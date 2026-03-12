@@ -2,64 +2,55 @@
  * Owner Access System
  * 
  * Allows the platform owner to bypass Pro subscription checks.
- * The owner email is configured via the OWNER_EMAIL environment variable.
+ * The owner email is configured via the NEXT_PUBLIC_OWNER_EMAIL environment variable.
+ * 
+ * In production mode with Clerk, the current user email comes from Clerk's session.
+ * In preview mode, it uses localStorage for testing.
  */
+
+import { isPreviewMode } from './app-mode'
 
 // =============================================================================
 // OWNER EMAIL CONFIGURATION
 // =============================================================================
 
 /**
- * Get the configured owner email from environment or localStorage (for demo)
+ * Get the configured owner email from environment
  */
-function getOwnerEmail(): string | null {
-  // Check environment variable first (production)
+export function getOwnerEmail(): string | null {
+  // Check environment variable (works in both client and server)
   if (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_OWNER_EMAIL) {
     return process.env.NEXT_PUBLIC_OWNER_EMAIL
-  }
-  
-  // Fallback to localStorage for demo mode
-  if (typeof window !== 'undefined') {
-    return localStorage.getItem('spartanlab_owner_email')
   }
   
   return null
 }
 
-/**
- * Set owner email (for demo/testing purposes)
- */
-export function setOwnerEmail(email: string): void {
-  if (typeof window === 'undefined') return
-  localStorage.setItem('spartanlab_owner_email', email)
-}
-
-/**
- * Clear owner email (for demo/testing purposes)
- */
-export function clearOwnerEmail(): void {
-  if (typeof window === 'undefined') return
-  localStorage.removeItem('spartanlab_owner_email')
-}
-
 // =============================================================================
-// CURRENT USER EMAIL
+// CURRENT USER EMAIL (for preview mode testing)
 // =============================================================================
 
 const CURRENT_USER_KEY = 'spartanlab_current_user_email'
 
 /**
- * Get the current user's email
- * In production, this would come from your auth system (Clerk, Auth.js, etc.)
+ * Get the current user's email from localStorage (preview mode only)
+ * In production, use the useCurrentUserEmail hook from useClerkAuth
  */
 export function getCurrentUserEmail(): string | null {
   if (typeof window === 'undefined') return null
-  return localStorage.getItem(CURRENT_USER_KEY)
+  
+  // In preview mode, use localStorage
+  if (isPreviewMode()) {
+    return localStorage.getItem(CURRENT_USER_KEY) || 'preview@spartanlab.local'
+  }
+  
+  // In production, this function is only for server-side compatibility
+  // Client components should use the useCurrentUserEmail hook
+  return null
 }
 
 /**
- * Set the current user's email (for demo purposes)
- * In production, this would be set by your auth system
+ * Set the current user's email (for preview mode testing)
  */
 export function setCurrentUserEmail(email: string): void {
   if (typeof window === 'undefined') return
@@ -67,7 +58,7 @@ export function setCurrentUserEmail(email: string): void {
 }
 
 /**
- * Clear the current user's email (logout)
+ * Clear the current user's email (logout in preview mode)
  */
 export function clearCurrentUserEmail(): void {
   if (typeof window === 'undefined') return
@@ -79,21 +70,30 @@ export function clearCurrentUserEmail(): void {
 // =============================================================================
 
 /**
- * Check if the current user is the platform owner
- * Returns true if the user's email matches the configured OWNER_EMAIL
+ * Check if the current user is the platform owner (synchronous, for non-hook contexts)
+ * 
+ * IMPORTANT: In client components with Clerk, use useIsOwner() hook instead.
+ * This function is primarily for:
+ * - Preview mode
+ * - Server-side checks where email is passed explicitly
  */
-export function isOwner(): boolean {
+export function isOwner(currentEmail?: string): boolean {
   const ownerEmail = getOwnerEmail()
-  const currentEmail = getCurrentUserEmail()
   
   // No owner email configured - owner mode not enabled
-  if (!ownerEmail) return false
+  if (!ownerEmail) {
+    // In preview mode, default to true for testing
+    return isPreviewMode()
+  }
+  
+  // Use provided email or get from localStorage (preview mode)
+  const email = currentEmail || getCurrentUserEmail()
   
   // No current user - not logged in
-  if (!currentEmail) return false
+  if (!email) return false
   
   // Case-insensitive comparison
-  return ownerEmail.toLowerCase() === currentEmail.toLowerCase()
+  return ownerEmail.toLowerCase() === email.toLowerCase()
 }
 
 /**
@@ -106,19 +106,31 @@ export function isOwnerModeConfigured(): boolean {
 /**
  * Get owner status details
  */
-export function getOwnerStatus(): {
+export function getOwnerStatus(currentEmail?: string): {
   isOwner: boolean
   ownerEmail: string | null
   currentEmail: string | null
   ownerModeConfigured: boolean
 } {
   const ownerEmail = getOwnerEmail()
-  const currentEmail = getCurrentUserEmail()
+  const email = currentEmail || getCurrentUserEmail()
   
   return {
-    isOwner: isOwner(),
+    isOwner: isOwner(currentEmail),
     ownerEmail: ownerEmail,
-    currentEmail: currentEmail,
+    currentEmail: email,
     ownerModeConfigured: ownerEmail !== null,
   }
+}
+
+/**
+ * Check owner status with explicit email (for server components/API routes)
+ */
+export function checkOwnerByEmail(email: string | null | undefined): boolean {
+  if (!email) return false
+  
+  const ownerEmail = getOwnerEmail()
+  if (!ownerEmail) return false
+  
+  return ownerEmail.toLowerCase() === email.toLowerCase()
 }

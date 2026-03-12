@@ -1,5 +1,6 @@
 // Client-safe auth service - NO server imports
 // For client components that need basic auth state
+// For full Clerk integration, use the useClerkAuth hook
 
 import { isPreviewMode, isAuthEnabled } from './app-mode'
 import type { User, SubscriptionPlan } from '@/types/domain'
@@ -14,15 +15,17 @@ const PREVIEW_USER: User = {
 }
 
 /**
- * Get the current authenticated user (client-safe)
- * In preview mode: returns mock user
- * In production mode: returns preview user as fallback
+ * Get the current authenticated user (client-safe fallback)
+ * 
+ * NOTE: In production with Clerk, use the useClerkAuth() hook instead.
+ * This function returns the preview user for compatibility.
  */
 export function getCurrentUser(): User {
   if (isPreviewMode()) {
     return PREVIEW_USER
   }
-  // Production mode: fall back to preview user if Clerk not fully integrated
+  // Production mode: return preview user as fallback
+  // Real user data comes from useClerkAuth() hook
   return PREVIEW_USER
 }
 
@@ -35,15 +38,17 @@ export function getCurrentUserId(): string {
 
 /**
  * Check if user is authenticated (client-safe)
- * In preview mode: always true (mock user)
- * In production mode: check for app data
+ * 
+ * NOTE: In production with Clerk, use SignedIn/SignedOut components
+ * or the useClerkAuth() hook instead.
  */
 export function isAuthenticated(): boolean {
   if (isPreviewMode()) {
     return true
   }
-  // Production mode: would check Clerk session via useAuth hook
-  return true
+  // Production mode: this is a fallback
+  // Real auth state comes from Clerk's useAuth() hook
+  return false
 }
 
 /**
@@ -84,15 +89,5 @@ export function mapClerkUserToUser(
     username,
     subscriptionPlan,
     createdAt: new Date(clerkUser.createdAt).toISOString(),
-  }
-}
-
-/**
- * Stub for sign-out (will be implemented with Clerk on client)
- */
-export function signOut(): void {
-  if (isPreviewMode()) {
-    console.log('[SpartanLab] Sign out called in preview mode')
-    return
   }
 }

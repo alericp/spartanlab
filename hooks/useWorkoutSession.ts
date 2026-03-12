@@ -1,0 +1,378 @@
+'use client'
+
+import { useState, useCallback, useRef, useEffect } from 'react'
+import type { AdaptiveSession, AdaptiveExercise } from '@/lib/adaptive-program-builder'
+import { saveWorkoutLog, type WorkoutExercise, type SessionType, type FocusArea, type ExerciseCategory } from '@/lib/workout-log-service'
+import { recordRPESession } from '@/lib/fatigue-engine'
+
+// =============================================================================
+// TYPES
+// =============================================================================
+
+export type SessionStatus = 'inactive' | 'active' | 'paused' | 'completed'
+
+export interface SessionStats {
+  totalSets: number
+  completedSets: number
+  totalExercises: number
+  completedExercises: number
+  averageRPE: number | null
+  estimatedVolume: number
+  elapsedSeconds: number
+}
+
+export interface CompletedSetData {
+  exerciseId: string
+  exerciseName: string
+  exerciseCategory: string
+  setNumber: number
+  targetReps: number
+  actualReps: number
+  targetRPE: number
+  actualRPE: number
+  restSeconds: number
+}
+
+export interface WorkoutSessionState {
+  status: SessionStatus
+  startTime: number | null
+  pausedTime: number | null
+  totalPausedDuration: number
+  elapsedSeconds: number
+  completedSets: CompletedSetData[]
+  currentExerciseIndex: number
+  currentSetNumber: number
+}
+
+export interface WorkoutSessionControls {
+  start: () => void
+  pause: () => void
+  resume: () => void
+  finish: () => void
+  reset: () => void
+  recordSet: (data: Omit<CompletedSetData, 'exerciseId' | 'exerciseName' | 'exerciseCategory' | 'setNumber'>) => void
+  nextExercise: () => void
+  skipExercise: () => void
+}
+
+export interface UseWorkoutSessionReturn extends WorkoutSessionState, WorkoutSessionControls {
+  stats: SessionStats
+  isActive: boolean
+  isPaused: boolean
+  isCompleted: boolean
+  formattedDuration: string
+  canSave: boolean
+  save: (notes?: string) => Promise<boolean>
+}
+
+// =============================================================================
+// HELPER FUNCTIONS
+// =============================================================================
+
+function formatDuration(seconds: number): string {
+  const hours = Math.floor(seconds / 3600)
+  const minutes = Math.floor((seconds % 3600) / 60)
+  const secs = seconds % 60
+
+  if (hours > 0) {
+    return `${hours}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
+  }
+  return `${minutes}:${secs.toString().padStart(2, '0')}`
+}
+
+function mapCategoryToLogCategory(category: string): ExerciseCategory {
+  const categoryMap: Record<string, ExerciseCategory> = {
+    skill: 'skill',
+    push: 'push',
+    pull: 'pull',
+    core: 'core',
+    legs: 'legs',
+    mobility: 'mobility',
+    strength: 'push', // Default strength to push
+  }
+  return categoryMap[category.toLowerCase()] || 'skill'
+}
+
+function mapFocusToFocusArea(focus: string): FocusArea {
+  const focusMap: Record<string, FocusArea> = {
+    planche: 'planche',
+    front_lever: 'front_lever',
+    'front lever': 'front_lever',
+    muscle_up: 'muscle_up',
+    'muscle up': 'muscle_up',
+    handstand: 'handstand_pushup',
+    handstand_pushup: 'handstand_pushup',
+    weighted: 'weighted_strength',
+    strength: 'weighted_strength',
+  }
+  
+  const lowerFocus = focus.toLowerCase()
+  for (const [key, value] of Object.entries(focusMap)) {
+    if (lowerFocus.includes(key)) return value
+  }
+  return 'general'
+}
+
+// =============================================================================
+// HOOK
+// =============================================================================
+
+export function useWorkoutSession(session: AdaptiveSession): UseWorkoutSessionReturn {
+  const [state, setState] = useState<WorkoutSessionState>({
+    status: 'inactive',
+    startTime: null,
+    pausedTime: null,
+    totalPausedDuration: 0,
+    elapsedSeconds: 0,
+    completedSets: [],
+    currentExerciseIndex: 0,
+    currentSetNumber: 1,
+  })
+
+  const intervalRef = useRef<NodeJS.Timeout | null>(null)
+
+  // Calculate total sets in session
+  const totalSets = session.exercises.reduce((sum, ex) => sum + ex.sets, 0)
+  const totalExercises = session.exercises.length
+
+  // Timer effect
+  useEffect(() => {
+    if (state.status === 'active' && state.startTime) {
+      intervalRef.current = setInterval(() => {
+        const now = Date.now()
+        const elapsed = Math.floor((now - state.startTime! - state.totalPausedDuration) / 1000)
+        setState(prev => ({ ...prev, elapsedSeconds: elapsed }))
+      }, 1000)
+    } else if (intervalRef.current) {
+      clearInterval(intervalRef.current)
+      intervalRef.current = null
+    }
+
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current)
+      }
+    }
+  }, [state.status, state.startTime, state.totalPausedDuration])
+
+  // Calculate stats
+  const stats: SessionStats = {
+    totalSets,
+    completedSets: state.completedSets.length,
+    totalExercises,
+    completedExercises: new Set(state.completedSets.map(s => s.exerciseId)).size,
+    averageRPE: state.completedSets.length > 0
+      ? Math.round((state.completedSets.reduce((sum, s) => sum + s.actualRPE, 0) / state.completedSets.length) * 10) / 10
+      : null,
+    estimatedVolume: state.completedSets.reduce((sum, s) => sum + (s.actualReps * (s.actualRPE / 10)), 0),
+    elapsedSeconds: state.elapsedSeconds,
+  }
+
+  // Control functions
+  const start = useCallback(() => {
+    setState(prev => ({
+      ...prev,
+      status: 'active',
+      startTime: Date.now(),
+      pausedTime: null,
+      totalPausedDuration: 0,
+      elapsedSeconds: 0,
+    }))
+  }, [])
+
+  const pause = useCallback(() => {
+    setState(prev => ({
+      ...prev,
+      status: 'paused',
+      pausedTime: Date.now(),
+    }))
+  }, [])
+
+  const resume = useCallback(() => {
+    setState(prev => {
+      const pausedDuration = prev.pausedTime ? Date.now() - prev.pausedTime : 0
+      return {
+        ...prev,
+        status: 'active',
+        pausedTime: null,
+        totalPausedDuration: prev.totalPausedDuration + pausedDuration,
+      }
+    })
+  }, [])
+
+  const finish = useCallback(() => {
+    setState(prev => ({
+      ...prev,
+      status: 'completed',
+    }))
+  }, [])
+
+  const reset = useCallback(() => {
+    setState({
+      status: 'inactive',
+      startTime: null,
+      pausedTime: null,
+      totalPausedDuration: 0,
+      elapsedSeconds: 0,
+      completedSets: [],
+      currentExerciseIndex: 0,
+      currentSetNumber: 1,
+    })
+  }, [])
+
+  const recordSet = useCallback((data: Omit<CompletedSetData, 'exerciseId' | 'exerciseName' | 'exerciseCategory' | 'setNumber'>) => {
+    const currentExercise = session.exercises[state.currentExerciseIndex]
+    if (!currentExercise) return
+
+    const setData: CompletedSetData = {
+      exerciseId: currentExercise.id,
+      exerciseName: currentExercise.name,
+      exerciseCategory: currentExercise.category,
+      setNumber: state.currentSetNumber,
+      ...data,
+    }
+
+    setState(prev => {
+      const newCompletedSets = [...prev.completedSets, setData]
+      const isLastSet = prev.currentSetNumber >= currentExercise.sets
+      const isLastExercise = prev.currentExerciseIndex >= session.exercises.length - 1
+
+      if (isLastSet && isLastExercise) {
+        // Workout complete
+        return {
+          ...prev,
+          completedSets: newCompletedSets,
+          status: 'completed',
+        }
+      } else if (isLastSet) {
+        // Move to next exercise
+        return {
+          ...prev,
+          completedSets: newCompletedSets,
+          currentExerciseIndex: prev.currentExerciseIndex + 1,
+          currentSetNumber: 1,
+        }
+      } else {
+        // Next set of same exercise
+        return {
+          ...prev,
+          completedSets: newCompletedSets,
+          currentSetNumber: prev.currentSetNumber + 1,
+        }
+      }
+    })
+  }, [session.exercises, state.currentExerciseIndex, state.currentSetNumber])
+
+  const nextExercise = useCallback(() => {
+    setState(prev => {
+      if (prev.currentExerciseIndex >= session.exercises.length - 1) {
+        return { ...prev, status: 'completed' }
+      }
+      return {
+        ...prev,
+        currentExerciseIndex: prev.currentExerciseIndex + 1,
+        currentSetNumber: 1,
+      }
+    })
+  }, [session.exercises.length])
+
+  const skipExercise = useCallback(() => {
+    nextExercise()
+  }, [nextExercise])
+
+  // Save session to workout log
+  const save = useCallback(async (notes?: string): Promise<boolean> => {
+    if (state.status !== 'completed' || state.completedSets.length === 0) {
+      return false
+    }
+
+    try {
+      // Map completed sets to workout exercises
+      const exerciseMap = new Map<string, WorkoutExercise>()
+      
+      for (const set of state.completedSets) {
+        if (!exerciseMap.has(set.exerciseId)) {
+          exerciseMap.set(set.exerciseId, {
+            id: set.exerciseId,
+            name: set.exerciseName,
+            category: mapCategoryToLogCategory(set.exerciseCategory),
+            sets: 0,
+            reps: set.actualReps,
+            completed: true,
+          })
+        }
+        const exercise = exerciseMap.get(set.exerciseId)!
+        exercise.sets += 1
+        exercise.reps = Math.round(
+          ((exercise.reps || 0) * (exercise.sets - 1) + set.actualReps) / exercise.sets
+        )
+      }
+
+      const exercises = Array.from(exerciseMap.values())
+      const durationMinutes = Math.round(state.elapsedSeconds / 60)
+
+      // Save to workout log
+      saveWorkoutLog({
+        sessionName: session.dayLabel,
+        sessionType: 'mixed' as SessionType,
+        sessionDate: new Date().toISOString().split('T')[0],
+        durationMinutes: durationMinutes || 1,
+        focusArea: mapFocusToFocusArea(session.focusLabel),
+        notes,
+        exercises,
+      })
+
+      // Record RPE session for fatigue engine
+      const rpeExercises = Array.from(
+        state.completedSets.reduce((map, set) => {
+          if (!map.has(set.exerciseName)) {
+            map.set(set.exerciseName, { exerciseName: set.exerciseName, sets: [] })
+          }
+          map.get(set.exerciseName)!.sets.push({
+            setNumber: set.setNumber,
+            targetRPE: set.targetRPE,
+            actualRPE: set.actualRPE,
+            targetReps: set.targetReps,
+            actualReps: set.actualReps,
+          })
+          return map
+        }, new Map<string, { exerciseName: string; sets: { setNumber: number; targetRPE: number; actualRPE: number; targetReps: number; actualReps: number }[] }>())
+      ).map(([_, data]) => data)
+
+      if (rpeExercises.length > 0) {
+        recordRPESession({
+          sessionId: `session-${Date.now()}`,
+          sessionDate: new Date().toISOString(),
+          exercises: rpeExercises,
+        })
+      }
+
+      return true
+    } catch (error) {
+      console.error('Failed to save workout session:', error)
+      return false
+    }
+  }, [state.status, state.completedSets, state.elapsedSeconds, session.dayLabel, session.focusLabel])
+
+  return {
+    // State
+    ...state,
+    stats,
+    isActive: state.status === 'active',
+    isPaused: state.status === 'paused',
+    isCompleted: state.status === 'completed',
+    formattedDuration: formatDuration(state.elapsedSeconds),
+    canSave: state.status === 'completed' && state.completedSets.length > 0,
+    
+    // Controls
+    start,
+    pause,
+    resume,
+    finish,
+    reset,
+    recordSet,
+    nextExercise,
+    skipExercise,
+    save,
+  }
+}

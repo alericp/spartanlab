@@ -1,0 +1,40 @@
+{
+  "name": "SpartanLab - Calisthenics Training Engine",
+  "short_name": "SpartanLab",
+  "description": "Your personal calisthenics training decision engine. Get intelligent workout recommendations based on your progress and goals.",
+  "start_url": "/dashboard",
+  "display": "standalone",
+  "background_color": "#0b0b0b",
+  "theme_color": "#0b0b0b",
+  "orientation": "portrait-primary",
+  "scope": "/",
+  "icons": [
+    {
+      "src": "/icons/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ],
+  "categories": ["fitness", "health", "sports"],
+  "screenshots": [],
+  "prefer_related_applications": false
+}

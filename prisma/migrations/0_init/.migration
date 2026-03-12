@@ -1,0 +1,18 @@
+{
+  "name": "init",
+  "description": "",
+  "steps": [
+    {
+      "stepType": "CreateEnum",
+      "stepMetadata": {
+        "userStep": true
+      }
+    },
+    {
+      "stepType": "CreateTable",
+      "stepMetadata": {
+        "userStep": true
+      }
+    }
+  ]
+}

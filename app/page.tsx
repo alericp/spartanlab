@@ -2,11 +2,11 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { useAuth } from '@clerk/nextjs'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { MarketingHeader } from '@/components/marketing/MarketingHeader'
 import { MarketingFooter } from '@/components/marketing/MarketingFooter'
-import { isAuthenticated } from '@/lib/auth-service-client'
 import { isPreviewMode } from '@/lib/app-mode'
 import {
   Target,
@@ -92,32 +92,36 @@ const COMPARISON = [
 export default function Home() {
   const router = useRouter()
   const [isCheckingAuth, setIsCheckingAuth] = useState(true)
+  const preview = isPreviewMode()
+  
+  // Use Clerk's useAuth hook for production mode
+  // In preview mode, we check localStorage
+  const { isSignedIn, isLoaded } = useAuth()
   
   useEffect(() => {
+    // Wait for Clerk to load in production mode
+    if (!preview && !isLoaded) return
+    
     // Check if user is authenticated and redirect to dashboard
-    const checkAuthAndRedirect = () => {
-      let shouldRedirect = false
-      
-      if (isPreviewMode()) {
-        // In preview mode, check if user has started using the app
-        const hasProfile = localStorage.getItem('athlete_profile')
-        const hasWorkouts = localStorage.getItem('workouts')
-        const hasPrograms = localStorage.getItem('saved_programs')
-        shouldRedirect = Boolean(hasProfile || hasWorkouts || hasPrograms)
-      } else {
-        // In production mode, check actual auth state
-        shouldRedirect = isAuthenticated()
-      }
-      
-      if (shouldRedirect) {
-        router.replace('/dashboard')
-      } else {
-        setIsCheckingAuth(false)
-      }
+    let shouldRedirect = false
+    
+    if (preview) {
+      // In preview mode, check if user has started using the app
+      const hasProfile = localStorage.getItem('athlete_profile')
+      const hasWorkouts = localStorage.getItem('workouts')
+      const hasPrograms = localStorage.getItem('saved_programs')
+      shouldRedirect = Boolean(hasProfile || hasWorkouts || hasPrograms)
+    } else {
+      // In production mode, use Clerk's auth state
+      shouldRedirect = Boolean(isSignedIn)
     }
     
-    checkAuthAndRedirect()
-  }, [router])
+    if (shouldRedirect) {
+      router.replace('/dashboard')
+    } else {
+      setIsCheckingAuth(false)
+    }
+  }, [router, preview, isSignedIn, isLoaded])
   
   // Show nothing while checking auth to prevent flash
   if (isCheckingAuth) {

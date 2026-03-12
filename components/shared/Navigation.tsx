@@ -2,12 +2,13 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { UserButton, SignedIn, SignedOut } from '@clerk/nextjs'
 import { Button } from '@/components/ui/button'
-import { LayoutDashboard, Target, Dumbbell, Calendar, ClipboardList, TrendingUp, Activity, Crosshair, Settings, Menu, X, Database, Wrench, BookOpen } from 'lucide-react'
+import { LayoutDashboard, Target, Dumbbell, Calendar, ClipboardList, TrendingUp, Activity, Crosshair, Settings, Menu, X, Database, Wrench, BookOpen, LogIn } from 'lucide-react'
 import { SpartanIcon } from '@/components/brand/SpartanLogo'
-import { getCurrentUser } from '@/lib/data-service'
 import { useState } from 'react'
 import { cn } from '@/lib/utils'
+import { isPreviewMode } from '@/lib/app-mode'
 
 const NAV_ITEMS = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -28,8 +29,8 @@ const SECONDARY_NAV_ITEMS = [
 
 export function Navigation() {
   const pathname = usePathname()
-  const user = getCurrentUser()
   const [mobileOpen, setMobileOpen] = useState(false)
+  const preview = isPreviewMode()
 
   return (
     <header className="border-b border-[#2B313A] bg-[#0F1115] sticky top-0 z-50">
@@ -64,16 +65,50 @@ export function Navigation() {
             })}
           </nav>
 
-          {/* Right side */}
+          {/* Right side - User area */}
           <div className="flex items-center gap-2">
             <Link href="/settings" className="hidden sm:block">
               <Button variant="ghost" size="icon" className="text-[#A4ACB8] hover:text-[#E6E9EF]">
                 <Settings className="w-5 h-5" />
               </Button>
             </Link>
-            <div className="w-8 h-8 rounded-full bg-[#C1121F] flex items-center justify-center text-sm font-bold">
-              {user.username.charAt(0)}
-            </div>
+            
+            {/* User Button - Clerk in production, avatar in preview */}
+            {preview ? (
+              // Preview mode: show simple avatar
+              <div className="w-8 h-8 rounded-full bg-[#C1121F] flex items-center justify-center text-sm font-bold">
+                A
+              </div>
+            ) : (
+              // Production mode: use Clerk components
+              <>
+                <SignedIn>
+                  <UserButton 
+                    afterSignOutUrl="/"
+                    appearance={{
+                      elements: {
+                        avatarBox: 'w-8 h-8',
+                        userButtonPopoverCard: 'bg-[#1A1F26] border border-[#2B313A]',
+                        userButtonPopoverActionButton: 'text-[#E6E9EF] hover:bg-[#2B313A]',
+                        userButtonPopoverActionButtonText: 'text-[#E6E9EF]',
+                        userButtonPopoverActionButtonIcon: 'text-[#A4ACB8]',
+                        userButtonPopoverFooter: 'hidden',
+                        userPreviewMainIdentifier: 'text-[#E6E9EF]',
+                        userPreviewSecondaryIdentifier: 'text-[#A4ACB8]',
+                      },
+                    }}
+                  />
+                </SignedIn>
+                <SignedOut>
+                  <Link href="/sign-in">
+                    <Button size="sm" variant="ghost" className="text-[#A4ACB8] hover:text-[#E6E9EF]">
+                      <LogIn className="w-4 h-4 mr-2" />
+                      Sign In
+                    </Button>
+                  </Link>
+                </SignedOut>
+              </>
+            )}
             
             {/* Mobile menu button */}
             <Button

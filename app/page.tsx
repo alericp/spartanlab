@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { useAuth } from '@clerk/nextjs'
+import { useAuth } from '@/components/auth/ClerkComponents'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { MarketingHeader } from '@/components/marketing/MarketingHeader'

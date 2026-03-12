@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useState, useEffect } from 'react'
-import { SignedIn, SignedOut, UserButton } from '@clerk/nextjs'
+import { SignedIn, SignedOut, UserButton } from '@/components/auth/ClerkComponents'
 import { Button } from '@/components/ui/button'
 import { Menu, X, LayoutDashboard } from 'lucide-react'
 import { SpartanIcon } from '@/components/brand/SpartanLogo'

@@ -1,0 +1,193 @@
+// Data service layer for preview mode
+// Uses localStorage for persistence, easy to swap to Prisma + Clerk later
+
+export interface User {
+  id: string
+  email: string
+  username: string
+  // NOTE: 'elite' kept for backward compatibility but merged into 'pro' for new users
+  subscriptionTier: 'free' | 'pro' | 'elite'
+  createdAt: string
+}
+
+export type Equipment = 'pullup_bar' | 'dip_bars' | 'parallettes' | 'rings' | 'resistance_bands'
+export type SessionLengthMinutes = 30 | 45 | 60 | 90
+
+export interface AthleteProfile {
+  id: string
+  userId: string
+  sex: 'male' | 'female' | null
+  height: number | null
+  heightUnit: 'inches' | 'cm'
+  bodyweight: number | null
+  weightUnit: 'lbs' | 'kg'
+  experienceLevel: 'beginner' | 'intermediate' | 'advanced'
+  trainingDaysPerWeek: number
+  sessionLengthMinutes: SessionLengthMinutes
+  primaryGoal: string | null
+  equipmentAvailable: Equipment[]
+  onboardingComplete: boolean
+  createdAt: string
+}
+
+export interface SkillProgression {
+  id: string
+  skillName: string
+  currentLevel: number
+  targetLevel: number
+  progressScore: number
+  lastUpdated: string
+}
+
+// Preview mode mock user
+const PREVIEW_USER: User = {
+  id: 'preview-user',
+  email: 'preview@spartanlab.local',
+  username: 'Aleric',
+  subscriptionTier: 'pro',
+  createdAt: new Date().toISOString(),
+}
+
+// Preview mode mock profile
+const DEFAULT_PROFILE: AthleteProfile = {
+  id: 'preview-profile',
+  userId: 'preview-user',
+  sex: 'male',
+  height: 70,
+  heightUnit: 'inches',
+  bodyweight: 160,
+  weightUnit: 'lbs',
+  experienceLevel: 'intermediate',
+  trainingDaysPerWeek: 4,
+  sessionLengthMinutes: 60,
+  primaryGoal: 'planche',
+  equipmentAvailable: ['pullup_bar', 'dip_bars', 'parallettes'],
+  onboardingComplete: true,
+  createdAt: new Date().toISOString(),
+}
+
+const STORAGE_KEYS = {
+  profile: 'spartanlab_profile',
+  progressions: 'spartanlab_progressions',
+}
+
+// Check if we're in browser
+function isBrowser(): boolean {
+  return typeof window !== 'undefined'
+}
+
+// Get current user (preview mode always returns mock user)
+export function getCurrentUser(): User {
+  return PREVIEW_USER
+}
+
+// Get athlete profile
+export function getAthleteProfile(): AthleteProfile {
+  if (!isBrowser()) return DEFAULT_PROFILE
+  
+  const stored = localStorage.getItem(STORAGE_KEYS.profile)
+  if (stored) {
+    try {
+      return JSON.parse(stored)
+    } catch {
+      return DEFAULT_PROFILE
+    }
+  }
+  
+  // Initialize with default
+  localStorage.setItem(STORAGE_KEYS.profile, JSON.stringify(DEFAULT_PROFILE))
+  return DEFAULT_PROFILE
+}
+
+// Save athlete profile
+export function saveAthleteProfile(profile: Partial<AthleteProfile>): AthleteProfile {
+  if (!isBrowser()) return DEFAULT_PROFILE
+  
+  const current = getAthleteProfile()
+  const updated: AthleteProfile = {
+    ...current,
+    ...profile,
+    id: current.id,
+    userId: current.userId,
+    createdAt: current.createdAt,
+  }
+  
+  localStorage.setItem(STORAGE_KEYS.profile, JSON.stringify(updated))
+  return updated
+}
+
+// Get all skill progressions
+export function getSkillProgressions(): SkillProgression[] {
+  if (!isBrowser()) return []
+  
+  const stored = localStorage.getItem(STORAGE_KEYS.progressions)
+  if (stored) {
+    try {
+      return JSON.parse(stored)
+    } catch {
+      return []
+    }
+  }
+  return []
+}
+
+// Save or update a skill progression
+export function saveSkillProgression(
+  skillName: string,
+  currentLevel: number,
+  targetLevel: number
+): SkillProgression {
+  if (!isBrowser()) {
+    return {
+      id: `preview-${skillName}`,
+      skillName,
+      currentLevel,
+      targetLevel,
+      progressScore: calculateProgressScore(currentLevel, targetLevel),
+      lastUpdated: new Date().toISOString(),
+    }
+  }
+  
+  const progressions = getSkillProgressions()
+  const existingIndex = progressions.findIndex(p => p.skillName === skillName)
+  
+  const progressScore = calculateProgressScore(currentLevel, targetLevel)
+  
+  const progression: SkillProgression = {
+    id: existingIndex >= 0 ? progressions[existingIndex].id : `prog-${Date.now()}`,
+    skillName,
+    currentLevel,
+    targetLevel,
+    progressScore,
+    lastUpdated: new Date().toISOString(),
+  }
+  
+  if (existingIndex >= 0) {
+    progressions[existingIndex] = progression
+  } else {
+    progressions.push(progression)
+  }
+  
+  localStorage.setItem(STORAGE_KEYS.progressions, JSON.stringify(progressions))
+  return progression
+}
+
+// Get a single skill progression by name
+export function getSkillProgression(skillName: string): SkillProgression | null {
+  const progressions = getSkillProgressions()
+  return progressions.find(p => p.skillName === skillName) || null
+}
+
+// Calculate progress score
+function calculateProgressScore(currentLevel: number, targetLevel: number): number {
+  const currentValue = currentLevel + 1
+  const targetValue = targetLevel + 1
+  return (currentValue / targetValue) * 100
+}
+
+// Clear all data (for testing)
+export function clearAllData(): void {
+  if (!isBrowser()) return
+  localStorage.removeItem(STORAGE_KEYS.profile)
+  localStorage.removeItem(STORAGE_KEYS.progressions)
+}

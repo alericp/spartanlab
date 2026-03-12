@@ -1,0 +1,220 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+@import 'shadcn/tailwind.css';
+
+@custom-variant dark (&:is(.dark *));
+
+/* 
+ * SpartanLab Brand Color System
+ * Premium dark athletic interface
+ * 
+ * Primary: Spartan Red (#C1121F) - discipline, power, key highlights
+ * Background: Charcoal Black (#0F1115) - main canvas
+ * Card: Deep Steel (#1A1F26) - panels, containers
+ * Border: Muted Steel (#2B313A) - separators, inactive
+ * Text Primary: (#E6E9EF) - headings, key values
+ * Text Secondary: (#A4ACB8) - descriptions, metadata
+ * Accent: Steel Blue (#4F6D8A) - charts, info highlights (rare)
+ */
+
+:root {
+  /* Core backgrounds */
+  --background: #0F1115;
+  --foreground: #E6E9EF;
+  
+  /* Card/panel surfaces */
+  --card: #1A1F26;
+  --card-foreground: #E6E9EF;
+  
+  /* Popover/dropdown surfaces */
+  --popover: #1A1F26;
+  --popover-foreground: #E6E9EF;
+  
+  /* Primary brand color - Spartan Red */
+  --primary: #C1121F;
+  --primary-foreground: #FFFFFF;
+  
+  /* Secondary elements */
+  --secondary: #2B313A;
+  --secondary-foreground: #E6E9EF;
+  
+  /* Muted/subdued elements */
+  --muted: #2B313A;
+  --muted-foreground: #A4ACB8;
+  
+  /* Accent - Steel Blue (use sparingly) */
+  --accent: #4F6D8A;
+  --accent-foreground: #E6E9EF;
+  
+  /* Destructive actions */
+  --destructive: #C1121F;
+  --destructive-foreground: #FFFFFF;
+  
+  /* Borders and inputs */
+  --border: #2B313A;
+  --input: #1A1F26;
+  --ring: #C1121F;
+  
+  /* Chart colors - disciplined palette */
+  --chart-1: #C1121F;
+  --chart-2: #4F6D8A;
+  --chart-3: #A4ACB8;
+  --chart-4: #2B313A;
+  --chart-5: #E6E9EF;
+  
+  /* Border radius */
+  --radius: 0.5rem;
+  
+  /* Sidebar */
+  --sidebar: #1A1F26;
+  --sidebar-foreground: #E6E9EF;
+  --sidebar-primary: #C1121F;
+  --sidebar-primary-foreground: #0F1115;
+  --sidebar-accent: #C1121F;
+  --sidebar-accent-foreground: #0F1115;
+  --sidebar-border: #2B313A;
+  --sidebar-ring: #C1121F;
+  
+  /* Extended palette for direct use */
+  --spartan-red: #C1121F;
+  --spartan-red-hover: #A30F1A;
+  --charcoal-black: #0F1115;
+  --deep-steel: #1A1F26;
+  --muted-steel: #2B313A;
+  --steel-blue: #4F6D8A;
+  --text-primary: #E6E9EF;
+  --text-secondary: #A4ACB8;
+  --text-tertiary: #6B7280;
+}
+
+/* Dark mode uses same values - SpartanLab is dark-first */
+.dark {
+  --background: #0F1115;
+  --foreground: #E6E9EF;
+  --card: #1A1F26;
+  --card-foreground: #E6E9EF;
+  --popover: #1A1F26;
+  --popover-foreground: #E6E9EF;
+  --primary: #C1121F;
+  --primary-foreground: #FFFFFF;
+  --secondary: #2B313A;
+  --secondary-foreground: #E6E9EF;
+  --muted: #2B313A;
+  --muted-foreground: #A4ACB8;
+  --accent: #4F6D8A;
+  --accent-foreground: #E6E9EF;
+  --destructive: #C1121F;
+  --destructive-foreground: #FFFFFF;
+  --border: #2B313A;
+  --input: #1A1F26;
+  --ring: #C1121F;
+  --chart-1: #C1121F;
+  --chart-2: #4F6D8A;
+  --chart-3: #A4ACB8;
+  --chart-4: #2B313A;
+  --chart-5: #E6E9EF;
+  --sidebar: #1A1F26;
+  --sidebar-foreground: #E6E9EF;
+  --sidebar-primary: #C1121F;
+  --sidebar-primary-foreground: #0F1115;
+  --sidebar-accent: #C1121F;
+  --sidebar-accent-foreground: #0F1115;
+  --sidebar-border: #2B313A;
+  --sidebar-ring: #C1121F;
+}
+
+@theme inline {
+  --font-sans: 'Geist', 'Geist Fallback';
+  --font-mono: 'Geist Mono', 'Geist Mono Fallback';
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* =============================================================================
+ * SPARTANLAB LAYOUT SYSTEM
+ * Consistent spacing: 4, 8, 16, 24, 32, 48px
+ * ============================================================================= */
+
+@layer utilities {
+  /* Section spacing */
+  .section-gap {
+    @apply space-y-12;
+  }
+  
+  .section-gap-sm {
+    @apply space-y-8;
+  }
+  
+  /* Card internal padding */
+  .card-padding {
+    @apply p-5 sm:p-6;
+  }
+  
+  /* Card grid gaps */
+  .card-grid-gap {
+    @apply gap-4 sm:gap-6;
+  }
+  
+  /* Typography - Large metric */
+  .metric-large {
+    @apply text-4xl sm:text-5xl lg:text-6xl font-bold tabular-nums;
+  }
+  
+  /* Typography - Medium heading */
+  .heading-medium {
+    @apply text-lg sm:text-xl font-semibold;
+  }
+  
+  /* Typography - Small description */
+  .text-description {
+    @apply text-sm text-[#A4ACB8];
+  }
+  
+  /* Typography - Label */
+  .text-label {
+    @apply text-xs text-[#6B7280] uppercase tracking-wider;
+  }
+}

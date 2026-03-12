@@ -1,0 +1,157 @@
+import { Metadata } from 'next'
+import Link from 'next/link'
+import { SeoPageLayout } from '@/components/seo/SeoPageLayout'
+import { SeoHero } from '@/components/seo/SeoHero'
+import { ProgressionLadderCard } from '@/components/seo/ProgressionLadderCard'
+import { RelatedFeatureCTA } from '@/components/seo/RelatedFeatureCTA'
+import { Target, Dumbbell, ArrowRight } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+
+export const metadata: Metadata = {
+  title: 'Front Lever Progression Guide | SpartanLab',
+  description: 'Master the front lever with this complete progression guide. From tuck to full front lever, understand each stage and what determines readiness.',
+}
+
+const frontLeverSteps = [
+  {
+    name: 'Tuck Front Lever',
+    description: 'Knees pulled tight to chest, body inverted and horizontal. Foundation for building lat and core tension.',
+    difficulty: 'beginner' as const,
+  },
+  {
+    name: 'Advanced Tuck Front Lever',
+    description: 'Hips extend slightly, back flattens. Significant increase in leverage and lat engagement required.',
+    difficulty: 'intermediate' as const,
+  },
+  {
+    name: 'One Leg Front Lever',
+    description: 'One leg extends fully while the other remains tucked. Asymmetric loading builds strength for straddle.',
+    difficulty: 'advanced' as const,
+  },
+  {
+    name: 'Straddle Front Lever',
+    description: 'Both legs extended in straddle position. Requires elite pulling strength and core tension.',
+    difficulty: 'advanced' as const,
+  },
+  {
+    name: 'Full Front Lever',
+    description: 'Legs together, body completely horizontal. Peak pulling strength achievement in calisthenics.',
+    difficulty: 'elite' as const,
+  },
+]
+
+const keyFactors = [
+  {
+    icon: Dumbbell,
+    title: 'Pulling Strength',
+    description: 'Strong weighted pull-ups (ideally +50% bodyweight) correlate highly with front lever success.',
+  },
+  {
+    icon: Target,
+    title: 'Core Tension',
+    description: 'The ability to maintain a rigid body line under load is critical for horizontal holds.',
+  },
+]
+
+export default function FrontLeverProgressionPage() {
+  return (
+    <SeoPageLayout>
+      <SeoHero
+        title="Front Lever Progression Guide"
+        subtitle="Build the pulling strength and body tension needed to master this iconic calisthenics skill. Progress systematically from tuck to full front lever."
+        ctaText="Track Your Progress"
+        ctaHref="/skills"
+        secondaryCtaText="View All Features"
+        secondaryCtaHref="/features"
+      />
+
+      {/* Progression Ladder */}
+      <section className="py-12 px-4 sm:px-6">
+        <div className="max-w-4xl mx-auto">
+          <ProgressionLadderCard title="Front Lever Progression Stages" steps={frontLeverSteps} />
+        </div>
+      </section>
+
+      {/* Key Factors */}
+      <section className="py-12 px-4 sm:px-6 bg-[#1A1A1A]/50">
+        <div className="max-w-4xl mx-auto">
+          <h2 className="text-2xl font-bold mb-6">What Determines Readiness</h2>
+          <div className="grid gap-6 sm:grid-cols-2">
+            {keyFactors.map((factor) => (
+              <div key={factor.title} className="p-6 bg-[#121212] rounded-xl border border-[#2A2A2A]">
+                <div className="w-12 h-12 rounded-lg bg-[#E63946]/10 flex items-center justify-center mb-4">
+                  <factor.icon className="w-6 h-6 text-[#E63946]" />
+                </div>
+                <h3 className="text-lg font-semibold mb-2">{factor.title}</h3>
+                <p className="text-[#A5A5A5]">{factor.description}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Training Tips */}
+      <section className="py-12 px-4 sm:px-6">
+        <div className="max-w-4xl mx-auto">
+          <h2 className="text-2xl font-bold mb-6">Training Guidance</h2>
+          <div className="space-y-4">
+            <div className="p-5 bg-[#1A1A1A] rounded-xl border border-[#2A2A2A]">
+              <h3 className="font-semibold mb-2">Build Weighted Pull-Up Strength</h3>
+              <p className="text-sm text-[#A5A5A5]">
+                Athletes who can do weighted pull-ups with +45-70 lbs typically have the raw pulling power for advanced front lever progressions. Track your 1RM regularly.
+              </p>
+            </div>
+            <div className="p-5 bg-[#1A1A1A] rounded-xl border border-[#2A2A2A]">
+              <h3 className="font-semibold mb-2">Train Rows Horizontally</h3>
+              <p className="text-sm text-[#A5A5A5]">
+                Front lever rows and ice cream makers build the specific horizontal pulling strength needed. Progress the difficulty as your holds improve.
+              </p>
+            </div>
+            <div className="p-5 bg-[#1A1A1A] rounded-xl border border-[#2A2A2A]">
+              <h3 className="font-semibold mb-2">Consistent Volume</h3>
+              <p className="text-sm text-[#A5A5A5]">
+                Front lever requires high frequency training. Multiple short sessions per week are more effective than occasional long sessions.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Related Feature CTA */}
+      <RelatedFeatureCTA
+        icon={Target}
+        title="Track Your Front Lever Progress"
+        description="Log your current level, monitor pulling strength, and see projected timelines to your next stage with SpartanLab."
+        ctaText="Open Skill Tracker"
+        ctaHref="/skills"
+      />
+
+      {/* Internal Links */}
+      <section className="py-12 px-4 sm:px-6">
+        <div className="max-w-4xl mx-auto">
+          <h2 className="text-xl font-bold mb-6">Related Resources</h2>
+          <div className="flex flex-wrap gap-4">
+            <Link href="/planche-progression">
+              <Button variant="outline" className="border-[#3A3A3A] hover:bg-[#2A2A2A] gap-2">
+                Planche Progression
+                <ArrowRight className="w-4 h-4" />
+              </Button>
+            </Link>
+            <Link href="/weighted-pull-up-calculator">
+              <Button variant="outline" className="border-[#3A3A3A] hover:bg-[#2A2A2A] gap-2">
+                Pull-Up Calculator
+                <ArrowRight className="w-4 h-4" />
+              </Button>
+            </Link>
+            <Link href="/features">
+              <Button variant="outline" className="border-[#3A3A3A] hover:bg-[#2A2A2A] gap-2">
+                Platform Features
+                <ArrowRight className="w-4 h-4" />
+              </Button>
+            </Link>
+          </div>
+        </div>
+      </section>
+    </SeoPageLayout>
+  )
+}

@@ -67,6 +67,13 @@ import {
   validateExerciseSelection,
   type ExerciseIntelligenceContext,
 } from './exercise-intelligence-engine'
+import {
+  getReadinessAssessment,
+  getSessionAdjustments,
+  getFlexibilityRecoveryStatus,
+  getMobilityRecoveryStatus,
+  type ReadinessAssessment,
+} from './recovery-fatigue-engine'
 
 // =============================================================================
 // TYPES
@@ -174,6 +181,14 @@ export interface AdaptiveProgram {
   // Adaptive Progression Engine - progression recommendations
   progressionInsights?: ProgressionInsight[]
   exercisesReadyToProgress?: string[]
+  // Recovery & Fatigue Engine - readiness assessment
+  readinessAssessment?: {
+    state: 'ready_to_push' | 'train_normally' | 'keep_controlled' | 'recovery_focused'
+    score: number
+    coachMessage: string
+    shouldProgress: boolean
+    shouldDeload: boolean
+  }
 }
 
 // =============================================================================
@@ -340,6 +355,21 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
     // Adaptive Progression Engine insights
     progressionInsights: getProgressionInsights(),
     exercisesReadyToProgress: getReadyToProgress().map(p => p.exerciseName),
+    // Recovery & Fatigue Engine assessment
+    readinessAssessment: (() => {
+      try {
+        const assessment = getReadinessAssessment()
+        return {
+          state: assessment.state,
+          score: assessment.score,
+          coachMessage: assessment.coachMessage,
+          shouldProgress: assessment.shouldProgress,
+          shouldDeload: assessment.shouldDeload,
+        }
+      } catch {
+        return undefined
+      }
+    })(),
   }
 }
 

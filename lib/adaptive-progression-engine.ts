@@ -11,6 +11,12 @@ import { getWorkoutLogs, type WorkoutLog, type WorkoutExercise } from './workout
 import { getStoredRPESessions, type StoredRPESession } from './fatigue-score-calculator'
 import { getFatigueTrainingDecision, type TrainingDecision } from './fatigue-decision-engine'
 import { getDailyReadiness } from './daily-readiness'
+import {
+  getReadinessAssessment,
+  getFlexibilityRecoveryStatus,
+  getMobilityRecoveryStatus,
+  type ReadinessAssessment,
+} from './recovery-fatigue-engine'
 
 // =============================================================================
 // TYPES

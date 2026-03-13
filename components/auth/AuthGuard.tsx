@@ -131,35 +131,15 @@ export function OwnerOnly({ children }: { children: ReactNode }) {
 
 /**
  * Owner check component - only rendered on production
+ * Loads OwnerOnlyInner from ClerkComponentsInner dynamically
  */
 function OwnerOnlyProduction({ children }: { children: ReactNode }) {
   const [Component, setComponent] = useState<React.ComponentType<{ children: ReactNode }> | null>(null)
   
   useEffect(() => {
-    const loadComponent = async () => {
-      try {
-        const { useUser } = await import('@clerk/nextjs')
-        
-        const OwnerCheck = ({ children }: { children: ReactNode }) => {
-          const { user, isLoaded, isSignedIn } = useUser()
-          
-          if (!isLoaded || !isSignedIn || !user) return null
-          
-          const ownerEmail = process.env.NEXT_PUBLIC_OWNER_EMAIL
-          if (!ownerEmail) return null
-          
-          const userEmail = user.primaryEmailAddress?.emailAddress
-          const isOwner = userEmail?.toLowerCase() === ownerEmail.toLowerCase()
-          
-          return isOwner ? <>{children}</> : null
-        }
-        
-        setComponent(() => OwnerCheck)
-      } catch {
-        setComponent(null)
-      }
-    }
-    loadComponent()
+    import('./ClerkComponentsInner')
+      .then(mod => setComponent(() => mod.OwnerOnlyInner))
+      .catch(() => setComponent(null))
   }, [])
   
   if (!Component) return null
@@ -169,33 +149,17 @@ function OwnerOnlyProduction({ children }: { children: ReactNode }) {
 /**
  * useOwnerStatus - Hook to check if current user is the owner
  * Returns isOwner: false in preview mode
+ * 
+ * NOTE: For accurate owner status on production, use the OwnerOnly component
+ * which properly checks via Clerk context.
  */
 export function useOwnerStatus(): { isOwner: boolean; isLoaded: boolean } {
   const { isClerkAvailable, isLoading: isClerkLoading } = useClerkAvailability()
-  const [status, setStatus] = useState({ isOwner: false, isLoaded: false })
 
-  useEffect(() => {
-    // Wait for Clerk check
-    if (isClerkLoading) return
-    
-    // Preview mode: not owner
-    if (!isClerkAvailable) {
-      setStatus({ isOwner: false, isLoaded: true })
-      return
-    }
-    
-    // Production: need to check via dynamic import
-    const checkOwner = async () => {
-      try {
-        const { useUser } = await import('@clerk/nextjs')
-        // Can't use hooks here - set loaded true and let component handle it
-        setStatus({ isOwner: false, isLoaded: true })
-      } catch {
-        setStatus({ isOwner: false, isLoaded: true })
-      }
-    }
-    checkOwner()
-  }, [isClerkAvailable, isClerkLoading])
-
-  return status
+  // Always return false for isOwner from this hook
+  // Actual owner check happens in OwnerOnly component
+  return {
+    isOwner: false,
+    isLoaded: !isClerkLoading,
+  }
 }

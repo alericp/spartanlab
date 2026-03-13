@@ -3,8 +3,8 @@
 /**
  * Sign-In Page - Preview-safe implementation
  * 
- * Uses synchronous domain check from auth-gate to determine
- * whether to show Clerk or preview fallback.
+ * NO @clerk/nextjs imports in this file.
+ * The SignInInner component is loaded dynamically only on production.
  */
 
 import Link from 'next/link'
@@ -59,61 +59,23 @@ function LoadingState() {
   )
 }
 
-/**
- * Clerk SignIn - dynamically loaded on production
- */
-function ClerkSignIn() {
-  const [SignIn, setSignIn] = useState<React.ComponentType<{
-    appearance: object
-    fallbackRedirectUrl: string
-    signUpUrl: string
-  }> | null>(null)
-  
-  useEffect(() => {
-    import('@clerk/nextjs').then(mod => {
-      setSignIn(() => mod.SignIn)
-    }).catch(() => {})
-  }, [])
-  
-  if (!SignIn) return <LoadingState />
-  
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-[#0F1115]">
-      <SignIn 
-        appearance={{
-          elements: {
-            rootBox: 'mx-auto',
-            card: 'bg-[#1A1F26] border border-[#2B313A] shadow-xl',
-            headerTitle: 'text-[#E6E9EF]',
-            headerSubtitle: 'text-[#A4ACB8]',
-            socialButtonsBlockButton: 'bg-[#2B313A] border-[#3A3A3A] text-[#E6E9EF] hover:bg-[#3A3A3A]',
-            socialButtonsBlockButtonText: 'text-[#E6E9EF]',
-            dividerLine: 'bg-[#2B313A]',
-            dividerText: 'text-[#A4ACB8]',
-            formFieldLabel: 'text-[#A4ACB8]',
-            formFieldInput: 'bg-[#0F1115] border-[#2B313A] text-[#E6E9EF] focus:border-[#C1121F] focus:ring-[#C1121F]/20',
-            formButtonPrimary: 'bg-[#C1121F] hover:bg-[#A30F1A] text-white',
-            footerActionLink: 'text-[#C1121F] hover:text-[#A30F1A]',
-            identityPreviewText: 'text-[#E6E9EF]',
-            identityPreviewEditButton: 'text-[#C1121F]',
-            formFieldInputShowPasswordButton: 'text-[#A4ACB8]',
-            otpCodeFieldInput: 'bg-[#0F1115] border-[#2B313A] text-[#E6E9EF]',
-          },
-        }}
-        fallbackRedirectUrl="/dashboard"
-        signUpUrl="/sign-up"
-      />
-    </div>
-  )
-}
-
 export default function SignInPage() {
   const [mounted, setMounted] = useState(false)
   const { isClerkAvailable, isLoading } = useClerkAvailability()
+  const [SignInComponent, setSignInComponent] = useState<React.ComponentType | null>(null)
   
   useEffect(() => {
     setMounted(true)
   }, [])
+  
+  // Load SignInInner only on production
+  useEffect(() => {
+    if (mounted && !isLoading && isClerkAvailable) {
+      import('@/components/auth/SignInInner')
+        .then(mod => setSignInComponent(() => mod.SignInInner))
+        .catch(() => {})
+    }
+  }, [mounted, isLoading, isClerkAvailable])
   
   // SSR
   if (!mounted) return <LoadingState />
@@ -124,6 +86,10 @@ export default function SignInPage() {
   // Preview: show fallback
   if (!isClerkAvailable) return <PreviewFallback />
   
-  // Production: show Clerk
-  return <ClerkSignIn />
+  // Production: show Clerk (or loading if not ready)
+  if (SignInComponent) {
+    return <SignInComponent />
+  }
+  
+  return <LoadingState />
 }

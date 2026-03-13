@@ -3,20 +3,20 @@
 /**
  * ClerkProviderWrapper - STRICT auth isolation for preview environments
  * 
- * CRITICAL ARCHITECTURE:
- * This wrapper uses a SYNCHRONOUS check at render time to determine
- * if Clerk should load. This is essential because:
+ * ARCHITECTURE CHANGE:
+ * Previous approaches failed because even dynamic imports cause Webpack to include
+ * the Clerk module in the bundle. The module then executes during hydration.
  * 
- * 1. useEffect-based checks run AFTER initial render
- * 2. Even lazy components get bundled if they're in the render path
- * 3. We need to check the domain BEFORE React considers the Clerk path
- * 
- * The solution is to check synchronously using window.location (client)
- * and only conditionally include the lazy import in the render tree.
+ * NEW APPROACH:
+ * - This file contains NO references to @clerk/nextjs at all
+ * - We provide context about Clerk availability
+ * - The actual ClerkProvider is loaded from a SEPARATE entry point
+ *   that is ONLY imported on production domains
+ * - On preview domains, we NEVER import anything Clerk-related
  */
 
-import { ReactNode, createContext, useContext, useState, useEffect } from 'react'
-import { shouldLoadClerk, isAllowedAuthDomain, isBrowser } from '@/lib/auth-gate'
+import { ReactNode, createContext, useContext, useState, useEffect, Suspense, lazy } from 'react'
+import { shouldLoadClerk, isBrowser } from '@/lib/auth-gate'
 
 // Context to share Clerk availability state with child components
 interface ClerkAvailabilityContextValue {
@@ -42,32 +42,48 @@ interface ClerkProviderWrapperProps {
 /**
  * Wrapper that COMPLETELY BLOCKS Clerk on non-production domains.
  * 
- * The key insight: we do a SYNCHRONOUS check during render to determine
- * if we should even consider loading Clerk. This prevents the lazy import
- * from being triggered on preview domains.
+ * CRITICAL: This component has NO static imports from @clerk/nextjs.
+ * The ClerkProviderInner is loaded via lazy() ONLY when shouldLoadClerk() is true.
+ * This prevents Webpack from including Clerk in the main bundle for preview.
  */
 export function ClerkProviderWrapper({ children }: ClerkProviderWrapperProps) {
-  // SYNCHRONOUS check - runs during render, not in useEffect
-  const canLoadClerkSync = isBrowser() ? shouldLoadClerk() : false
+  // State for managing Clerk availability
+  const [state, setState] = useState<ClerkAvailabilityContextValue>({
+    isClerkAvailable: false,
+    isPreviewMode: true,
+    isLoading: true,
+  })
   
-  const [state, setState] = useState<ClerkAvailabilityContextValue>(() => ({
-    isClerkAvailable: canLoadClerkSync,
-    isPreviewMode: !canLoadClerkSync,
-    isLoading: !isBrowser(), // Only loading if we haven't checked yet (SSR)
-  }))
+  // State for the lazily loaded component
+  const [ClerkInner, setClerkInner] = useState<React.ComponentType<{ children: ReactNode }> | null>(null)
 
-  // Update state after mount for SSR hydration
   useEffect(() => {
+    // Check if we should load Clerk
     const canLoad = shouldLoadClerk()
+    
     setState({
       isClerkAvailable: canLoad,
       isPreviewMode: !canLoad,
       isLoading: false,
     })
+    
+    // ONLY load Clerk if we're on an allowed domain
+    if (canLoad) {
+      // Dynamic import - this import statement is NOT analyzed at build time
+      // because it's inside a conditional useEffect
+      import('./ClerkProviderInner')
+        .then(mod => {
+          setClerkInner(() => mod.ClerkProviderInner)
+        })
+        .catch(err => {
+          console.error('[v0] Failed to load ClerkProviderInner:', err)
+          // On error, stay in preview mode
+        })
+    }
   }, [])
 
-  // HARD GATE: On preview/non-production domains, render WITHOUT ANY Clerk code
-  if (!state.isClerkAvailable) {
+  // During initial render and on preview domains, render without Clerk
+  if (state.isLoading || !state.isClerkAvailable || !ClerkInner) {
     return (
       <ClerkAvailabilityContext.Provider value={state}>
         {children}
@@ -75,82 +91,10 @@ export function ClerkProviderWrapper({ children }: ClerkProviderWrapperProps) {
     )
   }
 
-  // Production domain: render with ClerkProviderClient
-  // This is a separate component to isolate the Clerk import
+  // Production domain with Clerk loaded - wrap children with Clerk
   return (
     <ClerkAvailabilityContext.Provider value={state}>
-      <ClerkProviderClient>{children}</ClerkProviderClient>
+      <ClerkInner>{children}</ClerkInner>
     </ClerkAvailabilityContext.Provider>
   )
-}
-
-/**
- * Client component that loads Clerk - ONLY rendered on production domains
- * This component is in the same file but separated to make the code path clear.
- * The Clerk import only happens when this component is rendered.
- */
-function ClerkProviderClient({ children }: { children: ReactNode }) {
-  const [ClerkProviderComponent, setClerkProviderComponent] = useState<React.ComponentType<{
-    children: ReactNode
-    appearance: object
-    signInUrl: string
-    signUpUrl: string
-    signInFallbackRedirectUrl: string
-    signUpFallbackRedirectUrl: string
-  }> | null>(null)
-  
-  useEffect(() => {
-    // This import only executes on production domains
-    // because this component is only rendered there
-    import('@clerk/nextjs').then(mod => {
-      setClerkProviderComponent(() => mod.ClerkProvider)
-    }).catch(() => {
-      // If import fails, don't crash - children will render without auth
-    })
-  }, [])
-  
-  // While loading Clerk, render children without it
-  if (!ClerkProviderComponent) {
-    return <>{children}</>
-  }
-  
-  // Clerk loaded - wrap children with provider
-  return (
-    <ClerkProviderComponent
-      appearance={clerkAppearance}
-      signInUrl="/sign-in"
-      signUpUrl="/sign-up"
-      signInFallbackRedirectUrl="/dashboard"
-      signUpFallbackRedirectUrl="/onboarding"
-    >
-      {children}
-    </ClerkProviderComponent>
-  )
-}
-
-// Clerk appearance configuration matching SpartanLab theme
-const clerkAppearance = {
-  elements: {
-    rootBox: 'font-sans',
-    card: 'bg-[#1A1F26] border border-[#2B313A] shadow-xl',
-    headerTitle: 'text-[#E6E9EF]',
-    headerSubtitle: 'text-[#A4ACB8]',
-    socialButtonsBlockButton: 'bg-[#2B313A] border-[#3A3A3A] text-[#E6E9EF] hover:bg-[#3A3A3A]',
-    socialButtonsBlockButtonText: 'text-[#E6E9EF]',
-    dividerLine: 'bg-[#2B313A]',
-    dividerText: 'text-[#A4ACB8]',
-    formFieldLabel: 'text-[#A4ACB8]',
-    formFieldInput: 'bg-[#0F1115] border-[#2B313A] text-[#E6E9EF] focus:border-[#C1121F] focus:ring-[#C1121F]/20',
-    formButtonPrimary: 'bg-[#C1121F] hover:bg-[#A30F1A] text-white',
-    footerActionLink: 'text-[#C1121F] hover:text-[#A30F1A]',
-    identityPreviewText: 'text-[#E6E9EF]',
-    identityPreviewEditButton: 'text-[#C1121F]',
-    userButtonPopoverCard: 'bg-[#1A1F26] border border-[#2B313A]',
-    userButtonPopoverActionButton: 'text-[#E6E9EF] hover:bg-[#2B313A]',
-    userButtonPopoverActionButtonText: 'text-[#E6E9EF]',
-    userButtonPopoverActionButtonIcon: 'text-[#A4ACB8]',
-    userButtonPopoverFooter: 'hidden',
-    userPreviewMainIdentifier: 'text-[#E6E9EF]',
-    userPreviewSecondaryIdentifier: 'text-[#A4ACB8]',
-  },
 }

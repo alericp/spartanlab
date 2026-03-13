@@ -1,8 +1,8 @@
 'use client'
 
 import Link from 'next/link'
-import { useState, useEffect } from 'react'
-import { SignedIn, SignedOut, UserButton } from '@/components/auth/ClerkComponents'
+import { useState } from 'react'
+import { useAuth, UserButton as ClerkUserButton } from '@clerk/nextjs'
 import { Button } from '@/components/ui/button'
 import { Menu, X, LayoutDashboard } from 'lucide-react'
 import { SpartanIcon } from '@/components/brand/SpartanLogo'
@@ -17,11 +17,7 @@ const NAV_LINKS = [
 
 export function MarketingHeader() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
-  const [mounted, setMounted] = useState(false)
-  
-  useEffect(() => {
-    setMounted(true)
-  }, [])
+  const { isLoaded, isSignedIn } = useAuth()
 
   return (
     <header className="fixed top-0 left-0 right-0 z-50 bg-[#0F1115]/90 backdrop-blur-md border-b border-[#2B313A]">
@@ -48,8 +44,31 @@ export function MarketingHeader() {
 
           {/* Desktop CTA - Auth-aware */}
           <div className="hidden md:flex items-center gap-4">
-            {/* Default state shown during SSR and before mount */}
-            {!mounted && (
+            {isLoaded && isSignedIn ? (
+              // User is signed in
+              <>
+                <Link href="/dashboard">
+                  <Button variant="ghost" size="sm" className="text-[#A4ACB8] hover:text-[#E6E9EF]">
+                    <LayoutDashboard className="w-4 h-4 mr-2" />
+                    Dashboard
+                  </Button>
+                </Link>
+                <ClerkUserButton 
+                  afterSignOutUrl="/"
+                  appearance={{
+                    elements: {
+                      avatarBox: 'w-8 h-8',
+                      userButtonPopoverCard: 'bg-[#1A1F26] border border-[#2B313A]',
+                      userButtonPopoverActionButton: 'text-[#E6E9EF] hover:bg-[#2B313A]',
+                      userButtonPopoverActionButtonText: 'text-[#E6E9EF]',
+                      userButtonPopoverActionButtonIcon: 'text-[#A4ACB8]',
+                      userButtonPopoverFooter: 'hidden',
+                    },
+                  }}
+                />
+              </>
+            ) : (
+              // User is signed out OR auth is still loading - show login/signup buttons
               <>
                 <Link href="/sign-in">
                   <Button variant="ghost" size="sm" className="text-[#A4ACB8] hover:text-[#E6E9EF]">
@@ -61,45 +80,6 @@ export function MarketingHeader() {
                     Start Training
                   </Button>
                 </Link>
-              </>
-            )}
-            
-            {/* Auth-aware content after mount */}
-            {mounted && (
-              <>
-                <SignedIn>
-                  <Link href="/dashboard">
-                    <Button variant="ghost" size="sm" className="text-[#A4ACB8] hover:text-[#E6E9EF]">
-                      <LayoutDashboard className="w-4 h-4 mr-2" />
-                      Dashboard
-                    </Button>
-                  </Link>
-                  <UserButton 
-                    afterSignOutUrl="/"
-                    appearance={{
-                      elements: {
-                        avatarBox: 'w-8 h-8',
-                        userButtonPopoverCard: 'bg-[#1A1F26] border border-[#2B313A]',
-                        userButtonPopoverActionButton: 'text-[#E6E9EF] hover:bg-[#2B313A]',
-                        userButtonPopoverActionButtonText: 'text-[#E6E9EF]',
-                        userButtonPopoverActionButtonIcon: 'text-[#A4ACB8]',
-                        userButtonPopoverFooter: 'hidden',
-                      },
-                    }}
-                  />
-                </SignedIn>
-                <SignedOut>
-                  <Link href="/sign-in">
-                    <Button variant="ghost" size="sm" className="text-[#A4ACB8] hover:text-[#E6E9EF]">
-                      Login
-                    </Button>
-                  </Link>
-                  <Link href="/sign-up">
-                    <Button size="sm" className="bg-[#C1121F] hover:bg-[#A30F1A]">
-                      Start Training
-                    </Button>
-                  </Link>
-                </SignedOut>
               </>
             )}
           </div>
@@ -130,8 +110,16 @@ export function MarketingHeader() {
               ))}
               
               <div className="flex flex-col gap-2 pt-4 border-t border-[#2B313A]">
-                {/* Default state during SSR */}
-                {!mounted && (
+                {isLoaded && isSignedIn ? (
+                  // User is signed in
+                  <Link href="/dashboard" onClick={() => setMobileMenuOpen(false)}>
+                    <Button size="sm" className="w-full bg-[#C1121F] hover:bg-[#A30F1A]">
+                      <LayoutDashboard className="w-4 h-4 mr-2" />
+                      Go to Dashboard
+                    </Button>
+                  </Link>
+                ) : (
+                  // User is signed out OR auth is still loading
                   <>
                     <Link href="/sign-in" onClick={() => setMobileMenuOpen(false)}>
                       <Button variant="outline" size="sm" className="w-full border-[#2B313A] text-[#A4ACB8]">
@@ -143,32 +131,6 @@ export function MarketingHeader() {
                         Start Training
                       </Button>
                     </Link>
-                  </>
-                )}
-                
-                {/* Auth-aware content after mount */}
-                {mounted && (
-                  <>
-                    <SignedIn>
-                      <Link href="/dashboard" onClick={() => setMobileMenuOpen(false)}>
-                        <Button size="sm" className="w-full bg-[#C1121F] hover:bg-[#A30F1A]">
-                          <LayoutDashboard className="w-4 h-4 mr-2" />
-                          Go to Dashboard
-                        </Button>
-                      </Link>
-                    </SignedIn>
-                    <SignedOut>
-                      <Link href="/sign-in" onClick={() => setMobileMenuOpen(false)}>
-                        <Button variant="outline" size="sm" className="w-full border-[#2B313A] text-[#A4ACB8]">
-                          Login
-                        </Button>
-                      </Link>
-                      <Link href="/sign-up" onClick={() => setMobileMenuOpen(false)}>
-                        <Button size="sm" className="w-full bg-[#C1121F] hover:bg-[#A30F1A]">
-                          Start Training
-                        </Button>
-                      </Link>
-                    </SignedOut>
                   </>
                 )}
               </div>

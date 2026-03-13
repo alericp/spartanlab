@@ -79,20 +79,20 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <ClerkProvider
-      appearance={clerkAppearance}
-      signInUrl="/sign-in"
-      signUpUrl="/sign-up"
-      afterSignInUrl="/dashboard"
-      afterSignUpUrl="/onboarding"
-    >
-      <html lang="en">
-        <body className="font-sans antialiased bg-[#0F1115] text-[#E6E9EF]">
+    <html lang="en">
+      <body className="font-sans antialiased bg-[#0F1115] text-[#E6E9EF]">
+        <ClerkProvider
+          appearance={clerkAppearance}
+          signInUrl="/sign-in"
+          signUpUrl="/sign-up"
+          afterSignInUrl="/dashboard"
+          afterSignUpUrl="/onboarding"
+        >
           {children}
           <PreviewModeIndicator />
-          <Analytics />
-        </body>
-      </html>
-    </ClerkProvider>
+        </ClerkProvider>
+        <Analytics />
+      </body>
+    </html>
   )
 }

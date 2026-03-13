@@ -1,11 +1,11 @@
 import type { Metadata, Viewport } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
-import { Analytics } from '@vercel/analytics/next'
-import { ClerkProviderWrapper } from '@/components/providers/ClerkProviderWrapper'
-import { AnalyticsProvider } from '@/components/providers/AnalyticsProvider'
-import { PreviewModeIndicator } from '@/components/shared/PreviewModeIndicator'
 import { GlobalErrorBoundary } from '@/components/shared/GlobalErrorBoundary'
 import './globals.css'
+
+// BINARY ISOLATION TEST - Minimal layout
+// Removed: ClerkProviderWrapper, AnalyticsProvider, PreviewModeIndicator, Analytics
+// Purpose: Identify if crash is in shared root components vs page content
 
 const _geist = Geist({ subsets: ["latin"] });
 const _geistMono = Geist_Mono({ subsets: ["latin"] });
@@ -57,14 +57,8 @@ export default function RootLayout({
     <html lang="en">
       <body className="font-sans antialiased bg-[#0F1115] text-[#E6E9EF]">
         <GlobalErrorBoundary>
-          <ClerkProviderWrapper>
-            <AnalyticsProvider>
-              {children}
-            </AnalyticsProvider>
-            <PreviewModeIndicator />
-          </ClerkProviderWrapper>
+          {children}
         </GlobalErrorBoundary>
-        <Analytics />
       </body>
     </html>
   )

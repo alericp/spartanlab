@@ -5,6 +5,7 @@ import { Analytics } from '@vercel/analytics/next'
 import { ClerkProviderWrapper } from '@/components/providers/ClerkProviderWrapper'
 import { AnalyticsProvider } from '@/components/providers/AnalyticsProvider'
 import { PreviewModeIndicator } from '@/components/shared/PreviewModeIndicator'
+import { GlobalErrorBoundary } from '@/components/shared/GlobalErrorBoundary'
 import './globals.css'
 
 const _geist = Geist({ subsets: ["latin"] });
@@ -56,14 +57,16 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="font-sans antialiased bg-[#0F1115] text-[#E6E9EF]">
-        <ClerkProviderWrapper>
-          <Suspense fallback={null}>
-            <AnalyticsProvider>
-              {children}
-            </AnalyticsProvider>
-          </Suspense>
-          <PreviewModeIndicator />
-        </ClerkProviderWrapper>
+        <GlobalErrorBoundary>
+          <ClerkProviderWrapper>
+            <Suspense fallback={null}>
+              <AnalyticsProvider>
+                {children}
+              </AnalyticsProvider>
+            </Suspense>
+            <PreviewModeIndicator />
+          </ClerkProviderWrapper>
+        </GlobalErrorBoundary>
         <Analytics />
       </body>
     </html>

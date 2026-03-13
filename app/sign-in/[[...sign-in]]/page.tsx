@@ -111,14 +111,28 @@ function ProductionSignIn() {
     fallbackRedirectUrl?: string
     signUpUrl?: string
   }> | null>(null)
+  const [loadError, setLoadError] = useState(false)
 
   useEffect(() => {
-    const moduleName = ['@', 'clerk', '/', 'nextjs'].join('')
-    const loader = new Function('m', 'return import(m)')
-    loader(moduleName)
-      .then((mod: { SignIn: typeof SignIn }) => setSignIn(() => mod.SignIn))
-      .catch(() => {})
+    // Safe dynamic import
+    import('@clerk/nextjs')
+      .then((mod) => {
+        if (mod?.SignIn) {
+          setSignIn(() => mod.SignIn)
+        } else {
+          setLoadError(true)
+        }
+      })
+      .catch((error) => {
+        console.error('[SignIn] Failed to load Clerk:', error)
+        setLoadError(true)
+      })
   }, [])
+
+  // If loading failed, show fallback
+  if (loadError) {
+    return <PreviewFallback />
+  }
 
   if (!SignIn) return <LoadingState />
 

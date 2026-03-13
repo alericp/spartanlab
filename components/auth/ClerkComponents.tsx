@@ -1,14 +1,14 @@
 'use client'
 
 /**
- * ClerkComponents - Minimal auth component wrappers
+ * ClerkComponents - Production-safe auth component wrappers
  * 
  * SIMPLIFIED ARCHITECTURE:
  * - Preview mode: Static behavior, zero Clerk code
- * - Production mode: Real Clerk components via context
+ * - Production mode: Real Clerk components via safe dynamic import
  * 
  * These components ONLY handle rendering logic.
- * Runtime loading happens in ClerkProviderWrapper.
+ * CRITICAL: Uses safe dynamic import to prevent production crashes
  */
 
 import { ReactNode, useState, useEffect } from 'react'
@@ -27,18 +27,31 @@ interface UserButtonProps {
 }
 
 // ============================================================================
-// RUNTIME LOADER (single shared implementation)
+// SAFE CLERK MODULE LOADER
 // ============================================================================
 
-let clerkModulePromise: Promise<typeof import('@clerk/nextjs')> | null = null
+let clerkModuleCache: Promise<typeof import('@clerk/nextjs') | null> | null = null
 
-function getClerkModule(): Promise<typeof import('@clerk/nextjs')> {
-  if (!clerkModulePromise) {
-    const moduleName = ['@', 'clerk', '/', 'nextjs'].join('')
-    const loader = new Function('m', 'return import(m)')
-    clerkModulePromise = loader(moduleName)
+/**
+ * Safely load Clerk module with error handling
+ */
+async function getClerkModule(): Promise<typeof import('@clerk/nextjs') | null> {
+  if (clerkModuleCache) {
+    return clerkModuleCache
   }
-  return clerkModulePromise
+
+  clerkModuleCache = (async () => {
+    try {
+      // Direct dynamic import - safe for production
+      const mod = await import('@clerk/nextjs')
+      return mod
+    } catch (error) {
+      console.error('[ClerkComponents] Failed to load Clerk:', error)
+      return null
+    }
+  })()
+
+  return clerkModuleCache
 }
 
 // ============================================================================
@@ -59,8 +72,14 @@ export function SignedIn({ children }: AuthComponentProps) {
     if (isLoading || !isClerkAvailable) return
     
     getClerkModule()
-      .then(mod => setComp(() => mod.SignedIn))
-      .catch(() => {})
+      .then(mod => {
+        if (mod?.SignedIn) {
+          setComp(() => mod.SignedIn)
+        }
+      })
+      .catch(() => {
+        // Silently fail - component will stay null and render nothing
+      })
   }, [isLoading, isClerkAvailable])
 
   // Preview or loading: render nothing
@@ -87,8 +106,14 @@ export function SignedOut({ children }: AuthComponentProps) {
     if (isLoading || !isClerkAvailable) return
     
     getClerkModule()
-      .then(mod => setComp(() => mod.SignedOut))
-      .catch(() => {})
+      .then(mod => {
+        if (mod?.SignedOut) {
+          setComp(() => mod.SignedOut)
+        }
+      })
+      .catch(() => {
+        // Silently fail - will show children as fallback
+      })
   }, [isLoading, isClerkAvailable])
 
   // Preview: always show children
@@ -118,8 +143,14 @@ export function UserButton({ afterSignOutUrl = '/' }: UserButtonProps) {
     if (isLoading || !isClerkAvailable) return
     
     getClerkModule()
-      .then(mod => setComp(() => mod.UserButton))
-      .catch(() => {})
+      .then(mod => {
+        if (mod?.UserButton) {
+          setComp(() => mod.UserButton)
+        }
+      })
+      .catch(() => {
+        // Silently fail - component will stay null and render nothing
+      })
   }, [isLoading, isClerkAvailable])
 
   // Preview or not loaded: nothing

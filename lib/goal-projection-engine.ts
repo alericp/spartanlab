@@ -12,7 +12,7 @@ import { SKILL_PROGRESSIONS, type EnhancedSkillDefinition } from './skill-progre
 // TYPES
 // =============================================================================
 
-export type GoalType = 'front_lever' | 'planche' | 'muscle_up' | 'handstand_pushup'
+export type GoalType = 'front_lever' | 'planche' | 'muscle_up' | 'handstand_pushup' | 'l_sit' | 'pancake' | 'front_splits' | 'side_splits' | 'toe_touch'
 export type ConfidenceLevel = 'low' | 'moderate' | 'high'
 export type ProjectionStatus = 'on_track' | 'building' | 'needs_data' | 'goal_reached'
 
@@ -81,6 +81,13 @@ const BASE_PROGRESSION_TIMELINES: Record<GoalType, number[]> = {
   planche: [8, 12, 16, 24],            // tuck→adv_tuck→straddle→full
   muscle_up: [4, 6, 10, 16],           // band→jumping→strict→weighted
   handstand_pushup: [4, 8, 10, 16],    // wall→partial→strict→freestanding
+  // Compression skills
+  l_sit: [3, 6, 12, 20],               // tuck→L→V→I(manna)
+  // Flexibility skills (exposure-based, generally faster)
+  pancake: [8, 16, 24],                // beginner→intermediate→full
+  front_splits: [12, 20],              // partial→full
+  side_splits: [16, 28],               // partial→full
+  toe_touch: [4, 8],                   // restricted→full
 }
 
 // Strength thresholds that support each progression (% of bodyweight added)
@@ -97,6 +104,11 @@ const GOAL_NAMES: Record<GoalType, string> = {
   planche: 'Planche',
   muscle_up: 'Muscle-Up',
   handstand_pushup: 'Handstand Push-Up',
+  l_sit: 'L-Sit / V-Sit',
+  pancake: 'Pancake',
+  front_splits: 'Front Splits',
+  side_splits: 'Side Splits',
+  toe_touch: 'Toe Touch',
 }
 
 // =============================================================================
@@ -442,6 +454,31 @@ const GOAL_EXERCISES: Record<GoalType, {
     skillWork: ['Wall HSPU', 'Negatives', 'Partial ROM Work'],
     supportWork: ['Handstand Holds', 'Shoulder Mobility', 'Wrist Prep'],
   },
+  l_sit: {
+    strengthWork: ['Compression Lifts', 'Pike Compression', 'Weighted Hollow Body'],
+    skillWork: ['L-Sit Holds', 'V-Sit Progressions', 'Straddle Lifts'],
+    supportWork: ['Hip Flexor Strengthening', 'Pancake Flexibility', 'Core Work'],
+  },
+  pancake: {
+    strengthWork: ['Loaded Pancake Good Morning', 'Jefferson Curls', 'Pike Compression'],
+    skillWork: ['Seated Pancake Folds', 'Frog Stretch', 'Straddle Rotations'],
+    supportWork: ['Hip Circles', 'Adductor Work', 'Hamstring Exposure'],
+  },
+  front_splits: {
+    strengthWork: ['Loaded Split Stretch', 'Bulgarian Split Squats', 'Hip Flexor Lifts'],
+    skillWork: ['Half Split Holds', 'Runner Lunge Sequence', 'Pigeon Pose'],
+    supportWork: ['Hamstring Exposure', 'Quad Stretch', 'Hip Flexor Work'],
+  },
+  side_splits: {
+    strengthWork: ['Cossack Squats', 'Horse Stance', 'Loaded Straddle'],
+    skillWork: ['Frog Stretch', 'Pancake Work', 'Wall Straddle'],
+    supportWork: ['Adductor Slides', 'Butterfly Stretch', 'Hip Circles'],
+  },
+  toe_touch: {
+    strengthWork: ['Jefferson Curls', 'Romanian Deadlifts', 'Good Mornings'],
+    skillWork: ['Standing Pike Fold', 'Seated Forward Fold', 'Elephant Walk'],
+    supportWork: ['Hamstring Exposure', 'Calf Stretch', 'Hip Hinge Drills'],
+  },
 }
 
 function generateActionRecommendation(
@@ -541,11 +578,16 @@ export function calculateProjectionForPrimaryGoal(): GoalProjection | null {
 // UTILITY EXPORTS
 // =============================================================================
 
-export const SUPPORTED_GOALS: { type: GoalType; name: string }[] = [
-  { type: 'front_lever', name: 'Front Lever' },
-  { type: 'planche', name: 'Planche' },
-  { type: 'muscle_up', name: 'Muscle-Up' },
-  { type: 'handstand_pushup', name: 'Handstand Push-Up' },
+export const SUPPORTED_GOALS: { type: GoalType; name: string; category: 'skill' | 'compression' | 'flexibility' }[] = [
+  { type: 'front_lever', name: 'Front Lever', category: 'skill' },
+  { type: 'planche', name: 'Planche', category: 'skill' },
+  { type: 'muscle_up', name: 'Muscle-Up', category: 'skill' },
+  { type: 'handstand_pushup', name: 'Handstand Push-Up', category: 'skill' },
+  { type: 'l_sit', name: 'L-Sit / V-Sit', category: 'compression' },
+  { type: 'pancake', name: 'Pancake', category: 'flexibility' },
+  { type: 'front_splits', name: 'Front Splits', category: 'flexibility' },
+  { type: 'side_splits', name: 'Side Splits', category: 'flexibility' },
+  { type: 'toe_touch', name: 'Toe Touch', category: 'flexibility' },
 ]
 
 export function getConfidenceColor(confidence: ConfidenceLevel): string {

@@ -71,6 +71,7 @@ import { TrainingConsistencyCard } from '@/components/dashboard/TrainingConsiste
 import { AdaptiveEngineBadge, SensorEngineVisualization } from '@/components/shared/AdaptiveEngineBadge'
 import { TrainingEmphasis } from '@/components/dashboard/TrainingEmphasis'
 import { ProgressionInsights } from '@/components/dashboard/ProgressionInsights'
+import { GoalProjectionCard, GoalProjectionsOverview } from '@/components/dashboard/GoalProjectionCard'
 import { selectMethodProfiles, getCoachingMessage, type SelectionContext, type SelectedMethods } from '@/lib/training-principles-engine'
 import { getProgressionInsights, type ProgressionInsight } from '@/lib/adaptive-progression-engine'
 import { PremiumUpgradeBanner, SubscriptionTierBadge } from '@/components/premium/PremiumFeature'
@@ -344,6 +345,21 @@ setConstraintInsight(getConstraintInsight())
               })()}
               maxDisplay={4}
             />
+          </Section>
+        )}
+        
+        {/* ============================================================= */}
+        {/* GOAL PROJECTIONS - Timeline estimates */}
+        {/* ============================================================= */}
+        
+        {nextMilestone && (
+          <Section id="goal-projections" priority="secondary">
+            <SectionHeader 
+              title="Goal Timeline"
+              description="Estimated progress toward your next milestone"
+              icon={Target}
+            />
+            <GoalProjectionCard />
           </Section>
         )}
         

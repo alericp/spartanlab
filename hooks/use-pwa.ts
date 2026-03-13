@@ -130,25 +130,28 @@ export function usePWA(): UsePWAReturn {
   }
 }
 
-// Service Worker Registration
+// Service Worker Registration - TEMPORARILY DISABLED
+// Re-enable after cache invalidation is confirmed
 export function registerServiceWorker(): void {
   if (typeof window === 'undefined') return
   
+  // DISABLED: Unregister any existing service workers instead
   if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-      navigator.serviceWorker
-        .register('/sw.js')
-        .then((registration) => {
-          console.log('[PWA] Service Worker registered:', registration.scope)
-          
-          // Check for updates periodically
-          setInterval(() => {
-            registration.update()
-          }, 60 * 60 * 1000) // Check every hour
-        })
-        .catch((error) => {
-          console.log('[PWA] Service Worker registration failed:', error)
-        })
+    navigator.serviceWorker.getRegistrations().then((registrations) => {
+      registrations.forEach((registration) => {
+        console.log('[PWA] Unregistering service worker:', registration.scope)
+        registration.unregister()
+      })
     })
+    
+    // Clear all caches
+    if ('caches' in window) {
+      caches.keys().then((names) => {
+        names.forEach((name) => {
+          console.log('[PWA] Deleting cache:', name)
+          caches.delete(name)
+        })
+      })
+    }
   }
 }

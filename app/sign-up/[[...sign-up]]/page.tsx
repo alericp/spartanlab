@@ -1,10 +1,9 @@
 'use client'
 
 /**
- * Sign-Up Page - Preview-safe implementation
+ * Sign-Up Page - Preview-safe with runtime Clerk loading
  * 
- * NO @clerk/nextjs imports in this file.
- * The SignUpInner component is loaded dynamically only on production.
+ * Uses runtime dynamic import to hide @clerk/nextjs from Webpack.
  */
 
 import Link from 'next/link'
@@ -13,9 +12,6 @@ import { AlertCircle, ArrowLeft } from 'lucide-react'
 import { useClerkAvailability } from '@/components/providers/ClerkProviderWrapper'
 import { useEffect, useState } from 'react'
 
-/**
- * Preview fallback - shown on non-production domains
- */
 function PreviewFallback() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-[#0F1115] p-4">
@@ -48,9 +44,6 @@ function PreviewFallback() {
   )
 }
 
-/**
- * Loading state
- */
 function LoadingState() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-[#0F1115]">
@@ -59,37 +52,78 @@ function LoadingState() {
   )
 }
 
+const clerkAppearance = {
+  elements: {
+    rootBox: 'mx-auto',
+    card: 'bg-[#1A1F26] border border-[#2B313A] shadow-xl',
+    headerTitle: 'text-[#E6E9EF]',
+    headerSubtitle: 'text-[#A4ACB8]',
+    socialButtonsBlockButton: 'bg-[#2B313A] border-[#3A3A3A] text-[#E6E9EF] hover:bg-[#3A3A3A]',
+    socialButtonsBlockButtonText: 'text-[#E6E9EF]',
+    dividerLine: 'bg-[#2B313A]',
+    dividerText: 'text-[#A4ACB8]',
+    formFieldLabel: 'text-[#A4ACB8]',
+    formFieldInput: 'bg-[#0F1115] border-[#2B313A] text-[#E6E9EF] focus:border-[#C1121F] focus:ring-[#C1121F]/20',
+    formButtonPrimary: 'bg-[#C1121F] hover:bg-[#A30F1A] text-white',
+    footerActionLink: 'text-[#C1121F] hover:text-[#A30F1A]',
+    identityPreviewText: 'text-[#E6E9EF]',
+    identityPreviewEditButton: 'text-[#C1121F]',
+    formFieldInputShowPasswordButton: 'text-[#A4ACB8]',
+    otpCodeFieldInput: 'bg-[#0F1115] border-[#2B313A] text-[#E6E9EF]',
+  },
+}
+
+// Runtime import - hidden from Webpack static analysis
+async function loadClerkSignUp() {
+  const parts = ['@', 'clerk', '/', 'nextjs']
+  const moduleName = parts.join('')
+  const dynamicImport = new Function('m', 'return import(m)')
+  return dynamicImport(moduleName)
+}
+
 export default function SignUpPage() {
   const [mounted, setMounted] = useState(false)
   const { isClerkAvailable, isLoading } = useClerkAvailability()
-  const [SignUpComponent, setSignUpComponent] = useState<React.ComponentType | null>(null)
+  const [SignUp, setSignUp] = useState<React.ComponentType<{
+    appearance?: Record<string, unknown>
+    fallbackRedirectUrl?: string
+    signInUrl?: string
+  }> | null>(null)
   
   useEffect(() => {
     setMounted(true)
   }, [])
   
-  // Load SignUpInner only on production
   useEffect(() => {
     if (mounted && !isLoading && isClerkAvailable) {
-      import('@/components/auth/SignUpInner')
-        .then(mod => setSignUpComponent(() => mod.SignUpInner))
+      loadClerkSignUp()
+        .then((mod: { SignUp: typeof SignUp }) => setSignUp(() => mod.SignUp))
         .catch(() => {})
     }
   }, [mounted, isLoading, isClerkAvailable])
   
-  // SSR
-  if (!mounted) return <LoadingState />
-  
-  // Checking environment
-  if (isLoading) return <LoadingState />
-  
-  // Preview: show fallback
+  if (!mounted || isLoading) return <LoadingState />
   if (!isClerkAvailable) return <PreviewFallback />
+  if (!SignUp) return <LoadingState />
   
-  // Production: show Clerk (or loading if not ready)
-  if (SignUpComponent) {
-    return <SignUpComponent />
-  }
-  
-  return <LoadingState />
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center gap-4 bg-[#0F1115] px-4">
+      <SignUp
+        appearance={clerkAppearance}
+        fallbackRedirectUrl="/onboarding"
+        signInUrl="/sign-in"
+      />
+      <p className="text-xs text-[#6B7280] text-center max-w-xs leading-relaxed">
+        By creating an account, you agree to our{' '}
+        <Link href="/terms" className="text-[#A4ACB8] hover:text-[#E6E9EF] transition-colors underline underline-offset-2">
+          Terms of Service
+        </Link>{' '}
+        and{' '}
+        <Link href="/privacy" className="text-[#A4ACB8] hover:text-[#E6E9EF] transition-colors underline underline-offset-2">
+          Privacy Policy
+        </Link>
+        .
+      </p>
+    </div>
+  )
 }

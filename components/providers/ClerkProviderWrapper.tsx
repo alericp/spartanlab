@@ -1,24 +1,25 @@
 'use client'
 
 /**
- * ClerkProviderWrapper - STRICT auth isolation for preview environments
+ * ClerkProviderWrapper - Complete preview isolation using runtime import
  * 
- * ARCHITECTURE CHANGE:
- * Previous approaches failed because even dynamic imports cause Webpack to include
- * the Clerk module in the bundle. The module then executes during hydration.
+ * THE PROBLEM:
+ * Webpack statically analyzes import() statements and bundles them.
+ * Even dynamic imports like import('@clerk/nextjs') get pre-bundled.
+ * When the chunk loads, Clerk's module-level code runs and checks the domain.
  * 
- * NEW APPROACH:
- * - This file contains NO references to @clerk/nextjs at all
- * - We provide context about Clerk availability
- * - The actual ClerkProvider is loaded from a SEPARATE entry point
- *   that is ONLY imported on production domains
- * - On preview domains, we NEVER import anything Clerk-related
+ * THE SOLUTION:
+ * We use a technique to hide the import from Webpack's static analysis:
+ * - Build the module name at runtime using string concatenation
+ * - Use a wrapper function that Webpack can't trace
+ * This prevents Webpack from knowing what module to bundle.
+ * 
+ * The module is loaded via a truly dynamic runtime import.
  */
 
-import { ReactNode, createContext, useContext, useState, useEffect, Suspense, lazy } from 'react'
-import { shouldLoadClerk, isBrowser } from '@/lib/auth-gate'
+import { ReactNode, createContext, useContext, useState, useEffect, useRef } from 'react'
 
-// Context to share Clerk availability state with child components
+// Context for auth availability
 interface ClerkAvailabilityContextValue {
   isClerkAvailable: boolean
   isPreviewMode: boolean
@@ -35,55 +36,89 @@ export function useClerkAvailability() {
   return useContext(ClerkAvailabilityContext)
 }
 
-interface ClerkProviderWrapperProps {
-  children: ReactNode
+// Allowed production domains
+const ALLOWED_DOMAINS = ['spartanlab.app', 'www.spartanlab.app']
+
+/**
+ * SYNCHRONOUS domain check
+ */
+function isAllowedDomain(): boolean {
+  if (typeof window === 'undefined') return false
+  return ALLOWED_DOMAINS.includes(window.location.hostname)
 }
 
 /**
- * Wrapper that COMPLETELY BLOCKS Clerk on non-production domains.
- * 
- * CRITICAL: This component has NO static imports from @clerk/nextjs.
- * The ClerkProviderInner is loaded via lazy() ONLY when shouldLoadClerk() is true.
- * This prevents Webpack from including Clerk in the main bundle for preview.
+ * Check if we should attempt to use Clerk
  */
-export function ClerkProviderWrapper({ children }: ClerkProviderWrapperProps) {
-  // State for managing Clerk availability
-  const [state, setState] = useState<ClerkAvailabilityContextValue>({
-    isClerkAvailable: false,
-    isPreviewMode: true,
-    isLoading: true,
-  })
+function shouldAttemptClerk(): boolean {
+  const key = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
+  if (!key) return false
+  if (key.startsWith('pk_test_')) return true
+  return isAllowedDomain()
+}
+
+/**
+ * Runtime module loader that hides the module name from Webpack.
+ * Uses string building to construct '@clerk/nextjs' at runtime.
+ */
+async function loadClerkModule() {
+  // Build the module name at runtime - Webpack can't statically analyze this
+  const parts = ['@', 'clerk', '/', 'nextjs']
+  const moduleName = parts.join('')
   
-  // State for the lazily loaded component
-  const [ClerkInner, setClerkInner] = useState<React.ComponentType<{ children: ReactNode }> | null>(null)
+  // Use Function constructor to create a truly dynamic import
+  // This is the only way to prevent Webpack from bundling the module
+  const dynamicImport = new Function('moduleName', 'return import(moduleName)')
+  return dynamicImport(moduleName)
+}
+
+interface Props {
+  children: ReactNode
+}
+
+export function ClerkProviderWrapper({ children }: Props) {
+  // Check domain synchronously on first render
+  const canUseClerk = useRef(shouldAttemptClerk())
+  
+  const [state, setState] = useState<ClerkAvailabilityContextValue>(() => ({
+    isClerkAvailable: canUseClerk.current,
+    isPreviewMode: !canUseClerk.current,
+    isLoading: canUseClerk.current,
+  }))
+  
+  const [ClerkProvider, setClerkProvider] = useState<React.ComponentType<{
+    children: ReactNode
+    appearance?: Record<string, unknown>
+    signInUrl?: string
+    signUpUrl?: string
+    signInFallbackRedirectUrl?: string
+    signUpFallbackRedirectUrl?: string
+  }> | null>(null)
 
   useEffect(() => {
-    // Check if we should load Clerk
-    const canLoad = shouldLoadClerk()
-    
-    setState({
-      isClerkAvailable: canLoad,
-      isPreviewMode: !canLoad,
-      isLoading: false,
-    })
-    
-    // ONLY load Clerk if we're on an allowed domain
-    if (canLoad) {
-      // Dynamic import - this import statement is NOT analyzed at build time
-      // because it's inside a conditional useEffect
-      import('./ClerkProviderInner')
-        .then(mod => {
-          setClerkInner(() => mod.ClerkProviderInner)
-        })
-        .catch(err => {
-          console.error('[v0] Failed to load ClerkProviderInner:', err)
-          // On error, stay in preview mode
-        })
+    // Only load Clerk on allowed domains
+    if (!canUseClerk.current) {
+      return
     }
+
+    // Load Clerk using runtime dynamic import
+    loadClerkModule()
+      .then((mod: { ClerkProvider: typeof ClerkProvider }) => {
+        setClerkProvider(() => mod.ClerkProvider)
+        setState(prev => ({ ...prev, isLoading: false }))
+      })
+      .catch((err: Error) => {
+        console.error('[v0] Failed to load Clerk:', err)
+        setState({
+          isClerkAvailable: false,
+          isPreviewMode: true,
+          isLoading: false,
+        })
+      })
   }, [])
 
-  // During initial render and on preview domains, render without Clerk
-  if (state.isLoading || !state.isClerkAvailable || !ClerkInner) {
+  // Preview mode - render children without Clerk
+  if (!canUseClerk.current) {
     return (
       <ClerkAvailabilityContext.Provider value={state}>
         {children}
@@ -91,10 +126,51 @@ export function ClerkProviderWrapper({ children }: ClerkProviderWrapperProps) {
     )
   }
 
-  // Production domain with Clerk loaded - wrap children with Clerk
+  // Production mode but Clerk not loaded yet
+  if (!ClerkProvider) {
+    return (
+      <ClerkAvailabilityContext.Provider value={state}>
+        {children}
+      </ClerkAvailabilityContext.Provider>
+    )
+  }
+
+  // Production mode with Clerk loaded
   return (
     <ClerkAvailabilityContext.Provider value={state}>
-      <ClerkInner>{children}</ClerkInner>
+      <ClerkProvider
+        appearance={{
+          elements: {
+            rootBox: 'font-sans',
+            card: 'bg-[#1A1F26] border border-[#2B313A] shadow-xl',
+            headerTitle: 'text-[#E6E9EF]',
+            headerSubtitle: 'text-[#A4ACB8]',
+            socialButtonsBlockButton: 'bg-[#2B313A] border-[#3A3A3A] text-[#E6E9EF] hover:bg-[#3A3A3A]',
+            socialButtonsBlockButtonText: 'text-[#E6E9EF]',
+            dividerLine: 'bg-[#2B313A]',
+            dividerText: 'text-[#A4ACB8]',
+            formFieldLabel: 'text-[#A4ACB8]',
+            formFieldInput: 'bg-[#0F1115] border-[#2B313A] text-[#E6E9EF] focus:border-[#C1121F] focus:ring-[#C1121F]/20',
+            formButtonPrimary: 'bg-[#C1121F] hover:bg-[#A30F1A] text-white',
+            footerActionLink: 'text-[#C1121F] hover:text-[#A30F1A]',
+            identityPreviewText: 'text-[#E6E9EF]',
+            identityPreviewEditButton: 'text-[#C1121F]',
+            userButtonPopoverCard: 'bg-[#1A1F26] border border-[#2B313A]',
+            userButtonPopoverActionButton: 'text-[#E6E9EF] hover:bg-[#2B313A]',
+            userButtonPopoverActionButtonText: 'text-[#E6E9EF]',
+            userButtonPopoverActionButtonIcon: 'text-[#A4ACB8]',
+            userButtonPopoverFooter: 'hidden',
+            userPreviewMainIdentifier: 'text-[#E6E9EF]',
+            userPreviewSecondaryIdentifier: 'text-[#A4ACB8]',
+          },
+        }}
+        signInUrl="/sign-in"
+        signUpUrl="/sign-up"
+        signInFallbackRedirectUrl="/dashboard"
+        signUpFallbackRedirectUrl="/onboarding"
+      >
+        {children}
+      </ClerkProvider>
     </ClerkAvailabilityContext.Provider>
   )
 }

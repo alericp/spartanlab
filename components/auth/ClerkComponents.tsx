@@ -3,15 +3,9 @@
 /**
  * ClerkComponents - Preview-safe auth components
  * 
- * STRICT ISOLATION ARCHITECTURE:
- * - This file contains NO imports from @clerk/nextjs
- * - On preview domains, these components render static fallbacks
- * - On production domains, these components load inner components
- *   from ClerkComponentsInner.tsx via dynamic import
- * 
- * The key insight: by keeping ALL Clerk imports in a separate file
- * that's only dynamically imported on production, we ensure the
- * Clerk bundle is never loaded in preview.
+ * Uses runtime dynamic imports to hide module names from Webpack.
+ * On preview domains, these components render static fallbacks.
+ * On production domains, they load Clerk hooks at runtime.
  */
 
 import { ReactNode, useState, useEffect } from 'react'
@@ -22,76 +16,133 @@ interface AuthComponentProps {
 }
 
 /**
+ * Runtime module loader - hides from Webpack's static analysis
+ */
+async function loadClerkHooks() {
+  const parts = ['@', 'clerk', '/', 'nextjs']
+  const moduleName = parts.join('')
+  const dynamicImport = new Function('m', 'return import(m)')
+  return dynamicImport(moduleName)
+}
+
+/**
  * SignedIn - renders children only when user is signed in
- * Preview: renders nothing (user is never signed in)
+ * Preview: renders nothing
  */
 export function SignedIn({ children }: AuthComponentProps) {
   const [mounted, setMounted] = useState(false)
   const { isClerkAvailable, isLoading } = useClerkAvailability()
-  const [InnerComponent, setInnerComponent] = useState<React.ComponentType<AuthComponentProps> | null>(null)
+  const [isSignedIn, setIsSignedIn] = useState<boolean | null>(null)
 
   useEffect(() => {
     setMounted(true)
-    
-    // Only load the inner component on production
-    if (isClerkAvailable && !isLoading) {
-      import('./ClerkComponentsInner')
-        .then(mod => setInnerComponent(() => mod.SignedInInner))
-        .catch(() => {})
-    }
-  }, [isClerkAvailable, isLoading])
+  }, [])
 
-  // SSR or initial mount
+  useEffect(() => {
+    if (!isClerkAvailable || isLoading || !mounted) return
+
+    loadClerkHooks()
+      .then((mod: { useAuth: () => { isLoaded: boolean; isSignedIn: boolean } }) => {
+        // We can't use hooks here, so we need a different approach
+        // The hook needs to be called in a component
+      })
+      .catch(() => setIsSignedIn(false))
+  }, [isClerkAvailable, isLoading, mounted])
+
   if (!mounted || isLoading) return null
-  
-  // Preview mode: never signed in
   if (!isClerkAvailable) return null
 
-  // Production with component loaded
-  if (InnerComponent) {
-    return <InnerComponent>{children}</InnerComponent>
-  }
+  // On production, use the inner component
+  return <SignedInInner>{children}</SignedInInner>
+}
 
-  // Production loading - show nothing while loading
-  return null
+function SignedInInner({ children }: AuthComponentProps) {
+  const { isClerkAvailable } = useClerkAvailability()
+  const [authState, setAuthState] = useState<{ isLoaded: boolean; isSignedIn: boolean } | null>(null)
+  const [hookLoaded, setHookLoaded] = useState(false)
+
+  useEffect(() => {
+    if (!isClerkAvailable) {
+      setAuthState({ isLoaded: true, isSignedIn: false })
+      return
+    }
+
+    // Load hooks and poll for auth state
+    loadClerkHooks()
+      .then((mod) => {
+        setHookLoaded(true)
+        // Create a polling mechanism since we can't use hooks directly
+        const checkAuth = () => {
+          try {
+            // Access Clerk's client-side state
+            const clerk = (window as unknown as { Clerk?: { user?: unknown } }).Clerk
+            if (clerk) {
+              setAuthState({ isLoaded: true, isSignedIn: !!clerk.user })
+            }
+          } catch {
+            setAuthState({ isLoaded: true, isSignedIn: false })
+          }
+        }
+        checkAuth()
+        const interval = setInterval(checkAuth, 500)
+        setTimeout(() => clearInterval(interval), 5000) // Stop after 5s
+      })
+      .catch(() => setAuthState({ isLoaded: true, isSignedIn: false }))
+  }, [isClerkAvailable])
+
+  if (!authState || !authState.isLoaded) return null
+  return authState.isSignedIn ? <>{children}</> : null
 }
 
 /**
  * SignedOut - renders children when user is NOT signed in
- * Preview: always renders children (user is always signed out)
+ * Preview: always renders children
  */
 export function SignedOut({ children }: AuthComponentProps) {
   const [mounted, setMounted] = useState(false)
   const { isClerkAvailable, isLoading } = useClerkAvailability()
-  const [InnerComponent, setInnerComponent] = useState<React.ComponentType<AuthComponentProps> | null>(null)
 
   useEffect(() => {
     setMounted(true)
-    
-    // Only load the inner component on production
-    if (isClerkAvailable && !isLoading) {
-      import('./ClerkComponentsInner')
-        .then(mod => setInnerComponent(() => mod.SignedOutInner))
-        .catch(() => {
-          // On error, set a passthrough component
-          setInnerComponent(() => ({ children }: AuthComponentProps) => <>{children}</>)
-        })
-    }
-  }, [isClerkAvailable, isLoading])
+  }, [])
 
-  // SSR or initial mount
   if (!mounted || isLoading) return null
-  
-  // Preview mode: always signed out
   if (!isClerkAvailable) return <>{children}</>
 
-  // Production with component loaded
-  if (InnerComponent) {
-    return <InnerComponent>{children}</InnerComponent>
-  }
+  return <SignedOutInner>{children}</SignedOutInner>
+}
 
-  // Production loading - show children (assume signed out while loading)
-  return <>{children}</>
+function SignedOutInner({ children }: AuthComponentProps) {
+  const { isClerkAvailable } = useClerkAvailability()
+  const [authState, setAuthState] = useState<{ isLoaded: boolean; isSignedIn: boolean } | null>(null)
+
+  useEffect(() => {
+    if (!isClerkAvailable) {
+      setAuthState({ isLoaded: true, isSignedIn: false })
+      return
+    }
+
+    loadClerkHooks()
+      .then(() => {
+        const checkAuth = () => {
+          try {
+            const clerk = (window as unknown as { Clerk?: { user?: unknown } }).Clerk
+            if (clerk) {
+              setAuthState({ isLoaded: true, isSignedIn: !!clerk.user })
+            }
+          } catch {
+            setAuthState({ isLoaded: true, isSignedIn: false })
+          }
+        }
+        checkAuth()
+        const interval = setInterval(checkAuth, 500)
+        setTimeout(() => clearInterval(interval), 5000)
+      })
+      .catch(() => setAuthState({ isLoaded: true, isSignedIn: false }))
+  }, [isClerkAvailable])
+
+  if (!authState || !authState.isLoaded) return <>{children}</>
+  return authState.isSignedIn ? null : <>{children}</>
 }
 
 interface UserButtonProps {
@@ -105,37 +156,97 @@ interface UserButtonProps {
 export function UserButton({ afterSignOutUrl = '/' }: UserButtonProps) {
   const [mounted, setMounted] = useState(false)
   const { isClerkAvailable, isLoading } = useClerkAvailability()
-  const [InnerComponent, setInnerComponent] = useState<React.ComponentType<{ afterSignOutUrl: string }> | null>(null)
+  const [showMenu, setShowMenu] = useState(false)
+  const [user, setUser] = useState<{ firstName?: string; email?: string } | null>(null)
 
   useEffect(() => {
     setMounted(true)
-    
-    // Only load the inner component on production
-    if (isClerkAvailable && !isLoading) {
-      import('./ClerkComponentsInner')
-        .then(mod => setInnerComponent(() => mod.UserButtonInner))
-        .catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    if (!isClerkAvailable || isLoading || !mounted) return
+
+    const checkUser = () => {
+      try {
+        const clerk = (window as unknown as { 
+          Clerk?: { 
+            user?: { 
+              firstName?: string
+              primaryEmailAddress?: { emailAddress: string }
+            } 
+          } 
+        }).Clerk
+        if (clerk?.user) {
+          setUser({
+            firstName: clerk.user.firstName,
+            email: clerk.user.primaryEmailAddress?.emailAddress,
+          })
+        }
+      } catch {
+        // Ignore
+      }
     }
-  }, [isClerkAvailable, isLoading])
+    checkUser()
+    const interval = setInterval(checkUser, 500)
+    setTimeout(() => clearInterval(interval), 5000)
+    return () => clearInterval(interval)
+  }, [isClerkAvailable, isLoading, mounted])
 
-  // SSR or initial mount
-  if (!mounted || isLoading) return null
-  
-  // Preview mode: no user button
-  if (!isClerkAvailable) return null
+  if (!mounted || isLoading || !isClerkAvailable || !user) return null
 
-  // Production with component loaded
-  if (InnerComponent) {
-    return <InnerComponent afterSignOutUrl={afterSignOutUrl} />
+  const initial = (user.firstName?.[0] ?? user.email?.[0] ?? 'A').toUpperCase()
+
+  const handleSignOut = async () => {
+    setShowMenu(false)
+    try {
+      const clerk = (window as unknown as { Clerk?: { signOut?: (opts: { redirectUrl: string }) => Promise<void> } }).Clerk
+      if (clerk?.signOut) {
+        await clerk.signOut({ redirectUrl: afterSignOutUrl })
+      } else {
+        window.location.href = afterSignOutUrl
+      }
+    } catch {
+      window.location.href = afterSignOutUrl
+    }
   }
 
-  // Production loading
-  return null
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setShowMenu(!showMenu)}
+        className="w-8 h-8 rounded-full bg-[#C1121F] flex items-center justify-center text-xs font-bold text-white cursor-pointer select-none hover:bg-[#A30F1A] transition-colors"
+        title={user.email ?? 'Account'}
+      >
+        {initial}
+      </button>
+      
+      {showMenu && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setShowMenu(false)} />
+          <div className="absolute right-0 top-full mt-2 w-48 bg-[#1A1F26] border border-[#2B313A] rounded-lg shadow-xl z-50 py-1">
+            <div className="px-3 py-2 border-b border-[#2B313A]">
+              <div className="text-sm font-medium text-[#E6E9EF] truncate">
+                {user.firstName || 'User'}
+              </div>
+              <div className="text-xs text-[#A4ACB8] truncate">
+                {user.email}
+              </div>
+            </div>
+            <button
+              onClick={handleSignOut}
+              className="w-full text-left px-3 py-2 text-sm text-[#E6E9EF] hover:bg-[#2B313A] transition-colors"
+            >
+              Sign out
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  )
 }
 
 /**
  * useSafeAuth - Preview-safe hook for auth state
- * Returns defaults in preview mode
  */
 export function useSafeAuth() {
   const { isClerkAvailable, isLoading } = useClerkAvailability()
@@ -145,27 +256,16 @@ export function useSafeAuth() {
     isSignedIn: false,
     userId: null as string | null,
     signOut: async () => {},
-    // Components should use SignedIn/SignedOut for rendering logic
   }
 }
 
 /**
  * useSafeUser - Preview-safe hook for user data
- * Returns null user in preview mode
  */
 export function useSafeUser() {
-  const { isClerkAvailable, isLoading } = useClerkAvailability()
-  
   return {
-    user: null as {
-      id: string
-      firstName?: string | null
-      primaryEmailAddress?: { emailAddress: string } | null
-      emailAddresses?: Array<{ emailAddress: string }>
-      createdAt: number
-      username?: string | null
-    } | null,
-    isLoaded: !isLoading,
+    user: null,
+    isLoaded: true,
     isSignedIn: false,
   }
 }

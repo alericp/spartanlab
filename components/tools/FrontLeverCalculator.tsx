@@ -596,7 +596,7 @@ export function FrontLeverCalculator({ showCTA = true }: FrontLeverCalculatorPro
                   Generate your SpartanLab training program. Our adaptive engine will build workouts tailored to your strengths, weaknesses, and available time.
                 </p>
                 <Button asChild className="bg-[#C1121F] hover:bg-[#A30F1A] text-white px-8 py-3 font-semibold">
-                  <Link href="/signup">
+                  <Link href="/sign-up">
                     Start Training
                     <ArrowRight className="w-4 h-4 ml-2" />
                   </Link>

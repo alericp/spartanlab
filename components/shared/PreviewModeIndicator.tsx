@@ -1,11 +1,11 @@
 'use client'
 
 // Preview Mode Indicator - Debug/testing controls
-// PRODUCTION SAFE: Never renders for public users or non-owner users
-// Only renders in preview mode for local development/testing
+// PRODUCTION SAFE: Never renders in production environments
+// Only renders in local development when Clerk is NOT configured
 
 import { useState, useEffect } from 'react'
-import { isPreviewMode, getModeInfo } from '@/lib/app-mode'
+import { isAuthEnabled, getModeInfo } from '@/lib/app-mode'
 import { getCurrentPlan, setPreviewPlan, canSwitchPreviewPlan } from '@/lib/plan-source'
 import type { SubscriptionPlan } from '@/types/domain'
 import { Button } from '@/components/ui/button'
@@ -27,15 +27,14 @@ export function PreviewModeIndicator() {
   useEffect(() => {
     setMounted(true)
     
-    // CRITICAL: Only render in preview mode
-    // Never render in production - this keeps the public site clean
-    const preview = isPreviewMode()
-    if (!preview) {
+    // CRITICAL: Never render if Clerk auth is enabled (production environment)
+    // This ensures the preview indicator never leaks to public users
+    if (isAuthEnabled()) {
       setShouldRender(false)
       return
     }
     
-    // In preview mode, only show if user has started using the app
+    // In local dev mode (no Clerk), only show if user has started using the app
     const hasProfile = localStorage.getItem('athlete_profile')
     const hasWorkouts = localStorage.getItem('workouts')
     const hasPrograms = localStorage.getItem('saved_programs')

@@ -418,7 +418,7 @@ export function PullUpStrengthCalculator({ showCTA = true }: PullUpStrengthCalcu
                   SpartanLab builds calisthenics workouts based on your strength level and goals. Get adaptive training that evolves with your progress.
                 </p>
                 <Button asChild className="bg-[#C1121F] hover:bg-[#A30F1A] text-white px-8 py-3 font-semibold">
-                  <Link href="/signup">
+                  <Link href="/sign-up">
                     Generate Training Plan
                     <ArrowRight className="w-4 h-4 ml-2" />
                   </Link>

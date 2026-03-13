@@ -65,7 +65,7 @@ function HeroSection() {
         {/* CTA */}
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
           <Button asChild size="lg" className="bg-[#C1121F] hover:bg-[#A30F1A] text-white px-8 py-6 text-lg font-semibold">
-            <Link href="/signup">
+            <Link href="/sign-up">
               Start Training Free
               <ArrowRight className="w-5 h-5 ml-2" />
             </Link>

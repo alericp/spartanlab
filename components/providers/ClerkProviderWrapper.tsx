@@ -1,7 +1,7 @@
 'use client'
 
-import { ReactNode, useEffect, useState, lazy, Suspense } from 'react'
-import dynamic from 'next/dynamic'
+import { ClerkProvider } from '@clerk/nextjs'
+import { ReactNode, useEffect, useState } from 'react'
 
 // Clerk appearance configuration matching SpartanLab theme
 const clerkAppearance = {
@@ -30,80 +30,58 @@ const clerkAppearance = {
   },
 }
 
-/**
- * Check if we're in v0 preview environment where production Clerk keys won't work
- * This check runs at module load time to prevent Clerk from initializing
- */
-function getIsV0Preview(): boolean {
-  if (typeof window === 'undefined') {
-    // Server-side: check for v0 environment indicators
-    // The hostname check won't work server-side, so we use env vars
-    return process.env.VERCEL_ENV !== 'production' || 
-           process.env.NEXT_PUBLIC_VERCEL_URL?.includes('vusercontent.net') ||
-           process.env.NEXT_PUBLIC_VERCEL_URL?.includes('v0.dev') ||
-           !process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY?.startsWith('pk_live_')
-  }
-  const hostname = window.location.hostname
-  return hostname.includes('vusercontent.net') || 
-         hostname.includes('v0.dev') || 
-         hostname === 'localhost'
-}
-
-/**
- * Check if Clerk should be enabled - must be checked before importing Clerk
- */
-function shouldEnableClerk(): boolean {
-  const publishableKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
-  if (!publishableKey) return false
-  
-  const isProductionKey = publishableKey.startsWith('pk_live_')
-  const isPreview = getIsV0Preview()
-  
-  // Don't use production keys in v0 preview
-  if (isPreview && isProductionKey) {
-    return false
-  }
-  
-  return true
-}
-
-// Determine at module load time if we should use Clerk
-const CLERK_ENABLED = shouldEnableClerk()
-
 interface ClerkProviderWrapperProps {
   children: ReactNode
 }
 
-// Only create the Clerk wrapper component if Clerk is enabled
-// This prevents the @clerk/nextjs module from loading at all in preview
-const ClerkProviderLazy = CLERK_ENABLED 
-  ? dynamic(
-      () => import('@clerk/nextjs').then(mod => {
-        const { ClerkProvider } = mod
-        return function ClerkWrapper({ children }: { children: ReactNode }) {
-          return (
-            <ClerkProvider
-              appearance={clerkAppearance}
-              signInUrl="/sign-in"
-              signUpUrl="/sign-up"
-              signInFallbackRedirectUrl="/dashboard"
-              signUpFallbackRedirectUrl="/onboarding"
-            >
-              {children}
-            </ClerkProvider>
-          )
-        }
-      }),
-      { ssr: false }
-    )
-  : null
-
+/**
+ * Wrapper that conditionally enables Clerk based on environment.
+ * In v0 preview with production keys, Clerk is disabled to avoid domain errors.
+ */
 export function ClerkProviderWrapper({ children }: ClerkProviderWrapperProps) {
-  // If Clerk is disabled (v0 preview with production keys), just render children
-  if (!CLERK_ENABLED || !ClerkProviderLazy) {
+  const [shouldUseClerk, setShouldUseClerk] = useState(false)
+  const [isReady, setIsReady] = useState(false)
+
+  useEffect(() => {
+    // Check if we're in v0 preview environment
+    const hostname = window.location.hostname
+    const isV0Preview = hostname.includes('vusercontent.net') || 
+                        hostname.includes('v0.dev') || 
+                        hostname === 'localhost'
+    
+    const publishableKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
+    const hasKey = !!publishableKey
+    const isProductionKey = publishableKey?.startsWith('pk_live_') ?? false
+    
+    // Enable Clerk only if:
+    // 1. We have a key AND
+    // 2. Either we're not in preview OR we're using test keys
+    const enableClerk = hasKey && (!isV0Preview || !isProductionKey)
+    
+    setShouldUseClerk(enableClerk)
+    setIsReady(true)
+  }, [])
+
+  // Show nothing during initial check to avoid hydration issues
+  if (!isReady) {
     return <>{children}</>
   }
 
-  // Normal flow: use dynamically loaded ClerkProvider
-  return <ClerkProviderLazy>{children}</ClerkProviderLazy>
+  // Skip Clerk in v0 preview with production keys
+  if (!shouldUseClerk) {
+    return <>{children}</>
+  }
+
+  // Normal flow: use ClerkProvider
+  return (
+    <ClerkProvider
+      appearance={clerkAppearance}
+      signInUrl="/sign-in"
+      signUpUrl="/sign-up"
+      signInFallbackRedirectUrl="/dashboard"
+      signUpFallbackRedirectUrl="/onboarding"
+    >
+      {children}
+    </ClerkProvider>
+  )
 }

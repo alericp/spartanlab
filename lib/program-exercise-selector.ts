@@ -18,6 +18,7 @@ import {
   hasRequiredEquipment,
   getAllExercises,
 } from './adaptive-exercise-pool'
+import { FLEXIBILITY_SEQUENCES, generateFlexibilitySession } from './flexibility-sequences'
 import {
   getAdaptedExercise,
   getProgressionUp,
@@ -311,6 +312,12 @@ function selectMainExercises(
   }
   
   // 5. FLEXIBILITY DAYS (for flexibility goals or flexibility_focus day)
+  // SpartanLab Flexibility Philosophy:
+  // - 15 second holds (NOT 30-60s)
+  // - Multiple angles/variations per movement
+  // - 3 rounds of each sequence
+  // - Low soreness, high frequency
+  // - Sessions 5-12 minutes
   const flexibilityGoals = ['pancake', 'toe_touch', 'front_splits', 'side_splits', 'flexibility']
   if (flexibilityGoals.includes(primaryGoal) || day.focus === 'flexibility_focus') {
     // Get flexibility exercises that transfer to this goal
@@ -324,41 +331,37 @@ function selectMainExercises(
       ? availableFlexibility 
       : goalFlexibility.length > 0 ? goalFlexibility : availableFlexibility
     
-    // Flexibility philosophy: frequent exposure over long holds
-    // Select 3-5 exercises with moderate holds
+    // Sort by transfer priority
     const sortedFlexExercises = flexPool.sort((a, b) => {
-      // Prioritize exercises that directly transfer to the goal
       const aTransfer = a.transferTo.includes(primaryGoal) ? 1 : 0
       const bTransfer = b.transferTo.includes(primaryGoal) ? 1 : 0
       if (aTransfer !== bTransfer) return bTransfer - aTransfer
-      
-      // Then by progression ladder match
       const aLadder = a.progressionLadder === primaryGoal ? 1 : 0
       const bLadder = b.progressionLadder === primaryGoal ? 1 : 0
       return bLadder - aLadder
     })
     
-    // Add primary flexibility exercises (more sets, moderate hold times)
-    sortedFlexExercises.slice(0, Math.min(4, maxExercises - 1)).forEach((exercise, index) => {
-      const isPrimary = index < 2
+    // SpartanLab 15s Exposure Structure:
+    // Select 3-4 exercises, 3 rounds each, 15s holds
+    // Total time: ~5-12 minutes
+    const selectedFlexCount = Math.min(4, maxExercises - 1)
+    sortedFlexExercises.slice(0, selectedFlexCount).forEach((exercise) => {
       addExercise(
         exercise,
-        isPrimary 
-          ? `Primary ${primaryGoal} flexibility work` 
-          : `Supporting ${primaryGoal} flexibility`,
-        isPrimary ? 3 : 2,
-        isPrimary ? '45-60s' : '30-45s',
-        'Breathe deeply, relax into position'
+        `${primaryGoal} flexibility flow`,
+        3,  // 3 rounds - SpartanLab standard
+        '15s', // 15 second holds - SpartanLab philosophy
+        '15s exposure, multiple angles, breathe steadily'
       )
     })
     
-    // Add a light core/compression exercise if room
+    // Add light core/compression if room (also 15s exposure style)
     if (selected.length < maxExercises) {
       const compressionCore = availableCore.find(e => 
         e.movementPattern === 'compression' || e.transferTo.includes('l_sit')
       )
       if (compressionCore && !usedIds.has(compressionCore.id)) {
-        addExercise(compressionCore, 'Active flexibility / compression support', 2)
+        addExercise(compressionCore, 'Active compression support', 3, '15s')
       }
     }
   }

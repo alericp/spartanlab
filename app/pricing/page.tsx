@@ -158,6 +158,13 @@ export default function PricingPage() {
           <p className="text-center text-sm text-[#A5A5A5] mt-8">
             All plans include mobile access. Pricing is subject to change before launch.
           </p>
+          <p className="text-center text-xs text-[#6B7280] mt-3">
+            Subscriptions renew automatically until canceled. See our{' '}
+            <Link href="/terms" className="text-[#A5A5A5] hover:text-[#F5F5F5] transition-colors underline underline-offset-2">Terms of Service</Link>
+            {' '}and{' '}
+            <Link href="/privacy" className="text-[#A5A5A5] hover:text-[#F5F5F5] transition-colors underline underline-offset-2">Privacy Policy</Link>
+            .
+          </p>
         </div>
       </section>
 
@@ -229,7 +236,22 @@ export default function PricingPage() {
             {FAQ.map((item) => (
               <div key={item.question}>
                 <h3 className="text-lg font-semibold mb-2">{item.question}</h3>
-                <p className="text-[#A5A5A5]">{item.answer}</p>
+                <p className="text-[#A5A5A5]">
+                  {item.answer.includes('billing@spartanlab.app') ? (
+                    <>
+                      {'For billing questions, refunds, or invoice requests, email '}
+                      <a
+                        href="mailto:billing@spartanlab.app"
+                        className="text-[#F5F5F5] hover:text-white transition-colors underline underline-offset-2"
+                      >
+                        billing@spartanlab.app
+                      </a>
+                      .
+                    </>
+                  ) : (
+                    item.answer
+                  )}
+                </p>
               </div>
             ))}
           </div>

@@ -241,6 +241,12 @@ export default function SettingsPage() {
                   </p>
                 </div>
               </div>
+              <p className="text-xs text-[#6B7280]">
+                Billing questions?{' '}
+                <a href="mailto:billing@spartanlab.app" className="text-[#A5A5A5] hover:text-[#F5F5F5] transition-colors">
+                  billing@spartanlab.app
+                </a>
+              </p>
             </div>
           ) : (
             // Free user display

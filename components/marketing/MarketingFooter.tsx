@@ -6,7 +6,7 @@ import { SpartanIcon } from '@/components/brand/SpartanLogo'
 
 export function MarketingFooter() {
   // Use static year for SSR, update on client to avoid hydration mismatch
-  const [year, setYear] = useState(2024)
+  const [year, setYear] = useState(2026)
   
   useEffect(() => {
     setYear(new Date().getFullYear())
@@ -17,7 +17,7 @@ export function MarketingFooter() {
         <div className="grid gap-8 md:grid-cols-4">
           {/* Brand */}
           <div className="md:col-span-2">
-            <Link href="/landing" className="flex items-center gap-2.5 mb-4">
+            <Link href="/" className="flex items-center gap-2.5 mb-4">
               <SpartanIcon size={30} />
               <span className="text-lg font-bold tracking-tight text-[#E6E9EF]">SpartanLab</span>
             </Link>
@@ -34,7 +34,7 @@ export function MarketingFooter() {
             <h4 className="text-sm font-semibold mb-4 text-[#E6E9EF]">Platform</h4>
             <ul className="space-y-3">
               <li>
-                <Link href="/landing#how-it-works" className="text-sm text-[#A4ACB8] hover:text-[#E6E9EF] transition-colors">
+                <Link href="/how-it-works" className="text-sm text-[#A4ACB8] hover:text-[#E6E9EF] transition-colors">
                   How It Works
                 </Link>
               </li>
@@ -44,7 +44,7 @@ export function MarketingFooter() {
                 </Link>
               </li>
               <li>
-                <Link href="/landing#pricing" className="text-sm text-[#A4ACB8] hover:text-[#E6E9EF] transition-colors">
+                <Link href="/pricing" className="text-sm text-[#A4ACB8] hover:text-[#E6E9EF] transition-colors">
                   Pricing
                 </Link>
               </li>
@@ -66,7 +66,7 @@ export function MarketingFooter() {
             <h4 className="text-sm font-semibold mb-4 text-[#E6E9EF]">Training Guides</h4>
             <ul className="space-y-3">
               <li>
-                <Link href="/guides/front-lever-progression" className="text-sm text-[#A4ACB8] hover:text-[#E6E9EF] transition-colors">
+                <Link href="/guides/front-lever-training" className="text-sm text-[#A4ACB8] hover:text-[#E6E9EF] transition-colors">
                   Front Lever Guide
                 </Link>
               </li>
@@ -76,18 +76,18 @@ export function MarketingFooter() {
                 </Link>
               </li>
               <li>
-                <Link href="/guides/muscle-up-progression" className="text-sm text-[#A4ACB8] hover:text-[#E6E9EF] transition-colors">
+                <Link href="/guides/muscle-up-training" className="text-sm text-[#A4ACB8] hover:text-[#E6E9EF] transition-colors">
                   Muscle-Up Guide
                 </Link>
               </li>
               <li>
-                <Link href="/guides/calisthenics-strength-standards" className="text-sm text-[#A4ACB8] hover:text-[#E6E9EF] transition-colors">
-                  Strength Standards
+                <Link href="/guides/weighted-pull-up-training" className="text-sm text-[#A4ACB8] hover:text-[#E6E9EF] transition-colors">
+                  Weighted Pull-Up Guide
                 </Link>
               </li>
               <li>
-                <Link href="/guides/calisthenics-training-program" className="text-sm text-[#A4ACB8] hover:text-[#E6E9EF] transition-colors">
-                  Programming Guide
+                <Link href="/guides" className="text-sm text-[#A4ACB8] hover:text-[#E6E9EF] transition-colors">
+                  All Guides
                 </Link>
               </li>
             </ul>
@@ -100,7 +100,18 @@ export function MarketingFooter() {
             &copy; {year} SpartanLab. All rights reserved.
           </p>
           <div className="flex items-center gap-6">
-            <span className="text-xs text-[#6B7280]">Stop guessing. Start training with intelligence.</span>
+            <Link href="/terms" className="text-xs text-[#6B7280] hover:text-[#A4ACB8] transition-colors">
+              Terms
+            </Link>
+            <Link href="/privacy" className="text-xs text-[#6B7280] hover:text-[#A4ACB8] transition-colors">
+              Privacy
+            </Link>
+            <a 
+              href="mailto:support@spartanlab.app" 
+              className="text-xs text-[#6B7280] hover:text-[#A4ACB8] transition-colors"
+            >
+              support@spartanlab.app
+            </a>
           </div>
         </div>
       </div>

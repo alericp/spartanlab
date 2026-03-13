@@ -22,6 +22,7 @@ import {
 } from 'lucide-react'
 import { PREMIUM_FEATURES, type PremiumFeatureId, useSubscriptionInfo, useIsOwner } from '@/components/premium/PremiumFeature'
 import { upgradeToPro, startTrial, hasProAccess } from '@/lib/feature-access'
+import { trackUpgradeStarted, trackUpgradeCompleted } from '@/lib/analytics'
 
 const FREE_FEATURES = [
   'Workout generation & logging',
@@ -87,8 +88,10 @@ export default function UpgradePage() {
   }, [])
 
   const handleUpgrade = () => {
+    trackUpgradeStarted('upgrade_page')
     upgradeToPro()
     setIsPro(true)
+    trackUpgradeCompleted('upgrade_page')
     // Redirect to dashboard after short delay
     setTimeout(() => router.push('/dashboard'), 500)
   }
@@ -343,6 +346,14 @@ export default function UpgradePage() {
               <span className="hidden sm:inline text-[#3A4553]">|</span>
               <div>Cancel anytime, no questions asked</div>
             </div>
+            <p className="text-xs text-[#6B7280] mt-4">
+              By subscribing, you agree to our{' '}
+              <Link href="/terms" className="text-[#A4ACB8] hover:text-[#E6E9EF] underline underline-offset-2">Terms</Link>
+              {' '}and{' '}
+              <Link href="/privacy" className="text-[#A4ACB8] hover:text-[#E6E9EF] underline underline-offset-2">Privacy Policy</Link>
+              . Billing questions?{' '}
+              <a href="mailto:billing@spartanlab.app" className="text-[#A4ACB8] hover:text-[#E6E9EF] underline underline-offset-2">billing@spartanlab.app</a>
+            </p>
           </Card>
         </div>
       </div>

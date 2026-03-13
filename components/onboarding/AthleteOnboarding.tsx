@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { ArrowRight, ArrowLeft, Check, Loader2 } from 'lucide-react'
 import { SpartanIcon } from '@/components/brand/SpartanLogo'
+import { trackOnboardingCompleted } from '@/lib/analytics'
 import {
   type OnboardingProfile,
   type HeightRange,
@@ -273,10 +274,13 @@ export function AthleteOnboarding() {
       saveOnboardingProfile(profile)
       
       // Small delay for UX
-      await new Promise(resolve => setTimeout(resolve, 500))
-      
-      // Navigate to dashboard - the program will be generated there
-      router.push('/dashboard?welcome=true')
+    await new Promise(resolve => setTimeout(resolve, 500))
+    
+    // Track onboarding completion
+    trackOnboardingCompleted('onboarding')
+    
+    // Navigate to dashboard - the program will be generated there
+    router.push('/dashboard?welcome=true')
     } catch (error) {
       console.error('Failed to save profile:', error)
       setIsSubmitting(false)

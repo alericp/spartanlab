@@ -1,7 +1,9 @@
 import type { Metadata, Viewport } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
+import { Suspense } from 'react'
 import { Analytics } from '@vercel/analytics/next'
 import { ClerkProvider } from '@clerk/nextjs'
+import { AnalyticsProvider } from '@/components/providers/AnalyticsProvider'
 import { PreviewModeIndicator } from '@/components/shared/PreviewModeIndicator'
 import './globals.css'
 
@@ -88,7 +90,11 @@ export default function RootLayout({
           signInFallbackRedirectUrl="/dashboard"
           signUpFallbackRedirectUrl="/onboarding"
         >
-          {children}
+          <Suspense fallback={null}>
+            <AnalyticsProvider>
+              {children}
+            </AnalyticsProvider>
+          </Suspense>
           <PreviewModeIndicator />
         </ClerkProvider>
         <Analytics />

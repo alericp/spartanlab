@@ -17,6 +17,7 @@ import {
   FinishConfirmation 
 } from '@/components/workout/WorkoutSessionControls'
 import { WorkoutSessionSummary } from '@/components/workout/WorkoutSessionSummary'
+import { trackWorkoutStarted, trackWorkoutCompleted } from '@/lib/analytics'
 
 interface AdaptiveSessionCardProps {
   session: AdaptiveSession
@@ -56,10 +57,12 @@ export function AdaptiveSessionCard({ session, onExerciseReplace, onWorkoutCompl
   const handleStartWorkout = () => {
     startSession()
     setIsExpanded(true)
+    trackWorkoutStarted(session.name)
   }
 
   const handleWorkoutComplete = () => {
     finishSession()
+    trackWorkoutCompleted(session.name, stats.durationMinutes, stats.completedExercises)
     onWorkoutComplete?.()
   }
 

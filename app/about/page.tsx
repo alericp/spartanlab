@@ -162,6 +162,12 @@ export default function AboutPage() {
               <ArrowRight className="w-4 h-4 ml-2" />
             </Button>
           </Link>
+          <p className="text-sm text-[#6B7280] mt-8">
+            Questions? Reach us at{' '}
+            <a href="mailto:hello@spartanlab.app" className="text-[#A4ACB8] hover:text-[#E6E9EF] transition-colors">
+              hello@spartanlab.app
+            </a>
+          </p>
         </div>
       </section>
 

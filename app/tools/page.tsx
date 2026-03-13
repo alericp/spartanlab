@@ -91,6 +91,22 @@ const tools = [
     category: 'Program Generator',
     featured: true,
   },
+  {
+    slug: 'front-lever-strength-test',
+    title: 'Front Lever Strength Test',
+    description: 'Test your front lever readiness with this interactive strength assessment based on pulling strength and hold times.',
+    icon: Target,
+    category: 'Skill Sensor',
+    featured: true,
+  },
+  {
+    slug: 'planche-strength-calculator',
+    title: 'Planche Strength Calculator',
+    description: 'Calculate your planche readiness based on pushing strength, lean angle tolerance, and core compression.',
+    icon: Calculator,
+    category: 'Skill Sensor',
+    featured: true,
+  },
 ]
 
 // Pro-only advanced tools

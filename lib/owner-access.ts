@@ -16,9 +16,15 @@ import { isPreviewMode } from './app-mode'
 
 /**
  * Get the configured owner email from environment
+ * Checks both OWNER_EMAIL (server-only, preferred) and NEXT_PUBLIC_OWNER_EMAIL (client-safe)
  */
 export function getOwnerEmail(): string | null {
-  // Check environment variable (works in both client and server)
+  // Server-side: prefer OWNER_EMAIL (more secure, not exposed to client)
+  if (typeof window === 'undefined' && process.env?.OWNER_EMAIL) {
+    return process.env.OWNER_EMAIL
+  }
+  
+  // Client-side or fallback: use public version
   if (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_OWNER_EMAIL) {
     return process.env.NEXT_PUBLIC_OWNER_EMAIL
   }
@@ -82,11 +88,10 @@ export function isOwner(currentEmail?: string): boolean {
   
   // No owner email configured - owner mode not enabled
   if (!ownerEmail) {
-    // In preview mode, default to true for testing
-    return isPreviewMode()
+    return false
   }
   
-  // Use provided email or get from localStorage (preview mode)
+  // Use provided email or get from localStorage (preview mode only)
   const email = currentEmail || getCurrentUserEmail()
   
   // No current user - not logged in

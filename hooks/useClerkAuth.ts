@@ -8,8 +8,24 @@ import type { User, SubscriptionPlan } from '@/types/domain'
  * ClerkProvider is in the root layout, so these hooks work everywhere
  */
 export function useClerkAuth() {
-  const { user: clerkUser, isLoaded: isUserLoaded, isSignedIn } = useUser()
-  const { signOut } = useAuth()
+  let clerkUser = null
+  let isUserLoaded = false
+  let isSignedIn = false
+  let signOutFn = async () => {}
+  
+  // Wrap Clerk hooks in try-catch to handle domain mismatch errors
+  try {
+    const userResult = useUser()
+    const authResult = useAuth()
+    clerkUser = userResult.user
+    isUserLoaded = userResult.isLoaded
+    isSignedIn = userResult.isSignedIn || false
+    signOutFn = authResult.signOut
+  } catch {
+    // Clerk failed to initialize - treat as not signed in
+    isUserLoaded = true
+    isSignedIn = false
+  }
   
   const user: User | null = clerkUser ? {
     id: clerkUser.id,
@@ -22,8 +38,8 @@ export function useClerkAuth() {
   return {
     user,
     isLoaded: isUserLoaded,
-    isSignedIn: isSignedIn || false,
-    signOut,
+    isSignedIn: isSignedIn,
+    signOut: signOutFn,
     clerkUser,
   }
 }
@@ -32,13 +48,18 @@ export function useClerkAuth() {
  * Get the current user's email from Clerk
  */
 export function useCurrentUserEmail(): string | null {
-  const { user: clerkUser, isLoaded } = useUser()
-  
-  if (!isLoaded || !clerkUser) {
+  try {
+    const { user: clerkUser, isLoaded } = useUser()
+    
+    if (!isLoaded || !clerkUser) {
+      return null
+    }
+    
+    return clerkUser.emailAddresses?.[0]?.emailAddress || null
+  } catch {
+    // Clerk failed to initialize
     return null
   }
-  
-  return clerkUser.emailAddresses?.[0]?.emailAddress || null
 }
 
 /**

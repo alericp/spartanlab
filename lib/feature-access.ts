@@ -2,15 +2,16 @@
  * SpartanLab Feature Access System
  * 
  * Manages subscription tiers and feature gating for free vs pro users.
- * Designed for future integration with billing systems like Stripe.
+ * Integrates with Stripe subscriptions stored in the database.
  * 
  * Owner accounts bypass all subscription checks.
  */
 
-import { isOwner } from './owner-access'
+import { isOwner, checkOwnerByEmail } from './owner-access'
 
 // Re-export for component usage
 export { isOwner as isOwnerAccount } from './owner-access'
+export { checkOwnerByEmail } from './owner-access'
 
 // =============================================================================
 // SUBSCRIPTION TYPES

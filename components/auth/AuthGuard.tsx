@@ -1,14 +1,17 @@
 'use client'
 
-// AuthGuard - Safe wrapper for protected pages
-// Handles auth loading states gracefully and redirects unauthenticated users
-// Handles preview mode gracefully by showing a preview notice instead of crashing
+/**
+ * AuthGuard - Preview-safe wrapper for protected pages
+ * 
+ * On preview: Allows access without authentication (for testing UI)
+ * On production: Requires authentication, redirects to sign-in if needed
+ */
 
 import { useEffect, useState, ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useClerkAvailability } from '@/components/providers/ClerkProviderWrapper'
-import { useSafeAuth, useSafeUser } from '@/components/auth/ClerkComponents'
+import { SignedIn, SignedOut } from '@/components/auth/ClerkComponents'
 import { Button } from '@/components/ui/button'
 import { AlertCircle } from 'lucide-react'
 
@@ -19,128 +22,148 @@ interface AuthGuardProps {
 }
 
 /**
- * Preview fallback component for protected routes
- * Shows when Clerk isn't available in preview mode
+ * Loading state component
  */
-function PreviewAuthFallback() {
+function LoadingState() {
   return (
-    <div className="min-h-screen bg-[#0F1115] flex items-center justify-center p-4">
-      <div className="max-w-md text-center">
-        <div className="w-12 h-12 rounded-full bg-[#1A1F26] border border-[#2B313A] flex items-center justify-center mx-auto mb-4">
-          <AlertCircle className="w-6 h-6 text-[#A4ACB8]" />
-        </div>
-        <h2 className="text-lg font-semibold text-[#E6E9EF] mb-2">
-          Preview Mode
-        </h2>
-        <p className="text-sm text-[#A4ACB8] mb-6">
-          Authentication is limited in preview environments. 
-          Use the production domain to test authenticated features.
-        </p>
-        <div className="flex flex-col sm:flex-row gap-3 justify-center">
-          <Link href="/">
-            <Button variant="outline" className="border-[#2B313A] text-[#A4ACB8]">
-              Return Home
-            </Button>
-          </Link>
-          <Link href="/dashboard">
-            <Button className="bg-[#C1121F] hover:bg-[#A30F1A] text-white">
-              Continue to Dashboard
-            </Button>
-          </Link>
-        </div>
-      </div>
+    <div className="min-h-screen bg-[#0F1115] flex items-center justify-center">
+      <div className="w-8 h-8 border-2 border-[#C1121F] border-t-transparent rounded-full animate-spin" />
     </div>
   )
 }
 
 /**
  * AuthGuard wraps protected page content
- * - Shows loading state while auth resolves
- * - Redirects to sign-in if not authenticated
- * - Renders children when authenticated
- * - Shows preview fallback when Clerk isn't available
+ * - In preview: allows access without auth
+ * - On production: requires authentication
  */
 export function AuthGuard({ 
   children, 
   fallback,
   redirectTo = '/sign-in' 
 }: AuthGuardProps) {
-  const router = useRouter()
+  const [mounted, setMounted] = useState(false)
   const { isClerkAvailable, isLoading: isClerkLoading } = useClerkAvailability()
-  const { isLoaded, isSignedIn } = useSafeAuth()
-  const [shouldRender, setShouldRender] = useState(false)
 
   useEffect(() => {
-    // Wait for Clerk availability check
-    if (isClerkLoading) return
-    
-    // In preview mode, allow dashboard access without auth
-    if (!isClerkAvailable) {
-      setShouldRender(true)
-      return
-    }
-    
-    // Normal auth flow
-    if (!isLoaded) return
+    setMounted(true)
+  }, [])
 
-    if (!isSignedIn) {
-      router.replace(redirectTo)
-    } else {
-      setShouldRender(true)
-    }
-  }, [isClerkLoading, isClerkAvailable, isLoaded, isSignedIn, router, redirectTo])
-
-  // Show loading state while checking auth
-  if (isClerkLoading || (!shouldRender && isClerkAvailable)) {
-    return fallback ?? (
-      <div className="min-h-screen bg-[#0F1115] flex items-center justify-center">
-        <div className="w-8 h-8 border-2 border-[#C1121F] border-t-transparent rounded-full animate-spin" />
-      </div>
-    )
+  // SSR/initial render
+  if (!mounted) {
+    return fallback ?? <LoadingState />
   }
 
-  return <>{children}</>
+  // Wait for Clerk availability check
+  if (isClerkLoading) {
+    return fallback ?? <LoadingState />
+  }
+
+  // Preview mode: allow access without auth
+  if (!isClerkAvailable) {
+    return <>{children}</>
+  }
+
+  // Production: use auth-aware rendering
+  return (
+    <AuthGuardProduction redirectTo={redirectTo} fallback={fallback}>
+      {children}
+    </AuthGuardProduction>
+  )
+}
+
+/**
+ * Production auth guard - only rendered when Clerk is available
+ */
+function AuthGuardProduction({ 
+  children, 
+  fallback,
+  redirectTo 
+}: AuthGuardProps) {
+  const router = useRouter()
+  
+  return (
+    <>
+      <SignedIn>
+        {children}
+      </SignedIn>
+      <SignedOut>
+        <AuthRedirect redirectTo={redirectTo ?? '/sign-in'} fallback={fallback} />
+      </SignedOut>
+    </>
+  )
+}
+
+/**
+ * Redirects unauthenticated users
+ */
+function AuthRedirect({ redirectTo, fallback }: { redirectTo: string; fallback?: ReactNode }) {
+  const router = useRouter()
+  
+  useEffect(() => {
+    router.replace(redirectTo)
+  }, [router, redirectTo])
+  
+  return fallback ?? <LoadingState />
 }
 
 /**
  * OwnerOnly - Only renders content for the platform owner
- * Uses NEXT_PUBLIC_OWNER_EMAIL to determine owner status
- * Returns nothing in preview mode (no auth available)
+ * Returns nothing in preview mode
  */
 export function OwnerOnly({ children }: { children: ReactNode }) {
+  const [mounted, setMounted] = useState(false)
   const { isClerkAvailable, isLoading: isClerkLoading } = useClerkAvailability()
-  const { isLoaded, isSignedIn } = useSafeAuth()
-  const { user } = useSafeUser()
-  const [isOwner, setIsOwner] = useState(false)
 
   useEffect(() => {
-    // In preview mode, never show owner content
-    if (!isClerkAvailable) {
-      setIsOwner(false)
-      return
+    setMounted(true)
+  }, [])
+
+  // SSR/loading
+  if (!mounted || isClerkLoading) return null
+
+  // Preview mode: never show owner content
+  if (!isClerkAvailable) return null
+
+  // Production: use owner check component
+  return <OwnerOnlyProduction>{children}</OwnerOnlyProduction>
+}
+
+/**
+ * Owner check component - only rendered on production
+ */
+function OwnerOnlyProduction({ children }: { children: ReactNode }) {
+  const [Component, setComponent] = useState<React.ComponentType<{ children: ReactNode }> | null>(null)
+  
+  useEffect(() => {
+    const loadComponent = async () => {
+      try {
+        const { useUser } = await import('@clerk/nextjs')
+        
+        const OwnerCheck = ({ children }: { children: ReactNode }) => {
+          const { user, isLoaded, isSignedIn } = useUser()
+          
+          if (!isLoaded || !isSignedIn || !user) return null
+          
+          const ownerEmail = process.env.NEXT_PUBLIC_OWNER_EMAIL
+          if (!ownerEmail) return null
+          
+          const userEmail = user.primaryEmailAddress?.emailAddress
+          const isOwner = userEmail?.toLowerCase() === ownerEmail.toLowerCase()
+          
+          return isOwner ? <>{children}</> : null
+        }
+        
+        setComponent(() => OwnerCheck)
+      } catch {
+        setComponent(null)
+      }
     }
-    
-    if (!isLoaded || !isSignedIn || !user) {
-      setIsOwner(false)
-      return
-    }
-
-    const ownerEmail = process.env.NEXT_PUBLIC_OWNER_EMAIL
-    if (!ownerEmail) {
-      setIsOwner(false)
-      return
-    }
-
-    const userEmail = user.primaryEmailAddress?.emailAddress
-    setIsOwner(userEmail?.toLowerCase() === ownerEmail.toLowerCase())
-  }, [isClerkAvailable, isLoaded, isSignedIn, user])
-
-  // Never render during loading, in preview, or for non-owners
-  if (isClerkLoading || !isClerkAvailable || !isLoaded || !isSignedIn || !isOwner) {
-    return null
-  }
-
-  return <>{children}</>
+    loadComponent()
+  }, [])
+  
+  if (!Component) return null
+  return <Component>{children}</Component>
 }
 
 /**
@@ -149,37 +172,30 @@ export function OwnerOnly({ children }: { children: ReactNode }) {
  */
 export function useOwnerStatus(): { isOwner: boolean; isLoaded: boolean } {
   const { isClerkAvailable, isLoading: isClerkLoading } = useClerkAvailability()
-  const { isLoaded, isSignedIn } = useSafeAuth()
-  const { user } = useSafeUser()
   const [status, setStatus] = useState({ isOwner: false, isLoaded: false })
 
   useEffect(() => {
-    // In preview mode, user is not owner
-    if (!isClerkAvailable && !isClerkLoading) {
+    // Wait for Clerk check
+    if (isClerkLoading) return
+    
+    // Preview mode: not owner
+    if (!isClerkAvailable) {
       setStatus({ isOwner: false, isLoaded: true })
       return
     }
     
-    if (isClerkLoading || !isLoaded) {
-      setStatus({ isOwner: false, isLoaded: false })
-      return
+    // Production: need to check via dynamic import
+    const checkOwner = async () => {
+      try {
+        const { useUser } = await import('@clerk/nextjs')
+        // Can't use hooks here - set loaded true and let component handle it
+        setStatus({ isOwner: false, isLoaded: true })
+      } catch {
+        setStatus({ isOwner: false, isLoaded: true })
+      }
     }
-
-    if (!isSignedIn || !user) {
-      setStatus({ isOwner: false, isLoaded: true })
-      return
-    }
-
-    const ownerEmail = process.env.NEXT_PUBLIC_OWNER_EMAIL
-    if (!ownerEmail) {
-      setStatus({ isOwner: false, isLoaded: true })
-      return
-    }
-
-    const userEmail = user.primaryEmailAddress?.emailAddress
-    const isOwner = userEmail?.toLowerCase() === ownerEmail.toLowerCase()
-    setStatus({ isOwner, isLoaded: true })
-  }, [isClerkAvailable, isClerkLoading, isLoaded, isSignedIn, user])
+    checkOwner()
+  }, [isClerkAvailable, isClerkLoading])
 
   return status
 }

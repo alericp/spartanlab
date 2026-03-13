@@ -1,11 +1,18 @@
 'use client'
 
+/**
+ * HeaderAuthCTA - Preview-safe auth buttons for marketing header
+ * 
+ * On preview: Always shows login/signup buttons
+ * On production: Shows dashboard link when signed in
+ */
+
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { LayoutDashboard } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { useClerkAvailability } from '@/components/providers/ClerkProviderWrapper'
-import { useSafeAuth, useSafeUser } from '@/components/auth/ClerkComponents'
+import { SignedIn, SignedOut } from '@/components/auth/ClerkComponents'
 
 /**
  * Default CTA buttons shown when auth is loading or unavailable
@@ -27,11 +34,30 @@ function DefaultAuthCTA() {
   )
 }
 
+/**
+ * Signed-in state CTA
+ */
+function SignedInCTA() {
+  return (
+    <>
+      <Link href="/dashboard">
+        <Button variant="ghost" size="sm" className="text-[#A4ACB8] hover:text-[#E6E9EF]">
+          <LayoutDashboard className="w-4 h-4 mr-2" />
+          Dashboard
+        </Button>
+      </Link>
+      <Link href="/dashboard">
+        <div className="w-8 h-8 rounded-full bg-[#C1121F] flex items-center justify-center text-xs font-bold text-white cursor-pointer select-none hover:bg-[#A30F1A] transition-colors">
+          U
+        </div>
+      </Link>
+    </>
+  )
+}
+
 export function HeaderAuthCTA() {
   const [mounted, setMounted] = useState(false)
   const { isClerkAvailable, isLoading: isClerkLoading } = useClerkAvailability()
-  const { isLoaded, isSignedIn } = useSafeAuth()
-  const { user } = useSafeUser()
 
   useEffect(() => {
     setMounted(true)
@@ -45,31 +71,18 @@ export function HeaderAuthCTA() {
   
   // In preview mode without Clerk, show default CTA
   if (!isClerkAvailable) return <DefaultAuthCTA />
-  
-  // Wait for auth to load
-  if (!isLoaded) return <DefaultAuthCTA />
 
-  if (isSignedIn && user) {
-    return (
-      <>
-        <Link href="/dashboard">
-          <Button variant="ghost" size="sm" className="text-[#A4ACB8] hover:text-[#E6E9EF]">
-            <LayoutDashboard className="w-4 h-4 mr-2" />
-            Dashboard
-          </Button>
-        </Link>
-        {/* Simple avatar fallback */}
-        <div
-          className="w-8 h-8 rounded-full bg-[#C1121F] flex items-center justify-center text-xs font-bold text-white cursor-pointer select-none"
-          title={user?.primaryEmailAddress?.emailAddress ?? 'Account'}
-        >
-          {(user?.firstName?.[0] ?? user?.primaryEmailAddress?.emailAddress?.[0] ?? 'A').toUpperCase()}
-        </div>
-      </>
-    )
-  }
-
-  return <DefaultAuthCTA />
+  // Production: use SignedIn/SignedOut components
+  return (
+    <>
+      <SignedIn>
+        <SignedInCTA />
+      </SignedIn>
+      <SignedOut>
+        <DefaultAuthCTA />
+      </SignedOut>
+    </>
+  )
 }
 
 /**
@@ -92,10 +105,23 @@ function DefaultMobileCTA({ onNavigate }: { onNavigate: () => void }) {
   )
 }
 
+/**
+ * Signed-in mobile CTA
+ */
+function SignedInMobileCTA({ onNavigate }: { onNavigate: () => void }) {
+  return (
+    <Link href="/dashboard" onClick={onNavigate}>
+      <Button size="sm" className="w-full bg-[#C1121F] hover:bg-[#A30F1A]">
+        <LayoutDashboard className="w-4 h-4 mr-2" />
+        Go to Dashboard
+      </Button>
+    </Link>
+  )
+}
+
 export function MobileAuthCTA({ onNavigate }: { onNavigate: () => void }) {
   const [mounted, setMounted] = useState(false)
   const { isClerkAvailable, isLoading: isClerkLoading } = useClerkAvailability()
-  const { isLoaded, isSignedIn } = useSafeAuth()
 
   useEffect(() => {
     setMounted(true)
@@ -109,20 +135,16 @@ export function MobileAuthCTA({ onNavigate }: { onNavigate: () => void }) {
   
   // In preview mode without Clerk, show default CTA
   if (!isClerkAvailable) return <DefaultMobileCTA onNavigate={onNavigate} />
-  
-  // Wait for auth to load
-  if (!isLoaded) return <DefaultMobileCTA onNavigate={onNavigate} />
 
-  if (isSignedIn) {
-    return (
-      <Link href="/dashboard" onClick={onNavigate}>
-        <Button size="sm" className="w-full bg-[#C1121F] hover:bg-[#A30F1A]">
-          <LayoutDashboard className="w-4 h-4 mr-2" />
-          Go to Dashboard
-        </Button>
-      </Link>
-    )
-  }
-
-  return <DefaultMobileCTA onNavigate={onNavigate} />
+  // Production: use SignedIn/SignedOut components
+  return (
+    <>
+      <SignedIn>
+        <SignedInMobileCTA onNavigate={onNavigate} />
+      </SignedIn>
+      <SignedOut>
+        <DefaultMobileCTA onNavigate={onNavigate} />
+      </SignedOut>
+    </>
+  )
 }

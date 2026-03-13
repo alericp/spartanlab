@@ -1,8 +1,12 @@
 /**
  * Environment Guard - Central utility for runtime environment detection
  * 
- * Determines if we're running on a production-allowed domain or a preview domain.
- * Used to prevent Clerk production keys from crashing the app on preview domains.
+ * STRICT ALLOWLIST APPROACH:
+ * Only explicitly listed production domains can run Clerk production auth.
+ * ALL other domains are treated as preview-unsafe for Clerk.
+ * 
+ * This prevents Clerk from initializing on any domain not explicitly allowed,
+ * eliminating origin errors in v0 preview and other non-production environments.
  * 
  * IMPORTANT: This is a CLIENT-ONLY utility since it depends on window.location.
  */
@@ -15,17 +19,20 @@ export interface EnvironmentInfo {
   hostname: string
 }
 
-// Production-allowed domains for Clerk
-const PRODUCTION_ALLOWED_DOMAINS = [
+/**
+ * STRICT ALLOWLIST - Only these exact domains can use Clerk production auth.
+ * Everything else is blocked. No wildcards, no patterns - explicit matches only.
+ */
+const PRODUCTION_AUTH_ALLOWLIST: readonly string[] = [
   'spartanlab.app',
   'www.spartanlab.app',
-]
+] as const
 
-// Known preview domain patterns
+// Known preview domain patterns (for informational purposes only - we use allowlist, not blocklist)
 const PREVIEW_DOMAIN_PATTERNS = [
   '.vusercontent.net',
   '.v0.dev',
-  '.vercel.app', // Generic Vercel preview deployments
+  '.vercel.app',
   'localhost',
   '127.0.0.1',
 ]
@@ -50,14 +57,25 @@ export function getHostname(): string {
 }
 
 /**
- * Check if the current domain is a production-allowed domain
+ * STRICT CHECK: Is the current hostname in the production allowlist?
+ * Uses exact match only - no wildcards, no pattern matching.
+ * If not explicitly allowed, returns false.
  */
 export function isProductionDomain(): boolean {
   const hostname = getHostname()
   if (!hostname) return false
-  return PRODUCTION_ALLOWED_DOMAINS.some(
-    domain => hostname === domain || hostname.endsWith('.' + domain)
-  )
+  
+  // STRICT: Exact match only against allowlist
+  return PRODUCTION_AUTH_ALLOWLIST.includes(hostname)
+}
+
+/**
+ * Hard gate for production auth runtime.
+ * Returns true ONLY for explicitly allowed production domains.
+ * This is the primary gate used to block Clerk initialization.
+ */
+export function allowProductionAuthRuntime(): boolean {
+  return isProductionDomain()
 }
 
 /**
@@ -72,23 +90,30 @@ export function isPreviewDomain(): boolean {
 }
 
 /**
- * Check if Clerk should be initialized on this origin
+ * STRICT CHECK: Should Clerk be initialized on this origin?
  * 
- * Clerk with production keys only works on production-allowed domains.
- * On preview domains with production keys, Clerk will throw origin errors.
+ * This is a HARD GATE. Returns true only when:
+ * 1. A Clerk key exists AND
+ * 2. Either it's a test key OR we're on an explicitly allowed production domain
+ * 
+ * If this returns false, Clerk code should NOT be imported or initialized at all.
  */
 export function isAllowedClerkOrigin(): boolean {
+  // Check if we're on an allowed domain FIRST (before checking keys)
+  const isAllowedDomain = allowProductionAuthRuntime()
+  
   const publishableKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
   const isProductionKey = publishableKey?.startsWith('pk_live_') ?? false
   
   // No key = no Clerk
   if (!publishableKey) return false
   
-  // Test keys work everywhere
+  // Test keys work everywhere (development mode)
   if (!isProductionKey) return true
   
-  // Production keys only work on production domains
-  return isProductionDomain()
+  // Production keys ONLY work on explicitly allowed domains
+  // This is the strict gate that blocks Clerk on preview
+  return isAllowedDomain
 }
 
 /**

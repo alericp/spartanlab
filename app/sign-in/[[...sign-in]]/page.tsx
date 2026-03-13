@@ -1,13 +1,20 @@
 'use client'
 
+/**
+ * Sign-In Page - Preview-safe implementation
+ * 
+ * Uses synchronous domain check from auth-gate to determine
+ * whether to show Clerk or preview fallback.
+ */
+
 import Link from 'next/link'
-import { SignIn } from '@clerk/nextjs'
 import { Button } from '@/components/ui/button'
 import { AlertCircle, ArrowLeft } from 'lucide-react'
 import { useClerkAvailability } from '@/components/providers/ClerkProviderWrapper'
+import { useEffect, useState } from 'react'
 
 /**
- * Preview fallback when Clerk isn't available
+ * Preview fallback - shown on non-production domains
  */
 function PreviewFallback() {
   return (
@@ -41,22 +48,34 @@ function PreviewFallback() {
   )
 }
 
-export default function SignInPage() {
-  const { isClerkAvailable, isLoading } = useClerkAvailability()
+/**
+ * Loading state
+ */
+function LoadingState() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-[#0F1115]">
+      <div className="w-8 h-8 border-2 border-[#C1121F] border-t-transparent rounded-full animate-spin" />
+    </div>
+  )
+}
+
+/**
+ * Clerk SignIn - dynamically loaded on production
+ */
+function ClerkSignIn() {
+  const [SignIn, setSignIn] = useState<React.ComponentType<{
+    appearance: object
+    fallbackRedirectUrl: string
+    signUpUrl: string
+  }> | null>(null)
   
-  // Show loading state
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[#0F1115]">
-        <div className="w-8 h-8 border-2 border-[#C1121F] border-t-transparent rounded-full animate-spin" />
-      </div>
-    )
-  }
+  useEffect(() => {
+    import('@clerk/nextjs').then(mod => {
+      setSignIn(() => mod.SignIn)
+    }).catch(() => {})
+  }, [])
   
-  // Show preview fallback if Clerk isn't available
-  if (!isClerkAvailable) {
-    return <PreviewFallback />
-  }
+  if (!SignIn) return <LoadingState />
   
   return (
     <div className="min-h-screen flex items-center justify-center bg-[#0F1115]">
@@ -86,4 +105,25 @@ export default function SignInPage() {
       />
     </div>
   )
+}
+
+export default function SignInPage() {
+  const [mounted, setMounted] = useState(false)
+  const { isClerkAvailable, isLoading } = useClerkAvailability()
+  
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+  
+  // SSR
+  if (!mounted) return <LoadingState />
+  
+  // Checking environment
+  if (isLoading) return <LoadingState />
+  
+  // Preview: show fallback
+  if (!isClerkAvailable) return <PreviewFallback />
+  
+  // Production: show Clerk
+  return <ClerkSignIn />
 }

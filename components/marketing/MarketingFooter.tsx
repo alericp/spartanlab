@@ -103,6 +103,9 @@ export function MarketingFooter() {
             <Link href="/terms" className="text-xs text-[#6B7280] hover:text-[#A4ACB8] transition-colors">
               Terms
             </Link>
+            <Link href="/privacy" className="text-xs text-[#6B7280] hover:text-[#A4ACB8] transition-colors">
+              Privacy
+            </Link>
             <a 
               href="mailto:support@spartanlab.app" 
               className="text-xs text-[#6B7280] hover:text-[#A4ACB8] transition-colors"

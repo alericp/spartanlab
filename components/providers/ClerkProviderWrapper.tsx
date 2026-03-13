@@ -52,8 +52,11 @@ class ClerkErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryStat
 }
 
 // ============================================================================
-// CONTEXT
+// CONTEXT - Single source of truth for Clerk state and components
 // ============================================================================
+
+// Type for Clerk components we expose via context
+type ClerkComponentType<P = object> = React.ComponentType<P> | null
 
 interface ClerkAvailabilityContextValue {
   /**
@@ -76,6 +79,25 @@ interface ClerkAvailabilityContextValue {
    * True if there was an error loading Clerk
    */
   hasError: boolean
+  /**
+   * Clerk components - only available when isClerkAvailable is true
+   * These are the ONLY source for Clerk components in the app
+   */
+  components: {
+    SignIn: ClerkComponentType<{
+      appearance?: Record<string, unknown>
+      fallbackRedirectUrl?: string
+      signUpUrl?: string
+    }>
+    SignUp: ClerkComponentType<{
+      appearance?: Record<string, unknown>
+      fallbackRedirectUrl?: string
+      signInUrl?: string
+    }>
+    SignedIn: ClerkComponentType<{ children: React.ReactNode }>
+    SignedOut: ClerkComponentType<{ children: React.ReactNode }>
+    UserButton: ClerkComponentType<{ afterSignOutUrl?: string }>
+  }
 }
 
 const defaultContextValue: ClerkAvailabilityContextValue = {
@@ -84,12 +106,20 @@ const defaultContextValue: ClerkAvailabilityContextValue = {
   isLoading: true,
   authMode: 'preview',
   hasError: false,
+  components: {
+    SignIn: null,
+    SignUp: null,
+    SignedIn: null,
+    SignedOut: null,
+    UserButton: null,
+  },
 }
 
 const ClerkAvailabilityContext = createContext<ClerkAvailabilityContextValue>(defaultContextValue)
 
 /**
- * Hook to check Clerk availability status
+ * Hook to check Clerk availability status and access Clerk components
+ * This is the ONLY way to access Clerk components in the app
  */
 export function useClerkAvailability() {
   return useContext(ClerkAvailabilityContext)
@@ -176,6 +206,13 @@ export function ClerkProviderWrapper({ children }: Props) {
     isLoading: true, // Start loading until we determine mode
     authMode: 'preview',
     hasError: false,
+    components: {
+      SignIn: null,
+      SignUp: null,
+      SignedIn: null,
+      SignedOut: null,
+      UserButton: null,
+    },
   }))
   
   const [ClerkProvider, setClerkProvider] = useState<React.ComponentType<{
@@ -192,12 +229,6 @@ export function ClerkProviderWrapper({ children }: Props) {
     const shouldInit = shouldInitializeClerk()
     const authMode = getAuthMode()
     
-    console.log('[ClerkProviderWrapper] Hydration - init decision:', {
-      shouldInit,
-      authMode,
-      hostname: typeof window !== 'undefined' ? window.location.hostname : 'SSR',
-    })
-    
     setInitDecision({ decided: true, shouldInit, authMode })
     
     // If we shouldn't init, immediately set to preview mode
@@ -208,6 +239,13 @@ export function ClerkProviderWrapper({ children }: Props) {
         isLoading: false,
         authMode: authMode,
         hasError: false,
+        components: {
+          SignIn: null,
+          SignUp: null,
+          SignedIn: null,
+          SignedOut: null,
+          UserButton: null,
+        },
       })
     }
   }, [])
@@ -222,15 +260,9 @@ export function ClerkProviderWrapper({ children }: Props) {
 
     let cancelled = false
 
-    console.log('[ClerkProviderWrapper] Loading Clerk module...')
     loadClerkModule()
       .then(mod => {
         if (cancelled) return
-        
-        console.log('[ClerkProviderWrapper] Module loaded:', {
-          hasClerkProvider: !!mod?.ClerkProvider,
-          moduleKeys: mod ? Object.keys(mod).slice(0, 5) : [],
-        })
         
         if (mod?.ClerkProvider) {
           setClerkProvider(() => mod.ClerkProvider)
@@ -240,17 +272,29 @@ export function ClerkProviderWrapper({ children }: Props) {
             isLoading: false,
             authMode: 'production',
             hasError: false,
+            components: {
+              SignIn: mod.SignIn || null,
+              SignUp: mod.SignUp || null,
+              SignedIn: mod.SignedIn || null,
+              SignedOut: mod.SignedOut || null,
+              UserButton: mod.UserButton || null,
+            },
           })
-          console.log('[ClerkProviderWrapper] Clerk ready - production mode active')
         } else {
           // Clerk module failed to load - fallback to preview mode gracefully
-          console.warn('[ClerkProviderWrapper] Clerk unavailable, using preview mode')
           setState({
             isClerkAvailable: false,
             isPreviewMode: true,
             isLoading: false,
             authMode: 'preview',
             hasError: true,
+            components: {
+              SignIn: null,
+              SignUp: null,
+              SignedIn: null,
+              SignedOut: null,
+              UserButton: null,
+            },
           })
         }
       })
@@ -263,6 +307,13 @@ export function ClerkProviderWrapper({ children }: Props) {
           isLoading: false,
           authMode: 'preview',
           hasError: true,
+          components: {
+            SignIn: null,
+            SignUp: null,
+            SignedIn: null,
+            SignedOut: null,
+            UserButton: null,
+          },
         })
       })
 
@@ -297,6 +348,13 @@ export function ClerkProviderWrapper({ children }: Props) {
       isLoading: false,
       authMode: 'preview',
       hasError: true,
+      components: {
+        SignIn: null,
+        SignUp: null,
+        SignedIn: null,
+        SignedOut: null,
+        UserButton: null,
+      },
     }}>
       {children}
     </ClerkAvailabilityContext.Provider>

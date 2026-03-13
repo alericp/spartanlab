@@ -1,6 +1,5 @@
 import type { Metadata, Viewport } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
-import { Suspense } from 'react'
 import { Analytics } from '@vercel/analytics/next'
 import { ClerkProviderWrapper } from '@/components/providers/ClerkProviderWrapper'
 import { AnalyticsProvider } from '@/components/providers/AnalyticsProvider'
@@ -59,11 +58,9 @@ export default function RootLayout({
       <body className="font-sans antialiased bg-[#0F1115] text-[#E6E9EF]">
         <GlobalErrorBoundary>
           <ClerkProviderWrapper>
-            <Suspense fallback={null}>
-              <AnalyticsProvider>
-                {children}
-              </AnalyticsProvider>
-            </Suspense>
+            <AnalyticsProvider>
+              {children}
+            </AnalyticsProvider>
             <PreviewModeIndicator />
           </ClerkProviderWrapper>
         </GlobalErrorBoundary>

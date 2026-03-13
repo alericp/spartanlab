@@ -3,10 +3,9 @@
 // Preview Mode Indicator - Debug/testing controls
 // PRODUCTION SAFE: Never renders in production environments
 // Only renders in local development when Clerk is NOT configured
+// CRITICAL: All operations wrapped in try/catch - must never crash the app
 
 import { useState, useEffect } from 'react'
-import { isAuthEnabled, getModeInfo } from '@/lib/app-mode'
-import { getCurrentPlan, setPreviewPlan, canSwitchPreviewPlan } from '@/lib/plan-source'
 import type { SubscriptionPlan } from '@/types/domain'
 import { Button } from '@/components/ui/button'
 import { 
@@ -23,40 +22,84 @@ export function PreviewModeIndicator() {
   const [mounted, setMounted] = useState(false)
   const [currentPlan, setCurrentPlanState] = useState<SubscriptionPlan>('pro')
   const [shouldRender, setShouldRender] = useState(false)
+  const [modeInfo, setModeInfo] = useState<{
+    displayName: string
+    authEnabled: boolean
+    dbEnabled: boolean
+  } | null>(null)
+  const [canSwitch, setCanSwitch] = useState(false)
   
   useEffect(() => {
     setMounted(true)
     
-    // CRITICAL: Never render if Clerk auth is enabled (production environment)
-    // This ensures the preview indicator never leaks to public users
-    if (isAuthEnabled()) {
+    // CRITICAL: All checks wrapped in try/catch
+    // This component must NEVER crash production
+    try {
+      // Dynamic import to isolate any module-level errors
+      Promise.all([
+        import('@/lib/app-mode'),
+        import('@/lib/plan-source')
+      ]).then(([appMode, planSource]) => {
+        try {
+          // Check if auth is enabled (production) - if so, don't render
+          if (appMode.isAuthEnabled()) {
+            setShouldRender(false)
+            return
+          }
+          
+          // In local dev mode (no Clerk), only show if user has started using the app
+          let hasAppData = false
+          try {
+            const hasProfile = localStorage.getItem('athlete_profile')
+            const hasWorkouts = localStorage.getItem('workouts')
+            const hasPrograms = localStorage.getItem('saved_programs')
+            hasAppData = Boolean(hasProfile || hasWorkouts || hasPrograms)
+          } catch {
+            // localStorage not available - don't render
+            setShouldRender(false)
+            return
+          }
+          
+          setShouldRender(hasAppData)
+          setModeInfo(appMode.getModeInfo())
+          setCanSwitch(planSource.canSwitchPreviewPlan())
+          setCurrentPlanState(planSource.getCurrentPlan())
+        } catch {
+          // Any error in the check - don't render
+          setShouldRender(false)
+        }
+      }).catch(() => {
+        // Module import failed - don't render
+        setShouldRender(false)
+      })
+    } catch {
+      // Outer catch for any unexpected errors
       setShouldRender(false)
-      return
     }
-    
-    // In local dev mode (no Clerk), only show if user has started using the app
-    const hasProfile = localStorage.getItem('athlete_profile')
-    const hasWorkouts = localStorage.getItem('workouts')
-    const hasPrograms = localStorage.getItem('saved_programs')
-    const hasAppData = Boolean(hasProfile || hasWorkouts || hasPrograms)
-    
-    setShouldRender(hasAppData)
-    setCurrentPlanState(getCurrentPlan())
   }, [])
   
   // Don't render until mounted to avoid hydration mismatch
   if (!mounted) return null
   
   // Don't render if conditions aren't met (not preview mode, or no app data)
-  if (!shouldRender) return null
-  
-  const modeInfo = getModeInfo()
-  const canSwitch = canSwitchPreviewPlan()
+  if (!shouldRender || !modeInfo) return null
   
   const handlePlanChange = (plan: SubscriptionPlan) => {
-    setPreviewPlan(plan)
-    setCurrentPlanState(plan)
-    window.location.reload()
+    try {
+      import('@/lib/plan-source').then(({ setPreviewPlan }) => {
+        try {
+          setPreviewPlan(plan)
+          setCurrentPlanState(plan)
+          window.location.reload()
+        } catch {
+          // Plan change failed - ignore
+        }
+      }).catch(() => {
+        // Import failed - ignore
+      })
+    } catch {
+      // Outer catch - ignore
+    }
   }
   
   const planLabels: Record<SubscriptionPlan, string> = {

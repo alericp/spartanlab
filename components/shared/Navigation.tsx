@@ -30,6 +30,12 @@ const SECONDARY_NAV_ITEMS = [
 export function Navigation() {
   const pathname = usePathname()
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [mounted, setMounted] = useState(false)
+  const { isLoading } = useClerkAvailability()
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   return (
     <header className="border-b border-[#2B313A] bg-[#0F1115] sticky top-0 z-50">

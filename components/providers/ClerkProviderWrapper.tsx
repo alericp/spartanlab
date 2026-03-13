@@ -1,17 +1,55 @@
 'use client'
 
 /**
- * ClerkProviderWrapper - Strict preview isolation for Clerk
+ * ClerkProviderWrapper - Production-safe Clerk integration
  * 
  * Architecture:
  * 1. Check domain SYNCHRONOUSLY before any effect runs
  * 2. If not on production domain, never attempt to load Clerk
- * 3. Use runtime import technique to hide module from bundler
+ * 3. Use static import with error boundary for production safety
  * 4. Provide context for child components to check auth availability
+ * 
+ * CRITICAL: Uses try/catch error boundary to prevent auth failures from crashing the app
  */
 
-import { ReactNode, createContext, useContext, useState, useEffect, useRef } from 'react'
+import { ReactNode, createContext, useContext, useState, useEffect, useRef, Component, ErrorInfo } from 'react'
 import { shouldInitializeClerk, getAuthMode, type AuthMode } from '@/lib/auth-environment'
+
+// ============================================================================
+// ERROR BOUNDARY
+// ============================================================================
+
+interface ErrorBoundaryProps {
+  children: ReactNode
+  fallback: ReactNode
+}
+
+interface ErrorBoundaryState {
+  hasError: boolean
+  error: Error | null
+}
+
+class ClerkErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  constructor(props: ErrorBoundaryProps) {
+    super(props)
+    this.state = { hasError: false, error: null }
+  }
+
+  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+    return { hasError: true, error }
+  }
+
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    console.error('[ClerkErrorBoundary] Auth error caught:', error, errorInfo)
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return this.props.fallback
+    }
+    return this.props.children
+  }
+}
 
 // ============================================================================
 // CONTEXT
@@ -34,6 +72,10 @@ interface ClerkAvailabilityContextValue {
    * Current auth mode
    */
   authMode: AuthMode
+  /**
+   * True if there was an error loading Clerk
+   */
+  hasError: boolean
 }
 
 const defaultContextValue: ClerkAvailabilityContextValue = {
@@ -41,6 +83,7 @@ const defaultContextValue: ClerkAvailabilityContextValue = {
   isPreviewMode: true,
   isLoading: true,
   authMode: 'preview',
+  hasError: false,
 }
 
 const ClerkAvailabilityContext = createContext<ClerkAvailabilityContextValue>(defaultContextValue)
@@ -53,33 +96,32 @@ export function useClerkAvailability() {
 }
 
 // ============================================================================
-// RUNTIME CLERK LOADER
+// CLERK MODULE LOADER - Safe dynamic import
 // ============================================================================
 
+// Module cache to prevent multiple imports
+let clerkModuleCache: Promise<typeof import('@clerk/nextjs') | null> | null = null
+
 /**
- * Load Clerk module at runtime.
- * Uses string concatenation to hide from Webpack's static analysis.
+ * Safely load Clerk module with proper error handling
  */
-async function loadClerkRuntime(): Promise<{
-  ClerkProvider: React.ComponentType<{
-    children: ReactNode
-    appearance?: Record<string, unknown>
-    signInUrl?: string
-    signUpUrl?: string
-    signInFallbackRedirectUrl?: string
-    signUpFallbackRedirectUrl?: string
-  }>
-} | null> {
-  try {
-    // Build module name at runtime - Webpack can't trace this
-    const moduleName = ['@', 'clerk', '/', 'nextjs'].join('')
-    // Use Function constructor for truly dynamic import
-    const loader = new Function('m', 'return import(m)')
-    return await loader(moduleName)
-  } catch (error) {
-    console.error('[ClerkProviderWrapper] Failed to load Clerk:', error)
-    return null
+async function loadClerkModule(): Promise<typeof import('@clerk/nextjs') | null> {
+  if (clerkModuleCache) {
+    return clerkModuleCache
   }
+
+  clerkModuleCache = (async () => {
+    try {
+      // Direct dynamic import - Next.js handles this properly
+      const mod = await import('@clerk/nextjs')
+      return mod
+    } catch (error) {
+      console.error('[ClerkProviderWrapper] Failed to load Clerk module:', error)
+      return null
+    }
+  })()
+
+  return clerkModuleCache
 }
 
 // ============================================================================
@@ -137,6 +179,7 @@ export function ClerkProviderWrapper({ children }: Props) {
     isPreviewMode: !shouldInit.current,
     isLoading: shouldInit.current, // Only loading if we need to load Clerk
     authMode: authMode.current,
+    hasError: false,
   }))
   
   const [ClerkProvider, setClerkProvider] = useState<React.ComponentType<{
@@ -157,26 +200,42 @@ export function ClerkProviderWrapper({ children }: Props) {
 
     let cancelled = false
 
-    loadClerkRuntime().then(mod => {
-      if (cancelled) return
-      
-      if (mod?.ClerkProvider) {
-        setClerkProvider(() => mod.ClerkProvider)
-        setState({
-          isClerkAvailable: true,
-          isPreviewMode: false,
-          isLoading: false,
-          authMode: 'production',
-        })
-      } else {
+    loadClerkModule()
+      .then(mod => {
+        if (cancelled) return
+        
+        if (mod?.ClerkProvider) {
+          setClerkProvider(() => mod.ClerkProvider)
+          setState({
+            isClerkAvailable: true,
+            isPreviewMode: false,
+            isLoading: false,
+            authMode: 'production',
+            hasError: false,
+          })
+        } else {
+          // Clerk module failed to load - fallback to preview mode gracefully
+          console.warn('[ClerkProviderWrapper] Clerk unavailable, using preview mode')
+          setState({
+            isClerkAvailable: false,
+            isPreviewMode: true,
+            isLoading: false,
+            authMode: 'preview',
+            hasError: true,
+          })
+        }
+      })
+      .catch(error => {
+        if (cancelled) return
+        console.error('[ClerkProviderWrapper] Error loading Clerk:', error)
         setState({
           isClerkAvailable: false,
           isPreviewMode: true,
           isLoading: false,
           authMode: 'preview',
+          hasError: true,
         })
-      }
-    })
+      })
 
     return () => {
       cancelled = true
@@ -192,18 +251,33 @@ export function ClerkProviderWrapper({ children }: Props) {
     )
   }
 
-  // Production mode with Clerk loaded
-  return (
-    <ClerkAvailabilityContext.Provider value={state}>
-      <ClerkProvider
-        appearance={clerkAppearance}
-        signInUrl="/sign-in"
-        signUpUrl="/sign-up"
-        signInFallbackRedirectUrl="/dashboard"
-        signUpFallbackRedirectUrl="/onboarding"
-      >
-        {children}
-      </ClerkProvider>
+  // Fallback content for error boundary - allows app to work without auth
+  const errorFallback = (
+    <ClerkAvailabilityContext.Provider value={{
+      isClerkAvailable: false,
+      isPreviewMode: true,
+      isLoading: false,
+      authMode: 'preview',
+      hasError: true,
+    }}>
+      {children}
     </ClerkAvailabilityContext.Provider>
+  )
+
+  // Production mode with Clerk loaded - wrapped in error boundary for safety
+  return (
+    <ClerkErrorBoundary fallback={errorFallback}>
+      <ClerkAvailabilityContext.Provider value={state}>
+        <ClerkProvider
+          appearance={clerkAppearance}
+          signInUrl="/sign-in"
+          signUpUrl="/sign-up"
+          signInFallbackRedirectUrl="/dashboard"
+          signUpFallbackRedirectUrl="/onboarding"
+        >
+          {children}
+        </ClerkProvider>
+      </ClerkAvailabilityContext.Provider>
+    </ClerkErrorBoundary>
   )
 }

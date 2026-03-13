@@ -15,7 +15,9 @@ import {
 } from '@/lib/program-service'
 import { getConstraintInsight } from '@/lib/constraint-engine'
 import { getAthleteCalibration } from '@/lib/athlete-calibration'
+import { getProgramStatus, initializeProgramState } from '@/lib/program-adjustment-engine'
 import { PageHeader } from '@/components/shared/PageHeader'
+import { ProgramAdjustmentModal } from '@/components/programs/ProgramAdjustmentModal'
 import { AdaptiveEngineBadge, ENGINE_MESSAGES } from '@/components/shared/AdaptiveEngineBadge'
 import { useIsPremium, PremiumHelperText, PREMIUM_MESSAGES, UpgradeTriggerPanel, UPGRADE_TRIGGERS } from '@/components/premium/PremiumFeature'
 import { AdaptiveProgramUpgradeCard } from '@/components/upgrade/AdaptiveProgramUpgradeCard'
@@ -31,6 +33,8 @@ export default function ProgramsPage() {
   const [mounted, setMounted] = useState(false)
   const [constraintInsight, setConstraintInsight] = useState<ReturnType<typeof getConstraintInsight> | null>(null)
   const [calibration, setCalibration] = useState<ReturnType<typeof getAthleteCalibration> | null>(null)
+  const [showAdjustmentModal, setShowAdjustmentModal] = useState(false)
+  const [programStatus, setProgramStatus] = useState<ReturnType<typeof getProgramStatus>>(null)
 
   useEffect(() => {
     setMounted(true)
@@ -39,7 +43,17 @@ export default function ProgramsPage() {
     setSavedPrograms(getSavedPrograms())
     setConstraintInsight(getConstraintInsight())
     setCalibration(getAthleteCalibration())
+    setProgramStatus(getProgramStatus())
   }, [])
+
+  const handleGenerateAttempt = () => {
+    // If there's an active program, show the adjustment modal
+    if (programStatus && programStatus.currentWeek < programStatus.minimumRecommendedWeeks) {
+      setShowAdjustmentModal(true)
+      return
+    }
+    handleGenerate()
+  }
 
   const handleGenerate = () => {
     setIsGenerating(true)
@@ -50,6 +64,14 @@ export default function ProgramsPage() {
       const program = generateProgram(inputs)
       setCurrentProgram(program)
       setIsGenerating(false)
+      
+      // Initialize program state for adjustment tracking
+      initializeProgramState(program.id, {
+        sessionMinutes: inputs.sessionLength as number || 60,
+        trainingDays: inputs.trainingDaysPerWeek,
+        equipment: [],
+      })
+      setProgramStatus(getProgramStatus())
     }, 300)
   }
 
@@ -127,7 +149,7 @@ export default function ProgramsPage() {
           <ProgramBuilderForm
             inputs={inputs}
             onInputChange={setInputs}
-            onGenerate={handleGenerate}
+            onGenerate={handleGenerateAttempt}
             isGenerating={isGenerating}
           />
 
@@ -183,6 +205,19 @@ export default function ProgramsPage() {
             onDelete={handleDelete}
           />
         </div>
+
+        {/* Program Adjustment Modal */}
+        <ProgramAdjustmentModal
+          open={showAdjustmentModal}
+          onOpenChange={setShowAdjustmentModal}
+          onContinue={() => setShowAdjustmentModal(false)}
+          onStartNew={() => {
+            setShowAdjustmentModal(false)
+            handleGenerate()
+          }}
+          currentSessionMinutes={inputs.sessionLength as number || 60}
+          currentTrainingDays={inputs.trainingDaysPerWeek}
+        />
       </main>
     </div>
   )

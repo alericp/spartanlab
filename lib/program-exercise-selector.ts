@@ -103,10 +103,15 @@ export function selectExercisesForSession(inputs: ExerciseSelectionInputs): Exer
     equipment,
     sessionMinutes,
     constraintType,
+    selectedMethods,
   } = inputs
   
   // Calculate exercise budget based on session time
   const budget = calculateExerciseBudget(sessionMinutes)
+  
+  // Get principle rules if methods are selected
+  const primaryMethod = selectedMethods?.primary
+  const principleRules = primaryMethod?.rules
   
   // Get skill-specific exercises
   const goalExercises = getExercisesByTransfer(primaryGoal)

@@ -63,6 +63,10 @@ import {
   type ProgressionAnalysis,
   type ProgressionInsight,
 } from './adaptive-progression-engine'
+import {
+  validateExerciseSelection,
+  type ExerciseIntelligenceContext,
+} from './exercise-intelligence-engine'
 
 // =============================================================================
 // TYPES

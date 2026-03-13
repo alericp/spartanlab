@@ -58,6 +58,18 @@ import {
   type CoolDownGenerationContext,
   type FlexibilityPathway,
 } from './cooldown-engine'
+import {
+  selectBestExercise,
+  selectExercisesForCategory,
+  findBestReplacement,
+  validateExerciseSelection,
+  getSkillExerciseRecommendations,
+  selectRangeExercises,
+  getShortExplanation,
+  type ExerciseIntelligenceContext,
+  type ExerciseScore,
+  type IntelligentSelection,
+} from './exercise-intelligence-engine'
 
 export interface SelectedExercise {
   exercise: Exercise
@@ -89,6 +101,9 @@ interface ExerciseSelectionInputs {
   // Training principles engine integration
   selectedMethods?: SelectedMethods
   rangeTrainingMode?: RangeTrainingMode
+  // Exercise Intelligence Engine integration
+  athleteProfile?: import('@/types/domain').AthleteProfile
+  targetSkills?: SkillType[]
 }
 
 // =============================================================================
@@ -104,6 +119,10 @@ export function selectExercisesForSession(inputs: ExerciseSelectionInputs): Exer
     sessionMinutes,
     constraintType,
     selectedMethods,
+    fatigueLevel,
+    athleteProfile,
+    targetSkills,
+    rangeTrainingMode,
   } = inputs
   
   // Calculate exercise budget based on session time
@@ -112,6 +131,23 @@ export function selectExercisesForSession(inputs: ExerciseSelectionInputs): Exer
   // Get principle rules if methods are selected
   const primaryMethod = selectedMethods?.primary
   const principleRules = primaryMethod?.rules
+  
+  // Build Exercise Intelligence Context for smarter selection
+  const intelligenceContext: ExerciseIntelligenceContext = {
+    athleteProfile,
+    experienceLevel,
+    availableEquipment: equipment,
+    primaryGoal: primaryGoal as SkillType,
+    targetSkills: targetSkills || [primaryGoal as SkillType],
+    methodProfile: selectedMethods?.primary?.id,
+    fatigueLevel: fatigueLevel || 'moderate',
+    sessionMinutes,
+    sessionFocus: day.focus === 'skill' ? 'skill' : 
+                  day.focus === 'strength' ? 'strength' : 
+                  day.focus === 'flexibility' ? 'flexibility' : undefined,
+    preferLowerFatigue: fatigueLevel === 'high',
+    preferHighCarryover: true,
+  }
   
   // Get skill-specific exercises
   const goalExercises = getExercisesByTransfer(primaryGoal)

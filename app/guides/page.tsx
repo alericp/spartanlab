@@ -1,6 +1,6 @@
 import { Metadata } from 'next'
 import Link from 'next/link'
-import { ArrowRight, ArrowLeft, Target, Dumbbell, Trophy, Zap, GraduationCap, BookOpen, Brain, Sparkles } from 'lucide-react'
+import { ArrowRight, ArrowLeft, Target, Dumbbell, Trophy, Zap, GraduationCap, BookOpen, Brain, Sparkles, Flame } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { BackNav } from '@/components/navigation/BackNav'
@@ -218,6 +218,65 @@ const GUIDES = [
     icon: GraduationCap,
     category: 'Programming',
     readTime: '12 min read',
+  },
+  // Flexibility & Mobility Guides
+  {
+    slug: 'pancake-flexibility',
+    title: 'Pancake Flexibility Guide',
+    description: 'Master the pancake stretch with SpartanLab\'s 15-second exposure method. Short holds, multiple angles, frequent training.',
+    icon: Flame,
+    category: 'Flexibility',
+    readTime: '8 min read',
+    featured: true,
+  },
+  {
+    slug: 'toe-touch-flexibility',
+    title: 'Toe Touch Flexibility Guide',
+    description: 'Improve your forward fold with the SpartanLab approach. 15-second holds, low soreness, trainable daily.',
+    icon: Flame,
+    category: 'Flexibility',
+    readTime: '7 min read',
+  },
+  {
+    slug: 'front-splits-flexibility',
+    title: 'Front Splits Flexibility Guide',
+    description: 'Progress toward front splits using short exposure holds and frequent practice. The SpartanLab philosophy.',
+    icon: Flame,
+    category: 'Flexibility',
+    readTime: '8 min read',
+  },
+  {
+    slug: 'side-splits-flexibility',
+    title: 'Side Splits Flexibility Guide',
+    description: 'Develop middle split range with 15-second exposures and multiple movement angles.',
+    icon: Flame,
+    category: 'Flexibility',
+    readTime: '8 min read',
+  },
+  {
+    slug: 'flexibility-vs-mobility',
+    title: 'Flexibility vs Mobility Explained',
+    description: 'Understand the difference between flexibility and mobility training. When to use each approach.',
+    icon: Flame,
+    category: 'Flexibility',
+    readTime: '6 min read',
+    featured: true,
+  },
+  {
+    slug: 'splits-mobility',
+    title: 'Splits Mobility Training Guide',
+    description: 'Build strength and control in deep split positions. Loaded stretching, RPE-based progression.',
+    icon: Flame,
+    category: 'Mobility',
+    readTime: '9 min read',
+  },
+  {
+    slug: 'pancake-mobility',
+    title: 'Pancake Mobility Guide',
+    description: 'Build active compression strength for V-sit and straddle skills. Loaded pancake work, active holds.',
+    icon: Flame,
+    category: 'Mobility',
+    readTime: '8 min read',
   },
 ]
 

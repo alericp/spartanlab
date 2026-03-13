@@ -59,6 +59,23 @@ export function isClerkEnabled(): boolean {
 }
 
 /**
+ * Get detailed mode information for debugging
+ */
+export function getModeInfo(): {
+  mode: AppMode
+  displayName: string
+  authEnabled: boolean
+  dbEnabled: boolean
+} {
+  return {
+    mode: getAppMode(),
+    displayName: isPreviewMode() ? 'Preview Mode' : 'Production',
+    authEnabled: hasProductionAuth(),
+    dbEnabled: hasProductionDatabase(),
+  }
+}
+
+/**
  * Check if production database is available (Neon)
  */
 export function isDatabaseEnabled(): boolean {

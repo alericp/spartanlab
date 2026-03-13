@@ -3,11 +3,12 @@
 /**
  * Sign-Up Page
  * 
- * SIMPLIFIED ARCHITECTURE:
+ * ARCHITECTURE:
  * - Preview mode: Static informational fallback
- * - Production mode: Real Clerk SignUp
+ * - Production mode: Uses Clerk SignUp from provider context
  * 
- * Uses ClerkProviderWrapper context for mode detection.
+ * CRITICAL: Does NOT import @clerk/nextjs directly.
+ * Uses ClerkProviderWrapper context as single source of truth.
  */
 
 import Link from 'next/link'
@@ -15,6 +16,30 @@ import { Button } from '@/components/ui/button'
 import { AlertCircle, ArrowLeft, ExternalLink } from 'lucide-react'
 import { useClerkAvailability } from '@/components/providers/ClerkProviderWrapper'
 import { useEffect, useState } from 'react'
+
+// ============================================================================
+// CLERK APPEARANCE (page-specific overrides)
+// ============================================================================
+
+const clerkAppearance = {
+  elements: {
+    rootBox: 'mx-auto',
+    card: 'bg-[#1A1F26] border border-[#2B313A] shadow-xl',
+    headerTitle: 'text-[#E6E9EF]',
+    headerSubtitle: 'text-[#A4ACB8]',
+    socialButtonsBlockButton: 'bg-[#2B313A] border-[#3A3A3A] text-[#E6E9EF] hover:bg-[#3A3A3A]',
+    socialButtonsBlockButtonText: 'text-[#E6E9EF]',
+    dividerLine: 'bg-[#2B313A]',
+    dividerText: 'text-[#A4ACB8]',
+    formFieldLabel: 'text-[#A4ACB8]',
+    formFieldInput: 'bg-[#0F1115] border-[#2B313A] text-[#E6E9EF] focus:border-[#C1121F] focus:ring-[#C1121F]/20',
+    formButtonPrimary: 'bg-[#C1121F] hover:bg-[#A30F1A] text-white',
+    footerActionLink: 'text-[#C1121F] hover:text-[#A30F1A]',
+    identityPreviewText: 'text-[#E6E9EF]',
+    identityPreviewEditButton: 'text-[#C1121F]',
+    formFieldInputShowPasswordButton: 'text-[#A4ACB8]',
+  },
+}
 
 // ============================================================================
 // PREVIEW FALLBACK
@@ -78,73 +103,33 @@ function LoadingState() {
 }
 
 // ============================================================================
-// CLERK APPEARANCE
+// PAGE COMPONENT
 // ============================================================================
 
-const clerkAppearance = {
-  elements: {
-    rootBox: 'mx-auto',
-    card: 'bg-[#1A1F26] border border-[#2B313A] shadow-xl',
-    headerTitle: 'text-[#E6E9EF]',
-    headerSubtitle: 'text-[#A4ACB8]',
-    socialButtonsBlockButton: 'bg-[#2B313A] border-[#3A3A3A] text-[#E6E9EF] hover:bg-[#3A3A3A]',
-    socialButtonsBlockButtonText: 'text-[#E6E9EF]',
-    dividerLine: 'bg-[#2B313A]',
-    dividerText: 'text-[#A4ACB8]',
-    formFieldLabel: 'text-[#A4ACB8]',
-    formFieldInput: 'bg-[#0F1115] border-[#2B313A] text-[#E6E9EF] focus:border-[#C1121F] focus:ring-[#C1121F]/20',
-    formButtonPrimary: 'bg-[#C1121F] hover:bg-[#A30F1A] text-white',
-    footerActionLink: 'text-[#C1121F] hover:text-[#A30F1A]',
-    identityPreviewText: 'text-[#E6E9EF]',
-    identityPreviewEditButton: 'text-[#C1121F]',
-    formFieldInputShowPasswordButton: 'text-[#A4ACB8]',
-  },
-}
-
-// ============================================================================
-// PRODUCTION SIGN-UP (separate component for clarity)
-// ============================================================================
-
-function ProductionSignUp() {
-  const [SignUp, setSignUp] = useState<React.ComponentType<{
-    appearance?: Record<string, unknown>
-    fallbackRedirectUrl?: string
-    signInUrl?: string
-  }> | null>(null)
-  const [loadError, setLoadError] = useState(false)
-
+export default function SignUpPage() {
+  const [mounted, setMounted] = useState(false)
+  const { isClerkAvailable, isLoading, components } = useClerkAvailability()
+  
   useEffect(() => {
-    console.log('[ProductionSignUp] Loading Clerk SignUp component...')
-    // Safe dynamic import
-    import('@clerk/nextjs')
-      .then((mod) => {
-        console.log('[ProductionSignUp] Module loaded, has SignUp:', !!mod?.SignUp)
-        if (mod?.SignUp) {
-          setSignUp(() => mod.SignUp)
-        } else {
-          console.error('[ProductionSignUp] SignUp component not found in module')
-          setLoadError(true)
-        }
-      })
-      .catch((error) => {
-        console.error('[ProductionSignUp] Failed to load Clerk:', error)
-        setLoadError(true)
-      })
+    setMounted(true)
   }, [])
-
-  // If loading failed, show fallback
-  if (loadError) {
-    console.log('[ProductionSignUp] Showing fallback due to load error')
-    return <PreviewFallback />
-  }
-
-  if (!SignUp) {
-    console.log('[ProductionSignUp] Still loading, showing loading state')
-    return <LoadingState />
-  }
-
-  console.log('[ProductionSignUp] Rendering Clerk SignUp widget')
-
+  
+  // SSR - show loading
+  if (!mounted) return <LoadingState />
+  
+  // Still determining auth mode
+  if (isLoading) return <LoadingState />
+  
+  // Preview mode or no Clerk available - show fallback
+  if (!isClerkAvailable) return <PreviewFallback />
+  
+  // Production mode - get SignUp from provider context
+  const SignUp = components.SignUp
+  
+  // SignUp component not available (shouldn't happen if isClerkAvailable is true)
+  if (!SignUp) return <PreviewFallback />
+  
+  // Render Clerk SignUp
   return (
     <div className="min-h-screen flex flex-col items-center justify-center gap-4 bg-[#0F1115] px-4">
       <SignUp
@@ -165,47 +150,4 @@ function ProductionSignUp() {
       </p>
     </div>
   )
-}
-
-// ============================================================================
-// PAGE COMPONENT
-// ============================================================================
-
-export default function SignUpPage() {
-  const [mounted, setMounted] = useState(false)
-  const { isClerkAvailable, isLoading, authMode, hasError, isPreviewMode } = useClerkAvailability()
-  
-  useEffect(() => {
-    setMounted(true)
-  }, [])
-  
-  // Debug logging
-  useEffect(() => {
-    if (mounted) {
-      console.log('[SignUpPage] Auth state:', {
-        isClerkAvailable,
-        isLoading,
-        authMode,
-        hasError,
-        isPreviewMode,
-        hostname: window.location.hostname,
-      })
-    }
-  }, [mounted, isClerkAvailable, isLoading, authMode, hasError, isPreviewMode])
-  
-  // SSR
-  if (!mounted) return <LoadingState />
-  
-  // Checking auth availability
-  if (isLoading) return <LoadingState />
-  
-  // Preview mode: show fallback
-  if (!isClerkAvailable) {
-    console.log('[SignUpPage] Showing preview fallback - isClerkAvailable:', isClerkAvailable)
-    return <PreviewFallback />
-  }
-  
-  // Production mode: render Clerk SignUp
-  console.log('[SignUpPage] Rendering production SignUp')
-  return <ProductionSignUp />
 }

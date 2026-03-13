@@ -1,30 +1,44 @@
 // Application mode detection for dual-mode architecture
 // Allows SpartanLab to run in preview mode or production mode
+//
+// IMPORTANT: All mode checks must use NEXT_PUBLIC_* env vars only
+// to ensure consistent behavior on both server and client.
+// Server-only env vars (DATABASE_URL, CLERK_SECRET_KEY) cause hydration mismatches.
 
 export type AppMode = 'preview' | 'production'
 
-// Check if Clerk auth is configured (works on both client and server)
+/**
+ * Check if Clerk auth is configured (works on both client and server)
+ * Uses only NEXT_PUBLIC_* env vars to avoid server/client mismatch
+ */
 function hasProductionAuth(): boolean {
-  // Only check the public key - CLERK_SECRET_KEY is not available in browser
-  // This prevents auth from appearing disabled on the client when Clerk is configured
   const clerkPublishableKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
   return Boolean(clerkPublishableKey)
 }
 
+/**
+ * Check if database is configured (for client-safe detection)
+ * Uses NEXT_PUBLIC_DATABASE_ENABLED flag instead of DATABASE_URL
+ * since DATABASE_URL is server-only and causes hydration mismatch
+ */
 function hasProductionDatabase(): boolean {
-  // Check for Neon/Postgres connection
-  const databaseUrl = process.env.DATABASE_URL || process.env.POSTGRES_URL
-  return Boolean(databaseUrl)
+  // Use a public flag that can be set in Vercel env vars
+  // This allows consistent server/client detection
+  const dbEnabled = process.env.NEXT_PUBLIC_DATABASE_ENABLED
+  return dbEnabled === 'true' || dbEnabled === '1'
 }
 
 /**
  * Determine the current application mode
- * Preview mode: No external services required, uses localStorage
- * Production mode: Clerk auth + Neon/Postgres persistence
+ * Production mode: Clerk auth is configured
+ * Preview mode: No Clerk auth configured (local dev without services)
+ * 
+ * NOTE: We now base mode primarily on auth, not database,
+ * to ensure consistent SSR/client rendering.
  */
 export function getAppMode(): AppMode {
-  // Production mode requires both auth AND database
-  if (hasProductionAuth() && hasProductionDatabase()) {
+  // Production mode when Clerk is configured
+  if (hasProductionAuth()) {
     return 'production'
   }
   return 'preview'
@@ -38,7 +52,7 @@ export function isPreviewMode(): boolean {
 }
 
 /**
- * Check if running in production mode (full external services)
+ * Check if running in production mode (auth enabled)
  */
 export function isProductionMode(): boolean {
   return getAppMode() === 'production'
@@ -76,9 +90,16 @@ export function getModeInfo(): {
 }
 
 /**
- * Check if production database is available (Neon)
+ * Check if production database is available
+ * SERVER-ONLY: Use this only in server components or API routes
  */
 export function isDatabaseEnabled(): boolean {
+  // For server-side, check actual DATABASE_URL
+  if (typeof window === 'undefined') {
+    const databaseUrl = process.env.DATABASE_URL || process.env.POSTGRES_URL
+    return Boolean(databaseUrl)
+  }
+  // For client-side, use the public flag
   return hasProductionDatabase()
 }
 
@@ -86,7 +107,7 @@ export function isDatabaseEnabled(): boolean {
  * Check if full production services are enabled (both auth AND database)
  */
 export function isProductionServicesEnabled(): boolean {
-  return hasProductionAuth() && hasProductionDatabase()
+  return hasProductionAuth() && isDatabaseEnabled()
 }
 
 

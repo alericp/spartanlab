@@ -1,7 +1,16 @@
+'use client'
+
 import Link from 'next/link'
+import { useState, useEffect } from 'react'
 import { SpartanIcon } from '@/components/brand/SpartanLogo'
 
 export function MarketingFooter() {
+  // Use static year for SSR, update on client to avoid hydration mismatch
+  const [year, setYear] = useState(2024)
+  
+  useEffect(() => {
+    setYear(new Date().getFullYear())
+  }, [])
   return (
     <footer className="border-t border-[#2B313A] bg-[#0F1115]">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-12">
@@ -88,7 +97,7 @@ export function MarketingFooter() {
         {/* Bottom Bar */}
         <div className="mt-12 pt-8 border-t border-[#2B313A] flex flex-col sm:flex-row justify-between items-center gap-4">
           <p className="text-sm text-[#6B7280]">
-            &copy; {new Date().getFullYear()} SpartanLab. All rights reserved.
+            &copy; {year} SpartanLab. All rights reserved.
           </p>
           <div className="flex items-center gap-6">
             <span className="text-xs text-[#6B7280]">Stop guessing. Start training with intelligence.</span>

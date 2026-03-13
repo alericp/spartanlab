@@ -2,9 +2,8 @@
 
 import Link from 'next/link'
 import { useState } from 'react'
-import dynamic from 'next/dynamic'
 import { Button } from '@/components/ui/button'
-import { Menu, X, LayoutDashboard } from 'lucide-react'
+import { Menu, X } from 'lucide-react'
 import { SpartanIcon } from '@/components/brand/SpartanLogo'
 
 const NAV_LINKS = [
@@ -14,57 +13,6 @@ const NAV_LINKS = [
   { href: '/guides', label: 'Guides' },
   { href: '/pricing', label: 'Pricing' },
 ]
-
-// Placeholder shown during SSR and while auth loads - static content only
-function AuthPlaceholder({ variant = 'desktop' }: { variant?: 'desktop' | 'mobile' }) {
-  if (variant === 'mobile') {
-    return (
-      <>
-        <Link href="/sign-in">
-          <Button variant="outline" size="sm" className="w-full border-[#2B313A] text-[#A4ACB8]">
-            Login
-          </Button>
-        </Link>
-        <Link href="/sign-up">
-          <Button size="sm" className="w-full bg-[#C1121F] hover:bg-[#A30F1A]">
-            Start Training
-          </Button>
-        </Link>
-      </>
-    )
-  }
-  return (
-    <>
-      <Link href="/sign-in">
-        <Button variant="ghost" size="sm" className="text-[#A4ACB8] hover:text-[#E6E9EF]">
-          Login
-        </Button>
-      </Link>
-      <Link href="/sign-up">
-        <Button size="sm" className="bg-[#C1121F] hover:bg-[#A30F1A]">
-          Start Training
-        </Button>
-      </Link>
-    </>
-  )
-}
-
-// Client-only auth CTA - dynamically imported with ssr: false
-const HeaderAuthCTAClient = dynamic(
-  () => import('./HeaderAuthCTA').then((mod) => mod.HeaderAuthCTA),
-  { 
-    ssr: false, 
-    loading: () => <AuthPlaceholder variant="desktop" />
-  }
-)
-
-const MobileAuthCTAClient = dynamic(
-  () => import('./HeaderAuthCTA').then((mod) => mod.MobileAuthCTA),
-  { 
-    ssr: false, 
-    loading: () => <AuthPlaceholder variant="mobile" />
-  }
-)
 
 export function MarketingHeader() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
@@ -92,9 +40,18 @@ export function MarketingHeader() {
             ))}
           </div>
 
-          {/* Desktop CTA */}
+          {/* Desktop CTA - Static buttons, no auth dependency */}
           <div className="hidden md:flex items-center gap-4">
-            <HeaderAuthCTAClient />
+            <Link href="/sign-in">
+              <Button variant="ghost" size="sm" className="text-[#A4ACB8] hover:text-[#E6E9EF]">
+                Login
+              </Button>
+            </Link>
+            <Link href="/sign-up">
+              <Button size="sm" className="bg-[#C1121F] hover:bg-[#A30F1A]">
+                Start Training
+              </Button>
+            </Link>
           </div>
 
           {/* Mobile Menu Button */}
@@ -122,7 +79,16 @@ export function MarketingHeader() {
               ))}
 
               <div className="flex flex-col gap-2 pt-4 border-t border-[#2B313A]">
-                <MobileAuthCTAClient onNavigate={() => setMobileMenuOpen(false)} />
+                <Link href="/sign-in" onClick={() => setMobileMenuOpen(false)}>
+                  <Button variant="outline" size="sm" className="w-full border-[#2B313A] text-[#A4ACB8]">
+                    Login
+                  </Button>
+                </Link>
+                <Link href="/sign-up" onClick={() => setMobileMenuOpen(false)}>
+                  <Button size="sm" className="w-full bg-[#C1121F] hover:bg-[#A30F1A]">
+                    Start Training
+                  </Button>
+                </Link>
               </div>
             </div>
           </div>

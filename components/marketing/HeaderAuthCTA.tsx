@@ -5,26 +5,45 @@ import { useAuth, useUser } from '@clerk/nextjs'
 import { Button } from '@/components/ui/button'
 import { LayoutDashboard } from 'lucide-react'
 
+// Default logged-out buttons shown when Clerk is unavailable or loading
+function DefaultAuthButtons() {
+  return (
+    <>
+      <Link href="/sign-in">
+        <Button variant="ghost" size="sm" className="text-[#A4ACB8] hover:text-[#E6E9EF]">
+          Login
+        </Button>
+      </Link>
+      <Link href="/sign-up">
+        <Button size="sm" className="bg-[#C1121F] hover:bg-[#A30F1A]">
+          Start Training
+        </Button>
+      </Link>
+    </>
+  )
+}
+
 export function HeaderAuthCTA() {
-  const { isLoaded, isSignedIn } = useAuth()
-  const { user } = useUser()
+  // Wrap Clerk hooks in try-catch to handle domain mismatch errors gracefully
+  let isLoaded = false
+  let isSignedIn = false
+  let user = null
+  
+  try {
+    const auth = useAuth()
+    const userData = useUser()
+    isLoaded = auth.isLoaded
+    isSignedIn = auth.isSignedIn ?? false
+    user = userData.user
+  } catch {
+    // Clerk failed to initialize (e.g., domain mismatch in preview)
+    // Fall back to showing logged-out state
+    return <DefaultAuthButtons />
+  }
 
   // Still loading Clerk - show placeholder
   if (!isLoaded) {
-    return (
-      <>
-        <Link href="/sign-in">
-          <Button variant="ghost" size="sm" className="text-[#A4ACB8] hover:text-[#E6E9EF]">
-            Login
-          </Button>
-        </Link>
-        <Link href="/sign-up">
-          <Button size="sm" className="bg-[#C1121F] hover:bg-[#A30F1A]">
-            Start Training
-          </Button>
-        </Link>
-      </>
-    )
+    return <DefaultAuthButtons />
   }
 
   if (isSignedIn) {
@@ -63,25 +82,41 @@ export function HeaderAuthCTA() {
   )
 }
 
+// Default mobile buttons shown when Clerk is unavailable or loading
+function DefaultMobileAuthButtons({ onNavigate }: { onNavigate?: () => void }) {
+  return (
+    <>
+      <Link href="/sign-in" onClick={onNavigate}>
+        <Button variant="outline" size="sm" className="w-full border-[#2B313A] text-[#A4ACB8]">
+          Login
+        </Button>
+      </Link>
+      <Link href="/sign-up" onClick={onNavigate}>
+        <Button size="sm" className="w-full bg-[#C1121F] hover:bg-[#A30F1A]">
+          Start Training
+        </Button>
+      </Link>
+    </>
+  )
+}
+
 export function MobileAuthCTA({ onNavigate }: { onNavigate: () => void }) {
-  const { isLoaded, isSignedIn } = useAuth()
+  // Wrap Clerk hooks in try-catch to handle domain mismatch errors gracefully
+  let isLoaded = false
+  let isSignedIn = false
+  
+  try {
+    const auth = useAuth()
+    isLoaded = auth.isLoaded
+    isSignedIn = auth.isSignedIn ?? false
+  } catch {
+    // Clerk failed to initialize (e.g., domain mismatch in preview)
+    return <DefaultMobileAuthButtons onNavigate={onNavigate} />
+  }
 
   // Still loading Clerk
   if (!isLoaded) {
-    return (
-      <>
-        <Link href="/sign-in" onClick={onNavigate}>
-          <Button variant="outline" size="sm" className="w-full border-[#2B313A] text-[#A4ACB8]">
-            Login
-          </Button>
-        </Link>
-        <Link href="/sign-up" onClick={onNavigate}>
-          <Button size="sm" className="w-full bg-[#C1121F] hover:bg-[#A30F1A]">
-            Start Training
-          </Button>
-        </Link>
-      </>
-    )
+    return <DefaultMobileAuthButtons onNavigate={onNavigate} />
   }
 
   if (isSignedIn) {

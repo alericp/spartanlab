@@ -65,6 +65,10 @@ const FAQ = [
   {
     question: 'What happens to my data if I downgrade?',
     answer: 'Your training data is always preserved. Downgrading only limits access to certain features, not your history.'
+  },
+  {
+    question: 'How do I contact billing support?',
+    answer: 'For billing questions, refunds, or invoice requests, email billing@spartanlab.app.'
   }
 ]
 

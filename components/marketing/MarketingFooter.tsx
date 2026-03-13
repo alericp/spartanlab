@@ -100,7 +100,12 @@ export function MarketingFooter() {
             &copy; {year} SpartanLab. All rights reserved.
           </p>
           <div className="flex items-center gap-6">
-            <span className="text-xs text-[#6B7280]">Stop guessing. Start training with intelligence.</span>
+            <a 
+              href="mailto:support@spartanlab.app" 
+              className="text-xs text-[#6B7280] hover:text-[#A4ACB8] transition-colors"
+            >
+              support@spartanlab.app
+            </a>
           </div>
         </div>
       </div>

@@ -12,7 +12,7 @@
  * CRITICAL: Uses try/catch error boundary to prevent auth failures from crashing the app
  */
 
-import { ReactNode, createContext, useContext, useState, useEffect, useRef, Component, ErrorInfo } from 'react'
+import { ReactNode, createContext, useContext, useState, useEffect, Component, ErrorInfo } from 'react'
 import { shouldInitializeClerk, getAuthMode, type AuthMode } from '@/lib/auth-environment'
 
 // ============================================================================
@@ -163,22 +163,18 @@ interface Props {
 }
 
 export function ClerkProviderWrapper({ children }: Props) {
-  // CRITICAL: Check if we should initialize Clerk SYNCHRONOUSLY on first render
-  // This happens before any useEffect, so we never even attempt to load Clerk on preview
-  const shouldInit = useRef<boolean>(false)
-  const authMode = useRef<AuthMode>('preview')
-  
-  // These refs are set synchronously during render (not in useEffect)
-  if (typeof window !== 'undefined') {
-    shouldInit.current = shouldInitializeClerk()
-    authMode.current = getAuthMode()
-  }
+  // Track hydration and initialization decision
+  const [initDecision, setInitDecision] = useState<{
+    decided: boolean
+    shouldInit: boolean
+    authMode: AuthMode
+  }>({ decided: false, shouldInit: false, authMode: 'preview' })
   
   const [state, setState] = useState<ClerkAvailabilityContextValue>(() => ({
     isClerkAvailable: false,
-    isPreviewMode: !shouldInit.current,
-    isLoading: shouldInit.current, // Only loading if we need to load Clerk
-    authMode: authMode.current,
+    isPreviewMode: false, // Don't assume preview until we check on client
+    isLoading: true, // Start loading until we determine mode
+    authMode: 'preview',
     hasError: false,
   }))
   
@@ -191,18 +187,50 @@ export function ClerkProviderWrapper({ children }: Props) {
     signUpFallbackRedirectUrl?: string
   }> | null>(null)
 
+  // Effect 1: Determine if we should initialize Clerk (runs once on hydration)
   useEffect(() => {
-    // CRITICAL: Don't attempt to load Clerk if we shouldn't initialize it
-    if (!shouldInit.current) {
-      setState(prev => ({ ...prev, isLoading: false }))
-      return
+    const shouldInit = shouldInitializeClerk()
+    const authMode = getAuthMode()
+    
+    console.log('[ClerkProviderWrapper] Hydration - init decision:', {
+      shouldInit,
+      authMode,
+      hostname: typeof window !== 'undefined' ? window.location.hostname : 'SSR',
+    })
+    
+    setInitDecision({ decided: true, shouldInit, authMode })
+    
+    // If we shouldn't init, immediately set to preview mode
+    if (!shouldInit) {
+      setState({
+        isClerkAvailable: false,
+        isPreviewMode: true,
+        isLoading: false,
+        authMode: authMode,
+        hasError: false,
+      })
     }
+  }, [])
+
+  // Effect 2: Load Clerk if we should initialize it
+  useEffect(() => {
+    // Wait for init decision
+    if (!initDecision.decided) return
+    
+    // Don't load if we shouldn't init
+    if (!initDecision.shouldInit) return
 
     let cancelled = false
 
+    console.log('[ClerkProviderWrapper] Loading Clerk module...')
     loadClerkModule()
       .then(mod => {
         if (cancelled) return
+        
+        console.log('[ClerkProviderWrapper] Module loaded:', {
+          hasClerkProvider: !!mod?.ClerkProvider,
+          moduleKeys: mod ? Object.keys(mod).slice(0, 5) : [],
+        })
         
         if (mod?.ClerkProvider) {
           setClerkProvider(() => mod.ClerkProvider)
@@ -213,6 +241,7 @@ export function ClerkProviderWrapper({ children }: Props) {
             authMode: 'production',
             hasError: false,
           })
+          console.log('[ClerkProviderWrapper] Clerk ready - production mode active')
         } else {
           // Clerk module failed to load - fallback to preview mode gracefully
           console.warn('[ClerkProviderWrapper] Clerk unavailable, using preview mode')
@@ -240,10 +269,19 @@ export function ClerkProviderWrapper({ children }: Props) {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [initDecision])
+
+  // Still determining mode or loading Clerk
+  if (!initDecision.decided || (initDecision.shouldInit && !ClerkProvider && !state.hasError)) {
+    return (
+      <ClerkAvailabilityContext.Provider value={state}>
+        {children}
+      </ClerkAvailabilityContext.Provider>
+    )
+  }
 
   // Preview mode - render children without Clerk
-  if (!shouldInit.current || !ClerkProvider) {
+  if (!initDecision.shouldInit || !ClerkProvider) {
     return (
       <ClerkAvailabilityContext.Provider value={state}>
         {children}

@@ -114,27 +114,36 @@ function ProductionSignUp() {
   const [loadError, setLoadError] = useState(false)
 
   useEffect(() => {
+    console.log('[ProductionSignUp] Loading Clerk SignUp component...')
     // Safe dynamic import
     import('@clerk/nextjs')
       .then((mod) => {
+        console.log('[ProductionSignUp] Module loaded, has SignUp:', !!mod?.SignUp)
         if (mod?.SignUp) {
           setSignUp(() => mod.SignUp)
         } else {
+          console.error('[ProductionSignUp] SignUp component not found in module')
           setLoadError(true)
         }
       })
       .catch((error) => {
-        console.error('[SignUp] Failed to load Clerk:', error)
+        console.error('[ProductionSignUp] Failed to load Clerk:', error)
         setLoadError(true)
       })
   }, [])
 
   // If loading failed, show fallback
   if (loadError) {
+    console.log('[ProductionSignUp] Showing fallback due to load error')
     return <PreviewFallback />
   }
 
-  if (!SignUp) return <LoadingState />
+  if (!SignUp) {
+    console.log('[ProductionSignUp] Still loading, showing loading state')
+    return <LoadingState />
+  }
+
+  console.log('[ProductionSignUp] Rendering Clerk SignUp widget')
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center gap-4 bg-[#0F1115] px-4">
@@ -164,11 +173,25 @@ function ProductionSignUp() {
 
 export default function SignUpPage() {
   const [mounted, setMounted] = useState(false)
-  const { isClerkAvailable, isLoading } = useClerkAvailability()
+  const { isClerkAvailable, isLoading, authMode, hasError, isPreviewMode } = useClerkAvailability()
   
   useEffect(() => {
     setMounted(true)
   }, [])
+  
+  // Debug logging
+  useEffect(() => {
+    if (mounted) {
+      console.log('[SignUpPage] Auth state:', {
+        isClerkAvailable,
+        isLoading,
+        authMode,
+        hasError,
+        isPreviewMode,
+        hostname: window.location.hostname,
+      })
+    }
+  }, [mounted, isClerkAvailable, isLoading, authMode, hasError, isPreviewMode])
   
   // SSR
   if (!mounted) return <LoadingState />
@@ -177,8 +200,12 @@ export default function SignUpPage() {
   if (isLoading) return <LoadingState />
   
   // Preview mode: show fallback
-  if (!isClerkAvailable) return <PreviewFallback />
+  if (!isClerkAvailable) {
+    console.log('[SignUpPage] Showing preview fallback - isClerkAvailable:', isClerkAvailable)
+    return <PreviewFallback />
+  }
   
   // Production mode: render Clerk SignUp
+  console.log('[SignUpPage] Rendering production SignUp')
   return <ProductionSignUp />
 }

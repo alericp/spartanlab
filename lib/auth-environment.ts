@@ -115,23 +115,50 @@ export function isTestClerkKey(): boolean {
  * This is THE function that gates all Clerk initialization.
  * Returns true only when:
  * 1. Clerk is configured AND
- * 2. Either we have a test key OR we're on a production domain
+ * 2. Either we have a test key OR we're on a production domain with prod key
  * 
  * CRITICAL: If this returns false, NO Clerk code should be loaded or executed.
  */
 export function shouldInitializeClerk(): boolean {
+  const configured = isClerkConfigured()
+  const isTest = isTestClerkKey()
+  const isProd = isProductionClerkKey()
+  const isProdDomain = isProductionAuthDomain()
+  const hostname = getHostname()
+  
+  // Debug logging for production troubleshooting
+  if (isBrowser()) {
+    console.log('[SpartanLab Auth] shouldInitializeClerk check:', {
+      hostname,
+      configured,
+      isTestKey: isTest,
+      isProdKey: isProd,
+      isProdDomain,
+      keyPrefix: getClerkPublishableKey()?.substring(0, 10) + '...',
+    })
+  }
+  
   // No key = no Clerk
-  if (!isClerkConfigured()) return false
+  if (!configured) {
+    console.log('[SpartanLab Auth] Not configured - no Clerk key')
+    return false
+  }
   
   // Test keys work everywhere (development mode)
-  if (isTestClerkKey()) return true
+  if (isTest) {
+    console.log('[SpartanLab Auth] Test key detected - initializing Clerk')
+    return true
+  }
   
   // Production keys only work on production domains
-  if (isProductionClerkKey()) {
-    return isProductionAuthDomain()
+  if (isProd) {
+    const shouldInit = isProdDomain
+    console.log('[SpartanLab Auth] Production key on domain:', hostname, '- shouldInit:', shouldInit)
+    return shouldInit
   }
   
   // Unknown key format - don't initialize
+  console.log('[SpartanLab Auth] Unknown key format - not initializing')
   return false
 }
 

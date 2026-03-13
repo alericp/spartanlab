@@ -6,7 +6,6 @@ import { SignedIn, SignedOut, UserButton } from '@/components/auth/ClerkComponen
 import { Button } from '@/components/ui/button'
 import { Menu, X, LayoutDashboard } from 'lucide-react'
 import { SpartanIcon } from '@/components/brand/SpartanLogo'
-import { isPreviewMode } from '@/lib/app-mode'
 
 const NAV_LINKS = [
   { href: '/how-it-works', label: 'How It Works' },
@@ -18,26 +17,18 @@ const NAV_LINKS = [
 
 export function MarketingHeader() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
-  const [isLoggedIn, setIsLoggedIn] = useState(false)
-  const preview = isPreviewMode()
+  const [mounted, setMounted] = useState(false)
   
   useEffect(() => {
-    // In preview mode, check if user has started using the app (has data)
-    if (preview) {
-      const hasProfile = localStorage.getItem('athlete_profile')
-      const hasWorkouts = localStorage.getItem('workouts')
-      const hasPrograms = localStorage.getItem('saved_programs')
-      setIsLoggedIn(Boolean(hasProfile || hasWorkouts || hasPrograms))
-    }
-    // In production mode, Clerk's SignedIn/SignedOut handles this
-  }, [preview])
+    setMounted(true)
+  }, [])
 
   return (
     <header className="fixed top-0 left-0 right-0 z-50 bg-[#0F1115]/90 backdrop-blur-md border-b border-[#2B313A]">
       <nav className="max-w-6xl mx-auto px-4 sm:px-6">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
-          <Link href={isLoggedIn ? "/dashboard" : "/"} className="flex items-center gap-2.5">
+          <Link href="/" className="flex items-center gap-2.5">
             <SpartanIcon size={30} />
             <span className="text-lg font-bold tracking-tight text-[#E6E9EF]">SpartanLab</span>
           </Link>
@@ -57,36 +48,24 @@ export function MarketingHeader() {
 
           {/* Desktop CTA - Auth-aware */}
           <div className="hidden md:flex items-center gap-4">
-            {preview ? (
-              // Preview mode: simple auth state
-              isLoggedIn ? (
-                <>
-                  <Link href="/dashboard">
-                    <Button variant="ghost" size="sm" className="text-[#A4ACB8] hover:text-[#E6E9EF]">
-                      <LayoutDashboard className="w-4 h-4 mr-2" />
-                      Dashboard
-                    </Button>
-                  </Link>
-                  <div className="w-8 h-8 rounded-full bg-[#C1121F] flex items-center justify-center text-sm font-bold">
-                    A
-                  </div>
-                </>
-              ) : (
-                <>
-                  <Link href="/sign-in">
-                    <Button variant="ghost" size="sm" className="text-[#A4ACB8] hover:text-[#E6E9EF]">
-                      Login
-                    </Button>
-                  </Link>
-                  <Link href="/sign-up">
-                    <Button size="sm" className="bg-[#C1121F] hover:bg-[#A30F1A]">
-                      Start Training
-                    </Button>
-                  </Link>
-                </>
-              )
-            ) : (
-              // Production mode: use Clerk components
+            {/* Default state shown during SSR and before mount */}
+            {!mounted && (
+              <>
+                <Link href="/sign-in">
+                  <Button variant="ghost" size="sm" className="text-[#A4ACB8] hover:text-[#E6E9EF]">
+                    Login
+                  </Button>
+                </Link>
+                <Link href="/sign-up">
+                  <Button size="sm" className="bg-[#C1121F] hover:bg-[#A30F1A]">
+                    Start Training
+                  </Button>
+                </Link>
+              </>
+            )}
+            
+            {/* Auth-aware content after mount */}
+            {mounted && (
               <>
                 <SignedIn>
                   <Link href="/dashboard">
@@ -151,31 +130,24 @@ export function MarketingHeader() {
               ))}
               
               <div className="flex flex-col gap-2 pt-4 border-t border-[#2B313A]">
-                {preview ? (
-                  // Preview mode mobile
-                  isLoggedIn ? (
-                    <Link href="/dashboard" onClick={() => setMobileMenuOpen(false)}>
-                      <Button size="sm" className="w-full bg-[#C1121F] hover:bg-[#A30F1A]">
-                        <LayoutDashboard className="w-4 h-4 mr-2" />
-                        Go to Dashboard
+                {/* Default state during SSR */}
+                {!mounted && (
+                  <>
+                    <Link href="/sign-in" onClick={() => setMobileMenuOpen(false)}>
+                      <Button variant="outline" size="sm" className="w-full border-[#2B313A] text-[#A4ACB8]">
+                        Login
                       </Button>
                     </Link>
-                  ) : (
-                    <>
-                      <Link href="/sign-in" onClick={() => setMobileMenuOpen(false)}>
-                        <Button variant="outline" size="sm" className="w-full border-[#2B313A] text-[#A4ACB8]">
-                          Login
-                        </Button>
-                      </Link>
-                      <Link href="/sign-up" onClick={() => setMobileMenuOpen(false)}>
-                        <Button size="sm" className="w-full bg-[#C1121F] hover:bg-[#A30F1A]">
-                          Start Training
-                        </Button>
-                      </Link>
-                    </>
-                  )
-                ) : (
-                  // Production mode mobile - Clerk handles state
+                    <Link href="/sign-up" onClick={() => setMobileMenuOpen(false)}>
+                      <Button size="sm" className="w-full bg-[#C1121F] hover:bg-[#A30F1A]">
+                        Start Training
+                      </Button>
+                    </Link>
+                  </>
+                )}
+                
+                {/* Auth-aware content after mount */}
+                {mounted && (
                   <>
                     <SignedIn>
                       <Link href="/dashboard" onClick={() => setMobileMenuOpen(false)}>

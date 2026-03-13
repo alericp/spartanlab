@@ -23,6 +23,8 @@ export type HeightUnit = 'inches' | 'cm'
 export type WeightUnit = 'lbs' | 'kg'
 export type SessionLengthMinutes = 30 | 45 | 60 | 90
 export type Equipment = 'pullup_bar' | 'dip_bars' | 'parallettes' | 'rings' | 'resistance_bands'
+export type RangeIntent = 'deeper_range' | 'stronger_control' | 'both'
+export type RangeTrainingMode = 'flexibility' | 'mobility' | 'hybrid'
 
 export interface AthleteProfile {
   id: string
@@ -37,6 +39,8 @@ export interface AthleteProfile {
   sessionLengthMinutes: SessionLengthMinutes
   primaryGoal: string | null
   equipmentAvailable: Equipment[]
+  rangeIntent: RangeIntent | null // For flexibility/mobility goals
+  rangeTrainingMode: RangeTrainingMode | null // AI-determined training mode
   onboardingComplete: boolean
   createdAt: string
   updatedAt?: string

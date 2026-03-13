@@ -4,19 +4,25 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
-import { Target, Calendar, Clock, Wrench, ArrowRight, Check } from 'lucide-react'
+import { Target, Calendar, Clock, Wrench, ArrowRight, Check, Sparkles } from 'lucide-react'
 import { SpartanIcon } from '@/components/brand/SpartanLogo'
 import { saveAthleteProfile } from '@/lib/repositories/profile-repository'
 import type { Equipment, SessionLengthMinutes } from '@/types/domain'
+import { RANGE_INTENT_OPTIONS, RANGE_MODE_COPY, type RangeTrainingMode } from '@/lib/range-training-system'
 
 type PrimaryGoal = 'front_lever' | 'planche' | 'muscle_up' | 'general_strength' | 'pancake' | 'toe_touch' | 'front_splits' | 'side_splits' | 'flexibility'
 type TrainingDays = 2 | 3 | 4 | 5 | 6
+type RangeIntent = 'deeper_range' | 'stronger_control' | 'both'
+
+// Range-based skills that need intent selection
+const RANGE_SKILLS: PrimaryGoal[] = ['pancake', 'toe_touch', 'front_splits', 'side_splits']
 
 interface FormData {
   primaryGoal: PrimaryGoal | null
   trainingDaysPerWeek: TrainingDays | null
   sessionLengthMinutes: SessionLengthMinutes | null
   equipmentAvailable: Equipment[]
+  rangeIntent: RangeIntent | null // Only used for flexibility/mobility goals
 }
 
 const GOALS: { value: PrimaryGoal; label: string }[] = [
@@ -55,12 +61,18 @@ export function TrainingSetup() {
     trainingDaysPerWeek: null,
     sessionLengthMinutes: null,
     equipmentAvailable: [],
+    rangeIntent: null,
   })
 
+  // Check if range intent is needed for selected goal
+  const needsRangeIntent = formData.primaryGoal && RANGE_SKILLS.includes(formData.primaryGoal)
+  
   const isValid = 
     formData.primaryGoal !== null && 
     formData.trainingDaysPerWeek !== null &&
-    formData.sessionLengthMinutes !== null
+    formData.sessionLengthMinutes !== null &&
+    // Range skills require intent selection
+    (!needsRangeIntent || formData.rangeIntent !== null)
 
   const toggleEquipment = (equipment: Equipment) => {
     setFormData(prev => ({
@@ -82,6 +94,7 @@ export function TrainingSetup() {
         trainingDaysPerWeek: formData.trainingDaysPerWeek!,
         sessionLengthMinutes: formData.sessionLengthMinutes!,
         equipmentAvailable: formData.equipmentAvailable,
+        rangeIntent: formData.rangeIntent,
         onboardingComplete: true,
       })
       
@@ -121,7 +134,12 @@ export function TrainingSetup() {
                   <button
                     key={goal.value}
                     type="button"
-                    onClick={() => setFormData(prev => ({ ...prev, primaryGoal: goal.value }))}
+                    onClick={() => setFormData(prev => ({ 
+                      ...prev, 
+                      primaryGoal: goal.value,
+                      // Reset range intent when changing goals
+                      rangeIntent: RANGE_SKILLS.includes(goal.value) ? prev.rangeIntent : null,
+                    }))}
                     className={`py-3 px-4 rounded-lg border text-sm font-medium transition-colors ${
                       formData.primaryGoal === goal.value
                         ? 'bg-[#C1121F]/10 border-[#C1121F] text-[#E6E9EF]'
@@ -133,6 +151,43 @@ export function TrainingSetup() {
                 ))}
               </div>
             </div>
+
+            {/* Range Training Intent - Only shown for flexibility/mobility goals */}
+            {needsRangeIntent && (
+              <div className="space-y-3">
+                <label className="flex items-center gap-2 text-sm font-medium text-[#E6E9EF]">
+                  <Sparkles className="w-4 h-4 text-[#A4ACB8]" />
+                  What do you want most?
+                </label>
+                <div className="space-y-2">
+                  {RANGE_INTENT_OPTIONS.map((option) => {
+                    const isSelected = formData.rangeIntent === option.value
+                    const modeCopy = RANGE_MODE_COPY[option.recommendedMode]
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => setFormData(prev => ({ ...prev, rangeIntent: option.value }))}
+                        className={`w-full py-4 px-4 rounded-lg border text-left transition-colors ${
+                          isSelected
+                            ? 'bg-[#C1121F]/10 border-[#C1121F]'
+                            : 'bg-[#0F1115] border-[#2B313A] hover:border-[#4F6D8A]'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                          <span className={`text-sm font-medium ${isSelected ? 'text-[#E6E9EF]' : 'text-[#A4ACB8]'}`}>
+                            {option.label}
+                          </span>
+                          {isSelected && <Check className="w-4 h-4 text-[#C1121F]" />}
+                        </div>
+                        <p className="text-xs text-[#6B7280]">{modeCopy.tagline}</p>
+                        <p className="text-xs text-[#4F6D8A] mt-1">{modeCopy.description}</p>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
 
             {/* Training Days Per Week */}
             <div className="space-y-3">

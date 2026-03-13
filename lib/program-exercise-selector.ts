@@ -20,6 +20,15 @@ import {
 } from './adaptive-exercise-pool'
 import { FLEXIBILITY_SEQUENCES, generateFlexibilitySession } from './flexibility-sequences'
 import {
+  type RangeTrainingMode,
+  type RangeSkill,
+  MOBILITY_EXERCISES,
+  generateRangeSession,
+  determineRangeTrainingMode,
+  getSessionExplanation,
+  getPlanRationale,
+} from './range-training-system'
+import {
   getAdaptedExercise,
   getProgressionUp,
   getProgressionDown,
@@ -311,51 +320,92 @@ function selectMainExercises(
     })
   }
   
-  // 5. FLEXIBILITY DAYS (for flexibility goals or flexibility_focus day)
-  // SpartanLab Flexibility Philosophy:
-  // - 15 second holds (NOT 30-60s)
-  // - Multiple angles/variations per movement
-  // - 3 rounds of each sequence
-  // - Low soreness, high frequency
-  // - Sessions 5-12 minutes
-  const flexibilityGoals = ['pancake', 'toe_touch', 'front_splits', 'side_splits', 'flexibility']
-  if (flexibilityGoals.includes(primaryGoal) || day.focus === 'flexibility_focus') {
-    // Get flexibility exercises that transfer to this goal
-    const availableFlexibility = FLEXIBILITY_EXERCISES.filter(e => hasRequiredEquipment(e, equipment))
-    const goalFlexibility = availableFlexibility.filter(e => 
-      e.transferTo.includes(primaryGoal) || e.progressionLadder === primaryGoal
-    )
+  // 5. RANGE-BASED TRAINING (Flexibility vs Mobility)
+  // SpartanLab distinguishes two training modes:
+  // 
+  // FLEXIBILITY MODE (default):
+  //   - 15 second holds, 3 rounds, low soreness
+  //   - Trainable daily, recovery-friendly
+  // 
+  // MOBILITY MODE (if rangeTrainingMode === 'mobility'):
+  //   - Loaded stretches, RPE-based, strength-style recovery
+  //   - Treated like strength training
+  // 
+  // HYBRID MODE: Combines both approaches
+  const rangeSkills = ['pancake', 'toe_touch', 'front_splits', 'side_splits', 'flexibility']
+  if (rangeSkills.includes(primaryGoal) || day.focus === 'flexibility_focus') {
+    // Determine range training mode (default to flexibility)
+    const rangeTrainingMode: RangeTrainingMode = (context as { rangeTrainingMode?: RangeTrainingMode })?.rangeTrainingMode || 'flexibility'
+    const isRangeSkill = ['pancake', 'toe_touch', 'front_splits', 'side_splits'].includes(primaryGoal)
+    const rangeSkill = isRangeSkill ? primaryGoal as RangeSkill : 'toe_touch'
     
-    // For general flexibility goal, include all flexibility exercises
-    const flexPool = primaryGoal === 'flexibility' 
-      ? availableFlexibility 
-      : goalFlexibility.length > 0 ? goalFlexibility : availableFlexibility
-    
-    // Sort by transfer priority
-    const sortedFlexExercises = flexPool.sort((a, b) => {
-      const aTransfer = a.transferTo.includes(primaryGoal) ? 1 : 0
-      const bTransfer = b.transferTo.includes(primaryGoal) ? 1 : 0
-      if (aTransfer !== bTransfer) return bTransfer - aTransfer
-      const aLadder = a.progressionLadder === primaryGoal ? 1 : 0
-      const bLadder = b.progressionLadder === primaryGoal ? 1 : 0
-      return bLadder - aLadder
-    })
-    
-    // SpartanLab 15s Exposure Structure:
-    // Select 3-4 exercises, 3 rounds each, 15s holds
-    // Total time: ~5-12 minutes
-    const selectedFlexCount = Math.min(4, maxExercises - 1)
-    sortedFlexExercises.slice(0, selectedFlexCount).forEach((exercise) => {
-      addExercise(
-        exercise,
-        `${primaryGoal} flexibility flow`,
-        3,  // 3 rounds - SpartanLab standard
-        '15s', // 15 second holds - SpartanLab philosophy
-        '15s exposure, multiple angles, breathe steadily'
+    if (rangeTrainingMode === 'flexibility' || rangeTrainingMode === 'hybrid') {
+      // FLEXIBILITY MODE: 15s holds, 3 rounds, low fatigue
+      const availableFlexibility = FLEXIBILITY_EXERCISES.filter(e => hasRequiredEquipment(e, equipment))
+      const goalFlexibility = availableFlexibility.filter(e => 
+        e.transferTo.includes(primaryGoal) || e.progressionLadder === primaryGoal
       )
-    })
+      
+      const flexPool = primaryGoal === 'flexibility' 
+        ? availableFlexibility 
+        : goalFlexibility.length > 0 ? goalFlexibility : availableFlexibility
+      
+      const sortedFlexExercises = flexPool.sort((a, b) => {
+        const aTransfer = a.transferTo.includes(primaryGoal) ? 1 : 0
+        const bTransfer = b.transferTo.includes(primaryGoal) ? 1 : 0
+        if (aTransfer !== bTransfer) return bTransfer - aTransfer
+        const aLadder = a.progressionLadder === primaryGoal ? 1 : 0
+        const bLadder = b.progressionLadder === primaryGoal ? 1 : 0
+        return bLadder - aLadder
+      })
+      
+      // Flexibility: 15s holds, 3 rounds
+      const flexCount = rangeTrainingMode === 'hybrid' ? 2 : Math.min(4, maxExercises - 1)
+      sortedFlexExercises.slice(0, flexCount).forEach((exercise) => {
+        addExercise(
+          exercise,
+          `${primaryGoal} flexibility flow`,
+          3,
+          '15s',
+          '15s exposure, multiple angles, breathe steadily'
+        )
+      })
+    }
     
-    // Add light core/compression if room (also 15s exposure style)
+    if (rangeTrainingMode === 'mobility' || rangeTrainingMode === 'hybrid') {
+      // MOBILITY MODE: Loaded work, RPE-based, strength-style recovery
+      const mobilityExercises = MOBILITY_EXERCISES[rangeSkill] || []
+      const mobilityCount = rangeTrainingMode === 'hybrid' ? 2 : Math.min(3, maxExercises - selected.length)
+      
+      mobilityExercises.slice(0, mobilityCount).forEach((mobEx) => {
+        // Find matching exercise in pool or create reference
+        const matchingExercise = FLEXIBILITY_EXERCISES.find(e => e.id === mobEx.id) || {
+          id: mobEx.id,
+          name: mobEx.name,
+          category: 'flexibility' as const,
+          movementPattern: 'mobility',
+          primaryMuscles: ['hip_flexors'],
+          equipment: ['floor'] as EquipmentType[],
+          neuralDemand: 2,
+          fatigueCost: 2,
+          transferTo: [rangeSkill],
+          defaultSets: mobEx.sets,
+          defaultRepsOrTime: mobEx.repsOrHold,
+          difficultyLevel: 'intermediate' as DifficultyLevel,
+          movementCategory: 'flexibility',
+        }
+        
+        addExercise(
+          matchingExercise,
+          `${primaryGoal} mobility work (RPE ${mobEx.targetRPE})`,
+          mobEx.sets,
+          mobEx.repsOrHold,
+          mobEx.cues.join(', ')
+        )
+      })
+    }
+    
+    // Add light core/compression if room
     if (selected.length < maxExercises) {
       const compressionCore = availableCore.find(e => 
         e.movementPattern === 'compression' || e.transferTo.includes('l_sit')

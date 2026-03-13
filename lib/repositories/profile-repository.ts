@@ -24,6 +24,8 @@ const DEFAULT_PROFILE: AthleteProfile = {
   sessionLengthMinutes: 60,
   primaryGoal: 'planche',
   equipmentAvailable: ['pullup_bar', 'dip_bars', 'parallettes'],
+  rangeIntent: null,
+  rangeTrainingMode: null,
   onboardingComplete: true,
   createdAt: new Date().toISOString(),
 }

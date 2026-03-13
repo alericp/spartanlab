@@ -94,6 +94,17 @@ const RPE_SUPPORTED_EXERCISES = new Set([
   'chin-ups',
   'pike push-ups',
   'wall hspu',
+  // Mobility exercises (loaded stretching / end-range strength)
+  'weighted_pancake_goodmorning',
+  'weighted_jefferson_curl',
+  'loaded_lunge_stretch',
+  'loaded_horse_stance',
+  'pancake_compression_hold',
+  'pike_compression_holds',
+  'split_hover_holds',
+  'active_straddle_hover',
+  'pnf_split_contract_relax',
+  'cossack_weighted_shifts',
 ])
 
 export function exerciseSupportsRPE(exerciseName: string): boolean {
@@ -103,8 +114,12 @@ export function exerciseSupportsRPE(exerciseName: string): boolean {
   if (RPE_SUPPORTED_EXERCISES.has(normalized)) return true
   if (RPE_SUPPORTED_EXERCISES.has(exerciseName.toLowerCase())) return true
   
-  // Check for weighted movements
-  if (normalized.includes('weighted')) return true
+  // Check for weighted/loaded movements (strength-style)
+  if (normalized.includes('weighted') || normalized.includes('loaded')) return true
+  
+  // Check for mobility-specific patterns (end-range strength)
+  const mobilityPatterns = ['compression', 'hover', 'pnf', 'contract relax', 'jefferson curl']
+  if (mobilityPatterns.some(pattern => normalized.includes(pattern))) return true
   
   // Check for specific key movements
   const keyMovements = ['pull-up', 'pull up', 'dip', 'chin-up', 'chin up', 'hspu', 'pike push']

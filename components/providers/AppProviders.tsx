@@ -42,31 +42,19 @@ const clerkAppearance = {
 /**
  * AppProviders wraps the application with necessary context providers
  * 
- * In preview mode:
- * - No external auth provider needed
- * - All data flows through localStorage
- * 
- * In production mode:
- * - Wraps with ClerkProvider for authentication
- * - Real user sessions
+ * ClerkProvider is ALWAYS included when the publishable key exists.
+ * This prevents "useSession can only be used within ClerkProvider" errors.
+ * The key check happens at build/runtime via environment variable.
  */
 export function AppProviders({ children }: AppProvidersProps) {
-  // Preview mode: minimal providers, no Clerk
-  if (isPreviewMode()) {
-    return (
-      <PWAProvider>
-        <Suspense fallback={null}>
-          {children}
-        </Suspense>
-      </PWAProvider>
-    )
-  }
-
-  // Production mode: use Clerk for authentication
-  if (isAuthEnabled()) {
+  const clerkKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
+  
+  // Always wrap with ClerkProvider if the key exists
+  // This ensures Clerk hooks work everywhere in the app
+  if (clerkKey) {
     return (
       <ClerkProvider
-        publishableKey={process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY}
+        publishableKey={clerkKey}
         appearance={clerkAppearance}
         signInUrl="/sign-in"
         signUpUrl="/sign-up"
@@ -82,7 +70,7 @@ export function AppProviders({ children }: AppProvidersProps) {
     )
   }
 
-  // Fallback: no auth provider
+  // No Clerk key: preview/development mode without auth
   return (
     <PWAProvider>
       <Suspense fallback={null}>

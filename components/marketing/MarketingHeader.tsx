@@ -19,18 +19,23 @@ const NAV_LINKS = [
 export function MarketingHeader() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [isLoggedIn, setIsLoggedIn] = useState(false)
-  const preview = isPreviewMode()
+  const [mounted, setMounted] = useState(false)
+  const [preview, setPreview] = useState(false)
   
   useEffect(() => {
+    setMounted(true)
+    const isPreview = isPreviewMode()
+    setPreview(isPreview)
+    
     // In preview mode, check if user has started using the app (has data)
-    if (preview) {
+    if (isPreview) {
       const hasProfile = localStorage.getItem('athlete_profile')
       const hasWorkouts = localStorage.getItem('workouts')
       const hasPrograms = localStorage.getItem('saved_programs')
       setIsLoggedIn(Boolean(hasProfile || hasWorkouts || hasPrograms))
     }
     // In production mode, Clerk's SignedIn/SignedOut handles this
-  }, [preview])
+  }, [])
 
   return (
     <header className="fixed top-0 left-0 right-0 z-50 bg-[#0F1115]/90 backdrop-blur-md border-b border-[#2B313A]">
@@ -57,7 +62,21 @@ export function MarketingHeader() {
 
           {/* Desktop CTA - Auth-aware */}
           <div className="hidden md:flex items-center gap-4">
-            {preview ? (
+            {!mounted ? (
+              // Initial render (SSR/hydration): always show signed-out state to prevent mismatch
+              <>
+                <Link href="/sign-in">
+                  <Button variant="ghost" size="sm" className="text-[#A4ACB8] hover:text-[#E6E9EF]">
+                    Login
+                  </Button>
+                </Link>
+                <Link href="/sign-up">
+                  <Button size="sm" className="bg-[#C1121F] hover:bg-[#A30F1A]">
+                    Start Training
+                  </Button>
+                </Link>
+              </>
+            ) : preview ? (
               // Preview mode: simple auth state
               isLoggedIn ? (
                 <>
@@ -151,7 +170,21 @@ export function MarketingHeader() {
               ))}
               
               <div className="flex flex-col gap-2 pt-4 border-t border-[#2B313A]">
-                {preview ? (
+                {!mounted ? (
+                  // Initial render: signed-out state
+                  <>
+                    <Link href="/sign-in" onClick={() => setMobileMenuOpen(false)}>
+                      <Button variant="outline" size="sm" className="w-full border-[#2B313A] text-[#A4ACB8]">
+                        Login
+                      </Button>
+                    </Link>
+                    <Link href="/sign-up" onClick={() => setMobileMenuOpen(false)}>
+                      <Button size="sm" className="w-full bg-[#C1121F] hover:bg-[#A30F1A]">
+                        Start Training
+                      </Button>
+                    </Link>
+                  </>
+                ) : preview ? (
                   // Preview mode mobile
                   isLoggedIn ? (
                     <Link href="/dashboard" onClick={() => setMobileMenuOpen(false)}>

@@ -1,230 +1,301 @@
 'use client'
 
-// Clerk v7 compatible auth components
-// In Clerk v7, SignedIn/SignedOut are replaced with <Show when="signed-in/signed-out">
+// Custom auth components that work with both Clerk (production) and preview mode
+// Uses useAuth hook instead of SignedIn/SignedOut components to avoid Clerk v7 build issues
+// Safely handles cases where Clerk isn't fully initialized
 
 import { ReactNode, useState, useEffect } from 'react'
-import { isPreviewMode, isAuthEnabled } from '@/lib/app-mode'
+import { isPreviewMode } from '@/lib/app-mode'
+
+// Dynamic import approach to avoid build-time static analysis issues
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let clerkModule: any = null
 
 interface AuthComponentProps {
   children: ReactNode
 }
 
-interface UserButtonProps {
-  afterSignOutUrl?: string
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  appearance?: any
-}
-
 /**
- * SignedIn wrapper - renders children only when user is signed in
- * Uses Clerk's Show component with when="signed-in" in production
- * In preview mode, checks localStorage for app usage
+ * SignedIn - renders children only when user is signed in
  */
 export function SignedIn({ children }: AuthComponentProps) {
   const [mounted, setMounted] = useState(false)
-  const [showContent, setShowContent] = useState(false)
+  const [isSignedIn, setIsSignedIn] = useState<boolean | undefined>(undefined)
   const preview = isPreviewMode()
-  const authEnabled = isAuthEnabled()
   
   useEffect(() => {
     setMounted(true)
     
     if (preview) {
-      // In preview mode, check if user has started using the app
-      const hasProfile = localStorage.getItem('athlete_profile')
-      const hasWorkouts = localStorage.getItem('workouts')
-      const hasPrograms = localStorage.getItem('saved_programs')
-      setShowContent(Boolean(hasProfile || hasWorkouts || hasPrograms))
+      // In preview mode, check localStorage for user data
+      const hasData = 
+        localStorage.getItem('athlete_profile') ||
+        localStorage.getItem('workouts') ||
+        localStorage.getItem('saved_programs')
+      setIsSignedIn(Boolean(hasData))
+    } else {
+      // In production, dynamically import and use Clerk
+      import('@clerk/nextjs').then((mod) => {
+        clerkModule = mod
+      }).catch(() => {
+        setIsSignedIn(false)
+      })
     }
   }, [preview])
   
-  // Server-side or not mounted yet - render nothing to avoid hydration mismatch
+  // Use a separate effect to listen to Clerk auth state in production
+  useEffect(() => {
+    if (preview || !mounted) return
+    
+    // Poll for Clerk auth state (simple approach that works with dynamic imports)
+    const checkAuth = async () => {
+      try {
+        if (clerkModule) {
+          // Access auth state through Clerk's client-side API
+          // @ts-expect-error - accessing Clerk global
+          const clerk = window.Clerk
+          if (clerk && clerk.user) {
+            setIsSignedIn(true)
+          } else if (clerk) {
+            setIsSignedIn(false)
+          }
+        }
+      } catch {
+        // Silent fail
+      }
+    }
+    
+    checkAuth()
+    const interval = setInterval(checkAuth, 500)
+    return () => clearInterval(interval)
+  }, [preview, mounted])
+  
+  // Don't render until mounted
   if (!mounted) return null
   
-  // Preview mode - use localStorage check
+  // In preview mode, render based on localStorage state
   if (preview) {
-    return showContent ? <>{children}</> : null
+    return isSignedIn ? <>{children}</> : null
   }
   
-  // Production mode with Clerk - use Show component
-  if (authEnabled) {
-    return <ClerkShowWrapper when="signed-in">{children}</ClerkShowWrapper>
-  }
-  
-  // No auth configured - don't show signed-in content
-  return null
+  // In production, render based on Clerk state
+  return isSignedIn ? <>{children}</> : null
 }
 
 /**
- * SignedOut wrapper - renders children only when user is signed out
- * Uses Clerk's Show component with when="signed-out" in production
+ * SignedOut - renders children only when user is signed out
  */
 export function SignedOut({ children }: AuthComponentProps) {
   const [mounted, setMounted] = useState(false)
-  const [showContent, setShowContent] = useState(true)
+  const [isSignedIn, setIsSignedIn] = useState<boolean | undefined>(undefined)
   const preview = isPreviewMode()
-  const authEnabled = isAuthEnabled()
   
   useEffect(() => {
     setMounted(true)
     
     if (preview) {
-      // In preview mode, check if user has started using the app
-      const hasProfile = localStorage.getItem('athlete_profile')
-      const hasWorkouts = localStorage.getItem('workouts')
-      const hasPrograms = localStorage.getItem('saved_programs')
-      // Show signed-out content only if user hasn't started using the app
-      setShowContent(!Boolean(hasProfile || hasWorkouts || hasPrograms))
+      const hasData = 
+        localStorage.getItem('athlete_profile') ||
+        localStorage.getItem('workouts') ||
+        localStorage.getItem('saved_programs')
+      setIsSignedIn(Boolean(hasData))
+    } else {
+      import('@clerk/nextjs').then((mod) => {
+        clerkModule = mod
+      }).catch(() => {
+        setIsSignedIn(false)
+      })
     }
   }, [preview])
   
-  // Server-side or not mounted yet - render fallback for signed-out (safe default)
-  if (!mounted) return <>{children}</>
+  useEffect(() => {
+    if (preview || !mounted) return
+    
+    const checkAuth = async () => {
+      try {
+        // @ts-expect-error - accessing Clerk global
+        const clerk = window.Clerk
+        if (clerk && clerk.user) {
+          setIsSignedIn(true)
+        } else if (clerk) {
+          setIsSignedIn(false)
+        }
+      } catch {
+        // Silent fail
+      }
+    }
+    
+    checkAuth()
+    const interval = setInterval(checkAuth, 500)
+    return () => clearInterval(interval)
+  }, [preview, mounted])
   
-  // Preview mode - inverse of SignedIn check
-  if (preview) {
-    return showContent ? <>{children}</> : null
+  // Don't render until mounted
+  if (!mounted) return null
+  
+  // Show signed-out content by default while loading
+  if (isSignedIn === undefined) {
+    return <>{children}</>
   }
   
-  // Production mode with Clerk - use Show component
-  if (authEnabled) {
-    return <ClerkShowWrapper when="signed-out">{children}</ClerkShowWrapper>
-  }
+  return isSignedIn ? null : <>{children}</>
+}
 
-  // No auth configured - show signed-out content as fallback
-  return <>{children}</>
+interface UserButtonProps {
+  afterSignOutUrl?: string
+  appearance?: {
+    elements?: Record<string, string>
+  }
 }
 
 /**
- * UserButton wrapper - renders Clerk's UserButton or a fallback
+ * UserButton wrapper
  */
-export function UserButton({ afterSignOutUrl = '/', appearance }: UserButtonProps) {
+export function UserButton({ afterSignOutUrl = '/' }: UserButtonProps) {
   const [mounted, setMounted] = useState(false)
+  const [ClerkUserButton, setClerkUserButton] = useState<React.ComponentType<UserButtonProps> | null>(null)
   const preview = isPreviewMode()
-  const authEnabled = isAuthEnabled()
   
   useEffect(() => {
     setMounted(true)
-  }, [])
+    
+    if (!preview) {
+      import('@clerk/nextjs').then((mod) => {
+        setClerkUserButton(() => mod.UserButton)
+      }).catch(() => {
+        // Silent fail
+      })
+    }
+  }, [preview])
   
   if (!mounted) return null
   
   if (preview) {
-    // In preview mode, show a simple avatar placeholder
     return (
-      <div className="w-8 h-8 rounded-full bg-[#C1121F]/20 border border-[#C1121F]/30 flex items-center justify-center cursor-pointer hover:bg-[#C1121F]/30 transition-colors">
-        <span className="text-xs text-[#C1121F] font-medium">U</span>
+      <div className="w-8 h-8 rounded-full bg-[#C1121F] flex items-center justify-center text-sm font-bold text-white">
+        A
       </div>
     )
   }
   
-  if (authEnabled) {
-    return <ClerkUserButtonWrapper afterSignOutUrl={afterSignOutUrl} appearance={appearance} />
+  if (ClerkUserButton) {
+    return <ClerkUserButton afterSignOutUrl={afterSignOutUrl} />
   }
   
   return null
 }
 
 /**
- * useAuth hook wrapper - returns auth state
+ * useAuth hook wrapper
  */
 export function useAuth(): { isSignedIn: boolean | undefined; isLoaded: boolean; userId: string | null } {
+  const [mounted, setMounted] = useState(false)
   const [authState, setAuthState] = useState<{ isSignedIn: boolean | undefined; isLoaded: boolean; userId: string | null }>({
     isSignedIn: undefined,
     isLoaded: false,
-    userId: null,
+    userId: null
   })
   const preview = isPreviewMode()
-  const authEnabled = isAuthEnabled()
   
   useEffect(() => {
+    setMounted(true)
+    
     if (preview) {
-      // In preview mode, check localStorage
-      const hasProfile = localStorage.getItem('athlete_profile')
-      const hasWorkouts = localStorage.getItem('workouts')
-      const hasPrograms = localStorage.getItem('saved_programs')
-      const isSignedIn = Boolean(hasProfile || hasWorkouts || hasPrograms)
-      setAuthState({ 
-        isSignedIn, 
-        isLoaded: true, 
-        userId: isSignedIn ? 'preview-user' : null 
+      const hasData = 
+        localStorage.getItem('athlete_profile') ||
+        localStorage.getItem('workouts') ||
+        localStorage.getItem('saved_programs')
+      setAuthState({
+        isSignedIn: Boolean(hasData),
+        isLoaded: true,
+        userId: hasData ? 'preview-user' : null
       })
-    } else if (authEnabled) {
-      // In production with Clerk, we need to use Clerk's hook
-      // This wrapper provides a fallback - actual usage should import from useClerkAuth hook
-      setAuthState({ isSignedIn: undefined, isLoaded: true, userId: null })
-    } else {
-      setAuthState({ isSignedIn: false, isLoaded: true, userId: null })
     }
-  }, [preview, authEnabled])
+  }, [preview])
+  
+  useEffect(() => {
+    if (preview || !mounted) return
+    
+    const checkAuth = () => {
+      try {
+        // @ts-expect-error - accessing Clerk global
+        const clerk = window.Clerk
+        if (clerk) {
+          setAuthState({
+            isSignedIn: Boolean(clerk.user),
+            isLoaded: true,
+            userId: clerk.user?.id ?? null
+          })
+        }
+      } catch {
+        setAuthState({
+          isSignedIn: false,
+          isLoaded: true,
+          userId: null
+        })
+      }
+    }
+    
+    checkAuth()
+    const interval = setInterval(checkAuth, 500)
+    return () => clearInterval(interval)
+  }, [preview, mounted])
   
   return authState
 }
 
-// =============================================================================
-// Internal Clerk Wrappers (dynamic loading)
-// =============================================================================
-
-function ClerkShowWrapper({ when, children }: { when: 'signed-in' | 'signed-out'; children: ReactNode }) {
-  const [ClerkShow, setClerkShow] = useState<React.ComponentType<{ when: string; children: ReactNode }> | null>(null)
-  const [error, setError] = useState(false)
+/**
+ * useCurrentUser hook wrapper
+ */
+export function useCurrentUser() {
+  const [mounted, setMounted] = useState(false)
+  const [userState, setUserState] = useState<{ user: unknown; isLoaded: boolean }>({
+    user: null,
+    isLoaded: false
+  })
+  const preview = isPreviewMode()
   
   useEffect(() => {
-    import('@clerk/nextjs')
-      .then((mod) => {
-        // Clerk v7 uses Show component
-        if (mod.Show) {
-          setClerkShow(() => mod.Show)
-        } else {
-          // Fallback for older versions
-          console.warn('[v0] Clerk Show component not found')
-          setError(true)
-        }
+    setMounted(true)
+    
+    if (preview) {
+      setUserState({
+        user: {
+          id: 'preview-user',
+          primaryEmailAddress: { emailAddress: 'athlete@preview.local' },
+          firstName: 'Athlete',
+          lastName: 'Preview',
+        },
+        isLoaded: true,
       })
-      .catch((err) => {
-        console.error('[v0] Failed to load Clerk:', err)
-        setError(true)
-      })
-  }, [])
-  
-  // While loading, don't render anything for signed-in, show content for signed-out
-  if (!ClerkShow) {
-    return when === 'signed-out' ? <>{children}</> : null
-  }
-  
-  if (error) {
-    // Fallback: show signed-out content, hide signed-in content
-    return when === 'signed-out' ? <>{children}</> : null
-  }
-  
-  return <ClerkShow when={when}>{children}</ClerkShow>
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function ClerkUserButtonWrapper({ afterSignOutUrl, appearance }: { afterSignOutUrl: string; appearance?: any }) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [ClerkUserButton, setClerkUserButton] = useState<React.ComponentType<any> | null>(null)
+    }
+  }, [preview])
   
   useEffect(() => {
-    import('@clerk/nextjs')
-      .then((mod) => {
-        if (mod.UserButton) {
-          setClerkUserButton(() => mod.UserButton)
+    if (preview || !mounted) return
+    
+    const checkUser = () => {
+      try {
+        // @ts-expect-error - accessing Clerk global
+        const clerk = window.Clerk
+        if (clerk) {
+          setUserState({
+            user: clerk.user,
+            isLoaded: true,
+          })
         }
-      })
-      .catch((err) => {
-        console.error('[v0] Failed to load Clerk UserButton:', err)
-      })
-  }, [])
+      } catch {
+        setUserState({
+          user: null,
+          isLoaded: true,
+        })
+      }
+    }
+    
+    checkUser()
+    const interval = setInterval(checkUser, 500)
+    return () => clearInterval(interval)
+  }, [preview, mounted])
   
-  if (!ClerkUserButton) {
-    return (
-      <div className="w-8 h-8 rounded-full bg-[#2B313A] flex items-center justify-center animate-pulse">
-        <span className="text-xs text-[#A4ACB8]">...</span>
-      </div>
-    )
-  }
-  
-  return <ClerkUserButton afterSignOutUrl={afterSignOutUrl} appearance={appearance} />
+  return userState
 }

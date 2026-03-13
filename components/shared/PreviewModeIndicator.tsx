@@ -1,13 +1,12 @@
 'use client'
 
 // Preview Mode Indicator - Debug/testing controls
-// OWNER-ONLY: These controls are hidden from ALL users except the platform owner
-// Never visible to signed-out users or regular signed-in users
+// PRODUCTION SAFE: Never renders for public users or non-owner users
+// Only renders in preview mode for local development/testing
 
 import { useState, useEffect } from 'react'
-import { isPreviewMode, isAuthEnabled, getModeInfo } from '@/lib/app-mode'
+import { isPreviewMode, getModeInfo } from '@/lib/app-mode'
 import { getCurrentPlan, setPreviewPlan, canSwitchPreviewPlan } from '@/lib/plan-source'
-import { getOwnerEmail, checkOwnerByEmail } from '@/lib/owner-access'
 import type { SubscriptionPlan } from '@/types/domain'
 import { Button } from '@/components/ui/button'
 import { 
@@ -23,79 +22,34 @@ import { Eye, ChevronDown } from 'lucide-react'
 export function PreviewModeIndicator() {
   const [mounted, setMounted] = useState(false)
   const [currentPlan, setCurrentPlanState] = useState<SubscriptionPlan>('pro')
-  const [ownerAccess, setOwnerAccess] = useState(false)
-  const [checkingAuth, setCheckingAuth] = useState(true)
+  const [shouldRender, setShouldRender] = useState(false)
   
   useEffect(() => {
     setMounted(true)
-    setCurrentPlanState(getCurrentPlan())
     
-    // Check owner access
-    const checkOwnerAccess = async () => {
-      const preview = isPreviewMode()
-      const authEnabled = isAuthEnabled()
-      const ownerEmail = getOwnerEmail()
-      
-      // No owner email configured - hide debug controls
-      if (!ownerEmail) {
-        setOwnerAccess(false)
-        setCheckingAuth(false)
-        return
-      }
-      
-      if (preview) {
-        // In preview mode, allow owner controls (for local development)
-        // But only if the user is "logged in" in preview mode
-        const hasProfile = localStorage.getItem('athlete_profile')
-        const hasWorkouts = localStorage.getItem('workouts')
-        const hasPrograms = localStorage.getItem('saved_programs')
-        const isLoggedInPreview = Boolean(hasProfile || hasWorkouts || hasPrograms)
-        
-        // Only show debug controls if they've started using the app
-        setOwnerAccess(isLoggedInPreview)
-        setCheckingAuth(false)
-        return
-      }
-      
-      if (authEnabled) {
-        // In production mode, check Clerk session
-        try {
-          const { useUser } = await import('@clerk/nextjs')
-          // We can't call hooks here, so we use a different approach
-          // Check if we're signed in via Clerk
-          const clerkModule = await import('@clerk/nextjs')
-          
-          // This is a workaround - we'll check via the window object
-          // The real check happens in the component render based on Clerk state
-          // For now, hide by default in production
-          setOwnerAccess(false)
-          setCheckingAuth(false)
-        } catch {
-          setOwnerAccess(false)
-          setCheckingAuth(false)
-        }
-      } else {
-        setOwnerAccess(false)
-        setCheckingAuth(false)
-      }
+    // CRITICAL: Only render in preview mode
+    // Never render in production - this keeps the public site clean
+    const preview = isPreviewMode()
+    if (!preview) {
+      setShouldRender(false)
+      return
     }
     
-    checkOwnerAccess()
+    // In preview mode, only show if user has started using the app
+    const hasProfile = localStorage.getItem('athlete_profile')
+    const hasWorkouts = localStorage.getItem('workouts')
+    const hasPrograms = localStorage.getItem('saved_programs')
+    const hasAppData = Boolean(hasProfile || hasWorkouts || hasPrograms)
+    
+    setShouldRender(hasAppData)
+    setCurrentPlanState(getCurrentPlan())
   }, [])
   
   // Don't render until mounted to avoid hydration mismatch
   if (!mounted) return null
   
-  // Still checking auth - don't render anything
-  if (checkingAuth) return null
-  
-  // OWNER-ONLY: Hide all debug/preview controls from normal users
-  // This ensures the live product looks clean and production-ready
-  if (!ownerAccess) return null
-  
-  // Only show in preview mode for now
-  // Production owner access requires additional Clerk integration
-  if (!isPreviewMode()) return null
+  // Don't render if conditions aren't met (not preview mode, or no app data)
+  if (!shouldRender) return null
   
   const modeInfo = getModeInfo()
   const canSwitch = canSwitchPreviewPlan()

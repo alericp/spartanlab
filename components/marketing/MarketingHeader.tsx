@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useState, useEffect } from 'react'
-import { useAuth, UserButton as ClerkUserButton } from '@clerk/nextjs'
+import { useAuth, useUser } from '@clerk/nextjs'
 import { Button } from '@/components/ui/button'
 import { Menu, X, LayoutDashboard } from 'lucide-react'
 import { SpartanIcon } from '@/components/brand/SpartanLogo'
@@ -15,35 +15,63 @@ const NAV_LINKS = [
   { href: '/pricing', label: 'Pricing' },
 ]
 
-// Static auth buttons - always rendered the same on server and client initially
-function AuthButtons({ variant = 'desktop' }: { variant?: 'desktop' | 'mobile' }) {
-  const onMobileClick = variant === 'mobile' ? undefined : undefined
-  
-  if (variant === 'mobile') {
+// Isolated client-only component — only mounts after hydration
+// This prevents any server/client mismatch on the auth CTA slot
+function HeaderAuthCTA({ onNavigate }: { onNavigate?: () => void }) {
+  const { isLoaded, isSignedIn } = useAuth()
+  const { user } = useUser()
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  // Not yet mounted or Clerk not loaded: render stable placeholder matching server output
+  if (!mounted || !isLoaded) {
     return (
       <>
-        <Link href="/sign-in">
-          <Button variant="outline" size="sm" className="w-full border-[#2B313A] text-[#A4ACB8]">
+        <Link href="/sign-in" onClick={onNavigate}>
+          <Button variant="ghost" size="sm" className="text-[#A4ACB8] hover:text-[#E6E9EF]">
             Login
           </Button>
         </Link>
-        <Link href="/sign-up">
-          <Button size="sm" className="w-full bg-[#C1121F] hover:bg-[#A30F1A]">
+        <Link href="/sign-up" onClick={onNavigate}>
+          <Button size="sm" className="bg-[#C1121F] hover:bg-[#A30F1A]">
             Start Training
           </Button>
         </Link>
       </>
     )
   }
-  
+
+  if (isSignedIn) {
+    return (
+      <>
+        <Link href="/dashboard" onClick={onNavigate}>
+          <Button variant="ghost" size="sm" className="text-[#A4ACB8] hover:text-[#E6E9EF]">
+            <LayoutDashboard className="w-4 h-4 mr-2" />
+            Dashboard
+          </Button>
+        </Link>
+        {/* Simple avatar fallback since UserButton is not exported in @clerk/nextjs@7 */}
+        <div
+          className="w-8 h-8 rounded-full bg-[#C1121F] flex items-center justify-center text-xs font-bold text-white cursor-pointer select-none"
+          title={user?.primaryEmailAddress?.emailAddress ?? 'Account'}
+        >
+          {(user?.firstName?.[0] ?? user?.primaryEmailAddress?.emailAddress?.[0] ?? 'A').toUpperCase()}
+        </div>
+      </>
+    )
+  }
+
   return (
     <>
-      <Link href="/sign-in">
+      <Link href="/sign-in" onClick={onNavigate}>
         <Button variant="ghost" size="sm" className="text-[#A4ACB8] hover:text-[#E6E9EF]">
           Login
         </Button>
       </Link>
-      <Link href="/sign-up">
+      <Link href="/sign-up" onClick={onNavigate}>
         <Button size="sm" className="bg-[#C1121F] hover:bg-[#A30F1A]">
           Start Training
         </Button>
@@ -52,73 +80,60 @@ function AuthButtons({ variant = 'desktop' }: { variant?: 'desktop' | 'mobile' }
   )
 }
 
-// Auth-aware buttons - only rendered client-side after mount
-function AuthAwareButtons({ variant = 'desktop', onNavigate }: { variant?: 'desktop' | 'mobile', onNavigate?: () => void }) {
+function MobileAuthCTA({ onNavigate }: { onNavigate: () => void }) {
   const { isLoaded, isSignedIn } = useAuth()
   const [mounted, setMounted] = useState(false)
-  
+
   useEffect(() => {
     setMounted(true)
   }, [])
-  
-  // Before mount or while loading, show nothing (parent shows static buttons)
+
   if (!mounted || !isLoaded) {
-    return null
-  }
-  
-  // After mount + loaded: show auth-aware UI
-  if (isSignedIn) {
-    if (variant === 'mobile') {
-      return (
-        <Link href="/dashboard" onClick={onNavigate}>
-          <Button size="sm" className="w-full bg-[#C1121F] hover:bg-[#A30F1A]">
-            <LayoutDashboard className="w-4 h-4 mr-2" />
-            Go to Dashboard
-          </Button>
-        </Link>
-      )
-    }
-    
     return (
       <>
-        <Link href="/dashboard">
-          <Button variant="ghost" size="sm" className="text-[#A4ACB8] hover:text-[#E6E9EF]">
-            <LayoutDashboard className="w-4 h-4 mr-2" />
-            Dashboard
+        <Link href="/sign-in" onClick={onNavigate}>
+          <Button variant="outline" size="sm" className="w-full border-[#2B313A] text-[#A4ACB8]">
+            Login
           </Button>
         </Link>
-        <ClerkUserButton 
-          afterSignOutUrl="/"
-          appearance={{
-            elements: {
-              avatarBox: 'w-8 h-8',
-              userButtonPopoverCard: 'bg-[#1A1F26] border border-[#2B313A]',
-              userButtonPopoverActionButton: 'text-[#E6E9EF] hover:bg-[#2B313A]',
-              userButtonPopoverActionButtonText: 'text-[#E6E9EF]',
-              userButtonPopoverActionButtonIcon: 'text-[#A4ACB8]',
-              userButtonPopoverFooter: 'hidden',
-            },
-          }}
-        />
+        <Link href="/sign-up" onClick={onNavigate}>
+          <Button size="sm" className="w-full bg-[#C1121F] hover:bg-[#A30F1A]">
+            Start Training
+          </Button>
+        </Link>
       </>
     )
   }
-  
-  // Signed out - return null to let parent's static buttons show
-  return null
+
+  if (isSignedIn) {
+    return (
+      <Link href="/dashboard" onClick={onNavigate}>
+        <Button size="sm" className="w-full bg-[#C1121F] hover:bg-[#A30F1A]">
+          <LayoutDashboard className="w-4 h-4 mr-2" />
+          Go to Dashboard
+        </Button>
+      </Link>
+    )
+  }
+
+  return (
+    <>
+      <Link href="/sign-in" onClick={onNavigate}>
+        <Button variant="outline" size="sm" className="w-full border-[#2B313A] text-[#A4ACB8]">
+          Login
+        </Button>
+      </Link>
+      <Link href="/sign-up" onClick={onNavigate}>
+        <Button size="sm" className="w-full bg-[#C1121F] hover:bg-[#A30F1A]">
+          Start Training
+        </Button>
+      </Link>
+    </>
+  )
 }
 
 export function MarketingHeader() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
-  const [showAuthAware, setShowAuthAware] = useState(false)
-  const { isLoaded, isSignedIn } = useAuth()
-  
-  useEffect(() => {
-    // Only show auth-aware UI after client mount AND auth is loaded AND user is signed in
-    if (isLoaded && isSignedIn) {
-      setShowAuthAware(true)
-    }
-  }, [isLoaded, isSignedIn])
 
   return (
     <header className="fixed top-0 left-0 right-0 z-50 bg-[#0F1115]/90 backdrop-blur-md border-b border-[#2B313A]">
@@ -143,13 +158,9 @@ export function MarketingHeader() {
             ))}
           </div>
 
-          {/* Desktop CTA - Auth-aware */}
+          {/* Desktop CTA */}
           <div className="hidden md:flex items-center gap-4">
-            {showAuthAware ? (
-              <AuthAwareButtons variant="desktop" />
-            ) : (
-              <AuthButtons variant="desktop" />
-            )}
+            <HeaderAuthCTA />
           </div>
 
           {/* Mobile Menu Button */}
@@ -165,7 +176,6 @@ export function MarketingHeader() {
         {mobileMenuOpen && (
           <div className="md:hidden py-4 border-t border-[#2B313A]">
             <div className="flex flex-col gap-4">
-              {/* Navigation Links */}
               {NAV_LINKS.map((link) => (
                 <Link
                   key={link.href}
@@ -176,13 +186,9 @@ export function MarketingHeader() {
                   {link.label}
                 </Link>
               ))}
-              
+
               <div className="flex flex-col gap-2 pt-4 border-t border-[#2B313A]">
-                {showAuthAware ? (
-                  <AuthAwareButtons variant="mobile" onNavigate={() => setMobileMenuOpen(false)} />
-                ) : (
-                  <AuthButtons variant="mobile" />
-                )}
+                <MobileAuthCTA onNavigate={() => setMobileMenuOpen(false)} />
               </div>
             </div>
           </div>

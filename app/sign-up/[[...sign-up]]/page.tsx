@@ -24,7 +24,7 @@ export default function SignUpPage() {
             otpCodeFieldInput: 'bg-[#0F1115] border-[#2B313A] text-[#E6E9EF]',
           },
         }}
-        afterSignUpUrl="/onboarding"
+        fallbackRedirectUrl="/onboarding"
         signInUrl="/sign-in"
       />
     </div>

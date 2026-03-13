@@ -46,7 +46,13 @@ export class GlobalErrorBoundary extends Component<Props, State> {
   }
 
   handleRetry = () => {
-    this.setState({ hasError: false, error: null, errorInfo: null })
+    // Do a hard refresh to ensure all state is reset
+    // Simply clearing the error state would cause the same error to throw again
+    if (typeof window !== 'undefined') {
+      window.location.reload()
+    } else {
+      this.setState({ hasError: false, error: null, errorInfo: null })
+    }
   }
 
   render() {

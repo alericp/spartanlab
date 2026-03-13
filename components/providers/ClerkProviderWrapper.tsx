@@ -13,7 +13,23 @@
  */
 
 import { ReactNode, createContext, useContext, useState, useEffect, Component, ErrorInfo } from 'react'
-import { shouldInitializeClerk, getAuthMode, type AuthMode } from '@/lib/auth-environment'
+
+// Type for auth mode - defined here to avoid import issues
+type AuthMode = 'preview' | 'production'
+
+// Lazy-loaded auth environment functions
+// These are loaded dynamically in useEffect to prevent module-level crashes
+let authEnvModule: typeof import('@/lib/auth-environment') | null = null
+
+async function loadAuthEnv() {
+  if (authEnvModule) return authEnvModule
+  try {
+    authEnvModule = await import('@/lib/auth-environment')
+    return authEnvModule
+  } catch {
+    return null
+  }
+}
 
 // ============================================================================
 // ERROR BOUNDARY
@@ -226,18 +242,37 @@ export function ClerkProviderWrapper({ children }: Props) {
 
   // Effect 1: Determine if we should initialize Clerk (runs once on hydration)
   useEffect(() => {
-    const shouldInit = shouldInitializeClerk()
-    const authMode = getAuthMode()
-    
-    setInitDecision({ decided: true, shouldInit, authMode })
-    
-    // If we shouldn't init, immediately set to preview mode
-    if (!shouldInit) {
+    loadAuthEnv().then(authEnv => {
+      const shouldInit = authEnv?.shouldInitializeClerk?.() ?? false
+      const authMode = authEnv?.getAuthMode?.() ?? 'preview'
+      
+      setInitDecision({ decided: true, shouldInit, authMode })
+      
+      // If we shouldn't init, immediately set to preview mode
+      if (!shouldInit) {
+        setState({
+          isClerkAvailable: false,
+          isPreviewMode: true,
+          isLoading: false,
+          authMode: authMode,
+          hasError: false,
+          components: {
+            SignIn: null,
+            SignUp: null,
+            SignedIn: null,
+            SignedOut: null,
+            UserButton: null,
+          },
+        })
+      }
+    }).catch(() => {
+      // Auth env failed to load - default to preview mode
+      setInitDecision({ decided: true, shouldInit: false, authMode: 'preview' })
       setState({
         isClerkAvailable: false,
         isPreviewMode: true,
         isLoading: false,
-        authMode: authMode,
+        authMode: 'preview',
         hasError: false,
         components: {
           SignIn: null,
@@ -247,7 +282,7 @@ export function ClerkProviderWrapper({ children }: Props) {
           UserButton: null,
         },
       })
-    }
+    })
   }, [])
 
   // Effect 2: Load Clerk if we should initialize it

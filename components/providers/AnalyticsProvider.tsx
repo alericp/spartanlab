@@ -1,35 +1,66 @@
 'use client'
 
-import { useEffect } from 'react'
-import { usePathname, useSearchParams } from 'next/navigation'
-import { initAnalytics, trackPageView } from '@/lib/analytics'
+import { useEffect, useState } from 'react'
+import { usePathname } from 'next/navigation'
 
 /**
  * Analytics Provider Component
  * 
  * Initializes PostHog analytics and tracks page views automatically.
- * Wrap your app layout with this provider.
+ * CRITICAL: This component must NEVER crash the app. All analytics
+ * operations are wrapped in try/catch for production safety.
  */
 export function AnalyticsProvider({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
-  const searchParams = useSearchParams()
+  const [mounted, setMounted] = useState(false)
   
-  // Initialize analytics on mount
+  // Safely mark as mounted
   useEffect(() => {
-    initAnalytics()
+    setMounted(true)
   }, [])
   
-  // Track page views on route changes
+  // Initialize analytics on mount - fail silently
   useEffect(() => {
-    if (pathname) {
-      // Derive page name from pathname
-      const pageName = pathname === '/' 
-        ? 'home' 
-        : pathname.replace(/^\//, '').replace(/\//g, '_')
-      
-      trackPageView(pageName)
+    if (!mounted) return
+    
+    try {
+      // Dynamically import to prevent any module-level errors from crashing
+      import('@/lib/analytics').then(({ initAnalytics }) => {
+        try {
+          initAnalytics()
+        } catch {
+          // Analytics init failed - continue silently
+        }
+      }).catch(() => {
+        // Module import failed - continue silently
+      })
+    } catch {
+      // Outer try-catch for any unexpected errors
     }
-  }, [pathname, searchParams])
+  }, [mounted])
+  
+  // Track page views on route changes - fail silently
+  useEffect(() => {
+    if (!mounted || !pathname) return
+    
+    try {
+      import('@/lib/analytics').then(({ trackPageView }) => {
+        try {
+          const pageName = pathname === '/' 
+            ? 'home' 
+            : pathname.replace(/^\//, '').replace(/\//g, '_')
+          
+          trackPageView(pageName)
+        } catch {
+          // Page view tracking failed - continue silently
+        }
+      }).catch(() => {
+        // Module import failed - continue silently
+      })
+    } catch {
+      // Outer try-catch for any unexpected errors
+    }
+  }, [mounted, pathname])
   
   return <>{children}</>
 }

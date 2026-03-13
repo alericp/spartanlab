@@ -15,7 +15,7 @@ const NAV_LINKS = [
   { href: '/pricing', label: 'Pricing' },
 ]
 
-// Isolated client-only component — only mounts after hydration
+// Isolated client-only auth component — only mounts after hydration
 // This prevents any server/client mismatch on the auth CTA slot
 function HeaderAuthCTA({ onNavigate }: { onNavigate?: () => void }) {
   const { isLoaded, isSignedIn } = useAuth()

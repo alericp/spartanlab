@@ -2,9 +2,11 @@
 
 // ClerkComponents - Simple wrappers for Clerk auth UI components
 // ClerkProvider is now in the root layout, so these work everywhere
+// Note: @clerk/nextjs@7 does not export SignedIn, SignedOut, or UserButton directly
+// so we provide our own implementations using the available hooks
 
 import { ReactNode, useState, useEffect } from 'react'
-import { useAuth, useUser, UserButton as ClerkUserButton } from '@clerk/nextjs'
+import { useAuth, useUser, useClerk } from '@clerk/nextjs'
 
 interface AuthComponentProps {
   children: ReactNode
@@ -62,18 +64,66 @@ interface UserButtonProps {
 }
 
 /**
- * UserButton wrapper with safe mounting
+ * UserButton - custom implementation since @clerk/nextjs@7 doesn't export UserButton
+ * Shows user avatar with sign-out functionality
  */
-export function UserButton({ afterSignOutUrl = '/', appearance }: UserButtonProps) {
+export function UserButton({ afterSignOutUrl = '/' }: UserButtonProps) {
+  const { user } = useUser()
+  const { signOut } = useClerk()
   const [mounted, setMounted] = useState(false)
+  const [showMenu, setShowMenu] = useState(false)
 
   useEffect(() => {
     setMounted(true)
   }, [])
 
-  if (!mounted) return null
+  if (!mounted || !user) return null
 
-  return <ClerkUserButton afterSignOutUrl={afterSignOutUrl} appearance={appearance} />
+  const initial = (user.firstName?.[0] ?? user.primaryEmailAddress?.emailAddress?.[0] ?? 'A').toUpperCase()
+
+  const handleSignOut = async () => {
+    setShowMenu(false)
+    await signOut({ redirectUrl: afterSignOutUrl })
+  }
+
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setShowMenu(!showMenu)}
+        className="w-8 h-8 rounded-full bg-[#C1121F] flex items-center justify-center text-xs font-bold text-white cursor-pointer select-none hover:bg-[#A30F1A] transition-colors"
+        title={user.primaryEmailAddress?.emailAddress ?? 'Account'}
+      >
+        {initial}
+      </button>
+      
+      {showMenu && (
+        <>
+          {/* Backdrop to close menu */}
+          <div 
+            className="fixed inset-0 z-40" 
+            onClick={() => setShowMenu(false)}
+          />
+          {/* Menu */}
+          <div className="absolute right-0 top-full mt-2 w-48 bg-[#1A1F26] border border-[#2B313A] rounded-lg shadow-xl z-50 py-1">
+            <div className="px-3 py-2 border-b border-[#2B313A]">
+              <div className="text-sm font-medium text-[#E6E9EF] truncate">
+                {user.firstName || 'User'}
+              </div>
+              <div className="text-xs text-[#A4ACB8] truncate">
+                {user.primaryEmailAddress?.emailAddress}
+              </div>
+            </div>
+            <button
+              onClick={handleSignOut}
+              className="w-full text-left px-3 py-2 text-sm text-[#E6E9EF] hover:bg-[#2B313A] transition-colors"
+            >
+              Sign out
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  )
 }
 
 /**

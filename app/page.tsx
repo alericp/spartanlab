@@ -1,8 +1,3 @@
-'use client'
-
-import { useEffect } from 'react'
-import { useRouter } from 'next/navigation'
-import { useAuth } from '@clerk/nextjs'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { MarketingHeader } from '@/components/marketing/MarketingHeader'
@@ -89,16 +84,6 @@ const COMPARISON = [
 ]
 
 export default function Home() {
-  const router = useRouter()
-  const { isSignedIn, isLoaded } = useAuth()
-  
-  useEffect(() => {
-    // Redirect signed-in users to dashboard
-    if (isLoaded && isSignedIn) {
-      router.replace('/dashboard')
-    }
-  }, [router, isSignedIn, isLoaded])
-  
   return (
     <div className="min-h-screen bg-[#121212] text-[#F5F5F5]">
       <MarketingHeader />

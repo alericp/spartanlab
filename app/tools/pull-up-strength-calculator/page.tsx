@@ -178,7 +178,7 @@ export default function PullUpStrengthCalculatorPage() {
             Get workouts that evolve as you progress.
           </p>
           <Button asChild className="bg-[#C1121F] hover:bg-[#A30F1A] text-white px-8 py-3 font-semibold">
-            <Link href="/signup">
+            <Link href="/sign-up">
               Start Training Free
               <ArrowRight className="w-4 h-4 ml-2" />
             </Link>

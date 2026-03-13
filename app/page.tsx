@@ -91,59 +91,19 @@ const COMPARISON = [
 
 export default function Home() {
   const router = useRouter()
-  const [mounted, setMounted] = useState(false)
-  const [shouldRedirect, setShouldRedirect] = useState(false)
   
   // Use our auth wrapper which handles preview/production mode
   const { isSignedIn, isLoaded } = useAuth()
   
   useEffect(() => {
-    setMounted(true)
-  }, [])
-  
-  useEffect(() => {
-    if (!mounted) return
-    if (!isLoaded) return
-    
-    // Check if user is authenticated and redirect to dashboard
-    if (isSignedIn) {
-      setShouldRedirect(true)
+    // Suppress hydration mismatch warning - the auth state will match after load
+    if (isLoaded && isSignedIn) {
       router.replace('/dashboard')
     }
-  }, [mounted, router, isSignedIn, isLoaded])
-  
-  // Server-side render: show loading state that matches initial client state
-  // This avoids hydration mismatch
-  if (!mounted) {
-    return (
-      <div className="min-h-screen bg-[#121212] text-[#F5F5F5]">
-        <MarketingHeader />
-        {/* Skeleton content to avoid layout shift */}
-        <main className="pt-16">
-          <section className="relative min-h-[85vh] flex items-center justify-center px-4 py-16 sm:py-24">
-            <div className="max-w-4xl mx-auto text-center">
-              <div className="w-48 h-8 bg-[#1A1A1A] rounded-full mx-auto mb-6 animate-pulse" />
-              <div className="w-96 h-12 bg-[#1A1A1A] rounded mx-auto mb-6 animate-pulse" />
-              <div className="w-64 h-6 bg-[#1A1A1A] rounded mx-auto animate-pulse" />
-            </div>
-          </section>
-        </main>
-        <MarketingFooter />
-      </div>
-    )
-  }
-  
-  // If we're redirecting, show loading
-  if (shouldRedirect) {
-    return (
-      <div className="min-h-screen bg-[#121212] flex items-center justify-center">
-        <div className="w-8 h-8 border-2 border-[#C1121F] border-t-transparent rounded-full animate-spin" />
-      </div>
-    )
-  }
+  }, [router, isSignedIn, isLoaded])
   
   return (
-    <div className="min-h-screen bg-[#121212] text-[#F5F5F5]">
+    <div className="min-h-screen bg-[#121212] text-[#F5F5F5]" suppressHydrationWarning>
       <MarketingHeader />
 
       {/* Hero Section */}
@@ -182,7 +142,7 @@ export default function Home() {
               </div>
 
               <div className="flex flex-col sm:flex-row gap-4">
-                <Link href="/signup">
+                <Link href="/sign-up">
                   <Button size="lg" className="bg-[#E63946] hover:bg-[#D62828] w-full sm:w-auto px-8 h-12 text-base font-semibold">
                     Start Training Free
                     <ArrowRight className="w-4 h-4 ml-2" />

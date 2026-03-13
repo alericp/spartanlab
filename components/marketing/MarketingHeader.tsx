@@ -15,8 +15,8 @@ const NAV_LINKS = [
   { href: '/pricing', label: 'Pricing' },
 ]
 
-// Isolated client-only auth component — only mounts after hydration
-// This prevents any server/client mismatch on the auth CTA slot
+// Isolated client-only auth component — renders nothing on server, content only after hydration
+// This guarantees identical server/client output (both render nothing initially)
 function HeaderAuthCTA({ onNavigate }: { onNavigate?: () => void }) {
   const { isLoaded, isSignedIn } = useAuth()
   const { user } = useUser()
@@ -26,20 +26,22 @@ function HeaderAuthCTA({ onNavigate }: { onNavigate?: () => void }) {
     setMounted(true)
   }, [])
 
-  // Not yet mounted or Clerk not loaded: render stable placeholder matching server output
-  if (!mounted || !isLoaded) {
+  // Render nothing until mounted on client - this prevents hydration mismatch
+  // Server renders null, client first render is also null, then useEffect triggers re-render
+  if (!mounted) {
+    return null
+  }
+
+  // Still loading Clerk - show loading state
+  if (!isLoaded) {
     return (
       <>
-        <Link href="/sign-in" onClick={onNavigate}>
-          <Button variant="ghost" size="sm" className="text-[#A4ACB8] hover:text-[#E6E9EF]">
-            Login
-          </Button>
-        </Link>
-        <Link href="/sign-up" onClick={onNavigate}>
-          <Button size="sm" className="bg-[#C1121F] hover:bg-[#A30F1A]">
-            Start Training
-          </Button>
-        </Link>
+        <Button variant="ghost" size="sm" className="text-[#A4ACB8] hover:text-[#E6E9EF] opacity-50" disabled>
+          Login
+        </Button>
+        <Button size="sm" className="bg-[#C1121F] hover:bg-[#A30F1A] opacity-50" disabled>
+          Start Training
+        </Button>
       </>
     )
   }
@@ -88,19 +90,21 @@ function MobileAuthCTA({ onNavigate }: { onNavigate: () => void }) {
     setMounted(true)
   }, [])
 
-  if (!mounted || !isLoaded) {
+  // Render nothing until mounted - prevents hydration mismatch
+  if (!mounted) {
+    return null
+  }
+
+  // Still loading Clerk
+  if (!isLoaded) {
     return (
       <>
-        <Link href="/sign-in" onClick={onNavigate}>
-          <Button variant="outline" size="sm" className="w-full border-[#2B313A] text-[#A4ACB8]">
-            Login
-          </Button>
-        </Link>
-        <Link href="/sign-up" onClick={onNavigate}>
-          <Button size="sm" className="w-full bg-[#C1121F] hover:bg-[#A30F1A]">
-            Start Training
-          </Button>
-        </Link>
+        <Button variant="outline" size="sm" className="w-full border-[#2B313A] text-[#A4ACB8] opacity-50" disabled>
+          Login
+        </Button>
+        <Button size="sm" className="w-full bg-[#C1121F] hover:bg-[#A30F1A] opacity-50" disabled>
+          Start Training
+        </Button>
       </>
     )
   }

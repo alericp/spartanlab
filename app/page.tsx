@@ -1,13 +1,12 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@clerk/nextjs'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { MarketingHeader } from '@/components/marketing/MarketingHeader'
 import { MarketingFooter } from '@/components/marketing/MarketingFooter'
-import { isPreviewMode } from '@/lib/app-mode'
 import {
   Target,
   Dumbbell,
@@ -91,19 +90,17 @@ const COMPARISON = [
 
 export default function Home() {
   const router = useRouter()
-  
-  // Use our auth wrapper which handles preview/production mode
   const { isSignedIn, isLoaded } = useAuth()
   
   useEffect(() => {
-    // Suppress hydration mismatch warning - the auth state will match after load
+    // Redirect signed-in users to dashboard
     if (isLoaded && isSignedIn) {
       router.replace('/dashboard')
     }
   }, [router, isSignedIn, isLoaded])
   
   return (
-    <div className="min-h-screen bg-[#121212] text-[#F5F5F5]" suppressHydrationWarning>
+    <div className="min-h-screen bg-[#121212] text-[#F5F5F5]">
       <MarketingHeader />
 
       {/* Hero Section */}

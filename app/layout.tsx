@@ -85,8 +85,8 @@ export default function RootLayout({
           appearance={clerkAppearance}
           signInUrl="/sign-in"
           signUpUrl="/sign-up"
-          afterSignInUrl="/dashboard"
-          afterSignUpUrl="/onboarding"
+          signInFallbackRedirectUrl="/dashboard"
+          signUpFallbackRedirectUrl="/onboarding"
         >
           {children}
           <PreviewModeIndicator />

@@ -1,8 +1,8 @@
 'use client'
 
 import Link from 'next/link'
-import { useState, useEffect } from 'react'
-import { useAuth, useUser } from '@clerk/nextjs'
+import { useState } from 'react'
+import dynamic from 'next/dynamic'
 import { Button } from '@/components/ui/button'
 import { Menu, X, LayoutDashboard } from 'lucide-react'
 import { SpartanIcon } from '@/components/brand/SpartanLogo'
@@ -15,63 +15,32 @@ const NAV_LINKS = [
   { href: '/pricing', label: 'Pricing' },
 ]
 
-// Isolated client-only auth component — only mounts after hydration
-// This prevents any server/client mismatch on the auth CTA slot
-function HeaderAuthCTA({ onNavigate }: { onNavigate?: () => void }) {
-  const { isLoaded, isSignedIn } = useAuth()
-  const { user } = useUser()
-  const [mounted, setMounted] = useState(false)
-
-  useEffect(() => {
-    setMounted(true)
-  }, [])
-
-  // Not yet mounted or Clerk not loaded: render stable placeholder matching server output
-  if (!mounted || !isLoaded) {
+// Placeholder shown during SSR and while auth loads - static content only
+function AuthPlaceholder({ variant = 'desktop' }: { variant?: 'desktop' | 'mobile' }) {
+  if (variant === 'mobile') {
     return (
       <>
-        <Link href="/sign-in" onClick={onNavigate}>
-          <Button variant="ghost" size="sm" className="text-[#A4ACB8] hover:text-[#E6E9EF]">
+        <Link href="/sign-in">
+          <Button variant="outline" size="sm" className="w-full border-[#2B313A] text-[#A4ACB8]">
             Login
           </Button>
         </Link>
-        <Link href="/sign-up" onClick={onNavigate}>
-          <Button size="sm" className="bg-[#C1121F] hover:bg-[#A30F1A]">
+        <Link href="/sign-up">
+          <Button size="sm" className="w-full bg-[#C1121F] hover:bg-[#A30F1A]">
             Start Training
           </Button>
         </Link>
       </>
     )
   }
-
-  if (isSignedIn) {
-    return (
-      <>
-        <Link href="/dashboard" onClick={onNavigate}>
-          <Button variant="ghost" size="sm" className="text-[#A4ACB8] hover:text-[#E6E9EF]">
-            <LayoutDashboard className="w-4 h-4 mr-2" />
-            Dashboard
-          </Button>
-        </Link>
-        {/* Simple avatar fallback since UserButton is not exported in @clerk/nextjs@7 */}
-        <div
-          className="w-8 h-8 rounded-full bg-[#C1121F] flex items-center justify-center text-xs font-bold text-white cursor-pointer select-none"
-          title={user?.primaryEmailAddress?.emailAddress ?? 'Account'}
-        >
-          {(user?.firstName?.[0] ?? user?.primaryEmailAddress?.emailAddress?.[0] ?? 'A').toUpperCase()}
-        </div>
-      </>
-    )
-  }
-
   return (
     <>
-      <Link href="/sign-in" onClick={onNavigate}>
+      <Link href="/sign-in">
         <Button variant="ghost" size="sm" className="text-[#A4ACB8] hover:text-[#E6E9EF]">
           Login
         </Button>
       </Link>
-      <Link href="/sign-up" onClick={onNavigate}>
+      <Link href="/sign-up">
         <Button size="sm" className="bg-[#C1121F] hover:bg-[#A30F1A]">
           Start Training
         </Button>
@@ -80,57 +49,22 @@ function HeaderAuthCTA({ onNavigate }: { onNavigate?: () => void }) {
   )
 }
 
-function MobileAuthCTA({ onNavigate }: { onNavigate: () => void }) {
-  const { isLoaded, isSignedIn } = useAuth()
-  const [mounted, setMounted] = useState(false)
-
-  useEffect(() => {
-    setMounted(true)
-  }, [])
-
-  if (!mounted || !isLoaded) {
-    return (
-      <>
-        <Link href="/sign-in" onClick={onNavigate}>
-          <Button variant="outline" size="sm" className="w-full border-[#2B313A] text-[#A4ACB8]">
-            Login
-          </Button>
-        </Link>
-        <Link href="/sign-up" onClick={onNavigate}>
-          <Button size="sm" className="w-full bg-[#C1121F] hover:bg-[#A30F1A]">
-            Start Training
-          </Button>
-        </Link>
-      </>
-    )
+// Client-only auth CTA - dynamically imported with ssr: false
+const HeaderAuthCTAClient = dynamic(
+  () => import('./HeaderAuthCTA').then((mod) => mod.HeaderAuthCTA),
+  { 
+    ssr: false, 
+    loading: () => <AuthPlaceholder variant="desktop" />
   }
+)
 
-  if (isSignedIn) {
-    return (
-      <Link href="/dashboard" onClick={onNavigate}>
-        <Button size="sm" className="w-full bg-[#C1121F] hover:bg-[#A30F1A]">
-          <LayoutDashboard className="w-4 h-4 mr-2" />
-          Go to Dashboard
-        </Button>
-      </Link>
-    )
+const MobileAuthCTAClient = dynamic(
+  () => import('./HeaderAuthCTA').then((mod) => mod.MobileAuthCTA),
+  { 
+    ssr: false, 
+    loading: () => <AuthPlaceholder variant="mobile" />
   }
-
-  return (
-    <>
-      <Link href="/sign-in" onClick={onNavigate}>
-        <Button variant="outline" size="sm" className="w-full border-[#2B313A] text-[#A4ACB8]">
-          Login
-        </Button>
-      </Link>
-      <Link href="/sign-up" onClick={onNavigate}>
-        <Button size="sm" className="w-full bg-[#C1121F] hover:bg-[#A30F1A]">
-          Start Training
-        </Button>
-      </Link>
-    </>
-  )
-}
+)
 
 export function MarketingHeader() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
@@ -160,7 +94,7 @@ export function MarketingHeader() {
 
           {/* Desktop CTA */}
           <div className="hidden md:flex items-center gap-4">
-            <HeaderAuthCTA />
+            <HeaderAuthCTAClient />
           </div>
 
           {/* Mobile Menu Button */}
@@ -188,7 +122,7 @@ export function MarketingHeader() {
               ))}
 
               <div className="flex flex-col gap-2 pt-4 border-t border-[#2B313A]">
-                <MobileAuthCTA onNavigate={() => setMobileMenuOpen(false)} />
+                <MobileAuthCTAClient onNavigate={() => setMobileMenuOpen(false)} />
               </div>
             </div>
           </div>

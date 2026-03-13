@@ -32,6 +32,18 @@ export type SkillGoal = 'front_lever' | 'planche' | 'muscle_up' | 'handstand' | 
 export type FlexibilityGoal = 'pancake' | 'toe_touch' | 'front_splits' | 'side_splits'
 export type StrengthGoal = 'general_strength' | 'weighted_pull' | 'weighted_dip'
 
+// Training Principles Engine types (internal methodology)
+export type TrainingMethodId = 
+  | 'weighted_strength'
+  | 'static_skill_density'
+  | 'hypertrophy_support'
+  | 'explosive_power'
+  | 'endurance_density'
+  | 'flexibility_exposure'
+  | 'mobility_strength'
+  | 'hybrid_skill_strength'
+  | 'recovery_conservative'
+
 export interface AthleteProfile {
   id: string
   userId: string

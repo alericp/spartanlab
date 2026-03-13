@@ -69,6 +69,8 @@ import { ProgramSnapshotCard } from '@/components/dashboard/ProgramSnapshotCard'
 import { TrainingInsightQuote } from '@/components/dashboard/TrainingInsightQuote'
 import { TrainingConsistencyCard } from '@/components/dashboard/TrainingConsistencyCard'
 import { AdaptiveEngineBadge, SensorEngineVisualization } from '@/components/shared/AdaptiveEngineBadge'
+import { TrainingEmphasis } from '@/components/dashboard/TrainingEmphasis'
+import { selectMethodProfiles, getCoachingMessage, type SelectionContext, type SelectedMethods } from '@/lib/training-principles-engine'
 import { PremiumUpgradeBanner, SubscriptionTierBadge } from '@/components/premium/PremiumFeature'
 import { DashboardUpgradeCard } from '@/components/upgrade/AdaptiveProgramUpgradeCard'
 
@@ -89,6 +91,7 @@ export default function DashboardPage() {
   const [trainingMomentum, setTrainingMomentum] = useState<TrainingMomentum | null>(null)
   const [progressOverview, setProgressOverview] = useState<ProgressOverview | null>(null)
   const [unseenMilestones, setUnseenMilestones] = useState<ReturnType<typeof getUnseenMilestones>>([])
+  const [trainingMethods, setTrainingMethods] = useState<SelectedMethods | null>(null)
   const [mounted, setMounted] = useState(false)
   const [showWelcome, setShowWelcome] = useState(false)
   const [showIntroduction, setShowIntroduction] = useState(false)
@@ -120,6 +123,25 @@ setConstraintInsight(getConstraintInsight())
     setTrainingMomentum(calculateTrainingMomentum())
     setProgressOverview(getProgressOverview())
     setUnseenMilestones(getUnseenMilestones())
+    
+    // Calculate training method emphasis based on athlete profile
+    if (data.profile) {
+      const profile = data.profile
+      const recovery = calculateRecoverySignal()
+      const selectionContext: SelectionContext = {
+        primaryGoal: (profile.primaryGoal || 'general_strength') as any,
+        experienceLevel: profile.experienceLevel || 'intermediate',
+        recoveryCapacity: 'moderate',
+        sorenessToleranceHigh: false,
+        sessionMinutes: profile.sessionLengthMinutes || 60,
+        trainingDaysPerWeek: profile.trainingDaysPerWeek || 4,
+        currentFatigueLevel: recovery?.readinessLevel === 'low' ? 'high' : 'moderate',
+        recentSorenessLevel: 'mild',
+        rangeTrainingMode: profile.rangeTrainingMode || undefined,
+      }
+      const methods = selectMethodProfiles(selectionContext)
+      setTrainingMethods(methods)
+    }
   }, [])
 
   // Loading state
@@ -223,6 +245,16 @@ setConstraintInsight(getConstraintInsight())
           {/* Program Snapshot */}
           <ProgramSnapshotCard />
         </div>
+        
+        {/* Training Emphasis - Shows current methodology focus */}
+        {trainingMethods && (
+          <TrainingEmphasis
+            primaryEmphasis={trainingMethods.primary.publicLabel}
+            secondaryEmphasis={trainingMethods.secondary?.publicLabel}
+            rationale={trainingMethods.explanation}
+            coachingTip={getCoachingMessage(trainingMethods)}
+          />
+        )}
         
         {/* ============================================================= */}
         {/* PRIORITY 4: SKILL PROGRESS - Visual motivation */}

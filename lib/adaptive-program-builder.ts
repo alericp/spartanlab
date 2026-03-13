@@ -21,6 +21,17 @@ import { analyzeEquipmentProfile, adaptSessionForEquipment, getEquipmentRecommen
 import { GOAL_LABELS } from './program-service'
 import { getQuickFatigueDecision, type TrainingDecision, type SessionAdjustments } from './fatigue-decision-engine'
 import { 
+  selectMethodProfiles, 
+  getCoachingMessage, 
+  getWeeklyEmphasisInsight,
+  METHOD_PROFILES,
+  SKILL_METHOD_MATRIX,
+  type SelectedMethods,
+  type MethodProfile,
+  type SelectionContext,
+  type SkillType,
+} from './training-principles-engine'
+import { 
   type TrainingMethod, 
   type TrainingBlock,
   type GeneratedFinisher,
@@ -142,6 +153,13 @@ export interface AdaptiveProgram {
       limiter: string
     }
   }
+  // Training Principles Engine - methodology emphasis
+  trainingEmphasis?: {
+    primaryMethod: string // publicLabel from MethodProfile
+    secondaryMethod?: string
+    explanation: string
+    coachingTip: string
+  }
 }
 
 // =============================================================================
@@ -202,6 +220,32 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
   let fatigueDecision: { decision: TrainingDecision; shortGuidance: string; needsAttention: boolean } | null = null
   if (typeof window !== 'undefined') {
     fatigueDecision = getQuickFatigueDecision()
+  }
+  
+  // Select training method profiles via Principles Engine
+  const selectionContext: SelectionContext = {
+    primaryGoal: primaryGoal as SkillType,
+    experienceLevel,
+    recoveryCapacity: recoverySignal.level === 'optimal' ? 'moderate' : 
+                      recoverySignal.level === 'good' ? 'moderate' :
+                      recoverySignal.level === 'suboptimal' ? 'light' : 'minimal',
+    sorenessToleranceHigh: false,
+    sessionMinutes: typeof sessionLength === 'number' ? sessionLength : 60,
+    trainingDaysPerWeek,
+    currentFatigueLevel: fatigueDecision?.decision === 'SKIP_TODAY' ? 'high' :
+                         fatigueDecision?.decision === 'REDUCE_INTENSITY' ? 'moderate' : 'low',
+    recentSorenessLevel: 'mild',
+    rangeTrainingMode: profile?.rangeTrainingMode || undefined,
+    wantsHypertrophy: profile?.goalCategory === 'strength',
+  }
+  const selectedMethods = selectMethodProfiles(selectionContext)
+  
+  // Build training emphasis for UI
+  const trainingEmphasis = {
+    primaryMethod: selectedMethods.primary.publicLabel,
+    secondaryMethod: selectedMethods.secondary?.publicLabel,
+    explanation: selectedMethods.explanation,
+    coachingTip: getCoachingMessage(selectedMethods),
   }
   
   // Select optimal weekly structure
@@ -277,6 +321,8 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
     } : undefined,
     // Athlete calibration context
     calibrationContext: calibrationContext,
+    // Training Principles Engine emphasis
+    trainingEmphasis,
   }
 }
 

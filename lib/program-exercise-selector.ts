@@ -29,6 +29,16 @@ import {
   getPlanRationale,
 } from './range-training-system'
 import {
+  type MethodProfile,
+  type MethodProfileId,
+  type SkillType,
+  METHOD_PROFILES,
+  selectMethodProfiles,
+  getExerciseMethodCompatibility,
+  type SelectionContext,
+  type SelectedMethods,
+} from './training-principles-engine'
+import {
   getAdaptedExercise,
   getProgressionUp,
   getProgressionDown,
@@ -76,6 +86,9 @@ interface ExerciseSelectionInputs {
   // New progression-aware fields
   fatigueLevel?: 'low' | 'moderate' | 'high'
   athleteDifficultyLevel?: DifficultyLevel
+  // Training principles engine integration
+  selectedMethods?: SelectedMethods
+  rangeTrainingMode?: RangeTrainingMode
 }
 
 // =============================================================================

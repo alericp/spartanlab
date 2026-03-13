@@ -1,16 +1,16 @@
 import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
 import { NextResponse } from 'next/server'
 import type { NextRequest, NextFetchEvent } from 'next/server'
+import { PRODUCTION_AUTH_DOMAINS, isProductionDomainFromHostname } from '@/lib/auth-environment'
 
 /**
  * Middleware with preview-safe Clerk integration
  * 
+ * Uses the single source of truth from auth-environment.ts
+ * 
  * On preview domains (*.vusercontent.net, etc.): bypasses Clerk entirely
  * On production (spartanlab.app): applies Clerk auth middleware
  */
-
-// Production domains where Clerk should run
-const PRODUCTION_DOMAINS = ['spartanlab.app', 'www.spartanlab.app']
 
 // Define public routes that don't require authentication
 const isPublicRoute = createRouteMatcher([
@@ -38,14 +38,6 @@ const isPublicRoute = createRouteMatcher([
   '/onboarding(.*)',
 ])
 
-/**
- * Check if the request is from a production domain
- */
-function isProductionDomain(request: NextRequest): boolean {
-  const hostname = request.headers.get('host')?.split(':')[0] ?? ''
-  return PRODUCTION_DOMAINS.includes(hostname)
-}
-
 // Create the Clerk middleware once
 const authMiddleware = clerkMiddleware(async (auth, req) => {
   // Allow public routes without authentication
@@ -61,9 +53,11 @@ const authMiddleware = clerkMiddleware(async (auth, req) => {
  * Main middleware function
  */
 export default async function middleware(request: NextRequest, event: NextFetchEvent) {
+  const hostname = request.headers.get('host')
+  
   // CRITICAL: On non-production domains, bypass Clerk entirely
   // This prevents Clerk from trying to authenticate on preview domains
-  if (!isProductionDomain(request)) {
+  if (!isProductionDomainFromHostname(hostname)) {
     return NextResponse.next()
   }
   

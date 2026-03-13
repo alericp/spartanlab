@@ -2,11 +2,14 @@
 // Only import this in Server Components, Route Handlers, or Server Actions
 import 'server-only'
 
-import { isPreviewMode, isAuthEnabled } from './app-mode'
+import { isClerkConfigured } from './auth-environment'
 import { mapClerkUserToUser } from './auth-service'
-import type { User, SubscriptionPlan } from '@/types/domain'
+import type { User } from '@/types/domain'
 
-// Preview mode mock user
+// ============================================================================
+// PREVIEW MODE USER
+// ============================================================================
+
 const PREVIEW_USER: User = {
   id: 'preview-user',
   email: 'preview@spartanlab.local',
@@ -15,16 +18,20 @@ const PREVIEW_USER: User = {
   createdAt: new Date().toISOString(),
 }
 
-// Cache for Clerk module
+// ============================================================================
+// CLERK MODULE CACHE
+// ============================================================================
+
 let clerkModule: typeof import('@clerk/nextjs/server') | null = null
 
 /**
- * Get Clerk module (lazy loaded)
+ * Get Clerk server module (lazy loaded)
  */
-async function getClerk() {
+async function getClerkServer() {
   if (clerkModule) return clerkModule
   
-  if (isPreviewMode() || !process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY) {
+  // Check if Clerk is configured
+  if (!isClerkConfigured()) {
     return null
   }
   
@@ -32,21 +39,33 @@ async function getClerk() {
     clerkModule = await import('@clerk/nextjs/server')
     return clerkModule
   } catch (error) {
-    console.warn('[SpartanLab Auth Server] Clerk not available:', error)
+    console.warn('[auth-service-server] Clerk not available:', error)
     return null
   }
 }
 
 /**
+ * Check if we're in preview mode (server-side)
+ * Uses environment check since server can't check domain
+ */
+function isServerPreviewMode(): boolean {
+  return !isClerkConfigured()
+}
+
+// ============================================================================
+// SERVER AUTH FUNCTIONS
+// ============================================================================
+
+/**
  * Get current user from Clerk (server component only)
  */
 export async function getCurrentUserServer(): Promise<User | null> {
-  if (isPreviewMode()) {
+  if (isServerPreviewMode()) {
     return PREVIEW_USER
   }
 
   try {
-    const clerk = await getClerk()
+    const clerk = await getClerkServer()
     if (!clerk?.auth) return null
 
     const { userId } = await clerk.auth()
@@ -68,7 +87,7 @@ export async function getCurrentUserServer(): Promise<User | null> {
       createdAt: new Date().toISOString(),
     }
   } catch (error) {
-    console.warn('[SpartanLab Auth Server] Failed to get user:', error)
+    console.warn('[auth-service-server] Failed to get user:', error)
     return null
   }
 }
@@ -77,10 +96,10 @@ export async function getCurrentUserServer(): Promise<User | null> {
  * Check if user is authenticated (server component only)
  */
 export async function isAuthenticatedServer(): Promise<boolean> {
-  if (isPreviewMode()) return true
+  if (isServerPreviewMode()) return true
 
   try {
-    const clerk = await getClerk()
+    const clerk = await getClerkServer()
     if (!clerk?.auth) return false
 
     const { userId } = await clerk.auth()
@@ -94,12 +113,12 @@ export async function isAuthenticatedServer(): Promise<boolean> {
  * Get Clerk auth state (server component only)
  */
 export async function getAuthState(): Promise<{ userId: string | null }> {
-  if (isPreviewMode()) {
+  if (isServerPreviewMode()) {
     return { userId: PREVIEW_USER.id }
   }
 
   try {
-    const clerk = await getClerk()
+    const clerk = await getClerkServer()
     if (!clerk?.auth) return { userId: null }
 
     return await clerk.auth()

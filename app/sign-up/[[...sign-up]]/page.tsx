@@ -1,48 +1,69 @@
 'use client'
 
 /**
- * Sign-Up Page - Preview-safe with runtime Clerk loading
+ * Sign-Up Page
  * 
- * Uses runtime dynamic import to hide @clerk/nextjs from Webpack.
+ * Preview mode: Shows informational fallback
+ * Production mode: Loads real Clerk SignUp component
  */
 
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
-import { AlertCircle, ArrowLeft } from 'lucide-react'
+import { AlertCircle, ArrowLeft, ExternalLink } from 'lucide-react'
 import { useClerkAvailability } from '@/components/providers/ClerkProviderWrapper'
 import { useEffect, useState } from 'react'
+
+// ============================================================================
+// PREVIEW FALLBACK
+// ============================================================================
 
 function PreviewFallback() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-[#0F1115] p-4">
-      <div className="max-w-md text-center">
-        <div className="w-12 h-12 rounded-full bg-[#1A1F26] border border-[#2B313A] flex items-center justify-center mx-auto mb-4">
-          <AlertCircle className="w-6 h-6 text-[#A4ACB8]" />
-        </div>
-        <h2 className="text-lg font-semibold text-[#E6E9EF] mb-2">
-          Preview Mode
-        </h2>
-        <p className="text-sm text-[#A4ACB8] mb-6">
-          Account creation is available on the production domain.
-          In preview, you can explore the app without signing up.
-        </p>
-        <div className="flex flex-col sm:flex-row gap-3 justify-center">
-          <Link href="/">
-            <Button variant="outline" className="border-[#2B313A] text-[#A4ACB8] gap-2">
-              <ArrowLeft className="w-4 h-4" />
-              Back to Home
-            </Button>
-          </Link>
-          <Link href="/onboarding">
-            <Button className="bg-[#C1121F] hover:bg-[#A30F1A] text-white">
-              Start Onboarding
-            </Button>
-          </Link>
+      <div className="max-w-md w-full">
+        <div className="bg-[#1A1F26] border border-[#2B313A] rounded-xl p-8 text-center">
+          <div className="w-12 h-12 rounded-full bg-[#2B313A] flex items-center justify-center mx-auto mb-4">
+            <AlertCircle className="w-6 h-6 text-[#A4ACB8]" />
+          </div>
+          <h1 className="text-xl font-semibold text-[#E6E9EF] mb-2">
+            Preview Mode
+          </h1>
+          <p className="text-sm text-[#A4ACB8] mb-6 leading-relaxed">
+            Account creation is available on the production domain. You can explore the app without signing up.
+          </p>
+          <div className="flex flex-col gap-3">
+            <Link href="/onboarding">
+              <Button className="w-full bg-[#C1121F] hover:bg-[#A30F1A]">
+                Start Onboarding
+              </Button>
+            </Link>
+            <Link href="/">
+              <Button variant="outline" className="w-full border-[#2B313A] text-[#A4ACB8]">
+                <ArrowLeft className="w-4 h-4 mr-2" />
+                Back to Home
+              </Button>
+            </Link>
+          </div>
+          <div className="mt-6 pt-6 border-t border-[#2B313A]">
+            <a 
+              href="https://spartanlab.app/sign-up"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-xs text-[#6B7280] hover:text-[#A4ACB8] transition-colors"
+            >
+              Create account on production
+              <ExternalLink className="w-3 h-3" />
+            </a>
+          </div>
         </div>
       </div>
     </div>
   )
 }
+
+// ============================================================================
+// LOADING STATE
+// ============================================================================
 
 function LoadingState() {
   return (
@@ -51,6 +72,10 @@ function LoadingState() {
     </div>
   )
 }
+
+// ============================================================================
+// CLERK APPEARANCE
+// ============================================================================
 
 const clerkAppearance = {
   elements: {
@@ -73,13 +98,25 @@ const clerkAppearance = {
   },
 }
 
-// Runtime import - hidden from Webpack static analysis
+// ============================================================================
+// RUNTIME LOADER
+// ============================================================================
+
 async function loadClerkSignUp() {
-  const parts = ['@', 'clerk', '/', 'nextjs']
-  const moduleName = parts.join('')
-  const dynamicImport = new Function('m', 'return import(m)')
-  return dynamicImport(moduleName)
+  const moduleName = ['@', 'clerk', '/', 'nextjs'].join('')
+  const loader = new Function('m', 'return import(m)')
+  return loader(moduleName) as Promise<{
+    SignUp: React.ComponentType<{
+      appearance?: Record<string, unknown>
+      fallbackRedirectUrl?: string
+      signInUrl?: string
+    }>
+  }>
 }
+
+// ============================================================================
+// PAGE COMPONENT
+// ============================================================================
 
 export default function SignUpPage() {
   const [mounted, setMounted] = useState(false)
@@ -95,17 +132,27 @@ export default function SignUpPage() {
   }, [])
   
   useEffect(() => {
+    // Only load Clerk on production
     if (mounted && !isLoading && isClerkAvailable) {
       loadClerkSignUp()
-        .then((mod: { SignUp: typeof SignUp }) => setSignUp(() => mod.SignUp))
+        .then(mod => setSignUp(() => mod.SignUp))
         .catch(() => {})
     }
   }, [mounted, isLoading, isClerkAvailable])
   
-  if (!mounted || isLoading) return <LoadingState />
+  // SSR
+  if (!mounted) return <LoadingState />
+  
+  // Still checking auth availability
+  if (isLoading) return <LoadingState />
+  
+  // Preview mode
   if (!isClerkAvailable) return <PreviewFallback />
+  
+  // Production but Clerk not loaded yet
   if (!SignUp) return <LoadingState />
   
+  // Production with Clerk
   return (
     <div className="min-h-screen flex flex-col items-center justify-center gap-4 bg-[#0F1115] px-4">
       <SignUp

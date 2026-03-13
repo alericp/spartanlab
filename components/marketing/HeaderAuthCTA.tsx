@@ -3,8 +3,11 @@
 /**
  * HeaderAuthCTA - Preview-safe auth buttons for marketing header
  * 
- * On preview: Always shows login/signup buttons
- * On production: Shows dashboard link when signed in
+ * Architecture:
+ * - Preview mode: Always shows login/signup buttons (neutral CTA)
+ * - Production mode: Uses SignedIn/SignedOut for real auth state
+ * 
+ * NO POLLING. Simple conditional rendering.
  */
 
 import Link from 'next/link'
@@ -12,12 +15,13 @@ import { Button } from '@/components/ui/button'
 import { LayoutDashboard } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { useClerkAvailability } from '@/components/providers/ClerkProviderWrapper'
-import { SignedIn, SignedOut } from '@/components/auth/ClerkComponents'
+import { SignedIn, SignedOut, UserButton } from '@/components/auth/ClerkComponents'
 
-/**
- * Default CTA buttons shown when auth is loading or unavailable
- */
-function DefaultAuthCTA() {
+// ============================================================================
+// NEUTRAL CTA (shown in preview or before auth loads)
+// ============================================================================
+
+function NeutralCTA() {
   return (
     <>
       <Link href="/sign-in">
@@ -34,10 +38,11 @@ function DefaultAuthCTA() {
   )
 }
 
-/**
- * Signed-in state CTA
- */
-function SignedInCTA() {
+// ============================================================================
+// SIGNED-IN CTA (production only)
+// ============================================================================
+
+function AuthenticatedCTA() {
   return (
     <>
       <Link href="/dashboard">
@@ -46,49 +51,50 @@ function SignedInCTA() {
           Dashboard
         </Button>
       </Link>
-      <Link href="/dashboard">
-        <div className="w-8 h-8 rounded-full bg-[#C1121F] flex items-center justify-center text-xs font-bold text-white cursor-pointer select-none hover:bg-[#A30F1A] transition-colors">
-          U
-        </div>
-      </Link>
+      <UserButton afterSignOutUrl="/" />
     </>
   )
 }
 
+// ============================================================================
+// HEADER AUTH CTA
+// ============================================================================
+
 export function HeaderAuthCTA() {
   const [mounted, setMounted] = useState(false)
-  const { isClerkAvailable, isLoading: isClerkLoading } = useClerkAvailability()
+  const { isClerkAvailable, isLoading } = useClerkAvailability()
 
   useEffect(() => {
     setMounted(true)
   }, [])
 
-  // Don't render auth-specific content during SSR
-  if (!mounted) return <DefaultAuthCTA />
+  // SSR: show neutral CTA
+  if (!mounted) return <NeutralCTA />
   
-  // Show default while checking Clerk availability
-  if (isClerkLoading) return <DefaultAuthCTA />
+  // Loading: show neutral CTA
+  if (isLoading) return <NeutralCTA />
   
-  // In preview mode without Clerk, show default CTA
-  if (!isClerkAvailable) return <DefaultAuthCTA />
+  // Preview mode: show neutral CTA (no auth available)
+  if (!isClerkAvailable) return <NeutralCTA />
 
-  // Production: use SignedIn/SignedOut components
+  // Production mode: use real auth components
   return (
     <>
       <SignedIn>
-        <SignedInCTA />
+        <AuthenticatedCTA />
       </SignedIn>
       <SignedOut>
-        <DefaultAuthCTA />
+        <NeutralCTA />
       </SignedOut>
     </>
   )
 }
 
-/**
- * Default mobile CTA buttons
- */
-function DefaultMobileCTA({ onNavigate }: { onNavigate: () => void }) {
+// ============================================================================
+// MOBILE AUTH CTA
+// ============================================================================
+
+function NeutralMobileCTA({ onNavigate }: { onNavigate: () => void }) {
   return (
     <>
       <Link href="/sign-in" onClick={onNavigate}>
@@ -105,10 +111,7 @@ function DefaultMobileCTA({ onNavigate }: { onNavigate: () => void }) {
   )
 }
 
-/**
- * Signed-in mobile CTA
- */
-function SignedInMobileCTA({ onNavigate }: { onNavigate: () => void }) {
+function AuthenticatedMobileCTA({ onNavigate }: { onNavigate: () => void }) {
   return (
     <Link href="/dashboard" onClick={onNavigate}>
       <Button size="sm" className="w-full bg-[#C1121F] hover:bg-[#A30F1A]">
@@ -121,29 +124,25 @@ function SignedInMobileCTA({ onNavigate }: { onNavigate: () => void }) {
 
 export function MobileAuthCTA({ onNavigate }: { onNavigate: () => void }) {
   const [mounted, setMounted] = useState(false)
-  const { isClerkAvailable, isLoading: isClerkLoading } = useClerkAvailability()
+  const { isClerkAvailable, isLoading } = useClerkAvailability()
 
   useEffect(() => {
     setMounted(true)
   }, [])
 
-  // Don't render auth-specific content during SSR
-  if (!mounted) return <DefaultMobileCTA onNavigate={onNavigate} />
-  
-  // Show default while checking Clerk availability
-  if (isClerkLoading) return <DefaultMobileCTA onNavigate={onNavigate} />
-  
-  // In preview mode without Clerk, show default CTA
-  if (!isClerkAvailable) return <DefaultMobileCTA onNavigate={onNavigate} />
+  // SSR or Loading or Preview: show neutral CTA
+  if (!mounted || isLoading || !isClerkAvailable) {
+    return <NeutralMobileCTA onNavigate={onNavigate} />
+  }
 
-  // Production: use SignedIn/SignedOut components
+  // Production mode: use real auth components
   return (
     <>
       <SignedIn>
-        <SignedInMobileCTA onNavigate={onNavigate} />
+        <AuthenticatedMobileCTA onNavigate={onNavigate} />
       </SignedIn>
       <SignedOut>
-        <DefaultMobileCTA onNavigate={onNavigate} />
+        <NeutralMobileCTA onNavigate={onNavigate} />
       </SignedOut>
     </>
   )

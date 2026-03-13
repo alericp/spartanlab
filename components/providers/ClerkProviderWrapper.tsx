@@ -1,89 +1,142 @@
 'use client'
 
 /**
- * ClerkProviderWrapper - Complete preview isolation using runtime import
+ * ClerkProviderWrapper - Strict preview isolation for Clerk
  * 
- * THE PROBLEM:
- * Webpack statically analyzes import() statements and bundles them.
- * Even dynamic imports like import('@clerk/nextjs') get pre-bundled.
- * When the chunk loads, Clerk's module-level code runs and checks the domain.
- * 
- * THE SOLUTION:
- * We use a technique to hide the import from Webpack's static analysis:
- * - Build the module name at runtime using string concatenation
- * - Use a wrapper function that Webpack can't trace
- * This prevents Webpack from knowing what module to bundle.
- * 
- * The module is loaded via a truly dynamic runtime import.
+ * Architecture:
+ * 1. Check domain SYNCHRONOUSLY before any effect runs
+ * 2. If not on production domain, never attempt to load Clerk
+ * 3. Use runtime import technique to hide module from bundler
+ * 4. Provide context for child components to check auth availability
  */
 
 import { ReactNode, createContext, useContext, useState, useEffect, useRef } from 'react'
+import { shouldInitializeClerk, getAuthMode, type AuthMode } from '@/lib/auth-environment'
 
-// Context for auth availability
+// ============================================================================
+// CONTEXT
+// ============================================================================
+
 interface ClerkAvailabilityContextValue {
+  /**
+   * True only when Clerk is loaded and ready on a production domain
+   */
   isClerkAvailable: boolean
+  /**
+   * True when we're in preview mode (non-production domain with prod keys)
+   */
   isPreviewMode: boolean
+  /**
+   * True while determining auth availability
+   */
   isLoading: boolean
+  /**
+   * Current auth mode
+   */
+  authMode: AuthMode
 }
 
-const ClerkAvailabilityContext = createContext<ClerkAvailabilityContextValue>({
+const defaultContextValue: ClerkAvailabilityContextValue = {
   isClerkAvailable: false,
   isPreviewMode: true,
   isLoading: true,
-})
+  authMode: 'preview',
+}
 
+const ClerkAvailabilityContext = createContext<ClerkAvailabilityContextValue>(defaultContextValue)
+
+/**
+ * Hook to check Clerk availability status
+ */
 export function useClerkAvailability() {
   return useContext(ClerkAvailabilityContext)
 }
 
-// Allowed production domains
-const ALLOWED_DOMAINS = ['spartanlab.app', 'www.spartanlab.app']
+// ============================================================================
+// RUNTIME CLERK LOADER
+// ============================================================================
 
 /**
- * SYNCHRONOUS domain check
+ * Load Clerk module at runtime.
+ * Uses string concatenation to hide from Webpack's static analysis.
  */
-function isAllowedDomain(): boolean {
-  if (typeof window === 'undefined') return false
-  return ALLOWED_DOMAINS.includes(window.location.hostname)
+async function loadClerkRuntime(): Promise<{
+  ClerkProvider: React.ComponentType<{
+    children: ReactNode
+    appearance?: Record<string, unknown>
+    signInUrl?: string
+    signUpUrl?: string
+    signInFallbackRedirectUrl?: string
+    signUpFallbackRedirectUrl?: string
+  }>
+} | null> {
+  try {
+    // Build module name at runtime - Webpack can't trace this
+    const moduleName = ['@', 'clerk', '/', 'nextjs'].join('')
+    // Use Function constructor for truly dynamic import
+    const loader = new Function('m', 'return import(m)')
+    return await loader(moduleName)
+  } catch (error) {
+    console.error('[ClerkProviderWrapper] Failed to load Clerk:', error)
+    return null
+  }
 }
 
-/**
- * Check if we should attempt to use Clerk
- */
-function shouldAttemptClerk(): boolean {
-  const key = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
-  if (!key) return false
-  if (key.startsWith('pk_test_')) return true
-  return isAllowedDomain()
+// ============================================================================
+// CLERK APPEARANCE
+// ============================================================================
+
+const clerkAppearance = {
+  elements: {
+    rootBox: 'font-sans',
+    card: 'bg-[#1A1F26] border border-[#2B313A] shadow-xl',
+    headerTitle: 'text-[#E6E9EF]',
+    headerSubtitle: 'text-[#A4ACB8]',
+    socialButtonsBlockButton: 'bg-[#2B313A] border-[#3A3A3A] text-[#E6E9EF] hover:bg-[#3A3A3A]',
+    socialButtonsBlockButtonText: 'text-[#E6E9EF]',
+    dividerLine: 'bg-[#2B313A]',
+    dividerText: 'text-[#A4ACB8]',
+    formFieldLabel: 'text-[#A4ACB8]',
+    formFieldInput: 'bg-[#0F1115] border-[#2B313A] text-[#E6E9EF] focus:border-[#C1121F] focus:ring-[#C1121F]/20',
+    formButtonPrimary: 'bg-[#C1121F] hover:bg-[#A30F1A] text-white',
+    footerActionLink: 'text-[#C1121F] hover:text-[#A30F1A]',
+    identityPreviewText: 'text-[#E6E9EF]',
+    identityPreviewEditButton: 'text-[#C1121F]',
+    userButtonPopoverCard: 'bg-[#1A1F26] border border-[#2B313A]',
+    userButtonPopoverActionButton: 'text-[#E6E9EF] hover:bg-[#2B313A]',
+    userButtonPopoverActionButtonText: 'text-[#E6E9EF]',
+    userButtonPopoverActionButtonIcon: 'text-[#A4ACB8]',
+    userButtonPopoverFooter: 'hidden',
+    userPreviewMainIdentifier: 'text-[#E6E9EF]',
+    userPreviewSecondaryIdentifier: 'text-[#A4ACB8]',
+  },
 }
 
-/**
- * Runtime module loader that hides the module name from Webpack.
- * Uses string building to construct '@clerk/nextjs' at runtime.
- */
-async function loadClerkModule() {
-  // Build the module name at runtime - Webpack can't statically analyze this
-  const parts = ['@', 'clerk', '/', 'nextjs']
-  const moduleName = parts.join('')
-  
-  // Use Function constructor to create a truly dynamic import
-  // This is the only way to prevent Webpack from bundling the module
-  const dynamicImport = new Function('moduleName', 'return import(moduleName)')
-  return dynamicImport(moduleName)
-}
+// ============================================================================
+// PROVIDER COMPONENT
+// ============================================================================
 
 interface Props {
   children: ReactNode
 }
 
 export function ClerkProviderWrapper({ children }: Props) {
-  // Check domain synchronously on first render
-  const canUseClerk = useRef(shouldAttemptClerk())
+  // CRITICAL: Check if we should initialize Clerk SYNCHRONOUSLY on first render
+  // This happens before any useEffect, so we never even attempt to load Clerk on preview
+  const shouldInit = useRef<boolean>(false)
+  const authMode = useRef<AuthMode>('preview')
+  
+  // These refs are set synchronously during render (not in useEffect)
+  if (typeof window !== 'undefined') {
+    shouldInit.current = shouldInitializeClerk()
+    authMode.current = getAuthMode()
+  }
   
   const [state, setState] = useState<ClerkAvailabilityContextValue>(() => ({
-    isClerkAvailable: canUseClerk.current,
-    isPreviewMode: !canUseClerk.current,
-    isLoading: canUseClerk.current,
+    isClerkAvailable: false,
+    isPreviewMode: !shouldInit.current,
+    isLoading: shouldInit.current, // Only loading if we need to load Clerk
+    authMode: authMode.current,
   }))
   
   const [ClerkProvider, setClerkProvider] = useState<React.ComponentType<{
@@ -96,38 +149,42 @@ export function ClerkProviderWrapper({ children }: Props) {
   }> | null>(null)
 
   useEffect(() => {
-    // Only load Clerk on allowed domains
-    if (!canUseClerk.current) {
+    // CRITICAL: Don't attempt to load Clerk if we shouldn't initialize it
+    if (!shouldInit.current) {
+      setState(prev => ({ ...prev, isLoading: false }))
       return
     }
 
-    // Load Clerk using runtime dynamic import
-    loadClerkModule()
-      .then((mod: { ClerkProvider: typeof ClerkProvider }) => {
+    let cancelled = false
+
+    loadClerkRuntime().then(mod => {
+      if (cancelled) return
+      
+      if (mod?.ClerkProvider) {
         setClerkProvider(() => mod.ClerkProvider)
-        setState(prev => ({ ...prev, isLoading: false }))
-      })
-      .catch((err: Error) => {
-        console.error('[v0] Failed to load Clerk:', err)
+        setState({
+          isClerkAvailable: true,
+          isPreviewMode: false,
+          isLoading: false,
+          authMode: 'production',
+        })
+      } else {
         setState({
           isClerkAvailable: false,
           isPreviewMode: true,
           isLoading: false,
+          authMode: 'preview',
         })
-      })
+      }
+    })
+
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   // Preview mode - render children without Clerk
-  if (!canUseClerk.current) {
-    return (
-      <ClerkAvailabilityContext.Provider value={state}>
-        {children}
-      </ClerkAvailabilityContext.Provider>
-    )
-  }
-
-  // Production mode but Clerk not loaded yet
-  if (!ClerkProvider) {
+  if (!shouldInit.current || !ClerkProvider) {
     return (
       <ClerkAvailabilityContext.Provider value={state}>
         {children}
@@ -139,31 +196,7 @@ export function ClerkProviderWrapper({ children }: Props) {
   return (
     <ClerkAvailabilityContext.Provider value={state}>
       <ClerkProvider
-        appearance={{
-          elements: {
-            rootBox: 'font-sans',
-            card: 'bg-[#1A1F26] border border-[#2B313A] shadow-xl',
-            headerTitle: 'text-[#E6E9EF]',
-            headerSubtitle: 'text-[#A4ACB8]',
-            socialButtonsBlockButton: 'bg-[#2B313A] border-[#3A3A3A] text-[#E6E9EF] hover:bg-[#3A3A3A]',
-            socialButtonsBlockButtonText: 'text-[#E6E9EF]',
-            dividerLine: 'bg-[#2B313A]',
-            dividerText: 'text-[#A4ACB8]',
-            formFieldLabel: 'text-[#A4ACB8]',
-            formFieldInput: 'bg-[#0F1115] border-[#2B313A] text-[#E6E9EF] focus:border-[#C1121F] focus:ring-[#C1121F]/20',
-            formButtonPrimary: 'bg-[#C1121F] hover:bg-[#A30F1A] text-white',
-            footerActionLink: 'text-[#C1121F] hover:text-[#A30F1A]',
-            identityPreviewText: 'text-[#E6E9EF]',
-            identityPreviewEditButton: 'text-[#C1121F]',
-            userButtonPopoverCard: 'bg-[#1A1F26] border border-[#2B313A]',
-            userButtonPopoverActionButton: 'text-[#E6E9EF] hover:bg-[#2B313A]',
-            userButtonPopoverActionButtonText: 'text-[#E6E9EF]',
-            userButtonPopoverActionButtonIcon: 'text-[#A4ACB8]',
-            userButtonPopoverFooter: 'hidden',
-            userPreviewMainIdentifier: 'text-[#E6E9EF]',
-            userPreviewSecondaryIdentifier: 'text-[#A4ACB8]',
-          },
-        }}
+        appearance={clerkAppearance}
         signInUrl="/sign-in"
         signUpUrl="/sign-up"
         signInFallbackRedirectUrl="/dashboard"

@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { MarketingHeader } from '@/components/marketing/MarketingHeader'
 import { MarketingFooter } from '@/components/marketing/MarketingFooter'
 import { Check, ArrowRight } from 'lucide-react'
+import { trackUpgradeStarted, trackSignUpStarted } from '@/lib/analytics'
 
 const PLANS = [
   {
@@ -122,7 +123,17 @@ export default function PricingPage() {
                   </div>
                 </div>
 
-                <Link href={plan.ctaLink} className="block mb-8">
+                <Link 
+                  href={plan.ctaLink} 
+                  className="block mb-8"
+                  onClick={() => {
+                    if (plan.featured) {
+                      trackUpgradeStarted('pricing_page')
+                    } else {
+                      trackSignUpStarted('pricing_page')
+                    }
+                  }}
+                >
                   <Button
                     variant={plan.featured ? 'default' : 'outline'}
                     className={`w-full h-12 ${

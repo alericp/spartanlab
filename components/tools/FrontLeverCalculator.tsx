@@ -15,6 +15,7 @@ import {
   Timer,
   ArrowRight
 } from 'lucide-react'
+import { trackToolUsed } from '@/lib/analytics'
 
 // Readiness stages
 type ReadinessStage = 'early' | 'intermediate' | 'advanced' | 'ready'
@@ -281,6 +282,7 @@ export function FrontLeverCalculator({ showCTA = true }: FrontLeverCalculatorPro
   
   const handleCalculate = () => {
     setHasCalculated(true)
+    trackToolUsed('front_lever_calculator')
   }
   
   const getStageColor = (stage: ReadinessStage) => {

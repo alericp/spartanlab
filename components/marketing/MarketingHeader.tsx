@@ -5,6 +5,7 @@ import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Menu, X } from 'lucide-react'
 import { SpartanIcon } from '@/components/brand/SpartanLogo'
+import { trackSignUpStarted } from '@/lib/analytics'
 
 const NAV_LINKS = [
   { href: '/how-it-works', label: 'How It Works' },
@@ -47,7 +48,7 @@ export function MarketingHeader() {
                 Login
               </Button>
             </Link>
-            <Link href="/sign-up">
+            <Link href="/sign-up" onClick={() => trackSignUpStarted('header')}>
               <Button size="sm" className="bg-[#C1121F] hover:bg-[#A30F1A]">
                 Start Training
               </Button>

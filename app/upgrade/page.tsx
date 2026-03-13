@@ -22,6 +22,7 @@ import {
 } from 'lucide-react'
 import { PREMIUM_FEATURES, type PremiumFeatureId, useSubscriptionInfo, useIsOwner } from '@/components/premium/PremiumFeature'
 import { upgradeToPro, startTrial, hasProAccess } from '@/lib/feature-access'
+import { trackUpgradeStarted, trackUpgradeCompleted } from '@/lib/analytics'
 
 const FREE_FEATURES = [
   'Workout generation & logging',
@@ -87,8 +88,10 @@ export default function UpgradePage() {
   }, [])
 
   const handleUpgrade = () => {
+    trackUpgradeStarted('upgrade_page')
     upgradeToPro()
     setIsPro(true)
+    trackUpgradeCompleted('upgrade_page')
     // Redirect to dashboard after short delay
     setTimeout(() => router.push('/dashboard'), 500)
   }

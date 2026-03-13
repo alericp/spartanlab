@@ -25,6 +25,7 @@ const RECOMMENDED_ENV_VARS = [
   'OWNER_EMAIL',
   'STRIPE_SECRET_KEY',
   'NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY',
+  'RESEND_API_KEY',
 ] as const
 
 /**
@@ -100,6 +101,13 @@ export async function isOwnerConfigured(): Promise<boolean> {
 }
 
 /**
+ * Check if email service (Resend) is properly configured
+ */
+export async function isEmailConfigured(): Promise<boolean> {
+  return Boolean(process.env.RESEND_API_KEY)
+}
+
+/**
  * Get configuration summary for debugging
  */
 export async function getConfigSummary(): Promise<{
@@ -107,11 +115,13 @@ export async function getConfigSummary(): Promise<{
   stripe: boolean
   database: boolean
   owner: boolean
+  email: boolean
 }> {
   return {
     clerk: await isClerkConfigured(),
     stripe: await isStripeConfigured(),
     database: await isDatabaseConfigured(),
     owner: await isOwnerConfigured(),
+    email: await isEmailConfigured(),
   }
 }

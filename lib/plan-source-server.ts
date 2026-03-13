@@ -11,7 +11,7 @@ import type { SubscriptionPlan, PlanState } from '@/types/domain'
  * Get user's plan from database (server-side only)
  */
 export async function getProductionPlan(userId: string): Promise<SubscriptionPlan> {
-  if (isPreviewMode() || !isDatabaseAvailable()) {
+  if (isPreviewMode() || !(await isDatabaseAvailable())) {
     return 'free'
   }
 
@@ -35,7 +35,7 @@ export async function setProductionPlan(
   userId: string,
   plan: SubscriptionPlan
 ): Promise<PlanState> {
-  if (isPreviewMode() || !isDatabaseAvailable()) {
+  if (isPreviewMode() || !(await isDatabaseAvailable())) {
     return { plan, source: 'preview' }
   }
 
@@ -80,7 +80,7 @@ export async function syncPlanFromStripe(
     stripeSubscriptionId: string
   }
 ): Promise<PlanState> {
-  if (isPreviewMode() || !isDatabaseAvailable()) {
+  if (isPreviewMode() || !(await isDatabaseAvailable())) {
     return {
       plan: data.plan,
       source: 'stripe',

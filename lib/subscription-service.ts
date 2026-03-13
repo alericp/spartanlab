@@ -32,7 +32,7 @@ export async function getUserSubscription(clerkId: string): Promise<Subscription
     stripeSubscriptionId: null,
   }
 
-  if (isPreviewMode() || !isDatabaseAvailable()) {
+  if (isPreviewMode() || !(await isDatabaseAvailable())) {
     return defaultSub
   }
 
@@ -81,7 +81,7 @@ export async function updateUserSubscription(
     stripeSubscriptionId: string
   }
 ): Promise<boolean> {
-  if (isPreviewMode() || !isDatabaseAvailable()) {
+  if (isPreviewMode() || !(await isDatabaseAvailable())) {
     return false
   }
 
@@ -109,7 +109,7 @@ export async function updateUserSubscription(
  * Cancel user subscription in database
  */
 export async function cancelUserSubscription(clerkId: string): Promise<boolean> {
-  if (isPreviewMode() || !isDatabaseAvailable()) {
+  if (isPreviewMode() || !(await isDatabaseAvailable())) {
     return false
   }
 
@@ -135,7 +135,7 @@ export async function ensureUserExists(
   email: string,
   username?: string
 ): Promise<boolean> {
-  if (isPreviewMode() || !isDatabaseAvailable()) {
+  if (isPreviewMode() || !(await isDatabaseAvailable())) {
     return false
   }
 

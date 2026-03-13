@@ -27,7 +27,7 @@ const initializeClient = () => {
 /**
  * Check if database is available and configured
  */
-export function isDatabaseAvailable(): boolean {
+export async function isDatabaseAvailable(): Promise<boolean> {
   if (isPreviewMode()) {
     return false
   }
@@ -37,7 +37,7 @@ export function isDatabaseAvailable(): boolean {
 /**
  * Get the Neon SQL client
  */
-export function getSqlClient() {
+export async function getSqlClient() {
   if (!initialized) {
     initializeClient()
   }
@@ -55,7 +55,7 @@ export async function query<T>(
     return []
   }
 
-  const client = getSqlClient()
+  const client = await getSqlClient()
   if (!client) {
     return []
   }
@@ -95,7 +95,7 @@ export async function isDatabaseConnected(): Promise<boolean> {
   }
 
   try {
-    const client = getSqlClient()
+    const client = await getSqlClient()
     if (!client) return false
 
     const result = await query('SELECT 1 as ping')

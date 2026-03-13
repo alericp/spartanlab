@@ -94,9 +94,9 @@ function toAthleteProfile(row: AthleteProfileRow): AthleteProfile {
 // =============================================================================
 
 export async function dbGetSkills(userId: string): Promise<SkillProgression[]> {
-  if (!isDatabaseAvailable()) return []
+  if (!(await isDatabaseAvailable())) return []
   
-  const sql = getSqlClient()
+  const sql = await getSqlClient()
   if (!sql) return []
   
   try {
@@ -113,9 +113,9 @@ export async function dbGetSkills(userId: string): Promise<SkillProgression[]> {
 }
 
 export async function dbGetSkill(userId: string, skillName: string): Promise<SkillProgression | null> {
-  if (!isDatabaseAvailable()) return null
+  if (!(await isDatabaseAvailable())) return null
   
-  const sql = getSqlClient()
+  const sql = await getSqlClient()
   if (!sql) return null
   
   try {
@@ -135,9 +135,9 @@ export async function dbSaveSkill(
   userId: string, 
   data: Omit<SkillProgression, 'id' | 'userId' | 'createdAt'>
 ): Promise<SkillProgression | null> {
-  if (!isDatabaseAvailable()) return null
+  if (!(await isDatabaseAvailable())) return null
   
-  const sql = getSqlClient()
+  const sql = await getSqlClient()
   if (!sql) return null
   
   try {
@@ -174,9 +174,9 @@ export async function dbSaveSkill(
 }
 
 export async function dbDeleteSkill(userId: string, id: string): Promise<boolean> {
-  if (!isDatabaseAvailable()) return false
+  if (!(await isDatabaseAvailable())) return false
   
-  const sql = getSqlClient()
+  const sql = await getSqlClient()
   if (!sql) return false
   
   try {
@@ -197,9 +197,9 @@ export async function dbDeleteSkill(userId: string, id: string): Promise<boolean
 // =============================================================================
 
 export async function dbGetProfile(userId: string): Promise<AthleteProfile | null> {
-  if (!isDatabaseAvailable()) return null
+  if (!(await isDatabaseAvailable())) return null
   
-  const sql = getSqlClient()
+  const sql = await getSqlClient()
   if (!sql) return null
   
   try {
@@ -219,9 +219,9 @@ export async function dbSaveProfile(
   userId: string, 
   data: Partial<AthleteProfile>
 ): Promise<AthleteProfile | null> {
-  if (!isDatabaseAvailable()) return null
+  if (!(await isDatabaseAvailable())) return null
   
-  const sql = getSqlClient()
+  const sql = await getSqlClient()
   if (!sql) return null
   
   try {

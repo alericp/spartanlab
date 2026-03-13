@@ -7,8 +7,8 @@
  */
 
 import { getWorkoutLogs, type WorkoutLog } from './workout-log-service'
-import { getTrainingMomentum, type TrainingMomentum, type MomentumLevel } from './training-momentum-engine'
-import { getTrainingStreak, type TrainingStreak } from './progress-streak-engine'
+import { calculateTrainingMomentum, type TrainingMomentum, type MomentumLevel } from './training-momentum-engine'
+import { calculateTrainingStreak, type TrainingStreak } from './progress-streak-engine'
 import { getReadinessAssessment, type ReadinessAssessment } from './recovery-fatigue-engine'
 import { getAthleteProfile } from './data-service'
 
@@ -245,10 +245,10 @@ function calculateConsistencyMetrics(logs: WorkoutLog[], targetFrequency: number
   }
   
   // Streak calculation (simple version)
-  const streak = getTrainingStreak()
+  const streak = calculateTrainingStreak()
   
   // Momentum trend
-  const momentum = getTrainingMomentum()
+  const momentum = calculateTrainingMomentum()
   
   // Consistency score (0-100)
   const weeklyCompletionRate = targetFrequency > 0 ? sessionsThisWeek / targetFrequency : 0

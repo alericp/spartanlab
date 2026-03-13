@@ -3,12 +3,12 @@
 
 export type AppMode = 'preview' | 'production'
 
-// Check if all required production env vars are present
+// Check if Clerk auth is configured (works on both client and server)
 function hasProductionAuth(): boolean {
-  // Clerk env vars - these would be required for production auth
+  // Only check the public key - CLERK_SECRET_KEY is not available in browser
+  // This prevents auth from appearing disabled on the client when Clerk is configured
   const clerkPublishableKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
-  const clerkSecretKey = process.env.CLERK_SECRET_KEY
-  return Boolean(clerkPublishableKey && clerkSecretKey)
+  return Boolean(clerkPublishableKey)
 }
 
 function hasProductionDatabase(): boolean {

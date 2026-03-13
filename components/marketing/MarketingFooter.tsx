@@ -6,7 +6,7 @@ import { SpartanIcon } from '@/components/brand/SpartanLogo'
 
 export function MarketingFooter() {
   // Use static year for SSR, update on client to avoid hydration mismatch
-  const [year, setYear] = useState(2024)
+  const [year, setYear] = useState(2026)
   
   useEffect(() => {
     setYear(new Date().getFullYear())
@@ -66,7 +66,7 @@ export function MarketingFooter() {
             <h4 className="text-sm font-semibold mb-4 text-[#E6E9EF]">Training Guides</h4>
             <ul className="space-y-3">
               <li>
-                <Link href="/guides/front-lever-progression" className="text-sm text-[#A4ACB8] hover:text-[#E6E9EF] transition-colors">
+                <Link href="/guides/front-lever-training" className="text-sm text-[#A4ACB8] hover:text-[#E6E9EF] transition-colors">
                   Front Lever Guide
                 </Link>
               </li>
@@ -76,18 +76,18 @@ export function MarketingFooter() {
                 </Link>
               </li>
               <li>
-                <Link href="/guides/muscle-up-progression" className="text-sm text-[#A4ACB8] hover:text-[#E6E9EF] transition-colors">
+                <Link href="/guides/muscle-up-training" className="text-sm text-[#A4ACB8] hover:text-[#E6E9EF] transition-colors">
                   Muscle-Up Guide
                 </Link>
               </li>
               <li>
-                <Link href="/guides/calisthenics-strength-standards" className="text-sm text-[#A4ACB8] hover:text-[#E6E9EF] transition-colors">
-                  Strength Standards
+                <Link href="/guides/weighted-pull-up-training" className="text-sm text-[#A4ACB8] hover:text-[#E6E9EF] transition-colors">
+                  Weighted Pull-Up Guide
                 </Link>
               </li>
               <li>
-                <Link href="/guides/calisthenics-training-program" className="text-sm text-[#A4ACB8] hover:text-[#E6E9EF] transition-colors">
-                  Programming Guide
+                <Link href="/guides" className="text-sm text-[#A4ACB8] hover:text-[#E6E9EF] transition-colors">
+                  All Guides
                 </Link>
               </li>
             </ul>

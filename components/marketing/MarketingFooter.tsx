@@ -100,6 +100,9 @@ export function MarketingFooter() {
             &copy; {year} SpartanLab. All rights reserved.
           </p>
           <div className="flex items-center gap-6">
+            <Link href="/terms" className="text-xs text-[#6B7280] hover:text-[#A4ACB8] transition-colors">
+              Terms
+            </Link>
             <a 
               href="mailto:support@spartanlab.app" 
               className="text-xs text-[#6B7280] hover:text-[#A4ACB8] transition-colors"

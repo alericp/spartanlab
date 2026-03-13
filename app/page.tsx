@@ -96,14 +96,14 @@ export default function Home() {
   const { isSignedIn, isLoaded } = useAuth()
   
   useEffect(() => {
-    // Only redirect after auth is loaded and user is signed in
+    // Suppress hydration mismatch warning - the auth state will match after load
     if (isLoaded && isSignedIn) {
       router.replace('/dashboard')
     }
   }, [router, isSignedIn, isLoaded])
   
   return (
-    <div className="min-h-screen bg-[#121212] text-[#F5F5F5]">
+    <div className="min-h-screen bg-[#121212] text-[#F5F5F5]" suppressHydrationWarning>
       <MarketingHeader />
 
       {/* Hero Section */}

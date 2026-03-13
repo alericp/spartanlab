@@ -1,7 +1,25 @@
 'use client'
 
 import { ClerkProvider } from '@clerk/nextjs'
-import { ReactNode, useEffect, useState } from 'react'
+import { ReactNode, useEffect, useState, createContext, useContext } from 'react'
+import { isAllowedClerkOrigin, shouldRenderPreviewFallback, getHostname } from '@/lib/environment-guard'
+
+// Context to share Clerk availability state with child components
+interface ClerkAvailabilityContextValue {
+  isClerkAvailable: boolean
+  isPreviewMode: boolean
+  isLoading: boolean
+}
+
+const ClerkAvailabilityContext = createContext<ClerkAvailabilityContextValue>({
+  isClerkAvailable: false,
+  isPreviewMode: false,
+  isLoading: true,
+})
+
+export function useClerkAvailability() {
+  return useContext(ClerkAvailabilityContext)
+}
 
 // Clerk appearance configuration matching SpartanLab theme
 const clerkAppearance = {
@@ -37,51 +55,59 @@ interface ClerkProviderWrapperProps {
 /**
  * Wrapper that conditionally enables Clerk based on environment.
  * In v0 preview with production keys, Clerk is disabled to avoid domain errors.
+ * 
+ * Uses the centralized environment-guard utility for domain detection.
+ * Provides ClerkAvailabilityContext so child components know auth state.
  */
 export function ClerkProviderWrapper({ children }: ClerkProviderWrapperProps) {
-  const [shouldUseClerk, setShouldUseClerk] = useState(false)
-  const [isReady, setIsReady] = useState(false)
+  const [state, setState] = useState<ClerkAvailabilityContextValue>({
+    isClerkAvailable: false,
+    isPreviewMode: false,
+    isLoading: true,
+  })
 
   useEffect(() => {
-    // Check if we're in v0 preview environment
-    const hostname = window.location.hostname
-    const isV0Preview = hostname.includes('vusercontent.net') || 
-                        hostname.includes('v0.dev') || 
-                        hostname === 'localhost'
+    // Use centralized environment detection
+    const canUseClerk = isAllowedClerkOrigin()
+    const needsPreviewFallback = shouldRenderPreviewFallback()
     
-    const publishableKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
-    const hasKey = !!publishableKey
-    const isProductionKey = publishableKey?.startsWith('pk_live_') ?? false
-    
-    // Enable Clerk only if:
-    // 1. We have a key AND
-    // 2. Either we're not in preview OR we're using test keys
-    const enableClerk = hasKey && (!isV0Preview || !isProductionKey)
-    
-    setShouldUseClerk(enableClerk)
-    setIsReady(true)
+    setState({
+      isClerkAvailable: canUseClerk,
+      isPreviewMode: needsPreviewFallback,
+      isLoading: false,
+    })
   }, [])
 
-  // Show nothing during initial check to avoid hydration issues
-  if (!isReady) {
-    return <>{children}</>
+  // During loading, render children without Clerk to avoid flash
+  if (state.isLoading) {
+    return (
+      <ClerkAvailabilityContext.Provider value={state}>
+        {children}
+      </ClerkAvailabilityContext.Provider>
+    )
   }
 
-  // Skip Clerk in v0 preview with production keys
-  if (!shouldUseClerk) {
-    return <>{children}</>
+  // Skip Clerk in preview mode (production keys on non-production domain)
+  if (!state.isClerkAvailable) {
+    return (
+      <ClerkAvailabilityContext.Provider value={state}>
+        {children}
+      </ClerkAvailabilityContext.Provider>
+    )
   }
 
-  // Normal flow: use ClerkProvider
+  // Normal flow: use ClerkProvider with error boundary
   return (
-    <ClerkProvider
-      appearance={clerkAppearance}
-      signInUrl="/sign-in"
-      signUpUrl="/sign-up"
-      signInFallbackRedirectUrl="/dashboard"
-      signUpFallbackRedirectUrl="/onboarding"
-    >
-      {children}
-    </ClerkProvider>
+    <ClerkAvailabilityContext.Provider value={state}>
+      <ClerkProvider
+        appearance={clerkAppearance}
+        signInUrl="/sign-in"
+        signUpUrl="/sign-up"
+        signInFallbackRedirectUrl="/dashboard"
+        signUpFallbackRedirectUrl="/onboarding"
+      >
+        {children}
+      </ClerkProvider>
+    </ClerkAvailabilityContext.Provider>
   )
 }

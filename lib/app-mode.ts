@@ -4,12 +4,17 @@
 // IMPORTANT: All mode checks must use NEXT_PUBLIC_* env vars only
 // to ensure consistent behavior on both server and client.
 // Server-only env vars (DATABASE_URL, CLERK_SECRET_KEY) cause hydration mismatches.
+//
+// For runtime domain detection (client-side only), see lib/environment-guard.ts
 
 export type AppMode = 'preview' | 'production'
 
 /**
  * Check if Clerk auth is configured (works on both client and server)
  * Uses only NEXT_PUBLIC_* env vars to avoid server/client mismatch
+ * 
+ * NOTE: This only checks if a key exists, not if it's valid for the current domain.
+ * Use isAllowedClerkOrigin() from environment-guard.ts for runtime domain checks.
  */
 function hasProductionAuth(): boolean {
   const clerkPublishableKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY

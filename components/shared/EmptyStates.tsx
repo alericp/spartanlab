@@ -114,38 +114,39 @@ export function EmptyState({
 export function DashboardEmptyState() {
   return (
     <div className="space-y-8">
-      {/* Hero Empty State */}
+      {/* Hero Empty State - Single Clear CTA */}
       <Card className="bg-gradient-to-br from-[#1A1A1A] via-[#2A2A2A] to-[#1A1A1A] border-[#3A3A3A] p-8 sm:p-12 relative overflow-hidden">
         <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-bl from-[#E63946]/10 to-transparent rounded-full blur-3xl" />
         
         <div className="relative text-center max-w-xl mx-auto">
           <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-gradient-to-br from-[#E63946]/20 to-[#E63946]/5 border border-[#E63946]/20 mb-6">
-            <Brain className="w-10 h-10 text-[#E63946]" />
+            <Calendar className="w-10 h-10 text-[#E63946]" />
           </div>
           
           <h2 className="text-2xl sm:text-3xl font-bold text-[#F5F5F5] mb-3">
-            Start Building Your Training Intelligence
+            Create Your Training Program
           </h2>
           
           <p className="text-[#A5A5A5] mb-8 leading-relaxed">
-            Log your first workout, skill session, or strength record to unlock adaptive training insights, 
-            fatigue tracking, and personalized recommendations.
+            Tell us your goals and we'll build a personalized calisthenics program 
+            that adapts to your progress.
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-            <Link href="/workouts">
+            <Link href="/programs">
               <Button className="bg-[#E63946] hover:bg-[#D62828] text-white gap-2 min-w-[180px]">
-                <ClipboardList className="w-4 h-4" />
-                Log First Workout
+                <Calendar className="w-4 h-4" />
+                Create Program
+                <ArrowRight className="w-4 h-4" />
               </Button>
             </Link>
-            <Link href="/skills">
+            <Link href="/workout/session?demo=true">
               <Button 
                 variant="outline" 
                 className="border-[#3A3A3A] text-[#A5A5A5] hover:text-[#F5F5F5] hover:border-[#4A4A4A] gap-2 min-w-[180px]"
               >
-                <Target className="w-4 h-4" />
-                Track Skill Progress
+                <Dumbbell className="w-4 h-4" />
+                Try Demo Workout
               </Button>
             </Link>
           </div>

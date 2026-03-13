@@ -1,47 +1,47 @@
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
-import { Target, Dumbbell, Calendar, Play } from 'lucide-react'
+import { Target, Dumbbell, Calendar, Play, ArrowRight } from 'lucide-react'
 
 export function QuickActionsRow() {
-  const actions = [
-    {
-      href: '/workout/session',
-      icon: Play,
-      label: "Start Workout",
-      variant: 'default' as const,
-    },
+  const secondaryActions = [
     {
       href: '/skills',
       icon: Target,
-      label: 'Update Skills',
-      variant: 'outline' as const,
+      label: 'Skills',
     },
     {
       href: '/strength',
       icon: Dumbbell,
-      label: 'Log Strength',
-      variant: 'outline' as const,
+      label: 'Strength',
     },
     {
       href: '/programs',
       icon: Calendar,
-      label: 'Build Program',
-      variant: 'outline' as const,
+      label: 'Program',
     },
   ]
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap gap-3">
-        {actions.map((action, idx) => (
+    <div className="space-y-3">
+      {/* Primary CTA - Start Workout */}
+      <Link href="/workout/session" className="block">
+        <Button 
+          className="w-full sm:w-auto bg-[#C1121F] hover:bg-[#A30F1A] text-white gap-2 h-12 px-6 text-base"
+        >
+          <Play className="w-5 h-5" />
+          Start Workout
+          <ArrowRight className="w-4 h-4 ml-1" />
+        </Button>
+      </Link>
+      
+      {/* Secondary Actions - More subtle */}
+      <div className="flex flex-wrap gap-2">
+        {secondaryActions.map((action) => (
           <Link key={action.href} href={action.href}>
             <Button
-              variant={action.variant}
-              className={`gap-2 ${
-                idx === 0
-                  ? 'bg-[#C1121F] hover:bg-[#A30F1A] text-white'
-                  : 'border-[#2B313A] hover:bg-[#1A1F26] text-[#A4ACB8] hover:text-[#E6E9EF]'
-              }`}
+              variant="ghost"
+              size="sm"
+              className="gap-2 text-[#6B7280] hover:text-[#E6E9EF] hover:bg-[#1A1F26]"
             >
               <action.icon className="w-4 h-4" />
               {action.label}

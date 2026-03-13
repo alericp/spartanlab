@@ -312,7 +312,10 @@ export function AthleteOnboarding() {
               <SpartanIcon size={36} />
             </div>
             <p className="text-xs text-[#6B7280] uppercase tracking-wider mb-1">
-              Step {currentStepIndex + 1} of {totalSteps}
+              {currentStepIndex === 0 
+                ? `Quick setup · ~2 minutes`
+                : `Step ${currentStepIndex + 1} of ${totalSteps}`
+              }
             </p>
             <h1 className="text-xl md:text-2xl font-bold text-[#E6E9EF]">
               {step.question}

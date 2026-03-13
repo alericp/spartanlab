@@ -39,22 +39,21 @@ export function ProgramSnapshotCard({ className }: ProgramSnapshotCardProps) {
 
   if (!program) {
     return (
-      <Card className={`bg-[#1A1F26] border-[#2B313A] p-5 ${className}`}>
-        <div className="flex items-start gap-4">
-          <div className="w-10 h-10 rounded-lg bg-[#4F6D8A]/10 flex items-center justify-center shrink-0">
-            <Calendar className="w-5 h-5 text-[#4F6D8A]" />
+      <Card className={`bg-[#1A1F26] border-[#2B313A] border-dashed p-5 ${className}`}>
+        <div className="text-center py-2">
+          <div className="w-12 h-12 rounded-xl bg-[#C1121F]/10 flex items-center justify-center mx-auto mb-3">
+            <Calendar className="w-6 h-6 text-[#C1121F]" />
           </div>
-          <div className="flex-1">
-            <h3 className="text-sm font-medium text-[#E6E9EF] mb-1">Training Program</h3>
-            <p className="text-xs text-[#6B7280] mb-3">
-              No program configured. Create one to get structured training guidance.
-            </p>
-            <Link href="/programs">
-              <Button variant="outline" size="sm" className="border-[#2B313A] text-[#A4ACB8]">
-                Build Program
-              </Button>
-            </Link>
-          </div>
+          <h3 className="text-sm font-medium text-[#E6E9EF] mb-1">No Program Yet</h3>
+          <p className="text-xs text-[#6B7280] mb-4">
+            Create a program to get structured training
+          </p>
+          <Link href="/programs">
+            <Button size="sm" className="bg-[#C1121F] hover:bg-[#A30F1A] text-white gap-2">
+              <Calendar className="w-4 h-4" />
+              Create Program
+            </Button>
+          </Link>
         </div>
       </Card>
     )

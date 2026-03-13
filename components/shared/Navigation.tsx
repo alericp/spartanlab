@@ -9,21 +9,21 @@ import { SpartanIcon } from '@/components/brand/SpartanLogo'
 import { useState, useEffect } from 'react'
 import { cn } from '@/lib/utils'
 
+// Primary navigation - essential daily actions
 const NAV_ITEMS = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/programs', label: 'Programs', icon: Calendar },
+  { href: '/programs', label: 'Program', icon: Calendar },
   { href: '/skills', label: 'Skills', icon: Target },
   { href: '/strength', label: 'Strength', icon: Dumbbell },
-  { href: '/recovery', label: 'Recovery', icon: Activity },
-  { href: '/tools', label: 'Tools', icon: Wrench },
   { href: '/guides', label: 'Guides', icon: BookOpen },
 ]
 
+// Secondary navigation - deeper features (shown in mobile menu and settings)
 const SECONDARY_NAV_ITEMS = [
-  { href: '/workouts', label: 'Workouts', icon: ClipboardList },
-  { href: '/goals', label: 'Goals', icon: Crosshair },
-  { href: '/performance', label: 'Performance', icon: TrendingUp },
-  { href: '/database', label: 'Database', icon: Database },
+  { href: '/recovery', label: 'Recovery', icon: Activity },
+  { href: '/tools', label: 'Tools', icon: Wrench },
+  { href: '/workouts', label: 'History', icon: ClipboardList },
+  { href: '/performance', label: 'Analytics', icon: TrendingUp },
 ]
 
 export function Navigation() {

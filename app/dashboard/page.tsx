@@ -77,6 +77,7 @@ import { selectMethodProfiles, getCoachingMessage, type SelectionContext, type S
 import { getProgressionInsights, type ProgressionInsight } from '@/lib/adaptive-progression-engine'
 import { PremiumUpgradeBanner, SubscriptionTierBadge } from '@/components/premium/PremiumFeature'
 import { DashboardUpgradeCard } from '@/components/upgrade/AdaptiveProgramUpgradeCard'
+import { FirstRunGuide, SetupReminderBanner } from '@/components/dashboard/FirstRunGuide'
 
 export default function DashboardPage() {
   const [overview, setOverview] = useState<DashboardOverview | null>(null)
@@ -217,6 +218,12 @@ setConstraintInsight(getConstraintInsight())
             />
           </div>
         )}
+        
+        {/* ============================================================= */}
+        {/* FIRST RUN GUIDE - Shows new users exactly what to do */}
+        {/* ============================================================= */}
+        
+        <FirstRunGuide />
         
         {/* ============================================================= */}
         {/* PRIORITY 1: TODAY'S TRAINING FOCUS + START/RESUME WORKOUT */}

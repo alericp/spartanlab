@@ -89,19 +89,4 @@ export function isProductionServicesEnabled(): boolean {
   return hasProductionAuth() && hasProductionDatabase()
 }
 
-/**
- * Get mode display info for debugging/UI indicators
- */
-export function getModeInfo(): {
-  mode: AppMode
-  authEnabled: boolean
-  dbEnabled: boolean
-  displayName: string
-} {
-  return {
-    mode: getAppMode(),
-    authEnabled: hasProductionAuth(),
-    dbEnabled: hasProductionDatabase(),
-    displayName: isPreviewMode() ? 'Preview Mode' : 'Production',
-  }
-}
+

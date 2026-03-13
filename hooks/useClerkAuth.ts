@@ -6,26 +6,14 @@ import type { User, SubscriptionPlan } from '@/types/domain'
 /**
  * Hook to get the current authenticated user from Clerk
  * ClerkProvider is in the root layout, so these hooks work everywhere
+ * 
+ * IMPORTANT: All hooks are called unconditionally to follow React rules of hooks.
+ * Error handling is done via Clerk's isLoaded state, not try/catch.
  */
 export function useClerkAuth() {
-  let clerkUser = null
-  let isUserLoaded = false
-  let isSignedIn = false
-  let signOutFn = async () => {}
-  
-  // Wrap Clerk hooks in try-catch to handle domain mismatch errors
-  try {
-    const userResult = useUser()
-    const authResult = useAuth()
-    clerkUser = userResult.user
-    isUserLoaded = userResult.isLoaded
-    isSignedIn = userResult.isSignedIn || false
-    signOutFn = authResult.signOut
-  } catch {
-    // Clerk failed to initialize - treat as not signed in
-    isUserLoaded = true
-    isSignedIn = false
-  }
+  // Call hooks unconditionally at top level - React rules of hooks
+  const { user: clerkUser, isLoaded: isUserLoaded, isSignedIn: userSignedIn } = useUser()
+  const { signOut } = useAuth()
   
   const user: User | null = clerkUser ? {
     id: clerkUser.id,
@@ -38,8 +26,8 @@ export function useClerkAuth() {
   return {
     user,
     isLoaded: isUserLoaded,
-    isSignedIn: isSignedIn,
-    signOut: signOutFn,
+    isSignedIn: userSignedIn || false,
+    signOut,
     clerkUser,
   }
 }
@@ -48,18 +36,14 @@ export function useClerkAuth() {
  * Get the current user's email from Clerk
  */
 export function useCurrentUserEmail(): string | null {
-  try {
-    const { user: clerkUser, isLoaded } = useUser()
-    
-    if (!isLoaded || !clerkUser) {
-      return null
-    }
-    
-    return clerkUser.emailAddresses?.[0]?.emailAddress || null
-  } catch {
-    // Clerk failed to initialize
+  // Call hooks unconditionally at top level - React rules of hooks
+  const { user: clerkUser, isLoaded } = useUser()
+  
+  if (!isLoaded || !clerkUser) {
     return null
   }
+  
+  return clerkUser.emailAddresses?.[0]?.emailAddress || null
 }
 
 /**

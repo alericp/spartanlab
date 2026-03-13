@@ -18,34 +18,22 @@ interface AuthComponentProps {
  */
 export function SignedIn({ children }: AuthComponentProps) {
   const [mounted, setMounted] = useState(false)
-  const [authState, setAuthState] = useState({ isLoaded: false, isSignedIn: false })
-
-  // Wrap hook in try-catch for error resilience
-  let isLoaded = false
-  let isSignedIn = false
-  try {
-    const auth = useAuth()
-    isLoaded = auth.isLoaded
-    isSignedIn = auth.isSignedIn ?? false
-  } catch {
-    // Clerk failed to initialize - treat as not signed in
-    isLoaded = true
-    isSignedIn = false
-  }
+  
+  // Call hooks unconditionally at top level - React rules of hooks
+  const { isLoaded, isSignedIn } = useAuth()
 
   useEffect(() => {
     setMounted(true)
-    setAuthState({ isLoaded, isSignedIn })
-  }, [isLoaded, isSignedIn])
+  }, [])
 
   // Don't render during SSR to avoid hydration mismatch
   if (!mounted) return null
 
   // Wait for auth to load
-  if (!authState.isLoaded) return null
+  if (!isLoaded) return null
 
   // Only render when signed in
-  return authState.isSignedIn ? <>{children}</> : null
+  return isSignedIn ? <>{children}</> : null
 }
 
 /**
@@ -54,34 +42,22 @@ export function SignedIn({ children }: AuthComponentProps) {
  */
 export function SignedOut({ children }: AuthComponentProps) {
   const [mounted, setMounted] = useState(false)
-  const [authState, setAuthState] = useState({ isLoaded: false, isSignedIn: false })
-
-  // Wrap hook in try-catch for error resilience
-  let isLoaded = false
-  let isSignedIn = false
-  try {
-    const auth = useAuth()
-    isLoaded = auth.isLoaded
-    isSignedIn = auth.isSignedIn ?? false
-  } catch {
-    // Clerk failed to initialize - treat as signed out (show sign-out UI)
-    isLoaded = true
-    isSignedIn = false
-  }
+  
+  // Call hooks unconditionally at top level - React rules of hooks
+  const { isLoaded, isSignedIn } = useAuth()
 
   useEffect(() => {
     setMounted(true)
-    setAuthState({ isLoaded, isSignedIn })
-  }, [isLoaded, isSignedIn])
+  }, [])
 
   // Don't render during SSR to avoid hydration mismatch
   if (!mounted) return null
 
   // Wait for auth to load
-  if (!authState.isLoaded) return null
+  if (!isLoaded) return null
 
   // Only render when signed out
-  return authState.isSignedIn ? null : <>{children}</>
+  return isSignedIn ? null : <>{children}</>
 }
 
 interface UserButtonProps {
@@ -99,32 +75,22 @@ export function UserButton({ afterSignOutUrl = '/' }: UserButtonProps) {
   const [mounted, setMounted] = useState(false)
   const [showMenu, setShowMenu] = useState(false)
   
-  // Wrap hooks in try-catch for error resilience
-  let user = null
-  let signOutFn: ((opts?: { redirectUrl?: string }) => Promise<void>) | null = null
-  try {
-    const userData = useUser()
-    const clerk = useClerk()
-    user = userData.user
-    signOutFn = clerk.signOut
-  } catch {
-    // Clerk failed to initialize
-    return null
-  }
+  // Call hooks unconditionally at top level - React rules of hooks
+  const { user, isLoaded } = useUser()
+  const { signOut } = useClerk()
 
   useEffect(() => {
     setMounted(true)
   }, [])
 
-  if (!mounted || !user) return null
+  // Don't render during SSR or while loading
+  if (!mounted || !isLoaded || !user) return null
 
   const initial = (user.firstName?.[0] ?? user.primaryEmailAddress?.emailAddress?.[0] ?? 'A').toUpperCase()
 
   const handleSignOut = async () => {
     setShowMenu(false)
-    if (signOutFn) {
-      await signOutFn({ redirectUrl: afterSignOutUrl })
-    }
+    await signOut({ redirectUrl: afterSignOutUrl })
   }
 
   return (

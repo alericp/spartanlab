@@ -6,6 +6,7 @@
 // Database operations are async and server-compatible
 
 import { isPreviewMode } from '../app-mode'
+import { dbGetProfile, dbSaveProfile } from '../db-queries'
 import type { AthleteProfile, ProfileRepository } from '@/types/domain'
 
 const STORAGE_KEY = 'spartanlab_profile'
@@ -85,24 +86,36 @@ const previewProfileRepository: ProfileRepository = {
 
 // =============================================================================
 // PRODUCTION MODE IMPLEMENTATION (Neon/Postgres)
-// NOTE: For now, production mode falls back to preview implementation
-// Database operations should be handled via server actions in a separate file
+// Falls back to localStorage if database is unavailable
 // =============================================================================
 
 const productionProfileRepository: ProfileRepository = {
   async getProfile(userId: string): Promise<AthleteProfile | null> {
-    // Fall back to localStorage for now
-    // Real production would use server actions with database queries
-    return previewProfileRepository.getProfile(userId)
+    try {
+      const profile = await dbGetProfile(userId)
+      if (profile) return profile
+      // Fallback to localStorage if no database profile
+      return previewProfileRepository.getProfile(userId)
+    } catch (error) {
+      console.error('[SpartanLab] Production getProfile failed, falling back to localStorage:', error)
+      return previewProfileRepository.getProfile(userId)
+    }
   },
 
   async saveProfile(
     userId: string,
     data: Partial<AthleteProfile>
   ): Promise<AthleteProfile> {
-    // Fall back to localStorage for now
-    // Real production would use server actions with database queries
-    return previewProfileRepository.saveProfile(userId, data)
+    try {
+      const saved = await dbSaveProfile(userId, data)
+      if (saved) return saved
+      // Fallback to localStorage if database save fails
+      console.warn('[SpartanLab] Database profile save returned null, falling back to localStorage')
+      return previewProfileRepository.saveProfile(userId, data)
+    } catch (error) {
+      console.error('[SpartanLab] Production saveProfile failed, falling back to localStorage:', error)
+      return previewProfileRepository.saveProfile(userId, data)
+    }
   },
 }
 

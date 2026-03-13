@@ -1,8 +1,9 @@
 // Skill repository with dual-mode support
 // Preview mode: localStorage
-// Production mode: database (stub)
+// Production mode: Neon/Postgres database
 
 import { isPreviewMode } from '../app-mode'
+import { dbGetSkills, dbGetSkill, dbSaveSkill, dbDeleteSkill } from '../db-queries'
 import type { SkillProgression, SkillRepository } from '@/types/domain'
 
 const STORAGE_KEY = 'spartanlab_progressions'
@@ -86,28 +87,63 @@ const previewSkillRepository: SkillRepository = {
 }
 
 // =============================================================================
-// PRODUCTION MODE IMPLEMENTATION (STUB)
+// PRODUCTION MODE IMPLEMENTATION (Neon/Postgres)
+// Falls back to localStorage if database is unavailable
 // =============================================================================
 
 const productionSkillRepository: SkillRepository = {
   async getSkills(userId: string): Promise<SkillProgression[]> {
-    // TODO: Implement with Neon/Prisma
-    return previewSkillRepository.getSkills(userId)
+    try {
+      const skills = await dbGetSkills(userId)
+      // Fallback to localStorage if database returns empty (may be connection issue)
+      if (skills.length === 0) {
+        const localSkills = await previewSkillRepository.getSkills(userId)
+        if (localSkills.length > 0) {
+          return localSkills
+        }
+      }
+      return skills
+    } catch (error) {
+      console.error('[SpartanLab] Production getSkills failed, falling back to localStorage:', error)
+      return previewSkillRepository.getSkills(userId)
+    }
   },
   
   async getSkill(userId: string, skillName: string): Promise<SkillProgression | null> {
-    // TODO: Implement with Neon/Prisma
-    return previewSkillRepository.getSkill(userId, skillName)
+    try {
+      const skill = await dbGetSkill(userId, skillName)
+      if (skill) return skill
+      // Fallback to localStorage
+      return previewSkillRepository.getSkill(userId, skillName)
+    } catch (error) {
+      console.error('[SpartanLab] Production getSkill failed, falling back to localStorage:', error)
+      return previewSkillRepository.getSkill(userId, skillName)
+    }
   },
   
   async saveSkill(userId: string, data: Omit<SkillProgression, 'id' | 'userId' | 'createdAt'>): Promise<SkillProgression> {
-    // TODO: Implement with Neon/Prisma
-    return previewSkillRepository.saveSkill(userId, data)
+    try {
+      const saved = await dbSaveSkill(userId, data)
+      if (saved) return saved
+      // Fallback to localStorage if database save fails
+      console.warn('[SpartanLab] Database save returned null, falling back to localStorage')
+      return previewSkillRepository.saveSkill(userId, data)
+    } catch (error) {
+      console.error('[SpartanLab] Production saveSkill failed, falling back to localStorage:', error)
+      return previewSkillRepository.saveSkill(userId, data)
+    }
   },
   
   async deleteSkill(userId: string, id: string): Promise<boolean> {
-    // TODO: Implement with Neon/Prisma
-    return previewSkillRepository.deleteSkill(userId, id)
+    try {
+      const deleted = await dbDeleteSkill(userId, id)
+      if (deleted) return true
+      // Try localStorage as fallback
+      return previewSkillRepository.deleteSkill(userId, id)
+    } catch (error) {
+      console.error('[SpartanLab] Production deleteSkill failed, falling back to localStorage:', error)
+      return previewSkillRepository.deleteSkill(userId, id)
+    }
   },
 }
 

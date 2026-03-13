@@ -1,8 +1,9 @@
 import { SignUp } from '@clerk/nextjs'
+import Link from 'next/link'
 
 export default function SignUpPage() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#0F1115]">
+    <div className="min-h-screen flex flex-col items-center justify-center gap-4 bg-[#0F1115] px-4">
       <SignUp 
         appearance={{
           elements: {
@@ -27,6 +28,17 @@ export default function SignUpPage() {
         fallbackRedirectUrl="/onboarding"
         signInUrl="/sign-in"
       />
+      <p className="text-xs text-[#6B7280] text-center max-w-xs leading-relaxed">
+        By continuing, you agree to our{' '}
+        <Link href="/terms" className="text-[#A4ACB8] hover:text-[#E6E9EF] transition-colors underline underline-offset-2">
+          Terms of Service
+        </Link>{' '}
+        and{' '}
+        <Link href="/privacy" className="text-[#A4ACB8] hover:text-[#E6E9EF] transition-colors underline underline-offset-2">
+          Privacy Policy
+        </Link>
+        .
+      </p>
     </div>
   )
 }

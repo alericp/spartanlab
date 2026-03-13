@@ -15,7 +15,7 @@ const NAV_LINKS = [
   { href: '/pricing', label: 'Pricing' },
 ]
 
-// Placeholder shown during SSR and while auth loads
+// Placeholder shown during SSR and while auth loads - static content only
 function AuthPlaceholder({ variant = 'desktop' }: { variant?: 'desktop' | 'mobile' }) {
   if (variant === 'mobile') {
     return (

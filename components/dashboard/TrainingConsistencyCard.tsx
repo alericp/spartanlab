@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { Card } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
-import { Flame, Calendar, CheckCircle2, TrendingUp } from 'lucide-react'
+import { Flame, Calendar, CheckCircle2, TrendingUp, Activity, RefreshCw } from 'lucide-react'
 import {
   calculateTrainingStreak,
   calculateWeeklyProgress,
@@ -11,6 +11,11 @@ import {
   type TrainingStreak,
   type WeeklyProgress,
 } from '@/lib/progress-streak-engine'
+import {
+  getConsistencyStatus,
+  type ConsistencyStatus,
+  type ConsistencyState,
+} from '@/lib/consistency-momentum-engine'
 
 // =============================================================================
 // TRAINING CONSISTENCY CARD
@@ -20,12 +25,18 @@ import {
 export function TrainingConsistencyCard() {
   const [streak, setStreak] = useState<TrainingStreak | null>(null)
   const [weekly, setWeekly] = useState<WeeklyProgress | null>(null)
+  const [consistency, setConsistency] = useState<ConsistencyStatus | null>(null)
   const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
     setMounted(true)
     setStreak(calculateTrainingStreak())
     setWeekly(calculateWeeklyProgress())
+    try {
+      setConsistency(getConsistencyStatus())
+    } catch {
+      // Silent fail - consistency engine is optional
+    }
   }, [])
 
   if (!mounted || !streak || !weekly) {
@@ -129,10 +140,23 @@ export function TrainingConsistencyCard() {
           </div>
         </div>
 
+        {/* Comeback Notice */}
+        {consistency?.comebackConfig.isComeback && (
+          <div className="p-3 bg-[#C1121F]/10 border border-[#C1121F]/20 rounded-lg">
+            <div className="flex items-center gap-2 mb-1">
+              <RefreshCw className="w-4 h-4 text-[#C1121F]" />
+              <span className="text-sm font-medium text-[#C1121F]">Comeback Session</span>
+            </div>
+            <p className="text-xs text-[#A4ACB8]">
+              {consistency.comebackConfig.message}
+            </p>
+          </div>
+        )}
+
         {/* Motivational Message */}
         <div className="pt-3 border-t border-[#2B313A]/50">
           <p className="text-sm text-[#A4ACB8]">
-            {weekly.message}
+            {consistency?.coachMessage || weekly.message}
           </p>
         </div>
       </div>

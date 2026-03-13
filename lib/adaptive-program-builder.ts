@@ -74,6 +74,13 @@ import {
   getMobilityRecoveryStatus,
   type ReadinessAssessment,
 } from './recovery-fatigue-engine'
+import {
+  getConsistencyStatus,
+  getComebackWorkoutConfig,
+  getConsistencyAdjustments,
+  type ConsistencyStatus,
+  type ComebackWorkoutConfig,
+} from './consistency-momentum-engine'
 
 // =============================================================================
 // TYPES
@@ -188,6 +195,14 @@ export interface AdaptiveProgram {
     coachMessage: string
     shouldProgress: boolean
     shouldDeload: boolean
+  }
+  // Consistency & Momentum Engine
+  consistencyStatus?: {
+    state: 'strong' | 'building' | 'rebuilding' | 'starting'
+    coachMessage: string
+    isComeback: boolean
+    volumeModifier: number
+    intensityModifier: number
   }
 }
 
@@ -365,6 +380,21 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
           coachMessage: assessment.coachMessage,
           shouldProgress: assessment.shouldProgress,
           shouldDeload: assessment.shouldDeload,
+        }
+      } catch {
+        return undefined
+      }
+    })(),
+    // Consistency & Momentum Engine status
+    consistencyStatus: (() => {
+      try {
+        const consistency = getConsistencyStatus()
+        return {
+          state: consistency.state,
+          coachMessage: consistency.coachMessage,
+          isComeback: consistency.comebackConfig.isComeback,
+          volumeModifier: consistency.adjustment.volumeModifier,
+          intensityModifier: consistency.adjustment.intensityModifier,
         }
       } catch {
         return undefined

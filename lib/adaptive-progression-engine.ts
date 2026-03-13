@@ -17,6 +17,9 @@ import {
   getMobilityRecoveryStatus,
   type ReadinessAssessment,
 } from './recovery-fatigue-engine'
+import {
+  shouldAllowProgression as checkConsistencyForProgression,
+} from './consistency-momentum-engine'
 
 // =============================================================================
 // TYPES

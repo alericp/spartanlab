@@ -3,8 +3,11 @@
 /**
  * Sign-Up Page
  * 
- * Preview mode: Shows informational fallback
- * Production mode: Loads real Clerk SignUp component
+ * SIMPLIFIED ARCHITECTURE:
+ * - Preview mode: Static informational fallback
+ * - Production mode: Real Clerk SignUp
+ * 
+ * Uses ClerkProviderWrapper context for mode detection.
  */
 
 import Link from 'next/link'
@@ -29,7 +32,8 @@ function PreviewFallback() {
             Preview Mode
           </h1>
           <p className="text-sm text-[#A4ACB8] mb-6 leading-relaxed">
-            Account creation is available on the production domain. You can explore the app without signing up.
+            Account creation is available on the production domain. 
+            You can explore the app without signing up.
           </p>
           <div className="flex flex-col gap-3">
             <Link href="/onboarding">
@@ -94,65 +98,30 @@ const clerkAppearance = {
     identityPreviewText: 'text-[#E6E9EF]',
     identityPreviewEditButton: 'text-[#C1121F]',
     formFieldInputShowPasswordButton: 'text-[#A4ACB8]',
-    otpCodeFieldInput: 'bg-[#0F1115] border-[#2B313A] text-[#E6E9EF]',
   },
 }
 
 // ============================================================================
-// RUNTIME LOADER
+// PRODUCTION SIGN-UP (separate component for clarity)
 // ============================================================================
 
-async function loadClerkSignUp() {
-  const moduleName = ['@', 'clerk', '/', 'nextjs'].join('')
-  const loader = new Function('m', 'return import(m)')
-  return loader(moduleName) as Promise<{
-    SignUp: React.ComponentType<{
-      appearance?: Record<string, unknown>
-      fallbackRedirectUrl?: string
-      signInUrl?: string
-    }>
-  }>
-}
-
-// ============================================================================
-// PAGE COMPONENT
-// ============================================================================
-
-export default function SignUpPage() {
-  const [mounted, setMounted] = useState(false)
-  const { isClerkAvailable, isLoading } = useClerkAvailability()
+function ProductionSignUp() {
   const [SignUp, setSignUp] = useState<React.ComponentType<{
     appearance?: Record<string, unknown>
     fallbackRedirectUrl?: string
     signInUrl?: string
   }> | null>(null)
-  
+
   useEffect(() => {
-    setMounted(true)
+    const moduleName = ['@', 'clerk', '/', 'nextjs'].join('')
+    const loader = new Function('m', 'return import(m)')
+    loader(moduleName)
+      .then((mod: { SignUp: typeof SignUp }) => setSignUp(() => mod.SignUp))
+      .catch(() => {})
   }, [])
-  
-  useEffect(() => {
-    // Only load Clerk on production
-    if (mounted && !isLoading && isClerkAvailable) {
-      loadClerkSignUp()
-        .then(mod => setSignUp(() => mod.SignUp))
-        .catch(() => {})
-    }
-  }, [mounted, isLoading, isClerkAvailable])
-  
-  // SSR
-  if (!mounted) return <LoadingState />
-  
-  // Still checking auth availability
-  if (isLoading) return <LoadingState />
-  
-  // Preview mode
-  if (!isClerkAvailable) return <PreviewFallback />
-  
-  // Production but Clerk not loaded yet
+
   if (!SignUp) return <LoadingState />
-  
-  // Production with Clerk
+
   return (
     <div className="min-h-screen flex flex-col items-center justify-center gap-4 bg-[#0F1115] px-4">
       <SignUp
@@ -162,15 +131,40 @@ export default function SignUpPage() {
       />
       <p className="text-xs text-[#6B7280] text-center max-w-xs leading-relaxed">
         By creating an account, you agree to our{' '}
-        <Link href="/terms" className="text-[#A4ACB8] hover:text-[#E6E9EF] transition-colors underline underline-offset-2">
+        <Link href="/terms" className="text-[#A4ACB8] hover:text-[#E6E9EF] underline underline-offset-2">
           Terms of Service
         </Link>{' '}
         and{' '}
-        <Link href="/privacy" className="text-[#A4ACB8] hover:text-[#E6E9EF] transition-colors underline underline-offset-2">
+        <Link href="/privacy" className="text-[#A4ACB8] hover:text-[#E6E9EF] underline underline-offset-2">
           Privacy Policy
         </Link>
         .
       </p>
     </div>
   )
+}
+
+// ============================================================================
+// PAGE COMPONENT
+// ============================================================================
+
+export default function SignUpPage() {
+  const [mounted, setMounted] = useState(false)
+  const { isClerkAvailable, isLoading } = useClerkAvailability()
+  
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+  
+  // SSR
+  if (!mounted) return <LoadingState />
+  
+  // Checking auth availability
+  if (isLoading) return <LoadingState />
+  
+  // Preview mode: show fallback
+  if (!isClerkAvailable) return <PreviewFallback />
+  
+  // Production mode: render Clerk SignUp
+  return <ProductionSignUp />
 }

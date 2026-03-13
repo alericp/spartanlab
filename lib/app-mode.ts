@@ -1,14 +1,18 @@
 /**
- * Application mode detection for dual-mode architecture
+ * Application Mode Detection
  * 
- * This file provides application-level mode detection.
- * For auth-specific checks, use auth-environment.ts
+ * IMPORTANT: This file derives from auth-environment.ts - the single source of truth.
  * 
- * IMPORTANT: Uses only NEXT_PUBLIC_* env vars to ensure consistent
- * behavior on both server and client.
+ * App mode is based on whether Clerk CAN initialize on the current domain,
+ * NOT just whether a Clerk key exists.
  */
 
-import { isClerkConfigured, getAuthMode as getAuthModeFromEnv } from './auth-environment'
+import { 
+  shouldInitializeClerk, 
+  isClerkConfigured, 
+  getAuthMode as getAuthModeFromEnv,
+  isPreviewEnvironment
+} from './auth-environment'
 
 // ============================================================================
 // TYPES
@@ -17,27 +21,21 @@ import { isClerkConfigured, getAuthMode as getAuthModeFromEnv } from './auth-env
 export type AppMode = 'preview' | 'production'
 
 // ============================================================================
-// MODE DETECTION
+// MODE DETECTION - Derived from auth-environment
 // ============================================================================
 
 /**
- * Check if database is configured (for client-safe detection)
- */
-function hasProductionDatabase(): boolean {
-  const dbEnabled = process.env.NEXT_PUBLIC_DATABASE_ENABLED
-  return dbEnabled === 'true' || dbEnabled === '1'
-}
-
-/**
- * Determine the current application mode
- * Production mode: Clerk auth is configured
- * Preview mode: No Clerk auth configured
+ * Determine the current application mode.
+ * 
+ * CRITICAL: Uses shouldInitializeClerk() which checks DOMAIN + KEY,
+ * not just whether a key exists.
+ * 
+ * Production mode: Clerk CAN initialize (correct domain + valid key)
+ * Preview mode: Clerk CANNOT initialize (wrong domain or no key)
  */
 export function getAppMode(): AppMode {
-  if (isClerkConfigured()) {
-    return 'production'
-  }
-  return 'preview'
+  // Use the auth environment source of truth
+  return shouldInitializeClerk() ? 'production' : 'preview'
 }
 
 /**
@@ -55,34 +53,37 @@ export function isProductionMode(): boolean {
 }
 
 /**
- * Check if auth services are configured (Clerk key exists)
+ * Check if auth services are enabled and usable
+ * This means Clerk CAN initialize, not just that a key exists
  */
 export function isAuthEnabled(): boolean {
-  return isClerkConfigured()
+  return shouldInitializeClerk()
 }
 
 /**
- * Alias for isAuthEnabled
+ * Alias for isAuthEnabled - checks if Clerk can actually be used
  */
 export function isClerkEnabled(): boolean {
-  return isClerkConfigured()
+  return shouldInitializeClerk()
 }
 
 /**
- * Get detailed mode information
+ * Check if Clerk is configured (key exists) - may not be usable on current domain
  */
-export function getModeInfo(): {
-  mode: AppMode
-  displayName: string
-  authEnabled: boolean
-  dbEnabled: boolean
-} {
-  return {
-    mode: getAppMode(),
-    displayName: isPreviewMode() ? 'Preview Mode' : 'Production',
-    authEnabled: isClerkConfigured(),
-    dbEnabled: hasProductionDatabase(),
-  }
+export function isClerkKeyConfigured(): boolean {
+  return isClerkConfigured()
+}
+
+// ============================================================================
+// DATABASE DETECTION
+// ============================================================================
+
+/**
+ * Check if database is configured (for client-safe detection)
+ */
+function hasProductionDatabase(): boolean {
+  const dbEnabled = process.env.NEXT_PUBLIC_DATABASE_ENABLED
+  return dbEnabled === 'true' || dbEnabled === '1'
 }
 
 /**
@@ -97,9 +98,33 @@ export function isDatabaseEnabled(): boolean {
   return hasProductionDatabase()
 }
 
+// ============================================================================
+// MODE INFO
+// ============================================================================
+
 /**
- * Check if full production services are enabled (both auth AND database)
+ * Get detailed mode information
+ */
+export function getModeInfo(): {
+  mode: AppMode
+  displayName: string
+  authEnabled: boolean
+  dbEnabled: boolean
+  isPreview: boolean
+} {
+  const mode = getAppMode()
+  return {
+    mode,
+    displayName: mode === 'preview' ? 'Preview Mode' : 'Production',
+    authEnabled: shouldInitializeClerk(),
+    dbEnabled: hasProductionDatabase(),
+    isPreview: mode === 'preview',
+  }
+}
+
+/**
+ * Check if full production services are enabled (both auth AND database usable)
  */
 export function isProductionServicesEnabled(): boolean {
-  return isClerkConfigured() && isDatabaseEnabled()
+  return shouldInitializeClerk() && isDatabaseEnabled()
 }

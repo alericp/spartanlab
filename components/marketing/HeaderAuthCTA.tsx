@@ -3,9 +3,9 @@
 /**
  * HeaderAuthCTA - Preview-safe auth buttons for marketing header
  * 
- * Architecture:
- * - Preview mode: Always shows login/signup buttons (neutral CTA)
- * - Production mode: Uses SignedIn/SignedOut for real auth state
+ * SIMPLIFIED ARCHITECTURE:
+ * - Preview mode: Static neutral CTA (no auth state detection)
+ * - Production mode: SignedIn/SignedOut for real auth state
  * 
  * NO POLLING. Simple conditional rendering.
  */
@@ -18,7 +18,7 @@ import { useClerkAvailability } from '@/components/providers/ClerkProviderWrappe
 import { SignedIn, SignedOut, UserButton } from '@/components/auth/ClerkComponents'
 
 // ============================================================================
-// NEUTRAL CTA (shown in preview or before auth loads)
+// NEUTRAL CTA (preview mode or before auth loads)
 // ============================================================================
 
 function NeutralCTA() {
@@ -39,7 +39,7 @@ function NeutralCTA() {
 }
 
 // ============================================================================
-// SIGNED-IN CTA (production only)
+// AUTHENTICATED CTA (production only, when signed in)
 // ============================================================================
 
 function AuthenticatedCTA() {
@@ -68,16 +68,12 @@ export function HeaderAuthCTA() {
     setMounted(true)
   }, [])
 
-  // SSR: show neutral CTA
-  if (!mounted) return <NeutralCTA />
-  
-  // Loading: show neutral CTA
-  if (isLoading) return <NeutralCTA />
-  
-  // Preview mode: show neutral CTA (no auth available)
-  if (!isClerkAvailable) return <NeutralCTA />
+  // SSR or Loading or Preview: neutral CTA
+  if (!mounted || isLoading || !isClerkAvailable) {
+    return <NeutralCTA />
+  }
 
-  // Production mode: use real auth components
+  // Production mode: real auth components
   return (
     <>
       <SignedIn>
@@ -130,12 +126,12 @@ export function MobileAuthCTA({ onNavigate }: { onNavigate: () => void }) {
     setMounted(true)
   }, [])
 
-  // SSR or Loading or Preview: show neutral CTA
+  // SSR or Loading or Preview: neutral CTA
   if (!mounted || isLoading || !isClerkAvailable) {
     return <NeutralMobileCTA onNavigate={onNavigate} />
   }
 
-  // Production mode: use real auth components
+  // Production mode: real auth components
   return (
     <>
       <SignedIn>

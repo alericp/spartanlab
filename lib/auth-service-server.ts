@@ -134,3 +134,8 @@ export async function getCurrentUserIdServer(): Promise<string | null> {
   const user = await getCurrentUserServer()
   return user?.id || null
 }
+
+/**
+ * Alias for getCurrentUserServer
+ */
+export const getCurrentUser = getCurrentUserServer

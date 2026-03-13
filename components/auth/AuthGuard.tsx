@@ -3,27 +3,17 @@
 /**
  * AuthGuard - Preview-safe wrapper for protected pages
  * 
- * Architecture:
- * - Preview mode: Allows access (for UI testing)
- * - Production mode: Requires auth, redirects to sign-in if needed
+ * SIMPLIFIED ARCHITECTURE:
+ * - Preview mode: Allows access for UI testing
+ * - Production mode: Requires auth, uses SignedIn/SignedOut
  * 
- * NO POLLING. Uses SignedIn/SignedOut components.
+ * NO window.Clerk checks. NO polling. Simple components.
  */
 
 import { useEffect, useState, ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
 import { useClerkAvailability } from '@/components/providers/ClerkProviderWrapper'
 import { SignedIn, SignedOut } from '@/components/auth/ClerkComponents'
-
-// ============================================================================
-// TYPES
-// ============================================================================
-
-interface AuthGuardProps {
-  children: ReactNode
-  fallback?: ReactNode
-  redirectTo?: string
-}
 
 // ============================================================================
 // LOADING STATE
@@ -41,22 +31,31 @@ function LoadingState() {
 // AUTH REDIRECT (production only)
 // ============================================================================
 
-function AuthRedirect({ redirectTo, fallback }: { redirectTo: string; fallback?: ReactNode }) {
+function AuthRedirect({ redirectTo }: { redirectTo: string }) {
   const router = useRouter()
   
   useEffect(() => {
     router.replace(redirectTo)
   }, [router, redirectTo])
   
-  return <>{fallback ?? <LoadingState />}</>
+  return <LoadingState />
 }
 
 // ============================================================================
 // AUTHGUARD COMPONENT
 // ============================================================================
 
+interface AuthGuardProps {
+  children: ReactNode
+  fallback?: ReactNode
+  redirectTo?: string
+}
+
 /**
  * AuthGuard - Protects pages that require authentication
+ * 
+ * Preview: Allows access (for UI testing)
+ * Production: Redirects to sign-in if not authenticated
  */
 export function AuthGuard({ 
   children, 
@@ -70,105 +69,82 @@ export function AuthGuard({
     setMounted(true)
   }, [])
 
-  // SSR or Loading
-  if (!mounted || isLoading) {
-    return <>{fallback ?? <LoadingState />}</>
-  }
+  // SSR
+  if (!mounted) return <>{fallback ?? <LoadingState />}</>
+  
+  // Checking auth availability
+  if (isLoading) return <>{fallback ?? <LoadingState />}</>
 
-  // Preview mode: allow access without auth (for UI testing)
-  if (!isClerkAvailable) {
-    return <>{children}</>
-  }
+  // Preview mode: allow access without auth
+  if (!isClerkAvailable) return <>{children}</>
 
   // Production mode: require authentication
   return (
     <>
       <SignedIn>{children}</SignedIn>
       <SignedOut>
-        <AuthRedirect redirectTo={redirectTo} fallback={fallback} />
+        <AuthRedirect redirectTo={redirectTo} />
       </SignedOut>
     </>
   )
 }
 
 // ============================================================================
-// OWNERONLY COMPONENT
+// OWNERONLY COMPONENT (SIMPLIFIED)
 // ============================================================================
 
 /**
  * OwnerOnly - Only renders for the platform owner
  * 
+ * SIMPLIFIED: Uses server-side owner check via API instead of
+ * brittle client-side window.Clerk checks.
+ * 
  * Preview mode: Renders nothing
- * Production mode: Checks owner email
+ * Production mode: Checks owner status and renders accordingly
  */
 export function OwnerOnly({ children }: { children: ReactNode }) {
-  const [mounted, setMounted] = useState(false)
   const { isClerkAvailable, isLoading } = useClerkAvailability()
   const [isOwner, setIsOwner] = useState(false)
   const [checked, setChecked] = useState(false)
 
   useEffect(() => {
-    setMounted(true)
-  }, [])
-
-  useEffect(() => {
-    // Preview mode: never owner
+    // Preview mode: not owner
     if (!isClerkAvailable) {
       setIsOwner(false)
       setChecked(true)
       return
     }
 
-    // Production mode: load and check
-    const checkOwner = async () => {
-      try {
-        const moduleName = ['@', 'clerk', '/', 'nextjs'].join('')
-        const loader = new Function('m', 'return import(m)')
-        const mod = await loader(moduleName) as { 
-          useUser: () => { user: { primaryEmailAddress?: { emailAddress: string } } | null } 
-        }
-        
-        // We can't use hooks here, so check Clerk global
-        const clerkGlobal = (window as unknown as { 
-          Clerk?: { user?: { primaryEmailAddress?: { emailAddress: string } } } 
-        }).Clerk
-        
-        if (clerkGlobal?.user) {
-          const ownerEmail = process.env.NEXT_PUBLIC_OWNER_EMAIL
-          const userEmail = clerkGlobal.user.primaryEmailAddress?.emailAddress
-          setIsOwner(userEmail?.toLowerCase() === ownerEmail?.toLowerCase())
-        }
-      } catch {
+    // Production mode: check owner status via API
+    // This is more reliable than client-side window.Clerk checks
+    fetch('/api/auth/owner-status')
+      .then(res => {
+        if (!res.ok) return { isOwner: false }
+        return res.json()
+      })
+      .then(data => {
+        setIsOwner(data?.isOwner === true)
+        setChecked(true)
+      })
+      .catch(() => {
         setIsOwner(false)
-      }
-      setChecked(true)
-    }
-    
-    // Check once after Clerk loads
-    const timeout = setTimeout(checkOwner, 1000)
-    return () => clearTimeout(timeout)
+        setChecked(true)
+      })
   }, [isClerkAvailable])
 
-  if (!mounted || isLoading || !checked || !isOwner) {
-    return null
-  }
-
+  if (isLoading || !checked || !isOwner) return null
   return <>{children}</>
 }
 
 // ============================================================================
-// HOOKS
+// HOOK (SIMPLIFIED)
 // ============================================================================
 
 /**
- * useOwnerStatus - Returns owner status (always false in preview)
+ * useOwnerStatus - Returns owner status
+ * Always returns false - use OwnerOnly component instead
  */
 export function useOwnerStatus(): { isOwner: boolean; isLoaded: boolean } {
   const { isLoading } = useClerkAvailability()
-  
-  // Always return false - OwnerOnly component handles actual check
-  return { 
-    isOwner: false, 
-    isLoaded: !isLoading 
-  }
+  return { isOwner: false, isLoaded: !isLoading }
 }

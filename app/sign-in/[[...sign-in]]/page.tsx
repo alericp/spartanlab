@@ -3,8 +3,11 @@
 /**
  * Sign-In Page
  * 
- * Preview mode: Shows informational fallback
- * Production mode: Loads real Clerk SignIn component
+ * SIMPLIFIED ARCHITECTURE:
+ * - Preview mode: Static informational fallback
+ * - Production mode: Real Clerk SignIn
+ * 
+ * Uses ClerkProviderWrapper context for mode detection.
  */
 
 import Link from 'next/link'
@@ -29,7 +32,8 @@ function PreviewFallback() {
             Preview Mode
           </h1>
           <p className="text-sm text-[#A4ACB8] mb-6 leading-relaxed">
-            Authentication is available on the production domain. You can explore the app without signing in.
+            Authentication is available on the production domain. 
+            You can explore the app without signing in.
           </p>
           <div className="flex flex-col gap-3">
             <Link href="/dashboard">
@@ -94,65 +98,30 @@ const clerkAppearance = {
     identityPreviewText: 'text-[#E6E9EF]',
     identityPreviewEditButton: 'text-[#C1121F]',
     formFieldInputShowPasswordButton: 'text-[#A4ACB8]',
-    otpCodeFieldInput: 'bg-[#0F1115] border-[#2B313A] text-[#E6E9EF]',
   },
 }
 
 // ============================================================================
-// RUNTIME LOADER
+// PRODUCTION SIGN-IN (separate component for clarity)
 // ============================================================================
 
-async function loadClerkSignIn() {
-  const moduleName = ['@', 'clerk', '/', 'nextjs'].join('')
-  const loader = new Function('m', 'return import(m)')
-  return loader(moduleName) as Promise<{
-    SignIn: React.ComponentType<{
-      appearance?: Record<string, unknown>
-      fallbackRedirectUrl?: string
-      signUpUrl?: string
-    }>
-  }>
-}
-
-// ============================================================================
-// PAGE COMPONENT
-// ============================================================================
-
-export default function SignInPage() {
-  const [mounted, setMounted] = useState(false)
-  const { isClerkAvailable, isLoading } = useClerkAvailability()
+function ProductionSignIn() {
   const [SignIn, setSignIn] = useState<React.ComponentType<{
     appearance?: Record<string, unknown>
     fallbackRedirectUrl?: string
     signUpUrl?: string
   }> | null>(null)
-  
+
   useEffect(() => {
-    setMounted(true)
+    const moduleName = ['@', 'clerk', '/', 'nextjs'].join('')
+    const loader = new Function('m', 'return import(m)')
+    loader(moduleName)
+      .then((mod: { SignIn: typeof SignIn }) => setSignIn(() => mod.SignIn))
+      .catch(() => {})
   }, [])
-  
-  useEffect(() => {
-    // Only load Clerk on production
-    if (mounted && !isLoading && isClerkAvailable) {
-      loadClerkSignIn()
-        .then(mod => setSignIn(() => mod.SignIn))
-        .catch(() => {})
-    }
-  }, [mounted, isLoading, isClerkAvailable])
-  
-  // SSR
-  if (!mounted) return <LoadingState />
-  
-  // Still checking auth availability
-  if (isLoading) return <LoadingState />
-  
-  // Preview mode
-  if (!isClerkAvailable) return <PreviewFallback />
-  
-  // Production but Clerk not loaded yet
+
   if (!SignIn) return <LoadingState />
-  
-  // Production with Clerk
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-[#0F1115]">
       <SignIn
@@ -162,4 +131,29 @@ export default function SignInPage() {
       />
     </div>
   )
+}
+
+// ============================================================================
+// PAGE COMPONENT
+// ============================================================================
+
+export default function SignInPage() {
+  const [mounted, setMounted] = useState(false)
+  const { isClerkAvailable, isLoading } = useClerkAvailability()
+  
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+  
+  // SSR
+  if (!mounted) return <LoadingState />
+  
+  // Checking auth availability
+  if (isLoading) return <LoadingState />
+  
+  // Preview mode: show fallback
+  if (!isClerkAvailable) return <PreviewFallback />
+  
+  // Production mode: render Clerk SignIn
+  return <ProductionSignIn />
 }

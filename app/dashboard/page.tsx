@@ -68,6 +68,7 @@ import { TodayFocusCard } from '@/components/dashboard/TodayFocusCard'
 import { ProgramSnapshotCard } from '@/components/dashboard/ProgramSnapshotCard'
 import { TrainingInsightQuote } from '@/components/dashboard/TrainingInsightQuote'
 import { TrainingConsistencyCard } from '@/components/dashboard/TrainingConsistencyCard'
+import { SkillProgressHeatmap } from '@/components/dashboard/SkillProgressHeatmap'
 import { AdaptiveEngineBadge, SensorEngineVisualization } from '@/components/shared/AdaptiveEngineBadge'
 import { TrainingEmphasis } from '@/components/dashboard/TrainingEmphasis'
 import { ProgressionInsights } from '@/components/dashboard/ProgressionInsights'
@@ -347,6 +348,14 @@ setConstraintInsight(getConstraintInsight())
             />
           </Section>
         )}
+        
+        {/* ============================================================= */}
+        {/* SKILL PROGRESS HEATMAP - Visual motivation snapshot */}
+        {/* ============================================================= */}
+        
+        <div className="px-4">
+          <SkillProgressHeatmap maxSkills={6} />
+        </div>
         
         {/* ============================================================= */}
         {/* GOAL PROJECTIONS - Timeline estimates */}

@@ -14,7 +14,7 @@ const PLANS = [
     description: 'Access training tools and guides',
     cta: 'Start Free',
     ctaVariant: 'outline' as const,
-    ctaLink: '/dashboard',
+    ctaLink: '/sign-up',
     featured: false,
     features: [
       'Access to SpartanLab training tools',
@@ -32,7 +32,7 @@ const PLANS = [
     description: 'Full Adaptive Training Engine access',
     cta: 'Upgrade to Pro',
     ctaVariant: 'default' as const,
-    ctaLink: '/billing',
+    ctaLink: '/sign-up',
     featured: true,
     features: [
       'Adaptive Training Engine',
@@ -48,7 +48,7 @@ const PLANS = [
 const FAQ = [
   {
     question: 'Can I try the platform before subscribing?',
-    answer: 'Yes. The preview mode gives you full access to explore all features. Once billing is enabled, you can choose the plan that fits your needs.'
+    answer: 'Yes. The free tier gives you access to training tools, calculators, and guides. You can explore the platform before upgrading to Pro for full access.'
   },
   {
     question: 'What payment methods will you accept?',
@@ -159,11 +159,12 @@ export default function PricingPage() {
             All plans include mobile access. Pricing is subject to change before launch.
           </p>
           <p className="text-center text-xs text-[#6B7280] mt-3">
-            Subscriptions renew automatically until canceled. See our{' '}
+            Subscriptions renew automatically until canceled. Cancel anytime. See our{' '}
             <Link href="/terms" className="text-[#A5A5A5] hover:text-[#F5F5F5] transition-colors underline underline-offset-2">Terms of Service</Link>
             {' '}and{' '}
             <Link href="/privacy" className="text-[#A5A5A5] hover:text-[#F5F5F5] transition-colors underline underline-offset-2">Privacy Policy</Link>
-            .
+            . Billing questions?{' '}
+            <a href="mailto:billing@spartanlab.app" className="text-[#A5A5A5] hover:text-[#F5F5F5] transition-colors underline underline-offset-2">billing@spartanlab.app</a>
           </p>
         </div>
       </section>

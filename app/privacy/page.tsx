@@ -106,16 +106,45 @@ export default function PrivacyPage() {
               </p>
             </div>
 
+            {/* Third-party providers */}
+            <div>
+              <h2 className="text-xl font-semibold mb-4 text-[#E6E9EF]">5. Third-Party Service Providers</h2>
+              <p className="text-[#A4ACB8] leading-relaxed mb-4">
+                We use trusted third-party providers to operate SpartanLab:
+              </p>
+              <ul className="space-y-2 text-[#A4ACB8] mb-4">
+                <li className="flex items-start gap-3">
+                  <span className="text-[#C1121F] mt-1">•</span>
+                  <span><strong className="text-[#E6E9EF]">Authentication:</strong> Clerk handles secure sign-in and account management.</span>
+                </li>
+                <li className="flex items-start gap-3">
+                  <span className="text-[#C1121F] mt-1">•</span>
+                  <span><strong className="text-[#E6E9EF]">Payments:</strong> Stripe processes all payment transactions securely.</span>
+                </li>
+                <li className="flex items-start gap-3">
+                  <span className="text-[#C1121F] mt-1">•</span>
+                  <span><strong className="text-[#E6E9EF]">Infrastructure:</strong> Cloud hosting and database services store and serve your data.</span>
+                </li>
+                <li className="flex items-start gap-3">
+                  <span className="text-[#C1121F] mt-1">•</span>
+                  <span><strong className="text-[#E6E9EF]">Analytics:</strong> Service monitoring tools help us understand usage patterns and improve the platform.</span>
+                </li>
+              </ul>
+              <p className="text-[#A4ACB8] leading-relaxed">
+                These providers access only the data necessary to perform their functions and are bound by their own privacy policies and security practices.
+              </p>
+            </div>
+
             {/* Data sharing */}
             <div>
-              <h2 className="text-xl font-semibold mb-4 text-[#E6E9EF]">5. Data Sharing</h2>
+              <h2 className="text-xl font-semibold mb-4 text-[#E6E9EF]">6. Data Sharing</h2>
               <p className="text-[#A4ACB8] leading-relaxed mb-4">
                 We do not sell your personal information. We share data only in limited circumstances:
               </p>
               <ul className="space-y-2 text-[#A4ACB8]">
                 <li className="flex items-start gap-3">
                   <span className="text-[#C1121F] mt-1">•</span>
-                  <span><strong className="text-[#E6E9EF]">Service Providers:</strong> We work with trusted vendors (hosting, payment processing, analytics) who process data on our behalf under strict confidentiality agreements.</span>
+                  <span><strong className="text-[#E6E9EF]">Service Providers:</strong> As described above, to operate the platform.</span>
                 </li>
                 <li className="flex items-start gap-3">
                   <span className="text-[#C1121F] mt-1">•</span>
@@ -130,7 +159,7 @@ export default function PrivacyPage() {
 
             {/* Cookies */}
             <div>
-              <h2 className="text-xl font-semibold mb-4 text-[#E6E9EF]">6. Cookies and Sessions</h2>
+              <h2 className="text-xl font-semibold mb-4 text-[#E6E9EF]">7. Cookies and Sessions</h2>
               <p className="text-[#A4ACB8] leading-relaxed mb-4">
                 We use cookies and similar technologies to maintain your session, remember your preferences, and understand how you use the platform.
               </p>
@@ -141,7 +170,7 @@ export default function PrivacyPage() {
 
             {/* Data security */}
             <div>
-              <h2 className="text-xl font-semibold mb-4 text-[#E6E9EF]">7. Data Security</h2>
+              <h2 className="text-xl font-semibold mb-4 text-[#E6E9EF]">8. Data Security</h2>
               <p className="text-[#A4ACB8] leading-relaxed mb-4">
                 We implement industry-standard security measures to protect your data, including encryption in transit (HTTPS), secure authentication, and access controls.
               </p>
@@ -152,7 +181,7 @@ export default function PrivacyPage() {
 
             {/* Data retention */}
             <div>
-              <h2 className="text-xl font-semibold mb-4 text-[#E6E9EF]">8. Data Retention</h2>
+              <h2 className="text-xl font-semibold mb-4 text-[#E6E9EF]">9. Data Retention</h2>
               <p className="text-[#A4ACB8] leading-relaxed">
                 We retain your data for as long as your account is active or as needed to provide services. If you delete your account, we will remove your personal data within a reasonable timeframe, except where we are required to retain it for legal or legitimate business purposes.
               </p>
@@ -160,7 +189,7 @@ export default function PrivacyPage() {
 
             {/* User rights */}
             <div>
-              <h2 className="text-xl font-semibold mb-4 text-[#E6E9EF]">9. Your Rights</h2>
+              <h2 className="text-xl font-semibold mb-4 text-[#E6E9EF]">10. Your Rights</h2>
               <p className="text-[#A4ACB8] leading-relaxed mb-4">
                 Depending on your location, you may have certain rights regarding your personal data:
               </p>
@@ -192,7 +221,7 @@ export default function PrivacyPage() {
 
             {/* Children */}
             <div>
-              <h2 className="text-xl font-semibold mb-4 text-[#E6E9EF]">10. Children&apos;s Privacy</h2>
+              <h2 className="text-xl font-semibold mb-4 text-[#E6E9EF]">11. Children&apos;s Privacy</h2>
               <p className="text-[#A4ACB8] leading-relaxed">
                 SpartanLab is not intended for children under 13. We do not knowingly collect personal information from children. If you believe a child has provided us with their data, please contact us and we will delete it.
               </p>
@@ -200,7 +229,7 @@ export default function PrivacyPage() {
 
             {/* Changes */}
             <div>
-              <h2 className="text-xl font-semibold mb-4 text-[#E6E9EF]">11. Changes to This Policy</h2>
+              <h2 className="text-xl font-semibold mb-4 text-[#E6E9EF]">12. Changes to This Policy</h2>
               <p className="text-[#A4ACB8] leading-relaxed">
                 We may update this Privacy Policy from time to time. We will notify you of significant changes by posting a notice on the platform or sending an email. Your continued use of SpartanLab after changes take effect constitutes acceptance of the updated policy.
               </p>
@@ -208,7 +237,7 @@ export default function PrivacyPage() {
 
             {/* Contact */}
             <div>
-              <h2 className="text-xl font-semibold mb-4 text-[#E6E9EF]">12. Contact Us</h2>
+              <h2 className="text-xl font-semibold mb-4 text-[#E6E9EF]">13. Contact Us</h2>
               <p className="text-[#A4ACB8] leading-relaxed">
                 If you have questions about this Privacy Policy or our data practices, please contact us at{' '}
                 <a href="mailto:support@spartanlab.app" className="text-[#E6E9EF] hover:underline">

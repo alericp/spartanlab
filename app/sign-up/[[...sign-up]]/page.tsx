@@ -29,7 +29,7 @@ export default function SignUpPage() {
         signInUrl="/sign-in"
       />
       <p className="text-xs text-[#6B7280] text-center max-w-xs leading-relaxed">
-        By continuing, you agree to our{' '}
+        By creating an account, you agree to our{' '}
         <Link href="/terms" className="text-[#A4ACB8] hover:text-[#E6E9EF] transition-colors underline underline-offset-2">
           Terms of Service
         </Link>{' '}

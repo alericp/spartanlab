@@ -314,13 +314,13 @@ export default function Home() {
             <p className="text-[#A5A5A5]">Start free. Upgrade when you need more.</p>
           </div>
 
-          <div className="grid sm:grid-cols-3 gap-6 max-w-4xl mx-auto">
+          <div className="grid sm:grid-cols-2 gap-6 max-w-3xl mx-auto">
             {/* Free */}
             <div className="bg-[#1A1A1A] border border-[#2A2A2A] rounded-xl p-6 text-center">
               <h3 className="text-lg font-semibold mb-2">Free</h3>
               <div className="text-3xl font-bold mb-4">$0</div>
-              <p className="text-sm text-[#A5A5A5] mb-6">Basic tracking to get started</p>
-              <Link href="/dashboard">
+              <p className="text-sm text-[#A5A5A5] mb-6">Training tools and basic tracking</p>
+              <Link href="/sign-up">
                 <Button variant="outline" className="w-full border-[#3A3A3A] hover:bg-[#2A2A2A]">
                   Start Free
                 </Button>
@@ -331,29 +331,28 @@ export default function Home() {
             <div className="bg-[#1A1A1A] border-2 border-[#E63946] rounded-xl p-6 text-center relative">
               <div className="absolute -top-3 left-1/2 -translate-x-1/2">
                 <span className="bg-[#E63946] text-white text-xs font-semibold px-3 py-1 rounded-full">
-                  Popular
+                  Full Access
                 </span>
               </div>
               <h3 className="text-lg font-semibold mb-2">Pro</h3>
-              <div className="text-3xl font-bold mb-4">$9<span className="text-base font-normal text-[#A5A5A5]">/mo</span></div>
-              <p className="text-sm text-[#A5A5A5] mb-6">Full platform access</p>
-              <Button className="w-full bg-[#E63946] hover:bg-[#D62828]" disabled>
-                Coming Soon
-              </Button>
-            </div>
-
-            {/* Elite */}
-            <div className="bg-[#1A1A1A] border border-[#2A2A2A] rounded-xl p-6 text-center">
-              <h3 className="text-lg font-semibold mb-2">Elite</h3>
               <div className="text-3xl font-bold mb-4">$15<span className="text-base font-normal text-[#A5A5A5]">/mo</span></div>
-              <p className="text-sm text-[#A5A5A5] mb-6">Advanced analytics + projections</p>
-              <Button variant="outline" className="w-full border-[#3A3A3A] hover:bg-[#2A2A2A]" disabled>
-                Coming Soon
-              </Button>
+              <p className="text-sm text-[#A5A5A5] mb-6">Adaptive Training Engine + analytics</p>
+              <Link href="/pricing">
+                <Button className="w-full bg-[#E63946] hover:bg-[#D62828]">
+                  Upgrade to Pro
+                </Button>
+              </Link>
             </div>
           </div>
 
-          <div className="text-center mt-8">
+          <p className="text-center text-xs text-[#6B7280] mt-6">
+            Cancel anytime. See{' '}
+            <Link href="/terms" className="text-[#A5A5A5] hover:text-[#F5F5F5] transition-colors underline underline-offset-2">Terms</Link>
+            {' '}and{' '}
+            <Link href="/privacy" className="text-[#A5A5A5] hover:text-[#F5F5F5] transition-colors underline underline-offset-2">Privacy</Link>
+            .
+          </p>
+          <div className="text-center mt-4">
             <Link href="/pricing" className="text-sm text-[#E63946] hover:underline">
               View full pricing details
             </Link>

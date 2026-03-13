@@ -17,7 +17,7 @@ export function MarketingFooter() {
         <div className="grid gap-8 md:grid-cols-4">
           {/* Brand */}
           <div className="md:col-span-2">
-            <Link href="/landing" className="flex items-center gap-2.5 mb-4">
+            <Link href="/" className="flex items-center gap-2.5 mb-4">
               <SpartanIcon size={30} />
               <span className="text-lg font-bold tracking-tight text-[#E6E9EF]">SpartanLab</span>
             </Link>
@@ -34,7 +34,7 @@ export function MarketingFooter() {
             <h4 className="text-sm font-semibold mb-4 text-[#E6E9EF]">Platform</h4>
             <ul className="space-y-3">
               <li>
-                <Link href="/landing#how-it-works" className="text-sm text-[#A4ACB8] hover:text-[#E6E9EF] transition-colors">
+                <Link href="/how-it-works" className="text-sm text-[#A4ACB8] hover:text-[#E6E9EF] transition-colors">
                   How It Works
                 </Link>
               </li>
@@ -44,7 +44,7 @@ export function MarketingFooter() {
                 </Link>
               </li>
               <li>
-                <Link href="/landing#pricing" className="text-sm text-[#A4ACB8] hover:text-[#E6E9EF] transition-colors">
+                <Link href="/pricing" className="text-sm text-[#A4ACB8] hover:text-[#E6E9EF] transition-colors">
                   Pricing
                 </Link>
               </li>

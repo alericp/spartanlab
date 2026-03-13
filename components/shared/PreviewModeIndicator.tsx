@@ -1,13 +1,12 @@
 'use client'
 
 // Preview Mode Indicator - Debug/testing controls
-// OWNER-ONLY: These controls are hidden from normal users for production cleanliness
-// Only the platform owner can see preview mode, plan switching, and debug labels
+// PRODUCTION SAFE: Never renders for public users or non-owner users
+// Only renders in preview mode for local development/testing
 
 import { useState, useEffect } from 'react'
 import { isPreviewMode, getModeInfo } from '@/lib/app-mode'
 import { getCurrentPlan, setPreviewPlan, canSwitchPreviewPlan } from '@/lib/plan-source'
-import { isOwner } from '@/lib/owner-access'
 import type { SubscriptionPlan } from '@/types/domain'
 import { Button } from '@/components/ui/button'
 import { 
@@ -23,23 +22,34 @@ import { Eye, ChevronDown } from 'lucide-react'
 export function PreviewModeIndicator() {
   const [mounted, setMounted] = useState(false)
   const [currentPlan, setCurrentPlanState] = useState<SubscriptionPlan>('pro')
-  const [ownerAccess, setOwnerAccess] = useState(false)
+  const [shouldRender, setShouldRender] = useState(false)
   
   useEffect(() => {
     setMounted(true)
+    
+    // CRITICAL: Only render in preview mode
+    // Never render in production - this keeps the public site clean
+    const preview = isPreviewMode()
+    if (!preview) {
+      setShouldRender(false)
+      return
+    }
+    
+    // In preview mode, only show if user has started using the app
+    const hasProfile = localStorage.getItem('athlete_profile')
+    const hasWorkouts = localStorage.getItem('workouts')
+    const hasPrograms = localStorage.getItem('saved_programs')
+    const hasAppData = Boolean(hasProfile || hasWorkouts || hasPrograms)
+    
+    setShouldRender(hasAppData)
     setCurrentPlanState(getCurrentPlan())
-    setOwnerAccess(isOwner())
   }, [])
   
   // Don't render until mounted to avoid hydration mismatch
   if (!mounted) return null
   
-  // OWNER-ONLY: Hide all debug/preview controls from normal users
-  // This ensures the live product looks clean and production-ready
-  if (!ownerAccess) return null
-  
-  // Only show in preview mode (redundant check, but kept for safety)
-  if (!isPreviewMode()) return null
+  // Don't render if conditions aren't met (not preview mode, or no app data)
+  if (!shouldRender) return null
   
   const modeInfo = getModeInfo()
   const canSwitch = canSwitchPreviewPlan()
@@ -47,15 +57,13 @@ export function PreviewModeIndicator() {
   const handlePlanChange = (plan: SubscriptionPlan) => {
     setPreviewPlan(plan)
     setCurrentPlanState(plan)
-    // Trigger a page refresh to apply new plan access
     window.location.reload()
   }
   
-  // Only show Free and Pro to users - Elite is merged into Pro
   const planLabels: Record<SubscriptionPlan, string> = {
     free: 'Free',
     pro: 'Pro',
-    elite: 'Pro', // Legacy: Elite users shown as Pro
+    elite: 'Pro',
   }
   
   return (

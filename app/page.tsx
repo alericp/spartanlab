@@ -91,40 +91,50 @@ const COMPARISON = [
 
 export default function Home() {
   const router = useRouter()
-  const [isCheckingAuth, setIsCheckingAuth] = useState(true)
-  const preview = isPreviewMode()
+  const [mounted, setMounted] = useState(false)
+  const [shouldRedirect, setShouldRedirect] = useState(false)
   
-  // Use Clerk's useAuth hook for production mode
-  // In preview mode, we check localStorage
+  // Use our auth wrapper which handles preview/production mode
   const { isSignedIn, isLoaded } = useAuth()
   
   useEffect(() => {
-    // Wait for Clerk to load in production mode
-    if (!preview && !isLoaded) return
+    setMounted(true)
+  }, [])
+  
+  useEffect(() => {
+    if (!mounted) return
+    if (!isLoaded) return
     
     // Check if user is authenticated and redirect to dashboard
-    let shouldRedirect = false
-    
-    if (preview) {
-      // In preview mode, check if user has started using the app
-      const hasProfile = localStorage.getItem('athlete_profile')
-      const hasWorkouts = localStorage.getItem('workouts')
-      const hasPrograms = localStorage.getItem('saved_programs')
-      shouldRedirect = Boolean(hasProfile || hasWorkouts || hasPrograms)
-    } else {
-      // In production mode, use Clerk's auth state
-      shouldRedirect = Boolean(isSignedIn)
-    }
-    
-    if (shouldRedirect) {
+    if (isSignedIn) {
+      setShouldRedirect(true)
       router.replace('/dashboard')
-    } else {
-      setIsCheckingAuth(false)
     }
-  }, [router, preview, isSignedIn, isLoaded])
+  }, [mounted, router, isSignedIn, isLoaded])
   
-  // Show nothing while checking auth to prevent flash
-  if (isCheckingAuth) {
+  // Server-side render: show loading state that matches initial client state
+  // This avoids hydration mismatch
+  if (!mounted) {
+    return (
+      <div className="min-h-screen bg-[#121212] text-[#F5F5F5]">
+        <MarketingHeader />
+        {/* Skeleton content to avoid layout shift */}
+        <main className="pt-16">
+          <section className="relative min-h-[85vh] flex items-center justify-center px-4 py-16 sm:py-24">
+            <div className="max-w-4xl mx-auto text-center">
+              <div className="w-48 h-8 bg-[#1A1A1A] rounded-full mx-auto mb-6 animate-pulse" />
+              <div className="w-96 h-12 bg-[#1A1A1A] rounded mx-auto mb-6 animate-pulse" />
+              <div className="w-64 h-6 bg-[#1A1A1A] rounded mx-auto animate-pulse" />
+            </div>
+          </section>
+        </main>
+        <MarketingFooter />
+      </div>
+    )
+  }
+  
+  // If we're redirecting, show loading
+  if (shouldRedirect) {
     return (
       <div className="min-h-screen bg-[#121212] flex items-center justify-center">
         <div className="w-8 h-8 border-2 border-[#C1121F] border-t-transparent rounded-full animate-spin" />

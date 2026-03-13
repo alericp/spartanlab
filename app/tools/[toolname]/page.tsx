@@ -7,6 +7,8 @@ import { AdaptiveEngineBadge, SignalIndicator, ENGINE_MESSAGES } from '@/compone
 import { PostActionUpgradePrompt, UPGRADE_TRIGGERS } from '@/components/premium/PremiumFeature'
 import { SkillProgressSensor } from '@/components/tools/SkillProgressSensor'
 import { StrengthCalculator } from '@/components/tools/StrengthCalculator'
+import { FrontLeverStrengthTest } from '@/components/tools/FrontLeverStrengthTest'
+import { PlancheStrengthCalculator } from '@/components/tools/PlancheStrengthCalculator'
 import { SpartanIcon } from '@/components/brand/SpartanLogo'
 import { Calculator, Target, Dumbbell, Trophy, ArrowRight, ArrowLeft, Zap, LayoutDashboard, Activity, Calendar } from 'lucide-react'
 
@@ -22,6 +24,7 @@ const TOOLS: Record<string, {
   appRoute: string
   hasSensor: boolean
   hasStrengthCalc?: 'weighted_pull_up' | 'weighted_dip'
+  customComponent?: 'front-lever-strength-test' | 'planche-strength-calculator'
   seoSections?: {
     h2: string
     content: string
@@ -246,6 +249,70 @@ const TOOLS: Record<string, {
       },
     ],
   },
+  'front-lever-strength-test': {
+    title: 'Front Lever Strength Test',
+    metaTitle: 'Front Lever Strength Test - Calculate Your Readiness Score',
+    description: 'Test your front lever readiness with this interactive strength assessment. Get a score from 0-100 based on pulling strength and hold times.',
+    longDescription: 'This comprehensive strength test evaluates your front lever readiness by analyzing your pull-up max, weighted pull-up strength, bodyweight, and current hold times. Get a detailed score breakdown and personalized recommendations for progression.',
+    icon: Target,
+    relatedSkill: 'front_lever',
+    features: [
+      'Calculate your Front Lever Strength Score (0-100)',
+      'Evaluate pull strength ratio and core requirements',
+      'Get recommended progression level (Tuck, Advanced Tuck, Straddle, Full)',
+      'Receive personalized training recommendations',
+      'Link directly to program builder for training plans',
+    ],
+    appRoute: '/skills',
+    hasSensor: false,
+    customComponent: 'front-lever-strength-test' as const,
+    seoSections: [
+      {
+        h2: 'What Makes a Good Front Lever Strength Score?',
+        content: 'A score of 0-39 indicates early stage readiness—focus on building pull-up volume and weighted pull-up strength before serious front lever training. Scores of 40-59 suggest intermediate readiness suitable for tuck and advanced tuck work. Scores of 60-79 indicate advanced readiness for straddle front lever training. Scores of 80+ suggest you have the strength foundation for full front lever work.',
+      },
+      {
+        h2: 'Key Factors in Front Lever Readiness',
+        content: 'Front lever readiness depends on three main factors: pulling strength (measured by weighted pull-ups), core anti-extension strength (measured by hold times), and leverage efficiency (affected by bodyweight and arm length). Athletes with +50% bodyweight pull-ups and 15+ second tuck holds typically have the foundation for straddle front lever training.',
+      },
+      {
+        h2: 'How to Improve Your Front Lever Score',
+        content: 'Focus on the factor limiting your score most. If pulling strength is low, prioritize weighted pull-ups and front lever rows. If core strength is the limiter, work on dragon flags and hollow body progressions. If leverage is the issue, band-assisted front lever work helps build specific strength at longer lever lengths.',
+      },
+    ],
+  },
+  'planche-strength-calculator': {
+    title: 'Planche Strength Calculator',
+    metaTitle: 'Planche Strength Calculator - Calculate Your Readiness Score',
+    description: 'Calculate your planche readiness based on pushing strength, lean angle tolerance, and core compression. Get a score from 0-100.',
+    longDescription: 'This planche calculator evaluates your readiness by analyzing pseudo planche push-up capacity, planche lean hold times, weighted dip strength, and bodyweight. Get a detailed assessment of your horizontal pushing strength and progression recommendations.',
+    icon: Calculator,
+    relatedSkill: 'planche',
+    features: [
+      'Calculate your Planche Readiness Score (0-100)',
+      'Evaluate horizontal pushing strength and lean tolerance',
+      'Assess core compression and protraction strength',
+      'Get recommended progression (Tuck, Advanced Tuck, Straddle, Full)',
+      'Receive targeted training recommendations',
+    ],
+    appRoute: '/skills',
+    hasSensor: false,
+    customComponent: 'planche-strength-calculator' as const,
+    seoSections: [
+      {
+        h2: 'Understanding Your Planche Readiness Score',
+        content: 'Scores of 0-39 indicate foundational work is needed—focus on pseudo planche push-ups, weighted dips, and planche leans. Scores of 40-59 suggest readiness for tuck planche training. Scores of 60-79 indicate potential for advanced tuck and early straddle work. Scores of 80+ suggest the strength foundation for straddle planche and beyond.',
+      },
+      {
+        h2: 'Planche Strength Prerequisites',
+        content: 'The planche requires exceptional pushing strength. Key benchmarks include: 20+ pseudo planche push-ups with deep lean, 30+ second planche lean holds, weighted dips at +40-60% bodyweight, and solid scapular protraction strength. Athletes who rush into planche training without these foundations often develop shoulder issues.',
+      },
+      {
+        h2: 'Improving Your Planche Readiness',
+        content: 'Target your weakest area first. For pushing strength, emphasize weighted dips and pseudo planche push-ups. For lean tolerance, gradually increase planche lean depth and duration. For core compression, work L-sit progressions and pike compressions. Wrist conditioning is equally important—neglect it at your peril.',
+      },
+    ],
+  },
 }
 
 type Props = {
@@ -353,8 +420,16 @@ export default async function ToolPage({ params }: Props) {
             </ul>
           </Card>
           
-          {/* Interactive Skill Progress Sensor or Strength Calculator or Placeholder */}
-          {tool.hasSensor ? (
+          {/* Interactive Skill Progress Sensor or Strength Calculator or Custom Component or Placeholder */}
+          {tool.customComponent === 'front-lever-strength-test' ? (
+            <div className="mb-8">
+              <FrontLeverStrengthTest />
+            </div>
+          ) : tool.customComponent === 'planche-strength-calculator' ? (
+            <div className="mb-8">
+              <PlancheStrengthCalculator />
+            </div>
+          ) : tool.hasSensor ? (
             <Card className="bg-[#1A1F26] border-[#2B313A] p-6 mb-8">
               <h2 className="text-xl font-semibold mb-6 text-[#E6E9EF]">Skill Progress Sensor</h2>
               <SkillProgressSensor 

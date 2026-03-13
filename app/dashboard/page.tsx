@@ -70,7 +70,9 @@ import { TrainingInsightQuote } from '@/components/dashboard/TrainingInsightQuot
 import { TrainingConsistencyCard } from '@/components/dashboard/TrainingConsistencyCard'
 import { AdaptiveEngineBadge, SensorEngineVisualization } from '@/components/shared/AdaptiveEngineBadge'
 import { TrainingEmphasis } from '@/components/dashboard/TrainingEmphasis'
+import { ProgressionInsights } from '@/components/dashboard/ProgressionInsights'
 import { selectMethodProfiles, getCoachingMessage, type SelectionContext, type SelectedMethods } from '@/lib/training-principles-engine'
+import { getProgressionInsights, type ProgressionInsight } from '@/lib/adaptive-progression-engine'
 import { PremiumUpgradeBanner, SubscriptionTierBadge } from '@/components/premium/PremiumFeature'
 import { DashboardUpgradeCard } from '@/components/upgrade/AdaptiveProgramUpgradeCard'
 
@@ -92,6 +94,7 @@ export default function DashboardPage() {
   const [progressOverview, setProgressOverview] = useState<ProgressOverview | null>(null)
   const [unseenMilestones, setUnseenMilestones] = useState<ReturnType<typeof getUnseenMilestones>>([])
   const [trainingMethods, setTrainingMethods] = useState<SelectedMethods | null>(null)
+  const [progressionInsights, setProgressionInsights] = useState<ProgressionInsight[]>([])
   const [mounted, setMounted] = useState(false)
   const [showWelcome, setShowWelcome] = useState(false)
   const [showIntroduction, setShowIntroduction] = useState(false)
@@ -141,6 +144,14 @@ setConstraintInsight(getConstraintInsight())
       }
       const methods = selectMethodProfiles(selectionContext)
       setTrainingMethods(methods)
+    }
+    
+    // Get progression insights from adaptive progression engine
+    try {
+      const insights = getProgressionInsights()
+      setProgressionInsights(insights)
+    } catch {
+      // Silent fail - progression insights are optional
     }
   }, [])
 
@@ -254,6 +265,13 @@ setConstraintInsight(getConstraintInsight())
             rationale={trainingMethods.explanation}
             coachingTip={getCoachingMessage(trainingMethods)}
           />
+        )}
+        
+        {/* Progression Insights - Show exercises ready for progression */}
+        {progressionInsights.length > 0 && (
+          <div className="px-4">
+            <ProgressionInsights insights={progressionInsights} />
+          </div>
         )}
         
         {/* ============================================================= */}

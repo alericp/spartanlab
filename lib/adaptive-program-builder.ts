@@ -56,6 +56,13 @@ import {
   TRAINING_METHODS,
   ENDURANCE_BLOCK_TEMPLATES,
 } from './training-methods'
+import {
+  analyzeExerciseProgression,
+  getProgressionInsights,
+  getReadyToProgress,
+  type ProgressionAnalysis,
+  type ProgressionInsight,
+} from './adaptive-progression-engine'
 
 // =============================================================================
 // TYPES
@@ -160,6 +167,9 @@ export interface AdaptiveProgram {
     explanation: string
     coachingTip: string
   }
+  // Adaptive Progression Engine - progression recommendations
+  progressionInsights?: ProgressionInsight[]
+  exercisesReadyToProgress?: string[]
 }
 
 // =============================================================================
@@ -323,6 +333,9 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
     calibrationContext: calibrationContext,
     // Training Principles Engine emphasis
     trainingEmphasis,
+    // Adaptive Progression Engine insights
+    progressionInsights: getProgressionInsights(),
+    exercisesReadyToProgress: getReadyToProgress().map(p => p.exerciseName),
   }
 }
 

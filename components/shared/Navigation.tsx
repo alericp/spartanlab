@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { UserButton, SignedIn, SignedOut } from '@clerk/nextjs'
+import { UserButton, SignedIn, SignedOut } from '@/components/auth/ClerkComponents'
 import { Button } from '@/components/ui/button'
 import { LayoutDashboard, Target, Dumbbell, Calendar, ClipboardList, TrendingUp, Activity, Crosshair, Settings, Menu, X, Database, Wrench, BookOpen, LogIn } from 'lucide-react'
 import { SpartanIcon } from '@/components/brand/SpartanLogo'

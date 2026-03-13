@@ -26,6 +26,12 @@ export type Equipment = 'pullup_bar' | 'dip_bars' | 'parallettes' | 'rings' | 'r
 export type RangeIntent = 'deeper_range' | 'stronger_control' | 'both'
 export type RangeTrainingMode = 'flexibility' | 'mobility' | 'hybrid'
 
+// Goal categories for onboarding flow
+export type GoalCategory = 'strength' | 'skills' | 'flexibility'
+export type SkillGoal = 'front_lever' | 'planche' | 'muscle_up' | 'handstand' | 'l_sit'
+export type FlexibilityGoal = 'pancake' | 'toe_touch' | 'front_splits' | 'side_splits'
+export type StrengthGoal = 'general_strength' | 'weighted_pull' | 'weighted_dip'
+
 export interface AthleteProfile {
   id: string
   userId: string
@@ -37,10 +43,18 @@ export interface AthleteProfile {
   experienceLevel: ExperienceLevel
   trainingDaysPerWeek: number
   sessionLengthMinutes: SessionLengthMinutes
-  primaryGoal: string | null
+  // Goal selection (new multi-step flow)
+  goalCategory: GoalCategory | null
+  selectedSkills: SkillGoal[]
+  selectedFlexibility: FlexibilityGoal[]
+  selectedStrength: StrengthGoal[]
+  primaryGoal: string | null // Backwards compat: first selected goal
   equipmentAvailable: Equipment[]
   rangeIntent: RangeIntent | null // For flexibility/mobility goals
   rangeTrainingMode: RangeTrainingMode | null // AI-determined training mode
+  // Strength baseline (optional)
+  pullUpMax: number | null
+  dipMax: number | null
   onboardingComplete: boolean
   createdAt: string
   updatedAt?: string

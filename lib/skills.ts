@@ -9,6 +9,7 @@ export type SkillCategory =
   | 'push' 
   | 'transition'
   | 'compression'
+  | 'flexibility'
 
 export type CompressionSkill = 
   | 'l_sit'
@@ -73,6 +74,31 @@ export const SKILL_DEFINITIONS = {
     category: 'compression' as SkillCategory,
     levels: ['I-Sit Entry', 'I-Sit Hold', 'I-Sit Mastery'],
     description: 'Elite compression strength - complete vertical body hold',
+  },
+  // Flexibility Skills
+  pancake: {
+    name: 'Pancake',
+    category: 'flexibility' as SkillCategory,
+    levels: ['Seated Straddle', 'Supported Pancake', 'Active Pancake', 'Deep Pancake', 'Compression Pancake'],
+    description: 'Forward fold with legs wide - essential for compression and straddle skills',
+  },
+  toe_touch: {
+    name: 'Toe Touch',
+    category: 'flexibility' as SkillCategory,
+    levels: ['Standing Reach', 'Palms to Shins', 'Palms to Floor', 'Chest to Thigh', 'Deep Fold'],
+    description: 'Standing forward fold - foundation for pike compression and hamstring flexibility',
+  },
+  front_splits: {
+    name: 'Front Splits',
+    category: 'flexibility' as SkillCategory,
+    levels: ['Lunge Mobility', 'Half Split', 'Elevated Split', 'Deep Split Prep', 'Full Front Split'],
+    description: 'Full leg split front-to-back - key for hip flexor and hamstring mobility',
+  },
+  side_splits: {
+    name: 'Side Splits',
+    category: 'flexibility' as SkillCategory,
+    levels: ['Horse Stance', 'Frog Mobility', 'Elevated Middle Split', 'Deep Split Prep', 'Full Side Split'],
+    description: 'Full leg split side-to-side - essential for straddle skills and hip mobility',
   },
 };
 

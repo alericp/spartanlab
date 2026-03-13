@@ -13,6 +13,7 @@ import {
   CORE_EXERCISES_POOL,
   WARMUP_EXERCISES,
   COOLDOWN_EXERCISES,
+  FLEXIBILITY_EXERCISES,
   getExercisesByTransfer,
   hasRequiredEquipment,
   getAllExercises,
@@ -307,6 +308,59 @@ function selectMainExercises(
     transitionExercises.slice(0, 2).forEach(e => {
       addExercise(e, 'Transition pattern development')
     })
+  }
+  
+  // 5. FLEXIBILITY DAYS (for flexibility goals or flexibility_focus day)
+  const flexibilityGoals = ['pancake', 'toe_touch', 'front_splits', 'side_splits', 'flexibility']
+  if (flexibilityGoals.includes(primaryGoal) || day.focus === 'flexibility_focus') {
+    // Get flexibility exercises that transfer to this goal
+    const availableFlexibility = FLEXIBILITY_EXERCISES.filter(e => hasRequiredEquipment(e, equipment))
+    const goalFlexibility = availableFlexibility.filter(e => 
+      e.transferTo.includes(primaryGoal) || e.progressionLadder === primaryGoal
+    )
+    
+    // For general flexibility goal, include all flexibility exercises
+    const flexPool = primaryGoal === 'flexibility' 
+      ? availableFlexibility 
+      : goalFlexibility.length > 0 ? goalFlexibility : availableFlexibility
+    
+    // Flexibility philosophy: frequent exposure over long holds
+    // Select 3-5 exercises with moderate holds
+    const sortedFlexExercises = flexPool.sort((a, b) => {
+      // Prioritize exercises that directly transfer to the goal
+      const aTransfer = a.transferTo.includes(primaryGoal) ? 1 : 0
+      const bTransfer = b.transferTo.includes(primaryGoal) ? 1 : 0
+      if (aTransfer !== bTransfer) return bTransfer - aTransfer
+      
+      // Then by progression ladder match
+      const aLadder = a.progressionLadder === primaryGoal ? 1 : 0
+      const bLadder = b.progressionLadder === primaryGoal ? 1 : 0
+      return bLadder - aLadder
+    })
+    
+    // Add primary flexibility exercises (more sets, moderate hold times)
+    sortedFlexExercises.slice(0, Math.min(4, maxExercises - 1)).forEach((exercise, index) => {
+      const isPrimary = index < 2
+      addExercise(
+        exercise,
+        isPrimary 
+          ? `Primary ${primaryGoal} flexibility work` 
+          : `Supporting ${primaryGoal} flexibility`,
+        isPrimary ? 3 : 2,
+        isPrimary ? '45-60s' : '30-45s',
+        'Breathe deeply, relax into position'
+      )
+    })
+    
+    // Add a light core/compression exercise if room
+    if (selected.length < maxExercises) {
+      const compressionCore = availableCore.find(e => 
+        e.movementPattern === 'compression' || e.transferTo.includes('l_sit')
+      )
+      if (compressionCore && !usedIds.has(compressionCore.id)) {
+        addExercise(compressionCore, 'Active flexibility / compression support', 2)
+      }
+    }
   }
   
   // ==========================================================================

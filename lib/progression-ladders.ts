@@ -418,6 +418,168 @@ export const PROGRESSION_LADDERS: ProgressionLadder[] = [
       },
     ],
   },
+
+  // ===== FLEXIBILITY PROGRESSIONS =====
+
+  // ===== PANCAKE PROGRESSION =====
+  {
+    id: 'pancake',
+    name: 'Pancake',
+    description: 'Forward fold with legs wide - essential for compression and straddle skills',
+    skill: 'pancake',
+    steps: [
+      {
+        exerciseId: 'seated_straddle_fold',
+        level: 1,
+        prerequisiteHoldTime: '30s',
+        cues: ['Sit tall', 'Legs wide', 'Hinge from hips'],
+      },
+      {
+        exerciseId: 'seated_pancake_hold',
+        level: 2,
+        prerequisiteHoldTime: '30s',
+        cues: ['Use props if needed', 'Walk hands forward', 'Breathe deeply'],
+      },
+      {
+        exerciseId: 'active_pancake_pulses',
+        level: 3,
+        prerequisiteReps: 15,
+        cues: ['Engage hip flexors', 'Small controlled pulses', 'Maintain form'],
+      },
+      {
+        exerciseId: 'pancake_side_reaches',
+        level: 4,
+        prerequisiteHoldTime: '30s',
+        cues: ['Reach to each foot', 'Keep other hip down', 'Rotate torso'],
+      },
+      {
+        exerciseId: 'compression_pancake',
+        level: 5,
+        prerequisiteHoldTime: '20s',
+        cues: ['Chest toward floor', 'Active compression', 'Control throughout'],
+      },
+    ],
+  },
+
+  // ===== TOE TOUCH PROGRESSION =====
+  {
+    id: 'toe_touch',
+    name: 'Toe Touch',
+    description: 'Standing forward fold - foundation for pike compression',
+    skill: 'toe_touch',
+    steps: [
+      {
+        exerciseId: 'standing_toe_touch',
+        level: 1,
+        prerequisiteHoldTime: '30s',
+        cues: ['Soft knees initially', 'Hang relaxed', 'Let gravity help'],
+      },
+      {
+        exerciseId: 'standing_forward_fold',
+        level: 2,
+        prerequisiteHoldTime: '30s',
+        cues: ['Straighten knees', 'Relax neck', 'Breathe into stretch'],
+      },
+      {
+        exerciseId: 'hamstring_fold',
+        level: 3,
+        prerequisiteHoldTime: '30s',
+        cues: ['One leg at a time', 'Hinge at hips', 'Keep back flat'],
+      },
+      {
+        exerciseId: 'seated_pike_fold',
+        level: 4,
+        prerequisiteHoldTime: '30s',
+        cues: ['Legs together', 'Reach for toes', 'Chest toward thighs'],
+      },
+      {
+        exerciseId: 'deep_pike_fold',
+        level: 5,
+        prerequisiteHoldTime: '20s',
+        cues: ['Maximum compression', 'Pull chest to thighs', 'Straight legs'],
+      },
+    ],
+  },
+
+  // ===== FRONT SPLITS PROGRESSION =====
+  {
+    id: 'front_splits',
+    name: 'Front Splits',
+    description: 'Full leg split front-to-back - hip flexor and hamstring mobility',
+    skill: 'front_splits',
+    steps: [
+      {
+        exerciseId: 'runners_lunge',
+        level: 1,
+        prerequisiteHoldTime: '30s',
+        cues: ['Back knee down', 'Sink hips forward', 'Keep torso upright'],
+      },
+      {
+        exerciseId: 'half_splits',
+        level: 2,
+        prerequisiteHoldTime: '30s',
+        cues: ['Front leg straight', 'Hinge forward', 'Square hips'],
+      },
+      {
+        exerciseId: 'front_split_prep',
+        level: 3,
+        prerequisiteHoldTime: '30s',
+        cues: ['Use blocks for support', 'Slide feet apart', 'Control descent'],
+      },
+      {
+        exerciseId: 'pigeon_pose',
+        level: 4,
+        prerequisiteHoldTime: '45s',
+        cues: ['Open hip', 'Front shin angled', 'Relax into stretch'],
+      },
+      {
+        exerciseId: 'full_front_split',
+        level: 5,
+        prerequisiteHoldTime: '20s',
+        cues: ['Both legs straight', 'Hips square', 'Control throughout'],
+      },
+    ],
+  },
+
+  // ===== SIDE SPLITS PROGRESSION =====
+  {
+    id: 'side_splits',
+    name: 'Side Splits',
+    description: 'Full leg split side-to-side - essential for straddle skills',
+    skill: 'side_splits',
+    steps: [
+      {
+        exerciseId: 'horse_stance_hold',
+        level: 1,
+        prerequisiteHoldTime: '30s',
+        cues: ['Wide stance', 'Sink low', 'Chest up'],
+      },
+      {
+        exerciseId: 'frog_pose',
+        level: 2,
+        prerequisiteHoldTime: '45s',
+        cues: ['Knees wide', 'Rock gently', 'Relax groin'],
+      },
+      {
+        exerciseId: 'cossack_hold',
+        level: 3,
+        prerequisiteHoldTime: '30s',
+        cues: ['Side lunge', 'Straight leg pointed up', 'Deep stretch'],
+      },
+      {
+        exerciseId: 'side_split_prep',
+        level: 4,
+        prerequisiteHoldTime: '30s',
+        cues: ['Use blocks', 'Slide out gradually', 'Control descent'],
+      },
+      {
+        exerciseId: 'full_side_split',
+        level: 5,
+        prerequisiteHoldTime: '20s',
+        cues: ['Toes pointing up', 'Hips forward', 'Control throughout'],
+      },
+    ],
+  },
 ]
 
 // =============================================================================

@@ -9,7 +9,7 @@ import { SpartanIcon } from '@/components/brand/SpartanLogo'
 import { saveAthleteProfile } from '@/lib/repositories/profile-repository'
 import type { Equipment, SessionLengthMinutes } from '@/types/domain'
 
-type PrimaryGoal = 'front_lever' | 'planche' | 'muscle_up' | 'general_strength'
+type PrimaryGoal = 'front_lever' | 'planche' | 'muscle_up' | 'general_strength' | 'pancake' | 'toe_touch' | 'front_splits' | 'side_splits' | 'flexibility'
 type TrainingDays = 2 | 3 | 4 | 5 | 6
 
 interface FormData {
@@ -24,6 +24,10 @@ const GOALS: { value: PrimaryGoal; label: string }[] = [
   { value: 'planche', label: 'Planche' },
   { value: 'muscle_up', label: 'Muscle-Up' },
   { value: 'general_strength', label: 'General Strength' },
+  { value: 'pancake', label: 'Pancake' },
+  { value: 'toe_touch', label: 'Toe Touch' },
+  { value: 'front_splits', label: 'Front Splits' },
+  { value: 'side_splits', label: 'Side Splits' },
 ]
 
 const TRAINING_DAYS: TrainingDays[] = [2, 3, 4, 5, 6]

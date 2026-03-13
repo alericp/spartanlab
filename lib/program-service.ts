@@ -15,7 +15,7 @@ import {
 import { getSkillProgressions, getAthleteProfile } from './data-service'
 import { getLatestRecords } from './strength-service'
 
-export type PrimaryGoal = 'planche' | 'front_lever' | 'muscle_up' | 'handstand_pushup' | 'weighted_strength' | 'general' | 'skill' | 'strength' | 'endurance' | 'abs'
+export type PrimaryGoal = 'planche' | 'front_lever' | 'muscle_up' | 'handstand_pushup' | 'weighted_strength' | 'general' | 'skill' | 'strength' | 'endurance' | 'abs' | 'pancake' | 'toe_touch' | 'front_splits' | 'side_splits' | 'flexibility'
 export type ExperienceLevel = 'beginner' | 'intermediate' | 'advanced'
 export type SecondaryEmphasis = 'pulling_strength' | 'pushing_strength' | 'core_control' | 'skill_technique' | 'hypertrophy_support' | 'none'
 export type SessionLength = 30 | 45 | 60 | 75 | '10-20' | '20-30' | '30-45' | '45-60' | '60+'

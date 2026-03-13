@@ -21,6 +21,7 @@ export type DayFocus =
   | 'skill_density'
   | 'support_recovery'
   | 'transition_work'
+  | 'flexibility_focus'
 
 export interface WeeklyStructure {
   structureType: StructureType
@@ -58,6 +59,12 @@ export function selectOptimalStructure(inputs: StructureInputs): WeeklyStructure
   const isPushGoal = primaryGoal === 'planche' || primaryGoal === 'handstand_pushup'
   const isPullGoal = primaryGoal === 'front_lever' || primaryGoal === 'muscle_up'
   const isStrengthGoal = primaryGoal === 'weighted_strength'
+  const isFlexibilityGoal = ['pancake', 'toe_touch', 'front_splits', 'side_splits', 'flexibility'].includes(primaryGoal)
+  
+  // Handle flexibility goals with specialized structure
+  if (isFlexibilityGoal) {
+    return buildFlexibilityStructure(inputs, trainingDays)
+  }
   
   // Select structure based on training frequency
   if (trainingDays === 2) {
@@ -435,7 +442,180 @@ export function getDayExplanation(day: DayStructure, goalName: string): string {
     skill_density: 'Additional skill exposure at moderate intensity to build density without excessive fatigue.',
     support_recovery: 'Lighter session focused on support work and active recovery.',
     transition_work: 'Focused on transition patterns and movement coordination.',
+    flexibility_focus: `Dedicated flexibility work for ${goalName}. Frequent exposure with moderate holds builds lasting range.`,
   }
   
   return explanations[day.focus] || 'Session designed to support overall progression.'
+}
+
+// =============================================================================
+// FLEXIBILITY STRUCTURE
+// =============================================================================
+
+function buildFlexibilityStructure(
+  inputs: StructureInputs,
+  trainingDays: TrainingDays
+): WeeklyStructure {
+  const { primaryGoal } = inputs
+  
+  // Format goal name for display
+  const goalLabel = primaryGoal === 'toe_touch' ? 'Toe Touch'
+    : primaryGoal === 'front_splits' ? 'Front Splits'
+    : primaryGoal === 'side_splits' ? 'Side Splits'
+    : primaryGoal === 'pancake' ? 'Pancake'
+    : 'Flexibility'
+  
+  // Flexibility philosophy: frequent short sessions > infrequent long sessions
+  // Build structure based on training days available
+  
+  if (trainingDays === 2) {
+    return {
+      structureType: 'full_body',
+      structureName: `${goalLabel} Focus (2x/week)`,
+      days: [
+        {
+          dayNumber: 1,
+          focus: 'flexibility_focus',
+          focusLabel: `${goalLabel} + Light Strength`,
+          isPrimary: true,
+          movementEmphasis: 'mixed',
+          targetIntensity: 'moderate',
+        },
+        {
+          dayNumber: 2,
+          focus: 'flexibility_focus',
+          focusLabel: `${goalLabel} + Core/Compression`,
+          isPrimary: true,
+          movementEmphasis: 'mixed',
+          targetIntensity: 'moderate',
+        },
+      ],
+      rationale: `${goalLabel} focused sessions with complementary strength work. Consistency is key for flexibility gains.`,
+    }
+  }
+  
+  if (trainingDays === 3) {
+    return {
+      structureType: 'full_body',
+      structureName: `${goalLabel} Focus (3x/week)`,
+      days: [
+        {
+          dayNumber: 1,
+          focus: 'flexibility_focus',
+          focusLabel: `${goalLabel} Primary`,
+          isPrimary: true,
+          movementEmphasis: 'mixed',
+          targetIntensity: 'moderate',
+        },
+        {
+          dayNumber: 2,
+          focus: 'mixed_upper',
+          focusLabel: 'Strength + Flexibility Maintenance',
+          isPrimary: false,
+          movementEmphasis: 'mixed',
+          targetIntensity: 'moderate',
+        },
+        {
+          dayNumber: 3,
+          focus: 'flexibility_focus',
+          focusLabel: `${goalLabel} + Active Work`,
+          isPrimary: true,
+          movementEmphasis: 'mixed',
+          targetIntensity: 'moderate',
+        },
+      ],
+      rationale: `Alternating ${goalLabel.toLowerCase()} focused and maintenance sessions. This frequency optimizes flexibility adaptation.`,
+    }
+  }
+  
+  if (trainingDays === 4) {
+    return {
+      structureType: 'full_body',
+      structureName: `${goalLabel} Focus (4x/week)`,
+      days: [
+        {
+          dayNumber: 1,
+          focus: 'flexibility_focus',
+          focusLabel: `${goalLabel} Deep Work`,
+          isPrimary: true,
+          movementEmphasis: 'mixed',
+          targetIntensity: 'high',
+        },
+        {
+          dayNumber: 2,
+          focus: 'mixed_upper',
+          focusLabel: 'Strength + Active Flexibility',
+          isPrimary: false,
+          movementEmphasis: 'mixed',
+          targetIntensity: 'moderate',
+        },
+        {
+          dayNumber: 3,
+          focus: 'flexibility_focus',
+          focusLabel: `${goalLabel} + Core`,
+          isPrimary: true,
+          movementEmphasis: 'mixed',
+          targetIntensity: 'moderate',
+        },
+        {
+          dayNumber: 4,
+          focus: 'support_recovery',
+          focusLabel: 'Light Flexibility + Recovery',
+          isPrimary: false,
+          movementEmphasis: 'mixed',
+          targetIntensity: 'low',
+        },
+      ],
+      rationale: `High frequency ${goalLabel.toLowerCase()} exposure with strategic recovery. 4 sessions/week is ideal for flexibility progress.`,
+    }
+  }
+  
+  // 5 days
+  return {
+    structureType: 'full_body',
+    structureName: `${goalLabel} Focus (5x/week)`,
+    days: [
+      {
+        dayNumber: 1,
+        focus: 'flexibility_focus',
+        focusLabel: `${goalLabel} Deep Work`,
+        isPrimary: true,
+        movementEmphasis: 'mixed',
+        targetIntensity: 'high',
+      },
+      {
+        dayNumber: 2,
+        focus: 'mixed_upper',
+        focusLabel: 'Strength + Active Flexibility',
+        isPrimary: false,
+        movementEmphasis: 'mixed',
+        targetIntensity: 'moderate',
+      },
+      {
+        dayNumber: 3,
+        focus: 'flexibility_focus',
+        focusLabel: `${goalLabel} + Compression`,
+        isPrimary: true,
+        movementEmphasis: 'mixed',
+        targetIntensity: 'moderate',
+      },
+      {
+        dayNumber: 4,
+        focus: 'support_recovery',
+        focusLabel: 'Light Flexibility + Recovery',
+        isPrimary: false,
+        movementEmphasis: 'mixed',
+        targetIntensity: 'low',
+      },
+      {
+        dayNumber: 5,
+        focus: 'flexibility_focus',
+        focusLabel: `${goalLabel} + Active Work`,
+        isPrimary: true,
+        movementEmphasis: 'mixed',
+        targetIntensity: 'moderate',
+      },
+    ],
+    rationale: `Maximum ${goalLabel.toLowerCase()} frequency with strategic recovery. This structure drives rapid flexibility adaptation.`,
+  }
 }

@@ -416,6 +416,286 @@ export const COMPRESSION_SKILL_PROGRESSIONS: Record<string, EnhancedSkillDefinit
 }
 
 // =============================================================================
+// FLEXIBILITY SKILL PROGRESSIONS
+// =============================================================================
+
+export const PANCAKE_PROGRESSION: EnhancedSkillDefinition = {
+  key: 'pancake',
+  name: 'Pancake',
+  description: 'Forward fold with legs wide - essential for compression and straddle skills',
+  isIsometric: true,
+  levels: [
+    {
+      name: 'Seated Straddle',
+      minHoldForOwnership: 30,
+      targetHold: 60,
+      microToNext: {
+        name: 'Straddle with Forward Reach',
+        description: 'Increase forward fold while maintaining wide leg position',
+        fromLevel: 0,
+        towardLevel: 1,
+        cues: ['Sit tall initially', 'Hinge from hips not spine', 'Keep legs active'],
+      },
+    },
+    {
+      name: 'Supported Pancake',
+      minHoldForOwnership: 30,
+      targetHold: 60,
+      microToNext: {
+        name: 'Reduced Support Pancake',
+        description: 'Decrease external support while maintaining depth',
+        fromLevel: 1,
+        towardLevel: 2,
+        cues: ['Use blocks/cushion initially', 'Gradually reduce support height', 'Maintain hip hinge'],
+      },
+    },
+    {
+      name: 'Active Pancake',
+      minHoldForOwnership: 20,
+      targetHold: 45,
+      microToNext: {
+        name: 'Deepening Pancake',
+        description: 'Work toward chest-to-floor position',
+        fromLevel: 2,
+        towardLevel: 3,
+        cues: ['Engage hip flexors actively', 'Walk hands forward', 'Breathe into the stretch'],
+      },
+    },
+    {
+      name: 'Deep Pancake',
+      minHoldForOwnership: 20,
+      targetHold: 45,
+      microToNext: {
+        name: 'Compression Pancake Entry',
+        description: 'Add compression strength to deep fold',
+        fromLevel: 3,
+        towardLevel: 4,
+        cues: ['Pull chest toward floor', 'Engage core throughout', 'Control entry and exit'],
+      },
+    },
+    {
+      name: 'Compression Pancake',
+      minHoldForOwnership: 15,
+      targetHold: 30,
+    },
+  ],
+  supportStrengthRequirements: {
+    primaryExercise: 'weighted_pull_up',
+    minOneRMPercent: [0, 0, 0, 0, 0],
+    additionalFactors: ['Hip flexor strength', 'Adductor flexibility', 'Core compression ability'],
+  },
+}
+
+export const TOE_TOUCH_PROGRESSION: EnhancedSkillDefinition = {
+  key: 'toe_touch',
+  name: 'Toe Touch',
+  description: 'Standing forward fold - foundation for pike compression',
+  isIsometric: true,
+  levels: [
+    {
+      name: 'Standing Reach',
+      minHoldForOwnership: 30,
+      targetHold: 60,
+      microToNext: {
+        name: 'Deeper Hamstring Reach',
+        description: 'Increase forward fold depth',
+        fromLevel: 0,
+        towardLevel: 1,
+        cues: ['Soft knees to start', 'Hinge at hips', 'Let head hang relaxed'],
+      },
+    },
+    {
+      name: 'Palms to Shins',
+      minHoldForOwnership: 30,
+      targetHold: 60,
+      microToNext: {
+        name: 'Reaching Lower',
+        description: 'Progress toward floor contact',
+        fromLevel: 1,
+        towardLevel: 2,
+        cues: ['Straighten knees gradually', 'Keep weight forward on toes', 'Relax into stretch'],
+      },
+    },
+    {
+      name: 'Palms to Floor',
+      minHoldForOwnership: 30,
+      targetHold: 60,
+      microToNext: {
+        name: 'Deepening Fold',
+        description: 'Bring torso closer to legs',
+        fromLevel: 2,
+        towardLevel: 3,
+        cues: ['Flatten palms fully', 'Work toward straight knees', 'Engage quads to relax hamstrings'],
+      },
+    },
+    {
+      name: 'Chest to Thigh',
+      minHoldForOwnership: 20,
+      targetHold: 45,
+      microToNext: {
+        name: 'Deep Pike Fold',
+        description: 'Maximum compression in standing fold',
+        fromLevel: 3,
+        towardLevel: 4,
+        cues: ['Pull chest to thighs actively', 'Straight legs throughout', 'Breathe into lower back'],
+      },
+    },
+    {
+      name: 'Deep Fold',
+      minHoldForOwnership: 15,
+      targetHold: 30,
+    },
+  ],
+  supportStrengthRequirements: {
+    primaryExercise: 'weighted_pull_up',
+    minOneRMPercent: [0, 0, 0, 0, 0],
+    additionalFactors: ['Hamstring flexibility', 'Hip hinge mobility', 'Core compression'],
+  },
+}
+
+export const FRONT_SPLITS_PROGRESSION: EnhancedSkillDefinition = {
+  key: 'front_splits',
+  name: 'Front Splits',
+  description: 'Full leg split front-to-back - hip flexor and hamstring mobility',
+  isIsometric: true,
+  levels: [
+    {
+      name: 'Lunge Mobility',
+      minHoldForOwnership: 45,
+      targetHold: 90,
+      microToNext: {
+        name: 'Deep Lunge Hold',
+        description: 'Increase lunge depth and hip flexor stretch',
+        fromLevel: 0,
+        towardLevel: 1,
+        cues: ['Back knee down', 'Sink hips forward and down', 'Keep torso upright'],
+      },
+    },
+    {
+      name: 'Half Split',
+      minHoldForOwnership: 45,
+      targetHold: 90,
+      microToNext: {
+        name: 'Deepening Half Split',
+        description: 'Increase range in half split position',
+        fromLevel: 1,
+        towardLevel: 2,
+        cues: ['Front leg straight', 'Hinge forward from hips', 'Square hips to front'],
+      },
+    },
+    {
+      name: 'Elevated Split',
+      minHoldForOwnership: 30,
+      targetHold: 60,
+      microToNext: {
+        name: 'Lowering Elevated Split',
+        description: 'Gradually reduce elevation support',
+        fromLevel: 2,
+        towardLevel: 3,
+        cues: ['Use blocks under hands', 'Lower blocks progressively', 'Maintain hip alignment'],
+      },
+    },
+    {
+      name: 'Deep Split Prep',
+      minHoldForOwnership: 30,
+      targetHold: 60,
+      microToNext: {
+        name: 'Floor Approach',
+        description: 'Work toward full floor contact',
+        fromLevel: 3,
+        towardLevel: 4,
+        cues: ['Both legs straight', 'Hips square', 'Control descent'],
+      },
+    },
+    {
+      name: 'Full Front Split',
+      minHoldForOwnership: 20,
+      targetHold: 45,
+    },
+  ],
+  supportStrengthRequirements: {
+    primaryExercise: 'weighted_pull_up',
+    minOneRMPercent: [0, 0, 0, 0, 0],
+    additionalFactors: ['Hip flexor flexibility', 'Hamstring flexibility', 'Hip stability'],
+  },
+}
+
+export const SIDE_SPLITS_PROGRESSION: EnhancedSkillDefinition = {
+  key: 'side_splits',
+  name: 'Side Splits',
+  description: 'Full leg split side-to-side - essential for straddle skills',
+  isIsometric: true,
+  levels: [
+    {
+      name: 'Horse Stance',
+      minHoldForOwnership: 45,
+      targetHold: 90,
+      microToNext: {
+        name: 'Wider Horse Stance',
+        description: 'Gradually increase stance width',
+        fromLevel: 0,
+        towardLevel: 1,
+        cues: ['Feet parallel or slightly out', 'Sink low with control', 'Keep chest up'],
+      },
+    },
+    {
+      name: 'Frog Mobility',
+      minHoldForOwnership: 45,
+      targetHold: 90,
+      microToNext: {
+        name: 'Deeper Frog Position',
+        description: 'Increase frog stretch depth',
+        fromLevel: 1,
+        towardLevel: 2,
+        cues: ['Knees wide', 'Rock gently forward and back', 'Relax into groin stretch'],
+      },
+    },
+    {
+      name: 'Elevated Middle Split',
+      minHoldForOwnership: 30,
+      targetHold: 60,
+      microToNext: {
+        name: 'Lowering Middle Split',
+        description: 'Reduce support in middle split',
+        fromLevel: 2,
+        towardLevel: 3,
+        cues: ['Use blocks for support', 'Slide feet out gradually', 'Keep toes pointing up'],
+      },
+    },
+    {
+      name: 'Deep Split Prep',
+      minHoldForOwnership: 30,
+      targetHold: 60,
+      microToNext: {
+        name: 'Floor Approach',
+        description: 'Work toward full floor contact',
+        fromLevel: 3,
+        towardLevel: 4,
+        cues: ['Straight legs', 'Hips forward', 'Control descent'],
+      },
+    },
+    {
+      name: 'Full Side Split',
+      minHoldForOwnership: 20,
+      targetHold: 45,
+    },
+  ],
+  supportStrengthRequirements: {
+    primaryExercise: 'weighted_pull_up',
+    minOneRMPercent: [0, 0, 0, 0, 0],
+    additionalFactors: ['Adductor flexibility', 'Hip mobility', 'Hip stability'],
+  },
+}
+
+// Add flexibility skills to the registry
+export const FLEXIBILITY_SKILL_PROGRESSIONS: Record<string, EnhancedSkillDefinition> = {
+  pancake: PANCAKE_PROGRESSION,
+  toe_touch: TOE_TOUCH_PROGRESSION,
+  front_splits: FRONT_SPLITS_PROGRESSION,
+  side_splits: SIDE_SPLITS_PROGRESSION,
+}
+
+// =============================================================================
 // SKILL PROGRESSIONS REGISTRY (Main Export)
 // =============================================================================
 
@@ -427,6 +707,11 @@ export const SKILL_PROGRESSIONS: Record<string, EnhancedSkillDefinition> = {
   l_sit: L_SIT_PROGRESSION,
   v_sit: V_SIT_PROGRESSION,
   i_sit: I_SIT_PROGRESSION,
+  // Flexibility skills
+  pancake: PANCAKE_PROGRESSION,
+  toe_touch: TOE_TOUCH_PROGRESSION,
+  front_splits: FRONT_SPLITS_PROGRESSION,
+  side_splits: SIDE_SPLITS_PROGRESSION,
 }
 
 export function getSkillProgression(skillKey: string): EnhancedSkillDefinition | null {

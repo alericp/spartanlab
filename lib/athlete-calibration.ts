@@ -15,6 +15,7 @@ import type {
   WeeklyTrainingDays,
   OnboardingGoal,
   PrimaryGoalType,
+  ReadinessScores,
 } from './athlete-profile'
 import { getOnboardingProfile } from './athlete-profile'
 import { getAthleteProfile, type AthleteProfile as DataServiceAthleteProfile } from './data-service'
@@ -100,6 +101,14 @@ export interface AthleteCalibration {
   suggestedProgressionLevel: 'very_conservative' | 'conservative' | 'standard' | 'aggressive'
   suggestedVolumeModifier: number // 0.7 to 1.2
   suggestedRestModifier: number // 0.8 to 1.3
+  
+  // Readiness scores (from quick calibration questions)
+  readinessScores: {
+    strengthPotential: number      // 0-100
+    skillAdaptation: number        // 0-100
+    recoveryTolerance: number      // 0-100
+    volumeTolerance: number        // 0-100
+  } | null
   
   // Metadata
   calibrationComplete: boolean
@@ -598,16 +607,56 @@ export function calibrateAthleteProfile(profile: CalibrationProfile): AthleteCal
   const canHandleEnduranceBlocks = enduranceCompatibility !== 'low' && fatigueSensitivity !== 'high'
   const shouldConserveVolume = fatigueSensitivity === 'high' || sessionCapacity === 'short'
   
-  // Suggest adjustments
-  const suggestedProgressionLevel = suggestProgressionLevel(
+  // Extract readiness scores from onboarding profile (if available)
+  const readinessScores = !isAthleteProfile && (profile as OnboardingProfile).readinessCalibration?.scores
+    ? {
+        strengthPotential: (profile as OnboardingProfile).readinessCalibration!.scores!.strengthPotentialScore,
+        skillAdaptation: (profile as OnboardingProfile).readinessCalibration!.scores!.skillAdaptationScore,
+        recoveryTolerance: (profile as OnboardingProfile).readinessCalibration!.scores!.recoveryToleranceScore,
+        volumeTolerance: (profile as OnboardingProfile).readinessCalibration!.scores!.volumeToleranceScore,
+      }
+    : null
+
+  // Suggest adjustments (enhanced with readiness scores)
+  let suggestedProgressionLevel = suggestProgressionLevel(
     leverageProfile,
     bodyMassProfile,
     fatigueSensitivity,
     pullStrengthTier,
     pushStrengthTier
   )
-  const suggestedVolumeModifier = suggestVolumeModifier(sessionCapacity, fatigueSensitivity, bodyMassProfile)
-  const suggestedRestModifier = suggestRestModifier(fatigueSensitivity, bodyMassProfile, leverageProfile)
+  
+  // Adjust progression based on readiness scores if available
+  if (readinessScores) {
+    // High skill adaptation = can progress faster on skills
+    if (readinessScores.skillAdaptation >= 70 && suggestedProgressionLevel === 'conservative') {
+      suggestedProgressionLevel = 'standard'
+    }
+    // Low recovery tolerance = be more conservative
+    if (readinessScores.recoveryTolerance < 40 && suggestedProgressionLevel !== 'very_conservative') {
+      suggestedProgressionLevel = suggestedProgressionLevel === 'aggressive' ? 'standard' : 'conservative'
+    }
+  }
+
+  let suggestedVolumeModifier = suggestVolumeModifier(sessionCapacity, fatigueSensitivity, bodyMassProfile)
+  let suggestedRestModifier = suggestRestModifier(fatigueSensitivity, bodyMassProfile, leverageProfile)
+  
+  // Adjust volume/rest based on readiness scores
+  if (readinessScores) {
+    // Volume tolerance affects how much total work they can handle
+    if (readinessScores.volumeTolerance >= 70) {
+      suggestedVolumeModifier = Math.min(1.2, suggestedVolumeModifier + 0.1)
+    } else if (readinessScores.volumeTolerance < 40) {
+      suggestedVolumeModifier = Math.max(0.7, suggestedVolumeModifier - 0.15)
+    }
+    
+    // Recovery tolerance affects rest periods
+    if (readinessScores.recoveryTolerance >= 70) {
+      suggestedRestModifier = Math.max(0.8, suggestedRestModifier - 0.1)
+    } else if (readinessScores.recoveryTolerance < 40) {
+      suggestedRestModifier = Math.min(1.3, suggestedRestModifier + 0.15)
+    }
+  }
   
   return {
     leverageProfile,
@@ -632,6 +681,7 @@ export function calibrateAthleteProfile(profile: CalibrationProfile): AthleteCal
     suggestedProgressionLevel,
     suggestedVolumeModifier,
     suggestedRestModifier,
+    readinessScores,
     calibrationComplete: true,
     calibrationDate: new Date().toISOString(),
   }
@@ -662,6 +712,7 @@ needsCompressionWork: true,
   suggestedProgressionLevel: 'standard',
     suggestedVolumeModifier: 1.0,
     suggestedRestModifier: 1.0,
+    readinessScores: null,
     calibrationComplete: false,
     calibrationDate: null,
   }

@@ -6,19 +6,20 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { 
-  ArrowRight, 
-  ArrowLeft, 
-  Check, 
-  Loader2,
-  User,
-  Target,
-  Zap,
+  ChevronLeft, 
+  ChevronRight, 
+  User, 
+  Target, 
   Dumbbell,
-  StretchHorizontal,
+  Zap,
   Settings,
+  CheckCircle2,
   Calendar,
   Heart,
-  CheckCircle2
+  StretchHorizontal,
+  Loader2,
+  Calculator,
+  Activity,
 } from 'lucide-react'
 import { SpartanIcon } from '@/components/brand/SpartanLogo'
 import { trackOnboardingCompleted } from '@/lib/analytics'
@@ -52,6 +53,12 @@ import {
   type SessionLengthPreference,
   type SessionStylePreference,
   type RecoveryQuality,
+  type TrainingConsistencyAnswer,
+  type RecoveryToleranceAnswer,
+  type StrengthPerceptionAnswer,
+  type SkillFamiliarityAnswer,
+  type BodyTypeAnswer,
+  type ReadinessCalibration,
   TRAINING_EXPERIENCE_LABELS,
   TRAINING_EXPERIENCE_DESCRIPTIONS,
   HEIGHT_LABELS,
@@ -78,6 +85,16 @@ import {
   SESSION_LENGTH_LABELS,
   SESSION_STYLE_LABELS,
   RECOVERY_LABELS,
+  TRAINING_CONSISTENCY_LABELS,
+  TRAINING_CONSISTENCY_DESCRIPTIONS,
+  RECOVERY_TOLERANCE_LABELS,
+  RECOVERY_TOLERANCE_DESCRIPTIONS,
+  STRENGTH_PERCEPTION_LABELS,
+  SKILL_FAMILIARITY_LABELS,
+  SKILL_FAMILIARITY_DESCRIPTIONS,
+  BODY_TYPE_LABELS,
+  BODY_TYPE_DESCRIPTIONS,
+  calculateReadinessScores,
   saveOnboardingProfile,
   createEmptyOnboardingProfile,
   hasEstimatedValues,
@@ -88,8 +105,9 @@ import { BodyFatCalculator } from './BodyFatCalculator'
 // SECTION DEFINITIONS
 // =============================================================================
 
-type SectionId = 
+type SectionId =
   | 'athlete_profile'
+  | 'readiness'
   | 'goals'
   | 'skill_selection'
   | 'strength_benchmarks'
@@ -114,6 +132,12 @@ const SECTIONS: Section[] = [
     title: 'About You',
     subtitle: 'Tell us a little about yourself so we can tailor training to you',
     icon: User,
+  },
+  {
+    id: 'readiness',
+    title: 'Quick Calibration',
+    subtitle: 'A few quick questions to fine-tune your program',
+    icon: Activity,
   },
   {
     id: 'goals',
@@ -485,6 +509,140 @@ function BodyFatSection({ profile, updateProfile }: SectionProps) {
           </OptionButton>
         </div>
       )}
+    </div>
+  )
+}
+
+// =============================================================================
+// READINESS CALIBRATION SECTION
+// =============================================================================
+
+function ReadinessCalibrationSection({ profile, updateProfile }: SectionProps) {
+  // Helper to update readiness calibration
+  const updateReadiness = <K extends keyof ReadinessCalibration>(
+    key: K,
+    value: ReadinessCalibration[K]
+  ) => {
+    const current = profile.readinessCalibration || {
+      trainingConsistency: null,
+      recoveryTolerance: null,
+      strengthPerception: null,
+      skillFamiliarity: null,
+      bodyType: null,
+      scores: null,
+    }
+    
+    const updated = { ...current, [key]: value }
+    
+    // Recalculate scores whenever any answer changes
+    const scores = calculateReadinessScores(updated)
+    
+    updateProfile({
+      readinessCalibration: {
+        ...updated,
+        scores,
+      }
+    })
+  }
+
+  const consistencyOptions: TrainingConsistencyAnswer[] = ['very_consistent', 'mostly_consistent', 'inconsistent', 'just_starting']
+  const recoveryOptions: RecoveryToleranceAnswer[] = ['bounces_back', 'needs_time', 'easily_overtrained']
+  const strengthOptions: StrengthPerceptionAnswer[] = ['above_average', 'average', 'below_average', 'unsure']
+  const skillOptions: SkillFamiliarityAnswer[] = ['experienced', 'some_exposure', 'new_to_skills']
+  const bodyTypeOptions: BodyTypeAnswer[] = ['lean_light', 'athletic_medium', 'strong_heavy', 'tall_long']
+
+  return (
+    <div className="space-y-6">
+      {/* Intro text */}
+      <p className="text-xs text-[#6B7280] -mt-2 pb-2 border-b border-[#2B313A]">
+        These help us estimate your training capacity — especially useful if you don't know exact numbers yet.
+      </p>
+
+      {/* Q1: Training Consistency */}
+      <div className="space-y-3">
+        <label className="text-sm font-medium text-[#A4ACB8]">How consistent is your training?</label>
+        <div className="grid grid-cols-1 gap-2">
+          {consistencyOptions.map((opt) => (
+            <OptionButton
+              key={opt}
+              selected={profile.readinessCalibration?.trainingConsistency === opt}
+              onClick={() => updateReadiness('trainingConsistency', opt)}
+              description={TRAINING_CONSISTENCY_DESCRIPTIONS[opt]}
+            >
+              {TRAINING_CONSISTENCY_LABELS[opt]}
+            </OptionButton>
+          ))}
+        </div>
+      </div>
+
+      {/* Q2: Recovery Tolerance */}
+      <div className="space-y-3">
+        <label className="text-sm font-medium text-[#A4ACB8]">How well do you recover from training?</label>
+        <div className="grid grid-cols-1 gap-2">
+          {recoveryOptions.map((opt) => (
+            <OptionButton
+              key={opt}
+              selected={profile.readinessCalibration?.recoveryTolerance === opt}
+              onClick={() => updateReadiness('recoveryTolerance', opt)}
+              description={RECOVERY_TOLERANCE_DESCRIPTIONS[opt]}
+            >
+              {RECOVERY_TOLERANCE_LABELS[opt]}
+            </OptionButton>
+          ))}
+        </div>
+      </div>
+
+      {/* Q3: Strength Perception */}
+      <div className="space-y-3">
+        <label className="text-sm font-medium text-[#A4ACB8]">How would you rate your relative strength?</label>
+        <p className="text-xs text-[#6B7280] -mt-1">Compared to others your size</p>
+        <div className="grid grid-cols-2 gap-2">
+          {strengthOptions.map((opt) => (
+            <OptionButton
+              key={opt}
+              selected={profile.readinessCalibration?.strengthPerception === opt}
+              onClick={() => updateReadiness('strengthPerception', opt)}
+            >
+              {STRENGTH_PERCEPTION_LABELS[opt]}
+            </OptionButton>
+          ))}
+        </div>
+      </div>
+
+      {/* Q4: Skill Familiarity */}
+      <div className="space-y-3">
+        <label className="text-sm font-medium text-[#A4ACB8]">Experience with skill training?</label>
+        <p className="text-xs text-[#6B7280] -mt-1">Levers, handstands, gymnastics-style work</p>
+        <div className="grid grid-cols-1 gap-2">
+          {skillOptions.map((opt) => (
+            <OptionButton
+              key={opt}
+              selected={profile.readinessCalibration?.skillFamiliarity === opt}
+              onClick={() => updateReadiness('skillFamiliarity', opt)}
+              description={SKILL_FAMILIARITY_DESCRIPTIONS[opt]}
+            >
+              {SKILL_FAMILIARITY_LABELS[opt]}
+            </OptionButton>
+          ))}
+        </div>
+      </div>
+
+      {/* Q5: Body Type */}
+      <div className="space-y-3">
+        <label className="text-sm font-medium text-[#A4ACB8]">How would you describe your build?</label>
+        <div className="grid grid-cols-2 gap-2">
+          {bodyTypeOptions.map((opt) => (
+            <OptionButton
+              key={opt}
+              selected={profile.readinessCalibration?.bodyType === opt}
+              onClick={() => updateReadiness('bodyType', opt)}
+              description={BODY_TYPE_DESCRIPTIONS[opt]}
+            >
+              {BODY_TYPE_LABELS[opt]}
+            </OptionButton>
+          ))}
+        </div>
+      </div>
     </div>
   )
 }
@@ -1635,6 +1793,57 @@ function ReviewSection({ profile, onEditSection }: ReviewSectionProps) {
               : 'Bodyweight only'}
           </div>
         </div>
+
+        {/* Readiness Calibration Summary */}
+        {profile.readinessCalibration?.scores && (
+          <div className="bg-[#0F1115] rounded-lg p-3 border border-[#2B313A]">
+            <div className="flex justify-between items-start mb-2">
+              <span className="text-[#6B7280] text-xs uppercase tracking-wide">Training Calibration</span>
+              <EditButton section="readiness" />
+            </div>
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              <div className="flex items-center gap-2">
+                <div className="w-full bg-[#2B313A] rounded-full h-1.5">
+                  <div 
+                    className="bg-[#4F6D8A] h-1.5 rounded-full" 
+                    style={{ width: `${profile.readinessCalibration.scores.volumeToleranceScore}%` }}
+                  />
+                </div>
+                <span className="text-[#6B7280] whitespace-nowrap">Volume</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-full bg-[#2B313A] rounded-full h-1.5">
+                  <div 
+                    className="bg-[#4F6D8A] h-1.5 rounded-full" 
+                    style={{ width: `${profile.readinessCalibration.scores.recoveryToleranceScore}%` }}
+                  />
+                </div>
+                <span className="text-[#6B7280] whitespace-nowrap">Recovery</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-full bg-[#2B313A] rounded-full h-1.5">
+                  <div 
+                    className="bg-[#4F6D8A] h-1.5 rounded-full" 
+                    style={{ width: `${profile.readinessCalibration.scores.skillAdaptationScore}%` }}
+                  />
+                </div>
+                <span className="text-[#6B7280] whitespace-nowrap">Skill</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-full bg-[#2B313A] rounded-full h-1.5">
+                  <div 
+                    className="bg-[#4F6D8A] h-1.5 rounded-full" 
+                    style={{ width: `${profile.readinessCalibration.scores.strengthPotentialScore}%` }}
+                  />
+                </div>
+                <span className="text-[#6B7280] whitespace-nowrap">Strength</span>
+              </div>
+            </div>
+            <p className="text-[#6B7280] text-[10px] mt-2 text-center">
+              These estimates help calibrate your starting program
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Confidence message */}
@@ -1678,8 +1887,19 @@ export function AthleteOnboarding() {
     if (!currentSection) return false
     
     switch (currentSection.id) {
-      case 'athlete_profile':
-        return profile.sex !== null && profile.trainingExperience !== null
+    case 'athlete_profile':
+      return profile.sex !== null && profile.trainingExperience !== null
+      case 'readiness':
+      // At least 3 of 5 questions answered
+      const r = profile.readinessCalibration
+      const answered = [
+        r?.trainingConsistency,
+        r?.recoveryTolerance,
+        r?.strengthPerception,
+        r?.skillFamiliarity,
+        r?.bodyType
+      ].filter(Boolean).length
+      return answered >= 3
       case 'goals':
         return profile.primaryGoal !== null
       case 'skill_selection':
@@ -1756,8 +1976,10 @@ export function AthleteOnboarding() {
     const props = { profile, updateProfile }
     
     switch (currentSection.id) {
-      case 'athlete_profile':
-        return <AthleteProfileSection {...props} />
+    case 'athlete_profile':
+      return <AthleteProfileSection {...props} />
+      case 'readiness':
+      return <ReadinessCalibrationSection {...props} />
       case 'goals':
         return <GoalsSection {...props} />
       case 'skill_selection':

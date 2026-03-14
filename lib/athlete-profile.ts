@@ -262,6 +262,202 @@ export interface RecoveryProfile {
 }
 
 // =============================================================================
+// READINESS CALIBRATION TYPES
+// =============================================================================
+
+// Question response types
+export type TrainingConsistencyAnswer = 'very_consistent' | 'mostly_consistent' | 'inconsistent' | 'just_starting'
+export type RecoveryToleranceAnswer = 'bounces_back' | 'needs_time' | 'easily_overtrained'
+export type StrengthPerceptionAnswer = 'above_average' | 'average' | 'below_average' | 'unsure'
+export type SkillFamiliarityAnswer = 'experienced' | 'some_exposure' | 'new_to_skills'
+export type BodyTypeAnswer = 'lean_light' | 'athletic_medium' | 'strong_heavy' | 'tall_long'
+
+// Readiness scores (0-100 internal scale)
+export interface ReadinessScores {
+  strengthPotentialScore: number      // 0-100: Estimated strength ceiling based on perception + body type
+  skillAdaptationScore: number        // 0-100: How quickly they'll pick up skill work
+  recoveryToleranceScore: number      // 0-100: How much volume/intensity they can handle
+  volumeToleranceScore: number        // 0-100: Weekly training capacity
+}
+
+// Full readiness calibration data
+export interface ReadinessCalibration {
+  // Raw answers
+  trainingConsistency: TrainingConsistencyAnswer | null
+  recoveryTolerance: RecoveryToleranceAnswer | null
+  strengthPerception: StrengthPerceptionAnswer | null
+  skillFamiliarity: SkillFamiliarityAnswer | null
+  bodyType: BodyTypeAnswer | null
+  
+  // Computed scores (calculated from answers)
+  scores: ReadinessScores | null
+}
+
+// Labels for UI
+export const TRAINING_CONSISTENCY_LABELS: Record<TrainingConsistencyAnswer, string> = {
+  'very_consistent': 'Very consistent',
+  'mostly_consistent': 'Mostly consistent',
+  'inconsistent': 'On and off',
+  'just_starting': 'Just starting out',
+}
+
+export const TRAINING_CONSISTENCY_DESCRIPTIONS: Record<TrainingConsistencyAnswer, string> = {
+  'very_consistent': 'Rarely miss sessions, training is a habit',
+  'mostly_consistent': 'Train regularly with occasional breaks',
+  'inconsistent': 'Tend to start and stop, hard to maintain',
+  'just_starting': 'Building the habit now',
+}
+
+export const RECOVERY_TOLERANCE_LABELS: Record<RecoveryToleranceAnswer, string> = {
+  'bounces_back': 'Quick recovery',
+  'needs_time': 'Need adequate rest',
+  'easily_overtrained': 'Recover slowly',
+}
+
+export const RECOVERY_TOLERANCE_DESCRIPTIONS: Record<RecoveryToleranceAnswer, string> = {
+  'bounces_back': 'Can train hard day after day',
+  'needs_time': 'Need rest days between hard sessions',
+  'easily_overtrained': 'Get fatigued or sore easily',
+}
+
+export const STRENGTH_PERCEPTION_LABELS: Record<StrengthPerceptionAnswer, string> = {
+  'above_average': 'Stronger than most',
+  'average': 'About average',
+  'below_average': 'Working on it',
+  'unsure': 'Not sure yet',
+}
+
+export const SKILL_FAMILIARITY_LABELS: Record<SkillFamiliarityAnswer, string> = {
+  'experienced': 'Experienced',
+  'some_exposure': 'Some exposure',
+  'new_to_skills': 'New to skills',
+}
+
+export const SKILL_FAMILIARITY_DESCRIPTIONS: Record<SkillFamiliarityAnswer, string> = {
+  'experienced': 'Have trained levers, handstands, or similar',
+  'some_exposure': 'Tried some skill work before',
+  'new_to_skills': 'Mostly strength or cardio background',
+}
+
+export const BODY_TYPE_LABELS: Record<BodyTypeAnswer, string> = {
+  'lean_light': 'Lean & light',
+  'athletic_medium': 'Athletic build',
+  'strong_heavy': 'Strong & heavy',
+  'tall_long': 'Tall / long limbs',
+}
+
+export const BODY_TYPE_DESCRIPTIONS: Record<BodyTypeAnswer, string> = {
+  'lean_light': 'Lower body weight, good leverage for skills',
+  'athletic_medium': 'Balanced build, versatile',
+  'strong_heavy': 'More muscle mass, strength-focused',
+  'tall_long': 'Longer levers, may need more time on skills',
+}
+
+// =============================================================================
+// READINESS SCORE CALCULATOR
+// =============================================================================
+
+export function calculateReadinessScores(calibration: Partial<ReadinessCalibration>): ReadinessScores {
+  // Default middle-of-road scores
+  let strengthPotential = 50
+  let skillAdaptation = 50
+  let recoveryTolerance = 50
+  let volumeTolerance = 50
+
+  // Training consistency affects volume tolerance and skill adaptation
+  switch (calibration.trainingConsistency) {
+    case 'very_consistent':
+      volumeTolerance += 25
+      skillAdaptation += 10
+      break
+    case 'mostly_consistent':
+      volumeTolerance += 10
+      skillAdaptation += 5
+      break
+    case 'inconsistent':
+      volumeTolerance -= 10
+      break
+    case 'just_starting':
+      volumeTolerance -= 20
+      skillAdaptation -= 5
+      break
+  }
+
+  // Recovery tolerance affects recovery and volume scores
+  switch (calibration.recoveryTolerance) {
+    case 'bounces_back':
+      recoveryTolerance += 30
+      volumeTolerance += 15
+      break
+    case 'needs_time':
+      // Keep at baseline
+      break
+    case 'easily_overtrained':
+      recoveryTolerance -= 25
+      volumeTolerance -= 15
+      break
+  }
+
+  // Strength perception affects strength potential
+  switch (calibration.strengthPerception) {
+    case 'above_average':
+      strengthPotential += 25
+      break
+    case 'average':
+      strengthPotential += 5
+      break
+    case 'below_average':
+      strengthPotential -= 15
+      break
+    case 'unsure':
+      // Keep at baseline - conservative
+      break
+  }
+
+  // Skill familiarity affects skill adaptation
+  switch (calibration.skillFamiliarity) {
+    case 'experienced':
+      skillAdaptation += 30
+      break
+    case 'some_exposure':
+      skillAdaptation += 10
+      break
+    case 'new_to_skills':
+      skillAdaptation -= 10
+      break
+  }
+
+  // Body type affects multiple scores
+  switch (calibration.bodyType) {
+    case 'lean_light':
+      skillAdaptation += 15
+      strengthPotential -= 5
+      break
+    case 'athletic_medium':
+      strengthPotential += 10
+      skillAdaptation += 5
+      break
+    case 'strong_heavy':
+      strengthPotential += 20
+      skillAdaptation -= 15
+      recoveryTolerance += 5
+      break
+    case 'tall_long':
+      skillAdaptation -= 10  // Longer levers = harder skills
+      strengthPotential += 5
+      break
+  }
+
+  // Clamp all scores to 0-100
+  return {
+    strengthPotentialScore: Math.max(0, Math.min(100, strengthPotential)),
+    skillAdaptationScore: Math.max(0, Math.min(100, skillAdaptation)),
+    recoveryToleranceScore: Math.max(0, Math.min(100, recoveryTolerance)),
+    volumeToleranceScore: Math.max(0, Math.min(100, volumeTolerance)),
+  }
+}
+
+// =============================================================================
 // FULL ONBOARDING PROFILE
 // =============================================================================
 
@@ -316,6 +512,9 @@ export interface OnboardingProfile {
   
   // Section 9: Recovery / Lifestyle
   recovery: RecoveryProfile | null
+  
+  // Section 10: Readiness Calibration
+  readinessCalibration: ReadinessCalibration | null
   
   // Meta
   hasSeenDashboardIntro: boolean
@@ -696,6 +895,9 @@ export function createEmptyOnboardingProfile(): OnboardingProfile {
     
     // Section 9: Recovery / Lifestyle
     recovery: null,
+    
+    // Section 10: Readiness Calibration
+    readinessCalibration: null,
     
     // Meta
     hasSeenDashboardIntro: false,

@@ -56,3 +56,11 @@ export function isOwnerModeConfigured(): boolean {
 export function checkOwnerByEmail(email: string | null | undefined): boolean {
   return isOwner(email)
 }
+
+/**
+ * Get the current user's email (client-side only, returns owner email if configured)
+ * This is a placeholder for display purposes when showing owner account info
+ */
+export function getCurrentUserEmail(): string | null {
+  return getOwnerEmail()
+}

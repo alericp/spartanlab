@@ -1,4 +1,4 @@
-// AUTH_IMPORT_GRAPH_V6
+// AUTH_PROD_UNBLOCK_V1
 import type { Metadata, Viewport } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
 import { ClerkProvider } from '@clerk/nextjs'
@@ -7,7 +7,7 @@ import { AUTH_BUILD_STAMP } from '@/lib/build-stamp'
 import './globals.css'
 
 // Hard proof marker for deployment verification
-console.log("[AUTH_PROOF] layout auth-import-graph-v6")
+console.log("[AUTH_PROOF] layout auth-prod-unblock-v1")
 console.log(`[SpartanLab] Build: ${AUTH_BUILD_STAMP} (root-layout)`)
 
 const _geist = Geist({ subsets: ["latin"] });

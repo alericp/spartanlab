@@ -183,6 +183,13 @@ export function WelcomeCard({ onDismiss, onProgramReady }: WelcomeCardProps) {
         </div>
       )}
 
+      {/* Adaptability Message */}
+      <div className="bg-[#0F1115] border border-[#2B313A] rounded-lg p-3 mt-4">
+        <p className="text-xs text-[#A4ACB8] text-center">
+          SpartanLab adapts as you improve. Update your metrics anytime to refine your training.
+        </p>
+      </div>
+
       {/* CTA */}
       <div className="mt-4">
         <Button

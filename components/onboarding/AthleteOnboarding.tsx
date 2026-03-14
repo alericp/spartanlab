@@ -111,20 +111,20 @@ interface Section {
 const SECTIONS: Section[] = [
   {
     id: 'athlete_profile',
-    title: 'Athlete Profile',
-    subtitle: 'Basic information to calibrate your training',
+    title: 'About You',
+    subtitle: 'Tell us a little about yourself so we can tailor training to you',
     icon: User,
   },
   {
     id: 'goals',
     title: 'Your Goals',
-    subtitle: 'What do you want to achieve?',
+    subtitle: 'What do you want to achieve? This shapes your entire program.',
     icon: Target,
   },
   {
     id: 'skill_selection',
-    title: 'Skill Selection',
-    subtitle: 'Choose the skills you want to pursue',
+    title: 'Choose Your Skills',
+    subtitle: 'Select the skills you want to master — we\'ll build progressions for each',
     icon: Zap,
     showIf: (profile) => profile.goalCategories.includes('skill_mastery') || 
                          profile.goalCategories.includes('flexibility') ||
@@ -132,46 +132,46 @@ const SECTIONS: Section[] = [
   },
   {
     id: 'strength_benchmarks',
-    title: 'Strength Benchmarks',
-    subtitle: 'Your current strength levels',
+    title: 'Current Strength',
+    subtitle: 'These numbers help us set the right training intensity for you',
     icon: Dumbbell,
   },
   {
     id: 'skill_benchmarks',
-    title: 'Skill Benchmarks',
-    subtitle: 'Your current skill progressions',
+    title: 'Skill Levels',
+    subtitle: 'Your current abilities help us select the right progressions',
     icon: Zap,
     showIf: (profile) => profile.selectedSkills.length > 0,
   },
   {
     id: 'flexibility_benchmarks',
-    title: 'Flexibility Benchmarks',
-    subtitle: 'Your current flexibility levels',
+    title: 'Flexibility',
+    subtitle: 'Range of motion helps us balance strength and mobility work',
     icon: StretchHorizontal,
     showIf: (profile) => profile.selectedFlexibility.length > 0,
   },
   {
     id: 'equipment',
-    title: 'Equipment',
-    subtitle: 'What do you have access to?',
+    title: 'Your Equipment',
+    subtitle: 'We\'ll only program exercises you can actually do',
     icon: Settings,
   },
   {
     id: 'schedule',
     title: 'Training Schedule',
-    subtitle: 'How much time can you dedicate?',
+    subtitle: 'How much time can you realistically commit each week?',
     icon: Calendar,
   },
   {
     id: 'recovery',
     title: 'Recovery & Lifestyle',
-    subtitle: 'Factors that affect your training',
+    subtitle: 'Sleep and stress affect how hard we can push you',
     icon: Heart,
   },
   {
     id: 'review',
-    title: 'Final Review',
-    subtitle: 'Confirm your profile',
+    title: 'Review & Confirm',
+    subtitle: 'Make sure everything looks right before we build your program',
     icon: CheckCircle2,
   },
 ]
@@ -225,7 +225,7 @@ function AthleteProfileSection({ profile, updateProfile }: SectionProps) {
       {/* Sex */}
       <div className="space-y-3">
         <label className="text-sm font-medium text-[#A4ACB8]">Biological sex</label>
-        <p className="text-xs text-[#6B7280] -mt-1">Helps calibrate strength and leverage baselines</p>
+        <p className="text-xs text-[#6B7280] -mt-1">Used to calibrate strength standards and leverage expectations</p>
         <div className="grid grid-cols-2 gap-2">
           {(['male', 'female'] as Sex[]).map((sex) => (
             <OptionButton
@@ -241,7 +241,8 @@ function AthleteProfileSection({ profile, updateProfile }: SectionProps) {
 
       {/* Training Experience */}
       <div className="space-y-3">
-        <label className="text-sm font-medium text-[#A4ACB8]">Training experience</label>
+        <label className="text-sm font-medium text-[#A4ACB8]">How long have you been training?</label>
+        <p className="text-xs text-[#6B7280] -mt-1">This helps us set appropriate starting points</p>
         <div className="grid grid-cols-1 gap-2">
           {(Object.keys(TRAINING_EXPERIENCE_LABELS) as TrainingExperience[]).map((exp) => (
             <OptionButton
@@ -258,7 +259,8 @@ function AthleteProfileSection({ profile, updateProfile }: SectionProps) {
 
       {/* Height */}
       <div className="space-y-3">
-        <label className="text-sm font-medium text-[#A4ACB8]">Height</label>
+        <label className="text-sm font-medium text-[#A4ACB8]">Your height</label>
+        <p className="text-xs text-[#6B7280] -mt-1">Affects leverage in pulling and pushing movements</p>
         <div className="grid grid-cols-2 gap-2">
           {(Object.keys(HEIGHT_LABELS) as HeightRange[]).map((height) => (
             <OptionButton
@@ -274,7 +276,8 @@ function AthleteProfileSection({ profile, updateProfile }: SectionProps) {
 
       {/* Weight */}
       <div className="space-y-3">
-        <label className="text-sm font-medium text-[#A4ACB8]">Weight</label>
+        <label className="text-sm font-medium text-[#A4ACB8]">Your weight</label>
+        <p className="text-xs text-[#6B7280] -mt-1">Important for bodyweight strength calculations</p>
         <div className="grid grid-cols-2 gap-2">
           {(Object.keys(WEIGHT_LABELS) as WeightRange[]).map((weight) => (
             <OptionButton
@@ -668,10 +671,15 @@ function StrengthBenchmarksSection({ profile, updateProfile }: SectionProps) {
 
   return (
     <div className="space-y-6">
+      {/* Section intro */}
+      <p className="text-xs text-[#6B7280] -mt-2 pb-2 border-b border-[#2B313A]">
+        Don't know your numbers? Select "Not tested" — you can always update later.
+      </p>
+
       {/* Max Pull-ups */}
       <div className="space-y-3">
-        <label className="text-sm font-medium text-[#A4ACB8]">Max pull-ups</label>
-        <p className="text-xs text-[#6B7280] -mt-1">Strict form, full range of motion</p>
+        <label className="text-sm font-medium text-[#A4ACB8]">Max strict pull-ups</label>
+        <p className="text-xs text-[#6B7280] -mt-1">Dead hang to chin over bar, no kipping</p>
         <div className="grid grid-cols-4 gap-2">
           {pullupOptions.map((cap) => (
             <OptionButton
@@ -1267,20 +1275,25 @@ function EquipmentSection({ profile, updateProfile }: SectionProps) {
   }
 
   return (
-    <div className="space-y-3">
-      <label className="text-sm font-medium text-[#A4ACB8]">Equipment available</label>
-      <p className="text-xs text-[#6B7280] -mt-1">Select all you have access to</p>
-      <div className="grid grid-cols-2 gap-2">
-        {(Object.keys(EQUIPMENT_LABELS) as EquipmentType[]).map((eq) => (
-          <OptionButton
-            key={eq}
-            selected={profile.equipment.includes(eq)}
-            onClick={() => toggleEquipment(eq)}
-          >
-            {EQUIPMENT_LABELS[eq]}
-          </OptionButton>
-        ))}
+    <div className="space-y-4">
+      <div className="space-y-3">
+        <label className="text-sm font-medium text-[#A4ACB8]">What equipment do you have?</label>
+        <p className="text-xs text-[#6B7280] -mt-1">Select everything you can access regularly — we'll adapt exercises accordingly</p>
+        <div className="grid grid-cols-2 gap-2">
+          {(Object.keys(EQUIPMENT_LABELS) as EquipmentType[]).map((eq) => (
+            <OptionButton
+              key={eq}
+              selected={profile.equipment.includes(eq)}
+              onClick={() => toggleEquipment(eq)}
+            >
+              {EQUIPMENT_LABELS[eq]}
+            </OptionButton>
+          ))}
+        </div>
       </div>
+      <p className="text-xs text-[#6B7280] italic pt-1 border-t border-[#2B313A]">
+        Don't have much? That's fine — bodyweight training can take you far.
+      </p>
     </div>
   )
 }
@@ -1293,7 +1306,8 @@ function ScheduleSection({ profile, updateProfile }: SectionProps) {
     <div className="space-y-6">
       {/* Days per week */}
       <div className="space-y-3">
-        <label className="text-sm font-medium text-[#A4ACB8]">Training days per week</label>
+        <label className="text-sm font-medium text-[#A4ACB8]">How many days can you train?</label>
+        <p className="text-xs text-[#6B7280] -mt-1">Be realistic — consistency beats intensity</p>
         <div className="flex gap-2">
           {days.map((day) => (
             <OptionButton
@@ -1310,7 +1324,8 @@ function ScheduleSection({ profile, updateProfile }: SectionProps) {
 
       {/* Session length */}
       <div className="space-y-3">
-        <label className="text-sm font-medium text-[#A4ACB8]">Typical session length</label>
+        <label className="text-sm font-medium text-[#A4ACB8]">How long can you train?</label>
+        <p className="text-xs text-[#6B7280] -mt-1">Average time per session</p>
         <div className="grid grid-cols-4 gap-2">
           {lengths.map((len) => (
             <OptionButton
@@ -1326,7 +1341,8 @@ function ScheduleSection({ profile, updateProfile }: SectionProps) {
 
       {/* Session style */}
       <div className="space-y-3">
-        <label className="text-sm font-medium text-[#A4ACB8]">Session style preference</label>
+        <label className="text-sm font-medium text-[#A4ACB8]">What's your training style?</label>
+        <p className="text-xs text-[#6B7280] -mt-1">How do you prefer to structure workouts?</p>
         <div className="grid grid-cols-1 gap-2">
           {(Object.keys(SESSION_STYLE_LABELS) as SessionStylePreference[]).map((style) => (
             <OptionButton
@@ -1360,9 +1376,14 @@ function RecoverySection({ profile, updateProfile }: SectionProps) {
 
   return (
     <div className="space-y-6">
+      {/* Section intro */}
+      <p className="text-xs text-[#6B7280] -mt-2 pb-2 border-b border-[#2B313A]">
+        These affect how hard we program your training. Be honest — it helps us keep you safe.
+      </p>
+
       {/* Sleep Quality */}
       <div className="space-y-3">
-        <label className="text-sm font-medium text-[#A4ACB8]">Sleep quality</label>
+        <label className="text-sm font-medium text-[#A4ACB8]">How well do you typically sleep?</label>
         <div className="flex gap-2">
           {qualities.map((q) => (
             <OptionButton
@@ -1379,7 +1400,7 @@ function RecoverySection({ profile, updateProfile }: SectionProps) {
 
       {/* Energy Level */}
       <div className="space-y-3">
-        <label className="text-sm font-medium text-[#A4ACB8]">Typical energy level</label>
+        <label className="text-sm font-medium text-[#A4ACB8]">General energy level</label>
         <div className="flex gap-2">
           {qualities.map((q) => (
             <OptionButton
@@ -1432,21 +1453,76 @@ function RecoverySection({ profile, updateProfile }: SectionProps) {
   )
 }
 
-function ReviewSection({ profile }: { profile: OnboardingProfile }) {
+interface ReviewSectionProps {
+  profile: OnboardingProfile
+  onEditSection?: (sectionId: SectionId) => void
+}
+
+function ReviewSection({ profile, onEditSection }: ReviewSectionProps) {
   const hasEstimates = hasEstimatedValues(profile)
+
+  // Helper to format skill list
+  const formatSkills = () => {
+    if (profile.selectedSkills.length === 0) return null
+    return profile.selectedSkills.map(s => SKILL_GOAL_LABELS[s]).join(', ')
+  }
+
+  // Helper to format flexibility goals
+  const formatFlexibility = () => {
+    if (profile.selectedFlexibility.length === 0) return null
+    return profile.selectedFlexibility.map(f => FLEXIBILITY_GOAL_LABELS[f]).join(', ')
+  }
+
+  // Helper for strength summary
+  const getStrengthSummary = () => {
+    const items = []
+    if (profile.pullUpMax && profile.pullUpMax !== 'unknown') items.push(`Pull-ups: ${PULLUP_LABELS[profile.pullUpMax]}`)
+    if (profile.dipMax && profile.dipMax !== 'unknown') items.push(`Dips: ${DIP_LABELS[profile.dipMax]}`)
+    if (profile.pushUpMax && profile.pushUpMax !== 'unknown') items.push(`Push-ups: ${PUSHUP_LABELS[profile.pushUpMax]}`)
+    return items.length > 0 ? items : null
+  }
+
+  // Helper for skill level summary
+  const getSkillSummary = () => {
+    const items = []
+    if (profile.frontLever?.progression && profile.frontLever.progression !== 'unknown' && profile.frontLever.progression !== 'none') {
+      items.push(`Front Lever: ${FRONT_LEVER_LABELS[profile.frontLever.progression]}`)
+    }
+    if (profile.planche?.progression && profile.planche.progression !== 'unknown' && profile.planche.progression !== 'none') {
+      items.push(`Planche: ${PLANCHE_LABELS[profile.planche.progression]}`)
+    }
+    if (profile.muscleUp && profile.muscleUp !== 'unknown' && profile.muscleUp !== 'none') {
+      items.push(`Muscle-Up: ${MUSCLE_UP_LABELS[profile.muscleUp]}`)
+    }
+    return items.length > 0 ? items : null
+  }
+
+  const EditButton = ({ section }: { section: SectionId }) => (
+    onEditSection ? (
+      <button
+        onClick={() => onEditSection(section)}
+        className="text-xs text-[#4F6D8A] hover:text-[#6B8FAD] transition-colors"
+      >
+        Edit
+      </button>
+    ) : null
+  )
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-[#A4ACB8]">
-        Review your profile before generating your personalized program.
-      </p>
+      {/* Header message */}
+      <div className="text-center pb-2">
+        <p className="text-sm text-[#A4ACB8]">
+          Here's what we know about you. Make sure everything looks right.
+        </p>
+      </div>
       
       {/* Estimated values notice */}
       {hasEstimates && (
         <div className="bg-[#4F6D8A]/10 border border-[#4F6D8A]/30 rounded-lg p-3">
           <p className="text-sm text-[#A4ACB8]">
             <span className="text-[#4F6D8A] font-medium">Some metrics not provided.</span>{' '}
-            Your program will use conservative beginner-safe estimates. You can update your strength and skill metrics anytime to refine your program.
+            No problem — your program will start with safe, conservative estimates. Update your numbers anytime as you learn them.
           </p>
         </div>
       )}
@@ -1454,45 +1530,121 @@ function ReviewSection({ profile }: { profile: OnboardingProfile }) {
       <div className="space-y-3 text-sm">
         {/* Athlete Profile */}
         <div className="bg-[#0F1115] rounded-lg p-3 border border-[#2B313A]">
-          <div className="text-[#6B7280] text-xs uppercase tracking-wide mb-1">Profile</div>
+          <div className="flex justify-between items-start mb-1">
+            <span className="text-[#6B7280] text-xs uppercase tracking-wide">Your Profile</span>
+            <EditButton section="athlete_profile" />
+          </div>
           <div className="text-[#E6E9EF]">
             {profile.sex ? (profile.sex === 'male' ? 'Male' : 'Female') : 'Not set'} 
             {profile.trainingExperience && ` • ${TRAINING_EXPERIENCE_LABELS[profile.trainingExperience]}`}
           </div>
+          {profile.bodyFatPercent && (
+            <div className="text-[#A4ACB8] text-xs mt-1">Body fat: {profile.bodyFatPercent}%</div>
+          )}
         </div>
 
         {/* Goals */}
         <div className="bg-[#0F1115] rounded-lg p-3 border border-[#2B313A]">
-          <div className="text-[#6B7280] text-xs uppercase tracking-wide mb-1">Primary Goal</div>
+          <div className="flex justify-between items-start mb-1">
+            <span className="text-[#6B7280] text-xs uppercase tracking-wide">Goals</span>
+            <EditButton section="goals" />
+          </div>
           <div className="text-[#E6E9EF]">
             {profile.primaryGoal || 'Not set'}
             {profile.secondaryGoal && ` + ${profile.secondaryGoal}`}
           </div>
         </div>
 
+        {/* Skills (if any selected) */}
+        {formatSkills() && (
+          <div className="bg-[#0F1115] rounded-lg p-3 border border-[#2B313A]">
+            <div className="flex justify-between items-start mb-1">
+              <span className="text-[#6B7280] text-xs uppercase tracking-wide">Skills to Master</span>
+              <EditButton section="skill_selection" />
+            </div>
+            <div className="text-[#E6E9EF] text-xs leading-relaxed">
+              {formatSkills()}
+            </div>
+          </div>
+        )}
+
+        {/* Flexibility (if any selected) */}
+        {formatFlexibility() && (
+          <div className="bg-[#0F1115] rounded-lg p-3 border border-[#2B313A]">
+            <div className="flex justify-between items-start mb-1">
+              <span className="text-[#6B7280] text-xs uppercase tracking-wide">Flexibility Goals</span>
+              <EditButton section="skill_selection" />
+            </div>
+            <div className="text-[#E6E9EF] text-xs leading-relaxed">
+              {formatFlexibility()}
+            </div>
+          </div>
+        )}
+
+        {/* Strength Benchmarks */}
+        {getStrengthSummary() && (
+          <div className="bg-[#0F1115] rounded-lg p-3 border border-[#2B313A]">
+            <div className="flex justify-between items-start mb-1">
+              <span className="text-[#6B7280] text-xs uppercase tracking-wide">Strength</span>
+              <EditButton section="strength_benchmarks" />
+            </div>
+            <div className="text-[#E6E9EF] text-xs leading-relaxed space-y-0.5">
+              {getStrengthSummary()?.map((item, i) => (
+                <div key={i}>{item}</div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Skill Levels */}
+        {getSkillSummary() && (
+          <div className="bg-[#0F1115] rounded-lg p-3 border border-[#2B313A]">
+            <div className="flex justify-between items-start mb-1">
+              <span className="text-[#6B7280] text-xs uppercase tracking-wide">Skill Levels</span>
+              <EditButton section="skill_benchmarks" />
+            </div>
+            <div className="text-[#E6E9EF] text-xs leading-relaxed space-y-0.5">
+              {getSkillSummary()?.map((item, i) => (
+                <div key={i}>{item}</div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Schedule */}
         <div className="bg-[#0F1115] rounded-lg p-3 border border-[#2B313A]">
-          <div className="text-[#6B7280] text-xs uppercase tracking-wide mb-1">Schedule</div>
+          <div className="flex justify-between items-start mb-1">
+            <span className="text-[#6B7280] text-xs uppercase tracking-wide">Training Schedule</span>
+            <EditButton section="schedule" />
+          </div>
           <div className="text-[#E6E9EF]">
             {profile.trainingDaysPerWeek || '?'} days/week
-            {profile.sessionLengthMinutes && ` • ${profile.sessionLengthMinutes} min sessions`}
+            {profile.sessionLengthMinutes && ` • ${SESSION_LENGTH_LABELS[profile.sessionLengthMinutes as SessionLengthPreference]}`}
           </div>
         </div>
 
         {/* Equipment */}
         <div className="bg-[#0F1115] rounded-lg p-3 border border-[#2B313A]">
-          <div className="text-[#6B7280] text-xs uppercase tracking-wide mb-1">Equipment</div>
-          <div className="text-[#E6E9EF]">
+          <div className="flex justify-between items-start mb-1">
+            <span className="text-[#6B7280] text-xs uppercase tracking-wide">Equipment</span>
+            <EditButton section="equipment" />
+          </div>
+          <div className="text-[#E6E9EF] text-xs leading-relaxed">
             {profile.equipment.length > 0 
               ? profile.equipment.map(e => EQUIPMENT_LABELS[e]).join(', ')
-              : 'None selected'}
+              : 'Bodyweight only'}
           </div>
         </div>
       </div>
 
-      <p className="text-xs text-[#6B7280] pt-2">
-        You can update these details anytime from your profile settings.
-      </p>
+      {/* Confidence message */}
+      <div className="bg-[#C1121F]/5 border border-[#C1121F]/20 rounded-lg p-3 mt-4">
+        <p className="text-xs text-[#A4ACB8] text-center">
+          Your personalized program will be built using your strength, skills, and goals.
+          <br />
+          <span className="text-[#6B7280]">SpartanLab adapts as you improve — update your metrics anytime.</span>
+        </p>
+      </div>
     </div>
   )
 }
@@ -1567,6 +1719,14 @@ export function AthleteOnboarding() {
     }
   }
 
+  // Navigate to a specific section (used by ReviewSection edit buttons)
+  const goToSection = useCallback((sectionId: SectionId) => {
+    const sectionIndex = visibleSections.findIndex(s => s.id === sectionId)
+    if (sectionIndex !== -1) {
+      setCurrentSectionIndex(sectionIndex)
+    }
+  }, [visibleSections])
+
   const handleSubmit = async () => {
     setIsSubmitting(true)
     
@@ -1615,7 +1775,7 @@ export function AthleteOnboarding() {
       case 'recovery':
         return <RecoverySection {...props} />
       case 'review':
-        return <ReviewSection profile={profile} />
+        return <ReviewSection profile={profile} onEditSection={goToSection} />
       default:
         return null
     }
@@ -1727,7 +1887,9 @@ export function AthleteOnboarding() {
 
           {/* Footer Note */}
           <p className="text-center text-xs text-[#6B7280] mt-4 md:mt-6 px-4">
-            SpartanLab uses this to calibrate your personalized training program.
+            Everything here helps SpartanLab build training that fits you.
+            <br />
+            <span className="text-[#4F6D8A]">You can always change these later.</span>
           </p>
         </div>
       </div>

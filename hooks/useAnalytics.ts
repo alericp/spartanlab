@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback } from 'react'
-import { useClerkAuth } from './useClerkAuth'
+import { useUser } from '@clerk/nextjs'
 import {
   trackEvent,
   trackSignUpStarted,
@@ -25,11 +25,11 @@ import {
  * Automatically includes user ID when available
  */
 export function useAnalytics() {
-  const { user, isSignedIn } = useClerkAuth()
+  const { user, isSignedIn } = useUser()
   
   const identify = useCallback(() => {
     if (user?.id) {
-      identifyUser(user.id, { email: user.email })
+      identifyUser(user.id, { email: user.emailAddresses?.[0]?.emailAddress })
     }
   }, [user])
   
@@ -39,7 +39,7 @@ export function useAnalytics() {
   
   const trackAccountCreate = useCallback(() => {
     if (user?.id) {
-      trackAccountCreated(user.id, user.email)
+      trackAccountCreated(user.id, user.emailAddresses?.[0]?.emailAddress)
     }
   }, [user])
   

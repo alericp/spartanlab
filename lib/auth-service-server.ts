@@ -1,55 +1,39 @@
-// Server-only auth service with Clerk integration
+// Server-only auth service using native Clerk
 // Only import this in Server Components, Route Handlers, or Server Actions
 import 'server-only'
 
-import { isClerkConfigured } from './auth-environment'
-import { mapClerkUserToUser } from './auth-service'
-import type { User } from '@/types/domain'
+import { auth, currentUser } from '@clerk/nextjs/server'
+import type { User, SubscriptionPlan } from '@/types/domain'
 
 // ============================================================================
-// PREVIEW MODE USER
+// USER MAPPING
 // ============================================================================
-
-const PREVIEW_USER: User = {
-  id: 'preview-user',
-  email: 'preview@spartanlab.local',
-  username: 'Aleric',
-  subscriptionPlan: 'pro',
-  createdAt: new Date().toISOString(),
-}
-
-// ============================================================================
-// CLERK MODULE CACHE
-// ============================================================================
-
-let clerkModule: typeof import('@clerk/nextjs/server') | null = null
 
 /**
- * Get Clerk server module (lazy loaded)
+ * Map Clerk user to our User type
  */
-async function getClerkServer() {
-  if (clerkModule) return clerkModule
-  
-  // Check if Clerk is configured
-  if (!isClerkConfigured()) {
-    return null
-  }
-  
-  try {
-    clerkModule = await import('@clerk/nextjs/server')
-    return clerkModule
-  } catch (error) {
-    console.warn('[auth-service-server] Clerk not available:', error)
-    return null
-  }
-}
+function mapClerkUserToUser(
+  clerkUser: {
+    id: string
+    emailAddresses: { emailAddress: string }[]
+    firstName?: string | null
+    lastName?: string | null
+    username?: string | null
+    createdAt: number
+  },
+  subscriptionPlan: SubscriptionPlan = 'free'
+): User {
+  const email = clerkUser.emailAddresses?.[0]?.emailAddress || ''
+  const username =
+    clerkUser.username || clerkUser.firstName || email.split('@')[0] || 'Athlete'
 
-/**
- * Check if we're in preview mode (server-side)
- * Uses environment check since server can't check domain
- */
-function isServerPreviewMode(): boolean {
-  return !isClerkConfigured()
+  return {
+    id: clerkUser.id,
+    email,
+    username,
+    subscriptionPlan,
+    createdAt: new Date(clerkUser.createdAt).toISOString(),
+  }
 }
 
 // ============================================================================
@@ -60,32 +44,10 @@ function isServerPreviewMode(): boolean {
  * Get current user from Clerk (server component only)
  */
 export async function getCurrentUserServer(): Promise<User | null> {
-  if (isServerPreviewMode()) {
-    return PREVIEW_USER
-  }
-
   try {
-    const clerk = await getClerkServer()
-    if (!clerk?.auth) return null
-
-    const { userId } = await clerk.auth()
-    if (!userId) return null
-
-    // Try to get full user details
-    if (clerk.currentUser) {
-      const clerkUser = await clerk.currentUser()
-      if (clerkUser) {
-        return mapClerkUserToUser(clerkUser, 'free')
-      }
-    }
-
-    return {
-      id: userId,
-      email: '',
-      username: userId,
-      subscriptionPlan: 'free',
-      createdAt: new Date().toISOString(),
-    }
+    const clerkUser = await currentUser()
+    if (!clerkUser) return null
+    return mapClerkUserToUser(clerkUser, 'free')
   } catch (error) {
     console.warn('[auth-service-server] Failed to get user:', error)
     return null
@@ -96,13 +58,8 @@ export async function getCurrentUserServer(): Promise<User | null> {
  * Check if user is authenticated (server component only)
  */
 export async function isAuthenticatedServer(): Promise<boolean> {
-  if (isServerPreviewMode()) return true
-
   try {
-    const clerk = await getClerkServer()
-    if (!clerk?.auth) return false
-
-    const { userId } = await clerk.auth()
+    const { userId } = await auth()
     return Boolean(userId)
   } catch {
     return false
@@ -113,15 +70,8 @@ export async function isAuthenticatedServer(): Promise<boolean> {
  * Get Clerk auth state (server component only)
  */
 export async function getAuthState(): Promise<{ userId: string | null }> {
-  if (isServerPreviewMode()) {
-    return { userId: PREVIEW_USER.id }
-  }
-
   try {
-    const clerk = await getClerkServer()
-    if (!clerk?.auth) return { userId: null }
-
-    return await clerk.auth()
+    return await auth()
   } catch {
     return { userId: null }
   }
@@ -131,8 +81,12 @@ export async function getAuthState(): Promise<{ userId: string | null }> {
  * Get current user ID (server component only)
  */
 export async function getCurrentUserIdServer(): Promise<string | null> {
-  const user = await getCurrentUserServer()
-  return user?.id || null
+  try {
+    const { userId } = await auth()
+    return userId
+  } catch {
+    return null
+  }
 }
 
 /**

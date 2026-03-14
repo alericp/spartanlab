@@ -1,67 +1,8 @@
-// Auth service - universal version (no server imports)
-// NOTE: For full Clerk server integration, use auth-service-server.ts
-// This file is safe for both client and server components
+// Auth service - universal utilities (no server imports)
+// NOTE: For actual Clerk user data, use @clerk/nextjs hooks in client components
+// or auth-service-server.ts in server components
 
-import { isPreviewMode, isAuthEnabled } from './app-mode'
 import type { User, SubscriptionPlan } from '@/types/domain'
-
-// Preview mode mock user
-const PREVIEW_USER: User = {
-  id: 'preview-user',
-  email: 'preview@spartanlab.local',
-  username: 'Aleric',
-  subscriptionPlan: 'pro',
-  createdAt: new Date().toISOString(),
-}
-
-/**
- * Get the current authenticated user
- * In preview mode: returns mock user
- * In production mode: returns mock user (full auth requires server component)
- */
-export function getCurrentUser(): User {
-  if (isPreviewMode()) {
-    return PREVIEW_USER
-  }
-  // Production mode: fall back to preview user
-  // Use getCurrentUserServer() in server components for real Clerk data
-  return PREVIEW_USER
-}
-
-/**
- * Get the current user ID
- */
-export function getCurrentUserId(): string {
-  return getCurrentUser().id
-}
-
-/**
- * Check if user is authenticated
- * In preview mode: always true (mock user)
- * In production mode: check via client-side hook
- */
-export function isAuthenticated(): boolean {
-  if (isPreviewMode()) {
-    return true
-  }
-  // Production mode: return true for now
-  // Real auth check should use useAuth() hook in client components
-  return true
-}
-
-/**
- * Get user's subscription plan
- */
-export function getUserPlan(): SubscriptionPlan {
-  return getCurrentUser().subscriptionPlan
-}
-
-/**
- * Check if auth services are fully configured
- */
-export function isAuthConfigured(): boolean {
-  return isAuthEnabled()
-}
 
 /**
  * Map Clerk user to our User type
@@ -87,15 +28,5 @@ export function mapClerkUserToUser(
     username,
     subscriptionPlan,
     createdAt: new Date(clerkUser.createdAt).toISOString(),
-  }
-}
-
-/**
- * Stub for sign-out (will be implemented with Clerk on client)
- */
-export function signOut(): void {
-  if (isPreviewMode()) {
-    console.log('[SpartanLab] Sign out called in preview mode')
-    return
   }
 }

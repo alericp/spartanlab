@@ -1,9 +1,7 @@
 'use client'
 
-// Preview Mode Indicator - Debug/testing controls
-// PRODUCTION SAFE: Never renders in production environments
-// Only renders in local development when Clerk is NOT configured
-// CRITICAL: All operations wrapped in try/catch - must never crash the app
+// Preview Mode Indicator - Shows when running without database
+// Only renders in development when no DATABASE_URL is configured
 
 import { useState, useEffect } from 'react'
 import type { SubscriptionPlan } from '@/types/domain'
@@ -17,89 +15,60 @@ import {
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu'
 import { Eye, ChevronDown } from 'lucide-react'
+import { isPreviewMode } from '@/lib/app-mode'
 
 export function PreviewModeIndicator() {
   const [mounted, setMounted] = useState(false)
   const [currentPlan, setCurrentPlanState] = useState<SubscriptionPlan>('pro')
   const [shouldRender, setShouldRender] = useState(false)
-  const [modeInfo, setModeInfo] = useState<{
-    displayName: string
-    authEnabled: boolean
-    dbEnabled: boolean
-  } | null>(null)
   const [canSwitch, setCanSwitch] = useState(false)
   
   useEffect(() => {
     setMounted(true)
     
-    // CRITICAL: All checks wrapped in try/catch
-    // This component must NEVER crash production
     try {
-      // Dynamic import to isolate any module-level errors
-      Promise.all([
-        import('@/lib/app-mode'),
-        import('@/lib/plan-source')
-      ]).then(([appMode, planSource]) => {
-        try {
-          // Check if auth is enabled (production) - if so, don't render
-          if (appMode.isAuthEnabled()) {
-            setShouldRender(false)
-            return
-          }
-          
-          // In local dev mode (no Clerk), only show if user has started using the app
-          let hasAppData = false
-          try {
-            const hasProfile = localStorage.getItem('athlete_profile')
-            const hasWorkouts = localStorage.getItem('workouts')
-            const hasPrograms = localStorage.getItem('saved_programs')
-            hasAppData = Boolean(hasProfile || hasWorkouts || hasPrograms)
-          } catch {
-            // localStorage not available - don't render
-            setShouldRender(false)
-            return
-          }
-          
-          setShouldRender(hasAppData)
-          setModeInfo(appMode.getModeInfo())
-          setCanSwitch(planSource.canSwitchPreviewPlan())
-          setCurrentPlanState(planSource.getCurrentPlan())
-        } catch {
-          // Any error in the check - don't render
-          setShouldRender(false)
-        }
-      }).catch(() => {
-        // Module import failed - don't render
+      // Only show in preview mode (no database)
+      if (!isPreviewMode()) {
         setShouldRender(false)
+        return
+      }
+      
+      // Check if user has started using the app
+      let hasAppData = false
+      try {
+        const hasProfile = localStorage.getItem('athlete_profile')
+        const hasWorkouts = localStorage.getItem('workouts')
+        const hasPrograms = localStorage.getItem('saved_programs')
+        hasAppData = Boolean(hasProfile || hasWorkouts || hasPrograms)
+      } catch {
+        setShouldRender(false)
+        return
+      }
+      
+      setShouldRender(hasAppData)
+      
+      // Check if plan switching is available
+      import('@/lib/plan-source').then(({ canSwitchPreviewPlan, getCurrentPlan }) => {
+        setCanSwitch(canSwitchPreviewPlan())
+        setCurrentPlanState(getCurrentPlan())
+      }).catch(() => {
+        // Module not available - that's fine
       })
     } catch {
-      // Outer catch for any unexpected errors
       setShouldRender(false)
     }
   }, [])
   
-  // Don't render until mounted to avoid hydration mismatch
-  if (!mounted) return null
-  
-  // Don't render if conditions aren't met (not preview mode, or no app data)
-  if (!shouldRender || !modeInfo) return null
+  if (!mounted || !shouldRender) return null
   
   const handlePlanChange = (plan: SubscriptionPlan) => {
     try {
       import('@/lib/plan-source').then(({ setPreviewPlan }) => {
-        try {
-          setPreviewPlan(plan)
-          setCurrentPlanState(plan)
-          window.location.reload()
-        } catch {
-          // Plan change failed - ignore
-        }
-      }).catch(() => {
-        // Import failed - ignore
-      })
-    } catch {
-      // Outer catch - ignore
-    }
+        setPreviewPlan(plan)
+        setCurrentPlanState(plan)
+        window.location.reload()
+      }).catch(() => {})
+    } catch {}
   }
   
   const planLabels: Record<SubscriptionPlan, string> = {
@@ -129,7 +98,7 @@ export function PreviewModeIndicator() {
           className="w-48 bg-[#1A1A1A] border-[#2A2A2A]"
         >
           <DropdownMenuLabel className="text-xs text-[#A5A5A5]">
-            {modeInfo.displayName}
+            Preview Mode (No Database)
           </DropdownMenuLabel>
           <DropdownMenuSeparator className="bg-[#2A2A2A]" />
           
@@ -154,22 +123,6 @@ export function PreviewModeIndicator() {
               </DropdownMenuItem>
             </>
           )}
-          
-          <DropdownMenuSeparator className="bg-[#2A2A2A]" />
-          <div className="px-2 py-1.5 text-xs text-[#666]">
-            <div className="flex justify-between">
-              <span>Auth:</span>
-              <span className={modeInfo.authEnabled ? 'text-green-500' : 'text-[#666]'}>
-                {modeInfo.authEnabled ? 'Enabled' : 'Mock'}
-              </span>
-            </div>
-            <div className="flex justify-between">
-              <span>Database:</span>
-              <span className={modeInfo.dbEnabled ? 'text-green-500' : 'text-[#666]'}>
-                {modeInfo.dbEnabled ? 'Connected' : 'Local'}
-              </span>
-            </div>
-          </div>
         </DropdownMenuContent>
       </DropdownMenu>
     </div>

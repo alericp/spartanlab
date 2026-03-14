@@ -37,6 +37,8 @@ import {
   getExitInterceptMessage,
   applyProgramAdjustment,
   getProgramStatus,
+  checkFrequentRestarts,
+  recordProgramEnd,
   type AdjustmentType,
   type AdjustmentResult,
 } from '@/lib/program-adjustment-engine'
@@ -118,6 +120,7 @@ export function ProgramAdjustmentModal({
 
   const interceptMessage = getExitInterceptMessage()
   const programStatus = getProgramStatus()
+  const frequentRestartCheck = checkFrequentRestarts()
 
   const handleBack = () => {
     if (view === 'confirm') {
@@ -197,6 +200,21 @@ export function ProgramAdjustmentModal({
         </div>
       )}
 
+      {/* Frequent Restart Warning */}
+      {frequentRestartCheck.isFrequent && (
+        <div className="p-4 bg-[#1F1A1A] rounded-lg border border-[#3D2B2B]">
+          <div className="flex items-start gap-2">
+            <AlertCircle className="w-4 h-4 text-[#F59E0B] shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-medium text-[#F59E0B] mb-1">Consistency Reminder</p>
+              <p className="text-xs text-[#F59E0B]/80">
+                {frequentRestartCheck.message}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="flex flex-col gap-3 pt-4">
         <Button
           onClick={onContinue}
@@ -214,7 +232,10 @@ export function ProgramAdjustmentModal({
         </Button>
         <Button
           variant="ghost"
-          onClick={onStartNew}
+          onClick={() => {
+            recordProgramEnd('new_program')
+            onStartNew()
+          }}
           className="text-[#6B7280] hover:text-[#A4ACB8]"
         >
           Start New Program

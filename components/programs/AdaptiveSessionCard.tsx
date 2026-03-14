@@ -18,6 +18,9 @@ import {
 } from '@/components/workout/WorkoutSessionControls'
 import { WorkoutSessionSummary } from '@/components/workout/WorkoutSessionSummary'
 import { trackWorkoutStarted, trackWorkoutCompleted } from '@/lib/analytics'
+import { ExerciseReplacementModal } from './ExerciseReplacementModal'
+import { getOnboardingProfile } from '@/lib/athlete-profile'
+import type { EquipmentType } from '@/lib/adaptive-exercise-pool'
 
 interface AdaptiveSessionCardProps {
   session: AdaptiveSession
@@ -32,6 +35,8 @@ export function AdaptiveSessionCard({ session, onExerciseReplace, onWorkoutCompl
   const [showCooldown, setShowCooldown] = useState(false)
   const [selectedVariant, setSelectedVariant] = useState<number | null>(null)
   const [showFinishConfirm, setShowFinishConfirm] = useState(false)
+  const [showReplacementModal, setShowReplacementModal] = useState(false)
+  const [selectedExerciseForReplace, setSelectedExerciseForReplace] = useState<{id: string, name: string} | null>(null)
 
   // Session lifecycle hook
   const workoutSession = useWorkoutSession(session)
@@ -86,6 +91,33 @@ export function AdaptiveSessionCard({ session, onExerciseReplace, onWorkoutCompl
   const handleReturnToProgram = () => {
     resetSession()
   }
+
+  const handleExerciseReplace = (exerciseId: string, exerciseName: string) => {
+    setSelectedExerciseForReplace({ id: exerciseId, name: exerciseName })
+    setShowReplacementModal(true)
+  }
+
+  const handleReplacementConfirm = (newExerciseId: string) => {
+    if (selectedExerciseForReplace && onExerciseReplace) {
+      onExerciseReplace(selectedExerciseForReplace.id)
+      // The parent component handles the actual replacement logic
+    }
+    setShowReplacementModal(false)
+    setSelectedExerciseForReplace(null)
+  }
+
+  // Get equipment from profile for replacement modal
+  // Convert profile equipment types to adaptive-exercise-pool types
+  const profile = getOnboardingProfile()
+  const profileEquipment = profile?.equipment || []
+  const equipmentMap: Record<string, EquipmentType> = {
+    'pullup_bar': 'pull_bar',
+    'dip_bars': 'dip_bars',
+    'rings': 'rings',
+    'parallettes': 'parallettes',
+    'resistance_bands': 'bands',
+  }
+  const availableEquipment: EquipmentType[] = ['floor', 'wall', ...profileEquipment.map(e => equipmentMap[e] || e).filter((e): e is EquipmentType => !!e)]
 
   // Get exercises to display based on variant selection
   const displayExercises = selectedVariant !== null && session.variants?.[selectedVariant]
@@ -265,15 +297,15 @@ export function AdaptiveSessionCard({ session, onExerciseReplace, onWorkoutCompl
     )}
   </div>
 
-          {/* Main Exercises */}
-          <div className="space-y-2">
-            {displayExercises.map((exercise, idx) => (
-              <ExerciseRow
-                key={exercise.id}
-                exercise={exercise}
-                index={idx + 1}
-                onReplace={onExerciseReplace}
-              />
+{/* Main Exercises */}
+  <div className="space-y-2">
+  {displayExercises.map((exercise, idx) => (
+  <ExerciseRow
+  key={exercise.id}
+  exercise={exercise}
+  index={idx + 1}
+  onReplace={handleExerciseReplace}
+  />
             ))}
           </div>
 
@@ -322,12 +354,24 @@ export function AdaptiveSessionCard({ session, onExerciseReplace, onWorkoutCompl
             )}
           </div>
             </>
-          )}
-        </div>
+)}
+  </div>
+  )}
+
+      {/* Exercise Replacement Modal */}
+      {selectedExerciseForReplace && (
+        <ExerciseReplacementModal
+          open={showReplacementModal}
+          onOpenChange={setShowReplacementModal}
+          exerciseId={selectedExerciseForReplace.id}
+          exerciseName={selectedExerciseForReplace.name}
+          availableEquipment={availableEquipment}
+          onReplace={handleReplacementConfirm}
+        />
       )}
-    </Card>
+  </Card>
   )
-}
+  }
 
 // =============================================================================
 // EXERCISE ROW
@@ -337,8 +381,8 @@ interface ExerciseRowProps {
   exercise: AdaptiveExercise
   index?: number
   isWarmupCooldown?: boolean
-  onReplace?: (exerciseId: string) => void
-}
+  onReplace?: (exerciseId: string, exerciseName: string) => void
+  }
 
 function ExerciseRow({ exercise, index, isWarmupCooldown, onReplace }: ExerciseRowProps) {
   const [showReason, setShowReason] = useState(false)
@@ -390,15 +434,15 @@ function ExerciseRow({ exercise, index, isWarmupCooldown, onReplace }: ExerciseR
           <p className="text-sm text-[#A5A5A5]">
             {exercise.sets} x {exercise.repsOrTime}
           </p>
-          {!isWarmupCooldown && exercise.isOverrideable && onReplace && (
-            <button
-              className="text-xs text-[#6A6A6A] hover:text-[#A5A5A5] flex items-center gap-1 mt-1 ml-auto"
-              onClick={() => onReplace(exercise.id)}
-            >
-              <RefreshCw className="w-3 h-3" />
-              Replace
-            </button>
-          )}
+{!isWarmupCooldown && exercise.isOverrideable && onReplace && (
+  <button
+  className="text-xs text-[#6A6A6A] hover:text-[#A5A5A5] flex items-center gap-1 mt-1 ml-auto"
+  onClick={() => onReplace(exercise.id, exercise.name)}
+  >
+  <RefreshCw className="w-3 h-3" />
+  Replace
+  </button>
+  )}
         </div>
       </div>
       

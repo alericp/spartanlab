@@ -5,6 +5,7 @@ import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { AdaptiveProgramForm } from '@/components/programs/AdaptiveProgramForm'
 import { AdaptiveProgramDisplay } from '@/components/programs/AdaptiveProgramDisplay'
+import { ProgramAdjustmentModal } from '@/components/programs/ProgramAdjustmentModal'
 import {
   generateAdaptiveProgram,
   saveAdaptiveProgram,
@@ -15,6 +16,7 @@ import {
   type AdaptiveProgram,
 } from '@/lib/adaptive-program-builder'
 import { getConstraintInsight } from '@/lib/constraint-engine'
+import { getProgramStatus, recordProgramEnd } from '@/lib/program-adjustment-engine'
 import { ArrowLeft, Dumbbell, Plus } from 'lucide-react'
 import Link from 'next/link'
 
@@ -24,6 +26,7 @@ export default function ProgramPage() {
   const [isGenerating, setIsGenerating] = useState(false)
   const [constraintLabel, setConstraintLabel] = useState<string>('')
   const [showBuilder, setShowBuilder] = useState(false)
+  const [showAdjustmentModal, setShowAdjustmentModal] = useState(false)
   const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
@@ -69,6 +72,18 @@ export default function ProgramPage() {
   }
 
   const handleNewProgram = () => {
+    // If there's an active program, show the adjustment modal first
+    const status = getProgramStatus()
+    if (status && program) {
+      setShowAdjustmentModal(true)
+      return
+    }
+    setShowBuilder(true)
+  }
+
+  const handleConfirmNewProgram = () => {
+    recordProgramEnd('new_program')
+    setShowAdjustmentModal(false)
     setShowBuilder(true)
   }
 
@@ -162,6 +177,16 @@ export default function ProgramPage() {
             </Button>
           </Card>
         )}
+
+        {/* Program Adjustment Modal */}
+        <ProgramAdjustmentModal
+          open={showAdjustmentModal}
+          onOpenChange={setShowAdjustmentModal}
+          onContinue={() => setShowAdjustmentModal(false)}
+          onStartNew={handleConfirmNewProgram}
+          currentSessionMinutes={inputs?.sessionLength || 60}
+          currentTrainingDays={inputs?.trainingDaysPerWeek || 3}
+        />
       </div>
     </div>
   )

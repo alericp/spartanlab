@@ -9,7 +9,6 @@
  */
 
 import { Component, ErrorInfo, ReactNode } from 'react'
-import Link from 'next/link'
 
 interface Props {
   children: ReactNode
@@ -55,6 +54,22 @@ export class GlobalErrorBoundary extends Component<Props, State> {
     }
   }
 
+  handleGoHome = () => {
+    // Navigate to home with a full page load to ensure clean state
+    // This avoids client-side routing back into potentially broken state
+    if (typeof window !== 'undefined') {
+      // Clear any cached state that might cause issues
+      try {
+        // Clear session storage items that might be corrupted
+        sessionStorage.clear()
+      } catch {
+        // Ignore storage errors
+      }
+      // Use window.location for a full navigation, not client-side routing
+      window.location.href = '/'
+    }
+  }
+
   render() {
     if (this.state.hasError) {
       return (
@@ -93,12 +108,12 @@ export class GlobalErrorBoundary extends Component<Props, State> {
                   Try Again
                 </button>
                 
-                <Link
-                  href="/"
-                  className="w-full px-4 py-2 border border-[#2B313A] text-[#A4ACB8] hover:text-[#E6E9EF] hover:border-[#3A3A3A] font-medium rounded-lg transition-colors inline-block"
+                <button
+                  onClick={this.handleGoHome}
+                  className="w-full px-4 py-2 border border-[#2B313A] text-[#A4ACB8] hover:text-[#E6E9EF] hover:border-[#3A3A3A] font-medium rounded-lg transition-colors"
                 >
                   Go to Home
-                </Link>
+                </button>
               </div>
               
               {/* Debug info in development */}

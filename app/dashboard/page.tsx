@@ -78,6 +78,7 @@ import { TrainingInsightQuote } from '@/components/dashboard/TrainingInsightQuot
 import { TrainingConsistencyCard } from '@/components/dashboard/TrainingConsistencyCard'
 import { SkillProgressHeatmap } from '@/components/dashboard/SkillProgressHeatmap'
 import { AdaptiveEngineBadge, SensorEngineVisualization } from '@/components/shared/AdaptiveEngineBadge'
+import { AuthGuard } from '@/components/auth/AuthGuard'
 import { TrainingEmphasis } from '@/components/dashboard/TrainingEmphasis'
 import { ProgressionInsights } from '@/components/dashboard/ProgressionInsights'
 import { GoalProjectionCard, GoalProjectionsOverview } from '@/components/dashboard/GoalProjectionCard'
@@ -689,7 +690,11 @@ function DashboardContent() {
   )
 }
 
-// Dashboard route - Protected by middleware, no client-side auth guard needed
+// Dashboard route - Protected by AuthGuard to prevent mixed auth state
 export default function DashboardPage() {
-  return <DashboardContent />
+  return (
+    <AuthGuard redirectTo="/sign-in">
+      <DashboardContent />
+    </AuthGuard>
+  )
 }

@@ -69,6 +69,21 @@ export function AuthGuard({
     setMounted(true)
   }, [])
 
+  // Determine which branch we're in for diagnostics
+  const getBranch = () => {
+    if (!mounted) return 'ssr'
+    if (isLoading) return 'loading'
+    if (!isClerkAvailable) return 'fallback-preview'
+    return 'clerk-production'
+  }
+  
+  // Log final branch (only when mounted and not loading)
+  useEffect(() => {
+    if (mounted && !isLoading) {
+      console.log('[v0] AuthGuard resolved:', { branch: getBranch(), isClerkAvailable, isLoading })
+    }
+  }, [mounted, isLoading, isClerkAvailable])
+
   // SSR
   if (!mounted) return <>{fallback ?? <LoadingState />}</>
   

@@ -207,6 +207,105 @@ export interface SkillBenchmark {
 }
 
 // =============================================================================
+// SKILL TRAINING HISTORY (for tendon adaptation estimation)
+// =============================================================================
+
+export type SkillTrainingHistory = 
+  | 'never'              // Never trained this skill
+  | 'tried_little'       // Tried a little, dabbled
+  | 'trained_consistently' // Trained consistently for a period
+  | 'previously_strong'  // Was previously very strong at this
+
+export type SkillLastTrained =
+  | 'currently'          // Currently training
+  | 'within_6_months'    // Within the last 6 months
+  | '6_to_12_months'     // 6-12 months ago
+  | '1_to_2_years'       // 1-2 years ago
+  | 'over_2_years'       // More than 2 years ago
+
+export type TendonAdaptationLevel = 'low' | 'moderate' | 'high'
+
+export interface SkillHistoryEntry {
+  trainingHistory: SkillTrainingHistory
+  lastTrained: SkillLastTrained | null  // null if "never"
+  tendonAdaptationScore: TendonAdaptationLevel
+}
+
+// Labels for UI
+export const SKILL_TRAINING_HISTORY_LABELS: Record<SkillTrainingHistory, string> = {
+  'never': 'Never',
+  'tried_little': 'Tried a little',
+  'trained_consistently': 'Trained consistently',
+  'previously_strong': 'Previously strong',
+}
+
+export const SKILL_TRAINING_HISTORY_DESCRIPTIONS: Record<SkillTrainingHistory, string> = {
+  'never': 'No experience with this skill',
+  'tried_little': 'Dabbled or did occasional work',
+  'trained_consistently': 'Trained this for weeks or months',
+  'previously_strong': 'Could hold/perform intermediate+ levels',
+}
+
+export const SKILL_LAST_TRAINED_LABELS: Record<SkillLastTrained, string> = {
+  'currently': 'Currently training',
+  'within_6_months': 'Within 6 months',
+  '6_to_12_months': '6-12 months ago',
+  '1_to_2_years': '1-2 years ago',
+  'over_2_years': 'Over 2 years ago',
+}
+
+// =============================================================================
+// TENDON ADAPTATION CALCULATOR
+// =============================================================================
+
+export function calculateTendonAdaptation(
+  history: SkillTrainingHistory,
+  lastTrained: SkillLastTrained | null
+): TendonAdaptationLevel {
+  // Base level from training history
+  let baseLevel: TendonAdaptationLevel
+  
+  switch (history) {
+    case 'never':
+      return 'low' // No past training = always low
+    case 'tried_little':
+      baseLevel = 'low'
+      break
+    case 'trained_consistently':
+      baseLevel = 'moderate'
+      break
+    case 'previously_strong':
+      baseLevel = 'high'
+      break
+  }
+  
+  // Adjust based on time since last training
+  if (!lastTrained) return baseLevel
+  
+  switch (lastTrained) {
+    case 'currently':
+    case 'within_6_months':
+      // Recent training maintains adaptation
+      return baseLevel
+    case '6_to_12_months':
+      // Some detraining - drop one level
+      if (baseLevel === 'high') return 'moderate'
+      return baseLevel
+    case '1_to_2_years':
+      // Significant detraining
+      if (baseLevel === 'high') return 'moderate'
+      if (baseLevel === 'moderate') return 'low'
+      return 'low'
+    case 'over_2_years':
+      // Mostly lost, but some memory remains for "previously strong"
+      if (baseLevel === 'high') return 'low' // Was strong, some residual
+      return 'low'
+    default:
+      return baseLevel
+  }
+}
+
+// =============================================================================
 // FLEXIBILITY BENCHMARKS
 // =============================================================================
 
@@ -495,6 +594,17 @@ export interface OnboardingProfile {
   hspu: SkillBenchmark | null
   lSitHold: LSitHoldCapacity | null
   vSitHold: VSitHoldCapacity | null
+  
+  // Section 5b: Skill Training History (for tendon adaptation)
+  skillHistory: {
+    front_lever?: SkillHistoryEntry
+    planche?: SkillHistoryEntry
+    muscle_up?: SkillHistoryEntry
+    handstand_pushup?: SkillHistoryEntry
+    handstand?: SkillHistoryEntry
+    l_sit?: SkillHistoryEntry
+    v_sit?: SkillHistoryEntry
+  }
   
   // Section 6: Flexibility Benchmarks
   pancake: FlexibilityBenchmark | null
@@ -871,15 +981,18 @@ export function createEmptyOnboardingProfile(): OnboardingProfile {
     weightedPullUp: null,
     weightedDip: null,
     
-    // Section 5: Skill Benchmarks
-    frontLever: null,
-    planche: null,
-    muscleUp: null,
-    hspu: null,
-    lSitHold: null,
-    vSitHold: null,
-    
-    // Section 6: Flexibility Benchmarks
+  // Section 5: Skill Benchmarks
+  frontLever: null,
+  planche: null,
+  muscleUp: null,
+  hspu: null,
+  lSitHold: null,
+  vSitHold: null,
+  
+  // Section 5b: Skill Training History
+  skillHistory: {},
+  
+  // Section 6: Flexibility Benchmarks
     pancake: null,
     toeTouch: null,
     frontSplits: null,

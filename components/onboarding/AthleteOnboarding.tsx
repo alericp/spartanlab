@@ -59,6 +59,9 @@ import {
   type SkillFamiliarityAnswer,
   type BodyTypeAnswer,
   type ReadinessCalibration,
+  type SkillTrainingHistory,
+  type SkillLastTrained,
+  type SkillHistoryEntry,
   TRAINING_EXPERIENCE_LABELS,
   TRAINING_EXPERIENCE_DESCRIPTIONS,
   HEIGHT_LABELS,
@@ -94,7 +97,11 @@ import {
   SKILL_FAMILIARITY_DESCRIPTIONS,
   BODY_TYPE_LABELS,
   BODY_TYPE_DESCRIPTIONS,
+  SKILL_TRAINING_HISTORY_LABELS,
+  SKILL_TRAINING_HISTORY_DESCRIPTIONS,
+  SKILL_LAST_TRAINED_LABELS,
   calculateReadinessScores,
+  calculateTendonAdaptation,
   saveOnboardingProfile,
   createEmptyOnboardingProfile,
   hasEstimatedValues,
@@ -1017,6 +1024,107 @@ function StrengthBenchmarksSection({ profile, updateProfile }: SectionProps) {
   )
 }
 
+// =============================================================================
+// SKILL HISTORY INPUT COMPONENT
+// =============================================================================
+
+interface SkillHistoryInputProps {
+  skillKey: SkillGoal
+  skillLabel: string
+  profile: OnboardingProfile
+  updateProfile: (updates: Partial<OnboardingProfile>) => void
+}
+
+function SkillHistoryInput({ skillKey, skillLabel, profile, updateProfile }: SkillHistoryInputProps) {
+  const historyOptions: SkillTrainingHistory[] = ['never', 'tried_little', 'trained_consistently', 'previously_strong']
+  const lastTrainedOptions: SkillLastTrained[] = ['currently', 'within_6_months', '6_to_12_months', '1_to_2_years', 'over_2_years']
+  
+  const currentHistory = profile.skillHistory?.[skillKey]
+  const showLastTrained = currentHistory?.trainingHistory && currentHistory.trainingHistory !== 'never'
+  
+  const updateHistory = (trainingHistory: SkillTrainingHistory) => {
+    const lastTrained = trainingHistory === 'never' ? null : (currentHistory?.lastTrained || null)
+    const tendonAdaptationScore = calculateTendonAdaptation(trainingHistory, lastTrained)
+    
+    updateProfile({
+      skillHistory: {
+        ...profile.skillHistory,
+        [skillKey]: {
+          trainingHistory,
+          lastTrained,
+          tendonAdaptationScore,
+        }
+      }
+    })
+  }
+  
+  const updateLastTrained = (lastTrained: SkillLastTrained) => {
+    const trainingHistory = currentHistory?.trainingHistory || 'never'
+    const tendonAdaptationScore = calculateTendonAdaptation(trainingHistory, lastTrained)
+    
+    updateProfile({
+      skillHistory: {
+        ...profile.skillHistory,
+        [skillKey]: {
+          trainingHistory,
+          lastTrained,
+          tendonAdaptationScore,
+        }
+      }
+    })
+  }
+  
+  return (
+    <div className="bg-[#0F1115] border border-[#2B313A] rounded-lg p-3 space-y-3">
+      <div className="space-y-2">
+        <label className="text-xs text-[#6B7280]">Have you trained {skillLabel} before?</label>
+        <div className="grid grid-cols-2 gap-1.5">
+          {historyOptions.map((opt) => (
+            <button
+              key={opt}
+              type="button"
+              onClick={() => updateHistory(opt)}
+              className={`
+                px-2 py-1.5 rounded text-xs transition-colors
+                ${currentHistory?.trainingHistory === opt
+                  ? 'bg-[#4F6D8A] text-white'
+                  : 'bg-[#1A1D24] text-[#A4ACB8] hover:bg-[#2B313A]'
+                }
+              `}
+            >
+              {SKILL_TRAINING_HISTORY_LABELS[opt]}
+            </button>
+          ))}
+        </div>
+      </div>
+      
+      {showLastTrained && (
+        <div className="space-y-2 pt-2 border-t border-[#2B313A]">
+          <label className="text-xs text-[#6B7280]">When did you last train it seriously?</label>
+          <div className="grid grid-cols-2 gap-1.5">
+            {lastTrainedOptions.map((opt) => (
+              <button
+                key={opt}
+                type="button"
+                onClick={() => updateLastTrained(opt)}
+                className={`
+                  px-2 py-1.5 rounded text-xs transition-colors
+                  ${currentHistory?.lastTrained === opt
+                    ? 'bg-[#4F6D8A] text-white'
+                    : 'bg-[#1A1D24] text-[#A4ACB8] hover:bg-[#2B313A]'
+                  }
+                `}
+              >
+                {SKILL_LAST_TRAINED_LABELS[opt]}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function SkillBenchmarksSection({ profile, updateProfile }: SectionProps) {
   const hasSkill = (skill: SkillGoal) => profile.selectedSkills.includes(skill)
   
@@ -1072,6 +1180,12 @@ function SkillBenchmarksSection({ profile, updateProfile }: SectionProps) {
             </div>
           )}
           {profile.frontLever?.progression === 'unknown' && <DontKnowHint metricKey="frontLever" />}
+          <SkillHistoryInput
+            skillKey="front_lever"
+            skillLabel="front lever"
+            profile={profile}
+            updateProfile={updateProfile}
+          />
         </div>
       )}
 
@@ -1117,6 +1231,12 @@ function SkillBenchmarksSection({ profile, updateProfile }: SectionProps) {
             </div>
           )}
           {profile.planche?.progression === 'unknown' && <DontKnowHint metricKey="planche" />}
+          <SkillHistoryInput
+            skillKey="planche"
+            skillLabel="planche"
+            profile={profile}
+            updateProfile={updateProfile}
+          />
         </div>
       )}
 
@@ -1143,6 +1263,12 @@ function SkillBenchmarksSection({ profile, updateProfile }: SectionProps) {
             Don't know / Skip for now
           </OptionButton>
           {profile.muscleUp === 'unknown' && <DontKnowHint metricKey="muscleUp" />}
+          <SkillHistoryInput
+            skillKey="muscle_up"
+            skillLabel="muscle-ups"
+            profile={profile}
+            updateProfile={updateProfile}
+          />
         </div>
       )}
 
@@ -1171,6 +1297,12 @@ function SkillBenchmarksSection({ profile, updateProfile }: SectionProps) {
             Don't know / Skip for now
           </OptionButton>
           {profile.hspu?.progression === 'unknown' && <DontKnowHint metricKey="wallHSPUReps" />}
+          <SkillHistoryInput
+            skillKey="handstand_pushup"
+            skillLabel="HSPU/handstand work"
+            profile={profile}
+            updateProfile={updateProfile}
+          />
         </div>
       )}
 
@@ -1197,6 +1329,12 @@ function SkillBenchmarksSection({ profile, updateProfile }: SectionProps) {
             Don't know / Skip for now
           </OptionButton>
           {profile.lSitHold === 'unknown' && <DontKnowHint metricKey="lSitHold" />}
+          <SkillHistoryInput
+            skillKey="l_sit"
+            skillLabel="L-sit"
+            profile={profile}
+            updateProfile={updateProfile}
+          />
         </div>
       )}
 
@@ -1223,6 +1361,12 @@ function SkillBenchmarksSection({ profile, updateProfile }: SectionProps) {
             Don't know / Skip for now
           </OptionButton>
           {profile.vSitHold === 'unknown' && <DontKnowHint metricKey="vSitHold" />}
+          <SkillHistoryInput
+            skillKey="v_sit"
+            skillLabel="V-sit"
+            profile={profile}
+            updateProfile={updateProfile}
+          />
         </div>
       )}
     </div>

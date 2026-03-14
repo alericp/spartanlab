@@ -16,6 +16,9 @@ import type {
   OnboardingGoal,
   PrimaryGoalType,
   ReadinessScores,
+  SkillHistoryEntry,
+  TendonAdaptationLevel,
+  SkillGoal,
 } from './athlete-profile'
 import { getOnboardingProfile } from './athlete-profile'
 import { getAthleteProfile, type AthleteProfile as DataServiceAthleteProfile } from './data-service'
@@ -108,6 +111,17 @@ export interface AthleteCalibration {
     skillAdaptation: number        // 0-100
     recoveryTolerance: number      // 0-100
     volumeTolerance: number        // 0-100
+  } | null
+  
+  // Tendon adaptation scores (from skill training history)
+  tendonAdaptation: {
+    front_lever: TendonAdaptationLevel
+    planche: TendonAdaptationLevel
+    muscle_up: TendonAdaptationLevel
+    handstand_pushup: TendonAdaptationLevel
+    handstand: TendonAdaptationLevel
+    l_sit: TendonAdaptationLevel
+    v_sit: TendonAdaptationLevel
   } | null
   
   // Metadata
@@ -617,6 +631,18 @@ export function calibrateAthleteProfile(profile: CalibrationProfile): AthleteCal
       }
     : null
 
+  // Extract tendon adaptation from skill history (if available)
+  const skillHistory = !isAthleteProfile ? (profile as OnboardingProfile).skillHistory : null
+  const tendonAdaptation = skillHistory ? {
+    front_lever: skillHistory.front_lever?.tendonAdaptationScore ?? 'low' as TendonAdaptationLevel,
+    planche: skillHistory.planche?.tendonAdaptationScore ?? 'low' as TendonAdaptationLevel,
+    muscle_up: skillHistory.muscle_up?.tendonAdaptationScore ?? 'low' as TendonAdaptationLevel,
+    handstand_pushup: skillHistory.handstand_pushup?.tendonAdaptationScore ?? 'low' as TendonAdaptationLevel,
+    handstand: skillHistory.handstand?.tendonAdaptationScore ?? 'low' as TendonAdaptationLevel,
+    l_sit: skillHistory.l_sit?.tendonAdaptationScore ?? 'low' as TendonAdaptationLevel,
+    v_sit: skillHistory.v_sit?.tendonAdaptationScore ?? 'low' as TendonAdaptationLevel,
+  } : null
+
   // Suggest adjustments (enhanced with readiness scores)
   let suggestedProgressionLevel = suggestProgressionLevel(
     leverageProfile,
@@ -682,6 +708,7 @@ export function calibrateAthleteProfile(profile: CalibrationProfile): AthleteCal
     suggestedVolumeModifier,
     suggestedRestModifier,
     readinessScores,
+    tendonAdaptation,
     calibrationComplete: true,
     calibrationDate: new Date().toISOString(),
   }
@@ -713,6 +740,7 @@ needsCompressionWork: true,
     suggestedVolumeModifier: 1.0,
     suggestedRestModifier: 1.0,
     readinessScores: null,
+    tendonAdaptation: null,
     calibrationComplete: false,
     calibrationDate: null,
   }
@@ -1005,4 +1033,113 @@ export function getProgramCalibrationAdjustments(
     progressionNotes,
     calibrationMessage,
   }
+}
+
+// =============================================================================
+// TENDON ADAPTATION HELPERS
+// =============================================================================
+
+export interface SkillStartingPoint {
+  progressionTier: 'foundation' | 'beginner' | 'intermediate' | 'advanced'
+  intensityModifier: number     // 0.7 to 1.1
+  volumeModifier: number        // 0.6 to 1.0
+  progressionSpeedModifier: number // 0.7 to 1.2
+}
+
+/**
+ * Get the recommended starting point for a skill based on tendon adaptation.
+ * This must be further constrained by current strength metrics and other factors.
+ */
+export function getSkillStartingPoint(
+  tendonLevel: TendonAdaptationLevel,
+  currentStrengthTier: StrengthTier,
+  readinessScores: { recoveryTolerance: number; skillAdaptation: number } | null
+): SkillStartingPoint {
+  // Base starting point from tendon adaptation
+  let baseResult: SkillStartingPoint
+  
+  switch (tendonLevel) {
+    case 'low':
+      baseResult = {
+        progressionTier: 'foundation',
+        intensityModifier: 0.8,
+        volumeModifier: 0.7,
+        progressionSpeedModifier: 0.8,
+      }
+      break
+    case 'moderate':
+      baseResult = {
+        progressionTier: 'beginner',
+        intensityModifier: 0.9,
+        volumeModifier: 0.85,
+        progressionSpeedModifier: 1.0,
+      }
+      break
+    case 'high':
+      baseResult = {
+        progressionTier: 'intermediate',
+        intensityModifier: 1.0,
+        volumeModifier: 0.95,
+        progressionSpeedModifier: 1.1,
+      }
+      break
+  }
+  
+  // SAFETY CONSTRAINT: Never exceed what current strength allows
+  // Even with high tendon adaptation, low strength caps the progression tier
+  const strengthCap = getStrengthBasedCap(currentStrengthTier)
+  const tierOrder = ['foundation', 'beginner', 'intermediate', 'advanced'] as const
+  const baseTierIdx = tierOrder.indexOf(baseResult.progressionTier)
+  const capTierIdx = tierOrder.indexOf(strengthCap)
+  
+  if (baseTierIdx > capTierIdx) {
+    baseResult.progressionTier = strengthCap
+    // Also reduce intensity when capped
+    baseResult.intensityModifier = Math.min(baseResult.intensityModifier, 0.85)
+  }
+  
+  // Adjust based on readiness scores if available
+  if (readinessScores) {
+    // Low recovery tolerance = reduce volume and intensity
+    if (readinessScores.recoveryTolerance < 40) {
+      baseResult.volumeModifier *= 0.85
+      baseResult.intensityModifier *= 0.9
+    }
+    
+    // High skill adaptation = can progress slightly faster
+    if (readinessScores.skillAdaptation >= 70) {
+      baseResult.progressionSpeedModifier = Math.min(1.2, baseResult.progressionSpeedModifier * 1.1)
+    }
+  }
+  
+  return baseResult
+}
+
+/**
+ * Get the maximum progression tier allowed by current strength.
+ * This is a hard cap that tendon adaptation cannot exceed.
+ */
+function getStrengthBasedCap(strengthTier: StrengthTier): 'foundation' | 'beginner' | 'intermediate' | 'advanced' {
+  switch (strengthTier) {
+    case 'very_low':
+      return 'foundation'
+    case 'low':
+      return 'beginner'
+    case 'moderate':
+      return 'intermediate'
+    case 'strong':
+    case 'elite':
+      return 'advanced'
+  }
+}
+
+/**
+ * Check if an athlete has meaningful tendon adaptation for any skill.
+ * Useful for determining if skill history should influence programming.
+ */
+export function hasAnyTendonAdaptation(calibration: AthleteCalibration): boolean {
+  if (!calibration.tendonAdaptation) return false
+  
+  const scores = Object.values(calibration.tendonAdaptation)
+  return scores.some(level => level === 'moderate' || level === 'high')
 }

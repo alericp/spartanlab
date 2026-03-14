@@ -266,6 +266,9 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
     fatigueDecision = getQuickFatigueDecision()
   }
   
+  // Get tendon adaptation for the primary goal skill
+  const tendonAdaptationForGoal = athleteCalibration.tendonAdaptation?.[primaryGoal as keyof typeof athleteCalibration.tendonAdaptation] ?? 'low'
+
   // Select training method profiles via Principles Engine
   const selectionContext: SelectionContext = {
     primaryGoal: primaryGoal as SkillType,
@@ -281,6 +284,7 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
     recentSorenessLevel: 'mild',
     rangeTrainingMode: profile?.rangeTrainingMode || undefined,
     wantsHypertrophy: profile?.goalCategory === 'strength',
+    tendonAdaptationLevel: tendonAdaptationForGoal as 'low' | 'moderate' | 'high',
   }
   const selectedMethods = selectMethodProfiles(selectionContext)
   

@@ -899,6 +899,9 @@ export interface SelectionContext {
   currentFatigueLevel: 'low' | 'moderate' | 'high'
   recentSorenessLevel: 'none' | 'mild' | 'moderate' | 'high'
   
+  // Tendon adaptation (from skill training history)
+  tendonAdaptationLevel?: 'low' | 'moderate' | 'high'
+  
   // Preferences
   rangeTrainingMode?: RangeTrainingMode
   wantsHypertrophy?: boolean
@@ -992,6 +995,21 @@ export function selectMethodProfiles(context: SelectionContext): SelectedMethods
   // Adjust based on experience level
   if (experienceLevel === 'beginner' && primary.id === 'hybrid_skill_strength') {
     primary = METHOD_PROFILES.static_skill_density
+  }
+  
+  // Adjust based on tendon adaptation level
+  // Low tendon adaptation = foundation focus (less intense skill exposure)
+  // High tendon adaptation = can handle more aggressive methods
+  if (context.tendonAdaptationLevel === 'low') {
+    // Low tendon adaptation - start with static density for controlled exposure
+    if (primary.id === 'dynamic_skill_mastery' || primary.id === 'hybrid_skill_strength') {
+      primary = METHOD_PROFILES.static_skill_density
+    }
+  } else if (context.tendonAdaptationLevel === 'high' && experienceLevel !== 'beginner') {
+    // High tendon adaptation with experience - can use more dynamic methods
+    if (primary.id === 'static_skill_density' && skillCompat.primaryMethods.includes('hybrid_skill_strength')) {
+      primary = METHOD_PROFILES.hybrid_skill_strength
+    }
   }
   
   // Select secondary based on context

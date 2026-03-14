@@ -23,6 +23,8 @@ import {
 import { PREMIUM_FEATURES, type PremiumFeatureId, useSubscriptionInfo, useIsOwner } from '@/components/premium/PremiumFeature'
 import { upgradeToPro, startTrial, hasProAccess } from '@/lib/feature-access'
 import { trackUpgradeStarted, trackUpgradeCompleted } from '@/lib/analytics'
+import { useClerkAvailability } from '@/components/providers/ClerkProviderWrapper'
+import { toast } from 'sonner'
 
 const FREE_FEATURES = [
   'Workout generation & logging',
@@ -80,20 +82,53 @@ export default function UpgradePage() {
   const router = useRouter()
   const [mounted, setMounted] = useState(false)
   const [isPro, setIsPro] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
   const isOwner = useIsOwner()
+  const { isClerkAvailable, isLoading: isAuthLoading } = useClerkAvailability()
 
   useEffect(() => {
     setMounted(true)
     setIsPro(hasProAccess())
   }, [])
 
-  const handleUpgrade = () => {
+  const handleUpgrade = async () => {
+    // If not authenticated, redirect to sign-in
+    if (!isClerkAvailable) {
+      router.push('/sign-in?redirect_url=/upgrade')
+      return
+    }
+
+    setIsLoading(true)
     trackUpgradeStarted('upgrade_page')
-    upgradeToPro()
-    setIsPro(true)
-    trackUpgradeCompleted('upgrade_page')
-    // Redirect to dashboard after short delay
-    setTimeout(() => router.push('/dashboard'), 500)
+    
+    try {
+      const res = await fetch('/api/stripe/create-checkout-session', {
+        method: 'POST',
+      })
+
+      const data = await res.json()
+
+      if (data.error) {
+        if (res.status === 401) {
+          // User not authenticated, redirect to sign-in
+          router.push('/sign-in?redirect_url=/upgrade')
+          return
+        }
+        toast.error('Failed to start checkout. Please try again.')
+        console.error('Checkout error:', data.error)
+        setIsLoading(false)
+        return
+      }
+
+      if (data.url) {
+        // Redirect to Stripe Checkout
+        window.location.href = data.url
+      }
+    } catch (error) {
+      console.error('Checkout error:', error)
+      toast.error('Something went wrong. Please try again.')
+      setIsLoading(false)
+    }
   }
 
   const handleStartTrial = () => {
@@ -286,10 +321,20 @@ export default function UpgradePage() {
 
             <Button 
               onClick={handleUpgrade}
-              className="w-full bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-semibold"
+              disabled={isLoading}
+              className="w-full bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-semibold disabled:opacity-50"
             >
-              <Crown className="w-4 h-4 mr-2" />
-              Upgrade to Pro
+              {isLoading ? (
+                <>
+                  <div className="w-4 h-4 mr-2 border-2 border-black/30 border-t-black rounded-full animate-spin" />
+                  Processing...
+                </>
+              ) : (
+                <>
+                  <Crown className="w-4 h-4 mr-2" />
+                  Upgrade to Pro
+                </>
+              )}
             </Button>
             <Button 
               onClick={handleStartTrial}

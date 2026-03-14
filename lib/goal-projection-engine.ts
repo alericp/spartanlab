@@ -176,6 +176,9 @@ function assessStrengthSupport(
   if (!bodyweight || bodyweight <= 0) return 'unknown'
   
   const config = STRENGTH_SUPPORT_THRESHOLDS[goalType]
+  // Not all goal types have strength thresholds (e.g., flexibility goals)
+  if (!config) return 'unknown'
+  
   const relevantStrength = config.exercise === 'weighted_pull_up' ? pullUp1RM : dip1RM
   
   if (relevantStrength === null) return 'unknown'

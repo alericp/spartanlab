@@ -13,6 +13,7 @@ import { getConstraintInsight } from './constraint-engine'
 import { getProgramBuilderContext } from './adaptive-athlete-engine'
 import { getAthleteCalibration, getProgramCalibrationAdjustments, type AthleteCalibration, type ProgramCalibrationAdjustments } from './athlete-calibration'
 import { getOnboardingProfile } from './athlete-profile'
+import { getUnifiedSkillIntelligence, generateTrainingAdjustments, type UnifiedSkillIntelligence } from './skill-intelligence-layer'
 import { getCompressionReadiness, shouldBiasTowardCompression, type CompressionReadinessResult } from './compression-readiness'
 import { selectOptimalStructure, getDayExplanation } from './program-structure-engine'
 import { selectExercisesForSession } from './program-exercise-selector'
@@ -185,6 +186,27 @@ export interface AdaptiveProgram {
     explanation: string
     coachingTip: string
   }
+  // Unified Skill Intelligence Layer - per-skill confidence and weak points
+  skillIntelligence?: {
+    prioritization: {
+      primaryEmphasis: string | null
+      secondaryEmphasis: string | null
+      exposureOnly: string[]
+      shouldAvoid: string[]
+    }
+    globalLimiters: {
+      primaryPattern: string | null
+      affectedSkills: string[]
+      recommendation: string
+    }
+    dataQuality: 'insufficient' | 'partial' | 'good' | 'excellent'
+    adjustments: Array<{
+      type: string
+      target: string
+      reason: string
+      priority: 'high' | 'medium' | 'low'
+    }>
+  }
   // Adaptive Progression Engine - progression recommendations
   progressionInsights?: ProgressionInsight[]
   exercisesReadyToProgress?: string[]
@@ -266,6 +288,31 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
     fatigueDecision = getQuickFatigueDecision()
   }
   
+  // Get unified skill intelligence for program prioritization
+  // This aggregates readiness, support strength, tendon adaptation, and calibration
+  const skillIntelligence = getUnifiedSkillIntelligence(
+    [], // Sessions loaded separately if needed
+    [], // Strength records loaded separately
+    profile?.bodyweight || null,
+    (onboardingProfile?.selectedSkills || []) as Parameters<typeof getUnifiedSkillIntelligence>[3]
+  )
+  
+  // Get training adjustments based on skill intelligence weak points
+  const intelligenceAdjustments = generateTrainingAdjustments(skillIntelligence)
+  
+  // Use skill intelligence to potentially refine emphasis
+  // If the primary goal has a critical limiter, consider adjusting approach
+  const primarySkillIntel = skillIntelligence.skills[primaryGoal as keyof typeof skillIntelligence.skills]
+  const hasSkillLimiter = primarySkillIntel?.weakPoints.hasCriticalLimiter ?? false
+  
+  // Get tendon adaptation for the primary goal skill (from intelligence or calibration)
+  const tendonAdaptationForGoal = primarySkillIntel?.confidence.components.tendonAdaptationScore 
+    ? (primarySkillIntel.confidence.components.tendonAdaptationScore >= 75 ? 'high' :
+       primarySkillIntel.confidence.components.tendonAdaptationScore >= 55 ? 'moderate_high' :
+       primarySkillIntel.confidence.components.tendonAdaptationScore >= 40 ? 'moderate' :
+       primarySkillIntel.confidence.components.tendonAdaptationScore >= 25 ? 'low_moderate' : 'low')
+    : (athleteCalibration.tendonAdaptation?.[primaryGoal as keyof typeof athleteCalibration.tendonAdaptation] ?? 'low')
+
   // Select training method profiles via Principles Engine
   const selectionContext: SelectionContext = {
     primaryGoal: primaryGoal as SkillType,
@@ -281,6 +328,7 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
     recentSorenessLevel: 'mild',
     rangeTrainingMode: profile?.rangeTrainingMode || undefined,
     wantsHypertrophy: profile?.goalCategory === 'strength',
+    tendonAdaptationLevel: tendonAdaptationForGoal as 'low' | 'low_moderate' | 'moderate' | 'moderate_high' | 'high',
   }
   const selectedMethods = selectMethodProfiles(selectionContext)
   
@@ -367,6 +415,13 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
     calibrationContext: calibrationContext,
     // Training Principles Engine emphasis
     trainingEmphasis,
+    // Unified Skill Intelligence Layer
+    skillIntelligence: {
+      prioritization: skillIntelligence.prioritization,
+      globalLimiters: skillIntelligence.globalLimiters,
+      dataQuality: skillIntelligence.dataQuality,
+      adjustments: intelligenceAdjustments.slice(0, 3), // Top 3 adjustments
+    },
     // Adaptive Progression Engine insights
     progressionInsights: getProgressionInsights(),
     exercisesReadyToProgress: getReadyToProgress().map(p => p.exerciseName),

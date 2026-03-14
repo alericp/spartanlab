@@ -10,7 +10,8 @@ import {
   getOnboardingSummary,
   type FirstRunResult,
 } from '@/lib/onboarding-service'
-import { getOnboardingProfile } from '@/lib/athlete-profile'
+import { getOnboardingProfile, hasEstimatedValues } from '@/lib/athlete-profile'
+import { AlertCircle } from 'lucide-react'
 
 interface WelcomeCardProps {
   onDismiss?: () => void
@@ -83,6 +84,7 @@ export function WelcomeCard({ onDismiss, onProgramReady }: WelcomeCardProps) {
   }
 
   const profile = getOnboardingProfile()
+  const hasEstimates = profile ? hasEstimatedValues(profile) : false
 
   return (
     <Card className="bg-gradient-to-br from-[#1A1F26] to-[#0F1115] border-[#C1121F]/30 p-6 relative overflow-hidden">
@@ -94,6 +96,17 @@ export function WelcomeCard({ onDismiss, onProgramReady }: WelcomeCardProps) {
         >
           <X className="w-4 h-4" />
         </button>
+      )}
+
+      {/* Estimated values notice */}
+      {hasEstimates && (
+        <div className="bg-[#4F6D8A]/10 border border-[#4F6D8A]/30 rounded-lg p-3 mb-4 flex items-start gap-2">
+          <AlertCircle className="w-4 h-4 text-[#4F6D8A] mt-0.5 shrink-0" />
+          <p className="text-xs text-[#A4ACB8]">
+            <span className="text-[#4F6D8A] font-medium">Estimated values used.</span>{' '}
+            Update your strength metrics anytime to refine your program.
+          </p>
+        </div>
       )}
 
       {/* Success Icon */}
@@ -169,6 +182,13 @@ export function WelcomeCard({ onDismiss, onProgramReady }: WelcomeCardProps) {
           </div>
         </div>
       )}
+
+      {/* Adaptability Message */}
+      <div className="bg-[#0F1115] border border-[#2B313A] rounded-lg p-3 mt-4">
+        <p className="text-xs text-[#A4ACB8] text-center">
+          SpartanLab adapts as you improve. Update your metrics anytime to refine your training.
+        </p>
+      </div>
 
       {/* CTA */}
       <div className="mt-4">

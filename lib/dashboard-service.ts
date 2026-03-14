@@ -28,6 +28,12 @@ import { getSkillSessions } from './skill-session-service'
 import { generateSkillAnalysis } from './skill-readiness-engine'
 import type { ReadinessStatus } from '@/types/skill-readiness'
 import { calculateRelativeStrengthMetrics, getTierLabel } from './relative-strength-engine'
+import { 
+  getUnifiedSkillIntelligence, 
+  generateTrainingAdjustments,
+  type UnifiedSkillIntelligence,
+  type SkillKey,
+} from './skill-intelligence-layer'
 
 export interface DashboardOverview {
   user: User
@@ -344,6 +350,60 @@ export function getRecentActivity(overview: DashboardOverview): RecentActivity[]
   return activities
     .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
     .slice(0, 5)
+}
+
+// Get unified skill intelligence for dashboard display
+// This is the single source of truth for skill confidence and weak point summaries
+export function getSkillIntelligenceSummary(overview: DashboardOverview): {
+  intelligence: UnifiedSkillIntelligence | null
+  primarySkillConfidence: number | null
+  primaryLimiter: string | null
+  topAdjustments: string[]
+} {
+  const { profile } = overview
+  
+  // Get skill sessions and strength records for intelligence calculation
+  const skillSessions = getSkillSessions()
+  const strengthRecords = getStrengthRecords()
+  
+  // Determine which skills to analyze based on profile goals
+  const selectedSkills: SkillKey[] = ['front_lever', 'planche', 'muscle_up', 'handstand_pushup', 'handstand', 'l_sit', 'v_sit', 'i_sit']
+  
+  try {
+    const intelligence = getUnifiedSkillIntelligence(
+      skillSessions,
+      strengthRecords,
+      profile.bodyweight,
+      selectedSkills
+    )
+    
+    // Get primary skill confidence
+    const primaryGoal = profile.primaryGoal as SkillKey | null
+    const primarySkillIntel = primaryGoal ? intelligence.skills[primaryGoal] : null
+    const primarySkillConfidence = primarySkillIntel?.confidence.confidence ?? null
+    
+    // Get primary limiter
+    const primaryLimiter = primarySkillIntel?.weakPoints.primaryLimiter?.label ?? 
+                           intelligence.globalLimiters.primaryPattern ?? null
+    
+    // Get top adjustments
+    const adjustments = generateTrainingAdjustments(intelligence)
+    const topAdjustments = adjustments.slice(0, 3).map(a => a.target)
+    
+    return {
+      intelligence,
+      primarySkillConfidence,
+      primaryLimiter,
+      topAdjustments,
+    }
+  } catch {
+    return {
+      intelligence: null,
+      primarySkillConfidence: null,
+      primaryLimiter: null,
+      topAdjustments: [],
+    }
+  }
 }
 
 // Format relative time

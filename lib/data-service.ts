@@ -57,6 +57,8 @@ const DEFAULT_PROFILE: AthleteProfile = {
   heightUnit: 'inches',
   bodyweight: 160,
   weightUnit: 'lbs',
+  bodyFatPercent: null,
+  bodyFatSource: null,
   experienceLevel: 'intermediate',
   trainingDaysPerWeek: 4,
   sessionLengthMinutes: 60,

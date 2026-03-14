@@ -10,11 +10,48 @@ import type {
   PushUpCapacity,
   DipCapacity,
   LSitCapacity,
+  LSitHoldCapacity,
   TrainingTimeRange,
   WeeklyTrainingDays,
   OnboardingGoal,
+  PrimaryGoalType,
+  ReadinessScores,
+  SkillHistoryEntry,
+  TendonAdaptationLevel,
+  SkillGoal,
 } from './athlete-profile'
 import { getOnboardingProfile } from './athlete-profile'
+import { getAthleteProfile, type AthleteProfile as DataServiceAthleteProfile } from './data-service'
+import type { AthleteProfile } from '@/types/domain'
+
+// Unified profile input type - accepts both OnboardingProfile and AthleteProfile
+type CalibrationProfile = OnboardingProfile | AthleteProfile | null
+
+// =============================================================================
+// PROFILE TYPE CONVERSION HELPERS
+// =============================================================================
+
+// Map numeric height (in inches) to HeightRange
+function mapHeightToRange(height: number | null): HeightRange | null {
+  if (height === null) return null
+  if (height < 64) return 'under_5_4'
+  if (height < 67) return '5_4_to_5_7'
+  if (height < 70) return '5_7_to_5_10'
+  if (height < 73) return '5_10_to_6_1'
+  if (height < 76) return '6_1_to_6_4'
+  return 'over_6_4'
+}
+
+// Map numeric weight (in lbs) to WeightRange
+function mapWeightToRange(weight: number | null): WeightRange | null {
+  if (weight === null) return null
+  if (weight < 140) return 'under_140'
+  if (weight < 160) return '140_160'
+  if (weight < 180) return '160_180'
+  if (weight < 200) return '180_200'
+  if (weight < 220) return '200_220'
+  return 'over_220'
+}
 
 // =============================================================================
 // CALIBRATION TYPES
@@ -67,6 +104,25 @@ export interface AthleteCalibration {
   suggestedProgressionLevel: 'very_conservative' | 'conservative' | 'standard' | 'aggressive'
   suggestedVolumeModifier: number // 0.7 to 1.2
   suggestedRestModifier: number // 0.8 to 1.3
+  
+  // Readiness scores (from quick calibration questions)
+  readinessScores: {
+    strengthPotential: number      // 0-100
+    skillAdaptation: number        // 0-100
+    recoveryTolerance: number      // 0-100
+    volumeTolerance: number        // 0-100
+  } | null
+  
+  // Tendon adaptation scores (from skill training history)
+  tendonAdaptation: {
+    front_lever: TendonAdaptationLevel
+    planche: TendonAdaptationLevel
+    muscle_up: TendonAdaptationLevel
+    handstand_pushup: TendonAdaptationLevel
+    handstand: TendonAdaptationLevel
+    l_sit: TendonAdaptationLevel
+    v_sit: TendonAdaptationLevel
+  } | null
   
   // Metadata
   calibrationComplete: boolean
@@ -131,36 +187,103 @@ function inferBodyMassProfile(weight: WeightRange | null): BodyMassProfile {
 }
 
 // Convert pull-up capacity to strength tier
+// Handles both legacy and new property formats, plus "unknown" values
 function inferPullStrengthTier(pullups: PullUpCapacity | null): StrengthTier {
-  if (!pullups) return 'low'
-  const mapping: Record<PullUpCapacity, StrengthTier> = {
-    '0_3': 'very_low',
+  // Handle null or "unknown" - default to safe beginner estimate
+  if (!pullups || pullups === 'unknown') return 'low'
+  const mapping: Record<string, StrengthTier> = {
+    // New format
+    '0': 'very_low',
+    '1_3': 'very_low',
     '4_7': 'low',
     '8_12': 'moderate',
     '13_17': 'strong',
     '18_22': 'strong',
     '23_plus': 'elite',
+    // Legacy format
+    '0_3': 'very_low',
   }
-  return mapping[pullups]
+  return mapping[pullups] ?? 'low'
+}
+
+// Convert numeric pull-up count to strength tier (for AthleteProfile)
+function inferPullStrengthTierFromNumber(pullups: number | null): StrengthTier {
+  if (pullups === null || pullups === undefined) return 'low'
+  if (pullups <= 3) return 'very_low'
+  if (pullups <= 7) return 'low'
+  if (pullups <= 12) return 'moderate'
+  if (pullups <= 22) return 'strong'
+  return 'elite'
+}
+
+// Convert numeric push-up/dip counts to strength tier (unified)
+function inferPushStrengthTierUnified(
+  pushups: number | PushUpCapacity | null,
+  dips: number | DipCapacity | null
+): StrengthTier {
+  // Handle numeric values
+  if (typeof pushups === 'number' || typeof dips === 'number') {
+    const pushTier = typeof pushups === 'number' ? inferPushStrengthFromNumber(pushups) : 'low'
+    const dipTier = typeof dips === 'number' ? inferDipStrengthFromNumber(dips) : 'low'
+    return combineTiers(pushTier, dipTier)
+  }
+  // Handle string values
+  return inferPushStrengthTier(pushups as PushUpCapacity | null, dips as DipCapacity | null)
+}
+
+function inferPushStrengthFromNumber(pushups: number | null): StrengthTier {
+  if (pushups === null) return 'low'
+  if (pushups <= 10) return 'very_low'
+  if (pushups <= 25) return 'low'
+  if (pushups <= 40) return 'moderate'
+  if (pushups <= 60) return 'strong'
+  return 'elite'
+}
+
+function inferDipStrengthFromNumber(dips: number | null): StrengthTier {
+  if (dips === null) return 'low'
+  if (dips === 0) return 'very_low'
+  if (dips <= 5) return 'low'
+  if (dips <= 15) return 'moderate'
+  if (dips <= 25) return 'strong'
+  return 'elite'
+}
+
+function combineTiers(a: StrengthTier, b: StrengthTier): StrengthTier {
+  const tierOrder: StrengthTier[] = ['very_low', 'low', 'moderate', 'strong', 'elite']
+  const aIdx = tierOrder.indexOf(a)
+  const bIdx = tierOrder.indexOf(b)
+  // Use the higher tier (optimistic)
+  return tierOrder[Math.max(aIdx, bIdx)]
+}
+
+// Convert numeric L-sit hold seconds to core tier
+function inferCoreTierFromSeconds(seconds: number | null): CoreCompressionTier {
+  if (seconds === null || seconds === 0) return 'low'
+  if (seconds < 10) return 'low'
+  if (seconds < 20) return 'moderate'
+  return 'strong'
 }
 
 // Convert push-up capacity to strength tier
 function inferPushUpStrengthTier(pushups: PushUpCapacity | null): StrengthTier {
-  if (!pushups) return 'low'
-  const mapping: Record<PushUpCapacity, StrengthTier> = {
+  // Handle null or "unknown" - default to safe beginner estimate
+  if (!pushups || pushups === 'unknown') return 'low'
+  const mapping: Record<string, StrengthTier> = {
     '0_10': 'very_low',
     '10_25': 'low',
     '25_40': 'moderate',
     '40_60': 'strong',
     '60_plus': 'elite',
   }
-  return mapping[pushups]
+  return mapping[pushups] ?? 'low'
 }
 
 // Convert dip capacity to strength tier
 function inferDipStrengthTier(dips: DipCapacity | null): StrengthTier {
-  if (!dips) return 'low'
-  const mapping: Record<DipCapacity, StrengthTier> = {
+  // Handle null or "unknown" - default to safe beginner estimate
+  if (!dips || dips === 'unknown') return 'low'
+  const mapping: Record<string, StrengthTier> = {
     '0': 'very_low',
     '1_5': 'low',
     '6_10': 'low',
@@ -169,7 +292,7 @@ function inferDipStrengthTier(dips: DipCapacity | null): StrengthTier {
     '21_25': 'strong',
     '25_plus': 'elite',
   }
-  return mapping[dips]
+  return mapping[dips] ?? 'low'
 }
 
 // Combined push strength from push-ups and dips (takes the higher of the two)
@@ -186,15 +309,21 @@ function inferPushStrengthTier(pushups: PushUpCapacity | null, dips: DipCapacity
 }
 
 // Convert L-sit capacity to core compression tier
-function inferCoreCompressionTier(lsit: LSitCapacity | null): CoreCompressionTier {
-  if (!lsit) return 'low'
-  const mapping: Record<LSitCapacity, CoreCompressionTier> = {
+// Handles both new LSitHoldCapacity and legacy LSitCapacity formats, plus "unknown"
+function inferCoreCompressionTier(lsit: LSitCapacity | string | null): CoreCompressionTier {
+  // Handle null or "unknown" - default to safe beginner estimate
+  if (!lsit || lsit === 'unknown') return 'low'
+  const mapping: Record<string, CoreCompressionTier> = {
+    // New format (LSitHoldCapacity)
     'none': 'very_low',
     'under_10': 'low',
     '10_20': 'moderate',
+    '20_30': 'moderate',
+    '30_plus': 'strong',
+    // Legacy format (LSitCapacity)
     '20_plus': 'strong',
   }
-  return mapping[lsit]
+  return mapping[lsit] ?? 'low'
 }
 
 // Infer session capacity from training time
@@ -210,7 +339,7 @@ function inferSessionCapacity(time: TrainingTimeRange | null): SessionCapacity {
   return mapping[time]
 }
 
-// Infer consistency capacity from weekly training
+// Infer consistency capacity from weekly training (legacy string format)
 function inferConsistencyCapacity(weekly: WeeklyTrainingDays | null): ConsistencyCapacity {
   if (!weekly) return 'moderate'
   const mapping: Record<WeeklyTrainingDays, ConsistencyCapacity> = {
@@ -222,26 +351,44 @@ function inferConsistencyCapacity(weekly: WeeklyTrainingDays | null): Consistenc
   return mapping[weekly]
 }
 
+// Infer session capacity from numeric minutes (new format)
+function inferSessionCapacityFromMinutes(minutes: number | null): SessionCapacity | null {
+  if (!minutes) return null
+  if (minutes <= 30) return 'short'
+  if (minutes <= 45) return 'medium'
+  return 'high'
+}
+
+// Infer consistency capacity from numeric days (new format)
+function inferConsistencyCapacityFromDays(days: number | null): ConsistencyCapacity | null {
+  if (!days) return null
+  if (days <= 2) return 'low'
+  if (days <= 3) return 'moderate'
+  return 'high'
+}
+
 // Infer endurance compatibility from goal + capacity
+// Accepts both legacy OnboardingGoal and new PrimaryGoalType
 function inferEnduranceCompatibility(
-  goal: OnboardingGoal | null,
+  goal: OnboardingGoal | PrimaryGoalType | null,
   session: SessionCapacity,
   consistency: ConsistencyCapacity
 ): EnduranceCompatibility {
+  // Handle both legacy OnboardingGoal and new PrimaryGoalType formats
   // Endurance goal = high compatibility
   if (goal === 'endurance') return 'high'
   
-  // Abs goal often involves circuits
+  // Abs goal often involves circuits (legacy)
   if (goal === 'abs' && session !== 'short') return 'high'
   
-  // General fitness supports endurance
-  if (goal === 'general' && session !== 'short') return 'moderate'
+  // General fitness / overall_fitness supports endurance
+  if ((goal === 'general' || goal === 'overall_fitness') && session !== 'short') return 'moderate'
   
   // Short sessions = lower endurance compatibility
   if (session === 'short') return 'low'
   
-  // Skill/strength focused goals are lower endurance compatibility by default
-  if (goal === 'skill' || goal === 'strength') {
+  // Skill/strength/muscle_and_strength focused goals are lower endurance compatibility by default
+  if (goal === 'skill' || goal === 'strength' || goal === 'muscle_and_strength' || goal === 'skills_and_moves') {
     return consistency === 'high' ? 'moderate' : 'low'
   }
   
@@ -387,20 +534,62 @@ function suggestRestModifier(
 // MAIN CALIBRATION FUNCTION
 // =============================================================================
 
-export function calibrateAthleteProfile(profile: OnboardingProfile | null): AthleteCalibration {
+export function calibrateAthleteProfile(profile: CalibrationProfile): AthleteCalibration {
   // Default calibration for missing data
   if (!profile) {
     return getDefaultCalibration()
   }
   
+  // Detect profile type and extract values accordingly
+  // AthleteProfile uses numeric values, OnboardingProfile uses string ranges
+  const isAthleteProfile = 'userId' in profile && typeof (profile as AthleteProfile).pullUpMax === 'number'
+  
+  // Extract height/weight info
+  const heightRange = isAthleteProfile 
+    ? mapHeightToRange((profile as AthleteProfile).height) 
+    : (profile as OnboardingProfile).heightRange
+  const weightRange = isAthleteProfile
+    ? mapWeightToRange((profile as AthleteProfile).bodyweight)
+    : (profile as OnboardingProfile).weightRange
+  
+  // Extract strength benchmarks
+  const pullUpValue = isAthleteProfile
+    ? (profile as AthleteProfile).pullUpMax
+    : (profile as OnboardingProfile).pullUpMax
+  const pushUpValue = isAthleteProfile
+    ? (profile as AthleteProfile).pushUpMax
+    : (profile as OnboardingProfile).pushUpMax
+  const dipValue = isAthleteProfile
+    ? (profile as AthleteProfile).dipMax
+    : (profile as OnboardingProfile).dipMax
+  const lSitValue = isAthleteProfile
+    ? (profile as AthleteProfile).lSitHoldSeconds
+    : (profile as OnboardingProfile).lSitHold
+  
+  // Extract training schedule
+  const daysPerWeek = typeof profile.trainingDaysPerWeek === 'number' 
+    ? profile.trainingDaysPerWeek 
+    : null
+  const sessionMinutes = typeof profile.sessionLengthMinutes === 'number'
+    ? profile.sessionLengthMinutes
+    : null
+  
   // Infer traits
-  const leverageProfile = inferLeverageProfile(profile.heightRange, profile.weightRange)
-  const bodyMassProfile = inferBodyMassProfile(profile.weightRange)
-  const pullStrengthTier = inferPullStrengthTier(profile.pullUpCapacity)
-  const pushStrengthTier = inferPushStrengthTier(profile.pushUpCapacity, profile.dipCapacity)
-  const coreCompressionTier = inferCoreCompressionTier(profile.lSitCapacity)
-  const sessionCapacity = inferSessionCapacity(profile.trainingTime)
-  const consistencyCapacity = inferConsistencyCapacity(profile.weeklyTraining)
+  const leverageProfile = inferLeverageProfile(heightRange, weightRange)
+  const bodyMassProfile = inferBodyMassProfile(weightRange)
+  
+  // Infer strength tiers based on value type
+  const pullStrengthTier = typeof pullUpValue === 'number'
+    ? inferPullStrengthTierFromNumber(pullUpValue)
+    : inferPullStrengthTier(pullUpValue as PullUpCapacity | null)
+  const pushStrengthTier = inferPushStrengthTierUnified(pushUpValue, dipValue)
+  const coreCompressionTier = typeof lSitValue === 'number'
+    ? inferCoreTierFromSeconds(lSitValue)
+    : inferCoreCompressionTier(lSitValue as LSitCapacity | string | null)
+  
+  // Infer session/training capacity with defaults
+  const sessionCapacity = inferSessionCapacityFromMinutes(sessionMinutes) ?? 'medium'
+  const consistencyCapacity = inferConsistencyCapacityFromDays(daysPerWeek) ?? 'moderate'
   
   const enduranceCompatibility = inferEnduranceCompatibility(
     profile.primaryGoal,
@@ -432,16 +621,68 @@ export function calibrateAthleteProfile(profile: OnboardingProfile | null): Athl
   const canHandleEnduranceBlocks = enduranceCompatibility !== 'low' && fatigueSensitivity !== 'high'
   const shouldConserveVolume = fatigueSensitivity === 'high' || sessionCapacity === 'short'
   
-  // Suggest adjustments
-  const suggestedProgressionLevel = suggestProgressionLevel(
+  // Extract readiness scores from onboarding profile (if available)
+  const readinessScores = !isAthleteProfile && (profile as OnboardingProfile).readinessCalibration?.scores
+    ? {
+        strengthPotential: (profile as OnboardingProfile).readinessCalibration!.scores!.strengthPotentialScore,
+        skillAdaptation: (profile as OnboardingProfile).readinessCalibration!.scores!.skillAdaptationScore,
+        recoveryTolerance: (profile as OnboardingProfile).readinessCalibration!.scores!.recoveryToleranceScore,
+        volumeTolerance: (profile as OnboardingProfile).readinessCalibration!.scores!.volumeToleranceScore,
+      }
+    : null
+
+  // Extract tendon adaptation from skill history (if available)
+  const skillHistory = !isAthleteProfile ? (profile as OnboardingProfile).skillHistory : null
+  const tendonAdaptation = skillHistory ? {
+    front_lever: skillHistory.front_lever?.tendonAdaptationScore ?? 'low' as TendonAdaptationLevel,
+    planche: skillHistory.planche?.tendonAdaptationScore ?? 'low' as TendonAdaptationLevel,
+    muscle_up: skillHistory.muscle_up?.tendonAdaptationScore ?? 'low' as TendonAdaptationLevel,
+    handstand_pushup: skillHistory.handstand_pushup?.tendonAdaptationScore ?? 'low' as TendonAdaptationLevel,
+    handstand: skillHistory.handstand?.tendonAdaptationScore ?? 'low' as TendonAdaptationLevel,
+    l_sit: skillHistory.l_sit?.tendonAdaptationScore ?? 'low' as TendonAdaptationLevel,
+    v_sit: skillHistory.v_sit?.tendonAdaptationScore ?? 'low' as TendonAdaptationLevel,
+  } : null
+
+  // Suggest adjustments (enhanced with readiness scores)
+  let suggestedProgressionLevel = suggestProgressionLevel(
     leverageProfile,
     bodyMassProfile,
     fatigueSensitivity,
     pullStrengthTier,
     pushStrengthTier
   )
-  const suggestedVolumeModifier = suggestVolumeModifier(sessionCapacity, fatigueSensitivity, bodyMassProfile)
-  const suggestedRestModifier = suggestRestModifier(fatigueSensitivity, bodyMassProfile, leverageProfile)
+  
+  // Adjust progression based on readiness scores if available
+  if (readinessScores) {
+    // High skill adaptation = can progress faster on skills
+    if (readinessScores.skillAdaptation >= 70 && suggestedProgressionLevel === 'conservative') {
+      suggestedProgressionLevel = 'standard'
+    }
+    // Low recovery tolerance = be more conservative
+    if (readinessScores.recoveryTolerance < 40 && suggestedProgressionLevel !== 'very_conservative') {
+      suggestedProgressionLevel = suggestedProgressionLevel === 'aggressive' ? 'standard' : 'conservative'
+    }
+  }
+
+  let suggestedVolumeModifier = suggestVolumeModifier(sessionCapacity, fatigueSensitivity, bodyMassProfile)
+  let suggestedRestModifier = suggestRestModifier(fatigueSensitivity, bodyMassProfile, leverageProfile)
+  
+  // Adjust volume/rest based on readiness scores
+  if (readinessScores) {
+    // Volume tolerance affects how much total work they can handle
+    if (readinessScores.volumeTolerance >= 70) {
+      suggestedVolumeModifier = Math.min(1.2, suggestedVolumeModifier + 0.1)
+    } else if (readinessScores.volumeTolerance < 40) {
+      suggestedVolumeModifier = Math.max(0.7, suggestedVolumeModifier - 0.15)
+    }
+    
+    // Recovery tolerance affects rest periods
+    if (readinessScores.recoveryTolerance >= 70) {
+      suggestedRestModifier = Math.max(0.8, suggestedRestModifier - 0.1)
+    } else if (readinessScores.recoveryTolerance < 40) {
+      suggestedRestModifier = Math.min(1.3, suggestedRestModifier + 0.15)
+    }
+  }
   
   return {
     leverageProfile,
@@ -466,6 +707,8 @@ export function calibrateAthleteProfile(profile: OnboardingProfile | null): Athl
     suggestedProgressionLevel,
     suggestedVolumeModifier,
     suggestedRestModifier,
+    readinessScores,
+    tendonAdaptation,
     calibrationComplete: true,
     calibrationDate: new Date().toISOString(),
   }
@@ -496,15 +739,25 @@ needsCompressionWork: true,
   suggestedProgressionLevel: 'standard',
     suggestedVolumeModifier: 1.0,
     suggestedRestModifier: 1.0,
+    readinessScores: null,
+    tendonAdaptation: null,
     calibrationComplete: false,
     calibrationDate: null,
   }
 }
 
 // Get athlete calibration (uses stored profile)
+// Tries AthleteProfile first (from TrainingSetup), falls back to OnboardingProfile
 export function getAthleteCalibration(): AthleteCalibration {
-  const profile = getOnboardingProfile()
-  return calibrateAthleteProfile(profile)
+  // First try the main athlete profile (from profile-repository)
+  const athleteProfile = getAthleteProfile()
+  if (athleteProfile && athleteProfile.onboardingComplete) {
+    return calibrateAthleteProfile(athleteProfile)
+  }
+  
+  // Fall back to onboarding profile (legacy)
+  const onboardingProfile = getOnboardingProfile()
+  return calibrateAthleteProfile(onboardingProfile)
 }
 
 // =============================================================================
@@ -780,4 +1033,152 @@ export function getProgramCalibrationAdjustments(
     progressionNotes,
     calibrationMessage,
   }
+}
+
+// =============================================================================
+// TENDON ADAPTATION HELPERS
+// =============================================================================
+
+export interface SkillStartingPoint {
+  progressionTier: 'foundation' | 'beginner' | 'intermediate' | 'advanced'
+  intensityModifier: number     // 0.7 to 1.1
+  volumeModifier: number        // 0.6 to 1.0
+  progressionSpeedModifier: number // 0.7 to 1.2
+}
+
+/**
+ * Get the recommended starting point for a skill based on tendon adaptation.
+ * 
+ * TENDON LEVEL → STARTING POINT MAPPING:
+ * | Tendon Level  | Progression Tier | Intensity | Volume | Speed |
+ * |---------------|------------------|-----------|--------|-------|
+ * | low           | foundation       | 0.75      | 0.65   | 0.75  |
+ * | low_moderate  | foundation+      | 0.82      | 0.75   | 0.9   |
+ * | moderate      | beginner         | 0.88      | 0.82   | 1.0   |
+ * | moderate_high | beginner+        | 0.94      | 0.88   | 1.1   |
+ * | high          | intermediate     | 1.0       | 0.92   | 1.15  |
+ * 
+ * SAFETY: This must be further constrained by current strength metrics.
+ */
+export function getSkillStartingPoint(
+  tendonLevel: TendonAdaptationLevel,
+  currentStrengthTier: StrengthTier,
+  readinessScores: { recoveryTolerance: number; skillAdaptation: number } | null
+): SkillStartingPoint {
+  // Base starting point from tendon adaptation (5-tier system)
+  let baseResult: SkillStartingPoint
+  
+  switch (tendonLevel) {
+    case 'low':
+      // No adaptation - pure foundation work
+      baseResult = {
+        progressionTier: 'foundation',
+        intensityModifier: 0.75,
+        volumeModifier: 0.65,
+        progressionSpeedModifier: 0.75,
+      }
+      break
+    case 'low_moderate':
+      // Some retained familiarity - foundation with faster ramp
+      baseResult = {
+        progressionTier: 'foundation',
+        intensityModifier: 0.82,
+        volumeModifier: 0.75,
+        progressionSpeedModifier: 0.9,
+      }
+      break
+    case 'moderate':
+      // Solid base - standard beginner progression
+      baseResult = {
+        progressionTier: 'beginner',
+        intensityModifier: 0.88,
+        volumeModifier: 0.82,
+        progressionSpeedModifier: 1.0,
+      }
+      break
+    case 'moderate_high':
+      // Strong base - beginner with accelerated path
+      baseResult = {
+        progressionTier: 'beginner',
+        intensityModifier: 0.94,
+        volumeModifier: 0.88,
+        progressionSpeedModifier: 1.1,
+      }
+      break
+    case 'high':
+      // Recently strong - can enter intermediate (if strength allows)
+      baseResult = {
+        progressionTier: 'intermediate',
+        intensityModifier: 1.0,
+        volumeModifier: 0.92,
+        progressionSpeedModifier: 1.15,
+      }
+      break
+  }
+  
+  // SAFETY CONSTRAINT: Never exceed what current strength allows
+  // Even with high tendon adaptation, low strength caps the progression tier
+  const strengthCap = getStrengthBasedCap(currentStrengthTier)
+  const tierOrder = ['foundation', 'beginner', 'intermediate', 'advanced'] as const
+  const baseTierIdx = tierOrder.indexOf(baseResult.progressionTier)
+  const capTierIdx = tierOrder.indexOf(strengthCap)
+  
+  if (baseTierIdx > capTierIdx) {
+    baseResult.progressionTier = strengthCap
+    // Reduce intensity when capped by strength
+    baseResult.intensityModifier = Math.min(baseResult.intensityModifier, 0.82)
+    // Also slow progression when strength-limited
+    baseResult.progressionSpeedModifier = Math.min(baseResult.progressionSpeedModifier, 0.95)
+  }
+  
+  // Adjust based on readiness scores if available
+  if (readinessScores) {
+    // Low recovery tolerance = reduce volume and intensity
+    if (readinessScores.recoveryTolerance < 40) {
+      baseResult.volumeModifier *= 0.85
+      baseResult.intensityModifier *= 0.9
+    }
+    
+    // High skill adaptation = can progress slightly faster
+    if (readinessScores.skillAdaptation >= 70) {
+      baseResult.progressionSpeedModifier = Math.min(1.2, baseResult.progressionSpeedModifier * 1.05)
+    }
+  }
+  
+  return baseResult
+}
+
+/**
+ * Get the maximum progression tier allowed by current strength.
+ * This is a hard cap that tendon adaptation cannot exceed.
+ */
+function getStrengthBasedCap(strengthTier: StrengthTier): 'foundation' | 'beginner' | 'intermediate' | 'advanced' {
+  switch (strengthTier) {
+    case 'very_low':
+      return 'foundation'
+    case 'low':
+      return 'beginner'
+    case 'moderate':
+      return 'intermediate'
+    case 'strong':
+    case 'elite':
+      return 'advanced'
+  }
+}
+
+/**
+ * Check if an athlete has meaningful tendon adaptation for any skill.
+ * Useful for determining if skill history should influence programming.
+ * Returns true if any skill has at least low_moderate adaptation.
+ */
+export function hasAnyTendonAdaptation(calibration: AthleteCalibration): boolean {
+  if (!calibration.tendonAdaptation) return false
+  
+  const scores = Object.values(calibration.tendonAdaptation)
+  return scores.some(level => 
+    level === 'low_moderate' || 
+    level === 'moderate' || 
+    level === 'moderate_high' || 
+    level === 'high'
+  )
 }

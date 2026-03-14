@@ -1,310 +1,2164 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
-import { ArrowRight, ArrowLeft, Check, Loader2 } from 'lucide-react'
+import { Input } from '@/components/ui/input'
+import { 
+  ChevronLeft, 
+  ChevronRight, 
+  User, 
+  Target, 
+  Dumbbell,
+  Zap,
+  Settings,
+  CheckCircle2,
+  Calendar,
+  Heart,
+  StretchHorizontal,
+  Loader2,
+  Calculator,
+  Activity,
+} from 'lucide-react'
 import { SpartanIcon } from '@/components/brand/SpartanLogo'
 import { trackOnboardingCompleted } from '@/lib/analytics'
+import { TestingGuideLink, DontKnowHelper } from '@/components/testing/TestingGuideModal'
 import {
   type OnboardingProfile,
+  type Sex,
+  type TrainingExperience,
   type HeightRange,
   type WeightRange,
+  type BodyFatRange,
+  type BodyFatSource,
+  type GoalCategory,
+  type PrimaryGoalType,
+  type SkillGoal,
+  type FlexibilityGoal,
   type PullUpCapacity,
   type PushUpCapacity,
   type DipCapacity,
-  type LSitCapacity,
-  type TrainingTimeRange,
-  type WeeklyTrainingDays,
-  type OnboardingGoal,
-  type SkillInterest,
-  type FlexibilityFocus,
-  type FlexibilityGoal,
+  type WallHSPUReps,
+  type FrontLeverProgression,
+  type PlancheProgression,
+  type MuscleUpReadiness,
+  type HSPUProgression,
+  type LSitHoldCapacity,
+  type VSitHoldCapacity,
+  type FlexibilityLevel,
+  type RangeTrainingIntent,
   type EquipmentType,
-  type EnduranceInterest,
+  type TrainingDaysPerWeek,
+  type SessionLengthPreference,
+  type SessionStylePreference,
+  type RecoveryQuality,
+  type TrainingConsistencyAnswer,
+  type RecoveryToleranceAnswer,
+  type StrengthPerceptionAnswer,
+  type SkillFamiliarityAnswer,
+  type BodyTypeAnswer,
+  type ReadinessCalibration,
+  type SkillTrainingHistory,
+  type SkillLastTrained,
+  type SkillHistoryEntry,
+  TRAINING_EXPERIENCE_LABELS,
+  TRAINING_EXPERIENCE_DESCRIPTIONS,
   HEIGHT_LABELS,
   WEIGHT_LABELS,
+  BODY_FAT_LABELS,
+  GOAL_CATEGORY_LABELS,
+  GOAL_CATEGORY_DESCRIPTIONS,
+  SKILL_GOAL_LABELS,
+  FLEXIBILITY_GOAL_LABELS,
   PULLUP_LABELS,
   PUSHUP_LABELS,
   DIP_LABELS,
-  LSIT_LABELS,
-  TRAINING_TIME_LABELS,
-  WEEKLY_TRAINING_LABELS,
-  GOAL_LABELS,
-  SKILL_INTEREST_LABELS,
-  FLEXIBILITY_FOCUS_LABELS,
-  FLEXIBILITY_GOAL_LABELS,
+  WALL_HSPU_LABELS,
+  FRONT_LEVER_LABELS,
+  PLANCHE_LABELS,
+  MUSCLE_UP_LABELS,
+  HSPU_LABELS,
+  LSIT_HOLD_LABELS,
+  VSIT_HOLD_LABELS,
+  FLEXIBILITY_LEVEL_LABELS,
+  RANGE_INTENT_LABELS,
+  RANGE_INTENT_DESCRIPTIONS,
   EQUIPMENT_LABELS,
-  ENDURANCE_INTEREST_LABELS,
+  SESSION_LENGTH_LABELS,
+  SESSION_STYLE_LABELS,
+  RECOVERY_LABELS,
+  TRAINING_CONSISTENCY_LABELS,
+  TRAINING_CONSISTENCY_DESCRIPTIONS,
+  RECOVERY_TOLERANCE_LABELS,
+  RECOVERY_TOLERANCE_DESCRIPTIONS,
+  STRENGTH_PERCEPTION_LABELS,
+  SKILL_FAMILIARITY_LABELS,
+  SKILL_FAMILIARITY_DESCRIPTIONS,
+  BODY_TYPE_LABELS,
+  BODY_TYPE_DESCRIPTIONS,
+  SKILL_TRAINING_HISTORY_LABELS,
+  SKILL_TRAINING_HISTORY_DESCRIPTIONS,
+  SKILL_LAST_TRAINED_LABELS,
+  calculateReadinessScores,
+  calculateTendonAdaptation,
   saveOnboardingProfile,
   createEmptyOnboardingProfile,
+  hasEstimatedValues,
 } from '@/lib/athlete-profile'
+import { BodyFatCalculator } from './BodyFatCalculator'
 
-// Step types
-type StepType = 'single' | 'multi'
+// =============================================================================
+// SECTION DEFINITIONS
+// =============================================================================
 
-interface StepConfig {
-  key: keyof OnboardingProfile
-  question: string
-  subtitle?: string
-  options: { value: string; label: string }[]
-  columns?: number
-  type: StepType
+type SectionId =
+  | 'athlete_profile'
+  | 'readiness'
+  | 'goals'
+  | 'skill_selection'
+  | 'strength_benchmarks'
+  | 'skill_benchmarks'
+  | 'flexibility_benchmarks'
+  | 'equipment'
+  | 'schedule'
+  | 'recovery'
+  | 'review'
+
+interface Section {
+  id: SectionId
+  title: string
+  subtitle: string
+  icon: typeof User
   showIf?: (profile: OnboardingProfile) => boolean
 }
 
-// All onboarding steps
-const ALL_STEPS: StepConfig[] = [
-  // Basic Profile
+const SECTIONS: Section[] = [
   {
-    key: 'sex',
-    question: 'Biological sex',
-    subtitle: 'Helps calibrate leverage and strength baselines',
-    options: [
-      { value: 'male', label: 'Male' },
-      { value: 'female', label: 'Female' },
-    ],
-    columns: 2,
-    type: 'single',
+    id: 'athlete_profile',
+    title: 'About You',
+    subtitle: 'Tell us a little about yourself so we can tailor training to you',
+    icon: User,
   },
   {
-    key: 'heightRange',
-    question: 'Your height',
-    options: Object.entries(HEIGHT_LABELS).map(([value, label]) => ({ value, label })),
-    columns: 2,
-    type: 'single',
+    id: 'readiness',
+    title: 'Quick Calibration',
+    subtitle: 'A few quick questions to fine-tune your program',
+    icon: Activity,
   },
   {
-    key: 'weightRange',
-    question: 'Your weight',
-    options: Object.entries(WEIGHT_LABELS).map(([value, label]) => ({ value, label })),
-    columns: 2,
-    type: 'single',
-  },
-  
-  // Strength Indicators
-  {
-    key: 'pullUpCapacity',
-    question: 'How many pull-ups can you perform?',
-    subtitle: 'Strict form, full range of motion',
-    options: Object.entries(PULLUP_LABELS).map(([value, label]) => ({ value, label })),
-    columns: 4,
-    type: 'single',
+    id: 'goals',
+    title: 'Your Goals',
+    subtitle: 'What do you want to achieve? This shapes your entire program.',
+    icon: Target,
   },
   {
-    key: 'pushUpCapacity',
-    question: 'How many push-ups can you perform?',
-    subtitle: 'Full range, chest to ground',
-    options: Object.entries(PUSHUP_LABELS).map(([value, label]) => ({ value, label })),
-    columns: 3,
-    type: 'single',
+    id: 'skill_selection',
+    title: 'Choose Your Skills',
+    subtitle: 'Select the skills you want to master — we\'ll build progressions for each',
+    icon: Zap,
+    showIf: (profile) => profile.goalCategories.includes('skill_mastery') || 
+                         profile.goalCategories.includes('flexibility') ||
+                         profile.goalCategories.includes('mobility'),
   },
   {
-    key: 'dipCapacity',
-    question: 'Max dips',
-    subtitle: 'Parallel bar dips, full depth',
-    options: Object.entries(DIP_LABELS).map(([value, label]) => ({ value, label })),
-    columns: 4,
-    type: 'single',
+    id: 'strength_benchmarks',
+    title: 'Current Strength',
+    subtitle: 'These numbers help us set the right training intensity for you',
+    icon: Dumbbell,
   },
   {
-    key: 'lSitCapacity',
-    question: 'Can you hold an L-sit?',
-    subtitle: 'On parallettes or floor',
-    options: Object.entries(LSIT_LABELS).map(([value, label]) => ({ value, label })),
-    columns: 2,
-    type: 'single',
-  },
-  
-  // Goal Selection
-  {
-    key: 'primaryGoal',
-    question: 'Main training goal',
-    options: Object.entries(GOAL_LABELS).map(([value, label]) => ({ value, label })),
-    columns: 2,
-    type: 'single',
-  },
-  
-  // Skill Interests
-  {
-    key: 'skillInterests',
-    question: 'Skills you want to pursue',
-    subtitle: 'Select all that interest you',
-    options: Object.entries(SKILL_INTEREST_LABELS).map(([value, label]) => ({ value, label })),
-    columns: 2,
-    type: 'multi',
-  },
-  
-  // Flexibility
-  {
-    key: 'flexibilityFocus',
-    question: 'Flexibility focus',
-    options: Object.entries(FLEXIBILITY_FOCUS_LABELS).map(([value, label]) => ({ value, label })),
-    columns: 1,
-    type: 'single',
+    id: 'skill_benchmarks',
+    title: 'Skill Levels',
+    subtitle: 'Your current abilities help us select the right progressions',
+    icon: Zap,
+    showIf: (profile) => profile.selectedSkills.length > 0,
   },
   {
-    key: 'flexibilityGoals',
-    question: 'Flexibility goals',
-    subtitle: 'Select your targets',
-    options: Object.entries(FLEXIBILITY_GOAL_LABELS).map(([value, label]) => ({ value, label })),
-    columns: 2,
-    type: 'multi',
-    showIf: (profile) => profile.flexibilityFocus !== 'none' && profile.flexibilityFocus !== null,
-  },
-  
-  // Training Setup
-  {
-    key: 'weeklyTraining',
-    question: 'Training days per week',
-    options: Object.entries(WEEKLY_TRAINING_LABELS).map(([value, label]) => ({ value, label })),
-    columns: 4,
-    type: 'single',
+    id: 'flexibility_benchmarks',
+    title: 'Flexibility',
+    subtitle: 'Range of motion helps us balance strength and mobility work',
+    icon: StretchHorizontal,
+    showIf: (profile) => profile.selectedFlexibility.length > 0,
   },
   {
-    key: 'trainingTime',
-    question: 'Typical session length',
-    options: Object.entries(TRAINING_TIME_LABELS).map(([value, label]) => ({ value, label })),
-    columns: 3,
-    type: 'single',
+    id: 'equipment',
+    title: 'Your Equipment',
+    subtitle: 'We\'ll only program exercises you can actually do',
+    icon: Settings,
   },
-  
-  // Equipment
   {
-    key: 'equipment',
-    question: 'Equipment available',
-    subtitle: 'Select all you have access to',
-    options: Object.entries(EQUIPMENT_LABELS).map(([value, label]) => ({ value, label })),
-    columns: 2,
-    type: 'multi',
+    id: 'schedule',
+    title: 'Training Schedule',
+    subtitle: 'How much time can you realistically commit each week?',
+    icon: Calendar,
   },
-  
-  // Endurance
   {
-    key: 'enduranceInterest',
-    question: 'Circuit training interest',
-    subtitle: 'Endurance-style finishers and conditioning',
-    options: Object.entries(ENDURANCE_INTEREST_LABELS).map(([value, label]) => ({ value, label })),
-    columns: 1,
-    type: 'single',
+    id: 'recovery',
+    title: 'Recovery & Lifestyle',
+    subtitle: 'Sleep and stress affect how hard we can push you',
+    icon: Heart,
+  },
+  {
+    id: 'review',
+    title: 'Review & Confirm',
+    subtitle: 'Make sure everything looks right before we build your program',
+    icon: CheckCircle2,
   },
 ]
 
-export function AthleteOnboarding() {
-  const router = useRouter()
-  const [currentStepIndex, setCurrentStepIndex] = useState(0)
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [profile, setProfile] = useState<OnboardingProfile>(createEmptyOnboardingProfile())
+// =============================================================================
+// OPTION BUTTON COMPONENT
+// =============================================================================
 
-  // Filter steps based on showIf conditions
-  const visibleSteps = useMemo(() => {
-    return ALL_STEPS.filter(step => !step.showIf || step.showIf(profile))
-  }, [profile])
+interface OptionButtonProps {
+  selected: boolean
+  onClick: () => void
+  children: React.ReactNode
+  description?: string
+  className?: string
+}
 
-  const step = visibleSteps[currentStepIndex]
-  const totalSteps = visibleSteps.length
-  const isLastStep = currentStepIndex === totalSteps - 1
-  const progress = ((currentStepIndex + 1) / totalSteps) * 100
+function OptionButton({ selected, onClick, children, description, className = '' }: OptionButtonProps) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`py-3 px-4 rounded-lg border text-sm font-medium transition-all duration-150 flex items-center gap-2 text-left ${
+        selected
+          ? 'bg-[#C1121F]/10 border-[#C1121F] text-[#E6E9EF] ring-1 ring-[#C1121F]/30'
+          : 'bg-[#0F1115] border-[#2B313A] text-[#A4ACB8] hover:border-[#4F6D8A] hover:text-[#E6E9EF]'
+      } ${className}`}
+    >
+      {selected && <Check className="w-4 h-4 text-[#C1121F] shrink-0" />}
+      <div className="flex-1 min-w-0">
+        <span className="truncate block">{children}</span>
+        {description && (
+          <span className="text-xs text-[#6B7280] block mt-0.5">{description}</span>
+        )}
+      </div>
+    </button>
+  )
+}
 
-  // Guard against undefined step (shouldn't happen, but prevents crashes)
-  if (!step) {
-    return (
-      <div className="min-h-screen bg-[#0F1115] flex items-center justify-center">
-        <div className="text-center p-8">
-          <p className="text-[#A4ACB8] mb-4">Unable to load onboarding step. Please refresh.</p>
-          <Button onClick={() => window.location.reload()}>Refresh</Button>
+// =============================================================================
+// SECTION CONTENT COMPONENTS
+// =============================================================================
+
+interface SectionProps {
+  profile: OnboardingProfile
+  updateProfile: (updates: Partial<OnboardingProfile>) => void
+}
+
+function AthleteProfileSection({ profile, updateProfile }: SectionProps) {
+  return (
+    <div className="space-y-6">
+      {/* Sex */}
+      <div className="space-y-3">
+        <label className="text-sm font-medium text-[#A4ACB8]">Biological sex</label>
+        <p className="text-xs text-[#6B7280] -mt-1">Used to calibrate strength standards and leverage expectations</p>
+        <div className="grid grid-cols-2 gap-2">
+          {(['male', 'female'] as Sex[]).map((sex) => (
+            <OptionButton
+              key={sex}
+              selected={profile.sex === sex}
+              onClick={() => updateProfile({ sex })}
+            >
+              {sex === 'male' ? 'Male' : 'Female'}
+            </OptionButton>
+          ))}
         </div>
+      </div>
+
+      {/* Training Experience */}
+      <div className="space-y-3">
+        <label className="text-sm font-medium text-[#A4ACB8]">How long have you been training?</label>
+        <p className="text-xs text-[#6B7280] -mt-1">This helps us set appropriate starting points</p>
+        <div className="grid grid-cols-1 gap-2">
+          {(Object.keys(TRAINING_EXPERIENCE_LABELS) as TrainingExperience[]).map((exp) => (
+            <OptionButton
+              key={exp}
+              selected={profile.trainingExperience === exp}
+              onClick={() => updateProfile({ trainingExperience: exp })}
+              description={TRAINING_EXPERIENCE_DESCRIPTIONS[exp]}
+            >
+              {TRAINING_EXPERIENCE_LABELS[exp]}
+            </OptionButton>
+          ))}
+        </div>
+      </div>
+
+      {/* Height */}
+      <div className="space-y-3">
+        <label className="text-sm font-medium text-[#A4ACB8]">Your height</label>
+        <p className="text-xs text-[#6B7280] -mt-1">Affects leverage in pulling and pushing movements</p>
+        <div className="grid grid-cols-2 gap-2">
+          {(Object.keys(HEIGHT_LABELS) as HeightRange[]).map((height) => (
+            <OptionButton
+              key={height}
+              selected={profile.heightRange === height}
+              onClick={() => updateProfile({ heightRange: height })}
+            >
+              {HEIGHT_LABELS[height]}
+            </OptionButton>
+          ))}
+        </div>
+      </div>
+
+      {/* Weight */}
+      <div className="space-y-3">
+        <label className="text-sm font-medium text-[#A4ACB8]">Your weight</label>
+        <p className="text-xs text-[#6B7280] -mt-1">Important for bodyweight strength calculations</p>
+        <div className="grid grid-cols-2 gap-2">
+          {(Object.keys(WEIGHT_LABELS) as WeightRange[]).map((weight) => (
+            <OptionButton
+              key={weight}
+              selected={profile.weightRange === weight}
+              onClick={() => updateProfile({ weightRange: weight })}
+            >
+              {WEIGHT_LABELS[weight]}
+            </OptionButton>
+          ))}
+        </div>
+      </div>
+
+      {/* Body Fat (Optional) - Enhanced with calculator */}
+      <BodyFatSection profile={profile} updateProfile={updateProfile} />
+    </div>
+  )
+}
+
+// Separate component for body fat to manage calculator state
+function BodyFatSection({ profile, updateProfile }: SectionProps) {
+  const [mode, setMode] = useState<'selection' | 'manual' | 'calculator'>('selection')
+  const [manualValue, setManualValue] = useState('')
+
+  // Handle calculator result
+  const handleCalculatorResult = (percent: number) => {
+    // Map percent to range
+    let range: BodyFatRange = 'unknown'
+    if (percent < 10) range = 'under_10'
+    else if (percent < 15) range = '10_15'
+    else if (percent < 20) range = '15_20'
+    else if (percent < 25) range = '20_25'
+    else if (percent < 30) range = '25_30'
+    else range = 'over_30'
+
+    updateProfile({ 
+      bodyFatRange: range,
+      bodyFatPercent: percent,
+      bodyFatSource: 'calculator'
+    })
+    setMode('selection')
+  }
+
+  // Handle manual entry
+  const handleManualSubmit = () => {
+    const percent = parseFloat(manualValue)
+    if (isNaN(percent) || percent < 2 || percent > 50) return
+
+    let range: BodyFatRange = 'unknown'
+    if (percent < 10) range = 'under_10'
+    else if (percent < 15) range = '10_15'
+    else if (percent < 20) range = '15_20'
+    else if (percent < 25) range = '20_25'
+    else if (percent < 30) range = '25_30'
+    else range = 'over_30'
+
+    updateProfile({ 
+      bodyFatRange: range,
+      bodyFatPercent: percent,
+      bodyFatSource: 'manual'
+    })
+    setMode('selection')
+  }
+
+  // Skip body fat
+  const handleSkip = () => {
+    updateProfile({ 
+      bodyFatRange: 'unknown',
+      bodyFatPercent: null,
+      bodyFatSource: 'unknown'
+    })
+    setMode('selection')
+  }
+
+  // Clear selection
+  const handleClear = () => {
+    updateProfile({ 
+      bodyFatRange: null,
+      bodyFatPercent: null,
+      bodyFatSource: null
+    })
+    setMode('selection')
+    setManualValue('')
+  }
+
+  // Show calculator
+  if (mode === 'calculator' && profile.sex) {
+    return (
+      <div className="space-y-3">
+        <label className="text-sm font-medium text-[#A4ACB8]">
+          Body Fat Calculator
+        </label>
+        <Card className="bg-[#0F1115] border-[#2B313A] p-4">
+          <BodyFatCalculator 
+            sex={profile.sex}
+            onResult={handleCalculatorResult}
+            onCancel={() => setMode('selection')}
+            embedded
+          />
+        </Card>
       </div>
     )
   }
 
-  // Get current value for this step
-  const getCurrentValue = () => {
-    const value = profile[step.key]
-    if (step.type === 'multi') {
-      return value as string[] || []
+  // Show manual entry
+  if (mode === 'manual') {
+    return (
+      <div className="space-y-3">
+        <label className="text-sm font-medium text-[#A4ACB8]">
+          Enter Body Fat %
+        </label>
+        <div className="flex gap-2">
+          <Input
+            type="number"
+            placeholder="e.g. 15"
+            value={manualValue}
+            onChange={(e) => setManualValue(e.target.value)}
+            className="bg-[#0F1115] border-[#2B313A] text-[#E6E9EF] w-24"
+          />
+          <span className="text-[#6B7280] self-center">%</span>
+          <Button
+            onClick={handleManualSubmit}
+            disabled={!manualValue || parseFloat(manualValue) < 2 || parseFloat(manualValue) > 50}
+            className="bg-[#C1121F] hover:bg-[#C1121F]/90 text-white"
+            size="sm"
+          >
+            <Check className="w-4 h-4" />
+          </Button>
+        </div>
+        <button 
+          onClick={() => setMode('selection')}
+          className="text-sm text-[#6B7280] hover:text-[#A4ACB8] transition-colors"
+        >
+          Cancel
+        </button>
+      </div>
+    )
+  }
+
+  // Selection mode - show current value or options
+  return (
+    <div className="space-y-3">
+      <label className="text-sm font-medium text-[#A4ACB8]">
+        Body fat % <span className="text-[#6B7280]">(optional)</span>
+      </label>
+      <p className="text-xs text-[#6B7280] -mt-1">
+        Improves training accuracy but not required.
+      </p>
+
+      {/* Show current value if set */}
+      {profile.bodyFatPercent !== null && profile.bodyFatSource !== 'unknown' ? (
+        <div className="bg-[#0F1115] rounded-lg p-3 border border-[#2B313A]">
+          <div className="flex items-center justify-between">
+            <div>
+              <span className="text-[#E6E9EF] font-medium">{profile.bodyFatPercent}%</span>
+              <span className="text-[#6B7280] text-sm ml-2">
+                ({profile.bodyFatSource === 'calculator' ? 'calculated' : 'entered manually'})
+              </span>
+            </div>
+            <button
+              onClick={handleClear}
+              className="text-sm text-[#4F6D8A] hover:text-[#6B8FAD] transition-colors"
+            >
+              Change
+            </button>
+          </div>
+        </div>
+      ) : profile.bodyFatRange === 'unknown' ? (
+        <div className="bg-[#0F1115] rounded-lg p-3 border border-[#2B313A]">
+          <div className="flex items-center justify-between">
+            <span className="text-[#6B7280]">Skipped</span>
+            <button
+              onClick={handleClear}
+              className="text-sm text-[#4F6D8A] hover:text-[#6B8FAD] transition-colors"
+            >
+              Change
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 gap-2">
+          <OptionButton
+            selected={false}
+            onClick={() => setMode('manual')}
+          >
+            Enter manually
+          </OptionButton>
+          <OptionButton
+            selected={false}
+            onClick={() => {
+              if (profile.sex) {
+                setMode('calculator')
+              }
+            }}
+            disabled={!profile.sex}
+            description={!profile.sex ? 'Select sex first to use calculator' : 'Uses U.S. Navy method'}
+          >
+            Estimate with calculator
+          </OptionButton>
+          <OptionButton
+            selected={false}
+            onClick={handleSkip}
+          >
+            Skip for now
+          </OptionButton>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// =============================================================================
+// READINESS CALIBRATION SECTION
+// =============================================================================
+
+function ReadinessCalibrationSection({ profile, updateProfile }: SectionProps) {
+  // Helper to update readiness calibration
+  const updateReadiness = <K extends keyof ReadinessCalibration>(
+    key: K,
+    value: ReadinessCalibration[K]
+  ) => {
+    const current = profile.readinessCalibration || {
+      trainingConsistency: null,
+      recoveryTolerance: null,
+      strengthPerception: null,
+      skillFamiliarity: null,
+      bodyType: null,
+      scores: null,
     }
-    return value as string | null
-  }
-
-  const currentValue = getCurrentValue()
-
-  // Check if we can proceed
-  const canGoNext = step.type === 'multi' 
-    ? (currentValue as string[]).length > 0 || step.key === 'skillInterests' || step.key === 'flexibilityGoals'
-    : currentValue !== null
-
-  // Handle single selection
-  const handleSingleSelect = (value: string) => {
-    setProfile(prev => ({ ...prev, [step.key]: value }))
-  }
-
-  // Handle multi selection
-  const handleMultiSelect = (value: string) => {
-    const currentArray = (profile[step.key] as string[]) || []
-    const newArray = currentArray.includes(value)
-      ? currentArray.filter(v => v !== value)
-      : [...currentArray, value]
     
-    // Special handling for 'none' equipment
-    if (step.key === 'equipment') {
-      if (value === 'none') {
-        setProfile(prev => ({ ...prev, [step.key]: ['none'] }))
-        return
+    const updated = { ...current, [key]: value }
+    
+    // Recalculate scores whenever any answer changes
+    const scores = calculateReadinessScores(updated)
+    
+    updateProfile({
+      readinessCalibration: {
+        ...updated,
+        scores,
       }
-      // Remove 'none' if selecting other equipment
-      const filtered = newArray.filter(v => v !== 'none')
-      setProfile(prev => ({ ...prev, [step.key]: filtered.length > 0 ? filtered : [] }))
+    })
+  }
+
+  const consistencyOptions: TrainingConsistencyAnswer[] = ['very_consistent', 'mostly_consistent', 'inconsistent', 'just_starting']
+  const recoveryOptions: RecoveryToleranceAnswer[] = ['bounces_back', 'needs_time', 'easily_overtrained']
+  const strengthOptions: StrengthPerceptionAnswer[] = ['above_average', 'average', 'below_average', 'unsure']
+  const skillOptions: SkillFamiliarityAnswer[] = ['experienced', 'some_exposure', 'new_to_skills']
+  const bodyTypeOptions: BodyTypeAnswer[] = ['lean_light', 'athletic_medium', 'strong_heavy', 'tall_long']
+
+  return (
+    <div className="space-y-6">
+      {/* Intro text */}
+      <p className="text-xs text-[#6B7280] -mt-2 pb-2 border-b border-[#2B313A]">
+        These help us estimate your training capacity — especially useful if you don't know exact numbers yet.
+      </p>
+
+      {/* Q1: Training Consistency */}
+      <div className="space-y-3">
+        <label className="text-sm font-medium text-[#A4ACB8]">How consistent is your training?</label>
+        <div className="grid grid-cols-1 gap-2">
+          {consistencyOptions.map((opt) => (
+            <OptionButton
+              key={opt}
+              selected={profile.readinessCalibration?.trainingConsistency === opt}
+              onClick={() => updateReadiness('trainingConsistency', opt)}
+              description={TRAINING_CONSISTENCY_DESCRIPTIONS[opt]}
+            >
+              {TRAINING_CONSISTENCY_LABELS[opt]}
+            </OptionButton>
+          ))}
+        </div>
+      </div>
+
+      {/* Q2: Recovery Tolerance */}
+      <div className="space-y-3">
+        <label className="text-sm font-medium text-[#A4ACB8]">How well do you recover from training?</label>
+        <div className="grid grid-cols-1 gap-2">
+          {recoveryOptions.map((opt) => (
+            <OptionButton
+              key={opt}
+              selected={profile.readinessCalibration?.recoveryTolerance === opt}
+              onClick={() => updateReadiness('recoveryTolerance', opt)}
+              description={RECOVERY_TOLERANCE_DESCRIPTIONS[opt]}
+            >
+              {RECOVERY_TOLERANCE_LABELS[opt]}
+            </OptionButton>
+          ))}
+        </div>
+      </div>
+
+      {/* Q3: Strength Perception */}
+      <div className="space-y-3">
+        <label className="text-sm font-medium text-[#A4ACB8]">How would you rate your relative strength?</label>
+        <p className="text-xs text-[#6B7280] -mt-1">Compared to others your size</p>
+        <div className="grid grid-cols-2 gap-2">
+          {strengthOptions.map((opt) => (
+            <OptionButton
+              key={opt}
+              selected={profile.readinessCalibration?.strengthPerception === opt}
+              onClick={() => updateReadiness('strengthPerception', opt)}
+            >
+              {STRENGTH_PERCEPTION_LABELS[opt]}
+            </OptionButton>
+          ))}
+        </div>
+      </div>
+
+      {/* Q4: Skill Familiarity */}
+      <div className="space-y-3">
+        <label className="text-sm font-medium text-[#A4ACB8]">Experience with skill training?</label>
+        <p className="text-xs text-[#6B7280] -mt-1">Levers, handstands, gymnastics-style work</p>
+        <div className="grid grid-cols-1 gap-2">
+          {skillOptions.map((opt) => (
+            <OptionButton
+              key={opt}
+              selected={profile.readinessCalibration?.skillFamiliarity === opt}
+              onClick={() => updateReadiness('skillFamiliarity', opt)}
+              description={SKILL_FAMILIARITY_DESCRIPTIONS[opt]}
+            >
+              {SKILL_FAMILIARITY_LABELS[opt]}
+            </OptionButton>
+          ))}
+        </div>
+      </div>
+
+      {/* Q5: Body Type */}
+      <div className="space-y-3">
+        <label className="text-sm font-medium text-[#A4ACB8]">How would you describe your build?</label>
+        <div className="grid grid-cols-2 gap-2">
+          {bodyTypeOptions.map((opt) => (
+            <OptionButton
+              key={opt}
+              selected={profile.readinessCalibration?.bodyType === opt}
+              onClick={() => updateReadiness('bodyType', opt)}
+              description={BODY_TYPE_DESCRIPTIONS[opt]}
+            >
+              {BODY_TYPE_LABELS[opt]}
+            </OptionButton>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function GoalsSection({ profile, updateProfile }: SectionProps) {
+  const toggleCategory = (cat: GoalCategory) => {
+    const current = profile.goalCategories
+    const updated = current.includes(cat)
+      ? current.filter(c => c !== cat)
+      : [...current, cat]
+    updateProfile({ goalCategories: updated })
+  }
+
+  const goalOptions: PrimaryGoalType[] = [
+    'front_lever', 'planche', 'muscle_up', 'handstand_pushup', 'handstand',
+    'l_sit', 'v_sit', 'pancake', 'front_splits', 'side_splits',
+    'weighted_pull', 'weighted_dip', 'general_strength', 'muscle_building', 'work_capacity'
+  ]
+
+  const goalLabels: Record<PrimaryGoalType, string> = {
+    'front_lever': 'Front Lever',
+    'planche': 'Planche',
+    'muscle_up': 'Muscle-Up',
+    'handstand_pushup': 'Handstand Push-Up',
+    'handstand': 'Handstand',
+    'l_sit': 'L-Sit',
+    'v_sit': 'V-Sit',
+    'pancake': 'Pancake',
+    'front_splits': 'Front Splits',
+    'side_splits': 'Side Splits',
+    'toe_touch': 'Toe Touch',
+    'weighted_pull': 'Weighted Pull-ups',
+    'weighted_dip': 'Weighted Dips',
+    'general_strength': 'General Strength',
+    'muscle_building': 'Muscle Building',
+    'work_capacity': 'Work Capacity / Endurance',
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Goal Categories */}
+      <div className="space-y-3">
+        <label className="text-sm font-medium text-[#A4ACB8]">What areas are you focused on?</label>
+        <p className="text-xs text-[#6B7280] -mt-1">Select all that apply</p>
+        <div className="grid grid-cols-1 gap-2">
+          {(Object.keys(GOAL_CATEGORY_LABELS) as GoalCategory[]).map((cat) => (
+            <OptionButton
+              key={cat}
+              selected={profile.goalCategories.includes(cat)}
+              onClick={() => toggleCategory(cat)}
+              description={GOAL_CATEGORY_DESCRIPTIONS[cat]}
+            >
+              {GOAL_CATEGORY_LABELS[cat]}
+            </OptionButton>
+          ))}
+        </div>
+      </div>
+
+      {/* Primary Goal */}
+      <div className="space-y-3">
+        <label className="text-sm font-medium text-[#A4ACB8]">Primary goal</label>
+        <p className="text-xs text-[#6B7280] -mt-1">Your main training focus</p>
+        <div className="grid grid-cols-2 gap-2">
+          {goalOptions.map((goal) => (
+            <OptionButton
+              key={goal}
+              selected={profile.primaryGoal === goal}
+              onClick={() => updateProfile({ primaryGoal: goal })}
+            >
+              {goalLabels[goal]}
+            </OptionButton>
+          ))}
+        </div>
+      </div>
+
+      {/* Secondary Goal (Optional) */}
+      <div className="space-y-3">
+        <label className="text-sm font-medium text-[#A4ACB8]">Secondary goal <span className="text-[#6B7280]">(optional)</span></label>
+        <div className="grid grid-cols-2 gap-2">
+          <OptionButton
+            selected={profile.secondaryGoal === null}
+            onClick={() => updateProfile({ secondaryGoal: null })}
+          >
+            None
+          </OptionButton>
+          {goalOptions.filter(g => g !== profile.primaryGoal).map((goal) => (
+            <OptionButton
+              key={goal}
+              selected={profile.secondaryGoal === goal}
+              onClick={() => updateProfile({ secondaryGoal: goal })}
+            >
+              {goalLabels[goal]}
+            </OptionButton>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function SkillSelectionSection({ profile, updateProfile }: SectionProps) {
+  const toggleSkill = (skill: SkillGoal) => {
+    const current = profile.selectedSkills
+    const updated = current.includes(skill)
+      ? current.filter(s => s !== skill)
+      : [...current, skill]
+    updateProfile({ selectedSkills: updated })
+  }
+
+  const toggleFlexibility = (goal: FlexibilityGoal) => {
+    const current = profile.selectedFlexibility
+    const updated = current.includes(goal)
+      ? current.filter(g => g !== goal)
+      : [...current, goal]
+    updateProfile({ selectedFlexibility: updated })
+  }
+
+  const showSkills = profile.goalCategories.includes('skill_mastery')
+  const showFlexibility = profile.goalCategories.includes('flexibility') || profile.goalCategories.includes('mobility')
+
+  return (
+    <div className="space-y-6">
+      {/* Skills */}
+      {showSkills && (
+        <div className="space-y-3">
+          <label className="text-sm font-medium text-[#A4ACB8]">Skills you want to pursue</label>
+          <p className="text-xs text-[#6B7280] -mt-1">Select all that interest you</p>
+          <div className="grid grid-cols-2 gap-2">
+            {(Object.keys(SKILL_GOAL_LABELS) as SkillGoal[]).map((skill) => (
+              <OptionButton
+                key={skill}
+                selected={profile.selectedSkills.includes(skill)}
+                onClick={() => toggleSkill(skill)}
+              >
+                {SKILL_GOAL_LABELS[skill]}
+              </OptionButton>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Flexibility Goals */}
+      {showFlexibility && (
+        <div className="space-y-3">
+          <label className="text-sm font-medium text-[#A4ACB8]">Flexibility / mobility goals</label>
+          <p className="text-xs text-[#6B7280] -mt-1">Select your targets</p>
+          <div className="grid grid-cols-2 gap-2">
+            {(Object.keys(FLEXIBILITY_GOAL_LABELS) as FlexibilityGoal[]).map((goal) => (
+              <OptionButton
+                key={goal}
+                selected={profile.selectedFlexibility.includes(goal)}
+                onClick={() => toggleFlexibility(goal)}
+              >
+                {FLEXIBILITY_GOAL_LABELS[goal]}
+              </OptionButton>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Helper component for "Don't know" hint
+function DontKnowHint({ metricKey }: { metricKey?: string }) {
+  return (
+    <div className="flex items-start gap-2 mt-2 p-2 rounded bg-[#4F6D8A]/10 border border-[#4F6D8A]/20">
+      <p className="text-xs text-[#A4ACB8] flex-1">
+        Not sure? Test this after a proper warm-up. You can update your numbers anytime.
+      </p>
+      {metricKey && (
+        <TestingGuideLink metricKey={metricKey} variant="link" label="How to test" />
+      )}
+    </div>
+  )
+}
+
+function StrengthBenchmarksSection({ profile, updateProfile }: SectionProps) {
+  // Separate known values from "unknown" for better UX
+  const pullupOptions = (Object.keys(PULLUP_LABELS) as PullUpCapacity[]).filter(k => k !== 'unknown')
+  const dipOptions = (Object.keys(DIP_LABELS) as DipCapacity[]).filter(k => k !== 'unknown')
+  const pushupOptions = (Object.keys(PUSHUP_LABELS) as PushUpCapacity[]).filter(k => k !== 'unknown')
+  const hspuOptions = (Object.keys(WALL_HSPU_LABELS) as WallHSPUReps[]).filter(k => k !== 'unknown')
+
+  return (
+    <div className="space-y-6">
+      {/* Section intro */}
+      <p className="text-xs text-[#6B7280] -mt-2 pb-2 border-b border-[#2B313A]">
+        Don't know your numbers? Select "Not tested" — you can always update later.
+      </p>
+
+      {/* Max Pull-ups */}
+      <div className="space-y-3">
+        <label className="text-sm font-medium text-[#A4ACB8]">Max strict pull-ups</label>
+        <p className="text-xs text-[#6B7280] -mt-1">Dead hang to chin over bar, no kipping</p>
+        <div className="grid grid-cols-4 gap-2">
+          {pullupOptions.map((cap) => (
+            <OptionButton
+              key={cap}
+              selected={profile.pullUpMax === cap}
+              onClick={() => updateProfile({ pullUpMax: cap })}
+            >
+              {PULLUP_LABELS[cap]}
+            </OptionButton>
+          ))}
+        </div>
+        <OptionButton
+          selected={profile.pullUpMax === 'unknown'}
+          onClick={() => updateProfile({ pullUpMax: 'unknown' })}
+          className="w-full mt-1"
+        >
+          Don't know / Not tested
+        </OptionButton>
+        {profile.pullUpMax === 'unknown' && <DontKnowHint metricKey="pullUpMax" />}
+      </div>
+
+      {/* Max Dips */}
+      <div className="space-y-3">
+        <label className="text-sm font-medium text-[#A4ACB8]">Max dips</label>
+        <p className="text-xs text-[#6B7280] -mt-1">Parallel bar dips, full depth</p>
+        <div className="grid grid-cols-4 gap-2">
+          {dipOptions.map((cap) => (
+            <OptionButton
+              key={cap}
+              selected={profile.dipMax === cap}
+              onClick={() => updateProfile({ dipMax: cap })}
+            >
+              {DIP_LABELS[cap]}
+            </OptionButton>
+          ))}
+        </div>
+        <OptionButton
+          selected={profile.dipMax === 'unknown'}
+          onClick={() => updateProfile({ dipMax: 'unknown' })}
+          className="w-full mt-1"
+        >
+          Don't know / Not tested
+        </OptionButton>
+        {profile.dipMax === 'unknown' && <DontKnowHint metricKey="dipMax" />}
+      </div>
+
+      {/* Max Push-ups */}
+      <div className="space-y-3">
+        <label className="text-sm font-medium text-[#A4ACB8]">Max push-ups</label>
+        <p className="text-xs text-[#6B7280] -mt-1">Full range, chest to ground</p>
+        <div className="grid grid-cols-3 gap-2">
+          {pushupOptions.map((cap) => (
+            <OptionButton
+              key={cap}
+              selected={profile.pushUpMax === cap}
+              onClick={() => updateProfile({ pushUpMax: cap })}
+            >
+              {PUSHUP_LABELS[cap]}
+            </OptionButton>
+          ))}
+        </div>
+        <OptionButton
+          selected={profile.pushUpMax === 'unknown'}
+          onClick={() => updateProfile({ pushUpMax: 'unknown' })}
+          className="w-full mt-1"
+        >
+          Don't know / Not tested
+        </OptionButton>
+        {profile.pushUpMax === 'unknown' && <DontKnowHint metricKey="pushUpMax" />}
+      </div>
+
+      {/* Wall HSPU */}
+      <div className="space-y-3">
+        <label className="text-sm font-medium text-[#A4ACB8]">Wall handstand push-ups</label>
+        <p className="text-xs text-[#6B7280] -mt-1">Full range against wall</p>
+        <div className="grid grid-cols-5 gap-2">
+          {hspuOptions.map((reps) => (
+            <OptionButton
+              key={reps}
+              selected={profile.wallHSPUReps === reps}
+              onClick={() => updateProfile({ wallHSPUReps: reps })}
+            >
+              {WALL_HSPU_LABELS[reps]}
+            </OptionButton>
+          ))}
+        </div>
+        <OptionButton
+          selected={profile.wallHSPUReps === 'unknown'}
+          onClick={() => updateProfile({ wallHSPUReps: 'unknown' })}
+          className="w-full mt-1"
+        >
+          Don't know / Not tested
+        </OptionButton>
+        {profile.wallHSPUReps === 'unknown' && <DontKnowHint metricKey="wallHSPUReps" />}
+      </div>
+
+      {/* Weighted Pull-up */}
+      <div className="space-y-3">
+        <label className="text-sm font-medium text-[#A4ACB8]">Best weighted pull-up <span className="text-[#6B7280]">(optional)</span></label>
+        <p className="text-xs text-[#6B7280] -mt-1">Weight added for 1-3 reps</p>
+        <div className="flex gap-2">
+          <Input
+            type="number"
+            placeholder="Weight"
+            value={profile.weightedPullUp?.load || ''}
+            onChange={(e) => updateProfile({
+              weightedPullUp: {
+                load: e.target.value ? parseInt(e.target.value) : null,
+                unit: profile.weightedPullUp?.unit || 'lbs',
+              }
+            })}
+            className="flex-1 bg-[#0F1115] border-[#2B313A] text-[#E6E9EF]"
+          />
+          <div className="flex gap-1">
+            <OptionButton
+              selected={profile.weightedPullUp?.unit === 'lbs'}
+              onClick={() => updateProfile({
+                weightedPullUp: { ...profile.weightedPullUp, unit: 'lbs', load: profile.weightedPullUp?.load ?? null }
+              })}
+              className="px-3"
+            >
+              lbs
+            </OptionButton>
+            <OptionButton
+              selected={profile.weightedPullUp?.unit === 'kg'}
+              onClick={() => updateProfile({
+                weightedPullUp: { ...profile.weightedPullUp, unit: 'kg', load: profile.weightedPullUp?.load ?? null }
+              })}
+              className="px-3"
+            >
+              kg
+            </OptionButton>
+          </div>
+        </div>
+      </div>
+
+      {/* Weighted Dip */}
+      <div className="space-y-3">
+        <label className="text-sm font-medium text-[#A4ACB8]">Best weighted dip <span className="text-[#6B7280]">(optional)</span></label>
+        <p className="text-xs text-[#6B7280] -mt-1">Weight added for 1-3 reps</p>
+        <div className="flex gap-2">
+          <Input
+            type="number"
+            placeholder="Weight"
+            value={profile.weightedDip?.load || ''}
+            onChange={(e) => updateProfile({
+              weightedDip: {
+                load: e.target.value ? parseInt(e.target.value) : null,
+                unit: profile.weightedDip?.unit || 'lbs',
+              }
+            })}
+            className="flex-1 bg-[#0F1115] border-[#2B313A] text-[#E6E9EF]"
+          />
+          <div className="flex gap-1">
+            <OptionButton
+              selected={profile.weightedDip?.unit === 'lbs'}
+              onClick={() => updateProfile({
+                weightedDip: { ...profile.weightedDip, unit: 'lbs', load: profile.weightedDip?.load ?? null }
+              })}
+              className="px-3"
+            >
+              lbs
+            </OptionButton>
+            <OptionButton
+              selected={profile.weightedDip?.unit === 'kg'}
+              onClick={() => updateProfile({
+                weightedDip: { ...profile.weightedDip, unit: 'kg', load: profile.weightedDip?.load ?? null }
+              })}
+              className="px-3"
+            >
+              kg
+            </OptionButton>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// =============================================================================
+// SKILL HISTORY INPUT COMPONENT
+// =============================================================================
+
+interface SkillHistoryInputProps {
+  skillKey: SkillGoal
+  skillLabel: string
+  profile: OnboardingProfile
+  updateProfile: (updates: Partial<OnboardingProfile>) => void
+}
+
+function SkillHistoryInput({ skillKey, skillLabel, profile, updateProfile }: SkillHistoryInputProps) {
+  const historyOptions: SkillTrainingHistory[] = ['never', 'tried_little', 'trained_consistently', 'previously_strong']
+  const lastTrainedOptions: SkillLastTrained[] = ['currently', 'within_3_months', '3_to_6_months', '6_to_12_months', '1_to_2_years', 'over_2_years']
+  
+  const currentHistory = profile.skillHistory?.[skillKey]
+  const showLastTrained = currentHistory?.trainingHistory && currentHistory.trainingHistory !== 'never'
+  
+  const updateHistory = (trainingHistory: SkillTrainingHistory) => {
+    const lastTrained = trainingHistory === 'never' ? null : (currentHistory?.lastTrained || null)
+    const tendonAdaptationScore = calculateTendonAdaptation(trainingHistory, lastTrained)
+    
+    updateProfile({
+      skillHistory: {
+        ...profile.skillHistory,
+        [skillKey]: {
+          trainingHistory,
+          lastTrained,
+          tendonAdaptationScore,
+        }
+      }
+    })
+  }
+  
+  const updateLastTrained = (lastTrained: SkillLastTrained) => {
+    const trainingHistory = currentHistory?.trainingHistory || 'never'
+    const tendonAdaptationScore = calculateTendonAdaptation(trainingHistory, lastTrained)
+    
+    updateProfile({
+      skillHistory: {
+        ...profile.skillHistory,
+        [skillKey]: {
+          trainingHistory,
+          lastTrained,
+          tendonAdaptationScore,
+        }
+      }
+    })
+  }
+  
+  return (
+    <div className="bg-[#0F1115] border border-[#2B313A] rounded-lg p-3 space-y-3">
+      <div className="space-y-2">
+        <label className="text-xs text-[#6B7280]">Have you trained {skillLabel} before?</label>
+        <div className="grid grid-cols-2 gap-1.5">
+          {historyOptions.map((opt) => (
+            <button
+              key={opt}
+              type="button"
+              onClick={() => updateHistory(opt)}
+              className={`
+                px-2 py-1.5 rounded text-xs transition-colors
+                ${currentHistory?.trainingHistory === opt
+                  ? 'bg-[#4F6D8A] text-white'
+                  : 'bg-[#1A1D24] text-[#A4ACB8] hover:bg-[#2B313A]'
+                }
+              `}
+            >
+              {SKILL_TRAINING_HISTORY_LABELS[opt]}
+            </button>
+          ))}
+        </div>
+      </div>
+      
+      {showLastTrained && (
+        <div className="space-y-2 pt-2 border-t border-[#2B313A]">
+          <label className="text-xs text-[#6B7280]">When did you last train it seriously?</label>
+          <div className="grid grid-cols-2 gap-1.5">
+            {lastTrainedOptions.map((opt) => (
+              <button
+                key={opt}
+                type="button"
+                onClick={() => updateLastTrained(opt)}
+                className={`
+                  px-2 py-1.5 rounded text-xs transition-colors
+                  ${currentHistory?.lastTrained === opt
+                    ? 'bg-[#4F6D8A] text-white'
+                    : 'bg-[#1A1D24] text-[#A4ACB8] hover:bg-[#2B313A]'
+                  }
+                `}
+              >
+                {SKILL_LAST_TRAINED_LABELS[opt]}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function SkillBenchmarksSection({ profile, updateProfile }: SectionProps) {
+  const hasSkill = (skill: SkillGoal) => profile.selectedSkills.includes(skill)
+  
+  // Filter out "unknown" from the main grid, show it separately
+  const flOptions = (Object.keys(FRONT_LEVER_LABELS) as FrontLeverProgression[]).filter(k => k !== 'unknown')
+  const plancheOptions = (Object.keys(PLANCHE_LABELS) as PlancheProgression[]).filter(k => k !== 'unknown')
+  const muOptions = (Object.keys(MUSCLE_UP_LABELS) as MuscleUpReadiness[]).filter(k => k !== 'unknown')
+  const hspuOptions = (Object.keys(HSPU_LABELS) as HSPUProgression[]).filter(k => k !== 'unknown')
+  const lsitOptions = (Object.keys(LSIT_HOLD_LABELS) as LSitHoldCapacity[]).filter(k => k !== 'unknown')
+  const vsitOptions = (Object.keys(VSIT_HOLD_LABELS) as VSitHoldCapacity[]).filter(k => k !== 'unknown')
+
+  return (
+    <div className="space-y-6">
+      {/* Front Lever */}
+      {hasSkill('front_lever') && (
+        <div className="space-y-3">
+          <label className="text-sm font-medium text-[#A4ACB8]">Front Lever progression</label>
+          <div className="grid grid-cols-3 gap-2">
+            {flOptions.map((prog) => (
+              <OptionButton
+                key={prog}
+                selected={profile.frontLever?.progression === prog}
+                onClick={() => updateProfile({
+                  frontLever: { progression: prog, holdSeconds: profile.frontLever?.holdSeconds }
+                })}
+              >
+                {FRONT_LEVER_LABELS[prog]}
+              </OptionButton>
+            ))}
+          </div>
+          <OptionButton
+            selected={profile.frontLever?.progression === 'unknown'}
+            onClick={() => updateProfile({ frontLever: { progression: 'unknown' } })}
+            className="w-full"
+          >
+            Don't know / Skip for now
+          </OptionButton>
+          {profile.frontLever?.progression && profile.frontLever.progression !== 'none' && profile.frontLever.progression !== 'unknown' && (
+            <div className="mt-2">
+              <label className="text-xs text-[#6B7280]">Best hold (seconds) — optional</label>
+              <Input
+                type="number"
+                placeholder="e.g. 10"
+                value={profile.frontLever?.holdSeconds || ''}
+                onChange={(e) => updateProfile({
+                  frontLever: {
+                    progression: profile.frontLever?.progression || 'none',
+                    holdSeconds: e.target.value ? parseInt(e.target.value) : undefined
+                  }
+                })}
+                className="mt-1 bg-[#0F1115] border-[#2B313A] text-[#E6E9EF] w-24"
+              />
+            </div>
+          )}
+          {profile.frontLever?.progression === 'unknown' && <DontKnowHint metricKey="frontLever" />}
+          <SkillHistoryInput
+            skillKey="front_lever"
+            skillLabel="front lever"
+            profile={profile}
+            updateProfile={updateProfile}
+          />
+        </div>
+      )}
+
+      {/* Planche */}
+      {hasSkill('planche') && (
+        <div className="space-y-3">
+          <label className="text-sm font-medium text-[#A4ACB8]">Planche progression</label>
+          <div className="grid grid-cols-3 gap-2">
+            {plancheOptions.map((prog) => (
+              <OptionButton
+                key={prog}
+                selected={profile.planche?.progression === prog}
+                onClick={() => updateProfile({
+                  planche: { progression: prog, holdSeconds: profile.planche?.holdSeconds }
+                })}
+              >
+                {PLANCHE_LABELS[prog]}
+              </OptionButton>
+            ))}
+          </div>
+          <OptionButton
+            selected={profile.planche?.progression === 'unknown'}
+            onClick={() => updateProfile({ planche: { progression: 'unknown' } })}
+            className="w-full"
+          >
+            Don't know / Skip for now
+          </OptionButton>
+          {profile.planche?.progression && profile.planche.progression !== 'none' && profile.planche.progression !== 'unknown' && (
+            <div className="mt-2">
+              <label className="text-xs text-[#6B7280]">Best hold (seconds) — optional</label>
+              <Input
+                type="number"
+                placeholder="e.g. 10"
+                value={profile.planche?.holdSeconds || ''}
+                onChange={(e) => updateProfile({
+                  planche: {
+                    progression: profile.planche?.progression || 'none',
+                    holdSeconds: e.target.value ? parseInt(e.target.value) : undefined
+                  }
+                })}
+                className="mt-1 bg-[#0F1115] border-[#2B313A] text-[#E6E9EF] w-24"
+              />
+            </div>
+          )}
+          {profile.planche?.progression === 'unknown' && <DontKnowHint metricKey="planche" />}
+          <SkillHistoryInput
+            skillKey="planche"
+            skillLabel="planche"
+            profile={profile}
+            updateProfile={updateProfile}
+          />
+        </div>
+      )}
+
+      {/* Muscle-Up */}
+      {hasSkill('muscle_up') && (
+        <div className="space-y-3">
+          <label className="text-sm font-medium text-[#A4ACB8]">Muscle-Up readiness</label>
+          <div className="grid grid-cols-2 gap-2">
+            {muOptions.map((level) => (
+              <OptionButton
+                key={level}
+                selected={profile.muscleUp === level}
+                onClick={() => updateProfile({ muscleUp: level })}
+              >
+                {MUSCLE_UP_LABELS[level]}
+              </OptionButton>
+            ))}
+          </div>
+          <OptionButton
+            selected={profile.muscleUp === 'unknown'}
+            onClick={() => updateProfile({ muscleUp: 'unknown' })}
+            className="w-full"
+          >
+            Don't know / Skip for now
+          </OptionButton>
+          {profile.muscleUp === 'unknown' && <DontKnowHint metricKey="muscleUp" />}
+          <SkillHistoryInput
+            skillKey="muscle_up"
+            skillLabel="muscle-ups"
+            profile={profile}
+            updateProfile={updateProfile}
+          />
+        </div>
+      )}
+
+      {/* HSPU */}
+      {hasSkill('handstand_pushup') && (
+        <div className="space-y-3">
+          <label className="text-sm font-medium text-[#A4ACB8]">HSPU progression</label>
+          <div className="grid grid-cols-2 gap-2">
+            {hspuOptions.map((prog) => (
+              <OptionButton
+                key={prog}
+                selected={profile.hspu?.progression === prog}
+                onClick={() => updateProfile({
+                  hspu: { progression: prog, reps: profile.hspu?.reps }
+                })}
+              >
+                {HSPU_LABELS[prog]}
+              </OptionButton>
+            ))}
+          </div>
+          <OptionButton
+            selected={profile.hspu?.progression === 'unknown'}
+            onClick={() => updateProfile({ hspu: { progression: 'unknown' } })}
+            className="w-full"
+          >
+            Don't know / Skip for now
+          </OptionButton>
+          {profile.hspu?.progression === 'unknown' && <DontKnowHint metricKey="wallHSPUReps" />}
+          <SkillHistoryInput
+            skillKey="handstand_pushup"
+            skillLabel="HSPU/handstand work"
+            profile={profile}
+            updateProfile={updateProfile}
+          />
+        </div>
+      )}
+
+      {/* L-Sit */}
+      {hasSkill('l_sit') && (
+        <div className="space-y-3">
+          <label className="text-sm font-medium text-[#A4ACB8]">L-Sit hold</label>
+          <div className="grid grid-cols-3 gap-2">
+            {lsitOptions.map((hold) => (
+              <OptionButton
+                key={hold}
+                selected={profile.lSitHold === hold}
+                onClick={() => updateProfile({ lSitHold: hold })}
+              >
+                {LSIT_HOLD_LABELS[hold]}
+              </OptionButton>
+            ))}
+          </div>
+          <OptionButton
+            selected={profile.lSitHold === 'unknown'}
+            onClick={() => updateProfile({ lSitHold: 'unknown' })}
+            className="w-full"
+          >
+            Don't know / Skip for now
+          </OptionButton>
+          {profile.lSitHold === 'unknown' && <DontKnowHint metricKey="lSitHold" />}
+          <SkillHistoryInput
+            skillKey="l_sit"
+            skillLabel="L-sit"
+            profile={profile}
+            updateProfile={updateProfile}
+          />
+        </div>
+      )}
+
+      {/* V-Sit */}
+      {hasSkill('v_sit') && (
+        <div className="space-y-3">
+          <label className="text-sm font-medium text-[#A4ACB8]">V-Sit hold</label>
+          <div className="grid grid-cols-2 gap-2">
+            {vsitOptions.map((hold) => (
+              <OptionButton
+                key={hold}
+                selected={profile.vSitHold === hold}
+                onClick={() => updateProfile({ vSitHold: hold })}
+              >
+                {VSIT_HOLD_LABELS[hold]}
+              </OptionButton>
+            ))}
+          </div>
+          <OptionButton
+            selected={profile.vSitHold === 'unknown'}
+            onClick={() => updateProfile({ vSitHold: 'unknown' })}
+            className="w-full"
+          >
+            Don't know / Skip for now
+          </OptionButton>
+          {profile.vSitHold === 'unknown' && <DontKnowHint metricKey="vSitHold" />}
+          <SkillHistoryInput
+            skillKey="v_sit"
+            skillLabel="V-sit"
+            profile={profile}
+            updateProfile={updateProfile}
+          />
+        </div>
+      )}
+    </div>
+  )
+}
+
+function FlexibilityBenchmarksSection({ profile, updateProfile }: SectionProps) {
+  const hasGoal = (goal: FlexibilityGoal) => profile.selectedFlexibility.includes(goal)
+  
+  // Filter out "unknown" from the main grid
+  const flexOptions = (Object.keys(FLEXIBILITY_LEVEL_LABELS) as FlexibilityLevel[]).filter(k => k !== 'unknown')
+
+  const updateFlexBenchmark = (
+    key: 'pancake' | 'toeTouch' | 'frontSplits' | 'sideSplits',
+    level: FlexibilityLevel
+  ) => {
+    updateProfile({
+      [key]: {
+        level,
+        rangeIntent: profile[key]?.rangeIntent || null,
+      }
+    })
+  }
+
+  const updateRangeIntent = (
+    key: 'pancake' | 'toeTouch' | 'frontSplits' | 'sideSplits',
+    intent: RangeTrainingIntent
+  ) => {
+    updateProfile({
+      [key]: {
+        level: profile[key]?.level || 'beginner',
+        rangeIntent: intent,
+      }
+    })
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Pancake */}
+      {hasGoal('pancake') && (
+        <div className="space-y-3">
+          <label className="text-sm font-medium text-[#A4ACB8]">Pancake</label>
+          <div className="grid grid-cols-3 gap-2">
+            {flexOptions.map((level) => (
+              <OptionButton
+                key={level}
+                selected={profile.pancake?.level === level}
+                onClick={() => updateFlexBenchmark('pancake', level)}
+              >
+                {FLEXIBILITY_LEVEL_LABELS[level]}
+              </OptionButton>
+            ))}
+          </div>
+          <OptionButton
+            selected={profile.pancake?.level === 'unknown'}
+            onClick={() => updateFlexBenchmark('pancake', 'unknown')}
+            className="w-full"
+          >
+            Don't know / Skip for now
+          </OptionButton>
+          {profile.pancake?.level !== 'unknown' && (
+            <div className="mt-2">
+              <label className="text-xs text-[#6B7280]">Training focus</label>
+              <div className="grid grid-cols-3 gap-2 mt-1">
+                {(Object.keys(RANGE_INTENT_LABELS) as RangeTrainingIntent[]).map((intent) => (
+                  <OptionButton
+                    key={intent}
+                    selected={profile.pancake?.rangeIntent === intent}
+                    onClick={() => updateRangeIntent('pancake', intent)}
+                  >
+                    {RANGE_INTENT_LABELS[intent]}
+                  </OptionButton>
+                ))}
+              </div>
+            </div>
+          )}
+          {profile.pancake?.level === 'unknown' && <DontKnowHint metricKey="pancake" />}
+        </div>
+      )}
+
+      {/* Toe Touch */}
+      {hasGoal('toe_touch') && (
+        <div className="space-y-3">
+          <label className="text-sm font-medium text-[#A4ACB8]">Toe Touch / Forward Fold</label>
+          <div className="grid grid-cols-3 gap-2">
+            {flexOptions.map((level) => (
+              <OptionButton
+                key={level}
+                selected={profile.toeTouch?.level === level}
+                onClick={() => updateFlexBenchmark('toeTouch', level)}
+              >
+                {FLEXIBILITY_LEVEL_LABELS[level]}
+              </OptionButton>
+            ))}
+          </div>
+          <OptionButton
+            selected={profile.toeTouch?.level === 'unknown'}
+            onClick={() => updateFlexBenchmark('toeTouch', 'unknown')}
+            className="w-full"
+          >
+            Don't know / Skip for now
+          </OptionButton>
+          {profile.toeTouch?.level === 'unknown' && <DontKnowHint metricKey="forwardFold" />}
+        </div>
+      )}
+
+      {/* Front Splits */}
+      {hasGoal('front_splits') && (
+        <div className="space-y-3">
+          <label className="text-sm font-medium text-[#A4ACB8]">Front Splits</label>
+          <div className="grid grid-cols-3 gap-2">
+            {flexOptions.map((level) => (
+              <OptionButton
+                key={level}
+                selected={profile.frontSplits?.level === level}
+                onClick={() => updateFlexBenchmark('frontSplits', level)}
+              >
+                {FLEXIBILITY_LEVEL_LABELS[level]}
+              </OptionButton>
+            ))}
+          </div>
+          <OptionButton
+            selected={profile.frontSplits?.level === 'unknown'}
+            onClick={() => updateFlexBenchmark('frontSplits', 'unknown')}
+            className="w-full"
+          >
+            Don't know / Skip for now
+          </OptionButton>
+          {profile.frontSplits?.level !== 'unknown' && (
+            <div className="mt-2">
+              <label className="text-xs text-[#6B7280]">Training focus</label>
+              <div className="grid grid-cols-3 gap-2 mt-1">
+                {(Object.keys(RANGE_INTENT_LABELS) as RangeTrainingIntent[]).map((intent) => (
+                  <OptionButton
+                    key={intent}
+                    selected={profile.frontSplits?.rangeIntent === intent}
+                    onClick={() => updateRangeIntent('frontSplits', intent)}
+                  >
+                    {RANGE_INTENT_LABELS[intent]}
+                  </OptionButton>
+                ))}
+              </div>
+            </div>
+          )}
+          {profile.frontSplits?.level === 'unknown' && <DontKnowHint metricKey="frontSplits" />}
+        </div>
+      )}
+
+      {/* Side Splits */}
+      {hasGoal('side_splits') && (
+        <div className="space-y-3">
+          <label className="text-sm font-medium text-[#A4ACB8]">Side Splits</label>
+          <div className="grid grid-cols-3 gap-2">
+            {flexOptions.map((level) => (
+              <OptionButton
+                key={level}
+                selected={profile.sideSplits?.level === level}
+                onClick={() => updateFlexBenchmark('sideSplits', level)}
+              >
+                {FLEXIBILITY_LEVEL_LABELS[level]}
+              </OptionButton>
+            ))}
+          </div>
+          <OptionButton
+            selected={profile.sideSplits?.level === 'unknown'}
+            onClick={() => updateFlexBenchmark('sideSplits', 'unknown')}
+            className="w-full"
+          >
+            Don't know / Skip for now
+          </OptionButton>
+          {profile.sideSplits?.level !== 'unknown' && (
+            <div className="mt-2">
+              <label className="text-xs text-[#6B7280]">Training focus</label>
+              <div className="grid grid-cols-3 gap-2 mt-1">
+                {(Object.keys(RANGE_INTENT_LABELS) as RangeTrainingIntent[]).map((intent) => (
+                  <OptionButton
+                    key={intent}
+                    selected={profile.sideSplits?.rangeIntent === intent}
+                    onClick={() => updateRangeIntent('sideSplits', intent)}
+                  >
+                    {RANGE_INTENT_LABELS[intent]}
+                  </OptionButton>
+                ))}
+              </div>
+            </div>
+          )}
+          {profile.sideSplits?.level === 'unknown' && <DontKnowHint metricKey="sideSplits" />}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function EquipmentSection({ profile, updateProfile }: SectionProps) {
+  const toggleEquipment = (eq: EquipmentType) => {
+    const current = profile.equipment
+    // Special handling for minimal
+    if (eq === 'minimal') {
+      updateProfile({ equipment: ['minimal'] })
       return
     }
-    
-    setProfile(prev => ({ ...prev, [step.key]: newArray }))
+    // Remove minimal if selecting other equipment
+    const filtered = current.filter(e => e !== 'minimal')
+    const updated = filtered.includes(eq)
+      ? filtered.filter(e => e !== eq)
+      : [...filtered, eq]
+    updateProfile({ equipment: updated.length > 0 ? updated : [] })
   }
 
-  const handleNext = () => {
-    if (!canGoNext) return
+  return (
+    <div className="space-y-4">
+      <div className="space-y-3">
+        <label className="text-sm font-medium text-[#A4ACB8]">What equipment do you have?</label>
+        <p className="text-xs text-[#6B7280] -mt-1">Select everything you can access regularly — we'll adapt exercises accordingly</p>
+        <div className="grid grid-cols-2 gap-2">
+          {(Object.keys(EQUIPMENT_LABELS) as EquipmentType[]).map((eq) => (
+            <OptionButton
+              key={eq}
+              selected={profile.equipment.includes(eq)}
+              onClick={() => toggleEquipment(eq)}
+            >
+              {EQUIPMENT_LABELS[eq]}
+            </OptionButton>
+          ))}
+        </div>
+      </div>
+      <p className="text-xs text-[#6B7280] italic pt-1 border-t border-[#2B313A]">
+        Don't have much? That's fine — bodyweight training can take you far.
+      </p>
+    </div>
+  )
+}
+
+function ScheduleSection({ profile, updateProfile }: SectionProps) {
+  const days: TrainingDaysPerWeek[] = [2, 3, 4, 5, 6]
+  const lengths: SessionLengthPreference[] = [30, 45, 60, 75]
+
+  return (
+    <div className="space-y-6">
+      {/* Days per week */}
+      <div className="space-y-3">
+        <label className="text-sm font-medium text-[#A4ACB8]">How many days can you train?</label>
+        <p className="text-xs text-[#6B7280] -mt-1">Be realistic — consistency beats intensity</p>
+        <div className="flex gap-2">
+          {days.map((day) => (
+            <OptionButton
+              key={day}
+              selected={profile.trainingDaysPerWeek === day}
+              onClick={() => updateProfile({ trainingDaysPerWeek: day })}
+              className="flex-1 justify-center"
+            >
+              {day}
+            </OptionButton>
+          ))}
+        </div>
+      </div>
+
+      {/* Session length */}
+      <div className="space-y-3">
+        <label className="text-sm font-medium text-[#A4ACB8]">How long can you train?</label>
+        <p className="text-xs text-[#6B7280] -mt-1">Average time per session</p>
+        <div className="grid grid-cols-4 gap-2">
+          {lengths.map((len) => (
+            <OptionButton
+              key={len}
+              selected={profile.sessionLengthMinutes === len}
+              onClick={() => updateProfile({ sessionLengthMinutes: len })}
+            >
+              {SESSION_LENGTH_LABELS[len]}
+            </OptionButton>
+          ))}
+        </div>
+      </div>
+
+      {/* Session style */}
+      <div className="space-y-3">
+        <label className="text-sm font-medium text-[#A4ACB8]">What's your training style?</label>
+        <p className="text-xs text-[#6B7280] -mt-1">How do you prefer to structure workouts?</p>
+        <div className="grid grid-cols-1 gap-2">
+          {(Object.keys(SESSION_STYLE_LABELS) as SessionStylePreference[]).map((style) => (
+            <OptionButton
+              key={style}
+              selected={profile.sessionStyle === style}
+              onClick={() => updateProfile({ sessionStyle: style })}
+            >
+              {SESSION_STYLE_LABELS[style]}
+            </OptionButton>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function RecoverySection({ profile, updateProfile }: SectionProps) {
+  const updateRecovery = (key: keyof NonNullable<OnboardingProfile['recovery']>, value: RecoveryQuality) => {
+    updateProfile({
+      recovery: {
+        sleepQuality: profile.recovery?.sleepQuality || 'normal',
+        energyLevel: profile.recovery?.energyLevel || 'normal',
+        stressLevel: profile.recovery?.stressLevel || 'normal',
+        recoveryConfidence: profile.recovery?.recoveryConfidence || 'normal',
+        [key]: value,
+      }
+    })
+  }
+
+  const qualities: RecoveryQuality[] = ['good', 'normal', 'poor']
+
+  return (
+    <div className="space-y-6">
+      {/* Section intro */}
+      <p className="text-xs text-[#6B7280] -mt-2 pb-2 border-b border-[#2B313A]">
+        These affect how hard we program your training. Be honest — it helps us keep you safe.
+      </p>
+
+      {/* Sleep Quality */}
+      <div className="space-y-3">
+        <label className="text-sm font-medium text-[#A4ACB8]">How well do you typically sleep?</label>
+        <div className="flex gap-2">
+          {qualities.map((q) => (
+            <OptionButton
+              key={q}
+              selected={profile.recovery?.sleepQuality === q}
+              onClick={() => updateRecovery('sleepQuality', q)}
+              className="flex-1 justify-center"
+            >
+              {RECOVERY_LABELS[q]}
+            </OptionButton>
+          ))}
+        </div>
+      </div>
+
+      {/* Energy Level */}
+      <div className="space-y-3">
+        <label className="text-sm font-medium text-[#A4ACB8]">General energy level</label>
+        <div className="flex gap-2">
+          {qualities.map((q) => (
+            <OptionButton
+              key={q}
+              selected={profile.recovery?.energyLevel === q}
+              onClick={() => updateRecovery('energyLevel', q)}
+              className="flex-1 justify-center"
+            >
+              {RECOVERY_LABELS[q]}
+            </OptionButton>
+          ))}
+        </div>
+      </div>
+
+      {/* Stress Level */}
+      <div className="space-y-3">
+        <label className="text-sm font-medium text-[#A4ACB8]">Life stress level</label>
+        <div className="flex gap-2">
+          {qualities.map((q) => (
+            <OptionButton
+              key={q}
+              selected={profile.recovery?.stressLevel === q}
+              onClick={() => updateRecovery('stressLevel', q)}
+              className="flex-1 justify-center"
+            >
+              {RECOVERY_LABELS[q]}
+            </OptionButton>
+          ))}
+        </div>
+      </div>
+
+      {/* Recovery Confidence */}
+      <div className="space-y-3">
+        <label className="text-sm font-medium text-[#A4ACB8]">Recovery confidence</label>
+        <p className="text-xs text-[#6B7280] -mt-1">How well do you bounce back between sessions?</p>
+        <div className="flex gap-2">
+          {qualities.map((q) => (
+            <OptionButton
+              key={q}
+              selected={profile.recovery?.recoveryConfidence === q}
+              onClick={() => updateRecovery('recoveryConfidence', q)}
+              className="flex-1 justify-center"
+            >
+              {RECOVERY_LABELS[q]}
+            </OptionButton>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+interface ReviewSectionProps {
+  profile: OnboardingProfile
+  onEditSection?: (sectionId: SectionId) => void
+}
+
+function ReviewSection({ profile, onEditSection }: ReviewSectionProps) {
+  const hasEstimates = hasEstimatedValues(profile)
+
+  // Helper to format skill list
+  const formatSkills = () => {
+    if (profile.selectedSkills.length === 0) return null
+    return profile.selectedSkills.map(s => SKILL_GOAL_LABELS[s]).join(', ')
+  }
+
+  // Helper to format flexibility goals
+  const formatFlexibility = () => {
+    if (profile.selectedFlexibility.length === 0) return null
+    return profile.selectedFlexibility.map(f => FLEXIBILITY_GOAL_LABELS[f]).join(', ')
+  }
+
+  // Helper for strength summary
+  const getStrengthSummary = () => {
+    const items = []
+    if (profile.pullUpMax && profile.pullUpMax !== 'unknown') items.push(`Pull-ups: ${PULLUP_LABELS[profile.pullUpMax]}`)
+    if (profile.dipMax && profile.dipMax !== 'unknown') items.push(`Dips: ${DIP_LABELS[profile.dipMax]}`)
+    if (profile.pushUpMax && profile.pushUpMax !== 'unknown') items.push(`Push-ups: ${PUSHUP_LABELS[profile.pushUpMax]}`)
+    return items.length > 0 ? items : null
+  }
+
+  // Helper for skill level summary
+  const getSkillSummary = () => {
+    const items = []
+    if (profile.frontLever?.progression && profile.frontLever.progression !== 'unknown' && profile.frontLever.progression !== 'none') {
+      items.push(`Front Lever: ${FRONT_LEVER_LABELS[profile.frontLever.progression]}`)
+    }
+    if (profile.planche?.progression && profile.planche.progression !== 'unknown' && profile.planche.progression !== 'none') {
+      items.push(`Planche: ${PLANCHE_LABELS[profile.planche.progression]}`)
+    }
+    if (profile.muscleUp && profile.muscleUp !== 'unknown' && profile.muscleUp !== 'none') {
+      items.push(`Muscle-Up: ${MUSCLE_UP_LABELS[profile.muscleUp]}`)
+    }
+    return items.length > 0 ? items : null
+  }
+
+  const EditButton = ({ section }: { section: SectionId }) => (
+    onEditSection ? (
+      <button
+        onClick={() => onEditSection(section)}
+        className="text-xs text-[#4F6D8A] hover:text-[#6B8FAD] transition-colors"
+      >
+        Edit
+      </button>
+    ) : null
+  )
+
+  return (
+    <div className="space-y-4">
+      {/* Header message */}
+      <div className="text-center pb-2">
+        <p className="text-sm text-[#A4ACB8]">
+          Here's what we know about you. Make sure everything looks right.
+        </p>
+      </div>
+      
+      {/* Estimated values notice */}
+      {hasEstimates && (
+        <div className="bg-[#4F6D8A]/10 border border-[#4F6D8A]/30 rounded-lg p-3">
+          <p className="text-sm text-[#A4ACB8]">
+            <span className="text-[#4F6D8A] font-medium">Some metrics not provided.</span>{' '}
+            No problem — your program will start with safe, conservative estimates. Update your numbers anytime as you learn them.
+          </p>
+        </div>
+      )}
+      
+      <div className="space-y-3 text-sm">
+        {/* Athlete Profile */}
+        <div className="bg-[#0F1115] rounded-lg p-3 border border-[#2B313A]">
+          <div className="flex justify-between items-start mb-1">
+            <span className="text-[#6B7280] text-xs uppercase tracking-wide">Your Profile</span>
+            <EditButton section="athlete_profile" />
+          </div>
+          <div className="text-[#E6E9EF]">
+            {profile.sex ? (profile.sex === 'male' ? 'Male' : 'Female') : 'Not set'} 
+            {profile.trainingExperience && ` • ${TRAINING_EXPERIENCE_LABELS[profile.trainingExperience]}`}
+          </div>
+          {profile.bodyFatPercent && (
+            <div className="text-[#A4ACB8] text-xs mt-1">Body fat: {profile.bodyFatPercent}%</div>
+          )}
+        </div>
+
+        {/* Goals */}
+        <div className="bg-[#0F1115] rounded-lg p-3 border border-[#2B313A]">
+          <div className="flex justify-between items-start mb-1">
+            <span className="text-[#6B7280] text-xs uppercase tracking-wide">Goals</span>
+            <EditButton section="goals" />
+          </div>
+          <div className="text-[#E6E9EF]">
+            {profile.primaryGoal || 'Not set'}
+            {profile.secondaryGoal && ` + ${profile.secondaryGoal}`}
+          </div>
+        </div>
+
+        {/* Skills (if any selected) */}
+        {formatSkills() && (
+          <div className="bg-[#0F1115] rounded-lg p-3 border border-[#2B313A]">
+            <div className="flex justify-between items-start mb-1">
+              <span className="text-[#6B7280] text-xs uppercase tracking-wide">Skills to Master</span>
+              <EditButton section="skill_selection" />
+            </div>
+            <div className="text-[#E6E9EF] text-xs leading-relaxed">
+              {formatSkills()}
+            </div>
+          </div>
+        )}
+
+        {/* Flexibility (if any selected) */}
+        {formatFlexibility() && (
+          <div className="bg-[#0F1115] rounded-lg p-3 border border-[#2B313A]">
+            <div className="flex justify-between items-start mb-1">
+              <span className="text-[#6B7280] text-xs uppercase tracking-wide">Flexibility Goals</span>
+              <EditButton section="skill_selection" />
+            </div>
+            <div className="text-[#E6E9EF] text-xs leading-relaxed">
+              {formatFlexibility()}
+            </div>
+          </div>
+        )}
+
+        {/* Strength Benchmarks */}
+        {getStrengthSummary() && (
+          <div className="bg-[#0F1115] rounded-lg p-3 border border-[#2B313A]">
+            <div className="flex justify-between items-start mb-1">
+              <span className="text-[#6B7280] text-xs uppercase tracking-wide">Strength</span>
+              <EditButton section="strength_benchmarks" />
+            </div>
+            <div className="text-[#E6E9EF] text-xs leading-relaxed space-y-0.5">
+              {getStrengthSummary()?.map((item, i) => (
+                <div key={i}>{item}</div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Skill Levels */}
+        {getSkillSummary() && (
+          <div className="bg-[#0F1115] rounded-lg p-3 border border-[#2B313A]">
+            <div className="flex justify-between items-start mb-1">
+              <span className="text-[#6B7280] text-xs uppercase tracking-wide">Skill Levels</span>
+              <EditButton section="skill_benchmarks" />
+            </div>
+            <div className="text-[#E6E9EF] text-xs leading-relaxed space-y-0.5">
+              {getSkillSummary()?.map((item, i) => (
+                <div key={i}>{item}</div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Schedule */}
+        <div className="bg-[#0F1115] rounded-lg p-3 border border-[#2B313A]">
+          <div className="flex justify-between items-start mb-1">
+            <span className="text-[#6B7280] text-xs uppercase tracking-wide">Training Schedule</span>
+            <EditButton section="schedule" />
+          </div>
+          <div className="text-[#E6E9EF]">
+            {profile.trainingDaysPerWeek || '?'} days/week
+            {profile.sessionLengthMinutes && ` • ${SESSION_LENGTH_LABELS[profile.sessionLengthMinutes as SessionLengthPreference]}`}
+          </div>
+        </div>
+
+        {/* Equipment */}
+        <div className="bg-[#0F1115] rounded-lg p-3 border border-[#2B313A]">
+          <div className="flex justify-between items-start mb-1">
+            <span className="text-[#6B7280] text-xs uppercase tracking-wide">Equipment</span>
+            <EditButton section="equipment" />
+          </div>
+          <div className="text-[#E6E9EF] text-xs leading-relaxed">
+            {profile.equipment.length > 0 
+              ? profile.equipment.map(e => EQUIPMENT_LABELS[e]).join(', ')
+              : 'Bodyweight only'}
+          </div>
+        </div>
+
+        {/* Readiness Calibration Summary */}
+        {profile.readinessCalibration?.scores && (
+          <div className="bg-[#0F1115] rounded-lg p-3 border border-[#2B313A]">
+            <div className="flex justify-between items-start mb-2">
+              <span className="text-[#6B7280] text-xs uppercase tracking-wide">Training Calibration</span>
+              <EditButton section="readiness" />
+            </div>
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              <div className="flex items-center gap-2">
+                <div className="w-full bg-[#2B313A] rounded-full h-1.5">
+                  <div 
+                    className="bg-[#4F6D8A] h-1.5 rounded-full" 
+                    style={{ width: `${profile.readinessCalibration.scores.volumeToleranceScore}%` }}
+                  />
+                </div>
+                <span className="text-[#6B7280] whitespace-nowrap">Volume</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-full bg-[#2B313A] rounded-full h-1.5">
+                  <div 
+                    className="bg-[#4F6D8A] h-1.5 rounded-full" 
+                    style={{ width: `${profile.readinessCalibration.scores.recoveryToleranceScore}%` }}
+                  />
+                </div>
+                <span className="text-[#6B7280] whitespace-nowrap">Recovery</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-full bg-[#2B313A] rounded-full h-1.5">
+                  <div 
+                    className="bg-[#4F6D8A] h-1.5 rounded-full" 
+                    style={{ width: `${profile.readinessCalibration.scores.skillAdaptationScore}%` }}
+                  />
+                </div>
+                <span className="text-[#6B7280] whitespace-nowrap">Skill</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-full bg-[#2B313A] rounded-full h-1.5">
+                  <div 
+                    className="bg-[#4F6D8A] h-1.5 rounded-full" 
+                    style={{ width: `${profile.readinessCalibration.scores.strengthPotentialScore}%` }}
+                  />
+                </div>
+                <span className="text-[#6B7280] whitespace-nowrap">Strength</span>
+              </div>
+            </div>
+            <p className="text-[#6B7280] text-[10px] mt-2 text-center">
+              These estimates help calibrate your starting program
+            </p>
+          </div>
+        )}
+      </div>
+
+      {/* Confidence message */}
+      <div className="bg-[#C1121F]/5 border border-[#C1121F]/20 rounded-lg p-3 mt-4">
+        <p className="text-xs text-[#A4ACB8] text-center">
+          Your personalized program will be built using your strength, skills, and goals.
+          <br />
+          <span className="text-[#6B7280]">SpartanLab adapts as you improve — update your metrics anytime.</span>
+        </p>
+      </div>
+    </div>
+  )
+}
+
+// =============================================================================
+// MAIN COMPONENT
+// =============================================================================
+
+export function AthleteOnboarding() {
+  const router = useRouter()
+  const [currentSectionIndex, setCurrentSectionIndex] = useState(0)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [profile, setProfile] = useState<OnboardingProfile>(createEmptyOnboardingProfile())
+
+  // Filter sections based on showIf conditions
+  const visibleSections = useMemo(() => {
+    return SECTIONS.filter(section => !section.showIf || section.showIf(profile))
+  }, [profile])
+
+  const currentSection = visibleSections[currentSectionIndex]
+  const totalSections = visibleSections.length
+  const isLastSection = currentSectionIndex === totalSections - 1
+  const progress = ((currentSectionIndex + 1) / totalSections) * 100
+
+  const updateProfile = useCallback((updates: Partial<OnboardingProfile>) => {
+    setProfile(prev => ({ ...prev, ...updates }))
+  }, [])
+
+  // Check if current section has minimum required data
+  const canProceed = useMemo(() => {
+    if (!currentSection) return false
     
-    if (isLastStep) {
+    switch (currentSection.id) {
+    case 'athlete_profile':
+      return profile.sex !== null && profile.trainingExperience !== null
+      case 'readiness':
+      // At least 3 of 5 questions answered
+      const r = profile.readinessCalibration
+      const answered = [
+        r?.trainingConsistency,
+        r?.recoveryTolerance,
+        r?.strengthPerception,
+        r?.skillFamiliarity,
+        r?.bodyType
+      ].filter(Boolean).length
+      return answered >= 3
+      case 'goals':
+        return profile.primaryGoal !== null
+      case 'skill_selection':
+        return true // Optional selections
+      case 'strength_benchmarks':
+        return profile.pullUpMax !== null || profile.dipMax !== null
+      case 'skill_benchmarks':
+        return true // All optional within context
+      case 'flexibility_benchmarks':
+        return true // All optional within context
+      case 'equipment':
+        return profile.equipment.length > 0
+      case 'schedule':
+        return profile.trainingDaysPerWeek !== null && profile.sessionLengthMinutes !== null
+      case 'recovery':
+        return true // All optional
+      case 'review':
+        return true
+      default:
+        return true
+    }
+  }, [currentSection, profile])
+
+  const handleNext = () => {
+    if (!canProceed) return
+    
+    if (isLastSection) {
       handleSubmit()
     } else {
-      setCurrentStepIndex(prev => prev + 1)
+      setCurrentSectionIndex(prev => prev + 1)
     }
   }
 
   const handleBack = () => {
-    if (currentStepIndex > 0) {
-      setCurrentStepIndex(prev => prev - 1)
+    if (currentSectionIndex > 0) {
+      setCurrentSectionIndex(prev => prev - 1)
     }
   }
+
+  // Navigate to a specific section (used by ReviewSection edit buttons)
+  const goToSection = useCallback((sectionId: SectionId) => {
+    const sectionIndex = visibleSections.findIndex(s => s.id === sectionId)
+    if (sectionIndex !== -1) {
+      setCurrentSectionIndex(sectionIndex)
+    }
+  }, [visibleSections])
 
   const handleSubmit = async () => {
     setIsSubmitting(true)
     
     try {
-      // Save onboarding profile
-      saveOnboardingProfile(profile)
+      // Mark as complete and save
+      const finalProfile = { ...profile, onboardingComplete: true }
+      saveOnboardingProfile(finalProfile)
       
       // Small delay for UX
-    await new Promise(resolve => setTimeout(resolve, 500))
-    
-    // Track onboarding completion
-    trackOnboardingCompleted('onboarding')
-    
-    // Navigate to dashboard - the program will be generated there
-    router.push('/dashboard?welcome=true')
+      await new Promise(resolve => setTimeout(resolve, 500))
+      
+      // Track completion
+      trackOnboardingCompleted('onboarding')
+      
+      // Navigate to dashboard
+      router.push('/dashboard?welcome=true')
     } catch (error) {
       console.error('Failed to save profile:', error)
       setIsSubmitting(false)
     }
   }
 
-  const isSelected = (value: string) => {
-    if (step.type === 'multi') {
-      return ((currentValue as string[]) || []).includes(value)
+  // Render section content
+  const renderSectionContent = () => {
+    if (!currentSection) return null
+    
+    const props = { profile, updateProfile }
+    
+    switch (currentSection.id) {
+    case 'athlete_profile':
+      return <AthleteProfileSection {...props} />
+      case 'readiness':
+      return <ReadinessCalibrationSection {...props} />
+      case 'goals':
+        return <GoalsSection {...props} />
+      case 'skill_selection':
+        return <SkillSelectionSection {...props} />
+      case 'strength_benchmarks':
+        return <StrengthBenchmarksSection {...props} />
+      case 'skill_benchmarks':
+        return <SkillBenchmarksSection {...props} />
+      case 'flexibility_benchmarks':
+        return <FlexibilityBenchmarksSection {...props} />
+      case 'equipment':
+        return <EquipmentSection {...props} />
+      case 'schedule':
+        return <ScheduleSection {...props} />
+      case 'recovery':
+        return <RecoverySection {...props} />
+      case 'review':
+        return <ReviewSection profile={profile} onEditSection={goToSection} />
+      default:
+        return null
     }
-    return currentValue === value
   }
+
+  if (!currentSection) {
+    return (
+      <div className="min-h-screen bg-[#0F1115] flex items-center justify-center">
+        <div className="text-center p-8">
+          <p className="text-[#A4ACB8] mb-4">Unable to load onboarding. Please refresh.</p>
+          <Button onClick={() => window.location.reload()}>Refresh</Button>
+        </div>
+      </div>
+    )
+  }
+
+  const Icon = currentSection.icon
 
   return (
     <div className="min-h-screen bg-[#0F1115] flex flex-col">
@@ -316,7 +2170,7 @@ export function AthleteOnboarding() {
         />
       </div>
 
-      <div className="flex-1 flex items-center justify-center p-4 pt-8">
+      <div className="flex-1 flex items-start justify-center p-4 pt-8 pb-24 overflow-y-auto">
         <div className="w-full max-w-lg">
           {/* Header */}
           <div className="text-center mb-6">
@@ -324,66 +2178,29 @@ export function AthleteOnboarding() {
               <SpartanIcon size={36} />
             </div>
             <p className="text-xs text-[#6B7280] uppercase tracking-wider mb-1">
-              {currentStepIndex === 0 
-                ? `Quick setup · ~2 minutes`
-                : `Step ${currentStepIndex + 1} of ${totalSteps}`
+              {currentSectionIndex === 0 
+                ? 'Quick setup'
+                : `Step ${currentSectionIndex + 1} of ${totalSections}`
               }
             </p>
-            <h1 className="text-xl md:text-2xl font-bold text-[#E6E9EF]">
-              {step.question}
-            </h1>
-            {step.subtitle && (
-              <p className="text-sm text-[#6B7280] mt-1">
-                {step.subtitle}
-              </p>
-            )}
+            <div className="flex items-center justify-center gap-2 mb-1">
+              <Icon className="w-5 h-5 text-[#C1121F]" />
+              <h1 className="text-xl md:text-2xl font-bold text-[#E6E9EF]">
+                {currentSection.title}
+              </h1>
+            </div>
+            <p className="text-sm text-[#6B7280]">
+              {currentSection.subtitle}
+            </p>
           </div>
 
-          {/* Options Card */}
+          {/* Content Card */}
           <Card className="bg-[#1A1F26] border-[#2B313A] p-4 md:p-6">
-            <div 
-              className="grid gap-2 md:gap-3"
-              style={{ 
-                gridTemplateColumns: `repeat(${Math.min(step.columns || 2, 2)}, minmax(0, 1fr))` 
-              }}
-            >
-              {step.options.map((option) => {
-                const selected = isSelected(option.value)
-                return (
-                  <button
-                    key={option.value}
-                    type="button"
-                    onClick={() => step.type === 'multi' 
-                      ? handleMultiSelect(option.value) 
-                      : handleSingleSelect(option.value)
-                    }
-                    className={`py-3 md:py-4 px-3 md:px-4 rounded-lg border text-sm font-medium transition-all duration-150 flex items-center justify-center gap-2 ${
-                      selected
-                        ? 'bg-[#C1121F]/10 border-[#C1121F] text-[#E6E9EF] ring-1 ring-[#C1121F]/30'
-                        : 'bg-[#0F1115] border-[#2B313A] text-[#A4ACB8] hover:border-[#4F6D8A] hover:text-[#E6E9EF]'
-                    }`}
-                  >
-                    {selected && <Check className="w-4 h-4 text-[#C1121F] shrink-0" />}
-                    <span className="truncate">{option.label}</span>
-                  </button>
-                )
-              })}
-            </div>
-
-            {/* Skip option for optional multi-select steps */}
-            {step.type === 'multi' && (step.key === 'skillInterests' || step.key === 'flexibilityGoals') && (
-              <button
-                type="button"
-                onClick={handleNext}
-                className="w-full mt-3 py-2 text-sm text-[#6B7280] hover:text-[#A4ACB8] transition-colors"
-              >
-                Skip for now
-              </button>
-            )}
+            {renderSectionContent()}
 
             {/* Navigation Buttons */}
-            <div className="flex gap-3 mt-4 md:mt-6">
-              {currentStepIndex > 0 && (
+            <div className="flex gap-3 mt-6 pt-4 border-t border-[#2B313A]">
+              {currentSectionIndex > 0 && (
                 <Button
                   type="button"
                   variant="outline"
@@ -396,9 +2213,9 @@ export function AthleteOnboarding() {
               )}
               <Button
                 onClick={handleNext}
-                disabled={!canGoNext || isSubmitting}
+                disabled={!canProceed || isSubmitting}
                 className={`bg-[#C1121F] hover:bg-[#A30F1A] text-white py-5 md:py-6 font-medium gap-2 disabled:opacity-50 disabled:cursor-not-allowed ${
-                  currentStepIndex === 0 ? 'flex-1' : 'flex-[2]'
+                  currentSectionIndex === 0 ? 'flex-1' : 'flex-[2]'
                 }`}
               >
                 {isSubmitting ? (
@@ -406,7 +2223,7 @@ export function AthleteOnboarding() {
                     <Loader2 className="w-4 h-4 animate-spin" />
                     Building Program...
                   </>
-                ) : isLastStep ? (
+                ) : isLastSection ? (
                   'Generate My Program'
                 ) : (
                   <>
@@ -418,15 +2235,15 @@ export function AthleteOnboarding() {
             </div>
           </Card>
 
-          {/* Step Indicators */}
+          {/* Section Indicators */}
           <div className="flex justify-center gap-1 mt-4 md:mt-6 flex-wrap">
-            {visibleSteps.map((_, i) => (
+            {visibleSections.map((_, i) => (
               <div
                 key={i}
                 className={`h-1.5 rounded-full transition-all duration-300 ${
-                  i === currentStepIndex
+                  i === currentSectionIndex
                     ? 'w-5 bg-[#C1121F]'
-                    : i < currentStepIndex
+                    : i < currentSectionIndex
                       ? 'w-1.5 bg-[#C1121F]/50'
                       : 'w-1.5 bg-[#2B313A]'
                 }`}
@@ -436,7 +2253,9 @@ export function AthleteOnboarding() {
 
           {/* Footer Note */}
           <p className="text-center text-xs text-[#6B7280] mt-4 md:mt-6 px-4">
-            SpartanLab uses this to calibrate your personalized training program.
+            Everything here helps SpartanLab build training that fits you.
+            <br />
+            <span className="text-[#4F6D8A]">You can always change these later.</span>
           </p>
         </div>
       </div>

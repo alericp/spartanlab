@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { 
@@ -85,6 +86,7 @@ import { getProgressionInsights, type ProgressionInsight } from '@/lib/adaptive-
 import { PremiumUpgradeBanner, SubscriptionTierBadge } from '@/components/premium/PremiumFeature'
 import { DashboardUpgradeCard } from '@/components/upgrade/AdaptiveProgramUpgradeCard'
 import { FirstRunGuide, SetupReminderBanner } from '@/components/dashboard/FirstRunGuide'
+import { UpdateMetricsCard, MetricsUpdateBanner } from '@/components/dashboard/UpdateMetricsCard'
 
 function DashboardContent() {
   const [overview, setOverview] = useState<DashboardOverview | null>(null)
@@ -168,6 +170,24 @@ setConstraintInsight(getConstraintInsight())
       setProgressionInsights(insights)
     } catch {
       // Silent fail - progression insights are optional
+    }
+    
+    // Listen for program recalculation events
+    const handleRecalculation = () => {
+      // Refresh all dashboard data when metrics are updated
+      const freshData = getDashboardOverview()
+      setOverview(freshData)
+      setSkillSummary(getPrimarySkillSummary(freshData))
+      setStrengthSummary(getStrengthSummary(freshData))
+      setProgramSummary(getProgramSummary(freshData))
+      setFocusSummary(getCurrentFocusSummary(freshData))
+      setConstraintInsight(getConstraintInsight())
+      setAthleteCalibration(getAthleteCalibration())
+    }
+    
+    window.addEventListener('spartanlab:program-recalculated', handleRecalculation)
+    return () => {
+      window.removeEventListener('spartanlab:program-recalculated', handleRecalculation)
     }
   }, [])
 
@@ -466,6 +486,9 @@ setConstraintInsight(getConstraintInsight())
             
             {/* Athlete Intelligence */}
             <AthleteIntelligenceCard />
+            
+            {/* Update Metrics - Allow users to refine their program */}
+            <UpdateMetricsCard />
             
             {/* Pro upgrade prompt - non-intrusive card */}
             <DashboardUpgradeCard />

@@ -1,0 +1,400 @@
+/**
+ * SpartanLab Coaching Intelligence Engine - Central Index
+ * 
+ * This module provides a unified entry point to all coaching engine components.
+ * It ties together the various config modules, progression systems, and assembly engines.
+ * 
+ * ARCHITECTURE OVERVIEW:
+ * 
+ * ┌─────────────────────────────────────────────────────────────────────────┐
+ * │                    COACHING INTELLIGENCE ENGINE                         │
+ * │                                                                         │
+ * │  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────────────┐ │
+ * │  │ TRAINING        │  │ SKILL           │  │ WEAK POINT              │ │
+ * │  │ PRINCIPLES      │  │ PROGRESSIONS    │  │ PRIORITY                │ │
+ * │  │ CONFIG          │  │ SYSTEMS         │  │ ENGINE                  │ │
+ * │  └─────────────────┘  └─────────────────┘  └─────────────────────────┘ │
+ * │          │                    │                      │                 │
+ * │          └────────────────────┼──────────────────────┘                 │
+ * │                               ▼                                        │
+ * │  ┌─────────────────────────────────────────────────────────────────┐  │
+ * │  │                    SESSION ASSEMBLY ENGINE                       │  │
+ * │  │      Intelligent block ordering and exercise sequencing          │  │
+ * │  └─────────────────────────────────────────────────────────────────┘  │
+ * │                               │                                        │
+ * │          ┌────────────────────┼────────────────────┐                  │
+ * │          ▼                    ▼                    ▼                  │
+ * │  ┌───────────────┐  ┌─────────────────┐  ┌─────────────────────────┐ │
+ * │  │ ENDURANCE     │  │ MILITARY        │  │ WEIGHTED                │ │
+ * │  │ DENSITY       │  │ TEST            │  │ CALISTHENICS            │ │
+ * │  │ CONFIG        │  │ CONFIG          │  │ LOGIC                   │ │
+ * │  └───────────────┘  └─────────────────┘  └─────────────────────────┘ │
+ * │                                                                       │
+ * └───────────────────────────────────────────────────────────────────────┘
+ * 
+ * INTERNAL ONLY:
+ * - No branded methods exposed
+ * - No coach names or athlete names
+ * - Clean, simple outputs for users
+ * - Complex intelligence hidden behind the scenes
+ */
+
+// =============================================================================
+// CORE ENGINE EXPORTS
+// =============================================================================
+
+export {
+  // Training Principles
+  TRAINING_PRINCIPLES,
+  getApplicablePrinciples,
+  resolvePrincipleConflicts,
+  
+  // Session Structure
+  determineSessionStructure,
+  
+  // Readiness Analysis
+  analyzeReadinessProfile,
+  selectProgressionLevel,
+  
+  // Marketing Capability Proof
+  COACHING_CAPABILITIES,
+  generateCapabilityDescription,
+  
+  // Types
+  type PrincipleId,
+  type PrincipleCategory,
+  type TrainingPrinciple,
+  type PrincipleApplicationContext,
+  type SessionStructure,
+  type ReadinessProfile,
+  type ProgressionDecision,
+} from './coaching-intelligence-engine'
+
+// =============================================================================
+// SESSION CONFIGURATION EXPORTS
+// =============================================================================
+
+export {
+  // Session Durations
+  SESSION_DURATION_OPTIONS,
+  shouldShowExtendedDurations,
+  getAvailableSessionDurations,
+  
+  // Coaching Principles (internal)
+  COACHING_PRINCIPLES,
+  getApplicableCoachingPrinciples,
+  
+  // Handstand Training Rules
+  HANDSTAND_TRAINING_CONFIG,
+  shouldIncludeHandstandStrength,
+  
+  // Iron Cross Safety
+  IRON_CROSS_READINESS_REQUIREMENTS,
+  IRON_CROSS_FOUNDATIONAL_PROGRESSIONS,
+  IRON_CROSS_SAFETY_WARNING,
+  checkIronCrossReadiness,
+  
+  // Running Rules
+  RUNNING_INCLUSION_RULES,
+  shouldIncludeRunning,
+  
+  // Session Sequencing
+  SESSION_SEQUENCING_RULES,
+  getSessionStructure as getSessionBlockStructure,
+  
+  // Types
+  type StandardSessionLength,
+  type ExtendedSessionLength,
+  type AllSessionLength,
+  type SessionDurationOption,
+  type CoachingPrinciple,
+  type HandstandTrainingConfig,
+  type IronCrossReadinessCheck,
+  type IronCrossFoundationalProgression,
+  type RunningInclusionRules,
+  type SessionSequencingRules,
+} from './training-session-config'
+
+// =============================================================================
+// SKILL PROGRESSION EXPORTS
+// =============================================================================
+
+export {
+  // Core Progressions
+  PLANCHE_PROGRESSION,
+  FRONT_LEVER_PROGRESSION,
+  MUSCLE_UP_PROGRESSION,
+  
+  // Types
+  type EnhancedSkillLevel,
+  type EnhancedSkillDefinition,
+} from './skill-progression-rules'
+
+export {
+  // Full Progression Systems
+  PLANCHE_SYSTEM,
+  FRONT_LEVER_SYSTEM,
+  HANDSTAND_SYSTEM,
+  MUSCLE_UP_SYSTEM,
+  IRON_CROSS_SYSTEM,
+  SKILL_PROGRESSION_SYSTEMS,
+  
+  // Functions
+  getSkillProgressionSystem,
+  checkSkillReadiness,
+  
+  // Types
+  type SkillProgressionSystem,
+  type ProgressionLevel,
+  type ReadinessRequirement,
+  type SupportExercise,
+  type MobilityPrepWork,
+} from './comprehensive-skill-progressions'
+
+// =============================================================================
+// WEAK POINT ANALYSIS EXPORTS
+// =============================================================================
+
+export {
+  // Analysis Functions
+  analyzeWeakPoints,
+  getSkillSpecificRecommendations,
+  
+  // Types
+  type WeakPointCategory,
+  type WeakPointAssessment,
+  type UserProfileFactors,
+  type WeakPointAnalysisResult,
+} from './weak-point-priority-engine'
+
+// =============================================================================
+// SESSION ASSEMBLY EXPORTS
+// =============================================================================
+
+export {
+  // Session Builders
+  buildSkillFirstSession,
+  buildWeightedStrengthSession,
+  buildHandstandFocusedSession,
+  buildMilitaryConditioningSession,
+  buildEnduranceSession,
+  buildLongStrengthSession,
+  
+  // Assembly Function
+  assembleSession,
+  getSessionDurationMinutes,
+  validateSessionAssembly,
+  
+  // Types
+  type SessionBlockType,
+  type SessionBlock,
+  type SessionTemplate,
+  type SessionAssemblyContext,
+} from './session-assembly-engine'
+
+// =============================================================================
+// ENDURANCE / DENSITY EXPORTS
+// =============================================================================
+
+export {
+  // Protocol Configs
+  ENDURANCE_PROTOCOLS,
+  
+  // Protocol Selection
+  selectEnduranceProtocol,
+  
+  // Max Rep Development
+  generateMaxRepPlan,
+  
+  // Military Conditioning
+  MILITARY_CONDITIONING_BLOCKS,
+  getMilitaryConditioningPlan,
+  
+  // Types
+  type EnduranceProtocol,
+  type EnduranceProtocolConfig,
+  type EnduranceProtocolContext,
+  type MaxRepWave,
+  type MaxRepProgressionPlan,
+  type MilitaryConditioningBlock,
+} from './endurance-density-config'
+
+// =============================================================================
+// MARKETING SUPPORT EXPORTS
+// =============================================================================
+
+export {
+  // Capability Documentation
+  FEATURE_CAPABILITIES,
+  
+  // Copy Generators
+  generateHeroSection,
+  generateFeatureSection,
+  generateCoachExplainer,
+  generateCapabilityProof,
+  
+  // SEO Support
+  SEO_CONTENT_STRUCTURES,
+  
+  // Validation
+  validateMarketingClaim,
+  generateTagline,
+  generateCapabilityDescription as generateMarketingDescription,
+  
+  // Types
+  type FeatureCapability,
+  type MarketingCopyBlock,
+  type SEOContentStructure,
+} from './marketing-copy-support'
+
+// =============================================================================
+// CONVENIENCE FUNCTIONS
+// =============================================================================
+
+import type { PrimaryTrainingOutcome, SkillGoal } from './athlete-profile'
+import type { ExperienceLevel, PrimaryGoal, SessionLength } from './program-service'
+import { analyzeWeakPoints, type UserProfileFactors } from './weak-point-priority-engine'
+import { assembleSession, type SessionTemplate } from './session-assembly-engine'
+import { getApplicablePrinciples, type TrainingPrinciple } from './coaching-intelligence-engine'
+import { checkSkillReadiness, type SkillProgressionSystem, SKILL_PROGRESSION_SYSTEMS } from './comprehensive-skill-progressions'
+import { selectEnduranceProtocol, type EnduranceProtocolConfig } from './endurance-density-config'
+
+export interface CoachingContext {
+  outcome: PrimaryTrainingOutcome
+  goal?: PrimaryGoal
+  experienceLevel: ExperienceLevel
+  sessionLengthMinutes: number
+  skillGoals?: SkillGoal[]
+  userProfile?: UserProfileFactors
+}
+
+export interface CoachingRecommendation {
+  sessionTemplate: SessionTemplate
+  applicablePrinciples: TrainingPrinciple[]
+  skillReadiness: Record<string, { isReady: boolean; recommendations: string[] }>
+  enduranceProtocol?: EnduranceProtocolConfig
+  weakPointAnalysis?: {
+    overallReadiness: number
+    topRecommendations: string[]
+    exercisePriorities: string[]
+  }
+  safetyWarnings: string[]
+}
+
+/**
+ * Unified coaching recommendation generator
+ * 
+ * Takes a user context and returns comprehensive coaching recommendations
+ * including session structure, applicable principles, skill readiness, and safety warnings.
+ */
+export function generateCoachingRecommendation(context: CoachingContext): CoachingRecommendation {
+  const { outcome, goal, experienceLevel, sessionLengthMinutes, skillGoals = [], userProfile } = context
+  
+  // Get applicable training principles
+  const applicablePrinciples = getApplicablePrinciples({
+    outcome,
+    goal,
+    experienceLevel,
+    sessionLength: sessionLengthMinutes.toString() as SessionLength,
+  })
+  
+  // Assemble session structure
+  const sessionTemplate = assembleSession({
+    outcome,
+    primaryGoal: goal,
+    experienceLevel,
+    sessionLengthMinutes,
+    hasHandstandGoal: skillGoals.includes('handstand') || skillGoals.includes('handstand_pushup'),
+    skillGoals: skillGoals as string[],
+  })
+  
+  // Check skill readiness for each goal
+  const skillReadiness: Record<string, { isReady: boolean; recommendations: string[] }> = {}
+  for (const skill of skillGoals) {
+    if (SKILL_PROGRESSION_SYSTEMS[skill]) {
+      const readiness = checkSkillReadiness(skill, {
+        experienceLevel,
+        pullUpMax: userProfile?.pullUpMax,
+        pushUpMax: userProfile?.pushUpMax,
+        dipMax: userProfile?.dipMax,
+      })
+      skillReadiness[skill] = {
+        isReady: readiness.isReady,
+        recommendations: [...readiness.criticalMissing, ...readiness.recommendations],
+      }
+    }
+  }
+  
+  // Get endurance protocol if applicable
+  let enduranceProtocol: EnduranceProtocolConfig | undefined
+  if (outcome === 'endurance' || outcome === 'military' || outcome === 'max_reps') {
+    enduranceProtocol = selectEnduranceProtocol({
+      outcome,
+      experienceLevel,
+      sessionRole: 'primary',
+      availableMinutes: sessionLengthMinutes * 0.4,
+      hasRunningCapability: true,
+    })
+  }
+  
+  // Analyze weak points if user profile provided
+  let weakPointAnalysis
+  if (userProfile) {
+    const analysis = analyzeWeakPoints(userProfile)
+    weakPointAnalysis = {
+      overallReadiness: analysis.overallReadiness,
+      topRecommendations: analysis.topRecommendations,
+      exercisePriorities: analysis.exercisePriorities,
+    }
+  }
+  
+  // Collect safety warnings
+  const safetyWarnings: string[] = []
+  
+  // Add iron cross warning if applicable
+  if (skillGoals.includes('iron_cross')) {
+    safetyWarnings.push('Iron cross requires extensive foundation work. Progress extremely slowly to protect tendons.')
+  }
+  
+  // Add beginner straight-arm warning
+  if (experienceLevel === 'beginner' && skillGoals.some(s => ['planche', 'front_lever'].includes(s))) {
+    safetyWarnings.push('Straight-arm skills require tendon conditioning. Build foundational strength before static holds.')
+  }
+  
+  // Add weak point warnings
+  if (weakPointAnalysis && weakPointAnalysis.overallReadiness < 50) {
+    safetyWarnings.push('Current readiness suggests conservative progression. Focus on building foundation.')
+  }
+  
+  return {
+    sessionTemplate,
+    applicablePrinciples,
+    skillReadiness,
+    enduranceProtocol,
+    weakPointAnalysis,
+    safetyWarnings,
+  }
+}
+
+/**
+ * Get all available skill progression systems
+ */
+export function getAllSkillProgressionSystems(): SkillProgressionSystem[] {
+  return Object.values(SKILL_PROGRESSION_SYSTEMS)
+}
+
+/**
+ * Get engine capability summary (for marketing/about pages)
+ */
+export function getEngineCapabilitySummary(): string[] {
+  return [
+    'Adaptive skill coaching based on readiness assessment',
+    'Weighted calisthenics and streetlifting programming',
+    'Conservative tendon protection for straight-arm skills',
+    'Fatigue-aware session structure',
+    'Military and tactical fitness test preparation',
+    'Intelligent exercise sequencing',
+    'Endurance and work capacity protocols',
+    'Skill frequency optimization',
+  ]
+}

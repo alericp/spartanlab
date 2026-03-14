@@ -97,21 +97,21 @@ export type PrimaryTrainingOutcome =
   | 'general_fitness' // General fitness and body control
 
 export const PRIMARY_TRAINING_OUTCOME_LABELS: Record<PrimaryTrainingOutcome, string> = {
-  strength: 'Build calisthenics strength',
-  max_reps: 'Increase max reps (pull-ups, push-ups, dips)',
-  military: 'Train for military or tactical fitness tests',
-  skills: 'Learn advanced calisthenics skills (planche, front lever, muscle-up, etc.)',
-  endurance: 'Improve endurance and conditioning',
-  general_fitness: 'General fitness and body control',
+  strength: 'Bodyweight Strength',
+  max_reps: 'Rep Performance',
+  military: 'Military & Tactical Prep',
+  skills: 'Skill Mastery',
+  endurance: 'Endurance & Work Capacity',
+  general_fitness: 'General Fitness & Conditioning',
 }
 
 export const PRIMARY_TRAINING_OUTCOME_DESCRIPTIONS: Record<PrimaryTrainingOutcome, string> = {
-  strength: 'Focus on weighted progressions and building raw pushing/pulling power',
-  max_reps: 'Density training and rep-based progressions to maximize bodyweight reps',
-  military: 'PT test preparation with high-rep work, circuits, and tactical conditioning',
-  skills: 'Skill-focused training with progression-based work and support strength',
-  endurance: 'Circuits, density blocks, and conditioning for work capacity',
-  general_fitness: 'Balanced programming covering strength, endurance, and movement quality',
+  strength: 'Build raw pushing and pulling power with weighted progressions and strength-focused training',
+  max_reps: 'Maximize your pull-up, push-up, and dip numbers with density training and rep progressions',
+  military: 'Prepare for official fitness tests with branch-specific conditioning and event training',
+  skills: 'Master planche, front lever, muscle-up, and other advanced movements with structured progressions',
+  endurance: 'Build work capacity with circuits, density blocks, and sustained conditioning',
+  general_fitness: 'Develop well-rounded fitness with balanced strength, conditioning, and movement quality',
 }
 
 /**

@@ -39,6 +39,10 @@ interface UserButtonProps {
 export function SignedIn({ children }: AuthComponentProps) {
   const { isClerkAvailable, isLoading, components } = useClerkAvailability()
 
+  // Diagnostic logging
+  const reason = isLoading ? 'loading' : !isClerkAvailable ? 'no-clerk' : !components.SignedIn ? 'no-component' : 'rendering'
+  console.log('[v0] SignedIn:', { isLoading, isClerkAvailable, hasComponent: !!components.SignedIn, decision: reason })
+
   // Preview or loading: render nothing
   if (isLoading || !isClerkAvailable) return null
   
@@ -64,6 +68,10 @@ export function SignedIn({ children }: AuthComponentProps) {
  */
 export function SignedOut({ children }: AuthComponentProps) {
   const { isClerkAvailable, isLoading, components } = useClerkAvailability()
+
+  // Diagnostic logging
+  const reason = isLoading ? 'loading-block' : !isClerkAvailable ? 'preview-show' : !components.SignedOut ? 'no-component-show' : 'clerk-rendering'
+  console.log('[v0] SignedOut:', { isLoading, isClerkAvailable, hasComponent: !!components.SignedOut, decision: reason })
 
   // CRITICAL: During loading, render nothing to prevent "Sign In" flash
   // This must be checked FIRST before checking isClerkAvailable

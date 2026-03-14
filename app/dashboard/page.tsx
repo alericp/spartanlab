@@ -11,12 +11,11 @@ import {
   DashboardSkeleton 
 } from '@/components/layout'
 import { AuthGuard } from '@/components/auth/AuthGuard'
-import { useClerkAvailability } from '@/components/providers/ClerkProviderWrapper'
 
 // =============================================================================
-// ISOLATION TEST FLAG - Set to false to enable full dashboard
+// ISOLATION TEST FLAG - Set to true for normal operation
 // =============================================================================
-const ENABLE_FULL_DASHBOARD = false
+const ENABLE_FULL_DASHBOARD = true
 
 // Only import heavy components when full dashboard is enabled
 import { SpartanScoreCard } from '@/components/performance/SpartanScoreCard'
@@ -87,36 +86,6 @@ import { getProgressionInsights, type ProgressionInsight } from '@/lib/adaptive-
 import { PremiumUpgradeBanner, SubscriptionTierBadge } from '@/components/premium/PremiumFeature'
 import { DashboardUpgradeCard } from '@/components/upgrade/AdaptiveProgramUpgradeCard'
 import { FirstRunGuide, SetupReminderBanner } from '@/components/dashboard/FirstRunGuide'
-
-// =============================================================================
-// AUTH DIAGNOSTIC COMPONENT - Temporary for debugging
-// =============================================================================
-function AuthDiagnosticBox() {
-  const { isClerkAvailable, isLoading } = useClerkAvailability()
-  const [info, setInfo] = useState<{hostname: string, pathname: string} | null>(null)
-  
-  useEffect(() => {
-    setInfo({
-      hostname: window.location.hostname,
-      pathname: window.location.pathname,
-    })
-  }, [])
-  
-  // Only show in production for debugging
-  if (!info) return null
-  
-  return (
-    <div className="fixed bottom-4 right-4 z-50 bg-[#1A1D23] border border-[#2A2F38] rounded-lg p-3 text-xs font-mono max-w-xs shadow-lg">
-      <div className="text-[#6B7280] mb-1">Auth Diagnostic</div>
-      <div className="space-y-0.5 text-[#A4ACB8]">
-        <div>host: {info.hostname}</div>
-        <div>path: {info.pathname}</div>
-        <div>clerkAvailable: {String(isClerkAvailable)}</div>
-        <div>loading: {String(isLoading)}</div>
-      </div>
-    </div>
-  )
-}
 
 function DashboardContent() {
   const [overview, setOverview] = useState<DashboardOverview | null>(null)
@@ -208,7 +177,6 @@ setConstraintInsight(getConstraintInsight())
     return (
       <PageContainer>
         <DashboardSkeleton />
-        <AuthDiagnosticBox />
       </PageContainer>
     )
   }
@@ -230,7 +198,6 @@ setConstraintInsight(getConstraintInsight())
             </p>
           </div>
         </div>
-        <AuthDiagnosticBox />
       </PageContainer>
     )
   }
@@ -246,7 +213,6 @@ setConstraintInsight(getConstraintInsight())
     return (
       <PageContainer>
         <DashboardEmptyState />
-        <AuthDiagnosticBox />
       </PageContainer>
     )
   }

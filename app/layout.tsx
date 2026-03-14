@@ -1,12 +1,8 @@
 import type { Metadata, Viewport } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
+import { ClerkProvider } from '@clerk/nextjs'
 import { GlobalErrorBoundary } from '@/components/shared/GlobalErrorBoundary'
-import { ClerkProviderWrapper } from '@/components/providers/ClerkProviderWrapper'
 import './globals.css'
-
-// AUTH RESTORATION TEST - Minimal auth-capable layout
-// Restored: ClerkProviderWrapper (required for auth routes)
-// Still removed: AnalyticsProvider, PreviewModeIndicator, Analytics, PWAProvider
 
 const _geist = Geist({ subsets: ["latin"] });
 const _geistMono = Geist_Mono({ subsets: ["latin"] });
@@ -55,14 +51,14 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en">
-      <body className="font-sans antialiased bg-[#0F1115] text-[#E6E9EF]">
-        <GlobalErrorBoundary>
-          <ClerkProviderWrapper>
+    <ClerkProvider>
+      <html lang="en">
+        <body className="font-sans antialiased bg-[#0F1115] text-[#E6E9EF]">
+          <GlobalErrorBoundary>
             {children}
-          </ClerkProviderWrapper>
-        </GlobalErrorBoundary>
-      </body>
-    </html>
+          </GlobalErrorBoundary>
+        </body>
+      </html>
+    </ClerkProvider>
   )
 }

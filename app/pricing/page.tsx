@@ -8,7 +8,7 @@ import { MarketingHeader } from '@/components/marketing/MarketingHeader'
 import { MarketingFooter } from '@/components/marketing/MarketingFooter'
 import { Check, ArrowRight } from 'lucide-react'
 import { trackUpgradeStarted, trackSignUpStarted } from '@/lib/analytics'
-import { useClerkAvailability } from '@/components/providers/ClerkProviderWrapper'
+import { useAuth } from '@clerk/nextjs'
 import { toast } from 'sonner'
 
 const PLANS = [
@@ -78,13 +78,13 @@ const FAQ = [
 ]
 
 export default function PricingPage() {
-  const router = useRouter()
+const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
-  const { isClerkAvailable } = useClerkAvailability()
-
+  const { isSignedIn } = useAuth()
+  
   const handleProUpgrade = async () => {
-    // If not authenticated, redirect to sign-up
-    if (!isClerkAvailable) {
+  // If not authenticated, redirect to sign-up
+  if (!isSignedIn) {
       trackUpgradeStarted('pricing_page')
       router.push('/sign-up?redirect_url=/upgrade')
       return

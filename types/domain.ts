@@ -21,16 +21,25 @@ export interface User {
 export type Sex = 'male' | 'female'
 export type HeightUnit = 'inches' | 'cm'
 export type WeightUnit = 'lbs' | 'kg'
-export type SessionLengthMinutes = 30 | 45 | 60 | 90
-export type Equipment = 'pullup_bar' | 'dip_bars' | 'parallettes' | 'rings' | 'resistance_bands'
+export type SessionLengthMinutes = 30 | 45 | 60 | 75 | 90
+export type Equipment = 'pullup_bar' | 'dip_bars' | 'parallettes' | 'rings' | 'resistance_bands' | 'weights' | 'bench_box' | 'minimal'
 export type RangeIntent = 'deeper_range' | 'stronger_control' | 'both'
 export type RangeTrainingMode = 'flexibility' | 'mobility' | 'hybrid'
 
+// Training experience levels
+export type TrainingExperience = 'new' | 'some' | 'intermediate' | 'advanced'
+
 // Goal categories for onboarding flow
-export type GoalCategory = 'strength' | 'skills' | 'flexibility'
-export type SkillGoal = 'front_lever' | 'planche' | 'muscle_up' | 'handstand' | 'l_sit'
+export type GoalCategory = 'skill_mastery' | 'strength' | 'muscle_physique' | 'flexibility' | 'mobility' | 'endurance'
+export type SkillGoal = 'front_lever' | 'planche' | 'muscle_up' | 'handstand_pushup' | 'handstand' | 'l_sit' | 'v_sit' | 'i_sit'
 export type FlexibilityGoal = 'pancake' | 'toe_touch' | 'front_splits' | 'side_splits'
-export type StrengthGoal = 'general_strength' | 'weighted_pull' | 'weighted_dip'
+export type StrengthGoal = 'general_strength' | 'weighted_pull' | 'weighted_dip' | 'muscle_building' | 'work_capacity'
+
+// Recovery quality for lifestyle factors
+export type RecoveryQuality = 'good' | 'normal' | 'poor'
+
+// Session style preference
+export type SessionStylePreference = 'efficient' | 'full'
 
 // Training Principles Engine types (internal methodology)
 export type TrainingMethodId = 
@@ -47,26 +56,76 @@ export type TrainingMethodId =
 export interface AthleteProfile {
   id: string
   userId: string
+  
+  // Section 1: Athlete Profile
   sex: Sex | null
   height: number | null
   heightUnit: HeightUnit
   bodyweight: number | null
   weightUnit: WeightUnit
-  experienceLevel: ExperienceLevel
-  trainingDaysPerWeek: number
-  sessionLengthMinutes: SessionLengthMinutes
-  // Goal selection (new multi-step flow)
-  goalCategory: GoalCategory | null
+  bodyFatPercent: number | null
+  trainingExperience: TrainingExperience | null
+  experienceLevel: ExperienceLevel // Derived from trainingExperience
+  
+  // Section 2: Goals
+  goalCategories: GoalCategory[]
+  primaryGoal: string | null
+  secondaryGoal: string | null
+  
+  // Section 3: Skill Selection
   selectedSkills: SkillGoal[]
   selectedFlexibility: FlexibilityGoal[]
   selectedStrength: StrengthGoal[]
-  primaryGoal: string | null // Backwards compat: first selected goal
-  equipmentAvailable: Equipment[]
-  rangeIntent: RangeIntent | null // For flexibility/mobility goals
-  rangeTrainingMode: RangeTrainingMode | null // AI-determined training mode
-  // Strength baseline (optional)
+  
+  // Section 4: Strength Benchmarks
   pullUpMax: number | null
+  pushUpMax: number | null
   dipMax: number | null
+  wallHspuReps: number | null
+  weightedPullUpLoad: number | null
+  weightedPullUpUnit: WeightUnit | null
+  weightedDipLoad: number | null
+  weightedDipUnit: WeightUnit | null
+  
+  // Section 5: Skill Benchmarks (JSON stored)
+  frontLeverProgression: string | null
+  frontLeverHoldSeconds: number | null
+  plancheProgression: string | null
+  plancheHoldSeconds: number | null
+  muscleUpReadiness: string | null
+  hspuProgression: string | null
+  lSitHoldSeconds: number | null
+  vSitHoldSeconds: number | null
+  
+  // Section 6: Flexibility Benchmarks (JSON stored)
+  pancakeLevel: string | null
+  pancakeRangeIntent: RangeTrainingMode | null
+  toeTouchLevel: string | null
+  frontSplitsLevel: string | null
+  frontSplitsRangeIntent: RangeTrainingMode | null
+  sideSplitsLevel: string | null
+  sideSplitsRangeIntent: RangeTrainingMode | null
+  
+  // Section 7: Equipment
+  equipmentAvailable: Equipment[]
+  
+  // Section 8: Training Schedule
+  trainingDaysPerWeek: number
+  sessionLengthMinutes: SessionLengthMinutes
+  sessionStyle: SessionStylePreference | null
+  
+  // Section 9: Recovery / Lifestyle
+  sleepQuality: RecoveryQuality | null
+  energyLevel: RecoveryQuality | null
+  stressLevel: RecoveryQuality | null
+  recoveryConfidence: RecoveryQuality | null
+  
+  // Legacy fields for backwards compatibility
+  rangeIntent: RangeIntent | null
+  rangeTrainingMode: RangeTrainingMode | null
+  goalCategory: GoalCategory | null
+  
+  // Meta
   onboardingComplete: boolean
   createdAt: string
   updatedAt?: string

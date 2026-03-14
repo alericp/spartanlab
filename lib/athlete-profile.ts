@@ -1,6 +1,18 @@
 // Athlete Profile Types for Onboarding
-// These range-based types allow quick selection without exact values
-// The Adaptive Training Engine uses these to calibrate training recommendations
+// Comprehensive onboarding data model for calisthenics programming
+// Supports beginners, intermediates, and advanced athletes
+
+// =============================================================================
+// ATHLETE PROFILE SECTION
+// =============================================================================
+
+export type Sex = 'male' | 'female'
+
+export type TrainingExperience = 
+  | 'new'           // New to training
+  | 'some'          // Some experience (6mo - 1yr)
+  | 'intermediate'  // Consistent intermediate (1-3 years)
+  | 'advanced'      // Advanced athlete (3+ years)
 
 export type HeightRange =
   | 'under_5_4'
@@ -18,8 +30,74 @@ export type WeightRange =
   | '200_220'
   | 'over_220'
 
+export type BodyFatRange =
+  | 'under_10'    // Very lean
+  | '10_15'       // Lean/athletic
+  | '15_20'       // Fit
+  | '20_25'       // Average
+  | '25_30'       // Above average
+  | 'over_30'     // Higher
+  | 'unknown'     // Don't know
+
+// =============================================================================
+// GOALS SECTION
+// =============================================================================
+
+export type GoalCategory = 
+  | 'skill_mastery'
+  | 'strength'
+  | 'muscle_physique'
+  | 'flexibility'
+  | 'mobility'
+  | 'endurance'
+
+export type PrimaryGoalType =
+  | 'front_lever'
+  | 'planche'
+  | 'muscle_up'
+  | 'handstand_pushup'
+  | 'handstand'
+  | 'l_sit'
+  | 'v_sit'
+  | 'pancake'
+  | 'toe_touch'
+  | 'front_splits'
+  | 'side_splits'
+  | 'weighted_pull'
+  | 'weighted_dip'
+  | 'general_strength'
+  | 'muscle_building'
+  | 'work_capacity'
+
+// =============================================================================
+// SKILL SELECTION
+// =============================================================================
+
+export type SkillGoal =
+  | 'front_lever'
+  | 'planche'
+  | 'muscle_up'
+  | 'handstand_pushup'
+  | 'handstand'
+  | 'l_sit'
+  | 'v_sit'
+  | 'i_sit'
+
+export type FlexibilityGoal =
+  | 'pancake'
+  | 'toe_touch'
+  | 'front_splits'
+  | 'side_splits'
+
+export type RangeTrainingIntent = 'flexibility' | 'mobility' | 'hybrid'
+
+// =============================================================================
+// STRENGTH BENCHMARKS
+// =============================================================================
+
 export type PullUpCapacity =
-  | '0_3'
+  | '0'
+  | '1_3'
   | '4_7'
   | '8_12'
   | '13_17'
@@ -42,47 +120,93 @@ export type DipCapacity =
   | '21_25'
   | '25_plus'
 
-export type LSitCapacity =
+export type WallHSPUReps =
+  | '0'
+  | '1_3'
+  | '4_6'
+  | '7_10'
+  | '10_plus'
+
+// Weighted benchmarks - exact values in lbs/kg
+export interface WeightedBenchmark {
+  load: number | null      // Weight added
+  unit: 'lbs' | 'kg'
+  reps?: number            // Reps at that weight
+}
+
+// =============================================================================
+// SKILL BENCHMARKS - Progression + Performance
+// =============================================================================
+
+export type FrontLeverProgression =
+  | 'none'
+  | 'tuck'
+  | 'adv_tuck'
+  | 'one_leg'
+  | 'straddle'
+  | 'full'
+
+export type PlancheProgression =
+  | 'none'
+  | 'lean'
+  | 'tuck'
+  | 'adv_tuck'
+  | 'straddle'
+  | 'full'
+
+export type MuscleUpReadiness =
+  | 'none'
+  | 'working_on'     // Can do high pull-ups
+  | 'kipping'        // Can do kipping muscle-ups
+  | 'strict_1_3'     // 1-3 strict
+  | 'strict_4_plus'  // 4+ strict
+
+export type HSPUProgression =
+  | 'none'
+  | 'pike'
+  | 'box_pike'
+  | 'wall_hspu'
+  | 'freestanding'
+
+export type LSitHoldCapacity =
   | 'none'
   | 'under_10'
   | '10_20'
-  | '20_plus'
-
-export type TrainingTimeRange =
-  | '10_20'
   | '20_30'
-  | '30_45'
-  | '45_60'
-  | '60_plus'
+  | '30_plus'
 
-export type WeeklyTrainingDays =
-  | '2'
-  | '3'
-  | '4'
-  | '5_plus'
+export type VSitHoldCapacity =
+  | 'none'
+  | 'under_5'
+  | '5_10'
+  | '10_plus'
 
-export type OnboardingGoal =
-  | 'skill'
-  | 'strength'
-  | 'endurance'
-  | 'abs'
-  | 'general'
+export interface SkillBenchmark {
+  progression: string
+  holdSeconds?: number
+  reps?: number
+}
 
-export type SkillInterest =
-  | 'front_lever'
-  | 'planche'
-  | 'muscle_up'
-  | 'handstand_pushup'
-  | 'l_sit'
-  | 'compression'
+// =============================================================================
+// FLEXIBILITY BENCHMARKS
+// =============================================================================
 
-export type FlexibilityFocus = 'none' | 'minor' | 'important'
+export type FlexibilityLevel =
+  | 'none'           // Cannot reach
+  | 'beginner'       // Very limited
+  | 'developing'     // Making progress
+  | 'intermediate'   // Decent range
+  | 'advanced'       // Good range
+  | 'elite'          // Full expression
 
-export type FlexibilityGoal =
-  | 'pancake'
-  | 'toe_touch'
-  | 'front_splits'
-  | 'side_splits'
+export interface FlexibilityBenchmark {
+  level: FlexibilityLevel
+  rangeIntent: RangeTrainingIntent | null  // Flexibility vs mobility focus
+}
+
+// =============================================================================
+// EQUIPMENT
+// =============================================================================
 
 export type EquipmentType =
   | 'pullup_bar'
@@ -90,32 +214,122 @@ export type EquipmentType =
   | 'parallettes'
   | 'rings'
   | 'resistance_bands'
-  | 'none'
+  | 'weights'
+  | 'bench_box'
+  | 'minimal'
 
-export type EnduranceInterest = 'yes' | 'occasionally' | 'no'
+// =============================================================================
+// TRAINING SCHEDULE
+// =============================================================================
 
-export interface OnboardingProfile {
-  sex: 'male' | 'female' | null
-  heightRange: HeightRange | null
-  weightRange: WeightRange | null
-  pullUpCapacity: PullUpCapacity | null
-  pushUpCapacity: PushUpCapacity | null
-  dipCapacity: DipCapacity | null
-  lSitCapacity: LSitCapacity | null
-  trainingTime: TrainingTimeRange | null
-  weeklyTraining: WeeklyTrainingDays | null
-  primaryGoal: OnboardingGoal | null
-  // New fields for enhanced onboarding
-  skillInterests: SkillInterest[]
-  flexibilityFocus: FlexibilityFocus | null
-  flexibilityGoals: FlexibilityGoal[]
-  equipment: EquipmentType[]
-  enduranceInterest: EnduranceInterest | null
-  // First-run experience flags
-  hasSeenDashboardIntro: boolean
+export type TrainingDaysPerWeek = 2 | 3 | 4 | 5 | 6
+
+export type SessionLengthPreference = 30 | 45 | 60 | 75
+
+export type SessionStylePreference = 'efficient' | 'full'
+
+// =============================================================================
+// RECOVERY / LIFESTYLE
+// =============================================================================
+
+export type RecoveryQuality = 'good' | 'normal' | 'poor'
+
+export interface RecoveryProfile {
+  sleepQuality: RecoveryQuality
+  energyLevel: RecoveryQuality
+  stressLevel: RecoveryQuality
+  recoveryConfidence: RecoveryQuality
 }
 
-// Labels for display
+// =============================================================================
+// FULL ONBOARDING PROFILE
+// =============================================================================
+
+export interface OnboardingProfile {
+  // Section 1: Athlete Profile
+  sex: Sex | null
+  heightRange: HeightRange | null
+  weightRange: WeightRange | null
+  bodyFatRange: BodyFatRange | null
+  trainingExperience: TrainingExperience | null
+  
+  // Section 2: Goals
+  primaryGoal: PrimaryGoalType | null
+  secondaryGoal: PrimaryGoalType | null
+  goalCategories: GoalCategory[]
+  
+  // Section 3: Skill Selection
+  selectedSkills: SkillGoal[]
+  selectedFlexibility: FlexibilityGoal[]
+  
+  // Section 4: Strength Benchmarks
+  pullUpMax: PullUpCapacity | null
+  pushUpMax: PushUpCapacity | null
+  dipMax: DipCapacity | null
+  wallHSPUReps: WallHSPUReps | null
+  weightedPullUp: WeightedBenchmark | null
+  weightedDip: WeightedBenchmark | null
+  
+  // Section 5: Skill Benchmarks
+  frontLever: SkillBenchmark | null
+  planche: SkillBenchmark | null
+  muscleUp: MuscleUpReadiness | null
+  hspu: SkillBenchmark | null
+  lSitHold: LSitHoldCapacity | null
+  vSitHold: VSitHoldCapacity | null
+  
+  // Section 6: Flexibility Benchmarks
+  pancake: FlexibilityBenchmark | null
+  toeTouch: FlexibilityBenchmark | null
+  frontSplits: FlexibilityBenchmark | null
+  sideSplits: FlexibilityBenchmark | null
+  
+  // Section 7: Equipment
+  equipment: EquipmentType[]
+  
+  // Section 8: Training Schedule
+  trainingDaysPerWeek: TrainingDaysPerWeek | null
+  sessionLengthMinutes: SessionLengthPreference | null
+  sessionStyle: SessionStylePreference | null
+  
+  // Section 9: Recovery / Lifestyle
+  recovery: RecoveryProfile | null
+  
+  // Meta
+  hasSeenDashboardIntro: boolean
+  onboardingComplete: boolean
+}
+
+// =============================================================================
+// LEGACY TYPE ALIASES (backward compatibility)
+// =============================================================================
+
+export type SkillInterest = SkillGoal
+export type FlexibilityFocus = 'none' | 'minor' | 'important'
+export type OnboardingGoal = 'skill' | 'strength' | 'endurance' | 'abs' | 'general'
+export type TrainingTimeRange = '10_20' | '20_30' | '30_45' | '45_60' | '60_plus'
+export type WeeklyTrainingDays = '2' | '3' | '4' | '5_plus'
+export type EnduranceInterest = 'yes' | 'occasionally' | 'no'
+export type LSitCapacity = 'none' | 'under_10' | '10_20' | '20_plus'
+
+// =============================================================================
+// DISPLAY LABELS
+// =============================================================================
+
+export const TRAINING_EXPERIENCE_LABELS: Record<TrainingExperience, string> = {
+  'new': 'New to training',
+  'some': 'Some experience',
+  'intermediate': 'Consistent intermediate',
+  'advanced': 'Advanced athlete',
+}
+
+export const TRAINING_EXPERIENCE_DESCRIPTIONS: Record<TrainingExperience, string> = {
+  'new': 'Just getting started or less than 6 months',
+  'some': '6 months to 1 year of training',
+  'intermediate': '1-3 years of consistent training',
+  'advanced': '3+ years of dedicated training',
+}
+
 export const HEIGHT_LABELS: Record<HeightRange, string> = {
   'under_5_4': "Under 5'4\"",
   '5_4_to_5_7': "5'4\" – 5'7\"",
@@ -134,8 +348,55 @@ export const WEIGHT_LABELS: Record<WeightRange, string> = {
   'over_220': '220+ lbs',
 }
 
+export const BODY_FAT_LABELS: Record<BodyFatRange, string> = {
+  'under_10': 'Under 10%',
+  '10_15': '10-15%',
+  '15_20': '15-20%',
+  '20_25': '20-25%',
+  '25_30': '25-30%',
+  'over_30': '30%+',
+  'unknown': "I don't know",
+}
+
+export const GOAL_CATEGORY_LABELS: Record<GoalCategory, string> = {
+  'skill_mastery': 'Skill Mastery',
+  'strength': 'Strength',
+  'muscle_physique': 'Muscle / Physique',
+  'flexibility': 'Flexibility',
+  'mobility': 'Mobility',
+  'endurance': 'Endurance / Work Capacity',
+}
+
+export const GOAL_CATEGORY_DESCRIPTIONS: Record<GoalCategory, string> = {
+  'skill_mastery': 'Unlock advanced calisthenics movements',
+  'strength': 'Build raw pushing and pulling power',
+  'muscle_physique': 'Support hypertrophy and aesthetics',
+  'flexibility': 'Increase passive range of motion',
+  'mobility': 'Develop strength through range',
+  'endurance': 'Improve work capacity and conditioning',
+}
+
+export const SKILL_GOAL_LABELS: Record<SkillGoal, string> = {
+  'front_lever': 'Front Lever',
+  'planche': 'Planche',
+  'muscle_up': 'Muscle-Up',
+  'handstand_pushup': 'Handstand Push-Up',
+  'handstand': 'Handstand',
+  'l_sit': 'L-Sit',
+  'v_sit': 'V-Sit',
+  'i_sit': 'Manna / I-Sit',
+}
+
+export const FLEXIBILITY_GOAL_LABELS: Record<FlexibilityGoal, string> = {
+  'pancake': 'Pancake',
+  'toe_touch': 'Toe Touch / Forward Fold',
+  'front_splits': 'Front Splits',
+  'side_splits': 'Side Splits',
+}
+
 export const PULLUP_LABELS: Record<PullUpCapacity, string> = {
-  '0_3': '0–3',
+  '0': '0',
+  '1_3': '1–3',
   '4_7': '4–7',
   '8_12': '8–12',
   '13_17': '13–17',
@@ -161,28 +422,115 @@ export const DIP_LABELS: Record<DipCapacity, string> = {
   '25_plus': '25+',
 }
 
-export const LSIT_LABELS: Record<LSitCapacity, string> = {
-  'none': 'No',
-  'under_10': 'Under 10 sec',
-  '10_20': '10–20 sec',
-  '20_plus': '20+ sec',
+export const WALL_HSPU_LABELS: Record<WallHSPUReps, string> = {
+  '0': '0',
+  '1_3': '1–3',
+  '4_6': '4–6',
+  '7_10': '7–10',
+  '10_plus': '10+',
 }
 
-export const TRAINING_TIME_LABELS: Record<TrainingTimeRange, string> = {
-  '10_20': '10–20 min',
-  '20_30': '20–30 min',
-  '30_45': '30–45 min',
-  '45_60': '45–60 min',
-  '60_plus': '60+ min',
+export const FRONT_LEVER_LABELS: Record<FrontLeverProgression, string> = {
+  'none': 'Not started',
+  'tuck': 'Tuck',
+  'adv_tuck': 'Advanced Tuck',
+  'one_leg': 'One Leg',
+  'straddle': 'Straddle',
+  'full': 'Full',
 }
 
-export const WEEKLY_TRAINING_LABELS: Record<WeeklyTrainingDays, string> = {
-  '2': '2',
-  '3': '3',
-  '4': '4',
-  '5_plus': '5+',
+export const PLANCHE_LABELS: Record<PlancheProgression, string> = {
+  'none': 'Not started',
+  'lean': 'Planche Lean',
+  'tuck': 'Tuck',
+  'adv_tuck': 'Advanced Tuck',
+  'straddle': 'Straddle',
+  'full': 'Full',
 }
 
+export const MUSCLE_UP_LABELS: Record<MuscleUpReadiness, string> = {
+  'none': 'Not yet',
+  'working_on': 'Working on it',
+  'kipping': 'Kipping only',
+  'strict_1_3': '1–3 strict',
+  'strict_4_plus': '4+ strict',
+}
+
+export const HSPU_LABELS: Record<HSPUProgression, string> = {
+  'none': 'Not started',
+  'pike': 'Pike push-ups',
+  'box_pike': 'Elevated pike',
+  'wall_hspu': 'Wall HSPU',
+  'freestanding': 'Freestanding',
+}
+
+export const LSIT_HOLD_LABELS: Record<LSitHoldCapacity, string> = {
+  'none': "Can't hold",
+  'under_10': 'Under 10s',
+  '10_20': '10–20s',
+  '20_30': '20–30s',
+  '30_plus': '30s+',
+}
+
+export const VSIT_HOLD_LABELS: Record<VSitHoldCapacity, string> = {
+  'none': "Can't hold",
+  'under_5': 'Under 5s',
+  '5_10': '5–10s',
+  '10_plus': '10s+',
+}
+
+export const FLEXIBILITY_LEVEL_LABELS: Record<FlexibilityLevel, string> = {
+  'none': 'Cannot reach',
+  'beginner': 'Very limited',
+  'developing': 'Making progress',
+  'intermediate': 'Decent range',
+  'advanced': 'Good range',
+  'elite': 'Full expression',
+}
+
+export const RANGE_INTENT_LABELS: Record<RangeTrainingIntent, string> = {
+  'flexibility': 'Flexibility focus',
+  'mobility': 'Mobility focus',
+  'hybrid': 'Both',
+}
+
+export const RANGE_INTENT_DESCRIPTIONS: Record<RangeTrainingIntent, string> = {
+  'flexibility': 'Prioritize passive range and relaxation',
+  'mobility': 'Prioritize strength and control through range',
+  'hybrid': 'Balance both flexibility and mobility work',
+}
+
+export const EQUIPMENT_LABELS: Record<EquipmentType, string> = {
+  'pullup_bar': 'Pull-up bar',
+  'dip_bars': 'Dip bars',
+  'parallettes': 'Parallettes',
+  'rings': 'Rings',
+  'resistance_bands': 'Bands',
+  'weights': 'Weights',
+  'bench_box': 'Bench / Box',
+  'minimal': 'Minimal / Home setup',
+}
+
+export const SESSION_LENGTH_LABELS: Record<SessionLengthPreference, string> = {
+  30: '30 min',
+  45: '45 min',
+  60: '60 min',
+  75: '75+ min',
+}
+
+export const SESSION_STYLE_LABELS: Record<SessionStylePreference, string> = {
+  'efficient': 'Shorter, efficient sessions',
+  'full': 'Fuller, comprehensive sessions',
+}
+
+export const RECOVERY_LABELS: Record<RecoveryQuality, string> = {
+  'good': 'Good',
+  'normal': 'Normal',
+  'poor': 'Poor',
+}
+
+// Legacy labels for backward compatibility
+export const SKILL_INTEREST_LABELS = SKILL_GOAL_LABELS
 export const GOAL_LABELS: Record<OnboardingGoal, string> = {
   'skill': 'Unlock skills',
   'strength': 'Build strength',
@@ -190,55 +538,48 @@ export const GOAL_LABELS: Record<OnboardingGoal, string> = {
   'abs': 'Visible abs / core',
   'general': 'General fitness',
 }
-
-export const SKILL_INTEREST_LABELS: Record<SkillInterest, string> = {
-  'front_lever': 'Front Lever',
-  'planche': 'Planche',
-  'muscle_up': 'Muscle-Up',
-  'handstand_pushup': 'Handstand Push-Up',
-  'l_sit': 'L-Sit / V-Sit',
-  'compression': 'Compression Skills',
-}
-
 export const FLEXIBILITY_FOCUS_LABELS: Record<FlexibilityFocus, string> = {
   'none': 'Not a focus',
   'minor': 'Minor accessory goal',
   'important': 'Important training goal',
 }
-
-export const FLEXIBILITY_GOAL_LABELS: Record<FlexibilityGoal, string> = {
-  'pancake': 'Pancake stretch',
-  'toe_touch': 'Toe touch',
-  'front_splits': 'Front splits',
-  'side_splits': 'Side splits',
+export const TRAINING_TIME_LABELS: Record<TrainingTimeRange, string> = {
+  '10_20': '10–20 min',
+  '20_30': '20–30 min',
+  '30_45': '30–45 min',
+  '45_60': '45–60 min',
+  '60_plus': '60+ min',
 }
-
-export const EQUIPMENT_LABELS: Record<EquipmentType, string> = {
-  'pullup_bar': 'Pull-up bar',
-  'dip_bars': 'Dip bars',
-  'parallettes': 'Parallettes',
-  'rings': 'Gym rings',
-  'resistance_bands': 'Resistance bands',
-  'none': 'None / minimal',
+export const WEEKLY_TRAINING_LABELS: Record<WeeklyTrainingDays, string> = {
+  '2': '2',
+  '3': '3',
+  '4': '4',
+  '5_plus': '5+',
 }
-
 export const ENDURANCE_INTEREST_LABELS: Record<EnduranceInterest, string> = {
   'yes': 'Yes, regularly',
   'occasionally': 'Occasionally',
   'no': 'Not really',
 }
+export const LSIT_LABELS: Record<LSitCapacity, string> = {
+  'none': 'No',
+  'under_10': 'Under 10 sec',
+  '10_20': '10–20 sec',
+  '20_plus': '20+ sec',
+}
 
-// Storage key for onboarding profile
+// =============================================================================
+// STORAGE FUNCTIONS
+// =============================================================================
+
 const ONBOARDING_STORAGE_KEY = 'spartanlab_onboarding_profile'
 
-// Save onboarding profile to localStorage
 export function saveOnboardingProfile(profile: OnboardingProfile): void {
   if (typeof window !== 'undefined') {
     localStorage.setItem(ONBOARDING_STORAGE_KEY, JSON.stringify(profile))
   }
 }
 
-// Get onboarding profile from localStorage
 export function getOnboardingProfile(): OnboardingProfile | null {
   if (typeof window === 'undefined') return null
   
@@ -252,55 +593,90 @@ export function getOnboardingProfile(): OnboardingProfile | null {
   }
 }
 
-// Check if onboarding is complete
 export function isOnboardingComplete(): boolean {
   const profile = getOnboardingProfile()
   if (!profile) return false
   
+  // Minimum requirements for a complete onboarding
   return (
-    profile.sex !== null &&
-    profile.heightRange !== null &&
-    profile.weightRange !== null &&
-    profile.pullUpCapacity !== null &&
-    profile.dipCapacity !== null &&
-    profile.lSitCapacity !== null &&
-    profile.trainingTime !== null &&
-    profile.weeklyTraining !== null &&
-    profile.primaryGoal !== null &&
-    profile.equipment.length > 0 &&
-    profile.enduranceInterest !== null
+    profile.onboardingComplete === true ||
+    (
+      profile.sex !== null &&
+      profile.trainingExperience !== null &&
+      profile.primaryGoal !== null &&
+      profile.trainingDaysPerWeek !== null &&
+      profile.sessionLengthMinutes !== null &&
+      profile.equipment.length > 0
+    )
   )
 }
 
-// Create empty onboarding profile
 export function createEmptyOnboardingProfile(): OnboardingProfile {
   return {
+    // Section 1: Athlete Profile
     sex: null,
     heightRange: null,
     weightRange: null,
-    pullUpCapacity: null,
-    pushUpCapacity: null,
-    dipCapacity: null,
-    lSitCapacity: null,
-    trainingTime: null,
-    weeklyTraining: null,
+    bodyFatRange: null,
+    trainingExperience: null,
+    
+    // Section 2: Goals
     primaryGoal: null,
-    skillInterests: [],
-    flexibilityFocus: null,
-    flexibilityGoals: [],
+    secondaryGoal: null,
+    goalCategories: [],
+    
+    // Section 3: Skill Selection
+    selectedSkills: [],
+    selectedFlexibility: [],
+    
+    // Section 4: Strength Benchmarks
+    pullUpMax: null,
+    pushUpMax: null,
+    dipMax: null,
+    wallHSPUReps: null,
+    weightedPullUp: null,
+    weightedDip: null,
+    
+    // Section 5: Skill Benchmarks
+    frontLever: null,
+    planche: null,
+    muscleUp: null,
+    hspu: null,
+    lSitHold: null,
+    vSitHold: null,
+    
+    // Section 6: Flexibility Benchmarks
+    pancake: null,
+    toeTouch: null,
+    frontSplits: null,
+    sideSplits: null,
+    
+    // Section 7: Equipment
     equipment: [],
-    enduranceInterest: null,
+    
+    // Section 8: Training Schedule
+    trainingDaysPerWeek: null,
+    sessionLengthMinutes: null,
+    sessionStyle: null,
+    
+    // Section 9: Recovery / Lifestyle
+    recovery: null,
+    
+    // Meta
     hasSeenDashboardIntro: false,
+    onboardingComplete: false,
   }
 }
 
-// Check if user has seen dashboard intro
+// =============================================================================
+// DASHBOARD INTRO HELPERS
+// =============================================================================
+
 export function hasSeenDashboardIntro(): boolean {
   const profile = getOnboardingProfile()
   return profile?.hasSeenDashboardIntro ?? false
 }
 
-// Mark dashboard intro as seen
 export function markDashboardIntroSeen(): void {
   const profile = getOnboardingProfile()
   if (profile) {
@@ -311,7 +687,6 @@ export function markDashboardIntroSeen(): void {
   }
 }
 
-// Reset dashboard intro (for testing or help access)
 export function resetDashboardIntro(): void {
   const profile = getOnboardingProfile()
   if (profile) {
@@ -322,11 +697,28 @@ export function resetDashboardIntro(): void {
   }
 }
 
-// Convert onboarding profile to strength tier estimate
-export function estimateStrengthTier(profile: OnboardingProfile): 'novice' | 'developing' | 'intermediate' | 'advanced' | 'elite' {
-  if (!profile.pullUpCapacity || !profile.dipCapacity) return 'novice'
+// =============================================================================
+// STRENGTH TIER ESTIMATION
+// =============================================================================
+
+export type StrengthTier = 'novice' | 'developing' | 'intermediate' | 'advanced' | 'elite'
+
+export function estimateStrengthTier(profile: OnboardingProfile): StrengthTier {
+  // Use training experience as primary signal
+  if (profile.trainingExperience) {
+    const expMap: Record<TrainingExperience, StrengthTier> = {
+      'new': 'novice',
+      'some': 'developing',
+      'intermediate': 'intermediate',
+      'advanced': 'advanced',
+    }
+    return expMap[profile.trainingExperience]
+  }
   
-  const pullupScore = {
+  // Fallback to pull-up/dip capacity estimation
+  if (!profile.pullUpMax || !profile.dipMax) return 'novice'
+  
+  const pullupScore: Record<PullUpCapacity, number> = {
     '0': 0,
     '1_3': 1,
     '4_7': 2,
@@ -334,9 +726,9 @@ export function estimateStrengthTier(profile: OnboardingProfile): 'novice' | 'de
     '13_17': 4,
     '18_22': 5,
     '23_plus': 6,
-  }[profile.pullUpCapacity]
+  }
   
-  const dipScore = {
+  const dipScore: Record<DipCapacity, number> = {
     '0': 0,
     '1_5': 1,
     '6_10': 2,
@@ -344,9 +736,9 @@ export function estimateStrengthTier(profile: OnboardingProfile): 'novice' | 'de
     '16_20': 4,
     '21_25': 5,
     '25_plus': 6,
-  }[profile.dipCapacity]
+  }
   
-  const avgScore = (pullupScore + dipScore) / 2
+  const avgScore = ((pullupScore[profile.pullUpMax] ?? 0) + (dipScore[profile.dipMax] ?? 0)) / 2
   
   if (avgScore <= 1) return 'novice'
   if (avgScore <= 2.5) return 'developing'
@@ -355,19 +747,43 @@ export function estimateStrengthTier(profile: OnboardingProfile): 'novice' | 'de
   return 'elite'
 }
 
-// Convert onboarding goal to program builder goal
-export function mapOnboardingGoalToProgram(goal: OnboardingGoal): string {
-  const goalMap: Record<OnboardingGoal, string> = {
-    'skill': 'front_lever', // Default skill focus
+// =============================================================================
+// PROGRAM MAPPING HELPERS
+// =============================================================================
+
+export function mapStrengthTierToExperience(tier: StrengthTier): 'beginner' | 'intermediate' | 'advanced' {
+  if (tier === 'novice' || tier === 'developing') return 'beginner'
+  if (tier === 'intermediate') return 'intermediate'
+  return 'advanced'
+}
+
+export function mapTrainingExperienceToLevel(exp: TrainingExperience | null): 'beginner' | 'intermediate' | 'advanced' {
+  if (!exp || exp === 'new' || exp === 'some') return 'beginner'
+  if (exp === 'intermediate') return 'intermediate'
+  return 'advanced'
+}
+
+// Legacy compatibility function
+export function mapOnboardingGoalToProgram(goal: OnboardingGoal | PrimaryGoalType): string {
+  const goalMap: Record<string, string> = {
+    'skill': 'front_lever',
     'strength': 'weighted_strength',
     'endurance': 'general_strength',
     'abs': 'general_strength',
     'general': 'general_strength',
+    // Direct mappings for new goals
+    'front_lever': 'front_lever',
+    'planche': 'planche',
+    'muscle_up': 'muscle_up',
+    'handstand_pushup': 'handstand_pushup',
+    'weighted_pull': 'weighted_strength',
+    'weighted_dip': 'weighted_strength',
+    'general_strength': 'general_strength',
   }
   return goalMap[goal] || 'general_strength'
 }
 
-// Convert training time range to session length minutes
+// Legacy compatibility functions
 export function mapTrainingTimeToMinutes(time: TrainingTimeRange): number {
   const timeMap: Record<TrainingTimeRange, number> = {
     '10_20': 20,
@@ -379,7 +795,6 @@ export function mapTrainingTimeToMinutes(time: TrainingTimeRange): number {
   return timeMap[time] || 45
 }
 
-// Convert weekly training to days number
 export function mapWeeklyTrainingToDays(weekly: WeeklyTrainingDays): number {
   const daysMap: Record<WeeklyTrainingDays, number> = {
     '2': 2,
@@ -390,22 +805,20 @@ export function mapWeeklyTrainingToDays(weekly: WeeklyTrainingDays): number {
   return daysMap[weekly] || 3
 }
 
-// Get experience level from onboarding data
-export function mapStrengthTierToExperience(tier: ReturnType<typeof estimateStrengthTier>): 'beginner' | 'intermediate' | 'advanced' {
-  if (tier === 'novice' || tier === 'developing') return 'beginner'
-  if (tier === 'intermediate') return 'intermediate'
-  return 'advanced'
-}
+// =============================================================================
+// PROGRAM INPUT SUGGESTION
+// =============================================================================
 
-// Generate suggested program inputs from onboarding profile
 export function suggestProgramInputsFromOnboarding(profile: OnboardingProfile) {
   const strengthTier = estimateStrengthTier(profile)
   
   return {
-    experienceLevel: mapStrengthTierToExperience(strengthTier),
-    sessionLength: profile.trainingTime ? mapTrainingTimeToMinutes(profile.trainingTime) : 45,
-    trainingDaysPerWeek: profile.weeklyTraining ? mapWeeklyTrainingToDays(profile.weeklyTraining) : 3,
-    primaryGoal: profile.primaryGoal ? mapOnboardingGoalToProgram(profile.primaryGoal) : 'general_strength',
+    experienceLevel: profile.trainingExperience 
+      ? mapTrainingExperienceToLevel(profile.trainingExperience)
+      : mapStrengthTierToExperience(strengthTier),
+    sessionLength: profile.sessionLengthMinutes || 45,
+    trainingDaysPerWeek: profile.trainingDaysPerWeek || 3,
+    primaryGoal: profile.primaryGoal || 'general_strength',
     estimatedStrengthTier: strengthTier,
   }
 }

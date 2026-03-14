@@ -1,13 +1,8 @@
+// AUTH_TRUTH_PASS_V5
 'use client'
 
 /**
- * Sign-Up Page - Stable render-only page
- * 
- * ARCHITECTURE:
- * - Uses Clerk SignUp component directly for stable rendering
- * - No manual redirects - Clerk handles post-auth navigation
- * - No remount logic - single stable render path
- * - Middleware handles route protection
+ * Sign-Up Page - Minimal native Clerk only
  */
 
 import { SignUp } from '@clerk/nextjs'
@@ -42,6 +37,7 @@ const clerkAppearance = {
 // ============================================================================
 
 export default function SignUpPage() {
+  console.log("[AUTH_PROOF] sign-up auth-truth-pass-v5")
   console.log(`[SpartanLab] Build: ${AUTH_BUILD_STAMP} (sign-up-render)`)
   
   return (

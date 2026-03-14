@@ -1,3 +1,4 @@
+// AUTH_TRUTH_PASS_V5
 import type { Metadata, Viewport } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
 import { ClerkProvider } from '@clerk/nextjs'
@@ -5,7 +6,8 @@ import { GlobalErrorBoundary } from '@/components/shared/GlobalErrorBoundary'
 import { AUTH_BUILD_STAMP } from '@/lib/build-stamp'
 import './globals.css'
 
-// Log build stamp on server initialization
+// Hard proof marker for deployment verification
+console.log("[AUTH_PROOF] layout auth-truth-pass-v5")
 console.log(`[SpartanLab] Build: ${AUTH_BUILD_STAMP} (root-layout)`)
 
 const _geist = Geist({ subsets: ["latin"] });

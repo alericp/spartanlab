@@ -1,9 +1,8 @@
+// AUTH_TRUTH_PASS_V5
 'use client'
 
 /**
- * AuthGuard - Wrapper for protected pages using Clerk authentication
- * 
- * DIAGNOSTIC ISOLATION: Uses only useAuth with userId branching
+ * AuthGuard - Uses only useAuth with userId branching
  * No SignedIn/SignedOut components
  */
 

@@ -1,10 +1,9 @@
+// AUTH_TRUTH_PASS_V5
 'use client'
 
 /**
  * HeaderAuthCTA - Static auth buttons for marketing header
- * 
- * DIAGNOSTIC ISOLATION: No Clerk hooks or components
- * Uses static links only to isolate auth boundary issues
+ * No Clerk hooks or components - static links only
  */
 
 import Link from 'next/link'

@@ -1,9 +1,10 @@
+// AUTH_TRUTH_PASS_V5
 /**
  * Deployment Build Stamp
  * Used to verify which code version is running in production
  */
 
-export const AUTH_BUILD_STAMP = 'auth-shared-ui-isolation-v4'
+export const AUTH_BUILD_STAMP = 'auth-truth-pass-v5'
 
 /**
  * Log the build stamp once (call on app initialization)

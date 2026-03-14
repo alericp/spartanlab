@@ -112,46 +112,24 @@ export default function SignUpPage() {
   
   useEffect(() => {
     setMounted(true)
-    console.log('[v0] SignUpPage: 1. route mounted')
   }, [])
   
-  // Trace auth state changes
-  useEffect(() => {
-    if (mounted) {
-      console.log('[v0] SignUpPage: 2. state check:', { isClerkAvailable, isLoading, hasSignUp: !!components.SignUp })
-    }
-  }, [mounted, isClerkAvailable, isLoading, components])
-  
   // SSR - show loading
-  if (!mounted) {
-    console.log('[v0] SignUpPage: showing loading (not mounted)')
-    return <LoadingState />
-  }
+  if (!mounted) return <LoadingState />
   
   // Still determining auth mode
-  if (isLoading) {
-    console.log('[v0] SignUpPage: showing loading (isLoading=true)')
-    return <LoadingState />
-  }
+  if (isLoading) return <LoadingState />
   
   // Preview mode or no Clerk available - show fallback
-  if (!isClerkAvailable) {
-    console.log('[v0] SignUpPage: showing preview fallback (isClerkAvailable=false)')
-    return <PreviewFallback />
-  }
+  if (!isClerkAvailable) return <PreviewFallback />
   
   // Production mode - get SignUp from provider context
   const SignUp = components.SignUp
   
   // SignUp component not available
-  if (!SignUp) {
-    console.log('[v0] SignUpPage: showing preview fallback (SignUp component is null)')
-    return <PreviewFallback />
-  }
+  if (!SignUp) return <PreviewFallback />
   
-  console.log('[v0] SignUpPage: 3. rendering Clerk SignUp widget')
-  
-  // Render Clerk SignUp - simplified to match sign-in exactly
+  // Render Clerk SignUp
   return (
     <div className="min-h-screen flex items-center justify-center bg-[#0F1115]">
       <SignUp

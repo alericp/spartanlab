@@ -170,7 +170,7 @@ setConstraintInsight(getConstraintInsight())
   // Check if user has meaningful data
   const hasWorkoutData = workoutAnalytics && workoutAnalytics.totalWorkouts > 0
   const hasSkillData = skillSummary && skillSummary.level !== 'none'
-  const hasStrengthData = strengthSummary && strengthSummary.topExercises.length > 0
+  const hasStrengthData = strengthSummary && strengthSummary.topExercises && strengthSummary.topExercises.length > 0
   const hasMeaningfulData = hasWorkoutData || hasSkillData || hasStrengthData
 
   // Show empty state for first-time users

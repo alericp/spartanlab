@@ -192,49 +192,65 @@ export function SkillProgressHeatmap({
       const profile = getAthleteProfile()
       const progressions = getSkillProgressions()
       
-      // Build entries for all supported goals
+      // Build entries for all supported goals - each projection is wrapped in try-catch
+      // so one bad entry doesn't crash the entire dashboard
       const allEntries: SkillHeatmapEntry[] = SUPPORTED_GOALS.map(goal => {
-        const projection = calculateGoalProjection(goal.type)
-        const skillProgression = progressions.find(p => p.skillName === goal.type)
-        
-        // Determine if this skill is active (user's goal or has progress)
-        const isActive = profile.primaryGoal === goal.type || 
-                        profile.primaryGoal === goal.name ||
-                        (skillProgression?.progressScore ?? 0) > 0
-        
-        // Calculate progress percentage
-        let progressPercent = 0
-        if (projection.isAtFinalLevel) {
-          progressPercent = 100
-        } else if (skillProgression) {
-          progressPercent = Math.min(95, skillProgression.progressScore || 0)
-        } else if (projection.currentLevel > 0) {
-          // Estimate based on level progression
-          const maxLevels = 5 // Approximate max levels
-          progressPercent = Math.min(95, (projection.currentLevel / maxLevels) * 100)
-        }
-        
-        // Determine status
-        let status: SkillHeatmapEntry['status'] = 'not_started'
-        if (projection.isAtFinalLevel) {
-          status = 'achieved'
-        } else if (progressPercent >= 70) {
-          status = 'strong'
-        } else if (progressPercent >= 30) {
-          status = 'building'
-        } else if (progressPercent > 0) {
-          status = 'foundation'
-        }
-        
-        return {
-          id: goal.type,
-          name: goal.name,
-          category: goal.category,
-          progressPercent,
-          currentLevel: projection.currentLevelName || 'Not Started',
-          nextMilestone: projection.nextLevelName,
-          status,
-          isActive,
+        try {
+          const projection = calculateGoalProjection(goal.type)
+          const skillProgression = progressions.find(p => p.skillName === goal.type)
+          
+          // Determine if this skill is active (user's goal or has progress)
+          const isActive = profile.primaryGoal === goal.type || 
+                          profile.primaryGoal === goal.name ||
+                          (skillProgression?.progressScore ?? 0) > 0
+          
+          // Calculate progress percentage
+          let progressPercent = 0
+          if (projection.isAtFinalLevel) {
+            progressPercent = 100
+          } else if (skillProgression) {
+            progressPercent = Math.min(95, skillProgression.progressScore || 0)
+          } else if (projection.currentLevel > 0) {
+            // Estimate based on level progression
+            const maxLevels = 5 // Approximate max levels
+            progressPercent = Math.min(95, (projection.currentLevel / maxLevels) * 100)
+          }
+          
+          // Determine status
+          let status: SkillHeatmapEntry['status'] = 'not_started'
+          if (projection.isAtFinalLevel) {
+            status = 'achieved'
+          } else if (progressPercent >= 70) {
+            status = 'strong'
+          } else if (progressPercent >= 30) {
+            status = 'building'
+          } else if (progressPercent > 0) {
+            status = 'foundation'
+          }
+          
+          return {
+            id: goal.type,
+            name: goal.name,
+            category: goal.category,
+            progressPercent,
+            currentLevel: projection.currentLevelName || 'Not Started',
+            nextMilestone: projection.nextLevelName,
+            status,
+            isActive,
+          }
+        } catch (err) {
+          // If projection fails for this goal, return a safe fallback entry
+          console.error(`Error calculating projection for ${goal.type}:`, err)
+          return {
+            id: goal.type,
+            name: goal.name,
+            category: goal.category,
+            progressPercent: 0,
+            currentLevel: 'Needs Data',
+            nextMilestone: null,
+            status: 'not_started' as const,
+            isActive: false,
+          }
         }
       })
       

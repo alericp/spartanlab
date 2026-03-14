@@ -207,6 +207,18 @@ export function AthleteOnboarding() {
   const isLastStep = currentStepIndex === totalSteps - 1
   const progress = ((currentStepIndex + 1) / totalSteps) * 100
 
+  // Guard against undefined step (shouldn't happen, but prevents crashes)
+  if (!step) {
+    return (
+      <div className="min-h-screen bg-[#0F1115] flex items-center justify-center">
+        <div className="text-center p-8">
+          <p className="text-[#A4ACB8] mb-4">Unable to load onboarding step. Please refresh.</p>
+          <Button onClick={() => window.location.reload()}>Refresh</Button>
+        </div>
+      </div>
+    )
+  }
+
   // Get current value for this step
   const getCurrentValue = () => {
     const value = profile[step.key]

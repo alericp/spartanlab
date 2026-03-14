@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
-import { ClerkProvider } from '@clerk/nextjs'
+import ClerkProviderClient from '@/components/providers/ClerkProviderClient'
 import { GlobalErrorBoundary } from '@/components/shared/GlobalErrorBoundary'
 import { AUTH_BUILD_STAMP } from '@/lib/build-stamp'
 import './globals.css'
@@ -55,14 +55,14 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <ClerkProvider>
-      <html lang="en">
-        <body className="font-sans antialiased bg-[#0F1115] text-[#E6E9EF]">
+    <html lang="en">
+      <body className="font-sans antialiased bg-[#0F1115] text-[#E6E9EF]">
+        <ClerkProviderClient>
           <GlobalErrorBoundary>
             {children}
           </GlobalErrorBoundary>
-        </body>
-      </html>
-    </ClerkProvider>
+        </ClerkProviderClient>
+      </body>
+    </html>
   )
 }

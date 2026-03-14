@@ -1,11 +1,15 @@
 'use client'
 
+import { useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { MarketingHeader } from '@/components/marketing/MarketingHeader'
 import { MarketingFooter } from '@/components/marketing/MarketingFooter'
 import { Check, ArrowRight } from 'lucide-react'
 import { trackUpgradeStarted, trackSignUpStarted } from '@/lib/analytics'
+import { useClerkAvailability } from '@/components/providers/ClerkProviderWrapper'
+import { toast } from 'sonner'
 
 const PLANS = [
   {
@@ -74,6 +78,48 @@ const FAQ = [
 ]
 
 export default function PricingPage() {
+  const router = useRouter()
+  const [isLoading, setIsLoading] = useState(false)
+  const { isClerkAvailable } = useClerkAvailability()
+
+  const handleProUpgrade = async () => {
+    // If not authenticated, redirect to sign-up
+    if (!isClerkAvailable) {
+      trackUpgradeStarted('pricing_page')
+      router.push('/sign-up?redirect_url=/upgrade')
+      return
+    }
+
+    setIsLoading(true)
+    trackUpgradeStarted('pricing_page')
+
+    try {
+      const res = await fetch('/api/stripe/create-checkout-session', {
+        method: 'POST',
+      })
+
+      const data = await res.json()
+
+      if (data.error) {
+        if (res.status === 401) {
+          router.push('/sign-up?redirect_url=/upgrade')
+          return
+        }
+        toast.error('Failed to start checkout. Please try again.')
+        setIsLoading(false)
+        return
+      }
+
+      if (data.url) {
+        window.location.href = data.url
+      }
+    } catch (error) {
+      console.error('Checkout error:', error)
+      toast.error('Something went wrong. Please try again.')
+      setIsLoading(false)
+    }
+  }
+
   return (
     <div className="min-h-screen bg-[#121212] text-[#F5F5F5]">
       <MarketingHeader />
@@ -123,29 +169,40 @@ export default function PricingPage() {
                   </div>
                 </div>
 
-                <Link 
-                  href={plan.ctaLink} 
-                  className="block mb-8"
-                  onClick={() => {
-                    if (plan.featured) {
-                      trackUpgradeStarted('pricing_page')
-                    } else {
-                      trackSignUpStarted('pricing_page')
-                    }
-                  }}
-                >
-                  <Button
-                    variant={plan.featured ? 'default' : 'outline'}
-                    className={`w-full h-12 ${
-                      plan.featured
-                        ? 'bg-[#E63946] hover:bg-[#D62828]'
-                        : 'border-[#3A3A3A] hover:bg-[#2A2A2A]'
-                    }`}
+                {plan.featured ? (
+                  <div className="mb-8">
+                    <Button
+                      onClick={handleProUpgrade}
+                      disabled={isLoading}
+                      className="w-full h-12 bg-[#E63946] hover:bg-[#D62828] disabled:opacity-50"
+                    >
+                      {isLoading ? (
+                        <>
+                          <div className="w-4 h-4 mr-2 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                          Processing...
+                        </>
+                      ) : (
+                        <>
+                          {plan.cta}
+                          <ArrowRight className="w-4 h-4 ml-2" />
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                ) : (
+                  <Link 
+                    href={plan.ctaLink} 
+                    className="block mb-8"
+                    onClick={() => trackSignUpStarted('pricing_page')}
                   >
-                    {plan.cta}
-                    {plan.featured && <ArrowRight className="w-4 h-4 ml-2" />}
-                  </Button>
-                </Link>
+                    <Button
+                      variant="outline"
+                      className="w-full h-12 border-[#3A3A3A] hover:bg-[#2A2A2A]"
+                    >
+                      {plan.cta}
+                    </Button>
+                  </Link>
+                )}
 
                 <div className="space-y-4">
                   <p className="text-xs font-medium text-[#A5A5A5] uppercase tracking-wider">

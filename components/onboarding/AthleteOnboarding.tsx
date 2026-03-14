@@ -29,6 +29,7 @@ import {
   type HeightRange,
   type WeightRange,
   type BodyFatRange,
+  type BodyFatSource,
   type GoalCategory,
   type PrimaryGoalType,
   type SkillGoal,
@@ -80,6 +81,7 @@ import {
   createEmptyOnboardingProfile,
   hasEstimatedValues,
 } from '@/lib/athlete-profile'
+import { BodyFatCalculator } from './BodyFatCalculator'
 
 // =============================================================================
 // SECTION DEFINITIONS
@@ -285,21 +287,200 @@ function AthleteProfileSection({ profile, updateProfile }: SectionProps) {
         </div>
       </div>
 
-      {/* Body Fat (Optional) */}
+      {/* Body Fat (Optional) - Enhanced with calculator */}
+      <BodyFatSection profile={profile} updateProfile={updateProfile} />
+    </div>
+  )
+}
+
+// Separate component for body fat to manage calculator state
+function BodyFatSection({ profile, updateProfile }: SectionProps) {
+  const [mode, setMode] = useState<'selection' | 'manual' | 'calculator'>('selection')
+  const [manualValue, setManualValue] = useState('')
+
+  // Handle calculator result
+  const handleCalculatorResult = (percent: number) => {
+    // Map percent to range
+    let range: BodyFatRange = 'unknown'
+    if (percent < 10) range = 'under_10'
+    else if (percent < 15) range = '10_15'
+    else if (percent < 20) range = '15_20'
+    else if (percent < 25) range = '20_25'
+    else if (percent < 30) range = '25_30'
+    else range = 'over_30'
+
+    updateProfile({ 
+      bodyFatRange: range,
+      bodyFatPercent: percent,
+      bodyFatSource: 'calculator'
+    })
+    setMode('selection')
+  }
+
+  // Handle manual entry
+  const handleManualSubmit = () => {
+    const percent = parseFloat(manualValue)
+    if (isNaN(percent) || percent < 2 || percent > 50) return
+
+    let range: BodyFatRange = 'unknown'
+    if (percent < 10) range = 'under_10'
+    else if (percent < 15) range = '10_15'
+    else if (percent < 20) range = '15_20'
+    else if (percent < 25) range = '20_25'
+    else if (percent < 30) range = '25_30'
+    else range = 'over_30'
+
+    updateProfile({ 
+      bodyFatRange: range,
+      bodyFatPercent: percent,
+      bodyFatSource: 'manual'
+    })
+    setMode('selection')
+  }
+
+  // Skip body fat
+  const handleSkip = () => {
+    updateProfile({ 
+      bodyFatRange: 'unknown',
+      bodyFatPercent: null,
+      bodyFatSource: 'unknown'
+    })
+    setMode('selection')
+  }
+
+  // Clear selection
+  const handleClear = () => {
+    updateProfile({ 
+      bodyFatRange: null,
+      bodyFatPercent: null,
+      bodyFatSource: null
+    })
+    setMode('selection')
+    setManualValue('')
+  }
+
+  // Show calculator
+  if (mode === 'calculator' && profile.sex) {
+    return (
       <div className="space-y-3">
-        <label className="text-sm font-medium text-[#A4ACB8]">Estimated body fat % <span className="text-[#6B7280]">(optional)</span></label>
-        <div className="grid grid-cols-2 gap-2">
-          {(Object.keys(BODY_FAT_LABELS) as BodyFatRange[]).map((bf) => (
-            <OptionButton
-              key={bf}
-              selected={profile.bodyFatRange === bf}
-              onClick={() => updateProfile({ bodyFatRange: bf })}
-            >
-              {BODY_FAT_LABELS[bf]}
-            </OptionButton>
-          ))}
-        </div>
+        <label className="text-sm font-medium text-[#A4ACB8]">
+          Body Fat Calculator
+        </label>
+        <Card className="bg-[#0F1115] border-[#2B313A] p-4">
+          <BodyFatCalculator 
+            sex={profile.sex}
+            onResult={handleCalculatorResult}
+            onCancel={() => setMode('selection')}
+            embedded
+          />
+        </Card>
       </div>
+    )
+  }
+
+  // Show manual entry
+  if (mode === 'manual') {
+    return (
+      <div className="space-y-3">
+        <label className="text-sm font-medium text-[#A4ACB8]">
+          Enter Body Fat %
+        </label>
+        <div className="flex gap-2">
+          <Input
+            type="number"
+            placeholder="e.g. 15"
+            value={manualValue}
+            onChange={(e) => setManualValue(e.target.value)}
+            className="bg-[#0F1115] border-[#2B313A] text-[#E6E9EF] w-24"
+          />
+          <span className="text-[#6B7280] self-center">%</span>
+          <Button
+            onClick={handleManualSubmit}
+            disabled={!manualValue || parseFloat(manualValue) < 2 || parseFloat(manualValue) > 50}
+            className="bg-[#C1121F] hover:bg-[#C1121F]/90 text-white"
+            size="sm"
+          >
+            <Check className="w-4 h-4" />
+          </Button>
+        </div>
+        <button 
+          onClick={() => setMode('selection')}
+          className="text-sm text-[#6B7280] hover:text-[#A4ACB8] transition-colors"
+        >
+          Cancel
+        </button>
+      </div>
+    )
+  }
+
+  // Selection mode - show current value or options
+  return (
+    <div className="space-y-3">
+      <label className="text-sm font-medium text-[#A4ACB8]">
+        Body fat % <span className="text-[#6B7280]">(optional)</span>
+      </label>
+      <p className="text-xs text-[#6B7280] -mt-1">
+        Improves training accuracy but not required.
+      </p>
+
+      {/* Show current value if set */}
+      {profile.bodyFatPercent !== null && profile.bodyFatSource !== 'unknown' ? (
+        <div className="bg-[#0F1115] rounded-lg p-3 border border-[#2B313A]">
+          <div className="flex items-center justify-between">
+            <div>
+              <span className="text-[#E6E9EF] font-medium">{profile.bodyFatPercent}%</span>
+              <span className="text-[#6B7280] text-sm ml-2">
+                ({profile.bodyFatSource === 'calculator' ? 'calculated' : 'entered manually'})
+              </span>
+            </div>
+            <button
+              onClick={handleClear}
+              className="text-sm text-[#4F6D8A] hover:text-[#6B8FAD] transition-colors"
+            >
+              Change
+            </button>
+          </div>
+        </div>
+      ) : profile.bodyFatRange === 'unknown' ? (
+        <div className="bg-[#0F1115] rounded-lg p-3 border border-[#2B313A]">
+          <div className="flex items-center justify-between">
+            <span className="text-[#6B7280]">Skipped</span>
+            <button
+              onClick={handleClear}
+              className="text-sm text-[#4F6D8A] hover:text-[#6B8FAD] transition-colors"
+            >
+              Change
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 gap-2">
+          <OptionButton
+            selected={false}
+            onClick={() => setMode('manual')}
+          >
+            Enter manually
+          </OptionButton>
+          <OptionButton
+            selected={false}
+            onClick={() => {
+              if (profile.sex) {
+                setMode('calculator')
+              }
+            }}
+            disabled={!profile.sex}
+            description={!profile.sex ? 'Select sex first to use calculator' : 'Uses U.S. Navy method'}
+          >
+            Estimate with calculator
+          </OptionButton>
+          <OptionButton
+            selected={false}
+            onClick={handleSkip}
+          >
+            Skip for now
+          </OptionButton>
+        </div>
+      )}
     </div>
   )
 }

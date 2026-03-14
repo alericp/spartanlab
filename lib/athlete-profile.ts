@@ -39,6 +39,12 @@ export type BodyFatRange =
   | 'over_30'     // Higher
   | 'unknown'     // Don't know
 
+// Body fat source - how the value was obtained
+export type BodyFatSource = 
+  | 'manual'      // User entered directly
+  | 'calculator'  // Calculated via U.S. Navy method
+  | 'unknown'     // Skipped or not provided
+
 // =============================================================================
 // GOALS SECTION
 // =============================================================================
@@ -265,6 +271,8 @@ export interface OnboardingProfile {
   heightRange: HeightRange | null
   weightRange: WeightRange | null
   bodyFatRange: BodyFatRange | null
+  bodyFatPercent: number | null           // Exact percentage (from manual or calculator)
+  bodyFatSource: BodyFatSource | null     // How the value was obtained
   trainingExperience: TrainingExperience | null
   
   // Section 2: Goals
@@ -638,12 +646,14 @@ export function isOnboardingComplete(): boolean {
 
 export function createEmptyOnboardingProfile(): OnboardingProfile {
   return {
-    // Section 1: Athlete Profile
-    sex: null,
-    heightRange: null,
-    weightRange: null,
-    bodyFatRange: null,
-    trainingExperience: null,
+  // Section 1: Athlete Profile
+  sex: null,
+  heightRange: null,
+  weightRange: null,
+  bodyFatRange: null,
+  bodyFatPercent: null,
+  bodyFatSource: null,
+  trainingExperience: null,
     
     // Section 2: Goals
     primaryGoal: null,

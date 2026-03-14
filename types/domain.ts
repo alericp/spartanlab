@@ -38,6 +38,9 @@ export type StrengthGoal = 'general_strength' | 'weighted_pull' | 'weighted_dip'
 // Recovery quality for lifestyle factors
 export type RecoveryQuality = 'good' | 'normal' | 'poor'
 
+// Body fat source - how the value was obtained
+export type BodyFatSource = 'manual' | 'calculator' | 'unknown'
+
 // Session style preference
 export type SessionStylePreference = 'efficient' | 'full'
 
@@ -64,6 +67,7 @@ export interface AthleteProfile {
   bodyweight: number | null
   weightUnit: WeightUnit
   bodyFatPercent: number | null
+  bodyFatSource: BodyFatSource | null
   trainingExperience: TrainingExperience | null
   experienceLevel: ExperienceLevel // Derived from trainingExperience
   

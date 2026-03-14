@@ -1,13 +1,8 @@
+// AUTH_IMPORT_GRAPH_V6
 'use client'
 
 /**
- * Sign-In Page - Stable render-only page
- * 
- * ARCHITECTURE:
- * - Uses Clerk SignIn component directly for stable rendering
- * - No manual redirects - Clerk handles post-auth navigation
- * - No remount logic - single stable render path
- * - Middleware handles route protection
+ * Sign-In Page - Minimal native Clerk only
  */
 
 import { SignIn } from '@clerk/nextjs'
@@ -42,6 +37,7 @@ const clerkAppearance = {
 // ============================================================================
 
 export default function SignInPage() {
+  console.log("[AUTH_PROOF] sign-in auth-import-graph-v6")
   console.log(`[SpartanLab] Build: ${AUTH_BUILD_STAMP} (sign-in-render)`)
   
   return (

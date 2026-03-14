@@ -14,6 +14,12 @@ export interface User {
   email: string
   username: string
   subscriptionPlan: SubscriptionPlan
+  // Stripe subscription fields
+  stripeCustomerId?: string
+  stripeSubscriptionId?: string
+  subscriptionStatus?: 'active' | 'canceled' | 'past_due' | 'unpaid' | 'trialing'
+  subscriptionTier?: SubscriptionPlan
+  subscriptionCurrentPeriodEnd?: string
   createdAt: string
   updatedAt?: string
 }

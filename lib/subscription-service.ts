@@ -71,6 +71,46 @@ export async function hasProSubscription(clerkId: string): Promise<boolean> {
 }
 
 /**
+ * Get user's clerk_id by their email (used for Stripe webhook matching)
+ */
+export async function getUserClerkIdByEmail(email: string): Promise<string | null> {
+  if (isPreviewMode() || !(await isDatabaseAvailable())) {
+    return null
+  }
+
+  try {
+    const result = await queryOne<{ clerk_id: string }>(
+      'SELECT clerk_id FROM users WHERE email = $1',
+      [email]
+    )
+    return result?.clerk_id || null
+  } catch (error) {
+    console.error('[SpartanLab] Failed to get user by email:', error)
+    return null
+  }
+}
+
+/**
+ * Get user's clerk_id by their Stripe customer ID
+ */
+export async function getUserClerkIdByStripeCustomer(stripeCustomerId: string): Promise<string | null> {
+  if (isPreviewMode() || !(await isDatabaseAvailable())) {
+    return null
+  }
+
+  try {
+    const result = await queryOne<{ clerk_id: string }>(
+      'SELECT clerk_id FROM users WHERE stripe_customer_id = $1',
+      [stripeCustomerId]
+    )
+    return result?.clerk_id || null
+  } catch (error) {
+    console.error('[SpartanLab] Failed to get user by Stripe customer:', error)
+    return null
+  }
+}
+
+/**
  * Update user subscription in database (called from Stripe webhook)
  */
 export async function updateUserSubscription(

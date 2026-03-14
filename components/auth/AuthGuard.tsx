@@ -26,9 +26,6 @@ function LoadingState() {
 // ============================================================================
 
 function SignedOutFallback({ redirectTo }: { redirectTo: string }) {
-  // Log when this branch is reached
-  console.log('[v0] AuthGuard: signed-out fallback rendered', { redirectTo })
-  
   return (
     <div className="min-h-screen bg-[#0F1115] flex items-center justify-center p-4">
       <div className="bg-[#1A1D23] border border-[#2B313A] rounded-lg p-8 max-w-md w-full text-center">
@@ -45,9 +42,7 @@ function SignedOutFallback({ redirectTo }: { redirectTo: string }) {
         >
           Sign In
         </a>
-        <p className="mt-4 text-xs text-[#6B7280]">
-          AuthGuard: signed-out branch
-        </p>
+        
       </div>
     </div>
   )

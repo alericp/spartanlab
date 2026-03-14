@@ -242,9 +242,11 @@ export function ClerkProviderWrapper({ children }: Props) {
 
   // Effect 1: Determine if we should initialize Clerk (runs once on hydration)
   useEffect(() => {
+    console.log('[v0] ClerkProvider: 1. init effect running')
     loadAuthEnv().then(authEnv => {
       const shouldInit = authEnv?.shouldInitializeClerk?.() ?? false
       const authMode = authEnv?.getAuthMode?.() ?? 'preview'
+      console.log('[v0] ClerkProvider: 2. auth decision:', { shouldInit, authMode })
       
       setInitDecision({ decided: true, shouldInit, authMode })
       
@@ -295,12 +297,15 @@ export function ClerkProviderWrapper({ children }: Props) {
 
     let cancelled = false
 
+    console.log('[v0] ClerkProvider: 3. loading Clerk module...')
     loadClerkModule()
       .then(mod => {
         if (cancelled) return
+        console.log('[v0] ClerkProvider: 4. Clerk module loaded:', { hasProvider: !!mod?.ClerkProvider, hasSignUp: !!mod?.SignUp })
         
         if (mod?.ClerkProvider) {
           setClerkProvider(() => mod.ClerkProvider)
+          console.log('[v0] ClerkProvider: 5. Clerk ready, setting state')
           setState({
             isClerkAvailable: true,
             isPreviewMode: false,

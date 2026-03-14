@@ -112,55 +112,53 @@ export default function SignUpPage() {
   
   useEffect(() => {
     setMounted(true)
+    console.log('[v0] SignUpPage: 1. route mounted')
   }, [])
   
-  // Debug logging
+  // Trace auth state changes
   useEffect(() => {
     if (mounted) {
-      console.log('[v0] SignUpPage state:', {
-        mounted,
-        isClerkAvailable,
-        isLoading,
-        hasSignUp: !!components.SignUp,
-        componentKeys: Object.keys(components).filter(k => components[k as keyof typeof components] !== null)
-      })
+      console.log('[v0] SignUpPage: 2. state check:', { isClerkAvailable, isLoading, hasSignUp: !!components.SignUp })
     }
   }, [mounted, isClerkAvailable, isLoading, components])
   
   // SSR - show loading
-  if (!mounted) return <LoadingState />
+  if (!mounted) {
+    console.log('[v0] SignUpPage: showing loading (not mounted)')
+    return <LoadingState />
+  }
   
   // Still determining auth mode
-  if (isLoading) return <LoadingState />
+  if (isLoading) {
+    console.log('[v0] SignUpPage: showing loading (isLoading=true)')
+    return <LoadingState />
+  }
   
   // Preview mode or no Clerk available - show fallback
-  if (!isClerkAvailable) return <PreviewFallback />
+  if (!isClerkAvailable) {
+    console.log('[v0] SignUpPage: showing preview fallback (isClerkAvailable=false)')
+    return <PreviewFallback />
+  }
   
   // Production mode - get SignUp from provider context
   const SignUp = components.SignUp
   
-  // SignUp component not available (shouldn't happen if isClerkAvailable is true)
-  if (!SignUp) return <PreviewFallback />
+  // SignUp component not available
+  if (!SignUp) {
+    console.log('[v0] SignUpPage: showing preview fallback (SignUp component is null)')
+    return <PreviewFallback />
+  }
   
-  // Render Clerk SignUp
+  console.log('[v0] SignUpPage: 3. rendering Clerk SignUp widget')
+  
+  // Render Clerk SignUp - simplified to match sign-in exactly
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center gap-4 bg-[#0F1115] px-4">
+    <div className="min-h-screen flex items-center justify-center bg-[#0F1115]">
       <SignUp
         appearance={clerkAppearance}
         fallbackRedirectUrl="/onboarding"
         signInUrl="/sign-in"
       />
-      <p className="text-xs text-[#6B7280] text-center max-w-xs leading-relaxed">
-        By creating an account, you agree to our{' '}
-        <Link href="/terms" className="text-[#A4ACB8] hover:text-[#E6E9EF] underline underline-offset-2">
-          Terms of Service
-        </Link>{' '}
-        and{' '}
-        <Link href="/privacy" className="text-[#A4ACB8] hover:text-[#E6E9EF] underline underline-offset-2">
-          Privacy Policy
-        </Link>
-        .
-      </p>
     </div>
   )
 }

@@ -1,4 +1,4 @@
-// AUTH_TRUTH_PASS_V5
+// AUTH_IMPORT_GRAPH_V6
 'use client'
 
 /**
@@ -37,7 +37,7 @@ const clerkAppearance = {
 // ============================================================================
 
 export default function SignInPage() {
-  console.log("[AUTH_PROOF] sign-in auth-truth-pass-v5")
+  console.log("[AUTH_PROOF] sign-in auth-import-graph-v6")
   console.log(`[SpartanLab] Build: ${AUTH_BUILD_STAMP} (sign-in-render)`)
   
   return (

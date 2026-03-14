@@ -218,12 +218,14 @@ export type SkillTrainingHistory =
 
 export type SkillLastTrained =
   | 'currently'          // Currently training
-  | 'within_6_months'    // Within the last 6 months
+  | 'within_3_months'    // Within the last 3 months
+  | '3_to_6_months'      // 3-6 months ago
   | '6_to_12_months'     // 6-12 months ago
   | '1_to_2_years'       // 1-2 years ago
   | 'over_2_years'       // More than 2 years ago
 
-export type TendonAdaptationLevel = 'low' | 'moderate' | 'high'
+// Tendon adaptation levels with finer granularity for internal mapping
+export type TendonAdaptationLevel = 'low' | 'low_moderate' | 'moderate' | 'moderate_high' | 'high'
 
 export interface SkillHistoryEntry {
   trainingHistory: SkillTrainingHistory
@@ -248,7 +250,8 @@ export const SKILL_TRAINING_HISTORY_DESCRIPTIONS: Record<SkillTrainingHistory, s
 
 export const SKILL_LAST_TRAINED_LABELS: Record<SkillLastTrained, string> = {
   'currently': 'Currently training',
-  'within_6_months': 'Within 6 months',
+  'within_3_months': 'Within 3 months',
+  '3_to_6_months': '3-6 months ago',
   '6_to_12_months': '6-12 months ago',
   '1_to_2_years': '1-2 years ago',
   'over_2_years': 'Over 2 years ago',
@@ -258,51 +261,95 @@ export const SKILL_LAST_TRAINED_LABELS: Record<SkillLastTrained, string> = {
 // TENDON ADAPTATION CALCULATOR
 // =============================================================================
 
+/**
+ * Calculates tendon adaptation level based on training history and time since last training.
+ * 
+ * RETENTION BEHAVIOR:
+ * - Short layoffs (0-3 months): Retain most adaptation
+ * - Medium layoffs (3-6 months): Some detraining, but significant retention
+ * - Extended layoffs (6-12 months): Notable detraining, reduced starting point
+ * - Long layoffs (1-2 years): Major detraining, conservative approach
+ * - Very long layoffs (2+ years): Mostly reset, minimal retained benefit
+ * 
+ * MAPPING TABLE:
+ * | History            | Time Since      | Adaptation   | Outcome                          |
+ * |--------------------|-----------------|--------------|----------------------------------|
+ * | Never              | N/A             | low          | Foundation layer                 |
+ * | Tried a little     | Any             | low          | Conservative start               |
+ * | Trained consistently| Currently      | moderate_high| Beginner with faster ramp        |
+ * | Trained consistently| Within 3 months| moderate_high| Beginner with faster ramp        |
+ * | Trained consistently| 3-6 months     | moderate     | Beginner progression             |
+ * | Trained consistently| 6-12 months    | low_moderate | Conservative beginner            |
+ * | Trained consistently| 1-2 years      | low          | Foundation + beginner blend      |
+ * | Trained consistently| 2+ years       | low          | Mostly reset                     |
+ * | Previously strong  | Currently       | high         | Intermediate entry possible      |
+ * | Previously strong  | Within 3 months | high         | Cautious intermediate entry      |
+ * | Previously strong  | 3-6 months      | moderate_high| Beginner/intermediate bridge     |
+ * | Previously strong  | 6-12 months     | moderate     | Beginner with retained familiarity|
+ * | Previously strong  | 1-2 years       | low_moderate | Foundation + beginner blend      |
+ * | Previously strong  | 2+ years        | low          | Mostly reset                     |
+ * 
+ * SAFETY: This score informs starting point but NEVER overrides current strength metrics.
+ */
 export function calculateTendonAdaptation(
   history: SkillTrainingHistory,
   lastTrained: SkillLastTrained | null
 ): TendonAdaptationLevel {
-  // Base level from training history
-  let baseLevel: TendonAdaptationLevel
-  
-  switch (history) {
-    case 'never':
-      return 'low' // No past training = always low
-    case 'tried_little':
-      baseLevel = 'low'
-      break
-    case 'trained_consistently':
-      baseLevel = 'moderate'
-      break
-    case 'previously_strong':
-      baseLevel = 'high'
-      break
+  // Never trained = always low, no exceptions
+  if (history === 'never') {
+    return 'low'
   }
   
-  // Adjust based on time since last training
-  if (!lastTrained) return baseLevel
-  
-  switch (lastTrained) {
-    case 'currently':
-    case 'within_6_months':
-      // Recent training maintains adaptation
-      return baseLevel
-    case '6_to_12_months':
-      // Some detraining - drop one level
-      if (baseLevel === 'high') return 'moderate'
-      return baseLevel
-    case '1_to_2_years':
-      // Significant detraining
-      if (baseLevel === 'high') return 'moderate'
-      if (baseLevel === 'moderate') return 'low'
-      return 'low'
-    case 'over_2_years':
-      // Mostly lost, but some memory remains for "previously strong"
-      if (baseLevel === 'high') return 'low' // Was strong, some residual
-      return 'low'
-    default:
-      return baseLevel
+  // Tried a little = low regardless of when (minimal adaptation built)
+  if (history === 'tried_little') {
+    return 'low'
   }
+  
+  // Handle "trained consistently" with time-based decay
+  if (history === 'trained_consistently') {
+    switch (lastTrained) {
+      case 'currently':
+      case 'within_3_months':
+        // Recent consistent training = strong beginner adaptation
+        return 'moderate_high'
+      case '3_to_6_months':
+        // Some detraining but still solid base
+        return 'moderate'
+      case '6_to_12_months':
+        // Notable detraining, conservative approach
+        return 'low_moderate'
+      case '1_to_2_years':
+      case 'over_2_years':
+      default:
+        // Long layoff = mostly lost
+        return 'low'
+    }
+  }
+  
+  // Handle "previously strong" with time-based decay
+  if (history === 'previously_strong') {
+    switch (lastTrained) {
+      case 'currently':
+      case 'within_3_months':
+        // Recently strong = can potentially enter intermediate
+        return 'high'
+      case '3_to_6_months':
+        // Some detraining but significant retained strength
+        return 'moderate_high'
+      case '6_to_12_months':
+        // Extended layoff, notable detraining
+        return 'moderate'
+      case '1_to_2_years':
+        // Major detraining, but some neural memory
+        return 'low_moderate'
+      case 'over_2_years':
+      default:
+        // Very long layoff = mostly reset
+        return 'low'
+    }
+  }
+  
+  return 'low'
 }
 
 // =============================================================================
@@ -737,7 +784,7 @@ export const PULLUP_LABELS: Record<PullUpCapacity, string> = {
 }
 
 export const PUSHUP_LABELS: Record<PushUpCapacity, string> = {
-  '0_10': '0–10',
+  '0_10': '0���10',
   '10_25': '10–25',
   '25_40': '25–40',
   '40_60': '40–60',

@@ -284,7 +284,7 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
     recentSorenessLevel: 'mild',
     rangeTrainingMode: profile?.rangeTrainingMode || undefined,
     wantsHypertrophy: profile?.goalCategory === 'strength',
-    tendonAdaptationLevel: tendonAdaptationForGoal as 'low' | 'moderate' | 'high',
+    tendonAdaptationLevel: tendonAdaptationForGoal as 'low' | 'low_moderate' | 'moderate' | 'moderate_high' | 'high',
   }
   const selectedMethods = selectMethodProfiles(selectionContext)
   

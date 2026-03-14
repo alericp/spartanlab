@@ -1037,7 +1037,7 @@ interface SkillHistoryInputProps {
 
 function SkillHistoryInput({ skillKey, skillLabel, profile, updateProfile }: SkillHistoryInputProps) {
   const historyOptions: SkillTrainingHistory[] = ['never', 'tried_little', 'trained_consistently', 'previously_strong']
-  const lastTrainedOptions: SkillLastTrained[] = ['currently', 'within_6_months', '6_to_12_months', '1_to_2_years', 'over_2_years']
+  const lastTrainedOptions: SkillLastTrained[] = ['currently', 'within_3_months', '3_to_6_months', '6_to_12_months', '1_to_2_years', 'over_2_years']
   
   const currentHistory = profile.skillHistory?.[skillKey]
   const showLastTrained = currentHistory?.trainingHistory && currentHistory.trainingHistory !== 'never'

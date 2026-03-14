@@ -1048,39 +1048,70 @@ export interface SkillStartingPoint {
 
 /**
  * Get the recommended starting point for a skill based on tendon adaptation.
- * This must be further constrained by current strength metrics and other factors.
+ * 
+ * TENDON LEVEL → STARTING POINT MAPPING:
+ * | Tendon Level  | Progression Tier | Intensity | Volume | Speed |
+ * |---------------|------------------|-----------|--------|-------|
+ * | low           | foundation       | 0.75      | 0.65   | 0.75  |
+ * | low_moderate  | foundation+      | 0.82      | 0.75   | 0.9   |
+ * | moderate      | beginner         | 0.88      | 0.82   | 1.0   |
+ * | moderate_high | beginner+        | 0.94      | 0.88   | 1.1   |
+ * | high          | intermediate     | 1.0       | 0.92   | 1.15  |
+ * 
+ * SAFETY: This must be further constrained by current strength metrics.
  */
 export function getSkillStartingPoint(
   tendonLevel: TendonAdaptationLevel,
   currentStrengthTier: StrengthTier,
   readinessScores: { recoveryTolerance: number; skillAdaptation: number } | null
 ): SkillStartingPoint {
-  // Base starting point from tendon adaptation
+  // Base starting point from tendon adaptation (5-tier system)
   let baseResult: SkillStartingPoint
   
   switch (tendonLevel) {
     case 'low':
+      // No adaptation - pure foundation work
       baseResult = {
         progressionTier: 'foundation',
-        intensityModifier: 0.8,
-        volumeModifier: 0.7,
-        progressionSpeedModifier: 0.8,
+        intensityModifier: 0.75,
+        volumeModifier: 0.65,
+        progressionSpeedModifier: 0.75,
+      }
+      break
+    case 'low_moderate':
+      // Some retained familiarity - foundation with faster ramp
+      baseResult = {
+        progressionTier: 'foundation',
+        intensityModifier: 0.82,
+        volumeModifier: 0.75,
+        progressionSpeedModifier: 0.9,
       }
       break
     case 'moderate':
+      // Solid base - standard beginner progression
       baseResult = {
         progressionTier: 'beginner',
-        intensityModifier: 0.9,
-        volumeModifier: 0.85,
+        intensityModifier: 0.88,
+        volumeModifier: 0.82,
         progressionSpeedModifier: 1.0,
       }
       break
+    case 'moderate_high':
+      // Strong base - beginner with accelerated path
+      baseResult = {
+        progressionTier: 'beginner',
+        intensityModifier: 0.94,
+        volumeModifier: 0.88,
+        progressionSpeedModifier: 1.1,
+      }
+      break
     case 'high':
+      // Recently strong - can enter intermediate (if strength allows)
       baseResult = {
         progressionTier: 'intermediate',
         intensityModifier: 1.0,
-        volumeModifier: 0.95,
-        progressionSpeedModifier: 1.1,
+        volumeModifier: 0.92,
+        progressionSpeedModifier: 1.15,
       }
       break
   }
@@ -1094,8 +1125,10 @@ export function getSkillStartingPoint(
   
   if (baseTierIdx > capTierIdx) {
     baseResult.progressionTier = strengthCap
-    // Also reduce intensity when capped
-    baseResult.intensityModifier = Math.min(baseResult.intensityModifier, 0.85)
+    // Reduce intensity when capped by strength
+    baseResult.intensityModifier = Math.min(baseResult.intensityModifier, 0.82)
+    // Also slow progression when strength-limited
+    baseResult.progressionSpeedModifier = Math.min(baseResult.progressionSpeedModifier, 0.95)
   }
   
   // Adjust based on readiness scores if available
@@ -1108,7 +1141,7 @@ export function getSkillStartingPoint(
     
     // High skill adaptation = can progress slightly faster
     if (readinessScores.skillAdaptation >= 70) {
-      baseResult.progressionSpeedModifier = Math.min(1.2, baseResult.progressionSpeedModifier * 1.1)
+      baseResult.progressionSpeedModifier = Math.min(1.2, baseResult.progressionSpeedModifier * 1.05)
     }
   }
   
@@ -1136,10 +1169,16 @@ function getStrengthBasedCap(strengthTier: StrengthTier): 'foundation' | 'beginn
 /**
  * Check if an athlete has meaningful tendon adaptation for any skill.
  * Useful for determining if skill history should influence programming.
+ * Returns true if any skill has at least low_moderate adaptation.
  */
 export function hasAnyTendonAdaptation(calibration: AthleteCalibration): boolean {
   if (!calibration.tendonAdaptation) return false
   
   const scores = Object.values(calibration.tendonAdaptation)
-  return scores.some(level => level === 'moderate' || level === 'high')
+  return scores.some(level => 
+    level === 'low_moderate' || 
+    level === 'moderate' || 
+    level === 'moderate_high' || 
+    level === 'high'
+  )
 }

@@ -11,6 +11,7 @@
  */
 
 import { SignUp } from '@clerk/nextjs'
+import { AUTH_BUILD_STAMP } from '@/lib/build-stamp'
 
 // ============================================================================
 // CLERK APPEARANCE
@@ -41,6 +42,8 @@ const clerkAppearance = {
 // ============================================================================
 
 export default function SignUpPage() {
+  console.log(`[SpartanLab] Build: ${AUTH_BUILD_STAMP} (sign-up-render)`)
+  
   return (
     <div className="min-h-screen flex items-center justify-center bg-[#0F1115]">
       <SignUp

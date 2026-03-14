@@ -222,10 +222,13 @@ export function ClerkProviderWrapper({ children }: Props) {
   // Track if we've timed out waiting for auth
   const [timedOut, setTimedOut] = useState(false)
   
+  // CRITICAL: Start with isLoading: false to prevent SSR blocking
+  // The client-side effect will update this when auth is determined
+  // This allows the app shell to render immediately
   const [state, setState] = useState<ClerkAvailabilityContextValue>(() => ({
     isClerkAvailable: false,
-    isPreviewMode: false, // Don't assume preview until we check on client
-    isLoading: true, // Start loading until we determine mode
+    isPreviewMode: true, // Safe default - allows UI to render
+    isLoading: false, // Start as false to prevent SSR blocking
     authMode: 'preview',
     hasError: false,
     components: {
@@ -277,6 +280,9 @@ export function ClerkProviderWrapper({ children }: Props) {
 
   // Effect 1: Determine if we should initialize Clerk (runs once on hydration)
   useEffect(() => {
+    // Set loading true only on client while we determine auth mode
+    setState(prev => ({ ...prev, isLoading: true }))
+    
     loadAuthEnv().then(authEnv => {
       const hostname = typeof window !== 'undefined' ? window.location.hostname : 'server'
       const shouldInit = authEnv?.shouldInitializeClerk?.() ?? false

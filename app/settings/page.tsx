@@ -1,3 +1,4 @@
+// AUTH_PROD_UNBLOCK_V1
 'use client'
 
 import { useState, useEffect } from 'react'
@@ -27,6 +28,8 @@ import {
 import { UpdateMetricsCard } from '@/components/dashboard/UpdateMetricsCard'
 
 export default function SettingsPage() {
+  console.log("[AUTH_PROOF] settings auth-prod-unblock-v1")
+  
   const [profile, setProfile] = useState<AthleteProfile | null>(null)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)

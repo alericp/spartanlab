@@ -1,10 +1,10 @@
-// AUTH_IMPORT_GRAPH_V6
+// AUTH_PROD_UNBLOCK_V1
 /**
  * Deployment Build Stamp
  * Used to verify which code version is running in production
  */
 
-export const AUTH_BUILD_STAMP = 'auth-import-graph-v6'
+export const AUTH_BUILD_STAMP = 'auth-prod-unblock-v1'
 
 /**
  * Log the build stamp once (call on app initialization)

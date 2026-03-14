@@ -1,4 +1,4 @@
-// AUTH_IMPORT_GRAPH_V6
+// AUTH_PROD_UNBLOCK_V1
 'use client'
 
 /**
@@ -37,7 +37,7 @@ const clerkAppearance = {
 // ============================================================================
 
 export default function SignInPage() {
-  console.log("[AUTH_PROOF] sign-in auth-import-graph-v6")
+  console.log("[AUTH_PROOF] sign-in auth-prod-unblock-v1")
   console.log(`[SpartanLab] Build: ${AUTH_BUILD_STAMP} (sign-in-render)`)
   
   return (

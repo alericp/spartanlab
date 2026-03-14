@@ -11,6 +11,14 @@ import {
   DashboardSkeleton 
 } from '@/components/layout'
 import { AuthGuard } from '@/components/auth/AuthGuard'
+import { useClerkAvailability } from '@/components/providers/ClerkProviderWrapper'
+
+// =============================================================================
+// ISOLATION TEST FLAG - Set to false to enable full dashboard
+// =============================================================================
+const ENABLE_FULL_DASHBOARD = false
+
+// Only import heavy components when full dashboard is enabled
 import { SpartanScoreCard } from '@/components/performance/SpartanScoreCard'
 import { AthleteIntelligenceCard } from '@/components/dashboard/AthleteIntelligenceCard'
 import { TrainingMomentumCard } from '@/components/dashboard/TrainingMomentumCard'
@@ -80,6 +88,36 @@ import { PremiumUpgradeBanner, SubscriptionTierBadge } from '@/components/premiu
 import { DashboardUpgradeCard } from '@/components/upgrade/AdaptiveProgramUpgradeCard'
 import { FirstRunGuide, SetupReminderBanner } from '@/components/dashboard/FirstRunGuide'
 
+// =============================================================================
+// AUTH DIAGNOSTIC COMPONENT - Temporary for debugging
+// =============================================================================
+function AuthDiagnosticBox() {
+  const { isClerkAvailable, isLoading } = useClerkAvailability()
+  const [info, setInfo] = useState<{hostname: string, pathname: string} | null>(null)
+  
+  useEffect(() => {
+    setInfo({
+      hostname: window.location.hostname,
+      pathname: window.location.pathname,
+    })
+  }, [])
+  
+  // Only show in production for debugging
+  if (!info) return null
+  
+  return (
+    <div className="fixed bottom-4 right-4 z-50 bg-[#1A1D23] border border-[#2A2F38] rounded-lg p-3 text-xs font-mono max-w-xs shadow-lg">
+      <div className="text-[#6B7280] mb-1">Auth Diagnostic</div>
+      <div className="space-y-0.5 text-[#A4ACB8]">
+        <div>host: {info.hostname}</div>
+        <div>path: {info.pathname}</div>
+        <div>clerkAvailable: {String(isClerkAvailable)}</div>
+        <div>loading: {String(isLoading)}</div>
+      </div>
+    </div>
+  )
+}
+
 function DashboardContent() {
   const [overview, setOverview] = useState<DashboardOverview | null>(null)
   const [skillSummary, setSkillSummary] = useState<PrimarySkillSummary | null>(null)
@@ -105,6 +143,12 @@ function DashboardContent() {
 
   useEffect(() => {
     setMounted(true)
+    
+    // ISOLATION TEST: Skip heavy data loading if isolation mode is enabled
+    if (!ENABLE_FULL_DASHBOARD) {
+      setOverview({ profile: null as any, progressions: [], workouts: [], goals: [] })
+      return
+    }
     
     // Check if this is a first-run welcome scenario
     const urlParams = new URLSearchParams(window.location.search)
@@ -164,6 +208,29 @@ setConstraintInsight(getConstraintInsight())
     return (
       <PageContainer>
         <DashboardSkeleton />
+        <AuthDiagnosticBox />
+      </PageContainer>
+    )
+  }
+
+  // =============================================================================
+  // ISOLATION TEST MODE - Minimal shell to prove route/auth works
+  // =============================================================================
+  if (!ENABLE_FULL_DASHBOARD) {
+    return (
+      <PageContainer>
+        <div className="py-12">
+          <div className="bg-[#1A1D23] border border-[#2A2F38] rounded-xl p-8 text-center">
+            <h1 className="text-2xl font-semibold text-[#E6E9EF] mb-2">Dashboard Alive</h1>
+            <p className="text-[#6B7280] mb-4">
+              Isolation test mode active. Route and auth are working.
+            </p>
+            <p className="text-xs text-[#4B5563] font-mono">
+              Set ENABLE_FULL_DASHBOARD = true to restore full dashboard
+            </p>
+          </div>
+        </div>
+        <AuthDiagnosticBox />
       </PageContainer>
     )
   }
@@ -179,6 +246,7 @@ setConstraintInsight(getConstraintInsight())
     return (
       <PageContainer>
         <DashboardEmptyState />
+        <AuthDiagnosticBox />
       </PageContainer>
     )
   }

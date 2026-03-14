@@ -56,6 +56,7 @@ import {
   type VSitHoldCapacity,
   type FlexibilityLevel,
 } from '@/lib/athlete-profile'
+import { TestingGuideLink } from '@/components/testing/TestingGuideModal'
 import { cn } from '@/lib/utils'
 
 // =============================================================================
@@ -68,6 +69,7 @@ interface MetricSelectorProps<T extends string> {
   options: Record<T, string>
   onChange: (value: T) => void
   description?: string
+  metricKey?: string  // For linking to testing guide
 }
 
 function MetricSelector<T extends string>({
@@ -76,12 +78,16 @@ function MetricSelector<T extends string>({
   options,
   onChange,
   description,
+  metricKey,
 }: MetricSelectorProps<T>) {
   const optionKeys = Object.keys(options).filter(k => k !== 'unknown') as T[]
   
   return (
     <div className="space-y-2">
-      <label className="text-sm font-medium text-[#A4ACB8]">{label}</label>
+      <div className="flex items-center justify-between">
+        <label className="text-sm font-medium text-[#A4ACB8]">{label}</label>
+        {metricKey && <TestingGuideLink metricKey={metricKey} />}
+      </div>
       {description && (
         <p className="text-xs text-[#6B7280]">{description}</p>
       )}
@@ -115,12 +121,16 @@ interface WeightedInputProps {
   reps: number | null
   onWeightChange: (weight: number | null) => void
   onRepsChange: (reps: number | null) => void
+  metricKey?: string
 }
 
-function WeightedInput({ label, weight, reps, onWeightChange, onRepsChange }: WeightedInputProps) {
+function WeightedInput({ label, weight, reps, onWeightChange, onRepsChange, metricKey }: WeightedInputProps) {
   return (
     <div className="space-y-2">
-      <label className="text-sm font-medium text-[#A4ACB8]">{label}</label>
+      <div className="flex items-center justify-between">
+        <label className="text-sm font-medium text-[#A4ACB8]">{label}</label>
+        {metricKey && <TestingGuideLink metricKey={metricKey} />}
+      </div>
       <div className="flex gap-2 items-center">
         <Input
           type="number"
@@ -424,9 +434,17 @@ export function UpdateMetricsCard({ variant = 'full', onUpdate }: UpdateMetricsC
             {/* Info banner */}
             <div className="px-4 py-3 bg-[#4F6D8A]/10 border-b border-[#2B313A] flex items-start gap-2">
               <Info className="w-4 h-4 text-[#4F6D8A] mt-0.5 shrink-0" />
-              <p className="text-xs text-[#A4ACB8]">
-                SpartanLab adapts to your progress. Update your metrics anytime to refine your program.
-              </p>
+              <div className="flex-1">
+                <p className="text-xs text-[#A4ACB8]">
+                  SpartanLab adapts to your progress. Update your metrics anytime to refine your program.
+                </p>
+                <a 
+                  href="/guides/testing" 
+                  className="text-xs text-[#4F6D8A] hover:text-[#6B8FAD] mt-1 inline-block transition-colors"
+                >
+                  Learn how to test your metrics properly
+                </a>
+              </div>
             </div>
 
             {/* Tab navigation */}
@@ -662,10 +680,16 @@ export function MetricsUpdateBanner() {
       <div className="p-1.5 bg-[#4F6D8A]/10 rounded-md mt-0.5">
         <Info className="w-4 h-4 text-[#4F6D8A]" />
       </div>
-      <div>
+      <div className="flex-1">
         <p className="text-sm text-[#A4ACB8]">
           SpartanLab adapts to your progress. Update your strength and skill metrics anytime to refine your program.
         </p>
+        <a 
+          href="/guides/testing" 
+          className="text-xs text-[#4F6D8A] hover:text-[#6B8FAD] mt-1 inline-block transition-colors"
+        >
+          Learn how to test your metrics
+        </a>
       </div>
     </div>
   )

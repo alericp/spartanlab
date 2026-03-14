@@ -22,6 +22,7 @@ import {
 } from 'lucide-react'
 import { SpartanIcon } from '@/components/brand/SpartanLogo'
 import { trackOnboardingCompleted } from '@/lib/analytics'
+import { TestingGuideLink, DontKnowHelper } from '@/components/testing/TestingGuideModal'
 import {
   type OnboardingProfile,
   type Sex,
@@ -645,11 +646,16 @@ function SkillSelectionSection({ profile, updateProfile }: SectionProps) {
 }
 
 // Helper component for "Don't know" hint
-function DontKnowHint() {
+function DontKnowHint({ metricKey }: { metricKey?: string }) {
   return (
-    <p className="text-xs text-[#4F6D8A] mt-2 italic">
-      Not sure? You can test this after a proper warm-up. Update your metrics anytime.
-    </p>
+    <div className="flex items-start gap-2 mt-2 p-2 rounded bg-[#4F6D8A]/10 border border-[#4F6D8A]/20">
+      <p className="text-xs text-[#A4ACB8] flex-1">
+        Not sure? Test this after a proper warm-up. You can update your numbers anytime.
+      </p>
+      {metricKey && (
+        <TestingGuideLink metricKey={metricKey} variant="link" label="How to test" />
+      )}
+    </div>
   )
 }
 
@@ -684,7 +690,7 @@ function StrengthBenchmarksSection({ profile, updateProfile }: SectionProps) {
         >
           Don't know / Not tested
         </OptionButton>
-        {profile.pullUpMax === 'unknown' && <DontKnowHint />}
+        {profile.pullUpMax === 'unknown' && <DontKnowHint metricKey="pullUpMax" />}
       </div>
 
       {/* Max Dips */}
@@ -709,7 +715,7 @@ function StrengthBenchmarksSection({ profile, updateProfile }: SectionProps) {
         >
           Don't know / Not tested
         </OptionButton>
-        {profile.dipMax === 'unknown' && <DontKnowHint />}
+        {profile.dipMax === 'unknown' && <DontKnowHint metricKey="dipMax" />}
       </div>
 
       {/* Max Push-ups */}
@@ -734,7 +740,7 @@ function StrengthBenchmarksSection({ profile, updateProfile }: SectionProps) {
         >
           Don't know / Not tested
         </OptionButton>
-        {profile.pushUpMax === 'unknown' && <DontKnowHint />}
+        {profile.pushUpMax === 'unknown' && <DontKnowHint metricKey="pushUpMax" />}
       </div>
 
       {/* Wall HSPU */}
@@ -759,7 +765,7 @@ function StrengthBenchmarksSection({ profile, updateProfile }: SectionProps) {
         >
           Don't know / Not tested
         </OptionButton>
-        {profile.wallHSPUReps === 'unknown' && <DontKnowHint />}
+        {profile.wallHSPUReps === 'unknown' && <DontKnowHint metricKey="wallHSPUReps" />}
       </div>
 
       {/* Weighted Pull-up */}
@@ -899,7 +905,7 @@ function SkillBenchmarksSection({ profile, updateProfile }: SectionProps) {
               />
             </div>
           )}
-          {profile.frontLever?.progression === 'unknown' && <DontKnowHint />}
+          {profile.frontLever?.progression === 'unknown' && <DontKnowHint metricKey="frontLever" />}
         </div>
       )}
 
@@ -944,7 +950,7 @@ function SkillBenchmarksSection({ profile, updateProfile }: SectionProps) {
               />
             </div>
           )}
-          {profile.planche?.progression === 'unknown' && <DontKnowHint />}
+          {profile.planche?.progression === 'unknown' && <DontKnowHint metricKey="planche" />}
         </div>
       )}
 
@@ -970,7 +976,7 @@ function SkillBenchmarksSection({ profile, updateProfile }: SectionProps) {
           >
             Don't know / Skip for now
           </OptionButton>
-          {profile.muscleUp === 'unknown' && <DontKnowHint />}
+          {profile.muscleUp === 'unknown' && <DontKnowHint metricKey="muscleUp" />}
         </div>
       )}
 
@@ -998,7 +1004,7 @@ function SkillBenchmarksSection({ profile, updateProfile }: SectionProps) {
           >
             Don't know / Skip for now
           </OptionButton>
-          {profile.hspu?.progression === 'unknown' && <DontKnowHint />}
+          {profile.hspu?.progression === 'unknown' && <DontKnowHint metricKey="wallHSPUReps" />}
         </div>
       )}
 
@@ -1024,7 +1030,7 @@ function SkillBenchmarksSection({ profile, updateProfile }: SectionProps) {
           >
             Don't know / Skip for now
           </OptionButton>
-          {profile.lSitHold === 'unknown' && <DontKnowHint />}
+          {profile.lSitHold === 'unknown' && <DontKnowHint metricKey="lSitHold" />}
         </div>
       )}
 
@@ -1050,7 +1056,7 @@ function SkillBenchmarksSection({ profile, updateProfile }: SectionProps) {
           >
             Don't know / Skip for now
           </OptionButton>
-          {profile.vSitHold === 'unknown' && <DontKnowHint />}
+          {profile.vSitHold === 'unknown' && <DontKnowHint metricKey="vSitHold" />}
         </div>
       )}
     </div>
@@ -1127,7 +1133,7 @@ function FlexibilityBenchmarksSection({ profile, updateProfile }: SectionProps) 
               </div>
             </div>
           )}
-          {profile.pancake?.level === 'unknown' && <DontKnowHint />}
+          {profile.pancake?.level === 'unknown' && <DontKnowHint metricKey="pancake" />}
         </div>
       )}
 
@@ -1153,7 +1159,7 @@ function FlexibilityBenchmarksSection({ profile, updateProfile }: SectionProps) 
           >
             Don't know / Skip for now
           </OptionButton>
-          {profile.toeTouch?.level === 'unknown' && <DontKnowHint />}
+          {profile.toeTouch?.level === 'unknown' && <DontKnowHint metricKey="forwardFold" />}
         </div>
       )}
 
@@ -1195,7 +1201,7 @@ function FlexibilityBenchmarksSection({ profile, updateProfile }: SectionProps) 
               </div>
             </div>
           )}
-          {profile.frontSplits?.level === 'unknown' && <DontKnowHint />}
+          {profile.frontSplits?.level === 'unknown' && <DontKnowHint metricKey="frontSplits" />}
         </div>
       )}
 
@@ -1237,7 +1243,7 @@ function FlexibilityBenchmarksSection({ profile, updateProfile }: SectionProps) 
               </div>
             </div>
           )}
-          {profile.sideSplits?.level === 'unknown' && <DontKnowHint />}
+          {profile.sideSplits?.level === 'unknown' && <DontKnowHint metricKey="sideSplits" />}
         </div>
       )}
     </div>

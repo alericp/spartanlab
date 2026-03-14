@@ -17,6 +17,15 @@ export const metadata: Metadata = {
 
 const GUIDES = [
   {
+    slug: 'testing',
+    title: 'How to Test Your Metrics',
+    description: 'Learn how to properly test your strength, skill, and flexibility benchmarks for accurate training programs.',
+    icon: GraduationCap,
+    category: 'Testing',
+    readTime: '10 min read',
+    featured: true,
+  },
+  {
     slug: 'front-lever-training',
     title: 'Front Lever Training Guide',
     description: 'Complete training guide with progressions, exercises, muscle diagrams, and programming advice for the front lever.',

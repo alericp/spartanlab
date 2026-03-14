@@ -153,6 +153,19 @@ export const FEATURE_CAPABILITIES: FeatureCapability[] = [
     keyFunctions: ['HANDSTAND_TRAINING_CONFIG', 'skill_frequency_training', 'shouldIncludeHandstandStrength'],
     relevantFor: ['skills', 'handstand_pushup'],
   },
+  {
+    id: 'training_cycle_engine',
+    internalName: 'Training Cycle Engine + Periodization',
+    marketingName: 'Periodized Training Cycles',
+    shortDescription: 'Structured training phases for real progress',
+    longDescription: 'Move beyond random workouts with periodized training. Skill cycles for technique, strength cycles for max output, hypertrophy cycles for muscle building, and intelligent transitions between phases. Each cycle has specific volume, intensity, and exercise prescriptions.',
+    implementationEvidence: [
+      'lib/training-cycle-engine.ts',
+      'lib/coaching-engine-index.ts',
+    ],
+    keyFunctions: ['ALL_TRAINING_CYCLES', 'selectRecommendedCycle', 'getTransitionRecommendation', 'CYCLE_GUIDE_STRUCTURES'],
+    relevantFor: ['all'],
+  },
 ]
 
 // =============================================================================

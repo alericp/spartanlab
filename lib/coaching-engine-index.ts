@@ -510,5 +510,9 @@ export function getEngineCapabilitySummary(): string[] {
     'Weighted pull-up strength programming',
     'Pull-up endurance and max-rep protocols',
     'Pull-specific weak point detection and correction',
+    'Periodized training cycles (skill, strength, hypertrophy, endurance)',
+    'Intelligent cycle selection based on goals',
+    'Phase transition recommendations',
+    'Deload and peaking protocols',
   ]
 }

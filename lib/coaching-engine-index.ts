@@ -264,6 +264,72 @@ export {
 } from './pulling-strength-engine'
 
 // =============================================================================
+// TRAINING CYCLE ENGINE EXPORTS
+// =============================================================================
+
+export {
+  // Skill Cycles
+  PLANCHE_SKILL_CYCLE,
+  FRONT_LEVER_SKILL_CYCLE,
+  HANDSTAND_SKILL_CYCLE,
+  MUSCLE_UP_SKILL_CYCLE,
+  ONE_ARM_PULL_UP_SKILL_CYCLE,
+  SKILL_CYCLES,
+  
+  // Strength Cycles
+  WEIGHTED_PULL_STRENGTH_CYCLE,
+  WEIGHTED_DIP_STRENGTH_CYCLE,
+  STREETLIFTING_STRENGTH_CYCLE,
+  STRENGTH_CYCLES,
+  
+  // Hypertrophy Cycles
+  UPPER_HYPERTROPHY_CYCLE,
+  PULL_HYPERTROPHY_CYCLE,
+  PUSH_HYPERTROPHY_CYCLE,
+  HYPERTROPHY_CYCLES,
+  
+  // Endurance Cycles
+  PULL_ENDURANCE_CYCLE,
+  GENERAL_ENDURANCE_CYCLE,
+  ENDURANCE_CYCLES,
+  
+  // Utility Cycles
+  MIXED_DEVELOPMENT_CYCLE,
+  DELOAD_CYCLE,
+  PEAK_CYCLE,
+  UTILITY_CYCLES,
+  
+  // All Cycles
+  ALL_TRAINING_CYCLES,
+  
+  // Cycle Selection Engine
+  selectRecommendedCycle,
+  
+  // Cycle Transition Engine
+  RECOMMENDED_CYCLE_TRANSITIONS,
+  getTransitionRecommendation,
+  
+  // Guide Structures
+  CYCLE_GUIDE_STRUCTURES,
+  
+  // Marketing Support
+  CYCLE_MARKETING_CLAIMS,
+  
+  // Types
+  type CycleType,
+  type CycleFocus,
+  type TrainingCycle,
+  type VolumeDistribution,
+  type IntensityDistribution,
+  type ProgressionPacing,
+  type ExerciseBias,
+  type RecoveryBias,
+  type CycleSelectionFactors,
+  type CycleTransition,
+  type CycleGuideStructure,
+} from './training-cycle-engine'
+
+// =============================================================================
 // MARKETING SUPPORT EXPORTS
 // =============================================================================
 

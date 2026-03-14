@@ -95,7 +95,9 @@ export interface ExitIntention {
 
 const PROGRAM_STATE_KEY = 'spartanlab_program_state'
 const ADJUSTMENT_HISTORY_KEY = 'spartanlab_adjustment_history'
+const PROGRAM_HISTORY_KEY = 'spartanlab_program_history'
 const MINIMUM_RECOMMENDED_WEEKS = 4
+const FREQUENT_RESTART_THRESHOLD_DAYS = 14
 
 // Priority order for preserving work when session time decreases
 const SESSION_PRIORITY = [
@@ -177,6 +179,82 @@ function getAdjustmentHistory(): ProgramAdjustment[] {
 function saveAdjustmentHistory(history: ProgramAdjustment[]): void {
   if (!isBrowser()) return
   localStorage.setItem(ADJUSTMENT_HISTORY_KEY, JSON.stringify(history))
+}
+
+interface ProgramHistoryEntry {
+  programId: string
+  startDate: string
+  endDate?: string
+  reason?: 'completed' | 'new_program' | 'abandoned'
+}
+
+function getProgramHistory(): ProgramHistoryEntry[] {
+  if (!isBrowser()) return []
+  try {
+    const stored = localStorage.getItem(PROGRAM_HISTORY_KEY)
+    return stored ? JSON.parse(stored) : []
+  } catch {
+    return []
+  }
+}
+
+function saveProgramHistory(history: ProgramHistoryEntry[]): void {
+  if (!isBrowser()) return
+  localStorage.setItem(PROGRAM_HISTORY_KEY, JSON.stringify(history))
+}
+
+/**
+ * Records when a program ends (either completed or abandoned for a new one)
+ */
+export function recordProgramEnd(reason: 'completed' | 'new_program' | 'abandoned'): void {
+  const state = getStoredProgramState()
+  if (!state) return
+  
+  const history = getProgramHistory()
+  const existingEntry = history.find(h => h.programId === state.programId)
+  
+  if (existingEntry) {
+    existingEntry.endDate = new Date().toISOString()
+    existingEntry.reason = reason
+  } else {
+    history.push({
+      programId: state.programId,
+      startDate: state.startDate,
+      endDate: new Date().toISOString(),
+      reason,
+    })
+  }
+  
+  saveProgramHistory(history)
+}
+
+/**
+ * Checks if user is restarting programs too frequently
+ */
+export function checkFrequentRestarts(): {
+  isFrequent: boolean
+  recentRestarts: number
+  message: string
+} {
+  const history = getProgramHistory()
+  const twoWeeksAgo = new Date()
+  twoWeeksAgo.setDate(twoWeeksAgo.getDate() - FREQUENT_RESTART_THRESHOLD_DAYS)
+  
+  // Count programs started and abandoned within 2 weeks
+  const recentRestarts = history.filter(h => {
+    if (h.reason !== 'new_program' && h.reason !== 'abandoned') return false
+    const endDate = h.endDate ? new Date(h.endDate) : new Date()
+    return endDate >= twoWeeksAgo
+  }).length
+  
+  const isFrequent = recentRestarts >= 2
+  
+  let message = ''
+  if (isFrequent) {
+    message = `For best results, SpartanLab recommends following your program for at least 4 weeks before switching. You've started ${recentRestarts + 1} programs in the last 2 weeks. Consistency is key to progress.`
+  }
+  
+  return { isFrequent, recentRestarts, message }
 }
 
 // =============================================================================

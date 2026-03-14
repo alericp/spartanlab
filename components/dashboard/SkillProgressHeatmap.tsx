@@ -238,9 +238,9 @@ export function SkillProgressHeatmap({
             status,
             isActive,
           }
-        } catch (err) {
-          // If projection fails for this goal, return a safe fallback entry
-          console.error(`Error calculating projection for ${goal.type}:`, err)
+        } catch {
+          // If projection fails for this goal (e.g., flexibility goals without strength thresholds),
+          // return a safe fallback entry. This is expected for some goal types.
           return {
             id: goal.type,
             name: goal.name,
@@ -263,8 +263,8 @@ export function SkillProgressHeatmap({
         .slice(0, maxSkills)
       
       setEntries(sortedEntries)
-    } catch (error) {
-      console.error('Error loading skill progress:', error)
+    } catch {
+      // Silent fail - skill progress is optional dashboard content
     }
   }, [maxSkills])
   

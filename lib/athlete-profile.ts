@@ -2,6 +2,11 @@
 // Comprehensive onboarding data model for calisthenics programming
 // Supports beginners, intermediates, and advanced athletes
 
+import type { MilitaryProfile } from './military-test-config'
+
+// Re-export for convenience
+export type { MilitaryProfile } from './military-test-config'
+
 // =============================================================================
 // ATHLETE PROFILE SECTION
 // =============================================================================
@@ -107,6 +112,31 @@ export const PRIMARY_TRAINING_OUTCOME_DESCRIPTIONS: Record<PrimaryTrainingOutcom
   skills: 'Skill-focused training with progression-based work and support strength',
   endurance: 'Circuits, density blocks, and conditioning for work capacity',
   general_fitness: 'Balanced programming covering strength, endurance, and movement quality',
+}
+
+/**
+ * Helper text explaining who each training outcome is best for
+ * Displayed in onboarding and goal selection UI
+ */
+export const PRIMARY_TRAINING_OUTCOME_HELPER_TEXT: Record<PrimaryTrainingOutcome, string> = {
+  strength: 'Best for: Users who want raw power, weighted progressions, and strength gains',
+  max_reps: 'Best for: Users chasing pull-up, push-up, and dip rep PRs',
+  military: 'Best for: Recruits, applicants, and service members preparing for official fitness tests',
+  skills: 'Best for: Users who want to master planche, front lever, muscle-up, and other advanced movements',
+  endurance: 'Best for: Users focused on conditioning, circuits, and sustained work capacity',
+  general_fitness: 'Best for: Users who want balanced strength, movement quality, and consistency without specializing',
+}
+
+/**
+ * Concrete examples of outcomes for each training path
+ */
+export const PRIMARY_TRAINING_OUTCOME_EXAMPLES: Record<PrimaryTrainingOutcome, string[]> = {
+  strength: ['Weighted pull-ups', 'Weighted dips', 'Harder progressions', 'Lower rep ranges'],
+  max_reps: ['20+ pull-ups', '50+ push-ups', 'Rep density', 'Volume tolerance'],
+  military: ['IST/PFT/CFT prep', 'ACFT training', 'Boot camp readiness', 'PT test standards'],
+  skills: ['Planche', 'Front lever', 'Muscle-up', 'Handstand push-up'],
+  endurance: ['Circuit training', 'Conditioning blocks', 'High-rep work', 'Work capacity'],
+  general_fitness: ['Overall improvement', 'Movement quality', 'Consistency', 'Balanced fitness'],
 }
 
 // =============================================================================
@@ -706,6 +736,10 @@ export interface OnboardingProfile {
   // This drives program structure - what does the user want to achieve?
   primaryTrainingOutcome: PrimaryTrainingOutcome | null
   
+  // Section 1b-military: Military Test Prep Profile
+  // Conditional - only populated if primaryTrainingOutcome === 'military'
+  militaryProfile: MilitaryProfile | null
+  
   // Section 1c: Training Path Type
   // Determines overall program focus: skill-based, strength/endurance, or hybrid
   trainingPathType: TrainingPathType | null
@@ -1118,6 +1152,9 @@ export function createEmptyOnboardingProfile(): OnboardingProfile {
   
   // Section 1b: Primary Training Outcome
   primaryTrainingOutcome: null,
+  
+  // Section 1b-military: Military Profile
+  militaryProfile: null,
   
   // Section 1c: Training Path Type
   trainingPathType: null,

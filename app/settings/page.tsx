@@ -24,6 +24,7 @@ import {
   saveAthleteProfile,
   type AthleteProfile,
 } from '@/lib/data-service'
+import { UpdateMetricsCard } from '@/components/dashboard/UpdateMetricsCard'
 
 export default function SettingsPage() {
   const [profile, setProfile] = useState<AthleteProfile | null>(null)
@@ -191,6 +192,11 @@ export default function SettingsPage() {
             </Button>
           </div>
         </Card>
+        
+        {/* Strength & Skill Metrics Update */}
+        <div className="mt-6">
+          <UpdateMetricsCard onUpdate={loadProfile} />
+        </div>
         
         {/* Subscription & Billing Section */}
         <Card className="bg-[#2A2A2A] border-[#3A3A3A] p-8 mt-6">

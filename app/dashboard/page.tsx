@@ -87,8 +87,11 @@ import { PremiumUpgradeBanner, SubscriptionTierBadge } from '@/components/premiu
 import { DashboardUpgradeCard } from '@/components/upgrade/AdaptiveProgramUpgradeCard'
 import { FirstRunGuide, SetupReminderBanner } from '@/components/dashboard/FirstRunGuide'
 import { UpdateMetricsCard, MetricsUpdateBanner } from '@/components/dashboard/UpdateMetricsCard'
+import { SafeWidget } from '@/components/shared/WidgetErrorBoundary'
+import { useClerkAvailability } from '@/components/providers/ClerkProviderWrapper'
 
 function DashboardContent() {
+  const { isLoading: isAuthLoading } = useClerkAvailability()
   const [overview, setOverview] = useState<DashboardOverview | null>(null)
   const [skillSummary, setSkillSummary] = useState<PrimarySkillSummary | null>(null)
   const [strengthSummary, setStrengthSummary] = useState<StrengthSummary | null>(null)
@@ -191,8 +194,8 @@ setConstraintInsight(getConstraintInsight())
     }
   }, [])
 
-  // Loading state
-  if (!mounted || !overview) {
+  // Loading state - also wait for auth to resolve to prevent UI mismatch
+  if (!mounted || !overview || isAuthLoading) {
     return (
       <PageContainer>
         <DashboardSkeleton />
@@ -284,7 +287,9 @@ setConstraintInsight(getConstraintInsight())
         {/* This is the most important section - what should I do right now */}
         {/* ============================================================= */}
         
-        <TodayFocusCard />
+        <SafeWidget name="TodayFocusCard">
+          <TodayFocusCard />
+        </SafeWidget>
         
         {/* Milestone Notifications - Show achievements prominently */}
         {unseenMilestones.length > 0 && (
@@ -306,7 +311,9 @@ setConstraintInsight(getConstraintInsight())
         {/* PRIORITY 2: TRAINING CONSISTENCY - Streak + Weekly Progress */}
         {/* ============================================================= */}
         
-        <TrainingConsistencyCard />
+        <SafeWidget name="TrainingConsistencyCard">
+          <TrainingConsistencyCard />
+        </SafeWidget>
         
         {/* ============================================================= */}
         {/* PRIORITY 3: READINESS + PROGRAM SNAPSHOT - Quick Status */}
@@ -357,56 +364,58 @@ setConstraintInsight(getConstraintInsight())
                 </Link>
               }
             />
-            <SkillProgressSection 
-              skills={progressOverview.skills}
-              focusNotes={constraintInsight?.hasInsight ? [{
-                skillName: focusSummary?.skillName || '',
-                note: constraintInsight.label || '',
-                type: 'limiter' as const,
-              }] : []}
-              goalSummaries={(() => {
-                // Calculate goal summaries from active skills
-                const activeSkills = progressOverview.skills.filter(s => s.progressPercent > 0)
-                if (activeSkills.length === 0) return []
-                
-                const avgProgress = Math.round(
-                  activeSkills.reduce((acc, s) => acc + s.progressPercent, 0) / activeSkills.length
-                )
-                
-                const categories: GoalCategorySummary[] = []
-                
-                // Skill goal progress
-                if (activeSkills.length > 0) {
-                  categories.push({
-                    category: 'skill',
-                    label: 'Skill Mastery',
-                    progressPercent: avgProgress,
-                    activeSkillsCount: activeSkills.length,
-                    totalMilestones: activeSkills.length * 5,
-                    completedMilestones: Math.round(activeSkills.length * avgProgress / 100 * 5),
-                  })
-                }
-                
-                // Strength progress if applicable
-                const strengthSkills = progressOverview.strength.filter(s => s.currentBest > 0)
-                if (strengthSkills.length > 0) {
-                  const strengthProgress = Math.min(100, Math.round(
-                    strengthSkills.reduce((acc, s) => acc + Math.min(100, s.improvement * 10), 0) / strengthSkills.length
-                  ))
-                  categories.push({
-                    category: 'strength',
-                    label: 'Strength',
-                    progressPercent: Math.max(30, strengthProgress),
-                    activeSkillsCount: strengthSkills.length,
-                    totalMilestones: strengthSkills.length,
-                    completedMilestones: strengthSkills.filter(s => s.improvement > 0).length,
-                  })
-                }
-                
-                return categories
-              })()}
-              maxDisplay={4}
-            />
+            <SafeWidget name="SkillProgressSection">
+              <SkillProgressSection 
+                skills={progressOverview.skills}
+                focusNotes={constraintInsight?.hasInsight ? [{
+                  skillName: focusSummary?.skillName || '',
+                  note: constraintInsight.label || '',
+                  type: 'limiter' as const,
+                }] : []}
+                goalSummaries={(() => {
+                  // Calculate goal summaries from active skills
+                  const activeSkills = progressOverview.skills.filter(s => s.progressPercent > 0)
+                  if (activeSkills.length === 0) return []
+                  
+                  const avgProgress = Math.round(
+                    activeSkills.reduce((acc, s) => acc + s.progressPercent, 0) / activeSkills.length
+                  )
+                  
+                  const categories: GoalCategorySummary[] = []
+                  
+                  // Skill goal progress
+                  if (activeSkills.length > 0) {
+                    categories.push({
+                      category: 'skill',
+                      label: 'Skill Mastery',
+                      progressPercent: avgProgress,
+                      activeSkillsCount: activeSkills.length,
+                      totalMilestones: activeSkills.length * 5,
+                      completedMilestones: Math.round(activeSkills.length * avgProgress / 100 * 5),
+                    })
+                  }
+                  
+                  // Strength progress if applicable
+                  const strengthSkills = progressOverview.strength.filter(s => s.currentBest > 0)
+                  if (strengthSkills.length > 0) {
+                    const strengthProgress = Math.min(100, Math.round(
+                      strengthSkills.reduce((acc, s) => acc + Math.min(100, s.improvement * 10), 0) / strengthSkills.length
+                    ))
+                    categories.push({
+                      category: 'strength',
+                      label: 'Strength',
+                      progressPercent: Math.max(30, strengthProgress),
+                      activeSkillsCount: strengthSkills.length,
+                      totalMilestones: strengthSkills.length,
+                      completedMilestones: strengthSkills.filter(s => s.improvement > 0).length,
+                    })
+                  }
+                  
+                  return categories
+                })()}
+                maxDisplay={4}
+              />
+            </SafeWidget>
           </Section>
         )}
         
@@ -415,7 +424,9 @@ setConstraintInsight(getConstraintInsight())
         {/* ============================================================= */}
         
         <div className="px-4">
-          <SkillProgressHeatmap maxSkills={6} />
+          <SafeWidget name="SkillProgressHeatmap">
+            <SkillProgressHeatmap maxSkills={6} />
+          </SafeWidget>
         </div>
         
         {/* ============================================================= */}
@@ -429,7 +440,9 @@ setConstraintInsight(getConstraintInsight())
               description="Estimated progress toward your next milestone"
               icon={Target}
             />
-            <GoalProjectionCard />
+            <SafeWidget name="GoalProjectionCard">
+              <GoalProjectionCard />
+            </SafeWidget>
           </Section>
         )}
         
@@ -443,7 +456,9 @@ setConstraintInsight(getConstraintInsight())
         <PWAInstallCard />
         
         {/* Adaptive Training Engine Visualization - Collapsed by default */}
-        <SensorEngineVisualization variant="full" />
+        <SafeWidget name="SensorEngineVisualization" hideOnError>
+          <SensorEngineVisualization variant="full" />
+        </SafeWidget>
         
         {/* Training Momentum - Secondary info */}
         {trainingMomentum && <TrainingMomentumCard momentum={trainingMomentum} />}
@@ -485,7 +500,9 @@ setConstraintInsight(getConstraintInsight())
             )}
             
             {/* Athlete Intelligence */}
-            <AthleteIntelligenceCard />
+            <SafeWidget name="AthleteIntelligenceCard">
+              <AthleteIntelligenceCard />
+            </SafeWidget>
             
             {/* Update Metrics - Allow users to refine their program */}
             <UpdateMetricsCard />

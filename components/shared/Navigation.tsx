@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { UserButton, SignedIn, SignedOut } from '@/components/auth/ClerkComponents'
+import { useClerkAvailability } from '@/components/providers/ClerkProviderWrapper'
 import { Button } from '@/components/ui/button'
 import { LayoutDashboard, Target, Dumbbell, Calendar, ClipboardList, TrendingUp, Activity, Settings, Menu, X, Wrench, BookOpen, LogIn } from 'lucide-react'
 import { SpartanIcon } from '@/components/brand/SpartanLogo'
@@ -29,6 +30,7 @@ const SECONDARY_NAV_ITEMS = [
 export function Navigation() {
   const pathname = usePathname()
   const [mobileOpen, setMobileOpen] = useState(false)
+  const { isLoading: isAuthLoading } = useClerkAvailability()
 
   return (
     <header className="border-b border-[#2B313A] bg-[#0F1115] sticky top-0 z-50">
@@ -72,17 +74,24 @@ export function Navigation() {
             </Link>
             
             {/* User Button - uses Clerk auth components */}
-            <SignedIn>
-              <UserButton afterSignOutUrl="/" />
-            </SignedIn>
-            <SignedOut>
-              <Link href="/sign-in">
-                <Button size="sm" variant="ghost" className="text-[#A4ACB8] hover:text-[#E6E9EF]">
-                  <LogIn className="w-4 h-4 mr-2" />
-                  Sign In
-                </Button>
-              </Link>
-            </SignedOut>
+            {/* Show loading placeholder while auth state resolves */}
+            {isAuthLoading ? (
+              <div className="w-8 h-8 rounded-full bg-[#2B313A] animate-pulse" />
+            ) : (
+              <>
+                <SignedIn>
+                  <UserButton afterSignOutUrl="/" />
+                </SignedIn>
+                <SignedOut>
+                  <Link href="/sign-in">
+                    <Button size="sm" variant="ghost" className="text-[#A4ACB8] hover:text-[#E6E9EF]">
+                      <LogIn className="w-4 h-4 mr-2" />
+                      Sign In
+                    </Button>
+                  </Link>
+                </SignedOut>
+              </>
+            )}
             
             {/* Mobile menu button */}
             <Button

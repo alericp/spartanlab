@@ -58,6 +58,9 @@ export function SignedIn({ children }: AuthComponentProps) {
  * 
  * Preview: Always renders children (no auth = signed out)
  * Production: Uses real Clerk SignedOut from provider context
+ * 
+ * CRITICAL: During loading, render nothing to prevent auth state mismatch
+ * where SignedOut shows content while SignedIn returns null.
  */
 export function SignedOut({ children }: AuthComponentProps) {
   const { isClerkAvailable, isLoading, components } = useClerkAvailability()
@@ -65,8 +68,9 @@ export function SignedOut({ children }: AuthComponentProps) {
   // Preview: always show children
   if (!isClerkAvailable) return <>{children}</>
   
-  // Still loading: show children (optimistic for SignedOut)
-  if (isLoading) return <>{children}</>
+  // Still loading: render nothing to match SignedIn behavior
+  // This prevents "Sign In" from flashing while auth state resolves
+  if (isLoading) return null
   
   // No component available: show children
   const Comp = components.SignedOut

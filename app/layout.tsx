@@ -55,14 +55,14 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <ClerkProvider>
-      <html lang="en">
-        <body className="font-sans antialiased bg-[#0F1115] text-[#E6E9EF]">
+    <html lang="en">
+      <body className="font-sans antialiased bg-[#0F1115] text-[#E6E9EF]">
+        <ClerkProvider>
           <GlobalErrorBoundary>
             {children}
           </GlobalErrorBoundary>
-        </body>
-      </html>
-    </ClerkProvider>
+        </ClerkProvider>
+      </body>
+    </html>
   )
 }

@@ -70,6 +70,15 @@ const GUIDES = [
     featured: true,
   },
   {
+    slug: 'back-lever-training',
+    title: 'Back Lever Training Guide',
+    description: 'Complete guide to back lever development. German hang mobility, progression ladder, support exercises, and tendon safety.',
+    icon: Target,
+    category: 'Skill Progression',
+    readTime: '12 min read',
+    featured: true,
+  },
+  {
     slug: 'calisthenics-strength-standards',
     title: 'Calisthenics Strength Standards',
     description: 'Benchmark your pulling and pushing strength against calisthenics standards from beginner to elite.',

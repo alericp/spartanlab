@@ -166,6 +166,19 @@ export const FEATURE_CAPABILITIES: FeatureCapability[] = [
     keyFunctions: ['ALL_TRAINING_CYCLES', 'selectRecommendedCycle', 'getTransitionRecommendation', 'CYCLE_GUIDE_STRUCTURES'],
     relevantFor: ['all'],
   },
+  {
+    id: 'back_lever_system',
+    internalName: 'Back Lever Training System',
+    marketingName: 'Back Lever Progressions',
+    shortDescription: 'Complete back lever development system',
+    longDescription: 'Full back lever progression system from german hang mobility to full lever holds. Includes readiness gates, tendon safety protocols, weak point detection, and session integration with other straight-arm skills.',
+    implementationEvidence: [
+      'lib/back-lever-training-system.ts',
+      'lib/coaching-engine-index.ts',
+    ],
+    keyFunctions: ['BACK_LEVER_PROGRESSION_SYSTEM', 'BACK_LEVER_READINESS_GATES', 'BACK_LEVER_WEAK_POINTS', 'BACK_LEVER_SESSION_TEMPLATE'],
+    relevantFor: ['skills', 'back_lever', 'front_lever'],
+  },
 ]
 
 // =============================================================================

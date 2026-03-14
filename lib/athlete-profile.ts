@@ -145,6 +145,7 @@ export const PRIMARY_TRAINING_OUTCOME_EXAMPLES: Record<PrimaryTrainingOutcome, s
 
 export type SkillGoal =
   | 'front_lever'
+  | 'back_lever'
   | 'planche'
   | 'muscle_up'
   | 'handstand_pushup'

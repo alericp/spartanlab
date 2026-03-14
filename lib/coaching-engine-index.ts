@@ -330,6 +330,40 @@ export {
 } from './training-cycle-engine'
 
 // =============================================================================
+// BACK LEVER TRAINING SYSTEM EXPORTS
+// =============================================================================
+
+export {
+  // Exercise Library
+  BACK_LEVER_EXERCISE_LIBRARY,
+  
+  // Readiness & Safety
+  BACK_LEVER_READINESS_GATES,
+  BACK_LEVER_WEAK_POINTS,
+  
+  // Progression System
+  BACK_LEVER_PROGRESSION_SYSTEM,
+  
+  // Training Cycle
+  BACK_LEVER_SKILL_CYCLE,
+  
+  // Guide & SEO
+  BACK_LEVER_GUIDE_STRUCTURE,
+  BACK_LEVER_SEO_PAGES,
+  
+  // Marketing
+  BACK_LEVER_MARKETING_CLAIMS,
+  
+  // Session Integration
+  BACK_LEVER_SESSION_TEMPLATE,
+  
+  // Types
+  type BackLeverExercise,
+  type BackLeverWeakPoint,
+  type BackLeverReadinessGate,
+} from './back-lever-training-system'
+
+// =============================================================================
 // MARKETING SUPPORT EXPORTS
 // =============================================================================
 
@@ -514,5 +548,6 @@ export function getEngineCapabilitySummary(): string[] {
     'Intelligent cycle selection based on goals',
     'Phase transition recommendations',
     'Deload and peaking protocols',
+    'Back lever progression system with mobility gates',
   ]
 }

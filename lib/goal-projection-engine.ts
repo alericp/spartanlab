@@ -240,19 +240,21 @@ export function calculateGoalProjection(goalType: GoalType): GoalProjection {
   
   // If at final level - goal reached
   if (isAtFinalLevel) {
-    return {
-      goalType,
-      goalName: GOAL_NAMES[goalType],
-      currentLevel,
-      currentLevelName: skillDefinition.levels[currentLevel].name,
-      isAtFinalLevel: true,
-      nextLevel: null,
-      nextLevelName: null,
-      timeRange: null,
-      confidence: 'high',
-      confidenceReason: 'Goal achieved',
-      status: 'goal_reached',
-      explanation: `You've achieved ${skillDefinition.levels[currentLevel].name}. Focus on hold quality and duration.`,
+  const currentLevelData = skillDefinition.levels?.[currentLevel]
+  const currentLevelName = currentLevelData?.name || 'Final Level'
+  return {
+  goalType,
+  goalName: GOAL_NAMES[goalType],
+  currentLevel,
+  currentLevelName,
+  isAtFinalLevel: true,
+  nextLevel: null,
+  nextLevelName: null,
+  timeRange: null,
+  confidence: 'high',
+  confidenceReason: 'Goal achieved',
+  status: 'goal_reached',
+  explanation: `You've achieved ${currentLevelName}. Focus on hold quality and duration.`,
       mainLimiter: null,
       action: {
         primary: 'Master your current level',

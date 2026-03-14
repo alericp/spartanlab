@@ -243,8 +243,22 @@ export function ClerkProviderWrapper({ children }: Props) {
   // Effect 1: Determine if we should initialize Clerk (runs once on hydration)
   useEffect(() => {
     loadAuthEnv().then(authEnv => {
+      const hostname = typeof window !== 'undefined' ? window.location.hostname : 'server'
       const shouldInit = authEnv?.shouldInitializeClerk?.() ?? false
       const authMode = authEnv?.getAuthMode?.() ?? 'preview'
+      const isProductionDomain = authEnv?.isProductionAuthDomain?.() ?? false
+      const isClerkConfigured = authEnv?.isClerkConfigured?.() ?? false
+      const isProductionKey = authEnv?.isProductionClerkKey?.() ?? false
+      
+      // Diagnostic logging for production debugging
+      console.log('[v0] ClerkProviderWrapper auth decision:', {
+        hostname,
+        shouldInit,
+        authMode,
+        isProductionDomain,
+        isClerkConfigured,
+        isProductionKey,
+      })
       
       setInitDecision({ decided: true, shouldInit, authMode })
       

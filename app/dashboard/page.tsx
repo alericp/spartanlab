@@ -130,41 +130,149 @@ function DashboardContent() {
       // Clean up URL
       window.history.replaceState({}, '', '/dashboard')
     }
-    const data = getDashboardOverview()
-    setOverview(data)
-    setSkillSummary(getPrimarySkillSummary(data))
-    setStrengthSummary(getStrengthSummary(data))
-    setProgramSummary(getProgramSummary(data))
-    setFocusSummary(getCurrentFocusSummary(data))
-    setWorkoutAnalytics(getWorkoutAnalytics())
-    setSpartanScore(calculateSpartanScore())
-    setRecoverySignal(calculateRecoverySignal())
-    setMovementBalance(calculateMovementBalance())
-    setNextMilestone(calculateProjectionForPrimaryGoal())
-setConstraintInsight(getConstraintInsight())
-  setAthleteCalibration(getAthleteCalibration())
-    setDeloadAssessment(assessDeloadNeed())
-    setTrainingMomentum(calculateTrainingMomentum())
-    setProgressOverview(getProgressOverview())
-    setUnseenMilestones(getUnseenMilestones())
+    
+    // STAGED CRASH ISOLATION: Each computation wrapped to identify exact failure point
+    let data: DashboardOverview | null = null
+    
+    try {
+      console.log('[v0] Dashboard: Stage 1 - getDashboardOverview')
+      data = getDashboardOverview()
+      setOverview(data)
+    } catch (e) {
+      console.error('[v0] Dashboard CRASH at Stage 1 - getDashboardOverview:', e)
+      setOverview({ profile: null as any, progressions: [], workouts: [], goals: [] })
+      return // Stop further processing
+    }
+    
+    try {
+      console.log('[v0] Dashboard: Stage 2 - getPrimarySkillSummary')
+      setSkillSummary(getPrimarySkillSummary(data))
+    } catch (e) {
+      console.error('[v0] Dashboard CRASH at Stage 2 - getPrimarySkillSummary:', e)
+    }
+    
+    try {
+      console.log('[v0] Dashboard: Stage 3 - getStrengthSummary')
+      setStrengthSummary(getStrengthSummary(data))
+    } catch (e) {
+      console.error('[v0] Dashboard CRASH at Stage 3 - getStrengthSummary:', e)
+    }
+    
+    try {
+      console.log('[v0] Dashboard: Stage 4 - getProgramSummary')
+      setProgramSummary(getProgramSummary(data))
+    } catch (e) {
+      console.error('[v0] Dashboard CRASH at Stage 4 - getProgramSummary:', e)
+    }
+    
+    try {
+      console.log('[v0] Dashboard: Stage 5 - getCurrentFocusSummary')
+      setFocusSummary(getCurrentFocusSummary(data))
+    } catch (e) {
+      console.error('[v0] Dashboard CRASH at Stage 5 - getCurrentFocusSummary:', e)
+    }
+    
+    try {
+      console.log('[v0] Dashboard: Stage 6 - getWorkoutAnalytics')
+      setWorkoutAnalytics(getWorkoutAnalytics())
+    } catch (e) {
+      console.error('[v0] Dashboard CRASH at Stage 6 - getWorkoutAnalytics:', e)
+    }
+    
+    try {
+      console.log('[v0] Dashboard: Stage 7 - calculateSpartanScore')
+      setSpartanScore(calculateSpartanScore())
+    } catch (e) {
+      console.error('[v0] Dashboard CRASH at Stage 7 - calculateSpartanScore:', e)
+    }
+    
+    try {
+      console.log('[v0] Dashboard: Stage 8 - calculateRecoverySignal')
+      setRecoverySignal(calculateRecoverySignal())
+    } catch (e) {
+      console.error('[v0] Dashboard CRASH at Stage 8 - calculateRecoverySignal:', e)
+    }
+    
+    try {
+      console.log('[v0] Dashboard: Stage 9 - calculateMovementBalance')
+      setMovementBalance(calculateMovementBalance())
+    } catch (e) {
+      console.error('[v0] Dashboard CRASH at Stage 9 - calculateMovementBalance:', e)
+    }
+    
+    try {
+      console.log('[v0] Dashboard: Stage 10 - calculateProjectionForPrimaryGoal')
+      setNextMilestone(calculateProjectionForPrimaryGoal())
+    } catch (e) {
+      console.error('[v0] Dashboard CRASH at Stage 10 - calculateProjectionForPrimaryGoal:', e)
+    }
+    
+    try {
+      console.log('[v0] Dashboard: Stage 11 - getConstraintInsight')
+      setConstraintInsight(getConstraintInsight())
+    } catch (e) {
+      console.error('[v0] Dashboard CRASH at Stage 11 - getConstraintInsight:', e)
+    }
+    
+    try {
+      console.log('[v0] Dashboard: Stage 12 - getAthleteCalibration')
+      setAthleteCalibration(getAthleteCalibration())
+    } catch (e) {
+      console.error('[v0] Dashboard CRASH at Stage 12 - getAthleteCalibration:', e)
+    }
+    
+    try {
+      console.log('[v0] Dashboard: Stage 13 - assessDeloadNeed')
+      setDeloadAssessment(assessDeloadNeed())
+    } catch (e) {
+      console.error('[v0] Dashboard CRASH at Stage 13 - assessDeloadNeed:', e)
+    }
+    
+    try {
+      console.log('[v0] Dashboard: Stage 14 - calculateTrainingMomentum')
+      setTrainingMomentum(calculateTrainingMomentum())
+    } catch (e) {
+      console.error('[v0] Dashboard CRASH at Stage 14 - calculateTrainingMomentum:', e)
+    }
+    
+    try {
+      console.log('[v0] Dashboard: Stage 15 - getProgressOverview')
+      setProgressOverview(getProgressOverview())
+    } catch (e) {
+      console.error('[v0] Dashboard CRASH at Stage 15 - getProgressOverview:', e)
+    }
+    
+    try {
+      console.log('[v0] Dashboard: Stage 16 - getUnseenMilestones')
+      setUnseenMilestones(getUnseenMilestones())
+    } catch (e) {
+      console.error('[v0] Dashboard CRASH at Stage 16 - getUnseenMilestones:', e)
+    }
+    
+    console.log('[v0] Dashboard: All stages completed')
     
     // Calculate training method emphasis based on athlete profile
-    if (data.profile) {
-      const profile = data.profile
-      const recovery = calculateRecoverySignal()
-      const selectionContext: SelectionContext = {
-        primaryGoal: (profile.primaryGoal || 'general_strength') as any,
-        experienceLevel: profile.experienceLevel || 'intermediate',
-        recoveryCapacity: 'moderate',
-        sorenessToleranceHigh: false,
-        sessionMinutes: profile.sessionLengthMinutes || 60,
-        trainingDaysPerWeek: profile.trainingDaysPerWeek || 4,
-        currentFatigueLevel: recovery?.readinessLevel === 'low' ? 'high' : 'moderate',
-        recentSorenessLevel: 'mild',
-        rangeTrainingMode: profile.rangeTrainingMode || undefined,
+    try {
+      console.log('[v0] Dashboard: Stage 17 - selectMethodProfiles')
+      if (data.profile) {
+        const profile = data.profile
+        const recovery = calculateRecoverySignal()
+        const selectionContext: SelectionContext = {
+          primaryGoal: (profile.primaryGoal || 'general_strength') as any,
+          experienceLevel: profile.experienceLevel || 'intermediate',
+          recoveryCapacity: 'moderate',
+          sorenessToleranceHigh: false,
+          sessionMinutes: typeof profile.sessionLengthMinutes === 'number' ? profile.sessionLengthMinutes : 60,
+          trainingDaysPerWeek: typeof profile.trainingDaysPerWeek === 'number' ? profile.trainingDaysPerWeek : 4,
+          currentFatigueLevel: recovery?.readinessLevel === 'low' ? 'high' : 'moderate',
+          recentSorenessLevel: 'mild',
+          rangeTrainingMode: profile.rangeTrainingMode || undefined,
+        }
+        const methods = selectMethodProfiles(selectionContext)
+        setTrainingMethods(methods)
       }
-      const methods = selectMethodProfiles(selectionContext)
-      setTrainingMethods(methods)
+    } catch (e) {
+      console.error('[v0] Dashboard CRASH at Stage 17 - selectMethodProfiles:', e)
     }
     
     // Get progression insights from adaptive progression engine

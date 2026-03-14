@@ -208,6 +208,9 @@ interface Props {
   children: ReactNode
 }
 
+// Maximum time to wait for auth to resolve before falling back to preview mode
+const AUTH_TIMEOUT_MS = 5000
+
 export function ClerkProviderWrapper({ children }: Props) {
   // Track hydration and initialization decision
   const [initDecision, setInitDecision] = useState<{
@@ -215,6 +218,9 @@ export function ClerkProviderWrapper({ children }: Props) {
     shouldInit: boolean
     authMode: AuthMode
   }>({ decided: false, shouldInit: false, authMode: 'preview' })
+  
+  // Track if we've timed out waiting for auth
+  const [timedOut, setTimedOut] = useState(false)
   
   const [state, setState] = useState<ClerkAvailabilityContextValue>(() => ({
     isClerkAvailable: false,
@@ -239,6 +245,35 @@ export function ClerkProviderWrapper({ children }: Props) {
     signInFallbackRedirectUrl?: string
     signUpFallbackRedirectUrl?: string
   }> | null>(null)
+
+  // Effect 0: Safety timeout - prevent infinite loading
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      // If we're still loading after timeout, force fallback to preview mode
+      if (state.isLoading) {
+        console.warn('[v0] ClerkProviderWrapper: Auth timeout - falling back to preview mode')
+        setTimedOut(true)
+        setState({
+          isClerkAvailable: false,
+          isPreviewMode: true,
+          isLoading: false,
+          authMode: 'preview',
+          hasError: false,
+          components: {
+            SignIn: null,
+            SignUp: null,
+            SignedIn: null,
+            SignedOut: null,
+            UserButton: null,
+          },
+        })
+        // Also mark decision as decided to unblock
+        setInitDecision(prev => ({ ...prev, decided: true, shouldInit: false }))
+      }
+    }, AUTH_TIMEOUT_MS)
+    
+    return () => clearTimeout(timeout)
+  }, [state.isLoading])
 
   // Effect 1: Determine if we should initialize Clerk (runs once on hydration)
   useEffect(() => {
@@ -371,14 +406,22 @@ export function ClerkProviderWrapper({ children }: Props) {
     }
   }, [initDecision])
 
-  // Still determining mode or loading Clerk
-  if (!initDecision.decided || (initDecision.shouldInit && !ClerkProvider && !state.hasError)) {
+  // Still determining mode or loading Clerk (unless timed out)
+  if (!timedOut && (!initDecision.decided || (initDecision.shouldInit && !ClerkProvider && !state.hasError))) {
+    console.log('[v0] ClerkProviderWrapper: Still loading...', { decided: initDecision.decided, shouldInit: initDecision.shouldInit, hasClerkProvider: !!ClerkProvider, hasError: state.hasError, timedOut })
     return (
       <ClerkAvailabilityContext.Provider value={state}>
         {children}
       </ClerkAvailabilityContext.Provider>
     )
   }
+  
+  // Log final resolved state
+  console.log('[v0] ClerkProviderWrapper: Resolved to', { 
+    branch: timedOut ? 'timeout-fallback' : !initDecision.shouldInit ? 'preview' : ClerkProvider ? 'production' : 'error-fallback',
+    isClerkAvailable: state.isClerkAvailable,
+    authMode: state.authMode 
+  })
 
   // Preview mode - render children without Clerk
   if (!initDecision.shouldInit || !ClerkProvider) {

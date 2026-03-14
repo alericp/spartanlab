@@ -69,31 +69,18 @@ export function AuthGuard({
     setMounted(true)
   }, [])
 
-  // Determine which branch we're in for diagnostics
-  const getBranch = () => {
-    if (!mounted) return 'ssr'
-    if (isLoading) return 'loading'
-    if (!isClerkAvailable) return 'fallback-preview'
-    return 'clerk-production'
-  }
+  // SSR - return null to prevent blocking, let client handle auth
+  if (!mounted) return null
   
-  // Log final branch (only when mounted and not loading)
-  useEffect(() => {
-    if (mounted && !isLoading) {
-      console.log('[v0] AuthGuard resolved:', { branch: getBranch(), isClerkAvailable, isLoading })
-    }
-  }, [mounted, isLoading, isClerkAvailable])
+  // Still loading - return null to prevent blocking the app shell
+  // The navigation and layout should still render
+  if (isLoading) return null
 
-  // SSR
-  if (!mounted) return <>{fallback ?? <LoadingState />}</>
-  
-  // Checking auth availability
-  if (isLoading) return <>{fallback ?? <LoadingState />}</>
-
-  // Preview mode: allow access without auth
+  // Preview mode: allow access without auth (for UI testing)
   if (!isClerkAvailable) return <>{children}</>
 
   // Production mode: require authentication
+  // SignedIn/SignedOut handle their own loading states
   return (
     <>
       <SignedIn>{children}</SignedIn>

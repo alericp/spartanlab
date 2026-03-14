@@ -95,6 +95,9 @@ export type RangeTrainingIntent = 'flexibility' | 'mobility' | 'hybrid'
 // STRENGTH BENCHMARKS
 // =============================================================================
 
+// Metric confidence - tracks whether value is known or estimated
+export type MetricConfidence = 'known' | 'unknown' | 'estimated'
+
 export type PullUpCapacity =
   | '0'
   | '1_3'
@@ -103,6 +106,7 @@ export type PullUpCapacity =
   | '13_17'
   | '18_22'
   | '23_plus'
+  | 'unknown'  // Don't know / not tested
 
 export type PushUpCapacity =
   | '0_10'
@@ -110,6 +114,7 @@ export type PushUpCapacity =
   | '25_40'
   | '40_60'
   | '60_plus'
+  | 'unknown'
 
 export type DipCapacity =
   | '0'
@@ -119,6 +124,7 @@ export type DipCapacity =
   | '16_20'
   | '21_25'
   | '25_plus'
+  | 'unknown'
 
 export type WallHSPUReps =
   | '0'
@@ -126,6 +132,7 @@ export type WallHSPUReps =
   | '4_6'
   | '7_10'
   | '10_plus'
+  | 'unknown'
 
 // Weighted benchmarks - exact values in lbs/kg
 export interface WeightedBenchmark {
@@ -145,6 +152,7 @@ export type FrontLeverProgression =
   | 'one_leg'
   | 'straddle'
   | 'full'
+  | 'unknown'
 
 export type PlancheProgression =
   | 'none'
@@ -153,6 +161,7 @@ export type PlancheProgression =
   | 'adv_tuck'
   | 'straddle'
   | 'full'
+  | 'unknown'
 
 export type MuscleUpReadiness =
   | 'none'
@@ -160,6 +169,7 @@ export type MuscleUpReadiness =
   | 'kipping'        // Can do kipping muscle-ups
   | 'strict_1_3'     // 1-3 strict
   | 'strict_4_plus'  // 4+ strict
+  | 'unknown'
 
 export type HSPUProgression =
   | 'none'
@@ -167,6 +177,7 @@ export type HSPUProgression =
   | 'box_pike'
   | 'wall_hspu'
   | 'freestanding'
+  | 'unknown'
 
 export type LSitHoldCapacity =
   | 'none'
@@ -174,12 +185,14 @@ export type LSitHoldCapacity =
   | '10_20'
   | '20_30'
   | '30_plus'
+  | 'unknown'
 
 export type VSitHoldCapacity =
   | 'none'
   | 'under_5'
   | '5_10'
   | '10_plus'
+  | 'unknown'
 
 export interface SkillBenchmark {
   progression: string
@@ -198,6 +211,7 @@ export type FlexibilityLevel =
   | 'intermediate'   // Decent range
   | 'advanced'       // Good range
   | 'elite'          // Full expression
+  | 'unknown'        // Don't know / not tested
 
 export interface FlexibilityBenchmark {
   level: FlexibilityLevel
@@ -402,6 +416,7 @@ export const PULLUP_LABELS: Record<PullUpCapacity, string> = {
   '13_17': '13–17',
   '18_22': '18–22',
   '23_plus': '23+',
+  'unknown': "Don't know",
 }
 
 export const PUSHUP_LABELS: Record<PushUpCapacity, string> = {
@@ -410,6 +425,7 @@ export const PUSHUP_LABELS: Record<PushUpCapacity, string> = {
   '25_40': '25–40',
   '40_60': '40–60',
   '60_plus': '60+',
+  'unknown': "Don't know",
 }
 
 export const DIP_LABELS: Record<DipCapacity, string> = {
@@ -420,6 +436,7 @@ export const DIP_LABELS: Record<DipCapacity, string> = {
   '16_20': '16–20',
   '21_25': '21–25',
   '25_plus': '25+',
+  'unknown': "Don't know",
 }
 
 export const WALL_HSPU_LABELS: Record<WallHSPUReps, string> = {
@@ -428,6 +445,7 @@ export const WALL_HSPU_LABELS: Record<WallHSPUReps, string> = {
   '4_6': '4–6',
   '7_10': '7–10',
   '10_plus': '10+',
+  'unknown': "Don't know",
 }
 
 export const FRONT_LEVER_LABELS: Record<FrontLeverProgression, string> = {
@@ -437,6 +455,7 @@ export const FRONT_LEVER_LABELS: Record<FrontLeverProgression, string> = {
   'one_leg': 'One Leg',
   'straddle': 'Straddle',
   'full': 'Full',
+  'unknown': "Don't know",
 }
 
 export const PLANCHE_LABELS: Record<PlancheProgression, string> = {
@@ -446,6 +465,7 @@ export const PLANCHE_LABELS: Record<PlancheProgression, string> = {
   'adv_tuck': 'Advanced Tuck',
   'straddle': 'Straddle',
   'full': 'Full',
+  'unknown': "Don't know",
 }
 
 export const MUSCLE_UP_LABELS: Record<MuscleUpReadiness, string> = {
@@ -454,6 +474,7 @@ export const MUSCLE_UP_LABELS: Record<MuscleUpReadiness, string> = {
   'kipping': 'Kipping only',
   'strict_1_3': '1–3 strict',
   'strict_4_plus': '4+ strict',
+  'unknown': "Don't know",
 }
 
 export const HSPU_LABELS: Record<HSPUProgression, string> = {
@@ -462,6 +483,7 @@ export const HSPU_LABELS: Record<HSPUProgression, string> = {
   'box_pike': 'Elevated pike',
   'wall_hspu': 'Wall HSPU',
   'freestanding': 'Freestanding',
+  'unknown': "Don't know",
 }
 
 export const LSIT_HOLD_LABELS: Record<LSitHoldCapacity, string> = {
@@ -470,6 +492,7 @@ export const LSIT_HOLD_LABELS: Record<LSitHoldCapacity, string> = {
   '10_20': '10–20s',
   '20_30': '20–30s',
   '30_plus': '30s+',
+  'unknown': "Don't know",
 }
 
 export const VSIT_HOLD_LABELS: Record<VSitHoldCapacity, string> = {
@@ -477,6 +500,7 @@ export const VSIT_HOLD_LABELS: Record<VSitHoldCapacity, string> = {
   'under_5': 'Under 5s',
   '5_10': '5–10s',
   '10_plus': '10s+',
+  'unknown': "Don't know",
 }
 
 export const FLEXIBILITY_LEVEL_LABELS: Record<FlexibilityLevel, string> = {
@@ -486,6 +510,7 @@ export const FLEXIBILITY_LEVEL_LABELS: Record<FlexibilityLevel, string> = {
   'intermediate': 'Decent range',
   'advanced': 'Good range',
   'elite': 'Full expression',
+  'unknown': "Don't know",
 }
 
 export const RANGE_INTENT_LABELS: Record<RangeTrainingIntent, string> = {
@@ -716,7 +741,9 @@ export function estimateStrengthTier(profile: OnboardingProfile): StrengthTier {
   }
   
   // Fallback to pull-up/dip capacity estimation
+  // Handle "unknown" values by defaulting to novice
   if (!profile.pullUpMax || !profile.dipMax) return 'novice'
+  if (profile.pullUpMax === 'unknown' || profile.dipMax === 'unknown') return 'novice'
   
   const pullupScore: Record<PullUpCapacity, number> = {
     '0': 0,
@@ -726,6 +753,7 @@ export function estimateStrengthTier(profile: OnboardingProfile): StrengthTier {
     '13_17': 4,
     '18_22': 5,
     '23_plus': 6,
+    'unknown': 0, // Treat unknown as 0 for scoring
   }
   
   const dipScore: Record<DipCapacity, number> = {
@@ -736,6 +764,7 @@ export function estimateStrengthTier(profile: OnboardingProfile): StrengthTier {
     '16_20': 4,
     '21_25': 5,
     '25_plus': 6,
+    'unknown': 0, // Treat unknown as 0 for scoring
   }
   
   const avgScore = ((pullupScore[profile.pullUpMax] ?? 0) + (dipScore[profile.dipMax] ?? 0)) / 2
@@ -806,6 +835,137 @@ export function mapWeeklyTrainingToDays(weekly: WeeklyTrainingDays): number {
 }
 
 // =============================================================================
+// DEFAULT ESTIMATION ENGINE
+// =============================================================================
+
+// Default values used when user selects "Don't know" / "Unknown"
+// These are conservative beginner-safe estimates based on training experience
+
+export interface EstimatedDefaults {
+  pullUpMax: PullUpCapacity
+  dipMax: DipCapacity
+  pushUpMax: PushUpCapacity
+  wallHSPUReps: WallHSPUReps
+  frontLever: FrontLeverProgression
+  planche: PlancheProgression
+  muscleUp: MuscleUpReadiness
+  hspu: HSPUProgression
+  lSitHold: LSitHoldCapacity
+  vSitHold: VSitHoldCapacity
+  flexibilityLevel: FlexibilityLevel
+}
+
+// Conservative defaults based on training experience
+export function getDefaultEstimates(experience: TrainingExperience | null): EstimatedDefaults {
+  switch (experience) {
+    case 'advanced':
+      return {
+        pullUpMax: '8_12',
+        dipMax: '11_15',
+        pushUpMax: '25_40',
+        wallHSPUReps: '4_6',
+        frontLever: 'adv_tuck',
+        planche: 'tuck',
+        muscleUp: 'working_on',
+        hspu: 'box_pike',
+        lSitHold: '10_20',
+        vSitHold: 'under_5',
+        flexibilityLevel: 'developing',
+      }
+    case 'intermediate':
+      return {
+        pullUpMax: '4_7',
+        dipMax: '6_10',
+        pushUpMax: '25_40',
+        wallHSPUReps: '1_3',
+        frontLever: 'tuck',
+        planche: 'lean',
+        muscleUp: 'none',
+        hspu: 'pike',
+        lSitHold: 'under_10',
+        vSitHold: 'none',
+        flexibilityLevel: 'beginner',
+      }
+    case 'some':
+      return {
+        pullUpMax: '1_3',
+        dipMax: '1_5',
+        pushUpMax: '10_25',
+        wallHSPUReps: '0',
+        frontLever: 'none',
+        planche: 'none',
+        muscleUp: 'none',
+        hspu: 'none',
+        lSitHold: 'none',
+        vSitHold: 'none',
+        flexibilityLevel: 'beginner',
+      }
+    case 'new':
+    default:
+      return {
+        pullUpMax: '0',
+        dipMax: '0',
+        pushUpMax: '0_10',
+        wallHSPUReps: '0',
+        frontLever: 'none',
+        planche: 'none',
+        muscleUp: 'none',
+        hspu: 'none',
+        lSitHold: 'none',
+        vSitHold: 'none',
+        flexibilityLevel: 'none',
+      }
+  }
+}
+
+// Check if a metric is "unknown" and needs estimation
+export function isMetricUnknown(value: string | null | undefined): boolean {
+  return value === 'unknown' || value === null || value === undefined
+}
+
+// Get estimated value for a specific metric
+export function getEstimatedMetric<K extends keyof EstimatedDefaults>(
+  profile: OnboardingProfile,
+  metricKey: K
+): EstimatedDefaults[K] {
+  const defaults = getDefaultEstimates(profile.trainingExperience)
+  return defaults[metricKey]
+}
+
+// Check if profile has any estimated/unknown values
+export function hasEstimatedValues(profile: OnboardingProfile): boolean {
+  return (
+    profile.pullUpMax === 'unknown' ||
+    profile.dipMax === 'unknown' ||
+    profile.pushUpMax === 'unknown' ||
+    profile.wallHSPUReps === 'unknown' ||
+    profile.frontLever?.progression === 'unknown' ||
+    profile.planche?.progression === 'unknown' ||
+    profile.muscleUp === 'unknown' ||
+    profile.hspu?.progression === 'unknown' ||
+    profile.lSitHold === 'unknown' ||
+    profile.vSitHold === 'unknown' ||
+    profile.pancake?.level === 'unknown' ||
+    profile.toeTouch?.level === 'unknown' ||
+    profile.frontSplits?.level === 'unknown' ||
+    profile.sideSplits?.level === 'unknown'
+  )
+}
+
+// Get actual or estimated value for program building
+export function getEffectiveStrengthValue(
+  profile: OnboardingProfile,
+  metric: 'pullUpMax' | 'dipMax' | 'pushUpMax' | 'wallHSPUReps'
+): { value: string; isEstimated: boolean } {
+  const profileValue = profile[metric]
+  if (isMetricUnknown(profileValue)) {
+    const defaults = getDefaultEstimates(profile.trainingExperience)
+    return { value: defaults[metric], isEstimated: true }
+  }
+  return { value: profileValue!, isEstimated: false }
+}
+
+// =============================================================================
 // PROGRAM INPUT SUGGESTION
 // =============================================================================
 
@@ -820,5 +980,6 @@ export function suggestProgramInputsFromOnboarding(profile: OnboardingProfile) {
     trainingDaysPerWeek: profile.trainingDaysPerWeek || 3,
     primaryGoal: profile.primaryGoal || 'general_strength',
     estimatedStrengthTier: strengthTier,
+    hasEstimatedValues: hasEstimatedValues(profile),
   }
 }

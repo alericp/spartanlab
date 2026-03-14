@@ -78,6 +78,7 @@ import {
   RECOVERY_LABELS,
   saveOnboardingProfile,
   createEmptyOnboardingProfile,
+  hasEstimatedValues,
 } from '@/lib/athlete-profile'
 
 // =============================================================================
@@ -462,7 +463,22 @@ function SkillSelectionSection({ profile, updateProfile }: SectionProps) {
   )
 }
 
+// Helper component for "Don't know" hint
+function DontKnowHint() {
+  return (
+    <p className="text-xs text-[#4F6D8A] mt-2 italic">
+      Not sure? You can test this after a proper warm-up. Update your metrics anytime.
+    </p>
+  )
+}
+
 function StrengthBenchmarksSection({ profile, updateProfile }: SectionProps) {
+  // Separate known values from "unknown" for better UX
+  const pullupOptions = (Object.keys(PULLUP_LABELS) as PullUpCapacity[]).filter(k => k !== 'unknown')
+  const dipOptions = (Object.keys(DIP_LABELS) as DipCapacity[]).filter(k => k !== 'unknown')
+  const pushupOptions = (Object.keys(PUSHUP_LABELS) as PushUpCapacity[]).filter(k => k !== 'unknown')
+  const hspuOptions = (Object.keys(WALL_HSPU_LABELS) as WallHSPUReps[]).filter(k => k !== 'unknown')
+
   return (
     <div className="space-y-6">
       {/* Max Pull-ups */}
@@ -470,7 +486,7 @@ function StrengthBenchmarksSection({ profile, updateProfile }: SectionProps) {
         <label className="text-sm font-medium text-[#A4ACB8]">Max pull-ups</label>
         <p className="text-xs text-[#6B7280] -mt-1">Strict form, full range of motion</p>
         <div className="grid grid-cols-4 gap-2">
-          {(Object.keys(PULLUP_LABELS) as PullUpCapacity[]).map((cap) => (
+          {pullupOptions.map((cap) => (
             <OptionButton
               key={cap}
               selected={profile.pullUpMax === cap}
@@ -480,6 +496,14 @@ function StrengthBenchmarksSection({ profile, updateProfile }: SectionProps) {
             </OptionButton>
           ))}
         </div>
+        <OptionButton
+          selected={profile.pullUpMax === 'unknown'}
+          onClick={() => updateProfile({ pullUpMax: 'unknown' })}
+          className="w-full mt-1"
+        >
+          Don't know / Not tested
+        </OptionButton>
+        {profile.pullUpMax === 'unknown' && <DontKnowHint />}
       </div>
 
       {/* Max Dips */}
@@ -487,7 +511,7 @@ function StrengthBenchmarksSection({ profile, updateProfile }: SectionProps) {
         <label className="text-sm font-medium text-[#A4ACB8]">Max dips</label>
         <p className="text-xs text-[#6B7280] -mt-1">Parallel bar dips, full depth</p>
         <div className="grid grid-cols-4 gap-2">
-          {(Object.keys(DIP_LABELS) as DipCapacity[]).map((cap) => (
+          {dipOptions.map((cap) => (
             <OptionButton
               key={cap}
               selected={profile.dipMax === cap}
@@ -497,6 +521,14 @@ function StrengthBenchmarksSection({ profile, updateProfile }: SectionProps) {
             </OptionButton>
           ))}
         </div>
+        <OptionButton
+          selected={profile.dipMax === 'unknown'}
+          onClick={() => updateProfile({ dipMax: 'unknown' })}
+          className="w-full mt-1"
+        >
+          Don't know / Not tested
+        </OptionButton>
+        {profile.dipMax === 'unknown' && <DontKnowHint />}
       </div>
 
       {/* Max Push-ups */}
@@ -504,7 +536,7 @@ function StrengthBenchmarksSection({ profile, updateProfile }: SectionProps) {
         <label className="text-sm font-medium text-[#A4ACB8]">Max push-ups</label>
         <p className="text-xs text-[#6B7280] -mt-1">Full range, chest to ground</p>
         <div className="grid grid-cols-3 gap-2">
-          {(Object.keys(PUSHUP_LABELS) as PushUpCapacity[]).map((cap) => (
+          {pushupOptions.map((cap) => (
             <OptionButton
               key={cap}
               selected={profile.pushUpMax === cap}
@@ -514,6 +546,14 @@ function StrengthBenchmarksSection({ profile, updateProfile }: SectionProps) {
             </OptionButton>
           ))}
         </div>
+        <OptionButton
+          selected={profile.pushUpMax === 'unknown'}
+          onClick={() => updateProfile({ pushUpMax: 'unknown' })}
+          className="w-full mt-1"
+        >
+          Don't know / Not tested
+        </OptionButton>
+        {profile.pushUpMax === 'unknown' && <DontKnowHint />}
       </div>
 
       {/* Wall HSPU */}
@@ -521,7 +561,7 @@ function StrengthBenchmarksSection({ profile, updateProfile }: SectionProps) {
         <label className="text-sm font-medium text-[#A4ACB8]">Wall handstand push-ups</label>
         <p className="text-xs text-[#6B7280] -mt-1">Full range against wall</p>
         <div className="grid grid-cols-5 gap-2">
-          {(Object.keys(WALL_HSPU_LABELS) as WallHSPUReps[]).map((reps) => (
+          {hspuOptions.map((reps) => (
             <OptionButton
               key={reps}
               selected={profile.wallHSPUReps === reps}
@@ -531,6 +571,14 @@ function StrengthBenchmarksSection({ profile, updateProfile }: SectionProps) {
             </OptionButton>
           ))}
         </div>
+        <OptionButton
+          selected={profile.wallHSPUReps === 'unknown'}
+          onClick={() => updateProfile({ wallHSPUReps: 'unknown' })}
+          className="w-full mt-1"
+        >
+          Don't know / Not tested
+        </OptionButton>
+        {profile.wallHSPUReps === 'unknown' && <DontKnowHint />}
       </div>
 
       {/* Weighted Pull-up */}
@@ -618,6 +666,14 @@ function StrengthBenchmarksSection({ profile, updateProfile }: SectionProps) {
 
 function SkillBenchmarksSection({ profile, updateProfile }: SectionProps) {
   const hasSkill = (skill: SkillGoal) => profile.selectedSkills.includes(skill)
+  
+  // Filter out "unknown" from the main grid, show it separately
+  const flOptions = (Object.keys(FRONT_LEVER_LABELS) as FrontLeverProgression[]).filter(k => k !== 'unknown')
+  const plancheOptions = (Object.keys(PLANCHE_LABELS) as PlancheProgression[]).filter(k => k !== 'unknown')
+  const muOptions = (Object.keys(MUSCLE_UP_LABELS) as MuscleUpReadiness[]).filter(k => k !== 'unknown')
+  const hspuOptions = (Object.keys(HSPU_LABELS) as HSPUProgression[]).filter(k => k !== 'unknown')
+  const lsitOptions = (Object.keys(LSIT_HOLD_LABELS) as LSitHoldCapacity[]).filter(k => k !== 'unknown')
+  const vsitOptions = (Object.keys(VSIT_HOLD_LABELS) as VSitHoldCapacity[]).filter(k => k !== 'unknown')
 
   return (
     <div className="space-y-6">
@@ -626,7 +682,7 @@ function SkillBenchmarksSection({ profile, updateProfile }: SectionProps) {
         <div className="space-y-3">
           <label className="text-sm font-medium text-[#A4ACB8]">Front Lever progression</label>
           <div className="grid grid-cols-3 gap-2">
-            {(Object.keys(FRONT_LEVER_LABELS) as FrontLeverProgression[]).map((prog) => (
+            {flOptions.map((prog) => (
               <OptionButton
                 key={prog}
                 selected={profile.frontLever?.progression === prog}
@@ -638,9 +694,16 @@ function SkillBenchmarksSection({ profile, updateProfile }: SectionProps) {
               </OptionButton>
             ))}
           </div>
-          {profile.frontLever?.progression && profile.frontLever.progression !== 'none' && (
+          <OptionButton
+            selected={profile.frontLever?.progression === 'unknown'}
+            onClick={() => updateProfile({ frontLever: { progression: 'unknown' } })}
+            className="w-full"
+          >
+            Don't know / Skip for now
+          </OptionButton>
+          {profile.frontLever?.progression && profile.frontLever.progression !== 'none' && profile.frontLever.progression !== 'unknown' && (
             <div className="mt-2">
-              <label className="text-xs text-[#6B7280]">Best hold (seconds)</label>
+              <label className="text-xs text-[#6B7280]">Best hold (seconds) — optional</label>
               <Input
                 type="number"
                 placeholder="e.g. 10"
@@ -655,6 +718,7 @@ function SkillBenchmarksSection({ profile, updateProfile }: SectionProps) {
               />
             </div>
           )}
+          {profile.frontLever?.progression === 'unknown' && <DontKnowHint />}
         </div>
       )}
 
@@ -663,7 +727,7 @@ function SkillBenchmarksSection({ profile, updateProfile }: SectionProps) {
         <div className="space-y-3">
           <label className="text-sm font-medium text-[#A4ACB8]">Planche progression</label>
           <div className="grid grid-cols-3 gap-2">
-            {(Object.keys(PLANCHE_LABELS) as PlancheProgression[]).map((prog) => (
+            {plancheOptions.map((prog) => (
               <OptionButton
                 key={prog}
                 selected={profile.planche?.progression === prog}
@@ -675,9 +739,16 @@ function SkillBenchmarksSection({ profile, updateProfile }: SectionProps) {
               </OptionButton>
             ))}
           </div>
-          {profile.planche?.progression && profile.planche.progression !== 'none' && (
+          <OptionButton
+            selected={profile.planche?.progression === 'unknown'}
+            onClick={() => updateProfile({ planche: { progression: 'unknown' } })}
+            className="w-full"
+          >
+            Don't know / Skip for now
+          </OptionButton>
+          {profile.planche?.progression && profile.planche.progression !== 'none' && profile.planche.progression !== 'unknown' && (
             <div className="mt-2">
-              <label className="text-xs text-[#6B7280]">Best hold (seconds)</label>
+              <label className="text-xs text-[#6B7280]">Best hold (seconds) — optional</label>
               <Input
                 type="number"
                 placeholder="e.g. 10"
@@ -692,6 +763,7 @@ function SkillBenchmarksSection({ profile, updateProfile }: SectionProps) {
               />
             </div>
           )}
+          {profile.planche?.progression === 'unknown' && <DontKnowHint />}
         </div>
       )}
 
@@ -700,7 +772,7 @@ function SkillBenchmarksSection({ profile, updateProfile }: SectionProps) {
         <div className="space-y-3">
           <label className="text-sm font-medium text-[#A4ACB8]">Muscle-Up readiness</label>
           <div className="grid grid-cols-2 gap-2">
-            {(Object.keys(MUSCLE_UP_LABELS) as MuscleUpReadiness[]).map((level) => (
+            {muOptions.map((level) => (
               <OptionButton
                 key={level}
                 selected={profile.muscleUp === level}
@@ -710,6 +782,14 @@ function SkillBenchmarksSection({ profile, updateProfile }: SectionProps) {
               </OptionButton>
             ))}
           </div>
+          <OptionButton
+            selected={profile.muscleUp === 'unknown'}
+            onClick={() => updateProfile({ muscleUp: 'unknown' })}
+            className="w-full"
+          >
+            Don't know / Skip for now
+          </OptionButton>
+          {profile.muscleUp === 'unknown' && <DontKnowHint />}
         </div>
       )}
 
@@ -718,7 +798,7 @@ function SkillBenchmarksSection({ profile, updateProfile }: SectionProps) {
         <div className="space-y-3">
           <label className="text-sm font-medium text-[#A4ACB8]">HSPU progression</label>
           <div className="grid grid-cols-2 gap-2">
-            {(Object.keys(HSPU_LABELS) as HSPUProgression[]).map((prog) => (
+            {hspuOptions.map((prog) => (
               <OptionButton
                 key={prog}
                 selected={profile.hspu?.progression === prog}
@@ -730,6 +810,14 @@ function SkillBenchmarksSection({ profile, updateProfile }: SectionProps) {
               </OptionButton>
             ))}
           </div>
+          <OptionButton
+            selected={profile.hspu?.progression === 'unknown'}
+            onClick={() => updateProfile({ hspu: { progression: 'unknown' } })}
+            className="w-full"
+          >
+            Don't know / Skip for now
+          </OptionButton>
+          {profile.hspu?.progression === 'unknown' && <DontKnowHint />}
         </div>
       )}
 
@@ -738,7 +826,7 @@ function SkillBenchmarksSection({ profile, updateProfile }: SectionProps) {
         <div className="space-y-3">
           <label className="text-sm font-medium text-[#A4ACB8]">L-Sit hold</label>
           <div className="grid grid-cols-3 gap-2">
-            {(Object.keys(LSIT_HOLD_LABELS) as LSitHoldCapacity[]).map((hold) => (
+            {lsitOptions.map((hold) => (
               <OptionButton
                 key={hold}
                 selected={profile.lSitHold === hold}
@@ -748,6 +836,14 @@ function SkillBenchmarksSection({ profile, updateProfile }: SectionProps) {
               </OptionButton>
             ))}
           </div>
+          <OptionButton
+            selected={profile.lSitHold === 'unknown'}
+            onClick={() => updateProfile({ lSitHold: 'unknown' })}
+            className="w-full"
+          >
+            Don't know / Skip for now
+          </OptionButton>
+          {profile.lSitHold === 'unknown' && <DontKnowHint />}
         </div>
       )}
 
@@ -756,7 +852,7 @@ function SkillBenchmarksSection({ profile, updateProfile }: SectionProps) {
         <div className="space-y-3">
           <label className="text-sm font-medium text-[#A4ACB8]">V-Sit hold</label>
           <div className="grid grid-cols-2 gap-2">
-            {(Object.keys(VSIT_HOLD_LABELS) as VSitHoldCapacity[]).map((hold) => (
+            {vsitOptions.map((hold) => (
               <OptionButton
                 key={hold}
                 selected={profile.vSitHold === hold}
@@ -766,6 +862,14 @@ function SkillBenchmarksSection({ profile, updateProfile }: SectionProps) {
               </OptionButton>
             ))}
           </div>
+          <OptionButton
+            selected={profile.vSitHold === 'unknown'}
+            onClick={() => updateProfile({ vSitHold: 'unknown' })}
+            className="w-full"
+          >
+            Don't know / Skip for now
+          </OptionButton>
+          {profile.vSitHold === 'unknown' && <DontKnowHint />}
         </div>
       )}
     </div>
@@ -774,6 +878,9 @@ function SkillBenchmarksSection({ profile, updateProfile }: SectionProps) {
 
 function FlexibilityBenchmarksSection({ profile, updateProfile }: SectionProps) {
   const hasGoal = (goal: FlexibilityGoal) => profile.selectedFlexibility.includes(goal)
+  
+  // Filter out "unknown" from the main grid
+  const flexOptions = (Object.keys(FLEXIBILITY_LEVEL_LABELS) as FlexibilityLevel[]).filter(k => k !== 'unknown')
 
   const updateFlexBenchmark = (
     key: 'pancake' | 'toeTouch' | 'frontSplits' | 'sideSplits',
@@ -806,7 +913,7 @@ function FlexibilityBenchmarksSection({ profile, updateProfile }: SectionProps) 
         <div className="space-y-3">
           <label className="text-sm font-medium text-[#A4ACB8]">Pancake</label>
           <div className="grid grid-cols-3 gap-2">
-            {(Object.keys(FLEXIBILITY_LEVEL_LABELS) as FlexibilityLevel[]).map((level) => (
+            {flexOptions.map((level) => (
               <OptionButton
                 key={level}
                 selected={profile.pancake?.level === level}
@@ -816,20 +923,30 @@ function FlexibilityBenchmarksSection({ profile, updateProfile }: SectionProps) 
               </OptionButton>
             ))}
           </div>
-          <div className="mt-2">
-            <label className="text-xs text-[#6B7280]">Training focus</label>
-            <div className="grid grid-cols-3 gap-2 mt-1">
-              {(Object.keys(RANGE_INTENT_LABELS) as RangeTrainingIntent[]).map((intent) => (
-                <OptionButton
-                  key={intent}
-                  selected={profile.pancake?.rangeIntent === intent}
-                  onClick={() => updateRangeIntent('pancake', intent)}
-                >
-                  {RANGE_INTENT_LABELS[intent]}
-                </OptionButton>
-              ))}
+          <OptionButton
+            selected={profile.pancake?.level === 'unknown'}
+            onClick={() => updateFlexBenchmark('pancake', 'unknown')}
+            className="w-full"
+          >
+            Don't know / Skip for now
+          </OptionButton>
+          {profile.pancake?.level !== 'unknown' && (
+            <div className="mt-2">
+              <label className="text-xs text-[#6B7280]">Training focus</label>
+              <div className="grid grid-cols-3 gap-2 mt-1">
+                {(Object.keys(RANGE_INTENT_LABELS) as RangeTrainingIntent[]).map((intent) => (
+                  <OptionButton
+                    key={intent}
+                    selected={profile.pancake?.rangeIntent === intent}
+                    onClick={() => updateRangeIntent('pancake', intent)}
+                  >
+                    {RANGE_INTENT_LABELS[intent]}
+                  </OptionButton>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
+          {profile.pancake?.level === 'unknown' && <DontKnowHint />}
         </div>
       )}
 
@@ -838,7 +955,7 @@ function FlexibilityBenchmarksSection({ profile, updateProfile }: SectionProps) 
         <div className="space-y-3">
           <label className="text-sm font-medium text-[#A4ACB8]">Toe Touch / Forward Fold</label>
           <div className="grid grid-cols-3 gap-2">
-            {(Object.keys(FLEXIBILITY_LEVEL_LABELS) as FlexibilityLevel[]).map((level) => (
+            {flexOptions.map((level) => (
               <OptionButton
                 key={level}
                 selected={profile.toeTouch?.level === level}
@@ -848,6 +965,14 @@ function FlexibilityBenchmarksSection({ profile, updateProfile }: SectionProps) 
               </OptionButton>
             ))}
           </div>
+          <OptionButton
+            selected={profile.toeTouch?.level === 'unknown'}
+            onClick={() => updateFlexBenchmark('toeTouch', 'unknown')}
+            className="w-full"
+          >
+            Don't know / Skip for now
+          </OptionButton>
+          {profile.toeTouch?.level === 'unknown' && <DontKnowHint />}
         </div>
       )}
 
@@ -856,7 +981,7 @@ function FlexibilityBenchmarksSection({ profile, updateProfile }: SectionProps) 
         <div className="space-y-3">
           <label className="text-sm font-medium text-[#A4ACB8]">Front Splits</label>
           <div className="grid grid-cols-3 gap-2">
-            {(Object.keys(FLEXIBILITY_LEVEL_LABELS) as FlexibilityLevel[]).map((level) => (
+            {flexOptions.map((level) => (
               <OptionButton
                 key={level}
                 selected={profile.frontSplits?.level === level}
@@ -866,20 +991,30 @@ function FlexibilityBenchmarksSection({ profile, updateProfile }: SectionProps) 
               </OptionButton>
             ))}
           </div>
-          <div className="mt-2">
-            <label className="text-xs text-[#6B7280]">Training focus</label>
-            <div className="grid grid-cols-3 gap-2 mt-1">
-              {(Object.keys(RANGE_INTENT_LABELS) as RangeTrainingIntent[]).map((intent) => (
-                <OptionButton
-                  key={intent}
-                  selected={profile.frontSplits?.rangeIntent === intent}
-                  onClick={() => updateRangeIntent('frontSplits', intent)}
-                >
-                  {RANGE_INTENT_LABELS[intent]}
-                </OptionButton>
-              ))}
+          <OptionButton
+            selected={profile.frontSplits?.level === 'unknown'}
+            onClick={() => updateFlexBenchmark('frontSplits', 'unknown')}
+            className="w-full"
+          >
+            Don't know / Skip for now
+          </OptionButton>
+          {profile.frontSplits?.level !== 'unknown' && (
+            <div className="mt-2">
+              <label className="text-xs text-[#6B7280]">Training focus</label>
+              <div className="grid grid-cols-3 gap-2 mt-1">
+                {(Object.keys(RANGE_INTENT_LABELS) as RangeTrainingIntent[]).map((intent) => (
+                  <OptionButton
+                    key={intent}
+                    selected={profile.frontSplits?.rangeIntent === intent}
+                    onClick={() => updateRangeIntent('frontSplits', intent)}
+                  >
+                    {RANGE_INTENT_LABELS[intent]}
+                  </OptionButton>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
+          {profile.frontSplits?.level === 'unknown' && <DontKnowHint />}
         </div>
       )}
 
@@ -888,7 +1023,7 @@ function FlexibilityBenchmarksSection({ profile, updateProfile }: SectionProps) 
         <div className="space-y-3">
           <label className="text-sm font-medium text-[#A4ACB8]">Side Splits</label>
           <div className="grid grid-cols-3 gap-2">
-            {(Object.keys(FLEXIBILITY_LEVEL_LABELS) as FlexibilityLevel[]).map((level) => (
+            {flexOptions.map((level) => (
               <OptionButton
                 key={level}
                 selected={profile.sideSplits?.level === level}
@@ -898,20 +1033,30 @@ function FlexibilityBenchmarksSection({ profile, updateProfile }: SectionProps) 
               </OptionButton>
             ))}
           </div>
-          <div className="mt-2">
-            <label className="text-xs text-[#6B7280]">Training focus</label>
-            <div className="grid grid-cols-3 gap-2 mt-1">
-              {(Object.keys(RANGE_INTENT_LABELS) as RangeTrainingIntent[]).map((intent) => (
-                <OptionButton
-                  key={intent}
-                  selected={profile.sideSplits?.rangeIntent === intent}
-                  onClick={() => updateRangeIntent('sideSplits', intent)}
-                >
-                  {RANGE_INTENT_LABELS[intent]}
-                </OptionButton>
-              ))}
+          <OptionButton
+            selected={profile.sideSplits?.level === 'unknown'}
+            onClick={() => updateFlexBenchmark('sideSplits', 'unknown')}
+            className="w-full"
+          >
+            Don't know / Skip for now
+          </OptionButton>
+          {profile.sideSplits?.level !== 'unknown' && (
+            <div className="mt-2">
+              <label className="text-xs text-[#6B7280]">Training focus</label>
+              <div className="grid grid-cols-3 gap-2 mt-1">
+                {(Object.keys(RANGE_INTENT_LABELS) as RangeTrainingIntent[]).map((intent) => (
+                  <OptionButton
+                    key={intent}
+                    selected={profile.sideSplits?.rangeIntent === intent}
+                    onClick={() => updateRangeIntent('sideSplits', intent)}
+                  >
+                    {RANGE_INTENT_LABELS[intent]}
+                  </OptionButton>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
+          {profile.sideSplits?.level === 'unknown' && <DontKnowHint />}
         </div>
       )}
     </div>
@@ -1101,11 +1246,23 @@ function RecoverySection({ profile, updateProfile }: SectionProps) {
 }
 
 function ReviewSection({ profile }: { profile: OnboardingProfile }) {
+  const hasEstimates = hasEstimatedValues(profile)
+
   return (
     <div className="space-y-4">
       <p className="text-sm text-[#A4ACB8]">
         Review your profile before generating your personalized program.
       </p>
+      
+      {/* Estimated values notice */}
+      {hasEstimates && (
+        <div className="bg-[#4F6D8A]/10 border border-[#4F6D8A]/30 rounded-lg p-3">
+          <p className="text-sm text-[#A4ACB8]">
+            <span className="text-[#4F6D8A] font-medium">Some metrics not provided.</span>{' '}
+            Your program will use conservative beginner-safe estimates. You can update your strength and skill metrics anytime to refine your program.
+          </p>
+        </div>
+      )}
       
       <div className="space-y-3 text-sm">
         {/* Athlete Profile */}

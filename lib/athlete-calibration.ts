@@ -10,11 +10,44 @@ import type {
   PushUpCapacity,
   DipCapacity,
   LSitCapacity,
+  LSitHoldCapacity,
   TrainingTimeRange,
   WeeklyTrainingDays,
   OnboardingGoal,
+  PrimaryGoalType,
 } from './athlete-profile'
 import { getOnboardingProfile } from './athlete-profile'
+import { getAthleteProfile, type AthleteProfile as DataServiceAthleteProfile } from './data-service'
+import type { AthleteProfile } from '@/types/domain'
+
+// Unified profile input type - accepts both OnboardingProfile and AthleteProfile
+type CalibrationProfile = OnboardingProfile | AthleteProfile | null
+
+// =============================================================================
+// PROFILE TYPE CONVERSION HELPERS
+// =============================================================================
+
+// Map numeric height (in inches) to HeightRange
+function mapHeightToRange(height: number | null): HeightRange | null {
+  if (height === null) return null
+  if (height < 64) return 'under_5_4'
+  if (height < 67) return '5_4_to_5_7'
+  if (height < 70) return '5_7_to_5_10'
+  if (height < 73) return '5_10_to_6_1'
+  if (height < 76) return '6_1_to_6_4'
+  return 'over_6_4'
+}
+
+// Map numeric weight (in lbs) to WeightRange
+function mapWeightToRange(weight: number | null): WeightRange | null {
+  if (weight === null) return null
+  if (weight < 140) return 'under_140'
+  if (weight < 160) return '140_160'
+  if (weight < 180) return '160_180'
+  if (weight < 200) return '180_200'
+  if (weight < 220) return '200_220'
+  return 'over_220'
+}
 
 // =============================================================================
 // CALIBRATION TYPES
@@ -131,36 +164,103 @@ function inferBodyMassProfile(weight: WeightRange | null): BodyMassProfile {
 }
 
 // Convert pull-up capacity to strength tier
+// Handles both legacy and new property formats, plus "unknown" values
 function inferPullStrengthTier(pullups: PullUpCapacity | null): StrengthTier {
-  if (!pullups) return 'low'
-  const mapping: Record<PullUpCapacity, StrengthTier> = {
-    '0_3': 'very_low',
+  // Handle null or "unknown" - default to safe beginner estimate
+  if (!pullups || pullups === 'unknown') return 'low'
+  const mapping: Record<string, StrengthTier> = {
+    // New format
+    '0': 'very_low',
+    '1_3': 'very_low',
     '4_7': 'low',
     '8_12': 'moderate',
     '13_17': 'strong',
     '18_22': 'strong',
     '23_plus': 'elite',
+    // Legacy format
+    '0_3': 'very_low',
   }
-  return mapping[pullups]
+  return mapping[pullups] ?? 'low'
+}
+
+// Convert numeric pull-up count to strength tier (for AthleteProfile)
+function inferPullStrengthTierFromNumber(pullups: number | null): StrengthTier {
+  if (pullups === null || pullups === undefined) return 'low'
+  if (pullups <= 3) return 'very_low'
+  if (pullups <= 7) return 'low'
+  if (pullups <= 12) return 'moderate'
+  if (pullups <= 22) return 'strong'
+  return 'elite'
+}
+
+// Convert numeric push-up/dip counts to strength tier (unified)
+function inferPushStrengthTierUnified(
+  pushups: number | PushUpCapacity | null,
+  dips: number | DipCapacity | null
+): StrengthTier {
+  // Handle numeric values
+  if (typeof pushups === 'number' || typeof dips === 'number') {
+    const pushTier = typeof pushups === 'number' ? inferPushStrengthFromNumber(pushups) : 'low'
+    const dipTier = typeof dips === 'number' ? inferDipStrengthFromNumber(dips) : 'low'
+    return combineTiers(pushTier, dipTier)
+  }
+  // Handle string values
+  return inferPushStrengthTier(pushups as PushUpCapacity | null, dips as DipCapacity | null)
+}
+
+function inferPushStrengthFromNumber(pushups: number | null): StrengthTier {
+  if (pushups === null) return 'low'
+  if (pushups <= 10) return 'very_low'
+  if (pushups <= 25) return 'low'
+  if (pushups <= 40) return 'moderate'
+  if (pushups <= 60) return 'strong'
+  return 'elite'
+}
+
+function inferDipStrengthFromNumber(dips: number | null): StrengthTier {
+  if (dips === null) return 'low'
+  if (dips === 0) return 'very_low'
+  if (dips <= 5) return 'low'
+  if (dips <= 15) return 'moderate'
+  if (dips <= 25) return 'strong'
+  return 'elite'
+}
+
+function combineTiers(a: StrengthTier, b: StrengthTier): StrengthTier {
+  const tierOrder: StrengthTier[] = ['very_low', 'low', 'moderate', 'strong', 'elite']
+  const aIdx = tierOrder.indexOf(a)
+  const bIdx = tierOrder.indexOf(b)
+  // Use the higher tier (optimistic)
+  return tierOrder[Math.max(aIdx, bIdx)]
+}
+
+// Convert numeric L-sit hold seconds to core tier
+function inferCoreTierFromSeconds(seconds: number | null): CoreCompressionTier {
+  if (seconds === null || seconds === 0) return 'low'
+  if (seconds < 10) return 'low'
+  if (seconds < 20) return 'moderate'
+  return 'strong'
 }
 
 // Convert push-up capacity to strength tier
 function inferPushUpStrengthTier(pushups: PushUpCapacity | null): StrengthTier {
-  if (!pushups) return 'low'
-  const mapping: Record<PushUpCapacity, StrengthTier> = {
+  // Handle null or "unknown" - default to safe beginner estimate
+  if (!pushups || pushups === 'unknown') return 'low'
+  const mapping: Record<string, StrengthTier> = {
     '0_10': 'very_low',
     '10_25': 'low',
     '25_40': 'moderate',
     '40_60': 'strong',
     '60_plus': 'elite',
   }
-  return mapping[pushups]
+  return mapping[pushups] ?? 'low'
 }
 
 // Convert dip capacity to strength tier
 function inferDipStrengthTier(dips: DipCapacity | null): StrengthTier {
-  if (!dips) return 'low'
-  const mapping: Record<DipCapacity, StrengthTier> = {
+  // Handle null or "unknown" - default to safe beginner estimate
+  if (!dips || dips === 'unknown') return 'low'
+  const mapping: Record<string, StrengthTier> = {
     '0': 'very_low',
     '1_5': 'low',
     '6_10': 'low',
@@ -169,7 +269,7 @@ function inferDipStrengthTier(dips: DipCapacity | null): StrengthTier {
     '21_25': 'strong',
     '25_plus': 'elite',
   }
-  return mapping[dips]
+  return mapping[dips] ?? 'low'
 }
 
 // Combined push strength from push-ups and dips (takes the higher of the two)
@@ -186,15 +286,21 @@ function inferPushStrengthTier(pushups: PushUpCapacity | null, dips: DipCapacity
 }
 
 // Convert L-sit capacity to core compression tier
-function inferCoreCompressionTier(lsit: LSitCapacity | null): CoreCompressionTier {
-  if (!lsit) return 'low'
-  const mapping: Record<LSitCapacity, CoreCompressionTier> = {
+// Handles both new LSitHoldCapacity and legacy LSitCapacity formats, plus "unknown"
+function inferCoreCompressionTier(lsit: LSitCapacity | string | null): CoreCompressionTier {
+  // Handle null or "unknown" - default to safe beginner estimate
+  if (!lsit || lsit === 'unknown') return 'low'
+  const mapping: Record<string, CoreCompressionTier> = {
+    // New format (LSitHoldCapacity)
     'none': 'very_low',
     'under_10': 'low',
     '10_20': 'moderate',
+    '20_30': 'moderate',
+    '30_plus': 'strong',
+    // Legacy format (LSitCapacity)
     '20_plus': 'strong',
   }
-  return mapping[lsit]
+  return mapping[lsit] ?? 'low'
 }
 
 // Infer session capacity from training time
@@ -210,7 +316,7 @@ function inferSessionCapacity(time: TrainingTimeRange | null): SessionCapacity {
   return mapping[time]
 }
 
-// Infer consistency capacity from weekly training
+// Infer consistency capacity from weekly training (legacy string format)
 function inferConsistencyCapacity(weekly: WeeklyTrainingDays | null): ConsistencyCapacity {
   if (!weekly) return 'moderate'
   const mapping: Record<WeeklyTrainingDays, ConsistencyCapacity> = {
@@ -222,26 +328,44 @@ function inferConsistencyCapacity(weekly: WeeklyTrainingDays | null): Consistenc
   return mapping[weekly]
 }
 
+// Infer session capacity from numeric minutes (new format)
+function inferSessionCapacityFromMinutes(minutes: number | null): SessionCapacity | null {
+  if (!minutes) return null
+  if (minutes <= 30) return 'short'
+  if (minutes <= 45) return 'medium'
+  return 'high'
+}
+
+// Infer consistency capacity from numeric days (new format)
+function inferConsistencyCapacityFromDays(days: number | null): ConsistencyCapacity | null {
+  if (!days) return null
+  if (days <= 2) return 'low'
+  if (days <= 3) return 'moderate'
+  return 'high'
+}
+
 // Infer endurance compatibility from goal + capacity
+// Accepts both legacy OnboardingGoal and new PrimaryGoalType
 function inferEnduranceCompatibility(
-  goal: OnboardingGoal | null,
+  goal: OnboardingGoal | PrimaryGoalType | null,
   session: SessionCapacity,
   consistency: ConsistencyCapacity
 ): EnduranceCompatibility {
+  // Handle both legacy OnboardingGoal and new PrimaryGoalType formats
   // Endurance goal = high compatibility
   if (goal === 'endurance') return 'high'
   
-  // Abs goal often involves circuits
+  // Abs goal often involves circuits (legacy)
   if (goal === 'abs' && session !== 'short') return 'high'
   
-  // General fitness supports endurance
-  if (goal === 'general' && session !== 'short') return 'moderate'
+  // General fitness / overall_fitness supports endurance
+  if ((goal === 'general' || goal === 'overall_fitness') && session !== 'short') return 'moderate'
   
   // Short sessions = lower endurance compatibility
   if (session === 'short') return 'low'
   
-  // Skill/strength focused goals are lower endurance compatibility by default
-  if (goal === 'skill' || goal === 'strength') {
+  // Skill/strength/muscle_and_strength focused goals are lower endurance compatibility by default
+  if (goal === 'skill' || goal === 'strength' || goal === 'muscle_and_strength' || goal === 'skills_and_moves') {
     return consistency === 'high' ? 'moderate' : 'low'
   }
   
@@ -387,20 +511,62 @@ function suggestRestModifier(
 // MAIN CALIBRATION FUNCTION
 // =============================================================================
 
-export function calibrateAthleteProfile(profile: OnboardingProfile | null): AthleteCalibration {
+export function calibrateAthleteProfile(profile: CalibrationProfile): AthleteCalibration {
   // Default calibration for missing data
   if (!profile) {
     return getDefaultCalibration()
   }
   
+  // Detect profile type and extract values accordingly
+  // AthleteProfile uses numeric values, OnboardingProfile uses string ranges
+  const isAthleteProfile = 'userId' in profile && typeof (profile as AthleteProfile).pullUpMax === 'number'
+  
+  // Extract height/weight info
+  const heightRange = isAthleteProfile 
+    ? mapHeightToRange((profile as AthleteProfile).height) 
+    : (profile as OnboardingProfile).heightRange
+  const weightRange = isAthleteProfile
+    ? mapWeightToRange((profile as AthleteProfile).bodyweight)
+    : (profile as OnboardingProfile).weightRange
+  
+  // Extract strength benchmarks
+  const pullUpValue = isAthleteProfile
+    ? (profile as AthleteProfile).pullUpMax
+    : (profile as OnboardingProfile).pullUpMax
+  const pushUpValue = isAthleteProfile
+    ? (profile as AthleteProfile).pushUpMax
+    : (profile as OnboardingProfile).pushUpMax
+  const dipValue = isAthleteProfile
+    ? (profile as AthleteProfile).dipMax
+    : (profile as OnboardingProfile).dipMax
+  const lSitValue = isAthleteProfile
+    ? (profile as AthleteProfile).lSitHoldSeconds
+    : (profile as OnboardingProfile).lSitHold
+  
+  // Extract training schedule
+  const daysPerWeek = typeof profile.trainingDaysPerWeek === 'number' 
+    ? profile.trainingDaysPerWeek 
+    : null
+  const sessionMinutes = typeof profile.sessionLengthMinutes === 'number'
+    ? profile.sessionLengthMinutes
+    : null
+  
   // Infer traits
-  const leverageProfile = inferLeverageProfile(profile.heightRange, profile.weightRange)
-  const bodyMassProfile = inferBodyMassProfile(profile.weightRange)
-  const pullStrengthTier = inferPullStrengthTier(profile.pullUpCapacity)
-  const pushStrengthTier = inferPushStrengthTier(profile.pushUpCapacity, profile.dipCapacity)
-  const coreCompressionTier = inferCoreCompressionTier(profile.lSitCapacity)
-  const sessionCapacity = inferSessionCapacity(profile.trainingTime)
-  const consistencyCapacity = inferConsistencyCapacity(profile.weeklyTraining)
+  const leverageProfile = inferLeverageProfile(heightRange, weightRange)
+  const bodyMassProfile = inferBodyMassProfile(weightRange)
+  
+  // Infer strength tiers based on value type
+  const pullStrengthTier = typeof pullUpValue === 'number'
+    ? inferPullStrengthTierFromNumber(pullUpValue)
+    : inferPullStrengthTier(pullUpValue as PullUpCapacity | null)
+  const pushStrengthTier = inferPushStrengthTierUnified(pushUpValue, dipValue)
+  const coreCompressionTier = typeof lSitValue === 'number'
+    ? inferCoreTierFromSeconds(lSitValue)
+    : inferCoreCompressionTier(lSitValue as LSitCapacity | string | null)
+  
+  // Infer session/training capacity with defaults
+  const sessionCapacity = inferSessionCapacityFromMinutes(sessionMinutes) ?? 'medium'
+  const consistencyCapacity = inferConsistencyCapacityFromDays(daysPerWeek) ?? 'moderate'
   
   const enduranceCompatibility = inferEnduranceCompatibility(
     profile.primaryGoal,
@@ -502,9 +668,17 @@ needsCompressionWork: true,
 }
 
 // Get athlete calibration (uses stored profile)
+// Tries AthleteProfile first (from TrainingSetup), falls back to OnboardingProfile
 export function getAthleteCalibration(): AthleteCalibration {
-  const profile = getOnboardingProfile()
-  return calibrateAthleteProfile(profile)
+  // First try the main athlete profile (from profile-repository)
+  const athleteProfile = getAthleteProfile()
+  if (athleteProfile && athleteProfile.onboardingComplete) {
+    return calibrateAthleteProfile(athleteProfile)
+  }
+  
+  // Fall back to onboarding profile (legacy)
+  const onboardingProfile = getOnboardingProfile()
+  return calibrateAthleteProfile(onboardingProfile)
 }
 
 // =============================================================================

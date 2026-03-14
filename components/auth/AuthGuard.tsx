@@ -79,10 +79,10 @@ export function AuthGuard({
   // SSR - return null to prevent blocking
   if (!mounted) return null
   
-  // Still loading auth state
+  // Auth not yet loaded
   if (!isLoaded) return <>{fallback ?? <LoadingState />}</>
 
-  // Use Clerk's native SignedIn/SignedOut components
+  // Native Clerk SignedIn/SignedOut components
   return (
     <>
       <SignedIn>{children}</SignedIn>

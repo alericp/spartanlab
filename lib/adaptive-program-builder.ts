@@ -12,7 +12,7 @@ import { calculateRecoverySignal } from './recovery-engine'
 import { getConstraintInsight } from './constraint-engine'
 import { getProgramBuilderContext } from './adaptive-athlete-engine'
 import { getAthleteCalibration, getProgramCalibrationAdjustments, type AthleteCalibration, type ProgramCalibrationAdjustments } from './athlete-calibration'
-import { getOnboardingProfile, type PrimaryTrainingOutcome, type TrainingPathType } from './athlete-profile'
+import { getOnboardingProfile, type PrimaryTrainingOutcome, type TrainingPathType, type WorkoutDurationPreference } from './athlete-profile'
 import { getUnifiedSkillIntelligence, generateTrainingAdjustments, type UnifiedSkillIntelligence } from './skill-intelligence-layer'
 import { getCompressionReadiness, shouldBiasTowardCompression, type CompressionReadinessResult } from './compression-readiness'
 import { selectOptimalStructure, getDayExplanation } from './program-structure-engine'
@@ -177,6 +177,8 @@ export interface AdaptiveProgram {
   trainingPath?: TrainingPathType
   prioritizesSkills?: boolean
   prioritizesStrength?: boolean
+  workoutDuration?: WorkoutDurationPreference
+  durationConfig?: DurationConfig
   compressionReadiness?: {
   currentLevel: string
   nextMilestone: string
@@ -331,6 +333,79 @@ function getTrainingStyleFromOutcome(outcome: PrimaryTrainingOutcome): OutcomeTr
 }
 
 // =============================================================================
+// WORKOUT DURATION CONFIGURATION
+// =============================================================================
+
+interface DurationConfig {
+  minExercises: number
+  maxExercises: number
+  includeAccessories: boolean
+  useSupersetsOrDensity: boolean
+  skillBlockReduction: number  // 0 = full, 0.5 = half, 1 = minimal
+  restModifier: number         // Multiplier for rest periods
+}
+
+/**
+ * Maps workout duration preference to exercise count and structure parameters.
+ * This ensures programs fit within the user's available training time.
+ */
+function getDurationConfig(duration: WorkoutDurationPreference): DurationConfig {
+  switch (duration) {
+    case 'short':
+      // 20-30 minutes: minimal, efficient
+      return {
+        minExercises: 4,
+        maxExercises: 5,
+        includeAccessories: false,
+        useSupersetsOrDensity: true,
+        skillBlockReduction: 0.5,
+        restModifier: 0.7,
+      }
+    case 'medium':
+      // 30-45 minutes: balanced
+      return {
+        minExercises: 5,
+        maxExercises: 7,
+        includeAccessories: true,
+        useSupersetsOrDensity: true,
+        skillBlockReduction: 0.25,
+        restModifier: 0.85,
+      }
+    case 'long':
+      // 45-60 minutes: full structure
+      return {
+        minExercises: 6,
+        maxExercises: 8,
+        includeAccessories: true,
+        useSupersetsOrDensity: false,
+        skillBlockReduction: 0,
+        restModifier: 1.0,
+      }
+    case 'extended':
+      // 60-90 minutes: complete programming
+      return {
+        minExercises: 7,
+        maxExercises: 9,
+        includeAccessories: true,
+        useSupersetsOrDensity: false,
+        skillBlockReduction: 0,
+        restModifier: 1.1,
+      }
+    case 'flexible':
+    default:
+      // Default to medium-long structure
+      return {
+        minExercises: 5,
+        maxExercises: 7,
+        includeAccessories: true,
+        useSupersetsOrDensity: false,
+        skillBlockReduction: 0.1,
+        restModifier: 1.0,
+      }
+  }
+}
+
+// =============================================================================
 // MAIN GENERATION FUNCTION
 // =============================================================================
 
@@ -355,6 +430,10 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
   const onboardingProfile = getOnboardingProfile()
   const trainingOutcome = onboardingProfile?.primaryTrainingOutcome || 'general_fitness'
   const trainingPath = onboardingProfile?.trainingPathType || 'hybrid'
+  const workoutDuration = onboardingProfile?.workoutDurationPreference || 'medium'
+  
+  // Get duration-based configuration for exercise count and structure
+  const durationConfig = getDurationConfig(workoutDuration)
   
   // Determine if skills should be prioritized based on training path
   const shouldPrioritizeSkills = trainingPath === 'skill_progression' || 
@@ -393,6 +472,8 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
   trainingPath: trainingPath,
   prioritizesSkills: shouldPrioritizeSkills,
   prioritizesStrength: shouldPrioritizeStrength,
+  workoutDuration: workoutDuration,
+  durationConfig: durationConfig,
   compressionReadiness: {
   currentLevel: compressionReadiness.currentLevelLabel,
   nextMilestone: compressionReadiness.nextMilestoneLabel,
@@ -410,6 +491,8 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
   trainingPath: trainingPath,
   prioritizesSkills: shouldPrioritizeSkills,
   prioritizesStrength: shouldPrioritizeStrength,
+  workoutDuration: workoutDuration,
+  durationConfig: durationConfig,
   }
   
   // Get fatigue-based training decision (runs client-side only)

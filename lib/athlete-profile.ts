@@ -448,6 +448,35 @@ export type TrainingDaysPerWeek = 2 | 3 | 4 | 5 | 6 | 'flexible'
 // Workout duration: 20=20-30min, 30=30-45min, 45=45-60min, 60=60-75min, 75=75-90min
 export type SessionLengthPreference = 20 | 30 | 45 | 60 | 75 | 'flexible'
 
+// Semantic workout duration preference for program builder
+export type WorkoutDurationPreference = 'short' | 'medium' | 'long' | 'extended' | 'flexible'
+
+export const WORKOUT_DURATION_LABELS: Record<WorkoutDurationPreference, string> = {
+  short: '20–30 minutes',
+  medium: '30–45 minutes',
+  long: '45–60 minutes',
+  extended: '60–90 minutes',
+  flexible: 'Flexible / varies',
+}
+
+export const WORKOUT_DURATION_DESCRIPTIONS: Record<WorkoutDurationPreference, string> = {
+  short: '4–5 exercises, minimal accessories, density or supersets',
+  medium: '5–7 exercises, balanced training structure',
+  long: '6–8 exercises, full skill blocks, some accessory work',
+  extended: '7–9 exercises, complete programming with accessories',
+  flexible: 'Programs adapt based on available time',
+}
+
+// Maps SessionLengthPreference to WorkoutDurationPreference
+export function sessionLengthToDurationPreference(sessionLength: SessionLengthPreference): WorkoutDurationPreference {
+  if (sessionLength === 'flexible') return 'flexible'
+  if (sessionLength === 20) return 'short'
+  if (sessionLength === 30) return 'medium'
+  if (sessionLength === 45) return 'long'
+  if (sessionLength === 60 || sessionLength === 75) return 'extended'
+  return 'medium' // default
+}
+
 export type SessionStylePreference = 'efficient' | 'full'
 
 // =============================================================================
@@ -729,6 +758,7 @@ export interface OnboardingProfile {
   // Section 8: Training Schedule
   trainingDaysPerWeek: TrainingDaysPerWeek | null
   sessionLengthMinutes: SessionLengthPreference | null
+  workoutDurationPreference: WorkoutDurationPreference | null  // Semantic duration for program builder
   sessionStyle: SessionStylePreference | null
   
   // Section 9: Recovery / Lifestyle
@@ -1129,12 +1159,13 @@ export function createEmptyOnboardingProfile(): OnboardingProfile {
     // Section 7: Equipment
     equipment: [],
     
-    // Section 8: Training Schedule
-    trainingDaysPerWeek: null,
-    sessionLengthMinutes: null,
-    sessionStyle: null,
-    
-    // Section 9: Recovery / Lifestyle
+  // Section 8: Training Schedule
+  trainingDaysPerWeek: null,
+  sessionLengthMinutes: null,
+  workoutDurationPreference: null,
+  sessionStyle: null,
+  
+  // Section 9: Recovery / Lifestyle
     recovery: null,
     
     // Section 10: Readiness Calibration

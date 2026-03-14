@@ -72,6 +72,7 @@ import {
   TRAINING_PATH_LABELS,
   TRAINING_PATH_DESCRIPTIONS,
   TRAINING_DAYS_LABELS,
+  sessionLengthToDurationPreference,
   TRAINING_EXPERIENCE_LABELS,
   TRAINING_EXPERIENCE_DESCRIPTIONS,
   HEIGHT_LABELS,
@@ -1838,7 +1839,10 @@ function ScheduleSection({ profile, updateProfile }: SectionProps) {
   <OptionButton
   key={String(len)}
   selected={profile.sessionLengthMinutes === len}
-  onClick={() => updateProfile({ sessionLengthMinutes: len })}
+  onClick={() => updateProfile({ 
+    sessionLengthMinutes: len,
+    workoutDurationPreference: sessionLengthToDurationPreference(len)
+  })}
   >
   {SESSION_LENGTH_LABELS[len]}
   </OptionButton>

@@ -12,7 +12,7 @@ import { calculateRecoverySignal } from './recovery-engine'
 import { getConstraintInsight } from './constraint-engine'
 import { getProgramBuilderContext } from './adaptive-athlete-engine'
 import { getAthleteCalibration, getProgramCalibrationAdjustments, type AthleteCalibration, type ProgramCalibrationAdjustments } from './athlete-calibration'
-import { getOnboardingProfile, type PrimaryTrainingOutcome } from './athlete-profile'
+import { getOnboardingProfile, type PrimaryTrainingOutcome, type TrainingPathType } from './athlete-profile'
 import { getUnifiedSkillIntelligence, generateTrainingAdjustments, type UnifiedSkillIntelligence } from './skill-intelligence-layer'
 import { getCompressionReadiness, shouldBiasTowardCompression, type CompressionReadinessResult } from './compression-readiness'
 import { selectOptimalStructure, getDayExplanation } from './program-structure-engine'
@@ -174,6 +174,9 @@ export interface AdaptiveProgram {
   includesEnduranceFinisher: boolean
   includesDensityBlocks?: boolean
   trainingOutcome?: PrimaryTrainingOutcome
+  trainingPath?: TrainingPathType
+  prioritizesSkills?: boolean
+  prioritizesStrength?: boolean
   compressionReadiness?: {
   currentLevel: string
   nextMilestone: string
@@ -351,6 +354,14 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
   const athleteCalibration = getAthleteCalibration()
   const onboardingProfile = getOnboardingProfile()
   const trainingOutcome = onboardingProfile?.primaryTrainingOutcome || 'general_fitness'
+  const trainingPath = onboardingProfile?.trainingPathType || 'hybrid'
+  
+  // Determine if skills should be prioritized based on training path
+  const shouldPrioritizeSkills = trainingPath === 'skill_progression' || 
+    (trainingPath === 'hybrid' && trainingOutcome === 'skills')
+  const shouldPrioritizeStrength = trainingPath === 'strength_endurance' ||
+    trainingOutcome === 'strength' || trainingOutcome === 'max_reps' || trainingOutcome === 'military'
+    
   const calibrationAdjustments = getProgramCalibrationAdjustments(
     athleteCalibration,
     onboardingProfile?.primaryGoal || null,
@@ -379,6 +390,9 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
   includesEnduranceFinisher: shouldIncludeEndurance,
   includesDensityBlocks: shouldIncludeDensity,
   trainingOutcome: trainingOutcome,
+  trainingPath: trainingPath,
+  prioritizesSkills: shouldPrioritizeSkills,
+  prioritizesStrength: shouldPrioritizeStrength,
   compressionReadiness: {
   currentLevel: compressionReadiness.currentLevelLabel,
   nextMilestone: compressionReadiness.nextMilestoneLabel,
@@ -393,6 +407,9 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
   includesEnduranceFinisher: shouldIncludeEndurance,
   includesDensityBlocks: shouldIncludeDensity,
   trainingOutcome: trainingOutcome,
+  trainingPath: trainingPath,
+  prioritizesSkills: shouldPrioritizeSkills,
+  prioritizesStrength: shouldPrioritizeStrength,
   }
   
   // Get fatigue-based training decision (runs client-side only)

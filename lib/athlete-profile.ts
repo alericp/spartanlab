@@ -419,12 +419,34 @@ export type EquipmentType =
   | 'minimal'
 
 // =============================================================================
+// TRAINING PATH TYPE
+// =============================================================================
+
+/**
+ * Training path type - determines the overall focus of the program
+ */
+export type TrainingPathType = 'skill_progression' | 'strength_endurance' | 'hybrid'
+
+export const TRAINING_PATH_LABELS: Record<TrainingPathType, string> = {
+  skill_progression: 'Skill Progression',
+  strength_endurance: 'Strength & Endurance',
+  hybrid: 'Hybrid Training',
+}
+
+export const TRAINING_PATH_DESCRIPTIONS: Record<TrainingPathType, string> = {
+  skill_progression: 'Focus on advanced calisthenics skills like planche, front lever, muscle-up, and handstand push-ups.',
+  strength_endurance: 'Focus on improving pull-ups, push-ups, dips, and bodyweight strength for general fitness or military-style training.',
+  hybrid: 'Combine skill work with strength and endurance training.',
+}
+
+// =============================================================================
 // TRAINING SCHEDULE
 // =============================================================================
 
-export type TrainingDaysPerWeek = 2 | 3 | 4 | 5 | 6
+export type TrainingDaysPerWeek = 2 | 3 | 4 | 5 | 6 | 'flexible'
 
-export type SessionLengthPreference = 30 | 45 | 60 | 75
+// Workout duration: 20=20-30min, 30=30-45min, 45=45-60min, 60=60-75min, 75=75-90min
+export type SessionLengthPreference = 20 | 30 | 45 | 60 | 75 | 'flexible'
 
 export type SessionStylePreference = 'efficient' | 'full'
 
@@ -654,6 +676,10 @@ export interface OnboardingProfile {
   // Section 1b: Primary Training Outcome
   // This drives program structure - what does the user want to achieve?
   primaryTrainingOutcome: PrimaryTrainingOutcome | null
+  
+  // Section 1c: Training Path Type
+  // Determines overall program focus: skill-based, strength/endurance, or hybrid
+  trainingPathType: TrainingPathType | null
   
   // Section 2: Goals
   primaryGoal: PrimaryGoalType | null
@@ -939,10 +965,21 @@ export const EQUIPMENT_LABELS: Record<EquipmentType, string> = {
 }
 
 export const SESSION_LENGTH_LABELS: Record<SessionLengthPreference, string> = {
-  30: '30 min',
-  45: '45 min',
-  60: '60 min',
-  75: '75+ min',
+  20: '20–30 minutes',
+  30: '30–45 minutes',
+  45: '45–60 minutes',
+  60: '60–75 minutes',
+  75: '75–90 minutes',
+  'flexible': 'Flexible / varies',
+}
+
+export const TRAINING_DAYS_LABELS: Record<TrainingDaysPerWeek, string> = {
+  2: '2 days',
+  3: '3 days',
+  4: '4 days',
+  5: '5 days',
+  6: '6 days',
+  'flexible': 'Flexible',
 }
 
 export const SESSION_STYLE_LABELS: Record<SessionStylePreference, string> = {
@@ -1051,6 +1088,9 @@ export function createEmptyOnboardingProfile(): OnboardingProfile {
   
   // Section 1b: Primary Training Outcome
   primaryTrainingOutcome: null,
+  
+  // Section 1c: Training Path Type
+  trainingPathType: null,
   
   // Section 2: Goals
   primaryGoal: null,
@@ -1389,8 +1429,10 @@ export function suggestProgramInputsFromOnboarding(profile: OnboardingProfile) {
     experienceLevel: profile.trainingExperience 
       ? mapTrainingExperienceToLevel(profile.trainingExperience)
       : mapStrengthTierToExperience(strengthTier),
-    sessionLength: profile.sessionLengthMinutes || 45,
-    trainingDaysPerWeek: profile.trainingDaysPerWeek || 3,
+  // Handle 'flexible' as default to 45 minutes for calculations
+  sessionLength: typeof profile.sessionLengthMinutes === 'number' ? profile.sessionLengthMinutes : 45,
+  // Handle 'flexible' as default to 4 days for calculations
+  trainingDaysPerWeek: typeof profile.trainingDaysPerWeek === 'number' ? profile.trainingDaysPerWeek : 4,
     primaryGoal: profile.primaryGoal || 'general_strength',
     estimatedStrengthTier: strengthTier,
     hasEstimatedValues: hasEstimatedValues(profile),

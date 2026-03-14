@@ -66,8 +66,12 @@ import {
   type SkillLastTrained,
   type SkillHistoryEntry,
   type PrimaryTrainingOutcome,
+  type TrainingPathType,
   PRIMARY_TRAINING_OUTCOME_LABELS,
   PRIMARY_TRAINING_OUTCOME_DESCRIPTIONS,
+  TRAINING_PATH_LABELS,
+  TRAINING_PATH_DESCRIPTIONS,
+  TRAINING_DAYS_LABELS,
   TRAINING_EXPERIENCE_LABELS,
   TRAINING_EXPERIENCE_DESCRIPTIONS,
   HEIGHT_LABELS,
@@ -122,6 +126,7 @@ type SectionId =
   | 'athlete_profile'
   | 'readiness'
   | 'training_outcome'
+  | 'training_path'
   | 'goals'
   | 'skill_selection'
   | 'strength_benchmarks'
@@ -160,6 +165,12 @@ const SECTIONS: Section[] = [
     icon: Target,
   },
   {
+    id: 'training_path',
+    title: 'Training Path',
+    subtitle: 'What type of training do you want SpartanLab to focus on?',
+    icon: TrendingUp,
+  },
+  {
     id: 'goals',
     title: 'Your Goals',
     subtitle: 'What do you want to achieve? This shapes your entire program.',
@@ -172,6 +183,8 @@ const SECTIONS: Section[] = [
     icon: Zap,
     // Only show if user wants skills or has skill_mastery as a goal category
     showIf: (profile) => profile.primaryTrainingOutcome === 'skills' ||
+                         profile.trainingPathType === 'skill_progression' ||
+                         profile.trainingPathType === 'hybrid' ||
                          profile.goalCategories.includes('skill_mastery') || 
                          profile.goalCategories.includes('flexibility') ||
                          profile.goalCategories.includes('mobility'),
@@ -767,11 +780,86 @@ function TrainingOutcomeSection({ profile, updateProfile }: SectionProps) {
           SpartanLab supports everything from beginners building their first pull-up to athletes training for military fitness standards or advanced calisthenics skills.
         </p>
       </div>
+  </div>
+  )
+  }
+
+// =============================================================================
+// TRAINING PATH SECTION - What type of training to focus on
+// =============================================================================
+
+function TrainingPathSection({ profile, updateProfile }: SectionProps) {
+  const paths: TrainingPathType[] = ['skill_progression', 'strength_endurance', 'hybrid']
+
+  const getPathIcon = (path: TrainingPathType) => {
+    switch (path) {
+      case 'skill_progression': return Zap
+      case 'strength_endurance': return Dumbbell
+      case 'hybrid': return TrendingUp
+      default: return Target
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="text-center mb-6">
+        <p className="text-sm text-[#A4ACB8]">
+          This determines how SpartanLab structures your program.
+        </p>
+      </div>
+      
+      <div className="space-y-3">
+        {paths.map(path => {
+          const Icon = getPathIcon(path)
+          const isSelected = profile.trainingPathType === path
+          
+          return (
+            <button
+              key={path}
+              onClick={() => {
+                const updates: Partial<OnboardingProfile> = { trainingPathType: path }
+                
+                // Auto-add skill_mastery category if selecting skill-based paths
+                if ((path === 'skill_progression' || path === 'hybrid') && 
+                    !profile.goalCategories.includes('skill_mastery')) {
+                  updates.goalCategories = [...profile.goalCategories, 'skill_mastery']
+                }
+                
+                updateProfile(updates)
+              }}
+              className={`w-full p-4 rounded-xl border transition-all text-left ${
+                isSelected
+                  ? 'bg-[#C1121F]/10 border-[#C1121F] ring-1 ring-[#C1121F]/30'
+                  : 'bg-[#1C1F26] border-[#2B313A] hover:border-[#3A3A3A]'
+              }`}
+            >
+              <div className="flex items-start gap-3">
+                <div className={`p-2 rounded-lg ${
+                  isSelected ? 'bg-[#C1121F]/20 text-[#C1121F]' : 'bg-[#2B313A] text-[#6B7280]'
+                }`}>
+                  <Icon className="w-5 h-5" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className={`font-medium ${isSelected ? 'text-white' : 'text-[#A4ACB8]'}`}>
+                    {TRAINING_PATH_LABELS[path]}
+                  </div>
+                  <div className="text-xs text-[#6B7280] mt-1">
+                    {TRAINING_PATH_DESCRIPTIONS[path]}
+                  </div>
+                </div>
+                {isSelected && (
+                  <Check className="w-5 h-5 text-[#C1121F] flex-shrink-0" />
+                )}
+              </div>
+            </button>
+          )
+        })}
+      </div>
     </div>
   )
 }
   
-  function GoalsSection({ profile, updateProfile }: SectionProps) {
+function GoalsSection({ profile, updateProfile }: SectionProps) {
   const toggleCategory = (cat: GoalCategory) => {
     const current = profile.goalCategories
     const updated = current.includes(cat)
@@ -1718,45 +1806,45 @@ function EquipmentSection({ profile, updateProfile }: SectionProps) {
 }
 
 function ScheduleSection({ profile, updateProfile }: SectionProps) {
-  const days: TrainingDaysPerWeek[] = [2, 3, 4, 5, 6]
-  const lengths: SessionLengthPreference[] = [30, 45, 60, 75]
-
+  const days: TrainingDaysPerWeek[] = [2, 3, 4, 5, 6, 'flexible']
+  const lengths: SessionLengthPreference[] = [20, 30, 45, 60, 75, 'flexible']
+  
   return (
-    <div className="space-y-6">
-      {/* Days per week */}
-      <div className="space-y-3">
-        <label className="text-sm font-medium text-[#A4ACB8]">How many days can you train?</label>
-        <p className="text-xs text-[#6B7280] -mt-1">Be realistic — consistency beats intensity</p>
-        <div className="flex gap-2">
-          {days.map((day) => (
-            <OptionButton
-              key={day}
-              selected={profile.trainingDaysPerWeek === day}
-              onClick={() => updateProfile({ trainingDaysPerWeek: day })}
-              className="flex-1 justify-center"
-            >
-              {day}
-            </OptionButton>
-          ))}
-        </div>
-      </div>
-
-      {/* Session length */}
-      <div className="space-y-3">
-        <label className="text-sm font-medium text-[#A4ACB8]">How long can you train?</label>
-        <p className="text-xs text-[#6B7280] -mt-1">Average time per session</p>
-        <div className="grid grid-cols-4 gap-2">
-          {lengths.map((len) => (
-            <OptionButton
-              key={len}
-              selected={profile.sessionLengthMinutes === len}
-              onClick={() => updateProfile({ sessionLengthMinutes: len })}
-            >
-              {SESSION_LENGTH_LABELS[len]}
-            </OptionButton>
-          ))}
-        </div>
-      </div>
+  <div className="space-y-6">
+  {/* Days per week */}
+  <div className="space-y-3">
+  <label className="text-sm font-medium text-[#A4ACB8]">How many days per week can you realistically train?</label>
+  <p className="text-xs text-[#6B7280] -mt-1">Be realistic — consistency beats intensity</p>
+  <div className="grid grid-cols-3 gap-2">
+  {days.map((day) => (
+  <OptionButton
+  key={String(day)}
+  selected={profile.trainingDaysPerWeek === day}
+  onClick={() => updateProfile({ trainingDaysPerWeek: day })}
+  className="justify-center"
+  >
+  {TRAINING_DAYS_LABELS[day]}
+  </OptionButton>
+  ))}
+  </div>
+  </div>
+  
+  {/* Session length */}
+  <div className="space-y-3">
+  <label className="text-sm font-medium text-[#A4ACB8]">How much time do you usually have per workout?</label>
+  <p className="text-xs text-[#6B7280] -mt-1">SpartanLab will design workouts that fit your available training time.</p>
+  <div className="grid grid-cols-2 gap-2">
+  {lengths.map((len) => (
+  <OptionButton
+  key={String(len)}
+  selected={profile.sessionLengthMinutes === len}
+  onClick={() => updateProfile({ sessionLengthMinutes: len })}
+  >
+  {SESSION_LENGTH_LABELS[len]}
+  </OptionButton>
+  ))}
+  </div>
+  </div>
 
       {/* Session style */}
       <div className="space-y-3">
@@ -2163,6 +2251,8 @@ export function AthleteOnboarding() {
   return answered >= 3
   case 'training_outcome':
   return profile.primaryTrainingOutcome !== null
+  case 'training_path':
+  return profile.trainingPathType !== null
   case 'goals':
   return profile.primaryGoal !== null
       case 'skill_selection':
@@ -2245,6 +2335,8 @@ export function AthleteOnboarding() {
   return <ReadinessCalibrationSection {...props} />
   case 'training_outcome':
   return <TrainingOutcomeSection {...props} />
+  case 'training_path':
+  return <TrainingPathSection {...props} />
   case 'goals':
   return <GoalsSection {...props} />
       case 'skill_selection':

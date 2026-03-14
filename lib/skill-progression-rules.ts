@@ -657,6 +657,143 @@ export const FLEXIBILITY_SKILL_PROGRESSIONS: Record<string, EnhancedSkillDefinit
 }
 
 // =============================================================================
+// IRON CROSS PROGRESSION
+// =============================================================================
+
+export const IRON_CROSS_PROGRESSION: EnhancedSkillDefinition = {
+  key: 'iron_cross',
+  name: 'Iron Cross',
+  description: 'Elite ring skill - horizontal arm hold',
+  isIsometric: true,
+  trainingPhilosophy: 'Conservative progression with extensive tendon preparation',
+  levels: [
+    {
+      name: 'Ring Support Mastery',
+      minHoldForOwnership: 45, // 45 seconds with turn-out
+      targetHold: 60,
+      microToNext: {
+        name: 'Support with External Rotation',
+        description: 'Build shoulder stability and ring control',
+        fromLevel: 0,
+        towardLevel: 1,
+        cues: ['Maximum external rotation', 'Elbows fully locked', 'Shoulders depressed'],
+      },
+    },
+    {
+      name: 'German Hang Mobility',
+      minHoldForOwnership: 20,
+      targetHold: 30,
+      microToNext: {
+        name: 'Skin the Cat Flow',
+        description: 'Build shoulder flexibility and bicep tendon tolerance',
+        fromLevel: 1,
+        towardLevel: 2,
+        cues: ['Control throughout movement', 'Straight arms', 'No forcing end range'],
+      },
+    },
+    {
+      name: 'Cross Pull Negatives',
+      minHoldForOwnership: 5, // 5 second controlled descent
+      targetHold: 8,
+      microToNext: {
+        name: 'Deeper Negatives',
+        description: 'Increase range and control of eccentric cross',
+        fromLevel: 2,
+        towardLevel: 3,
+        cues: ['Slow controlled descent', 'Arms moving outward', 'Stop before failure'],
+      },
+    },
+    {
+      name: 'Band-Assisted Cross',
+      minHoldForOwnership: 5,
+      targetHold: 10,
+      microToNext: {
+        name: 'Reducing Band Assistance',
+        description: 'Progress to thinner bands over time',
+        fromLevel: 3,
+        towardLevel: 4,
+        cues: ['Reduce band thickness gradually', 'Maintain form over time', 'Never rush'],
+      },
+    },
+    {
+      name: 'Full Iron Cross',
+      minHoldForOwnership: 3,
+      targetHold: 8,
+    },
+  ],
+  supportStrengthRequirements: {
+    primaryExercise: 'weighted_dip',
+    minOneRMPercent: [30, 45, 60, 75, 90], // Very high strength requirements
+    additionalFactors: [
+      'Straight arm strength (planche/front lever)',
+      'Ring stability',
+      'Bicep tendon conditioning',
+      'Shoulder health and mobility',
+    ],
+  },
+}
+
+// =============================================================================
+// HANDSTAND PROGRESSION (Balance-focused)
+// =============================================================================
+
+export const HANDSTAND_PROGRESSION: EnhancedSkillDefinition = {
+  key: 'handstand',
+  name: 'Freestanding Handstand',
+  description: 'Balanced inverted hold - foundational for advanced pressing',
+  isIsometric: true,
+  trainingPhilosophy: 'Frequent short practice sessions, quality over quantity',
+  levels: [
+    {
+      name: 'Wall Handstand',
+      minHoldForOwnership: 30,
+      targetHold: 60,
+      microToNext: {
+        name: 'Heel Pulls from Wall',
+        description: 'Practice balance by briefly leaving the wall',
+        fromLevel: 0,
+        towardLevel: 1,
+        cues: ['Light wall contact', 'Pull heels away briefly', 'Return to wall controlled'],
+      },
+    },
+    {
+      name: 'Kick-Up Hold',
+      minHoldForOwnership: 10,
+      targetHold: 20,
+      microToNext: {
+        name: 'Controlled Kick-Up Practice',
+        description: 'Develop consistent kick-up and find balance point',
+        fromLevel: 1,
+        towardLevel: 2,
+        cues: ['Same kick every time', 'Find balance point quickly', 'Bail safely'],
+      },
+    },
+    {
+      name: 'Freestanding Hold',
+      minHoldForOwnership: 15,
+      targetHold: 30,
+      microToNext: {
+        name: 'Shape and Alignment Work',
+        description: 'Refine body line and reduce energy expenditure',
+        fromLevel: 2,
+        towardLevel: 3,
+        cues: ['Stacked joints', 'Hollow body', 'Finger balance corrections'],
+      },
+    },
+    {
+      name: 'Solid Freestanding',
+      minHoldForOwnership: 30,
+      targetHold: 60,
+    },
+  ],
+  supportStrengthRequirements: {
+    primaryExercise: 'weighted_dip',
+    minOneRMPercent: [10, 20, 30, 40],
+    additionalFactors: ['Shoulder mobility', 'Wrist flexibility', 'Core stability'],
+  },
+}
+
+// =============================================================================
 // SKILL PROGRESSIONS REGISTRY (Main Export)
 // =============================================================================
 
@@ -665,6 +802,8 @@ export const SKILL_PROGRESSIONS: Record<string, EnhancedSkillDefinition> = {
   front_lever: FRONT_LEVER_PROGRESSION,
   muscle_up: MUSCLE_UP_PROGRESSION,
   handstand_pushup: HANDSTAND_PUSHUP_PROGRESSION,
+  handstand: HANDSTAND_PROGRESSION,
+  iron_cross: IRON_CROSS_PROGRESSION,
   l_sit: L_SIT_PROGRESSION,
   v_sit: V_SIT_PROGRESSION,
   i_sit: I_SIT_PROGRESSION,

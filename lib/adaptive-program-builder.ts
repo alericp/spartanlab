@@ -82,6 +82,16 @@ import {
   type ConsistencyStatus,
   type ComebackWorkoutConfig,
 } from './consistency-momentum-engine'
+import {
+  getApplicableCoachingPrinciples,
+  shouldIncludeRunning,
+  shouldIncludeHandstandStrength,
+  checkIronCrossReadiness,
+  HANDSTAND_TRAINING_CONFIG,
+  IRON_CROSS_SAFETY_WARNING,
+  getSessionStructure,
+  type CoachingPrinciple,
+} from './training-session-config'
 
 // =============================================================================
 // TYPES
@@ -233,6 +243,27 @@ export interface AdaptiveProgram {
     volumeModifier: number
     intensityModifier: number
   }
+  // Skill Safety Context - iron cross and other advanced skills
+  skillSafetyContext?: {
+    ironCrossReadiness?: {
+      isReady: boolean
+      missingRequirements: string[]
+      recommendation: string
+      safetyWarning?: string
+    }
+    handstandConfig?: {
+      maxBalanceDuration: number
+      placementInSession: string
+      includeStrengthWork: boolean
+    }
+    activeCoachingPrinciples?: string[] // Internal principle IDs being applied
+  }
+  // Running inclusion decision
+  runningConfig?: {
+    shouldInclude: boolean
+    frequency: 'none' | 'occasional' | 'regular' | 'primary'
+    rationale: string
+  }
 }
 
 // =============================================================================
@@ -248,6 +279,8 @@ interface OutcomeTrainingStyle {
   useWeightedProgressions: boolean // Prefer weighted over bodyweight
   preferDropSets: boolean        // Use mechanical/strength drop sets
   restModifier: number           // Multiplier for rest periods (0.7 = shorter, 1.3 = longer)
+  includeRunning: boolean        // Include running/cardio work
+  runningFrequency: 'none' | 'occasional' | 'regular' | 'primary'
 }
 
 /**
@@ -267,6 +300,8 @@ function getTrainingStyleFromOutcome(outcome: PrimaryTrainingOutcome): OutcomeTr
         useWeightedProgressions: true,
         preferDropSets: false,
         restModifier: 1.3,
+        includeRunning: false,
+        runningFrequency: 'none',
       }
     case 'max_reps':
       // Maximize bodyweight reps - density, drop sets, moderate rest
@@ -279,9 +314,11 @@ function getTrainingStyleFromOutcome(outcome: PrimaryTrainingOutcome): OutcomeTr
         useWeightedProgressions: false,
         preferDropSets: true,
         restModifier: 0.85,
+        includeRunning: false,
+        runningFrequency: 'occasional',
       }
     case 'military':
-      // PT test prep - high reps, circuits, conditioning
+      // PT test prep - high reps, circuits, conditioning, running
       return {
         preferHighReps: true,
         preferLowReps: false,
@@ -291,46 +328,54 @@ function getTrainingStyleFromOutcome(outcome: PrimaryTrainingOutcome): OutcomeTr
         useWeightedProgressions: false,
         preferDropSets: true,
         restModifier: 0.7,
+        includeRunning: true,
+        runningFrequency: 'primary',
       }
-    case 'skills':
-      // Skill progression - skill-focused, moderate intensity, support work
-      return {
-        preferHighReps: false,
-        preferLowReps: false,
-        includeDensityBlocks: false,
-        includeEnduranceWork: false,
-        skillFocused: true,
-        useWeightedProgressions: true,
-        preferDropSets: false,
-        restModifier: 1.2,
-      }
-    case 'endurance':
-      // Conditioning focus - circuits, density, minimal rest
-      return {
-        preferHighReps: true,
-        preferLowReps: false,
-        includeDensityBlocks: true,
-        includeEnduranceWork: true,
-        skillFocused: false,
-        useWeightedProgressions: false,
-        preferDropSets: true,
-        restModifier: 0.6,
-      }
-    case 'general_fitness':
-    default:
-      // Balanced approach
-      return {
-        preferHighReps: false,
-        preferLowReps: false,
-        includeDensityBlocks: true,
-        includeEnduranceWork: true,
-        skillFocused: false,
-        useWeightedProgressions: true,
-        preferDropSets: false,
-        restModifier: 1.0,
-      }
+case 'skills':
+  // Skill progression - skill-focused, moderate intensity, support work
+  return {
+  preferHighReps: false,
+  preferLowReps: false,
+  includeDensityBlocks: false,
+  includeEnduranceWork: false,
+  skillFocused: true,
+  useWeightedProgressions: true,
+  preferDropSets: false,
+  restModifier: 1.2,
+  includeRunning: false,
+  runningFrequency: 'none',
   }
-}
+case 'endurance':
+  // Conditioning focus - circuits, density, minimal rest, running
+  return {
+  preferHighReps: true,
+  preferLowReps: false,
+  includeDensityBlocks: true,
+  includeEnduranceWork: true,
+  skillFocused: false,
+  useWeightedProgressions: false,
+  preferDropSets: true,
+  restModifier: 0.6,
+  includeRunning: true,
+  runningFrequency: 'regular',
+  }
+case 'general_fitness':
+  default:
+  // Balanced approach
+  return {
+  preferHighReps: false,
+  preferLowReps: false,
+  includeDensityBlocks: true,
+  includeEnduranceWork: true,
+  skillFocused: false,
+  useWeightedProgressions: true,
+  preferDropSets: false,
+  restModifier: 1.0,
+  includeRunning: false,
+  runningFrequency: 'occasional',
+  }
+  }
+  }
 
 // =============================================================================
 // WORKOUT DURATION CONFIGURATION

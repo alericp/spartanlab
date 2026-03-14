@@ -12,7 +12,7 @@ import { calculateRecoverySignal } from './recovery-engine'
 import { getConstraintInsight } from './constraint-engine'
 import { getProgramBuilderContext } from './adaptive-athlete-engine'
 import { getAthleteCalibration, getProgramCalibrationAdjustments, type AthleteCalibration, type ProgramCalibrationAdjustments } from './athlete-calibration'
-import { getOnboardingProfile } from './athlete-profile'
+import { getOnboardingProfile, type PrimaryTrainingOutcome } from './athlete-profile'
 import { getUnifiedSkillIntelligence, generateTrainingAdjustments, type UnifiedSkillIntelligence } from './skill-intelligence-layer'
 import { getCompressionReadiness, shouldBiasTowardCompression, type CompressionReadinessResult } from './compression-readiness'
 import { selectOptimalStructure, getDayExplanation } from './program-structure-engine'
@@ -167,17 +167,19 @@ export interface AdaptiveProgram {
   }
   // Athlete calibration context from onboarding
   calibrationContext?: {
-    isCalibrated: boolean
-    message: string
-    notes: string[]
-    includesCompressionWork: boolean
-    includesEnduranceFinisher: boolean
-    compressionReadiness?: {
-      currentLevel: string
-      nextMilestone: string
-      readinessScore: number
-      limiter: string
-    }
+  isCalibrated: boolean
+  message: string
+  notes: string[]
+  includesCompressionWork: boolean
+  includesEnduranceFinisher: boolean
+  includesDensityBlocks?: boolean
+  trainingOutcome?: PrimaryTrainingOutcome
+  compressionReadiness?: {
+  currentLevel: string
+  nextMilestone: string
+  readinessScore: number
+  limiter: string
+  }
   }
   // Training Principles Engine - methodology emphasis
   trainingEmphasis?: {
@@ -229,6 +231,103 @@ export interface AdaptiveProgram {
 }
 
 // =============================================================================
+// TRAINING OUTCOME STYLE MAPPING
+// =============================================================================
+
+interface OutcomeTrainingStyle {
+  preferHighReps: boolean        // Favor higher rep ranges (8-15+)
+  preferLowReps: boolean         // Favor lower rep ranges (3-6)
+  includeDensityBlocks: boolean  // Include timed density/circuit work
+  includeEnduranceWork: boolean  // Include conditioning finishers
+  skillFocused: boolean          // Prioritize skill progressions
+  useWeightedProgressions: boolean // Prefer weighted over bodyweight
+  preferDropSets: boolean        // Use mechanical/strength drop sets
+  restModifier: number           // Multiplier for rest periods (0.7 = shorter, 1.3 = longer)
+}
+
+/**
+ * Maps the user's primary training outcome to specific training style adjustments.
+ * This influences exercise selection, rep ranges, and training block structure.
+ */
+function getTrainingStyleFromOutcome(outcome: PrimaryTrainingOutcome): OutcomeTrainingStyle {
+  switch (outcome) {
+    case 'strength':
+      // Build raw strength - lower reps, longer rest, weighted work
+      return {
+        preferHighReps: false,
+        preferLowReps: true,
+        includeDensityBlocks: false,
+        includeEnduranceWork: false,
+        skillFocused: false,
+        useWeightedProgressions: true,
+        preferDropSets: false,
+        restModifier: 1.3,
+      }
+    case 'max_reps':
+      // Maximize bodyweight reps - density, drop sets, moderate rest
+      return {
+        preferHighReps: true,
+        preferLowReps: false,
+        includeDensityBlocks: true,
+        includeEnduranceWork: true,
+        skillFocused: false,
+        useWeightedProgressions: false,
+        preferDropSets: true,
+        restModifier: 0.85,
+      }
+    case 'military':
+      // PT test prep - high reps, circuits, conditioning
+      return {
+        preferHighReps: true,
+        preferLowReps: false,
+        includeDensityBlocks: true,
+        includeEnduranceWork: true,
+        skillFocused: false,
+        useWeightedProgressions: false,
+        preferDropSets: true,
+        restModifier: 0.7,
+      }
+    case 'skills':
+      // Skill progression - skill-focused, moderate intensity, support work
+      return {
+        preferHighReps: false,
+        preferLowReps: false,
+        includeDensityBlocks: false,
+        includeEnduranceWork: false,
+        skillFocused: true,
+        useWeightedProgressions: true,
+        preferDropSets: false,
+        restModifier: 1.2,
+      }
+    case 'endurance':
+      // Conditioning focus - circuits, density, minimal rest
+      return {
+        preferHighReps: true,
+        preferLowReps: false,
+        includeDensityBlocks: true,
+        includeEnduranceWork: true,
+        skillFocused: false,
+        useWeightedProgressions: false,
+        preferDropSets: true,
+        restModifier: 0.6,
+      }
+    case 'general_fitness':
+    default:
+      // Balanced approach
+      return {
+        preferHighReps: false,
+        preferLowReps: false,
+        includeDensityBlocks: true,
+        includeEnduranceWork: true,
+        skillFocused: false,
+        useWeightedProgressions: true,
+        preferDropSets: false,
+        restModifier: 1.0,
+      }
+  }
+}
+
+// =============================================================================
 // MAIN GENERATION FUNCTION
 // =============================================================================
 
@@ -251,35 +350,49 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
   // Get athlete calibration from onboarding
   const athleteCalibration = getAthleteCalibration()
   const onboardingProfile = getOnboardingProfile()
+  const trainingOutcome = onboardingProfile?.primaryTrainingOutcome || 'general_fitness'
   const calibrationAdjustments = getProgramCalibrationAdjustments(
     athleteCalibration,
     onboardingProfile?.primaryGoal || null,
     sessionLength
   )
   
+  // Determine training style adjustments based on training outcome
+  // This affects rep ranges, rest periods, and exercise selection
+  const outcomeTrainingStyle = getTrainingStyleFromOutcome(trainingOutcome)
+  
   // Build calibration context for UI display
 // Get compression readiness for program generation
   const compressionReadiness = getCompressionReadiness(onboardingProfile, athleteCalibration)
   const biasTowardCompression = shouldBiasTowardCompression(compressionReadiness, primaryGoal)
   
+  // Apply training outcome overrides to calibration
+  const shouldIncludeEndurance = outcomeTrainingStyle.includeEnduranceWork || 
+    calibrationAdjustments.includeEnduranceFinisher
+  const shouldIncludeDensity = outcomeTrainingStyle.includeDensityBlocks
+  
   const calibrationContext = athleteCalibration.calibrationComplete ? {
-    isCalibrated: true,
-    message: calibrationAdjustments.calibrationMessage,
-    notes: calibrationAdjustments.progressionNotes,
-    includesCompressionWork: calibrationAdjustments.includeCompressionWork || biasTowardCompression,
-    includesEnduranceFinisher: calibrationAdjustments.includeEnduranceFinisher,
-    compressionReadiness: {
-      currentLevel: compressionReadiness.currentLevelLabel,
-      nextMilestone: compressionReadiness.nextMilestoneLabel,
-      readinessScore: compressionReadiness.readinessScore,
-      limiter: compressionReadiness.primaryLimiter,
-    },
+  isCalibrated: true,
+  message: calibrationAdjustments.calibrationMessage,
+  notes: calibrationAdjustments.progressionNotes,
+  includesCompressionWork: calibrationAdjustments.includeCompressionWork || biasTowardCompression,
+  includesEnduranceFinisher: shouldIncludeEndurance,
+  includesDensityBlocks: shouldIncludeDensity,
+  trainingOutcome: trainingOutcome,
+  compressionReadiness: {
+  currentLevel: compressionReadiness.currentLevelLabel,
+  nextMilestone: compressionReadiness.nextMilestoneLabel,
+  readinessScore: compressionReadiness.readinessScore,
+  limiter: compressionReadiness.primaryLimiter,
+  },
   } : {
-    isCalibrated: false,
-    message: 'Complete onboarding for personalized calibration',
-    notes: [],
-    includesCompressionWork: false,
-    includesEnduranceFinisher: false,
+  isCalibrated: false,
+  message: 'Complete onboarding for personalized calibration',
+  notes: [],
+  includesCompressionWork: false,
+  includesEnduranceFinisher: shouldIncludeEndurance,
+  includesDensityBlocks: shouldIncludeDensity,
+  trainingOutcome: trainingOutcome,
   }
   
   // Get fatigue-based training decision (runs client-side only)
@@ -314,8 +427,16 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
     : (athleteCalibration.tendonAdaptation?.[primaryGoal as keyof typeof athleteCalibration.tendonAdaptation] ?? 'low')
 
   // Select training method profiles via Principles Engine
+  // Adjust goal type based on training outcome for non-skill focused users
+  const effectiveGoalType = outcomeTrainingStyle.skillFocused 
+    ? primaryGoal as SkillType 
+    : (trainingOutcome === 'strength' ? 'general_strength' : 
+       trainingOutcome === 'max_reps' ? 'work_capacity' :
+       trainingOutcome === 'military' ? 'work_capacity' :
+       trainingOutcome === 'endurance' ? 'work_capacity' : primaryGoal) as SkillType
+  
   const selectionContext: SelectionContext = {
-    primaryGoal: primaryGoal as SkillType,
+    primaryGoal: effectiveGoalType,
     experienceLevel,
     recoveryCapacity: recoverySignal.level === 'optimal' ? 'moderate' : 
                       recoverySignal.level === 'good' ? 'moderate' :
@@ -327,7 +448,7 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
                          fatigueDecision?.decision === 'REDUCE_INTENSITY' ? 'moderate' : 'low',
     recentSorenessLevel: 'mild',
     rangeTrainingMode: profile?.rangeTrainingMode || undefined,
-    wantsHypertrophy: profile?.goalCategory === 'strength',
+    wantsHypertrophy: trainingOutcome === 'strength' || profile?.goalCategory === 'strength',
     tendonAdaptationLevel: tendonAdaptationForGoal as 'low' | 'low_moderate' | 'moderate' | 'moderate_high' | 'high',
   }
   const selectedMethods = selectMethodProfiles(selectionContext)

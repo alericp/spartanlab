@@ -20,6 +20,9 @@ import {
   Loader2,
   Calculator,
   Activity,
+  Shield,
+  TrendingUp,
+  Check,
 } from 'lucide-react'
 import { SpartanIcon } from '@/components/brand/SpartanLogo'
 import { trackOnboardingCompleted } from '@/lib/analytics'
@@ -62,6 +65,9 @@ import {
   type SkillTrainingHistory,
   type SkillLastTrained,
   type SkillHistoryEntry,
+  type PrimaryTrainingOutcome,
+  PRIMARY_TRAINING_OUTCOME_LABELS,
+  PRIMARY_TRAINING_OUTCOME_DESCRIPTIONS,
   TRAINING_EXPERIENCE_LABELS,
   TRAINING_EXPERIENCE_DESCRIPTIONS,
   HEIGHT_LABELS,
@@ -115,6 +121,7 @@ import { BodyFatCalculator } from './BodyFatCalculator'
 type SectionId =
   | 'athlete_profile'
   | 'readiness'
+  | 'training_outcome'
   | 'goals'
   | 'skill_selection'
   | 'strength_benchmarks'
@@ -147,6 +154,12 @@ const SECTIONS: Section[] = [
     icon: Activity,
   },
   {
+    id: 'training_outcome',
+    title: 'Training Focus',
+    subtitle: 'What do you want to improve the most right now?',
+    icon: Target,
+  },
+  {
     id: 'goals',
     title: 'Your Goals',
     subtitle: 'What do you want to achieve? This shapes your entire program.',
@@ -157,7 +170,9 @@ const SECTIONS: Section[] = [
     title: 'Choose Your Skills',
     subtitle: 'Select the skills you want to master — we\'ll build progressions for each',
     icon: Zap,
-    showIf: (profile) => profile.goalCategories.includes('skill_mastery') || 
+    // Only show if user wants skills or has skill_mastery as a goal category
+    showIf: (profile) => profile.primaryTrainingOutcome === 'skills' ||
+                         profile.goalCategories.includes('skill_mastery') || 
                          profile.goalCategories.includes('flexibility') ||
                          profile.goalCategories.includes('mobility'),
   },
@@ -650,11 +665,113 @@ function ReadinessCalibrationSection({ profile, updateProfile }: SectionProps) {
           ))}
         </div>
       </div>
+  </div>
+  )
+  }
+
+// =============================================================================
+// TRAINING OUTCOME SECTION - What the user wants to achieve
+// =============================================================================
+
+function TrainingOutcomeSection({ profile, updateProfile }: SectionProps) {
+  const outcomes: PrimaryTrainingOutcome[] = [
+    'strength',
+    'max_reps', 
+    'military',
+    'skills',
+    'endurance',
+    'general_fitness',
+  ]
+
+  const getOutcomeIcon = (outcome: PrimaryTrainingOutcome) => {
+    switch (outcome) {
+      case 'strength': return Dumbbell
+      case 'max_reps': return TrendingUp
+      case 'military': return Shield
+      case 'skills': return Zap
+      case 'endurance': return Activity
+      case 'general_fitness': return Heart
+      default: return Target
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="text-center mb-6">
+        <p className="text-sm text-[#A4ACB8]">
+          This helps SpartanLab choose the best training structure for your goals.
+        </p>
+      </div>
+      
+      <div className="space-y-3">
+        {outcomes.map(outcome => {
+          const Icon = getOutcomeIcon(outcome)
+          const isSelected = profile.primaryTrainingOutcome === outcome
+          
+          return (
+            <button
+              key={outcome}
+              onClick={() => {
+                // Auto-add relevant goal categories based on outcome
+                const updates: Partial<OnboardingProfile> = { 
+                  primaryTrainingOutcome: outcome 
+                }
+                
+                // If selecting skills, ensure skill_mastery is in categories
+                if (outcome === 'skills' && !profile.goalCategories.includes('skill_mastery')) {
+                  updates.goalCategories = [...profile.goalCategories, 'skill_mastery']
+                }
+                // If selecting strength, ensure strength is in categories
+                if (outcome === 'strength' && !profile.goalCategories.includes('strength')) {
+                  updates.goalCategories = [...profile.goalCategories, 'strength']
+                }
+                // If selecting endurance, ensure endurance is in categories
+                if (outcome === 'endurance' && !profile.goalCategories.includes('endurance')) {
+                  updates.goalCategories = [...profile.goalCategories, 'endurance']
+                }
+                
+                updateProfile(updates)
+              }}
+              className={`w-full p-4 rounded-xl border transition-all text-left ${
+                isSelected
+                  ? 'bg-[#C1121F]/10 border-[#C1121F] ring-1 ring-[#C1121F]/30'
+                  : 'bg-[#1C1F26] border-[#2B313A] hover:border-[#3A3A3A]'
+              }`}
+            >
+              <div className="flex items-start gap-3">
+                <div className={`p-2 rounded-lg ${
+                  isSelected ? 'bg-[#C1121F]/20 text-[#C1121F]' : 'bg-[#2B313A] text-[#6B7280]'
+                }`}>
+                  <Icon className="w-5 h-5" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className={`font-medium ${isSelected ? 'text-white' : 'text-[#A4ACB8]'}`}>
+                    {PRIMARY_TRAINING_OUTCOME_LABELS[outcome]}
+                  </div>
+                  <div className="text-xs text-[#6B7280] mt-1">
+                    {PRIMARY_TRAINING_OUTCOME_DESCRIPTIONS[outcome]}
+                  </div>
+                </div>
+                {isSelected && (
+                  <Check className="w-5 h-5 text-[#C1121F] flex-shrink-0" />
+                )}
+              </div>
+            </button>
+          )
+        })}
+      </div>
+
+      {/* Explanatory note */}
+      <div className="bg-[#1C1F26] border border-[#2B313A] rounded-lg p-4 mt-6">
+        <p className="text-xs text-[#6B7280] text-center">
+          SpartanLab supports everything from beginners building their first pull-up to athletes training for military fitness standards or advanced calisthenics skills.
+        </p>
+      </div>
     </div>
   )
 }
-
-function GoalsSection({ profile, updateProfile }: SectionProps) {
+  
+  function GoalsSection({ profile, updateProfile }: SectionProps) {
   const toggleCategory = (cat: GoalCategory) => {
     const current = profile.goalCategories
     const updated = current.includes(cat)
@@ -2042,10 +2159,12 @@ export function AthleteOnboarding() {
         r?.strengthPerception,
         r?.skillFamiliarity,
         r?.bodyType
-      ].filter(Boolean).length
-      return answered >= 3
-      case 'goals':
-        return profile.primaryGoal !== null
+  ].filter(Boolean).length
+  return answered >= 3
+  case 'training_outcome':
+  return profile.primaryTrainingOutcome !== null
+  case 'goals':
+  return profile.primaryGoal !== null
       case 'skill_selection':
         return true // Optional selections
       case 'strength_benchmarks':
@@ -2122,10 +2241,12 @@ export function AthleteOnboarding() {
     switch (currentSection.id) {
     case 'athlete_profile':
       return <AthleteProfileSection {...props} />
-      case 'readiness':
-      return <ReadinessCalibrationSection {...props} />
-      case 'goals':
-        return <GoalsSection {...props} />
+  case 'readiness':
+  return <ReadinessCalibrationSection {...props} />
+  case 'training_outcome':
+  return <TrainingOutcomeSection {...props} />
+  case 'goals':
+  return <GoalsSection {...props} />
       case 'skill_selection':
         return <SkillSelectionSection {...props} />
       case 'strength_benchmarks':

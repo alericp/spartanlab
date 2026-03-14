@@ -76,6 +76,40 @@ export type PrimaryGoalType =
   | 'work_capacity'
 
 // =============================================================================
+// PRIMARY TRAINING OUTCOME
+// =============================================================================
+
+/**
+ * Primary training outcome - what the user wants to achieve
+ * This drives program structure and exercise selection
+ */
+export type PrimaryTrainingOutcome =
+  | 'strength'        // Build calisthenics strength
+  | 'max_reps'        // Increase max reps (pull-ups, push-ups, dips)
+  | 'military'        // Train for military or tactical fitness tests
+  | 'skills'          // Learn advanced calisthenics skills
+  | 'endurance'       // Improve endurance and conditioning
+  | 'general_fitness' // General fitness and body control
+
+export const PRIMARY_TRAINING_OUTCOME_LABELS: Record<PrimaryTrainingOutcome, string> = {
+  strength: 'Build calisthenics strength',
+  max_reps: 'Increase max reps (pull-ups, push-ups, dips)',
+  military: 'Train for military or tactical fitness tests',
+  skills: 'Learn advanced calisthenics skills (planche, front lever, muscle-up, etc.)',
+  endurance: 'Improve endurance and conditioning',
+  general_fitness: 'General fitness and body control',
+}
+
+export const PRIMARY_TRAINING_OUTCOME_DESCRIPTIONS: Record<PrimaryTrainingOutcome, string> = {
+  strength: 'Focus on weighted progressions and building raw pushing/pulling power',
+  max_reps: 'Density training and rep-based progressions to maximize bodyweight reps',
+  military: 'PT test preparation with high-rep work, circuits, and tactical conditioning',
+  skills: 'Skill-focused training with progression-based work and support strength',
+  endurance: 'Circuits, density blocks, and conditioning for work capacity',
+  general_fitness: 'Balanced programming covering strength, endurance, and movement quality',
+}
+
+// =============================================================================
 // SKILL SELECTION
 // =============================================================================
 
@@ -617,12 +651,16 @@ export interface OnboardingProfile {
   bodyFatSource: BodyFatSource | null     // How the value was obtained
   trainingExperience: TrainingExperience | null
   
+  // Section 1b: Primary Training Outcome
+  // This drives program structure - what does the user want to achieve?
+  primaryTrainingOutcome: PrimaryTrainingOutcome | null
+  
   // Section 2: Goals
   primaryGoal: PrimaryGoalType | null
   secondaryGoal: PrimaryGoalType | null
   goalCategories: GoalCategory[]
   
-  // Section 3: Skill Selection
+  // Section 3: Skill Selection (conditional - only if skills/hybrid outcome)
   selectedSkills: SkillGoal[]
   selectedFlexibility: FlexibilityGoal[]
   
@@ -1010,14 +1048,17 @@ export function createEmptyOnboardingProfile(): OnboardingProfile {
   bodyFatPercent: null,
   bodyFatSource: null,
   trainingExperience: null,
-    
-    // Section 2: Goals
-    primaryGoal: null,
-    secondaryGoal: null,
-    goalCategories: [],
-    
-    // Section 3: Skill Selection
-    selectedSkills: [],
+  
+  // Section 1b: Primary Training Outcome
+  primaryTrainingOutcome: null,
+  
+  // Section 2: Goals
+  primaryGoal: null,
+  secondaryGoal: null,
+  goalCategories: [],
+  
+  // Section 3: Skill Selection
+  selectedSkills: [],
     selectedFlexibility: [],
     
     // Section 4: Strength Benchmarks

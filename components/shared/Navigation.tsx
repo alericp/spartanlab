@@ -30,7 +30,16 @@ const SECONDARY_NAV_ITEMS = [
 export function Navigation() {
   const pathname = usePathname()
   const [mobileOpen, setMobileOpen] = useState(false)
-  const { isLoading: isAuthLoading } = useClerkAvailability()
+  const { isLoading: isAuthLoading, isClerkAvailable, isPreviewMode, authMode, hasError } = useClerkAvailability()
+  
+  // Diagnostic logging for auth state debugging
+  console.log('[v0] Navigation auth state:', {
+    isAuthLoading,
+    isClerkAvailable,
+    isPreviewMode,
+    authMode,
+    hasError,
+  })
 
   return (
     <header className="border-b border-[#2B313A] bg-[#0F1115] sticky top-0 z-50">

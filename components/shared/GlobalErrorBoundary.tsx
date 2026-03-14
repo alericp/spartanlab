@@ -55,8 +55,11 @@ export class GlobalErrorBoundary extends Component<Props, State> {
   }
 
   handleGoHome = () => {
-    // Navigate to home with a full page load to ensure clean state
-    // This avoids client-side routing back into potentially broken state
+    // Navigate to a guaranteed stable public route with full page reload
+    // The landing page '/' is the safest destination as it:
+    // 1. Has no auth requirements
+    // 2. Has minimal data dependencies
+    // 3. Cannot re-enter broken dashboard state
     if (typeof window !== 'undefined') {
       // Clear any cached state that might cause issues
       try {
@@ -65,8 +68,9 @@ export class GlobalErrorBoundary extends Component<Props, State> {
       } catch {
         // Ignore storage errors
       }
-      // Use window.location for a full navigation, not client-side routing
-      window.location.href = '/'
+      // Use window.location.replace to prevent back button returning to error
+      // Go to landing page which is always safe
+      window.location.replace('/landing')
     }
   }
 

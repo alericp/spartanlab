@@ -10,7 +10,6 @@ import {
   SectionHeader, 
   DashboardSkeleton 
 } from '@/components/layout'
-import { AuthGuard } from '@/components/auth/AuthGuard'
 
 // =============================================================================
 // ISOLATION TEST FLAG - Set to true for normal operation
@@ -542,11 +541,7 @@ setConstraintInsight(getConstraintInsight())
   )
 }
 
-// Wrap dashboard in AuthGuard to protect route
+// Dashboard route - Protected by middleware, no client-side auth guard needed
 export default function DashboardPage() {
-  return (
-    <AuthGuard redirectTo="/sign-in">
-      <DashboardContent />
-    </AuthGuard>
-  )
+  return <DashboardContent />
 }

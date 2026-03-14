@@ -3,7 +3,7 @@
  * Used to verify which code version is running in production
  */
 
-export const AUTH_BUILD_STAMP = 'auth-normalized-v1-native-clerk-only'
+export const AUTH_BUILD_STAMP = 'auth-official-native-clerk-v2'
 
 /**
  * Log the build stamp once (call on app initialization)

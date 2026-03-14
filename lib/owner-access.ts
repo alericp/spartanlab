@@ -40,7 +40,7 @@ const CURRENT_USER_KEY = 'spartanlab_current_user_email'
 
 /**
  * Get the current user's email from localStorage (preview mode only)
- * In production, use the useCurrentUserEmail hook from useClerkAuth
+ * In production, use useUser() from @clerk/nextjs
  */
 export function getCurrentUserEmail(): string | null {
   if (typeof window === 'undefined') return null

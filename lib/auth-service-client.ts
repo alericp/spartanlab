@@ -1,6 +1,6 @@
 // Client-safe auth service - NO server imports
 // For client components that need basic auth state
-// For full Clerk integration, use the useClerkAuth hook
+// For full Clerk integration, use useAuth/useUser from @clerk/nextjs
 
 import { isPreviewMode, isAuthEnabled } from './app-mode'
 import type { User, SubscriptionPlan } from '@/types/domain'
@@ -17,7 +17,7 @@ const PREVIEW_USER: User = {
 /**
  * Get the current authenticated user (client-safe fallback)
  * 
- * NOTE: In production with Clerk, use the useClerkAuth() hook instead.
+ * NOTE: In production with Clerk, use useUser() from @clerk/nextjs instead.
  * This function returns the preview user for compatibility.
  */
 export function getCurrentUser(): User {
@@ -40,7 +40,7 @@ export function getCurrentUserId(): string {
  * Check if user is authenticated (client-safe)
  * 
  * NOTE: In production with Clerk, use SignedIn/SignedOut components
- * or the useClerkAuth() hook instead.
+ * from @clerk/nextjs or useAuth() hook instead.
  */
 export function isAuthenticated(): boolean {
   if (isPreviewMode()) {

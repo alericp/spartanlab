@@ -10,6 +10,7 @@ import {
   SectionHeader, 
   DashboardSkeleton 
 } from '@/components/layout'
+import { AuthGuard } from '@/components/auth/AuthGuard'
 import { SpartanScoreCard } from '@/components/performance/SpartanScoreCard'
 import { AthleteIntelligenceCard } from '@/components/dashboard/AthleteIntelligenceCard'
 import { TrainingMomentumCard } from '@/components/dashboard/TrainingMomentumCard'
@@ -79,7 +80,7 @@ import { PremiumUpgradeBanner, SubscriptionTierBadge } from '@/components/premiu
 import { DashboardUpgradeCard } from '@/components/upgrade/AdaptiveProgramUpgradeCard'
 import { FirstRunGuide, SetupReminderBanner } from '@/components/dashboard/FirstRunGuide'
 
-export default function DashboardPage() {
+function DashboardContent() {
   const [overview, setOverview] = useState<DashboardOverview | null>(null)
   const [skillSummary, setSkillSummary] = useState<PrimarySkillSummary | null>(null)
   const [strengthSummary, setStrengthSummary] = useState<StrengthSummary | null>(null)
@@ -504,5 +505,14 @@ setConstraintInsight(getConstraintInsight())
         
       </SectionStack>
     </PageContainer>
+  )
+}
+
+// Wrap dashboard in AuthGuard to protect route
+export default function DashboardPage() {
+  return (
+    <AuthGuard redirectTo="/sign-in">
+      <DashboardContent />
+    </AuthGuard>
   )
 }

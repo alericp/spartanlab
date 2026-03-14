@@ -102,6 +102,19 @@ export const FEATURE_CAPABILITIES: FeatureCapability[] = [
     relevantFor: ['military', 'max_reps', 'endurance'],
   },
   {
+    id: 'pulling_strength_system',
+    internalName: 'Pulling Strength Engine + One-Arm Pull-Up System',
+    marketingName: 'Advanced Pulling Development',
+    shortDescription: 'From pull-up basics to one-arm mastery',
+    longDescription: 'Comprehensive pulling progression systems covering bodyweight strength, weighted pull-ups, one-arm pull-up progressions, and pull-up endurance development. Includes intelligent weak point detection for grip, scapular control, and bilateral balance.',
+    implementationEvidence: [
+      'lib/pulling-strength-engine.ts',
+      'lib/weak-point-priority-engine.ts',
+    ],
+    keyFunctions: ['ONE_ARM_PULL_UP_SYSTEM', 'WEIGHTED_PULL_UP_LEVELS', 'analyzeFullPullProfile', 'getPullPriorityExercises'],
+    relevantFor: ['strength', 'skills', 'one_arm_pull_up', 'front_lever', 'muscle_up'],
+  },
+  {
     id: 'session_optimization',
     internalName: 'Session Assembly Engine + Sequencing Rules',
     marketingName: 'Intelligent Session Structure',

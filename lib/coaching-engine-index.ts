@@ -220,6 +220,50 @@ export {
 } from './endurance-density-config'
 
 // =============================================================================
+// PULLING STRENGTH ENGINE EXPORTS
+// =============================================================================
+
+export {
+  // Exercise Library
+  PULLING_EXERCISE_LIBRARY,
+  
+  // One-Arm Pull-Up System
+  ONE_ARM_PULL_UP_SYSTEM,
+  
+  // Weighted Pull-Up Levels & Programs
+  WEIGHTED_PULL_UP_LEVELS,
+  WEIGHTED_PULL_UP_PROGRAMS,
+  
+  // Endurance Protocols
+  PULL_UP_ENDURANCE_PROTOCOLS,
+  
+  // Weak Point Analysis
+  analyzeFullPullProfile,
+  getPullPriorityExercises,
+  analyzePullStrength,
+  analyzeScapularDepression,
+  analyzeGripStrength,
+  analyzeArmBalance,
+  analyzeExplosivePower,
+  
+  // Guide Structures
+  PULL_GUIDE_STRUCTURES,
+  
+  // Marketing Support
+  PULL_MARKETING_CLAIMS,
+  
+  // Types
+  type PullingExercise,
+  type PullWeakPointCategory,
+  type PullWeakPointAssessment,
+  type PullProfileFactors,
+  type WeightedPullUpLevel,
+  type WeightedPullUpProgram,
+  type PullUpEnduranceProtocol,
+  type PullGuideStructure,
+} from './pulling-strength-engine'
+
+// =============================================================================
 // MARKETING SUPPORT EXPORTS
 // =============================================================================
 
@@ -396,5 +440,9 @@ export function getEngineCapabilitySummary(): string[] {
     'Intelligent exercise sequencing',
     'Endurance and work capacity protocols',
     'Skill frequency optimization',
+    'One-arm pull-up progression system',
+    'Weighted pull-up strength programming',
+    'Pull-up endurance and max-rep protocols',
+    'Pull-specific weak point detection and correction',
   ]
 }

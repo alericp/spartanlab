@@ -150,6 +150,7 @@ export type SkillGoal =
   | 'handstand_pushup'
   | 'handstand'
   | 'iron_cross'
+  | 'one_arm_pull_up'
   | 'l_sit'
   | 'v_sit'
   | 'i_sit'

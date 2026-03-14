@@ -3,11 +3,12 @@
 /**
  * AuthGuard - Wrapper for protected pages using Clerk authentication
  * 
- * Uses native Clerk components for authentication state
+ * DIAGNOSTIC ISOLATION: Uses only useAuth with userId branching
+ * No SignedIn/SignedOut components
  */
 
 import { useEffect, useState, ReactNode } from 'react'
-import { useAuth, SignedIn, SignedOut } from '@clerk/nextjs'
+import { useAuth } from '@clerk/nextjs'
 
 // ============================================================================
 // LOADING STATE
@@ -22,7 +23,7 @@ function LoadingState() {
 }
 
 // ============================================================================
-// SIGNED OUT FALLBACK (production only)
+// SIGNED OUT FALLBACK
 // ============================================================================
 
 function SignedOutFallback({ redirectTo }: { redirectTo: string }) {
@@ -42,7 +43,6 @@ function SignedOutFallback({ redirectTo }: { redirectTo: string }) {
         >
           Sign In
         </a>
-        
       </div>
     </div>
   )
@@ -61,15 +61,14 @@ interface AuthGuardProps {
 /**
  * AuthGuard - Protects pages that require authentication
  * 
- * Preview: Allows access (for UI testing)
- * Production: Redirects to sign-in if not authenticated
+ * Uses only useAuth with explicit userId branching
  */
 export function AuthGuard({ 
   children, 
   fallback,
   redirectTo = '/sign-in' 
 }: AuthGuardProps) {
-  const { isLoaded } = useAuth()
+  const { isLoaded, userId } = useAuth()
   const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
@@ -82,15 +81,11 @@ export function AuthGuard({
   // Auth not yet loaded
   if (!isLoaded) return <>{fallback ?? <LoadingState />}</>
 
-  // Native Clerk SignedIn/SignedOut components
-  return (
-    <>
-      <SignedIn>{children}</SignedIn>
-      <SignedOut>
-        <SignedOutFallback redirectTo={redirectTo} />
-      </SignedOut>
-    </>
-  )
+  // Not signed in - show fallback
+  if (!userId) return <SignedOutFallback redirectTo={redirectTo} />
+
+  // Signed in - render children
+  return <>{children}</>
 }
 
 // ============================================================================
@@ -99,20 +94,14 @@ export function AuthGuard({
 
 /**
  * OwnerOnly - Only renders for the platform owner
- * 
- * SIMPLIFIED: Uses server-side owner check via API instead of
- * brittle client-side window.Clerk checks.
- * 
- * Preview mode: Renders nothing
- * Production mode: Checks owner status and renders accordingly
  */
 export function OwnerOnly({ children }: { children: ReactNode }) {
-  const { isLoaded } = useAuth()
+  const { isLoaded, userId } = useAuth()
   const [isOwner, setIsOwner] = useState(false)
   const [checked, setChecked] = useState(false)
 
   useEffect(() => {
-    if (!isLoaded) return
+    if (!isLoaded || !userId) return
 
     // Check owner status via API
     fetch('/api/auth/owner-status')
@@ -128,9 +117,9 @@ export function OwnerOnly({ children }: { children: ReactNode }) {
         setIsOwner(false)
         setChecked(true)
       })
-  }, [isLoaded])
+  }, [isLoaded, userId])
 
-  if (!isLoaded || !checked || !isOwner) return null
+  if (!isLoaded || !userId || !checked || !isOwner) return null
   return <>{children}</>
 }
 

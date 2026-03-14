@@ -2,7 +2,6 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { UserButton, SignedIn, SignedOut, useAuth } from '@clerk/nextjs'
 import { Button } from '@/components/ui/button'
 import { LayoutDashboard, Target, Dumbbell, Calendar, ClipboardList, TrendingUp, Activity, Settings, Menu, X, Wrench, BookOpen, LogIn } from 'lucide-react'
 import { SpartanIcon } from '@/components/brand/SpartanLogo'
@@ -29,7 +28,6 @@ const SECONDARY_NAV_ITEMS = [
 export function Navigation() {
   const pathname = usePathname()
   const [mobileOpen, setMobileOpen] = useState(false)
-  const { isLoaded } = useAuth()
 
   return (
     <header className="border-b border-[#2B313A] bg-[#0F1115] sticky top-0 z-50">
@@ -64,7 +62,7 @@ export function Navigation() {
             })}
           </nav>
 
-          {/* Right side - User area */}
+          {/* Right side - Static links only (no Clerk) */}
           <div className="flex items-center gap-2">
             <Link href="/settings" className="hidden sm:block">
               <Button variant="ghost" size="icon" className="text-[#A4ACB8] hover:text-[#E6E9EF]">
@@ -72,24 +70,19 @@ export function Navigation() {
               </Button>
             </Link>
             
-            {/* User Button - uses Clerk auth components */}
-            {!isLoaded ? (
-              <div className="w-8 h-8 rounded-full bg-[#2B313A] animate-pulse" />
-            ) : (
-              <>
-                <SignedIn>
-                  <UserButton afterSignOutUrl="/" />
-                </SignedIn>
-                <SignedOut>
-                  <Link href="/sign-in">
-                    <Button size="sm" variant="ghost" className="text-[#A4ACB8] hover:text-[#E6E9EF]">
-                      <LogIn className="w-4 h-4 mr-2" />
-                      Sign In
-                    </Button>
-                  </Link>
-                </SignedOut>
-              </>
-            )}
+            {/* Static auth links - no Clerk hooks */}
+            <Link href="/dashboard">
+              <Button size="sm" variant="ghost" className="text-[#A4ACB8] hover:text-[#E6E9EF] hidden sm:flex">
+                <LayoutDashboard className="w-4 h-4 mr-2" />
+                Open App
+              </Button>
+            </Link>
+            <Link href="/sign-in">
+              <Button size="sm" variant="ghost" className="text-[#A4ACB8] hover:text-[#E6E9EF]">
+                <LogIn className="w-4 h-4 mr-2" />
+                Sign In
+              </Button>
+            </Link>
             
             {/* Mobile menu button */}
             <Button

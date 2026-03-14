@@ -1,18 +1,18 @@
 import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
 import { NextResponse } from 'next/server'
 import type { NextRequest, NextFetchEvent } from 'next/server'
-import { PRODUCTION_AUTH_DOMAINS, isProductionDomainFromHostname } from '@/lib/auth-environment'
+import { isProductionDomainFromHostname } from '@/lib/auth-environment'
 
 /**
  * Middleware with preview-safe Clerk integration
- * 
- * Uses the single source of truth from auth-environment.ts
- * 
- * On preview domains (*.vusercontent.net, etc.): bypasses Clerk entirely
- * On production (spartanlab.app): applies Clerk auth middleware
+ *
+ * Rules:
+ * - Preview/non-production domains bypass Clerk
+ * - Production domains enforce authentication for app routes
+ * - Marketing and auth pages remain public
  */
 
-// Define public routes that don't require authentication
+// Public routes that never require auth
 const isPublicRoute = createRouteMatcher([
   '/',
   '/landing',
@@ -27,41 +27,30 @@ const isPublicRoute = createRouteMatcher([
   '/contact',
   '/privacy',
   '/terms',
-  // SEO pages
   '/front-lever-progression',
   '/planche-progression',
   '/weighted-pull-up-calculator',
-  // API routes that should be public
   '/api/public(.*)',
-  // Dashboard should be accessible in preview (will show preview fallback)
-  '/dashboard(.*)',
-  '/onboarding(.*)',
 ])
 
-// Create the Clerk middleware once
 const authMiddleware = clerkMiddleware(async (auth, req) => {
-  // Allow public routes without authentication
   if (isPublicRoute(req)) {
     return
   }
-  
-  // Protect all other routes - require authentication
+
+  // All other routes require authentication
   await auth.protect()
 })
 
-/**
- * Main middleware function
- */
 export default async function middleware(request: NextRequest, event: NextFetchEvent) {
   const hostname = request.headers.get('host')
-  
-  // CRITICAL: On non-production domains, bypass Clerk entirely
-  // This prevents Clerk from trying to authenticate on preview domains
+
+  // Preview domains bypass Clerk entirely
   if (!isProductionDomainFromHostname(hostname)) {
     return NextResponse.next()
   }
-  
-  // Production domain: use Clerk middleware
+
+  // Production domains enforce auth middleware
   return authMiddleware(request, event)
 }
 

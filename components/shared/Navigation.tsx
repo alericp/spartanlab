@@ -27,6 +27,33 @@ const SECONDARY_NAV_ITEMS = [
   { href: '/performance', label: 'Analytics', icon: TrendingUp },
 ]
 
+// Page title mapping for all known routes
+const PAGE_TITLES: Record<string, string> = {
+  '/dashboard': 'Dashboard',
+  '/programs': 'Program',
+  '/skills': 'Skills',
+  '/strength': 'Strength',
+  '/guides': 'Guides',
+  '/recovery': 'Recovery',
+  '/tools': 'Tools',
+  '/workouts': 'History',
+  '/performance': 'Analytics',
+  '/settings': 'Settings',
+  '/upgrade': 'Upgrade',
+  '/pricing': 'Pricing',
+  '/onboarding': 'Onboarding',
+}
+
+function getPageTitle(pathname: string): string {
+  // Exact match first
+  if (PAGE_TITLES[pathname]) return PAGE_TITLES[pathname]
+  // Match by prefix for nested routes (e.g. /tools/front-lever-calculator → "Tools")
+  for (const [route, title] of Object.entries(PAGE_TITLES)) {
+    if (pathname.startsWith(route + '/')) return title
+  }
+  return ''
+}
+
 export function Navigation() {
   const pathname = usePathname()
   const [mobileOpen, setMobileOpen] = useState(false)
@@ -50,15 +77,24 @@ export function Navigation() {
     setMobileOpen(false)
   }
 
+  const pageTitle = getPageTitle(pathname)
+
   return (
     <header className="border-b border-[#2B313A] bg-[#0F1115] sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
-        <div className="flex items-center justify-between h-16">
+        <div className="relative flex items-center justify-between h-16">
           {/* Logo - Links to dashboard for app users */}
-          <Link href="/dashboard" className="flex items-center gap-2">
+          <Link href="/dashboard" className="flex items-center gap-2 shrink-0">
             <SpartanIcon size={28} />
             <span className="text-xl font-bold hidden sm:inline">SpartanLab</span>
           </Link>
+
+          {/* Page title - centered, visible on mobile only (desktop shows full nav) */}
+          {pageTitle && (
+            <span className="md:hidden absolute left-1/2 -translate-x-1/2 text-[16px] font-semibold text-[#E6E9EF]/90 truncate max-w-[40vw] text-center pointer-events-none">
+              {pageTitle}
+            </span>
+          )}
 
           {/* Desktop Nav */}
           <nav className="hidden md:flex items-center gap-1">

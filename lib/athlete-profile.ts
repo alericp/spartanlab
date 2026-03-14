@@ -2,6 +2,11 @@
 // Comprehensive onboarding data model for calisthenics programming
 // Supports beginners, intermediates, and advanced athletes
 
+import type { MilitaryProfile } from './military-test-config'
+
+// Re-export for convenience
+export type { MilitaryProfile } from './military-test-config'
+
 // =============================================================================
 // ATHLETE PROFILE SECTION
 // =============================================================================
@@ -92,21 +97,46 @@ export type PrimaryTrainingOutcome =
   | 'general_fitness' // General fitness and body control
 
 export const PRIMARY_TRAINING_OUTCOME_LABELS: Record<PrimaryTrainingOutcome, string> = {
-  strength: 'Build calisthenics strength',
-  max_reps: 'Increase max reps (pull-ups, push-ups, dips)',
-  military: 'Train for military or tactical fitness tests',
-  skills: 'Learn advanced calisthenics skills (planche, front lever, muscle-up, etc.)',
-  endurance: 'Improve endurance and conditioning',
-  general_fitness: 'General fitness and body control',
+  strength: 'Bodyweight Strength',
+  max_reps: 'Rep Performance',
+  military: 'Military & Tactical Prep',
+  skills: 'Skill Mastery',
+  endurance: 'Endurance & Work Capacity',
+  general_fitness: 'General Fitness & Conditioning',
 }
 
 export const PRIMARY_TRAINING_OUTCOME_DESCRIPTIONS: Record<PrimaryTrainingOutcome, string> = {
-  strength: 'Focus on weighted progressions and building raw pushing/pulling power',
-  max_reps: 'Density training and rep-based progressions to maximize bodyweight reps',
-  military: 'PT test preparation with high-rep work, circuits, and tactical conditioning',
-  skills: 'Skill-focused training with progression-based work and support strength',
-  endurance: 'Circuits, density blocks, and conditioning for work capacity',
-  general_fitness: 'Balanced programming covering strength, endurance, and movement quality',
+  strength: 'Build raw pushing and pulling power with weighted progressions and strength-focused training',
+  max_reps: 'Maximize your pull-up, push-up, and dip numbers with density training and rep progressions',
+  military: 'Prepare for official fitness tests with branch-specific conditioning and event training',
+  skills: 'Master planche, front lever, muscle-up, and other advanced movements with structured progressions',
+  endurance: 'Build work capacity with circuits, density blocks, and sustained conditioning',
+  general_fitness: 'Develop well-rounded fitness with balanced strength, conditioning, and movement quality',
+}
+
+/**
+ * Helper text explaining who each training outcome is best for
+ * Displayed in onboarding and goal selection UI
+ */
+export const PRIMARY_TRAINING_OUTCOME_HELPER_TEXT: Record<PrimaryTrainingOutcome, string> = {
+  strength: 'Best for: Users who want raw power, weighted progressions, and strength gains',
+  max_reps: 'Best for: Users chasing pull-up, push-up, and dip rep PRs',
+  military: 'Best for: Recruits, applicants, and service members preparing for official fitness tests',
+  skills: 'Best for: Users who want to master planche, front lever, muscle-up, and other advanced movements',
+  endurance: 'Best for: Users focused on conditioning, circuits, and sustained work capacity',
+  general_fitness: 'Best for: Users who want balanced strength, movement quality, and consistency without specializing',
+}
+
+/**
+ * Concrete examples of outcomes for each training path
+ */
+export const PRIMARY_TRAINING_OUTCOME_EXAMPLES: Record<PrimaryTrainingOutcome, string[]> = {
+  strength: ['Weighted pull-ups', 'Weighted dips', 'Harder progressions', 'Lower rep ranges'],
+  max_reps: ['20+ pull-ups', '50+ push-ups', 'Rep density', 'Volume tolerance'],
+  military: ['IST/PFT/CFT prep', 'ACFT training', 'Boot camp readiness', 'PT test standards'],
+  skills: ['Planche', 'Front lever', 'Muscle-up', 'Handstand push-up'],
+  endurance: ['Circuit training', 'Conditioning blocks', 'High-rep work', 'Work capacity'],
+  general_fitness: ['Overall improvement', 'Movement quality', 'Consistency', 'Balanced fitness'],
 }
 
 // =============================================================================
@@ -119,6 +149,8 @@ export type SkillGoal =
   | 'muscle_up'
   | 'handstand_pushup'
   | 'handstand'
+  | 'iron_cross'
+  | 'one_arm_pull_up'
   | 'l_sit'
   | 'v_sit'
   | 'i_sit'
@@ -445,27 +477,29 @@ export const TRAINING_PATH_DESCRIPTIONS: Record<TrainingPathType, string> = {
 
 export type TrainingDaysPerWeek = 2 | 3 | 4 | 5 | 6 | 'flexible'
 
-// Workout duration: 20=20-30min, 30=30-45min, 45=45-60min, 60=60-75min, 75=75-90min
-export type SessionLengthPreference = 20 | 30 | 45 | 60 | 75 | 'flexible'
-
-// Semantic workout duration preference for program builder
-export type WorkoutDurationPreference = 'short' | 'medium' | 'long' | 'extended' | 'flexible'
-
-export const WORKOUT_DURATION_LABELS: Record<WorkoutDurationPreference, string> = {
+// Workout duration: 20=20-30min, 30=30-45min, 45=45-60min, 60=60-75min, 75=75-90min, 90=90min, 120=120min
+  export type SessionLengthPreference = 20 | 30 | 45 | 60 | 75 | 90 | 120 | 'flexible'
+  
+  // Semantic workout duration preference for program builder
+  export type WorkoutDurationPreference = 'short' | 'medium' | 'long' | 'extended' | 'elite' | 'flexible'
+  
+  export const WORKOUT_DURATION_LABELS: Record<WorkoutDurationPreference, string> = {
   short: '20–30 minutes',
   medium: '30–45 minutes',
   long: '45–60 minutes',
   extended: '60–90 minutes',
+  elite: '90–120 minutes',
   flexible: 'Flexible / varies',
-}
-
-export const WORKOUT_DURATION_DESCRIPTIONS: Record<WorkoutDurationPreference, string> = {
+  }
+  
+  export const WORKOUT_DURATION_DESCRIPTIONS: Record<WorkoutDurationPreference, string> = {
   short: '4–5 exercises, minimal accessories, density or supersets',
   medium: '5–7 exercises, balanced training structure',
   long: '6–8 exercises, full skill blocks, some accessory work',
   extended: '7–9 exercises, complete programming with accessories',
+  elite: '10+ exercises, iron cross / weighted strength / ring specialization',
   flexible: 'Programs adapt based on available time',
-}
+  }
 
 // Maps SessionLengthPreference to WorkoutDurationPreference
 export function sessionLengthToDurationPreference(sessionLength: SessionLengthPreference): WorkoutDurationPreference {
@@ -474,6 +508,7 @@ export function sessionLengthToDurationPreference(sessionLength: SessionLengthPr
   if (sessionLength === 30) return 'medium'
   if (sessionLength === 45) return 'long'
   if (sessionLength === 60 || sessionLength === 75) return 'extended'
+  if (sessionLength === 90 || sessionLength === 120) return 'elite'
   return 'medium' // default
 }
 
@@ -705,6 +740,10 @@ export interface OnboardingProfile {
   // Section 1b: Primary Training Outcome
   // This drives program structure - what does the user want to achieve?
   primaryTrainingOutcome: PrimaryTrainingOutcome | null
+  
+  // Section 1b-military: Military Test Prep Profile
+  // Conditional - only populated if primaryTrainingOutcome === 'military'
+  militaryProfile: MilitaryProfile | null
   
   // Section 1c: Training Path Type
   // Determines overall program focus: skill-based, strength/endurance, or hybrid
@@ -1118,6 +1157,9 @@ export function createEmptyOnboardingProfile(): OnboardingProfile {
   
   // Section 1b: Primary Training Outcome
   primaryTrainingOutcome: null,
+  
+  // Section 1b-military: Military Profile
+  militaryProfile: null,
   
   // Section 1c: Training Path Type
   trainingPathType: null,

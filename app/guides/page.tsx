@@ -1,6 +1,6 @@
 import { Metadata } from 'next'
 import Link from 'next/link'
-import { ArrowRight, ArrowLeft, Target, Dumbbell, Trophy, Zap, GraduationCap, BookOpen, Brain, Sparkles, Flame } from 'lucide-react'
+import { ArrowRight, ArrowLeft, Target, Dumbbell, Trophy, Zap, GraduationCap, BookOpen, Brain, Sparkles, Flame, Shield } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { BackNav } from '@/components/navigation/BackNav'
@@ -52,6 +52,24 @@ const GUIDES = [
     featured: true,
   },
   {
+    slug: 'handstand-training',
+    title: 'Handstand Training Guide',
+    description: 'Master the freestanding handstand with proper balance practice, strength progressions, and intelligent training structure.',
+    icon: Target,
+    category: 'Skill Progression',
+    readTime: '12 min read',
+    featured: true,
+  },
+  {
+    slug: 'iron-cross-training',
+    title: 'Iron Cross Training Guide',
+    description: 'Complete guide to iron cross training. Prerequisites, foundational progressions, tendon safety, and long-term programming.',
+    icon: Target,
+    category: 'Elite Skills',
+    readTime: '15 min read',
+    featured: true,
+  },
+  {
     slug: 'calisthenics-strength-standards',
     title: 'Calisthenics Strength Standards',
     description: 'Benchmark your pulling and pushing strength against calisthenics standards from beginner to elite.',
@@ -75,6 +93,31 @@ const GUIDES = [
     icon: Dumbbell,
     category: 'Strength',
     readTime: '5 min read',
+  },
+  {
+    slug: 'one-arm-pull-up-training',
+    title: 'One-Arm Pull-Up Training Guide',
+    description: 'Complete guide to achieving the one-arm pull-up. Prerequisites, progressions, training structure, and common mistakes.',
+    icon: Target,
+    category: 'Elite Skills',
+    readTime: '15 min read',
+    featured: true,
+  },
+  {
+    slug: 'pull-up-endurance-training',
+    title: 'Pull-Up Endurance Training Guide',
+    description: 'Maximize your pull-up reps with structured endurance protocols. Ladders, density work, and military test preparation.',
+    icon: Zap,
+    category: 'Endurance',
+    readTime: '10 min read',
+  },
+  {
+    slug: 'pull-up-strength-progressions',
+    title: 'Pull-Up Strength Progressions',
+    description: 'From beginner to advanced pulling strength. Complete exercise library with progressions for all levels.',
+    icon: Dumbbell,
+    category: 'Strength',
+    readTime: '12 min read',
   },
   {
     slug: 'weighted-dip-training',
@@ -286,6 +329,65 @@ const GUIDES = [
     icon: Flame,
     category: 'Mobility',
     readTime: '8 min read',
+  },
+  // Military Fitness Prep Guides
+  {
+    slug: 'military-fitness-prep',
+    title: 'Military Fitness Test Prep Guide',
+    description: 'Complete guide to preparing for military fitness tests. Covers all branches, training principles, and test-specific strategies.',
+    icon: Shield,
+    category: 'Military Prep',
+    readTime: '15 min read',
+    featured: true,
+  },
+  {
+    slug: 'marine-pft-prep',
+    title: 'Marine Corps PFT Prep Guide',
+    description: 'Comprehensive preparation for the Marine Corps Physical Fitness Test. Pull-ups, plank, and 3-mile run strategies.',
+    icon: Shield,
+    category: 'Military Prep',
+    readTime: '12 min read',
+  },
+  {
+    slug: 'marine-cft-prep',
+    title: 'Marine Corps CFT Prep Guide',
+    description: 'Train for the Combat Fitness Test with movement to contact, ammo lift, and maneuver under fire preparation.',
+    icon: Shield,
+    category: 'Military Prep',
+    readTime: '12 min read',
+  },
+  {
+    slug: 'army-acft-prep',
+    title: 'Army ACFT Prep Guide',
+    description: 'Complete guide to the Army Combat Fitness Test. All six events with training strategies and programming.',
+    icon: Shield,
+    category: 'Military Prep',
+    readTime: '15 min read',
+  },
+  {
+    slug: 'navy-prt-prep',
+    title: 'Navy PRT Prep Guide',
+    description: 'Prepare for the Navy Physical Readiness Test with push-up, plank, and cardio training strategies.',
+    icon: Shield,
+    category: 'Military Prep',
+    readTime: '10 min read',
+  },
+  {
+    slug: 'air-force-pt-prep',
+    title: 'Air Force PT Test Prep Guide',
+    description: 'Complete preparation guide for the Air Force Physical Training Test. Push-ups, sit-ups, and 1.5-mile run.',
+    icon: Shield,
+    category: 'Military Prep',
+    readTime: '10 min read',
+  },
+  {
+    slug: 'boot-camp-readiness',
+    title: 'Boot Camp Readiness Guide',
+    description: 'Prepare physically for any military basic training. Build the fitness foundation needed to succeed from day one.',
+    icon: Shield,
+    category: 'Military Prep',
+    readTime: '12 min read',
+    featured: true,
   },
 ]
 

@@ -70,6 +70,8 @@ import {
   type TrainingPathType,
   PRIMARY_TRAINING_OUTCOME_LABELS,
   PRIMARY_TRAINING_OUTCOME_DESCRIPTIONS,
+  PRIMARY_TRAINING_OUTCOME_HELPER_TEXT,
+  PRIMARY_TRAINING_OUTCOME_EXAMPLES,
   TRAINING_PATH_LABELS,
   TRAINING_PATH_DESCRIPTIONS,
   TRAINING_DAYS_LABELS,
@@ -119,6 +121,22 @@ import {
   hasEstimatedValues,
 } from '@/lib/athlete-profile'
 import { BodyFatCalculator } from './BodyFatCalculator'
+import {
+  type MilitaryBranch,
+  type MilitaryTest,
+  type MilitaryStatus,
+  type MilitaryGoalPriority,
+  type MilitaryProfile,
+  BRANCH_LABELS,
+  BRANCH_DESCRIPTIONS,
+  BRANCH_TESTS,
+  TEST_LABELS,
+  STATUS_LABELS,
+  GOAL_PRIORITY_LABELS,
+  TEST_CONFIGS,
+  getRelevantBenchmarkInputs,
+  createEmptyMilitaryProfile,
+} from '@/lib/military-test-config'
 
 // =============================================================================
 // SECTION DEFINITIONS
@@ -128,6 +146,7 @@ type SectionId =
   | 'athlete_profile'
   | 'readiness'
   | 'training_outcome'
+  | 'military_profile'
   | 'training_path'
   | 'goals'
   | 'skill_selection'
@@ -165,6 +184,13 @@ const SECTIONS: Section[] = [
     title: 'Training Focus',
     subtitle: 'What do you want to improve the most right now?',
     icon: Target,
+  },
+  {
+    id: 'military_profile',
+    title: 'Military Test Prep',
+    subtitle: 'Tell us about your fitness test so we can build the right program',
+    icon: Shield,
+    showIf: (profile) => profile.primaryTrainingOutcome === 'military',
   },
   {
     id: 'training_path',
@@ -766,6 +792,25 @@ function TrainingOutcomeSection({ profile, updateProfile }: SectionProps) {
                   <div className="text-xs text-[#6B7280] mt-1">
                     {PRIMARY_TRAINING_OUTCOME_DESCRIPTIONS[outcome]}
                   </div>
+                  {/* Helper text - who this is best for */}
+                  <div className="text-xs text-[#4F6D8A] mt-2 italic">
+                    {PRIMARY_TRAINING_OUTCOME_HELPER_TEXT[outcome]}
+                  </div>
+                  {/* Example outcomes */}
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    {PRIMARY_TRAINING_OUTCOME_EXAMPLES[outcome].slice(0, 3).map((example, i) => (
+                      <span 
+                        key={i}
+                        className={`text-[10px] px-2 py-0.5 rounded-full ${
+                          isSelected 
+                            ? 'bg-[#C1121F]/20 text-[#E6E9EF]' 
+                            : 'bg-[#2B313A] text-[#6B7280]'
+                        }`}
+                      >
+                        {example}
+                      </span>
+                    ))}
+                  </div>
                 </div>
                 {isSelected && (
                   <Check className="w-5 h-5 text-[#C1121F] flex-shrink-0" />
@@ -785,6 +830,252 @@ function TrainingOutcomeSection({ profile, updateProfile }: SectionProps) {
   </div>
   )
   }
+
+// =============================================================================
+// MILITARY PROFILE SECTION - Branch, test, benchmarks for military prep
+// =============================================================================
+
+function MilitaryProfileSection({ profile, updateProfile }: SectionProps) {
+  // Initialize military profile if not set
+  const militaryProfile = profile.militaryProfile || createEmptyMilitaryProfile()
+  
+  const updateMilitaryProfile = (updates: Partial<MilitaryProfile>) => {
+    updateProfile({
+      militaryProfile: { ...militaryProfile, ...updates }
+    })
+  }
+
+  const branches: MilitaryBranch[] = [
+    'marine_corps', 'army', 'navy', 'air_force', 'space_force', 'coast_guard', 'general_recruit'
+  ]
+
+  const availableTests = militaryProfile.branch ? BRANCH_TESTS[militaryProfile.branch] : []
+  const benchmarkInputs = militaryProfile.targetTest 
+    ? getRelevantBenchmarkInputs(militaryProfile.targetTest)
+    : []
+
+  const statuses: MilitaryStatus[] = ['recruit_poolee', 'active_duty', 'returning', 'chasing_max']
+  const priorities: MilitaryGoalPriority[] = ['pass_minimum', 'competitive', 'max_score']
+
+  return (
+    <div className="space-y-8">
+      {/* Branch Selection */}
+      <div className="space-y-3">
+        <label className="text-sm font-medium text-[#A4ACB8]">Branch / Service</label>
+        <p className="text-xs text-[#6B7280] -mt-1">Select your military branch or service</p>
+        <div className="grid grid-cols-2 gap-2">
+          {branches.map(branch => (
+            <button
+              key={branch}
+              onClick={() => {
+                updateMilitaryProfile({ 
+                  branch, 
+                  targetTest: null // Reset test when branch changes
+                })
+              }}
+              className={`p-3 rounded-lg border text-left transition-all ${
+                militaryProfile.branch === branch
+                  ? 'bg-[#C1121F]/10 border-[#C1121F] ring-1 ring-[#C1121F]/30'
+                  : 'bg-[#1C1F26] border-[#2B313A] hover:border-[#3A3A3A]'
+              }`}
+            >
+              <div className={`font-medium text-sm ${
+                militaryProfile.branch === branch ? 'text-white' : 'text-[#A4ACB8]'
+              }`}>
+                {BRANCH_LABELS[branch]}
+              </div>
+              <div className="text-xs text-[#6B7280] mt-0.5">
+                {BRANCH_DESCRIPTIONS[branch]}
+              </div>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Test Selection - only show if branch selected */}
+      {militaryProfile.branch && availableTests.length > 0 && (
+        <div className="space-y-3">
+          <label className="text-sm font-medium text-[#A4ACB8]">Target Test</label>
+          <p className="text-xs text-[#6B7280] -mt-1">Which fitness test are you preparing for?</p>
+          <div className="space-y-2">
+            {availableTests.map(test => {
+              const testConfig = TEST_CONFIGS[test]
+              return (
+                <button
+                  key={test}
+                  onClick={() => updateMilitaryProfile({ targetTest: test })}
+                  className={`w-full p-3 rounded-lg border text-left transition-all ${
+                    militaryProfile.targetTest === test
+                      ? 'bg-[#C1121F]/10 border-[#C1121F] ring-1 ring-[#C1121F]/30'
+                      : 'bg-[#1C1F26] border-[#2B313A] hover:border-[#3A3A3A]'
+                  }`}
+                >
+                  <div className={`font-medium ${
+                    militaryProfile.targetTest === test ? 'text-white' : 'text-[#A4ACB8]'
+                  }`}>
+                    {TEST_LABELS[test]}
+                  </div>
+                  <div className="text-xs text-[#6B7280] mt-1">
+                    {testConfig.testDescription}
+                  </div>
+                  <div className="flex flex-wrap gap-1 mt-2">
+                    {testConfig.events.slice(0, 3).map(event => (
+                      <span key={event.id} className="text-[10px] px-2 py-0.5 rounded-full bg-[#2B313A] text-[#6B7280]">
+                        {event.name}
+                      </span>
+                    ))}
+                  </div>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Status */}
+      {militaryProfile.targetTest && (
+        <div className="space-y-3">
+          <label className="text-sm font-medium text-[#A4ACB8]">Your Current Status</label>
+          <div className="grid grid-cols-2 gap-2">
+            {statuses.map(status => (
+              <OptionButton
+                key={status}
+                selected={militaryProfile.status === status}
+                onClick={() => updateMilitaryProfile({ status })}
+              >
+                {STATUS_LABELS[status]}
+              </OptionButton>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Goal Priority */}
+      {militaryProfile.status && (
+        <div className="space-y-3">
+          <label className="text-sm font-medium text-[#A4ACB8]">Goal Priority</label>
+          <p className="text-xs text-[#6B7280] -mt-1">What&apos;s your main objective?</p>
+          <div className="space-y-2">
+            {priorities.map(priority => (
+              <OptionButton
+                key={priority}
+                selected={militaryProfile.goalPriority === priority}
+                onClick={() => updateMilitaryProfile({ goalPriority: priority })}
+                className="w-full"
+              >
+                {GOAL_PRIORITY_LABELS[priority]}
+              </OptionButton>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Test Date */}
+      {militaryProfile.goalPriority && (
+        <div className="space-y-3">
+          <label className="text-sm font-medium text-[#A4ACB8]">Test Date (optional)</label>
+          <p className="text-xs text-[#6B7280] -mt-1">When is your test? This helps us plan your training timeline.</p>
+          <Input
+            type="date"
+            value={militaryProfile.testDate || ''}
+            onChange={(e) => updateMilitaryProfile({ testDate: e.target.value || null })}
+            className="bg-[#1C1F26] border-[#2B313A] text-[#E6E9EF]"
+          />
+        </div>
+      )}
+
+      {/* Current Benchmarks */}
+      {militaryProfile.goalPriority && benchmarkInputs.length > 0 && (
+        <div className="space-y-3">
+          <label className="text-sm font-medium text-[#A4ACB8]">Current Benchmarks</label>
+          <p className="text-xs text-[#6B7280] -mt-1">Enter your current numbers so we can track your progress</p>
+          <div className="space-y-3">
+            {benchmarkInputs.map(input => (
+              <div key={input.field} className="flex items-center gap-3">
+                <label className="text-sm text-[#A4ACB8] flex-1">{input.label}</label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="number"
+                    placeholder={input.placeholder}
+                    value={militaryProfile.currentBenchmarks[input.field] || ''}
+                    onChange={(e) => {
+                      const value = e.target.value ? Number(e.target.value) : undefined
+                      updateMilitaryProfile({
+                        currentBenchmarks: {
+                          ...militaryProfile.currentBenchmarks,
+                          [input.field]: value
+                        }
+                      })
+                    }}
+                    className="w-24 bg-[#1C1F26] border-[#2B313A] text-[#E6E9EF]"
+                  />
+                  <span className="text-xs text-[#6B7280] w-12">{input.unit}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Equipment Access */}
+      {militaryProfile.goalPriority && (
+        <div className="space-y-3">
+          <label className="text-sm font-medium text-[#A4ACB8]">Equipment Access</label>
+          <p className="text-xs text-[#6B7280] -mt-1">What do you have access to for training?</p>
+          <div className="grid grid-cols-2 gap-2">
+            {[
+              { key: 'hasTrack', label: 'Track / Measured Route' },
+              { key: 'hasTreadmill', label: 'Treadmill' },
+              { key: 'hasPullUpBar', label: 'Pull-Up Bar' },
+              { key: 'hasWeights', label: 'Weights / Dumbbells' },
+              { key: 'hasSled', label: 'Sled / Resistance' },
+              { key: 'hasAmmoCan', label: 'Ammo Can / Substitute' },
+              { key: 'hasMedicineBall', label: 'Medicine Ball' },
+              { key: 'hasSandbag', label: 'Sandbag' },
+            ].map(item => (
+              <OptionButton
+                key={item.key}
+                selected={militaryProfile.equipment[item.key as keyof typeof militaryProfile.equipment]}
+                onClick={() => {
+                  updateMilitaryProfile({
+                    equipment: {
+                      ...militaryProfile.equipment,
+                      [item.key]: !militaryProfile.equipment[item.key as keyof typeof militaryProfile.equipment]
+                    }
+                  })
+                }}
+              >
+                {item.label}
+              </OptionButton>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Test Overview Card */}
+      {militaryProfile.targetTest && (
+        <div className="bg-[#1C1F26] border border-[#2B313A] rounded-lg p-4 mt-4">
+          <h4 className="text-sm font-medium text-[#E6E9EF] mb-2">
+            {TEST_LABELS[militaryProfile.targetTest]} Overview
+          </h4>
+          <div className="space-y-2">
+            {TEST_CONFIGS[militaryProfile.targetTest].events.map(event => (
+              <div key={event.id} className="flex justify-between text-xs">
+                <span className="text-[#A4ACB8]">{event.name}</span>
+                <span className="text-[#6B7280]">
+                  Min: {event.minimumMale || 'N/A'}
+                </span>
+              </div>
+            ))}
+          </div>
+          <p className="text-xs text-[#6B7280] mt-3">
+            Total duration: {TEST_CONFIGS[militaryProfile.targetTest].totalTestDuration}
+          </p>
+        </div>
+      )}
+    </div>
+  )
+}
 
 // =============================================================================
 // TRAINING PATH SECTION - What type of training to focus on
@@ -2256,6 +2547,11 @@ export function AthleteOnboarding() {
   return answered >= 3
   case 'training_outcome':
   return profile.primaryTrainingOutcome !== null
+  case 'military_profile':
+  // Military profile is complete if branch and test are selected
+  return profile.militaryProfile?.branch !== null && 
+         profile.militaryProfile?.targetTest !== null &&
+         profile.militaryProfile?.goalPriority !== null
   case 'training_path':
   return profile.trainingPathType !== null
   case 'goals':
@@ -2340,6 +2636,8 @@ export function AthleteOnboarding() {
   return <ReadinessCalibrationSection {...props} />
   case 'training_outcome':
   return <TrainingOutcomeSection {...props} />
+  case 'military_profile':
+  return <MilitaryProfileSection {...props} />
   case 'training_path':
   return <TrainingPathSection {...props} />
   case 'goals':

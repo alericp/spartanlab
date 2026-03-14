@@ -114,6 +114,19 @@ export default function SignUpPage() {
     setMounted(true)
   }, [])
   
+  // Debug logging
+  useEffect(() => {
+    if (mounted) {
+      console.log('[v0] SignUpPage state:', {
+        mounted,
+        isClerkAvailable,
+        isLoading,
+        hasSignUp: !!components.SignUp,
+        componentKeys: Object.keys(components).filter(k => components[k as keyof typeof components] !== null)
+      })
+    }
+  }, [mounted, isClerkAvailable, isLoading, components])
+  
   // SSR - show loading
   if (!mounted) return <LoadingState />
   

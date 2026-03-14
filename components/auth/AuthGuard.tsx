@@ -1,18 +1,13 @@
 'use client'
 
 /**
- * AuthGuard - Preview-safe wrapper for protected pages
+ * AuthGuard - Wrapper for protected pages using Clerk authentication
  * 
- * SIMPLIFIED ARCHITECTURE:
- * - Preview mode: Allows access for UI testing
- * - Production mode: Requires auth, uses SignedIn/SignedOut
- * 
- * NO window.Clerk checks. NO polling. Simple components.
+ * Uses native Clerk components for authentication state
  */
 
 import { useEffect, useState, ReactNode } from 'react'
-import { useClerkAvailability } from '@/components/providers/ClerkProviderWrapper'
-import { SignedIn, SignedOut } from '@/components/auth/ClerkComponents'
+import { useAuth, SignedIn, SignedOut } from '@clerk/nextjs'
 
 // ============================================================================
 // LOADING STATE
@@ -79,33 +74,20 @@ export function AuthGuard({
   fallback,
   redirectTo = '/sign-in' 
 }: AuthGuardProps) {
+  const { isLoaded } = useAuth()
   const [mounted, setMounted] = useState(false)
-  const { isClerkAvailable, isLoading } = useClerkAvailability()
 
   useEffect(() => {
     setMounted(true)
   }, [])
 
-  // SSR - return null to prevent blocking, let client handle auth
-  if (!mounted) {
-    console.log('[v0] AuthGuard: ssr - not mounted')
-    return null
-  }
+  // SSR - return null to prevent blocking
+  if (!mounted) return null
   
-  // Still loading - return null to prevent blocking the app shell
-  if (isLoading) {
-    console.log('[v0] AuthGuard: loading state')
-    return null
-  }
+  // Still loading auth state
+  if (!isLoaded) return <>{fallback ?? <LoadingState />}</>
 
-  // Preview mode: allow access without auth (for UI testing)
-  if (!isClerkAvailable) {
-    console.log('[v0] AuthGuard: preview-bypass - Clerk not available')
-    return <>{children}</>
-  }
-
-  // Production mode: require authentication
-  console.log('[v0] AuthGuard: production mode - rendering SignedIn/SignedOut')
+  // Use Clerk's native SignedIn/SignedOut components
   return (
     <>
       <SignedIn>{children}</SignedIn>
@@ -130,20 +112,14 @@ export function AuthGuard({
  * Production mode: Checks owner status and renders accordingly
  */
 export function OwnerOnly({ children }: { children: ReactNode }) {
-  const { isClerkAvailable, isLoading } = useClerkAvailability()
+  const { isLoaded } = useAuth()
   const [isOwner, setIsOwner] = useState(false)
   const [checked, setChecked] = useState(false)
 
   useEffect(() => {
-    // Preview mode: not owner
-    if (!isClerkAvailable) {
-      setIsOwner(false)
-      setChecked(true)
-      return
-    }
+    if (!isLoaded) return
 
-    // Production mode: check owner status via API
-    // This is more reliable than client-side window.Clerk checks
+    // Check owner status via API
     fetch('/api/auth/owner-status')
       .then(res => {
         if (!res.ok) return { isOwner: false }
@@ -157,9 +133,9 @@ export function OwnerOnly({ children }: { children: ReactNode }) {
         setIsOwner(false)
         setChecked(true)
       })
-  }, [isClerkAvailable])
+  }, [isLoaded])
 
-  if (isLoading || !checked || !isOwner) return null
+  if (!isLoaded || !checked || !isOwner) return null
   return <>{children}</>
 }
 
@@ -172,6 +148,6 @@ export function OwnerOnly({ children }: { children: ReactNode }) {
  * Always returns false - use OwnerOnly component instead
  */
 export function useOwnerStatus(): { isOwner: boolean; isLoaded: boolean } {
-  const { isLoading } = useClerkAvailability()
-  return { isOwner: false, isLoaded: !isLoading }
+  const { isLoaded } = useAuth()
+  return { isOwner: false, isLoaded }
 }

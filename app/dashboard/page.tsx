@@ -89,10 +89,10 @@ import { DashboardUpgradeCard } from '@/components/upgrade/AdaptiveProgramUpgrad
 import { FirstRunGuide, SetupReminderBanner } from '@/components/dashboard/FirstRunGuide'
 import { UpdateMetricsCard, MetricsUpdateBanner } from '@/components/dashboard/UpdateMetricsCard'
 import { SafeWidget } from '@/components/shared/WidgetErrorBoundary'
-import { useClerkAvailability } from '@/components/providers/ClerkProviderWrapper'
+import { useAuth } from '@clerk/nextjs'
 
 function DashboardContent() {
-  const { isLoading: isAuthLoading } = useClerkAvailability()
+  const { isLoaded: isAuthLoaded } = useAuth()
   const [overview, setOverview] = useState<DashboardOverview | null>(null)
   const [skillSummary, setSkillSummary] = useState<PrimarySkillSummary | null>(null)
   const [strengthSummary, setStrengthSummary] = useState<StrengthSummary | null>(null)
@@ -304,7 +304,7 @@ function DashboardContent() {
   }, [])
 
   // Loading state - also wait for auth to resolve to prevent UI mismatch
-  if (!mounted || !overview || isAuthLoading) {
+  if (!mounted || !overview || !isAuthLoaded) {
     return (
       <PageContainer>
         <DashboardSkeleton />

@@ -23,7 +23,7 @@ import {
 import { PREMIUM_FEATURES, type PremiumFeatureId, useSubscriptionInfo, useIsOwner } from '@/components/premium/PremiumFeature'
 import { upgradeToPro, startTrial, hasProAccess } from '@/lib/feature-access'
 import { trackUpgradeStarted, trackUpgradeCompleted } from '@/lib/analytics'
-import { useClerkAvailability } from '@/components/providers/ClerkProviderWrapper'
+import { useAuth } from '@clerk/nextjs'
 import { toast } from 'sonner'
 
 const FREE_FEATURES = [
@@ -84,19 +84,19 @@ export default function UpgradePage() {
   const [isPro, setIsPro] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const isOwner = useIsOwner()
-  const { isClerkAvailable, isLoading: isAuthLoading } = useClerkAvailability()
+  const { isSignedIn, isLoaded: isAuthLoaded } = useAuth()
 
   useEffect(() => {
     setMounted(true)
     setIsPro(hasProAccess())
   }, [])
 
-  const handleUpgrade = async () => {
-    // If not authenticated, redirect to sign-in
-    if (!isClerkAvailable) {
-      router.push('/sign-in?redirect_url=/upgrade')
-      return
-    }
+const handleUpgrade = async () => {
+  // If not authenticated, redirect to sign-in
+  if (!isSignedIn) {
+  router.push('/sign-in?redirect_url=/upgrade')
+  return
+  }
 
     setIsLoading(true)
     trackUpgradeStarted('upgrade_page')

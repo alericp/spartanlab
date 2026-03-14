@@ -1,21 +1,14 @@
 'use client'
 
 /**
- * HeaderAuthCTA - Preview-safe auth buttons for marketing header
- * 
- * SIMPLIFIED ARCHITECTURE:
- * - Preview mode: Static neutral CTA (no auth state detection)
- * - Production mode: SignedIn/SignedOut for real auth state
- * 
- * NO POLLING. Simple conditional rendering.
+ * HeaderAuthCTA - Auth buttons for marketing header using Clerk
  */
 
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { LayoutDashboard } from 'lucide-react'
 import { useState, useEffect } from 'react'
-import { useClerkAvailability } from '@/components/providers/ClerkProviderWrapper'
-import { SignedIn, SignedOut, UserButton } from '@/components/auth/ClerkComponents'
+import { SignedIn, SignedOut, UserButton, useAuth } from '@clerk/nextjs'
 
 // ============================================================================
 // NEUTRAL CTA (preview mode or before auth loads)
@@ -62,18 +55,18 @@ function AuthenticatedCTA() {
 
 export function HeaderAuthCTA() {
   const [mounted, setMounted] = useState(false)
-  const { isClerkAvailable, isLoading } = useClerkAvailability()
+  const { isLoaded } = useAuth()
 
   useEffect(() => {
     setMounted(true)
   }, [])
 
-  // SSR or Loading or Preview: neutral CTA
-  if (!mounted || isLoading || !isClerkAvailable) {
+  // SSR or Loading: show neutral CTA
+  if (!mounted || !isLoaded) {
     return <NeutralCTA />
   }
 
-  // Production mode: real auth components
+  // Use Clerk's native SignedIn/SignedOut components
   return (
     <>
       <SignedIn>
@@ -120,18 +113,18 @@ function AuthenticatedMobileCTA({ onNavigate }: { onNavigate: () => void }) {
 
 export function MobileAuthCTA({ onNavigate }: { onNavigate: () => void }) {
   const [mounted, setMounted] = useState(false)
-  const { isClerkAvailable, isLoading } = useClerkAvailability()
+  const { isLoaded } = useAuth()
 
   useEffect(() => {
     setMounted(true)
   }, [])
 
-  // SSR or Loading or Preview: neutral CTA
-  if (!mounted || isLoading || !isClerkAvailable) {
+  // SSR or Loading: show neutral CTA
+  if (!mounted || !isLoaded) {
     return <NeutralMobileCTA onNavigate={onNavigate} />
   }
 
-  // Production mode: real auth components
+  // Use Clerk's native SignedIn/SignedOut components
   return (
     <>
       <SignedIn>

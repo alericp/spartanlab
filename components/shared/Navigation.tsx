@@ -2,8 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { UserButton, SignedIn, SignedOut } from '@/components/auth/ClerkComponents'
-import { useClerkAvailability } from '@/components/providers/ClerkProviderWrapper'
+import { UserButton, SignedIn, SignedOut, useAuth } from '@clerk/nextjs'
 import { Button } from '@/components/ui/button'
 import { LayoutDashboard, Target, Dumbbell, Calendar, ClipboardList, TrendingUp, Activity, Settings, Menu, X, Wrench, BookOpen, LogIn } from 'lucide-react'
 import { SpartanIcon } from '@/components/brand/SpartanLogo'
@@ -27,37 +26,10 @@ const SECONDARY_NAV_ITEMS = [
   { href: '/performance', label: 'Analytics', icon: TrendingUp },
 ]
 
-// Temporary debug flag - set to true to show auth diagnostics in UI
-const SHOW_AUTH_DEBUG = true
-
 export function Navigation() {
   const pathname = usePathname()
   const [mobileOpen, setMobileOpen] = useState(false)
-  const { isLoading: isAuthLoading, isClerkAvailable, isPreviewMode, authMode, hasError } = useClerkAvailability()
-  
-  // Get hostname for diagnostics
-  const hostname = typeof window !== 'undefined' ? window.location.hostname : 'server'
-  
-  // Determine which render branch we're in
-  const getRenderBranch = () => {
-    if (isAuthLoading) return 'loading'
-    // Note: We can't know signed-in vs signed-out here directly - that's determined by SignedIn/SignedOut components
-    // This shows the provider state
-    if (!isClerkAvailable) return 'fallback-preview'
-    return 'clerk-ready'
-  }
-  const renderBranch = getRenderBranch()
-  
-  // Diagnostic logging for auth state debugging
-  console.log('[v0] Navigation auth state:', {
-    hostname,
-    authMode,
-    isClerkAvailable,
-    isAuthLoading,
-    isPreviewMode,
-    hasError,
-    renderBranch,
-  })
+  const { isLoaded } = useAuth()
 
   return (
     <header className="border-b border-[#2B313A] bg-[#0F1115] sticky top-0 z-50">
@@ -94,21 +66,6 @@ export function Navigation() {
 
           {/* Right side - User area */}
           <div className="flex items-center gap-2">
-            {/* Temporary Auth Diagnostic Chip - Remove after debugging */}
-            {SHOW_AUTH_DEBUG && (
-              <div className="hidden sm:flex items-center gap-1 px-2 py-1 bg-[#1A1F26] border border-[#2B313A] rounded text-[10px] font-mono text-[#6B7280]">
-                <span className={renderBranch === 'loading' ? 'text-yellow-500' : renderBranch === 'clerk-ready' ? 'text-green-500' : 'text-orange-500'}>
-                  {renderBranch}
-                </span>
-                <span className="text-[#3A3F4A]">|</span>
-                <span>{authMode}</span>
-                <span className="text-[#3A3F4A]">|</span>
-                <span className={isClerkAvailable ? 'text-green-500' : 'text-red-500'}>
-                  {isClerkAvailable ? 'clerk' : 'no-clerk'}
-                </span>
-              </div>
-            )}
-            
             <Link href="/settings" className="hidden sm:block">
               <Button variant="ghost" size="icon" className="text-[#A4ACB8] hover:text-[#E6E9EF]">
                 <Settings className="w-5 h-5" />
@@ -116,8 +73,7 @@ export function Navigation() {
             </Link>
             
             {/* User Button - uses Clerk auth components */}
-            {/* Show loading placeholder while auth state resolves */}
-            {isAuthLoading ? (
+            {!isLoaded ? (
               <div className="w-8 h-8 rounded-full bg-[#2B313A] animate-pulse" />
             ) : (
               <>

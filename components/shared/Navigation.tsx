@@ -1,12 +1,13 @@
-// AUTH_TRUTH_PASS_V5
+// AUTH_PROD_UNBLOCK_V1
 'use client'
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { useAuth } from '@clerk/nextjs'
 import { Button } from '@/components/ui/button'
-import { LayoutDashboard, Target, Dumbbell, Calendar, ClipboardList, TrendingUp, Activity, Settings, Menu, X, Wrench, BookOpen, LogIn } from 'lucide-react'
+import { LayoutDashboard, Target, Dumbbell, Calendar, ClipboardList, TrendingUp, Activity, Settings, Menu, X, Wrench, BookOpen, LogIn, LogOut } from 'lucide-react'
 import { SpartanIcon } from '@/components/brand/SpartanLogo'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { cn } from '@/lib/utils'
 
 // Primary navigation - essential daily actions
@@ -29,6 +30,25 @@ const SECONDARY_NAV_ITEMS = [
 export function Navigation() {
   const pathname = usePathname()
   const [mobileOpen, setMobileOpen] = useState(false)
+  const { userId, signOut, isLoaded } = useAuth()
+
+  // Lock body scroll when mobile menu is open
+  useEffect(() => {
+    if (mobileOpen) {
+      document.body.style.overflow = 'hidden'
+    } else {
+      document.body.style.overflow = ''
+    }
+    // Cleanup on unmount
+    return () => {
+      document.body.style.overflow = ''
+    }
+  }, [mobileOpen])
+
+  const handleSignOut = async () => {
+    await signOut()
+    setMobileOpen(false)
+  }
 
   return (
     <header className="border-b border-[#2B313A] bg-[#0F1115] sticky top-0 z-50">
@@ -63,7 +83,7 @@ export function Navigation() {
             })}
           </nav>
 
-          {/* Right side - Static links only (no Clerk) */}
+          {/* Right side - Auth-aware */}
           <div className="flex items-center gap-2">
             <Link href="/settings" className="hidden sm:block">
               <Button variant="ghost" size="icon" className="text-[#A4ACB8] hover:text-[#E6E9EF]">
@@ -71,19 +91,25 @@ export function Navigation() {
               </Button>
             </Link>
             
-            {/* Static auth links - no Clerk hooks */}
-            <Link href="/dashboard">
-              <Button size="sm" variant="ghost" className="text-[#A4ACB8] hover:text-[#E6E9EF] hidden sm:flex">
-                <LayoutDashboard className="w-4 h-4 mr-2" />
-                Open App
+            {/* Auth buttons - show based on auth state */}
+            {isLoaded && userId ? (
+              <Button 
+                size="sm" 
+                variant="ghost" 
+                className="text-[#A4ACB8] hover:text-[#E6E9EF] hidden sm:flex"
+                onClick={handleSignOut}
+              >
+                <LogOut className="w-4 h-4 mr-2" />
+                Sign Out
               </Button>
-            </Link>
-            <Link href="/sign-in">
-              <Button size="sm" variant="ghost" className="text-[#A4ACB8] hover:text-[#E6E9EF]">
-                <LogIn className="w-4 h-4 mr-2" />
-                Sign In
-              </Button>
-            </Link>
+            ) : (
+              <Link href="/sign-in">
+                <Button size="sm" variant="ghost" className="text-[#A4ACB8] hover:text-[#E6E9EF] hidden sm:flex">
+                  <LogIn className="w-4 h-4 mr-2" />
+                  Sign In
+                </Button>
+              </Link>
+            )}
             
             {/* Mobile menu button */}
             <Button
@@ -96,10 +122,20 @@ export function Navigation() {
             </Button>
           </div>
         </div>
+      </div>
 
-        {/* Mobile Nav */}
-        {mobileOpen && (
-          <nav className="md:hidden pb-4 border-t border-[#2B313A] pt-4 space-y-1">
+      {/* Mobile Nav Overlay */}
+      {mobileOpen && (
+        <div 
+          className="fixed inset-0 bg-black/40 z-40 md:hidden"
+          onClick={() => setMobileOpen(false)}
+        />
+      )}
+
+      {/* Mobile Nav Sidebar */}
+      {mobileOpen && (
+        <nav className="fixed top-16 left-0 right-0 bottom-0 bg-[#0F1115] z-50 md:hidden overflow-y-auto">
+          <div className="p-4 space-y-1">
             {/* Primary Nav Items */}
             {NAV_ITEMS.map((item) => {
               const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
@@ -156,9 +192,31 @@ export function Navigation() {
                 Settings
               </Button>
             </Link>
-          </nav>
-        )}
-      </div>
+
+            {/* Divider */}
+            <div className="border-t border-[#2B313A] my-2" />
+
+            {/* Auth button in mobile menu */}
+            {isLoaded && userId ? (
+              <Button 
+                variant="ghost" 
+                className="w-full justify-start gap-3 text-[#A4ACB8]"
+                onClick={handleSignOut}
+              >
+                <LogOut className="w-4 h-4" />
+                Sign Out
+              </Button>
+            ) : (
+              <Link href="/sign-in" onClick={() => setMobileOpen(false)}>
+                <Button variant="ghost" className="w-full justify-start gap-3 text-[#A4ACB8]">
+                  <LogIn className="w-4 h-4" />
+                  Sign In
+                </Button>
+              </Link>
+            )}
+          </div>
+        </nav>
+      )}
     </header>
   )
 }

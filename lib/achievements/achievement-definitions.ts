@@ -331,6 +331,13 @@ export const CATEGORY_LABELS: Record<AchievementCategory, string> = {
   volume: 'Volume',
 }
 
+/**
+ * Get display name for a category
+ */
+export function getCategoryDisplayName(category: AchievementCategory): string {
+  return CATEGORY_LABELS[category] || category
+}
+
 // =============================================================================
 // UNLOCKED ACHIEVEMENTS STORAGE
 // =============================================================================

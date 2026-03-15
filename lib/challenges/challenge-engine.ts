@@ -341,3 +341,90 @@ export function getCompletedChallengeCount(): number {
 export function hasUnseenChallengeCompletions(): boolean {
   return getChallengeNotificationQueue().length > 0
 }
+
+// =============================================================================
+// CHALLENGE TYPES FOR PANEL COMPONENTS
+// =============================================================================
+
+export interface ChallengeWithProgress {
+  id: string
+  name: string
+  description: string
+  category: string
+  period: 'weekly' | 'monthly' | 'seasonal'
+  goalValue: number
+  currentValue: number
+  percentComplete: number
+  completed: boolean
+  endDate: string
+  reward: ChallengeReward
+}
+
+export interface ChallengeSummary {
+  totalActive: number
+  completedThisPeriod: number
+  completedThisMonth: number // alias for panel compatibility
+  scoreBoost: number
+  totalPointsEarned: number // alias for panel compatibility
+  streakDays: number
+}
+
+/**
+ * Get challenges by period with progress info for panel display
+ */
+export function getChallengesByPeriodWithProgress(period: 'weekly' | 'monthly'): ChallengeWithProgress[] {
+  const all = getActiveChallengesWithProgress()
+  return all
+    .filter(item => item.challenge.period === period)
+    .map(item => ({
+      id: item.challenge.id,
+      name: item.challenge.name,
+      description: item.challenge.description,
+      category: item.challenge.category,
+      period: item.challenge.period,
+      goalValue: item.challenge.goalValue,
+      currentValue: item.progress.currentValue,
+      percentComplete: item.percentComplete,
+      completed: item.progress.completed,
+      endDate: item.challenge.endDate,
+      reward: item.challenge.reward,
+    }))
+}
+
+/**
+ * Get all active challenges as ChallengeWithProgress[] for panel display
+ */
+export function getAllChallengesWithProgress(): ChallengeWithProgress[] {
+  const all = getActiveChallengesWithProgress()
+  return all.map(item => ({
+    id: item.challenge.id,
+    name: item.challenge.name,
+    description: item.challenge.description,
+    category: item.challenge.category,
+    period: item.challenge.period,
+    goalValue: item.challenge.goalValue,
+    currentValue: item.progress.currentValue,
+    percentComplete: item.percentComplete,
+    completed: item.progress.completed,
+    endDate: item.challenge.endDate,
+    reward: item.challenge.reward,
+  }))
+}
+
+/**
+ * Get challenge summary stats for dashboard
+ */
+export function getChallengeSummary(): ChallengeSummary {
+  const progress = getChallengeProgress()
+  const completedCount = progress.filter(p => p.completed).length
+  const scoreBoost = getTotalScoreBoost()
+  
+  return {
+    totalActive: getActiveChallenges().length,
+    completedThisPeriod: completedCount,
+    completedThisMonth: completedCount, // alias for panel compatibility
+    scoreBoost,
+    totalPointsEarned: scoreBoost, // alias for panel compatibility
+    streakDays: 0, // Could track actual streak later
+  }
+}

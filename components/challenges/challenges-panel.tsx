@@ -7,7 +7,7 @@ import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { 
-  getActiveChallengesWithProgress,
+  getAllChallengesWithProgress,
   getChallengesByPeriodWithProgress,
   getChallengeSummary,
   type ChallengeWithProgress,
@@ -31,7 +31,7 @@ export function ChallengesPanel({ className }: ChallengesPanelProps) {
   const [activeTab, setActiveTab] = useState<'weekly' | 'monthly'>('weekly')
   
   useEffect(() => {
-    setChallenges(getActiveChallengesWithProgress())
+    setChallenges(getAllChallengesWithProgress())
     setSummary(getChallengeSummary())
   }, [])
   

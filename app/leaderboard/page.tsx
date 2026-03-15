@@ -2,14 +2,11 @@
 
 import { Trophy, Info } from 'lucide-react'
 import { PageContainer } from '@/components/layout'
-import { Navigation } from '@/components/shared/Navigation'
 import { LeaderboardTabs } from '@/components/leaderboards/LeaderboardTabs'
 
 export default function LeaderboardPage() {
   return (
-    <>
-      <Navigation />
-      <PageContainer>
+    <PageContainer>
         <div className="space-y-6 py-4">
           {/* Header */}
           <div className="px-4">
@@ -87,6 +84,5 @@ export default function LeaderboardPage() {
           </div>
         </div>
       </PageContainer>
-    </>
   )
 }

@@ -13,9 +13,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Navigation } from '@/components/shared/Navigation'
+import { PageContainer } from '@/components/layout'
 import { PageHeader } from '@/components/shared/PageHeader'
-import { Settings, Crown, Shield, Target } from 'lucide-react'
+import { Settings, Crown, Shield, Target, Sparkles } from 'lucide-react'
 import { SKILL_DEFINITIONS } from '@/lib/skills'
 import { useOwnerInit } from '@/hooks/useOwnerInit'
 import { PRICING, TRIAL } from '@/lib/billing/pricing'
@@ -28,16 +28,72 @@ import {
   type AthleteProfile,
 } from '@/lib/data-service'
 import { UpdateMetricsCard } from '@/components/dashboard/UpdateMetricsCard'
-import { Sparkles } from 'lucide-react'
 
-// Subscription Billing Card - handles Pro and Trial states
+// Subscription Billing Card - handles Pro, Trial, and Free states with graceful error handling
 function SubscriptionBillingCard() {
   const subscriptionInfo = useSubscriptionDisplay()
+  const [billingStatus, setBillingStatus] = useState<'idle' | 'loading' | 'error' | 'no-account'>('idle')
+  const [billingMessage, setBillingMessage] = useState('')
+  
+  // Free user - show upgrade CTA instead of billing management
+  if (subscriptionInfo.status === 'free' && !subscriptionInfo.isOwner) {
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center gap-3 p-4 rounded-lg bg-[#1A1A1A] border border-[#3A3A3A]">
+          <div className="w-10 h-10 rounded-lg bg-[#3A3A3A] flex items-center justify-center">
+            <Shield className="w-5 h-5 text-[#6B7280]" />
+          </div>
+          <div className="flex-1">
+            <div className="flex items-center gap-2">
+              <span className="text-[#F5F5F5] font-medium">Free Plan</span>
+            </div>
+            <p className="text-sm text-[#A5A5A5]">
+              Basic features for getting started with your training.
+            </p>
+          </div>
+        </div>
+        <Link href="/pricing">
+          <Button className="w-full bg-[#E63946] hover:bg-[#D62828] text-white">
+            <Sparkles className="w-4 h-4 mr-2" />
+            Upgrade to Pro
+          </Button>
+        </Link>
+      </div>
+    )
+  }
   
   const statusLabel = subscriptionInfo.isTrialing ? 'Trial Active' : 'Active'
   const statusDescription = subscriptionInfo.isTrialing 
     ? `${subscriptionInfo.trialDaysRemaining} day${subscriptionInfo.trialDaysRemaining !== 1 ? 's' : ''} remaining in your trial. You won't be charged until it ends.`
     : 'Full access to all training intelligence features.'
+  
+  const handleManageBilling = async () => {
+    setBillingStatus('loading')
+    setBillingMessage('')
+    
+    try {
+      const res = await fetch('/api/stripe/create-portal-session', { method: 'POST' })
+      const data = await res.json()
+      
+      if (res.ok && data.url) {
+        window.location.href = data.url
+        return
+      }
+      
+      // Handle specific error cases gracefully
+      if (res.status === 404 || data.error?.includes('No billing account')) {
+        setBillingStatus('no-account')
+        setBillingMessage('Your billing account is being set up. This usually happens automatically after your first payment.')
+      } else {
+        setBillingStatus('error')
+        setBillingMessage('Unable to open billing portal. Please try again or contact support.')
+      }
+    } catch (error) {
+      console.error('Portal error:', error)
+      setBillingStatus('error')
+      setBillingMessage('Connection error. Please check your internet and try again.')
+    }
+  }
   
   return (
     <div className="space-y-4">
@@ -61,22 +117,26 @@ function SubscriptionBillingCard() {
           </p>
         </div>
       </div>
+      
+      {/* Billing status message */}
+      {billingStatus === 'no-account' && (
+        <div className="p-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
+          <p className="text-sm text-blue-400">{billingMessage}</p>
+        </div>
+      )}
+      {billingStatus === 'error' && (
+        <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20">
+          <p className="text-sm text-red-400">{billingMessage}</p>
+        </div>
+      )}
+      
       <Button 
         variant="outline" 
         className="w-full border-[#3A3A3A] text-[#A5A5A5] hover:bg-[#2A2A2A]"
-        onClick={async () => {
-          try {
-            const res = await fetch('/api/stripe/create-portal-session', { method: 'POST' })
-            const data = await res.json()
-            if (data.url) {
-              window.location.href = data.url
-            }
-          } catch (error) {
-            console.error('Portal error:', error)
-          }
-        }}
+        onClick={handleManageBilling}
+        disabled={billingStatus === 'loading'}
       >
-        Manage Billing
+        {billingStatus === 'loading' ? 'Opening Billing...' : 'Manage Billing'}
       </Button>
       <p className="text-xs text-[#6B7280]">
         Billing questions?{' '}
@@ -139,29 +199,23 @@ export default function SettingsPage() {
   // Loading state during hydration
   if (!mounted) {
     return (
-      <div className="min-h-screen bg-[#121212] text-[#F5F5F5]">
-        <Navigation />
-        <main className="max-w-2xl mx-auto px-4 sm:px-6 py-8">
-          <div className="animate-pulse">
-            <div className="h-96 bg-[#2A2A2A] rounded"></div>
-          </div>
-        </main>
-      </div>
+      <PageContainer maxWidth="md">
+        <div className="animate-pulse">
+          <div className="h-96 bg-[#2A2A2A] rounded"></div>
+        </div>
+      </PageContainer>
     )
   }
 
   return (
-    <div className="min-h-screen bg-[#121212] text-[#F5F5F5]">
-      <Navigation />
-
-      <main className="max-w-2xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
-        <PageHeader 
-          title="Settings"
-          description="Configure your training profile for accurate progress estimates"
-          backHref="/dashboard"
-          backLabel="Back to Dashboard"
-          icon={<Settings className="w-5 h-5" />}
-        />
+    <PageContainer maxWidth="md">
+      <PageHeader 
+        title="Settings"
+        description="Configure your training profile for accurate progress estimates"
+        backHref="/dashboard"
+        backLabel="Back to Dashboard"
+        icon={<Settings className="w-5 h-5" />}
+      />
         
         <Card className="bg-[#2A2A2A] border-[#3A3A3A] p-8 space-y-8">
           <div>
@@ -289,8 +343,15 @@ export default function SettingsPage() {
         </Card>
         
         {/* Subscription & Billing Section */}
-        <SubscriptionBillingCard />
-      </main>
-    </div>
+        <Card className="bg-[#2A2A2A] border-[#3A3A3A] p-8 mt-6">
+          <div className="mb-4">
+            <h2 className="text-xl font-bold mb-2">Subscription & Billing</h2>
+            <p className="text-sm text-[#A5A5A5]">
+              Manage your SpartanLab subscription and billing details.
+            </p>
+          </div>
+          <SubscriptionBillingCard />
+        </Card>
+    </PageContainer>
   )
 }

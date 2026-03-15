@@ -1,6 +1,7 @@
 // Leaderboard Service
 // Centralized service for fetching and computing leaderboard data
-// Supports both preview mode (localStorage) and production (database)
+// Production mode: shows only current user (real data)
+// Demo mode: disabled by default, only for explicit development testing
 
 import { 
   type LeaderboardCategory, 
@@ -14,82 +15,14 @@ import { calculateTrainingStreak } from '../progress-streak-engine'
 import { getSkillProgressions, getAthleteProfile, type SkillProgression } from '../data-service'
 import { getWorkoutLogs } from '../workout-log-service'
 import { getUnlockedAchievements } from '../achievements/achievement-definitions'
+import { getUISubscriptionStatus } from '../billing/subscription-status'
 
 // =============================================================================
-// STORAGE
+// HELPERS
 // =============================================================================
-
-const LEADERBOARD_STORAGE_KEY = 'spartanlab_leaderboard_cache'
-const SAMPLE_USERS_KEY = 'spartanlab_sample_leaderboard_users'
 
 function isBrowser(): boolean {
   return typeof window !== 'undefined'
-}
-
-// =============================================================================
-// SAMPLE DATA GENERATION (For Preview Mode)
-// =============================================================================
-
-interface SampleUser {
-  userId: string
-  displayName: string
-  spartanScore: number
-  streak: number
-  workoutsLast30: number
-  skills: Record<string, number>
-  achievementCount: number
-  subscriptionTier: 'free' | 'pro'
-}
-
-// Generate realistic sample leaderboard users
-function generateSampleUsers(): SampleUser[] {
-  const names = [
-    'AlexStrong', 'IronMike', 'FlexMaster', 'CoreKing', 'LeverLegend',
-    'PlanchePro', 'MuscleMan', 'StrengthSage', 'FitPhoenix', 'PowerPanda',
-    'GritGuru', 'BeastMode', 'TitanTom', 'SteelSara', 'MightyMax',
-    'RockSolid', 'ZenWarrior', 'FireFit', 'SwiftStrike', 'IronWill',
-    'SpartanSam', 'EliteElla', 'ChampCarl', 'DynamoDan', 'ForceField'
-  ]
-  
-  return names.map((name, index) => {
-    // Create varied but realistic distributions
-    const baseScore = 850 - (index * 25) + Math.floor(Math.random() * 30)
-    const normalizedScore = Math.max(150, Math.min(950, baseScore))
-    
-    return {
-      userId: `sample-user-${index}`,
-      displayName: name,
-      spartanScore: normalizedScore,
-      streak: Math.max(0, 45 - (index * 2) + Math.floor(Math.random() * 10)),
-      workoutsLast30: Math.max(5, 28 - index + Math.floor(Math.random() * 5)),
-      skills: {
-        front_lever: Math.min(4, Math.max(0, 4 - Math.floor(index / 5))),
-        planche: Math.min(4, Math.max(0, 4 - Math.floor(index / 4))),
-        muscle_up: Math.min(4, Math.max(0, 4 - Math.floor(index / 6))),
-        handstand_push_up: Math.min(4, Math.max(0, 4 - Math.floor(index / 5))),
-      },
-      achievementCount: Math.max(2, 15 - Math.floor(index / 2)),
-      subscriptionTier: index < 15 ? 'pro' : 'free',
-    }
-  })
-}
-
-// Get or create sample users (cached in localStorage)
-function getSampleUsers(): SampleUser[] {
-  if (!isBrowser()) return generateSampleUsers()
-  
-  const cached = localStorage.getItem(SAMPLE_USERS_KEY)
-  if (cached) {
-    try {
-      return JSON.parse(cached)
-    } catch {
-      // Fall through to regenerate
-    }
-  }
-  
-  const users = generateSampleUsers()
-  localStorage.setItem(SAMPLE_USERS_KEY, JSON.stringify(users))
-  return users
 }
 
 // =============================================================================
@@ -103,6 +36,7 @@ interface CurrentUserData {
   workoutsLast30: number
   skills: Record<string, number>
   achievementCount: number
+  subscriptionTier: 'free' | 'pro' | 'trial'
 }
 
 function getCurrentUserData(): CurrentUserData {
@@ -128,6 +62,10 @@ function getCurrentUserData(): CurrentUserData {
   // Get achievement count
   const achievements = getUnlockedAchievements()
   
+  // Get actual subscription tier from subscription status
+  const uiStatus = getUISubscriptionStatus()
+  const subscriptionTier: 'free' | 'pro' | 'trial' = uiStatus === 'trial' ? 'trial' : uiStatus
+  
   return {
     spartanScore: scoreData.totalScore,
     level: scoreData.level,
@@ -135,157 +73,106 @@ function getCurrentUserData(): CurrentUserData {
     workoutsLast30: recentLogs.length,
     skills,
     achievementCount: achievements.length,
+    subscriptionTier,
   }
 }
 
 // =============================================================================
-// LEADERBOARD GENERATORS
+// LEADERBOARD GENERATORS (Production: current user only, no fake data)
 // =============================================================================
 
 function generateGlobalSpartanScoreLeaderboard(): LeaderboardData {
-  const sampleUsers = getSampleUsers()
   const currentUser = getCurrentUserData()
   const profile = getAthleteProfile()
   
-  // Combine sample users with current user
-  const allEntries: LeaderboardEntry[] = sampleUsers.map(user => ({
-    userId: user.userId,
-    displayName: user.displayName,
-    rank: 0,
-    score: user.spartanScore,
-    scoreLabel: `${user.spartanScore} pts`,
-    level: getScoreLevel(user.spartanScore),
-    achievementCount: user.achievementCount,
-    subscriptionTier: user.subscriptionTier,
-    isCurrentUser: false,
-  }))
+  // Production mode: only show current user's real data
+  const allEntries: LeaderboardEntry[] = []
   
-  // Add current user
+  // Add current user with their actual subscription tier
   allEntries.push({
     userId: 'current-user',
     displayName: profile?.username || 'You',
-    rank: 0,
+    rank: 1,
     score: currentUser.spartanScore,
     scoreLabel: `${currentUser.spartanScore} pts`,
     level: currentUser.level,
     achievementCount: currentUser.achievementCount,
-    subscriptionTier: 'pro',
+    subscriptionTier: currentUser.subscriptionTier === 'trial' ? 'pro' : currentUser.subscriptionTier,
     isCurrentUser: true,
   })
   
-  // Sort and assign ranks
-  allEntries.sort((a, b) => b.score - a.score)
-  allEntries.forEach((entry, index) => {
-    entry.rank = index + 1
-  })
-  
-  const userPosition = allEntries.find(e => e.isCurrentUser) || null
-  const topEntries = allEntries.slice(0, 10)
+  const userPosition = allEntries[0]
   
   return {
     metadata: LEADERBOARD_CATEGORIES.global_spartan_score,
-    entries: topEntries,
+    entries: allEntries,
     userPosition,
-    totalParticipants: allEntries.length,
+    totalParticipants: 1,
     lastUpdated: new Date().toISOString(),
+    // Flag to indicate this is early-stage data (no community yet)
+    isEarlyAccess: true,
   }
 }
 
 function generateConsistencyLeaderboard(): LeaderboardData {
-  const sampleUsers = getSampleUsers()
   const currentUser = getCurrentUserData()
   const profile = getAthleteProfile()
   
-  const allEntries: LeaderboardEntry[] = sampleUsers.map(user => ({
-    userId: user.userId,
-    displayName: user.displayName,
-    rank: 0,
-    score: user.streak,
-    scoreLabel: `${user.streak} day streak`,
-    achievementCount: user.achievementCount,
-    subscriptionTier: user.subscriptionTier,
-    isCurrentUser: false,
-  }))
+  const allEntries: LeaderboardEntry[] = []
   
   allEntries.push({
     userId: 'current-user',
     displayName: profile?.username || 'You',
-    rank: 0,
+    rank: 1,
     score: currentUser.streak,
     scoreLabel: `${currentUser.streak} day streak`,
     achievementCount: currentUser.achievementCount,
-    subscriptionTier: 'pro',
+    subscriptionTier: currentUser.subscriptionTier === 'trial' ? 'pro' : currentUser.subscriptionTier,
     isCurrentUser: true,
   })
   
-  allEntries.sort((a, b) => b.score - a.score)
-  allEntries.forEach((entry, index) => {
-    entry.rank = index + 1
-  })
-  
-  const userPosition = allEntries.find(e => e.isCurrentUser) || null
-  const topEntries = allEntries.slice(0, 10)
+  const userPosition = allEntries[0]
   
   return {
     metadata: LEADERBOARD_CATEGORIES.consistency,
-    entries: topEntries,
+    entries: allEntries,
     userPosition,
-    totalParticipants: allEntries.length,
+    totalParticipants: 1,
     lastUpdated: new Date().toISOString(),
+    isEarlyAccess: true,
   }
 }
 
 function generateSkillLeaderboard(skillKey: string): LeaderboardData {
   const category = skillKey as LeaderboardCategory
-  const sampleUsers = getSampleUsers()
   const currentUser = getCurrentUserData()
   const profile = getAthleteProfile()
   
   const skillLevelNames = SKILL_LEVEL_NAMES[skillKey] || {}
-  
-  const allEntries: LeaderboardEntry[] = sampleUsers.map(user => {
-    const skillLevel = user.skills[skillKey] ?? 0
-    return {
-      userId: user.userId,
-      displayName: user.displayName,
-      rank: 0,
-      score: skillLevel,
-      scoreLabel: skillLevelNames[skillLevel] || `Level ${skillLevel}`,
-      level: skillLevelNames[skillLevel],
-      achievementCount: user.achievementCount,
-      subscriptionTier: user.subscriptionTier,
-      isCurrentUser: false,
-    }
-  })
+  const allEntries: LeaderboardEntry[] = []
   
   const currentSkillLevel = currentUser.skills[skillKey] ?? 0
   allEntries.push({
     userId: 'current-user',
     displayName: profile?.username || 'You',
-    rank: 0,
+    rank: 1,
     score: currentSkillLevel,
     scoreLabel: skillLevelNames[currentSkillLevel] || `Level ${currentSkillLevel}`,
     level: skillLevelNames[currentSkillLevel],
     achievementCount: currentUser.achievementCount,
-    subscriptionTier: 'pro',
+    subscriptionTier: currentUser.subscriptionTier === 'trial' ? 'pro' : currentUser.subscriptionTier,
     isCurrentUser: true,
   })
   
-  // Sort by skill level (higher = better)
-  allEntries.sort((a, b) => b.score - a.score)
-  allEntries.forEach((entry, index) => {
-    entry.rank = index + 1
-  })
-  
-  const userPosition = allEntries.find(e => e.isCurrentUser) || null
-  const topEntries = allEntries.slice(0, 10)
+  const userPosition = allEntries[0]
   
   return {
     metadata: LEADERBOARD_CATEGORIES[category],
-    entries: topEntries,
+    entries: allEntries,
     userPosition,
-    totalParticipants: allEntries.length,
+    totalParticipants: 1,
     lastUpdated: new Date().toISOString(),
+    isEarlyAccess: true,
   }
 }
 

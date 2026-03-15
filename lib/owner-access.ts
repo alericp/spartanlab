@@ -3,11 +3,16 @@
  * 
  * Allows the platform owner to bypass Pro subscription checks.
  * The owner email is configured via the NEXT_PUBLIC_OWNER_EMAIL environment variable.
+ * 
+ * Client-side: Use setCurrentUserEmail() after Clerk auth loads to enable owner detection.
  */
 
 // =============================================================================
 // OWNER EMAIL CONFIGURATION
 // =============================================================================
+
+// Client-side cache for the current user's email (set from Clerk useUser)
+let cachedCurrentUserEmail: string | null = null
 
 /**
  * Get the configured owner email from environment
@@ -27,6 +32,32 @@ export function getOwnerEmail(): string | null {
 }
 
 // =============================================================================
+// CURRENT USER EMAIL (Client-side)
+// =============================================================================
+
+/**
+ * Set the current user's email (call this from components with Clerk useUser)
+ * This enables owner detection on the client side.
+ */
+export function setCurrentUserEmail(email: string | null): void {
+  cachedCurrentUserEmail = email
+}
+
+/**
+ * Get the current user's email (client-side cached value)
+ */
+export function getCurrentUserEmail(): string | null {
+  return cachedCurrentUserEmail
+}
+
+/**
+ * Clear the cached user email (call on sign out)
+ */
+export function clearCurrentUserEmail(): void {
+  cachedCurrentUserEmail = null
+}
+
+// =============================================================================
 // OWNER CHECK
 // =============================================================================
 
@@ -35,12 +66,21 @@ export function getOwnerEmail(): string | null {
  */
 export function isOwner(currentEmail?: string | null): boolean {
   const ownerEmail = getOwnerEmail()
+  const emailToCheck = currentEmail ?? cachedCurrentUserEmail
   
-  if (!ownerEmail || !currentEmail) {
+  if (!ownerEmail || !emailToCheck) {
     return false
   }
   
-  return ownerEmail.toLowerCase() === currentEmail.toLowerCase()
+  return ownerEmail.toLowerCase() === emailToCheck.toLowerCase()
+}
+
+/**
+ * Check if current cached user is the owner (client-side convenience)
+ * Use this after setCurrentUserEmail() has been called.
+ */
+export function isCurrentUserOwner(): boolean {
+  return isOwner(cachedCurrentUserEmail)
 }
 
 /**
@@ -55,12 +95,4 @@ export function isOwnerModeConfigured(): boolean {
  */
 export function checkOwnerByEmail(email: string | null | undefined): boolean {
   return isOwner(email)
-}
-
-/**
- * Get the current user's email (client-side only, returns owner email if configured)
- * This is a placeholder for display purposes when showing owner account info
- */
-export function getCurrentUserEmail(): string | null {
-  return getOwnerEmail()
 }

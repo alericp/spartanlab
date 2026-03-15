@@ -116,35 +116,40 @@ export function FirstRunGuide() {
       <div className="p-6 pb-4">
         <div className="flex items-start justify-between mb-4">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#C1121F]/20 to-[#C1121F]/5 border border-[#C1121F]/20 flex items-center justify-center">
-              <SpartanIcon size={20} className="text-[#C1121F]" />
+            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#C1121F]/20 to-[#C1121F]/5 border border-[#C1121F]/20 flex items-center justify-center">
+              <SpartanIcon size={24} className="text-[#C1121F]" />
             </div>
             <div>
               <h2 className="text-lg font-semibold text-[#E6E9EF]">
-                Welcome to SpartanLab
+                {nextStep?.id === 'workout' ? 'Ready to Train' : 'Get Started'}
               </h2>
               <p className="text-sm text-[#6B7280]">
-                Let's get you set up in 3 simple steps
+                {nextStep?.id === 'workout' 
+                  ? 'Complete your first workout to unlock insights'
+                  : 'Complete setup to unlock your personalized program'}
               </p>
             </div>
           </div>
-          <button 
-            onClick={handleDismiss}
-            className="text-xs text-[#6B7280] hover:text-[#A4ACB8] transition-colors"
-          >
-            Skip for now
-          </button>
+          {/* Only show skip after first step is complete */}
+          {completedCount >= 1 && (
+            <button 
+              onClick={handleDismiss}
+              className="text-xs text-[#6B7280] hover:text-[#A4ACB8] transition-colors"
+            >
+              Skip
+            </button>
+          )}
         </div>
 
         {/* Progress Bar */}
-        <div className="h-1.5 bg-[#2B313A] rounded-full overflow-hidden mb-1">
+        <div className="h-2 bg-[#2B313A] rounded-full overflow-hidden mb-1">
           <div 
             className="h-full bg-gradient-to-r from-[#C1121F] to-[#E63946] transition-all duration-500"
             style={{ width: `${progress}%` }}
           />
         </div>
         <p className="text-xs text-[#6B7280]">
-          {completedCount} of {steps.length} steps complete
+          {completedCount} of {steps.length} complete
         </p>
       </div>
 

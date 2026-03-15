@@ -97,12 +97,20 @@ export default function UpgradePage() {
   }, [])
 
 const handleUpgrade = async () => {
-  // If not authenticated, redirect to sign-in
-  if (!isSignedIn) {
-  router.push('/sign-in?redirect_url=/upgrade')
-  return
-  }
+    // Wait for auth to fully load before making any decisions
+    if (!isAuthLoaded) {
+      // Auth still loading - show loading state and wait
+      setIsLoading(true)
+      return
+    }
+    
+    // If not authenticated, redirect to sign-in with return URL
+    if (!isSignedIn) {
+      router.push('/sign-in?redirect_url=/upgrade')
+      return
+    }
 
+    // User is authenticated - proceed directly to checkout
     setIsLoading(true)
     trackUpgradeStarted('upgrade_page')
     
@@ -115,7 +123,7 @@ const handleUpgrade = async () => {
 
       if (data.error) {
         if (res.status === 401) {
-          // User not authenticated, redirect to sign-in
+          // Session expired or invalid - redirect to sign-in
           router.push('/sign-in?redirect_url=/upgrade')
           return
         }
@@ -338,13 +346,13 @@ const handleUpgrade = async () => {
 
             <Button 
               onClick={handleUpgrade}
-              disabled={isLoading}
+              disabled={isLoading || !isAuthLoaded}
               className="w-full bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-semibold disabled:opacity-50"
             >
-              {isLoading ? (
+              {isLoading || !isAuthLoaded ? (
                 <>
                   <div className="w-4 h-4 mr-2 border-2 border-black/30 border-t-black rounded-full animate-spin" />
-                  Processing...
+                  {!isAuthLoaded ? 'Loading...' : 'Processing...'}
                 </>
               ) : (
                 <>

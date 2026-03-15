@@ -10,6 +10,7 @@ import { SpartanIcon } from '@/components/brand/SpartanLogo'
 import { useState, useEffect } from 'react'
 import { cn } from '@/lib/utils'
 import { SubscriptionBadge, useSubscriptionDisplay } from '@/components/billing/SubscriptionBadge'
+import { useOwnerInit } from '@/hooks/useOwnerInit'
 
 // Primary navigation - essential daily actions
 const NAV_ITEMS = [
@@ -64,6 +65,9 @@ export function Navigation() {
   const [mobileOpen, setMobileOpen] = useState(false)
   const { userId, signOut, isLoaded } = useAuth()
   const subscriptionInfo = useSubscriptionDisplay()
+  
+  // Initialize owner detection from Clerk auth - this enables owner simulation throughout the app
+  useOwnerInit()
 
   // Lock body scroll when mobile menu is open
   useEffect(() => {

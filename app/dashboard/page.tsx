@@ -346,6 +346,9 @@ function DashboardContent() {
   const hasSkillData = skillSummary && skillSummary.level !== 'none'
   const hasStrengthData = strengthSummary && strengthSummary.topExercises && strengthSummary.topExercises.length > 0
   const hasMeaningfulData = hasWorkoutData || hasSkillData || hasStrengthData
+  
+  // Detect early-stage users (fewer than 3 workouts) for conditional UI prioritization
+  const isEarlyStageUser = !workoutAnalytics || workoutAnalytics.totalWorkouts < 3
 
   // Show empty state for first-time users
   if (!hasMeaningfulData) {
@@ -541,37 +544,47 @@ function DashboardContent() {
         
         {/* ============================================================= */}
         {/* SKILL PROGRESS HEATMAP - Visual motivation snapshot */}
+        {/* Only show after user has some workout history */}
         {/* ============================================================= */}
         
-        <div className="px-4">
-          <SafeWidget name="SkillProgressHeatmap">
-            <SkillProgressHeatmap maxSkills={6} />
-          </SafeWidget>
-        </div>
+        {!isEarlyStageUser && (
+          <div className="px-4">
+            <SafeWidget name="SkillProgressHeatmap">
+              <SkillProgressHeatmap maxSkills={6} />
+            </SafeWidget>
+          </div>
+        )}
         
         {/* ============================================================= */}
         {/* ACHIEVEMENTS - Medal collection */}
+        {/* Show for all users - achievements provide early motivation */}
         {/* ============================================================= */}
         
         <SafeWidget name="AchievementsCard">
-          <AchievementsCard maxDisplay={6} />
+          <AchievementsCard maxDisplay={isEarlyStageUser ? 3 : 6} />
         </SafeWidget>
         
         {/* ============================================================= */}
         {/* CHALLENGES - Weekly/monthly/seasonal challenges */}
+        {/* Only show after initial workouts */}
         {/* ============================================================= */}
         
-        <SafeWidget name="ChallengesCard">
-          <ChallengesCard maxDisplay={3} />
-        </SafeWidget>
+        {!isEarlyStageUser && (
+          <SafeWidget name="ChallengesCard">
+            <ChallengesCard maxDisplay={3} />
+          </SafeWidget>
+        )}
         
         {/* ============================================================= */}
         {/* LEADERBOARD - Community rankings */}
+        {/* Only show after user has established baseline */}
         {/* ============================================================= */}
         
-        <SafeWidget name="LeaderboardPreviewCard">
-          <LeaderboardPreviewCard />
-        </SafeWidget>
+        {!isEarlyStageUser && (
+          <SafeWidget name="LeaderboardPreviewCard">
+            <LeaderboardPreviewCard />
+          </SafeWidget>
+        )}
         
         {/* ============================================================= */}
         {/* GOAL PROJECTIONS - Timeline estimates */}

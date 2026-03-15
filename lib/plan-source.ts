@@ -211,7 +211,7 @@ export function getAvailablePlans(): {
     {
       id: 'pro',
       name: 'Pro',
-      price: 15,
+      price: 14.99,
       features: [
         'Full skill tracker',
         'Full strength tracker',

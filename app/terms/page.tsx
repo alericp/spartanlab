@@ -94,7 +94,7 @@ export default function TermsPage() {
                 </li>
                 <li className="flex items-start gap-3">
                   <span className="text-[#C1121F] mt-1">•</span>
-                  <span><strong className="text-[#E6E9EF]">Pro Tier:</strong> Full access to the Adaptive Training Engine, personalized programs, workout tracking, analytics, and all premium features. Currently priced at $15/month.</span>
+                  <span><strong className="text-[#E6E9EF]">Pro Tier:</strong> Full access to the Adaptive Training Engine, personalized programs, workout tracking, analytics, and all premium features. Currently priced at $14.99/month.</span>
                 </li>
               </ul>
               <p className="text-[#A4ACB8] leading-relaxed">

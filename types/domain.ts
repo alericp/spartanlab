@@ -6,7 +6,7 @@
 // =============================================================================
 
 // NOTE: 'elite' tier is kept for backward compatibility but merged into 'pro' for new users
-// Elite features are now included in Pro tier ($15/month)
+// Elite features are now included in Pro tier ($14.99/month)
 export type SubscriptionPlan = 'free' | 'pro' | 'elite'
 
 export interface User {

@@ -14,6 +14,7 @@ import {
   getTrialDaysRemaining,
   isOwnerAccount,
 } from '@/lib/feature-access'
+import { isCurrentUserOwner } from '@/lib/owner-access'
 
 // =============================================================================
 // SIMULATION MODE (Owner Only)
@@ -21,6 +22,7 @@ import {
 
 export type SimulationMode = 'off' | 'free' | 'pro'
 
+// CANONICAL simulation storage key - used everywhere
 const SIMULATION_KEY = 'spartanlab_owner_sim'
 
 /**
@@ -28,7 +30,7 @@ const SIMULATION_KEY = 'spartanlab_owner_sim'
  */
 export function getSimulationMode(): SimulationMode {
   if (typeof window === 'undefined') return 'off'
-  if (!isOwnerAccount()) return 'off'
+  if (!isCurrentUserOwner()) return 'off'
   
   const stored = sessionStorage.getItem(SIMULATION_KEY)
   if (stored === 'free' || stored === 'pro') return stored
@@ -40,7 +42,7 @@ export function getSimulationMode(): SimulationMode {
  */
 export function setSimulationMode(mode: SimulationMode): void {
   if (typeof window === 'undefined') return
-  if (!isOwnerAccount()) return
+  if (!isCurrentUserOwner()) return
   
   if (mode === 'off') {
     sessionStorage.removeItem(SIMULATION_KEY)

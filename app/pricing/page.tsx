@@ -80,18 +80,26 @@ const FAQ = [
 ]
 
 export default function PricingPage() {
-const router = useRouter()
+  const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
-  const { isSignedIn } = useAuth()
+  const { isSignedIn, isLoaded: isAuthLoaded } = useAuth()
   
   const handleProUpgrade = async () => {
-  // If not authenticated, redirect to sign-up
-  if (!isSignedIn) {
+    // Wait for auth to fully load before making any decisions
+    if (!isAuthLoaded) {
+      // Auth still loading - show loading state and wait
+      setIsLoading(true)
+      return
+    }
+    
+    // If not authenticated, redirect to sign-up with return URL
+    if (!isSignedIn) {
       trackUpgradeStarted('pricing_page')
       router.push('/sign-up?redirect_url=/upgrade')
       return
     }
 
+    // User is authenticated - proceed directly to checkout
     setIsLoading(true)
     trackUpgradeStarted('pricing_page')
 
@@ -104,7 +112,8 @@ const router = useRouter()
 
       if (data.error) {
         if (res.status === 401) {
-          router.push('/sign-up?redirect_url=/upgrade')
+          // Session expired or invalid - redirect to sign-in
+          router.push('/sign-in?redirect_url=/upgrade')
           return
         }
         toast.error('Failed to start checkout. Please try again.')
@@ -175,13 +184,13 @@ const router = useRouter()
                   <div className="mb-8">
                     <Button
                       onClick={handleProUpgrade}
-                      disabled={isLoading}
+                      disabled={isLoading || !isAuthLoaded}
                       className="w-full h-12 bg-[#E63946] hover:bg-[#D62828] disabled:opacity-50"
                     >
-                      {isLoading ? (
+                      {isLoading || !isAuthLoaded ? (
                         <>
                           <div className="w-4 h-4 mr-2 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                          Processing...
+                          {!isAuthLoaded ? 'Loading...' : 'Processing...'}
                         </>
                       ) : (
                         <>

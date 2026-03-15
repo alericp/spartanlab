@@ -1332,9 +1332,13 @@ export const IRON_CROSS_SYSTEM: SkillProgressionSystem = {
 // EXPORT ALL SYSTEMS
 // =============================================================================
 
+// Import back lever system
+import { BACK_LEVER_PROGRESSION_SYSTEM } from './back-lever-training-system'
+
 export const SKILL_PROGRESSION_SYSTEMS: Record<string, SkillProgressionSystem> = {
   planche: PLANCHE_SYSTEM,
   front_lever: FRONT_LEVER_SYSTEM,
+  back_lever: BACK_LEVER_PROGRESSION_SYSTEM,
   handstand: HANDSTAND_SYSTEM,
   muscle_up: MUSCLE_UP_SYSTEM,
   iron_cross: IRON_CROSS_SYSTEM,

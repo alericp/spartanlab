@@ -9,6 +9,8 @@ import type {
   ExerciseCategory 
 } from './adaptive-exercise-pool'
 import type { SessionLength, PrimaryGoal } from './program-service'
+import { generateIntelligentPrehab } from './prehab'
+import type { IntelligentPrehabContext } from './prehab'
 
 // =============================================================================
 // TYPES
@@ -697,3 +699,76 @@ export function generateQuickWarmUp(
     equipment,
   })
 }
+
+// =============================================================================
+// INTELLIGENT PREHAB INTEGRATION
+// =============================================================================
+
+/**
+ * Generate intelligent prehab warm-up using the unified prehab intelligence engine
+ * This integrates with joint stress mapping, weak point data, and skill demands
+ * 
+ * Use this for better session-specific preparation vs generic templates
+ */
+export async function generateIntelligentWarmup(
+  context: WarmUpGenerationContext,
+  athleteWeakPoints?: Record<string, number>,
+  sessionFocus?: 'skill' | 'strength' | 'hypertrophy' | 'endurance'
+): Promise<GeneratedWarmUp> {
+  try {
+    // Build prehab context from warmup context
+    const prehabContext: IntelligentPrehabContext = {
+      mainExercises: context.mainExercises.map(ex => ({
+        id: ex.id,
+        name: ex.name,
+        category: ex.category,
+        movementPattern: ex.movementPattern,
+        primaryMuscles: ex.primaryMuscles,
+      })),
+      sessionLength: context.sessionLength,
+      athleteWeakPoints,
+      sessionFocus: sessionFocus || 'skill',
+    }
+    
+    // Get intelligent prehab recommendation
+    const prehabResult = generateIntelligentPrehab(prehabContext)
+    
+    // Convert to warmup format for compatibility
+    return {
+      block: {
+        focus: 'skill' as const,
+        exercises: prehabResult.prehabExercises.map(ex => ({
+          id: ex.id,
+          name: ex.name,
+          phase: 'general' as const,
+          targetPattern: ex.targetJoints as MovementPattern[],
+          targetMuscles: [],
+          equipment: ex.equipment as EquipmentType[],
+          reps: ex.prescription,
+          notes: ex.rationale,
+          priority: 2,
+          intensity: 'low' as const,
+        })),
+        durationMinutes: prehabResult.estimatedDuration,
+        rationale: `Intelligent preparation targeting ${prehabResult.primaryJointsFocused.join(', ')}. ${prehabResult.weakPointAdaptations.join(' ')}`,
+      },
+      exercises: prehabResult.prehabExercises.map(ex => ({
+        name: ex.name,
+        prescription: ex.prescription,
+        note: ex.rationale,
+      })),
+      totalMinutes: prehabResult.estimatedDuration,
+      focusLabel: 'Session-Specific Preparation',
+    }
+  } catch (error) {
+    // Fallback to standard warmup if prehab fails
+    console.warn('[warmup-engine] Falling back to standard warmup:', error)
+    return generateStandardWarmup(context)
+  }
+}
+
+/**
+ * Re-export prehab functions for convenience
+ */
+export { generateIntelligentPrehab } from './prehab'
+export type { IntelligentPrehabContext, IntelligentPrehabResult } from './prehab'

@@ -15,7 +15,7 @@ import { RANGE_MODE_COPY, type RangeTrainingMode } from '@/lib/range-training-sy
 // =============================================================================
 
 type GoalCategory = 'strength' | 'skills' | 'flexibility'
-type SkillGoal = 'front_lever' | 'planche' | 'muscle_up' | 'handstand' | 'l_sit' | 'muscle_up_bar'
+type SkillGoal = 'front_lever' | 'back_lever' | 'planche' | 'muscle_up' | 'handstand' | 'l_sit' | 'muscle_up_bar'
 type FlexibilityGoal = 'pancake' | 'toe_touch' | 'front_splits' | 'side_splits'
 type StrengthGoal = 'general_strength' | 'weighted_pull' | 'weighted_dip'
 type TrainingDays = 2 | 3 | 4 | 5 | 6
@@ -70,6 +70,7 @@ const GOAL_CATEGORIES: { value: GoalCategory; label: string; description: string
 const SKILL_OPTIONS: { value: SkillGoal; label: string }[] = [
   { value: 'planche', label: 'Planche' },
   { value: 'front_lever', label: 'Front Lever' },
+  { value: 'back_lever', label: 'Back Lever' },
   { value: 'muscle_up', label: 'Muscle-Up' },
   { value: 'handstand', label: 'Handstand' },
   { value: 'l_sit', label: 'L-Sit' },

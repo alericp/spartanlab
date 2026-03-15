@@ -138,7 +138,7 @@ function analyzePullingStrength(factors: UserProfileFactors): WeakPointAssessmen
     score: Math.round(score),
     severity,
     recommendations,
-    affectsGoals: ['front_lever', 'muscle_up'],
+    affectsGoals: ['front_lever', 'back_lever', 'muscle_up'],
     priorityExercises,
   }
 }
@@ -222,7 +222,7 @@ function analyzeCoreStrength(factors: UserProfileFactors): WeakPointAssessment {
     score: Math.round(score),
     severity,
     recommendations,
-    affectsGoals: ['front_lever', 'planche', 'l_sit', 'v_sit'],
+    affectsGoals: ['front_lever', 'back_lever', 'planche', 'l_sit', 'v_sit'],
     priorityExercises,
   }
 }
@@ -265,7 +265,7 @@ function analyzeStraightArmTolerance(factors: UserProfileFactors): WeakPointAsse
     score: Math.round(score),
     severity,
     recommendations,
-    affectsGoals: ['planche', 'front_lever', 'iron_cross'],
+    affectsGoals: ['planche', 'front_lever', 'back_lever', 'iron_cross'],
     priorityExercises,
   }
 }
@@ -309,7 +309,7 @@ function analyzeTendonConditioning(factors: UserProfileFactors): WeakPointAssess
     score: Math.round(score),
     severity,
     recommendations,
-    affectsGoals: ['planche', 'front_lever', 'iron_cross'],
+    affectsGoals: ['planche', 'front_lever', 'back_lever', 'iron_cross'],
     priorityExercises,
   }
 }
@@ -332,7 +332,7 @@ function analyzeRingStability(factors: UserProfileFactors): WeakPointAssessment 
       score,
       severity,
       recommendations,
-      affectsGoals: ['muscle_up', 'iron_cross'],
+      affectsGoals: ['muscle_up', 'iron_cross', 'back_lever'],
       priorityExercises: [],
     }
   }
@@ -358,7 +358,53 @@ function analyzeRingStability(factors: UserProfileFactors): WeakPointAssessment 
     score: Math.round(score),
     severity,
     recommendations,
-    affectsGoals: ['muscle_up', 'iron_cross'],
+    affectsGoals: ['muscle_up', 'iron_cross', 'back_lever'],
+    priorityExercises,
+  }
+}
+
+/**
+ * Analyze shoulder mobility (critical for back lever and overhead work)
+ */
+function analyzeShoulderMobility(factors: UserProfileFactors): WeakPointAssessment {
+  let score = 60
+  let severity: WeakPointAssessment['severity'] = 'moderate'
+  const recommendations: string[] = []
+  const priorityExercises: string[] = []
+  
+  // Check if user has shoulder issues that indicate mobility limitations
+  if (factors.hasShoulderIssues) {
+    score = 35
+    severity = 'significant'
+    recommendations.push('Address shoulder mobility before back lever or overhead work')
+    recommendations.push('Include daily shoulder mobility drills')
+    priorityExercises.push('german_hang_passive', 'shoulder_dislocates', 'wall_slides')
+  }
+  
+  // Experience level impacts assumed mobility development
+  if (factors.experienceLevel === 'beginner') {
+    score = Math.max(40, score - 15)
+    severity = severity === 'none' ? 'moderate' : severity
+    recommendations.push('Build shoulder extension mobility gradually')
+    priorityExercises.push('skin_the_cat', 'german_hang_progressions')
+  } else if (factors.experienceLevel === 'intermediate') {
+    if (!factors.hasShoulderIssues) {
+      score = 65
+      severity = 'minor'
+    }
+    recommendations.push('Continue shoulder mobility maintenance')
+    priorityExercises.push('german_hang', 'skin_the_cat')
+  } else if (factors.experienceLevel === 'advanced' && !factors.hasShoulderIssues) {
+    score = 80
+    severity = 'none'
+  }
+  
+  return {
+    category: 'shoulder_mobility',
+    score: Math.round(score),
+    severity,
+    recommendations,
+    affectsGoals: ['back_lever', 'iron_cross', 'handstand_pushup'],
     priorityExercises,
   }
 }
@@ -434,6 +480,7 @@ export function analyzeWeakPoints(factors: UserProfileFactors): WeakPointAnalysi
     analyzeStraightArmTolerance(factors),
     analyzeTendonConditioning(factors),
     analyzeRingStability(factors),
+    analyzeShoulderMobility(factors),
     analyzeRecoveryCapacity(factors),
   ]
   
@@ -461,6 +508,9 @@ export function analyzeWeakPoints(factors: UserProfileFactors): WeakPointAnalysi
       }
       if (assessment.category === 'straight_arm_tolerance') {
         safetyWarnings.push('Build straight-arm foundation before attempting static holds')
+      }
+      if (assessment.category === 'shoulder_mobility') {
+        safetyWarnings.push('Develop shoulder extension mobility before back lever or iron cross work')
       }
     }
   }

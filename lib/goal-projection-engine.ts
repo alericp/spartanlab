@@ -619,3 +619,26 @@ export function getConfidenceLabel(confidence: ConfidenceLevel): string {
     case 'low': return 'Low'
   }
 }
+
+// =============================================================================
+// UNIFIED PREDICTION INTEGRATION
+// =============================================================================
+// The prediction module provides more comprehensive prediction capabilities.
+// This section provides bridge functions for seamless integration.
+
+/**
+ * Get a unified prediction for a skill using the new centralized prediction engine.
+ * Provides more detailed analysis including weak points, momentum effects, and recovery status.
+ * 
+ * Import from lib/prediction for direct access to the unified engine.
+ */
+export { 
+  getSkillPrediction,
+  getAllSkillPredictions,
+  getDashboardPredictionSummary,
+} from './prediction/prediction-service'
+
+export type { 
+  UnifiedSkillPrediction,
+  BatchPredictionResult,
+} from './prediction/skill-progress-prediction-engine'

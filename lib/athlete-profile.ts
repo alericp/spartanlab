@@ -145,6 +145,7 @@ export const PRIMARY_TRAINING_OUTCOME_EXAMPLES: Record<PrimaryTrainingOutcome, s
 
 export type SkillGoal =
   | 'front_lever'
+  | 'back_lever'
   | 'planche'
   | 'muscle_up'
   | 'handstand_pushup'
@@ -889,6 +890,7 @@ export const GOAL_CATEGORY_DESCRIPTIONS: Record<GoalCategory, string> = {
 
 export const SKILL_GOAL_LABELS: Record<SkillGoal, string> = {
   'front_lever': 'Front Lever',
+  'back_lever': 'Back Lever',
   'planche': 'Planche',
   'muscle_up': 'Muscle-Up',
   'handstand_pushup': 'Handstand Push-Up',

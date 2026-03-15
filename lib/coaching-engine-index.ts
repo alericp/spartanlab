@@ -264,6 +264,194 @@ export {
 } from './pulling-strength-engine'
 
 // =============================================================================
+// TRAINING CYCLE ENGINE EXPORTS
+// =============================================================================
+
+export {
+  // Skill Cycles
+  PLANCHE_SKILL_CYCLE,
+  FRONT_LEVER_SKILL_CYCLE,
+  HANDSTAND_SKILL_CYCLE,
+  MUSCLE_UP_SKILL_CYCLE,
+  ONE_ARM_PULL_UP_SKILL_CYCLE,
+  SKILL_CYCLES,
+  
+  // Strength Cycles
+  WEIGHTED_PULL_STRENGTH_CYCLE,
+  WEIGHTED_DIP_STRENGTH_CYCLE,
+  STREETLIFTING_STRENGTH_CYCLE,
+  STRENGTH_CYCLES,
+  
+  // Hypertrophy Cycles
+  UPPER_HYPERTROPHY_CYCLE,
+  PULL_HYPERTROPHY_CYCLE,
+  PUSH_HYPERTROPHY_CYCLE,
+  HYPERTROPHY_CYCLES,
+  
+  // Endurance Cycles
+  PULL_ENDURANCE_CYCLE,
+  GENERAL_ENDURANCE_CYCLE,
+  ENDURANCE_CYCLES,
+  
+  // Utility Cycles
+  MIXED_DEVELOPMENT_CYCLE,
+  DELOAD_CYCLE,
+  PEAK_CYCLE,
+  UTILITY_CYCLES,
+  
+  // All Cycles
+  ALL_TRAINING_CYCLES,
+  
+  // Cycle Selection Engine
+  selectRecommendedCycle,
+  
+  // Cycle Transition Engine
+  RECOMMENDED_CYCLE_TRANSITIONS,
+  getTransitionRecommendation,
+  
+  // Guide Structures
+  CYCLE_GUIDE_STRUCTURES,
+  
+  // Marketing Support
+  CYCLE_MARKETING_CLAIMS,
+  
+  // Types
+  type CycleType,
+  type CycleFocus,
+  type TrainingCycle,
+  type VolumeDistribution,
+  type IntensityDistribution,
+  type ProgressionPacing,
+  type ExerciseBias,
+  type RecoveryBias,
+  type CycleSelectionFactors,
+  type CycleTransition,
+  type CycleGuideStructure,
+} from './training-cycle-engine'
+
+// =============================================================================
+// BACK LEVER TRAINING SYSTEM EXPORTS
+// =============================================================================
+
+export {
+  // Exercise Library
+  BACK_LEVER_EXERCISE_LIBRARY,
+  
+  // Readiness & Safety
+  BACK_LEVER_READINESS_GATES,
+  BACK_LEVER_WEAK_POINTS,
+  
+  // Progression System
+  BACK_LEVER_PROGRESSION_SYSTEM,
+  
+  // Skill Relationships
+  BACK_LEVER_SKILL_RELATIONSHIPS,
+  
+  // Training Cycle
+  BACK_LEVER_SKILL_CYCLE,
+  
+  // Guide & SEO
+  BACK_LEVER_GUIDE_STRUCTURE,
+  BACK_LEVER_SEO_PAGES,
+  
+  // Marketing
+  BACK_LEVER_MARKETING_CLAIMS,
+  
+  // Session Integration
+  BACK_LEVER_SESSION_TEMPLATE,
+  
+  // Types
+  type BackLeverExercise,
+  type BackLeverWeakPoint,
+  type BackLeverReadinessGate,
+} from './back-lever-training-system'
+
+// =============================================================================
+// PREDICTION ENGINE EXPORTS
+// =============================================================================
+
+export {
+  // Main Prediction Functions
+  getSkillPrediction,
+  getAllSkillPredictions,
+  getDashboardPredictionSummary,
+  getSpecificSkillPredictions,
+  generateUnifiedPrediction,
+  generateBatchPredictions,
+  
+  // Configuration
+  SKILL_DIFFICULTY_CONFIG,
+  SKILL_NAMES,
+  SKILL_LEVELS,
+  LIMITER_LABELS,
+  LIMITER_TIMELINE_IMPACTS,
+  LIMITER_FOCUS_EXERCISES,
+  
+  // Normalizers
+  normalizePredictionInputs,
+  normalizeStrengthSupport,
+  normalizeConsistencyLevel,
+  
+  // Types
+  type UnifiedSkillPrediction,
+  type BatchPredictionResult,
+  type PredictionInputs,
+  type PredictionLimiter,
+  type TimelineEstimate,
+  type ProgressionStage,
+  type MomentumModifier,
+  type RecoveryModifier,
+  type ConfidenceTier,
+  type LimiterCategory,
+} from './prediction'
+
+// =============================================================================
+// PREHAB / JOINT PREPARATION ENGINE EXPORTS
+// =============================================================================
+
+export {
+  // Core Types
+  type JointArea,
+  type LoadingIntensity,
+  type PrehabExercise,
+  type PrehabGenerationContext,
+  type GeneratedPrehabWarmup,
+  
+  // Joint Stress Mappings
+  SKILL_JOINT_MAPPINGS,
+  EXERCISE_JOINT_MAPPINGS,
+  PREHAB_EXERCISE_LIBRARY,
+  
+  // Core Functions
+  analyzeJointStress,
+  calculatePrehabDuration,
+  selectPrehabExercises,
+  generatePrehabWarmup,
+  generateSkillFocusedPrehab,
+  
+  // Intelligence Engine Types
+  type IntelligentPrehabResult,
+  type IntelligentPrehabContext,
+  type SkillGuidePrehabSection,
+  
+  // Intelligence Configuration
+  WEAK_POINT_PREHAB_ADJUSTMENTS,
+  PREHAB_PLACEMENT_RULES,
+  SKILL_PREHAB_RECOMMENDATIONS,
+  
+  // Intelligent Generation
+  generateIntelligentPrehab,
+  getSkillPrehabRecommendations,
+  validatePrehabSpecificity,
+  generateGuidePrehabSection,
+  
+  // Convenience Functions
+  quickPrehab,
+  adaptivePrehab,
+  isPrehabSessionSpecific,
+} from './prehab'
+
+// =============================================================================
 // MARKETING SUPPORT EXPORTS
 // =============================================================================
 
@@ -401,8 +589,13 @@ export function generateCoachingRecommendation(context: CoachingContext): Coachi
   }
   
   // Add beginner straight-arm warning
-  if (experienceLevel === 'beginner' && skillGoals.some(s => ['planche', 'front_lever'].includes(s))) {
+  if (experienceLevel === 'beginner' && skillGoals.some(s => ['planche', 'front_lever', 'back_lever'].includes(s))) {
     safetyWarnings.push('Straight-arm skills require tendon conditioning. Build foundational strength before static holds.')
+  }
+  
+  // Add back lever specific warning
+  if (skillGoals.includes('back_lever')) {
+    safetyWarnings.push('Back lever requires shoulder extension mobility. Ensure comfortable german hang before progressing.')
   }
   
   // Add weak point warnings
@@ -432,6 +625,10 @@ export function getAllSkillProgressionSystems(): SkillProgressionSystem[] {
  */
 export function getEngineCapabilitySummary(): string[] {
   return [
+    'Session-specific warm-ups based on joint stress mapping',
+    'Weak point-personalized preparation and prehab',
+    'Progress timeline predictions based on training data',
+    'Weak point identification and timeline impact analysis',
     'Adaptive skill coaching based on readiness assessment',
     'Weighted calisthenics and streetlifting programming',
     'Conservative tendon protection for straight-arm skills',
@@ -444,5 +641,10 @@ export function getEngineCapabilitySummary(): string[] {
     'Weighted pull-up strength programming',
     'Pull-up endurance and max-rep protocols',
     'Pull-specific weak point detection and correction',
+    'Periodized training cycles (skill, strength, hypertrophy, endurance)',
+    'Intelligent cycle selection based on goals',
+    'Phase transition recommendations',
+    'Deload and peaking protocols',
+    'Back lever progression system with mobility gates',
   ]
 }

@@ -12,9 +12,11 @@ import {
   Dumbbell,
   ArrowRight,
   Clock,
+  Sparkles,
 } from 'lucide-react'
 import { getCoachDecision, getQuickCoachInsights, type CoachDecision } from '@/lib/training-coach'
 import { getOnboardingProfile } from '@/lib/athlete-profile'
+import { getWorkoutLogs } from '@/lib/workout-log-service'
 
 const WORKOUT_STORAGE_KEY = 'spartanlab_workout_session'
 
@@ -26,6 +28,7 @@ export function TodayFocusCard({ className }: TodayFocusCardProps) {
   const [hasActiveSession, setHasActiveSession] = useState(false)
   const [coachDecision, setCoachDecision] = useState<CoachDecision | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [isFirstWorkout, setIsFirstWorkout] = useState(false)
 
   useEffect(() => {
     // Check for active workout session
@@ -40,6 +43,14 @@ export function TodayFocusCard({ className }: TodayFocusCardProps) {
       }
     } catch {
       setHasActiveSession(false)
+    }
+
+    // Check if this is the user's first workout
+    try {
+      const logs = getWorkoutLogs()
+      setIsFirstWorkout(logs.length === 0)
+    } catch {
+      setIsFirstWorkout(false)
     }
 
     // Get coach decision for today's focus
@@ -67,6 +78,11 @@ export function TodayFocusCard({ className }: TodayFocusCardProps) {
 
   // Get today's focus label
   const getTodayFocusLabel = () => {
+    // Special messaging for first workout
+    if (isFirstWorkout) {
+      return 'Your First Workout'
+    }
+    
     if (!coachDecision) return 'Training Session'
     
     const { sessionRecommendation, primaryLimiter } = coachDecision
@@ -98,6 +114,11 @@ export function TodayFocusCard({ className }: TodayFocusCardProps) {
 
   // Get explanation text
   const getExplanation = () => {
+    // Special messaging for first workout
+    if (isFirstWorkout) {
+      return 'Complete your first session to unlock personalized insights, progress tracking, and adaptive programming tailored to your performance.'
+    }
+    
     if (!coachDecision) {
       return 'Start your training session to build towards your goals.'
     }
@@ -115,20 +136,30 @@ export function TodayFocusCard({ className }: TodayFocusCardProps) {
   }
 
   return (
-    <Card className={`bg-gradient-to-br from-[#1A1F26] to-[#0F1115] border-[#2B313A] overflow-hidden ${className}`}>
+    <Card className={`overflow-hidden ${
+      isFirstWorkout 
+        ? 'bg-gradient-to-br from-[#C1121F]/10 via-[#1A1F26] to-[#0F1115] border-[#C1121F]/30' 
+        : 'bg-gradient-to-br from-[#1A1F26] to-[#0F1115] border-[#2B313A]'
+    } ${className}`}>
       <div className="p-6">
         {/* Header */}
         <div className="flex items-center gap-2 mb-4">
-          <div className="w-8 h-8 rounded-lg bg-[#C1121F]/10 flex items-center justify-center">
-            <Zap className="w-4 h-4 text-[#C1121F]" />
+          <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
+            isFirstWorkout ? 'bg-[#C1121F]/20' : 'bg-[#C1121F]/10'
+          }`}>
+            {isFirstWorkout ? (
+              <Sparkles className="w-4 h-4 text-[#C1121F]" />
+            ) : (
+              <Zap className="w-4 h-4 text-[#C1121F]" />
+            )}
           </div>
           <span className="text-xs font-semibold text-[#6B7280] uppercase tracking-wider">
-            Today's Training Focus
+            {isFirstWorkout ? 'Your Next Step' : 'Today\'s Training Focus'}
           </span>
         </div>
 
         {/* Focus Title */}
-        <h2 className="text-xl font-bold text-[#E6E9EF] mb-2">
+        <h2 className={`font-bold text-[#E6E9EF] mb-2 ${isFirstWorkout ? 'text-2xl' : 'text-xl'}`}>
           {getTodayFocusLabel()}
         </h2>
 
@@ -137,7 +168,7 @@ export function TodayFocusCard({ className }: TodayFocusCardProps) {
           {getExplanation()}
         </p>
 
-        {/* Action Button */}
+        {/* Action Button - More prominent for first workout */}
         <div className="flex items-center gap-3">
           {hasActiveSession ? (
             <Link href="/workout/session">
@@ -152,28 +183,35 @@ export function TodayFocusCard({ className }: TodayFocusCardProps) {
           ) : (
             <Link href="/workout/session">
               <Button 
-                size="lg" 
-                className="bg-[#C1121F] hover:bg-[#A30F1A] text-white gap-2 font-semibold"
+                size={isFirstWorkout ? 'lg' : 'lg'} 
+                className={`gap-2 font-semibold ${
+                  isFirstWorkout 
+                    ? 'bg-[#C1121F] hover:bg-[#A30F1A] text-white px-8' 
+                    : 'bg-[#C1121F] hover:bg-[#A30F1A] text-white'
+                }`}
               >
                 <Play className="w-5 h-5" />
-                Start Workout
+                {isFirstWorkout ? 'Start First Workout' : 'Start Workout'}
+                {isFirstWorkout && <ArrowRight className="w-4 h-4" />}
               </Button>
             </Link>
           )}
           
-          <Link href="/programs">
-            <Button 
-              variant="outline" 
-              size="lg"
-              className="border-[#2B313A] text-[#A4ACB8] hover:text-[#E6E9EF] hover:bg-[#1A1F26]"
-            >
-              View Program
-            </Button>
-          </Link>
+          {!isFirstWorkout && (
+            <Link href="/programs">
+              <Button 
+                variant="outline" 
+                size="lg"
+                className="border-[#2B313A] text-[#A4ACB8] hover:text-[#E6E9EF] hover:bg-[#1A1F26]"
+              >
+                View Program
+              </Button>
+            </Link>
+          )}
         </div>
 
-        {/* Subtle intensity indicator */}
-        {coachDecision && (
+        {/* Subtle intensity indicator - only for returning users */}
+        {coachDecision && !isFirstWorkout && (
           <div className="flex items-center gap-2 mt-4 pt-4 border-t border-[#2B313A]/50">
             <span className="text-xs text-[#6B7280]">Suggested intensity:</span>
             <span className={`text-xs font-medium px-2 py-0.5 rounded ${
@@ -187,6 +225,13 @@ export function TodayFocusCard({ className }: TodayFocusCardProps) {
                coachDecision.sessionRecommendation.intensity.slice(1)}
             </span>
           </div>
+        )}
+        
+        {/* First workout benefit hint */}
+        {isFirstWorkout && (
+          <p className="text-xs text-[#6B7280] mt-4 pt-4 border-t border-[#2B313A]/50">
+            After your first workout, you'll see your Spartan Score, training insights, and personalized recommendations.
+          </p>
         )}
       </div>
     </Card>

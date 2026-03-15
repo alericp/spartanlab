@@ -108,7 +108,7 @@ export function WelcomeBanner() {
 
   // Standard welcome (free or pro)
   return (
-    <div className="relative bg-gradient-to-r from-[#C1121F]/10 to-[#C1121F]/5 border border-[#C1121F]/20 rounded-xl p-4 mb-6">
+    <div className="relative bg-gradient-to-r from-[#C1121F]/10 to-[#C1121F]/5 border border-[#C1121F]/20 rounded-xl p-5 mb-6">
       <button
         onClick={handleDismiss}
         className="absolute top-3 right-3 text-[#6B7280] hover:text-[#A4ACB8] transition-colors"
@@ -116,37 +116,27 @@ export function WelcomeBanner() {
         <X className="w-4 h-4" />
       </button>
 
-      <div className="flex items-start gap-3">
-        <div className="w-10 h-10 rounded-lg bg-[#C1121F]/20 flex items-center justify-center shrink-0">
-          <Target className="w-5 h-5 text-[#C1121F]" />
+      <div className="flex flex-col sm:flex-row items-start gap-4">
+        <div className="w-12 h-12 rounded-xl bg-[#C1121F]/20 flex items-center justify-center shrink-0">
+          <Dumbbell className="w-6 h-6 text-[#C1121F]" />
         </div>
         <div className="flex-1 pr-6">
-          <h3 className="text-[#E6E9EF] font-semibold mb-1">
-            Welcome to SpartanLab!
+          <h3 className="text-lg text-[#E6E9EF] font-semibold mb-1">
+            Your Program is Ready
           </h3>
-          <p className="text-sm text-[#A4ACB8] mb-3">
-            Your personalized program for {getPrimaryGoalDisplay()} is ready.
-            {profile?.trainingDaysPerWeek && ` We've planned ${profile.trainingDaysPerWeek} training days per week.`}
+          <p className="text-sm text-[#A4ACB8] mb-4">
+            Start your first workout for {getPrimaryGoalDisplay()}. SpartanLab will learn from your performance 
+            and personalize your training as you go.
           </p>
           
-          {/* Quick action cards */}
-          <div className="flex flex-wrap gap-2">
-            <Link href="/programs">
-              <Button size="sm" className="bg-[#C1121F] hover:bg-[#A30F1A] text-white">
-                <Calendar className="w-3.5 h-3.5 mr-1.5" />
-                Start First Workout
-              </Button>
-            </Link>
-            
-            {!isPro && (
-              <Link href="/upgrade">
-                <Button size="sm" variant="outline" className="border-amber-500/30 text-amber-400 hover:bg-amber-500/10">
-                  <Sparkles className="w-3.5 h-3.5 mr-1.5" />
-                  Try Pro Free
-                </Button>
-              </Link>
-            )}
-          </div>
+          {/* Primary CTA - Start Workout */}
+          <Link href="/workout/session">
+            <Button className="bg-[#C1121F] hover:bg-[#A30F1A] text-white gap-2">
+              <Dumbbell className="w-4 h-4" />
+              Start First Workout
+              <ArrowRight className="w-4 h-4" />
+            </Button>
+          </Link>
         </div>
       </div>
     </div>
@@ -177,7 +167,7 @@ export function FirstWorkoutCTA() {
   }
 
   return (
-    <Link href="/programs" className="block">
+    <Link href="/workout/session" className="block">
       <div className="bg-[#1A1F26] border border-[#2B313A] hover:border-[#C1121F]/30 rounded-xl p-4 transition-colors group">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">

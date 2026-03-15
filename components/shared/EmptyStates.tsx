@@ -113,101 +113,85 @@ export function EmptyState({
 
 export function DashboardEmptyState() {
   return (
-    <div className="space-y-8">
-      {/* Hero Empty State - Single Clear CTA */}
+    <div className="space-y-6">
+      {/* Hero Empty State - One Dominant CTA */}
       <Card className="bg-gradient-to-br from-[#1A1A1A] via-[#2A2A2A] to-[#1A1A1A] border-[#3A3A3A] p-8 sm:p-12 relative overflow-hidden">
         <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-bl from-[#E63946]/10 to-transparent rounded-full blur-3xl" />
         
         <div className="relative text-center max-w-xl mx-auto">
           <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-gradient-to-br from-[#E63946]/20 to-[#E63946]/5 border border-[#E63946]/20 mb-6">
-            <Calendar className="w-10 h-10 text-[#E63946]" />
+            <Zap className="w-10 h-10 text-[#E63946]" />
           </div>
           
           <h2 className="text-2xl sm:text-3xl font-bold text-[#F5F5F5] mb-3">
-            Create Your Training Program
+            Start Your First Workout
           </h2>
           
-          <p className="text-[#A5A5A5] mb-8 leading-relaxed">
-            Tell us your goals and we'll build a personalized calisthenics program 
-            that adapts to your progress.
+          <p className="text-[#A5A5A5] mb-2 leading-relaxed">
+            Your personalized training program is ready. Begin your first session 
+            and SpartanLab will adapt to your performance.
+          </p>
+          
+          <p className="text-sm text-[#6A6A6A] mb-8">
+            Each workout builds your training intelligence for smarter recommendations.
           </p>
 
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-            <Link href="/programs">
-              <Button className="bg-[#E63946] hover:bg-[#D62828] text-white gap-2 min-w-[180px]">
-                <Calendar className="w-4 h-4" />
-                Create Program
-                <ArrowRight className="w-4 h-4" />
-              </Button>
-            </Link>
-            <Link href="/workout/session?demo=true">
-              <Button 
-                variant="outline" 
-                className="border-[#3A3A3A] text-[#A5A5A5] hover:text-[#F5F5F5] hover:border-[#4A4A4A] gap-2 min-w-[180px]"
-              >
-                <Dumbbell className="w-4 h-4" />
-                Try Demo Workout
-              </Button>
-            </Link>
-          </div>
+          {/* Single dominant CTA */}
+          <Link href="/workout/session">
+            <Button size="lg" className="bg-[#E63946] hover:bg-[#D62828] text-white gap-2 px-8 py-6 text-lg font-semibold">
+              <Dumbbell className="w-5 h-5" />
+              Start First Workout
+              <ArrowRight className="w-5 h-5" />
+            </Button>
+          </Link>
+          
+          {/* Secondary option - subtle */}
+          <p className="mt-4 text-sm text-[#6A6A6A]">
+            Or <Link href="/programs" className="text-[#E63946] hover:underline">view your program</Link> first
+          </p>
         </div>
       </Card>
 
-      {/* Quick Start Cards */}
-      <div className="grid sm:grid-cols-3 gap-4">
-        <QuickStartCard
-          icon={<Activity className="w-5 h-5" />}
-          title="Log Workouts"
-          description="Track sessions to build your training history"
-          href="/workouts"
-        />
-        <QuickStartCard
-          icon={<Target className="w-5 h-5" />}
-          title="Track Skills"
-          description="Monitor skill progression and readiness"
-          href="/skills"
-        />
-        <QuickStartCard
-          icon={<Dumbbell className="w-5 h-5" />}
-          title="Log Strength"
-          description="Record weighted exercises for analysis"
-          href="/strength"
-        />
-      </div>
+      {/* What happens next - Intelligence preview */}
+      <Card className="bg-[#1A1A1A] border-[#2A2A2A] p-6">
+        <h3 className="text-sm font-semibold text-[#6A6A6A] uppercase tracking-wider mb-4">
+          After your first workout
+        </h3>
+        <div className="grid sm:grid-cols-3 gap-4">
+          <div className="flex items-start gap-3">
+            <div className="w-8 h-8 rounded-lg bg-[#E63946]/10 flex items-center justify-center shrink-0">
+              <Brain className="w-4 h-4 text-[#E63946]" />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-[#F5F5F5]">Personalized Insights</p>
+              <p className="text-xs text-[#6A6A6A]">See your strength profile and limiters</p>
+            </div>
+          </div>
+          <div className="flex items-start gap-3">
+            <div className="w-8 h-8 rounded-lg bg-[#E63946]/10 flex items-center justify-center shrink-0">
+              <TrendingUp className="w-4 h-4 text-[#E63946]" />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-[#F5F5F5]">Progress Tracking</p>
+              <p className="text-xs text-[#6A6A6A]">Watch your Spartan Score grow</p>
+            </div>
+          </div>
+          <div className="flex items-start gap-3">
+            <div className="w-8 h-8 rounded-lg bg-[#E63946]/10 flex items-center justify-center shrink-0">
+              <Target className="w-4 h-4 text-[#E63946]" />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-[#F5F5F5]">Adaptive Programming</p>
+              <p className="text-xs text-[#6A6A6A]">Your next session adjusts to you</p>
+            </div>
+          </div>
+        </div>
+      </Card>
     </div>
   )
 }
 
-function QuickStartCard({ 
-  icon, 
-  title, 
-  description, 
-  href 
-}: { 
-  icon: React.ReactNode
-  title: string
-  description: string
-  href: string
-}) {
-  return (
-    <Link href={href}>
-      <Card className="bg-[#1A1A1A] border-[#2A2A2A] p-5 hover:border-[#E63946]/30 transition-colors group cursor-pointer h-full">
-        <div className="flex items-start gap-4">
-          <div className="p-2.5 rounded-lg bg-[#2A2A2A] text-[#E63946] group-hover:bg-[#E63946]/10 transition-colors">
-            {icon}
-          </div>
-          <div className="flex-1">
-            <h3 className="font-medium text-[#F5F5F5] mb-1 group-hover:text-[#E63946] transition-colors">
-              {title}
-            </h3>
-            <p className="text-sm text-[#6A6A6A]">{description}</p>
-          </div>
-          <ArrowRight className="w-4 h-4 text-[#3A3A3A] group-hover:text-[#E63946] transition-colors mt-1" />
-        </div>
-      </Card>
-    </Link>
-  )
-}
+
 
 // ============================================================================
 // SKILL TRACKER EMPTY STATE

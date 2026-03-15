@@ -9,6 +9,7 @@ import { LayoutDashboard, Target, Dumbbell, Calendar, ClipboardList, TrendingUp,
 import { SpartanIcon } from '@/components/brand/SpartanLogo'
 import { useState, useEffect } from 'react'
 import { cn } from '@/lib/utils'
+import { SubscriptionBadge, useSubscriptionDisplay } from '@/components/billing/SubscriptionBadge'
 
 // Primary navigation - essential daily actions
 const NAV_ITEMS = [
@@ -58,6 +59,7 @@ export function Navigation() {
   const pathname = usePathname()
   const [mobileOpen, setMobileOpen] = useState(false)
   const { userId, signOut, isLoaded } = useAuth()
+  const subscriptionInfo = useSubscriptionDisplay()
 
   // Lock body scroll when mobile menu is open
   useEffect(() => {
@@ -84,10 +86,18 @@ export function Navigation() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
         <div className="relative flex items-center justify-between h-16">
           {/* Logo - Links to dashboard for app users */}
-          <Link href="/dashboard" className="flex items-center gap-2 shrink-0">
-            <SpartanIcon size={28} />
-            <span className="text-xl font-bold hidden sm:inline">SpartanLab</span>
-          </Link>
+          <div className="flex items-center gap-2 shrink-0">
+            <Link href="/dashboard" className="flex items-center gap-2">
+              <SpartanIcon size={28} />
+              <span className="text-xl font-bold hidden sm:inline">SpartanLab</span>
+            </Link>
+            {/* Pro/Trial badge - only on desktop */}
+            {subscriptionInfo.isPaid && (
+              <div className="hidden sm:block">
+                <SubscriptionBadge size="sm" showTrialDays={false} />
+              </div>
+            )}
+          </div>
 
           {/* Page title - centered, visible on mobile only (desktop shows full nav) */}
           {pageTitle && (

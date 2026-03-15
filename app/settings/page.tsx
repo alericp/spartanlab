@@ -19,7 +19,8 @@ import { Settings, Crown, Shield } from 'lucide-react'
 import { SKILL_DEFINITIONS } from '@/lib/skills'
 import { isOwner, getCurrentUserEmail } from '@/lib/owner-access'
 import { PRICING, TRIAL } from '@/lib/billing/pricing'
-import { getCurrentTier, hasProAccess } from '@/lib/feature-access'
+import { hasProAccess } from '@/lib/feature-access'
+import { useSubscriptionDisplay } from '@/lib/billing/subscription-status'
 import Link from 'next/link'
 import {
   getAthleteProfile,
@@ -27,6 +28,65 @@ import {
   type AthleteProfile,
 } from '@/lib/data-service'
 import { UpdateMetricsCard } from '@/components/dashboard/UpdateMetricsCard'
+import { Sparkles } from 'lucide-react'
+
+// Subscription Billing Card - handles Pro and Trial states
+function SubscriptionBillingCard() {
+  const subscriptionInfo = useSubscriptionDisplay()
+  
+  const statusLabel = subscriptionInfo.isTrialing ? 'Trial Active' : 'Active'
+  const statusDescription = subscriptionInfo.isTrialing 
+    ? `${subscriptionInfo.trialDaysRemaining} day${subscriptionInfo.trialDaysRemaining !== 1 ? 's' : ''} remaining in your trial. You won't be charged until it ends.`
+    : 'Full access to all training intelligence features.'
+  
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-3 p-4 rounded-lg bg-gradient-to-r from-amber-500/10 to-transparent border border-amber-500/20">
+        <div className="w-10 h-10 rounded-lg bg-amber-500/20 flex items-center justify-center">
+          {subscriptionInfo.isTrialing ? (
+            <Sparkles className="w-5 h-5 text-amber-400" />
+          ) : (
+            <Crown className="w-5 h-5 text-amber-400" />
+          )}
+        </div>
+        <div className="flex-1">
+          <div className="flex items-center gap-2">
+            <span className="text-[#F5F5F5] font-medium">SpartanLab Pro</span>
+            <span className="px-2 py-0.5 text-xs rounded bg-amber-500/20 text-amber-400 border border-amber-500/30">
+              {statusLabel}
+            </span>
+          </div>
+          <p className="text-sm text-[#A5A5A5]">
+            {statusDescription}
+          </p>
+        </div>
+      </div>
+      <Button 
+        variant="outline" 
+        className="w-full border-[#3A3A3A] text-[#A5A5A5] hover:bg-[#2A2A2A]"
+        onClick={async () => {
+          try {
+            const res = await fetch('/api/stripe/create-portal-session', { method: 'POST' })
+            const data = await res.json()
+            if (data.url) {
+              window.location.href = data.url
+            }
+          } catch (error) {
+            console.error('Portal error:', error)
+          }
+        }}
+      >
+        Manage Billing
+      </Button>
+      <p className="text-xs text-[#6B7280]">
+        Billing questions?{' '}
+        <a href="mailto:billing@spartanlab.app" className="text-[#A5A5A5] hover:text-[#F5F5F5] transition-colors">
+          billing@spartanlab.app
+        </a>
+      </p>
+    </div>
+  )
+}
 
 export default function SettingsPage() {
   console.log("[AUTH_PROOF] settings auth-prod-unblock-v1")
@@ -233,48 +293,8 @@ export default function SettingsPage() {
               </div>
             </div>
           ) : hasProAccess() ? (
-            // Pro subscriber display
-            <div className="space-y-4">
-              <div className="flex items-center gap-3 p-4 rounded-lg bg-gradient-to-r from-amber-500/10 to-transparent border border-amber-500/20">
-                <div className="w-10 h-10 rounded-lg bg-amber-500/20 flex items-center justify-center">
-                  <Crown className="w-5 h-5 text-amber-400" />
-                </div>
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[#F5F5F5] font-medium">SpartanLab Pro</span>
-                    <span className="px-2 py-0.5 text-xs rounded bg-amber-500/20 text-amber-400 border border-amber-500/30">
-                      Active
-                    </span>
-                  </div>
-                  <p className="text-sm text-[#A5A5A5]">
-                    Full access to all training intelligence features.
-                  </p>
-                </div>
-              </div>
-              <Button 
-                variant="outline" 
-                className="w-full border-[#3A3A3A] text-[#A5A5A5] hover:bg-[#2A2A2A]"
-                onClick={async () => {
-                  try {
-                    const res = await fetch('/api/stripe/create-portal-session', { method: 'POST' })
-                    const data = await res.json()
-                    if (data.url) {
-                      window.location.href = data.url
-                    }
-                  } catch (error) {
-                    console.error('Portal error:', error)
-                  }
-                }}
-              >
-                Manage Billing
-              </Button>
-              <p className="text-xs text-[#6B7280]">
-                Billing questions?{' '}
-                <a href="mailto:billing@spartanlab.app" className="text-[#A5A5A5] hover:text-[#F5F5F5] transition-colors">
-                  billing@spartanlab.app
-                </a>
-              </p>
-            </div>
+            // Pro subscriber display (includes trial users)
+            <SubscriptionBillingCard />
           ) : (
             // Free user display
             <div className="space-y-4">

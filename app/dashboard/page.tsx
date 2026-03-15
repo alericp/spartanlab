@@ -90,6 +90,8 @@ import { FirstRunGuide, SetupReminderBanner } from '@/components/dashboard/First
 import { UpdateMetricsCard, MetricsUpdateBanner } from '@/components/dashboard/UpdateMetricsCard'
 import { SafeWidget } from '@/components/shared/WidgetErrorBoundary'
 import { useAuth } from '@clerk/nextjs'
+import { AchievementsCard } from '@/components/dashboard/AchievementsCard'
+import { AchievementNotification } from '@/components/achievements/AchievementNotification'
 
 function DashboardContent() {
   const { isLoaded: isAuthLoaded } = useAuth()
@@ -539,6 +541,14 @@ function DashboardContent() {
         </div>
         
         {/* ============================================================= */}
+        {/* ACHIEVEMENTS - Medal collection */}
+        {/* ============================================================= */}
+        
+        <SafeWidget name="AchievementsCard">
+          <AchievementsCard maxDisplay={6} />
+        </SafeWidget>
+        
+        {/* ============================================================= */}
         {/* GOAL PROJECTIONS - Timeline estimates */}
         {/* ============================================================= */}
         
@@ -686,6 +696,9 @@ function DashboardContent() {
         </div>
         
       </SectionStack>
+      
+      {/* Achievement Unlock Notification */}
+      <AchievementNotification />
     </PageContainer>
   )
 }

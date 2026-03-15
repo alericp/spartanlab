@@ -7,6 +7,7 @@ import { getPersonalRecords, getStrengthRecords, type StrengthRecord, type Exerc
 import { getWorkoutLogs, type WorkoutLog } from './workout-log-service'
 import { getConstraintInsight } from './constraint-engine'
 import { getSkillSessions } from './skill-session-service'
+import { getUnlockedAchievements, ACHIEVEMENTS, type AchievementTier } from './achievements/achievement-definitions'
 
 export interface ScoreComponent {
   raw: number      // 0-100 raw score
@@ -22,6 +23,7 @@ export interface StrengthScoreBreakdown {
   strengthScore: number
   readinessScore: number
   consistencyScore: number
+  achievementScore: number
   
   // Detailed components
   components: ScoreComponent[]
@@ -107,12 +109,21 @@ function normalizeStrengthScore(oneRM: number, mapping: Record<number, number>):
   return 0
 }
 
-// Component weights
+// Component weights (must sum to 1.0)
 const WEIGHTS = {
-  skill: 0.35,      // 35% - Skill progression level
-  strength: 0.35,   // 35% - Weighted strength capacity
-  readiness: 0.15,  // 15% - Skill readiness / progression proximity
-  consistency: 0.15 // 15% - Training consistency
+  skill: 0.30,       // 30% - Skill progression level
+  strength: 0.30,    // 30% - Weighted strength capacity
+  readiness: 0.15,   // 15% - Skill readiness / progression proximity
+  consistency: 0.15, // 15% - Training consistency
+  achievements: 0.10 // 10% - Achievement unlocks
+}
+
+// Achievement tier point values for scoring
+const ACHIEVEMENT_TIER_POINTS: Record<AchievementTier, number> = {
+  bronze: 10,
+  silver: 25,
+  gold: 50,
+  elite: 100
 }
 
 // Calculate skill score (35% weight)
@@ -277,25 +288,63 @@ export function calculateConsistencyScore(): { score: number; weeklyWorkouts: nu
   }
 }
 
+// Calculate achievement score (10% weight)
+export function calculateAchievementScore(): { score: number; unlockedCount: number; totalPossible: number } {
+  const unlocked = getUnlockedAchievements()
+  
+  if (unlocked.length === 0) {
+    return { score: 0, unlockedCount: 0, totalPossible: ACHIEVEMENTS.length }
+  }
+  
+  let totalPoints = 0
+  let maxPossiblePoints = 0
+  
+  // Calculate points from unlocked achievements
+  unlocked.forEach(ua => {
+    const achievement = ACHIEVEMENTS.find(a => a.id === ua.achievementId)
+    if (achievement) {
+      totalPoints += ACHIEVEMENT_TIER_POINTS[achievement.tier]
+    }
+  })
+  
+  // Calculate max possible points
+  ACHIEVEMENTS.forEach(a => {
+    maxPossiblePoints += ACHIEVEMENT_TIER_POINTS[a.tier]
+  })
+  
+  // Normalize to 0-100 scale
+  const score = maxPossiblePoints > 0 
+    ? Math.round((totalPoints / maxPossiblePoints) * 100)
+    : 0
+  
+  return { 
+    score: Math.min(100, score), 
+    unlockedCount: unlocked.length,
+    totalPossible: ACHIEVEMENTS.length
+  }
+}
+
 // Calculate total Spartan Strength Score (0-1000 scale)
 export function calculateSpartanScore(): StrengthScoreBreakdown {
   const skillResult = calculateSkillScore()
   const strengthResult = calculateStrengthScore()
   const readinessResult = calculateReadinessScore()
   const consistencyResult = calculateConsistencyScore()
+  const achievementResult = calculateAchievementScore()
   
   // Check data quality
   const hasSkillData = skillResult.details.length > 0
   const hasStrengthData = strengthResult.details.length > 0
   const hasSessionData = readinessResult.score > 0
   const hasWorkoutData = consistencyResult.weeklyWorkouts > 0
+  const hasAchievementData = achievementResult.unlockedCount > 0
   
   let dataQuality: 'insufficient' | 'partial' | 'good' | 'excellent' = 'insufficient'
   if (hasSkillData && hasStrengthData && hasSessionData && hasWorkoutData) {
     dataQuality = 'excellent'
   } else if ((hasSkillData || hasStrengthData) && (hasSessionData || hasWorkoutData)) {
     dataQuality = 'good'
-  } else if (hasSkillData || hasStrengthData || hasSessionData || hasWorkoutData) {
+  } else if (hasSkillData || hasStrengthData || hasSessionData || hasWorkoutData || hasAchievementData) {
     dataQuality = 'partial'
   }
   
@@ -306,7 +355,8 @@ export function calculateSpartanScore(): StrengthScoreBreakdown {
     (skillResult.score * WEIGHTS.skill) +
     (strengthResult.score * WEIGHTS.strength) +
     (readinessResult.score * WEIGHTS.readiness) +
-    (consistencyResult.score * WEIGHTS.consistency)
+    (consistencyResult.score * WEIGHTS.consistency) +
+    (achievementResult.score * WEIGHTS.achievements)
   
   // Convert to 0-1000 scale
   const totalScore = Math.round(Math.max(0, Math.min(1000, baseScore * 10)))
@@ -349,6 +399,15 @@ export function calculateSpartanScore(): StrengthScoreBreakdown {
       description: consistencyResult.weeklyWorkouts > 0 
         ? `${consistencyResult.weeklyWorkouts} workouts this week`
         : 'No recent workouts'
+    },
+    {
+      raw: achievementResult.score,
+      weighted: Math.round(achievementResult.score * WEIGHTS.achievements * 10),
+      weight: WEIGHTS.achievements,
+      label: 'Achievements',
+      description: achievementResult.unlockedCount > 0 
+        ? `${achievementResult.unlockedCount} of ${achievementResult.totalPossible} unlocked`
+        : 'No achievements yet'
     }
   ]
   
@@ -362,6 +421,7 @@ export function calculateSpartanScore(): StrengthScoreBreakdown {
     strengthScore: strengthResult.score,
     readinessScore: readinessResult.score,
     consistencyScore: consistencyResult.score,
+    achievementScore: achievementResult.score,
     components,
     totalScore,
     level,

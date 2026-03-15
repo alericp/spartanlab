@@ -33,6 +33,34 @@ export interface FeatureCapability {
 
 export const FEATURE_CAPABILITIES: FeatureCapability[] = [
   {
+    id: 'timeline_prediction',
+    internalName: 'Unified Skill Progress Prediction Engine',
+    marketingName: 'Progress Timeline Prediction',
+    shortDescription: 'Personalized timeline estimates based on your training data',
+    longDescription: 'SpartanLab estimates realistic progression timelines based on your current strength level, skill stage, training consistency, and recovery status. Predictions adapt as your training data changes, with clear explanations of what factors are affecting your timeline.',
+    implementationEvidence: [
+      'lib/prediction/skill-progress-prediction-engine.ts',
+      'lib/prediction/prediction-service.ts',
+      'lib/goal-projection-engine.ts',
+    ],
+    keyFunctions: ['generateUnifiedPrediction', 'getAllSkillPredictions', 'identifyLimiters', 'calculateMomentumModifier'],
+    relevantFor: ['skills', 'planche', 'front_lever', 'muscle_up', 'handstand_pushup', 'back_lever', 'one_arm_pull_up'],
+  },
+  {
+    id: 'weak_point_identification',
+    internalName: 'Weak Point Priority Engine + Limiter Detection',
+    marketingName: 'Weak Point Identification',
+    shortDescription: 'Identifies what is limiting your progress',
+    longDescription: 'The prediction engine identifies primary and secondary limiters affecting your skill timelines. Whether it is pulling strength, tendon conditioning, or training consistency, you will know exactly what to focus on to accelerate your progress.',
+    implementationEvidence: [
+      'lib/prediction/skill-progress-prediction-engine.ts',
+      'lib/weak-point-priority-engine.ts',
+      'lib/skill-intelligence-layer.ts',
+    ],
+    keyFunctions: ['identifyLimiters', 'analyzeWeakPoints', 'calculateSkillIntelligence'],
+    relevantFor: ['skills', 'all'],
+  },
+  {
     id: 'adaptive_skill_coaching',
     internalName: 'Skill Progression Rules + Coaching Intelligence',
     marketingName: 'Adaptive Skill Coaching',
@@ -213,6 +241,17 @@ export function generateHeroSection(): MarketingCopyBlock {
 export function generateFeatureSection(): MarketingCopyBlock[] {
   return [
     {
+      section: 'feature_prediction',
+      headline: 'Know Your Timeline',
+      body: 'SpartanLab estimates realistic progression timelines based on your current strength, skill level, and training consistency. See what is holding you back and how to accelerate your progress.',
+      bulletPoints: [
+        'Personalized timeline estimates for each skill goal',
+        'Clear identification of what is limiting your progress',
+        'Predictions that adapt as your training data changes',
+        'Honest ranges, not unrealistic guarantees',
+      ],
+    },
+    {
       section: 'feature_skills',
       headline: 'Master Advanced Skills',
       body: 'From your first muscle-up to planche and front lever, SpartanLab builds the foundation you need and progresses you safely.',
@@ -307,6 +346,66 @@ export interface SEOContentStructure {
 }
 
 export const SEO_CONTENT_STRUCTURES: SEOContentStructure[] = [
+  {
+    pageType: 'prediction_guide',
+    primaryKeyword: 'front lever timeline',
+    secondaryKeywords: ['how long front lever', 'front lever progress time', 'front lever estimate'],
+    suggestedTitle: 'How Long Does a Front Lever Take? | SpartanLab',
+    metaDescription: 'Estimate your front lever timeline based on your current strength and skill level. Learn what factors affect progression time and how to accelerate your progress.',
+    h1: 'How Long Does It Take to Achieve a Front Lever?',
+    contentOutline: [
+      'Factors that affect front lever timeline',
+      'How strength level impacts progress speed',
+      'The role of training consistency',
+      'What is holding back your front lever',
+      'How to accelerate your progress',
+    ],
+  },
+  {
+    pageType: 'prediction_guide',
+    primaryKeyword: 'planche timeline',
+    secondaryKeywords: ['how long planche', 'planche progress time', 'planche estimate'],
+    suggestedTitle: 'How Long Does a Planche Take? | SpartanLab',
+    metaDescription: 'Get a realistic planche timeline estimate based on your current abilities. Learn what factors determine progression speed and how to optimize your training.',
+    h1: 'How Long Does It Take to Achieve a Planche?',
+    contentOutline: [
+      'Factors that affect planche timeline',
+      'Straight-arm strength requirements',
+      'The importance of tendon conditioning',
+      'What slows down planche progress',
+      'How to train smarter for faster results',
+    ],
+  },
+  {
+    pageType: 'prediction_guide',
+    primaryKeyword: 'muscle up timeline',
+    secondaryKeywords: ['how long muscle up', 'muscle up progress time', 'first muscle up'],
+    suggestedTitle: 'How Long Until Your First Muscle-Up? | SpartanLab',
+    metaDescription: 'Estimate when you might achieve your first muscle-up based on your current pulling strength and training consistency.',
+    h1: 'When Will You Get Your First Muscle-Up?',
+    contentOutline: [
+      'Prerequisites for muscle-up success',
+      'Strength benchmarks that predict readiness',
+      'How training frequency affects timeline',
+      'Common blockers and how to fix them',
+      'Accelerating your muscle-up journey',
+    ],
+  },
+  {
+    pageType: 'prediction_guide',
+    primaryKeyword: 'one arm pull up timeline',
+    secondaryKeywords: ['how long one arm pullup', 'oap progress time', 'one arm pullup training'],
+    suggestedTitle: 'How Long Does a One-Arm Pull-Up Take? | SpartanLab',
+    metaDescription: 'Realistic timeline estimates for the one-arm pull-up based on your weighted pull-up strength and training history.',
+    h1: 'How Long Until You Achieve a One-Arm Pull-Up?',
+    contentOutline: [
+      'Strength prerequisites for one-arm pull-up',
+      'How weighted pull-up strength predicts timeline',
+      'The role of grip and tendon conditioning',
+      'Training frequency recommendations',
+      'Common mistakes that extend timeline',
+    ],
+  },
   {
     pageType: 'skill_guide',
     primaryKeyword: 'planche tutorial',

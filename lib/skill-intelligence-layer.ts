@@ -879,3 +879,25 @@ export function getGlobalWeakPointSummary(
     adjustments,
   }
 }
+
+// =============================================================================
+// UNIFIED PREDICTION ENGINE INTEGRATION
+// =============================================================================
+// The prediction module (lib/prediction) provides comprehensive timeline
+// predictions. This layer provides the confidence and weak point analysis
+// that feeds into predictions.
+
+/**
+ * Re-export unified prediction functions for convenience.
+ * Import directly from lib/prediction for full access to prediction types.
+ */
+export {
+  getSkillPrediction,
+  getAllSkillPredictions,
+  getDashboardPredictionSummary,
+} from './prediction/prediction-service'
+
+export type {
+  UnifiedSkillPrediction,
+  BatchPredictionResult,
+} from './prediction/skill-progress-prediction-engine'

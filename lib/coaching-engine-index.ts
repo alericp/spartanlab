@@ -367,6 +367,45 @@ export {
 } from './back-lever-training-system'
 
 // =============================================================================
+// PREDICTION ENGINE EXPORTS
+// =============================================================================
+
+export {
+  // Main Prediction Functions
+  getSkillPrediction,
+  getAllSkillPredictions,
+  getDashboardPredictionSummary,
+  getSpecificSkillPredictions,
+  generateUnifiedPrediction,
+  generateBatchPredictions,
+  
+  // Configuration
+  SKILL_DIFFICULTY_CONFIG,
+  SKILL_NAMES,
+  SKILL_LEVELS,
+  LIMITER_LABELS,
+  LIMITER_TIMELINE_IMPACTS,
+  LIMITER_FOCUS_EXERCISES,
+  
+  // Normalizers
+  normalizePredictionInputs,
+  normalizeStrengthSupport,
+  normalizeConsistencyLevel,
+  
+  // Types
+  type UnifiedSkillPrediction,
+  type BatchPredictionResult,
+  type PredictionInputs,
+  type PredictionLimiter,
+  type TimelineEstimate,
+  type ProgressionStage,
+  type MomentumModifier,
+  type RecoveryModifier,
+  type ConfidenceTier,
+  type LimiterCategory,
+} from './prediction'
+
+// =============================================================================
 // MARKETING SUPPORT EXPORTS
 // =============================================================================
 
@@ -540,6 +579,8 @@ export function getAllSkillProgressionSystems(): SkillProgressionSystem[] {
  */
 export function getEngineCapabilitySummary(): string[] {
   return [
+    'Progress timeline predictions based on training data',
+    'Weak point identification and timeline impact analysis',
     'Adaptive skill coaching based on readiness assessment',
     'Weighted calisthenics and streetlifting programming',
     'Conservative tendon protection for straight-arm skills',

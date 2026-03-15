@@ -125,18 +125,27 @@ export function ChallengeCard({ challenge, progress, percentComplete, compact = 
           </div>
         </div>
         
-        {/* Time remaining */}
-        {!isComplete && !timeRemaining.expired && (
-          <div className="flex items-center gap-1 text-xs text-[#6B7280]">
-            <Clock className="w-3 h-3" />
-            <span>{timeRemaining.label}</span>
-          </div>
-        )}
-        {isComplete && (
-          <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400">
-            Complete
-          </span>
-        )}
+        <div className="flex items-center gap-2">
+          {/* Tier indicator */}
+          {challenge.tier && challenge.maxTier && (
+            <span className="text-xs px-1.5 py-0.5 rounded bg-[#2A2F36] text-[#A4ACB8]">
+              T{challenge.tier}/{challenge.maxTier}
+            </span>
+          )}
+          
+          {/* Time remaining */}
+          {!isComplete && !timeRemaining.expired && (
+            <div className="flex items-center gap-1 text-xs text-[#6B7280]">
+              <Clock className="w-3 h-3" />
+              <span>{timeRemaining.label}</span>
+            </div>
+          )}
+          {isComplete && (
+            <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400">
+              Complete
+            </span>
+          )}
+        </div>
       </div>
       
       {/* Description */}

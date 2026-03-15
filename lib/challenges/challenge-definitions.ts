@@ -1,6 +1,7 @@
 // Challenge Definitions
 // Centralized challenge system for SpartanLab
-// Supports weekly, monthly, and seasonal challenges
+// Supports weekly, monthly, and seasonal challenges with tiered progression
+// Design philosophy: realistic goals that reward consistency, not absurd volume
 
 export type ChallengeCategory = 'weekly' | 'monthly' | 'seasonal' | 'special'
 export type ChallengeGoalType = 'workout_count' | 'rep_total' | 'streak_days' | 'skill_sessions' | 'training_minutes' | 'exercise_count'
@@ -11,6 +12,22 @@ export interface ChallengeReward {
   type: ChallengeRewardType
   value: number // badge id, score boost amount, or achievement id
   label: string
+}
+
+export interface ChallengeTier {
+  tier: number
+  goalValue: number
+  reward: ChallengeReward
+}
+
+export interface ChallengeDefinition {
+  baseId: string
+  name: string
+  descriptionTemplate: string // Use {goal} placeholder
+  category: ChallengeCategory
+  goalType: ChallengeGoalType
+  tiers: ChallengeTier[]
+  icon: 'flame' | 'target' | 'trophy' | 'star' | 'dumbbell' | 'lightning' | 'medal' | 'crown'
 }
 
 export interface Challenge {
@@ -25,6 +42,9 @@ export interface Challenge {
   reward: ChallengeReward
   seasonId?: SeasonId
   icon: 'flame' | 'target' | 'trophy' | 'star' | 'dumbbell' | 'lightning' | 'medal' | 'crown'
+  tier?: number
+  maxTier?: number
+  baseId?: string
 }
 
 export interface ChallengeProgress {
@@ -84,10 +104,184 @@ export const SEASONS: SeasonInfo[] = [
 ]
 
 // =============================================================================
-// CHALLENGE DEFINITIONS
+// TIERED CHALLENGE DEFINITIONS
+// =============================================================================
+// Design philosophy: realistic goals that reward consistency, not absurd volume
+// Tier targets are designed for normal athletes training 2-5 days/week
+
+const TIERED_CHALLENGES: ChallengeDefinition[] = [
+  // ==========================================================================
+  // WEEKLY CHALLENGES
+  // ==========================================================================
+  {
+    baseId: 'weekly_warrior',
+    name: 'Weekly Warrior',
+    descriptionTemplate: 'Complete {goal} workouts this week',
+    category: 'weekly',
+    goalType: 'workout_count',
+    icon: 'flame',
+    tiers: [
+      { tier: 1, goalValue: 2, reward: { type: 'score_boost', value: 10, label: '+10 Spartan Score' } },
+      { tier: 2, goalValue: 3, reward: { type: 'score_boost', value: 15, label: '+15 Spartan Score' } },
+      { tier: 3, goalValue: 4, reward: { type: 'score_boost', value: 25, label: '+25 Spartan Score' } },
+      { tier: 4, goalValue: 5, reward: { type: 'score_boost', value: 35, label: '+35 Spartan Score' } },
+    ],
+  },
+  {
+    baseId: 'rep_crusher',
+    name: 'Rep Crusher',
+    descriptionTemplate: 'Log {goal} total reps this week',
+    category: 'weekly',
+    goalType: 'rep_total',
+    icon: 'dumbbell',
+    tiers: [
+      { tier: 1, goalValue: 100, reward: { type: 'score_boost', value: 8, label: '+8 Spartan Score' } },
+      { tier: 2, goalValue: 180, reward: { type: 'score_boost', value: 12, label: '+12 Spartan Score' } },
+      { tier: 3, goalValue: 260, reward: { type: 'score_boost', value: 18, label: '+18 Spartan Score' } },
+      { tier: 4, goalValue: 350, reward: { type: 'score_boost', value: 25, label: '+25 Spartan Score' } },
+      { tier: 5, goalValue: 500, reward: { type: 'badge', value: 1, label: 'Rep Master Badge' } },
+    ],
+  },
+  {
+    baseId: 'consistency_king',
+    name: 'Consistency King',
+    descriptionTemplate: 'Achieve a {goal}-day training streak',
+    category: 'weekly',
+    goalType: 'streak_days',
+    icon: 'lightning',
+    tiers: [
+      { tier: 1, goalValue: 2, reward: { type: 'score_boost', value: 5, label: '+5 Spartan Score' } },
+      { tier: 2, goalValue: 3, reward: { type: 'score_boost', value: 10, label: '+10 Spartan Score' } },
+      { tier: 3, goalValue: 5, reward: { type: 'score_boost', value: 20, label: '+20 Spartan Score' } },
+      { tier: 4, goalValue: 7, reward: { type: 'badge', value: 2, label: 'Consistency Badge' } },
+      { tier: 5, goalValue: 10, reward: { type: 'badge', value: 3, label: 'Iron Will Badge' } },
+    ],
+  },
+  {
+    baseId: 'skill_focus_weekly',
+    name: 'Skill Focus',
+    descriptionTemplate: 'Complete {goal} skill sessions this week',
+    category: 'weekly',
+    goalType: 'skill_sessions',
+    icon: 'star',
+    tiers: [
+      { tier: 1, goalValue: 2, reward: { type: 'score_boost', value: 10, label: '+10 Spartan Score' } },
+      { tier: 2, goalValue: 4, reward: { type: 'score_boost', value: 20, label: '+20 Spartan Score' } },
+      { tier: 3, goalValue: 6, reward: { type: 'score_boost', value: 30, label: '+30 Spartan Score' } },
+    ],
+  },
+  
+  // ==========================================================================
+  // MONTHLY CHALLENGES
+  // ==========================================================================
+  {
+    baseId: 'monthly_grinder',
+    name: 'Monthly Grinder',
+    descriptionTemplate: 'Complete {goal} workouts this month',
+    category: 'monthly',
+    goalType: 'workout_count',
+    icon: 'trophy',
+    tiers: [
+      { tier: 1, goalValue: 8, reward: { type: 'score_boost', value: 25, label: '+25 Spartan Score' } },
+      { tier: 2, goalValue: 12, reward: { type: 'score_boost', value: 45, label: '+45 Spartan Score' } },
+      { tier: 3, goalValue: 16, reward: { type: 'score_boost', value: 75, label: '+75 Spartan Score' } },
+      { tier: 4, goalValue: 20, reward: { type: 'badge', value: 4, label: 'Grinder Badge' } },
+    ],
+  },
+  {
+    baseId: 'volume_master',
+    name: 'Volume Master',
+    descriptionTemplate: 'Log {goal} total reps this month',
+    category: 'monthly',
+    goalType: 'rep_total',
+    icon: 'target',
+    tiers: [
+      { tier: 1, goalValue: 500, reward: { type: 'score_boost', value: 20, label: '+20 Spartan Score' } },
+      { tier: 2, goalValue: 900, reward: { type: 'score_boost', value: 40, label: '+40 Spartan Score' } },
+      { tier: 3, goalValue: 1300, reward: { type: 'score_boost', value: 60, label: '+60 Spartan Score' } },
+      { tier: 4, goalValue: 1800, reward: { type: 'score_boost', value: 80, label: '+80 Spartan Score' } },
+      { tier: 5, goalValue: 2400, reward: { type: 'badge', value: 5, label: 'Volume Champion Badge' } },
+    ],
+  },
+  {
+    baseId: 'skill_master',
+    name: 'Skill Master',
+    descriptionTemplate: 'Complete {goal} skill sessions this month',
+    category: 'monthly',
+    goalType: 'skill_sessions',
+    icon: 'star',
+    tiers: [
+      { tier: 1, goalValue: 4, reward: { type: 'score_boost', value: 15, label: '+15 Spartan Score' } },
+      { tier: 2, goalValue: 8, reward: { type: 'score_boost', value: 35, label: '+35 Spartan Score' } },
+      { tier: 3, goalValue: 12, reward: { type: 'score_boost', value: 50, label: '+50 Spartan Score' } },
+      { tier: 4, goalValue: 16, reward: { type: 'badge', value: 6, label: 'Skill Master Badge' } },
+    ],
+  },
+]
+
+// =============================================================================
+// SEASONAL CHALLENGE DEFINITIONS
 // =============================================================================
 
-// Helper to get current week/month dates
+const SEASONAL_CHALLENGES: ChallengeDefinition[] = [
+  {
+    baseId: 'seasonal_champion',
+    name: 'Season Champion',
+    descriptionTemplate: 'Complete {goal} workouts this season',
+    category: 'seasonal',
+    goalType: 'workout_count',
+    icon: 'crown',
+    tiers: [
+      { tier: 1, goalValue: 24, reward: { type: 'score_boost', value: 50, label: '+50 Spartan Score' } },
+      { tier: 2, goalValue: 40, reward: { type: 'score_boost', value: 100, label: '+100 Spartan Score' } },
+      { tier: 3, goalValue: 60, reward: { type: 'badge', value: 10, label: 'Season Champion Badge' } },
+    ],
+  },
+  {
+    baseId: 'seasonal_volume',
+    name: 'Seasonal Volume',
+    descriptionTemplate: 'Log {goal} reps this season',
+    category: 'seasonal',
+    goalType: 'rep_total',
+    icon: 'medal',
+    tiers: [
+      { tier: 1, goalValue: 2500, reward: { type: 'score_boost', value: 50, label: '+50 Spartan Score' } },
+      { tier: 2, goalValue: 4000, reward: { type: 'score_boost', value: 100, label: '+100 Spartan Score' } },
+      { tier: 3, goalValue: 6000, reward: { type: 'badge', value: 11, label: 'Season Volume Badge' } },
+    ],
+  },
+  {
+    baseId: 'seasonal_skill',
+    name: 'Skill Season',
+    descriptionTemplate: 'Complete {goal} skill sessions this season',
+    category: 'seasonal',
+    goalType: 'skill_sessions',
+    icon: 'star',
+    tiers: [
+      { tier: 1, goalValue: 10, reward: { type: 'score_boost', value: 40, label: '+40 Spartan Score' } },
+      { tier: 2, goalValue: 20, reward: { type: 'score_boost', value: 80, label: '+80 Spartan Score' } },
+      { tier: 3, goalValue: 35, reward: { type: 'badge', value: 12, label: 'Skill Season Badge' } },
+    ],
+  },
+  {
+    baseId: 'seasonal_streak',
+    name: 'Season Streak',
+    descriptionTemplate: 'Achieve a {goal}-day streak during the season',
+    category: 'seasonal',
+    goalType: 'streak_days',
+    icon: 'lightning',
+    tiers: [
+      { tier: 1, goalValue: 7, reward: { type: 'score_boost', value: 30, label: '+30 Spartan Score' } },
+      { tier: 2, goalValue: 14, reward: { type: 'score_boost', value: 75, label: '+75 Spartan Score' } },
+      { tier: 3, goalValue: 21, reward: { type: 'badge', value: 13, label: 'Unstoppable Badge' } },
+    ],
+  },
+]
+
+// =============================================================================
+// DATE HELPERS
+// =============================================================================
+
 function getWeekDates(): { start: string; end: string } {
   const now = new Date()
   const dayOfWeek = now.getDay()
@@ -121,122 +315,178 @@ function getCurrentSeason(): SeasonInfo | null {
   return SEASONS.find(s => now >= s.startDate && now <= s.endDate) || null
 }
 
-// Generate dynamic challenges based on current date
+// =============================================================================
+// TIER PROGRESS TRACKING
+// =============================================================================
+
+const TIER_PROGRESS_KEY = 'spartanlab_tier_progress'
+
+interface TierProgressRecord {
+  baseId: string
+  periodKey: string // e.g., "weekly_2026-03-15" or "monthly_2026-03"
+  completedTier: number
+}
+
+function getTierProgressRecords(): TierProgressRecord[] {
+  if (typeof window === 'undefined') return []
+  const stored = localStorage.getItem(TIER_PROGRESS_KEY)
+  if (stored) {
+    try { return JSON.parse(stored) } catch { return [] }
+  }
+  return []
+}
+
+function saveTierProgressRecord(record: TierProgressRecord): void {
+  if (typeof window === 'undefined') return
+  const records = getTierProgressRecords()
+  const existingIdx = records.findIndex(
+    r => r.baseId === record.baseId && r.periodKey === record.periodKey
+  )
+  if (existingIdx >= 0) {
+    records[existingIdx] = record
+  } else {
+    records.push(record)
+  }
+  // Keep only recent records (last 90 days worth)
+  const cutoff = new Date()
+  cutoff.setDate(cutoff.getDate() - 90)
+  const filtered = records.filter(r => {
+    const datePart = r.periodKey.split('_')[1]
+    return new Date(datePart) >= cutoff
+  })
+  localStorage.setItem(TIER_PROGRESS_KEY, JSON.stringify(filtered))
+}
+
+function getCurrentTierForChallenge(baseId: string, periodKey: string): number {
+  const records = getTierProgressRecords()
+  const record = records.find(r => r.baseId === baseId && r.periodKey === periodKey)
+  return record?.completedTier || 0
+}
+
+export function markTierCompleted(baseId: string, periodKey: string, tier: number): void {
+  const current = getCurrentTierForChallenge(baseId, periodKey)
+  if (tier > current) {
+    saveTierProgressRecord({ baseId, periodKey, completedTier: tier })
+  }
+}
+
+// =============================================================================
+// ACTIVE CHALLENGES GENERATION
+// =============================================================================
+
+/**
+ * Generate active challenges with intelligent tier progression
+ * Shows the next achievable tier for each challenge type
+ */
 export function getActiveChallenges(): Challenge[] {
   const week = getWeekDates()
   const month = getMonthDates()
   const season = getCurrentSeason()
   
-  const challenges: Challenge[] = [
-    // Weekly Challenges
-    {
-      id: `weekly_workouts_${week.start}`,
-      name: 'Weekly Warrior',
-      description: 'Complete 4 workouts this week',
-      category: 'weekly',
-      startDate: week.start,
-      endDate: week.end,
-      goalType: 'workout_count',
-      goalValue: 4,
-      reward: { type: 'score_boost', value: 25, label: '+25 Spartan Score' },
-      icon: 'flame',
-    },
-    {
-      id: `weekly_reps_${week.start}`,
-      name: 'Rep Crusher',
-      description: 'Log 200 total reps this week',
-      category: 'weekly',
-      startDate: week.start,
-      endDate: week.end,
-      goalType: 'rep_total',
-      goalValue: 200,
-      reward: { type: 'score_boost', value: 15, label: '+15 Spartan Score' },
-      icon: 'dumbbell',
-    },
-    {
-      id: `weekly_streak_${week.start}`,
-      name: 'Consistency King',
-      description: 'Train 5 days in a row this week',
-      category: 'weekly',
-      startDate: week.start,
-      endDate: week.end,
-      goalType: 'streak_days',
-      goalValue: 5,
-      reward: { type: 'badge', value: 1, label: 'Consistency Badge' },
-      icon: 'lightning',
-    },
-    
-    // Monthly Challenges
-    {
-      id: `monthly_workouts_${month.start}`,
-      name: 'Monthly Grinder',
-      description: 'Complete 16 workouts this month',
-      category: 'monthly',
-      startDate: month.start,
-      endDate: month.end,
-      goalType: 'workout_count',
-      goalValue: 16,
-      reward: { type: 'score_boost', value: 75, label: '+75 Spartan Score' },
-      icon: 'trophy',
-    },
-    {
-      id: `monthly_reps_${month.start}`,
-      name: 'Volume Master',
-      description: 'Log 1,000 total reps this month',
-      category: 'monthly',
-      startDate: month.start,
-      endDate: month.end,
-      goalType: 'rep_total',
-      goalValue: 1000,
-      reward: { type: 'badge', value: 2, label: 'Volume Badge' },
-      icon: 'target',
-    },
-    {
-      id: `monthly_skill_${month.start}`,
-      name: 'Skill Focus',
-      description: 'Complete 8 skill training sessions this month',
-      category: 'monthly',
-      startDate: month.start,
-      endDate: month.end,
-      goalType: 'skill_sessions',
-      goalValue: 8,
-      reward: { type: 'score_boost', value: 50, label: '+50 Spartan Score' },
-      icon: 'star',
-    },
-  ]
+  const challenges: Challenge[] = []
   
-  // Add seasonal challenge if in an active season
-  if (season) {
-    challenges.push({
-      id: `seasonal_${season.id}`,
-      name: `${season.name.split(':')[0]} Champion`,
-      description: `Complete 50 workouts during ${season.name.split(':')[0]}`,
-      category: 'seasonal',
-      startDate: season.startDate,
-      endDate: season.endDate,
-      goalType: 'workout_count',
-      goalValue: 50,
-      reward: { type: 'badge', value: 10, label: `${season.name.split(':')[0]} Medal` },
-      seasonId: season.id,
-      icon: 'crown',
-    })
+  // Weekly challenges
+  const weeklyPeriodKey = `weekly_${week.start}`
+  TIERED_CHALLENGES.filter(c => c.category === 'weekly').forEach(def => {
+    const completedTier = getCurrentTierForChallenge(def.baseId, weeklyPeriodKey)
+    const nextTier = def.tiers.find(t => t.tier > completedTier)
     
-    challenges.push({
-      id: `seasonal_reps_${season.id}`,
-      name: 'Seasonal Volume',
-      description: `Log 5,000 reps during ${season.name.split(':')[0]}`,
-      category: 'seasonal',
-      startDate: season.startDate,
-      endDate: season.endDate,
-      goalType: 'rep_total',
-      goalValue: 5000,
-      reward: { type: 'score_boost', value: 150, label: '+150 Spartan Score' },
-      seasonId: season.id,
-      icon: 'medal',
+    if (nextTier) {
+      challenges.push({
+        id: `${def.baseId}_t${nextTier.tier}_${week.start}`,
+        name: def.name,
+        description: def.descriptionTemplate.replace('{goal}', nextTier.goalValue.toLocaleString()),
+        category: 'weekly',
+        startDate: week.start,
+        endDate: week.end,
+        goalType: def.goalType,
+        goalValue: nextTier.goalValue,
+        reward: nextTier.reward,
+        icon: def.icon,
+        tier: nextTier.tier,
+        maxTier: def.tiers.length,
+        baseId: def.baseId,
+      })
+    }
+  })
+  
+  // Monthly challenges
+  const monthlyPeriodKey = `monthly_${month.start}`
+  TIERED_CHALLENGES.filter(c => c.category === 'monthly').forEach(def => {
+    const completedTier = getCurrentTierForChallenge(def.baseId, monthlyPeriodKey)
+    const nextTier = def.tiers.find(t => t.tier > completedTier)
+    
+    if (nextTier) {
+      challenges.push({
+        id: `${def.baseId}_t${nextTier.tier}_${month.start}`,
+        name: def.name,
+        description: def.descriptionTemplate.replace('{goal}', nextTier.goalValue.toLocaleString()),
+        category: 'monthly',
+        startDate: month.start,
+        endDate: month.end,
+        goalType: def.goalType,
+        goalValue: nextTier.goalValue,
+        reward: nextTier.reward,
+        icon: def.icon,
+        tier: nextTier.tier,
+        maxTier: def.tiers.length,
+        baseId: def.baseId,
+      })
+    }
+  })
+  
+  // Seasonal challenges
+  if (season) {
+    const seasonalPeriodKey = `seasonal_${season.id}`
+    SEASONAL_CHALLENGES.forEach(def => {
+      const completedTier = getCurrentTierForChallenge(def.baseId, seasonalPeriodKey)
+      const nextTier = def.tiers.find(t => t.tier > completedTier)
+      
+      if (nextTier) {
+        challenges.push({
+          id: `${def.baseId}_t${nextTier.tier}_${season.id}`,
+          name: def.name,
+          description: def.descriptionTemplate.replace('{goal}', nextTier.goalValue.toLocaleString()),
+          category: 'seasonal',
+          startDate: season.startDate,
+          endDate: season.endDate,
+          goalType: def.goalType,
+          goalValue: nextTier.goalValue,
+          reward: nextTier.reward,
+          seasonId: season.id,
+          icon: def.icon,
+          tier: nextTier.tier,
+          maxTier: def.tiers.length,
+          baseId: def.baseId,
+        })
+      }
     })
   }
   
   return challenges
+}
+
+/**
+ * Get total number of challenges available (including all tiers)
+ */
+export function getTotalChallengeCount(): number {
+  let count = 0
+  TIERED_CHALLENGES.forEach(c => count += c.tiers.length)
+  SEASONAL_CHALLENGES.forEach(c => count += c.tiers.length)
+  return count
+}
+
+/**
+ * Get period key for a challenge (used for tier tracking)
+ */
+export function getPeriodKeyForChallenge(challenge: Challenge): string {
+  if (challenge.category === 'seasonal' && challenge.seasonId) {
+    return `seasonal_${challenge.seasonId}`
+  }
+  if (challenge.category === 'monthly') {
+    return `monthly_${challenge.startDate}`
+  }
+  return `weekly_${challenge.startDate}`
 }
 
 // Get challenge by ID

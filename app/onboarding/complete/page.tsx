@@ -96,19 +96,21 @@ export default function OnboardingCompletePage() {
   const handleStartTrial = async () => {
     setIsLoading(true)
     try {
+      // Use canonical checkout path - no body params needed
+      // Route uses PRICING.pro.trialDays and env vars for all config
       const response = await fetch('/api/stripe/create-checkout-session', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          priceId: PRICING.pro.monthly.priceId,
-          trialDays: TRIAL.durationDays,
-          successUrl: `${window.location.origin}/dashboard?welcome=true&trial=started`,
-          cancelUrl: `${window.location.origin}/onboarding/complete`,
-        }),
       })
-      const { url } = await response.json()
-      if (url) {
-        window.location.href = url
+      const data = await response.json()
+      
+      if (data.error) {
+        console.error('Checkout error:', data.error)
+        setIsLoading(false)
+        return
+      }
+      
+      if (data.url) {
+        window.location.href = data.url
       }
     } catch (error) {
       console.error('Checkout error:', error)
@@ -295,7 +297,7 @@ export default function OnboardingCompletePage() {
                 <Sparkles className="w-4 h-4 text-amber-400" />
                 <span className="text-[#E6E9EF] font-medium">7-Day Free Trial</span>
               </div>
-              <span className="text-sm text-[#6B7280]">Then ${PRICING.pro.monthly.amount}/mo</span>
+              <span className="text-sm text-[#6B7280]">Then {PRICING.pro.displayWithPeriod}</span>
             </div>
             <p className="text-xs text-[#6B7280]">
               No charge until your trial ends. Cancel anytime.

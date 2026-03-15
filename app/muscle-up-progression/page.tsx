@@ -1,6 +1,9 @@
 import { Metadata } from 'next'
 import Link from 'next/link'
 import { SeoPageLayout } from '@/components/seo/SeoPageLayout'
+
+// Prevent static prerendering to avoid auth issues during build
+export const dynamic = 'force-dynamic'
 import { SeoHero } from '@/components/seo/SeoHero'
 import { ProgressionLadderCard } from '@/components/seo/ProgressionLadderCard'
 import { RelatedFeatureCTA } from '@/components/seo/RelatedFeatureCTA'

@@ -117,6 +117,38 @@ export default function sitemap(): MetadataRoute.Sitemap {
       priority: 0.85,
     },
     
+    // Calculators hub and pages
+    {
+      url: `${baseUrl}/calculators`,
+      lastModified: currentDate,
+      changeFrequency: 'monthly',
+      priority: 0.85,
+    },
+    {
+      url: `${baseUrl}/calculators/pull-up-strength-score`,
+      lastModified: currentDate,
+      changeFrequency: 'monthly',
+      priority: 0.8,
+    },
+    {
+      url: `${baseUrl}/calculators/bodyweight-strength-ratio`,
+      lastModified: currentDate,
+      changeFrequency: 'monthly',
+      priority: 0.8,
+    },
+    {
+      url: `${baseUrl}/calculators/calisthenics-strength-score`,
+      lastModified: currentDate,
+      changeFrequency: 'monthly',
+      priority: 0.8,
+    },
+    {
+      url: `${baseUrl}/calculators/skill-readiness-score`,
+      lastModified: currentDate,
+      changeFrequency: 'monthly',
+      priority: 0.8,
+    },
+    
     // Readiness calculators - interactive SEO pages
     {
       url: `${baseUrl}/front-lever-readiness-calculator`,

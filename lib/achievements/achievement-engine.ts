@@ -280,3 +280,108 @@ export function getRecentAchievements(limit: number = 5): Array<Achievement & { 
 export function hasUnseenAchievements(): boolean {
   return getNotificationQueue().length > 0
 }
+
+// =============================================================================
+// ACHIEVEMENT PROGRESS & SUMMARY (for achievements-panel)
+// =============================================================================
+
+export interface AchievementWithProgress extends Achievement {
+  unlocked: boolean
+  unlockedAt?: string
+  progress: number // 0-100
+}
+
+export interface AchievementSummary {
+  total: number
+  unlocked: number
+  percentage: number
+  recentUnlocks: number
+  byCategory: Record<string, { total: number; unlocked: number }>
+}
+
+/**
+ * Get all achievements with their progress
+ */
+export function getAchievementsWithProgress(): AchievementWithProgress[] {
+  const unlocked = getUnlockedAchievements()
+  const unlockedMap = new Map(unlocked.map(u => [u.achievementId, u]))
+  const metrics = calculateMetrics()
+  
+  return ACHIEVEMENTS.map(achievement => {
+    const status = unlockedMap.get(achievement.id)
+    const isUnlocked = !!status
+    
+    // Calculate progress for non-unlocked achievements
+    let progress = isUnlocked ? 100 : 0
+    if (!isUnlocked) {
+      const { requirement } = achievement
+      switch (requirement.type) {
+        case 'workout_count':
+          progress = Math.min(100, (metrics.workoutCount / requirement.value) * 100)
+          break
+        case 'streak_days':
+          progress = Math.min(100, (metrics.bestStreak / requirement.value) * 100)
+          break
+        case 'total_reps':
+          progress = Math.min(100, (metrics.totalReps / requirement.value) * 100)
+          break
+        case 'strength_milestone':
+          if (requirement.exercise) {
+            const weight = metrics.strengthRecords[requirement.exercise] || 0
+            progress = Math.min(100, (weight / requirement.value) * 100)
+          }
+          break
+        case 'skill_level':
+          if (requirement.skill) {
+            const level = metrics.skillLevels[requirement.skill] || 0
+            progress = Math.min(100, (level / requirement.value) * 100)
+          }
+          break
+      }
+    }
+    
+    return {
+      ...achievement,
+      unlocked: isUnlocked,
+      unlockedAt: status?.unlockedAt,
+      progress: Math.round(progress),
+    }
+  })
+}
+
+/**
+ * Get achievement summary statistics
+ */
+export function getAchievementSummary(): AchievementSummary {
+  const unlocked = getUnlockedAchievements()
+  const counts = getAchievementCounts()
+  
+  // Count recent unlocks (last 7 days)
+  const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000
+  const recentUnlocks = unlocked.filter(u => 
+    new Date(u.unlockedAt).getTime() > weekAgo
+  ).length
+  
+  return {
+    total: counts.total,
+    unlocked: counts.unlocked,
+    percentage: counts.total > 0 ? Math.round((counts.unlocked / counts.total) * 100) : 0,
+    recentUnlocks,
+    byCategory: counts.byCategory,
+  }
+}
+
+// =============================================================================
+// TRAINING EVENT HOOK
+// =============================================================================
+
+export type TrainingEventType = 'workout_complete' | 'strength_record' | 'skill_progress'
+
+/**
+ * Called after training events to evaluate achievements
+ * Use this as the main entry point for achievement evaluation
+ */
+export function onTrainingEvent(eventType: TrainingEventType): Achievement[] {
+  // Evaluate all achievements and return newly unlocked ones
+  return evaluateAchievements()
+}

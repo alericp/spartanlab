@@ -371,15 +371,19 @@ function SubscriptionBillingCard() {
                   You will be charged after your trial ends.
                 </p>
               </div>
-              
-              <div className="text-xs text-[#6B7280]">
-                Logged in as: {getCurrentUserEmail() || 'Owner'}
-              </div>
+            )}
+            <Button 
+              onClick={handleManageBilling}
+              variant="outline" 
+              className="w-full border-[#3A3A3A] text-[#A5A5A5] hover:bg-[#3A3A3A] hover:text-[#F5F5F5]"
+            >
+              Manage Subscription
+            </Button>
+            <div className="text-xs text-[#6B7280]">
+              Logged in as: {getCurrentUserEmail() || 'Owner'}
             </div>
-          ) : hasProAccess() ? (
-            // Pro subscriber display (includes trial users)
-            <SubscriptionBillingCard />
-          ) : (
+          </>
+        ) : (
             // Free user display
             <div className="space-y-4">
               <div className="flex items-center gap-3 p-4 rounded-lg bg-[#1A1A1A] border border-[#3A3A3A]">

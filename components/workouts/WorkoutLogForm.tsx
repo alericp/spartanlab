@@ -24,6 +24,8 @@ import {
   FOCUS_AREA_LABELS,
   saveWorkoutLog,
 } from '@/lib/workout-log-service'
+import { onTrainingEvent } from '@/lib/achievements/achievement-engine'
+import { showAchievementNotifications } from '@/components/achievements/achievement-notification'
 
 interface WorkoutLogFormProps {
   onSave: (log: WorkoutLog) => void
@@ -77,6 +79,12 @@ export function WorkoutLogForm({ onSave, onCancel }: WorkoutLogFormProps) {
         notes: notes.trim() || undefined,
         exercises: exercises.filter(e => e.name.trim()),
       })
+      
+      // Check for newly unlocked achievements
+      const newAchievements = onTrainingEvent()
+      if (newAchievements.length > 0) {
+        showAchievementNotifications(newAchievements)
+      }
       
       onSave(log)
       

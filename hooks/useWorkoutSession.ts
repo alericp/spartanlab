@@ -4,6 +4,8 @@ import { useState, useCallback, useRef, useEffect } from 'react'
 import type { AdaptiveSession, AdaptiveExercise } from '@/lib/adaptive-program-builder'
 import { saveWorkoutLog, type WorkoutExercise, type SessionType, type FocusArea, type ExerciseCategory } from '@/lib/workout-log-service'
 import { recordRPESession } from '@/lib/fatigue-engine'
+import { onTrainingEvent } from '@/lib/achievements/achievement-engine'
+import { showAchievementNotifications } from '@/components/achievements/achievement-notification'
 
 // =============================================================================
 // TYPES
@@ -345,6 +347,12 @@ export function useWorkoutSession(session: AdaptiveSession): UseWorkoutSessionRe
           sessionDate: new Date().toISOString(),
           exercises: rpeExercises,
         })
+      }
+
+      // Check for newly unlocked achievements
+      const newAchievements = onTrainingEvent()
+      if (newAchievements.length > 0) {
+        showAchievementNotifications(newAchievements)
       }
 
       return true

@@ -89,6 +89,7 @@ import { DashboardUpgradeCard } from '@/components/upgrade/AdaptiveProgramUpgrad
 import { FirstRunGuide, SetupReminderBanner } from '@/components/dashboard/FirstRunGuide'
 import { UpdateMetricsCard, MetricsUpdateBanner } from '@/components/dashboard/UpdateMetricsCard'
 import { SafeWidget } from '@/components/shared/WidgetErrorBoundary'
+import { AchievementsSummaryCard } from '@/components/achievements/achievements-panel'
 import { useAuth } from '@clerk/nextjs'
 
 function DashboardContent() {
@@ -644,6 +645,14 @@ function DashboardContent() {
             </div>
           </div>
         )}
+        
+        {/* ============================================================= */}
+        {/* SECTION: ACHIEVEMENTS */}
+        {/* ============================================================= */}
+        
+        <SafeWidget name="AchievementsSummaryCard">
+          <AchievementsSummaryCard />
+        </SafeWidget>
         
         {/* ============================================================= */}
         {/* SECTION: PERFORMANCE OVERVIEW (Compact) */}

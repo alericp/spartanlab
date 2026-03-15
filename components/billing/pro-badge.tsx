@@ -3,7 +3,8 @@
 import { Badge } from '@/components/ui/badge'
 import { Crown, Sparkles } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { useSubscriptionStatus, type UISubscriptionStatus } from '@/lib/billing/subscription-status'
+import { useSubscriptionStatus } from '@/lib/billing/subscription-status'
+import { isSimulationActive } from '@/lib/billing/subscription-simulation'
 
 // =============================================================================
 // PRO BADGE COMPONENT
@@ -109,29 +110,25 @@ interface PlanStatusBadgeProps {
 /**
  * Plan Status Badge - Shows current plan status
  * Free users see nothing, Trial/Pro users see their badge
+ * Owner in simulation mode shows simulated state badge
  */
 export function PlanStatusBadge({ className, size = 'sm' }: PlanStatusBadgeProps) {
   const { status, isOwner } = useSubscriptionStatus()
+  const simActive = isOwner && isSimulationActive()
   
-  // Owner gets a special badge
-  if (isOwner) {
-    const sizeClasses = {
-      xs: 'text-[9px] px-1 py-0',
-      sm: 'text-[10px] px-1.5 py-0.5',
-      md: 'text-xs px-2 py-0.5',
+  // Owner in simulation mode - show simulated state badge (not Owner badge)
+  if (isOwner && simActive) {
+    if (status === 'free') return null
+    return <ProBadge variant="auto" size={size} className={className} />
+  }
+  
+  // Owner without simulation - show Owner badge only if actually Pro
+  if (isOwner && !simActive) {
+    if (status === 'free') return null
+    if (status === 'pro' || status === 'trial') {
+      return <ProBadge variant="auto" size={size} className={className} />
     }
-    
-    return (
-      <Badge 
-        className={cn(
-          'bg-gradient-to-r from-violet-500/20 to-violet-600/15 text-violet-400 border-violet-500/30',
-          sizeClasses[size],
-          className
-        )}
-      >
-        Owner
-      </Badge>
-    )
+    return null
   }
   
   // Free users don't show a badge
@@ -157,12 +154,14 @@ interface SubscriptionStatusIndicatorProps {
 /**
  * Subscription Status Indicator - For settings/billing pages
  * Shows full subscription status with appropriate styling
+ * Owner in simulation shows simulated state
  */
 export function SubscriptionStatusIndicator({ 
   compact = false, 
   className 
 }: SubscriptionStatusIndicatorProps) {
   const { status, planLabel, trialDaysRemaining, isOwner } = useSubscriptionStatus()
+  const simActive = isOwner && isSimulationActive()
   
   if (compact) {
     return (
@@ -178,11 +177,10 @@ export function SubscriptionStatusIndicator({
     )
   }
   
-  // Full indicator with styling based on status
+  // Full indicator with styling based on effective status
   return (
     <div className={cn(
       'flex items-center gap-3 p-3 rounded-lg',
-      isOwner && 'bg-violet-500/10 border border-violet-500/20',
       status === 'pro' && 'bg-amber-500/10 border border-amber-500/20',
       status === 'trial' && 'bg-amber-500/5 border border-amber-500/15',
       status === 'free' && 'bg-[#1A1F26] border border-[#2B313A]',
@@ -191,14 +189,12 @@ export function SubscriptionStatusIndicator({
       {/* Icon */}
       <div className={cn(
         'w-8 h-8 rounded-lg flex items-center justify-center',
-        isOwner && 'bg-violet-500/20',
         status === 'pro' && 'bg-amber-500/20',
         status === 'trial' && 'bg-amber-500/15',
         status === 'free' && 'bg-[#2A2A2A]',
       )}>
         <Crown className={cn(
           'w-4 h-4',
-          isOwner && 'text-violet-400',
           status === 'pro' && 'text-amber-400',
           status === 'trial' && 'text-amber-400/80',
           status === 'free' && 'text-[#6B7280]',
@@ -209,7 +205,7 @@ export function SubscriptionStatusIndicator({
       <div className="flex-1">
         <div className="flex items-center gap-2">
           <span className="text-sm font-medium text-[#E6E9EF]">{planLabel}</span>
-          {status !== 'free' && !isOwner && (
+          {status !== 'free' && (
             <Badge 
               variant="outline" 
               className={cn(
@@ -221,15 +217,28 @@ export function SubscriptionStatusIndicator({
               {status === 'pro' ? 'Active' : 'Trial'}
             </Badge>
           )}
+          {simActive && (
+            <Badge 
+              variant="outline" 
+              className="text-[9px] px-1.5 py-0 text-zinc-400 border-zinc-600"
+            >
+              Sim
+            </Badge>
+          )}
         </div>
         {status === 'trial' && trialDaysRemaining > 0 && (
           <span className="text-xs text-[#6B7280]">
             Trial ends in {trialDaysRemaining} day{trialDaysRemaining !== 1 ? 's' : ''}
           </span>
         )}
-        {status === 'free' && (
+        {status === 'free' && !simActive && (
           <span className="text-xs text-[#6B7280]">
             Upgrade to unlock Pro features
+          </span>
+        )}
+        {status === 'free' && simActive && (
+          <span className="text-xs text-zinc-500">
+            Simulating Free tier
           </span>
         )}
       </div>

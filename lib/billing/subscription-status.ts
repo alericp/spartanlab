@@ -19,6 +19,7 @@ import {
   isOwnerAccount,
   type SubscriptionTier,
 } from '@/lib/feature-access'
+import { getSimulationMode, isSimulationActive } from './subscription-simulation'
 
 // =============================================================================
 // UI STATUS TYPES
@@ -56,19 +57,54 @@ export interface UISubscriptionInfo {
 /**
  * Get the simple UI subscription status
  * Returns: 'free' | 'trial' | 'pro'
+ * 
+ * For owner accounts:
+ * - If simulation is active, returns the simulated state
+ * - If simulation is off, returns the REAL billing state (not auto-Pro)
  */
 export function getUISubscriptionStatus(): UISubscriptionStatus {
-  // Owner bypass - treated as Pro
-  if (isOwnerAccount()) return 'pro'
+  const isOwner = isOwnerAccount()
   
-  // Check if user has Pro access
+  // Owner with simulation active - use simulated state
+  if (isOwner && isSimulationActive()) {
+    const simMode = getSimulationMode()
+    return simMode === 'pro' ? 'pro' : 'free'
+  }
+  
+  // Owner without simulation - use REAL billing state (not auto-Pro)
+  // This ensures owner sees real Free state unless actually paid
+  if (isOwner) {
+    // Get real subscription state (bypassing owner check in hasProAccess)
+    const hasPro = hasProAccessReal()
+    if (!hasPro) return 'free'
+    if (isInTrial()) return 'trial'
+    return 'pro'
+  }
+  
+  // Regular users - standard logic
   const hasPro = hasProAccess()
   if (!hasPro) return 'free'
-  
-  // Has Pro access - check if trialing
   if (isInTrial()) return 'trial'
-  
   return 'pro'
+}
+
+/**
+ * Check real Pro access without owner bypass
+ * Used internally for owner's real billing state
+ */
+function hasProAccessReal(): boolean {
+  // Import getSubscription directly to avoid owner bypass in hasProAccess
+  if (typeof window === 'undefined') return false
+  
+  try {
+    const stored = localStorage.getItem('spartanlab_subscription')
+    if (!stored) return false
+    const subscription = JSON.parse(stored)
+    return subscription.tier === 'pro' && 
+           (subscription.status === 'active' || subscription.status === 'trialing')
+  } catch {
+    return false
+  }
 }
 
 /**
@@ -77,17 +113,28 @@ export function getUISubscriptionStatus(): UISubscriptionStatus {
 export function getUISubscriptionInfo(): UISubscriptionInfo {
   const status = getUISubscriptionStatus()
   const isOwner = isOwnerAccount()
-  const hasPro = hasProAccess()
-  const isTrial = isInTrial()
-  const trialDays = getTrialDaysRemaining()
+  const simActive = isOwner && isSimulationActive()
+  const simMode = simActive ? getSimulationMode() : null
+  const isTrial = !simActive && isInTrial()
+  const trialDays = !simActive ? getTrialDaysRemaining() : 0
+  
+  // Effective premium access based on status
+  const hasPremium = status === 'pro' || status === 'trial'
   
   // Determine plan label
   let planLabel: string
   let badgeText: string | null
   
-  if (isOwner) {
-    planLabel = 'Owner'
-    badgeText = null // Owner doesn't need a badge
+  if (isOwner && simActive) {
+    // Owner in simulation mode
+    planLabel = simMode === 'pro' ? 'Pro (Sim)' : 'Free (Sim)'
+    badgeText = simMode === 'pro' ? 'Pro' : null
+  } else if (isOwner && status === 'pro') {
+    planLabel = 'Pro'
+    badgeText = 'Pro'
+  } else if (isOwner && status === 'free') {
+    planLabel = 'Free'
+    badgeText = null
   } else if (status === 'pro') {
     planLabel = 'Pro'
     badgeText = 'Pro'
@@ -101,7 +148,7 @@ export function getUISubscriptionInfo(): UISubscriptionInfo {
   
   return {
     status,
-    hasPremiumAccess: hasPro || isOwner,
+    hasPremiumAccess: hasPremium,
     isTrial,
     trialDaysRemaining: trialDays,
     isOwner,

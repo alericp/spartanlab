@@ -5,6 +5,7 @@ import { ClerkProvider } from '@clerk/nextjs'
 import { GlobalErrorBoundary } from '@/components/shared/GlobalErrorBoundary'
 import { AchievementNotificationContainer } from '@/components/achievements/achievement-notification'
 import { ChallengeNotificationContainer } from '@/components/challenges/challenge-notification'
+import { SubscriptionSimToggle } from '@/components/billing/subscription-sim-toggle'
 import { AUTH_BUILD_STAMP } from '@/lib/build-stamp'
 import { JsonLdMultiple } from '@/components/seo/JsonLd'
 import { generateOrganizationSchema, generateWebsiteSchema, generateSoftwareSchema } from '@/lib/seo'
@@ -119,6 +120,7 @@ export default function RootLayout({
             {children}
             <AchievementNotificationContainer />
             <ChallengeNotificationContainer />
+            <SubscriptionSimToggle />
           </GlobalErrorBoundary>
         </ClerkProvider>
       </body>

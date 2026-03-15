@@ -8,6 +8,7 @@
  */
 
 import { isOwner, checkOwnerByEmail } from './owner-access'
+import { getSimulationMode, isSimulationActive } from './billing/subscription-simulation'
 
 // Re-export for component usage
 export { isOwner as isOwnerAccount } from './owner-access'
@@ -297,12 +298,21 @@ export function saveSubscription(subscription: SubscriptionInfo): void {
 
 /**
  * Check if user has Pro subscription
- * Owner accounts always have Pro access
+ * Owner accounts respect simulation mode if active
  */
 export function hasProAccess(): boolean {
-  // Owner bypass - always has Pro access
-  if (isOwner()) return true
+  // Owner with simulation - respect simulated state
+  if (isOwner()) {
+    if (isSimulationActive()) {
+      return getSimulationMode() === 'pro'
+    }
+    // Owner without simulation - check real subscription state
+    const subscription = getSubscription()
+    return subscription.tier === 'pro' && 
+           (subscription.status === 'active' || subscription.status === 'trialing')
+  }
   
+  // Regular users - standard check
   const subscription = getSubscription()
   return subscription.tier === 'pro' && 
          (subscription.status === 'active' || subscription.status === 'trialing')
@@ -310,28 +320,31 @@ export function hasProAccess(): boolean {
 
 /**
  * Check if a specific feature is available to the user
- * Owner accounts have access to all features
+ * Owner accounts respect simulation mode
  */
 export function hasFeatureAccess(featureId: FeatureId): boolean {
-  // Owner bypass - all features available
-  if (isOwner()) return true
-  
   const feature = FEATURES[featureId]
   if (!feature) return false
   
   // Free features are always available
   if (feature.tier === 'free') return true
   
-  // Pro features require pro subscription
+  // Pro features require pro subscription (hasProAccess handles owner simulation)
   return hasProAccess()
 }
 
 /**
  * Get current subscription tier
- * Owner accounts are always treated as Pro tier
+ * Owner accounts respect simulation mode
  */
 export function getCurrentTier(): SubscriptionTier {
-  if (isOwner()) return 'pro'
+  if (isOwner()) {
+    if (isSimulationActive()) {
+      return getSimulationMode() === 'pro' ? 'pro' : 'free'
+    }
+    // Without simulation, return real tier
+    return getSubscription().tier
+  }
   return getSubscription().tier
 }
 

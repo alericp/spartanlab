@@ -254,6 +254,11 @@ export function getCurrentSeasonInfo(): SeasonInfo | null {
   return getCurrentSeason()
 }
 
+// Get display name for challenge period
+export function getPeriodDisplayName(period: 'weekly' | 'monthly'): string {
+  return period === 'weekly' ? 'Weekly' : 'Monthly'
+}
+
 // Calculate time remaining for a challenge
 export function getChallengeTimeRemaining(challenge: Challenge): { 
   days: number

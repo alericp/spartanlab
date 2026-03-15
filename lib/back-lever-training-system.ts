@@ -902,6 +902,61 @@ export const BACK_LEVER_PROGRESSION_SYSTEM: SkillProgressionSystem = {
 }
 
 // =============================================================================
+// BACK LEVER SKILL RELATIONSHIPS
+// =============================================================================
+
+export const BACK_LEVER_SKILL_RELATIONSHIPS = {
+  frontLever: {
+    type: 'complementary',
+    relationship: 'Both require straight-arm pulling strength. Back lever emphasizes shoulder extension, front lever emphasizes horizontal pulling. Training both develops complete straight-arm strength.',
+    transferBenefits: [
+      'Shared straight-arm conditioning',
+      'Similar scapular control demands',
+      'Core tension requirements overlap',
+    ],
+    programmingNotes: 'Can train both in same session if fatigue is managed, or alternate focus days.',
+  },
+  ironCross: {
+    type: 'prerequisite',
+    relationship: 'Back lever develops shoulder extension strength that transfers to iron cross preparation. German hang mobility also supports cross training.',
+    transferBenefits: [
+      'Shoulder extension strength',
+      'Straight-arm tolerance under load',
+      'Bicep tendon conditioning',
+    ],
+    programmingNotes: 'Back lever serves as foundation work before iron cross. Complete BL before attempting cross progressions.',
+  },
+  skinTheCat: {
+    type: 'foundation',
+    relationship: 'Skin the cat is the primary mobility prerequisite for back lever. Controlled skin the cats indicate readiness for back lever progressions.',
+    transferBenefits: [
+      'Direct shoulder extension mobility',
+      'Movement pattern familiarization',
+      'Controlled entry/exit practice',
+    ],
+    programmingNotes: 'Master controlled skin the cat before attempting back lever holds.',
+  },
+  planche: {
+    type: 'orthogonal',
+    relationship: 'Minimal direct transfer - different shoulder positions (extension vs flexion/protraction). However, both require straight-arm conditioning.',
+    transferBenefits: [
+      'General straight-arm conditioning',
+      'Core tension patterns',
+    ],
+    programmingNotes: 'Separate by at least one day to avoid straight-arm fatigue accumulation.',
+  },
+  muscleUp: {
+    type: 'indirect',
+    relationship: 'Back lever ring support stability can support muscle-up transition strength. Shoulder extension mobility aids false grip work.',
+    transferBenefits: [
+      'Ring stability',
+      'Shoulder extension for false grip',
+    ],
+    programmingNotes: 'Back lever can be trained on same day as muscle-up work if placed first.',
+  },
+}
+
+// =============================================================================
 // BACK LEVER TRAINING CYCLE
 // =============================================================================
 
@@ -1144,6 +1199,7 @@ export {
   BACK_LEVER_READINESS_GATES,
   BACK_LEVER_WEAK_POINTS,
   BACK_LEVER_PROGRESSION_SYSTEM,
+  BACK_LEVER_SKILL_RELATIONSHIPS,
   BACK_LEVER_SKILL_CYCLE,
   BACK_LEVER_GUIDE_STRUCTURE,
   BACK_LEVER_SEO_PAGES,

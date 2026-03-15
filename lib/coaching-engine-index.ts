@@ -344,6 +344,9 @@ export {
   // Progression System
   BACK_LEVER_PROGRESSION_SYSTEM,
   
+  // Skill Relationships
+  BACK_LEVER_SKILL_RELATIONSHIPS,
+  
   // Training Cycle
   BACK_LEVER_SKILL_CYCLE,
   
@@ -501,8 +504,13 @@ export function generateCoachingRecommendation(context: CoachingContext): Coachi
   }
   
   // Add beginner straight-arm warning
-  if (experienceLevel === 'beginner' && skillGoals.some(s => ['planche', 'front_lever'].includes(s))) {
+  if (experienceLevel === 'beginner' && skillGoals.some(s => ['planche', 'front_lever', 'back_lever'].includes(s))) {
     safetyWarnings.push('Straight-arm skills require tendon conditioning. Build foundational strength before static holds.')
+  }
+  
+  // Add back lever specific warning
+  if (skillGoals.includes('back_lever')) {
+    safetyWarnings.push('Back lever requires shoulder extension mobility. Ensure comfortable german hang before progressing.')
   }
   
   // Add weak point warnings

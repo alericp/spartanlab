@@ -890,6 +890,7 @@ export const GOAL_CATEGORY_DESCRIPTIONS: Record<GoalCategory, string> = {
 
 export const SKILL_GOAL_LABELS: Record<SkillGoal, string> = {
   'front_lever': 'Front Lever',
+  'back_lever': 'Back Lever',
   'planche': 'Planche',
   'muscle_up': 'Muscle-Up',
   'handstand_pushup': 'Handstand Push-Up',

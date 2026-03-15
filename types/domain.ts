@@ -37,7 +37,7 @@ export type TrainingExperience = 'new' | 'some' | 'intermediate' | 'advanced'
 
 // Goal categories for onboarding flow
 export type GoalCategory = 'skill_mastery' | 'strength' | 'muscle_physique' | 'flexibility' | 'mobility' | 'endurance'
-export type SkillGoal = 'front_lever' | 'planche' | 'muscle_up' | 'handstand_pushup' | 'handstand' | 'l_sit' | 'v_sit' | 'i_sit'
+export type SkillGoal = 'front_lever' | 'back_lever' | 'planche' | 'muscle_up' | 'handstand_pushup' | 'handstand' | 'l_sit' | 'v_sit' | 'i_sit'
 export type FlexibilityGoal = 'pancake' | 'toe_touch' | 'front_splits' | 'side_splits'
 export type StrengthGoal = 'general_strength' | 'weighted_pull' | 'weighted_dip' | 'muscle_building' | 'work_capacity'
 

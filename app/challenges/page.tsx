@@ -41,14 +41,11 @@ function ChallengesContent() {
   
   if (!mounted) {
     return (
-      <>
-        <Navigation />
-        <PageContainer>
-          <div className="flex items-center justify-center min-h-[400px]">
-            <div className="w-8 h-8 border-2 border-[#C1121F] border-t-transparent rounded-full animate-spin" />
-          </div>
-        </PageContainer>
-      </>
+      <PageContainer>
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="w-8 h-8 border-2 border-[#C1121F] border-t-transparent rounded-full animate-spin" />
+        </div>
+      </PageContainer>
     )
   }
   
@@ -60,9 +57,7 @@ function ChallengesContent() {
   const completedChallenges = filteredChallenges.filter(c => c.progress.completed)
   
   return (
-    <>
-      <Navigation />
-      <PageContainer>
+    <PageContainer>
         <div className="space-y-6">
           {/* Header */}
           <div className="flex items-center justify-between">
@@ -234,9 +229,8 @@ function ChallengesContent() {
         </div>
         
         {/* Challenge completion notification */}
-        <ChallengeNotification />
-      </PageContainer>
-    </>
+<ChallengeNotification />
+  </PageContainer>
   )
 }
 

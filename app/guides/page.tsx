@@ -3,7 +3,6 @@ import Link from 'next/link'
 import { ArrowRight, ArrowLeft, Target, Dumbbell, Trophy, Zap, GraduationCap, BookOpen, Brain, Sparkles, Flame, Shield } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { BackNav } from '@/components/navigation/BackNav'
 import { SITE_CONFIG } from '@/lib/seo'
 
 export const metadata: Metadata = {
@@ -460,13 +459,6 @@ export default function GuidesPage() {
 
   return (
     <div className="min-h-screen bg-[#0F1115]">
-      {/* Back Navigation */}
-      <nav className="px-4 py-3 border-b border-[#2B313A]/50 sticky top-0 z-40 bg-[#0F1115]/95 backdrop-blur-sm">
-        <div className="max-w-5xl mx-auto">
-          <BackNav to="dashboard" />
-        </div>
-      </nav>
-      
       {/* Header */}
       <div className="px-4 py-16 sm:py-20 border-b border-[#2B313A]">
         <div className="max-w-5xl mx-auto text-center">

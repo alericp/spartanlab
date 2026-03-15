@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Trophy, Flame, Target, Dumbbell, Star, ChevronRight, Users } from 'lucide-react'
+import { Trophy, Flame, Target, Dumbbell, Star, ChevronRight, Users, Sparkles, Clock } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { 
   type LeaderboardCategory, 
@@ -10,6 +10,38 @@ import {
 } from '@/lib/leaderboards/leaderboard-types'
 import { getLeaderboard } from '@/lib/leaderboards/leaderboard-service'
 import { LeaderboardTable } from './LeaderboardTable'
+
+// Early Access explainer component
+function EarlyAccessState({ userPosition }: { userPosition?: { score: number; scoreLabel: string } | null }) {
+  return (
+    <div className="py-6 px-4 text-center">
+      <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-br from-amber-500/20 to-amber-600/10 border border-amber-500/30 mb-4">
+        <Sparkles className="w-6 h-6 text-amber-400" />
+      </div>
+      <h3 className="text-lg font-semibold text-[#E6E9EF] mb-2">You're an Early Adopter</h3>
+      <p className="text-sm text-[#A4ACB8] max-w-sm mx-auto mb-4">
+        Community rankings will appear as more athletes join SpartanLab. For now, track your personal progress below.
+      </p>
+      
+      {userPosition && (
+        <div className="inline-flex items-center gap-3 px-4 py-3 rounded-xl bg-[#1A1F26] border border-[#2B313A]">
+          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center text-sm font-bold text-white">
+            1
+          </div>
+          <div className="text-left">
+            <p className="text-xs text-[#6B7280]">Your Score</p>
+            <p className="text-sm font-semibold text-[#E6E9EF]">{userPosition.scoreLabel}</p>
+          </div>
+        </div>
+      )}
+      
+      <div className="mt-6 flex items-center justify-center gap-2 text-xs text-[#6B7280]">
+        <Clock className="w-3.5 h-3.5" />
+        <span>Rankings update as the community grows</span>
+      </div>
+    </div>
+  )
+}
 
 // Icon mapping
 const CATEGORY_ICONS: Record<LeaderboardCategory, typeof Trophy> = {
@@ -100,7 +132,7 @@ export function LeaderboardTabs({
           </div>
         )}
         
-        {/* Table */}
+        {/* Table or Early Access State */}
         <div className="p-3">
           {loading ? (
             <div className="space-y-2">
@@ -108,6 +140,9 @@ export function LeaderboardTabs({
                 <div key={i} className="h-14 bg-[#1A1F26] rounded-lg animate-pulse" />
               ))}
             </div>
+          ) : leaderboardData?.isEarlyAccess ? (
+            // Show early access state when not enough real community data
+            <EarlyAccessState userPosition={leaderboardData.userPosition} />
           ) : leaderboardData ? (
             <LeaderboardTable
               entries={leaderboardData.entries}
@@ -148,6 +183,9 @@ export function LeaderboardPreviewCard({ className }: LeaderboardPreviewCardProp
     )
   }
   
+  // Early access state for preview card
+  const isEarlyAccess = data.isEarlyAccess
+  
   // Show top 3 + user position
   const topThree = data.entries.slice(0, 3)
   
@@ -173,9 +211,25 @@ export function LeaderboardPreviewCard({ className }: LeaderboardPreviewCardProp
         </a>
       </div>
       
-      {/* Top 3 mini display */}
+      {/* Top 3 mini display or early access state */}
       <div className="p-3 space-y-2">
-        {topThree.map((entry, index) => (
+        {isEarlyAccess ? (
+          // Compact early access state for preview card
+          <div className="py-4 text-center">
+            <div className="inline-flex items-center justify-center w-10 h-10 rounded-lg bg-gradient-to-br from-amber-500/20 to-amber-600/10 border border-amber-500/30 mb-3">
+              <Sparkles className="w-5 h-5 text-amber-400" />
+            </div>
+            <p className="text-xs text-[#A4ACB8] mb-3">You're an early adopter! Rankings unlock as the community grows.</p>
+            {data.userPosition && (
+              <div className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-[#1A1F26]">
+                <div className="w-6 h-6 rounded-full bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center text-xs font-bold text-white">
+                  1
+                </div>
+                <span className="text-sm font-medium text-[#E6E9EF]">{data.userPosition.score} pts</span>
+              </div>
+            )}
+          </div>
+        ) : topThree.map((entry, index) => (
           <div
             key={entry.userId}
             className={cn(
@@ -212,8 +266,8 @@ export function LeaderboardPreviewCard({ className }: LeaderboardPreviewCardProp
           </div>
         ))}
         
-        {/* User position if not in top 3 */}
-        {data.userPosition && data.userPosition.rank > 3 && (
+        {/* User position if not in top 3 (only when not early access) */}
+        {!isEarlyAccess && data.userPosition && data.userPosition.rank > 3 && (
           <>
             <div className="flex items-center gap-2 py-1">
               <div className="flex-1 border-t border-dashed border-[#2B313A]" />

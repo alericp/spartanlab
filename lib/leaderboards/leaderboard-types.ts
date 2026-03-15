@@ -37,6 +37,8 @@ export interface LeaderboardData {
   userPosition?: LeaderboardEntry | null
   totalParticipants: number
   lastUpdated: string
+  // Flag indicating this is early-access mode (not enough real users for rankings)
+  isEarlyAccess?: boolean
 }
 
 // Leaderboard category metadata

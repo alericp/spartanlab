@@ -3,6 +3,7 @@ import type { Metadata, Viewport } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
 import { ClerkProvider } from '@clerk/nextjs'
 import { GlobalErrorBoundary } from '@/components/shared/GlobalErrorBoundary'
+import { OwnerSimulationToggle } from '@/components/billing/OwnerSimulationToggle'
 import { AUTH_BUILD_STAMP } from '@/lib/build-stamp'
 import { JsonLdMultiple } from '@/components/seo/JsonLd'
 import { generateOrganizationSchema, generateWebsiteSchema, generateSoftwareSchema } from '@/lib/seo'
@@ -115,6 +116,8 @@ export default function RootLayout({
         <ClerkProvider>
           <GlobalErrorBoundary>
             {children}
+            {/* Owner-only simulation toggle for testing Free/Pro states */}
+            <OwnerSimulationToggle />
           </GlobalErrorBoundary>
         </ClerkProvider>
       </body>

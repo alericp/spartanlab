@@ -4,12 +4,31 @@ import { SeoPageLayout } from '@/components/seo/SeoPageLayout'
 import { SeoHero } from '@/components/seo/SeoHero'
 import { ProgressionLadderCard } from '@/components/seo/ProgressionLadderCard'
 import { RelatedFeatureCTA } from '@/components/seo/RelatedFeatureCTA'
+import { JsonLdMultiple } from '@/components/seo/JsonLd'
+import { generateHowToSchema, generateBreadcrumbSchema, generateArticleSchema, SITE_CONFIG } from '@/lib/seo'
 import { Target, Dumbbell, ArrowRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
 export const metadata: Metadata = {
   title: 'Front Lever Progression Guide | SpartanLab',
   description: 'Master the front lever with this complete progression guide. From tuck to full front lever, understand each stage and what determines readiness.',
+  keywords: ['front lever', 'front lever progression', 'front lever tutorial', 'calisthenics', 'bodyweight training', 'pull exercises'],
+  alternates: {
+    canonical: `${SITE_CONFIG.url}/front-lever-progression`,
+  },
+  openGraph: {
+    title: 'Front Lever Progression Guide | SpartanLab',
+    description: 'Master the front lever with this complete progression guide. From tuck to full front lever, understand each stage and what determines readiness.',
+    url: `${SITE_CONFIG.url}/front-lever-progression`,
+    siteName: SITE_CONFIG.name,
+    type: 'article',
+    publishedTime: '2024-01-01T00:00:00Z',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Front Lever Progression Guide | SpartanLab',
+    description: 'Master the front lever with this complete progression guide. From tuck to full front lever.',
+  },
 }
 
 const frontLeverSteps = [
@@ -53,9 +72,38 @@ const keyFactors = [
   },
 ]
 
+// JSON-LD structured data for rich search results
+const jsonLdSchemas = [
+  generateHowToSchema({
+    name: 'Front Lever Progression Guide',
+    description: 'Learn the front lever with this complete progression guide. Progress systematically from tuck to full front lever.',
+    url: `${SITE_CONFIG.url}/front-lever-progression`,
+    steps: [
+      { name: 'Tuck Front Lever', description: 'Knees pulled tight to chest, body inverted and horizontal. Foundation for building lat and core tension.' },
+      { name: 'Advanced Tuck Front Lever', description: 'Hips extend slightly, back flattens. Significant increase in leverage and lat engagement required.' },
+      { name: 'One Leg Front Lever', description: 'One leg extends fully while the other remains tucked. Asymmetric loading builds strength for straddle.' },
+      { name: 'Straddle Front Lever', description: 'Both legs extended in straddle position. Requires elite pulling strength and core tension.' },
+      { name: 'Full Front Lever', description: 'Legs together, body completely horizontal. Peak pulling strength achievement in calisthenics.' },
+    ],
+    totalTime: 'P6M',
+  }),
+  generateBreadcrumbSchema([
+    { name: 'Home', url: '/' },
+    { name: 'Skills', url: '/skills' },
+    { name: 'Front Lever Progression', url: '/front-lever-progression' },
+  ]),
+  generateArticleSchema({
+    title: 'Front Lever Progression Guide',
+    description: 'Master the front lever with this complete progression guide.',
+    url: `${SITE_CONFIG.url}/front-lever-progression`,
+    publishedDate: '2024-01-01T00:00:00Z',
+  }),
+]
+
 export default function FrontLeverProgressionPage() {
   return (
     <SeoPageLayout>
+      <JsonLdMultiple schemas={jsonLdSchemas} />
       <SeoHero
         title="Front Lever Progression Guide"
         subtitle="Build the pulling strength and body tension needed to master this iconic calisthenics skill. Progress systematically from tuck to full front lever."

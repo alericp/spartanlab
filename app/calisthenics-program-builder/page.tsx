@@ -3,12 +3,30 @@ import Link from 'next/link'
 import { SeoPageLayout } from '@/components/seo/SeoPageLayout'
 import { SeoHero } from '@/components/seo/SeoHero'
 import { RelatedFeatureCTA } from '@/components/seo/RelatedFeatureCTA'
+import { JsonLd } from '@/components/seo/JsonLd'
+import { generateBreadcrumbSchema, SITE_CONFIG } from '@/lib/seo'
 import { Calendar, Target, Dumbbell, Activity, ArrowRight, CheckCircle2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
 export const metadata: Metadata = {
   title: 'Calisthenics Program Builder | SpartanLab',
   description: 'Build structured calisthenics training programs. Balance skill work, weighted strength, and recovery for consistent progress.',
+  keywords: ['calisthenics program', 'workout builder', 'training program', 'bodyweight workout', 'workout generator', 'calisthenics routine'],
+  alternates: {
+    canonical: `${SITE_CONFIG.url}/calisthenics-program-builder`,
+  },
+  openGraph: {
+    title: 'Calisthenics Program Builder | SpartanLab',
+    description: 'Build structured calisthenics training programs with skill work, weighted strength, and smart recovery planning.',
+    url: `${SITE_CONFIG.url}/calisthenics-program-builder`,
+    siteName: SITE_CONFIG.name,
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Calisthenics Program Builder | SpartanLab',
+    description: 'Build structured calisthenics training programs for consistent progress.',
+  },
 }
 
 const programComponents = [

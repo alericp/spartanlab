@@ -4,6 +4,8 @@ import { Geist, Geist_Mono } from 'next/font/google'
 import { ClerkProvider } from '@clerk/nextjs'
 import { GlobalErrorBoundary } from '@/components/shared/GlobalErrorBoundary'
 import { AUTH_BUILD_STAMP } from '@/lib/build-stamp'
+import { JsonLdMultiple } from '@/components/seo/JsonLd'
+import { generateOrganizationSchema, generateWebsiteSchema, generateSoftwareSchema } from '@/lib/seo'
 import './globals.css'
 
 // Hard proof marker for deployment verification
@@ -23,10 +25,51 @@ export const viewport: Viewport = {
 }
 
 export const metadata: Metadata = {
-  title: 'SpartanLab - Calisthenics Training Decision Engine',
+  title: {
+    default: 'SpartanLab - Calisthenics Training Decision Engine',
+    template: '%s | SpartanLab',
+  },
   description: 'Stop guessing your calisthenics training. SpartanLab analyzes your progress, finds your limiters, and tells you exactly what to train next. Like having a coach analyzing your training 24/7.',
+  keywords: ['calisthenics', 'bodyweight training', 'workout planner', 'fitness app', 'training program', 'front lever', 'planche', 'muscle up'],
+  authors: [{ name: 'SpartanLab' }],
+  creator: 'SpartanLab',
+  publisher: 'SpartanLab',
   generator: 'v0.app',
   manifest: '/manifest.json',
+  metadataBase: new URL('https://spartanlab.app'),
+  openGraph: {
+    type: 'website',
+    locale: 'en_US',
+    siteName: 'SpartanLab',
+    title: 'SpartanLab - Calisthenics Training Decision Engine',
+    description: 'Stop guessing your calisthenics training. SpartanLab analyzes your progress, finds your limiters, and tells you exactly what to train next.',
+    images: [
+      {
+        url: '/og-default.png',
+        width: 1200,
+        height: 630,
+        alt: 'SpartanLab - Calisthenics Training Intelligence',
+      },
+    ],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'SpartanLab - Calisthenics Training Decision Engine',
+    description: 'Stop guessing your calisthenics training. Get personalized coaching intelligence.',
+    creator: '@spartanlabapp',
+    images: ['/og-default.png'],
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      'max-video-preview': -1,
+      'max-image-preview': 'large',
+      'max-snippet': -1,
+    },
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: 'black-translucent',
@@ -56,8 +99,18 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode
 }>) {
+  // Global structured data for SEO
+  const globalSchemas = [
+    generateOrganizationSchema(),
+    generateWebsiteSchema(),
+    generateSoftwareSchema(),
+  ]
+
   return (
     <html lang="en">
+      <head>
+        <JsonLdMultiple schemas={globalSchemas} />
+      </head>
       <body className="font-sans antialiased bg-[#0F1115] text-[#E6E9EF]">
         <ClerkProvider>
           <GlobalErrorBoundary>

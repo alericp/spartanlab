@@ -4,15 +4,27 @@ import Image from 'next/image'
 import { ArrowLeft, ArrowRight, Zap, CheckCircle2, AlertTriangle, Dumbbell, Clock, Calendar, Target } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { SITE_CONFIG } from '@/lib/seo'
 
 export const metadata: Metadata = {
   title: 'Muscle-Up Training Guide | SpartanLab',
   description: 'Learn how to train the muscle-up with step-by-step progressions, exercises, and calisthenics strength benchmarks. Complete guide from pull-ups to your first muscle-up.',
   keywords: ['how to do a muscle-up', 'muscle-up training', 'muscle-up progression', 'muscle-up tutorial', 'learn muscle-up', 'calisthenics muscle-up'],
+  alternates: {
+    canonical: `${SITE_CONFIG.url}/guides/muscle-up-training`,
+  },
   openGraph: {
     title: 'Muscle-Up Training Guide | SpartanLab',
     description: 'Learn how to train the muscle-up with step-by-step progressions, exercises, and calisthenics strength benchmarks.',
+    url: `${SITE_CONFIG.url}/guides/muscle-up-training`,
+    siteName: SITE_CONFIG.name,
     type: 'article',
+    publishedTime: '2024-01-01T00:00:00Z',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Muscle-Up Training Guide | SpartanLab',
+    description: 'Learn how to train the muscle-up with step-by-step progressions.',
   },
 }
 

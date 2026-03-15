@@ -1,10 +1,27 @@
 import { Metadata } from 'next'
 import Link from 'next/link'
 import { ArrowLeft, Clock, Target, AlertTriangle, CheckCircle, Dumbbell, Brain } from 'lucide-react'
+import { SITE_CONFIG } from '@/lib/seo'
 
 export const metadata: Metadata = {
   title: 'Handstand Training Guide | SpartanLab',
   description: 'Complete guide to freestanding handstand training. Balance practice, strength progressions, and training frequency recommendations.',
+  keywords: ['handstand training', 'freestanding handstand', 'handstand tutorial', 'balance training', 'calisthenics', 'handstand progression'],
+  alternates: {
+    canonical: `${SITE_CONFIG.url}/guides/handstand-training`,
+  },
+  openGraph: {
+    title: 'Handstand Training Guide | SpartanLab',
+    description: 'Complete guide to freestanding handstand training. Balance practice, strength progressions, and training frequency recommendations.',
+    url: `${SITE_CONFIG.url}/guides/handstand-training`,
+    siteName: SITE_CONFIG.name,
+    type: 'article',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Handstand Training Guide | SpartanLab',
+    description: 'Master the freestanding handstand with proper balance practice.',
+  },
 }
 
 export default function HandstandTrainingGuidePage() {

@@ -4,14 +4,26 @@ import { ArrowRight, ArrowLeft, Target, Dumbbell, Trophy, Zap, GraduationCap, Bo
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { BackNav } from '@/components/navigation/BackNav'
+import { SITE_CONFIG } from '@/lib/seo'
 
 export const metadata: Metadata = {
   title: 'Calisthenics Training Guides | SpartanLab',
   description: 'Explore 25+ SpartanLab calisthenics guides covering front lever, planche, muscle-up, HSPU progressions, strength requirements, and complete training programs from beginner to advanced.',
   keywords: ['calisthenics training guides', 'front lever guide', 'planche progression guide', 'muscle-up training guide', 'calisthenics strength standards', 'calisthenics program', 'HSPU progression', 'calisthenics strength requirements'],
+  alternates: {
+    canonical: `${SITE_CONFIG.url}/guides`,
+  },
   openGraph: {
     title: 'Calisthenics Training Guides | SpartanLab',
     description: 'Explore 25+ SpartanLab calisthenics guides covering front lever, planche, muscle-up, HSPU progressions, strength requirements, and complete training programs.',
+    url: `${SITE_CONFIG.url}/guides`,
+    siteName: SITE_CONFIG.name,
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Calisthenics Training Guides | SpartanLab',
+    description: 'Explore 25+ calisthenics training guides for front lever, planche, muscle-up, and more.',
   },
 }
 

@@ -4,12 +4,30 @@ import { SeoPageLayout } from '@/components/seo/SeoPageLayout'
 import { SeoHero } from '@/components/seo/SeoHero'
 import { ProgressionLadderCard } from '@/components/seo/ProgressionLadderCard'
 import { RelatedFeatureCTA } from '@/components/seo/RelatedFeatureCTA'
+import { JsonLdMultiple } from '@/components/seo/JsonLd'
+import { generateHowToSchema, generateBreadcrumbSchema, generateArticleSchema, SITE_CONFIG } from '@/lib/seo'
 import { Target, AlertTriangle, ArrowRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
 export const metadata: Metadata = {
   title: 'Planche Progression Guide | SpartanLab',
   description: 'Learn the complete planche progression ladder from tuck to full planche. Understand each stage, common mistakes, and how to track your progress.',
+  keywords: ['planche', 'planche progression', 'planche tutorial', 'calisthenics', 'bodyweight training', 'push exercises'],
+  alternates: {
+    canonical: `${SITE_CONFIG.url}/planche-progression`,
+  },
+  openGraph: {
+    title: 'Planche Progression Guide | SpartanLab',
+    description: 'Learn the complete planche progression ladder from tuck to full planche. Understand each stage and common mistakes.',
+    url: `${SITE_CONFIG.url}/planche-progression`,
+    siteName: SITE_CONFIG.name,
+    type: 'article',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Planche Progression Guide | SpartanLab',
+    description: 'Learn the complete planche progression from tuck to full planche.',
+  },
 }
 
 const plancheSteps = [
@@ -54,9 +72,31 @@ const commonMistakes = [
   },
 ]
 
+// JSON-LD structured data
+const jsonLdSchemas = [
+  generateHowToSchema({
+    name: 'Planche Progression Guide',
+    description: 'Learn the complete planche progression ladder from tuck to full planche.',
+    url: `${SITE_CONFIG.url}/planche-progression`,
+    steps: [
+      { name: 'Tuck Planche', description: 'Knees tucked to chest, back parallel to ground. Build foundational shoulder strength and balance.' },
+      { name: 'Advanced Tuck Planche', description: 'Back becomes more horizontal, hips open slightly. Requires significantly more shoulder protraction strength.' },
+      { name: 'Straddle Planche', description: 'Legs extend outward in a straddle position. Major leap in difficulty requiring elite shoulder and core strength.' },
+      { name: 'Full Planche', description: 'Legs fully extended together, body completely horizontal. Peak calisthenics achievement.' },
+    ],
+    totalTime: 'P2Y',
+  }),
+  generateBreadcrumbSchema([
+    { name: 'Home', url: '/' },
+    { name: 'Skills', url: '/skills' },
+    { name: 'Planche Progression', url: '/planche-progression' },
+  ]),
+]
+
 export default function PlancheProgressionPage() {
   return (
     <SeoPageLayout>
+      <JsonLdMultiple schemas={jsonLdSchemas} />
       <SeoHero
         title="The Complete Planche Progression Ladder"
         subtitle="Master one of calisthenics' most impressive skills. Understand each stage, what determines readiness, and how to track your progress systematically."

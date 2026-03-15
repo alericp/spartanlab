@@ -6,15 +6,26 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { BackNav } from '@/components/navigation/BackNav'
+import { SITE_CONFIG } from '@/lib/seo'
 
 export const metadata: Metadata = {
   title: 'Calisthenics Training Tools | SpartanLab',
   description: 'Use SpartanLab calisthenics training tools to analyze strength, test skill readiness, and generate training programs. Front lever calculator, planche calculator, muscle-up readiness test.',
-  keywords: 'calisthenics training tools, front lever calculator, planche calculator, muscle-up readiness test, weighted pull-up calculator',
+  keywords: ['calisthenics training tools', 'front lever calculator', 'planche calculator', 'muscle-up readiness test', 'weighted pull-up calculator', 'fitness calculator'],
+  alternates: {
+    canonical: `${SITE_CONFIG.url}/tools`,
+  },
   openGraph: {
     title: 'Calisthenics Training Tools | SpartanLab',
     description: 'Use SpartanLab calisthenics training tools to analyze strength, test skill readiness, and generate training programs.',
+    url: `${SITE_CONFIG.url}/tools`,
+    siteName: SITE_CONFIG.name,
     type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Calisthenics Training Tools | SpartanLab',
+    description: 'Free calisthenics calculators: front lever, planche, muscle-up readiness, and more.',
   },
 }
 

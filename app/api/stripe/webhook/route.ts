@@ -8,9 +8,42 @@ import {
   findUserByEmail,
   type StripeSubscriptionData,
 } from '@/lib/subscription-sync'
+import {
+  sendProUpgradeEmail,
+  sendPaymentFailedEmail,
+  sendSubscriptionCancelledEmail,
+} from '@/lib/email-service'
 
 // Stripe webhook signature verification
 const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET
+
+// =============================================================================
+// IDEMPOTENCY TRACKING
+// =============================================================================
+
+// In-memory tracking for processed email events (production: use Redis/DB)
+// Key format: `${eventType}:${resourceId}` - prevents duplicate emails for same event
+const processedEmailEvents = new Set<string>()
+
+/**
+ * Check if email was already sent for this event (idempotency)
+ * Returns true if already processed, false if new
+ */
+function wasEmailAlreadySent(eventType: string, resourceId: string): boolean {
+  const key = `${eventType}:${resourceId}`
+  if (processedEmailEvents.has(key)) {
+    console.log(`[Stripe Webhook] Skipping duplicate email for ${key}`)
+    return true
+  }
+  processedEmailEvents.add(key)
+  // Clean up old entries after 1 hour to prevent memory bloat
+  setTimeout(() => processedEmailEvents.delete(key), 60 * 60 * 1000)
+  return false
+}
+
+// =============================================================================
+// STRIPE EVENT TYPES
+// =============================================================================
 
 interface StripeEvent {
   id: string
@@ -31,12 +64,12 @@ interface StripeEvent {
 
 /**
  * Handle checkout.session.completed event
- * Called when user completes payment
+ * Called when user completes payment - this is the trustworthy moment to send upgrade email
  */
 async function handleCheckoutSessionCompleted(event: StripeEvent): Promise<void> {
   const session = event.data.object
   const customerId = session.customer as string
-  const email = session.email as string
+  const email = session.customer_email as string || session.email as string
 
   console.log(`[Stripe Webhook] Checkout completed for customer: ${customerId}, email: ${email}`)
 
@@ -63,20 +96,33 @@ async function handleCheckoutSessionCompleted(event: StripeEvent): Promise<void>
     const user = await findUserByEmail(email)
     if (!user) {
       console.warn(`[Stripe Webhook] User not found for email: ${email}`)
-      return
+      // Still send email even if user not in DB yet (they just signed up)
     }
 
-    // Sync subscription to user
-    const subscriptionData: StripeSubscriptionData = {
-      customerId,
-      subscriptionId: subscription.id,
-      email,
-      status: (subscription.status as any) || 'active',
-      currentPeriodEnd: new Date(subscription.current_period_end * 1000).toISOString(),
+    // Sync subscription to user if found
+    if (user) {
+      const subscriptionData: StripeSubscriptionData = {
+        customerId,
+        subscriptionId: subscription.id,
+        email,
+        status: (subscription.status as any) || 'active',
+        currentPeriodEnd: new Date(subscription.current_period_end * 1000).toISOString(),
+      }
+
+      await syncStripeSubscriptionToUser(user.id, subscriptionData)
+      console.log(`[Stripe Webhook] Successfully updated user ${user.id} subscription`)
     }
 
-    await syncStripeSubscriptionToUser(user.id, subscriptionData)
-    console.log(`[Stripe Webhook] Successfully updated user ${user.id} subscription`)
+    // Send Pro upgrade confirmation email (idempotent)
+    // Use subscription ID as resource ID to prevent duplicate emails
+    if (!wasEmailAlreadySent('pro_upgrade', subscription.id)) {
+      const customerName = session.customer_details?.name || user?.username
+      await sendProUpgradeEmail({
+        email,
+        name: customerName || undefined,
+      })
+      console.log(`[Stripe Webhook] Pro upgrade email sent to ${email}`)
+    }
   } catch (error) {
     console.error('[Stripe Webhook] Error handling checkout.session.completed:', error)
   }
@@ -105,7 +151,7 @@ async function handleSubscriptionUpdated(event: StripeEvent): Promise<void> {
 
 /**
  * Handle customer.subscription.deleted event
- * Called when subscription is canceled
+ * Called when subscription is canceled - send cancellation email
  */
 async function handleSubscriptionDeleted(event: StripeEvent): Promise<void> {
   const subscription = event.data.object
@@ -117,13 +163,36 @@ async function handleSubscriptionDeleted(event: StripeEvent): Promise<void> {
   try {
     // Find user by Stripe customer ID and downgrade
     const user = await findUserByStripeCustomerId(customerId)
-    if (!user) {
-      console.warn(`[Stripe Webhook] User not found for Stripe customer: ${customerId}`)
-      return
+    
+    // Also try to get customer email from Stripe for email sending
+    let customerEmail: string | null = null
+    let customerName: string | undefined
+    try {
+      const customer = await stripe.customers.retrieve(customerId) as { email?: string; name?: string; deleted?: boolean }
+      if (!customer.deleted) {
+        customerEmail = customer.email || null
+        customerName = customer.name || undefined
+      }
+    } catch (e) {
+      console.warn(`[Stripe Webhook] Could not retrieve customer ${customerId}:`, e)
     }
 
-    await downgradeUserSubscription(user.id)
-    console.log(`[Stripe Webhook] Successfully downgraded user ${user.id} to free plan`)
+    // Downgrade user if found
+    if (user) {
+      await downgradeUserSubscription(user.id)
+      console.log(`[Stripe Webhook] Successfully downgraded user ${user.id} to free plan`)
+      customerEmail = customerEmail || user.email
+      customerName = customerName || user.username
+    }
+
+    // Send cancellation email (idempotent)
+    if (customerEmail && !wasEmailAlreadySent('subscription_cancelled', subscriptionId)) {
+      await sendSubscriptionCancelledEmail({
+        email: customerEmail,
+        name: customerName,
+      })
+      console.log(`[Stripe Webhook] Cancellation email sent to ${customerEmail}`)
+    }
   } catch (error) {
     console.error('[Stripe Webhook] Error handling subscription.deleted:', error)
   }
@@ -153,16 +222,44 @@ async function handleInvoicePaymentSucceeded(event: StripeEvent): Promise<void> 
 
 /**
  * Handle invoice.payment_failed event
- * Called when invoice payment fails
+ * Called when invoice payment fails - send payment failed email
  */
 async function handleInvoicePaymentFailed(event: StripeEvent): Promise<void> {
   const invoice = event.data.object
   const customerId = invoice.customer as string
+  const invoiceId = invoice.id as string
 
   console.log(`[Stripe Webhook] Invoice payment failed for customer: ${customerId}`)
 
-  // In production: mark subscription as past_due or update status
-  console.log(`[Stripe Webhook] Would update customer ${customerId} payment status to failed`)
+  try {
+    // Get customer email from Stripe
+    let customerEmail: string | null = invoice.customer_email as string || null
+    let customerName: string | undefined
+
+    // If no email in invoice, fetch from customer
+    if (!customerEmail) {
+      try {
+        const customer = await stripe.customers.retrieve(customerId) as { email?: string; name?: string; deleted?: boolean }
+        if (!customer.deleted) {
+          customerEmail = customer.email || null
+          customerName = customer.name || undefined
+        }
+      } catch (e) {
+        console.warn(`[Stripe Webhook] Could not retrieve customer ${customerId}:`, e)
+      }
+    }
+
+    // Send payment failed email (idempotent - use invoice ID to prevent duplicates)
+    if (customerEmail && !wasEmailAlreadySent('payment_failed', invoiceId)) {
+      await sendPaymentFailedEmail({
+        email: customerEmail,
+        name: customerName,
+      })
+      console.log(`[Stripe Webhook] Payment failed email sent to ${customerEmail}`)
+    }
+  } catch (error) {
+    console.error('[Stripe Webhook] Error handling invoice.payment_failed:', error)
+  }
 }
 
 /**

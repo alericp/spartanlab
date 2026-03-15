@@ -1,390 +1,343 @@
-/**
- * SpartanLab Challenge Engine
- * 
- * Tracks user progress toward active challenges,
- * detects completions, and triggers reward events.
- */
+// Challenge Engine
+// Evaluates challenge progress and detects completions
 
 import {
+  type Challenge,
+  type ChallengeProgress,
+  type ChallengeReward,
   getActiveChallenges,
   getChallengeById,
-  getChallengeStatus,
-  type ChallengeDefinition,
-  type UserChallengeProgress,
-  type ChallengeGoalType,
 } from './challenge-definitions'
+import { getWorkoutLogs } from '../workout-log-service'
+import { getSkillSessions } from '../skill-session-service'
+import { calculateTrainingStreak } from '../progress-streak-engine'
 
 // =============================================================================
 // STORAGE
 // =============================================================================
 
-const STORAGE_KEY = 'spartanlab_challenge_progress'
-const COMPLETED_KEY = 'spartanlab_completed_challenges'
+const CHALLENGE_PROGRESS_KEY = 'spartanlab_challenge_progress'
+const CHALLENGE_NOTIFICATIONS_KEY = 'spartanlab_challenge_notifications'
+const CHALLENGE_REWARDS_KEY = 'spartanlab_challenge_rewards'
 
-/**
- * Get all challenge progress from storage
- */
-export function getChallengeProgress(): UserChallengeProgress[] {
-  if (typeof window === 'undefined') return []
+function isBrowser(): boolean {
+  return typeof window !== 'undefined'
+}
+
+export function getChallengeProgress(): ChallengeProgress[] {
+  if (!isBrowser()) return []
   
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY)
-    if (!stored) return []
-    return JSON.parse(stored) as UserChallengeProgress[]
-  } catch {
-    return []
+  const stored = localStorage.getItem(CHALLENGE_PROGRESS_KEY)
+  if (stored) {
+    try {
+      return JSON.parse(stored)
+    } catch {
+      return []
+    }
   }
+  return []
 }
 
-/**
- * Save challenge progress
- */
-function saveChallengeProgress(progress: UserChallengeProgress[]): void {
-  if (typeof window === 'undefined') return
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(progress))
+function saveChallengeProgress(progress: ChallengeProgress[]): void {
+  if (!isBrowser()) return
+  localStorage.setItem(CHALLENGE_PROGRESS_KEY, JSON.stringify(progress))
 }
 
-/**
- * Get completed challenge IDs
- */
-export function getCompletedChallengeIds(): string[] {
-  if (typeof window === 'undefined') return []
+export function getCompletedRewards(): ChallengeReward[] {
+  if (!isBrowser()) return []
   
-  try {
-    const stored = localStorage.getItem(COMPLETED_KEY)
-    if (!stored) return []
-    return JSON.parse(stored) as string[]
-  } catch {
-    return []
+  const stored = localStorage.getItem(CHALLENGE_REWARDS_KEY)
+  if (stored) {
+    try {
+      return JSON.parse(stored)
+    } catch {
+      return []
+    }
   }
+  return []
 }
 
-/**
- * Mark challenge as completed
- */
-function markChallengeCompleted(challengeId: string): void {
-  if (typeof window === 'undefined') return
+function saveCompletedRewards(rewards: ChallengeReward[]): void {
+  if (!isBrowser()) return
+  localStorage.setItem(CHALLENGE_REWARDS_KEY, JSON.stringify(rewards))
+}
+
+// Notification queue for completed challenges
+export function getChallengeNotificationQueue(): string[] {
+  if (!isBrowser()) return []
   
-  const completed = getCompletedChallengeIds()
-  if (!completed.includes(challengeId)) {
-    completed.push(challengeId)
-    localStorage.setItem(COMPLETED_KEY, JSON.stringify(completed))
+  const stored = localStorage.getItem(CHALLENGE_NOTIFICATIONS_KEY)
+  if (stored) {
+    try {
+      return JSON.parse(stored)
+    } catch {
+      return []
+    }
   }
+  return []
 }
 
-/**
- * Check if a challenge is already completed
- */
-export function isChallengeCompleted(challengeId: string): boolean {
-  return getCompletedChallengeIds().includes(challengeId)
+function saveChallengeNotificationQueue(queue: string[]): void {
+  if (!isBrowser()) return
+  localStorage.setItem(CHALLENGE_NOTIFICATIONS_KEY, JSON.stringify(queue))
+}
+
+export function popNextChallengeNotification(): Challenge | null {
+  const queue = getChallengeNotificationQueue()
+  if (queue.length === 0) return null
+  
+  const challengeId = queue.shift()
+  saveChallengeNotificationQueue(queue)
+  
+  if (challengeId) {
+    return getChallengeById(challengeId) || null
+  }
+  return null
 }
 
 // =============================================================================
-// METRIC GATHERING
+// METRICS CALCULATION
 // =============================================================================
 
 interface ChallengeMetrics {
-  workoutCountThisWeek: number
-  workoutCountThisMonth: number
-  repsThisWeek: number
-  repsThisMonth: number
-  skillSessionsThisWeek: number
+  workoutsInPeriod: Record<string, number> // key: "startDate_endDate", value: count
+  repsInPeriod: Record<string, number>
   currentStreak: number
+  skillSessionsInPeriod: Record<string, number>
+  trainingMinutesInPeriod: Record<string, number>
 }
 
-/**
- * Gather current metrics for challenge evaluation
- */
-function gatherChallengeMetrics(): ChallengeMetrics {
-  if (typeof window === 'undefined') {
-    return getDefaultMetrics()
+function getPeriodKey(startDate: string, endDate: string): string {
+  return `${startDate}_${endDate}`
+}
+
+function isDateInPeriod(date: string, startDate: string, endDate: string): boolean {
+  const d = date.split('T')[0]
+  return d >= startDate && d <= endDate
+}
+
+function calculateMetrics(): ChallengeMetrics {
+  const workouts = getWorkoutLogs()
+  const skillSessions = getSkillSessions()
+  const streakData = calculateTrainingStreak()
+  
+  const metrics: ChallengeMetrics = {
+    workoutsInPeriod: {},
+    repsInPeriod: {},
+    currentStreak: streakData.currentStreak,
+    skillSessionsInPeriod: {},
+    trainingMinutesInPeriod: {},
   }
   
-  try {
-    // Get workout logs
-    const workoutsStr = localStorage.getItem('spartanlab_workout_logs')
-    const workouts = workoutsStr ? JSON.parse(workoutsStr) : []
-    
-    // Get skill sessions
-    const skillSessionsStr = localStorage.getItem('spartanlab_skill_sessions')
-    const skillSessions = skillSessionsStr ? JSON.parse(skillSessionsStr) : []
-    
-    // Get streak data
-    const progressStr = localStorage.getItem('spartanlab_progress')
-    const progress = progressStr ? JSON.parse(progressStr) : null
-    
-    // Calculate week boundaries
-    const now = new Date()
-    const startOfWeek = new Date(now)
-    startOfWeek.setDate(now.getDate() - now.getDay())
-    startOfWeek.setHours(0, 0, 0, 0)
-    
-    // Calculate month boundaries
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
-    
-    // Filter workouts for this week/month
-    const workoutsThisWeek = workouts.filter((w: any) => {
-      const date = new Date(w.sessionDate || w.createdAt)
-      return date >= startOfWeek
+  // Get all active challenges to determine which periods to track
+  const challenges = getActiveChallenges()
+  const periods = new Set<string>()
+  
+  challenges.forEach(c => {
+    periods.add(getPeriodKey(c.startDate, c.endDate))
+  })
+  
+  // Initialize counters for each period
+  periods.forEach(period => {
+    metrics.workoutsInPeriod[period] = 0
+    metrics.repsInPeriod[period] = 0
+    metrics.skillSessionsInPeriod[period] = 0
+    metrics.trainingMinutesInPeriod[period] = 0
+  })
+  
+  // Count workouts and reps per period
+  workouts.forEach(workout => {
+    periods.forEach(period => {
+      const [start, end] = period.split('_')
+      if (isDateInPeriod(workout.sessionDate || workout.createdAt, start, end)) {
+        metrics.workoutsInPeriod[period]++
+        metrics.trainingMinutesInPeriod[period] += workout.durationMinutes || 0
+        
+        // Count reps
+        workout.exercises.forEach(ex => {
+          if (ex.completed && ex.reps) {
+            metrics.repsInPeriod[period] += (ex.sets || 1) * (ex.reps || 0)
+          }
+        })
+      }
     })
-    
-    const workoutsThisMonth = workouts.filter((w: any) => {
-      const date = new Date(w.sessionDate || w.createdAt)
-      return date >= startOfMonth
+  })
+  
+  // Count skill sessions per period
+  skillSessions.forEach(session => {
+    periods.forEach(period => {
+      const [start, end] = period.split('_')
+      if (isDateInPeriod(session.sessionDate, start, end)) {
+        metrics.skillSessionsInPeriod[period]++
+      }
     })
-    
-    // Calculate reps
-    const calculateReps = (workoutList: any[]): number => {
-      return workoutList.reduce((total, workout) => {
-        if (!workout.exercises || !Array.isArray(workout.exercises)) return total
-        return total + workout.exercises.reduce((sum: number, ex: any) => {
-          const sets = ex.sets || 1
-          const reps = ex.reps || 0
-          return sum + (sets * reps)
-        }, 0)
-      }, 0)
-    }
-    
-    // Filter skill sessions for this week
-    const skillSessionsThisWeek = skillSessions.filter((s: any) => {
-      const date = new Date(s.sessionDate || s.createdAt)
-      return date >= startOfWeek
-    })
-    
-    return {
-      workoutCountThisWeek: workoutsThisWeek.length,
-      workoutCountThisMonth: workoutsThisMonth.length,
-      repsThisWeek: calculateReps(workoutsThisWeek),
-      repsThisMonth: calculateReps(workoutsThisMonth),
-      skillSessionsThisWeek: skillSessionsThisWeek.length,
-      currentStreak: progress?.currentStreak || 0,
-    }
-  } catch (e) {
-    console.error('[Challenges] Error gathering metrics:', e)
-    return getDefaultMetrics()
-  }
-}
-
-function getDefaultMetrics(): ChallengeMetrics {
-  return {
-    workoutCountThisWeek: 0,
-    workoutCountThisMonth: 0,
-    repsThisWeek: 0,
-    repsThisMonth: 0,
-    skillSessionsThisWeek: 0,
-    currentStreak: 0,
-  }
+  })
+  
+  return metrics
 }
 
 // =============================================================================
-// PROGRESS EVALUATION
+// CHALLENGE EVALUATION
 // =============================================================================
 
-/**
- * Get current value for a challenge goal type
- */
-function getCurrentValueForGoal(
-  goalType: ChallengeGoalType,
-  period: 'weekly' | 'monthly' | 'seasonal',
-  metrics: ChallengeMetrics
-): number {
-  switch (goalType) {
+export function evaluateChallengeProgress(challenge: Challenge): number {
+  const metrics = calculateMetrics()
+  const periodKey = getPeriodKey(challenge.startDate, challenge.endDate)
+  
+  switch (challenge.goalType) {
     case 'workout_count':
-      return period === 'weekly' ? metrics.workoutCountThisWeek : metrics.workoutCountThisMonth
-    
+      return metrics.workoutsInPeriod[periodKey] || 0
     case 'rep_total':
-      return period === 'weekly' ? metrics.repsThisWeek : metrics.repsThisMonth
-    
-    case 'skill_sessions':
-      return metrics.skillSessionsThisWeek
-    
+      return metrics.repsInPeriod[periodKey] || 0
     case 'streak_days':
       return metrics.currentStreak
-    
-    case 'exercise_volume':
-      // For exercise-specific volume, would need target exercise
-      return period === 'weekly' ? metrics.repsThisWeek : metrics.repsThisMonth
-    
+    case 'skill_sessions':
+      return metrics.skillSessionsInPeriod[periodKey] || 0
+    case 'training_minutes':
+      return metrics.trainingMinutesInPeriod[periodKey] || 0
+    case 'exercise_count':
+      // For exercise count, sum all exercises across workouts
+      const workouts = getWorkoutLogs()
+      let exerciseCount = 0
+      workouts.forEach(workout => {
+        const [start, end] = periodKey.split('_')
+        if (isDateInPeriod(workout.sessionDate || workout.createdAt, start, end)) {
+          exerciseCount += workout.exercises.filter(e => e.completed).length
+        }
+      })
+      return exerciseCount
     default:
       return 0
   }
 }
 
-// =============================================================================
-// ENGINE FUNCTIONS
-// =============================================================================
-
-export interface ChallengeWithProgress extends ChallengeDefinition {
-  currentValue: number
-  progressPercent: number
-  isCompleted: boolean
-  completedAt?: string
-  timeRemaining: {
-    days: number
-    hours: number
-    minutes: number
-    expired: boolean
-  }
-}
-
-/**
- * Get all active challenges with progress
- */
-export function getActiveChallengesWithProgress(): ChallengeWithProgress[] {
+// Evaluate all challenges and update progress
+export function evaluateAllChallenges(): {
+  progress: ChallengeProgress[]
+  newCompletions: Challenge[]
+} {
   const challenges = getActiveChallenges()
-  const metrics = gatherChallengeMetrics()
-  const completedIds = getCompletedChallengeIds()
-  const progress = getChallengeProgress()
+  const existingProgress = getChallengeProgress()
+  const existingCompletions = new Set(
+    existingProgress.filter(p => p.completed).map(p => p.challengeId)
+  )
   
-  return challenges
-    .filter(c => getChallengeStatus(c) === 'active')
-    .map(challenge => {
-      const isCompleted = completedIds.includes(challenge.id)
-      const currentValue = getCurrentValueForGoal(challenge.goalType, challenge.period, metrics)
-      const progressPercent = Math.min(100, Math.round((currentValue / challenge.goalValue) * 100))
-      
-      // Get time remaining
-      const now = new Date().getTime()
-      const end = new Date(challenge.endDate).getTime()
-      const diff = Math.max(0, end - now)
-      
-      const days = Math.floor(diff / (1000 * 60 * 60 * 24))
-      const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60))
-      const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60))
-      
-      // Check saved progress for completion date
-      const savedProgress = progress.find(p => p.challengeId === challenge.id)
-      
-      return {
-        ...challenge,
-        currentValue,
-        progressPercent,
-        isCompleted,
-        completedAt: savedProgress?.completedAt,
-        timeRemaining: {
-          days,
-          hours,
-          minutes,
-          expired: diff <= 0,
-        },
+  const newCompletions: Challenge[] = []
+  const updatedProgress: ChallengeProgress[] = []
+  
+  challenges.forEach(challenge => {
+    const currentValue = evaluateChallengeProgress(challenge)
+    const isComplete = currentValue >= challenge.goalValue
+    const wasComplete = existingCompletions.has(challenge.id)
+    
+    // Find existing progress or create new
+    const existing = existingProgress.find(p => p.challengeId === challenge.id)
+    
+    const progress: ChallengeProgress = {
+      challengeId: challenge.id,
+      currentValue,
+      completed: isComplete,
+      completedAt: isComplete && !wasComplete 
+        ? new Date().toISOString() 
+        : existing?.completedAt,
+      startedAt: existing?.startedAt || new Date().toISOString(),
+    }
+    
+    updatedProgress.push(progress)
+    
+    // Track new completions
+    if (isComplete && !wasComplete) {
+      newCompletions.push(challenge)
+    }
+  })
+  
+  // Save updated progress
+  saveChallengeProgress(updatedProgress)
+  
+  // Queue notifications for new completions
+  if (newCompletions.length > 0) {
+    const queue = getChallengeNotificationQueue()
+    newCompletions.forEach(c => {
+      if (!queue.includes(c.id)) {
+        queue.push(c.id)
       }
     })
-}
-
-/**
- * Check for newly completed challenges
- */
-export function checkChallengeCompletions(): ChallengeDefinition[] {
-  const challenges = getActiveChallenges()
-  const metrics = gatherChallengeMetrics()
-  const completedIds = getCompletedChallengeIds()
-  const newlyCompleted: ChallengeDefinition[] = []
-  
-  for (const challenge of challenges) {
-    // Skip if already completed or not active
-    if (completedIds.includes(challenge.id)) continue
-    if (getChallengeStatus(challenge) !== 'active') continue
+    saveChallengeNotificationQueue(queue)
     
-    const currentValue = getCurrentValueForGoal(challenge.goalType, challenge.period, metrics)
-    
-    if (currentValue >= challenge.goalValue) {
-      // Challenge completed!
-      markChallengeCompleted(challenge.id)
-      newlyCompleted.push(challenge)
-      
-      // Update progress with completion timestamp
-      updateChallengeProgress(challenge.id, currentValue, challenge.goalValue, true)
-    }
+    // Save rewards
+    const rewards = getCompletedRewards()
+    newCompletions.forEach(c => {
+      rewards.push(c.reward)
+    })
+    saveCompletedRewards(rewards)
   }
   
-  return newlyCompleted
+  return { progress: updatedProgress, newCompletions }
 }
 
-/**
- * Update progress for a specific challenge
- */
-function updateChallengeProgress(
-  challengeId: string,
-  currentValue: number,
-  goalValue: number,
-  completed: boolean
-): void {
+// Get progress for a specific challenge
+export function getChallengeProgressById(challengeId: string): ChallengeProgress | null {
   const progress = getChallengeProgress()
-  const now = new Date().toISOString()
-  
-  const existingIndex = progress.findIndex(p => p.challengeId === challengeId)
-  
-  const newProgress: UserChallengeProgress = {
-    challengeId,
-    userId: 'local', // For localStorage, no actual user ID needed
-    currentValue,
-    goalValue,
-    startedAt: existingIndex >= 0 ? progress[existingIndex].startedAt : now,
-    completedAt: completed ? now : undefined,
-    lastUpdated: now,
-  }
-  
-  if (existingIndex >= 0) {
-    progress[existingIndex] = newProgress
-  } else {
-    progress.push(newProgress)
-  }
-  
-  saveChallengeProgress(progress)
+  return progress.find(p => p.challengeId === challengeId) || null
 }
 
-/**
- * Get challenge summary statistics
- */
-export interface ChallengeSummary {
-  activeChallenges: number
-  completedThisWeek: number
-  completedThisMonth: number
-  totalPointsEarned: number
-  currentSeason?: string
-}
-
-export function getChallengeSummary(): ChallengeSummary {
+// Get all active challenges with their current progress
+export function getActiveChallengesWithProgress(): Array<{
+  challenge: Challenge
+  progress: ChallengeProgress
+  percentComplete: number
+}> {
+  // First evaluate to update progress
+  evaluateAllChallenges()
+  
   const challenges = getActiveChallenges()
-  const completedIds = getCompletedChallengeIds()
-  const activeChallenges = challenges.filter(c => getChallengeStatus(c) === 'active')
+  const progress = getChallengeProgress()
   
-  // Count completions by period
-  const completedThisWeek = activeChallenges
-    .filter(c => c.period === 'weekly' && completedIds.includes(c.id))
-    .length
-  
-  const completedThisMonth = activeChallenges
-    .filter(c => (c.period === 'weekly' || c.period === 'monthly') && completedIds.includes(c.id))
-    .length
-  
-  // Calculate total points from completed challenges
-  const totalPointsEarned = challenges
-    .filter(c => completedIds.includes(c.id))
-    .reduce((sum, c) => sum + c.reward.pointBonus, 0)
-  
-  return {
-    activeChallenges: activeChallenges.length,
-    completedThisWeek,
-    completedThisMonth,
-    totalPointsEarned,
-    currentSeason: 'Season 1',
-  }
+  return challenges.map(challenge => {
+    const prog = progress.find(p => p.challengeId === challenge.id) || {
+      challengeId: challenge.id,
+      currentValue: 0,
+      completed: false,
+      startedAt: new Date().toISOString(),
+    }
+    
+    const percentComplete = Math.min(100, Math.round((prog.currentValue / challenge.goalValue) * 100))
+    
+    return {
+      challenge,
+      progress: prog,
+      percentComplete,
+    }
+  })
 }
 
-/**
- * Trigger challenge check on training events
- * Call this after workout completion, session logging, etc.
- */
-export function onTrainingEventForChallenges(): ChallengeDefinition[] {
-  return checkChallengeCompletions()
+// Check if any challenges are close to expiring (within 24 hours)
+export function getExpiringChallenges(): Challenge[] {
+  const challenges = getActiveChallenges()
+  const now = new Date()
+  const oneDayFromNow = new Date(now.getTime() + 24 * 60 * 60 * 1000)
+  
+  return challenges.filter(c => {
+    const endDate = new Date(c.endDate + 'T23:59:59')
+    return endDate <= oneDayFromNow && endDate > now
+  })
 }
 
-/**
- * Get challenges by period with progress
- */
-export function getChallengesByPeriodWithProgress(
-  period: 'weekly' | 'monthly' | 'seasonal'
-): ChallengeWithProgress[] {
-  return getActiveChallengesWithProgress().filter(c => c.period === period)
+// Get total score boost from completed challenges
+export function getTotalScoreBoost(): number {
+  const rewards = getCompletedRewards()
+  return rewards
+    .filter(r => r.type === 'score_boost')
+    .reduce((sum, r) => sum + r.value, 0)
+}
+
+// Get count of completed challenges
+export function getCompletedChallengeCount(): number {
+  const progress = getChallengeProgress()
+  return progress.filter(p => p.completed).length
+}
+
+// Check for unseen challenge completions
+export function hasUnseenChallengeCompletions(): boolean {
+  return getChallengeNotificationQueue().length > 0
 }

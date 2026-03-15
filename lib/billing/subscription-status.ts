@@ -1,243 +1,248 @@
 /**
  * Subscription Status Helper
  * 
- * Single source of truth for UI subscription status decisions.
- * Normalizes Stripe/database subscription states into simple app-facing statuses:
- * - free: No active subscription
- * - trial: Active trial (Pro features with trial indicator)
- * - pro: Active paid subscription
+ * Normalizes subscription state into simple UI-friendly statuses.
+ * Single source of truth for subscription display logic.
  * 
- * This file does NOT duplicate subscription logic - it provides a clean adapter
- * for UI components to make consistent status decisions.
+ * Includes owner-only simulation mode for testing Free/Pro states.
  */
 
-import {
-  hasProAccess,
-  isInTrial,
+import { 
+  hasProAccess, 
+  getCurrentTier, 
+  isInTrial, 
   getTrialDaysRemaining,
-  getCurrentTier,
   isOwnerAccount,
-  type SubscriptionTier,
 } from '@/lib/feature-access'
-import { getSimulationMode, isSimulationActive } from './subscription-simulation'
-import { TRIAL } from './pricing'
 
 // =============================================================================
-// UI STATUS TYPES
+// SIMULATION MODE (Owner Only)
 // =============================================================================
+
+export type SimulationMode = 'off' | 'free' | 'pro'
+
+const SIMULATION_KEY = 'spartanlab_owner_sim'
 
 /**
- * Simple UI-facing subscription status
+ * Get current simulation mode (owner only)
  */
+export function getSimulationMode(): SimulationMode {
+  if (typeof window === 'undefined') return 'off'
+  if (!isOwnerAccount()) return 'off'
+  
+  const stored = sessionStorage.getItem(SIMULATION_KEY)
+  if (stored === 'free' || stored === 'pro') return stored
+  return 'off'
+}
+
+/**
+ * Set simulation mode (owner only)
+ */
+export function setSimulationMode(mode: SimulationMode): void {
+  if (typeof window === 'undefined') return
+  if (!isOwnerAccount()) return
+  
+  if (mode === 'off') {
+    sessionStorage.removeItem(SIMULATION_KEY)
+  } else {
+    sessionStorage.setItem(SIMULATION_KEY, mode)
+  }
+  
+  // Dispatch event for components to update
+  window.dispatchEvent(new CustomEvent('simulation-mode-changed', { detail: mode }))
+}
+
+/**
+ * Check if simulation is active
+ */
+export function isSimulationActive(): boolean {
+  return getSimulationMode() !== 'off'
+}
+
+// =============================================================================
+// UI-FRIENDLY STATUS TYPES
+// =============================================================================
+
 export type UISubscriptionStatus = 'free' | 'trial' | 'pro'
 
-/**
- * Full subscription info for UI rendering
- */
-export interface UISubscriptionInfo {
-  /** Simple status for conditional rendering */
+export interface SubscriptionDisplayInfo {
   status: UISubscriptionStatus
-  /** Whether user has Pro access (trial counts as Pro) */
-  hasPremiumAccess: boolean
-  /** Whether this is a trial period */
-  isTrial: boolean
-  /** Days remaining in trial (0 if not trialing) */
+  label: string
+  shortLabel: string
+  isPaid: boolean
+  isTrialing: boolean
   trialDaysRemaining: number
-  /** Whether this is the platform owner */
+  showUpgradeCTA: boolean
+  showTrialCTA: boolean
   isOwner: boolean
-  /** Display label for the current plan */
-  planLabel: string
-  /** Short badge text */
-  badgeText: string | null
 }
 
 // =============================================================================
-// STATUS FUNCTIONS
+// STATUS HELPERS
 // =============================================================================
 
 /**
- * Get the simple UI subscription status
- * Returns: 'free' | 'trial' | 'pro'
- * 
- * For owner accounts:
- * - If simulation is active, returns the simulated state
- * - If simulation is off, returns the REAL billing state (not auto-Pro)
+ * Get the current UI subscription status
+ * Maps internal subscription state to simple free/trial/pro
+ * Respects owner simulation mode when active
  */
 export function getUISubscriptionStatus(): UISubscriptionStatus {
-  const isOwner = isOwnerAccount()
+  if (typeof window === 'undefined') return 'free'
   
-  // Owner with simulation active - use simulated state
-  if (isOwner && isSimulationActive()) {
-    const simMode = getSimulationMode()
-    return simMode === 'pro' ? 'pro' : 'free'
+  // Check for owner simulation mode first
+  const simMode = getSimulationMode()
+  if (simMode !== 'off') {
+    return simMode // 'free' or 'pro'
   }
   
-  // Owner without simulation - use REAL billing state (not auto-Pro)
-  // This ensures owner sees real Free state unless actually paid
-  if (isOwner) {
-    // Get real subscription state (bypassing owner check in hasProAccess)
-    const hasPro = hasProAccessReal()
-    if (!hasPro) return 'free'
-    if (isInTrial()) return 'trial'
-    return 'pro'
-  }
+  // Owner without simulation is always pro
+  if (isOwnerAccount()) return 'pro'
   
-  // Regular users - standard logic
-  const hasPro = hasProAccess()
-  if (!hasPro) return 'free'
+  // Check if actively trialing
   if (isInTrial()) return 'trial'
-  return 'pro'
+  
+  // Check if pro (active subscription)
+  if (hasProAccess()) return 'pro'
+  
+  return 'free'
 }
 
 /**
- * Check real Pro access without owner bypass
- * Used internally for owner's real billing state
+ * Get the real subscription status (ignores simulation)
+ * Used for billing/account screens to show actual state
  */
-function hasProAccessReal(): boolean {
-  // Import getSubscription directly to avoid owner bypass in hasProAccess
-  if (typeof window === 'undefined') return false
+export function getRealSubscriptionStatus(): UISubscriptionStatus {
+  if (typeof window === 'undefined') return 'free'
   
-  try {
-    const stored = localStorage.getItem('spartanlab_subscription')
-    if (!stored) return false
-    const subscription = JSON.parse(stored)
-    return subscription.tier === 'pro' && 
-           (subscription.status === 'active' || subscription.status === 'trialing')
-  } catch {
-    return false
-  }
-}
-
-/**
- * Get full subscription info for UI components
- */
-export function getUISubscriptionInfo(): UISubscriptionInfo {
-  const status = getUISubscriptionStatus()
-  const isOwner = isOwnerAccount()
-  const simActive = isOwner && isSimulationActive()
-  const simMode = simActive ? getSimulationMode() : null
-  const isTrial = !simActive && isInTrial()
-  const trialDays = !simActive ? getTrialDaysRemaining() : 0
-  
-  // Effective premium access based on status
-  const hasPremium = status === 'pro' || status === 'trial'
-  
-  // Determine plan label
-  let planLabel: string
-  let badgeText: string | null
-  
-  if (isOwner && simActive) {
-    // Owner in simulation mode
-    planLabel = simMode === 'pro' ? 'Pro (Sim)' : 'Free (Sim)'
-    badgeText = simMode === 'pro' ? 'Pro' : null
-  } else if (isOwner && status === 'pro') {
-    planLabel = 'Pro'
-    badgeText = 'Pro'
-  } else if (isOwner && status === 'free') {
-    planLabel = 'Free'
-    badgeText = null
-  } else if (status === 'pro') {
-    planLabel = 'Pro'
-    badgeText = 'Pro'
-  } else if (status === 'trial') {
-    planLabel = 'Pro Trial'
-    badgeText = trialDays > 0 ? `Trial (${trialDays}d)` : 'Trial'
-  } else {
-    planLabel = 'Free'
-    badgeText = null
+  // Owner's real state is Free unless they actually paid
+  if (isOwnerAccount()) {
+    // Check if owner has a real subscription
+    if (isInTrial()) return 'trial'
+    if (hasProAccess()) return 'pro'
+    return 'free'
   }
   
-  return {
-    status,
-    hasPremiumAccess: hasPremium,
-    isTrial,
-    trialDaysRemaining: trialDays,
-    isOwner,
-    planLabel,
-    badgeText,
-  }
+  if (isInTrial()) return 'trial'
+  if (hasProAccess()) return 'pro'
+  return 'free'
 }
 
 /**
- * Check if user should see upgrade prompts
- * Returns false for Pro, Trial, and Owner accounts
+ * Get comprehensive subscription display info for UI components
+ * Respects owner simulation mode
  */
-export function shouldShowUpgradePrompt(): boolean {
-  const status = getUISubscriptionStatus()
-  return status === 'free'
-}
-
-/**
- * Check if user should see trial start prompts
- * Returns false if already trialing, Pro, or Owner
- */
-export function shouldShowTrialPrompt(): boolean {
-  const status = getUISubscriptionStatus()
-  return status === 'free'
-}
-
-/**
- * Check if user should see the Pro badge
- * Returns true for Pro and Trial users
- */
-export function shouldShowProBadge(): boolean {
-  const status = getUISubscriptionStatus()
-  return status === 'pro' || status === 'trial'
-}
-
-/**
- * Get the appropriate CTA text based on subscription status
- */
-export function getUpgradeCtaText(status?: UISubscriptionStatus): string {
-  const currentStatus = status ?? getUISubscriptionStatus()
-  
-  switch (currentStatus) {
-    case 'trial':
-      return 'Upgrade to Pro'
-    case 'pro':
-      return 'Manage Billing'
-    default:
-      return TRIAL.ctaText
-  }
-}
-
-/**
- * Get the appropriate billing action based on subscription status
- */
-export function getBillingAction(status?: UISubscriptionStatus): 'upgrade' | 'manage' | 'trial' {
-  const currentStatus = status ?? getUISubscriptionStatus()
-  
-  switch (currentStatus) {
-    case 'pro':
-      return 'manage'
-    case 'trial':
-      return 'upgrade' // Trialing users might want to upgrade early
-    default:
-      return 'trial'
-  }
-}
-
-// =============================================================================
-// REACT HOOK
-// =============================================================================
-
-/**
- * React hook for subscription status
- * Use this in components for reactive updates
- */
-export function useSubscriptionStatus(): UISubscriptionInfo {
-  // For client-side, we read directly since feature-access uses localStorage
+export function getSubscriptionDisplayInfo(): SubscriptionDisplayInfo {
   if (typeof window === 'undefined') {
     return {
       status: 'free',
-      hasPremiumAccess: false,
-      isTrial: false,
+      label: 'Free',
+      shortLabel: 'Free',
+      isPaid: false,
+      isTrialing: false,
       trialDaysRemaining: 0,
+      showUpgradeCTA: true,
+      showTrialCTA: true,
       isOwner: false,
-      planLabel: 'Free',
-      badgeText: null,
     }
   }
   
-  return getUISubscriptionInfo()
+  const isOwner = isOwnerAccount()
+  const simMode = getSimulationMode()
+  const trialing = isInTrial()
+  const hasPro = hasProAccess()
+  const trialDays = getTrialDaysRemaining()
+  
+  // Owner simulation mode takes priority
+  if (isOwner && simMode !== 'off') {
+    if (simMode === 'free') {
+      return {
+        status: 'free',
+        label: 'Free',
+        shortLabel: 'Free',
+        isPaid: false,
+        isTrialing: false,
+        trialDaysRemaining: 0,
+        showUpgradeCTA: true,
+        showTrialCTA: true,
+        isOwner: true,
+      }
+    }
+    // simMode === 'pro'
+    return {
+      status: 'pro',
+      label: 'Pro',
+      shortLabel: 'Pro',
+      isPaid: true,
+      isTrialing: false,
+      trialDaysRemaining: 0,
+      showUpgradeCTA: false,
+      showTrialCTA: false,
+      isOwner: true,
+    }
+  }
+  
+  // Owner without simulation always shows as Pro
+  if (isOwner) {
+    return {
+      status: 'pro',
+      label: 'Pro',
+      shortLabel: 'Pro',
+      isPaid: true,
+      isTrialing: false,
+      trialDaysRemaining: 0,
+      showUpgradeCTA: false,
+      showTrialCTA: false,
+      isOwner: true,
+    }
+  }
+  
+  // Trialing user
+  if (trialing) {
+    return {
+      status: 'trial',
+      label: trialDays > 0 ? `Trial (${trialDays}d left)` : 'Trial',
+      shortLabel: 'Trial',
+      isPaid: true,
+      isTrialing: true,
+      trialDaysRemaining: trialDays,
+      showUpgradeCTA: false, // Don't show upgrade, they're already on trial
+      showTrialCTA: false,   // Don't show "start trial" again
+      isOwner: false,
+    }
+  }
+  
+  // Active Pro
+  if (hasPro) {
+    return {
+      status: 'pro',
+      label: 'Pro',
+      shortLabel: 'Pro',
+      isPaid: true,
+      isTrialing: false,
+      trialDaysRemaining: 0,
+      showUpgradeCTA: false,
+      showTrialCTA: false,
+      isOwner: false,
+    }
+  }
+  
+  // Free user
+  return {
+    status: 'free',
+    label: 'Free',
+    shortLabel: 'Free',
+    isPaid: false,
+    isTrialing: false,
+    trialDaysRemaining: 0,
+    showUpgradeCTA: true,
+    showTrialCTA: true,
+    isOwner: false,
+  }
+}
+
+/**
+ * React hook version for components
+ */
+export function useSubscriptionDisplay(): SubscriptionDisplayInfo {
+  return getSubscriptionDisplayInfo()
 }

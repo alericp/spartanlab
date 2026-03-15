@@ -83,8 +83,8 @@ const jsonLdSchemas = [
 export default function CalculatorsHubPage() {
   return (
     <main className="min-h-screen bg-[#0F1115] text-[#E6E9EF]">
-      <JsonLd schema={jsonLdSchemas[0]} />
-      <JsonLd schema={jsonLdSchemas[1]} />
+      <JsonLd data={jsonLdSchemas[0]} />
+      <JsonLd data={jsonLdSchemas[1]} />
       
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
         {/* Back Navigation */}

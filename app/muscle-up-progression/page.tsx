@@ -1,332 +1,312 @@
 import { Metadata } from 'next'
 import Link from 'next/link'
-import { Target, Dumbbell, ArrowRight, TrendingUp, ChevronRight, CheckCircle2, Calculator, Zap, Clock } from 'lucide-react'
-import { Card } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { SeoPageLayout } from '@/components/seo/SeoPageLayout'
+
+// Prevent static prerendering to avoid auth issues during build
+export const dynamic = 'force-dynamic'
+import { SeoHero } from '@/components/seo/SeoHero'
+import { ProgressionLadderCard } from '@/components/seo/ProgressionLadderCard'
+import { RelatedFeatureCTA } from '@/components/seo/RelatedFeatureCTA'
 import { JsonLdMultiple } from '@/components/seo/JsonLd'
+import { RelatedContent } from '@/components/seo/RelatedContent'
+import { ProgressionTable } from '@/components/seo/ProgressionTable'
+import { CommonMistakes } from '@/components/seo/CommonMistakes'
 import { FAQ } from '@/components/seo/FAQ'
-import { generateArticleSchema, generateBreadcrumbSchema, generateFAQSchema, generateHowToSchema, SITE_CONFIG } from '@/lib/seo'
+import { generateHowToSchema, generateBreadcrumbSchema, generateArticleSchema, generateFAQSchema, SITE_CONFIG } from '@/lib/seo'
+import { Target, Dumbbell, ArrowRight, Zap, AlertTriangle } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Card } from '@/components/ui/card'
 
 export const metadata: Metadata = {
-  title: 'Muscle-Up Progression | Step-by-Step Guide to Your First Muscle-Up | SpartanLab',
-  description: 'Complete muscle-up progression from beginner to advanced. Learn the exercises, strength requirements, and step-by-step progressions to achieve your first muscle-up.',
-  keywords: ['muscle-up progression', 'how to muscle-up', 'muscle-up tutorial', 'muscle-up training', 'calisthenics muscle-up', 'bar muscle-up'],
+  title: 'Muscle-Up Progression Guide | Learn the Muscle-Up | SpartanLab',
+  description: 'Master the muscle-up with this complete progression guide. From pull-ups to explosive muscle-ups, learn each stage, prerequisites, and common mistakes.',
+  keywords: ['muscle-up', 'muscle-up progression', 'muscle-up tutorial', 'how to muscle-up', 'calisthenics', 'bar muscle-up', 'ring muscle-up'],
   alternates: {
     canonical: `${SITE_CONFIG.url}/muscle-up-progression`,
   },
   openGraph: {
-    title: 'Muscle-Up Progression | SpartanLab',
-    description: 'Complete muscle-up progression from beginner to advanced. Step-by-step guide to your first muscle-up.',
+    title: 'Muscle-Up Progression Guide | SpartanLab',
+    description: 'Master the muscle-up with this complete progression guide. From pull-ups to explosive muscle-ups.',
     url: `${SITE_CONFIG.url}/muscle-up-progression`,
     siteName: SITE_CONFIG.name,
     type: 'article',
     publishedTime: '2024-01-01T00:00:00Z',
   },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Muscle-Up Progression Guide | SpartanLab',
+    description: 'Master the muscle-up with this complete progression guide.',
+  },
 }
 
-const progressionStages = [
-  { 
-    stage: 1, 
-    name: 'Pull-Up Foundation', 
-    target: '10-12 strict reps',
-    description: 'Build baseline pulling strength with full range of motion pull-ups.',
-    timeframe: '4-8 weeks',
-    exercises: ['Strict Pull-Ups', 'Negative Pull-Ups', 'Scapular Pull-Ups'],
-    color: 'text-blue-400',
-    bgColor: 'bg-blue-400/10',
+const muscleUpSteps = [
+  {
+    name: 'High Pull-Ups',
+    description: 'Pull explosively to bring chest to bar height. Foundation for generating the power needed for transition.',
+    difficulty: 'beginner' as const,
   },
-  { 
-    stage: 2, 
-    name: 'Chest-to-Bar Pull-Ups', 
-    target: '8-10 reps',
-    description: 'Develop the pulling height needed to create space for the transition.',
-    timeframe: '4-6 weeks',
-    exercises: ['Chest-to-Bar Pull-Ups', 'High Pull-Ups', 'Archer Pull-Ups'],
-    color: 'text-green-400',
-    bgColor: 'bg-green-400/10',
+  {
+    name: 'Chest-to-Bar Pull-Ups',
+    description: 'Pull until chest touches the bar. Builds the pulling power and range of motion required.',
+    difficulty: 'intermediate' as const,
   },
-  { 
-    stage: 3, 
-    name: 'Explosive Power', 
-    target: '6-8 explosive reps',
-    description: 'Train explosive pulling to generate upward momentum above the bar.',
-    timeframe: '4-6 weeks',
-    exercises: ['Explosive Pull-Ups', 'Clapping Pull-Ups', 'Band-Assisted Muscle-Ups'],
-    color: 'text-yellow-400',
-    bgColor: 'bg-yellow-400/10',
+  {
+    name: 'Negative Muscle-Ups',
+    description: 'Jump to the top position and slowly lower through the transition. Builds strength in the weak range.',
+    difficulty: 'intermediate' as const,
   },
-  { 
-    stage: 4, 
-    name: 'Transition Training', 
-    target: '5-8 controlled reps',
-    description: 'Practice the wrist rotation and transition over the bar.',
-    timeframe: '3-5 weeks',
-    exercises: ['Muscle-Up Negatives', 'Low Bar Transitions', 'Band Muscle-Ups'],
-    color: 'text-amber-400',
-    bgColor: 'bg-amber-400/10',
+  {
+    name: 'Assisted Muscle-Up',
+    description: 'Use bands or a small jump to complete the movement. Practice the full motion with assistance.',
+    difficulty: 'advanced' as const,
   },
-  { 
-    stage: 5, 
-    name: 'Full Muscle-Up', 
-    target: '1-5 clean reps',
-    description: 'Combine explosive pull with smooth transition technique.',
-    timeframe: 'Ongoing',
-    exercises: ['Full Muscle-Ups', 'Strict Muscle-Ups', 'Multiple Rep Sets'],
-    color: 'text-[#C1121F]',
-    bgColor: 'bg-[#C1121F]/10',
+  {
+    name: 'Strict Muscle-Up',
+    description: 'Full muscle-up with controlled technique. The ultimate demonstration of pulling power and transition skill.',
+    difficulty: 'elite' as const,
   },
 ]
 
-const strengthBenchmarks = [
-  { exercise: 'Strict Pull-Ups', minimum: '10 reps', optimal: '15+ reps', notes: 'Full dead hang to chin over bar' },
-  { exercise: 'Chest-to-Bar Pull-Ups', minimum: '8 reps', optimal: '12+ reps', notes: 'Chest touches the bar' },
-  { exercise: 'Weighted Pull-Ups', minimum: '+10% BW', optimal: '+25-30% BW', notes: 'Builds explosive power reserve' },
-  { exercise: 'Straight Bar Dips', minimum: '10 reps', optimal: '15+ reps', notes: 'Required for press-out phase' },
+const keyFactors = [
+  {
+    icon: Dumbbell,
+    title: 'Explosive Pulling Power',
+    description: 'The muscle-up requires explosive strength to generate momentum through the transition.',
+  },
+  {
+    icon: Zap,
+    title: 'Transition Technique',
+    description: 'The hardest part - rotating around the bar from below to above requires specific practice.',
+  },
+  {
+    icon: Target,
+    title: 'Straight Bar Dips',
+    description: 'Strong dips on a straight bar are essential for the pressing portion of the muscle-up.',
+  },
 ]
 
+// Progression table data
+const progressionLevels = [
+  { level: 'High Pull-Ups', holdTime: '8-10 reps', requirement: 'Explosive pulling power', nextGoal: 'Touch chest to bar' },
+  { level: 'Chest-to-Bar', holdTime: '8-10 reps', requirement: 'Full range pulling', nextGoal: 'Add negative muscle-ups' },
+  { level: 'Negative Muscle-Ups', holdTime: '5-8 reps', requirement: 'Transition strength', nextGoal: 'Attempt assisted muscle-ups' },
+  { level: 'Assisted Muscle-Up', holdTime: '3-5 reps', requirement: 'Full movement pattern', nextGoal: 'Reduce assistance gradually' },
+  { level: 'Strict Muscle-Up', holdTime: '1-3 reps', requirement: 'Complete skill mastery', nextGoal: 'Build volume and consistency' },
+]
+
+// Common mistakes
 const commonMistakes = [
-  { mistake: 'Attempting too early', fix: 'Build 10+ strict pull-ups first. Rushing leads to poor technique and potential injury.' },
-  { mistake: 'Insufficient pulling height', fix: 'If your pull stops at chin level, you cannot transition. Train chest-to-bar pulls.' },
-  { mistake: 'Poor transition technique', fix: 'The wrist rotation is critical. Practice low bar transitions and negatives.' },
-  { mistake: 'Weak dip strength', fix: 'Many athletes fail at the top. Train straight bar dips specifically.' },
-  { mistake: 'Too much kip, not enough strength', fix: 'Kipping hides strength deficits. Build strict strength first.' },
+  { title: 'Insufficient Pull-Up Strength', description: 'Attempting muscle-ups before having 10-12 strict pull-ups. Build the foundation first.' },
+  { title: 'Pulling Straight Up', description: 'The bar must travel in an arc. Pull back slightly to create the path for the transition.' },
+  { title: 'Chicken Wing Transition', description: 'Going over one arm at a time. Practice keeping elbows even during the transition.' },
+  { title: 'Weak Straight Bar Dips', description: 'Unable to press out of the transition. Train straight bar dips separately.' },
+  { title: 'Skipping Negatives', description: 'Negatives build the specific transition strength. Do not skip this progression.' },
 ]
 
+// Strength requirements
+const strengthRequirements = [
+  { metric: 'Strict Pull-Ups', minimum: '10-12 reps', ideal: '15+ reps', notes: 'Foundation for explosive pulling' },
+  { metric: 'Chest-to-Bar Pull-Ups', minimum: '5-8 reps', ideal: '10+ reps', notes: 'Required range of motion' },
+  { metric: 'Weighted Pull-Ups', minimum: '+20% BW', ideal: '+35% BW', notes: 'Indicates power capacity' },
+  { metric: 'Straight Bar Dips', minimum: '10 reps', ideal: '15+ reps', notes: 'For pressing out of transition' },
+]
+
+// FAQ data
 const faqs = [
-  {
-    question: 'How many pull-ups do I need for a muscle-up?',
-    answer: 'Most athletes need 10-12 strict pull-ups and 8-10 chest-to-bar pull-ups as a minimum. Additionally, weighted pull-ups at +20-30% bodyweight help build the explosive power reserve needed for the transition phase.',
-  },
-  {
-    question: 'How long does it take to learn a muscle-up?',
-    answer: 'Athletes with solid pull-up strength (10+ strict) typically achieve their first muscle-up in 2-6 months of dedicated training. Complete beginners may need 6-12 months to build the prerequisite strength before starting muscle-up specific training.',
-  },
-  {
-    question: 'Can I learn a muscle-up without kipping?',
-    answer: 'Yes, strict muscle-ups are achievable and build more strength than kipping variations. They require more raw pulling power but develop better overall strength. Start with strict progressions and only add kipping after mastering the movement.',
-  },
-  {
-    question: 'What is the hardest part of the muscle-up?',
-    answer: 'The transition phase is typically the hardest part. This is where you rotate your wrists and body from below the bar to above it. Many athletes have the pulling strength but lack the technique. Negatives and low bar drills help.',
-  },
-  {
-    question: 'Should I use a false grip for muscle-ups?',
-    answer: 'A false grip (wrists over the bar) makes the transition easier on rings but is less common on bar muscle-ups. Most bar muscle-ups use a standard grip with a quick wrist rotation during the transition.',
-  },
+  { question: 'How many pull-ups do I need for a muscle-up?', answer: 'Most athletes need 10-12 strict pull-ups as a minimum, with the ability to do chest-to-bar pull-ups explosively. Having 15+ pull-ups with weighted capacity (+25-35% BW) makes the muscle-up significantly easier to achieve.' },
+  { question: 'How long does it take to learn a muscle-up?', answer: 'If you already have 10+ pull-ups, most athletes achieve their first muscle-up in 2-6 months of focused training. The key is developing explosive pulling power and practicing the transition specifically, not just building more pull-up strength.' },
+  { question: 'Should I learn bar muscle-up or ring muscle-up first?', answer: 'Bar muscle-ups are generally easier to learn first because the bar is stable. Ring muscle-ups require additional stability and a different transition technique. Master bar muscle-ups before progressing to rings.' },
+  { question: 'Why can I do 15 pull-ups but not a muscle-up?', answer: 'Pull-up strength does not directly equal muscle-up ability. Muscle-ups require explosive power (not just strength), a specific transition technique, and straight bar dip strength. Train high pulls, chest-to-bar, and negatives specifically.' },
+  { question: 'What is the hardest part of the muscle-up?', answer: 'The transition - the moment you rotate from below the bar to above it - is the hardest part. This is where most athletes fail. Negative muscle-ups and assisted practice specifically target this weak point.' },
 ]
 
+// JSON-LD structured data for rich search results
 const jsonLdSchemas = [
   generateHowToSchema({
     name: 'Muscle-Up Progression Guide',
-    description: 'Step-by-step progression to achieve your first muscle-up.',
+    description: 'Learn the muscle-up with this complete progression guide. Progress from pull-ups to strict muscle-ups.',
     url: `${SITE_CONFIG.url}/muscle-up-progression`,
     steps: [
-      { name: 'Build Pull-Up Foundation', description: 'Achieve 10-12 strict pull-ups with full range of motion.' },
-      { name: 'Train Chest-to-Bar', description: 'Develop 8-10 chest-to-bar pull-ups for pulling height.' },
-      { name: 'Add Explosive Work', description: 'Train explosive pull-ups to generate upward momentum.' },
-      { name: 'Practice Transition', description: 'Use negatives and low bar drills to learn the transition.' },
-      { name: 'Attempt Full Muscle-Up', description: 'Combine explosive pull with smooth transition technique.' },
+      { name: 'High Pull-Ups', description: 'Pull explosively to bring chest to bar height. Foundation for generating power.' },
+      { name: 'Chest-to-Bar Pull-Ups', description: 'Pull until chest touches the bar. Builds pulling power and range of motion.' },
+      { name: 'Negative Muscle-Ups', description: 'Jump to top position and lower slowly through transition. Builds transition strength.' },
+      { name: 'Assisted Muscle-Up', description: 'Use bands or small jump to complete movement. Practice full motion with assistance.' },
+      { name: 'Strict Muscle-Up', description: 'Full muscle-up with controlled technique. Ultimate demonstration of skill.' },
     ],
     totalTime: 'P6M',
   }),
   generateBreadcrumbSchema([
     { name: 'Home', url: '/' },
     { name: 'Skills', url: '/skills' },
-    { name: 'Muscle-Up Progression', url: '/muscle-up-progression' },
+    { name: 'Muscle-Up Hub', url: '/skills/muscle-up' },
+    { name: 'Progression Guide', url: '/muscle-up-progression' },
   ]),
+  generateArticleSchema({
+    title: 'Muscle-Up Progression Guide',
+    description: 'Master the muscle-up with this complete progression guide.',
+    url: `${SITE_CONFIG.url}/muscle-up-progression`,
+    publishedDate: '2024-01-01T00:00:00Z',
+  }),
   generateFAQSchema(faqs),
 ]
 
 export default function MuscleUpProgressionPage() {
   return (
-    <main className="min-h-screen bg-[#0F1115] text-[#E6E9EF]">
+    <SeoPageLayout>
       <JsonLdMultiple schemas={jsonLdSchemas} />
-      
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8">
-        {/* Breadcrumb */}
-        <nav className="flex items-center gap-2 text-sm text-[#6B7280] mb-6">
-          <Link href="/" className="hover:text-[#E6E9EF]">Home</Link>
-          <ChevronRight className="w-4 h-4" />
-          <Link href="/skills" className="hover:text-[#E6E9EF]">Skills</Link>
-          <ChevronRight className="w-4 h-4" />
-          <span className="text-[#E6E9EF]">Muscle-Up Progression</span>
-        </nav>
+      <SeoHero
+        title="Muscle-Up Progression Guide"
+        subtitle="Master the muscle-up - one of the most impressive calisthenics skills. Learn the explosive pulling power and transition technique needed to get over the bar."
+        ctaText="Check Your Readiness"
+        ctaHref="/muscle-up-readiness-calculator"
+        secondaryCtaText="Back to Muscle-Up Hub"
+        secondaryCtaHref="/skills/muscle-up"
+      />
 
-        {/* Hero */}
-        <header className="mb-12">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="w-12 h-12 rounded-xl bg-[#C1121F]/10 flex items-center justify-center">
-              <Zap className="w-6 h-6 text-[#C1121F]" />
-            </div>
-            <div>
-              <span className="text-xs text-[#C1121F] font-medium uppercase tracking-wider">Skill Progression</span>
-              <h1 className="text-3xl sm:text-4xl font-bold">Muscle-Up Progression</h1>
-            </div>
-          </div>
-          <p className="text-lg text-[#A5A5A5] max-w-2xl">
-            The muscle-up combines explosive pulling power with a technical transition over the bar. 
-            Follow this step-by-step progression to achieve your first muscle-up safely and efficiently.
-          </p>
-        </header>
-
-        {/* Introduction */}
-        <section className="mb-12">
-          <p className="text-[#A4ACB8] leading-relaxed mb-4">
-            The muscle-up is one of the most iconic calisthenics skills. It represents the transition 
-            from basic pull-up strength to advanced bodyweight mastery. Unlike a standard pull-up, 
-            the muscle-up requires you to generate enough height to get your entire upper body above 
-            the bar, then press out to a straight arm support.
-          </p>
-          <p className="text-[#A4ACB8] leading-relaxed">
-            Most athletes fail because they attempt muscle-ups before building sufficient strength, 
-            or they focus only on pulling power without developing the transition technique. This 
-            progression addresses both requirements systematically.
-          </p>
-        </section>
-
-        {/* Progression Stages */}
-        <section className="mb-12">
-          <h2 className="text-2xl font-bold mb-6">Muscle-Up Progression Stages</h2>
+      {/* Progression Ladder */}
+      <section className="py-12 px-4 sm:px-6">
+        <div className="max-w-4xl mx-auto">
+          <h2 className="text-2xl font-bold mb-6">Muscle-Up Progression Ladder</h2>
           <div className="space-y-4">
-            {progressionStages.map((stage) => (
-              <Card key={stage.stage} className="bg-[#1A1D23] border-[#2B313A] p-6">
-                <div className="flex flex-col sm:flex-row sm:items-start gap-4">
-                  <div className={`w-12 h-12 rounded-xl ${stage.bgColor} flex items-center justify-center flex-shrink-0`}>
-                    <span className={`text-lg font-bold ${stage.color}`}>{stage.stage}</span>
-                  </div>
-                  <div className="flex-1">
-                    <div className="flex flex-wrap items-center gap-3 mb-2">
-                      <h3 className={`text-lg font-semibold ${stage.color}`}>{stage.name}</h3>
-                      <span className="text-sm text-[#6B7280]">Target: {stage.target}</span>
-                    </div>
-                    <p className="text-sm text-[#A5A5A5] mb-3">{stage.description}</p>
-                    <div className="flex flex-wrap items-center gap-4 text-xs">
-                      <div className="flex items-center gap-1.5">
-                        <Clock className="w-3.5 h-3.5 text-[#6B7280]" />
-                        <span className="text-[#6B7280]">{stage.timeframe}</span>
-                      </div>
-                      <div className="flex flex-wrap gap-1.5">
-                        {stage.exercises.map((ex) => (
-                          <span key={ex} className="px-2 py-0.5 rounded bg-[#0F1115] text-[#A5A5A5]">
-                            {ex}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
+            {muscleUpSteps.map((step, index) => (
+              <ProgressionLadderCard
+                key={step.name}
+                step={index + 1}
+                name={step.name}
+                description={step.description}
+                difficulty={step.difficulty}
+              />
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Key Factors */}
+      <section className="py-12 px-4 sm:px-6 bg-[#1A1A1A]/50">
+        <div className="max-w-4xl mx-auto">
+          <h2 className="text-2xl font-bold mb-6">What Makes a Muscle-Up Possible</h2>
+          <div className="grid gap-6 sm:grid-cols-3">
+            {keyFactors.map((factor) => (
+              <Card key={factor.title} className="p-6 bg-[#1A1A1A] border-[#2A2A2A]">
+                <div className="w-12 h-12 rounded-xl bg-[#C1121F]/10 flex items-center justify-center mb-4">
+                  <factor.icon className="w-6 h-6 text-[#C1121F]" />
                 </div>
+                <h3 className="font-semibold mb-2 text-[#E6E9EF]">{factor.title}</h3>
+                <p className="text-sm text-[#A5A5A5]">{factor.description}</p>
               </Card>
             ))}
           </div>
-        </section>
+        </div>
+      </section>
 
-        {/* Strength Benchmarks */}
-        <section className="mb-12">
-          <h2 className="text-2xl font-bold mb-4">Strength Requirements</h2>
+      {/* Strength Requirements */}
+      <section className="py-12 px-4 sm:px-6">
+        <div className="max-w-4xl mx-auto">
+          <h2 className="text-2xl font-bold mb-2">Strength Requirements</h2>
           <p className="text-[#A5A5A5] mb-6">
-            These benchmarks indicate your readiness for muscle-up training. Meeting the minimum 
-            requirements allows you to start, while optimal levels make success much more likely.
+            Before attempting muscle-ups, ensure you meet these baseline strength requirements.
           </p>
           <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow className="border-[#2B313A]">
-                  <TableHead className="text-[#E6E9EF]">Exercise</TableHead>
-                  <TableHead className="text-yellow-400">Minimum</TableHead>
-                  <TableHead className="text-green-400">Optimal</TableHead>
-                  <TableHead className="text-[#6B7280]">Notes</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {strengthBenchmarks.map((row) => (
-                  <TableRow key={row.exercise} className="border-[#2B313A]">
-                    <TableCell className="text-[#E6E9EF] font-medium">{row.exercise}</TableCell>
-                    <TableCell className="text-yellow-400">{row.minimum}</TableCell>
-                    <TableCell className="text-green-400">{row.optimal}</TableCell>
-                    <TableCell className="text-[#6B7280] text-sm">{row.notes}</TableCell>
-                  </TableRow>
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-[#2A2A2A]">
+                  <th className="text-left py-3 px-4 text-sm font-medium text-[#A5A5A5]">Metric</th>
+                  <th className="text-left py-3 px-4 text-sm font-medium text-[#A5A5A5]">Minimum</th>
+                  <th className="text-left py-3 px-4 text-sm font-medium text-[#A5A5A5]">Ideal</th>
+                  <th className="text-left py-3 px-4 text-sm font-medium text-[#A5A5A5] hidden sm:table-cell">Notes</th>
+                </tr>
+              </thead>
+              <tbody>
+                {strengthRequirements.map((req) => (
+                  <tr key={req.metric} className="border-b border-[#2A2A2A]/50">
+                    <td className="py-3 px-4 font-medium text-[#E6E9EF]">{req.metric}</td>
+                    <td className="py-3 px-4 text-yellow-400">{req.minimum}</td>
+                    <td className="py-3 px-4 text-green-400">{req.ideal}</td>
+                    <td className="py-3 px-4 text-sm text-[#A5A5A5] hidden sm:table-cell">{req.notes}</td>
+                  </tr>
                 ))}
-              </TableBody>
-            </Table>
+              </tbody>
+            </table>
           </div>
-        </section>
+        </div>
+      </section>
 
-        {/* Common Mistakes */}
-        <section className="mb-12">
-          <h2 className="text-2xl font-bold mb-4">Common Mistakes to Avoid</h2>
-          <div className="space-y-3">
-            {commonMistakes.map((item) => (
-              <Card key={item.mistake} className="bg-[#1A1D23] border-[#2B313A] p-4">
-                <div className="flex items-start gap-3">
-                  <div className="w-6 h-6 rounded-full bg-[#C1121F]/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <span className="text-[#C1121F] text-xs font-bold">!</span>
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-[#E6E9EF] mb-1">{item.mistake}</h3>
-                    <p className="text-sm text-[#A5A5A5]">{item.fix}</p>
-                  </div>
-                </div>
-              </Card>
-            ))}
-          </div>
-        </section>
+      {/* Progression Table */}
+      <section className="py-12 px-4 sm:px-6 bg-[#1A1A1A]/50">
+        <div className="max-w-4xl mx-auto">
+          <h2 className="text-2xl font-bold mb-6">Progression Milestones</h2>
+          <ProgressionTable levels={progressionLevels} />
+        </div>
+      </section>
 
-        {/* CTA Section */}
-        <section className="mb-12">
-          <Card className="bg-gradient-to-br from-[#C1121F]/10 to-[#1A1D23] border-[#C1121F]/30 p-6">
-            <h2 className="text-xl font-bold mb-2">Test Your Muscle-Up Readiness</h2>
-            <p className="text-[#A5A5A5] mb-4">
-              Use our calculators to get a detailed analysis of your pulling strength and muscle-up readiness score.
-            </p>
-            <div className="flex flex-wrap gap-3">
-              <Link href="/muscle-up-readiness-calculator">
-                <Button className="bg-[#C1121F] hover:bg-[#A50E1A]">
-                  <Calculator className="w-4 h-4 mr-2" />
-                  Muscle-Up Readiness Calculator
-                </Button>
-              </Link>
-              <Link href="/calculators/pull-up-strength-score">
-                <Button variant="outline" className="border-[#2B313A] hover:bg-[#1A1D23]">
-                  Pull-Up Strength Score
-                </Button>
-              </Link>
-            </div>
-          </Card>
-        </section>
+      {/* Common Mistakes */}
+      <section className="py-12 px-4 sm:px-6">
+        <div className="max-w-4xl mx-auto">
+          <h2 className="text-2xl font-bold mb-6 flex items-center gap-2">
+            <AlertTriangle className="w-6 h-6 text-yellow-400" />
+            Common Mistakes
+          </h2>
+          <CommonMistakes mistakes={commonMistakes} />
+        </div>
+      </section>
 
-        {/* FAQ */}
-        <section className="mb-12">
-          <FAQ faqs={faqs} title="Frequently Asked Questions" />
-        </section>
+      {/* Readiness Calculator CTA */}
+      <section className="py-12 px-4 sm:px-6 bg-[#1A1A1A]/50">
+        <div className="max-w-4xl mx-auto">
+          <RelatedFeatureCTA
+            title="Check Your Muscle-Up Readiness"
+            description="Enter your current strength metrics and find out if you are ready to start muscle-up training."
+            ctaText="Use Readiness Calculator"
+            ctaHref="/muscle-up-readiness-calculator"
+          />
+        </div>
+      </section>
 
-        {/* Related Links */}
-        <section className="mb-12">
-          <h2 className="text-xl font-bold mb-4">Related Content</h2>
-          <div className="flex flex-wrap gap-3">
+      {/* FAQ */}
+      <section className="py-12 px-4 sm:px-6">
+        <div className="max-w-4xl mx-auto">
+          <h2 className="text-2xl font-bold mb-6">Frequently Asked Questions</h2>
+          <FAQ questions={faqs} />
+        </div>
+      </section>
+
+      {/* Related Content */}
+      <section className="py-12 px-4 sm:px-6 bg-[#1A1A1A]/50">
+        <div className="max-w-4xl mx-auto">
+          <h2 className="text-2xl font-bold mb-6">Related Resources</h2>
+          <RelatedContent
+            items={[
+              { title: 'Muscle-Up Training Guide', href: '/guides/muscle-up-training', description: 'Complete training guide with workouts' },
+              { title: 'Pull-Up Strength Standards', href: '/pull-up-strength-standards', description: 'Know your pulling strength level' },
+              { title: 'How Many Pull-Ups for Front Lever?', href: '/how-many-pull-ups-for-front-lever', description: 'Related pulling skill requirements' },
+              { title: 'Muscle-Up Readiness Calculator', href: '/muscle-up-readiness-calculator', description: 'Check if you are ready' },
+            ]}
+          />
+        </div>
+      </section>
+
+      {/* Final CTA */}
+      <section className="py-16 px-4 sm:px-6">
+        <div className="max-w-4xl mx-auto text-center">
+          <h2 className="text-2xl font-bold mb-4">Ready to Train for the Muscle-Up?</h2>
+          <p className="text-[#A5A5A5] mb-8 max-w-xl mx-auto">
+            Track your progress, get personalized recommendations, and master the muscle-up with SpartanLab.
+          </p>
+          <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Link href="/skills/muscle-up">
-              <Button variant="outline" className="border-[#2B313A] hover:bg-[#1A1D23]">
-                Muscle-Up Skill Hub
+              <Button className="bg-[#C1121F] hover:bg-[#A10E1A] text-white">
+                Start Training
+                <ArrowRight className="ml-2 w-4 h-4" />
               </Button>
             </Link>
-            <Link href="/guides/muscle-up-training">
-              <Button variant="outline" className="border-[#2B313A] hover:bg-[#1A1D23]">
-                Full Training Guide
-              </Button>
-            </Link>
-            <Link href="/pull-up-strength-standards">
-              <Button variant="outline" className="border-[#2B313A] hover:bg-[#1A1D23]">
-                Pull-Up Standards
-              </Button>
-            </Link>
-            <Link href="/how-many-dips-for-muscle-up">
-              <Button variant="outline" className="border-[#2B313A] hover:bg-[#1A1D23]">
-                Dip Requirements
+            <Link href="/muscle-up-readiness-calculator">
+              <Button variant="outline" className="border-[#2A2A2A] text-[#A5A5A5] hover:bg-[#2A2A2A]">
+                Check Readiness First
               </Button>
             </Link>
           </div>
-        </section>
-      </div>
-    </main>
+        </div>
+      </section>
+    </SeoPageLayout>
   )
 }

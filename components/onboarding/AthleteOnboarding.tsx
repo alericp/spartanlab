@@ -2616,7 +2616,7 @@ export function AthleteOnboarding() {
       // Track completion
       trackOnboardingCompleted('onboarding')
       
-      // Navigate to onboarding completion flow (shows program + upgrade opportunity)
+      // Navigate to program preview page (upgrade opportunity)
       router.push('/onboarding/complete')
     } catch (error) {
       console.error('Failed to save profile:', error)

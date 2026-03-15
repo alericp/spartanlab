@@ -4,7 +4,7 @@
  * Manages subscription tiers and feature gating for free vs pro users.
  * Integrates with Stripe subscriptions stored in the database.
  * 
- * Owner accounts bypass all subscription checks.
+ * Owner accounts bypass all subscription checks unless simulation mode is active.
  */
 
 import { isOwner, checkOwnerByEmail } from './owner-access'
@@ -13,6 +13,25 @@ import { getSimulationMode, isSimulationActive } from './billing/subscription-si
 // Re-export for component usage
 export { isOwner as isOwnerAccount } from './owner-access'
 export { checkOwnerByEmail } from './owner-access'
+
+// =============================================================================
+// OWNER SIMULATION SUPPORT
+// =============================================================================
+
+const SIMULATION_KEY = 'spartanlab_owner_sim'
+
+/**
+ * Get owner simulation mode (internal use)
+ * Returns 'off', 'free', or 'pro'
+ */
+function getOwnerSimulationMode(): 'off' | 'free' | 'pro' {
+  if (typeof window === 'undefined') return 'off'
+  if (!isOwner()) return 'off'
+  
+  const stored = sessionStorage.getItem(SIMULATION_KEY)
+  if (stored === 'free' || stored === 'pro') return stored
+  return 'off'
+}
 
 // =============================================================================
 // SUBSCRIPTION TYPES
@@ -298,19 +317,16 @@ export function saveSubscription(subscription: SubscriptionInfo): void {
 
 /**
  * Check if user has Pro subscription
- * Owner accounts respect simulation mode if active
+ * Owner accounts have Pro access unless simulating Free
  */
 export function hasProAccess(): boolean {
-  // Owner with simulation - respect simulated state
-  if (isOwner()) {
-    if (isSimulationActive()) {
-      return getSimulationMode() === 'pro'
-    }
-    // Owner without simulation - check real subscription state
-    const subscription = getSubscription()
-    return subscription.tier === 'pro' && 
-           (subscription.status === 'active' || subscription.status === 'trialing')
-  }
+  // Check owner simulation first
+  const simMode = getOwnerSimulationMode()
+  if (simMode === 'free') return false
+  if (simMode === 'pro') return true
+  
+  // Owner without simulation has Pro access
+  if (isOwner()) return true
   
   // Regular users - standard check
   const subscription = getSubscription()
@@ -320,7 +336,7 @@ export function hasProAccess(): boolean {
 
 /**
  * Check if a specific feature is available to the user
- * Owner accounts respect simulation mode
+ * Owner accounts have access unless simulating Free
  */
 export function hasFeatureAccess(featureId: FeatureId): boolean {
   const feature = FEATURES[featureId]
@@ -329,22 +345,20 @@ export function hasFeatureAccess(featureId: FeatureId): boolean {
   // Free features are always available
   if (feature.tier === 'free') return true
   
-  // Pro features require pro subscription (hasProAccess handles owner simulation)
+  // Pro features require pro access (respects simulation)
   return hasProAccess()
 }
 
 /**
  * Get current subscription tier
- * Owner accounts respect simulation mode
+ * Respects owner simulation mode
  */
 export function getCurrentTier(): SubscriptionTier {
-  if (isOwner()) {
-    if (isSimulationActive()) {
-      return getSimulationMode() === 'pro' ? 'pro' : 'free'
-    }
-    // Without simulation, return real tier
-    return getSubscription().tier
-  }
+  const simMode = getOwnerSimulationMode()
+  if (simMode === 'free') return 'free'
+  if (simMode === 'pro') return 'pro'
+  
+  if (isOwner()) return 'pro'
   return getSubscription().tier
 }
 

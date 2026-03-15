@@ -7,8 +7,7 @@ import { getPersonalRecords, getStrengthRecords, type StrengthRecord, type Exerc
 import { getWorkoutLogs, type WorkoutLog } from './workout-log-service'
 import { getConstraintInsight } from './constraint-engine'
 import { getSkillSessions } from './skill-session-service'
-import { getAchievementSummary, getTotalPossiblePoints } from './achievements/achievement-definitions'
-import { getUnlockedAchievements } from './achievements/achievement-engine'
+import { getUnlockedAchievements, ACHIEVEMENTS, type AchievementTier } from './achievements/achievement-definitions'
 
 export interface ScoreComponent {
   raw: number      // 0-100 raw score
@@ -110,17 +109,21 @@ function normalizeStrengthScore(oneRM: number, mapping: Record<number, number>):
   return 0
 }
 
-// Component weights (total 100%)
-// Strength & Skill: 60% combined (real performance)
-// Consistency: 20% (training habits)
-// Readiness: 10% (progression proximity)
-// Achievements: 10% (milestone rewards)
+// Component weights (must sum to 1.0)
 const WEIGHTS = {
-  skill: 0.30,         // 30% - Skill progression level
-  strength: 0.30,      // 30% - Weighted strength capacity
-  consistency: 0.20,   // 20% - Training consistency
-  readiness: 0.10,     // 10% - Skill readiness / progression proximity
-  achievements: 0.10,  // 10% - Achievement unlocks
+  skill: 0.30,       // 30% - Skill progression level
+  strength: 0.30,    // 30% - Weighted strength capacity
+  readiness: 0.15,   // 15% - Skill readiness / progression proximity
+  consistency: 0.15, // 15% - Training consistency
+  achievements: 0.10 // 10% - Achievement unlocks
+}
+
+// Achievement tier point values for scoring
+const ACHIEVEMENT_TIER_POINTS: Record<AchievementTier, number> = {
+  bronze: 10,
+  silver: 25,
+  gold: 50,
+  elite: 100
 }
 
 // Calculate skill score (35% weight)
@@ -286,34 +289,38 @@ export function calculateConsistencyScore(): { score: number; weeklyWorkouts: nu
 }
 
 // Calculate achievement score (10% weight)
-export function calculateAchievementScore(): { score: number; unlockedCount: number; totalCount: number; earnedPoints: number } {
+export function calculateAchievementScore(): { score: number; unlockedCount: number; totalPossible: number } {
   const unlocked = getUnlockedAchievements()
-  const totalPossiblePoints = getTotalPossiblePoints()
   
-  // Import achievement definitions to count total
-  const { ACHIEVEMENTS } = require('./achievements/achievement-definitions')
-  const totalCount = ACHIEVEMENTS?.length || 20
-  
-  // Calculate earned points
-  let earnedPoints = 0
-  for (const u of unlocked) {
-    const achievement = ACHIEVEMENTS?.find((a: any) => a.id === u.achievementId)
-    if (achievement) {
-      earnedPoints += achievement.pointValue || 0
-    }
+  if (unlocked.length === 0) {
+    return { score: 0, unlockedCount: 0, totalPossible: ACHIEVEMENTS.length }
   }
   
-  // Score based on percentage of total possible points earned
-  // This rewards higher-tier achievements more
-  const score = totalPossiblePoints > 0 
-    ? Math.round((earnedPoints / totalPossiblePoints) * 100)
+  let totalPoints = 0
+  let maxPossiblePoints = 0
+  
+  // Calculate points from unlocked achievements
+  unlocked.forEach(ua => {
+    const achievement = ACHIEVEMENTS.find(a => a.id === ua.achievementId)
+    if (achievement) {
+      totalPoints += ACHIEVEMENT_TIER_POINTS[achievement.tier]
+    }
+  })
+  
+  // Calculate max possible points
+  ACHIEVEMENTS.forEach(a => {
+    maxPossiblePoints += ACHIEVEMENT_TIER_POINTS[a.tier]
+  })
+  
+  // Normalize to 0-100 scale
+  const score = maxPossiblePoints > 0 
+    ? Math.round((totalPoints / maxPossiblePoints) * 100)
     : 0
   
-  return {
-    score: Math.min(100, score),
+  return { 
+    score: Math.min(100, score), 
     unlockedCount: unlocked.length,
-    totalCount,
-    earnedPoints,
+    totalPossible: ACHIEVEMENTS.length
   }
 }
 
@@ -330,14 +337,14 @@ export function calculateSpartanScore(): StrengthScoreBreakdown {
   const hasStrengthData = strengthResult.details.length > 0
   const hasSessionData = readinessResult.score > 0
   const hasWorkoutData = consistencyResult.weeklyWorkouts > 0
-  const hasAchievements = achievementResult.unlockedCount > 0
+  const hasAchievementData = achievementResult.unlockedCount > 0
   
   let dataQuality: 'insufficient' | 'partial' | 'good' | 'excellent' = 'insufficient'
   if (hasSkillData && hasStrengthData && hasSessionData && hasWorkoutData) {
     dataQuality = 'excellent'
   } else if ((hasSkillData || hasStrengthData) && (hasSessionData || hasWorkoutData)) {
     dataQuality = 'good'
-  } else if (hasSkillData || hasStrengthData || hasSessionData || hasWorkoutData || hasAchievements) {
+  } else if (hasSkillData || hasStrengthData || hasSessionData || hasWorkoutData || hasAchievementData) {
     dataQuality = 'partial'
   }
   
@@ -349,6 +356,7 @@ export function calculateSpartanScore(): StrengthScoreBreakdown {
     (strengthResult.score * WEIGHTS.strength) +
     (consistencyResult.score * WEIGHTS.consistency) +
     (readinessResult.score * WEIGHTS.readiness) +
+    (consistencyResult.score * WEIGHTS.consistency) +
     (achievementResult.score * WEIGHTS.achievements)
   
   // Convert to 0-1000 scale
@@ -387,21 +395,14 @@ export function calculateSpartanScore(): StrengthScoreBreakdown {
         : 'No recent workouts'
     },
     {
-      raw: readinessResult.score,
-      weighted: Math.round(readinessResult.score * WEIGHTS.readiness * 10),
-      weight: WEIGHTS.readiness,
-      label: 'Skill Readiness',
-      description: readinessResult.description
-    },
-    {
       raw: achievementResult.score,
       weighted: Math.round(achievementResult.score * WEIGHTS.achievements * 10),
       weight: WEIGHTS.achievements,
       label: 'Achievements',
       description: achievementResult.unlockedCount > 0 
-        ? `${achievementResult.unlockedCount}/${achievementResult.totalCount} unlocked`
+        ? `${achievementResult.unlockedCount} of ${achievementResult.totalPossible} unlocked`
         : 'No achievements yet'
-    },
+    }
   ]
   
   // Generate explanation and focus areas

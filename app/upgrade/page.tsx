@@ -20,8 +20,8 @@ import {
   BarChart3,
   Dumbbell,
 } from 'lucide-react'
-import { PREMIUM_FEATURES, type PremiumFeatureId, useSubscriptionInfo, useIsOwner } from '@/components/premium/PremiumFeature'
-import { hasProAccess } from '@/lib/feature-access'
+import { PREMIUM_FEATURES, type PremiumFeatureId, useIsOwner } from '@/components/premium/PremiumFeature'
+import { hasProAccess, isInTrial, getTrialDaysRemaining } from '@/lib/feature-access'
 import { trackUpgradeStarted, trackUpgradeCompleted } from '@/lib/analytics'
 import { PRICING, TRIAL } from '@/lib/billing/pricing'
 import { useAuth } from '@clerk/nextjs'
@@ -83,6 +83,8 @@ export default function UpgradePage() {
   const router = useRouter()
   const [mounted, setMounted] = useState(false)
   const [isPro, setIsPro] = useState(false)
+  const [isTrial, setIsTrial] = useState(false)
+  const [trialDays, setTrialDays] = useState(0)
   const [isLoading, setIsLoading] = useState(false)
   const isOwner = useIsOwner()
   const { isSignedIn, isLoaded: isAuthLoaded } = useAuth()
@@ -90,6 +92,8 @@ export default function UpgradePage() {
   useEffect(() => {
     setMounted(true)
     setIsPro(hasProAccess())
+    setIsTrial(isInTrial())
+    setTrialDays(getTrialDaysRemaining())
   }, [])
 
 const handleUpgrade = async () => {
@@ -155,21 +159,39 @@ const handleUpgrade = async () => {
     )
   }
   
-  // Show success state if already pro
+  // Show success state if already pro (including trial)
   if (isPro) {
     return (
       <div className="min-h-screen bg-[#0F1115] flex items-center justify-center">
         <div className="text-center p-8">
           <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-amber-500/20 to-amber-600/10 border border-amber-500/30 flex items-center justify-center mx-auto mb-6">
-            <Crown className="w-8 h-8 text-amber-400" />
+            {isTrial ? (
+              <Sparkles className="w-8 h-8 text-amber-400" />
+            ) : (
+              <Crown className="w-8 h-8 text-amber-400" />
+            )}
           </div>
-          <h1 className="text-2xl font-bold text-[#E6E9EF] mb-2">You're on SpartanLab Pro!</h1>
-          <p className="text-[#A4ACB8] mb-6">All advanced features are now unlocked.</p>
-          <Link href="/dashboard">
-            <Button className="bg-[#C1121F] hover:bg-[#9A0F19] text-white">
-              Go to Dashboard
-            </Button>
-          </Link>
+          <h1 className="text-2xl font-bold text-[#E6E9EF] mb-2">
+            {isTrial ? 'Your Pro Trial is Active!' : "You're on SpartanLab Pro!"}
+          </h1>
+          <p className="text-[#A4ACB8] mb-2">All advanced features are now unlocked.</p>
+          {isTrial && trialDays > 0 && (
+            <p className="text-sm text-[#6B7280] mb-4">
+              {trialDays} day{trialDays !== 1 ? 's' : ''} remaining in your trial.
+            </p>
+          )}
+          <div className="flex gap-3 justify-center">
+            <Link href="/dashboard">
+              <Button className="bg-[#C1121F] hover:bg-[#9A0F19] text-white">
+                Go to Dashboard
+              </Button>
+            </Link>
+            <Link href="/settings">
+              <Button variant="outline" className="border-[#3A4553] text-[#A4ACB8] hover:bg-[#1A1F26]">
+                Manage Billing
+              </Button>
+            </Link>
+          </div>
         </div>
       </div>
     )

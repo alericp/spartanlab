@@ -1,13 +1,5 @@
-/**
- * SpartanLab Leaderboard Types
- * 
- * Defines types for the modular leaderboard system.
- * Supports multiple leaderboard categories without hardcoding UI logic.
- */
-
-// =============================================================================
-// LEADERBOARD CATEGORIES
-// =============================================================================
+// Leaderboard Type Definitions
+// Centralized types for the SpartanLab leaderboard system
 
 export type LeaderboardCategory = 
   | 'global_spartan_score'
@@ -15,204 +7,118 @@ export type LeaderboardCategory =
   | 'front_lever'
   | 'planche'
   | 'muscle_up'
-  | 'handstand_pushup'
-  | 'weighted_strength'
-
-export interface LeaderboardCategoryConfig {
-  id: LeaderboardCategory
-  label: string
-  shortLabel: string
-  description: string
-  icon: string // Lucide icon name
-  scoreUnit: string
-  sortDirection: 'desc' | 'asc' // desc = higher is better
-}
-
-// Category configurations
-export const LEADERBOARD_CATEGORIES: LeaderboardCategoryConfig[] = [
-  {
-    id: 'global_spartan_score',
-    label: 'Spartan Score',
-    shortLabel: 'Score',
-    description: 'Overall training performance combining strength, skills, and consistency',
-    icon: 'Flame',
-    scoreUnit: 'pts',
-    sortDirection: 'desc',
-  },
-  {
-    id: 'consistency',
-    label: 'Consistency',
-    shortLabel: 'Streak',
-    description: 'Training discipline and workout streak',
-    icon: 'Calendar',
-    scoreUnit: 'days',
-    sortDirection: 'desc',
-  },
-  {
-    id: 'front_lever',
-    label: 'Front Lever',
-    shortLabel: 'FL',
-    description: 'Front lever progression mastery',
-    icon: 'Target',
-    scoreUnit: 'lvl',
-    sortDirection: 'desc',
-  },
-  {
-    id: 'planche',
-    label: 'Planche',
-    shortLabel: 'PL',
-    description: 'Planche progression mastery',
-    icon: 'Target',
-    scoreUnit: 'lvl',
-    sortDirection: 'desc',
-  },
-  {
-    id: 'muscle_up',
-    label: 'Muscle-Up',
-    shortLabel: 'MU',
-    description: 'Muscle-up progression mastery',
-    icon: 'Dumbbell',
-    scoreUnit: 'lvl',
-    sortDirection: 'desc',
-  },
-  {
-    id: 'handstand_pushup',
-    label: 'HSPU',
-    shortLabel: 'HSPU',
-    description: 'Handstand push-up progression mastery',
-    icon: 'ArrowUp',
-    scoreUnit: 'lvl',
-    sortDirection: 'desc',
-  },
-  {
-    id: 'weighted_strength',
-    label: 'Weighted Strength',
-    shortLabel: 'Strength',
-    description: 'Combined weighted pull-up and dip strength',
-    icon: 'Dumbbell',
-    scoreUnit: 'lbs',
-    sortDirection: 'desc',
-  },
-]
-
-export function getCategoryConfig(category: LeaderboardCategory): LeaderboardCategoryConfig | undefined {
-  return LEADERBOARD_CATEGORIES.find(c => c.id === category)
-}
-
-// =============================================================================
-// LEADERBOARD ENTRY
-// =============================================================================
-
-export interface LeaderboardBadge {
-  id: string
-  name: string
-  tier: 'common' | 'rare' | 'epic' | 'legendary'
-}
+  | 'handstand_push_up'
 
 export interface LeaderboardEntry {
   userId: string
   displayName: string
-  avatarUrl?: string
+  avatar?: string | null
   rank: number
   score: number
-  formattedScore: string
-  level?: string // e.g., "Advanced", "Intermediate"
-  badges?: LeaderboardBadge[]
-  isPro?: boolean
+  scoreLabel: string // Human-readable score (e.g., "847 pts", "21 days", "Advanced")
+  level?: string // Optional level classification
+  achievementCount?: number
+  subscriptionTier?: 'free' | 'pro' | 'elite'
   isCurrentUser?: boolean
-  lastUpdated: string
 }
 
-// =============================================================================
-// LEADERBOARD RESPONSE
-// =============================================================================
+export interface LeaderboardMetadata {
+  category: LeaderboardCategory
+  title: string
+  description: string
+  scoreUnit: string
+  icon: 'trophy' | 'flame' | 'target' | 'dumbbell' | 'crown' | 'star'
+  sortDirection: 'desc' | 'asc'
+}
 
 export interface LeaderboardData {
-  category: LeaderboardCategory
-  categoryConfig: LeaderboardCategoryConfig
+  metadata: LeaderboardMetadata
   entries: LeaderboardEntry[]
-  userRank?: LeaderboardEntry // Current user's position if not in top entries
+  userPosition?: LeaderboardEntry | null
   totalParticipants: number
   lastUpdated: string
 }
 
-// =============================================================================
-// USER RANKING SUMMARY
-// =============================================================================
-
-export interface UserRankingSummary {
-  userId: string
-  displayName: string
-  rankings: {
-    category: LeaderboardCategory
-    rank: number
-    score: number
-    percentile: number // Top X%
-  }[]
-  bestCategory: LeaderboardCategory | null
-  overallRank: number
-}
-
-// =============================================================================
-// SKILL PROGRESSION LEVELS (for skill leaderboards)
-// =============================================================================
-
-export const SKILL_PROGRESSION_LABELS: Record<string, Record<number, string>> = {
+// Leaderboard category metadata
+export const LEADERBOARD_CATEGORIES: Record<LeaderboardCategory, LeaderboardMetadata> = {
+  global_spartan_score: {
+    category: 'global_spartan_score',
+    title: 'Spartan Score',
+    description: 'Overall performance ranking combining strength, skill, consistency, and achievements',
+    scoreUnit: 'pts',
+    icon: 'trophy',
+    sortDirection: 'desc',
+  },
+  consistency: {
+    category: 'consistency',
+    title: 'Consistency',
+    description: 'Training streak and workout frequency',
+    scoreUnit: 'days',
+    icon: 'flame',
+    sortDirection: 'desc',
+  },
   front_lever: {
-    0: 'Tuck',
-    1: 'Adv. Tuck',
-    2: 'Straddle',
-    3: 'Half',
-    4: 'Full',
+    category: 'front_lever',
+    title: 'Front Lever',
+    description: 'Front lever progression ranking',
+    scoreUnit: 'level',
+    icon: 'target',
+    sortDirection: 'desc',
   },
   planche: {
+    category: 'planche',
+    title: 'Planche',
+    description: 'Planche progression ranking',
+    scoreUnit: 'level',
+    icon: 'target',
+    sortDirection: 'desc',
+  },
+  muscle_up: {
+    category: 'muscle_up',
+    title: 'Muscle-Up',
+    description: 'Muscle-up progression ranking',
+    scoreUnit: 'level',
+    icon: 'dumbbell',
+    sortDirection: 'desc',
+  },
+  handstand_push_up: {
+    category: 'handstand_push_up',
+    title: 'HSPU',
+    description: 'Handstand push-up progression ranking',
+    scoreUnit: 'level',
+    icon: 'star',
+    sortDirection: 'desc',
+  },
+}
+
+// Skill level names for display
+export const SKILL_LEVEL_NAMES: Record<string, Record<number, string>> = {
+  planche: {
     0: 'Tuck',
-    1: 'Adv. Tuck',
+    1: 'Advanced Tuck',
     2: 'Straddle',
-    3: 'Half',
-    4: 'Full',
+    3: 'Full',
+    4: 'Maltese',
+  },
+  front_lever: {
+    0: 'Tuck',
+    1: 'Advanced Tuck',
+    2: 'Straddle',
+    3: 'Full',
+    4: 'Wide',
   },
   muscle_up: {
     0: 'Kipping',
     1: 'Strict',
     2: 'Weighted',
     3: 'Slow',
-    4: 'Ring MU',
+    4: 'One Arm',
   },
-  handstand_pushup: {
+  handstand_push_up: {
     0: 'Pike',
     1: 'Wall',
-    2: 'Free',
+    2: 'Freestanding',
     3: 'Deficit',
-    4: '90° Push',
+    4: '90 Degree',
   },
-}
-
-export function getSkillLevelLabel(skillName: string, level: number): string {
-  return SKILL_PROGRESSION_LABELS[skillName]?.[level] || `Level ${level}`
-}
-
-// =============================================================================
-// SCORING HELPERS
-// =============================================================================
-
-export function formatLeaderboardScore(score: number, category: LeaderboardCategory): string {
-  const config = getCategoryConfig(category)
-  if (!config) return String(score)
-  
-  switch (category) {
-    case 'global_spartan_score':
-      return score.toLocaleString()
-    case 'consistency':
-      return `${score} ${score === 1 ? 'day' : 'days'}`
-    case 'weighted_strength':
-      return `${score} lbs`
-    case 'front_lever':
-    case 'planche':
-    case 'muscle_up':
-    case 'handstand_pushup':
-      return getSkillLevelLabel(category, score)
-    default:
-      return String(score)
-  }
 }

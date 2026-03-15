@@ -15,13 +15,12 @@ import {
 } from '@/components/ui/select'
 import { Navigation } from '@/components/shared/Navigation'
 import { PageHeader } from '@/components/shared/PageHeader'
-import { Settings, Crown, Shield } from 'lucide-react'
+import { Settings, Crown, Shield, Target } from 'lucide-react'
 import { SKILL_DEFINITIONS } from '@/lib/skills'
 import { isOwner, getCurrentUserEmail } from '@/lib/owner-access'
 import { PRICING, TRIAL } from '@/lib/billing/pricing'
-import { getCurrentTier, hasProAccess } from '@/lib/feature-access'
-import { useSubscriptionStatus, shouldShowUpgradePrompt, getUpgradeCtaText } from '@/lib/billing/subscription-status'
-import { SubscriptionStatusIndicator } from '@/components/billing/pro-badge'
+import { hasProAccess } from '@/lib/feature-access'
+import { useSubscriptionDisplay } from '@/lib/billing/subscription-status'
 import Link from 'next/link'
 import {
   getAthleteProfile,
@@ -29,6 +28,65 @@ import {
   type AthleteProfile,
 } from '@/lib/data-service'
 import { UpdateMetricsCard } from '@/components/dashboard/UpdateMetricsCard'
+import { Sparkles } from 'lucide-react'
+
+// Subscription Billing Card - handles Pro and Trial states
+function SubscriptionBillingCard() {
+  const subscriptionInfo = useSubscriptionDisplay()
+  
+  const statusLabel = subscriptionInfo.isTrialing ? 'Trial Active' : 'Active'
+  const statusDescription = subscriptionInfo.isTrialing 
+    ? `${subscriptionInfo.trialDaysRemaining} day${subscriptionInfo.trialDaysRemaining !== 1 ? 's' : ''} remaining in your trial. You won't be charged until it ends.`
+    : 'Full access to all training intelligence features.'
+  
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-3 p-4 rounded-lg bg-gradient-to-r from-amber-500/10 to-transparent border border-amber-500/20">
+        <div className="w-10 h-10 rounded-lg bg-amber-500/20 flex items-center justify-center">
+          {subscriptionInfo.isTrialing ? (
+            <Sparkles className="w-5 h-5 text-amber-400" />
+          ) : (
+            <Crown className="w-5 h-5 text-amber-400" />
+          )}
+        </div>
+        <div className="flex-1">
+          <div className="flex items-center gap-2">
+            <span className="text-[#F5F5F5] font-medium">SpartanLab Pro</span>
+            <span className="px-2 py-0.5 text-xs rounded bg-amber-500/20 text-amber-400 border border-amber-500/30">
+              {statusLabel}
+            </span>
+          </div>
+          <p className="text-sm text-[#A5A5A5]">
+            {statusDescription}
+          </p>
+        </div>
+      </div>
+      <Button 
+        variant="outline" 
+        className="w-full border-[#3A3A3A] text-[#A5A5A5] hover:bg-[#2A2A2A]"
+        onClick={async () => {
+          try {
+            const res = await fetch('/api/stripe/create-portal-session', { method: 'POST' })
+            const data = await res.json()
+            if (data.url) {
+              window.location.href = data.url
+            }
+          } catch (error) {
+            console.error('Portal error:', error)
+          }
+        }}
+      >
+        Manage Billing
+      </Button>
+      <p className="text-xs text-[#6B7280]">
+        Billing questions?{' '}
+        <a href="mailto:billing@spartanlab.app" className="text-[#A5A5A5] hover:text-[#F5F5F5] transition-colors">
+          billing@spartanlab.app
+        </a>
+      </p>
+    </div>
+  )
+}
 
 export default function SettingsPage() {
   console.log("[AUTH_PROOF] settings auth-prod-unblock-v1")
@@ -204,8 +262,28 @@ export default function SettingsPage() {
           <UpdateMetricsCard onUpdate={loadProfile} />
         </div>
         
-        {/* Training Profile - Re-run Onboarding */}
-        <TrainingProfileCard />
+        {/* Redo Onboarding Section */}
+        <Card className="bg-[#2A2A2A] border-[#3A3A3A] p-8 mt-6">
+          <div className="mb-4">
+            <h2 className="text-xl font-bold mb-2">Training Profile</h2>
+            <p className="text-sm text-[#A5A5A5]">
+              Want to update your goals, skills, or training preferences? You can re-run the full onboarding process.
+            </p>
+          </div>
+          
+          <Link href="/onboarding">
+            <Button 
+              variant="outline" 
+              className="w-full border-[#3A3A3A] text-[#A5A5A5] hover:bg-[#2A2A2A] hover:text-[#F5F5F5]"
+            >
+              <Target className="w-4 h-4 mr-2" />
+              Update Training Goals
+            </Button>
+          </Link>
+          <p className="text-xs text-[#6B7280] mt-2">
+            This will walk you through your goals, skill levels, and training schedule again.
+          </p>
+        </Card>
         
         {/* Subscription & Billing Section */}
         <SubscriptionBillingCard />
@@ -295,34 +373,46 @@ function SubscriptionBillingCard() {
               </div>
             )}
             <Button 
-              variant="outline" 
-              className="w-full border-[#3A3A3A] text-[#A5A5A5] hover:bg-[#2A2A2A]"
               onClick={handleManageBilling}
+              variant="outline" 
+              className="w-full border-[#3A3A3A] text-[#A5A5A5] hover:bg-[#3A3A3A] hover:text-[#F5F5F5]"
             >
-              Manage Billing
+              Manage Subscription
             </Button>
-            <p className="text-xs text-[#6B7280]">
-              Billing questions?{' '}
-              <a href="mailto:billing@spartanlab.app" className="text-[#A5A5A5] hover:text-[#F5F5F5] transition-colors">
-                billing@spartanlab.app
-              </a>
-            </p>
+            <div className="text-xs text-[#6B7280]">
+              Logged in as: {getCurrentUserEmail() || 'Owner'}
+            </div>
           </>
         ) : (
-          // Free user upgrade prompt
-          <>
-            <Link href="/upgrade">
-              <Button className="w-full bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-semibold">
-                <Crown className="w-4 h-4 mr-2" />
-                {TRIAL.ctaText}
-              </Button>
-            </Link>
-            <p className="text-xs text-center text-[#6B7280] mt-2">
-              {TRIAL.explanationShort}
-            </p>
-          </>
-        )}
-      </div>
-    </Card>
+            // Free user display
+            <div className="space-y-4">
+              <div className="flex items-center gap-3 p-4 rounded-lg bg-[#1A1A1A] border border-[#3A3A3A]">
+                <div className="w-10 h-10 rounded-lg bg-[#2A2A2A] flex items-center justify-center">
+                  <Crown className="w-5 h-5 text-[#6B7280]" />
+                </div>
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[#F5F5F5] font-medium">Free Plan</span>
+                  </div>
+                  <p className="text-sm text-[#A5A5A5]">
+                    Upgrade to Pro for deeper insights and adaptive programming.
+                  </p>
+                </div>
+              </div>
+              
+              <Link href="/upgrade">
+                <Button className="w-full bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-semibold">
+                  <Crown className="w-4 h-4 mr-2" />
+                  {TRIAL.ctaText}
+                </Button>
+              </Link>
+              <p className="text-xs text-center text-[#6B7280] mt-2">
+                {TRIAL.explanationShort}
+              </p>
+            </div>
+          )}
+        </Card>
+      </main>
+    </div>
   )
 }

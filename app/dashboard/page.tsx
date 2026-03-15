@@ -92,6 +92,12 @@ import { SafeWidget } from '@/components/shared/WidgetErrorBoundary'
 import { AchievementsSummaryCard } from '@/components/achievements/achievements-panel'
 import { ChallengesSummaryCard } from '@/components/challenges/challenges-panel'
 import { useAuth } from '@clerk/nextjs'
+import { AchievementsCard } from '@/components/dashboard/AchievementsCard'
+import { AchievementNotification } from '@/components/achievements/AchievementNotification'
+import { LeaderboardPreviewCard } from '@/components/leaderboards/LeaderboardTabs'
+import { ChallengesCard } from '@/components/challenges/ChallengesCard'
+import { ChallengeNotification } from '@/components/challenges/ChallengeNotification'
+import { WelcomeBanner } from '@/components/dashboard/WelcomeBanner'
 
 function DashboardContent() {
   const { isLoaded: isAuthLoaded } = useAuth()
@@ -354,6 +360,9 @@ function DashboardContent() {
     <PageContainer>
       <SectionStack gap="xl">
         
+        {/* Welcome Banner for Post-Onboarding */}
+        <WelcomeBanner />
+        
         {/* Welcome Card for First-Run Users */}
         {showWelcome && (
           <WelcomeCard 
@@ -541,6 +550,30 @@ function DashboardContent() {
         </div>
         
         {/* ============================================================= */}
+        {/* ACHIEVEMENTS - Medal collection */}
+        {/* ============================================================= */}
+        
+        <SafeWidget name="AchievementsCard">
+          <AchievementsCard maxDisplay={6} />
+        </SafeWidget>
+        
+        {/* ============================================================= */}
+        {/* CHALLENGES - Weekly/monthly/seasonal challenges */}
+        {/* ============================================================= */}
+        
+        <SafeWidget name="ChallengesCard">
+          <ChallengesCard maxDisplay={3} />
+        </SafeWidget>
+        
+        {/* ============================================================= */}
+        {/* LEADERBOARD - Community rankings */}
+        {/* ============================================================= */}
+        
+        <SafeWidget name="LeaderboardPreviewCard">
+          <LeaderboardPreviewCard />
+        </SafeWidget>
+        
+        {/* ============================================================= */}
         {/* GOAL PROJECTIONS - Timeline estimates */}
         {/* ============================================================= */}
         
@@ -702,6 +735,12 @@ function DashboardContent() {
         </div>
         
       </SectionStack>
+      
+      {/* Achievement Unlock Notification */}
+      <AchievementNotification />
+      
+      {/* Challenge Completion Notification */}
+      <ChallengeNotification />
     </PageContainer>
   )
 }

@@ -1,126 +1,94 @@
-/**
- * SpartanLab Challenge Definitions
- * 
- * Centralized challenge registry for structured training competitions.
- * Supports weekly, monthly, and seasonal challenges.
- */
+// Challenge Definitions
+// Centralized challenge system for SpartanLab
+// Supports weekly, monthly, and seasonal challenges
 
-// =============================================================================
-// TYPES
-// =============================================================================
-
-export type ChallengeCategory = 
-  | 'consistency'
-  | 'volume'
-  | 'strength'
-  | 'skill'
-
-export type ChallengePeriod = 'weekly' | 'monthly' | 'seasonal'
-
-export type ChallengeStatus = 'upcoming' | 'active' | 'completed' | 'expired'
-
-export type ChallengeGoalType = 
-  | 'workout_count'
-  | 'rep_total'
-  | 'skill_sessions'
-  | 'streak_days'
-  | 'exercise_volume'
+export type ChallengeCategory = 'weekly' | 'monthly' | 'seasonal' | 'special'
+export type ChallengeGoalType = 'workout_count' | 'rep_total' | 'streak_days' | 'skill_sessions' | 'training_minutes' | 'exercise_count'
+export type ChallengeRewardType = 'badge' | 'score_boost' | 'achievement_unlock'
+export type SeasonId = 'season_1' | 'season_2' | 'season_3' | 'season_4'
 
 export interface ChallengeReward {
-  /** Badge ID to unlock on completion */
-  badgeId: string
-  /** Points to add to Spartan Score */
-  pointBonus: number
-  /** Display name for the reward */
-  rewardName: string
+  type: ChallengeRewardType
+  value: number // badge id, score boost amount, or achievement id
+  label: string
 }
 
-export interface ChallengeDefinition {
+export interface Challenge {
   id: string
   name: string
   description: string
   category: ChallengeCategory
-  period: ChallengePeriod
-  /** ISO date string */
-  startDate: string
-  /** ISO date string */
-  endDate: string
-  /** What we're counting */
+  startDate: string // ISO date
+  endDate: string // ISO date
   goalType: ChallengeGoalType
-  /** Target value to reach */
   goalValue: number
-  /** Optional: specific exercise or skill to target */
-  targetExercise?: string
-  /** Reward for completion */
   reward: ChallengeReward
-  /** Season ID if part of a seasonal competition */
-  seasonId?: string
-  /** Icon for display */
-  icon: 'flame' | 'trophy' | 'target' | 'zap' | 'dumbbell' | 'star'
+  seasonId?: SeasonId
+  icon: 'flame' | 'target' | 'trophy' | 'star' | 'dumbbell' | 'lightning' | 'medal' | 'crown'
 }
 
-export interface UserChallengeProgress {
+export interface ChallengeProgress {
   challengeId: string
-  userId: string
   currentValue: number
-  goalValue: number
-  startedAt: string
+  completed: boolean
   completedAt?: string
-  lastUpdated: string
+  startedAt: string
 }
 
-export interface Season {
-  id: string
+export interface SeasonInfo {
+  id: SeasonId
   name: string
-  displayName: string
   startDate: string
   endDate: string
-  description: string
-  /** Challenges included in this season */
-  challengeIds: string[]
-  /** Season badge for completing all challenges */
-  completionBadgeId: string
+  theme: string
+  badge: string
 }
 
 // =============================================================================
 // SEASONS
 // =============================================================================
 
-export const SEASONS: Season[] = [
+export const SEASONS: SeasonInfo[] = [
   {
-    id: 'season_1_2026',
-    name: 'Season 1',
-    displayName: 'Spartan Season 1: Foundation',
-    startDate: '2026-01-01T00:00:00Z',
-    endDate: '2026-03-31T23:59:59Z',
-    description: 'Build your foundation with consistency and strength challenges.',
-    challengeIds: [
-      'weekly_warrior_s1w1',
-      'weekly_warrior_s1w2',
-      'monthly_volume_jan',
-      'monthly_consistency_feb',
-      'seasonal_strength_s1',
-    ],
-    completionBadgeId: 'season_1_champion',
+    id: 'season_1',
+    name: 'Season 1: Foundation',
+    startDate: '2026-01-01',
+    endDate: '2026-03-31',
+    theme: 'Building the base',
+    badge: 'season_1_badge',
   },
   {
-    id: 'season_2_2026',
-    name: 'Season 2',
-    displayName: 'Spartan Season 2: Progression',
-    startDate: '2026-04-01T00:00:00Z',
-    endDate: '2026-06-30T23:59:59Z',
-    description: 'Push your limits with skill and progression challenges.',
-    challengeIds: [],
-    completionBadgeId: 'season_2_champion',
+    id: 'season_2',
+    name: 'Season 2: Rising',
+    startDate: '2026-04-01',
+    endDate: '2026-06-30',
+    theme: 'Pushing limits',
+    badge: 'season_2_badge',
+  },
+  {
+    id: 'season_3',
+    name: 'Season 3: Peak',
+    startDate: '2026-07-01',
+    endDate: '2026-09-30',
+    theme: 'Maximum intensity',
+    badge: 'season_3_badge',
+  },
+  {
+    id: 'season_4',
+    name: 'Season 4: Legacy',
+    startDate: '2026-10-01',
+    endDate: '2026-12-31',
+    theme: 'Proving greatness',
+    badge: 'season_4_badge',
   },
 ]
 
 // =============================================================================
-// CHALLENGE REGISTRY
+// CHALLENGE DEFINITIONS
 // =============================================================================
 
-// Helper to get current week/month boundaries
-function getCurrentWeekBounds(): { start: string; end: string } {
+// Helper to get current week/month dates
+function getWeekDates(): { start: string; end: string } {
   const now = new Date()
   const dayOfWeek = now.getDay()
   const startOfWeek = new Date(now)
@@ -132,236 +100,204 @@ function getCurrentWeekBounds(): { start: string; end: string } {
   endOfWeek.setHours(23, 59, 59, 999)
   
   return {
-    start: startOfWeek.toISOString(),
-    end: endOfWeek.toISOString(),
+    start: startOfWeek.toISOString().split('T')[0],
+    end: endOfWeek.toISOString().split('T')[0],
   }
 }
 
-function getCurrentMonthBounds(): { start: string; end: string } {
+function getMonthDates(): { start: string; end: string } {
   const now = new Date()
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
-  const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999)
+  const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0)
   
   return {
-    start: startOfMonth.toISOString(),
-    end: endOfMonth.toISOString(),
+    start: startOfMonth.toISOString().split('T')[0],
+    end: endOfMonth.toISOString().split('T')[0],
   }
 }
 
-// Dynamic challenges that reset each period
-export function getActiveChallenges(): ChallengeDefinition[] {
-  const weekBounds = getCurrentWeekBounds()
-  const monthBounds = getCurrentMonthBounds()
+function getCurrentSeason(): SeasonInfo | null {
+  const now = new Date().toISOString().split('T')[0]
+  return SEASONS.find(s => now >= s.startDate && now <= s.endDate) || null
+}
+
+// Generate dynamic challenges based on current date
+export function getActiveChallenges(): Challenge[] {
+  const week = getWeekDates()
+  const month = getMonthDates()
+  const season = getCurrentSeason()
   
-  // Build weekly challenge ID based on current week
-  const weekNum = Math.ceil((new Date().getTime() - new Date('2026-01-01').getTime()) / (7 * 24 * 60 * 60 * 1000))
-  const monthName = new Date().toLocaleString('en-US', { month: 'short' }).toLowerCase()
-  
-  const challenges: ChallengeDefinition[] = [
-    // ===========================================
-    // WEEKLY CHALLENGES
-    // ===========================================
+  const challenges: Challenge[] = [
+    // Weekly Challenges
     {
-      id: `weekly_workouts_w${weekNum}`,
+      id: `weekly_workouts_${week.start}`,
       name: 'Weekly Warrior',
       description: 'Complete 4 workouts this week',
-      category: 'consistency',
-      period: 'weekly',
-      startDate: weekBounds.start,
-      endDate: weekBounds.end,
+      category: 'weekly',
+      startDate: week.start,
+      endDate: week.end,
       goalType: 'workout_count',
       goalValue: 4,
-      reward: {
-        badgeId: 'weekly_warrior',
-        pointBonus: 25,
-        rewardName: 'Weekly Warrior Badge',
-      },
+      reward: { type: 'score_boost', value: 25, label: '+25 Spartan Score' },
       icon: 'flame',
     },
     {
-      id: `weekly_volume_w${weekNum}`,
-      name: 'Volume Week',
-      description: 'Log 300 total reps this week',
-      category: 'volume',
-      period: 'weekly',
-      startDate: weekBounds.start,
-      endDate: weekBounds.end,
+      id: `weekly_reps_${week.start}`,
+      name: 'Rep Crusher',
+      description: 'Log 200 total reps this week',
+      category: 'weekly',
+      startDate: week.start,
+      endDate: week.end,
       goalType: 'rep_total',
-      goalValue: 300,
-      reward: {
-        badgeId: 'volume_week',
-        pointBonus: 30,
-        rewardName: 'Volume Badge',
-      },
-      icon: 'target',
-    },
-    {
-      id: `weekly_skill_w${weekNum}`,
-      name: 'Skill Focus',
-      description: 'Complete 3 skill training sessions',
-      category: 'skill',
-      period: 'weekly',
-      startDate: weekBounds.start,
-      endDate: weekBounds.end,
-      goalType: 'skill_sessions',
-      goalValue: 3,
-      reward: {
-        badgeId: 'skill_focus',
-        pointBonus: 25,
-        rewardName: 'Skill Focus Badge',
-      },
-      icon: 'star',
-    },
-    
-    // ===========================================
-    // MONTHLY CHALLENGES
-    // ===========================================
-    {
-      id: `monthly_consistency_${monthName}`,
-      name: 'Monthly Discipline',
-      description: 'Train at least 16 days this month',
-      category: 'consistency',
-      period: 'monthly',
-      startDate: monthBounds.start,
-      endDate: monthBounds.end,
-      goalType: 'workout_count',
-      goalValue: 16,
-      reward: {
-        badgeId: 'monthly_discipline',
-        pointBonus: 100,
-        rewardName: 'Discipline Medal',
-      },
-      icon: 'trophy',
-    },
-    {
-      id: `monthly_volume_${monthName}`,
-      name: 'Volume Champion',
-      description: 'Log 2,000 total reps this month',
-      category: 'volume',
-      period: 'monthly',
-      startDate: monthBounds.start,
-      endDate: monthBounds.end,
-      goalType: 'rep_total',
-      goalValue: 2000,
-      reward: {
-        badgeId: 'volume_champion',
-        pointBonus: 150,
-        rewardName: 'Volume Champion Medal',
-      },
+      goalValue: 200,
+      reward: { type: 'score_boost', value: 15, label: '+15 Spartan Score' },
       icon: 'dumbbell',
     },
     {
-      id: `monthly_streak_${monthName}`,
-      name: 'Streak Master',
-      description: 'Achieve a 14-day training streak',
-      category: 'consistency',
-      period: 'monthly',
-      startDate: monthBounds.start,
-      endDate: monthBounds.end,
+      id: `weekly_streak_${week.start}`,
+      name: 'Consistency King',
+      description: 'Train 5 days in a row this week',
+      category: 'weekly',
+      startDate: week.start,
+      endDate: week.end,
       goalType: 'streak_days',
-      goalValue: 14,
-      reward: {
-        badgeId: 'streak_master',
-        pointBonus: 125,
-        rewardName: 'Streak Master Medal',
-      },
-      icon: 'flame',
+      goalValue: 5,
+      reward: { type: 'badge', value: 1, label: 'Consistency Badge' },
+      icon: 'lightning',
+    },
+    
+    // Monthly Challenges
+    {
+      id: `monthly_workouts_${month.start}`,
+      name: 'Monthly Grinder',
+      description: 'Complete 16 workouts this month',
+      category: 'monthly',
+      startDate: month.start,
+      endDate: month.end,
+      goalType: 'workout_count',
+      goalValue: 16,
+      reward: { type: 'score_boost', value: 75, label: '+75 Spartan Score' },
+      icon: 'trophy',
+    },
+    {
+      id: `monthly_reps_${month.start}`,
+      name: 'Volume Master',
+      description: 'Log 1,000 total reps this month',
+      category: 'monthly',
+      startDate: month.start,
+      endDate: month.end,
+      goalType: 'rep_total',
+      goalValue: 1000,
+      reward: { type: 'badge', value: 2, label: 'Volume Badge' },
+      icon: 'target',
+    },
+    {
+      id: `monthly_skill_${month.start}`,
+      name: 'Skill Focus',
+      description: 'Complete 8 skill training sessions this month',
+      category: 'monthly',
+      startDate: month.start,
+      endDate: month.end,
+      goalType: 'skill_sessions',
+      goalValue: 8,
+      reward: { type: 'score_boost', value: 50, label: '+50 Spartan Score' },
+      icon: 'star',
     },
   ]
+  
+  // Add seasonal challenge if in an active season
+  if (season) {
+    challenges.push({
+      id: `seasonal_${season.id}`,
+      name: `${season.name.split(':')[0]} Champion`,
+      description: `Complete 50 workouts during ${season.name.split(':')[0]}`,
+      category: 'seasonal',
+      startDate: season.startDate,
+      endDate: season.endDate,
+      goalType: 'workout_count',
+      goalValue: 50,
+      reward: { type: 'badge', value: 10, label: `${season.name.split(':')[0]} Medal` },
+      seasonId: season.id,
+      icon: 'crown',
+    })
+    
+    challenges.push({
+      id: `seasonal_reps_${season.id}`,
+      name: 'Seasonal Volume',
+      description: `Log 5,000 reps during ${season.name.split(':')[0]}`,
+      category: 'seasonal',
+      startDate: season.startDate,
+      endDate: season.endDate,
+      goalType: 'rep_total',
+      goalValue: 5000,
+      reward: { type: 'score_boost', value: 150, label: '+150 Spartan Score' },
+      seasonId: season.id,
+      icon: 'medal',
+    })
+  }
   
   return challenges
 }
 
-// =============================================================================
-// HELPER FUNCTIONS
-// =============================================================================
-
-/**
- * Get challenge by ID
- */
-export function getChallengeById(id: string): ChallengeDefinition | undefined {
-  const challenges = getActiveChallenges()
-  return challenges.find(c => c.id === id)
+// Get challenge by ID
+export function getChallengeById(id: string): Challenge | null {
+  return getActiveChallenges().find(c => c.id === id) || null
 }
 
-/**
- * Get challenges by period type
- */
-export function getChallengesByPeriod(period: ChallengePeriod): ChallengeDefinition[] {
-  return getActiveChallenges().filter(c => c.period === period)
+// Get challenges by category
+export function getChallengesByCategory(category: ChallengeCategory): Challenge[] {
+  return getActiveChallenges().filter(c => c.category === category)
 }
 
-/**
- * Get current season
- */
-export function getCurrentSeason(): Season | undefined {
-  const now = new Date().toISOString()
-  return SEASONS.find(s => s.startDate <= now && s.endDate >= now)
+// Get current season
+export function getCurrentSeasonInfo(): SeasonInfo | null {
+  return getCurrentSeason()
 }
 
-/**
- * Get season by ID
- */
-export function getSeasonById(id: string): Season | undefined {
-  return SEASONS.find(s => s.id === id)
-}
-
-/**
- * Get challenge status based on dates
- */
-export function getChallengeStatus(challenge: ChallengeDefinition): ChallengeStatus {
-  const now = new Date().toISOString()
-  
-  if (now < challenge.startDate) return 'upcoming'
-  if (now > challenge.endDate) return 'expired'
-  return 'active'
-}
-
-/**
- * Calculate time remaining for a challenge
- */
-export function getTimeRemaining(challenge: ChallengeDefinition): {
+// Calculate time remaining for a challenge
+export function getChallengeTimeRemaining(challenge: Challenge): { 
   days: number
   hours: number
-  minutes: number
-  expired: boolean
+  label: string
+  expired: boolean 
 } {
-  const now = new Date().getTime()
-  const end = new Date(challenge.endDate).getTime()
-  const diff = end - now
+  const now = new Date()
+  const end = new Date(challenge.endDate + 'T23:59:59')
+  const diff = end.getTime() - now.getTime()
   
   if (diff <= 0) {
-    return { days: 0, hours: 0, minutes: 0, expired: true }
+    return { days: 0, hours: 0, label: 'Expired', expired: true }
   }
   
   const days = Math.floor(diff / (1000 * 60 * 60 * 24))
   const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60))
-  const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60))
   
-  return { days, hours, minutes, expired: false }
+  let label = ''
+  if (days > 0) {
+    label = `${days}d ${hours}h left`
+  } else if (hours > 0) {
+    label = `${hours}h left`
+  } else {
+    label = 'Less than 1h left'
+  }
+  
+  return { days, hours, label, expired: false }
 }
 
-/**
- * Get category display name
- */
-export function getCategoryDisplayName(category: ChallengeCategory): string {
-  const names: Record<ChallengeCategory, string> = {
-    consistency: 'Consistency',
-    volume: 'Volume',
-    strength: 'Strength',
-    skill: 'Skill',
-  }
-  return names[category]
+// Category labels for display
+export const CHALLENGE_CATEGORY_LABELS: Record<ChallengeCategory, string> = {
+  weekly: 'Weekly',
+  monthly: 'Monthly',
+  seasonal: 'Seasonal',
+  special: 'Special Event',
 }
 
-/**
- * Get period display name
- */
-export function getPeriodDisplayName(period: ChallengePeriod): string {
-  const names: Record<ChallengePeriod, string> = {
-    weekly: 'Weekly',
-    monthly: 'Monthly',
-    seasonal: 'Season',
-  }
-  return names[period]
+// Goal type labels for display
+export const GOAL_TYPE_LABELS: Record<ChallengeGoalType, string> = {
+  workout_count: 'Workouts',
+  rep_total: 'Reps',
+  streak_days: 'Day Streak',
+  skill_sessions: 'Skill Sessions',
+  training_minutes: 'Minutes',
+  exercise_count: 'Exercises',
 }

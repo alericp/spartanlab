@@ -5,11 +5,11 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useAuth } from '@clerk/nextjs'
 import { Button } from '@/components/ui/button'
-import { LayoutDashboard, Target, Dumbbell, Calendar, ClipboardList, TrendingUp, Activity, Settings, Menu, X, Wrench, BookOpen, LogIn, LogOut, Trophy, Flame } from 'lucide-react'
+import { LayoutDashboard, Target, Dumbbell, Calendar, ClipboardList, TrendingUp, Activity, Settings, Menu, X, Wrench, BookOpen, LogIn, LogOut, Trophy } from 'lucide-react'
 import { SpartanIcon } from '@/components/brand/SpartanLogo'
 import { useState, useEffect } from 'react'
 import { cn } from '@/lib/utils'
-import { PlanStatusBadge } from '@/components/billing/pro-badge'
+import { SubscriptionBadge, useSubscriptionDisplay } from '@/components/billing/SubscriptionBadge'
 
 // Primary navigation - essential daily actions
 const NAV_ITEMS = [
@@ -22,8 +22,8 @@ const NAV_ITEMS = [
 
 // Secondary navigation - deeper features (shown in mobile menu and settings)
 const SECONDARY_NAV_ITEMS = [
-  { href: '/challenges', label: 'Challenges', icon: Flame },
-  { href: '/achievements', label: 'Achievements', icon: Trophy },
+  { href: '/challenges', label: 'Challenges', icon: Target },
+  { href: '/leaderboard', label: 'Leaderboard', icon: Trophy },
   { href: '/recovery', label: 'Recovery', icon: Activity },
   { href: '/tools', label: 'Tools', icon: Wrench },
   { href: '/workouts', label: 'History', icon: ClipboardList },
@@ -38,7 +38,7 @@ const PAGE_TITLES: Record<string, string> = {
   '/strength': 'Strength',
   '/guides': 'Guides',
   '/challenges': 'Challenges',
-  '/achievements': 'Achievements',
+  '/leaderboard': 'Leaderboard',
   '/recovery': 'Recovery',
   '/tools': 'Tools',
   '/workouts': 'History',
@@ -63,6 +63,7 @@ export function Navigation() {
   const pathname = usePathname()
   const [mobileOpen, setMobileOpen] = useState(false)
   const { userId, signOut, isLoaded } = useAuth()
+  const subscriptionInfo = useSubscriptionDisplay()
 
   // Lock body scroll when mobile menu is open
   useEffect(() => {
@@ -89,11 +90,18 @@ export function Navigation() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
         <div className="relative flex items-center justify-between h-16">
           {/* Logo - Links to dashboard for app users */}
-          <Link href="/dashboard" className="flex items-center gap-2 shrink-0">
-            <SpartanIcon size={28} />
-            <span className="text-xl font-bold hidden sm:inline">SpartanLab</span>
-            <PlanStatusBadge size="xs" className="hidden sm:inline-flex" />
-          </Link>
+          <div className="flex items-center gap-2 shrink-0">
+            <Link href="/dashboard" className="flex items-center gap-2">
+              <SpartanIcon size={28} />
+              <span className="text-xl font-bold hidden sm:inline">SpartanLab</span>
+            </Link>
+            {/* Pro/Trial badge - only on desktop */}
+            {subscriptionInfo.isPaid && (
+              <div className="hidden sm:block">
+                <SubscriptionBadge size="sm" showTrialDays={false} />
+              </div>
+            )}
+          </div>
 
           {/* Page title - centered, visible on mobile only (desktop shows full nav) */}
           {pageTitle && (

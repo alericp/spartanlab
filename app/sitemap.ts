@@ -186,6 +186,20 @@ export default function sitemap(): MetadataRoute.Sitemap {
     },
   ]
 
+  // Program template pages - educational workout programs
+  const programPages: MetadataRoute.Sitemap = [
+    'front-lever-program',
+    'planche-program',
+    'muscle-up-program',
+    'handstand-push-up-program',
+    'calisthenics-beginner-program',
+  ].map(slug => ({
+    url: `${baseUrl}/programs/${slug}`,
+    lastModified: currentDate,
+    changeFrequency: 'monthly' as const,
+    priority: 0.75,
+  }))
+
   // Exercise pages - individual exercise guides
   const exercisePages: MetadataRoute.Sitemap = [
     'pull-up',
@@ -274,5 +288,5 @@ export default function sitemap(): MetadataRoute.Sitemap {
     },
   ]
 
-  return [...staticPages, ...exercisePages, ...guidePages, ...infoPages]
+  return [...staticPages, ...programPages, ...exercisePages, ...guidePages, ...infoPages]
 }

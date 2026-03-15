@@ -92,6 +92,7 @@ import { SafeWidget } from '@/components/shared/WidgetErrorBoundary'
 import { useAuth } from '@clerk/nextjs'
 import { AchievementsCard } from '@/components/dashboard/AchievementsCard'
 import { AchievementNotification } from '@/components/achievements/AchievementNotification'
+import { LeaderboardPreviewCard } from '@/components/leaderboards/LeaderboardTabs'
 
 function DashboardContent() {
   const { isLoaded: isAuthLoaded } = useAuth()
@@ -546,6 +547,14 @@ function DashboardContent() {
         
         <SafeWidget name="AchievementsCard">
           <AchievementsCard maxDisplay={6} />
+        </SafeWidget>
+        
+        {/* ============================================================= */}
+        {/* LEADERBOARD - Community rankings */}
+        {/* ============================================================= */}
+        
+        <SafeWidget name="LeaderboardPreviewCard">
+          <LeaderboardPreviewCard />
         </SafeWidget>
         
         {/* ============================================================= */}

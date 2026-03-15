@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useAuth } from '@clerk/nextjs'
 import { Button } from '@/components/ui/button'
-import { LayoutDashboard, Target, Dumbbell, Calendar, ClipboardList, TrendingUp, Activity, Settings, Menu, X, Wrench, BookOpen, LogIn, LogOut } from 'lucide-react'
+import { LayoutDashboard, Target, Dumbbell, Calendar, ClipboardList, TrendingUp, Activity, Settings, Menu, X, Wrench, BookOpen, LogIn, LogOut, Trophy } from 'lucide-react'
 import { SpartanIcon } from '@/components/brand/SpartanLogo'
 import { useState, useEffect } from 'react'
 import { cn } from '@/lib/utils'
@@ -22,6 +22,7 @@ const NAV_ITEMS = [
 
 // Secondary navigation - deeper features (shown in mobile menu and settings)
 const SECONDARY_NAV_ITEMS = [
+  { href: '/leaderboard', label: 'Leaderboard', icon: Trophy },
   { href: '/recovery', label: 'Recovery', icon: Activity },
   { href: '/tools', label: 'Tools', icon: Wrench },
   { href: '/workouts', label: 'History', icon: ClipboardList },
@@ -35,6 +36,7 @@ const PAGE_TITLES: Record<string, string> = {
   '/skills': 'Skills',
   '/strength': 'Strength',
   '/guides': 'Guides',
+  '/leaderboard': 'Leaderboard',
   '/recovery': 'Recovery',
   '/tools': 'Tools',
   '/workouts': 'History',

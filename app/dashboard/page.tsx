@@ -90,6 +90,7 @@ import { FirstRunGuide, SetupReminderBanner } from '@/components/dashboard/First
 import { UpdateMetricsCard, MetricsUpdateBanner } from '@/components/dashboard/UpdateMetricsCard'
 import { SafeWidget } from '@/components/shared/WidgetErrorBoundary'
 import { AchievementsSummaryCard } from '@/components/achievements/achievements-panel'
+import { ChallengesSummaryCard } from '@/components/challenges/challenges-panel'
 import { useAuth } from '@clerk/nextjs'
 
 function DashboardContent() {
@@ -647,12 +648,18 @@ function DashboardContent() {
         )}
         
         {/* ============================================================= */}
-        {/* SECTION: ACHIEVEMENTS */}
+        {/* SECTION: ACHIEVEMENTS & CHALLENGES */}
         {/* ============================================================= */}
         
-        <SafeWidget name="AchievementsSummaryCard">
-          <AchievementsSummaryCard />
-        </SafeWidget>
+        <div className="grid gap-4 md:grid-cols-2">
+          <SafeWidget name="AchievementsSummaryCard">
+            <AchievementsSummaryCard />
+          </SafeWidget>
+          
+          <SafeWidget name="ChallengesSummaryCard">
+            <ChallengesSummaryCard />
+          </SafeWidget>
+        </div>
         
         {/* ============================================================= */}
         {/* SECTION: PERFORMANCE OVERVIEW (Compact) */}

@@ -26,6 +26,8 @@ import {
 } from '@/lib/workout-log-service'
 import { onTrainingEvent } from '@/lib/achievements/achievement-engine'
 import { showAchievementNotifications } from '@/components/achievements/achievement-notification'
+import { onTrainingEventForChallenges } from '@/lib/challenges/challenge-engine'
+import { showChallengeNotifications } from '@/components/challenges/challenge-notification'
 
 interface WorkoutLogFormProps {
   onSave: (log: WorkoutLog) => void
@@ -84,6 +86,12 @@ export function WorkoutLogForm({ onSave, onCancel }: WorkoutLogFormProps) {
       const newAchievements = onTrainingEvent()
       if (newAchievements.length > 0) {
         showAchievementNotifications(newAchievements)
+      }
+      
+      // Check for completed challenges
+      const completedChallenges = onTrainingEventForChallenges()
+      if (completedChallenges.length > 0) {
+        showChallengeNotifications(completedChallenges)
       }
       
       onSave(log)

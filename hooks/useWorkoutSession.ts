@@ -6,6 +6,8 @@ import { saveWorkoutLog, type WorkoutExercise, type SessionType, type FocusArea,
 import { recordRPESession } from '@/lib/fatigue-engine'
 import { onTrainingEvent } from '@/lib/achievements/achievement-engine'
 import { showAchievementNotifications } from '@/components/achievements/achievement-notification'
+import { onTrainingEventForChallenges } from '@/lib/challenges/challenge-engine'
+import { showChallengeNotifications } from '@/components/challenges/challenge-notification'
 
 // =============================================================================
 // TYPES
@@ -349,12 +351,18 @@ export function useWorkoutSession(session: AdaptiveSession): UseWorkoutSessionRe
         })
       }
 
-      // Check for newly unlocked achievements
+// Check for newly unlocked achievements
       const newAchievements = onTrainingEvent()
       if (newAchievements.length > 0) {
         showAchievementNotifications(newAchievements)
       }
-
+      
+      // Check for completed challenges
+      const completedChallenges = onTrainingEventForChallenges()
+      if (completedChallenges.length > 0) {
+        showChallengeNotifications(completedChallenges)
+      }
+      
       return true
     } catch (error) {
       console.error('Failed to save workout session:', error)

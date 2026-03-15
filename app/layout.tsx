@@ -4,6 +4,7 @@ import { Geist, Geist_Mono } from 'next/font/google'
 import { ClerkProvider } from '@clerk/nextjs'
 import { GlobalErrorBoundary } from '@/components/shared/GlobalErrorBoundary'
 import { AchievementNotificationContainer } from '@/components/achievements/achievement-notification'
+import { ChallengeNotificationContainer } from '@/components/challenges/challenge-notification'
 import { AUTH_BUILD_STAMP } from '@/lib/build-stamp'
 import { JsonLdMultiple } from '@/components/seo/JsonLd'
 import { generateOrganizationSchema, generateWebsiteSchema, generateSoftwareSchema } from '@/lib/seo'
@@ -117,6 +118,7 @@ export default function RootLayout({
           <GlobalErrorBoundary>
             {children}
             <AchievementNotificationContainer />
+            <ChallengeNotificationContainer />
           </GlobalErrorBoundary>
         </ClerkProvider>
       </body>

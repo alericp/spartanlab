@@ -110,7 +110,8 @@ const jsonLdSchemas = [
   generateBreadcrumbSchema([
     { name: 'Home', url: '/' },
     { name: 'Skills', url: '/skills' },
-    { name: 'Planche Progression', url: '/planche-progression' },
+    { name: 'Planche Hub', url: '/skills/planche' },
+    { name: 'Progression Guide', url: '/planche-progression' },
   ]),
   generateFAQSchema(faqs),
 ]
@@ -124,8 +125,8 @@ export default function PlancheProgressionPage() {
         subtitle="Master one of calisthenics' most impressive skills. Understand each stage, what determines readiness, and how to track your progress systematically."
         ctaText="Track Your Progress"
         ctaHref="/skills"
-        secondaryCtaText="View All Features"
-        secondaryCtaHref="/features"
+        secondaryCtaText="Back to Planche Hub"
+        secondaryCtaHref="/skills/planche"
       />
 
       {/* Progression Ladder */}

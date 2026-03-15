@@ -91,6 +91,32 @@ export default function sitemap(): MetadataRoute.Sitemap {
       priority: 0.7,
     },
     
+    // Skill hubs - central educational hubs
+    {
+      url: `${baseUrl}/skills/front-lever`,
+      lastModified: currentDate,
+      changeFrequency: 'monthly',
+      priority: 0.85,
+    },
+    {
+      url: `${baseUrl}/skills/planche`,
+      lastModified: currentDate,
+      changeFrequency: 'monthly',
+      priority: 0.85,
+    },
+    {
+      url: `${baseUrl}/skills/muscle-up`,
+      lastModified: currentDate,
+      changeFrequency: 'monthly',
+      priority: 0.85,
+    },
+    {
+      url: `${baseUrl}/skills/handstand-push-up`,
+      lastModified: currentDate,
+      changeFrequency: 'monthly',
+      priority: 0.85,
+    },
+    
     // Readiness calculators - interactive SEO pages
     {
       url: `${baseUrl}/front-lever-readiness-calculator`,

@@ -120,7 +120,8 @@ const jsonLdSchemas = [
   generateBreadcrumbSchema([
     { name: 'Home', url: '/' },
     { name: 'Skills', url: '/skills' },
-    { name: 'Front Lever Progression', url: '/front-lever-progression' },
+    { name: 'Front Lever Hub', url: '/skills/front-lever' },
+    { name: 'Progression Guide', url: '/front-lever-progression' },
   ]),
   generateArticleSchema({
     title: 'Front Lever Progression Guide',
@@ -140,8 +141,8 @@ export default function FrontLeverProgressionPage() {
         subtitle="Build the pulling strength and body tension needed to master this iconic calisthenics skill. Progress systematically from tuck to full front lever."
         ctaText="Track Your Progress"
         ctaHref="/skills"
-        secondaryCtaText="View All Features"
-        secondaryCtaHref="/features"
+        secondaryCtaText="Back to Front Lever Hub"
+        secondaryCtaHref="/skills/front-lever"
       />
 
       {/* Progression Ladder */}

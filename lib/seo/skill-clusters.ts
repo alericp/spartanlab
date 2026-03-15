@@ -214,14 +214,77 @@ export const GUIDE_CLUSTERS: Record<string, SkillCluster> = {
   },
 }
 
+// Skill Hub clusters for hub pages
+export const SKILL_HUB_CLUSTERS: Record<string, SkillCluster> = {
+  'front-lever-hub': {
+    relatedSkills: [
+      { title: 'Planche Hub', href: '/skills/planche', description: 'The pushing counterpart' },
+      { title: 'Muscle-Up Hub', href: '/skills/muscle-up', description: 'Explosive pulling power' },
+      { title: 'HSPU Hub', href: '/skills/handstand-push-up', description: 'Vertical pressing' },
+    ],
+    relatedGuides: [
+      { title: 'Front Lever Progression', href: '/front-lever-progression', description: 'Full progression guide' },
+      { title: 'Strength Standards', href: '/calisthenics-strength-standards', description: 'Check your benchmarks' },
+    ],
+    relatedTools: [
+      { title: 'Readiness Calculator', href: '/front-lever-readiness-calculator', description: 'Test your readiness' },
+      { title: 'Program Builder', href: '/calisthenics-program-builder', description: 'Build your plan' },
+    ],
+  },
+  'planche-hub': {
+    relatedSkills: [
+      { title: 'Front Lever Hub', href: '/skills/front-lever', description: 'The pulling counterpart' },
+      { title: 'HSPU Hub', href: '/skills/handstand-push-up', description: 'Vertical pressing' },
+      { title: 'Muscle-Up Hub', href: '/skills/muscle-up', description: 'Combined strength' },
+    ],
+    relatedGuides: [
+      { title: 'Planche Progression', href: '/planche-progression', description: 'Full progression guide' },
+      { title: 'Strength Standards', href: '/calisthenics-strength-standards', description: 'Check your benchmarks' },
+    ],
+    relatedTools: [
+      { title: 'Readiness Calculator', href: '/planche-readiness-calculator', description: 'Test your readiness' },
+      { title: 'Program Builder', href: '/calisthenics-program-builder', description: 'Build your plan' },
+    ],
+  },
+  'muscle-up-hub': {
+    relatedSkills: [
+      { title: 'Front Lever Hub', href: '/skills/front-lever', description: 'Build pulling strength' },
+      { title: 'Planche Hub', href: '/skills/planche', description: 'Build pushing strength' },
+      { title: 'HSPU Hub', href: '/skills/handstand-push-up', description: 'Vertical pressing' },
+    ],
+    relatedGuides: [
+      { title: 'Muscle-Up Training', href: '/guides/muscle-up-training', description: 'Full training guide' },
+      { title: 'Strength Standards', href: '/calisthenics-strength-standards', description: 'Check your benchmarks' },
+    ],
+    relatedTools: [
+      { title: 'Readiness Calculator', href: '/muscle-up-readiness-calculator', description: 'Test your readiness' },
+      { title: 'Program Builder', href: '/calisthenics-program-builder', description: 'Build your plan' },
+    ],
+  },
+  'hspu-hub': {
+    relatedSkills: [
+      { title: 'Planche Hub', href: '/skills/planche', description: 'Horizontal pushing' },
+      { title: 'Muscle-Up Hub', href: '/skills/muscle-up', description: 'Combined strength' },
+      { title: 'Front Lever Hub', href: '/skills/front-lever', description: 'Pulling counterpart' },
+    ],
+    relatedGuides: [
+      { title: 'Handstand Training', href: '/guides/handstand-training', description: 'Build balance first' },
+      { title: 'Strength Standards', href: '/calisthenics-strength-standards', description: 'Check your benchmarks' },
+    ],
+    relatedTools: [
+      { title: 'Program Builder', href: '/calisthenics-program-builder', description: 'Build your plan' },
+    ],
+  },
+}
+
 // Guide clusters for reference pages
 export const GUIDE_CLUSTERS: Record<string, SkillCluster> = {
   'calisthenics-strength-standards': {
     relatedSkills: [
-      { title: 'Front Lever Progression', href: '/front-lever-progression', description: 'Test your pulling strength' },
-      { title: 'Planche Progression', href: '/planche-progression', description: 'Test your pushing strength' },
-      { title: 'Muscle-Up Training', href: '/guides/muscle-up-training', description: 'Combine strength and skill' },
-      { title: 'Handstand Training', href: '/guides/handstand-training', description: 'Balance and control skills' },
+      { title: 'Front Lever Hub', href: '/skills/front-lever', description: 'Test your pulling strength' },
+      { title: 'Planche Hub', href: '/skills/planche', description: 'Test your pushing strength' },
+      { title: 'Muscle-Up Hub', href: '/skills/muscle-up', description: 'Combine strength and skill' },
+      { title: 'HSPU Hub', href: '/skills/handstand-push-up', description: 'Balance and control skills' },
     ],
     relatedGuides: [
       { title: 'Weighted Pull-Up Progression', href: '/guides/weighted-pull-up-progression', description: 'Build pulling strength' },

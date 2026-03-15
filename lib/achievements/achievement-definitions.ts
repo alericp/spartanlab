@@ -338,6 +338,13 @@ export function getCategoryDisplayName(category: AchievementCategory): string {
   return CATEGORY_LABELS[category] || category
 }
 
+/**
+ * Get color classes for a tier
+ */
+export function getTierColors(tier: AchievementTier): { bg: string; text: string; border: string; glow: string } {
+  return TIER_COLORS[tier] || TIER_COLORS.bronze
+}
+
 // =============================================================================
 // UNLOCKED ACHIEVEMENTS STORAGE
 // =============================================================================

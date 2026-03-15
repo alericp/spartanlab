@@ -428,3 +428,15 @@ export function getChallengeSummary(): ChallengeSummary {
     streakDays: 0, // Could track actual streak later
   }
 }
+
+// =============================================================================
+// TRAINING EVENT HOOK FOR CHALLENGES
+// =============================================================================
+
+/**
+ * Called after training events to evaluate challenges
+ * Returns array of newly completed challenge IDs
+ */
+export function onTrainingEventForChallenges(): string[] {
+  return evaluateChallenges()
+}

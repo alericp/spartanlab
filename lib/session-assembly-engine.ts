@@ -8,10 +8,13 @@
  * - Fatigue management
  * 
  * Each session type has specific block ordering rules.
+ * Integrates with intelligent prehab/joint preparation system for adaptive mobility_activation blocks.
  */
 
 import type { PrimaryTrainingOutcome } from './athlete-profile'
 import type { ExperienceLevel, SessionLength, PrimaryGoal } from './program-service'
+import { generateIntelligentPrehab } from './prehab'
+import type { IntelligentPrehabContext } from './prehab'
 
 // =============================================================================
 // SESSION BLOCK TYPES
@@ -692,3 +695,76 @@ export function validateSessionAssembly(template: SessionTemplate): {
     issues,
   }
 }
+
+// =============================================================================
+// INTELLIGENT MOBILITY_ACTIVATION BLOCK GENERATION
+// =============================================================================
+
+/**
+ * Generate intelligent mobility/activation block using joint stress mapping
+ * This replaces generic "wrist prep + shoulder work" with targeted preparation
+ */
+export interface MobilityActivationContext {
+  mainExercises: Array<{
+    name: string
+    category: string
+    movementPattern: string
+    primaryMuscles: string[]
+  }>
+  sessionLength: SessionLength
+  athleteWeakPoints?: Record<string, number>
+}
+
+export function generateIntelligentMobilityBlock(context: MobilityActivationContext): SessionBlock {
+  try {
+    // Convert to prehab context
+    const prehabContext: IntelligentPrehabContext = {
+      mainExercises: context.mainExercises.map((ex, idx) => ({
+        id: `ex_${idx}`,
+        name: ex.name,
+        category: ex.category as any,
+        movementPattern: ex.movementPattern as any,
+        primaryMuscles: ex.primaryMuscles,
+      })),
+      sessionLength: context.sessionLength,
+      athleteWeakPoints: context.athleteWeakPoints,
+      sessionFocus: 'skill',
+    }
+    
+    // Generate intelligent prehab
+    const prehabResult = generateIntelligentPrehab(prehabContext)
+    
+    // Return as mobility_activation block
+    return {
+      type: 'mobility_activation',
+      name: 'Intelligent Joint Preparation',
+      durationMinutes: prehabResult.estimatedDuration,
+      exercises: prehabResult.prehabExercises.length,
+      intensity: 'low',
+      restBetweenSets: [30, 45],
+      notes: [
+        `Focused on: ${prehabResult.primaryJointsFocused.join(', ')}`,
+        ...prehabResult.weakPointAdaptations,
+        prehabResult.prehabExercises.map(ex => `${ex.name} - ${ex.prescription}`).join('; '),
+      ],
+    }
+  } catch (error) {
+    // Fallback to generic mobility block
+    console.warn('[session-assembly] Falling back to generic mobility block:', error)
+    return {
+      type: 'mobility_activation',
+      name: 'General Joint Preparation',
+      durationMinutes: 5,
+      exercises: 3,
+      intensity: 'low',
+      restBetweenSets: [30, 45],
+      notes: ['Wrist prep', 'Shoulder activation', 'Scapular work'],
+    }
+  }
+}
+
+/**
+ * Re-export prehab functions for convenience
+ */
+export { generateIntelligentPrehab } from './prehab'
+export type { IntelligentPrehabContext, IntelligentPrehabResult } from './prehab'

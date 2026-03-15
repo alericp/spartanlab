@@ -625,6 +625,8 @@ export function getAllSkillProgressionSystems(): SkillProgressionSystem[] {
  */
 export function getEngineCapabilitySummary(): string[] {
   return [
+    'Session-specific warm-ups based on joint stress mapping',
+    'Weak point-personalized preparation and prehab',
     'Progress timeline predictions based on training data',
     'Weak point identification and timeline impact analysis',
     'Adaptive skill coaching based on readiness assessment',

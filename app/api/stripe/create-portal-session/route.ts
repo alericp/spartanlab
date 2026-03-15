@@ -1,7 +1,7 @@
 import { stripe } from "@/lib/stripe";
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
-import { createClient } from "@/lib/supabase/server";
+import { queryOne } from "@/lib/db";
 
 export async function POST() {
   try {
@@ -16,14 +16,12 @@ export async function POST() {
     }
 
     // Get the Stripe customer ID from database
-    const supabase = await createClient();
-    const { data: subscription } = await supabase
-      .from('subscriptions')
-      .select('stripe_customer_id')
-      .eq('user_id', userId)
-      .single();
+    const user = await queryOne<{ stripe_customer_id: string | null }>(
+      'SELECT stripe_customer_id FROM users WHERE clerk_id = $1',
+      [userId]
+    );
 
-    if (!subscription?.stripe_customer_id) {
+    if (!user?.stripe_customer_id) {
       return NextResponse.json(
         { error: "No billing account found. Please subscribe first." },
         { status: 404 }
@@ -35,7 +33,7 @@ export async function POST() {
 
     // Create Stripe Customer Portal session
     const session = await stripe.billingPortal.sessions.create({
-      customer: subscription.stripe_customer_id,
+      customer: user.stripe_customer_id,
       return_url: `${appUrl}/settings`,
     });
 

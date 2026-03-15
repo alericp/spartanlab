@@ -26,10 +26,10 @@ export const SKILL_CLUSTERS: Record<string, SkillCluster> = {
       { title: 'One-Arm Pull-Up', href: '/guides/one-arm-pull-up', description: 'Ultimate pulling strength' },
     ],
     relatedGuides: [
+      { title: 'Strength Standards', href: '/calisthenics-strength-standards', description: 'Check your readiness benchmarks' },
       { title: 'Pull-Up Strength Guide', href: '/guides/pull-up-strength', description: 'Build your pulling foundation' },
       { title: 'Core Compression Training', href: '/guides/core-compression-training', description: 'Essential for horizontal holds' },
       { title: 'Weighted Pull-Up Programming', href: '/guides/weighted-pull-up-progression', description: 'Add load to accelerate progress' },
-      { title: 'Straight-Arm Strength', href: '/guides/straight-arm-strength', description: 'Critical for front lever control' },
     ],
     relatedTools: [
       { title: 'Program Builder', href: '/calisthenics-program-builder', description: 'Build your training plan' },
@@ -45,10 +45,10 @@ export const SKILL_CLUSTERS: Record<string, SkillCluster> = {
       { title: 'Muscle-Up Training', href: '/guides/muscle-up-training', description: 'Combine push and pull' },
     ],
     relatedGuides: [
+      { title: 'Strength Standards', href: '/calisthenics-strength-standards', description: 'Check your readiness benchmarks' },
       { title: 'Planche Lean Guide', href: '/guides/planche-leans', description: 'Build wrist and shoulder conditioning' },
       { title: 'Straight-Arm Strength', href: '/guides/straight-arm-strength', description: 'Essential for planche holds' },
       { title: 'Weighted Dip Progression', href: '/guides/weighted-dip-progression', description: 'Build pushing foundation' },
-      { title: 'Shoulder Mobility', href: '/guides/shoulder-mobility', description: 'Prerequisite flexibility work' },
     ],
     relatedTools: [
       { title: 'Program Builder', href: '/calisthenics-program-builder', description: 'Build your training plan' },
@@ -64,9 +64,9 @@ export const SKILL_CLUSTERS: Record<string, SkillCluster> = {
       { title: 'Weighted Dips', href: '/guides/weighted-dip-progression', description: 'Explosive pushing strength' },
     ],
     relatedGuides: [
+      { title: 'Strength Standards', href: '/calisthenics-strength-standards', description: 'Check your readiness benchmarks' },
       { title: 'Pull-Up Strength Guide', href: '/guides/pull-up-strength', description: 'Foundation for muscle-ups' },
       { title: 'Explosive Pull Training', href: '/guides/explosive-pull-training', description: 'Generate the power needed' },
-      { title: 'Ring Training Guide', href: '/guides/ring-training', description: 'Master ring muscle-ups' },
       { title: 'Chest-to-Bar Progression', href: '/guides/chest-to-bar-pull-ups', description: 'Build the transition strength' },
     ],
     relatedTools: [
@@ -207,6 +207,27 @@ export const GUIDE_CLUSTERS: Record<string, SkillCluster> = {
     relatedTools: [
       { title: 'Body Fat Calculator', href: '/body-fat-calculator' },
       { title: 'Program Builder', href: '/calisthenics-program-builder' },
+    ],
+  },
+}
+
+// Guide clusters for reference pages
+export const GUIDE_CLUSTERS: Record<string, SkillCluster> = {
+  'calisthenics-strength-standards': {
+    relatedSkills: [
+      { title: 'Front Lever Progression', href: '/front-lever-progression', description: 'Test your pulling strength' },
+      { title: 'Planche Progression', href: '/planche-progression', description: 'Test your pushing strength' },
+      { title: 'Muscle-Up Training', href: '/guides/muscle-up-training', description: 'Combine strength and skill' },
+      { title: 'Handstand Training', href: '/guides/handstand-training', description: 'Balance and control skills' },
+    ],
+    relatedGuides: [
+      { title: 'Weighted Pull-Up Progression', href: '/guides/weighted-pull-up-progression', description: 'Build pulling strength' },
+      { title: 'Weighted Dip Progression', href: '/guides/weighted-dip-progression', description: 'Build pushing strength' },
+      { title: 'Core Compression Training', href: '/guides/core-compression-training', description: 'Essential core strength' },
+    ],
+    relatedTools: [
+      { title: 'Program Builder', href: '/calisthenics-program-builder', description: 'Build your training plan' },
+      { title: 'Body Fat Calculator', href: '/body-fat-calculator', description: 'Optimize body composition' },
     ],
   },
 }

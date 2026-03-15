@@ -91,6 +91,14 @@ export default function sitemap(): MetadataRoute.Sitemap {
       priority: 0.7,
     },
     
+    // Strength standards - authoritative reference
+    {
+      url: `${baseUrl}/calisthenics-strength-standards`,
+      lastModified: currentDate,
+      changeFrequency: 'monthly',
+      priority: 0.9,
+    },
+    
     // Guides index
     {
       url: `${baseUrl}/guides`,

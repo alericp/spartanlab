@@ -177,7 +177,7 @@ export default function FrontLeverProgressionPage() {
             <div className="p-5 bg-[#1A1A1A] rounded-xl border border-[#2A2A2A]">
               <h3 className="font-semibold mb-2">Build Weighted Pull-Up Strength</h3>
               <p className="text-sm text-[#A5A5A5]">
-                Athletes who can do weighted pull-ups with +45-70 lbs typically have the raw pulling power for advanced front lever progressions. Track your 1RM regularly.
+                Athletes who can do weighted pull-ups with +45-70 lbs typically have the raw pulling power for advanced front lever progressions. Track your 1RM regularly. Check our <Link href="/calisthenics-strength-standards" className="text-[#C1121F] hover:underline">strength standards</Link> to see where you stand.
               </p>
             </div>
             <div className="p-5 bg-[#1A1A1A] rounded-xl border border-[#2A2A2A]">

@@ -116,6 +116,15 @@ const GUIDES = [
     readTime: '5 min read',
   },
   {
+    slug: '../calisthenics-strength-standards',
+    title: 'Calisthenics Strength Standards',
+    description: 'Complete benchmarks for pull-ups, dips, push-ups, and weighted exercises. Know your level from beginner to elite.',
+    icon: Trophy,
+    category: 'Reference',
+    readTime: '8 min read',
+    featured: true,
+  },
+  {
     slug: 'one-arm-pull-up-training',
     title: 'One-Arm Pull-Up Training Guide',
     description: 'Complete guide to achieving the one-arm pull-up. Prerequisites, progressions, training structure, and common mistakes.',

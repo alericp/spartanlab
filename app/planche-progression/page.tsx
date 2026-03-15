@@ -161,7 +161,7 @@ export default function PlancheProgressionPage() {
             <div className="p-5 bg-[#121212] rounded-xl border border-[#2A2A2A]">
               <h3 className="font-semibold mb-2">Prerequisite Strength</h3>
               <p className="text-sm text-[#A5A5A5]">
-                Strong planche leans, pseudo planche push-ups, and adequate wrist conditioning.
+                Strong planche leans, pseudo planche push-ups, and adequate wrist conditioning. Check our <Link href="/calisthenics-strength-standards" className="text-[#C1121F] hover:underline">strength standards</Link> to assess your readiness.
               </p>
             </div>
           </div>

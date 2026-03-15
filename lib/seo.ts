@@ -434,7 +434,7 @@ export const PAGE_METADATA = {
   
   pricing: generateSEOMetadata({
     title: 'Pricing - SpartanLab Pro',
-    description: 'Upgrade to SpartanLab Pro for advanced analytics, personalized coaching insights, and unlimited program customization. Start your free trial today.',
+    description: 'Upgrade to SpartanLab Pro for advanced analytics, personalized coaching insights, and unlimited program customization. Start your 7-day free trial - cancel anytime.',
     path: '/pricing',
     noIndex: false,
   }),

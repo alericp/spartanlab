@@ -21,9 +21,9 @@ import {
   Dumbbell,
 } from 'lucide-react'
 import { PREMIUM_FEATURES, type PremiumFeatureId, useSubscriptionInfo, useIsOwner } from '@/components/premium/PremiumFeature'
-import { upgradeToPro, startTrial, hasProAccess } from '@/lib/feature-access'
+import { hasProAccess } from '@/lib/feature-access'
 import { trackUpgradeStarted, trackUpgradeCompleted } from '@/lib/analytics'
-import { PRICING } from '@/lib/billing/pricing'
+import { PRICING, TRIAL } from '@/lib/billing/pricing'
 import { useAuth } from '@clerk/nextjs'
 import { toast } from 'sonner'
 
@@ -130,12 +130,6 @@ const handleUpgrade = async () => {
       toast.error('Something went wrong. Please try again.')
       setIsLoading(false)
     }
-  }
-
-  const handleStartTrial = () => {
-    startTrial(7)
-    setIsPro(true)
-    setTimeout(() => router.push('/dashboard'), 500)
   }
 
   if (!mounted) return null
@@ -333,17 +327,13 @@ const handleUpgrade = async () => {
               ) : (
                 <>
                   <Crown className="w-4 h-4 mr-2" />
-                  Upgrade to Pro
+                  {TRIAL.ctaText}
                 </>
               )}
             </Button>
-            <Button 
-              onClick={handleStartTrial}
-              variant="outline"
-              className="w-full mt-2 border-amber-500/30 text-amber-400 hover:bg-amber-500/10"
-            >
-              Start 7-Day Free Trial
-            </Button>
+            <p className="text-xs text-center text-[#6B7280] mt-3">
+              {TRIAL.explanation}
+            </p>
           </Card>
           </div>
         </div>

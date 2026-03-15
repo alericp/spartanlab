@@ -18,7 +18,7 @@ import { PageHeader } from '@/components/shared/PageHeader'
 import { Settings, Crown, Shield } from 'lucide-react'
 import { SKILL_DEFINITIONS } from '@/lib/skills'
 import { isOwner, getCurrentUserEmail } from '@/lib/owner-access'
-import { PRICING } from '@/lib/billing/pricing'
+import { PRICING, TRIAL } from '@/lib/billing/pricing'
 import { getCurrentTier, hasProAccess } from '@/lib/feature-access'
 import Link from 'next/link'
 import {
@@ -251,6 +251,23 @@ export default function SettingsPage() {
                   </p>
                 </div>
               </div>
+              <Button 
+                variant="outline" 
+                className="w-full border-[#3A3A3A] text-[#A5A5A5] hover:bg-[#2A2A2A]"
+                onClick={async () => {
+                  try {
+                    const res = await fetch('/api/stripe/create-portal-session', { method: 'POST' })
+                    const data = await res.json()
+                    if (data.url) {
+                      window.location.href = data.url
+                    }
+                  } catch (error) {
+                    console.error('Portal error:', error)
+                  }
+                }}
+              >
+                Manage Billing
+              </Button>
               <p className="text-xs text-[#6B7280]">
                 Billing questions?{' '}
                 <a href="mailto:billing@spartanlab.app" className="text-[#A5A5A5] hover:text-[#F5F5F5] transition-colors">
@@ -278,9 +295,12 @@ export default function SettingsPage() {
               <Link href="/upgrade">
                 <Button className="w-full bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-semibold">
                   <Crown className="w-4 h-4 mr-2" />
-                  Upgrade to Pro - {PRICING.pro.displayWithPeriod}
+                  {TRIAL.ctaText}
                 </Button>
               </Link>
+              <p className="text-xs text-center text-[#6B7280] mt-2">
+                {TRIAL.explanationShort}
+              </p>
             </div>
           )}
         </Card>

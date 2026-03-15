@@ -10,7 +10,7 @@ import { Check, ArrowRight } from 'lucide-react'
 import { trackUpgradeStarted, trackSignUpStarted } from '@/lib/analytics'
 import { useAuth } from '@clerk/nextjs'
 import { toast } from 'sonner'
-import { PRICING } from '@/lib/billing/pricing'
+import { PRICING, TRIAL } from '@/lib/billing/pricing'
 
 const PLANS = [
   {
@@ -36,7 +36,7 @@ const PLANS = [
     price: PRICING.pro.display,
     period: '/month',
     description: 'Full Adaptive Training Engine access',
-    cta: 'Upgrade to Pro',
+    cta: TRIAL.ctaText,
     ctaVariant: 'default' as const,
     ctaLink: '/sign-up',
     featured: true,
@@ -47,14 +47,15 @@ const PLANS = [
       'Progress analytics and strength trends',
       'Fatigue detection and training adjustments',
       'Skill progression tracking'
-    ]
+    ],
+    trialExplanation: TRIAL.explanation,
   }
 ]
 
 const FAQ = [
   {
-    question: 'Can I try the platform before subscribing?',
-    answer: 'Yes. The free tier gives you access to training tools, calculators, and guides. You can explore the platform before upgrading to Pro for full access.'
+    question: 'Can I try Pro before paying?',
+    answer: 'Yes! Pro includes a 7-day free trial. Your card is collected upfront, but you won\'t be charged until the trial ends. Cancel anytime before then to avoid charges.'
   },
   {
     question: 'What payment methods will you accept?',
@@ -189,6 +190,11 @@ const router = useRouter()
                         </>
                       )}
                     </Button>
+                    {'trialExplanation' in plan && plan.trialExplanation && (
+                      <p className="text-xs text-center text-[#6B7280] mt-3">
+                        {plan.trialExplanation}
+                      </p>
+                    )}
                   </div>
                 ) : (
                   <Link 

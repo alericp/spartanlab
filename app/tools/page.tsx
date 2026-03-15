@@ -6,15 +6,26 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { BackNav } from '@/components/navigation/BackNav'
+import { SITE_CONFIG } from '@/lib/seo'
 
 export const metadata: Metadata = {
   title: 'Calisthenics Training Tools | SpartanLab',
   description: 'Use SpartanLab calisthenics training tools to analyze strength, test skill readiness, and generate training programs. Front lever calculator, planche calculator, muscle-up readiness test.',
-  keywords: 'calisthenics training tools, front lever calculator, planche calculator, muscle-up readiness test, weighted pull-up calculator',
+  keywords: ['calisthenics training tools', 'front lever calculator', 'planche calculator', 'muscle-up readiness test', 'weighted pull-up calculator', 'fitness calculator'],
+  alternates: {
+    canonical: `${SITE_CONFIG.url}/tools`,
+  },
   openGraph: {
     title: 'Calisthenics Training Tools | SpartanLab',
     description: 'Use SpartanLab calisthenics training tools to analyze strength, test skill readiness, and generate training programs.',
+    url: `${SITE_CONFIG.url}/tools`,
+    siteName: SITE_CONFIG.name,
     type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Calisthenics Training Tools | SpartanLab',
+    description: 'Free calisthenics calculators: front lever, planche, muscle-up readiness, and more.',
   },
 }
 
@@ -36,12 +47,36 @@ const tools = [
     featured: true,
   },
   {
+    slug: '../front-lever-readiness-calculator',
+    title: 'Front Lever Readiness Calculator',
+    description: 'Calculate your front lever readiness score based on pulling strength, core tension, and skill experience.',
+    icon: Target,
+    category: 'Readiness Calculator',
+    featured: true,
+  },
+  {
+    slug: '../planche-readiness-calculator',
+    title: 'Planche Readiness Calculator',
+    description: 'Evaluate your planche prerequisites based on pushing strength, lean tolerance, and shoulder conditioning.',
+    icon: Calculator,
+    category: 'Readiness Calculator',
+    featured: true,
+  },
+  {
+    slug: '../muscle-up-readiness-calculator',
+    title: 'Muscle-Up Readiness Calculator',
+    description: 'Test your muscle-up readiness with pulling strength, explosive power, and transition metrics.',
+    icon: Zap,
+    category: 'Readiness Calculator',
+    featured: true,
+  },
+  {
     slug: 'planche-readiness',
-    title: 'Planche Readiness Test',
+    title: 'Planche Readiness Test (Legacy)',
     description: 'Evaluate your planche prerequisites and identify weak points.',
     icon: Calculator,
     category: 'Skill Sensor',
-    featured: true,
+    featured: false,
   },
   {
     slug: 'muscle-up-progression',

@@ -4,6 +4,8 @@ import { notFound } from 'next/navigation'
 import { ArrowLeft, ArrowRight, Target, Dumbbell, Trophy, Zap, GraduationCap, CheckCircle2 } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { JsonLdMultiple } from '@/components/seo/JsonLd'
+import { generateArticleSchema, generateBreadcrumbSchema, SITE_CONFIG } from '@/lib/seo'
 
 // Comprehensive guide content for SEO
 const GUIDES: Record<string, {
@@ -1114,10 +1116,21 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   return {
     title: guide.metaTitle,
     description: guide.metaDescription,
+    alternates: {
+      canonical: `${SITE_CONFIG.url}/guides/${slug}`,
+    },
     openGraph: {
       title: guide.metaTitle,
       description: guide.metaDescription,
+      url: `${SITE_CONFIG.url}/guides/${slug}`,
+      siteName: SITE_CONFIG.name,
       type: 'article',
+      publishedTime: '2024-01-01T00:00:00Z',
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title: guide.metaTitle,
+      description: guide.metaDescription,
     },
   }
 }
@@ -1136,8 +1149,24 @@ export default async function GuidePage({ params }: Props) {
   
   const Icon = guide.icon
   
+  // Generate JSON-LD structured data
+  const jsonLdSchemas = [
+    generateArticleSchema({
+      title: guide.metaTitle,
+      description: guide.metaDescription,
+      url: `${SITE_CONFIG.url}/guides/${slug}`,
+      publishedDate: '2024-01-01T00:00:00Z',
+    }),
+    generateBreadcrumbSchema([
+      { name: 'Home', url: '/' },
+      { name: 'Guides', url: '/guides' },
+      { name: guide.title, url: `/guides/${slug}` },
+    ]),
+  ]
+  
   return (
     <div className="min-h-screen bg-[#0F1115]">
+      <JsonLdMultiple schemas={jsonLdSchemas} />
       {/* Sticky Back Navigation */}
       <nav className="px-4 py-3 border-b border-[#2B313A]/50 sticky top-0 z-40 bg-[#0F1115]/95 backdrop-blur-sm">
         <div className="max-w-3xl mx-auto flex items-center justify-between">

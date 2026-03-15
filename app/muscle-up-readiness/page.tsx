@@ -131,6 +131,22 @@ export default function MuscleUpReadinessPage() {
         </div>
       </section>
 
+      {/* Calculator CTA */}
+      <section className="py-8 px-4 sm:px-6 bg-[#C1121F]/10 border-y border-[#C1121F]/20">
+        <div className="max-w-4xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div>
+            <h2 className="text-lg font-semibold text-[#E6E9EF]">Get Your Personalized Score</h2>
+            <p className="text-sm text-[#A5A5A5]">Use our interactive calculator for a detailed readiness assessment.</p>
+          </div>
+          <Link href="/muscle-up-readiness-calculator">
+            <Button className="bg-[#C1121F] hover:bg-[#A50E1A] text-white">
+              Muscle-Up Readiness Calculator
+              <ArrowRight className="w-4 h-4 ml-2" />
+            </Button>
+          </Link>
+        </div>
+      </section>
+
       {/* Training Recommendations */}
       <section className="py-12 px-4 sm:px-6">
         <div className="max-w-4xl mx-auto">

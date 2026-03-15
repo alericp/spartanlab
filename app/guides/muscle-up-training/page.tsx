@@ -4,15 +4,33 @@ import Image from 'next/image'
 import { ArrowLeft, ArrowRight, Zap, CheckCircle2, AlertTriangle, Dumbbell, Clock, Calendar, Target } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { RelatedContent } from '@/components/seo/RelatedContent'
+import { ProgressionTable } from '@/components/seo/ProgressionTable'
+import { CommonMistakes } from '@/components/seo/CommonMistakes'
+import { FAQ } from '@/components/seo/FAQ'
+import { JsonLdMultiple } from '@/components/seo/JsonLd'
+import { SITE_CONFIG, generateFAQSchema, generateHowToSchema, generateBreadcrumbSchema } from '@/lib/seo'
+import { getSkillCluster } from '@/lib/seo/skill-clusters'
 
 export const metadata: Metadata = {
   title: 'Muscle-Up Training Guide | SpartanLab',
   description: 'Learn how to train the muscle-up with step-by-step progressions, exercises, and calisthenics strength benchmarks. Complete guide from pull-ups to your first muscle-up.',
   keywords: ['how to do a muscle-up', 'muscle-up training', 'muscle-up progression', 'muscle-up tutorial', 'learn muscle-up', 'calisthenics muscle-up'],
+  alternates: {
+    canonical: `${SITE_CONFIG.url}/guides/muscle-up-training`,
+  },
   openGraph: {
     title: 'Muscle-Up Training Guide | SpartanLab',
     description: 'Learn how to train the muscle-up with step-by-step progressions, exercises, and calisthenics strength benchmarks.',
+    url: `${SITE_CONFIG.url}/guides/muscle-up-training`,
+    siteName: SITE_CONFIG.name,
     type: 'article',
+    publishedTime: '2024-01-01T00:00:00Z',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Muscle-Up Training Guide | SpartanLab',
+    description: 'Learn how to train the muscle-up with step-by-step progressions.',
   },
 }
 
@@ -142,9 +160,50 @@ const BENCHMARKS = [
   { exercise: 'Straight Bar Dips', benchmark: '10-15 reps', importance: 'Transition and press-out strength' },
 ]
 
+// Progression table for SEO
+const progressionLevels = [
+  { level: 'Pull-Up Foundation', holdTime: '10-12 strict reps', requirement: 'Basic pulling strength', nextGoal: 'Achieve chest-to-bar' },
+  { level: 'Chest-to-Bar Pull-Ups', holdTime: '8-10 reps', requirement: 'Full ROM pulling', nextGoal: 'Add explosive work' },
+  { level: 'Explosive Pull-Ups', holdTime: '6-8 explosive reps', requirement: 'High pull capability', nextGoal: 'Learn transition' },
+  { level: 'Muscle-Up Negatives', holdTime: '5-8 controlled negatives', requirement: 'Eccentric strength', nextGoal: 'Full muscle-up' },
+  { level: 'Full Muscle-Up', holdTime: '1+ clean reps', requirement: 'Complete strength chain', nextGoal: 'Build volume' },
+]
+
+// FAQ data for SEO
+const faqs = [
+  { question: 'How many pull-ups do I need for a muscle-up?', answer: 'Most athletes need 10-12 strict pull-ups and 8-10 chest-to-bar pull-ups as a baseline. However, muscle-ups also require explosive power and transition technique, so raw numbers alone are not sufficient. Weighted pull-ups (+20-30% BW) help build the power reserve needed.' },
+  { question: 'How long does it take to learn a muscle-up?', answer: 'Athletes with a solid pull-up foundation (10+ strict) typically achieve their first muscle-up in 2-6 months of dedicated training. The timeline depends heavily on starting strength, training consistency, and technique work. Beginners may need 6-12 months to build the prerequisite strength first.' },
+  { question: 'Can I learn a muscle-up without kipping?', answer: 'Yes, strict muscle-ups are achievable and preferable for building strength. They require more raw pulling power than kipping muscle-ups. Start with strict progressions and add kipping only after mastering the movement pattern.' },
+  { question: 'What are the best muscle-up progressions?', answer: 'The most effective progression is: strict pull-ups -> chest-to-bar pull-ups -> explosive pull-ups -> muscle-up negatives -> full muscle-ups. Each stage builds specific strength needed for the next. Do not skip steps, especially the negative phase which teaches the transition.' },
+]
+
+// JSON-LD schemas
+const jsonLdSchemas = [
+  generateHowToSchema({
+    name: 'Muscle-Up Training Guide',
+    description: 'Learn how to train the muscle-up with step-by-step progressions and strength benchmarks.',
+    url: `${SITE_CONFIG.url}/guides/muscle-up-training`,
+    steps: [
+      { name: 'Build Pull-Up Strength', description: 'Achieve 10-12 strict pull-ups with full range of motion.' },
+      { name: 'Train Chest-to-Bar', description: 'Develop the pulling height with 8-10 chest-to-bar pull-ups.' },
+      { name: 'Add Explosive Work', description: 'Train explosive pull-ups to generate upward momentum.' },
+      { name: 'Practice Negatives', description: 'Lower through the transition with control to learn the movement.' },
+      { name: 'Attempt Full Muscle-Up', description: 'Combine explosive pull with transition technique.' },
+    ],
+    totalTime: 'P6M',
+  }),
+  generateBreadcrumbSchema([
+    { name: 'Home', url: '/' },
+    { name: 'Guides', url: '/guides' },
+    { name: 'Muscle-Up Training', url: '/guides/muscle-up-training' },
+  ]),
+  generateFAQSchema(faqs),
+]
+
 export default function MuscleUpTrainingGuide() {
   return (
     <div className="min-h-screen bg-[#0F1115]">
+      <JsonLdMultiple schemas={jsonLdSchemas} />
       {/* Sticky Back Navigation */}
       <nav className="px-4 py-3 border-b border-[#2B313A]/50 sticky top-0 z-40 bg-[#0F1115]/95 backdrop-blur-sm">
         <div className="max-w-4xl mx-auto flex items-center justify-between">
@@ -484,33 +543,33 @@ export default function MuscleUpTrainingGuide() {
             </Card>
           </section>
 
-          {/* Related Guides */}
-          <section className="mb-12">
-            <h2 className="text-xl font-bold text-[#E6E9EF] mb-4">Related Guides</h2>
-            <div className="grid sm:grid-cols-3 gap-4">
-              <Link href="/guides/weighted-pull-up-standards">
-                <Card className="bg-[#1A1F26] border-[#2B313A] p-4 h-full hover:border-[#C1121F]/50 transition-all cursor-pointer">
-                  <Dumbbell className="w-5 h-5 text-[#C1121F] mb-2" />
-                  <h3 className="font-medium text-[#E6E9EF] text-sm mb-1">Weighted Pull-Up Standards</h3>
-                  <p className="text-xs text-[#6B7280]">Benchmarks that correlate with skill acquisition</p>
-                </Card>
-              </Link>
-              <Link href="/guides/front-lever-training">
-                <Card className="bg-[#1A1F26] border-[#2B313A] p-4 h-full hover:border-[#C1121F]/50 transition-all cursor-pointer">
-                  <Target className="w-5 h-5 text-[#C1121F] mb-2" />
-                  <h3 className="font-medium text-[#E6E9EF] text-sm mb-1">Front Lever Training</h3>
-                  <p className="text-xs text-[#6B7280]">Build pulling strength for advanced skills</p>
-                </Card>
-              </Link>
-              <Link href="/guides/calisthenics-strength-standards">
-                <Card className="bg-[#1A1F26] border-[#2B313A] p-4 h-full hover:border-[#C1121F]/50 transition-all cursor-pointer">
-                  <Target className="w-5 h-5 text-[#C1121F] mb-2" />
-                  <h3 className="font-medium text-[#E6E9EF] text-sm mb-1">Strength Standards</h3>
-                  <p className="text-xs text-[#6B7280]">Know where you stand</p>
-                </Card>
-              </Link>
-            </div>
-          </section>
+          {/* Progression Standards Table */}
+          <ProgressionTable 
+            title="Muscle-Up Progression Standards" 
+            levels={progressionLevels} 
+          />
+
+          {/* Common Training Mistakes */}
+          <CommonMistakes 
+            title="Common Muscle-Up Training Mistakes" 
+            mistakes={MISTAKES.map(m => ({ title: m.mistake, description: m.explanation }))} 
+            variant="list"
+          />
+
+          {/* FAQ Section */}
+          <FAQ 
+            title="Muscle-Up FAQ" 
+            faqs={faqs} 
+            defaultOpen={[0]} 
+          />
+
+          {/* Related Content - SEO Internal Linking */}
+          {getSkillCluster('muscle-up') && (
+            <RelatedContent 
+              cluster={getSkillCluster('muscle-up')!} 
+              title="Continue Your Training"
+            />
+          )}
 
           {/* Back to Guides */}
           <div className="flex items-center justify-between pt-8 border-t border-[#2B313A]">

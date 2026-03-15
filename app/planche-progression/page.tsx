@@ -4,12 +4,34 @@ import { SeoPageLayout } from '@/components/seo/SeoPageLayout'
 import { SeoHero } from '@/components/seo/SeoHero'
 import { ProgressionLadderCard } from '@/components/seo/ProgressionLadderCard'
 import { RelatedFeatureCTA } from '@/components/seo/RelatedFeatureCTA'
+import { JsonLdMultiple } from '@/components/seo/JsonLd'
+import { RelatedContent } from '@/components/seo/RelatedContent'
+import { ProgressionTable } from '@/components/seo/ProgressionTable'
+import { FAQ } from '@/components/seo/FAQ'
+import { generateHowToSchema, generateBreadcrumbSchema, generateFAQSchema, SITE_CONFIG } from '@/lib/seo'
+import { getSkillCluster } from '@/lib/seo/skill-clusters'
 import { Target, AlertTriangle, ArrowRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
 export const metadata: Metadata = {
   title: 'Planche Progression Guide | SpartanLab',
   description: 'Learn the complete planche progression ladder from tuck to full planche. Understand each stage, common mistakes, and how to track your progress.',
+  keywords: ['planche', 'planche progression', 'planche tutorial', 'calisthenics', 'bodyweight training', 'push exercises'],
+  alternates: {
+    canonical: `${SITE_CONFIG.url}/planche-progression`,
+  },
+  openGraph: {
+    title: 'Planche Progression Guide | SpartanLab',
+    description: 'Learn the complete planche progression ladder from tuck to full planche. Understand each stage and common mistakes.',
+    url: `${SITE_CONFIG.url}/planche-progression`,
+    siteName: SITE_CONFIG.name,
+    type: 'article',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Planche Progression Guide | SpartanLab',
+    description: 'Learn the complete planche progression from tuck to full planche.',
+  },
 }
 
 const plancheSteps = [
@@ -54,22 +76,79 @@ const commonMistakes = [
   },
 ]
 
+// Progression table data
+const progressionLevels = [
+  { level: 'Planche Lean', holdTime: '30-60 seconds', requirement: 'Wrist conditioning', nextGoal: 'Increase lean angle' },
+  { level: 'Tuck Planche', holdTime: '10-20 seconds', requirement: 'Basic pushing strength', nextGoal: 'Develop shoulder protraction' },
+  { level: 'Advanced Tuck', holdTime: '10-15 seconds', requirement: 'Strong protraction', nextGoal: 'Begin hip extension' },
+  { level: 'Straddle Planche', holdTime: '5-10 seconds', requirement: 'Elite shoulder strength', nextGoal: 'Prepare for full planche' },
+  { level: 'Full Planche', holdTime: '3-5 seconds', requirement: 'Peak straight-arm strength', nextGoal: 'Extend hold time' },
+]
+
+// FAQ data
+const faqs = [
+  { question: 'How long does it take to learn a planche?', answer: 'A full planche typically takes 2-5 years of dedicated training for most athletes. Tuck planche can be achieved in 6-18 months, while the jump to straddle and full planche represents the longest training periods. Genetics, training consistency, and body weight all significantly impact timeline.' },
+  { question: 'Do push-ups help planche training?', answer: 'Regular push-ups have limited carryover to planche. Pseudo planche push-ups (PPPU) with significant forward lean are much more effective as they train the same shoulder angle and protraction pattern. Weighted dips also build relevant pushing strength for planche.' },
+  { question: 'Is planche harder than front lever?', answer: 'Yes, for most athletes planche is significantly harder. The full planche requires extreme shoulder extension strength and straight-arm pushing power that takes much longer to develop than the pulling strength for front lever. Most coaches estimate planche takes 2-4x longer than front lever.' },
+  { question: 'What are the best planche accessory exercises?', answer: 'The most effective accessories are: pseudo planche push-ups (PPPU), planche leans, maltese press negatives, front lever rows, and weighted dips. Band-assisted planche holds can help learn the body position, but strength must be built through leans and pressing work.' },
+]
+
+// JSON-LD structured data
+const jsonLdSchemas = [
+  generateHowToSchema({
+    name: 'Planche Progression Guide',
+    description: 'Learn the complete planche progression ladder from tuck to full planche.',
+    url: `${SITE_CONFIG.url}/planche-progression`,
+    steps: [
+      { name: 'Tuck Planche', description: 'Knees tucked to chest, back parallel to ground. Build foundational shoulder strength and balance.' },
+      { name: 'Advanced Tuck Planche', description: 'Back becomes more horizontal, hips open slightly. Requires significantly more shoulder protraction strength.' },
+      { name: 'Straddle Planche', description: 'Legs extend outward in a straddle position. Major leap in difficulty requiring elite shoulder and core strength.' },
+      { name: 'Full Planche', description: 'Legs fully extended together, body completely horizontal. Peak calisthenics achievement.' },
+    ],
+    totalTime: 'P2Y',
+  }),
+  generateBreadcrumbSchema([
+    { name: 'Home', url: '/' },
+    { name: 'Skills', url: '/skills' },
+    { name: 'Planche Hub', url: '/skills/planche' },
+    { name: 'Progression Guide', url: '/planche-progression' },
+  ]),
+  generateFAQSchema(faqs),
+]
+
 export default function PlancheProgressionPage() {
   return (
     <SeoPageLayout>
+      <JsonLdMultiple schemas={jsonLdSchemas} />
       <SeoHero
         title="The Complete Planche Progression Ladder"
         subtitle="Master one of calisthenics' most impressive skills. Understand each stage, what determines readiness, and how to track your progress systematically."
         ctaText="Track Your Progress"
         ctaHref="/skills"
-        secondaryCtaText="View All Features"
-        secondaryCtaHref="/features"
+        secondaryCtaText="Back to Planche Hub"
+        secondaryCtaHref="/skills/planche"
       />
 
       {/* Progression Ladder */}
       <section className="py-12 px-4 sm:px-6">
         <div className="max-w-4xl mx-auto">
           <ProgressionLadderCard title="Planche Progression Stages" steps={plancheSteps} />
+        </div>
+      </section>
+
+      {/* Readiness Calculator CTA */}
+      <section className="py-8 px-4 sm:px-6 bg-[#C1121F]/10 border-y border-[#C1121F]/20">
+        <div className="max-w-4xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div>
+            <h2 className="text-lg font-semibold text-[#E6E9EF]">Not sure if you are ready?</h2>
+            <p className="text-sm text-[#A5A5A5]">Take the free readiness assessment to get a personalized score and recommendations.</p>
+          </div>
+          <Link href="/planche-readiness-calculator">
+            <Button className="bg-[#C1121F] hover:bg-[#A50E1A] text-white">
+              Planche Readiness Calculator
+              <ArrowRight className="w-4 h-4 ml-2" />
+            </Button>
+          </Link>
         </div>
       </section>
 
@@ -99,7 +178,7 @@ export default function PlancheProgressionPage() {
             <div className="p-5 bg-[#121212] rounded-xl border border-[#2A2A2A]">
               <h3 className="font-semibold mb-2">Prerequisite Strength</h3>
               <p className="text-sm text-[#A5A5A5]">
-                Strong planche leans, pseudo planche push-ups, and adequate wrist conditioning.
+                Strong planche leans, pseudo planche push-ups, and adequate wrist conditioning. Check our <Link href="/calisthenics-strength-standards" className="text-[#C1121F] hover:underline">strength standards</Link> to assess your readiness.
               </p>
             </div>
           </div>
@@ -124,6 +203,19 @@ export default function PlancheProgressionPage() {
         </div>
       </section>
 
+      {/* Progression Standards Table */}
+      <ProgressionTable 
+        title="Planche Progression Standards" 
+        levels={progressionLevels} 
+      />
+
+      {/* FAQ Section */}
+      <FAQ 
+        title="Planche FAQ" 
+        faqs={faqs} 
+        defaultOpen={[0]} 
+      />
+
       {/* Related Feature CTA */}
       <RelatedFeatureCTA
         icon={Target}
@@ -133,32 +225,13 @@ export default function PlancheProgressionPage() {
         ctaHref="/skills"
       />
 
-      {/* Internal Links */}
-      <section className="py-12 px-4 sm:px-6">
-        <div className="max-w-4xl mx-auto">
-          <h2 className="text-xl font-bold mb-6">Related Resources</h2>
-          <div className="flex flex-wrap gap-4">
-            <Link href="/front-lever-progression">
-              <Button variant="outline" className="border-[#3A3A3A] hover:bg-[#2A2A2A] gap-2">
-                Front Lever Progression
-                <ArrowRight className="w-4 h-4" />
-              </Button>
-            </Link>
-            <Link href="/features">
-              <Button variant="outline" className="border-[#3A3A3A] hover:bg-[#2A2A2A] gap-2">
-                Platform Features
-                <ArrowRight className="w-4 h-4" />
-              </Button>
-            </Link>
-            <Link href="/pricing">
-              <Button variant="outline" className="border-[#3A3A3A] hover:bg-[#2A2A2A] gap-2">
-                See Pricing
-                <ArrowRight className="w-4 h-4" />
-              </Button>
-            </Link>
-          </div>
-        </div>
-      </section>
+      {/* Related Content - SEO Internal Linking */}
+      {getSkillCluster('planche') && (
+        <RelatedContent 
+          cluster={getSkillCluster('planche')!} 
+          title="Continue Your Training"
+        />
+      )}
     </SeoPageLayout>
   )
 }

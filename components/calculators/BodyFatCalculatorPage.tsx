@@ -16,6 +16,8 @@ import {
   Users
 } from 'lucide-react'
 import { SpartanIcon } from '@/components/brand/SpartanLogo'
+import { NextSteps } from '@/components/seo/RelatedContent'
+import { getToolCluster } from '@/lib/seo/skill-clusters'
 import { 
   calculateBodyFat, 
   MEASUREMENT_INSTRUCTIONS,
@@ -301,6 +303,16 @@ export function BodyFatCalculatorPage() {
             </Card>
           </div>
         </div>
+
+        {/* Train With This Data - Internal Linking */}
+        {result && getToolCluster('body-fat-calculator') && (
+          <div className="mt-12">
+            <NextSteps 
+              cluster={getToolCluster('body-fat-calculator')!} 
+              title="Train With This Data"
+            />
+          </div>
+        )}
 
         {/* About Section */}
         <section className="mt-12">

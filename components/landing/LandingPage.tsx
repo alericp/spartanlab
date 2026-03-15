@@ -21,6 +21,7 @@ import {
 import { SpartanIcon } from '@/components/brand/SpartanLogo'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import { PRICING } from '@/lib/billing/pricing'
 
 // Hero Section - Refined messaging positioning SpartanLab as an intelligent coach
 function HeroSection() {
@@ -442,7 +443,7 @@ function PricingSection() {
               <p className="text-[#6B7280] text-sm">Full Adaptive Training Engine</p>
             </div>
             <div className="mb-6">
-              <span className="text-4xl font-bold">$15</span>
+              <span className="text-4xl font-bold">{PRICING.pro.display}</span>
               <span className="text-[#6B7280]">/month</span>
             </div>
             <ul className="space-y-3 mb-6">

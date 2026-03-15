@@ -18,6 +18,7 @@ import { PageHeader } from '@/components/shared/PageHeader'
 import { Settings, Crown, Shield } from 'lucide-react'
 import { SKILL_DEFINITIONS } from '@/lib/skills'
 import { isOwner, getCurrentUserEmail } from '@/lib/owner-access'
+import { PRICING } from '@/lib/billing/pricing'
 import { getCurrentTier, hasProAccess } from '@/lib/feature-access'
 import Link from 'next/link'
 import {
@@ -277,7 +278,7 @@ export default function SettingsPage() {
               <Link href="/upgrade">
                 <Button className="w-full bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-semibold">
                   <Crown className="w-4 h-4 mr-2" />
-                  Upgrade to Pro - $15/month
+                  Upgrade to Pro - {PRICING.pro.displayWithPeriod}
                 </Button>
               </Link>
             </div>

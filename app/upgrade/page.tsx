@@ -23,6 +23,7 @@ import {
 import { PREMIUM_FEATURES, type PremiumFeatureId, useSubscriptionInfo, useIsOwner } from '@/components/premium/PremiumFeature'
 import { upgradeToPro, startTrial, hasProAccess } from '@/lib/feature-access'
 import { trackUpgradeStarted, trackUpgradeCompleted } from '@/lib/analytics'
+import { PRICING } from '@/lib/billing/pricing'
 import { useAuth } from '@clerk/nextjs'
 import { toast } from 'sonner'
 
@@ -298,7 +299,7 @@ const handleUpgrade = async () => {
             </div>
             
             <div className="mb-6">
-              <span className="text-4xl font-bold text-[#E6E9EF]">$15</span>
+              <span className="text-4xl font-bold text-[#E6E9EF]">{PRICING.pro.display}</span>
               <span className="text-[#6B7280]">/month</span>
               <p className="text-xs text-[#6B7280] mt-1">Full access to adaptive training intelligence</p>
             </div>

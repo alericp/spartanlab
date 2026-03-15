@@ -3,6 +3,8 @@ import Link from 'next/link'
 import { ArrowLeft, ArrowRight, Flame, CheckCircle2, Dumbbell, AlertTriangle, Calendar, Target, Gauge } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { RelatedContent } from '@/components/seo/RelatedContent'
+import { getGuideCluster } from '@/lib/seo/skill-clusters'
 
 export const metadata: Metadata = {
   title: 'Pancake Mobility Guide | SpartanLab',
@@ -342,6 +344,14 @@ export default function PancakeMobilityGuide() {
               ))}
             </div>
           </section>
+
+          {/* Related Content - SEO Internal Linking */}
+          {getGuideCluster('pancake-mobility') && (
+            <RelatedContent 
+              cluster={getGuideCluster('pancake-mobility')!} 
+              title="Continue Your Training"
+            />
+          )}
 
           {/* Back Link */}
           <div className="mt-12">

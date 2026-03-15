@@ -1,6 +1,6 @@
 // Premium Insight Engine (formerly Elite Insight Engine)
 // Synthesizes high-value insights for the Pro tier performance dashboard
-// NOTE: These premium features are included in Pro tier ($15/month)
+// NOTE: These premium features are included in Pro tier ($14.99/month)
 
 import { getSkillHistorySnapshots, getStrengthHistorySnapshots, getTrainingHistorySnapshot } from './history-snapshot-engine'
 import { getMilestones } from './milestone-engine'

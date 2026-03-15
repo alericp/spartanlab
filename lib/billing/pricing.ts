@@ -17,9 +17,9 @@ export const TRIAL = {
 export const PRICING = {
   // Pro tier pricing
   pro: {
-    monthly: 15,
-    display: '$15',
-    displayWithPeriod: '$15/month',
+    monthly: 14.99,
+    display: '$14.99',
+    displayWithPeriod: '$14.99/month',
     description: 'Full access to adaptive training, analytics, and all premium features',
     trialDays: TRIAL.days,
   },

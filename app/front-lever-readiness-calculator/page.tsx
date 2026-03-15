@@ -21,7 +21,9 @@ import {
   type FrontLeverInputs,
   type ReadinessResult
 } from '@/lib/readiness/skill-readiness'
+import { spartanScoreFromFrontLeverInputs, type SpartanStrengthResult } from '@/lib/strength/spartan-strength-score'
 import { ReadinessResultCard } from '@/components/calculators/ReadinessResultCard'
+import { SpartanScoreCard } from '@/components/athlete/SpartanScoreCard'
 import { cn } from '@/lib/utils'
 
 // FAQ Data
@@ -55,6 +57,7 @@ export default function FrontLeverReadinessCalculator() {
   
   // Result state
   const [result, setResult] = useState<ReadinessResult | null>(null)
+  const [spartanScore, setSpartanScore] = useState<SpartanStrengthResult | null>(null)
   const [error, setError] = useState<string | null>(null)
   
   // FAQ accordion state
@@ -84,10 +87,20 @@ export default function FrontLeverReadinessCalculator() {
     
     const calcResult = calculateFrontLeverReadiness(inputs)
     setResult(calcResult)
+    
+    // Calculate Spartan Strength Score
+    const spartanResult = spartanScoreFromFrontLeverInputs({
+      maxPullUps: pullUps,
+      weightedPullUpLoad: weighted,
+      hollowHoldTime: hollow,
+      tuckFrontLeverHold: tuck > 0 ? tuck : undefined,
+    })
+    setSpartanScore(spartanResult)
   }
 
   const handleReset = () => {
     setResult(null)
+    setSpartanScore(null)
     setError(null)
     setMaxPullUps('')
     setWeightedPullUpLoad('')
@@ -280,6 +293,16 @@ export default function FrontLeverReadinessCalculator() {
             )}
           </div>
         </div>
+
+        {/* Spartan Strength Score Section */}
+        {spartanScore && (
+          <section className="mt-8">
+            <h2 className="text-xl font-bold text-[#E6E9EF] mb-4 text-center">Your Spartan Strength Score</h2>
+            <div className="max-w-md mx-auto">
+              <SpartanScoreCard result={spartanScore} />
+            </div>
+          </section>
+        )}
 
         {/* SEO Content Section */}
         <section className="mt-16 space-y-12">

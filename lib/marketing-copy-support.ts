@@ -102,6 +102,20 @@ export const FEATURE_CAPABILITIES: FeatureCapability[] = [
     relevantFor: ['skills', 'planche', 'front_lever', 'iron_cross'],
   },
   {
+    id: 'intelligent_prehab',
+    internalName: 'Prehab Intelligence Engine + Joint Preparation System',
+    marketingName: 'Session-Specific Warm-Ups',
+    shortDescription: 'Warm-ups built for today\'s exact workout',
+    longDescription: 'Every warm-up is generated based on the actual exercises in your session. The engine analyzes joint stress patterns, tendon loading, and skill demands to select targeted preparation work. Weak point data further personalizes preparation to address your specific limitations.',
+    implementationEvidence: [
+      'lib/prehab/prehab-preparation-engine.ts',
+      'lib/prehab/prehab-intelligence-engine.ts',
+      'lib/warmup-engine.ts',
+    ],
+    keyFunctions: ['generateIntelligentPrehab', 'analyzeJointStress', 'SKILL_JOINT_MAPPINGS', 'WEAK_POINT_PREHAB_ADJUSTMENTS'],
+    relevantFor: ['all', 'skills', 'planche', 'front_lever', 'iron_cross'],
+  },
+  {
     id: 'fatigue_aware_programming',
     internalName: 'Fatigue Budgeting + Recovery-Aware Programming',
     marketingName: 'Recovery-Smart Training',

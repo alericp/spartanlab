@@ -406,6 +406,52 @@ export {
 } from './prediction'
 
 // =============================================================================
+// PREHAB / JOINT PREPARATION ENGINE EXPORTS
+// =============================================================================
+
+export {
+  // Core Types
+  type JointArea,
+  type LoadingIntensity,
+  type PrehabExercise,
+  type PrehabGenerationContext,
+  type GeneratedPrehabWarmup,
+  
+  // Joint Stress Mappings
+  SKILL_JOINT_MAPPINGS,
+  EXERCISE_JOINT_MAPPINGS,
+  PREHAB_EXERCISE_LIBRARY,
+  
+  // Core Functions
+  analyzeJointStress,
+  calculatePrehabDuration,
+  selectPrehabExercises,
+  generatePrehabWarmup,
+  generateSkillFocusedPrehab,
+  
+  // Intelligence Engine Types
+  type IntelligentPrehabResult,
+  type IntelligentPrehabContext,
+  type SkillGuidePrehabSection,
+  
+  // Intelligence Configuration
+  WEAK_POINT_PREHAB_ADJUSTMENTS,
+  PREHAB_PLACEMENT_RULES,
+  SKILL_PREHAB_RECOMMENDATIONS,
+  
+  // Intelligent Generation
+  generateIntelligentPrehab,
+  getSkillPrehabRecommendations,
+  validatePrehabSpecificity,
+  generateGuidePrehabSection,
+  
+  // Convenience Functions
+  quickPrehab,
+  adaptivePrehab,
+  isPrehabSessionSpecific,
+} from './prehab'
+
+// =============================================================================
 // MARKETING SUPPORT EXPORTS
 // =============================================================================
 

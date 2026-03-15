@@ -9,6 +9,7 @@ import { LayoutDashboard, Target, Dumbbell, Calendar, ClipboardList, TrendingUp,
 import { SpartanIcon } from '@/components/brand/SpartanLogo'
 import { useState, useEffect } from 'react'
 import { cn } from '@/lib/utils'
+import { PlanStatusBadge } from '@/components/billing/pro-badge'
 
 // Primary navigation - essential daily actions
 const NAV_ITEMS = [
@@ -87,6 +88,7 @@ export function Navigation() {
           <Link href="/dashboard" className="flex items-center gap-2 shrink-0">
             <SpartanIcon size={28} />
             <span className="text-xl font-bold hidden sm:inline">SpartanLab</span>
+            <PlanStatusBadge size="xs" className="hidden sm:inline-flex" />
           </Link>
 
           {/* Page title - centered, visible on mobile only (desktop shows full nav) */}

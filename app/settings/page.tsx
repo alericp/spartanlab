@@ -20,6 +20,8 @@ import { SKILL_DEFINITIONS } from '@/lib/skills'
 import { isOwner, getCurrentUserEmail } from '@/lib/owner-access'
 import { PRICING, TRIAL } from '@/lib/billing/pricing'
 import { getCurrentTier, hasProAccess } from '@/lib/feature-access'
+import { useSubscriptionStatus, shouldShowUpgradePrompt, getUpgradeCtaText } from '@/lib/billing/subscription-status'
+import { SubscriptionStatusIndicator } from '@/components/billing/pro-badge'
 import Link from 'next/link'
 import {
   getAthleteProfile,
@@ -203,108 +205,88 @@ export default function SettingsPage() {
         </div>
         
         {/* Subscription & Billing Section */}
-        <Card className="bg-[#2A2A2A] border-[#3A3A3A] p-8 mt-6">
-          <div className="mb-6">
-            <h2 className="text-xl font-bold mb-2">Subscription</h2>
-          </div>
-          
-          {isOwner() ? (
-            // Owner account display
-            <div className="space-y-4">
-              <div className="flex items-center gap-3 p-4 rounded-lg bg-gradient-to-r from-amber-500/10 to-transparent border border-amber-500/20">
-                <div className="w-10 h-10 rounded-lg bg-amber-500/20 flex items-center justify-center">
-                  <Shield className="w-5 h-5 text-amber-400" />
-                </div>
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[#F5F5F5] font-medium">Owner Account</span>
-                    <span className="px-2 py-0.5 text-xs rounded bg-amber-500/20 text-amber-400 border border-amber-500/30">
-                      Full Access
-                    </span>
-                  </div>
-                  <p className="text-sm text-[#A5A5A5]">
-                    Subscription not required. All Pro features unlocked.
-                  </p>
-                </div>
-              </div>
-              
-              <div className="text-xs text-[#6B7280]">
-                Logged in as: {getCurrentUserEmail() || 'Owner'}
-              </div>
-            </div>
-          ) : hasProAccess() ? (
-            // Pro subscriber display
-            <div className="space-y-4">
-              <div className="flex items-center gap-3 p-4 rounded-lg bg-gradient-to-r from-amber-500/10 to-transparent border border-amber-500/20">
-                <div className="w-10 h-10 rounded-lg bg-amber-500/20 flex items-center justify-center">
-                  <Crown className="w-5 h-5 text-amber-400" />
-                </div>
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[#F5F5F5] font-medium">SpartanLab Pro</span>
-                    <span className="px-2 py-0.5 text-xs rounded bg-amber-500/20 text-amber-400 border border-amber-500/30">
-                      Active
-                    </span>
-                  </div>
-                  <p className="text-sm text-[#A5A5A5]">
-                    Full access to all training intelligence features.
-                  </p>
-                </div>
-              </div>
-              <Button 
-                variant="outline" 
-                className="w-full border-[#3A3A3A] text-[#A5A5A5] hover:bg-[#2A2A2A]"
-                onClick={async () => {
-                  try {
-                    const res = await fetch('/api/stripe/create-portal-session', { method: 'POST' })
-                    const data = await res.json()
-                    if (data.url) {
-                      window.location.href = data.url
-                    }
-                  } catch (error) {
-                    console.error('Portal error:', error)
-                  }
-                }}
-              >
-                Manage Billing
-              </Button>
-              <p className="text-xs text-[#6B7280]">
-                Billing questions?{' '}
-                <a href="mailto:billing@spartanlab.app" className="text-[#A5A5A5] hover:text-[#F5F5F5] transition-colors">
-                  billing@spartanlab.app
-                </a>
-              </p>
-            </div>
-          ) : (
-            // Free user display
-            <div className="space-y-4">
-              <div className="flex items-center gap-3 p-4 rounded-lg bg-[#1A1A1A] border border-[#3A3A3A]">
-                <div className="w-10 h-10 rounded-lg bg-[#2A2A2A] flex items-center justify-center">
-                  <Crown className="w-5 h-5 text-[#6B7280]" />
-                </div>
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[#F5F5F5] font-medium">Free Plan</span>
-                  </div>
-                  <p className="text-sm text-[#A5A5A5]">
-                    Upgrade to Pro for deeper insights and adaptive programming.
-                  </p>
-                </div>
-              </div>
-              
-              <Link href="/upgrade">
-                <Button className="w-full bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-semibold">
-                  <Crown className="w-4 h-4 mr-2" />
-                  {TRIAL.ctaText}
-                </Button>
-              </Link>
-              <p className="text-xs text-center text-[#6B7280] mt-2">
-                {TRIAL.explanationShort}
-              </p>
-            </div>
-          )}
-        </Card>
+        <SubscriptionBillingCard />
       </main>
     </div>
+  )
+}
+
+// =============================================================================
+// SUBSCRIPTION BILLING CARD
+// =============================================================================
+
+function SubscriptionBillingCard() {
+  const { status, planLabel, isTrial, trialDaysRemaining, isOwner } = useSubscriptionStatus()
+  const showUpgrade = shouldShowUpgradePrompt()
+  
+  const handleManageBilling = async () => {
+    try {
+      const res = await fetch('/api/stripe/create-portal-session', { method: 'POST' })
+      const data = await res.json()
+      if (data.url) {
+        window.location.href = data.url
+      }
+    } catch (error) {
+      console.error('Portal error:', error)
+    }
+  }
+  
+  return (
+    <Card className="bg-[#2A2A2A] border-[#3A3A3A] p-8 mt-6">
+      <div className="mb-6">
+        <h2 className="text-xl font-bold mb-2">Subscription</h2>
+      </div>
+      
+      {/* Subscription Status */}
+      <SubscriptionStatusIndicator className="mb-6" />
+      
+      {/* Actions based on status */}
+      <div className="space-y-4">
+        {isOwner ? (
+          // Owner info
+          <div className="text-xs text-[#6B7280]">
+            Logged in as: {getCurrentUserEmail() || 'Owner'}
+          </div>
+        ) : status === 'pro' || status === 'trial' ? (
+          // Pro/Trial actions
+          <>
+            {isTrial && trialDaysRemaining > 0 && (
+              <div className="p-3 rounded-lg bg-amber-500/5 border border-amber-500/20">
+                <p className="text-sm text-[#A4ACB8]">
+                  Your trial ends in <span className="font-medium text-amber-400">{trialDaysRemaining} day{trialDaysRemaining !== 1 ? 's' : ''}</span>. 
+                  You will be charged after your trial ends.
+                </p>
+              </div>
+            )}
+            <Button 
+              variant="outline" 
+              className="w-full border-[#3A3A3A] text-[#A5A5A5] hover:bg-[#2A2A2A]"
+              onClick={handleManageBilling}
+            >
+              Manage Billing
+            </Button>
+            <p className="text-xs text-[#6B7280]">
+              Billing questions?{' '}
+              <a href="mailto:billing@spartanlab.app" className="text-[#A5A5A5] hover:text-[#F5F5F5] transition-colors">
+                billing@spartanlab.app
+              </a>
+            </p>
+          </>
+        ) : (
+          // Free user upgrade prompt
+          <>
+            <Link href="/upgrade">
+              <Button className="w-full bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-semibold">
+                <Crown className="w-4 h-4 mr-2" />
+                {TRIAL.ctaText}
+              </Button>
+            </Link>
+            <p className="text-xs text-center text-[#6B7280] mt-2">
+              {TRIAL.explanationShort}
+            </p>
+          </>
+        )}
+      </div>
+    </Card>
   )
 }

@@ -1,0 +1,244 @@
+'use client'
+
+import { Badge } from '@/components/ui/badge'
+import { Crown, Sparkles } from 'lucide-react'
+import { cn } from '@/lib/utils'
+import { useSubscriptionStatus, type UISubscriptionStatus } from '@/lib/billing/subscription-status'
+
+// =============================================================================
+// PRO BADGE COMPONENT
+// =============================================================================
+
+export type ProBadgeVariant = 'pro' | 'trial' | 'auto'
+export type ProBadgeSize = 'xs' | 'sm' | 'md'
+
+interface ProBadgeProps {
+  /** Force a specific variant, or 'auto' to detect from subscription */
+  variant?: ProBadgeVariant
+  /** Size of the badge */
+  size?: ProBadgeSize
+  /** Show crown icon */
+  showIcon?: boolean
+  /** Additional className */
+  className?: string
+}
+
+/**
+ * Pro Badge - Premium identity indicator
+ * 
+ * Usage:
+ * - <ProBadge /> - Auto-detects subscription status
+ * - <ProBadge variant="pro" /> - Force Pro badge
+ * - <ProBadge variant="trial" /> - Force Trial badge
+ */
+export function ProBadge({ 
+  variant = 'auto', 
+  size = 'sm',
+  showIcon = true,
+  className,
+}: ProBadgeProps) {
+  const { status, isTrial, trialDaysRemaining } = useSubscriptionStatus()
+  
+  // Determine which variant to show
+  let displayVariant: 'pro' | 'trial'
+  if (variant === 'auto') {
+    displayVariant = isTrial ? 'trial' : 'pro'
+  } else {
+    displayVariant = variant
+  }
+  
+  // Don't render for free users when auto-detecting
+  if (variant === 'auto' && status === 'free') {
+    return null
+  }
+  
+  const isPro = displayVariant === 'pro'
+  const isTr = displayVariant === 'trial'
+  
+  // Size classes
+  const sizeClasses = {
+    xs: 'text-[9px] px-1 py-0 gap-0.5',
+    sm: 'text-[10px] px-1.5 py-0.5 gap-1',
+    md: 'text-xs px-2 py-0.5 gap-1',
+  }
+  
+  const iconSizes = {
+    xs: 'w-2 h-2',
+    sm: 'w-2.5 h-2.5',
+    md: 'w-3 h-3',
+  }
+  
+  // Trial badge text
+  const trialText = trialDaysRemaining > 0 ? `Trial (${trialDaysRemaining}d)` : 'Trial'
+  
+  return (
+    <Badge 
+      className={cn(
+        'font-medium border shrink-0 inline-flex items-center',
+        sizeClasses[size],
+        // Pro variant styling
+        isPro && 'bg-gradient-to-r from-amber-500/20 to-amber-600/15 text-amber-400 border-amber-500/30',
+        isPro && 'hover:from-amber-500/25 hover:to-amber-600/20',
+        // Trial variant styling - slightly different to indicate temporary
+        isTr && 'bg-gradient-to-r from-amber-500/15 to-orange-500/10 text-amber-400/90 border-amber-500/25',
+        isTr && 'hover:from-amber-500/20 hover:to-orange-500/15',
+        className
+      )}
+    >
+      {showIcon && (
+        isPro 
+          ? <Crown className={iconSizes[size]} />
+          : <Sparkles className={iconSizes[size]} />
+      )}
+      {isPro ? 'Pro' : trialText}
+    </Badge>
+  )
+}
+
+// =============================================================================
+// PLAN STATUS BADGE
+// =============================================================================
+
+interface PlanStatusBadgeProps {
+  /** Additional className */
+  className?: string
+  /** Size */
+  size?: ProBadgeSize
+}
+
+/**
+ * Plan Status Badge - Shows current plan status
+ * Free users see nothing, Trial/Pro users see their badge
+ */
+export function PlanStatusBadge({ className, size = 'sm' }: PlanStatusBadgeProps) {
+  const { status, isOwner } = useSubscriptionStatus()
+  
+  // Owner gets a special badge
+  if (isOwner) {
+    const sizeClasses = {
+      xs: 'text-[9px] px-1 py-0',
+      sm: 'text-[10px] px-1.5 py-0.5',
+      md: 'text-xs px-2 py-0.5',
+    }
+    
+    return (
+      <Badge 
+        className={cn(
+          'bg-gradient-to-r from-violet-500/20 to-violet-600/15 text-violet-400 border-violet-500/30',
+          sizeClasses[size],
+          className
+        )}
+      >
+        Owner
+      </Badge>
+    )
+  }
+  
+  // Free users don't show a badge
+  if (status === 'free') {
+    return null
+  }
+  
+  // Pro/Trial users show the ProBadge
+  return <ProBadge variant="auto" size={size} className={className} />
+}
+
+// =============================================================================
+// SUBSCRIPTION STATUS INDICATOR
+// =============================================================================
+
+interface SubscriptionStatusIndicatorProps {
+  /** Show in compact mode */
+  compact?: boolean
+  /** Additional className */
+  className?: string
+}
+
+/**
+ * Subscription Status Indicator - For settings/billing pages
+ * Shows full subscription status with appropriate styling
+ */
+export function SubscriptionStatusIndicator({ 
+  compact = false, 
+  className 
+}: SubscriptionStatusIndicatorProps) {
+  const { status, planLabel, trialDaysRemaining, isOwner } = useSubscriptionStatus()
+  
+  if (compact) {
+    return (
+      <div className={cn('flex items-center gap-2', className)}>
+        <span className="text-sm text-[#A4ACB8]">Plan:</span>
+        <span className="text-sm font-medium text-[#E6E9EF]">{planLabel}</span>
+        {status === 'trial' && trialDaysRemaining > 0 && (
+          <span className="text-xs text-[#6B7280]">
+            ({trialDaysRemaining} days left)
+          </span>
+        )}
+      </div>
+    )
+  }
+  
+  // Full indicator with styling based on status
+  return (
+    <div className={cn(
+      'flex items-center gap-3 p-3 rounded-lg',
+      isOwner && 'bg-violet-500/10 border border-violet-500/20',
+      status === 'pro' && 'bg-amber-500/10 border border-amber-500/20',
+      status === 'trial' && 'bg-amber-500/5 border border-amber-500/15',
+      status === 'free' && 'bg-[#1A1F26] border border-[#2B313A]',
+      className
+    )}>
+      {/* Icon */}
+      <div className={cn(
+        'w-8 h-8 rounded-lg flex items-center justify-center',
+        isOwner && 'bg-violet-500/20',
+        status === 'pro' && 'bg-amber-500/20',
+        status === 'trial' && 'bg-amber-500/15',
+        status === 'free' && 'bg-[#2A2A2A]',
+      )}>
+        <Crown className={cn(
+          'w-4 h-4',
+          isOwner && 'text-violet-400',
+          status === 'pro' && 'text-amber-400',
+          status === 'trial' && 'text-amber-400/80',
+          status === 'free' && 'text-[#6B7280]',
+        )} />
+      </div>
+      
+      {/* Info */}
+      <div className="flex-1">
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-medium text-[#E6E9EF]">{planLabel}</span>
+          {status !== 'free' && !isOwner && (
+            <Badge 
+              variant="outline" 
+              className={cn(
+                'text-[9px] px-1.5 py-0',
+                status === 'pro' && 'text-amber-400 border-amber-500/30',
+                status === 'trial' && 'text-amber-400/80 border-amber-500/20',
+              )}
+            >
+              {status === 'pro' ? 'Active' : 'Trial'}
+            </Badge>
+          )}
+        </div>
+        {status === 'trial' && trialDaysRemaining > 0 && (
+          <span className="text-xs text-[#6B7280]">
+            Trial ends in {trialDaysRemaining} day{trialDaysRemaining !== 1 ? 's' : ''}
+          </span>
+        )}
+        {status === 'free' && (
+          <span className="text-xs text-[#6B7280]">
+            Upgrade to unlock Pro features
+          </span>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// =============================================================================
+// EXPORTS
+// =============================================================================
+
+export { useSubscriptionStatus } from '@/lib/billing/subscription-status'

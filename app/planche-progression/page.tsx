@@ -5,7 +5,9 @@ import { SeoHero } from '@/components/seo/SeoHero'
 import { ProgressionLadderCard } from '@/components/seo/ProgressionLadderCard'
 import { RelatedFeatureCTA } from '@/components/seo/RelatedFeatureCTA'
 import { JsonLdMultiple } from '@/components/seo/JsonLd'
-import { generateHowToSchema, generateBreadcrumbSchema, generateArticleSchema, SITE_CONFIG } from '@/lib/seo'
+import { RelatedContent } from '@/components/seo/RelatedContent'
+import { generateHowToSchema, generateBreadcrumbSchema, SITE_CONFIG } from '@/lib/seo'
+import { getSkillCluster } from '@/lib/seo/skill-clusters'
 import { Target, AlertTriangle, ArrowRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
@@ -173,32 +175,13 @@ export default function PlancheProgressionPage() {
         ctaHref="/skills"
       />
 
-      {/* Internal Links */}
-      <section className="py-12 px-4 sm:px-6">
-        <div className="max-w-4xl mx-auto">
-          <h2 className="text-xl font-bold mb-6">Related Resources</h2>
-          <div className="flex flex-wrap gap-4">
-            <Link href="/front-lever-progression">
-              <Button variant="outline" className="border-[#3A3A3A] hover:bg-[#2A2A2A] gap-2">
-                Front Lever Progression
-                <ArrowRight className="w-4 h-4" />
-              </Button>
-            </Link>
-            <Link href="/features">
-              <Button variant="outline" className="border-[#3A3A3A] hover:bg-[#2A2A2A] gap-2">
-                Platform Features
-                <ArrowRight className="w-4 h-4" />
-              </Button>
-            </Link>
-            <Link href="/pricing">
-              <Button variant="outline" className="border-[#3A3A3A] hover:bg-[#2A2A2A] gap-2">
-                See Pricing
-                <ArrowRight className="w-4 h-4" />
-              </Button>
-            </Link>
-          </div>
-        </div>
-      </section>
+      {/* Related Content - SEO Internal Linking */}
+      {getSkillCluster('planche') && (
+        <RelatedContent 
+          cluster={getSkillCluster('planche')!} 
+          title="Continue Your Training"
+        />
+      )}
     </SeoPageLayout>
   )
 }

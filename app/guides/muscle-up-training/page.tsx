@@ -4,7 +4,9 @@ import Image from 'next/image'
 import { ArrowLeft, ArrowRight, Zap, CheckCircle2, AlertTriangle, Dumbbell, Clock, Calendar, Target } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { RelatedContent } from '@/components/seo/RelatedContent'
 import { SITE_CONFIG } from '@/lib/seo'
+import { getSkillCluster } from '@/lib/seo/skill-clusters'
 
 export const metadata: Metadata = {
   title: 'Muscle-Up Training Guide | SpartanLab',
@@ -496,33 +498,13 @@ export default function MuscleUpTrainingGuide() {
             </Card>
           </section>
 
-          {/* Related Guides */}
-          <section className="mb-12">
-            <h2 className="text-xl font-bold text-[#E6E9EF] mb-4">Related Guides</h2>
-            <div className="grid sm:grid-cols-3 gap-4">
-              <Link href="/guides/weighted-pull-up-standards">
-                <Card className="bg-[#1A1F26] border-[#2B313A] p-4 h-full hover:border-[#C1121F]/50 transition-all cursor-pointer">
-                  <Dumbbell className="w-5 h-5 text-[#C1121F] mb-2" />
-                  <h3 className="font-medium text-[#E6E9EF] text-sm mb-1">Weighted Pull-Up Standards</h3>
-                  <p className="text-xs text-[#6B7280]">Benchmarks that correlate with skill acquisition</p>
-                </Card>
-              </Link>
-              <Link href="/guides/front-lever-training">
-                <Card className="bg-[#1A1F26] border-[#2B313A] p-4 h-full hover:border-[#C1121F]/50 transition-all cursor-pointer">
-                  <Target className="w-5 h-5 text-[#C1121F] mb-2" />
-                  <h3 className="font-medium text-[#E6E9EF] text-sm mb-1">Front Lever Training</h3>
-                  <p className="text-xs text-[#6B7280]">Build pulling strength for advanced skills</p>
-                </Card>
-              </Link>
-              <Link href="/guides/calisthenics-strength-standards">
-                <Card className="bg-[#1A1F26] border-[#2B313A] p-4 h-full hover:border-[#C1121F]/50 transition-all cursor-pointer">
-                  <Target className="w-5 h-5 text-[#C1121F] mb-2" />
-                  <h3 className="font-medium text-[#E6E9EF] text-sm mb-1">Strength Standards</h3>
-                  <p className="text-xs text-[#6B7280]">Know where you stand</p>
-                </Card>
-              </Link>
-            </div>
-          </section>
+          {/* Related Content - SEO Internal Linking */}
+          {getSkillCluster('muscle-up') && (
+            <RelatedContent 
+              cluster={getSkillCluster('muscle-up')!} 
+              title="Continue Your Training"
+            />
+          )}
 
           {/* Back to Guides */}
           <div className="flex items-center justify-between pt-8 border-t border-[#2B313A]">

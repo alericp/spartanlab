@@ -377,19 +377,13 @@ export function upgradeToPro(): void {
 }
 
 /**
- * Start a trial (demo function)
+ * @deprecated Use Stripe checkout with trial_period_days instead.
+ * This was a demo function - real trials are now handled via Stripe.
+ * The real trial flow: /api/stripe/create-checkout-session with subscription_data.trial_period_days
  */
-export function startTrial(durationDays: number = 7): void {
-  const trialEnd = new Date()
-  trialEnd.setDate(trialEnd.getDate() + durationDays)
-  
-  const subscription: SubscriptionInfo = {
-    tier: 'pro',
-    status: 'trialing',
-    expiresAt: trialEnd.toISOString(),
-    trialEndsAt: trialEnd.toISOString(),
-  }
-  saveSubscription(subscription)
+export function startTrial(_durationDays: number = 7): void {
+  console.warn('[SpartanLab] startTrial() is deprecated. Use Stripe checkout for real trials.')
+  // No-op - real trials are handled by Stripe checkout
 }
 
 /**

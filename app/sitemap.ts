@@ -225,6 +225,47 @@ export default function sitemap(): MetadataRoute.Sitemap {
     priority: 0.7,
   }))
 
+  // Strength standards pages - SEO content hubs
+  const strengthStandardsPages: MetadataRoute.Sitemap = [
+    'pull-up-strength-standards',
+    'dip-strength-standards',
+    'push-up-strength-standards',
+    'weighted-pull-up-strength-standards',
+    'weighted-dip-strength-standards',
+  ].map(slug => ({
+    url: `${baseUrl}/${slug}`,
+    lastModified: currentDate,
+    changeFrequency: 'monthly' as const,
+    priority: 0.8,
+  }))
+
+  // Skill threshold pages - targeting search questions
+  const skillThresholdPages: MetadataRoute.Sitemap = [
+    'how-many-pull-ups-for-front-lever',
+    'how-strong-for-planche',
+    'how-many-dips-for-muscle-up',
+    'how-to-train-for-handstand-push-ups',
+  ].map(slug => ({
+    url: `${baseUrl}/${slug}`,
+    lastModified: currentDate,
+    changeFrequency: 'monthly' as const,
+    priority: 0.8,
+  }))
+
+  // Comparison and training guide pages
+  const comparisonPages: MetadataRoute.Sitemap = [
+    'front-lever-vs-planche',
+    'best-exercises-for-front-lever',
+    'best-exercises-for-planche',
+    'front-lever-training-guide',
+    'planche-training-guide',
+  ].map(slug => ({
+    url: `${baseUrl}/${slug}`,
+    lastModified: currentDate,
+    changeFrequency: 'monthly' as const,
+    priority: 0.8,
+  }))
+
   // Marketing and info pages
   const infoPages: MetadataRoute.Sitemap = [
     {
@@ -265,5 +306,14 @@ export default function sitemap(): MetadataRoute.Sitemap {
     },
   ]
 
-  return [...staticPages, ...programPages, ...exercisePages, ...guidePages, ...infoPages]
+  return [
+    ...staticPages,
+    ...programPages,
+    ...exercisePages,
+    ...guidePages,
+    ...strengthStandardsPages,
+    ...skillThresholdPages,
+    ...comparisonPages,
+    ...infoPages,
+  ]
 }

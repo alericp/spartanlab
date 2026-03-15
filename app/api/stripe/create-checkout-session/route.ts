@@ -1,6 +1,7 @@
 import { stripe } from "@/lib/stripe";
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
+import { PRICING } from "@/lib/billing/pricing";
 
 export async function POST() {
   try {
@@ -26,7 +27,14 @@ export async function POST() {
           quantity: 1,
         },
       ],
-      success_url: `${appUrl}/dashboard?upgrade=success`,
+      // Enable 7-day free trial - card collected upfront, first charge after trial ends
+      subscription_data: {
+        trial_period_days: PRICING.pro.trialDays,
+        metadata: {
+          userId,
+        },
+      },
+      success_url: `${appUrl}/dashboard?upgrade=success&trial=started`,
       cancel_url: `${appUrl}/pricing`,
       metadata: {
         userId,

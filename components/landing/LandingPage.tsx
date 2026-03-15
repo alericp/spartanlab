@@ -21,7 +21,7 @@ import {
 import { SpartanIcon } from '@/components/brand/SpartanLogo'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
-import { PRICING } from '@/lib/billing/pricing'
+import { PRICING, TRIAL } from '@/lib/billing/pricing'
 
 // Hero Section - Refined messaging positioning SpartanLab as an intelligent coach
 function HeroSection() {
@@ -463,8 +463,11 @@ function PricingSection() {
               ))}
             </ul>
             <Button asChild className="w-full bg-[#C1121F] hover:bg-[#A30F1A]">
-              <Link href="/dashboard">Unlock Pro</Link>
+              <Link href="/upgrade">{TRIAL.ctaText}</Link>
             </Button>
+            <p className="text-xs text-center text-[#6B7280] mt-3">
+              {TRIAL.explanationShort}
+            </p>
           </Card>
         </div>
       </div>

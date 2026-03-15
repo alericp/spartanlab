@@ -186,6 +186,22 @@ export default function sitemap(): MetadataRoute.Sitemap {
     },
   ]
 
+  // Exercise pages - individual exercise guides
+  const exercisePages: MetadataRoute.Sitemap = [
+    'pull-up',
+    'dip',
+    'front-lever-row',
+    'hollow-body-hold',
+    'l-sit',
+    'arch-hang',
+    'pseudo-planche-push-up',
+  ].map(slug => ({
+    url: `${baseUrl}/exercises/${slug}`,
+    lastModified: currentDate,
+    changeFrequency: 'monthly' as const,
+    priority: 0.7,
+  }))
+
   // Guide pages - comprehensive training guides
   const guidePages: MetadataRoute.Sitemap = [
     'front-lever-training',
@@ -258,5 +274,5 @@ export default function sitemap(): MetadataRoute.Sitemap {
     },
   ]
 
-  return [...staticPages, ...guidePages, ...infoPages]
+  return [...staticPages, ...exercisePages, ...guidePages, ...infoPages]
 }

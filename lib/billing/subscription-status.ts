@@ -244,7 +244,24 @@ export function getSubscriptionDisplayInfo(): SubscriptionDisplayInfo {
 
 /**
  * React hook version for components
+ * Includes error boundary to prevent crashes if subscription lookup fails
  */
 export function useSubscriptionDisplay(): SubscriptionDisplayInfo {
-  return getSubscriptionDisplayInfo()
+  try {
+    return getSubscriptionDisplayInfo()
+  } catch (error) {
+    console.error('[useSubscriptionDisplay] Error fetching subscription info:', error)
+    // Return safe default on error - shows as free user
+    return {
+      status: 'free',
+      label: 'Free',
+      shortLabel: 'Free',
+      isPaid: false,
+      isTrialing: false,
+      trialDaysRemaining: 0,
+      showUpgradeCTA: true,
+      showTrialCTA: true,
+      isOwner: false,
+    }
+  }
 }

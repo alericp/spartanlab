@@ -17,7 +17,7 @@ import { Navigation } from '@/components/shared/Navigation'
 import { PageHeader } from '@/components/shared/PageHeader'
 import { Settings, Crown, Shield, Target } from 'lucide-react'
 import { SKILL_DEFINITIONS } from '@/lib/skills'
-import { isOwner, getCurrentUserEmail } from '@/lib/owner-access'
+import { useOwnerInit } from '@/hooks/useOwnerInit'
 import { PRICING, TRIAL } from '@/lib/billing/pricing'
 import { hasProAccess } from '@/lib/feature-access'
 import { useSubscriptionDisplay } from '@/lib/billing/subscription-status'
@@ -90,6 +90,9 @@ function SubscriptionBillingCard() {
 
 export default function SettingsPage() {
   console.log("[AUTH_PROOF] settings auth-prod-unblock-v1")
+  
+  // Initialize owner detection from Clerk auth
+  const { isOwner } = useOwnerInit()
   
   const [profile, setProfile] = useState<AthleteProfile | null>(null)
   const [saving, setSaving] = useState(false)

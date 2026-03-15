@@ -10,7 +10,7 @@
  * - Real users are completely unaffected
  */
 
-import { isOwnerAccount } from '@/lib/feature-access'
+import { isCurrentUserOwner } from '@/lib/owner-access'
 
 // =============================================================================
 // TYPES
@@ -28,7 +28,8 @@ export interface SimulationState {
 // STORAGE
 // =============================================================================
 
-const SIMULATION_KEY = 'spartanlab_owner_simulation'
+// CANONICAL simulation storage key - matches feature-access.ts
+const SIMULATION_KEY = 'spartanlab_owner_sim'
 
 /**
  * Get current simulation mode (owner only)
@@ -37,7 +38,7 @@ export function getSimulationMode(): SimulationMode {
   if (typeof window === 'undefined') return 'off'
   
   // Only owner can have simulation active
-  if (!isOwnerAccount()) return 'off'
+  if (!isCurrentUserOwner()) return 'off'
   
   try {
     const stored = sessionStorage.getItem(SIMULATION_KEY)
@@ -60,7 +61,7 @@ export function setSimulationMode(mode: SimulationMode): void {
   if (typeof window === 'undefined') return
   
   // Safety check - only owner can set simulation
-  if (!isOwnerAccount()) return
+  if (!isCurrentUserOwner()) return
   
   if (mode === 'off') {
     sessionStorage.removeItem(SIMULATION_KEY)

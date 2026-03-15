@@ -7,17 +7,17 @@
  * Owner accounts bypass all subscription checks unless simulation mode is active.
  */
 
-import { isOwner, checkOwnerByEmail } from './owner-access'
-import { getSimulationMode, isSimulationActive } from './billing/subscription-simulation'
+import { isCurrentUserOwner, checkOwnerByEmail } from './owner-access'
 
 // Re-export for component usage
-export { isOwner as isOwnerAccount } from './owner-access'
+export { isCurrentUserOwner as isOwnerAccount } from './owner-access'
 export { checkOwnerByEmail } from './owner-access'
 
 // =============================================================================
 // OWNER SIMULATION SUPPORT
 // =============================================================================
 
+// CANONICAL simulation storage key - use this everywhere
 const SIMULATION_KEY = 'spartanlab_owner_sim'
 
 /**
@@ -26,7 +26,7 @@ const SIMULATION_KEY = 'spartanlab_owner_sim'
  */
 function getOwnerSimulationMode(): 'off' | 'free' | 'pro' {
   if (typeof window === 'undefined') return 'off'
-  if (!isOwner()) return 'off'
+  if (!isCurrentUserOwner()) return 'off'
   
   const stored = sessionStorage.getItem(SIMULATION_KEY)
   if (stored === 'free' || stored === 'pro') return stored
@@ -326,7 +326,7 @@ export function hasProAccess(): boolean {
   if (simMode === 'pro') return true
   
   // Owner without simulation has Pro access
-  if (isOwner()) return true
+  if (isCurrentUserOwner()) return true
   
   // Regular users - standard check
   const subscription = getSubscription()
@@ -358,7 +358,7 @@ export function getCurrentTier(): SubscriptionTier {
   if (simMode === 'free') return 'free'
   if (simMode === 'pro') return 'pro'
   
-  if (isOwner()) return 'pro'
+  if (isCurrentUserOwner()) return 'pro'
   return getSubscription().tier
 }
 

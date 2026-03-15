@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Beaker } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { isOwnerAccount } from '@/lib/feature-access'
+import { useOwnerInit } from '@/hooks/useOwnerInit'
 import { 
   getSimulationMode, 
   setSimulationMode, 
@@ -17,20 +17,30 @@ import {
  * 
  * A small, discreet bottom-screen control visible only to the Platform Owner.
  * Allows testing Free/Pro states without modifying real billing data.
+ * 
+ * Uses Clerk auth to reliably detect the owner account.
  */
 export function OwnerSimulationToggle() {
-  const [isOwner, setIsOwner] = useState(false)
+  // Initialize owner detection from Clerk user email
+  const { isOwner, isLoaded } = useOwnerInit()
   const [mode, setMode] = useState<SimulationMode>('off')
   const [realStatus, setRealStatus] = useState<string>('free')
   const [mounted, setMounted] = useState(false)
   
   useEffect(() => {
     setMounted(true)
-    setIsOwner(isOwnerAccount())
-    setMode(getSimulationMode())
-    setRealStatus(getRealSubscriptionStatus())
-    
-    // Listen for simulation changes from other tabs/components
+  }, [])
+  
+  // Update simulation state when owner status is confirmed
+  useEffect(() => {
+    if (isLoaded && isOwner) {
+      setMode(getSimulationMode())
+      setRealStatus(getRealSubscriptionStatus())
+    }
+  }, [isLoaded, isOwner])
+  
+  // Listen for simulation changes from other tabs/components
+  useEffect(() => {
     const handleChange = (e: CustomEvent<SimulationMode>) => {
       setMode(e.detail)
     }
@@ -41,8 +51,8 @@ export function OwnerSimulationToggle() {
     }
   }, [])
   
-  // Only render for owner
-  if (!mounted || !isOwner) return null
+  // Only render for owner after auth is loaded
+  if (!mounted || !isLoaded || !isOwner) return null
   
   const handleModeChange = (newMode: SimulationMode) => {
     setSimulationMode(newMode)

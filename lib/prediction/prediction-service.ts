@@ -237,7 +237,7 @@ function gatherPredictionInputs(skillId: SkillId): PredictionInputs {
     strengthSupport,
     momentum,
     fatigue,
-    weakPoints: weakPointsList
+    weakPoints: weakPointsList,
     tendonLevel,
     consistencyLevel,
     relevantStrength1RM,

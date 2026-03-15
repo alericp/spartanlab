@@ -10,11 +10,12 @@ import { Check, ArrowRight } from 'lucide-react'
 import { trackUpgradeStarted, trackSignUpStarted } from '@/lib/analytics'
 import { useAuth } from '@clerk/nextjs'
 import { toast } from 'sonner'
+import { PRICING } from '@/lib/billing/pricing'
 
 const PLANS = [
   {
     name: 'Free',
-    price: '$0',
+    price: PRICING.free.display,
     period: '/month',
     description: 'Access training tools and guides',
     cta: 'Start Free',
@@ -32,7 +33,7 @@ const PLANS = [
   },
   {
     name: 'Pro',
-    price: '$15',
+    price: PRICING.pro.display,
     period: '/month',
     description: 'Full Adaptive Training Engine access',
     cta: 'Upgrade to Pro',

@@ -128,7 +128,7 @@ export const SKILL_CLUSTERS: Record<string, SkillCluster> = {
   },
 }
 
-// Guide clusters for guide pages
+// Guide clusters for guide pages (merged with reference page clusters)
 export const GUIDE_CLUSTERS: Record<string, SkillCluster> = {
   'pull-up-strength': {
     relatedSkills: [
@@ -212,6 +212,25 @@ export const GUIDE_CLUSTERS: Record<string, SkillCluster> = {
       { title: 'Program Builder', href: '/calisthenics-program-builder' },
     ],
   },
+  
+  // Strength standards reference page cluster
+  'calisthenics-strength-standards': {
+    relatedSkills: [
+      { title: 'Front Lever Hub', href: '/skills/front-lever', description: 'Test your pulling strength' },
+      { title: 'Planche Hub', href: '/skills/planche', description: 'Test your pushing strength' },
+      { title: 'Muscle-Up Hub', href: '/skills/muscle-up', description: 'Combine strength and skill' },
+      { title: 'HSPU Hub', href: '/skills/handstand-push-up', description: 'Balance and control skills' },
+    ],
+    relatedGuides: [
+      { title: 'Weighted Pull-Up Progression', href: '/guides/weighted-pull-up-progression', description: 'Build pulling strength' },
+      { title: 'Weighted Dip Progression', href: '/guides/weighted-dip-progression', description: 'Build pushing strength' },
+      { title: 'Core Compression Training', href: '/guides/core-compression-training', description: 'Essential core strength' },
+    ],
+    relatedTools: [
+      { title: 'Program Builder', href: '/calisthenics-program-builder', description: 'Build your training plan' },
+      { title: 'Body Fat Calculator', href: '/body-fat-calculator', description: 'Optimize body composition' },
+    ],
+  },
 }
 
 // Skill Hub clusters for hub pages
@@ -273,27 +292,6 @@ export const SKILL_HUB_CLUSTERS: Record<string, SkillCluster> = {
     ],
     relatedTools: [
       { title: 'Program Builder', href: '/calisthenics-program-builder', description: 'Build your plan' },
-    ],
-  },
-}
-
-// Guide clusters for reference pages
-export const GUIDE_CLUSTERS: Record<string, SkillCluster> = {
-  'calisthenics-strength-standards': {
-    relatedSkills: [
-      { title: 'Front Lever Hub', href: '/skills/front-lever', description: 'Test your pulling strength' },
-      { title: 'Planche Hub', href: '/skills/planche', description: 'Test your pushing strength' },
-      { title: 'Muscle-Up Hub', href: '/skills/muscle-up', description: 'Combine strength and skill' },
-      { title: 'HSPU Hub', href: '/skills/handstand-push-up', description: 'Balance and control skills' },
-    ],
-    relatedGuides: [
-      { title: 'Weighted Pull-Up Progression', href: '/guides/weighted-pull-up-progression', description: 'Build pulling strength' },
-      { title: 'Weighted Dip Progression', href: '/guides/weighted-dip-progression', description: 'Build pushing strength' },
-      { title: 'Core Compression Training', href: '/guides/core-compression-training', description: 'Essential core strength' },
-    ],
-    relatedTools: [
-      { title: 'Program Builder', href: '/calisthenics-program-builder', description: 'Build your training plan' },
-      { title: 'Body Fat Calculator', href: '/body-fat-calculator', description: 'Optimize body composition' },
     ],
   },
 }

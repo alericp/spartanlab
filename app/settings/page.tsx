@@ -204,10 +204,46 @@ export default function SettingsPage() {
           <UpdateMetricsCard onUpdate={loadProfile} />
         </div>
         
+        {/* Training Profile - Re-run Onboarding */}
+        <TrainingProfileCard />
+        
         {/* Subscription & Billing Section */}
         <SubscriptionBillingCard />
       </main>
     </div>
+  )
+}
+
+// =============================================================================
+// TRAINING PROFILE CARD
+// =============================================================================
+
+function TrainingProfileCard() {
+  return (
+    <Card className="bg-[#2A2A2A] border-[#3A3A3A] p-8 mt-6">
+      <div className="mb-4">
+        <h2 className="text-xl font-bold mb-2">Training Profile</h2>
+        <p className="text-sm text-[#A5A5A5]">
+          Update your goals, skill levels, and training preferences
+        </p>
+      </div>
+      
+      <div className="space-y-4">
+        <Link href="/onboarding">
+          <Button 
+            variant="outline" 
+            className="w-full border-[#3A3A3A] text-[#A5A5A5] hover:bg-[#3A3A3A] hover:text-[#F5F5F5]"
+          >
+            <Settings className="w-4 h-4 mr-2" />
+            Update Training Goals & Benchmarks
+          </Button>
+        </Link>
+        <p className="text-xs text-[#6B7280]">
+          Re-run the setup wizard to update your strength benchmarks, skill levels, 
+          training schedule, and goals. Your program will be regenerated based on your new inputs.
+        </p>
+      </div>
+    </Card>
   )
 }
 

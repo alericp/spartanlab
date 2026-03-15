@@ -9,6 +9,7 @@ import {
   ChevronLeft, 
   ChevronRight, 
   ArrowRight,
+  ArrowLeft,
   User, 
   Target, 
   Dumbbell,
@@ -2615,8 +2616,8 @@ export function AthleteOnboarding() {
       // Track completion
       trackOnboardingCompleted('onboarding')
       
-      // Navigate to dashboard
-      router.push('/dashboard?welcome=true')
+      // Navigate to onboarding completion flow (shows program + upgrade opportunity)
+      router.push('/onboarding/complete')
     } catch (error) {
       console.error('Failed to save profile:', error)
       setIsSubmitting(false)

@@ -32,6 +32,7 @@ export const SKILL_CLUSTERS: Record<string, SkillCluster> = {
       { title: 'Weighted Pull-Up Programming', href: '/guides/weighted-pull-up-progression', description: 'Add load to accelerate progress' },
     ],
     relatedTools: [
+      { title: 'Front Lever Readiness Calculator', href: '/front-lever-readiness-calculator', description: 'Test your readiness score' },
       { title: 'Program Builder', href: '/calisthenics-program-builder', description: 'Build your training plan' },
       { title: 'Body Fat Calculator', href: '/body-fat-calculator', description: 'Optimize your body composition' },
     ],
@@ -51,6 +52,7 @@ export const SKILL_CLUSTERS: Record<string, SkillCluster> = {
       { title: 'Weighted Dip Progression', href: '/guides/weighted-dip-progression', description: 'Build pushing foundation' },
     ],
     relatedTools: [
+      { title: 'Planche Readiness Calculator', href: '/planche-readiness-calculator', description: 'Test your readiness score' },
       { title: 'Program Builder', href: '/calisthenics-program-builder', description: 'Build your training plan' },
       { title: 'Body Fat Calculator', href: '/body-fat-calculator', description: 'Lower body fat aids planche' },
     ],
@@ -70,6 +72,7 @@ export const SKILL_CLUSTERS: Record<string, SkillCluster> = {
       { title: 'Chest-to-Bar Progression', href: '/guides/chest-to-bar-pull-ups', description: 'Build the transition strength' },
     ],
     relatedTools: [
+      { title: 'Muscle-Up Readiness Calculator', href: '/muscle-up-readiness-calculator', description: 'Test your readiness score' },
       { title: 'Program Builder', href: '/calisthenics-program-builder', description: 'Build your training plan' },
       { title: 'Body Fat Calculator', href: '/body-fat-calculator', description: 'Optimize power-to-weight ratio' },
     ],

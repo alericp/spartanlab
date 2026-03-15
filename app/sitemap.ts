@@ -91,6 +91,26 @@ export default function sitemap(): MetadataRoute.Sitemap {
       priority: 0.7,
     },
     
+    // Readiness calculators - interactive SEO pages
+    {
+      url: `${baseUrl}/front-lever-readiness-calculator`,
+      lastModified: currentDate,
+      changeFrequency: 'monthly',
+      priority: 0.8,
+    },
+    {
+      url: `${baseUrl}/planche-readiness-calculator`,
+      lastModified: currentDate,
+      changeFrequency: 'monthly',
+      priority: 0.8,
+    },
+    {
+      url: `${baseUrl}/muscle-up-readiness-calculator`,
+      lastModified: currentDate,
+      changeFrequency: 'monthly',
+      priority: 0.8,
+    },
+    
     // Strength standards - authoritative reference
     {
       url: `${baseUrl}/calisthenics-strength-standards`,

@@ -135,6 +135,22 @@ export default function PlancheProgressionPage() {
         </div>
       </section>
 
+      {/* Readiness Calculator CTA */}
+      <section className="py-8 px-4 sm:px-6 bg-[#C1121F]/10 border-y border-[#C1121F]/20">
+        <div className="max-w-4xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div>
+            <h2 className="text-lg font-semibold text-[#E6E9EF]">Not sure if you are ready?</h2>
+            <p className="text-sm text-[#A5A5A5]">Take the free readiness assessment to get a personalized score and recommendations.</p>
+          </div>
+          <Link href="/planche-readiness-calculator">
+            <Button className="bg-[#C1121F] hover:bg-[#A50E1A] text-white">
+              Planche Readiness Calculator
+              <ArrowRight className="w-4 h-4 ml-2" />
+            </Button>
+          </Link>
+        </div>
+      </section>
+
       {/* Readiness Indicators */}
       <section className="py-12 px-4 sm:px-6 bg-[#1A1A1A]/50">
         <div className="max-w-4xl mx-auto">

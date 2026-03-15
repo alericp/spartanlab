@@ -13,9 +13,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Navigation } from '@/components/shared/Navigation'
+import { PageContainer } from '@/components/layout'
 import { PageHeader } from '@/components/shared/PageHeader'
-import { Settings, Crown, Shield, Target } from 'lucide-react'
+import { Settings, Crown, Shield, Target, Sparkles } from 'lucide-react'
 import { SKILL_DEFINITIONS } from '@/lib/skills'
 import { useOwnerInit } from '@/hooks/useOwnerInit'
 import { PRICING, TRIAL } from '@/lib/billing/pricing'
@@ -28,7 +28,6 @@ import {
   type AthleteProfile,
 } from '@/lib/data-service'
 import { UpdateMetricsCard } from '@/components/dashboard/UpdateMetricsCard'
-import { Sparkles } from 'lucide-react'
 
 // Subscription Billing Card - handles Pro, Trial, and Free states with graceful error handling
 function SubscriptionBillingCard() {
@@ -200,29 +199,23 @@ export default function SettingsPage() {
   // Loading state during hydration
   if (!mounted) {
     return (
-      <div className="min-h-screen bg-[#121212] text-[#F5F5F5]">
-        <Navigation />
-        <main className="max-w-2xl mx-auto px-4 sm:px-6 py-8">
-          <div className="animate-pulse">
-            <div className="h-96 bg-[#2A2A2A] rounded"></div>
-          </div>
-        </main>
-      </div>
+      <PageContainer maxWidth="md">
+        <div className="animate-pulse">
+          <div className="h-96 bg-[#2A2A2A] rounded"></div>
+        </div>
+      </PageContainer>
     )
   }
 
   return (
-    <div className="min-h-screen bg-[#121212] text-[#F5F5F5]">
-      <Navigation />
-
-      <main className="max-w-2xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
-        <PageHeader 
-          title="Settings"
-          description="Configure your training profile for accurate progress estimates"
-          backHref="/dashboard"
-          backLabel="Back to Dashboard"
-          icon={<Settings className="w-5 h-5" />}
-        />
+    <PageContainer maxWidth="md">
+      <PageHeader 
+        title="Settings"
+        description="Configure your training profile for accurate progress estimates"
+        backHref="/dashboard"
+        backLabel="Back to Dashboard"
+        icon={<Settings className="w-5 h-5" />}
+      />
         
         <Card className="bg-[#2A2A2A] border-[#3A3A3A] p-8 space-y-8">
           <div>
@@ -359,7 +352,6 @@ export default function SettingsPage() {
           </div>
           <SubscriptionBillingCard />
         </Card>
-      </main>
-    </div>
+    </PageContainer>
   )
 }

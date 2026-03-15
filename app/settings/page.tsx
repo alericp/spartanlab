@@ -15,7 +15,7 @@ import {
 } from '@/components/ui/select'
 import { Navigation } from '@/components/shared/Navigation'
 import { PageHeader } from '@/components/shared/PageHeader'
-import { Settings, Crown, Shield } from 'lucide-react'
+import { Settings, Crown, Shield, Target } from 'lucide-react'
 import { SKILL_DEFINITIONS } from '@/lib/skills'
 import { isOwner, getCurrentUserEmail } from '@/lib/owner-access'
 import { PRICING, TRIAL } from '@/lib/billing/pricing'
@@ -261,6 +261,29 @@ export default function SettingsPage() {
         <div className="mt-6">
           <UpdateMetricsCard onUpdate={loadProfile} />
         </div>
+        
+        {/* Redo Onboarding Section */}
+        <Card className="bg-[#2A2A2A] border-[#3A3A3A] p-8 mt-6">
+          <div className="mb-4">
+            <h2 className="text-xl font-bold mb-2">Training Profile</h2>
+            <p className="text-sm text-[#A5A5A5]">
+              Want to update your goals, skills, or training preferences? You can re-run the full onboarding process.
+            </p>
+          </div>
+          
+          <Link href="/onboarding">
+            <Button 
+              variant="outline" 
+              className="w-full border-[#3A3A3A] text-[#A5A5A5] hover:bg-[#2A2A2A] hover:text-[#F5F5F5]"
+            >
+              <Target className="w-4 h-4 mr-2" />
+              Update Training Goals
+            </Button>
+          </Link>
+          <p className="text-xs text-[#6B7280] mt-2">
+            This will walk you through your goals, skill levels, and training schedule again.
+          </p>
+        </Card>
         
         {/* Subscription & Billing Section */}
         <Card className="bg-[#2A2A2A] border-[#3A3A3A] p-8 mt-6">

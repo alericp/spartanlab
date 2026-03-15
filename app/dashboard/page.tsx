@@ -95,6 +95,7 @@ import { AchievementNotification } from '@/components/achievements/AchievementNo
 import { LeaderboardPreviewCard } from '@/components/leaderboards/LeaderboardTabs'
 import { ChallengesCard } from '@/components/challenges/ChallengesCard'
 import { ChallengeNotification } from '@/components/challenges/ChallengeNotification'
+import { WelcomeBanner } from '@/components/dashboard/WelcomeBanner'
 
 function DashboardContent() {
   const { isLoaded: isAuthLoaded } = useAuth()
@@ -356,6 +357,9 @@ function DashboardContent() {
   return (
     <PageContainer>
       <SectionStack gap="xl">
+        
+        {/* Welcome Banner for Post-Onboarding */}
+        <WelcomeBanner />
         
         {/* Welcome Card for First-Run Users */}
         {showWelcome && (

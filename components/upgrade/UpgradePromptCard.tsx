@@ -19,6 +19,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { hasProAccess } from '@/lib/feature-access'
+import { TRIAL } from '@/lib/billing/pricing'
 
 // =============================================================================
 // FREQUENCY CONTROL
@@ -100,7 +101,7 @@ export const UPGRADE_PROMPTS: Record<UpgradePromptId, UpgradePromptConfig> = {
     title: 'Want deeper insights into your performance?',
     description: 'SpartanLab Pro unlocks detailed session analysis, adaptive program adjustments, and progress forecasting.',
     icon: BarChart3,
-    ctaText: 'Unlock Pro Insights',
+    ctaText: TRIAL.ctaTextShort,
     benefits: [
       'Detailed session breakdown',
       'Adaptive adjustments',
@@ -112,7 +113,7 @@ export const UPGRADE_PROMPTS: Record<UpgradePromptId, UpgradePromptConfig> = {
     title: 'Unlock Advanced Training Analytics',
     description: 'See deeper patterns in your training data with Pro-level performance analysis and trend detection.',
     icon: TrendingUp,
-    ctaText: 'Upgrade for Analytics',
+    ctaText: TRIAL.ctaTextShort,
     benefits: [
       'Performance trend analysis',
       'Training volume insights',
@@ -124,7 +125,7 @@ export const UPGRADE_PROMPTS: Record<UpgradePromptId, UpgradePromptConfig> = {
     title: 'Get Detailed Skill Progression Insights',
     description: 'Upgrade to Pro for personalized skill progression timelines and targeted weak point analysis.',
     icon: Target,
-    ctaText: 'Unlock Skill Intelligence',
+    ctaText: TRIAL.ctaTextShort,
     benefits: [
       'Progress timeline estimates',
       'Weak point analysis',
@@ -136,7 +137,7 @@ export const UPGRADE_PROMPTS: Record<UpgradePromptId, UpgradePromptConfig> = {
     title: 'Intelligent Band Progression',
     description: 'Pro members receive adaptive band recommendations based on their performance trends and readiness.',
     icon: Activity,
-    ctaText: 'Unlock Band Intelligence',
+    ctaText: TRIAL.ctaTextShort,
     benefits: [
       'Adaptive band selection',
       'Progression timing',
@@ -148,7 +149,7 @@ export const UPGRADE_PROMPTS: Record<UpgradePromptId, UpgradePromptConfig> = {
     title: 'See Your Training Forecast',
     description: 'Pro unlocks progress projections showing estimated timelines for your next skill milestones.',
     icon: Sparkles,
-    ctaText: 'Unlock Forecasting',
+    ctaText: TRIAL.ctaTextShort,
     benefits: [
       'Milestone projections',
       'Timeline estimates',
@@ -160,7 +161,7 @@ export const UPGRADE_PROMPTS: Record<UpgradePromptId, UpgradePromptConfig> = {
     title: 'Adaptive Training Engine',
     description: 'Let SpartanLab automatically adjust your training based on fatigue, performance, and recovery signals.',
     icon: Brain,
-    ctaText: 'Unlock Adaptive Training',
+    ctaText: TRIAL.ctaTextShort,
     benefits: [
       'Auto-adjusted workouts',
       'Fatigue-aware programming',
@@ -172,7 +173,7 @@ export const UPGRADE_PROMPTS: Record<UpgradePromptId, UpgradePromptConfig> = {
     title: 'Advanced Fatigue Intelligence',
     description: 'Access deep fatigue analysis and recovery predictions to optimize your training timing.',
     icon: Zap,
-    ctaText: 'Unlock Fatigue AI',
+    ctaText: TRIAL.ctaTextShort,
     benefits: [
       'Fatigue tracking',
       'Recovery predictions',
@@ -184,7 +185,7 @@ export const UPGRADE_PROMPTS: Record<UpgradePromptId, UpgradePromptConfig> = {
     title: 'Advanced Training Tool',
     description: 'This tool provides Pro-level analysis and recommendations for your training.',
     icon: Brain,
-    ctaText: 'Upgrade to Pro',
+    ctaText: TRIAL.ctaTextShort,
     benefits: [
       'Deep analysis',
       'Personalized recommendations',
@@ -498,12 +499,12 @@ export function ToolLockedPreview({
           {description}
         </p>
         
-        <Link href="/upgrade">
-          <Button className="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-semibold">
-            <Crown className="w-4 h-4 mr-2" />
-            Upgrade to Pro
-          </Button>
-        </Link>
+<Link href="/upgrade">
+  <Button className="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-semibold">
+  <Crown className="w-4 h-4 mr-2" />
+  {TRIAL.ctaTextShort}
+  </Button>
+  </Link>
       </div>
     </Card>
   )

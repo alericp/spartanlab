@@ -20,6 +20,7 @@ import {
   type SubscriptionTier,
 } from '@/lib/feature-access'
 import { getSimulationMode, isSimulationActive } from './subscription-simulation'
+import { TRIAL } from './pricing'
 
 // =============================================================================
 // UI STATUS TYPES
@@ -196,7 +197,7 @@ export function getUpgradeCtaText(status?: UISubscriptionStatus): string {
     case 'pro':
       return 'Manage Billing'
     default:
-      return 'Start 7-Day Free Trial'
+      return TRIAL.ctaText
   }
 }
 

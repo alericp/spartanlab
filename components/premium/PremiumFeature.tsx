@@ -26,6 +26,7 @@ import {
   getTrialDaysRemaining,
   isOwnerAccount,
 } from '@/lib/feature-access'
+import { TRIAL } from '@/lib/billing/pricing'
 
 // =============================================================================
 // PREMIUM FEATURE DEFINITIONS (for UI display)
@@ -332,11 +333,11 @@ export function PremiumFeatureLockCard({
               size="sm" 
               className="w-full bg-gradient-to-r from-amber-500/20 to-amber-600/20 hover:from-amber-500/30 hover:to-amber-600/30 text-amber-400 border border-amber-500/30"
             >
-              <Crown className="w-3.5 h-3.5 mr-1.5" />
-              Upgrade to Pro
-            </Button>
-          </Link>
-        </div>
+<Crown className="w-3.5 h-3.5 mr-1.5" />
+  {TRIAL.ctaTextShort}
+  </Button>
+  </Link>
+  </div>
       </Card>
     )
   }
@@ -385,16 +386,17 @@ export function PremiumFeatureLockCard({
         )}
 
         {/* CTA */}
-        <Link href="/upgrade">
-          <Button 
-            className="w-full bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-semibold"
-          >
-            <Crown className="w-4 h-4 mr-2" />
-            Upgrade to SpartanLab Pro
-          </Button>
-        </Link>
-      </div>
-    </Card>
+<Link href="/upgrade">
+  <Button
+  className="w-full bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-semibold"
+  >
+  <Crown className="w-4 h-4 mr-2" />
+  {TRIAL.ctaText}
+  </Button>
+  </Link>
+  <p className="text-xs text-center text-[#6B7280] mt-2">{TRIAL.explanationShort}</p>
+  </div>
+  </Card>
   )
 }
 
@@ -578,12 +580,12 @@ export function UpgradeTriggerPanel({
             <p className="text-xs text-[#A4ACB8] leading-relaxed mb-3">{description}</p>
             
             <div className="flex items-center gap-3">
-              <Link href="/upgrade">
-                <Button size="sm" className="bg-[#C1121F] hover:bg-[#A30F1A] text-white text-xs h-8 px-4">
-                  <Crown className="w-3.5 h-3.5 mr-1.5" />
-                  Upgrade to Pro
-                </Button>
-              </Link>
+<Link href="/upgrade">
+  <Button size="sm" className="bg-[#C1121F] hover:bg-[#A30F1A] text-white text-xs h-8 px-4">
+  <Crown className="w-3.5 h-3.5 mr-1.5" />
+  {TRIAL.ctaTextShort}
+  </Button>
+  </Link>
               {showDismiss && onDismiss && (
                 <button
                   onClick={onDismiss}

@@ -1,7 +1,12 @@
 import { Metadata } from 'next'
 import Link from 'next/link'
 import { ArrowLeft, Clock, Target, AlertTriangle, CheckCircle, Dumbbell, Brain } from 'lucide-react'
-import { SITE_CONFIG } from '@/lib/seo'
+import { SITE_CONFIG, generateFAQSchema, generateHowToSchema, generateBreadcrumbSchema } from '@/lib/seo'
+import { JsonLdMultiple } from '@/components/seo/JsonLd'
+import { ProgressionTable } from '@/components/seo/ProgressionTable'
+import { FAQ } from '@/components/seo/FAQ'
+import { RelatedContent } from '@/components/seo/RelatedContent'
+import { getSkillCluster } from '@/lib/seo/skill-clusters'
 
 export const metadata: Metadata = {
   title: 'Handstand Training Guide | SpartanLab',
@@ -24,9 +29,50 @@ export const metadata: Metadata = {
   },
 }
 
+// Progression table data
+const progressionLevels = [
+  { level: 'Wall Handstand', holdTime: '30-60 seconds', requirement: 'Basic shoulder strength', nextGoal: 'Develop body alignment' },
+  { level: 'Chest-to-Wall', holdTime: '30-45 seconds', requirement: 'Shoulder flexibility', nextGoal: 'Begin balance drills' },
+  { level: 'Heel Pulls', holdTime: '5-10 pulls', requirement: 'Wall stability', nextGoal: 'Develop balance feel' },
+  { level: 'Kick-Up Attempts', holdTime: '15-30 attempts/day', requirement: 'Reliable kick-up', nextGoal: 'Achieve freestanding' },
+  { level: 'Freestanding Hold', holdTime: '10-30 seconds', requirement: 'Balance control', nextGoal: 'Extend hold time' },
+]
+
+// FAQ data
+const faqs = [
+  { question: 'How long does it take to learn a freestanding handstand?', answer: 'Most dedicated practitioners achieve a 10-30 second freestanding handstand in 6-18 months. Daily practice of 10-15 minutes is more effective than longer, less frequent sessions. Wall work builds strength, but balance requires freestanding attempts.' },
+  { question: 'Should I train handstand every day?', answer: 'Yes, daily balance practice (10-15 minutes) is ideal for developing the neurological adaptations needed. However, heavy pressing/strength work should be limited to 3x per week to allow recovery. Separate balance work from strength work for best results.' },
+  { question: 'Do I need to be strong to do a handstand?', answer: 'Basic strength is needed (10+ push-ups, 30+ second plank), but handstands are primarily a balance skill. Many people overthink strength requirements. Start wall practice early and build strength alongside balance development.' },
+  { question: 'Is handstand harder than front lever or planche?', answer: 'Handstand is primarily a balance skill, while front lever and planche are primarily strength skills. A basic handstand is achievable faster than front lever, but a perfectly controlled, long-duration handstand takes years of refinement.' },
+]
+
+// JSON-LD schemas
+const jsonLdSchemas = [
+  generateHowToSchema({
+    name: 'Handstand Training Guide',
+    description: 'Master the freestanding handstand with balance practice, strength progressions, and training structure.',
+    url: `${SITE_CONFIG.url}/guides/handstand-training`,
+    steps: [
+      { name: 'Wall Handstand', description: 'Build foundational shoulder strength and body alignment against the wall.' },
+      { name: 'Chest-to-Wall Practice', description: 'Develop proper alignment with chest facing the wall to correct banana back.' },
+      { name: 'Heel Pull Drills', description: 'Practice pulling heels away from wall to develop balance awareness.' },
+      { name: 'Kick-Up Practice', description: 'Develop a reliable kick-up technique for consistent entry.' },
+      { name: 'Freestanding Holds', description: 'Build balance endurance through daily freestanding practice.' },
+    ],
+    totalTime: 'P1Y',
+  }),
+  generateBreadcrumbSchema([
+    { name: 'Home', url: '/' },
+    { name: 'Guides', url: '/guides' },
+    { name: 'Handstand Training', url: '/guides/handstand-training' },
+  ]),
+  generateFAQSchema(faqs),
+]
+
 export default function HandstandTrainingGuidePage() {
   return (
     <main className="min-h-screen bg-[#0F1115] text-[#E6E9EF]">
+      <JsonLdMultiple schemas={jsonLdSchemas} />
       <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8">
         {/* Back Link */}
         <Link 
@@ -263,8 +309,21 @@ export default function HandstandTrainingGuidePage() {
           </p>
         </section>
 
+        {/* Progression Standards Table */}
+        <ProgressionTable 
+          title="Handstand Progression Standards" 
+          levels={progressionLevels} 
+        />
+
+        {/* FAQ Section */}
+        <FAQ 
+          title="Handstand FAQ" 
+          faqs={faqs} 
+          defaultOpen={[0]} 
+        />
+
         {/* CTA */}
-        <section className="bg-gradient-to-r from-[#C1121F]/20 to-[#1C1F26] border border-[#C1121F]/30 rounded-lg p-6 text-center">
+        <section className="bg-gradient-to-r from-[#C1121F]/20 to-[#1C1F26] border border-[#C1121F]/30 rounded-lg p-6 text-center mb-12">
           <h2 className="text-xl font-semibold text-white mb-2">
             Ready to Build Your Handstand?
           </h2>
@@ -278,6 +337,14 @@ export default function HandstandTrainingGuidePage() {
             Build Your Program
           </Link>
         </section>
+
+        {/* Related Content */}
+        {getSkillCluster('handstand') && (
+          <RelatedContent 
+            cluster={getSkillCluster('handstand')!} 
+            title="Continue Your Training"
+          />
+        )}
       </div>
     </main>
   )

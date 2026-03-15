@@ -6,7 +6,9 @@ import { ProgressionLadderCard } from '@/components/seo/ProgressionLadderCard'
 import { RelatedFeatureCTA } from '@/components/seo/RelatedFeatureCTA'
 import { JsonLdMultiple } from '@/components/seo/JsonLd'
 import { RelatedContent } from '@/components/seo/RelatedContent'
-import { generateHowToSchema, generateBreadcrumbSchema, SITE_CONFIG } from '@/lib/seo'
+import { ProgressionTable } from '@/components/seo/ProgressionTable'
+import { FAQ } from '@/components/seo/FAQ'
+import { generateHowToSchema, generateBreadcrumbSchema, generateFAQSchema, SITE_CONFIG } from '@/lib/seo'
 import { getSkillCluster } from '@/lib/seo/skill-clusters'
 import { Target, AlertTriangle, ArrowRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -74,6 +76,23 @@ const commonMistakes = [
   },
 ]
 
+// Progression table data
+const progressionLevels = [
+  { level: 'Planche Lean', holdTime: '30-60 seconds', requirement: 'Wrist conditioning', nextGoal: 'Increase lean angle' },
+  { level: 'Tuck Planche', holdTime: '10-20 seconds', requirement: 'Basic pushing strength', nextGoal: 'Develop shoulder protraction' },
+  { level: 'Advanced Tuck', holdTime: '10-15 seconds', requirement: 'Strong protraction', nextGoal: 'Begin hip extension' },
+  { level: 'Straddle Planche', holdTime: '5-10 seconds', requirement: 'Elite shoulder strength', nextGoal: 'Prepare for full planche' },
+  { level: 'Full Planche', holdTime: '3-5 seconds', requirement: 'Peak straight-arm strength', nextGoal: 'Extend hold time' },
+]
+
+// FAQ data
+const faqs = [
+  { question: 'How long does it take to learn a planche?', answer: 'A full planche typically takes 2-5 years of dedicated training for most athletes. Tuck planche can be achieved in 6-18 months, while the jump to straddle and full planche represents the longest training periods. Genetics, training consistency, and body weight all significantly impact timeline.' },
+  { question: 'Do push-ups help planche training?', answer: 'Regular push-ups have limited carryover to planche. Pseudo planche push-ups (PPPU) with significant forward lean are much more effective as they train the same shoulder angle and protraction pattern. Weighted dips also build relevant pushing strength for planche.' },
+  { question: 'Is planche harder than front lever?', answer: 'Yes, for most athletes planche is significantly harder. The full planche requires extreme shoulder extension strength and straight-arm pushing power that takes much longer to develop than the pulling strength for front lever. Most coaches estimate planche takes 2-4x longer than front lever.' },
+  { question: 'What are the best planche accessory exercises?', answer: 'The most effective accessories are: pseudo planche push-ups (PPPU), planche leans, maltese press negatives, front lever rows, and weighted dips. Band-assisted planche holds can help learn the body position, but strength must be built through leans and pressing work.' },
+]
+
 // JSON-LD structured data
 const jsonLdSchemas = [
   generateHowToSchema({
@@ -93,6 +112,7 @@ const jsonLdSchemas = [
     { name: 'Skills', url: '/skills' },
     { name: 'Planche Progression', url: '/planche-progression' },
   ]),
+  generateFAQSchema(faqs),
 ]
 
 export default function PlancheProgressionPage() {
@@ -165,6 +185,19 @@ export default function PlancheProgressionPage() {
           </div>
         </div>
       </section>
+
+      {/* Progression Standards Table */}
+      <ProgressionTable 
+        title="Planche Progression Standards" 
+        levels={progressionLevels} 
+      />
+
+      {/* FAQ Section */}
+      <FAQ 
+        title="Planche FAQ" 
+        faqs={faqs} 
+        defaultOpen={[0]} 
+      />
 
       {/* Related Feature CTA */}
       <RelatedFeatureCTA

@@ -105,6 +105,11 @@ export default function OnboardingCompletePage() {
       
       if (data.error) {
         console.error('Checkout error:', data.error)
+        // If authentication failed, redirect to sign-in with return URL
+        if (response.status === 401) {
+          router.push('/sign-in?redirect_url=/upgrade')
+          return
+        }
         setIsLoading(false)
         return
       }

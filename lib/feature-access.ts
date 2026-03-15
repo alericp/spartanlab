@@ -8,6 +8,7 @@
  */
 
 import { isOwner, checkOwnerByEmail } from './owner-access'
+import { getSimulationMode, isSimulationActive } from './billing/subscription-simulation'
 
 // Re-export for component usage
 export { isOwner as isOwnerAccount } from './owner-access'
@@ -327,6 +328,7 @@ export function hasProAccess(): boolean {
   // Owner without simulation has Pro access
   if (isOwner()) return true
   
+  // Regular users - standard check
   const subscription = getSubscription()
   return subscription.tier === 'pro' && 
          (subscription.status === 'active' || subscription.status === 'trialing')

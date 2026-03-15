@@ -3,8 +3,9 @@
 import Link from 'next/link'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Lock, ArrowRight } from 'lucide-react'
+import { Lock, ArrowRight, Sparkles } from 'lucide-react'
 import { getCurrentPlan } from '@/lib/plan-source'
+import { TRIAL } from '@/lib/billing/pricing'
 import type { SubscriptionPlan } from '@/types/domain'
 
 interface FeatureLockedCardProps {
@@ -48,10 +49,11 @@ export function FeatureLockedCard({
         
         <Link href="/upgrade">
           <Button className="bg-[#E63946] hover:bg-[#D62828]">
-            Upgrade to {PLAN_LABELS[requiredPlan]}
-            <ArrowRight className="w-4 h-4 ml-2" />
+            <Sparkles className="w-4 h-4 mr-2" />
+            {TRIAL.ctaText}
           </Button>
         </Link>
+        <p className="text-xs text-[#6B7280] mt-2">{TRIAL.explanationShort}</p>
       </div>
     </Card>
   )

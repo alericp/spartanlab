@@ -15,6 +15,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { hasProAccess } from '@/lib/feature-access'
+import { TRIAL } from '@/lib/billing/pricing'
 
 // =============================================================================
 // ADAPTIVE PROGRAM FEATURE UPGRADE CARD
@@ -91,7 +92,7 @@ export function AdaptiveProgramUpgradeCard({
               className="w-full bg-gradient-to-r from-amber-500/20 to-amber-600/20 hover:from-amber-500/30 hover:to-amber-600/30 text-amber-400 border border-amber-500/30 text-xs"
             >
               <Crown className="w-3 h-3 mr-1.5" />
-              Upgrade to Pro
+              {TRIAL.ctaTextShort}
             </Button>
           </Link>
         </div>
@@ -152,9 +153,10 @@ export function AdaptiveProgramUpgradeCard({
             className="w-full bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-semibold"
           >
             <Crown className="w-4 h-4 mr-2" />
-            Upgrade to SpartanLab Pro
+            {TRIAL.ctaText}
           </Button>
         </Link>
+        <p className="text-xs text-center text-[#6B7280] mt-2">{TRIAL.explanationShort}</p>
       </div>
     </Card>
   )

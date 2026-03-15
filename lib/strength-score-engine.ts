@@ -354,6 +354,7 @@ export function calculateSpartanScore(): StrengthScoreBreakdown {
   const baseScore = 
     (skillResult.score * WEIGHTS.skill) +
     (strengthResult.score * WEIGHTS.strength) +
+    (consistencyResult.score * WEIGHTS.consistency) +
     (readinessResult.score * WEIGHTS.readiness) +
     (consistencyResult.score * WEIGHTS.consistency) +
     (achievementResult.score * WEIGHTS.achievements)
@@ -383,13 +384,6 @@ export function calculateSpartanScore(): StrengthScoreBreakdown {
       description: strengthResult.details.length > 0
         ? `Based on ${strengthResult.details.map(d => d.exercise).join(', ')}`
         : 'No strength records yet'
-    },
-    {
-      raw: readinessResult.score,
-      weighted: Math.round(readinessResult.score * WEIGHTS.readiness * 10),
-      weight: WEIGHTS.readiness,
-      label: 'Skill Readiness',
-      description: readinessResult.description
     },
     {
       raw: consistencyResult.score,
@@ -440,6 +434,7 @@ function generateScoreExplanation(
   strengthResult: { score: number; details: { exercise: string; oneRM: number; score: number }[] },
   readinessResult: { score: number; description: string },
   consistencyResult: { score: number; weeklyWorkouts: number; daysSinceLastWorkout: number },
+  achievementResult: { score: number; unlockedCount: number; totalCount: number; earnedPoints: number },
   level: SpartanLevel
 ): { explanation: string; focusAreas: string[]; strengths: string[] } {
   const focusAreas: string[] = []
@@ -458,16 +453,20 @@ function generateScoreExplanation(
     focusAreas.push('Weighted strength development')
   }
   
+  if (consistencyResult.score >= 60) {
+    strengths.push('Consistent training')
+  } else if (consistencyResult.score < 40) {
+    focusAreas.push('Training consistency')
+  }
+  
   if (readinessResult.score >= 60) {
     strengths.push('High progression readiness')
   } else if (readinessResult.score < 40) {
     focusAreas.push('Build skill density')
   }
   
-  if (consistencyResult.score >= 60) {
-    strengths.push('Consistent training')
-  } else if (consistencyResult.score < 40) {
-    focusAreas.push('Training consistency')
+  if (achievementResult.score >= 60) {
+    strengths.push('Achievement hunter')
   }
   
   // Get constraint insight for additional focus

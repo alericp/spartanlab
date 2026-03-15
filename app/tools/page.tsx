@@ -7,6 +7,7 @@ import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { BackNav } from '@/components/navigation/BackNav'
 import { SITE_CONFIG } from '@/lib/seo'
+import { TRIAL } from '@/lib/billing/pricing'
 
 export const metadata: Metadata = {
   title: 'Calisthenics Training Tools | SpartanLab',
@@ -341,12 +342,12 @@ export default function ToolsIndexPage() {
               })}
             </div>
             <div className="mt-4 text-center">
-              <Link href="/upgrade">
-                <Button variant="outline" className="border-amber-500/30 text-amber-400 hover:bg-amber-500/10">
-                  <Crown className="w-4 h-4 mr-2" />
-                  Upgrade to Pro for Advanced Tools
-                </Button>
-              </Link>
+<Link href="/upgrade">
+  <Button variant="outline" className="border-amber-500/30 text-amber-400 hover:bg-amber-500/10">
+  <Crown className="w-4 h-4 mr-2" />
+  {TRIAL.ctaText}
+  </Button>
+  </Link>
             </div>
           </div>
           

@@ -286,29 +286,90 @@ export default function SettingsPage() {
         </Card>
         
         {/* Subscription & Billing Section */}
-        <Card className="bg-[#2A2A2A] border-[#3A3A3A] p-8 mt-6">
-          <div className="mb-6">
-            <h2 className="text-xl font-bold mb-2">Subscription</h2>
+        <SubscriptionBillingCard />
+      </main>
+    </div>
+  )
+}
+
+// =============================================================================
+// TRAINING PROFILE CARD
+// =============================================================================
+
+function TrainingProfileCard() {
+  return (
+    <Card className="bg-[#2A2A2A] border-[#3A3A3A] p-8 mt-6">
+      <div className="mb-4">
+        <h2 className="text-xl font-bold mb-2">Training Profile</h2>
+        <p className="text-sm text-[#A5A5A5]">
+          Update your goals, skill levels, and training preferences
+        </p>
+      </div>
+      
+      <div className="space-y-4">
+        <Link href="/onboarding">
+          <Button 
+            variant="outline" 
+            className="w-full border-[#3A3A3A] text-[#A5A5A5] hover:bg-[#3A3A3A] hover:text-[#F5F5F5]"
+          >
+            <Settings className="w-4 h-4 mr-2" />
+            Update Training Goals & Benchmarks
+          </Button>
+        </Link>
+        <p className="text-xs text-[#6B7280]">
+          Re-run the setup wizard to update your strength benchmarks, skill levels, 
+          training schedule, and goals. Your program will be regenerated based on your new inputs.
+        </p>
+      </div>
+    </Card>
+  )
+}
+
+// =============================================================================
+// SUBSCRIPTION BILLING CARD
+// =============================================================================
+
+function SubscriptionBillingCard() {
+  const { status, planLabel, isTrial, trialDaysRemaining, isOwner } = useSubscriptionStatus()
+  const showUpgrade = shouldShowUpgradePrompt()
+  
+  const handleManageBilling = async () => {
+    try {
+      const res = await fetch('/api/stripe/create-portal-session', { method: 'POST' })
+      const data = await res.json()
+      if (data.url) {
+        window.location.href = data.url
+      }
+    } catch (error) {
+      console.error('Portal error:', error)
+    }
+  }
+  
+  return (
+    <Card className="bg-[#2A2A2A] border-[#3A3A3A] p-8 mt-6">
+      <div className="mb-6">
+        <h2 className="text-xl font-bold mb-2">Subscription</h2>
+      </div>
+      
+      {/* Subscription Status */}
+      <SubscriptionStatusIndicator className="mb-6" />
+      
+      {/* Actions based on status */}
+      <div className="space-y-4">
+        {isOwner ? (
+          // Owner info
+          <div className="text-xs text-[#6B7280]">
+            Logged in as: {getCurrentUserEmail() || 'Owner'}
           </div>
-          
-          {isOwner() ? (
-            // Owner account display
-            <div className="space-y-4">
-              <div className="flex items-center gap-3 p-4 rounded-lg bg-gradient-to-r from-amber-500/10 to-transparent border border-amber-500/20">
-                <div className="w-10 h-10 rounded-lg bg-amber-500/20 flex items-center justify-center">
-                  <Shield className="w-5 h-5 text-amber-400" />
-                </div>
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[#F5F5F5] font-medium">Owner Account</span>
-                    <span className="px-2 py-0.5 text-xs rounded bg-amber-500/20 text-amber-400 border border-amber-500/30">
-                      Full Access
-                    </span>
-                  </div>
-                  <p className="text-sm text-[#A5A5A5]">
-                    Subscription not required. All Pro features unlocked.
-                  </p>
-                </div>
+        ) : status === 'pro' || status === 'trial' ? (
+          // Pro/Trial actions
+          <>
+            {isTrial && trialDaysRemaining > 0 && (
+              <div className="p-3 rounded-lg bg-amber-500/5 border border-amber-500/20">
+                <p className="text-sm text-[#A4ACB8]">
+                  Your trial ends in <span className="font-medium text-amber-400">{trialDaysRemaining} day{trialDaysRemaining !== 1 ? 's' : ''}</span>. 
+                  You will be charged after your trial ends.
+                </p>
               </div>
               
               <div className="text-xs text-[#6B7280]">

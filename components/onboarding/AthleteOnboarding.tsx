@@ -9,6 +9,7 @@ import {
   ChevronLeft, 
   ChevronRight, 
   ArrowRight,
+  ArrowLeft,
   User, 
   Target, 
   Dumbbell,

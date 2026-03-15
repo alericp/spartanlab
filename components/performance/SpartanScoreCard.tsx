@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
-import { ArrowRight, Target, Dumbbell, Activity, Calendar, TrendingUp, AlertCircle, Share2 } from 'lucide-react'
+import { ArrowRight, Target, Dumbbell, Activity, Calendar, TrendingUp, AlertCircle, Share2, Trophy, Zap } from 'lucide-react'
 import { StrengthScoreBreakdown, getLevelColor, getLevelGradient } from '@/lib/strength-score-engine'
 import { ShareScoreButton } from './ScoreShareCard'
 
@@ -119,31 +119,41 @@ export function SpartanScoreCard({ score }: SpartanScoreCardProps) {
           )}
         </div>
 
-        {/* Score breakdown */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
+        {/* Score breakdown - Primary metrics */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3">
           <ScoreBreakdownItem 
             icon={Target}
             label="Skills"
             score={score.skillScore}
-            weight={35}
+            weight={30}
           />
           <ScoreBreakdownItem 
             icon={Dumbbell}
             label="Strength"
             score={score.strengthScore}
-            weight={35}
-          />
-          <ScoreBreakdownItem 
-            icon={TrendingUp}
-            label="Readiness"
-            score={score.readinessScore}
-            weight={15}
+            weight={30}
           />
           <ScoreBreakdownItem 
             icon={Calendar}
             label="Consistency"
             score={score.consistencyScore}
-            weight={15}
+            weight={20}
+          />
+        </div>
+        
+        {/* Score breakdown - Secondary metrics */}
+        <div className="grid grid-cols-2 gap-2 sm:gap-3">
+          <ScoreBreakdownItem 
+            icon={Zap}
+            label="Readiness"
+            score={score.readinessScore}
+            weight={10}
+          />
+          <ScoreBreakdownItem 
+            icon={Trophy}
+            label="Achievements"
+            score={score.achievementScore}
+            weight={10}
           />
         </div>
 

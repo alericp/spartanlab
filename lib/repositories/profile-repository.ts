@@ -8,6 +8,8 @@
 import { isPreviewMode } from '../app-mode'
 import { dbGetProfile, dbSaveProfile } from '../db-queries'
 import type { AthleteProfile, ProfileRepository } from '@/types/domain'
+import { onTrainingEvent } from '@/lib/achievements/achievement-engine'
+import { showAchievementNotifications } from '@/components/achievements/achievement-notification'
 
 const STORAGE_KEY = 'spartanlab_profile'
 
@@ -170,6 +172,13 @@ export function saveAthleteProfile(
   }
 
   localStorage.setItem(STORAGE_KEY, JSON.stringify(updated))
+  
+  // Check for newly unlocked achievements (strength milestones, etc.)
+  const newAchievements = onTrainingEvent()
+  if (newAchievements.length > 0) {
+    showAchievementNotifications(newAchievements)
+  }
+  
   return updated
 }
 

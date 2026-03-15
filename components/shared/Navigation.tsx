@@ -22,6 +22,7 @@ const NAV_ITEMS = [
 
 // Secondary navigation - deeper features (shown in mobile menu and settings)
 const SECONDARY_NAV_ITEMS = [
+  { href: '/challenges', label: 'Challenges', icon: Target },
   { href: '/leaderboard', label: 'Leaderboard', icon: Trophy },
   { href: '/recovery', label: 'Recovery', icon: Activity },
   { href: '/tools', label: 'Tools', icon: Wrench },
@@ -36,6 +37,7 @@ const PAGE_TITLES: Record<string, string> = {
   '/skills': 'Skills',
   '/strength': 'Strength',
   '/guides': 'Guides',
+  '/challenges': 'Challenges',
   '/leaderboard': 'Leaderboard',
   '/recovery': 'Recovery',
   '/tools': 'Tools',

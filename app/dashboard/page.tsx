@@ -93,6 +93,8 @@ import { useAuth } from '@clerk/nextjs'
 import { AchievementsCard } from '@/components/dashboard/AchievementsCard'
 import { AchievementNotification } from '@/components/achievements/AchievementNotification'
 import { LeaderboardPreviewCard } from '@/components/leaderboards/LeaderboardTabs'
+import { ChallengesCard } from '@/components/challenges/ChallengesCard'
+import { ChallengeNotification } from '@/components/challenges/ChallengeNotification'
 
 function DashboardContent() {
   const { isLoaded: isAuthLoaded } = useAuth()
@@ -550,6 +552,14 @@ function DashboardContent() {
         </SafeWidget>
         
         {/* ============================================================= */}
+        {/* CHALLENGES - Weekly/monthly/seasonal challenges */}
+        {/* ============================================================= */}
+        
+        <SafeWidget name="ChallengesCard">
+          <ChallengesCard maxDisplay={3} />
+        </SafeWidget>
+        
+        {/* ============================================================= */}
         {/* LEADERBOARD - Community rankings */}
         {/* ============================================================= */}
         
@@ -708,6 +718,9 @@ function DashboardContent() {
       
       {/* Achievement Unlock Notification */}
       <AchievementNotification />
+      
+      {/* Challenge Completion Notification */}
+      <ChallengeNotification />
     </PageContainer>
   )
 }

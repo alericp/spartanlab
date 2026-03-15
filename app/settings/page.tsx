@@ -130,20 +130,38 @@ function SubscriptionBillingCard() {
         </div>
       )}
       
-      <Button 
-        variant="outline" 
-        className="w-full border-[#3A3A3A] text-[#A5A5A5] hover:bg-[#2A2A2A]"
-        onClick={handleManageBilling}
-        disabled={billingStatus === 'loading'}
-      >
-        {billingStatus === 'loading' ? 'Opening Billing...' : 'Manage Billing'}
-      </Button>
-      <p className="text-xs text-[#6B7280]">
-        Billing questions?{' '}
-        <a href="mailto:billing@spartanlab.app" className="text-[#A5A5A5] hover:text-[#F5F5F5] transition-colors">
-          billing@spartanlab.app
-        </a>
-      </p>
+      {/* Trial users may not have a billing account yet */}
+      {subscriptionInfo.isTrialing ? (
+        <>
+          <Button 
+            variant="outline" 
+            className="w-full border-[#3A3A3A] text-[#6B7280] cursor-not-allowed opacity-60"
+            disabled
+          >
+            Manage Billing
+          </Button>
+          <p className="text-xs text-[#6B7280]">
+            Billing will activate after your trial ends. No payment required during trial.
+          </p>
+        </>
+      ) : (
+        <>
+          <Button 
+            variant="outline" 
+            className="w-full border-[#3A3A3A] text-[#A5A5A5] hover:bg-[#2A2A2A]"
+            onClick={handleManageBilling}
+            disabled={billingStatus === 'loading'}
+          >
+            {billingStatus === 'loading' ? 'Opening Billing...' : 'Manage Billing'}
+          </Button>
+          <p className="text-xs text-[#6B7280]">
+            Billing questions?{' '}
+            <a href="mailto:billing@spartanlab.app" className="text-[#A5A5A5] hover:text-[#F5F5F5] transition-colors">
+              billing@spartanlab.app
+            </a>
+          </p>
+        </>
+      )}
     </div>
   )
 }

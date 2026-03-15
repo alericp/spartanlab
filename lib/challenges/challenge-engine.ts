@@ -7,6 +7,8 @@ import {
   type ChallengeReward,
   getActiveChallenges,
   getChallengeById,
+  markTierCompleted,
+  getPeriodKeyForChallenge,
 } from './challenge-definitions'
 import { getWorkoutLogs } from '../workout-log-service'
 import { getSkillSessions } from '../skill-session-service'
@@ -245,9 +247,15 @@ export function evaluateAllChallenges(): {
     
     updatedProgress.push(progress)
     
-    // Track new completions
+    // Track new completions and update tier progress
     if (isComplete && !wasComplete) {
       newCompletions.push(challenge)
+      
+      // Mark tier as completed for tiered challenges
+      if (challenge.baseId && challenge.tier) {
+        const periodKey = getPeriodKeyForChallenge(challenge)
+        markTierCompleted(challenge.baseId, periodKey, challenge.tier)
+      }
     }
   })
   
@@ -375,13 +383,13 @@ export interface ChallengeSummary {
 export function getChallengesByPeriodWithProgress(period: 'weekly' | 'monthly'): ChallengeWithProgress[] {
   const all = getActiveChallengesWithProgress()
   return all
-    .filter(item => item.challenge.period === period)
+    .filter(item => item.challenge.category === period)
     .map(item => ({
       id: item.challenge.id,
       name: item.challenge.name,
       description: item.challenge.description,
       category: item.challenge.category,
-      period: item.challenge.period,
+      period: item.challenge.category as 'weekly' | 'monthly' | 'seasonal',
       goalValue: item.challenge.goalValue,
       currentValue: item.progress.currentValue,
       percentComplete: item.percentComplete,
@@ -401,7 +409,7 @@ export function getAllChallengesWithProgress(): ChallengeWithProgress[] {
     name: item.challenge.name,
     description: item.challenge.description,
     category: item.challenge.category,
-    period: item.challenge.period,
+    period: item.challenge.category as 'weekly' | 'monthly' | 'seasonal',
     goalValue: item.challenge.goalValue,
     currentValue: item.progress.currentValue,
     percentComplete: item.percentComplete,
@@ -438,5 +446,6 @@ export function getChallengeSummary(): ChallengeSummary {
  * Returns array of newly completed challenge IDs
  */
 export function onTrainingEventForChallenges(): string[] {
-  return evaluateChallenges()
+  const { newCompletions } = evaluateAllChallenges()
+  return newCompletions.map(c => c.id)
 }

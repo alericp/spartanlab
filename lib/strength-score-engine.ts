@@ -43,6 +43,14 @@ export interface StrengthScoreBreakdown {
   // Data quality
   dataQuality: 'insufficient' | 'partial' | 'good' | 'excellent'
   hasEnoughData: boolean
+  
+  // Decay info (for transparency)
+  decayInfo?: {
+    daysInactive: number
+    decayAmount: number
+    decayApplied: boolean
+    message: string
+  }
 }
 
 export type SpartanLevel = 'Beginner' | 'Developing' | 'Intermediate' | 'Advanced' | 'Elite'
@@ -324,6 +332,100 @@ export function calculateAchievementScore(): { score: number; unlockedCount: num
   }
 }
 
+// =============================================================================
+// SPARTAN SCORE DECAY SYSTEM
+// =============================================================================
+// Philosophy: Light, fair decay that only penalizes true inactivity
+// - No punishment for lower-frequency training plans
+// - No punishment based on rep totals
+// - Only decay after meaningful inactivity (4+ days)
+// - Always recoverable, never demoralizing
+
+const DECAY_CONFIG = {
+  gracePeriodDays: 3,      // No decay for first 3 rest days
+  smallDecayDays: 4,       // After 4 days: small decay
+  mediumDecayDays: 7,      // After 7 days: medium decay
+  largeDecayDays: 14,      // After 14 days: larger decay
+  smallDecayAmount: 3,     // -3 points after 4 days
+  mediumDecayAmount: 5,    // -5 additional after 7 days
+  largeDecayAmount: 8,     // -8 additional after 14 days
+  minimumScore: 50,        // Score floor - never drops below this
+}
+
+interface DecayInfo {
+  daysInactive: number
+  decayAmount: number
+  decayApplied: boolean
+  message: string
+}
+
+/**
+ * Calculate score decay based on inactivity
+ * Returns the decay amount to subtract from the total score
+ */
+export function calculateScoreDecay(): DecayInfo {
+  const logs = getWorkoutLogs()
+  
+  if (logs.length === 0) {
+    return {
+      daysInactive: 0,
+      decayAmount: 0,
+      decayApplied: false,
+      message: 'Start training to build your score',
+    }
+  }
+  
+  // Get the most recent workout date
+  const sortedLogs = [...logs].sort((a, b) => 
+    new Date(b.sessionDate).getTime() - new Date(a.sessionDate).getTime()
+  )
+  const lastWorkoutDate = new Date(sortedLogs[0].sessionDate)
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  lastWorkoutDate.setHours(0, 0, 0, 0)
+  
+  const daysInactive = Math.floor((today.getTime() - lastWorkoutDate.getTime()) / (1000 * 60 * 60 * 24))
+  
+  // No decay within grace period
+  if (daysInactive <= DECAY_CONFIG.gracePeriodDays) {
+    return {
+      daysInactive,
+      decayAmount: 0,
+      decayApplied: false,
+      message: 'Score stable',
+    }
+  }
+  
+  // Calculate decay based on inactivity level
+  let decayAmount = 0
+  let message = ''
+  
+  if (daysInactive >= DECAY_CONFIG.largeDecayDays) {
+    decayAmount = DECAY_CONFIG.smallDecayAmount + DECAY_CONFIG.mediumDecayAmount + DECAY_CONFIG.largeDecayAmount
+    message = `${daysInactive} days since last workout. Train to recover your score.`
+  } else if (daysInactive >= DECAY_CONFIG.mediumDecayDays) {
+    decayAmount = DECAY_CONFIG.smallDecayAmount + DECAY_CONFIG.mediumDecayAmount
+    message = `${daysInactive} days rest. A workout will restore your momentum.`
+  } else if (daysInactive >= DECAY_CONFIG.smallDecayDays) {
+    decayAmount = DECAY_CONFIG.smallDecayAmount
+    message = `${daysInactive} days since last session. Time to get back to it.`
+  }
+  
+  return {
+    daysInactive,
+    decayAmount,
+    decayApplied: decayAmount > 0,
+    message,
+  }
+}
+
+/**
+ * Get the decay-adjusted minimum score floor
+ */
+function getScoreFloor(): number {
+  return DECAY_CONFIG.minimumScore
+}
+
 // Calculate total Spartan Strength Score (0-1000 scale)
 export function calculateSpartanScore(): StrengthScoreBreakdown {
   const skillResult = calculateSkillScore()
@@ -356,11 +458,16 @@ export function calculateSpartanScore(): StrengthScoreBreakdown {
     (strengthResult.score * WEIGHTS.strength) +
     (consistencyResult.score * WEIGHTS.consistency) +
     (readinessResult.score * WEIGHTS.readiness) +
-    (consistencyResult.score * WEIGHTS.consistency) +
     (achievementResult.score * WEIGHTS.achievements)
   
   // Convert to 0-1000 scale
-  const totalScore = Math.round(Math.max(0, Math.min(1000, baseScore * 10)))
+  let totalScore = Math.round(Math.max(0, Math.min(1000, baseScore * 10)))
+  
+  // Apply inactivity decay (light, fair, recoverable)
+  const decayInfo = calculateScoreDecay()
+  if (decayInfo.decayApplied) {
+    totalScore = Math.max(getScoreFloor(), totalScore - decayInfo.decayAmount)
+  }
   
   const level = getSpartanLevel(totalScore)
   const levelProgress = getLevelProgress(totalScore)
@@ -421,12 +528,13 @@ export function calculateSpartanScore(): StrengthScoreBreakdown {
     level,
     levelProgress,
     explanation,
-    focusAreas,
-    strengths,
-    dataQuality,
-    hasEnoughData,
+  focusAreas,
+  strengths,
+  dataQuality,
+  hasEnoughData,
+  decayInfo,
   }
-}
+  }
 
 // Generate explanation based on scores
 function generateScoreExplanation(

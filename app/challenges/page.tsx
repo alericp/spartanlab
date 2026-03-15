@@ -213,7 +213,10 @@ function ChallengesContent() {
             </CardHeader>
             <CardContent className="space-y-3 text-sm text-[#A4ACB8]">
               <p>
-                <strong className="text-[#E6E9EF]">Weekly Challenges</strong> reset every Sunday and reward consistent training habits.
+                <strong className="text-[#E6E9EF]">Tiered Progression</strong> - Each challenge has multiple tiers. Complete one tier to unlock the next with higher goals and better rewards.
+              </p>
+              <p>
+                <strong className="text-[#E6E9EF]">Weekly Challenges</strong> reset every Sunday and reward consistent training habits. Targets are realistic for athletes training 2-5 days per week.
               </p>
               <p>
                 <strong className="text-[#E6E9EF]">Monthly Challenges</strong> reset on the 1st of each month for bigger goals and rewards.
@@ -222,7 +225,7 @@ function ChallengesContent() {
                 <strong className="text-[#E6E9EF]">Seasonal Challenges</strong> run for 3 months and offer the most prestigious rewards.
               </p>
               <p className="pt-2 border-t border-[#2A2F36]">
-                Complete challenges to earn Spartan Score boosts and exclusive badges that appear on your profile and leaderboard rankings.
+                Complete challenges to earn Spartan Score boosts and exclusive badges. Your score reflects real training consistency, not grinding volume.
               </p>
             </CardContent>
           </Card>

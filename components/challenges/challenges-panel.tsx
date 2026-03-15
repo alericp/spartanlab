@@ -7,13 +7,13 @@ import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { 
-  getActiveChallengesWithProgress,
+  getAllChallengesWithProgress,
   getChallengesByPeriodWithProgress,
   getChallengeSummary,
   type ChallengeWithProgress,
   type ChallengeSummary,
 } from '@/lib/challenges/challenge-engine'
-import { getCurrentSeason } from '@/lib/challenges/challenge-definitions'
+import { getCurrentSeasonInfo } from '@/lib/challenges/challenge-definitions'
 import { ChallengeCard, ChallengeGrid, ChallengePreview } from './challenge-card'
 import { Trophy, ArrowRight, Flame, Target, Calendar } from 'lucide-react'
 
@@ -31,13 +31,13 @@ export function ChallengesPanel({ className }: ChallengesPanelProps) {
   const [activeTab, setActiveTab] = useState<'weekly' | 'monthly'>('weekly')
   
   useEffect(() => {
-    setChallenges(getActiveChallengesWithProgress())
+    setChallenges(getAllChallengesWithProgress())
     setSummary(getChallengeSummary())
   }, [])
   
   const weeklyChallenges = challenges.filter(c => c.period === 'weekly')
   const monthlyChallenges = challenges.filter(c => c.period === 'monthly')
-  const currentSeason = getCurrentSeason()
+  const currentSeason = getCurrentSeasonInfo()
   
   return (
     <div className={cn('space-y-6', className)}>

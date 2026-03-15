@@ -15,7 +15,6 @@ import {
   TIER_COLORS,
   CATEGORY_LABELS,
 } from '@/lib/achievements/achievement-definitions'
-import type { Metadata } from 'next'
 
 const CATEGORY_ICONS: Record<AchievementCategory, React.ReactNode> = {
   training: <Dumbbell className="w-4 h-4" />,

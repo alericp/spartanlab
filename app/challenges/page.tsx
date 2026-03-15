@@ -2,8 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { Target, Trophy, Flame, Crown, Clock, Sparkles } from 'lucide-react'
-import { Navigation } from '@/components/shared/Navigation'
-import { PageContainer } from '@/components/shared/PageContainer'
+import { PageContainer } from '@/components/layout'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { ChallengeCard } from '@/components/challenges/ChallengeCard'
@@ -20,11 +19,6 @@ import {
   CHALLENGE_CATEGORY_LABELS,
   type ChallengeCategory,
 } from '@/lib/challenges/challenge-definitions'
-
-export const metadata = {
-  title: 'Challenges | SpartanLab',
-  description: 'Complete training challenges to earn rewards and boost your Spartan Score',
-}
 
 function ChallengesContent() {
   const [challenges, setChallenges] = useState<ReturnType<typeof getActiveChallengesWithProgress>>([])

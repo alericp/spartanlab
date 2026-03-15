@@ -330,3 +330,67 @@ export const CATEGORY_LABELS: Record<AchievementCategory, string> = {
   consistency: 'Consistency',
   volume: 'Volume',
 }
+
+// =============================================================================
+// UNLOCKED ACHIEVEMENTS STORAGE
+// =============================================================================
+
+const UNLOCKED_STORAGE_KEY = 'spartanlab_unlocked_achievements'
+
+/**
+ * Get all unlocked achievements from localStorage
+ */
+export function getUnlockedAchievements(): UnlockedAchievement[] {
+  if (typeof window === 'undefined') return []
+  
+  try {
+    const stored = localStorage.getItem(UNLOCKED_STORAGE_KEY)
+    if (!stored) return []
+    return JSON.parse(stored) as UnlockedAchievement[]
+  } catch {
+    return []
+  }
+}
+
+/**
+ * Save an unlocked achievement
+ */
+export function saveUnlockedAchievement(achievementId: string): void {
+  if (typeof window === 'undefined') return
+  
+  const unlocked = getUnlockedAchievements()
+  
+  // Don't add duplicates
+  if (unlocked.some(a => a.achievementId === achievementId)) return
+  
+  const newUnlock: UnlockedAchievement = {
+    achievementId,
+    unlockedAt: new Date().toISOString(),
+    seen: false,
+  }
+  
+  unlocked.push(newUnlock)
+  localStorage.setItem(UNLOCKED_STORAGE_KEY, JSON.stringify(unlocked))
+}
+
+/**
+ * Mark an achievement as seen
+ */
+export function markAchievementSeen(achievementId: string): void {
+  if (typeof window === 'undefined') return
+  
+  const unlocked = getUnlockedAchievements()
+  const achievement = unlocked.find(a => a.achievementId === achievementId)
+  
+  if (achievement) {
+    achievement.seen = true
+    localStorage.setItem(UNLOCKED_STORAGE_KEY, JSON.stringify(unlocked))
+  }
+}
+
+/**
+ * Check if an achievement is unlocked
+ */
+export function isAchievementUnlocked(achievementId: string): boolean {
+  return getUnlockedAchievements().some(a => a.achievementId === achievementId)
+}

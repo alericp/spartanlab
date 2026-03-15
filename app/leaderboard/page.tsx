@@ -1,8 +1,8 @@
 'use client'
 
 import { Trophy, Info } from 'lucide-react'
+import { PageContainer } from '@/components/layout'
 import { Navigation } from '@/components/shared/Navigation'
-import { PageContainer } from '@/components/shared/PageContainer'
 import { LeaderboardTabs } from '@/components/leaderboards/LeaderboardTabs'
 
 export default function LeaderboardPage() {

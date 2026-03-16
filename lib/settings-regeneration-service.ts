@@ -46,6 +46,7 @@ export interface SettingsChangeAnalysis {
  * - Minor equipment addition
  * - Weakest area update
  * - Experience level update (affects estimates only)
+ * - Flexibility priority adjustment
  */
 const MINOR_CHANGE_RULES: Record<string, {
   threshold?: (old: unknown, newVal: unknown) => boolean
@@ -67,6 +68,10 @@ const MINOR_CHANGE_RULES: Record<string, {
   bodyweight: {
     alwaysMinor: true,
     impact: 'Intensity calculations will adjust',
+  },
+  flexibilityPriority: {
+    alwaysMinor: true,
+    impact: 'Mobility and flexibility work allocation will adjust',
   },
 }
 
@@ -415,6 +420,13 @@ export function getSessionAdaptations(analysis: SettingsChangeAnalysis): Session
         adaptations.push({
           type: 'substitution',
           description: 'Exercise variants updated for available equipment',
+          applyToSessions: 'future',
+        })
+        break
+      case 'flexibilityPriority':
+        adaptations.push({
+          type: 'emphasis',
+          description: 'Mobility and flexibility allocation updated',
           applyToSessions: 'future',
         })
         break

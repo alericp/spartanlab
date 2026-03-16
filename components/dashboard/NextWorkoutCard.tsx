@@ -51,6 +51,8 @@ interface WorkoutContext {
   dayNumber?: number
   totalDays?: number
   streakDays?: number
+  programUpdatedRecently?: boolean
+  versionNote?: string
 }
 
 export function NextWorkoutCard({ className }: NextWorkoutCardProps) {
@@ -112,6 +114,25 @@ export function NextWorkoutCard({ className }: NextWorkoutCardProps) {
         }
       } catch {
         // No adaptive data
+      }
+
+      // Check for recent program version update
+      let programUpdatedRecently = false
+      let versionNote: string | undefined
+      try {
+        // Check localStorage for recent program regeneration
+        const programVersionKey = 'spartanlab_program_version_timestamp'
+        const lastVersionTimestamp = localStorage.getItem(programVersionKey)
+        if (lastVersionTimestamp) {
+          const lastUpdate = new Date(lastVersionTimestamp)
+          const hoursSinceUpdate = (Date.now() - lastUpdate.getTime()) / (1000 * 60 * 60)
+          if (hoursSinceUpdate < 24) {
+            programUpdatedRecently = true
+            versionNote = 'Your program was recently updated based on your settings changes.'
+          }
+        }
+      } catch {
+        // localStorage access failed
       }
 
       // Calculate streak
@@ -224,10 +245,12 @@ export function NextWorkoutCard({ className }: NextWorkoutCardProps) {
         focusAreas: focusAreas.slice(0, 3),
         estimatedMinutes,
         intensityLevel,
-        adaptiveNote,
+        adaptiveNote: adaptiveNote || versionNote,
         dayNumber,
         totalDays,
         streakDays,
+        programUpdatedRecently,
+        versionNote,
       })
       
       setIsLoading(false)

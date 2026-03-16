@@ -208,6 +208,11 @@ export default function SettingsPage() {
   const [jointCautions, setJointCautions] = useState<JointCaution[]>([])
   const [weakestArea, setWeakestArea] = useState<WeakestArea | 'none'>('none')
   const [trainingStyle, setTrainingStyle] = useState<TrainingStyleMode>('balanced_hybrid')
+  const [lastChangeResult, setLastChangeResult] = useState<{
+    regenerated: boolean
+    message: string
+    affectedSystems: string[]
+  } | null>(null)
 
   useEffect(() => {
     setMounted(true)
@@ -263,20 +268,38 @@ export default function SettingsPage() {
         
         setSaved(true)
         
-        // Handle regeneration feedback
+        // Handle regeneration feedback with coaching explanation
         if (result.regenerated) {
+          // Record timestamp for NextWorkoutCard to show update notice
+          try {
+            localStorage.setItem('spartanlab_program_version_timestamp', new Date().toISOString())
+          } catch {
+            // localStorage unavailable
+          }
+          
+          setLastChangeResult({
+            regenerated: true,
+            message: result.analysis?.coachingMessage || 'Your program has been regenerated.',
+            affectedSystems: result.analysis?.affectedSystems || [],
+          })
           toast({
-            title: 'Program Updated',
-            description: result.analysis?.coachingMessage || 'Your program has been regenerated.',
+            title: 'Program Regenerated',
+            description: result.analysis?.coachingMessage || 'Your program has been regenerated to match your new settings.',
             duration: 5000,
           })
         } else if (result.adaptations && result.adaptations.length > 0) {
+          setLastChangeResult({
+            regenerated: false,
+            message: result.analysis?.coachingMessage || 'Future sessions will reflect these changes.',
+            affectedSystems: result.analysis?.affectedSystems || [],
+          })
           toast({
-            title: 'Settings Updated',
+            title: 'Settings Adjusted',
             description: result.analysis?.coachingMessage || 'Future sessions will reflect these changes.',
             duration: 4000,
           })
         } else if (result.analysis?.changes?.length > 0) {
+          setLastChangeResult(null)
           toast({
             title: 'Settings Saved',
             description: 'Your preferences have been updated.',
@@ -323,8 +346,21 @@ export default function SettingsPage() {
             clearActiveProgram()
             markRegeneration('current-user')
             
+            // Record timestamp for NextWorkoutCard to show update notice
+            try {
+              localStorage.setItem('spartanlab_program_version_timestamp', new Date().toISOString())
+            } catch {
+              // localStorage unavailable
+            }
+            
+            setLastChangeResult({
+              regenerated: true,
+              message: analysis.coachingMessage,
+              affectedSystems: analysis.affectedSystems,
+            })
+            
             toast({
-              title: 'Program Updated',
+              title: 'Program Regenerated',
               description: analysis.coachingMessage,
               duration: 5000,
             })
@@ -334,8 +370,14 @@ export default function SettingsPage() {
           const adaptations = getSessionAdaptations(analysis)
           
           if (adaptations.length > 0) {
+            setLastChangeResult({
+              regenerated: false,
+              message: analysis.coachingMessage,
+              affectedSystems: analysis.affectedSystems,
+            })
+            
             toast({
-              title: 'Settings Updated',
+              title: 'Settings Adjusted',
               description: analysis.coachingMessage,
               duration: 4000,
             })
@@ -620,6 +662,47 @@ export default function SettingsPage() {
                 'Save Profile'
               )}
             </Button>
+            
+            {/* Coaching explanation for recent changes */}
+            {lastChangeResult && (
+              <div className={`mt-4 p-4 rounded-lg border ${
+                lastChangeResult.regenerated 
+                  ? 'bg-[#E63946]/10 border-[#E63946]/30' 
+                  : 'bg-[#4F6D8A]/10 border-[#4F6D8A]/30'
+              }`}>
+                <div className="flex items-start gap-3">
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
+                    lastChangeResult.regenerated 
+                      ? 'bg-[#E63946]/20' 
+                      : 'bg-[#4F6D8A]/20'
+                  }`}>
+                    {lastChangeResult.regenerated ? (
+                      <Sparkles className="w-4 h-4 text-[#E63946]" />
+                    ) : (
+                      <Target className="w-4 h-4 text-[#4F6D8A]" />
+                    )}
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-[#F5F5F5] mb-1">
+                      {lastChangeResult.regenerated ? 'Program Regenerated' : 'Settings Adjusted'}
+                    </p>
+                    <p className="text-xs text-[#A5A5A5]">{lastChangeResult.message}</p>
+                    {lastChangeResult.affectedSystems.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 mt-2">
+                        {lastChangeResult.affectedSystems.slice(0, 3).map(system => (
+                          <span 
+                            key={system}
+                            className="px-2 py-0.5 text-xs bg-[#1A1A1A] border border-[#3A3A3A] rounded-full text-[#6B7280]"
+                          >
+                            {system.replace(/_/g, ' ')}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </Card>
         

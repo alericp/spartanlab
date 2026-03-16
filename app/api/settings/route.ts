@@ -235,9 +235,6 @@ export async function PUT(request: Request) {
         
         if (result.regenerated && result.version) {
           markRegeneration(userId)
-          
-          // Get version change message
-          const activeVersion = await getActiveProgramVersion(userId)
           versionMessage = result.explanation
         }
       } else {

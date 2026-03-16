@@ -18,6 +18,12 @@ import { getProgramBuilderContext } from './adaptive-athlete-engine'
 import { getAthleteCalibration, getProgramCalibrationAdjustments, type AthleteCalibration, type ProgramCalibrationAdjustments } from './athlete-calibration'
 import { getOnboardingProfile, type PrimaryTrainingOutcome, type TrainingPathType, type WorkoutDurationPreference, type PrimaryLimitation, type WeakestArea, type JointCaution } from './athlete-profile'
 import { detectWeakPoints, getVolumeDistribution, type WeakPointSummary } from './weak-point-detection'
+import { 
+  detectWeakPoints as detectUnifiedWeakPoints, 
+  weakPointToLimitingFactor,
+  type WeakPointAssessment,
+  type SkillTarget,
+} from './weak-point-engine'
 import { getUnifiedSkillIntelligence, generateTrainingAdjustments, type UnifiedSkillIntelligence } from './skill-intelligence-layer'
 import { getCompressionReadiness, shouldBiasTowardCompression, type CompressionReadinessResult } from './compression-readiness'
 import { selectOptimalStructure, getDayExplanation } from './program-structure-engine'
@@ -401,6 +407,8 @@ export interface AdaptiveProgram {
   }
   // Unified Workout Reasoning Summary - explains WHY this workout was generated
   workoutReasoningSummary?: WorkoutReasoningSummary
+  // Unified Weak Point Assessment - detailed limiter analysis
+  weakPointAssessment?: WeakPointAssessment
 }
 
 // =============================================================================
@@ -1106,6 +1114,36 @@ fatigueDecision: fatigueDecision ? {
           } : null,
           sessionType,
           firstSessionExercises
+        )
+      } catch {
+        return undefined
+      }
+    })(),
+    // Unified Weak Point Assessment - detailed limiter analysis
+    weakPointAssessment: (() => {
+      try {
+        // Map primary goal to skill target
+        const skillTargetMap: Record<string, SkillTarget> = {
+          front_lever: 'front_lever',
+          planche: 'planche',
+          muscle_up: 'muscle_up',
+          hspu: 'hspu',
+          back_lever: 'back_lever',
+          l_sit: 'l_sit',
+          iron_cross: 'iron_cross',
+          one_arm_pull_up: 'one_arm_pull_up',
+          handstand: 'handstand',
+        }
+        
+        const skillTarget = skillTargetMap[primaryGoal]
+        if (!skillTarget || !profile) return undefined
+        
+        return detectUnifiedWeakPoints(
+          skillTarget,
+          profile,
+          calibration || null,
+          null, // SkillState - would need to be passed in
+          null  // PerformanceEnvelope - would need to be passed in
         )
       } catch {
         return undefined

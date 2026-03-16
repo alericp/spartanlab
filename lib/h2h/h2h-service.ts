@@ -702,6 +702,7 @@ export function getH2HStats(): {
   winRate: number
   totalRewards: number
   currentPoolRank: number | null
+  poolWins: number
 } {
   const user = getCurrentUser()
   const challenges = getH2HChallenges().filter(c => 
@@ -735,6 +736,10 @@ export function getH2HStats(): {
     if (me) currentPoolRank = me.rank || null
   }
   
+  // Count pool wins from rewards
+  const rewards = getH2HRewards()
+  const poolWins = rewards.filter(r => r.type === 'pool_win').length
+  
   return {
     totalChallenges: total,
     wins,
@@ -743,6 +748,7 @@ export function getH2HStats(): {
     winRate,
     totalRewards: getTotalH2HRewards(),
     currentPoolRank,
+    poolWins,
   }
 }
 

@@ -3,7 +3,7 @@
 // Tracks training milestones, strength progress, skill achievements, and consistency
 // Philosophy: Realistic goals that reward consistency, not absurd volume requirements
 
-export type AchievementCategory = 'training' | 'strength' | 'skill' | 'consistency' | 'volume' | 'challenge'
+export type AchievementCategory = 'training' | 'strength' | 'skill' | 'consistency' | 'volume' | 'challenge' | 'h2h'
 export type AchievementTier = 'bronze' | 'silver' | 'gold' | 'elite'
 
 export interface Achievement {
@@ -12,9 +12,9 @@ export interface Achievement {
   description: string
   category: AchievementCategory
   tier: AchievementTier
-  icon: 'trophy' | 'medal' | 'star' | 'flame' | 'target' | 'dumbbell' | 'crown' | 'lightning'
+  icon: 'trophy' | 'medal' | 'star' | 'flame' | 'target' | 'dumbbell' | 'crown' | 'lightning' | 'swords'
   requirement: {
-    type: 'workout_count' | 'streak_days' | 'total_reps' | 'strength_milestone' | 'skill_level' | 'hold_time' | 'challenge_count' | 'weeks_active'
+    type: 'workout_count' | 'streak_days' | 'total_reps' | 'strength_milestone' | 'skill_level' | 'hold_time' | 'challenge_count' | 'weeks_active' | 'h2h_wins' | 'h2h_battles' | 'h2h_pool_wins'
     value: number
     exercise?: string
     skill?: string
@@ -688,6 +688,106 @@ export const ACHIEVEMENTS: Achievement[] = [
     requirement: { type: 'total_reps', value: 25000 },
     pointValue: 100,
   },
+
+  // ==========================================================================
+  // HEAD-TO-HEAD ACHIEVEMENTS
+  // ==========================================================================
+  {
+    id: 'h2h_first_battle',
+    name: 'First Battle',
+    description: 'Complete your first H2H competition',
+    category: 'h2h',
+    tier: 'bronze',
+    icon: 'swords',
+    requirement: { type: 'h2h_battles', value: 1 },
+    pointValue: 15,
+    unlockMessage: 'You entered the arena.',
+  },
+  {
+    id: 'h2h_first_win',
+    name: 'First Victory',
+    description: 'Win your first H2H competition',
+    category: 'h2h',
+    tier: 'bronze',
+    icon: 'swords',
+    requirement: { type: 'h2h_wins', value: 1 },
+    pointValue: 20,
+    unlockMessage: 'Victory is yours.',
+  },
+  {
+    id: 'h2h_wins_5',
+    name: 'Warrior Rising',
+    description: 'Win 5 H2H competitions',
+    category: 'h2h',
+    tier: 'silver',
+    icon: 'swords',
+    requirement: { type: 'h2h_wins', value: 5 },
+    pointValue: 40,
+  },
+  {
+    id: 'h2h_wins_10',
+    name: 'Proven Competitor',
+    description: 'Win 10 H2H competitions',
+    category: 'h2h',
+    tier: 'gold',
+    icon: 'trophy',
+    requirement: { type: 'h2h_wins', value: 10 },
+    pointValue: 65,
+    unlockMessage: 'A proven warrior.',
+  },
+  {
+    id: 'h2h_wins_25',
+    name: 'Arena Champion',
+    description: 'Win 25 H2H competitions',
+    category: 'h2h',
+    tier: 'elite',
+    icon: 'crown',
+    requirement: { type: 'h2h_wins', value: 25 },
+    pointValue: 100,
+    unlockMessage: 'Arena champion. Feared by all.',
+  },
+  {
+    id: 'h2h_pool_first',
+    name: 'Pool Victor',
+    description: 'Win your first weekly pool competition',
+    category: 'h2h',
+    tier: 'silver',
+    icon: 'medal',
+    requirement: { type: 'h2h_pool_wins', value: 1 },
+    pointValue: 35,
+    unlockMessage: 'Top of the pool.',
+  },
+  {
+    id: 'h2h_pool_5',
+    name: 'Pool Dominator',
+    description: 'Win 5 weekly pool competitions',
+    category: 'h2h',
+    tier: 'gold',
+    icon: 'trophy',
+    requirement: { type: 'h2h_pool_wins', value: 5 },
+    pointValue: 75,
+  },
+  {
+    id: 'h2h_battles_10',
+    name: 'Battle Hardened',
+    description: 'Complete 10 H2H competitions',
+    category: 'h2h',
+    tier: 'silver',
+    icon: 'swords',
+    requirement: { type: 'h2h_battles', value: 10 },
+    pointValue: 30,
+  },
+  {
+    id: 'h2h_battles_25',
+    name: 'Arena Veteran',
+    description: 'Complete 25 H2H competitions',
+    category: 'h2h',
+    tier: 'gold',
+    icon: 'trophy',
+    requirement: { type: 'h2h_battles', value: 25 },
+    pointValue: 60,
+    unlockMessage: 'A veteran of many battles.',
+  },
 ]
 
 // Helper functions
@@ -738,6 +838,7 @@ export const CATEGORY_LABELS: Record<AchievementCategory, string> = {
   consistency: 'Consistency',
   volume: 'Volume',
   challenge: 'Challenge Mastery',
+  h2h: 'Head-to-Head',
 }
 
 /**

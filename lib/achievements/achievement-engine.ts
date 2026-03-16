@@ -12,6 +12,7 @@ import { getStrengthRecords, getPersonalRecords } from '../strength-service'
 import { getSkillProgressions } from '../data-service'
 import { calculateTrainingStreak } from '../progress-streak-engine'
 import { getCompletedChallengeCount } from '../challenges/challenge-engine'
+import { getH2HStats } from '../h2h/h2h-service'
 
 // =============================================================================
 // STORAGE
@@ -96,6 +97,10 @@ interface AchievementMetrics {
   skillLevels: Record<string, number> // skill -> level
   challengeCount: number // completed challenges
   weeksActive: number // weeks with at least one workout
+  // H2H metrics
+  h2hWins: number
+  h2hBattles: number
+  h2hPoolWins: number
 }
 
 function calculateMetrics(): AchievementMetrics {
@@ -156,6 +161,19 @@ function calculateMetrics(): AchievementMetrics {
     weeksWithWorkouts.add(`${date.getFullYear()}-W${weekNumber}`)
   })
   
+  // Get H2H stats
+  let h2hWins = 0
+  let h2hBattles = 0
+  let h2hPoolWins = 0
+  try {
+    const h2hStats = getH2HStats()
+    h2hWins = h2hStats.wins
+    h2hBattles = h2hStats.totalChallenges
+    h2hPoolWins = h2hStats.poolWins || 0
+  } catch {
+    // H2H service may not be initialized
+  }
+  
   return {
     workoutCount: workouts.length,
     currentStreak: streak.currentStreak,
@@ -165,6 +183,9 @@ function calculateMetrics(): AchievementMetrics {
     skillLevels,
     challengeCount,
     weeksActive: weeksWithWorkouts.size,
+    h2hWins,
+    h2hBattles,
+    h2hPoolWins,
   }
 }
 
@@ -204,6 +225,15 @@ function isAchievementUnlocked(achievement: Achievement, metrics: AchievementMet
       
     case 'weeks_active':
       return metrics.weeksActive >= requirement.value
+      
+    case 'h2h_wins':
+      return metrics.h2hWins >= requirement.value
+      
+    case 'h2h_battles':
+      return metrics.h2hBattles >= requirement.value
+      
+    case 'h2h_pool_wins':
+      return metrics.h2hPoolWins >= requirement.value
       
     default:
       return false

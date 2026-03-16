@@ -228,14 +228,12 @@ export default function SettingsPage() {
     setTrainingStyle((data as AthleteProfile & { trainingStyle?: TrainingStyleMode }).trainingStyle || 'balanced_hybrid')
   }
 
-  const handleSave = () => {
+  const handleSave = async () => {
     setSaving(true)
     setSaved(false)
     
-    // Store previous profile for comparison
-    const previousProfile = profile
-    
-    const updated = saveAthleteProfile({
+    // Prepare update payload
+    const updates = {
       bodyweight: bodyweight ? parseFloat(bodyweight) : null,
       experienceLevel: experienceLevel as 'beginner' | 'intermediate' | 'advanced',
       trainingDaysPerWeek: parseInt(trainingDays),
@@ -245,6 +243,63 @@ export default function SettingsPage() {
       jointCautions: jointCautions,
       weakestArea: weakestArea === 'none' ? null : weakestArea,
       trainingStyle: trainingStyle,
+    }
+    
+    try {
+      // Try API-based save first (for authenticated users)
+      const response = await fetch('/api/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates),
+      })
+      
+      if (response.ok) {
+        const result = await response.json()
+        
+        // Update local state with server response
+        if (result.profile) {
+          setProfile(result.profile)
+        }
+        
+        setSaved(true)
+        
+        // Handle regeneration feedback
+        if (result.regenerated) {
+          toast({
+            title: 'Program Updated',
+            description: result.analysis?.coachingMessage || 'Your program has been regenerated.',
+            duration: 5000,
+          })
+        } else if (result.adaptations && result.adaptations.length > 0) {
+          toast({
+            title: 'Settings Updated',
+            description: result.analysis?.coachingMessage || 'Future sessions will reflect these changes.',
+            duration: 4000,
+          })
+        } else if (result.analysis?.changes?.length > 0) {
+          toast({
+            title: 'Settings Saved',
+            description: 'Your preferences have been updated.',
+            duration: 3000,
+          })
+        }
+        
+        setSaving(false)
+        setTimeout(() => setSaved(false), 2000)
+        return
+      }
+      
+      // API failed - fall back to localStorage
+      console.warn('[Settings] API save failed, using localStorage fallback')
+    } catch (error) {
+      console.warn('[Settings] API error, using localStorage fallback:', error)
+    }
+    
+    // FALLBACK: localStorage-based save (for preview/development mode)
+    const previousProfile = profile
+    
+    const updated = saveAthleteProfile({
+      ...updates,
     } as Parameters<typeof saveAthleteProfile>[0])
     
     setProfile(updated)

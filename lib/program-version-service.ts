@@ -23,6 +23,7 @@ export type GenerationReason =
   | 'adaptive_rebalance'
   | 'manual_regeneration'
   | 'injury_status_change'
+  | 'framework_update'
 
 export interface ProgramVersion {
   id: string
@@ -114,6 +115,14 @@ export interface ProgramInputSnapshot {
     }
   }
   
+  // Framework snapshot
+  frameworkSnapshot: {
+    frameworkId: string
+    frameworkName: string
+    confidenceScore: number
+    selectionReason: string
+  } | null
+  
   createdAt: string
 }
 
@@ -141,6 +150,7 @@ const GENERATION_REASON_LABELS: Record<GenerationReason, string> = {
   adaptive_rebalance: 'Program rebalanced based on your training response',
   manual_regeneration: 'Program regenerated at your request',
   injury_status_change: 'Program adjusted for your injury status',
+  framework_update: 'Training methodology updated based on your progress',
 }
 
 // =============================================================================
@@ -1211,6 +1221,7 @@ export async function getVersionStatistics(athleteId: string): Promise<{
     adaptive_rebalance: 0,
     manual_regeneration: 0,
     injury_status_change: 0,
+    framework_update: 0,
   }
 
   for (const version of history) {

@@ -27,6 +27,15 @@ import {
   type StyleProgrammingRules,
   type TrainingStyleMode as StyleMode 
 } from './training-style-service'
+import {
+  selectFramework,
+  getFrameworkProgrammingParams,
+  getFrameworkCoachingMessage,
+  getCurrentFrameworkWeeks,
+  recordFrameworkSelection,
+  type CoachingFrameworkId,
+  type FrameworkSelectionInput,
+} from './coaching-framework-engine'
 
 // =============================================================================
 // TYPES - UNIFIED ENGINE CONTEXT
@@ -176,6 +185,7 @@ export type RegenerationReason =
   | 'injury_status_change'
   | 'fatigue_deload'
   | 'adaptive_rebalance'
+  | 'framework_update'
 
 export interface CoachingSummary {
   headline: string
@@ -185,8 +195,29 @@ export interface CoachingSummary {
   constraintNote: string | null
   fatigueNote: string | null
   protocolNote: string | null
+  frameworkNote: string | null
   sessionNotes: string[]
   confidence: EngineConfidence
+}
+
+export interface FrameworkContext {
+  frameworkId: string
+  frameworkName: string
+  confidenceScore: number
+  selectionReason: string
+  programmingParams: {
+    repRange: { min: number; max: number }
+    setRange: { min: number; max: number }
+    restRange: { min: number; max: number }
+    allowFailure: boolean
+    backoffSetRequired: boolean
+    supersetAllowed: boolean
+    circuitAllowed: boolean
+  }
+  coachingMessage: string
+  weeksOnFramework: number
+  shouldSwitch: boolean
+  switchReason: string | null
 }
 
 export interface UnifiedEngineContext {
@@ -207,6 +238,9 @@ export interface UnifiedEngineContext {
   
   // Joint protocols
   protocols: ProtocolContext
+  
+  // Coaching framework methodology
+  framework: FrameworkContext
   
   // Program decisions
   programDecision: ProgramDecision
@@ -262,23 +296,34 @@ export async function buildUnifiedContext(userId: string): Promise<UnifiedEngine
     fatigueContext
   )
   
-  // Step 8: Determine program decisions
+  // Step 8: Select coaching framework
+  const frameworkContext = buildFrameworkContext(
+    userId,
+    athleteContext,
+    skillContext,
+    constraintContext,
+    envelopeContext
+  )
+  
+  // Step 9: Determine program decisions
   const programDecision = determineProgramDecision(
     athleteContext,
     fatigueContext,
-    constraintContext
+    constraintContext,
+    frameworkContext
   )
   
-  // Step 9: Generate coaching summary
+  // Step 10: Generate coaching summary
   const coachingSummary = generateCoachingSummary(
     athleteContext,
     skillContext,
     constraintContext,
     fatigueContext,
-    envelopeContext
+    envelopeContext,
+    frameworkContext
   )
   
-  // Step 10: Assess data quality
+  // Step 11: Assess data quality
   const dataQuality = assessDataQuality(skillContext, envelopeContext, fatigueContext)
   
   return {
@@ -288,6 +333,7 @@ export async function buildUnifiedContext(userId: string): Promise<UnifiedEngine
     envelope: envelopeContext,
     fatigue: fatigueContext,
     protocols: protocolContext,
+    framework: frameworkContext,
     programDecision,
     coachingSummary,
     dataQuality,
@@ -715,18 +761,121 @@ function buildProtocolContext(
 }
 
 // =============================================================================
-// STEP 8: PROGRAM DECISION
+// STEP 8: FRAMEWORK CONTEXT
+// =============================================================================
+
+function buildFrameworkContext(
+  userId: string,
+  athleteContext: AthleteContext,
+  skillContext: SkillContext,
+  constraintContext: ConstraintContext,
+  envelopeContext: EnvelopeContext
+): FrameworkContext {
+  // Build framework selection input from unified context
+  const hasTendonConcern = athleteContext.jointCautions.some(c => 
+    c.toLowerCase().includes('tendon') || 
+    c.toLowerCase().includes('elbow') || 
+    c.toLowerCase().includes('bicep')
+  )
+  
+  // Build skill levels map
+  const skillLevels: Record<string, number> = {}
+  for (const state of skillContext.states) {
+    // Convert level to numeric score
+    const levelScores: Record<string, number> = {
+      'beginner': 1,
+      'novice': 2,
+      'intermediate': 3,
+      'advanced': 4,
+      'elite': 5,
+    }
+    skillLevels[state.skill] = levelScores[state.currentLevel] || 1
+  }
+  
+  const input: FrameworkSelectionInput = {
+    primaryGoal: athleteContext.primaryGoal,
+    secondaryGoals: athleteContext.secondaryGoals,
+    experienceLevel: getExperienceLevelFromTrainingAge(athleteContext.trainingAge),
+    trainingStyle: athleteContext.trainingStyle,
+    equipment: athleteContext.equipment,
+    jointCautions: athleteContext.jointCautions,
+    primarySkill: skillContext.primarySkillState?.skill || null,
+    skillLevels,
+    readinessScore: skillContext.readinessBreakdown?.overallScore || 50,
+    limitingFactor: skillContext.readinessBreakdown?.limitingFactor || null,
+    primaryConstraint: constraintContext.primaryConstraint || null,
+    hasTendonConcern,
+    preferredRepRange: envelopeContext.recommendations.preferredRepRange,
+    preferredDensity: envelopeContext.recommendations.preferredDensity,
+    envelopeConfidence: envelopeContext.hasHighConfidenceData ? 0.8 : 0.3,
+    currentFrameworkId: null, // Would be loaded from DB in full implementation
+    weeksOnCurrentFramework: getCurrentFrameworkWeeks(userId),
+  }
+  
+  // Select framework
+  const result = selectFramework(input)
+  
+  // Get programming params
+  const params = getFrameworkProgrammingParams(result.selectedFrameworkId)
+  
+  // Record selection if switching
+  if (result.shouldSwitch) {
+    recordFrameworkSelection(userId, result.selectedFrameworkId, result.switchReason)
+  }
+  
+  return {
+    frameworkId: result.selectedFrameworkId,
+    frameworkName: result.framework.frameworkName,
+    confidenceScore: result.confidenceScore,
+    selectionReason: result.selectionReason,
+    programmingParams: {
+      repRange: params.repRange,
+      setRange: params.setRange,
+      restRange: params.restRange,
+      allowFailure: params.allowFailure,
+      backoffSetRequired: params.backoffSetRequired,
+      supersetAllowed: params.supersetAllowed,
+      circuitAllowed: params.circuitAllowed,
+    },
+    coachingMessage: getFrameworkCoachingMessage(result.selectedFrameworkId),
+    weeksOnFramework: input.weeksOnCurrentFramework,
+    shouldSwitch: result.shouldSwitch,
+    switchReason: result.switchReason,
+  }
+}
+
+/**
+ * Map training age to experience level
+ */
+function getExperienceLevelFromTrainingAge(trainingAge: number): 'beginner' | 'intermediate' | 'advanced' | 'elite' {
+  if (trainingAge < 1) return 'beginner'
+  if (trainingAge < 3) return 'intermediate'
+  if (trainingAge < 6) return 'advanced'
+  return 'elite'
+}
+
+// =============================================================================
+// STEP 9: PROGRAM DECISION
 // =============================================================================
 
 function determineProgramDecision(
   athleteContext: AthleteContext,
   fatigueContext: FatigueContext,
-  constraintContext: ConstraintContext
+  constraintContext: ConstraintContext,
+  frameworkContext: FrameworkContext
 ): ProgramDecision {
   const sessionModifications: string[] = []
   let shouldRegenerate = false
   let regenerationReason: RegenerationReason | null = null
   let adaptationLevel: AdaptationLevel = 'none'
+  
+  // Check for framework-triggered regeneration
+  if (frameworkContext.shouldSwitch) {
+    shouldRegenerate = true
+    regenerationReason = 'framework_update'
+    adaptationLevel = 'major'
+    sessionModifications.push(frameworkContext.switchReason || 'Framework updated')
+  }
   
   // Check for deload-triggered regeneration
   if (fatigueContext.requiresDeload) {
@@ -750,6 +899,9 @@ function determineProgramDecision(
     sessionModifications.push(`Emphasis on ${constraintContext.primaryConstraint.replace(/_/g, ' ')}`)
   }
   
+  // Framework-specific session modifications
+  sessionModifications.push(frameworkContext.coachingMessage)
+  
   return {
     shouldRegenerate,
     regenerationReason,
@@ -767,7 +919,8 @@ function generateCoachingSummary(
   skillContext: SkillContext,
   constraintContext: ConstraintContext,
   fatigueContext: FatigueContext,
-  envelopeContext: EnvelopeContext
+  envelopeContext: EnvelopeContext,
+  frameworkContext: FrameworkContext
 ): CoachingSummary {
   const focusAreas: string[] = []
   const sessionNotes: string[] = []
@@ -812,6 +965,9 @@ function generateCoachingSummary(
     protocolNote = `Joint protocols included for ${athleteContext.jointCautions.join(', ')}.`
   }
   
+  // Framework note
+  const frameworkNote = `${frameworkContext.frameworkName}: ${frameworkContext.coachingMessage}`
+  
   // Session notes from fatigue adjustments
   sessionNotes.push(...fatigueContext.sessionAdjustments.notes)
   
@@ -837,6 +993,7 @@ function generateCoachingSummary(
     constraintNote,
     fatigueNote,
     protocolNote,
+    frameworkNote,
     sessionNotes,
     confidence,
   }
@@ -913,4 +1070,34 @@ export async function getTodaySessionAdjustments(userId: string): Promise<Sessio
 export async function getSessionProtocols(userId: string): Promise<ProtocolContext> {
   const context = await buildUnifiedContext(userId)
   return context.protocols
+}
+
+/**
+ * Get current coaching framework and explanation
+ */
+export async function getCoachingFramework(userId: string): Promise<FrameworkContext> {
+  const context = await buildUnifiedContext(userId)
+  return context.framework
+}
+
+/**
+ * Get framework programming parameters for session generation
+ */
+export async function getFrameworkSessionParams(userId: string): Promise<{
+  repRange: { min: number; max: number }
+  setRange: { min: number; max: number }
+  restRange: { min: number; max: number }
+  allowFailure: boolean
+  backoffSetRequired: boolean
+  supersetAllowed: boolean
+  circuitAllowed: boolean
+  frameworkName: string
+  coachingMessage: string
+}> {
+  const context = await buildUnifiedContext(userId)
+  return {
+    ...context.framework.programmingParams,
+    frameworkName: context.framework.frameworkName,
+    coachingMessage: context.framework.coachingMessage,
+  }
 }

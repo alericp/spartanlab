@@ -16,6 +16,14 @@ import { analyzeEquipmentProfile, type EquipmentProfile } from './equipment-adap
 import { selectMethodProfiles, type SelectedMethods, type SelectionContext } from './training-principles-engine'
 import { recommendProtocolsForSession, type ProtocolRecommendation } from './protocols/joint-integrity-protocol'
 import { calculateRecoverySignal, type RecoverySignal, type RecoveryLevel } from './recovery-engine'
+import { 
+  getTrainingStyleProfile, 
+  getStyleProgrammingRules, 
+  inferStyleFromOnboarding,
+  type TrainingStyleProfile as StyleProfile,
+  type StyleProgrammingRules,
+  type TrainingStyleMode as StyleMode 
+} from './training-style-service'
 
 // =============================================================================
 // TYPES - UNIFIED ENGINE CONTEXT
@@ -68,6 +76,12 @@ export interface AthleteContext {
     endurance: number
     hypertrophy: number
   }
+  
+  // Style programming rules (derived from style mode)
+  styleProgrammingRules: StyleProgrammingRules
+  
+  // Raw style profile from DB (if exists)
+  styleProfile: StyleProfile | null
 }
 
 export interface SkillContext {
@@ -287,13 +301,27 @@ async function loadAthleteContext(userId: string): Promise<AthleteContext> {
   const profile = await getAthleteProfile(userId)
   const onboarding = await getOnboardingProfile(userId)
   
+  // Load training style profile from DB (if exists)
+  const styleProfileFromDb = await getTrainingStyleProfile(userId)
+  
   // Merge data from both sources, preferring AthleteProfile
   const equipment = profile?.equipment || onboarding?.equipment || ['pull_bar', 'dip_bars', 'floor']
   const equipmentProfile = analyzeEquipmentProfile(equipment)
   
-  // Determine training style from profile or infer from goal
-  const trainingStyle = inferTrainingStyle(onboarding)
-  const stylePriorities = calculateStylePriorities(trainingStyle)
+  // Determine training style - prefer DB, then infer from onboarding
+  const trainingStyle = styleProfileFromDb?.styleMode || inferStyleFromOnboarding(onboarding || {})
+  const stylePriorities = styleProfileFromDb 
+    ? {
+        skill: styleProfileFromDb.skillPriority,
+        strength: styleProfileFromDb.strengthPriority,
+        power: styleProfileFromDb.powerPriority,
+        endurance: styleProfileFromDb.endurancePriority,
+        hypertrophy: styleProfileFromDb.hypertrophyPriority,
+      }
+    : calculateStylePriorities(trainingStyle)
+  
+  // Get programming rules for the style
+  const styleProgrammingRules = getStyleProgrammingRules(trainingStyle)
   
   return {
     userId,
@@ -314,6 +342,8 @@ async function loadAthleteContext(userId: string): Promise<AthleteContext> {
     hasActiveInjury: (onboarding?.jointCautions?.length || 0) > 0,
     trainingStyle,
     stylePriorities,
+    styleProgrammingRules,
+    styleProfile: styleProfileFromDb,
   }
 }
 

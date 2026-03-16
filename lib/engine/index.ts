@@ -102,3 +102,45 @@ export {
   MOVEMENT_FAMILY_METADATA,
   TRAINING_INTENT_METADATA,
 } from '../movement-family-registry'
+
+// Training Style Service
+export {
+  getTrainingStyleProfile,
+  saveTrainingStyleProfile,
+  inferStyleFromOnboarding,
+  getStyleProgrammingRules,
+  getStylePriorities,
+  shouldRegenerateForStyleChange,
+  getRecommendedSkillExposures,
+  getRecommendedStrengthSets,
+  getRecommendedAccessoryVolume,
+  getRepRangeForStyle,
+  getRestPeriodForStyle,
+  STYLE_MODE_DEFINITIONS,
+  type TrainingStyleMode,
+  type TrainingStyleProfile,
+  type StylePriorities,
+  type StyleProgrammingRules,
+} from '../training-style-service'
+
+// Program Version Service
+export {
+  getActiveProgramVersion,
+  getProgramVersionHistory,
+  createProgramVersion,
+  createInputSnapshot,
+  getInputSnapshot,
+  checkRegenerationTriggers,
+  isSessionLevelChange,
+  createInitialProgramVersion,
+  regenerateProgramIfNeeded,
+  getRegenerationExplanation,
+  getVersionChangeMessage,
+  compareVersions,
+  type ProgramVersion,
+  type ProgramVersionStatus,
+  type GenerationReason,
+  type ProgramSummary,
+  type ProgramInputSnapshot,
+  type RegenerationTrigger,
+} from '../program-version-service'

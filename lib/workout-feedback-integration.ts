@@ -6,6 +6,10 @@ import { recordSignal, type TrainingResponseSignal } from './performance-envelop
 import { saveSkillState, type SkillKey, type SkillStateInput } from './skill-state-service'
 import { getExerciseClassification } from './exercise-classification-registry'
 import type { MovementFamily } from './movement-family-registry'
+import { 
+  getActiveProgramVersion, 
+  type ProgramVersion 
+} from './program-version-service'
 
 // =============================================================================
 // TYPES

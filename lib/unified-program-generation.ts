@@ -16,6 +16,12 @@ import {
 import { selectMethodProfiles, type SelectedMethods, type SelectionContext } from './training-principles-engine'
 import { getSmartSubstitutions, mapEquipmentArray } from './exercise-family-integration'
 import { type MovementFamily, type EquipmentTag } from './movement-family-registry'
+import { 
+  getRepRangeForStyle, 
+  getRestPeriodForStyle,
+  getRecommendedAccessoryVolume,
+  type StyleProgrammingRules 
+} from './training-style-service'
 
 // =============================================================================
 // TYPES
@@ -160,7 +166,7 @@ function buildWeeklyStructure(context: UnifiedEngineContext): WeeklyStructure {
   }
   
   // Calculate weekly volume based on style and fatigue
-  const baseVolume = getBaseVolume(context.athlete.trainingStyle)
+  const baseVolume = getBaseVolume(context.athlete.trainingStyle, context.athlete.styleProgrammingRules)
   const volumeMultiplier = context.fatigue.sessionAdjustments.volumeMultiplier
   
   return {
@@ -176,22 +182,32 @@ function buildWeeklyStructure(context: UnifiedEngineContext): WeeklyStructure {
   }
 }
 
-function getBaseVolume(style: TrainingStyleMode): { skill: number; strength: number; accessory: number } {
-  switch (style) {
-    case 'skill_focused':
-      return { skill: 12, strength: 8, accessory: 4 }
-    case 'strength_focused':
-      return { skill: 8, strength: 14, accessory: 6 }
-    case 'power_focused':
-      return { skill: 8, strength: 10, accessory: 4 }
-    case 'endurance_focused':
-      return { skill: 10, strength: 8, accessory: 8 }
-    case 'hypertrophy_supported':
-      return { skill: 8, strength: 10, accessory: 10 }
-    case 'balanced_hybrid':
-    default:
-      return { skill: 10, strength: 10, accessory: 6 }
+function getBaseVolume(
+  style: TrainingStyleMode,
+  rules?: StyleProgrammingRules
+): { skill: number; strength: number; accessory: number } {
+  // Base volumes per style, then apply rules multipliers
+  const baseVolumes: Record<TrainingStyleMode, { skill: number; strength: number; accessory: number }> = {
+    skill_focused: { skill: 12, strength: 8, accessory: 4 },
+    strength_focused: { skill: 8, strength: 14, accessory: 6 },
+    power_focused: { skill: 8, strength: 10, accessory: 4 },
+    endurance_focused: { skill: 10, strength: 8, accessory: 8 },
+    hypertrophy_supported: { skill: 8, strength: 10, accessory: 10 },
+    balanced_hybrid: { skill: 10, strength: 10, accessory: 6 },
   }
+  
+  const base = baseVolumes[style] || baseVolumes.balanced_hybrid
+  
+  // Apply style programming rules if provided
+  if (rules) {
+    return {
+      skill: Math.round(base.skill * rules.skillExposureMultiplier),
+      strength: Math.round(base.strength * rules.strengthVolumeMultiplier),
+      accessory: Math.round(base.accessory * rules.accessoryVolumeMultiplier),
+    }
+  }
+  
+  return base
 }
 
 // =============================================================================

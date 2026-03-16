@@ -98,7 +98,7 @@ Learns athlete-specific training responses:
 - Confidence scoring
 
 ### 6. Training Style Profile
-**File:** `lib/unified-coaching-engine.ts`
+**File:** `lib/training-style-service.ts`
 
 Style modes with priority weighting:
 - `skill_focused` - High-frequency skill exposure
@@ -107,6 +107,16 @@ Style modes with priority weighting:
 - `endurance_focused` - Work capacity and density
 - `hypertrophy_supported` - Skill-first with targeted muscle work
 - `balanced_hybrid` - Moderate across all qualities
+
+Each style includes programming rules:
+- Skill exposure multiplier
+- Strength volume multiplier
+- Accessory volume multiplier
+- Load intensity bias
+- Rep range bias
+- Rest bias
+- Density preference
+- Exercise variant preferences
 
 ### 7. Movement Family System
 **File:** `lib/movement-family-registry.ts`, `lib/exercise-classification-registry.ts`
@@ -176,6 +186,29 @@ Does NOT create new program version.
 
 Creates new ProgramVersion with reason tracking.
 
+### Program Versioning
+**File:** `lib/program-version-service.ts`
+
+Version management includes:
+- Input snapshots for reproducibility
+- Generation reason tracking
+- Automatic version archival
+- Comparison utilities
+- User-facing change messages
+
+Generation reasons:
+- `onboarding_initial_generation`
+- `settings_schedule_change`
+- `settings_equipment_change`
+- `settings_goal_change`
+- `settings_style_change`
+- `fatigue_deload`
+- `skill_priority_update`
+- `benchmark_update`
+- `adaptive_rebalance`
+- `manual_regeneration`
+- `injury_status_change`
+
 ## Coaching Summary
 
 Every context build includes human-readable summary:
@@ -232,7 +265,50 @@ Low confidence triggers conservative programming.
 |--------|-----------|-----------|
 | Dashboard | UnifiedContext | - |
 | Workout | UnifiedContext, Program | WorkoutLogs |
-| Settings | - | AthleteProfile |
-| Onboarding | - | AthleteProfile, SkillState |
-| Logging | WorkoutData | Envelopes, SkillState |
+| Settings | - | AthleteProfile, TrainingStyle |
+| Onboarding | - | AthleteProfile, SkillState, ProgramVersion |
+| Logging | WorkoutData | Envelopes, SkillState, FatigueSignals |
 | Override | Context | AdaptationEvents |
+| Version | UnifiedContext | ProgramVersion, InputSnapshot |
+
+## API Endpoints
+
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/api/engine/context` | GET | Build complete unified context |
+| `/api/engine/version` | GET | Get active program version and history |
+| `/api/engine/version` | POST | Check/trigger program regeneration |
+| `/api/engine/style` | GET | Get training style profile |
+| `/api/engine/style` | POST | Update training style |
+
+## Key Files
+
+| File | Purpose |
+|------|---------|
+| `lib/unified-coaching-engine.ts` | Core context builder and pipeline |
+| `lib/unified-program-generation.ts` | Program output from context |
+| `lib/training-style-service.ts` | Training style profiles and rules |
+| `lib/program-version-service.ts` | Version management and snapshots |
+| `lib/workout-feedback-integration.ts` | Closes loop from logs to engine |
+| `lib/engine/index.ts` | Unified exports for all engine systems |
+
+## Summary
+
+The Adaptive Athlete Engine is now a unified coaching intelligence system that:
+
+1. **Uses AthleteProfile as root input** - All decisions derive from this foundation
+2. **Integrates SkillState** - Skill-specific memory informs progressions
+3. **Uses readiness breakdowns** - Component scores drive support work
+4. **Makes Constraint Detection a driver** - Emphasis follows detected limitations
+5. **Integrates Performance Envelopes** - Personalizes prescriptions
+6. **Uses TrainingStyleProfile** - Shapes method selection
+7. **Uses Movement Family system** - Governs all exercise selection/substitution
+8. **Equipment-aware** - Filters exercises by availability
+9. **Hypertrophy support controlled** - Minimal, calisthenics-first approach
+10. **Fatigue state integrated** - Influences active programming
+11. **Joint protocols integrated** - Intelligent support based on context
+12. **Workout logs close the loop** - Learning from actual behavior
+13. **Session vs structural adaptation separated** - Clean versioning
+14. **ProgramVersioning used** - Tracks regeneration with reasons
+15. **Coaching summary coherent** - Explainable decisions
+16. **Dashboard uses unified output** - Single source of truth

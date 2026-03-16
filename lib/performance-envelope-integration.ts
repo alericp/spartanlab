@@ -217,6 +217,133 @@ export async function detectFatigueTrendFromEnvelopes(athleteId: string): Promis
 }
 
 /**
+ * Enhanced fatigue detection using athlete's learned thresholds
+ * Compares current weekly volume against learned fatigue thresholds
+ */
+export interface EnvelopeFatigueSignal {
+  movementFamily: MovementFamily
+  currentWeeklyVolume: number
+  fatigueThreshold: number
+  percentageOfThreshold: number
+  isApproachingThreshold: boolean
+  isExceedingThreshold: boolean
+  confidenceInThreshold: number
+  recommendation: string
+  severity: 'low' | 'moderate' | 'elevated' | 'high'
+}
+
+export async function detectEnvelopeFatigueRisk(
+  athleteId: string,
+  currentWeeklyVolumes: Map<MovementFamily, number>
+): Promise<{
+  overallRisk: 'low' | 'moderate' | 'elevated' | 'high'
+  familySignals: EnvelopeFatigueSignal[]
+  needsDeload: boolean
+  deloadRecommendation: string
+  coachingNote: string
+}> {
+  try {
+    const envelopes = await getAthleteEnvelopes(athleteId)
+    const familySignals: EnvelopeFatigueSignal[] = []
+    
+    for (const [family, currentVolume] of currentWeeklyVolumes) {
+      const envelope = envelopes.find(e => e.movementFamily === family)
+      
+      if (!envelope || envelope.confidenceScore < 0.3) {
+        // Not enough data - use conservative defaults
+        continue
+      }
+      
+      const threshold = envelope.fatigueThreshold
+      const percentageOfThreshold = threshold > 0 ? (currentVolume / threshold) * 100 : 0
+      
+      // Determine fatigue severity
+      let severity: EnvelopeFatigueSignal['severity'] = 'low'
+      let recommendation = ''
+      
+      if (percentageOfThreshold >= 120) {
+        severity = 'high'
+        recommendation = `${formatFamilyName(family)} volume (${currentVolume} sets) significantly exceeds your learned threshold (${threshold}). Consider immediate reduction.`
+      } else if (percentageOfThreshold >= 100) {
+        severity = 'elevated'
+        recommendation = `${formatFamilyName(family)} volume at threshold (${currentVolume}/${threshold} sets). Quality may decline.`
+      } else if (percentageOfThreshold >= 85) {
+        severity = 'moderate'
+        recommendation = `${formatFamilyName(family)} approaching volume threshold (${currentVolume}/${threshold} sets). Monitor performance.`
+      } else {
+        severity = 'low'
+        recommendation = `${formatFamilyName(family)} volume within productive range.`
+      }
+      
+      familySignals.push({
+        movementFamily: family,
+        currentWeeklyVolume: currentVolume,
+        fatigueThreshold: threshold,
+        percentageOfThreshold,
+        isApproachingThreshold: percentageOfThreshold >= 85,
+        isExceedingThreshold: percentageOfThreshold >= 100,
+        confidenceInThreshold: envelope.fatigueThresholdConfidence,
+        recommendation,
+        severity,
+      })
+    }
+    
+    // Calculate overall risk
+    const highRiskCount = familySignals.filter(s => s.severity === 'high').length
+    const elevatedRiskCount = familySignals.filter(s => s.severity === 'elevated').length
+    const moderateRiskCount = familySignals.filter(s => s.severity === 'moderate').length
+    
+    let overallRisk: 'low' | 'moderate' | 'elevated' | 'high' = 'low'
+    if (highRiskCount >= 2 || (highRiskCount >= 1 && elevatedRiskCount >= 2)) {
+      overallRisk = 'high'
+    } else if (highRiskCount >= 1 || elevatedRiskCount >= 2) {
+      overallRisk = 'elevated'
+    } else if (elevatedRiskCount >= 1 || moderateRiskCount >= 2) {
+      overallRisk = 'moderate'
+    }
+    
+    // Determine if deload is needed
+    const needsDeload = overallRisk === 'high' || (overallRisk === 'elevated' && highRiskCount > 0)
+    
+    // Generate coaching note
+    let coachingNote = ''
+    if (overallRisk === 'high') {
+      coachingNote = 'Multiple movement families are at or exceeding your learned fatigue thresholds. A deload or reduced volume block is recommended.'
+    } else if (overallRisk === 'elevated') {
+      const atRisk = familySignals.filter(s => s.severity === 'elevated' || s.severity === 'high')
+      coachingNote = `${atRisk.map(s => formatFamilyName(s.movementFamily)).join(' and ')} volume is approaching limits. Consider reducing or maintaining current levels.`
+    } else if (overallRisk === 'moderate') {
+      coachingNote = 'Training load is manageable but approaching productive limits for some movement families.'
+    } else {
+      coachingNote = 'Training load is well within your learned recovery capacity.'
+    }
+    
+    return {
+      overallRisk,
+      familySignals,
+      needsDeload,
+      deloadRecommendation: needsDeload 
+        ? 'Reduce volume by 40-50% for 1 week, prioritizing the high-risk movement families.'
+        : '',
+      coachingNote,
+    }
+  } catch (error) {
+    console.warn('[Envelope] Could not detect fatigue risk:', error)
+    return {
+      overallRisk: 'low',
+      familySignals: [],
+      needsDeload: false,
+      deloadRecommendation: '',
+      coachingNote: 'Unable to assess envelope-based fatigue. Using standard fatigue detection.',
+    }
+  }
+}
+
+function formatFamilyName(family: MovementFamily): string {
+  return family.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
+}
+
+/**
  * Get personalized program adjustments from envelopes
  */
 export async function getEnvelopeBasedProgramAdjustments(
@@ -414,4 +541,296 @@ export function extractMovementFamilyResultsFromLog(
   }
   
   return results
+}
+
+// =============================================================================
+// PROGRAM GENERATION HELPERS
+// =============================================================================
+
+/**
+ * Envelope-based exercise prescription
+ * Returns parameters for a specific exercise based on learned athlete response
+ */
+export interface EnvelopeExercisePrescription {
+  sets: number
+  repsMin: number
+  repsMax: number
+  restSeconds: number
+  intensity: 'light' | 'moderate' | 'heavy' | 'max'
+  densityLevel: 'low_density' | 'moderate_density' | 'high_density'
+  
+  // Confidence and explanation
+  prescriptionConfidence: number
+  rationale: string
+  
+  // Warnings if approaching limits
+  volumeWarning?: string
+  fatigueWarning?: string
+}
+
+/**
+ * Get envelope-based exercise prescription
+ */
+export async function getEnvelopeExercisePrescription(
+  athleteId: string,
+  movementFamily: MovementFamily,
+  goalType: 'strength' | 'skill' | 'endurance' | 'hypertrophy' | 'power',
+  currentWeeklyVolume: number,
+  sessionContext: {
+    isFirstSetOfFamily: boolean
+    sessionDensityTarget: 'low_density' | 'moderate_density' | 'high_density'
+    availableTimeMinutes: number
+  }
+): Promise<EnvelopeExercisePrescription> {
+  try {
+    const envelope = await getOrCreateEnvelope(athleteId, movementFamily, goalType)
+    const recs = getEnvelopeBasedRecommendations(envelope)
+    
+    // Calculate sets based on remaining volume capacity
+    const remainingCapacity = Math.max(0, envelope.toleratedWeeklyVolumeMax - currentWeeklyVolume)
+    const optimalSets = Math.round((envelope.preferredSetRangeMin + envelope.preferredSetRangeMax) / 2)
+    const recommendedSets = Math.min(optimalSets, Math.max(2, remainingCapacity))
+    
+    // Determine intensity based on goal type and fatigue proximity
+    let intensity: 'light' | 'moderate' | 'heavy' | 'max' = 'moderate'
+    if (goalType === 'strength') {
+      intensity = currentWeeklyVolume < envelope.preferredWeeklyVolumeMin ? 'heavy' : 'moderate'
+    } else if (goalType === 'hypertrophy') {
+      intensity = 'moderate'
+    } else if (goalType === 'endurance') {
+      intensity = 'light'
+    }
+    
+    // Adjust for fatigue proximity
+    const volumeRatio = currentWeeklyVolume / envelope.fatigueThreshold
+    if (volumeRatio > 0.85) {
+      intensity = 'light'
+    }
+    
+    // Build prescription
+    const prescription: EnvelopeExercisePrescription = {
+      sets: recommendedSets,
+      repsMin: envelope.preferredRepRangeMin,
+      repsMax: envelope.preferredRepRangeMax,
+      restSeconds: envelope.preferredDensityLevel === 'high_density' ? 60 :
+                   envelope.preferredDensityLevel === 'low_density' ? 150 : 90,
+      intensity,
+      densityLevel: envelope.preferredDensityLevel,
+      prescriptionConfidence: envelope.confidenceScore,
+      rationale: buildPrescriptionRationale(envelope, currentWeeklyVolume, remainingCapacity),
+    }
+    
+    // Add warnings
+    if (volumeRatio > 0.85) {
+      prescription.volumeWarning = `Approaching weekly volume threshold (${Math.round(volumeRatio * 100)}%). Consider lighter work.`
+    }
+    
+    if (volumeRatio > 1.0) {
+      prescription.fatigueWarning = `Exceeding learned fatigue threshold. Performance may decline.`
+    }
+    
+    return prescription
+  } catch (error) {
+    console.warn('[Envelope] Could not get exercise prescription:', error)
+    // Return conservative defaults
+    return {
+      sets: 3,
+      repsMin: 5,
+      repsMax: 8,
+      restSeconds: 90,
+      intensity: 'moderate',
+      densityLevel: 'moderate_density',
+      prescriptionConfidence: 0,
+      rationale: 'Using standard defaults. Enable envelope learning with consistent logging.',
+    }
+  }
+}
+
+function buildPrescriptionRationale(
+  envelope: PerformanceEnvelope,
+  currentVolume: number,
+  remainingCapacity: number
+): string {
+  const familyLabel = formatFamilyName(envelope.movementFamily)
+  
+  if (envelope.confidenceScore < 0.3) {
+    return `Standard ${familyLabel} prescription. More training data will personalize this.`
+  }
+  
+  const parts: string[] = []
+  
+  // Rep range rationale
+  if (envelope.repZoneConfidence > 0.4) {
+    parts.push(`${envelope.preferredRepRangeMin}-${envelope.preferredRepRangeMax} reps matches your best response`)
+  }
+  
+  // Volume rationale
+  if (envelope.weeklyVolumeConfidence > 0.4) {
+    const volumePercent = Math.round((currentVolume / envelope.preferredWeeklyVolumeMax) * 100)
+    parts.push(`Weekly volume at ${volumePercent}% of optimal range`)
+  }
+  
+  // Capacity warning
+  if (remainingCapacity < 6) {
+    parts.push(`${remainingCapacity} sets remaining before fatigue threshold`)
+  }
+  
+  return parts.length > 0 
+    ? parts.join('. ') + '.'
+    : `${familyLabel} prescription based on your training history.`
+}
+
+/**
+ * Get full program generation context from all envelopes
+ */
+export interface ProgramEnvelopeContext {
+  envelopes: Map<MovementFamily, PerformanceEnvelope>
+  
+  // Aggregate insights
+  primaryLimitingFamily: MovementFamily | null
+  familiesNearFatigueThreshold: MovementFamily[]
+  familiesWithHighConfidence: MovementFamily[]
+  
+  // Programming recommendations
+  volumeDistribution: Map<MovementFamily, { recommended: number; max: number }>
+  repRangeOverrides: Map<MovementFamily, { min: number; max: number }>
+  densityPreferences: Map<MovementFamily, 'low_density' | 'moderate_density' | 'high_density'>
+  
+  // Coaching summary
+  coachingSummary: string
+}
+
+export async function getProgramEnvelopeContext(
+  athleteId: string,
+  targetGoalType: 'strength' | 'skill' | 'endurance' | 'hypertrophy' | 'power',
+  relevantFamilies: MovementFamily[]
+): Promise<ProgramEnvelopeContext> {
+  const envelopes = new Map<MovementFamily, PerformanceEnvelope>()
+  const volumeDistribution = new Map<MovementFamily, { recommended: number; max: number }>()
+  const repRangeOverrides = new Map<MovementFamily, { min: number; max: number }>()
+  const densityPreferences = new Map<MovementFamily, 'low_density' | 'moderate_density' | 'high_density'>()
+  
+  const familiesNearFatigueThreshold: MovementFamily[] = []
+  const familiesWithHighConfidence: MovementFamily[] = []
+  let primaryLimitingFamily: MovementFamily | null = null
+  let lowestPerformanceTrend: number | null = null
+  
+  for (const family of relevantFamilies) {
+    try {
+      const envelope = await getOrCreateEnvelope(athleteId, family, targetGoalType)
+      envelopes.set(family, envelope)
+      
+      // Track high confidence envelopes
+      if (envelope.confidenceScore >= 0.5) {
+        familiesWithHighConfidence.push(family)
+      }
+      
+      // Track declining families
+      if (envelope.performanceTrend === 'declining' && envelope.trendConfidence > 0.4) {
+        familiesNearFatigueThreshold.push(family)
+        
+        // Track primary limiting family
+        const trendScore = envelope.trendConfidence
+        if (lowestPerformanceTrend === null || trendScore > lowestPerformanceTrend) {
+          lowestPerformanceTrend = trendScore
+          primaryLimitingFamily = family
+        }
+      }
+      
+      // Build volume distribution
+      if (envelope.confidenceScore >= 0.3) {
+        volumeDistribution.set(family, {
+          recommended: Math.round((envelope.preferredWeeklyVolumeMin + envelope.preferredWeeklyVolumeMax) / 2),
+          max: envelope.toleratedWeeklyVolumeMax,
+        })
+      }
+      
+      // Build rep range overrides (only if confident)
+      if (envelope.repZoneConfidence >= 0.4) {
+        repRangeOverrides.set(family, {
+          min: envelope.preferredRepRangeMin,
+          max: envelope.preferredRepRangeMax,
+        })
+      }
+      
+      // Build density preferences
+      if (envelope.densityConfidence >= 0.4) {
+        densityPreferences.set(family, envelope.preferredDensityLevel)
+      }
+    } catch (error) {
+      console.warn(`[Envelope] Could not get envelope for ${family}:`, error)
+    }
+  }
+  
+  // Generate coaching summary
+  const summaryParts: string[] = []
+  
+  if (familiesWithHighConfidence.length > 0) {
+    summaryParts.push(`SpartanLab has learned your response patterns for ${familiesWithHighConfidence.length} movement families`)
+  }
+  
+  if (primaryLimitingFamily) {
+    summaryParts.push(`${formatFamilyName(primaryLimitingFamily)} may need reduced volume or recovery focus`)
+  }
+  
+  if (repRangeOverrides.size > 0) {
+    summaryParts.push(`Rep ranges personalized based on your training history`)
+  }
+  
+  const coachingSummary = summaryParts.length > 0
+    ? summaryParts.join('. ') + '.'
+    : 'Continue logging workouts to enable personalized programming.'
+  
+  return {
+    envelopes,
+    primaryLimitingFamily,
+    familiesNearFatigueThreshold,
+    familiesWithHighConfidence,
+    volumeDistribution,
+    repRangeOverrides,
+    densityPreferences,
+    coachingSummary,
+  }
+}
+
+/**
+ * Check if a deload is recommended based on envelope analysis
+ */
+export async function shouldRecommendDeload(
+  athleteId: string,
+  currentWeeklyVolumes: Map<MovementFamily, number>
+): Promise<{
+  recommendDeload: boolean
+  severity: 'mild' | 'moderate' | 'critical'
+  affectedFamilies: MovementFamily[]
+  rationale: string
+  suggestedDuration: number // days
+}> {
+  const fatigueRisk = await detectEnvelopeFatigueRisk(athleteId, currentWeeklyVolumes)
+  
+  if (!fatigueRisk.needsDeload) {
+    return {
+      recommendDeload: false,
+      severity: 'mild',
+      affectedFamilies: [],
+      rationale: 'Training load within productive range.',
+      suggestedDuration: 0,
+    }
+  }
+  
+  const affectedFamilies = fatigueRisk.familySignals
+    .filter(s => s.severity === 'high' || s.severity === 'elevated')
+    .map(s => s.movementFamily)
+  
+  const severity: 'mild' | 'moderate' | 'critical' = 
+    fatigueRisk.overallRisk === 'high' ? 'critical' :
+    fatigueRisk.overallRisk === 'elevated' ? 'moderate' : 'mild'
+  
+  return {
+    recommendDeload: true,
+    severity,
+    affectedFamilies,
+    rationale: fatigueRisk.coachingNote,
+    suggestedDuration: severity === 'critical' ? 7 : severity === 'moderate' ? 5 : 3,
+  }
 }

@@ -45,10 +45,15 @@ export type MovementFamily =
   | 'joint_integrity'         // Shoulder prehab, wrist prep
   | 'mobility'                // Stretches, mobility drills
   | 'transition'              // Muscle-up, skin the cat
+  // Rings-specific patterns
+  | 'rings_stability'         // Ring support, RTO holds, ring control
+  | 'rings_strength'          // Iron cross prep, ring dips, maltese
   // Accessory/Isolation
   | 'shoulder_isolation'      // Lateral raises, face pulls
   | 'arm_isolation'           // Curls, tricep work
   | 'grip_strength'           // Hangs, grip work
+  // Hypertrophy/General
+  | 'hypertrophy_accessory'   // General hypertrophy work
 
 // =============================================================================
 // TRAINING INTENT DEFINITIONS

@@ -538,6 +538,217 @@ export function getRestPeriodForStyle(
 }
 
 // =============================================================================
+// ENVELOPE-REFINED STYLE PARAMETERS
+// =============================================================================
+
+import type { PerformanceEnvelope } from './performance-envelope-engine'
+import type { MovementFamily } from './movement-family-registry'
+
+/**
+ * Refined style parameters that combine training style preferences
+ * with learned performance envelope data
+ */
+export interface EnvelopeRefinedStyleParams {
+  // Base style
+  styleMode: TrainingStyleMode
+  
+  // Envelope-refined rep range (overrides style if confident)
+  repRangeMin: number
+  repRangeMax: number
+  repRangeSource: 'style' | 'envelope' | 'blended'
+  
+  // Envelope-refined volume (overrides style if confident)
+  weeklyVolumeMin: number
+  weeklyVolumeMax: number
+  volumeSource: 'style' | 'envelope' | 'blended'
+  
+  // Envelope-refined density
+  densityPreference: 'low' | 'moderate' | 'high'
+  densitySource: 'style' | 'envelope' | 'blended'
+  
+  // Envelope-refined rest
+  restSeconds: number
+  restSource: 'style' | 'envelope' | 'blended'
+  
+  // Confidence in the refinement
+  envelopeConfidence: number
+  
+  // Explanation for the athlete
+  refinementNote: string
+}
+
+/**
+ * Refine training style parameters using learned envelope data
+ * Style provides the broad approach; envelope provides the athlete-specific dose
+ */
+export function refineStyleWithEnvelope(
+  styleProfile: TrainingStyleProfile,
+  envelope: PerformanceEnvelope | null,
+  movementFamily: MovementFamily,
+  exerciseCategory: 'skill' | 'strength' | 'accessory'
+): EnvelopeRefinedStyleParams {
+  const rules = getStyleProgrammingRules(styleProfile.styleMode)
+  const baseRepRange = getRepRangeForStyle(styleProfile.styleMode, exerciseCategory)
+  const baseRest = getRestPeriodForStyle(styleProfile.styleMode, exerciseCategory)
+  const baseVolume = exerciseCategory === 'strength' 
+    ? getRecommendedStrengthSets(styleProfile.styleMode, 4, 'pull')
+    : { min: 6, max: 12 }
+  
+  // If no envelope or low confidence, use style defaults
+  if (!envelope || envelope.confidenceScore < 0.3) {
+    return {
+      styleMode: styleProfile.styleMode,
+      repRangeMin: baseRepRange.min,
+      repRangeMax: baseRepRange.max,
+      repRangeSource: 'style',
+      weeklyVolumeMin: baseVolume.min,
+      weeklyVolumeMax: baseVolume.max,
+      volumeSource: 'style',
+      densityPreference: rules.densityPreference,
+      densitySource: 'style',
+      restSeconds: baseRest,
+      restSource: 'style',
+      envelopeConfidence: envelope?.confidenceScore || 0,
+      refinementNote: 'Using style defaults. More training data will enable personalization.',
+    }
+  }
+  
+  // Blend style and envelope data based on confidence
+  const confidence = envelope.confidenceScore
+  const blendFactor = Math.min(confidence, 0.7) // Cap envelope influence at 70%
+  
+  // Rep range: blend if envelope has rep zone confidence
+  let repRangeMin = baseRepRange.min
+  let repRangeMax = baseRepRange.max
+  let repRangeSource: 'style' | 'envelope' | 'blended' = 'style'
+  
+  if (envelope.repZoneConfidence > 0.4) {
+    // Strong envelope signal - use it
+    repRangeMin = Math.round(
+      baseRepRange.min * (1 - blendFactor) + envelope.preferredRepRangeMin * blendFactor
+    )
+    repRangeMax = Math.round(
+      baseRepRange.max * (1 - blendFactor) + envelope.preferredRepRangeMax * blendFactor
+    )
+    repRangeSource = confidence > 0.6 ? 'envelope' : 'blended'
+  }
+  
+  // Weekly volume: blend if envelope has volume confidence
+  let weeklyVolumeMin = baseVolume.min
+  let weeklyVolumeMax = baseVolume.max
+  let volumeSource: 'style' | 'envelope' | 'blended' = 'style'
+  
+  if (envelope.weeklyVolumeConfidence > 0.4) {
+    weeklyVolumeMin = Math.round(
+      baseVolume.min * (1 - blendFactor) + envelope.preferredWeeklyVolumeMin * blendFactor
+    )
+    weeklyVolumeMax = Math.round(
+      baseVolume.max * (1 - blendFactor) + envelope.preferredWeeklyVolumeMax * blendFactor
+    )
+    volumeSource = confidence > 0.6 ? 'envelope' : 'blended'
+  }
+  
+  // Density: use envelope if confident
+  let densityPreference = rules.densityPreference
+  let densitySource: 'style' | 'envelope' | 'blended' = 'style'
+  
+  if (envelope.densityConfidence > 0.4) {
+    // Map envelope density to style density
+    densityPreference = envelope.preferredDensityLevel === 'high_density' ? 'high' :
+                        envelope.preferredDensityLevel === 'low_density' ? 'low' : 'moderate'
+    densitySource = confidence > 0.6 ? 'envelope' : 'blended'
+  }
+  
+  // Rest: adjust based on density tolerance
+  let restSeconds = baseRest
+  let restSource: 'style' | 'envelope' | 'blended' = 'style'
+  
+  if (envelope.densityConfidence > 0.4) {
+    if (envelope.densityTolerance === 'poor') {
+      restSeconds = Math.round(baseRest * 1.2) // More rest needed
+      restSource = 'blended'
+    } else if (envelope.densityTolerance === 'good') {
+      restSeconds = Math.round(baseRest * 0.85) // Can handle less rest
+      restSource = 'blended'
+    }
+  }
+  
+  // Generate refinement note
+  const notes: string[] = []
+  if (repRangeSource !== 'style') {
+    notes.push(`Rep range adjusted to ${repRangeMin}-${repRangeMax} based on your response data`)
+  }
+  if (volumeSource !== 'style') {
+    notes.push(`Volume tuned to ${weeklyVolumeMin}-${weeklyVolumeMax} weekly sets`)
+  }
+  if (densitySource !== 'style') {
+    notes.push(`Density preference: ${densityPreference}`)
+  }
+  
+  return {
+    styleMode: styleProfile.styleMode,
+    repRangeMin,
+    repRangeMax,
+    repRangeSource,
+    weeklyVolumeMin,
+    weeklyVolumeMax,
+    volumeSource,
+    densityPreference,
+    densitySource,
+    restSeconds,
+    restSource,
+    envelopeConfidence: confidence,
+    refinementNote: notes.length > 0 
+      ? notes.join('. ') + '.'
+      : `${STYLE_MODE_DEFINITIONS[styleProfile.styleMode].label} style with standard parameters.`,
+  }
+}
+
+/**
+ * Generate explainable coaching note for envelope-refined parameters
+ */
+export function generateEnvelopeRefinementInsight(
+  styleProfile: TrainingStyleProfile,
+  refinedParams: EnvelopeRefinedStyleParams,
+  movementFamily: MovementFamily
+): string {
+  const familyLabel = movementFamily.replace(/_/g, ' ')
+  const styleLabel = STYLE_MODE_DEFINITIONS[styleProfile.styleMode].label
+  
+  if (refinedParams.envelopeConfidence < 0.3) {
+    return `Using ${styleLabel} defaults for ${familyLabel}. Continue logging to personalize.`
+  }
+  
+  if (refinedParams.envelopeConfidence < 0.5) {
+    return `${styleLabel} style with early personalization for ${familyLabel}: ${refinedParams.repRangeMin}-${refinedParams.repRangeMax} reps, ${refinedParams.weeklyVolumeMin}-${refinedParams.weeklyVolumeMax} weekly sets.`
+  }
+  
+  // High confidence - provide detailed insight
+  const insights: string[] = []
+  
+  if (refinedParams.repRangeSource !== 'style') {
+    insights.push(`You respond best to ${refinedParams.repRangeMin}-${refinedParams.repRangeMax} reps`)
+  }
+  
+  if (refinedParams.volumeSource !== 'style') {
+    insights.push(`${refinedParams.weeklyVolumeMin}-${refinedParams.weeklyVolumeMax} weekly sets is your productive range`)
+  }
+  
+  if (refinedParams.densitySource !== 'style' && refinedParams.densityPreference !== 'moderate') {
+    const densityNote = refinedParams.densityPreference === 'low' 
+      ? 'more rest between sets helps your progress'
+      : 'you handle higher-density work well'
+    insights.push(densityNote)
+  }
+  
+  if (insights.length === 0) {
+    return `${styleLabel} programming is well-suited for your ${familyLabel} response patterns.`
+  }
+  
+  return `For ${familyLabel}: ${insights.join(', ')}.`
+}
+
+// =============================================================================
 // ADVANCED/COMBO METHODS
 // =============================================================================
 

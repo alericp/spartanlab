@@ -13,6 +13,87 @@ import {
 import { getWorkoutLogs } from '../workout-log-service'
 import { getSkillSessions } from '../skill-session-service'
 import { calculateTrainingStreak } from '../progress-streak-engine'
+import { getStrengthRecords } from '../strength-service'
+import { getSkillProgressions } from '../data-service'
+
+// =============================================================================
+// SKILL & TIMED RESULTS STORAGE
+// =============================================================================
+// For manually logged skill achievements and timed challenge results
+
+const SKILL_ACHIEVEMENTS_KEY = 'spartanlab_skill_achievements'
+const TIMED_RESULTS_KEY = 'spartanlab_timed_results'
+const PR_RECORDS_KEY = 'spartanlab_pr_records'
+
+interface SkillAchievement {
+  skillType: string
+  holdTime?: number
+  reps?: number
+  achievedAt: string
+}
+
+interface TimedResult {
+  challengeType: string
+  reps: number
+  timeLimit: number
+  achievedAt: string
+}
+
+interface PRRecord {
+  exercise: string
+  maxReps: number
+  achievedAt: string
+}
+
+function getSkillAchievements(): SkillAchievement[] {
+  if (typeof window === 'undefined') return []
+  const stored = localStorage.getItem(SKILL_ACHIEVEMENTS_KEY)
+  if (stored) { try { return JSON.parse(stored) } catch { return [] } }
+  return []
+}
+
+export function saveSkillAchievement(achievement: Omit<SkillAchievement, 'achievedAt'>): void {
+  if (typeof window === 'undefined') return
+  const achievements = getSkillAchievements()
+  achievements.push({ ...achievement, achievedAt: new Date().toISOString() })
+  localStorage.setItem(SKILL_ACHIEVEMENTS_KEY, JSON.stringify(achievements))
+}
+
+function getTimedResults(): TimedResult[] {
+  if (typeof window === 'undefined') return []
+  const stored = localStorage.getItem(TIMED_RESULTS_KEY)
+  if (stored) { try { return JSON.parse(stored) } catch { return [] } }
+  return []
+}
+
+export function saveTimedResult(result: Omit<TimedResult, 'achievedAt'>): void {
+  if (typeof window === 'undefined') return
+  const results = getTimedResults()
+  results.push({ ...result, achievedAt: new Date().toISOString() })
+  localStorage.setItem(TIMED_RESULTS_KEY, JSON.stringify(results))
+}
+
+function getPRRecords(): PRRecord[] {
+  if (typeof window === 'undefined') return []
+  const stored = localStorage.getItem(PR_RECORDS_KEY)
+  if (stored) { try { return JSON.parse(stored) } catch { return [] } }
+  return []
+}
+
+export function savePRRecord(exercise: string, maxReps: number): void {
+  if (typeof window === 'undefined') return
+  const records = getPRRecords()
+  const existing = records.find(r => r.exercise === exercise)
+  if (existing) {
+    if (maxReps > existing.maxReps) {
+      existing.maxReps = maxReps
+      existing.achievedAt = new Date().toISOString()
+    }
+  } else {
+    records.push({ exercise, maxReps, achievedAt: new Date().toISOString() })
+  }
+  localStorage.setItem(PR_RECORDS_KEY, JSON.stringify(records))
+}
 
 // =============================================================================
 // STORAGE
@@ -107,6 +188,18 @@ interface ChallengeMetrics {
   currentStreak: number
   skillSessionsInPeriod: Record<string, number>
   trainingMinutesInPeriod: Record<string, number>
+  // Strength metrics
+  maxPullUps: number
+  maxDips: number
+  maxPushUps: number
+  weightedPullUp: number // max weight added
+  weightedDip: number
+  // Skill hold times (from skill sessions)
+  skillHoldTimes: Record<string, number> // skill_type -> max hold seconds
+  // Skill levels
+  skillLevels: Record<string, number> // skill_type -> level
+  // Timed challenge results
+  timedResults: Record<string, number> // challenge_type -> best result
 }
 
 function getPeriodKey(startDate: string, endDate: string): string {
@@ -122,6 +215,11 @@ function calculateMetrics(): ChallengeMetrics {
   const workouts = getWorkoutLogs()
   const skillSessions = getSkillSessions()
   const streakData = calculateTrainingStreak()
+  const strengthRecords = getStrengthRecords()
+  const skillProgressions = getSkillProgressions()
+  const skillAchievements = getSkillAchievements()
+  const timedResults = getTimedResults()
+  const prRecords = getPRRecords()
   
   const metrics: ChallengeMetrics = {
     workoutsInPeriod: {},
@@ -129,6 +227,16 @@ function calculateMetrics(): ChallengeMetrics {
     currentStreak: streakData.currentStreak,
     skillSessionsInPeriod: {},
     trainingMinutesInPeriod: {},
+    // Strength metrics
+    maxPullUps: 0,
+    maxDips: 0,
+    maxPushUps: 0,
+    weightedPullUp: 0,
+    weightedDip: 0,
+    // Skill metrics
+    skillHoldTimes: {},
+    skillLevels: {},
+    timedResults: {},
   }
   
   // Get all active challenges to determine which periods to track
@@ -165,7 +273,7 @@ function calculateMetrics(): ChallengeMetrics {
     })
   })
   
-  // Count skill sessions per period
+  // Count skill sessions per period and extract best hold times
   skillSessions.forEach(session => {
     periods.forEach(period => {
       const [start, end] = period.split('_')
@@ -173,6 +281,69 @@ function calculateMetrics(): ChallengeMetrics {
         metrics.skillSessionsInPeriod[period]++
       }
     })
+    
+    // Track best session density (total hold time) per skill from sets
+    if (session.skillName && session.sets) {
+      const totalHoldTime = session.sets.reduce((sum, set) => sum + (set.holdSeconds || 0), 0)
+      const bestSet = Math.max(...session.sets.map(s => s.holdSeconds || 0))
+      const current = metrics.skillHoldTimes[session.skillName] || 0
+      if (bestSet > current) {
+        metrics.skillHoldTimes[session.skillName] = bestSet
+      }
+    }
+  })
+  
+  // Extract skill achievements (manually logged holds)
+  skillAchievements.forEach(achievement => {
+    if (achievement.holdTime) {
+      const current = metrics.skillHoldTimes[achievement.skillType] || 0
+      if (achievement.holdTime > current) {
+        metrics.skillHoldTimes[achievement.skillType] = achievement.holdTime
+      }
+    }
+    if (achievement.reps) {
+      // For skill milestones like muscle-ups, HSPU
+      const current = metrics.skillLevels[achievement.skillType] || 0
+      if (achievement.reps > current) {
+        metrics.skillLevels[achievement.skillType] = achievement.reps
+      }
+    }
+  })
+  
+  // Extract timed challenge results
+  timedResults.forEach(result => {
+    const current = metrics.timedResults[result.challengeType] || 0
+    if (result.reps > current) {
+      metrics.timedResults[result.challengeType] = result.reps
+    }
+  })
+  
+  // Extract strength records
+  strengthRecords.forEach(record => {
+    if (record.exercise === 'weighted_pull_up' && record.weightAdded > metrics.weightedPullUp) {
+      metrics.weightedPullUp = record.weightAdded
+    }
+    if (record.exercise === 'weighted_dip' && record.weightAdded > metrics.weightedDip) {
+      metrics.weightedDip = record.weightAdded
+    }
+  })
+  
+  // Extract PR records for max reps
+  prRecords.forEach(record => {
+    if (record.exercise === 'pull_ups') {
+      metrics.maxPullUps = Math.max(metrics.maxPullUps, record.maxReps)
+    }
+    if (record.exercise === 'dips') {
+      metrics.maxDips = Math.max(metrics.maxDips, record.maxReps)
+    }
+    if (record.exercise === 'push_ups') {
+      metrics.maxPushUps = Math.max(metrics.maxPushUps, record.maxReps)
+    }
+  })
+  
+  // Extract skill levels from progressions
+  skillProgressions.forEach(progression => {
+    metrics.skillLevels[progression.skillName] = progression.currentLevel
   })
   
   return metrics
@@ -208,6 +379,53 @@ export function evaluateChallengeProgress(challenge: Challenge): number {
         }
       })
       return exerciseCount
+    
+    // Strength rep challenges
+    case 'strength_reps':
+      if (challenge.exerciseType === 'pull_ups') return metrics.maxPullUps
+      if (challenge.exerciseType === 'dips') return metrics.maxDips
+      if (challenge.exerciseType === 'push_ups') return metrics.maxPushUps
+      // For HSPU/skill-based strength reps
+      if (challenge.skillType && metrics.skillLevels[challenge.skillType]) {
+        return metrics.skillLevels[challenge.skillType]
+      }
+      return 0
+    
+    // Weighted strength challenges
+    case 'weighted_strength':
+      if (challenge.exerciseType === 'weighted_pull_up') return metrics.weightedPullUp
+      if (challenge.exerciseType === 'weighted_dip') return metrics.weightedDip
+      return 0
+    
+    // Hold time challenges
+    case 'hold_time':
+      if (challenge.skillType) {
+        return metrics.skillHoldTimes[challenge.skillType] || 0
+      }
+      // Generic holds like L-sit use baseId as key
+      if (challenge.baseId) {
+        return metrics.skillHoldTimes[challenge.baseId] || 0
+      }
+      return 0
+    
+    // Timed max rep challenges
+    case 'timed_max_reps':
+      if (challenge.baseId) {
+        return metrics.timedResults[challenge.baseId] || 0
+      }
+      return 0
+    
+    // Skill milestone challenges
+    case 'skill_milestone':
+      if (challenge.skillType) {
+        return metrics.skillLevels[challenge.skillType] || 0
+      }
+      return 0
+    
+    // H2H challenges are evaluated separately
+    case 'h2h_challenge':
+      return 0
+    
     default:
       return 0
   }
@@ -359,14 +577,25 @@ export interface ChallengeWithProgress {
   name: string
   description: string
   category: string
-  period: 'weekly' | 'monthly' | 'seasonal'
+  period: 'weekly' | 'monthly' | 'seasonal' | 'skill' | 'strength' | 'time'
   goalValue: number
   currentValue: number
   percentComplete: number
   completed: boolean
   endDate: string
   reward: ChallengeReward
-}
+  icon?: string
+  tier?: number
+  maxTier?: number
+  timeRemaining?: {
+    days: number
+    hours: number
+    minutes: number
+    expired: boolean
+  }
+  isCompleted?: boolean
+  progressPercent?: number
+  }
 
 export interface ChallengeSummary {
   totalActive: number
@@ -400,24 +629,40 @@ export function getChallengesByPeriodWithProgress(period: 'weekly' | 'monthly'):
 }
 
 /**
- * Get all active challenges as ChallengeWithProgress[] for panel display
- */
-export function getAllChallengesWithProgress(): ChallengeWithProgress[] {
+  * Get all active challenges as ChallengeWithProgress[] for panel display
+  */
+  export function getAllChallengesWithProgress(): ChallengeWithProgress[] {
   const all = getActiveChallengesWithProgress()
-  return all.map(item => ({
+  return all.map(item => {
+  const now = new Date()
+  const end = new Date(item.challenge.endDate + 'T23:59:59')
+  const diff = end.getTime() - now.getTime()
+  const expired = diff <= 0
+  const days = Math.max(0, Math.floor(diff / (1000 * 60 * 60 * 24)))
+  const hours = Math.max(0, Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)))
+  const minutes = Math.max(0, Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60)))
+  
+  return {
     id: item.challenge.id,
     name: item.challenge.name,
     description: item.challenge.description,
     category: item.challenge.category,
-    period: item.challenge.category as 'weekly' | 'monthly' | 'seasonal',
+    period: item.challenge.category as 'weekly' | 'monthly' | 'seasonal' | 'skill' | 'strength' | 'time',
     goalValue: item.challenge.goalValue,
     currentValue: item.progress.currentValue,
     percentComplete: item.percentComplete,
     completed: item.progress.completed,
     endDate: item.challenge.endDate,
     reward: item.challenge.reward,
-  }))
-}
+    icon: item.challenge.icon,
+    tier: item.challenge.tier,
+    maxTier: item.challenge.maxTier,
+    timeRemaining: { days, hours, minutes, expired },
+    isCompleted: item.progress.completed,
+    progressPercent: item.percentComplete,
+  }
+  })
+  }
 
 /**
  * Get challenge summary stats for dashboard

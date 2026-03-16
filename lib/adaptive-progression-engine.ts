@@ -8,6 +8,7 @@ import {
   ALL_BAND_COLORS,
 } from './band-progression-engine'
 import { getWorkoutLogs, type WorkoutLog, type WorkoutExercise } from './workout-log-service'
+import { getOnboardingProfile, mapWeeklyTrainingToDays } from './athlete-profile'
 import { getStoredRPESessions, type StoredRPESession } from './fatigue-score-calculator'
 import { getFatigueTrainingDecision, type TrainingDecision } from './fatigue-decision-engine'
 import { getDailyReadiness } from './daily-readiness'
@@ -910,4 +911,518 @@ function createAnalysis(
 function getRandomMessage(decision: ProgressionDecision): string {
   const messages = COACH_MESSAGES[decision]
   return messages[Math.floor(Math.random() * messages.length)]
+}
+
+// =============================================================================
+// TRAINING BEHAVIOR ANALYSIS
+// Evaluates schedule adherence, missed sessions, and adapts recommendations
+// =============================================================================
+
+export type ScheduleAdaptation = 'maintain' | 'reduce' | 'increase'
+export type VolumeAdjustment = 'reduce' | 'maintain' | 'increase'
+
+export interface ScheduleAnalysis {
+  intendedDaysPerWeek: number
+  actualDaysPerWeek: number
+  scheduleMismatch: boolean
+  consistentPattern: boolean
+  adaptation: ScheduleAdaptation
+  adaptationReason: string
+  recommendedDays: number
+  temporaryReduction: boolean
+}
+
+export interface VolumeAnalysis {
+  avgSetsPerSession: number
+  avgExercisesPerSession: number
+  avgDurationMinutes: number
+  exerciseCompletionRate: number
+  setCompletionRate: number
+  volumeAdjustment: VolumeAdjustment
+  adjustmentReason: string
+  recommendedVolumeModifier: number
+}
+
+export interface TimeConstraintAnalysis {
+  intendedDuration: number
+  avgActualDuration: number
+  consistentlyShort: boolean
+  shouldPrioritize: boolean
+  priorityOrder: ('skill' | 'strength' | 'accessory' | 'mobility')[]
+  dropAccessoryWork: boolean
+  dropMobilityWork: boolean
+}
+
+export interface ProgressTrendAnalysis {
+  overallTrend: 'improving' | 'stable' | 'declining'
+  trendConfidence: 'low' | 'medium' | 'high'
+  strengthTrend: 'improving' | 'stable' | 'declining'
+  skillTrend: 'improving' | 'stable' | 'declining'
+  consistencyTrend: 'improving' | 'stable' | 'declining'
+  trendSummary: string
+}
+
+export interface TrainingBehaviorResult {
+  calculatedAt: string
+  adaptationNeeded: boolean
+  adaptationSummary: string
+  scheduleAnalysis: ScheduleAnalysis
+  volumeAnalysis: VolumeAnalysis
+  timeConstraints: TimeConstraintAnalysis
+  progressTrend: ProgressTrendAnalysis
+  coachMessages: string[]
+  dataQuality: 'insufficient' | 'limited' | 'good' | 'excellent'
+  confidenceLevel: 'low' | 'medium' | 'high'
+}
+
+// Schedule adaptation thresholds
+const SCHEDULE_THRESHOLDS = {
+  significantMismatch: 2,
+  weeksForPattern: 3,
+}
+
+// Volume thresholds
+const VOLUME_THRESHOLDS = {
+  reduceBelow: 60,
+  increaseAbove: 95,
+}
+
+function getWorkoutsInDateRange(logs: WorkoutLog[], days: number): WorkoutLog[] {
+  const now = new Date()
+  const cutoff = new Date(now.getTime() - days * 24 * 60 * 60 * 1000)
+  return logs.filter(log => {
+    const logDate = new Date(log.sessionDate)
+    return logDate >= cutoff && logDate <= now
+  })
+}
+
+function calculateAverageDaysPerWeek(logs: WorkoutLog[], weeks: number): number {
+  const recentLogs = getWorkoutsInDateRange(logs, weeks * 7)
+  if (recentLogs.length === 0) return 0
+  return Math.round((recentLogs.length / weeks) * 10) / 10
+}
+
+function analyzeSchedulePatterns(logs: WorkoutLog[]): ScheduleAnalysis {
+  const profile = getOnboardingProfile()
+  const intendedDays = profile?.weeklyTraining 
+    ? mapWeeklyTrainingToDays(profile.weeklyTraining)
+    : 3
+  
+  const actualDays = calculateAverageDaysPerWeek(logs, SCHEDULE_THRESHOLDS.weeksForPattern)
+  const difference = intendedDays - actualDays
+  const scheduleMismatch = Math.abs(difference) >= SCHEDULE_THRESHOLDS.significantMismatch
+  
+  // Check weekly variance for pattern consistency
+  const week1 = getWorkoutsInDateRange(logs, 7).length
+  const week2 = getWorkoutsInDateRange(logs, 14).length - week1
+  const week3 = getWorkoutsInDateRange(logs, 21).length - getWorkoutsInDateRange(logs, 14).length
+  const weeklyVariance = Math.max(week1, week2, week3) - Math.min(week1, week2, week3)
+  const consistentPattern = weeklyVariance <= 1
+  
+  let adaptation: ScheduleAdaptation = 'maintain'
+  let adaptationReason = 'Training frequency matches your target.'
+  let recommendedDays = intendedDays
+  let temporaryReduction = false
+  
+  if (scheduleMismatch) {
+    if (actualDays < intendedDays) {
+      if (consistentPattern) {
+        adaptation = 'reduce'
+        recommendedDays = Math.max(2, Math.round(actualDays))
+        adaptationReason = `Adapting to your actual ${recommendedDays}-day training pattern.`
+      } else {
+        adaptation = 'reduce'
+        recommendedDays = Math.max(2, intendedDays - 1)
+        temporaryReduction = true
+        adaptationReason = 'Reducing volume temporarily while you settle into a rhythm.'
+      }
+    } else {
+      adaptation = 'increase'
+      recommendedDays = Math.min(6, Math.round(actualDays))
+      adaptationReason = `You're training more than planned. Adjusted to ${recommendedDays} days.`
+    }
+  }
+  
+  return {
+    intendedDaysPerWeek: intendedDays,
+    actualDaysPerWeek: actualDays,
+    scheduleMismatch,
+    consistentPattern,
+    adaptation,
+    adaptationReason,
+    recommendedDays,
+    temporaryReduction,
+  }
+}
+
+function analyzeVolumePatterns(logs: WorkoutLog[]): VolumeAnalysis {
+  const recentLogs = getWorkoutsInDateRange(logs, 14)
+  
+  if (recentLogs.length === 0) {
+    return {
+      avgSetsPerSession: 0,
+      avgExercisesPerSession: 0,
+      avgDurationMinutes: 0,
+      exerciseCompletionRate: 100,
+      setCompletionRate: 100,
+      volumeAdjustment: 'maintain',
+      adjustmentReason: 'Not enough data to analyze volume patterns.',
+      recommendedVolumeModifier: 1.0,
+    }
+  }
+  
+  let totalSets = 0, completedSets = 0, totalExercises = 0, completedExercises = 0, totalDuration = 0
+  
+  for (const log of recentLogs) {
+    totalDuration += log.durationMinutes
+    totalExercises += log.exercises.length
+    completedExercises += log.exercises.filter(e => e.completed).length
+    for (const exercise of log.exercises) {
+      totalSets += exercise.sets
+      if (exercise.completed) completedSets += exercise.sets
+    }
+  }
+  
+  const avgSetsPerSession = Math.round(totalSets / recentLogs.length)
+  const avgExercisesPerSession = Math.round(totalExercises / recentLogs.length)
+  const avgDurationMinutes = Math.round(totalDuration / recentLogs.length)
+  const exerciseCompletionRate = Math.round((completedExercises / Math.max(1, totalExercises)) * 100)
+  const setCompletionRate = Math.round((completedSets / Math.max(1, totalSets)) * 100)
+  
+  let volumeAdjustment: VolumeAdjustment = 'maintain'
+  let adjustmentReason = 'Volume is appropriate for your completion rate.'
+  let recommendedVolumeModifier = 1.0
+  
+  if (setCompletionRate < VOLUME_THRESHOLDS.reduceBelow) {
+    volumeAdjustment = 'reduce'
+    recommendedVolumeModifier = 0.85
+    adjustmentReason = 'Reducing volume to improve completion rate and quality.'
+  } else if (setCompletionRate >= VOLUME_THRESHOLDS.increaseAbove && recentLogs.length >= 4) {
+    volumeAdjustment = 'increase'
+    recommendedVolumeModifier = 1.1
+    adjustmentReason = 'Excellent completion rate. Adding volume for continued progress.'
+  }
+  
+  return {
+    avgSetsPerSession,
+    avgExercisesPerSession,
+    avgDurationMinutes,
+    exerciseCompletionRate,
+    setCompletionRate,
+    volumeAdjustment,
+    adjustmentReason,
+    recommendedVolumeModifier,
+  }
+}
+
+function analyzeTimePatterns(logs: WorkoutLog[]): TimeConstraintAnalysis {
+  const profile = getOnboardingProfile()
+  const recentLogs = getWorkoutsInDateRange(logs, 14)
+  
+  let intendedDuration = 45
+  if (profile?.trainingTime) {
+    const timeMap: Record<string, number> = {
+      '15_30': 25, '30_45': 37, '45_60': 52, '60_plus': 70,
+    }
+    intendedDuration = timeMap[profile.trainingTime] || 45
+  }
+  
+  if (recentLogs.length === 0) {
+    return {
+      intendedDuration,
+      avgActualDuration: intendedDuration,
+      consistentlyShort: false,
+      shouldPrioritize: false,
+      priorityOrder: ['skill', 'strength', 'accessory', 'mobility'],
+      dropAccessoryWork: false,
+      dropMobilityWork: false,
+    }
+  }
+  
+  const avgActualDuration = Math.round(
+    recentLogs.reduce((sum, log) => sum + log.durationMinutes, 0) / recentLogs.length
+  )
+  
+  const shortSessions = recentLogs.filter(log => log.durationMinutes < intendedDuration * 0.8)
+  const consistentlyShort = shortSessions.length >= recentLogs.length * 0.7
+  
+  let shouldPrioritize = false
+  let priorityOrder: ('skill' | 'strength' | 'accessory' | 'mobility')[] = ['skill', 'strength', 'accessory', 'mobility']
+  let dropAccessoryWork = false
+  let dropMobilityWork = false
+  
+  if (consistentlyShort) {
+    shouldPrioritize = true
+    if (avgActualDuration < 30) {
+      dropAccessoryWork = true
+      dropMobilityWork = true
+    } else if (avgActualDuration < 45) {
+      priorityOrder = ['skill', 'strength', 'mobility', 'accessory']
+      dropAccessoryWork = true
+    }
+  }
+  
+  return {
+    intendedDuration,
+    avgActualDuration,
+    consistentlyShort,
+    shouldPrioritize,
+    priorityOrder,
+    dropAccessoryWork,
+    dropMobilityWork,
+  }
+}
+
+function analyzeOverallTrend(logs: WorkoutLog[]): ProgressTrendAnalysis {
+  const recentLogs = getWorkoutsInDateRange(logs, 21)
+  
+  if (recentLogs.length < 3) {
+    return {
+      overallTrend: 'stable',
+      trendConfidence: 'low',
+      strengthTrend: 'stable',
+      skillTrend: 'stable',
+      consistencyTrend: 'stable',
+      trendSummary: 'Not enough data to analyze progress trends.',
+    }
+  }
+  
+  // Analyze consistency trend
+  const week1 = getWorkoutsInDateRange(logs, 7).length
+  const week2 = getWorkoutsInDateRange(logs, 14).length - week1
+  const week3 = recentLogs.length - getWorkoutsInDateRange(logs, 14).length
+  
+  let consistencyTrend: 'improving' | 'stable' | 'declining' = 'stable'
+  if (week1 > week2 && week2 > week3) consistencyTrend = 'improving'
+  else if (week1 < week2 && week2 < week3) consistencyTrend = 'declining'
+  
+  // Analyze completion rates
+  const week1Logs = getWorkoutsInDateRange(logs, 7)
+  const week1Completion = week1Logs.length > 0
+    ? week1Logs.reduce((sum, log) => sum + log.exercises.filter(e => e.completed).length, 0) / 
+      Math.max(1, week1Logs.reduce((sum, log) => sum + log.exercises.length, 0))
+    : 0.8
+  
+  const week2Logs = recentLogs.filter(log => {
+    const daysAgo = (Date.now() - new Date(log.sessionDate).getTime()) / (1000 * 60 * 60 * 24)
+    return daysAgo > 7 && daysAgo <= 14
+  })
+  const week2Completion = week2Logs.length > 0
+    ? week2Logs.reduce((sum, log) => sum + log.exercises.filter(e => e.completed).length, 0) /
+      Math.max(1, week2Logs.reduce((sum, log) => sum + log.exercises.length, 0))
+    : 0.8
+  
+  let strengthTrend: 'improving' | 'stable' | 'declining' = 'stable'
+  const completionChange = week1Completion - week2Completion
+  if (completionChange > 0.1) strengthTrend = 'improving'
+  else if (completionChange < -0.1) strengthTrend = 'declining'
+  
+  // Skill trend
+  const skillLogs = recentLogs.filter(log => log.sessionType === 'skill' || log.focusArea !== 'general')
+  let skillTrend: 'improving' | 'stable' | 'declining' = 'stable'
+  if (skillLogs.length >= 3) {
+    const recentSkillCount = skillLogs.filter(log => {
+      const daysAgo = (Date.now() - new Date(log.sessionDate).getTime()) / (1000 * 60 * 60 * 24)
+      return daysAgo <= 7
+    }).length
+    const olderSkillCount = skillLogs.length - recentSkillCount
+    if (recentSkillCount > olderSkillCount) skillTrend = 'improving'
+    else if (recentSkillCount < olderSkillCount && olderSkillCount > 0) skillTrend = 'declining'
+  }
+  
+  // Overall
+  const improvingCount = [consistencyTrend, strengthTrend, skillTrend].filter(t => t === 'improving').length
+  const decliningCount = [consistencyTrend, strengthTrend, skillTrend].filter(t => t === 'declining').length
+  let overallTrend: 'improving' | 'stable' | 'declining' = 'stable'
+  if (improvingCount >= 2) overallTrend = 'improving'
+  else if (decliningCount >= 2) overallTrend = 'declining'
+  
+  let trendSummary = 'Training is stable. Continue building consistency.'
+  if (overallTrend === 'improving') trendSummary = 'Your training is progressing well. Keep up the momentum!'
+  else if (overallTrend === 'declining') trendSummary = 'Training patterns show some decline. Consider adjusting volume or recovery.'
+  
+  return {
+    overallTrend,
+    trendConfidence: recentLogs.length >= 6 ? 'high' : recentLogs.length >= 4 ? 'medium' : 'low',
+    strengthTrend,
+    skillTrend,
+    consistencyTrend,
+    trendSummary,
+  }
+}
+
+/**
+ * Evaluate overall training behavior and generate adaptive recommendations.
+ * Main entry point for schedule/volume/time adaptation.
+ */
+export function evaluateTrainingBehavior(): TrainingBehaviorResult {
+  const logs = getWorkoutLogs()
+  const recentLogs = getWorkoutsInDateRange(logs, 21)
+  
+  let dataQuality: 'insufficient' | 'limited' | 'good' | 'excellent' = 'insufficient'
+  if (recentLogs.length >= 9) dataQuality = 'excellent'
+  else if (recentLogs.length >= 6) dataQuality = 'good'
+  else if (recentLogs.length >= 3) dataQuality = 'limited'
+  
+  const scheduleAnalysis = analyzeSchedulePatterns(logs)
+  const volumeAnalysis = analyzeVolumePatterns(logs)
+  const timeConstraints = analyzeTimePatterns(logs)
+  const progressTrend = analyzeOverallTrend(logs)
+  
+  const adaptationNeeded = 
+    scheduleAnalysis.adaptation !== 'maintain' ||
+    volumeAnalysis.volumeAdjustment !== 'maintain' ||
+    timeConstraints.shouldPrioritize
+  
+  const coachMessages: string[] = []
+  if (scheduleAnalysis.adaptation !== 'maintain') coachMessages.push(scheduleAnalysis.adaptationReason)
+  if (volumeAnalysis.volumeAdjustment !== 'maintain') coachMessages.push(volumeAnalysis.adjustmentReason)
+  if (progressTrend.overallTrend === 'improving') coachMessages.push('Great progress! Your consistency is paying off.')
+  else if (progressTrend.overallTrend === 'declining') coachMessages.push('Training volume adjusted to help you recover.')
+  
+  let adaptationSummary = 'Training is on track. Continue as planned.'
+  if (adaptationNeeded) {
+    const changes: string[] = []
+    if (scheduleAnalysis.adaptation === 'reduce') changes.push('schedule adjustment')
+    if (volumeAnalysis.volumeAdjustment !== 'maintain') changes.push('volume adjustment')
+    adaptationSummary = `Adapting your program: ${changes.join(', ')}.`
+  }
+  
+  return {
+    calculatedAt: new Date().toISOString(),
+    adaptationNeeded,
+    adaptationSummary,
+    scheduleAnalysis,
+    volumeAnalysis,
+    timeConstraints,
+    progressTrend,
+    coachMessages: coachMessages.slice(0, 4),
+    dataQuality,
+    confidenceLevel: dataQuality === 'excellent' || dataQuality === 'good' ? 'high' : 
+                     dataQuality === 'limited' ? 'medium' : 'low',
+  }
+}
+
+/**
+ * Quick check if any schedule/volume adaptations are recommended
+ */
+export function hasTrainingAdaptations(): boolean {
+  const result = evaluateTrainingBehavior()
+  return result.adaptationNeeded
+}
+
+/**
+ * Get volume modifier based on current training patterns
+ */
+export function getAdaptiveVolumeModifier(): number {
+  const result = evaluateTrainingBehavior()
+  return result.volumeAnalysis.recommendedVolumeModifier
+}
+
+/**
+ * Get recommended training days based on actual patterns
+ */
+export function getAdaptiveTrainingDays(): number {
+  const result = evaluateTrainingBehavior()
+  return result.scheduleAnalysis.recommendedDays
+}
+
+/**
+ * Get a single coach message about current adaptations
+ */
+export function getAdaptationCoachMessage(): string | null {
+  const result = evaluateTrainingBehavior()
+  if (!result.adaptationNeeded || result.coachMessages.length === 0) return null
+  return result.coachMessages[0]
+}
+
+// =============================================================================
+// PERCEIVED DIFFICULTY BASED ADAPTATION
+// =============================================================================
+
+/**
+ * Analyze perceived difficulty trends and recommend adjustments
+ */
+export function analyzeDifficultyTrends(): {
+  recentDifficulty: 'easy' | 'normal' | 'hard' | 'mixed'
+  trend: 'getting_easier' | 'stable' | 'getting_harder'
+  recommendation: 'increase_intensity' | 'maintain' | 'reduce_volume' | 'add_recovery'
+  coachMessage: string
+} {
+  const logs = getWorkoutLogs()
+  const recentLogs = logs
+    .sort((a, b) => new Date(b.sessionDate).getTime() - new Date(a.sessionDate).getTime())
+    .slice(0, 10)
+    .filter(l => l.perceivedDifficulty)
+  
+  if (recentLogs.length < 3) {
+    return {
+      recentDifficulty: 'normal',
+      trend: 'stable',
+      recommendation: 'maintain',
+      coachMessage: 'Log more workouts with difficulty ratings to get personalized recommendations.'
+    }
+  }
+  
+  const difficultyScores = recentLogs.map(l => 
+    l.perceivedDifficulty === 'easy' ? 1 : l.perceivedDifficulty === 'normal' ? 2 : 3
+  )
+  
+  const avgDifficulty = difficultyScores.reduce((a, b) => a + b, 0) / difficultyScores.length
+  
+  // Determine predominant difficulty
+  let recentDifficulty: 'easy' | 'normal' | 'hard' | 'mixed' = 'normal'
+  if (avgDifficulty < 1.5) recentDifficulty = 'easy'
+  else if (avgDifficulty > 2.5) recentDifficulty = 'hard'
+  else if (Math.max(...difficultyScores) - Math.min(...difficultyScores) >= 2) recentDifficulty = 'mixed'
+  
+  // Analyze trend (first half vs second half)
+  const midpoint = Math.floor(difficultyScores.length / 2)
+  const recentHalf = difficultyScores.slice(0, midpoint)
+  const olderHalf = difficultyScores.slice(midpoint)
+  
+  const recentAvg = recentHalf.reduce((a, b) => a + b, 0) / (recentHalf.length || 1)
+  const olderAvg = olderHalf.reduce((a, b) => a + b, 0) / (olderHalf.length || 1)
+  
+  let trend: 'getting_easier' | 'stable' | 'getting_harder' = 'stable'
+  if (recentAvg > olderAvg + 0.3) trend = 'getting_harder'
+  else if (recentAvg < olderAvg - 0.3) trend = 'getting_easier'
+  
+  // Generate recommendation
+  let recommendation: 'increase_intensity' | 'maintain' | 'reduce_volume' | 'add_recovery' = 'maintain'
+  let coachMessage = 'Your training intensity is well-balanced.'
+  
+  if (recentDifficulty === 'easy' && trend !== 'getting_harder') {
+    recommendation = 'increase_intensity'
+    coachMessage = 'Workouts are feeling easy. Consider adding weight, reps, or progressing to harder variations.'
+  } else if (recentDifficulty === 'hard' && trend === 'getting_harder') {
+    recommendation = 'reduce_volume'
+    coachMessage = 'Training is getting consistently hard. Reduce volume slightly to prevent overtraining.'
+  } else if (recentDifficulty === 'hard') {
+    recommendation = 'add_recovery'
+    coachMessage = 'Recent workouts are challenging. Ensure adequate recovery between sessions.'
+  } else if (trend === 'getting_easier') {
+    recommendation = 'increase_intensity'
+    coachMessage = 'You\'re adapting well! Time to increase the challenge.'
+  }
+  
+  return { recentDifficulty, trend, recommendation, coachMessage }
+}
+
+/**
+ * Get volume modifier based on perceived difficulty
+ */
+export function getDifficultyBasedVolumeModifier(): number {
+  const analysis = analyzeDifficultyTrends()
+  
+  switch (analysis.recommendation) {
+    case 'increase_intensity':
+      return 1.1 // 10% more volume
+    case 'reduce_volume':
+      return 0.85 // 15% less volume
+    case 'add_recovery':
+      return 0.9 // 10% less volume
+    default:
+      return 1.0
+  }
 }

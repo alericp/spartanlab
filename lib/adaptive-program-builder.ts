@@ -12,7 +12,8 @@ import { calculateRecoverySignal } from './recovery-engine'
 import { getConstraintInsight } from './constraint-engine'
 import { getProgramBuilderContext } from './adaptive-athlete-engine'
 import { getAthleteCalibration, getProgramCalibrationAdjustments, type AthleteCalibration, type ProgramCalibrationAdjustments } from './athlete-calibration'
-import { getOnboardingProfile, type PrimaryTrainingOutcome, type TrainingPathType, type WorkoutDurationPreference } from './athlete-profile'
+import { getOnboardingProfile, type PrimaryTrainingOutcome, type TrainingPathType, type WorkoutDurationPreference, type PrimaryLimitation, type WeakestArea, type JointCaution } from './athlete-profile'
+import { detectWeakPoints, getVolumeDistribution, type WeakPointSummary } from './weak-point-detection'
 import { getUnifiedSkillIntelligence, generateTrainingAdjustments, type UnifiedSkillIntelligence } from './skill-intelligence-layer'
 import { getCompressionReadiness, shouldBiasTowardCompression, type CompressionReadinessResult } from './compression-readiness'
 import { selectOptimalStructure, getDayExplanation } from './program-structure-engine'
@@ -61,8 +62,12 @@ import {
   analyzeExerciseProgression,
   getProgressionInsights,
   getReadyToProgress,
+  evaluateTrainingBehavior,
+  getAdaptiveVolumeModifier,
+  getAdaptiveTrainingDays,
   type ProgressionAnalysis,
   type ProgressionInsight,
+  type TrainingBehaviorResult,
 } from './adaptive-progression-engine'
 import {
   validateExerciseSelection,
@@ -227,6 +232,16 @@ export interface AdaptiveProgram {
   // Adaptive Progression Engine - progression recommendations
   progressionInsights?: ProgressionInsight[]
   exercisesReadyToProgress?: string[]
+  // Weak Point Detection - automatic focus area detection
+  weakPointDetection?: {
+    primaryFocus: string
+    primaryFocusLabel: string
+    primaryFocusReason: string
+    secondaryFocus: string | null
+    mobilityEmphasis: string
+    volumeModifier: number
+    confidenceLevel: string
+  }
   // Recovery & Fatigue Engine - readiness assessment
   readinessAssessment?: {
     state: 'ready_to_push' | 'train_normally' | 'keep_controlled' | 'recovery_focused'
@@ -263,6 +278,19 @@ export interface AdaptiveProgram {
     shouldInclude: boolean
     frequency: 'none' | 'occasional' | 'regular' | 'primary'
     rationale: string
+  }
+  // Adaptive Progression Engine - training behavior analysis
+  trainingBehaviorAnalysis?: {
+    adaptationNeeded: boolean
+    adaptationSummary: string
+    coachMessages: string[]
+    scheduleAdaptation: 'maintain' | 'reduce' | 'increase'
+    recommendedDays: number
+    volumeAdjustment: 'reduce' | 'maintain' | 'increase'
+    volumeModifier: number
+    progressTrend: 'improving' | 'stable' | 'declining'
+    trendSummary: string
+    dataQuality: 'insufficient' | 'limited' | 'good' | 'excellent'
   }
 }
 
@@ -546,6 +574,22 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
     fatigueDecision = getQuickFatigueDecision()
   }
   
+  // Weak point detection for automatic focus area identification
+  const weakPointSummary = detectWeakPoints()
+  const volumeDistribution = getVolumeDistribution(weakPointSummary)
+  
+  // Get training behavior analysis for adaptive adjustments
+  let trainingBehavior: TrainingBehaviorResult | null = null
+  let adaptiveVolumeModifier = 1.0
+  try {
+    if (typeof window !== 'undefined') {
+      trainingBehavior = evaluateTrainingBehavior()
+      adaptiveVolumeModifier = trainingBehavior.volumeAnalysis.recommendedVolumeModifier
+    }
+  } catch {
+    // Training behavior analysis may fail with no workout logs
+  }
+  
   // Get unified skill intelligence for program prioritization
   // This aggregates readiness, support strength, tendon adaptation, and calibration
   const skillIntelligence = getUnifiedSkillIntelligence(
@@ -721,6 +765,29 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
         return undefined
       }
     })(),
+    // Weak Point Detection - automatic focus identification
+    weakPointDetection: weakPointSummary.confidenceLevel !== 'low' ? {
+      primaryFocus: weakPointSummary.primaryFocus,
+      primaryFocusLabel: weakPointSummary.primaryFocusLabel,
+      primaryFocusReason: weakPointSummary.primaryFocusReason,
+      secondaryFocus: weakPointSummary.secondaryFocusLabel,
+      mobilityEmphasis: weakPointSummary.mobilityEmphasis,
+      volumeModifier: weakPointSummary.volumeModifier,
+      confidenceLevel: weakPointSummary.confidenceLevel,
+    } : undefined,
+    // Adaptive Progression Engine - training behavior analysis
+    trainingBehaviorAnalysis: trainingBehavior ? {
+      adaptationNeeded: trainingBehavior.adaptationNeeded,
+      adaptationSummary: trainingBehavior.adaptationSummary,
+      coachMessages: trainingBehavior.coachMessages,
+      scheduleAdaptation: trainingBehavior.scheduleAnalysis.adaptation,
+      recommendedDays: trainingBehavior.scheduleAnalysis.recommendedDays,
+      volumeAdjustment: trainingBehavior.volumeAnalysis.volumeAdjustment,
+      volumeModifier: trainingBehavior.volumeAnalysis.recommendedVolumeModifier,
+      progressTrend: trainingBehavior.progressTrend.overallTrend,
+      trendSummary: trainingBehavior.progressTrend.trendSummary,
+      dataQuality: trainingBehavior.dataQuality,
+    } : undefined,
   }
 }
 

@@ -29,6 +29,7 @@ import {
 import { SpartanIcon } from '@/components/brand/SpartanLogo'
 import { trackOnboardingCompleted } from '@/lib/analytics'
 import { TestingGuideLink, DontKnowHelper } from '@/components/testing/TestingGuideModal'
+import { saveAthleteProfile } from '@/lib/data-service'
 import {
   type OnboardingProfile,
   type Sex,
@@ -69,6 +70,14 @@ import {
   type SkillHistoryEntry,
   type PrimaryTrainingOutcome,
   type TrainingPathType,
+  type PRTimeframe,
+  type AllTimePRBenchmark,
+  type PrimaryLimitation,
+  type WeakestArea,
+  type JointCaution,
+  PRIMARY_LIMITATION_LABELS,
+  WEAKEST_AREA_LABELS,
+  JOINT_CAUTION_LABELS,
   PRIMARY_TRAINING_OUTCOME_LABELS,
   PRIMARY_TRAINING_OUTCOME_DESCRIPTIONS,
   PRIMARY_TRAINING_OUTCOME_HELPER_TEXT,
@@ -102,6 +111,7 @@ import {
   EQUIPMENT_LABELS,
   SESSION_LENGTH_LABELS,
   SESSION_STYLE_LABELS,
+  SESSION_STYLE_DESCRIPTIONS,
   RECOVERY_LABELS,
   TRAINING_CONSISTENCY_LABELS,
   TRAINING_CONSISTENCY_DESCRIPTIONS,
@@ -115,6 +125,7 @@ import {
   SKILL_TRAINING_HISTORY_LABELS,
   SKILL_TRAINING_HISTORY_DESCRIPTIONS,
   SKILL_LAST_TRAINED_LABELS,
+  PR_TIMEFRAME_LABELS,
   calculateReadinessScores,
   calculateTendonAdaptation,
   saveOnboardingProfile,
@@ -289,9 +300,9 @@ function OptionButton({ selected, onClick, children, description, className = ''
     >
       {selected && <Check className="w-4 h-4 text-[#C1121F] shrink-0" />}
       <div className="flex-1 min-w-0">
-        <span className="truncate block">{children}</span>
+        <span className="block break-words">{children}</span>
         {description && (
-          <span className="text-xs text-[#6B7280] block mt-0.5">{description}</span>
+          <span className="text-xs text-[#6B7280] block mt-0.5 break-words">{description}</span>
         )}
       </div>
     </button>
@@ -705,6 +716,75 @@ function ReadinessCalibrationSection({ profile, updateProfile }: SectionProps) {
               {BODY_TYPE_LABELS[opt]}
             </OptionButton>
           ))}
+        </div>
+      </div>
+      
+      {/* Athlete Diagnostics Section */}
+      <div className="pt-4 mt-4 border-t border-[#2B313A]">
+        <p className="text-xs text-[#6B7280] pb-3">
+          Help us understand your unique training needs
+        </p>
+        
+        {/* Q6: Primary Limitation */}
+        <div className="space-y-3 mb-6">
+          <label className="text-sm font-medium text-[#A4ACB8]">What usually limits your progress the most?</label>
+          <div className="grid grid-cols-2 gap-2">
+            {(Object.keys(PRIMARY_LIMITATION_LABELS) as PrimaryLimitation[]).map((opt) => (
+              <OptionButton
+                key={opt}
+                selected={profile.primaryLimitation === opt}
+                onClick={() => updateProfile({ primaryLimitation: opt })}
+              >
+                {PRIMARY_LIMITATION_LABELS[opt]}
+              </OptionButton>
+            ))}
+          </div>
+        </div>
+        
+        {/* Q7: Weakest Area */}
+        <div className="space-y-3 mb-6">
+          <label className="text-sm font-medium text-[#A4ACB8]">Which area holds you back the most?</label>
+          <div className="grid grid-cols-2 gap-2">
+            {(Object.keys(WEAKEST_AREA_LABELS) as WeakestArea[]).map((opt) => (
+              <OptionButton
+                key={opt}
+                selected={profile.weakestArea === opt}
+                onClick={() => updateProfile({ weakestArea: opt })}
+              >
+                {WEAKEST_AREA_LABELS[opt]}
+              </OptionButton>
+            ))}
+          </div>
+        </div>
+        
+        {/* Q8: Joint Cautions (multi-select) */}
+        <div className="space-y-3">
+          <label className="text-sm font-medium text-[#A4ACB8]">Any joints we should protect while training?</label>
+          <p className="text-xs text-[#6B7280] -mt-1">Select all that apply</p>
+          <div className="grid grid-cols-3 gap-2">
+            {(Object.keys(JOINT_CAUTION_LABELS) as JointCaution[]).map((joint) => (
+              <OptionButton
+                key={joint}
+                selected={profile.jointCautions?.includes(joint) ?? false}
+                onClick={() => {
+                  const current = profile.jointCautions || []
+                  const updated = current.includes(joint)
+                    ? current.filter(j => j !== joint)
+                    : [...current, joint]
+                  updateProfile({ jointCautions: updated })
+                }}
+              >
+                {JOINT_CAUTION_LABELS[joint]}
+              </OptionButton>
+            ))}
+          </div>
+          <OptionButton
+            selected={profile.jointCautions?.length === 0 || !profile.jointCautions}
+            onClick={() => updateProfile({ jointCautions: [] })}
+            className="w-full"
+          >
+            None - all good
+          </OptionButton>
         </div>
       </div>
   </div>
@@ -1342,7 +1422,7 @@ function StrengthBenchmarksSection({ profile, updateProfile }: SectionProps) {
 
       {/* Max Pull-ups */}
       <div className="space-y-3">
-        <label className="text-sm font-medium text-[#A4ACB8]">Max strict pull-ups</label>
+        <label className="text-sm font-medium text-[#A4ACB8]">Current max strict pull-ups</label>
         <p className="text-xs text-[#6B7280] -mt-1">Dead hang to chin over bar, no kipping</p>
         <div className="grid grid-cols-4 gap-2">
           {pullupOptions.map((cap) => (
@@ -1367,7 +1447,7 @@ function StrengthBenchmarksSection({ profile, updateProfile }: SectionProps) {
 
       {/* Max Dips */}
       <div className="space-y-3">
-        <label className="text-sm font-medium text-[#A4ACB8]">Max dips</label>
+        <label className="text-sm font-medium text-[#A4ACB8]">Current max dips</label>
         <p className="text-xs text-[#6B7280] -mt-1">Parallel bar dips, full depth</p>
         <div className="grid grid-cols-4 gap-2">
           {dipOptions.map((cap) => (
@@ -1392,7 +1472,7 @@ function StrengthBenchmarksSection({ profile, updateProfile }: SectionProps) {
 
       {/* Max Push-ups */}
       <div className="space-y-3">
-        <label className="text-sm font-medium text-[#A4ACB8]">Max push-ups</label>
+        <label className="text-sm font-medium text-[#A4ACB8]">Current max push-ups</label>
         <p className="text-xs text-[#6B7280] -mt-1">Full range, chest to ground</p>
         <div className="grid grid-cols-3 gap-2">
           {pushupOptions.map((cap) => (
@@ -1417,7 +1497,7 @@ function StrengthBenchmarksSection({ profile, updateProfile }: SectionProps) {
 
       {/* Wall HSPU */}
       <div className="space-y-3">
-        <label className="text-sm font-medium text-[#A4ACB8]">Wall handstand push-ups</label>
+        <label className="text-sm font-medium text-[#A4ACB8]">Current wall handstand push-ups</label>
         <p className="text-xs text-[#6B7280] -mt-1">Full range against wall</p>
         <div className="grid grid-cols-5 gap-2">
           {hspuOptions.map((reps) => (
@@ -1440,10 +1520,10 @@ function StrengthBenchmarksSection({ profile, updateProfile }: SectionProps) {
         {profile.wallHSPUReps === 'unknown' && <DontKnowHint metricKey="wallHSPUReps" />}
       </div>
 
-      {/* Weighted Pull-up */}
+      {/* Current Weighted Pull-up */}
       <div className="space-y-3">
-        <label className="text-sm font-medium text-[#A4ACB8]">Best weighted pull-up <span className="text-[#6B7280]">(optional)</span></label>
-        <p className="text-xs text-[#6B7280] -mt-1">Weight added for 1-3 reps</p>
+        <label className="text-sm font-medium text-[#A4ACB8]">Current best weighted pull-up <span className="text-[#6B7280]">(optional)</span></label>
+        <p className="text-xs text-[#6B7280] -mt-1">Weight you can currently do for 1–5 reps</p>
         <div className="flex gap-2">
           <Input
             type="number"
@@ -1453,6 +1533,7 @@ function StrengthBenchmarksSection({ profile, updateProfile }: SectionProps) {
               weightedPullUp: {
                 load: e.target.value ? parseInt(e.target.value) : null,
                 unit: profile.weightedPullUp?.unit || 'lbs',
+                reps: profile.weightedPullUp?.reps,
               }
             })}
             className="flex-1 bg-[#0F1115] border-[#2B313A] text-[#E6E9EF]"
@@ -1478,12 +1559,123 @@ function StrengthBenchmarksSection({ profile, updateProfile }: SectionProps) {
             </OptionButton>
           </div>
         </div>
+        {profile.weightedPullUp?.load && (
+          <div className="space-y-1.5">
+            <label className="text-xs text-[#6B7280]">Reps at this weight</label>
+            <div className="flex gap-1.5">
+              {[1, 2, 3, 4, 5].map((rep) => (
+                <button
+                  key={rep}
+                  type="button"
+                  onClick={() => updateProfile({
+                    weightedPullUp: { ...profile.weightedPullUp!, reps: rep }
+                  })}
+                  className={`px-3 py-1.5 rounded text-xs transition-colors ${
+                    profile.weightedPullUp?.reps === rep
+                      ? 'bg-[#4F6D8A] text-white'
+                      : 'bg-[#1A1D24] text-[#A4ACB8] hover:bg-[#2B313A]'
+                  }`}
+                >
+                  {rep}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Weighted Dip */}
+      {/* All-time PR Weighted Pull-up */}
+      <div className="space-y-3 border-t border-[#2B313A] pt-4">
+        <label className="text-sm font-medium text-[#A4ACB8]">All-time best weighted pull-up <span className="text-[#6B7280]">(optional)</span></label>
+        <p className="text-xs text-[#6B7280] -mt-1">Most weight you ever added successfully</p>
+        <div className="flex gap-2">
+          <Input
+            type="number"
+            placeholder="Weight"
+            value={profile.allTimePRPullUp?.load || ''}
+            onChange={(e) => updateProfile({
+              allTimePRPullUp: {
+                load: e.target.value ? parseInt(e.target.value) : null,
+                unit: profile.allTimePRPullUp?.unit || 'lbs',
+                reps: profile.allTimePRPullUp?.reps,
+                timeframe: profile.allTimePRPullUp?.timeframe || 'current',
+              }
+            })}
+            className="flex-1 bg-[#0F1115] border-[#2B313A] text-[#E6E9EF]"
+          />
+          <div className="flex gap-1">
+            <OptionButton
+              selected={profile.allTimePRPullUp?.unit === 'lbs'}
+              onClick={() => updateProfile({
+                allTimePRPullUp: { ...profile.allTimePRPullUp, unit: 'lbs', load: profile.allTimePRPullUp?.load ?? null, timeframe: profile.allTimePRPullUp?.timeframe || 'current' }
+              })}
+              className="px-3"
+            >
+              lbs
+            </OptionButton>
+            <OptionButton
+              selected={profile.allTimePRPullUp?.unit === 'kg'}
+              onClick={() => updateProfile({
+                allTimePRPullUp: { ...profile.allTimePRPullUp, unit: 'kg', load: profile.allTimePRPullUp?.load ?? null, timeframe: profile.allTimePRPullUp?.timeframe || 'current' }
+              })}
+              className="px-3"
+            >
+              kg
+            </OptionButton>
+          </div>
+        </div>
+        {profile.allTimePRPullUp?.load && (
+          <>
+            <div className="space-y-1.5">
+              <label className="text-xs text-[#6B7280]">Reps at PR weight</label>
+              <div className="flex gap-1.5">
+                {[1, 2, 3, 4, 5].map((rep) => (
+                  <button
+                    key={rep}
+                    type="button"
+                    onClick={() => updateProfile({
+                      allTimePRPullUp: { ...profile.allTimePRPullUp!, reps: rep }
+                    })}
+                    className={`px-3 py-1.5 rounded text-xs transition-colors ${
+                      profile.allTimePRPullUp?.reps === rep
+                        ? 'bg-[#4F6D8A] text-white'
+                        : 'bg-[#1A1D24] text-[#A4ACB8] hover:bg-[#2B313A]'
+                    }`}
+                  >
+                    {rep}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs text-[#6B7280]">When was this PR?</label>
+              <div className="grid grid-cols-2 gap-1.5">
+                {(Object.keys(PR_TIMEFRAME_LABELS) as PRTimeframe[]).map((tf) => (
+                  <button
+                    key={tf}
+                    type="button"
+                    onClick={() => updateProfile({
+                      allTimePRPullUp: { ...profile.allTimePRPullUp!, timeframe: tf }
+                    })}
+                    className={`px-2 py-1.5 rounded text-xs transition-colors ${
+                      profile.allTimePRPullUp?.timeframe === tf
+                        ? 'bg-[#4F6D8A] text-white'
+                        : 'bg-[#1A1D24] text-[#A4ACB8] hover:bg-[#2B313A]'
+                    }`}
+                  >
+                    {PR_TIMEFRAME_LABELS[tf]}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* Current Weighted Dip */}
       <div className="space-y-3">
-        <label className="text-sm font-medium text-[#A4ACB8]">Best weighted dip <span className="text-[#6B7280]">(optional)</span></label>
-        <p className="text-xs text-[#6B7280] -mt-1">Weight added for 1-3 reps</p>
+        <label className="text-sm font-medium text-[#A4ACB8]">Current best weighted dip <span className="text-[#6B7280]">(optional)</span></label>
+        <p className="text-xs text-[#6B7280] -mt-1">Weight you can currently do for 1–5 reps</p>
         <div className="flex gap-2">
           <Input
             type="number"
@@ -1493,6 +1685,7 @@ function StrengthBenchmarksSection({ profile, updateProfile }: SectionProps) {
               weightedDip: {
                 load: e.target.value ? parseInt(e.target.value) : null,
                 unit: profile.weightedDip?.unit || 'lbs',
+                reps: profile.weightedDip?.reps,
               }
             })}
             className="flex-1 bg-[#0F1115] border-[#2B313A] text-[#E6E9EF]"
@@ -1518,6 +1711,117 @@ function StrengthBenchmarksSection({ profile, updateProfile }: SectionProps) {
             </OptionButton>
           </div>
         </div>
+        {profile.weightedDip?.load && (
+          <div className="space-y-1.5">
+            <label className="text-xs text-[#6B7280]">Reps at this weight</label>
+            <div className="flex gap-1.5">
+              {[1, 2, 3, 4, 5].map((rep) => (
+                <button
+                  key={rep}
+                  type="button"
+                  onClick={() => updateProfile({
+                    weightedDip: { ...profile.weightedDip!, reps: rep }
+                  })}
+                  className={`px-3 py-1.5 rounded text-xs transition-colors ${
+                    profile.weightedDip?.reps === rep
+                      ? 'bg-[#4F6D8A] text-white'
+                      : 'bg-[#1A1D24] text-[#A4ACB8] hover:bg-[#2B313A]'
+                  }`}
+                >
+                  {rep}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* All-time PR Weighted Dip */}
+      <div className="space-y-3 border-t border-[#2B313A] pt-4">
+        <label className="text-sm font-medium text-[#A4ACB8]">All-time best weighted dip <span className="text-[#6B7280]">(optional)</span></label>
+        <p className="text-xs text-[#6B7280] -mt-1">Most weight you ever added successfully</p>
+        <div className="flex gap-2">
+          <Input
+            type="number"
+            placeholder="Weight"
+            value={profile.allTimePRDip?.load || ''}
+            onChange={(e) => updateProfile({
+              allTimePRDip: {
+                load: e.target.value ? parseInt(e.target.value) : null,
+                unit: profile.allTimePRDip?.unit || 'lbs',
+                reps: profile.allTimePRDip?.reps,
+                timeframe: profile.allTimePRDip?.timeframe || 'current',
+              }
+            })}
+            className="flex-1 bg-[#0F1115] border-[#2B313A] text-[#E6E9EF]"
+          />
+          <div className="flex gap-1">
+            <OptionButton
+              selected={profile.allTimePRDip?.unit === 'lbs'}
+              onClick={() => updateProfile({
+                allTimePRDip: { ...profile.allTimePRDip, unit: 'lbs', load: profile.allTimePRDip?.load ?? null, timeframe: profile.allTimePRDip?.timeframe || 'current' }
+              })}
+              className="px-3"
+            >
+              lbs
+            </OptionButton>
+            <OptionButton
+              selected={profile.allTimePRDip?.unit === 'kg'}
+              onClick={() => updateProfile({
+                allTimePRDip: { ...profile.allTimePRDip, unit: 'kg', load: profile.allTimePRDip?.load ?? null, timeframe: profile.allTimePRDip?.timeframe || 'current' }
+              })}
+              className="px-3"
+            >
+              kg
+            </OptionButton>
+          </div>
+        </div>
+        {profile.allTimePRDip?.load && (
+          <>
+            <div className="space-y-1.5">
+              <label className="text-xs text-[#6B7280]">Reps at PR weight</label>
+              <div className="flex gap-1.5">
+                {[1, 2, 3, 4, 5].map((rep) => (
+                  <button
+                    key={rep}
+                    type="button"
+                    onClick={() => updateProfile({
+                      allTimePRDip: { ...profile.allTimePRDip!, reps: rep }
+                    })}
+                    className={`px-3 py-1.5 rounded text-xs transition-colors ${
+                      profile.allTimePRDip?.reps === rep
+                        ? 'bg-[#4F6D8A] text-white'
+                        : 'bg-[#1A1D24] text-[#A4ACB8] hover:bg-[#2B313A]'
+                    }`}
+                  >
+                    {rep}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs text-[#6B7280]">When was this PR?</label>
+              <div className="grid grid-cols-2 gap-1.5">
+                {(Object.keys(PR_TIMEFRAME_LABELS) as PRTimeframe[]).map((tf) => (
+                  <button
+                    key={tf}
+                    type="button"
+                    onClick={() => updateProfile({
+                      allTimePRDip: { ...profile.allTimePRDip!, timeframe: tf }
+                    })}
+                    className={`px-2 py-1.5 rounded text-xs transition-colors ${
+                      profile.allTimePRDip?.timeframe === tf
+                        ? 'bg-[#4F6D8A] text-white'
+                        : 'bg-[#1A1D24] text-[#A4ACB8] hover:bg-[#2B313A]'
+                    }`}
+                  >
+                    {PR_TIMEFRAME_LABELS[tf]}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </>
+        )}
       </div>
     </div>
   )
@@ -1576,7 +1880,7 @@ function SkillHistoryInput({ skillKey, skillLabel, profile, updateProfile }: Ski
   return (
     <div className="bg-[#0F1115] border border-[#2B313A] rounded-lg p-3 space-y-3">
       <div className="space-y-2">
-        <label className="text-xs text-[#6B7280]">Have you trained {skillLabel} before?</label>
+        <label className="text-xs text-[#6B7280]">Past experience with {skillLabel}</label>
         <div className="grid grid-cols-2 gap-1.5">
           {historyOptions.map((opt) => (
             <button
@@ -1599,7 +1903,7 @@ function SkillHistoryInput({ skillKey, skillLabel, profile, updateProfile }: Ski
       
       {showLastTrained && (
         <div className="space-y-2 pt-2 border-t border-[#2B313A]">
-          <label className="text-xs text-[#6B7280]">When did you last train it seriously?</label>
+          <label className="text-xs text-[#6B7280]">When did you last train this seriously?</label>
           <div className="grid grid-cols-2 gap-1.5">
             {lastTrainedOptions.map((opt) => (
               <button
@@ -1640,7 +1944,8 @@ function SkillBenchmarksSection({ profile, updateProfile }: SectionProps) {
       {/* Front Lever */}
       {hasSkill('front_lever') && (
         <div className="space-y-3">
-          <label className="text-sm font-medium text-[#A4ACB8]">Front Lever progression</label>
+          <label className="text-sm font-medium text-[#A4ACB8]">Current front lever level</label>
+          <p className="text-xs text-[#6B7280] -mt-1">Your current usable progression</p>
           <div className="grid grid-cols-3 gap-2">
             {flOptions.map((prog) => (
               <OptionButton
@@ -1663,7 +1968,8 @@ function SkillBenchmarksSection({ profile, updateProfile }: SectionProps) {
           </OptionButton>
           {profile.frontLever?.progression && profile.frontLever.progression !== 'none' && profile.frontLever.progression !== 'unknown' && (
             <div className="mt-2">
-              <label className="text-xs text-[#6B7280]">Best hold (seconds) — optional</label>
+              <label className="text-xs text-[#6B7280]">Current best hold (seconds) — optional</label>
+              <p className="text-[10px] text-[#4F5D6B] mb-1">Use your current usable hold, not all-time best</p>
               <Input
                 type="number"
                 placeholder="e.g. 10"
@@ -1691,7 +1997,8 @@ function SkillBenchmarksSection({ profile, updateProfile }: SectionProps) {
       {/* Planche */}
       {hasSkill('planche') && (
         <div className="space-y-3">
-          <label className="text-sm font-medium text-[#A4ACB8]">Planche progression</label>
+          <label className="text-sm font-medium text-[#A4ACB8]">Current planche level</label>
+          <p className="text-xs text-[#6B7280] -mt-1">Your current usable progression</p>
           <div className="grid grid-cols-3 gap-2">
             {plancheOptions.map((prog) => (
               <OptionButton
@@ -1714,7 +2021,8 @@ function SkillBenchmarksSection({ profile, updateProfile }: SectionProps) {
           </OptionButton>
           {profile.planche?.progression && profile.planche.progression !== 'none' && profile.planche.progression !== 'unknown' && (
             <div className="mt-2">
-              <label className="text-xs text-[#6B7280]">Best hold (seconds) — optional</label>
+              <label className="text-xs text-[#6B7280]">Current best hold (seconds) — optional</label>
+              <p className="text-[10px] text-[#4F5D6B] mb-1">Use your current usable hold, not all-time best</p>
               <Input
                 type="number"
                 placeholder="e.g. 10"
@@ -1742,7 +2050,7 @@ function SkillBenchmarksSection({ profile, updateProfile }: SectionProps) {
       {/* Muscle-Up */}
       {hasSkill('muscle_up') && (
         <div className="space-y-3">
-          <label className="text-sm font-medium text-[#A4ACB8]">Muscle-Up readiness</label>
+          <label className="text-sm font-medium text-[#A4ACB8]">Current muscle-up ability</label>
           <div className="grid grid-cols-2 gap-2">
             {muOptions.map((level) => (
               <OptionButton
@@ -1774,7 +2082,7 @@ function SkillBenchmarksSection({ profile, updateProfile }: SectionProps) {
       {/* HSPU */}
       {hasSkill('handstand_pushup') && (
         <div className="space-y-3">
-          <label className="text-sm font-medium text-[#A4ACB8]">HSPU progression</label>
+          <label className="text-sm font-medium text-[#A4ACB8]">Current HSPU level</label>
           <div className="grid grid-cols-2 gap-2">
             {hspuOptions.map((prog) => (
               <OptionButton
@@ -1808,7 +2116,7 @@ function SkillBenchmarksSection({ profile, updateProfile }: SectionProps) {
       {/* L-Sit */}
       {hasSkill('l_sit') && (
         <div className="space-y-3">
-          <label className="text-sm font-medium text-[#A4ACB8]">L-Sit hold</label>
+          <label className="text-sm font-medium text-[#A4ACB8]">Current L-sit hold</label>
           <div className="grid grid-cols-3 gap-2">
             {lsitOptions.map((hold) => (
               <OptionButton
@@ -1840,7 +2148,7 @@ function SkillBenchmarksSection({ profile, updateProfile }: SectionProps) {
       {/* V-Sit */}
       {hasSkill('v_sit') && (
         <div className="space-y-3">
-          <label className="text-sm font-medium text-[#A4ACB8]">V-Sit hold</label>
+          <label className="text-sm font-medium text-[#A4ACB8]">Current V-sit hold</label>
           <div className="grid grid-cols-2 gap-2">
             {vsitOptions.map((hold) => (
               <OptionButton
@@ -2145,14 +2453,15 @@ function ScheduleSection({ profile, updateProfile }: SectionProps) {
 
       {/* Session style */}
       <div className="space-y-3">
-        <label className="text-sm font-medium text-[#A4ACB8]">What's your training style?</label>
-        <p className="text-xs text-[#6B7280] -mt-1">How do you prefer to structure workouts?</p>
+        <label className="text-sm font-medium text-[#A4ACB8]">Preferred session style</label>
+        <p className="text-xs text-[#6B7280] -mt-1">How much time do you want to invest per workout?</p>
         <div className="grid grid-cols-1 gap-2">
           {(Object.keys(SESSION_STYLE_LABELS) as SessionStylePreference[]).map((style) => (
             <OptionButton
               key={style}
               selected={profile.sessionStyle === style}
               onClick={() => updateProfile({ sessionStyle: style })}
+              description={SESSION_STYLE_DESCRIPTIONS[style]}
             >
               {SESSION_STYLE_LABELS[style]}
             </OptionButton>
@@ -2279,26 +2588,95 @@ function ReviewSection({ profile, onEditSection }: ReviewSectionProps) {
 
   // Helper for strength summary
   const getStrengthSummary = () => {
-    const items = []
-    if (profile.pullUpMax && profile.pullUpMax !== 'unknown') items.push(`Pull-ups: ${PULLUP_LABELS[profile.pullUpMax]}`)
-    if (profile.dipMax && profile.dipMax !== 'unknown') items.push(`Dips: ${DIP_LABELS[profile.dipMax]}`)
-    if (profile.pushUpMax && profile.pushUpMax !== 'unknown') items.push(`Push-ups: ${PUSHUP_LABELS[profile.pushUpMax]}`)
-    return items.length > 0 ? items : null
+  const items = []
+  if (profile.pullUpMax && profile.pullUpMax !== 'unknown') items.push(`Pull-ups: ${PULLUP_LABELS[profile.pullUpMax]}`)
+  if (profile.dipMax && profile.dipMax !== 'unknown') items.push(`Dips: ${DIP_LABELS[profile.dipMax]}`)
+  if (profile.pushUpMax && profile.pushUpMax !== 'unknown') items.push(`Push-ups: ${PUSHUP_LABELS[profile.pushUpMax]}`)
+  
+  // Weighted pull-up with current vs all-time
+  if (profile.weightedPullUp?.load) {
+    const currentReps = profile.weightedPullUp.reps ? ` x ${profile.weightedPullUp.reps}` : ''
+    items.push(`Wtd. pull-up now: +${profile.weightedPullUp.load}${profile.weightedPullUp.unit}${currentReps}`)
+  }
+  if (profile.allTimePRPullUp?.load) {
+    const prReps = profile.allTimePRPullUp.reps ? ` x ${profile.allTimePRPullUp.reps}` : ''
+    const timeframe = profile.allTimePRPullUp.timeframe && profile.allTimePRPullUp.timeframe !== 'current' 
+      ? ` • ${PR_TIMEFRAME_LABELS[profile.allTimePRPullUp.timeframe]}` : ''
+    items.push(`Wtd. pull-up best: +${profile.allTimePRPullUp.load}${profile.allTimePRPullUp.unit}${prReps}${timeframe}`)
+  }
+  
+  // Weighted dip with current vs all-time
+  if (profile.weightedDip?.load) {
+    const currentReps = profile.weightedDip.reps ? ` x ${profile.weightedDip.reps}` : ''
+    items.push(`Wtd. dip now: +${profile.weightedDip.load}${profile.weightedDip.unit}${currentReps}`)
+  }
+  if (profile.allTimePRDip?.load) {
+    const prReps = profile.allTimePRDip.reps ? ` x ${profile.allTimePRDip.reps}` : ''
+    const timeframe = profile.allTimePRDip.timeframe && profile.allTimePRDip.timeframe !== 'current' 
+      ? ` • ${PR_TIMEFRAME_LABELS[profile.allTimePRDip.timeframe]}` : ''
+    items.push(`Wtd. dip best: +${profile.allTimePRDip.load}${profile.allTimePRDip.unit}${prReps}${timeframe}`)
+  }
+  
+  return items.length > 0 ? items : null
   }
 
-  // Helper for skill level summary
+  // Helper for skill level summary with history
   const getSkillSummary = () => {
-    const items = []
-    if (profile.frontLever?.progression && profile.frontLever.progression !== 'unknown' && profile.frontLever.progression !== 'none') {
-      items.push(`Front Lever: ${FRONT_LEVER_LABELS[profile.frontLever.progression]}`)
+  const items: string[] = []
+  
+  // Front Lever
+  if (profile.frontLever?.progression && profile.frontLever.progression !== 'unknown' && profile.frontLever.progression !== 'none') {
+    let flSummary = `Front Lever: ${FRONT_LEVER_LABELS[profile.frontLever.progression]}`
+    const flHistory = profile.skillHistory?.front_lever
+    if (flHistory?.trainingHistory && flHistory.trainingHistory !== 'never') {
+      flSummary += ` • ${SKILL_TRAINING_HISTORY_LABELS[flHistory.trainingHistory]}`
+      if (flHistory.lastTrained) {
+        flSummary += ` (${SKILL_LAST_TRAINED_LABELS[flHistory.lastTrained]})`
+      }
     }
-    if (profile.planche?.progression && profile.planche.progression !== 'unknown' && profile.planche.progression !== 'none') {
-      items.push(`Planche: ${PLANCHE_LABELS[profile.planche.progression]}`)
+    items.push(flSummary)
+  }
+  
+  // Planche
+  if (profile.planche?.progression && profile.planche.progression !== 'unknown' && profile.planche.progression !== 'none') {
+    let plSummary = `Planche: ${PLANCHE_LABELS[profile.planche.progression]}`
+    const plHistory = profile.skillHistory?.planche
+    if (plHistory?.trainingHistory && plHistory.trainingHistory !== 'never') {
+      plSummary += ` • ${SKILL_TRAINING_HISTORY_LABELS[plHistory.trainingHistory]}`
+      if (plHistory.lastTrained) {
+        plSummary += ` (${SKILL_LAST_TRAINED_LABELS[plHistory.lastTrained]})`
+      }
     }
-    if (profile.muscleUp && profile.muscleUp !== 'unknown' && profile.muscleUp !== 'none') {
-      items.push(`Muscle-Up: ${MUSCLE_UP_LABELS[profile.muscleUp]}`)
+    items.push(plSummary)
+  }
+  
+  // Muscle-Up
+  if (profile.muscleUp && profile.muscleUp !== 'unknown' && profile.muscleUp !== 'none') {
+    let muSummary = `Muscle-Up: ${MUSCLE_UP_LABELS[profile.muscleUp]}`
+    const muHistory = profile.skillHistory?.muscle_up
+    if (muHistory?.trainingHistory && muHistory.trainingHistory !== 'never') {
+      muSummary += ` • ${SKILL_TRAINING_HISTORY_LABELS[muHistory.trainingHistory]}`
+      if (muHistory.lastTrained) {
+        muSummary += ` (${SKILL_LAST_TRAINED_LABELS[muHistory.lastTrained]})`
+      }
     }
-    return items.length > 0 ? items : null
+    items.push(muSummary)
+  }
+  
+  // HSPU
+  if (profile.hspu?.progression && profile.hspu.progression !== 'unknown' && profile.hspu.progression !== 'none') {
+    let hspuSummary = `HSPU: ${HSPU_LABELS[profile.hspu.progression]}`
+    const hspuHistory = profile.skillHistory?.handstand_pushup
+    if (hspuHistory?.trainingHistory && hspuHistory.trainingHistory !== 'never') {
+      hspuSummary += ` • ${SKILL_TRAINING_HISTORY_LABELS[hspuHistory.trainingHistory]}`
+      if (hspuHistory.lastTrained) {
+        hspuSummary += ` (${SKILL_LAST_TRAINED_LABELS[hspuHistory.lastTrained]})`
+      }
+    }
+    items.push(hspuSummary)
+  }
+  
+  return items.length > 0 ? items : null
   }
 
   const EditButton = ({ section }: { section: SectionId }) => (
@@ -2421,9 +2799,11 @@ function ReviewSection({ profile, onEditSection }: ReviewSectionProps) {
             <span className="text-[#6B7280] text-xs uppercase tracking-wide">Training Schedule</span>
             <EditButton section="schedule" />
           </div>
-          <div className="text-[#E6E9EF]">
-            {profile.trainingDaysPerWeek || '?'} days/week
-            {profile.sessionLengthMinutes && ` • ${SESSION_LENGTH_LABELS[profile.sessionLengthMinutes as SessionLengthPreference]}`}
+          <div className="text-[#E6E9EF] text-xs space-y-0.5">
+            <div>{profile.trainingDaysPerWeek || '?'} days/week{profile.sessionLengthMinutes && ` • ${SESSION_LENGTH_LABELS[profile.sessionLengthMinutes as SessionLengthPreference]}`}</div>
+            {profile.sessionStyle && (
+              <div className="text-[#A4ACB8]">Style: {SESSION_STYLE_LABELS[profile.sessionStyle]}</div>
+            )}
           </div>
         </div>
 
@@ -2488,6 +2868,36 @@ function ReviewSection({ profile, onEditSection }: ReviewSectionProps) {
             <p className="text-[#6B7280] text-[10px] mt-2 text-center">
               These estimates help calibrate your starting program
             </p>
+          </div>
+        )}
+
+        {/* Athlete Diagnostics Summary */}
+        {(profile.primaryLimitation || profile.weakestArea || (profile.jointCautions && profile.jointCautions.length > 0)) && (
+          <div className="bg-[#0F1115] rounded-lg p-3 border border-[#2B313A]">
+            <div className="flex justify-between items-start mb-2">
+              <span className="text-[#6B7280] text-xs uppercase tracking-wide">Athlete Diagnostics</span>
+              <EditButton section="readiness" />
+            </div>
+            <div className="space-y-1.5 text-xs">
+              {profile.primaryLimitation && profile.primaryLimitation !== 'not_sure' && (
+                <div className="flex justify-between">
+                  <span className="text-[#6B7280]">Primary limitation:</span>
+                  <span className="text-[#E6E9EF]">{PRIMARY_LIMITATION_LABELS[profile.primaryLimitation]}</span>
+                </div>
+              )}
+              {profile.weakestArea && profile.weakestArea !== 'not_sure' && (
+                <div className="flex justify-between">
+                  <span className="text-[#6B7280]">Weakest area:</span>
+                  <span className="text-[#E6E9EF]">{WEAKEST_AREA_LABELS[profile.weakestArea]}</span>
+                </div>
+              )}
+              {profile.jointCautions && profile.jointCautions.length > 0 && (
+                <div className="flex justify-between">
+                  <span className="text-[#6B7280]">Joint protection:</span>
+                  <span className="text-[#E6E9EF]">{profile.jointCautions.map(j => JOINT_CAUTION_LABELS[j]).join(', ')}</span>
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>
@@ -2606,9 +3016,34 @@ export function AthleteOnboarding() {
     setIsSubmitting(true)
     
     try {
-      // Mark as complete and save
+      // Mark as complete and save onboarding profile
       const finalProfile = { ...profile, onboardingComplete: true }
       saveOnboardingProfile(finalProfile)
+      
+      // Sync key onboarding data to the athlete profile (used by program builder)
+      // This ensures the Program Builder doesn't ask the same questions again
+      saveAthleteProfile({
+        sex: profile.sex,
+        experienceLevel: profile.trainingExperience === 'new' || profile.trainingExperience === 'some' 
+          ? 'beginner' 
+          : profile.trainingExperience === 'intermediate' 
+            ? 'intermediate' 
+            : 'advanced',
+        trainingDaysPerWeek: typeof profile.trainingDaysPerWeek === 'number' 
+          ? profile.trainingDaysPerWeek 
+          : 4,
+        sessionLengthMinutes: typeof profile.sessionLengthMinutes === 'number'
+          ? (profile.sessionLengthMinutes <= 30 ? 30 
+             : profile.sessionLengthMinutes <= 45 ? 45 
+             : profile.sessionLengthMinutes <= 60 ? 60 
+             : 90)
+          : 60,
+        primaryGoal: profile.selectedSkills[0] || profile.primaryGoal || null,
+        equipmentAvailable: profile.equipment.filter(e => 
+          ['pullup_bar', 'dip_bars', 'parallettes', 'rings', 'resistance_bands'].includes(e)
+        ) as ('pullup_bar' | 'dip_bars' | 'parallettes' | 'rings' | 'resistance_bands')[],
+        onboardingComplete: true,
+      })
       
       // Small delay for UX
       await new Promise(resolve => setTimeout(resolve, 500))

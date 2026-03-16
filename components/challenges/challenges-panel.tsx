@@ -10,12 +10,18 @@ import {
   getAllChallengesWithProgress,
   getChallengesByPeriodWithProgress,
   getChallengeSummary,
+  getActiveChallengesWithProgress,
   type ChallengeWithProgress,
   type ChallengeSummary,
 } from '@/lib/challenges/challenge-engine'
-import { getCurrentSeasonInfo } from '@/lib/challenges/challenge-definitions'
+import { 
+  getCurrentSeasonInfo, 
+  getOpenHeadToHeadChallenges, 
+  type HeadToHeadChallenge,
+  CHALLENGE_CATEGORY_LABELS 
+} from '@/lib/challenges/challenge-definitions'
 import { ChallengeCard, ChallengeGrid, ChallengePreview } from './challenge-card'
-import { Trophy, ArrowRight, Flame, Target, Calendar } from 'lucide-react'
+import { Trophy, ArrowRight, Flame, Target, Calendar, Star, Dumbbell, Clock, Swords } from 'lucide-react'
 
 // =============================================================================
 // FULL CHALLENGES PANEL
@@ -25,10 +31,12 @@ interface ChallengesPanelProps {
   className?: string
 }
 
+type ChallengeTab = 'weekly' | 'monthly' | 'skill' | 'strength' | 'time' | 'seasonal'
+
 export function ChallengesPanel({ className }: ChallengesPanelProps) {
   const [challenges, setChallenges] = useState<ChallengeWithProgress[]>([])
   const [summary, setSummary] = useState<ChallengeSummary | null>(null)
-  const [activeTab, setActiveTab] = useState<'weekly' | 'monthly'>('weekly')
+  const [activeTab, setActiveTab] = useState<ChallengeTab>('weekly')
   
   useEffect(() => {
     setChallenges(getAllChallengesWithProgress())
@@ -37,6 +45,10 @@ export function ChallengesPanel({ className }: ChallengesPanelProps) {
   
   const weeklyChallenges = challenges.filter(c => c.period === 'weekly')
   const monthlyChallenges = challenges.filter(c => c.period === 'monthly')
+  const skillChallenges = challenges.filter(c => c.category === 'skill')
+  const strengthChallenges = challenges.filter(c => c.category === 'strength')
+  const timeChallenges = challenges.filter(c => c.category === 'time')
+  const seasonalChallenges = challenges.filter(c => c.period === 'seasonal')
   const currentSeason = getCurrentSeasonInfo()
   
   return (
@@ -50,10 +62,10 @@ export function ChallengesPanel({ className }: ChallengesPanelProps) {
             </div>
             <div>
               <h2 className="font-semibold text-[#E6E9EF]">
-                {currentSeason.displayName}
+                {currentSeason.name}
               </h2>
               <p className="text-sm text-[#9CA3AF]">
-                {currentSeason.description}
+                {currentSeason.theme}
               </p>
             </div>
           </div>
@@ -78,16 +90,34 @@ export function ChallengesPanel({ className }: ChallengesPanelProps) {
       )}
       
       {/* Challenge Tabs */}
-      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'weekly' | 'monthly')}>
-        <TabsList className="bg-[#1A1D23] border border-[#2A2F38]">
-          <TabsTrigger value="weekly" className="data-[state=active]:bg-[#2A2F38]">
-            <Flame className="w-4 h-4 mr-2" />
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as ChallengeTab)}>
+        <TabsList className="bg-[#1A1D23] border border-[#2A2F38] flex flex-wrap h-auto gap-1 p-1">
+          <TabsTrigger value="weekly" className="data-[state=active]:bg-[#2A2F38] text-xs sm:text-sm">
+            <Flame className="w-3.5 h-3.5 mr-1.5" />
             Weekly ({weeklyChallenges.length})
           </TabsTrigger>
-          <TabsTrigger value="monthly" className="data-[state=active]:bg-[#2A2F38]">
-            <Calendar className="w-4 h-4 mr-2" />
+          <TabsTrigger value="monthly" className="data-[state=active]:bg-[#2A2F38] text-xs sm:text-sm">
+            <Calendar className="w-3.5 h-3.5 mr-1.5" />
             Monthly ({monthlyChallenges.length})
           </TabsTrigger>
+          <TabsTrigger value="skill" className="data-[state=active]:bg-[#2A2F38] text-xs sm:text-sm">
+            <Star className="w-3.5 h-3.5 mr-1.5" />
+            Skill ({skillChallenges.length})
+          </TabsTrigger>
+          <TabsTrigger value="strength" className="data-[state=active]:bg-[#2A2F38] text-xs sm:text-sm">
+            <Dumbbell className="w-3.5 h-3.5 mr-1.5" />
+            Strength ({strengthChallenges.length})
+          </TabsTrigger>
+          <TabsTrigger value="time" className="data-[state=active]:bg-[#2A2F38] text-xs sm:text-sm">
+            <Clock className="w-3.5 h-3.5 mr-1.5" />
+            Timed ({timeChallenges.length})
+          </TabsTrigger>
+          {seasonalChallenges.length > 0 && (
+            <TabsTrigger value="seasonal" className="data-[state=active]:bg-[#2A2F38] text-xs sm:text-sm">
+              <Trophy className="w-3.5 h-3.5 mr-1.5" />
+              Seasonal ({seasonalChallenges.length})
+            </TabsTrigger>
+          )}
         </TabsList>
         
         <TabsContent value="weekly" className="mt-4">
@@ -96,6 +126,37 @@ export function ChallengesPanel({ className }: ChallengesPanelProps) {
         
         <TabsContent value="monthly" className="mt-4">
           <ChallengeGrid challenges={monthlyChallenges} />
+        </TabsContent>
+        
+        <TabsContent value="skill" className="mt-4">
+          <div className="mb-4 p-3 rounded-lg bg-[#2A2F38]/50 border border-[#2A2F38]">
+            <p className="text-sm text-[#9CA3AF]">
+              Skill challenges reward milestone achievements. Log your holds and reps to track progress.
+            </p>
+          </div>
+          <ChallengeGrid challenges={skillChallenges} />
+        </TabsContent>
+        
+        <TabsContent value="strength" className="mt-4">
+          <div className="mb-4 p-3 rounded-lg bg-[#2A2F38]/50 border border-[#2A2F38]">
+            <p className="text-sm text-[#9CA3AF]">
+              Strength challenges track your max consecutive reps and weighted PRs.
+            </p>
+          </div>
+          <ChallengeGrid challenges={strengthChallenges} />
+        </TabsContent>
+        
+        <TabsContent value="time" className="mt-4">
+          <div className="mb-4 p-3 rounded-lg bg-[#2A2F38]/50 border border-[#2A2F38]">
+            <p className="text-sm text-[#9CA3AF]">
+              Timed challenges test your endurance. Complete max reps or holds within the time limit.
+            </p>
+          </div>
+          <ChallengeGrid challenges={timeChallenges} />
+        </TabsContent>
+        
+        <TabsContent value="seasonal" className="mt-4">
+          <ChallengeGrid challenges={seasonalChallenges} />
         </TabsContent>
       </Tabs>
     </div>
@@ -115,17 +176,17 @@ export function ChallengesSummaryCard({ className }: ChallengesSummaryCardProps)
   const [summary, setSummary] = useState<ChallengeSummary | null>(null)
   
   useEffect(() => {
-    setChallenges(getActiveChallengesWithProgress())
+    setChallenges(getAllChallengesWithProgress())
     setSummary(getChallengeSummary())
   }, [])
   
   // Show most progressed incomplete challenges first
   const prioritizedChallenges = [...challenges]
-    .filter(c => !c.isCompleted)
-    .sort((a, b) => b.progressPercent - a.progressPercent)
+    .filter(c => !c.isCompleted && !c.completed)
+    .sort((a, b) => (b.progressPercent ?? 0) - (a.progressPercent ?? 0))
     .slice(0, 2)
   
-  const completedCount = challenges.filter(c => c.isCompleted).length
+  const completedCount = challenges.filter(c => c.isCompleted || c.completed).length
   
   return (
     <Card className={cn(

@@ -8,6 +8,7 @@ import { getWorkoutLogs, type WorkoutLog } from './workout-log-service'
 import { getConstraintInsight } from './constraint-engine'
 import { getSkillSessions } from './skill-session-service'
 import { getUnlockedAchievements, ACHIEVEMENTS, type AchievementTier } from './achievements/achievement-definitions'
+import { getTotalScoreBoost } from './challenges/challenge-engine'
 
 export interface ScoreComponent {
   raw: number      // 0-100 raw score
@@ -24,6 +25,7 @@ export interface StrengthScoreBreakdown {
   readinessScore: number
   consistencyScore: number
   achievementScore: number
+  challengeScore: number
   
   // Detailed components
   components: ScoreComponent[]
@@ -51,6 +53,9 @@ export interface StrengthScoreBreakdown {
     decayApplied: boolean
     message: string
   }
+  
+  // Score changes for display
+  recentScoreGain?: number
 }
 
 export type SpartanLevel = 'Beginner' | 'Developing' | 'Intermediate' | 'Advanced' | 'Elite'
@@ -118,12 +123,14 @@ function normalizeStrengthScore(oneRM: number, mapping: Record<number, number>):
 }
 
 // Component weights (must sum to 1.0)
+// Philosophy: Strength and skill matter most, consistency is valued, achievements/challenges add flavor
 const WEIGHTS = {
-  skill: 0.30,       // 30% - Skill progression level
-  strength: 0.30,    // 30% - Weighted strength capacity
-  readiness: 0.15,   // 15% - Skill readiness / progression proximity
-  consistency: 0.15, // 15% - Training consistency
-  achievements: 0.10 // 10% - Achievement unlocks
+  skill: 0.28,       // 28% - Skill progression level
+  strength: 0.28,    // 28% - Weighted strength capacity
+  consistency: 0.17, // 17% - Training consistency (valued but not dominant)
+  readiness: 0.12,   // 12% - Skill readiness / progression proximity
+  achievements: 0.10, // 10% - Achievement unlocks
+  challenges: 0.05,  // 5% - Challenge completions (bonus, not mandatory)
 }
 
 // Achievement tier point values for scoring
@@ -133,6 +140,9 @@ const ACHIEVEMENT_TIER_POINTS: Record<AchievementTier, number> = {
   gold: 50,
   elite: 100
 }
+
+// Challenge score contribution cap (max 100 points from challenges to prevent abuse)
+const CHALLENGE_SCORE_CAP = 100
 
 // Calculate skill score (35% weight)
 export function calculateSkillScore(): { score: number; details: { skill: string; level: number; score: number }[] } {
@@ -296,39 +306,55 @@ export function calculateConsistencyScore(): { score: number; weeklyWorkouts: nu
   }
 }
 
+// Calculate challenge score (5% weight) - bonus points from completed challenges
+export function calculateChallengeScore(): { score: number; totalBoost: number } {
+  let totalBoost = 0
+  try {
+    totalBoost = getTotalScoreBoost()
+  } catch {
+    // Challenge engine may not be initialized
+  }
+  
+  // Normalize to 0-100 scale, capped to prevent excessive grinding
+  const score = Math.min(100, Math.round((totalBoost / CHALLENGE_SCORE_CAP) * 100))
+  
+  return { score, totalBoost }
+}
+
 // Calculate achievement score (10% weight)
-export function calculateAchievementScore(): { score: number; unlockedCount: number; totalPossible: number } {
+export function calculateAchievementScore(): { score: number; unlockedCount: number; totalPossible: number; earnedPoints: number } {
   const unlocked = getUnlockedAchievements()
   
   if (unlocked.length === 0) {
-    return { score: 0, unlockedCount: 0, totalPossible: ACHIEVEMENTS.length }
+    return { score: 0, unlockedCount: 0, totalPossible: ACHIEVEMENTS.length, earnedPoints: 0 }
   }
   
-  let totalPoints = 0
+  let earnedPoints = 0
   let maxPossiblePoints = 0
   
-  // Calculate points from unlocked achievements
+  // Calculate points from unlocked achievements using pointValue field
   unlocked.forEach(ua => {
     const achievement = ACHIEVEMENTS.find(a => a.id === ua.achievementId)
     if (achievement) {
-      totalPoints += ACHIEVEMENT_TIER_POINTS[achievement.tier]
+      earnedPoints += achievement.pointValue
     }
   })
   
   // Calculate max possible points
   ACHIEVEMENTS.forEach(a => {
-    maxPossiblePoints += ACHIEVEMENT_TIER_POINTS[a.tier]
+    maxPossiblePoints += a.pointValue
   })
   
   // Normalize to 0-100 scale
   const score = maxPossiblePoints > 0 
-    ? Math.round((totalPoints / maxPossiblePoints) * 100)
+    ? Math.round((earnedPoints / maxPossiblePoints) * 100)
     : 0
   
   return { 
     score: Math.min(100, score), 
     unlockedCount: unlocked.length,
-    totalPossible: ACHIEVEMENTS.length
+    totalPossible: ACHIEVEMENTS.length,
+    earnedPoints,
   }
 }
 
@@ -433,6 +459,7 @@ export function calculateSpartanScore(): StrengthScoreBreakdown {
   const readinessResult = calculateReadinessScore()
   const consistencyResult = calculateConsistencyScore()
   const achievementResult = calculateAchievementScore()
+  const challengeResult = calculateChallengeScore()
   
   // Check data quality
   const hasSkillData = skillResult.details.length > 0
@@ -458,7 +485,8 @@ export function calculateSpartanScore(): StrengthScoreBreakdown {
     (strengthResult.score * WEIGHTS.strength) +
     (consistencyResult.score * WEIGHTS.consistency) +
     (readinessResult.score * WEIGHTS.readiness) +
-    (achievementResult.score * WEIGHTS.achievements)
+    (achievementResult.score * WEIGHTS.achievements) +
+    (challengeResult.score * WEIGHTS.challenges)
   
   // Convert to 0-1000 scale
   let totalScore = Math.round(Math.max(0, Math.min(1000, baseScore * 10)))
@@ -507,8 +535,17 @@ export function calculateSpartanScore(): StrengthScoreBreakdown {
       weight: WEIGHTS.achievements,
       label: 'Achievements',
       description: achievementResult.unlockedCount > 0 
-        ? `${achievementResult.unlockedCount} of ${achievementResult.totalPossible} unlocked`
+        ? `${achievementResult.unlockedCount} of ${achievementResult.totalPossible} unlocked (+${achievementResult.earnedPoints} pts)`
         : 'No achievements yet'
+    },
+    {
+      raw: challengeResult.score,
+      weighted: Math.round(challengeResult.score * WEIGHTS.challenges * 10),
+      weight: WEIGHTS.challenges,
+      label: 'Challenges',
+      description: challengeResult.totalBoost > 0 
+        ? `+${challengeResult.totalBoost} bonus points`
+        : 'Complete challenges for bonus'
     }
   ]
   
@@ -523,18 +560,19 @@ export function calculateSpartanScore(): StrengthScoreBreakdown {
     readinessScore: readinessResult.score,
     consistencyScore: consistencyResult.score,
     achievementScore: achievementResult.score,
+    challengeScore: challengeResult.score,
     components,
     totalScore,
     level,
     levelProgress,
     explanation,
-  focusAreas,
-  strengths,
-  dataQuality,
-  hasEnoughData,
-  decayInfo,
+    focusAreas,
+    strengths,
+    dataQuality,
+    hasEnoughData,
+    decayInfo,
   }
-  }
+}
 
 // Generate explanation based on scores
 function generateScoreExplanation(

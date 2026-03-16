@@ -81,6 +81,73 @@ export type PrimaryGoalType =
   | 'work_capacity'
 
 // =============================================================================
+// ATHLETE DIAGNOSTICS
+// =============================================================================
+
+/**
+ * Primary limitation - what usually limits the athlete's progress
+ * Used by engine to prioritize programming focus
+ */
+export type PrimaryLimitation =
+  | 'strength'          // Need more raw strength
+  | 'flexibility'       // Flexibility holds them back
+  | 'skill_coordination'// Coordination/technique issues
+  | 'recovery'          // Recovery capacity is the bottleneck
+  | 'consistency'       // Struggle with consistency
+  | 'not_sure'          // Don't know yet
+
+export const PRIMARY_LIMITATION_LABELS: Record<PrimaryLimitation, string> = {
+  'strength': 'Strength',
+  'flexibility': 'Flexibility',
+  'skill_coordination': 'Skill coordination',
+  'recovery': 'Recovery',
+  'consistency': 'Consistency',
+  'not_sure': 'Not sure yet',
+}
+
+/**
+ * Weakest area - which specific area holds them back most
+ * Used for weak-point emphasis in programming
+ */
+export type WeakestArea =
+  | 'pulling_strength'   // Pull-ups, rows, front lever
+  | 'pushing_strength'   // Push-ups, dips, planche
+  | 'core_strength'      // Core and compression
+  | 'shoulder_stability' // Scapular/shoulder strength
+  | 'hip_mobility'       // Hip flexion/extension
+  | 'hamstring_flexibility' // Hamstring range
+  | 'not_sure'           // Don't know
+
+export const WEAKEST_AREA_LABELS: Record<WeakestArea, string> = {
+  'pulling_strength': 'Pulling strength',
+  'pushing_strength': 'Pushing strength',
+  'core_strength': 'Core strength',
+  'shoulder_stability': 'Shoulder stability',
+  'hip_mobility': 'Hip mobility',
+  'hamstring_flexibility': 'Hamstring flexibility',
+  'not_sure': 'Not sure',
+}
+
+/**
+ * Joint cautions - joints that need extra care during training
+ * Used to modify exercise selection and loading
+ */
+export type JointCaution =
+  | 'shoulders'
+  | 'elbows'
+  | 'wrists'
+  | 'lower_back'
+  | 'knees'
+
+export const JOINT_CAUTION_LABELS: Record<JointCaution, string> = {
+  'shoulders': 'Shoulders',
+  'elbows': 'Elbows',
+  'wrists': 'Wrists',
+  'lower_back': 'Lower back',
+  'knees': 'Knees',
+}
+
+// =============================================================================
 // PRIMARY TRAINING OUTCOME
 // =============================================================================
 
@@ -207,12 +274,22 @@ export type WallHSPUReps =
   | '10_plus'
   | 'unknown'
 
-// Weighted benchmarks - exact values in lbs/kg
-export interface WeightedBenchmark {
+  // Weighted benchmarks - exact values in lbs/kg
+  export interface WeightedBenchmark {
   load: number | null      // Weight added
   unit: 'lbs' | 'kg'
-  reps?: number            // Reps at that weight
-}
+  reps?: number            // Reps at that weight (1-5)
+  }
+  
+  // All-time PR benchmarks with timeframe for rebound potential estimation
+  export type PRTimeframe = 'current' | 'within_3_months' | '3_to_6_months' | '6_to_12_months' | '1_to_2_years' | 'over_2_years'
+  
+  export interface AllTimePRBenchmark {
+  load: number | null      // Weight added at PR
+  unit: 'lbs' | 'kg'
+  reps?: number            // Reps at PR weight (1-5)
+  timeframe: PRTimeframe   // When was this PR achieved
+  }
 
 // =============================================================================
 // SKILL BENCHMARKS - Progression + Performance
@@ -300,19 +377,19 @@ export interface SkillHistoryEntry {
   tendonAdaptationScore: TendonAdaptationLevel
 }
 
-// Labels for UI
-export const SKILL_TRAINING_HISTORY_LABELS: Record<SkillTrainingHistory, string> = {
-  'never': 'Never',
-  'tried_little': 'Tried a little',
+  // Labels for UI - clearer wording for athletic history
+  export const SKILL_TRAINING_HISTORY_LABELS: Record<SkillTrainingHistory, string> = {
+  'never': 'Brand new',
+  'tried_little': 'Tried casually',
   'trained_consistently': 'Trained consistently',
-  'previously_strong': 'Previously strong',
-}
-
-export const SKILL_TRAINING_HISTORY_DESCRIPTIONS: Record<SkillTrainingHistory, string> = {
-  'never': 'No experience with this skill',
-  'tried_little': 'Dabbled or did occasional work',
-  'trained_consistently': 'Trained this for weeks or months',
-  'previously_strong': 'Could hold/perform intermediate+ levels',
+  'previously_strong': 'Reached higher level',
+  }
+  
+  export const SKILL_TRAINING_HISTORY_DESCRIPTIONS: Record<SkillTrainingHistory, string> = {
+  'never': 'No experience yet',
+  'tried_little': 'A few sessions here and there',
+  'trained_consistently': 'Weeks or months of focused work',
+  'previously_strong': 'Previously held a higher progression',
 }
 
 export const SKILL_LAST_TRAINED_LABELS: Record<SkillLastTrained, string> = {
@@ -759,13 +836,17 @@ export interface OnboardingProfile {
   selectedSkills: SkillGoal[]
   selectedFlexibility: FlexibilityGoal[]
   
-  // Section 4: Strength Benchmarks
+  // Section 4: Strength Benchmarks (current ability)
   pullUpMax: PullUpCapacity | null
   pushUpMax: PushUpCapacity | null
   dipMax: DipCapacity | null
   wallHSPUReps: WallHSPUReps | null
   weightedPullUp: WeightedBenchmark | null
   weightedDip: WeightedBenchmark | null
+  
+  // Section 4b: All-time PR benchmarks (for rebound potential)
+  allTimePRPullUp: AllTimePRBenchmark | null
+  allTimePRDip: AllTimePRBenchmark | null
   
   // Section 5: Skill Benchmarks
   frontLever: SkillBenchmark | null
@@ -806,6 +887,11 @@ export interface OnboardingProfile {
   
   // Section 10: Readiness Calibration
   readinessCalibration: ReadinessCalibration | null
+  
+  // Section 11: Athlete Diagnostics
+  primaryLimitation: PrimaryLimitation | null
+  weakestArea: WeakestArea | null
+  jointCautions: JointCaution[]
   
   // Meta
   hasSeenDashboardIntro: boolean
@@ -919,7 +1005,7 @@ export const PULLUP_LABELS: Record<PullUpCapacity, string> = {
 }
 
 export const PUSHUP_LABELS: Record<PushUpCapacity, string> = {
-  '0_10': '0���10',
+  '0_10': '0–10',
   '10_25': '10–25',
   '25_40': '25–40',
   '40_60': '40–60',
@@ -948,42 +1034,42 @@ export const WALL_HSPU_LABELS: Record<WallHSPUReps, string> = {
 }
 
 export const FRONT_LEVER_LABELS: Record<FrontLeverProgression, string> = {
-  'none': 'Not started',
+  'none': 'Not yet',
   'tuck': 'Tuck',
-  'adv_tuck': 'Advanced Tuck',
-  'one_leg': 'One Leg',
+  'adv_tuck': 'Adv. tuck',
+  'one_leg': 'One leg',
   'straddle': 'Straddle',
   'full': 'Full',
-  'unknown': "Don't know",
-}
+  'unknown': "Not sure",
+  }
 
 export const PLANCHE_LABELS: Record<PlancheProgression, string> = {
-  'none': 'Not started',
-  'lean': 'Planche Lean',
+  'none': 'Not yet',
+  'lean': 'Lean',
   'tuck': 'Tuck',
-  'adv_tuck': 'Advanced Tuck',
+  'adv_tuck': 'Adv. tuck',
   'straddle': 'Straddle',
   'full': 'Full',
-  'unknown': "Don't know",
-}
+  'unknown': "Not sure",
+  }
 
 export const MUSCLE_UP_LABELS: Record<MuscleUpReadiness, string> = {
   'none': 'Not yet',
-  'working_on': 'Working on it',
-  'kipping': 'Kipping only',
+  'working_on': 'Learning',
+  'kipping': 'Kipping',
   'strict_1_3': '1–3 strict',
   'strict_4_plus': '4+ strict',
-  'unknown': "Don't know",
-}
+  'unknown': "Not sure",
+  }
 
 export const HSPU_LABELS: Record<HSPUProgression, string> = {
-  'none': 'Not started',
-  'pike': 'Pike push-ups',
-  'box_pike': 'Elevated pike',
-  'wall_hspu': 'Wall HSPU',
-  'freestanding': 'Freestanding',
-  'unknown': "Don't know",
-}
+  'none': 'Not yet',
+  'pike': 'Pike',
+  'box_pike': 'Box pike',
+  'wall_hspu': 'Wall',
+  'freestanding': 'Free',
+  'unknown': "Not sure",
+  }
 
 export const LSIT_HOLD_LABELS: Record<LSitHoldCapacity, string> = {
   'none': "Can't hold",
@@ -1053,10 +1139,62 @@ export const TRAINING_DAYS_LABELS: Record<TrainingDaysPerWeek, string> = {
   'flexible': 'Flexible',
 }
 
-export const SESSION_STYLE_LABELS: Record<SessionStylePreference, string> = {
-  'efficient': 'Shorter, efficient sessions',
-  'full': 'Fuller, comprehensive sessions',
-}
+  export const SESSION_STYLE_LABELS: Record<SessionStylePreference, string> = {
+  'efficient': 'Shorter, focused sessions',
+  'full': 'Longer, more complete sessions',
+  }
+  
+  export const SESSION_STYLE_DESCRIPTIONS: Record<SessionStylePreference, string> = {
+  'efficient': 'Highest-impact work, less total volume',
+  'full': 'More skill, strength, and accessory work',
+  }
+  
+  // PR Timeframe labels for all-time PR tracking
+  export const PR_TIMEFRAME_LABELS: Record<PRTimeframe, string> = {
+  'current': 'Current / still true',
+  'within_3_months': 'Within 3 months',
+  '3_to_6_months': '3–6 months ago',
+  '6_to_12_months': '6–12 months ago',
+  '1_to_2_years': '1–2 years ago',
+  'over_2_years': 'Over 2 years ago',
+  }
+  
+  // Rebound potential multipliers based on how recently the PR was achieved
+  // Higher values = faster expected recovery to previous level
+  export const REBOUND_POTENTIAL_MULTIPLIERS: Record<PRTimeframe, number> = {
+  'current': 1.0,         // Already at peak
+  'within_3_months': 0.9, // Very high rebound potential
+  '3_to_6_months': 0.75,  // Good rebound potential
+  '6_to_12_months': 0.55, // Moderate rebound potential
+  '1_to_2_years': 0.35,   // Limited rebound potential
+  'over_2_years': 0.2,    // Minimal rebound potential
+  }
+  
+  // Helper function to estimate rebound potential from historical PR
+  export function estimateReboundPotential(
+  currentLoad: number | null,
+  allTimePR: AllTimePRBenchmark | null
+  ): { reboundPotential: number; reboundGap: number; estimatedWeeksToRecover: number } | null {
+  if (!allTimePR?.load || !currentLoad) return null
+  
+  const gap = allTimePR.load - currentLoad
+  if (gap <= 0) return { reboundPotential: 1.0, reboundGap: 0, estimatedWeeksToRecover: 0 }
+  
+  const timeframeMultiplier = REBOUND_POTENTIAL_MULTIPLIERS[allTimePR.timeframe]
+  const reboundPotential = timeframeMultiplier
+  
+  // Estimate weeks to recover based on gap and timeframe
+  // Rough heuristic: 1-2 weeks per 5lbs/2kg of gap, adjusted by timeframe
+  const gapInUnits = gap / 5 // Normalize to ~5lb increments
+  const baseWeeks = gapInUnits * 2
+  const adjustedWeeks = Math.round(baseWeeks / timeframeMultiplier)
+  
+  return {
+    reboundPotential,
+    reboundGap: gap,
+    estimatedWeeksToRecover: Math.min(adjustedWeeks, 52), // Cap at 1 year
+  }
+  }
 
 export const RECOVERY_LABELS: Record<RecoveryQuality, string> = {
   'good': 'Good',
@@ -1175,13 +1313,17 @@ export function createEmptyOnboardingProfile(): OnboardingProfile {
   selectedSkills: [],
     selectedFlexibility: [],
     
-    // Section 4: Strength Benchmarks
+    // Section 4: Strength Benchmarks (current ability)
     pullUpMax: null,
     pushUpMax: null,
     dipMax: null,
     wallHSPUReps: null,
     weightedPullUp: null,
     weightedDip: null,
+    
+    // Section 4b: All-time PR benchmarks
+    allTimePRPullUp: null,
+    allTimePRDip: null,
     
   // Section 5: Skill Benchmarks
   frontLever: null,
@@ -1214,6 +1356,11 @@ export function createEmptyOnboardingProfile(): OnboardingProfile {
     
     // Section 10: Readiness Calibration
     readinessCalibration: null,
+    
+    // Section 11: Athlete Diagnostics
+    primaryLimitation: null,
+    weakestArea: null,
+    jointCautions: [],
     
     // Meta
     hasSeenDashboardIntro: false,

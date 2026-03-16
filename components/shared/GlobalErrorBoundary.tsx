@@ -97,11 +97,11 @@ export class GlobalErrorBoundary extends Component<Props, State> {
               </div>
               
               <h1 className="text-xl font-semibold text-[#E6E9EF] mb-2">
-                Something went wrong
+                Unable to load this page
               </h1>
               
               <p className="text-sm text-[#A4ACB8] mb-6">
-                We encountered an unexpected error. Please try again.
+                Something unexpected happened. Refreshing usually fixes it.
               </p>
               
               <div className="flex flex-col gap-3">

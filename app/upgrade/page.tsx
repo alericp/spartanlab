@@ -138,8 +138,8 @@ const handleUpgrade = async () => {
         window.location.href = data.url
       }
     } catch (error) {
-      console.error('Checkout error:', error)
-      toast.error('Something went wrong. Please try again.')
+console.error('Checkout error:', error)
+    toast.error('Unable to start checkout. Please try again.')
       setIsLoading(false)
     }
   }

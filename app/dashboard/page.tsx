@@ -26,6 +26,7 @@ import { RecoveryStatusCard } from '@/components/dashboard/RecoveryStatusCard'
 import { ProgressForecastCard } from '@/components/dashboard/ProgressForecastCard'
 import { PerformanceVaultCard } from '@/components/dashboard/PerformanceVaultCard'
 import { QuickActionsRow } from '@/components/dashboard/QuickActionsRow'
+import { ShareProgressSection } from '@/components/dashboard/ShareProgressSection'
 import { DeloadStatusCard } from '@/components/dashboard/DailyAdjustmentCard'
 import { DailyReadinessCard } from '@/components/dashboard/DailyReadinessCard'
 import { WelcomeCard } from '@/components/dashboard/WelcomeCard'
@@ -73,6 +74,7 @@ import {
 import { DashboardEmptyState } from '@/components/shared/EmptyStates'
 import { PWAInstallCard } from '@/components/dashboard/PWAInstallCard'
 import { TodayFocusCard } from '@/components/dashboard/TodayFocusCard'
+import { NextWorkoutCard } from '@/components/dashboard/NextWorkoutCard'
 import { ProgramSnapshotCard } from '@/components/dashboard/ProgramSnapshotCard'
 import { TrainingInsightQuote } from '@/components/dashboard/TrainingInsightQuote'
 import { TrainingConsistencyCard } from '@/components/dashboard/TrainingConsistencyCard'
@@ -96,6 +98,7 @@ import { AchievementsCard } from '@/components/dashboard/AchievementsCard'
 import { AchievementNotification } from '@/components/achievements/AchievementNotification'
 import { LeaderboardPreviewCard } from '@/components/leaderboards/LeaderboardTabs'
 import { ChallengesCard } from '@/components/challenges/ChallengesCard'
+import { ProgressDashboard } from '@/components/dashboard/ProgressDashboard'
 import { ChallengeNotification } from '@/components/challenges/ChallengeNotification'
 import { WelcomeBanner } from '@/components/dashboard/WelcomeBanner'
 
@@ -406,12 +409,12 @@ function DashboardContent() {
         <FirstRunGuide />
         
         {/* ============================================================= */}
-        {/* PRIORITY 1: TODAY'S TRAINING FOCUS + START/RESUME WORKOUT */}
-        {/* This is the most important section - what should I do right now */}
+        {/* PRIORITY 1: NEXT WORKOUT - What should I do right now? */}
+        {/* The most important section - clear next action */}
         {/* ============================================================= */}
         
-        <SafeWidget name="TodayFocusCard">
-          <TodayFocusCard />
+        <SafeWidget name="NextWorkoutCard">
+          <NextWorkoutCard />
         </SafeWidget>
         
         {/* Milestone Notifications - Show achievements prominently */}
@@ -694,6 +697,23 @@ function DashboardContent() {
         )}
         
         {/* ============================================================= */}
+        {/* SECTION: PROGRESS TRACKING */}
+        {/* Visual progress charts for strength, skills, consistency */}
+        {/* ============================================================= */}
+        
+        <Section id="progress-tracking" priority="secondary">
+          <SectionHeader 
+            title="Progress Tracking"
+            description="Your training metrics over time"
+            icon={Target}
+          />
+          
+          <SafeWidget name="ProgressDashboard">
+            <ProgressDashboard />
+          </SafeWidget>
+        </Section>
+        
+        {/* ============================================================= */}
         {/* SECTION: ACHIEVEMENTS & CHALLENGES */}
         {/* ============================================================= */}
         
@@ -737,6 +757,11 @@ function DashboardContent() {
             
             {/* Performance Database */}
             <PerformanceVaultCard />
+            
+            {/* Share Progress Cards */}
+            <SafeWidget name="ShareProgressSection">
+              <ShareProgressSection />
+            </SafeWidget>
           </div>
         </Section>
         

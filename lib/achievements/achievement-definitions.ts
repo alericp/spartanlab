@@ -1,8 +1,9 @@
 // Achievement Definitions
 // Centralized achievement system for SpartanLab
 // Tracks training milestones, strength progress, skill achievements, and consistency
+// Philosophy: Realistic goals that reward consistency, not absurd volume requirements
 
-export type AchievementCategory = 'training' | 'strength' | 'skill' | 'consistency' | 'volume'
+export type AchievementCategory = 'training' | 'strength' | 'skill' | 'consistency' | 'volume' | 'challenge'
 export type AchievementTier = 'bronze' | 'silver' | 'gold' | 'elite'
 
 export interface Achievement {
@@ -13,12 +14,19 @@ export interface Achievement {
   tier: AchievementTier
   icon: 'trophy' | 'medal' | 'star' | 'flame' | 'target' | 'dumbbell' | 'crown' | 'lightning'
   requirement: {
-    type: 'workout_count' | 'streak_days' | 'total_reps' | 'strength_milestone' | 'skill_level' | 'hold_time'
+    type: 'workout_count' | 'streak_days' | 'total_reps' | 'strength_milestone' | 'skill_level' | 'hold_time' | 'challenge_count' | 'weeks_active'
     value: number
     exercise?: string
     skill?: string
   }
+  // Point value for Spartan Score contribution
+  pointValue: number
+  // Optional unlock message
+  unlockMessage?: string
 }
+
+// Export alias for backwards compatibility
+export type AchievementDefinition = Achievement
 
 export interface UnlockedAchievement {
   achievementId: string
@@ -29,9 +37,15 @@ export interface UnlockedAchievement {
 // =============================================================================
 // ACHIEVEMENT DEFINITIONS
 // =============================================================================
+// Philosophy: Tiered progression that rewards realistic athlete behavior
+// - Achievable by athletes training 2-5 days/week
+// - No meaningless grinding requirements
+// - Every milestone represents real progress
 
 export const ACHIEVEMENTS: Achievement[] = [
-  // Training Progress (workout count)
+  // ==========================================================================
+  // TRAINING PROGRESS - Workout Count (tiered)
+  // ==========================================================================
   {
     id: 'first_workout',
     name: 'First Step',
@@ -40,6 +54,28 @@ export const ACHIEVEMENTS: Achievement[] = [
     tier: 'bronze',
     icon: 'star',
     requirement: { type: 'workout_count', value: 1 },
+    pointValue: 5,
+    unlockMessage: 'Your journey begins now.',
+  },
+  {
+    id: 'workouts_3',
+    name: 'Getting Started',
+    description: 'Complete 3 workouts',
+    category: 'training',
+    tier: 'bronze',
+    icon: 'star',
+    requirement: { type: 'workout_count', value: 3 },
+    pointValue: 10,
+  },
+  {
+    id: 'workouts_5',
+    name: 'First Week Done',
+    description: 'Complete 5 workouts',
+    category: 'training',
+    tier: 'bronze',
+    icon: 'medal',
+    requirement: { type: 'workout_count', value: 5 },
+    pointValue: 15,
   },
   {
     id: 'workouts_10',
@@ -49,6 +85,8 @@ export const ACHIEVEMENTS: Achievement[] = [
     tier: 'bronze',
     icon: 'medal',
     requirement: { type: 'workout_count', value: 10 },
+    pointValue: 20,
+    unlockMessage: 'Momentum is building.',
   },
   {
     id: 'workouts_25',
@@ -58,6 +96,8 @@ export const ACHIEVEMENTS: Achievement[] = [
     tier: 'silver',
     icon: 'medal',
     requirement: { type: 'workout_count', value: 25 },
+    pointValue: 35,
+    unlockMessage: 'Real commitment showing.',
   },
   {
     id: 'workouts_50',
@@ -67,6 +107,8 @@ export const ACHIEVEMENTS: Achievement[] = [
     tier: 'silver',
     icon: 'trophy',
     requirement: { type: 'workout_count', value: 50 },
+    pointValue: 50,
+    unlockMessage: 'Half a century of work.',
   },
   {
     id: 'workouts_100',
@@ -76,6 +118,8 @@ export const ACHIEVEMENTS: Achievement[] = [
     tier: 'gold',
     icon: 'trophy',
     requirement: { type: 'workout_count', value: 100 },
+    pointValue: 75,
+    unlockMessage: 'A true centurion of training.',
   },
   {
     id: 'workouts_250',
@@ -85,17 +129,53 @@ export const ACHIEVEMENTS: Achievement[] = [
     tier: 'elite',
     icon: 'crown',
     requirement: { type: 'workout_count', value: 250 },
+    pointValue: 150,
+    unlockMessage: 'You have proven your dedication.',
   },
 
-  // Consistency (streak days)
+  // ==========================================================================
+  // CONSISTENCY - Streak Days (tiered)
+  // ==========================================================================
+  {
+    id: 'streak_2',
+    name: 'Back to Back',
+    description: 'Train 2 days in a row',
+    category: 'consistency',
+    tier: 'bronze',
+    icon: 'flame',
+    requirement: { type: 'streak_days', value: 2 },
+    pointValue: 5,
+  },
+  {
+    id: 'streak_3',
+    name: 'Three Day Push',
+    description: 'Train 3 days in a row',
+    category: 'consistency',
+    tier: 'bronze',
+    icon: 'flame',
+    requirement: { type: 'streak_days', value: 3 },
+    pointValue: 10,
+  },
+  {
+    id: 'streak_5',
+    name: 'Five Day Focus',
+    description: 'Train 5 days in a row',
+    category: 'consistency',
+    tier: 'bronze',
+    icon: 'flame',
+    requirement: { type: 'streak_days', value: 5 },
+    pointValue: 15,
+  },
   {
     id: 'streak_7',
     name: 'Week Warrior',
     description: 'Train 7 days in a row',
     category: 'consistency',
-    tier: 'bronze',
+    tier: 'silver',
     icon: 'flame',
     requirement: { type: 'streak_days', value: 7 },
+    pointValue: 25,
+    unlockMessage: 'A full week of dedication.',
   },
   {
     id: 'streak_14',
@@ -105,6 +185,8 @@ export const ACHIEVEMENTS: Achievement[] = [
     tier: 'silver',
     icon: 'flame',
     requirement: { type: 'streak_days', value: 14 },
+    pointValue: 40,
+    unlockMessage: 'Two weeks without missing.',
   },
   {
     id: 'streak_30',
@@ -114,6 +196,8 @@ export const ACHIEVEMENTS: Achievement[] = [
     tier: 'gold',
     icon: 'flame',
     requirement: { type: 'streak_days', value: 30 },
+    pointValue: 75,
+    unlockMessage: 'A month of pure dedication.',
   },
   {
     id: 'streak_90',
@@ -123,9 +207,70 @@ export const ACHIEVEMENTS: Achievement[] = [
     tier: 'elite',
     icon: 'crown',
     requirement: { type: 'streak_days', value: 90 },
+    pointValue: 200,
+    unlockMessage: 'Your discipline is legendary.',
   },
 
-  // Strength Milestones (weighted pull-up)
+  // ==========================================================================
+  // CONSISTENCY - Weeks Active (schedule-friendly)
+  // ==========================================================================
+  {
+    id: 'weeks_active_4',
+    name: 'Month of Training',
+    description: 'Train at least once per week for 4 weeks',
+    category: 'consistency',
+    tier: 'bronze',
+    icon: 'star',
+    requirement: { type: 'weeks_active', value: 4 },
+    pointValue: 20,
+    unlockMessage: 'Consistency over intensity.',
+  },
+  {
+    id: 'weeks_active_8',
+    name: 'Two Month Commitment',
+    description: 'Train at least once per week for 8 weeks',
+    category: 'consistency',
+    tier: 'silver',
+    icon: 'medal',
+    requirement: { type: 'weeks_active', value: 8 },
+    pointValue: 40,
+  },
+  {
+    id: 'weeks_active_12',
+    name: 'Quarter Year',
+    description: 'Train at least once per week for 12 weeks',
+    category: 'consistency',
+    tier: 'gold',
+    icon: 'trophy',
+    requirement: { type: 'weeks_active', value: 12 },
+    pointValue: 65,
+    unlockMessage: 'Three months of sustained effort.',
+  },
+  {
+    id: 'weeks_active_24',
+    name: 'Half Year Strong',
+    description: 'Train at least once per week for 24 weeks',
+    category: 'consistency',
+    tier: 'elite',
+    icon: 'crown',
+    requirement: { type: 'weeks_active', value: 24 },
+    pointValue: 125,
+    unlockMessage: 'Six months of dedication.',
+  },
+
+  // ==========================================================================
+  // STRENGTH MILESTONES - Weighted Pull-Up (tiered)
+  // ==========================================================================
+  {
+    id: 'pullup_10',
+    name: 'Added Weight',
+    description: 'Weighted pull-up with +10 lbs',
+    category: 'strength',
+    tier: 'bronze',
+    icon: 'dumbbell',
+    requirement: { type: 'strength_milestone', value: 10, exercise: 'weighted_pull_up' },
+    pointValue: 15,
+  },
   {
     id: 'pullup_25',
     name: 'Pull-Up Power',
@@ -134,6 +279,7 @@ export const ACHIEVEMENTS: Achievement[] = [
     tier: 'bronze',
     icon: 'dumbbell',
     requirement: { type: 'strength_milestone', value: 25, exercise: 'weighted_pull_up' },
+    pointValue: 25,
   },
   {
     id: 'pullup_45',
@@ -143,18 +289,44 @@ export const ACHIEVEMENTS: Achievement[] = [
     tier: 'silver',
     icon: 'dumbbell',
     requirement: { type: 'strength_milestone', value: 45, exercise: 'weighted_pull_up' },
+    pointValue: 45,
+    unlockMessage: 'A plate added to your pull.',
+  },
+  {
+    id: 'pullup_70',
+    name: 'Heavy Puller',
+    description: 'Weighted pull-up with +70 lbs',
+    category: 'strength',
+    tier: 'gold',
+    icon: 'trophy',
+    requirement: { type: 'strength_milestone', value: 70, exercise: 'weighted_pull_up' },
+    pointValue: 70,
   },
   {
     id: 'pullup_90',
     name: 'Elite Pull Strength',
     description: 'Weighted pull-up with +90 lbs',
     category: 'strength',
-    tier: 'gold',
-    icon: 'trophy',
+    tier: 'elite',
+    icon: 'crown',
     requirement: { type: 'strength_milestone', value: 90, exercise: 'weighted_pull_up' },
+    pointValue: 100,
+    unlockMessage: 'World-class pulling strength.',
   },
 
-  // Strength Milestones (weighted dip)
+  // ==========================================================================
+  // STRENGTH MILESTONES - Weighted Dip (tiered)
+  // ==========================================================================
+  {
+    id: 'dip_25',
+    name: 'Dip Weight Added',
+    description: 'Weighted dip with +25 lbs',
+    category: 'strength',
+    tier: 'bronze',
+    icon: 'dumbbell',
+    requirement: { type: 'strength_milestone', value: 25, exercise: 'weighted_dip' },
+    pointValue: 15,
+  },
   {
     id: 'dip_45',
     name: 'Dip Foundation',
@@ -163,27 +335,98 @@ export const ACHIEVEMENTS: Achievement[] = [
     tier: 'bronze',
     icon: 'dumbbell',
     requirement: { type: 'strength_milestone', value: 45, exercise: 'weighted_dip' },
+    pointValue: 25,
+  },
+  {
+    id: 'dip_70',
+    name: 'Strong Pusher',
+    description: 'Weighted dip with +70 lbs',
+    category: 'strength',
+    tier: 'silver',
+    icon: 'dumbbell',
+    requirement: { type: 'strength_milestone', value: 70, exercise: 'weighted_dip' },
+    pointValue: 40,
   },
   {
     id: 'dip_90',
     name: 'Push Powerhouse',
     description: 'Weighted dip with +90 lbs',
     category: 'strength',
-    tier: 'silver',
-    icon: 'dumbbell',
+    tier: 'gold',
+    icon: 'trophy',
     requirement: { type: 'strength_milestone', value: 90, exercise: 'weighted_dip' },
+    pointValue: 65,
+    unlockMessage: 'Pushing power unlocked.',
   },
   {
     id: 'dip_135',
     name: 'Elite Dip Strength',
     description: 'Weighted dip with +135 lbs',
     category: 'strength',
-    tier: 'gold',
-    icon: 'trophy',
+    tier: 'elite',
+    icon: 'crown',
     requirement: { type: 'strength_milestone', value: 135, exercise: 'weighted_dip' },
+    pointValue: 100,
+    unlockMessage: 'Three plates on dips. Elite.',
   },
 
-  // Skill Achievements - Front Lever
+  // ==========================================================================
+  // STRENGTH MILESTONES - Bodyweight Reps
+  // ==========================================================================
+  {
+    id: 'pullup_reps_10',
+    name: 'Double Digits',
+    description: 'Achieve 10 consecutive pull-ups',
+    category: 'strength',
+    tier: 'bronze',
+    icon: 'dumbbell',
+    requirement: { type: 'strength_milestone', value: 10, exercise: 'max_pull_ups' },
+    pointValue: 20,
+  },
+  {
+    id: 'pullup_reps_15',
+    name: 'Solid Endurance',
+    description: 'Achieve 15 consecutive pull-ups',
+    category: 'strength',
+    tier: 'silver',
+    icon: 'dumbbell',
+    requirement: { type: 'strength_milestone', value: 15, exercise: 'max_pull_ups' },
+    pointValue: 35,
+  },
+  {
+    id: 'pullup_reps_20',
+    name: 'Twenty Strong',
+    description: 'Achieve 20 consecutive pull-ups',
+    category: 'strength',
+    tier: 'gold',
+    icon: 'trophy',
+    requirement: { type: 'strength_milestone', value: 20, exercise: 'max_pull_ups' },
+    pointValue: 55,
+  },
+  {
+    id: 'dip_reps_15',
+    name: 'Dip Endurance',
+    description: 'Achieve 15 consecutive dips',
+    category: 'strength',
+    tier: 'bronze',
+    icon: 'dumbbell',
+    requirement: { type: 'strength_milestone', value: 15, exercise: 'max_dips' },
+    pointValue: 20,
+  },
+  {
+    id: 'dip_reps_25',
+    name: 'Dip Master',
+    description: 'Achieve 25 consecutive dips',
+    category: 'strength',
+    tier: 'silver',
+    icon: 'dumbbell',
+    requirement: { type: 'strength_milestone', value: 25, exercise: 'max_dips' },
+    pointValue: 40,
+  },
+
+  // ==========================================================================
+  // SKILL ACHIEVEMENTS - Front Lever (tiered)
+  // ==========================================================================
   {
     id: 'fl_tuck',
     name: 'Front Lever Started',
@@ -192,6 +435,8 @@ export const ACHIEVEMENTS: Achievement[] = [
     tier: 'bronze',
     icon: 'target',
     requirement: { type: 'skill_level', value: 1, skill: 'front_lever' },
+    pointValue: 25,
+    unlockMessage: 'Front lever journey begins.',
   },
   {
     id: 'fl_advanced',
@@ -201,6 +446,17 @@ export const ACHIEVEMENTS: Achievement[] = [
     tier: 'silver',
     icon: 'target',
     requirement: { type: 'skill_level', value: 2, skill: 'front_lever' },
+    pointValue: 50,
+  },
+  {
+    id: 'fl_straddle',
+    name: 'Front Lever Straddle',
+    description: 'Achieve Straddle Front Lever',
+    category: 'skill',
+    tier: 'gold',
+    icon: 'trophy',
+    requirement: { type: 'skill_level', value: 3, skill: 'front_lever' },
+    pointValue: 85,
   },
   {
     id: 'fl_full',
@@ -210,9 +466,13 @@ export const ACHIEVEMENTS: Achievement[] = [
     tier: 'elite',
     icon: 'crown',
     requirement: { type: 'skill_level', value: 4, skill: 'front_lever' },
+    pointValue: 150,
+    unlockMessage: 'Full front lever achieved. Exceptional.',
   },
 
-  // Skill Achievements - Planche
+  // ==========================================================================
+  // SKILL ACHIEVEMENTS - Planche (tiered)
+  // ==========================================================================
   {
     id: 'planche_tuck',
     name: 'Planche Started',
@@ -221,6 +481,8 @@ export const ACHIEVEMENTS: Achievement[] = [
     tier: 'bronze',
     icon: 'target',
     requirement: { type: 'skill_level', value: 1, skill: 'planche' },
+    pointValue: 25,
+    unlockMessage: 'Planche journey begins.',
   },
   {
     id: 'planche_advanced',
@@ -230,6 +492,17 @@ export const ACHIEVEMENTS: Achievement[] = [
     tier: 'silver',
     icon: 'target',
     requirement: { type: 'skill_level', value: 2, skill: 'planche' },
+    pointValue: 55,
+  },
+  {
+    id: 'planche_straddle',
+    name: 'Planche Straddle',
+    description: 'Achieve Straddle Planche',
+    category: 'skill',
+    tier: 'gold',
+    icon: 'trophy',
+    requirement: { type: 'skill_level', value: 3, skill: 'planche' },
+    pointValue: 100,
   },
   {
     id: 'planche_full',
@@ -239,9 +512,13 @@ export const ACHIEVEMENTS: Achievement[] = [
     tier: 'elite',
     icon: 'crown',
     requirement: { type: 'skill_level', value: 5, skill: 'planche' },
+    pointValue: 200,
+    unlockMessage: 'Full planche achieved. World-class.',
   },
 
-  // Muscle-Up Achievement
+  // ==========================================================================
+  // SKILL ACHIEVEMENTS - Muscle-Up
+  // ==========================================================================
   {
     id: 'muscle_up_first',
     name: 'First Muscle-Up',
@@ -250,9 +527,115 @@ export const ACHIEVEMENTS: Achievement[] = [
     tier: 'gold',
     icon: 'lightning',
     requirement: { type: 'skill_level', value: 1, skill: 'muscle_up' },
+    pointValue: 75,
+    unlockMessage: 'Muscle-up unlocked.',
+  },
+  {
+    id: 'muscle_up_strict',
+    name: 'Strict Muscle-Up',
+    description: 'Achieve strict muscle-up form',
+    category: 'skill',
+    tier: 'elite',
+    icon: 'crown',
+    requirement: { type: 'skill_level', value: 2, skill: 'muscle_up' },
+    pointValue: 120,
   },
 
-  // Volume Achievements
+  // ==========================================================================
+  // SKILL ACHIEVEMENTS - HSPU
+  // ==========================================================================
+  {
+    id: 'hspu_wall',
+    name: 'HSPU Started',
+    description: 'Achieve Wall Handstand Push-Up',
+    category: 'skill',
+    tier: 'bronze',
+    icon: 'target',
+    requirement: { type: 'skill_level', value: 1, skill: 'handstand_pushup' },
+    pointValue: 25,
+  },
+  {
+    id: 'hspu_freestanding',
+    name: 'Freestanding HSPU',
+    description: 'Achieve Freestanding Handstand Push-Up',
+    category: 'skill',
+    tier: 'gold',
+    icon: 'trophy',
+    requirement: { type: 'skill_level', value: 3, skill: 'handstand_pushup' },
+    pointValue: 80,
+    unlockMessage: 'Freestanding HSPU achieved.',
+  },
+
+  // ==========================================================================
+  // CHALLENGE ACHIEVEMENTS
+  // ==========================================================================
+  {
+    id: 'challenge_first',
+    name: 'Challenge Accepted',
+    description: 'Complete your first challenge',
+    category: 'challenge',
+    tier: 'bronze',
+    icon: 'target',
+    requirement: { type: 'challenge_count', value: 1 },
+    pointValue: 15,
+    unlockMessage: 'First challenge conquered.',
+  },
+  {
+    id: 'challenge_5',
+    name: 'Challenge Hunter',
+    description: 'Complete 5 challenges',
+    category: 'challenge',
+    tier: 'bronze',
+    icon: 'medal',
+    requirement: { type: 'challenge_count', value: 5 },
+    pointValue: 30,
+  },
+  {
+    id: 'challenge_10',
+    name: 'Challenge Crusher',
+    description: 'Complete 10 challenges',
+    category: 'challenge',
+    tier: 'silver',
+    icon: 'trophy',
+    requirement: { type: 'challenge_count', value: 10 },
+    pointValue: 50,
+    unlockMessage: 'Ten challenges down.',
+  },
+  {
+    id: 'challenge_25',
+    name: 'Challenge Champion',
+    description: 'Complete 25 challenges',
+    category: 'challenge',
+    tier: 'gold',
+    icon: 'trophy',
+    requirement: { type: 'challenge_count', value: 25 },
+    pointValue: 85,
+  },
+  {
+    id: 'challenge_50',
+    name: 'Challenge Legend',
+    description: 'Complete 50 challenges',
+    category: 'challenge',
+    tier: 'elite',
+    icon: 'crown',
+    requirement: { type: 'challenge_count', value: 50 },
+    pointValue: 150,
+    unlockMessage: 'A legend of challenges.',
+  },
+
+  // ==========================================================================
+  // VOLUME ACHIEVEMENTS (sensible thresholds)
+  // ==========================================================================
+  {
+    id: 'reps_500',
+    name: 'First 500',
+    description: 'Log 500 total reps',
+    category: 'volume',
+    tier: 'bronze',
+    icon: 'star',
+    requirement: { type: 'total_reps', value: 500 },
+    pointValue: 10,
+  },
   {
     id: 'reps_1000',
     name: 'Rep Builder',
@@ -261,6 +644,17 @@ export const ACHIEVEMENTS: Achievement[] = [
     tier: 'bronze',
     icon: 'star',
     requirement: { type: 'total_reps', value: 1000 },
+    pointValue: 15,
+  },
+  {
+    id: 'reps_2500',
+    name: 'Volume Rising',
+    description: 'Log 2,500 total reps',
+    category: 'volume',
+    tier: 'silver',
+    icon: 'medal',
+    requirement: { type: 'total_reps', value: 2500 },
+    pointValue: 25,
   },
   {
     id: 'reps_5000',
@@ -270,6 +664,8 @@ export const ACHIEVEMENTS: Achievement[] = [
     tier: 'silver',
     icon: 'medal',
     requirement: { type: 'total_reps', value: 5000 },
+    pointValue: 40,
+    unlockMessage: 'Five thousand reps logged.',
   },
   {
     id: 'reps_10000',
@@ -279,6 +675,18 @@ export const ACHIEVEMENTS: Achievement[] = [
     tier: 'gold',
     icon: 'trophy',
     requirement: { type: 'total_reps', value: 10000 },
+    pointValue: 65,
+    unlockMessage: 'Ten thousand reps. Incredible volume.',
+  },
+  {
+    id: 'reps_25000',
+    name: 'Volume Legend',
+    description: 'Log 25,000 total reps',
+    category: 'volume',
+    tier: 'elite',
+    icon: 'crown',
+    requirement: { type: 'total_reps', value: 25000 },
+    pointValue: 100,
   },
 ]
 
@@ -329,6 +737,7 @@ export const CATEGORY_LABELS: Record<AchievementCategory, string> = {
   skill: 'Skill Mastery',
   consistency: 'Consistency',
   volume: 'Volume',
+  challenge: 'Challenge Mastery',
 }
 
 /**

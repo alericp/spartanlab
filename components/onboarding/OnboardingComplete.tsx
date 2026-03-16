@@ -22,7 +22,7 @@ import { SpartanIcon } from '@/components/brand/SpartanLogo'
 import { TRIAL, PRICING } from '@/lib/billing/pricing'
 import { hasProAccess } from '@/lib/feature-access'
 import { getOnboardingProfile } from '@/lib/athlete-profile'
-import { generateFirstProgram, type FirstRunResult } from '@/lib/onboarding-service'
+import { generateFirstProgram, getProgramReasoning, type FirstRunResult, type ProgramReasoning } from '@/lib/onboarding-service'
 import { calculateSpartanScore } from '@/lib/strength-score-engine'
 
 // =============================================================================
@@ -68,6 +68,7 @@ export function OnboardingComplete({ onContinue }: OnboardingCompleteProps) {
   const router = useRouter()
   const [step, setStep] = useState<'generating' | 'readiness' | 'upgrade' | 'ready'>('generating')
   const [programResult, setProgramResult] = useState<FirstRunResult | null>(null)
+  const [programReasoning, setProgramReasoning] = useState<ProgramReasoning | null>(null)
   const [spartanScore, setSpartanScore] = useState<number | null>(null)
   const [isPro, setIsPro] = useState(false)
 
@@ -81,6 +82,10 @@ export function OnboardingComplete({ onContinue }: OnboardingCompleteProps) {
       
       const result = generateFirstProgram()
       setProgramResult(result)
+      
+      // Generate program reasoning
+      const reasoning = getProgramReasoning(result.program)
+      setProgramReasoning(reasoning)
       
       // Calculate initial Spartan Score
       const score = calculateSpartanScore()
@@ -122,11 +127,16 @@ export function OnboardingComplete({ onContinue }: OnboardingCompleteProps) {
             <SpartanIcon size={56} className="mx-auto" />
           </div>
           <h2 className="text-xl font-bold text-[#E6E9EF] mb-2">
-            Building Your Program
+            Analyzing Your Profile
           </h2>
-          <p className="text-sm text-[#6B7280] mb-6">
-            Calibrating the adaptive training engine...
-          </p>
+          <div className="space-y-1.5 mb-6">
+            <p className="text-sm text-[#A4ACB8]">
+              Reading your strength benchmarks...
+            </p>
+            <p className="text-sm text-[#6B7280]">
+              Designing your starting program
+            </p>
+          </div>
           <div className="flex justify-center gap-1">
             {[0, 1, 2].map(i => (
               <div
@@ -147,37 +157,93 @@ export function OnboardingComplete({ onContinue }: OnboardingCompleteProps) {
     
     return (
       <div className="min-h-screen bg-[#0F1115] flex items-center justify-center p-4">
-        <Card className="bg-[#1A1F26] border-[#2B313A] p-8 max-w-md w-full">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="w-12 h-12 rounded-full bg-[#C1121F]/10 flex items-center justify-center">
-              <CheckCircle2 className="w-6 h-6 text-[#C1121F]" />
+        <Card className="bg-[#1A1F26] border-[#2B313A] p-6 max-w-md w-full">
+          <div className="flex items-center gap-3 mb-5">
+            <div className="w-10 h-10 rounded-full bg-[#C1121F]/10 flex items-center justify-center">
+              <CheckCircle2 className="w-5 h-5 text-[#C1121F]" />
             </div>
             <div>
-              <h2 className="text-xl font-bold text-[#E6E9EF]">
+              <h2 className="text-lg font-bold text-[#E6E9EF]">
                 Profile Analyzed
               </h2>
               <p className="text-sm text-[#6B7280]">
-                Here's what we found
+                Building your personalized program
               </p>
             </div>
           </div>
 
-          {/* Readiness insights */}
-          <div className="space-y-3 mb-6">
-            {profile?.selectedSkills.slice(0, 2).map(skill => (
-              <div key={skill} className="bg-[#0F1115] rounded-lg p-3 border border-[#2B313A]">
-                <div className="flex items-center gap-2">
-                  <Target className="w-4 h-4 text-[#C1121F]" />
-                  <span className="text-sm font-medium text-[#E6E9EF] capitalize">
-                    {skill.replace('_', ' ')} Training
-                  </span>
+          {/* Detected athlete insights */}
+          <div className="space-y-2.5 mb-5">
+            {/* Strength level */}
+            {programReasoning?.detectedStrength && (
+              <div className="bg-[#0F1115] rounded-lg p-3 border border-[#2B313A]">
+                <div className="flex items-center gap-2 mb-1">
+                  <Dumbbell className="w-3.5 h-3.5 text-[#4F6D8A]" />
+                  <span className="text-xs text-[#6B7280] uppercase tracking-wide">Strength Level</span>
                 </div>
-                <p className="text-xs text-[#6B7280] mt-1">
-                  Progression path identified based on your benchmarks
+                <p className="text-sm font-medium text-[#E6E9EF]">
+                  {programReasoning.detectedStrength.label}
+                </p>
+                {programReasoning.detectedStrength.detail && (
+                  <p className="text-xs text-[#A4ACB8] mt-0.5">
+                    {programReasoning.detectedStrength.detail}
+                  </p>
+                )}
+              </div>
+            )}
+            
+            {/* Detected skills */}
+            {programReasoning?.detectedSkills && programReasoning.detectedSkills.length > 0 && (
+              <div className="bg-[#0F1115] rounded-lg p-3 border border-[#2B313A]">
+                <div className="flex items-center gap-2 mb-1">
+                  <Target className="w-3.5 h-3.5 text-[#C1121F]" />
+                  <span className="text-xs text-[#6B7280] uppercase tracking-wide">Current Skills</span>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {programReasoning.detectedSkills.map((s, i) => (
+                    <span key={i} className="px-2 py-0.5 bg-[#C1121F]/10 rounded text-xs text-[#E6E9EF]">
+                      {s.skill}: {s.level}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+            
+            {/* Skill interests (if no detected skills) */}
+            {(!programReasoning?.detectedSkills || programReasoning.detectedSkills.length === 0) && 
+              profile?.selectedSkills && profile.selectedSkills.length > 0 && (
+              <div className="bg-[#0F1115] rounded-lg p-3 border border-[#2B313A]">
+                <div className="flex items-center gap-2 mb-1">
+                  <Target className="w-3.5 h-3.5 text-[#C1121F]" />
+                  <span className="text-xs text-[#6B7280] uppercase tracking-wide">Skill Focus</span>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {profile.selectedSkills.slice(0, 3).map(skill => (
+                    <span key={skill} className="px-2 py-0.5 bg-[#C1121F]/10 rounded text-xs text-[#E6E9EF] capitalize">
+                      {skill.replace('_', ' ')}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+            
+            {/* Detected Development Focus */}
+            {programReasoning?.weakPointSummary && programReasoning.weakPointSummary.primaryFocus !== 'balanced_development' && (
+              <div className="bg-[#0F1115] rounded-lg p-3 border border-[#2B313A]">
+                <div className="flex items-center gap-2 mb-1">
+                  <Target className="w-3.5 h-3.5 text-[#4F6D8A]" />
+                  <span className="text-xs text-[#6B7280] uppercase tracking-wide">Development Focus</span>
+                </div>
+                <p className="text-sm font-medium text-[#E6E9EF]">
+                  {programReasoning.weakPointSummary.primaryFocusLabel}
+                </p>
+                <p className="text-xs text-[#A4ACB8] mt-0.5">
+                  {programReasoning.weakPointSummary.primaryFocusReason}
                 </p>
               </div>
-            ))}
+            )}
             
+            {/* Spartan Score */}
             {spartanScore !== null && (
               <div className="bg-gradient-to-r from-[#C1121F]/10 to-transparent rounded-lg p-3 border border-[#C1121F]/20">
                 <div className="flex items-center justify-between">
@@ -191,9 +257,6 @@ export function OnboardingComplete({ onContinue }: OnboardingCompleteProps) {
                     {spartanScore}
                   </span>
                 </div>
-                <p className="text-xs text-[#6B7280] mt-1">
-                  Your baseline performance metric — watch it grow!
-                </p>
               </div>
             )}
           </div>
@@ -216,14 +279,14 @@ export function OnboardingComplete({ onContinue }: OnboardingCompleteProps) {
   if (step === 'upgrade') {
     return (
       <div className="min-h-screen bg-[#0F1115] flex items-center justify-center p-4">
-        <Card className="bg-[#1A1F26] border-[#2B313A] p-6 max-w-lg w-full">
+        <Card className="bg-[#1A1F26] border-[#2B313A] p-5 max-w-lg w-full">
           {/* Program ready header */}
-          <div className="flex items-center gap-3 mb-6">
-            <div className="w-12 h-12 rounded-full bg-emerald-500/10 flex items-center justify-center">
-              <CheckCircle2 className="w-6 h-6 text-emerald-400" />
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-10 h-10 rounded-full bg-emerald-500/10 flex items-center justify-center">
+              <CheckCircle2 className="w-5 h-5 text-emerald-400" />
             </div>
             <div>
-              <h2 className="text-xl font-bold text-[#E6E9EF]">
+              <h2 className="text-lg font-bold text-[#E6E9EF]">
                 Your Program Is Ready
               </h2>
               <p className="text-sm text-[#6B7280]">
@@ -231,30 +294,67 @@ export function OnboardingComplete({ onContinue }: OnboardingCompleteProps) {
               </p>
             </div>
           </div>
+          
+          {/* Program Reasoning Summary */}
+          {programReasoning && (
+            <div className="bg-[#0F1115] rounded-lg p-3 border border-[#2B313A] mb-4">
+              <p className="text-xs text-[#6B7280] uppercase tracking-wide mb-2">Your Starting Focus</p>
+              <div className="space-y-1.5">
+                {programReasoning.strategyFocus.map((focus, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <div className="w-1.5 h-1.5 rounded-full bg-[#C1121F]" />
+                    <span className="text-sm text-[#E6E9EF]">{focus}</span>
+                  </div>
+                ))}
+              </div>
+              {programReasoning.weakPointSummary?.primaryFocusReason && 
+               programReasoning.weakPointSummary.primaryFocus !== 'balanced_development' && (
+                <p className="text-xs text-[#A4ACB8] mt-2 italic">
+                  {programReasoning.weakPointSummary.primaryFocusReason}
+                </p>
+              )}
+              <p className="text-xs text-[#6B7280] mt-2">
+                {programReasoning.volumeLevel}
+              </p>
+            </div>
+          )}
 
           {/* Program summary */}
           {programResult?.program && (
-            <div className="grid grid-cols-3 gap-3 mb-6">
-              <div className="bg-[#0F1115] rounded-lg p-3 text-center border border-[#2B313A]">
-                <Calendar className="w-4 h-4 text-[#4F6D8A] mx-auto mb-1" />
-                <p className="text-lg font-bold text-[#E6E9EF]">
+            <div className="grid grid-cols-3 gap-2 mb-4">
+              <div className="bg-[#0F1115] rounded-lg p-2.5 text-center border border-[#2B313A]">
+                <Calendar className="w-3.5 h-3.5 text-[#4F6D8A] mx-auto mb-1" />
+                <p className="text-base font-bold text-[#E6E9EF]">
                   {programResult.program.trainingDaysPerWeek}
                 </p>
-                <p className="text-xs text-[#6B7280]">Days/Week</p>
+                <p className="text-[10px] text-[#6B7280]">Days/Week</p>
               </div>
-              <div className="bg-[#0F1115] rounded-lg p-3 text-center border border-[#2B313A]">
-                <Target className="w-4 h-4 text-[#C1121F] mx-auto mb-1" />
-                <p className="text-lg font-bold text-[#E6E9EF] capitalize truncate">
+              <div className="bg-[#0F1115] rounded-lg p-2.5 text-center border border-[#2B313A]">
+                <Target className="w-3.5 h-3.5 text-[#C1121F] mx-auto mb-1" />
+                <p className="text-base font-bold text-[#E6E9EF] capitalize truncate">
                   {programResult.program.goalLabel.split(' ')[0]}
                 </p>
-                <p className="text-xs text-[#6B7280]">Focus</p>
+                <p className="text-[10px] text-[#6B7280]">Focus</p>
               </div>
-              <div className="bg-[#0F1115] rounded-lg p-3 text-center border border-[#2B313A]">
-                <Dumbbell className="w-4 h-4 text-[#4F6D8A] mx-auto mb-1" />
-                <p className="text-lg font-bold text-[#E6E9EF]">
+              <div className="bg-[#0F1115] rounded-lg p-2.5 text-center border border-[#2B313A]">
+                <Dumbbell className="w-3.5 h-3.5 text-[#4F6D8A] mx-auto mb-1" />
+                <p className="text-base font-bold text-[#E6E9EF]">
                   {programResult.program.sessions.length}
                 </p>
-                <p className="text-xs text-[#6B7280]">Sessions</p>
+                <p className="text-[10px] text-[#6B7280]">Sessions</p>
+              </div>
+            </div>
+          )}
+          
+          {/* First Session Preview */}
+          {programReasoning?.firstSession && (
+            <div className="bg-gradient-to-r from-[#C1121F]/10 to-transparent rounded-lg p-3 border border-[#C1121F]/20 mb-4">
+              <p className="text-xs text-[#6B7280] uppercase tracking-wide mb-1">First Spartan Session</p>
+              <p className="text-sm font-semibold text-[#E6E9EF] mb-1">{programReasoning.firstSession.title}</p>
+              <div className="flex items-center gap-3 text-xs text-[#A4ACB8]">
+                <span>{programReasoning.firstSession.estimatedMinutes} min</span>
+                <span>•</span>
+                <span>{programReasoning.firstSession.primaryFocus}</span>
               </div>
             </div>
           )}
@@ -309,24 +409,60 @@ export function OnboardingComplete({ onContinue }: OnboardingCompleteProps) {
   // Ready to train step (for Pro users or after skipping upgrade)
   return (
     <div className="min-h-screen bg-[#0F1115] flex items-center justify-center p-4">
-      <Card className="bg-[#1A1F26] border-[#2B313A] p-8 max-w-md w-full text-center">
-        <div className="w-16 h-16 rounded-full bg-emerald-500/10 flex items-center justify-center mx-auto mb-6">
-          <CheckCircle2 className="w-8 h-8 text-emerald-400" />
+      <Card className="bg-[#1A1F26] border-[#2B313A] p-6 max-w-md w-full">
+        <div className="flex items-center gap-3 mb-5">
+          <div className="w-12 h-12 rounded-full bg-emerald-500/10 flex items-center justify-center">
+            <CheckCircle2 className="w-6 h-6 text-emerald-400" />
+          </div>
+          <div>
+            <h2 className="text-xl font-bold text-[#E6E9EF]">
+              You're All Set!
+            </h2>
+            <p className="text-sm text-[#6B7280]">
+              Your program is built and ready
+            </p>
+          </div>
         </div>
         
-        <h2 className="text-2xl font-bold text-[#E6E9EF] mb-2">
-          You're All Set!
-        </h2>
-        <p className="text-sm text-[#6B7280] mb-6">
-          Your personalized training program is ready. Let's start your first session.
-        </p>
+        {/* Program Reasoning Summary */}
+        {programReasoning && (
+          <div className="bg-[#0F1115] rounded-lg p-3 border border-[#2B313A] mb-4">
+            <p className="text-xs text-[#6B7280] uppercase tracking-wide mb-2">Training Strategy</p>
+            <div className="space-y-1.5">
+              {programReasoning.strategyFocus.map((focus, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <div className="w-1.5 h-1.5 rounded-full bg-[#C1121F]" />
+                  <span className="text-sm text-[#E6E9EF]">{focus}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* First Session Preview */}
+        {programReasoning?.firstSession && (
+          <div className="bg-gradient-to-r from-[#C1121F]/10 to-transparent rounded-lg p-4 border border-[#C1121F]/20 mb-4">
+            <p className="text-xs text-[#6B7280] uppercase tracking-wide mb-1">First Spartan Session</p>
+            <p className="text-base font-semibold text-[#E6E9EF] mb-1">{programReasoning.firstSession.title}</p>
+            <div className="flex items-center gap-3 text-xs text-[#A4ACB8] mb-3">
+              <span>{programReasoning.firstSession.estimatedMinutes} min</span>
+              <span>•</span>
+              <span>{programReasoning.firstSession.primaryFocus}</span>
+            </div>
+            <div className="flex items-center gap-2 text-xs text-[#6B7280]">
+              <Dumbbell className="w-3 h-3" />
+              <span>{programReasoning.firstSession.exerciseCount} exercises</span>
+            </div>
+          </div>
+        )}
 
         {spartanScore !== null && (
-          <div className="bg-[#0F1115] rounded-lg p-4 border border-[#2B313A] mb-6">
-            <p className="text-xs text-[#6B7280] uppercase tracking-wide mb-1">
-              Starting Spartan Score
-            </p>
-            <p className="text-3xl font-bold text-[#C1121F]">{spartanScore}</p>
+          <div className="flex items-center justify-between bg-[#0F1115] rounded-lg p-3 border border-[#2B313A] mb-4">
+            <div className="flex items-center gap-2">
+              <Zap className="w-4 h-4 text-[#C1121F]" />
+              <span className="text-sm text-[#A4ACB8]">Starting Spartan Score</span>
+            </div>
+            <span className="text-xl font-bold text-[#C1121F]">{spartanScore}</span>
           </div>
         )}
 
@@ -335,8 +471,7 @@ export function OnboardingComplete({ onContinue }: OnboardingCompleteProps) {
           className="w-full bg-[#C1121F] hover:bg-[#A30F1A] text-white"
           size="lg"
         >
-          <Dumbbell className="w-4 h-4 mr-2" />
-          Start Training
+          Start Session
           <ArrowRight className="w-4 h-4 ml-2" />
         </Button>
       </Card>

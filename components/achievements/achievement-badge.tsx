@@ -2,7 +2,8 @@
 
 import { cn } from '@/lib/utils'
 import { 
-  type AchievementDefinition, 
+  type Achievement,
+  type AchievementDefinition,
   type AchievementTier,
   getTierColors 
 } from '@/lib/achievements/achievement-definitions'
@@ -17,6 +18,7 @@ const ICON_MAP = {
   flame: Flame,
   target: Target,
   zap: Zap,
+  lightning: Zap,
   star: Star,
   medal: Medal,
   crown: Crown,
@@ -51,11 +53,11 @@ const TIER_STYLES: Record<AchievementTier, {
     icon: 'text-yellow-100',
     ring: 'ring-yellow-400/50',
   },
-  platinum: {
-    gradient: 'from-cyan-300 to-cyan-500',
-    glow: 'shadow-cyan-400/40',
-    icon: 'text-white',
-    ring: 'ring-cyan-300/50',
+  elite: {
+    gradient: 'from-purple-500 to-purple-700',
+    glow: 'shadow-purple-500/40',
+    icon: 'text-purple-100',
+    ring: 'ring-purple-500/50',
   },
 }
 

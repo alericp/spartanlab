@@ -4,22 +4,25 @@ import { cn } from '@/lib/utils'
 import { Progress } from '@/components/ui/progress'
 import { 
   type ChallengeWithProgress,
-  type ChallengeDefinition,
 } from '@/lib/challenges/challenge-engine'
-import { getPeriodDisplayName } from '@/lib/challenges/challenge-definitions'
-import { Flame, Trophy, Target, Zap, Dumbbell, Star, Clock, CheckCircle2 } from 'lucide-react'
+import { getPeriodDisplayName, CHALLENGE_CATEGORY_LABELS, type ChallengeCategory } from '@/lib/challenges/challenge-definitions'
+import { Flame, Trophy, Target, Zap, Dumbbell, Star, Clock, CheckCircle2, Medal, Crown } from 'lucide-react'
 
 // =============================================================================
 // ICON MAPPING
 // =============================================================================
 
-const iconMap = {
+const iconMap: Record<string, React.ElementType> = {
   flame: Flame,
   trophy: Trophy,
   target: Target,
   zap: Zap,
+  lightning: Zap,
   dumbbell: Dumbbell,
   star: Star,
+  clock: Clock,
+  medal: Medal,
+  crown: Crown,
 }
 
 // =============================================================================
@@ -33,16 +36,32 @@ interface ChallengeCardProps {
 }
 
 export function ChallengeCard({ challenge, className, compact = false }: ChallengeCardProps) {
-  const Icon = iconMap[challenge.icon] || Target
-  const isCompleted = challenge.isCompleted
+  const Icon = iconMap[challenge.icon || 'target'] || Target
+  const isCompleted = challenge.isCompleted || challenge.completed
   
   // Format time remaining
   const formatTimeRemaining = () => {
+    if (!challenge.timeRemaining) {
+      // For lifetime challenges (skill/strength), show no expiry
+      if (challenge.category === 'skill' || challenge.category === 'strength') {
+        return 'Lifetime'
+      }
+      return 'Active'
+    }
     const { days, hours, minutes, expired } = challenge.timeRemaining
     if (expired) return 'Expired'
     if (days > 0) return `${days}d ${hours}h left`
     if (hours > 0) return `${hours}h ${minutes}m left`
     return `${minutes}m left`
+  }
+  
+  // Get category label
+  const getCategoryLabel = () => {
+    if (challenge.category === 'skill') return 'Skill Challenge'
+    if (challenge.category === 'strength') return 'Strength Challenge'
+    if (challenge.category === 'time') return 'Timed Challenge'
+    if (challenge.category === 'seasonal') return 'Seasonal Challenge'
+    return `${challenge.period.charAt(0).toUpperCase() + challenge.period.slice(1)} Challenge`
   }
   
   return (
@@ -91,7 +110,12 @@ export function ChallengeCard({ challenge, className, compact = false }: Challen
                 {challenge.name}
               </h3>
               <span className="text-xs text-[#6B7280]">
-                {getPeriodDisplayName(challenge.period)} Challenge
+                {getCategoryLabel()}
+                {challenge.tier && challenge.maxTier && (
+                  <span className="ml-1 text-amber-400/70">
+                    Tier {challenge.tier}/{challenge.maxTier}
+                  </span>
+                )}
               </span>
             </div>
           </div>
@@ -142,16 +166,23 @@ export function ChallengeCard({ challenge, className, compact = false }: Challen
         </div>
         
         {/* Reward Badge */}
-        {!compact && (
+        {!compact && challenge.reward && (
           <div className="flex items-center justify-between mt-3 pt-3 border-t border-[#2A2F38]">
             <span className="text-xs text-[#6B7280]">Reward</span>
             <div className="flex items-center gap-2">
               <span className="text-xs text-[#9CA3AF]">
-                {challenge.reward.rewardName}
+                {challenge.reward.label || challenge.reward.type}
               </span>
-              <span className="text-xs font-medium text-amber-400">
-                +{challenge.reward.pointBonus} pts
-              </span>
+              {challenge.reward.type === 'score_boost' && (
+                <span className="text-xs font-medium text-amber-400">
+                  +{challenge.reward.value} pts
+                </span>
+              )}
+              {challenge.reward.type === 'badge' && (
+                <span className="text-xs font-medium text-amber-400">
+                  Badge
+                </span>
+              )}
             </div>
           </div>
         )}

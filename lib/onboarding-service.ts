@@ -11,7 +11,9 @@ import {
   estimateStrengthTier,
 } from './athlete-profile'
 import { getAthleteCalibration } from './athlete-calibration'
+import { detectWeakPoints, type WeakPointSummary } from './weak-point-detection'
 import { generateAdaptiveProgram, type AdaptiveProgramInputs, type AdaptiveProgram } from './adaptive-program-builder'
+import { evaluateTrainingBehavior, type TrainingBehaviorResult } from './adaptive-progression-engine'
 import type { PrimaryGoal, ExperienceLevel, TrainingDays, SessionLength } from './program-service'
 import type { EquipmentType } from './adaptive-exercise-pool'
 
@@ -285,5 +287,271 @@ export function getOnboardingSummary(): {
     sessionLength: mapTrainingTimeToMinutes(profile.trainingTime || '30_45'),
     hasFlexibilityGoals: (profile.flexibilityGoals || []).length > 0,
     likesEndurance: profile.enduranceInterest === 'yes' || profile.enduranceInterest === 'occasionally',
+  }
+}
+
+// =============================================================================
+// PROGRAM REASONING
+// =============================================================================
+
+export interface ProgramReasoning {
+  // Athlete insights
+  detectedStrength: {
+    label: string
+    detail: string | null
+  }
+  detectedSkills: {
+    skill: string
+    level: string
+  }[]
+  
+  // Weak point detection
+  weakPointSummary: WeakPointSummary | null
+  
+  // Training strategy
+  strategyFocus: string[]
+  volumeLevel: string
+  sessionStyle: string
+  
+  // First session info
+  firstSession: {
+    title: string
+    estimatedMinutes: number
+    primaryFocus: string
+    exerciseCount: number
+  } | null
+  
+  // Detected limiters/areas to work on
+  areasToImprove: string[]
+  
+  // Diagnostic signals
+  primaryLimitation: string | null
+  weakestArea: string | null
+  jointProtection: string[]
+  
+  // Adaptive progression messages (from training behavior analysis)
+  adaptiveMessages: string[]
+  hasAdaptations: boolean
+  trainingBehavior: TrainingBehaviorResult | null
+}
+
+/**
+ * Generate detailed program reasoning based on athlete profile
+ */
+export function getProgramReasoning(program: AdaptiveProgram | null): ProgramReasoning {
+  const profile = getOnboardingProfile()
+  const calibration = getAthleteCalibration()
+  
+  // Weak point detection
+  const weakPointSummary = detectWeakPoints()
+  
+  // Strength detection
+  const strengthTier = profile ? estimateStrengthTier(profile) : 'intermediate'
+  const strengthLabels: Record<string, string> = {
+    'novice': 'Foundation building',
+    'developing': 'Early intermediate',
+    'intermediate': 'Solid foundation',
+    'advanced': 'Advanced strength',
+    'elite': 'Elite level',
+  }
+  
+  // Weighted strength details
+  let strengthDetail: string | null = null
+  if (profile?.weightedPullUp?.load) {
+    const reps = profile.weightedPullUp.reps ? ` x ${profile.weightedPullUp.reps}` : ''
+    strengthDetail = `Weighted pull-up: +${profile.weightedPullUp.load}${profile.weightedPullUp.unit}${reps}`
+  }
+  
+  // Detected skills
+  const detectedSkills: { skill: string; level: string }[] = []
+  
+  if (profile?.frontLever?.progression && profile.frontLever.progression !== 'none' && profile.frontLever.progression !== 'unknown') {
+    const flLabels: Record<string, string> = {
+      'tuck': 'Tuck',
+      'adv_tuck': 'Advanced tuck',
+      'one_leg': 'One leg',
+      'straddle': 'Straddle',
+      'full': 'Full',
+    }
+    detectedSkills.push({ skill: 'Front lever', level: flLabels[profile.frontLever.progression] || profile.frontLever.progression })
+  }
+  
+  if (profile?.planche?.progression && profile.planche.progression !== 'none' && profile.planche.progression !== 'unknown') {
+    const plLabels: Record<string, string> = {
+      'lean': 'Lean',
+      'tuck': 'Tuck',
+      'adv_tuck': 'Advanced tuck',
+      'straddle': 'Straddle',
+      'full': 'Full',
+    }
+    detectedSkills.push({ skill: 'Planche', level: plLabels[profile.planche.progression] || profile.planche.progression })
+  }
+  
+  if (profile?.muscleUp && profile.muscleUp !== 'none' && profile.muscleUp !== 'unknown') {
+    const muLabels: Record<string, string> = {
+      'working_on': 'Learning',
+      'kipping': 'Kipping',
+      'strict_1_3': '1-3 strict',
+      'strict_4_plus': '4+ strict',
+    }
+    detectedSkills.push({ skill: 'Muscle-up', level: muLabels[profile.muscleUp] || profile.muscleUp })
+  }
+  
+  // Training strategy - enhanced with weak point detection
+  const strategyFocus: string[] = []
+  const skillInterests = profile?.skillInterests || []
+  
+  // Primary focus from weak point detection
+  if (weakPointSummary.primaryFocus !== 'balanced_development') {
+    strategyFocus.push(weakPointSummary.primaryFocusLabel)
+  }
+  
+  // Skill work priority
+  if (skillInterests.includes('front_lever') || skillInterests.includes('planche')) {
+    if (!strategyFocus.some(s => s.toLowerCase().includes('skill'))) {
+      strategyFocus.push('Skill work priority')
+    }
+  }
+  
+  // Secondary focus
+  if (weakPointSummary.secondaryFocusLabel && strategyFocus.length < 3) {
+    strategyFocus.push(weakPointSummary.secondaryFocusLabel)
+  }
+  
+  // Core work if needed
+  if (calibration?.needsCompressionWork && !strategyFocus.some(s => s.toLowerCase().includes('core'))) {
+    strategyFocus.push('Core compression development')
+  }
+  
+  // Mobility if emphasized
+  if (weakPointSummary.mobilityEmphasis === 'high' && !strategyFocus.some(s => s.toLowerCase().includes('mobility'))) {
+    strategyFocus.push('Mobility integration')
+  }
+  
+  // Fallback to balanced
+  if (strategyFocus.length === 0) {
+    strategyFocus.push('Balanced strength development')
+  }
+  
+  // Volume level
+  const trainingDays = profile?.weeklyTraining ? mapWeeklyTrainingToDays(profile.weeklyTraining) : 3
+  const volumeLabels: Record<number, string> = {
+    2: 'Low volume (2 days/week)',
+    3: 'Moderate volume (3 days/week)',
+    4: 'Standard volume (4 days/week)',
+    5: 'High volume (5+ days/week)',
+  }
+  const volumeLevel = volumeLabels[Math.min(trainingDays, 5)] || 'Moderate volume'
+  
+  // Session style
+  const sessionStyle = profile?.sessionStyle === 'efficient' 
+    ? 'Shorter, focused sessions' 
+    : 'Longer, more complete sessions'
+  
+  // First session info
+  let firstSession: ProgramReasoning['firstSession'] = null
+  if (program && program.sessions.length > 0) {
+    const session = program.sessions[0]
+    const totalExercises = session.blocks.reduce((sum, block) => sum + block.exercises.length, 0)
+    
+    // Determine primary focus from session blocks
+    let primaryFocus = 'Strength and skill development'
+    if (session.blocks.some(b => b.name.toLowerCase().includes('skill'))) {
+      const skillBlock = session.blocks.find(b => b.name.toLowerCase().includes('skill'))
+      primaryFocus = skillBlock?.name || 'Skill progression'
+    } else if (session.blocks.some(b => b.name.toLowerCase().includes('pull'))) {
+      primaryFocus = 'Pulling strength'
+    } else if (session.blocks.some(b => b.name.toLowerCase().includes('push'))) {
+      primaryFocus = 'Pushing strength'
+    }
+    
+    firstSession = {
+      title: session.name,
+      estimatedMinutes: session.estimatedMinutes || 45,
+      primaryFocus,
+      exerciseCount: totalExercises,
+    }
+  }
+  
+  // Areas to improve
+  const areasToImprove: string[] = []
+  if (calibration?.needsCompressionWork) {
+    areasToImprove.push('Core compression')
+  }
+  if (profile?.weakestArea && profile.weakestArea !== 'not_sure') {
+    const weakAreaLabels: Record<string, string> = {
+      'pulling_strength': 'Pulling strength',
+      'pushing_strength': 'Pushing strength',
+      'core_strength': 'Core strength',
+      'shoulder_stability': 'Shoulder stability',
+      'hip_mobility': 'Hip mobility',
+      'hamstring_flexibility': 'Hamstring flexibility',
+    }
+    areasToImprove.push(weakAreaLabels[profile.weakestArea] || profile.weakestArea)
+  }
+  if (calibration?.leverageProfile === 'long_limbed') {
+    areasToImprove.push('Leverage disadvantage addressed')
+  }
+  
+  // Diagnostic signals
+  const primaryLimitationLabels: Record<string, string> = {
+    'strength': 'Strength',
+    'flexibility': 'Flexibility',
+    'skill_coordination': 'Skill coordination',
+    'recovery': 'Recovery capacity',
+    'consistency': 'Consistency',
+  }
+  
+  const primaryLimitation = profile?.primaryLimitation && profile.primaryLimitation !== 'not_sure'
+    ? primaryLimitationLabels[profile.primaryLimitation] || null
+    : null
+    
+  const weakestArea = profile?.weakestArea && profile.weakestArea !== 'not_sure'
+    ? profile.weakestArea.replace('_', ' ')
+    : null
+    
+  const jointProtection = (profile?.jointCautions || []).map(j => {
+    const labels: Record<string, string> = {
+      'shoulders': 'Shoulders',
+      'elbows': 'Elbows',
+      'wrists': 'Wrists',
+      'lower_back': 'Lower back',
+      'knees': 'Knees',
+    }
+    return labels[j] || j
+  })
+  
+  // Evaluate training behavior for adaptive messages
+  let trainingBehavior: TrainingBehaviorResult | null = null
+  let adaptiveMessages: string[] = []
+  let hasAdaptations = false
+  
+  try {
+    trainingBehavior = evaluateTrainingBehavior()
+    hasAdaptations = trainingBehavior.adaptationNeeded
+    adaptiveMessages = trainingBehavior.coachMessages
+  } catch {
+    // Training behavior analysis may fail if no logs exist yet
+    trainingBehavior = null
+  }
+  
+  return {
+    detectedStrength: {
+      label: strengthLabels[strengthTier] || 'Intermediate',
+      detail: strengthDetail,
+    },
+    detectedSkills,
+    weakPointSummary,
+    strategyFocus: strategyFocus.slice(0, 3), // Limit to 3 items
+    volumeLevel,
+    sessionStyle,
+    firstSession,
+    areasToImprove: areasToImprove.slice(0, 3),
+    primaryLimitation,
+    weakestArea,
+    jointProtection,
+    adaptiveMessages,
+    hasAdaptations,
+    trainingBehavior,
   }
 }

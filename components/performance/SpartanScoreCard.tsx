@@ -117,6 +117,14 @@ export function SpartanScoreCard({ score }: SpartanScoreCardProps) {
               ))}
             </div>
           )}
+          
+          {/* Decay info (if applicable) */}
+          {score.decayInfo?.decayApplied && (
+            <div className="mt-3 flex items-center gap-2 text-xs text-amber-400">
+              <AlertCircle className="w-3.5 h-3.5" />
+              <span>{score.decayInfo.message}</span>
+            </div>
+          )}
         </div>
 
         {/* Score breakdown - Primary metrics */}
@@ -125,35 +133,41 @@ export function SpartanScoreCard({ score }: SpartanScoreCardProps) {
             icon={Target}
             label="Skills"
             score={score.skillScore}
-            weight={30}
+            weight={28}
           />
           <ScoreBreakdownItem 
             icon={Dumbbell}
             label="Strength"
             score={score.strengthScore}
-            weight={30}
+            weight={28}
           />
           <ScoreBreakdownItem 
             icon={Calendar}
             label="Consistency"
             score={score.consistencyScore}
-            weight={20}
+            weight={17}
           />
         </div>
         
         {/* Score breakdown - Secondary metrics */}
-        <div className="grid grid-cols-2 gap-2 sm:gap-3">
+        <div className="grid grid-cols-3 gap-2 sm:gap-3">
           <ScoreBreakdownItem 
             icon={Zap}
             label="Readiness"
             score={score.readinessScore}
-            weight={10}
+            weight={12}
           />
           <ScoreBreakdownItem 
             icon={Trophy}
             label="Achievements"
             score={score.achievementScore}
             weight={10}
+          />
+          <ScoreBreakdownItem 
+            icon={Activity}
+            label="Challenges"
+            score={score.challengeScore || 0}
+            weight={5}
           />
         </div>
 

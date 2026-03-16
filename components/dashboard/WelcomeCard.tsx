@@ -3,12 +3,14 @@
 import { useEffect, useState } from 'react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { CheckCircle2, Calendar, Target, Dumbbell, X } from 'lucide-react'
+import { CheckCircle2, Calendar, Target, Dumbbell, X, TrendingUp, TrendingDown, Minus } from 'lucide-react'
 import { SpartanIcon } from '@/components/brand/SpartanLogo'
 import {
   generateFirstProgram,
   getOnboardingSummary,
+  getProgramReasoning,
   type FirstRunResult,
+  type ProgramReasoning,
 } from '@/lib/onboarding-service'
 import { getOnboardingProfile, hasEstimatedValues } from '@/lib/athlete-profile'
 import { AlertCircle } from 'lucide-react'
@@ -22,6 +24,7 @@ export function WelcomeCard({ onDismiss, onProgramReady }: WelcomeCardProps) {
   const [isGenerating, setIsGenerating] = useState(true)
   const [result, setResult] = useState<FirstRunResult | null>(null)
   const [summary, setSummary] = useState<ReturnType<typeof getOnboardingSummary>>(null)
+  const [reasoning, setReasoning] = useState<ProgramReasoning | null>(null)
 
   useEffect(() => {
     // Generate the first program
@@ -34,6 +37,7 @@ export function WelcomeCard({ onDismiss, onProgramReady }: WelcomeCardProps) {
       const programResult = generateFirstProgram()
       setResult(programResult)
       setSummary(getOnboardingSummary())
+      setReasoning(getProgramReasoning(programResult.program))
       setIsGenerating(false)
       
       if (programResult.success && onProgramReady) {
@@ -156,26 +160,77 @@ export function WelcomeCard({ onDismiss, onProgramReady }: WelcomeCardProps) {
         </div>
       )}
 
+      {/* Training Strategy */}
+      {reasoning && reasoning.strategyFocus.length > 0 && (
+        <div className="border-t border-[#2B313A] pt-4 mt-4">
+          <p className="text-xs text-[#6B7280] uppercase tracking-wide mb-2">
+            Training Strategy
+          </p>
+          <div className="space-y-1.5">
+            {reasoning.strategyFocus.map((focus, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <div className="w-1.5 h-1.5 rounded-full bg-[#C1121F]" />
+                <span className="text-sm text-[#E6E9EF]">{focus}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      
+      {/* First Session Preview */}
+      {reasoning?.firstSession && (
+        <div className="bg-gradient-to-r from-[#C1121F]/10 to-transparent rounded-lg p-3 border border-[#C1121F]/20 mt-4">
+          <p className="text-xs text-[#6B7280] uppercase tracking-wide mb-1">First Spartan Session</p>
+          <p className="text-sm font-semibold text-[#E6E9EF] mb-1">{reasoning.firstSession.title}</p>
+          <div className="flex items-center gap-3 text-xs text-[#A4ACB8]">
+            <span>{reasoning.firstSession.estimatedMinutes} min</span>
+            <span>•</span>
+            <span>{reasoning.firstSession.primaryFocus}</span>
+          </div>
+        </div>
+      )}
+
+      {/* Adaptive Coach Messages */}
+      {reasoning?.hasAdaptations && reasoning.adaptiveMessages.length > 0 && (
+        <div className="bg-[#C1121F]/5 border border-[#C1121F]/20 rounded-lg p-3 mt-4">
+          <div className="flex items-center gap-2 mb-2">
+            {reasoning.trainingBehavior?.progressTrend.overallTrend === 'improving' ? (
+              <TrendingUp className="w-4 h-4 text-green-400" />
+            ) : reasoning.trainingBehavior?.progressTrend.overallTrend === 'declining' ? (
+              <TrendingDown className="w-4 h-4 text-amber-400" />
+            ) : (
+              <Minus className="w-4 h-4 text-blue-400" />
+            )}
+            <span className="text-xs font-medium text-[#C1121F]">Adaptive Coaching</span>
+          </div>
+          <ul className="space-y-1">
+            {reasoning.adaptiveMessages.slice(0, 2).map((msg, idx) => (
+              <li key={idx} className="text-sm text-[#A4ACB8]">{msg}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {/* Calibration Highlights */}
       {summary && (
-        <div className="border-t border-[#2B313A] pt-4 mt-4">
+        <div className="border-t border-[#2B313A] pt-3 mt-4">
           <p className="text-xs text-[#6B7280] uppercase tracking-wide mb-2">
             Calibration Profile
           </p>
-          <div className="flex flex-wrap gap-2">
-            <span className="px-2 py-1 bg-[#0F1115] rounded text-xs text-[#A4ACB8] capitalize">
+          <div className="flex flex-wrap gap-1.5">
+            <span className="px-2 py-0.5 bg-[#0F1115] rounded text-xs text-[#A4ACB8] capitalize">
               {summary.strengthTier.replace('_', ' ')} level
             </span>
             {summary.skillInterests.slice(0, 2).map(skill => (
               <span
                 key={skill}
-                className="px-2 py-1 bg-[#C1121F]/10 rounded text-xs text-[#C1121F] capitalize"
+                className="px-2 py-0.5 bg-[#C1121F]/10 rounded text-xs text-[#C1121F] capitalize"
               >
                 {skill.replace('_', ' ')}
               </span>
             ))}
             {summary.hasFlexibilityGoals && (
-              <span className="px-2 py-1 bg-[#4F6D8A]/10 rounded text-xs text-[#4F6D8A]">
+              <span className="px-2 py-0.5 bg-[#4F6D8A]/10 rounded text-xs text-[#4F6D8A]">
                 + Flexibility
               </span>
             )}
@@ -183,20 +238,13 @@ export function WelcomeCard({ onDismiss, onProgramReady }: WelcomeCardProps) {
         </div>
       )}
 
-      {/* Adaptability Message */}
-      <div className="bg-[#0F1115] border border-[#2B313A] rounded-lg p-3 mt-4">
-        <p className="text-xs text-[#A4ACB8] text-center">
-          SpartanLab adapts as you improve. Update your metrics anytime to refine your training.
-        </p>
-      </div>
-
       {/* CTA */}
       <div className="mt-4">
         <Button
           onClick={onDismiss}
           className="w-full bg-[#C1121F] hover:bg-[#A30F1A] text-white"
         >
-          View Today's Session
+          Start Session
         </Button>
       </div>
     </Card>

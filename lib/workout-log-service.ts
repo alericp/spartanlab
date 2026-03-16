@@ -49,6 +49,15 @@ export interface WorkoutLog {
     skillHoldSeconds?: number
     skillName?: string
   }
+  // Time optimization tracking
+  timeOptimization?: {
+    wasOptimized: boolean
+    originalMinutes: number
+    targetMinutes: number
+    actualMinutes: number
+    removedExerciseCount: number
+    reducedExerciseCount: number
+  }
 }
 
 const STORAGE_KEY = 'spartanlab_workout_logs'

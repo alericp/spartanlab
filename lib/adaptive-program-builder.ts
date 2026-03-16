@@ -71,6 +71,11 @@ import {
   type ProgressionInsight,
   type TrainingBehaviorResult,
 } from './adaptive-progression-engine'
+import { 
+  optimizeSessionForTime, 
+  saveTimePattern,
+  type OptimizedSession,
+} from './time-optimization'
 import {
   validateExerciseSelection,
   type ExerciseIntelligenceContext,
@@ -139,6 +144,15 @@ export interface AdaptiveSession {
   // Joint Integrity Protocol recommendations
   protocols?: ProtocolRecommendation[]
   protocolExplanations?: string[]
+  // Time optimization context
+  timeOptimization?: {
+    wasOptimized: boolean
+    originalMinutes: number
+    targetMinutes: number
+    coachingMessage: string
+    removedExercises: string[]
+    reducedExercises: string[]
+  }
 }
 
 export interface AdaptiveExercise {
@@ -1304,5 +1318,79 @@ export function getDefaultAdaptiveInputs(): AdaptiveProgramInputs {
     trainingDaysPerWeek: (profile.trainingDaysPerWeek as TrainingDays) || 4,
     sessionLength: 60,
     equipment: defaultEquipment,
+  }
+}
+
+// =============================================================================
+// TIME OPTIMIZATION
+// =============================================================================
+
+/**
+ * Optimize a session for a specific target duration
+ * Use when user indicates they have less/more time than default
+ */
+export function optimizeSessionForDuration(
+  session: AdaptiveSession,
+  targetMinutes: number,
+  options?: {
+    preserveSkillWork?: boolean
+    preserveMainStrength?: boolean
+  }
+): AdaptiveSession {
+  const { preserveSkillWork = true, preserveMainStrength = true } = options || {}
+  
+  const result = optimizeSessionForTime({
+    session,
+    targetMinutes,
+    preserveSkillWork,
+    preserveMainStrength,
+  })
+  
+  // Track time pattern for adaptive learning
+  saveTimePattern({
+    date: new Date().toISOString().split('T')[0],
+    requestedMinutes: targetMinutes,
+    actualMinutes: result.actualMinutes,
+    wasCompressed: result.optimizationType === 'compressed',
+    wasExpanded: result.optimizationType === 'expanded',
+  })
+  
+  // Add optimization context to session
+  const optimizedSession: AdaptiveSession = {
+    ...result.session,
+    timeOptimization: {
+      wasOptimized: result.wasOptimized,
+      originalMinutes: result.originalMinutes,
+      targetMinutes: result.targetMinutes,
+      coachingMessage: result.coachingMessage,
+      removedExercises: result.removedExercises,
+      reducedExercises: result.reducedExercises,
+    },
+  }
+  
+  return optimizedSession
+}
+
+/**
+ * Get time optimization info for display
+ */
+export function getTimeOptimizationInfo(session: AdaptiveSession): {
+  isOptimized: boolean
+  message: string
+  details: string
+} {
+  if (!session.timeOptimization?.wasOptimized) {
+    return {
+      isOptimized: false,
+      message: '',
+      details: '',
+    }
+  }
+  
+  const opt = session.timeOptimization
+  return {
+    isOptimized: true,
+    message: opt.coachingMessage,
+    details: `${opt.removedExercises.length} exercise(s) removed, ${opt.reducedExercises.length} reduced`,
   }
 }

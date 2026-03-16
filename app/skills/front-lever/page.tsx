@@ -59,9 +59,9 @@ const commonMistakes = [
 ]
 
 const trainingResources = [
-  { title: 'Pull-Up Strength Guide', href: '/guides/pull-up-strength', description: 'Build your pulling foundation' },
-  { title: 'Core Compression Training', href: '/guides/core-compression-training', description: 'Essential for horizontal holds' },
-  { title: 'Weighted Pull-Up Programming', href: '/guides/weighted-pull-up-progression', description: 'Add load to accelerate progress' },
+  { title: 'Front Lever Training Guide', href: '/guides/front-lever-training', description: 'Complete training methodology' },
+  { title: 'Front Lever Program', href: '/programs/front-lever-program', description: '12-24 week structured plan' },
+  { title: 'Weighted Pull-Up Training', href: '/guides/weighted-pull-up-training', description: 'Build pulling strength foundation' },
   { title: 'Strength Standards', href: '/calisthenics-strength-standards', description: 'Check your readiness benchmarks' },
 ]
 
@@ -213,18 +213,18 @@ export default function FrontLeverHubPage() {
           <Card className="bg-gradient-to-r from-[#C1121F]/20 to-[#1A1F26] border-[#C1121F]/30 p-6">
             <h2 className="text-xl font-bold mb-2">Ready to Train?</h2>
             <p className="text-[#A5A5A5] mb-4">
-              Build a personalized program that integrates front lever training with your other goals.
+              SpartanLab creates adaptive programs that target your specific limiting factors and integrate front lever training with your other goals.
             </p>
             <div className="flex flex-wrap gap-3">
-              <Link href="/calisthenics-program-builder">
+              <Link href="/onboarding">
                 <Button className="bg-[#C1121F] hover:bg-[#A50E1A]">
-                  Build Your Program
+                  Generate Your Program
                   <ArrowRight className="w-4 h-4 ml-2" />
                 </Button>
               </Link>
-              <Link href="/calisthenics-strength-standards">
+              <Link href="/front-lever-readiness-calculator">
                 <Button variant="outline" className="border-[#2B313A] hover:bg-[#2B313A]">
-                  Check Strength Standards
+                  Check Your Readiness First
                 </Button>
               </Link>
             </div>

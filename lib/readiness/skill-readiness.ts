@@ -1694,3 +1694,144 @@ export function getStatusColor(status: ScoreBreakdown['status']): string {
     case 'weak': return 'text-red-400'
   }
 }
+
+// =============================================================================
+// GENERIC SKILL READINESS CALCULATOR (for engine integration)
+// =============================================================================
+
+export interface SkillReadinessResult {
+  overallScore: number
+  pullStrengthScore: number
+  compressionScore: number
+  scapularControlScore: number
+  straightArmScore: number
+  mobilityScore: number
+  limitingFactor: string
+  level: ReadinessLevel
+  recommendation: string
+}
+
+export interface AthleteProfileForReadiness {
+  pullUpMax?: number | null
+  dipMax?: number | null
+  pushUpMax?: number | null
+  hollowHoldTime?: number | null
+  experienceLevel?: 'beginner' | 'intermediate' | 'advanced'
+  equipment?: string[]
+}
+
+/**
+ * Generic skill readiness calculator for engine integration
+ * Maps to the specific skill calculators based on skill type
+ */
+export function calculateSkillReadiness(
+  skill: string,
+  profile: AthleteProfileForReadiness
+): SkillReadinessResult | null {
+  const pullUps = profile.pullUpMax ?? 0
+  const dips = profile.dipMax ?? 0
+  const pushUps = profile.pushUpMax ?? 30
+  const hollowHold = profile.hollowHoldTime ?? 15
+  const hasBar = profile.equipment?.some(e => e.includes('bar') || e.includes('pull')) ?? true
+  const hasRings = profile.equipment?.includes('rings') ?? false
+  const hasParallettes = profile.equipment?.includes('parallettes') ?? true
+
+  let result: ReadinessResult | null = null
+
+  switch (skill) {
+    case 'front_lever':
+      result = calculateFrontLeverReadiness({
+        maxPullUps: pullUps,
+        weightedPullUpLoad: Math.max(0, (pullUps - 10) * 3), // Estimate
+        hollowHoldTime: hollowHold,
+        hasRings,
+        hasBar,
+      })
+      break
+    
+    case 'planche':
+      result = calculatePlancheReadiness({
+        maxPushUps: pushUps,
+        maxDips: dips,
+        plancheLeanHold: 15, // Default estimate
+        shoulderMobilityConfidence: 'moderate',
+        hasParallettes,
+        hasFloor: true,
+      })
+      break
+    
+    case 'muscle_up':
+      result = calculateMuscleUpReadiness({
+        maxPullUps: pullUps,
+        maxDips: dips,
+        chestToBarReps: Math.max(0, pullUps - 5),
+        hasExplosivePulls: pullUps >= 12,
+        hasBar,
+        hasBands: false,
+      })
+      break
+    
+    case 'hspu':
+    case 'handstand_push_up':
+      result = calculateHSPUReadiness({
+        maxPushUps: pushUps,
+        maxDips: dips,
+        pikePushUpReps: Math.floor(pushUps * 0.4),
+        wallHandstandHold: 30,
+        hasWall: true,
+        hasParallettes,
+      })
+      break
+    
+    case 'l_sit':
+      result = calculateLSitReadiness({
+        maxDips: dips,
+        hollowHoldTime: hollowHold,
+        toePointQuality: 'moderate',
+        hipFlexorStrength: 'moderate',
+        hasParallettes,
+        hasFloor: true,
+      })
+      break
+    
+    default:
+      return null
+  }
+
+  if (!result) return null
+
+  // Map breakdown factors to our unified scoring
+  const breakdown = result.breakdown
+  const pullStrength = breakdown.find(b => 
+    b.factor.toLowerCase().includes('pull') || 
+    b.factor.toLowerCase().includes('strength')
+  )
+  const compression = breakdown.find(b => 
+    b.factor.toLowerCase().includes('core') || 
+    b.factor.toLowerCase().includes('hollow') ||
+    b.factor.toLowerCase().includes('compression')
+  )
+  const scapular = breakdown.find(b => 
+    b.factor.toLowerCase().includes('scapular') || 
+    b.factor.toLowerCase().includes('stability')
+  )
+  const straightArm = breakdown.find(b => 
+    b.factor.toLowerCase().includes('lean') || 
+    b.factor.toLowerCase().includes('straight')
+  )
+  const mobility = breakdown.find(b => 
+    b.factor.toLowerCase().includes('mobility')
+  )
+
+  return {
+    overallScore: result.score,
+    pullStrengthScore: pullStrength ? (pullStrength.score / pullStrength.maxScore) * 100 : 50,
+    compressionScore: compression ? (compression.score / compression.maxScore) * 100 : 50,
+    scapularControlScore: scapular ? (scapular.score / scapular.maxScore) * 100 : 50,
+    straightArmScore: straightArm ? (straightArm.score / straightArm.maxScore) * 100 : 50,
+    mobilityScore: mobility ? (mobility.score / mobility.maxScore) * 100 : 50,
+    limitingFactor: result.limitingFactor,
+    level: result.level,
+    recommendation: result.recommendation,
+  }
+}

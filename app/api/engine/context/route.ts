@@ -12,16 +12,16 @@ export const dynamic = 'force-dynamic'
  */
 export async function GET() {
   try {
-    const session = await getSession()
+    const { userId } = await getSession()
     
-    if (!session?.user?.id) {
+    if (!userId) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
       )
     }
     
-    const context = await buildUnifiedContext(session.user.id)
+    const context = await buildUnifiedContext(userId)
     
     return NextResponse.json({
       success: true,

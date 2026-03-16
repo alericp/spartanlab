@@ -17,16 +17,14 @@ export const dynamic = 'force-dynamic'
  */
 export async function GET() {
   try {
-    const session = await getSession()
+    const { userId } = await getSession()
     
-    if (!session?.user?.id) {
+    if (!userId) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
       )
     }
-    
-    const userId = session.user.id
     
     const [activeVersion, history] = await Promise.all([
       getActiveProgramVersion(userId),
@@ -64,16 +62,14 @@ export async function GET() {
  */
 export async function POST(request: Request) {
   try {
-    const session = await getSession()
+    const { userId } = await getSession()
     
-    if (!session?.user?.id) {
+    if (!userId) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
       )
     }
-    
-    const userId = session.user.id
     const body = await request.json().catch(() => ({}))
     
     // Build current context

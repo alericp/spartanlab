@@ -16,16 +16,16 @@ export const dynamic = 'force-dynamic'
  */
 export async function GET() {
   try {
-    const session = await getSession()
+    const { userId } = await getSession()
     
-    if (!session?.user?.id) {
+    if (!userId) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
       )
     }
     
-    const profile = await getTrainingStyleProfile(session.user.id)
+    const profile = await getTrainingStyleProfile(userId)
     
     return NextResponse.json({
       success: true,
@@ -67,9 +67,9 @@ export async function GET() {
  */
 export async function POST(request: Request) {
   try {
-    const session = await getSession()
+    const { userId } = await getSession()
     
-    if (!session?.user?.id) {
+    if (!userId) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
@@ -95,7 +95,7 @@ export async function POST(request: Request) {
       )
     }
     
-    const profile = await saveTrainingStyleProfile(session.user.id, {
+    const profile = await saveTrainingStyleProfile(userId, {
       styleMode: body.styleMode,
       skillPriority: body.skillPriority,
       strengthPriority: body.strengthPriority,

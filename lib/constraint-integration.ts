@@ -13,6 +13,9 @@ import {
   type GlobalConstraintResult,
   type SkillConstraintResult,
 } from './constraint-detection-engine'
+
+// Re-export for consumers
+export type { ConstraintCategory } from './constraint-detection-engine'
 import { getAthleteProfile } from './data-service'
 
 // =============================================================================

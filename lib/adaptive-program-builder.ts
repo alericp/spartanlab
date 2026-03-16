@@ -146,6 +146,11 @@ export interface AdaptiveExercise {
   method?: TrainingMethod
   methodLabel?: string
   blockId?: string // Groups exercises in the same block (e.g., superset)
+  // Session override tracking (runtime only, not persisted to program)
+  originalName?: string // Set when exercise is replaced
+  isSkipped?: boolean // Set when exercise is skipped
+  isReplaced?: boolean // Set when exercise is replaced
+  isProgressionAdjusted?: boolean // Set when progression is changed
 }
 
 export interface AdaptiveProgram {

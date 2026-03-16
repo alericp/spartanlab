@@ -26,6 +26,14 @@ import {
 } from '@/lib/band-progression-engine'
 import { RPE_QUICK_OPTIONS, type RPEValue } from '@/lib/rpe-adjustment-engine'
 import { InlineRestTimer } from '@/components/workout/InlineRestTimer'
+import { ExerciseOptionsMenu } from '@/components/workout/ExerciseOptionsMenu'
+import {
+  addOverride,
+  getSessionOverrides,
+  clearSessionOverrides,
+  getOverrideSummary,
+  type ExerciseOverride,
+} from '@/lib/exercise-override-service'
 import { SessionPerformanceCard } from '@/components/workout/SessionPerformanceCard'
 import { PostWorkoutSummary } from '@/components/workout/PostWorkoutSummary'
 import { getSessionPerformance, createPerformanceInputFromStats } from '@/lib/session-performance'
@@ -51,6 +59,14 @@ interface CompletedSetData {
   timestamp: number
 }
 
+interface ExerciseOverrideState {
+  originalName: string
+  currentName: string
+  isSkipped: boolean
+  isReplaced: boolean
+  isProgressionAdjusted: boolean
+}
+
 interface WorkoutSessionState {
   status: 'ready' | 'active' | 'resting' | 'completed'
   currentExerciseIndex: number
@@ -60,6 +76,7 @@ interface WorkoutSessionState {
   elapsedSeconds: number
   lastSetRPE: RPEValue | null
   workoutNotes: string
+  exerciseOverrides: Record<number, ExerciseOverrideState>
 }
 
 // Resume prompt state (exported for use in other components)
@@ -316,6 +333,7 @@ export function StreamlinedWorkoutSession({
       elapsedSeconds: 0,
       lastSetRPE: null,
       workoutNotes: '',
+      exerciseOverrides: {},
     }
   })
   
@@ -434,6 +452,7 @@ export function StreamlinedWorkoutSession({
   const handleStartNew = useCallback(() => {
     clearSessionStorage()
     clearRestTimerState()
+    clearSessionOverrides()
     setShowResumePrompt(false)
     setExistingSession(null)
     setState({
@@ -445,6 +464,7 @@ export function StreamlinedWorkoutSession({
       elapsedSeconds: 0,
       lastSetRPE: null,
       workoutNotes: '',
+      exerciseOverrides: {},
     })
   }, [])
   
@@ -529,6 +549,142 @@ export function StreamlinedWorkoutSession({
     }
     setSelectedRPE(null)
   }, [state.currentExerciseIndex, session.exercises.length])
+  
+  // ==========================================================================
+  // EXERCISE OVERRIDE HANDLERS
+  // ==========================================================================
+  
+  // Handle exercise replacement
+  const handleReplaceExercise = useCallback((newExercise: { id: string; name: string }) => {
+    const exerciseIndex = state.currentExerciseIndex
+    const originalExercise = session.exercises[exerciseIndex]
+    
+    // Record override in storage for adaptive tracking
+    const override: ExerciseOverride = {
+      originalExerciseId: originalExercise.id || originalExercise.name,
+      originalExerciseName: originalExercise.name,
+      overrideType: 'replaced',
+      newExerciseId: newExercise.id,
+      newExerciseName: newExercise.name,
+      timestamp: Date.now(),
+    }
+    addOverride(sessionId, override)
+    
+    // Update local state
+    setState(prev => ({
+      ...prev,
+      exerciseOverrides: {
+        ...prev.exerciseOverrides,
+        [exerciseIndex]: {
+          originalName: originalExercise.name,
+          currentName: newExercise.name,
+          isSkipped: false,
+          isReplaced: true,
+          isProgressionAdjusted: false,
+        },
+      },
+    }))
+  }, [sessionId, state.currentExerciseIndex, session.exercises])
+  
+  // Handle exercise skip via menu (different from skip button)
+  const handleMenuSkipExercise = useCallback(() => {
+    const exerciseIndex = state.currentExerciseIndex
+    const originalExercise = session.exercises[exerciseIndex]
+    
+    // Record skip override for adaptive tracking
+    const override: ExerciseOverride = {
+      originalExerciseId: originalExercise.id || originalExercise.name,
+      originalExerciseName: originalExercise.name,
+      overrideType: 'skipped',
+      timestamp: Date.now(),
+    }
+    addOverride(sessionId, override)
+    
+    // Mark as skipped and move to next
+    setState(prev => ({
+      ...prev,
+      exerciseOverrides: {
+        ...prev.exerciseOverrides,
+        [exerciseIndex]: {
+          originalName: originalExercise.name,
+          currentName: originalExercise.name,
+          isSkipped: true,
+          isReplaced: false,
+          isProgressionAdjusted: false,
+        },
+      },
+    }))
+    
+    // Then advance to next exercise
+    handleSkipExercise()
+  }, [sessionId, state.currentExerciseIndex, session.exercises, handleSkipExercise])
+  
+  // Handle progression adjustment
+  const handleProgressionChange = useCallback((newProgression: { id: string; name: string }) => {
+    const exerciseIndex = state.currentExerciseIndex
+    const originalExercise = session.exercises[exerciseIndex]
+    
+    // Record progression adjustment for adaptive tracking
+    const override: ExerciseOverride = {
+      originalExerciseId: originalExercise.id || originalExercise.name,
+      originalExerciseName: originalExercise.name,
+      overrideType: 'progression_adjusted',
+      newExerciseId: newProgression.id,
+      newProgression: newProgression.name,
+      timestamp: Date.now(),
+    }
+    addOverride(sessionId, override)
+    
+    // Update local state
+    setState(prev => ({
+      ...prev,
+      exerciseOverrides: {
+        ...prev.exerciseOverrides,
+        [exerciseIndex]: {
+          originalName: originalExercise.name,
+          currentName: newProgression.name,
+          isSkipped: false,
+          isReplaced: false,
+          isProgressionAdjusted: true,
+        },
+      },
+    }))
+  }, [sessionId, state.currentExerciseIndex, session.exercises])
+  
+  // Handle undo override
+  const handleUndoOverride = useCallback(() => {
+    const exerciseIndex = state.currentExerciseIndex
+    
+    // Remove from local state
+    setState(prev => {
+      const newOverrides = { ...prev.exerciseOverrides }
+      delete newOverrides[exerciseIndex]
+      return {
+        ...prev,
+        exerciseOverrides: newOverrides,
+      }
+    })
+  }, [state.currentExerciseIndex])
+  
+  // Get effective exercise (with override applied)
+  const getEffectiveExercise = useCallback((index: number) => {
+    const baseExercise = session.exercises[index]
+    const override = state.exerciseOverrides[index]
+    
+    if (!override) return baseExercise
+    
+    return {
+      ...baseExercise,
+      name: override.currentName,
+      originalName: override.originalName,
+      isReplaced: override.isReplaced,
+      isSkipped: override.isSkipped,
+      isProgressionAdjusted: override.isProgressionAdjusted,
+    }
+  }, [session.exercises, state.exerciseOverrides])
+  
+  // Get current effective exercise
+  const effectiveExercise = getEffectiveExercise(state.currentExerciseIndex)
   
   // Finish workout
   const handleFinish = useCallback(() => {
@@ -873,6 +1029,7 @@ export function StreamlinedWorkoutSession({
               }}
               bandProgressNote={bandProgressNote}
               skillSignal={skillSignal}
+              overrideSummary={getOverrideSummary(sessionId)}
             />
             
             {/* Optional Workout Notes - Below summary */}
@@ -1107,19 +1264,49 @@ export function StreamlinedWorkoutSession({
         {/* Exercise Header Card */}
         <Card className="bg-[#1A1F26] border-[#2B313A] p-4">
           <div className="flex items-start justify-between mb-3">
-            <Badge variant="outline" className="text-[#C1121F] border-[#C1121F]/30 text-xs uppercase">
-              {currentExercise.category}
-            </Badge>
-            {currentExercise.note && (
-              <Badge className="bg-amber-500/10 text-amber-400 border-0 text-xs">
-                {currentExercise.note.includes('band') ? 'Band Assisted' : 'Note'}
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-[#C1121F] border-[#C1121F]/30 text-xs uppercase">
+                {currentExercise.category}
               </Badge>
-            )}
+              {currentExercise.note && (
+                <Badge className="bg-amber-500/10 text-amber-400 border-0 text-xs">
+                  {currentExercise.note.includes('band') ? 'Band Assisted' : 'Note'}
+                </Badge>
+              )}
+              {/* Override indicator badges */}
+              {state.exerciseOverrides[state.currentExerciseIndex]?.isReplaced && (
+                <Badge className="bg-blue-500/10 text-blue-400 border-0 text-xs">
+                  Replaced
+                </Badge>
+              )}
+              {state.exerciseOverrides[state.currentExerciseIndex]?.isProgressionAdjusted && (
+                <Badge className="bg-purple-500/10 text-purple-400 border-0 text-xs">
+                  Adjusted
+                </Badge>
+              )}
+            </div>
+            {/* Exercise Options Menu */}
+            <ExerciseOptionsMenu
+              exercise={currentExercise}
+              exerciseIndex={state.currentExerciseIndex}
+              sessionId={sessionId}
+              onReplace={handleReplaceExercise}
+              onSkip={handleMenuSkipExercise}
+              onProgressionChange={handleProgressionChange}
+              onUndo={handleUndoOverride}
+            />
           </div>
           
-          <h2 className="text-xl font-bold text-[#E6E9EF] mb-2">
-            {currentExercise.name}
+          <h2 className="text-xl font-bold text-[#E6E9EF] mb-1">
+            {effectiveExercise.name}
           </h2>
+          
+          {/* Show original exercise name if changed */}
+          {state.exerciseOverrides[state.currentExerciseIndex] && (
+            <p className="text-xs text-[#6B7280] mb-2">
+              Originally: {state.exerciseOverrides[state.currentExerciseIndex].originalName}
+            </p>
+          )}
           
           {/* Set Progress Dots */}
           <div className="flex items-center gap-2 mb-3">

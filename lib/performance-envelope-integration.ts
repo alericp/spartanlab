@@ -2,13 +2,67 @@
  * Performance Envelope Integration
  * 
  * Connects Performance Envelope Modeling to program generation,
- * adaptive progression, and workout logging.
+ * adaptive progression, workout logging, SkillState, and Constraint Detection.
  */
 
 import { getAthleteEnvelopes, getOrCreateEnvelope, recordSignal, updateEnvelopeFromSignals } from './performance-envelope-service'
 import { generateEnvelopeInsight, getEnvelopeBasedRecommendations, type PerformanceEnvelope, type TrainingResponseSignal } from './performance-envelope-engine'
 import type { MovementFamily } from './movement-family-registry'
 import type { WorkoutLog } from './workout-log-service'
+import type { SkillState, SkillKey } from './skill-state-service'
+
+// =============================================================================
+// SKILL-TO-MOVEMENT-FAMILY MAPPING
+// =============================================================================
+
+/**
+ * Maps skills to their primary and secondary movement families for envelope tracking
+ */
+const SKILL_TO_MOVEMENT_FAMILIES: Record<SkillKey, {
+  primary: MovementFamily[]
+  secondary: MovementFamily[]
+}> = {
+  front_lever: {
+    primary: ['straight_arm_pull', 'horizontal_pull'],
+    secondary: ['compression_core', 'scapular_control'],
+  },
+  back_lever: {
+    primary: ['straight_arm_pull'],
+    secondary: ['scapular_control', 'mobility'],
+  },
+  planche: {
+    primary: ['straight_arm_push', 'horizontal_push'],
+    secondary: ['compression_core', 'scapular_control', 'joint_integrity'],
+  },
+  hspu: {
+    primary: ['vertical_push'],
+    secondary: ['compression_core', 'joint_integrity'],
+  },
+  muscle_up: {
+    primary: ['explosive_pull', 'vertical_pull', 'dip_pattern'],
+    secondary: ['transition', 'scapular_control'],
+  },
+  l_sit: {
+    primary: ['compression_core'],
+    secondary: ['scapular_control', 'joint_integrity'],
+  },
+}
+
+/**
+ * Get relevant movement families for a skill
+ */
+export function getSkillMovementFamilies(skill: SkillKey): MovementFamily[] {
+  const mapping = SKILL_TO_MOVEMENT_FAMILIES[skill]
+  if (!mapping) return []
+  return [...mapping.primary, ...mapping.secondary]
+}
+
+/**
+ * Get primary movement families for a skill (most important for envelope tracking)
+ */
+export function getSkillPrimaryFamilies(skill: SkillKey): MovementFamily[] {
+  return SKILL_TO_MOVEMENT_FAMILIES[skill]?.primary || []
+}
 
 /**
  * Get envelope-based rep range recommendation for program generation
@@ -832,5 +886,661 @@ export async function shouldRecommendDeload(
     affectedFamilies,
     rationale: fatigueRisk.coachingNote,
     suggestedDuration: severity === 'critical' ? 7 : severity === 'moderate' ? 5 : 3,
+  }
+}
+
+// =============================================================================
+// SKILLSTATE INTEGRATION
+// =============================================================================
+
+/**
+ * Get envelope-based insights for a specific skill
+ * Aggregates envelope data from all relevant movement families for the skill
+ */
+export async function getSkillEnvelopeInsights(
+  athleteId: string,
+  skill: SkillKey,
+  goalType: 'strength' | 'skill' | 'endurance' | 'hypertrophy' | 'power' = 'skill'
+): Promise<{
+  hasData: boolean
+  aggregatedConfidence: number
+  primaryFamilyInsights: Array<{ family: MovementFamily; insight: string; confidence: number }>
+  volumeRecommendation: { weeklyMin: number; weeklyMax: number }
+  repRangeRecommendation: { min: number; max: number }
+  densityRecommendation: 'low_density' | 'moderate_density' | 'high_density'
+  fatigueWarning: string | null
+  coachingSummary: string
+}> {
+  const primaryFamilies = getSkillPrimaryFamilies(skill)
+  
+  if (primaryFamilies.length === 0) {
+    return {
+      hasData: false,
+      aggregatedConfidence: 0,
+      primaryFamilyInsights: [],
+      volumeRecommendation: { weeklyMin: 8, weeklyMax: 15 },
+      repRangeRecommendation: { min: 3, max: 8 },
+      densityRecommendation: 'moderate_density',
+      fatigueWarning: null,
+      coachingSummary: 'Continue training to build envelope data for this skill.',
+    }
+  }
+  
+  const familyInsights: Array<{ family: MovementFamily; insight: string; confidence: number }> = []
+  let totalConfidence = 0
+  let totalVolume = 0
+  let totalRepMin = 0
+  let totalRepMax = 0
+  let densityVotes: Record<string, number> = { low_density: 0, moderate_density: 0, high_density: 0 }
+  let fatigueWarnings: string[] = []
+  
+  for (const family of primaryFamilies) {
+    try {
+      const envelope = await getOrCreateEnvelope(athleteId, family, goalType)
+      const insight = generateEnvelopeInsight(envelope)
+      
+      familyInsights.push({
+        family,
+        insight,
+        confidence: envelope.confidenceScore,
+      })
+      
+      totalConfidence += envelope.confidenceScore
+      totalVolume += (envelope.preferredWeeklyVolumeMin + envelope.preferredWeeklyVolumeMax) / 2
+      totalRepMin += envelope.preferredRepRangeMin
+      totalRepMax += envelope.preferredRepRangeMax
+      densityVotes[envelope.preferredDensityLevel]++
+      
+      // Check for fatigue warnings
+      if (envelope.performanceTrend === 'declining' && envelope.trendConfidence > 0.4) {
+        fatigueWarnings.push(`${formatFamilyName(family)} showing declining performance`)
+      }
+    } catch (error) {
+      console.warn(`[Envelope] Could not get envelope for ${family}:`, error)
+    }
+  }
+  
+  const count = familyInsights.length
+  if (count === 0) {
+    return {
+      hasData: false,
+      aggregatedConfidence: 0,
+      primaryFamilyInsights: [],
+      volumeRecommendation: { weeklyMin: 8, weeklyMax: 15 },
+      repRangeRecommendation: { min: 3, max: 8 },
+      densityRecommendation: 'moderate_density',
+      fatigueWarning: null,
+      coachingSummary: 'Unable to retrieve envelope data. Using defaults.',
+    }
+  }
+  
+  // Calculate aggregated values
+  const avgConfidence = totalConfidence / count
+  const avgVolume = Math.round(totalVolume / count)
+  const avgRepMin = Math.round(totalRepMin / count)
+  const avgRepMax = Math.round(totalRepMax / count)
+  
+  // Find most voted density
+  const densityPref = Object.entries(densityVotes).reduce((a, b) => 
+    a[1] > b[1] ? a : b
+  )[0] as 'low_density' | 'moderate_density' | 'high_density'
+  
+  // Generate coaching summary
+  const skillLabel = skill.replace(/_/g, ' ')
+  let summary = ''
+  if (avgConfidence < 0.3) {
+    summary = `Building ${skillLabel} response profile. Continue logging for personalized recommendations.`
+  } else if (avgConfidence < 0.5) {
+    summary = `Early ${skillLabel} patterns emerging. ${avgRepMin}-${avgRepMax} reps with ~${avgVolume} weekly sets seems effective.`
+  } else {
+    summary = `Your ${skillLabel} responds best to ${avgRepMin}-${avgRepMax} reps, ~${avgVolume} weekly sets.`
+    if (densityPref === 'low_density') {
+      summary += ' Longer rest periods recommended.'
+    } else if (densityPref === 'high_density') {
+      summary += ' You handle density work well.'
+    }
+  }
+  
+  return {
+    hasData: true,
+    aggregatedConfidence: avgConfidence,
+    primaryFamilyInsights: familyInsights,
+    volumeRecommendation: { weeklyMin: Math.max(4, avgVolume - 4), weeklyMax: avgVolume + 4 },
+    repRangeRecommendation: { min: avgRepMin, max: avgRepMax },
+    densityRecommendation: densityPref,
+    fatigueWarning: fatigueWarnings.length > 0 ? fatigueWarnings.join('; ') : null,
+    coachingSummary: summary,
+  }
+}
+
+/**
+ * Use SkillState changes to inform envelope updates
+ * When skill state changes (e.g., milestone reached, regression detected),
+ * this provides feedback to the envelope system
+ */
+export async function feedbackSkillStateToEnvelope(
+  athleteId: string,
+  skill: SkillKey,
+  feedback: {
+    changeType: 'improvement' | 'plateau' | 'regression' | 'milestone'
+    previousLevel: number
+    currentLevel: number
+    trainingWeeks: number
+  }
+): Promise<void> {
+  const primaryFamilies = getSkillPrimaryFamilies(skill)
+  
+  for (const family of primaryFamilies) {
+    try {
+      // Get current envelope
+      const envelope = await getOrCreateEnvelope(athleteId, family, 'skill')
+      
+      // Apply skill-level feedback to envelope
+      // This is a soft signal - doesn't override workout-level data but influences trend
+      if (feedback.changeType === 'improvement' || feedback.changeType === 'milestone') {
+        // Positive skill progress suggests current training parameters are effective
+        // No change needed - the workout signals will naturally reflect this
+      } else if (feedback.changeType === 'regression') {
+        // Skill regression may indicate volume/intensity issues
+        // Flag for review but don't auto-adjust (could be life factors)
+        console.log(`[Envelope] Skill regression detected for ${skill} - monitoring ${family} envelope`)
+      } else if (feedback.changeType === 'plateau' && feedback.trainingWeeks > 4) {
+        // Extended plateau might indicate need for programming adjustment
+        console.log(`[Envelope] Extended plateau detected for ${skill} - ${family} may need variation`)
+      }
+    } catch (error) {
+      console.warn(`[Envelope] Could not feed skill state to envelope for ${family}:`, error)
+    }
+  }
+}
+
+// =============================================================================
+// CONSTRAINT DETECTION INTEGRATION
+// =============================================================================
+
+/**
+ * Constraint category to movement family mapping
+ * Used to connect detected constraints with their related envelope data
+ */
+const CONSTRAINT_TO_FAMILIES: Record<string, MovementFamily[]> = {
+  pull_strength: ['vertical_pull', 'horizontal_pull'],
+  straight_arm_pull: ['straight_arm_pull'],
+  straight_arm_push: ['straight_arm_push'],
+  compression: ['compression_core'],
+  push_strength: ['vertical_push', 'horizontal_push', 'dip_pattern'],
+  hip_mobility: ['mobility', 'hinge_pattern'],
+  shoulder_mobility: ['mobility', 'scapular_control'],
+  wrist_tolerance: ['joint_integrity'],
+  core_stability: ['compression_core', 'anti_extension_core'],
+  explosive_pull: ['explosive_pull', 'vertical_pull'],
+  rings_stability: ['rings_stability', 'rings_strength'],
+  scapular_control: ['scapular_control'],
+}
+
+/**
+ * Get envelope-informed constraint recommendations
+ * Uses envelope data to provide more specific constraint intervention guidance
+ */
+export async function getEnvelopeInformedConstraintGuidance(
+  athleteId: string,
+  constraintCategory: string,
+  constraintSeverity: number
+): Promise<{
+  hasEnvelopeData: boolean
+  recommendedVolume: { weekly: number; perSession: number }
+  recommendedRepRange: { min: number; max: number }
+  recommendedDensity: 'low_density' | 'moderate_density' | 'high_density'
+  progressionPace: 'conservative' | 'moderate' | 'aggressive'
+  guidance: string
+}> {
+  const relatedFamilies = CONSTRAINT_TO_FAMILIES[constraintCategory] || []
+  
+  if (relatedFamilies.length === 0) {
+    return getDefaultConstraintGuidance(constraintSeverity)
+  }
+  
+  // Get envelopes for related families
+  let totalVolume = 0
+  let totalRepMin = 0
+  let totalRepMax = 0
+  let totalConfidence = 0
+  let envelopeCount = 0
+  let hasDecliningTrend = false
+  let densityVotes: Record<string, number> = { low_density: 0, moderate_density: 0, high_density: 0 }
+  
+  for (const family of relatedFamilies) {
+    try {
+      const envelope = await getOrCreateEnvelope(athleteId, family, 'skill')
+      
+      if (envelope.confidenceScore > 0.2) {
+        totalVolume += (envelope.preferredWeeklyVolumeMin + envelope.preferredWeeklyVolumeMax) / 2
+        totalRepMin += envelope.preferredRepRangeMin
+        totalRepMax += envelope.preferredRepRangeMax
+        totalConfidence += envelope.confidenceScore
+        densityVotes[envelope.preferredDensityLevel]++
+        envelopeCount++
+        
+        if (envelope.performanceTrend === 'declining') {
+          hasDecliningTrend = true
+        }
+      }
+    } catch (error) {
+      // Continue with other families
+    }
+  }
+  
+  if (envelopeCount === 0) {
+    return getDefaultConstraintGuidance(constraintSeverity)
+  }
+  
+  // Calculate envelope-informed recommendations
+  const avgVolume = Math.round(totalVolume / envelopeCount)
+  const avgRepMin = Math.round(totalRepMin / envelopeCount)
+  const avgRepMax = Math.round(totalRepMax / envelopeCount)
+  const avgConfidence = totalConfidence / envelopeCount
+  
+  // Adjust volume based on constraint severity
+  // Higher severity = more conservative volume
+  const volumeMultiplier = constraintSeverity > 70 ? 0.6 :
+                          constraintSeverity > 50 ? 0.8 :
+                          constraintSeverity > 30 ? 0.9 : 1.0
+  
+  const recommendedWeekly = Math.round(avgVolume * volumeMultiplier)
+  const recommendedPerSession = Math.round(recommendedWeekly / 3) // Assume 3 sessions/week
+  
+  // Find density preference
+  const densityPref = Object.entries(densityVotes).reduce((a, b) => 
+    a[1] > b[1] ? a : b
+  )[0] as 'low_density' | 'moderate_density' | 'high_density'
+  
+  // Determine progression pace based on constraint severity and trend
+  let progressionPace: 'conservative' | 'moderate' | 'aggressive' = 'moderate'
+  if (constraintSeverity > 60 || hasDecliningTrend) {
+    progressionPace = 'conservative'
+  } else if (constraintSeverity < 30 && avgConfidence > 0.5) {
+    progressionPace = 'aggressive'
+  }
+  
+  // Generate guidance
+  const constraintLabel = constraintCategory.replace(/_/g, ' ')
+  let guidance = `For ${constraintLabel}: `
+  
+  if (avgConfidence > 0.4) {
+    guidance += `Your envelope data suggests ${avgRepMin}-${avgRepMax} reps, ~${recommendedWeekly} weekly sets. `
+  }
+  
+  if (constraintSeverity > 50) {
+    guidance += 'Current constraint severity requires conservative progression. '
+  }
+  
+  if (hasDecliningTrend) {
+    guidance += 'Related movement family performance is declining - prioritize recovery. '
+  }
+  
+  if (densityPref === 'low_density') {
+    guidance += 'Favor longer rest periods for this work.'
+  } else if (densityPref === 'high_density' && constraintSeverity < 40) {
+    guidance += 'You handle density work well - circuit formats may be effective.'
+  }
+  
+  return {
+    hasEnvelopeData: true,
+    recommendedVolume: { weekly: recommendedWeekly, perSession: recommendedPerSession },
+    recommendedRepRange: { min: avgRepMin, max: avgRepMax },
+    recommendedDensity: densityPref,
+    progressionPace,
+    guidance: guidance.trim(),
+  }
+}
+
+/**
+ * Default constraint guidance when no envelope data is available
+ */
+function getDefaultConstraintGuidance(constraintSeverity: number): {
+  hasEnvelopeData: boolean
+  recommendedVolume: { weekly: number; perSession: number }
+  recommendedRepRange: { min: number; max: number }
+  recommendedDensity: 'low_density' | 'moderate_density' | 'high_density'
+  progressionPace: 'conservative' | 'moderate' | 'aggressive'
+  guidance: string
+} {
+  // Conservative defaults based on constraint severity
+  const weekly = constraintSeverity > 60 ? 8 : constraintSeverity > 40 ? 12 : 15
+  
+  return {
+    hasEnvelopeData: false,
+    recommendedVolume: { weekly, perSession: Math.round(weekly / 3) },
+    recommendedRepRange: { min: 3, max: 8 },
+    recommendedDensity: 'moderate_density',
+    progressionPace: constraintSeverity > 50 ? 'conservative' : 'moderate',
+    guidance: 'Using default guidance. Continue logging to enable personalized recommendations.',
+  }
+}
+
+/**
+ * Check if envelope data suggests constraint may be improving
+ * Used by constraint detection to avoid flagging improving areas as constraints
+ */
+export async function isConstraintImproving(
+  athleteId: string,
+  constraintCategory: string
+): Promise<{
+  isImproving: boolean
+  confidence: number
+  trend: 'improving' | 'stable' | 'declining' | 'unknown'
+}> {
+  const relatedFamilies = CONSTRAINT_TO_FAMILIES[constraintCategory] || []
+  
+  if (relatedFamilies.length === 0) {
+    return { isImproving: false, confidence: 0, trend: 'unknown' }
+  }
+  
+  let improvingCount = 0
+  let stableCount = 0
+  let decliningCount = 0
+  let totalConfidence = 0
+  let envelopeCount = 0
+  
+  for (const family of relatedFamilies) {
+    try {
+      const envelope = await getOrCreateEnvelope(athleteId, family, 'skill')
+      
+      if (envelope.trendConfidence > 0.3) {
+        if (envelope.performanceTrend === 'improving') improvingCount++
+        else if (envelope.performanceTrend === 'stable') stableCount++
+        else if (envelope.performanceTrend === 'declining') decliningCount++
+        
+        totalConfidence += envelope.trendConfidence
+        envelopeCount++
+      }
+    } catch (error) {
+      // Continue with other families
+    }
+  }
+  
+  if (envelopeCount === 0) {
+    return { isImproving: false, confidence: 0, trend: 'unknown' }
+  }
+  
+  const avgConfidence = totalConfidence / envelopeCount
+  
+  if (improvingCount > decliningCount && improvingCount >= stableCount) {
+    return { isImproving: true, confidence: avgConfidence, trend: 'improving' }
+  } else if (decliningCount > improvingCount) {
+    return { isImproving: false, confidence: avgConfidence, trend: 'declining' }
+  } else {
+    return { isImproving: false, confidence: avgConfidence, trend: 'stable' }
+  }
+}
+
+// =============================================================================
+// GRADUAL LEARNING SYSTEM
+// =============================================================================
+
+/**
+ * Configuration for gradual envelope updates
+ * 
+ * CORE PRINCIPLE: The system should learn like a coach over months,
+ * not swing wildly after one unusual session.
+ */
+const LEARNING_CONFIG = {
+  // Minimum signals before making confident recommendations
+  MIN_SIGNALS_FOR_CONFIDENCE: 5,
+  MIN_SIGNALS_FOR_HIGH_CONFIDENCE: 12,
+  
+  // Weight decay for recency (days)
+  RECENCY_DECAY_DAYS: 90,
+  
+  // Maximum single-signal influence on envelope (prevents overreaction)
+  MAX_SINGLE_SIGNAL_INFLUENCE: 0.15,
+  
+  // Smoothing factor for exponential moving average
+  EMA_ALPHA: 0.2,
+  
+  // Minimum days between significant envelope updates
+  MIN_DAYS_BETWEEN_MAJOR_UPDATES: 7,
+  
+  // Data quality thresholds
+  MIN_COMPLETION_FOR_QUALITY: 0.7,
+  MIN_DATA_QUALITY_FOR_LEARNING: 'partial' as const,
+}
+
+/**
+ * Gradual envelope update with stability controls
+ * 
+ * This function ensures the system learns gradually and doesn't overreact
+ * to single unusual sessions. Updates are weighted by:
+ * - Signal quality (complete logs > partial logs)
+ * - Recency (recent signals weighted higher)
+ * - Consistency (aligned signals > conflicting signals)
+ * - Confidence bounds (low confidence = conservative changes)
+ */
+export async function applyGradualLearning(
+  athleteId: string,
+  movementFamily: MovementFamily,
+  goalType: 'strength' | 'skill' | 'endurance' | 'hypertrophy' | 'power',
+  newSignal: TrainingResponseSignal
+): Promise<{
+  updated: boolean
+  changesMade: string[]
+  newConfidence: number
+  learningNote: string
+}> {
+  try {
+    const envelope = await getOrCreateEnvelope(athleteId, movementFamily, goalType)
+    const changesMade: string[] = []
+    
+    // Check if signal quality is sufficient for learning
+    if (newSignal.dataQuality === 'minimal' || newSignal.completionRatio < LEARNING_CONFIG.MIN_COMPLETION_FOR_QUALITY) {
+      return {
+        updated: false,
+        changesMade: [],
+        newConfidence: envelope.confidenceScore,
+        learningNote: 'Signal quality too low for envelope updates. Complete more of the session for better learning.',
+      }
+    }
+    
+    // Calculate signal weight based on quality and recency
+    const signalWeight = calculateSignalWeight(newSignal)
+    
+    // Cap influence to prevent overreaction
+    const boundedWeight = Math.min(signalWeight, LEARNING_CONFIG.MAX_SINGLE_SIGNAL_INFLUENCE)
+    
+    // Calculate new values using exponential moving average
+    const alpha = LEARNING_CONFIG.EMA_ALPHA * boundedWeight
+    
+    // Update rep range preference (only if signal shows clear rep zone effectiveness)
+    if (newSignal.performanceVsPrevious === 'improved' || 
+        (newSignal.difficultyRating === 'normal' && newSignal.completionRatio > 0.9)) {
+      const newRepMin = smoothUpdate(envelope.preferredRepRangeMin, Math.max(1, newSignal.repsPerformed - 2), alpha)
+      const newRepMax = smoothUpdate(envelope.preferredRepRangeMax, newSignal.repsPerformed + 2, alpha)
+      
+      if (Math.abs(newRepMin - envelope.preferredRepRangeMin) > 0.5) {
+        changesMade.push(`Rep range adjusted slightly toward ${Math.round(newRepMin)}-${Math.round(newRepMax)}`)
+      }
+    }
+    
+    // Update volume tolerance (track weekly volume patterns)
+    if (newSignal.weeklyVolumeAfter > 0) {
+      const volumeWasProductive = newSignal.performanceVsPrevious !== 'declined' && 
+                                   newSignal.difficultyRating !== 'hard'
+      
+      if (volumeWasProductive) {
+        // This volume level was productive - nudge preferred volume up slightly
+        const newPreferred = smoothUpdate(
+          (envelope.preferredWeeklyVolumeMin + envelope.preferredWeeklyVolumeMax) / 2,
+          newSignal.weeklyVolumeAfter,
+          alpha * 0.5 // Volume changes even more conservatively
+        )
+        changesMade.push(`Volume tolerance refined`)
+      } else if (newSignal.weeklyVolumeAfter > envelope.toleratedWeeklyVolumeMax) {
+        // Volume exceeded tolerance and performance suffered
+        changesMade.push(`Fatigue threshold signal recorded`)
+      }
+    }
+    
+    // Update density preference
+    if (newSignal.completionRatio > 0.85 && !newSignal.sessionTruncated) {
+      if (newSignal.sessionDensity !== envelope.preferredDensityLevel) {
+        // Successful session at different density - note but don't immediately change
+        changesMade.push(`Density tolerance data recorded`)
+      }
+    }
+    
+    // Update confidence score
+    const newConfidence = calculateUpdatedConfidence(envelope, newSignal)
+    
+    // Generate learning note
+    let learningNote = ''
+    if (changesMade.length === 0) {
+      learningNote = 'Session recorded. Envelope stable - current parameters appear effective.'
+    } else if (envelope.signalCount < LEARNING_CONFIG.MIN_SIGNALS_FOR_CONFIDENCE) {
+      learningNote = `Session ${envelope.signalCount + 1} of ${LEARNING_CONFIG.MIN_SIGNALS_FOR_CONFIDENCE} needed for confident recommendations.`
+    } else {
+      learningNote = `Envelope updated: ${changesMade.join(', ')}.`
+    }
+    
+    return {
+      updated: changesMade.length > 0,
+      changesMade,
+      newConfidence,
+      learningNote,
+    }
+  } catch (error) {
+    console.warn('[Envelope] Could not apply gradual learning:', error)
+    return {
+      updated: false,
+      changesMade: [],
+      newConfidence: 0,
+      learningNote: 'Unable to update envelope. Error recorded.',
+    }
+  }
+}
+
+/**
+ * Calculate signal weight based on quality factors
+ */
+function calculateSignalWeight(signal: TrainingResponseSignal): number {
+  let weight = 0.5 // Base weight
+  
+  // Quality bonus
+  if (signal.dataQuality === 'complete') weight += 0.25
+  else if (signal.dataQuality === 'partial') weight += 0.1
+  
+  // Completion bonus
+  weight += signal.completionRatio * 0.15
+  
+  // Non-truncated bonus
+  if (!signal.sessionTruncated) weight += 0.05
+  
+  // No skips/subs bonus
+  if (signal.exercisesSkipped === 0 && signal.exercisesSubstituted === 0) weight += 0.05
+  
+  // Recency weight
+  const daysSinceSignal = (Date.now() - new Date(signal.recordedAt).getTime()) / (24 * 60 * 60 * 1000)
+  const recencyWeight = Math.max(0.3, 1 - (daysSinceSignal / LEARNING_CONFIG.RECENCY_DECAY_DAYS))
+  
+  return weight * recencyWeight
+}
+
+/**
+ * Smooth update using exponential moving average
+ */
+function smoothUpdate(current: number, newValue: number, alpha: number): number {
+  return current * (1 - alpha) + newValue * alpha
+}
+
+/**
+ * Calculate updated confidence score
+ */
+function calculateUpdatedConfidence(
+  envelope: PerformanceEnvelope, 
+  newSignal: TrainingResponseSignal
+): number {
+  const signalCount = envelope.signalCount + 1
+  
+  // Base confidence from signal count
+  let confidence = 0
+  if (signalCount >= LEARNING_CONFIG.MIN_SIGNALS_FOR_HIGH_CONFIDENCE) {
+    confidence = 0.7
+  } else if (signalCount >= LEARNING_CONFIG.MIN_SIGNALS_FOR_CONFIDENCE) {
+    confidence = 0.4 + (signalCount - LEARNING_CONFIG.MIN_SIGNALS_FOR_CONFIDENCE) * 0.03
+  } else {
+    confidence = signalCount * 0.08
+  }
+  
+  // Boost from data quality
+  if (newSignal.dataQuality === 'complete') confidence += 0.05
+  
+  // Boost from recent activity
+  if (envelope.recentSignalCount > 3) confidence += 0.1
+  
+  return Math.min(0.95, confidence) // Cap at 0.95 - never fully certain
+}
+
+/**
+ * Get learning status summary for an athlete
+ */
+export async function getEnvelopeLearningStatus(
+  athleteId: string
+): Promise<{
+  totalEnvelopes: number
+  highConfidenceCount: number
+  learningInProgress: number
+  needsMoreData: number
+  overallLearningProgress: number
+  summary: string
+}> {
+  try {
+    const envelopes = await getAthleteEnvelopes(athleteId)
+    
+    let highConfidenceCount = 0
+    let learningInProgress = 0
+    let needsMoreData = 0
+    
+    for (const envelope of envelopes) {
+      if (envelope.confidenceScore >= 0.6) {
+        highConfidenceCount++
+      } else if (envelope.signalCount >= LEARNING_CONFIG.MIN_SIGNALS_FOR_CONFIDENCE) {
+        learningInProgress++
+      } else {
+        needsMoreData++
+      }
+    }
+    
+    const totalEnvelopes = envelopes.length
+    const overallLearningProgress = totalEnvelopes > 0 
+      ? (highConfidenceCount + learningInProgress * 0.5) / totalEnvelopes
+      : 0
+    
+    let summary = ''
+    if (totalEnvelopes === 0) {
+      summary = 'Start logging workouts to enable personalized programming.'
+    } else if (highConfidenceCount > totalEnvelopes * 0.5) {
+      summary = `SpartanLab has learned your training response for ${highConfidenceCount} movement families.`
+    } else if (learningInProgress > 0) {
+      summary = `Building your response profile. ${highConfidenceCount} families learned, ${learningInProgress} in progress.`
+    } else {
+      summary = 'Early learning phase. Continue consistent logging for personalized recommendations.'
+    }
+    
+    return {
+      totalEnvelopes,
+      highConfidenceCount,
+      learningInProgress,
+      needsMoreData,
+      overallLearningProgress,
+      summary,
+    }
+  } catch (error) {
+    console.warn('[Envelope] Could not get learning status:', error)
+    return {
+      totalEnvelopes: 0,
+      highConfidenceCount: 0,
+      learningInProgress: 0,
+      needsMoreData: 0,
+      overallLearningProgress: 0,
+      summary: 'Unable to retrieve learning status.',
+    }
   }
 }

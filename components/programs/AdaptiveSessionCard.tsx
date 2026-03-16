@@ -20,6 +20,8 @@ import { WorkoutSessionSummary } from '@/components/workout/WorkoutSessionSummar
 import { trackWorkoutStarted, trackWorkoutCompleted } from '@/lib/analytics'
 import { ExerciseReplacementModal } from './ExerciseReplacementModal'
 import { ExerciseActionMenu } from './ExerciseActionMenu'
+import { InfoBubble, ExerciseKnowledgeBubble, StructureKnowledgeBubble, ProtocolKnowledgeBubble } from '@/components/coaching'
+import { hasExerciseKnowledge, getStructureKnowledge } from '@/lib/knowledge-bubble-content'
 import { getOnboardingProfile } from '@/lib/athlete-profile'
 import { 
   addOverride, 
@@ -362,8 +364,10 @@ export function AdaptiveSessionCard({ session, onExerciseReplace, onWorkoutCompl
     </button>
     {showWarmup && (
       <div className="mt-2 space-y-2">
+        {/* Structure explanation for warmup protocols */}
+        <StructureKnowledgeBubble structureType="protocol_warmup" />
         {session.warmup[0]?.selectionReason && (
-          <p className="text-xs text-[#6A6A6A] italic mb-2 pl-2 border-l-2 border-[#4F6D8A]/30">
+          <p className="text-xs text-[#6A6A6A] italic pl-2 border-l-2 border-[#4F6D8A]/30">
             {session.warmup[0].selectionReason}
           </p>
         )}
@@ -484,6 +488,8 @@ function ExerciseRow({
 }: ExerciseRowProps) {
   const [showReason, setShowReason] = useState(false)
   const hasRPE = !isWarmupCooldown && exerciseSupportsRPE(exercise.name)
+  const exerciseId = exercise.name.toLowerCase().replace(/[\s-]+/g, '_')
+  const hasKnowledge = hasExerciseKnowledge(exerciseId)
   
   // Display name - show adjusted name if progression was changed
   const displayName = adjustedName || exercise.name
@@ -578,19 +584,32 @@ function ExerciseRow({
         </div>
       </div>
       
-      {/* Selection Reason (expandable) */}
-      {!isWarmupCooldown && exercise.selectionReason && (
+      {/* Selection Reason (expandable) with Knowledge Bubble */}
+      {!isWarmupCooldown && (exercise.selectionReason || hasKnowledge) && (
         <div className="mt-2">
           <button
-            className="text-xs text-[#6A6A6A] hover:text-[#A5A5A5]"
+            className="text-xs text-[#6A6A6A] hover:text-[#A5A5A5] flex items-center gap-1"
             onClick={() => setShowReason(!showReason)}
           >
             {showReason ? 'Hide why' : 'Why this exercise?'}
           </button>
           {showReason && (
-            <p className="text-xs text-[#6A6A6A] mt-1 pl-2 border-l-2 border-[#3A3A3A]">
-              {exercise.selectionReason}
-            </p>
+            <div className="mt-2 space-y-2">
+              {/* Knowledge bubble if available */}
+              {hasKnowledge && (
+                <ExerciseKnowledgeBubble 
+                  exerciseId={exerciseId}
+                  showSkillCarryover
+                  showSafetyNote
+                />
+              )}
+              {/* Selection reason from engine */}
+              {exercise.selectionReason && !hasKnowledge && (
+                <p className="text-xs text-[#6A6A6A] pl-2 border-l-2 border-[#3A3A3A]">
+                  {exercise.selectionReason}
+                </p>
+              )}
+            </div>
           )}
         </div>
       )}

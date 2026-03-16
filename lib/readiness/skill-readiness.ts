@@ -27,6 +27,7 @@ export interface ReadinessResult {
   recommendation: string
   nextProgression: string
   breakdown: ScoreBreakdown[]
+  suggestedProtocol?: string // Joint Integrity Protocol ID to recommend
 }
 
 export interface ScoreBreakdown {
@@ -284,6 +285,14 @@ export function calculateFrontLeverReadiness(inputs: FrontLeverInputs): Readines
     recommendation = 'You have the strength foundation for advanced progressions. Begin straddle pathway work with one-leg variations and slow negatives from full position.'
   }
 
+  // Suggest protocol based on weak point
+  let suggestedProtocol: string | undefined
+  if (weakestFactor?.factor === 'Core Tension (Hollow Hold)') {
+    suggestedProtocol = 'scapular_control_protocol' // Scap work helps core engagement
+  } else {
+    suggestedProtocol = 'scapular_control_protocol' // Default for FL training
+  }
+
   return {
     score: totalScore,
     level,
@@ -293,6 +302,7 @@ export function calculateFrontLeverReadiness(inputs: FrontLeverInputs): Readines
     recommendation,
     nextProgression,
     breakdown,
+    suggestedProtocol,
   }
 }
 
@@ -542,6 +552,12 @@ export function calculatePlancheReadiness(inputs: PlancheInputs): ReadinessResul
     recommendation = 'You have the foundation for tuck planche work. Begin with tuck holds on parallettes, focusing on shoulder protraction and posterior pelvic tilt.'
   }
 
+  // Suggest protocol based on weak point
+  let suggestedProtocol: string | undefined = 'wrist_integrity_protocol' // Default for planche
+  if (weakestFactor?.factor === 'Shoulder Mobility') {
+    suggestedProtocol = 'shoulder_stability_protocol'
+  }
+
   return {
     score: totalScore,
     level,
@@ -551,6 +567,7 @@ export function calculatePlancheReadiness(inputs: PlancheInputs): ReadinessResul
     recommendation,
     nextProgression,
     breakdown,
+    suggestedProtocol,
   }
 }
 
@@ -784,6 +801,9 @@ export function calculateMuscleUpReadiness(inputs: MuscleUpInputs): ReadinessRes
     recommendation = 'You have the strength for strict muscle-ups. Focus on transition technique and attempt strict reps with proper form.'
   }
 
+  // Suggest protocol - muscle-ups benefit from elbow and shoulder prep
+  const suggestedProtocol = 'elbow_tendon_health_protocol'
+
   return {
     score: totalScore,
     level,
@@ -793,6 +813,7 @@ export function calculateMuscleUpReadiness(inputs: MuscleUpInputs): ReadinessRes
     recommendation,
     nextProgression,
     breakdown,
+    suggestedProtocol,
   }
 }
 
@@ -1040,6 +1061,9 @@ export function calculateHSPUReadiness(inputs: HSPUInputs): ReadinessResult {
     recommendation = 'You have the strength for freestanding attempts. Focus on controlled kick-ups and maintaining tension through the press.'
   }
 
+  // Suggest protocol - HSPU benefits from wrist and shoulder prep
+  const suggestedProtocol = 'wrist_integrity_protocol'
+
   return {
     score: totalScore,
     level,
@@ -1049,6 +1073,7 @@ export function calculateHSPUReadiness(inputs: HSPUInputs): ReadinessResult {
     recommendation,
     nextProgression,
     breakdown,
+    suggestedProtocol,
   }
 }
 

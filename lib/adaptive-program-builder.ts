@@ -6,6 +6,7 @@ import type { EquipmentType } from './adaptive-exercise-pool'
 import type { RecoveryLevel } from './recovery-engine'
 import type { WeeklyStructure, DayStructure } from './program-structure-engine'
 import type { ExerciseSelection, SelectedExercise } from './program-exercise-selector'
+import type { ProtocolRecommendation } from './protocols/joint-integrity-protocol'
 
 import { getAthleteProfile } from './data-service'
 import { calculateRecoverySignal } from './recovery-engine'
@@ -134,6 +135,9 @@ export interface AdaptiveSession {
   finisher?: GeneratedFinisher
   finisherIncluded: boolean
   finisherRationale?: string
+  // Joint Integrity Protocol recommendations
+  protocols?: ProtocolRecommendation[]
+  protocolExplanations?: string[]
 }
 
 export interface AdaptiveExercise {

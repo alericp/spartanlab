@@ -54,6 +54,12 @@ interface OverrideSummary {
   progressionAdjusted: number
 }
 
+interface NextSessionInfo {
+  dayLabel: string
+  focusLabel: string
+  estimatedMinutes?: number
+}
+
 interface PostWorkoutSummaryProps {
   performance: SessionPerformanceResult
   sessionStats: {
@@ -70,6 +76,8 @@ interface PostWorkoutSummaryProps {
   bandProgressNote?: string | null
   skillSignal?: string | null
   overrideSummary?: OverrideSummary | null
+  nextSession?: NextSessionInfo | null
+  goalContext?: string | null
   className?: string
 }
 
@@ -242,6 +250,8 @@ export function PostWorkoutSummary({
   bandProgressNote,
   skillSignal,
   overrideSummary,
+  nextSession,
+  goalContext,
   className,
 }: PostWorkoutSummaryProps) {
   // Get fatigue indicators
@@ -521,6 +531,40 @@ export function PostWorkoutSummary({
                 <ChevronRight className="w-3.5 h-3.5 ml-1" />
               </Button>
             </Link>
+          </div>
+        </Card>
+      )}
+      
+      {/* Positive Reinforcement Message */}
+      {goalContext && (
+        <Card className="bg-[#C1121F]/5 border-[#C1121F]/20 p-4">
+          <div className="flex items-start gap-3">
+            <div className="w-8 h-8 rounded-full bg-[#C1121F]/10 flex items-center justify-center shrink-0">
+              <Target className="w-4 h-4 text-[#C1121F]" />
+            </div>
+            <div>
+              <p className="text-xs text-[#6B7280] uppercase tracking-wide mb-0.5">Progress Toward Your Goal</p>
+              <p className="text-sm text-[#E6E9EF] font-medium">{goalContext}</p>
+            </div>
+          </div>
+        </Card>
+      )}
+      
+      {/* Next Session Preview */}
+      {nextSession && (
+        <Card className="bg-[#1A1F26] border-[#2B313A] p-4">
+          <div className="flex items-start gap-3">
+            <div className="w-8 h-8 rounded-full bg-[#4F6D8A]/10 flex items-center justify-center shrink-0">
+              <Calendar className="w-4 h-4 text-[#4F6D8A]" />
+            </div>
+            <div className="flex-1">
+              <p className="text-xs text-[#6B7280] uppercase tracking-wide mb-0.5">Next Session</p>
+              <p className="text-sm text-[#E6E9EF] font-semibold">{nextSession.dayLabel}</p>
+              <p className="text-xs text-[#A4ACB8] mt-0.5">
+                Focus: {nextSession.focusLabel}
+                {nextSession.estimatedMinutes && ` • ${nextSession.estimatedMinutes} min`}
+              </p>
+            </div>
           </div>
         </Card>
       )}

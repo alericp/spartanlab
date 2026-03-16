@@ -12,9 +12,32 @@ The readiness system provides:
 - **Database Persistence**: Stores readiness assessments and historical snapshots
 - **Intelligent Recalculation**: Updates readiness after workouts and profile changes
 
+## CANONICAL READINESS ENGINE (Source of Truth)
+
+**All readiness calculations in SpartanLab flow through ONE canonical engine:**
+
+```
+lib/readiness/canonical-readiness-engine.ts
+```
+
+This ensures:
+- Dashboard shows the SAME readiness as public calculators
+- Constraint detection uses the SAME limiting factors
+- Coaching summaries match the same readiness scores
+- Program generation uses identical readiness inputs
+
+### Consumers of Canonical Readiness:
+- Dashboard readiness visuals (`SkillReadinessModule`)
+- Public SEO calculators (front-lever, planche, hspu, muscle-up, l-sit)
+- Constraint Detection Engine
+- Program Generation System
+- Coaching Explanation Engine
+- SkillState Updates
+
 ## Supported Skills
 
 - Front Lever
+- Back Lever
 - Planche
 - Handstand Push-up (HSPU)
 - Muscle-up
@@ -22,7 +45,29 @@ The readiness system provides:
 
 ## Architecture
 
-### Core Components
+### Canonical Engine (`lib/readiness/canonical-readiness-engine.ts`)
+
+**THE SINGLE SOURCE OF TRUTH for all readiness calculations.**
+
+Exports:
+- `calculateCanonicalReadiness(skill, input)` - Main entry point
+- `calculateAllSkillReadiness(input)` - All skills at once
+- `calculateReadinessFromProfile(skill, profile)` - From AthleteProfile data
+- `calculateSkillReadinessLegacy(skill, profile)` - Legacy-compatible format
+- `getLimiterExplanation(skill, limiter)` - Coaching explanation
+- `getReadinessSummary(result)` - Summary statement
+
+### Skill-Specific Calculators (`lib/readiness/skill-readiness.ts`)
+
+Individual skill calculators with specific factor weights:
+- `calculateFrontLeverReadiness()`
+- `calculateBackLeverReadiness()`
+- `calculatePlancheReadiness()`
+- `calculateMuscleUpReadiness()`
+- `calculateHSPUReadiness()`
+- `calculateLSitReadiness()`
+
+### UI Components
 
 **`SkillReadinessBars.tsx`**
 - Visual component displaying breakdown bars for a single skill
@@ -42,7 +87,7 @@ The readiness system provides:
 - Saves readiness assessments and snapshots
 
 **`readiness-calculation-service.ts`**
-- Triggers readiness recalculation
+- Triggers readiness recalculation using CANONICAL engine
 - Called after workouts, profile updates, strength changes
 - Filters to only recalculate when strength-relevant exercises are logged
 

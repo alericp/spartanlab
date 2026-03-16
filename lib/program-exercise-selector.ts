@@ -70,6 +70,8 @@ import {
   type ExerciseScore,
   type IntelligentSelection,
 } from './exercise-intelligence-engine'
+import type { PerformanceEnvelope } from './performance-envelope-engine'
+import type { MovementFamily } from './movement-family-registry'
 
 export interface SelectedExercise {
   exercise: Exercise
@@ -104,6 +106,8 @@ interface ExerciseSelectionInputs {
   // Exercise Intelligence Engine integration
   athleteProfile?: import('@/types/domain').AthleteProfile
   targetSkills?: SkillType[]
+  // Performance Envelope integration
+  envelopes?: PerformanceEnvelope[]
 }
 
 // =============================================================================
@@ -841,10 +845,124 @@ function adjustSetsForLevel(defaultSets: number, level: ExperienceLevel): number
   if (level === 'advanced') return Math.min(5, defaultSets + 1)
   return defaultSets
 }
-
+  
 function adjustRepsForLevel(defaultReps: string, level: ExperienceLevel): string {
   // Keep reps as-is for now, could be refined
   return defaultReps
+}
+
+/**
+ * Envelope-aware set adjustment
+ * Uses performance envelope data to personalize set count
+ */
+function adjustSetsWithEnvelope(
+  defaultSets: number, 
+  level: ExperienceLevel,
+  envelope: PerformanceEnvelope | undefined,
+  movementFamily: MovementFamily | undefined
+): number {
+  // Start with level-based adjustment
+  let sets = adjustSetsForLevel(defaultSets, level)
+  
+  // If no envelope or low confidence, use default
+  if (!envelope || envelope.confidenceScore < 0.3) {
+    return sets
+  }
+  
+  // Check if this envelope matches the movement family
+  if (movementFamily && envelope.movementFamily !== movementFamily) {
+    return sets
+  }
+  
+  // High confidence envelope - use learned preferences
+  if (envelope.confidenceScore >= 0.5) {
+    // Use the envelope's preferred set range
+    const envelopeMin = envelope.preferredSetRangeMin
+    const envelopeMax = envelope.preferredSetRangeMax
+    
+    // Clamp to envelope range, respecting reasonable bounds
+    sets = Math.max(envelopeMin, Math.min(envelopeMax, sets))
+  }
+  
+  // Moderate confidence - blend toward envelope preference
+  else if (envelope.confidenceScore >= 0.3) {
+    const envelopeMidpoint = (envelope.preferredSetRangeMin + envelope.preferredSetRangeMax) / 2
+    // Blend 40% toward envelope preference
+    sets = Math.round(sets * 0.6 + envelopeMidpoint * 0.4)
+  }
+  
+  return Math.max(2, Math.min(6, sets))
+}
+
+/**
+ * Envelope-aware rep adjustment
+ * Uses performance envelope data to personalize rep ranges
+ */
+function adjustRepsWithEnvelope(
+  defaultReps: string, 
+  level: ExperienceLevel,
+  envelope: PerformanceEnvelope | undefined,
+  movementFamily: MovementFamily | undefined,
+  goalType: 'strength' | 'skill' | 'hypertrophy' | 'endurance' = 'strength'
+): string {
+  // If no envelope or low confidence, use default
+  if (!envelope || envelope.confidenceScore < 0.3) {
+    return adjustRepsForLevel(defaultReps, level)
+  }
+  
+  // Check if this envelope matches the movement family and goal
+  if (movementFamily && envelope.movementFamily !== movementFamily) {
+    return adjustRepsForLevel(defaultReps, level)
+  }
+  if (envelope.goalType !== goalType) {
+    return adjustRepsForLevel(defaultReps, level)
+  }
+  
+  // High confidence envelope - use learned rep range
+  if (envelope.confidenceScore >= 0.5) {
+    const repMin = envelope.preferredRepRangeMin
+    const repMax = envelope.preferredRepRangeMax
+    
+    // Return envelope-based rep range
+    return `${repMin}-${repMax}`
+  }
+  
+  // Moderate confidence - keep original but note envelope suggestion
+  return adjustRepsForLevel(defaultReps, level)
+}
+
+/**
+ * Find matching envelope for a movement pattern
+ */
+function findEnvelopeForMovement(
+  envelopes: PerformanceEnvelope[] | undefined,
+  movementPattern: string | undefined,
+  goalType: 'strength' | 'skill' | 'hypertrophy' | 'endurance' = 'strength'
+): PerformanceEnvelope | undefined {
+  if (!envelopes || !movementPattern) return undefined
+  
+  // Map movement pattern to movement family
+  const patternToFamily: Record<string, MovementFamily> = {
+    'vertical_pull': 'vertical_pull',
+    'horizontal_pull': 'horizontal_pull',
+    'vertical_push': 'vertical_push',
+    'horizontal_push': 'horizontal_push',
+    'straight_arm_pull': 'straight_arm_pull',
+    'straight_arm_push': 'straight_arm_push',
+    'core': 'compression_core',
+    'hip_hinge': 'hip_hinge',
+    'squat': 'squat',
+  }
+  
+  const family = patternToFamily[movementPattern]
+  if (!family) return undefined
+  
+  // Find envelope matching family and goal type
+  return envelopes.find(e => 
+    e.movementFamily === family && 
+    e.goalType === goalType &&
+    e.confidenceScore >= 0.3
+  )
 }
 
 function getConstraintTargetedExercise(

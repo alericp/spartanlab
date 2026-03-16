@@ -1,6 +1,6 @@
 import { Metadata } from 'next'
 import Link from 'next/link'
-import { Hand, Dumbbell, ArrowRight, BookOpen, AlertTriangle, ChevronRight } from 'lucide-react'
+import { Hand, Dumbbell, ArrowRight, Calculator, BookOpen, AlertTriangle, ChevronRight } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { JsonLdMultiple } from '@/components/seo/JsonLd'
@@ -59,9 +59,9 @@ const commonMistakes = [
 ]
 
 const trainingResources = [
-  { title: 'Handstand Training Guide', href: '/guides/handstand-training', description: 'Build balance and control first' },
-  { title: 'Pike Push-Up Progression', href: '/guides/pike-push-up-progression', description: 'Foundation for vertical pressing' },
-  { title: 'Shoulder Mobility', href: '/guides/shoulder-mobility', description: 'Prerequisite flexibility work' },
+  { title: 'HSPU Training Guide', href: '/how-to-train-for-handstand-push-ups', description: 'Complete training methodology' },
+  { title: 'HSPU Program', href: '/programs/handstand-push-up-program', description: '12-24 week structured plan' },
+  { title: 'Handstand Training', href: '/guides/handstand-training', description: 'Build balance and control first' },
   { title: 'Strength Standards', href: '/calisthenics-strength-standards', description: 'Check your readiness benchmarks' },
 ]
 
@@ -105,24 +105,24 @@ export default function HSPUHubPage() {
 
         {/* Quick Actions */}
         <section className="grid sm:grid-cols-2 gap-4 mb-12">
-          <Link href="/guides/handstand-training">
+          <Link href="/hspu-readiness-calculator">
             <Card className="bg-[#C1121F]/10 border-[#C1121F]/30 p-5 h-full hover:bg-[#C1121F]/15 transition-colors cursor-pointer">
               <div className="flex items-center gap-3">
-                <Hand className="w-6 h-6 text-[#C1121F]" />
+                <Calculator className="w-6 h-6 text-[#C1121F]" />
                 <div>
-                  <h3 className="font-semibold text-[#E6E9EF]">Handstand Foundation</h3>
-                  <p className="text-sm text-[#A5A5A5]">Build balance first</p>
+                  <h3 className="font-semibold text-[#E6E9EF]">Check Your Readiness</h3>
+                  <p className="text-sm text-[#A5A5A5]">Take the readiness calculator</p>
                 </div>
                 <ArrowRight className="w-5 h-5 text-[#C1121F] ml-auto" />
               </div>
             </Card>
           </Link>
-          <Link href="/guides/hspu-progression">
+          <Link href="/guides/handstand-push-up-progression">
             <Card className="bg-[#1A1F26] border-[#2B313A] p-5 h-full hover:border-[#C1121F]/50 transition-colors cursor-pointer">
               <div className="flex items-center gap-3">
                 <BookOpen className="w-6 h-6 text-[#C1121F]" />
                 <div>
-                  <h3 className="font-semibold text-[#E6E9EF]">HSPU Progression Guide</h3>
+                  <h3 className="font-semibold text-[#E6E9EF]">Full Progression Guide</h3>
                   <p className="text-sm text-[#A5A5A5]">Detailed training walkthrough</p>
                 </div>
                 <ArrowRight className="w-5 h-5 text-[#6B7280] ml-auto" />
@@ -213,18 +213,18 @@ export default function HSPUHubPage() {
           <Card className="bg-gradient-to-r from-[#C1121F]/20 to-[#1A1F26] border-[#C1121F]/30 p-6">
             <h2 className="text-xl font-bold mb-2">Ready to Train?</h2>
             <p className="text-[#A5A5A5] mb-4">
-              Build a personalized program that integrates handstand push-up training with your other goals.
+              SpartanLab creates adaptive programs that target your specific limiting factors and integrate HSPU training with your other goals.
             </p>
             <div className="flex flex-wrap gap-3">
-              <Link href="/calisthenics-program-builder">
+              <Link href="/onboarding">
                 <Button className="bg-[#C1121F] hover:bg-[#A50E1A]">
-                  Build Your Program
+                  Generate Your Program
                   <ArrowRight className="w-4 h-4 ml-2" />
                 </Button>
               </Link>
-              <Link href="/calisthenics-strength-standards">
+              <Link href="/hspu-readiness-calculator">
                 <Button variant="outline" className="border-[#2B313A] hover:bg-[#2B313A]">
-                  Check Strength Standards
+                  Check Your Readiness First
                 </Button>
               </Link>
             </div>

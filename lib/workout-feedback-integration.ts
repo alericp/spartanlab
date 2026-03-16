@@ -3,13 +3,18 @@
 // Ensures the AI learns from actual athlete behavior
 
 import { recordSignal, type TrainingResponseSignal } from './performance-envelope-service'
+import { type RepZone, type DensityLevel } from './performance-envelope-engine'
 import { saveSkillState, type SkillKey, type SkillStateInput } from './skill-state-service'
 import { getExerciseClassification } from './exercise-classification-registry'
-import type { MovementFamily } from './movement-family-registry'
+import type { MovementFamily, TrainingGoalType } from './movement-family-registry'
 import { 
   getActiveProgramVersion, 
   type ProgramVersion 
 } from './program-version-service'
+import { 
+  getWeeklyVolumeForFamily, 
+  getWeeklySessionCountForFamily 
+} from './volume-analyzer'
 
 // =============================================================================
 // TYPES
@@ -143,7 +148,7 @@ function buildEnvelopeSignal(
   
   // Calculate completion ratio
   const targetReps = exercise.sets.reduce((sum, s) => sum + s.targetReps, 0)
-  const completionRatio = targetReps > 0 ? totalReps / targetReps : 1
+  const completionRatio = targetReps > 0 ? Math.min(1, totalReps / targetReps) : 1
   
   // Determine goal type
   const goalType = inferGoalType(exercise, classification)
@@ -151,25 +156,189 @@ function buildEnvelopeSignal(
   // Calculate performance score (0-100)
   const performanceScore = calculatePerformanceScore(exercise, completionRatio, avgRpe)
   
-  return {
-    id: `${log.workoutId}_${exercise.exerciseId}`,
+  // Get weekly volume context (movement-family specific)
+  const sessionDate = new Date(log.completedAt)
+  const weeklyVolumePrior = getWeeklyVolumeForFamily(movementFamily, sessionDate)
+  const weeklySessionCount = getWeeklySessionCountForFamily(movementFamily, sessionDate)
+  
+  // Classify rep zone (granular)
+  const repZone = classifyRepZone(avgReps)
+  
+  // Determine session density
+  const sessionDensity = inferSessionDensity(log.totalDurationMinutes, log.exercises.length, completedSets.length)
+  
+  // Determine performance vs previous (simplified - would need historical context)
+  const performanceVsPrevious = inferPerformanceComparison(performanceScore, exercise.progressionAdjusted)
+  
+  // Calculate quality rating
+  const qualityRating = calculateQualityRating(completionRatio, log.difficultyRating, avgRpe)
+  
+  // Determine data quality
+  const dataQuality = determineDataQuality(exercise, log)
+  
+  // Build enhanced signal
+  const signal: TrainingResponseSignal = {
     athleteId: log.userId,
     movementFamily,
     goalType,
-    sessionDate: log.completedAt,
-    exerciseId: exercise.exerciseId,
-    setsCompleted: completedSets.length,
-    avgReps,
-    bestReps: Math.max(...completedSets.map(s => s.actualReps)),
-    bestHoldSeconds: maxHold > 0 ? maxHold : undefined,
+    
+    // Performance data
+    repsPerformed: avgReps,
+    setsPerformed: completedSets.length,
+    repRange: avgReps <= 3 ? 'low' : avgReps <= 6 ? 'moderate' : 'high',
+    repZone,
+    performanceMetric: maxHold > 0 ? maxHold : performanceScore,
+    performanceVsPrevious,
+    
+    // Session context
+    sessionDensity,
+    restSecondsUsed: estimateRestSeconds(sessionDensity),
+    sessionDurationMinutes: log.totalDurationMinutes,
+    
+    // Weekly volume context (movement-family specific)
+    weeklyVolumePrior,
+    weeklyVolumeAfter: weeklyVolumePrior + completedSets.length,
+    weeklySessionCount: weeklySessionCount + 1,
+    
+    // Response indicators
     difficultyRating: log.difficultyRating,
-    wasTimeCompressed: log.wasTimeCompressed,
     completionRatio,
-    performanceScore,
-    progressionChange: exercise.progressionAdjusted || 'none',
-    fatigueIndicator: log.difficultyRating === 'hard' ? 'elevated' : 'normal',
-    createdAt: new Date().toISOString(),
+    qualityRating,
+    sessionTruncated: log.wasTimeCompressed,
+    exercisesSkipped: log.exercises.filter(e => e.skipped).length,
+    exercisesSubstituted: log.exercises.filter(e => e.replaced).length,
+    
+    // Progression tracking
+    progressionAdjustment: exercise.progressionAdjusted === 'up' ? 'increased' :
+                           exercise.progressionAdjusted === 'down' ? 'decreased' :
+                           exercise.progressionAdjusted === 'none' ? 'maintained' : 'none',
+    wasDeloadSession: false, // Would need deload context
+    
+    // Metadata
+    recordedAt: new Date(log.completedAt),
+    dataQuality,
   }
+  
+  return signal
+}
+
+/**
+ * Classify reps into granular rep zone
+ */
+function classifyRepZone(reps: number): RepZone {
+  if (reps <= 3) return 'strength_low'
+  if (reps <= 6) return 'strength_mid'
+  if (reps <= 10) return 'hypertrophy'
+  if (reps <= 15) return 'endurance'
+  return 'high_rep'
+}
+
+/**
+ * Infer session density from duration and exercise count
+ */
+function inferSessionDensity(
+  durationMinutes: number,
+  exerciseCount: number,
+  setCount: number
+): DensityLevel {
+  if (exerciseCount === 0 || setCount === 0) return 'moderate_density'
+  
+  // Minutes per set is a good proxy for density
+  const minutesPerSet = durationMinutes / setCount
+  
+  // < 2 min/set = high density (circuit style)
+  // 2-4 min/set = moderate density (standard training)
+  // > 4 min/set = low density (strength/skill focus with long rest)
+  if (minutesPerSet < 2) return 'high_density'
+  if (minutesPerSet > 4) return 'low_density'
+  return 'moderate_density'
+}
+
+/**
+ * Estimate rest seconds based on density
+ */
+function estimateRestSeconds(density: DensityLevel): number {
+  switch (density) {
+    case 'high_density': return 60
+    case 'moderate_density': return 120
+    case 'low_density': return 180
+    default: return 120
+  }
+}
+
+/**
+ * Infer performance comparison (would be more accurate with historical data)
+ */
+function inferPerformanceComparison(
+  performanceScore: number,
+  progressionAdjusted?: 'up' | 'down' | 'none'
+): 'improved' | 'maintained' | 'declined' | 'unknown' {
+  if (progressionAdjusted === 'up') return 'improved'
+  if (progressionAdjusted === 'down') return 'declined'
+  if (performanceScore >= 70) return 'maintained'
+  if (performanceScore < 50) return 'declined'
+  return 'unknown'
+}
+
+/**
+ * Calculate quality rating based on session metrics
+ */
+function calculateQualityRating(
+  completionRatio: number,
+  difficulty: 'easy' | 'normal' | 'hard',
+  avgRpe: number
+): 'poor' | 'moderate' | 'good' | 'excellent' {
+  let score = 0
+  
+  // Completion contributes 0-40 points
+  score += completionRatio * 40
+  
+  // Difficulty contributes:
+  // - 'normal' is ideal (30 points)
+  // - 'easy' or 'hard' are less ideal (15-20 points)
+  if (difficulty === 'normal') score += 30
+  else if (difficulty === 'easy') score += 20
+  else score += 15
+  
+  // RPE in optimal range (7-8.5) adds points
+  if (avgRpe >= 7 && avgRpe <= 8.5) score += 30
+  else if (avgRpe >= 6 && avgRpe <= 9) score += 20
+  else score += 10
+  
+  if (score >= 85) return 'excellent'
+  if (score >= 70) return 'good'
+  if (score >= 50) return 'moderate'
+  return 'poor'
+}
+
+/**
+ * Determine data quality based on logging completeness
+ */
+function determineDataQuality(
+  exercise: ExerciseLogData,
+  log: WorkoutLogData
+): 'complete' | 'partial' | 'minimal' {
+  let completenessScore = 0
+  
+  // Has actual reps for all sets
+  const setsWithReps = exercise.sets.filter(s => s.actualReps > 0).length
+  if (setsWithReps === exercise.sets.length) completenessScore += 3
+  else if (setsWithReps > 0) completenessScore += 1
+  
+  // Has RPE data
+  const setsWithRpe = exercise.sets.filter(s => s.rpe && s.rpe > 0).length
+  if (setsWithRpe === exercise.sets.length) completenessScore += 2
+  else if (setsWithRpe > 0) completenessScore += 1
+  
+  // Has difficulty rating
+  if (log.difficultyRating) completenessScore += 2
+  
+  // Has duration
+  if (log.totalDurationMinutes > 0) completenessScore += 1
+  
+  if (completenessScore >= 7) return 'complete'
+  if (completenessScore >= 4) return 'partial'
+  return 'minimal'
 }
 
 function inferMovementFamily(exerciseName: string): MovementFamily | null {
@@ -192,7 +361,7 @@ function inferMovementFamily(exerciseName: string): MovementFamily | null {
 function inferGoalType(
   exercise: ExerciseLogData,
   classification: ReturnType<typeof getExerciseClassification>
-): 'strength' | 'skill' | 'hypertrophy' | 'endurance' | 'power' {
+): TrainingGoalType {
   // Check classification first
   if (classification?.intents) {
     if (classification.intents.includes('skill')) return 'skill'
@@ -200,6 +369,8 @@ function inferGoalType(
     if (classification.intents.includes('hypertrophy')) return 'hypertrophy'
     if (classification.intents.includes('power')) return 'power'
     if (classification.intents.includes('endurance')) return 'endurance'
+    if (classification.intents.includes('mobility')) return 'mobility'
+    if (classification.intents.includes('conditioning')) return 'conditioning'
   }
   
   // Infer from exercise name
@@ -208,6 +379,7 @@ function inferGoalType(
   if (name.includes('weighted') || name.includes('heavy')) return 'strength'
   if (name.includes('curl') || name.includes('raise') || name.includes('fly')) return 'hypertrophy'
   if (name.includes('explosive') || name.includes('clap') || name.includes('plyo')) return 'power'
+  if (name.includes('stretch') || name.includes('mobility')) return 'mobility'
   
   return 'strength'
 }

@@ -135,11 +135,11 @@ export default function OnboardingCompletePage() {
           </div>
           
           <h1 className="text-2xl md:text-3xl font-bold text-[#E6E9EF] mb-3">
-            Your Program is Ready!
+            Your Adaptive Program is Ready
           </h1>
           
           <p className="text-[#A4ACB8] mb-2">
-            We've built a personalized training program based on your goals and current abilities.
+            SpartanLab has analyzed your profile and generated a program targeting your specific goals and limiting factors.
           </p>
           
           {isTrial && trialDays > 0 && (

@@ -13,10 +13,13 @@ import {
   ChevronRight, 
   CheckCircle2, 
   TrendingUp,
-  BarChart3
+  BarChart3,
+  Sparkles,
+  ArrowRight,
 } from 'lucide-react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
+import { Card } from '@/components/ui/card'
 
 interface ReadinessResultCardProps {
   result: ReadinessResult
@@ -124,10 +127,35 @@ export function ReadinessResultCard({
         </div>
       </div>
 
-      {/* Action Buttons */}
+      {/* Primary CTA - Generate Program based on this assessment */}
+      <Card className="bg-gradient-to-br from-[#C1121F]/10 to-[#C1121F]/5 border-[#C1121F]/20 p-5">
+        <div className="flex items-start gap-3 mb-4">
+          <div className="w-10 h-10 rounded-lg bg-[#C1121F]/10 flex items-center justify-center shrink-0">
+            <Sparkles className="w-5 h-5 text-[#C1121F]" />
+          </div>
+          <div>
+            <h3 className="font-semibold text-[#E6E9EF] mb-1">Build a Program for This Skill</h3>
+            <p className="text-sm text-[#A4ACB8]">
+              SpartanLab will generate a training program targeting your {result.limitingFactor.toLowerCase()} 
+              {' '}to accelerate your {skillName.toLowerCase()} progress.
+            </p>
+          </div>
+        </div>
+        <Link href="/onboarding">
+          <Button className="w-full bg-[#C1121F] hover:bg-[#A50E1A] text-white">
+            Generate {skillName} Program
+            <ArrowRight className="w-4 h-4 ml-2" />
+          </Button>
+        </Link>
+        <p className="text-xs text-[#6B7280] text-center mt-2">
+          Free to start. Takes about 3 minutes.
+        </p>
+      </Card>
+
+      {/* Secondary Action Buttons */}
       <div className="flex flex-col sm:flex-row gap-3">
         <Link href={progressionHref} className="flex-1">
-          <Button className="w-full bg-[#C1121F] hover:bg-[#A50E1A] text-white">
+          <Button variant="outline" className="w-full border-[#2B313A] text-[#A4ACB8] hover:bg-[#1A1F26]">
             View {skillName} Progression
             <ChevronRight className="w-4 h-4 ml-1" />
           </Button>

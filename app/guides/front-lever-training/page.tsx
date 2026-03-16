@@ -141,11 +141,13 @@ export default function FrontLeverTrainingGuide() {
         <article className="max-w-4xl mx-auto">
           {/* Breadcrumb - hidden on mobile */}
           <nav className="hidden sm:flex items-center gap-2 text-sm text-[#6B7280] mb-8">
-            <Link href="/landing" className="hover:text-[#A4ACB8]">Home</Link>
+            <Link href="/" className="hover:text-[#A4ACB8]">Home</Link>
             <span>/</span>
-            <Link href="/guides" className="hover:text-[#A4ACB8]">Guides</Link>
+            <Link href="/skills" className="hover:text-[#A4ACB8]">Skills</Link>
             <span>/</span>
-            <span className="text-[#A4ACB8]">Front Lever Training</span>
+            <Link href="/skills/front-lever" className="hover:text-[#A4ACB8]">Front Lever Hub</Link>
+            <span>/</span>
+            <span className="text-[#A4ACB8]">Training Guide</span>
           </nav>
 
           {/* Header */}

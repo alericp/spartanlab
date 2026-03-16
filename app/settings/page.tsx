@@ -39,8 +39,14 @@ import {
   saveAthleteProfile,
   type AthleteProfile,
 } from '@/lib/data-service'
-import { hasSignificantProfileChange, getProfileChangeDescription } from '@/lib/profile-sync-service'
 import { getActiveProgram, clearActiveProgram } from '@/lib/program-service'
+import { 
+  analyzeSettingsChanges, 
+  canRegenerate,
+  markRegeneration,
+  getSessionAdaptations,
+  type SettingsChangeAnalysis,
+} from '@/lib/settings-regeneration-service'
 import { UpdateMetricsCard } from '@/components/dashboard/UpdateMetricsCard'
 import { useToast } from '@/hooks/use-toast'
 
@@ -202,6 +208,11 @@ export default function SettingsPage() {
   const [jointCautions, setJointCautions] = useState<JointCaution[]>([])
   const [weakestArea, setWeakestArea] = useState<WeakestArea | 'none'>('none')
   const [trainingStyle, setTrainingStyle] = useState<TrainingStyleMode>('balanced_hybrid')
+  const [lastChangeResult, setLastChangeResult] = useState<{
+    regenerated: boolean
+    message: string
+    affectedSystems: string[]
+  } | null>(null)
 
   useEffect(() => {
     setMounted(true)
@@ -222,14 +233,12 @@ export default function SettingsPage() {
     setTrainingStyle((data as AthleteProfile & { trainingStyle?: TrainingStyleMode }).trainingStyle || 'balanced_hybrid')
   }
 
-  const handleSave = () => {
+  const handleSave = async () => {
     setSaving(true)
     setSaved(false)
     
-    // Store previous profile for comparison
-    const previousProfile = profile
-    
-    const updated = saveAthleteProfile({
+    // Prepare update payload
+    const updates = {
       bodyweight: bodyweight ? parseFloat(bodyweight) : null,
       experienceLevel: experienceLevel as 'beginner' | 'intermediate' | 'advanced',
       trainingDaysPerWeek: parseInt(trainingDays),
@@ -239,29 +248,141 @@ export default function SettingsPage() {
       jointCautions: jointCautions,
       weakestArea: weakestArea === 'none' ? null : weakestArea,
       trainingStyle: trainingStyle,
+    }
+    
+    try {
+      // Try API-based save first (for authenticated users)
+      const response = await fetch('/api/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates),
+      })
+      
+      if (response.ok) {
+        const result = await response.json()
+        
+        // Update local state with server response
+        if (result.profile) {
+          setProfile(result.profile)
+        }
+        
+        setSaved(true)
+        
+        // Handle regeneration feedback with coaching explanation
+        if (result.regenerated) {
+          // Record timestamp for NextWorkoutCard to show update notice
+          try {
+            localStorage.setItem('spartanlab_program_version_timestamp', new Date().toISOString())
+          } catch {
+            // localStorage unavailable
+          }
+          
+          setLastChangeResult({
+            regenerated: true,
+            message: result.analysis?.coachingMessage || 'Your program has been regenerated.',
+            affectedSystems: result.analysis?.affectedSystems || [],
+          })
+          toast({
+            title: 'Program Regenerated',
+            description: result.analysis?.coachingMessage || 'Your program has been regenerated to match your new settings.',
+            duration: 5000,
+          })
+        } else if (result.adaptations && result.adaptations.length > 0) {
+          setLastChangeResult({
+            regenerated: false,
+            message: result.analysis?.coachingMessage || 'Future sessions will reflect these changes.',
+            affectedSystems: result.analysis?.affectedSystems || [],
+          })
+          toast({
+            title: 'Settings Adjusted',
+            description: result.analysis?.coachingMessage || 'Future sessions will reflect these changes.',
+            duration: 4000,
+          })
+        } else if (result.analysis?.changes?.length > 0) {
+          setLastChangeResult(null)
+          toast({
+            title: 'Settings Saved',
+            description: 'Your preferences have been updated.',
+            duration: 3000,
+          })
+        }
+        
+        setSaving(false)
+        setTimeout(() => setSaved(false), 2000)
+        return
+      }
+      
+      // API failed - fall back to localStorage
+      console.warn('[Settings] API save failed, using localStorage fallback')
+    } catch (error) {
+      console.warn('[Settings] API error, using localStorage fallback:', error)
+    }
+    
+    // FALLBACK: localStorage-based save (for preview/development mode)
+    const previousProfile = profile
+    
+    const updated = saveAthleteProfile({
+      ...updates,
     } as Parameters<typeof saveAthleteProfile>[0])
     
     setProfile(updated)
     setSaved(true)
     setSaving(false)
     
-    // Check if changes require program regeneration
-    if (previousProfile && hasSignificantProfileChange(previousProfile, updated)) {
-      const activeProgram = getActiveProgram()
-      if (activeProgram) {
-        // Clear the active program to trigger regeneration on next visit
-        clearActiveProgram()
+    // Analyze settings changes using intelligent classification
+    if (previousProfile) {
+      const analysis = analyzeSettingsChanges(
+        previousProfile, 
+        updated as AthleteProfile & { trainingStyle?: string }
+      )
+      
+      if (analysis.changes.length > 0) {
+        const activeProgram = getActiveProgram()
         
-        // Get description of what changed for better user messaging
-        const changeDescription = getProfileChangeDescription(previousProfile, updated)
-        
-        toast({
-          title: 'Program Updated',
-          description: changeDescription 
-            ? `Your program will be regenerated to match your new ${changeDescription}.`
-            : 'Your training program will be regenerated to match your new settings.',
-          duration: 5000,
-        })
+        if (analysis.requiresRegeneration && activeProgram) {
+          // STRUCTURAL CHANGE: Clear active program to trigger new version
+          // Check debounce to prevent rapid regenerations
+          if (canRegenerate('current-user')) {
+            clearActiveProgram()
+            markRegeneration('current-user')
+            
+            // Record timestamp for NextWorkoutCard to show update notice
+            try {
+              localStorage.setItem('spartanlab_program_version_timestamp', new Date().toISOString())
+            } catch {
+              // localStorage unavailable
+            }
+            
+            setLastChangeResult({
+              regenerated: true,
+              message: analysis.coachingMessage,
+              affectedSystems: analysis.affectedSystems,
+            })
+            
+            toast({
+              title: 'Program Regenerated',
+              description: analysis.coachingMessage,
+              duration: 5000,
+            })
+          }
+        } else if (analysis.changes.some(c => c.affectsFutureSessions)) {
+          // MINOR CHANGE: Apply session adaptations without new version
+          const adaptations = getSessionAdaptations(analysis)
+          
+          if (adaptations.length > 0) {
+            setLastChangeResult({
+              regenerated: false,
+              message: analysis.coachingMessage,
+              affectedSystems: analysis.affectedSystems,
+            })
+            
+            toast({
+              title: 'Settings Adjusted',
+              description: analysis.coachingMessage,
+              duration: 4000,
+            })
+          }
+        }
       }
     }
     
@@ -541,6 +662,47 @@ export default function SettingsPage() {
                 'Save Profile'
               )}
             </Button>
+            
+            {/* Coaching explanation for recent changes */}
+            {lastChangeResult && (
+              <div className={`mt-4 p-4 rounded-lg border ${
+                lastChangeResult.regenerated 
+                  ? 'bg-[#E63946]/10 border-[#E63946]/30' 
+                  : 'bg-[#4F6D8A]/10 border-[#4F6D8A]/30'
+              }`}>
+                <div className="flex items-start gap-3">
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
+                    lastChangeResult.regenerated 
+                      ? 'bg-[#E63946]/20' 
+                      : 'bg-[#4F6D8A]/20'
+                  }`}>
+                    {lastChangeResult.regenerated ? (
+                      <Sparkles className="w-4 h-4 text-[#E63946]" />
+                    ) : (
+                      <Target className="w-4 h-4 text-[#4F6D8A]" />
+                    )}
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-[#F5F5F5] mb-1">
+                      {lastChangeResult.regenerated ? 'Program Regenerated' : 'Settings Adjusted'}
+                    </p>
+                    <p className="text-xs text-[#A5A5A5]">{lastChangeResult.message}</p>
+                    {lastChangeResult.affectedSystems.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 mt-2">
+                        {lastChangeResult.affectedSystems.slice(0, 3).map(system => (
+                          <span 
+                            key={system}
+                            className="px-2 py-0.5 text-xs bg-[#1A1A1A] border border-[#3A3A3A] rounded-full text-[#6B7280]"
+                          >
+                            {system.replace(/_/g, ' ')}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </Card>
         

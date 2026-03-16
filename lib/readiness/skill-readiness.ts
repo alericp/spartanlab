@@ -1364,6 +1364,244 @@ export function calculateBackLeverReadiness(inputs: BackLeverInputs): ReadinessR
 }
 
 // =============================================================================
+// L-SIT READINESS
+// =============================================================================
+
+export interface LSitInputs {
+  maxDips: number
+  hollowHoldTime: number // seconds
+  toePointQuality: 'poor' | 'moderate' | 'good'
+  hipFlexorStrength: 'weak' | 'moderate' | 'strong'
+  hasParallettes: boolean
+  hasFloor: boolean
+  lSitHoldTime?: number // seconds, optional - current L-sit ability
+}
+
+export function calculateLSitReadiness(inputs: LSitInputs): ReadinessResult {
+  const breakdown: ScoreBreakdown[] = []
+  
+  // ===================
+  // Factor 1: Support Strength / Dips (max 25 points)
+  // ===================
+  // Dips indicate shoulder depression strength needed for L-sit support
+  let dipScore = 0
+  let dipStatus: ScoreBreakdown['status'] = 'weak'
+  
+  if (inputs.maxDips >= 20) {
+    dipScore = 25
+    dipStatus = 'strong'
+  } else if (inputs.maxDips >= 15) {
+    dipScore = 20
+    dipStatus = 'strong'
+  } else if (inputs.maxDips >= 10) {
+    dipScore = 15
+    dipStatus = 'adequate'
+  } else if (inputs.maxDips >= 6) {
+    dipScore = 10
+    dipStatus = 'developing'
+  } else if (inputs.maxDips >= 3) {
+    dipScore = 5
+    dipStatus = 'weak'
+  }
+  
+  breakdown.push({
+    factor: 'Dip Support Strength',
+    score: dipScore,
+    maxScore: 25,
+    status: dipStatus,
+  })
+
+  // ===================
+  // Factor 2: Compression / Hollow Hold (max 30 points)
+  // ===================
+  // Core compression is the most critical L-sit component
+  let hollowScore = 0
+  let hollowStatus: ScoreBreakdown['status'] = 'weak'
+  
+  if (inputs.hollowHoldTime >= 60) {
+    hollowScore = 30
+    hollowStatus = 'strong'
+  } else if (inputs.hollowHoldTime >= 45) {
+    hollowScore = 24
+    hollowStatus = 'strong'
+  } else if (inputs.hollowHoldTime >= 30) {
+    hollowScore = 18
+    hollowStatus = 'adequate'
+  } else if (inputs.hollowHoldTime >= 20) {
+    hollowScore = 12
+    hollowStatus = 'developing'
+  } else if (inputs.hollowHoldTime >= 10) {
+    hollowScore = 6
+    hollowStatus = 'weak'
+  } else {
+    hollowScore = Math.max(0, Math.floor(inputs.hollowHoldTime / 2))
+    hollowStatus = 'weak'
+  }
+  
+  breakdown.push({
+    factor: 'Hollow Hold / Core Compression',
+    score: hollowScore,
+    maxScore: 30,
+    status: hollowStatus,
+  })
+
+  // ===================
+  // Factor 3: Hip Flexor Strength (max 25 points)
+  // ===================
+  const hipFlexorScores: Record<string, number> = {
+    'weak': 5,
+    'moderate': 15,
+    'strong': 25,
+  }
+  const hipFlexorStatuses: Record<string, ScoreBreakdown['status']> = {
+    'weak': 'weak',
+    'moderate': 'developing',
+    'strong': 'strong',
+  }
+  
+  breakdown.push({
+    factor: 'Hip Flexor Strength',
+    score: hipFlexorScores[inputs.hipFlexorStrength],
+    maxScore: 25,
+    status: hipFlexorStatuses[inputs.hipFlexorStrength],
+  })
+
+  // ===================
+  // Factor 4: Mobility / Toe Point (max 15 points)
+  // ===================
+  const toeScores: Record<string, number> = {
+    'poor': 3,
+    'moderate': 10,
+    'good': 15,
+  }
+  const toeStatuses: Record<string, ScoreBreakdown['status']> = {
+    'poor': 'weak',
+    'moderate': 'developing',
+    'good': 'strong',
+  }
+  
+  breakdown.push({
+    factor: 'Toe Point Quality',
+    score: toeScores[inputs.toePointQuality],
+    maxScore: 15,
+    status: toeStatuses[inputs.toePointQuality],
+  })
+
+  // ===================
+  // Factor 5: Equipment Access (max 5 points)
+  // ===================
+  let equipScore = 0
+  let equipStatus: ScoreBreakdown['status'] = 'weak'
+  
+  if (inputs.hasParallettes && inputs.hasFloor) {
+    equipScore = 5
+    equipStatus = 'strong'
+  } else if (inputs.hasParallettes || inputs.hasFloor) {
+    equipScore = 3
+    equipStatus = 'adequate'
+  }
+  
+  breakdown.push({
+    factor: 'Equipment Access',
+    score: equipScore,
+    maxScore: 5,
+    status: equipStatus,
+  })
+
+  // ===================
+  // Calculate Total Score
+  // ===================
+  const totalScore = breakdown.reduce((sum, b) => sum + b.score, 0)
+  
+  // ===================
+  // Determine Level & Labels
+  // ===================
+  let level: ReadinessLevel
+  let label: string
+  let nextProgression: string
+  
+  if (totalScore >= 85) {
+    level = 'advanced-ready'
+    label = 'Full L-Sit Ready'
+    nextProgression = 'Full L-sit holds, V-sit progressions, L-sit on floor'
+  } else if (totalScore >= 65) {
+    level = 'intermediate-progression'
+    label = 'Tuck L-Sit / One Leg L-Sit Ready'
+    nextProgression = 'Tuck L-sit holds, one leg extensions, compression work'
+  } else if (totalScore >= 45) {
+    level = 'early-progression'
+    label = 'Supported L-Sit Practice Ready'
+    nextProgression = 'Parallettes L-sit attempts, tuck holds, compression drills'
+  } else if (totalScore >= 25) {
+    level = 'foundation-phase'
+    label = 'Foundation Building'
+    nextProgression = 'Build dip strength, hollow holds, seated compression work'
+  } else {
+    level = 'not-ready'
+    label = 'Not Ready Yet'
+    nextProgression = 'Focus on basic dip support and hollow body strength'
+  }
+
+  // ===================
+  // Determine Limiting Factor
+  // ===================
+  const weakestFactor = [...breakdown]
+    .filter(b => b.maxScore > 5)
+    .sort((a, b) => (a.score / a.maxScore) - (b.score / b.maxScore))[0]
+  
+  const limitingFactorMap: Record<string, { factor: string; explanation: string }> = {
+    'Dip Support Strength': {
+      factor: 'Support strength deficit',
+      explanation: 'L-sit requires strong shoulder depression. Build dip support strength to hold your body off the ground with locked arms.'
+    },
+    'Hollow Hold / Core Compression': {
+      factor: 'Core compression weakness',
+      explanation: 'Compression strength is the primary limiter for L-sit. Your core must actively pull your legs up against gravity.'
+    },
+    'Hip Flexor Strength': {
+      factor: 'Hip flexor weakness',
+      explanation: 'Weak hip flexors make it impossible to lift your legs to parallel. Train seated leg raises and compression holds.'
+    },
+    'Toe Point Quality': {
+      factor: 'Mobility limitation',
+      explanation: 'Poor toe point indicates tight calves or weak lower leg control. This affects the aesthetic and difficulty of the hold.'
+    },
+  }
+  
+  const limitingInfo = limitingFactorMap[weakestFactor?.factor] || {
+    factor: 'General compression strength',
+    explanation: 'Focus on building overall compression and support strength.'
+  }
+
+  // ===================
+  // Generate Recommendation
+  // ===================
+  let recommendation: string
+  if (level === 'not-ready') {
+    recommendation = 'Build your foundation first. Work on dip support holds and basic hollow body strength before L-sit attempts.'
+  } else if (level === 'foundation-phase') {
+    recommendation = 'Continue building support strength. Add seated compression work and focus on extending hollow hold duration.'
+  } else if (level === 'early-progression') {
+    recommendation = 'Begin L-sit attempts on parallettes. Start with tuck holds and work on extending one leg at a time.'
+  } else if (level === 'intermediate-progression') {
+    recommendation = 'You are close to full L-sit. Focus on hip flexor strengthening and gradually extend both legs while maintaining height.'
+  } else {
+    recommendation = 'You have the strength for full L-sit holds. Work on hold duration and consider progressing to V-sit or floor L-sit.'
+  }
+
+  return {
+    score: totalScore,
+    level,
+    label,
+    limitingFactor: limitingInfo.factor,
+    limitingFactorExplanation: limitingInfo.explanation,
+    recommendation,
+    nextProgression,
+    breakdown,
+  }
+}
+
+// =============================================================================
 // READINESS TIERS (UNIFIED SYSTEM)
 // =============================================================================
 

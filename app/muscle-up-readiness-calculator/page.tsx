@@ -412,8 +412,25 @@ export default function MuscleUpReadinessCalculator() {
           </div>
         </section>
 
+        {/* Final CTA Section */}
+        <section className="mt-12 bg-gradient-to-br from-[#C1121F]/10 to-[#C1121F]/5 border border-[#C1121F]/20 rounded-xl p-6 text-center">
+          <h2 className="text-xl font-bold text-[#E6E9EF] mb-2">
+            Ready to Train for Muscle-Up?
+          </h2>
+          <p className="text-[#A4ACB8] mb-4 max-w-md mx-auto">
+            SpartanLab generates adaptive programs that build the explosive pulling strength and transition power you need for muscle-ups.
+          </p>
+          <Link href="/onboarding">
+            <Button className="bg-[#C1121F] hover:bg-[#A50E1A] text-white px-6">
+              Build Your Muscle-Up Program
+              <ChevronRight className="w-4 h-4 ml-1" />
+            </Button>
+          </Link>
+          <p className="text-xs text-[#6B7280] mt-2">Free to start. No credit card required.</p>
+        </section>
+
         {/* Back to Tools */}
-        <div className="mt-12 text-center">
+        <div className="mt-8 text-center">
           <Link href="/tools">
             <Button variant="outline" className="border-[#2B313A] text-[#A4ACB8] hover:bg-[#1A1F26]">
               View All Tools

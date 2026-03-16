@@ -78,11 +78,15 @@ export default function PlancheTrainingGuidePage() {
       <main className="max-w-4xl mx-auto px-4 py-12">
         {/* Hero */}
         <header className="mb-12">
-          <div className="flex items-center gap-2 text-sm text-[#6B7280] mb-4">
-            <Link href="/skills/planche" className="hover:text-[#E6E9EF]">Planche</Link>
+          <nav className="flex items-center gap-2 text-sm text-[#6B7280] mb-4">
+            <Link href="/" className="hover:text-[#E6E9EF]">Home</Link>
             <span>/</span>
-            <span>Training Guide</span>
-          </div>
+            <Link href="/skills" className="hover:text-[#E6E9EF]">Skills</Link>
+            <span>/</span>
+            <Link href="/skills/planche" className="hover:text-[#E6E9EF]">Planche Hub</Link>
+            <span>/</span>
+            <span className="text-[#E6E9EF]">Training Guide</span>
+          </nav>
           <h1 className="text-4xl font-bold mb-4">Planche Training Guide</h1>
           <p className="text-xl text-[#A5A5A5]">
             The ultimate guide to achieving the planche - one of the most impressive and challenging calisthenics skills.
@@ -227,17 +231,17 @@ export default function PlancheTrainingGuidePage() {
           <Card className="bg-gradient-to-br from-[#C1121F]/20 to-[#1A1F26] border-[#C1121F]/30 p-8 text-center">
             <h2 className="text-2xl font-bold mb-4">Ready to Start Training?</h2>
             <p className="text-[#A5A5A5] mb-6">
-              Test your readiness and get a personalized planche program.
+              SpartanLab creates adaptive programs that target your specific limiting factors for planche.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Link href="/planche-readiness-calculator">
                 <Button variant="outline" className="border-[#2B313A]">
-                  Test Readiness
+                  Test Readiness First
                 </Button>
               </Link>
-              <Link href="/calisthenics-program-builder">
+              <Link href="/onboarding">
                 <Button className="bg-[#C1121F] hover:bg-[#A30F1A]">
-                  Build Program
+                  Generate Your Program
                   <ArrowRight className="w-4 h-4 ml-2" />
                 </Button>
               </Link>

@@ -361,25 +361,49 @@ export default function FrontLeverReadinessCalculator() {
             </div>
           </div>
 
-          {/* Related Skills & Guides */}
+          {/* Front Lever Resources - Hub Links */}
           <div className="bg-[#0F1115] border border-[#2B313A] rounded-xl p-6">
-            <h2 className="text-xl font-bold text-[#E6E9EF] mb-4">Continue Your Training</h2>
+            <h2 className="text-xl font-bold text-[#E6E9EF] mb-2">Front Lever Resources</h2>
+            <p className="text-[#6B7280] text-sm mb-4">Everything you need to master the front lever</p>
             <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <Link href="/skills/front-lever" className="p-4 bg-[#1A1F26] rounded-lg hover:bg-[#252A33] transition-colors border border-transparent hover:border-[#C1121F]/30">
+                <h3 className="font-semibold text-[#E6E9EF] text-sm mb-1">Front Lever Hub</h3>
+                <p className="text-xs text-[#6B7280]">Complete skill overview</p>
+              </Link>
               <Link href="/front-lever-progression" className="p-4 bg-[#1A1F26] rounded-lg hover:bg-[#252A33] transition-colors">
-                <h3 className="font-semibold text-[#E6E9EF] text-sm mb-1">Front Lever Progression</h3>
-                <p className="text-xs text-[#6B7280]">Complete progression guide</p>
+                <h3 className="font-semibold text-[#E6E9EF] text-sm mb-1">Progression Guide</h3>
+                <p className="text-xs text-[#6B7280]">Tuck to full front lever</p>
+              </Link>
+              <Link href="/guides/front-lever-training" className="p-4 bg-[#1A1F26] rounded-lg hover:bg-[#252A33] transition-colors">
+                <h3 className="font-semibold text-[#E6E9EF] text-sm mb-1">Training Guide</h3>
+                <p className="text-xs text-[#6B7280]">How to train effectively</p>
+              </Link>
+              <Link href="/programs/front-lever-program" className="p-4 bg-[#1A1F26] rounded-lg hover:bg-[#252A33] transition-colors">
+                <h3 className="font-semibold text-[#E6E9EF] text-sm mb-1">Training Program</h3>
+                <p className="text-xs text-[#6B7280]">12-24 week structured plan</p>
+              </Link>
+            </div>
+          </div>
+
+          {/* Related Calculators & Standards */}
+          <div className="bg-[#0F1115] border border-[#2B313A] rounded-xl p-6">
+            <h2 className="text-xl font-bold text-[#E6E9EF] mb-4">Related Tools</h2>
+            <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <Link href="/planche-readiness-calculator" className="p-4 bg-[#1A1F26] rounded-lg hover:bg-[#252A33] transition-colors">
+                <h3 className="font-semibold text-[#E6E9EF] text-sm mb-1">Planche Calculator</h3>
+                <p className="text-xs text-[#6B7280]">Test your pushing readiness</p>
+              </Link>
+              <Link href="/muscle-up-readiness-calculator" className="p-4 bg-[#1A1F26] rounded-lg hover:bg-[#252A33] transition-colors">
+                <h3 className="font-semibold text-[#E6E9EF] text-sm mb-1">Muscle Up Calculator</h3>
+                <p className="text-xs text-[#6B7280]">Test your transition strength</p>
               </Link>
               <Link href="/calisthenics-strength-standards" className="p-4 bg-[#1A1F26] rounded-lg hover:bg-[#252A33] transition-colors">
                 <h3 className="font-semibold text-[#E6E9EF] text-sm mb-1">Strength Standards</h3>
                 <p className="text-xs text-[#6B7280]">Pull-up and dip benchmarks</p>
               </Link>
-              <Link href="/planche-readiness-calculator" className="p-4 bg-[#1A1F26] rounded-lg hover:bg-[#252A33] transition-colors">
-                <h3 className="font-semibold text-[#E6E9EF] text-sm mb-1">Planche Readiness</h3>
-                <p className="text-xs text-[#6B7280]">Test your pushing readiness</p>
-              </Link>
-              <Link href="/calisthenics-program-builder" className="p-4 bg-[#1A1F26] rounded-lg hover:bg-[#252A33] transition-colors">
-                <h3 className="font-semibold text-[#E6E9EF] text-sm mb-1">Program Builder</h3>
-                <p className="text-xs text-[#6B7280]">Build your training plan</p>
+              <Link href="/onboarding" className="p-4 bg-[#C1121F]/10 rounded-lg hover:bg-[#C1121F]/20 transition-colors border border-[#C1121F]/30">
+                <h3 className="font-semibold text-[#C1121F] text-sm mb-1">Generate Program</h3>
+                <p className="text-xs text-[#A4ACB8]">Personalized training plan</p>
               </Link>
             </div>
           </div>
@@ -421,8 +445,25 @@ export default function FrontLeverReadinessCalculator() {
           </div>
         </section>
 
+        {/* Final CTA Section */}
+        <section className="mt-12 bg-gradient-to-br from-[#C1121F]/10 to-[#C1121F]/5 border border-[#C1121F]/20 rounded-xl p-6 text-center">
+          <h2 className="text-xl font-bold text-[#E6E9EF] mb-2">
+            Ready to Train for Front Lever?
+          </h2>
+          <p className="text-[#A4ACB8] mb-4 max-w-md mx-auto">
+            SpartanLab generates adaptive programs that target your limiting factors and track your progress toward front lever mastery.
+          </p>
+          <Link href="/onboarding">
+            <Button className="bg-[#C1121F] hover:bg-[#A50E1A] text-white px-6">
+              Build Your Front Lever Program
+              <ChevronRight className="w-4 h-4 ml-1" />
+            </Button>
+          </Link>
+          <p className="text-xs text-[#6B7280] mt-2">Free to start. No credit card required.</p>
+        </section>
+
         {/* Back to Tools */}
-        <div className="mt-12 text-center">
+        <div className="mt-8 text-center">
           <Link href="/tools">
             <Button variant="outline" className="border-[#2B313A] text-[#A4ACB8] hover:bg-[#1A1F26]">
               View All Tools

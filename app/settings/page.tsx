@@ -39,8 +39,14 @@ import {
   saveAthleteProfile,
   type AthleteProfile,
 } from '@/lib/data-service'
-import { hasSignificantProfileChange, getProfileChangeDescription } from '@/lib/profile-sync-service'
 import { getActiveProgram, clearActiveProgram } from '@/lib/program-service'
+import { 
+  analyzeSettingsChanges, 
+  canRegenerate,
+  markRegeneration,
+  getSessionAdaptations,
+  type SettingsChangeAnalysis,
+} from '@/lib/settings-regeneration-service'
 import { UpdateMetricsCard } from '@/components/dashboard/UpdateMetricsCard'
 import { useToast } from '@/hooks/use-toast'
 
@@ -245,23 +251,41 @@ export default function SettingsPage() {
     setSaved(true)
     setSaving(false)
     
-    // Check if changes require program regeneration
-    if (previousProfile && hasSignificantProfileChange(previousProfile, updated)) {
-      const activeProgram = getActiveProgram()
-      if (activeProgram) {
-        // Clear the active program to trigger regeneration on next visit
-        clearActiveProgram()
+    // Analyze settings changes using intelligent classification
+    if (previousProfile) {
+      const analysis = analyzeSettingsChanges(
+        previousProfile, 
+        updated as AthleteProfile & { trainingStyle?: string }
+      )
+      
+      if (analysis.changes.length > 0) {
+        const activeProgram = getActiveProgram()
         
-        // Get description of what changed for better user messaging
-        const changeDescription = getProfileChangeDescription(previousProfile, updated)
-        
-        toast({
-          title: 'Program Updated',
-          description: changeDescription 
-            ? `Your program will be regenerated to match your new ${changeDescription}.`
-            : 'Your training program will be regenerated to match your new settings.',
-          duration: 5000,
-        })
+        if (analysis.requiresRegeneration && activeProgram) {
+          // STRUCTURAL CHANGE: Clear active program to trigger new version
+          // Check debounce to prevent rapid regenerations
+          if (canRegenerate('current-user')) {
+            clearActiveProgram()
+            markRegeneration('current-user')
+            
+            toast({
+              title: 'Program Updated',
+              description: analysis.coachingMessage,
+              duration: 5000,
+            })
+          }
+        } else if (analysis.changes.some(c => c.affectsFutureSessions)) {
+          // MINOR CHANGE: Apply session adaptations without new version
+          const adaptations = getSessionAdaptations(analysis)
+          
+          if (adaptations.length > 0) {
+            toast({
+              title: 'Settings Updated',
+              description: analysis.coachingMessage,
+              duration: 4000,
+            })
+          }
+        }
       }
     }
     

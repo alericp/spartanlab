@@ -873,11 +873,114 @@ function generateCoachingTone(analysis: ConstraintAnalysis): string {
 }
 
 // =============================================================================
+// WARMUP PROTOCOL GENERATION
+// =============================================================================
+
+export type WarmupProtocolType = 
+  | 'wrist_prep'
+  | 'scapular_activation'
+  | 'shoulder_prep'
+  | 'compression_prep'
+  | 'elbow_prep'
+  | 'ring_support_prep'
+  | 'hip_mobility'
+  | 'general_movement'
+
+export interface WarmupProtocol {
+  protocolType: WarmupProtocolType
+  priority: 'required' | 'recommended' | 'optional'
+  durationMinutes: number
+  rationale: string
+}
+
+/**
+ * Generate session-specific warmup protocols based on:
+ * - Skill demands of the session
+ * - Joint stress concerns
+ * - Injury flags
+ * - Movement families
+ */
+export function generateWarmupProtocols(
+  primarySkill: string,
+  analysis: ConstraintAnalysis
+): WarmupProtocol[] {
+  const protocols: WarmupProtocol[] = []
+  
+  // Always include general movement prep
+  protocols.push({
+    protocolType: 'general_movement',
+    priority: 'required',
+    durationMinutes: 3,
+    rationale: 'General movement preparation to increase core temperature.',
+  })
+  
+  // Skill-specific protocols
+  const skillProtocolMap: Record<string, WarmupProtocolType[]> = {
+    planche: ['wrist_prep', 'scapular_activation', 'shoulder_prep'],
+    front_lever: ['scapular_activation', 'shoulder_prep', 'compression_prep'],
+    back_lever: ['scapular_activation', 'shoulder_prep'],
+    iron_cross: ['ring_support_prep', 'shoulder_prep', 'scapular_activation'],
+    muscle_up: ['shoulder_prep', 'scapular_activation', 'elbow_prep'],
+    handstand: ['wrist_prep', 'shoulder_prep', 'scapular_activation'],
+    hspu: ['wrist_prep', 'shoulder_prep', 'scapular_activation'],
+    l_sit: ['compression_prep', 'hip_mobility', 'scapular_activation'],
+    v_sit: ['compression_prep', 'hip_mobility', 'scapular_activation'],
+  }
+  
+  const skillProtocols = skillProtocolMap[primarySkill] || ['scapular_activation', 'shoulder_prep']
+  
+  for (const protocolType of skillProtocols) {
+    // Check if this joint area has concerns
+    const hasTendonConcern = analysis.activeConstraints.some(c => 
+      c.type === 'tendon_constraint' && c.description.toLowerCase().includes(protocolType.split('_')[0])
+    )
+    const hasInjuryConcern = analysis.activeConstraints.some(c =>
+      c.type === 'injury_constraint' && c.description.toLowerCase().includes(protocolType.split('_')[0])
+    )
+    
+    protocols.push({
+      protocolType,
+      priority: hasTendonConcern || hasInjuryConcern ? 'required' : 'recommended',
+      durationMinutes: hasTendonConcern || hasInjuryConcern ? 4 : 2,
+      rationale: getProtocolRationale(protocolType, primarySkill, hasTendonConcern),
+    })
+  }
+  
+  return protocols
+}
+
+function getProtocolRationale(
+  protocol: WarmupProtocolType,
+  skill: string,
+  hasConcern: boolean
+): string {
+  const rationaleMap: Record<WarmupProtocolType, string> = {
+    wrist_prep: hasConcern 
+      ? 'Extended wrist preparation due to joint sensitivity.'
+      : `Wrist preparation for ${skill.replace(/_/g, ' ')} demands.`,
+    scapular_activation: `Scapular control activation for optimal ${skill.replace(/_/g, ' ')} positioning.`,
+    shoulder_prep: hasConcern
+      ? 'Thorough shoulder preparation due to elevated stress.'
+      : `Shoulder mobility and stability for ${skill.replace(/_/g, ' ')} work.`,
+    compression_prep: `Core and compression activation for ${skill.replace(/_/g, ' ')} demands.`,
+    elbow_prep: hasConcern
+      ? 'Careful elbow preparation due to tendon concerns.'
+      : 'Elbow joint preparation for pulling demands.',
+    ring_support_prep: 'Ring support and stability preparation for advanced skill work.',
+    hip_mobility: `Hip mobility work for ${skill.replace(/_/g, ' ')} positioning.`,
+    general_movement: 'General movement to increase core temperature and blood flow.',
+  }
+  
+  return rationaleMap[protocol]
+}
+
+// =============================================================================
 // EXPORTS
 // =============================================================================
 
 export {
   analyzeConstraints,
   formatBuilderReasoning,
+  generateWarmupProtocols,
   SESSION_TIERS,
 }

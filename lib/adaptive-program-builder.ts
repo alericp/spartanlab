@@ -147,6 +147,7 @@ import {
   calculateReadinessFromProfile,
   type WorkoutReasoningSummary,
   type CanonicalReadinessResult,
+  type LimitingFactor,
 } from './readiness/canonical-readiness-engine'
 import {
   analyzeConstraints,
@@ -1213,6 +1214,87 @@ fatigueDecision: fatigueDecision ? {
           progressionAggressiveness: modifications.progressionAggressiveness,
           cycleExplanation: explanation,
         }
+      } catch {
+        return undefined
+      }
+    })(),
+    // Constraint-Aware Assembly Analysis - explains all constraint decisions
+    constraintAnalysis: (() => {
+      try {
+        // Build constraint input from available data
+        const constraintInput: ConstraintAwareInput = {
+          targetMinutes: sessionLength === 'short' ? 30 : sessionLength === 'medium' ? 45 : 60,
+          preferredMinutes: sessionLength === 'short' ? 30 : sessionLength === 'medium' ? 45 : 60,
+          fatigueLevel: fatigueDecision?.overallDecision === 'reduce' ? 'fatigued' : 
+                        fatigueDecision?.overallDecision === 'deload' ? 'overtrained' : 'normal',
+          straightArmFatigue: fatigueDecision?.straightArmFatigue || 0,
+          overallFatigue: fatigueDecision?.overallFatigue || 0,
+          fatigueDecision: fatigueDecision || null,
+          jointCautions: profile?.jointCautions || [],
+          tendonStress: {
+            wrist: profile?.jointCautions?.includes('wrist') ? 70 : 30,
+            shoulder: profile?.jointCautions?.includes('shoulder') ? 70 : 30,
+            elbow: profile?.jointCautions?.includes('elbow') ? 70 : 30,
+          },
+          activeInjuries: [],
+          discomfortFlags: profile?.jointCautions || [],
+          primaryLimiter: profile?.weakestArea as LimitingFactor || null,
+          secondaryLimiter: null,
+          limiterSeverity: profile?.weakestArea ? 60 : 0,
+          frameworkId: trainingEmphasis?.primaryMethod || null,
+          frameworkRules: trainingEmphasis?.primaryMethod ? {
+            volumeMultiplier: 1.0,
+            restMultiplier: trainingEmphasis.primaryMethod === 'barseagle_strength' ? 1.5 : 1.0,
+            intensityBias: trainingEmphasis.primaryMethod === 'barseagle_strength' ? 'high' : 'moderate',
+            preferredDensity: trainingEmphasis.primaryMethod === 'density_endurance' ? 'high' : 'moderate',
+          } : null,
+          envelopeConfidence: 0.5,
+          envelopeLimits: null,
+          styleEnabled: false,
+          styleRules: null,
+          availableEquipment: equipment,
+          requiredEquipment: [],
+        }
+        
+        return analyzeConstraints(constraintInput)
+      } catch {
+        return undefined
+      }
+    })(),
+    // Formatted Builder Reasoning - coach-style explanations
+    builderReasoning: (() => {
+      try {
+        const constraintInput: ConstraintAwareInput = {
+          targetMinutes: sessionLength === 'short' ? 30 : sessionLength === 'medium' ? 45 : 60,
+          preferredMinutes: sessionLength === 'short' ? 30 : sessionLength === 'medium' ? 45 : 60,
+          fatigueLevel: fatigueDecision?.overallDecision === 'reduce' ? 'fatigued' : 
+                        fatigueDecision?.overallDecision === 'deload' ? 'overtrained' : 'normal',
+          straightArmFatigue: fatigueDecision?.straightArmFatigue || 0,
+          overallFatigue: fatigueDecision?.overallFatigue || 0,
+          fatigueDecision: fatigueDecision || null,
+          jointCautions: profile?.jointCautions || [],
+          tendonStress: {
+            wrist: profile?.jointCautions?.includes('wrist') ? 70 : 30,
+            shoulder: profile?.jointCautions?.includes('shoulder') ? 70 : 30,
+            elbow: profile?.jointCautions?.includes('elbow') ? 70 : 30,
+          },
+          activeInjuries: [],
+          discomfortFlags: profile?.jointCautions || [],
+          primaryLimiter: profile?.weakestArea as LimitingFactor || null,
+          secondaryLimiter: null,
+          limiterSeverity: profile?.weakestArea ? 60 : 0,
+          frameworkId: trainingEmphasis?.primaryMethod || null,
+          frameworkRules: null,
+          envelopeConfidence: 0.5,
+          envelopeLimits: null,
+          styleEnabled: false,
+          styleRules: null,
+          availableEquipment: equipment,
+          requiredEquipment: [],
+        }
+        
+        const analysis = analyzeConstraints(constraintInput)
+        return formatBuilderReasoning(analysis, primaryGoal)
       } catch {
         return undefined
       }

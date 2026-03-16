@@ -1302,6 +1302,113 @@ export function getPrerequisiteExercises(
 }
 
 // =============================================================================
+// WEIGHTED SKILL INTEGRATION
+// =============================================================================
+
+import {
+  WEIGHTED_SKILL_PROFILES,
+  getTempoRecommendation,
+  checkWeightedSkillPrerequisites,
+  generateWeightedSkillExplanation,
+  type WeightedSkillId,
+  type WeightedSkillProfile,
+} from './weighted-skill-systems-engine'
+
+/**
+ * Get recommended weighted exercises for a given skill target
+ */
+export function getWeightedExercisesForSkillTarget(
+  targetSkill: SkillGraphId,
+  context: {
+    experienceLevel: 'beginner' | 'intermediate' | 'advanced'
+    benchmarks: Record<string, number>
+    skillsAcquired: string[]
+    activeJointIssues: string[]
+    currentFramework?: string
+  }
+): {
+  recommended: WeightedSkillProfile[]
+  tempoAlternatives: WeightedSkillProfile[]
+  notYetAvailable: { skill: WeightedSkillProfile; missingPrereqs: string[] }[]
+} {
+  const recommended: WeightedSkillProfile[] = []
+  const tempoAlternatives: WeightedSkillProfile[] = []
+  const notYetAvailable: { skill: WeightedSkillProfile; missingPrereqs: string[] }[] = []
+  
+  for (const [, profile] of Object.entries(WEIGHTED_SKILL_PROFILES)) {
+    // Check if this weighted skill supports the target
+    if (!profile.skillCarryover.includes(targetSkill) && 
+        profile.parentSkill !== targetSkill) {
+      continue
+    }
+    
+    // Check prerequisites
+    const prereqCheck = checkWeightedSkillPrerequisites(profile.weightedSkillId, {
+      experienceLevel: context.experienceLevel,
+      benchmarks: context.benchmarks,
+      activeJointIssues: context.activeJointIssues,
+      skillsAcquired: context.skillsAcquired,
+    })
+    
+    if (prereqCheck.eligible) {
+      if (profile.weightedProgressionType === 'tempo_control') {
+        tempoAlternatives.push(profile)
+      } else {
+        recommended.push(profile)
+      }
+    } else if (prereqCheck.readinessScore >= 50) {
+      notYetAvailable.push({
+        skill: profile,
+        missingPrereqs: prereqCheck.missingPrerequisites,
+      })
+    }
+  }
+  
+  return { recommended, tempoAlternatives, notYetAvailable }
+}
+
+/**
+ * Generate enhanced "why this exercise" explanation for weighted skills
+ */
+export function generateWhyThisWeightedExercise(
+  skillId: WeightedSkillId,
+  context: {
+    primaryGoal: SkillGraphId | string
+    currentFramework: string
+    primaryWeakPoint?: WeakPointType
+    fatigueLevel?: 'fresh' | 'normal' | 'fatigued'
+  }
+): WhyThisExerciseExplanation {
+  const weightedExplanation = generateWeightedSkillExplanation(skillId, {
+    primaryGoal: context.primaryGoal as SkillGraphId,
+    currentFramework: context.currentFramework as any,
+    primaryWeakPoint: context.primaryWeakPoint,
+  })
+  
+  const tempoRec = getTempoRecommendation(skillId, {
+    primaryWeakPoint: context.primaryWeakPoint,
+    currentGoal: 'strength',
+    fatigueLevel: context.fatigueLevel || 'normal',
+    isDeloadWeek: false,
+  })
+  
+  let coachTip = weightedExplanation.safetyConsiderations[0] || 'Progress conservatively with external load.'
+  if (tempoRec.recommended) {
+    coachTip = `Consider tempo work: ${tempoRec.rationale}`
+  }
+  
+  return {
+    exerciseId: skillId,
+    exerciseName: WEIGHTED_SKILL_PROFILES[skillId].displayName,
+    headline: weightedExplanation.headline,
+    rationale: weightedExplanation.rationale,
+    skillBenefit: weightedExplanation.benefitsForGoal.join('. '),
+    coachTip,
+    confidenceLevel: 'high',
+  }
+}
+
+// =============================================================================
 // EXPORTS
 // =============================================================================
 
@@ -1316,4 +1423,7 @@ export {
   generateOverrideWarning,
   getExercisesForProgressionNode,
   getPrerequisiteExercises,
+  // Weighted skill integration
+  getWeightedExercisesForSkillTarget,
+  generateWhyThisWeightedExercise,
 }

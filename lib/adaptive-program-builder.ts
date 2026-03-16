@@ -155,6 +155,14 @@ import {
   type ConstraintAnalysis,
   type FormattedBuilderReasoning,
 } from './constraint-aware-assembly-engine'
+import {
+  getCycleBuilderModifications,
+  generateCycleExplanation,
+  initializeAdaptiveCycleState,
+  type AdaptiveCycleState,
+  type CycleBuilderModifications,
+  type AdaptiveCyclePhase,
+} from './adaptive-training-cycle-engine'
 
 // =============================================================================
 // TYPES
@@ -420,6 +428,21 @@ export interface AdaptiveProgram {
   constraintAnalysis?: ConstraintAnalysis
   // Formatted builder reasoning - coach-style explanations
   builderReasoning?: FormattedBuilderReasoning
+  // Adaptive Training Cycle context - current phase and modifications
+  cycleContext?: {
+    currentPhase: AdaptiveCyclePhase
+    phaseName: string
+    phaseDescription: string
+    volumeModifier: number
+    intensityModifier: number
+    progressionAggressiveness: 'conservative' | 'moderate' | 'aggressive'
+    cycleExplanation: {
+      headline: string
+      description: string
+      rationale: string
+      nextSteps: string
+    }
+  }
 }
 
 // =============================================================================
@@ -1156,6 +1179,40 @@ fatigueDecision: fatigueDecision ? {
           null, // SkillState - would need to be passed in
           null  // PerformanceEnvelope - would need to be passed in
         )
+      } catch {
+        return undefined
+      }
+    })(),
+    // Adaptive Training Cycle context - current phase and modifications
+    cycleContext: (() => {
+      try {
+        // Initialize a cycle state for this athlete (in production, this would be persisted)
+        const cycleState = initializeAdaptiveCycleState(
+          'current_athlete',
+          primaryGoal,
+          experienceLevel,
+          trainingEmphasis?.primaryMethod,
+          trainingEmphasis?.primaryMethod
+        )
+        
+        // Get builder modifications based on cycle state
+        const modifications = getCycleBuilderModifications(
+          cycleState,
+          null // WeakPointAssessment would be passed here
+        )
+        
+        // Generate explanation
+        const explanation = generateCycleExplanation(cycleState)
+        
+        return {
+          currentPhase: cycleState.currentPhase,
+          phaseName: explanation.headline,
+          phaseDescription: explanation.description,
+          volumeModifier: modifications.volumeModifier,
+          intensityModifier: modifications.intensityModifier,
+          progressionAggressiveness: modifications.progressionAggressiveness,
+          cycleExplanation: explanation,
+        }
       } catch {
         return undefined
       }

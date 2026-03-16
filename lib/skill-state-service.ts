@@ -503,3 +503,97 @@ export function getCurrentNodeId(
   const node = mapLevelToGraphNode(skill, level)
   return node?.nodeId || null
 }
+
+// =============================================================================
+// BENCHMARK INTEGRATION
+// =============================================================================
+
+import {
+  getUserBenchmarks,
+  calculateReadinessAdjustment,
+  detectLimiterFromBenchmarks,
+  type Benchmark,
+} from './benchmark-testing-engine'
+
+/**
+ * Update skill state readiness based on new benchmark data
+ */
+export async function updateSkillStateFromBenchmarks(
+  userId: string
+): Promise<{ updated: SkillKey[]; adjustments: Record<SkillKey, number> }> {
+  const benchmarks = await getUserBenchmarks(userId)
+  const skillStates = await getAthleteSkillStates(userId)
+  
+  // Calculate readiness adjustments from all recent benchmarks
+  const adjustmentMap: Record<SkillKey, number[]> = {
+    front_lever: [],
+    back_lever: [],
+    planche: [],
+    hspu: [],
+    muscle_up: [],
+    l_sit: [],
+  }
+  
+  // Get recent benchmarks (last 30 days)
+  const thirtyDaysAgo = new Date()
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+  
+  const recentBenchmarks = benchmarks.filter(b => 
+    new Date(b.testDate) >= thirtyDaysAgo
+  )
+  
+  for (const benchmark of recentBenchmarks) {
+    const adjustments = calculateReadinessAdjustment(benchmark)
+    for (const adj of adjustments) {
+      if (adjustmentMap[adj.skill]) {
+        adjustmentMap[adj.skill].push(adj.adjustment)
+      }
+    }
+  }
+  
+  // Average the adjustments for each skill
+  const finalAdjustments: Record<SkillKey, number> = {} as Record<SkillKey, number>
+  const updatedSkills: SkillKey[] = []
+  
+  for (const [skill, adjustments] of Object.entries(adjustmentMap)) {
+    if (adjustments.length > 0) {
+      const avgAdjustment = adjustments.reduce((a, b) => a + b, 0) / adjustments.length
+      finalAdjustments[skill as SkillKey] = Math.round(avgAdjustment)
+      
+      // Find existing state
+      const state = skillStates.find(s => s.skill === skill)
+      if (state && avgAdjustment !== 0) {
+        // Update readiness score
+        const newReadiness = Math.min(100, Math.max(0, state.readinessScore + avgAdjustment))
+        await updateSkillState(userId, skill as SkillKey, {
+          currentLevel: state.currentLevel,
+          readinessScore: newReadiness,
+        })
+        updatedSkills.push(skill as SkillKey)
+      }
+    }
+  }
+  
+  return { updated: updatedSkills, adjustments: finalAdjustments }
+}
+
+/**
+ * Get skill state with benchmark-derived limiter
+ */
+export async function getSkillStateWithBenchmarkLimiter(
+  userId: string,
+  skill: SkillKey
+): Promise<SkillState & { benchmarkLimiter: { limiter: string; confidence: number } | null }> {
+  const state = await getSkillState(userId, skill)
+  if (!state) {
+    throw new Error(`No skill state found for ${skill}`)
+  }
+  
+  const benchmarks = await getUserBenchmarks(userId)
+  const limiterInfo = detectLimiterFromBenchmarks(benchmarks)
+  
+  return {
+    ...state,
+    benchmarkLimiter: limiterInfo,
+  }
+}

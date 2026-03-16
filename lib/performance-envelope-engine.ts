@@ -1787,6 +1787,169 @@ export function applyFatigueFeedbackToEnvelope(
   }
   
   // If deload was triggered, we may have found the true fatigue threshold
+}
+
+// =============================================================================
+// BENCHMARK INTEGRATION
+// =============================================================================
+
+import {
+  getAllBenchmarkTrends,
+  getEnvelopeAdjustments,
+  type BenchmarkTrend,
+  type EnvelopeAdjustment,
+} from './benchmark-testing-engine'
+
+/**
+ * Map benchmark movement family to envelope movement family
+ */
+const BENCHMARK_TO_ENVELOPE_FAMILY: Record<string, MovementFamily> = {
+  'vertical_pull': 'vertical_pull',
+  'horizontal_pull': 'horizontal_pull',
+  'vertical_push': 'vertical_push',
+  'dip_pattern': 'dip_pattern',
+  'straight_arm_pull': 'straight_arm_pull',
+  'straight_arm_push': 'straight_arm_push',
+  'compression_core': 'compression_core',
+  'explosive_pull': 'explosive_pull',
+  'ring_support': 'rings_stability',
+  'handstand': 'scapular_control',
+}
+
+/**
+ * Apply benchmark trends to refine envelope
+ */
+export async function refineEnvelopeFromBenchmarks(
+  userId: string,
+  envelope: PerformanceEnvelope
+): Promise<PerformanceEnvelope & { benchmarkRefinement: BenchmarkEnvelopeRefinement }> {
+  // Get benchmark trends
+  const trends = await getAllBenchmarkTrends(userId, 12)
+  
+  // Get relevant trends for this envelope's movement family
+  const relevantTrends = trends.filter(t => {
+    const mappedFamily = BENCHMARK_TO_ENVELOPE_FAMILY[t.movementFamily]
+    return mappedFamily === envelope.movementFamily
+  })
+  
+  // Get envelope adjustments
+  const adjustments = getEnvelopeAdjustments(trends)
+  const relevantAdjustments = adjustments.filter(a => {
+    const mappedFamily = BENCHMARK_TO_ENVELOPE_FAMILY[a.movementFamily]
+    return mappedFamily === envelope.movementFamily
+  })
+  
+  // Calculate refinement
+  const refinement = calculateBenchmarkRefinement(envelope, relevantTrends, relevantAdjustments)
+  
+  // Apply refinements to envelope
+  const refinedEnvelope = applyBenchmarkRefinement(envelope, refinement)
+  
+  return {
+    ...refinedEnvelope,
+    benchmarkRefinement: refinement,
+  }
+}
+
+export interface BenchmarkEnvelopeRefinement {
+  hasData: boolean
+  trendDirection: 'improving' | 'stable' | 'declining' | 'unknown'
+  confidenceBoost: number
+  volumeAdjustment: 'increase' | 'decrease' | 'maintain'
+  intensityAdjustment: 'increase' | 'decrease' | 'maintain'
+  rationale: string
+}
+
+function calculateBenchmarkRefinement(
+  envelope: PerformanceEnvelope,
+  trends: BenchmarkTrend[],
+  adjustments: EnvelopeAdjustment[]
+): BenchmarkEnvelopeRefinement {
+  if (trends.length === 0) {
+    return {
+      hasData: false,
+      trendDirection: 'unknown',
+      confidenceBoost: 0,
+      volumeAdjustment: 'maintain',
+      intensityAdjustment: 'maintain',
+      rationale: 'No benchmark data available for this movement family.',
+    }
+  }
+  
+  // Determine overall trend from benchmarks
+  const improvingCount = trends.filter(t => t.trend === 'improving').length
+  const decliningCount = trends.filter(t => t.trend === 'declining').length
+  const stableCount = trends.filter(t => t.trend === 'stable').length
+  
+  let trendDirection: 'improving' | 'stable' | 'declining' = 'stable'
+  if (improvingCount > decliningCount && improvingCount > stableCount) {
+    trendDirection = 'improving'
+  } else if (decliningCount > improvingCount && decliningCount > stableCount) {
+    trendDirection = 'declining'
+  }
+  
+  // Calculate confidence boost from benchmark data
+  const avgConfidence = trends.reduce((sum, t) => sum + t.confidenceScore, 0) / trends.length
+  const confidenceBoost = Math.min(0.15, avgConfidence * 0.2)
+  
+  // Determine adjustments
+  let volumeAdjustment: 'increase' | 'decrease' | 'maintain' = 'maintain'
+  let intensityAdjustment: 'increase' | 'decrease' | 'maintain' = 'maintain'
+  
+  for (const adj of adjustments) {
+    if (adj.adjustmentType === 'volume_increase') volumeAdjustment = 'increase'
+    else if (adj.adjustmentType === 'volume_decrease') volumeAdjustment = 'decrease'
+    else if (adj.adjustmentType === 'intensity_increase') intensityAdjustment = 'increase'
+    else if (adj.adjustmentType === 'intensity_decrease') intensityAdjustment = 'decrease'
+  }
+  
+  // Generate rationale
+  let rationale = ''
+  if (trendDirection === 'improving') {
+    rationale = 'Benchmark tests show improvement. Current training approach is working well.'
+  } else if (trendDirection === 'declining') {
+    rationale = 'Benchmark tests show decline. Consider reducing volume or increasing recovery.'
+  } else {
+    rationale = 'Benchmark tests are stable. Consider increasing intensity to drive adaptation.'
+  }
+  
+  return {
+    hasData: true,
+    trendDirection,
+    confidenceBoost,
+    volumeAdjustment,
+    intensityAdjustment,
+    rationale,
+  }
+}
+
+function applyBenchmarkRefinement(
+  envelope: PerformanceEnvelope,
+  refinement: BenchmarkEnvelopeRefinement
+): PerformanceEnvelope {
+  if (!refinement.hasData) return envelope
+  
+  const updates: Partial<PerformanceEnvelope> = {}
+  
+  // Apply confidence boost
+  updates.confidenceScore = Math.min(0.95, envelope.confidenceScore + refinement.confidenceBoost)
+  
+  // Apply volume adjustments
+  if (refinement.volumeAdjustment === 'increase' && envelope.weeklyVolumeConfidence > 0.3) {
+    updates.preferredWeeklyVolumeMax = Math.round(envelope.preferredWeeklyVolumeMax * 1.1)
+    updates.toleratedWeeklyVolumeMax = Math.round(envelope.toleratedWeeklyVolumeMax * 1.1)
+  } else if (refinement.volumeAdjustment === 'decrease') {
+    updates.preferredWeeklyVolumeMax = Math.round(envelope.preferredWeeklyVolumeMax * 0.9)
+    updates.toleratedWeeklyVolumeMax = Math.round(envelope.toleratedWeeklyVolumeMax * 0.9)
+  }
+  
+  // Align performance trend with benchmark trend
+  if (refinement.trendDirection !== 'unknown' && envelope.trendConfidence < 0.5) {
+    updates.performanceTrend = refinement.trendDirection
+    updates.trendConfidence = Math.max(envelope.trendConfidence, 0.4)
+  }
+  
+  return { ...envelope, ...updates }
   if (feedback.wasDeloadTriggered && feedback.volumeAtTrigger > 0) {
     const currentThreshold = envelope.fatigueThreshold
     const observedThreshold = feedback.volumeAtTrigger

@@ -724,3 +724,88 @@ export function getSkillReadinessSummary(skillGoals: string[]): {
     developingSkills,
   }
 }
+
+// =============================================================================
+// ROADMAP-AWARE COACHING MESSAGES
+// =============================================================================
+
+import { getTrainingRoadmapContext, type SkillRoadmapType } from './roadmap/skill-roadmap-service'
+
+/**
+ * Get a coaching message that explains how a workout connects to roadmap goals
+ */
+export function getRoadmapCoachingMessage(skillGoal: string): string {
+  // Map skill goal to roadmap type
+  const roadmapKeyMap: Record<string, SkillRoadmapType> = {
+    'front_lever': 'front-lever',
+    'frontlever': 'front-lever',
+    'planche': 'planche',
+    'muscle_up': 'muscle-up',
+    'muscleup': 'muscle-up',
+    'muscle-up': 'muscle-up',
+    'hspu': 'hspu',
+    'handstand_pushup': 'hspu',
+    'handstand_push_up': 'hspu',
+  }
+  
+  const roadmapKey = roadmapKeyMap[skillGoal.toLowerCase()]
+  if (!roadmapKey) {
+    return 'This workout builds toward your skill goals.'
+  }
+  
+  try {
+    const context = getTrainingRoadmapContext(roadmapKey)
+    return context.message
+  } catch {
+    return 'This workout builds toward your skill goals.'
+  }
+}
+
+/**
+ * Get detailed roadmap context for program explanation
+ */
+export function getDetailedRoadmapContext(skillGoal: string): {
+  skillName: string
+  currentMilestone: string
+  nextMilestone: string | null
+  limitingFactor: string | null
+  explanation: string
+} | null {
+  const roadmapKeyMap: Record<string, SkillRoadmapType> = {
+    'front_lever': 'front-lever',
+    'frontlever': 'front-lever', 
+    'planche': 'planche',
+    'muscle_up': 'muscle-up',
+    'muscleup': 'muscle-up',
+    'muscle-up': 'muscle-up',
+    'hspu': 'hspu',
+    'handstand_pushup': 'hspu',
+    'handstand_push_up': 'hspu',
+  }
+  
+  const roadmapKey = roadmapKeyMap[skillGoal.toLowerCase()]
+  if (!roadmapKey) return null
+  
+  try {
+    const context = getTrainingRoadmapContext(roadmapKey)
+    
+    // Generate detailed explanation
+    let explanation = `Your training is targeting ${context.currentMilestone}.`
+    if (context.nextMilestone) {
+      explanation += ` The next milestone is ${context.nextMilestone}.`
+    }
+    if (context.limitingFactor) {
+      explanation += ` Primary focus area: ${context.limitingFactor.toLowerCase()}.`
+    }
+    
+    return {
+      skillName: roadmapKey.replace('-', ' ').replace(/\b\w/g, l => l.toUpperCase()),
+      currentMilestone: context.currentMilestone,
+      nextMilestone: context.nextMilestone,
+      limitingFactor: context.limitingFactor,
+      explanation,
+    }
+  } catch {
+    return null
+  }
+}

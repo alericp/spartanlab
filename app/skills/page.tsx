@@ -8,6 +8,8 @@ import { SkillSessionLogger } from '@/components/skills/SkillSessionLogger'
 import { SkillSessionHistory } from '@/components/skills/SkillSessionHistory'
 import { SkillReadinessCard } from '@/components/skills/SkillReadinessCard'
 import { SkillEmptyState } from '@/components/skills/SkillEmptyState'
+import { SkillRoadmapDisplay } from '@/components/roadmap'
+import { type SkillRoadmapType, SKILL_ROADMAPS } from '@/lib/roadmap/skill-roadmap-service'
 import {
   TrendingUp,
   Target,
@@ -431,6 +433,35 @@ function SkillDetailView({
           ) : (
             <SkillEmptyState type="no_sessions" skillName={skillDef.name} />
           )}
+          
+          {/* Skill Roadmap - show if roadmap exists for this skill */}
+          {(() => {
+            // Map skill key to roadmap type
+            const roadmapKeyMap: Record<string, SkillRoadmapType> = {
+              'front_lever': 'front-lever',
+              'frontLever': 'front-lever',
+              'planche': 'planche',
+              'muscle_up': 'muscle-up',
+              'muscleUp': 'muscle-up',
+              'hspu': 'hspu',
+              'handstand_pushup': 'hspu',
+            }
+            const roadmapKey = roadmapKeyMap[skillKey]
+            if (roadmapKey && SKILL_ROADMAPS[roadmapKey]) {
+              return (
+                <SkillRoadmapDisplay 
+                  skillKey={roadmapKey}
+                  onLevelSelect={(level) => {
+                    onCurrentLevelChange(level)
+                    if (level >= targetLevel) {
+                      onTargetLevelChange(Math.min(level + 1, skillDef.levels.length - 1))
+                    }
+                  }}
+                />
+              )
+            }
+            return null
+          })()}
         </div>
       </div>
 

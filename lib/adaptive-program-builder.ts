@@ -7,10 +7,13 @@ import type { RecoveryLevel } from './recovery-engine'
 import type { WeeklyStructure, DayStructure } from './program-structure-engine'
 import type { ExerciseSelection, SelectedExercise } from './program-exercise-selector'
 import type { ProtocolRecommendation } from './protocols/joint-integrity-protocol'
+import type { ConstraintResult, ConstraintIntervention } from './constraint-detection-engine'
 
 import { getAthleteProfile } from './data-service'
 import { calculateRecoverySignal } from './recovery-engine'
-import { getConstraintInsight } from './constraint-engine'
+import { getConstraintInsight, detectMultipleConstraints } from './constraint-engine'
+import { getConstraintIntervention } from './constraint-detection-engine'
+import { recordConstraintHistory, getLatestConstraint, calculateConstraintImprovement } from './constraint-history-service'
 import { getProgramBuilderContext } from './adaptive-athlete-engine'
 import { getAthleteCalibration, getProgramCalibrationAdjustments, type AthleteCalibration, type ProgramCalibrationAdjustments } from './athlete-calibration'
 import { getOnboardingProfile, type PrimaryTrainingOutcome, type TrainingPathType, type WorkoutDurationPreference, type PrimaryLimitation, type WeakestArea, type JointCaution } from './athlete-profile'
@@ -856,6 +859,47 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
   // Calculate variety score (0-1, higher = more varied)
   const varietyScore = calculateVarietyScore(sessionIntents)
   
+  // Detect multiple constraints and plan interventions
+  const multipleConstraints = detectMultipleConstraints(
+    athleteProfile,
+    primaryGoal as any,
+    constraintInsight
+  )
+  
+  // Get constraint interventions for primary constraint
+  let constraintInterventions: ConstraintIntervention[] = []
+  if (constraintInsight.hasInsight && constraintInsight.focus) {
+    const intervention = getConstraintIntervention(constraintInsight.focus, 65) // Mid-range severity
+    constraintInterventions = [intervention]
+  }
+  
+  // Record constraint detection in history (async, non-blocking)
+  if (athleteId && constraintInsight.hasInsight) {
+    recordConstraintHistory(
+      athleteId,
+      primaryGoal,
+      {
+        category: constraintInsight.focus || 'none',
+        score: 65,
+        indicatorMetrics: [],
+        isPrimaryLimiter: true,
+      } as any
+    ).catch(err => console.error('Failed to record constraint history:', err))
+  }
+  
+  // Fetch constraint improvement history for display (async)
+  let constraintImprovementData: any = undefined
+  if (athleteId) {
+    calculateConstraintImprovement(athleteId, primaryGoal, 6)
+      .then(improvements => {
+        constraintImprovementData = {
+          improvingConstraints: improvements.filter(c => c.trend === 'improving'),
+          stableConstraints: improvements.filter(c => c.trend === 'stable'),
+        }
+      })
+      .catch(err => console.error('Failed to fetch constraint improvements:', err))
+  }
+  
   // Generate program rationale
   const programRationale = generateProgramRationale(
     primaryGoal,
@@ -909,8 +953,18 @@ fatigueDecision: fatigueDecision ? {
     repetitionJustifications,
     varietyScore,
   },
-  // Athlete calibration context
-  calibrationContext: calibrationContext,
+  // Constraint detection and response
+  constraintDetection?: {
+    primaryConstraint: ConstraintResult | null
+    secondaryConstraints: ConstraintResult[]
+    interventions: ConstraintIntervention[]
+    coachingNote: string
+  }
+  // Constraint improvement tracking
+  constraintImprovement?: {
+    improvingConstraints: Array<{ category: string; improvement: number; trend: string }>
+    stableConstraints: Array<{ category: string; trend: string }>
+  }
     // Training Principles Engine emphasis
     trainingEmphasis,
     // Unified Skill Intelligence Layer
@@ -978,6 +1032,22 @@ fatigueDecision: fatigueDecision ? {
     } : undefined,
     // Override Signal Feedback - patterns from user exercise overrides
     overrideSignalFeedback: getOverrideSignalFeedback(),
+    // Constraint Detection - AI engine identifying limiting factors
+    constraintDetection: {
+      primaryConstraint: constraintInsight.hasInsight ? {
+        category: constraintInsight.focus || 'none',
+        score: 65,
+        indicatorMetrics: [],
+        isPrimaryLimiter: true,
+      } : null,
+      secondaryConstraints: [],
+      interventions: constraintInterventions,
+      coachingNote: constraintInsight.hasInsight
+        ? `${constraintInsight.label} is currently limiting your ${GOAL_LABELS[primaryGoal]} progress. SpartanLab is adjusting your program to prioritize this area.`
+        : 'No significant constraints detected. Continue your current approach.',
+    },
+    // Constraint Improvement Tracking - showing progress over time
+    constraintImprovement: constraintImprovementData || undefined,
   }
 }
 

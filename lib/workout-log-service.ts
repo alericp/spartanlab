@@ -4,6 +4,7 @@
 export type SessionType = 'skill' | 'strength' | 'mixed' | 'recovery'
 export type FocusArea = 'planche' | 'front_lever' | 'muscle_up' | 'handstand_pushup' | 'weighted_strength' | 'general'
 export type ExerciseCategory = 'skill' | 'push' | 'pull' | 'core' | 'legs' | 'mobility'
+export type PerceivedDifficulty = 'easy' | 'normal' | 'hard'
 
 export type ResistanceBandColor = 'yellow' | 'red' | 'black' | 'purple' | 'green' | 'blue'
 
@@ -35,6 +36,19 @@ export interface WorkoutLog {
   focusArea: FocusArea
   notes?: string
   exercises: WorkoutExercise[]
+  // Perceived difficulty for adaptive progression
+  perceivedDifficulty?: PerceivedDifficulty
+  // Quick log metadata
+  isQuickLog?: boolean
+  generatedWorkoutId?: string
+  // Key performance metrics (best reps in session)
+  keyPerformance?: {
+    pullUps?: number
+    dips?: number
+    pushUps?: number
+    skillHoldSeconds?: number
+    skillName?: string
+  }
 }
 
 const STORAGE_KEY = 'spartanlab_workout_logs'
@@ -135,6 +149,120 @@ export const CATEGORY_LABELS: Record<ExerciseCategory, string> = {
   core: 'Core',
   legs: 'Legs',
   mobility: 'Mobility',
+}
+
+// =============================================================================
+// QUICK WORKOUT LOGGING
+// =============================================================================
+
+interface QuickLogInput {
+  sessionName: string
+  sessionType: SessionType
+  focusArea: FocusArea
+  durationMinutes: number
+  perceivedDifficulty: PerceivedDifficulty
+  generatedWorkoutId?: string
+  keyPerformance?: WorkoutLog['keyPerformance']
+  notes?: string
+}
+
+/**
+ * Quick log a completed workout with minimal input
+ * Used for fast logging of generated workouts
+ */
+export function quickLogWorkout(input: QuickLogInput): WorkoutLog {
+  return saveWorkoutLog({
+    sessionName: input.sessionName,
+    sessionType: input.sessionType,
+    sessionDate: new Date().toISOString().split('T')[0],
+    durationMinutes: input.durationMinutes,
+    focusArea: input.focusArea,
+    perceivedDifficulty: input.perceivedDifficulty,
+    isQuickLog: true,
+    generatedWorkoutId: input.generatedWorkoutId,
+    keyPerformance: input.keyPerformance,
+    notes: input.notes,
+    exercises: [], // Quick logs may not have detailed exercises
+  })
+}
+
+/**
+ * Get perceived difficulty distribution for adaptive adjustments
+ */
+export function getDifficultyDistribution(days: number = 14): {
+  easy: number
+  normal: number
+  hard: number
+  trend: 'getting_easier' | 'stable' | 'getting_harder'
+} {
+  const logs = getRecentWorkoutLogs(30)
+  const cutoffDate = new Date()
+  cutoffDate.setDate(cutoffDate.getDate() - days)
+  
+  const recentLogs = logs.filter(log => 
+    new Date(log.sessionDate) >= cutoffDate && log.perceivedDifficulty
+  )
+  
+  const counts = {
+    easy: recentLogs.filter(l => l.perceivedDifficulty === 'easy').length,
+    normal: recentLogs.filter(l => l.perceivedDifficulty === 'normal').length,
+    hard: recentLogs.filter(l => l.perceivedDifficulty === 'hard').length,
+  }
+  
+  // Determine trend based on recent vs older logs
+  const midpoint = Math.floor(recentLogs.length / 2)
+  const recentHalf = recentLogs.slice(0, midpoint)
+  const olderHalf = recentLogs.slice(midpoint)
+  
+  const recentHardRate = recentHalf.filter(l => l.perceivedDifficulty === 'hard').length / (recentHalf.length || 1)
+  const olderHardRate = olderHalf.filter(l => l.perceivedDifficulty === 'hard').length / (olderHalf.length || 1)
+  
+  let trend: 'getting_easier' | 'stable' | 'getting_harder' = 'stable'
+  if (recentHardRate > olderHardRate + 0.2) trend = 'getting_harder'
+  else if (recentHardRate < olderHardRate - 0.2) trend = 'getting_easier'
+  
+  return { ...counts, trend }
+}
+
+/**
+ * Get workout completion stats for a period
+ */
+export function getCompletionStats(days: number = 30): {
+  totalWorkouts: number
+  avgDuration: number
+  avgDifficultyScore: number // 1=easy, 2=normal, 3=hard
+  workoutsPerWeek: number
+} {
+  const logs = getRecentWorkoutLogs(100)
+  const cutoffDate = new Date()
+  cutoffDate.setDate(cutoffDate.getDate() - days)
+  
+  const recentLogs = logs.filter(log => new Date(log.sessionDate) >= cutoffDate)
+  
+  const totalWorkouts = recentLogs.length
+  const avgDuration = totalWorkouts > 0
+    ? recentLogs.reduce((sum, l) => sum + (l.durationMinutes || 0), 0) / totalWorkouts
+    : 0
+  
+  const difficultyScores = recentLogs
+    .filter(l => l.perceivedDifficulty)
+    .map(l => l.perceivedDifficulty === 'easy' ? 1 : l.perceivedDifficulty === 'normal' ? 2 : 3)
+  
+  const avgDifficultyScore = difficultyScores.length > 0
+    ? difficultyScores.reduce((a, b) => a + b, 0) / difficultyScores.length
+    : 2
+  
+  const weeks = days / 7
+  const workoutsPerWeek = totalWorkouts / weeks
+  
+  return { totalWorkouts, avgDuration, avgDifficultyScore, workoutsPerWeek }
+}
+
+// Perceived difficulty labels
+export const DIFFICULTY_LABELS: Record<PerceivedDifficulty, string> = {
+  easy: 'Easy - Could do more',
+  normal: 'Normal - Just right',
+  hard: 'Hard - Pushed my limits',
 }
 
 // Common exercise templates for quick selection

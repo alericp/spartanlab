@@ -1335,3 +1335,94 @@ export function getAdaptationCoachMessage(): string | null {
   if (!result.adaptationNeeded || result.coachMessages.length === 0) return null
   return result.coachMessages[0]
 }
+
+// =============================================================================
+// PERCEIVED DIFFICULTY BASED ADAPTATION
+// =============================================================================
+
+/**
+ * Analyze perceived difficulty trends and recommend adjustments
+ */
+export function analyzeDifficultyTrends(): {
+  recentDifficulty: 'easy' | 'normal' | 'hard' | 'mixed'
+  trend: 'getting_easier' | 'stable' | 'getting_harder'
+  recommendation: 'increase_intensity' | 'maintain' | 'reduce_volume' | 'add_recovery'
+  coachMessage: string
+} {
+  const logs = getWorkoutLogs()
+  const recentLogs = logs
+    .sort((a, b) => new Date(b.sessionDate).getTime() - new Date(a.sessionDate).getTime())
+    .slice(0, 10)
+    .filter(l => l.perceivedDifficulty)
+  
+  if (recentLogs.length < 3) {
+    return {
+      recentDifficulty: 'normal',
+      trend: 'stable',
+      recommendation: 'maintain',
+      coachMessage: 'Log more workouts with difficulty ratings to get personalized recommendations.'
+    }
+  }
+  
+  const difficultyScores = recentLogs.map(l => 
+    l.perceivedDifficulty === 'easy' ? 1 : l.perceivedDifficulty === 'normal' ? 2 : 3
+  )
+  
+  const avgDifficulty = difficultyScores.reduce((a, b) => a + b, 0) / difficultyScores.length
+  
+  // Determine predominant difficulty
+  let recentDifficulty: 'easy' | 'normal' | 'hard' | 'mixed' = 'normal'
+  if (avgDifficulty < 1.5) recentDifficulty = 'easy'
+  else if (avgDifficulty > 2.5) recentDifficulty = 'hard'
+  else if (Math.max(...difficultyScores) - Math.min(...difficultyScores) >= 2) recentDifficulty = 'mixed'
+  
+  // Analyze trend (first half vs second half)
+  const midpoint = Math.floor(difficultyScores.length / 2)
+  const recentHalf = difficultyScores.slice(0, midpoint)
+  const olderHalf = difficultyScores.slice(midpoint)
+  
+  const recentAvg = recentHalf.reduce((a, b) => a + b, 0) / (recentHalf.length || 1)
+  const olderAvg = olderHalf.reduce((a, b) => a + b, 0) / (olderHalf.length || 1)
+  
+  let trend: 'getting_easier' | 'stable' | 'getting_harder' = 'stable'
+  if (recentAvg > olderAvg + 0.3) trend = 'getting_harder'
+  else if (recentAvg < olderAvg - 0.3) trend = 'getting_easier'
+  
+  // Generate recommendation
+  let recommendation: 'increase_intensity' | 'maintain' | 'reduce_volume' | 'add_recovery' = 'maintain'
+  let coachMessage = 'Your training intensity is well-balanced.'
+  
+  if (recentDifficulty === 'easy' && trend !== 'getting_harder') {
+    recommendation = 'increase_intensity'
+    coachMessage = 'Workouts are feeling easy. Consider adding weight, reps, or progressing to harder variations.'
+  } else if (recentDifficulty === 'hard' && trend === 'getting_harder') {
+    recommendation = 'reduce_volume'
+    coachMessage = 'Training is getting consistently hard. Reduce volume slightly to prevent overtraining.'
+  } else if (recentDifficulty === 'hard') {
+    recommendation = 'add_recovery'
+    coachMessage = 'Recent workouts are challenging. Ensure adequate recovery between sessions.'
+  } else if (trend === 'getting_easier') {
+    recommendation = 'increase_intensity'
+    coachMessage = 'You\'re adapting well! Time to increase the challenge.'
+  }
+  
+  return { recentDifficulty, trend, recommendation, coachMessage }
+}
+
+/**
+ * Get volume modifier based on perceived difficulty
+ */
+export function getDifficultyBasedVolumeModifier(): number {
+  const analysis = analyzeDifficultyTrends()
+  
+  switch (analysis.recommendation) {
+    case 'increase_intensity':
+      return 1.1 // 10% more volume
+    case 'reduce_volume':
+      return 0.85 // 15% less volume
+    case 'add_recovery':
+      return 0.9 // 10% less volume
+    default:
+      return 1.0
+  }
+}

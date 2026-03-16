@@ -101,6 +101,10 @@ interface AchievementMetrics {
   h2hWins: number
   h2hBattles: number
   h2hPoolWins: number
+  // Longevity metrics
+  monthsActive: number // months with at least one workout
+  // Balance metrics
+  balancedWeeks: number // weeks with both push and pull exercises
 }
 
 function calculateMetrics(): AchievementMetrics {
@@ -174,6 +178,45 @@ function calculateMetrics(): AchievementMetrics {
     // H2H service may not be initialized
   }
   
+  // Calculate months active (months with at least one workout)
+  const monthsWithWorkouts = new Set<string>()
+  workouts.forEach(workout => {
+    const date = new Date(workout.sessionDate || workout.createdAt)
+    monthsWithWorkouts.add(`${date.getFullYear()}-${date.getMonth() + 1}`)
+  })
+  
+  // Calculate balanced weeks (weeks with both push and pull exercises)
+  // Push: push-ups, dips, HSPU, planche work
+  // Pull: pull-ups, rows, front lever, back lever, muscle-ups
+  const weeklyExerciseTypes: Map<string, { hasPush: boolean; hasPull: boolean }> = new Map()
+  const pushExercises = ['push-up', 'pushup', 'dip', 'hspu', 'handstand', 'planche', 'pike', 'diamond', 'pseudo']
+  const pullExercises = ['pull-up', 'pullup', 'row', 'front lever', 'back lever', 'muscle-up', 'chin-up', 'lat', 'inverted']
+  
+  workouts.forEach(workout => {
+    const date = new Date(workout.sessionDate || workout.createdAt)
+    const yearStart = new Date(date.getFullYear(), 0, 1)
+    const weekNumber = Math.ceil(((date.getTime() - yearStart.getTime()) / 86400000 + yearStart.getDay() + 1) / 7)
+    const weekKey = `${date.getFullYear()}-W${weekNumber}`
+    
+    if (!weeklyExerciseTypes.has(weekKey)) {
+      weeklyExerciseTypes.set(weekKey, { hasPush: false, hasPull: false })
+    }
+    
+    const weekData = weeklyExerciseTypes.get(weekKey)!
+    workout.exercises.forEach(ex => {
+      const name = ex.name.toLowerCase()
+      if (pushExercises.some(p => name.includes(p))) {
+        weekData.hasPush = true
+      }
+      if (pullExercises.some(p => name.includes(p))) {
+        weekData.hasPull = true
+      }
+    })
+  })
+  
+  const balancedWeeks = Array.from(weeklyExerciseTypes.values())
+    .filter(w => w.hasPush && w.hasPull).length
+  
   return {
     workoutCount: workouts.length,
     currentStreak: streak.currentStreak,
@@ -186,6 +229,8 @@ function calculateMetrics(): AchievementMetrics {
     h2hWins,
     h2hBattles,
     h2hPoolWins,
+    monthsActive: monthsWithWorkouts.size,
+    balancedWeeks,
   }
 }
 
@@ -234,6 +279,12 @@ function isAchievementUnlocked(achievement: Achievement, metrics: AchievementMet
       
     case 'h2h_pool_wins':
       return metrics.h2hPoolWins >= requirement.value
+      
+    case 'months_active':
+      return metrics.monthsActive >= requirement.value
+      
+    case 'balanced_weeks':
+      return metrics.balancedWeeks >= requirement.value
       
     default:
       return false

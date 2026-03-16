@@ -3,7 +3,7 @@
 // Tracks training milestones, strength progress, skill achievements, and consistency
 // Philosophy: Realistic goals that reward consistency, not absurd volume requirements
 
-export type AchievementCategory = 'training' | 'strength' | 'skill' | 'consistency' | 'volume' | 'challenge' | 'h2h'
+export type AchievementCategory = 'training' | 'strength' | 'skill' | 'consistency' | 'volume' | 'challenge' | 'h2h' | 'longevity' | 'balance'
 export type AchievementTier = 'bronze' | 'silver' | 'gold' | 'elite'
 
 export interface Achievement {
@@ -14,7 +14,7 @@ export interface Achievement {
   tier: AchievementTier
   icon: 'trophy' | 'medal' | 'star' | 'flame' | 'target' | 'dumbbell' | 'crown' | 'lightning' | 'swords'
   requirement: {
-    type: 'workout_count' | 'streak_days' | 'total_reps' | 'strength_milestone' | 'skill_level' | 'hold_time' | 'challenge_count' | 'weeks_active' | 'h2h_wins' | 'h2h_battles' | 'h2h_pool_wins'
+    type: 'workout_count' | 'streak_days' | 'total_reps' | 'strength_milestone' | 'skill_level' | 'hold_time' | 'challenge_count' | 'weeks_active' | 'h2h_wins' | 'h2h_battles' | 'h2h_pool_wins' | 'months_active' | 'balanced_weeks'
     value: number
     exercise?: string
     skill?: string
@@ -567,6 +567,52 @@ export const ACHIEVEMENTS: Achievement[] = [
   },
 
   // ==========================================================================
+  // SKILL ACHIEVEMENTS - Back Lever (tiered)
+  // ==========================================================================
+  {
+    id: 'bl_tuck',
+    name: 'Back Lever Started',
+    description: 'Achieve Tuck Back Lever',
+    category: 'skill',
+    tier: 'bronze',
+    icon: 'target',
+    requirement: { type: 'skill_level', value: 1, skill: 'back_lever' },
+    pointValue: 25,
+    unlockMessage: 'Back lever journey begins.',
+  },
+  {
+    id: 'bl_advanced',
+    name: 'Back Lever Progress',
+    description: 'Achieve Advanced Tuck Back Lever',
+    category: 'skill',
+    tier: 'silver',
+    icon: 'target',
+    requirement: { type: 'skill_level', value: 2, skill: 'back_lever' },
+    pointValue: 50,
+  },
+  {
+    id: 'bl_straddle',
+    name: 'Back Lever Straddle',
+    description: 'Achieve Straddle Back Lever',
+    category: 'skill',
+    tier: 'gold',
+    icon: 'trophy',
+    requirement: { type: 'skill_level', value: 3, skill: 'back_lever' },
+    pointValue: 85,
+  },
+  {
+    id: 'bl_full',
+    name: 'Back Lever Mastery',
+    description: 'Achieve Full Back Lever',
+    category: 'skill',
+    tier: 'elite',
+    icon: 'crown',
+    requirement: { type: 'skill_level', value: 4, skill: 'back_lever' },
+    pointValue: 150,
+    unlockMessage: 'Full back lever achieved. Exceptional.',
+  },
+
+  // ==========================================================================
   // CHALLENGE ACHIEVEMENTS
   // ==========================================================================
   {
@@ -624,12 +670,12 @@ export const ACHIEVEMENTS: Achievement[] = [
   },
 
   // ==========================================================================
-  // VOLUME ACHIEVEMENTS (sensible thresholds)
+  // VOLUME ACHIEVEMENTS (lifetime totals - NOT weekly/daily)
   // ==========================================================================
   {
     id: 'reps_500',
     name: 'First 500',
-    description: 'Log 500 total reps',
+    description: 'Log 500 total reps across all workouts (lifetime)',
     category: 'volume',
     tier: 'bronze',
     icon: 'star',
@@ -639,7 +685,7 @@ export const ACHIEVEMENTS: Achievement[] = [
   {
     id: 'reps_1000',
     name: 'Rep Builder',
-    description: 'Log 1,000 total reps',
+    description: 'Log 1,000 total reps across all workouts (lifetime)',
     category: 'volume',
     tier: 'bronze',
     icon: 'star',
@@ -649,7 +695,7 @@ export const ACHIEVEMENTS: Achievement[] = [
   {
     id: 'reps_2500',
     name: 'Volume Rising',
-    description: 'Log 2,500 total reps',
+    description: 'Log 2,500 total reps across all workouts (lifetime)',
     category: 'volume',
     tier: 'silver',
     icon: 'medal',
@@ -659,29 +705,29 @@ export const ACHIEVEMENTS: Achievement[] = [
   {
     id: 'reps_5000',
     name: 'Volume Machine',
-    description: 'Log 5,000 total reps',
+    description: 'Log 5,000 total reps across all workouts (lifetime)',
     category: 'volume',
     tier: 'silver',
     icon: 'medal',
     requirement: { type: 'total_reps', value: 5000 },
     pointValue: 40,
-    unlockMessage: 'Five thousand reps logged.',
+    unlockMessage: 'Five thousand lifetime reps logged.',
   },
   {
     id: 'reps_10000',
     name: 'Ten Thousand Strong',
-    description: 'Log 10,000 total reps',
+    description: 'Log 10,000 total reps across all workouts (lifetime)',
     category: 'volume',
     tier: 'gold',
     icon: 'trophy',
     requirement: { type: 'total_reps', value: 10000 },
     pointValue: 65,
-    unlockMessage: 'Ten thousand reps. Incredible volume.',
+    unlockMessage: 'Ten thousand lifetime reps. Incredible dedication.',
   },
   {
     id: 'reps_25000',
     name: 'Volume Legend',
-    description: 'Log 25,000 total reps',
+    description: 'Log 25,000 total reps across all workouts (lifetime)',
     category: 'volume',
     tier: 'elite',
     icon: 'crown',
@@ -788,6 +834,90 @@ export const ACHIEVEMENTS: Achievement[] = [
     pointValue: 60,
     unlockMessage: 'A veteran of many battles.',
   },
+
+  // ==========================================================================
+  // LONGEVITY ACHIEVEMENTS - Long-term training commitment
+  // ==========================================================================
+  {
+    id: 'months_active_6',
+    name: 'Half Year Athlete',
+    description: 'Train at least once per week for 6 months (26 weeks)',
+    category: 'longevity',
+    tier: 'gold',
+    icon: 'trophy',
+    requirement: { type: 'months_active', value: 6 },
+    pointValue: 100,
+    unlockMessage: 'Six months of sustained training.',
+  },
+  {
+    id: 'months_active_12',
+    name: 'Year One Complete',
+    description: 'Train at least once per week for 12 months (52 weeks)',
+    category: 'longevity',
+    tier: 'elite',
+    icon: 'crown',
+    requirement: { type: 'months_active', value: 12 },
+    pointValue: 200,
+    unlockMessage: 'One full year of training. Legendary commitment.',
+  },
+  {
+    id: 'months_active_24',
+    name: 'Two Year Veteran',
+    description: 'Train at least once per week for 24 months',
+    category: 'longevity',
+    tier: 'elite',
+    icon: 'crown',
+    requirement: { type: 'months_active', value: 24 },
+    pointValue: 350,
+    unlockMessage: 'Two years of dedicated training. A true veteran.',
+  },
+
+  // ==========================================================================
+  // BALANCED TRAINING ACHIEVEMENTS - Encourages well-rounded training
+  // ==========================================================================
+  {
+    id: 'balanced_week_first',
+    name: 'Balanced Spartan',
+    description: 'Complete both push and pull exercises within the same week',
+    category: 'balance',
+    tier: 'bronze',
+    icon: 'star',
+    requirement: { type: 'balanced_weeks', value: 1 },
+    pointValue: 15,
+    unlockMessage: 'Balance is the foundation of strength.',
+  },
+  {
+    id: 'balanced_weeks_4',
+    name: 'Consistent Balance',
+    description: 'Achieve balanced training for 4 weeks',
+    category: 'balance',
+    tier: 'silver',
+    icon: 'medal',
+    requirement: { type: 'balanced_weeks', value: 4 },
+    pointValue: 35,
+  },
+  {
+    id: 'balanced_weeks_12',
+    name: 'Full System Athlete',
+    description: 'Achieve balanced training for 12 weeks',
+    category: 'balance',
+    tier: 'gold',
+    icon: 'trophy',
+    requirement: { type: 'balanced_weeks', value: 12 },
+    pointValue: 75,
+    unlockMessage: 'Three months of balanced development.',
+  },
+  {
+    id: 'balanced_weeks_24',
+    name: 'Complete Athlete',
+    description: 'Achieve balanced training for 24 weeks',
+    category: 'balance',
+    tier: 'elite',
+    icon: 'crown',
+    requirement: { type: 'balanced_weeks', value: 24 },
+    pointValue: 150,
+    unlockMessage: 'Six months of balanced excellence. A complete athlete.',
+  },
 ]
 
 // Helper functions
@@ -836,9 +966,11 @@ export const CATEGORY_LABELS: Record<AchievementCategory, string> = {
   strength: 'Strength Milestones',
   skill: 'Skill Mastery',
   consistency: 'Consistency',
-  volume: 'Volume',
+  volume: 'Lifetime Volume',
   challenge: 'Challenge Mastery',
   h2h: 'Head-to-Head',
+  longevity: 'Longevity',
+  balance: 'Balanced Training',
 }
 
 /**

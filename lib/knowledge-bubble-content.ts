@@ -590,3 +590,189 @@ export function getPriorityColor(priority: KnowledgePriority): string {
     default: return 'text-[#6B7280]'
   }
 }
+
+// =============================================================================
+// CLASSIFICATION-BASED KNOWLEDGE GENERATION
+// =============================================================================
+
+/**
+ * Generate knowledge bubble content from exercise classification metadata
+ * This allows dynamic explanations based on the movement family registry
+ */
+export interface GeneratedExerciseKnowledge {
+  exerciseId: string
+  exerciseName: string
+  primaryReason: string
+  movementFamily: string
+  intentDescription: string
+  skillCarryover: string[]
+  prerequisiteNote?: string
+  jointStressNote?: string
+  equipmentNote?: string
+}
+
+/**
+ * Generate exercise explanation from classification data
+ * Falls back to this when manual knowledge content doesn't exist
+ */
+export function generateExerciseKnowledgeFromClassification(
+  exerciseId: string,
+  classification: {
+    name: string
+    primaryFamily: string
+    intents: string[]
+    primaryIntent: string
+    skillCarryover?: string[]
+    difficulty: string
+    jointStress?: number
+    prerequisiteFor?: string[]
+  }
+): GeneratedExerciseKnowledge {
+  const familyDescriptions: Record<string, string> = {
+    'vertical_pull': 'pulling vertically through the lats and biceps',
+    'horizontal_pull': 'horizontal pulling through the back and biceps',
+    'straight_arm_pull': 'straight-arm pulling for lever progressions',
+    'vertical_push': 'overhead pressing strength',
+    'horizontal_push': 'horizontal pushing through chest, shoulders, and triceps',
+    'straight_arm_push': 'straight-arm pushing for planche progressions',
+    'dip_pattern': 'dipping strength for muscle-up and pressing power',
+    'squat_pattern': 'lower body pushing through quads and glutes',
+    'hinge_pattern': 'hip hinge patterns for posterior chain',
+    'compression_core': 'compression strength for L-sit and straddle skills',
+    'anti_extension_core': 'core stability against extension forces',
+    'scapular_control': 'scapular stability and positioning',
+    'explosive_pull': 'explosive pulling power for muscle-up transitions',
+    'rings_stability': 'ring stability and control',
+    'rings_strength': 'advanced ring strength work',
+    'joint_integrity': 'joint health and injury prevention',
+    'mobility': 'range of motion and flexibility',
+    'arm_isolation': 'arm isolation for balanced development',
+    'shoulder_isolation': 'shoulder isolation for balanced development',
+  }
+  
+  const intentDescriptions: Record<string, string> = {
+    'skill': 'develops technical mastery and motor control',
+    'strength': 'builds maximal strength capacity',
+    'hypertrophy': 'supports muscle growth and balance',
+    'endurance': 'develops muscular endurance',
+    'power': 'builds explosive force production',
+    'mobility': 'improves range of motion',
+    'durability': 'enhances joint health and resilience',
+    'activation': 'activates target muscles',
+    'accessory': 'provides supportive isolation work',
+  }
+  
+  const familyDescription = familyDescriptions[classification.primaryFamily] || 'targeted strength work'
+  const intentDescription = intentDescriptions[classification.primaryIntent] || 'supports training goals'
+  
+  // Build primary reason
+  let primaryReason = `Chosen for ${familyDescription}.`
+  
+  if (classification.skillCarryover && classification.skillCarryover.length > 0) {
+    const carryoverNames = classification.skillCarryover.map(s => s.replace(/_/g, ' ')).join(', ')
+    primaryReason += ` Transfers directly to ${carryoverNames}.`
+  }
+  
+  // Build prerequisite note
+  let prerequisiteNote: string | undefined
+  if (classification.prerequisiteFor && classification.prerequisiteFor.length > 0) {
+    const prereqNames = classification.prerequisiteFor.slice(0, 2).map(s => s.replace(/_/g, ' ')).join(' and ')
+    prerequisiteNote = `Prepares you for ${prereqNames}.`
+  }
+  
+  // Build joint stress note
+  let jointStressNote: string | undefined
+  if (classification.jointStress && classification.jointStress >= 4) {
+    jointStressNote = 'High joint demands - ensure adequate recovery between sessions.'
+  } else if (classification.jointStress && classification.jointStress >= 3) {
+    jointStressNote = 'Moderate joint stress - progress gradually.'
+  }
+  
+  return {
+    exerciseId,
+    exerciseName: classification.name,
+    primaryReason,
+    movementFamily: classification.primaryFamily.replace(/_/g, ' '),
+    intentDescription: `This exercise ${intentDescription}.`,
+    skillCarryover: classification.skillCarryover || [],
+    prerequisiteNote,
+    jointStressNote,
+  }
+}
+
+/**
+ * Get knowledge content for exercise - tries manual content first, then generates from classification
+ */
+export function getExerciseKnowledgeWithFallback(
+  exerciseId: string,
+  classification?: {
+    name: string
+    primaryFamily: string
+    intents: string[]
+    primaryIntent: string
+    skillCarryover?: string[]
+    difficulty: string
+    jointStress?: number
+    prerequisiteFor?: string[]
+  }
+): ExerciseKnowledge | GeneratedExerciseKnowledge | undefined {
+  // Try manual content first
+  const manualContent = getExerciseKnowledge(exerciseId)
+  if (manualContent) {
+    return manualContent
+  }
+  
+  // Generate from classification if available
+  if (classification) {
+    return generateExerciseKnowledgeFromClassification(exerciseId, classification)
+  }
+  
+  return undefined
+}
+
+/**
+ * Generate substitution explanation using movement family context
+ */
+export function generateSubstitutionExplanation(
+  originalExercise: { name: string; primaryFamily: string; skillCarryover?: string[] },
+  substituteExercise: { name: string; primaryFamily: string; skillCarryover?: string[] },
+  context?: { availableEquipment?: string[]; targetSkill?: string }
+): string {
+  const sameFamily = originalExercise.primaryFamily === substituteExercise.primaryFamily
+  const familyName = substituteExercise.primaryFamily.replace(/_/g, ' ')
+  
+  let explanation = `${substituteExercise.name} selected as substitute for ${originalExercise.name}. `
+  
+  if (sameFamily) {
+    explanation += `Same movement pattern (${familyName}) ensures training intent is preserved.`
+  } else {
+    explanation += `Targets ${familyName} movement pattern.`
+  }
+  
+  // Check skill carryover preservation
+  if (context?.targetSkill && substituteExercise.skillCarryover?.includes(context.targetSkill)) {
+    explanation += ` Maintains carryover to ${context.targetSkill.replace(/_/g, ' ')}.`
+  }
+  
+  return explanation
+}
+
+/**
+ * Generate constraint work explanation using movement family context
+ */
+export function generateConstraintWorkExplanation(
+  constraint: string,
+  recommendedFamily: string,
+  exercises: { name: string; reason: string }[]
+): string {
+  const constraintName = constraint.replace(/_/g, ' ')
+  const familyName = recommendedFamily.replace(/_/g, ' ')
+  
+  let explanation = `Addressing ${constraintName}: prioritizing ${familyName} work. `
+  
+  if (exercises.length > 0) {
+    explanation += `Key exercises: ${exercises.map(e => e.name).join(', ')}.`
+  }
+  
+  return explanation
+}

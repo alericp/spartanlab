@@ -170,6 +170,370 @@ export interface ExerciseClassification {
   // Substitution guidance
   substitutionPool?: string[]  // Exercise IDs that can replace this
   cannotSubstituteFor?: string[]  // Exercises this cannot replace
+  
+  // Prerequisite relationships
+  prerequisiteFor?: string[]  // Skills/exercises this exercise prepares for
+  requiresPrerequisite?: string[]  // Exercise IDs that should be mastered first
+  
+  // Detailed joint stress profile
+  jointStressProfile?: JointStressProfile
+}
+
+// =============================================================================
+// JOINT STRESS PROFILE
+// =============================================================================
+
+/**
+ * Detailed joint stress information for safer exercise selection
+ */
+export type JointRegion = 
+  | 'wrist'
+  | 'elbow' 
+  | 'shoulder'
+  | 'scapular_tendon'
+  | 'biceps_tendon'
+  | 'pec_tendon'
+  | 'hip_flexor'
+  | 'knee'
+  | 'ankle'
+  | 'spine'
+
+export type StressLevel = 'low' | 'moderate' | 'high' | 'very_high'
+
+export interface JointStressDetail {
+  region: JointRegion
+  level: StressLevel
+  notes?: string
+}
+
+export interface JointStressProfile {
+  overallStress: StressLevel
+  primaryStressors: JointStressDetail[]
+  secondaryStressors?: JointStressDetail[]
+  recoveryDays: number  // Minimum days between high-volume exposures
+  contraindications?: string[]  // Conditions that should avoid this exercise
+}
+
+// =============================================================================
+// PREREQUISITE RELATIONSHIP DEFINITIONS
+// =============================================================================
+
+/**
+ * Maps exercises to what they prepare the athlete for
+ * This enables the Prerequisite Gate Engine to provide smart warnings
+ */
+export const PREREQUISITE_RELATIONSHIPS: Record<string, {
+  preparesFor: string[]
+  requiredMastery: 'basic' | 'intermediate' | 'proficient'
+  rationale: string
+}> = {
+  // Ring progression prerequisites
+  'ring_support_hold': {
+    preparesFor: ['ring_dip', 'rto_support', 'iron_cross'],
+    requiredMastery: 'proficient',
+    rationale: 'Ring support stability is foundational for all advanced ring work',
+  },
+  'rto_support': {
+    preparesFor: ['iron_cross', 'maltese', 'ring_muscle_up'],
+    requiredMastery: 'proficient',
+    rationale: 'Rings turned out support develops the shoulder and tendon strength for advanced ring skills',
+  },
+  'ring_push_up': {
+    preparesFor: ['ring_dip', 'archer_ring_push_up'],
+    requiredMastery: 'intermediate',
+    rationale: 'Ring push-ups develop stability before adding dip depth',
+  },
+  'ring_dip': {
+    preparesFor: ['ring_muscle_up', 'rto_dip'],
+    requiredMastery: 'proficient',
+    rationale: 'Ring dip strength is essential for muscle-up lockout',
+  },
+  
+  // Planche progression prerequisites
+  'planche_lean': {
+    preparesFor: ['tuck_planche', 'pppu'],
+    requiredMastery: 'proficient',
+    rationale: 'Builds wrist tolerance and forward lean strength',
+  },
+  'pppu': {
+    preparesFor: ['tuck_planche', 'adv_tuck_planche'],
+    requiredMastery: 'intermediate',
+    rationale: 'Develops pushing strength in forward lean position',
+  },
+  'tuck_planche': {
+    preparesFor: ['adv_tuck_planche', 'straddle_planche'],
+    requiredMastery: 'proficient',
+    rationale: 'First straight-arm planche position builds tendon capacity',
+  },
+  
+  // Front lever progression prerequisites  
+  'tuck_front_lever': {
+    preparesFor: ['adv_tuck_front_lever', 'straddle_front_lever'],
+    requiredMastery: 'proficient',
+    rationale: 'Builds straight-arm pulling foundation',
+  },
+  'front_lever_row': {
+    preparesFor: ['adv_tuck_front_lever', 'straddle_front_lever'],
+    requiredMastery: 'intermediate',
+    rationale: 'Develops dynamic pulling strength for lever progressions',
+  },
+  
+  // Muscle-up prerequisites
+  'explosive_pull_up': {
+    preparesFor: ['muscle_up', 'bar_muscle_up', 'ring_muscle_up'],
+    requiredMastery: 'proficient',
+    rationale: 'High pull is essential for muscle-up transition',
+  },
+  'straight_bar_dip': {
+    preparesFor: ['bar_muscle_up'],
+    requiredMastery: 'proficient',
+    rationale: 'Straight bar dip strength is required for muscle-up lockout',
+  },
+  'ring_dip': {
+    preparesFor: ['ring_muscle_up'],
+    requiredMastery: 'proficient',
+    rationale: 'Ring dip depth and control required for ring muscle-up lockout',
+  },
+  
+  // HSPU prerequisites
+  'pike_push_up': {
+    preparesFor: ['elevated_pike_push_up', 'wall_hspu'],
+    requiredMastery: 'intermediate',
+    rationale: 'Builds vertical push strength base',
+  },
+  'wall_hspu': {
+    preparesFor: ['freestanding_hspu', 'deficit_hspu'],
+    requiredMastery: 'proficient',
+    rationale: 'Wall support allows strength development before balance demands',
+  },
+  
+  // Compression prerequisites
+  'tuck_l_sit': {
+    preparesFor: ['l_sit', 'v_sit'],
+    requiredMastery: 'proficient',
+    rationale: 'Tuck builds hip flexor and support strength',
+  },
+  'l_sit': {
+    preparesFor: ['v_sit', 'manna'],
+    requiredMastery: 'proficient',
+    rationale: 'L-sit compression strength is prerequisite for advanced compression skills',
+  },
+}
+
+// =============================================================================
+// JOINT STRESS PROFILES FOR KEY EXERCISES
+// =============================================================================
+
+/**
+ * Detailed joint stress profiles for exercises with significant joint demands
+ * These inform substitution logic and fatigue management
+ */
+export const EXERCISE_JOINT_STRESS_PROFILES: Record<string, JointStressProfile> = {
+  // Planche progressions - high wrist and shoulder stress
+  'planche_lean': {
+    overallStress: 'moderate',
+    primaryStressors: [
+      { region: 'wrist', level: 'high', notes: 'Forward lean increases wrist extension load' },
+      { region: 'shoulder', level: 'moderate', notes: 'Protraction demand' },
+    ],
+    recoveryDays: 2,
+    contraindications: ['wrist_injury', 'carpal_tunnel'],
+  },
+  'tuck_planche': {
+    overallStress: 'high',
+    primaryStressors: [
+      { region: 'wrist', level: 'very_high', notes: 'Significant wrist extension under load' },
+      { region: 'shoulder', level: 'high', notes: 'Protraction and elevation demand' },
+      { region: 'biceps_tendon', level: 'high', notes: 'Straight arm position stresses long head' },
+    ],
+    recoveryDays: 3,
+    contraindications: ['wrist_injury', 'shoulder_impingement', 'biceps_tendinitis'],
+  },
+  'straddle_planche': {
+    overallStress: 'very_high',
+    primaryStressors: [
+      { region: 'wrist', level: 'very_high', notes: 'Extreme wrist extension demand' },
+      { region: 'shoulder', level: 'very_high', notes: 'Full body weight in protraction' },
+      { region: 'biceps_tendon', level: 'very_high', notes: 'Maximal straight-arm stress' },
+    ],
+    recoveryDays: 4,
+    contraindications: ['wrist_injury', 'shoulder_impingement', 'biceps_tendinitis'],
+  },
+  
+  // Front lever progressions - straight arm pull stress
+  'tuck_front_lever': {
+    overallStress: 'moderate',
+    primaryStressors: [
+      { region: 'shoulder', level: 'moderate', notes: 'Shoulder extension under load' },
+      { region: 'scapular_tendon', level: 'moderate', notes: 'Scapular depression demand' },
+    ],
+    recoveryDays: 2,
+    contraindications: ['shoulder_impingement'],
+  },
+  'straddle_front_lever': {
+    overallStress: 'high',
+    primaryStressors: [
+      { region: 'shoulder', level: 'high', notes: 'Significant shoulder extension load' },
+      { region: 'scapular_tendon', level: 'high', notes: 'Strong scapular depression required' },
+      { region: 'biceps_tendon', level: 'moderate', notes: 'Long head engagement in extension' },
+    ],
+    recoveryDays: 3,
+    contraindications: ['shoulder_impingement', 'biceps_tendinitis'],
+  },
+  
+  // Iron Cross progressions - extreme tendon stress
+  'ring_support_hold': {
+    overallStress: 'low',
+    primaryStressors: [
+      { region: 'shoulder', level: 'low', notes: 'Basic ring stability' },
+    ],
+    recoveryDays: 1,
+  },
+  'rto_support': {
+    overallStress: 'moderate',
+    primaryStressors: [
+      { region: 'shoulder', level: 'moderate', notes: 'External rotation under load' },
+      { region: 'biceps_tendon', level: 'moderate', notes: 'RTO stresses biceps insertion' },
+    ],
+    recoveryDays: 2,
+    contraindications: ['biceps_tendinitis'],
+  },
+  'iron_cross_negative': {
+    overallStress: 'very_high',
+    primaryStressors: [
+      { region: 'shoulder', level: 'very_high', notes: 'Extreme adduction stress' },
+      { region: 'biceps_tendon', level: 'very_high', notes: 'Maximal tendon loading' },
+      { region: 'pec_tendon', level: 'very_high', notes: 'Pec insertion heavily loaded' },
+    ],
+    secondaryStressors: [
+      { region: 'elbow', level: 'high', notes: 'Elbow extension under cross load' },
+    ],
+    recoveryDays: 5,
+    contraindications: ['shoulder_impingement', 'biceps_tendinitis', 'pec_strain'],
+  },
+  
+  // Ring dips and muscle-up transition stress
+  'ring_dip': {
+    overallStress: 'moderate',
+    primaryStressors: [
+      { region: 'shoulder', level: 'moderate', notes: 'Deep dip position stresses anterior capsule' },
+      { region: 'pec_tendon', level: 'moderate', notes: 'Stretch at bottom position' },
+    ],
+    recoveryDays: 2,
+    contraindications: ['shoulder_instability', 'pec_strain'],
+  },
+  'muscle_up': {
+    overallStress: 'high',
+    primaryStressors: [
+      { region: 'shoulder', level: 'high', notes: 'Rapid transition stresses rotator cuff' },
+      { region: 'elbow', level: 'moderate', notes: 'Quick extension in transition' },
+    ],
+    secondaryStressors: [
+      { region: 'wrist', level: 'moderate', notes: 'False grip or wrist rotation' },
+    ],
+    recoveryDays: 2,
+    contraindications: ['shoulder_instability', 'elbow_tendinitis'],
+  },
+  
+  // HSPU stress
+  'wall_hspu': {
+    overallStress: 'moderate',
+    primaryStressors: [
+      { region: 'shoulder', level: 'moderate', notes: 'Overhead pressing under load' },
+      { region: 'wrist', level: 'moderate', notes: 'Extension in handstand position' },
+    ],
+    recoveryDays: 2,
+    contraindications: ['shoulder_impingement'],
+  },
+  'freestanding_hspu': {
+    overallStress: 'high',
+    primaryStressors: [
+      { region: 'shoulder', level: 'high', notes: 'Balance adds instability load' },
+      { region: 'wrist', level: 'high', notes: 'Dynamic balance through wrists' },
+    ],
+    recoveryDays: 2,
+    contraindications: ['shoulder_impingement', 'wrist_injury'],
+  },
+  
+  // Back lever stress
+  'back_lever': {
+    overallStress: 'high',
+    primaryStressors: [
+      { region: 'shoulder', level: 'high', notes: 'Extreme shoulder extension' },
+      { region: 'biceps_tendon', level: 'high', notes: 'Long head highly stretched' },
+    ],
+    recoveryDays: 3,
+    contraindications: ['biceps_tendinitis', 'shoulder_instability'],
+  },
+  
+  // Compression work
+  'l_sit': {
+    overallStress: 'low',
+    primaryStressors: [
+      { region: 'hip_flexor', level: 'moderate', notes: 'Sustained contraction' },
+      { region: 'shoulder', level: 'low', notes: 'Depression position' },
+    ],
+    recoveryDays: 1,
+  },
+  'v_sit': {
+    overallStress: 'moderate',
+    primaryStressors: [
+      { region: 'hip_flexor', level: 'high', notes: 'Intense compression demand' },
+      { region: 'shoulder', level: 'moderate', notes: 'Elevated position' },
+    ],
+    recoveryDays: 2,
+    contraindications: ['hip_flexor_strain'],
+  },
+}
+
+/**
+ * Get joint stress profile for an exercise
+ */
+export function getJointStressProfile(exerciseId: string): JointStressProfile | undefined {
+  return EXERCISE_JOINT_STRESS_PROFILES[exerciseId]
+}
+
+/**
+ * Check if exercise is safe for athlete with given conditions
+ */
+export function isExerciseSafeForConditions(
+  exerciseId: string,
+  athleteConditions: string[]
+): { safe: boolean; warnings: string[] } {
+  const profile = EXERCISE_JOINT_STRESS_PROFILES[exerciseId]
+  
+  if (!profile) {
+    return { safe: true, warnings: [] }
+  }
+  
+  const warnings: string[] = []
+  
+  for (const condition of athleteConditions) {
+    if (profile.contraindications?.includes(condition)) {
+      warnings.push(`${exerciseId} may aggravate ${condition.replace(/_/g, ' ')}`)
+    }
+  }
+  
+  return {
+    safe: warnings.length === 0,
+    warnings,
+  }
+}
+
+/**
+ * Get minimum recovery days for a set of exercises
+ */
+export function getMinRecoveryDays(exerciseIds: string[]): number {
+  let maxRecovery = 1
+  
+  for (const id of exerciseIds) {
+    const profile = EXERCISE_JOINT_STRESS_PROFILES[id]
+    if (profile && profile.recoveryDays > maxRecovery) {
+      maxRecovery = profile.recoveryDays
+    }
+  }
+  
+  return maxRecovery
 }
 
 // =============================================================================

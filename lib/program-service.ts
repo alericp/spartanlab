@@ -14,6 +14,7 @@ import {
 } from './program-templates'
 import { getSkillProgressions, getAthleteProfile } from './data-service'
 import { getLatestRecords } from './strength-service'
+import { getOnboardingProfile, isOnboardingComplete } from './athlete-profile'
 
 export type PrimaryGoal = 'planche' | 'front_lever' | 'muscle_up' | 'handstand_pushup' | 'weighted_strength' | 'general' | 'skill' | 'strength' | 'endurance' | 'abs' | 'pancake' | 'toe_touch' | 'front_splits' | 'side_splits' | 'flexibility'
 export type ExperienceLevel = 'beginner' | 'intermediate' | 'advanced'
@@ -296,7 +297,7 @@ export function deleteProgram(id: string): boolean {
   return true
 }
 
-// Get default inputs from profile
+// Get default inputs from profile - prioritizes onboarding profile if complete
 export function getDefaultInputs(): ProgramInputs {
   if (!isBrowser()) {
     return {
@@ -308,6 +309,57 @@ export function getDefaultInputs(): ProgramInputs {
     }
   }
   
+  // Check onboarding profile first (contains most complete data)
+  const onboardingProfile = getOnboardingProfile()
+  if (onboardingProfile && isOnboardingComplete()) {
+    // Map onboarding data to program inputs
+    let primaryGoal: PrimaryGoal = 'planche'
+    
+    // Use first selected skill as primary goal
+    if (onboardingProfile.selectedSkills.length > 0) {
+      const firstSkill = onboardingProfile.selectedSkills[0]
+      if (['planche', 'front_lever', 'muscle_up', 'handstand_pushup'].includes(firstSkill)) {
+        primaryGoal = firstSkill as PrimaryGoal
+      }
+    }
+    
+    // Map training outcome to primary goal if no skill selected
+    if (onboardingProfile.primaryTrainingOutcome === 'strength') {
+      primaryGoal = 'weighted_strength'
+    } else if (onboardingProfile.primaryTrainingOutcome === 'general_fitness') {
+      primaryGoal = 'general'
+    }
+    
+    // Map experience level
+    const experienceLevel: ExperienceLevel = 
+      onboardingProfile.trainingExperience === 'new' || onboardingProfile.trainingExperience === 'some'
+        ? 'beginner'
+        : onboardingProfile.trainingExperience === 'intermediate'
+          ? 'intermediate'
+          : 'advanced'
+    
+    // Map training days
+    const trainingDays = typeof onboardingProfile.trainingDaysPerWeek === 'number'
+      ? (onboardingProfile.trainingDaysPerWeek as TrainingDays)
+      : 4
+    
+    // Map session length
+    let sessionLength: SessionLength = 45
+    if (typeof onboardingProfile.sessionLengthMinutes === 'number') {
+      const pref = onboardingProfile.sessionLengthMinutes
+      sessionLength = pref <= 30 ? 30 : pref <= 45 ? 45 : pref <= 60 ? 60 : 75
+    }
+    
+    return {
+      primaryGoal,
+      experienceLevel,
+      trainingDaysPerWeek: trainingDays,
+      secondaryEmphasis: 'none',
+      sessionLength,
+    }
+  }
+  
+  // Fall back to athlete profile from data-service
   const profile = getAthleteProfile()
   const progressions = getSkillProgressions()
   
@@ -327,7 +379,7 @@ export function getDefaultInputs(): ProgramInputs {
     experienceLevel: profile.experienceLevel,
     trainingDaysPerWeek: (profile.trainingDaysPerWeek as TrainingDays) || 4,
     secondaryEmphasis: 'none',
-    sessionLength: 45,
+    sessionLength: profile.sessionLengthMinutes as SessionLength || 45,
   }
 }
 

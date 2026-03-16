@@ -225,7 +225,7 @@ export default function OnboardingCompletePage() {
                   <p className="text-xs text-[#6B7280] uppercase tracking-wide">Schedule</p>
                   <p className="text-[#E6E9EF]">
                     {profile.trainingDaysPerWeek} days/week
-                    {profile.sessionLengthMinutes && ` • ${profile.sessionLengthMinutes} min sessions`}
+                    {profile.sessionLengthMinutes && typeof profile.sessionLengthMinutes === 'number' && ` • ${profile.sessionLengthMinutes} min sessions`}
                   </p>
                 </div>
               </div>

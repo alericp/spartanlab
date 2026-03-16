@@ -29,6 +29,7 @@ import {
 import { SpartanIcon } from '@/components/brand/SpartanLogo'
 import { trackOnboardingCompleted } from '@/lib/analytics'
 import { TestingGuideLink, DontKnowHelper } from '@/components/testing/TestingGuideModal'
+import { saveAthleteProfile } from '@/lib/data-service'
 import {
   type OnboardingProfile,
   type Sex,
@@ -2606,9 +2607,34 @@ export function AthleteOnboarding() {
     setIsSubmitting(true)
     
     try {
-      // Mark as complete and save
+      // Mark as complete and save onboarding profile
       const finalProfile = { ...profile, onboardingComplete: true }
       saveOnboardingProfile(finalProfile)
+      
+      // Sync key onboarding data to the athlete profile (used by program builder)
+      // This ensures the Program Builder doesn't ask the same questions again
+      saveAthleteProfile({
+        sex: profile.sex,
+        experienceLevel: profile.trainingExperience === 'new' || profile.trainingExperience === 'some' 
+          ? 'beginner' 
+          : profile.trainingExperience === 'intermediate' 
+            ? 'intermediate' 
+            : 'advanced',
+        trainingDaysPerWeek: typeof profile.trainingDaysPerWeek === 'number' 
+          ? profile.trainingDaysPerWeek 
+          : 4,
+        sessionLengthMinutes: typeof profile.sessionLengthMinutes === 'number'
+          ? (profile.sessionLengthMinutes <= 30 ? 30 
+             : profile.sessionLengthMinutes <= 45 ? 45 
+             : profile.sessionLengthMinutes <= 60 ? 60 
+             : 90)
+          : 60,
+        primaryGoal: profile.selectedSkills[0] || profile.primaryGoal || null,
+        equipmentAvailable: profile.equipment.filter(e => 
+          ['pullup_bar', 'dip_bars', 'parallettes', 'rings', 'resistance_bands'].includes(e)
+        ) as ('pullup_bar' | 'dip_bars' | 'parallettes' | 'rings' | 'resistance_bands')[],
+        onboardingComplete: true,
+      })
       
       // Small delay for UX
       await new Promise(resolve => setTimeout(resolve, 500))

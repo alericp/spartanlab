@@ -182,3 +182,26 @@ export {
   type PlannedExercise,
   type EnvelopeLimits,
 } from '../skill-volume-governor-engine'
+
+// Movement Bias Detection Engine
+export {
+  detectMovementBias,
+  applyBiasToVolume,
+  getBiasProgressionModifier,
+  adjustFrameworkForBias,
+  generateBiasExplanation,
+  generateBiasCoachMessage,
+  checkBiasReEvaluation,
+  BIAS_THRESHOLDS,
+  type BiasType,
+  type BiasPattern,
+  type BiasSeverity,
+  type MovementBias,
+  type BiasAdjustment,
+  type BenchmarkInput,
+  type SkillStateInput,
+  type BiasDetectionInput,
+  type BiasAdjustedVolume,
+  type BiasExplanation,
+  type ReEvaluationTrigger,
+} from '../movement-bias-detection-engine'

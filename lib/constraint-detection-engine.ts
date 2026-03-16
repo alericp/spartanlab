@@ -72,7 +72,7 @@ export const CONSTRAINT_CATEGORY_LABELS: Record<ConstraintCategory, string> = {
 // SKILL-SPECIFIC CONSTRAINT REQUIREMENTS
 // =============================================================================
 
-export type SkillType = 'front_lever' | 'back_lever' | 'planche' | 'hspu' | 'muscle_up' | 'l_sit'
+export type SkillType = 'front_lever' | 'back_lever' | 'planche' | 'hspu' | 'muscle_up' | 'l_sit' | 'iron_cross'
 
 interface SkillConstraintRequirements {
   primaryConstraints: ConstraintCategory[]
@@ -148,6 +148,200 @@ export const SKILL_CONSTRAINT_REQUIREMENTS: Record<SkillType, SkillConstraintReq
       wrist_tolerance: 0.05,
     },
   },
+  iron_cross: {
+    primaryConstraints: ['straight_arm_push_strength', 'shoulder_stability', 'scapular_control'],
+    secondaryConstraints: ['core_control', 'wrist_tolerance'],
+    weights: {
+      straight_arm_push_strength: 0.35,
+      shoulder_stability: 0.25,
+      scapular_control: 0.20,
+      core_control: 0.10,
+      wrist_tolerance: 0.10,
+    },
+  },
+}
+
+// =============================================================================
+// CONSTRAINT SEVERITY THRESHOLDS
+// =============================================================================
+
+export type ConstraintSeverity = 'not_limiting' | 'minor_limiter' | 'primary_limiter' | 'severe_limiter'
+
+export const SEVERITY_THRESHOLDS = {
+  not_limiting: { min: 0, max: 20 },
+  minor_limiter: { min: 20, max: 50 },
+  primary_limiter: { min: 50, max: 80 },
+  severe_limiter: { min: 80, max: 100 },
+}
+
+export function getConstraintSeverity(score: number): ConstraintSeverity {
+  if (score >= 80) return 'severe_limiter'
+  if (score >= 50) return 'primary_limiter'
+  if (score >= 20) return 'minor_limiter'
+  return 'not_limiting'
+}
+
+export const SEVERITY_LABELS: Record<ConstraintSeverity, string> = {
+  not_limiting: 'Not Limiting',
+  minor_limiter: 'Minor Limiter',
+  primary_limiter: 'Primary Limiter',
+  severe_limiter: 'Severe Limiter',
+}
+
+// =============================================================================
+// CONSTRAINT INTERVENTIONS
+// =============================================================================
+
+export interface ConstraintIntervention {
+  constraintCategory: ConstraintCategory
+  severity: ConstraintSeverity
+  exercises: string[]
+  volumeAdjustment: 'increase_high' | 'increase_moderate' | 'maintain' | 'decrease'
+  frequencyRecommendation: string
+  coachingNote: string
+}
+
+export const CONSTRAINT_INTERVENTIONS: Record<ConstraintCategory, Omit<ConstraintIntervention, 'severity' | 'constraintCategory'>> = {
+  pull_strength: {
+    exercises: ['weighted_pull_up', 'pull_up', 'bent_over_row', 'chin_up'],
+    volumeAdjustment: 'increase_high',
+    frequencyRecommendation: '2-3x per week',
+    coachingNote: 'Build pulling base before advancing lever progressions.',
+  },
+  push_strength: {
+    exercises: ['weighted_dip', 'dip', 'push_up', 'ring_push_up'],
+    volumeAdjustment: 'increase_high',
+    frequencyRecommendation: '2-3x per week',
+    coachingNote: 'Strengthen pushing base for planche and pressing skills.',
+  },
+  straight_arm_pull_strength: {
+    exercises: ['front_lever_raise', 'tuck_front_lever', 'straight_arm_pulldown', 'inverted_hang'],
+    volumeAdjustment: 'increase_moderate',
+    frequencyRecommendation: '2-3x per week with longer rest between sessions',
+    coachingNote: 'Straight-arm work requires tendon conditioning. Progress slowly.',
+  },
+  straight_arm_push_strength: {
+    exercises: ['planche_lean', 'pseudo_planche_push_up', 'ring_support_hold', 'rto_support'],
+    volumeAdjustment: 'increase_moderate',
+    frequencyRecommendation: '2-3x per week with adequate recovery',
+    coachingNote: 'Straight-arm pushing is highly demanding on shoulders. Build gradually.',
+  },
+  compression_strength: {
+    exercises: ['l_sit', 'hanging_leg_raise', 'pike_compression', 'v_up', 'tuck_compression_hold'],
+    volumeAdjustment: 'increase_high',
+    frequencyRecommendation: '3-4x per week, can train frequently',
+    coachingNote: 'Compression can be trained often and is essential for levers.',
+  },
+  core_control: {
+    exercises: ['hollow_body_hold', 'plank', 'dead_bug', 'arch_hold'],
+    volumeAdjustment: 'increase_moderate',
+    frequencyRecommendation: 'Daily or 4-5x per week',
+    coachingNote: 'Core tension is foundational for all skills. Train consistently.',
+  },
+  scapular_control: {
+    exercises: ['scapular_pull_up', 'scapular_push_up', 'active_hang', 'scapular_depression_hold'],
+    volumeAdjustment: 'increase_moderate',
+    frequencyRecommendation: '3-4x per week as part of warm-up or main work',
+    coachingNote: 'Scapular control improves skill quality and reduces injury risk.',
+  },
+  shoulder_stability: {
+    exercises: ['external_rotation', 'face_pull', 'shoulder_tap', 'ring_support_hold'],
+    volumeAdjustment: 'increase_moderate',
+    frequencyRecommendation: 'Daily prehab + 2-3x strength work',
+    coachingNote: 'Shoulder health enables all upper body skill progression.',
+  },
+  wrist_tolerance: {
+    exercises: ['wrist_circles', 'wrist_push_up', 'finger_flexor_stretch', 'wrist_rock'],
+    volumeAdjustment: 'maintain',
+    frequencyRecommendation: 'Daily as part of warm-up',
+    coachingNote: 'Wrist prep is essential for planche and handstand work.',
+  },
+  explosive_pull_power: {
+    exercises: ['high_pull', 'explosive_pull_up', 'kipping_pull_up', 'chest_to_bar'],
+    volumeAdjustment: 'increase_high',
+    frequencyRecommendation: '2x per week with full recovery',
+    coachingNote: 'Explosive pulling is the key to muscle-up transition.',
+  },
+  transition_strength: {
+    exercises: ['muscle_up_transition', 'straight_bar_dip', 'deep_dip', 'muscle_up_negative'],
+    volumeAdjustment: 'increase_moderate',
+    frequencyRecommendation: '2-3x per week',
+    coachingNote: 'Transition strength bridges pulling and pushing in muscle-up.',
+  },
+  vertical_push_strength: {
+    exercises: ['pike_push_up', 'elevated_pike_push_up', 'wall_hspu', 'hspu_negative'],
+    volumeAdjustment: 'increase_high',
+    frequencyRecommendation: '2-3x per week',
+    coachingNote: 'Vertical pushing strength is essential for HSPU progress.',
+  },
+  mobility: {
+    exercises: ['shoulder_dislocates', 'hip_flexor_stretch', 'thoracic_rotation', 'pancake_stretch'],
+    volumeAdjustment: 'maintain',
+    frequencyRecommendation: 'Daily, 10-15 minutes',
+    coachingNote: 'Mobility supports skill positions and reduces compensation patterns.',
+  },
+  shoulder_extension_mobility: {
+    exercises: ['german_hang', 'skin_the_cat', 'behind_back_stretch', 'bridge'],
+    volumeAdjustment: 'maintain',
+    frequencyRecommendation: 'Daily, progress slowly',
+    coachingNote: 'Shoulder extension is critical for back lever. Build gradually.',
+  },
+  skill_coordination: {
+    exercises: ['skill_practice', 'technique_drills', 'partial_rom_work'],
+    volumeAdjustment: 'increase_moderate',
+    frequencyRecommendation: '3-5x per week, low fatigue',
+    coachingNote: 'Skill coordination improves with quality practice volume.',
+  },
+  balance_control: {
+    exercises: ['wall_handstand', 'freestanding_handstand', 'handstand_holds', 'balance_drills'],
+    volumeAdjustment: 'increase_moderate',
+    frequencyRecommendation: '4-6x per week, short sessions',
+    coachingNote: 'Balance improves with frequent, focused practice.',
+  },
+  fatigue_recovery: {
+    exercises: ['deload_session', 'active_recovery', 'mobility_work'],
+    volumeAdjustment: 'decrease',
+    frequencyRecommendation: 'Reduce training load for 3-7 days',
+    coachingNote: 'Recovery is training. Respect fatigue signals.',
+  },
+  schedule_time_constraint: {
+    exercises: ['compound_movements', 'supersets', 'priority_exercises'],
+    volumeAdjustment: 'maintain',
+    frequencyRecommendation: 'Focus on highest-impact exercises',
+    coachingNote: 'When time is limited, prioritize compound skill work.',
+  },
+  training_consistency: {
+    exercises: ['shorter_sessions', 'minimum_effective_dose', 'habit_building'],
+    volumeAdjustment: 'maintain',
+    frequencyRecommendation: 'Build consistent 3x per week habit first',
+    coachingNote: 'Consistency beats intensity. Start with achievable frequency.',
+  },
+  insufficient_data: {
+    exercises: [],
+    volumeAdjustment: 'maintain',
+    frequencyRecommendation: 'Continue training and logging',
+    coachingNote: 'More training data will improve constraint detection accuracy.',
+  },
+  none: {
+    exercises: [],
+    volumeAdjustment: 'maintain',
+    frequencyRecommendation: 'Continue current training approach',
+    coachingNote: 'No significant constraints detected. Continue progressing.',
+  },
+}
+
+export function getConstraintIntervention(
+  category: ConstraintCategory,
+  score: number
+): ConstraintIntervention {
+  const intervention = CONSTRAINT_INTERVENTIONS[category]
+  const severity = getConstraintSeverity(score)
+  
+  return {
+    constraintCategory: category,
+    severity,
+    ...intervention,
+  }
 }
 
 // =============================================================================

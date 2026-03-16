@@ -20,7 +20,12 @@ import {
   getRepRangeForStyle, 
   getRestPeriodForStyle,
   getRecommendedAccessoryVolume,
-  type StyleProgrammingRules 
+  getStyleEquipmentExercises,
+  getComboBlocksForSkill,
+  getStyleCoachingSummary,
+  refineStyleWithEnvelope,
+  type StyleProgrammingRules,
+  type ComboBlock
 } from './training-style-service'
 
 // =============================================================================

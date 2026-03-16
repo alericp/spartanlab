@@ -32,6 +32,7 @@ export interface AthleteProfile {
   weakestArea?: 'pulling_strength' | 'pushing_strength' | 'core_strength' | 'shoulder_stability' | 'hip_mobility' | 'hamstring_flexibility' | null
   pullUpMax?: number | null
   dipMax?: number | null
+  trainingStyle?: 'skill_focused' | 'strength_focused' | 'power_focused' | 'endurance_focused' | 'hypertrophy_supported' | 'balanced_hybrid'
   onboardingComplete: boolean
   createdAt: string
 }
@@ -70,6 +71,7 @@ const DEFAULT_PROFILE: AthleteProfile = {
   sessionLengthMinutes: 60,
   primaryGoal: 'planche',
   equipmentAvailable: ['pullup_bar', 'dip_bars', 'parallettes'],
+  trainingStyle: 'balanced_hybrid',
   onboardingComplete: true,
   createdAt: new Date().toISOString(),
 }

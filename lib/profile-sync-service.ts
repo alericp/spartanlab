@@ -187,6 +187,11 @@ export function hasSignificantProfileChange(
   // Weakest area changes (affects programming emphasis)
   if (previous.weakestArea !== current.weakestArea) return true
   
+  // Training style changes (affects programming methodology)
+  const prevStyle = (previous as AthleteProfile & { trainingStyle?: string }).trainingStyle
+  const currStyle = (current as AthleteProfile & { trainingStyle?: string }).trainingStyle
+  if (prevStyle !== currStyle) return true
+  
   return false
 }
 
@@ -210,6 +215,13 @@ export function getProfileChangeDescription(
   }
   if (previous.experienceLevel !== current.experienceLevel) {
     changes.push('experience level')
+  }
+  
+  // Check training style
+  const prevStyle = (previous as AthleteProfile & { trainingStyle?: string }).trainingStyle
+  const currStyle = (current as AthleteProfile & { trainingStyle?: string }).trainingStyle
+  if (prevStyle !== currStyle) {
+    changes.push('training style')
   }
   
   // Check equipment

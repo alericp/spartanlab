@@ -536,3 +536,345 @@ export function getRestPeriodForStyle(
   
   return restPeriods[rules.restBias][exerciseCategory]
 }
+
+// =============================================================================
+// ADVANCED/COMBO METHODS
+// =============================================================================
+
+export type ComboMethod = 
+  | 'skill_combo'      // muscle-up → dip, front lever → pull-up
+  | 'contrast_method'  // heavy → explosive pairs
+  | 'density_block'    // circuit-style work
+  | 'transition_drill' // movement transition practice
+
+export interface ComboBlock {
+  method: ComboMethod
+  exercises: string[]
+  description: string
+  restBetweenExercises: number
+  restAfterBlock: number
+  rounds: number
+}
+
+/**
+ * Get available combo methods based on style and skill level
+ */
+export function getAvailableComboMethods(
+  styleMode: TrainingStyleMode,
+  skillLevel: 'beginner' | 'intermediate' | 'advanced',
+  primarySkill?: string
+): ComboMethod[] {
+  const methods: ComboMethod[] = []
+  
+  // All styles can use skill combos at intermediate+
+  if (skillLevel !== 'beginner') {
+    methods.push('skill_combo')
+  }
+  
+  // Style-specific methods
+  switch (styleMode) {
+    case 'strength_focused':
+    case 'power_focused':
+      if (skillLevel !== 'beginner') {
+        methods.push('contrast_method')
+      }
+      break
+    case 'endurance_focused':
+      methods.push('density_block')
+      break
+    case 'skill_focused':
+      if (skillLevel === 'advanced') {
+        methods.push('transition_drill')
+      }
+      break
+  }
+  
+  return methods
+}
+
+/**
+ * Get combo blocks for a skill
+ */
+export function getComboBlocksForSkill(
+  skill: string,
+  styleMode: TrainingStyleMode,
+  skillLevel: 'beginner' | 'intermediate' | 'advanced'
+): ComboBlock[] {
+  const blocks: ComboBlock[] = []
+  const availableMethods = getAvailableComboMethods(styleMode, skillLevel, skill)
+  
+  // Skill-specific combo definitions
+  const SKILL_COMBOS: Record<string, ComboBlock[]> = {
+    muscle_up: [
+      {
+        method: 'skill_combo',
+        exercises: ['muscle_up', 'straight_bar_dip'],
+        description: 'Muscle-up to straight bar dip combo for transition practice',
+        restBetweenExercises: 0,
+        restAfterBlock: 120,
+        rounds: 3,
+      },
+      {
+        method: 'contrast_method',
+        exercises: ['weighted_pull_up', 'explosive_pull_up'],
+        description: 'Heavy pull followed by explosive pull for power development',
+        restBetweenExercises: 15,
+        restAfterBlock: 180,
+        rounds: 4,
+      },
+    ],
+    front_lever: [
+      {
+        method: 'skill_combo',
+        exercises: ['front_lever_hold', 'pull_up'],
+        description: 'Front lever hold into pull-up for integrated strength',
+        restBetweenExercises: 0,
+        restAfterBlock: 120,
+        rounds: 3,
+      },
+      {
+        method: 'skill_combo',
+        exercises: ['front_lever_row', 'front_lever_negative'],
+        description: 'Row to negative for time under tension',
+        restBetweenExercises: 5,
+        restAfterBlock: 90,
+        rounds: 4,
+      },
+    ],
+    planche: [
+      {
+        method: 'skill_combo',
+        exercises: ['planche_lean', 'pseudo_planche_push_up'],
+        description: 'Planche lean into push-up for integrated pressing',
+        restBetweenExercises: 0,
+        restAfterBlock: 120,
+        rounds: 3,
+      },
+      {
+        method: 'transition_drill',
+        exercises: ['tuck_planche', 'straddle_planche', 'tuck_planche'],
+        description: 'Planche position transitions',
+        restBetweenExercises: 0,
+        restAfterBlock: 180,
+        rounds: 2,
+      },
+    ],
+    handstand_push_up: [
+      {
+        method: 'contrast_method',
+        exercises: ['pike_push_up_weighted', 'pike_push_up_explosive'],
+        description: 'Weighted pike to explosive pike for pressing power',
+        restBetweenExercises: 15,
+        restAfterBlock: 150,
+        rounds: 3,
+      },
+    ],
+  }
+  
+  const skillCombos = SKILL_COMBOS[skill] || []
+  
+  // Filter by available methods
+  for (const combo of skillCombos) {
+    if (availableMethods.includes(combo.method)) {
+      blocks.push(combo)
+    }
+  }
+  
+  return blocks
+}
+
+// =============================================================================
+// EQUIPMENT-STYLE INTEGRATION
+// =============================================================================
+
+export interface StyleEquipmentRecommendation {
+  styleMode: TrainingStyleMode
+  equipment: string[]
+  recommendedExercises: string[]
+  excludedExercises: string[]
+}
+
+/**
+ * Get equipment-appropriate exercises for a style
+ */
+export function getStyleEquipmentExercises(
+  styleMode: TrainingStyleMode,
+  availableEquipment: string[],
+  category: 'strength' | 'accessory' | 'conditioning'
+): string[] {
+  const hasWeights = availableEquipment.some(e => 
+    ['dumbbells', 'barbell', 'weight_plates', 'weight_belt'].includes(e)
+  )
+  const hasPullBar = availableEquipment.includes('pull_bar')
+  const hasDipBars = availableEquipment.includes('dip_bars')
+  const hasRings = availableEquipment.includes('rings')
+  const hasBench = availableEquipment.includes('bench')
+  const hasResistanceBands = availableEquipment.includes('resistance_bands')
+  
+  const exercises: string[] = []
+  const rules = getStyleProgrammingRules(styleMode)
+  
+  if (category === 'strength') {
+    // Pull exercises
+    if (hasPullBar) {
+      exercises.push('pull_up')
+      if (rules.preferWeightedVariants && hasWeights) {
+        exercises.push('weighted_pull_up')
+      }
+      if (rules.preferExplosiveVariants) {
+        exercises.push('explosive_pull_up', 'chest_to_bar_pull_up')
+      }
+    }
+    if (hasRings) {
+      exercises.push('ring_row', 'ring_pull_up')
+    }
+    
+    // Push exercises
+    if (hasDipBars) {
+      exercises.push('dip')
+      if (rules.preferWeightedVariants && hasWeights) {
+        exercises.push('weighted_dip')
+      }
+    }
+    exercises.push('push_up')
+    if (rules.preferWeightedVariants && hasWeights) {
+      exercises.push('weighted_push_up')
+    }
+    if (rules.preferExplosiveVariants) {
+      exercises.push('clap_push_up', 'explosive_push_up')
+    }
+  }
+  
+  if (category === 'accessory') {
+    // Style-appropriate accessories
+    if (styleMode === 'hypertrophy_supported' || rules.hypertrophyAccessoriesPerSession > 0) {
+      if (hasWeights) {
+        exercises.push('spider_curl', 'incline_curl', 'hammer_curl')
+        if (hasBench) {
+          exercises.push('incline_bench_press', 'incline_db_press')
+        }
+        exercises.push('seated_row', 'low_angle_row')
+      }
+      if (hasDipBars) {
+        exercises.push('straight_bar_dip')
+      }
+      if (hasResistanceBands) {
+        exercises.push('band_curl', 'band_face_pull', 'band_pull_apart')
+      }
+    }
+  }
+  
+  if (category === 'conditioning') {
+    if (rules.includeConditioningWork) {
+      exercises.push('burpee', 'mountain_climber', 'jumping_jack')
+      if (hasPullBar) {
+        exercises.push('pull_up_ladder')
+      }
+      if (hasDipBars) {
+        exercises.push('dip_ladder')
+      }
+    }
+  }
+  
+  return exercises
+}
+
+// =============================================================================
+// PERFORMANCE ENVELOPE INTEGRATION
+// =============================================================================
+
+/**
+ * Refine style programming based on performance envelope data
+ */
+export function refineStyleWithEnvelope(
+  styleMode: TrainingStyleMode,
+  envelopeData: {
+    optimalRepRange?: { min: number; max: number }
+    volumeTolerance?: 'low' | 'moderate' | 'high'
+    fatigueSensitivity?: 'low' | 'moderate' | 'high'
+    responseToIntensity?: 'poor' | 'moderate' | 'good'
+  }
+): Partial<StyleProgrammingRules> {
+  const refinements: Partial<StyleProgrammingRules> = {}
+  const baseRules = getStyleProgrammingRules(styleMode)
+  
+  // Adjust rep range if envelope suggests different optimal
+  if (envelopeData.optimalRepRange) {
+    const { min, max } = envelopeData.optimalRepRange
+    if (min >= 8) {
+      refinements.repRangeBias = 'high'
+    } else if (max <= 5) {
+      refinements.repRangeBias = 'low'
+    }
+  }
+  
+  // Adjust volume based on tolerance
+  if (envelopeData.volumeTolerance) {
+    switch (envelopeData.volumeTolerance) {
+      case 'low':
+        refinements.strengthVolumeMultiplier = Math.max(0.7, baseRules.strengthVolumeMultiplier * 0.85)
+        refinements.accessoryVolumeMultiplier = Math.max(0.5, baseRules.accessoryVolumeMultiplier * 0.8)
+        break
+      case 'high':
+        refinements.strengthVolumeMultiplier = Math.min(1.4, baseRules.strengthVolumeMultiplier * 1.1)
+        refinements.accessoryVolumeMultiplier = Math.min(1.6, baseRules.accessoryVolumeMultiplier * 1.15)
+        break
+    }
+  }
+  
+  // Adjust density based on fatigue sensitivity
+  if (envelopeData.fatigueSensitivity === 'high') {
+    refinements.restBias = 'long'
+    refinements.densityPreference = 'low'
+  } else if (envelopeData.fatigueSensitivity === 'low' && styleMode !== 'strength_focused') {
+    refinements.densityPreference = 'high'
+  }
+  
+  // Adjust intensity preference
+  if (envelopeData.responseToIntensity === 'poor' && baseRules.loadIntensityBias === 'heavy') {
+    refinements.loadIntensityBias = 'moderate'
+  } else if (envelopeData.responseToIntensity === 'good' && baseRules.loadIntensityBias === 'moderate') {
+    refinements.loadIntensityBias = 'heavy'
+  }
+  
+  return refinements
+}
+
+// =============================================================================
+// STYLE SUMMARY/EXPLANATION
+// =============================================================================
+
+/**
+ * Generate coaching summary explaining the style bias
+ */
+export function getStyleCoachingSummary(
+  styleMode: TrainingStyleMode,
+  primarySkill?: string,
+  constraint?: string
+): string {
+  const definition = STYLE_MODE_DEFINITIONS[styleMode]
+  
+  const skillText = primarySkill 
+    ? ` for ${primarySkill.replace(/_/g, ' ')}` 
+    : ''
+  
+  const constraintText = constraint
+    ? ` while prioritizing ${constraint.replace(/_/g, ' ')}`
+    : ''
+  
+  switch (styleMode) {
+    case 'skill_focused':
+      return `Your program uses a skill-focused approach${skillText}${constraintText}. High-frequency exposures with quality emphasis.`
+    case 'strength_focused':
+      return `Your program uses a strength-focused approach${skillText}${constraintText}. Heavier loading with lower reps for maximal strength.`
+    case 'power_focused':
+      return `Your program uses a power-focused approach${skillText}${constraintText}. Explosive movements for dynamic strength.`
+    case 'endurance_focused':
+      return `Your program uses an endurance-focused approach${skillText}${constraintText}. Work capacity building with density protocols.`
+    case 'hypertrophy_supported':
+      return `Your program uses a hypertrophy-supported approach${skillText}${constraintText}. Skill-first with targeted accessory work for physique balance.`
+    case 'balanced_hybrid':
+    default:
+      return `Your program uses a balanced approach${skillText}${constraintText}. Skill, strength, and accessory work in moderation.`
+  }
+}

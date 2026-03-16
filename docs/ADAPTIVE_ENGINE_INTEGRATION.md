@@ -118,6 +118,23 @@ Each style includes programming rules:
 - Density preference
 - Exercise variant preferences
 
+Advanced training methods (available based on style and skill level):
+- `skill_combo` - Skill into strength combinations (e.g., muscle-up → straight bar dip)
+- `contrast_method` - Heavy/explosive pairs for power development
+- `density_block` - Circuit-style work for endurance athletes
+- `transition_drill` - Movement position transitions for advanced skill work
+
+Equipment-style integration:
+- Style-appropriate exercises selected based on available equipment
+- Weighted variants prioritized for strength-focused athletes
+- Explosive variants for power-focused athletes
+- Density work selected for endurance-focused athletes
+
+Performance envelope refinement:
+- Style provides the coaching framework
+- Envelope personalizes within that framework
+- Adjusts rep ranges, volume, and density based on athlete response data
+
 ### 7. Movement Family System
 **File:** `lib/movement-family-registry.ts`, `lib/exercise-classification-registry.ts`
 

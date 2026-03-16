@@ -20,6 +20,8 @@ import {
   getTrainingStyleProfile, 
   getStyleProgrammingRules, 
   inferStyleFromOnboarding,
+  getStyleCoachingSummary,
+  refineStyleWithEnvelope,
   type TrainingStyleProfile as StyleProfile,
   type StyleProgrammingRules,
   type TrainingStyleMode as StyleMode 
@@ -775,17 +777,12 @@ function generateCoachingSummary(
     headline += ` - Working toward ${skillContext.primarySkillState.nextMilestone || 'next milestone'}`
   }
   
-  // Current emphasis based on style
-  const styleDescriptions: Record<TrainingStyleMode, string> = {
-    skill_focused: 'High-frequency skill exposure with quality focus',
-    strength_focused: 'Strength-building emphasis with progressive loading',
-    power_focused: 'Explosive movement development',
-    endurance_focused: 'Work capacity and density training',
-    hypertrophy_supported: 'Skill-first with targeted muscle development',
-    balanced_hybrid: 'Balanced approach across all qualities',
-  }
-  
-  const styleDescription = styleDescriptions[athleteContext.trainingStyle]
+  // Current emphasis based on style - use the enhanced style summary
+  const styleDescription = getStyleCoachingSummary(
+    athleteContext.trainingStyle,
+    athleteContext.primaryGoal,
+    constraintContext.primaryConstraint || undefined
+  )
   
   // Focus areas from constraints
   if (constraintContext.volumeAdjustments.increasePriority.length > 0) {

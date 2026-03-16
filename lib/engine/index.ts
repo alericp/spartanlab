@@ -116,11 +116,19 @@ export {
   getRecommendedAccessoryVolume,
   getRepRangeForStyle,
   getRestPeriodForStyle,
+  getAvailableComboMethods,
+  getComboBlocksForSkill,
+  getStyleEquipmentExercises,
+  refineStyleWithEnvelope,
+  getStyleCoachingSummary,
   STYLE_MODE_DEFINITIONS,
   type TrainingStyleMode,
   type TrainingStyleProfile,
   type StylePriorities,
   type StyleProgrammingRules,
+  type ComboMethod,
+  type ComboBlock,
+  type StyleEquipmentRecommendation,
 } from '../training-style-service'
 
 // Program Version Service

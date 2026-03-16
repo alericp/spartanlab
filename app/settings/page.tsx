@@ -25,6 +25,10 @@ import {
   WEAKEST_AREA_LABELS,
   type WeakestArea,
 } from '@/lib/athlete-profile'
+import { 
+  STYLE_MODE_DEFINITIONS,
+  type TrainingStyleMode,
+} from '@/lib/training-style-service'
 import { useOwnerInit } from '@/hooks/useOwnerInit'
 import { PRICING, TRIAL } from '@/lib/billing/pricing'
 import { hasProAccess } from '@/lib/feature-access'
@@ -197,6 +201,7 @@ export default function SettingsPage() {
   const [equipment, setEquipment] = useState<EquipmentType[]>([])
   const [jointCautions, setJointCautions] = useState<JointCaution[]>([])
   const [weakestArea, setWeakestArea] = useState<WeakestArea | 'none'>('none')
+  const [trainingStyle, setTrainingStyle] = useState<TrainingStyleMode>('balanced_hybrid')
 
   useEffect(() => {
     setMounted(true)
@@ -214,6 +219,7 @@ export default function SettingsPage() {
     setEquipment(data.equipmentAvailable || [])
     setJointCautions(data.jointCautions || [])
     setWeakestArea(data.weakestArea || 'none')
+    setTrainingStyle((data as AthleteProfile & { trainingStyle?: TrainingStyleMode }).trainingStyle || 'balanced_hybrid')
   }
 
   const handleSave = () => {
@@ -232,7 +238,8 @@ export default function SettingsPage() {
       equipmentAvailable: equipment,
       jointCautions: jointCautions,
       weakestArea: weakestArea === 'none' ? null : weakestArea,
-    })
+      trainingStyle: trainingStyle,
+    } as Parameters<typeof saveAthleteProfile>[0])
     
     setProfile(updated)
     setSaved(true)
@@ -385,6 +392,31 @@ export default function SettingsPage() {
                 ))}
               </SelectContent>
             </Select>
+          </div>
+
+          {/* Training Style */}
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <Target className="w-4 h-4 text-[#A5A5A5]" />
+              <Label className="text-[#F5F5F5]">Training Style</Label>
+            </div>
+            <Select value={trainingStyle} onValueChange={(v) => setTrainingStyle(v as TrainingStyleMode)}>
+              <SelectTrigger className="bg-[#1A1A1A] border-[#3A3A3A] text-[#F5F5F5]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent className="bg-[#2A2A2A] border-[#3A3A3A]">
+                {Object.entries(STYLE_MODE_DEFINITIONS).map(([key, def]) => (
+                  <SelectItem key={key} value={key} className="text-[#F5F5F5] focus:bg-[#3A3A3A]">
+                    <div className="flex flex-col">
+                      <span>{def.label}</span>
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-[#A5A5A5] mt-1">
+              {STYLE_MODE_DEFINITIONS[trainingStyle].description}
+            </p>
           </div>
 
           {/* Equipment Available */}

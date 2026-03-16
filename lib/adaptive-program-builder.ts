@@ -22,7 +22,8 @@ import { selectExercisesForSession } from './program-exercise-selector'
 import { generateSessionVariants, type SessionVariant } from './session-compression-engine'
 import { analyzeEquipmentProfile, adaptSessionForEquipment, getEquipmentRecommendations, type EquipmentProfile } from './equipment-adaptation-engine'
 import { GOAL_LABELS } from './program-service'
-import { getQuickFatigueDecision, type TrainingDecision, type SessionAdjustments } from './fatigue-decision-engine'
+import { getQuickFatigueDecision, getEnhancedFatigueDecision, type TrainingDecision, type SessionAdjustments } from './fatigue-decision-engine'
+import { getDeloadRecommendation, type FatigueSignalSummary } from './fatigue/deload-system'
 import { 
   selectMethodProfiles, 
   getCoachingMessage, 
@@ -192,6 +193,15 @@ export interface AdaptiveProgram {
     decision: TrainingDecision
     guidance: string
     needsAttention: boolean
+  }
+  // Deload recommendation for UI
+  deloadRecommendation?: {
+    shouldDeload: boolean
+    deloadType: string
+    fatigueLevel: string
+    coachingMessage: string
+    volumeReductionPercent: number
+    recommendedProtocols: string[]
   }
   // Athlete calibration context from onboarding
   calibrationContext?: {
@@ -596,8 +606,45 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
   
   // Get fatigue-based training decision (runs client-side only)
   let fatigueDecision: { decision: TrainingDecision; shortGuidance: string; needsAttention: boolean } | null = null
+  let deloadRecommendation: {
+    shouldDeload: boolean
+    deloadType: string
+    fatigueLevel: string
+    coachingMessage: string
+    volumeReductionPercent: number
+    recommendedProtocols: string[]
+  } | undefined = undefined
+  
   if (typeof window !== 'undefined') {
     fatigueDecision = getQuickFatigueDecision()
+    
+    // Get enhanced decision with joint protocol integration
+    const jointCautions = onboardingProfile?.jointCautions || []
+    const jointDiscomforts = jointCautions.map(caution => {
+      // Map JointCaution to JointDiscomfortFlag
+      const cautionMap: Record<string, string> = {
+        'shoulders': 'shoulder_instability',
+        'elbows': 'elbow_tendon_pain',
+        'wrists': 'wrist_irritation',
+        'lower_back': 'hip_tightness',
+        'knees': 'knee_discomfort',
+      }
+      return cautionMap[caution] || null
+    }).filter(Boolean) as import('./athlete-profile').JointDiscomfortFlag[]
+    
+    const enhancedDecision = getEnhancedFatigueDecision(jointDiscomforts)
+    
+    if (enhancedDecision.deloadSystemRecommendation) {
+      const rec = enhancedDecision.deloadSystemRecommendation
+      deloadRecommendation = {
+        shouldDeload: rec.shouldDeload,
+        deloadType: rec.deloadType,
+        fatigueLevel: rec.fatigueLevel,
+        coachingMessage: rec.coachingMessage,
+        volumeReductionPercent: rec.adjustments.volumeReductionPercent,
+        recommendedProtocols: rec.jointProtocols,
+      }
+    }
   }
   
   // Weak point detection for automatic focus area identification
@@ -742,13 +789,15 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
       recommendations: engineContext.recommendations,
     },
     // Include fatigue decision for UI display
-    fatigueDecision: fatigueDecision ? {
-      decision: fatigueDecision.decision,
-      guidance: fatigueDecision.shortGuidance,
-      needsAttention: fatigueDecision.needsAttention,
-    } : undefined,
-    // Athlete calibration context
-    calibrationContext: calibrationContext,
+fatigueDecision: fatigueDecision ? {
+  decision: fatigueDecision.decision,
+  guidance: fatigueDecision.shortGuidance,
+  needsAttention: fatigueDecision.needsAttention,
+  } : undefined,
+  // Deload recommendation
+  deloadRecommendation,
+  // Athlete calibration context
+  calibrationContext: calibrationContext,
     // Training Principles Engine emphasis
     trainingEmphasis,
     // Unified Skill Intelligence Layer

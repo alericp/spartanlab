@@ -9,6 +9,14 @@ import {
   type FatigueTrendData,
   type RecoveryStatus,
 } from './fatigue-engine'
+import type { JointDiscomfortFlag } from './athlete-profile'
+import { 
+  getDeloadRecommendation, 
+  saveFatiguePattern,
+  type FatigueLevel,
+  type DeloadRecommendation as DeloadSystemRecommendation,
+  type FatigueSignalSummary,
+} from './fatigue/deload-system'
 
 // =============================================================================
 // DECISION TYPES
@@ -35,6 +43,9 @@ export interface FatigueDecision {
   explanation: string
   adjustments: SessionAdjustments
   weeklyAdjustments: WeeklyAdjustments
+  // Joint Integrity Protocol integration
+  recommendedProtocols?: string[]
+  jointStressDetected?: boolean
 }
 
 export interface SessionAdjustments {
@@ -708,4 +719,111 @@ export function getDeloadLabel(recommendation: DeloadRecommendation): string {
     case 'DELOAD_RECOMMENDED':
       return 'Deload Recommended'
   }
+}
+
+// =============================================================================
+// ENHANCED FATIGUE DECISION WITH JOINT PROTOCOL INTEGRATION
+// =============================================================================
+
+/**
+ * Get comprehensive fatigue decision including joint stress analysis
+ * and protocol recommendations
+ */
+export function getEnhancedFatigueDecision(
+  jointDiscomforts: JointDiscomfortFlag[] = []
+): FatigueDecision & { 
+  deloadSystemRecommendation?: DeloadSystemRecommendation 
+} {
+  const baseDecision = getFatigueTrainingDecision()
+  const indicators = analyzeFatigue()
+  
+  // Build signal summary from current indicators
+  const signalSummary: FatigueSignalSummary = {
+    performanceDrop: indicators.signals.repDropOff > 40,
+    exerciseSkips: indicators.signals.consistencyDrop > 30,
+    jointFlags: jointDiscomforts.length > 0,
+    volumeSpike: indicators.signals.volumeStress > 60,
+    consecutiveTrainingDays: getConsecutiveTrainingDays(indicators),
+    missedReps: indicators.signals.repDropOff > 50,
+    rpeElevated: indicators.signals.rpeEscalation > 50,
+  }
+  
+  // Get deload recommendation with joint protocol integration
+  const deloadRec = getDeloadRecommendation(
+    indicators.recoveryStatus,
+    indicators.fatigueTrend.trend,
+    jointDiscomforts,
+    signalSummary,
+    30 // Default days since last deload
+  )
+  
+  // Save pattern for long-term tracking
+  saveFatiguePattern({
+    date: new Date().toISOString().split('T')[0],
+    fatigueLevel: deloadRec.fatigueLevel,
+    deloadTriggered: deloadRec.shouldDeload,
+    trigger: deloadRec.trigger,
+  })
+  
+  // Map joint discomfort to recommended protocols
+  const recommendedProtocols = jointDiscomforts.length > 0
+    ? mapDiscomfortToProtocols(jointDiscomforts)
+    : deloadRec.jointProtocols
+  
+  return {
+    ...baseDecision,
+    recommendedProtocols,
+    jointStressDetected: jointDiscomforts.length > 0,
+    deloadSystemRecommendation: deloadRec,
+  }
+}
+
+/**
+ * Map joint discomfort flags to protocol IDs
+ */
+function mapDiscomfortToProtocols(discomforts: JointDiscomfortFlag[]): string[] {
+  const protocolMap: Record<JointDiscomfortFlag, string> = {
+    'wrist_irritation': 'wrist_integrity_protocol',
+    'elbow_tendon_pain': 'elbow_tendon_health_protocol',
+    'shoulder_instability': 'shoulder_stability_protocol',
+    'knee_discomfort': 'knee_stability_protocol',
+    'ankle_stiffness': 'ankle_mobility_protocol',
+    'hip_tightness': 'hip_compression_protocol',
+    'scapular_weakness': 'scapular_control_protocol',
+  }
+  
+  return discomforts.map(d => protocolMap[d]).filter(Boolean)
+}
+
+/**
+ * Extract consecutive training days from indicators
+ */
+function getConsecutiveTrainingDays(indicators: FatigueIndicators): number {
+  // Approximate based on frequency stress signal
+  // High frequency stress indicates many consecutive days
+  if (indicators.signals.frequencyStress > 70) return 5
+  if (indicators.signals.frequencyStress > 50) return 4
+  if (indicators.signals.frequencyStress > 30) return 3
+  return 2
+}
+
+// =============================================================================
+// COACHING MESSAGE HELPERS
+// =============================================================================
+
+export const DELOAD_COACHING_MESSAGES = {
+  fatigue_accumulation: 'Training intensity reduced this week to support recovery. Deloads preserve long-term progress.',
+  performance_decline: 'Performance signals indicate a need for recovery. Lighter sessions help restore strength capacity.',
+  joint_stress: 'Joint health protocols prioritized this week. Recovery work protects training longevity.',
+  overtraining_risk: 'A recovery period is recommended. Strategic rest is part of intelligent programming.',
+  scheduled_cycle: 'Periodic deload to consolidate recent training gains. Recovery supports adaptation.',
+} as const
+
+export function getDeloadCoachingMessage(
+  trigger: keyof typeof DELOAD_COACHING_MESSAGES | null
+): string {
+  if (!trigger || !(trigger in DELOAD_COACHING_MESSAGES)) {
+    return 'Training is progressing well. Continue with your current plan.'
+  }
+  return DELOAD_COACHING_MESSAGES[trigger]
 }

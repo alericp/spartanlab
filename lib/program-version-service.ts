@@ -911,3 +911,326 @@ export function validatePreservation(): { valid: boolean; message: string } {
     message: 'All athlete data (SkillState, readiness, workout logs) will be preserved.',
   }
 }
+
+// =============================================================================
+// FATIGUE-TRIGGERED VERSION CREATION
+// =============================================================================
+
+export interface FatigueVersionTrigger {
+  shouldCreateVersion: boolean
+  reason: GenerationReason | null
+  severity: 'mild' | 'moderate' | 'severe'
+  explanation: string
+  recommendedDuration: number // days
+}
+
+/**
+ * Check if fatigue state warrants a new program version
+ * Only severe or persistent fatigue triggers structural changes
+ */
+export function checkFatigueVersionTrigger(
+  currentFatigue: {
+    fatigueLevel: string
+    recoveryScore: number
+    requiresDeload: boolean
+    consecutiveHighFatigueDays?: number
+    movementFamilyFatigue?: Record<string, number>
+  },
+  previousFatigue: {
+    fatigueLevel: string
+    recoveryScore: number
+    requiresDeload: boolean
+  } | null
+): FatigueVersionTrigger {
+  // No previous data = first check, don't trigger
+  if (!previousFatigue) {
+    return {
+      shouldCreateVersion: false,
+      reason: null,
+      severity: 'mild',
+      explanation: 'Initial fatigue baseline established.',
+      recommendedDuration: 0,
+    }
+  }
+
+  // Deload triggered for first time
+  if (currentFatigue.requiresDeload && !previousFatigue.requiresDeload) {
+    // Determine severity
+    let severity: 'mild' | 'moderate' | 'severe' = 'moderate'
+    let recommendedDuration = 5
+
+    if (currentFatigue.recoveryScore < 30) {
+      severity = 'severe'
+      recommendedDuration = 7
+    } else if (currentFatigue.recoveryScore < 50) {
+      severity = 'moderate'
+      recommendedDuration = 5
+    } else {
+      severity = 'mild'
+      recommendedDuration = 3
+    }
+
+    return {
+      shouldCreateVersion: severity !== 'mild', // Only moderate/severe trigger new version
+      reason: 'fatigue_deload',
+      severity,
+      explanation: severity === 'severe'
+        ? 'Your training load has significantly exceeded recovery capacity. A recovery-focused program will protect your long-term progress.'
+        : 'Accumulated training stress detected. A brief recovery phase will optimize your adaptation.',
+      recommendedDuration,
+    }
+  }
+
+  // Persistent high fatigue (consecutive days)
+  if (currentFatigue.consecutiveHighFatigueDays && currentFatigue.consecutiveHighFatigueDays >= 5) {
+    return {
+      shouldCreateVersion: true,
+      reason: 'adaptive_rebalance',
+      severity: 'moderate',
+      explanation: 'Persistent fatigue detected over multiple sessions. Rebalancing training load.',
+      recommendedDuration: 5,
+    }
+  }
+
+  // No version trigger needed
+  return {
+    shouldCreateVersion: false,
+    reason: null,
+    severity: 'mild',
+    explanation: 'Fatigue levels within normal training range.',
+    recommendedDuration: 0,
+  }
+}
+
+/**
+ * Create a fatigue-triggered recovery version
+ * Preserves all athlete data while adjusting program structure
+ */
+export async function createFatigueRecoveryVersion(
+  athleteId: string,
+  context: UnifiedEngineContext,
+  trigger: FatigueVersionTrigger
+): Promise<{
+  version: ProgramVersion
+  coachingMessage: string
+}> {
+  if (!trigger.shouldCreateVersion || !trigger.reason) {
+    throw new Error('Cannot create fatigue version without valid trigger')
+  }
+
+  // Create snapshot capturing current fatigue state
+  const snapshotId = await createInputSnapshot(athleteId, context)
+
+  // Create version with fatigue-specific summary
+  const summary: ProgramSummary = {
+    primaryGoal: context.athlete.primaryGoal,
+    trainingDaysPerWeek: context.athlete.trainingDaysPerWeek,
+    sessionDurationMinutes: context.athlete.sessionDurationMinutes,
+    styleMode: context.athlete.trainingStyle,
+    constraintFocus: `recovery_${trigger.severity}`,
+    equipment: context.athlete.equipment,
+    generatedAt: new Date().toISOString(),
+  }
+
+  const version = await createProgramVersion(
+    athleteId,
+    trigger.reason,
+    summary,
+    snapshotId
+  )
+
+  // Generate coaching message
+  const coachingMessage = trigger.severity === 'severe'
+    ? 'A recovery-focused program has been created. This is strategic - your body needs time to adapt to the training you\'ve done. Your progress, skills, and workout history are fully preserved.'
+    : 'Your program has been adjusted for recovery. This brief phase will optimize your long-term progress. All your training data continues uninterrupted.'
+
+  return { version, coachingMessage }
+}
+
+// =============================================================================
+// PERFORMANCE ENVELOPE INTEGRATION
+// =============================================================================
+
+/**
+ * Check if Performance Envelope data suggests version update
+ * Used when envelope learns athlete responds poorly to current programming
+ */
+export function checkEnvelopeVersionTrigger(
+  envelopeAnalysis: {
+    movementFamiliesWithDecliningTrend: string[]
+    overallTrendConfidence: number
+    suggestsStructuralChange: boolean
+    explanation: string
+  }
+): {
+  shouldTrigger: boolean
+  reason: GenerationReason | null
+  explanation: string
+} {
+  // Only trigger if we have high confidence and clear declining patterns
+  if (
+    envelopeAnalysis.suggestsStructuralChange &&
+    envelopeAnalysis.overallTrendConfidence > 0.6 &&
+    envelopeAnalysis.movementFamiliesWithDecliningTrend.length >= 2
+  ) {
+    return {
+      shouldTrigger: true,
+      reason: 'adaptive_rebalance',
+      explanation: `Training response data suggests rebalancing. ${envelopeAnalysis.explanation}`,
+    }
+  }
+
+  return {
+    shouldTrigger: false,
+    reason: null,
+    explanation: 'Envelope data within normal parameters.',
+  }
+}
+
+// =============================================================================
+// VERSION STABILITY SAFEGUARDS
+// =============================================================================
+
+const versionCreationTimestamps = new Map<string, number[]>()
+const MAX_VERSIONS_PER_WEEK = 3
+const VERSION_WINDOW_MS = 7 * 24 * 60 * 60 * 1000 // 7 days
+
+/**
+ * Check if version creation is allowed (prevents churn)
+ * Limits to MAX_VERSIONS_PER_WEEK to maintain stability
+ */
+export function canCreateNewVersion(athleteId: string): {
+  allowed: boolean
+  reason: string
+  versionsThisWeek: number
+} {
+  const now = Date.now()
+  const timestamps = versionCreationTimestamps.get(athleteId) || []
+
+  // Filter to only timestamps within the last week
+  const recentTimestamps = timestamps.filter(t => now - t < VERSION_WINDOW_MS)
+
+  if (recentTimestamps.length >= MAX_VERSIONS_PER_WEEK) {
+    return {
+      allowed: false,
+      reason: `Maximum ${MAX_VERSIONS_PER_WEEK} program updates per week reached. This prevents unnecessary churn and allows time for training adaptation.`,
+      versionsThisWeek: recentTimestamps.length,
+    }
+  }
+
+  return {
+    allowed: true,
+    reason: 'Version creation allowed.',
+    versionsThisWeek: recentTimestamps.length,
+  }
+}
+
+/**
+ * Record version creation timestamp (for rate limiting)
+ */
+export function recordVersionCreation(athleteId: string): void {
+  const timestamps = versionCreationTimestamps.get(athleteId) || []
+  timestamps.push(Date.now())
+
+  // Keep only timestamps within the window
+  const now = Date.now()
+  const filtered = timestamps.filter(t => now - t < VERSION_WINDOW_MS)
+  versionCreationTimestamps.set(athleteId, filtered)
+}
+
+/**
+ * Safe version creation with all safeguards
+ */
+export async function safeCreateProgramVersion(
+  athleteId: string,
+  reason: GenerationReason,
+  summary: ProgramSummary,
+  snapshotId?: string
+): Promise<{
+  success: boolean
+  version: ProgramVersion | null
+  message: string
+}> {
+  // Check rate limit
+  const rateCheck = canCreateNewVersion(athleteId)
+  if (!rateCheck.allowed) {
+    return {
+      success: false,
+      version: null,
+      message: rateCheck.reason,
+    }
+  }
+
+  // Validate preservation
+  const preservation = validatePreservation()
+  if (!preservation.valid) {
+    return {
+      success: false,
+      version: null,
+      message: preservation.message,
+    }
+  }
+
+  // Create version
+  const version = await createProgramVersion(athleteId, reason, summary, snapshotId)
+
+  // Record for rate limiting
+  recordVersionCreation(athleteId)
+
+  return {
+    success: true,
+    version,
+    message: `Program version ${version.versionNumber} created. ${preservation.message}`,
+  }
+}
+
+/**
+ * Get version creation statistics for an athlete
+ */
+export async function getVersionStatistics(athleteId: string): Promise<{
+  totalVersions: number
+  activeVersionNumber: number
+  versionsThisWeek: number
+  canCreateMore: boolean
+  lastVersionDate: string | null
+  generationReasonBreakdown: Record<GenerationReason, number>
+}> {
+  const history = await getProgramVersionHistory(athleteId, 50)
+  const activeVersion = await getActiveProgramVersion(athleteId)
+
+  // Count by reason
+  const reasonBreakdown: Record<GenerationReason, number> = {
+    onboarding_initial_generation: 0,
+    settings_schedule_change: 0,
+    settings_equipment_change: 0,
+    settings_goal_change: 0,
+    settings_style_change: 0,
+    fatigue_deload: 0,
+    skill_priority_update: 0,
+    benchmark_update: 0,
+    adaptive_rebalance: 0,
+    manual_regeneration: 0,
+    injury_status_change: 0,
+  }
+
+  for (const version of history) {
+    if (version.generationReason in reasonBreakdown) {
+      reasonBreakdown[version.generationReason]++
+    }
+  }
+
+  // Count recent versions
+  const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+  const versionsThisWeek = history.filter(
+    v => new Date(v.createdAt) > oneWeekAgo
+  ).length
+
+  return {
+    totalVersions: history.length,
+    activeVersionNumber: activeVersion?.versionNumber || 0,
+    versionsThisWeek,
+    canCreateMore: versionsThisWeek < MAX_VERSIONS_PER_WEEK,
+    lastVersionDate: history[0]?.createdAt || null,
+    generationReasonBreakdown: reasonBreakdown,
+  }
+}

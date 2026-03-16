@@ -733,3 +733,379 @@ export function getReadinessSummary(result: CanonicalReadinessResult): string {
     return `Building foundations for ${skillLabel}. Focus on ${LIMITING_FACTOR_LABELS[result.primaryLimiter]} to accelerate progress.`
   }
 }
+
+// =============================================================================
+// WORKOUT REASONING SUMMARY
+// =============================================================================
+
+/**
+ * Unified workout reasoning summary that explains WHY a workout was generated.
+ * This is the single source of truth for workout explanations across the app.
+ * 
+ * Produced during program generation by combining:
+ * - Skill readiness state
+ * - Constraint detection results  
+ * - Performance envelope data
+ * - Selected coaching framework
+ */
+export interface WorkoutReasoningSummary {
+  // Core readiness state
+  skillReadiness: {
+    primarySkill: string
+    readinessScore: number
+    readinessLevel: ReadinessLevel
+    trend: 'improving' | 'stable' | 'declining' | 'unknown'
+  }
+  
+  // Primary and secondary limiters
+  primaryLimiter: {
+    factor: LimitingFactor
+    label: string
+    score: number // 0-100, how much this is limiting
+    explanation: string
+  }
+  secondaryLimiter: {
+    factor: LimitingFactor
+    label: string
+    score: number
+    explanation: string
+  } | null
+  
+  // Framework and envelope influence
+  frameworkInfluence: {
+    frameworkId: string
+    frameworkName: string
+    influence: string // Short description of how framework affected workout
+  } | null
+  
+  envelopeInfluence: {
+    confidenceLevel: 'low' | 'moderate' | 'high'
+    adaptations: string[] // List of envelope-driven adaptations
+  } | null
+  
+  constraintInfluence: {
+    activeConstraints: string[]
+    protocolsAdded: string[]
+  } | null
+  
+  // The main explanation - concise, coach-like
+  whyThisWorkout: string
+  
+  // Supporting details for optional display
+  workoutFocus: string // e.g., "Horizontal Pulling Strength"
+  sessionType: 'skill' | 'strength' | 'mixed' | 'deload' | 'recovery'
+  keyExerciseReasons: Array<{
+    exerciseName: string
+    reason: string
+    skillConnection?: string
+  }>
+  
+  // Confidence in the reasoning
+  reasoningConfidence: 'low' | 'moderate' | 'high'
+  dataQuality: 'sparse' | 'developing' | 'solid'
+}
+
+/**
+ * Generate the "Why This Workout" explanation
+ * This is the primary user-facing summary
+ */
+export function generateWhyThisWorkout(
+  primaryLimiter: LimitingFactor,
+  primarySkill: string,
+  sessionType: WorkoutReasoningSummary['sessionType'],
+  frameworkName?: string
+): string {
+  const limiterLabel = LIMITING_FACTOR_LABELS[primaryLimiter]
+  const skillLabel = formatSkillLabel(primarySkill)
+  
+  // Session type specific templates
+  if (sessionType === 'deload') {
+    return 'This is a recovery-focused session to reduce accumulated fatigue and prepare for your next training block.'
+  }
+  
+  if (sessionType === 'recovery') {
+    return 'Light mobility and technique work to support recovery while maintaining movement quality.'
+  }
+  
+  // Limiter-focused explanations
+  const limiterTemplates: Partial<Record<LimitingFactor, string>> = {
+    pull_strength: `Your current limiter is ${limiterLabel.toLowerCase()}, so this workout prioritizes weighted pulling and vertical pull development to support your ${skillLabel} progress.`,
+    straight_arm_pull_strength: `${limiterLabel} is your primary bottleneck for ${skillLabel}. This session focuses on straight-arm pulling and front lever progressions.`,
+    straight_arm_push_strength: `${limiterLabel} limits your ${skillLabel}. Today's workout prioritizes planche leans and straight-arm pushing work.`,
+    compression_strength: `This session focuses on ${limiterLabel.toLowerCase()} to support your ${skillLabel} progression. Expect hollow body work and compression drills.`,
+    scapular_control: `${limiterLabel} is key for ${skillLabel}. This workout includes scapular-focused pulling and stability work.`,
+    shoulder_stability: `Building ${limiterLabel.toLowerCase()} for ${skillLabel}. This session includes controlled stability progressions.`,
+    explosive_pull_power: `${limiterLabel} is your limiter for ${skillLabel}. This workout includes high pulls and explosive pulling drills.`,
+    transition_strength: `${limiterLabel} is holding back your muscle-up. This session targets transition-specific strength development.`,
+    vertical_push_strength: `Building ${limiterLabel.toLowerCase()} for HSPU progress. Today's workout prioritizes pike work and overhead pressing.`,
+    wrist_tolerance: `Wrist conditioning is prioritized to safely progress your ${skillLabel} work.`,
+    balance_control: `Balance and control work to support your handstand and ${skillLabel} progress.`,
+    none: `Strong readiness across all components. This session maintains progress while building skill consistency.`,
+  }
+  
+  const baseExplanation = limiterTemplates[primaryLimiter] || 
+    `This workout targets ${limiterLabel.toLowerCase()} to support your ${skillLabel} development.`
+  
+  // Add framework context if present
+  if (frameworkName) {
+    return `${baseExplanation} Structured using ${frameworkName} principles.`
+  }
+  
+  return baseExplanation
+}
+
+/**
+ * Generate exercise-specific reasons for knowledge bubbles
+ */
+export function generateExerciseReason(
+  exerciseId: string,
+  primaryLimiter: LimitingFactor,
+  primarySkill: string
+): { reason: string; skillConnection?: string } {
+  const skillLabel = formatSkillLabel(primarySkill)
+  
+  // Exercise-specific reasons mapped to limiters and skills
+  const exerciseReasons: Record<string, { reason: string; skills?: string[] }> = {
+    // Pulling exercises
+    weighted_pull_up: {
+      reason: 'Builds foundational pulling strength required for advanced skills.',
+      skills: ['front_lever', 'muscle_up', 'one_arm_pull_up'],
+    },
+    front_lever_row: {
+      reason: 'Develops horizontal pulling strength with direct front lever carryover.',
+      skills: ['front_lever'],
+    },
+    chest_to_bar_pull_up: {
+      reason: 'Builds the high-pull strength needed for muscle-up transitions.',
+      skills: ['muscle_up', 'ring_muscle_up'],
+    },
+    archer_pull_up: {
+      reason: 'Develops unilateral pulling strength toward one-arm pull-up.',
+      skills: ['one_arm_pull_up', 'muscle_up'],
+    },
+    
+    // Pushing exercises
+    weighted_dip: {
+      reason: 'Builds foundational pushing strength for planche and pressing skills.',
+      skills: ['planche', 'handstand_pushup'],
+    },
+    ring_dip: {
+      reason: 'Develops shoulder stability and control for ring work.',
+      skills: ['planche', 'iron_cross', 'ring_muscle_up'],
+    },
+    pseudo_planche_pushup: {
+      reason: 'Develops forward lean strength and shoulder conditioning for planche.',
+      skills: ['planche'],
+    },
+    pike_push_up: {
+      reason: 'Foundation for vertical pressing toward handstand push-up.',
+      skills: ['handstand_pushup'],
+    },
+    wall_hspu: {
+      reason: 'Builds overhead pressing strength with wall support.',
+      skills: ['handstand_pushup', 'freestanding_hspu'],
+    },
+    
+    // Core exercises
+    hollow_body_hold: {
+      reason: 'Develops core tension and body line control for skill work.',
+      skills: ['front_lever', 'planche', 'l_sit'],
+    },
+    hanging_leg_raise: {
+      reason: 'Improves compression strength for L-sit and lever progressions.',
+      skills: ['l_sit', 'front_lever', 'v_sit'],
+    },
+    l_sit_hold: {
+      reason: 'Builds compression strength and shoulder depression control.',
+      skills: ['l_sit', 'v_sit', 'manna'],
+    },
+    
+    // Support exercises
+    ring_support_hold: {
+      reason: 'Builds shoulder stability required for ring-based skills.',
+      skills: ['ring_muscle_up', 'iron_cross', 'ring_dip'],
+    },
+    rto_support: {
+      reason: 'Advanced shoulder stability for ring strength progressions.',
+      skills: ['iron_cross', 'planche'],
+    },
+    scapular_pull_up: {
+      reason: 'Develops scapular control and strength for pulling skills.',
+      skills: ['front_lever', 'muscle_up'],
+    },
+    
+    // Skill work
+    tuck_front_lever: {
+      reason: 'Progressive overload at your current front lever stage.',
+      skills: ['front_lever'],
+    },
+    adv_tuck_front_lever: {
+      reason: 'Intermediate front lever progression building toward straddle.',
+      skills: ['front_lever'],
+    },
+    tuck_planche: {
+      reason: 'Progressive overload at your current planche stage.',
+      skills: ['planche'],
+    },
+    straddle_planche: {
+      reason: 'Advanced planche progression toward full planche.',
+      skills: ['planche'],
+    },
+  }
+  
+  const exerciseData = exerciseReasons[exerciseId]
+  
+  if (exerciseData) {
+    const hasSkillConnection = exerciseData.skills?.includes(primarySkill)
+    return {
+      reason: exerciseData.reason,
+      skillConnection: hasSkillConnection ? `Directly supports ${skillLabel} development.` : undefined,
+    }
+  }
+  
+  // Fallback based on limiter
+  const limiterBasedReason = generateLimiterBasedExerciseReason(exerciseId, primaryLimiter)
+  return { reason: limiterBasedReason }
+}
+
+function generateLimiterBasedExerciseReason(exerciseId: string, limiter: LimitingFactor): string {
+  const limiterLabel = LIMITING_FACTOR_LABELS[limiter]
+  
+  // Check exercise category from name
+  if (exerciseId.includes('pull') || exerciseId.includes('row')) {
+    return `Builds pulling strength to address ${limiterLabel.toLowerCase()} limitations.`
+  }
+  if (exerciseId.includes('dip') || exerciseId.includes('push')) {
+    return `Develops pushing strength supporting your current training focus.`
+  }
+  if (exerciseId.includes('hold') || exerciseId.includes('hollow')) {
+    return `Builds core control and body tension for skill work.`
+  }
+  if (exerciseId.includes('support') || exerciseId.includes('ring')) {
+    return `Develops shoulder stability required for skill progressions.`
+  }
+  
+  return 'Supports your current training goals.'
+}
+
+function formatSkillLabel(skill: string): string {
+  return skill
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, c => c.toUpperCase())
+}
+
+/**
+ * Build a complete WorkoutReasoningSummary
+ * This is the main function called during program generation
+ */
+export function buildWorkoutReasoningSummary(
+  readinessResult: CanonicalReadinessResult | null,
+  constraintData: {
+    primaryConstraint?: string
+    secondaryConstraint?: string
+    protocolsAdded?: string[]
+  } | null,
+  frameworkData: {
+    frameworkId: string
+    frameworkName: string
+  } | null,
+  envelopeData: {
+    confidence: number
+    adaptations?: string[]
+  } | null,
+  sessionType: WorkoutReasoningSummary['sessionType'] = 'mixed',
+  exercises: Array<{ id: string; name: string }> = []
+): WorkoutReasoningSummary {
+  // Determine primary skill and limiter
+  const primarySkill = readinessResult?.skill || 'general'
+  const primaryLimiter: LimitingFactor = readinessResult?.primaryLimiter || 'none'
+  const secondaryLimiter = readinessResult?.secondaryLimiter || null
+  
+  // Calculate data quality
+  const hasReadiness = !!readinessResult && readinessResult.overallScore > 0
+  const hasEnvelope = !!envelopeData && envelopeData.confidence > 0.3
+  const hasFramework = !!frameworkData
+  const dataQuality: WorkoutReasoningSummary['dataQuality'] = 
+    hasReadiness && hasEnvelope ? 'solid' :
+    hasReadiness || hasEnvelope ? 'developing' : 'sparse'
+  
+  // Calculate reasoning confidence
+  const reasoningConfidence: WorkoutReasoningSummary['reasoningConfidence'] =
+    dataQuality === 'solid' && hasFramework ? 'high' :
+    dataQuality === 'developing' ? 'moderate' : 'low'
+  
+  // Build exercise reasons
+  const keyExerciseReasons = exercises.slice(0, 5).map(ex => {
+    const { reason, skillConnection } = generateExerciseReason(ex.id, primaryLimiter, primarySkill)
+    return {
+      exerciseName: ex.name,
+      reason,
+      skillConnection,
+    }
+  })
+  
+  // Generate the main explanation
+  const whyThisWorkout = generateWhyThisWorkout(
+    primaryLimiter,
+    primarySkill,
+    sessionType,
+    frameworkData?.frameworkName
+  )
+  
+  // Build workout focus label
+  const workoutFocus = LIMITING_FACTOR_LABELS[primaryLimiter] !== 'No Limiting Factor'
+    ? LIMITING_FACTOR_LABELS[primaryLimiter]
+    : sessionType === 'skill' ? 'Skill Practice'
+    : sessionType === 'strength' ? 'Strength Development'
+    : 'Balanced Training'
+  
+  return {
+    skillReadiness: {
+      primarySkill,
+      readinessScore: readinessResult?.overallScore || 0,
+      readinessLevel: readinessResult?.level || 'Building',
+      trend: 'unknown', // Would come from skill state service
+    },
+    primaryLimiter: {
+      factor: primaryLimiter,
+      label: LIMITING_FACTOR_LABELS[primaryLimiter],
+      score: readinessResult?.components 
+        ? 100 - Math.min(...Object.values(readinessResult.components))
+        : 0,
+      explanation: readinessResult 
+        ? getLimiterExplanation(readinessResult.skill, primaryLimiter)
+        : 'Continue building your training foundation.',
+    },
+    secondaryLimiter: secondaryLimiter ? {
+      factor: secondaryLimiter,
+      label: LIMITING_FACTOR_LABELS[secondaryLimiter],
+      score: 50,
+      explanation: readinessResult
+        ? getLimiterExplanation(readinessResult.skill, secondaryLimiter)
+        : '',
+    } : null,
+    frameworkInfluence: frameworkData ? {
+      frameworkId: frameworkData.frameworkId,
+      frameworkName: frameworkData.frameworkName,
+      influence: `Workout structured using ${frameworkData.frameworkName} principles.`,
+    } : null,
+    envelopeInfluence: envelopeData && envelopeData.confidence > 0.3 ? {
+      confidenceLevel: envelopeData.confidence >= 0.7 ? 'high' : 
+                       envelopeData.confidence >= 0.4 ? 'moderate' : 'low',
+      adaptations: envelopeData.adaptations || [],
+    } : null,
+    constraintInfluence: constraintData?.primaryConstraint ? {
+      activeConstraints: [
+        constraintData.primaryConstraint,
+        ...(constraintData.secondaryConstraint ? [constraintData.secondaryConstraint] : []),
+      ],
+      protocolsAdded: constraintData.protocolsAdded || [],
+    } : null,
+    whyThisWorkout,
+    workoutFocus,
+    sessionType,
+    keyExerciseReasons,
+    reasoningConfidence,
+    dataQuality,
+  }
+}

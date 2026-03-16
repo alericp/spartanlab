@@ -136,6 +136,12 @@ import {
   type RepetitionJustification,
   type SessionSignature,
 } from './session-variety-engine'
+import {
+  buildWorkoutReasoningSummary,
+  calculateReadinessFromProfile,
+  type WorkoutReasoningSummary,
+  type CanonicalReadinessResult,
+} from './readiness/canonical-readiness-engine'
 
 // =============================================================================
 // TYPES
@@ -393,6 +399,8 @@ export interface AdaptiveProgram {
     }>
     coachRecommendations: string[]
   }
+  // Unified Workout Reasoning Summary - explains WHY this workout was generated
+  workoutReasoningSummary?: WorkoutReasoningSummary
 }
 
 // =============================================================================
@@ -1048,6 +1056,61 @@ fatigueDecision: fatigueDecision ? {
     },
     // Constraint Improvement Tracking - showing progress over time
     constraintImprovement: constraintImprovementData || undefined,
+    // Unified Workout Reasoning Summary - explains WHY this workout was generated
+    workoutReasoningSummary: (() => {
+      try {
+        // Calculate skill readiness for primary goal
+        const skillType = primaryGoal === 'front_lever' ? 'front_lever'
+          : primaryGoal === 'planche' ? 'planche'
+          : primaryGoal === 'muscle_up' ? 'muscle_up'
+          : primaryGoal === 'hspu' ? 'hspu'
+          : primaryGoal === 'back_lever' ? 'back_lever'
+          : primaryGoal === 'l_sit' ? 'l_sit'
+          : null
+
+        let readinessResult: CanonicalReadinessResult | null = null
+        if (skillType && profile) {
+          readinessResult = calculateReadinessFromProfile(skillType, profile)
+        }
+
+        // Determine session type based on goal and calibration
+        const sessionType: WorkoutReasoningSummary['sessionType'] = 
+          deloadRecommendation?.shouldDeload ? 'deload'
+          : fatigueDecision?.decision === 'DELOAD_RECOMMENDED' ? 'recovery'
+          : shouldPrioritizeSkills ? 'skill'
+          : shouldPrioritizeStrength ? 'strength'
+          : 'mixed'
+
+        // Get first session exercises for exercise reasons
+        const firstSessionExercises = sessions[0]?.exercises?.slice(0, 5).map(e => ({
+          id: e.exercise?.id || '',
+          name: e.exercise?.name || '',
+        })) || []
+
+        return buildWorkoutReasoningSummary(
+          readinessResult,
+          constraintInsight.hasInsight ? {
+            primaryConstraint: constraintInsight.label,
+            secondaryConstraint: constraintContext.secondaryConstraint || null,
+            protocolsAdded: deloadRecommendation?.recommendedProtocols || [],
+          } : null,
+          trainingEmphasis ? {
+            frameworkId: trainingEmphasis.primaryMethod,
+            frameworkName: trainingEmphasis.primaryMethod,
+          } : null,
+          skillIntelligence.dataQuality !== 'insufficient' ? {
+            confidence: skillIntelligence.dataQuality === 'excellent' ? 0.9
+              : skillIntelligence.dataQuality === 'good' ? 0.7
+              : 0.4,
+            adaptations: intelligenceAdjustments.slice(0, 3).map(a => a.reason),
+          } : null,
+          sessionType,
+          firstSessionExercises
+        )
+      } catch {
+        return undefined
+      }
+    })(),
   }
 }
 

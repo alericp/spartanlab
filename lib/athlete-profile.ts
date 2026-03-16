@@ -1081,6 +1081,43 @@ export const TRAINING_DAYS_LABELS: Record<TrainingDaysPerWeek, string> = {
   '1_to_2_years': '1–2 years ago',
   'over_2_years': 'Over 2 years ago',
   }
+  
+  // Rebound potential multipliers based on how recently the PR was achieved
+  // Higher values = faster expected recovery to previous level
+  export const REBOUND_POTENTIAL_MULTIPLIERS: Record<PRTimeframe, number> = {
+  'current': 1.0,         // Already at peak
+  'within_3_months': 0.9, // Very high rebound potential
+  '3_to_6_months': 0.75,  // Good rebound potential
+  '6_to_12_months': 0.55, // Moderate rebound potential
+  '1_to_2_years': 0.35,   // Limited rebound potential
+  'over_2_years': 0.2,    // Minimal rebound potential
+  }
+  
+  // Helper function to estimate rebound potential from historical PR
+  export function estimateReboundPotential(
+  currentLoad: number | null,
+  allTimePR: AllTimePRBenchmark | null
+  ): { reboundPotential: number; reboundGap: number; estimatedWeeksToRecover: number } | null {
+  if (!allTimePR?.load || !currentLoad) return null
+  
+  const gap = allTimePR.load - currentLoad
+  if (gap <= 0) return { reboundPotential: 1.0, reboundGap: 0, estimatedWeeksToRecover: 0 }
+  
+  const timeframeMultiplier = REBOUND_POTENTIAL_MULTIPLIERS[allTimePR.timeframe]
+  const reboundPotential = timeframeMultiplier
+  
+  // Estimate weeks to recover based on gap and timeframe
+  // Rough heuristic: 1-2 weeks per 5lbs/2kg of gap, adjusted by timeframe
+  const gapInUnits = gap / 5 // Normalize to ~5lb increments
+  const baseWeeks = gapInUnits * 2
+  const adjustedWeeks = Math.round(baseWeeks / timeframeMultiplier)
+  
+  return {
+    reboundPotential,
+    reboundGap: gap,
+    estimatedWeeksToRecover: Math.min(adjustedWeeks, 52), // Cap at 1 year
+  }
+  }
 
 export const RECOVERY_LABELS: Record<RecoveryQuality, string> = {
   'good': 'Good',

@@ -1804,7 +1804,7 @@ function SkillHistoryInput({ skillKey, skillLabel, profile, updateProfile }: Ski
   return (
     <div className="bg-[#0F1115] border border-[#2B313A] rounded-lg p-3 space-y-3">
       <div className="space-y-2">
-        <label className="text-xs text-[#6B7280]">Have you trained {skillLabel} before?</label>
+        <label className="text-xs text-[#6B7280]">Past experience with {skillLabel}</label>
         <div className="grid grid-cols-2 gap-1.5">
           {historyOptions.map((opt) => (
             <button
@@ -1827,7 +1827,7 @@ function SkillHistoryInput({ skillKey, skillLabel, profile, updateProfile }: Ski
       
       {showLastTrained && (
         <div className="space-y-2 pt-2 border-t border-[#2B313A]">
-          <label className="text-xs text-[#6B7280]">When did you last train it seriously?</label>
+          <label className="text-xs text-[#6B7280]">When did you last train this seriously?</label>
           <div className="grid grid-cols-2 gap-1.5">
             {lastTrainedOptions.map((opt) => (
               <button
@@ -1868,7 +1868,8 @@ function SkillBenchmarksSection({ profile, updateProfile }: SectionProps) {
       {/* Front Lever */}
       {hasSkill('front_lever') && (
         <div className="space-y-3">
-          <label className="text-sm font-medium text-[#A4ACB8]">Front Lever progression</label>
+          <label className="text-sm font-medium text-[#A4ACB8]">Current front lever level</label>
+          <p className="text-xs text-[#6B7280] -mt-1">Your current usable progression</p>
           <div className="grid grid-cols-3 gap-2">
             {flOptions.map((prog) => (
               <OptionButton
@@ -1891,7 +1892,8 @@ function SkillBenchmarksSection({ profile, updateProfile }: SectionProps) {
           </OptionButton>
           {profile.frontLever?.progression && profile.frontLever.progression !== 'none' && profile.frontLever.progression !== 'unknown' && (
             <div className="mt-2">
-              <label className="text-xs text-[#6B7280]">Best hold (seconds) — optional</label>
+              <label className="text-xs text-[#6B7280]">Current best hold (seconds) — optional</label>
+              <p className="text-[10px] text-[#4F5D6B] mb-1">Use your current usable hold, not all-time best</p>
               <Input
                 type="number"
                 placeholder="e.g. 10"
@@ -1919,7 +1921,8 @@ function SkillBenchmarksSection({ profile, updateProfile }: SectionProps) {
       {/* Planche */}
       {hasSkill('planche') && (
         <div className="space-y-3">
-          <label className="text-sm font-medium text-[#A4ACB8]">Planche progression</label>
+          <label className="text-sm font-medium text-[#A4ACB8]">Current planche level</label>
+          <p className="text-xs text-[#6B7280] -mt-1">Your current usable progression</p>
           <div className="grid grid-cols-3 gap-2">
             {plancheOptions.map((prog) => (
               <OptionButton
@@ -1942,7 +1945,8 @@ function SkillBenchmarksSection({ profile, updateProfile }: SectionProps) {
           </OptionButton>
           {profile.planche?.progression && profile.planche.progression !== 'none' && profile.planche.progression !== 'unknown' && (
             <div className="mt-2">
-              <label className="text-xs text-[#6B7280]">Best hold (seconds) — optional</label>
+              <label className="text-xs text-[#6B7280]">Current best hold (seconds) — optional</label>
+              <p className="text-[10px] text-[#4F5D6B] mb-1">Use your current usable hold, not all-time best</p>
               <Input
                 type="number"
                 placeholder="e.g. 10"
@@ -1970,7 +1974,7 @@ function SkillBenchmarksSection({ profile, updateProfile }: SectionProps) {
       {/* Muscle-Up */}
       {hasSkill('muscle_up') && (
         <div className="space-y-3">
-          <label className="text-sm font-medium text-[#A4ACB8]">Muscle-Up readiness</label>
+          <label className="text-sm font-medium text-[#A4ACB8]">Current muscle-up ability</label>
           <div className="grid grid-cols-2 gap-2">
             {muOptions.map((level) => (
               <OptionButton
@@ -2002,7 +2006,7 @@ function SkillBenchmarksSection({ profile, updateProfile }: SectionProps) {
       {/* HSPU */}
       {hasSkill('handstand_pushup') && (
         <div className="space-y-3">
-          <label className="text-sm font-medium text-[#A4ACB8]">HSPU progression</label>
+          <label className="text-sm font-medium text-[#A4ACB8]">Current HSPU level</label>
           <div className="grid grid-cols-2 gap-2">
             {hspuOptions.map((prog) => (
               <OptionButton
@@ -2036,7 +2040,7 @@ function SkillBenchmarksSection({ profile, updateProfile }: SectionProps) {
       {/* L-Sit */}
       {hasSkill('l_sit') && (
         <div className="space-y-3">
-          <label className="text-sm font-medium text-[#A4ACB8]">L-Sit hold</label>
+          <label className="text-sm font-medium text-[#A4ACB8]">Current L-sit hold</label>
           <div className="grid grid-cols-3 gap-2">
             {lsitOptions.map((hold) => (
               <OptionButton
@@ -2068,7 +2072,7 @@ function SkillBenchmarksSection({ profile, updateProfile }: SectionProps) {
       {/* V-Sit */}
       {hasSkill('v_sit') && (
         <div className="space-y-3">
-          <label className="text-sm font-medium text-[#A4ACB8]">V-Sit hold</label>
+          <label className="text-sm font-medium text-[#A4ACB8]">Current V-sit hold</label>
           <div className="grid grid-cols-2 gap-2">
             {vsitOptions.map((hold) => (
               <OptionButton
@@ -2507,26 +2511,93 @@ function ReviewSection({ profile, onEditSection }: ReviewSectionProps) {
 
   // Helper for strength summary
   const getStrengthSummary = () => {
-    const items = []
-    if (profile.pullUpMax && profile.pullUpMax !== 'unknown') items.push(`Pull-ups: ${PULLUP_LABELS[profile.pullUpMax]}`)
-    if (profile.dipMax && profile.dipMax !== 'unknown') items.push(`Dips: ${DIP_LABELS[profile.dipMax]}`)
-    if (profile.pushUpMax && profile.pushUpMax !== 'unknown') items.push(`Push-ups: ${PUSHUP_LABELS[profile.pushUpMax]}`)
-    return items.length > 0 ? items : null
+  const items = []
+  if (profile.pullUpMax && profile.pullUpMax !== 'unknown') items.push(`Pull-ups: ${PULLUP_LABELS[profile.pullUpMax]}`)
+  if (profile.dipMax && profile.dipMax !== 'unknown') items.push(`Dips: ${DIP_LABELS[profile.dipMax]}`)
+  if (profile.pushUpMax && profile.pushUpMax !== 'unknown') items.push(`Push-ups: ${PUSHUP_LABELS[profile.pushUpMax]}`)
+  
+  // Weighted pull-up with current vs all-time
+  if (profile.weightedPullUp?.load) {
+    const currentReps = profile.weightedPullUp.reps ? ` x ${profile.weightedPullUp.reps}` : ''
+    items.push(`Weighted pull-up (current): +${profile.weightedPullUp.load} ${profile.weightedPullUp.unit}${currentReps}`)
+  }
+  if (profile.allTimePRPullUp?.load) {
+    const prReps = profile.allTimePRPullUp.reps ? ` x ${profile.allTimePRPullUp.reps}` : ''
+    const timeframe = profile.allTimePRPullUp.timeframe ? ` (${PR_TIMEFRAME_LABELS[profile.allTimePRPullUp.timeframe]})` : ''
+    items.push(`Weighted pull-up (all-time): +${profile.allTimePRPullUp.load} ${profile.allTimePRPullUp.unit}${prReps}${timeframe}`)
+  }
+  
+  // Weighted dip with current vs all-time
+  if (profile.weightedDip?.load) {
+    const currentReps = profile.weightedDip.reps ? ` x ${profile.weightedDip.reps}` : ''
+    items.push(`Weighted dip (current): +${profile.weightedDip.load} ${profile.weightedDip.unit}${currentReps}`)
+  }
+  if (profile.allTimePRDip?.load) {
+    const prReps = profile.allTimePRDip.reps ? ` x ${profile.allTimePRDip.reps}` : ''
+    const timeframe = profile.allTimePRDip.timeframe ? ` (${PR_TIMEFRAME_LABELS[profile.allTimePRDip.timeframe]})` : ''
+    items.push(`Weighted dip (all-time): +${profile.allTimePRDip.load} ${profile.allTimePRDip.unit}${prReps}${timeframe}`)
+  }
+  
+  return items.length > 0 ? items : null
   }
 
-  // Helper for skill level summary
+  // Helper for skill level summary with history
   const getSkillSummary = () => {
-    const items = []
-    if (profile.frontLever?.progression && profile.frontLever.progression !== 'unknown' && profile.frontLever.progression !== 'none') {
-      items.push(`Front Lever: ${FRONT_LEVER_LABELS[profile.frontLever.progression]}`)
+  const items: string[] = []
+  
+  // Front Lever
+  if (profile.frontLever?.progression && profile.frontLever.progression !== 'unknown' && profile.frontLever.progression !== 'none') {
+    let flSummary = `Front Lever: ${FRONT_LEVER_LABELS[profile.frontLever.progression]}`
+    const flHistory = profile.skillHistory?.front_lever
+    if (flHistory?.trainingHistory && flHistory.trainingHistory !== 'never') {
+      flSummary += ` • ${SKILL_TRAINING_HISTORY_LABELS[flHistory.trainingHistory]}`
+      if (flHistory.lastTrained) {
+        flSummary += ` (${SKILL_LAST_TRAINED_LABELS[flHistory.lastTrained]})`
+      }
     }
-    if (profile.planche?.progression && profile.planche.progression !== 'unknown' && profile.planche.progression !== 'none') {
-      items.push(`Planche: ${PLANCHE_LABELS[profile.planche.progression]}`)
+    items.push(flSummary)
+  }
+  
+  // Planche
+  if (profile.planche?.progression && profile.planche.progression !== 'unknown' && profile.planche.progression !== 'none') {
+    let plSummary = `Planche: ${PLANCHE_LABELS[profile.planche.progression]}`
+    const plHistory = profile.skillHistory?.planche
+    if (plHistory?.trainingHistory && plHistory.trainingHistory !== 'never') {
+      plSummary += ` • ${SKILL_TRAINING_HISTORY_LABELS[plHistory.trainingHistory]}`
+      if (plHistory.lastTrained) {
+        plSummary += ` (${SKILL_LAST_TRAINED_LABELS[plHistory.lastTrained]})`
+      }
     }
-    if (profile.muscleUp && profile.muscleUp !== 'unknown' && profile.muscleUp !== 'none') {
-      items.push(`Muscle-Up: ${MUSCLE_UP_LABELS[profile.muscleUp]}`)
+    items.push(plSummary)
+  }
+  
+  // Muscle-Up
+  if (profile.muscleUp && profile.muscleUp !== 'unknown' && profile.muscleUp !== 'none') {
+    let muSummary = `Muscle-Up: ${MUSCLE_UP_LABELS[profile.muscleUp]}`
+    const muHistory = profile.skillHistory?.muscle_up
+    if (muHistory?.trainingHistory && muHistory.trainingHistory !== 'never') {
+      muSummary += ` • ${SKILL_TRAINING_HISTORY_LABELS[muHistory.trainingHistory]}`
+      if (muHistory.lastTrained) {
+        muSummary += ` (${SKILL_LAST_TRAINED_LABELS[muHistory.lastTrained]})`
+      }
     }
-    return items.length > 0 ? items : null
+    items.push(muSummary)
+  }
+  
+  // HSPU
+  if (profile.hspu?.progression && profile.hspu.progression !== 'unknown' && profile.hspu.progression !== 'none') {
+    let hspuSummary = `HSPU: ${HSPU_LABELS[profile.hspu.progression]}`
+    const hspuHistory = profile.skillHistory?.handstand_pushup
+    if (hspuHistory?.trainingHistory && hspuHistory.trainingHistory !== 'never') {
+      hspuSummary += ` • ${SKILL_TRAINING_HISTORY_LABELS[hspuHistory.trainingHistory]}`
+      if (hspuHistory.lastTrained) {
+        hspuSummary += ` (${SKILL_LAST_TRAINED_LABELS[hspuHistory.lastTrained]})`
+      }
+    }
+    items.push(hspuSummary)
+  }
+  
+  return items.length > 0 ? items : null
   }
 
   const EditButton = ({ section }: { section: SectionId }) => (

@@ -67,6 +67,7 @@ function WorkoutSessionContent() {
   const searchParams = useSearchParams()
   const dayParam = searchParams.get('day')
   const demoMode = searchParams.get('demo') === 'true'
+  const isFirstSession = searchParams.get('first') === 'true'
   
   const [session, setSession] = useState<AdaptiveSession | null>(null)
   const [loading, setLoading] = useState(true)
@@ -90,10 +91,17 @@ function WorkoutSessionContent() {
     
     // Find the session for the requested day (or today)
     // Sessions array contains all workout days, ordered by dayNumber
-    const today = new Date().getDay() // 0=Sunday through 6=Saturday
-    const sessionIndex = dayParam 
-      ? parseInt(dayParam, 10) 
-      : Math.min(today === 0 ? 6 : today - 1, program.sessions.length - 1)
+    // If coming from first-session flow, always use day 1 (index 0)
+    let sessionIndex: number
+    if (isFirstSession || dayParam === '1') {
+      sessionIndex = 0
+    } else if (dayParam) {
+      // dayParam is 1-indexed, convert to 0-indexed
+      sessionIndex = parseInt(dayParam, 10) - 1
+    } else {
+      const today = new Date().getDay() // 0=Sunday through 6=Saturday
+      sessionIndex = Math.min(today === 0 ? 6 : today - 1, program.sessions.length - 1)
+    }
     
     const targetSession = program.sessions[sessionIndex] || program.sessions[0]
     
@@ -105,7 +113,7 @@ function WorkoutSessionContent() {
     
     setSession(targetSession)
     setLoading(false)
-  }, [dayParam, demoMode])
+  }, [dayParam, demoMode, isFirstSession])
   
   const handleComplete = () => {
     router.push('/dashboard?workout=completed')

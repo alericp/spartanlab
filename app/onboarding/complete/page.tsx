@@ -161,9 +161,9 @@ export default function OnboardingCompletePage() {
             )}
           </div>
           
-          <Link href="/workout/session">
+          <Link href="/first-session?from=onboarding">
             <Button className="w-full bg-[#C1121F] hover:bg-[#A30F1A] text-white py-6 text-lg font-medium">
-              Start First Workout
+              Start First Session
               <ArrowRight className="w-5 h-5 ml-2" />
             </Button>
           </Link>
@@ -173,7 +173,7 @@ export default function OnboardingCompletePage() {
               variant="ghost" 
               className="w-full text-[#6B7280] hover:text-[#A4ACB8]"
             >
-              Go to Dashboard
+              View Dashboard First
             </Button>
           </Link>
         </div>
@@ -339,12 +339,12 @@ export default function OnboardingCompletePage() {
 
         {/* Continue Free Option */}
         <div className="text-center">
-          <Link href="/workout/session">
+          <Link href="/first-session?from=onboarding">
             <Button
               variant="ghost"
               className="text-[#6B7280] hover:text-[#A4ACB8] hover:bg-transparent"
             >
-              Start Free Workout
+              Start First Session
               <ArrowRight className="w-4 h-4 ml-1" />
             </Button>
           </Link>

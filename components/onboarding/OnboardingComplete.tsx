@@ -110,7 +110,8 @@ export function OnboardingComplete({ onContinue }: OnboardingCompleteProps) {
     if (onContinue) {
       onContinue()
     } else {
-      router.push('/dashboard')
+      // Route directly to first session ready page for immediate training
+      router.push('/first-session?from=onboarding')
     }
   }
 
@@ -471,7 +472,7 @@ export function OnboardingComplete({ onContinue }: OnboardingCompleteProps) {
           className="w-full bg-[#C1121F] hover:bg-[#A30F1A] text-white"
           size="lg"
         >
-          Start Session
+          Start First Session
           <ArrowRight className="w-4 h-4 ml-2" />
         </Button>
       </Card>

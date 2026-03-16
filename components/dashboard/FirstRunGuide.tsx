@@ -80,9 +80,9 @@ export function FirstRunGuide() {
       },
       {
         id: 'workout',
-        label: 'Complete First Workout',
-        description: 'Start training with your new program',
-        href: '/workout/session',
+        label: 'Complete First Session',
+        description: 'Start training with your personalized program',
+        href: '/first-session',
         icon: Dumbbell,
         isComplete: hasWorkout,
       },

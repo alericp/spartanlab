@@ -129,11 +129,11 @@ export function WelcomeBanner() {
             and personalize your training as you go.
           </p>
           
-          {/* Primary CTA - Start Workout */}
-          <Link href="/workout/session">
+          {/* Primary CTA - Start First Session */}
+          <Link href="/first-session">
             <Button className="bg-[#C1121F] hover:bg-[#A30F1A] text-white gap-2">
               <Dumbbell className="w-4 h-4" />
-              Start First Workout
+              Start First Session
               <ArrowRight className="w-4 h-4" />
             </Button>
           </Link>
@@ -167,7 +167,7 @@ export function FirstWorkoutCTA() {
   }
 
   return (
-    <Link href="/workout/session" className="block">
+    <Link href="/first-session" className="block">
       <div className="bg-[#1A1F26] border border-[#2B313A] hover:border-[#C1121F]/30 rounded-xl p-4 transition-colors group">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -176,7 +176,7 @@ export function FirstWorkoutCTA() {
             </div>
             <div>
               <p className="text-[#E6E9EF] font-medium">Ready to train?</p>
-              <p className="text-sm text-[#6B7280]">Start your first workout</p>
+              <p className="text-sm text-[#6B7280]">Start your first session</p>
             </div>
           </div>
           <ChevronRight className="w-5 h-5 text-[#6B7280] group-hover:text-[#C1121F] transition-colors" />

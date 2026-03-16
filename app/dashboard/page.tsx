@@ -94,10 +94,12 @@ import { FirstRunGuide, SetupReminderBanner } from '@/components/dashboard/First
 import { UpdateMetricsCard, MetricsUpdateBanner } from '@/components/dashboard/UpdateMetricsCard'
 import { SafeWidget } from '@/components/shared/WidgetErrorBoundary'
 import { AchievementsSummaryCard } from '@/components/achievements/achievements-panel'
+import { ChallengesCard } from '@/components/challenges/challenges-panel'
 import { ChallengesSummaryCard } from '@/components/challenges/challenges-panel'
 import { useAuth } from '@clerk/nextjs'
 import { AchievementsCard } from '@/components/dashboard/AchievementsCard'
 import { AchievementNotification } from '@/components/achievements/AchievementNotification'
+import { SkillReadinessModule } from '@/components/readiness/SkillReadinessModule'
 import { LeaderboardPreviewCard } from '@/components/leaderboards/LeaderboardTabs'
 import { ChallengesCard } from '@/components/challenges/ChallengesCard'
 import { ProgressDashboard } from '@/components/dashboard/ProgressDashboard'
@@ -558,6 +560,24 @@ function DashboardContent() {
               <SkillProgressHeatmap maxSkills={6} />
             </SafeWidget>
           </div>
+        )}
+        
+        {/* ============================================================= */}
+        {/* SKILL READINESS - Component breakdown visualization */}
+        {/* Shows athletes their readiness level for major skills */}
+        {/* ============================================================= */}
+        
+        {!isEarlyStageUser && (
+          <Section id="skill-readiness" priority="secondary">
+            <SectionHeader 
+              title="Skill Readiness"
+              description="Visual breakdown of readiness for major skills"
+              icon={Target}
+            />
+            <SafeWidget name="SkillReadinessModule">
+              <SkillReadinessModule athleteId={userId} />
+            </SafeWidget>
+          </Section>
         )}
         
         {/* ============================================================= */}

@@ -11,8 +11,8 @@ import type { Metadata } from 'next'
 
 export const SITE_CONFIG = {
   name: 'SpartanLab',
-  tagline: 'Calisthenics Training Intelligence System',
-  description: 'Stop guessing your calisthenics training. SpartanLab analyzes your progress, finds your limiters, and tells you exactly what to train next.',
+  tagline: 'Adaptive Calisthenics Training Intelligence',
+  description: 'AI-powered calisthenics coaching that adapts to you. Skill readiness analysis, constraint detection, adaptive programming, and joint integrity protocols for front lever, planche, and muscle-up mastery.',
   url: 'https://spartanlab.app',
   defaultImage: '/og-default.png',
   twitterHandle: '@spartanlabapp',

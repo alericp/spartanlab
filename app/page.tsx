@@ -3,23 +3,23 @@ import { LandingPage } from '@/components/landing/LandingPage'
 import { SITE_CONFIG } from '@/lib/seo'
 
 export const metadata: Metadata = {
-  title: 'SpartanLab - Calisthenics Training Decision Engine',
-  description: 'Stop guessing your calisthenics training. SpartanLab analyzes your progress, finds your limiters, and tells you exactly what to train next. Like having a coach analyzing your training 24/7.',
-  keywords: ['calisthenics', 'bodyweight training', 'workout planner', 'fitness app', 'training program', 'front lever', 'planche', 'muscle up'],
+  title: 'SpartanLab - Adaptive Calisthenics Training Intelligence',
+  description: 'AI-powered calisthenics coaching that adapts to you. SpartanLab analyzes skill readiness, detects training constraints, and generates personalized programs with joint integrity protocols for front lever, planche, and muscle-up mastery.',
+  keywords: ['calisthenics training app', 'AI calisthenics coach', 'front lever training program', 'planche progression training', 'bodyweight strength program', 'adaptive workout program', 'muscle up progression', 'calisthenics skill training'],
   alternates: {
     canonical: SITE_CONFIG.url,
   },
   openGraph: {
-    title: 'SpartanLab - Calisthenics Training Decision Engine',
-    description: 'Stop guessing your calisthenics training. SpartanLab analyzes your progress, finds your limiters, and tells you exactly what to train next.',
+    title: 'SpartanLab - Adaptive Calisthenics Training Intelligence',
+    description: 'AI-powered calisthenics coaching. Skill readiness analysis, constraint detection, adaptive programming, and joint integrity protocols.',
     url: SITE_CONFIG.url,
     siteName: SITE_CONFIG.name,
     type: 'website',
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'SpartanLab - Calisthenics Training Decision Engine',
-    description: 'Stop guessing your calisthenics training. Get personalized coaching intelligence.',
+    title: 'SpartanLab - Adaptive Calisthenics Training Intelligence',
+    description: 'AI coaching for calisthenics. Skill readiness analysis, adaptive programming, and joint integrity protocols.',
   },
 }
 

@@ -1,9 +1,11 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { CheckCircle2, Calendar, Target, Dumbbell, X, TrendingUp, TrendingDown, Minus } from 'lucide-react'
+import Link from 'next/link'
+import { CheckCircle2, Calendar, Target, Dumbbell, X, TrendingUp, TrendingDown, Minus, Play, ArrowRight } from 'lucide-react'
 import { SpartanIcon } from '@/components/brand/SpartanLogo'
 import {
   generateFirstProgram,
@@ -239,13 +241,24 @@ export function WelcomeCard({ onDismiss, onProgramReady }: WelcomeCardProps) {
       )}
 
       {/* CTA */}
-      <div className="mt-4">
-        <Button
-          onClick={onDismiss}
-          className="w-full bg-[#C1121F] hover:bg-[#A30F1A] text-white"
-        >
-          Start Session
-        </Button>
+      <div className="mt-4 space-y-2">
+        <Link href="/first-session" className="block">
+          <Button
+            className="w-full bg-[#C1121F] hover:bg-[#A30F1A] text-white"
+          >
+            <Play className="w-4 h-4 mr-2" />
+            Start First Session
+          </Button>
+        </Link>
+        {onDismiss && (
+          <button
+            onClick={onDismiss}
+            className="w-full text-center text-sm text-[#6B7280] hover:text-[#A4ACB8] transition-colors py-2"
+          >
+            View Dashboard First
+            <ArrowRight className="w-4 h-4 inline ml-1" />
+          </button>
+        )}
       </div>
     </Card>
   )

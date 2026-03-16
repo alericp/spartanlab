@@ -472,13 +472,13 @@ function renderActionButton(state: WorkoutState) {
       )
     case 'first_workout':
       return (
-        <Link href="/workout/session">
+        <Link href="/first-session">
           <Button 
             size="lg" 
             className="bg-[#C1121F] hover:bg-[#A30F1A] text-white gap-2 font-semibold px-8"
           >
             <Play className="w-5 h-5" />
-            Start First Workout
+            Start First Session
             <ArrowRight className="w-4 h-4" />
           </Button>
         </Link>

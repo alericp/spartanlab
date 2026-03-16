@@ -9,6 +9,15 @@ import {
   type DifficultyLevel,
 } from './exercises'
 import type { AdaptiveExercise } from './adaptive-program-builder'
+import {
+  getSmartSubstitutions,
+  getBestSubstitution,
+  mapEquipmentArray,
+  type SmartSubstitution,
+  type EquipmentTag,
+  type SkillCarryover,
+} from './exercise-family-integration'
+import { getExerciseClassification } from './exercise-classification-registry'
 
 // =============================================================================
 // TYPES
@@ -266,6 +275,37 @@ export function getReplacementOptions(
   })
   
   return options.slice(0, 10) // Limit to 10 options
+}
+
+/**
+ * Get intelligent replacement options using the Movement Family Registry
+ * This is the enhanced version that preserves training intent and skill carryover
+ */
+export function getIntelligentReplacements(
+  exercise: AdaptiveExercise,
+  availableEquipment: string[] = ['pull_bar', 'dip_bars', 'floor', 'bands'],
+  targetSkill?: SkillCarryover
+): ReplacementOption[] {
+  // Try to find classification for this exercise
+  const classification = getExerciseClassification(exercise.id || exercise.name.toLowerCase().replace(/\s+/g, '_'))
+  
+  if (classification) {
+    // Use the smart substitution system
+    const equipmentTags = mapEquipmentArray(availableEquipment)
+    const smartSubs = getSmartSubstitutions(classification.id, equipmentTags, targetSkill)
+    
+    return smartSubs.map(sub => ({
+      id: sub.substitutionId,
+      name: sub.substitutionName,
+      category: classification.primaryFamily,
+      difficulty: getExerciseClassification(sub.substitutionId)?.difficulty || 'intermediate',
+      isRecommended: sub.familyPreserved && sub.intentPreserved,
+      reason: sub.reason,
+    })).slice(0, 10)
+  }
+  
+  // Fall back to original logic if no classification found
+  return getReplacementOptions(exercise, availableEquipment)
 }
 
 /**

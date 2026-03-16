@@ -40,23 +40,23 @@ interface OnboardingCompleteProps {
 const PRO_FEATURES = [
   {
     icon: RefreshCcw,
-    title: 'Adaptive Programming',
-    description: 'Training that adjusts to your progress, fatigue, and recovery',
+    title: 'Adaptive Program Generation',
+    description: 'Training that evolves based on skill readiness, constraints, and performance response',
   },
   {
     icon: BarChart3,
-    title: 'Performance Analytics',
-    description: 'Deep insights into your strength, skills, and consistency',
+    title: 'Constraint Detection Engine',
+    description: 'Identifies the specific factors limiting your skill progress',
   },
   {
     icon: Trophy,
-    title: 'Spartan Score Tracking',
-    description: 'Unified performance metric combining all your training data',
+    title: 'Joint Integrity Protocols',
+    description: 'Durability work integrated into every session to protect your joints',
   },
   {
     icon: TrendingUp,
-    title: 'Advanced Progression Logic',
-    description: 'Smart skill and strength progressions that accelerate results',
+    title: 'Performance Envelope Learning',
+    description: 'The engine learns your optimal rep ranges, volume tolerance, and fatigue thresholds',
   },
 ]
 
@@ -110,7 +110,8 @@ export function OnboardingComplete({ onContinue }: OnboardingCompleteProps) {
     if (onContinue) {
       onContinue()
     } else {
-      router.push('/dashboard')
+      // Route directly to first session ready page for immediate training
+      router.push('/first-session?from=onboarding')
     }
   }
 
@@ -471,7 +472,7 @@ export function OnboardingComplete({ onContinue }: OnboardingCompleteProps) {
           className="w-full bg-[#C1121F] hover:bg-[#A30F1A] text-white"
           size="lg"
         >
-          Start Session
+          Start First Session
           <ArrowRight className="w-4 h-4 ml-2" />
         </Button>
       </Card>

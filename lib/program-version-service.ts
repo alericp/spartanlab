@@ -1,0 +1,736 @@
+// Program Version Service
+// Manages program versioning and regeneration integrity
+// Ensures training continuity when programs update
+
+import { neon } from '@neondatabase/serverless'
+import type { UnifiedEngineContext } from './unified-coaching-engine'
+
+// =============================================================================
+// TYPES
+// =============================================================================
+
+export type ProgramVersionStatus = 'active' | 'archived' | 'superseded' | 'pending'
+
+export type GenerationReason =
+  | 'onboarding_initial_generation'
+  | 'settings_schedule_change'
+  | 'settings_equipment_change'
+  | 'settings_goal_change'
+  | 'settings_style_change'
+  | 'fatigue_deload'
+  | 'skill_priority_update'
+  | 'benchmark_update'
+  | 'adaptive_rebalance'
+  | 'manual_regeneration'
+  | 'injury_status_change'
+
+export interface ProgramVersion {
+  id: string
+  athleteId: string
+  versionNumber: number
+  status: ProgramVersionStatus
+  createdAt: string
+  supersededAt: string | null
+  generationReason: GenerationReason
+  sourceSnapshotId: string | null
+  
+  // Program summary
+  programSummary: ProgramSummary
+  
+  // Active flag (only one should be true per athlete)
+  activeFlag: boolean
+}
+
+export interface ProgramSummary {
+  primaryGoal: string
+  trainingDaysPerWeek: number
+  sessionDurationMinutes: number
+  styleMode: string
+  constraintFocus: string | null
+  equipment: string[]
+  generatedAt: string
+}
+
+export interface ProgramInputSnapshot {
+  id: string
+  athleteId: string
+  
+  // Profile snapshot
+  athleteProfileSnapshot: {
+    primaryGoal: string
+    secondaryGoals: string[]
+    trainingDaysPerWeek: number
+    sessionDurationMinutes: number
+    equipment: string[]
+    jointCautions: string[]
+    trainingAge: number
+    bodyWeight: number | null
+  }
+  
+  // Skill state snapshot
+  skillStateSnapshot: {
+    skills: Array<{
+      skill: string
+      currentLevel: string
+      readinessScore: number
+      limitingFactor: string | null
+    }>
+  }
+  
+  // Readiness snapshot
+  readinessSnapshot: {
+    overallReadiness: number
+    pullStrengthScore: number
+    pushStrengthScore: number
+    compressionScore: number
+    scapularControlScore: number
+    shoulderStabilityScore: number
+    mobilityScore: number
+  } | null
+  
+  // Constraint snapshot
+  constraintSnapshot: {
+    primaryConstraint: string | null
+    secondaryConstraint: string | null
+    strongQualities: string[]
+  }
+  
+  // Fatigue snapshot
+  fatigueSnapshot: {
+    fatigueLevel: string
+    recoveryScore: number
+    requiresDeload: boolean
+  }
+  
+  // Style snapshot
+  styleSnapshot: {
+    styleMode: string
+    priorities: {
+      skill: number
+      strength: number
+      power: number
+      endurance: number
+      hypertrophy: number
+    }
+  }
+  
+  createdAt: string
+}
+
+export interface RegenerationTrigger {
+  shouldRegenerate: boolean
+  reason: GenerationReason | null
+  explanation: string
+  changedFields: string[]
+  isStructuralChange: boolean  // true = new version, false = session adaptation only
+}
+
+// =============================================================================
+// CONSTANTS
+// =============================================================================
+
+const GENERATION_REASON_LABELS: Record<GenerationReason, string> = {
+  onboarding_initial_generation: 'Initial program created during onboarding',
+  settings_schedule_change: 'Program updated for your new schedule',
+  settings_equipment_change: 'Program adjusted for your equipment changes',
+  settings_goal_change: 'Program refocused on your new primary goal',
+  settings_style_change: 'Training approach updated to match your preferences',
+  fatigue_deload: 'Recovery-focused version created to support progress',
+  skill_priority_update: 'Skill focus adjusted based on your progress',
+  benchmark_update: 'Program calibrated to your updated strength levels',
+  adaptive_rebalance: 'Program rebalanced based on your training response',
+  manual_regeneration: 'Program regenerated at your request',
+  injury_status_change: 'Program adjusted for your injury status',
+}
+
+// =============================================================================
+// DATABASE OPERATIONS
+// =============================================================================
+
+function getDb() {
+  const connectionString = process.env.DATABASE_URL
+  if (!connectionString) {
+    throw new Error('DATABASE_URL not set')
+  }
+  return neon(connectionString)
+}
+
+/**
+ * Get active program version for an athlete
+ */
+export async function getActiveProgramVersion(
+  athleteId: string
+): Promise<ProgramVersion | null> {
+  const sql = getDb()
+  
+  try {
+    // Support both athlete_id (new) and user_id (legacy) column names
+    const result = await sql`
+      SELECT 
+        id,
+        COALESCE(athlete_id, user_id) as "athleteId",
+        version_number as "versionNumber",
+        status,
+        created_at as "createdAt",
+        superseded_at as "supersededAt",
+        generation_reason as "generationReason",
+        source_snapshot_id as "sourceSnapshotId",
+        COALESCE(program_summary, '{}'::jsonb) as "programSummary",
+        COALESCE(active_flag, status = 'active') as "activeFlag"
+      FROM program_versions
+      WHERE COALESCE(athlete_id, user_id) = ${athleteId}
+        AND (active_flag = true OR status = 'active')
+      LIMIT 1
+    `
+    
+    if (result.length === 0) return null
+    return result[0] as ProgramVersion
+  } catch {
+    // Table might not exist yet
+    return null
+  }
+}
+
+/**
+ * Get all program versions for an athlete (for history)
+ */
+export async function getProgramVersionHistory(
+  athleteId: string,
+  limit: number = 10
+): Promise<ProgramVersion[]> {
+  const sql = getDb()
+  
+  try {
+    const result = await sql`
+      SELECT 
+        id,
+        COALESCE(athlete_id, user_id) as "athleteId",
+        version_number as "versionNumber",
+        status,
+        created_at as "createdAt",
+        superseded_at as "supersededAt",
+        generation_reason as "generationReason",
+        source_snapshot_id as "sourceSnapshotId",
+        COALESCE(program_summary, '{}'::jsonb) as "programSummary",
+        COALESCE(active_flag, status = 'active') as "activeFlag"
+      FROM program_versions
+      WHERE COALESCE(athlete_id, user_id) = ${athleteId}
+      ORDER BY version_number DESC
+      LIMIT ${limit}
+    `
+    
+    return result as ProgramVersion[]
+  } catch {
+    return []
+  }
+}
+
+/**
+ * Get the next version number for an athlete
+ */
+async function getNextVersionNumber(athleteId: string): Promise<number> {
+  const sql = getDb()
+  
+  try {
+    const result = await sql`
+      SELECT COALESCE(MAX(version_number), 0) + 1 as "nextVersion"
+      FROM program_versions
+      WHERE athlete_id = ${athleteId}
+    `
+    return result[0]?.nextVersion || 1
+  } catch {
+    return 1
+  }
+}
+
+/**
+ * Create a new program version
+ */
+export async function createProgramVersion(
+  athleteId: string,
+  reason: GenerationReason,
+  summary: ProgramSummary,
+  snapshotId?: string
+): Promise<ProgramVersion> {
+  const sql = getDb()
+  
+  const versionNumber = await getNextVersionNumber(athleteId)
+  
+  // First, archive any existing active versions
+  await sql`
+    UPDATE program_versions
+    SET 
+      active_flag = false,
+      status = 'superseded',
+      superseded_at = NOW()
+    WHERE athlete_id = ${athleteId}
+      AND active_flag = true
+  `
+  
+  // Create the new version
+  const result = await sql`
+    INSERT INTO program_versions (
+      athlete_id,
+      version_number,
+      status,
+      generation_reason,
+      source_snapshot_id,
+      program_summary,
+      active_flag
+    ) VALUES (
+      ${athleteId},
+      ${versionNumber},
+      'active',
+      ${reason},
+      ${snapshotId || null},
+      ${JSON.stringify(summary)},
+      true
+    )
+    RETURNING
+      id,
+      athlete_id as "athleteId",
+      version_number as "versionNumber",
+      status,
+      created_at as "createdAt",
+      superseded_at as "supersededAt",
+      generation_reason as "generationReason",
+      source_snapshot_id as "sourceSnapshotId",
+      program_summary as "programSummary",
+      active_flag as "activeFlag"
+  `
+  
+  return result[0] as ProgramVersion
+}
+
+/**
+ * Create an input snapshot
+ */
+export async function createInputSnapshot(
+  athleteId: string,
+  context: UnifiedEngineContext
+): Promise<string> {
+  const sql = getDb()
+  
+  const snapshot: Omit<ProgramInputSnapshot, 'id' | 'createdAt'> = {
+    athleteId,
+    athleteProfileSnapshot: {
+      primaryGoal: context.athlete.primaryGoal,
+      secondaryGoals: context.athlete.secondaryGoals,
+      trainingDaysPerWeek: context.athlete.trainingDaysPerWeek,
+      sessionDurationMinutes: context.athlete.sessionDurationMinutes,
+      equipment: context.athlete.equipment,
+      jointCautions: context.athlete.jointCautions,
+      trainingAge: context.athlete.trainingAge,
+      bodyWeight: context.athlete.weightKg,
+    },
+    skillStateSnapshot: {
+      skills: context.skills.states.map(s => ({
+        skill: s.skill,
+        currentLevel: s.currentLevel,
+        readinessScore: s.readinessScore || 50,
+        limitingFactor: s.limitingFactor,
+      })),
+    },
+    readinessSnapshot: context.skills.readinessBreakdown
+      ? {
+          overallReadiness: context.skills.readinessBreakdown.overallScore,
+          pullStrengthScore: context.skills.readinessBreakdown.pullStrengthScore,
+          pushStrengthScore: context.skills.readinessBreakdown.pushStrengthScore,
+          compressionScore: context.skills.readinessBreakdown.compressionScore,
+          scapularControlScore: context.skills.readinessBreakdown.scapularControlScore,
+          shoulderStabilityScore: context.skills.readinessBreakdown.shoulderStabilityScore,
+          mobilityScore: context.skills.readinessBreakdown.mobilityScore,
+        }
+      : null,
+    constraintSnapshot: {
+      primaryConstraint: context.constraints.primaryConstraint || null,
+      secondaryConstraint: context.constraints.secondaryConstraint || null,
+      strongQualities: context.constraints.strongQualities || [],
+    },
+    fatigueSnapshot: {
+      fatigueLevel: context.fatigue.fatigueLevel,
+      recoveryScore: context.fatigue.recoveryScore,
+      requiresDeload: context.fatigue.requiresDeload,
+    },
+    styleSnapshot: {
+      styleMode: context.athlete.trainingStyle,
+      priorities: context.athlete.stylePriorities,
+    },
+  }
+  
+  const result = await sql`
+    INSERT INTO program_input_snapshots (
+      athlete_id,
+      athlete_profile_snapshot,
+      skill_state_snapshot,
+      readiness_snapshot,
+      constraint_snapshot,
+      fatigue_snapshot,
+      style_snapshot
+    ) VALUES (
+      ${athleteId},
+      ${JSON.stringify(snapshot.athleteProfileSnapshot)},
+      ${JSON.stringify(snapshot.skillStateSnapshot)},
+      ${JSON.stringify(snapshot.readinessSnapshot)},
+      ${JSON.stringify(snapshot.constraintSnapshot)},
+      ${JSON.stringify(snapshot.fatigueSnapshot)},
+      ${JSON.stringify(snapshot.styleSnapshot)}
+    )
+    RETURNING id
+  `
+  
+  return result[0].id
+}
+
+/**
+ * Get input snapshot by ID
+ */
+export async function getInputSnapshot(
+  snapshotId: string
+): Promise<ProgramInputSnapshot | null> {
+  const sql = getDb()
+  
+  try {
+    const result = await sql`
+      SELECT 
+        id,
+        athlete_id as "athleteId",
+        athlete_profile_snapshot as "athleteProfileSnapshot",
+        skill_state_snapshot as "skillStateSnapshot",
+        readiness_snapshot as "readinessSnapshot",
+        constraint_snapshot as "constraintSnapshot",
+        fatigue_snapshot as "fatigueSnapshot",
+        style_snapshot as "styleSnapshot",
+        created_at as "createdAt"
+      FROM program_input_snapshots
+      WHERE id = ${snapshotId}
+      LIMIT 1
+    `
+    
+    if (result.length === 0) return null
+    return result[0] as ProgramInputSnapshot
+  } catch {
+    return null
+  }
+}
+
+// =============================================================================
+// REGENERATION TRIGGER DETECTION
+// =============================================================================
+
+/**
+ * Check if settings changes should trigger program regeneration
+ */
+export function checkRegenerationTriggers(
+  oldSnapshot: ProgramInputSnapshot | null,
+  newContext: UnifiedEngineContext
+): RegenerationTrigger {
+  // No previous snapshot = first generation
+  if (!oldSnapshot) {
+    return {
+      shouldRegenerate: true,
+      reason: 'onboarding_initial_generation',
+      explanation: 'Creating your first training program.',
+      changedFields: [],
+      isStructuralChange: true,
+    }
+  }
+  
+  const changedFields: string[] = []
+  let reason: GenerationReason | null = null
+  let isStructuralChange = false
+  
+  const oldProfile = oldSnapshot.athleteProfileSnapshot
+  const newProfile = {
+    primaryGoal: newContext.athlete.primaryGoal,
+    trainingDaysPerWeek: newContext.athlete.trainingDaysPerWeek,
+    sessionDurationMinutes: newContext.athlete.sessionDurationMinutes,
+    equipment: newContext.athlete.equipment,
+    jointCautions: newContext.athlete.jointCautions,
+  }
+  
+  // Check for structural changes that require new version
+  
+  // Training days changed
+  if (oldProfile.trainingDaysPerWeek !== newProfile.trainingDaysPerWeek) {
+    changedFields.push('trainingDaysPerWeek')
+    reason = 'settings_schedule_change'
+    isStructuralChange = true
+  }
+  
+  // Session duration changed significantly (more than 10 minutes)
+  if (Math.abs(oldProfile.sessionDurationMinutes - newProfile.sessionDurationMinutes) > 10) {
+    changedFields.push('sessionDurationMinutes')
+    if (!reason) reason = 'settings_schedule_change'
+    isStructuralChange = true
+  }
+  
+  // Primary goal changed
+  if (oldProfile.primaryGoal !== newProfile.primaryGoal) {
+    changedFields.push('primaryGoal')
+    reason = 'settings_goal_change'
+    isStructuralChange = true
+  }
+  
+  // Equipment changed significantly
+  const oldEquipment = new Set(oldProfile.equipment)
+  const newEquipment = new Set(newProfile.equipment)
+  const equipmentAdded = [...newEquipment].filter(e => !oldEquipment.has(e))
+  const equipmentRemoved = [...oldEquipment].filter(e => !newEquipment.has(e))
+  if (equipmentAdded.length > 0 || equipmentRemoved.length > 0) {
+    changedFields.push('equipment')
+    if (!reason) reason = 'settings_equipment_change'
+    // Only structural if major equipment (bars, rings) changed
+    const majorEquipment = ['pull_bar', 'dip_bars', 'rings', 'weight_belt']
+    const majorChange = [...equipmentAdded, ...equipmentRemoved].some(e => 
+      majorEquipment.includes(e)
+    )
+    if (majorChange) isStructuralChange = true
+  }
+  
+  // Injury status changed
+  const oldCautions = new Set(oldProfile.jointCautions)
+  const newCautions = new Set(newProfile.jointCautions)
+  const cautionsAdded = [...newCautions].filter(c => !oldCautions.has(c))
+  const cautionsRemoved = [...oldCautions].filter(c => !newCautions.has(c))
+  if (cautionsAdded.length > 0 || cautionsRemoved.length > 0) {
+    changedFields.push('jointCautions')
+    if (!reason) reason = 'injury_status_change'
+    isStructuralChange = true
+  }
+  
+  // Style changed
+  const oldStyle = oldSnapshot.styleSnapshot.styleMode
+  const newStyle = newContext.athlete.trainingStyle
+  if (oldStyle !== newStyle) {
+    changedFields.push('trainingStyle')
+    if (!reason) reason = 'settings_style_change'
+    isStructuralChange = true
+  }
+  
+  // Fatigue-triggered deload
+  if (newContext.fatigue.requiresDeload && !oldSnapshot.fatigueSnapshot.requiresDeload) {
+    changedFields.push('fatigueState')
+    if (!reason) reason = 'fatigue_deload'
+    isStructuralChange = true
+  }
+  
+  // Build explanation
+  let explanation = ''
+  if (reason) {
+    explanation = GENERATION_REASON_LABELS[reason]
+  }
+  
+  return {
+    shouldRegenerate: isStructuralChange && changedFields.length > 0,
+    reason: isStructuralChange ? reason : null,
+    explanation,
+    changedFields,
+    isStructuralChange,
+  }
+}
+
+/**
+ * Check if a change is session-level (doesn't need new version) vs structural
+ */
+export function isSessionLevelChange(changes: string[]): boolean {
+  // These changes can be handled at session level without new version
+  const sessionLevelChanges = [
+    'singleExerciseSkip',
+    'singleSessionOverride',
+    'minorTimeAdjustment',
+    'singleProgressionChange',
+  ]
+  
+  return changes.every(c => sessionLevelChanges.includes(c))
+}
+
+// =============================================================================
+// VERSION MANAGEMENT
+// =============================================================================
+
+/**
+ * Create initial program version on onboarding completion
+ */
+export async function createInitialProgramVersion(
+  athleteId: string,
+  context: UnifiedEngineContext
+): Promise<ProgramVersion> {
+  // Create input snapshot
+  const snapshotId = await createInputSnapshot(athleteId, context)
+  
+  // Create version
+  const summary: ProgramSummary = {
+    primaryGoal: context.athlete.primaryGoal,
+    trainingDaysPerWeek: context.athlete.trainingDaysPerWeek,
+    sessionDurationMinutes: context.athlete.sessionDurationMinutes,
+    styleMode: context.athlete.trainingStyle,
+    constraintFocus: context.constraints.primaryConstraint || null,
+    equipment: context.athlete.equipment,
+    generatedAt: new Date().toISOString(),
+  }
+  
+  return createProgramVersion(
+    athleteId,
+    'onboarding_initial_generation',
+    summary,
+    snapshotId
+  )
+}
+
+/**
+ * Regenerate program with new version if needed
+ */
+export async function regenerateProgramIfNeeded(
+  athleteId: string,
+  context: UnifiedEngineContext,
+  manualReason?: GenerationReason
+): Promise<{
+  regenerated: boolean
+  version: ProgramVersion | null
+  explanation: string
+}> {
+  // Get current active version
+  const currentVersion = await getActiveProgramVersion(athleteId)
+  
+  // Get the snapshot from current version
+  const oldSnapshot = currentVersion?.sourceSnapshotId
+    ? await getInputSnapshot(currentVersion.sourceSnapshotId)
+    : null
+  
+  // Check if regeneration is needed
+  const trigger = manualReason
+    ? { shouldRegenerate: true, reason: manualReason, explanation: GENERATION_REASON_LABELS[manualReason], changedFields: [], isStructuralChange: true }
+    : checkRegenerationTriggers(oldSnapshot, context)
+  
+  if (!trigger.shouldRegenerate || !trigger.reason) {
+    return {
+      regenerated: false,
+      version: currentVersion,
+      explanation: 'No structural changes detected. Current program remains active.',
+    }
+  }
+  
+  // Create new snapshot
+  const snapshotId = await createInputSnapshot(athleteId, context)
+  
+  // Create new version
+  const summary: ProgramSummary = {
+    primaryGoal: context.athlete.primaryGoal,
+    trainingDaysPerWeek: context.athlete.trainingDaysPerWeek,
+    sessionDurationMinutes: context.athlete.sessionDurationMinutes,
+    styleMode: context.athlete.trainingStyle,
+    constraintFocus: context.constraints.primaryConstraint || null,
+    equipment: context.athlete.equipment,
+    generatedAt: new Date().toISOString(),
+  }
+  
+  const newVersion = await createProgramVersion(
+    athleteId,
+    trigger.reason,
+    summary,
+    snapshotId
+  )
+  
+  return {
+    regenerated: true,
+    version: newVersion,
+    explanation: trigger.explanation,
+  }
+}
+
+// =============================================================================
+// COACHING EXPLANATION HELPERS
+// =============================================================================
+
+/**
+ * Get user-friendly explanation for a generation reason
+ */
+export function getRegenerationExplanation(reason: GenerationReason): string {
+  return GENERATION_REASON_LABELS[reason] || 'Your program was updated.'
+}
+
+/**
+ * Get short coaching message for version change
+ */
+export function getVersionChangeMessage(
+  oldVersion: ProgramVersion | null,
+  newVersion: ProgramVersion
+): string {
+  if (!oldVersion) {
+    return 'Your training program has been created.'
+  }
+  
+  const reason = newVersion.generationReason
+  
+  switch (reason) {
+    case 'settings_schedule_change':
+      return `Your program was updated for ${newVersion.programSummary.trainingDaysPerWeek} training days per week.`
+    case 'settings_equipment_change':
+      return 'Your program was adjusted for your updated equipment.'
+    case 'settings_goal_change':
+      return `Your program now focuses on ${newVersion.programSummary.primaryGoal.replace(/_/g, ' ')}.`
+    case 'settings_style_change':
+      return 'Your training approach has been updated.'
+    case 'fatigue_deload':
+      return 'A recovery-focused program was created to support your progress.'
+    case 'injury_status_change':
+      return 'Your program was adjusted for your injury status.'
+    default:
+      return getRegenerationExplanation(reason)
+  }
+}
+
+/**
+ * Compare two versions for display
+ */
+export function compareVersions(
+  oldVersion: ProgramVersion,
+  newVersion: ProgramVersion
+): {
+  changes: Array<{ field: string; old: string; new: string }>
+  summary: string
+} {
+  const changes: Array<{ field: string; old: string; new: string }> = []
+  
+  const oldSummary = oldVersion.programSummary
+  const newSummary = newVersion.programSummary
+  
+  if (oldSummary.trainingDaysPerWeek !== newSummary.trainingDaysPerWeek) {
+    changes.push({
+      field: 'Training days',
+      old: `${oldSummary.trainingDaysPerWeek} days/week`,
+      new: `${newSummary.trainingDaysPerWeek} days/week`,
+    })
+  }
+  
+  if (oldSummary.primaryGoal !== newSummary.primaryGoal) {
+    changes.push({
+      field: 'Primary goal',
+      old: oldSummary.primaryGoal.replace(/_/g, ' '),
+      new: newSummary.primaryGoal.replace(/_/g, ' '),
+    })
+  }
+  
+  if (oldSummary.styleMode !== newSummary.styleMode) {
+    changes.push({
+      field: 'Training style',
+      old: oldSummary.styleMode.replace(/_/g, ' '),
+      new: newSummary.styleMode.replace(/_/g, ' '),
+    })
+  }
+  
+  if (oldSummary.constraintFocus !== newSummary.constraintFocus) {
+    changes.push({
+      field: 'Focus area',
+      old: oldSummary.constraintFocus?.replace(/_/g, ' ') || 'balanced',
+      new: newSummary.constraintFocus?.replace(/_/g, ' ') || 'balanced',
+    })
+  }
+  
+  const summary = changes.length > 0
+    ? `${changes.length} change${changes.length > 1 ? 's' : ''} from v${oldVersion.versionNumber} to v${newVersion.versionNumber}`
+    : 'No visible changes'
+  
+  return { changes, summary }
+}

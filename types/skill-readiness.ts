@@ -4,6 +4,38 @@
 import type { SkillName, ExerciseType } from './domain'
 
 // =============================================================================
+// READINESS VISUALIZATION TYPES
+// =============================================================================
+
+/**
+ * Skill readiness data with component breakdown
+ */
+export interface SkillReadiness {
+  id: string
+  athleteId: string
+  skill: 'front_lever' | 'planche' | 'hspu' | 'muscle_up' | 'l_sit'
+  readinessScore: number
+  pullStrengthScore: number
+  compressionScore: number
+  scapularControlScore: number
+  straightArmScore: number
+  mobilityScore: number
+  limitingFactor: string
+  lastUpdated: string
+}
+
+/**
+ * Historical readiness snapshots for tracking progress
+ */
+export interface ReadinessSnapshot {
+  id: string
+  athleteId: string
+  skill: string
+  readinessScore: number
+  snapshotDate: string
+}
+
+// =============================================================================
 // SKILL SESSION & HOLD TYPES
 // =============================================================================
 

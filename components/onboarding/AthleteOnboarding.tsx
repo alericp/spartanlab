@@ -182,13 +182,13 @@ const SECTIONS: Section[] = [
   {
     id: 'athlete_profile',
     title: 'About You',
-    subtitle: 'Tell us a little about yourself so we can tailor training to you',
+    subtitle: 'Your profile helps the engine calibrate strength standards and leverage expectations',
     icon: User,
   },
   {
     id: 'readiness',
     title: 'Quick Calibration',
-    subtitle: 'A few quick questions to fine-tune your program',
+    subtitle: 'These questions help the adaptive engine personalize your starting point',
     icon: Activity,
   },
   {
@@ -232,13 +232,13 @@ const SECTIONS: Section[] = [
   {
     id: 'strength_benchmarks',
     title: 'Current Strength',
-    subtitle: 'These numbers help us set the right training intensity for you',
+    subtitle: 'Strength data feeds the constraint detection engine to identify your limiters',
     icon: Dumbbell,
   },
   {
     id: 'skill_benchmarks',
     title: 'Skill Levels',
-    subtitle: 'Your current abilities help us select the right progressions',
+    subtitle: 'Current skill levels determine readiness scores and progression paths',
     icon: Zap,
     showIf: (profile) => profile.selectedSkills.length > 0,
   },
@@ -252,7 +252,7 @@ const SECTIONS: Section[] = [
   {
     id: 'equipment',
     title: 'Your Equipment',
-    subtitle: 'We\'ll only program exercises you can actually do',
+    subtitle: 'Equipment-aware programming ensures every exercise fits your setup',
     icon: Settings,
   },
   {
@@ -264,13 +264,13 @@ const SECTIONS: Section[] = [
   {
     id: 'recovery',
     title: 'Recovery & Lifestyle',
-    subtitle: 'Sleep and stress affect how hard we can push you',
+    subtitle: 'Recovery data shapes volume tolerance and adaptive deload triggers',
     icon: Heart,
   },
   {
     id: 'review',
     title: 'Review & Confirm',
-    subtitle: 'Make sure everything looks right before we build your program',
+    subtitle: 'The adaptive engine will generate your personalized training program',
     icon: CheckCircle2,
   },
 ]

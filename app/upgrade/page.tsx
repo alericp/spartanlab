@@ -49,33 +49,33 @@ const PRO_FEATURE_IDS: PremiumFeatureId[] = [
 const VALUE_HIGHLIGHTS = [
   {
     icon: Brain,
-    title: 'Adaptive Program Adjustments',
-    description: 'Your program evolves automatically based on your performance, fatigue, and recovery signals.',
+    title: 'Skill Readiness Analysis',
+    description: 'Component-level analysis of what specifically limits your front lever, planche, or muscle-up progress.',
   },
   {
     icon: BarChart3,
-    title: 'Deeper Performance Insights',
-    description: 'See what is actually limiting your progress and how to address it.',
+    title: 'Constraint Detection Engine',
+    description: 'Identifies strength gaps, mobility deficits, or stability needs blocking your skill development.',
   },
   {
     icon: Target,
-    title: 'Skill Progression Intelligence',
-    description: 'Know exactly when you are ready to progress and which weak points to target.',
+    title: 'Adaptive Program Generation',
+    description: 'Programs that evolve based on readiness, performance response, and fatigue signals.',
   },
   {
     icon: TrendingUp,
-    title: 'Progress Forecasting',
-    description: 'Estimated timelines for your next skill milestone based on current progress velocity.',
+    title: 'Performance Envelope Learning',
+    description: 'The engine learns your optimal rep ranges, volume tolerance, and fatigue thresholds.',
   },
   {
     icon: Activity,
-    title: 'Advanced Fatigue Intelligence',
-    description: 'Deep fatigue analysis with recovery predictions and deload timing.',
+    title: 'Joint Integrity Protocols',
+    description: 'Durability work for wrists, elbows, shoulders, and scapulae integrated into every session.',
   },
   {
     icon: Zap,
-    title: 'Daily Training Adjustments',
-    description: 'Personalized workout modifications based on your current readiness state.',
+    title: 'Training Style Personalization',
+    description: 'Skill-focused, strength-focused, or hypertrophy-supported approaches while preserving progression logic.',
   },
 ]
 

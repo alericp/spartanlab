@@ -18,95 +18,95 @@ import {
 
 const FEATURES = [
   {
-    id: 'skills',
+    id: 'readiness',
     icon: Target,
-    title: 'Skill Progression Tracking',
-    description: 'Track your progress across the most demanding calisthenics skills with visual progression maps.',
+    title: 'Skill Readiness Analysis',
+    description: 'SpartanLab analyzes your readiness for front lever, planche, muscle-up, HSPU, back lever, and L-sit.',
     benefits: [
-      'Track planche, front lever, muscle-up, and handstand push-up',
-      'Visual progression from foundation to mastery',
-      'Log practice sessions and hold times',
-      'See your progression history over time'
+      'Component-level readiness scoring (pull strength, compression, stability)',
+      'Identifies the specific factor limiting your skill progress',
+      'Tracks progression from foundation to mastery',
+      'Real-time readiness updates as you train'
     ],
-    highlight: 'From tuck to full - every step is tracked.'
+    highlight: 'Know exactly what limits your progress.'
   },
   {
-    id: 'strength',
-    icon: Dumbbell,
-    title: 'Weighted Strength Tracking',
-    description: 'Monitor your weighted calisthenics performance with automatic 1RM calculations.',
+    id: 'adaptive',
+    icon: TrendingUp,
+    title: 'Adaptive Program Generation',
+    description: 'Programs that evolve based on your performance, not fixed timelines.',
     benefits: [
-      'Track weighted pull-ups, dips, and muscle-ups',
-      'Automatic 1RM estimation using proven formulas',
-      'Log sets, reps, and weights for each session',
-      'View strength progression charts over time'
+      'Programs adjust to readiness, fatigue, and training response',
+      'Performance envelope learning personalizes volume and intensity',
+      'Equipment-aware exercise selection',
+      'Automatic deload detection when needed'
     ],
-    highlight: 'Know exactly how strong you are.'
+    highlight: 'Your program evolves as your performance changes.'
   },
   {
-    id: 'programs',
+    id: 'constraints',
+    icon: Crosshair,
+    title: 'Constraint Detection Engine',
+    description: 'Identifies the specific strength gaps, mobility deficits, or stability needs blocking your progress.',
+    benefits: [
+      'Analyzes pulling, pushing, compression, and straight-arm strength',
+      'Detects mobility and stability limitations',
+      'Prioritizes training to solve the real bottleneck',
+      'Explains why you are stuck and what to do'
+    ],
+    highlight: 'Training that solves your actual limiters.'
+  },
+  {
+    id: 'protocols',
+    icon: Activity,
+    title: 'Joint Integrity Protocols',
+    description: 'Durability protocols protect your joints while you train advanced skills.',
+    benefits: [
+      'Wrist, elbow, shoulder, and scapular preparation',
+      'Integrated into warmups and recovery',
+      'Adapts based on training load and joint stress',
+      'Longevity-focused injury prevention'
+    ],
+    highlight: 'Protect your joints. Train for decades.'
+  },
+  {
+    id: 'style',
     icon: Calendar,
-    title: 'Program Builder',
-    description: 'Create structured training programs tailored to your goals, level, and schedule.',
+    title: 'Training Style Personalization',
+    description: 'Supports different training approaches while preserving skill development.',
     benefits: [
-      'Generate programs based on your target skill',
-      'Customize training days per week',
-      'Balance skill work and strength training',
-      'Track program completion and adherence'
+      'Skill-focused, strength-focused, or balanced approaches',
+      'Power/explosive and endurance/density options',
+      'Hypertrophy-supported calisthenics available',
+      'Style layered on top of prerequisite logic'
     ],
-    highlight: 'Train with structure, not randomness.'
+    highlight: 'Train your way. Same intelligent coaching.'
   },
   {
     id: 'workouts',
     icon: ClipboardList,
-    title: 'Workout Logging',
-    description: 'Record every training session with detailed exercise logging and notes.',
+    title: 'Intelligent Workout Logging',
+    description: 'Every logged workout feeds back into the coaching engine.',
     benefits: [
-      'Quick session logging with exercise templates',
-      'Track sets, reps, load, and hold times',
-      'Add notes and session ratings',
-      'Build your complete training history'
+      'Performance data improves future programming',
+      'Fatigue signals trigger adaptive adjustments',
+      'Skill progress tracked automatically',
+      'Complete training history preserved'
     ],
-    highlight: 'Every rep counts. Every session matters.'
-  },
-  {
-    id: 'recovery',
-    icon: Activity,
-    title: 'Volume & Recovery Analyzer',
-    description: 'Understand your training load and get recovery insights based on your workout patterns.',
-    benefits: [
-      'Analyze weekly training volume by category',
-      'Monitor push/pull balance ratio',
-      'Get recovery readiness signals',
-      'Receive training balance insights'
-    ],
-    highlight: 'Train hard. Recover smarter.'
+    highlight: 'The system learns from your real training.'
   },
   {
     id: 'score',
-    icon: TrendingUp,
+    icon: Dumbbell,
     title: 'Spartan Strength Score',
-    description: 'Your unified performance metric combining skill progress, weighted strength, and consistency.',
+    description: 'Your unified performance metric combining skill progress, strength, and consistency.',
     benefits: [
-      'Single score from 0-100 reflecting total performance',
-      'Weighted formula: 40% skills + 40% strength + 20% consistency',
-      'Progress from Novice to Elite tier',
-      'Score updates automatically as you train'
+      'Score from 0-1000 reflecting total calisthenics performance',
+      'Combines skills, weighted strength, and training momentum',
+      'Progress through Novice to Elite tiers',
+      'Compare with community benchmarks'
     ],
     highlight: 'One number. Total performance clarity.'
-  },
-  {
-    id: 'goals',
-    icon: Crosshair,
-    title: 'Goal Projection Engine',
-    description: 'Get estimated timelines for reaching your next skill and strength milestones.',
-    benefits: [
-      'Projections for all tracked skills and lifts',
-      'Estimates adjusted by your consistency score',
-      'Time ranges instead of false precision dates',
-      'Know what is achievable and when'
-    ],
-    highlight: 'See how far you can go.'
   }
 ]
 
@@ -119,10 +119,10 @@ export default function FeaturesPage() {
       <section className="pt-32 pb-16 sm:pt-40 sm:pb-20">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 text-center">
           <h1 className="text-4xl sm:text-5xl font-bold tracking-tight mb-6">
-            Platform Features
+            Adaptive Athlete Engine
           </h1>
           <p className="text-lg sm:text-xl text-[#A5A5A5] max-w-2xl mx-auto">
-            Every tool you need to track, analyze, and optimize your calisthenics training. Built by athletes, for athletes.
+            AI coaching intelligence that analyzes, adapts, and protects. Built specifically for advanced calisthenics skill development.
           </p>
         </div>
       </section>

@@ -35,31 +35,31 @@ function HeroSection() {
         {/* Badge */}
         <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[#C1121F]/10 border border-[#C1121F]/20 mb-8">
           <SpartanIcon size={18} />
-          <span className="text-sm text-[#C1121F] font-medium">Adaptive Calisthenics Coach</span>
+          <span className="text-sm text-[#C1121F] font-medium">Adaptive Training Intelligence</span>
         </div>
         
         <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold leading-tight mb-6 text-balance">
-          Train Smarter With an{' '}
-          <span className="text-[#C1121F]">Adaptive Coach</span>
+          AI Coaching for{' '}
+          <span className="text-[#C1121F]">Advanced Calisthenics</span>
         </h1>
         
         <p className="text-lg sm:text-xl text-[#A4ACB8] max-w-2xl mx-auto mb-10 leading-relaxed text-pretty">
-          SpartanLab analyzes your strength, skills, and recovery to generate the most effective calisthenics workouts for your goals.
+          SpartanLab analyzes your skill readiness, detects what limits your progress, and generates programs that adapt as your performance changes.
         </p>
         
         {/* Trust Signals */}
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4 sm:gap-8 mb-10">
           <div className="flex items-center gap-2 text-sm text-[#A4ACB8]">
             <CheckCircle2 className="w-4 h-4 text-[#C1121F]" />
-            <span>Skill-based training</span>
+            <span>Skill readiness analysis</span>
           </div>
           <div className="flex items-center gap-2 text-sm text-[#A4ACB8]">
             <CheckCircle2 className="w-4 h-4 text-[#C1121F]" />
-            <span>Adaptive programming</span>
+            <span>Constraint detection</span>
           </div>
           <div className="flex items-center gap-2 text-sm text-[#A4ACB8]">
             <CheckCircle2 className="w-4 h-4 text-[#C1121F]" />
-            <span>Calisthenics focused</span>
+            <span>Joint integrity protocols</span>
           </div>
         </div>
         
@@ -129,22 +129,22 @@ function HowItWorksSection() {
   const steps = [
     {
       number: '1',
-      title: 'Analyze Your Strength',
-      description: 'Use SpartanLab tools to measure pulling strength, pushing strength, and skill readiness.',
+      title: 'Profile Your Athleticism',
+      description: 'SpartanLab builds your athlete profile by analyzing strength benchmarks, skill experience, equipment, and training preferences.',
       icon: Gauge,
       color: '#4F6D8A',
     },
     {
       number: '2',
-      title: 'Identify Weak Points',
-      description: 'The platform analyzes your performance data and identifies the strength gaps preventing skill progress.',
+      title: 'Detect Your Constraints',
+      description: 'The Constraint Detection Engine identifies the specific factors limiting your skill progress: strength gaps, mobility deficits, or stability needs.',
       icon: Brain,
       color: '#C1121F',
     },
     {
       number: '3',
-      title: 'Generate Smarter Training',
-      description: 'The Adaptive Training Engine generates a program designed for your current ability and adjusts it as you improve.',
+      title: 'Generate Adaptive Programs',
+      description: 'The engine generates personalized training with joint integrity protocols that evolves based on your performance and recovery signals.',
       icon: Cpu,
       color: '#FFD700',
     },
@@ -155,10 +155,10 @@ function HowItWorksSection() {
       <div className="max-w-5xl mx-auto">
         <div className="text-center mb-16">
           <h2 className="text-3xl sm:text-4xl font-bold mb-4">
-            How SpartanLab <span className="text-[#C1121F]">Works</span>
+            The Adaptive <span className="text-[#C1121F]">Athlete Engine</span>
           </h2>
           <p className="text-[#A4ACB8] max-w-2xl mx-auto">
-            Three steps to smarter calisthenics training.
+            How SpartanLab coaches like an elite calisthenics trainer.
           </p>
         </div>
         
@@ -208,10 +208,10 @@ function IntelligencePreviewSection() {
       <div className="max-w-5xl mx-auto">
         <div className="text-center mb-12">
           <h2 className="text-3xl sm:text-4xl font-bold mb-4">
-            Know Your Training <span className="text-[#C1121F]">State</span>
+            Coaching <span className="text-[#C1121F]">Intelligence</span>
           </h2>
           <p className="text-[#A4ACB8] max-w-2xl mx-auto">
-            The Athlete Intelligence dashboard gives you immediate clarity on what's happening with your training.
+            SpartanLab analyzes your performance data to provide real coaching insight, not just workout tracking.
           </p>
         </div>
         
@@ -449,12 +449,12 @@ function PricingSection() {
             <ul className="space-y-3 mb-6">
               {[
                 'Everything in Free',
-                'Adaptive Program Builder',
-                'Daily Training Adjustments',
-                'Limiter Correction Programs',
-                'Deload Detection & Timing',
-                'Equipment-Based Programming',
-                'Advanced Progression Planning',
+                'Skill Readiness Analysis',
+                'Adaptive Program Generation',
+                'Constraint Detection Engine',
+                'Joint Integrity Protocols',
+                'Equipment-Aware Programming',
+                'Training Style Personalization',
               ].map((item, i) => (
                 <li key={i} className="flex items-center gap-3 text-sm text-[#A4ACB8]">
                   <CheckCircle2 className="w-4 h-4 text-[#C1121F] flex-shrink-0" />
@@ -482,19 +482,19 @@ function PlatformValueSection() {
       <div className="max-w-4xl mx-auto">
         <div className="text-center mb-12">
           <h2 className="text-3xl sm:text-4xl font-bold mb-4">
-            A Training <span className="text-[#C1121F]">Intelligence System</span>
+            Calisthenics-First <span className="text-[#C1121F]">Intelligence</span>
           </h2>
         </div>
         
         <div className="space-y-6 text-lg text-[#A4ACB8] max-w-2xl mx-auto text-center">
           <p>
-            Most athletes follow generic programs or random workouts.
+            SpartanLab is built specifically for calisthenics skill development, not generic fitness.
           </p>
           <p>
-            SpartanLab analyzes your training performance and identifies the most effective exercises and progressions for your goals.
+            The engine understands prerequisite strength, joint preparation, and skill-specific readiness for front lever, planche, muscle-up, and handstand push-up training.
           </p>
           <p className="text-[#E6E9EF] font-medium">
-            Instead of guessing what to train next, you receive data-driven recommendations.
+            Your program adapts based on real performance data, not fixed timelines.
           </p>
         </div>
       </div>
@@ -511,10 +511,10 @@ function FinalCTASection() {
           <SpartanIcon size={32} />
         </div>
         <h2 className="text-3xl sm:text-4xl font-bold mb-4">
-          Start Training <span className="text-[#C1121F]">Smarter</span>
+          Train With <span className="text-[#C1121F]">Intelligence</span>
         </h2>
         <p className="text-lg text-[#A4ACB8] mb-8 max-w-xl mx-auto">
-          Generate your first calisthenics training program and start making data-driven progress.
+          Let the Adaptive Athlete Engine analyze your readiness and generate a program designed specifically for you.
         </p>
         <Button asChild size="lg" className="bg-[#C1121F] hover:bg-[#A30F1A] text-white px-8 py-6 text-lg">
           <Link href="/programs">
@@ -544,7 +544,7 @@ function Footer() {
           </div>
         </div>
         <div className="mt-8 pt-8 border-t border-[#2B313A] text-center text-sm text-[#6B7280]">
-          <p>The Calisthenics Training Decision Engine. Built for athletes who want results, not guesswork.</p>
+          <p>Adaptive Calisthenics Training Intelligence. Skill readiness analysis, constraint detection, and joint integrity protocols.</p>
         </div>
       </div>
     </footer>

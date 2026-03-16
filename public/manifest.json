@@ -1,7 +1,7 @@
 {
-  "name": "SpartanLab - Calisthenics Training Engine",
+  "name": "SpartanLab - Adaptive Calisthenics Training Intelligence",
   "short_name": "SpartanLab",
-  "description": "Your personal calisthenics training decision engine. Get intelligent workout recommendations based on your progress and goals.",
+  "description": "AI-powered calisthenics coaching. Skill readiness analysis, constraint detection, adaptive programming, and joint integrity protocols.",
   "start_url": "/dashboard",
   "display": "standalone",
   "background_color": "#0b0b0b",

@@ -1,5 +1,5 @@
 import { getAthleteProfile } from '@/lib/data-service'
-import { calculateSkillReadiness } from '@/lib/readiness/skill-readiness'
+import { calculateSkillReadinessLegacy } from '@/lib/readiness/canonical-readiness-engine'
 import { saveSkillReadiness } from '@/lib/readiness-service'
 import type { WorkoutLog } from '@/lib/workout-log-service'
 
@@ -23,7 +23,7 @@ export async function recalculateAthleteReadiness(athleteId: string) {
     const skills = ['front_lever', 'planche', 'hspu', 'muscle_up', 'l_sit'] as const
 
     for (const skill of skills) {
-      const readiness = calculateSkillReadiness(skill, profile)
+      const readiness = calculateSkillReadinessLegacy(skill, profile)
 
       if (readiness) {
         await saveSkillReadiness(athleteId, skill, {

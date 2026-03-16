@@ -1,6 +1,9 @@
 // Constraint Detection Engine
 // Elite calisthenics coaching logic for identifying true limiting factors
-// Integrates with AthleteProfile, SkillState, readiness engine, and fatigue detection
+// Integrates with AthleteProfile, SkillState, CANONICAL readiness engine, and fatigue detection
+// 
+// IMPORTANT: This engine consumes readiness from the canonical readiness engine.
+// All readiness data comes through readiness-service which stores canonical calculations.
 
 import { getAthleteProfile, type AthleteProfile } from './data-service'
 import { getWorkoutLogs, type WorkoutLog } from './workout-log-service'
@@ -8,6 +11,7 @@ import { getSkillReadiness, getAthleteSkillReadiness, type SkillReadinessData } 
 import { getQuickFatigueDecision, type TrainingDecision } from './fatigue-decision-engine'
 import { analyzeConstraints, type ConstraintResult } from './constraint-engine'
 import type { SkillState } from './skill-state-service'
+import type { LimitingFactor } from './readiness/canonical-readiness-engine'
 
 // =============================================================================
 // CONSTRAINT CATEGORIES

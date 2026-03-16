@@ -544,18 +544,16 @@ export function getCoachExplanation(topic: 'session' | 'limiter' | 'progression'
 // =============================================================================
 // SKILL READINESS COACHING INTEGRATION
 // =============================================================================
+// Uses the CANONICAL READINESS ENGINE for all skill readiness calculations
+// to ensure consistency across all surfaces (dashboard, coaching, calculators)
 
 import {
-  calculateFrontLeverReadiness,
-  calculatePlancheReadiness,
-  calculateMuscleUpReadiness,
-  calculateHSPUReadiness,
-  type ReadinessResult,
-  type FrontLeverInputs,
-  type PlancheInputs,
-  type MuscleUpInputs,
-  type HSPUInputs,
-} from './readiness/skill-readiness'
+  calculateCanonicalReadiness,
+  getLimiterExplanation,
+  type CanonicalReadinessResult,
+  type SkillType,
+  type AthleteReadinessInput,
+} from './readiness/canonical-readiness-engine'
 import { getStrengthRecords } from './strength-service'
 
 export interface SkillReadinessCoachingInsight {
@@ -570,7 +568,7 @@ export interface SkillReadinessCoachingInsight {
 
 /**
  * Get skill-specific coaching insights based on the user's current strength data
- * and skill goals. This integrates the readiness calculators into the coaching system.
+ * and skill goals. Uses the CANONICAL READINESS ENGINE for consistent calculations.
  */
 export function getSkillReadinessCoachingInsights(skillGoals: string[]): SkillReadinessCoachingInsight[] {
   const insights: SkillReadinessCoachingInsight[] = []
@@ -589,77 +587,50 @@ export function getSkillReadinessCoachingInsights(skillGoals: string[]): SkillRe
   const maxDips = dipRecord?.reps || 0
   const maxPushUps = pushUpRecord?.reps || 0
 
-  // Check each skill goal
+  // Build unified input for canonical engine
+  const input: AthleteReadinessInput = {
+    maxPullUps,
+    weightedPullUpLoad: weightedPullUp,
+    maxDips,
+    maxPushUps,
+    hollowHoldTime: 30, // Default assumption
+    hasRings: true,
+    hasBar: true,
+    hasParallettes: false,
+    hasFloor: true,
+    hasWall: true,
+  }
+
+  // Skill name mapping
+  const skillNames: Record<string, string> = {
+    front_lever: 'Front Lever',
+    planche: 'Planche',
+    muscle_up: 'Muscle-Up',
+    hspu: 'Handstand Push-Up',
+    handstand_pushup: 'Handstand Push-Up',
+    l_sit: 'L-Sit',
+    back_lever: 'Back Lever',
+  }
+
+  // Check each skill goal using canonical engine
   for (const goal of skillGoals) {
-    let result: ReadinessResult | null = null
-    let skillName = ''
-    
-    switch (goal) {
-      case 'front_lever':
-        skillName = 'Front Lever'
-        const flInputs: FrontLeverInputs = {
-          maxPullUps,
-          weightedPullUpLoad: weightedPullUp,
-          hollowHoldTime: 30, // Default assumption
-          hasRings: true,
-          hasBar: true,
-        }
-        result = calculateFrontLeverReadiness(flInputs)
-        break
-        
-      case 'planche':
-        skillName = 'Planche'
-        const plInputs: PlancheInputs = {
-          maxDips,
-          maxPushUps,
-          leanHoldTime: 15, // Default assumption
-          bodyweightLbs: 170, // Default assumption
-          hasParallettes: false,
-          hasFloor: true,
-        }
-        result = calculatePlancheReadiness(plInputs)
-        break
-        
-      case 'muscle_up':
-        skillName = 'Muscle-Up'
-        const muInputs: MuscleUpInputs = {
-          maxPullUps,
-          maxDips,
-          chestToBarReps: Math.floor(maxPullUps * 0.4), // Estimate
-          straightBarDipReps: Math.floor(maxDips * 0.5), // Estimate
-          hasBar: true,
-          hasRings: false,
-        }
-        result = calculateMuscleUpReadiness(muInputs)
-        break
-        
-      case 'hspu':
-      case 'handstand_pushup':
-        skillName = 'Handstand Push-Up'
-        const hspuInputs: HSPUInputs = {
-          wallHSPUReps: 0, // Unknown
-          pikeHSPUReps: Math.floor(maxPushUps * 0.3), // Estimate
-          maxDips,
-          wallHandstandHold: 30, // Default assumption
-          overheadPressStrength: 'light',
-          hasWall: true,
-          hasParallettes: false,
-        }
-        result = calculateHSPUReadiness(hspuInputs)
-        break
+    const normalizedGoal = goal === 'handstand_pushup' ? 'hspu' : goal
+    if (!['front_lever', 'planche', 'muscle_up', 'hspu', 'l_sit', 'back_lever'].includes(normalizedGoal)) {
+      continue
     }
     
-    if (result) {
-      insights.push({
-        skill: skillName,
-        score: result.score,
-        level: result.label,
-        limitingFactor: result.limitingFactor,
-        coachingMessage: generateSkillCoachingMessage(result, skillName),
-        recommendation: result.recommendation,
-        actionableNextStep: result.nextProgression,
-      })
-    }
+    const result = calculateCanonicalReadiness(normalizedGoal as SkillType, input)
+    const skillName = skillNames[goal] || goal.replace(/_/g, ' ')
+    
+    insights.push({
+      skill: skillName,
+      score: result.overallScore,
+      level: result.levelLabel,
+      limitingFactor: result.primaryLimiter.replace(/_/g, ' '),
+      coachingMessage: generateSkillCoachingMessage(result, skillName),
+      recommendation: result.recommendation,
+      actionableNextStep: result.nextProgression,
+    })
   }
   
   return insights
@@ -667,16 +638,19 @@ export function getSkillReadinessCoachingInsights(skillGoals: string[]): SkillRe
 
 /**
  * Generate a concise coaching message for a skill based on readiness
+ * Uses canonical readiness result for consistent messaging
  */
-function generateSkillCoachingMessage(result: ReadinessResult, skillName: string): string {
-  if (result.score >= 80) {
+function generateSkillCoachingMessage(result: CanonicalReadinessResult, skillName: string): string {
+  const limiterExplanation = getLimiterExplanation(result.skill, result.primaryLimiter)
+  
+  if (result.overallScore >= 80) {
     return `Your ${skillName} foundation is solid. Focus on skill-specific practice.`
-  } else if (result.score >= 60) {
-    return `You are close to ${skillName} readiness. ${result.limitingFactor} is your focus area.`
-  } else if (result.score >= 40) {
-    return `Build more foundation before intense ${skillName} work. Prioritize ${result.limitingFactor.toLowerCase()}.`
+  } else if (result.overallScore >= 60) {
+    return `You are close to ${skillName} readiness. ${result.primaryLimiter.replace(/_/g, ' ')} is your focus area.`
+  } else if (result.overallScore >= 40) {
+    return `Build more foundation before intense ${skillName} work. Prioritize ${result.primaryLimiter.replace(/_/g, ' ').toLowerCase()}.`
   } else {
-    return `${skillName} requires more preparation. Focus on ${result.limitingFactor.toLowerCase()} as your primary limiter.`
+    return `${skillName} requires more preparation. ${limiterExplanation}`
   }
 }
 

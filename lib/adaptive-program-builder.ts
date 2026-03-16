@@ -178,7 +178,16 @@ import {
   type WhyThisExerciseExplanation,
   type AthleteExerciseContext,
 } from './enhanced-exercise-intelligence'
-
+import {
+  selectSessionStructure,
+  adjustStructureForEnvelope,
+  integrateWeakPointIntoStructure,
+  checkStructureOveruse,
+  type SessionStructure,
+  type SessionStructureType,
+  type StructureSelectionResult,
+} from './session-structure-engine'
+  
 // =============================================================================
 // TYPES
 // =============================================================================
@@ -471,15 +480,26 @@ export interface AdaptiveProgram {
     knowledgeTip: string
   }
   // Exercise intelligence explanations - "why this exercise" for each main movement
-  exerciseExplanations?: {
-    exerciseId: string
-    exerciseName: string
-    headline: string
-    rationale: string
-    skillBenefit: string
-    coachTip: string
-    confidenceLevel: 'high' | 'medium' | 'low'
+exerciseExplanations?: {
+  exerciseId: string
+  exerciseName: string
+  headline: string
+  rationale: string
+  skillBenefit: string
+  coachTip: string
+  confidenceLevel: 'high' | 'medium' | 'low'
   }[]
+  // Session Structure - EMOM, ladder, pyramid, density block, etc.
+  sessionStructure?: {
+    structureType: SessionStructureType
+    structureName: string
+    structureDescription: string
+    totalDurationMinutes: number
+    cycleCount: number
+    densityLevel: 'low' | 'moderate' | 'high' | 'very_high'
+    coachingExplanation: string
+    adjustments: string[]
+  }
 }
 
 // =============================================================================
@@ -1422,17 +1442,77 @@ fatigueDecision: fatigueDecision ? {
           }
         }
         
-        return explanations.length > 0 ? explanations : undefined
+return explanations.length > 0 ? explanations : undefined
+  } catch {
+  return undefined
+  }
+  })(),
+    // Session Structure - intelligent workout format selection
+    sessionStructure: (() => {
+      try {
+        const availableMinutes = sessionLength === 'short' ? 30 : sessionLength === 'medium' ? 45 : 60
+        const trainingStyle = trainingEmphasis?.styleMode || 'skill_focused'
+        const frameworkId = trainingEmphasis?.primaryMethod || undefined
+        
+        // Determine if we should use a structured format
+        const shouldUseStructure = 
+          availableMinutes <= 30 || // Time-constrained
+          trainingStyle === 'endurance_focused' || // Density preference
+          (trainingEmphasis?.styleRules?.densityPreference === 'high') // High density preference
+        
+        if (!shouldUseStructure) {
+          return undefined // Use standard structure
+        }
+        
+        const structureInput = {
+          availableMinutes,
+          trainingStyle: trainingStyle as any,
+          frameworkId: frameworkId as any,
+          primaryGoal,
+          primaryWeakPoint: profile?.weakestArea as any,
+          fatigueLevel: fatigueDecision?.overallDecision === 'reduce' ? 'fatigued' : 
+                        fatigueDecision?.overallDecision === 'deload' ? 'fatigued' : 'normal',
+          experienceLevel: experienceLevel as 'beginner' | 'intermediate' | 'advanced',
+          preferDensityTraining: trainingEmphasis?.styleRules?.densityPreference === 'high',
+          isDeloadWeek: fatigueDecision?.overallDecision === 'deload',
+        }
+        
+        const result = selectSessionStructure(structureInput as any)
+        
+        // Apply envelope adjustments if needed
+        let adjustments: string[] = []
+        if (result.selectedStructure.structureType !== 'standard') {
+          const envelopeAdjusted = adjustStructureForEnvelope(
+            result.selectedStructure,
+            {
+              straightArmPull: fatigueDecision?.straightArmFatigue ? 100 - fatigueDecision.straightArmFatigue : 70,
+              straightArmPush: 70,
+              verticalPull: 80,
+            }
+          )
+          adjustments = envelopeAdjusted.adjustments
+        }
+        
+        return {
+          structureType: result.selectedStructure.structureType,
+          structureName: result.selectedStructure.structureName,
+          structureDescription: result.selectedStructure.structureDescription,
+          totalDurationMinutes: result.selectedStructure.totalDurationMinutes,
+          cycleCount: result.selectedStructure.cycleCount,
+          densityLevel: result.selectedStructure.densityLevel,
+          coachingExplanation: result.coachingExplanation,
+          adjustments,
+        }
       } catch {
         return undefined
       }
     })(),
   }
-  }
-  
-  /**
-  * Get override signal feedback for program generation
-  */
+}
+
+/**
+ * Get override signal feedback for program generation
+ */
 function getOverrideSignalFeedback() {
   const signalFeedback = analyzeSignalsForAdaptive(14) // Last 14 days
   

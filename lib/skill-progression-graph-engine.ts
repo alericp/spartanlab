@@ -14,6 +14,7 @@
 
 import type { LimitingFactor } from './readiness/canonical-readiness-engine'
 import type { WeakPointType } from './weak-point-engine'
+import { MALTESE_GRAPH, PLANCHE_PUSHUP_GRAPH, FRONT_LEVER_PULLUP_GRAPH, SLOW_MUSCLE_UP_GRAPH } from './advanced-skill-graphs'
 
 // =============================================================================
 // CORE GRAPH TYPES
@@ -31,6 +32,14 @@ export type SkillGraphId =
   | 'iron_cross'
   | 'one_arm_pull_up'
   | 'ring_muscle_up'
+  // Advanced skills and sub-skills
+  | 'maltese'
+  | 'planche_pushup'
+  | 'pseudo_planche_pushup'
+  | 'front_lever_pullup'
+  | 'one_arm_front_lever_row'
+  | 'slow_muscle_up'
+  | 'weighted_muscle_up'
 
 export type JointStressLevel = 
   | 'minimal'
@@ -948,6 +957,20 @@ export const SKILL_PROGRESSION_GRAPHS: Record<SkillGraphId, SkillProgressionGrap
   ring_muscle_up: createSimpleGraph('ring_muscle_up', 'Ring Muscle-Up', 'rings', [
     'ring_pull_up', 'ring_high_pull', 'false_grip_hold', 
     'ring_transition', 'ring_muscle_up', 'strict_ring_muscle_up'
+  ]),
+  // Advanced skills and sub-skills
+  maltese: MALTESE_GRAPH,
+  planche_pushup: PLANCHE_PUSHUP_GRAPH,
+  pseudo_planche_pushup: createSimpleGraph('pseudo_planche_pushup', 'Pseudo Planche Push-Up', 'push', [
+    'pseudo_lean', 'pseudo_angle_1', 'pseudo_angle_2', 'pseudo_horizontal'
+  ]),
+  front_lever_pullup: FRONT_LEVER_PULLUP_GRAPH,
+  one_arm_front_lever_row: createSimpleGraph('one_arm_front_lever_row', 'One-Arm Front Lever Row', 'pull', [
+    'assisted_oafl_row', 'band_oafl_row', 'negative_oafl_row', 'one_arm_fl_row'
+  ]),
+  slow_muscle_up: SLOW_MUSCLE_UP_GRAPH,
+  weighted_muscle_up: createSimpleGraph('weighted_muscle_up', 'Weighted Muscle-Up', 'dynamic', [
+    'light_weighted_mu', 'moderate_weighted_mu', 'heavy_weighted_mu', 'very_heavy_weighted_mu'
   ]),
 }
 

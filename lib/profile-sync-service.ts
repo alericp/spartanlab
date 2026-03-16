@@ -174,6 +174,43 @@ export function hasSignificantProfileChange(
   return false
 }
 
+/**
+ * Get a description of what changed for user messaging
+ */
+export function getProfileChangeDescription(
+  previous: AthleteProfile,
+  current: AthleteProfile
+): string {
+  const changes: string[] = []
+  
+  if (previous.trainingDaysPerWeek !== current.trainingDaysPerWeek) {
+    changes.push('training frequency')
+  }
+  if (previous.sessionLengthMinutes !== current.sessionLengthMinutes) {
+    changes.push('session length')
+  }
+  if (previous.primaryGoal !== current.primaryGoal) {
+    changes.push('primary goal')
+  }
+  if (previous.experienceLevel !== current.experienceLevel) {
+    changes.push('experience level')
+  }
+  
+  // Check equipment
+  const coreEquipment = ['pullup_bar', 'dip_bars', 'rings']
+  const prevCore = previous.equipmentAvailable?.filter(e => coreEquipment.includes(e)) ?? []
+  const currCore = current.equipmentAvailable?.filter(e => coreEquipment.includes(e)) ?? []
+  if (prevCore.length !== currCore.length || !prevCore.every(e => currCore.includes(e))) {
+    changes.push('equipment')
+  }
+  
+  if (changes.length === 0) return ''
+  if (changes.length === 1) return changes[0]
+  if (changes.length === 2) return `${changes[0]} and ${changes[1]}`
+  
+  return `${changes.slice(0, -1).join(', ')}, and ${changes[changes.length - 1]}`
+}
+
 // =============================================================================
 // CONSOLIDATED PROFILE ACCESS
 // =============================================================================

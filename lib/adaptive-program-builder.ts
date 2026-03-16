@@ -74,6 +74,10 @@ import {
   type ExerciseIntelligenceContext,
 } from './exercise-intelligence-engine'
 import {
+  analyzeSignalsForAdaptive,
+  type AdaptiveSignalFeedback,
+} from './override-signal-service'
+import {
   getReadinessAssessment,
   getSessionAdjustments,
   getFlexibilityRecoveryStatus,
@@ -296,6 +300,19 @@ export interface AdaptiveProgram {
     progressTrend: 'improving' | 'stable' | 'declining'
     trendSummary: string
     dataQuality: 'insufficient' | 'limited' | 'good' | 'excellent'
+  }
+  // Override Signal Feedback - user override behavior patterns
+  overrideSignalFeedback?: {
+    hasSignificantPatterns: boolean
+    patterns: Array<{
+      type: 'frequent_skip' | 'frequent_replace' | 'difficulty_mismatch' | 'equipment_issue'
+      exerciseName?: string
+      movementCategory?: string
+      severity: 'low' | 'moderate' | 'high'
+      description: string
+      recommendation: string
+    }>
+    coachRecommendations: string[]
   }
 }
 
@@ -793,6 +810,25 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
       trendSummary: trainingBehavior.progressTrend.trendSummary,
       dataQuality: trainingBehavior.dataQuality,
     } : undefined,
+    // Override Signal Feedback - patterns from user exercise overrides
+    overrideSignalFeedback: getOverrideSignalFeedback(),
+  }
+}
+
+/**
+ * Get override signal feedback for program generation
+ */
+function getOverrideSignalFeedback() {
+  const signalFeedback = analyzeSignalsForAdaptive(14) // Last 14 days
+  
+  if (!signalFeedback.hasSignificantPatterns) {
+    return undefined
+  }
+  
+  return {
+    hasSignificantPatterns: signalFeedback.hasSignificantPatterns,
+    patterns: signalFeedback.patterns,
+    coachRecommendations: signalFeedback.coachRecommendations,
   }
 }
 

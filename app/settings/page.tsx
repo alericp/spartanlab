@@ -27,7 +27,7 @@ import {
   saveAthleteProfile,
   type AthleteProfile,
 } from '@/lib/data-service'
-import { hasSignificantProfileChange } from '@/lib/profile-sync-service'
+import { hasSignificantProfileChange, getProfileChangeDescription } from '@/lib/profile-sync-service'
 import { getActiveProgram, clearActiveProgram } from '@/lib/program-service'
 import { UpdateMetricsCard } from '@/components/dashboard/UpdateMetricsCard'
 import { useToast } from '@/hooks/use-toast'
@@ -184,6 +184,7 @@ export default function SettingsPage() {
   const [bodyweight, setBodyweight] = useState('')
   const [experienceLevel, setExperienceLevel] = useState('beginner')
   const [trainingDays, setTrainingDays] = useState('3')
+  const [sessionLength, setSessionLength] = useState('60')
   const [primaryGoal, setPrimaryGoal] = useState('none')
 
   useEffect(() => {
@@ -197,6 +198,7 @@ export default function SettingsPage() {
     setBodyweight(data.bodyweight?.toString() || '')
     setExperienceLevel(data.experienceLevel || 'beginner')
     setTrainingDays(data.trainingDaysPerWeek?.toString() || '3')
+    setSessionLength(data.sessionLengthMinutes?.toString() || '60')
     setPrimaryGoal(data.primaryGoal || 'none')
   }
 
@@ -211,6 +213,7 @@ export default function SettingsPage() {
       bodyweight: bodyweight ? parseFloat(bodyweight) : null,
       experienceLevel: experienceLevel as 'beginner' | 'intermediate' | 'advanced',
       trainingDaysPerWeek: parseInt(trainingDays),
+      sessionLengthMinutes: parseInt(sessionLength) as 30 | 45 | 60 | 90,
       primaryGoal: primaryGoal === 'none' ? null : primaryGoal,
     })
     
@@ -224,10 +227,16 @@ export default function SettingsPage() {
       if (activeProgram) {
         // Clear the active program to trigger regeneration on next visit
         clearActiveProgram()
+        
+        // Get description of what changed for better user messaging
+        const changeDescription = getProfileChangeDescription(previousProfile, updated)
+        
         toast({
-          title: 'Profile Updated',
-          description: 'Your training program will be regenerated to match your new settings.',
-          duration: 4000,
+          title: 'Program Updated',
+          description: changeDescription 
+            ? `Your program will be regenerated to match your new ${changeDescription}.`
+            : 'Your training program will be regenerated to match your new settings.',
+          duration: 5000,
         })
       }
     }
@@ -312,6 +321,33 @@ export default function SettingsPage() {
                 ))}
               </SelectContent>
             </Select>
+          </div>
+
+          {/* Session Length */}
+          <div className="space-y-2">
+            <Label className="text-[#F5F5F5]">Session Length</Label>
+            <Select value={sessionLength} onValueChange={setSessionLength}>
+              <SelectTrigger className="bg-[#1A1A1A] border-[#3A3A3A] text-[#F5F5F5]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent className="bg-[#2A2A2A] border-[#3A3A3A]">
+                <SelectItem value="30" className="text-[#F5F5F5] focus:bg-[#3A3A3A]">
+                  30 minutes
+                </SelectItem>
+                <SelectItem value="45" className="text-[#F5F5F5] focus:bg-[#3A3A3A]">
+                  45 minutes
+                </SelectItem>
+                <SelectItem value="60" className="text-[#F5F5F5] focus:bg-[#3A3A3A]">
+                  60 minutes
+                </SelectItem>
+                <SelectItem value="90" className="text-[#F5F5F5] focus:bg-[#3A3A3A]">
+                  90 minutes
+                </SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-[#A5A5A5] mt-1">
+              How long you want each training session to last
+            </p>
           </div>
 
           {/* Primary Goal */}

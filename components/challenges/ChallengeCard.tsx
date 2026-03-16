@@ -19,8 +19,10 @@ const CHALLENGE_ICONS: Record<string, React.ComponentType<{ className?: string }
   star: Star,
   dumbbell: Dumbbell,
   lightning: Zap,
+  zap: Zap,
   medal: Medal,
   crown: Crown,
+  clock: Clock,
 }
 
 // Category colors
@@ -48,6 +50,30 @@ const CATEGORY_COLORS: Record<string, { bg: string; border: string; text: string
     border: 'border-emerald-500/20',
     text: 'text-emerald-400',
     badge: 'bg-emerald-500/20 text-emerald-400',
+  },
+  skill: {
+    bg: 'bg-cyan-500/10',
+    border: 'border-cyan-500/20',
+    text: 'text-cyan-400',
+    badge: 'bg-cyan-500/20 text-cyan-400',
+  },
+  strength: {
+    bg: 'bg-red-500/10',
+    border: 'border-red-500/20',
+    text: 'text-red-400',
+    badge: 'bg-red-500/20 text-red-400',
+  },
+  time: {
+    bg: 'bg-orange-500/10',
+    border: 'border-orange-500/20',
+    text: 'text-orange-400',
+    badge: 'bg-orange-500/20 text-orange-400',
+  },
+  h2h: {
+    bg: 'bg-pink-500/10',
+    border: 'border-pink-500/20',
+    text: 'text-pink-400',
+    badge: 'bg-pink-500/20 text-pink-400',
   },
 }
 

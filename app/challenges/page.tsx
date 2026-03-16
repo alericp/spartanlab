@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Target, Trophy, Flame, Crown, Clock, Sparkles } from 'lucide-react'
+import { Target, Trophy, Flame, Crown, Clock, Sparkles, Star, Dumbbell, Swords } from 'lucide-react'
 import { PageContainer } from '@/components/layout'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -18,6 +18,7 @@ import {
   getCurrentSeasonInfo,
   CHALLENGE_CATEGORY_LABELS,
   type ChallengeCategory,
+  getOpenHeadToHeadChallenges,
 } from '@/lib/challenges/challenge-definitions'
 
 function ChallengesContent() {
@@ -137,17 +138,32 @@ function ChallengesContent() {
           
           {/* Challenge Tabs */}
           <Tabs defaultValue="all" onValueChange={(v) => setActiveTab(v as ChallengeCategory | 'all')}>
-            <TabsList className="bg-[#1A1F26] border border-[#2A2F36]">
+            <TabsList className="bg-[#1A1F26] border border-[#2A2F36] flex-wrap h-auto gap-1 p-1">
               <TabsTrigger value="all" className="data-[state=active]:bg-[#C1121F] data-[state=active]:text-white">
                 All
               </TabsTrigger>
               <TabsTrigger value="weekly" className="data-[state=active]:bg-[#C1121F] data-[state=active]:text-white">
+                <Flame className="w-3.5 h-3.5 mr-1" />
                 Weekly
               </TabsTrigger>
               <TabsTrigger value="monthly" className="data-[state=active]:bg-[#C1121F] data-[state=active]:text-white">
+                <Clock className="w-3.5 h-3.5 mr-1" />
                 Monthly
               </TabsTrigger>
+              <TabsTrigger value="skill" className="data-[state=active]:bg-[#C1121F] data-[state=active]:text-white">
+                <Star className="w-3.5 h-3.5 mr-1" />
+                Skill
+              </TabsTrigger>
+              <TabsTrigger value="strength" className="data-[state=active]:bg-[#C1121F] data-[state=active]:text-white">
+                <Dumbbell className="w-3.5 h-3.5 mr-1" />
+                Strength
+              </TabsTrigger>
+              <TabsTrigger value="time" className="data-[state=active]:bg-[#C1121F] data-[state=active]:text-white">
+                <Clock className="w-3.5 h-3.5 mr-1" />
+                Timed
+              </TabsTrigger>
               <TabsTrigger value="seasonal" className="data-[state=active]:bg-[#C1121F] data-[state=active]:text-white">
+                <Crown className="w-3.5 h-3.5 mr-1" />
                 Seasonal
               </TabsTrigger>
             </TabsList>
@@ -220,6 +236,15 @@ function ChallengesContent() {
               </p>
               <p>
                 <strong className="text-[#E6E9EF]">Monthly Challenges</strong> reset on the 1st of each month for bigger goals and rewards.
+              </p>
+              <p>
+                <strong className="text-[#E6E9EF]">Skill Challenges</strong> are lifetime achievements for skills like front lever, planche, muscle-ups, and HSPUs. Log your holds and reps to track progress.
+              </p>
+              <p>
+                <strong className="text-[#E6E9EF]">Strength Challenges</strong> track your max consecutive reps for pull-ups, dips, push-ups, and weighted variations.
+              </p>
+              <p>
+                <strong className="text-[#E6E9EF]">Timed Challenges</strong> test your endurance with max reps in a time limit or hold duration challenges.
               </p>
               <p>
                 <strong className="text-[#E6E9EF]">Seasonal Challenges</strong> run for 3 months and offer the most prestigious rewards.

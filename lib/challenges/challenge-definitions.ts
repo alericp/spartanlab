@@ -1,12 +1,26 @@
 // Challenge Definitions
 // Centralized challenge system for SpartanLab
-// Supports weekly, monthly, and seasonal challenges with tiered progression
-// Design philosophy: realistic goals that reward consistency, not absurd volume
+// Supports weekly, monthly, seasonal, skill, strength, time, and head-to-head challenges
+// Design philosophy: realistic goals that reward consistency and skill, not absurd volume
 
-export type ChallengeCategory = 'weekly' | 'monthly' | 'seasonal' | 'special'
-export type ChallengeGoalType = 'workout_count' | 'rep_total' | 'streak_days' | 'skill_sessions' | 'training_minutes' | 'exercise_count'
+export type ChallengeCategory = 'weekly' | 'monthly' | 'seasonal' | 'special' | 'skill' | 'strength' | 'time' | 'h2h'
+export type ChallengeGoalType = 
+  | 'workout_count' 
+  | 'rep_total' 
+  | 'streak_days' 
+  | 'skill_sessions' 
+  | 'training_minutes' 
+  | 'exercise_count'
+  | 'skill_milestone'      // Achieve specific skill level
+  | 'strength_reps'        // Achieve X consecutive reps
+  | 'weighted_strength'    // Achieve X added weight
+  | 'timed_max_reps'       // Max reps in time limit
+  | 'hold_time'            // Hold for X seconds
+  | 'h2h_challenge'        // Head-to-head competition
 export type ChallengeRewardType = 'badge' | 'score_boost' | 'achievement_unlock'
 export type SeasonId = 'season_1' | 'season_2' | 'season_3' | 'season_4'
+export type SkillType = 'front_lever' | 'planche' | 'muscle_up' | 'handstand_pushup' | 'hspu'
+export type StrengthExercise = 'pull_ups' | 'dips' | 'push_ups' | 'weighted_pull_up' | 'weighted_dip'
 
 export interface ChallengeReward {
   type: ChallengeRewardType
@@ -27,7 +41,14 @@ export interface ChallengeDefinition {
   category: ChallengeCategory
   goalType: ChallengeGoalType
   tiers: ChallengeTier[]
-  icon: 'flame' | 'target' | 'trophy' | 'star' | 'dumbbell' | 'lightning' | 'medal' | 'crown'
+  icon: 'flame' | 'target' | 'trophy' | 'star' | 'dumbbell' | 'lightning' | 'medal' | 'crown' | 'zap' | 'clock'
+  // Optional skill/exercise specification
+  skillType?: SkillType
+  exerciseType?: StrengthExercise
+  // Time limit for timed challenges (in seconds)
+  timeLimit?: number
+  // For one-time challenges that don't repeat
+  oneTime?: boolean
 }
 
 export interface Challenge {
@@ -41,10 +62,17 @@ export interface Challenge {
   goalValue: number
   reward: ChallengeReward
   seasonId?: SeasonId
-  icon: 'flame' | 'target' | 'trophy' | 'star' | 'dumbbell' | 'lightning' | 'medal' | 'crown'
+  icon: 'flame' | 'target' | 'trophy' | 'star' | 'dumbbell' | 'lightning' | 'medal' | 'crown' | 'zap' | 'clock'
   tier?: number
   maxTier?: number
   baseId?: string
+  // Optional skill/exercise specification
+  skillType?: SkillType
+  exerciseType?: StrengthExercise
+  // Time limit for timed challenges
+  timeLimit?: number
+  // For one-time challenges
+  oneTime?: boolean
 }
 
 export interface ChallengeProgress {
@@ -215,6 +243,283 @@ const TIERED_CHALLENGES: ChallengeDefinition[] = [
       { tier: 2, goalValue: 8, reward: { type: 'score_boost', value: 35, label: '+35 Spartan Score' } },
       { tier: 3, goalValue: 12, reward: { type: 'score_boost', value: 50, label: '+50 Spartan Score' } },
       { tier: 4, goalValue: 16, reward: { type: 'badge', value: 6, label: 'Skill Master Badge' } },
+    ],
+  },
+]
+
+// =============================================================================
+// SKILL CHALLENGES
+// =============================================================================
+// Milestone-based skill progressions - one-time achievements
+
+const SKILL_CHALLENGES: ChallengeDefinition[] = [
+  // Front Lever Progression
+  {
+    baseId: 'fl_tuck_hold',
+    name: 'Tuck Front Lever',
+    descriptionTemplate: 'Hold a Tuck Front Lever for {goal} seconds',
+    category: 'skill',
+    goalType: 'hold_time',
+    skillType: 'front_lever',
+    icon: 'star',
+    oneTime: true,
+    tiers: [
+      { tier: 1, goalValue: 5, reward: { type: 'score_boost', value: 15, label: '+15 Spartan Score' } },
+      { tier: 2, goalValue: 10, reward: { type: 'score_boost', value: 25, label: '+25 Spartan Score' } },
+      { tier: 3, goalValue: 15, reward: { type: 'score_boost', value: 40, label: '+40 Spartan Score' } },
+    ],
+  },
+  {
+    baseId: 'fl_straddle_hold',
+    name: 'Straddle Front Lever',
+    descriptionTemplate: 'Hold a Straddle Front Lever for {goal} seconds',
+    category: 'skill',
+    goalType: 'hold_time',
+    skillType: 'front_lever',
+    icon: 'star',
+    oneTime: true,
+    tiers: [
+      { tier: 1, goalValue: 3, reward: { type: 'score_boost', value: 30, label: '+30 Spartan Score' } },
+      { tier: 2, goalValue: 8, reward: { type: 'score_boost', value: 50, label: '+50 Spartan Score' } },
+      { tier: 3, goalValue: 12, reward: { type: 'badge', value: 20, label: 'Front Lever Badge' } },
+    ],
+  },
+  // Planche Progression
+  {
+    baseId: 'planche_tuck_hold',
+    name: 'Tuck Planche',
+    descriptionTemplate: 'Hold a Tuck Planche for {goal} seconds',
+    category: 'skill',
+    goalType: 'hold_time',
+    skillType: 'planche',
+    icon: 'star',
+    oneTime: true,
+    tiers: [
+      { tier: 1, goalValue: 5, reward: { type: 'score_boost', value: 15, label: '+15 Spartan Score' } },
+      { tier: 2, goalValue: 10, reward: { type: 'score_boost', value: 25, label: '+25 Spartan Score' } },
+      { tier: 3, goalValue: 15, reward: { type: 'score_boost', value: 40, label: '+40 Spartan Score' } },
+    ],
+  },
+  {
+    baseId: 'planche_straddle_hold',
+    name: 'Straddle Planche',
+    descriptionTemplate: 'Hold a Straddle Planche for {goal} seconds',
+    category: 'skill',
+    goalType: 'hold_time',
+    skillType: 'planche',
+    icon: 'star',
+    oneTime: true,
+    tiers: [
+      { tier: 1, goalValue: 3, reward: { type: 'score_boost', value: 35, label: '+35 Spartan Score' } },
+      { tier: 2, goalValue: 8, reward: { type: 'score_boost', value: 60, label: '+60 Spartan Score' } },
+      { tier: 3, goalValue: 12, reward: { type: 'badge', value: 21, label: 'Planche Badge' } },
+    ],
+  },
+  // Muscle-Up
+  {
+    baseId: 'first_muscle_up',
+    name: 'First Muscle-Up',
+    descriptionTemplate: 'Complete {goal} muscle-up(s)',
+    category: 'skill',
+    goalType: 'skill_milestone',
+    skillType: 'muscle_up',
+    icon: 'lightning',
+    oneTime: true,
+    tiers: [
+      { tier: 1, goalValue: 1, reward: { type: 'score_boost', value: 50, label: '+50 Spartan Score' } },
+      { tier: 2, goalValue: 3, reward: { type: 'score_boost', value: 30, label: '+30 Spartan Score' } },
+      { tier: 3, goalValue: 5, reward: { type: 'badge', value: 22, label: 'Muscle-Up Master Badge' } },
+    ],
+  },
+  // HSPU
+  {
+    baseId: 'wall_hspu',
+    name: 'Wall HSPU',
+    descriptionTemplate: 'Complete {goal} wall handstand push-ups',
+    category: 'skill',
+    goalType: 'strength_reps',
+    skillType: 'hspu',
+    icon: 'zap',
+    oneTime: true,
+    tiers: [
+      { tier: 1, goalValue: 1, reward: { type: 'score_boost', value: 20, label: '+20 Spartan Score' } },
+      { tier: 2, goalValue: 5, reward: { type: 'score_boost', value: 35, label: '+35 Spartan Score' } },
+      { tier: 3, goalValue: 10, reward: { type: 'score_boost', value: 50, label: '+50 Spartan Score' } },
+    ],
+  },
+  {
+    baseId: 'freestanding_hspu',
+    name: 'Freestanding HSPU',
+    descriptionTemplate: 'Complete {goal} freestanding HSPU(s)',
+    category: 'skill',
+    goalType: 'skill_milestone',
+    skillType: 'handstand_pushup',
+    icon: 'crown',
+    oneTime: true,
+    tiers: [
+      { tier: 1, goalValue: 1, reward: { type: 'score_boost', value: 60, label: '+60 Spartan Score' } },
+      { tier: 2, goalValue: 3, reward: { type: 'badge', value: 23, label: 'HSPU Elite Badge' } },
+    ],
+  },
+]
+
+// =============================================================================
+// STRENGTH CHALLENGES
+// =============================================================================
+// Rep-based and weighted strength progressions
+
+const STRENGTH_CHALLENGES: ChallengeDefinition[] = [
+  // Pull-Up Progression
+  {
+    baseId: 'pullup_reps',
+    name: 'Pull-Up Strength',
+    descriptionTemplate: 'Complete {goal} consecutive pull-ups',
+    category: 'strength',
+    goalType: 'strength_reps',
+    exerciseType: 'pull_ups',
+    icon: 'dumbbell',
+    oneTime: true,
+    tiers: [
+      { tier: 1, goalValue: 5, reward: { type: 'score_boost', value: 10, label: '+10 Spartan Score' } },
+      { tier: 2, goalValue: 10, reward: { type: 'score_boost', value: 20, label: '+20 Spartan Score' } },
+      { tier: 3, goalValue: 15, reward: { type: 'score_boost', value: 35, label: '+35 Spartan Score' } },
+      { tier: 4, goalValue: 20, reward: { type: 'badge', value: 30, label: 'Pull-Up Master Badge' } },
+    ],
+  },
+  // Dip Progression
+  {
+    baseId: 'dip_reps',
+    name: 'Dip Strength',
+    descriptionTemplate: 'Complete {goal} consecutive dips',
+    category: 'strength',
+    goalType: 'strength_reps',
+    exerciseType: 'dips',
+    icon: 'dumbbell',
+    oneTime: true,
+    tiers: [
+      { tier: 1, goalValue: 10, reward: { type: 'score_boost', value: 10, label: '+10 Spartan Score' } },
+      { tier: 2, goalValue: 15, reward: { type: 'score_boost', value: 15, label: '+15 Spartan Score' } },
+      { tier: 3, goalValue: 20, reward: { type: 'score_boost', value: 25, label: '+25 Spartan Score' } },
+      { tier: 4, goalValue: 30, reward: { type: 'badge', value: 31, label: 'Dip Master Badge' } },
+    ],
+  },
+  // Push-Up Progression
+  {
+    baseId: 'pushup_reps',
+    name: 'Push-Up Endurance',
+    descriptionTemplate: 'Complete {goal} consecutive push-ups',
+    category: 'strength',
+    goalType: 'strength_reps',
+    exerciseType: 'push_ups',
+    icon: 'dumbbell',
+    oneTime: true,
+    tiers: [
+      { tier: 1, goalValue: 20, reward: { type: 'score_boost', value: 8, label: '+8 Spartan Score' } },
+      { tier: 2, goalValue: 35, reward: { type: 'score_boost', value: 15, label: '+15 Spartan Score' } },
+      { tier: 3, goalValue: 50, reward: { type: 'score_boost', value: 25, label: '+25 Spartan Score' } },
+      { tier: 4, goalValue: 75, reward: { type: 'badge', value: 32, label: 'Push-Up Master Badge' } },
+    ],
+  },
+  // Weighted Pull-Up
+  {
+    baseId: 'weighted_pullup',
+    name: 'Weighted Pull-Up',
+    descriptionTemplate: 'Complete a pull-up with +{goal} lbs added',
+    category: 'strength',
+    goalType: 'weighted_strength',
+    exerciseType: 'weighted_pull_up',
+    icon: 'trophy',
+    oneTime: true,
+    tiers: [
+      { tier: 1, goalValue: 25, reward: { type: 'score_boost', value: 20, label: '+20 Spartan Score' } },
+      { tier: 2, goalValue: 45, reward: { type: 'score_boost', value: 35, label: '+35 Spartan Score' } },
+      { tier: 3, goalValue: 70, reward: { type: 'score_boost', value: 55, label: '+55 Spartan Score' } },
+      { tier: 4, goalValue: 90, reward: { type: 'badge', value: 33, label: 'Elite Pull Strength Badge' } },
+    ],
+  },
+  // Weighted Dip
+  {
+    baseId: 'weighted_dip',
+    name: 'Weighted Dip',
+    descriptionTemplate: 'Complete a dip with +{goal} lbs added',
+    category: 'strength',
+    goalType: 'weighted_strength',
+    exerciseType: 'weighted_dip',
+    icon: 'trophy',
+    oneTime: true,
+    tiers: [
+      { tier: 1, goalValue: 45, reward: { type: 'score_boost', value: 20, label: '+20 Spartan Score' } },
+      { tier: 2, goalValue: 70, reward: { type: 'score_boost', value: 35, label: '+35 Spartan Score' } },
+      { tier: 3, goalValue: 90, reward: { type: 'score_boost', value: 50, label: '+50 Spartan Score' } },
+      { tier: 4, goalValue: 135, reward: { type: 'badge', value: 34, label: 'Elite Dip Strength Badge' } },
+    ],
+  },
+]
+
+// =============================================================================
+// TIME CHALLENGES
+// =============================================================================
+// Max reps in time or endurance holds
+
+const TIME_CHALLENGES: ChallengeDefinition[] = [
+  {
+    baseId: 'pushups_2min',
+    name: '2-Minute Push-Up Test',
+    descriptionTemplate: 'Complete {goal} push-ups in 2 minutes',
+    category: 'time',
+    goalType: 'timed_max_reps',
+    exerciseType: 'push_ups',
+    timeLimit: 120,
+    icon: 'clock',
+    tiers: [
+      { tier: 1, goalValue: 30, reward: { type: 'score_boost', value: 15, label: '+15 Spartan Score' } },
+      { tier: 2, goalValue: 45, reward: { type: 'score_boost', value: 25, label: '+25 Spartan Score' } },
+      { tier: 3, goalValue: 60, reward: { type: 'score_boost', value: 40, label: '+40 Spartan Score' } },
+      { tier: 4, goalValue: 80, reward: { type: 'badge', value: 40, label: 'Endurance Elite Badge' } },
+    ],
+  },
+  {
+    baseId: 'pullups_1min',
+    name: '1-Minute Pull-Up Test',
+    descriptionTemplate: 'Complete {goal} pull-ups in 60 seconds',
+    category: 'time',
+    goalType: 'timed_max_reps',
+    exerciseType: 'pull_ups',
+    timeLimit: 60,
+    icon: 'clock',
+    tiers: [
+      { tier: 1, goalValue: 8, reward: { type: 'score_boost', value: 15, label: '+15 Spartan Score' } },
+      { tier: 2, goalValue: 12, reward: { type: 'score_boost', value: 25, label: '+25 Spartan Score' } },
+      { tier: 3, goalValue: 18, reward: { type: 'score_boost', value: 40, label: '+40 Spartan Score' } },
+      { tier: 4, goalValue: 25, reward: { type: 'badge', value: 41, label: 'Speed Pull Badge' } },
+    ],
+  },
+  {
+    baseId: 'lsit_hold',
+    name: 'L-Sit Hold',
+    descriptionTemplate: 'Hold an L-Sit for {goal} seconds',
+    category: 'time',
+    goalType: 'hold_time',
+    icon: 'clock',
+    tiers: [
+      { tier: 1, goalValue: 10, reward: { type: 'score_boost', value: 10, label: '+10 Spartan Score' } },
+      { tier: 2, goalValue: 20, reward: { type: 'score_boost', value: 20, label: '+20 Spartan Score' } },
+      { tier: 3, goalValue: 30, reward: { type: 'score_boost', value: 35, label: '+35 Spartan Score' } },
+      { tier: 4, goalValue: 45, reward: { type: 'badge', value: 42, label: 'L-Sit Master Badge' } },
+    ],
+  },
+  {
+    baseId: 'dead_hang',
+    name: 'Dead Hang',
+    descriptionTemplate: 'Hold a dead hang for {goal} seconds',
+    category: 'time',
+    goalType: 'hold_time',
+    icon: 'clock',
+    tiers: [
+      { tier: 1, goalValue: 30, reward: { type: 'score_boost', value: 8, label: '+8 Spartan Score' } },
+      { tier: 2, goalValue: 60, reward: { type: 'score_boost', value: 15, label: '+15 Spartan Score' } },
+      { tier: 3, goalValue: 90, reward: { type: 'score_boost', value: 25, label: '+25 Spartan Score' } },
+      { tier: 4, goalValue: 120, reward: { type: 'badge', value: 43, label: 'Grip Legend Badge' } },
     ],
   },
 ]
@@ -463,31 +768,123 @@ export function getActiveChallenges(): Challenge[] {
     })
   }
   
+  // Skill challenges (one-time, no period key)
+  const skillPeriodKey = 'skill_lifetime'
+  SKILL_CHALLENGES.forEach(def => {
+    const completedTier = getCurrentTierForChallenge(def.baseId, skillPeriodKey)
+    const nextTier = def.tiers.find(t => t.tier > completedTier)
+    
+    if (nextTier) {
+      challenges.push({
+        id: `${def.baseId}_t${nextTier.tier}`,
+        name: def.name,
+        description: def.descriptionTemplate.replace('{goal}', nextTier.goalValue.toLocaleString()),
+        category: 'skill',
+        startDate: '2020-01-01', // Always available
+        endDate: '2099-12-31',
+        goalType: def.goalType,
+        goalValue: nextTier.goalValue,
+        reward: nextTier.reward,
+        icon: def.icon,
+        tier: nextTier.tier,
+        maxTier: def.tiers.length,
+        baseId: def.baseId,
+        skillType: def.skillType,
+        oneTime: true,
+      })
+    }
+  })
+  
+  // Strength challenges (one-time, no period key)
+  const strengthPeriodKey = 'strength_lifetime'
+  STRENGTH_CHALLENGES.forEach(def => {
+    const completedTier = getCurrentTierForChallenge(def.baseId, strengthPeriodKey)
+    const nextTier = def.tiers.find(t => t.tier > completedTier)
+    
+    if (nextTier) {
+      challenges.push({
+        id: `${def.baseId}_t${nextTier.tier}`,
+        name: def.name,
+        description: def.descriptionTemplate.replace('{goal}', nextTier.goalValue.toLocaleString()),
+        category: 'strength',
+        startDate: '2020-01-01',
+        endDate: '2099-12-31',
+        goalType: def.goalType,
+        goalValue: nextTier.goalValue,
+        reward: nextTier.reward,
+        icon: def.icon,
+        tier: nextTier.tier,
+        maxTier: def.tiers.length,
+        baseId: def.baseId,
+        exerciseType: def.exerciseType,
+        oneTime: true,
+      })
+    }
+  })
+  
+  // Time challenges (repeatable monthly)
+  TIME_CHALLENGES.forEach(def => {
+    const completedTier = getCurrentTierForChallenge(def.baseId, monthlyPeriodKey)
+    const nextTier = def.tiers.find(t => t.tier > completedTier)
+    
+    if (nextTier) {
+      challenges.push({
+        id: `${def.baseId}_t${nextTier.tier}_${month.start}`,
+        name: def.name,
+        description: def.descriptionTemplate.replace('{goal}', nextTier.goalValue.toLocaleString()),
+        category: 'time',
+        startDate: month.start,
+        endDate: month.end,
+        goalType: def.goalType,
+        goalValue: nextTier.goalValue,
+        reward: nextTier.reward,
+        icon: def.icon,
+        tier: nextTier.tier,
+        maxTier: def.tiers.length,
+        baseId: def.baseId,
+        exerciseType: def.exerciseType,
+        timeLimit: def.timeLimit,
+      })
+    }
+  })
+  
   return challenges
 }
 
 /**
- * Get total number of challenges available (including all tiers)
- */
-export function getTotalChallengeCount(): number {
+  * Get total number of challenges available (including all tiers)
+  */
+  export function getTotalChallengeCount(): number {
   let count = 0
   TIERED_CHALLENGES.forEach(c => count += c.tiers.length)
   SEASONAL_CHALLENGES.forEach(c => count += c.tiers.length)
+  SKILL_CHALLENGES.forEach(c => count += c.tiers.length)
+  STRENGTH_CHALLENGES.forEach(c => count += c.tiers.length)
+  TIME_CHALLENGES.forEach(c => count += c.tiers.length)
   return count
-}
+  }
 
 /**
- * Get period key for a challenge (used for tier tracking)
- */
-export function getPeriodKeyForChallenge(challenge: Challenge): string {
+  * Get period key for a challenge (used for tier tracking)
+  */
+  export function getPeriodKeyForChallenge(challenge: Challenge): string {
   if (challenge.category === 'seasonal' && challenge.seasonId) {
     return `seasonal_${challenge.seasonId}`
+  }
+  if (challenge.category === 'skill') {
+    return 'skill_lifetime'
+  }
+  if (challenge.category === 'strength') {
+    return 'strength_lifetime'
+  }
+  if (challenge.category === 'time') {
+    return `time_${challenge.startDate}`
   }
   if (challenge.category === 'monthly') {
     return `monthly_${challenge.startDate}`
   }
   return `weekly_${challenge.startDate}`
-}
+  }
 
 // Get challenge by ID
 export function getChallengeById(id: string): Challenge | null {
@@ -505,9 +902,18 @@ export function getCurrentSeasonInfo(): SeasonInfo | null {
 }
 
 // Get display name for challenge period
-export function getPeriodDisplayName(period: 'weekly' | 'monthly'): string {
-  return period === 'weekly' ? 'Weekly' : 'Monthly'
-}
+  export function getPeriodDisplayName(period: string): string {
+    const names: Record<string, string> = {
+      weekly: 'Weekly',
+      monthly: 'Monthly',
+      seasonal: 'Seasonal',
+      skill: 'Skill',
+      strength: 'Strength',
+      time: 'Timed',
+      h2h: 'Head-to-Head',
+    }
+    return names[period] || period.charAt(0).toUpperCase() + period.slice(1)
+  }
 
 // Calculate time remaining for a challenge
 export function getChallengeTimeRemaining(challenge: Challenge): { 
@@ -539,12 +945,179 @@ export function getChallengeTimeRemaining(challenge: Challenge): {
   return { days, hours, label, expired: false }
 }
 
+// =============================================================================
+// HEAD-TO-HEAD CHALLENGE TYPES
+// =============================================================================
+// For optional competitive challenges between users
+
+export interface HeadToHeadChallenge {
+  id: string
+  challengerId: string
+  challengerName: string
+  opponentId?: string
+  opponentName?: string
+  challengeType: 'pushups_2min' | 'pullups_1min' | 'lsit_hold' | 'max_pullups' | 'max_dips'
+  status: 'open' | 'accepted' | 'completed' | 'expired'
+  challengerScore?: number
+  opponentScore?: number
+  winnerId?: string
+  reward: ChallengeReward
+  createdAt: string
+  expiresAt: string
+  completedAt?: string
+}
+
+export const H2H_CHALLENGE_TYPES = {
+  pushups_2min: {
+    name: '2-Min Push-Up Battle',
+    description: 'Most push-ups in 2 minutes wins',
+    timeLimit: 120,
+    reward: { type: 'score_boost' as const, value: 25, label: '+25 Spartan Score' },
+  },
+  pullups_1min: {
+    name: '1-Min Pull-Up Battle',
+    description: 'Most pull-ups in 60 seconds wins',
+    timeLimit: 60,
+    reward: { type: 'score_boost' as const, value: 25, label: '+25 Spartan Score' },
+  },
+  lsit_hold: {
+    name: 'L-Sit Hold Challenge',
+    description: 'Longest L-Sit hold wins',
+    timeLimit: null,
+    reward: { type: 'score_boost' as const, value: 20, label: '+20 Spartan Score' },
+  },
+  max_pullups: {
+    name: 'Max Pull-Ups',
+    description: 'Most consecutive pull-ups wins',
+    timeLimit: null,
+    reward: { type: 'score_boost' as const, value: 20, label: '+20 Spartan Score' },
+  },
+  max_dips: {
+    name: 'Max Dips',
+    description: 'Most consecutive dips wins',
+    timeLimit: null,
+    reward: { type: 'score_boost' as const, value: 20, label: '+20 Spartan Score' },
+  },
+}
+
+// H2H Storage
+const H2H_STORAGE_KEY = 'spartanlab_h2h_challenges'
+
+export function getHeadToHeadChallenges(): HeadToHeadChallenge[] {
+  if (typeof window === 'undefined') return []
+  const stored = localStorage.getItem(H2H_STORAGE_KEY)
+  if (stored) {
+    try { return JSON.parse(stored) } catch { return [] }
+  }
+  return []
+}
+
+export function saveHeadToHeadChallenges(challenges: HeadToHeadChallenge[]): void {
+  if (typeof window === 'undefined') return
+  localStorage.setItem(H2H_STORAGE_KEY, JSON.stringify(challenges))
+}
+
+export function createHeadToHeadChallenge(
+  challengerId: string,
+  challengerName: string,
+  challengeType: keyof typeof H2H_CHALLENGE_TYPES
+): HeadToHeadChallenge {
+  const config = H2H_CHALLENGE_TYPES[challengeType]
+  const now = new Date()
+  const expires = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000) // 7 days
+  
+  const challenge: HeadToHeadChallenge = {
+    id: `h2h_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+    challengerId,
+    challengerName,
+    challengeType,
+    status: 'open',
+    reward: config.reward,
+    createdAt: now.toISOString(),
+    expiresAt: expires.toISOString(),
+  }
+  
+  const challenges = getHeadToHeadChallenges()
+  challenges.push(challenge)
+  saveHeadToHeadChallenges(challenges)
+  
+  return challenge
+}
+
+export function acceptHeadToHeadChallenge(
+  challengeId: string,
+  opponentId: string,
+  opponentName: string
+): HeadToHeadChallenge | null {
+  const challenges = getHeadToHeadChallenges()
+  const idx = challenges.findIndex(c => c.id === challengeId)
+  if (idx === -1) return null
+  
+  challenges[idx].opponentId = opponentId
+  challenges[idx].opponentName = opponentName
+  challenges[idx].status = 'accepted'
+  saveHeadToHeadChallenges(challenges)
+  
+  return challenges[idx]
+}
+
+export function submitHeadToHeadResult(
+  challengeId: string,
+  userId: string,
+  score: number
+): HeadToHeadChallenge | null {
+  const challenges = getHeadToHeadChallenges()
+  const idx = challenges.findIndex(c => c.id === challengeId)
+  if (idx === -1) return null
+  
+  const challenge = challenges[idx]
+  
+  if (userId === challenge.challengerId) {
+    challenge.challengerScore = score
+  } else if (userId === challenge.opponentId) {
+    challenge.opponentScore = score
+  }
+  
+  // Check if both have submitted
+  if (challenge.challengerScore !== undefined && challenge.opponentScore !== undefined) {
+    challenge.status = 'completed'
+    challenge.completedAt = new Date().toISOString()
+    
+    if (challenge.challengerScore > challenge.opponentScore) {
+      challenge.winnerId = challenge.challengerId
+    } else if (challenge.opponentScore > challenge.challengerScore) {
+      challenge.winnerId = challenge.opponentId
+    }
+    // Tie = no winner
+  }
+  
+  saveHeadToHeadChallenges(challenges)
+  return challenges[idx]
+}
+
+export function getOpenHeadToHeadChallenges(): HeadToHeadChallenge[] {
+  const now = new Date().toISOString()
+  return getHeadToHeadChallenges().filter(
+    c => c.status === 'open' && c.expiresAt > now
+  )
+}
+
+export function getMyHeadToHeadChallenges(userId: string): HeadToHeadChallenge[] {
+  return getHeadToHeadChallenges().filter(
+    c => c.challengerId === userId || c.opponentId === userId
+  )
+}
+
 // Category labels for display
 export const CHALLENGE_CATEGORY_LABELS: Record<ChallengeCategory, string> = {
   weekly: 'Weekly',
   monthly: 'Monthly',
   seasonal: 'Seasonal',
   special: 'Special Event',
+  skill: 'Skill Milestone',
+  strength: 'Strength',
+  time: 'Timed Challenge',
+  h2h: 'Head-to-Head',
 }
 
 // Goal type labels for display

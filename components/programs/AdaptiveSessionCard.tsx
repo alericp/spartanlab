@@ -6,7 +6,7 @@ import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import type { AdaptiveSession, AdaptiveExercise } from '@/lib/adaptive-program-builder'
-import { ChevronDown, ChevronUp, Clock, AlertCircle, Zap, RefreshCw, Play, CheckCircle2, SkipForward } from 'lucide-react'
+import { ChevronDown, ChevronUp, Clock, AlertCircle, Zap, RefreshCw, Play, CheckCircle2, SkipForward, Repeat } from 'lucide-react'
 import { WorkoutExecutionCard, StartWorkoutButton } from './WorkoutExecutionCard'
 import { exerciseSupportsRPE } from '@/lib/rpe-adjustment-engine'
 import { useWorkoutSession } from '@/hooks/useWorkoutSession'
@@ -316,18 +316,31 @@ export function AdaptiveSessionCard({ session, onExerciseReplace, onWorkoutCompl
                 {session.rationale}
               </div>
 
-          {/* Adaptation Notes */}
-          {session.adaptationNotes && session.adaptationNotes.length > 0 && (
-            <div className="p-3 bg-amber-500/10 rounded-lg border border-amber-500/20">
-              <div className="flex items-start gap-2">
-                <AlertCircle className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
-                <div className="text-sm">
-                  {session.adaptationNotes.map((note, idx) => (
-                    <p key={idx} className="text-amber-500/80">{note}</p>
-                  ))}
-                </div>
-              </div>
-            </div>
+  {/* Session Variety Info - Justified Repetition */}
+  {session.varietyInfo?.isIntentionalRepetition && session.varietyInfo.repetitionReason && (
+    <div className="p-3 bg-[#4F6D8A]/10 rounded-lg border border-[#4F6D8A]/20">
+      <div className="flex items-start gap-2">
+        <Repeat className="w-4 h-4 text-[#4F6D8A] mt-0.5 shrink-0" />
+        <div className="text-sm">
+          <p className="text-[#4F6D8A]/90 font-medium">Intentional Structure</p>
+          <p className="text-[#4F6D8A]/70 text-xs mt-1">{session.varietyInfo.repetitionReason}</p>
+        </div>
+      </div>
+    </div>
+  )}
+  
+  {/* Adaptation Notes */}
+  {session.adaptationNotes && session.adaptationNotes.length > 0 && (
+  <div className="p-3 bg-amber-500/10 rounded-lg border border-amber-500/20">
+  <div className="flex items-start gap-2">
+  <AlertCircle className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
+  <div className="text-sm">
+  {session.adaptationNotes.map((note, idx) => (
+  <p key={idx} className="text-amber-500/80">{note}</p>
+  ))}
+  </div>
+  </div>
+  </div>
           )}
 
           {/* Time Variants */}

@@ -180,7 +180,7 @@ export default function SettingsPage() {
   const [bodyweight, setBodyweight] = useState('')
   const [experienceLevel, setExperienceLevel] = useState('beginner')
   const [trainingDays, setTrainingDays] = useState('3')
-  const [primaryGoal, setPrimaryGoal] = useState('')
+  const [primaryGoal, setPrimaryGoal] = useState('none')
 
   useEffect(() => {
     setMounted(true)
@@ -193,7 +193,7 @@ export default function SettingsPage() {
     setBodyweight(data.bodyweight?.toString() || '')
     setExperienceLevel(data.experienceLevel || 'beginner')
     setTrainingDays(data.trainingDaysPerWeek?.toString() || '3')
-    setPrimaryGoal(data.primaryGoal || '')
+    setPrimaryGoal(data.primaryGoal || 'none')
   }
 
   const handleSave = () => {
@@ -204,7 +204,7 @@ export default function SettingsPage() {
       bodyweight: bodyweight ? parseFloat(bodyweight) : null,
       experienceLevel: experienceLevel as 'beginner' | 'intermediate' | 'advanced',
       trainingDaysPerWeek: parseInt(trainingDays),
-      primaryGoal: primaryGoal || null,
+      primaryGoal: primaryGoal === 'none' ? null : primaryGoal,
     })
     
     setProfile(updated)
@@ -301,7 +301,7 @@ export default function SettingsPage() {
                 <SelectValue placeholder="Select a goal" />
               </SelectTrigger>
               <SelectContent className="bg-[#2A2A2A] border-[#3A3A3A]">
-                <SelectItem value="" className="text-[#A5A5A5] focus:bg-[#3A3A3A]">
+                <SelectItem value="none" className="text-[#A5A5A5] focus:bg-[#3A3A3A]">
                   None
                 </SelectItem>
                 {Object.entries(SKILL_DEFINITIONS).map(([key, def]) => (

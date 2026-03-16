@@ -76,7 +76,7 @@ export function getStrengthProgressData(): StrengthProgressData[] {
   
   return exercises.map(exercise => {
     const exerciseRecords = records
-      .filter(r => r.exerciseType === exercise)
+      .filter(r => r.exercise === exercise)
       .sort((a, b) => new Date(a.dateLogged).getTime() - new Date(b.dateLogged).getTime())
     
     if (exerciseRecords.length === 0) {
@@ -171,8 +171,8 @@ export function getSkillProgressData(): SkillProgressData[] {
     skillSessions.forEach(s => {
       const dateKey = s.sessionDate.split('T')[0]
       const existing = levelByDate.get(dateKey) || 0
-      if (s.progressionLevel > existing) {
-        levelByDate.set(dateKey, s.progressionLevel)
+      if (s.level > existing) {
+        levelByDate.set(dateKey, s.level)
       }
     })
     

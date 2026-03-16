@@ -26,6 +26,7 @@ import { RecoveryStatusCard } from '@/components/dashboard/RecoveryStatusCard'
 import { ProgressForecastCard } from '@/components/dashboard/ProgressForecastCard'
 import { PerformanceVaultCard } from '@/components/dashboard/PerformanceVaultCard'
 import { QuickActionsRow } from '@/components/dashboard/QuickActionsRow'
+import { ShareProgressSection } from '@/components/dashboard/ShareProgressSection'
 import { DeloadStatusCard } from '@/components/dashboard/DailyAdjustmentCard'
 import { DailyReadinessCard } from '@/components/dashboard/DailyReadinessCard'
 import { WelcomeCard } from '@/components/dashboard/WelcomeCard'
@@ -737,6 +738,11 @@ function DashboardContent() {
             
             {/* Performance Database */}
             <PerformanceVaultCard />
+            
+            {/* Share Progress Cards */}
+            <SafeWidget name="ShareProgressSection">
+              <ShareProgressSection />
+            </SafeWidget>
           </div>
         </Section>
         

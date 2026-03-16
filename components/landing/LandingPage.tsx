@@ -16,14 +16,16 @@ import {
   Cpu,
   Gauge,
   Zap,
-  ChevronRight
+  ChevronRight,
+  Clock,
+  Sparkles,
 } from 'lucide-react'
 import { SpartanIcon } from '@/components/brand/SpartanLogo'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { PRICING, TRIAL } from '@/lib/billing/pricing'
 
-// Hero Section - Refined messaging positioning SpartanLab as an intelligent coach
+// Hero Section - Clear value proposition in under 5 seconds
 function HeroSection() {
   return (
     <section className="relative min-h-[90vh] flex items-center justify-center px-4 py-20 overflow-hidden">
@@ -32,51 +34,63 @@ function HeroSection() {
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[600px] bg-[#C1121F]/5 rounded-full blur-[120px]" />
       
       <div className="relative z-10 max-w-4xl mx-auto text-center">
-        {/* Badge */}
-        <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[#C1121F]/10 border border-[#C1121F]/20 mb-8">
+        {/* Who it's for */}
+        <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[#C1121F]/10 border border-[#C1121F]/20 mb-6">
           <SpartanIcon size={18} />
-          <span className="text-sm text-[#C1121F] font-medium">Adaptive Training Intelligence</span>
+          <span className="text-sm text-[#C1121F] font-medium">For athletes training Front Lever, Planche, and Muscle-Up</span>
         </div>
         
-        <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold leading-tight mb-6 text-balance">
-          AI Coaching for{' '}
-          <span className="text-[#C1121F]">Advanced Calisthenics</span>
+        {/* Primary headline - what it is + problem it solves */}
+        <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold leading-tight mb-4 text-balance">
+          Your AI Calisthenics Coach
         </h1>
         
-        <p className="text-lg sm:text-xl text-[#A4ACB8] max-w-2xl mx-auto mb-10 leading-relaxed text-pretty">
-          SpartanLab analyzes your skill readiness, detects what limits your progress, and generates programs that adapt as your performance changes.
+        {/* Why it's different */}
+        <p className="text-xl sm:text-2xl text-[#E6E9EF] font-medium mb-4">
+          Programs that adapt to <span className="text-[#C1121F]">your</span> progress
         </p>
         
-        {/* Trust Signals */}
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-4 sm:gap-8 mb-10">
+        <p className="text-lg text-[#A4ACB8] max-w-2xl mx-auto mb-8 leading-relaxed text-pretty">
+          SpartanLab detects what limits your skill progress and generates joint-safe training 
+          that evolves based on your performance. No more guessing.
+        </p>
+        
+        {/* Product proof - what it does */}
+        <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-3 mb-10 max-w-xl mx-auto">
           <div className="flex items-center gap-2 text-sm text-[#A4ACB8]">
-            <CheckCircle2 className="w-4 h-4 text-[#C1121F]" />
-            <span>Skill readiness analysis</span>
+            <Gauge className="w-4 h-4 text-[#C1121F]" />
+            <span>Readiness analysis</span>
           </div>
           <div className="flex items-center gap-2 text-sm text-[#A4ACB8]">
-            <CheckCircle2 className="w-4 h-4 text-[#C1121F]" />
+            <Target className="w-4 h-4 text-[#C1121F]" />
             <span>Constraint detection</span>
           </div>
           <div className="flex items-center gap-2 text-sm text-[#A4ACB8]">
-            <CheckCircle2 className="w-4 h-4 text-[#C1121F]" />
+            <Brain className="w-4 h-4 text-[#C1121F]" />
+            <span>Adaptive programs</span>
+          </div>
+          <div className="flex items-center gap-2 text-sm text-[#A4ACB8]">
+            <Shield className="w-4 h-4 text-[#C1121F]" />
             <span>Joint integrity protocols</span>
           </div>
         </div>
         
-        {/* CTA */}
+        {/* Primary CTA */}
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
           <Button asChild size="lg" className="bg-[#C1121F] hover:bg-[#A30F1A] text-white px-8 py-6 text-lg font-semibold">
-            <Link href="/sign-up">
-              Start Training Free
+            <Link href="/onboarding">
+              Build Your Adaptive Program
               <ArrowRight className="w-5 h-5 ml-2" />
             </Link>
           </Button>
           <Button asChild size="lg" variant="outline" className="border-[#2B313A] hover:bg-[#2B313A] px-8 py-6 text-lg">
             <Link href="/tools">
-              Explore Tools
+              Try Free Calculators
             </Link>
           </Button>
         </div>
+        
+        <p className="text-sm text-[#6B7280] mt-4">Free to start. No credit card required.</p>
       </div>
     </section>
   )
@@ -201,85 +215,66 @@ function HowItWorksSection() {
   )
 }
 
-// Intelligence Preview Section
+// Intelligence Preview Section - Product Proof
 function IntelligencePreviewSection() {
   return (
     <section className="px-4 py-20 bg-[#1A1F26]">
       <div className="max-w-5xl mx-auto">
         <div className="text-center mb-12">
           <h2 className="text-3xl sm:text-4xl font-bold mb-4">
-            Coaching <span className="text-[#C1121F]">Intelligence</span>
+            Training Intelligence, <span className="text-[#C1121F]">Not Guesswork</span>
           </h2>
           <p className="text-[#A4ACB8] max-w-2xl mx-auto">
-            SpartanLab analyzes your performance data to provide real coaching insight, not just workout tracking.
+            SpartanLab provides real coaching insights - readiness analysis, constraint detection, and adaptive adjustments based on your performance data.
           </p>
         </div>
         
         <div className="grid md:grid-cols-2 gap-6">
-          {/* Spartan Score Preview */}
+          {/* Readiness Analysis Preview */}
           <Card className="bg-[#0F1115] border-[#2B313A] p-6">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-10 h-10 rounded-lg bg-[#C1121F]/10 flex items-center justify-center">
-                <TrendingUp className="w-5 h-5 text-[#C1121F]" />
+                <Gauge className="w-5 h-5 text-[#C1121F]" />
               </div>
               <div>
-                <h3 className="font-semibold">Spartan Strength Score</h3>
-                <p className="text-xs text-[#6B7280]">Overall performance metric</p>
+                <h3 className="font-semibold">Skill Readiness Analysis</h3>
+                <p className="text-xs text-[#6B7280]">Are you ready to progress?</p>
               </div>
             </div>
-            <div className="flex items-end gap-3 mb-4">
-              <span className="text-5xl font-bold tabular-nums">482</span>
-              <span className="text-sm text-[#4F6D8A] mb-2">/ 1000</span>
-            </div>
-            <div className="flex items-center gap-2 mb-2">
-              <div className="h-2 flex-1 bg-[#2B313A] rounded-full overflow-hidden">
-                <div className="h-full w-[48%] bg-[#4F6D8A] rounded-full" />
+            <div className="space-y-3 mb-4">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-[#A4ACB8]">Pulling Strength</span>
+                <span className="text-sm text-green-400">Ready</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-[#A4ACB8]">Core Compression</span>
+                <span className="text-sm text-amber-400">Developing</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-[#A4ACB8]">Straight-Arm Strength</span>
+                <span className="text-sm text-amber-400">Developing</span>
               </div>
             </div>
-            <p className="text-sm text-[#A4ACB8]">Level: <span className="text-[#E6E9EF]">Intermediate</span></p>
+            <p className="text-sm text-[#6B7280]">Front Lever readiness: <span className="text-[#E6E9EF] font-medium">68%</span></p>
           </Card>
           
-          {/* Training Momentum Preview */}
-          <Card className="bg-[#0F1115] border-[#2B313A] p-6">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-lg bg-green-500/10 flex items-center justify-center">
-                <Activity className="w-5 h-5 text-green-400" />
-              </div>
-              <div>
-                <h3 className="font-semibold">Training Momentum</h3>
-                <p className="text-xs text-[#6B7280]">Consistency tracking</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-4 mb-4">
-              <span className="text-2xl font-bold text-green-400">Strong</span>
-              <span className="text-sm text-[#6B7280]">4 workouts this week</span>
-            </div>
-            <div className="flex gap-1 mb-2">
-              {[1, 2, 3, 4].map(i => (
-                <div key={i} className="flex-1 h-2 rounded-full bg-green-500/50" />
-              ))}
-              <div className="flex-1 h-2 rounded-full bg-[#2B313A]" />
-            </div>
-            <p className="text-sm text-[#A4ACB8]">Your consistency supports steady progress.</p>
-          </Card>
-          
-          {/* Primary Limiter Preview */}
+          {/* Constraint Detection Preview */}
           <Card className="bg-[#0F1115] border-[#2B313A] p-6">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-10 h-10 rounded-lg bg-amber-500/10 flex items-center justify-center">
                 <Target className="w-5 h-5 text-amber-400" />
               </div>
               <div>
-                <h3 className="font-semibold">Primary Limiter</h3>
-                <p className="text-xs text-[#6B7280]">What's holding you back</p>
+                <h3 className="font-semibold">Constraint Detection</h3>
+                <p className="text-xs text-[#6B7280]">What limits your progress</p>
               </div>
             </div>
-            <p className="text-lg font-semibold text-amber-400 mb-2">Horizontal Pull Strength</p>
+            <p className="text-lg font-semibold text-amber-400 mb-2">Compression Strength</p>
             <p className="text-sm text-[#A4ACB8] mb-4">
-              Your pulling strength supports your current progression, but horizontal capacity limits front lever development.
+              Core compression is currently limiting your front lever development. Your program prioritizes this until resolved.
             </p>
             <div className="flex flex-wrap gap-2">
-              {['Front Lever Rows', 'Scapula Pulls'].map((item, i) => (
+              {['L-Sit Progressions', 'Hollow Holds'].map((item, i) => (
                 <span key={i} className="px-2 py-1 text-xs bg-amber-500/10 text-amber-400 rounded">
                   {item}
                 </span>
@@ -287,33 +282,68 @@ function IntelligencePreviewSection() {
             </div>
           </Card>
           
-          {/* Recommended Focus Preview */}
+          {/* Adaptive Program Preview */}
           <Card className="bg-[#0F1115] border-[#2B313A] p-6">
             <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-lg bg-[#C1121F]/10 flex items-center justify-center">
-                <Zap className="w-5 h-5 text-[#C1121F]" />
+              <div className="w-10 h-10 rounded-lg bg-[#4F6D8A]/10 flex items-center justify-center">
+                <Brain className="w-5 h-5 text-[#4F6D8A]" />
               </div>
               <div>
-                <h3 className="font-semibold">Recommended Focus</h3>
-                <p className="text-xs text-[#6B7280]">What to train today</p>
+                <h3 className="font-semibold">Adaptive Programming</h3>
+                <p className="text-xs text-[#6B7280]">Programs that evolve with you</p>
               </div>
             </div>
-            <p className="text-lg font-semibold mb-3">Pulling Strength Session</p>
-            <ul className="space-y-2 text-sm text-[#A4ACB8]">
-              <li className="flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 text-[#C1121F]" />
-                Heavy rows for horizontal strength
+            <p className="text-sm text-[#A4ACB8] mb-4">
+              Based on your recent performance, the engine recommends:
+            </p>
+            <ul className="space-y-2 text-sm">
+              <li className="flex items-center gap-2 text-[#A4ACB8]">
+                <CheckCircle2 className="w-4 h-4 text-green-400" />
+                Progress to advanced tuck holds
               </li>
-              <li className="flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 text-[#C1121F]" />
-                Front lever holds at current level
+              <li className="flex items-center gap-2 text-[#A4ACB8]">
+                <CheckCircle2 className="w-4 h-4 text-green-400" />
+                Increase horizontal row volume
               </li>
-              <li className="flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 text-[#C1121F]" />
-                Weighted pull-ups for support
+              <li className="flex items-center gap-2 text-[#A4ACB8]">
+                <CheckCircle2 className="w-4 h-4 text-green-400" />
+                Maintain current weighted pull-ups
               </li>
             </ul>
           </Card>
+          
+          {/* Joint-Safe Training Preview */}
+          <Card className="bg-[#0F1115] border-[#2B313A] p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-lg bg-green-500/10 flex items-center justify-center">
+                <Shield className="w-5 h-5 text-green-400" />
+              </div>
+              <div>
+                <h3 className="font-semibold">Joint Integrity Protocols</h3>
+                <p className="text-xs text-[#6B7280]">Train hard, stay healthy</p>
+              </div>
+            </div>
+            <p className="text-sm text-[#A4ACB8] mb-4">
+              Every program includes joint preparation matched to your training demands. No more wrist pain from planche, no more elbow issues from levers.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {['Wrist prep', 'Elbow prehab', 'Shoulder stability'].map((item, i) => (
+                <span key={i} className="px-2 py-1 text-xs bg-green-500/10 text-green-400 rounded">
+                  {item}
+                </span>
+              ))}
+            </div>
+          </Card>
+        </div>
+        
+        {/* CTA after product proof */}
+        <div className="text-center mt-10">
+          <Button asChild size="lg" className="bg-[#C1121F] hover:bg-[#A30F1A] text-white px-8 py-6 text-lg font-semibold">
+            <Link href="/onboarding">
+              Start Your Adaptive Program
+              <ArrowRight className="w-5 h-5 ml-2" />
+            </Link>
+          </Button>
         </div>
       </div>
     </section>
@@ -511,14 +541,17 @@ function FinalCTASection() {
           <SpartanIcon size={32} />
         </div>
         <h2 className="text-3xl sm:text-4xl font-bold mb-4">
-          Train With <span className="text-[#C1121F]">Intelligence</span>
+          Ready to Train <span className="text-[#C1121F]">Smarter</span>?
         </h2>
-        <p className="text-lg text-[#A4ACB8] mb-8 max-w-xl mx-auto">
-          Let the Adaptive Athlete Engine analyze your readiness and generate a program designed specifically for you.
+        <p className="text-lg text-[#A4ACB8] mb-4 max-w-xl mx-auto">
+          SpartanLab analyzes your current strength, identifies what limits your progress, and generates a training program built specifically for your goals.
         </p>
-        <Button asChild size="lg" className="bg-[#C1121F] hover:bg-[#A30F1A] text-white px-8 py-6 text-lg">
-          <Link href="/programs">
-            Generate Training Program
+        <p className="text-sm text-[#6B7280] mb-8">
+          Takes about 3 minutes. No credit card required.
+        </p>
+        <Button asChild size="lg" className="bg-[#C1121F] hover:bg-[#A30F1A] text-white px-8 py-6 text-lg font-semibold">
+          <Link href="/onboarding">
+            Build Your Adaptive Program
             <ArrowRight className="w-5 h-5 ml-2" />
           </Link>
         </Button>

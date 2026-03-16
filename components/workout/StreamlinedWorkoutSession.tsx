@@ -1181,6 +1181,20 @@ export function StreamlinedWorkoutSession({
               bandProgressNote={bandProgressNote}
               skillSignal={skillSignal}
               overrideSummary={getOverrideSummary(sessionId)}
+              goalContext={session.focusLabel ? `This ${session.focusLabel.toLowerCase()} session builds toward your primary goal. Consistent training accelerates progress.` : "Workout completed. Consistent training builds skill faster."}
+              nextSession={(() => {
+                const program = getLatestAdaptiveProgram()
+                if (!program?.sessions) return null
+                const currentIdx = program.sessions.findIndex(s => s.dayNumber === session.dayNumber)
+                const nextIdx = (currentIdx + 1) % program.sessions.length
+                const next = program.sessions[nextIdx]
+                if (!next) return null
+                return {
+                  dayLabel: next.dayLabel || `Day ${next.dayNumber}`,
+                  focusLabel: next.focusLabel || 'Strength Development',
+                  estimatedMinutes: next.estimatedMinutes,
+                }
+              })()}
             />
           </div>
         </div>

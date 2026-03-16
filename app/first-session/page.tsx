@@ -336,9 +336,17 @@ function FirstSessionContent() {
           <h2 className="text-lg font-semibold text-foreground mb-1">
             {session.dayLabel || `Day 1: ${session.focusLabel || goalDisplay}`}
           </h2>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-muted-foreground mb-3">
             {session.focusLabel || `${goalDisplay} Development`}
           </p>
+          
+          {/* Coaching Insight */}
+          <div className="bg-muted/30 rounded-md p-3 border-l-2 border-primary">
+            <p className="text-xs text-muted-foreground mb-1">Coaching Insight</p>
+            <p className="text-sm text-foreground">
+              Your program is calibrated to your current strength levels. Log your performance to unlock adaptive adjustments.
+            </p>
+          </div>
         </div>
 
         {/* Session Stats */}

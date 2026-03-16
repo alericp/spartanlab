@@ -122,12 +122,20 @@ export function WelcomeBanner() {
         </div>
         <div className="flex-1 pr-6">
           <h3 className="text-lg text-[#E6E9EF] font-semibold mb-1">
-            Your Program is Ready
+            Your Adaptive Program is Ready
           </h3>
-          <p className="text-sm text-[#A4ACB8] mb-4">
-            Start your first workout for {getPrimaryGoalDisplay()}. SpartanLab will learn from your performance 
-            and personalize your training as you go.
+          <p className="text-sm text-[#A4ACB8] mb-3">
+            Your first session is personalized for {getPrimaryGoalDisplay()} training. 
+            Complete it to activate adaptive adjustments.
           </p>
+          
+          {/* Coaching insight */}
+          <div className="bg-[#0F1115]/50 rounded-md p-3 mb-4 border-l-2 border-[#C1121F]/50">
+            <p className="text-xs text-[#6B7280] mb-1">What happens next</p>
+            <p className="text-sm text-[#A4ACB8]">
+              Log your first workout. SpartanLab analyzes your performance and adjusts future sessions based on your actual progress.
+            </p>
+          </div>
           
           {/* Primary CTA - Start First Session */}
           <Link href="/first-session">

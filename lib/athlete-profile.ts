@@ -386,10 +386,10 @@ export interface SkillHistoryEntry {
   }
   
   export const SKILL_TRAINING_HISTORY_DESCRIPTIONS: Record<SkillTrainingHistory, string> = {
-  'never': 'No prior experience with this skill',
-  'tried_little': 'Dabbled or did occasional work',
-  'trained_consistently': 'Trained this for weeks or months',
-  'previously_strong': 'Could hold/perform intermediate+ levels',
+  'never': 'No experience yet',
+  'tried_little': 'A few sessions here and there',
+  'trained_consistently': 'Weeks or months of focused work',
+  'previously_strong': 'Previously held a higher progression',
 }
 
 export const SKILL_LAST_TRAINED_LABELS: Record<SkillLastTrained, string> = {
@@ -1034,42 +1034,42 @@ export const WALL_HSPU_LABELS: Record<WallHSPUReps, string> = {
 }
 
 export const FRONT_LEVER_LABELS: Record<FrontLeverProgression, string> = {
-  'none': 'Not started',
+  'none': 'Not yet',
   'tuck': 'Tuck',
-  'adv_tuck': 'Advanced Tuck',
-  'one_leg': 'One Leg',
+  'adv_tuck': 'Adv. tuck',
+  'one_leg': 'One leg',
   'straddle': 'Straddle',
   'full': 'Full',
-  'unknown': "Don't know",
-}
+  'unknown': "Not sure",
+  }
 
 export const PLANCHE_LABELS: Record<PlancheProgression, string> = {
-  'none': 'Not started',
-  'lean': 'Planche Lean',
+  'none': 'Not yet',
+  'lean': 'Lean',
   'tuck': 'Tuck',
-  'adv_tuck': 'Advanced Tuck',
+  'adv_tuck': 'Adv. tuck',
   'straddle': 'Straddle',
   'full': 'Full',
-  'unknown': "Don't know",
-}
+  'unknown': "Not sure",
+  }
 
 export const MUSCLE_UP_LABELS: Record<MuscleUpReadiness, string> = {
   'none': 'Not yet',
-  'working_on': 'Working on it',
-  'kipping': 'Kipping only',
+  'working_on': 'Learning',
+  'kipping': 'Kipping',
   'strict_1_3': '1–3 strict',
   'strict_4_plus': '4+ strict',
-  'unknown': "Don't know",
-}
+  'unknown': "Not sure",
+  }
 
 export const HSPU_LABELS: Record<HSPUProgression, string> = {
-  'none': 'Not started',
-  'pike': 'Pike push-ups',
-  'box_pike': 'Elevated pike',
-  'wall_hspu': 'Wall HSPU',
-  'freestanding': 'Freestanding',
-  'unknown': "Don't know",
-}
+  'none': 'Not yet',
+  'pike': 'Pike',
+  'box_pike': 'Box pike',
+  'wall_hspu': 'Wall',
+  'freestanding': 'Free',
+  'unknown': "Not sure",
+  }
 
 export const LSIT_HOLD_LABELS: Record<LSitHoldCapacity, string> = {
   'none': "Can't hold",
@@ -1142,6 +1142,11 @@ export const TRAINING_DAYS_LABELS: Record<TrainingDaysPerWeek, string> = {
   export const SESSION_STYLE_LABELS: Record<SessionStylePreference, string> = {
   'efficient': 'Shorter, focused sessions',
   'full': 'Longer, more complete sessions',
+  }
+  
+  export const SESSION_STYLE_DESCRIPTIONS: Record<SessionStylePreference, string> = {
+  'efficient': 'Highest-impact work, less total volume',
+  'full': 'More skill, strength, and accessory work',
   }
   
   // PR Timeframe labels for all-time PR tracking

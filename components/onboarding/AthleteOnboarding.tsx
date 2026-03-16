@@ -111,6 +111,7 @@ import {
   EQUIPMENT_LABELS,
   SESSION_LENGTH_LABELS,
   SESSION_STYLE_LABELS,
+  SESSION_STYLE_DESCRIPTIONS,
   RECOVERY_LABELS,
   TRAINING_CONSISTENCY_LABELS,
   TRAINING_CONSISTENCY_DESCRIPTIONS,
@@ -2452,14 +2453,15 @@ function ScheduleSection({ profile, updateProfile }: SectionProps) {
 
       {/* Session style */}
       <div className="space-y-3">
-        <label className="text-sm font-medium text-[#A4ACB8]">What's your training style?</label>
-        <p className="text-xs text-[#6B7280] -mt-1">How do you prefer to structure workouts?</p>
+        <label className="text-sm font-medium text-[#A4ACB8]">Preferred session style</label>
+        <p className="text-xs text-[#6B7280] -mt-1">How much time do you want to invest per workout?</p>
         <div className="grid grid-cols-1 gap-2">
           {(Object.keys(SESSION_STYLE_LABELS) as SessionStylePreference[]).map((style) => (
             <OptionButton
               key={style}
               selected={profile.sessionStyle === style}
               onClick={() => updateProfile({ sessionStyle: style })}
+              description={SESSION_STYLE_DESCRIPTIONS[style]}
             >
               {SESSION_STYLE_LABELS[style]}
             </OptionButton>
@@ -2594,23 +2596,25 @@ function ReviewSection({ profile, onEditSection }: ReviewSectionProps) {
   // Weighted pull-up with current vs all-time
   if (profile.weightedPullUp?.load) {
     const currentReps = profile.weightedPullUp.reps ? ` x ${profile.weightedPullUp.reps}` : ''
-    items.push(`Weighted pull-up (current): +${profile.weightedPullUp.load} ${profile.weightedPullUp.unit}${currentReps}`)
+    items.push(`Wtd. pull-up now: +${profile.weightedPullUp.load}${profile.weightedPullUp.unit}${currentReps}`)
   }
   if (profile.allTimePRPullUp?.load) {
     const prReps = profile.allTimePRPullUp.reps ? ` x ${profile.allTimePRPullUp.reps}` : ''
-    const timeframe = profile.allTimePRPullUp.timeframe ? ` (${PR_TIMEFRAME_LABELS[profile.allTimePRPullUp.timeframe]})` : ''
-    items.push(`Weighted pull-up (all-time): +${profile.allTimePRPullUp.load} ${profile.allTimePRPullUp.unit}${prReps}${timeframe}`)
+    const timeframe = profile.allTimePRPullUp.timeframe && profile.allTimePRPullUp.timeframe !== 'current' 
+      ? ` • ${PR_TIMEFRAME_LABELS[profile.allTimePRPullUp.timeframe]}` : ''
+    items.push(`Wtd. pull-up best: +${profile.allTimePRPullUp.load}${profile.allTimePRPullUp.unit}${prReps}${timeframe}`)
   }
   
   // Weighted dip with current vs all-time
   if (profile.weightedDip?.load) {
     const currentReps = profile.weightedDip.reps ? ` x ${profile.weightedDip.reps}` : ''
-    items.push(`Weighted dip (current): +${profile.weightedDip.load} ${profile.weightedDip.unit}${currentReps}`)
+    items.push(`Wtd. dip now: +${profile.weightedDip.load}${profile.weightedDip.unit}${currentReps}`)
   }
   if (profile.allTimePRDip?.load) {
     const prReps = profile.allTimePRDip.reps ? ` x ${profile.allTimePRDip.reps}` : ''
-    const timeframe = profile.allTimePRDip.timeframe ? ` (${PR_TIMEFRAME_LABELS[profile.allTimePRDip.timeframe]})` : ''
-    items.push(`Weighted dip (all-time): +${profile.allTimePRDip.load} ${profile.allTimePRDip.unit}${prReps}${timeframe}`)
+    const timeframe = profile.allTimePRDip.timeframe && profile.allTimePRDip.timeframe !== 'current' 
+      ? ` • ${PR_TIMEFRAME_LABELS[profile.allTimePRDip.timeframe]}` : ''
+    items.push(`Wtd. dip best: +${profile.allTimePRDip.load}${profile.allTimePRDip.unit}${prReps}${timeframe}`)
   }
   
   return items.length > 0 ? items : null
@@ -2795,9 +2799,11 @@ function ReviewSection({ profile, onEditSection }: ReviewSectionProps) {
             <span className="text-[#6B7280] text-xs uppercase tracking-wide">Training Schedule</span>
             <EditButton section="schedule" />
           </div>
-          <div className="text-[#E6E9EF]">
-            {profile.trainingDaysPerWeek || '?'} days/week
-            {profile.sessionLengthMinutes && ` • ${SESSION_LENGTH_LABELS[profile.sessionLengthMinutes as SessionLengthPreference]}`}
+          <div className="text-[#E6E9EF] text-xs space-y-0.5">
+            <div>{profile.trainingDaysPerWeek || '?'} days/week{profile.sessionLengthMinutes && ` • ${SESSION_LENGTH_LABELS[profile.sessionLengthMinutes as SessionLengthPreference]}`}</div>
+            {profile.sessionStyle && (
+              <div className="text-[#A4ACB8]">Style: {SESSION_STYLE_LABELS[profile.sessionStyle]}</div>
+            )}
           </div>
         </div>
 

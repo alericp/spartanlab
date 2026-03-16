@@ -21,11 +21,17 @@ export interface AthleteProfile {
   heightUnit: 'inches' | 'cm'
   bodyweight: number | null
   weightUnit: 'lbs' | 'kg'
+  bodyFatPercent?: number | null
+  bodyFatSource?: string | null
   experienceLevel: 'beginner' | 'intermediate' | 'advanced'
   trainingDaysPerWeek: number
   sessionLengthMinutes: SessionLengthMinutes
   primaryGoal: string | null
   equipmentAvailable: Equipment[]
+  jointCautions?: ('shoulders' | 'elbows' | 'wrists' | 'lower_back' | 'knees')[]
+  weakestArea?: 'pulling_strength' | 'pushing_strength' | 'core_strength' | 'shoulder_stability' | 'hip_mobility' | 'hamstring_flexibility' | null
+  pullUpMax?: number | null
+  dipMax?: number | null
   onboardingComplete: boolean
   createdAt: string
 }

@@ -6,17 +6,17 @@
  * 
  * Supported Skills:
  * - Front Lever
+ * - Back Lever
  * - Planche
  * - Muscle-Up
  * - Handstand Push-Up
- * 
- * Designed to be extensible for future skills (Back Lever, V-Sit, Human Flag, etc.)
  */
 
 import { getAthleteProfile, getSkillProgressions, type SkillProgression } from '../data-service'
 import { getStrengthRecords } from '../strength-service'
 import {
   calculateFrontLeverReadiness,
+  calculateBackLeverReadiness,
   calculatePlancheReadiness,
   calculateMuscleUpReadiness,
   calculateHSPUReadiness,
@@ -24,6 +24,7 @@ import {
   extractWeakPoints,
   type ReadinessResult,
   type FrontLeverInputs,
+  type BackLeverInputs,
   type PlancheInputs,
   type MuscleUpInputs,
   type HSPUInputs,
@@ -34,7 +35,7 @@ import {
 // TYPES
 // =============================================================================
 
-export type SkillRoadmapType = 'front-lever' | 'planche' | 'muscle-up' | 'hspu'
+export type SkillRoadmapType = 'front-lever' | 'back-lever' | 'planche' | 'muscle-up' | 'hspu'
 
 export interface RoadmapLevel {
   id: string
@@ -176,6 +177,99 @@ export const FRONT_LEVER_ROADMAP: SkillRoadmap = {
       ],
       prerequisiteStrength: ['+60lb weighted pull-up', 'Strong straddle holds'],
       coachingTip: 'The final progression. Maintain full body tension and lat engagement.',
+    },
+  ],
+}
+
+export const BACK_LEVER_ROADMAP: SkillRoadmap = {
+  skillKey: 'back-lever',
+  skillName: 'Back Lever',
+  shortDescription: 'Horizontal pulling hold with arms behind body, requiring shoulder extension strength',
+  totalLevels: 6,
+  categoryIcon: 'pull',
+  levels: [
+    {
+      id: 'bl-1',
+      level: 1,
+      name: 'German Hang Foundation',
+      description: 'Build shoulder extension mobility and comfort in the stretched position.',
+      requirements: [
+        '8+ strict pull-ups',
+        '15s german hang hold',
+        'Controlled skin the cat (3+ reps)',
+      ],
+      prerequisiteStrength: ['Basic pull-up proficiency', 'Ring support comfort'],
+      coachingTip: 'German hang is the most critical prerequisite. Build mobility gradually and consistently.',
+    },
+    {
+      id: 'bl-2',
+      level: 2,
+      name: 'Tuck Back Lever',
+      description: 'First back lever position with knees tucked tightly to chest.',
+      holdTimeGoal: 10,
+      requirements: [
+        '12+ strict pull-ups',
+        '10s tuck back lever hold',
+        '25s german hang hold',
+      ],
+      prerequisiteStrength: ['12+ pull-ups', '20s+ german hang'],
+      coachingTip: 'Keep arms completely straight. Focus on scapular depression and posterior tilt.',
+    },
+    {
+      id: 'bl-3',
+      level: 3,
+      name: 'Advanced Tuck Back Lever',
+      description: 'Extended hip angle while maintaining tucked knees.',
+      holdTimeGoal: 10,
+      requirements: [
+        '15+ pull-ups or +20lb weighted pull',
+        '10s advanced tuck hold',
+        'Hips extended behind shoulders',
+      ],
+      prerequisiteStrength: ['+20lb weighted pull-up', 'Strong tuck holds'],
+      coachingTip: 'Opening the hip angle increases leverage significantly. Progress slowly.',
+    },
+    {
+      id: 'bl-4',
+      level: 4,
+      name: 'One Leg Back Lever',
+      description: 'One leg extended, one tucked. Transition toward straight body.',
+      holdTimeGoal: 8,
+      requirements: [
+        '+30lb weighted pull-up',
+        '6-8s one leg back lever hold',
+        'Extended leg parallel to ground',
+      ],
+      prerequisiteStrength: ['+30lb weighted pull-up', '45s german hang'],
+      coachingTip: 'Alternate legs between sets. Extended leg should be fully locked.',
+    },
+    {
+      id: 'bl-5',
+      level: 5,
+      name: 'Straddle Back Lever',
+      description: 'Both legs extended in straddle position.',
+      holdTimeGoal: 6,
+      requirements: [
+        '+40lb weighted pull-up',
+        '5-6s straddle back lever hold',
+        'Legs wide and pointed',
+      ],
+      prerequisiteStrength: ['+40lb weighted pull-up', 'Strong one-leg holds'],
+      coachingTip: 'Straddle reduces lever length. Maintain body line and full arm extension.',
+    },
+    {
+      id: 'bl-6',
+      level: 6,
+      name: 'Full Back Lever',
+      description: 'Legs together, body horizontal. The complete back lever.',
+      holdTimeGoal: 5,
+      requirements: [
+        '+50lb weighted pull-up',
+        '5+ second full back lever',
+        'Body parallel to ground',
+      ],
+      prerequisiteStrength: ['+50lb weighted pull-up', 'Strong straddle holds'],
+      coachingTip: 'The final progression. Maximum body tension and straight arm discipline required.',
     },
   ],
 }
@@ -434,6 +528,7 @@ export const HSPU_ROADMAP: SkillRoadmap = {
 // All roadmaps collection
 export const SKILL_ROADMAPS: Record<SkillRoadmapType, SkillRoadmap> = {
   'front-lever': FRONT_LEVER_ROADMAP,
+  'back-lever': BACK_LEVER_ROADMAP,
   'planche': PLANCHE_ROADMAP,
   'muscle-up': MUSCLE_UP_ROADMAP,
   'hspu': HSPU_ROADMAP,
@@ -486,6 +581,19 @@ export function determineRoadmapPosition(
         hasBar: profile.equipmentAvailable?.includes('pullup_bar') || true,
       }
       readinessResult = calculateFrontLeverReadiness(inputs)
+      break
+    }
+    case 'back-lever': {
+      const inputs: BackLeverInputs = {
+        maxPullUps,
+        germanHangHold: 15, // Estimate based on experience
+        skinTheCatReps: Math.floor(maxPullUps * 0.3), // Estimate correlation
+        ringsSupportHold: 20, // Reasonable default
+        invertedHangHold: 15, // Reasonable default
+        hasRings: profile.equipmentAvailable?.includes('rings') || false,
+        hasBar: profile.equipmentAvailable?.includes('pullup_bar') || true,
+      }
+      readinessResult = calculateBackLeverReadiness(inputs)
       break
     }
     case 'planche': {

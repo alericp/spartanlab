@@ -171,6 +171,16 @@ export function hasSignificantProfileChange(
     return true
   }
   
+  // Joint cautions changes (affects exercise selection)
+  const prevJoints = previous.jointCautions ?? []
+  const currJoints = current.jointCautions ?? []
+  if (prevJoints.length !== currJoints.length || !prevJoints.every(j => currJoints.includes(j))) {
+    return true
+  }
+  
+  // Weakest area changes (affects programming emphasis)
+  if (previous.weakestArea !== current.weakestArea) return true
+  
   return false
 }
 
@@ -202,6 +212,18 @@ export function getProfileChangeDescription(
   const currCore = current.equipmentAvailable?.filter(e => coreEquipment.includes(e)) ?? []
   if (prevCore.length !== currCore.length || !prevCore.every(e => currCore.includes(e))) {
     changes.push('equipment')
+  }
+  
+  // Check joint cautions
+  const prevJoints = previous.jointCautions ?? []
+  const currJoints = current.jointCautions ?? []
+  if (prevJoints.length !== currJoints.length || !prevJoints.every(j => currJoints.includes(j))) {
+    changes.push('joint cautions')
+  }
+  
+  // Check weakest area
+  if (previous.weakestArea !== current.weakestArea) {
+    changes.push('focus area')
   }
   
   if (changes.length === 0) return ''

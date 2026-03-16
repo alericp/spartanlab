@@ -1053,6 +1053,292 @@ export function calculateHSPUReadiness(inputs: HSPUInputs): ReadinessResult {
 }
 
 // =============================================================================
+// BACK LEVER READINESS
+// =============================================================================
+
+export interface BackLeverInputs {
+  maxPullUps: number
+  germanHangHold: number // seconds - key indicator of shoulder extension readiness
+  skinTheCatReps: number // controlled skin the cats
+  ringsSupportHold: number // seconds on rings
+  invertedHangHold: number // seconds
+  hasRings: boolean
+  hasBar: boolean
+  currentProgression?: 'none' | 'tuck' | 'adv_tuck' | 'one_leg' | 'straddle' | 'full'
+}
+
+export function calculateBackLeverReadiness(inputs: BackLeverInputs): ReadinessResult {
+  const breakdown: ScoreBreakdown[] = []
+  
+  // ===================
+  // Factor 1: German Hang / Shoulder Extension (max 30 points)
+  // ===================
+  // The most critical prerequisite for back lever - shoulder extension mobility and strength
+  let germanScore = 0
+  let germanStatus: ScoreBreakdown['status'] = 'weak'
+  
+  if (inputs.germanHangHold >= 30) {
+    germanScore = 30
+    germanStatus = 'strong'
+  } else if (inputs.germanHangHold >= 20) {
+    germanScore = 24
+    germanStatus = 'strong'
+  } else if (inputs.germanHangHold >= 15) {
+    germanScore = 18
+    germanStatus = 'adequate'
+  } else if (inputs.germanHangHold >= 8) {
+    germanScore = 12
+    germanStatus = 'developing'
+  } else if (inputs.germanHangHold >= 3) {
+    germanScore = 6
+    germanStatus = 'weak'
+  }
+  
+  breakdown.push({
+    factor: 'German Hang (Shoulder Extension)',
+    score: germanScore,
+    maxScore: 30,
+    status: germanStatus,
+  })
+
+  // ===================
+  // Factor 2: Pull-Up Base (max 20 points)
+  // ===================
+  // Pulling strength correlates with back lever ability
+  let pullUpScore = 0
+  let pullUpStatus: ScoreBreakdown['status'] = 'weak'
+  
+  if (inputs.maxPullUps >= 15) {
+    pullUpScore = 20
+    pullUpStatus = 'strong'
+  } else if (inputs.maxPullUps >= 12) {
+    pullUpScore = 16
+    pullUpStatus = 'strong'
+  } else if (inputs.maxPullUps >= 8) {
+    pullUpScore = 12
+    pullUpStatus = 'adequate'
+  } else if (inputs.maxPullUps >= 5) {
+    pullUpScore = 7
+    pullUpStatus = 'developing'
+  } else if (inputs.maxPullUps >= 2) {
+    pullUpScore = 3
+    pullUpStatus = 'weak'
+  }
+  
+  breakdown.push({
+    factor: 'Pulling Strength (Pull-Ups)',
+    score: pullUpScore,
+    maxScore: 20,
+    status: pullUpStatus,
+  })
+
+  // ===================
+  // Factor 3: Skin the Cat Proficiency (max 20 points)
+  // ===================
+  // Direct precursor movement for back lever
+  let stcScore = 0
+  let stcStatus: ScoreBreakdown['status'] = 'weak'
+  
+  if (inputs.skinTheCatReps >= 8) {
+    stcScore = 20
+    stcStatus = 'strong'
+  } else if (inputs.skinTheCatReps >= 5) {
+    stcScore = 16
+    stcStatus = 'strong'
+  } else if (inputs.skinTheCatReps >= 3) {
+    stcScore = 12
+    stcStatus = 'adequate'
+  } else if (inputs.skinTheCatReps >= 2) {
+    stcScore = 7
+    stcStatus = 'developing'
+  } else if (inputs.skinTheCatReps >= 1) {
+    stcScore = 4
+    stcStatus = 'weak'
+  }
+  
+  breakdown.push({
+    factor: 'Skin the Cat Proficiency',
+    score: stcScore,
+    maxScore: 20,
+    status: stcStatus,
+  })
+
+  // ===================
+  // Factor 4: Straight-Arm Strength / Ring Support (max 15 points)
+  // ===================
+  let supportScore = 0
+  let supportStatus: ScoreBreakdown['status'] = 'weak'
+  
+  if (inputs.ringsSupportHold >= 45) {
+    supportScore = 15
+    supportStatus = 'strong'
+  } else if (inputs.ringsSupportHold >= 30) {
+    supportScore = 12
+    supportStatus = 'strong'
+  } else if (inputs.ringsSupportHold >= 20) {
+    supportScore = 9
+    supportStatus = 'adequate'
+  } else if (inputs.ringsSupportHold >= 10) {
+    supportScore = 5
+    supportStatus = 'developing'
+  } else if (inputs.ringsSupportHold >= 5) {
+    supportScore = 2
+    supportStatus = 'weak'
+  }
+  
+  breakdown.push({
+    factor: 'Ring Support / Straight-Arm Strength',
+    score: supportScore,
+    maxScore: 15,
+    status: supportStatus,
+  })
+
+  // ===================
+  // Factor 5: Inversion Comfort (max 10 points)
+  // ===================
+  let inversionScore = 0
+  let inversionStatus: ScoreBreakdown['status'] = 'weak'
+  
+  if (inputs.invertedHangHold >= 20) {
+    inversionScore = 10
+    inversionStatus = 'strong'
+  } else if (inputs.invertedHangHold >= 12) {
+    inversionScore = 8
+    inversionStatus = 'adequate'
+  } else if (inputs.invertedHangHold >= 6) {
+    inversionScore = 5
+    inversionStatus = 'developing'
+  } else if (inputs.invertedHangHold >= 3) {
+    inversionScore = 3
+    inversionStatus = 'weak'
+  }
+  
+  breakdown.push({
+    factor: 'Inversion Comfort',
+    score: inversionScore,
+    maxScore: 10,
+    status: inversionStatus,
+  })
+
+  // ===================
+  // Factor 6: Equipment Access (max 5 points)
+  // ===================
+  let equipScore = 0
+  let equipStatus: ScoreBreakdown['status'] = 'weak'
+  
+  if (inputs.hasRings) {
+    equipScore = 5
+    equipStatus = 'strong'
+  } else if (inputs.hasBar) {
+    equipScore = 3
+    equipStatus = 'adequate'
+  }
+  
+  breakdown.push({
+    factor: 'Equipment Access',
+    score: equipScore,
+    maxScore: 5,
+    status: equipStatus,
+  })
+
+  // ===================
+  // Calculate Total Score
+  // ===================
+  const totalScore = breakdown.reduce((sum, b) => sum + b.score, 0)
+  
+  // ===================
+  // Determine Level & Labels
+  // ===================
+  let level: ReadinessLevel
+  let label: string
+  let nextProgression: string
+  
+  if (totalScore >= 85) {
+    level = 'advanced-ready'
+    label = 'Advanced Tuck / One Leg Ready'
+    nextProgression = 'Advanced tuck holds, one leg back lever, straddle progression'
+  } else if (totalScore >= 70) {
+    level = 'intermediate-progression'
+    label = 'Tuck Back Lever Ready'
+    nextProgression = 'Tuck back lever holds, extended tuck work, skin the cat volume'
+  } else if (totalScore >= 50) {
+    level = 'early-progression'
+    label = 'German Hang / Mobility Building'
+    nextProgression = 'German hang holds, skin the cat practice, inverted rows'
+  } else if (totalScore >= 25) {
+    level = 'foundation-phase'
+    label = 'Foundation Building'
+    nextProgression = 'Build pull-up strength, begin german hang mobility, skin the cat basics'
+  } else {
+    level = 'not-ready'
+    label = 'Not Ready Yet'
+    nextProgression = 'Focus on building pull-up strength and basic ring work first'
+  }
+
+  // ===================
+  // Determine Limiting Factor
+  // ===================
+  const weakestFactor = [...breakdown]
+    .filter(b => b.maxScore > 5)
+    .sort((a, b) => (a.score / a.maxScore) - (b.score / b.maxScore))[0]
+  
+  const limitingFactorMap: Record<string, { factor: string; explanation: string }> = {
+    'German Hang (Shoulder Extension)': {
+      factor: 'Shoulder extension mobility',
+      explanation: 'German hang is the most critical prerequisite. Without comfortable shoulder extension, back lever training will be unsafe and ineffective. Build to 20+ second holds.'
+    },
+    'Pulling Strength (Pull-Ups)': {
+      factor: 'Base pulling strength',
+      explanation: 'Back lever relies heavily on lat and pulling strength. Build your pull-up numbers as the foundation for straight-arm pulling work.'
+    },
+    'Skin the Cat Proficiency': {
+      factor: 'Movement pattern preparation',
+      explanation: 'Skin the cat teaches the full range of motion in a dynamic context. Controlled reps build the motor pattern and confidence for static holds.'
+    },
+    'Ring Support / Straight-Arm Strength': {
+      factor: 'Straight-arm support strength',
+      explanation: 'Back lever is a straight-arm skill. Build ring support endurance to develop the connective tissue strength needed for static holds.'
+    },
+    'Inversion Comfort': {
+      factor: 'Inversion confidence',
+      explanation: 'You need to be comfortable upside down. Practice inverted hangs and inversions until they feel natural and controlled.'
+    },
+  }
+  
+  const limitingInfo = limitingFactorMap[weakestFactor?.factor] || {
+    factor: 'General preparation',
+    explanation: 'Focus on building shoulder mobility and pulling strength.'
+  }
+
+  // ===================
+  // Generate Recommendation
+  // ===================
+  let recommendation: string
+  if (level === 'not-ready') {
+    recommendation = 'Build your foundation first. Focus on pull-ups, basic ring work, and shoulder mobility before back lever training.'
+  } else if (level === 'foundation-phase') {
+    recommendation = 'Begin german hang work for mobility. Add skin the cat practice while continuing to build pulling strength.'
+  } else if (level === 'early-progression') {
+    recommendation = 'You are ready for preparatory back lever work. Focus on extended german hang holds and controlled skin the cats to build the specific strength.'
+  } else if (level === 'intermediate-progression') {
+    recommendation = 'You can begin tuck back lever holds. Start with short holds (3-5 seconds) focusing on body position and straight arms.'
+  } else {
+    recommendation = 'You have the foundation to progress beyond tuck. Work toward advanced tuck and one-leg progressions with emphasis on body tension.'
+  }
+
+  return {
+    score: totalScore,
+    level,
+    label,
+    limitingFactor: limitingInfo.factor,
+    limitingFactorExplanation: limitingInfo.explanation,
+    recommendation,
+    nextProgression,
+    breakdown,
+  }
+}
+
+// =============================================================================
 // READINESS TIERS (UNIFIED SYSTEM)
 // =============================================================================
 
@@ -1251,6 +1537,32 @@ function getSuggestionForFactor(factor: string, severity: WeakPoint['severity'])
       moderate: 'Progress overhead press load.',
       minor: 'Maintain pressing strength.',
     },
+    // Back Lever factors
+    'German Hang (Shoulder Extension)': {
+      critical: 'Daily german hang practice. Start with 5-10s holds.',
+      moderate: 'Build german hang hold time to 20-30s.',
+      minor: 'Maintain shoulder extension work. Add loaded stretching.',
+    },
+    'Pulling Strength (Pull-Ups)': {
+      critical: 'Focus on building strict pull-up volume. Target 3-4 sessions per week.',
+      moderate: 'Add weighted pull-ups or increase training frequency.',
+      minor: 'Continue current pull-up work. Consider adding more volume.',
+    },
+    'Skin the Cat Proficiency': {
+      critical: 'Begin skin the cat practice. Use band assistance if needed.',
+      moderate: 'Build to 5+ controlled skin the cats per session.',
+      minor: 'Maintain skin the cat volume. Focus on control.',
+    },
+    'Ring Support / Straight-Arm Strength': {
+      critical: 'Daily ring support holds. Start with 10-15s.',
+      moderate: 'Build ring support to 30-45s holds.',
+      minor: 'Add RTO (rings turned out) support work.',
+    },
+    'Inversion Comfort': {
+      critical: 'Practice inverted hangs daily until comfortable.',
+      moderate: 'Build inverted hang time. Add movement in inversion.',
+      minor: 'Maintain inversion practice. Focus on body control.',
+    },
   }
   
   return suggestions[factor]?.[severity] || `Improve ${factor.toLowerCase()} with targeted training.`
@@ -1260,7 +1572,7 @@ function getSuggestionForFactor(factor: string, severity: WeakPoint['severity'])
 // UNIFIED READINESS CALCULATOR (for dashboard indicators)
 // =============================================================================
 
-export type SkillType = 'front-lever' | 'planche' | 'muscle-up' | 'hspu'
+export type SkillType = 'front-lever' | 'back-lever' | 'planche' | 'muscle-up' | 'hspu'
 
 export interface UnifiedReadinessResult {
   skillType: SkillType

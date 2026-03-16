@@ -91,6 +91,52 @@ export const PROGRESSION_LADDERS: ProgressionLadder[] = [
     ],
   },
 
+  // ===== IRON CROSS PROGRESSION =====
+  {
+    id: 'iron_cross',
+    name: 'Iron Cross',
+    description: 'Advanced rings skill progression requiring extreme straight-arm shoulder strength',
+    skill: 'iron_cross',
+    steps: [
+      {
+        exerciseId: 'ring_support_hold',
+        level: 1,
+        prerequisiteHoldTime: '60s',
+        cues: ['Arms locked straight', 'Shoulders depressed', 'Rings stable against body'],
+      },
+      {
+        exerciseId: 'rto_support_hold',
+        level: 2,
+        prerequisiteHoldTime: '30s',
+        cues: ['Rings turned out 45-90 degrees', 'Maintain depression', 'Control rotation'],
+      },
+      {
+        exerciseId: 'assisted_cross_hold',
+        level: 3,
+        prerequisiteHoldTime: '15s',
+        cues: ['Use band for assistance', 'Arms horizontal', 'Shoulders depressed throughout'],
+      },
+      {
+        exerciseId: 'cross_negatives',
+        level: 4,
+        prerequisiteReps: 5,
+        cues: ['Slow controlled descent', '5+ seconds per rep', 'Fight against gravity'],
+      },
+      {
+        exerciseId: 'partial_cross_hold',
+        level: 5,
+        prerequisiteHoldTime: '10s',
+        cues: ['Arms at 45-degree angle', 'Build toward horizontal', 'Perfect form over ROM'],
+      },
+      {
+        exerciseId: 'full_iron_cross',
+        level: 6,
+        prerequisiteHoldTime: '5s',
+        cues: ['Arms fully horizontal', 'Body vertical', 'Maximum tension throughout'],
+      },
+    ],
+  },
+
   // ===== PLANCHE PROGRESSION =====
   {
     id: 'planche',

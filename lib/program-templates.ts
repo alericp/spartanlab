@@ -98,6 +98,28 @@ export const HSPU_EXERCISES = {
   ],
 }
 
+// Iron Cross exercises by level (rings skill)
+export const IRON_CROSS_EXERCISES = {
+  beginner: [
+    { name: 'Ring Support Hold', sets: 3, repsOrTime: '20-30s', category: 'skill' as const },
+    { name: 'Ring Turned Out Support', sets: 3, repsOrTime: '15-20s', note: 'RTO focus', category: 'skill' as const },
+    { name: 'Wide Ring Support', sets: 3, repsOrTime: '15s', note: 'Lowered rings', category: 'skill' as const },
+    { name: 'Ring Dips', sets: 3, repsOrTime: '6-8', category: 'strength' as const },
+  ],
+  intermediate: [
+    { name: 'Cross Pulls (Assisted)', sets: 4, repsOrTime: '5-6', note: 'Band or pulley assist', category: 'skill' as const },
+    { name: 'Cross Eccentrics', sets: 3, repsOrTime: '3-4', note: '5s negative', category: 'skill' as const },
+    { name: 'Wide Ring Push-Ups', sets: 4, repsOrTime: '8-10', category: 'strength' as const },
+    { name: 'Bent Arm Cross Hold', sets: 3, repsOrTime: '8-12s', note: '45° arm angle', category: 'skill' as const },
+  ],
+  advanced: [
+    { name: 'Iron Cross Hold', sets: 4, repsOrTime: '3-5s', category: 'skill' as const },
+    { name: 'Cross Pulls (Minimal Assist)', sets: 4, repsOrTime: '3-4', category: 'skill' as const },
+    { name: 'Cross to L-Sit', sets: 3, repsOrTime: '2-3', category: 'skill' as const },
+    { name: 'Archer Ring Dips', sets: 3, repsOrTime: '4-6 each', category: 'strength' as const },
+  ],
+}
+
 // Weighted Strength exercises
 export const WEIGHTED_STRENGTH_EXERCISES = {
   beginner: [

@@ -456,6 +456,122 @@ export const PREREQUISITE_RULES: PrerequisiteRule[] = [
     safeProgressionLadder: ['skin_the_cat', 'german_hang', 'tuck_back_lever', 'adv_tuck_back_lever', 'back_lever'],
     riskLevel: 'high',
   },
+  
+  // ===== IRON CROSS (ASSISTED) =====
+  {
+    exerciseId: 'assisted_cross_hold',
+    exerciseName: 'Assisted Cross Hold',
+    requiredStrengthMetrics: [
+      {
+        metric: 'straight_arm_strength',
+        level: 'intermediate',
+        description: 'Strong straight-arm pressing from rings work',
+      },
+    ],
+    requiredSkillStage: [
+      {
+        exerciseId: 'rto_support_hold',
+        exerciseName: 'RTO Support Hold',
+        holdTimeSeconds: 30,
+      },
+    ],
+    minimumReadinessScore: 55,
+    requiredJointStability: [
+      {
+        joint: 'shoulder',
+        stabilityThreshold: 70,
+        description: 'High shoulder stability for horizontal loading',
+      },
+      {
+        joint: 'elbow',
+        stabilityThreshold: 65,
+        description: 'Elbow integrity for straight-arm loading',
+      },
+    ],
+    warningMessage: 'Assisted cross requires exceptional shoulder stability. Build RTO support holds to 30+ seconds first.',
+    knowledgeBubble: 'RTO support develops the shoulder position and stability needed for cross progressions.',
+    safeProgressionLadder: ['ring_support_hold', 'rto_support_hold', 'assisted_cross_hold'],
+    riskLevel: 'high',
+  },
+  
+  // ===== IRON CROSS (NEGATIVES) =====
+  {
+    exerciseId: 'cross_negatives',
+    exerciseName: 'Cross Negatives',
+    requiredStrengthMetrics: [
+      {
+        metric: 'straight_arm_strength',
+        level: 'advanced',
+        description: 'Advanced straight-arm shoulder strength',
+      },
+    ],
+    requiredSkillStage: [
+      {
+        exerciseId: 'assisted_cross_hold',
+        exerciseName: 'Assisted Cross Hold',
+        holdTimeSeconds: 15,
+      },
+    ],
+    minimumReadinessScore: 70,
+    requiredJointStability: [
+      {
+        joint: 'shoulder',
+        stabilityThreshold: 75,
+        description: 'Excellent shoulder stability under eccentric cross loading',
+      },
+      {
+        joint: 'elbow',
+        stabilityThreshold: 70,
+        description: 'Elbow tendon conditioning for cross stress',
+      },
+    ],
+    warningMessage: 'Cross negatives place extreme stress on shoulders and elbows. Build assisted cross holds first.',
+    knowledgeBubble: 'Assisted cross holds condition tendons for the demands of cross negatives.',
+    safeProgressionLadder: ['rto_support_hold', 'assisted_cross_hold', 'cross_negatives'],
+    riskLevel: 'very_high',
+  },
+  
+  // ===== IRON CROSS (FULL) =====
+  {
+    exerciseId: 'full_iron_cross',
+    exerciseName: 'Full Iron Cross',
+    requiredStrengthMetrics: [
+      {
+        metric: 'straight_arm_strength',
+        level: 'elite',
+        description: 'Elite-level straight-arm shoulder strength',
+      },
+    ],
+    requiredSkillStage: [
+      {
+        exerciseId: 'cross_negatives',
+        exerciseName: 'Cross Negatives',
+        reps: 5,
+      },
+      {
+        exerciseId: 'partial_cross_hold',
+        exerciseName: 'Partial Cross Hold',
+        holdTimeSeconds: 10,
+      },
+    ],
+    minimumReadinessScore: 85,
+    requiredJointStability: [
+      {
+        joint: 'shoulder',
+        stabilityThreshold: 85,
+        description: 'Elite shoulder joint integrity',
+      },
+      {
+        joint: 'elbow',
+        stabilityThreshold: 80,
+        description: 'Conditioned elbow tendons for full cross loading',
+      },
+    ],
+    warningMessage: 'Full Iron Cross is an elite skill. Years of progressive tendon conditioning are required. Do not rush this progression.',
+    knowledgeBubble: 'Iron Cross requires years of preparation. Rushing leads to shoulder and elbow injuries.',
+    safeProgressionLadder: ['ring_support_hold', 'rto_support_hold', 'assisted_cross_hold', 'cross_negatives', 'partial_cross_hold', 'full_iron_cross'],
+    riskLevel: 'very_high',
+  },
 ]
 
 // =============================================================================

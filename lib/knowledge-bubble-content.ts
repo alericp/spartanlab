@@ -216,6 +216,53 @@ export const EXERCISE_KNOWLEDGE: Record<string, ExerciseKnowledge> = {
     safetyNote: 'Start with bent arms if new to this position.',
   },
   
+  // Iron Cross progressions
+  'ring_support_hold': {
+    exerciseId: 'ring_support_hold',
+    exerciseName: 'Ring Support Hold',
+    shortReason: 'Foundation for all advanced rings work. Builds shoulder stability and straight-arm strength.',
+    skillCarryover: ['iron_cross', 'ring_dip', 'muscle_up'],
+    safetyNote: 'Rings should be stable against the body. Do not allow excessive shaking.',
+  },
+  'rto_support_hold': {
+    exerciseId: 'rto_support_hold',
+    exerciseName: 'RTO Support Hold',
+    shortReason: 'Develops the turned-out shoulder position required for cross and advanced rings skills.',
+    skillCarryover: ['iron_cross', 'maltese'],
+    safetyNote: 'Progress rotation gradually. Stop if shoulder discomfort occurs.',
+  },
+  'assisted_cross_hold': {
+    exerciseId: 'assisted_cross_hold',
+    exerciseName: 'Assisted Cross Hold',
+    shortReason: 'Allows tendon adaptation to cross position before attempting unsupported holds.',
+    skillCarryover: ['iron_cross'],
+    safetyNote: 'Use appropriate band resistance. Do not ego-lift with too little assistance.',
+    commonMistake: 'Rushing to reduce assistance before tendons are ready.',
+  },
+  'cross_negatives': {
+    exerciseId: 'cross_negatives',
+    exerciseName: 'Cross Negatives',
+    shortReason: 'Eccentric cross training builds strength through the full ROM while conditioning tendons.',
+    skillCarryover: ['iron_cross'],
+    safetyNote: 'Use 5+ second descents. Stop immediately if sharp pain occurs.',
+    commonMistake: 'Descending too fast - control is more important than volume.',
+  },
+  'partial_cross_hold': {
+    exerciseId: 'partial_cross_hold',
+    exerciseName: 'Partial Cross Hold',
+    shortReason: 'Builds cross strength at reduced lever arm before attempting full horizontal.',
+    skillCarryover: ['iron_cross'],
+    safetyNote: 'Progress arm angle gradually over months, not weeks.',
+  },
+  'full_iron_cross': {
+    exerciseId: 'full_iron_cross',
+    exerciseName: 'Full Iron Cross',
+    shortReason: 'Elite rings skill requiring years of preparation. Peak straight-arm shoulder strength.',
+    skillCarryover: ['maltese', 'victorian'],
+    safetyNote: 'This skill requires years of progressive tendon conditioning. Never rush this progression.',
+    commonMistake: 'Attempting full cross before partial holds are solid. This leads to injury.',
+  },
+  
   // Core / Compression
   'compression_hold': {
     exerciseId: 'compression_hold',
@@ -429,11 +476,20 @@ export const READINESS_EXPLANATIONS: Record<string, string> = {
   'lsit_compression': 'Hip flexor and compression strength is limiting your L-Sit.',
   'lsit_tricep': 'Tricep lockout endurance needs development for longer L-Sit holds.',
   
+  // Iron Cross limiters
+  'ic_ring_support': 'Ring support stability is the foundation you need to build for Cross work.',
+  'ic_rto': 'RTO (Rings Turned Out) support strength is limiting your Cross progression.',
+  'ic_straight_arm': 'Straight-arm shoulder strength is the primary gap in your Iron Cross readiness.',
+  'ic_scapular': 'Scapular depression strength needs development for Cross holds.',
+  'ic_shoulder': 'Shoulder stability is critical for Iron Cross. Build this before advancing.',
+  'ic_tendon': 'Tendon tolerance requires years of conditioning. Do not rush Cross progressions.',
+  
   // Strong areas
   'strong_pulling': 'Pulling strength is already strong enough for your current stage.',
   'strong_pushing': 'Pushing strength is well developed for your current goals.',
   'strong_compression': 'Compression strength is ahead of other components.',
   'strong_stability': 'Shoulder stability is a relative strength for you.',
+  'strong_ring_support': 'Ring support stability is solid for your current Cross progression.',
 }
 
 // =============================================================================

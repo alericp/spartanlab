@@ -1,8 +1,17 @@
 // Skill State Service
 // Manages persistent skill-specific state tracking for athletes
 // Source of truth for skill-specific coaching decisions
+// Now integrated with Skill Progression Graph Engine for explicit node-based tracking
 
 import { neon } from '@neondatabase/serverless'
+import {
+  determineGraphPosition,
+  getSkillGraph,
+  getGraphNode,
+  type SkillGraphId,
+  type AthleteGraphPosition,
+  type ProgressionNode,
+} from './skill-progression-graph-engine'
 
 const sql = neon(process.env.DATABASE_URL!)
 
@@ -375,4 +384,122 @@ export const COACHING_CONTEXT_LABELS: Record<CoachingContext, string> = {
   maintaining: 'Maintaining',
   regressing: 'Rebuilding',
   new_skill: 'New Skill',
+}
+
+// =============================================================================
+// GRAPH-ENHANCED SKILL STATE
+// =============================================================================
+
+/**
+ * Extended SkillState with graph node positioning
+ */
+export interface GraphEnhancedSkillState extends SkillState {
+  graphPosition: AthleteGraphPosition | null
+  currentNode: ProgressionNode | null
+  nextNode: ProgressionNode | null
+  isBlocked: boolean
+  blockingReasons: string[]
+}
+
+/**
+ * Convert SkillKey to SkillGraphId
+ */
+function skillKeyToGraphId(skill: SkillKey): SkillGraphId {
+  return skill as SkillGraphId
+}
+
+/**
+ * Get skill state enhanced with graph positioning
+ */
+export async function getGraphEnhancedSkillState(
+  userId: string,
+  skill: SkillKey,
+  athleteBenchmarks?: Record<string, number>
+): Promise<GraphEnhancedSkillState | null> {
+  const state = await getSkillState(userId, skill)
+  if (!state) return null
+  
+  // Default benchmarks from state if not provided
+  const benchmarks = athleteBenchmarks || {
+    pull_ups: 0,
+    dips: 0,
+    weighted_pull: 0,
+    weighted_dip: 0,
+    compression: 0,
+    hold_time: state.currentBestMetric || 0,
+  }
+  
+  // Get graph position
+  const graphId = skillKeyToGraphId(skill)
+  const graphPosition = determineGraphPosition(
+    graphId,
+    benchmarks,
+    state.readinessScore || 0,
+    state.metricType === 'hold_seconds' ? state.currentBestMetric : undefined,
+    state.metricType === 'reps' ? state.currentBestMetric : undefined
+  )
+  
+  return {
+    ...state,
+    graphPosition,
+    currentNode: graphPosition?.currentNode || null,
+    nextNode: graphPosition?.nextRecommendedNode || null,
+    isBlocked: graphPosition?.isBlocked || false,
+    blockingReasons: graphPosition?.blockingReasons.map(r => r.description) || [],
+  }
+}
+
+/**
+ * Get all skill states enhanced with graph positioning
+ */
+export async function getAllGraphEnhancedSkillStates(
+  userId: string,
+  athleteBenchmarks?: Record<string, number>
+): Promise<GraphEnhancedSkillState[]> {
+  const states = await getAthleteSkillStates(userId)
+  
+  return Promise.all(
+    states.map(async (state) => {
+      const enhanced = await getGraphEnhancedSkillState(
+        userId,
+        state.skill,
+        athleteBenchmarks
+      )
+      return enhanced || {
+        ...state,
+        graphPosition: null,
+        currentNode: null,
+        nextNode: null,
+        isBlocked: false,
+        blockingReasons: [],
+      }
+    })
+  )
+}
+
+/**
+ * Map numeric level to graph node for a skill
+ */
+export function mapLevelToGraphNode(
+  skill: SkillKey,
+  level: number
+): ProgressionNode | null {
+  const graphId = skillKeyToGraphId(skill)
+  const graph = getSkillGraph(graphId)
+  if (!graph) return null
+  
+  // Find node with matching levelIndex
+  const node = graph.nodes.find(n => n.levelIndex === level)
+  return node || null
+}
+
+/**
+ * Get node ID from current level (for SkillState update)
+ */
+export function getCurrentNodeId(
+  skill: SkillKey,
+  level: number
+): string | null {
+  const node = mapLevelToGraphNode(skill, level)
+  return node?.nodeId || null
 }

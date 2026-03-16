@@ -157,13 +157,19 @@ import {
   type FormattedBuilderReasoning,
 } from './constraint-aware-assembly-engine'
 import {
-  getCycleBuilderModifications,
-  generateCycleExplanation,
   initializeAdaptiveCycleState,
   type AdaptiveCycleState,
   type CycleBuilderModifications,
   type AdaptiveCyclePhase,
 } from './adaptive-training-cycle-engine'
+import {
+  determineGraphPosition,
+  getSkillGraph,
+  getGraphNode,
+  type SkillGraphId,
+  type AthleteGraphPosition,
+  type ProgressionNode,
+} from './skill-progression-graph-engine'
 
 // =============================================================================
 // TYPES
@@ -443,6 +449,18 @@ export interface AdaptiveProgram {
       rationale: string
       nextSteps: string
     }
+  }
+  // Skill Progression Graph position - current node in progression graph
+  skillGraphPosition?: {
+    skillId: string
+    currentNodeId: string
+    currentNodeName: string
+    nextNodeId: string | null
+    nextNodeName: string | null
+    isBlocked: boolean
+    blockingReasons: string[]
+    progressPercentage: number
+    knowledgeTip: string
   }
 }
 
@@ -1293,8 +1311,65 @@ fatigueDecision: fatigueDecision ? {
           requiredEquipment: [],
         }
         
-        const analysis = analyzeConstraints(constraintInput)
-        return formatBuilderReasoning(analysis, primaryGoal)
+    const analysis = analyzeConstraints(constraintInput)
+    return formatBuilderReasoning(analysis, primaryGoal)
+    } catch {
+    return undefined
+    }
+    })(),
+    // Skill Progression Graph position - current node in progression graph
+    skillGraphPosition: (() => {
+      try {
+        // Map primary goal to skill graph ID
+        const skillGraphMap: Record<string, SkillGraphId> = {
+          front_lever: 'front_lever',
+          planche: 'planche',
+          muscle_up: 'muscle_up',
+          hspu: 'hspu',
+          back_lever: 'back_lever',
+          l_sit: 'l_sit',
+          v_sit: 'v_sit',
+          iron_cross: 'iron_cross',
+          handstand: 'handstand',
+          one_arm_pull_up: 'one_arm_pull_up',
+        }
+        
+        const skillId = skillGraphMap[primaryGoal]
+        if (!skillId || !profile) return undefined
+        
+        // Build benchmarks from profile
+        const benchmarks: Record<string, number> = {
+          pull_ups: profile.pullUpMax || 0,
+          dips: profile.dipMax || 0,
+          weighted_pull: profile.weightedPullUp?.load || 0,
+          weighted_dip: profile.weightedDip?.load || 0,
+          compression: profile.lSitHold || 0,
+          hold_time: 0,
+        }
+        
+        // Get readiness score (use 50 as default if not available)
+        const readinessScore = canonicalReadiness?.readinessScore ?? 50
+        
+        // Determine graph position
+        const position = determineGraphPosition(
+          skillId,
+          benchmarks,
+          readinessScore
+        )
+        
+        if (!position) return undefined
+        
+        return {
+          skillId,
+          currentNodeId: position.currentNodeId,
+          currentNodeName: position.currentNode.displayName,
+          nextNodeId: position.nextRecommendedNodeId,
+          nextNodeName: position.nextRecommendedNode?.displayName || null,
+          isBlocked: position.isBlocked,
+          blockingReasons: position.blockingReasons.map(r => r.description),
+          progressPercentage: position.currentNodeProgress.percentToNextNode,
+          knowledgeTip: position.currentNode.knowledgeBubble.shortTip,
+        }
       } catch {
         return undefined
       }

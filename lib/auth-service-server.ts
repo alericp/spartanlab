@@ -93,3 +93,16 @@ export async function getCurrentUserIdServer(): Promise<string | null> {
  * Alias for getCurrentUserServer
  */
 export const getCurrentUser = getCurrentUserServer
+
+/**
+ * Get session with userId (compatibility alias for routes)
+ * Returns { userId } for use in API routes
+ */
+export async function getSession(): Promise<{ userId: string | null }> {
+  try {
+    const { userId } = await auth()
+    return { userId }
+  } catch {
+    return { userId: null }
+  }
+}

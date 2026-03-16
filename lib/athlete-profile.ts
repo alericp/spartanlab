@@ -207,12 +207,22 @@ export type WallHSPUReps =
   | '10_plus'
   | 'unknown'
 
-// Weighted benchmarks - exact values in lbs/kg
-export interface WeightedBenchmark {
+  // Weighted benchmarks - exact values in lbs/kg
+  export interface WeightedBenchmark {
   load: number | null      // Weight added
   unit: 'lbs' | 'kg'
-  reps?: number            // Reps at that weight
-}
+  reps?: number            // Reps at that weight (1-5)
+  }
+  
+  // All-time PR benchmarks with timeframe for rebound potential estimation
+  export type PRTimeframe = 'current' | 'within_3_months' | '3_to_6_months' | '6_to_12_months' | '1_to_2_years' | 'over_2_years'
+  
+  export interface AllTimePRBenchmark {
+  load: number | null      // Weight added at PR
+  unit: 'lbs' | 'kg'
+  reps?: number            // Reps at PR weight (1-5)
+  timeframe: PRTimeframe   // When was this PR achieved
+  }
 
 // =============================================================================
 // SKILL BENCHMARKS - Progression + Performance
@@ -300,16 +310,16 @@ export interface SkillHistoryEntry {
   tendonAdaptationScore: TendonAdaptationLevel
 }
 
-// Labels for UI
-export const SKILL_TRAINING_HISTORY_LABELS: Record<SkillTrainingHistory, string> = {
-  'never': 'Never',
-  'tried_little': 'Tried a little',
+  // Labels for UI - clearer wording for athletic history
+  export const SKILL_TRAINING_HISTORY_LABELS: Record<SkillTrainingHistory, string> = {
+  'never': 'Brand new',
+  'tried_little': 'Tried casually',
   'trained_consistently': 'Trained consistently',
-  'previously_strong': 'Previously strong',
-}
-
-export const SKILL_TRAINING_HISTORY_DESCRIPTIONS: Record<SkillTrainingHistory, string> = {
-  'never': 'No experience with this skill',
+  'previously_strong': 'Reached higher level',
+  }
+  
+  export const SKILL_TRAINING_HISTORY_DESCRIPTIONS: Record<SkillTrainingHistory, string> = {
+  'never': 'No prior experience with this skill',
   'tried_little': 'Dabbled or did occasional work',
   'trained_consistently': 'Trained this for weeks or months',
   'previously_strong': 'Could hold/perform intermediate+ levels',
@@ -759,13 +769,17 @@ export interface OnboardingProfile {
   selectedSkills: SkillGoal[]
   selectedFlexibility: FlexibilityGoal[]
   
-  // Section 4: Strength Benchmarks
+  // Section 4: Strength Benchmarks (current ability)
   pullUpMax: PullUpCapacity | null
   pushUpMax: PushUpCapacity | null
   dipMax: DipCapacity | null
   wallHSPUReps: WallHSPUReps | null
   weightedPullUp: WeightedBenchmark | null
   weightedDip: WeightedBenchmark | null
+  
+  // Section 4b: All-time PR benchmarks (for rebound potential)
+  allTimePRPullUp: AllTimePRBenchmark | null
+  allTimePRDip: AllTimePRBenchmark | null
   
   // Section 5: Skill Benchmarks
   frontLever: SkillBenchmark | null
@@ -1053,10 +1067,20 @@ export const TRAINING_DAYS_LABELS: Record<TrainingDaysPerWeek, string> = {
   'flexible': 'Flexible',
 }
 
-export const SESSION_STYLE_LABELS: Record<SessionStylePreference, string> = {
-  'efficient': 'Shorter, efficient sessions',
-  'full': 'Fuller, comprehensive sessions',
-}
+  export const SESSION_STYLE_LABELS: Record<SessionStylePreference, string> = {
+  'efficient': 'Shorter, focused sessions',
+  'full': 'Longer, more complete sessions',
+  }
+  
+  // PR Timeframe labels for all-time PR tracking
+  export const PR_TIMEFRAME_LABELS: Record<PRTimeframe, string> = {
+  'current': 'Current / still true',
+  'within_3_months': 'Within 3 months',
+  '3_to_6_months': '3–6 months ago',
+  '6_to_12_months': '6–12 months ago',
+  '1_to_2_years': '1–2 years ago',
+  'over_2_years': 'Over 2 years ago',
+  }
 
 export const RECOVERY_LABELS: Record<RecoveryQuality, string> = {
   'good': 'Good',
@@ -1175,13 +1199,17 @@ export function createEmptyOnboardingProfile(): OnboardingProfile {
   selectedSkills: [],
     selectedFlexibility: [],
     
-    // Section 4: Strength Benchmarks
+    // Section 4: Strength Benchmarks (current ability)
     pullUpMax: null,
     pushUpMax: null,
     dipMax: null,
     wallHSPUReps: null,
     weightedPullUp: null,
     weightedDip: null,
+    
+    // Section 4b: All-time PR benchmarks
+    allTimePRPullUp: null,
+    allTimePRDip: null,
     
   // Section 5: Skill Benchmarks
   frontLever: null,

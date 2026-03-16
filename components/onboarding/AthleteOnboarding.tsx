@@ -70,6 +70,8 @@ import {
   type SkillHistoryEntry,
   type PrimaryTrainingOutcome,
   type TrainingPathType,
+  type PRTimeframe,
+  type AllTimePRBenchmark,
   PRIMARY_TRAINING_OUTCOME_LABELS,
   PRIMARY_TRAINING_OUTCOME_DESCRIPTIONS,
   PRIMARY_TRAINING_OUTCOME_HELPER_TEXT,
@@ -116,6 +118,7 @@ import {
   SKILL_TRAINING_HISTORY_LABELS,
   SKILL_TRAINING_HISTORY_DESCRIPTIONS,
   SKILL_LAST_TRAINED_LABELS,
+  PR_TIMEFRAME_LABELS,
   calculateReadinessScores,
   calculateTendonAdaptation,
   saveOnboardingProfile,
@@ -1343,7 +1346,7 @@ function StrengthBenchmarksSection({ profile, updateProfile }: SectionProps) {
 
       {/* Max Pull-ups */}
       <div className="space-y-3">
-        <label className="text-sm font-medium text-[#A4ACB8]">Max strict pull-ups</label>
+        <label className="text-sm font-medium text-[#A4ACB8]">Current max strict pull-ups</label>
         <p className="text-xs text-[#6B7280] -mt-1">Dead hang to chin over bar, no kipping</p>
         <div className="grid grid-cols-4 gap-2">
           {pullupOptions.map((cap) => (
@@ -1368,7 +1371,7 @@ function StrengthBenchmarksSection({ profile, updateProfile }: SectionProps) {
 
       {/* Max Dips */}
       <div className="space-y-3">
-        <label className="text-sm font-medium text-[#A4ACB8]">Max dips</label>
+        <label className="text-sm font-medium text-[#A4ACB8]">Current max dips</label>
         <p className="text-xs text-[#6B7280] -mt-1">Parallel bar dips, full depth</p>
         <div className="grid grid-cols-4 gap-2">
           {dipOptions.map((cap) => (
@@ -1393,7 +1396,7 @@ function StrengthBenchmarksSection({ profile, updateProfile }: SectionProps) {
 
       {/* Max Push-ups */}
       <div className="space-y-3">
-        <label className="text-sm font-medium text-[#A4ACB8]">Max push-ups</label>
+        <label className="text-sm font-medium text-[#A4ACB8]">Current max push-ups</label>
         <p className="text-xs text-[#6B7280] -mt-1">Full range, chest to ground</p>
         <div className="grid grid-cols-3 gap-2">
           {pushupOptions.map((cap) => (
@@ -1418,7 +1421,7 @@ function StrengthBenchmarksSection({ profile, updateProfile }: SectionProps) {
 
       {/* Wall HSPU */}
       <div className="space-y-3">
-        <label className="text-sm font-medium text-[#A4ACB8]">Wall handstand push-ups</label>
+        <label className="text-sm font-medium text-[#A4ACB8]">Current wall handstand push-ups</label>
         <p className="text-xs text-[#6B7280] -mt-1">Full range against wall</p>
         <div className="grid grid-cols-5 gap-2">
           {hspuOptions.map((reps) => (
@@ -1441,10 +1444,10 @@ function StrengthBenchmarksSection({ profile, updateProfile }: SectionProps) {
         {profile.wallHSPUReps === 'unknown' && <DontKnowHint metricKey="wallHSPUReps" />}
       </div>
 
-      {/* Weighted Pull-up */}
+      {/* Current Weighted Pull-up */}
       <div className="space-y-3">
-        <label className="text-sm font-medium text-[#A4ACB8]">Best weighted pull-up <span className="text-[#6B7280]">(optional)</span></label>
-        <p className="text-xs text-[#6B7280] -mt-1">Weight added for 1-3 reps</p>
+        <label className="text-sm font-medium text-[#A4ACB8]">Current best weighted pull-up <span className="text-[#6B7280]">(optional)</span></label>
+        <p className="text-xs text-[#6B7280] -mt-1">Weight you can currently do for 1–5 reps</p>
         <div className="flex gap-2">
           <Input
             type="number"
@@ -1454,6 +1457,7 @@ function StrengthBenchmarksSection({ profile, updateProfile }: SectionProps) {
               weightedPullUp: {
                 load: e.target.value ? parseInt(e.target.value) : null,
                 unit: profile.weightedPullUp?.unit || 'lbs',
+                reps: profile.weightedPullUp?.reps,
               }
             })}
             className="flex-1 bg-[#0F1115] border-[#2B313A] text-[#E6E9EF]"
@@ -1479,12 +1483,123 @@ function StrengthBenchmarksSection({ profile, updateProfile }: SectionProps) {
             </OptionButton>
           </div>
         </div>
+        {profile.weightedPullUp?.load && (
+          <div className="space-y-1.5">
+            <label className="text-xs text-[#6B7280]">Reps at this weight</label>
+            <div className="flex gap-1.5">
+              {[1, 2, 3, 4, 5].map((rep) => (
+                <button
+                  key={rep}
+                  type="button"
+                  onClick={() => updateProfile({
+                    weightedPullUp: { ...profile.weightedPullUp!, reps: rep }
+                  })}
+                  className={`px-3 py-1.5 rounded text-xs transition-colors ${
+                    profile.weightedPullUp?.reps === rep
+                      ? 'bg-[#4F6D8A] text-white'
+                      : 'bg-[#1A1D24] text-[#A4ACB8] hover:bg-[#2B313A]'
+                  }`}
+                >
+                  {rep}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Weighted Dip */}
+      {/* All-time PR Weighted Pull-up */}
+      <div className="space-y-3 border-t border-[#2B313A] pt-4">
+        <label className="text-sm font-medium text-[#A4ACB8]">All-time best weighted pull-up <span className="text-[#6B7280]">(optional)</span></label>
+        <p className="text-xs text-[#6B7280] -mt-1">Most weight you ever added successfully</p>
+        <div className="flex gap-2">
+          <Input
+            type="number"
+            placeholder="Weight"
+            value={profile.allTimePRPullUp?.load || ''}
+            onChange={(e) => updateProfile({
+              allTimePRPullUp: {
+                load: e.target.value ? parseInt(e.target.value) : null,
+                unit: profile.allTimePRPullUp?.unit || 'lbs',
+                reps: profile.allTimePRPullUp?.reps,
+                timeframe: profile.allTimePRPullUp?.timeframe || 'current',
+              }
+            })}
+            className="flex-1 bg-[#0F1115] border-[#2B313A] text-[#E6E9EF]"
+          />
+          <div className="flex gap-1">
+            <OptionButton
+              selected={profile.allTimePRPullUp?.unit === 'lbs'}
+              onClick={() => updateProfile({
+                allTimePRPullUp: { ...profile.allTimePRPullUp, unit: 'lbs', load: profile.allTimePRPullUp?.load ?? null, timeframe: profile.allTimePRPullUp?.timeframe || 'current' }
+              })}
+              className="px-3"
+            >
+              lbs
+            </OptionButton>
+            <OptionButton
+              selected={profile.allTimePRPullUp?.unit === 'kg'}
+              onClick={() => updateProfile({
+                allTimePRPullUp: { ...profile.allTimePRPullUp, unit: 'kg', load: profile.allTimePRPullUp?.load ?? null, timeframe: profile.allTimePRPullUp?.timeframe || 'current' }
+              })}
+              className="px-3"
+            >
+              kg
+            </OptionButton>
+          </div>
+        </div>
+        {profile.allTimePRPullUp?.load && (
+          <>
+            <div className="space-y-1.5">
+              <label className="text-xs text-[#6B7280]">Reps at PR weight</label>
+              <div className="flex gap-1.5">
+                {[1, 2, 3, 4, 5].map((rep) => (
+                  <button
+                    key={rep}
+                    type="button"
+                    onClick={() => updateProfile({
+                      allTimePRPullUp: { ...profile.allTimePRPullUp!, reps: rep }
+                    })}
+                    className={`px-3 py-1.5 rounded text-xs transition-colors ${
+                      profile.allTimePRPullUp?.reps === rep
+                        ? 'bg-[#4F6D8A] text-white'
+                        : 'bg-[#1A1D24] text-[#A4ACB8] hover:bg-[#2B313A]'
+                    }`}
+                  >
+                    {rep}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs text-[#6B7280]">When was this PR?</label>
+              <div className="grid grid-cols-2 gap-1.5">
+                {(Object.keys(PR_TIMEFRAME_LABELS) as PRTimeframe[]).map((tf) => (
+                  <button
+                    key={tf}
+                    type="button"
+                    onClick={() => updateProfile({
+                      allTimePRPullUp: { ...profile.allTimePRPullUp!, timeframe: tf }
+                    })}
+                    className={`px-2 py-1.5 rounded text-xs transition-colors ${
+                      profile.allTimePRPullUp?.timeframe === tf
+                        ? 'bg-[#4F6D8A] text-white'
+                        : 'bg-[#1A1D24] text-[#A4ACB8] hover:bg-[#2B313A]'
+                    }`}
+                  >
+                    {PR_TIMEFRAME_LABELS[tf]}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* Current Weighted Dip */}
       <div className="space-y-3">
-        <label className="text-sm font-medium text-[#A4ACB8]">Best weighted dip <span className="text-[#6B7280]">(optional)</span></label>
-        <p className="text-xs text-[#6B7280] -mt-1">Weight added for 1-3 reps</p>
+        <label className="text-sm font-medium text-[#A4ACB8]">Current best weighted dip <span className="text-[#6B7280]">(optional)</span></label>
+        <p className="text-xs text-[#6B7280] -mt-1">Weight you can currently do for 1–5 reps</p>
         <div className="flex gap-2">
           <Input
             type="number"
@@ -1494,6 +1609,7 @@ function StrengthBenchmarksSection({ profile, updateProfile }: SectionProps) {
               weightedDip: {
                 load: e.target.value ? parseInt(e.target.value) : null,
                 unit: profile.weightedDip?.unit || 'lbs',
+                reps: profile.weightedDip?.reps,
               }
             })}
             className="flex-1 bg-[#0F1115] border-[#2B313A] text-[#E6E9EF]"
@@ -1519,6 +1635,117 @@ function StrengthBenchmarksSection({ profile, updateProfile }: SectionProps) {
             </OptionButton>
           </div>
         </div>
+        {profile.weightedDip?.load && (
+          <div className="space-y-1.5">
+            <label className="text-xs text-[#6B7280]">Reps at this weight</label>
+            <div className="flex gap-1.5">
+              {[1, 2, 3, 4, 5].map((rep) => (
+                <button
+                  key={rep}
+                  type="button"
+                  onClick={() => updateProfile({
+                    weightedDip: { ...profile.weightedDip!, reps: rep }
+                  })}
+                  className={`px-3 py-1.5 rounded text-xs transition-colors ${
+                    profile.weightedDip?.reps === rep
+                      ? 'bg-[#4F6D8A] text-white'
+                      : 'bg-[#1A1D24] text-[#A4ACB8] hover:bg-[#2B313A]'
+                  }`}
+                >
+                  {rep}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* All-time PR Weighted Dip */}
+      <div className="space-y-3 border-t border-[#2B313A] pt-4">
+        <label className="text-sm font-medium text-[#A4ACB8]">All-time best weighted dip <span className="text-[#6B7280]">(optional)</span></label>
+        <p className="text-xs text-[#6B7280] -mt-1">Most weight you ever added successfully</p>
+        <div className="flex gap-2">
+          <Input
+            type="number"
+            placeholder="Weight"
+            value={profile.allTimePRDip?.load || ''}
+            onChange={(e) => updateProfile({
+              allTimePRDip: {
+                load: e.target.value ? parseInt(e.target.value) : null,
+                unit: profile.allTimePRDip?.unit || 'lbs',
+                reps: profile.allTimePRDip?.reps,
+                timeframe: profile.allTimePRDip?.timeframe || 'current',
+              }
+            })}
+            className="flex-1 bg-[#0F1115] border-[#2B313A] text-[#E6E9EF]"
+          />
+          <div className="flex gap-1">
+            <OptionButton
+              selected={profile.allTimePRDip?.unit === 'lbs'}
+              onClick={() => updateProfile({
+                allTimePRDip: { ...profile.allTimePRDip, unit: 'lbs', load: profile.allTimePRDip?.load ?? null, timeframe: profile.allTimePRDip?.timeframe || 'current' }
+              })}
+              className="px-3"
+            >
+              lbs
+            </OptionButton>
+            <OptionButton
+              selected={profile.allTimePRDip?.unit === 'kg'}
+              onClick={() => updateProfile({
+                allTimePRDip: { ...profile.allTimePRDip, unit: 'kg', load: profile.allTimePRDip?.load ?? null, timeframe: profile.allTimePRDip?.timeframe || 'current' }
+              })}
+              className="px-3"
+            >
+              kg
+            </OptionButton>
+          </div>
+        </div>
+        {profile.allTimePRDip?.load && (
+          <>
+            <div className="space-y-1.5">
+              <label className="text-xs text-[#6B7280]">Reps at PR weight</label>
+              <div className="flex gap-1.5">
+                {[1, 2, 3, 4, 5].map((rep) => (
+                  <button
+                    key={rep}
+                    type="button"
+                    onClick={() => updateProfile({
+                      allTimePRDip: { ...profile.allTimePRDip!, reps: rep }
+                    })}
+                    className={`px-3 py-1.5 rounded text-xs transition-colors ${
+                      profile.allTimePRDip?.reps === rep
+                        ? 'bg-[#4F6D8A] text-white'
+                        : 'bg-[#1A1D24] text-[#A4ACB8] hover:bg-[#2B313A]'
+                    }`}
+                  >
+                    {rep}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs text-[#6B7280]">When was this PR?</label>
+              <div className="grid grid-cols-2 gap-1.5">
+                {(Object.keys(PR_TIMEFRAME_LABELS) as PRTimeframe[]).map((tf) => (
+                  <button
+                    key={tf}
+                    type="button"
+                    onClick={() => updateProfile({
+                      allTimePRDip: { ...profile.allTimePRDip!, timeframe: tf }
+                    })}
+                    className={`px-2 py-1.5 rounded text-xs transition-colors ${
+                      profile.allTimePRDip?.timeframe === tf
+                        ? 'bg-[#4F6D8A] text-white'
+                        : 'bg-[#1A1D24] text-[#A4ACB8] hover:bg-[#2B313A]'
+                    }`}
+                  >
+                    {PR_TIMEFRAME_LABELS[tf]}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </>
+        )}
       </div>
     </div>
   )

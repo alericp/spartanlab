@@ -25,6 +25,11 @@ import type { FatigueDecision, TrainingDecision } from './fatigue-decision-engin
 import type { PrimaryGoal, ExperienceLevel } from './program-service'
 import type { CycleType, CycleFocus, TrainingCycle } from './training-cycle-engine'
 import { ALL_TRAINING_CYCLES, DELOAD_CYCLE, MIXED_DEVELOPMENT_CYCLE } from './training-cycle-engine'
+import {
+  generateReadinessSignalsForCycle,
+  type AthleteReadinessSummary,
+  type ReadinessSignalsForCycle,
+} from './unified-readiness-integration'
 
 // =============================================================================
 // ADAPTIVE CYCLE TYPES
@@ -103,6 +108,9 @@ export type CycleTransitionSignalType =
   | 'fatigue_resolved'        // Fatigue successfully reduced
   | 'readiness_decline'       // Readiness dropping
   | 'readiness_recovery'      // Readiness improving
+  | 'readiness_high'          // High skill readiness detected (NEW)
+  | 'readiness_low'           // Low skill readiness detected (NEW)
+  | 'readiness_emphasis'      // Readiness suggests different emphasis (NEW)
   | 'time_based'              // Minimum cycle duration reached
   | 'framework_shift'         // Framework changed
   | 'goal_change'             // Athlete changed goals
@@ -317,6 +325,8 @@ interface TransitionContext {
   benchmarkTrend: 'improving' | 'stable' | 'declining' | null
   skillProgress: 'improving' | 'stable' | 'stalled' | null
   daysSincePhaseStart: number
+  // Readiness integration
+  readinessSummary?: AthleteReadinessSummary | null
 }
 
 /**
@@ -390,6 +400,41 @@ export function analyzePhaseTransition(context: TransitionContext): {
       timestamp: new Date(),
       description: 'Skill progress has stalled.',
     })
+  }
+  
+  // 3.5. Readiness-based signals (NEW)
+  if (context.readinessSummary) {
+    const readinessSignals = generateReadinessSignalsForCycle(context.readinessSummary)
+    
+    // High readiness = ready for intensification or skill focus
+    if (readinessSignals.overallReadiness >= 70 && readinessSignals.progressPotential === 'high') {
+      signals.push({
+        signalType: 'readiness_high',
+        strength: 0.7,
+        timestamp: new Date(),
+        description: `High skill readiness (${readinessSignals.overallReadiness}%) suggests readiness for intensification.`,
+      })
+    }
+    
+    // Low readiness = need accumulation
+    if (readinessSignals.overallReadiness < 40) {
+      signals.push({
+        signalType: 'readiness_low',
+        strength: 0.6,
+        timestamp: new Date(),
+        description: `Low readiness (${readinessSignals.overallReadiness}%) suggests focus on building foundations.`,
+      })
+    }
+    
+    // Readiness suggests specific emphasis
+    if (readinessSignals.suggestedEmphasis !== currentPhase && readinessSignals.dataConfidence > 0.5) {
+      signals.push({
+        signalType: 'readiness_emphasis',
+        strength: readinessSignals.dataConfidence * 0.6,
+        timestamp: new Date(),
+        description: `Readiness analysis suggests ${readinessSignals.suggestedEmphasis} emphasis.`,
+      })
+    }
   }
   
   // 4. Time-based signals (minimum duration reached)

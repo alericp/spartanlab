@@ -28,6 +28,13 @@ import type { OnboardingProfile } from './athlete-profile'
 import type { AthleteCalibration } from './athlete-calibration'
 import type { SkillState } from './skill-state-service'
 import type { PerformanceEnvelope } from './performance-envelope-engine'
+import {
+  generateAthleteReadinessSummary,
+  extractWeakPointsFromReadiness,
+  type SkillReadinessScore,
+  type AthleteReadinessSummary,
+  type WeakPointFromReadiness,
+} from './unified-readiness-integration'
 
 // =============================================================================
 // WEAK POINT TYPES
@@ -984,4 +991,140 @@ export function detectPlateau(
     weeksSinceProgress: 0,
     recommendation: 'Progress is on track.',
   }
+}
+
+// =============================================================================
+// READINESS-INTEGRATED WEAK POINT DETECTION
+// =============================================================================
+
+/**
+ * Enhanced weak point detection that integrates canonical readiness calculations.
+ * This function combines benchmark-based detection with readiness engine signals
+ * for more accurate limiter identification.
+ */
+export function detectWeakPointsWithReadiness(
+  skillTarget: SkillTarget,
+  profile: OnboardingProfile,
+  calibration: AthleteCalibration | null,
+  primaryGoal?: string
+): WeakPointAssessment & { readinessIntegration: ReadinessIntegration } {
+  // Get base weak point assessment
+  const baseAssessment = detectWeakPoints(skillTarget, profile, calibration)
+  
+  // Generate readiness summary for the athlete
+  let readinessSummary: AthleteReadinessSummary | null = null
+  let readinessWeakPoints: WeakPointFromReadiness[] = []
+  
+  try {
+    // Convert OnboardingProfile to AthleteProfile format for readiness calculation
+    const athleteProfile = {
+      userId: profile.userId || 'unknown',
+      experienceLevel: profile.experienceLevel || 'intermediate',
+      maxPullUps: profile.pullUpMax || 0,
+      maxDips: profile.dipMax || 0,
+      weightedPullUp: profile.weightedPullUp?.load || 0,
+      weightedDip: profile.weightedDip?.load || 0,
+      hollowHold: profile.hollowHold || 0,
+      lSitHold: profile.lSitHold || 0,
+      bodyweight: profile.bodyweight || 75,
+      primaryGoal: primaryGoal || skillTarget,
+    }
+    
+    readinessSummary = generateAthleteReadinessSummary(
+      athleteProfile.userId,
+      athleteProfile as any,
+      primaryGoal || skillTarget,
+      calibration
+    )
+    
+    readinessWeakPoints = extractWeakPointsFromReadiness(readinessSummary)
+  } catch {
+    // Continue with base assessment if readiness calculation fails
+  }
+  
+  // Merge insights from readiness analysis
+  const readinessIntegration: ReadinessIntegration = {
+    readinessScore: readinessSummary?.primaryReadiness?.readinessScore || null,
+    readinessLevel: readinessSummary?.primaryReadiness?.readinessLevel || null,
+    readinessLimiter: readinessSummary?.globalPrimaryLimiter || null,
+    readinessWeakPoints,
+    limiterAgreement: checkLimiterAgreement(
+      baseAssessment.primaryLimiter.type,
+      readinessSummary?.globalPrimaryLimiter
+    ),
+    combinedConfidence: calculateCombinedConfidence(
+      baseAssessment.primaryLimiter.confidenceScore,
+      readinessSummary?.dataQuality
+    ),
+  }
+  
+  // If readiness and benchmark detection agree, increase confidence
+  if (readinessIntegration.limiterAgreement === 'full') {
+    baseAssessment.primaryLimiter.confidenceScore = Math.min(
+      1.0,
+      baseAssessment.primaryLimiter.confidenceScore + 0.15
+    )
+  }
+  
+  return {
+    ...baseAssessment,
+    readinessIntegration,
+  }
+}
+
+/**
+ * Readiness integration data for weak point assessment
+ */
+export interface ReadinessIntegration {
+  readinessScore: number | null
+  readinessLevel: string | null
+  readinessLimiter: LimitingFactor | null
+  readinessWeakPoints: WeakPointFromReadiness[]
+  limiterAgreement: 'full' | 'partial' | 'different' | 'unknown'
+  combinedConfidence: number
+}
+
+function checkLimiterAgreement(
+  benchmarkLimiter: WeakPointType,
+  readinessLimiter: LimitingFactor | null | undefined
+): ReadinessIntegration['limiterAgreement'] {
+  if (!readinessLimiter || readinessLimiter === 'none') {
+    return 'unknown'
+  }
+  
+  // Direct match
+  if (benchmarkLimiter === readinessLimiter) {
+    return 'full'
+  }
+  
+  // Related limiters (partial agreement)
+  const relatedGroups: WeakPointType[][] = [
+    ['pull_strength', 'straight_arm_pull_strength', 'explosive_power'],
+    ['push_strength', 'straight_arm_push_strength', 'vertical_push_strength', 'dip_strength'],
+    ['scapular_control', 'shoulder_stability', 'ring_support_stability'],
+    ['compression_strength', 'core_control'],
+    ['wrist_tolerance', 'tendon_tolerance'],
+    ['mobility', 'shoulder_extension_mobility'],
+  ]
+  
+  for (const group of relatedGroups) {
+    if (group.includes(benchmarkLimiter) && group.includes(readinessLimiter as WeakPointType)) {
+      return 'partial'
+    }
+  }
+  
+  return 'different'
+}
+
+function calculateCombinedConfidence(
+  benchmarkConfidence: number,
+  readinessDataQuality: string | undefined
+): number {
+  const readinessConfidence = 
+    readinessDataQuality === 'excellent' ? 0.9 :
+    readinessDataQuality === 'solid' ? 0.7 :
+    readinessDataQuality === 'developing' ? 0.5 : 0.3
+  
+  // Average with slight weighting toward readiness (it's more comprehensive)
+  return benchmarkConfidence * 0.4 + readinessConfidence * 0.6
 }

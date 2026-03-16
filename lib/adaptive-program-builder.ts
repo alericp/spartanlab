@@ -187,6 +187,13 @@ import {
   type SessionStructureType,
   type StructureSelectionResult,
 } from './session-structure-engine'
+import {
+  SkillVolumeGovernor,
+  type SessionStressAnalysis,
+  type GovernorSessionInput,
+  type PlannedExercise,
+  type SkillStressFocus,
+} from './skill-volume-governor-engine'
   
 // =============================================================================
 // TYPES
@@ -499,6 +506,17 @@ exerciseExplanations?: {
     densityLevel: 'low' | 'moderate' | 'high' | 'very_high'
     coachingExplanation: string
     adjustments: string[]
+  }
+  // Skill Volume Governor - stress analysis and recommendations
+  volumeGovernor?: {
+    totalSessionStress: number
+    fatigueRiskLevel: 'low' | 'moderate' | 'elevated' | 'high' | 'critical'
+    tendonRiskLevel: 'minimal' | 'low' | 'moderate' | 'high' | 'very_high' | 'extreme'
+    highRiskElements: string[]
+    recommendationsApplied: string[]
+    coachingExplanation: string
+    additionalWarmupNeeded: boolean
+    warmupIntensityLevel: 'minimal' | 'moderate' | 'thorough'
   }
 }
 
@@ -1502,6 +1520,80 @@ return explanations.length > 0 ? explanations : undefined
           densityLevel: result.selectedStructure.densityLevel,
           coachingExplanation: result.coachingExplanation,
           adjustments,
+        }
+      } catch {
+        return undefined
+      }
+    })(),
+    // Skill Volume Governor - stress analysis and recommendations
+    volumeGovernor: (() => {
+      try {
+        // Build planned exercises from the session
+        const plannedExercises: PlannedExercise[] = (exercises?.skills || []).map(ex => ({
+          exerciseId: ex.name.toLowerCase().replace(/\s+/g, '_'),
+          exerciseName: ex.name,
+          sets: ex.sets || 3,
+          reps: ex.reps || 5,
+          holdSeconds: ex.holdSeconds,
+          isWeighted: false,
+          tempoControlled: false,
+          progressionLevel: 'intermediate' as const,
+          movementFamily: (ex.movementFamily || 'vertical_pull') as SkillStressFocus,
+          isRingBased: ex.name.toLowerCase().includes('ring'),
+          isAdvancedSkillNode: ['planche', 'front lever', 'back lever', 'iron cross', 'maltese']
+            .some(skill => ex.name.toLowerCase().includes(skill)),
+        }))
+        
+        // Add strength exercises
+        for (const ex of exercises?.strength || []) {
+          plannedExercises.push({
+            exerciseId: ex.name.toLowerCase().replace(/\s+/g, '_'),
+            exerciseName: ex.name,
+            sets: ex.sets || 3,
+            reps: ex.reps || 5,
+            isWeighted: ex.name.toLowerCase().includes('weighted'),
+            tempoControlled: false,
+            progressionLevel: 'intermediate' as const,
+            movementFamily: (ex.movementFamily || 'vertical_pull') as SkillStressFocus,
+            isRingBased: ex.name.toLowerCase().includes('ring'),
+            isAdvancedSkillNode: false,
+          })
+        }
+        
+        if (plannedExercises.length === 0) {
+          return undefined
+        }
+        
+        const governorInput: GovernorSessionInput = {
+          athleteId: 'current',
+          plannedExercises,
+          sessionStructureType: 'standard',
+          sessionDurationMinutes: sessionLength === 'short' ? 30 : sessionLength === 'medium' ? 45 : 60,
+          isDeloadWeek: fatigueDecision?.overallDecision === 'deload',
+          currentFramework: trainingEmphasis?.primaryMethod,
+          trainingStyle: trainingEmphasis?.styleMode,
+        }
+        
+        const analysis = SkillVolumeGovernor.analyzeSessionStress(governorInput)
+        const warmupNeeds = SkillVolumeGovernor.getStressBasedWarmupNeeds(analysis)
+        
+        // Apply recommendations if needed
+        const recommendationsApplied: string[] = []
+        for (const rec of analysis.governorRecommendations) {
+          if (rec.priority === 'critical' || rec.priority === 'high') {
+            recommendationsApplied.push(SkillVolumeGovernor.generateGovernorCoachingMessage(rec))
+          }
+        }
+        
+        return {
+          totalSessionStress: analysis.totalSessionStress,
+          fatigueRiskLevel: analysis.fatigueRiskLevel,
+          tendonRiskLevel: analysis.tendonRiskLevel,
+          highRiskElements: analysis.highRiskElements,
+          recommendationsApplied,
+          coachingExplanation: analysis.coachingExplanation,
+          additionalWarmupNeeded: warmupNeeds.warmupIntensityLevel !== 'minimal',
+          warmupIntensityLevel: warmupNeeds.warmupIntensityLevel,
         }
       } catch {
         return undefined

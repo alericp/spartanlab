@@ -113,6 +113,12 @@ import {
   type ProgramConstraintContext,
   type ConstraintCategory,
 } from './constraint-integration'
+import {
+  getOrCreateEnvelope,
+  getAthleteEnvelopes,
+  getEnvelopeBasedRecommendations,
+  type PerformanceEnvelope,
+} from './performance-envelope-service'
 
 // =============================================================================
 // TYPES

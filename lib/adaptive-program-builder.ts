@@ -170,6 +170,14 @@ import {
   type AthleteGraphPosition,
   type ProgressionNode,
 } from './skill-progression-graph-engine'
+import {
+  generateWhyThisExercise,
+  getExercisesForWeakPoint,
+  getExercisesForProgressionNode,
+  checkContraindications,
+  type WhyThisExerciseExplanation,
+  type AthleteExerciseContext,
+} from './enhanced-exercise-intelligence'
 
 // =============================================================================
 // TYPES
@@ -462,6 +470,16 @@ export interface AdaptiveProgram {
     progressPercentage: number
     knowledgeTip: string
   }
+  // Exercise intelligence explanations - "why this exercise" for each main movement
+  exerciseExplanations?: {
+    exerciseId: string
+    exerciseName: string
+    headline: string
+    rationale: string
+    skillBenefit: string
+    coachTip: string
+    confidenceLevel: 'high' | 'medium' | 'low'
+  }[]
 }
 
 // =============================================================================
@@ -1368,18 +1386,53 @@ fatigueDecision: fatigueDecision ? {
           isBlocked: position.isBlocked,
           blockingReasons: position.blockingReasons.map(r => r.description),
           progressPercentage: position.currentNodeProgress.percentToNextNode,
-          knowledgeTip: position.currentNode.knowledgeBubble.shortTip,
+  knowledgeTip: position.currentNode.knowledgeBubble.shortTip,
+  }
+  } catch {
+  return undefined
+  }
+  })(),
+    // Exercise intelligence explanations - "why this exercise" for main movements
+    exerciseExplanations: (() => {
+      try {
+        const explanations: WhyThisExerciseExplanation[] = []
+        const targetSkill = primaryGoal as SkillTarget
+        const primaryLimiter = profile?.weakestArea as string | undefined
+        
+        // Generate explanations for key exercise types
+        const keyExercises = [
+          'weighted_pull_up',
+          'ring_dip',
+          'ring_push_up',
+          'l_sit_hold',
+          'hanging_leg_raise',
+          'scap_pull_up',
+          'planche_lean',
+          'straight_bar_dip',
+        ]
+        
+        for (const exerciseId of keyExercises) {
+          const explanation = generateWhyThisExercise(
+            exerciseId,
+            targetSkill as any,
+            primaryLimiter as any
+          )
+          if (explanation) {
+            explanations.push(explanation)
+          }
         }
+        
+        return explanations.length > 0 ? explanations : undefined
       } catch {
         return undefined
       }
     })(),
   }
-}
-
-/**
- * Get override signal feedback for program generation
- */
+  }
+  
+  /**
+  * Get override signal feedback for program generation
+  */
 function getOverrideSignalFeedback() {
   const signalFeedback = analyzeSignalsForAdaptive(14) // Last 14 days
   

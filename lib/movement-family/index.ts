@@ -54,3 +54,25 @@ export {
   getHypertrophyExercises,
   getCalisthenicsHypertrophyPool,
 } from '../exercise-family-integration'
+
+// Enhanced Exercise Intelligence
+export {
+  type BestUseCase,
+  type BestUseCaseDefinition,
+  type ContraindicationType,
+  type Contraindication,
+  type EnhancedExerciseProfile,
+  type AthleteExerciseContext,
+  type WhyThisExerciseExplanation,
+  type SubstitutionQualityScore,
+  ENHANCED_EXERCISE_PROFILES,
+  getEnhancedExerciseProfile,
+  checkContraindications,
+  getExercisesForUseCase,
+  getExercisesForWeakPoint,
+  generateWhyThisExercise,
+  scoreSubstitution,
+  generateOverrideWarning,
+  getExercisesForProgressionNode,
+  getPrerequisiteExercises,
+} from '../enhanced-exercise-intelligence'

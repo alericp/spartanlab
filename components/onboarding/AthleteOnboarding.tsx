@@ -72,6 +72,12 @@ import {
   type TrainingPathType,
   type PRTimeframe,
   type AllTimePRBenchmark,
+  type PrimaryLimitation,
+  type WeakestArea,
+  type JointCaution,
+  PRIMARY_LIMITATION_LABELS,
+  WEAKEST_AREA_LABELS,
+  JOINT_CAUTION_LABELS,
   PRIMARY_TRAINING_OUTCOME_LABELS,
   PRIMARY_TRAINING_OUTCOME_DESCRIPTIONS,
   PRIMARY_TRAINING_OUTCOME_HELPER_TEXT,
@@ -709,6 +715,75 @@ function ReadinessCalibrationSection({ profile, updateProfile }: SectionProps) {
               {BODY_TYPE_LABELS[opt]}
             </OptionButton>
           ))}
+        </div>
+      </div>
+      
+      {/* Athlete Diagnostics Section */}
+      <div className="pt-4 mt-4 border-t border-[#2B313A]">
+        <p className="text-xs text-[#6B7280] pb-3">
+          Help us understand your unique training needs
+        </p>
+        
+        {/* Q6: Primary Limitation */}
+        <div className="space-y-3 mb-6">
+          <label className="text-sm font-medium text-[#A4ACB8]">What usually limits your progress the most?</label>
+          <div className="grid grid-cols-2 gap-2">
+            {(Object.keys(PRIMARY_LIMITATION_LABELS) as PrimaryLimitation[]).map((opt) => (
+              <OptionButton
+                key={opt}
+                selected={profile.primaryLimitation === opt}
+                onClick={() => updateProfile({ primaryLimitation: opt })}
+              >
+                {PRIMARY_LIMITATION_LABELS[opt]}
+              </OptionButton>
+            ))}
+          </div>
+        </div>
+        
+        {/* Q7: Weakest Area */}
+        <div className="space-y-3 mb-6">
+          <label className="text-sm font-medium text-[#A4ACB8]">Which area holds you back the most?</label>
+          <div className="grid grid-cols-2 gap-2">
+            {(Object.keys(WEAKEST_AREA_LABELS) as WeakestArea[]).map((opt) => (
+              <OptionButton
+                key={opt}
+                selected={profile.weakestArea === opt}
+                onClick={() => updateProfile({ weakestArea: opt })}
+              >
+                {WEAKEST_AREA_LABELS[opt]}
+              </OptionButton>
+            ))}
+          </div>
+        </div>
+        
+        {/* Q8: Joint Cautions (multi-select) */}
+        <div className="space-y-3">
+          <label className="text-sm font-medium text-[#A4ACB8]">Any joints we should protect while training?</label>
+          <p className="text-xs text-[#6B7280] -mt-1">Select all that apply</p>
+          <div className="grid grid-cols-3 gap-2">
+            {(Object.keys(JOINT_CAUTION_LABELS) as JointCaution[]).map((joint) => (
+              <OptionButton
+                key={joint}
+                selected={profile.jointCautions?.includes(joint) ?? false}
+                onClick={() => {
+                  const current = profile.jointCautions || []
+                  const updated = current.includes(joint)
+                    ? current.filter(j => j !== joint)
+                    : [...current, joint]
+                  updateProfile({ jointCautions: updated })
+                }}
+              >
+                {JOINT_CAUTION_LABELS[joint]}
+              </OptionButton>
+            ))}
+          </div>
+          <OptionButton
+            selected={profile.jointCautions?.length === 0 || !profile.jointCautions}
+            onClick={() => updateProfile({ jointCautions: [] })}
+            className="w-full"
+          >
+            None - all good
+          </OptionButton>
         </div>
       </div>
   </div>
@@ -2787,6 +2862,36 @@ function ReviewSection({ profile, onEditSection }: ReviewSectionProps) {
             <p className="text-[#6B7280] text-[10px] mt-2 text-center">
               These estimates help calibrate your starting program
             </p>
+          </div>
+        )}
+
+        {/* Athlete Diagnostics Summary */}
+        {(profile.primaryLimitation || profile.weakestArea || (profile.jointCautions && profile.jointCautions.length > 0)) && (
+          <div className="bg-[#0F1115] rounded-lg p-3 border border-[#2B313A]">
+            <div className="flex justify-between items-start mb-2">
+              <span className="text-[#6B7280] text-xs uppercase tracking-wide">Athlete Diagnostics</span>
+              <EditButton section="readiness" />
+            </div>
+            <div className="space-y-1.5 text-xs">
+              {profile.primaryLimitation && profile.primaryLimitation !== 'not_sure' && (
+                <div className="flex justify-between">
+                  <span className="text-[#6B7280]">Primary limitation:</span>
+                  <span className="text-[#E6E9EF]">{PRIMARY_LIMITATION_LABELS[profile.primaryLimitation]}</span>
+                </div>
+              )}
+              {profile.weakestArea && profile.weakestArea !== 'not_sure' && (
+                <div className="flex justify-between">
+                  <span className="text-[#6B7280]">Weakest area:</span>
+                  <span className="text-[#E6E9EF]">{WEAKEST_AREA_LABELS[profile.weakestArea]}</span>
+                </div>
+              )}
+              {profile.jointCautions && profile.jointCautions.length > 0 && (
+                <div className="flex justify-between">
+                  <span className="text-[#6B7280]">Joint protection:</span>
+                  <span className="text-[#E6E9EF]">{profile.jointCautions.map(j => JOINT_CAUTION_LABELS[j]).join(', ')}</span>
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>

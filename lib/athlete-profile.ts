@@ -81,6 +81,73 @@ export type PrimaryGoalType =
   | 'work_capacity'
 
 // =============================================================================
+// ATHLETE DIAGNOSTICS
+// =============================================================================
+
+/**
+ * Primary limitation - what usually limits the athlete's progress
+ * Used by engine to prioritize programming focus
+ */
+export type PrimaryLimitation =
+  | 'strength'          // Need more raw strength
+  | 'flexibility'       // Flexibility holds them back
+  | 'skill_coordination'// Coordination/technique issues
+  | 'recovery'          // Recovery capacity is the bottleneck
+  | 'consistency'       // Struggle with consistency
+  | 'not_sure'          // Don't know yet
+
+export const PRIMARY_LIMITATION_LABELS: Record<PrimaryLimitation, string> = {
+  'strength': 'Strength',
+  'flexibility': 'Flexibility',
+  'skill_coordination': 'Skill coordination',
+  'recovery': 'Recovery',
+  'consistency': 'Consistency',
+  'not_sure': 'Not sure yet',
+}
+
+/**
+ * Weakest area - which specific area holds them back most
+ * Used for weak-point emphasis in programming
+ */
+export type WeakestArea =
+  | 'pulling_strength'   // Pull-ups, rows, front lever
+  | 'pushing_strength'   // Push-ups, dips, planche
+  | 'core_strength'      // Core and compression
+  | 'shoulder_stability' // Scapular/shoulder strength
+  | 'hip_mobility'       // Hip flexion/extension
+  | 'hamstring_flexibility' // Hamstring range
+  | 'not_sure'           // Don't know
+
+export const WEAKEST_AREA_LABELS: Record<WeakestArea, string> = {
+  'pulling_strength': 'Pulling strength',
+  'pushing_strength': 'Pushing strength',
+  'core_strength': 'Core strength',
+  'shoulder_stability': 'Shoulder stability',
+  'hip_mobility': 'Hip mobility',
+  'hamstring_flexibility': 'Hamstring flexibility',
+  'not_sure': 'Not sure',
+}
+
+/**
+ * Joint cautions - joints that need extra care during training
+ * Used to modify exercise selection and loading
+ */
+export type JointCaution =
+  | 'shoulders'
+  | 'elbows'
+  | 'wrists'
+  | 'lower_back'
+  | 'knees'
+
+export const JOINT_CAUTION_LABELS: Record<JointCaution, string> = {
+  'shoulders': 'Shoulders',
+  'elbows': 'Elbows',
+  'wrists': 'Wrists',
+  'lower_back': 'Lower back',
+  'knees': 'Knees',
+}
+
+// =============================================================================
 // PRIMARY TRAINING OUTCOME
 // =============================================================================
 
@@ -821,6 +888,11 @@ export interface OnboardingProfile {
   // Section 10: Readiness Calibration
   readinessCalibration: ReadinessCalibration | null
   
+  // Section 11: Athlete Diagnostics
+  primaryLimitation: PrimaryLimitation | null
+  weakestArea: WeakestArea | null
+  jointCautions: JointCaution[]
+  
   // Meta
   hasSeenDashboardIntro: boolean
   onboardingComplete: boolean
@@ -1279,6 +1351,11 @@ export function createEmptyOnboardingProfile(): OnboardingProfile {
     
     // Section 10: Readiness Calibration
     readinessCalibration: null,
+    
+    // Section 11: Athlete Diagnostics
+    primaryLimitation: null,
+    weakestArea: null,
+    jointCautions: [],
     
     // Meta
     hasSeenDashboardIntro: false,

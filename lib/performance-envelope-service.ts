@@ -335,3 +335,6 @@ function rowToSignal(row: any): TrainingResponseSignal {
     recordedAt: new Date(row.recorded_at),
   }
 }
+
+// Re-export types for convenience
+export type { PerformanceEnvelope, TrainingResponseSignal } from './performance-envelope-engine'

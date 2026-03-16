@@ -119,6 +119,11 @@ import {
   getEnvelopeBasedRecommendations,
   type PerformanceEnvelope,
 } from './performance-envelope-service'
+import {
+  buildUnifiedContext,
+  type UnifiedEngineContext,
+  type TrainingStyleMode,
+} from './unified-coaching-engine'
 
 // =============================================================================
 // TYPES

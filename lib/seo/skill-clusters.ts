@@ -20,60 +20,60 @@ export interface SkillCluster {
 export const SKILL_CLUSTERS: Record<string, SkillCluster> = {
   'front-lever': {
     relatedSkills: [
-      { title: 'Planche Progression', href: '/planche-progression', description: 'Master the pushing counterpart' },
-      { title: 'Muscle-Up Training', href: '/guides/muscle-up-training', description: 'Build explosive pulling power' },
-      { title: 'Back Lever Guide', href: '/guides/back-lever-progression', description: 'Train the reverse hold' },
-      { title: 'One-Arm Pull-Up', href: '/guides/one-arm-pull-up', description: 'Ultimate pulling strength' },
+      { title: 'Planche Hub', href: '/skills/planche', description: 'Master the pushing counterpart' },
+      { title: 'Muscle-Up Hub', href: '/skills/muscle-up', description: 'Build explosive pulling power' },
+      { title: 'HSPU Hub', href: '/skills/handstand-push-up', description: 'Vertical pressing power' },
+      { title: 'Back Lever Guide', href: '/guides/back-lever-training', description: 'Train the reverse hold' },
     ],
     relatedGuides: [
+      { title: 'Front Lever Training Guide', href: '/front-lever-training-guide', description: 'Complete training methodology' },
+      { title: 'Front Lever Program', href: '/programs/front-lever-program', description: '12-24 week structured plan' },
       { title: 'Strength Standards', href: '/calisthenics-strength-standards', description: 'Check your readiness benchmarks' },
-      { title: 'Pull-Up Strength Guide', href: '/guides/pull-up-strength', description: 'Build your pulling foundation' },
-      { title: 'Core Compression Training', href: '/guides/core-compression-training', description: 'Essential for horizontal holds' },
-      { title: 'Weighted Pull-Up Programming', href: '/guides/weighted-pull-up-progression', description: 'Add load to accelerate progress' },
+      { title: 'Weighted Pull-Up Training', href: '/guides/weighted-pull-up-training', description: 'Build pulling foundation' },
     ],
     relatedTools: [
       { title: 'Front Lever Readiness Calculator', href: '/front-lever-readiness-calculator', description: 'Test your readiness score' },
-      { title: 'Program Builder', href: '/calisthenics-program-builder', description: 'Build your training plan' },
+      { title: 'Generate Your Program', href: '/onboarding', description: 'Personalized training plan' },
       { title: 'Body Fat Calculator', href: '/body-fat-calculator', description: 'Optimize your body composition' },
     ],
   },
   
   'planche': {
     relatedSkills: [
-      { title: 'Front Lever Progression', href: '/front-lever-progression', description: 'Master the pulling counterpart' },
+      { title: 'Front Lever Hub', href: '/skills/front-lever', description: 'Master the pulling counterpart' },
+      { title: 'HSPU Hub', href: '/skills/handstand-push-up', description: 'Vertical pushing power' },
+      { title: 'Muscle-Up Hub', href: '/skills/muscle-up', description: 'Combine push and pull' },
       { title: 'Handstand Training', href: '/guides/handstand-training', description: 'Build overhead pushing strength' },
-      { title: 'HSPU Progression', href: '/guides/hspu-progression', description: 'Vertical pushing power' },
-      { title: 'Muscle-Up Training', href: '/guides/muscle-up-training', description: 'Combine push and pull' },
     ],
     relatedGuides: [
+      { title: 'Planche Training Guide', href: '/planche-training-guide', description: 'Complete training methodology' },
+      { title: 'Planche Program', href: '/programs/planche-program', description: '12-24 week structured plan' },
       { title: 'Strength Standards', href: '/calisthenics-strength-standards', description: 'Check your readiness benchmarks' },
-      { title: 'Planche Lean Guide', href: '/guides/planche-leans', description: 'Build wrist and shoulder conditioning' },
-      { title: 'Straight-Arm Strength', href: '/guides/straight-arm-strength', description: 'Essential for planche holds' },
-      { title: 'Weighted Dip Progression', href: '/guides/weighted-dip-progression', description: 'Build pushing foundation' },
+      { title: 'Weighted Dip Training', href: '/guides/weighted-dip-training', description: 'Build pushing foundation' },
     ],
     relatedTools: [
       { title: 'Planche Readiness Calculator', href: '/planche-readiness-calculator', description: 'Test your readiness score' },
-      { title: 'Program Builder', href: '/calisthenics-program-builder', description: 'Build your training plan' },
+      { title: 'Generate Your Program', href: '/onboarding', description: 'Personalized training plan' },
       { title: 'Body Fat Calculator', href: '/body-fat-calculator', description: 'Lower body fat aids planche' },
     ],
   },
   
   'muscle-up': {
     relatedSkills: [
-      { title: 'Front Lever Progression', href: '/front-lever-progression', description: 'Build pulling strength' },
-      { title: 'Planche Progression', href: '/planche-progression', description: 'Build pushing strength' },
-      { title: 'One-Arm Pull-Up', href: '/guides/one-arm-pull-up', description: 'Peak pulling power' },
-      { title: 'Weighted Dips', href: '/guides/weighted-dip-progression', description: 'Explosive pushing strength' },
+      { title: 'Front Lever Hub', href: '/skills/front-lever', description: 'Build pulling strength' },
+      { title: 'Planche Hub', href: '/skills/planche', description: 'Build pushing strength' },
+      { title: 'HSPU Hub', href: '/skills/handstand-push-up', description: 'Vertical pressing' },
+      { title: 'One-Arm Pull-Up', href: '/guides/one-arm-pull-up-training', description: 'Peak pulling power' },
     ],
     relatedGuides: [
+      { title: 'Muscle-Up Training Guide', href: '/guides/muscle-up-training', description: 'Complete training methodology' },
+      { title: 'Muscle-Up Program', href: '/programs/muscle-up-program', description: '12-24 week structured plan' },
       { title: 'Strength Standards', href: '/calisthenics-strength-standards', description: 'Check your readiness benchmarks' },
       { title: 'Pull-Up Strength Guide', href: '/guides/pull-up-strength', description: 'Foundation for muscle-ups' },
-      { title: 'Explosive Pull Training', href: '/guides/explosive-pull-training', description: 'Generate the power needed' },
-      { title: 'Chest-to-Bar Progression', href: '/guides/chest-to-bar-pull-ups', description: 'Build the transition strength' },
     ],
     relatedTools: [
       { title: 'Muscle-Up Readiness Calculator', href: '/muscle-up-readiness-calculator', description: 'Test your readiness score' },
-      { title: 'Program Builder', href: '/calisthenics-program-builder', description: 'Build your training plan' },
+      { title: 'Generate Your Program', href: '/onboarding', description: 'Personalized training plan' },
       { title: 'Body Fat Calculator', href: '/body-fat-calculator', description: 'Optimize power-to-weight ratio' },
     ],
   },

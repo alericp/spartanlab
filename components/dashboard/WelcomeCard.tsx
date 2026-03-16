@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { CheckCircle2, Calendar, Target, Dumbbell, X } from 'lucide-react'
+import { CheckCircle2, Calendar, Target, Dumbbell, X, TrendingUp, TrendingDown, Minus } from 'lucide-react'
 import { SpartanIcon } from '@/components/brand/SpartanLogo'
 import {
   generateFirstProgram,
@@ -187,6 +187,27 @@ export function WelcomeCard({ onDismiss, onProgramReady }: WelcomeCardProps) {
             <span>•</span>
             <span>{reasoning.firstSession.primaryFocus}</span>
           </div>
+        </div>
+      )}
+
+      {/* Adaptive Coach Messages */}
+      {reasoning?.hasAdaptations && reasoning.adaptiveMessages.length > 0 && (
+        <div className="bg-[#C1121F]/5 border border-[#C1121F]/20 rounded-lg p-3 mt-4">
+          <div className="flex items-center gap-2 mb-2">
+            {reasoning.trainingBehavior?.progressTrend.overallTrend === 'improving' ? (
+              <TrendingUp className="w-4 h-4 text-green-400" />
+            ) : reasoning.trainingBehavior?.progressTrend.overallTrend === 'declining' ? (
+              <TrendingDown className="w-4 h-4 text-amber-400" />
+            ) : (
+              <Minus className="w-4 h-4 text-blue-400" />
+            )}
+            <span className="text-xs font-medium text-[#C1121F]">Adaptive Coaching</span>
+          </div>
+          <ul className="space-y-1">
+            {reasoning.adaptiveMessages.slice(0, 2).map((msg, idx) => (
+              <li key={idx} className="text-sm text-[#A4ACB8]">{msg}</li>
+            ))}
+          </ul>
         </div>
       )}
 

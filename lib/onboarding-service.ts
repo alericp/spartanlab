@@ -13,6 +13,7 @@ import {
 import { getAthleteCalibration } from './athlete-calibration'
 import { detectWeakPoints, type WeakPointSummary } from './weak-point-detection'
 import { generateAdaptiveProgram, type AdaptiveProgramInputs, type AdaptiveProgram } from './adaptive-program-builder'
+import { evaluateTrainingBehavior, type TrainingBehaviorResult } from './adaptive-progression-engine'
 import type { PrimaryGoal, ExperienceLevel, TrainingDays, SessionLength } from './program-service'
 import type { EquipmentType } from './adaptive-exercise-pool'
 
@@ -327,6 +328,11 @@ export interface ProgramReasoning {
   primaryLimitation: string | null
   weakestArea: string | null
   jointProtection: string[]
+  
+  // Adaptive progression messages (from training behavior analysis)
+  adaptiveMessages: string[]
+  hasAdaptations: boolean
+  trainingBehavior: TrainingBehaviorResult | null
 }
 
 /**
@@ -515,6 +521,20 @@ export function getProgramReasoning(program: AdaptiveProgram | null): ProgramRea
     return labels[j] || j
   })
   
+  // Evaluate training behavior for adaptive messages
+  let trainingBehavior: TrainingBehaviorResult | null = null
+  let adaptiveMessages: string[] = []
+  let hasAdaptations = false
+  
+  try {
+    trainingBehavior = evaluateTrainingBehavior()
+    hasAdaptations = trainingBehavior.adaptationNeeded
+    adaptiveMessages = trainingBehavior.coachMessages
+  } catch {
+    // Training behavior analysis may fail if no logs exist yet
+    trainingBehavior = null
+  }
+  
   return {
     detectedStrength: {
       label: strengthLabels[strengthTier] || 'Intermediate',
@@ -530,5 +550,8 @@ export function getProgramReasoning(program: AdaptiveProgram | null): ProgramRea
     primaryLimitation,
     weakestArea,
     jointProtection,
+    adaptiveMessages,
+    hasAdaptations,
+    trainingBehavior,
   }
 }

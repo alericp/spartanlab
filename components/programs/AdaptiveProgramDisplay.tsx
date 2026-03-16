@@ -96,6 +96,27 @@ export function AdaptiveProgramDisplay({
         <div className="p-3 bg-[#1A1A1A] rounded-lg">
           <p className="text-sm text-[#A5A5A5]">{program.programRationale}</p>
         </div>
+        
+        {/* Adaptive Coach Messages */}
+        {program.trainingBehaviorAnalysis?.adaptationNeeded && program.trainingBehaviorAnalysis.coachMessages.length > 0 && (
+          <div className="mt-4 p-3 bg-[#E63946]/5 border border-[#E63946]/20 rounded-lg">
+            <div className="flex items-center gap-2 mb-2">
+              {program.trainingBehaviorAnalysis.progressTrend === 'improving' ? (
+                <TrendingUp className="w-4 h-4 text-green-400" />
+              ) : program.trainingBehaviorAnalysis.progressTrend === 'declining' ? (
+                <TrendingDown className="w-4 h-4 text-amber-400" />
+              ) : (
+                <Minus className="w-4 h-4 text-blue-400" />
+              )}
+              <span className="text-xs font-medium text-[#E63946]">Adaptive Coaching</span>
+            </div>
+            <ul className="space-y-1">
+              {program.trainingBehaviorAnalysis.coachMessages.map((msg, idx) => (
+                <li key={idx} className="text-sm text-[#A5A5A5]">{msg}</li>
+              ))}
+            </ul>
+          </div>
+        )}
       </Card>
 
       {/* Constraint & Recovery Status */}

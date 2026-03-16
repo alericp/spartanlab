@@ -62,8 +62,12 @@ import {
   analyzeExerciseProgression,
   getProgressionInsights,
   getReadyToProgress,
+  evaluateTrainingBehavior,
+  getAdaptiveVolumeModifier,
+  getAdaptiveTrainingDays,
   type ProgressionAnalysis,
   type ProgressionInsight,
+  type TrainingBehaviorResult,
 } from './adaptive-progression-engine'
 import {
   validateExerciseSelection,
@@ -274,6 +278,19 @@ export interface AdaptiveProgram {
     shouldInclude: boolean
     frequency: 'none' | 'occasional' | 'regular' | 'primary'
     rationale: string
+  }
+  // Adaptive Progression Engine - training behavior analysis
+  trainingBehaviorAnalysis?: {
+    adaptationNeeded: boolean
+    adaptationSummary: string
+    coachMessages: string[]
+    scheduleAdaptation: 'maintain' | 'reduce' | 'increase'
+    recommendedDays: number
+    volumeAdjustment: 'reduce' | 'maintain' | 'increase'
+    volumeModifier: number
+    progressTrend: 'improving' | 'stable' | 'declining'
+    trendSummary: string
+    dataQuality: 'insufficient' | 'limited' | 'good' | 'excellent'
   }
 }
 
@@ -561,6 +578,18 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
   const weakPointSummary = detectWeakPoints()
   const volumeDistribution = getVolumeDistribution(weakPointSummary)
   
+  // Get training behavior analysis for adaptive adjustments
+  let trainingBehavior: TrainingBehaviorResult | null = null
+  let adaptiveVolumeModifier = 1.0
+  try {
+    if (typeof window !== 'undefined') {
+      trainingBehavior = evaluateTrainingBehavior()
+      adaptiveVolumeModifier = trainingBehavior.volumeAnalysis.recommendedVolumeModifier
+    }
+  } catch {
+    // Training behavior analysis may fail with no workout logs
+  }
+  
   // Get unified skill intelligence for program prioritization
   // This aggregates readiness, support strength, tendon adaptation, and calibration
   const skillIntelligence = getUnifiedSkillIntelligence(
@@ -745,6 +774,19 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
       mobilityEmphasis: weakPointSummary.mobilityEmphasis,
       volumeModifier: weakPointSummary.volumeModifier,
       confidenceLevel: weakPointSummary.confidenceLevel,
+    } : undefined,
+    // Adaptive Progression Engine - training behavior analysis
+    trainingBehaviorAnalysis: trainingBehavior ? {
+      adaptationNeeded: trainingBehavior.adaptationNeeded,
+      adaptationSummary: trainingBehavior.adaptationSummary,
+      coachMessages: trainingBehavior.coachMessages,
+      scheduleAdaptation: trainingBehavior.scheduleAnalysis.adaptation,
+      recommendedDays: trainingBehavior.scheduleAnalysis.recommendedDays,
+      volumeAdjustment: trainingBehavior.volumeAnalysis.volumeAdjustment,
+      volumeModifier: trainingBehavior.volumeAnalysis.recommendedVolumeModifier,
+      progressTrend: trainingBehavior.progressTrend.overallTrend,
+      trendSummary: trainingBehavior.progressTrend.trendSummary,
+      dataQuality: trainingBehavior.dataQuality,
     } : undefined,
   }
 }

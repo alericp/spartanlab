@@ -613,6 +613,474 @@ export function getStyleChangeCoachingMessage(
 }
 
 // =============================================================================
+// FRAMEWORK AND ENVELOPE INTEGRATION
+// =============================================================================
+
+import type { CoachingFrameworkId } from './coaching-framework-engine'
+import type { PerformanceEnvelope } from './performance-envelope-engine'
+
+/**
+ * Determine if a framework change should trigger regeneration
+ * Only triggers for meaningful framework changes, not every re-evaluation
+ */
+export function shouldRegenerateForFramework(
+  currentFrameworkId: string | null,
+  newFrameworkId: string,
+  confidenceScore: number,
+  weeksOnCurrent: number
+): { shouldRegenerate: boolean; reason: string | null } {
+  // If no current framework, this is initial assignment
+  if (!currentFrameworkId) {
+    return { shouldRegenerate: false, reason: null }
+  }
+  
+  // Same framework - no change needed
+  if (currentFrameworkId === newFrameworkId) {
+    return { shouldRegenerate: false, reason: null }
+  }
+  
+  // Framework stability protection - minimum 4 weeks before switching
+  if (weeksOnCurrent < 4) {
+    return { 
+      shouldRegenerate: false, 
+      reason: 'Framework switch deferred (minimum stability period not met)' 
+    }
+  }
+  
+  // Low confidence - don't switch yet
+  if (confidenceScore < 0.6) {
+    return { 
+      shouldRegenerate: false, 
+      reason: 'Framework switch deferred (selection confidence too low)' 
+    }
+  }
+  
+  // Framework change is warranted
+  return {
+    shouldRegenerate: true,
+    reason: `Training methodology updated from ${formatFrameworkName(currentFrameworkId)} to ${formatFrameworkName(newFrameworkId)}`
+  }
+}
+
+function formatFrameworkName(frameworkId: string): string {
+  const names: Record<string, string> = {
+    skill_frequency: 'Skill Frequency',
+    barseagle_strength: 'Strength-Focused',
+    strength_conversion: 'Strength Conversion',
+    density_endurance: 'Density Endurance',
+    hypertrophy_supported: 'Hypertrophy-Supported',
+    tendon_conservative: 'Tendon-Conservative',
+    balanced_hybrid: 'Balanced Hybrid',
+  }
+  return names[frameworkId] || frameworkId.replace(/_/g, ' ')
+}
+
+/**
+ * Validate that Performance Envelope is preserved during regeneration
+ */
+export function validateEnvelopePreservation(
+  envelopesBefore: PerformanceEnvelope[],
+  envelopesAfter: PerformanceEnvelope[]
+): { preserved: boolean; issues: string[] } {
+  const issues: string[] = []
+  
+  // Check that all movement families are retained
+  const beforeFamilies = new Set(envelopesBefore.map(e => e.movementFamily))
+  const afterFamilies = new Set(envelopesAfter.map(e => e.movementFamily))
+  
+  for (const family of beforeFamilies) {
+    if (!afterFamilies.has(family)) {
+      issues.push(`Envelope for ${family} was lost during regeneration`)
+    }
+  }
+  
+  // Check that confidence scores weren't reset
+  for (const before of envelopesBefore) {
+    const after = envelopesAfter.find(e => 
+      e.movementFamily === before.movementFamily && e.goalType === before.goalType
+    )
+    if (after && after.confidenceScore < before.confidenceScore * 0.8) {
+      issues.push(`Confidence score dropped significantly for ${before.movementFamily}`)
+    }
+  }
+  
+  return {
+    preserved: issues.length === 0,
+    issues,
+  }
+}
+
+// =============================================================================
+// BENCHMARK CHANGE HANDLING
+// =============================================================================
+
+interface BenchmarkChange {
+  type: 'pull_up' | 'dip' | 'push_up' | 'weighted_pull' | 'weighted_dip' | 'hold_time'
+  oldValue: number | null
+  newValue: number
+  percentChange: number
+  isSignificant: boolean
+}
+
+/**
+ * Analyze benchmark changes to determine regeneration necessity
+ * 
+ * Minor benchmark updates (small improvements): no regeneration
+ * Significant benchmark updates (large jumps/drops): trigger recalibration
+ */
+export function analyzeBenchmarkChanges(
+  previousBenchmarks: {
+    pullUpMax?: number | null
+    dipMax?: number | null
+    pushUpMax?: number | null
+    weightedPullUpMax?: number | null
+    weightedDipMax?: number | null
+    maxHoldSeconds?: number | null
+  },
+  currentBenchmarks: typeof previousBenchmarks
+): {
+  changes: BenchmarkChange[]
+  requiresRecalibration: boolean
+  generationReason: GenerationReason | null
+  coachingMessage: string
+} {
+  const changes: BenchmarkChange[] = []
+  let requiresRecalibration = false
+  
+  // Check each benchmark type
+  const benchmarkTypes: Array<{
+    key: keyof typeof previousBenchmarks
+    type: BenchmarkChange['type']
+    significantThreshold: number // Percentage change to be significant
+  }> = [
+    { key: 'pullUpMax', type: 'pull_up', significantThreshold: 30 },
+    { key: 'dipMax', type: 'dip', significantThreshold: 30 },
+    { key: 'pushUpMax', type: 'push_up', significantThreshold: 25 },
+    { key: 'weightedPullUpMax', type: 'weighted_pull', significantThreshold: 20 },
+    { key: 'weightedDipMax', type: 'weighted_dip', significantThreshold: 20 },
+    { key: 'maxHoldSeconds', type: 'hold_time', significantThreshold: 50 },
+  ]
+  
+  for (const { key, type, significantThreshold } of benchmarkTypes) {
+    const oldVal = previousBenchmarks[key]
+    const newVal = currentBenchmarks[key]
+    
+    if (newVal != null && (oldVal == null || oldVal !== newVal)) {
+      const percentChange = oldVal != null && oldVal > 0 
+        ? Math.abs((newVal - oldVal) / oldVal) * 100
+        : 100 // New benchmark where none existed
+      
+      const isSignificant = percentChange >= significantThreshold
+      
+      changes.push({
+        type,
+        oldValue: oldVal ?? null,
+        newValue: newVal,
+        percentChange,
+        isSignificant,
+      })
+      
+      if (isSignificant) {
+        requiresRecalibration = true
+      }
+    }
+  }
+  
+  // Generate coaching message
+  let coachingMessage = ''
+  if (changes.length === 0) {
+    coachingMessage = 'Your benchmarks are up to date.'
+  } else if (!requiresRecalibration) {
+    coachingMessage = 'Your benchmarks have been updated. Training intensity will adjust accordingly.'
+  } else {
+    const significantChanges = changes.filter(c => c.isSignificant)
+    coachingMessage = `Significant strength update detected. Your program has been recalibrated to match your current ${
+      significantChanges.map(c => c.type.replace(/_/g, ' ')).join(', ')
+    } capacity.`
+  }
+  
+  return {
+    changes,
+    requiresRecalibration,
+    generationReason: requiresRecalibration ? 'benchmark_update' : null,
+    coachingMessage,
+  }
+}
+
+// =============================================================================
+// FIRST-SESSION AND RESUME LOGIC INTEGRATION
+// =============================================================================
+
+export type SessionState = 'not_started' | 'in_progress' | 'completed'
+
+/**
+ * Determine how to handle regeneration based on current session state
+ */
+export function getRegenerationSessionStrategy(
+  sessionState: SessionState,
+  regenerationReason: GenerationReason
+): {
+  archiveCurrentSession: boolean
+  useNewVersionImmediately: boolean
+  preservePartialProgress: boolean
+  message: string
+} {
+  switch (sessionState) {
+    case 'not_started':
+      // Session hasn't begun - use new version immediately
+      return {
+        archiveCurrentSession: false,
+        useNewVersionImmediately: true,
+        preservePartialProgress: false,
+        message: 'Your next session will use your updated program.',
+      }
+    
+    case 'in_progress':
+      // User is in mid-session - preserve their work
+      return {
+        archiveCurrentSession: true, // Archive the partial log
+        useNewVersionImmediately: false, // Let them finish current
+        preservePartialProgress: true,
+        message: 'Complete your current session. Your next workout will use the updated program.',
+      }
+    
+    case 'completed':
+      // Session complete - new version takes effect next time
+      return {
+        archiveCurrentSession: false,
+        useNewVersionImmediately: true,
+        preservePartialProgress: false,
+        message: 'Your program has been updated for your next session.',
+      }
+    
+    default:
+      return {
+        archiveCurrentSession: false,
+        useNewVersionImmediately: true,
+        preservePartialProgress: false,
+        message: 'Your program has been updated.',
+      }
+  }
+}
+
+// =============================================================================
+// DUPLICATE REGENERATION PREVENTION
+// =============================================================================
+
+interface RegenerationEvent {
+  timestamp: number
+  reason: GenerationReason
+  changeHash: string
+}
+
+const regenerationHistory = new Map<string, RegenerationEvent[]>()
+
+/**
+ * Check if this exact change combination was already processed recently
+ * Prevents duplicate regenerations from rapid settings saves
+ */
+export function isDuplicateRegeneration(
+  athleteId: string,
+  reason: GenerationReason,
+  changes: SettingsChange[]
+): boolean {
+  const history = regenerationHistory.get(athleteId) || []
+  const changeHash = computeChangeHash(changes)
+  
+  // Check if identical change was processed in last 30 seconds
+  const recentDuplicate = history.find(event => 
+    event.changeHash === changeHash &&
+    event.reason === reason &&
+    Date.now() - event.timestamp < 30000
+  )
+  
+  return !!recentDuplicate
+}
+
+/**
+ * Record a regeneration event for duplicate detection
+ */
+export function recordRegenerationEvent(
+  athleteId: string,
+  reason: GenerationReason,
+  changes: SettingsChange[]
+): void {
+  const history = regenerationHistory.get(athleteId) || []
+  const changeHash = computeChangeHash(changes)
+  
+  // Add new event
+  history.push({
+    timestamp: Date.now(),
+    reason,
+    changeHash,
+  })
+  
+  // Keep only last 10 events
+  if (history.length > 10) {
+    history.shift()
+  }
+  
+  regenerationHistory.set(athleteId, history)
+}
+
+function computeChangeHash(changes: SettingsChange[]): string {
+  return changes
+    .map(c => `${c.field}:${JSON.stringify(c.newValue)}`)
+    .sort()
+    .join('|')
+}
+
+// =============================================================================
+// DASHBOARD / SESSION ALIGNMENT VERIFICATION
+// =============================================================================
+
+export interface AlignmentCheckResult {
+  aligned: boolean
+  issues: string[]
+  dashboardVersionId: string | null
+  nextWorkoutVersionId: string | null
+  sessionPageVersionId: string | null
+  activeVersionId: string | null
+}
+
+/**
+ * Verify that dashboard, next workout card, and session page all reference
+ * the same active program version
+ * 
+ * This should be called after any regeneration to catch misalignment
+ */
+export function verifyDashboardSessionAlignment(
+  activeVersionId: string | null,
+  dashboardVersionId: string | null,
+  nextWorkoutVersionId: string | null,
+  sessionPageVersionId: string | null
+): AlignmentCheckResult {
+  const issues: string[] = []
+  
+  // If no active version, we're in a pre-program state
+  if (!activeVersionId) {
+    return {
+      aligned: true,
+      issues: [],
+      dashboardVersionId,
+      nextWorkoutVersionId,
+      sessionPageVersionId,
+      activeVersionId,
+    }
+  }
+  
+  // Check each component against the active version
+  if (dashboardVersionId && dashboardVersionId !== activeVersionId) {
+    issues.push('Dashboard references outdated program version')
+  }
+  
+  if (nextWorkoutVersionId && nextWorkoutVersionId !== activeVersionId) {
+    issues.push('Next workout card references outdated program version')
+  }
+  
+  if (sessionPageVersionId && sessionPageVersionId !== activeVersionId) {
+    issues.push('Session page references outdated program version')
+  }
+  
+  return {
+    aligned: issues.length === 0,
+    issues,
+    dashboardVersionId,
+    nextWorkoutVersionId,
+    sessionPageVersionId,
+    activeVersionId,
+  }
+}
+
+/**
+ * Get instructions for recovering from misalignment
+ */
+export function getAlignmentRecoveryInstructions(checkResult: AlignmentCheckResult): {
+  action: 'none' | 'refresh' | 'clear_cache' | 'regenerate'
+  message: string
+} {
+  if (checkResult.aligned) {
+    return { action: 'none', message: 'All systems aligned.' }
+  }
+  
+  // Most common fix is refreshing the page
+  if (checkResult.issues.length === 1) {
+    return {
+      action: 'refresh',
+      message: 'Please refresh the page to see your updated program.',
+    }
+  }
+  
+  // Multiple misalignments might need cache clearing
+  if (checkResult.issues.length > 1) {
+    return {
+      action: 'clear_cache',
+      message: 'Multiple alignment issues detected. Clear your browser cache and refresh.',
+    }
+  }
+  
+  return {
+    action: 'regenerate',
+    message: 'Unable to resolve alignment. Your program may need to be regenerated.',
+  }
+}
+
+// =============================================================================
+// SKILL STATE CONTINUITY PROTECTION
+// =============================================================================
+
+/**
+ * Verify that SkillState is preserved during regeneration
+ * Returns true if skill progress is intact
+ */
+export function validateSkillStateContinuity(
+  skillsBefore: Array<{ skill: string; currentLevel: string; readinessScore: number }>,
+  skillsAfter: Array<{ skill: string; currentLevel: string; readinessScore: number }>
+): { preserved: boolean; warnings: string[] } {
+  const warnings: string[] = []
+  
+  // Every skill that existed before should still exist
+  for (const before of skillsBefore) {
+    const after = skillsAfter.find(s => s.skill === before.skill)
+    
+    if (!after) {
+      warnings.push(`Skill state lost for ${before.skill}`)
+      continue
+    }
+    
+    // Level should never decrease due to settings change alone
+    // (only through explicit skill regression which is separate)
+    const levelsBefore = getLevelNumericValue(before.currentLevel)
+    const levelsAfter = getLevelNumericValue(after.currentLevel)
+    
+    if (levelsAfter < levelsBefore) {
+      warnings.push(`Skill level regressed for ${before.skill} (${before.currentLevel} -> ${after.currentLevel})`)
+    }
+  }
+  
+  return {
+    preserved: warnings.length === 0,
+    warnings,
+  }
+}
+
+function getLevelNumericValue(level: string): number {
+  const levelMap: Record<string, number> = {
+    'none': 0,
+    'beginner': 1,
+    'tuck': 2,
+    'adv_tuck': 3,
+    'advanced_tuck': 3,
+    'one_leg': 4,
+    'straddle': 5,
+    'half_lay': 6,
+    'full': 7,
+    'advanced': 8,
+  }
+  return levelMap[level.toLowerCase()] ?? 0
+}
+
+// =============================================================================
 // EXPORT SUMMARY
 // =============================================================================
 

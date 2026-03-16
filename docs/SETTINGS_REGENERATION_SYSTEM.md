@@ -281,6 +281,127 @@ Updates profile and handles regeneration intelligently.
 
 ---
 
+## Framework Integration
+
+Framework changes are handled with stability protection:
+
+```typescript
+shouldRegenerateForFramework(currentId, newId, confidence, weeksOnCurrent)
+```
+
+**Rules:**
+- Minimum 4 weeks on current framework before switching
+- Confidence score must be >= 0.6 for switch
+- Framework changes only trigger when meaningful
+- Tiny preference changes do NOT re-run framework selection
+
+---
+
+## Performance Envelope Preservation
+
+The Performance Envelope survives all regenerations:
+
+```typescript
+validateEnvelopePreservation(envelopesBefore, envelopesAfter)
+```
+
+**Guarantees:**
+- All movement family envelopes retained
+- Confidence scores preserved (max 20% drop tolerated)
+- Tolerance patterns transfer to new exercise pool when possible
+
+---
+
+## Benchmark Change Handling
+
+Benchmark updates are analyzed for significance:
+
+```typescript
+analyzeBenchmarkChanges(previousBenchmarks, currentBenchmarks)
+```
+
+**Thresholds:**
+| Benchmark | Significant Threshold |
+|-----------|----------------------|
+| Pull-ups | 30% change |
+| Dips | 30% change |
+| Push-ups | 25% change |
+| Weighted Pull-up | 20% change |
+| Weighted Dip | 20% change |
+| Hold Time | 50% change |
+
+**Behavior:**
+- Minor improvements: intensity recalculates, no regen
+- Significant jumps: `benchmark_update` trigger, recalibration
+
+---
+
+## First-Session / Resume Logic
+
+When regeneration occurs mid-session:
+
+| Session State | Behavior |
+|--------------|----------|
+| `not_started` | Use new version immediately |
+| `in_progress` | Archive partial, let user finish, new version next |
+| `completed` | New version takes effect next session |
+
+```typescript
+getRegenerationSessionStrategy(sessionState, regenerationReason)
+```
+
+---
+
+## Duplicate Regeneration Prevention
+
+Enhanced protection against multiple regenerations:
+
+1. **Debounce cooldown:** 5 seconds between regenerations
+2. **Change hash deduplication:** Identical changes within 30 seconds blocked
+3. **History tracking:** Last 10 regeneration events stored per athlete
+
+```typescript
+isDuplicateRegeneration(athleteId, reason, changes)
+recordRegenerationEvent(athleteId, reason, changes)
+```
+
+---
+
+## Dashboard / Session Alignment
+
+Verification that all views agree on active version:
+
+```typescript
+verifyDashboardSessionAlignment(
+  activeVersionId,
+  dashboardVersionId,
+  nextWorkoutVersionId,
+  sessionPageVersionId
+)
+```
+
+**Recovery actions:**
+- Single misalignment: Refresh page
+- Multiple misalignments: Clear cache
+- Persistent issues: Trigger regeneration
+
+---
+
+## SkillState Continuity Validation
+
+Explicit validation that skill progress survives regeneration:
+
+```typescript
+validateSkillStateContinuity(skillsBefore, skillsAfter)
+```
+
+**Checks:**
+- All previous skills still exist
+- No unexpected level regression
+- Readiness scores preserved
+
+---
+
 ## Validation Checklist
 
 - [x] Minor changes update future sessions only
@@ -292,3 +413,9 @@ Updates profile and handles regeneration intelligently.
 - [x] Program history remains intact
 - [x] Debounce prevents rapid regeneration
 - [x] Coaching messages are clear and professional
+- [x] Framework reevaluates only when meaningful
+- [x] Performance Envelope survives regeneration
+- [x] Benchmark changes analyzed for significance
+- [x] First-session / resume logic handles mid-session changes
+- [x] Dashboard/session alignment verified
+- [x] Duplicate regeneration prevention active

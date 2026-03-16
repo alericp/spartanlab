@@ -9,7 +9,12 @@ import {
   getSessionAdaptations,
   validateContinuityPreservation,
   PRESERVED_SYSTEMS,
+  analyzeBenchmarkChanges,
+  isDuplicateRegeneration,
+  recordRegenerationEvent,
+  getRegenerationSessionStrategy,
   type SettingsChangeAnalysis,
+  type SessionState,
 } from '@/lib/settings-regeneration-service'
 import {
   regenerateProgramIfNeeded,
@@ -219,8 +224,12 @@ export async function PUT(request: Request) {
     
     // Handle structural changes (new program version)
     if (analysis.requiresRegeneration && analysis.generationReason) {
+      // Check for duplicate regeneration (prevents rapid double-saves)
+      if (isDuplicateRegeneration(userId, analysis.generationReason, analysis.changes)) {
+        versionMessage = 'Update already applied.'
+      }
       // Check debounce
-      if (canRegenerate(userId)) {
+      else if (canRegenerate(userId)) {
         // Build unified context for regeneration
         const context = await buildUnifiedContext(userId)
         
@@ -235,6 +244,7 @@ export async function PUT(request: Request) {
         
         if (result.regenerated && result.version) {
           markRegeneration(userId)
+          recordRegenerationEvent(userId, analysis.generationReason, analysis.changes)
           versionMessage = result.explanation
         }
       } else {

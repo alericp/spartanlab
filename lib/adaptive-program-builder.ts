@@ -108,6 +108,11 @@ import {
   getSessionStructure,
   type CoachingPrinciple,
 } from './training-session-config'
+import {
+  getConstraintContextForProgram,
+  type ProgramConstraintContext,
+  type ConstraintCategory,
+} from './constraint-integration'
 
 // =============================================================================
 // TYPES
@@ -192,6 +197,15 @@ export interface AdaptiveProgram {
     label: string
     focus: string[]
     explanation: string
+    // Enhanced constraint detection
+    primaryConstraint?: ConstraintCategory
+    secondaryConstraint?: ConstraintCategory | null
+    strongQualities?: ConstraintCategory[]
+    volumeAdjustments?: {
+      increasePriority: string[]
+      maintainPriority: string[]
+      decreasePriority: string[]
+    }
   }
   recoveryLevel: RecoveryLevel
   programRationale: string
@@ -548,6 +562,9 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
   const equipmentProfile = analyzeEquipmentProfile(equipment)
   const engineContext = getProgramBuilderContext()
   
+  // Get enhanced constraint context for program generation
+  const constraintContext = getConstraintContextForProgram(primaryGoal)
+  
   // Get athlete calibration from onboarding
   const athleteCalibration = getAthleteCalibration()
   const onboardingProfile = getOnboardingProfile()
@@ -792,7 +809,12 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
       hasInsight: constraintInsight.hasInsight,
       label: constraintInsight.label,
       focus: constraintInsight.focus,
-      explanation: constraintInsight.explanation,
+      explanation: constraintContext.explanation || constraintInsight.explanation,
+      // Enhanced constraint detection data
+      primaryConstraint: constraintContext.primaryConstraint,
+      secondaryConstraint: constraintContext.secondaryConstraint,
+      strongQualities: constraintContext.strongQualities,
+      volumeAdjustments: constraintContext.volumeAdjustments,
     },
     recoveryLevel: recoverySignal.level,
     programRationale,

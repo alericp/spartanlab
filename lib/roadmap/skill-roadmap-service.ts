@@ -30,6 +30,10 @@ import {
   type HSPUInputs,
   type WeakPoint,
 } from '../readiness/skill-readiness'
+import {
+  getConstraintContextForRoadmap,
+  type ConstraintCategory,
+} from '../constraint-integration'
 
 // =============================================================================
 // TYPES
@@ -73,6 +77,15 @@ export interface AthleteRoadmapPosition {
   progressPercentage: number
   coachingMessage: string
   actionableNextStep: string
+  // Constraint detection integration
+  constraintAnalysis?: {
+    primaryConstraint: ConstraintCategory
+    secondaryConstraint: ConstraintCategory | null
+    blockingConstraints: ConstraintCategory[]
+    isBlocked: boolean
+    constraintExplanation: string
+    constraintRecommendations: string[]
+  }
 }
 
 export interface RoadmapSummary {
@@ -690,6 +703,26 @@ export function determineRoadmapPosition(
   
   const tier = getReadinessTier(readinessResult.score)
   
+  // Get constraint analysis for this skill
+  const constraintSkillKey = mapRoadmapTypeToConstraintSkill(skillKey)
+  let constraintAnalysis: AthleteRoadmapPosition['constraintAnalysis'] = undefined
+  
+  if (constraintSkillKey) {
+    try {
+      const constraintContext = getConstraintContextForRoadmap(constraintSkillKey)
+      constraintAnalysis = {
+        primaryConstraint: constraintContext.blockingConstraints[0] || 'none',
+        secondaryConstraint: constraintContext.blockingConstraints[1] || null,
+        blockingConstraints: constraintContext.blockingConstraints,
+        isBlocked: constraintContext.isBlocked,
+        constraintExplanation: constraintContext.explanation,
+        constraintRecommendations: constraintContext.recommendations,
+      }
+    } catch (error) {
+      console.warn('[Roadmap] Could not get constraint context:', error)
+    }
+  }
+  
   return {
     skillKey,
     skillName: roadmap.skillName,
@@ -705,7 +738,24 @@ export function determineRoadmapPosition(
     progressPercentage,
     coachingMessage,
     actionableNextStep,
+    constraintAnalysis,
   }
+}
+
+/**
+ * Map roadmap skill type to constraint detection skill type
+ */
+function mapRoadmapTypeToConstraintSkill(
+  skillKey: SkillRoadmapType
+): 'front_lever' | 'back_lever' | 'planche' | 'hspu' | 'muscle_up' | 'l_sit' | null {
+  const mapping: Record<SkillRoadmapType, 'front_lever' | 'back_lever' | 'planche' | 'hspu' | 'muscle_up' | 'l_sit'> = {
+    'front-lever': 'front_lever',
+    'back-lever': 'back_lever',
+    'planche': 'planche',
+    'muscle-up': 'muscle_up',
+    'hspu': 'hspu',
+  }
+  return mapping[skillKey] || null
 }
 
 /**

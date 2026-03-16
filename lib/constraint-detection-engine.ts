@@ -1,0 +1,817 @@
+// Constraint Detection Engine
+// Elite calisthenics coaching logic for identifying true limiting factors
+// Integrates with AthleteProfile, SkillState, readiness engine, and fatigue detection
+
+import { getAthleteProfile, type AthleteProfile } from './data-service'
+import { getWorkoutLogs, type WorkoutLog } from './workout-log-service'
+import { getSkillReadiness, getAthleteSkillReadiness, type SkillReadinessData } from './readiness-service'
+import { getQuickFatigueDecision, type TrainingDecision } from './fatigue-decision-engine'
+import { analyzeConstraints, type ConstraintResult } from './constraint-engine'
+import type { SkillState } from './skill-state-service'
+
+// =============================================================================
+// CONSTRAINT CATEGORIES
+// =============================================================================
+
+export type ConstraintCategory =
+  // Strength-based constraints
+  | 'pull_strength'
+  | 'push_strength'
+  | 'straight_arm_pull_strength'
+  | 'straight_arm_push_strength'
+  | 'compression_strength'
+  | 'core_control'
+  | 'scapular_control'
+  | 'shoulder_stability'
+  | 'wrist_tolerance'
+  | 'explosive_pull_power'
+  | 'transition_strength' // For muscle-up transition
+  | 'vertical_push_strength' // For HSPU
+  // Non-strength constraints
+  | 'mobility'
+  | 'shoulder_extension_mobility' // For back lever
+  | 'skill_coordination'
+  | 'balance_control' // For handstand work
+  // Recovery and schedule constraints
+  | 'fatigue_recovery'
+  | 'schedule_time_constraint'
+  | 'training_consistency'
+  // Data quality
+  | 'insufficient_data'
+  | 'none'
+
+export const CONSTRAINT_CATEGORY_LABELS: Record<ConstraintCategory, string> = {
+  pull_strength: 'Pulling Strength',
+  push_strength: 'Pushing Strength',
+  straight_arm_pull_strength: 'Straight-Arm Pull Strength',
+  straight_arm_push_strength: 'Straight-Arm Push Strength',
+  compression_strength: 'Compression Strength',
+  core_control: 'Core Control',
+  scapular_control: 'Scapular Control',
+  shoulder_stability: 'Shoulder Stability',
+  wrist_tolerance: 'Wrist Tolerance',
+  explosive_pull_power: 'Explosive Pull Power',
+  transition_strength: 'Transition Strength',
+  vertical_push_strength: 'Vertical Push Strength',
+  mobility: 'General Mobility',
+  shoulder_extension_mobility: 'Shoulder Extension Mobility',
+  skill_coordination: 'Skill Coordination',
+  balance_control: 'Balance Control',
+  fatigue_recovery: 'Recovery / Fatigue',
+  schedule_time_constraint: 'Time Availability',
+  training_consistency: 'Training Consistency',
+  insufficient_data: 'More Data Needed',
+  none: 'No Constraint',
+}
+
+// =============================================================================
+// SKILL-SPECIFIC CONSTRAINT REQUIREMENTS
+// =============================================================================
+
+export type SkillType = 'front_lever' | 'back_lever' | 'planche' | 'hspu' | 'muscle_up' | 'l_sit'
+
+interface SkillConstraintRequirements {
+  primaryConstraints: ConstraintCategory[]
+  secondaryConstraints: ConstraintCategory[]
+  weights: Partial<Record<ConstraintCategory, number>>
+}
+
+export const SKILL_CONSTRAINT_REQUIREMENTS: Record<SkillType, SkillConstraintRequirements> = {
+  front_lever: {
+    primaryConstraints: ['pull_strength', 'straight_arm_pull_strength', 'compression_strength', 'scapular_control'],
+    secondaryConstraints: ['core_control', 'shoulder_stability', 'mobility'],
+    weights: {
+      pull_strength: 0.30,
+      straight_arm_pull_strength: 0.25,
+      compression_strength: 0.25,
+      scapular_control: 0.15,
+      core_control: 0.05,
+    },
+  },
+  back_lever: {
+    primaryConstraints: ['straight_arm_pull_strength', 'shoulder_extension_mobility', 'scapular_control'],
+    secondaryConstraints: ['shoulder_stability', 'core_control', 'mobility'],
+    weights: {
+      straight_arm_pull_strength: 0.30,
+      shoulder_extension_mobility: 0.25,
+      scapular_control: 0.25,
+      shoulder_stability: 0.15,
+      core_control: 0.05,
+    },
+  },
+  planche: {
+    primaryConstraints: ['push_strength', 'straight_arm_push_strength', 'shoulder_stability', 'wrist_tolerance'],
+    secondaryConstraints: ['compression_strength', 'core_control', 'scapular_control'],
+    weights: {
+      push_strength: 0.25,
+      straight_arm_push_strength: 0.25,
+      shoulder_stability: 0.20,
+      wrist_tolerance: 0.15,
+      compression_strength: 0.10,
+      core_control: 0.05,
+    },
+  },
+  hspu: {
+    primaryConstraints: ['vertical_push_strength', 'shoulder_stability', 'balance_control'],
+    secondaryConstraints: ['core_control', 'wrist_tolerance', 'mobility'],
+    weights: {
+      vertical_push_strength: 0.35,
+      shoulder_stability: 0.25,
+      balance_control: 0.20,
+      core_control: 0.10,
+      wrist_tolerance: 0.10,
+    },
+  },
+  muscle_up: {
+    primaryConstraints: ['explosive_pull_power', 'transition_strength', 'pull_strength'],
+    secondaryConstraints: ['push_strength', 'skill_coordination', 'scapular_control'],
+    weights: {
+      explosive_pull_power: 0.30,
+      transition_strength: 0.25,
+      pull_strength: 0.20,
+      push_strength: 0.15,
+      skill_coordination: 0.10,
+    },
+  },
+  l_sit: {
+    primaryConstraints: ['compression_strength', 'core_control', 'shoulder_stability'],
+    secondaryConstraints: ['mobility', 'wrist_tolerance'],
+    weights: {
+      compression_strength: 0.40,
+      core_control: 0.30,
+      shoulder_stability: 0.15,
+      mobility: 0.10,
+      wrist_tolerance: 0.05,
+    },
+  },
+}
+
+// =============================================================================
+// CONSTRAINT DETECTION RESULT TYPES
+// =============================================================================
+
+export interface ConstraintScore {
+  category: ConstraintCategory
+  score: number // 0-100, higher = more limiting (lower capability)
+  confidence: 'high' | 'medium' | 'low'
+  dataSource: string
+}
+
+export interface SkillConstraintResult {
+  skill: SkillType
+  primaryConstraint: ConstraintCategory
+  secondaryConstraint: ConstraintCategory | null
+  strongQualities: ConstraintCategory[]
+  constraintScores: ConstraintScore[]
+  overallReadiness: number // 0-100
+  recommendations: string[]
+  explanation: string
+}
+
+export interface GlobalConstraintResult {
+  primaryConstraint: ConstraintCategory
+  secondaryConstraint: ConstraintCategory | null
+  strongQualities: ConstraintCategory[]
+  skillResults: Record<SkillType, SkillConstraintResult | null>
+  fatigueStatus: {
+    isFatigued: boolean
+    decision: TrainingDecision
+    recommendation: string
+  }
+  scheduleStatus: {
+    isTimeLimited: boolean
+    averageSessionMinutes: number
+    shortenedSessionRate: number
+    recommendation: string
+  }
+  overallRecommendations: string[]
+  dataQuality: 'excellent' | 'good' | 'partial' | 'insufficient'
+}
+
+// =============================================================================
+// CONSTRAINT SCORE CALCULATION
+// =============================================================================
+
+function calculateConstraintScores(
+  readinessData: SkillReadinessData | null,
+  profile: AthleteProfile,
+  skill: SkillType
+): ConstraintScore[] {
+  const scores: ConstraintScore[] = []
+  
+  // If we have readiness data, use it directly
+  if (readinessData) {
+    // Map readiness component scores to constraint scores
+    // Lower readiness = higher constraint score (more limiting)
+    scores.push({
+      category: 'pull_strength',
+      score: 100 - readinessData.pullStrengthScore,
+      confidence: 'high',
+      dataSource: 'readiness_engine',
+    })
+    
+    scores.push({
+      category: 'compression_strength',
+      score: 100 - readinessData.compressionScore,
+      confidence: 'high',
+      dataSource: 'readiness_engine',
+    })
+    
+    scores.push({
+      category: 'scapular_control',
+      score: 100 - readinessData.scapularControlScore,
+      confidence: 'high',
+      dataSource: 'readiness_engine',
+    })
+    
+    scores.push({
+      category: 'straight_arm_pull_strength',
+      score: 100 - readinessData.straightArmScore,
+      confidence: 'high',
+      dataSource: 'readiness_engine',
+    })
+    
+    scores.push({
+      category: 'mobility',
+      score: 100 - readinessData.mobilityScore,
+      confidence: 'high',
+      dataSource: 'readiness_engine',
+    })
+  }
+  
+  // Add profile-based constraint scores
+  if (profile.weakestArea) {
+    const weaknessMapping: Partial<Record<string, ConstraintCategory>> = {
+      'pulling_strength': 'pull_strength',
+      'pushing_strength': 'push_strength',
+      'core_strength': 'core_control',
+      'shoulder_stability': 'shoulder_stability',
+      'hip_mobility': 'mobility',
+      'hamstring_flexibility': 'mobility',
+    }
+    const mappedCategory = weaknessMapping[profile.weakestArea]
+    if (mappedCategory) {
+      // Add or increase the score for self-reported weakness
+      const existingIdx = scores.findIndex(s => s.category === mappedCategory)
+      if (existingIdx >= 0) {
+        scores[existingIdx].score = Math.min(100, scores[existingIdx].score + 15)
+      } else {
+        scores.push({
+          category: mappedCategory,
+          score: 70, // Default high constraint score for self-reported weakness
+          confidence: 'medium',
+          dataSource: 'athlete_profile',
+        })
+      }
+    }
+  }
+  
+  // Add joint caution-based constraints
+  if (profile.jointCautions && profile.jointCautions.length > 0) {
+    for (const caution of profile.jointCautions) {
+      switch (caution) {
+        case 'wrists':
+          scores.push({
+            category: 'wrist_tolerance',
+            score: 65,
+            confidence: 'medium',
+            dataSource: 'joint_cautions',
+          })
+          break
+        case 'shoulders':
+          scores.push({
+            category: 'shoulder_stability',
+            score: 60,
+            confidence: 'medium',
+            dataSource: 'joint_cautions',
+          })
+          break
+        case 'elbows':
+          // Elbow issues affect straight-arm work
+          scores.push({
+            category: 'straight_arm_pull_strength',
+            score: 55,
+            confidence: 'medium',
+            dataSource: 'joint_cautions',
+          })
+          scores.push({
+            category: 'straight_arm_push_strength',
+            score: 55,
+            confidence: 'medium',
+            dataSource: 'joint_cautions',
+          })
+          break
+      }
+    }
+  }
+  
+  // Fill in missing categories with neutral scores based on profile data
+  const allCategories = SKILL_CONSTRAINT_REQUIREMENTS[skill].primaryConstraints
+    .concat(SKILL_CONSTRAINT_REQUIREMENTS[skill].secondaryConstraints)
+  
+  for (const category of allCategories) {
+    if (!scores.find(s => s.category === category)) {
+      scores.push({
+        category,
+        score: 50, // Neutral score when no data
+        confidence: 'low',
+        dataSource: 'default',
+      })
+    }
+  }
+  
+  return scores
+}
+
+// =============================================================================
+// SKILL-SPECIFIC CONSTRAINT DETECTION
+// =============================================================================
+
+export function detectSkillConstraints(
+  skill: SkillType,
+  readinessData: SkillReadinessData | null,
+  profile: AthleteProfile
+): SkillConstraintResult {
+  const requirements = SKILL_CONSTRAINT_REQUIREMENTS[skill]
+  const constraintScores = calculateConstraintScores(readinessData, profile, skill)
+  
+  // Calculate weighted scores for relevant constraints
+  const weightedScores: { category: ConstraintCategory; weightedScore: number }[] = []
+  
+  for (const score of constraintScores) {
+    const weight = requirements.weights[score.category] || 0.05
+    weightedScores.push({
+      category: score.category,
+      weightedScore: score.score * weight,
+    })
+  }
+  
+  // Sort by weighted score (highest = most limiting)
+  weightedScores.sort((a, b) => b.weightedScore - a.weightedScore)
+  
+  // Determine primary and secondary constraints
+  const primaryConstraint = weightedScores[0]?.category || 'insufficient_data'
+  const secondaryConstraint = weightedScores[1]?.category || null
+  
+  // Identify strong qualities (low constraint scores)
+  const strongQualities = constraintScores
+    .filter(s => s.score < 40)
+    .map(s => s.category)
+  
+  // Calculate overall readiness
+  let overallReadiness = 0
+  let totalWeight = 0
+  for (const score of constraintScores) {
+    const weight = requirements.weights[score.category] || 0.05
+    overallReadiness += (100 - score.score) * weight
+    totalWeight += weight
+  }
+  overallReadiness = Math.round(overallReadiness / (totalWeight || 1))
+  
+  // Generate recommendations
+  const recommendations = generateSkillRecommendations(
+    skill,
+    primaryConstraint,
+    secondaryConstraint,
+    strongQualities
+  )
+  
+  // Generate explanation
+  const explanation = generateSkillExplanation(
+    skill,
+    primaryConstraint,
+    secondaryConstraint,
+    constraintScores
+  )
+  
+  return {
+    skill,
+    primaryConstraint,
+    secondaryConstraint,
+    strongQualities,
+    constraintScores,
+    overallReadiness,
+    recommendations,
+    explanation,
+  }
+}
+
+// =============================================================================
+// RECOMMENDATION GENERATION
+// =============================================================================
+
+function generateSkillRecommendations(
+  skill: SkillType,
+  primary: ConstraintCategory,
+  secondary: ConstraintCategory | null,
+  strongQualities: ConstraintCategory[]
+): string[] {
+  const recommendations: string[] = []
+  
+  // Primary constraint recommendations
+  const primaryRecs = getConstraintRecommendation(primary, 'increase')
+  if (primaryRecs) recommendations.push(primaryRecs)
+  
+  // Secondary constraint recommendations
+  if (secondary) {
+    const secondaryRecs = getConstraintRecommendation(secondary, 'add')
+    if (secondaryRecs) recommendations.push(secondaryRecs)
+  }
+  
+  // Strong quality recommendations
+  if (strongQualities.length > 0) {
+    const strongLabels = strongQualities
+      .slice(0, 2)
+      .map(q => CONSTRAINT_CATEGORY_LABELS[q].toLowerCase())
+      .join(' and ')
+    recommendations.push(`Maintain ${strongLabels} with current volume`)
+  }
+  
+  // Skill-specific exposure recommendation
+  const skillLabel = skill.replace(/_/g, ' ')
+  recommendations.push(`Continue ${skillLabel} exposure at current progression`)
+  
+  return recommendations
+}
+
+function getConstraintRecommendation(
+  constraint: ConstraintCategory,
+  action: 'increase' | 'add' | 'maintain'
+): string | null {
+  const actionVerb = {
+    increase: 'Increase',
+    add: 'Add',
+    maintain: 'Maintain',
+  }[action]
+  
+  const recommendations: Partial<Record<ConstraintCategory, string>> = {
+    pull_strength: `${actionVerb} weighted pulling work (pull-ups, rows)`,
+    push_strength: `${actionVerb} weighted pushing work (dips, push-ups)`,
+    straight_arm_pull_strength: `${actionVerb} straight-arm pulling (FL raises, tuck FL)`,
+    straight_arm_push_strength: `${actionVerb} straight-arm pushing (planche leans, pseudo planche)`,
+    compression_strength: `${actionVerb} compression work (L-sit, V-ups, leg lifts)`,
+    core_control: `${actionVerb} hollow body and core tension drills`,
+    scapular_control: `${actionVerb} scapular pull-ups and controlled hangs`,
+    shoulder_stability: `${actionVerb} shoulder prep and stability work`,
+    wrist_tolerance: `${actionVerb} wrist conditioning and prep`,
+    explosive_pull_power: `${actionVerb} explosive pull training (high pulls, kipping)`,
+    transition_strength: `${actionVerb} transition drills and straight bar dip work`,
+    vertical_push_strength: `${actionVerb} pike push-ups and overhead pressing`,
+    mobility: `${actionVerb} targeted mobility work`,
+    shoulder_extension_mobility: `${actionVerb} German hang and shoulder extension stretches`,
+    skill_coordination: `${actionVerb} skill practice volume with technique focus`,
+    balance_control: `${actionVerb} handstand balance work`,
+    fatigue_recovery: 'Reduce volume and prioritize recovery',
+    schedule_time_constraint: 'Focus on highest-priority exercises in limited time',
+    training_consistency: 'Focus on building consistent training habits',
+  }
+  
+  return recommendations[constraint] || null
+}
+
+function generateSkillExplanation(
+  skill: SkillType,
+  primary: ConstraintCategory,
+  secondary: ConstraintCategory | null,
+  scores: ConstraintScore[]
+): string {
+  const skillLabel = skill.replace(/_/g, ' ')
+  const primaryLabel = CONSTRAINT_CATEGORY_LABELS[primary]
+  
+  const primaryScore = scores.find(s => s.category === primary)
+  
+  let explanation = `Your ${skillLabel} is primarily limited by ${primaryLabel.toLowerCase()}`
+  
+  if (primaryScore && primaryScore.confidence === 'high') {
+    explanation += ` (${100 - primaryScore.score}% readiness)`
+  }
+  
+  if (secondary) {
+    const secondaryLabel = CONSTRAINT_CATEGORY_LABELS[secondary]
+    explanation += `, with ${secondaryLabel.toLowerCase()} as a secondary limiter`
+  }
+  
+  explanation += '.'
+  
+  return explanation
+}
+
+// =============================================================================
+// SCHEDULE CONSTRAINT DETECTION
+// =============================================================================
+
+function detectScheduleConstraints(logs: WorkoutLog[]): {
+  isTimeLimited: boolean
+  averageSessionMinutes: number
+  shortenedSessionRate: number
+  recommendation: string
+} {
+  if (logs.length === 0) {
+    return {
+      isTimeLimited: false,
+      averageSessionMinutes: 0,
+      shortenedSessionRate: 0,
+      recommendation: 'Start logging workouts to track time patterns',
+    }
+  }
+  
+  // Analyze recent logs (last 14 days)
+  const twoWeeksAgo = new Date()
+  twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14)
+  
+  const recentLogs = logs.filter(log => 
+    new Date(log.sessionDate) >= twoWeeksAgo
+  )
+  
+  if (recentLogs.length === 0) {
+    return {
+      isTimeLimited: false,
+      averageSessionMinutes: 0,
+      shortenedSessionRate: 0,
+      recommendation: 'Resume training to analyze time patterns',
+    }
+  }
+  
+  // Calculate average session duration
+  const totalMinutes = recentLogs.reduce((sum, log) => sum + log.durationMinutes, 0)
+  const averageSessionMinutes = Math.round(totalMinutes / recentLogs.length)
+  
+  // Check for shortened sessions (with time optimization data)
+  const shortenedLogs = recentLogs.filter(log => 
+    log.timeOptimization?.wasOptimized === true
+  )
+  const shortenedSessionRate = shortenedLogs.length / recentLogs.length
+  
+  // Determine if time-limited
+  const isTimeLimited = shortenedSessionRate > 0.3 || averageSessionMinutes < 40
+  
+  let recommendation = ''
+  if (isTimeLimited) {
+    if (shortenedSessionRate > 0.5) {
+      recommendation = 'Consider adjusting session length in settings to match available time'
+    } else if (averageSessionMinutes < 30) {
+      recommendation = 'Very short sessions detected - prioritize compound movements'
+    } else {
+      recommendation = 'Moderate time constraints - use time optimization features'
+    }
+  } else {
+    recommendation = 'Session length is adequate for full programming'
+  }
+  
+  return {
+    isTimeLimited,
+    averageSessionMinutes,
+    shortenedSessionRate: Math.round(shortenedSessionRate * 100) / 100,
+    recommendation,
+  }
+}
+
+// =============================================================================
+// MAIN CONSTRAINT DETECTION FUNCTION
+// =============================================================================
+
+export async function detectConstraints(
+  athleteId: string
+): Promise<GlobalConstraintResult> {
+  // Gather all data
+  const profile = getAthleteProfile()
+  const logs = getWorkoutLogs()
+  const fatigueDecision = getQuickFatigueDecision()
+  const existingConstraints = analyzeConstraints()
+  
+  // Get readiness data for all skills
+  let readinessData: SkillReadinessData[] = []
+  try {
+    readinessData = await getAthleteSkillReadiness(athleteId)
+  } catch (error) {
+    console.warn('[ConstraintEngine] Could not fetch readiness data:', error)
+  }
+  
+  // Detect schedule constraints
+  const scheduleStatus = detectScheduleConstraints(logs)
+  
+  // Detect fatigue status
+  const fatigueStatus = {
+    isFatigued: fatigueDecision.decision !== 'TRAIN_AS_PLANNED',
+    decision: fatigueDecision.decision,
+    recommendation: fatigueDecision.shortGuidance,
+  }
+  
+  // Detect constraints for each skill
+  const skillResults: Record<SkillType, SkillConstraintResult | null> = {
+    front_lever: null,
+    back_lever: null,
+    planche: null,
+    hspu: null,
+    muscle_up: null,
+    l_sit: null,
+  }
+  
+  const skills: SkillType[] = ['front_lever', 'back_lever', 'planche', 'hspu', 'muscle_up', 'l_sit']
+  
+  for (const skill of skills) {
+    const skillReadiness = readinessData.find(r => r.skill === skill) || null
+    skillResults[skill] = detectSkillConstraints(skill, skillReadiness, profile)
+  }
+  
+  // Determine global primary constraint
+  // Priority: fatigue > schedule > skill-based
+  let primaryConstraint: ConstraintCategory = 'none'
+  let secondaryConstraint: ConstraintCategory | null = null
+  const strongQualities: ConstraintCategory[] = []
+  
+  if (fatigueStatus.isFatigued && fatigueStatus.decision === 'DELOAD_RECOMMENDED') {
+    primaryConstraint = 'fatigue_recovery'
+  } else if (scheduleStatus.isTimeLimited && scheduleStatus.shortenedSessionRate > 0.5) {
+    primaryConstraint = 'schedule_time_constraint'
+  } else {
+    // Use skill-based constraint detection
+    // Focus on primary goal skill
+    const primaryGoal = profile.primaryGoal as SkillType | null
+    if (primaryGoal && skillResults[primaryGoal]) {
+      primaryConstraint = skillResults[primaryGoal]!.primaryConstraint
+      secondaryConstraint = skillResults[primaryGoal]!.secondaryConstraint
+      strongQualities.push(...skillResults[primaryGoal]!.strongQualities)
+    } else {
+      // Fall back to existing constraint engine
+      const existingMapping: Partial<Record<string, ConstraintCategory>> = {
+        'pull_strength_deficit': 'pull_strength',
+        'push_strength_deficit': 'push_strength',
+        'core_tension_deficit': 'core_control',
+        'fatigue_accumulation': 'fatigue_recovery',
+        'recovery_deficit': 'fatigue_recovery',
+      }
+      primaryConstraint = existingMapping[existingConstraints.primaryConstraint] || 'insufficient_data'
+    }
+  }
+  
+  // Determine data quality
+  let dataQuality: 'excellent' | 'good' | 'partial' | 'insufficient' = 'insufficient'
+  if (readinessData.length >= 4 && logs.length >= 10) {
+    dataQuality = 'excellent'
+  } else if (readinessData.length >= 2 && logs.length >= 5) {
+    dataQuality = 'good'
+  } else if (readinessData.length >= 1 || logs.length >= 3) {
+    dataQuality = 'partial'
+  }
+  
+  // Generate overall recommendations
+  const overallRecommendations: string[] = []
+  
+  if (primaryConstraint !== 'none' && primaryConstraint !== 'insufficient_data') {
+    const primaryRec = getConstraintRecommendation(primaryConstraint, 'increase')
+    if (primaryRec) overallRecommendations.push(primaryRec)
+  }
+  
+  if (fatigueStatus.isFatigued) {
+    overallRecommendations.push(fatigueStatus.recommendation)
+  }
+  
+  if (scheduleStatus.isTimeLimited) {
+    overallRecommendations.push(scheduleStatus.recommendation)
+  }
+  
+  if (strongQualities.length > 0) {
+    const strongLabels = strongQualities
+      .slice(0, 2)
+      .map(q => CONSTRAINT_CATEGORY_LABELS[q].toLowerCase())
+      .join(' and ')
+    overallRecommendations.push(`Maintain ${strongLabels} - these are already strong`)
+  }
+  
+  return {
+    primaryConstraint,
+    secondaryConstraint,
+    strongQualities,
+    skillResults,
+    fatigueStatus,
+    scheduleStatus,
+    overallRecommendations,
+    dataQuality,
+  }
+}
+
+// =============================================================================
+// SYNCHRONOUS VERSION FOR IMMEDIATE USE
+// =============================================================================
+
+export function detectConstraintsSync(): Omit<GlobalConstraintResult, 'skillResults'> & {
+  skillResults: Record<SkillType, SkillConstraintResult | null>
+} {
+  const profile = getAthleteProfile()
+  const logs = getWorkoutLogs()
+  const fatigueDecision = getQuickFatigueDecision()
+  const existingConstraints = analyzeConstraints()
+  
+  // Detect schedule constraints
+  const scheduleStatus = detectScheduleConstraints(logs)
+  
+  // Detect fatigue status
+  const fatigueStatus = {
+    isFatigued: fatigueDecision.decision !== 'TRAIN_AS_PLANNED',
+    decision: fatigueDecision.decision,
+    recommendation: fatigueDecision.shortGuidance,
+  }
+  
+  // Initialize skill results (without readiness data - will use profile-based scoring)
+  const skillResults: Record<SkillType, SkillConstraintResult | null> = {
+    front_lever: detectSkillConstraints('front_lever', null, profile),
+    back_lever: detectSkillConstraints('back_lever', null, profile),
+    planche: detectSkillConstraints('planche', null, profile),
+    hspu: detectSkillConstraints('hspu', null, profile),
+    muscle_up: detectSkillConstraints('muscle_up', null, profile),
+    l_sit: detectSkillConstraints('l_sit', null, profile),
+  }
+  
+  // Determine global constraints
+  let primaryConstraint: ConstraintCategory = 'none'
+  let secondaryConstraint: ConstraintCategory | null = null
+  const strongQualities: ConstraintCategory[] = []
+  
+  if (fatigueStatus.isFatigued && fatigueStatus.decision === 'DELOAD_RECOMMENDED') {
+    primaryConstraint = 'fatigue_recovery'
+  } else if (scheduleStatus.isTimeLimited && scheduleStatus.shortenedSessionRate > 0.5) {
+    primaryConstraint = 'schedule_time_constraint'
+  } else {
+    const primaryGoal = profile.primaryGoal as SkillType | null
+    if (primaryGoal && skillResults[primaryGoal]) {
+      primaryConstraint = skillResults[primaryGoal]!.primaryConstraint
+      secondaryConstraint = skillResults[primaryGoal]!.secondaryConstraint
+      strongQualities.push(...skillResults[primaryGoal]!.strongQualities)
+    } else {
+      const existingMapping: Partial<Record<string, ConstraintCategory>> = {
+        'pull_strength_deficit': 'pull_strength',
+        'push_strength_deficit': 'push_strength',
+        'core_tension_deficit': 'core_control',
+        'fatigue_accumulation': 'fatigue_recovery',
+        'recovery_deficit': 'fatigue_recovery',
+      }
+      primaryConstraint = existingMapping[existingConstraints.primaryConstraint] || 'insufficient_data'
+    }
+  }
+  
+  const dataQuality = logs.length >= 10 ? 'good' : logs.length >= 3 ? 'partial' : 'insufficient'
+  
+  const overallRecommendations: string[] = []
+  if (primaryConstraint !== 'none' && primaryConstraint !== 'insufficient_data') {
+    const primaryRec = getConstraintRecommendation(primaryConstraint, 'increase')
+    if (primaryRec) overallRecommendations.push(primaryRec)
+  }
+  if (fatigueStatus.isFatigued) {
+    overallRecommendations.push(fatigueStatus.recommendation)
+  }
+  if (scheduleStatus.isTimeLimited) {
+    overallRecommendations.push(scheduleStatus.recommendation)
+  }
+  
+  return {
+    primaryConstraint,
+    secondaryConstraint,
+    strongQualities,
+    skillResults,
+    fatigueStatus,
+    scheduleStatus,
+    overallRecommendations,
+    dataQuality,
+  }
+}
+
+// =============================================================================
+// CONSTRAINT INSIGHT FOR DASHBOARD
+// =============================================================================
+
+export function getConstraintInsightForSkill(skill: SkillType): {
+  hasInsight: boolean
+  primaryLabel: string
+  secondaryLabel: string | null
+  strongQualitiesLabel: string
+  recommendations: string[]
+  explanation: string
+} {
+  const profile = getAthleteProfile()
+  const result = detectSkillConstraints(skill, null, profile)
+  
+  if (result.primaryConstraint === 'insufficient_data') {
+    return {
+      hasInsight: false,
+      primaryLabel: 'More Data Needed',
+      secondaryLabel: null,
+      strongQualitiesLabel: '',
+      recommendations: ['Log workouts to unlock constraint detection'],
+      explanation: 'Track your training to receive personalized constraint analysis.',
+    }
+  }
+  
+  return {
+    hasInsight: true,
+    primaryLabel: CONSTRAINT_CATEGORY_LABELS[result.primaryConstraint],
+    secondaryLabel: result.secondaryConstraint 
+      ? CONSTRAINT_CATEGORY_LABELS[result.secondaryConstraint] 
+      : null,
+    strongQualitiesLabel: result.strongQualities
+      .map(q => CONSTRAINT_CATEGORY_LABELS[q])
+      .join(', '),
+    recommendations: result.recommendations,
+    explanation: result.explanation,
+  }
+}

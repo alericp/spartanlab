@@ -880,6 +880,60 @@ export function getComboBlocksForSkill(
         rounds: 3,
       },
     ],
+    iron_cross: [
+      {
+        method: 'skill_combo',
+        exercises: ['ring_support_hold', 'ring_turn_out'],
+        description: 'Ring support to RTO for stability conditioning',
+        restBetweenExercises: 0,
+        restAfterBlock: 120,
+        rounds: 3,
+      },
+      {
+        method: 'skill_combo',
+        exercises: ['cross_pull', 'ring_fly_negative'],
+        description: 'Cross pulls with controlled fly negatives for tendon conditioning',
+        restBetweenExercises: 10,
+        restAfterBlock: 180,
+        rounds: 2,
+      },
+    ],
+    back_lever: [
+      {
+        method: 'skill_combo',
+        exercises: ['back_lever_hold', 'skin_the_cat'],
+        description: 'Back lever hold into skin the cat for shoulder mobility',
+        restBetweenExercises: 0,
+        restAfterBlock: 120,
+        rounds: 3,
+      },
+      {
+        method: 'skill_combo',
+        exercises: ['german_hang', 'back_lever_negative'],
+        description: 'German hang into back lever negative for eccentric strength',
+        restBetweenExercises: 5,
+        restAfterBlock: 150,
+        rounds: 3,
+      },
+    ],
+    l_sit: [
+      {
+        method: 'density_block',
+        exercises: ['l_sit_hold', 'leg_raise', 'v_up'],
+        description: 'Compression density circuit for core endurance',
+        restBetweenExercises: 5,
+        restAfterBlock: 60,
+        rounds: 3,
+      },
+      {
+        method: 'skill_combo',
+        exercises: ['l_sit_hold', 'tuck_to_l_sit'],
+        description: 'L-sit hold into tuck transitions for control',
+        restBetweenExercises: 0,
+        restAfterBlock: 90,
+        rounds: 4,
+      },
+    ],
   }
   
   const skillCombos = SKILL_COMBOS[skill] || []
@@ -1052,6 +1106,208 @@ export function refineStyleWithEnvelope(
 }
 
 // =============================================================================
+// PREREQUISITE SAFETY GATE
+// =============================================================================
+
+/**
+ * CORE DESIGN PRINCIPLE: Style changes the method, NOT the prerequisites.
+ * 
+ * This function ensures that regardless of training style, all skill prerequisites
+ * are preserved. Style affects HOW the athlete trains those prerequisites, not
+ * WHETHER they are required.
+ */
+
+export interface PrerequisiteRequirement {
+  category: string
+  minRequired: boolean
+  styleAdjustment: 'method_only' | 'volume_adjust' | 'intensity_adjust'
+}
+
+/**
+ * Skill-to-prerequisite mapping - these are NON-NEGOTIABLE regardless of style
+ */
+export const SKILL_PREREQUISITES: Record<string, PrerequisiteRequirement[]> = {
+  front_lever: [
+    { category: 'compression_strength', minRequired: true, styleAdjustment: 'method_only' },
+    { category: 'scapular_control', minRequired: true, styleAdjustment: 'method_only' },
+    { category: 'straight_arm_pull_strength', minRequired: true, styleAdjustment: 'intensity_adjust' },
+    { category: 'core_control', minRequired: true, styleAdjustment: 'volume_adjust' },
+  ],
+  planche: [
+    { category: 'wrist_tolerance', minRequired: true, styleAdjustment: 'method_only' },
+    { category: 'straight_arm_push_strength', minRequired: true, styleAdjustment: 'intensity_adjust' },
+    { category: 'shoulder_stability', minRequired: true, styleAdjustment: 'method_only' },
+    { category: 'core_control', minRequired: true, styleAdjustment: 'volume_adjust' },
+  ],
+  muscle_up: [
+    { category: 'explosive_pull_power', minRequired: true, styleAdjustment: 'intensity_adjust' },
+    { category: 'transition_strength', minRequired: true, styleAdjustment: 'method_only' },
+    { category: 'pull_strength', minRequired: true, styleAdjustment: 'intensity_adjust' },
+    { category: 'push_strength', minRequired: true, styleAdjustment: 'intensity_adjust' },
+  ],
+  iron_cross: [
+    { category: 'straight_arm_push_strength', minRequired: true, styleAdjustment: 'method_only' },
+    { category: 'shoulder_stability', minRequired: true, styleAdjustment: 'method_only' },
+    { category: 'scapular_control', minRequired: true, styleAdjustment: 'method_only' },
+    // Tendon tolerance is critical - no style can rush this
+    { category: 'tendon_tolerance', minRequired: true, styleAdjustment: 'method_only' },
+  ],
+  back_lever: [
+    { category: 'shoulder_extension_mobility', minRequired: true, styleAdjustment: 'method_only' },
+    { category: 'straight_arm_pull_strength', minRequired: true, styleAdjustment: 'intensity_adjust' },
+    { category: 'core_control', minRequired: true, styleAdjustment: 'volume_adjust' },
+  ],
+  handstand_push_up: [
+    { category: 'vertical_push_strength', minRequired: true, styleAdjustment: 'intensity_adjust' },
+    { category: 'shoulder_stability', minRequired: true, styleAdjustment: 'method_only' },
+    { category: 'balance_control', minRequired: true, styleAdjustment: 'volume_adjust' },
+    { category: 'wrist_tolerance', minRequired: true, styleAdjustment: 'method_only' },
+  ],
+  l_sit: [
+    { category: 'compression_strength', minRequired: true, styleAdjustment: 'volume_adjust' },
+    { category: 'core_control', minRequired: true, styleAdjustment: 'volume_adjust' },
+    { category: 'shoulder_stability', minRequired: true, styleAdjustment: 'method_only' },
+  ],
+}
+
+/**
+ * Validate that a style mode doesn't skip required prerequisites for a skill
+ * 
+ * Style changes HOW we train prerequisites, not WHETHER they're included.
+ * Returns adjustments that respect both style preferences AND prerequisite requirements.
+ */
+export function validateStylePrerequisites(
+  skill: string,
+  styleMode: TrainingStyleMode,
+  currentConstraints: string[]
+): {
+  preservedPrerequisites: string[]
+  styleMethodAdjustments: Map<string, string>
+  coachingNote: string
+} {
+  const prerequisites = SKILL_PREREQUISITES[skill] || []
+  const preservedPrerequisites: string[] = []
+  const styleMethodAdjustments = new Map<string, string>()
+  const rules = getStyleProgrammingRules(styleMode)
+  
+  for (const prereq of prerequisites) {
+    // All prerequisites are preserved regardless of style
+    preservedPrerequisites.push(prereq.category)
+    
+    // Style determines HOW we train each prerequisite
+    let method = 'standard'
+    
+    switch (prereq.styleAdjustment) {
+      case 'method_only':
+        // Prerequisite method is fixed - style cannot change it
+        method = 'fixed'
+        break
+      case 'volume_adjust':
+        // Style can adjust volume for this prerequisite
+        if (rules.skillExposureMultiplier > 1.1) {
+          method = 'high_frequency_low_intensity'
+        } else if (rules.strengthVolumeMultiplier > 1.1) {
+          method = 'moderate_frequency_high_intensity'
+        } else {
+          method = 'balanced'
+        }
+        break
+      case 'intensity_adjust':
+        // Style can adjust intensity for this prerequisite
+        if (rules.loadIntensityBias === 'heavy') {
+          method = 'low_rep_high_load'
+        } else if (rules.loadIntensityBias === 'light') {
+          method = 'high_rep_endurance'
+        } else {
+          method = 'moderate_intensity'
+        }
+        break
+    }
+    
+    styleMethodAdjustments.set(prereq.category, method)
+  }
+  
+  // Generate coaching note
+  const styleLabel = STYLE_MODE_DEFINITIONS[styleMode].label
+  const skillLabel = skill.replace(/_/g, ' ')
+  const coachingNote = `${styleLabel} approach for ${skillLabel}: All ${preservedPrerequisites.length} prerequisites preserved. Style affects training method, not requirements.`
+  
+  return {
+    preservedPrerequisites,
+    styleMethodAdjustments,
+    coachingNote,
+  }
+}
+
+/**
+ * Check if a style-based volume adjustment is safe for tendon-sensitive work
+ * 
+ * Even aggressive styles must respect tendon recovery limits.
+ */
+export function isSafeForTendonWork(
+  styleMode: TrainingStyleMode,
+  movementFamily: string,
+  currentWeeklyVolume: number,
+  fatigueLevel: 'fresh' | 'normal' | 'fatigued' | 'overtrained'
+): {
+  isSafe: boolean
+  maxAllowedVolume: number
+  recommendation: string
+} {
+  const rules = getStyleProgrammingRules(styleMode)
+  
+  // Tendon-sensitive movement families
+  const TENDON_SENSITIVE = ['straight_arm_pull', 'straight_arm_push', 'rings_stability', 'rings_strength']
+  
+  if (!TENDON_SENSITIVE.includes(movementFamily)) {
+    return {
+      isSafe: true,
+      maxAllowedVolume: 999, // No limit
+      recommendation: 'Movement family is not tendon-sensitive.',
+    }
+  }
+  
+  // Base tendon volume limits (weekly sets)
+  const BASE_TENDON_LIMITS: Record<string, number> = {
+    straight_arm_pull: 12,
+    straight_arm_push: 10,
+    rings_stability: 15,
+    rings_strength: 8,
+  }
+  
+  // Fatigue-based multiplier
+  const fatigueMultiplier = {
+    fresh: 1.2,
+    normal: 1.0,
+    fatigued: 0.7,
+    overtrained: 0.4,
+  }
+  
+  // Style can NOT increase tendon limits - only potentially decrease
+  const styleMultiplier = rules.densityPreference === 'high' ? 0.85 : 1.0
+  
+  const baseLimit = BASE_TENDON_LIMITS[movementFamily] || 10
+  const adjustedLimit = Math.floor(baseLimit * fatigueMultiplier[fatigueLevel] * styleMultiplier)
+  
+  const isSafe = currentWeeklyVolume <= adjustedLimit
+  
+  let recommendation = ''
+  if (!isSafe) {
+    recommendation = `${movementFamily.replace(/_/g, ' ')} volume (${currentWeeklyVolume}) exceeds safe limit (${adjustedLimit}). Reduce to protect tendons.`
+  } else if (currentWeeklyVolume > adjustedLimit * 0.85) {
+    recommendation = `Approaching tendon volume limit. Monitor for joint discomfort.`
+  } else {
+    recommendation = `Volume within safe tendon tolerance.`
+  }
+  
+  return {
+    isSafe,
+    maxAllowedVolume: adjustedLimit,
+    recommendation,
+  }
+}
+
+// =============================================================================
 // STYLE SUMMARY/EXPLANATION
 // =============================================================================
 
@@ -1088,4 +1344,138 @@ export function getStyleCoachingSummary(
     default:
       return `Your program uses a balanced approach${skillText}${constraintText}. Skill, strength, and accessory work in moderation.`
   }
+}
+
+// =============================================================================
+// ENHANCED COACHING EXPLANATIONS
+// =============================================================================
+
+/**
+ * Generate detailed style explanation for knowledge bubbles
+ * These are premium, concise coaching insights.
+ */
+export interface StyleExplanation {
+  headline: string
+  details: string[]
+  methodHighlight: string
+  preservedElement: string
+}
+
+export function generateDetailedStyleExplanation(
+  styleMode: TrainingStyleMode,
+  skill: string,
+  constraint?: string,
+  envelopeConfidence?: number
+): StyleExplanation {
+  const definition = STYLE_MODE_DEFINITIONS[styleMode]
+  const skillLabel = skill.replace(/_/g, ' ')
+  const constraintLabel = constraint?.replace(/_/g, ' ')
+  
+  const explanations: Record<TrainingStyleMode, StyleExplanation> = {
+    skill_focused: {
+      headline: `Skill-Focused Training for ${skillLabel}`,
+      details: [
+        'High-frequency practice with lower fatigue per session',
+        'Quality over intensity - perfect reps build skill faster',
+        'Repeated exposure cements motor patterns',
+        constraintLabel ? `Prioritizing ${constraintLabel} to unlock progress` : '',
+      ].filter(Boolean),
+      methodHighlight: 'Frequent low-fatigue skill exposures with quality emphasis',
+      preservedElement: 'All strength prerequisites maintained with skill-biased methods',
+    },
+    strength_focused: {
+      headline: `Strength-Focused Training for ${skillLabel}`,
+      details: [
+        'Heavier loading with lower rep ranges for maximal strength',
+        'Weighted calisthenics emphasized where equipment allows',
+        'Longer rest periods for full neural recovery',
+        constraintLabel ? `Building ${constraintLabel} through progressive overload` : '',
+      ].filter(Boolean),
+      methodHighlight: 'Lower reps, heavier loads, longer rest for maximal adaptation',
+      preservedElement: 'Skill work maintained but strength qualities prioritized',
+    },
+    power_focused: {
+      headline: `Power-Focused Training for ${skillLabel}`,
+      details: [
+        'Explosive movement emphasis for dynamic strength',
+        'Quality speed reps with full recovery between sets',
+        'Plyometric and contrast methods where appropriate',
+        constraintLabel ? `Developing explosive ${constraintLabel}` : '',
+      ].filter(Boolean),
+      methodHighlight: 'Explosive pulling and pushing with neural recovery focus',
+      preservedElement: 'Base strength and skill prerequisites preserved',
+    },
+    endurance_focused: {
+      headline: `Endurance/Density Training for ${skillLabel}`,
+      details: [
+        'Work capacity building through shorter rest periods',
+        'Circuit and density blocks for repeat-effort tolerance',
+        'Skill quality preserved for high-risk movements',
+        constraintLabel ? `Building fatigue resistance in ${constraintLabel}` : '',
+      ].filter(Boolean),
+      methodHighlight: 'Density protocols with careful preservation of technique',
+      preservedElement: 'Straight-arm and tendon-sensitive work kept conservative',
+    },
+    hypertrophy_supported: {
+      headline: `Hypertrophy-Supported Training for ${skillLabel}`,
+      details: [
+        'Core skill work remains the primary focus',
+        'Minimal high-ROI accessory work for muscle balance',
+        'Physique support enhances both aesthetics and performance',
+        constraintLabel ? `Supporting ${constraintLabel} through targeted hypertrophy` : '',
+      ].filter(Boolean),
+      methodHighlight: 'Skill-first programming with strategic accessory work',
+      preservedElement: 'Calisthenics identity fully preserved - accessories are support only',
+    },
+    balanced_hybrid: {
+      headline: `Balanced Training for ${skillLabel}`,
+      details: [
+        'Moderate distribution across skill, strength, and support work',
+        'Adaptable approach that responds to your progress',
+        'Well-rounded development without extreme bias',
+        constraintLabel ? `Balanced attention to ${constraintLabel}` : '',
+      ].filter(Boolean),
+      methodHighlight: 'Moderate intensity, frequency, and accessory balance',
+      preservedElement: 'All training qualities developed in proportion',
+    },
+  }
+  
+  const explanation = explanations[styleMode]
+  
+  // Add envelope confidence note if available
+  if (envelopeConfidence !== undefined && envelopeConfidence > 0.5) {
+    explanation.details.push('Personalized based on your training response data')
+  }
+  
+  return explanation
+}
+
+/**
+ * Generate short coaching note for UI display
+ */
+export function getShortStyleNote(styleMode: TrainingStyleMode): string {
+  const notes: Record<TrainingStyleMode, string> = {
+    skill_focused: 'High-frequency practice, quality emphasis',
+    strength_focused: 'Heavier loading, lower reps',
+    power_focused: 'Explosive movements, dynamic strength',
+    endurance_focused: 'Work capacity, density protocols',
+    hypertrophy_supported: 'Skill-first with targeted accessories',
+    balanced_hybrid: 'Moderate distribution, adaptable approach',
+  }
+  return notes[styleMode]
+}
+
+/**
+ * Generate style-specific rep scheme description
+ */
+export function getStyleRepSchemeNote(styleMode: TrainingStyleMode): string {
+  const notes: Record<TrainingStyleMode, string> = {
+    skill_focused: '5-8 reps for strength work, hold durations for skill',
+    strength_focused: '3-6 reps for primary lifts, 6-10 for support',
+    power_focused: '1-5 explosive reps with full recovery',
+    endurance_focused: '8-15 reps, shorter rest, density emphasis',
+    hypertrophy_supported: '6-12 reps, moderate rest, accessory focus',
+    balanced_hybrid: '5-10 reps, balanced rest periods',
+  }
+  return notes[styleMode]
 }

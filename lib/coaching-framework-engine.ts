@@ -1130,3 +1130,333 @@ export function getAllFrameworkIds(): CoachingFrameworkId[] {
 export function getFramework(id: CoachingFrameworkId): CoachingFramework {
   return COACHING_FRAMEWORKS[id]
 }
+
+// =============================================================================
+// ENVELOPE-PERSONALIZED FRAMEWORK PARAMETERS
+// =============================================================================
+
+import type { PerformanceEnvelope, DensityLevel } from './performance-envelope-engine'
+
+/**
+ * Personalized framework parameters that blend the selected framework's methodology
+ * with the athlete's learned performance envelope
+ */
+export interface PersonalizedFrameworkParams {
+  // Rep ranges (blended from framework + envelope)
+  repRangeMin: number
+  repRangeMax: number
+  repRangeSource: 'framework' | 'envelope' | 'blended'
+  
+  // Set ranges (blended from framework + envelope)
+  setRangeMin: number
+  setRangeMax: number
+  
+  // Volume limits (primarily from envelope, bounded by framework)
+  weeklyVolumeMin: number
+  weeklyVolumeMax: number
+  toleratedVolumeMax: number
+  
+  // Density preference (from envelope if confident, else framework)
+  densityPreference: DensityLevel
+  densitySource: 'framework' | 'envelope'
+  
+  // Rest intervals (framework-informed, envelope-adjusted)
+  restSecondsMin: number
+  restSecondsMax: number
+  
+  // Fatigue management (from envelope)
+  fatigueThreshold: number
+  recoveryDays: number
+  
+  // Framework-specific parameters
+  progressionMethod: ProgressionMethod
+  allowFailure: boolean
+  supersetAllowed: boolean
+  circuitAllowed: boolean
+  
+  // Confidence in personalization
+  personalizationConfidence: number
+  
+  // Explanations
+  adaptations: string[]
+}
+
+/**
+ * Get framework parameters personalized by the athlete's performance envelope
+ * 
+ * This function blends the selected coaching framework's methodology with
+ * learned athlete-specific responses to create truly personalized programming.
+ * 
+ * The framework provides the "philosophy" (what approach to use),
+ * the envelope provides the "tuning" (how this athlete responds).
+ */
+export function getPersonalizedFrameworkParams(
+  frameworkId: CoachingFrameworkId,
+  envelope: PerformanceEnvelope | null
+): PersonalizedFrameworkParams {
+  const framework = COACHING_FRAMEWORKS[frameworkId]
+  const rules = framework.rules
+  const adaptations: string[] = []
+  
+  // If no envelope or very low confidence, return framework defaults
+  if (!envelope || envelope.confidenceScore < 0.2) {
+    return {
+      repRangeMin: rules.preferredRepRangeMin,
+      repRangeMax: rules.preferredRepRangeMax,
+      repRangeSource: 'framework',
+      setRangeMin: rules.preferredSetRangeMin,
+      setRangeMax: rules.preferredSetRangeMax,
+      weeklyVolumeMin: Math.round(rules.maxWeeklySkillSets * 0.6),
+      weeklyVolumeMax: rules.maxWeeklySkillSets,
+      toleratedVolumeMax: Math.round(rules.maxWeeklySkillSets * 1.2),
+      densityPreference: framework.densityBias === 'high' ? 'high_density' : 
+                         framework.densityBias === 'low' ? 'low_density' : 'moderate_density',
+      densitySource: 'framework',
+      restSecondsMin: rules.restSecondsMin,
+      restSecondsMax: rules.restSecondsMax,
+      fatigueThreshold: rules.maxWeeklySkillSets + rules.maxWeeklyStrengthSets,
+      recoveryDays: framework.tendonSafetyBias === 'very_conservative' ? 3 : 2,
+      progressionMethod: framework.progressionMethod,
+      allowFailure: rules.allowFailure,
+      supersetAllowed: rules.supersetAllowed,
+      circuitAllowed: rules.circuitAllowed,
+      personalizationConfidence: 0,
+      adaptations: ['Using framework defaults (insufficient personalization data)'],
+    }
+  }
+  
+  // ==========================================================================
+  // REP RANGE BLENDING
+  // ==========================================================================
+  // Use envelope if confident AND within reasonable bounds of framework philosophy
+  let repRangeMin = rules.preferredRepRangeMin
+  let repRangeMax = rules.preferredRepRangeMax
+  let repRangeSource: 'framework' | 'envelope' | 'blended' = 'framework'
+  
+  if (envelope.repZoneConfidence >= 0.4) {
+    // Check if envelope rep range is compatible with framework philosophy
+    const envelopeAvg = (envelope.preferredRepRangeMin + envelope.preferredRepRangeMax) / 2
+    const frameworkAvg = (rules.preferredRepRangeMin + rules.preferredRepRangeMax) / 2
+    const difference = Math.abs(envelopeAvg - frameworkAvg)
+    
+    if (difference <= 3) {
+      // Close enough - use envelope values
+      repRangeMin = envelope.preferredRepRangeMin
+      repRangeMax = envelope.preferredRepRangeMax
+      repRangeSource = 'envelope'
+      adaptations.push(
+        `Rep range personalized to ${repRangeMin}-${repRangeMax} based on your response data`
+      )
+    } else if (difference <= 5) {
+      // Blend them - envelope has different preference but within tolerance
+      const blendWeight = Math.min(envelope.repZoneConfidence, 0.6)
+      repRangeMin = Math.round(rules.preferredRepRangeMin * (1 - blendWeight) + envelope.preferredRepRangeMin * blendWeight)
+      repRangeMax = Math.round(rules.preferredRepRangeMax * (1 - blendWeight) + envelope.preferredRepRangeMax * blendWeight)
+      repRangeSource = 'blended'
+      adaptations.push(
+        `Rep range adjusted to ${repRangeMin}-${repRangeMax} (blending framework ${rules.preferredRepRangeMin}-${rules.preferredRepRangeMax} with your preference)`
+      )
+    } else {
+      // Envelope suggests very different rep range - note it but prioritize framework philosophy
+      adaptations.push(
+        `Note: You respond well to ${envelope.preferredRepRangeMin}-${envelope.preferredRepRangeMax} reps, but ${framework.frameworkName} prescribes ${rules.preferredRepRangeMin}-${rules.preferredRepRangeMax}`
+      )
+    }
+  }
+  
+  // ==========================================================================
+  // SET RANGE BLENDING
+  // ==========================================================================
+  let setRangeMin = rules.preferredSetRangeMin
+  let setRangeMax = rules.preferredSetRangeMax
+  
+  if (envelope.confidenceScore >= 0.4) {
+    setRangeMin = Math.max(rules.preferredSetRangeMin - 1, envelope.preferredSetRangeMin)
+    setRangeMax = Math.min(rules.preferredSetRangeMax + 1, envelope.preferredSetRangeMax)
+  }
+  
+  // ==========================================================================
+  // VOLUME LIMITS (primarily from envelope)
+  // ==========================================================================
+  let weeklyVolumeMin: number
+  let weeklyVolumeMax: number
+  let toleratedVolumeMax: number
+  
+  if (envelope.weeklyVolumeConfidence >= 0.4) {
+    weeklyVolumeMin = envelope.preferredWeeklyVolumeMin
+    weeklyVolumeMax = envelope.preferredWeeklyVolumeMax
+    toleratedVolumeMax = envelope.toleratedWeeklyVolumeMax
+    
+    // Warn if framework wants more volume than athlete tolerates
+    if (rules.maxWeeklySkillSets > envelope.toleratedWeeklyVolumeMax) {
+      adaptations.push(
+        `Weekly volume capped at ${envelope.toleratedWeeklyVolumeMax} sets (your tolerance is lower than framework default)`
+      )
+    }
+  } else {
+    // Use framework defaults with conservative buffer
+    weeklyVolumeMin = Math.round(rules.maxWeeklySkillSets * 0.6)
+    weeklyVolumeMax = rules.maxWeeklySkillSets
+    toleratedVolumeMax = Math.round(rules.maxWeeklySkillSets * 1.2)
+  }
+  
+  // ==========================================================================
+  // DENSITY PREFERENCE
+  // ==========================================================================
+  let densityPreference: DensityLevel
+  let densitySource: 'framework' | 'envelope' = 'framework'
+  
+  if (envelope.densityConfidence >= 0.4) {
+    densityPreference = envelope.preferredDensityLevel
+    densitySource = 'envelope'
+    
+    // Check for framework conflict
+    const frameworkDensity = framework.densityBias
+    if (frameworkDensity === 'high' && envelope.densityTolerance === 'poor') {
+      adaptations.push(
+        'Rest periods extended despite framework preference (you respond better to lower density)'
+      )
+    } else if (frameworkDensity === 'low' && envelope.densityTolerance === 'good') {
+      adaptations.push(
+        'Session density optimized based on your good recovery tolerance'
+      )
+    }
+  } else {
+    densityPreference = framework.densityBias === 'high' ? 'high_density' : 
+                       framework.densityBias === 'low' ? 'low_density' : 'moderate_density'
+  }
+  
+  // ==========================================================================
+  // REST INTERVALS (framework + density adjustment)
+  // ==========================================================================
+  let restSecondsMin = rules.restSecondsMin
+  let restSecondsMax = rules.restSecondsMax
+  
+  if (envelope.densityTolerance === 'poor') {
+    restSecondsMin = Math.round(restSecondsMin * 1.3)
+    restSecondsMax = Math.round(restSecondsMax * 1.3)
+  } else if (envelope.densityTolerance === 'good') {
+    restSecondsMin = Math.round(restSecondsMin * 0.8)
+    restSecondsMax = Math.round(restSecondsMax * 0.9)
+  }
+  
+  // ==========================================================================
+  // FATIGUE AND RECOVERY
+  // ==========================================================================
+  const fatigueThreshold = envelope.fatigueThreshold
+  const recoveryDays = envelope.recoveryRateEstimate || 
+                       (framework.tendonSafetyBias === 'very_conservative' ? 3 : 2)
+  
+  if (envelope.recoveryNeeds === 'high') {
+    adaptations.push('Extended recovery periods recommended based on your response patterns')
+  }
+  
+  // ==========================================================================
+  // CALCULATE PERSONALIZATION CONFIDENCE
+  // ==========================================================================
+  const personalizationConfidence = Math.min(
+    envelope.confidenceScore,
+    (envelope.repZoneConfidence + envelope.weeklyVolumeConfidence + envelope.densityConfidence) / 3
+  )
+  
+  return {
+    repRangeMin,
+    repRangeMax,
+    repRangeSource,
+    setRangeMin,
+    setRangeMax,
+    weeklyVolumeMin,
+    weeklyVolumeMax,
+    toleratedVolumeMax,
+    densityPreference,
+    densitySource,
+    restSecondsMin,
+    restSecondsMax,
+    fatigueThreshold,
+    recoveryDays,
+    progressionMethod: framework.progressionMethod,
+    allowFailure: rules.allowFailure,
+    supersetAllowed: rules.supersetAllowed && envelope.densityTolerance !== 'poor',
+    circuitAllowed: rules.circuitAllowed && envelope.densityTolerance === 'good',
+    personalizationConfidence,
+    adaptations,
+  }
+}
+
+/**
+ * Check if the selected framework aligns with the athlete's learned envelope
+ * Returns compatibility assessment and recommendations
+ */
+export function assessFrameworkEnvelopeCompatibility(
+  frameworkId: CoachingFrameworkId,
+  envelope: PerformanceEnvelope
+): {
+  compatibility: 'excellent' | 'good' | 'moderate' | 'poor'
+  score: number
+  conflicts: string[]
+  recommendations: string[]
+} {
+  const framework = COACHING_FRAMEWORKS[frameworkId]
+  const rules = framework.rules
+  const conflicts: string[] = []
+  const recommendations: string[] = []
+  let score = 70 // Base score
+  
+  // Check rep range compatibility
+  const envelopeRepAvg = (envelope.preferredRepRangeMin + envelope.preferredRepRangeMax) / 2
+  const frameworkRepAvg = (rules.preferredRepRangeMin + rules.preferredRepRangeMax) / 2
+  const repDiff = Math.abs(envelopeRepAvg - frameworkRepAvg)
+  
+  if (repDiff > 5 && envelope.repZoneConfidence >= 0.4) {
+    score -= 15
+    conflicts.push(`Framework rep range (${rules.preferredRepRangeMin}-${rules.preferredRepRangeMax}) differs significantly from your optimal (${envelope.preferredRepRangeMin}-${envelope.preferredRepRangeMax})`)
+    recommendations.push(`Consider ${envelope.preferredRepRangeMin <= 3 ? 'barseagle_strength' : 'hypertrophy_supported'} framework to match your response pattern`)
+  } else if (repDiff <= 2) {
+    score += 10
+  }
+  
+  // Check density compatibility
+  if (envelope.densityConfidence >= 0.4) {
+    if (framework.densityBias === 'high' && envelope.densityTolerance === 'poor') {
+      score -= 20
+      conflicts.push('Framework uses high density but you respond poorly to compressed rest periods')
+      recommendations.push('Rest periods will be automatically extended to match your recovery needs')
+    } else if (framework.densityBias === 'low' && envelope.densityTolerance === 'good') {
+      score += 5
+      recommendations.push('You could handle higher density if time-constrained')
+    }
+  }
+  
+  // Check volume compatibility
+  if (envelope.weeklyVolumeConfidence >= 0.4) {
+    if (rules.maxWeeklySkillSets > envelope.toleratedWeeklyVolumeMax * 1.2) {
+      score -= 15
+      conflicts.push(`Framework volume (${rules.maxWeeklySkillSets} sets/week) exceeds your tolerance (${envelope.toleratedWeeklyVolumeMax})`)
+      recommendations.push('Volume will be automatically capped to prevent quality degradation')
+    }
+  }
+  
+  // Check framework affinity
+  if (envelope.frameworkAffinity.frameworkConfidence >= 0.4) {
+    if (envelope.frameworkAffinity.preferredFramework === frameworkId) {
+      score += 15
+    } else if (envelope.frameworkAffinity.preferredFramework) {
+      score -= 5
+      recommendations.push(`Your response patterns suggest ${envelope.frameworkAffinity.preferredFramework} might be a better fit`)
+    }
+  }
+  
+  // Determine compatibility level
+  let compatibility: 'excellent' | 'good' | 'moderate' | 'poor' = 'good'
+  if (score >= 85) compatibility = 'excellent'
+  else if (score >= 70) compatibility = 'good'
+  else if (score >= 50) compatibility = 'moderate'
+  else compatibility = 'poor'
+  
+  return {
+    compatibility,
+    score: Math.max(0, Math.min(100, score)),
+    conflicts,
+    recommendations,
+  }
+}

@@ -290,9 +290,9 @@ function OptionButton({ selected, onClick, children, description, className = ''
     >
       {selected && <Check className="w-4 h-4 text-[#C1121F] shrink-0" />}
       <div className="flex-1 min-w-0">
-        <span className="truncate block">{children}</span>
+        <span className="block break-words">{children}</span>
         {description && (
-          <span className="text-xs text-[#6B7280] block mt-0.5">{description}</span>
+          <span className="text-xs text-[#6B7280] block mt-0.5 break-words">{description}</span>
         )}
       </div>
     </button>

@@ -919,7 +919,7 @@ export const PULLUP_LABELS: Record<PullUpCapacity, string> = {
 }
 
 export const PUSHUP_LABELS: Record<PushUpCapacity, string> = {
-  '0_10': '0���10',
+  '0_10': '0–10',
   '10_25': '10–25',
   '25_40': '25–40',
   '40_60': '40–60',

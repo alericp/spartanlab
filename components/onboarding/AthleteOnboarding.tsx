@@ -30,6 +30,7 @@ import { SpartanIcon } from '@/components/brand/SpartanLogo'
 import { trackOnboardingCompleted } from '@/lib/analytics'
 import { TestingGuideLink, DontKnowHelper } from '@/components/testing/TestingGuideModal'
 import { saveAthleteProfile } from '@/lib/data-service'
+import { syncOnboardingToProfile } from '@/lib/profile-sync-service'
 import {
   type OnboardingProfile,
   type Sex,

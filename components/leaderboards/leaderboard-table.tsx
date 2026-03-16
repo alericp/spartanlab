@@ -110,11 +110,11 @@ function EarlyAccessState({ userScore = 0, className }: EarlyAccessStateProps) {
       </div>
       
       <h3 className="text-lg font-semibold text-[#F5F5F5] mb-2">
-        You're an Early Spartan
+        You're Among the First Spartans
       </h3>
       
       <p className="text-sm text-[#A5A5A5] mb-4 max-w-xs mx-auto">
-        You're one of the first athletes on the platform. As more Spartans join, the leaderboard will grow.
+        Build your score and claim the top spot. Weekly and monthly rankings give everyone a fair chance to compete.
       </p>
       
       {userScore > 0 && (
@@ -127,7 +127,7 @@ function EarlyAccessState({ userScore = 0, className }: EarlyAccessStateProps) {
       )}
       
       <p className="text-xs text-[#6B7280] mt-4">
-        Focus on building your Spartan Score. Your rank will update as the community grows.
+        Focus on weekly consistency. Your rank will update as the community grows.
       </p>
     </div>
   )

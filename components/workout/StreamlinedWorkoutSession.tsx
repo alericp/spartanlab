@@ -26,6 +26,14 @@ import {
 } from '@/lib/band-progression-engine'
 import { RPE_QUICK_OPTIONS, type RPEValue } from '@/lib/rpe-adjustment-engine'
 import { InlineRestTimer } from '@/components/workout/InlineRestTimer'
+import { ExerciseOptionsMenu } from '@/components/workout/ExerciseOptionsMenu'
+import {
+  addOverride,
+  getSessionOverrides,
+  clearSessionOverrides,
+  getOverrideSummary,
+  type ExerciseOverride,
+} from '@/lib/exercise-override-service'
 import { SessionPerformanceCard } from '@/components/workout/SessionPerformanceCard'
 import { PostWorkoutSummary } from '@/components/workout/PostWorkoutSummary'
 import { getSessionPerformance, createPerformanceInputFromStats } from '@/lib/session-performance'
@@ -36,6 +44,14 @@ import {
   loadRestTimerState,
   clearRestTimerState,
 } from '@/lib/rest-intelligence'
+import {
+  quickLogWorkout,
+  type PerceivedDifficulty,
+  type SessionType,
+  type FocusArea,
+} from '@/lib/workout-log-service'
+import { evaluateAllChallenges } from '@/lib/challenges/challenge-engine'
+import { evaluateAchievements } from '@/lib/achievements/achievement-engine'
 
 // =============================================================================
 // TYPES
@@ -51,6 +67,14 @@ interface CompletedSetData {
   timestamp: number
 }
 
+interface ExerciseOverrideState {
+  originalName: string
+  currentName: string
+  isSkipped: boolean
+  isReplaced: boolean
+  isProgressionAdjusted: boolean
+}
+
 interface WorkoutSessionState {
   status: 'ready' | 'active' | 'resting' | 'completed'
   currentExerciseIndex: number
@@ -60,6 +84,7 @@ interface WorkoutSessionState {
   elapsedSeconds: number
   lastSetRPE: RPEValue | null
   workoutNotes: string
+  exerciseOverrides: Record<number, ExerciseOverrideState>
 }
 
 // Resume prompt state (exported for use in other components)
@@ -316,6 +341,7 @@ export function StreamlinedWorkoutSession({
       elapsedSeconds: 0,
       lastSetRPE: null,
       workoutNotes: '',
+      exerciseOverrides: {},
     }
   })
   
@@ -338,6 +364,8 @@ export function StreamlinedWorkoutSession({
   // Save state for completed workout
   const [isSaved, setIsSaved] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+  const [perceivedDifficulty, setPerceivedDifficulty] = useState<PerceivedDifficulty | null>(null)
+  const [showQuickLog, setShowQuickLog] = useState(false)
   
   // Timer
   const timerRef = useRef<NodeJS.Timeout | null>(null)
@@ -434,6 +462,7 @@ export function StreamlinedWorkoutSession({
   const handleStartNew = useCallback(() => {
     clearSessionStorage()
     clearRestTimerState()
+    clearSessionOverrides()
     setShowResumePrompt(false)
     setExistingSession(null)
     setState({
@@ -445,6 +474,7 @@ export function StreamlinedWorkoutSession({
       elapsedSeconds: 0,
       lastSetRPE: null,
       workoutNotes: '',
+      exerciseOverrides: {},
     })
   }, [])
   
@@ -530,6 +560,142 @@ export function StreamlinedWorkoutSession({
     setSelectedRPE(null)
   }, [state.currentExerciseIndex, session.exercises.length])
   
+  // ==========================================================================
+  // EXERCISE OVERRIDE HANDLERS
+  // ==========================================================================
+  
+  // Handle exercise replacement
+  const handleReplaceExercise = useCallback((newExercise: { id: string; name: string }) => {
+    const exerciseIndex = state.currentExerciseIndex
+    const originalExercise = session.exercises[exerciseIndex]
+    
+    // Record override in storage for adaptive tracking
+    const override: ExerciseOverride = {
+      originalExerciseId: originalExercise.id || originalExercise.name,
+      originalExerciseName: originalExercise.name,
+      overrideType: 'replaced',
+      newExerciseId: newExercise.id,
+      newExerciseName: newExercise.name,
+      timestamp: Date.now(),
+    }
+    addOverride(sessionId, override)
+    
+    // Update local state
+    setState(prev => ({
+      ...prev,
+      exerciseOverrides: {
+        ...prev.exerciseOverrides,
+        [exerciseIndex]: {
+          originalName: originalExercise.name,
+          currentName: newExercise.name,
+          isSkipped: false,
+          isReplaced: true,
+          isProgressionAdjusted: false,
+        },
+      },
+    }))
+  }, [sessionId, state.currentExerciseIndex, session.exercises])
+  
+  // Handle exercise skip via menu (different from skip button)
+  const handleMenuSkipExercise = useCallback(() => {
+    const exerciseIndex = state.currentExerciseIndex
+    const originalExercise = session.exercises[exerciseIndex]
+    
+    // Record skip override for adaptive tracking
+    const override: ExerciseOverride = {
+      originalExerciseId: originalExercise.id || originalExercise.name,
+      originalExerciseName: originalExercise.name,
+      overrideType: 'skipped',
+      timestamp: Date.now(),
+    }
+    addOverride(sessionId, override)
+    
+    // Mark as skipped and move to next
+    setState(prev => ({
+      ...prev,
+      exerciseOverrides: {
+        ...prev.exerciseOverrides,
+        [exerciseIndex]: {
+          originalName: originalExercise.name,
+          currentName: originalExercise.name,
+          isSkipped: true,
+          isReplaced: false,
+          isProgressionAdjusted: false,
+        },
+      },
+    }))
+    
+    // Then advance to next exercise
+    handleSkipExercise()
+  }, [sessionId, state.currentExerciseIndex, session.exercises, handleSkipExercise])
+  
+  // Handle progression adjustment
+  const handleProgressionChange = useCallback((newProgression: { id: string; name: string }) => {
+    const exerciseIndex = state.currentExerciseIndex
+    const originalExercise = session.exercises[exerciseIndex]
+    
+    // Record progression adjustment for adaptive tracking
+    const override: ExerciseOverride = {
+      originalExerciseId: originalExercise.id || originalExercise.name,
+      originalExerciseName: originalExercise.name,
+      overrideType: 'progression_adjusted',
+      newExerciseId: newProgression.id,
+      newProgression: newProgression.name,
+      timestamp: Date.now(),
+    }
+    addOverride(sessionId, override)
+    
+    // Update local state
+    setState(prev => ({
+      ...prev,
+      exerciseOverrides: {
+        ...prev.exerciseOverrides,
+        [exerciseIndex]: {
+          originalName: originalExercise.name,
+          currentName: newProgression.name,
+          isSkipped: false,
+          isReplaced: false,
+          isProgressionAdjusted: true,
+        },
+      },
+    }))
+  }, [sessionId, state.currentExerciseIndex, session.exercises])
+  
+  // Handle undo override
+  const handleUndoOverride = useCallback(() => {
+    const exerciseIndex = state.currentExerciseIndex
+    
+    // Remove from local state
+    setState(prev => {
+      const newOverrides = { ...prev.exerciseOverrides }
+      delete newOverrides[exerciseIndex]
+      return {
+        ...prev,
+        exerciseOverrides: newOverrides,
+      }
+    })
+  }, [state.currentExerciseIndex])
+  
+  // Get effective exercise (with override applied)
+  const getEffectiveExercise = useCallback((index: number) => {
+    const baseExercise = session.exercises[index]
+    const override = state.exerciseOverrides[index]
+    
+    if (!override) return baseExercise
+    
+    return {
+      ...baseExercise,
+      name: override.currentName,
+      originalName: override.originalName,
+      isReplaced: override.isReplaced,
+      isSkipped: override.isSkipped,
+      isProgressionAdjusted: override.isProgressionAdjusted,
+    }
+  }, [session.exercises, state.exerciseOverrides])
+  
+  // Get current effective exercise
+  const effectiveExercise = getEffectiveExercise(state.currentExerciseIndex)
+  
   // Finish workout
   const handleFinish = useCallback(() => {
     setState(prev => ({ ...prev, status: 'completed' }))
@@ -537,21 +703,98 @@ export function StreamlinedWorkoutSession({
     clearRestTimerState()
   }, [])
   
-  // Save completed workout
-  const handleSaveWorkout = useCallback(async () => {
+  // Save completed workout with full logging
+  const handleSaveWorkout = useCallback(async (difficulty?: PerceivedDifficulty) => {
     setIsSaving(true)
     try {
-      // Session data is already cleared when completed
-      // This confirms the save and enables navigation
+      // Use provided difficulty or the state value
+      const finalDifficulty = difficulty || perceivedDifficulty || 'normal'
+      
+      // Calculate key performance metrics from completed sets
+      const keyPerformance: {
+        pullUps?: number
+        dips?: number
+        pushUps?: number
+        skillHoldSeconds?: number
+        skillName?: string
+      } = {}
+      
+      // Find best performance for key exercises
+      session.exercises.forEach((exercise, exerciseIndex) => {
+        const exerciseSets = state.completedSets.filter(s => s.exerciseIndex === exerciseIndex)
+        if (exerciseSets.length === 0) return
+        
+        const bestReps = Math.max(...exerciseSets.map(s => s.actualReps))
+        const bestHold = Math.max(...exerciseSets.map(s => s.holdSeconds || 0))
+        
+        const nameLower = exercise.name.toLowerCase()
+        
+        if (nameLower.includes('pull-up') || nameLower.includes('pull up') || nameLower.includes('pullup')) {
+          keyPerformance.pullUps = Math.max(keyPerformance.pullUps || 0, bestReps)
+        } else if (nameLower.includes('dip')) {
+          keyPerformance.dips = Math.max(keyPerformance.dips || 0, bestReps)
+        } else if (nameLower.includes('push-up') || nameLower.includes('push up') || nameLower.includes('pushup')) {
+          keyPerformance.pushUps = Math.max(keyPerformance.pushUps || 0, bestReps)
+        } else if (exercise.category === 'skill' && bestHold > 0) {
+          // Track skill holds
+          if (!keyPerformance.skillHoldSeconds || bestHold > keyPerformance.skillHoldSeconds) {
+            keyPerformance.skillHoldSeconds = bestHold
+            keyPerformance.skillName = exercise.name
+          }
+        }
+      })
+      
+      // Determine session type and focus area
+      const sessionType: SessionType = session.dayLabel.toLowerCase().includes('skill') 
+        ? 'skill' 
+        : session.dayLabel.toLowerCase().includes('strength')
+          ? 'strength'
+          : 'mixed'
+      
+      const focusArea: FocusArea = session.exercises.some(e => e.name.toLowerCase().includes('planche'))
+        ? 'planche'
+        : session.exercises.some(e => e.name.toLowerCase().includes('front lever'))
+          ? 'front_lever'
+          : session.exercises.some(e => e.name.toLowerCase().includes('muscle'))
+            ? 'muscle_up'
+            : session.exercises.some(e => e.name.toLowerCase().includes('hspu') || e.name.toLowerCase().includes('handstand push'))
+              ? 'handstand_pushup'
+              : session.exercises.some(e => e.name.toLowerCase().includes('weighted'))
+                ? 'weighted_strength'
+                : 'general'
+      
+      // Quick log the workout
+      quickLogWorkout({
+        sessionName: session.dayLabel,
+        sessionType,
+        focusArea,
+        durationMinutes: Math.round(state.elapsedSeconds / 60),
+        perceivedDifficulty: finalDifficulty,
+        generatedWorkoutId: sessionId,
+        keyPerformance,
+        notes: state.workoutNotes || undefined,
+      })
+      
+      // Evaluate achievements and challenges
+      try {
+        evaluateAchievements()
+        evaluateAllChallenges()
+      } catch (e) {
+        console.error('Failed to evaluate achievements/challenges:', e)
+      }
+      
+      // Clear session data
       clearSessionStorage()
       clearRestTimerState()
+      clearSessionOverrides()
       setIsSaved(true)
+      setShowQuickLog(false)
     } catch (error) {
       console.error('Failed to save workout:', error)
     } finally {
       setIsSaving(false)
     }
-  }, [])
+  }, [session, state, sessionId, perceivedDifficulty])
   
   // Get intelligent rest recommendation
   const getRestRecommendationForCurrentExercise = useCallback((): RestRecommendation => {
@@ -849,11 +1092,79 @@ export function StreamlinedWorkoutSession({
       }
     }
     
-    // Before saving - show PostWorkoutSummary
+    // Before saving - show Quick Log + PostWorkoutSummary
     if (!isSaved) {
       return (
         <div className="min-h-screen bg-[#0F1115] p-4 sm:p-6">
-          <div className="max-w-lg mx-auto pt-6">
+          <div className="max-w-lg mx-auto pt-6 space-y-4">
+            {/* Quick Log - Difficulty Selection (Required for quality data) */}
+            <Card className="bg-[#1A1F26] border-[#2B313A] p-4">
+              <p className="text-xs text-[#6B7280] uppercase tracking-wide mb-3">How did this session feel?</p>
+              <div className="grid grid-cols-3 gap-2">
+                <Button
+                  variant={perceivedDifficulty === 'easy' ? 'default' : 'outline'}
+                  onClick={() => setPerceivedDifficulty('easy')}
+                  className={`h-14 flex flex-col gap-0.5 ${
+                    perceivedDifficulty === 'easy' 
+                      ? 'bg-green-600 hover:bg-green-700 text-white border-green-600' 
+                      : 'border-[#2B313A] text-[#A4ACB8] hover:bg-[#2B313A]/50'
+                  }`}
+                >
+                  <span className="text-base font-semibold">Easy</span>
+                  <span className="text-[10px] opacity-70">Could do more</span>
+                </Button>
+                <Button
+                  variant={perceivedDifficulty === 'normal' ? 'default' : 'outline'}
+                  onClick={() => setPerceivedDifficulty('normal')}
+                  className={`h-14 flex flex-col gap-0.5 ${
+                    perceivedDifficulty === 'normal' 
+                      ? 'bg-[#C1121F] hover:bg-[#A30F1A] text-white border-[#C1121F]' 
+                      : 'border-[#2B313A] text-[#A4ACB8] hover:bg-[#2B313A]/50'
+                  }`}
+                >
+                  <span className="text-base font-semibold">Normal</span>
+                  <span className="text-[10px] opacity-70">Just right</span>
+                </Button>
+                <Button
+                  variant={perceivedDifficulty === 'hard' ? 'default' : 'outline'}
+                  onClick={() => setPerceivedDifficulty('hard')}
+                  className={`h-14 flex flex-col gap-0.5 ${
+                    perceivedDifficulty === 'hard' 
+                      ? 'bg-amber-600 hover:bg-amber-700 text-white border-amber-600' 
+                      : 'border-[#2B313A] text-[#A4ACB8] hover:bg-[#2B313A]/50'
+                  }`}
+                >
+                  <span className="text-base font-semibold">Hard</span>
+                  <span className="text-[10px] opacity-70">Pushed limits</span>
+                </Button>
+              </div>
+            </Card>
+            
+            {/* Optional Workout Notes - Compact */}
+            <Card className="bg-[#1A1F26] border-[#2B313A] p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <MessageSquare className="w-4 h-4 text-[#6B7280]" />
+                <p className="text-sm font-medium text-[#A4ACB8]">Quick Note</p>
+                <span className="text-xs text-[#6B7280]">(optional)</span>
+              </div>
+              <Textarea
+                value={state.workoutNotes}
+                onChange={(e) => setState(prev => ({ ...prev, workoutNotes: e.target.value }))}
+                placeholder="Felt strong, wrists sore, short on time..."
+                className="bg-[#0F1115] border-[#2B313A] text-[#E6E9EF] placeholder:text-[#6B7280] min-h-[50px] resize-none text-sm"
+              />
+            </Card>
+            
+            {/* Complete Workout Button - Primary CTA */}
+            <Button
+              onClick={() => handleSaveWorkout(perceivedDifficulty || 'normal')}
+              disabled={isSaving}
+              className="w-full h-14 bg-[#C1121F] hover:bg-[#A30F1A] text-white text-lg font-bold"
+            >
+              {isSaving ? 'Saving...' : 'Complete Workout'}
+            </Button>
+            
+            {/* Performance Summary below - condensed */}
             <PostWorkoutSummary
               performance={performance}
               sessionStats={{
@@ -865,55 +1176,66 @@ export function StreamlinedWorkoutSession({
                 averageRPE: stats.averageRPE || undefined,
               }}
               sessionName={session.dayLabel}
-              onReturnToDashboard={() => {
-                handleSaveWorkout()
-              }}
-              onViewProgram={() => {
-                handleSaveWorkout()
-              }}
+              onReturnToDashboard={() => handleSaveWorkout(perceivedDifficulty || 'normal')}
+              onViewProgram={() => handleSaveWorkout(perceivedDifficulty || 'normal')}
               bandProgressNote={bandProgressNote}
               skillSignal={skillSignal}
+              overrideSummary={getOverrideSummary(sessionId)}
             />
-            
-            {/* Optional Workout Notes - Below summary */}
-            <Card className="bg-[#1A1F26] border-[#2B313A] p-4 mt-4">
-              <div className="flex items-center gap-2 mb-3">
-                <MessageSquare className="w-4 h-4 text-[#6B7280]" />
-                <p className="text-sm font-medium text-[#A4ACB8]">Session Notes</p>
-                <span className="text-xs text-[#6B7280]">(optional)</span>
-              </div>
-              <Textarea
-                value={state.workoutNotes}
-                onChange={(e) => setState(prev => ({ ...prev, workoutNotes: e.target.value }))}
-                placeholder="Any observations about the workout..."
-                className="bg-[#0F1115] border-[#2B313A] text-[#E6E9EF] placeholder:text-[#6B7280] min-h-[60px] resize-none text-sm"
-              />
-            </Card>
           </div>
         </div>
       )
     }
     
-    // After saving - show confirmation
+    // After saving - show confirmation with feedback
+    const isPartialSession = stats.completedSets < stats.totalSets * 0.5
+    
     return (
       <div className="min-h-screen bg-[#0F1115] p-4 sm:p-6">
-        <div className="max-w-lg mx-auto space-y-6 pt-8">
+        <div className="max-w-lg mx-auto space-y-4 pt-8">
           {/* Saved Confirmation */}
           <div className="text-center">
-            <div className="w-20 h-20 rounded-full bg-green-500/10 border-2 border-green-500 flex items-center justify-center mx-auto mb-4">
-              <CheckCircle2 className="w-10 h-10 text-green-400" />
+            <div className={`w-20 h-20 rounded-full ${isPartialSession ? 'bg-amber-500/10 border-amber-500' : 'bg-green-500/10 border-green-500'} border-2 flex items-center justify-center mx-auto mb-4`}>
+              <CheckCircle2 className={`w-10 h-10 ${isPartialSession ? 'text-amber-400' : 'text-green-400'}`} />
             </div>
             <h1 className="text-2xl font-bold text-[#E6E9EF] mb-2">
-              Workout Saved
+              {isPartialSession ? 'Partial Session Logged' : 'Workout Complete'}
             </h1>
             <p className="text-[#A4ACB8]">
-              {session.dayLabel} • {stats.completedSets} sets logged
+              {session.dayLabel} • {stats.completedSets}/{stats.totalSets} sets
             </p>
           </div>
           
-          <div className="flex items-center justify-center gap-2 py-3 bg-green-500/10 border border-green-500/30 rounded-lg">
-            <CheckCircle2 className="w-5 h-5 text-green-400" />
-            <span className="text-green-400 font-medium">Progress recorded</span>
+          {/* Quick Stats Feedback */}
+          <Card className="bg-[#1A1F26] border-[#2B313A] p-4">
+            <div className="grid grid-cols-3 gap-4 text-center">
+              <div>
+                <p className="text-xl font-bold text-[#E6E9EF]">{Math.round(state.elapsedSeconds / 60)}</p>
+                <p className="text-xs text-[#6B7280]">minutes</p>
+              </div>
+              <div>
+                <p className="text-xl font-bold text-[#E6E9EF]">{stats.completedSets}</p>
+                <p className="text-xs text-[#6B7280]">sets</p>
+              </div>
+              <div>
+                <p className="text-xl font-bold text-[#E6E9EF] capitalize">{perceivedDifficulty || 'Normal'}</p>
+                <p className="text-xs text-[#6B7280]">difficulty</p>
+              </div>
+            </div>
+          </Card>
+          
+          {/* Progress Signals */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-center gap-2 py-2.5 bg-green-500/10 border border-green-500/30 rounded-lg">
+              <CheckCircle2 className="w-4 h-4 text-green-400" />
+              <span className="text-sm text-green-400 font-medium">Progress recorded</span>
+            </div>
+            {performance.performanceTier === 'excellent' && (
+              <div className="flex items-center justify-center gap-2 py-2.5 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+                <Dumbbell className="w-4 h-4 text-amber-400" />
+                <span className="text-sm text-amber-400 font-medium">Excellent performance!</span>
+              </div>
+            )}
           </div>
           
           <Button
@@ -1107,19 +1429,49 @@ export function StreamlinedWorkoutSession({
         {/* Exercise Header Card */}
         <Card className="bg-[#1A1F26] border-[#2B313A] p-4">
           <div className="flex items-start justify-between mb-3">
-            <Badge variant="outline" className="text-[#C1121F] border-[#C1121F]/30 text-xs uppercase">
-              {currentExercise.category}
-            </Badge>
-            {currentExercise.note && (
-              <Badge className="bg-amber-500/10 text-amber-400 border-0 text-xs">
-                {currentExercise.note.includes('band') ? 'Band Assisted' : 'Note'}
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-[#C1121F] border-[#C1121F]/30 text-xs uppercase">
+                {currentExercise.category}
               </Badge>
-            )}
+              {currentExercise.note && (
+                <Badge className="bg-amber-500/10 text-amber-400 border-0 text-xs">
+                  {currentExercise.note.includes('band') ? 'Band Assisted' : 'Note'}
+                </Badge>
+              )}
+              {/* Override indicator badges */}
+              {state.exerciseOverrides[state.currentExerciseIndex]?.isReplaced && (
+                <Badge className="bg-blue-500/10 text-blue-400 border-0 text-xs">
+                  Replaced
+                </Badge>
+              )}
+              {state.exerciseOverrides[state.currentExerciseIndex]?.isProgressionAdjusted && (
+                <Badge className="bg-purple-500/10 text-purple-400 border-0 text-xs">
+                  Adjusted
+                </Badge>
+              )}
+            </div>
+            {/* Exercise Options Menu */}
+            <ExerciseOptionsMenu
+              exercise={currentExercise}
+              exerciseIndex={state.currentExerciseIndex}
+              sessionId={sessionId}
+              onReplace={handleReplaceExercise}
+              onSkip={handleMenuSkipExercise}
+              onProgressionChange={handleProgressionChange}
+              onUndo={handleUndoOverride}
+            />
           </div>
           
-          <h2 className="text-xl font-bold text-[#E6E9EF] mb-2">
-            {currentExercise.name}
+          <h2 className="text-xl font-bold text-[#E6E9EF] mb-1">
+            {effectiveExercise.name}
           </h2>
+          
+          {/* Show original exercise name if changed */}
+          {state.exerciseOverrides[state.currentExerciseIndex] && (
+            <p className="text-xs text-[#6B7280] mb-2">
+              Originally: {state.exerciseOverrides[state.currentExerciseIndex].originalName}
+            </p>
+          )}
           
           {/* Set Progress Dots */}
           <div className="flex items-center gap-2 mb-3">

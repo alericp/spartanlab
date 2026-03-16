@@ -2,6 +2,7 @@
 
 import { useMemo } from 'react'
 import Link from 'next/link'
+import { cn } from '@/lib/utils'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -38,11 +39,20 @@ import {
   Brain,
   ChevronRight,
   Lock,
+  RefreshCw,
+  SkipForward,
 } from 'lucide-react'
 
 // =============================================================================
 // TYPES
 // =============================================================================
+
+interface OverrideSummary {
+  totalOverrides: number
+  skipped: number
+  replaced: number
+  progressionAdjusted: number
+}
 
 interface PostWorkoutSummaryProps {
   performance: SessionPerformanceResult
@@ -59,6 +69,7 @@ interface PostWorkoutSummaryProps {
   onViewProgram?: () => void
   bandProgressNote?: string | null
   skillSignal?: string | null
+  overrideSummary?: OverrideSummary | null
   className?: string
 }
 
@@ -230,6 +241,7 @@ export function PostWorkoutSummary({
   onViewProgram,
   bandProgressNote,
   skillSignal,
+  overrideSummary,
   className,
 }: PostWorkoutSummaryProps) {
   // Get fatigue indicators
@@ -398,6 +410,42 @@ export function PostWorkoutSummary({
               <p className="text-sm text-blue-300 font-medium">{bandProgressNote}</p>
             </div>
           </div>
+        </Card>
+      )}
+      
+      {/* Session Overrides (if any) */}
+      {overrideSummary && overrideSummary.totalOverrides > 0 && (
+        <Card className="bg-[#1A1F26] border-[#2B313A] p-4">
+          <p className="text-xs text-[#6B7280] uppercase tracking-wide mb-3">Session Adjustments</p>
+          <div className="flex flex-wrap gap-2">
+            {overrideSummary.replaced > 0 && (
+              <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-blue-500/10 border border-blue-500/20">
+                <RefreshCw className="w-3.5 h-3.5 text-blue-400" />
+                <span className="text-xs text-blue-400 font-medium">
+                  {overrideSummary.replaced} replaced
+                </span>
+              </div>
+            )}
+            {overrideSummary.skipped > 0 && (
+              <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-amber-500/10 border border-amber-500/20">
+                <SkipForward className="w-3.5 h-3.5 text-amber-400" />
+                <span className="text-xs text-amber-400 font-medium">
+                  {overrideSummary.skipped} skipped
+                </span>
+              </div>
+            )}
+            {overrideSummary.progressionAdjusted > 0 && (
+              <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-purple-500/10 border border-purple-500/20">
+                <TrendingUp className="w-3.5 h-3.5 text-purple-400" />
+                <span className="text-xs text-purple-400 font-medium">
+                  {overrideSummary.progressionAdjusted} adjusted
+                </span>
+              </div>
+            )}
+          </div>
+          <p className="text-xs text-[#6B7280] mt-2">
+            These adjustments will be logged for adaptive training analysis.
+          </p>
         </Card>
       )}
       

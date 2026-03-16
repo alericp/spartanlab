@@ -27,7 +27,10 @@ import {
   saveAthleteProfile,
   type AthleteProfile,
 } from '@/lib/data-service'
+import { hasSignificantProfileChange } from '@/lib/profile-sync-service'
+import { getActiveProgram, clearActiveProgram } from '@/lib/program-service'
 import { UpdateMetricsCard } from '@/components/dashboard/UpdateMetricsCard'
+import { useToast } from '@/hooks/use-toast'
 
 // Subscription Billing Card - handles Pro, Trial, and Free states with graceful error handling
 function SubscriptionBillingCard() {
@@ -171,6 +174,7 @@ export default function SettingsPage() {
   
   // Initialize owner detection from Clerk auth
   const { isOwner } = useOwnerInit()
+  const { toast } = useToast()
   
   const [profile, setProfile] = useState<AthleteProfile | null>(null)
   const [saving, setSaving] = useState(false)
@@ -200,6 +204,9 @@ export default function SettingsPage() {
     setSaving(true)
     setSaved(false)
     
+    // Store previous profile for comparison
+    const previousProfile = profile
+    
     const updated = saveAthleteProfile({
       bodyweight: bodyweight ? parseFloat(bodyweight) : null,
       experienceLevel: experienceLevel as 'beginner' | 'intermediate' | 'advanced',
@@ -210,6 +217,20 @@ export default function SettingsPage() {
     setProfile(updated)
     setSaved(true)
     setSaving(false)
+    
+    // Check if changes require program regeneration
+    if (previousProfile && hasSignificantProfileChange(previousProfile, updated)) {
+      const activeProgram = getActiveProgram()
+      if (activeProgram) {
+        // Clear the active program to trigger regeneration on next visit
+        clearActiveProgram()
+        toast({
+          title: 'Profile Updated',
+          description: 'Your training program will be regenerated to match your new settings.',
+          duration: 4000,
+        })
+      }
+    }
     
     setTimeout(() => setSaved(false), 2000)
   }

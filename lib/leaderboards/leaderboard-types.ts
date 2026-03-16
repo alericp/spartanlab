@@ -1,6 +1,9 @@
 // Leaderboard Type Definitions
 // Centralized types for the SpartanLab leaderboard system
 
+// Time scope for fair competition - beginners can compete weekly/monthly
+export type LeaderboardTimeScope = 'weekly' | 'monthly' | 'all_time'
+
 export type LeaderboardCategory = 
   | 'global_spartan_score'
   | 'consistency'
@@ -43,6 +46,39 @@ export interface LeaderboardData {
   lastUpdated: string
   // Flag indicating this is early-access mode (not enough real users for rankings)
   isEarlyAccess?: boolean
+  // Time scope for this leaderboard data
+  timeScope?: LeaderboardTimeScope
+  // When the scope resets (for weekly/monthly)
+  scopeResetDate?: string
+}
+
+// Time scope configuration
+export interface TimeScopeConfig {
+  id: LeaderboardTimeScope
+  label: string
+  shortLabel: string
+  description: string
+}
+
+export const TIME_SCOPE_CONFIGS: Record<LeaderboardTimeScope, TimeScopeConfig> = {
+  weekly: {
+    id: 'weekly',
+    label: 'Weekly',
+    shortLabel: 'Week',
+    description: 'Score earned this week (resets Monday)',
+  },
+  monthly: {
+    id: 'monthly',
+    label: 'Monthly',
+    shortLabel: 'Month',
+    description: 'Score earned this month',
+  },
+  all_time: {
+    id: 'all_time',
+    label: 'All-Time',
+    shortLabel: 'All',
+    description: 'Total accumulated Spartan Score',
+  },
 }
 
 // Leaderboard category metadata

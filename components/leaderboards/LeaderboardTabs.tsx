@@ -6,21 +6,29 @@ import { cn } from '@/lib/utils'
 import { 
   type LeaderboardCategory, 
   type LeaderboardData,
+  type LeaderboardTimeScope,
   LEADERBOARD_CATEGORIES,
+  TIME_SCOPE_CONFIGS,
 } from '@/lib/leaderboards/leaderboard-types'
-import { getLeaderboard } from '@/lib/leaderboards/leaderboard-service'
+import { getLeaderboard, getAllTimeScopes } from '@/lib/leaderboards/leaderboard-service'
 import { LeaderboardTable } from './LeaderboardTable'
 
 // Early Access explainer component
-function EarlyAccessState({ userPosition }: { userPosition?: { score: number; scoreLabel: string } | null }) {
+interface EarlyAccessStateProps {
+  userPosition?: { score: number; scoreLabel: string } | null
+  timeScope?: LeaderboardTimeScope
+  scopeResetDate?: string
+}
+
+function EarlyAccessState({ userPosition, timeScope, scopeResetDate }: EarlyAccessStateProps) {
   return (
     <div className="py-6 px-4 text-center">
       <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-br from-amber-500/20 to-amber-600/10 border border-amber-500/30 mb-4">
         <Sparkles className="w-6 h-6 text-amber-400" />
       </div>
-      <h3 className="text-lg font-semibold text-[#E6E9EF] mb-2">You're an Early Adopter</h3>
+      <h3 className="text-lg font-semibold text-[#E6E9EF] mb-2">You're Among the First Spartans</h3>
       <p className="text-sm text-[#A4ACB8] max-w-sm mx-auto mb-4">
-        Community rankings will appear as more athletes join SpartanLab. For now, track your personal progress below.
+        Build your score and claim the top spot. Weekly and monthly rankings give everyone a fair chance to compete.
       </p>
       
       {userPosition && (
@@ -29,15 +37,24 @@ function EarlyAccessState({ userPosition }: { userPosition?: { score: number; sc
             1
           </div>
           <div className="text-left">
-            <p className="text-xs text-[#6B7280]">Your Score</p>
+            <p className="text-xs text-[#6B7280]">
+              {timeScope === 'weekly' ? 'This Week' : timeScope === 'monthly' ? 'This Month' : 'Total Score'}
+            </p>
             <p className="text-sm font-semibold text-[#E6E9EF]">{userPosition.scoreLabel}</p>
           </div>
         </div>
       )}
       
-      <div className="mt-6 flex items-center justify-center gap-2 text-xs text-[#6B7280]">
-        <Clock className="w-3.5 h-3.5" />
-        <span>Rankings update as the community grows</span>
+      <div className="mt-6 flex flex-col items-center gap-1 text-xs text-[#6B7280]">
+        <div className="flex items-center gap-2">
+          <Clock className="w-3.5 h-3.5" />
+          <span>Rankings update as the community grows</span>
+        </div>
+        {scopeResetDate && timeScope !== 'all_time' && (
+          <span className="text-amber-400/70">
+            {timeScope === 'weekly' ? 'Week' : 'Month'} resets {new Date(scopeResetDate).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+          </span>
+        )}
       </div>
     </div>
   )
@@ -55,6 +72,7 @@ const CATEGORY_ICONS: Record<LeaderboardCategory, typeof Trophy> = {
 
 interface LeaderboardTabsProps {
   defaultCategory?: LeaderboardCategory
+  defaultTimeScope?: LeaderboardTimeScope
   showAllCategories?: boolean
   compact?: boolean
   className?: string
@@ -62,11 +80,13 @@ interface LeaderboardTabsProps {
 
 export function LeaderboardTabs({
   defaultCategory = 'global_spartan_score',
+  defaultTimeScope = 'weekly',
   showAllCategories = true,
   compact = false,
   className,
 }: LeaderboardTabsProps) {
   const [activeCategory, setActiveCategory] = useState<LeaderboardCategory>(defaultCategory)
+  const [activeTimeScope, setActiveTimeScope] = useState<LeaderboardTimeScope>(defaultTimeScope)
   const [leaderboardData, setLeaderboardData] = useState<LeaderboardData | null>(null)
   const [loading, setLoading] = useState(true)
   
@@ -75,20 +95,54 @@ export function LeaderboardTabs({
     ? ['global_spartan_score', 'consistency', 'front_lever', 'planche', 'muscle_up', 'handstand_push_up']
     : ['global_spartan_score', 'consistency']
   
+  // Show time scope selector only for Spartan Score category
+  const showTimeScopeSelector = activeCategory === 'global_spartan_score'
+  
   useEffect(() => {
     setLoading(true)
     // Small delay to simulate loading
     const timer = setTimeout(() => {
-      const data = getLeaderboard(activeCategory)
+      const data = getLeaderboard(activeCategory, activeTimeScope)
       setLeaderboardData(data)
       setLoading(false)
     }, 150)
     
     return () => clearTimeout(timer)
-  }, [activeCategory])
+  }, [activeCategory, activeTimeScope])
   
   return (
     <div className={cn('space-y-4', className)}>
+      {/* Time Scope Selector - for fair competition */}
+      {showTimeScopeSelector && (
+        <div className="flex items-center justify-between gap-3 pb-2 border-b border-[#2B313A]">
+          <div className="flex items-center gap-2">
+            <Clock className="w-4 h-4 text-[#6B7280]" />
+            <span className="text-sm text-[#A4ACB8]">Ranking period</span>
+          </div>
+          <div className="flex items-center gap-1 p-1 bg-[#1A1F26] rounded-lg border border-[#2B313A]">
+            {getAllTimeScopes().map(scope => {
+              const config = TIME_SCOPE_CONFIGS[scope]
+              const isActive = activeTimeScope === scope
+              
+              return (
+                <button
+                  key={scope}
+                  onClick={() => setActiveTimeScope(scope)}
+                  className={cn(
+                    'px-3 py-1.5 rounded-md text-sm font-medium transition-all',
+                    isActive
+                      ? 'bg-[#C1121F] text-white'
+                      : 'text-[#6B7280] hover:text-[#A4ACB8] hover:bg-[#2B313A]/50'
+                  )}
+                >
+                  {config.shortLabel}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
+      
       {/* Category tabs */}
       <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
         {categories.map((category) => {
@@ -142,7 +196,11 @@ export function LeaderboardTabs({
             </div>
           ) : leaderboardData?.isEarlyAccess ? (
             // Show early access state when not enough real community data
-            <EarlyAccessState userPosition={leaderboardData.userPosition} />
+            <EarlyAccessState 
+              userPosition={leaderboardData.userPosition}
+              timeScope={activeTimeScope}
+              scopeResetDate={leaderboardData.scopeResetDate}
+            />
           ) : leaderboardData ? (
             <LeaderboardTable
               entries={leaderboardData.entries}
@@ -165,15 +223,16 @@ export function LeaderboardTabs({
 // Compact preview card for dashboard
 interface LeaderboardPreviewCardProps {
   className?: string
+  timeScope?: LeaderboardTimeScope
 }
 
-export function LeaderboardPreviewCard({ className }: LeaderboardPreviewCardProps) {
+export function LeaderboardPreviewCard({ className, timeScope = 'weekly' }: LeaderboardPreviewCardProps) {
   const [data, setData] = useState<LeaderboardData | null>(null)
   
   useEffect(() => {
-    const leaderboard = getLeaderboard('global_spartan_score')
+    const leaderboard = getLeaderboard('global_spartan_score', timeScope)
     setData(leaderboard)
-  }, [])
+  }, [timeScope])
   
   if (!data) {
     return (

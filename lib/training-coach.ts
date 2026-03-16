@@ -540,3 +540,187 @@ export function getCoachExplanation(topic: 'session' | 'limiter' | 'progression'
       return 'Continue with your planned training.'
   }
 }
+
+// =============================================================================
+// SKILL READINESS COACHING INTEGRATION
+// =============================================================================
+
+import {
+  calculateFrontLeverReadiness,
+  calculatePlancheReadiness,
+  calculateMuscleUpReadiness,
+  calculateHSPUReadiness,
+  type ReadinessResult,
+  type FrontLeverInputs,
+  type PlancheInputs,
+  type MuscleUpInputs,
+  type HSPUInputs,
+} from './readiness/skill-readiness'
+import { getStrengthRecords } from './strength-service'
+
+export interface SkillReadinessCoachingInsight {
+  skill: string
+  score: number
+  level: string
+  limitingFactor: string
+  coachingMessage: string
+  recommendation: string
+  actionableNextStep: string
+}
+
+/**
+ * Get skill-specific coaching insights based on the user's current strength data
+ * and skill goals. This integrates the readiness calculators into the coaching system.
+ */
+export function getSkillReadinessCoachingInsights(skillGoals: string[]): SkillReadinessCoachingInsight[] {
+  const insights: SkillReadinessCoachingInsight[] = []
+  
+  // Get strength records to calculate readiness
+  const strengthRecords = getStrengthRecords()
+  
+  // Find relevant metrics
+  const pullUpRecord = strengthRecords.find(r => r.exerciseKey === 'pull_ups')
+  const weightedPullUpRecord = strengthRecords.find(r => r.exerciseKey === 'weighted_pull_ups')
+  const dipRecord = strengthRecords.find(r => r.exerciseKey === 'dips')
+  const pushUpRecord = strengthRecords.find(r => r.exerciseKey === 'push_ups')
+  
+  const maxPullUps = pullUpRecord?.reps || 0
+  const weightedPullUp = weightedPullUpRecord?.weight || 0
+  const maxDips = dipRecord?.reps || 0
+  const maxPushUps = pushUpRecord?.reps || 0
+
+  // Check each skill goal
+  for (const goal of skillGoals) {
+    let result: ReadinessResult | null = null
+    let skillName = ''
+    
+    switch (goal) {
+      case 'front_lever':
+        skillName = 'Front Lever'
+        const flInputs: FrontLeverInputs = {
+          maxPullUps,
+          weightedPullUpLoad: weightedPullUp,
+          hollowHoldTime: 30, // Default assumption
+          hasRings: true,
+          hasBar: true,
+        }
+        result = calculateFrontLeverReadiness(flInputs)
+        break
+        
+      case 'planche':
+        skillName = 'Planche'
+        const plInputs: PlancheInputs = {
+          maxDips,
+          maxPushUps,
+          leanHoldTime: 15, // Default assumption
+          bodyweightLbs: 170, // Default assumption
+          hasParallettes: false,
+          hasFloor: true,
+        }
+        result = calculatePlancheReadiness(plInputs)
+        break
+        
+      case 'muscle_up':
+        skillName = 'Muscle-Up'
+        const muInputs: MuscleUpInputs = {
+          maxPullUps,
+          maxDips,
+          chestToBarReps: Math.floor(maxPullUps * 0.4), // Estimate
+          straightBarDipReps: Math.floor(maxDips * 0.5), // Estimate
+          hasBar: true,
+          hasRings: false,
+        }
+        result = calculateMuscleUpReadiness(muInputs)
+        break
+        
+      case 'hspu':
+      case 'handstand_pushup':
+        skillName = 'Handstand Push-Up'
+        const hspuInputs: HSPUInputs = {
+          wallHSPUReps: 0, // Unknown
+          pikeHSPUReps: Math.floor(maxPushUps * 0.3), // Estimate
+          maxDips,
+          wallHandstandHold: 30, // Default assumption
+          overheadPressStrength: 'light',
+          hasWall: true,
+          hasParallettes: false,
+        }
+        result = calculateHSPUReadiness(hspuInputs)
+        break
+    }
+    
+    if (result) {
+      insights.push({
+        skill: skillName,
+        score: result.score,
+        level: result.label,
+        limitingFactor: result.limitingFactor,
+        coachingMessage: generateSkillCoachingMessage(result, skillName),
+        recommendation: result.recommendation,
+        actionableNextStep: result.nextProgression,
+      })
+    }
+  }
+  
+  return insights
+}
+
+/**
+ * Generate a concise coaching message for a skill based on readiness
+ */
+function generateSkillCoachingMessage(result: ReadinessResult, skillName: string): string {
+  if (result.score >= 80) {
+    return `Your ${skillName} foundation is solid. Focus on skill-specific practice.`
+  } else if (result.score >= 60) {
+    return `You are close to ${skillName} readiness. ${result.limitingFactor} is your focus area.`
+  } else if (result.score >= 40) {
+    return `Build more foundation before intense ${skillName} work. Prioritize ${result.limitingFactor.toLowerCase()}.`
+  } else {
+    return `${skillName} requires more preparation. Focus on ${result.limitingFactor.toLowerCase()} as your primary limiter.`
+  }
+}
+
+/**
+ * Get a single coaching summary for all skill goals
+ */
+export function getSkillReadinessSummary(skillGoals: string[]): {
+  overallMessage: string
+  primaryFocus: string | null
+  readySkills: string[]
+  developingSkills: string[]
+} {
+  const insights = getSkillReadinessCoachingInsights(skillGoals)
+  
+  if (insights.length === 0) {
+    return {
+      overallMessage: 'Set skill goals to receive personalized readiness insights.',
+      primaryFocus: null,
+      readySkills: [],
+      developingSkills: [],
+    }
+  }
+  
+  const readySkills = insights.filter(i => i.score >= 70).map(i => i.skill)
+  const developingSkills = insights.filter(i => i.score < 70).map(i => i.skill)
+  
+  // Find the primary limiting skill (lowest score)
+  const primaryLimiter = insights.reduce((min, curr) => 
+    curr.score < min.score ? curr : min
+  , insights[0])
+  
+  let overallMessage = ''
+  if (readySkills.length === insights.length) {
+    overallMessage = 'Your foundation is strong across all skill goals. Time to advance progressions.'
+  } else if (developingSkills.length === insights.length) {
+    overallMessage = `Focus on building foundation. ${primaryLimiter.limitingFactor} is your primary limiter across goals.`
+  } else {
+    overallMessage = `${readySkills.join(', ')} ready for progression. Keep building toward ${developingSkills.join(', ')}.`
+  }
+  
+  return {
+    overallMessage,
+    primaryFocus: primaryLimiter ? primaryLimiter.limitingFactor : null,
+    readySkills,
+    developingSkills,
+  }
+}

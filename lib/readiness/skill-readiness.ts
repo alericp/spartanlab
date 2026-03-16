@@ -797,6 +797,528 @@ export function calculateMuscleUpReadiness(inputs: MuscleUpInputs): ReadinessRes
 }
 
 // =============================================================================
+// HSPU (HANDSTAND PUSH-UP) READINESS
+// =============================================================================
+
+export interface HSPUInputs {
+  wallHSPUReps: number // reps with face to wall
+  pikeHSPUReps: number // elevated pike push-up reps
+  maxDips: number
+  wallHandstandHold: number // seconds
+  overheadPressStrength: 'none' | 'light' | 'moderate' | 'strong' // relative to BW
+  hasWall: boolean
+  hasParallettes: boolean
+}
+
+export function calculateHSPUReadiness(inputs: HSPUInputs): ReadinessResult {
+  const breakdown: ScoreBreakdown[] = []
+  
+  // ===================
+  // Factor 1: Wall HSPU Ability (max 35 points)
+  // ===================
+  let wallHSPUScore = 0
+  let wallHSPUStatus: ScoreBreakdown['status'] = 'weak'
+  
+  if (inputs.wallHSPUReps >= 10) {
+    wallHSPUScore = 35
+    wallHSPUStatus = 'strong'
+  } else if (inputs.wallHSPUReps >= 7) {
+    wallHSPUScore = 28
+    wallHSPUStatus = 'strong'
+  } else if (inputs.wallHSPUReps >= 5) {
+    wallHSPUScore = 22
+    wallHSPUStatus = 'adequate'
+  } else if (inputs.wallHSPUReps >= 3) {
+    wallHSPUScore = 15
+    wallHSPUStatus = 'developing'
+  } else if (inputs.wallHSPUReps >= 1) {
+    wallHSPUScore = 8
+    wallHSPUStatus = 'weak'
+  }
+  
+  breakdown.push({
+    factor: 'Wall HSPU Ability',
+    score: wallHSPUScore,
+    maxScore: 35,
+    status: wallHSPUStatus,
+  })
+
+  // ===================
+  // Factor 2: Pike Push-Up Strength (max 20 points)
+  // ===================
+  let pikeScore = 0
+  let pikeStatus: ScoreBreakdown['status'] = 'weak'
+  
+  if (inputs.pikeHSPUReps >= 15) {
+    pikeScore = 20
+    pikeStatus = 'strong'
+  } else if (inputs.pikeHSPUReps >= 12) {
+    pikeScore = 16
+    pikeStatus = 'strong'
+  } else if (inputs.pikeHSPUReps >= 8) {
+    pikeScore = 12
+    pikeStatus = 'adequate'
+  } else if (inputs.pikeHSPUReps >= 5) {
+    pikeScore = 8
+    pikeStatus = 'developing'
+  } else if (inputs.pikeHSPUReps >= 3) {
+    pikeScore = 4
+    pikeStatus = 'weak'
+  }
+  
+  breakdown.push({
+    factor: 'Pike Push-Up Strength',
+    score: pikeScore,
+    maxScore: 20,
+    status: pikeStatus,
+  })
+
+  // ===================
+  // Factor 3: Dip Strength (max 15 points)
+  // ===================
+  let dipScore = 0
+  let dipStatus: ScoreBreakdown['status'] = 'weak'
+  
+  if (inputs.maxDips >= 20) {
+    dipScore = 15
+    dipStatus = 'strong'
+  } else if (inputs.maxDips >= 15) {
+    dipScore = 12
+    dipStatus = 'strong'
+  } else if (inputs.maxDips >= 10) {
+    dipScore = 9
+    dipStatus = 'adequate'
+  } else if (inputs.maxDips >= 6) {
+    dipScore = 6
+    dipStatus = 'developing'
+  } else if (inputs.maxDips >= 3) {
+    dipScore = 3
+    dipStatus = 'weak'
+  }
+  
+  breakdown.push({
+    factor: 'Dip Strength',
+    score: dipScore,
+    maxScore: 15,
+    status: dipStatus,
+  })
+
+  // ===================
+  // Factor 4: Handstand Hold / Balance (max 20 points)
+  // ===================
+  let hsScore = 0
+  let hsStatus: ScoreBreakdown['status'] = 'weak'
+  
+  if (inputs.wallHandstandHold >= 60) {
+    hsScore = 20
+    hsStatus = 'strong'
+  } else if (inputs.wallHandstandHold >= 45) {
+    hsScore = 16
+    hsStatus = 'adequate'
+  } else if (inputs.wallHandstandHold >= 30) {
+    hsScore = 12
+    hsStatus = 'developing'
+  } else if (inputs.wallHandstandHold >= 15) {
+    hsScore = 6
+    hsStatus = 'weak'
+  } else if (inputs.wallHandstandHold >= 5) {
+    hsScore = 3
+    hsStatus = 'weak'
+  }
+  
+  breakdown.push({
+    factor: 'Handstand Hold (Balance)',
+    score: hsScore,
+    maxScore: 20,
+    status: hsStatus,
+  })
+
+  // ===================
+  // Factor 5: Overhead Press Strength (max 10 points)
+  // ===================
+  const pressScores: Record<string, number> = {
+    'none': 0,
+    'light': 4,
+    'moderate': 7,
+    'strong': 10,
+  }
+  const pressStatuses: Record<string, ScoreBreakdown['status']> = {
+    'none': 'weak',
+    'light': 'developing',
+    'moderate': 'adequate',
+    'strong': 'strong',
+  }
+  
+  breakdown.push({
+    factor: 'Overhead Press Strength',
+    score: pressScores[inputs.overheadPressStrength],
+    maxScore: 10,
+    status: pressStatuses[inputs.overheadPressStrength],
+  })
+
+  // ===================
+  // Calculate Total Score
+  // ===================
+  const totalScore = breakdown.reduce((sum, b) => sum + b.score, 0)
+  
+  // ===================
+  // Determine Level & Labels
+  // ===================
+  let level: ReadinessLevel
+  let label: string
+  let nextProgression: string
+  
+  if (totalScore >= 85) {
+    level = 'advanced-ready'
+    label = 'Freestanding HSPU Pathway Ready'
+    nextProgression = 'Freestanding HSPU attempts, deficit HSPUs, strict negatives'
+  } else if (totalScore >= 70) {
+    level = 'intermediate-progression'
+    label = 'Wall HSPU Consistent'
+    nextProgression = 'Wall HSPU volume, deficit work, freestanding kick-ups'
+  } else if (totalScore >= 50) {
+    level = 'early-progression'
+    label = 'Wall HSPU Practice Ready'
+    nextProgression = 'Wall HSPU attempts, pike push-up progressions, handstand holds'
+  } else if (totalScore >= 25) {
+    level = 'foundation-phase'
+    label = 'Foundation Building'
+    nextProgression = 'Pike push-ups, wall handstand holds, overhead pressing'
+  } else {
+    level = 'not-ready'
+    label = 'Not Ready Yet'
+    nextProgression = 'Build pike push-up strength, dip strength, and handstand comfort'
+  }
+
+  // ===================
+  // Determine Limiting Factor
+  // ===================
+  const weakestFactor = [...breakdown]
+    .sort((a, b) => (a.score / a.maxScore) - (b.score / b.maxScore))[0]
+  
+  const limitingFactorMap: Record<string, { factor: string; explanation: string }> = {
+    'Wall HSPU Ability': {
+      factor: 'Specific HSPU strength',
+      explanation: 'Wall HSPUs are the direct progression to freestanding. Build volume here before advancing to freestanding attempts.'
+    },
+    'Pike Push-Up Strength': {
+      factor: 'Vertical pushing foundation',
+      explanation: 'Pike push-ups build the overhead pressing strength needed for HSPUs without the balance component. Build to 12+ reps.'
+    },
+    'Dip Strength': {
+      factor: 'Pressing base deficit',
+      explanation: 'Dips build general pressing capacity that supports HSPU strength. Strong dips (15+) correlate with easier HSPU development.'
+    },
+    'Handstand Hold (Balance)': {
+      factor: 'Balance and stability',
+      explanation: 'You need comfort inverted before adding the pressing motion. Build 30+ second holds for stability.'
+    },
+    'Overhead Press Strength': {
+      factor: 'Shoulder pressing weakness',
+      explanation: 'General overhead strength supports HSPU development. Consider adding weighted overhead pressing to your training.'
+    },
+  }
+  
+  const limitingInfo = limitingFactorMap[weakestFactor?.factor] || {
+    factor: 'General pressing preparedness',
+    explanation: 'Focus on building overall pressing strength and handstand comfort.'
+  }
+
+  // ===================
+  // Generate Recommendation
+  // ===================
+  let recommendation: string
+  if (level === 'not-ready') {
+    recommendation = 'Build your foundation first. Work toward 8+ pike push-ups and 30+ second wall handstands before HSPU attempts.'
+  } else if (level === 'foundation-phase') {
+    recommendation = 'Continue building pressing strength. Add elevated pike push-ups and increase handstand hold time while building dip volume.'
+  } else if (level === 'early-progression') {
+    recommendation = 'You are ready for wall HSPU practice. Start with negatives if needed, focus on controlled descent and pressing back up.'
+  } else if (level === 'intermediate-progression') {
+    recommendation = 'Build wall HSPU volume and consistency. Add deficit work for increased range of motion and begin freestanding kick-up practice.'
+  } else {
+    recommendation = 'You have the strength for freestanding attempts. Focus on controlled kick-ups and maintaining tension through the press.'
+  }
+
+  return {
+    score: totalScore,
+    level,
+    label,
+    limitingFactor: limitingInfo.factor,
+    limitingFactorExplanation: limitingInfo.explanation,
+    recommendation,
+    nextProgression,
+    breakdown,
+  }
+}
+
+// =============================================================================
+// READINESS TIERS (UNIFIED SYSTEM)
+// =============================================================================
+
+export type ReadinessTier = 
+  | 'not-ready'
+  | 'early-foundation'
+  | 'developing'
+  | 'almost-ready'
+  | 'ready-to-push'
+
+export interface ReadinessTierInfo {
+  tier: ReadinessTier
+  label: string
+  description: string
+  colorClass: string
+  bgClass: string
+}
+
+/**
+ * Convert numeric score to human-readable tier
+ * 0-24 = Not Ready Yet
+ * 25-49 = Early Foundation  
+ * 50-69 = Developing
+ * 70-84 = Almost Ready
+ * 85-100 = Ready to Push
+ */
+export function getReadinessTier(score: number): ReadinessTierInfo {
+  if (score >= 85) {
+    return {
+      tier: 'ready-to-push',
+      label: 'Ready to Push',
+      description: 'You have the foundation to attempt this skill. Focus on technique and deliberate practice.',
+      colorClass: 'text-emerald-400',
+      bgClass: 'bg-emerald-500/20 border-emerald-500/40',
+    }
+  }
+  if (score >= 70) {
+    return {
+      tier: 'almost-ready',
+      label: 'Almost Ready',
+      description: 'Very close. A few more weeks of targeted work should get you there.',
+      colorClass: 'text-green-400',
+      bgClass: 'bg-green-500/20 border-green-500/40',
+    }
+  }
+  if (score >= 50) {
+    return {
+      tier: 'developing',
+      label: 'Developing',
+      description: 'Solid progress. Continue building strength in the limiting areas.',
+      colorClass: 'text-yellow-400',
+      bgClass: 'bg-yellow-500/20 border-yellow-500/40',
+    }
+  }
+  if (score >= 25) {
+    return {
+      tier: 'early-foundation',
+      label: 'Early Foundation',
+      description: 'Building the base. Focus on fundamental strength before skill-specific work.',
+      colorClass: 'text-orange-400',
+      bgClass: 'bg-orange-500/20 border-orange-500/40',
+    }
+  }
+  return {
+    tier: 'not-ready',
+    label: 'Not Ready Yet',
+    description: 'Build your foundation first. The prerequisites are not yet in place.',
+    colorClass: 'text-red-400',
+    bgClass: 'bg-red-500/20 border-red-500/40',
+  }
+}
+
+// =============================================================================
+// WEAK POINT EXTRACTION
+// =============================================================================
+
+export interface WeakPoint {
+  name: string
+  severity: 'critical' | 'moderate' | 'minor'
+  percentOfMax: number
+  suggestion: string
+}
+
+/**
+ * Extract ranked weak points from a readiness breakdown
+ * Critical: < 40% of max
+ * Moderate: 40-60% of max
+ * Minor: 60-80% of max
+ */
+export function extractWeakPoints(breakdown: ScoreBreakdown[]): WeakPoint[] {
+  const weakPoints: WeakPoint[] = []
+  
+  // Sort by percentage of max (ascending = weakest first)
+  const sorted = [...breakdown]
+    .filter(b => b.maxScore > 5) // Filter out equipment-type factors
+    .map(b => ({
+      ...b,
+      percentOfMax: Math.round((b.score / b.maxScore) * 100)
+    }))
+    .sort((a, b) => a.percentOfMax - b.percentOfMax)
+  
+  for (const item of sorted) {
+    if (item.percentOfMax >= 80) continue // Not a weak point
+    
+    let severity: WeakPoint['severity'] = 'minor'
+    if (item.percentOfMax < 40) severity = 'critical'
+    else if (item.percentOfMax < 60) severity = 'moderate'
+    
+    const suggestion = getSuggestionForFactor(item.factor, severity)
+    
+    weakPoints.push({
+      name: item.factor,
+      severity,
+      percentOfMax: item.percentOfMax,
+      suggestion,
+    })
+  }
+  
+  return weakPoints
+}
+
+function getSuggestionForFactor(factor: string, severity: WeakPoint['severity']): string {
+  const suggestions: Record<string, Record<WeakPoint['severity'], string>> = {
+    'Pull-Up Strength': {
+      critical: 'Focus on building strict pull-up volume. Target 3-4 sessions per week.',
+      moderate: 'Add weighted pull-ups or increase training frequency.',
+      minor: 'Continue current pull-up work. Consider adding more volume.',
+    },
+    'Weighted Pull-Up': {
+      critical: 'Start weighted pull-up training with +10-15lbs. Progress slowly.',
+      moderate: 'Increase weighted pull-up load. Target +35-50lbs.',
+      minor: 'Continue progressive overload on weighted pulls.',
+    },
+    'Core Tension (Hollow Hold)': {
+      critical: 'Daily hollow hold practice. Start with 10-15s holds.',
+      moderate: 'Build to 45-60s hollow holds with good form.',
+      minor: 'Maintain core work. Add hollow body rocks.',
+    },
+    'Tuck Front Lever Hold': {
+      critical: 'Begin tuck front lever attempts. Use bands if needed.',
+      moderate: 'Build tuck hold time to 15-20s consistently.',
+      minor: 'Focus on form quality. Prepare for advanced tuck.',
+    },
+    'Push-Up Endurance': {
+      critical: 'Build push-up volume. Target 30+ reps before skill work.',
+      moderate: 'Add push-up variations. Consider pseudo planche push-ups.',
+      minor: 'Maintain push-up capacity. Focus on quality.',
+    },
+    'Dip Strength': {
+      critical: 'Priority: build dip strength. Target 15+ strict dips.',
+      moderate: 'Add weighted dips. Build to +25-35lbs for reps.',
+      minor: 'Continue dip progression. Consider ring dips.',
+    },
+    'Planche Lean / Shoulder Loading': {
+      critical: 'Start planche lean work. Build to 30s holds.',
+      moderate: 'Increase lean depth progressively. Add PPPU work.',
+      minor: 'Focus on maintaining lean depth. Prepare for frog stand.',
+    },
+    'Overhead Stability (Handstand)': {
+      critical: 'Daily handstand practice. Start with wall holds.',
+      moderate: 'Build handstand hold time. Target 45-60s holds.',
+      minor: 'Work on freestanding balance. Reduce wall reliance.',
+    },
+    'Shoulder Mobility': {
+      critical: 'Daily shoulder mobility work is essential.',
+      moderate: 'Increase shoulder opening frequency.',
+      minor: 'Maintain mobility routine.',
+    },
+    'Chest-to-Bar Pull-Ups': {
+      critical: 'Practice explosive pulling. Start with high pull attempts.',
+      moderate: 'Build CTB volume. Target 8+ reps.',
+      minor: 'Maintain CTB ability. Focus on height consistency.',
+    },
+    'Explosive Pull Ability': {
+      critical: 'Add explosive pulling drills. Focus on pull height.',
+      moderate: 'Practice kipping or jumping muscle-up transitions.',
+      minor: 'Continue power development work.',
+    },
+    'Wall HSPU Ability': {
+      critical: 'Start with negatives or band-assisted wall HSPUs.',
+      moderate: 'Build wall HSPU volume. Target 7+ reps.',
+      minor: 'Add deficit work to increase range of motion.',
+    },
+    'Pike Push-Up Strength': {
+      critical: 'Build pike push-up volume. Elevate feet progressively.',
+      moderate: 'Increase pike elevation. Target 12+ reps.',
+      minor: 'Maintain pike strength. Consider box pike push-ups.',
+    },
+    'Handstand Hold (Balance)': {
+      critical: 'Daily wall handstand practice. Build comfort inverted.',
+      moderate: 'Extend hold time to 45-60 seconds.',
+      minor: 'Work on freestanding balance elements.',
+    },
+    'Overhead Press Strength': {
+      critical: 'Add overhead pressing to your routine.',
+      moderate: 'Progress overhead press load.',
+      minor: 'Maintain pressing strength.',
+    },
+  }
+  
+  return suggestions[factor]?.[severity] || `Improve ${factor.toLowerCase()} with targeted training.`
+}
+
+// =============================================================================
+// UNIFIED READINESS CALCULATOR (for dashboard indicators)
+// =============================================================================
+
+export type SkillType = 'front-lever' | 'planche' | 'muscle-up' | 'hspu'
+
+export interface UnifiedReadinessResult {
+  skillType: SkillType
+  skillName: string
+  score: number
+  tier: ReadinessTierInfo
+  primaryWeakPoint: WeakPoint | null
+  topWeakPoints: WeakPoint[]
+  suggestion: string
+  breakdown: ScoreBreakdown[]
+}
+
+/**
+ * Calculate readiness for any supported skill type
+ * This is the main entry point for the unified readiness system
+ */
+export function calculateUnifiedReadiness(
+  skillType: SkillType,
+  inputs: FrontLeverInputs | PlancheInputs | MuscleUpInputs | HSPUInputs
+): UnifiedReadinessResult {
+  let result: ReadinessResult
+  let skillName: string
+  
+  switch (skillType) {
+    case 'front-lever':
+      result = calculateFrontLeverReadiness(inputs as FrontLeverInputs)
+      skillName = 'Front Lever'
+      break
+    case 'planche':
+      result = calculatePlancheReadiness(inputs as PlancheInputs)
+      skillName = 'Planche'
+      break
+    case 'muscle-up':
+      result = calculateMuscleUpReadiness(inputs as MuscleUpInputs)
+      skillName = 'Muscle-Up'
+      break
+    case 'hspu':
+      result = calculateHSPUReadiness(inputs as HSPUInputs)
+      skillName = 'Handstand Push-Up'
+      break
+  }
+  
+  const tier = getReadinessTier(result.score)
+  const weakPoints = extractWeakPoints(result.breakdown)
+  
+  return {
+    skillType,
+    skillName,
+    score: result.score,
+    tier,
+    primaryWeakPoint: weakPoints[0] || null,
+    topWeakPoints: weakPoints.slice(0, 3),
+    suggestion: result.recommendation,
+    breakdown: result.breakdown,
+  }
+}
+
+// =============================================================================
 // UTILITY FUNCTIONS
 // =============================================================================
 
@@ -804,10 +1326,10 @@ export function calculateMuscleUpReadiness(inputs: MuscleUpInputs): ReadinessRes
  * Get color class for readiness score
  */
 export function getScoreColor(score: number): string {
-  if (score >= 80) return 'text-emerald-400'
-  if (score >= 60) return 'text-green-400'
-  if (score >= 40) return 'text-yellow-400'
-  if (score >= 20) return 'text-orange-400'
+  if (score >= 85) return 'text-emerald-400'
+  if (score >= 70) return 'text-green-400'
+  if (score >= 50) return 'text-yellow-400'
+  if (score >= 25) return 'text-orange-400'
   return 'text-red-400'
 }
 

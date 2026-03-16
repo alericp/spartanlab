@@ -123,3 +123,33 @@ export function isPrehabSessionSpecific(
   
   return hasSkillGoals || hasPlannedExercises || hasInjuryConsideration
 }
+
+// =============================================================================
+// WARMUP INTELLIGENCE ENGINE (Enhanced)
+// =============================================================================
+
+export {
+  // Types
+  type JointCategory,
+  type JointPrepCategory,
+  type SessionJointProfile,
+  type WarmUpExerciseWithRationale,
+  type IntelligentWarmUp,
+  type WarmUpGenerationInput,
+  type WarmUpExerciseDefinition,
+  
+  // Registries
+  JOINT_PREP_REGISTRY,
+  EXERCISE_JOINT_STRESS_PROFILES,
+  WARMUP_EXERCISE_DATABASE,
+  
+  // Generation Functions
+  analyzeSessionJointStress,
+  selectWarmupExercises,
+  generateIntelligentWarmup,
+  generateCompressedWarmup,
+  
+  // Knowledge Bubbles
+  getWarmupKnowledgeBubble,
+  generateWarmupExplanation,
+} from '../warmup-intelligence-engine'

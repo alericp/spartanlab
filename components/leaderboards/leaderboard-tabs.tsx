@@ -9,18 +9,20 @@
 
 import { useState, useEffect } from 'react'
 import { cn } from '@/lib/utils'
-import { Flame, Calendar, Target, Dumbbell, ArrowUp, RefreshCw, HelpCircle } from 'lucide-react'
+import { Flame, Calendar, Target, Dumbbell, ArrowUp, RefreshCw, HelpCircle, Clock } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { LeaderboardTable, LeaderboardPreview } from './leaderboard-table'
 import { 
   type LeaderboardCategory, 
   type LeaderboardData,
+  type LeaderboardTimeScope,
   LEADERBOARD_CATEGORIES,
   getCategoryConfig,
   CATEGORY_CONFIGS,
+  TIME_SCOPE_CONFIGS,
 } from '@/lib/leaderboards/leaderboard-types'
-import { getLeaderboard, refreshLeaderboard } from '@/lib/leaderboards/leaderboard-service'
+import { getLeaderboard, refreshLeaderboard, getAllTimeScopes } from '@/lib/leaderboards/leaderboard-service'
 
 // Fallback icon mapping
 const CATEGORY_ICONS: Record<LeaderboardCategory, typeof Flame> = {
@@ -30,6 +32,44 @@ const CATEGORY_ICONS: Record<LeaderboardCategory, typeof Flame> = {
   planche: Target,
   muscle_up: Dumbbell,
   handstand_push_up: ArrowUp,
+}
+
+// =============================================================================
+// TIME SCOPE SELECTOR
+// =============================================================================
+
+interface TimeScopeSelectorProps {
+  activeScope: LeaderboardTimeScope
+  onScopeChange: (scope: LeaderboardTimeScope) => void
+}
+
+function TimeScopeSelector({ activeScope, onScopeChange }: TimeScopeSelectorProps) {
+  const scopes = getAllTimeScopes()
+  
+  return (
+    <div className="flex items-center gap-1 p-1 bg-[#1A1A1A] rounded-lg border border-[#2A2A2A]">
+      {scopes.map(scope => {
+        const config = TIME_SCOPE_CONFIGS[scope]
+        const isActive = activeScope === scope
+        
+        return (
+          <button
+            key={scope}
+            onClick={() => onScopeChange(scope)}
+            className={cn(
+              'px-3 py-1.5 rounded-md text-sm font-medium transition-all',
+              'focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500',
+              isActive
+                ? 'bg-amber-500/20 text-amber-400'
+                : 'text-[#6B7280] hover:text-[#A5A5A5] hover:bg-[#2A2A2A]/50'
+            )}
+          >
+            {config.shortLabel}
+          </button>
+        )
+      })}
+    </div>
+  )
 }
 
 // =============================================================================
@@ -72,49 +112,71 @@ function CategoryTab({ category, isActive, onClick }: CategoryTabProps) {
 
 interface LeaderboardTabsProps {
   defaultCategory?: LeaderboardCategory
+  defaultTimeScope?: LeaderboardTimeScope
   categories?: LeaderboardCategory[]
   className?: string
   showRefresh?: boolean
+  showAllCategories?: boolean
 }
 
 export function LeaderboardTabs({
   defaultCategory = 'global_spartan_score',
+  defaultTimeScope = 'weekly',
   categories = ['global_spartan_score', 'consistency', 'front_lever', 'planche', 'muscle_up'],
   className,
   showRefresh = true,
+  showAllCategories = false,
 }: LeaderboardTabsProps) {
   const [activeCategory, setActiveCategory] = useState<LeaderboardCategory>(defaultCategory)
+  const [activeTimeScope, setActiveTimeScope] = useState<LeaderboardTimeScope>(defaultTimeScope)
   const [leaderboardData, setLeaderboardData] = useState<LeaderboardData | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [showHelp, setShowHelp] = useState(false)
   
-  // Load leaderboard data when category changes
+  // Load leaderboard data when category or time scope changes
   useEffect(() => {
     setIsLoading(true)
     
     // Small delay to prevent flashing
     const timer = setTimeout(() => {
-      const data = getLeaderboard(activeCategory)
+      const data = getLeaderboard(activeCategory, activeTimeScope)
       setLeaderboardData(data)
       setIsLoading(false)
     }, 100)
     
     return () => clearTimeout(timer)
-  }, [activeCategory])
+  }, [activeCategory, activeTimeScope])
   
   // Handle refresh
   const handleRefresh = () => {
     setIsRefreshing(true)
-    const data = refreshLeaderboard(activeCategory)
+    const data = refreshLeaderboard(activeCategory, activeTimeScope)
     setLeaderboardData(data)
     setTimeout(() => setIsRefreshing(false), 500)
   }
+  
+  // Show time scope selector only for Spartan Score category
+  const showTimeScopeSelector = activeCategory === 'global_spartan_score'
   
   const activeConfig = getCategoryConfig(activeCategory)
   
   return (
     <div className={cn('space-y-4', className)}>
+      {/* Time Scope Selector - Above category tabs for prominence */}
+      {showTimeScopeSelector && (
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <Clock className="w-4 h-4 text-[#6B7280]" />
+            <span className="text-sm text-[#A5A5A5]">Ranking period:</span>
+          </div>
+          <TimeScopeSelector
+            activeScope={activeTimeScope}
+            onScopeChange={setActiveTimeScope}
+          />
+        </div>
+      )}
+      
       {/* Category Tabs */}
       <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-[#3A3A3A] scrollbar-track-transparent">
         {categories.map(category => (
@@ -204,11 +266,18 @@ export function LeaderboardTabs({
         </p>
       )}
       
-      {/* Early access notice */}
+      {/* Early access notice with scope info */}
       {leaderboardData?.isEarlyAccess && (
-        <p className="text-xs text-center text-amber-400/70">
-          Building the Spartan community
-        </p>
+        <div className="text-center space-y-1">
+          <p className="text-xs text-amber-400/70">
+            Building the Spartan community
+          </p>
+          {showTimeScopeSelector && leaderboardData.scopeResetDate && activeTimeScope !== 'all_time' && (
+            <p className="text-xs text-[#6B7280]">
+              {activeTimeScope === 'weekly' ? 'Week' : 'Month'} resets {new Date(leaderboardData.scopeResetDate).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+            </p>
+          )}
+        </div>
       )}
     </div>
   )

@@ -3,7 +3,7 @@ import { AthleteOnboarding } from '@/components/onboarding/AthleteOnboarding'
 
 export const metadata: Metadata = {
   title: 'Athlete Onboarding - SpartanLab',
-  description: 'Complete your athlete profile to calibrate the SpartanLab Adaptive Training Engine for personalized calisthenics programming.',
+  description: 'We analyze your strength, skill experience, equipment, and schedule to generate a calisthenics training program designed specifically for you.',
 }
 
 export default function OnboardingPage() {

@@ -40,23 +40,23 @@ interface OnboardingCompleteProps {
 const PRO_FEATURES = [
   {
     icon: RefreshCcw,
-    title: 'Adaptive Programming',
-    description: 'Training that adjusts to your progress, fatigue, and recovery',
+    title: 'Adaptive Program Generation',
+    description: 'Training that evolves based on skill readiness, constraints, and performance response',
   },
   {
     icon: BarChart3,
-    title: 'Performance Analytics',
-    description: 'Deep insights into your strength, skills, and consistency',
+    title: 'Constraint Detection Engine',
+    description: 'Identifies the specific factors limiting your skill progress',
   },
   {
     icon: Trophy,
-    title: 'Spartan Score Tracking',
-    description: 'Unified performance metric combining all your training data',
+    title: 'Joint Integrity Protocols',
+    description: 'Durability work integrated into every session to protect your joints',
   },
   {
     icon: TrendingUp,
-    title: 'Advanced Progression Logic',
-    description: 'Smart skill and strength progressions that accelerate results',
+    title: 'Performance Envelope Learning',
+    description: 'The engine learns your optimal rep ranges, volume tolerance, and fatigue thresholds',
   },
 ]
 

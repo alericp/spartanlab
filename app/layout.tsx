@@ -28,11 +28,11 @@ export const viewport: Viewport = {
 
 export const metadata: Metadata = {
   title: {
-    default: 'SpartanLab - Calisthenics Training Decision Engine',
+    default: 'SpartanLab - Adaptive Calisthenics Training Intelligence',
     template: '%s | SpartanLab',
   },
-  description: 'Stop guessing your calisthenics training. SpartanLab analyzes your progress, finds your limiters, and tells you exactly what to train next. Like having a coach analyzing your training 24/7.',
-  keywords: ['calisthenics', 'bodyweight training', 'workout planner', 'fitness app', 'training program', 'front lever', 'planche', 'muscle up'],
+  description: 'AI-powered calisthenics coaching that adapts to you. SpartanLab analyzes skill readiness, detects training limiters, and generates personalized programs with joint integrity protocols. Master front lever, planche, and muscle-up intelligently.',
+  keywords: ['calisthenics training app', 'AI calisthenics coach', 'front lever training program', 'planche progression training', 'bodyweight strength program', 'calisthenics skill training', 'adaptive workout program', 'muscle up progression'],
   authors: [{ name: 'SpartanLab' }],
   creator: 'SpartanLab',
   publisher: 'SpartanLab',
@@ -43,21 +43,21 @@ export const metadata: Metadata = {
     type: 'website',
     locale: 'en_US',
     siteName: 'SpartanLab',
-    title: 'SpartanLab - Calisthenics Training Decision Engine',
-    description: 'Stop guessing your calisthenics training. SpartanLab analyzes your progress, finds your limiters, and tells you exactly what to train next.',
+    title: 'SpartanLab - Adaptive Calisthenics Training Intelligence',
+    description: 'AI-powered calisthenics coaching. Skill readiness analysis, constraint detection, adaptive programming, and joint integrity protocols for front lever, planche, and muscle-up mastery.',
     images: [
       {
         url: '/og-default.png',
         width: 1200,
         height: 630,
-        alt: 'SpartanLab - Calisthenics Training Intelligence',
+        alt: 'SpartanLab - Adaptive Calisthenics Training Intelligence',
       },
     ],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'SpartanLab - Calisthenics Training Decision Engine',
-    description: 'Stop guessing your calisthenics training. Get personalized coaching intelligence.',
+    title: 'SpartanLab - Adaptive Calisthenics Training Intelligence',
+    description: 'AI coaching for calisthenics. Skill readiness analysis, adaptive programming, and joint integrity protocols.',
     creator: '@spartanlabapp',
     images: ['/og-default.png'],
   },

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Trophy, Flame, Target, Dumbbell, Star, ChevronRight, Users, Sparkles, Clock } from 'lucide-react'
+import { Trophy, Flame, Target, Dumbbell, Star, ChevronRight, Users, Sparkles, Clock, TrendingUp, Zap } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { 
   type LeaderboardCategory, 
@@ -10,7 +10,7 @@ import {
   LEADERBOARD_CATEGORIES,
   TIME_SCOPE_CONFIGS,
 } from '@/lib/leaderboards/leaderboard-types'
-import { getLeaderboard, getAllTimeScopes } from '@/lib/leaderboards/leaderboard-service'
+import { getLeaderboard, getAllTimeScopes, getBestScope, getMotivationalMessage, type BestScopeResult } from '@/lib/leaderboards/leaderboard-service'
 import { LeaderboardTable } from './LeaderboardTable'
 
 // Early Access explainer component
@@ -21,14 +21,35 @@ interface EarlyAccessStateProps {
 }
 
 function EarlyAccessState({ userPosition, timeScope, scopeResetDate }: EarlyAccessStateProps) {
+  // Beginner psychology: Different messaging for each scope
+  const scopeMessages = {
+    weekly: {
+      title: 'Make Your Move This Week',
+      subtitle: 'Weekly rankings reset every Monday - your chance to claim the top spot',
+      motivation: 'Complete workouts to climb the weekly board',
+    },
+    monthly: {
+      title: 'Build Consistency This Month',
+      subtitle: 'Monthly rankings reward dedicated training throughout the month',
+      motivation: 'Train consistently to dominate the monthly leaderboard',
+    },
+    all_time: {
+      title: 'Build Your Legacy',
+      subtitle: 'The all-time board celebrates long-term dedication and excellence',
+      motivation: 'Every workout adds to your permanent Spartan Score',
+    },
+  }
+  
+  const messages = scopeMessages[timeScope || 'weekly']
+  
   return (
     <div className="py-6 px-4 text-center">
       <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-br from-amber-500/20 to-amber-600/10 border border-amber-500/30 mb-4">
         <Sparkles className="w-6 h-6 text-amber-400" />
       </div>
-      <h3 className="text-lg font-semibold text-[#E6E9EF] mb-2">You're Among the First Spartans</h3>
+      <h3 className="text-lg font-semibold text-[#E6E9EF] mb-2">{messages.title}</h3>
       <p className="text-sm text-[#A4ACB8] max-w-sm mx-auto mb-4">
-        Build your score and claim the top spot. Weekly and monthly rankings give everyone a fair chance to compete.
+        {messages.subtitle}
       </p>
       
       {userPosition && (
@@ -38,22 +59,23 @@ function EarlyAccessState({ userPosition, timeScope, scopeResetDate }: EarlyAcce
           </div>
           <div className="text-left">
             <p className="text-xs text-[#6B7280]">
-              {timeScope === 'weekly' ? 'This Week' : timeScope === 'monthly' ? 'This Month' : 'Total Score'}
+              {timeScope === 'weekly' ? 'This Week' : timeScope === 'monthly' ? 'This Month' : 'All-Time'}
             </p>
             <p className="text-sm font-semibold text-[#E6E9EF]">{userPosition.scoreLabel}</p>
           </div>
         </div>
       )}
       
-      <div className="mt-6 flex flex-col items-center gap-1 text-xs text-[#6B7280]">
-        <div className="flex items-center gap-2">
-          <Clock className="w-3.5 h-3.5" />
-          <span>Rankings update as the community grows</span>
-        </div>
+      <div className="mt-6 space-y-2">
+        <p className="text-xs text-[#6B7280] flex items-center justify-center gap-2">
+          <Zap className="w-3.5 h-3.5 text-amber-400" />
+          {messages.motivation}
+        </p>
         {scopeResetDate && timeScope !== 'all_time' && (
-          <span className="text-amber-400/70">
+          <p className="text-xs text-amber-400/70 flex items-center justify-center gap-2">
+            <Clock className="w-3.5 h-3.5" />
             {timeScope === 'weekly' ? 'Week' : 'Month'} resets {new Date(scopeResetDate).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
-          </span>
+          </p>
         )}
       </div>
     </div>
@@ -89,6 +111,7 @@ export function LeaderboardTabs({
   const [activeTimeScope, setActiveTimeScope] = useState<LeaderboardTimeScope>(defaultTimeScope)
   const [leaderboardData, setLeaderboardData] = useState<LeaderboardData | null>(null)
   const [loading, setLoading] = useState(true)
+  const [bestScope, setBestScope] = useState<BestScopeResult | null>(null)
   
   // Categories to show
   const categories: LeaderboardCategory[] = showAllCategories
@@ -105,6 +128,11 @@ export function LeaderboardTabs({
       const data = getLeaderboard(activeCategory, activeTimeScope)
       setLeaderboardData(data)
       setLoading(false)
+      
+      // Calculate best scope for Spartan Score category
+      if (activeCategory === 'global_spartan_score') {
+        setBestScope(getBestScope())
+      }
     }, 150)
     
     return () => clearTimeout(timer)
@@ -114,32 +142,62 @@ export function LeaderboardTabs({
     <div className={cn('space-y-4', className)}>
       {/* Time Scope Selector - for fair competition */}
       {showTimeScopeSelector && (
-        <div className="flex items-center justify-between gap-3 pb-2 border-b border-[#2B313A]">
-          <div className="flex items-center gap-2">
-            <Clock className="w-4 h-4 text-[#6B7280]" />
-            <span className="text-sm text-[#A4ACB8]">Ranking period</span>
+        <div className="space-y-3 pb-3 border-b border-[#2B313A]">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <Clock className="w-4 h-4 text-[#6B7280]" />
+              <span className="text-sm text-[#A4ACB8]">Ranking period</span>
+            </div>
+            <div className="flex items-center gap-1 p-1 bg-[#1A1F26] rounded-lg border border-[#2B313A]">
+              {getAllTimeScopes().map(scope => {
+                const config = TIME_SCOPE_CONFIGS[scope]
+                const isActive = activeTimeScope === scope
+                const isBestScope = bestScope?.bestScope === scope
+                
+                return (
+                  <button
+                    key={scope}
+                    onClick={() => setActiveTimeScope(scope)}
+                    className={cn(
+                      'relative px-3 py-1.5 rounded-md text-sm font-medium transition-all',
+                      isActive
+                        ? 'bg-[#C1121F] text-white'
+                        : 'text-[#6B7280] hover:text-[#A4ACB8] hover:bg-[#2B313A]/50'
+                    )}
+                  >
+                    {config.shortLabel}
+                    {isBestScope && !isActive && (
+                      <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-green-500" />
+                    )}
+                  </button>
+                )
+              })}
+            </div>
           </div>
-          <div className="flex items-center gap-1 p-1 bg-[#1A1F26] rounded-lg border border-[#2B313A]">
-            {getAllTimeScopes().map(scope => {
-              const config = TIME_SCOPE_CONFIGS[scope]
-              const isActive = activeTimeScope === scope
-              
-              return (
-                <button
-                  key={scope}
-                  onClick={() => setActiveTimeScope(scope)}
-                  className={cn(
-                    'px-3 py-1.5 rounded-md text-sm font-medium transition-all',
-                    isActive
-                      ? 'bg-[#C1121F] text-white'
-                      : 'text-[#6B7280] hover:text-[#A4ACB8] hover:bg-[#2B313A]/50'
-                  )}
-                >
-                  {config.shortLabel}
-                </button>
-              )
-            })}
-          </div>
+          
+          {/* Best Scope Indicator - helps beginners see where they're performing best */}
+          {bestScope && activeCategory === 'global_spartan_score' && (
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-xs">
+                <TrendingUp className="w-3.5 h-3.5 text-green-500" />
+                <span className="text-[#A4ACB8]">{bestScope.message}</span>
+                {bestScope.bestScope !== activeTimeScope && (
+                  <button
+                    onClick={() => setActiveTimeScope(bestScope.bestScope)}
+                    className="text-[#C1121F] hover:text-[#E6363F] font-medium"
+                  >
+                    View
+                  </button>
+                )}
+              </div>
+              {leaderboardData?.userPosition && (
+                <div className="flex items-center gap-1.5 text-xs text-[#6B7280]">
+                  <Zap className="w-3 h-3 text-amber-400" />
+                  <span>{leaderboardData.userPosition.score} pts {TIME_SCOPE_CONFIGS[activeTimeScope].shortLabel.toLowerCase()}</span>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
       

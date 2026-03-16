@@ -21,14 +21,20 @@ export default function LeaderboardPage() {
             </div>
           </div>
           
-          {/* Info banner */}
+          {/* Info banner - explains fair competition */}
           <div className="px-4">
             <div className="flex items-start gap-3 p-3 rounded-lg bg-[#1A1F26] border border-[#2B313A]">
               <Info className="w-4 h-4 text-[#6B7280] mt-0.5 shrink-0" />
-              <p className="text-xs text-[#6B7280]">
-                Rankings are based on your Spartan Score, training consistency, and skill progressions. 
-                Keep training to climb the ranks and earn your place among the elite.
-              </p>
+              <div className="space-y-1">
+                <p className="text-xs text-[#A4ACB8]">
+                  <span className="font-medium">Weekly rankings</span> give everyone a fresh start each Monday.
+                  <span className="font-medium"> Monthly rankings</span> reward consistent training.
+                  <span className="font-medium"> All-time</span> celebrates long-term dedication.
+                </p>
+                <p className="text-xs text-[#6B7280]">
+                  Every workout, achievement, and skill progression earns you Spartan Score.
+                </p>
+              </div>
             </div>
           </div>
           

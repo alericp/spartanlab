@@ -13,6 +13,7 @@ import { getConstraintInsight } from './constraint-engine'
 import { getProgramBuilderContext } from './adaptive-athlete-engine'
 import { getAthleteCalibration, getProgramCalibrationAdjustments, type AthleteCalibration, type ProgramCalibrationAdjustments } from './athlete-calibration'
 import { getOnboardingProfile, type PrimaryTrainingOutcome, type TrainingPathType, type WorkoutDurationPreference, type PrimaryLimitation, type WeakestArea, type JointCaution } from './athlete-profile'
+import { detectWeakPoints, getVolumeDistribution, type WeakPointSummary } from './weak-point-detection'
 import { getUnifiedSkillIntelligence, generateTrainingAdjustments, type UnifiedSkillIntelligence } from './skill-intelligence-layer'
 import { getCompressionReadiness, shouldBiasTowardCompression, type CompressionReadinessResult } from './compression-readiness'
 import { selectOptimalStructure, getDayExplanation } from './program-structure-engine'
@@ -227,6 +228,16 @@ export interface AdaptiveProgram {
   // Adaptive Progression Engine - progression recommendations
   progressionInsights?: ProgressionInsight[]
   exercisesReadyToProgress?: string[]
+  // Weak Point Detection - automatic focus area detection
+  weakPointDetection?: {
+    primaryFocus: string
+    primaryFocusLabel: string
+    primaryFocusReason: string
+    secondaryFocus: string | null
+    mobilityEmphasis: string
+    volumeModifier: number
+    confidenceLevel: string
+  }
   // Recovery & Fatigue Engine - readiness assessment
   readinessAssessment?: {
     state: 'ready_to_push' | 'train_normally' | 'keep_controlled' | 'recovery_focused'
@@ -546,6 +557,10 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
     fatigueDecision = getQuickFatigueDecision()
   }
   
+  // Weak point detection for automatic focus area identification
+  const weakPointSummary = detectWeakPoints()
+  const volumeDistribution = getVolumeDistribution(weakPointSummary)
+  
   // Get unified skill intelligence for program prioritization
   // This aggregates readiness, support strength, tendon adaptation, and calibration
   const skillIntelligence = getUnifiedSkillIntelligence(
@@ -721,6 +736,16 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
         return undefined
       }
     })(),
+    // Weak Point Detection - automatic focus identification
+    weakPointDetection: weakPointSummary.confidenceLevel !== 'low' ? {
+      primaryFocus: weakPointSummary.primaryFocus,
+      primaryFocusLabel: weakPointSummary.primaryFocusLabel,
+      primaryFocusReason: weakPointSummary.primaryFocusReason,
+      secondaryFocus: weakPointSummary.secondaryFocusLabel,
+      mobilityEmphasis: weakPointSummary.mobilityEmphasis,
+      volumeModifier: weakPointSummary.volumeModifier,
+      confidenceLevel: weakPointSummary.confidenceLevel,
+    } : undefined,
   }
 }
 

@@ -11,6 +11,7 @@ import {
   estimateStrengthTier,
 } from './athlete-profile'
 import { getAthleteCalibration } from './athlete-calibration'
+import { detectWeakPoints, type WeakPointSummary } from './weak-point-detection'
 import { generateAdaptiveProgram, type AdaptiveProgramInputs, type AdaptiveProgram } from './adaptive-program-builder'
 import type { PrimaryGoal, ExperienceLevel, TrainingDays, SessionLength } from './program-service'
 import type { EquipmentType } from './adaptive-exercise-pool'
@@ -303,6 +304,9 @@ export interface ProgramReasoning {
     level: string
   }[]
   
+  // Weak point detection
+  weakPointSummary: WeakPointSummary | null
+  
   // Training strategy
   strategyFocus: string[]
   volumeLevel: string
@@ -331,6 +335,9 @@ export interface ProgramReasoning {
 export function getProgramReasoning(program: AdaptiveProgram | null): ProgramReasoning {
   const profile = getOnboardingProfile()
   const calibration = getAthleteCalibration()
+  
+  // Weak point detection
+  const weakPointSummary = detectWeakPoints()
   
   // Strength detection
   const strengthTier = profile ? estimateStrengthTier(profile) : 'intermediate'
@@ -384,23 +391,41 @@ export function getProgramReasoning(program: AdaptiveProgram | null): ProgramRea
     detectedSkills.push({ skill: 'Muscle-up', level: muLabels[profile.muscleUp] || profile.muscleUp })
   }
   
-  // Training strategy
+  // Training strategy - enhanced with weak point detection
   const strategyFocus: string[] = []
   const skillInterests = profile?.skillInterests || []
   
+  // Primary focus from weak point detection
+  if (weakPointSummary.primaryFocus !== 'balanced_development') {
+    strategyFocus.push(weakPointSummary.primaryFocusLabel)
+  }
+  
+  // Skill work priority
   if (skillInterests.includes('front_lever') || skillInterests.includes('planche')) {
-    strategyFocus.push('Skill work first')
+    if (!strategyFocus.some(s => s.toLowerCase().includes('skill'))) {
+      strategyFocus.push('Skill work priority')
+    }
   }
-  if (profile?.primaryGoal === 'strength' || skillInterests.length === 0) {
-    strategyFocus.push('Strength development')
+  
+  // Secondary focus
+  if (weakPointSummary.secondaryFocusLabel && strategyFocus.length < 3) {
+    strategyFocus.push(weakPointSummary.secondaryFocusLabel)
   }
-  if (calibration?.needsCompressionWork) {
+  
+  // Core work if needed
+  if (calibration?.needsCompressionWork && !strategyFocus.some(s => s.toLowerCase().includes('core'))) {
     strategyFocus.push('Core compression development')
   }
-  if (profile?.flexibilityGoals && profile.flexibilityGoals.length > 0) {
-    strategyFocus.push('Flexibility integration')
+  
+  // Mobility if emphasized
+  if (weakPointSummary.mobilityEmphasis === 'high' && !strategyFocus.some(s => s.toLowerCase().includes('mobility'))) {
+    strategyFocus.push('Mobility integration')
   }
-  strategyFocus.push('Accessory work for balance')
+  
+  // Fallback to balanced
+  if (strategyFocus.length === 0) {
+    strategyFocus.push('Balanced strength development')
+  }
   
   // Volume level
   const trainingDays = profile?.weeklyTraining ? mapWeeklyTrainingToDays(profile.weeklyTraining) : 3
@@ -496,6 +521,7 @@ export function getProgramReasoning(program: AdaptiveProgram | null): ProgramRea
       detail: strengthDetail,
     },
     detectedSkills,
+    weakPointSummary,
     strategyFocus: strategyFocus.slice(0, 3), // Limit to 3 items
     volumeLevel,
     sessionStyle,

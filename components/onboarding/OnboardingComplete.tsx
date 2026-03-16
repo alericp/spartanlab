@@ -227,6 +227,22 @@ export function OnboardingComplete({ onContinue }: OnboardingCompleteProps) {
               </div>
             )}
             
+            {/* Detected Development Focus */}
+            {programReasoning?.weakPointSummary && programReasoning.weakPointSummary.primaryFocus !== 'balanced_development' && (
+              <div className="bg-[#0F1115] rounded-lg p-3 border border-[#2B313A]">
+                <div className="flex items-center gap-2 mb-1">
+                  <Target className="w-3.5 h-3.5 text-[#4F6D8A]" />
+                  <span className="text-xs text-[#6B7280] uppercase tracking-wide">Development Focus</span>
+                </div>
+                <p className="text-sm font-medium text-[#E6E9EF]">
+                  {programReasoning.weakPointSummary.primaryFocusLabel}
+                </p>
+                <p className="text-xs text-[#A4ACB8] mt-0.5">
+                  {programReasoning.weakPointSummary.primaryFocusReason}
+                </p>
+              </div>
+            )}
+            
             {/* Spartan Score */}
             {spartanScore !== null && (
               <div className="bg-gradient-to-r from-[#C1121F]/10 to-transparent rounded-lg p-3 border border-[#C1121F]/20">
@@ -291,6 +307,12 @@ export function OnboardingComplete({ onContinue }: OnboardingCompleteProps) {
                   </div>
                 ))}
               </div>
+              {programReasoning.weakPointSummary?.primaryFocusReason && 
+               programReasoning.weakPointSummary.primaryFocus !== 'balanced_development' && (
+                <p className="text-xs text-[#A4ACB8] mt-2 italic">
+                  {programReasoning.weakPointSummary.primaryFocusReason}
+                </p>
+              )}
               <p className="text-xs text-[#6B7280] mt-2">
                 {programReasoning.volumeLevel}
               </p>

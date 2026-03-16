@@ -72,6 +72,14 @@ import {
 } from './exercise-intelligence-engine'
 import type { PerformanceEnvelope } from './performance-envelope-engine'
 import type { MovementFamily } from './movement-family-registry'
+import {
+  checkExercisePrerequisite,
+  buildPrerequisiteContext,
+  isGatedExercise,
+  getExerciseKnowledgeBubble,
+  type AthletePrerequisiteContext,
+  type GateCheckResult,
+} from './prerequisite-gate-engine'
 
 export interface SelectedExercise {
   exercise: Exercise
@@ -80,6 +88,58 @@ export interface SelectedExercise {
   note?: string
   isOverrideable: boolean
   selectionReason: string
+  // Prerequisite Gate fields
+  gateCheckResult?: GateCheckResult
+  knowledgeBubble?: string
+  wasSubstituted?: boolean
+  originalExerciseId?: string
+}
+
+// =============================================================================
+// PREREQUISITE GATE CHECK WRAPPER
+// =============================================================================
+
+/**
+ * Apply prerequisite gate checks to an exercise selection
+ * Returns the exercise (or safe substitute) with gate metadata
+ */
+function applyPrerequisiteGate(
+  exercise: Exercise,
+  context: AthletePrerequisiteContext | undefined,
+  experienceLevel: ExperienceLevel
+): { exercise: Exercise; gateResult: GateCheckResult; wasSubstituted: boolean; originalId?: string } {
+  // Build context if not provided
+  const prerequisiteContext = context || buildPrerequisiteContext({
+    experienceLevel,
+  })
+  
+  // Check if this exercise passes the gate
+  const gateResult = checkExercisePrerequisite(exercise.id, prerequisiteContext)
+  
+  if (gateResult.allowed) {
+    return { exercise, gateResult, wasSubstituted: false }
+  }
+  
+  // Exercise not allowed - find substitute
+  if (gateResult.recommendedSubstitute) {
+    const allExercises = getAllExercises()
+    const substitute = allExercises.find(e => 
+      e.id === gateResult.recommendedSubstitute!.exerciseId ||
+      e.name.toLowerCase().replace(/\s+/g, '_') === gateResult.recommendedSubstitute!.exerciseId
+    )
+    
+    if (substitute) {
+      return {
+        exercise: substitute,
+        gateResult,
+        wasSubstituted: true,
+        originalId: exercise.id,
+      }
+    }
+  }
+  
+  // No substitute found - return original with warning
+  return { exercise, gateResult, wasSubstituted: false }
 }
 
 export interface ExerciseSelection {
@@ -108,6 +168,9 @@ interface ExerciseSelectionInputs {
   targetSkills?: SkillType[]
   // Performance Envelope integration
   envelopes?: PerformanceEnvelope[]
+  // Prerequisite Gate Engine integration
+  prerequisiteContext?: AthletePrerequisiteContext
+  jointCautions?: string[]
 }
 
 // =============================================================================
@@ -127,7 +190,15 @@ export function selectExercisesForSession(inputs: ExerciseSelectionInputs): Exer
     athleteProfile,
     targetSkills,
     rangeTrainingMode,
+    prerequisiteContext: inputContext,
+    jointCautions,
   } = inputs
+  
+  // Build prerequisite context for gate checks
+  const prerequisiteContext = inputContext || buildPrerequisiteContext({
+    experienceLevel,
+    jointCautions: jointCautions as ('shoulder' | 'elbow' | 'wrist' | 'lower_back' | 'hip' | 'knee' | 'ankle')[],
+  })
   
   // Calculate exercise budget based on session time
   const budget = calculateExerciseBudget(sessionMinutes)
@@ -162,7 +233,7 @@ export function selectExercisesForSession(inputs: ExerciseSelectionInputs): Exer
   const availableAccessory = ACCESSORY_EXERCISES.filter(e => hasRequiredEquipment(e, equipment))
   const availableCore = CORE_EXERCISES_POOL.filter(e => hasRequiredEquipment(e, equipment))
   
-  // Select main exercises based on day focus
+  // Select main exercises based on day focus with prerequisite gate checks
   const main = selectMainExercises(
     day,
     primaryGoal,
@@ -173,7 +244,8 @@ export function selectExercisesForSession(inputs: ExerciseSelectionInputs): Exer
     availableAccessory,
     availableCore,
     budget.mainExercises,
-    constraintType
+    constraintType,
+    prerequisiteContext
   )
   
   // Generate intelligent warmup based on main exercises
@@ -241,12 +313,13 @@ function selectMainExercises(
   availableAccessory: Exercise[],
   availableCore: Exercise[],
   maxExercises: number,
-  constraintType?: string
+  constraintType?: string,
+  prerequisiteContext?: AthletePrerequisiteContext
 ): SelectedExercise[] {
   const selected: SelectedExercise[] = []
   const usedIds = new Set<string>()
   
-  // Helper to add exercise
+  // Helper to add exercise with prerequisite gate check
   const addExercise = (
     exercise: Exercise,
     reason: string,
@@ -257,14 +330,31 @@ function selectMainExercises(
     if (usedIds.has(exercise.id)) return false
     if (selected.length >= maxExercises) return false
     
-    usedIds.add(exercise.id)
+    // Apply prerequisite gate check
+    const { exercise: finalExercise, gateResult, wasSubstituted, originalId } = 
+      applyPrerequisiteGate(exercise, prerequisiteContext, experienceLevel)
+    
+    usedIds.add(finalExercise.id)
+    if (originalId) usedIds.add(originalId)
+    
+    // Get knowledge bubble for educational context
+    const knowledgeBubble = getExerciseKnowledgeBubble(exercise.id)
+    
     selected.push({
-      exercise,
-      sets: setsOverride ?? adjustSetsForLevel(exercise.defaultSets, experienceLevel),
-      repsOrTime: repsOverride ?? adjustRepsForLevel(exercise.defaultRepsOrTime, experienceLevel),
-      note: noteOverride ?? exercise.notes,
-      isOverrideable: exercise.category !== 'skill', // Skills are harder to replace
-      selectionReason: reason,
+      exercise: finalExercise,
+      sets: setsOverride ?? adjustSetsForLevel(finalExercise.defaultSets, experienceLevel),
+      repsOrTime: repsOverride ?? adjustRepsForLevel(finalExercise.defaultRepsOrTime, experienceLevel),
+      note: wasSubstituted 
+        ? `Substituted from ${exercise.name} - ${gateResult.recommendedSubstitute?.reason || 'Prerequisites not met'}`
+        : noteOverride ?? finalExercise.notes,
+      isOverrideable: finalExercise.category !== 'skill', // Skills are harder to replace
+      selectionReason: wasSubstituted 
+        ? `${reason} (safe progression substitute)`
+        : reason,
+      gateCheckResult: isGatedExercise(exercise.id) ? gateResult : undefined,
+      knowledgeBubble: knowledgeBubble || undefined,
+      wasSubstituted,
+      originalExerciseId: originalId,
     })
     return true
   }

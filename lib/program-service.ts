@@ -6,6 +6,7 @@ import {
   FRONT_LEVER_EXERCISES,
   MUSCLE_UP_EXERCISES,
   HSPU_EXERCISES,
+  IRON_CROSS_EXERCISES,
   WEIGHTED_STRENGTH_EXERCISES,
   CORE_EXERCISES,
   SUPPORT_EXERCISES,
@@ -16,7 +17,7 @@ import { getSkillProgressions, getAthleteProfile } from './data-service'
 import { getLatestRecords } from './strength-service'
 import { getOnboardingProfile, isOnboardingComplete } from './athlete-profile'
 
-export type PrimaryGoal = 'planche' | 'front_lever' | 'back_lever' | 'muscle_up' | 'handstand_pushup' | 'weighted_strength' | 'general' | 'skill' | 'strength' | 'endurance' | 'abs' | 'pancake' | 'toe_touch' | 'front_splits' | 'side_splits' | 'flexibility'
+export type PrimaryGoal = 'planche' | 'front_lever' | 'back_lever' | 'muscle_up' | 'handstand_pushup' | 'iron_cross' | 'weighted_strength' | 'general' | 'skill' | 'strength' | 'endurance' | 'abs' | 'pancake' | 'toe_touch' | 'front_splits' | 'side_splits' | 'flexibility'
 export type ExperienceLevel = 'beginner' | 'intermediate' | 'advanced'
 export type SecondaryEmphasis = 'pulling_strength' | 'pushing_strength' | 'core_control' | 'skill_technique' | 'hypertrophy_support' | 'none'
 export type SessionLength = 30 | 45 | 60 | 75 | 90 | 120 | '10-20' | '20-30' | '30-45' | '45-60' | '60+'
@@ -50,15 +51,18 @@ function isBrowser(): boolean {
 
 // Goal-specific exercise selection
 function getGoalExercises(goal: PrimaryGoal, level: ExperienceLevel): ExerciseTemplate[] {
-  const exerciseMap = {
+  const exerciseMap: Record<string, Record<string, ExerciseTemplate[]>> = {
     planche: PLANCHE_EXERCISES,
     front_lever: FRONT_LEVER_EXERCISES,
     muscle_up: MUSCLE_UP_EXERCISES,
     handstand_pushup: HSPU_EXERCISES,
+    iron_cross: IRON_CROSS_EXERCISES,
     weighted_strength: WEIGHTED_STRENGTH_EXERCISES,
   }
   
-  return exerciseMap[goal][level] || exerciseMap[goal].intermediate
+  const exercises = exerciseMap[goal]
+  if (!exercises) return []
+  return exercises[level] || exercises.intermediate
 }
 
 // Get core exercise based on goal
@@ -132,9 +136,9 @@ function buildTrainingDay(
   let emphasis = ''
   const goalExercises = getGoalExercises(primaryGoal, experienceLevel)
   
-  if (primaryGoal === 'planche' || primaryGoal === 'handstand_pushup') {
-    // Push-focused goal
-    emphasis = isPush ? 'Skill Push + Strength' : 'Pull Strength + Support'
+if (primaryGoal === 'planche' || primaryGoal === 'handstand_pushup' || primaryGoal === 'iron_cross') {
+  // Push-focused goal (includes Iron Cross - rings pressing skill)
+  emphasis = isPush ? 'Skill Push + Strength' : 'Pull Strength + Support'
     
     if (isPush) {
       // Add skill work (1-2 exercises)
@@ -318,9 +322,9 @@ export function getDefaultInputs(): ProgramInputs {
     // Use first selected skill as primary goal
     if (onboardingProfile.selectedSkills.length > 0) {
       const firstSkill = onboardingProfile.selectedSkills[0]
-      if (['planche', 'front_lever', 'back_lever', 'muscle_up', 'handstand_pushup'].includes(firstSkill)) {
-        primaryGoal = firstSkill as PrimaryGoal
-      }
+if (['planche', 'front_lever', 'back_lever', 'muscle_up', 'handstand_pushup', 'iron_cross'].includes(firstSkill)) {
+  primaryGoal = firstSkill as PrimaryGoal
+  }
     }
     
     // Map training outcome to primary goal if no skill selected
@@ -369,9 +373,9 @@ export function getDefaultInputs(): ProgramInputs {
     primaryGoal = profile.primaryGoal as PrimaryGoal
   } else if (progressions.length > 0) {
     const skillName = progressions[0].skillName
-    if (['planche', 'front_lever', 'back_lever', 'muscle_up', 'handstand_pushup'].includes(skillName)) {
-      primaryGoal = skillName as PrimaryGoal
-    }
+if (['planche', 'front_lever', 'back_lever', 'muscle_up', 'handstand_pushup', 'iron_cross'].includes(skillName)) {
+  primaryGoal = skillName as PrimaryGoal
+  }
   }
   
   return {
@@ -390,6 +394,7 @@ export const GOAL_LABELS: Record<PrimaryGoal, string> = {
   back_lever: 'Back Lever',
   muscle_up: 'Muscle Up',
   handstand_pushup: 'Handstand Pushup',
+  iron_cross: 'Iron Cross',
   weighted_strength: 'Weighted Strength',
   general: 'General Fitness',
   skill: 'Skill Development',

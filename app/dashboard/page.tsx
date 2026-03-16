@@ -100,6 +100,7 @@ import { useAuth } from '@clerk/nextjs'
 import { AchievementsCard } from '@/components/dashboard/AchievementsCard'
 import { AchievementNotification } from '@/components/achievements/AchievementNotification'
 import { SkillReadinessModule } from '@/components/readiness/SkillReadinessModule'
+import { SkillReadinessPanel } from '@/components/readiness/SkillReadinessPanel'
 import { LeaderboardPreviewCard } from '@/components/leaderboards/LeaderboardTabs'
 import { ChallengesCard } from '@/components/challenges/ChallengesCard'
 import { ProgressDashboard } from '@/components/dashboard/ProgressDashboard'
@@ -565,19 +566,25 @@ function DashboardContent() {
         {/* ============================================================= */}
         {/* SKILL READINESS - Component breakdown visualization */}
         {/* Shows athletes their readiness level for major skills */}
+        {/* Uses the canonical readiness engine as source of truth */}
         {/* ============================================================= */}
         
-        {!isEarlyStageUser && (
-          <Section id="skill-readiness" priority="secondary">
-            <SectionHeader 
-              title="Skill Readiness"
-              description="Visual breakdown of readiness for major skills"
-              icon={Target}
+        {!isEarlyStageUser && overview?.profile && (
+          <SafeWidget name="SkillReadinessPanel">
+            <SkillReadinessPanel 
+              athleteProfile={{
+                pullUpMax: overview.profile.pullUpMax,
+                dipMax: overview.profile.dipMax,
+                pushUpMax: overview.profile.pushUpMax,
+                hollowHoldTime: overview.profile.hollowHoldTime,
+                experienceLevel: overview.profile.experienceLevel,
+                equipment: overview.profile.equipment,
+                primarySkill: focusSummary?.skillName?.toLowerCase().replace(/[\s-]+/g, '_'),
+              }}
+              skills={['front_lever', 'planche', 'muscle_up', 'hspu', 'l_sit']}
+              maxDisplay={3}
             />
-            <SafeWidget name="SkillReadinessModule">
-              <SkillReadinessModule athleteId={userId} />
-            </SafeWidget>
-          </Section>
+          </SafeWidget>
         )}
         
         {/* ============================================================= */}

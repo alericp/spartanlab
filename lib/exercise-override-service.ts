@@ -1,5 +1,6 @@
 // Exercise Override Service
 // Manages session-scoped exercise replacements, skips, and progression adjustments
+// Enhanced with Prerequisite Gate Engine integration
 
 import { 
   getAllExercises, 
@@ -8,6 +9,15 @@ import {
   type MovementPattern,
   type DifficultyLevel,
 } from './exercises'
+import {
+  checkExercisePrerequisite,
+  buildPrerequisiteContext,
+  isGatedExercise,
+  getExerciseKnowledgeBubble,
+  getProgressionLadder,
+  type AthletePrerequisiteContext,
+  type GateCheckResult,
+} from './prerequisite-gate-engine'
 import type { AdaptiveExercise } from './adaptive-program-builder'
 import {
   getSmartSubstitutions,
@@ -34,6 +44,10 @@ export interface ExerciseOverride {
   newProgression?: string
   reason?: string
   timestamp: number
+  // Prerequisite Gate fields
+  wasGateOverride?: boolean
+  gateRiskLevel?: 'moderate' | 'high' | 'very_high'
+  failedPrerequisites?: string[]
 }
 
 export interface SessionOverrides {
@@ -49,6 +63,10 @@ export interface ReplacementOption {
   difficulty: DifficultyLevel
   isRecommended: boolean
   reason: string
+  // Prerequisite Gate fields
+  gateCheckResult?: GateCheckResult
+  requiresGateOverride?: boolean
+  knowledgeBubble?: string
 }
 
 export interface ProgressionOption {
@@ -492,11 +510,103 @@ export function applyOverridesToSession(
 /**
  * Get override summary for adaptive engine logging
  */
+// =============================================================================
+// PREREQUISITE GATE INTEGRATION
+// =============================================================================
+
+/**
+ * Get replacement options with prerequisite gate checks
+ * Marks options that require gate override
+ */
+export function getGatedReplacementOptions(
+  exercise: AdaptiveExercise,
+  availableEquipment: string[] = ['pull_bar', 'dip_bars', 'floor', 'bands'],
+  prerequisiteContext?: AthletePrerequisiteContext
+): ReplacementOption[] {
+  // Get base replacement options
+  const baseOptions = getReplacementOptions(exercise, availableEquipment)
+  
+  // Build context if not provided
+  const context = prerequisiteContext || buildPrerequisiteContext({
+    experienceLevel: 'intermediate', // Default
+  })
+  
+  // Enhance with gate check results
+  return baseOptions.map(option => {
+    const gateResult = checkExercisePrerequisite(option.id, context)
+    const knowledgeBubble = getExerciseKnowledgeBubble(option.id)
+    
+    return {
+      ...option,
+      gateCheckResult: gateResult,
+      requiresGateOverride: !gateResult.allowed,
+      knowledgeBubble: knowledgeBubble || undefined,
+      // Demote non-allowed exercises in recommendation
+      isRecommended: option.isRecommended && gateResult.allowed,
+    }
+  }).sort((a, b) => {
+    // Sort: allowed first, then recommended, then by original order
+    if (a.gateCheckResult?.allowed && !b.gateCheckResult?.allowed) return -1
+    if (!a.gateCheckResult?.allowed && b.gateCheckResult?.allowed) return 1
+    if (a.isRecommended && !b.isRecommended) return -1
+    if (!a.isRecommended && b.isRecommended) return 1
+    return 0
+  })
+}
+
+/**
+ * Check if a replacement exercise requires gate override
+ */
+export function requiresGateOverride(
+  exerciseId: string,
+  prerequisiteContext?: AthletePrerequisiteContext
+): GateCheckResult {
+  const context = prerequisiteContext || buildPrerequisiteContext({
+    experienceLevel: 'intermediate',
+  })
+  
+  return checkExercisePrerequisite(exerciseId, context)
+}
+
+/**
+ * Add an override with gate tracking
+ */
+export function addGatedOverride(
+  sessionId: string,
+  override: ExerciseOverride,
+  gateResult?: GateCheckResult
+): void {
+  const enhancedOverride: ExerciseOverride = {
+    ...override,
+    wasGateOverride: gateResult ? !gateResult.allowed : false,
+    gateRiskLevel: gateResult?.overrideRiskLevel,
+    failedPrerequisites: gateResult?.failedPrerequisites?.map(p => p.description),
+  }
+  
+  addOverride(sessionId, enhancedOverride)
+}
+
+/**
+ * Get safe progression ladder for an exercise
+ */
+export function getExerciseProgressionLadder(exerciseId: string): string[] | null {
+  return getProgressionLadder(exerciseId)
+}
+
+/**
+ * Check if exercise is gated
+ */
+export function checkIsGatedExercise(exerciseId: string): boolean {
+  return isGatedExercise(exerciseId)
+}
+
 export function getOverrideSummary(sessionId: string): {
   totalOverrides: number
   skipped: number
   replaced: number
   progressionAdjusted: number
+  gateOverrides: number
+  highRiskGateOverrides: number
   details: ExerciseOverride[]
 } {
   const overrides = getSessionOverrides(sessionId)
@@ -506,6 +616,10 @@ export function getOverrideSummary(sessionId: string): {
     skipped: overrides.filter(o => o.overrideType === 'skipped').length,
     replaced: overrides.filter(o => o.overrideType === 'replaced').length,
     progressionAdjusted: overrides.filter(o => o.overrideType === 'progression_adjusted').length,
+    gateOverrides: overrides.filter(o => o.wasGateOverride).length,
+    highRiskGateOverrides: overrides.filter(o => 
+      o.wasGateOverride && (o.gateRiskLevel === 'high' || o.gateRiskLevel === 'very_high')
+    ).length,
     details: overrides,
   }
 }

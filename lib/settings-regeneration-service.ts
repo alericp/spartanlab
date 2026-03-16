@@ -524,6 +524,95 @@ export function clearRegenerationCooldown(athleteId: string): void {
 }
 
 // =============================================================================
+// STYLE CHANGE HANDLING
+// =============================================================================
+
+import type { TrainingStyleMode } from './training-style-service'
+import { STYLE_MODE_DEFINITIONS } from './training-style-service'
+
+/**
+ * Determine if a style change is fundamental (requires full regen) or minor (partial regen)
+ * 
+ * Fundamental shifts: strength↔skill, power↔endurance, extreme methodology changes
+ * Minor shifts: balanced→any specific, specific→balanced, adjacent styles
+ */
+export function isFundamentalStyleShift(oldStyle: TrainingStyleMode | string, newStyle: TrainingStyleMode | string): boolean {
+  // Define fundamental axis shifts - opposite ends of methodology spectrums
+  const fundamentalPairs = [
+    ['skill_focused', 'strength_focused'],
+    ['skill_focused', 'power_focused'],
+    ['power_focused', 'endurance_focused'],
+    ['strength_focused', 'endurance_focused'],
+  ]
+
+  for (const pair of fundamentalPairs) {
+    if ((oldStyle === pair[0] && newStyle === pair[1]) || (oldStyle === pair[1] && newStyle === pair[0])) {
+      return true
+    }
+  }
+
+  return false
+}
+
+/**
+ * Get style change regeneration strategy
+ */
+export function getStyleChangeRegenerationStrategy(
+  oldStyle: TrainingStyleMode | string,
+  newStyle: TrainingStyleMode | string
+): {
+  regenerationType: 'full' | 'partial'
+  preserveWeekNumber: boolean
+  updateSessionStructure: boolean
+  updateExerciseSelection: boolean
+  explanation: string
+} {
+  const fundamental = isFundamentalStyleShift(oldStyle, newStyle)
+  
+  if (fundamental) {
+    return {
+      regenerationType: 'full',
+      preserveWeekNumber: true,
+      updateSessionStructure: true,
+      updateExerciseSelection: true,
+      explanation: `Regenerating program structure for shift from ${oldStyle} to ${newStyle}. All your progress is preserved.`,
+    }
+  }
+
+  // Adjacent or hybrid changes - partial regeneration
+  return {
+    regenerationType: 'partial',
+    preserveWeekNumber: true,
+    updateSessionStructure: true,
+    updateExerciseSelection: false, // Exercise pool stays mostly the same
+    explanation: `Updating program approach from ${oldStyle} to ${newStyle}. Continuing your progression.`,
+  }
+}
+
+/**
+ * Generate style change coaching message with continuity emphasis
+ */
+export function getStyleChangeCoachingMessage(
+  oldStyle: TrainingStyleMode | string,
+  newStyle: TrainingStyleMode | string,
+  regenerationType: 'full' | 'partial'
+): string {
+  const oldLabel = typeof oldStyle === 'string' 
+    ? (STYLE_MODE_DEFINITIONS[oldStyle as TrainingStyleMode]?.label || oldStyle.replace(/_/g, ' '))
+    : oldStyle
+
+  const newLabel = typeof newStyle === 'string'
+    ? (STYLE_MODE_DEFINITIONS[newStyle as TrainingStyleMode]?.label || newStyle.replace(/_/g, ' '))
+    : newStyle
+
+  if (regenerationType === 'full') {
+    return `Your training style has been updated from ${oldLabel} to ${newLabel}. SpartanLab has regenerated your program structure to match the new approach. All your progress, skill advancement, and workout history have been preserved—you're continuing from where you left off, just with a new training method.`
+  } else {
+    return `Your training style has been adjusted from ${oldLabel} to ${newLabel}. Your current program structure has been updated to reflect the new approach while maintaining your progression continuity. Your week counter and progress continue uninterrupted.`
+  }
+}
+
+// =============================================================================
 // EXPORT SUMMARY
 // =============================================================================
 

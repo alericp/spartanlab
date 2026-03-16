@@ -7,10 +7,13 @@ import type { RecoveryLevel } from './recovery-engine'
 import type { WeeklyStructure, DayStructure } from './program-structure-engine'
 import type { ExerciseSelection, SelectedExercise } from './program-exercise-selector'
 import type { ProtocolRecommendation } from './protocols/joint-integrity-protocol'
+import type { ConstraintResult, ConstraintIntervention } from './constraint-detection-engine'
 
 import { getAthleteProfile } from './data-service'
 import { calculateRecoverySignal } from './recovery-engine'
-import { getConstraintInsight } from './constraint-engine'
+import { getConstraintInsight, detectMultipleConstraints } from './constraint-engine'
+import { getConstraintIntervention } from './constraint-detection-engine'
+import { recordConstraintHistory, getLatestConstraint, calculateConstraintImprovement } from './constraint-history-service'
 import { getProgramBuilderContext } from './adaptive-athlete-engine'
 import { getAthleteCalibration, getProgramCalibrationAdjustments, type AthleteCalibration, type ProgramCalibrationAdjustments } from './athlete-calibration'
 import { getOnboardingProfile, type PrimaryTrainingOutcome, type TrainingPathType, type WorkoutDurationPreference, type PrimaryLimitation, type WeakestArea, type JointCaution } from './athlete-profile'
@@ -124,6 +127,15 @@ import {
   type UnifiedEngineContext,
   type TrainingStyleMode,
 } from './unified-coaching-engine'
+import {
+  generateWeeklySessionIntents,
+  detectDuplicateSession,
+  generateRepetitionJustifications,
+  getExerciseVariants,
+  type SessionIntent,
+  type RepetitionJustification,
+  type SessionSignature,
+} from './session-variety-engine'
 
 // =============================================================================
 // TYPES
@@ -168,6 +180,14 @@ export interface AdaptiveSession {
     coachingMessage: string
     removedExercises: string[]
     reducedExercises: string[]
+  }
+  // Session variety tracking
+  sessionIntent?: SessionIntent
+  varietyInfo?: {
+    exerciseVariant: 'A' | 'B' | 'C'
+    supportVariant: 'primary' | 'secondary' | 'tertiary'
+    isIntentionalRepetition: boolean
+    repetitionReason?: string
   }
 }
 
@@ -237,6 +257,12 @@ export interface AdaptiveProgram {
   deloadRecommendation?: {
     shouldDeload: boolean
     deloadType: string
+  }
+  // Session variety tracking
+  varietyAnalysis?: {
+    sessionIntents: SessionIntent[]
+    repetitionJustifications: RepetitionJustification[]
+    varietyScore: number // 0-1, higher = more varied
     fatigueLevel: string
     coachingMessage: string
     volumeReductionPercent: number
@@ -773,8 +799,27 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
     constraintType: constraintInsight.hasInsight ? constraintInsight.label : undefined,
   })
   
-  // Generate each session
-  const sessions: AdaptiveSession[] = structure.days.map(day => {
+  // Generate session intents for variety
+  const skillType = primaryGoal as 'front_lever' | 'planche' | 'muscle_up' | 'hspu' | 'back_lever' | 'iron_cross' | 'l_sit' | 'weighted_strength' | 'general'
+  const trainingStyleMode = (['strength', 'skill', 'endurance', 'mixed'].includes(onboardingProfile?.primaryOutcome || '') 
+    ? onboardingProfile?.primaryOutcome 
+    : 'mixed') as TrainingStyleMode
+  
+  const sessionIntents = generateWeeklySessionIntents({
+    skill: skillType,
+    trainingStyle: trainingStyleMode,
+    primaryConstraint: constraintInsight.hasInsight ? constraintInsight.label : null,
+    experienceLevel: experienceLevel as 'beginner' | 'intermediate' | 'advanced',
+    weeklyDays: trainingDaysPerWeek,
+    existingIntents: [],
+  })
+  
+  // Generate repetition justifications
+  const repetitionJustifications = generateRepetitionJustifications(sessionIntents)
+  
+  // Generate each session with variety info
+  const sessions: AdaptiveSession[] = structure.days.map((day, index) => {
+    const intent = sessionIntents[index]
     const session = generateAdaptiveSession(
       day,
       primaryGoal,
@@ -783,6 +828,21 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
       sessionLength,
       constraintInsight.hasInsight ? constraintInsight.label : undefined
     )
+    
+    // Attach session intent and variety info
+    session.sessionIntent = intent
+    
+    // Check if this session is an intentional repetition
+    const justification = repetitionJustifications.find(
+      j => j.dayA === day.dayNumber || j.dayB === day.dayNumber
+    )
+    
+    session.varietyInfo = {
+      exerciseVariant: intent?.exerciseVariant || 'A',
+      supportVariant: intent?.supportVariant || 'primary',
+      isIntentionalRepetition: justification?.isIntentional || false,
+      repetitionReason: justification?.coachingNote,
+    }
     
     // Add fatigue-based adaptation notes if needed
     if (fatigueDecision && fatigueDecision.decision !== 'TRAIN_AS_PLANNED') {
@@ -795,6 +855,50 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
     
     return session
   })
+  
+  // Calculate variety score (0-1, higher = more varied)
+  const varietyScore = calculateVarietyScore(sessionIntents)
+  
+  // Detect multiple constraints and plan interventions
+  const multipleConstraints = detectMultipleConstraints(
+    athleteProfile,
+    primaryGoal as any,
+    constraintInsight
+  )
+  
+  // Get constraint interventions for primary constraint
+  let constraintInterventions: ConstraintIntervention[] = []
+  if (constraintInsight.hasInsight && constraintInsight.focus) {
+    const intervention = getConstraintIntervention(constraintInsight.focus, 65) // Mid-range severity
+    constraintInterventions = [intervention]
+  }
+  
+  // Record constraint detection in history (async, non-blocking)
+  if (athleteId && constraintInsight.hasInsight) {
+    recordConstraintHistory(
+      athleteId,
+      primaryGoal,
+      {
+        category: constraintInsight.focus || 'none',
+        score: 65,
+        indicatorMetrics: [],
+        isPrimaryLimiter: true,
+      } as any
+    ).catch(err => console.error('Failed to record constraint history:', err))
+  }
+  
+  // Fetch constraint improvement history for display (async)
+  let constraintImprovementData: any = undefined
+  if (athleteId) {
+    calculateConstraintImprovement(athleteId, primaryGoal, 6)
+      .then(improvements => {
+        constraintImprovementData = {
+          improvingConstraints: improvements.filter(c => c.trend === 'improving'),
+          stableConstraints: improvements.filter(c => c.trend === 'stable'),
+        }
+      })
+      .catch(err => console.error('Failed to fetch constraint improvements:', err))
+  }
   
   // Generate program rationale
   const programRationale = generateProgramRationale(
@@ -843,8 +947,24 @@ fatigueDecision: fatigueDecision ? {
   } : undefined,
   // Deload recommendation
   deloadRecommendation,
-  // Athlete calibration context
-  calibrationContext: calibrationContext,
+  // Session variety analysis
+  varietyAnalysis: {
+    sessionIntents,
+    repetitionJustifications,
+    varietyScore,
+  },
+  // Constraint detection and response
+  constraintDetection?: {
+    primaryConstraint: ConstraintResult | null
+    secondaryConstraints: ConstraintResult[]
+    interventions: ConstraintIntervention[]
+    coachingNote: string
+  }
+  // Constraint improvement tracking
+  constraintImprovement?: {
+    improvingConstraints: Array<{ category: string; improvement: number; trend: string }>
+    stableConstraints: Array<{ category: string; trend: string }>
+  }
     // Training Principles Engine emphasis
     trainingEmphasis,
     // Unified Skill Intelligence Layer
@@ -912,6 +1032,22 @@ fatigueDecision: fatigueDecision ? {
     } : undefined,
     // Override Signal Feedback - patterns from user exercise overrides
     overrideSignalFeedback: getOverrideSignalFeedback(),
+    // Constraint Detection - AI engine identifying limiting factors
+    constraintDetection: {
+      primaryConstraint: constraintInsight.hasInsight ? {
+        category: constraintInsight.focus || 'none',
+        score: 65,
+        indicatorMetrics: [],
+        isPrimaryLimiter: true,
+      } : null,
+      secondaryConstraints: [],
+      interventions: constraintInterventions,
+      coachingNote: constraintInsight.hasInsight
+        ? `${constraintInsight.label} is currently limiting your ${GOAL_LABELS[primaryGoal]} progress. SpartanLab is adjusting your program to prioritize this area.`
+        : 'No significant constraints detected. Continue your current approach.',
+    },
+    // Constraint Improvement Tracking - showing progress over time
+    constraintImprovement: constraintImprovementData || undefined,
   }
 }
 
@@ -935,6 +1071,43 @@ function getOverrideSignalFeedback() {
 // =============================================================================
 // FATIGUE ADAPTATION HELPERS
 // =============================================================================
+
+/**
+ * Calculate variety score for session intents (0-1, higher = more varied)
+ */
+function calculateVarietyScore(intents: SessionIntent[]): number {
+  if (intents.length <= 1) return 1 // Single session is inherently varied
+  
+  let totalSimilarity = 0
+  let comparisons = 0
+  
+  for (let i = 0; i < intents.length; i++) {
+    for (let j = i + 1; j < intents.length; j++) {
+      const a = intents[i]
+      const b = intents[j]
+      
+      let similarity = 0
+      
+      // Session type similarity (weight: 0.3)
+      if (a.sessionType === b.sessionType) similarity += 0.3
+      
+      // Exercise variant similarity (weight: 0.3)
+      if (a.exerciseVariant === b.exerciseVariant) similarity += 0.3
+      
+      // Support variant similarity (weight: 0.2)
+      if (a.supportVariant === b.supportVariant) similarity += 0.2
+      
+      // Fatigue profile similarity (weight: 0.2)
+      if (a.fatigueProfile === b.fatigueProfile) similarity += 0.2
+      
+      totalSimilarity += similarity
+      comparisons++
+    }
+  }
+  
+  const avgSimilarity = comparisons > 0 ? totalSimilarity / comparisons : 0
+  return Math.max(0, Math.min(1, 1 - avgSimilarity))
+}
 
 function getFatigueAdaptationNote(decision: TrainingDecision): string | null {
   switch (decision) {

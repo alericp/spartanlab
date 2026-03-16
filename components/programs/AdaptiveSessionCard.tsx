@@ -6,7 +6,7 @@ import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import type { AdaptiveSession, AdaptiveExercise } from '@/lib/adaptive-program-builder'
-import { ChevronDown, ChevronUp, Clock, AlertCircle, Zap, RefreshCw, Play, CheckCircle2, SkipForward } from 'lucide-react'
+import { ChevronDown, ChevronUp, Clock, AlertCircle, Zap, RefreshCw, Play, CheckCircle2, SkipForward, Repeat } from 'lucide-react'
 import { WorkoutExecutionCard, StartWorkoutButton } from './WorkoutExecutionCard'
 import { exerciseSupportsRPE } from '@/lib/rpe-adjustment-engine'
 import { useWorkoutSession } from '@/hooks/useWorkoutSession'
@@ -20,6 +20,8 @@ import { WorkoutSessionSummary } from '@/components/workout/WorkoutSessionSummar
 import { trackWorkoutStarted, trackWorkoutCompleted } from '@/lib/analytics'
 import { ExerciseReplacementModal } from './ExerciseReplacementModal'
 import { ExerciseActionMenu } from './ExerciseActionMenu'
+import { InfoBubble, ExerciseKnowledgeBubble, StructureKnowledgeBubble, ProtocolKnowledgeBubble } from '@/components/coaching'
+import { hasExerciseKnowledge, getStructureKnowledge } from '@/lib/knowledge-bubble-content'
 import { getOnboardingProfile } from '@/lib/athlete-profile'
 import { 
   addOverride, 
@@ -314,18 +316,31 @@ export function AdaptiveSessionCard({ session, onExerciseReplace, onWorkoutCompl
                 {session.rationale}
               </div>
 
-          {/* Adaptation Notes */}
-          {session.adaptationNotes && session.adaptationNotes.length > 0 && (
-            <div className="p-3 bg-amber-500/10 rounded-lg border border-amber-500/20">
-              <div className="flex items-start gap-2">
-                <AlertCircle className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
-                <div className="text-sm">
-                  {session.adaptationNotes.map((note, idx) => (
-                    <p key={idx} className="text-amber-500/80">{note}</p>
-                  ))}
-                </div>
-              </div>
-            </div>
+  {/* Session Variety Info - Justified Repetition */}
+  {session.varietyInfo?.isIntentionalRepetition && session.varietyInfo.repetitionReason && (
+    <div className="p-3 bg-[#4F6D8A]/10 rounded-lg border border-[#4F6D8A]/20">
+      <div className="flex items-start gap-2">
+        <Repeat className="w-4 h-4 text-[#4F6D8A] mt-0.5 shrink-0" />
+        <div className="text-sm">
+          <p className="text-[#4F6D8A]/90 font-medium">Intentional Structure</p>
+          <p className="text-[#4F6D8A]/70 text-xs mt-1">{session.varietyInfo.repetitionReason}</p>
+        </div>
+      </div>
+    </div>
+  )}
+  
+  {/* Adaptation Notes */}
+  {session.adaptationNotes && session.adaptationNotes.length > 0 && (
+  <div className="p-3 bg-amber-500/10 rounded-lg border border-amber-500/20">
+  <div className="flex items-start gap-2">
+  <AlertCircle className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
+  <div className="text-sm">
+  {session.adaptationNotes.map((note, idx) => (
+  <p key={idx} className="text-amber-500/80">{note}</p>
+  ))}
+  </div>
+  </div>
+  </div>
           )}
 
           {/* Time Variants */}
@@ -362,8 +377,10 @@ export function AdaptiveSessionCard({ session, onExerciseReplace, onWorkoutCompl
     </button>
     {showWarmup && (
       <div className="mt-2 space-y-2">
+        {/* Structure explanation for warmup protocols */}
+        <StructureKnowledgeBubble structureType="protocol_warmup" />
         {session.warmup[0]?.selectionReason && (
-          <p className="text-xs text-[#6A6A6A] italic mb-2 pl-2 border-l-2 border-[#4F6D8A]/30">
+          <p className="text-xs text-[#6A6A6A] italic pl-2 border-l-2 border-[#4F6D8A]/30">
             {session.warmup[0].selectionReason}
           </p>
         )}
@@ -484,6 +501,8 @@ function ExerciseRow({
 }: ExerciseRowProps) {
   const [showReason, setShowReason] = useState(false)
   const hasRPE = !isWarmupCooldown && exerciseSupportsRPE(exercise.name)
+  const exerciseId = exercise.name.toLowerCase().replace(/[\s-]+/g, '_')
+  const hasKnowledge = hasExerciseKnowledge(exerciseId)
   
   // Display name - show adjusted name if progression was changed
   const displayName = adjustedName || exercise.name
@@ -578,19 +597,32 @@ function ExerciseRow({
         </div>
       </div>
       
-      {/* Selection Reason (expandable) */}
-      {!isWarmupCooldown && exercise.selectionReason && (
+      {/* Selection Reason (expandable) with Knowledge Bubble */}
+      {!isWarmupCooldown && (exercise.selectionReason || hasKnowledge) && (
         <div className="mt-2">
           <button
-            className="text-xs text-[#6A6A6A] hover:text-[#A5A5A5]"
+            className="text-xs text-[#6A6A6A] hover:text-[#A5A5A5] flex items-center gap-1"
             onClick={() => setShowReason(!showReason)}
           >
             {showReason ? 'Hide why' : 'Why this exercise?'}
           </button>
           {showReason && (
-            <p className="text-xs text-[#6A6A6A] mt-1 pl-2 border-l-2 border-[#3A3A3A]">
-              {exercise.selectionReason}
-            </p>
+            <div className="mt-2 space-y-2">
+              {/* Knowledge bubble if available */}
+              {hasKnowledge && (
+                <ExerciseKnowledgeBubble 
+                  exerciseId={exerciseId}
+                  showSkillCarryover
+                  showSafetyNote
+                />
+              )}
+              {/* Selection reason from engine */}
+              {exercise.selectionReason && !hasKnowledge && (
+                <p className="text-xs text-[#6A6A6A] pl-2 border-l-2 border-[#3A3A3A]">
+                  {exercise.selectionReason}
+                </p>
+              )}
+            </div>
           )}
         </div>
       )}

@@ -1602,6 +1602,285 @@ export function calculateLSitReadiness(inputs: LSitInputs): ReadinessResult {
 }
 
 // =============================================================================
+// IRON CROSS READINESS
+// =============================================================================
+
+export interface IronCrossInputs {
+  ringSupportHoldTime: number // seconds - basic ring support
+  rtoSupportHoldTime: number // seconds - rings turned out support
+  straightArmStrength: 'none' | 'basic' | 'intermediate' | 'advanced' // from ring work
+  maxDips: number
+  scapularDepressionStrength: 'weak' | 'moderate' | 'strong'
+  shoulderStability: 'unstable' | 'moderate' | 'stable' | 'very_stable'
+  tendonTolerance: 'low' | 'moderate' | 'high' // based on training history
+  hasRings: boolean
+  assistedCrossHoldTime?: number // seconds, if attempted with band
+}
+
+export function calculateIronCrossReadiness(inputs: IronCrossInputs): ReadinessResult {
+  const breakdown: ScoreBreakdown[] = []
+  
+  // ===================
+  // Factor 1: Ring Support Stability (max 20 points)
+  // ===================
+  // Foundational for all rings work
+  let supportScore = 0
+  let supportStatus: ScoreBreakdown['status'] = 'weak'
+  
+  if (inputs.ringSupportHoldTime >= 60) {
+    supportScore = 20
+    supportStatus = 'strong'
+  } else if (inputs.ringSupportHoldTime >= 45) {
+    supportScore = 16
+    supportStatus = 'strong'
+  } else if (inputs.ringSupportHoldTime >= 30) {
+    supportScore = 12
+    supportStatus = 'adequate'
+  } else if (inputs.ringSupportHoldTime >= 20) {
+    supportScore = 8
+    supportStatus = 'developing'
+  } else if (inputs.ringSupportHoldTime >= 10) {
+    supportScore = 4
+    supportStatus = 'weak'
+  }
+  
+  breakdown.push({
+    factor: 'Ring Support Stability',
+    score: supportScore,
+    maxScore: 20,
+    status: supportStatus,
+  })
+
+  // ===================
+  // Factor 2: RTO (Rings Turned Out) Support (max 20 points)
+  // ===================
+  // Critical prerequisite - shows shoulder stability under rotation
+  let rtoScore = 0
+  let rtoStatus: ScoreBreakdown['status'] = 'weak'
+  
+  if (inputs.rtoSupportHoldTime >= 45) {
+    rtoScore = 20
+    rtoStatus = 'strong'
+  } else if (inputs.rtoSupportHoldTime >= 30) {
+    rtoScore = 16
+    rtoStatus = 'strong'
+  } else if (inputs.rtoSupportHoldTime >= 20) {
+    rtoScore = 12
+    rtoStatus = 'adequate'
+  } else if (inputs.rtoSupportHoldTime >= 10) {
+    rtoScore = 8
+    rtoStatus = 'developing'
+  } else if (inputs.rtoSupportHoldTime >= 5) {
+    rtoScore = 4
+    rtoStatus = 'weak'
+  }
+  
+  breakdown.push({
+    factor: 'RTO Support Hold',
+    score: rtoScore,
+    maxScore: 20,
+    status: rtoStatus,
+  })
+
+  // ===================
+  // Factor 3: Straight-Arm Shoulder Strength (max 20 points)
+  // ===================
+  // Primary limiter for Cross - requires extreme straight-arm pressing strength
+  const straightArmScores: Record<string, number> = {
+    'none': 0,
+    'basic': 6,
+    'intermediate': 13,
+    'advanced': 20,
+  }
+  const straightArmStatuses: Record<string, ScoreBreakdown['status']> = {
+    'none': 'weak',
+    'basic': 'weak',
+    'intermediate': 'developing',
+    'advanced': 'strong',
+  }
+  
+  breakdown.push({
+    factor: 'Straight-Arm Shoulder Strength',
+    score: straightArmScores[inputs.straightArmStrength],
+    maxScore: 20,
+    status: straightArmStatuses[inputs.straightArmStrength],
+  })
+
+  // ===================
+  // Factor 4: Scapular Depression Strength (max 15 points)
+  // ===================
+  // Must hold body weight through depressed scapulae
+  const scapularScores: Record<string, number> = {
+    'weak': 3,
+    'moderate': 9,
+    'strong': 15,
+  }
+  const scapularStatuses: Record<string, ScoreBreakdown['status']> = {
+    'weak': 'weak',
+    'moderate': 'developing',
+    'strong': 'strong',
+  }
+  
+  breakdown.push({
+    factor: 'Scapular Depression Strength',
+    score: scapularScores[inputs.scapularDepressionStrength],
+    maxScore: 15,
+    status: scapularStatuses[inputs.scapularDepressionStrength],
+  })
+
+  // ===================
+  // Factor 5: Shoulder Stability (max 15 points)
+  // ===================
+  // Cross places extreme demands on shoulder joint integrity
+  const stabilityScores: Record<string, number> = {
+    'unstable': 0,
+    'moderate': 6,
+    'stable': 11,
+    'very_stable': 15,
+  }
+  const stabilityStatuses: Record<string, ScoreBreakdown['status']> = {
+    'unstable': 'weak',
+    'moderate': 'developing',
+    'stable': 'adequate',
+    'very_stable': 'strong',
+  }
+  
+  breakdown.push({
+    factor: 'Shoulder Stability',
+    score: stabilityScores[inputs.shoulderStability],
+    maxScore: 15,
+    status: stabilityStatuses[inputs.shoulderStability],
+  })
+
+  // ===================
+  // Factor 6: Tendon Tolerance (max 10 points)
+  // ===================
+  // Critical safety factor - tendons must be conditioned over years
+  const tendonScores: Record<string, number> = {
+    'low': 2,
+    'moderate': 6,
+    'high': 10,
+  }
+  const tendonStatuses: Record<string, ScoreBreakdown['status']> = {
+    'low': 'weak',
+    'moderate': 'developing',
+    'high': 'strong',
+  }
+  
+  breakdown.push({
+    factor: 'Tendon Tolerance',
+    score: tendonScores[inputs.tendonTolerance],
+    maxScore: 10,
+    status: tendonStatuses[inputs.tendonTolerance],
+  })
+
+  // ===================
+  // Calculate Total Score
+  // ===================
+  const totalScore = breakdown.reduce((sum, b) => sum + b.score, 0)
+  
+  // ===================
+  // Determine Level & Labels
+  // ===================
+  let level: ReadinessLevel
+  let label: string
+  let nextProgression: string
+  
+  // Iron Cross has very high requirements
+  if (totalScore >= 90) {
+    level = 'advanced-ready'
+    label = 'Partial Cross / Full Cross Ready'
+    nextProgression = 'Partial cross holds, work toward full iron cross'
+  } else if (totalScore >= 75) {
+    level = 'intermediate-progression'
+    label = 'Cross Negatives / Assisted Cross Ready'
+    nextProgression = 'Cross negatives, band-assisted cross holds, partial ROM work'
+  } else if (totalScore >= 55) {
+    level = 'early-progression'
+    label = 'RTO Development Phase'
+    nextProgression = 'RTO support holds, RTO dips, straight-arm pressing strength'
+  } else if (totalScore >= 35) {
+    level = 'foundation-phase'
+    label = 'Ring Support Foundation'
+    nextProgression = 'Build ring support stability, add scapular depression work'
+  } else {
+    level = 'not-ready'
+    label = 'Not Ready Yet'
+    nextProgression = 'Focus on basic ring support and shoulder conditioning first'
+  }
+
+  // ===================
+  // Determine Limiting Factor
+  // ===================
+  const weakestFactor = [...breakdown]
+    .filter(b => b.maxScore > 5)
+    .sort((a, b) => (a.score / a.maxScore) - (b.score / b.maxScore))[0]
+  
+  const limitingFactorMap: Record<string, { factor: string; explanation: string }> = {
+    'Ring Support Stability': {
+      factor: 'Ring support weakness',
+      explanation: 'Basic ring support is the foundation for all advanced rings work. Build to 60+ second stable holds before Cross progressions.'
+    },
+    'RTO Support Hold': {
+      factor: 'RTO support deficit',
+      explanation: 'Rings turned out support develops the shoulder position needed for Cross. Build to 30+ second RTO holds with good form.'
+    },
+    'Straight-Arm Shoulder Strength': {
+      factor: 'Straight-arm strength deficit',
+      explanation: 'Iron Cross requires extreme straight-arm pressing strength. This is the primary limiter for most athletes attempting Cross.'
+    },
+    'Scapular Depression Strength': {
+      factor: 'Scapular depression weakness',
+      explanation: 'Cross requires powerful scapular depression to hold body weight. Train scapular pulls and depression-focused exercises.'
+    },
+    'Shoulder Stability': {
+      factor: 'Shoulder stability limitation',
+      explanation: 'Cross places extreme demands on shoulder joint integrity. Build stability through progressive rings work before attempting Cross.'
+    },
+    'Tendon Tolerance': {
+      factor: 'Tendon conditioning needed',
+      explanation: 'Cross training requires years of tendon conditioning. Rushing this leads to injury. Be patient with progression.'
+    },
+  }
+  
+  const limitingInfo = limitingFactorMap[weakestFactor?.factor] || {
+    factor: 'Overall rings strength',
+    explanation: 'Build foundational rings strength before Iron Cross work.'
+  }
+
+  // ===================
+  // Generate Recommendation
+  // ===================
+  let recommendation: string
+  if (level === 'not-ready') {
+    recommendation = 'Iron Cross requires exceptional preparation. Focus on building solid ring support holds, shoulder stability, and overall rings comfort before any Cross-specific work.'
+  } else if (level === 'foundation-phase') {
+    recommendation = 'Continue building ring support strength. Add RTO holds and scapular depression work. Do not rush - tendon adaptation takes time.'
+  } else if (level === 'early-progression') {
+    recommendation = 'You are building the foundation for Cross work. Focus on RTO development and straight-arm strength. Consider light band-assisted Cross exploration only if shoulder stability is solid.'
+  } else if (level === 'intermediate-progression') {
+    recommendation = 'You can begin careful Cross progressions. Start with band-assisted holds or Cross negatives. Progress very slowly - shoulder and tendon health is paramount.'
+  } else {
+    recommendation = 'You have the foundation for serious Cross training. Work partial Cross holds with excellent form. Progress to full Cross only with consistent partial ROM success.'
+  }
+
+  // Always suggest shoulder protocol for Iron Cross
+  const suggestedProtocol = 'shoulder_stability_protocol'
+
+  return {
+    score: totalScore,
+    level,
+    label,
+    limitingFactor: limitingInfo.factor,
+    limitingFactorExplanation: limitingInfo.explanation,
+    recommendation,
+    nextProgression,
+    breakdown,
+    suggestedProtocol,
+  }
+}
+
+// =============================================================================
 // READINESS TIERS (UNIFIED SYSTEM)
 // =============================================================================
 

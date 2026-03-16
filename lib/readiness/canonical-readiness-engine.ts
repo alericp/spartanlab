@@ -25,16 +25,18 @@ import {
   calculateHSPUReadiness,
   calculateLSitReadiness,
   calculateBackLeverReadiness,
+  calculateIronCrossReadiness,
   type ReadinessResult,
   type ReadinessLevel,
   type ScoreBreakdown,
+  type IronCrossInputs,
 } from './skill-readiness'
 
 // =============================================================================
 // UNIFIED READINESS OUTPUT TYPES
 // =============================================================================
 
-export type SkillType = 'front_lever' | 'back_lever' | 'planche' | 'hspu' | 'muscle_up' | 'l_sit'
+export type SkillType = 'front_lever' | 'back_lever' | 'planche' | 'hspu' | 'muscle_up' | 'l_sit' | 'iron_cross'
 
 /**
  * Standardized readiness component scores (0-100)
@@ -51,6 +53,7 @@ export interface ReadinessComponentScores {
   mobility: number            // General mobility
   explosivePower: number      // Explosive movement capacity
   skillSpecific: number       // Skill-specific technique/experience
+  tendonTolerance: number     // Tendon conditioning (critical for Iron Cross)
 }
 
 /**
@@ -107,6 +110,8 @@ export type LimitingFactor =
   | 'shoulder_extension_mobility'
   | 'skill_coordination'
   | 'balance_control'
+  | 'tendon_tolerance'
+  | 'ring_support_stability'
   | 'none'
 
 export const LIMITING_FACTOR_LABELS: Record<LimitingFactor, string> = {
@@ -126,6 +131,8 @@ export const LIMITING_FACTOR_LABELS: Record<LimitingFactor, string> = {
   shoulder_extension_mobility: 'Shoulder Extension Mobility',
   skill_coordination: 'Skill Coordination',
   balance_control: 'Balance Control',
+  tendon_tolerance: 'Tendon Tolerance',
+  ring_support_stability: 'Ring Support Stability',
   none: 'No Limiting Factor',
 }
 
@@ -181,6 +188,14 @@ const SKILL_COMPONENT_MAPPINGS: Record<SkillType, Record<string, keyof Readiness
     'Toe Point Quality': 'mobility',
     'Equipment Access': 'skillSpecific',
   },
+  iron_cross: {
+    'Ring Support Stability': 'shoulderStability',
+    'RTO Support Hold': 'straightArmStrength',
+    'Straight-Arm Shoulder Strength': 'straightArmStrength',
+    'Scapular Depression Strength': 'scapularControl',
+    'Shoulder Stability': 'shoulderStability',
+    'Tendon Tolerance': 'tendonTolerance',
+  },
 }
 
 /**
@@ -228,6 +243,15 @@ const LIMITING_FACTOR_MAPPINGS: Record<SkillType, Record<string, LimitingFactor>
     'Hip flexor weakness': 'compression_strength',
     'Mobility limitation': 'mobility',
     'General preparedness': 'compression_strength',
+  },
+  iron_cross: {
+    'Ring support weakness': 'ring_support_stability',
+    'RTO support deficit': 'straight_arm_push_strength',
+    'Straight-arm strength deficit': 'straight_arm_push_strength',
+    'Scapular depression weakness': 'scapular_control',
+    'Shoulder stability limitation': 'shoulder_stability',
+    'Tendon conditioning needed': 'tendon_tolerance',
+    'Overall rings strength': 'straight_arm_push_strength',
   },
 }
 
@@ -279,6 +303,15 @@ export interface AthleteReadinessInput {
   hasFloor?: boolean
   hasWall?: boolean
   hasBands?: boolean
+  
+  // Iron Cross specific
+  ringSupportHoldTime?: number
+  rtoSupportHoldTime?: number
+  straightArmStrength?: 'none' | 'basic' | 'intermediate' | 'advanced'
+  scapularDepressionStrength?: 'weak' | 'moderate' | 'strong'
+  shoulderStability?: 'unstable' | 'moderate' | 'stable' | 'very_stable'
+  tendonTolerance?: 'low' | 'moderate' | 'high'
+  assistedCrossHoldTime?: number
 }
 
 // =============================================================================
@@ -406,17 +439,30 @@ function calculateRawReadiness(skill: SkillType, input: AthleteReadinessInput): 
         hasParallettes: input.hasParallettes ?? false,
       })
     
-    case 'l_sit':
-      return calculateLSitReadiness({
-        maxDips: input.maxDips ?? 0,
-        hollowHoldTime: input.hollowHoldTime ?? 0,
-        toePointQuality: input.toePointQuality ?? 'moderate',
-        hipFlexorStrength: input.hipFlexorStrength ?? 'moderate',
-        hasParallettes: input.hasParallettes ?? false,
-        hasFloor: input.hasFloor ?? true,
-      })
-    
-    default:
+  case 'l_sit':
+  return calculateLSitReadiness({
+  maxDips: input.maxDips ?? 0,
+  hollowHoldTime: input.hollowHoldTime ?? 0,
+  toePointQuality: input.toePointQuality ?? 'moderate',
+  hipFlexorStrength: input.hipFlexorStrength ?? 'moderate',
+  hasParallettes: input.hasParallettes ?? false,
+  hasFloor: input.hasFloor ?? true,
+  })
+  
+  case 'iron_cross':
+  return calculateIronCrossReadiness({
+  ringSupportHoldTime: input.ringSupportHoldTime ?? 0,
+  rtoSupportHoldTime: input.rtoSupportHoldTime ?? 0,
+  straightArmStrength: input.straightArmStrength ?? 'none',
+  maxDips: input.maxDips ?? 0,
+  scapularDepressionStrength: input.scapularDepressionStrength ?? 'weak',
+  shoulderStability: input.shoulderStability ?? 'unstable',
+  tendonTolerance: input.tendonTolerance ?? 'low',
+  hasRings: input.hasRings ?? false,
+  assistedCrossHoldTime: input.assistedCrossHoldTime,
+  })
+  
+  default:
       // Fallback
       return calculateFrontLeverReadiness({
         maxPullUps: input.maxPullUps ?? 0,

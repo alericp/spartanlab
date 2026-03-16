@@ -16,10 +16,14 @@ export interface LeaderboardEntry {
   rank: number
   score: number
   scoreLabel: string // Human-readable score (e.g., "847 pts", "21 days", "Advanced")
+  formattedScore?: string // Alias for scoreLabel
   level?: string // Optional level classification
   achievementCount?: number
   subscriptionTier?: 'free' | 'pro' | 'elite'
   isCurrentUser?: boolean
+  isPro?: boolean // Whether user has pro subscription
+  badges?: Array<{ id: string; name: string; tier: 'legendary' | 'epic' | 'rare' | 'common' }>
+  streakDays?: number // Current streak for display
 }
 
 export interface LeaderboardMetadata {
@@ -91,6 +95,50 @@ export const LEADERBOARD_CATEGORIES: Record<LeaderboardCategory, LeaderboardMeta
     icon: 'star',
     sortDirection: 'desc',
   },
+}
+
+// Category config with labels for UI
+export interface CategoryConfig extends LeaderboardMetadata {
+  label: string
+  shortLabel: string
+}
+
+export const CATEGORY_CONFIGS: Record<LeaderboardCategory, CategoryConfig> = {
+  global_spartan_score: {
+    ...LEADERBOARD_CATEGORIES.global_spartan_score,
+    label: 'Spartan Score',
+    shortLabel: 'Score',
+  },
+  consistency: {
+    ...LEADERBOARD_CATEGORIES.consistency,
+    label: 'Consistency',
+    shortLabel: 'Streak',
+  },
+  front_lever: {
+    ...LEADERBOARD_CATEGORIES.front_lever,
+    label: 'Front Lever',
+    shortLabel: 'FL',
+  },
+  planche: {
+    ...LEADERBOARD_CATEGORIES.planche,
+    label: 'Planche',
+    shortLabel: 'PL',
+  },
+  muscle_up: {
+    ...LEADERBOARD_CATEGORIES.muscle_up,
+    label: 'Muscle-Up',
+    shortLabel: 'MU',
+  },
+  handstand_push_up: {
+    ...LEADERBOARD_CATEGORIES.handstand_push_up,
+    label: 'HSPU',
+    shortLabel: 'HSPU',
+  },
+}
+
+// Helper to get category config
+export function getCategoryConfig(category: LeaderboardCategory): CategoryConfig | undefined {
+  return CATEGORY_CONFIGS[category]
 }
 
 // Skill level names for display

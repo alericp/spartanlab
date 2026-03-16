@@ -5,11 +5,133 @@
  * 
  * Displays ranked leaderboard entries with user position visibility.
  * Mobile-friendly, premium design.
+ * Handles empty states and onboarding for early-access mode.
  */
 
+import { useState, useEffect } from 'react'
 import { cn } from '@/lib/utils'
-import { Crown, Medal, Trophy, Shield, Flame, User } from 'lucide-react'
+import { Crown, Medal, Trophy, Shield, Flame, User, Info, X, TrendingUp, Target, Award } from 'lucide-react'
 import type { LeaderboardEntry, LeaderboardData } from '@/lib/leaderboards/leaderboard-types'
+
+// =============================================================================
+// LOCAL STORAGE KEYS
+// =============================================================================
+
+const ONBOARDING_DISMISSED_KEY = 'spartanlab_leaderboard_onboarding_dismissed'
+
+function hasSeenOnboarding(): boolean {
+  if (typeof window === 'undefined') return true
+  return localStorage.getItem(ONBOARDING_DISMISSED_KEY) === 'true'
+}
+
+function setOnboardingSeen(): void {
+  if (typeof window === 'undefined') return
+  localStorage.setItem(ONBOARDING_DISMISSED_KEY, 'true')
+}
+
+// =============================================================================
+// ONBOARDING OVERLAY
+// =============================================================================
+
+interface OnboardingOverlayProps {
+  onDismiss: () => void
+}
+
+function OnboardingOverlay({ onDismiss }: OnboardingOverlayProps) {
+  return (
+    <div className="absolute inset-0 z-10 bg-[#0F1115]/95 backdrop-blur-sm flex items-center justify-center p-4">
+      <div className="max-w-sm w-full bg-[#1A1A1A] border border-[#2A2A2A] rounded-xl p-6 shadow-xl">
+        <div className="flex items-start justify-between mb-4">
+          <div className="w-10 h-10 rounded-full bg-amber-500/20 flex items-center justify-center">
+            <Trophy className="w-5 h-5 text-amber-400" />
+          </div>
+          <button
+            onClick={onDismiss}
+            className="text-[#6B7280] hover:text-[#A5A5A5] transition-colors"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        
+        <h3 className="text-lg font-semibold text-[#F5F5F5] mb-2">
+          How Spartan Score Works
+        </h3>
+        
+        <p className="text-sm text-[#A5A5A5] mb-4">
+          Your Spartan Score reflects your overall training progress. Higher scores mean higher leaderboard rankings.
+        </p>
+        
+        <div className="space-y-3 mb-6">
+          <div className="flex items-center gap-3 text-sm">
+            <div className="w-8 h-8 rounded-lg bg-[#2A2A2A] flex items-center justify-center shrink-0">
+              <Target className="w-4 h-4 text-amber-400" />
+            </div>
+            <span className="text-[#A5A5A5]">Complete workouts and progress skills</span>
+          </div>
+          <div className="flex items-center gap-3 text-sm">
+            <div className="w-8 h-8 rounded-lg bg-[#2A2A2A] flex items-center justify-center shrink-0">
+              <Flame className="w-4 h-4 text-amber-400" />
+            </div>
+            <span className="text-[#A5A5A5]">Maintain training streaks</span>
+          </div>
+          <div className="flex items-center gap-3 text-sm">
+            <div className="w-8 h-8 rounded-lg bg-[#2A2A2A] flex items-center justify-center shrink-0">
+              <Award className="w-4 h-4 text-amber-400" />
+            </div>
+            <span className="text-[#A5A5A5]">Unlock achievements and complete challenges</span>
+          </div>
+        </div>
+        
+        <button
+          onClick={onDismiss}
+          className="w-full py-2.5 px-4 bg-amber-500 hover:bg-amber-600 text-black font-medium rounded-lg transition-colors"
+        >
+          Got it
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// =============================================================================
+// EARLY ACCESS EMPTY STATE
+// =============================================================================
+
+interface EarlyAccessStateProps {
+  userScore?: number
+  className?: string
+}
+
+function EarlyAccessState({ userScore = 0, className }: EarlyAccessStateProps) {
+  return (
+    <div className={cn('py-8 px-4 text-center', className)}>
+      <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-amber-500/20 to-amber-600/10 flex items-center justify-center">
+        <Crown className="w-8 h-8 text-amber-400" />
+      </div>
+      
+      <h3 className="text-lg font-semibold text-[#F5F5F5] mb-2">
+        You're an Early Spartan
+      </h3>
+      
+      <p className="text-sm text-[#A5A5A5] mb-4 max-w-xs mx-auto">
+        You're one of the first athletes on the platform. As more Spartans join, the leaderboard will grow.
+      </p>
+      
+      {userScore > 0 && (
+        <div className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-amber-500/10 border border-amber-500/20">
+          <TrendingUp className="w-4 h-4 text-amber-400" />
+          <span className="text-sm font-medium text-amber-400">
+            Your Score: {userScore} pts
+          </span>
+        </div>
+      )}
+      
+      <p className="text-xs text-[#6B7280] mt-4">
+        Focus on building your Spartan Score. Your rank will update as the community grows.
+      </p>
+    </div>
+  )
+}
 
 // =============================================================================
 // RANK BADGE
@@ -205,6 +327,7 @@ interface LeaderboardTableProps {
   className?: string
   showHeader?: boolean
   compact?: boolean
+  showOnboarding?: boolean
 }
 
 export function LeaderboardTable({
@@ -212,8 +335,38 @@ export function LeaderboardTable({
   className,
   showHeader = true,
   compact = false,
+  showOnboarding = true,
 }: LeaderboardTableProps) {
-  const { entries, userRank, totalParticipants, categoryConfig } = data
+  const [showOnboardingOverlay, setShowOnboardingOverlay] = useState(false)
+  
+  // Check if we should show onboarding on mount
+  useEffect(() => {
+    if (showOnboarding && !hasSeenOnboarding()) {
+      setShowOnboardingOverlay(true)
+    }
+  }, [showOnboarding])
+  
+  const handleDismissOnboarding = () => {
+    setOnboardingSeen()
+    setShowOnboardingOverlay(false)
+  }
+  
+  const { entries, userPosition, totalParticipants, metadata, isEarlyAccess } = data
+  // Support both userPosition and userRank for backwards compatibility
+  const userRank = userPosition || (data as any).userRank
+  
+  // Handle early access state (only current user, no community yet)
+  if (isEarlyAccess && entries.length <= 1) {
+    const userEntry = entries.find(e => e.isCurrentUser)
+    return (
+      <div className={cn('relative', className)}>
+        {showOnboardingOverlay && (
+          <OnboardingOverlay onDismiss={handleDismissOnboarding} />
+        )}
+        <EarlyAccessState userScore={userEntry?.score} />
+      </div>
+    )
+  }
   
   if (entries.length === 0) {
     return (
@@ -222,18 +375,23 @@ export function LeaderboardTable({
           <Trophy className="w-6 h-6 text-[#6B7280]" />
         </div>
         <p className="text-[#A5A5A5]">No rankings yet</p>
-        <p className="text-xs text-[#6B7280] mt-1">Be the first to compete!</p>
+        <p className="text-xs text-[#6B7280] mt-1">Complete workouts to join the leaderboard</p>
       </div>
     )
   }
   
   return (
-    <div className={cn('space-y-1', className)}>
+    <div className={cn('relative space-y-1', className)}>
+      {/* Onboarding overlay */}
+      {showOnboardingOverlay && (
+        <OnboardingOverlay onDismiss={handleDismissOnboarding} />
+      )}
+      
       {/* Header */}
-      {showHeader && (
+      {showHeader && metadata && (
         <div className="flex items-center justify-between px-3 py-2 text-xs text-[#6B7280]">
           <span>RANK</span>
-          <span>{categoryConfig.scoreUnit.toUpperCase()}</span>
+          <span>{metadata.scoreUnit?.toUpperCase() || 'SCORE'}</span>
         </div>
       )}
       
@@ -274,7 +432,29 @@ export function LeaderboardPreview({
   limit = 5,
   className,
 }: LeaderboardPreviewProps) {
-  const previewEntries = data.entries.slice(0, limit)
+  const { entries, isEarlyAccess, userPosition } = data
+  // Support both userPosition and userRank
+  const userRank = userPosition || (data as any).userRank
+  
+  // Handle early access - show encouraging message instead of empty list
+  if (isEarlyAccess && entries.length <= 1) {
+    const userEntry = entries.find(e => e.isCurrentUser)
+    return (
+      <div className={cn('py-4 px-2 text-center', className)}>
+        <div className="flex items-center justify-center gap-2 mb-2">
+          <Crown className="w-4 h-4 text-amber-400" />
+          <span className="text-sm font-medium text-[#F5F5F5]">Early Spartan</span>
+        </div>
+        {userEntry && (
+          <p className="text-xs text-[#6B7280]">
+            Your Score: <span className="text-amber-400 font-medium">{userEntry.score} pts</span>
+          </p>
+        )}
+      </div>
+    )
+  }
+  
+  const previewEntries = entries.slice(0, limit)
   const userInPreview = previewEntries.some(e => e.isCurrentUser)
   
   return (
@@ -293,21 +473,22 @@ export function LeaderboardPreview({
             entry.isCurrentUser ? 'text-amber-400 font-medium' : 'text-[#A5A5A5]'
           )}>
             {entry.displayName}
+            {entry.isCurrentUser && <span className="ml-1 text-xs text-[#6B7280]">(You)</span>}
           </span>
           <span className="text-sm font-medium tabular-nums text-[#F5F5F5]">
-            {entry.formattedScore}
+            {entry.formattedScore || entry.scoreLabel}
           </span>
         </div>
       ))}
       
       {/* Show user position if not in preview */}
-      {!userInPreview && data.userRank && (
+      {!userInPreview && userRank && (
         <div className="flex items-center gap-2 px-2 py-1.5 rounded bg-amber-500/10 mt-2 border-t border-[#3A3A3A]/50 pt-2">
           <span className="text-xs text-[#6B7280]">You:</span>
-          <span className="text-sm text-amber-400 font-medium">#{data.userRank.rank}</span>
+          <span className="text-sm text-amber-400 font-medium">#{userRank.rank}</span>
           <span className="flex-1" />
           <span className="text-sm font-medium tabular-nums text-[#F5F5F5]">
-            {data.userRank.formattedScore}
+            {userRank.formattedScore || userRank.scoreLabel}
           </span>
         </div>
       )}

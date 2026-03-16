@@ -95,10 +95,13 @@ function generateGlobalSpartanScoreLeaderboard(): LeaderboardData {
     rank: 1,
     score: currentUser.spartanScore,
     scoreLabel: `${currentUser.spartanScore} pts`,
+    formattedScore: `${currentUser.spartanScore} pts`,
     level: currentUser.level,
     achievementCount: currentUser.achievementCount,
     subscriptionTier: currentUser.subscriptionTier === 'trial' ? 'pro' : currentUser.subscriptionTier,
+    isPro: currentUser.subscriptionTier === 'pro' || currentUser.subscriptionTier === 'trial',
     isCurrentUser: true,
+    streakDays: currentUser.streak,
   })
   
   const userPosition = allEntries[0]
@@ -126,9 +129,12 @@ function generateConsistencyLeaderboard(): LeaderboardData {
     rank: 1,
     score: currentUser.streak,
     scoreLabel: `${currentUser.streak} day streak`,
+    formattedScore: `${currentUser.streak} days`,
     achievementCount: currentUser.achievementCount,
     subscriptionTier: currentUser.subscriptionTier === 'trial' ? 'pro' : currentUser.subscriptionTier,
+    isPro: currentUser.subscriptionTier === 'pro' || currentUser.subscriptionTier === 'trial',
     isCurrentUser: true,
+    streakDays: currentUser.streak,
   })
   
   const userPosition = allEntries[0]
@@ -152,15 +158,18 @@ function generateSkillLeaderboard(skillKey: string): LeaderboardData {
   const allEntries: LeaderboardEntry[] = []
   
   const currentSkillLevel = currentUser.skills[skillKey] ?? 0
+  const levelName = skillLevelNames[currentSkillLevel] || `Level ${currentSkillLevel}`
   allEntries.push({
     userId: 'current-user',
     displayName: profile?.username || 'You',
     rank: 1,
     score: currentSkillLevel,
-    scoreLabel: skillLevelNames[currentSkillLevel] || `Level ${currentSkillLevel}`,
+    scoreLabel: levelName,
+    formattedScore: levelName,
     level: skillLevelNames[currentSkillLevel],
     achievementCount: currentUser.achievementCount,
     subscriptionTier: currentUser.subscriptionTier === 'trial' ? 'pro' : currentUser.subscriptionTier,
+    isPro: currentUser.subscriptionTier === 'pro' || currentUser.subscriptionTier === 'trial',
     isCurrentUser: true,
   })
   
@@ -198,6 +207,12 @@ export function getLeaderboard(category: LeaderboardCategory): LeaderboardData {
 
 export function getAllLeaderboardCategories(): LeaderboardCategory[] {
   return Object.keys(LEADERBOARD_CATEGORIES) as LeaderboardCategory[]
+}
+
+// Refresh leaderboard (recalculates scores)
+export function refreshLeaderboard(category: LeaderboardCategory): LeaderboardData {
+  // Simply returns fresh data since we recalculate on each call
+  return getLeaderboard(category)
 }
 
 // Helper to get Spartan Score level name

@@ -9,6 +9,7 @@ import { getConstraintInsight } from './constraint-engine'
 import { getSkillSessions } from './skill-session-service'
 import { getUnlockedAchievements, ACHIEVEMENTS, type AchievementTier } from './achievements/achievement-definitions'
 import { getTotalScoreBoost } from './challenges/challenge-engine'
+import { getTotalH2HRewards } from './h2h/h2h-service'
 
 export interface ScoreComponent {
   raw: number      // 0-100 raw score
@@ -306,7 +307,7 @@ export function calculateConsistencyScore(): { score: number; weeklyWorkouts: nu
   }
 }
 
-// Calculate challenge score (5% weight) - bonus points from completed challenges
+// Calculate challenge score (5% weight) - bonus points from completed challenges + H2H rewards
 export function calculateChallengeScore(): { score: number; totalBoost: number } {
   let totalBoost = 0
   try {
@@ -314,6 +315,16 @@ export function calculateChallengeScore(): { score: number; totalBoost: number }
   } catch {
     // Challenge engine may not be initialized
   }
+  
+  // Add H2H rewards (capped to prevent exploitation)
+  let h2hBoost = 0
+  try {
+    h2hBoost = Math.min(getTotalH2HRewards(), 200) // Cap H2H contribution at 200 pts
+  } catch {
+    // H2H service may not be initialized
+  }
+  
+  totalBoost += h2hBoost
   
   // Normalize to 0-100 scale, capped to prevent excessive grinding
   const score = Math.min(100, Math.round((totalBoost / CHALLENGE_SCORE_CAP) * 100))

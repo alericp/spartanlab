@@ -11,6 +11,16 @@ import type {
 import type { SessionLength, PrimaryGoal } from './program-service'
 import { generateIntelligentPrehab } from './prehab'
 import type { IntelligentPrehabContext } from './prehab'
+import type { JointCaution } from './athlete-profile'
+import { 
+  recommendProtocolsForSession, 
+  generateProtocolExplanation,
+  type ProtocolRecommendation,
+  type JointIntegrityProtocol 
+} from './protocols/joint-integrity-protocol'
+
+// Re-export for external use
+export type { ProtocolRecommendation, JointIntegrityProtocol } from './protocols/joint-integrity-protocol'
 
 // =============================================================================
 // TYPES
@@ -63,6 +73,7 @@ export interface WarmUpGenerationContext {
   primaryGoal: PrimaryGoal
   sessionLength: SessionLength
   equipment: EquipmentType[]
+  jointCautions?: JointCaution[]
 }
 
 export interface GeneratedWarmUp {
@@ -74,6 +85,9 @@ export interface GeneratedWarmUp {
   }>
   totalMinutes: number
   focusLabel: string
+  // Joint Integrity Protocol integration
+  protocols?: ProtocolRecommendation[]
+  protocolExplanations?: string[]
 }
 
 // =============================================================================
@@ -497,6 +511,17 @@ export function generateWarmUp(context: WarmUpGenerationContext): GeneratedWarmU
     note: ex.notes,
   }))
 
+  // ===================
+  // JOINT INTEGRITY PROTOCOL INTEGRATION
+  // ===================
+  // Recommend protocols based on primary goal and joint cautions
+  // Limited to max 2 protocols to prevent warm-up overload
+  const protocols = recommendProtocolsForSession(primaryGoal, context.jointCautions)
+  const protocolExplanations = protocols.map(p => generateProtocolExplanation(p))
+  
+  // Add protocol time to total (max 2 protocols = max 8 min additional)
+  const protocolMinutes = protocols.reduce((sum, p) => sum + p.protocol.durationMinutes, 0)
+
   return {
     block: {
       focus,
@@ -505,8 +530,10 @@ export function generateWarmUp(context: WarmUpGenerationContext): GeneratedWarmU
       rationale,
     },
     exercises: formattedExercises,
-    totalMinutes: duration.totalMinutes,
+    totalMinutes: duration.totalMinutes + protocolMinutes,
     focusLabel,
+    protocols,
+    protocolExplanations,
   }
 }
 

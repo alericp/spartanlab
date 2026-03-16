@@ -15,8 +15,16 @@ import {
 } from '@/components/ui/select'
 import { PageContainer } from '@/components/layout'
 import { PageHeader } from '@/components/shared/PageHeader'
-import { Settings, Crown, Shield, Target, Sparkles } from 'lucide-react'
+import { Settings, Crown, Shield, Target, Sparkles, AlertTriangle, Dumbbell } from 'lucide-react'
 import { SKILL_DEFINITIONS } from '@/lib/skills'
+import { Checkbox } from '@/components/ui/checkbox'
+import { 
+  JOINT_CAUTION_LABELS, 
+  type JointCaution,
+  type EquipmentType,
+  WEAKEST_AREA_LABELS,
+  type WeakestArea,
+} from '@/lib/athlete-profile'
 import { useOwnerInit } from '@/hooks/useOwnerInit'
 import { PRICING, TRIAL } from '@/lib/billing/pricing'
 import { hasProAccess } from '@/lib/feature-access'
@@ -27,7 +35,7 @@ import {
   saveAthleteProfile,
   type AthleteProfile,
 } from '@/lib/data-service'
-import { hasSignificantProfileChange } from '@/lib/profile-sync-service'
+import { hasSignificantProfileChange, getProfileChangeDescription } from '@/lib/profile-sync-service'
 import { getActiveProgram, clearActiveProgram } from '@/lib/program-service'
 import { UpdateMetricsCard } from '@/components/dashboard/UpdateMetricsCard'
 import { useToast } from '@/hooks/use-toast'
@@ -184,7 +192,11 @@ export default function SettingsPage() {
   const [bodyweight, setBodyweight] = useState('')
   const [experienceLevel, setExperienceLevel] = useState('beginner')
   const [trainingDays, setTrainingDays] = useState('3')
+  const [sessionLength, setSessionLength] = useState('60')
   const [primaryGoal, setPrimaryGoal] = useState('none')
+  const [equipment, setEquipment] = useState<EquipmentType[]>([])
+  const [jointCautions, setJointCautions] = useState<JointCaution[]>([])
+  const [weakestArea, setWeakestArea] = useState<WeakestArea | 'none'>('none')
 
   useEffect(() => {
     setMounted(true)
@@ -197,7 +209,11 @@ export default function SettingsPage() {
     setBodyweight(data.bodyweight?.toString() || '')
     setExperienceLevel(data.experienceLevel || 'beginner')
     setTrainingDays(data.trainingDaysPerWeek?.toString() || '3')
+    setSessionLength(data.sessionLengthMinutes?.toString() || '60')
     setPrimaryGoal(data.primaryGoal || 'none')
+    setEquipment(data.equipmentAvailable || [])
+    setJointCautions(data.jointCautions || [])
+    setWeakestArea(data.weakestArea || 'none')
   }
 
   const handleSave = () => {
@@ -211,7 +227,11 @@ export default function SettingsPage() {
       bodyweight: bodyweight ? parseFloat(bodyweight) : null,
       experienceLevel: experienceLevel as 'beginner' | 'intermediate' | 'advanced',
       trainingDaysPerWeek: parseInt(trainingDays),
+      sessionLengthMinutes: parseInt(sessionLength) as 30 | 45 | 60 | 90,
       primaryGoal: primaryGoal === 'none' ? null : primaryGoal,
+      equipmentAvailable: equipment,
+      jointCautions: jointCautions,
+      weakestArea: weakestArea === 'none' ? null : weakestArea,
     })
     
     setProfile(updated)
@@ -224,10 +244,16 @@ export default function SettingsPage() {
       if (activeProgram) {
         // Clear the active program to trigger regeneration on next visit
         clearActiveProgram()
+        
+        // Get description of what changed for better user messaging
+        const changeDescription = getProfileChangeDescription(previousProfile, updated)
+        
         toast({
-          title: 'Profile Updated',
-          description: 'Your training program will be regenerated to match your new settings.',
-          duration: 4000,
+          title: 'Program Updated',
+          description: changeDescription 
+            ? `Your program will be regenerated to match your new ${changeDescription}.`
+            : 'Your training program will be regenerated to match your new settings.',
+          duration: 5000,
         })
       }
     }
@@ -314,6 +340,33 @@ export default function SettingsPage() {
             </Select>
           </div>
 
+          {/* Session Length */}
+          <div className="space-y-2">
+            <Label className="text-[#F5F5F5]">Session Duration</Label>
+            <Select value={sessionLength} onValueChange={setSessionLength}>
+              <SelectTrigger className="bg-[#1A1A1A] border-[#3A3A3A] text-[#F5F5F5]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent className="bg-[#2A2A2A] border-[#3A3A3A]">
+                <SelectItem value="30" className="text-[#F5F5F5] focus:bg-[#3A3A3A]">
+                  30 min focused session
+                </SelectItem>
+                <SelectItem value="45" className="text-[#F5F5F5] focus:bg-[#3A3A3A]">
+                  45 min balanced session
+                </SelectItem>
+                <SelectItem value="60" className="text-[#F5F5F5] focus:bg-[#3A3A3A]">
+                  60 min complete session
+                </SelectItem>
+                <SelectItem value="90" className="text-[#F5F5F5] focus:bg-[#3A3A3A]">
+                  90 min extended session
+                </SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-[#A5A5A5] mt-1">
+              Changing this will regenerate your program
+            </p>
+          </div>
+
           {/* Primary Goal */}
           <div className="space-y-2">
             <Label className="text-[#F5F5F5]">Primary Goal (Optional)</Label>
@@ -332,6 +385,112 @@ export default function SettingsPage() {
                 ))}
               </SelectContent>
             </Select>
+          </div>
+
+          {/* Equipment Available */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <Dumbbell className="w-4 h-4 text-[#A5A5A5]" />
+              <Label className="text-[#F5F5F5]">Equipment Available</Label>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              {[
+                { key: 'pullup_bar' as const, label: 'Pull-up Bar' },
+                { key: 'dip_bars' as const, label: 'Dip Bars' },
+                { key: 'rings' as const, label: 'Rings' },
+                { key: 'parallettes' as const, label: 'Parallettes' },
+                { key: 'resistance_bands' as const, label: 'Resistance Bands' },
+                { key: 'weights' as const, label: 'Weights (for loading)' },
+              ].map((item) => (
+                <div 
+                  key={item.key}
+                  className="flex items-center gap-2 p-3 rounded-lg bg-[#1A1A1A] border border-[#3A3A3A]"
+                >
+                  <Checkbox
+                    id={`equip-${item.key}`}
+                    checked={equipment.includes(item.key)}
+                    onCheckedChange={(checked) => {
+                      if (checked) {
+                        setEquipment([...equipment, item.key])
+                      } else {
+                        setEquipment(equipment.filter(e => e !== item.key))
+                      }
+                    }}
+                    className="border-[#3A3A3A] data-[state=checked]:bg-[#E63946] data-[state=checked]:border-[#E63946]"
+                  />
+                  <label 
+                    htmlFor={`equip-${item.key}`}
+                    className="text-sm text-[#A5A5A5] cursor-pointer"
+                  >
+                    {item.label}
+                  </label>
+                </div>
+              ))}
+            </div>
+            <p className="text-xs text-[#6B7280]">
+              Your program will be adjusted based on available equipment.
+            </p>
+          </div>
+
+          {/* Joint Cautions */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-amber-500" />
+              <Label className="text-[#F5F5F5]">Joint Cautions (Optional)</Label>
+            </div>
+            <p className="text-xs text-[#A5A5A5]">
+              Flag any joints that need extra care. Your program will modify exercises accordingly.
+            </p>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              {(Object.keys(JOINT_CAUTION_LABELS) as JointCaution[]).map((joint) => (
+                <div 
+                  key={joint}
+                  className="flex items-center gap-2 p-3 rounded-lg bg-[#1A1A1A] border border-[#3A3A3A]"
+                >
+                  <Checkbox
+                    id={`joint-${joint}`}
+                    checked={jointCautions.includes(joint)}
+                    onCheckedChange={(checked) => {
+                      if (checked) {
+                        setJointCautions([...jointCautions, joint])
+                      } else {
+                        setJointCautions(jointCautions.filter(j => j !== joint))
+                      }
+                    }}
+                    className="border-[#3A3A3A] data-[state=checked]:bg-amber-500 data-[state=checked]:border-amber-500"
+                  />
+                  <label 
+                    htmlFor={`joint-${joint}`}
+                    className="text-sm text-[#A5A5A5] cursor-pointer"
+                  >
+                    {JOINT_CAUTION_LABELS[joint]}
+                  </label>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Weakest Area */}
+          <div className="space-y-2">
+            <Label className="text-[#F5F5F5]">Weakest Area (Optional)</Label>
+            <Select value={weakestArea} onValueChange={(v) => setWeakestArea(v as WeakestArea | 'none')}>
+              <SelectTrigger className="bg-[#1A1A1A] border-[#3A3A3A] text-[#F5F5F5]">
+                <SelectValue placeholder="Select your weakest area" />
+              </SelectTrigger>
+              <SelectContent className="bg-[#2A2A2A] border-[#3A3A3A]">
+                <SelectItem value="none" className="text-[#A5A5A5] focus:bg-[#3A3A3A]">
+                  None / Not sure
+                </SelectItem>
+                {(Object.keys(WEAKEST_AREA_LABELS) as WeakestArea[]).map((area) => (
+                  <SelectItem key={area} value={area} className="text-[#F5F5F5] focus:bg-[#3A3A3A]">
+                    {WEAKEST_AREA_LABELS[area]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-[#A5A5A5]">
+              Your training will emphasize work on your identified weakness.
+            </p>
           </div>
 
           {/* Save Button */}

@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { ChallengeCard } from '@/components/challenges/ChallengeCard'
 import { ChallengeNotification } from '@/components/challenges/ChallengeNotification'
 import { AuthGuard } from '@/components/auth/AuthGuard'
+import { H2HPanel } from '@/components/h2h'
 import {
   getActiveChallengesWithProgress,
   getCompletedChallengeCount,
@@ -166,9 +167,19 @@ function ChallengesContent() {
                 <Crown className="w-3.5 h-3.5 mr-1" />
                 Seasonal
               </TabsTrigger>
+              <TabsTrigger value="h2h" className="data-[state=active]:bg-[#C1121F] data-[state=active]:text-white">
+                <Swords className="w-3.5 h-3.5 mr-1" />
+                H2H
+              </TabsTrigger>
             </TabsList>
             
-            <TabsContent value={activeTab} className="mt-6">
+            {/* H2H Tab Content */}
+            <TabsContent value="h2h" className="mt-6">
+              <H2HPanel />
+            </TabsContent>
+            
+            {/* Regular challenge tabs */}
+            <TabsContent value={activeTab === 'h2h' ? 'none' : activeTab} className={activeTab === 'h2h' ? 'hidden' : 'mt-6'}>
               {/* Active Challenges */}
               {activeChallenges.length > 0 && (
                 <div className="space-y-4">
@@ -208,7 +219,7 @@ function ChallengesContent() {
               )}
               
               {/* Empty state */}
-              {filteredChallenges.length === 0 && (
+              {filteredChallenges.length === 0 && activeTab !== 'h2h' && (
                 <Card className="bg-[#12151A] border-[#2A2F36]">
                   <CardContent className="py-12 text-center">
                     <Target className="w-12 h-12 mx-auto text-[#3A4553] mb-4" />

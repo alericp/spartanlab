@@ -16,7 +16,7 @@ import { getSkillProgressions, getAthleteProfile } from './data-service'
 import { getLatestRecords } from './strength-service'
 import { getOnboardingProfile, isOnboardingComplete } from './athlete-profile'
 
-export type PrimaryGoal = 'planche' | 'front_lever' | 'muscle_up' | 'handstand_pushup' | 'weighted_strength' | 'general' | 'skill' | 'strength' | 'endurance' | 'abs' | 'pancake' | 'toe_touch' | 'front_splits' | 'side_splits' | 'flexibility'
+export type PrimaryGoal = 'planche' | 'front_lever' | 'back_lever' | 'muscle_up' | 'handstand_pushup' | 'weighted_strength' | 'general' | 'skill' | 'strength' | 'endurance' | 'abs' | 'pancake' | 'toe_touch' | 'front_splits' | 'side_splits' | 'flexibility'
 export type ExperienceLevel = 'beginner' | 'intermediate' | 'advanced'
 export type SecondaryEmphasis = 'pulling_strength' | 'pushing_strength' | 'core_control' | 'skill_technique' | 'hypertrophy_support' | 'none'
 export type SessionLength = 30 | 45 | 60 | 75 | 90 | 120 | '10-20' | '20-30' | '30-45' | '45-60' | '60+'
@@ -318,7 +318,7 @@ export function getDefaultInputs(): ProgramInputs {
     // Use first selected skill as primary goal
     if (onboardingProfile.selectedSkills.length > 0) {
       const firstSkill = onboardingProfile.selectedSkills[0]
-      if (['planche', 'front_lever', 'muscle_up', 'handstand_pushup'].includes(firstSkill)) {
+      if (['planche', 'front_lever', 'back_lever', 'muscle_up', 'handstand_pushup'].includes(firstSkill)) {
         primaryGoal = firstSkill as PrimaryGoal
       }
     }
@@ -365,11 +365,11 @@ export function getDefaultInputs(): ProgramInputs {
   
   // Determine primary goal from profile or first tracked skill
   let primaryGoal: PrimaryGoal = 'planche'
-  if (profile.primaryGoal && ['planche', 'front_lever', 'muscle_up', 'handstand_pushup', 'weighted_strength'].includes(profile.primaryGoal)) {
+  if (profile.primaryGoal && ['planche', 'front_lever', 'back_lever', 'muscle_up', 'handstand_pushup', 'weighted_strength'].includes(profile.primaryGoal)) {
     primaryGoal = profile.primaryGoal as PrimaryGoal
   } else if (progressions.length > 0) {
     const skillName = progressions[0].skillName
-    if (['planche', 'front_lever', 'muscle_up', 'handstand_pushup'].includes(skillName)) {
+    if (['planche', 'front_lever', 'back_lever', 'muscle_up', 'handstand_pushup'].includes(skillName)) {
       primaryGoal = skillName as PrimaryGoal
     }
   }
@@ -387,6 +387,7 @@ export function getDefaultInputs(): ProgramInputs {
 export const GOAL_LABELS: Record<PrimaryGoal, string> = {
   planche: 'Planche',
   front_lever: 'Front Lever',
+  back_lever: 'Back Lever',
   muscle_up: 'Muscle Up',
   handstand_pushup: 'Handstand Pushup',
   weighted_strength: 'Weighted Strength',
@@ -409,4 +410,59 @@ export const EMPHASIS_LABELS: Record<SecondaryEmphasis, string> = {
   skill_technique: 'Skill Technique',
   hypertrophy_support: 'Hypertrophy Support',
   none: 'None',
+}
+
+// =============================================================================
+// ACTIVE PROGRAM MANAGEMENT
+// =============================================================================
+// Handles the currently active program for the athlete.
+// Used by settings to trigger program regeneration when profile changes.
+
+const ACTIVE_PROGRAM_KEY = 'spartanlab_active_program'
+
+/**
+ * Get the currently active program
+ * This is the program the athlete is currently following
+ */
+export function getActiveProgram(): GeneratedProgram | null {
+  if (!isBrowser()) return null
+  
+  const stored = localStorage.getItem(ACTIVE_PROGRAM_KEY)
+  if (stored) {
+    try {
+      return JSON.parse(stored)
+    } catch {
+      return null
+    }
+  }
+  return null
+}
+
+/**
+ * Set the active program
+ * Called when a new program is generated and assigned to the athlete
+ */
+export function setActiveProgram(program: GeneratedProgram): void {
+  if (!isBrowser()) return
+  localStorage.setItem(ACTIVE_PROGRAM_KEY, JSON.stringify(program))
+}
+
+/**
+ * Clear the active program
+ * Called when profile changes require program regeneration.
+ * This preserves workout history but signals that a new program is needed.
+ * The next visit to the program builder will regenerate with new settings.
+ */
+export function clearActiveProgram(): void {
+  if (!isBrowser()) return
+  localStorage.removeItem(ACTIVE_PROGRAM_KEY)
+}
+
+/**
+ * Check if the active program needs regeneration
+ * Based on whether clearActiveProgram() was called
+ */
+export function needsProgramRegeneration(): boolean {
+  if (!isBrowser()) return false
+  return getActiveProgram() === null && getSavedPrograms().length > 0
 }

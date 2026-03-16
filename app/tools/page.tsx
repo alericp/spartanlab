@@ -72,6 +72,14 @@ const tools = [
     featured: true,
   },
   {
+    slug: '../hspu-readiness-calculator',
+    title: 'HSPU Readiness Calculator',
+    description: 'Evaluate handstand push-up readiness based on pike push-up strength, dips, and wall handstand ability.',
+    icon: Target,
+    category: 'Readiness Calculator',
+    featured: true,
+  },
+  {
     slug: 'planche-readiness',
     title: 'Planche Readiness Test (Legacy)',
     description: 'Evaluate your planche prerequisites and identify weak points.',

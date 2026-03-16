@@ -6,6 +6,7 @@ import type { EquipmentType } from './adaptive-exercise-pool'
 import type { RecoveryLevel } from './recovery-engine'
 import type { WeeklyStructure, DayStructure } from './program-structure-engine'
 import type { ExerciseSelection, SelectedExercise } from './program-exercise-selector'
+import type { ProtocolRecommendation } from './protocols/joint-integrity-protocol'
 
 import { getAthleteProfile } from './data-service'
 import { calculateRecoverySignal } from './recovery-engine'
@@ -21,7 +22,8 @@ import { selectExercisesForSession } from './program-exercise-selector'
 import { generateSessionVariants, type SessionVariant } from './session-compression-engine'
 import { analyzeEquipmentProfile, adaptSessionForEquipment, getEquipmentRecommendations, type EquipmentProfile } from './equipment-adaptation-engine'
 import { GOAL_LABELS } from './program-service'
-import { getQuickFatigueDecision, type TrainingDecision, type SessionAdjustments } from './fatigue-decision-engine'
+import { getQuickFatigueDecision, getEnhancedFatigueDecision, type TrainingDecision, type SessionAdjustments } from './fatigue-decision-engine'
+import { getDeloadRecommendation, type FatigueSignalSummary } from './fatigue/deload-system'
 import { 
   selectMethodProfiles, 
   getCoachingMessage, 
@@ -69,10 +71,19 @@ import {
   type ProgressionInsight,
   type TrainingBehaviorResult,
 } from './adaptive-progression-engine'
+import { 
+  optimizeSessionForTime, 
+  saveTimePattern,
+  type OptimizedSession,
+} from './time-optimization'
 import {
   validateExerciseSelection,
   type ExerciseIntelligenceContext,
 } from './exercise-intelligence-engine'
+import {
+  analyzeSignalsForAdaptive,
+  type AdaptiveSignalFeedback,
+} from './override-signal-service'
 import {
   getReadinessAssessment,
   getSessionAdjustments,
@@ -130,6 +141,18 @@ export interface AdaptiveSession {
   finisher?: GeneratedFinisher
   finisherIncluded: boolean
   finisherRationale?: string
+  // Joint Integrity Protocol recommendations
+  protocols?: ProtocolRecommendation[]
+  protocolExplanations?: string[]
+  // Time optimization context
+  timeOptimization?: {
+    wasOptimized: boolean
+    originalMinutes: number
+    targetMinutes: number
+    coachingMessage: string
+    removedExercises: string[]
+    reducedExercises: string[]
+  }
 }
 
 export interface AdaptiveExercise {
@@ -184,6 +207,15 @@ export interface AdaptiveProgram {
     decision: TrainingDecision
     guidance: string
     needsAttention: boolean
+  }
+  // Deload recommendation for UI
+  deloadRecommendation?: {
+    shouldDeload: boolean
+    deloadType: string
+    fatigueLevel: string
+    coachingMessage: string
+    volumeReductionPercent: number
+    recommendedProtocols: string[]
   }
   // Athlete calibration context from onboarding
   calibrationContext?: {
@@ -296,6 +328,19 @@ export interface AdaptiveProgram {
     progressTrend: 'improving' | 'stable' | 'declining'
     trendSummary: string
     dataQuality: 'insufficient' | 'limited' | 'good' | 'excellent'
+  }
+  // Override Signal Feedback - user override behavior patterns
+  overrideSignalFeedback?: {
+    hasSignificantPatterns: boolean
+    patterns: Array<{
+      type: 'frequent_skip' | 'frequent_replace' | 'difficulty_mismatch' | 'equipment_issue'
+      exerciseName?: string
+      movementCategory?: string
+      severity: 'low' | 'moderate' | 'high'
+      description: string
+      recommendation: string
+    }>
+    coachRecommendations: string[]
   }
 }
 
@@ -575,8 +620,45 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
   
   // Get fatigue-based training decision (runs client-side only)
   let fatigueDecision: { decision: TrainingDecision; shortGuidance: string; needsAttention: boolean } | null = null
+  let deloadRecommendation: {
+    shouldDeload: boolean
+    deloadType: string
+    fatigueLevel: string
+    coachingMessage: string
+    volumeReductionPercent: number
+    recommendedProtocols: string[]
+  } | undefined = undefined
+  
   if (typeof window !== 'undefined') {
     fatigueDecision = getQuickFatigueDecision()
+    
+    // Get enhanced decision with joint protocol integration
+    const jointCautions = onboardingProfile?.jointCautions || []
+    const jointDiscomforts = jointCautions.map(caution => {
+      // Map JointCaution to JointDiscomfortFlag
+      const cautionMap: Record<string, string> = {
+        'shoulders': 'shoulder_instability',
+        'elbows': 'elbow_tendon_pain',
+        'wrists': 'wrist_irritation',
+        'lower_back': 'hip_tightness',
+        'knees': 'knee_discomfort',
+      }
+      return cautionMap[caution] || null
+    }).filter(Boolean) as import('./athlete-profile').JointDiscomfortFlag[]
+    
+    const enhancedDecision = getEnhancedFatigueDecision(jointDiscomforts)
+    
+    if (enhancedDecision.deloadSystemRecommendation) {
+      const rec = enhancedDecision.deloadSystemRecommendation
+      deloadRecommendation = {
+        shouldDeload: rec.shouldDeload,
+        deloadType: rec.deloadType,
+        fatigueLevel: rec.fatigueLevel,
+        coachingMessage: rec.coachingMessage,
+        volumeReductionPercent: rec.adjustments.volumeReductionPercent,
+        recommendedProtocols: rec.jointProtocols,
+      }
+    }
   }
   
   // Weak point detection for automatic focus area identification
@@ -721,13 +803,15 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
       recommendations: engineContext.recommendations,
     },
     // Include fatigue decision for UI display
-    fatigueDecision: fatigueDecision ? {
-      decision: fatigueDecision.decision,
-      guidance: fatigueDecision.shortGuidance,
-      needsAttention: fatigueDecision.needsAttention,
-    } : undefined,
-    // Athlete calibration context
-    calibrationContext: calibrationContext,
+fatigueDecision: fatigueDecision ? {
+  decision: fatigueDecision.decision,
+  guidance: fatigueDecision.shortGuidance,
+  needsAttention: fatigueDecision.needsAttention,
+  } : undefined,
+  // Deload recommendation
+  deloadRecommendation,
+  // Athlete calibration context
+  calibrationContext: calibrationContext,
     // Training Principles Engine emphasis
     trainingEmphasis,
     // Unified Skill Intelligence Layer
@@ -793,6 +877,25 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
       trendSummary: trainingBehavior.progressTrend.trendSummary,
       dataQuality: trainingBehavior.dataQuality,
     } : undefined,
+    // Override Signal Feedback - patterns from user exercise overrides
+    overrideSignalFeedback: getOverrideSignalFeedback(),
+  }
+}
+
+/**
+ * Get override signal feedback for program generation
+ */
+function getOverrideSignalFeedback() {
+  const signalFeedback = analyzeSignalsForAdaptive(14) // Last 14 days
+  
+  if (!signalFeedback.hasSignificantPatterns) {
+    return undefined
+  }
+  
+  return {
+    hasSignificantPatterns: signalFeedback.hasSignificantPatterns,
+    patterns: signalFeedback.patterns,
+    coachRecommendations: signalFeedback.coachRecommendations,
   }
 }
 
@@ -1200,20 +1303,126 @@ export function deleteAdaptiveProgram(id: string): boolean {
 export function getDefaultAdaptiveInputs(): AdaptiveProgramInputs {
   const profile = getAthleteProfile()
   
-  // Determine primary goal
+  // Determine primary goal from AthleteProfile
   let primaryGoal: PrimaryGoal = 'planche'
   if (profile.primaryGoal && ['planche', 'front_lever', 'muscle_up', 'handstand_pushup', 'weighted_strength'].includes(profile.primaryGoal)) {
     primaryGoal = profile.primaryGoal as PrimaryGoal
   }
   
-  // Default equipment
-  const defaultEquipment: EquipmentType[] = ['pull_bar', 'dip_bars', 'floor', 'wall']
+  // Map AthleteProfile equipment to EquipmentType
+  // AthleteProfile uses: 'pullup_bar' | 'dip_bars' | 'parallettes' | 'rings' | 'resistance_bands'
+  // AdaptiveProgramInputs uses: 'pull_bar' | 'dip_bars' | 'rings' | 'parallettes' | 'bands' | 'floor' | 'wall'
+  const equipmentMap: Record<string, EquipmentType> = {
+    'pullup_bar': 'pull_bar',
+    'dip_bars': 'dip_bars',
+    'parallettes': 'parallettes',
+    'rings': 'rings',
+    'resistance_bands': 'bands',
+  }
+  
+  // Start with floor and wall (always available)
+  const mappedEquipment: EquipmentType[] = ['floor', 'wall']
+  
+  // Add equipment from profile
+  if (profile.equipmentAvailable && profile.equipmentAvailable.length > 0) {
+    for (const eq of profile.equipmentAvailable) {
+      const mapped = equipmentMap[eq]
+      if (mapped && !mappedEquipment.includes(mapped)) {
+        mappedEquipment.push(mapped)
+      }
+    }
+  } else {
+    // Fallback to sensible defaults if no equipment saved
+    mappedEquipment.push('pull_bar', 'dip_bars')
+  }
+  
+  // Map session length from profile (30, 45, 60, 90) to SessionLength (30, 45, 60, 75)
+  let sessionLength: SessionLength = 60
+  const profileSessionLength = profile.sessionLengthMinutes
+  if (profileSessionLength === 30) sessionLength = 30
+  else if (profileSessionLength === 45) sessionLength = 45
+  else if (profileSessionLength === 60) sessionLength = 60
+  else if (profileSessionLength === 90) sessionLength = 75 // Map 90 to 75 (closest match)
   
   return {
     primaryGoal,
     experienceLevel: profile.experienceLevel,
     trainingDaysPerWeek: (profile.trainingDaysPerWeek as TrainingDays) || 4,
-    sessionLength: 60,
-    equipment: defaultEquipment,
+    sessionLength,
+    equipment: mappedEquipment,
+  }
+}
+
+// =============================================================================
+// TIME OPTIMIZATION
+// =============================================================================
+
+/**
+ * Optimize a session for a specific target duration
+ * Use when user indicates they have less/more time than default
+ */
+export function optimizeSessionForDuration(
+  session: AdaptiveSession,
+  targetMinutes: number,
+  options?: {
+    preserveSkillWork?: boolean
+    preserveMainStrength?: boolean
+  }
+): AdaptiveSession {
+  const { preserveSkillWork = true, preserveMainStrength = true } = options || {}
+  
+  const result = optimizeSessionForTime({
+    session,
+    targetMinutes,
+    preserveSkillWork,
+    preserveMainStrength,
+  })
+  
+  // Track time pattern for adaptive learning
+  saveTimePattern({
+    date: new Date().toISOString().split('T')[0],
+    requestedMinutes: targetMinutes,
+    actualMinutes: result.actualMinutes,
+    wasCompressed: result.optimizationType === 'compressed',
+    wasExpanded: result.optimizationType === 'expanded',
+  })
+  
+  // Add optimization context to session
+  const optimizedSession: AdaptiveSession = {
+    ...result.session,
+    timeOptimization: {
+      wasOptimized: result.wasOptimized,
+      originalMinutes: result.originalMinutes,
+      targetMinutes: result.targetMinutes,
+      coachingMessage: result.coachingMessage,
+      removedExercises: result.removedExercises,
+      reducedExercises: result.reducedExercises,
+    },
+  }
+  
+  return optimizedSession
+}
+
+/**
+ * Get time optimization info for display
+ */
+export function getTimeOptimizationInfo(session: AdaptiveSession): {
+  isOptimized: boolean
+  message: string
+  details: string
+} {
+  if (!session.timeOptimization?.wasOptimized) {
+    return {
+      isOptimized: false,
+      message: '',
+      details: '',
+    }
+  }
+  
+  const opt = session.timeOptimization
+  return {
+    isOptimized: true,
+    message: opt.coachingMessage,
+    details: `${opt.removedExercises.length} exercise(s) removed, ${opt.reducedExercises.length} reduced`,
   }
 }

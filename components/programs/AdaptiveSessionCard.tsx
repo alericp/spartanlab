@@ -6,7 +6,7 @@ import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import type { AdaptiveSession, AdaptiveExercise } from '@/lib/adaptive-program-builder'
-import { ChevronDown, ChevronUp, Clock, AlertCircle, Zap, RefreshCw, Play, CheckCircle2 } from 'lucide-react'
+import { ChevronDown, ChevronUp, Clock, AlertCircle, Zap, RefreshCw, Play, CheckCircle2, SkipForward } from 'lucide-react'
 import { WorkoutExecutionCard, StartWorkoutButton } from './WorkoutExecutionCard'
 import { exerciseSupportsRPE } from '@/lib/rpe-adjustment-engine'
 import { useWorkoutSession } from '@/hooks/useWorkoutSession'
@@ -19,16 +19,24 @@ import {
 import { WorkoutSessionSummary } from '@/components/workout/WorkoutSessionSummary'
 import { trackWorkoutStarted, trackWorkoutCompleted } from '@/lib/analytics'
 import { ExerciseReplacementModal } from './ExerciseReplacementModal'
+import { ExerciseActionMenu } from './ExerciseActionMenu'
 import { getOnboardingProfile } from '@/lib/athlete-profile'
+import { 
+  addOverride, 
+  applyOverridesToSession,
+  type ExerciseOverride 
+} from '@/lib/exercise-override-service'
+import { recordReplaceSignal } from '@/lib/override-signal-service'
 import type { EquipmentType } from '@/lib/adaptive-exercise-pool'
 
 interface AdaptiveSessionCardProps {
   session: AdaptiveSession
   onExerciseReplace?: (exerciseId: string) => void
   onWorkoutComplete?: () => void
+  onExerciseOverride?: (override: ExerciseOverride) => void
 }
 
-export function AdaptiveSessionCard({ session, onExerciseReplace, onWorkoutComplete }: AdaptiveSessionCardProps) {
+export function AdaptiveSessionCard({ session, onExerciseReplace, onWorkoutComplete, onExerciseOverride }: AdaptiveSessionCardProps) {
   const router = useRouter()
   const [isExpanded, setIsExpanded] = useState(true)
   const [showWarmup, setShowWarmup] = useState(false)
@@ -37,6 +45,11 @@ export function AdaptiveSessionCard({ session, onExerciseReplace, onWorkoutCompl
   const [showFinishConfirm, setShowFinishConfirm] = useState(false)
   const [showReplacementModal, setShowReplacementModal] = useState(false)
   const [selectedExerciseForReplace, setSelectedExerciseForReplace] = useState<{id: string, name: string} | null>(null)
+  const [skippedExercises, setSkippedExercises] = useState<Set<string>>(new Set())
+  const [adjustedExercises, setAdjustedExercises] = useState<Map<string, string>>(new Map())
+  
+  // Generate unique session ID for tracking overrides
+  const sessionId = `${session.name}-${session.dayLabel}-${Date.now().toString(36)}`
 
   // Session lifecycle hook
   const workoutSession = useWorkoutSession(session)
@@ -98,12 +111,76 @@ export function AdaptiveSessionCard({ session, onExerciseReplace, onWorkoutCompl
   }
 
   const handleReplacementConfirm = (newExerciseId: string) => {
-    if (selectedExerciseForReplace && onExerciseReplace) {
-      onExerciseReplace(selectedExerciseForReplace.id)
-      // The parent component handles the actual replacement logic
+    if (selectedExerciseForReplace) {
+      // Record the override
+      const exercise = session.exercises.find(e => e.id === selectedExerciseForReplace.id)
+      const newName = newExerciseId.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
+      
+      const override: ExerciseOverride = {
+        originalExerciseId: selectedExerciseForReplace.id,
+        originalExerciseName: selectedExerciseForReplace.name,
+        overrideType: 'replaced',
+        newExerciseId,
+        newExerciseName: newName,
+        timestamp: Date.now(),
+      }
+      
+      addOverride(sessionId, override)
+      
+      // Record signal for adaptive learning
+      if (exercise) {
+        recordReplaceSignal(
+          sessionId,
+          selectedExerciseForReplace.id,
+          selectedExerciseForReplace.name,
+          exercise.category,
+          newExerciseId,
+          newName
+        )
+      }
+      
+      // Notify parent
+      onExerciseOverride?.(override)
+      onExerciseReplace?.(selectedExerciseForReplace.id)
     }
     setShowReplacementModal(false)
     setSelectedExerciseForReplace(null)
+  }
+
+  const handleExerciseSkip = (exerciseId: string, exerciseName: string) => {
+    // Add to skipped set for visual feedback
+    setSkippedExercises(prev => new Set(prev).add(exerciseId))
+    
+    // Record the override
+    const override: ExerciseOverride = {
+      originalExerciseId: exerciseId,
+      originalExerciseName: exerciseName,
+      overrideType: 'skipped',
+      timestamp: Date.now(),
+    }
+    
+    addOverride(sessionId, override)
+    onExerciseOverride?.(override)
+  }
+
+  const handleProgressionAdjust = (exerciseId: string, newProgression: string, direction: 'up' | 'down') => {
+    // Track the adjustment locally
+    setAdjustedExercises(prev => new Map(prev).set(exerciseId, newProgression))
+    
+    // Find original exercise name
+    const exercise = session.exercises.find(e => e.id === exerciseId)
+    
+    // Record the override
+    const override: ExerciseOverride = {
+      originalExerciseId: exerciseId,
+      originalExerciseName: exercise?.name || exerciseId,
+      overrideType: 'progression_adjusted',
+      newProgression,
+      timestamp: Date.now(),
+    }
+    
+    addOverride(sessionId, override)
+    onExerciseOverride?.(override)
   }
 
   // Get equipment from profile for replacement modal
@@ -304,7 +381,12 @@ export function AdaptiveSessionCard({ session, onExerciseReplace, onWorkoutCompl
   key={exercise.id}
   exercise={exercise}
   index={idx + 1}
+  sessionId={sessionId}
+  isSkipped={skippedExercises.has(exercise.id)}
+  adjustedName={adjustedExercises.get(exercise.id)}
   onReplace={handleExerciseReplace}
+  onSkip={handleExerciseSkip}
+  onProgressionAdjust={handleProgressionAdjust}
   />
             ))}
           </div>
@@ -381,12 +463,30 @@ interface ExerciseRowProps {
   exercise: AdaptiveExercise
   index?: number
   isWarmupCooldown?: boolean
+  sessionId?: string
+  isSkipped?: boolean
+  adjustedName?: string
   onReplace?: (exerciseId: string, exerciseName: string) => void
-  }
+  onSkip?: (exerciseId: string, exerciseName: string) => void
+  onProgressionAdjust?: (exerciseId: string, newProgression: string, direction: 'up' | 'down') => void
+}
 
-function ExerciseRow({ exercise, index, isWarmupCooldown, onReplace }: ExerciseRowProps) {
+function ExerciseRow({ 
+  exercise, 
+  index, 
+  isWarmupCooldown, 
+  sessionId,
+  isSkipped,
+  adjustedName,
+  onReplace,
+  onSkip,
+  onProgressionAdjust,
+}: ExerciseRowProps) {
   const [showReason, setShowReason] = useState(false)
   const hasRPE = !isWarmupCooldown && exerciseSupportsRPE(exercise.name)
+  
+  // Display name - show adjusted name if progression was changed
+  const displayName = adjustedName || exercise.name
 
   const categoryColors: Record<string, string> = {
     skill: 'text-[#E63946]',
@@ -397,11 +497,31 @@ function ExerciseRow({ exercise, index, isWarmupCooldown, onReplace }: ExerciseR
     cooldown: 'text-green-400',
   }
 
+  // Skipped state styling
+  if (isSkipped) {
+    return (
+      <div className="p-3 rounded-lg border bg-[#1A1A1A]/30 border-[#2A2A2A] opacity-60">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            {index && (
+              <span className="text-xs text-[#6A6A6A] font-mono w-4">{index}.</span>
+            )}
+            <SkipForward className="w-4 h-4 text-[#6A6A6A]" />
+            <span className="text-sm text-[#6A6A6A] line-through">{exercise.name}</span>
+          </div>
+          <span className="text-xs text-[#6A6A6A]">Skipped</span>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className={`p-3 rounded-lg border transition-colors ${
       isWarmupCooldown 
         ? 'bg-[#1A1A1A]/50 border-[#2A2A2A]' 
-        : 'bg-[#1A1A1A] border-[#3A3A3A] hover:border-[#4A4A4A]'
+        : adjustedName 
+          ? 'bg-[#1A1A1A] border-[#4F6D8A]/30' 
+          : 'bg-[#1A1A1A] border-[#3A3A3A] hover:border-[#4A4A4A]'
     }`}>
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1">
@@ -417,32 +537,44 @@ function ExerciseRow({ exercise, index, isWarmupCooldown, onReplace }: ExerciseR
                 {exercise.methodLabel}
               </span>
             )}
+            {adjustedName && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#4F6D8A]/20 text-[#4F6D8A] font-medium">
+                Adjusted
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-2 mt-1">
-            <p className="font-medium">{exercise.name}</p>
+            <p className="font-medium">{displayName}</p>
             {hasRPE && (
               <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#E63946]/10 text-[#E63946] font-medium">
                 RPE
               </span>
             )}
           </div>
+          {adjustedName && (
+            <p className="text-xs text-[#4F6D8A] mt-0.5">
+              Originally: {exercise.name}
+            </p>
+          )}
           {exercise.note && (
             <p className="text-xs text-[#6A6A6A] mt-0.5">{exercise.note}</p>
           )}
         </div>
-        <div className="text-right shrink-0">
-          <p className="text-sm text-[#A5A5A5]">
-            {exercise.sets} x {exercise.repsOrTime}
-          </p>
-{!isWarmupCooldown && exercise.isOverrideable && onReplace && (
-  <button
-  className="text-xs text-[#6A6A6A] hover:text-[#A5A5A5] flex items-center gap-1 mt-1 ml-auto"
-  onClick={() => onReplace(exercise.id, exercise.name)}
-  >
-  <RefreshCw className="w-3 h-3" />
-  Replace
-  </button>
-  )}
+        <div className="flex items-start gap-2 shrink-0">
+          <div className="text-right">
+            <p className="text-sm text-[#A5A5A5]">
+              {exercise.sets} x {exercise.repsOrTime}
+            </p>
+          </div>
+          {!isWarmupCooldown && exercise.isOverrideable && sessionId && onReplace && onSkip && onProgressionAdjust && (
+            <ExerciseActionMenu
+              exercise={exercise}
+              sessionId={sessionId}
+              onReplace={onReplace}
+              onSkip={onSkip}
+              onProgressionAdjust={onProgressionAdjust}
+            />
+          )}
         </div>
       </div>
       

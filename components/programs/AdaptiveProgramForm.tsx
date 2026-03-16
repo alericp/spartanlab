@@ -123,17 +123,20 @@ export function AdaptiveProgramForm({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent className="bg-[#2A2A2A] border-[#3A3A3A]">
-                <SelectItem value="2">2 Days</SelectItem>
-                <SelectItem value="3">3 Days</SelectItem>
-                <SelectItem value="4">4 Days</SelectItem>
-                <SelectItem value="5">5 Days</SelectItem>
+                <SelectItem value="2">2 days/week</SelectItem>
+                <SelectItem value="3">3 days/week</SelectItem>
+                <SelectItem value="4">4 days/week</SelectItem>
+                <SelectItem value="5">5 days/week</SelectItem>
               </SelectContent>
             </Select>
+            <p className="text-xs text-[#6A6A6A]">
+              Pre-filled from your profile settings
+            </p>
           </div>
 
           {/* Session Length */}
           <div className="space-y-2">
-            <label className="text-sm text-[#A5A5A5]">Session Length</label>
+            <label className="text-sm text-[#A5A5A5]">Session Duration</label>
             <Select
               value={String(inputs.sessionLength)}
               onValueChange={(v) => updateInput('sessionLength', Number(v) as SessionLength)}
@@ -142,12 +145,15 @@ export function AdaptiveProgramForm({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent className="bg-[#2A2A2A] border-[#3A3A3A]">
-                <SelectItem value="30">30 Minutes</SelectItem>
-                <SelectItem value="45">45 Minutes</SelectItem>
-                <SelectItem value="60">60 Minutes</SelectItem>
-                <SelectItem value="75">75 Minutes</SelectItem>
+                <SelectItem value="30">30 min focused session</SelectItem>
+                <SelectItem value="45">45 min balanced session</SelectItem>
+                <SelectItem value="60">60 min complete session</SelectItem>
+                <SelectItem value="75">75 min extended session</SelectItem>
               </SelectContent>
             </Select>
+            <p className="text-xs text-[#6A6A6A]">
+              Pre-filled from your profile settings
+            </p>
           </div>
         </div>
 
@@ -170,7 +176,7 @@ export function AdaptiveProgramForm({
             ))}
           </div>
           <p className="text-xs text-[#6A6A6A]">
-            Floor and wall are always available
+            Pre-filled from your profile. Floor and wall are always available.
           </p>
         </div>
 

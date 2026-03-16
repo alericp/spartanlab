@@ -392,7 +392,114 @@ function getScoreLevel(score: number): string {
 }
 
 // =============================================================================
+// BEST SCOPE FINDER - helps users see where they're performing best
+// =============================================================================
+
+export interface BestScopeResult {
+  bestScope: LeaderboardTimeScope
+  rank: number
+  score: number
+  message: string
+}
+
+/**
+ * Find which time scope the user is performing best in
+ * This helps beginners feel immediate progress
+ */
+export function getBestScope(): BestScopeResult {
+  const weekly = getLeaderboard('global_spartan_score', 'weekly')
+  const monthly = getLeaderboard('global_spartan_score', 'monthly')
+  const allTime = getLeaderboard('global_spartan_score', 'all_time')
+  
+  const scopes: Array<{ scope: LeaderboardTimeScope; data: LeaderboardData }> = [
+    { scope: 'weekly', data: weekly },
+    { scope: 'monthly', data: monthly },
+    { scope: 'all_time', data: allTime },
+  ]
+  
+  // In early access, default to weekly since that's most motivating for beginners
+  if (weekly.isEarlyAccess) {
+    return {
+      bestScope: 'weekly',
+      rank: 1,
+      score: weekly.userPosition?.score ?? 0,
+      message: 'You\'re building your weekly ranking',
+    }
+  }
+  
+  // Find best rank
+  let bestScope: LeaderboardTimeScope = 'weekly'
+  let bestRank = Infinity
+  let bestScore = 0
+  
+  for (const { scope, data } of scopes) {
+    if (data.userPosition && data.userPosition.rank < bestRank) {
+      bestRank = data.userPosition.rank
+      bestScope = scope
+      bestScore = data.userPosition.score
+    }
+  }
+  
+  const scopeLabels: Record<LeaderboardTimeScope, string> = {
+    weekly: 'this week',
+    monthly: 'this month',
+    all_time: 'all-time',
+  }
+  
+  return {
+    bestScope,
+    rank: bestRank === Infinity ? 1 : bestRank,
+    score: bestScore,
+    message: `Best rank: #${bestRank === Infinity ? 1 : bestRank} ${scopeLabels[bestScope]}`,
+  }
+}
+
+/**
+ * Get motivational message based on user's position and activity
+ */
+export function getMotivationalMessage(
+  timeScope: LeaderboardTimeScope,
+  userScore: number,
+  isEarlyAccess: boolean
+): string {
+  if (isEarlyAccess) {
+    const messages = {
+      weekly: 'Keep training to climb this week\'s rankings',
+      monthly: 'Stay consistent to dominate this month',
+      all_time: 'Build your legacy on the all-time board',
+    }
+    return messages[timeScope]
+  }
+  
+  if (userScore === 0) {
+    return 'Complete a workout to start earning points'
+  }
+  
+  const motivations = {
+    weekly: [
+      'Every workout this week counts toward your ranking',
+      'Push harder to climb the weekly leaderboard',
+      'A strong finish this week could change everything',
+    ],
+    monthly: [
+      'Stay consistent to hold your monthly position',
+      'There\'s still time to climb this month',
+      'Monthly rankings reward dedication',
+    ],
+    all_time: [
+      'Your long-term commitment is building something lasting',
+      'The all-time board celebrates sustained excellence',
+      'Legends are made through consistent effort',
+    ],
+  }
+  
+  const scopeMessages = motivations[timeScope]
+  return scopeMessages[Math.floor(Math.random() * scopeMessages.length)]
+}
+
+// =============================================================================
 // EXPORTS
 // =============================================================================
 
 export { LEADERBOARD_CATEGORIES, SKILL_LEVEL_NAMES, TIME_SCOPE_CONFIGS }
+export type { BestScopeResult }

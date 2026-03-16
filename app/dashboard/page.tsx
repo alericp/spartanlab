@@ -78,6 +78,8 @@ import { NextWorkoutCard } from '@/components/dashboard/NextWorkoutCard'
 import { ProgramSnapshotCard } from '@/components/dashboard/ProgramSnapshotCard'
 import { TrainingInsightQuote } from '@/components/dashboard/TrainingInsightQuote'
 import { TrainingConsistencyCard } from '@/components/dashboard/TrainingConsistencyCard'
+import { H2HPanel } from '@/components/h2h'
+import { SkillRoadmapsCard } from '@/components/roadmap'
 import { SkillProgressHeatmap } from '@/components/dashboard/SkillProgressHeatmap'
 import { AdaptiveEngineBadge, SensorEngineVisualization } from '@/components/shared/AdaptiveEngineBadge'
 import { AuthGuard } from '@/components/auth/AuthGuard'
@@ -559,6 +561,17 @@ function DashboardContent() {
         )}
         
         {/* ============================================================= */}
+        {/* SKILL ROADMAPS - Progression ladders to advanced skills */}
+        {/* Only show after user has some training data */}
+        {/* ============================================================= */}
+        
+        {!isEarlyStageUser && (
+          <SafeWidget name="SkillRoadmapsCard">
+            <SkillRoadmapsCard maxDisplay={4} />
+          </SafeWidget>
+        )}
+        
+        {/* ============================================================= */}
         {/* ACHIEVEMENTS - Medal collection */}
         {/* Show for all users - achievements provide early motivation */}
         {/* ============================================================= */}
@@ -575,6 +588,17 @@ function DashboardContent() {
         {!isEarlyStageUser && (
           <SafeWidget name="ChallengesCard">
             <ChallengesCard maxDisplay={3} />
+          </SafeWidget>
+        )}
+        
+        {/* ============================================================= */}
+        {/* H2H CHALLENGES - Competitive matches */}
+        {/* Only show after user has established baseline */}
+        {/* ============================================================= */}
+        
+        {!isEarlyStageUser && (
+          <SafeWidget name="H2HPanel">
+            <H2HPanel compact />
           </SafeWidget>
         )}
         

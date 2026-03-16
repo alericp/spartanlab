@@ -39,6 +39,12 @@ export const SKILL_DEFINITIONS = {
     levels: SKILL_PROGRESSIONS.front_lever.levels.map(l => l.name),
     description: 'Complete horizontal front body hold',
   },
+  back_lever: {
+    name: 'Back Lever',
+    category: 'pull' as SkillCategory,
+    levels: ['German Hang', 'Tuck Back Lever', 'Advanced Tuck', 'One Leg', 'Straddle', 'Full Back Lever'],
+    description: 'Horizontal pulling hold with arms behind body',
+  },
   muscle_up: {
     name: 'Muscle Up',
     category: 'transition' as SkillCategory,

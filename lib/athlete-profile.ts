@@ -147,6 +147,42 @@ export const JOINT_CAUTION_LABELS: Record<JointCaution, string> = {
   'knees': 'Knees',
 }
 
+/**
+ * Joint discomfort flags - extended injury/discomfort tracking
+ * Triggers Joint Integrity Protocol recommendations
+ */
+export type JointDiscomfortFlag =
+  | 'wrist_irritation'
+  | 'elbow_tendon_pain'
+  | 'shoulder_instability'
+  | 'knee_discomfort'
+  | 'ankle_stiffness'
+  | 'hip_tightness'
+  | 'scapular_weakness'
+
+export const JOINT_DISCOMFORT_LABELS: Record<JointDiscomfortFlag, string> = {
+  'wrist_irritation': 'Wrist irritation',
+  'elbow_tendon_pain': 'Elbow tendon pain',
+  'shoulder_instability': 'Shoulder instability',
+  'knee_discomfort': 'Knee discomfort',
+  'ankle_stiffness': 'Ankle stiffness',
+  'hip_tightness': 'Hip tightness',
+  'scapular_weakness': 'Scapular weakness',
+}
+
+/**
+ * Maps discomfort flags to recommended Joint Integrity Protocol IDs
+ */
+export const DISCOMFORT_TO_PROTOCOL: Record<JointDiscomfortFlag, string> = {
+  'wrist_irritation': 'wrist_integrity_protocol',
+  'elbow_tendon_pain': 'elbow_tendon_health_protocol',
+  'shoulder_instability': 'shoulder_stability_protocol',
+  'knee_discomfort': 'knee_stability_protocol',
+  'ankle_stiffness': 'ankle_mobility_protocol',
+  'hip_tightness': 'hip_compression_protocol',
+  'scapular_weakness': 'scapular_control_protocol',
+}
+
 // =============================================================================
 // PRIMARY TRAINING OUTCOME
 // =============================================================================

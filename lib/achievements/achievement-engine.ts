@@ -12,6 +12,7 @@ import { getStrengthRecords, getPersonalRecords } from '../strength-service'
 import { getSkillProgressions } from '../data-service'
 import { calculateTrainingStreak } from '../progress-streak-engine'
 import { getCompletedChallengeCount } from '../challenges/challenge-engine'
+import { getH2HStats } from '../h2h/h2h-service'
 
 // =============================================================================
 // STORAGE
@@ -96,6 +97,14 @@ interface AchievementMetrics {
   skillLevels: Record<string, number> // skill -> level
   challengeCount: number // completed challenges
   weeksActive: number // weeks with at least one workout
+  // H2H metrics
+  h2hWins: number
+  h2hBattles: number
+  h2hPoolWins: number
+  // Longevity metrics
+  monthsActive: number // months with at least one workout
+  // Balance metrics
+  balancedWeeks: number // weeks with both push and pull exercises
 }
 
 function calculateMetrics(): AchievementMetrics {
@@ -156,6 +165,58 @@ function calculateMetrics(): AchievementMetrics {
     weeksWithWorkouts.add(`${date.getFullYear()}-W${weekNumber}`)
   })
   
+  // Get H2H stats
+  let h2hWins = 0
+  let h2hBattles = 0
+  let h2hPoolWins = 0
+  try {
+    const h2hStats = getH2HStats()
+    h2hWins = h2hStats.wins
+    h2hBattles = h2hStats.totalChallenges
+    h2hPoolWins = h2hStats.poolWins || 0
+  } catch {
+    // H2H service may not be initialized
+  }
+  
+  // Calculate months active (months with at least one workout)
+  const monthsWithWorkouts = new Set<string>()
+  workouts.forEach(workout => {
+    const date = new Date(workout.sessionDate || workout.createdAt)
+    monthsWithWorkouts.add(`${date.getFullYear()}-${date.getMonth() + 1}`)
+  })
+  
+  // Calculate balanced weeks (weeks with both push and pull exercises)
+  // Push: push-ups, dips, HSPU, planche work
+  // Pull: pull-ups, rows, front lever, back lever, muscle-ups
+  const weeklyExerciseTypes: Map<string, { hasPush: boolean; hasPull: boolean }> = new Map()
+  const pushExercises = ['push-up', 'pushup', 'dip', 'hspu', 'handstand', 'planche', 'pike', 'diamond', 'pseudo']
+  const pullExercises = ['pull-up', 'pullup', 'row', 'front lever', 'back lever', 'muscle-up', 'chin-up', 'lat', 'inverted']
+  
+  workouts.forEach(workout => {
+    const date = new Date(workout.sessionDate || workout.createdAt)
+    const yearStart = new Date(date.getFullYear(), 0, 1)
+    const weekNumber = Math.ceil(((date.getTime() - yearStart.getTime()) / 86400000 + yearStart.getDay() + 1) / 7)
+    const weekKey = `${date.getFullYear()}-W${weekNumber}`
+    
+    if (!weeklyExerciseTypes.has(weekKey)) {
+      weeklyExerciseTypes.set(weekKey, { hasPush: false, hasPull: false })
+    }
+    
+    const weekData = weeklyExerciseTypes.get(weekKey)!
+    workout.exercises.forEach(ex => {
+      const name = ex.name.toLowerCase()
+      if (pushExercises.some(p => name.includes(p))) {
+        weekData.hasPush = true
+      }
+      if (pullExercises.some(p => name.includes(p))) {
+        weekData.hasPull = true
+      }
+    })
+  })
+  
+  const balancedWeeks = Array.from(weeklyExerciseTypes.values())
+    .filter(w => w.hasPush && w.hasPull).length
+  
   return {
     workoutCount: workouts.length,
     currentStreak: streak.currentStreak,
@@ -165,6 +226,11 @@ function calculateMetrics(): AchievementMetrics {
     skillLevels,
     challengeCount,
     weeksActive: weeksWithWorkouts.size,
+    h2hWins,
+    h2hBattles,
+    h2hPoolWins,
+    monthsActive: monthsWithWorkouts.size,
+    balancedWeeks,
   }
 }
 
@@ -204,6 +270,21 @@ function isAchievementUnlocked(achievement: Achievement, metrics: AchievementMet
       
     case 'weeks_active':
       return metrics.weeksActive >= requirement.value
+      
+    case 'h2h_wins':
+      return metrics.h2hWins >= requirement.value
+      
+    case 'h2h_battles':
+      return metrics.h2hBattles >= requirement.value
+      
+    case 'h2h_pool_wins':
+      return metrics.h2hPoolWins >= requirement.value
+      
+    case 'months_active':
+      return metrics.monthsActive >= requirement.value
+      
+    case 'balanced_weeks':
+      return metrics.balancedWeeks >= requirement.value
       
     default:
       return false

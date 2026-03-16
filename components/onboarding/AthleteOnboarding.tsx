@@ -30,7 +30,6 @@ import { SpartanIcon } from '@/components/brand/SpartanLogo'
 import { trackOnboardingCompleted } from '@/lib/analytics'
 import { TestingGuideLink, DontKnowHelper } from '@/components/testing/TestingGuideModal'
 import { saveAthleteProfile } from '@/lib/data-service'
-import { syncOnboardingToProfile } from '@/lib/profile-sync-service'
 import {
   type OnboardingProfile,
   type Sex,
@@ -3043,6 +3042,10 @@ export function AthleteOnboarding() {
         equipmentAvailable: profile.equipment.filter(e => 
           ['pullup_bar', 'dip_bars', 'parallettes', 'rings', 'resistance_bands'].includes(e)
         ) as ('pullup_bar' | 'dip_bars' | 'parallettes' | 'rings' | 'resistance_bands')[],
+        // Sync joint cautions for protocol recommendations and exercise selection
+        jointCautions: profile.jointCautions || [],
+        // Sync weakest area for programming emphasis
+        weakestArea: profile.weakestArea || null,
         onboardingComplete: true,
       })
       

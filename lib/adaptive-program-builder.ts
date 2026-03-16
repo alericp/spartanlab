@@ -1303,21 +1303,53 @@ export function deleteAdaptiveProgram(id: string): boolean {
 export function getDefaultAdaptiveInputs(): AdaptiveProgramInputs {
   const profile = getAthleteProfile()
   
-  // Determine primary goal
+  // Determine primary goal from AthleteProfile
   let primaryGoal: PrimaryGoal = 'planche'
   if (profile.primaryGoal && ['planche', 'front_lever', 'muscle_up', 'handstand_pushup', 'weighted_strength'].includes(profile.primaryGoal)) {
     primaryGoal = profile.primaryGoal as PrimaryGoal
   }
   
-  // Default equipment
-  const defaultEquipment: EquipmentType[] = ['pull_bar', 'dip_bars', 'floor', 'wall']
+  // Map AthleteProfile equipment to EquipmentType
+  // AthleteProfile uses: 'pullup_bar' | 'dip_bars' | 'parallettes' | 'rings' | 'resistance_bands'
+  // AdaptiveProgramInputs uses: 'pull_bar' | 'dip_bars' | 'rings' | 'parallettes' | 'bands' | 'floor' | 'wall'
+  const equipmentMap: Record<string, EquipmentType> = {
+    'pullup_bar': 'pull_bar',
+    'dip_bars': 'dip_bars',
+    'parallettes': 'parallettes',
+    'rings': 'rings',
+    'resistance_bands': 'bands',
+  }
+  
+  // Start with floor and wall (always available)
+  const mappedEquipment: EquipmentType[] = ['floor', 'wall']
+  
+  // Add equipment from profile
+  if (profile.equipmentAvailable && profile.equipmentAvailable.length > 0) {
+    for (const eq of profile.equipmentAvailable) {
+      const mapped = equipmentMap[eq]
+      if (mapped && !mappedEquipment.includes(mapped)) {
+        mappedEquipment.push(mapped)
+      }
+    }
+  } else {
+    // Fallback to sensible defaults if no equipment saved
+    mappedEquipment.push('pull_bar', 'dip_bars')
+  }
+  
+  // Map session length from profile (30, 45, 60, 90) to SessionLength (30, 45, 60, 75)
+  let sessionLength: SessionLength = 60
+  const profileSessionLength = profile.sessionLengthMinutes
+  if (profileSessionLength === 30) sessionLength = 30
+  else if (profileSessionLength === 45) sessionLength = 45
+  else if (profileSessionLength === 60) sessionLength = 60
+  else if (profileSessionLength === 90) sessionLength = 75 // Map 90 to 75 (closest match)
   
   return {
     primaryGoal,
     experienceLevel: profile.experienceLevel,
     trainingDaysPerWeek: (profile.trainingDaysPerWeek as TrainingDays) || 4,
-    sessionLength: 60,
-    equipment: defaultEquipment,
+    sessionLength,
+    equipment: mappedEquipment,
   }
 }
 

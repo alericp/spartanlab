@@ -342,28 +342,28 @@ export default function SettingsPage() {
 
           {/* Session Length */}
           <div className="space-y-2">
-            <Label className="text-[#F5F5F5]">Session Length</Label>
+            <Label className="text-[#F5F5F5]">Session Duration</Label>
             <Select value={sessionLength} onValueChange={setSessionLength}>
               <SelectTrigger className="bg-[#1A1A1A] border-[#3A3A3A] text-[#F5F5F5]">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent className="bg-[#2A2A2A] border-[#3A3A3A]">
                 <SelectItem value="30" className="text-[#F5F5F5] focus:bg-[#3A3A3A]">
-                  30 minutes
+                  30 min focused session
                 </SelectItem>
                 <SelectItem value="45" className="text-[#F5F5F5] focus:bg-[#3A3A3A]">
-                  45 minutes
+                  45 min balanced session
                 </SelectItem>
                 <SelectItem value="60" className="text-[#F5F5F5] focus:bg-[#3A3A3A]">
-                  60 minutes
+                  60 min complete session
                 </SelectItem>
                 <SelectItem value="90" className="text-[#F5F5F5] focus:bg-[#3A3A3A]">
-                  90 minutes
+                  90 min extended session
                 </SelectItem>
               </SelectContent>
             </Select>
             <p className="text-xs text-[#A5A5A5] mt-1">
-              How long you want each training session to last
+              Changing this will regenerate your program
             </p>
           </div>
 

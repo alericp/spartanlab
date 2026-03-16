@@ -80,6 +80,12 @@ export function mapOnboardingToAthleteProfile(onboarding: OnboardingProfile): Pa
     pullUpMax: onboarding.pullUpMax ? pullUpMaxMap[onboarding.pullUpMax] ?? null : null,
     dipMax: onboarding.dipMax ? dipMaxMap[onboarding.dipMax] ?? null : null,
     
+    // Joint cautions for protocol recommendations and exercise selection
+    jointCautions: onboarding.jointCautions ?? [],
+    
+    // Weakest area for programming emphasis
+    weakestArea: onboarding.weakestArea ?? null,
+    
     // Meta
     onboardingComplete: true,
   }

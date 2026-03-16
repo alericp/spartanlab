@@ -1149,6 +1149,80 @@ export function generateWarmupExplanation(
 }
 
 // =============================================================================
+// VOLUME GOVERNOR INTEGRATION
+// =============================================================================
+
+import { SkillVolumeGovernor, type SessionStressAnalysis } from './skill-volume-governor-engine'
+
+/**
+ * Enhance warmup based on volume governor stress analysis
+ */
+export function enhanceWarmupFromGovernor(
+  baseWarmup: IntelligentWarmUp,
+  stressAnalysis: SessionStressAnalysis
+): IntelligentWarmUp {
+  const warmupNeeds = SkillVolumeGovernor.getStressBasedWarmupNeeds(stressAnalysis)
+  
+  // If governor recommends thorough warmup, add additional prep
+  if (warmupNeeds.warmupIntensityLevel === 'thorough') {
+    const enhancedWarmup = { ...baseWarmup }
+    
+    // Add tendon prep exercises
+    for (const tendonPrep of warmupNeeds.additionalTendonPrep) {
+      const existingIds = enhancedWarmup.exercises.map(e => e.exerciseId)
+      if (!existingIds.includes(tendonPrep)) {
+        const tendonExercise = WARMUP_EXERCISE_DATABASE.find(e => e.id === tendonPrep)
+        if (tendonExercise) {
+          enhancedWarmup.exercises.push({
+            exerciseId: tendonExercise.id,
+            exerciseName: tendonExercise.name,
+            instruction: tendonExercise.defaultPrescription,
+            rationale: `Added for tendon preparation based on session stress analysis.`,
+            jointCategory: tendonExercise.primaryJoint,
+            priority: tendonExercise.priority,
+            knowledgeBubble: tendonExercise.knowledgeBubble,
+          })
+        }
+      }
+    }
+    
+    // Add joint prep for high-stress joints
+    for (const joint of warmupNeeds.additionalJointPrep) {
+      const jointExercises = WARMUP_EXERCISE_DATABASE.filter(e => e.primaryJoint === joint)
+      const existingIds = enhancedWarmup.exercises.map(e => e.exerciseId)
+      const newJointExercise = jointExercises.find(e => !existingIds.includes(e.id))
+      
+      if (newJointExercise) {
+        enhancedWarmup.exercises.push({
+          exerciseId: newJointExercise.id,
+          exerciseName: newJointExercise.name,
+          instruction: newJointExercise.defaultPrescription,
+          rationale: `Added for ${joint} preparation due to elevated stress.`,
+          jointCategory: newJointExercise.primaryJoint,
+          priority: newJointExercise.priority,
+          knowledgeBubble: newJointExercise.knowledgeBubble,
+        })
+      }
+    }
+    
+    // Recalculate total time
+    enhancedWarmup.totalMinutes = Math.ceil(
+      enhancedWarmup.exercises.reduce((sum, ex) => {
+        const def = WARMUP_EXERCISE_DATABASE.find(d => d.id === ex.exerciseId)
+        return sum + (def?.durationSeconds || 30)
+      }, 0) / 60
+    )
+    
+    enhancedWarmup.tendonPrepIncluded = true
+    enhancedWarmup.coachingNote = `Enhanced warm-up recommended due to ${stressAnalysis.fatigueRiskLevel} session stress. ${stressAnalysis.coachingExplanation}`
+    
+    return enhancedWarmup
+  }
+  
+  return baseWarmup
+}
+
+// =============================================================================
 // EXPORTS
 // =============================================================================
 
@@ -1159,4 +1233,5 @@ export {
   generateCompressedWarmup,
   getWarmupKnowledgeBubble,
   generateWarmupExplanation,
+  enhanceWarmupFromGovernor,
 }

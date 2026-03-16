@@ -74,6 +74,7 @@ import {
 import { DashboardEmptyState } from '@/components/shared/EmptyStates'
 import { PWAInstallCard } from '@/components/dashboard/PWAInstallCard'
 import { TodayFocusCard } from '@/components/dashboard/TodayFocusCard'
+import { NextWorkoutCard } from '@/components/dashboard/NextWorkoutCard'
 import { ProgramSnapshotCard } from '@/components/dashboard/ProgramSnapshotCard'
 import { TrainingInsightQuote } from '@/components/dashboard/TrainingInsightQuote'
 import { TrainingConsistencyCard } from '@/components/dashboard/TrainingConsistencyCard'
@@ -407,12 +408,12 @@ function DashboardContent() {
         <FirstRunGuide />
         
         {/* ============================================================= */}
-        {/* PRIORITY 1: TODAY'S TRAINING FOCUS + START/RESUME WORKOUT */}
-        {/* This is the most important section - what should I do right now */}
+        {/* PRIORITY 1: NEXT WORKOUT - What should I do right now? */}
+        {/* The most important section - clear next action */}
         {/* ============================================================= */}
         
-        <SafeWidget name="TodayFocusCard">
-          <TodayFocusCard />
+        <SafeWidget name="NextWorkoutCard">
+          <NextWorkoutCard />
         </SafeWidget>
         
         {/* Milestone Notifications - Show achievements prominently */}

@@ -152,3 +152,33 @@ export {
   type ProgramInputSnapshot,
   type RegenerationTrigger,
 } from '../program-version-service'
+
+// Skill Fatigue & Volume Governor
+export {
+  SkillVolumeGovernor,
+  analyzeSessionStress,
+  calculateExerciseStress,
+  calculateWeeklyStress,
+  wouldExceedWeeklyLimits,
+  applyGovernorRecommendations,
+  getFrameworkAdjustedThresholds,
+  getStressBasedWarmupNeeds,
+  generateGovernorCoachingMessage,
+  BASE_STRESS_BY_FAMILY,
+  WEEKLY_STRESS_THRESHOLDS,
+  HIGH_RISK_SKILL_NODES,
+  UNSAFE_STRUCTURE_COMBINATIONS,
+  type SkillStress,
+  type SkillStressFocus,
+  type JointStressFocus,
+  type TendonStressLevel,
+  type FatigueRiskLevel,
+  type SessionStressAnalysis,
+  type WeeklyStressAccumulation,
+  type GovernorRecommendation,
+  type GovernorRecommendationType,
+  type ExerciseStressProfile,
+  type GovernorSessionInput,
+  type PlannedExercise,
+  type EnvelopeLimits,
+} from '../skill-volume-governor-engine'

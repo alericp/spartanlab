@@ -8,7 +8,8 @@ import { ScoreBreakdown } from '@/components/performance/ScoreBreakdown'
 import { calculateSpartanScore, type StrengthScoreBreakdown } from '@/lib/strength-score-engine'
 import { PageHeader } from '@/components/shared/PageHeader'
 import { EmptyState } from '@/components/shared/EmptyStates'
-import { TrendingUp, BarChart3 } from 'lucide-react'
+import { TrendingUp, BarChart3, LineChart } from 'lucide-react'
+import { ProgressDashboard } from '@/components/dashboard/ProgressDashboard'
 
 export default function PerformancePage() {
   const [score, setScore] = useState<StrengthScoreBreakdown | null>(null)
@@ -80,6 +81,15 @@ export default function PerformancePage() {
               <div className="space-y-4">
                 <h2 className="text-2xl font-bold">Score Breakdown</h2>
                 <ScoreBreakdown score={score} />
+              </div>
+
+              {/* Progress Over Time */}
+              <div className="space-y-4">
+                <div className="flex items-center gap-2">
+                  <LineChart className="w-5 h-5 text-[#E63946]" />
+                  <h2 className="text-2xl font-bold">Progress Over Time</h2>
+                </div>
+                <ProgressDashboard />
               </div>
 
               {/* Interpretation Guide */}

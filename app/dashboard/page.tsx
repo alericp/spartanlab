@@ -98,6 +98,7 @@ import { AchievementsCard } from '@/components/dashboard/AchievementsCard'
 import { AchievementNotification } from '@/components/achievements/AchievementNotification'
 import { LeaderboardPreviewCard } from '@/components/leaderboards/LeaderboardTabs'
 import { ChallengesCard } from '@/components/challenges/ChallengesCard'
+import { ProgressDashboard } from '@/components/dashboard/ProgressDashboard'
 import { ChallengeNotification } from '@/components/challenges/ChallengeNotification'
 import { WelcomeBanner } from '@/components/dashboard/WelcomeBanner'
 
@@ -694,6 +695,23 @@ function DashboardContent() {
             </div>
           </div>
         )}
+        
+        {/* ============================================================= */}
+        {/* SECTION: PROGRESS TRACKING */}
+        {/* Visual progress charts for strength, skills, consistency */}
+        {/* ============================================================= */}
+        
+        <Section id="progress-tracking" priority="secondary">
+          <SectionHeader 
+            title="Progress Tracking"
+            description="Your training metrics over time"
+            icon={Target}
+          />
+          
+          <SafeWidget name="ProgressDashboard">
+            <ProgressDashboard />
+          </SafeWidget>
+        </Section>
         
         {/* ============================================================= */}
         {/* SECTION: ACHIEVEMENTS & CHALLENGES */}

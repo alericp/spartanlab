@@ -148,6 +148,13 @@ import {
   type WorkoutReasoningSummary,
   type CanonicalReadinessResult,
 } from './readiness/canonical-readiness-engine'
+import {
+  analyzeConstraints,
+  formatBuilderReasoning,
+  type ConstraintAwareInput,
+  type ConstraintAnalysis,
+  type FormattedBuilderReasoning,
+} from './constraint-aware-assembly-engine'
 
 // =============================================================================
 // TYPES
@@ -409,6 +416,10 @@ export interface AdaptiveProgram {
   workoutReasoningSummary?: WorkoutReasoningSummary
   // Unified Weak Point Assessment - detailed limiter analysis
   weakPointAssessment?: WeakPointAssessment
+  // Constraint-aware assembly analysis - explains all builder decisions
+  constraintAnalysis?: ConstraintAnalysis
+  // Formatted builder reasoning - coach-style explanations
+  builderReasoning?: FormattedBuilderReasoning
 }
 
 // =============================================================================

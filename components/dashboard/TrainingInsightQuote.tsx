@@ -2,22 +2,36 @@
 
 import { useState, useEffect } from 'react'
 import { Card } from '@/components/ui/card'
-import { Lightbulb, Brain, Target, TrendingUp, Zap } from 'lucide-react'
+import { Lightbulb, Brain, Target, TrendingUp, Zap, Activity } from 'lucide-react'
 import { getQuickCoachInsights, type QuickCoachInsight } from '@/lib/training-coach'
 import { getConstraintInsight } from '@/lib/constraint-engine'
+import { getEnvelopeCoachingInsights } from '@/lib/performance-envelope-integration'
 
 interface TrainingInsightQuoteProps {
   className?: string
+  athleteId?: string
 }
 
-export function TrainingInsightQuote({ className }: TrainingInsightQuoteProps) {
+export function TrainingInsightQuote({ className, athleteId }: TrainingInsightQuoteProps) {
   const [insight, setInsight] = useState<string | null>(null)
-  const [insightType, setInsightType] = useState<'limiter' | 'progress' | 'tip'>('tip')
+  const [insightType, setInsightType] = useState<'limiter' | 'progress' | 'tip' | 'envelope'>('tip')
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
+    async function loadInsights() {
     try {
-      // Try to get constraint insight first (most actionable)
+      // Try to get envelope-based coaching insight first (most personalized)
+      if (athleteId) {
+        const envelopeInsights = await getEnvelopeCoachingInsights(athleteId)
+        if (envelopeInsights && envelopeInsights.length > 0) {
+          setInsight(envelopeInsights[0])
+          setInsightType('envelope')
+          setIsLoading(false)
+          return
+        }
+      }
+      
+      // Try to get constraint insight (most actionable)
       const constraintInsight = getConstraintInsight()
       
       if (constraintInsight?.hasInsight && constraintInsight.label) {
@@ -59,7 +73,10 @@ export function TrainingInsightQuote({ className }: TrainingInsightQuoteProps) {
       setInsightType('tip')
     }
     setIsLoading(false)
-  }, [])
+    }
+    
+    loadInsights()
+  }, [athleteId])
 
   if (isLoading) {
     return (
@@ -83,6 +100,8 @@ export function TrainingInsightQuote({ className }: TrainingInsightQuoteProps) {
         return <Target className="w-4 h-4 text-amber-500" />
       case 'progress':
         return <TrendingUp className="w-4 h-4 text-green-500" />
+      case 'envelope':
+        return <Activity className="w-4 h-4 text-[#E63946]" />
       default:
         return <Lightbulb className="w-4 h-4 text-[#4F6D8A]" />
     }
@@ -94,6 +113,8 @@ export function TrainingInsightQuote({ className }: TrainingInsightQuoteProps) {
         return 'bg-amber-500/10'
       case 'progress':
         return 'bg-green-500/10'
+      case 'envelope':
+        return 'bg-[#E63946]/10'
       default:
         return 'bg-[#4F6D8A]/10'
     }

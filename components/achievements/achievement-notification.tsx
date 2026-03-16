@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { cn } from '@/lib/utils'
-import { type AchievementDefinition } from '@/lib/achievements/achievement-definitions'
+import { type Achievement, type AchievementDefinition } from '@/lib/achievements/achievement-definitions'
 import { AchievementBadge } from './achievement-badge'
 import { X } from 'lucide-react'
 

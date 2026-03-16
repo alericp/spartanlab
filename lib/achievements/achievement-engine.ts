@@ -8,9 +8,10 @@ import {
   getAchievementById,
 } from './achievement-definitions'
 import { getWorkoutLogs } from '../workout-log-service'
-import { getStrengthRecords } from '../strength-service'
+import { getStrengthRecords, getPersonalRecords } from '../strength-service'
 import { getSkillProgressions } from '../data-service'
 import { calculateTrainingStreak } from '../progress-streak-engine'
+import { getCompletedChallengeCount } from '../challenges/challenge-engine'
 
 // =============================================================================
 // STORAGE
@@ -91,13 +92,16 @@ interface AchievementMetrics {
   currentStreak: number
   bestStreak: number
   totalReps: number
-  strengthRecords: Record<string, number> // exercise -> max weight
+  strengthRecords: Record<string, number> // exercise -> max weight or max reps
   skillLevels: Record<string, number> // skill -> level
+  challengeCount: number // completed challenges
+  weeksActive: number // weeks with at least one workout
 }
 
 function calculateMetrics(): AchievementMetrics {
   const workouts = getWorkoutLogs()
   const strengthRecords = getStrengthRecords()
+  const personalRecords = getPersonalRecords()
   const skillProgressions = getSkillProgressions()
   const streak = calculateTrainingStreak()
   
@@ -120,10 +124,36 @@ function calculateMetrics(): AchievementMetrics {
     }
   })
   
+  // Add personal records for max reps (pull-ups, dips)
+  Object.entries(personalRecords).forEach(([exercise, record]) => {
+    if (record && record.maxReps) {
+      const key = `max_${exercise.replace('weighted_', '')}s`
+      maxWeights[key] = record.maxReps
+    }
+  })
+  
   // Get skill levels
   const skillLevels: Record<string, number> = {}
   skillProgressions.forEach(progression => {
     skillLevels[progression.skillName] = progression.currentLevel
+  })
+  
+  // Get completed challenge count
+  let challengeCount = 0
+  try {
+    challengeCount = getCompletedChallengeCount()
+  } catch {
+    // Challenge engine may not be initialized
+  }
+  
+  // Calculate weeks active (weeks with at least one workout)
+  const weeksWithWorkouts = new Set<string>()
+  workouts.forEach(workout => {
+    const date = new Date(workout.sessionDate || workout.createdAt)
+    // Get ISO week number
+    const yearStart = new Date(date.getFullYear(), 0, 1)
+    const weekNumber = Math.ceil(((date.getTime() - yearStart.getTime()) / 86400000 + yearStart.getDay() + 1) / 7)
+    weeksWithWorkouts.add(`${date.getFullYear()}-W${weekNumber}`)
   })
   
   return {
@@ -133,6 +163,8 @@ function calculateMetrics(): AchievementMetrics {
     totalReps,
     strengthRecords: maxWeights,
     skillLevels,
+    challengeCount,
+    weeksActive: weeksWithWorkouts.size,
   }
 }
 
@@ -166,6 +198,12 @@ function isAchievementUnlocked(achievement: Achievement, metrics: AchievementMet
     case 'hold_time':
       // Future implementation for hold time tracking
       return false
+      
+    case 'challenge_count':
+      return metrics.challengeCount >= requirement.value
+      
+    case 'weeks_active':
+      return metrics.weeksActive >= requirement.value
       
     default:
       return false
@@ -289,14 +327,23 @@ export interface AchievementWithProgress extends Achievement {
   unlocked: boolean
   unlockedAt?: string
   progress: number // 0-100
+  progressPercent: number // alias for progress
+  currentValue: number // actual current value
 }
 
 export interface AchievementSummary {
-  total: number
-  unlocked: number
-  percentage: number
+  totalAchievements: number
+  total: number // alias
+  unlockedCount: number
+  unlocked: number // alias
+  percentComplete: number
+  percentage: number // alias
   recentUnlocks: number
   byCategory: Record<string, { total: number; unlocked: number }>
+  // Point system
+  earnedPoints: number
+  totalPoints: number
+  pointsPercentage: number
 }
 
 /**
@@ -313,31 +360,46 @@ export function getAchievementsWithProgress(): AchievementWithProgress[] {
     
     // Calculate progress for non-unlocked achievements
     let progress = isUnlocked ? 100 : 0
+    let currentValue = 0
+    
     if (!isUnlocked) {
       const { requirement } = achievement
       switch (requirement.type) {
         case 'workout_count':
-          progress = Math.min(100, (metrics.workoutCount / requirement.value) * 100)
+          currentValue = metrics.workoutCount
+          progress = Math.min(100, (currentValue / requirement.value) * 100)
           break
         case 'streak_days':
-          progress = Math.min(100, (metrics.bestStreak / requirement.value) * 100)
+          currentValue = metrics.bestStreak
+          progress = Math.min(100, (currentValue / requirement.value) * 100)
           break
         case 'total_reps':
-          progress = Math.min(100, (metrics.totalReps / requirement.value) * 100)
+          currentValue = metrics.totalReps
+          progress = Math.min(100, (currentValue / requirement.value) * 100)
           break
         case 'strength_milestone':
           if (requirement.exercise) {
-            const weight = metrics.strengthRecords[requirement.exercise] || 0
-            progress = Math.min(100, (weight / requirement.value) * 100)
+            currentValue = metrics.strengthRecords[requirement.exercise] || 0
+            progress = Math.min(100, (currentValue / requirement.value) * 100)
           }
           break
         case 'skill_level':
           if (requirement.skill) {
-            const level = metrics.skillLevels[requirement.skill] || 0
-            progress = Math.min(100, (level / requirement.value) * 100)
+            currentValue = metrics.skillLevels[requirement.skill] || 0
+            progress = Math.min(100, (currentValue / requirement.value) * 100)
           }
           break
+        case 'challenge_count':
+          currentValue = metrics.challengeCount
+          progress = Math.min(100, (currentValue / requirement.value) * 100)
+          break
+        case 'weeks_active':
+          currentValue = metrics.weeksActive
+          progress = Math.min(100, (currentValue / requirement.value) * 100)
+          break
       }
+    } else {
+      currentValue = achievement.requirement.value
     }
     
     return {
@@ -345,6 +407,8 @@ export function getAchievementsWithProgress(): AchievementWithProgress[] {
       unlocked: isUnlocked,
       unlockedAt: status?.unlockedAt,
       progress: Math.round(progress),
+      progressPercent: Math.round(progress),
+      currentValue,
     }
   })
 }
@@ -362,12 +426,32 @@ export function getAchievementSummary(): AchievementSummary {
     new Date(u.unlockedAt).getTime() > weekAgo
   ).length
   
+  // Calculate point totals
+  let earnedPoints = 0
+  let totalPoints = 0
+  
+  ACHIEVEMENTS.forEach(achievement => {
+    totalPoints += achievement.pointValue
+    if (unlocked.some(u => u.achievementId === achievement.id)) {
+      earnedPoints += achievement.pointValue
+    }
+  })
+  
+  const percentComplete = counts.total > 0 ? Math.round((counts.unlocked / counts.total) * 100) : 0
+  const pointsPercentage = totalPoints > 0 ? Math.round((earnedPoints / totalPoints) * 100) : 0
+  
   return {
+    totalAchievements: counts.total,
     total: counts.total,
+    unlockedCount: counts.unlocked,
     unlocked: counts.unlocked,
-    percentage: counts.total > 0 ? Math.round((counts.unlocked / counts.total) * 100) : 0,
+    percentComplete,
+    percentage: percentComplete,
     recentUnlocks,
     byCategory: counts.byCategory,
+    earnedPoints,
+    totalPoints,
+    pointsPercentage,
   }
 }
 

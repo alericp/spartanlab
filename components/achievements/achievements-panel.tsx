@@ -52,7 +52,7 @@ export function AchievementsSummaryCard({ className }: AchievementsSummaryCardPr
           <div>
             <h3 className="font-semibold text-[#E6E9EF]">Achievements</h3>
             <p className="text-xs text-[#6B7280]">
-              {summary.unlockedCount} of {summary.totalAchievements} unlocked
+              {summary.unlockedCount || summary.unlocked} of {summary.totalAchievements || summary.total} unlocked
             </p>
           </div>
         </div>
@@ -68,13 +68,13 @@ export function AchievementsSummaryCard({ className }: AchievementsSummaryCardPr
       {/* Progress bar */}
       <div className="mb-4">
         <div className="flex items-center justify-between text-xs text-[#6B7280] mb-1">
-          <span>{summary.percentComplete}% complete</span>
-          <span>{summary.earnedPoints} / {summary.totalPoints} pts</span>
+          <span>{summary.percentComplete || summary.percentage}% complete</span>
+          <span>{summary.earnedPoints || 0} / {summary.totalPoints || 0} pts</span>
         </div>
         <div className="h-2 bg-[#2A2F38] rounded-full overflow-hidden">
           <div
             className="h-full bg-gradient-to-r from-amber-500 to-yellow-400 rounded-full transition-all"
-            style={{ width: `${summary.percentComplete}%` }}
+            style={{ width: `${summary.percentComplete || summary.percentage || 0}%` }}
           />
         </div>
       </div>
@@ -90,8 +90,8 @@ export function AchievementsSummaryCard({ className }: AchievementsSummaryCardPr
               size="sm"
             />
           ))}
-          {summary.unlockedCount > 3 && (
-            <span className="text-xs text-[#6B7280]">+{summary.unlockedCount - 3} more</span>
+          {(summary.unlockedCount || summary.unlocked || 0) > 3 && (
+            <span className="text-xs text-[#6B7280]">+{(summary.unlockedCount || summary.unlocked || 0) - 3} more</span>
           )}
         </div>
       ) : (
@@ -124,11 +124,12 @@ export function AchievementsPageContent({ className }: AchievementsPageContentPr
   
   const categories: (AchievementCategory | 'all')[] = [
     'all',
-    'training_progress',
+    'training',
     'consistency',
-    'strength_milestone',
-    'skill_progress',
+    'strength',
+    'skill',
     'volume',
+    'challenge',
   ]
   
   const filteredAchievements = achievements.filter(a => {
@@ -154,7 +155,7 @@ export function AchievementsPageContent({ className }: AchievementsPageContentPr
               <div>
                 <h1 className="text-2xl font-bold text-[#E6E9EF]">Achievements</h1>
                 <p className="text-[#6B7280]">
-                  {summary.unlockedCount} unlocked | {summary.earnedPoints} points earned
+                  {summary.unlockedCount || summary.unlocked} unlocked | {summary.earnedPoints || 0} points earned
                 </p>
               </div>
             </div>
@@ -179,7 +180,7 @@ export function AchievementsPageContent({ className }: AchievementsPageContentPr
                     stroke="url(#progress-gradient)"
                     strokeWidth="3"
                     strokeLinecap="round"
-                    strokeDasharray={`${summary.percentComplete} 100`}
+                    strokeDasharray={`${summary.percentComplete || summary.percentage || 0} 100`}
                   />
                   <defs>
                     <linearGradient id="progress-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
@@ -189,7 +190,7 @@ export function AchievementsPageContent({ className }: AchievementsPageContentPr
                   </defs>
                 </svg>
                 <div className="absolute inset-0 flex items-center justify-center">
-                  <span className="text-sm font-bold text-[#E6E9EF]">{summary.percentComplete}%</span>
+                  <span className="text-sm font-bold text-[#E6E9EF]">{summary.percentComplete || summary.percentage || 0}%</span>
                 </div>
               </div>
             </div>

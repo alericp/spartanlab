@@ -1,0 +1,189 @@
+import { neon } from '@neondatabase/serverless'
+import type { SkillReadiness, ReadinessSnapshot } from '@/types/skill-readiness'
+
+const sql = neon(process.env.DATABASE_URL!)
+
+export interface SkillReadinessData {
+  id: string
+  athleteId: string
+  skill: 'front_lever' | 'planche' | 'hspu' | 'muscle_up' | 'l_sit'
+  readinessScore: number
+  pullStrengthScore: number
+  compressionScore: number
+  scapularControlScore: number
+  straightArmScore: number
+  mobilityScore: number
+  limitingFactor: string
+  lastUpdated: string
+}
+
+/**
+ * Fetch current skill readiness for an athlete
+ */
+export async function getAthleteSkillReadiness(
+  athleteId: string
+): Promise<SkillReadinessData[]> {
+  try {
+    const results = await sql`
+      SELECT 
+        id,
+        athlete_id as "athleteId",
+        skill,
+        readiness_score as "readinessScore",
+        pull_strength_score as "pullStrengthScore",
+        compression_score as "compressionScore",
+        scapular_control_score as "scapularControlScore",
+        straight_arm_score as "straightArmScore",
+        mobility_score as "mobilityScore",
+        limiting_factor as "limitingFactor",
+        last_updated as "lastUpdated"
+      FROM skill_readiness
+      WHERE athlete_id = ${athleteId}
+      ORDER BY skill
+    `
+    return results as SkillReadinessData[]
+  } catch (error) {
+    console.error('[Readiness] Error fetching skill readiness:', error)
+    return []
+  }
+}
+
+/**
+ * Fetch readiness for a specific skill
+ */
+export async function getSkillReadiness(
+  athleteId: string,
+  skill: string
+): Promise<SkillReadinessData | null> {
+  try {
+    const results = await sql`
+      SELECT 
+        id,
+        athlete_id as "athleteId",
+        skill,
+        readiness_score as "readinessScore",
+        pull_strength_score as "pullStrengthScore",
+        compression_score as "compressionScore",
+        scapular_control_score as "scapularControlScore",
+        straight_arm_score as "straightArmScore",
+        mobility_score as "mobilityScore",
+        limiting_factor as "limitingFactor",
+        last_updated as "lastUpdated"
+      FROM skill_readiness
+      WHERE athlete_id = ${athleteId} AND skill = ${skill}
+      LIMIT 1
+    `
+    return results?.[0] as SkillReadinessData | null
+  } catch (error) {
+    console.error('[Readiness] Error fetching skill readiness for', skill, error)
+    return null
+  }
+}
+
+/**
+ * Save or update skill readiness
+ */
+export async function saveSkillReadiness(
+  athleteId: string,
+  skill: string,
+  data: {
+    readinessScore: number
+    pullStrengthScore: number
+    compressionScore: number
+    scapularControlScore: number
+    straightArmScore: number
+    mobilityScore: number
+    limitingFactor: string
+  }
+): Promise<void> {
+  try {
+    const now = new Date().toISOString()
+    
+    // Upsert: insert or update if exists
+    await sql`
+      INSERT INTO skill_readiness (
+        athlete_id,
+        skill,
+        readiness_score,
+        pull_strength_score,
+        compression_score,
+        scapular_control_score,
+        straight_arm_score,
+        mobility_score,
+        limiting_factor,
+        last_updated
+      ) VALUES (
+        ${athleteId},
+        ${skill},
+        ${data.readinessScore},
+        ${data.pullStrengthScore},
+        ${data.compressionScore},
+        ${data.scapularControlScore},
+        ${data.straightArmScore},
+        ${data.mobilityScore},
+        ${data.limitingFactor},
+        ${now}
+      )
+      ON CONFLICT (athlete_id, skill)
+      DO UPDATE SET
+        readiness_score = EXCLUDED.readiness_score,
+        pull_strength_score = EXCLUDED.pull_strength_score,
+        compression_score = EXCLUDED.compression_score,
+        scapular_control_score = EXCLUDED.scapular_control_score,
+        straight_arm_score = EXCLUDED.straight_arm_score,
+        mobility_score = EXCLUDED.mobility_score,
+        limiting_factor = EXCLUDED.limiting_factor,
+        last_updated = EXCLUDED.last_updated
+    `
+    
+    // Save snapshot for history tracking
+    await sql`
+      INSERT INTO readiness_snapshots (
+        athlete_id,
+        skill,
+        readiness_score,
+        snapshot_date
+      ) VALUES (
+        ${athleteId},
+        ${skill},
+        ${data.readinessScore},
+        ${now}
+      )
+    `
+  } catch (error) {
+    console.error('[Readiness] Error saving skill readiness:', error)
+  }
+}
+
+/**
+ * Get readiness history for a skill
+ */
+export async function getReadinessHistory(
+  athleteId: string,
+  skill: string,
+  days: number = 30
+): Promise<ReadinessSnapshot[]> {
+  try {
+    const dateThreshold = new Date()
+    dateThreshold.setDate(dateThreshold.getDate() - days)
+    
+    const results = await sql`
+      SELECT 
+        id,
+        athlete_id as "athleteId",
+        skill,
+        readiness_score as "readinessScore",
+        snapshot_date as "snapshotDate"
+      FROM readiness_snapshots
+      WHERE athlete_id = ${athleteId}
+        AND skill = ${skill}
+        AND snapshot_date >= ${dateThreshold.toISOString()}
+      ORDER BY snapshot_date DESC
+      LIMIT 100
+    `
+    return results as ReadinessSnapshot[]
+  } catch (error) {
+    console.error('[Readiness] Error fetching readiness history:', error)
+    return []
+  }
+}

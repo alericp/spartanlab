@@ -31,6 +31,12 @@ import {
   getReadinessThresholds,
   type EnhancedSkillDefinition,
 } from './skill-progression-rules'
+import {
+  analyzeProgression as analyzeBandProgression,
+  getExerciseBandHistory,
+  type ProgressionAnalysis,
+  type ResistanceBandColor,
+} from './band-progression-engine'
 
 // =============================================================================
 // PILLAR 1: CURRENT LEVEL VALIDATION (OWNERSHIP)
@@ -671,6 +677,175 @@ export function generateSkillAnalysis(
 }
 
 // =============================================================================
+// =============================================================================
+// BAND ASSISTANCE ASSESSMENT (PILLAR 5)
+// =============================================================================
+
+interface BandAssistanceAssessment {
+  score: number // 0-100
+  currentBand: ResistanceBandColor | null
+  recommendedBand: ResistanceBandColor | null
+  status: 'no_history' | 'using_assistance' | 'reducing_assistance' | 'unassisted' | 'ready_to_reduce'
+  bandProgressionAnalysis: ProgressionAnalysis | null
+  readinessAdjustment: number // Negative = need more assistance, Positive = ready to reduce
+  feedback: string
+}
+
+/**
+ * Assess band assistance status and its impact on skill readiness
+ * This factors into progression recommendations
+ */
+export function assessBandAssistance(
+  skillKey: string,
+  currentLevel: number
+): BandAssistanceAssessment {
+  // Map skill + level to exercise ID
+  const exerciseId = getExerciseIdForSkillLevel(skillKey, currentLevel)
+  
+  if (!exerciseId) {
+    return {
+      score: 100,
+      currentBand: null,
+      recommendedBand: null,
+      status: 'unassisted',
+      bandProgressionAnalysis: null,
+      readinessAdjustment: 0,
+      feedback: 'Exercise does not track band assistance.',
+    }
+  }
+  
+  // Get band progression analysis
+  const analysis = analyzeBandProgression(exerciseId, exerciseId)
+  
+  if (analysis.status === 'new') {
+    return {
+      score: 50,
+      currentBand: null,
+      recommendedBand: analysis.recommendedBand,
+      status: 'no_history',
+      bandProgressionAnalysis: analysis,
+      readinessAdjustment: 0,
+      feedback: analysis.recommendation,
+    }
+  }
+  
+  // Calculate readiness adjustment based on band status
+  let readinessAdjustment = 0
+  let status: BandAssistanceAssessment['status'] = 'using_assistance'
+  
+  if (!analysis.currentBand) {
+    // Training unassisted
+    status = 'unassisted'
+    readinessAdjustment = 10 // Bonus for unassisted work
+  } else if (analysis.status === 'ready_to_reduce') {
+    status = 'ready_to_reduce'
+    readinessAdjustment = 5 // Ready to progress assistance
+  } else if (analysis.status === 'progressing') {
+    status = 'reducing_assistance'
+    readinessAdjustment = 2 // On track
+  } else if (analysis.status === 'regressing') {
+    readinessAdjustment = -10 // May need more assistance
+  } else if (analysis.status === 'stagnating') {
+    readinessAdjustment = -5 // Stuck at current band
+  }
+  
+  // Score based on band position (lighter = better)
+  const bandScores: Record<ResistanceBandColor, number> = {
+    yellow: 95, // Almost unassisted
+    red: 85,
+    black: 70,
+    purple: 55,
+    green: 40,
+    blue: 25, // Heavy assistance
+  }
+  
+  const baseScore = analysis.currentBand ? bandScores[analysis.currentBand] : 100
+  
+  // Adjust score based on progression status
+  const statusBonus = {
+    progressing: 10,
+    ready_to_reduce: 15,
+    maintaining: 0,
+    stagnating: -10,
+    regressing: -15,
+    new: 0,
+  }
+  
+  const finalScore = Math.max(0, Math.min(100, baseScore + statusBonus[analysis.status]))
+  
+  // Generate feedback
+  let feedback = ''
+  if (status === 'unassisted') {
+    feedback = 'Training unassisted - great for building true strength.'
+  } else if (status === 'ready_to_reduce') {
+    feedback = `Ready to reduce assistance from ${analysis.currentBand} to ${analysis.recommendedBand || 'unassisted'}.`
+  } else if (status === 'reducing_assistance') {
+    feedback = 'Making good progress with band assistance reduction.'
+  } else if (analysis.status === 'stagnating') {
+    feedback = analysis.reason || 'Consider accessory work to break through plateau.'
+  } else if (analysis.status === 'regressing') {
+    feedback = 'Performance declining - maintain current band level until recovered.'
+  } else {
+    feedback = 'Continue building strength at current assistance level.'
+  }
+  
+  return {
+    score: finalScore,
+    currentBand: analysis.currentBand,
+    recommendedBand: analysis.recommendedBand,
+    status,
+    bandProgressionAnalysis: analysis,
+    readinessAdjustment,
+    feedback,
+  }
+}
+
+/**
+ * Map skill key + level to exercise ID for band tracking
+ */
+function getExerciseIdForSkillLevel(skillKey: string, level: number): string | null {
+  const exerciseMapping: Record<string, string[]> = {
+    front_lever: ['front_lever_tuck', 'front_lever_adv_tuck', 'front_lever_straddle', 'front_lever_half_lay', 'front_lever_full'],
+    planche: ['tuck_planche', 'adv_tuck_planche', 'straddle_planche', 'full_planche'],
+    muscle_up: ['muscle_up_negative', 'muscle_up_transition', 'muscle_up'],
+    back_lever: ['back_lever_tuck', 'back_lever_adv_tuck', 'back_lever_straddle', 'back_lever_full'],
+    iron_cross: ['ring_support_hold', 'rto_support_hold', 'assisted_cross_hold', 'cross_negatives', 'partial_cross_hold', 'full_iron_cross'],
+    hspu: ['pike_pushup', 'wall_hspu', 'hspu'],
+  }
+  
+  const exercises = exerciseMapping[skillKey]
+  if (!exercises || level < 0 || level >= exercises.length) {
+    return null
+  }
+  
+  return exercises[level]
+}
+
+/**
+ * Get band progression insight message for display
+ */
+export function getBandProgressionInsightMessage(
+  assessment: BandAssistanceAssessment
+): string | null {
+  if (!assessment.bandProgressionAnalysis || assessment.status === 'unassisted') {
+    return null
+  }
+  
+  if (assessment.status === 'ready_to_reduce') {
+    return `Band assistance reduced based on recent performance. Moving from ${assessment.currentBand} to ${assessment.recommendedBand || 'unassisted'}.`
+  }
+  
+  if (assessment.status === 'reducing_assistance') {
+    return `Assistance maintained to preserve form quality while building strength.`
+  }
+  
+  if (assessment.bandProgressionAnalysis.fatigueWarning) {
+    return assessment.bandProgressionAnalysis.fatigueReason || null
+  }
+  
+  return null
+}
+
 // ENGINE-AWARE READINESS CHECK
 // =============================================================================
 

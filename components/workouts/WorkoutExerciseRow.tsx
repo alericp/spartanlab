@@ -16,6 +16,8 @@ import {
   CATEGORY_LABELS,
   EXERCISE_TEMPLATES,
 } from '@/lib/workout-log-service'
+import { BandSelector, BandBadge } from './BandSelector'
+import { supportsBandAssistance, type ResistanceBandColor } from '@/lib/band-progression-engine'
 
 interface WorkoutExerciseRowProps {
   exercise: WorkoutExercise
@@ -31,12 +33,30 @@ export function WorkoutExerciseRow({
   const handleNameChange = (name: string) => {
     // Auto-detect category from template
     const template = EXERCISE_TEMPLATES.find(t => t.name === name)
+    // Check if exercise supports band assistance
+    const exerciseId = name.toLowerCase().replace(/\s+/g, '_')
+    const bandSupported = supportsBandAssistance(exerciseId)
+    
     onUpdate({
       ...exercise,
       name,
       category: template?.category || exercise.category,
+      supportsBandAssistance: bandSupported,
+      // Clear band if exercise doesn't support it
+      band: bandSupported ? exercise.band : undefined,
     })
   }
+  
+  const handleBandChange = (band: ResistanceBandColor | null) => {
+    onUpdate({
+      ...exercise,
+      band: band ? { bandColor: band, assisted: true } : undefined,
+    })
+  }
+  
+  // Determine if this exercise supports bands
+  const exerciseId = exercise.name.toLowerCase().replace(/\s+/g, '_')
+  const showBandSelector = exercise.supportsBandAssistance || supportsBandAssistance(exerciseId)
 
   return (
     <div className="bg-[#1A1A1A] rounded-lg p-4 space-y-3">
@@ -124,7 +144,27 @@ export function WorkoutExerciseRow({
             min={0}
           />
         </div>
+        
+        {/* Band assistance selector - only show for supported exercises */}
+        {showBandSelector && (
+          <BandSelector
+            exerciseId={exerciseId}
+            exerciseName={exercise.name}
+            value={exercise.band?.bandColor}
+            onChange={handleBandChange}
+            showInsight={true}
+            compact={true}
+          />
+        )}
       </div>
+      
+      {/* Show band badge if band is selected */}
+      {exercise.band?.bandColor && (
+        <div className="flex items-center gap-2 pt-1">
+          <span className="text-xs text-[#6B7280]">Assistance:</span>
+          <BandBadge band={exercise.band.bandColor} size="sm" />
+        </div>
+      )}
     </div>
   )
 }

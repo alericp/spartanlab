@@ -4,17 +4,18 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { 
-  Play, 
-  Check, 
-  Clock, 
-  Dumbbell,
-  SkipForward,
-  CheckCircle2,
-  X,
-  MessageSquare,
-  RotateCcw,
+import {
+  ChevronDown,
+  ChevronUp,
+  Play,
+  Check,
   Trash2,
+  RotateCcw,
+  Dumbbell,
+  Clock,
+  MessageSquare,
+  CheckCircle2,
+  Lightbulb,
 } from 'lucide-react'
 import { Textarea } from '@/components/ui/textarea'
 import type { AdaptiveSession } from '@/lib/adaptive-program-builder'
@@ -54,6 +55,8 @@ import { evaluateAllChallenges } from '@/lib/challenges/challenge-engine'
 import { evaluateAchievements } from '@/lib/achievements/achievement-engine'
 import type { WorkoutReasoningSummary } from '@/lib/readiness/canonical-readiness-engine'
 import { WhyThisWorkout, ExerciseReasonBubble, WorkoutFocusBadge } from '@/components/workout/WhyThisWorkout'
+import { WarmUpInsight, ProgressionReasoning, OverrideProtectionInsight } from '@/components/coaching/CoachingInsights'
+import { getExerciseSelectionInsight, getSkillCarryoverInsight } from '@/lib/coaching/insight-generation'
 
 // =============================================================================
 // TYPES
@@ -1536,6 +1539,46 @@ export function StreamlinedWorkoutSession({
             </span>
           </div>
         </Card>
+        
+        {/* Exercise Coaching Insight - Why This Exercise */}
+        {(() => {
+          const insight = getExerciseSelectionInsight(currentExercise.id || currentExercise.name)
+          const carryover = getSkillCarryoverInsight(currentExercise.id || currentExercise.name)
+          
+          if (!insight) return null
+          
+          return (
+            <div className="text-xs text-[#6B7280] rounded-lg bg-[#1A1A1A] border border-[#2B313A]/50 p-2.5 flex items-start gap-2">
+              <Lightbulb className="w-3 h-3 shrink-0 mt-0.5 text-[#4F6D8A]" />
+              <div className="flex-1 min-w-0">
+                <p className="text-[#A4ACB8] leading-relaxed">{insight}</p>
+                {carryover && carryover.length > 0 && (
+                  <p className="text-[#6B7280] mt-1">
+                    Supports: <span className="text-[#4F6D8A]">{carryover.join(', ')}</span>
+                  </p>
+                )}
+              </div>
+            </div>
+          )
+        })()}
+        
+        {/* Override Protection Warning */}
+        {state.exerciseOverrides[state.currentExerciseIndex]?.isReplaced && (() => {
+          const original = state.exerciseOverrides[state.currentExerciseIndex]?.originalName
+          const originalInsight = original ? getExerciseSelectionInsight(original) : null
+          const originalCarryover = original ? getSkillCarryoverInsight(original) : null
+          
+          if (!original) return null
+          
+          return (
+            <OverrideProtectionInsight
+              originalExerciseName={original}
+              selectionReason={originalInsight || `${original} was selected for specific training benefit.`}
+              skillCarryover={originalCarryover || []}
+              confirming={false}
+            />
+          )
+        })()}
         
         {/* Input Section */}
         <Card className="bg-[#1A1F26] border-[#2B313A] p-4 space-y-5">

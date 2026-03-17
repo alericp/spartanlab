@@ -23,6 +23,7 @@ export {
   type EngineConfidence,
   type RegenerationReason,
   type SessionAdjustments,
+  type MovementBiasContext,
 } from '../unified-coaching-engine'
 
 // Program Generation

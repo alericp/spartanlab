@@ -7,6 +7,7 @@ import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { BackNav } from '@/components/navigation/BackNav'
 import { JsonLd } from '@/components/seo/JsonLd'
+import { ToolConversionCard } from '@/components/tools/ToolConversionCard'
 import { SITE_CONFIG, generateBreadcrumbSchema, generateArticleSchema } from '@/lib/seo'
 
 export const metadata: Metadata = {
@@ -160,32 +161,9 @@ export default function CalculatorsHubPage() {
           </div>
         </section>
 
-        {/* CTA Section */}
+        {/* Conversion CTA */}
         <section className="py-12 border-t border-[#2B313A]">
-          <Card className="bg-gradient-to-r from-[#C1121F]/10 to-[#1A1F26] border-[#C1121F]/20 p-8 text-center">
-            <div className="flex justify-center mb-4">
-              <SpartanIcon className="w-10 h-10 text-[#C1121F]" />
-            </div>
-            <h2 className="text-xl font-bold text-[#E6E9EF] mb-2">
-              Ready to Start Training?
-            </h2>
-            <p className="text-[#A4ACB8] mb-6 max-w-md mx-auto">
-              Use the Program Builder to create a personalized calisthenics training plan based on your goals.
-            </p>
-            <div className="flex flex-wrap justify-center gap-4">
-              <Link href="/calisthenics-program-builder">
-                <Button className="bg-[#C1121F] hover:bg-[#A50E1A] text-white">
-                  Build Your Program
-                  <ArrowRight className="w-4 h-4 ml-2" />
-                </Button>
-              </Link>
-              <Link href="/calisthenics-strength-standards">
-                <Button variant="outline" className="border-[#2B313A] hover:bg-[#2B313A]">
-                  View Strength Standards
-                </Button>
-              </Link>
-            </div>
-          </Card>
+          <ToolConversionCard context="strength-standards" />
         </section>
 
         {/* Info Section */}

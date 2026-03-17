@@ -17,6 +17,8 @@ import {
   ArrowLeft
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { ToolConversionCard } from '@/components/tools/ToolConversionCard'
+import { trackToolUsed } from '@/lib/analytics'
 
 // Scoring logic
 function calculateCalisthenicsStrengthScore(
@@ -167,10 +169,13 @@ export default function CalisthenicsStrengthScoreCalculator() {
       return
     }
     
-    const calcResult = calculateCalisthenicsStrengthScore(pullUps, dips, pushUps, lSit)
-    setResult(calcResult)
+  const calcResult = calculateCalisthenicsStrengthScore(pullUps, dips, pushUps, lSit)
+  setResult(calcResult)
+  
+  // Track tool usage
+  trackToolUsed('calisthenics_strength_score', { score: calcResult.score, classification: calcResult.classification })
   }
-
+  
   const handleReset = () => {
     setResult(null)
     setError(null)
@@ -459,13 +464,19 @@ Calculate yours at SpartanLab.io/calculators/calisthenics-strength-score`
                 <p className="text-xs text-[#6B7280]">Learn proper technique</p>
               </Card>
             </Link>
-            <Link href="/calisthenics-program-builder">
-              <Card className="bg-[#1A1F26] border-[#2B313A] p-4 hover:border-[#C1121F]/50 transition-colors cursor-pointer">
-                <h3 className="font-medium text-[#E6E9EF] mb-1">Program Builder</h3>
-                <p className="text-xs text-[#6B7280]">Create your training plan</p>
-              </Card>
-            </Link>
           </div>
+        </section>
+
+        {/* Conversion CTA */}
+        <section className="mb-8">
+          <ToolConversionCard
+            context="general"
+            toolData={result ? {
+              maxPullUps: parseInt(maxPullUps) || undefined,
+              maxDips: parseInt(maxDips) || undefined,
+              maxPushUps: parseInt(maxPushUps) || undefined,
+            } : undefined}
+          />
         </section>
       </div>
     </main>

@@ -69,7 +69,7 @@ interface WorkoutSessionCardProps {
   session: WorkoutSessionHistory
 }
 
-function WorkoutSessionCard({ session }: WorkoutSessionCardProps) {
+export function WorkoutSessionCard({ session }: WorkoutSessionCardProps) {
   const prsHit = session.prsHitSnapshot?.length || 0
   
   return (
@@ -137,7 +137,7 @@ interface ProgramHistoryCardProps {
   program: ProgramHistory
 }
 
-function ProgramHistoryCard({ program }: ProgramHistoryCardProps) {
+export function ProgramHistoryCard({ program }: ProgramHistoryCardProps) {
   const isActive = program.status === 'active'
   
   return (
@@ -208,7 +208,7 @@ interface EmptyHistoryStateProps {
   type: 'workouts' | 'programs' | 'prs'
 }
 
-function EmptyHistoryState({ type }: EmptyHistoryStateProps) {
+export function EmptyHistoryState({ type }: EmptyHistoryStateProps) {
   const config = {
     workouts: {
       icon: ClipboardList,
@@ -343,7 +343,7 @@ export function HistoryHub({
           icon={<Trophy className="w-4 h-4 text-amber-400" />}
         />
         
-        <Link href="/prs">
+        <Link href="/history/prs">
           <Card className="bg-[#1A1F26] border-[#2B313A] p-5 hover:bg-[#1E242D] hover:border-[#3B424D] transition-all cursor-pointer group">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">

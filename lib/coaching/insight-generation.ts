@@ -286,3 +286,78 @@ export function getBandChangeNotification(
   
   return null
 }
+
+// =============================================================================
+// PREPARATION CHAIN INSIGHTS
+// =============================================================================
+
+import {
+  validateSkillPreparation,
+  getPreparationChain,
+  getOverrideGuidance,
+  type PreparationValidation,
+} from '@/lib/preparation-chain-engine'
+
+/**
+ * Get preparation insight for a skill in the workout.
+ * Returns guidance message if athlete needs foundational work.
+ */
+export function getPreparationInsight(
+  skillId: string,
+  athleteProgress: Record<string, { hold?: number; reps?: number }>,
+  experienceLevel: 'beginner' | 'intermediate' | 'advanced' = 'intermediate'
+): {
+  message: string | null
+  status: PreparationValidation['status']
+  increaseFoundationalVolume: boolean
+  reduceAdvancedVolume: boolean
+} {
+  const validation = validateSkillPreparation(skillId, athleteProgress, experienceLevel)
+  
+  return {
+    message: validation.guidanceMessage || null,
+    status: validation.status,
+    increaseFoundationalVolume: validation.increaseFoundationalVolume,
+    reduceAdvancedVolume: validation.reduceAdvancedVolume,
+  }
+}
+
+/**
+ * Get override guidance when user skips a foundational exercise.
+ * Returns warning message if skipping may impact progress.
+ */
+export function getSkipExerciseGuidance(
+  skillId: string,
+  skippedExerciseId: string,
+  athleteProgress: Record<string, { hold?: number; reps?: number }>
+): {
+  message: string
+  riskLevel: 'low' | 'moderate' | 'high' | 'very_high'
+  suggestedAlternative: string | null
+} {
+  const guidance = getOverrideGuidance(skillId, skippedExerciseId, athleteProgress)
+  
+  return {
+    message: guidance.message,
+    riskLevel: guidance.riskLevel,
+    suggestedAlternative: guidance.suggestedAlternative,
+  }
+}
+
+/**
+ * Get the preparation chain explanation for a skill.
+ * Used in tooltips or knowledge bubbles.
+ */
+export function getPreparationChainExplanation(skillId: string): string | null {
+  const chain = getPreparationChain(skillId)
+  
+  if (!chain) return null
+  
+  const criticalSteps = chain.chain.filter(s => s.isCritical)
+  
+  if (criticalSteps.length === 0) return null
+  
+  const exerciseNames = criticalSteps.map(s => s.exerciseName).join(', ')
+  
+  return `${chain.skillName} requires: ${exerciseNames}. These build the strength and control needed for safe progression.`
+}

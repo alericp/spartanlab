@@ -405,8 +405,8 @@ function DashboardContent() {
             <div className="flex items-center gap-3">
               <p className="text-sm text-[#6B7280] max-w-xl">
                 {athleteCalibration?.calibrationComplete 
-                  ? 'Your training data is analyzed and calibrated for your body type and goals.'
-                  : 'Your training data is analyzed to identify the most effective exercises and progressions for your goals.'}
+                  ? 'Your performance is analyzed to build structured programming for your goals.'
+                  : 'Your training data is analyzed to identify what limits your progress and how to solve it.'}
               </p>
               <SubscriptionTierBadge className="hidden sm:inline-flex" />
             </div>

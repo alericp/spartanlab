@@ -44,18 +44,18 @@ const PLANS = [
     name: 'Pro',
     price: PRICING.pro.display,
     period: '/month',
-    description: 'Full Adaptive Training Engine access',
+    description: 'Full training intelligence system',
     cta: TRIAL.ctaText,
     ctaVariant: 'default' as const,
     ctaLink: '/upgrade', // Links to authenticated upgrade page
     featured: true,
     features: [
-      'Adaptive Training Engine',
-      'Personalized calisthenics programs',
-      'Workout tracking database',
-      'Progress analytics and strength trends',
-      'Fatigue detection and training adjustments',
-      'Skill progression tracking'
+      'Adaptive programming engine',
+      'Structured calisthenics programs',
+      'Performance analysis and tracking',
+      'Strength trend analytics',
+      'Fatigue detection and adjustments',
+      'Skill progression intelligence'
     ],
     trialExplanation: TRIAL.explanation,
   }
@@ -100,7 +100,7 @@ export default function PricingPage() {
             SpartanLab Pricing
           </h1>
           <p className="text-lg sm:text-xl text-[#A5A5A5] max-w-2xl mx-auto">
-            Train smarter with data-driven calisthenics programming and performance tracking.
+            Access a training intelligence system that analyzes your performance and builds adaptive programs.
           </p>
         </div>
       </section>
@@ -213,7 +213,7 @@ export default function PricingPage() {
             Why Upgrade to SpartanLab Pro?
           </h2>
           <p className="text-[#A5A5A5] text-center max-w-2xl mx-auto mb-12">
-            Most athletes rely on generic workout programs. SpartanLab Pro analyzes your strength levels, training schedule, and progress data to generate a program tailored to your current ability.
+            Most athletes follow generic programs or guess their progressions. SpartanLab Pro analyzes your actual performance to build structured training that evolves with you.
           </p>
           
           <div className="grid sm:grid-cols-3 gap-8">
@@ -223,8 +223,8 @@ export default function PricingPage() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                 </svg>
               </div>
-              <h3 className="font-semibold mb-2">Personalized Programming</h3>
-              <p className="text-sm text-[#A5A5A5]">Programs built specifically for your strength level and goals</p>
+              <h3 className="font-semibold mb-2">Structured Programming</h3>
+              <p className="text-sm text-[#A5A5A5]">Programs built from real training methodologies, not templates</p>
             </div>
             <div className="text-center">
               <div className="w-12 h-12 rounded-xl bg-[#E63946]/10 flex items-center justify-center mx-auto mb-4">
@@ -232,8 +232,8 @@ export default function PricingPage() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                 </svg>
               </div>
-              <h3 className="font-semibold mb-2">Adaptive Adjustments</h3>
-              <p className="text-sm text-[#A5A5A5]">Workouts automatically adjust as your strength improves</p>
+              <h3 className="font-semibold mb-2">Continuous Adaptation</h3>
+              <p className="text-sm text-[#A5A5A5]">Programming adjusts as your performance improves</p>
             </div>
             <div className="text-center">
               <div className="w-12 h-12 rounded-xl bg-[#E63946]/10 flex items-center justify-center mx-auto mb-4">
@@ -241,8 +241,8 @@ export default function PricingPage() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                 </svg>
               </div>
-              <h3 className="font-semibold mb-2">Data-Driven Decisions</h3>
-              <p className="text-sm text-[#A5A5A5]">Train smarter instead of guessing what to do next</p>
+              <h3 className="font-semibold mb-2">Performance Analysis</h3>
+              <p className="text-sm text-[#A5A5A5]">Understand what limits your progress and how to solve it</p>
             </div>
           </div>
         </div>
@@ -252,13 +252,13 @@ export default function PricingPage() {
       <section className="py-20 sm:py-28">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 text-center">
           <h2 className="text-2xl sm:text-3xl font-bold mb-6">
-            Built for Calisthenics Athletes
+            Calisthenics-First, Hybrid-Ready
           </h2>
           <p className="text-[#A5A5A5] max-w-2xl mx-auto mb-4">
-            SpartanLab was designed to help athletes develop real strength and progress toward advanced calisthenics skills.
+            SpartanLab is built for athletes pursuing advanced calisthenics skills like front lever, planche, and muscle-up.
           </p>
           <p className="text-[#A5A5A5] max-w-2xl mx-auto">
-            Instead of following generic programs, athletes receive training recommendations based on real performance data.
+            Supports weighted calisthenics and hybrid strength training without losing focus on skill progression and joint integrity.
           </p>
         </div>
       </section>
@@ -300,14 +300,14 @@ export default function PricingPage() {
       <section className="py-20 sm:py-28">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 text-center">
           <h2 className="text-3xl sm:text-4xl font-bold mb-4">
-            Start Training Smarter
+            Start Training Intelligently
           </h2>
           <p className="text-[#A5A5A5] max-w-xl mx-auto mb-8">
-            Generate your first training program and begin tracking your progress today.
+            Get structured programming that analyzes your performance and evolves with you.
           </p>
-          <Link href="/sign-up" onClick={() => trackSignUpStarted('pricing_cta')}>
+          <Link href="/onboarding" onClick={() => trackSignUpStarted('pricing_cta')}>
             <Button size="lg" className="bg-[#E63946] hover:bg-[#D62828] px-10 h-12">
-              Start Free
+              Analyze My Training
               <ArrowRight className="w-4 h-4 ml-2" />
             </Button>
           </Link>

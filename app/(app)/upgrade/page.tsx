@@ -225,10 +225,10 @@ console.error('Checkout error:', error)
             SpartanLab Pro
           </div>
           <h1 className="text-3xl sm:text-4xl font-bold text-[#E6E9EF] mb-4 text-balance">
-            Unlock Adaptive Training Intelligence
+            Unlock Full Training Intelligence
           </h1>
           <p className="text-xl text-[#A4ACB8] max-w-2xl mx-auto mb-6 text-balance">
-            See what is actually limiting your progress. Get deeper performance insights.
+            Adaptive programming that evolves with your performance. Built from real training methodologies.
           </p>
         </div>
 
@@ -240,14 +240,14 @@ console.error('Checkout error:', error)
                 <Brain className="w-5 h-5 text-[#C1121F]" />
               </div>
               <div>
-                <h2 className="text-lg font-semibold text-[#E6E9EF] mb-2">Not Just Tracking. Intelligence.</h2>
+                <h2 className="text-lg font-semibold text-[#E6E9EF] mb-2">Analysis, Not Automation</h2>
                 <p className="text-[#A4ACB8] leading-relaxed">
-                  SpartanLab Pro transforms your training data into actionable intelligence. It identifies what is limiting your progress, when to push harder, and when to recover.
+                  SpartanLab Pro analyzes your performance to build structured training programs. It identifies what limits your progress and adjusts programming based on real training data.
                 </p>
               </div>
             </div>
             <p className="text-[#6B7280] text-sm pl-14">
-              Your program adapts automatically based on fatigue signals, performance trends, and recovery patterns. Every workout is optimized for your current state.
+              Programs adapt based on fatigue signals, performance trends, and recovery patterns. Designed for long-term performance, not quick fixes.
             </p>
           </Card>
         </div>

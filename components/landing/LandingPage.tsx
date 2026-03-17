@@ -37,22 +37,22 @@ function HeroSection() {
         {/* Who it's for */}
         <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[#C1121F]/10 border border-[#C1121F]/20 mb-6">
           <SpartanIcon size={18} />
-          <span className="text-sm text-[#C1121F] font-medium">For athletes training Front Lever, Planche, and Muscle-Up</span>
+          <span className="text-sm text-[#C1121F] font-medium">Built for calisthenics athletes pursuing advanced skills</span>
         </div>
         
         {/* Primary headline - what it is + problem it solves */}
         <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold leading-tight mb-4 text-balance">
-          Your AI Calisthenics Coach
+          Calisthenics-First Training Intelligence
         </h1>
         
         {/* Why it's different */}
         <p className="text-xl sm:text-2xl text-[#E6E9EF] font-medium mb-4">
-          Programs that adapt to <span className="text-[#C1121F]">your</span> progress
+          Adaptive programs built from <span className="text-[#C1121F]">real strength systems</span>
         </p>
         
         <p className="text-lg text-[#A4ACB8] max-w-2xl mx-auto mb-8 leading-relaxed text-pretty">
-          SpartanLab detects what limits your skill progress and generates joint-safe training 
-          that evolves based on your performance. No more guessing.
+          SpartanLab analyzes your performance and builds structured training that evolves with you. 
+          Supports weighted calisthenics and hybrid strength without losing skill focus.
         </p>
         
         {/* Product proof - what it does */}
@@ -79,18 +79,18 @@ function HeroSection() {
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
           <Button asChild size="lg" className="bg-[#C1121F] hover:bg-[#A30F1A] text-white px-8 py-6 text-lg font-semibold">
             <Link href="/onboarding">
-              Build Your Adaptive Program
+              Analyze My Training
               <ArrowRight className="w-5 h-5 ml-2" />
             </Link>
           </Button>
           <Button asChild size="lg" variant="outline" className="border-[#2B313A] hover:bg-[#2B313A] px-8 py-6 text-lg">
             <Link href="/tools">
-              Try Free Calculators
+              Free Strength Calculators
             </Link>
           </Button>
         </div>
         
-        <p className="text-sm text-[#6B7280] mt-4">Free to start. No credit card required.</p>
+        <p className="text-sm text-[#6B7280] mt-4">Free to start. Built from real training methodologies.</p>
       </div>
     </section>
   )
@@ -143,22 +143,22 @@ function HowItWorksSection() {
   const steps = [
     {
       number: '1',
-      title: 'Profile Your Athleticism',
-      description: 'SpartanLab builds your athlete profile by analyzing strength benchmarks, skill experience, equipment, and training preferences.',
+      title: 'Analyze Your Profile',
+      description: 'SpartanLab analyzes your strength benchmarks, skill experience, equipment, and training preferences to understand where you are.',
       icon: Gauge,
       color: '#4F6D8A',
     },
     {
       number: '2',
-      title: 'Detect Your Constraints',
-      description: 'The Constraint Detection Engine identifies the specific factors limiting your skill progress: strength gaps, mobility deficits, or stability needs.',
+      title: 'Identify Limiting Factors',
+      description: 'Identifies the specific factors limiting your skill progress: strength gaps, mobility deficits, or stability needs.',
       icon: Brain,
       color: '#C1121F',
     },
     {
       number: '3',
-      title: 'Generate Adaptive Programs',
-      description: 'The engine generates personalized training with joint integrity protocols that evolves based on your performance and recovery signals.',
+      title: 'Build Adaptive Programs',
+      description: 'Generates structured training with joint integrity protocols that evolves based on your performance and recovery signals.',
       icon: Cpu,
       color: '#FFD700',
     },
@@ -169,10 +169,10 @@ function HowItWorksSection() {
       <div className="max-w-5xl mx-auto">
         <div className="text-center mb-16">
           <h2 className="text-3xl sm:text-4xl font-bold mb-4">
-            The Adaptive <span className="text-[#C1121F]">Athlete Engine</span>
+            Structured <span className="text-[#C1121F]">Progression Logic</span>
           </h2>
           <p className="text-[#A4ACB8] max-w-2xl mx-auto">
-            How SpartanLab coaches like an elite calisthenics trainer.
+            How SpartanLab analyzes your performance and builds intelligent programming.
           </p>
         </div>
         
@@ -222,10 +222,10 @@ function IntelligencePreviewSection() {
       <div className="max-w-5xl mx-auto">
         <div className="text-center mb-12">
           <h2 className="text-3xl sm:text-4xl font-bold mb-4">
-            Training Intelligence, <span className="text-[#C1121F]">Not Guesswork</span>
+            Analysis, <span className="text-[#C1121F]">Not Automation</span>
           </h2>
           <p className="text-[#A4ACB8] max-w-2xl mx-auto">
-            SpartanLab provides real coaching insights - readiness analysis, constraint detection, and adaptive adjustments based on your performance data.
+            SpartanLab analyzes your strength, recovery, and goals to build structured programs. Real methodology, not random workouts.
           </p>
         </div>
         
@@ -340,7 +340,7 @@ function IntelligencePreviewSection() {
         <div className="text-center mt-10">
           <Button asChild size="lg" className="bg-[#C1121F] hover:bg-[#A30F1A] text-white px-8 py-6 text-lg font-semibold">
             <Link href="/onboarding">
-              Start Your Adaptive Program
+              Start Training Intelligently
               <ArrowRight className="w-5 h-5 ml-2" />
             </Link>
           </Button>
@@ -429,7 +429,7 @@ function PricingSection() {
           Simple <span className="text-[#C1121F]">Pricing</span>
         </h2>
         <p className="text-[#A4ACB8] text-center mb-12 max-w-xl mx-auto">
-          Start free with Athlete Sensors. Upgrade to unlock the full Training Decision Engine.
+          Start free with analysis tools. Upgrade for adaptive programming that evolves with your training.
         </p>
         
         <div className="grid md:grid-cols-2 gap-6">
@@ -547,11 +547,11 @@ function FinalCTASection() {
           SpartanLab analyzes your current strength, identifies what limits your progress, and generates a training program built specifically for your goals.
         </p>
         <p className="text-sm text-[#6B7280] mb-8">
-          Takes about 3 minutes. No credit card required.
+          Takes about 3 minutes. Free to start.
         </p>
         <Button asChild size="lg" className="bg-[#C1121F] hover:bg-[#A30F1A] text-white px-8 py-6 text-lg font-semibold">
           <Link href="/onboarding">
-            Build Your Adaptive Program
+            Analyze My Training
             <ArrowRight className="w-5 h-5 ml-2" />
           </Link>
         </Button>
@@ -577,7 +577,7 @@ function Footer() {
           </div>
         </div>
         <div className="mt-8 pt-8 border-t border-[#2B313A] text-center text-sm text-[#6B7280]">
-          <p>Adaptive Calisthenics Training Intelligence. Skill readiness analysis, constraint detection, and joint integrity protocols.</p>
+          <p>Calisthenics-first training intelligence. Built from real strength methodologies.</p>
         </div>
       </div>
     </footer>

@@ -20,7 +20,7 @@ export const PRICING = {
     monthly: 14.99,
     display: '$14.99',
     displayWithPeriod: '$14.99/month',
-    description: 'Full access to adaptive training, analytics, and all premium features',
+    description: 'Full training intelligence system with adaptive programming',
     trialDays: TRIAL.days,
   },
   
@@ -29,7 +29,7 @@ export const PRICING = {
     monthly: 0,
     display: 'Free',
     displayWithPeriod: 'Free forever',
-    description: 'Limited access to educational content and basic tools',
+    description: 'Training tools and basic analysis',
   },
 } as const
 

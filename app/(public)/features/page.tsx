@@ -21,33 +21,33 @@ const FEATURES = [
     id: 'readiness',
     icon: Target,
     title: 'Skill Readiness Analysis',
-    description: 'SpartanLab analyzes your readiness for front lever, planche, muscle-up, HSPU, back lever, and L-sit.',
+    description: 'Analyzes your readiness for front lever, planche, muscle-up, HSPU, back lever, and L-sit based on real prerequisite logic.',
     benefits: [
-      'Component-level readiness scoring (pull strength, compression, stability)',
+      'Component-level scoring (pull strength, compression, stability)',
       'Identifies the specific factor limiting your skill progress',
       'Tracks progression from foundation to mastery',
-      'Real-time readiness updates as you train'
+      'Updates as you train and improve'
     ],
     highlight: 'Know exactly what limits your progress.'
   },
   {
     id: 'adaptive',
     icon: TrendingUp,
-    title: 'Adaptive Program Generation',
-    description: 'Programs that evolve based on your performance, not fixed timelines.',
+    title: 'Adaptive Programming',
+    description: 'Programs built from your performance data, not fixed templates or timelines.',
     benefits: [
-      'Programs adjust to readiness, fatigue, and training response',
-      'Performance envelope learning personalizes volume and intensity',
+      'Adjusts to readiness, fatigue, and training response',
+      'Learns your optimal volume and intensity ranges',
       'Equipment-aware exercise selection',
       'Automatic deload detection when needed'
     ],
-    highlight: 'Your program evolves as your performance changes.'
+    highlight: 'Programming that evolves with your performance.'
   },
   {
     id: 'constraints',
     icon: Crosshair,
-    title: 'Constraint Detection Engine',
-    description: 'Identifies the specific strength gaps, mobility deficits, or stability needs blocking your progress.',
+    title: 'Constraint Detection',
+    description: 'Identifies specific strength gaps, mobility deficits, or stability needs blocking your progress.',
     benefits: [
       'Analyzes pulling, pushing, compression, and straight-arm strength',
       'Detects mobility and stability limitations',
@@ -60,33 +60,33 @@ const FEATURES = [
     id: 'protocols',
     icon: Activity,
     title: 'Joint Integrity Protocols',
-    description: 'Durability protocols protect your joints while you train advanced skills.',
+    description: 'Durability work integrated into every session to protect joints during advanced skill training.',
     benefits: [
       'Wrist, elbow, shoulder, and scapular preparation',
       'Integrated into warmups and recovery',
       'Adapts based on training load and joint stress',
-      'Longevity-focused injury prevention'
+      'Designed for long-term training sustainability'
     ],
     highlight: 'Protect your joints. Train for decades.'
   },
   {
     id: 'style',
     icon: Calendar,
-    title: 'Training Style Personalization',
-    description: 'Supports different training approaches while preserving skill development.',
+    title: 'Training Style Options',
+    description: 'Supports different training approaches while preserving structured skill development.',
     benefits: [
       'Skill-focused, strength-focused, or balanced approaches',
-      'Power/explosive and endurance/density options',
-      'Hypertrophy-supported calisthenics available',
+      'Supports weighted calisthenics and hybrid strength',
+      'Hypertrophy-supported options available',
       'Style layered on top of prerequisite logic'
     ],
-    highlight: 'Train your way. Same intelligent coaching.'
+    highlight: 'Train your way with structured progression.'
   },
   {
     id: 'workouts',
     icon: ClipboardList,
-    title: 'Intelligent Workout Logging',
-    description: 'Every logged workout feeds back into the coaching engine.',
+    title: 'Performance Tracking',
+    description: 'Every logged workout feeds back into the programming engine for continuous improvement.',
     benefits: [
       'Performance data improves future programming',
       'Fatigue signals trigger adaptive adjustments',
@@ -99,7 +99,7 @@ const FEATURES = [
     id: 'score',
     icon: Dumbbell,
     title: 'Spartan Strength Score',
-    description: 'Your unified performance metric combining skill progress, strength, and consistency.',
+    description: 'Unified performance metric combining skill progress, strength, and consistency.',
     benefits: [
       'Score from 0-1000 reflecting total calisthenics performance',
       'Combines skills, weighted strength, and training momentum',
@@ -119,10 +119,10 @@ export default function FeaturesPage() {
       <section className="pt-32 pb-16 sm:pt-40 sm:pb-20">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 text-center">
           <h1 className="text-4xl sm:text-5xl font-bold tracking-tight mb-6">
-            Adaptive Athlete Engine
+            Training Intelligence System
           </h1>
           <p className="text-lg sm:text-xl text-[#A5A5A5] max-w-2xl mx-auto">
-            AI coaching intelligence that analyzes, adapts, and protects. Built specifically for advanced calisthenics skill development.
+            Analyzes your performance and builds structured programs using real training methodologies. Calisthenics-first with hybrid strength support.
           </p>
         </div>
       </section>
@@ -181,15 +181,15 @@ export default function FeaturesPage() {
       <section className="py-20 sm:py-28 bg-[#1A1A1A] border-t border-[#2A2A2A]">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 text-center">
           <h2 className="text-3xl sm:text-4xl font-bold mb-4">
-            Ready to Start Training?
+            Ready to Train Intelligently?
           </h2>
           <p className="text-[#A5A5A5] max-w-xl mx-auto mb-8">
-            All features included. Start tracking your calisthenics progress today.
+            Get structured programming that evolves with your performance. Free to start.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Link href="/dashboard">
+            <Link href="/onboarding">
               <Button size="lg" className="bg-[#E63946] hover:bg-[#D62828] px-8 h-12">
-                Start Training
+                Analyze My Training
                 <ArrowRight className="w-4 h-4 ml-2" />
               </Button>
             </Link>

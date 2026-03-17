@@ -166,6 +166,31 @@ export default function CalculatorsHubPage() {
           <ToolConversionCardStatic context="strength-standards" />
         </section>
 
+        {/* Related Resources - Internal Linking */}
+        <section className="py-12 border-t border-[#2B313A]">
+          <h2 className="text-xl font-bold text-[#E6E9EF] mb-6">Related Resources</h2>
+          <div className="grid sm:grid-cols-3 gap-4">
+            <Link href="/calisthenics-strength-standards">
+              <Card className="bg-[#1A1F26] border-[#2B313A] p-4 hover:border-[#C1121F]/50 transition-all">
+                <h3 className="font-medium text-[#E6E9EF] text-sm mb-1">Strength Standards</h3>
+                <p className="text-xs text-[#6B7280]">Benchmark your pull-ups, dips, and weighted exercises</p>
+              </Card>
+            </Link>
+            <Link href="/guides">
+              <Card className="bg-[#1A1F26] border-[#2B313A] p-4 hover:border-[#C1121F]/50 transition-all">
+                <h3 className="font-medium text-[#E6E9EF] text-sm mb-1">Training Guides</h3>
+                <p className="text-xs text-[#6B7280]">In-depth guides for skill progressions and programming</p>
+              </Card>
+            </Link>
+            <Link href="/training">
+              <Card className="bg-[#1A1F26] border-[#2B313A] p-4 hover:border-[#C1121F]/50 transition-all">
+                <h3 className="font-medium text-[#E6E9EF] text-sm mb-1">Training Programs</h3>
+                <p className="text-xs text-[#6B7280]">Structured programs for specific skill goals</p>
+              </Card>
+            </Link>
+          </div>
+        </section>
+
         {/* Info Section */}
         <section className="py-12 border-t border-[#2B313A]">
           <h2 className="text-xl font-bold text-[#E6E9EF] mb-4">About Our Calculators</h2>

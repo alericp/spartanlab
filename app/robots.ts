@@ -60,6 +60,43 @@ export default function robots(): MetadataRoute.Robots {
           '/weighted-pull-up-calculator',
           '/calisthenics-program-builder',
           '/tools/',
+          // Training hub and program pages
+          '/training/',
+          '/training-systems',
+          // Strength standards pages
+          '/weighted-pull-up-strength-standards',
+          '/weighted-dip-strength-standards',
+          '/pull-up-strength-standards',
+          '/dip-strength-standards',
+          '/push-up-strength-standards',
+          // Additional readiness calculators
+          '/hspu-readiness-calculator',
+          '/iron-cross-readiness-calculator',
+          // Protocols (joint health content)
+          '/protocols/',
+          // Strength requirements pages (high-intent skill prerequisites)
+          '/planche-strength-requirements',
+          '/front-lever-strength-requirements',
+          '/muscle-up-strength-requirements',
+          '/hspu-strength-requirements',
+          // Hybrid, powerlifting, and streetlifting SEO pages
+          '/deadlift-strength-standards',
+          '/powerlifting-strength-standards',
+          '/streetlifting-strength-standards',
+          '/hybrid-training-program',
+          '/weighted-calisthenics-vs-powerlifting',
+          // High-conversion program generator pages
+          '/calisthenics-program-generator',
+          '/weighted-calisthenics-program',
+          '/hybrid-strength-program',
+          '/muscle-up-training-program',
+          '/planche-training-program',
+          '/front-lever-training-program',
+          // Diagnostic "why you can't" pages
+          '/why-you-cant-front-lever',
+          '/why-you-cant-planche',
+          '/why-you-cant-muscle-up',
+          '/why-your-hspu-is-stuck',
         ],
         disallow: [
           // App/private pages - user-specific content

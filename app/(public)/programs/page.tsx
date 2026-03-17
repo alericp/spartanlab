@@ -198,6 +198,39 @@ export default function ProgramsPage() {
         </div>
       </section>
 
+      {/* Related Resources */}
+      <section className="py-12 px-4 sm:px-6 border-t border-[#2B313A]">
+        <div className="max-w-5xl mx-auto">
+          <h2 className="text-xl font-bold text-[#E6E9EF] mb-6">Related Resources</h2>
+          <div className="grid sm:grid-cols-4 gap-4">
+            <Link href="/calculators">
+              <Card className="bg-[#1A1F26] border-[#2B313A] p-4 hover:border-[#C1121F]/50 transition-all h-full">
+                <h3 className="font-medium text-[#E6E9EF] text-sm mb-1">Readiness Calculators</h3>
+                <p className="text-xs text-[#6B7280]">Test your skill readiness before starting</p>
+              </Card>
+            </Link>
+            <Link href="/calisthenics-strength-standards">
+              <Card className="bg-[#1A1F26] border-[#2B313A] p-4 hover:border-[#C1121F]/50 transition-all h-full">
+                <h3 className="font-medium text-[#E6E9EF] text-sm mb-1">Strength Standards</h3>
+                <p className="text-xs text-[#6B7280]">Benchmark your current level</p>
+              </Card>
+            </Link>
+            <Link href="/guides">
+              <Card className="bg-[#1A1F26] border-[#2B313A] p-4 hover:border-[#C1121F]/50 transition-all h-full">
+                <h3 className="font-medium text-[#E6E9EF] text-sm mb-1">Training Guides</h3>
+                <p className="text-xs text-[#6B7280]">Learn progression methodology</p>
+              </Card>
+            </Link>
+            <Link href="/training-systems">
+              <Card className="bg-[#1A1F26] border-[#2B313A] p-4 hover:border-[#C1121F]/50 transition-all h-full">
+                <h3 className="font-medium text-[#E6E9EF] text-sm mb-1">Training Systems</h3>
+                <p className="text-xs text-[#6B7280]">Understand how programs are built</p>
+              </Card>
+            </Link>
+          </div>
+        </div>
+      </section>
+
       {/* CTA Section */}
       <section className="py-16 px-4 sm:px-6 bg-gradient-to-b from-[#0A0A0A] to-[#121212]">
         <div className="max-w-3xl mx-auto text-center">

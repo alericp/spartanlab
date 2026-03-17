@@ -173,6 +173,19 @@ export default function sitemap(): MetadataRoute.Sitemap {
       changeFrequency: 'weekly',
       priority: 0.8,
     },
+    // Training hub and methodology
+    {
+      url: `${baseUrl}/training`,
+      lastModified: currentDate,
+      changeFrequency: 'weekly',
+      priority: 0.8,
+    },
+    {
+      url: `${baseUrl}/training-systems`,
+      lastModified: currentDate,
+      changeFrequency: 'monthly',
+      priority: 0.7,
+    },
   ]
 
   // Program template pages - educational workout programs
@@ -187,6 +200,35 @@ export default function sitemap(): MetadataRoute.Sitemap {
     lastModified: currentDate,
     changeFrequency: 'monthly' as const,
     priority: 0.75,
+  }))
+
+  // SEO training program pages - high-intent landing pages
+  const trainingPages: MetadataRoute.Sitemap = [
+    'front-lever-program',
+    'planche-program',
+    'weighted-pull-up-program',
+    'calisthenics-program',
+    'hybrid-strength-program',
+  ].map(slug => ({
+    url: `${baseUrl}/training/${slug}`,
+    lastModified: currentDate,
+    changeFrequency: 'monthly' as const,
+    priority: 0.8,
+  }))
+
+  // High-conversion program generator pages
+  const programGeneratorPages: MetadataRoute.Sitemap = [
+    'calisthenics-program-generator',
+    'weighted-calisthenics-program',
+    'hybrid-strength-program',
+    'muscle-up-training-program',
+    'planche-training-program',
+    'front-lever-training-program',
+  ].map(slug => ({
+    url: `${baseUrl}/${slug}`,
+    lastModified: currentDate,
+    changeFrequency: 'monthly' as const,
+    priority: 0.85,
   }))
 
   // Exercise pages - individual exercise guides
@@ -251,12 +293,52 @@ export default function sitemap(): MetadataRoute.Sitemap {
     priority: 0.8,
   }))
 
+  // Strength requirements pages - high-intent skill prerequisites
+  const strengthRequirementsPages: MetadataRoute.Sitemap = [
+    'planche-strength-requirements',
+    'front-lever-strength-requirements',
+    'muscle-up-strength-requirements',
+    'hspu-strength-requirements',
+  ].map(slug => ({
+    url: `${baseUrl}/${slug}`,
+    lastModified: currentDate,
+    changeFrequency: 'monthly' as const,
+    priority: 0.8,
+  }))
+
   // Skill threshold pages - targeting search questions
   const skillThresholdPages: MetadataRoute.Sitemap = [
     'how-many-pull-ups-for-front-lever',
     'how-strong-for-planche',
     'how-many-dips-for-muscle-up',
     'how-to-train-for-handstand-push-ups',
+  ].map(slug => ({
+    url: `${baseUrl}/${slug}`,
+    lastModified: currentDate,
+    changeFrequency: 'monthly' as const,
+    priority: 0.8,
+  }))
+
+  // Hybrid, powerlifting, and streetlifting SEO pages
+  const hybridStrengthPages: MetadataRoute.Sitemap = [
+    'deadlift-strength-standards',
+    'powerlifting-strength-standards',
+    'streetlifting-strength-standards',
+    'hybrid-training-program',
+    'weighted-calisthenics-vs-powerlifting',
+  ].map(slug => ({
+    url: `${baseUrl}/${slug}`,
+    lastModified: currentDate,
+    changeFrequency: 'monthly' as const,
+    priority: 0.8,
+  }))
+
+  // Diagnostic "why you can't" pages - frustration-based search intent
+  const diagnosticPages: MetadataRoute.Sitemap = [
+    'why-you-cant-front-lever',
+    'why-you-cant-planche',
+    'why-you-cant-muscle-up',
+    'why-your-hspu-is-stuck',
   ].map(slug => ({
     url: `${baseUrl}/${slug}`,
     lastModified: currentDate,
@@ -321,9 +403,14 @@ export default function sitemap(): MetadataRoute.Sitemap {
   return [
     ...staticPages,
     ...programPages,
+    ...trainingPages,
+    ...programGeneratorPages,
     ...exercisePages,
     ...guidePages,
     ...strengthStandardsPages,
+    ...strengthRequirementsPages,
+    ...hybridStrengthPages,
+    ...diagnosticPages,
     ...skillThresholdPages,
     ...comparisonPages,
     ...infoPages,

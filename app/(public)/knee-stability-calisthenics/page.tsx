@@ -1,5 +1,6 @@
-import { redirect } from 'next/navigation'
+import { permanentRedirect } from 'next/navigation'
 
+// Permanent redirect (308) - tells search engines to transfer ranking to canonical URL
 export default function KneeStabilityRedirect() {
-  redirect('/protocols/knee-stability-calisthenics')
+  permanentRedirect('/protocols/knee-stability-calisthenics')
 }

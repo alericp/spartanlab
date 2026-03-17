@@ -23,6 +23,7 @@ import {
 } from '@/lib/readiness/skill-readiness'
 import { ReadinessResultCard } from '@/components/calculators/ReadinessResultCard'
 import { ToolConversionCard } from '@/components/tools/ToolConversionCard'
+import { trackToolUsed } from '@/lib/analytics'
 import { cn } from '@/lib/utils'
 
 // FAQ Data
@@ -91,6 +92,9 @@ export default function PlancheReadinessCalculator() {
     
     const calcResult = calculatePlancheReadiness(inputs)
     setResult(calcResult)
+    
+    // Track tool usage
+    trackToolUsed('planche_calculator', { readiness_score: calcResult.readinessScore })
   }
 
   const handleReset = () => {

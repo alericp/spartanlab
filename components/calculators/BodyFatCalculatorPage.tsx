@@ -21,6 +21,7 @@ import { cn } from '@/lib/utils'
 import { SpartanIcon } from '@/components/brand/SpartanLogo'
 import { NextSteps } from '@/components/seo/RelatedContent'
 import { ToolConversionCard } from '@/components/tools/ToolConversionCard'
+import { trackToolUsed } from '@/lib/analytics'
 import { getToolCluster } from '@/lib/seo/skill-clusters'
 import { 
   calculateBodyFat, 
@@ -100,6 +101,9 @@ export function BodyFatCalculatorPage() {
       
       const calcResult = calculateBodyFat(inputs)
       setResult(calcResult)
+      
+      // Track tool usage
+      trackToolUsed('body_fat_calculator', { body_fat_percent: calcResult.bodyFatPercent })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Calculation error')
     }

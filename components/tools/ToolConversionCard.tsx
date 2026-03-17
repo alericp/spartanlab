@@ -22,6 +22,7 @@ import {
   Dumbbell,
   ArrowRight
 } from 'lucide-react'
+import { trackCTAClicked } from '@/lib/analytics'
 
 // =============================================================================
 // TYPES
@@ -313,13 +314,19 @@ export function ToolConversionCard({
             
             {/* CTAs */}
             <div className="flex flex-col sm:flex-row gap-3">
-              <Link href={onboardingUrl}>
+              <Link 
+                href={onboardingUrl}
+                onClick={() => trackCTAClicked(context, userId ? 'program-builder' : 'onboarding')}
+              >
                 <Button className="bg-[#C1121F] hover:bg-[#A50E1A] text-white w-full sm:w-auto">
                   {primaryCtaText || config.primaryCta}
                   <ChevronRight className="w-4 h-4 ml-1" />
                 </Button>
               </Link>
-              <Link href={secondaryCtaHref || config.secondaryHref}>
+              <Link 
+                href={secondaryCtaHref || config.secondaryHref}
+                onClick={() => trackCTAClicked(context, 'features')}
+              >
                 <Button 
                   variant="outline" 
                   className="border-[#2B313A] text-[#A4ACB8] hover:bg-[#1A1F26] hover:text-[#E6E9EF] w-full sm:w-auto"

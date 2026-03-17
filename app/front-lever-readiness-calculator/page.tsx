@@ -25,6 +25,7 @@ import { spartanScoreFromFrontLeverInputs, type SpartanStrengthResult } from '@/
 import { ReadinessResultCard } from '@/components/calculators/ReadinessResultCard'
 import { SpartanScoreCard } from '@/components/athlete/SpartanScoreCard'
 import { ToolConversionCard } from '@/components/tools/ToolConversionCard'
+import { trackToolUsed } from '@/lib/analytics'
 import { cn } from '@/lib/utils'
 
 // FAQ Data
@@ -91,6 +92,9 @@ export default function FrontLeverReadinessCalculator() {
     
     const calcResult = calculateFrontLeverReadiness(inputs)
     setResult(calcResult)
+    
+    // Track tool usage
+    trackToolUsed('front_lever_calculator', { readiness_score: calcResult.readinessScore })
     
     // Calculate Spartan Strength Score
     const spartanResult = spartanScoreFromFrontLeverInputs({

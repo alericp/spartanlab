@@ -21,6 +21,7 @@ import {
 } from 'lucide-react'
 import { SpartanIcon } from '@/components/brand/SpartanLogo'
 import { ToolConversionCard } from '@/components/tools/ToolConversionCard'
+import { trackToolUsed } from '@/lib/analytics'
 import { cn } from '@/lib/utils'
 
 // Types for the calculator
@@ -301,8 +302,11 @@ export default function PlancheLeanCalculator() {
       pppuReps: parseInt(pppuReps) || undefined,
     }
     
-    const calcResult = calculatePlancheLeanScore(inputs)
-    setResult(calcResult)
+  const calcResult = calculatePlancheLeanScore(inputs)
+  setResult(calcResult)
+  
+  // Track tool usage
+  trackToolUsed('planche_lean_calculator', { score: calcResult.score, classification: calcResult.classification })
   }
 
   const handleReset = () => {

@@ -27,6 +27,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { ToolConversionCard } from '@/components/tools/ToolConversionCard'
+import { trackToolUsed } from '@/lib/analytics'
 
 // Strength level classifications
 type StrengthLevel = 'Beginner' | 'Developing' | 'Intermediate' | 'Advanced' | 'Elite'
@@ -468,8 +469,11 @@ export default function CalisthenicsStrengthStandardsPage() {
       hollowHoldVal,
       frontLeverHoldVal,
       plancheLeanVal
-    )
-    setResult(calcResult)
+  )
+  setResult(calcResult)
+  
+  // Track tool usage
+  trackToolUsed('strength_standards', { overall_level: calcResult.overallLevel })
   }
 
   const handleReset = () => {

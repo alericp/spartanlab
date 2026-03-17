@@ -23,6 +23,7 @@ import {
 } from '@/lib/readiness/skill-readiness'
 import { ReadinessResultCard } from '@/components/calculators/ReadinessResultCard'
 import { ToolConversionCard } from '@/components/tools/ToolConversionCard'
+import { trackToolUsed } from '@/lib/analytics'
 import { cn } from '@/lib/utils'
 
 // FAQ Data
@@ -89,6 +90,9 @@ export default function MuscleUpReadinessCalculator() {
     
     const calcResult = calculateMuscleUpReadiness(inputs)
     setResult(calcResult)
+    
+    // Track tool usage
+    trackToolUsed('muscle_up_calculator', { readiness_score: calcResult.readinessScore })
   }
 
   const handleReset = () => {

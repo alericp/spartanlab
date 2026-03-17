@@ -24,6 +24,7 @@ import {
 } from '@/lib/readiness/skill-readiness'
 import { ReadinessResultCard } from '@/components/calculators/ReadinessResultCard'
 import { ToolConversionCard } from '@/components/tools/ToolConversionCard'
+import { trackToolUsed } from '@/lib/analytics'
 import { cn } from '@/lib/utils'
 
 // FAQ Data
@@ -94,6 +95,9 @@ export default function IronCrossReadinessCalculator() {
     
     const calcResult = calculateIronCrossReadiness(inputs)
     setResult(calcResult)
+    
+    // Track tool usage
+    trackToolUsed('iron_cross_calculator', { readiness_score: calcResult.readinessScore })
   }
 
   const handleReset = () => {

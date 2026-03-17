@@ -213,29 +213,45 @@ export function EmptyHistoryState({ type }: EmptyHistoryStateProps) {
     workouts: {
       icon: ClipboardList,
       title: 'No workout history yet',
-      description: 'Your completed sessions will appear here — every workout preserved.',
+      description: 'Complete your first session to start building your training archive.',
+      cta: 'Start Training',
+      ctaHref: '/dashboard',
     },
     programs: {
       icon: Calendar,
       title: 'No program history yet',
-      description: 'Your training programs will be saved here. No more lost plans.',
+      description: 'Your training programs will be preserved here automatically.',
+      cta: 'View Program',
+      ctaHref: '/programs',
     },
     prs: {
       icon: Trophy,
       title: 'No PRs tracked yet',
-      description: 'Personal records will be tracked automatically as you train.',
+      description: 'Personal records will appear as you surpass your previous bests.',
+      cta: 'Start Training',
+      ctaHref: '/dashboard',
     },
   }[type]
   
   const Icon = config.icon
   
   return (
-    <div className="flex flex-col items-center justify-center py-8 px-4 text-center">
-      <div className="w-12 h-12 rounded-full bg-[#1A1F26] border border-[#2B313A] flex items-center justify-center mb-3">
-        <Icon className="w-5 h-5 text-[#6B7280]" />
+    <div className="flex flex-col items-center justify-center py-10 px-4 text-center">
+      <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-[#1A1F26] to-[#0F1115] border border-[#2B313A] flex items-center justify-center mb-4 shadow-lg">
+        <Icon className="w-6 h-6 text-[#6B7280]" />
       </div>
-      <p className="text-sm text-[#A4ACB8] mb-1">{config.title}</p>
-      <p className="text-xs text-[#6B7280]">{config.description}</p>
+      <p className="text-sm font-medium text-[#A4ACB8] mb-1">{config.title}</p>
+      <p className="text-xs text-[#6B7280] max-w-[240px]">{config.description}</p>
+      <Link href={config.ctaHref}>
+        <Button 
+          variant="ghost" 
+          size="sm" 
+          className="mt-4 text-xs text-[#C1121F] hover:text-[#E6E9EF] hover:bg-[#1A1F26]"
+        >
+          {config.cta}
+          <ChevronRight className="w-3 h-3 ml-1" />
+        </Button>
+      </Link>
     </div>
   )
 }
@@ -291,11 +307,85 @@ export function HistoryHub({
   const recentWorkouts = workoutHistory.slice(0, 5)
   const recentPrograms = programHistory.slice(0, 3)
   const mostRecentPR = recentPRs[0]
+  const mostRecentWorkout = workoutHistory[0]
+  const activeProgram = programHistory.find(p => p.status === 'active')
   
   const hasAnyHistory = workoutHistory.length > 0 || programHistory.length > 0 || totalPRs > 0
+  const hasRecentActivity = mostRecentWorkout || mostRecentPR || activeProgram
 
   return (
     <div className="space-y-8">
+      {/* Recent Activity Highlight - Only show if there's activity */}
+      {hasRecentActivity && (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {/* Last Workout */}
+          <Link href={mostRecentWorkout ? `/history/session/${mostRecentWorkout.id}` : '/history/workouts'}>
+            <Card className="bg-[#1A1F26] border-[#2B313A] p-4 hover:border-[#3B424D] transition-all h-full cursor-pointer group">
+              <div className="flex items-center gap-2 mb-2">
+                <ClipboardList className="w-4 h-4 text-[#C1121F]" />
+                <span className="text-xs font-medium text-[#6B7280] uppercase tracking-wide">Last Workout</span>
+              </div>
+              {mostRecentWorkout ? (
+                <>
+                  <p className="text-sm font-semibold text-[#E6E9EF] truncate">
+                    {mostRecentWorkout.workoutName || mostRecentWorkout.dayLabel || 'Workout'}
+                  </p>
+                  <p className="text-xs text-[#6B7280] mt-1">
+                    {formatRelativeDate(mostRecentWorkout.workoutDate)}
+                  </p>
+                </>
+              ) : (
+                <p className="text-xs text-[#6B7280]">No workouts yet</p>
+              )}
+            </Card>
+          </Link>
+
+          {/* Latest PR */}
+          <Link href="/history/prs">
+            <Card className="bg-[#1A1F26] border-[#2B313A] p-4 hover:border-[#3B424D] transition-all h-full cursor-pointer group">
+              <div className="flex items-center gap-2 mb-2">
+                <Trophy className="w-4 h-4 text-amber-400" />
+                <span className="text-xs font-medium text-[#6B7280] uppercase tracking-wide">Latest PR</span>
+              </div>
+              {mostRecentPR ? (
+                <>
+                  <p className="text-sm font-semibold text-[#E6E9EF] truncate">
+                    {mostRecentPR.exerciseName}
+                  </p>
+                  <p className="text-xs text-[#6B7280] mt-1">
+                    {formatRelativeDate(mostRecentPR.achievedAt)}
+                  </p>
+                </>
+              ) : (
+                <p className="text-xs text-[#6B7280]">No PRs yet</p>
+              )}
+            </Card>
+          </Link>
+
+          {/* Current Program */}
+          <Link href={activeProgram ? `/history/program/${activeProgram.id}` : '/history/programs'}>
+            <Card className="bg-[#1A1F26] border-[#2B313A] p-4 hover:border-[#3B424D] transition-all h-full cursor-pointer group">
+              <div className="flex items-center gap-2 mb-2">
+                <Calendar className="w-4 h-4 text-emerald-400" />
+                <span className="text-xs font-medium text-[#6B7280] uppercase tracking-wide">Current Program</span>
+              </div>
+              {activeProgram ? (
+                <>
+                  <p className="text-sm font-semibold text-[#E6E9EF] truncate">
+                    {activeProgram.programName || 'Active Program'}
+                  </p>
+                  <p className="text-xs text-[#6B7280] mt-1">
+                    Since {formatDate(activeProgram.createdAt)}
+                  </p>
+                </>
+              ) : (
+                <p className="text-xs text-[#6B7280]">No active program</p>
+              )}
+            </Card>
+          </Link>
+        </div>
+      )}
+
       {/* Value Message Header */}
       <div className="flex items-start gap-3 p-4 rounded-lg bg-gradient-to-r from-[#1A1F26] to-[#1E242D] border border-[#2B313A]">
         <div className="p-2 rounded-lg bg-[#0F1115] border border-[#2B313A] flex-shrink-0">

@@ -17,6 +17,7 @@ import {
   Archive,
   Sparkles,
   Layers,
+  Flame,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { ProgramHistory, ProgramStructureSnapshot } from '@/types/history'
@@ -211,6 +212,17 @@ export function ProgramDetail({ program }: ProgramDetailProps) {
             )}
           </p>
         </div>
+        {/* Quick return to current training */}
+        <Link href="/dashboard">
+          <Button 
+            variant="ghost" 
+            size="sm"
+            className="text-xs text-[#6B7280] hover:text-[#E6E9EF] hover:bg-[#1A1F26]"
+          >
+            <Flame className="w-3 h-3 mr-1" />
+            Current Training
+          </Button>
+        </Link>
       </div>
 
       {/* Why This Program */}

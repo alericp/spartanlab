@@ -698,6 +698,27 @@ export async function getCurrentBestPR(
 }
 
 /**
+ * Get total PR count for a user (optimized)
+ */
+export async function getTotalPRCount(userId: string): Promise<number> {
+  if (!(await isDatabaseAvailable())) return 0
+
+  const sql = await getSqlClient()
+  if (!sql) return 0
+
+  try {
+    const result = await sql`
+      SELECT COUNT(*) as count FROM personal_record_history
+      WHERE user_id = ${userId}
+    `
+    return parseInt(result[0]?.count || '0', 10)
+  } catch (error) {
+    console.error('[HistoryService] Error counting PRs:', error)
+    return 0
+  }
+}
+
+/**
  * Get all-time best PRs grouped by exercise
  */
 export async function getAllTimeBestPRs(

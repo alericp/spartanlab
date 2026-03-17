@@ -3,6 +3,7 @@ import {
   getWorkoutHistoryForUser, 
   getProgramHistoryForUser,
   getPersonalRecordHistoryForUser,
+  getTotalPRCount,
 } from '@/lib/history-service'
 
 export async function GET(request: NextRequest) {
@@ -14,21 +15,19 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // Fetch all history data in parallel
-    const [workoutHistory, programHistory, recentPRs] = await Promise.all([
+    // Fetch all history data in parallel with optimized count query
+    const [workoutHistory, programHistory, recentPRs, totalPRs] = await Promise.all([
       getWorkoutHistoryForUser(userId, { limit: 20, sortOrder: 'desc' }),
       getProgramHistoryForUser(userId, { limit: 10, sortOrder: 'desc' }),
       getPersonalRecordHistoryForUser(userId, { limit: 5, sortOrder: 'desc' }),
+      getTotalPRCount(userId),
     ])
-
-    // Get total PR count (could be optimized with a COUNT query)
-    const allPRs = await getPersonalRecordHistoryForUser(userId, { limit: 1000 })
 
     return NextResponse.json({
       workoutHistory,
       programHistory,
       recentPRs,
-      totalPRs: allPRs.length,
+      totalPRs,
     })
   } catch (error) {
     console.error('[HistoryAPI] Error fetching history:', error)

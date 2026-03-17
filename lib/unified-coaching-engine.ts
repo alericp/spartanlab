@@ -56,7 +56,7 @@ import {
 // Re-export for use by program generation
 export { buildAthleteMemoryProfile, getProgramAdjustments, getSessionContinuationAdjustments }
 export type { AthleteMemoryProfile, ProgramAdjustments }
-export type { AthleteMemoryContext }
+// AthleteMemoryContext is exported via its interface definition below
 
 // =============================================================================
 // TYPES - UNIFIED ENGINE CONTEXT

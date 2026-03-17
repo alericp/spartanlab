@@ -5,7 +5,7 @@
  * for any missing configuration. This runs on the server side only.
  */
 
-'use server'
+import 'server-only'
 
 export interface EnvValidationResult {
   valid: boolean

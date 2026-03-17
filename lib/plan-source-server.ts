@@ -1,7 +1,7 @@
 // Server-side plan source operations
 // Use this for database operations in server actions and API routes
 
-'use server'
+import 'server-only'
 
 import { isPreviewMode } from './app-mode'
 import { isDatabaseAvailable, queryOne, query } from './db'

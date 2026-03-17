@@ -255,3 +255,43 @@ export {
   type PersonalizedFrameworkParams,
   type FrameworkHistory,
 } from '../coaching-framework-engine'
+
+// Training Doctrine Registry
+export {
+  // Types
+  type DoctrineCategory,
+  type TrainingStyleBias,
+  type VolumeProfile,
+  type IntensityProfile,
+  type SkillFrequencyProfile,
+  type ProgressionPhilosophy,
+  type MovementBiasTendency,
+  type PrimaryFocus,
+  type TrainingDoctrine,
+  type DoctrineQueryFilters,
+  type DoctrineAttributes,
+  
+  // Registry
+  DOCTRINE_REGISTRY,
+  getAllDoctrineIds,
+  doctrineExists,
+  getDoctrineCount,
+  
+  // Service Functions
+  getDoctrineById,
+  getDoctrineList,
+  getDoctrineAttributes,
+  getAllDoctrineAttributes,
+  findDoctrines,
+  getDoctrinesByCategory,
+  getDoctrinesByFocus,
+  getDoctrinesByFramework,
+  getDoctrineVolumeProfile,
+  getDoctrineSkillFrequency,
+  getDoctrineMovementBias,
+  getDoctrineSafetyNotes,
+  getDoctrineKeyPrinciples,
+  isDoctrineCompatibleWithFramework,
+  findBestDoctrineMatch,
+  getDoctrineRecommendations,
+} from '../training-doctrine-registry'

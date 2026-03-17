@@ -20,6 +20,7 @@ import {
   TrendingUp
 } from 'lucide-react'
 import { SpartanIcon } from '@/components/brand/SpartanLogo'
+import { ToolConversionCard } from '@/components/tools/ToolConversionCard'
 import { cn } from '@/lib/utils'
 
 // Types for the calculator
@@ -782,20 +783,23 @@ export default function PlancheLeanCalculator() {
           </div>
         </section>
 
-        {/* Final CTA */}
-        <section className="mt-12 text-center">
-          <Card className="bg-[#0F1115] border-[#2B313A] p-8">
-            <h2 className="text-2xl font-bold text-[#E6E9EF] mb-3">Ready to Build Your Planche?</h2>
-            <p className="text-[#A4ACB8] mb-6 max-w-lg mx-auto">
-              Get a personalized planche training program based on your current strength and goals.
-            </p>
-            <Link href="/onboarding">
-              <Button size="lg" className="bg-[#C1121F] hover:bg-[#A50E1A] text-white">
-                Build My SpartanLab Plan
-                <ChevronRight className="w-5 h-5 ml-1" />
-              </Button>
-            </Link>
-          </Card>
+        {/* Conversion CTA */}
+        <section className="mt-12">
+          <ToolConversionCard
+            context="planche-lean"
+            toolData={result ? {
+              plancheLeanHold: leanHoldTime ? parseInt(leanHoldTime) : undefined,
+              plancheLeanDistance: leanDistance ? parseFloat(leanDistance) : undefined,
+              maxPushUps: pushUps ? parseInt(pushUps) : undefined,
+              maxDips: dips ? parseInt(dips) : undefined,
+              weightedDip: weightedDip ? parseFloat(weightedDip) : undefined,
+              lSitHold: lSitHold ? parseInt(lSitHold) : undefined,
+              bodyweight: bodyweight ? parseFloat(bodyweight) : undefined,
+              readinessScore: result.score,
+              classification: result.classification,
+              limitingFactors: result.limitingFactors,
+            } : undefined}
+          />
         </section>
       </main>
 

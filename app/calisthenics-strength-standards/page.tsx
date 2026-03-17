@@ -26,6 +26,7 @@ import {
   Zap
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { ToolConversionCard } from '@/components/tools/ToolConversionCard'
 
 // Strength level classifications
 type StrengthLevel = 'Beginner' | 'Developing' | 'Intermediate' | 'Advanced' | 'Elite'
@@ -908,20 +909,24 @@ export default function CalisthenicsStrengthStandardsPage() {
         </div>
       </section>
 
-      {/* Final CTA */}
+      {/* Conversion CTA */}
       <section className="py-12 px-4 sm:px-6 bg-[#0F1115]">
-        <div className="max-w-4xl mx-auto text-center">
-          <h2 className="text-xl font-bold mb-3 text-[#E6E9EF]">Ready to Train Smarter?</h2>
-          <p className="text-[#A5A5A5] mb-6 max-w-xl mx-auto">
-            SpartanLab uses your strength levels to generate intelligent, adaptive training programs 
-            that evolve as you progress.
-          </p>
-          <Link href="/onboarding">
-            <Button className="bg-[#C1121F] hover:bg-[#A50E1A] text-white px-8 py-3 rounded-lg gap-2">
-              Build My Calisthenics Program
-              <ArrowRight className="w-4 h-4" />
-            </Button>
-          </Link>
+        <div className="max-w-4xl mx-auto">
+          <ToolConversionCard
+            context="strength-standards"
+            toolData={result ? {
+              maxPullUps: pullUps ? parseInt(pullUps) : undefined,
+              weightedPullUp: weightedPullUp ? parseFloat(weightedPullUp) : undefined,
+              maxPushUps: pushUps ? parseInt(pushUps) : undefined,
+              maxDips: dips ? parseInt(dips) : undefined,
+              weightedDip: weightedDip ? parseFloat(weightedDip) : undefined,
+              lSitHold: lSitHold ? parseInt(lSitHold) : undefined,
+              hollowHold: hollowHold ? parseInt(hollowHold) : undefined,
+              bodyweight: bodyweight ? parseFloat(bodyweight) : undefined,
+              strengthLevel: result.overallLevel,
+              limitingFactors: result.movementBias !== 'balanced' ? [result.movementBias] : undefined,
+            } : undefined}
+          />
         </div>
       </section>
     </SeoPageLayout>

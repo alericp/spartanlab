@@ -22,6 +22,7 @@ import {
   type ReadinessResult
 } from '@/lib/readiness/skill-readiness'
 import { ReadinessResultCard } from '@/components/calculators/ReadinessResultCard'
+import { ToolConversionCard } from '@/components/tools/ToolConversionCard'
 import { cn } from '@/lib/utils'
 
 // FAQ Data
@@ -501,21 +502,20 @@ export default function MuscleUpReadinessCalculator() {
           </div>
         </section>
 
-        {/* Final CTA Section */}
-        <section className="mt-12 bg-gradient-to-br from-[#C1121F]/10 to-[#C1121F]/5 border border-[#C1121F]/20 rounded-xl p-6 text-center">
-          <h2 className="text-xl font-bold text-[#E6E9EF] mb-2">
-            Ready to Train for Muscle-Up?
-          </h2>
-          <p className="text-[#A4ACB8] mb-4 max-w-md mx-auto">
-            SpartanLab generates adaptive programs that build the explosive pulling strength and transition power you need for muscle-ups.
-          </p>
-          <Link href="/onboarding">
-            <Button className="bg-[#C1121F] hover:bg-[#A50E1A] text-white px-6">
-              Build Your Muscle-Up Program
-              <ChevronRight className="w-4 h-4 ml-1" />
-            </Button>
-          </Link>
-          <p className="text-xs text-[#6B7280] mt-2">Free to start. No credit card required.</p>
+        {/* Conversion CTA */}
+        <section className="mt-12">
+          <ToolConversionCard
+            context="muscle-up"
+            toolData={result ? {
+              maxPullUps: maxPullUps ? parseInt(maxPullUps) : undefined,
+              weightedPullUp: weightedPullUpLoad ? parseFloat(weightedPullUpLoad) : undefined,
+              maxDips: maxDips ? parseInt(maxDips) : undefined,
+              lSitHold: lSitHoldTime ? parseInt(lSitHoldTime) : undefined,
+              readinessScore: result.readinessScore,
+              classification: result.classification,
+              limitingFactors: result.limitingFactors.map(lf => lf.factor),
+            } : undefined}
+          />
         </section>
 
         {/* Back to Tools */}

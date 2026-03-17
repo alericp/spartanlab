@@ -20,6 +20,7 @@ import {
 import { cn } from '@/lib/utils'
 import { SpartanIcon } from '@/components/brand/SpartanLogo'
 import { NextSteps } from '@/components/seo/RelatedContent'
+import { ToolConversionCard } from '@/components/tools/ToolConversionCard'
 import { getToolCluster } from '@/lib/seo/skill-clusters'
 import { 
   calculateBodyFat, 
@@ -339,9 +340,22 @@ export function BodyFatCalculatorPage() {
           </div>
         </div>
 
+        {/* Conversion CTA */}
+        {result && (
+          <section className="mt-12">
+            <ToolConversionCard
+              context="body-fat"
+              toolData={{
+                bodyweight: undefined, // Bodyweight isn't collected separately
+                bodyFatPercentage: result.bodyFatPercentage,
+              }}
+            />
+          </section>
+        )}
+
         {/* Train With This Data - Internal Linking */}
         {result && getToolCluster('body-fat-calculator') && (
-          <div className="mt-12">
+          <div className="mt-8">
             <NextSteps 
               cluster={getToolCluster('body-fat-calculator')!} 
               title="Train With This Data"

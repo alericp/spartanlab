@@ -1,16 +1,25 @@
 'use client'
 
-import { useState } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { MarketingHeader } from '@/components/marketing/MarketingHeader'
 import { MarketingFooter } from '@/components/marketing/MarketingFooter'
 import { Check, ArrowRight } from 'lucide-react'
 import { trackUpgradeStarted, trackSignUpStarted } from '@/lib/analytics'
-import { useAuth } from '@clerk/nextjs'
-import { toast } from 'sonner'
 import { PRICING, TRIAL } from '@/lib/billing/pricing'
+
+/**
+ * STATIC-SAFE Pricing Page
+ * 
+ * This page is in the (public) route group and must be prerenderable.
+ * It does NOT use any Clerk hooks (useAuth, useUser, etc.).
+ * 
+ * CTA behavior:
+ * - Free plan: Links to /sign-up
+ * - Pro plan: Links to /upgrade (authenticated route)
+ *   - If user is not signed in, middleware redirects to sign-in
+ *   - If user is signed in, they can proceed to checkout
+ */
 
 const PLANS = [
   {
@@ -38,7 +47,7 @@ const PLANS = [
     description: 'Full Adaptive Training Engine access',
     cta: TRIAL.ctaText,
     ctaVariant: 'default' as const,
-    ctaLink: '/sign-up',
+    ctaLink: '/upgrade', // Links to authenticated upgrade page
     featured: true,
     features: [
       'Adaptive Training Engine',
@@ -80,57 +89,6 @@ const FAQ = [
 ]
 
 export default function PricingPage() {
-  const router = useRouter()
-  const [isLoading, setIsLoading] = useState(false)
-  const { isSignedIn, isLoaded: isAuthLoaded } = useAuth()
-  
-  const handleProUpgrade = async () => {
-    // Wait for auth to fully load before making any decisions
-    if (!isAuthLoaded) {
-      // Auth still loading - show loading state and wait
-      setIsLoading(true)
-      return
-    }
-    
-    // If not authenticated, redirect to sign-up with return URL
-    if (!isSignedIn) {
-      trackUpgradeStarted('pricing_page')
-      router.push('/sign-up?redirect_url=/upgrade')
-      return
-    }
-
-    // User is authenticated - proceed directly to checkout
-    setIsLoading(true)
-    trackUpgradeStarted('pricing_page')
-
-    try {
-      const res = await fetch('/api/stripe/create-checkout-session', {
-        method: 'POST',
-      })
-
-      const data = await res.json()
-
-      if (data.error) {
-        if (res.status === 401) {
-          // Session expired or invalid - redirect to sign-in
-          router.push('/sign-in?redirect_url=/upgrade')
-          return
-        }
-        toast.error('Failed to start checkout. Please try again.')
-        setIsLoading(false)
-        return
-      }
-
-      if (data.url) {
-        window.location.href = data.url
-      }
-    } catch (error) {
-console.error('Checkout error:', error)
-    toast.error('Unable to start checkout. Please try again.')
-      setIsLoading(false)
-    }
-  }
-
   return (
     <div className="min-h-screen bg-[#121212] text-[#F5F5F5]">
       <MarketingHeader />
@@ -182,23 +140,18 @@ console.error('Checkout error:', error)
 
                 {plan.featured ? (
                   <div className="mb-8">
-                    <Button
-                      onClick={handleProUpgrade}
-                      disabled={isLoading || !isAuthLoaded}
-                      className="w-full h-12 bg-[#E63946] hover:bg-[#D62828] disabled:opacity-50"
+                    <Link 
+                      href={plan.ctaLink} 
+                      className="block"
+                      onClick={() => trackUpgradeStarted('pricing_page')}
                     >
-                      {isLoading || !isAuthLoaded ? (
-                        <>
-                          <div className="w-4 h-4 mr-2 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                          {!isAuthLoaded ? 'Loading...' : 'Processing...'}
-                        </>
-                      ) : (
-                        <>
-                          {plan.cta}
-                          <ArrowRight className="w-4 h-4 ml-2" />
-                        </>
-                      )}
-                    </Button>
+                      <Button
+                        className="w-full h-12 bg-[#E63946] hover:bg-[#D62828]"
+                      >
+                        {plan.cta}
+                        <ArrowRight className="w-4 h-4 ml-2" />
+                      </Button>
+                    </Link>
                     {'trialExplanation' in plan && plan.trialExplanation && (
                       <p className="text-xs text-center text-[#6B7280] mt-3">
                         {plan.trialExplanation}
@@ -352,7 +305,7 @@ console.error('Checkout error:', error)
           <p className="text-[#A5A5A5] max-w-xl mx-auto mb-8">
             Generate your first training program and begin tracking your progress today.
           </p>
-          <Link href="/dashboard">
+          <Link href="/sign-up" onClick={() => trackSignUpStarted('pricing_cta')}>
             <Button size="lg" className="bg-[#E63946] hover:bg-[#D62828] px-10 h-12">
               Start Free
               <ArrowRight className="w-4 h-4 ml-2" />

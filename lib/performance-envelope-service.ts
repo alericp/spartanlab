@@ -28,7 +28,7 @@ export async function getOrCreateEnvelope(
   movementFamily: MovementFamily,
   goalType: TrainingGoalType
 ): Promise<PerformanceEnvelope> {
-  const db = getDb()
+  const db = await getDb()
 
   // Try to get existing envelope
   const existing = await db.query(
@@ -64,7 +64,7 @@ export async function getEnvelope(
   movementFamily: MovementFamily,
   goalType: TrainingGoalType
 ): Promise<PerformanceEnvelope | null> {
-  const db = getDb()
+  const db = await getDb()
 
   const result = await db.query(
     `SELECT * FROM performance_envelopes 
@@ -79,7 +79,7 @@ export async function getEnvelope(
  * Get all envelopes for an athlete
  */
 export async function getAthleteEnvelopes(athleteId: string): Promise<PerformanceEnvelope[]> {
-  const db = getDb()
+  const db = await getDb()
 
   const result = await db.query(
     `SELECT * FROM performance_envelopes 
@@ -96,7 +96,7 @@ export async function getAthleteEnvelopes(athleteId: string): Promise<Performanc
  * Enhanced to capture all the new signal fields
  */
 export async function recordSignal(signal: TrainingResponseSignal): Promise<void> {
-  const db = getDb()
+  const db = await getDb()
 
   await db.query(
     `INSERT INTO training_response_signals 
@@ -147,7 +147,7 @@ export async function getRecentSignals(
   goalType: TrainingGoalType,
   limit: number = 20
 ): Promise<TrainingResponseSignal[]> {
-  const db = getDb()
+  const db = await getDb()
 
   const result = await db.query(
     `SELECT * FROM training_response_signals 
@@ -236,7 +236,7 @@ export async function applyFatigueFeedback(
  * Handles both legacy and new enhanced fields
  */
 async function saveEnvelope(envelope: PerformanceEnvelope): Promise<void> {
-  const db = getDb()
+  const db = await getDb()
 
   const existing = await getEnvelope(envelope.athleteId, envelope.movementFamily, envelope.goalType)
 
@@ -358,7 +358,7 @@ async function saveEnvelopeSnapshot(
   envelope: PerformanceEnvelope,
   triggerEvent: string = 'regular_update'
 ): Promise<void> {
-  const db = getDb()
+  const db = await getDb()
 
   await db.query(
     `INSERT INTO performance_envelope_snapshots 
@@ -402,7 +402,7 @@ export async function getEnvelopeHistory(
     recovery_needs?: string
   }>
 > {
-  const db = getDb()
+  const db = await getDb()
 
   const result = await db.query(
     `SELECT created_at, rep_range, weekly_volume_range, density_level, 

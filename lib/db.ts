@@ -104,10 +104,10 @@ export async function isDatabaseConnected(): Promise<boolean> {
 }
 
 /**
- * Get the Neon SQL client (sync wrapper for tagged template usage)
+ * Get the Neon SQL client
  * Returns null if database is not available
  */
-export function getDb() {
+export async function getDb() {
   if (!initialized) {
     initializeClient()
   }

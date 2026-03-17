@@ -52,8 +52,11 @@ export default function FrontLeverReadinessCalculator() {
   const [weightedPullUpLoad, setWeightedPullUpLoad] = useState('')
   const [hollowHoldTime, setHollowHoldTime] = useState('')
   const [tuckFrontLeverHold, setTuckFrontLeverHold] = useState('')
+  const [lSitHoldTime, setLSitHoldTime] = useState('')
+  const [bodyweight, setBodyweight] = useState('')
   const [hasRings, setHasRings] = useState(false)
   const [hasBar, setHasBar] = useState(true)
+  const [showAdvanced, setShowAdvanced] = useState(false)
   
   // Result state
   const [result, setResult] = useState<ReadinessResult | null>(null)
@@ -106,8 +109,11 @@ export default function FrontLeverReadinessCalculator() {
     setWeightedPullUpLoad('')
     setHollowHoldTime('')
     setTuckFrontLeverHold('')
+    setLSitHoldTime('')
+    setBodyweight('')
     setHasRings(false)
     setHasBar(true)
+    setShowAdvanced(false)
   }
 
   const toggleFaq = (index: number) => {
@@ -142,9 +148,12 @@ export default function FrontLeverReadinessCalculator() {
           <h1 className="text-3xl md:text-4xl font-bold text-[#E6E9EF] mb-4">
             Front Lever Readiness Calculator
           </h1>
-          <p className="text-[#A4ACB8] text-lg max-w-2xl mx-auto">
+          <p className="text-[#A4ACB8] text-lg max-w-2xl mx-auto mb-3">
             Evaluate your pulling strength, core tension, and skill experience to determine
             your readiness for front lever progressions.
+          </p>
+          <p className="text-xs text-[#6B7280] max-w-lg mx-auto">
+            Built from structured calisthenics readiness principles used to evaluate real front lever progress.
           </p>
         </div>
 
@@ -220,6 +229,52 @@ export default function FrontLeverReadinessCalculator() {
                 />
                 <p className="text-xs text-[#6B7280]">Leave blank if you cannot hold a tuck</p>
               </div>
+
+              {/* L-Sit Hold Time (Optional) */}
+              <div className="space-y-2">
+                <Label htmlFor="lsit" className="text-[#E6E9EF]">
+                  L-Sit Hold (seconds) <span className="text-[#6B7280]">- optional</span>
+                </Label>
+                <Input
+                  id="lsit"
+                  type="number"
+                  placeholder="e.g., 20"
+                  value={lSitHoldTime}
+                  onChange={(e) => setLSitHoldTime(e.target.value)}
+                  className="bg-[#1A1F26] border-[#2B313A] text-[#E6E9EF]"
+                />
+                <p className="text-xs text-[#6B7280]">Indicates core compression strength</p>
+              </div>
+
+              {/* Advanced Options Toggle */}
+              <button
+                type="button"
+                onClick={() => setShowAdvanced(!showAdvanced)}
+                className="text-sm text-[#C1121F] hover:text-[#A50E1A] flex items-center gap-1 mt-2"
+              >
+                {showAdvanced ? 'Hide' : 'Show'} advanced options
+                <ChevronDown className={cn("w-4 h-4 transition-transform", showAdvanced && "rotate-180")} />
+              </button>
+
+              {/* Advanced Options */}
+              {showAdvanced && (
+                <div className="space-y-4 pt-2 border-t border-[#2B313A]">
+                  <div className="space-y-2">
+                    <Label htmlFor="bodyweight" className="text-[#E6E9EF]">
+                      Bodyweight (lbs) <span className="text-[#6B7280]">- optional</span>
+                    </Label>
+                    <Input
+                      id="bodyweight"
+                      type="number"
+                      placeholder="e.g., 165"
+                      value={bodyweight}
+                      onChange={(e) => setBodyweight(e.target.value)}
+                      className="bg-[#1A1F26] border-[#2B313A] text-[#E6E9EF]"
+                    />
+                    <p className="text-xs text-[#6B7280]">Helps contextualize weighted pull-up strength</p>
+                  </div>
+                </div>
+              )}
 
               {/* Equipment */}
               <div className="space-y-3">

@@ -1,8 +1,5 @@
 'use client'
 
-// Prevent static prerendering to avoid auth issues during build
-export const dynamic = 'force-dynamic'
-
 import { useState } from 'react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
@@ -25,7 +22,7 @@ import {
   type ReadinessResult
 } from '@/lib/readiness/skill-readiness'
 import { ReadinessResultCard } from '@/components/calculators/ReadinessResultCard'
-import { ToolConversionCard } from '@/components/tools/ToolConversionCard'
+import { ToolConversionCardStatic } from '@/components/tools/ToolConversionCardStatic'
 import { trackToolUsed } from '@/lib/analytics'
 import { cn } from '@/lib/utils'
 
@@ -511,7 +508,7 @@ export default function MuscleUpReadinessCalculator() {
 
         {/* Conversion CTA */}
         <section className="mt-12">
-          <ToolConversionCard
+          <ToolConversionCardStatic
             context="muscle-up"
             toolData={result ? {
               maxPullUps: maxPullUps ? parseInt(maxPullUps) : undefined,

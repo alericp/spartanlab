@@ -1,8 +1,5 @@
 'use client'
 
-// Prevent static prerendering to avoid auth issues during build
-export const dynamic = 'force-dynamic'
-
 import { useState } from 'react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
@@ -27,7 +24,7 @@ import {
 import { spartanScoreFromFrontLeverInputs, type SpartanStrengthResult } from '@/lib/strength/spartan-strength-score'
 import { ReadinessResultCard } from '@/components/calculators/ReadinessResultCard'
 import { SpartanScoreCard } from '@/components/athlete/SpartanScoreCard'
-import { ToolConversionCard } from '@/components/tools/ToolConversionCard'
+import { ToolConversionCardStatic } from '@/components/tools/ToolConversionCardStatic'
 import { trackToolUsed } from '@/lib/analytics'
 import { cn } from '@/lib/utils'
 
@@ -510,7 +507,7 @@ export default function FrontLeverReadinessCalculator() {
 
         {/* Conversion CTA */}
         <section className="mt-12">
-          <ToolConversionCard
+          <ToolConversionCardStatic
             context="front-lever"
             toolData={result ? {
               maxPullUps: maxPullUps ? parseInt(maxPullUps) : undefined,

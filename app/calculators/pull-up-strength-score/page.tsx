@@ -1,8 +1,5 @@
 'use client'
 
-// Prevent static prerendering to avoid auth issues during build
-export const dynamic = 'force-dynamic'
-
 import { useState } from 'react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
@@ -23,7 +20,7 @@ import {
 } from 'lucide-react'
 import { SpartanIcon } from '@/components/brand/SpartanLogo'
 import { cn } from '@/lib/utils'
-import { ToolConversionCard } from '@/components/tools/ToolConversionCard'
+import { ToolConversionCardStatic } from '@/components/tools/ToolConversionCardStatic'
 import { trackToolUsed } from '@/lib/analytics'
 
 // Scoring logic
@@ -440,7 +437,7 @@ Calculate yours at SpartanLab.io/calculators/pull-up-strength-score`
 
         {/* Conversion CTA */}
         <section className="mb-8">
-          <ToolConversionCard
+          <ToolConversionCardStatic
             context="front-lever"
             toolData={result ? {
               maxPullUps: parseInt(maxPullUps) || undefined,

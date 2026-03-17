@@ -1,8 +1,4 @@
 import { Metadata } from 'next'
-
-// Prevent static prerendering to avoid auth issues during build
-export const dynamic = 'force-dynamic'
-
 import Link from 'next/link'
 import { ArrowRight, Calculator, Dumbbell, Target, Activity, TrendingUp, Zap } from 'lucide-react'
 import { SpartanIcon } from '@/components/brand/SpartanLogo'
@@ -11,7 +7,7 @@ import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { BackNav } from '@/components/navigation/BackNav'
 import { JsonLd } from '@/components/seo/JsonLd'
-import { ToolConversionCard } from '@/components/tools/ToolConversionCard'
+import { ToolConversionCardStatic } from '@/components/tools/ToolConversionCardStatic'
 import { SITE_CONFIG, generateBreadcrumbSchema, generateArticleSchema } from '@/lib/seo'
 
 export const metadata: Metadata = {
@@ -167,7 +163,7 @@ export default function CalculatorsHubPage() {
 
         {/* Conversion CTA */}
         <section className="py-12 border-t border-[#2B313A]">
-          <ToolConversionCard context="strength-standards" />
+          <ToolConversionCardStatic context="strength-standards" />
         </section>
 
         {/* Info Section */}

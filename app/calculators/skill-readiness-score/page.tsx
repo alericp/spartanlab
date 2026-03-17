@@ -1,8 +1,5 @@
 'use client'
 
-// Prevent static prerendering to avoid auth issues during build
-export const dynamic = 'force-dynamic'
-
 import { useState } from 'react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
@@ -21,7 +18,7 @@ import {
   ArrowRight
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { ToolConversionCard } from '@/components/tools/ToolConversionCard'
+import { ToolConversionCardStatic } from '@/components/tools/ToolConversionCardStatic'
 import { trackToolUsed } from '@/lib/analytics'
 
 // Scoring logic
@@ -480,7 +477,7 @@ Calculate yours at SpartanLab.io/calculators/skill-readiness-score`
 
         {/* Conversion CTA */}
         <section>
-          <ToolConversionCard
+          <ToolConversionCardStatic
             context="general"
             toolData={result ? {
               maxPullUps: parseInt(maxPullUps) || undefined,

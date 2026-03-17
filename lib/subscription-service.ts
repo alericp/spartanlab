@@ -22,6 +22,9 @@ export interface SubscriptionInfo {
 
 /**
  * Get user subscription info from database
+ * This is the SERVER-SIDE SOURCE OF TRUTH for subscription status
+ * 
+ * Queries the new subscription_status and trial_ends_at columns for accurate trial tracking
  */
 export async function getUserSubscription(clerkId: string): Promise<SubscriptionInfo> {
   // Default free subscription
@@ -39,10 +42,19 @@ export async function getUserSubscription(clerkId: string): Promise<Subscription
   try {
     const result = await queryOne<{
       subscription_plan: string
+      subscription_status: string | null
+      trial_ends_at: string | null
       stripe_customer_id: string | null
       stripe_subscription_id: string | null
     }>(
-      'SELECT subscription_plan, stripe_customer_id, stripe_subscription_id FROM users WHERE clerk_id = $1',
+      `SELECT 
+        subscription_plan, 
+        subscription_status,
+        trial_ends_at,
+        stripe_customer_id, 
+        stripe_subscription_id 
+       FROM users 
+       WHERE clerk_id = $1`,
       [clerkId]
     )
 
@@ -50,9 +62,22 @@ export async function getUserSubscription(clerkId: string): Promise<Subscription
       return defaultSub
     }
 
+    const plan = (result.subscription_plan as SubscriptionPlan) || 'free'
+    let status = (result.subscription_status as SubscriptionStatus) || 'none'
+    
+    // Check if trial has expired
+    if (status === 'trialing' && result.trial_ends_at) {
+      const trialEndsAt = new Date(result.trial_ends_at)
+      const now = new Date()
+      if (trialEndsAt < now) {
+        // Trial expired - revert to none status
+        status = 'none'
+      }
+    }
+
     return {
-      plan: (result.subscription_plan as SubscriptionPlan) || 'free',
-      status: result.stripe_subscription_id ? 'active' : 'none',
+      plan: plan,
+      status: status,
       stripeCustomerId: result.stripe_customer_id,
       stripeSubscriptionId: result.stripe_subscription_id,
     }
@@ -112,13 +137,18 @@ export async function getUserClerkIdByStripeCustomer(stripeCustomerId: string): 
 
 /**
  * Update user subscription in database (called from Stripe webhook)
+ * 
+ * Now tracks subscription_status (active/trialing/canceled/etc) and trial_ends_at
+ * to provide accurate trial and subscription state
  */
 export async function updateUserSubscription(
   clerkId: string,
   data: {
     plan: SubscriptionPlan
+    status: SubscriptionStatus
     stripeCustomerId: string
     stripeSubscriptionId: string
+    trialEndsAt?: Date
   }
 ): Promise<boolean> {
   if (isPreviewMode() || !(await isDatabaseAvailable())) {
@@ -128,10 +158,17 @@ export async function updateUserSubscription(
   try {
     await query(
       `UPDATE users 
-       SET subscription_plan = $1, stripe_customer_id = $2, stripe_subscription_id = $3, updated_at = $4
-       WHERE clerk_id = $5`,
+       SET subscription_plan = $1, 
+           subscription_status = $2,
+           trial_ends_at = $3,
+           stripe_customer_id = $4, 
+           stripe_subscription_id = $5, 
+           updated_at = $6
+       WHERE clerk_id = $7`,
       [
         data.plan,
+        data.status,
+        data.trialEndsAt ? data.trialEndsAt.toISOString() : null,
         data.stripeCustomerId,
         data.stripeSubscriptionId,
         new Date().toISOString(),
@@ -147,6 +184,8 @@ export async function updateUserSubscription(
 
 /**
  * Cancel user subscription in database
+ * 
+ * Downgrades user to free and clears subscription status
  */
 export async function cancelUserSubscription(clerkId: string): Promise<boolean> {
   if (isPreviewMode() || !(await isDatabaseAvailable())) {
@@ -156,7 +195,11 @@ export async function cancelUserSubscription(clerkId: string): Promise<boolean> 
   try {
     await query(
       `UPDATE users 
-       SET subscription_plan = 'free', stripe_subscription_id = NULL, updated_at = $1
+       SET subscription_plan = 'free', 
+           subscription_status = 'canceled',
+           stripe_subscription_id = NULL, 
+           trial_ends_at = NULL,
+           updated_at = $1
        WHERE clerk_id = $2`,
       [new Date().toISOString(), clerkId]
     )

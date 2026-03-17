@@ -5,12 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Beaker } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useOwnerInit } from '@/hooks/useOwnerInit'
-import { 
-  getSimulationMode, 
-  setSimulationMode, 
-  type SimulationMode,
-  getRealSubscriptionStatus,
-} from '@/lib/billing/subscription-status'
+import { useEntitlement, setSimulationMode, type SimulationMode } from '@/hooks/useEntitlement'
 
 /**
  * Owner Simulation Toggle
@@ -23,41 +18,42 @@ import {
 export function OwnerSimulationToggle() {
   // Initialize owner detection from Clerk user email
   const { isOwner, isLoaded } = useOwnerInit()
-  const [mode, setMode] = useState<SimulationMode>('off')
-  const [realStatus, setRealStatus] = useState<string>('free')
+  // Use the new entitlement hook (database-backed)
+  const entitlement = useEntitlement()
   const [mounted, setMounted] = useState(false)
   
   useEffect(() => {
     setMounted(true)
   }, [])
   
-  // Update simulation state when owner status is confirmed
-  useEffect(() => {
-    if (isLoaded && isOwner) {
-      setMode(getSimulationMode())
-      setRealStatus(getRealSubscriptionStatus())
-    }
-  }, [isLoaded, isOwner])
-  
   // Listen for simulation changes from other tabs/components
   useEffect(() => {
-    const handleChange = (e: CustomEvent<SimulationMode>) => {
-      setMode(e.detail)
+    const handleChange = () => {
+      // Revalidate entitlement when simulation changes
+      entitlement.mutate()
     }
     
-    window.addEventListener('simulation-mode-changed', handleChange as EventListener)
+    window.addEventListener('entitlement-simulation-changed', handleChange)
     return () => {
-      window.removeEventListener('simulation-mode-changed', handleChange as EventListener)
+      window.removeEventListener('entitlement-simulation-changed', handleChange)
     }
-  }, [])
+  }, [entitlement])
   
   // Only render for owner after auth is loaded
   if (!mounted || !isLoaded || !isOwner) return null
   
+  // Get mode from entitlement hook
+  const mode = entitlement.simulationMode
+  // Real status from database (before simulation overlay)
+  const realStatus = entitlement.accessSource === 'ownerSimulation' 
+    ? (entitlement.isPro ? 'pro' : 'free') // Would need to track this separately 
+    : entitlement.plan
+  
   const handleModeChange = (newMode: SimulationMode) => {
     setSimulationMode(newMode)
-    setMode(newMode)
-    // Force page refresh to update all feature gating
+    // Revalidate entitlement to pick up simulation change
+    entitlement.mutate()
+    // Force page refresh to update all feature gating (components using legacy hasProAccess)
     window.location.reload()
   }
   

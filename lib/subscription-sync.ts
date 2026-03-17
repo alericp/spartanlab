@@ -23,7 +23,9 @@ export interface StripeSubscriptionData {
 
 /**
  * Update user with Stripe subscription data
- * Syncs Stripe customer/subscription IDs and status to the database
+ * 
+ * Syncs Stripe customer/subscription IDs, status, and trial end date to the database.
+ * Now updates subscription_status and trial_ends_at columns for accurate trial tracking.
  */
 export async function syncStripeSubscriptionToUser(
   userId: string,
@@ -48,26 +50,30 @@ export async function syncStripeSubscriptionToUser(
         ? 'pro' 
         : 'free'
 
-    // Update user with Stripe data
+    // Update user with Stripe data, including status and trial end date
     const result = await query<User>(
       `UPDATE users 
        SET stripe_customer_id = $1,
            stripe_subscription_id = $2,
            subscription_plan = $3,
-           updated_at = $4
-       WHERE id = $5
+           subscription_status = $4,
+           trial_ends_at = $5,
+           updated_at = $6
+       WHERE id = $7
        RETURNING id, email, username, subscription_plan, stripe_customer_id, stripe_subscription_id, created_at`,
       [
         subscriptionData.customerId,
         subscriptionData.subscriptionId,
         subscriptionPlan,
+        subscriptionData.status, // 'active' | 'trialing' | 'canceled' | etc
+        subscriptionData.status === 'trialing' ? new Date(subscriptionData.currentPeriodEnd).toISOString() : null,
         new Date().toISOString(),
         userId,
       ]
     )
 
     if (result && result.length > 0) {
-      console.log(`[Subscription Sync] Successfully updated user ${userId} to plan: ${subscriptionPlan}`)
+      console.log(`[Subscription Sync] Successfully updated user ${userId} to plan: ${subscriptionPlan}, status: ${subscriptionData.status}`)
       return result[0]
     }
 
@@ -81,7 +87,8 @@ export async function syncStripeSubscriptionToUser(
 
 /**
  * Downgrade user subscription (for cancellations)
- * Sets subscription_plan to 'free' and clears subscription ID
+ * 
+ * Sets subscription_plan to 'free', status to 'canceled', and clears subscription ID
  */
 export async function downgradeUserSubscription(userId: string): Promise<User | null> {
   console.log(`[Subscription Sync] Downgrading user ${userId} to free plan`)
@@ -96,7 +103,9 @@ export async function downgradeUserSubscription(userId: string): Promise<User | 
     const result = await query<User>(
       `UPDATE users 
        SET subscription_plan = 'free',
+           subscription_status = 'canceled',
            stripe_subscription_id = NULL,
+           trial_ends_at = NULL,
            updated_at = $1
        WHERE id = $2
        RETURNING id, email, username, subscription_plan, stripe_customer_id, stripe_subscription_id, created_at`,

@@ -6,9 +6,14 @@ import {
   getConstraintContextForRoadmap,
   type SkillType,
 } from '@/lib/constraint-integration'
+import { requireProAccess } from '@/lib/server/require-pro'
 
 export async function GET(request: NextRequest) {
   try {
+    // Pro feature enforcement - skill constraint analysis is Pro-only
+    const denied = await requireProAccess()
+    if (denied) return denied
+    
     const { userId } = await auth()
     
     if (!userId) {

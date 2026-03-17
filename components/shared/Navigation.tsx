@@ -9,7 +9,7 @@ import { LayoutDashboard, Target, Dumbbell, Calendar, ClipboardList, TrendingUp,
 import { SpartanIcon } from '@/components/brand/SpartanLogo'
 import { useState, useEffect } from 'react'
 import { cn } from '@/lib/utils'
-import { SubscriptionBadge, useSubscriptionDisplay } from '@/components/billing/SubscriptionBadge'
+import { SubscriptionBadge, useEntitlement } from '@/components/billing/SubscriptionBadge'
 import { useOwnerInit } from '@/hooks/useOwnerInit'
 
 // Primary navigation - essential daily actions
@@ -75,7 +75,7 @@ export function Navigation() {
   const pathname = usePathname()
   const [mobileOpen, setMobileOpen] = useState(false)
   const { userId, signOut, isLoaded } = useAuth()
-  const subscriptionInfo = useSubscriptionDisplay()
+  const entitlement = useEntitlement()
   
   // Initialize owner detection from Clerk auth - this enables owner simulation throughout the app
   useOwnerInit()
@@ -111,7 +111,7 @@ export function Navigation() {
               <span className="text-xl font-bold hidden sm:inline">SpartanLab</span>
             </Link>
             {/* Pro/Trial badge - only on desktop */}
-            {subscriptionInfo.isPaid && (
+            {entitlement.hasProAccess && (
               <div className="hidden sm:block">
                 <SubscriptionBadge size="sm" showTrialDays={false} />
               </div>

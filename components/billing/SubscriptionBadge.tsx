@@ -3,7 +3,10 @@
 import { Badge } from '@/components/ui/badge'
 import { Crown, Sparkles } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { useSubscriptionDisplay, type UISubscriptionStatus } from '@/lib/billing/subscription-status'
+import { useEntitlement } from '@/hooks/useEntitlement'
+
+// UI status type for component props
+export type UISubscriptionStatus = 'free' | 'trial' | 'pro'
 
 // =============================================================================
 // SUBSCRIPTION BADGE COMPONENT
@@ -33,8 +36,10 @@ export function SubscriptionBadge({
   showTrialDays = true,
   className,
 }: SubscriptionBadgeProps) {
-  const subscriptionInfo = useSubscriptionDisplay()
-  const status = statusOverride ?? subscriptionInfo.status
+  const entitlement = useEntitlement()
+  // Derive status from entitlement
+  const derivedStatus: UISubscriptionStatus = entitlement.isTrialing ? 'trial' : (entitlement.hasProAccess ? 'pro' : 'free')
+  const status = statusOverride ?? derivedStatus
   
   // Free users don't get a badge
   if (status === 'free') return null
@@ -44,9 +49,8 @@ export function SubscriptionBadge({
   
   // Badge content based on status
   const Icon = isPro ? Crown : Sparkles
-  const label = isPro ? 'Pro' : (showTrialDays && subscriptionInfo.trialDaysRemaining > 0 
-    ? `Trial · ${subscriptionInfo.trialDaysRemaining}d` 
-    : 'Trial')
+  // Note: We don't have exact trial days from entitlement API, just show "Trial"
+  const label = isPro ? 'Pro' : 'Trial'
   
   return (
     <Badge 
@@ -81,9 +85,9 @@ interface SubscriptionStatusCardProps {
  * Compact subscription status display for account/settings areas
  */
 export function SubscriptionStatusIndicator({ className }: SubscriptionStatusCardProps) {
-  const info = useSubscriptionDisplay()
+  const entitlement = useEntitlement()
   
-  if (info.status === 'free') {
+  if (!entitlement.hasProAccess) {
     return (
       <div className={cn("flex items-center gap-2", className)}>
         <span className="text-sm text-[#6B7280]">Free Plan</span>
@@ -94,9 +98,9 @@ export function SubscriptionStatusIndicator({ className }: SubscriptionStatusCar
   return (
     <div className={cn("flex items-center gap-2", className)}>
       <SubscriptionBadge size="md" />
-      {info.isTrialing && info.trialDaysRemaining > 0 && (
+      {entitlement.isTrialing && (
         <span className="text-xs text-[#6B7280]">
-          ends in {info.trialDaysRemaining} day{info.trialDaysRemaining !== 1 ? 's' : ''}
+          Trial active
         </span>
       )}
     </div>
@@ -107,4 +111,8 @@ export function SubscriptionStatusIndicator({ className }: SubscriptionStatusCar
 // RE-EXPORT HOOK FOR CONVENIENCE
 // =============================================================================
 
+// Re-export the new entitlement hook for components that import from here
+export { useEntitlement } from '@/hooks/useEntitlement'
+
+// Legacy re-export (deprecated - use useEntitlement instead)
 export { useSubscriptionDisplay } from '@/lib/billing/subscription-status'

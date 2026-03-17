@@ -22,73 +22,13 @@
 
 import dynamic from 'next/dynamic'
 import { Card, CardContent } from '@/components/ui/card'
-import { Sparkles
-} from 'lucide-react'
+import { Sparkles } from 'lucide-react'
 
-// =============================================================================
-// TYPES (exported for consumers and client component)
-// =============================================================================
+// Import types from separate auth-free file
+import type { ToolConversionCardProps } from './tool-conversion-types'
 
-export type ToolContext = 
-  | 'front-lever'
-  | 'planche'
-  | 'muscle-up'
-  | 'iron-cross'
-  | 'strength-standards'
-  | 'body-fat'
-  | 'planche-lean'
-  | 'back-lever'
-  | 'handstand'
-  | 'l-sit'
-  | 'general'
-
-export interface ToolDataPayload {
-  // Common metrics
-  maxPullUps?: number
-  maxDips?: number
-  maxPushUps?: number
-  weightedPullUp?: number
-  weightedDip?: number
-  bodyweight?: number
-  hollowHold?: number
-  lSitHold?: number
-  
-  // Skill-specific
-  frontLeverHold?: number
-  plancheLeanHold?: number
-  plancheLeanDistance?: number
-  tuckFrontLeverHold?: number
-  ringSupport?: number
-  wallHandstand?: number
-  
-  // Results
-  readinessScore?: number
-  classification?: string
-  limitingFactors?: string[]
-  bodyFatPercentage?: number
-  strengthLevel?: string
-}
-
-export interface ToolConversionCardProps {
-  /** Tool context for customized messaging */
-  context: ToolContext
-  /** Optional tool data to pass to onboarding */
-  toolData?: ToolDataPayload
-  /** Custom headline override */
-  headline?: string
-  /** Custom description override */
-  description?: string
-  /** Custom primary CTA text */
-  primaryCtaText?: string
-  /** Custom secondary CTA text */
-  secondaryCtaText?: string
-  /** Custom secondary CTA href */
-  secondaryCtaHref?: string
-  /** Show compact version */
-  compact?: boolean
-  /** Custom class name */
-  className?: string
-}
+// Re-export types for consumers
+export type { ToolContext, ToolDataPayload, ToolConversionCardProps } from './tool-conversion-types'
 
 // =============================================================================
 // DYNAMIC CLIENT COMPONENT (ssr: false prevents auth hooks during prerender)

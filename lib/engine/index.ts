@@ -412,3 +412,36 @@ export {
   type ProgramHistoryStats,
   type ProgramComparison,
 } from '../program-history-helpers'
+
+// Hybrid Strength Engine (Deadlift / Streetlifting Support)
+export {
+  buildHybridProgrammingContext,
+  checkDeadliftConflict,
+  getDeadliftDayExclusions,
+  getDeadliftDayReductions,
+  recommendDeadliftPlacement,
+  checkStreetliftingConflicts,
+  generateDeadliftExplanation,
+  DEADLIFT_CONFLICT_MAP,
+  DEADLIFT_EXERCISE_DEFINITIONS,
+  type HybridProgrammingContext,
+  type FatigueConflict,
+  type DeadliftPlacement,
+  type HybridExplanation,
+} from '../hybrid-strength-engine'
+
+// Hybrid Strength Integration (Session-level hooks)
+export {
+  getHybridSessionDecision,
+  planHybridWeek,
+  filterExercisesForHybridSession,
+  getHybridVolumeReduction,
+  generateHybridExplanations,
+  getHybridContextFromProfile,
+  hasHybridFeatures,
+  shouldProtectSkillSession,
+  getMaxHybridExercisesForSession,
+  type HybridSessionDecision,
+  type HybridWeeklyPlan,
+  type HybridProgramExplanation,
+} from '../hybrid-strength-integration'

@@ -255,3 +255,82 @@ export {
   type PersonalizedFrameworkParams,
   type FrameworkHistory,
 } from '../coaching-framework-engine'
+
+// Training Doctrine Registry
+export {
+  // Types
+  type DoctrineCategory,
+  type TrainingStyleBias,
+  type VolumeProfile,
+  type IntensityProfile,
+  type SkillFrequencyProfile,
+  type ProgressionPhilosophy,
+  type MovementBiasTendency,
+  type PrimaryFocus,
+  type PreferredStructure,
+  type AdvancedApplicability,
+  type TrainingDoctrine,
+  type DoctrineQueryFilters,
+  type DoctrineAttributes,
+  
+  // Registry
+  DOCTRINE_REGISTRY,
+  getAllDoctrineIds,
+  doctrineExists,
+  getDoctrineCount,
+  
+  // Service Functions
+  getDoctrineById,
+  getDoctrineList,
+  getDoctrineAttributes,
+  getAllDoctrineAttributes,
+  findDoctrines,
+  getDoctrinesByCategory,
+  getDoctrinesByFocus,
+  getDoctrinesByFramework,
+  getDoctrineVolumeProfile,
+  getDoctrineSkillFrequency,
+  getDoctrineMovementBias,
+  getDoctrineSafetyNotes,
+  getDoctrineKeyPrinciples,
+  isDoctrineCompatibleWithFramework,
+  findBestDoctrineMatch,
+  getDoctrineRecommendations,
+} from '../training-doctrine-registry'
+
+// Doctrine → Engine Integration Layer
+export {
+  // Types
+  type InfluenceType,
+  type TargetSystem,
+  type DoctrineInfluence,
+  type AthleteDoctrineContext,
+  type DoctrineSelectionResult,
+  type FrameworkInfluenceRecommendation,
+  type WeakPointInfluenceRecommendation,
+  type ProgressionInfluenceRecommendation,
+  type ExerciseInfluenceRecommendation,
+  type ProgramBuilderInfluenceRecommendation,
+  type MovementBiasInfluenceRecommendation,
+  type EnvelopeInfluenceRecommendation,
+  type DoctrineInfluenceResult,
+  
+  // Core Functions
+  selectDoctrinesForAthlete,
+  applyDoctrineInfluence,
+  getDoctrineInfluenceForSystem,
+  shouldReEvaluateDoctrine,
+  
+  // Influence Functions
+  getFrameworkInfluence,
+  getWeakPointInfluence,
+  getProgressionInfluence,
+  getExerciseInfluence,
+  getProgramBuilderInfluence,
+  getMovementBiasInfluence,
+  getEnvelopeInfluence,
+  
+  // Constants
+  DOCTRINE_STABILITY_PERIOD_DAYS,
+  DOCTRINE_REEVAL_TRIGGERS,
+} from '../doctrine-integration-layer'

@@ -613,6 +613,12 @@ export interface FrameworkSelectionInput {
   // Time availability
   weeklySessionsAvailable?: number
   sessionDurationMinutes?: number
+  
+  // Doctrine influence (from Doctrine Integration Layer)
+  doctrineInfluence?: {
+    preferredFrameworks: string[]
+    frameworkAffinityScores: Record<string, number>
+  } | null
 }
 
 export interface FrameworkSelectionResult {
@@ -802,7 +808,18 @@ export function selectFramework(input: FrameworkSelectionInput): FrameworkSelect
       }
     }
     
-    // 12. Readiness-based intensity adjustment
+    // 12. Doctrine influence integration
+    if (input.doctrineInfluence) {
+      const doctrineScore = input.doctrineInfluence.frameworkAffinityScores[frameworkId] || 0
+      if (doctrineScore > 0) {
+        score += doctrineScore * 0.8 // Scale doctrine influence (max ~12 points)
+        if (input.doctrineInfluence.preferredFrameworks.includes(frameworkId)) {
+          reasons[frameworkId].push('Aligns with training doctrine philosophy')
+        }
+      }
+    }
+    
+    // 13. Readiness-based intensity adjustment
     if (input.readinessScore < 60) {
       // Low readiness favors less demanding frameworks
       if (frameworkId === 'skill_frequency') {

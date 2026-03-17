@@ -1128,3 +1128,73 @@ function calculateCombinedConfidence(
   // Average with slight weighting toward readiness (it's more comprehensive)
   return benchmarkConfidence * 0.4 + readinessConfidence * 0.6
 }
+
+// =============================================================================
+// DOCTRINE INFLUENCE INTEGRATION
+// =============================================================================
+
+/**
+ * Apply doctrine-informed weak point weighting.
+ * Adjusts how weak points are prioritized based on training doctrine.
+ *
+ * Examples:
+ * - Tendon-conservative doctrine: emphasize joint/tendon tolerance weak points
+ * - Roadmap doctrine: emphasize missing prerequisites
+ * - Weighted-strength doctrine: emphasize strength deficits for weighted skills
+ */
+export function applyDoctrineInfluenceToWeakPointAssessment(
+  assessment: WeakPointAssessment,
+  doctrineAdjustments: {
+    emphasizeTendonTolerance?: boolean
+    emphasizePrerequisites?: boolean
+    emphasizeStrengthDeficits?: boolean
+    emphasizeMovementBias?: boolean
+    scaleIntensity?: number
+  }
+): WeakPointAssessment {
+  if (!doctrineAdjustments || Object.keys(doctrineAdjustments).length === 0) {
+    return assessment
+  }
+
+  let adjustedSeverity = assessment.primaryLimiter.severityScore
+  const originalType = assessment.primaryLimiter.type
+
+  // Tendon-conservative doctrine: boost tendon/joint concerns
+  if (doctrineAdjustments.emphasizeTendonTolerance && 
+      (originalType === 'tendon_tolerance' || originalType === 'wrist_tolerance')) {
+    adjustedSeverity = Math.min(100, adjustedSeverity + 10)
+  }
+
+  // Roadmap doctrine: boost prerequisite gaps
+  if (doctrineAdjustments.emphasizePrerequisites && 
+      (originalType === 'pull_strength' || originalType === 'push_strength')) {
+    adjustedSeverity = Math.min(100, adjustedSeverity + 8)
+  }
+
+  // Weighted-strength doctrine: boost strength deficits
+  if (doctrineAdjustments.emphasizeStrengthDeficits && 
+      (originalType === 'pull_strength' || originalType === 'push_strength' || 
+       originalType === 'straight_arm_pull_strength' || originalType === 'straight_arm_push_strength')) {
+    adjustedSeverity = Math.min(100, adjustedSeverity + 5)
+  }
+
+  // Movement bias doctrine: boost weak-side emphasis
+  if (doctrineAdjustments.emphasizeMovementBias &&
+      (originalType === 'push_strength' || originalType === 'pull_strength')) {
+    adjustedSeverity = Math.min(100, adjustedSeverity + 3)
+  }
+
+  // Apply intensity scaling if provided
+  if (doctrineAdjustments.scaleIntensity && doctrineAdjustments.scaleIntensity !== 1) {
+    adjustedSeverity = adjustedSeverity * doctrineAdjustments.scaleIntensity
+  }
+
+  return {
+    ...assessment,
+    primaryLimiter: {
+      ...assessment.primaryLimiter,
+      severityScore: Math.min(100, Math.max(0, adjustedSeverity))
+    }
+  }
+}
+}

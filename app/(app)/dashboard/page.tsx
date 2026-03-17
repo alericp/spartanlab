@@ -362,14 +362,19 @@ function DashboardContent() {
     )
   }
 
-  // Check if user has meaningful data
-  const hasWorkoutData = workoutAnalytics && workoutAnalytics.totalWorkouts > 0
-  const hasSkillData = skillSummary && skillSummary.level !== 'none'
-  const hasStrengthData = strengthSummary && strengthSummary.topExercises && strengthSummary.topExercises.length > 0
+  // Check if user has meaningful data - with defensive null guards
+  const hasWorkoutData = !!(workoutAnalytics && typeof workoutAnalytics.totalWorkouts === 'number' && workoutAnalytics.totalWorkouts > 0)
+  const hasSkillData = !!(skillSummary && skillSummary.level && skillSummary.level !== 'none')
+  const hasStrengthData = !!(strengthSummary && Array.isArray(strengthSummary.topExercises) && strengthSummary.topExercises.length > 0)
   const hasMeaningfulData = hasWorkoutData || hasSkillData || hasStrengthData
   
   // Detect early-stage users (fewer than 3 workouts) for conditional UI prioritization
-  const isEarlyStageUser = !workoutAnalytics || workoutAnalytics.totalWorkouts < 3
+  const isEarlyStageUser = !workoutAnalytics || typeof workoutAnalytics.totalWorkouts !== 'number' || workoutAnalytics.totalWorkouts < 3
+  
+  // Safe access helpers for nested properties
+  const safeProgressOverview = progressOverview && typeof progressOverview === 'object' ? progressOverview : null
+  const safeSkills = safeProgressOverview && Array.isArray(safeProgressOverview.skills) ? safeProgressOverview.skills : []
+  const safeStrength = safeProgressOverview && Array.isArray(safeProgressOverview.strength) ? safeProgressOverview.strength : []
 
   // Show empty state for first-time users
   if (!hasMeaningfulData) {
@@ -385,21 +390,27 @@ function DashboardContent() {
       <SectionStack gap="xl">
         
         {/* Welcome Banner for Post-Onboarding */}
-        <WelcomeBanner />
+        <SafeWidget name="WelcomeBanner" hideOnError>
+          <WelcomeBanner />
+        </SafeWidget>
         
         {/* Welcome Card for First-Run Users */}
         {showWelcome && (
-          <WelcomeCard 
-            onDismiss={() => setShowWelcome(false)}
-          />
+          <SafeWidget name="WelcomeCard" hideOnError>
+            <WelcomeCard 
+              onDismiss={() => setShowWelcome(false)}
+            />
+          </SafeWidget>
         )}
         
         {/* Dashboard Introduction for New Users */}
         {!showWelcome && (
-          <DashboardIntroduction 
-            forceShow={showIntroduction}
-            onComplete={() => setShowIntroduction(false)}
-          />
+          <SafeWidget name="DashboardIntroduction" hideOnError>
+            <DashboardIntroduction 
+              forceShow={showIntroduction}
+              onComplete={() => setShowIntroduction(false)}
+            />
+          </SafeWidget>
         )}
         
         {/* Dashboard Header with Intelligence Explanation */}
@@ -426,7 +437,9 @@ function DashboardContent() {
         {/* FIRST RUN GUIDE - Shows new users exactly what to do */}
         {/* ============================================================= */}
         
-        <FirstRunGuide />
+        <SafeWidget name="FirstRunGuide" hideOnError>
+          <FirstRunGuide />
+        </SafeWidget>
         
         {/* ============================================================= */}
         {/* PRIORITY 1: NEXT WORKOUT - What should I do right now? */}
@@ -462,9 +475,11 @@ function DashboardContent() {
         </SafeWidget>
         
         {/* Progress Signals - Lightweight progress indicators */}
-        <div className="px-4">
-          <ProgressSignals variant="inline" />
-        </div>
+        <SafeWidget name="ProgressSignals" hideOnError>
+          <div className="px-4">
+            <ProgressSignals variant="inline" />
+          </div>
+        </SafeWidget>
         
         {/* ============================================================= */}
         {/* PRIORITY 3: READINESS + PROGRAM SNAPSHOT - Quick Status */}
@@ -472,27 +487,35 @@ function DashboardContent() {
         
         <div className="grid gap-4 md:grid-cols-2">
           {/* Daily Readiness - Compact version */}
-          <DailyReadinessCard compact />
+          <SafeWidget name="DailyReadinessCard" hideOnError>
+            <DailyReadinessCard compact />
+          </SafeWidget>
           
           {/* Program Snapshot */}
-          <ProgramSnapshotCard />
+          <SafeWidget name="ProgramSnapshotCard" hideOnError>
+            <ProgramSnapshotCard />
+          </SafeWidget>
         </div>
         
         {/* Training Emphasis - Shows current methodology focus */}
         {trainingMethods && (
-          <TrainingEmphasis
-            primaryEmphasis={trainingMethods.primary.publicLabel}
-            secondaryEmphasis={trainingMethods.secondary?.publicLabel}
-            rationale={trainingMethods.explanation}
-            coachingTip={getCoachingMessage(trainingMethods)}
-          />
+          <SafeWidget name="TrainingEmphasis" hideOnError>
+            <TrainingEmphasis
+              primaryEmphasis={trainingMethods.primary?.publicLabel || ''}
+              secondaryEmphasis={trainingMethods.secondary?.publicLabel}
+              rationale={trainingMethods.explanation || ''}
+              coachingTip={getCoachingMessage(trainingMethods)}
+            />
+          </SafeWidget>
         )}
         
         {/* Progression Insights - Show exercises ready for progression */}
-        {progressionInsights.length > 0 && (
-          <div className="px-4">
-            <ProgressionInsights insights={progressionInsights} />
-          </div>
+        {Array.isArray(progressionInsights) && progressionInsights.length > 0 && (
+          <SafeWidget name="ProgressionInsights" hideOnError>
+            <div className="px-4">
+              <ProgressionInsights insights={progressionInsights} />
+            </div>
+          </SafeWidget>
         )}
         
         {/* ============================================================= */}
@@ -500,7 +523,7 @@ function DashboardContent() {
         {/* Premium progress cards for active skills */}
         {/* ============================================================= */}
         
-        {progressOverview && progressOverview.skills.filter(s => s.progressPercent > 0 || s.sessionsThisMonth > 0).length > 0 && (
+        {safeSkills.filter(s => s && (s.progressPercent > 0 || s.sessionsThisMonth > 0)).length > 0 && (
           <Section id="skill-progress" priority="primary">
             <SectionHeader 
               title="Skill Progress"
@@ -517,7 +540,7 @@ function DashboardContent() {
             />
             <SafeWidget name="SkillProgressSection">
               <SkillProgressSection 
-                skills={progressOverview.skills}
+                skills={safeSkills}
                 focusNotes={constraintInsight?.hasInsight ? [{
                   skillName: focusSummary?.skillName || '',
                   note: constraintInsight.label || '',
@@ -525,7 +548,7 @@ function DashboardContent() {
                 }] : []}
                 goalSummaries={(() => {
                   // Calculate goal summaries from active skills
-                  const activeSkills = progressOverview.skills.filter(s => s.progressPercent > 0)
+                  const activeSkills = safeSkills.filter(s => s && s.progressPercent > 0)
                   if (activeSkills.length === 0) return []
                   
                   const avgProgress = Math.round(
@@ -547,7 +570,7 @@ function DashboardContent() {
                   }
                   
                   // Strength progress if applicable
-                  const strengthSkills = progressOverview.strength.filter(s => s.currentBest > 0)
+                  const strengthSkills = safeStrength.filter(s => s && s.currentBest > 0)
                   if (strengthSkills.length > 0) {
                     const strengthProgress = Math.min(100, Math.round(
                       strengthSkills.reduce((acc, s) => acc + Math.min(100, s.improvement * 10), 0) / strengthSkills.length
@@ -681,10 +704,14 @@ function DashboardContent() {
         {/* PRIORITY 4: TRAINING INSIGHT - One key message */}
         {/* ============================================================= */}
         
-        <TrainingInsightQuote />
+        <SafeWidget name="TrainingInsightQuote" hideOnError>
+          <TrainingInsightQuote />
+        </SafeWidget>
         
         {/* PWA Install Prompt - Non-intrusive */}
-        <PWAInstallCard />
+        <SafeWidget name="PWAInstallCard" hideOnError>
+          <PWAInstallCard />
+        </SafeWidget>
         
         {/* Adaptive Training Engine Visualization - Collapsed by default */}
         <SafeWidget name="SensorEngineVisualization" hideOnError>
@@ -692,11 +719,17 @@ function DashboardContent() {
         </SafeWidget>
         
         {/* Training Momentum - Secondary info */}
-        {trainingMomentum && <TrainingMomentumCard momentum={trainingMomentum} />}
+        {trainingMomentum && (
+          <SafeWidget name="TrainingMomentumCard" hideOnError>
+            <TrainingMomentumCard momentum={trainingMomentum} />
+          </SafeWidget>
+        )}
         
         {/* Deload Warning - Only show if needed */}
         {deloadAssessment && deloadAssessment.status !== 'no_deload_needed' && (
-          <DeloadStatusCard status={deloadAssessment} />
+          <SafeWidget name="DeloadStatusCard" hideOnError>
+            <DeloadStatusCard status={deloadAssessment} />
+          </SafeWidget>
         )}
 
         {/* ============================================================= */}
@@ -722,12 +755,16 @@ function DashboardContent() {
           <div className="space-y-4">
             {/* Primary Training Limiter */}
             {constraintInsight && constraintInsight.hasInsight && (
-              <PrimaryLimiterCard insight={constraintInsight} />
+              <SafeWidget name="PrimaryLimiterCard" hideOnError>
+                <PrimaryLimiterCard insight={constraintInsight} />
+              </SafeWidget>
             )}
             
             {/* Recovery & Fatigue Details */}
             {recoverySignal && movementBalance && (
-              <RecoveryStatusCard recovery={recoverySignal} balance={movementBalance} />
+              <SafeWidget name="RecoveryStatusCard" hideOnError>
+                <RecoveryStatusCard recovery={recoverySignal} balance={movementBalance} />
+              </SafeWidget>
             )}
             
             {/* Athlete Intelligence */}
@@ -736,10 +773,14 @@ function DashboardContent() {
             </SafeWidget>
             
             {/* Update Metrics - Allow users to refine their program */}
-            <UpdateMetricsCard />
+            <SafeWidget name="UpdateMetricsCard" hideOnError>
+              <UpdateMetricsCard />
+            </SafeWidget>
             
             {/* Smart upgrade prompt - contextual based on engagement */}
-            <SmartUpgradeBanner />
+            <SafeWidget name="SmartUpgradeBanner" hideOnError>
+              <SmartUpgradeBanner />
+            </SafeWidget>
           </div>
         </Section>
 
@@ -747,24 +788,26 @@ function DashboardContent() {
         {/* SECTION: STRENGTH PROGRESS */}
         {/* ============================================================= */}
         
-        {progressOverview && progressOverview.strength.filter(s => s.currentBest > 0).length > 0 && (
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <h4 className="text-sm font-medium text-[#A4ACB8]">Strength Progress</h4>
-              <Link href="/strength" className="text-xs text-[#C1121F] hover:underline">
-                View All
-              </Link>
+        {safeStrength.filter(s => s && s.currentBest > 0).length > 0 && (
+          <SafeWidget name="StrengthProgressSection" hideOnError>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <h4 className="text-sm font-medium text-[#A4ACB8]">Strength Progress</h4>
+                <Link href="/strength" className="text-xs text-[#C1121F] hover:underline">
+                  View All
+                </Link>
+              </div>
+              <div className="grid gap-4 md:grid-cols-3">
+                {safeStrength
+                  .filter(s => s && s.currentBest > 0)
+                  .slice(0, 3)
+                  .map(strength => (
+                    <StrengthProgressCard key={strength.exerciseName} strength={strength} />
+                  ))
+                }
+              </div>
             </div>
-            <div className="grid gap-4 md:grid-cols-3">
-              {progressOverview.strength
-                .filter(s => s.currentBest > 0)
-                .slice(0, 3)
-                .map(strength => (
-                  <StrengthProgressCard key={strength.exerciseName} strength={strength} />
-                ))
-              }
-            </div>
-          </div>
+          </SafeWidget>
         )}
         
         {/* ============================================================= */}
@@ -804,10 +847,16 @@ function DashboardContent() {
         
         <div className="grid gap-4 md:grid-cols-2">
           {/* Spartan Score - Compact */}
-          {spartanScore && <SpartanScoreCard score={spartanScore} />}
+          {spartanScore && (
+            <SafeWidget name="SpartanScoreCard" hideOnError>
+              <SpartanScoreCard score={spartanScore} />
+            </SafeWidget>
+          )}
           
           {/* Next Milestone */}
-          <ProgressForecastCard nextMilestone={nextMilestone} />
+          <SafeWidget name="ProgressForecastCard" hideOnError>
+            <ProgressForecastCard nextMilestone={nextMilestone} />
+          </SafeWidget>
         </div>
 
         {/* ============================================================= */}
@@ -824,10 +873,14 @@ function DashboardContent() {
           
           <div className="space-y-6">
             {/* Quick Actions Row */}
-            <QuickActionsRow />
+            <SafeWidget name="QuickActionsRow" hideOnError>
+              <QuickActionsRow />
+            </SafeWidget>
             
             {/* Performance Database */}
-            <PerformanceVaultCard />
+            <SafeWidget name="PerformanceVaultCard" hideOnError>
+              <PerformanceVaultCard />
+            </SafeWidget>
             
             {/* Share Progress Cards */}
             <SafeWidget name="ShareProgressSection">
@@ -838,7 +891,9 @@ function DashboardContent() {
         
         {/* Mobile Help Links */}
         <div className="sm:hidden flex flex-col items-center gap-3 pt-4 pb-8">
-          <SessionCounter />
+          <SafeWidget name="SessionCounter" hideOnError>
+            <SessionCounter />
+          </SafeWidget>
           <TrainingSystemsLink />
           <HowSpartanLabWorksButton 
             onOpen={() => setShowIntroduction(true)} 
@@ -848,10 +903,14 @@ function DashboardContent() {
       </SectionStack>
       
       {/* Achievement Unlock Notification */}
-      <AchievementNotification />
+      <SafeWidget name="AchievementNotification" hideOnError>
+        <AchievementNotification />
+      </SafeWidget>
       
       {/* Challenge Completion Notification */}
-      <ChallengeNotification />
+      <SafeWidget name="ChallengeNotification" hideOnError>
+        <ChallengeNotification />
+      </SafeWidget>
     </PageContainer>
   )
 }

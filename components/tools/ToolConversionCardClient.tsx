@@ -21,7 +21,7 @@ import {
   ArrowRight
 } from 'lucide-react'
 import { trackCTAClicked } from '@/lib/analytics'
-import type { ToolContext, ToolDataPayload } from './ToolConversionCard'
+import type { ToolContext, ToolDataPayload } from './tool-conversion-types'
 
 // =============================================================================
 // CONTEXT CONFIGURATIONS

@@ -19,7 +19,8 @@ import {
   Brain,
   Dumbbell,
 } from 'lucide-react'
-import type { ToolContext, ToolDataPayload } from './ToolConversionCard'
+// Import types from auth-free types file (NOT from ToolConversionCard which uses Clerk)
+import type { ToolContext, ToolDataPayload } from './tool-conversion-types'
 
 // =============================================================================
 // CONTEXT CONFIGURATIONS (same as client version for consistency)

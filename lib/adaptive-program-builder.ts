@@ -11,7 +11,7 @@ import type { ConstraintResult, ConstraintIntervention } from './constraint-dete
 
 import { getAthleteProfile } from './data-service'
 import { calculateRecoverySignal } from './recovery-engine'
-import { getConstraintInsight, detectMultipleConstraints } from './constraint-engine'
+import { getConstraintInsight } from './constraint-engine'
 import { getConstraintIntervention } from './constraint-detection-engine'
 import { recordConstraintHistory, getLatestConstraint, calculateConstraintImprovement } from './constraint-history-service'
 import { getProgramBuilderContext } from './adaptive-athlete-engine'
@@ -983,13 +983,6 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
   
   // Calculate variety score (0-1, higher = more varied)
   const varietyScore = calculateVarietyScore(sessionIntents)
-  
-  // Detect multiple constraints and plan interventions
-  const multipleConstraints = detectMultipleConstraints(
-    athleteProfile,
-    primaryGoal as any,
-    constraintInsight
-  )
   
   // Get constraint interventions for primary constraint
   let constraintInterventions: ConstraintIntervention[] = []

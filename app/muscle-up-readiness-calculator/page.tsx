@@ -47,11 +47,16 @@ const faqs = [
 export default function MuscleUpReadinessCalculator() {
   // Form state
   const [maxPullUps, setMaxPullUps] = useState('')
+  const [weightedPullUpLoad, setWeightedPullUpLoad] = useState('')
   const [maxDips, setMaxDips] = useState('')
   const [chestToBarReps, setChestToBarReps] = useState('')
+  const [straightBarDipReps, setStraightBarDipReps] = useState('')
+  const [lSitHoldTime, setLSitHoldTime] = useState('')
+  const [bodyweight, setBodyweight] = useState('')
   const [hasExplosivePulls, setHasExplosivePulls] = useState(false)
   const [hasBar, setHasBar] = useState(true)
   const [hasBands, setHasBands] = useState(false)
+  const [showAdvanced, setShowAdvanced] = useState(false)
   
   // Result state
   const [result, setResult] = useState<ReadinessResult | null>(null)
@@ -89,11 +94,16 @@ export default function MuscleUpReadinessCalculator() {
     setResult(null)
     setError(null)
     setMaxPullUps('')
+    setWeightedPullUpLoad('')
     setMaxDips('')
     setChestToBarReps('')
+    setStraightBarDipReps('')
+    setLSitHoldTime('')
+    setBodyweight('')
     setHasExplosivePulls(false)
     setHasBar(true)
     setHasBands(false)
+    setShowAdvanced(false)
   }
 
   const toggleFaq = (index: number) => {
@@ -128,9 +138,12 @@ export default function MuscleUpReadinessCalculator() {
           <h1 className="text-3xl md:text-4xl font-bold text-[#E6E9EF] mb-4">
             Muscle-Up Readiness Calculator
           </h1>
-          <p className="text-[#A4ACB8] text-lg max-w-2xl mx-auto">
+          <p className="text-[#A4ACB8] text-lg max-w-2xl mx-auto mb-3">
             Evaluate your pulling strength, dip power, and explosive capability to determine
             your readiness for muscle-up training.
+          </p>
+          <p className="text-xs text-[#6B7280] max-w-lg mx-auto">
+            Built using structured calisthenics readiness principles used to evaluate real muscle-up progress.
           </p>
         </div>
 
@@ -157,6 +170,22 @@ export default function MuscleUpReadinessCalculator() {
                   onChange={(e) => setMaxPullUps(e.target.value)}
                   className="bg-[#1A1F26] border-[#2B313A] text-[#E6E9EF]"
                 />
+              </div>
+
+              {/* Weighted Pull-Up (Optional) */}
+              <div className="space-y-2">
+                <Label htmlFor="weightedPullup" className="text-[#E6E9EF]">
+                  Weighted Pull-Up Load (lbs added) <span className="text-[#6B7280]">- optional</span>
+                </Label>
+                <Input
+                  id="weightedPullup"
+                  type="number"
+                  placeholder="e.g., 25"
+                  value={weightedPullUpLoad}
+                  onChange={(e) => setWeightedPullUpLoad(e.target.value)}
+                  className="bg-[#1A1F26] border-[#2B313A] text-[#E6E9EF]"
+                />
+                <p className="text-xs text-[#6B7280]">Indicates pulling strength reserve</p>
               </div>
 
               {/* Dips */}
@@ -190,6 +219,66 @@ export default function MuscleUpReadinessCalculator() {
                 />
                 <p className="text-xs text-[#6B7280]">Enter 0 if you cannot do chest-to-bar</p>
               </div>
+
+              {/* Straight Bar Dip Reps (Optional) */}
+              <div className="space-y-2">
+                <Label htmlFor="sbdips" className="text-[#E6E9EF]">
+                  Straight Bar Dip Reps <span className="text-[#6B7280]">- optional</span>
+                </Label>
+                <Input
+                  id="sbdips"
+                  type="number"
+                  placeholder="e.g., 10"
+                  value={straightBarDipReps}
+                  onChange={(e) => setStraightBarDipReps(e.target.value)}
+                  className="bg-[#1A1F26] border-[#2B313A] text-[#E6E9EF]"
+                />
+                <p className="text-xs text-[#6B7280]">Key for the transition and press-out phase</p>
+              </div>
+
+              {/* Advanced Options Toggle */}
+              <button
+                type="button"
+                onClick={() => setShowAdvanced(!showAdvanced)}
+                className="text-sm text-[#C1121F] hover:text-[#A50E1A] flex items-center gap-1 mt-2"
+              >
+                {showAdvanced ? 'Hide' : 'Show'} advanced options
+                <ChevronDown className={cn("w-4 h-4 transition-transform", showAdvanced && "rotate-180")} />
+              </button>
+
+              {/* Advanced Options */}
+              {showAdvanced && (
+                <div className="space-y-4 pt-2 border-t border-[#2B313A]">
+                  <div className="space-y-2">
+                    <Label htmlFor="lsit" className="text-[#E6E9EF]">
+                      L-Sit Hold (seconds) <span className="text-[#6B7280]">- optional</span>
+                    </Label>
+                    <Input
+                      id="lsit"
+                      type="number"
+                      placeholder="e.g., 15"
+                      value={lSitHoldTime}
+                      onChange={(e) => setLSitHoldTime(e.target.value)}
+                      className="bg-[#1A1F26] border-[#2B313A] text-[#E6E9EF]"
+                    />
+                    <p className="text-xs text-[#6B7280]">Indicates core control and compression</p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="bodyweight" className="text-[#E6E9EF]">
+                      Bodyweight (lbs) <span className="text-[#6B7280]">- optional</span>
+                    </Label>
+                    <Input
+                      id="bodyweight"
+                      type="number"
+                      placeholder="e.g., 175"
+                      value={bodyweight}
+                      onChange={(e) => setBodyweight(e.target.value)}
+                      className="bg-[#1A1F26] border-[#2B313A] text-[#E6E9EF]"
+                    />
+                    <p className="text-xs text-[#6B7280]">Helps contextualize strength metrics</p>
+                  </div>
+                </div>
+              )}
 
               {/* Explosive Pulls */}
               <div className="space-y-3">

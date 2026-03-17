@@ -1,224 +1,223 @@
-'use client'
-
-import { useState, useEffect } from 'react'
-import { Navigation } from '@/components/shared/Navigation'
-import { ProgramBuilderForm } from '@/components/programs/ProgramBuilderForm'
-import { GeneratedProgramCard } from '@/components/programs/GeneratedProgramCard'
-import { SavedProgramsList } from '@/components/programs/SavedProgramsList'
-import {
-  generateProgram,
-  getSavedPrograms,
-  saveProgram,
-  getDefaultInputs,
-  type ProgramInputs,
-  type GeneratedProgram,
-} from '@/lib/program-service'
-import { getConstraintInsight } from '@/lib/constraint-engine'
-import { getAthleteCalibration } from '@/lib/athlete-calibration'
-import { getProgramStatus, initializeProgramState } from '@/lib/program-adjustment-engine'
-import { PageHeader } from '@/components/shared/PageHeader'
-import { ProgramAdjustmentModal } from '@/components/programs/ProgramAdjustmentModal'
-import { AdaptiveEngineBadge, ENGINE_MESSAGES } from '@/components/shared/AdaptiveEngineBadge'
-import { useIsPremium, PremiumHelperText, PREMIUM_MESSAGES, UpgradeTriggerPanel, UPGRADE_TRIGGERS } from '@/components/premium/PremiumFeature'
-import { AdaptiveProgramUpgradeCard } from '@/components/upgrade/AdaptiveProgramUpgradeCard'
-import { Calendar, Brain, Target } from 'lucide-react'
+import { Metadata } from 'next'
+import Link from 'next/link'
+import { ArrowRight, Calendar, Target, Dumbbell, Zap, CheckCircle, ChevronRight, Sparkles, Trophy, Shield, Activity } from 'lucide-react'
 import { Card } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { SeoPageLayout } from '@/components/seo/SeoPageLayout'
+import { JsonLdMultiple } from '@/components/seo/JsonLd'
+import { generateBreadcrumbSchema, SITE_CONFIG } from '@/lib/seo'
+
+export const metadata: Metadata = {
+  title: 'Calisthenics Training Programs | Free Program Builder | SpartanLab',
+  description: 'Build personalized calisthenics training programs for front lever, planche, muscle-up, and more. Free program generator with skill-specific progressions and adaptive training.',
+  keywords: ['calisthenics program', 'calisthenics training program', 'bodyweight program', 'front lever program', 'planche program', 'muscle-up program', 'calisthenics workout plan'],
+  alternates: {
+    canonical: `${SITE_CONFIG.url}/programs`,
+  },
+  openGraph: {
+    title: 'Calisthenics Training Programs | SpartanLab',
+    description: 'Build personalized calisthenics training programs for front lever, planche, muscle-up, and more.',
+    url: `${SITE_CONFIG.url}/programs`,
+    siteName: SITE_CONFIG.name,
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Calisthenics Training Programs | SpartanLab',
+    description: 'Build personalized calisthenics training programs for front lever, planche, muscle-up, and more.',
+  },
+}
+
+const jsonLdSchemas = [
+  generateBreadcrumbSchema([
+    { name: 'Home', url: '/' },
+    { name: 'Programs', url: '/programs' },
+  ]),
+]
+
+const FEATURED_PROGRAMS = [
+  {
+    slug: 'calisthenics-beginner-program',
+    title: 'Calisthenics Beginner Program',
+    description: 'Build foundational strength with proper technique for pull-ups, dips, and push-ups.',
+    icon: Dumbbell,
+    duration: '12 weeks',
+    level: 'Beginner',
+    featured: true,
+  },
+  {
+    slug: 'front-lever-program',
+    title: 'Front Lever Program',
+    description: 'Systematic approach to master the front lever from tuck to full.',
+    icon: Target,
+    duration: '16+ weeks',
+    level: 'Intermediate',
+    featured: true,
+  },
+  {
+    slug: 'planche-program',
+    title: 'Planche Program',
+    description: 'Progressive training to build planche strength from lean to full.',
+    icon: Target,
+    duration: '20+ weeks',
+    level: 'Intermediate-Advanced',
+    featured: true,
+  },
+  {
+    slug: 'muscle-up-program',
+    title: 'Muscle-Up Program',
+    description: 'Master the bar and ring muscle-up with proper technique.',
+    icon: Zap,
+    duration: '8-12 weeks',
+    level: 'Intermediate',
+    featured: true,
+  },
+  {
+    slug: 'handstand-push-up-program',
+    title: 'Handstand Push-Up Program',
+    description: 'Build pressing strength for freestanding handstand push-ups.',
+    icon: Trophy,
+    duration: '12+ weeks',
+    level: 'Intermediate',
+  },
+]
+
+const PROGRAM_FEATURES = [
+  {
+    icon: Target,
+    title: 'Skill-Specific Progressions',
+    description: 'Programs tailored to your target skill with appropriate exercise selection.',
+  },
+  {
+    icon: Activity,
+    title: 'Adaptive Adjustments',
+    description: 'Pro users get automatic program adjustments based on performance and fatigue.',
+  },
+  {
+    icon: Shield,
+    title: 'Joint Integrity Built-In',
+    description: 'All programs include wrist, elbow, and shoulder preparation protocols.',
+  },
+  {
+    icon: Sparkles,
+    title: 'Constraint-Aware Training',
+    description: 'Programs prioritize exercises to address your specific limiters.',
+  },
+]
 
 export default function ProgramsPage() {
-  const [inputs, setInputs] = useState<ProgramInputs>(getDefaultInputs())
-  const [currentProgram, setCurrentProgram] = useState<GeneratedProgram | null>(null)
-  const [savedPrograms, setSavedPrograms] = useState<GeneratedProgram[]>([])
-  const [isSaved, setIsSaved] = useState(false)
-  const [isGenerating, setIsGenerating] = useState(false)
-  const [mounted, setMounted] = useState(false)
-  const [constraintInsight, setConstraintInsight] = useState<ReturnType<typeof getConstraintInsight> | null>(null)
-  const [calibration, setCalibration] = useState<ReturnType<typeof getAthleteCalibration> | null>(null)
-  const [showAdjustmentModal, setShowAdjustmentModal] = useState(false)
-  const [programStatus, setProgramStatus] = useState<ReturnType<typeof getProgramStatus>>(null)
-
-  useEffect(() => {
-    setMounted(true)
-    // Load default inputs and saved programs
-    setInputs(getDefaultInputs())
-    setSavedPrograms(getSavedPrograms())
-    setConstraintInsight(getConstraintInsight())
-    setCalibration(getAthleteCalibration())
-    setProgramStatus(getProgramStatus())
-  }, [])
-
-  const handleGenerateAttempt = () => {
-    // If there's an active program, show the adjustment modal
-    if (programStatus && programStatus.currentWeek < programStatus.minimumRecommendedWeeks) {
-      setShowAdjustmentModal(true)
-      return
-    }
-    handleGenerate()
-  }
-
-  const handleGenerate = () => {
-    setIsGenerating(true)
-    setIsSaved(false)
-    
-    // Small delay for UX
-    setTimeout(() => {
-      const program = generateProgram(inputs)
-      setCurrentProgram(program)
-      setIsGenerating(false)
-      
-      // Initialize program state for adjustment tracking
-      initializeProgramState(program.id, {
-        sessionMinutes: inputs.sessionLength as number || 60,
-        trainingDays: inputs.trainingDaysPerWeek,
-        equipment: [],
-      })
-      setProgramStatus(getProgramStatus())
-    }, 300)
-  }
-
-  const handleSave = () => {
-    if (!currentProgram) return
-    
-    saveProgram(currentProgram)
-    setSavedPrograms(getSavedPrograms())
-    setIsSaved(true)
-  }
-
-  const handleDelete = (id: string) => {
-    setSavedPrograms(getSavedPrograms())
-  }
-
-  // Loading state
-  if (!mounted) {
-    return (
-      <div className="min-h-screen bg-[#121212] text-[#F5F5F5]">
-        <Navigation />
-        <main className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
-          <div className="animate-pulse space-y-8">
-            <div className="h-12 bg-[#2A2A2A] rounded w-1/3"></div>
-            <div className="h-64 bg-[#2A2A2A] rounded"></div>
-          </div>
-        </main>
-      </div>
-    )
-  }
-
   return (
-    <div className="min-h-screen bg-[#121212] text-[#F5F5F5]">
-      <Navigation />
-
-      <main className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
-        <div className="space-y-12">
-          {/* Page Header */}
-          <PageHeader 
-            title="Program Builder"
-            description="Generate a focused calisthenics program based on your current skill level, weighted strength, and training frequency"
-            backHref="/dashboard"
-            backLabel="Back to Dashboard"
-            icon={<Calendar className="w-5 h-5" />}
-          />
-
-          {/* Adaptive Program Feature Card for Free Users */}
-          <AdaptiveProgramUpgradeCard variant="inline" />
-
-          {/* Detected Limiter Context */}
-          {constraintInsight?.hasInsight && (
-            <Card className="bg-[#1A1F26] border-[#2B313A] p-4">
-              <div className="flex items-start gap-4">
-                <div className="w-10 h-10 rounded-lg bg-[#C1121F]/10 flex items-center justify-center flex-shrink-0">
-                  <Brain className="w-5 h-5 text-[#C1121F]" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <p className="text-xs text-[#6B7280] uppercase tracking-wider">Detected Limiter</p>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#C1121F]/10 text-[#C1121F] font-medium">
-                      {constraintInsight.category}
-                    </span>
-                  </div>
-                  <p className="text-sm font-medium text-[#E6E9EF] mb-1">
-                    {constraintInsight.label}
-                  </p>
-                  <p className="text-xs text-[#A4ACB8]">
-                    This program will prioritize exercises to address your {constraintInsight.label.toLowerCase()}.
-                  </p>
-                </div>
-              </div>
-            </Card>
-          )}
-
-          {/* Builder Form */}
-          <ProgramBuilderForm
-            inputs={inputs}
-            onInputChange={setInputs}
-            onGenerate={handleGenerateAttempt}
-            isGenerating={isGenerating}
-          />
-
-          {/* Generated Program */}
-          {currentProgram && (
-            <div className="space-y-4">
-              <div className="space-y-1.5">
-                <AdaptiveEngineBadge variant="card" message={ENGINE_MESSAGES.program} />
-                <p className="text-[11px] text-[#6B7280] px-1">
-                  {ENGINE_MESSAGES.programHelper}
-                </p>
-                {constraintInsight?.hasInsight && (
-                  <div className="flex items-center gap-2 px-1 pt-1">
-                    <Target className="w-3 h-3 text-[#C1121F]" />
-                    <p className="text-[11px] text-[#A4ACB8]">
-                      This program emphasizes exercises for your {constraintInsight.label.toLowerCase()} because SpartanLab detected it as your current limiter.
-                    </p>
-                  </div>
-                )}
-                {calibration?.calibrationComplete && (
-                  <div className="flex items-start gap-2 px-1 pt-1">
-                    <div className="w-3 h-3 rounded-full bg-[#4F6D8A]/20 flex items-center justify-center mt-0.5">
-                      <div className="w-1.5 h-1.5 rounded-full bg-[#4F6D8A]" />
-                    </div>
-                    <div>
-                      <p className="text-[11px] text-[#A4ACB8]">
-                        {calibration.needsCompressionWork && 'Includes compression work to build your foundation. '}
-                        {calibration.leverageProfile !== 'average' && 'Progressions adjusted for your body type.'}
-                        {!calibration.needsCompressionWork && calibration.leverageProfile === 'average' && 'Built for your current strength and session availability.'}
-                      </p>
-                    </div>
-                  </div>
-                )}
-              </div>
-              <GeneratedProgramCard
-                program={currentProgram}
-                onSave={handleSave}
-                isSaved={isSaved}
-              />
-              
-              {/* Upgrade Trigger - After Program Generation */}
-              <UpgradeTriggerPanel
-                title={UPGRADE_TRIGGERS.programGenerated.title}
-                description={UPGRADE_TRIGGERS.programGenerated.description}
-                variant="default"
-              />
-            </div>
-          )}
-
-          {/* Saved Programs */}
-          <SavedProgramsList
-            programs={savedPrograms}
-            onDelete={handleDelete}
-          />
+    <SeoPageLayout>
+      <JsonLdMultiple schemas={jsonLdSchemas} />
+      
+      {/* Hero Section */}
+      <section className="py-16 sm:py-24 px-4 sm:px-6">
+        <div className="max-w-4xl mx-auto text-center">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#C1121F]/10 border border-[#C1121F]/20 text-[#C1121F] text-sm mb-6">
+            <Calendar className="w-4 h-4" />
+            Free Program Builder
+          </div>
+          <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight text-balance mb-6">
+            Calisthenics Training Programs
+          </h1>
+          <p className="text-lg sm:text-xl text-[#A5A5A5] max-w-2xl mx-auto mb-8 text-pretty">
+            Generate personalized training programs based on your current strength, target skills, and available training time.
+          </p>
+          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <Link href="/sign-up">
+              <Button size="lg" className="bg-[#C1121F] hover:bg-[#A30F1A] gap-2">
+                Build Your Program
+                <ArrowRight className="w-4 h-4" />
+              </Button>
+            </Link>
+            <Link href="#programs">
+              <Button size="lg" variant="outline" className="border-[#3A3A3A] hover:bg-[#2A2A2A]">
+                Browse Programs
+              </Button>
+            </Link>
+          </div>
         </div>
+      </section>
 
-        {/* Program Adjustment Modal */}
-        <ProgramAdjustmentModal
-          open={showAdjustmentModal}
-          onOpenChange={setShowAdjustmentModal}
-          onContinue={() => setShowAdjustmentModal(false)}
-          onStartNew={() => {
-            setShowAdjustmentModal(false)
-            handleGenerate()
-          }}
-          currentSessionMinutes={inputs.sessionLength as number || 60}
-          currentTrainingDays={inputs.trainingDaysPerWeek}
-        />
-      </main>
-    </div>
+      {/* Features Grid */}
+      <section className="py-12 px-4 sm:px-6 bg-[#0A0A0A]">
+        <div className="max-w-6xl mx-auto">
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            {PROGRAM_FEATURES.map((feature) => (
+              <div key={feature.title} className="p-5 rounded-xl bg-[#1A1A1A] border border-[#2A2A2A]">
+                <feature.icon className="w-8 h-8 text-[#C1121F] mb-3" />
+                <h3 className="font-semibold text-[#F5F5F5] mb-2">{feature.title}</h3>
+                <p className="text-sm text-[#A5A5A5]">{feature.description}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Programs List */}
+      <section id="programs" className="py-16 px-4 sm:px-6">
+        <div className="max-w-6xl mx-auto">
+          <div className="text-center mb-12">
+            <h2 className="text-2xl sm:text-3xl font-bold mb-4">Training Programs</h2>
+            <p className="text-[#A5A5A5] max-w-2xl mx-auto">
+              Explore our structured training programs for specific calisthenics skills and goals.
+            </p>
+          </div>
+          
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {FEATURED_PROGRAMS.map((program) => (
+              <Link key={program.slug} href={`/programs/${program.slug}`}>
+                <Card className="h-full bg-[#1A1A1A] border-[#2A2A2A] hover:border-[#3A3A3A] transition-colors p-6 group">
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="w-12 h-12 rounded-xl bg-[#C1121F]/10 flex items-center justify-center">
+                      <program.icon className="w-6 h-6 text-[#C1121F]" />
+                    </div>
+                    {program.featured && (
+                      <span className="text-xs px-2 py-1 rounded-full bg-[#C1121F]/10 text-[#C1121F] border border-[#C1121F]/20">
+                        Popular
+                      </span>
+                    )}
+                  </div>
+                  <h3 className="text-lg font-semibold text-[#F5F5F5] mb-2 group-hover:text-[#C1121F] transition-colors">
+                    {program.title}
+                  </h3>
+                  <p className="text-sm text-[#A5A5A5] mb-4">
+                    {program.description}
+                  </p>
+                  <div className="flex items-center gap-4 text-xs text-[#6B7280]">
+                    <span className="flex items-center gap-1">
+                      <Calendar className="w-3.5 h-3.5" />
+                      {program.duration}
+                    </span>
+                    <span>{program.level}</span>
+                  </div>
+                </Card>
+              </Link>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* CTA Section */}
+      <section className="py-16 px-4 sm:px-6 bg-gradient-to-b from-[#0A0A0A] to-[#121212]">
+        <div className="max-w-3xl mx-auto text-center">
+          <h2 className="text-2xl sm:text-3xl font-bold mb-4">
+            Ready to Build Your Program?
+          </h2>
+          <p className="text-[#A5A5A5] mb-8 max-w-xl mx-auto">
+            Create a free account to generate personalized training programs based on your strength levels and goals.
+          </p>
+          <Link href="/sign-up">
+            <Button size="lg" className="bg-[#C1121F] hover:bg-[#A30F1A] gap-2">
+              Get Started Free
+              <ArrowRight className="w-4 h-4" />
+            </Button>
+          </Link>
+          <p className="text-xs text-[#6B7280] mt-4">
+            No credit card required. Free tools available immediately.
+          </p>
+        </div>
+      </section>
+    </SeoPageLayout>
   )
 }

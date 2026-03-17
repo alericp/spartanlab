@@ -227,3 +227,31 @@ export {
   type CompletedExercise,
   type CoolDownLogEntry,
 } from '../cooldown-recovery-intelligence-engine'
+
+// Coaching Framework Selection Engine
+export {
+  COACHING_FRAMEWORKS,
+  selectFramework,
+  getFrameworkProgrammingParams,
+  getPersonalizedFrameworkParams,
+  generateFrameworkExplanation,
+  getFrameworkCoachingMessage,
+  getFrameworkSelectionExplanation,
+  getFrameworkDashboardSummary,
+  getFrameworkComparison,
+  getAllFrameworkIds,
+  getFramework,
+  recordFrameworkSelection,
+  getFrameworkHistory,
+  getCurrentFrameworkWeeks,
+  type CoachingFrameworkId,
+  type CoachingFramework,
+  type FrameworkRules,
+  type ProgressionMethod,
+  type SkillTypeTarget,
+  type FrameworkSelectionInput,
+  type FrameworkSelectionResult,
+  type FrameworkProgrammingParams,
+  type PersonalizedFrameworkParams,
+  type FrameworkHistory,
+} from '../coaching-framework-engine'

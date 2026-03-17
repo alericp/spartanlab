@@ -602,6 +602,17 @@ export interface FrameworkSelectionInput {
   // Current state
   currentFrameworkId: CoachingFrameworkId | null
   weeksOnCurrentFramework: number
+  
+  // Movement bias context (from MovementBias detection)
+  movementBias?: {
+    biasType: 'pull_dominant' | 'push_dominant' | 'compression_dominant' | 'balanced'
+    confidenceScore: number
+    weakerPattern: string
+  } | null
+  
+  // Time availability
+  weeklySessionsAvailable?: number
+  sessionDurationMinutes?: number
 }
 
 export interface FrameworkSelectionResult {
@@ -733,6 +744,85 @@ export function selectFramework(input: FrameworkSelectionInput): FrameworkSelect
       if (input.primaryConstraint.includes('endurance') && frameworkId === 'density_endurance') {
         score += 15
         reasons[frameworkId].push('Addresses work capacity constraint')
+      }
+    }
+    
+    // 10. Movement bias integration
+    if (input.movementBias && input.movementBias.confidenceScore > 0.5) {
+      const bias = input.movementBias
+      
+      // Pull-dominant athletes benefit from frameworks that can emphasize pushing
+      if (bias.biasType === 'pull_dominant') {
+        if (frameworkId === 'hypertrophy_supported') {
+          score += 8
+          reasons[frameworkId].push('Supports balanced development for pull-dominant athlete')
+        }
+        if (frameworkId === 'balanced_hybrid') {
+          score += 5
+        }
+      }
+      
+      // Push-dominant athletes benefit from frameworks supporting pulling emphasis
+      if (bias.biasType === 'push_dominant') {
+        if (frameworkId === 'strength_conversion') {
+          score += 8
+          reasons[frameworkId].push('Supports pulling strength for push-dominant athlete')
+        }
+        if (frameworkId === 'balanced_hybrid') {
+          score += 5
+        }
+      }
+      
+      // Compression-dominant athletes may need upper body emphasis
+      if (bias.biasType === 'compression_dominant') {
+        if (frameworkId === 'skill_frequency') {
+          score += 5
+          reasons[frameworkId].push('Supports upper body skill development')
+        }
+      }
+    }
+    
+    // 11. Time availability consideration
+    if (input.weeklySessionsAvailable && input.weeklySessionsAvailable <= 2) {
+      // Limited sessions favor efficiency-focused frameworks
+      if (frameworkId === 'barseagle_strength') {
+        score += 10
+        reasons[frameworkId].push('Efficient for limited training days')
+      }
+      if (frameworkId === 'density_endurance') {
+        score -= 5 // Density needs more frequency
+      }
+    }
+    
+    if (input.sessionDurationMinutes && input.sessionDurationMinutes <= 30) {
+      // Short sessions favor density or focused approaches
+      if (frameworkId === 'density_endurance') {
+        score += 8
+        reasons[frameworkId].push('Effective in short sessions')
+      }
+    }
+    
+    // 12. Readiness-based intensity adjustment
+    if (input.readinessScore < 60) {
+      // Low readiness favors less demanding frameworks
+      if (frameworkId === 'skill_frequency') {
+        score += 10
+        reasons[frameworkId].push('Lower fatigue approach for current readiness')
+      }
+      if (frameworkId === 'tendon_conservative') {
+        score += 8
+      }
+      if (frameworkId === 'barseagle_strength') {
+        score -= 5 // Heavy work not ideal when readiness is low
+      }
+    } else if (input.readinessScore > 80) {
+      // High readiness supports more demanding frameworks
+      if (frameworkId === 'barseagle_strength') {
+        score += 5
+        reasons[frameworkId].push('Strong readiness supports heavy strength work')
+      }
+      if (frameworkId === 'strength_conversion') {
+        score += 5
       }
     }
     

@@ -46,7 +46,9 @@ export {
   calculateMuscleUpReadiness,
   calculateHSPUReadiness,
   calculateLSitReadiness,
+  calculateVSitReadiness,
   calculateBackLeverReadiness,
+  calculateIronCrossReadiness,
   calculateUnifiedReadiness,
   
   // Types
@@ -55,7 +57,9 @@ export {
   type MuscleUpInputs,
   type HSPUInputs,
   type LSitInputs,
+  type VSitInputs,
   type BackLeverInputs,
+  type IronCrossInputs,
   type ReadinessResult,
   type ReadinessLevel,
   type ScoreBreakdown,

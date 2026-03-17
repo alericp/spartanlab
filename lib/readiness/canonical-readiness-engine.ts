@@ -25,18 +25,20 @@ import {
   calculateHSPUReadiness,
   calculateLSitReadiness,
   calculateBackLeverReadiness,
+  calculateVSitReadiness,
   calculateIronCrossReadiness,
   type ReadinessResult,
   type ReadinessLevel,
   type ScoreBreakdown,
   type IronCrossInputs,
+  type VSitInputs,
 } from './skill-readiness'
 
 // =============================================================================
 // UNIFIED READINESS OUTPUT TYPES
 // =============================================================================
 
-export type SkillType = 'front_lever' | 'back_lever' | 'planche' | 'hspu' | 'muscle_up' | 'l_sit' | 'iron_cross'
+export type SkillType = 'front_lever' | 'back_lever' | 'planche' | 'hspu' | 'muscle_up' | 'l_sit' | 'v_sit' | 'iron_cross'
 
 /**
  * Standardized readiness component scores (0-100)
@@ -181,12 +183,19 @@ const SKILL_COMPONENT_MAPPINGS: Record<SkillType, Record<string, keyof Readiness
     'Overhead Press Strength': 'pushStrength',
     'Equipment Access': 'skillSpecific',
   },
-  l_sit: {
-    'Dip Support Strength': 'pushStrength',
-    'Hollow Hold / Core Compression': 'compression',
-    'Hip Flexor Strength': 'compression',
-    'Toe Point Quality': 'mobility',
-    'Equipment Access': 'skillSpecific',
+l_sit: {
+  'Dip Support Strength': 'pushStrength',
+  'Hollow Hold / Core Compression': 'compression',
+  'Hip Flexor Strength': 'compression',
+  'Toe Point Quality': 'mobility',
+  'Equipment Access': 'skillSpecific',
+  },
+  v_sit: {
+  'L-Sit Foundation': 'skillSpecific',
+  'Pike Compression Strength': 'compression',
+  'Hip Flexor Strength': 'compression',
+  'Hamstring Flexibility': 'mobility',
+  'Core Stability (Hollow Hold)': 'compression',
   },
   iron_cross: {
     'Ring Support Stability': 'shoulderStability',
@@ -237,12 +246,20 @@ const LIMITING_FACTOR_MAPPINGS: Record<SkillType, Record<string, LimitingFactor>
     'Balance / stability': 'balance_control',
     'General preparedness': 'vertical_push_strength',
   },
-  l_sit: {
-    'Dip support weakness': 'push_strength',
-    'Core compression weakness': 'compression_strength',
-    'Hip flexor weakness': 'compression_strength',
-    'Mobility limitation': 'mobility',
-    'General preparedness': 'compression_strength',
+l_sit: {
+  'Dip support weakness': 'push_strength',
+  'Core compression weakness': 'compression_strength',
+  'Hip flexor weakness': 'compression_strength',
+  'Mobility limitation': 'mobility',
+  'General preparedness': 'compression_strength',
+  },
+  v_sit: {
+  'L-sit strength deficit': 'skill_coordination',
+  'Compression weakness': 'compression_strength',
+  'Hip flexor weakness': 'compression_strength',
+  'Hamstring flexibility limitation': 'mobility',
+  'Core stability deficit': 'core_control',
+  'General compression preparedness': 'compression_strength',
   },
   iron_cross: {
     'Ring support weakness': 'ring_support_stability',
@@ -293,7 +310,7 @@ export interface AthleteReadinessInput {
   hasExplosivePulls?: boolean
   overheadPressStrength?: 'none' | 'light' | 'moderate' | 'strong'
   toePointQuality?: 'poor' | 'moderate' | 'good'
-  hipFlexorStrength?: 'weak' | 'moderate' | 'strong'
+  hipFlexorStrength?: 'weak' | 'moderate' | 'strong' | 'very_strong'
   
   // Equipment
   equipment?: string[]
@@ -304,6 +321,11 @@ export interface AthleteReadinessInput {
   hasWall?: boolean
   hasBands?: boolean
   
+// V-Sit specific
+  lSitHoldTime?: number
+  pikeCompressionQuality?: 'poor' | 'moderate' | 'good' | 'excellent'
+  hamstringFlexibility?: 'poor' | 'moderate' | 'good' | 'excellent'
+  
   // Iron Cross specific
   ringSupportHoldTime?: number
   rtoSupportHoldTime?: number
@@ -312,7 +334,7 @@ export interface AthleteReadinessInput {
   shoulderStability?: 'unstable' | 'moderate' | 'stable' | 'very_stable'
   tendonTolerance?: 'low' | 'moderate' | 'high'
   assistedCrossHoldTime?: number
-}
+  }
 
 // =============================================================================
 // MAIN CALCULATION FUNCTIONS
@@ -444,6 +466,19 @@ function calculateRawReadiness(skill: SkillType, input: AthleteReadinessInput): 
   maxDips: input.maxDips ?? 0,
   hollowHoldTime: input.hollowHoldTime ?? 0,
   toePointQuality: input.toePointQuality ?? 'moderate',
+  hipFlexorStrength: input.hipFlexorStrength ?? 'moderate',
+  hasParallettes: input.hasParallettes ?? false,
+  hasFloor: input.hasFloor ?? true,
+  })
+  
+  case 'v_sit':
+  return calculateVSitReadiness({
+  maxPushUps: input.maxPushUps ?? 0,
+  maxDips: input.maxDips ?? 0,
+  lSitHoldTime: input.lSitHoldTime ?? 0,
+  hollowHoldTime: input.hollowHoldTime ?? 0,
+  pikeCompressionQuality: input.pikeCompressionQuality ?? 'moderate',
+  hamstringFlexibility: input.hamstringFlexibility ?? 'moderate',
   hipFlexorStrength: input.hipFlexorStrength ?? 'moderate',
   hasParallettes: input.hasParallettes ?? false,
   hasFloor: input.hasFloor ?? true,

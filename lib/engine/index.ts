@@ -205,3 +205,25 @@ export {
   type BiasExplanation,
   type ReEvaluationTrigger,
 } from '../movement-bias-detection-engine'
+
+// Cool-Down + Recovery Intelligence Engine
+export {
+  analyzeSessionForRecovery,
+  selectRecoveryExercises,
+  generateIntelligentCooldown,
+  generateCompressedCooldown,
+  getRecoveryKnowledgeBubble,
+  generateCooldownExplanation,
+  createCooldownLogEntry,
+  RECOVERY_EXERCISE_DATABASE,
+  type RecoveryRecommendationType,
+  type TargetRegion,
+  type RecoveryPriority,
+  type RecoveryRecommendation,
+  type RecoveryExercise,
+  type IntelligentCoolDown,
+  type RecoveryExerciseWithRationale,
+  type CoolDownGenerationInput,
+  type CompletedExercise,
+  type CoolDownLogEntry,
+} from '../cooldown-recovery-intelligence-engine'

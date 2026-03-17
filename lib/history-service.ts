@@ -759,3 +759,42 @@ export async function isSessionAlreadyPersisted(
     return false
   }
 }
+
+/**
+ * Get the active program history ID for workout session linkage
+ * Returns the ID of the current active program or null if none exists
+ */
+export async function getActiveProgramHistoryId(userId: string): Promise<string | null> {
+  const active = await getActiveProgramHistory(userId)
+  return active?.id ?? null
+}
+
+/**
+ * Get workout sessions for a specific program version
+ */
+export async function getWorkoutSessionsForProgram(
+  userId: string,
+  programHistoryId: string,
+  options: HistoryQueryOptions = {}
+): Promise<WorkoutSessionHistory[]> {
+  if (!(await isDatabaseAvailable())) return []
+
+  const sql = await getSqlClient()
+  if (!sql) return []
+
+  const { limit = 100, sortOrder = 'desc' } = options
+
+  try {
+    const result = await sql`
+      SELECT * FROM workout_session_history
+      WHERE user_id = ${userId} AND program_history_id = ${programHistoryId}
+      ORDER BY workout_date ${sortOrder === 'asc' ? sql`ASC` : sql`DESC`}
+      LIMIT ${limit}
+    `
+
+    return result.map(row => toWorkoutSession(row as WorkoutSessionRow))
+  } catch (error) {
+    console.error('[HistoryService] Error fetching program sessions:', error)
+    return []
+  }
+}

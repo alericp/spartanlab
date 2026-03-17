@@ -23,6 +23,8 @@ import {
   getVersionChangeMessage,
   type GenerationReason,
 } from '@/lib/program-version-service'
+import { createProgramVersionOnSettingsChange } from '@/lib/program-history-versioning'
+import { generateAdaptiveProgram, type AdaptiveProgramInputs } from '@/lib/adaptive-program-builder'
 import type { AthleteProfile } from '@/lib/data-service'
 
 export const dynamic = 'force-dynamic'
@@ -246,6 +248,33 @@ export async function PUT(request: Request) {
           markRegeneration(userId)
           recordRegenerationEvent(userId, analysis.generationReason, analysis.changes)
           versionMessage = result.explanation
+          
+          // Also save to program history for version tracking
+          // Generate the actual program to store as snapshot
+          try {
+            const programInputs: AdaptiveProgramInputs = {
+              primaryGoal: (context.athlete.primaryGoal || 'front_lever') as AdaptiveProgramInputs['primaryGoal'],
+              experienceLevel: 'intermediate',
+              trainingDaysPerWeek: (context.athlete.trainingDaysPerWeek || 4) as AdaptiveProgramInputs['trainingDaysPerWeek'],
+              sessionLength: (context.athlete.sessionDurationMinutes || 60) as AdaptiveProgramInputs['sessionLength'],
+              equipment: context.athlete.equipment as AdaptiveProgramInputs['equipment'],
+            }
+            const program = generateAdaptiveProgram(programInputs)
+            
+            // Save to program history (archives previous, creates new entry)
+            const historyResult = await createProgramVersionOnSettingsChange(
+              userId,
+              program,
+              analysis.generationReason
+            )
+            
+            if (historyResult.success) {
+              console.log('[Settings API] Program history saved:', historyResult.reasonSummary)
+            }
+          } catch (historyError) {
+            console.error('[Settings API] Failed to save program history:', historyError)
+            // Don't fail the whole operation - program version was still created
+          }
         }
       } else {
         versionMessage = 'Program update skipped (recent regeneration in progress).'

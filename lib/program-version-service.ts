@@ -4,6 +4,8 @@
 
 import { neon } from '@neondatabase/serverless'
 import type { UnifiedEngineContext } from './unified-coaching-engine'
+import { createProgramVersionOnSettingsChange, createProgramVersion as createHistoryVersion } from './program-history-versioning'
+import type { AdaptiveProgram } from './adaptive-program-builder'
 
 // =============================================================================
 // TYPES
@@ -641,6 +643,33 @@ export async function regenerateProgramIfNeeded(
     summary,
     snapshotId
   )
+  
+  // Also create an entry in the program_history table for durable history
+  // Build a minimal program-like object for the history versioning system
+  const programForHistory: Partial<AdaptiveProgram> = {
+    primaryGoal: context.athlete.primaryGoal,
+    goalLabel: summary.primaryGoal,
+    trainingDaysPerWeek: context.athlete.trainingDaysPerWeek,
+    sessionLengthMinutes: context.athlete.sessionDurationMinutes,
+    sessionLength: context.athlete.sessionDurationMinutes,
+    equipment: context.athlete.equipment,
+    styleMode: context.athlete.trainingStyle,
+    constraintFocus: context.constraints.primaryConstraint,
+    primaryConstraint: context.constraints.primaryConstraint,
+    experienceLevel: 'intermediate',
+    sessions: [],
+  }
+  
+  try {
+    await createHistoryVersion({
+      userId: athleteId,
+      program: programForHistory as AdaptiveProgram,
+      generationReason: trigger.reason,
+    })
+  } catch (historyError) {
+    // Log but don't fail - the primary version table is updated
+    console.error('[ProgramVersionService] Failed to create history entry:', historyError)
+  }
   
   return {
     regenerated: true,

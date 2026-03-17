@@ -60,13 +60,13 @@ export function PerformanceVaultCard() {
           
           {stats ? (
             <div className="grid grid-cols-3 gap-3">
-              <div className="bg-[#0F1115] rounded-lg p-3 text-center border border-[#2B313A]">
+              <Link href="/prs" className="bg-[#0F1115] rounded-lg p-3 text-center border border-[#2B313A] hover:border-amber-500/50 transition-colors">
                 <div className="flex items-center justify-center gap-1 mb-1">
                   <Trophy className="w-3 h-3 text-amber-500" />
                 </div>
                 <p className="text-lg font-bold text-[#E6E9EF]">{stats.totalPRs}</p>
                 <p className="text-xs text-[#6B7280]">PRs</p>
-              </div>
+              </Link>
               <div className="bg-[#0F1115] rounded-lg p-3 text-center border border-[#2B313A]">
                 <div className="flex items-center justify-center gap-1 mb-1">
                   <Award className="w-3 h-3 text-[#4F6D8A]" />

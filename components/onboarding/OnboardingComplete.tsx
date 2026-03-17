@@ -91,6 +91,23 @@ export function OnboardingComplete({ onContinue }: OnboardingCompleteProps) {
       const score = calculateSpartanScore()
       setSpartanScore(score.totalScore)
       
+      // Create program history entry via API (if authenticated)
+      // This runs in background - don't block the UI flow
+      if (result.success && result.program) {
+        fetch('/api/program/history', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            program: result.program,
+            isInitial: true,
+            reason: 'onboarding_initial_generation',
+          }),
+        }).catch(err => {
+          // Silent fail - history will be created later if needed
+          console.error('[OnboardingComplete] Failed to create program history:', err)
+        })
+      }
+      
       // Show readiness for 2 seconds
       setStep('readiness')
       await new Promise(resolve => setTimeout(resolve, 2500))

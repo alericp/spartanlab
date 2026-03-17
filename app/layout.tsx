@@ -1,19 +1,29 @@
-// AUTH_PROD_UNBLOCK_V1
+/**
+ * Root Layout - Minimal, Auth-Free Shell
+ * 
+ * This layout is applied to ALL routes and must be completely prerender-safe.
+ * 
+ * INTENTIONALLY EXCLUDES:
+ * - ClerkProvider (only in app/(app) layout for authenticated routes)
+ * - OwnerSimulationToggleWrapper (only in app/(app) layout)
+ * - GlobalErrorBoundary (only in app/(app) layout)
+ * - Toaster (only in app/(app) layout to prevent auth hook failures)
+ * 
+ * INCLUDES:
+ * - AnalyticsProvider (auth-safe, no direct Clerk dependencies)
+ * - Global SEO schemas (static, no auth)
+ * - Fonts and CSS (static)
+ * 
+ * Public routes via app/(public) - No auth, prerenderable ✓
+ * App routes via app/(app) - Auth-wrapped separately ✓
+ */
+
 import type { Metadata, Viewport } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
-import { ClerkProvider } from '@clerk/nextjs'
-import { GlobalErrorBoundary } from '@/components/shared/GlobalErrorBoundary'
-import { OwnerSimulationToggleWrapper } from '@/components/billing/OwnerSimulationToggleWrapper'
 import { AnalyticsProvider } from '@/components/providers/AnalyticsProvider'
-import { Toaster } from '@/components/ui/toaster'
-import { AUTH_BUILD_STAMP } from '@/lib/build-stamp'
 import { JsonLdMultiple } from '@/components/seo/JsonLd'
 import { generateOrganizationSchema, generateWebsiteSchema, generateSoftwareSchema } from '@/lib/seo'
 import './globals.css'
-
-// Hard proof marker for deployment verification
-console.log("[AUTH_PROOF] layout auth-prod-unblock-v1")
-console.log(`[SpartanLab] Build: ${AUTH_BUILD_STAMP} (root-layout)`)
 
 const _geist = Geist({ subsets: ["latin"] });
 const _geistMono = Geist_Mono({ subsets: ["latin"] });
@@ -115,16 +125,10 @@ export default function RootLayout({
         <JsonLdMultiple schemas={globalSchemas} />
       </head>
       <body className="font-sans antialiased bg-[#0F1115] text-[#E6E9EF]">
-        <ClerkProvider>
-          <AnalyticsProvider>
-            <GlobalErrorBoundary>
-              {children}
-              {/* Owner-only simulation toggle - only on authenticated app routes */}
-              <OwnerSimulationToggleWrapper />
-              <Toaster />
-            </GlobalErrorBoundary>
-          </AnalyticsProvider>
-        </ClerkProvider>
+        {/* AnalyticsProvider is auth-safe - no Clerk dependencies */}
+        <AnalyticsProvider>
+          {children}
+        </AnalyticsProvider>
       </body>
     </html>
   )

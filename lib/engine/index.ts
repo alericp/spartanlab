@@ -121,6 +121,7 @@ export {
   getComboBlocksForSkill,
   getStyleEquipmentExercises,
   refineStyleWithEnvelope,
+  refineStyleRulesWithEnvelope,
   getStyleCoachingSummary,
   STYLE_MODE_DEFINITIONS,
   type TrainingStyleMode,

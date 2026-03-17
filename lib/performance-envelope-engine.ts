@@ -96,6 +96,14 @@ export interface PerformanceEnvelope {
   excessiveVolumeThreshold: number // Volume where performance consistently drops
   weeklyVolumeConfidence: number // 0-1
   
+  // Completed vs planned volume tracking (real workout data)
+  volumeMetrics: {
+    avgPlannedWeeklyVolume: number
+    avgCompletedWeeklyVolume: number
+    completionRate: number // 0-1, completed / planned
+    volumeVariance: number // Consistency of volume week-to-week
+  }
+  
   // Density preferences
   preferredDensityLevel: DensityLevel
   densityTolerance: 'poor' | 'moderate' | 'good' // How well athlete handles compressed sessions
@@ -105,12 +113,25 @@ export interface PerformanceEnvelope {
   fatigueThreshold: number // Weekly stress units before degradation
   fatigueThresholdConfidence: number // 0-1
   recoveryNeeds: 'standard' | 'elevated' | 'high' // How much recovery this family needs
+  recoveryRateEstimate: number // Days needed for full recovery (movement-family specific)
   
   // Performance tracking
   performanceTrend: 'improving' | 'stable' | 'declining'
   trendConfidence: number // 0-1
+  trendStrength: number // 0-1, how strong is the trend
+  consecutiveImprovements: number // Count of consecutive improving sessions
+  consecutiveDeclines: number // Count of consecutive declining sessions
   lastPositiveSignal: Date | null
   lastNegativeSignal: Date | null
+  
+  // Framework affinity (which coaching framework this athlete responds best to)
+  frameworkAffinity: {
+    preferredFramework: string | null // Best-fit framework for this movement family
+    frameworkConfidence: number // 0-1
+    lowRepResponse: number // 0-1, how well athlete responds to low-rep work
+    highDensityResponse: number // 0-1, how well athlete handles density
+    frequencyResponse: number // 0-1, response to higher training frequency
+  }
   
   // Overall confidence
   confidenceScore: number // 0-1, overall confidence in this envelope
@@ -269,6 +290,14 @@ export function analyzePerformanceEnvelope(
     excessiveVolumeThreshold: Math.round(metrics.volumeAnalysis.excessiveThreshold),
     weeklyVolumeConfidence: metrics.volumeAnalysis.confidence,
     
+    // Completed vs planned volume tracking
+    volumeMetrics: {
+      avgPlannedWeeklyVolume: metrics.volumeAnalysis.avgObserved,
+      avgCompletedWeeklyVolume: metrics.volumeAnalysis.avgObserved * (1 - metrics.fatigueAnalysis.truncationRate * 0.3),
+      completionRate: 1 - metrics.fatigueAnalysis.truncationRate,
+      volumeVariance: calculateVolumeVariance(signals),
+    },
+    
     // Density preferences
     preferredDensityLevel: metrics.densityAnalysis.preferred,
     densityTolerance: metrics.densityAnalysis.tolerance,
@@ -282,12 +311,19 @@ export function analyzePerformanceEnvelope(
     ),
     fatigueThresholdConfidence: metrics.fatigueAnalysis.confidence,
     recoveryNeeds: metrics.fatigueAnalysis.recoveryNeeds,
+    recoveryRateEstimate: calculateRecoveryRateEstimate(metrics, familyDefaults),
     
     // Performance trend
     performanceTrend: metrics.trendAnalysis.direction,
     trendConfidence: metrics.trendAnalysis.confidence,
+    trendStrength: metrics.trendAnalysis.strength,
+    consecutiveImprovements: countConsecutiveTrend(signals, 'improved'),
+    consecutiveDeclines: countConsecutiveTrend(signals, 'declined'),
     lastPositiveSignal: findLastSignalOfType(signals, 'positive'),
     lastNegativeSignal: findLastSignalOfType(signals, 'negative'),
+    
+    // Framework affinity (inferred from training patterns)
+    frameworkAffinity: inferFrameworkAffinity(signals, metrics),
     
     // Overall confidence
     confidenceScore: overallConfidence,
@@ -922,6 +958,14 @@ function createConservativeEnvelope(
     excessiveVolumeThreshold: Math.round(familyDefaults.baseThreshold * 1.3),
     weeklyVolumeConfidence: 0,
     
+    // Volume metrics - no data yet
+    volumeMetrics: {
+      avgPlannedWeeklyVolume: 0,
+      avgCompletedWeeklyVolume: 0,
+      completionRate: 1,
+      volumeVariance: 0,
+    },
+    
     // Density - conservative moderate
     preferredDensityLevel: 'moderate_density',
     densityTolerance: 'moderate',
@@ -931,12 +975,25 @@ function createConservativeEnvelope(
     fatigueThreshold: familyDefaults.baseThreshold,
     fatigueThresholdConfidence: 0,
     recoveryNeeds: familyDefaults.recoveryMultiplier > 1.2 ? 'elevated' : 'standard',
+    recoveryRateEstimate: Math.round(2 * familyDefaults.recoveryMultiplier), // Days based on family
     
     // Performance - unknown
     performanceTrend: 'stable',
     trendConfidence: 0,
+    trendStrength: 0,
+    consecutiveImprovements: 0,
+    consecutiveDeclines: 0,
     lastPositiveSignal: null,
     lastNegativeSignal: null,
+    
+    // Framework affinity - unknown
+    frameworkAffinity: {
+      preferredFramework: null,
+      frameworkConfidence: 0,
+      lowRepResponse: 0.5, // Neutral
+      highDensityResponse: 0.5,
+      frequencyResponse: 0.5,
+    },
     
     // Confidence - zero for new envelope
     confidenceScore: 0,
@@ -948,6 +1005,124 @@ function createConservativeEnvelope(
     lastUpdated: new Date(),
     createdAt: new Date(),
     updateCount: 0,
+  }
+}
+
+/**
+ * Calculate volume variance from signals
+ */
+function calculateVolumeVariance(signals: TrainingResponseSignal[]): number {
+  const weeklyVolumes = signals.filter(s => s.weeklyVolumeAfter > 0).map(s => s.weeklyVolumeAfter)
+  if (weeklyVolumes.length < 3) return 0
+  
+  const mean = weeklyVolumes.reduce((a, b) => a + b, 0) / weeklyVolumes.length
+  const variance = weeklyVolumes.reduce((sum, v) => sum + Math.pow(v - mean, 2), 0) / weeklyVolumes.length
+  // Normalize variance to 0-1 scale (high variance = 1)
+  return Math.min(1, Math.sqrt(variance) / mean)
+}
+
+/**
+ * Calculate recovery rate estimate based on fatigue patterns
+ */
+function calculateRecoveryRateEstimate(
+  metrics: EnvelopeMetrics,
+  familyDefaults: { baseThreshold: number; recoveryMultiplier: number }
+): number {
+  // Base recovery days from movement family
+  const baseRecoveryDays = 2 * familyDefaults.recoveryMultiplier
+  
+  // Adjust based on actual fatigue indicators
+  let adjustment = 0
+  if (metrics.fatigueAnalysis.hardSessionFrequency > 0.4) adjustment += 0.5
+  if (metrics.fatigueAnalysis.truncationRate > 0.2) adjustment += 0.5
+  if (metrics.fatigueAnalysis.recoveryNeeds === 'high') adjustment += 1
+  else if (metrics.fatigueAnalysis.recoveryNeeds === 'elevated') adjustment += 0.5
+  
+  return Math.round((baseRecoveryDays + adjustment) * 10) / 10
+}
+
+/**
+ * Count consecutive trend signals (improvements or declines)
+ */
+function countConsecutiveTrend(
+  signals: TrainingResponseSignal[],
+  type: 'improved' | 'declined'
+): number {
+  const sorted = [...signals].sort((a, b) => 
+    new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime()
+  )
+  
+  let count = 0
+  for (const signal of sorted) {
+    if (signal.performanceVsPrevious === type) count++
+    else if (signal.performanceVsPrevious === (type === 'improved' ? 'declined' : 'improved')) break
+    // Skip 'maintained' and 'unknown' - they don't break the streak
+  }
+  return count
+}
+
+/**
+ * Infer framework affinity from training patterns
+ * Determines which coaching framework the athlete responds best to
+ */
+function inferFrameworkAffinity(
+  signals: TrainingResponseSignal[],
+  metrics: EnvelopeMetrics
+): PerformanceEnvelope['frameworkAffinity'] {
+  if (signals.length < 5) {
+    return {
+      preferredFramework: null,
+      frameworkConfidence: 0,
+      lowRepResponse: 0.5,
+      highDensityResponse: 0.5,
+      frequencyResponse: 0.5,
+    }
+  }
+  
+  // Calculate low rep response (performance when reps <= 5)
+  const lowRepSignals = signals.filter(s => s.repsPerformed <= 5)
+  const lowRepImprovement = lowRepSignals.filter(s => s.performanceVsPrevious === 'improved').length
+  const lowRepResponse = lowRepSignals.length > 2 
+    ? lowRepImprovement / lowRepSignals.length 
+    : 0.5
+  
+  // Calculate high density response
+  const highDensitySignals = signals.filter(s => s.sessionDensity === 'high_density')
+  const highDensitySuccess = highDensitySignals.filter(s => 
+    s.completionRatio > 0.9 && s.difficultyRating !== 'hard'
+  ).length
+  const highDensityResponse = highDensitySignals.length > 2
+    ? highDensitySuccess / highDensitySignals.length
+    : 0.5
+  
+  // Calculate frequency response (sessions per week with good quality)
+  const frequencyResponse = metrics.fatigueAnalysis.hardSessionFrequency < 0.3 ? 0.7 :
+                           metrics.fatigueAnalysis.hardSessionFrequency < 0.5 ? 0.5 : 0.3
+  
+  // Infer preferred framework
+  let preferredFramework: string | null = null
+  let frameworkConfidence = 0
+  
+  if (lowRepResponse >= 0.6 && metrics.densityAnalysis.tolerance === 'poor') {
+    preferredFramework = 'barseagle_strength' // Responds well to low-rep, needs rest
+    frameworkConfidence = Math.min(0.8, lowRepResponse * 0.8 + 0.2)
+  } else if (highDensityResponse >= 0.6 && frequencyResponse >= 0.6) {
+    preferredFramework = 'otz_density' // Handles density and frequency well
+    frameworkConfidence = Math.min(0.8, highDensityResponse * 0.6 + frequencyResponse * 0.4)
+  } else if (frequencyResponse >= 0.7 && lowRepResponse >= 0.5) {
+    preferredFramework = 'skill_frequency' // Good with frequent practice
+    frameworkConfidence = Math.min(0.8, frequencyResponse * 0.7 + lowRepResponse * 0.3)
+  } else if (metrics.densityAnalysis.tolerance === 'good' && metrics.trendAnalysis.direction === 'improving') {
+    preferredFramework = 'balanced_hybrid'
+    frameworkConfidence = 0.5
+  }
+  
+  return {
+    preferredFramework,
+    frameworkConfidence,
+    lowRepResponse,
+    highDensityResponse,
+    frequencyResponse,
   }
 }
 
@@ -1016,15 +1191,199 @@ export function generateEnvelopeInsight(envelope: PerformanceEnvelope): string {
   // Trend insight (only if confident and notable)
   if (envelope.trendConfidence > 0.5) {
     if (envelope.performanceTrend === 'improving') {
-      insights.push(`${familyLabel} showing consistent progress.`)
+      const streak = envelope.consecutiveImprovements
+      if (streak >= 3) {
+        insights.push(`${familyLabel} on a ${streak}-session improvement streak.`)
+      } else {
+        insights.push(`${familyLabel} showing consistent progress.`)
+      }
     } else if (envelope.performanceTrend === 'declining') {
       insights.push(`${familyLabel} performance declining. Consider volume reduction or deload.`)
     }
+  }
+  
+  // Framework affinity insight (only if confident)
+  if (envelope.frameworkAffinity.frameworkConfidence >= 0.5 && envelope.frameworkAffinity.preferredFramework) {
+    const frameworkNames: Record<string, string> = {
+      barseagle_strength: 'strength-focused training',
+      skill_frequency: 'frequent skill practice',
+      otz_density: 'density-based training',
+      balanced_hybrid: 'balanced programming',
+    }
+    const frameworkLabel = frameworkNames[envelope.frameworkAffinity.preferredFramework] || envelope.frameworkAffinity.preferredFramework
+    insights.push(`Your response pattern suggests ${frameworkLabel} works well for this movement.`)
   }
 
   return insights.length > 0 
     ? insights.join(' ')
     : `${familyLabel} programming is optimized for your current response patterns.`
+}
+
+/**
+ * Generate a comprehensive athlete-facing summary of all envelopes
+ * Produces concise, actionable insights across all movement families
+ */
+export function generateAthleteEnvelopeSummary(
+  envelopes: PerformanceEnvelope[]
+): {
+  overallConfidence: number
+  primaryInsights: string[]
+  volumeGuidance: string
+  recoveryGuidance: string
+  frameworkRecommendation: string | null
+  improvingFamilies: string[]
+  decliningFamilies: string[]
+  needsAttentionFamilies: string[]
+} {
+  if (envelopes.length === 0) {
+    return {
+      overallConfidence: 0,
+      primaryInsights: ['No training data available yet. Begin logging workouts to build your profile.'],
+      volumeGuidance: 'Start with conservative volume and track your response.',
+      recoveryGuidance: 'Allow 48+ hours between sessions targeting the same muscle groups.',
+      frameworkRecommendation: null,
+      improvingFamilies: [],
+      decliningFamilies: [],
+      needsAttentionFamilies: [],
+    }
+  }
+  
+  const confidenceSum = envelopes.reduce((sum, e) => sum + e.confidenceScore, 0)
+  const overallConfidence = confidenceSum / envelopes.length
+  
+  const primaryInsights: string[] = []
+  const improvingFamilies: string[] = []
+  const decliningFamilies: string[] = []
+  const needsAttentionFamilies: string[] = []
+  
+  // Analyze each envelope
+  for (const envelope of envelopes) {
+    if (envelope.confidenceScore < 0.3) continue
+    
+    const familyLabel = formatMovementFamily(envelope.movementFamily)
+    
+    // Track trends
+    if (envelope.performanceTrend === 'improving' && envelope.trendConfidence >= 0.4) {
+      improvingFamilies.push(familyLabel)
+    } else if (envelope.performanceTrend === 'declining' && envelope.trendConfidence >= 0.4) {
+      decliningFamilies.push(familyLabel)
+    }
+    
+    // Check for concerning patterns
+    if (envelope.recoveryNeeds === 'high' || 
+        (envelope.volumeMetrics.completionRate < 0.8 && envelope.confidenceScore >= 0.4)) {
+      needsAttentionFamilies.push(familyLabel)
+    }
+  }
+  
+  // Generate primary insights (limit to top 3)
+  const highConfidenceEnvelopes = envelopes
+    .filter(e => e.confidenceScore >= 0.5)
+    .sort((a, b) => b.confidenceScore - a.confidenceScore)
+    .slice(0, 3)
+  
+  for (const envelope of highConfidenceEnvelopes) {
+    const insight = generateEnvelopeInsight(envelope)
+    if (insight && !insight.includes('Continue logging') && !insight.includes('Building your')) {
+      primaryInsights.push(insight)
+    }
+  }
+  
+  // Volume guidance
+  const avgToleratedVolume = envelopes
+    .filter(e => e.weeklyVolumeConfidence >= 0.4)
+    .reduce((sum, e) => sum + e.toleratedWeeklyVolumeMax, 0) / 
+    Math.max(1, envelopes.filter(e => e.weeklyVolumeConfidence >= 0.4).length)
+  
+  let volumeGuidance: string
+  if (avgToleratedVolume > 0) {
+    volumeGuidance = `Your data suggests an average tolerance of ${Math.round(avgToleratedVolume)} weekly sets per movement family.`
+  } else {
+    volumeGuidance = 'Continue logging workouts to establish your volume tolerance.'
+  }
+  
+  // Recovery guidance
+  const highRecoveryCount = envelopes.filter(e => e.recoveryNeeds === 'high').length
+  const elevatedRecoveryCount = envelopes.filter(e => e.recoveryNeeds === 'elevated').length
+  
+  let recoveryGuidance: string
+  if (highRecoveryCount >= 2) {
+    recoveryGuidance = 'Multiple movement families show elevated recovery needs. Prioritize rest days and sleep.'
+  } else if (highRecoveryCount >= 1 || elevatedRecoveryCount >= 2) {
+    recoveryGuidance = 'Some movements require extra recovery time. Schedule appropriately.'
+  } else {
+    recoveryGuidance = 'Your recovery patterns appear standard. Continue current rest practices.'
+  }
+  
+  // Framework recommendation (based on most common affinity)
+  const frameworkCounts = new Map<string, number>()
+  for (const envelope of envelopes) {
+    if (envelope.frameworkAffinity.frameworkConfidence >= 0.4 && envelope.frameworkAffinity.preferredFramework) {
+      const count = frameworkCounts.get(envelope.frameworkAffinity.preferredFramework) || 0
+      frameworkCounts.set(envelope.frameworkAffinity.preferredFramework, count + 1)
+    }
+  }
+  
+  let frameworkRecommendation: string | null = null
+  let maxCount = 0
+  for (const [framework, count] of frameworkCounts) {
+    if (count > maxCount) {
+      maxCount = count
+      frameworkRecommendation = framework
+    }
+  }
+  
+  return {
+    overallConfidence,
+    primaryInsights: primaryInsights.length > 0 ? primaryInsights : ['Your profile is being built. More data will unlock personalized insights.'],
+    volumeGuidance,
+    recoveryGuidance,
+    frameworkRecommendation,
+    improvingFamilies,
+    decliningFamilies,
+    needsAttentionFamilies,
+  }
+}
+
+/**
+ * Generate constraint-aware envelope insight
+ * Used when constraint detection identifies a limiter - provides envelope context
+ */
+export function generateConstraintAwareInsight(
+  envelope: PerformanceEnvelope,
+  constraintType: string
+): string {
+  const familyLabel = formatMovementFamily(envelope.movementFamily)
+  
+  if (envelope.confidenceScore < 0.3) {
+    return `Building response data for ${familyLabel}. Default conservative dosing applied.`
+  }
+  
+  // Tailor insight to constraint type
+  if (constraintType === 'compression' || constraintType === 'flexibility') {
+    if (envelope.densityTolerance === 'good') {
+      return `Frequent, low-dose ${familyLabel} work recommended based on your tolerance.`
+    } else {
+      return `${familyLabel} benefits from longer rest periods. Space out constraint work.`
+    }
+  }
+  
+  if (constraintType === 'straight_arm' || constraintType === 'tendon') {
+    if (envelope.recoveryNeeds === 'high') {
+      return `${familyLabel} recovery needs are elevated. Keep weekly sets under ${envelope.toleratedWeeklyVolumeMax}.`
+    } else {
+      return `${familyLabel} can handle ${envelope.preferredWeeklyVolumeMin}-${envelope.preferredWeeklyVolumeMax} weekly sets.`
+    }
+  }
+  
+  if (constraintType === 'strength' || constraintType === 'pulling_strength') {
+    if (envelope.repZoneConfidence >= 0.4) {
+      return `Your best response in ${familyLabel}: ${envelope.preferredRepRangeMin}-${envelope.preferredRepRangeMax} reps.`
+    }
+  }
+  
+  // Default insight
+  return `${familyLabel}: ${Math.round(envelope.preferredWeeklyVolumeMin)}-${Math.round(envelope.preferredWeeklyVolumeMax)} weekly sets optimal.`
 }
 
 /**
@@ -1127,6 +1486,23 @@ export function getEnvelopeBasedRecommendations(
   // Add recovery warnings
   if (envelope.recoveryNeeds === 'high') {
     coachingNotes.push(`${familyLabel} requires extended recovery. Space sessions appropriately.`)
+  }
+  
+  // Add framework affinity insights
+  if (envelope.frameworkAffinity.frameworkConfidence >= 0.5 && envelope.frameworkAffinity.preferredFramework) {
+    const frameworkLabels: Record<string, string> = {
+      barseagle_strength: 'strength-focused protocols',
+      skill_frequency: 'frequent skill practice',
+      otz_density: 'density-based training',
+      balanced_hybrid: 'balanced programming',
+    }
+    const label = frameworkLabels[envelope.frameworkAffinity.preferredFramework] || 'personalized programming'
+    coachingNotes.push(`Response pattern suggests ${label} works well for ${familyLabel}.`)
+  }
+  
+  // Add volume completion insights
+  if (envelope.volumeMetrics.completionRate < 0.85 && envelope.confidenceScore >= 0.4) {
+    warnings.push(`Workout completion rate is low (${Math.round(envelope.volumeMetrics.completionRate * 100)}%). Consider reducing planned volume.`)
   }
   
   // Format outputs
@@ -1265,6 +1641,28 @@ export function updateEnvelopeWithSignals(
     excessiveVolumeThreshold: blendedExcessive,
     weeklyVolumeConfidence: blendedVolConfidence,
     
+    // Updated volume metrics (blend with existing)
+    volumeMetrics: {
+      avgPlannedWeeklyVolume: blend(
+        existingEnvelope.volumeMetrics.avgPlannedWeeklyVolume,
+        newMetrics.volumeAnalysis.avgObserved
+      ),
+      avgCompletedWeeklyVolume: blend(
+        existingEnvelope.volumeMetrics.avgCompletedWeeklyVolume,
+        newMetrics.volumeAnalysis.avgObserved * (1 - newMetrics.fatigueAnalysis.truncationRate * 0.3)
+      ),
+      completionRate: blendConfidence(
+        existingEnvelope.volumeMetrics.completionRate,
+        1 - newMetrics.fatigueAnalysis.truncationRate,
+        adjustedLearningRate
+      ),
+      volumeVariance: blendConfidence(
+        existingEnvelope.volumeMetrics.volumeVariance,
+        calculateVolumeVariance(newSignals),
+        adjustedLearningRate
+      ),
+    },
+    
     // Updated density preferences
     preferredDensityLevel: preferredDensity,
     densityTolerance: newMetrics.densityAnalysis.tolerance,
@@ -1274,12 +1672,26 @@ export function updateEnvelopeWithSignals(
     fatigueThreshold: blendedFatigue,
     fatigueThresholdConfidence: blendedFatigueConfidence,
     recoveryNeeds: newMetrics.fatigueAnalysis.recoveryNeeds,
+    recoveryRateEstimate: blend(
+      existingEnvelope.recoveryRateEstimate,
+      calculateRecoveryRateFromSignals(newSignals, existingEnvelope.movementFamily)
+    ),
     
     // Updated performance tracking
     performanceTrend: trend,
     trendConfidence: blendConfidence(existingEnvelope.trendConfidence, newMetrics.trendAnalysis.confidence, adjustedLearningRate),
+    trendStrength: blendConfidence(existingEnvelope.trendStrength, newMetrics.trendAnalysis.strength, adjustedLearningRate),
+    consecutiveImprovements: countConsecutiveTrend(newSignals, 'improved'),
+    consecutiveDeclines: countConsecutiveTrend(newSignals, 'declined'),
     lastPositiveSignal: latestPositive || existingEnvelope.lastPositiveSignal,
     lastNegativeSignal: latestNegative || existingEnvelope.lastNegativeSignal,
+    
+    // Updated framework affinity (blend with existing)
+    frameworkAffinity: blendFrameworkAffinity(
+      existingEnvelope.frameworkAffinity,
+      inferFrameworkAffinity(newSignals, newMetrics),
+      adjustedLearningRate
+    ),
     
     // Updated confidence
     confidenceScore: blendedOverallConfidence,
@@ -1290,6 +1702,58 @@ export function updateEnvelopeWithSignals(
     // Updated metadata
     lastUpdated: new Date(),
     updateCount: existingEnvelope.updateCount + 1,
+  }
+}
+
+/**
+ * Calculate recovery rate from signals (simplified version for blending)
+ */
+function calculateRecoveryRateFromSignals(
+  signals: TrainingResponseSignal[],
+  movementFamily: MovementFamily
+): number {
+  const familyDefaults = MOVEMENT_FAMILY_FATIGUE_DEFAULTS[movementFamily] || MOVEMENT_FAMILY_FATIGUE_DEFAULTS.vertical_pull
+  const baseRecoveryDays = 2 * familyDefaults.recoveryMultiplier
+  
+  if (signals.length < 3) return baseRecoveryDays
+  
+  // Calculate adjustment based on hard session frequency and truncation
+  const hardRate = signals.filter(s => s.difficultyRating === 'hard').length / signals.length
+  const truncationRate = signals.filter(s => s.sessionTruncated).length / signals.length
+  
+  let adjustment = 0
+  if (hardRate > 0.4) adjustment += 0.5
+  if (truncationRate > 0.2) adjustment += 0.5
+  
+  return Math.round((baseRecoveryDays + adjustment) * 10) / 10
+}
+
+/**
+ * Blend framework affinity data
+ */
+function blendFrameworkAffinity(
+  existing: PerformanceEnvelope['frameworkAffinity'],
+  newAffinity: PerformanceEnvelope['frameworkAffinity'],
+  rate: number
+): PerformanceEnvelope['frameworkAffinity'] {
+  // Blend numeric values
+  const blendedLowRep = existing.lowRepResponse * (1 - rate) + newAffinity.lowRepResponse * rate
+  const blendedHighDensity = existing.highDensityResponse * (1 - rate) + newAffinity.highDensityResponse * rate
+  const blendedFrequency = existing.frequencyResponse * (1 - rate) + newAffinity.frequencyResponse * rate
+  
+  // Only update preferred framework if new confidence is higher
+  const preferredFramework = newAffinity.frameworkConfidence > existing.frameworkConfidence
+    ? newAffinity.preferredFramework
+    : existing.preferredFramework
+  
+  const frameworkConfidence = Math.max(existing.frameworkConfidence, newAffinity.frameworkConfidence * 0.9)
+  
+  return {
+    preferredFramework,
+    frameworkConfidence,
+    lowRepResponse: blendedLowRep,
+    highDensityResponse: blendedHighDensity,
+    frequencyResponse: blendedFrequency,
   }
 }
 
@@ -1323,6 +1787,169 @@ export function applyFatigueFeedbackToEnvelope(
   }
   
   // If deload was triggered, we may have found the true fatigue threshold
+}
+
+// =============================================================================
+// BENCHMARK INTEGRATION
+// =============================================================================
+
+import {
+  getAllBenchmarkTrends,
+  getEnvelopeAdjustments,
+  type BenchmarkTrend,
+  type EnvelopeAdjustment,
+} from './benchmark-testing-engine'
+
+/**
+ * Map benchmark movement family to envelope movement family
+ */
+const BENCHMARK_TO_ENVELOPE_FAMILY: Record<string, MovementFamily> = {
+  'vertical_pull': 'vertical_pull',
+  'horizontal_pull': 'horizontal_pull',
+  'vertical_push': 'vertical_push',
+  'dip_pattern': 'dip_pattern',
+  'straight_arm_pull': 'straight_arm_pull',
+  'straight_arm_push': 'straight_arm_push',
+  'compression_core': 'compression_core',
+  'explosive_pull': 'explosive_pull',
+  'ring_support': 'rings_stability',
+  'handstand': 'scapular_control',
+}
+
+/**
+ * Apply benchmark trends to refine envelope
+ */
+export async function refineEnvelopeFromBenchmarks(
+  userId: string,
+  envelope: PerformanceEnvelope
+): Promise<PerformanceEnvelope & { benchmarkRefinement: BenchmarkEnvelopeRefinement }> {
+  // Get benchmark trends
+  const trends = await getAllBenchmarkTrends(userId, 12)
+  
+  // Get relevant trends for this envelope's movement family
+  const relevantTrends = trends.filter(t => {
+    const mappedFamily = BENCHMARK_TO_ENVELOPE_FAMILY[t.movementFamily]
+    return mappedFamily === envelope.movementFamily
+  })
+  
+  // Get envelope adjustments
+  const adjustments = getEnvelopeAdjustments(trends)
+  const relevantAdjustments = adjustments.filter(a => {
+    const mappedFamily = BENCHMARK_TO_ENVELOPE_FAMILY[a.movementFamily]
+    return mappedFamily === envelope.movementFamily
+  })
+  
+  // Calculate refinement
+  const refinement = calculateBenchmarkRefinement(envelope, relevantTrends, relevantAdjustments)
+  
+  // Apply refinements to envelope
+  const refinedEnvelope = applyBenchmarkRefinement(envelope, refinement)
+  
+  return {
+    ...refinedEnvelope,
+    benchmarkRefinement: refinement,
+  }
+}
+
+export interface BenchmarkEnvelopeRefinement {
+  hasData: boolean
+  trendDirection: 'improving' | 'stable' | 'declining' | 'unknown'
+  confidenceBoost: number
+  volumeAdjustment: 'increase' | 'decrease' | 'maintain'
+  intensityAdjustment: 'increase' | 'decrease' | 'maintain'
+  rationale: string
+}
+
+function calculateBenchmarkRefinement(
+  envelope: PerformanceEnvelope,
+  trends: BenchmarkTrend[],
+  adjustments: EnvelopeAdjustment[]
+): BenchmarkEnvelopeRefinement {
+  if (trends.length === 0) {
+    return {
+      hasData: false,
+      trendDirection: 'unknown',
+      confidenceBoost: 0,
+      volumeAdjustment: 'maintain',
+      intensityAdjustment: 'maintain',
+      rationale: 'No benchmark data available for this movement family.',
+    }
+  }
+  
+  // Determine overall trend from benchmarks
+  const improvingCount = trends.filter(t => t.trend === 'improving').length
+  const decliningCount = trends.filter(t => t.trend === 'declining').length
+  const stableCount = trends.filter(t => t.trend === 'stable').length
+  
+  let trendDirection: 'improving' | 'stable' | 'declining' = 'stable'
+  if (improvingCount > decliningCount && improvingCount > stableCount) {
+    trendDirection = 'improving'
+  } else if (decliningCount > improvingCount && decliningCount > stableCount) {
+    trendDirection = 'declining'
+  }
+  
+  // Calculate confidence boost from benchmark data
+  const avgConfidence = trends.reduce((sum, t) => sum + t.confidenceScore, 0) / trends.length
+  const confidenceBoost = Math.min(0.15, avgConfidence * 0.2)
+  
+  // Determine adjustments
+  let volumeAdjustment: 'increase' | 'decrease' | 'maintain' = 'maintain'
+  let intensityAdjustment: 'increase' | 'decrease' | 'maintain' = 'maintain'
+  
+  for (const adj of adjustments) {
+    if (adj.adjustmentType === 'volume_increase') volumeAdjustment = 'increase'
+    else if (adj.adjustmentType === 'volume_decrease') volumeAdjustment = 'decrease'
+    else if (adj.adjustmentType === 'intensity_increase') intensityAdjustment = 'increase'
+    else if (adj.adjustmentType === 'intensity_decrease') intensityAdjustment = 'decrease'
+  }
+  
+  // Generate rationale
+  let rationale = ''
+  if (trendDirection === 'improving') {
+    rationale = 'Benchmark tests show improvement. Current training approach is working well.'
+  } else if (trendDirection === 'declining') {
+    rationale = 'Benchmark tests show decline. Consider reducing volume or increasing recovery.'
+  } else {
+    rationale = 'Benchmark tests are stable. Consider increasing intensity to drive adaptation.'
+  }
+  
+  return {
+    hasData: true,
+    trendDirection,
+    confidenceBoost,
+    volumeAdjustment,
+    intensityAdjustment,
+    rationale,
+  }
+}
+
+function applyBenchmarkRefinement(
+  envelope: PerformanceEnvelope,
+  refinement: BenchmarkEnvelopeRefinement
+): PerformanceEnvelope {
+  if (!refinement.hasData) return envelope
+  
+  const updates: Partial<PerformanceEnvelope> = {}
+  
+  // Apply confidence boost
+  updates.confidenceScore = Math.min(0.95, envelope.confidenceScore + refinement.confidenceBoost)
+  
+  // Apply volume adjustments
+  if (refinement.volumeAdjustment === 'increase' && envelope.weeklyVolumeConfidence > 0.3) {
+    updates.preferredWeeklyVolumeMax = Math.round(envelope.preferredWeeklyVolumeMax * 1.1)
+    updates.toleratedWeeklyVolumeMax = Math.round(envelope.toleratedWeeklyVolumeMax * 1.1)
+  } else if (refinement.volumeAdjustment === 'decrease') {
+    updates.preferredWeeklyVolumeMax = Math.round(envelope.preferredWeeklyVolumeMax * 0.9)
+    updates.toleratedWeeklyVolumeMax = Math.round(envelope.toleratedWeeklyVolumeMax * 0.9)
+  }
+  
+  // Align performance trend with benchmark trend
+  if (refinement.trendDirection !== 'unknown' && envelope.trendConfidence < 0.5) {
+    updates.performanceTrend = refinement.trendDirection
+    updates.trendConfidence = Math.max(envelope.trendConfidence, 0.4)
+  }
+  
+  return { ...envelope, ...updates }
   if (feedback.wasDeloadTriggered && feedback.volumeAtTrigger > 0) {
     const currentThreshold = envelope.fatigueThreshold
     const observedThreshold = feedback.volumeAtTrigger

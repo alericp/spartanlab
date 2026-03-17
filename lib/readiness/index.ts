@@ -19,6 +19,9 @@ export {
   // Explanation generators
   getLimiterExplanation,
   getReadinessSummary,
+  generateWhyThisWorkout,
+  generateExerciseReason,
+  buildWorkoutReasoningSummary,
   
   // Types
   type SkillType,
@@ -26,6 +29,7 @@ export {
   type ReadinessComponentScores,
   type LimitingFactor,
   type AthleteReadinessInput,
+  type WorkoutReasoningSummary,
   
   // Constants
   LIMITING_FACTOR_LABELS,

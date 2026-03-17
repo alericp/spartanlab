@@ -28,3 +28,38 @@ export {
   getFatiguePatterns,
   analyzeFatigueHistory,
 } from './deload-system'
+
+// =============================================================================
+// ADAPTIVE DELOAD & RECOVERY PHASE ENGINE
+// =============================================================================
+
+export {
+  // Types
+  type RecoveryPhaseType,
+  type RecoveryPhaseStatus,
+  type TriggerSource,
+  type TrendDirection,
+  type RecoveryPhase,
+  type RecoveryPhaseAdjustments,
+  type TriggerSignal,
+  type RecoveryTriggerAssessment,
+  type RecoveryAssessmentInput,
+  type SessionRecoveryAdjustment,
+  type RecoveryPhaseExplanation,
+  
+  // Assessment Functions
+  assessRecoveryNeed,
+  generatePhaseAdjustments,
+  calculatePhaseDuration,
+  
+  // Program Integration
+  applyRecoveryAdjustmentsToSession,
+  
+  // Coaching & Explanations
+  generateRecoveryPhaseExplanation,
+  generateRecoveryCoachMessage,
+  
+  // Phase Management
+  assessPhaseCompletion,
+  assessCycleCompatibility,
+} from '../adaptive-deload-recovery-engine'

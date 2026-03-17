@@ -52,6 +52,8 @@ import {
 } from '@/lib/workout-log-service'
 import { evaluateAllChallenges } from '@/lib/challenges/challenge-engine'
 import { evaluateAchievements } from '@/lib/achievements/achievement-engine'
+import type { WorkoutReasoningSummary } from '@/lib/readiness/canonical-readiness-engine'
+import { WhyThisWorkout, ExerciseReasonBubble, WorkoutFocusBadge } from '@/components/workout/WhyThisWorkout'
 
 // =============================================================================
 // TYPES
@@ -311,14 +313,16 @@ function BandSelector({ value, onChange, recommendedBand }: BandSelectorProps) {
 
 interface StreamlinedWorkoutSessionProps {
   session: AdaptiveSession
+  reasoningSummary?: WorkoutReasoningSummary
   onComplete: () => void
   onCancel: () => void
 }
 
-export function StreamlinedWorkoutSession({ 
-  session, 
-  onComplete, 
-  onCancel 
+export function StreamlinedWorkoutSession({
+  session,
+  reasoningSummary,
+  onComplete,
+  onCancel
 }: StreamlinedWorkoutSessionProps) {
   const sessionId = `session-${session.dayLabel}-${session.dayNumber}`
   
@@ -956,9 +960,17 @@ export function StreamlinedWorkoutSession({
           <Card className="bg-[#1A1F26] border-[#2B313A] p-4">
             <div className="flex items-center justify-between mb-4">
               <p className="text-xs text-[#6B7280] uppercase tracking-wide">Today&apos;s Workout</p>
-              <Badge variant="outline" className="text-xs border-[#2B313A] text-[#A4ACB8]">
-                {session.focusLabel}
-              </Badge>
+              {reasoningSummary ? (
+                <WorkoutFocusBadge 
+                  focus={reasoningSummary.workoutFocus} 
+                  sessionType={reasoningSummary.sessionType}
+                  size="sm"
+                />
+              ) : (
+                <Badge variant="outline" className="text-xs border-[#2B313A] text-[#A4ACB8]">
+                  {session.focusLabel}
+                </Badge>
+              )}
             </div>
             <div className="space-y-2">
               {session.exercises.slice(0, 5).map((ex, i) => (
@@ -979,6 +991,15 @@ export function StreamlinedWorkoutSession({
               )}
             </div>
           </Card>
+          
+          {/* Why This Workout - Reasoning Explanation */}
+          {reasoningSummary && (
+            <WhyThisWorkout
+              reasoning={reasoningSummary}
+              defaultCollapsed={true}
+              variant="card"
+            />
+          )}
           
           {/* What to Expect */}
           <div className="bg-[#1A1F26]/50 border border-[#2B313A]/50 rounded-lg p-4">

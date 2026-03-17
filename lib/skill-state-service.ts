@@ -1,8 +1,17 @@
 // Skill State Service
 // Manages persistent skill-specific state tracking for athletes
 // Source of truth for skill-specific coaching decisions
+// Now integrated with Skill Progression Graph Engine for explicit node-based tracking
 
 import { neon } from '@neondatabase/serverless'
+import {
+  determineGraphPosition,
+  getSkillGraph,
+  getGraphNode,
+  type SkillGraphId,
+  type AthleteGraphPosition,
+  type ProgressionNode,
+} from './skill-progression-graph-engine'
 
 const sql = neon(process.env.DATABASE_URL!)
 
@@ -375,4 +384,216 @@ export const COACHING_CONTEXT_LABELS: Record<CoachingContext, string> = {
   maintaining: 'Maintaining',
   regressing: 'Rebuilding',
   new_skill: 'New Skill',
+}
+
+// =============================================================================
+// GRAPH-ENHANCED SKILL STATE
+// =============================================================================
+
+/**
+ * Extended SkillState with graph node positioning
+ */
+export interface GraphEnhancedSkillState extends SkillState {
+  graphPosition: AthleteGraphPosition | null
+  currentNode: ProgressionNode | null
+  nextNode: ProgressionNode | null
+  isBlocked: boolean
+  blockingReasons: string[]
+}
+
+/**
+ * Convert SkillKey to SkillGraphId
+ */
+function skillKeyToGraphId(skill: SkillKey): SkillGraphId {
+  return skill as SkillGraphId
+}
+
+/**
+ * Get skill state enhanced with graph positioning
+ */
+export async function getGraphEnhancedSkillState(
+  userId: string,
+  skill: SkillKey,
+  athleteBenchmarks?: Record<string, number>
+): Promise<GraphEnhancedSkillState | null> {
+  const state = await getSkillState(userId, skill)
+  if (!state) return null
+  
+  // Default benchmarks from state if not provided
+  const benchmarks = athleteBenchmarks || {
+    pull_ups: 0,
+    dips: 0,
+    weighted_pull: 0,
+    weighted_dip: 0,
+    compression: 0,
+    hold_time: state.currentBestMetric || 0,
+  }
+  
+  // Get graph position
+  const graphId = skillKeyToGraphId(skill)
+  const graphPosition = determineGraphPosition(
+    graphId,
+    benchmarks,
+    state.readinessScore || 0,
+    state.metricType === 'hold_seconds' ? state.currentBestMetric : undefined,
+    state.metricType === 'reps' ? state.currentBestMetric : undefined
+  )
+  
+  return {
+    ...state,
+    graphPosition,
+    currentNode: graphPosition?.currentNode || null,
+    nextNode: graphPosition?.nextRecommendedNode || null,
+    isBlocked: graphPosition?.isBlocked || false,
+    blockingReasons: graphPosition?.blockingReasons.map(r => r.description) || [],
+  }
+}
+
+/**
+ * Get all skill states enhanced with graph positioning
+ */
+export async function getAllGraphEnhancedSkillStates(
+  userId: string,
+  athleteBenchmarks?: Record<string, number>
+): Promise<GraphEnhancedSkillState[]> {
+  const states = await getAthleteSkillStates(userId)
+  
+  return Promise.all(
+    states.map(async (state) => {
+      const enhanced = await getGraphEnhancedSkillState(
+        userId,
+        state.skill,
+        athleteBenchmarks
+      )
+      return enhanced || {
+        ...state,
+        graphPosition: null,
+        currentNode: null,
+        nextNode: null,
+        isBlocked: false,
+        blockingReasons: [],
+      }
+    })
+  )
+}
+
+/**
+ * Map numeric level to graph node for a skill
+ */
+export function mapLevelToGraphNode(
+  skill: SkillKey,
+  level: number
+): ProgressionNode | null {
+  const graphId = skillKeyToGraphId(skill)
+  const graph = getSkillGraph(graphId)
+  if (!graph) return null
+  
+  // Find node with matching levelIndex
+  const node = graph.nodes.find(n => n.levelIndex === level)
+  return node || null
+}
+
+/**
+ * Get node ID from current level (for SkillState update)
+ */
+export function getCurrentNodeId(
+  skill: SkillKey,
+  level: number
+): string | null {
+  const node = mapLevelToGraphNode(skill, level)
+  return node?.nodeId || null
+}
+
+// =============================================================================
+// BENCHMARK INTEGRATION
+// =============================================================================
+
+import {
+  getUserBenchmarks,
+  calculateReadinessAdjustment,
+  detectLimiterFromBenchmarks,
+  type Benchmark,
+} from './benchmark-testing-engine'
+
+/**
+ * Update skill state readiness based on new benchmark data
+ */
+export async function updateSkillStateFromBenchmarks(
+  userId: string
+): Promise<{ updated: SkillKey[]; adjustments: Record<SkillKey, number> }> {
+  const benchmarks = await getUserBenchmarks(userId)
+  const skillStates = await getAthleteSkillStates(userId)
+  
+  // Calculate readiness adjustments from all recent benchmarks
+  const adjustmentMap: Record<SkillKey, number[]> = {
+    front_lever: [],
+    back_lever: [],
+    planche: [],
+    hspu: [],
+    muscle_up: [],
+    l_sit: [],
+  }
+  
+  // Get recent benchmarks (last 30 days)
+  const thirtyDaysAgo = new Date()
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+  
+  const recentBenchmarks = benchmarks.filter(b => 
+    new Date(b.testDate) >= thirtyDaysAgo
+  )
+  
+  for (const benchmark of recentBenchmarks) {
+    const adjustments = calculateReadinessAdjustment(benchmark)
+    for (const adj of adjustments) {
+      if (adjustmentMap[adj.skill]) {
+        adjustmentMap[adj.skill].push(adj.adjustment)
+      }
+    }
+  }
+  
+  // Average the adjustments for each skill
+  const finalAdjustments: Record<SkillKey, number> = {} as Record<SkillKey, number>
+  const updatedSkills: SkillKey[] = []
+  
+  for (const [skill, adjustments] of Object.entries(adjustmentMap)) {
+    if (adjustments.length > 0) {
+      const avgAdjustment = adjustments.reduce((a, b) => a + b, 0) / adjustments.length
+      finalAdjustments[skill as SkillKey] = Math.round(avgAdjustment)
+      
+      // Find existing state
+      const state = skillStates.find(s => s.skill === skill)
+      if (state && avgAdjustment !== 0) {
+        // Update readiness score
+        const newReadiness = Math.min(100, Math.max(0, state.readinessScore + avgAdjustment))
+        await updateSkillState(userId, skill as SkillKey, {
+          currentLevel: state.currentLevel,
+          readinessScore: newReadiness,
+        })
+        updatedSkills.push(skill as SkillKey)
+      }
+    }
+  }
+  
+  return { updated: updatedSkills, adjustments: finalAdjustments }
+}
+
+/**
+ * Get skill state with benchmark-derived limiter
+ */
+export async function getSkillStateWithBenchmarkLimiter(
+  userId: string,
+  skill: SkillKey
+): Promise<SkillState & { benchmarkLimiter: { limiter: string; confidence: number } | null }> {
+  const state = await getSkillState(userId, skill)
+  if (!state) {
+    throw new Error(`No skill state found for ${skill}`)
+  }
+  
+  const benchmarks = await getUserBenchmarks(userId)
+  const limiterInfo = detectLimiterFromBenchmarks(benchmarks)
+  
+  return {
+    ...state,
+    benchmarkLimiter: limiterInfo,
+  }
 }

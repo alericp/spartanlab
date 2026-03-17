@@ -1,6 +1,15 @@
 // Override Signal Service
 // Tracks exercise overrides as behavioral signals for the adaptive engine
 // Signals help the AI understand athlete preferences and needs over time
+// Now integrated with Enhanced Exercise Intelligence for smarter warnings
+
+import {
+  generateOverrideWarning,
+  generateWhyThisExercise,
+  scoreSubstitution,
+  type AthleteExerciseContext,
+  type SubstitutionQualityScore,
+} from './enhanced-exercise-intelligence'
 
 // =============================================================================
 // TYPES
@@ -430,4 +439,156 @@ export function clearOverrideSignals(): void {
   try {
     localStorage.removeItem(STORAGE_KEY)
   } catch {}
+}
+
+// =============================================================================
+// ENHANCED EXERCISE INTELLIGENCE INTEGRATION
+// =============================================================================
+
+/**
+ * Enhanced override warning using the exercise intelligence layer
+ * Provides more nuanced and coach-like feedback on exercise substitutions
+ */
+export interface EnhancedOverrideWarning {
+  shouldWarn: boolean
+  severity: 'none' | 'info' | 'warning' | 'danger'
+  headline: string
+  message: string
+  substitutionQuality: 'excellent' | 'good' | 'acceptable' | 'poor'
+  preservedAttributes: string[]
+  lostAttributes: string[]
+  coachingTip: string | null
+}
+
+export function getEnhancedOverrideWarning(
+  originalExerciseId: string,
+  overrideExerciseId: string,
+  targetSkill?: string,
+  athleteContext?: AthleteExerciseContext
+): EnhancedOverrideWarning {
+  // Get warning from exercise intelligence
+  const warning = generateOverrideWarning(
+    originalExerciseId,
+    overrideExerciseId,
+    targetSkill as any,
+    athleteContext
+  )
+  
+  // Get substitution quality score
+  const qualityScore = scoreSubstitution(
+    originalExerciseId,
+    overrideExerciseId,
+    targetSkill as any
+  )
+  
+  // Get explanation for original exercise
+  const whyOriginal = generateWhyThisExercise(
+    originalExerciseId,
+    targetSkill as any
+  )
+  
+  // Build preserved/lost attributes
+  const preservedAttributes: string[] = []
+  const lostAttributes: string[] = []
+  
+  if (qualityScore.preserves.movementFamily) {
+    preservedAttributes.push('Movement pattern')
+  } else {
+    lostAttributes.push('Movement pattern')
+  }
+  
+  if (qualityScore.preserves.trainingIntent) {
+    preservedAttributes.push('Training intent')
+  } else {
+    lostAttributes.push('Training intent')
+  }
+  
+  if (qualityScore.preserves.skillCarryover) {
+    preservedAttributes.push('Skill transfer')
+  } else if (targetSkill) {
+    lostAttributes.push('Skill transfer')
+  }
+  
+  if (qualityScore.preserves.difficultyLevel) {
+    preservedAttributes.push('Difficulty level')
+  } else {
+    lostAttributes.push('Difficulty match')
+  }
+  
+  // Build headline based on quality
+  let headline = ''
+  switch (qualityScore.qualityLevel) {
+    case 'excellent':
+      headline = 'Great substitute'
+      break
+    case 'good':
+      headline = 'Solid alternative'
+      break
+    case 'acceptable':
+      headline = 'Acceptable but different'
+      break
+    case 'poor':
+      headline = 'Consider a closer match'
+      break
+  }
+  
+  // Determine if we should show coaching tip
+  const coachingTip = warning.shouldWarn && whyOriginal?.coachTip
+    ? whyOriginal.coachTip
+    : null
+  
+  return {
+    shouldWarn: warning.shouldWarn,
+    severity: warning.shouldWarn 
+      ? (warning.severity === 'danger' ? 'danger' : warning.severity === 'warning' ? 'warning' : 'info')
+      : 'none',
+    headline,
+    message: warning.message || `${headline}: This exercise ${preservedAttributes.length > 0 ? `preserves ${preservedAttributes.join(', ').toLowerCase()}` : 'differs significantly from the original'}.`,
+    substitutionQuality: qualityScore.qualityLevel,
+    preservedAttributes,
+    lostAttributes,
+    coachingTip,
+  }
+}
+
+/**
+ * Generate "why this exercise was recommended" explanation for UI display
+ */
+export interface ExerciseExplanationForUI {
+  exerciseId: string
+  exerciseName: string
+  headline: string
+  shortRationale: string
+  fullRationale: string
+  skillBenefit: string
+  coachTip: string
+  confidenceIndicator: 'high' | 'medium' | 'low'
+}
+
+export function getExerciseExplanationForUI(
+  exerciseId: string,
+  targetSkill?: string,
+  primaryWeakPoint?: string
+): ExerciseExplanationForUI | null {
+  const explanation = generateWhyThisExercise(
+    exerciseId,
+    targetSkill as any,
+    primaryWeakPoint as any
+  )
+  
+  if (!explanation) return null
+  
+  // Build short rationale (first sentence)
+  const shortRationale = explanation.rationale.split('.')[0] + '.'
+  
+  return {
+    exerciseId: explanation.exerciseId,
+    exerciseName: explanation.exerciseName,
+    headline: explanation.headline,
+    shortRationale,
+    fullRationale: explanation.rationale,
+    skillBenefit: explanation.skillBenefit,
+    coachTip: explanation.coachTip,
+    confidenceIndicator: explanation.confidenceLevel,
+  }
 }

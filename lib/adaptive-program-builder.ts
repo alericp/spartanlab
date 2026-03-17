@@ -18,6 +18,12 @@ import { getProgramBuilderContext } from './adaptive-athlete-engine'
 import { getAthleteCalibration, getProgramCalibrationAdjustments, type AthleteCalibration, type ProgramCalibrationAdjustments } from './athlete-calibration'
 import { getOnboardingProfile, type PrimaryTrainingOutcome, type TrainingPathType, type WorkoutDurationPreference, type PrimaryLimitation, type WeakestArea, type JointCaution } from './athlete-profile'
 import { detectWeakPoints, getVolumeDistribution, type WeakPointSummary } from './weak-point-detection'
+import { 
+  detectWeakPoints as detectUnifiedWeakPoints, 
+  weakPointToLimitingFactor,
+  type WeakPointAssessment,
+  type SkillTarget,
+} from './weak-point-engine'
 import { getUnifiedSkillIntelligence, generateTrainingAdjustments, type UnifiedSkillIntelligence } from './skill-intelligence-layer'
 import { getCompressionReadiness, shouldBiasTowardCompression, type CompressionReadinessResult } from './compression-readiness'
 import { selectOptimalStructure, getDayExplanation } from './program-structure-engine'
@@ -136,7 +142,59 @@ import {
   type RepetitionJustification,
   type SessionSignature,
 } from './session-variety-engine'
-
+import {
+  buildWorkoutReasoningSummary,
+  calculateReadinessFromProfile,
+  type WorkoutReasoningSummary,
+  type CanonicalReadinessResult,
+  type LimitingFactor,
+} from './readiness/canonical-readiness-engine'
+import {
+  analyzeConstraints,
+  formatBuilderReasoning,
+  type ConstraintAwareInput,
+  type ConstraintAnalysis,
+  type FormattedBuilderReasoning,
+} from './constraint-aware-assembly-engine'
+import {
+  initializeAdaptiveCycleState,
+  type AdaptiveCycleState,
+  type CycleBuilderModifications,
+  type AdaptiveCyclePhase,
+} from './adaptive-training-cycle-engine'
+import {
+  determineGraphPosition,
+  getSkillGraph,
+  getGraphNode,
+  type SkillGraphId,
+  type AthleteGraphPosition,
+  type ProgressionNode,
+} from './skill-progression-graph-engine'
+import {
+  generateWhyThisExercise,
+  getExercisesForWeakPoint,
+  getExercisesForProgressionNode,
+  checkContraindications,
+  type WhyThisExerciseExplanation,
+  type AthleteExerciseContext,
+} from './enhanced-exercise-intelligence'
+import {
+  selectSessionStructure,
+  adjustStructureForEnvelope,
+  integrateWeakPointIntoStructure,
+  checkStructureOveruse,
+  type SessionStructure,
+  type SessionStructureType,
+  type StructureSelectionResult,
+} from './session-structure-engine'
+import {
+  SkillVolumeGovernor,
+  type SessionStressAnalysis,
+  type GovernorSessionInput,
+  type PlannedExercise,
+  type SkillStressFocus,
+} from './skill-volume-governor-engine'
+  
 // =============================================================================
 // TYPES
 // =============================================================================
@@ -392,6 +450,73 @@ export interface AdaptiveProgram {
       recommendation: string
     }>
     coachRecommendations: string[]
+  }
+  // Unified Workout Reasoning Summary - explains WHY this workout was generated
+  workoutReasoningSummary?: WorkoutReasoningSummary
+  // Unified Weak Point Assessment - detailed limiter analysis
+  weakPointAssessment?: WeakPointAssessment
+  // Constraint-aware assembly analysis - explains all builder decisions
+  constraintAnalysis?: ConstraintAnalysis
+  // Formatted builder reasoning - coach-style explanations
+  builderReasoning?: FormattedBuilderReasoning
+  // Adaptive Training Cycle context - current phase and modifications
+  cycleContext?: {
+    currentPhase: AdaptiveCyclePhase
+    phaseName: string
+    phaseDescription: string
+    volumeModifier: number
+    intensityModifier: number
+    progressionAggressiveness: 'conservative' | 'moderate' | 'aggressive'
+    cycleExplanation: {
+      headline: string
+      description: string
+      rationale: string
+      nextSteps: string
+    }
+  }
+  // Skill Progression Graph position - current node in progression graph
+  skillGraphPosition?: {
+    skillId: string
+    currentNodeId: string
+    currentNodeName: string
+    nextNodeId: string | null
+    nextNodeName: string | null
+    isBlocked: boolean
+    blockingReasons: string[]
+    progressPercentage: number
+    knowledgeTip: string
+  }
+  // Exercise intelligence explanations - "why this exercise" for each main movement
+exerciseExplanations?: {
+  exerciseId: string
+  exerciseName: string
+  headline: string
+  rationale: string
+  skillBenefit: string
+  coachTip: string
+  confidenceLevel: 'high' | 'medium' | 'low'
+  }[]
+  // Session Structure - EMOM, ladder, pyramid, density block, etc.
+  sessionStructure?: {
+    structureType: SessionStructureType
+    structureName: string
+    structureDescription: string
+    totalDurationMinutes: number
+    cycleCount: number
+    densityLevel: 'low' | 'moderate' | 'high' | 'very_high'
+    coachingExplanation: string
+    adjustments: string[]
+  }
+  // Skill Volume Governor - stress analysis and recommendations
+  volumeGovernor?: {
+    totalSessionStress: number
+    fatigueRiskLevel: 'low' | 'moderate' | 'elevated' | 'high' | 'critical'
+    tendonRiskLevel: 'minimal' | 'low' | 'moderate' | 'high' | 'very_high' | 'extreme'
+    highRiskElements: string[]
+    recommendationsApplied: string[]
+    coachingExplanation: string
+    additionalWarmupNeeded: boolean
+    warmupIntensityLevel: 'minimal' | 'moderate' | 'thorough'
   }
 }
 
@@ -1048,6 +1173,432 @@ fatigueDecision: fatigueDecision ? {
     },
     // Constraint Improvement Tracking - showing progress over time
     constraintImprovement: constraintImprovementData || undefined,
+    // Unified Workout Reasoning Summary - explains WHY this workout was generated
+    workoutReasoningSummary: (() => {
+      try {
+        // Calculate skill readiness for primary goal
+        const skillType = primaryGoal === 'front_lever' ? 'front_lever'
+          : primaryGoal === 'planche' ? 'planche'
+          : primaryGoal === 'muscle_up' ? 'muscle_up'
+          : primaryGoal === 'hspu' ? 'hspu'
+          : primaryGoal === 'back_lever' ? 'back_lever'
+          : primaryGoal === 'l_sit' ? 'l_sit'
+          : null
+
+        let readinessResult: CanonicalReadinessResult | null = null
+        if (skillType && profile) {
+          readinessResult = calculateReadinessFromProfile(skillType, profile)
+        }
+
+        // Determine session type based on goal and calibration
+        const sessionType: WorkoutReasoningSummary['sessionType'] = 
+          deloadRecommendation?.shouldDeload ? 'deload'
+          : fatigueDecision?.decision === 'DELOAD_RECOMMENDED' ? 'recovery'
+          : shouldPrioritizeSkills ? 'skill'
+          : shouldPrioritizeStrength ? 'strength'
+          : 'mixed'
+
+        // Get first session exercises for exercise reasons
+        const firstSessionExercises = sessions[0]?.exercises?.slice(0, 5).map(e => ({
+          id: e.exercise?.id || '',
+          name: e.exercise?.name || '',
+        })) || []
+
+        return buildWorkoutReasoningSummary(
+          readinessResult,
+          constraintInsight.hasInsight ? {
+            primaryConstraint: constraintInsight.label,
+            secondaryConstraint: constraintContext.secondaryConstraint || null,
+            protocolsAdded: deloadRecommendation?.recommendedProtocols || [],
+          } : null,
+          trainingEmphasis ? {
+            frameworkId: trainingEmphasis.primaryMethod,
+            frameworkName: trainingEmphasis.primaryMethod,
+          } : null,
+          skillIntelligence.dataQuality !== 'insufficient' ? {
+            confidence: skillIntelligence.dataQuality === 'excellent' ? 0.9
+              : skillIntelligence.dataQuality === 'good' ? 0.7
+              : 0.4,
+            adaptations: intelligenceAdjustments.slice(0, 3).map(a => a.reason),
+          } : null,
+          sessionType,
+          firstSessionExercises
+        )
+      } catch {
+        return undefined
+      }
+    })(),
+    // Unified Weak Point Assessment - detailed limiter analysis
+    weakPointAssessment: (() => {
+      try {
+        // Map primary goal to skill target
+        const skillTargetMap: Record<string, SkillTarget> = {
+          front_lever: 'front_lever',
+          planche: 'planche',
+          muscle_up: 'muscle_up',
+          hspu: 'hspu',
+          back_lever: 'back_lever',
+          l_sit: 'l_sit',
+          iron_cross: 'iron_cross',
+          one_arm_pull_up: 'one_arm_pull_up',
+          handstand: 'handstand',
+        }
+        
+        const skillTarget = skillTargetMap[primaryGoal]
+        if (!skillTarget || !profile) return undefined
+        
+        return detectUnifiedWeakPoints(
+          skillTarget,
+          profile,
+          calibration || null,
+          null, // SkillState - would need to be passed in
+          null  // PerformanceEnvelope - would need to be passed in
+        )
+      } catch {
+        return undefined
+      }
+    })(),
+    // Adaptive Training Cycle context - current phase and modifications
+    cycleContext: (() => {
+      try {
+        // Initialize a cycle state for this athlete (in production, this would be persisted)
+        const cycleState = initializeAdaptiveCycleState(
+          'current_athlete',
+          primaryGoal,
+          experienceLevel,
+          trainingEmphasis?.primaryMethod,
+          trainingEmphasis?.primaryMethod
+        )
+        
+        // Get builder modifications based on cycle state
+        const modifications = getCycleBuilderModifications(
+          cycleState,
+          null // WeakPointAssessment would be passed here
+        )
+        
+        // Generate explanation
+        const explanation = generateCycleExplanation(cycleState)
+        
+        return {
+          currentPhase: cycleState.currentPhase,
+          phaseName: explanation.headline,
+          phaseDescription: explanation.description,
+          volumeModifier: modifications.volumeModifier,
+          intensityModifier: modifications.intensityModifier,
+          progressionAggressiveness: modifications.progressionAggressiveness,
+          cycleExplanation: explanation,
+        }
+      } catch {
+        return undefined
+      }
+    })(),
+    // Constraint-Aware Assembly Analysis - explains all constraint decisions
+    constraintAnalysis: (() => {
+      try {
+        // Build constraint input from available data
+        const constraintInput: ConstraintAwareInput = {
+          targetMinutes: sessionLength === 'short' ? 30 : sessionLength === 'medium' ? 45 : 60,
+          preferredMinutes: sessionLength === 'short' ? 30 : sessionLength === 'medium' ? 45 : 60,
+          fatigueLevel: fatigueDecision?.overallDecision === 'reduce' ? 'fatigued' : 
+                        fatigueDecision?.overallDecision === 'deload' ? 'overtrained' : 'normal',
+          straightArmFatigue: fatigueDecision?.straightArmFatigue || 0,
+          overallFatigue: fatigueDecision?.overallFatigue || 0,
+          fatigueDecision: fatigueDecision || null,
+          jointCautions: profile?.jointCautions || [],
+          tendonStress: {
+            wrist: profile?.jointCautions?.includes('wrist') ? 70 : 30,
+            shoulder: profile?.jointCautions?.includes('shoulder') ? 70 : 30,
+            elbow: profile?.jointCautions?.includes('elbow') ? 70 : 30,
+          },
+          activeInjuries: [],
+          discomfortFlags: profile?.jointCautions || [],
+          primaryLimiter: profile?.weakestArea as LimitingFactor || null,
+          secondaryLimiter: null,
+          limiterSeverity: profile?.weakestArea ? 60 : 0,
+          frameworkId: trainingEmphasis?.primaryMethod || null,
+          frameworkRules: trainingEmphasis?.primaryMethod ? {
+            volumeMultiplier: 1.0,
+            restMultiplier: trainingEmphasis.primaryMethod === 'barseagle_strength' ? 1.5 : 1.0,
+            intensityBias: trainingEmphasis.primaryMethod === 'barseagle_strength' ? 'high' : 'moderate',
+            preferredDensity: trainingEmphasis.primaryMethod === 'density_endurance' ? 'high' : 'moderate',
+          } : null,
+          envelopeConfidence: 0.5,
+          envelopeLimits: null,
+          styleEnabled: false,
+          styleRules: null,
+          availableEquipment: equipment,
+          requiredEquipment: [],
+        }
+        
+        return analyzeConstraints(constraintInput)
+      } catch {
+        return undefined
+      }
+    })(),
+    // Formatted Builder Reasoning - coach-style explanations
+    builderReasoning: (() => {
+      try {
+        const constraintInput: ConstraintAwareInput = {
+          targetMinutes: sessionLength === 'short' ? 30 : sessionLength === 'medium' ? 45 : 60,
+          preferredMinutes: sessionLength === 'short' ? 30 : sessionLength === 'medium' ? 45 : 60,
+          fatigueLevel: fatigueDecision?.overallDecision === 'reduce' ? 'fatigued' : 
+                        fatigueDecision?.overallDecision === 'deload' ? 'overtrained' : 'normal',
+          straightArmFatigue: fatigueDecision?.straightArmFatigue || 0,
+          overallFatigue: fatigueDecision?.overallFatigue || 0,
+          fatigueDecision: fatigueDecision || null,
+          jointCautions: profile?.jointCautions || [],
+          tendonStress: {
+            wrist: profile?.jointCautions?.includes('wrist') ? 70 : 30,
+            shoulder: profile?.jointCautions?.includes('shoulder') ? 70 : 30,
+            elbow: profile?.jointCautions?.includes('elbow') ? 70 : 30,
+          },
+          activeInjuries: [],
+          discomfortFlags: profile?.jointCautions || [],
+          primaryLimiter: profile?.weakestArea as LimitingFactor || null,
+          secondaryLimiter: null,
+          limiterSeverity: profile?.weakestArea ? 60 : 0,
+          frameworkId: trainingEmphasis?.primaryMethod || null,
+          frameworkRules: null,
+          envelopeConfidence: 0.5,
+          envelopeLimits: null,
+          styleEnabled: false,
+          styleRules: null,
+          availableEquipment: equipment,
+          requiredEquipment: [],
+        }
+        
+    const analysis = analyzeConstraints(constraintInput)
+    return formatBuilderReasoning(analysis, primaryGoal)
+    } catch {
+    return undefined
+    }
+    })(),
+    // Skill Progression Graph position - current node in progression graph
+    skillGraphPosition: (() => {
+      try {
+        // Map primary goal to skill graph ID
+        const skillGraphMap: Record<string, SkillGraphId> = {
+          front_lever: 'front_lever',
+          planche: 'planche',
+          muscle_up: 'muscle_up',
+          hspu: 'hspu',
+          back_lever: 'back_lever',
+          l_sit: 'l_sit',
+          v_sit: 'v_sit',
+          iron_cross: 'iron_cross',
+          handstand: 'handstand',
+          one_arm_pull_up: 'one_arm_pull_up',
+        }
+        
+        const skillId = skillGraphMap[primaryGoal]
+        if (!skillId || !profile) return undefined
+        
+        // Build benchmarks from profile
+        const benchmarks: Record<string, number> = {
+          pull_ups: profile.pullUpMax || 0,
+          dips: profile.dipMax || 0,
+          weighted_pull: profile.weightedPullUp?.load || 0,
+          weighted_dip: profile.weightedDip?.load || 0,
+          compression: profile.lSitHold || 0,
+          hold_time: 0,
+        }
+        
+        // Get readiness score (use 50 as default if not available)
+        const readinessScore = canonicalReadiness?.readinessScore ?? 50
+        
+        // Determine graph position
+        const position = determineGraphPosition(
+          skillId,
+          benchmarks,
+          readinessScore
+        )
+        
+        if (!position) return undefined
+        
+        return {
+          skillId,
+          currentNodeId: position.currentNodeId,
+          currentNodeName: position.currentNode.displayName,
+          nextNodeId: position.nextRecommendedNodeId,
+          nextNodeName: position.nextRecommendedNode?.displayName || null,
+          isBlocked: position.isBlocked,
+          blockingReasons: position.blockingReasons.map(r => r.description),
+          progressPercentage: position.currentNodeProgress.percentToNextNode,
+  knowledgeTip: position.currentNode.knowledgeBubble.shortTip,
+  }
+  } catch {
+  return undefined
+  }
+  })(),
+    // Exercise intelligence explanations - "why this exercise" for main movements
+    exerciseExplanations: (() => {
+      try {
+        const explanations: WhyThisExerciseExplanation[] = []
+        const targetSkill = primaryGoal as SkillTarget
+        const primaryLimiter = profile?.weakestArea as string | undefined
+        
+        // Generate explanations for key exercise types
+        const keyExercises = [
+          'weighted_pull_up',
+          'ring_dip',
+          'ring_push_up',
+          'l_sit_hold',
+          'hanging_leg_raise',
+          'scap_pull_up',
+          'planche_lean',
+          'straight_bar_dip',
+        ]
+        
+        for (const exerciseId of keyExercises) {
+          const explanation = generateWhyThisExercise(
+            exerciseId,
+            targetSkill as any,
+            primaryLimiter as any
+          )
+          if (explanation) {
+            explanations.push(explanation)
+          }
+        }
+        
+return explanations.length > 0 ? explanations : undefined
+  } catch {
+  return undefined
+  }
+  })(),
+    // Session Structure - intelligent workout format selection
+    sessionStructure: (() => {
+      try {
+        const availableMinutes = sessionLength === 'short' ? 30 : sessionLength === 'medium' ? 45 : 60
+        const trainingStyle = trainingEmphasis?.styleMode || 'skill_focused'
+        const frameworkId = trainingEmphasis?.primaryMethod || undefined
+        
+        // Determine if we should use a structured format
+        const shouldUseStructure = 
+          availableMinutes <= 30 || // Time-constrained
+          trainingStyle === 'endurance_focused' || // Density preference
+          (trainingEmphasis?.styleRules?.densityPreference === 'high') // High density preference
+        
+        if (!shouldUseStructure) {
+          return undefined // Use standard structure
+        }
+        
+        const structureInput = {
+          availableMinutes,
+          trainingStyle: trainingStyle as any,
+          frameworkId: frameworkId as any,
+          primaryGoal,
+          primaryWeakPoint: profile?.weakestArea as any,
+          fatigueLevel: fatigueDecision?.overallDecision === 'reduce' ? 'fatigued' : 
+                        fatigueDecision?.overallDecision === 'deload' ? 'fatigued' : 'normal',
+          experienceLevel: experienceLevel as 'beginner' | 'intermediate' | 'advanced',
+          preferDensityTraining: trainingEmphasis?.styleRules?.densityPreference === 'high',
+          isDeloadWeek: fatigueDecision?.overallDecision === 'deload',
+        }
+        
+        const result = selectSessionStructure(structureInput as any)
+        
+        // Apply envelope adjustments if needed
+        let adjustments: string[] = []
+        if (result.selectedStructure.structureType !== 'standard') {
+          const envelopeAdjusted = adjustStructureForEnvelope(
+            result.selectedStructure,
+            {
+              straightArmPull: fatigueDecision?.straightArmFatigue ? 100 - fatigueDecision.straightArmFatigue : 70,
+              straightArmPush: 70,
+              verticalPull: 80,
+            }
+          )
+          adjustments = envelopeAdjusted.adjustments
+        }
+        
+        return {
+          structureType: result.selectedStructure.structureType,
+          structureName: result.selectedStructure.structureName,
+          structureDescription: result.selectedStructure.structureDescription,
+          totalDurationMinutes: result.selectedStructure.totalDurationMinutes,
+          cycleCount: result.selectedStructure.cycleCount,
+          densityLevel: result.selectedStructure.densityLevel,
+          coachingExplanation: result.coachingExplanation,
+          adjustments,
+        }
+      } catch {
+        return undefined
+      }
+    })(),
+    // Skill Volume Governor - stress analysis and recommendations
+    volumeGovernor: (() => {
+      try {
+        // Build planned exercises from the session
+        const plannedExercises: PlannedExercise[] = (exercises?.skills || []).map(ex => ({
+          exerciseId: ex.name.toLowerCase().replace(/\s+/g, '_'),
+          exerciseName: ex.name,
+          sets: ex.sets || 3,
+          reps: ex.reps || 5,
+          holdSeconds: ex.holdSeconds,
+          isWeighted: false,
+          tempoControlled: false,
+          progressionLevel: 'intermediate' as const,
+          movementFamily: (ex.movementFamily || 'vertical_pull') as SkillStressFocus,
+          isRingBased: ex.name.toLowerCase().includes('ring'),
+          isAdvancedSkillNode: ['planche', 'front lever', 'back lever', 'iron cross', 'maltese']
+            .some(skill => ex.name.toLowerCase().includes(skill)),
+        }))
+        
+        // Add strength exercises
+        for (const ex of exercises?.strength || []) {
+          plannedExercises.push({
+            exerciseId: ex.name.toLowerCase().replace(/\s+/g, '_'),
+            exerciseName: ex.name,
+            sets: ex.sets || 3,
+            reps: ex.reps || 5,
+            isWeighted: ex.name.toLowerCase().includes('weighted'),
+            tempoControlled: false,
+            progressionLevel: 'intermediate' as const,
+            movementFamily: (ex.movementFamily || 'vertical_pull') as SkillStressFocus,
+            isRingBased: ex.name.toLowerCase().includes('ring'),
+            isAdvancedSkillNode: false,
+          })
+        }
+        
+        if (plannedExercises.length === 0) {
+          return undefined
+        }
+        
+        const governorInput: GovernorSessionInput = {
+          athleteId: 'current',
+          plannedExercises,
+          sessionStructureType: 'standard',
+          sessionDurationMinutes: sessionLength === 'short' ? 30 : sessionLength === 'medium' ? 45 : 60,
+          isDeloadWeek: fatigueDecision?.overallDecision === 'deload',
+          currentFramework: trainingEmphasis?.primaryMethod,
+          trainingStyle: trainingEmphasis?.styleMode,
+        }
+        
+        const analysis = SkillVolumeGovernor.analyzeSessionStress(governorInput)
+        const warmupNeeds = SkillVolumeGovernor.getStressBasedWarmupNeeds(analysis)
+        
+        // Apply recommendations if needed
+        const recommendationsApplied: string[] = []
+        for (const rec of analysis.governorRecommendations) {
+          if (rec.priority === 'critical' || rec.priority === 'high') {
+            recommendationsApplied.push(SkillVolumeGovernor.generateGovernorCoachingMessage(rec))
+          }
+        }
+        
+        return {
+          totalSessionStress: analysis.totalSessionStress,
+          fatigueRiskLevel: analysis.fatigueRiskLevel,
+          tendonRiskLevel: analysis.tendonRiskLevel,
+          highRiskElements: analysis.highRiskElements,
+          recommendationsApplied,
+          coachingExplanation: analysis.coachingExplanation,
+          additionalWarmupNeeded: warmupNeeds.warmupIntensityLevel !== 'minimal',
+          warmupIntensityLevel: warmupNeeds.warmupIntensityLevel,
+        }
+      } catch {
+        return undefined
+      }
+    })(),
   }
 }
 

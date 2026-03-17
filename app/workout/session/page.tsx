@@ -4,6 +4,7 @@ import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { StreamlinedWorkoutSession } from '@/components/workout/StreamlinedWorkoutSession'
 import { getLatestAdaptiveProgram, type AdaptiveSession, type AdaptiveProgram } from '@/lib/adaptive-program-builder'
+import type { WorkoutReasoningSummary } from '@/lib/readiness/canonical-readiness-engine'
 import { Spinner } from '@/components/ui/spinner'
 import { Button } from '@/components/ui/button'
 import Link from 'next/link'
@@ -70,6 +71,7 @@ function WorkoutSessionContent() {
   const isFirstSession = searchParams.get('first') === 'true'
   
   const [session, setSession] = useState<AdaptiveSession | null>(null)
+  const [reasoningSummary, setReasoningSummary] = useState<WorkoutReasoningSummary | undefined>(undefined)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   
@@ -112,6 +114,10 @@ function WorkoutSessionContent() {
     }
     
     setSession(targetSession)
+    // Extract workout reasoning summary from the program
+    if (program.workoutReasoningSummary) {
+      setReasoningSummary(program.workoutReasoningSummary)
+    }
     setLoading(false)
   }, [dayParam, demoMode, isFirstSession])
   
@@ -172,6 +178,7 @@ function WorkoutSessionContent() {
   return (
     <StreamlinedWorkoutSession
       session={session}
+      reasoningSummary={reasoningSummary}
       onComplete={handleComplete}
       onCancel={handleCancel}
     />

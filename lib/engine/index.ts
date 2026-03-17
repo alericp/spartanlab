@@ -412,3 +412,82 @@ export {
   type ProgramHistoryStats,
   type ProgramComparison,
 } from '../program-history-helpers'
+
+// Hybrid Strength Engine (Deadlift / Streetlifting Support)
+export {
+  buildHybridProgrammingContext,
+  checkDeadliftConflict,
+  getDeadliftDayExclusions,
+  getDeadliftDayReductions,
+  recommendDeadliftPlacement,
+  checkStreetliftingConflicts,
+  generateDeadliftExplanation,
+  planIntelligentHybridSession,
+  checkProgressionStatus,
+  DEADLIFT_CONFLICT_MAP,
+  DEADLIFT_EXERCISE_DEFINITIONS,
+  type HybridProgrammingContext,
+  type FatigueConflict,
+  type DeadliftPlacement,
+  type HybridExplanation,
+} from '../hybrid-strength-engine'
+
+// Hybrid Strength Integration (Session-level hooks)
+export {
+  getHybridSessionDecision,
+  planHybridWeek,
+  filterExercisesForHybridSession,
+  getHybridVolumeReduction,
+  generateHybridExplanations,
+  getHybridContextFromProfile,
+  hasHybridFeatures,
+  shouldProtectSkillSession,
+  getMaxHybridExercisesForSession,
+  type HybridSessionDecision,
+  type HybridWeeklyPlan,
+  type HybridProgramExplanation,
+} from '../hybrid-strength-integration'
+
+// Strength Intelligence Engine (Advanced Powerlifting/Streetlifting Logic)
+export {
+  // Method profiles
+  STRENGTH_METHOD_PROFILES,
+  INTENSITY_ZONES,
+  DEFAULT_FATIGUE_BUDGETS,
+  selectStrengthMethod,
+  // Intensity
+  classifyIntensity,
+  canStackHeavyLifts,
+  // Frequency
+  getFrequencyRecommendation,
+  // Fatigue
+  getExerciseFatigueContribution,
+  checkFatigueOverload,
+  getFatigueBasedVolumeReduction,
+  // Progression
+  getProgressionRecommendation,
+  shouldHoldProgression,
+  // Bias detection
+  detectStrengthBias,
+  // Streetlifting
+  coordinateStreetliftingSession,
+  // Explanations
+  generateStrengthExplanation,
+  generateWeeklySummary,
+  // Types
+  type StrengthMethodId,
+  type StrengthMethodProfile,
+  type IntensityZone,
+  type IntensityClassification,
+  type FatigueCategory,
+  type FatigueBudget,
+  type FatigueState,
+  type ProgressionModel,
+  type ProgressionRecommendation,
+  type StrengthBiasProfile,
+  type FrequencyRecommendation,
+  type StreetliftingCoordination,
+  type StrengthExplanation,
+  type SetStructureType,
+  type ExerciseFatigueContribution,
+} from '../strength-intelligence-engine'

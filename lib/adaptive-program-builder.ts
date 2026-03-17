@@ -518,6 +518,20 @@ exerciseExplanations?: {
     additionalWarmupNeeded: boolean
     warmupIntensityLevel: 'minimal' | 'moderate' | 'thorough'
   }
+  // Hybrid Strength Bias - Phase 2 integration
+  hybridStrengthBias?: 'calisthenics_only' | 'weighted_calisthenics' | 'hybrid_light' | 'streetlifting_biased'
+  // Hybrid Strength Context - deadlift, barbell work integration
+  hybridStrengthContext?: {
+    includesDeadlift: boolean
+    deadliftFrequency: 'none' | 'once_weekly' | 'twice_weekly'
+    deadliftVariant: 'conventional' | 'sumo' | 'trap_bar' | 'romanian'
+    deadliftRationale?: string
+    barbellIntegrationLevel: 'none' | 'minimal' | 'moderate' | 'significant'
+    preservesCalisthenicsRecovery: boolean
+    streetliftingOriented: boolean
+  }
+  // Secondary Emphasis - for hybrid programs
+  secondaryEmphasis?: string
 }
 
 // =============================================================================

@@ -129,12 +129,23 @@ export function WelcomeBanner() {
             Complete it to activate adaptive adjustments.
           </p>
           
-          {/* Coaching insight */}
-          <div className="bg-[#0F1115]/50 rounded-md p-3 mb-4 border-l-2 border-[#C1121F]/50">
-            <p className="text-xs text-[#6B7280] mb-1">What happens next</p>
-            <p className="text-sm text-[#A4ACB8]">
-              Log your first workout. SpartanLab analyzes your performance and adjusts future sessions based on your actual progress.
-            </p>
+          {/* Why this program works - First Win Section */}
+          <div className="bg-[#0F1115]/50 rounded-md p-3 mb-4 border border-emerald-500/20">
+            <p className="text-xs text-emerald-400 font-medium mb-2">Why This Program Works For You</p>
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-2 text-xs text-[#A4ACB8]">
+                <div className="w-1 h-1 rounded-full bg-emerald-400" />
+                Built from your current strength levels
+              </div>
+              <div className="flex items-center gap-2 text-xs text-[#A4ACB8]">
+                <div className="w-1 h-1 rounded-full bg-emerald-400" />
+                Balanced volume for sustainable recovery
+              </div>
+              <div className="flex items-center gap-2 text-xs text-[#A4ACB8]">
+                <div className="w-1 h-1 rounded-full bg-emerald-400" />
+                Progression logic targets {getPrimaryGoalDisplay()}
+              </div>
+            </div>
           </div>
           
           {/* Primary CTA - Start First Session */}

@@ -22,10 +22,10 @@ export function MarketingFooter() {
               <span className="text-lg font-bold tracking-tight text-[#E6E9EF]">SpartanLab</span>
             </Link>
             <p className="text-sm text-[#A4ACB8] max-w-sm mb-4">
-              The Calisthenics Training Decision Engine. Analyzes your training data and tells you exactly what to train next.
+              Calisthenics-first training intelligence. Analyzes your performance and builds adaptive programs using real strength methodologies.
             </p>
             <p className="text-xs text-[#6B7280]">
-              Like having a coach analyzing your training 24/7.
+              Built from real training systems.
             </p>
           </div>
 
@@ -36,6 +36,11 @@ export function MarketingFooter() {
               <li>
                 <Link href="/how-it-works" className="text-sm text-[#A4ACB8] hover:text-[#E6E9EF] transition-colors">
                   How It Works
+                </Link>
+              </li>
+              <li>
+                <Link href="/training-systems" className="text-sm text-[#A4ACB8] hover:text-[#E6E9EF] transition-colors">
+                  Training Systems
                 </Link>
               </li>
               <li>
@@ -61,33 +66,33 @@ export function MarketingFooter() {
             </ul>
           </div>
 
-          {/* Training Guides / SEO Links */}
+          {/* Training Programs / SEO Links */}
           <div>
-            <h4 className="text-sm font-semibold mb-4 text-[#E6E9EF]">Training Guides</h4>
+            <h4 className="text-sm font-semibold mb-4 text-[#E6E9EF]">Training Programs</h4>
             <ul className="space-y-3">
               <li>
-                <Link href="/guides/front-lever-training" className="text-sm text-[#A4ACB8] hover:text-[#E6E9EF] transition-colors">
-                  Front Lever Guide
+                <Link href="/training/front-lever-program" className="text-sm text-[#A4ACB8] hover:text-[#E6E9EF] transition-colors">
+                  Front Lever Program
                 </Link>
               </li>
               <li>
-                <Link href="/guides/planche-progression" className="text-sm text-[#A4ACB8] hover:text-[#E6E9EF] transition-colors">
-                  Planche Guide
+                <Link href="/training/planche-program" className="text-sm text-[#A4ACB8] hover:text-[#E6E9EF] transition-colors">
+                  Planche Program
                 </Link>
               </li>
               <li>
-                <Link href="/guides/muscle-up-training" className="text-sm text-[#A4ACB8] hover:text-[#E6E9EF] transition-colors">
-                  Muscle-Up Guide
+                <Link href="/training/weighted-pull-up-program" className="text-sm text-[#A4ACB8] hover:text-[#E6E9EF] transition-colors">
+                  Weighted Pull-Up Program
                 </Link>
               </li>
               <li>
-                <Link href="/guides/weighted-pull-up-training" className="text-sm text-[#A4ACB8] hover:text-[#E6E9EF] transition-colors">
-                  Weighted Pull-Up Guide
+                <Link href="/training/hybrid-strength-program" className="text-sm text-[#A4ACB8] hover:text-[#E6E9EF] transition-colors">
+                  Hybrid Strength Program
                 </Link>
               </li>
               <li>
-                <Link href="/guides" className="text-sm text-[#A4ACB8] hover:text-[#E6E9EF] transition-colors">
-                  All Guides
+                <Link href="/training" className="text-sm text-[#A4ACB8] hover:text-[#E6E9EF] transition-colors">
+                  All Programs
                 </Link>
               </li>
             </ul>

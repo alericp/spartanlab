@@ -176,13 +176,13 @@ export default function HowItWorksPage() {
         <div className="max-w-5xl mx-auto px-4 sm:px-6 text-center">
           <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#C1121F]/10 text-[#C1121F] text-sm font-medium mb-6">
             <Brain className="w-4 h-4" />
-            Adaptive Intelligence
+            Training Intelligence
           </div>
           <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight mb-6 text-balance">
-            Training That Thinks <span className="text-[#C1121F]">With You</span>
+            How <span className="text-[#C1121F]">SpartanLab</span> Works
           </h1>
           <p className="text-lg sm:text-xl text-[#A4ACB8] max-w-2xl mx-auto leading-relaxed">
-            SpartanLab is a training intelligence system. It analyzes your strength levels, skill readiness, and training performance to generate optimal programming and real-time adjustments.
+            A calisthenics-first training intelligence system. Analyzes your performance and builds adaptive programs using real strength methodologies.
           </p>
         </div>
       </section>
@@ -192,10 +192,10 @@ export default function HowItWorksPage() {
         <div className="max-w-5xl mx-auto px-4 sm:px-6">
           <div className="bg-gradient-to-r from-[#C1121F]/5 to-[#1A1F26] border border-[#C1121F]/20 rounded-2xl p-8 sm:p-10 text-center">
             <p className="text-2xl sm:text-3xl font-bold text-[#E6E9EF] mb-4">
-              Stop guessing your training.
+              Built from real training methodologies.
             </p>
             <p className="text-[#A4ACB8] max-w-xl mx-auto">
-              Every feature below works together to ensure your calisthenics program adapts to your body, your schedule, and your goals.
+              Calisthenics-first with support for weighted movements and hybrid strength. Designed for long-term performance.
             </p>
           </div>
         </div>
@@ -247,15 +247,15 @@ export default function HowItWorksPage() {
       <section className="py-20 sm:py-28 bg-[#1A1F26] border-t border-[#2B313A]">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 text-center">
           <h2 className="text-3xl sm:text-4xl font-bold mb-4">
-            Ready to Train Smarter?
+            Ready to Train Intelligently?
           </h2>
           <p className="text-[#A4ACB8] max-w-xl mx-auto mb-8">
-            Experience adaptive calisthenics training that evolves with every workout. Start your progression today.
+            Get structured programming that evolves with your performance. Built from real training methodologies.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Link href="/dashboard">
+            <Link href="/onboarding">
               <Button size="lg" className="bg-[#C1121F] hover:bg-[#A30F1A] px-8 h-12 w-full sm:w-auto">
-                Start Training
+                Analyze My Training
                 <ArrowRight className="w-4 h-4 ml-2" />
               </Button>
             </Link>

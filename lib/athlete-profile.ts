@@ -563,6 +563,134 @@ export type EquipmentType =
   | 'weights'
   | 'bench_box'
   | 'minimal'
+  | 'barbell'      // Barbell + plates for hybrid strength
+  | 'weight_plates' // For weighted calisthenics / dip belt
+
+// =============================================================================
+// HYBRID STRENGTH PROFILE
+// =============================================================================
+
+/**
+ * Hybrid strength modality - determines how barbell/streetlifting elements are integrated
+ * This is ADDITIVE to the calisthenics-first foundation
+ */
+export type HybridStrengthModality =
+  | 'calisthenics_only'        // Pure calisthenics, no barbell work
+  | 'weighted_calisthenics'    // Weighted pull-ups/dips, no barbell
+  | 'hybrid_light'             // Light barbell inclusion (1x/week deadlift)
+  | 'streetlifting_biased'     // Streetlifting-style: weighted pull/dip + deadlift emphasis
+
+export const HYBRID_STRENGTH_MODALITY_LABELS: Record<HybridStrengthModality, string> = {
+  calisthenics_only: 'Calisthenics Only',
+  weighted_calisthenics: 'Weighted Calisthenics',
+  hybrid_light: 'Light Hybrid',
+  streetlifting_biased: 'Streetlifting Focus',
+}
+
+export const HYBRID_STRENGTH_MODALITY_DESCRIPTIONS: Record<HybridStrengthModality, string> = {
+  calisthenics_only: 'Pure bodyweight training with no barbell work',
+  weighted_calisthenics: 'Weighted pull-ups and dips for strength, no barbell',
+  hybrid_light: 'Calisthenics-first with optional deadlift 1x/week for posterior chain',
+  streetlifting_biased: 'Weighted pull-up, weighted dip, and deadlift as primary strength drivers',
+}
+
+/**
+ * Deadlift experience level for appropriate programming
+ */
+export type DeadliftExperienceLevel =
+  | 'none'           // Never done deadlifts
+  | 'beginner'       // Can perform with decent form, <1.5x bodyweight
+  | 'intermediate'   // Good technique, 1.5-2x bodyweight
+  | 'advanced'       // Strong puller, 2x+ bodyweight
+
+export const DEADLIFT_EXPERIENCE_LABELS: Record<DeadliftExperienceLevel, string> = {
+  none: 'No experience',
+  beginner: 'Beginner',
+  intermediate: 'Intermediate',
+  advanced: 'Advanced',
+}
+
+export const DEADLIFT_EXPERIENCE_DESCRIPTIONS: Record<DeadliftExperienceLevel, string> = {
+  none: 'Never trained deadlifts or minimal exposure',
+  beginner: 'Can perform with decent form, building strength',
+  intermediate: 'Solid technique, consistent training history',
+  advanced: 'Strong puller with years of experience',
+}
+
+/**
+ * Hybrid strength profile - optional extension to OnboardingProfile
+ * Only populated if user opts into hybrid/streetlifting modalities
+ */
+export interface HybridStrengthProfile {
+  modality: HybridStrengthModality
+  
+  // Deadlift-specific (only if barbell equipment + hybrid/streetlifting)
+  includesDeadlift: boolean
+  deadliftExperience: DeadliftExperienceLevel | null
+  deadlift1RM: number | null        // In lbs or kg based on user preference
+  deadliftUnit: 'lbs' | 'kg'
+  
+  // Streetlifting benchmark tracking (future-extensible)
+  streetliftingTotal: number | null  // Combined: weighted pull-up + weighted dip + deadlift
+}
+
+/**
+ * Default hybrid strength profile - preserves calisthenics-first behavior
+ */
+export function getDefaultHybridStrengthProfile(): HybridStrengthProfile {
+  return {
+    modality: 'calisthenics_only',
+    includesDeadlift: false,
+    deadliftExperience: null,
+    deadlift1RM: null,
+    deadliftUnit: 'lbs',
+    streetliftingTotal: null,
+  }
+}
+
+/**
+ * Check if hybrid strength features should be enabled
+ * Returns true only if user has explicitly opted in AND has equipment
+ */
+export function isHybridStrengthEnabled(
+  profile: HybridStrengthProfile | null | undefined,
+  equipment: EquipmentType[]
+): boolean {
+  if (!profile) return false
+  if (profile.modality === 'calisthenics_only') return false
+  
+  // weighted_calisthenics only needs weights/weight_plates
+  if (profile.modality === 'weighted_calisthenics') {
+    return equipment.includes('weights') || equipment.includes('weight_plates')
+  }
+  
+  // hybrid_light and streetlifting_biased need barbell
+  return equipment.includes('barbell')
+}
+
+/**
+ * Check if deadlift should be included in programming
+ */
+export function shouldIncludeDeadlift(
+  profile: HybridStrengthProfile | null | undefined,
+  equipment: EquipmentType[],
+  jointCautions: JointCaution[]
+): { eligible: boolean; reason: string } {
+  if (!profile || !profile.includesDeadlift) {
+    return { eligible: false, reason: 'Deadlift not enabled in profile' }
+  }
+  
+  if (!equipment.includes('barbell')) {
+    return { eligible: false, reason: 'No barbell equipment available' }
+  }
+  
+  // Check for conflicting joint cautions
+  if (jointCautions.includes('lower_back')) {
+    return { eligible: false, reason: 'Lower back caution detected - deadlift excluded for safety' }
+  }
+  
+  return { eligible: true, reason: 'Deadlift eligible for hybrid programming' }
+}
 
 // =============================================================================
 // TRAINING PATH TYPE
@@ -933,6 +1061,11 @@ export interface OnboardingProfile {
   primaryLimitation: PrimaryLimitation | null
   weakestArea: WeakestArea | null
   jointCautions: JointCaution[]
+  
+  // Section 12: Hybrid Strength Profile (Optional)
+  // Only populated if user opts into hybrid/streetlifting modalities
+  // Defaults to calisthenics-only if not set
+  hybridStrengthProfile: HybridStrengthProfile | null
   
   // Meta
   hasSeenDashboardIntro: boolean
@@ -1407,6 +1540,9 @@ export function createEmptyOnboardingProfile(): OnboardingProfile {
     primaryLimitation: null,
     weakestArea: null,
     jointCautions: [],
+    
+    // Section 12: Hybrid Strength Profile (defaults to null = calisthenics-only)
+    hybridStrengthProfile: null,
     
     // Meta
     hasSeenDashboardIntro: false,

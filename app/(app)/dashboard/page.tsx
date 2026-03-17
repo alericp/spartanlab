@@ -30,7 +30,7 @@ import { ShareProgressSection } from '@/components/dashboard/ShareProgressSectio
 import { DeloadStatusCard } from '@/components/dashboard/DailyAdjustmentCard'
 import { DailyReadinessCard } from '@/components/dashboard/DailyReadinessCard'
 import { WelcomeCard } from '@/components/dashboard/WelcomeCard'
-import { DashboardIntroduction, HowSpartanLabWorksButton } from '@/components/dashboard/DashboardIntroduction'
+import { DashboardIntroduction, HowSpartanLabWorksButton, TrainingSystemsLink } from '@/components/dashboard/DashboardIntroduction'
 import { calculateSpartanScore } from '@/lib/strength-score-engine'
 import { isFirstRun } from '@/lib/onboarding-service'
 import { syncProgramToHistory } from '@/lib/use-program-history'
@@ -106,6 +106,9 @@ import { LeaderboardPreviewCard } from '@/components/leaderboards/LeaderboardTab
 import { ProgressDashboard } from '@/components/dashboard/ProgressDashboard'
 import { ChallengeNotification } from '@/components/challenges/ChallengeNotification'
 import { WelcomeBanner } from '@/components/dashboard/WelcomeBanner'
+import { ProgressSignals } from '@/components/dashboard/ProgressSignals'
+import { ReturnVisitCard, SessionCounter } from '@/components/dashboard/DailyEngagement'
+import { SmartUpgradeBanner } from '@/components/upgrade/SmartUpgradeTrigger'
 
 function DashboardContent() {
   const { isLoaded: isAuthLoaded } = useAuth()
@@ -405,15 +408,17 @@ function DashboardContent() {
             <div className="flex items-center gap-3">
               <p className="text-sm text-[#6B7280] max-w-xl">
                 {athleteCalibration?.calibrationComplete 
-                  ? 'Your training data is analyzed and calibrated for your body type and goals.'
-                  : 'Your training data is analyzed to identify the most effective exercises and progressions for your goals.'}
+                  ? 'Your performance is analyzed to build structured programming for your goals.'
+                  : 'Your training data is analyzed to identify what limits your progress and how to solve it.'}
               </p>
               <SubscriptionTierBadge className="hidden sm:inline-flex" />
             </div>
-            <HowSpartanLabWorksButton 
-              onOpen={() => setShowIntroduction(true)} 
-              className="hidden sm:flex shrink-0"
-            />
+            <div className="hidden sm:flex items-center gap-4 shrink-0">
+              <TrainingSystemsLink />
+              <HowSpartanLabWorksButton 
+                onOpen={() => setShowIntroduction(true)} 
+              />
+            </div>
           </div>
         )}
         
@@ -455,6 +460,11 @@ function DashboardContent() {
         <SafeWidget name="TrainingConsistencyCard">
           <TrainingConsistencyCard />
         </SafeWidget>
+        
+        {/* Progress Signals - Lightweight progress indicators */}
+        <div className="px-4">
+          <ProgressSignals variant="inline" />
+        </div>
         
         {/* ============================================================= */}
         {/* PRIORITY 3: READINESS + PROGRAM SNAPSHOT - Quick Status */}
@@ -728,8 +738,8 @@ function DashboardContent() {
             {/* Update Metrics - Allow users to refine their program */}
             <UpdateMetricsCard />
             
-            {/* Pro upgrade prompt - non-intrusive card */}
-            <DashboardUpgradeCard />
+            {/* Smart upgrade prompt - contextual based on engagement */}
+            <SmartUpgradeBanner />
           </div>
         </Section>
 
@@ -826,8 +836,10 @@ function DashboardContent() {
           </div>
         </Section>
         
-        {/* Mobile Help Link */}
-        <div className="sm:hidden flex justify-center pt-4 pb-8">
+        {/* Mobile Help Links */}
+        <div className="sm:hidden flex flex-col items-center gap-3 pt-4 pb-8">
+          <SessionCounter />
+          <TrainingSystemsLink />
           <HowSpartanLabWorksButton 
             onOpen={() => setShowIntroduction(true)} 
           />

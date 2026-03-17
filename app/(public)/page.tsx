@@ -3,23 +3,23 @@ import { LandingPage } from '@/components/landing/LandingPage'
 import { SITE_CONFIG } from '@/lib/seo'
 
 export const metadata: Metadata = {
-  title: 'SpartanLab - Adaptive Calisthenics Training Intelligence',
-  description: 'AI-powered calisthenics coaching that adapts to you. SpartanLab analyzes skill readiness, detects training constraints, and generates personalized programs with joint integrity protocols for front lever, planche, and muscle-up mastery.',
-  keywords: ['calisthenics training app', 'AI calisthenics coach', 'front lever training program', 'planche progression training', 'bodyweight strength program', 'adaptive workout program', 'muscle up progression', 'calisthenics skill training'],
+  title: 'SpartanLab - Calisthenics-First Training Intelligence',
+  description: 'Calisthenics training intelligence that analyzes your performance and builds adaptive programs using real strength methodologies. Supports weighted calisthenics and hybrid strength for front lever, planche, and muscle-up progression.',
+  keywords: ['calisthenics training app', 'calisthenics programming', 'front lever training program', 'planche progression training', 'bodyweight strength program', 'adaptive training program', 'muscle up progression', 'weighted calisthenics', 'streetlifting'],
   alternates: {
     canonical: SITE_CONFIG.url,
   },
   openGraph: {
-    title: 'SpartanLab - Adaptive Calisthenics Training Intelligence',
-    description: 'AI-powered calisthenics coaching. Skill readiness analysis, constraint detection, adaptive programming, and joint integrity protocols.',
+    title: 'SpartanLab - Calisthenics-First Training Intelligence',
+    description: 'Training intelligence that analyzes your performance and builds adaptive programs. Built from real strength methodologies.',
     url: SITE_CONFIG.url,
     siteName: SITE_CONFIG.name,
     type: 'website',
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'SpartanLab - Adaptive Calisthenics Training Intelligence',
-    description: 'AI coaching for calisthenics. Skill readiness analysis, adaptive programming, and joint integrity protocols.',
+    title: 'SpartanLab - Calisthenics-First Training Intelligence',
+    description: 'Training intelligence that analyzes performance and builds adaptive calisthenics programs.',
   },
 }
 

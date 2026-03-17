@@ -182,19 +182,19 @@ const SECTIONS: Section[] = [
   {
     id: 'athlete_profile',
     title: 'About You',
-    subtitle: 'We calibrate strength standards based on your body type to set accurate starting points.',
+    subtitle: 'Used to calibrate strength standards and set accurate starting points for your programming.',
     icon: User,
   },
   {
     id: 'readiness',
     title: 'Quick Calibration',
-    subtitle: 'Quick questions to personalize your starting intensity and volume.',
+    subtitle: 'These questions help personalize your starting intensity and volume based on your training history.',
     icon: Activity,
   },
   {
     id: 'training_outcome',
     title: 'Training Focus',
-    subtitle: 'This determines which exercises and progressions are prioritized.',
+    subtitle: 'Determines which exercises and progressions are prioritized in your program.',
     icon: Target,
   },
   {

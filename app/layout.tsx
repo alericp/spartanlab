@@ -39,11 +39,11 @@ export const viewport: Viewport = {
 
 export const metadata: Metadata = {
   title: {
-    default: 'SpartanLab - Adaptive Calisthenics Training Intelligence',
+    default: 'SpartanLab - Calisthenics-First Training Intelligence',
     template: '%s | SpartanLab',
   },
-  description: 'AI-powered calisthenics coaching that adapts to you. SpartanLab analyzes skill readiness, detects training limiters, and generates personalized programs with joint integrity protocols. Master front lever, planche, and muscle-up intelligently.',
-  keywords: ['calisthenics training app', 'AI calisthenics coach', 'front lever training program', 'planche progression training', 'bodyweight strength program', 'calisthenics skill training', 'adaptive workout program', 'muscle up progression'],
+  description: 'Calisthenics-first training intelligence that analyzes your performance and builds adaptive programs using real strength methodologies. Supports weighted calisthenics and hybrid strength for front lever, planche, and muscle-up progression.',
+  keywords: ['calisthenics training app', 'calisthenics programming', 'front lever training program', 'planche progression training', 'bodyweight strength program', 'calisthenics skill training', 'adaptive training program', 'muscle up progression', 'weighted calisthenics', 'streetlifting'],
   authors: [{ name: 'SpartanLab' }],
   creator: 'SpartanLab',
   publisher: 'SpartanLab',
@@ -54,8 +54,8 @@ export const metadata: Metadata = {
     type: 'website',
     locale: 'en_US',
     siteName: 'SpartanLab',
-    title: 'SpartanLab - Adaptive Calisthenics Training Intelligence',
-    description: 'AI-powered calisthenics coaching. Skill readiness analysis, constraint detection, adaptive programming, and joint integrity protocols for front lever, planche, and muscle-up mastery.',
+    title: 'SpartanLab - Calisthenics-First Training Intelligence',
+    description: 'Training intelligence that analyzes your performance and builds adaptive calisthenics programs. Built from real strength methodologies.',
     images: [
       {
         url: '/og-default.png',

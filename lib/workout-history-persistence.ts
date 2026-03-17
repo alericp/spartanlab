@@ -233,6 +233,7 @@ export async function detectSessionPRs(
 
 /**
  * Generate a concise, useful summary message for a completed workout session
+ * Now supports hybrid strength context
  */
 export function generateWorkoutSessionSummaryMessage(
   completionRate: number,
@@ -240,12 +241,30 @@ export function generateWorkoutSessionSummaryMessage(
   averageRPE: number | null,
   totalVolume: number,
   perceivedDifficulty?: 'easy' | 'normal' | 'hard',
-  durationMinutes?: number
+  durationMinutes?: number,
+  // Hybrid context
+  hybridContext?: {
+    hasDeadlift?: boolean
+    hasWeightedPull?: boolean
+    hasWeightedDip?: boolean
+    deadliftPR?: boolean
+    weightedPR?: boolean
+  }
 ): string {
   const parts: string[] = []
 
-  // Completion quality
-  if (completionRate >= 0.95) {
+  // Determine session type based on hybrid context
+  const isHybridSession = hybridContext?.hasDeadlift || hybridContext?.hasWeightedPull || hybridContext?.hasWeightedDip
+  const isDeadliftSession = hybridContext?.hasDeadlift
+  
+  // Session type prefix
+  if (isDeadliftSession && hybridContext?.deadliftPR) {
+    parts.push('Strong hybrid session')
+  } else if (isDeadliftSession) {
+    parts.push('Hybrid strength session')
+  } else if (isHybridSession) {
+    parts.push('Weighted calisthenics session')
+  } else if (completionRate >= 0.95) {
     parts.push('Full session completed')
   } else if (completionRate >= 0.75) {
     parts.push('Solid session completed')
@@ -255,9 +274,13 @@ export function generateWorkoutSessionSummaryMessage(
     parts.push('Light session logged')
   }
 
-  // PR mentions
+  // PR mentions with hybrid awareness
   if (prsHit > 0) {
-    if (prsHit === 1) {
+    if (hybridContext?.deadliftPR) {
+      parts.push('with a new deadlift PR')
+    } else if (hybridContext?.weightedPR) {
+      parts.push('with a new weighted calisthenics PR')
+    } else if (prsHit === 1) {
       parts.push('with 1 new PR')
     } else {
       parts.push(`with ${prsHit} new PRs`)
@@ -279,6 +302,57 @@ export function generateWorkoutSessionSummaryMessage(
   }
 
   return message
+}
+
+/**
+ * Generate hybrid-specific session summary
+ */
+export function generateHybridSessionSummary(
+  exercises: Array<{ id: string; name: string; category: string }>,
+  prs: Array<{ exerciseKey: string; prType: string }>,
+  averageRPE: number | null
+): string {
+  const hasDeadlift = exercises.some(e => 
+    e.id.includes('deadlift') || e.category === 'barbell_hinge'
+  )
+  const hasWeightedPull = exercises.some(e => e.id === 'weighted_pull_up')
+  const hasWeightedDip = exercises.some(e => e.id === 'weighted_dip')
+  
+  const deadliftPR = prs.some(pr => pr.exerciseKey.includes('deadlift'))
+  const weightedPullPR = prs.some(pr => pr.exerciseKey === 'weighted_pull_up')
+  const weightedDipPR = prs.some(pr => pr.exerciseKey === 'weighted_dip')
+  
+  // Build contextual summary
+  const summaryParts: string[] = []
+  
+  if (hasDeadlift && deadliftPR) {
+    summaryParts.push('New deadlift PR achieved')
+  } else if (hasDeadlift) {
+    if (averageRPE && averageRPE >= 8) {
+      summaryParts.push('Heavy hinge work completed')
+    } else {
+      summaryParts.push('Deadlift training completed')
+    }
+  }
+  
+  if (hasWeightedPull || hasWeightedDip) {
+    if (weightedPullPR || weightedDipPR) {
+      summaryParts.push('weighted strength PRs hit')
+    } else {
+      summaryParts.push('stable weighted pulling output')
+    }
+  }
+  
+  if (summaryParts.length === 0) {
+    return 'Session completed.'
+  }
+  
+  // Join with appropriate connector
+  if (summaryParts.length === 1) {
+    return summaryParts[0] + '.'
+  }
+  
+  return summaryParts.join(' and ') + '.'
 }
 
 function getPerformanceDescriptor(

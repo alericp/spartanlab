@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import Link from 'next/link'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { 
@@ -14,6 +15,7 @@ import {
   Brain,
   Sparkles,
   HelpCircle,
+  BookOpen,
 } from 'lucide-react'
 import { SpartanIcon } from '@/components/brand/SpartanLogo'
 import { 
@@ -28,16 +30,16 @@ const INTRO_STEPS = [
     id: 'welcome',
     icon: Sparkles,
     title: 'Welcome to SpartanLab',
-    description: 'The Adaptive Athlete Engine has generated your personalized training program.',
-    detail: 'Your program adapts based on skill readiness, performance response, and fatigue signals.',
+    description: 'Your training program has been built based on your performance profile.',
+    detail: 'Programs adapt based on skill readiness, performance response, and fatigue signals.',
     highlight: null,
   },
   {
     id: 'workout',
     icon: Calendar,
     title: "Today's Workout",
-    description: 'Your workout is built by the constraint detection and adaptive programming engine.',
-    detail: 'Training targets your specific limiters while protecting joint integrity.',
+    description: 'Your workout is structured to target your specific limiting factors.',
+    detail: 'Training addresses your constraints while protecting joint integrity.',
     highlight: 'today-workout',
   },
   {
@@ -53,23 +55,23 @@ const INTRO_STEPS = [
     icon: Target,
     title: 'Skill Progress Tracking',
     description: 'Track readiness for front lever, planche, muscle-up, HSPU, and more.',
-    detail: 'The engine analyzes your training to identify progression opportunities.',
+    detail: 'Your training data is analyzed to identify progression opportunities.',
     highlight: 'skill-progress',
   },
   {
     id: 'tools',
     icon: Wrench,
     title: 'Training Tools',
-    description: 'Powerful analysis tools feed data into the coaching engine.',
-    detail: 'Skill readiness calculators, performance envelope learning, and training analytics.',
+    description: 'Analysis tools that feed data into your programming.',
+    detail: 'Skill readiness calculators, performance analysis, and training analytics.',
     highlight: 'tools',
   },
   {
     id: 'adaptive',
     icon: Brain,
-    title: 'Adaptive Training Intelligence',
-    description: 'SpartanLab is an AI coaching system, not just a workout tracker.',
-    detail: 'It analyzes constraints, adapts programming, and integrates joint integrity protocols.',
+    title: 'Training Intelligence',
+    description: 'SpartanLab is a training intelligence system, not just a workout tracker.',
+    detail: 'Analyzes your constraints, adapts programming, and integrates joint integrity protocols.',
     highlight: null,
   },
 ] as const
@@ -289,5 +291,41 @@ export function FeatureHint({ feature, className }: FeatureHintProps) {
         <X className="w-3 h-3" />
       </button>
     </div>
+  )
+}
+
+// Link to Training Systems page
+interface TrainingSystemsLinkProps {
+  className?: string
+  variant?: 'inline' | 'button'
+}
+
+export function TrainingSystemsLink({ className, variant = 'inline' }: TrainingSystemsLinkProps) {
+  if (variant === 'button') {
+    return (
+      <Link
+        href="/training-systems"
+        className={cn(
+          'inline-flex items-center gap-2 px-3 py-2 text-sm text-[#A4ACB8] bg-[#1A1F26] hover:bg-[#2B313A] rounded-lg border border-[#2B313A] transition-colors',
+          className
+        )}
+      >
+        <BookOpen className="w-4 h-4 text-[#C1121F]" />
+        How Your Training Is Built
+      </Link>
+    )
+  }
+
+  return (
+    <Link
+      href="/training-systems"
+      className={cn(
+        'inline-flex items-center gap-1.5 text-xs text-[#6B7280] hover:text-[#A4ACB8] transition-colors',
+        className
+      )}
+    >
+      <BookOpen className="w-3.5 h-3.5" />
+      How Your Training Is Built
+    </Link>
   )
 }

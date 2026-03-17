@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { 
@@ -17,6 +18,7 @@ import {
   BarChart3,
   RefreshCcw,
   Crown,
+  BookOpen,
 } from 'lucide-react'
 import { SpartanIcon } from '@/components/brand/SpartanLogo'
 import { TRIAL, PRICING } from '@/lib/billing/pricing'
@@ -442,6 +444,25 @@ export function OnboardingComplete({ onContinue }: OnboardingCompleteProps) {
           </div>
         </div>
         
+        {/* Why This Program Works - First Win Section */}
+        <div className="bg-[#0F1115] rounded-lg p-4 border border-emerald-500/20 mb-4">
+          <p className="text-xs text-emerald-400 uppercase tracking-wide font-medium mb-3">Why This Program Works For You</p>
+          <div className="space-y-2">
+            <div className="flex items-start gap-2.5">
+              <CheckCircle2 className="w-4 h-4 text-emerald-400 mt-0.5 shrink-0" />
+              <span className="text-sm text-[#E6E9EF]">Built from your current strength levels</span>
+            </div>
+            <div className="flex items-start gap-2.5">
+              <CheckCircle2 className="w-4 h-4 text-emerald-400 mt-0.5 shrink-0" />
+              <span className="text-sm text-[#E6E9EF]">Balanced volume for sustainable recovery</span>
+            </div>
+            <div className="flex items-start gap-2.5">
+              <CheckCircle2 className="w-4 h-4 text-emerald-400 mt-0.5 shrink-0" />
+              <span className="text-sm text-[#E6E9EF]">Progression logic targets your primary goal</span>
+            </div>
+          </div>
+        </div>
+
         {/* Program Reasoning Summary */}
         {programReasoning && (
           <div className="bg-[#0F1115] rounded-lg p-3 border border-[#2B313A] mb-4">
@@ -492,6 +513,15 @@ export function OnboardingComplete({ onContinue }: OnboardingCompleteProps) {
           Start First Session
           <ArrowRight className="w-4 h-4 ml-2" />
         </Button>
+        
+        {/* Training Systems link */}
+        <Link
+          href="/training-systems"
+          className="flex items-center justify-center gap-1.5 mt-3 text-xs text-[#6B7280] hover:text-[#A4ACB8] transition-colors"
+        >
+          <BookOpen className="w-3.5 h-3.5" />
+          How your training is built
+        </Link>
       </Card>
     </div>
   )

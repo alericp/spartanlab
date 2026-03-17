@@ -31,7 +31,8 @@ export type MovementFamily =
   | 'dip_pattern'             // Dips, straight bar dips
   // Lower body
   | 'squat_pattern'           // Squats, pistols
-  | 'hinge_pattern'           // RDLs, hip thrusts
+  | 'hinge_pattern'           // RDLs, hip thrusts (bodyweight/light)
+  | 'barbell_hinge'           // Deadlift and barbell hip hinge variants (hybrid strength)
   | 'unilateral_leg'          // Lunges, step-ups
   // Core patterns
   | 'compression_core'        // L-sit, V-sit, leg raises
@@ -627,13 +628,22 @@ export const MOVEMENT_FAMILY_METADATA: Record<MovementFamily, MovementFamilyMeta
     skillTransfers: [],
   },
   hinge_pattern: {
-    id: 'hinge_pattern',
-    name: 'Hip Hinge',
-    description: 'Hip-dominant movements - RDLs, good mornings',
-    primaryMuscles: ['hamstrings', 'glutes', 'lower_back'],
-    relatedFamilies: ['squat_pattern', 'unilateral_leg'],
-    typicalIntents: ['strength', 'hypertrophy'],
-    skillTransfers: [],
+  id: 'hinge_pattern',
+  name: 'Hip Hinge',
+  description: 'Hip-dominant movements - RDLs, good mornings (bodyweight/light)',
+  primaryMuscles: ['hamstrings', 'glutes', 'lower_back'],
+  relatedFamilies: ['squat_pattern', 'unilateral_leg', 'barbell_hinge'],
+  typicalIntents: ['strength', 'hypertrophy'],
+  skillTransfers: [],
+  },
+  barbell_hinge: {
+  id: 'barbell_hinge',
+  name: 'Barbell Hinge',
+  description: 'Heavy barbell hip hinge movements - deadlifts (hybrid strength)',
+  primaryMuscles: ['hamstrings', 'glutes', 'lower_back', 'traps', 'grip'],
+  relatedFamilies: ['hinge_pattern', 'squat_pattern'],
+  typicalIntents: ['strength'],
+  skillTransfers: [],
   },
   unilateral_leg: {
     id: 'unilateral_leg',

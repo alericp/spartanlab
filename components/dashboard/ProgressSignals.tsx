@@ -1,0 +1,192 @@
+'use client'
+
+import { useState, useEffect } from 'react'
+import { TrendingUp, Activity, Shield, Zap, CheckCircle2 } from 'lucide-react'
+import { cn } from '@/lib/utils'
+import { getWorkoutLogs } from '@/lib/workout-log-service'
+import { getStrengthRecords } from '@/lib/strength-service'
+import { calculateTrainingStreak } from '@/lib/progress-streak-engine'
+
+// =============================================================================
+// PROGRESS SIGNALS COMPONENT
+// Lightweight indicators showing user progress without heavy metrics
+// =============================================================================
+
+interface ProgressSignal {
+  id: string
+  icon: typeof TrendingUp
+  message: string
+  type: 'positive' | 'neutral' | 'action'
+  color: string
+}
+
+function generateProgressSignals(): ProgressSignal[] {
+  const signals: ProgressSignal[] = []
+  
+  try {
+    const workoutLogs = getWorkoutLogs()
+    const strengthRecords = getStrengthRecords()
+    const streak = calculateTrainingStreak()
+    
+    // Check workout completion trend
+    if (workoutLogs.length >= 3) {
+      const recentWorkouts = workoutLogs.slice(0, 5)
+      const avgCompletion = recentWorkouts.reduce((sum, log) => {
+        const completed = log.exercises?.filter(e => e.completed).length || 0
+        const total = log.exercises?.length || 1
+        return sum + (completed / total)
+      }, 0) / recentWorkouts.length
+      
+      if (avgCompletion >= 0.9) {
+        signals.push({
+          id: 'completion',
+          icon: CheckCircle2,
+          message: 'Training consistency improving',
+          type: 'positive',
+          color: 'text-emerald-400',
+        })
+      }
+    }
+    
+    // Check strength progress
+    if (strengthRecords && Object.keys(strengthRecords).length > 0) {
+      const pullRecords = strengthRecords.weighted_pullup || strengthRecords.pullup
+      if (pullRecords && pullRecords.length >= 2) {
+        const recent = pullRecords[0]
+        const previous = pullRecords[1]
+        if (recent.value > previous.value) {
+          signals.push({
+            id: 'pull_strength',
+            icon: TrendingUp,
+            message: 'Pull strength increasing',
+            type: 'positive',
+            color: 'text-blue-400',
+          })
+        }
+      }
+    }
+    
+    // Check streak status
+    if (streak.currentStreak >= 3) {
+      signals.push({
+        id: 'streak',
+        icon: Zap,
+        message: `${streak.currentStreak}-day training streak`,
+        type: 'positive',
+        color: 'text-amber-400',
+      })
+    }
+    
+    // Recovery signal (based on training frequency)
+    if (workoutLogs.length >= 2) {
+      const lastTwo = workoutLogs.slice(0, 2)
+      const daysBetween = Math.abs(
+        (new Date(lastTwo[0].date).getTime() - new Date(lastTwo[1].date).getTime()) / (1000 * 60 * 60 * 24)
+      )
+      if (daysBetween >= 1 && daysBetween <= 3) {
+        signals.push({
+          id: 'recovery',
+          icon: Shield,
+          message: 'Recovery balanced',
+          type: 'positive',
+          color: 'text-purple-400',
+        })
+      }
+    }
+    
+    // Default signal for new users
+    if (signals.length === 0 && workoutLogs.length < 3) {
+      signals.push({
+        id: 'getting_started',
+        icon: Activity,
+        message: 'Building your training baseline',
+        type: 'neutral',
+        color: 'text-[#A4ACB8]',
+      })
+    }
+    
+  } catch (error) {
+    // Silent fail - return empty signals
+  }
+  
+  // Return max 3 signals
+  return signals.slice(0, 3)
+}
+
+interface ProgressSignalsProps {
+  className?: string
+  variant?: 'inline' | 'stacked'
+}
+
+export function ProgressSignals({ className, variant = 'inline' }: ProgressSignalsProps) {
+  const [signals, setSignals] = useState<ProgressSignal[]>([])
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+    setSignals(generateProgressSignals())
+  }, [])
+
+  if (!mounted || signals.length === 0) {
+    return null
+  }
+
+  if (variant === 'stacked') {
+    return (
+      <div className={cn('space-y-2', className)}>
+        {signals.map((signal) => (
+          <div 
+            key={signal.id}
+            className="flex items-center gap-2 text-sm"
+          >
+            <signal.icon className={cn('w-4 h-4', signal.color)} />
+            <span className="text-[#A4ACB8]">{signal.message}</span>
+          </div>
+        ))}
+      </div>
+    )
+  }
+
+  return (
+    <div className={cn('flex flex-wrap items-center gap-3', className)}>
+      {signals.map((signal) => (
+        <div 
+          key={signal.id}
+          className="flex items-center gap-1.5 text-xs bg-[#1A1F26] px-2.5 py-1.5 rounded-full border border-[#2B313A]"
+        >
+          <signal.icon className={cn('w-3.5 h-3.5', signal.color)} />
+          <span className="text-[#A4ACB8]">{signal.message}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// =============================================================================
+// COMPACT PROGRESS INDICATOR
+// Single-line progress indicator for headers/footers
+// =============================================================================
+
+export function CompactProgressIndicator({ className }: { className?: string }) {
+  const [signal, setSignal] = useState<ProgressSignal | null>(null)
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+    const signals = generateProgressSignals()
+    if (signals.length > 0) {
+      setSignal(signals[0])
+    }
+  }, [])
+
+  if (!mounted || !signal) {
+    return null
+  }
+
+  return (
+    <div className={cn('flex items-center gap-1.5 text-xs', className)}>
+      <signal.icon className={cn('w-3 h-3', signal.color)} />
+      <span className="text-[#6B7280]">{signal.message}</span>
+    </div>
+  )
+}

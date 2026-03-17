@@ -66,33 +66,33 @@ export function MarketingFooter() {
             </ul>
           </div>
 
-          {/* Training Guides / SEO Links */}
+          {/* Training Programs / SEO Links */}
           <div>
-            <h4 className="text-sm font-semibold mb-4 text-[#E6E9EF]">Training Guides</h4>
+            <h4 className="text-sm font-semibold mb-4 text-[#E6E9EF]">Training Programs</h4>
             <ul className="space-y-3">
               <li>
-                <Link href="/guides/front-lever-training" className="text-sm text-[#A4ACB8] hover:text-[#E6E9EF] transition-colors">
-                  Front Lever Guide
+                <Link href="/training/front-lever-program" className="text-sm text-[#A4ACB8] hover:text-[#E6E9EF] transition-colors">
+                  Front Lever Program
                 </Link>
               </li>
               <li>
-                <Link href="/guides/planche-progression" className="text-sm text-[#A4ACB8] hover:text-[#E6E9EF] transition-colors">
-                  Planche Guide
+                <Link href="/training/planche-program" className="text-sm text-[#A4ACB8] hover:text-[#E6E9EF] transition-colors">
+                  Planche Program
                 </Link>
               </li>
               <li>
-                <Link href="/guides/muscle-up-training" className="text-sm text-[#A4ACB8] hover:text-[#E6E9EF] transition-colors">
-                  Muscle-Up Guide
+                <Link href="/training/weighted-pull-up-program" className="text-sm text-[#A4ACB8] hover:text-[#E6E9EF] transition-colors">
+                  Weighted Pull-Up Program
                 </Link>
               </li>
               <li>
-                <Link href="/guides/weighted-pull-up-training" className="text-sm text-[#A4ACB8] hover:text-[#E6E9EF] transition-colors">
-                  Weighted Pull-Up Guide
+                <Link href="/training/hybrid-strength-program" className="text-sm text-[#A4ACB8] hover:text-[#E6E9EF] transition-colors">
+                  Hybrid Strength Program
                 </Link>
               </li>
               <li>
-                <Link href="/guides" className="text-sm text-[#A4ACB8] hover:text-[#E6E9EF] transition-colors">
-                  All Guides
+                <Link href="/training" className="text-sm text-[#A4ACB8] hover:text-[#E6E9EF] transition-colors">
+                  All Programs
                 </Link>
               </li>
             </ul>

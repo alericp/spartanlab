@@ -9,9 +9,9 @@ import { trackSignUpStarted } from '@/lib/analytics'
 
 const NAV_LINKS = [
   { href: '/how-it-works', label: 'How It Works' },
+  { href: '/training', label: 'Programs' },
   { href: '/features', label: 'Features' },
   { href: '/tools', label: 'Free Tools' },
-  { href: '/guides', label: 'Guides' },
   { href: '/pricing', label: 'Pricing' },
 ]
 

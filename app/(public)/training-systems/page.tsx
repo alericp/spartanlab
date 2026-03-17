@@ -183,6 +183,15 @@ export default function TrainingSystemsPage() {
                 <ArrowRight className="w-4 h-4 ml-2" />
               </Button>
             </Link>
+            <div className="mt-4">
+              <Link 
+                href="/training" 
+                className="text-sm text-[#6B7280] hover:text-[#A4ACB8] transition-colors inline-flex items-center gap-1"
+              >
+                Browse training programs
+                <ArrowRight className="w-3 h-3" />
+              </Link>
+            </div>
           </div>
         </div>
       </section>

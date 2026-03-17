@@ -130,7 +130,12 @@ function PRSummaryHeader({ totalPRs, totalExercises, mostRecentDate, latestPR }:
           </div>
           <div>
             <h1 className="text-xl sm:text-2xl font-bold text-[#E6E9EF]">PR Archive</h1>
-            <p className="text-sm text-[#A4ACB8]">Your personal record history</p>
+            <p className="text-sm text-[#A4ACB8]">
+              {totalPRs > 0 
+                ? "Your personal records tracked automatically as you train."
+                : "Track your strongest lifts, holds, and performance over time."
+              }
+            </p>
           </div>
         </div>
 

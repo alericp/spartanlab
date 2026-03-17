@@ -213,17 +213,17 @@ export function EmptyHistoryState({ type }: EmptyHistoryStateProps) {
     workouts: {
       icon: ClipboardList,
       title: 'No workout history yet',
-      description: 'Your completed sessions will appear here.',
+      description: 'Your completed sessions will appear here — every workout preserved.',
     },
     programs: {
       icon: Calendar,
       title: 'No program history yet',
-      description: 'Your training programs will be preserved here.',
+      description: 'Your training programs will be saved here. No more lost plans.',
     },
     prs: {
       icon: Trophy,
       title: 'No PRs tracked yet',
-      description: 'Personal records will appear as you train.',
+      description: 'Personal records will be tracked automatically as you train.',
     },
   }[type]
   
@@ -291,9 +291,29 @@ export function HistoryHub({
   const recentWorkouts = workoutHistory.slice(0, 5)
   const recentPrograms = programHistory.slice(0, 3)
   const mostRecentPR = recentPRs[0]
+  
+  const hasAnyHistory = workoutHistory.length > 0 || programHistory.length > 0 || totalPRs > 0
 
   return (
     <div className="space-y-8">
+      {/* Value Message Header */}
+      <div className="flex items-start gap-3 p-4 rounded-lg bg-gradient-to-r from-[#1A1F26] to-[#1E242D] border border-[#2B313A]">
+        <div className="p-2 rounded-lg bg-[#0F1115] border border-[#2B313A] flex-shrink-0">
+          <Archive className="w-4 h-4 text-[#C1121F]" />
+        </div>
+        <div className="min-w-0">
+          <p className="text-sm text-[#E6E9EF] leading-relaxed">
+            {hasAnyHistory 
+              ? "Your complete training archive — every session, program, and personal record in one place."
+              : "Your training history will be fully tracked here — workouts, programs, and PRs all preserved automatically."
+            }
+          </p>
+          <p className="text-xs text-[#6B7280] mt-1">
+            No more scattered notes or guesswork.
+          </p>
+        </div>
+      </div>
+
       {/* Workout History Section */}
       <section>
         <SectionHeader

@@ -311,6 +311,13 @@ export function SessionDetail({ session }: SessionDetailProps) {
           </Card>
         </section>
       )}
+      
+      {/* Subtle value reinforcement footer */}
+      <div className="text-center py-4 border-t border-[#2B313A]">
+        <p className="text-xs text-[#6B7280]">
+          This session is part of your permanent training archive.
+        </p>
+      </div>
     </div>
   )
 }

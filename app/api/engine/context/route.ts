@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth-service-server'
 import { buildUnifiedContext } from '@/lib/unified-coaching-engine'
+import { requireProAccess } from '@/lib/server/require-pro'
 
 export const dynamic = 'force-dynamic'
 
@@ -9,9 +10,15 @@ export const dynamic = 'force-dynamic'
  * 
  * Returns the complete unified engine context for the authenticated athlete.
  * This is the single source of truth for all coaching decisions.
+ * 
+ * PRO FEATURE: Full engine context is Pro-only.
  */
 export async function GET() {
   try {
+    // Pro feature enforcement - full engine context is Pro-only
+    const denied = await requireProAccess()
+    if (denied) return denied
+    
     const { userId } = await getSession()
     
     if (!userId) {

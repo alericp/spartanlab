@@ -1,9 +1,14 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 import { detectConstraints, detectConstraintsSync } from '@/lib/constraint-detection-engine'
+import { requireProAccess } from '@/lib/server/require-pro'
 
 export async function GET() {
   try {
+    // Pro feature enforcement - constraint analysis is Pro-only
+    const denied = await requireProAccess()
+    if (denied) return denied
+    
     const { userId } = await auth()
     
     if (!userId) {

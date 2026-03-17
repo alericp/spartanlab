@@ -289,11 +289,6 @@ export function deleteStrengthRecord(id: string): boolean {
   return true
 }
 
-// Get exercise definition by ID
-export function getExerciseDefinition(id: ExerciseType): ExerciseDefinition | undefined {
-  return EXERCISE_DEFINITIONS.find(e => e.id === id)
-}
-
 // Get personal records (best 1RM for each exercise)
 export function getPersonalRecords(): Partial<Record<ExerciseType, StrengthRecord | null>> {
   const records = getStrengthRecords()

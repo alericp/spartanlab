@@ -319,8 +319,10 @@ export function getAllSkillConstraints(): Record<SkillType, SkillConstraintResul
 export {
   CONSTRAINT_CATEGORY_LABELS,
   SKILL_CONSTRAINT_REQUIREMENTS,
-  type ConstraintCategory,
-  type SkillType,
-  type GlobalConstraintResult,
-  type SkillConstraintResult,
+}
+
+export type {
+  SkillType,
+  GlobalConstraintResult,
+  SkillConstraintResult,
 }

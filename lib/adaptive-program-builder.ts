@@ -1078,18 +1078,8 @@ fatigueDecision: fatigueDecision ? {
     repetitionJustifications,
     varietyScore,
   },
-  // Constraint detection and response
-  constraintDetection?: {
-    primaryConstraint: ConstraintResult | null
-    secondaryConstraints: ConstraintResult[]
-    interventions: ConstraintIntervention[]
-    coachingNote: string
-  }
-  // Constraint improvement tracking
-  constraintImprovement?: {
-    improvingConstraints: Array<{ category: string; improvement: number; trend: string }>
-    stableConstraints: Array<{ category: string; trend: string }>
-  }
+  // Constraint improvement tracking (populated async - may be undefined initially)
+  constraintImprovementData,
     // Training Principles Engine emphasis
     trainingEmphasis,
     // Unified Skill Intelligence Layer

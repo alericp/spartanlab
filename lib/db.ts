@@ -1,5 +1,3 @@
-'use server'
-
 import { neon } from '@neondatabase/serverless'
 import { isPreviewMode } from './app-mode'
 

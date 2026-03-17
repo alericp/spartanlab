@@ -5,7 +5,7 @@
  * Integrates with Stripe subscription data stored in the users table.
  */
 
-'use server'
+import 'server-only'
 
 import { query, queryOne, isDatabaseAvailable } from './db'
 import { isPreviewMode } from './app-mode'

@@ -1,5 +1,3 @@
-'use server'
-
 import { getSqlClient, isDatabaseAvailable } from './db'
 import type {
   ProgramHistory,
@@ -449,35 +447,6 @@ export async function getWorkoutHistoryForUser(
     return result.map(toWorkoutSession)
   } catch (error) {
     console.error('[HistoryService] Error fetching workout history:', error)
-    return []
-  }
-}
-
-/**
- * Get workout sessions for a specific program
- */
-export async function getWorkoutSessionsForProgram(
-  programHistoryId: string,
-  options: HistoryQueryOptions = {}
-): Promise<WorkoutSessionHistory[]> {
-  if (!(await isDatabaseAvailable())) return []
-
-  const sql = await getSqlClient()
-  if (!sql) return []
-
-  const { limit = 100, offset = 0, sortOrder = 'desc' } = options
-
-  try {
-    const result = await sql`
-      SELECT * FROM workout_session_history
-      WHERE program_history_id = ${programHistoryId}
-      ORDER BY workout_date ${sortOrder === 'asc' ? sql`ASC` : sql`DESC`}
-      LIMIT ${limit} OFFSET ${offset}
-    `
-
-    return result.map(toWorkoutSession)
-  } catch (error) {
-    console.error('[HistoryService] Error fetching program sessions:', error)
     return []
   }
 }

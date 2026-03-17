@@ -1,5 +1,3 @@
-'use server'
-
 /**
  * Workout History Persistence Module
  * 

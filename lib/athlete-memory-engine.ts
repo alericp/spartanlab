@@ -2,8 +2,6 @@
 // Transforms history data into actionable intelligence for adaptive coaching
 // Uses workout history, PR records, and program history to inform future decisions
 
-'use server'
-
 import {
   getWorkoutHistoryForUser,
   getProgramHistoryForUser,

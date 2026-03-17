@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useAuth } from '@clerk/nextjs'
 import { Button } from '@/components/ui/button'
-import { LayoutDashboard, Target, Dumbbell, Calendar, ClipboardList, TrendingUp, Activity, Settings, Menu, X, Wrench, BookOpen, LogIn, LogOut, Trophy, Swords } from 'lucide-react'
+import { LayoutDashboard, Target, Dumbbell, Calendar, ClipboardList, TrendingUp, Activity, Settings, Menu, X, Wrench, BookOpen, LogIn, LogOut, Trophy, Swords, Archive } from 'lucide-react'
 import { SpartanIcon } from '@/components/brand/SpartanLogo'
 import { useState, useEffect } from 'react'
 import { cn } from '@/lib/utils'
@@ -23,12 +23,12 @@ const NAV_ITEMS = [
 
 // Secondary navigation - deeper features (shown in mobile menu and settings)
 const SECONDARY_NAV_ITEMS = [
+  { href: '/history', label: 'History', icon: Archive },
   { href: '/challenges', label: 'Challenges', icon: Target },
   { href: '/compete', label: 'Compete', icon: Swords },
   { href: '/leaderboard', label: 'Leaderboard', icon: Trophy },
   { href: '/recovery', label: 'Recovery', icon: Activity },
   { href: '/tools', label: 'Tools', icon: Wrench },
-  { href: '/workouts', label: 'History', icon: ClipboardList },
   { href: '/performance', label: 'Analytics', icon: TrendingUp },
 ]
 
@@ -39,12 +39,19 @@ const PAGE_TITLES: Record<string, string> = {
   '/skills': 'Skills',
   '/strength': 'Strength',
   '/guides': 'Guides',
+  '/history': 'History',
+  '/history/prs': 'PR Archive',
+  '/history/workouts': 'Workout History',
+  '/history/programs': 'Program History',
+  '/history/session': 'Session Details',
+  '/history/program': 'Program Details',
   '/challenges': 'Challenges',
   '/compete': 'Compete',
   '/leaderboard': 'Leaderboard',
   '/recovery': 'Recovery',
   '/tools': 'Tools',
-  '/workouts': 'History',
+  '/workouts': 'Workout Log',
+  '/prs': 'PR Archive',
   '/performance': 'Analytics',
   '/settings': 'Settings',
   '/upgrade': 'Upgrade',

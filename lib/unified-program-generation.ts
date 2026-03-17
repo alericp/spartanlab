@@ -180,14 +180,22 @@ function buildWeeklyStructure(context: UnifiedEngineContext): WeeklyStructure {
   
   // Calculate weekly volume based on style and fatigue
   const baseVolume = getBaseVolume(context.athlete.trainingStyle, context.athlete.styleProgrammingRules)
-  const volumeMultiplier = context.fatigue.sessionAdjustments.volumeMultiplier
+  let volumeMultiplier = context.fatigue.sessionAdjustments.volumeMultiplier
+  
+  // Apply memory-based volume adjustments (returning after break)
+  if (context.memory && context.memory.adjustments.volumeMultiplier < 1.0) {
+    volumeMultiplier *= context.memory.adjustments.volumeMultiplier
+  }
   
   // Apply movement bias adjustments to volume distribution
   // This ensures pull-dominant athletes get more push volume and vice versa
   const biasAdjustment = context.movementBias.volumeAdjustment
+  
+  // Combine bias adjustments with memory-based weakness adjustments
+  const memoryWeakness = context.memory?.adjustments || { pushVolumeMultiplier: 1.0, pullVolumeMultiplier: 1.0 }
   const pushPullRatio = {
-    push: biasAdjustment.pushVolumeRatio,
-    pull: biasAdjustment.pullVolumeRatio,
+    push: biasAdjustment.pushVolumeRatio * memoryWeakness.pushVolumeMultiplier,
+    pull: biasAdjustment.pullVolumeRatio * memoryWeakness.pullVolumeMultiplier,
   }
   
   // Calculate bias-adjusted strength volume
@@ -860,6 +868,31 @@ function buildSessionRationale(
 function buildRecommendations(context: UnifiedEngineContext): string[] {
   const recommendations: string[] = []
   
+  // Add memory-based recommendations (returning athletes, weakness)
+  if (context.memory && context.memory.inactivityLevel !== 'none') {
+    const adjustments = context.memory.adjustments
+    if (adjustments.reintroductionWeeks > 0) {
+      recommendations.push(
+        `Allow ${adjustments.reintroductionWeeks} weeks to rebuild to previous training levels.`
+      )
+    }
+    if (context.memory.strengthDropEstimate > 0) {
+      recommendations.push(
+        `Intensity adjusted by ${context.memory.strengthDropEstimate}% to account for time off.`
+      )
+    }
+  }
+  
+  // Add weakness-based recommendations from memory
+  if (context.memory?.isPushWeak) {
+    recommendations.push('Pushing volume increased to address historical imbalance.')
+  } else if (context.memory?.isPullWeak) {
+    recommendations.push('Pulling volume increased to address historical imbalance.')
+  }
+  if (context.memory?.straightArmLagging) {
+    recommendations.push('Straight-arm work prioritized based on training history.')
+  }
+  
   // Add constraint-based recommendation
   if (context.constraints.primaryConstraint) {
     recommendations.push(
@@ -888,6 +921,11 @@ function buildRecommendations(context: UnifiedEngineContext): string[] {
     balanced_hybrid: 'Balanced approach. Adjust based on how you respond to different stimuli.',
   }
   recommendations.push(styleRecs[context.athlete.trainingStyle])
+  
+  // Add PR history recommendation
+  if (context.memory?.hasHistoricalData && context.memory.adjustments.prBasedTargets.size > 0) {
+    recommendations.push('Working weights based on your PR history.')
+  }
   
   return recommendations
 }

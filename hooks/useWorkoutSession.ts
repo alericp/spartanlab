@@ -8,6 +8,12 @@ import { onTrainingEvent } from '@/lib/achievements/achievement-engine'
 import { showAchievementNotifications } from '@/components/achievements/achievement-notification'
 import { onTrainingEventForChallenges } from '@/lib/challenges/challenge-engine'
 import { showChallengeNotifications } from '@/components/challenges/challenge-notification'
+import { persistWorkoutSession, type PersistenceResult } from '@/lib/workout-history-persistence'
+import { useAuth } from '@clerk/nextjs'
+import type { CompletedSetData } from '@/types/history'
+
+// Re-export CompletedSetData for components that import from this hook
+export type { CompletedSetData } from '@/types/history'
 
 // =============================================================================
 // TYPES
@@ -23,18 +29,6 @@ export interface SessionStats {
   averageRPE: number | null
   estimatedVolume: number
   elapsedSeconds: number
-}
-
-export interface CompletedSetData {
-  exerciseId: string
-  exerciseName: string
-  exerciseCategory: string
-  setNumber: number
-  targetReps: number
-  actualReps: number
-  targetRPE: number
-  actualRPE: number
-  restSeconds: number
 }
 
 export interface WorkoutSessionState {
@@ -67,6 +61,7 @@ export interface UseWorkoutSessionReturn extends WorkoutSessionState, WorkoutSes
   formattedDuration: string
   canSave: boolean
   save: (notes?: string) => Promise<boolean>
+  lastSaveResult: PersistenceResult | null
 }
 
 // =============================================================================
@@ -122,6 +117,7 @@ function mapFocusToFocusArea(focus: string): FocusArea {
 // =============================================================================
 
 export function useWorkoutSession(session: AdaptiveSession): UseWorkoutSessionReturn {
+  const { userId } = useAuth()
   const [state, setState] = useState<WorkoutSessionState>({
     status: 'inactive',
     startTime: null,
@@ -132,6 +128,7 @@ export function useWorkoutSession(session: AdaptiveSession): UseWorkoutSessionRe
     currentExerciseIndex: 0,
     currentSetNumber: 1,
   })
+  const [lastSaveResult, setLastSaveResult] = useState<PersistenceResult | null>(null)
 
   const intervalRef = useRef<NodeJS.Timeout | null>(null)
 
@@ -315,7 +312,7 @@ export function useWorkoutSession(session: AdaptiveSession): UseWorkoutSessionRe
       const exercises = Array.from(exerciseMap.values())
       const durationMinutes = Math.round(state.elapsedSeconds / 60)
 
-      // Save to workout log
+      // Save to workout log (localStorage for quick access)
       saveWorkoutLog({
         sessionName: session.dayLabel,
         sessionType: 'mixed' as SessionType,
@@ -325,6 +322,34 @@ export function useWorkoutSession(session: AdaptiveSession): UseWorkoutSessionRe
         notes,
         exercises,
       })
+
+      // Persist to workout history system (database)
+      if (userId) {
+        const historyResult = await persistWorkoutSession({
+          userId,
+          workoutName: session.dayLabel,
+          dayLabel: session.dayLabel,
+          focusArea: session.focusLabel,
+          durationMinutes: durationMinutes || 1,
+          completedSets: state.completedSets,
+          exercises: session.exercises.map(ex => ({
+            id: ex.id,
+            name: ex.name,
+            category: ex.category,
+            sets: ex.sets,
+            targetReps: typeof ex.reps === 'number' ? ex.reps : parseInt(ex.reps) || undefined,
+            targetHold: ex.hold,
+            weight: ex.weight,
+          })),
+          notes,
+        })
+        setLastSaveResult(historyResult)
+        
+        // Log PR achievements for debugging
+        if (historyResult.prsDetected.length > 0) {
+          console.log('[WorkoutSession] PRs detected:', historyResult.prsDetected)
+        }
+      }
 
       // Record RPE session for fatigue engine
       const rpeExercises = Array.from(
@@ -351,7 +376,7 @@ export function useWorkoutSession(session: AdaptiveSession): UseWorkoutSessionRe
         })
       }
 
-// Check for newly unlocked achievements
+      // Check for newly unlocked achievements
       const newAchievements = onTrainingEvent()
       if (newAchievements.length > 0) {
         showAchievementNotifications(newAchievements)
@@ -368,7 +393,7 @@ export function useWorkoutSession(session: AdaptiveSession): UseWorkoutSessionRe
       console.error('Failed to save workout session:', error)
       return false
     }
-  }, [state.status, state.completedSets, state.elapsedSeconds, session.dayLabel, session.focusLabel])
+  }, [state.status, state.completedSets, state.elapsedSeconds, session, userId])
 
   return {
     // State
@@ -379,6 +404,7 @@ export function useWorkoutSession(session: AdaptiveSession): UseWorkoutSessionRe
     isCompleted: state.status === 'completed',
     formattedDuration: formatDuration(state.elapsedSeconds),
     canSave: state.status === 'completed' && state.completedSets.length > 0,
+    lastSaveResult,
     
     // Controls
     start,

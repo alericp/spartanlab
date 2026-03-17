@@ -45,6 +45,18 @@ import {
   type BiasAdjustment,
   type BenchmarkInput,
 } from './movement-bias-detection-engine'
+import {
+  buildAthleteMemoryProfile,
+  getProgramAdjustments,
+  getSessionContinuationAdjustments,
+  type AthleteMemoryProfile,
+  type ProgramAdjustments,
+} from './athlete-memory-engine'
+
+// Re-export for use by program generation
+export { buildAthleteMemoryProfile, getProgramAdjustments, getSessionContinuationAdjustments }
+export type { AthleteMemoryProfile, ProgramAdjustments }
+export type { AthleteMemoryContext }
 
 // =============================================================================
 // TYPES - UNIFIED ENGINE CONTEXT
@@ -239,6 +251,33 @@ export interface MovementBiasContext {
   hasStrongBias: boolean
 }
 
+export interface AthleteMemoryContext {
+  // Activity status
+  lastActiveDate: string | null
+  inactivityDays: number
+  inactivityLevel: 'none' | 'mild' | 'moderate' | 'significant' | 'major'
+  
+  // Strength memory
+  hasHistoricalData: boolean
+  peakStrengthExercises: string[] // Exercises with peak PRs
+  strengthDropEstimate: number // 0-100%
+  
+  // Program adjustments derived from memory
+  adjustments: ProgramAdjustments
+  
+  // Weakness profile
+  isPushWeak: boolean
+  isPullWeak: boolean
+  straightArmLagging: boolean
+  
+  // Progression rate
+  averagePRsPerWeek: number
+  weeksSinceLastPR: number
+  
+  // Full memory profile reference
+  fullProfile: AthleteMemoryProfile
+}
+
 export interface UnifiedEngineContext {
   // Core athlete data
   athlete: AthleteContext
@@ -263,6 +302,9 @@ export interface UnifiedEngineContext {
   
   // Movement bias (push/pull/compression dominance)
   movementBias: MovementBiasContext
+  
+  // Athlete memory (historical training intelligence)
+  memory: AthleteMemoryContext
   
   // Program decisions
   programDecision: ProgramDecision
@@ -335,15 +377,19 @@ export async function buildUnifiedContext(userId: string): Promise<UnifiedEngine
     constraintContext
   )
   
-  // Step 10: Determine program decisions
+  // Step 10: Build athlete memory (historical training intelligence)
+  const memoryContext = await buildMemoryContext(userId)
+  
+  // Step 11: Determine program decisions (now memory-informed)
   const programDecision = determineProgramDecision(
     athleteContext,
     fatigueContext,
     constraintContext,
-    frameworkContext
+    frameworkContext,
+    memoryContext
   )
   
-  // Step 11: Generate coaching summary
+  // Step 12: Generate coaching summary
   const coachingSummary = generateCoachingSummary(
     athleteContext,
     skillContext,
@@ -351,10 +397,11 @@ export async function buildUnifiedContext(userId: string): Promise<UnifiedEngine
     fatigueContext,
     envelopeContext,
     frameworkContext,
-    movementBiasContext
+    movementBiasContext,
+    memoryContext
   )
   
-  // Step 12: Assess data quality
+  // Step 13: Assess data quality
   const dataQuality = assessDataQuality(skillContext, envelopeContext, fatigueContext)
   
   return {
@@ -366,6 +413,7 @@ export async function buildUnifiedContext(userId: string): Promise<UnifiedEngine
     protocols: protocolContext,
     framework: frameworkContext,
     movementBias: movementBiasContext,
+    memory: memoryContext,
     programDecision,
     coachingSummary,
     dataQuality,
@@ -968,19 +1016,90 @@ function buildMovementBiasContext(
 }
 
 // =============================================================================
-// STEP 10: PROGRAM DECISION
+// STEP 10: ATHLETE MEMORY CONTEXT
+// =============================================================================
+
+async function buildMemoryContext(userId: string): Promise<AthleteMemoryContext> {
+  try {
+    // Build the full memory profile from history
+    const fullProfile = await buildAthleteMemoryProfile(userId)
+    
+    // Get program adjustments based on memory
+    const adjustments = getProgramAdjustments(fullProfile)
+    
+    return {
+      lastActiveDate: fullProfile.lastActiveDate,
+      inactivityDays: fullProfile.inactivityDays,
+      inactivityLevel: fullProfile.inactivityLevel,
+      hasHistoricalData: fullProfile.dataQuality !== 'none',
+      peakStrengthExercises: fullProfile.peakStrengthMetrics.map(m => m.exerciseName),
+      strengthDropEstimate: fullProfile.strengthDropEstimate.overallDrop,
+      adjustments,
+      isPushWeak: fullProfile.weaknessProfile.isPushWeak,
+      isPullWeak: fullProfile.weaknessProfile.isPullWeak,
+      straightArmLagging: fullProfile.weaknessProfile.straightArmLagging,
+      averagePRsPerWeek: fullProfile.progressionRateEstimate.averagePRsPerWeek,
+      weeksSinceLastPR: fullProfile.progressionRateEstimate.weeksSinceLastPR,
+      fullProfile,
+    }
+  } catch (error) {
+    console.error('[UnifiedEngine] Error building memory context:', error)
+    // Return default context if memory fails
+    return {
+      lastActiveDate: null,
+      inactivityDays: 0,
+      inactivityLevel: 'none',
+      hasHistoricalData: false,
+      peakStrengthExercises: [],
+      strengthDropEstimate: 0,
+      adjustments: {
+        intensityMultiplier: 1.0,
+        volumeMultiplier: 1.0,
+        pushVolumeMultiplier: 1.0,
+        pullVolumeMultiplier: 1.0,
+        straightArmVolumeMultiplier: 1.0,
+        reintroductionWeeks: 0,
+        useHistoricalBaselines: false,
+        prBasedTargets: new Map(),
+        explanations: [],
+      },
+      isPushWeak: false,
+      isPullWeak: false,
+      straightArmLagging: false,
+      averagePRsPerWeek: 0,
+      weeksSinceLastPR: 0,
+      fullProfile: null as unknown as AthleteMemoryProfile,
+    }
+  }
+}
+
+// =============================================================================
+// STEP 11: PROGRAM DECISION
 // =============================================================================
 
 function determineProgramDecision(
   athleteContext: AthleteContext,
   fatigueContext: FatigueContext,
   constraintContext: ConstraintContext,
-  frameworkContext: FrameworkContext
+  frameworkContext: FrameworkContext,
+  memoryContext?: AthleteMemoryContext
 ): ProgramDecision {
   const sessionModifications: string[] = []
   let shouldRegenerate = false
   let regenerationReason: RegenerationReason | null = null
   let adaptationLevel: AdaptationLevel = 'none'
+  
+  // Check for memory-triggered adjustments (returning after break)
+  if (memoryContext && memoryContext.inactivityLevel !== 'none') {
+    if (memoryContext.inactivityLevel === 'major' || memoryContext.inactivityLevel === 'significant') {
+      // Major break - may need program adjustment
+      adaptationLevel = memoryContext.inactivityLevel === 'major' ? 'major' : 'moderate'
+      sessionModifications.push(memoryContext.adjustments.explanations[0] || 'Returning after break')
+    } else {
+      // Mild/moderate break - session-level adjustments
+      sessionModifications.push(`Intensity adjusted for return (${memoryContext.inactivityDays} days off)`)
+    }
+  }
   
   // Check for framework-triggered regeneration
   if (frameworkContext.shouldSwitch) {
@@ -1012,6 +1131,13 @@ function determineProgramDecision(
     sessionModifications.push(`Emphasis on ${constraintContext.primaryConstraint.replace(/_/g, ' ')}`)
   }
   
+  // Weakness-based modifications from memory
+  if (memoryContext?.isPushWeak) {
+    sessionModifications.push('Extra pushing volume to address imbalance')
+  } else if (memoryContext?.isPullWeak) {
+    sessionModifications.push('Extra pulling volume to address imbalance')
+  }
+  
   // Framework-specific session modifications
   sessionModifications.push(frameworkContext.coachingMessage)
   
@@ -1034,15 +1160,31 @@ function generateCoachingSummary(
   fatigueContext: FatigueContext,
   envelopeContext: EnvelopeContext,
   frameworkContext: FrameworkContext,
-  movementBiasContext: MovementBiasContext
+  movementBiasContext: MovementBiasContext,
+  memoryContext?: AthleteMemoryContext
 ): CoachingSummary {
   const focusAreas: string[] = []
   const sessionNotes: string[] = []
   
-  // Build headline
+  // Build headline - adjust for returning athletes
   let headline = `${athleteContext.primaryGoalLabel} Development`
-  if (skillContext.primarySkillState?.currentLevel) {
+  if (memoryContext && memoryContext.inactivityLevel !== 'none' && memoryContext.inactivityLevel !== 'mild') {
+    headline = `Welcome Back - ${athleteContext.primaryGoalLabel} Rebuild`
+  } else if (skillContext.primarySkillState?.currentLevel) {
     headline += ` - Working toward ${skillContext.primarySkillState.nextMilestone || 'next milestone'}`
+  }
+  
+  // Add memory-based session notes
+  if (memoryContext) {
+    if (memoryContext.inactivityLevel !== 'none') {
+      sessionNotes.push(`Returning after ${memoryContext.inactivityDays} days - adjustments applied`)
+    }
+    if (memoryContext.hasHistoricalData && memoryContext.adjustments.useHistoricalBaselines) {
+      sessionNotes.push('Working weights based on PR history')
+    }
+    for (const explanation of memoryContext.adjustments.explanations.slice(0, 2)) {
+      sessionNotes.push(explanation)
+    }
   }
   
   // Current emphasis based on style - use the enhanced style summary

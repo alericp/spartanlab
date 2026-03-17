@@ -386,3 +386,29 @@ export {
   type SkillReadinessAPIRequest,
   type SkillReadinessAPIResponse,
 } from '../skill-readiness'
+
+// Program History Versioning
+export {
+  createProgramVersion as createProgramHistoryVersion,
+  createInitialProgramHistoryEntry,
+  createProgramVersionOnSettingsChange,
+  getFullProgramHistory,
+  generateProgramReasonSummary,
+  archiveCurrentProgramToHistory,
+  buildAthleteInputsSnapshot,
+  buildGoalsSnapshot,
+  buildProgramStructureSnapshot,
+  type ProgramHistoryContext,
+  type ProgramVersionResult,
+} from '../program-history-versioning'
+
+// Program History Helpers
+export {
+  startNewProgram,
+  getProgramHistoryStats,
+  compareProgramVersions,
+  getVersionComparisons,
+  type ResetReason,
+  type ProgramHistoryStats,
+  type ProgramComparison,
+} from '../program-history-helpers'

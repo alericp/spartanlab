@@ -14,6 +14,7 @@ import { getAthleteCalibration } from './athlete-calibration'
 import { detectWeakPoints, type WeakPointSummary } from './weak-point-detection'
 import { generateAdaptiveProgram, type AdaptiveProgramInputs, type AdaptiveProgram } from './adaptive-program-builder'
 import { evaluateTrainingBehavior, type TrainingBehaviorResult } from './adaptive-progression-engine'
+import { createInitialProgramHistoryEntry } from './program-history-versioning'
 import type { PrimaryGoal, ExperienceLevel, TrainingDays, SessionLength } from './program-service'
 import type { EquipmentType } from './adaptive-exercise-pool'
 
@@ -198,6 +199,10 @@ export function generateFirstProgram(): FirstRunResult {
       localStorage.setItem('spartanlab_first_program', JSON.stringify(program))
       localStorage.setItem('spartanlab_onboarding_complete', 'true')
     }
+    
+    // Note: Program history entry will be created server-side via API
+    // when user ID is available (after auth). The localStorage save above
+    // ensures the program is immediately available for display.
     
     return {
       success: true,

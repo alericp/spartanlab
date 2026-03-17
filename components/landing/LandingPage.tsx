@@ -70,8 +70,8 @@ function HeroSection() {
             <span>Adaptive programs</span>
           </div>
           <div className="flex items-center gap-2 text-sm text-[#A4ACB8]">
-            <Shield className="w-4 h-4 text-[#C1121F]" />
-            <span>Joint integrity protocols</span>
+            <Database className="w-4 h-4 text-[#C1121F]" />
+            <span>Full history tracking</span>
           </div>
         </div>
         
@@ -447,10 +447,10 @@ function PricingSection() {
               {[
                 'All Skill Progress Sensors',
                 'Strength Analysis Tools',
-                'Workout Logging',
+                'Workout Logging + History',
+                'PR Tracking Archive',
                 'Spartan Strength Score',
                 'Training Momentum Tracking',
-                'Primary Limiter Detection',
               ].map((item, i) => (
                 <li key={i} className="flex items-center gap-3 text-sm text-[#A4ACB8]">
                   <CheckCircle2 className="w-4 h-4 text-[#4F6D8A] flex-shrink-0" />
@@ -481,10 +481,10 @@ function PricingSection() {
                 'Everything in Free',
                 'Skill Readiness Analysis',
                 'Adaptive Program Generation',
+                'Program History + Versioning',
                 'Constraint Detection Engine',
                 'Joint Integrity Protocols',
                 'Equipment-Aware Programming',
-                'Training Style Personalization',
               ].map((item, i) => (
                 <li key={i} className="flex items-center gap-3 text-sm text-[#A4ACB8]">
                   <CheckCircle2 className="w-4 h-4 text-[#C1121F] flex-shrink-0" />

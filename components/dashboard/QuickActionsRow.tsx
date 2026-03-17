@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
-import { Target, Dumbbell, Calendar, Play, ArrowRight } from 'lucide-react'
+import { Target, Dumbbell, Calendar, Play, ArrowRight, Archive, Trophy } from 'lucide-react'
 
 export function QuickActionsRow() {
   const secondaryActions = [
@@ -18,6 +18,16 @@ export function QuickActionsRow() {
       href: '/programs',
       icon: Calendar,
       label: 'Program',
+    },
+    {
+      href: '/history',
+      icon: Archive,
+      label: 'History',
+    },
+    {
+      href: '/history/prs',
+      icon: Trophy,
+      label: 'PRs',
     },
   ]
 

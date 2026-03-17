@@ -33,6 +33,7 @@ import { WelcomeCard } from '@/components/dashboard/WelcomeCard'
 import { DashboardIntroduction, HowSpartanLabWorksButton } from '@/components/dashboard/DashboardIntroduction'
 import { calculateSpartanScore } from '@/lib/strength-score-engine'
 import { isFirstRun } from '@/lib/onboarding-service'
+import { syncProgramToHistory } from '@/lib/use-program-history'
 import { calculateRecoverySignal, type RecoverySignal } from '@/lib/recovery-engine'
 import { calculateMovementBalance, type MovementBalance } from '@/lib/volume-analyzer'
 import { calculateProjectionForPrimaryGoal, type GoalProjection } from '@/lib/goal-projection-engine'
@@ -146,6 +147,16 @@ function DashboardContent() {
       // Clean up URL
       window.history.replaceState({}, '', '/dashboard')
     }
+    
+    // Sync program to history if needed (ensures localStorage program is persisted to DB)
+    // This handles the case where user completed onboarding but program wasn't yet saved to history
+    syncProgramToHistory().then(result => {
+      if (result?.success) {
+        console.log('[v0] Dashboard: Synced program to history:', result.reasonSummary)
+      }
+    }).catch(err => {
+      console.error('[v0] Dashboard: Failed to sync program to history:', err)
+    })
     
     // STAGED CRASH ISOLATION: Each computation wrapped to identify exact failure point
     let data: DashboardOverview | null = null

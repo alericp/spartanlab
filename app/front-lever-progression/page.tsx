@@ -9,6 +9,7 @@ import { ProgressionLadderCard } from '@/components/seo/ProgressionLadderCard'
 import { RelatedFeatureCTA } from '@/components/seo/RelatedFeatureCTA'
 import { JsonLdMultiple } from '@/components/seo/JsonLd'
 import { RelatedContent } from '@/components/seo/RelatedContent'
+import { ToolConversionCard } from '@/components/tools/ToolConversionCard'
 import { ProgressionTable } from '@/components/seo/ProgressionTable'
 import { CommonMistakes } from '@/components/seo/CommonMistakes'
 import { FAQ } from '@/components/seo/FAQ'
@@ -209,7 +210,7 @@ export default function FrontLeverProgressionPage() {
             <div className="p-5 bg-[#1A1A1A] rounded-xl border border-[#2A2A2A]">
               <h3 className="font-semibold mb-2">Consistent Volume</h3>
               <p className="text-sm text-[#A5A5A5]">
-                Front lever requires high frequency training. Multiple short sessions per week are more effective than occasional long sessions.
+                Front lever requires high frequency training. Multiple short sessions per week are more effective than occasional long sessions. Learn more about our <Link href="/training-philosophy" className="text-[#C1121F] hover:underline">training philosophy</Link>.
               </p>
             </div>
           </div>
@@ -235,6 +236,13 @@ export default function FrontLeverProgressionPage() {
         faqs={faqs} 
         defaultOpen={[0]} 
       />
+
+      {/* Conversion CTA */}
+      <section className="py-12 px-4 sm:px-6">
+        <div className="max-w-4xl mx-auto">
+          <ToolConversionCard context="front-lever" />
+        </div>
+      </section>
 
       {/* Related Feature CTA */}
       <RelatedFeatureCTA

@@ -130,7 +130,7 @@ async function handleCheckoutSessionCompleted(event: StripeEvent): Promise<void>
 
 /**
  * Handle customer.subscription.updated event
- * Called when subscription is updated (e.g., renewing, changing plan)
+ * Called when subscription status changes (trial -> active, payment issues, etc.)
  */
 async function handleSubscriptionUpdated(event: StripeEvent): Promise<void> {
   const subscription = event.data.object
@@ -141,12 +141,29 @@ async function handleSubscriptionUpdated(event: StripeEvent): Promise<void> {
 
   console.log(`[Stripe Webhook] Subscription updated: ${subscriptionId}, status: ${status}`)
 
-  // In production: find user by stripeCustomerId and update
-  // For now, just log
-  console.log(`[Stripe Webhook] Would update customer ${customerId}:`, {
-    subscriptionStatus: status,
-    subscriptionCurrentPeriodEnd: new Date(currentPeriodEnd * 1000).toISOString(),
-  })
+  try {
+    // Find user by Stripe customer ID
+    const user = await findUserByStripeCustomerId(customerId)
+    
+    if (!user) {
+      console.warn(`[Stripe Webhook] No user found for customer: ${customerId}`)
+      return
+    }
+
+    // Sync subscription data
+    const subscriptionData: StripeSubscriptionData = {
+      customerId,
+      subscriptionId,
+      email: user.email,
+      status: status as StripeSubscriptionData['status'],
+      currentPeriodEnd: new Date(currentPeriodEnd * 1000).toISOString(),
+    }
+
+    await syncStripeSubscriptionToUser(user.id, subscriptionData)
+    console.log(`[Stripe Webhook] Successfully synced subscription update for user ${user.id}`)
+  } catch (error) {
+    console.error('[Stripe Webhook] Error handling subscription.updated:', error)
+  }
 }
 
 /**

@@ -152,7 +152,7 @@ function WorkoutSessionContent() {
             Create a program first, or try a demo workout to explore SpartanLab.
           </p>
           <div className="space-y-3">
-            <Link href="/programs" className="block">
+            <Link href="/my-programs" className="block">
               <Button className="w-full bg-[#C1121F] hover:bg-[#A30F1A] text-white gap-2">
                 Create Your Program
               </Button>

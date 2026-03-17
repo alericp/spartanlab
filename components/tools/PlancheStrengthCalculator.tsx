@@ -390,7 +390,7 @@ export function PlancheStrengthCalculator({ showCTA = true }: { showCTA?: boolea
           {/* CTA */}
           {showCTA && (
             <div className="pt-4 border-t border-[#2B313A]">
-              <Link href="/programs">
+              <Link href="/my-programs">
                 <Button className="w-full bg-[#C1121F] hover:bg-[#A30F1A] h-12">
                   Generate Planche Training Program
                   <ArrowRight className="w-4 h-4 ml-2" />

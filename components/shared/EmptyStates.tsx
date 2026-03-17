@@ -147,7 +147,7 @@ export function DashboardEmptyState() {
           
           {/* Secondary option - subtle */}
           <p className="mt-4 text-sm text-[#6A6A6A]">
-            Or <Link href="/programs" className="text-[#E63946] hover:underline">view your program</Link> first
+            Or <Link href="/my-programs" className="text-[#E63946] hover:underline">view your program</Link> first
           </p>
         </div>
       </Card>

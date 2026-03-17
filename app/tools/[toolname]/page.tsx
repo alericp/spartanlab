@@ -487,7 +487,7 @@ export default async function ToolPage({ params }: Props) {
                 Use the SpartanLab Adaptive Training Engine to generate a personalized calisthenics program that adjusts automatically as you progress.
               </p>
               <Button asChild size="lg" className="bg-[#C1121F] hover:bg-[#A30F1A]">
-                <Link href="/programs">
+                <Link href="/my-programs">
                   Generate Program
                   <ArrowRight className="w-5 h-5 ml-2" />
                 </Link>
@@ -504,7 +504,7 @@ export default async function ToolPage({ params }: Props) {
           <div className="mb-8">
             <h2 className="text-lg font-semibold mb-4 text-[#E6E9EF]">Continue Your Training Journey</h2>
             <div className="grid sm:grid-cols-3 gap-4">
-              <Link href="/programs">
+              <Link href="/my-programs">
                 <Card className="bg-[#1A1F26] border-[#2B313A] p-4 h-full hover:border-[#C1121F]/50 transition-all cursor-pointer group">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-lg bg-[#0F1115] flex items-center justify-center flex-shrink-0">
@@ -517,7 +517,7 @@ export default async function ToolPage({ params }: Props) {
                   </div>
                 </Card>
               </Link>
-              <Link href="/skills">
+              <Link href="/my-skills">
                 <Card className="bg-[#1A1F26] border-[#2B313A] p-4 h-full hover:border-[#C1121F]/50 transition-all cursor-pointer group">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-lg bg-[#0F1115] flex items-center justify-center flex-shrink-0">
@@ -576,8 +576,8 @@ export default async function ToolPage({ params }: Props) {
             <p>Part of the SpartanLab Calisthenics Training Decision Engine</p>
             <div className="flex items-center gap-6">
               <Link href="/tools" className="hover:text-[#E6E9EF] transition-colors">All Tools</Link>
-              <Link href="/programs" className="hover:text-[#E6E9EF] transition-colors">Program Builder</Link>
-              <Link href="/skills" className="hover:text-[#E6E9EF] transition-colors">Skill Tracker</Link>
+              <Link href="/my-programs" className="hover:text-[#E6E9EF] transition-colors">Program Builder</Link>
+              <Link href="/my-skills" className="hover:text-[#E6E9EF] transition-colors">Skill Tracker</Link>
               <Link href="/dashboard" className="hover:text-[#E6E9EF] transition-colors">Dashboard</Link>
             </div>
           </div>

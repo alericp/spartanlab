@@ -13,10 +13,12 @@ import { SubscriptionBadge, useSubscriptionDisplay } from '@/components/billing/
 import { useOwnerInit } from '@/hooks/useOwnerInit'
 
 // Primary navigation - essential daily actions
+// NOTE: /my-programs and /my-skills are app-only routes (authenticated)
+// Public SEO pages exist at /programs and /skills under (public) route group
 const NAV_ITEMS = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/programs', label: 'Program', icon: Calendar },
-  { href: '/skills', label: 'Skills', icon: Target },
+  { href: '/my-programs', label: 'Program', icon: Calendar },
+  { href: '/my-skills', label: 'Skills', icon: Target },
   { href: '/strength', label: 'Strength', icon: Dumbbell },
   { href: '/guides', label: 'Guides', icon: BookOpen },
 ]
@@ -35,8 +37,8 @@ const SECONDARY_NAV_ITEMS = [
 // Page title mapping for all known routes
 const PAGE_TITLES: Record<string, string> = {
   '/dashboard': 'Dashboard',
-  '/programs': 'Program',
-  '/skills': 'Skills',
+  '/my-programs': 'Program',
+  '/my-skills': 'Skills',
   '/strength': 'Strength',
   '/guides': 'Guides',
   '/history': 'History',

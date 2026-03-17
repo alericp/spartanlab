@@ -31,8 +31,7 @@ import {
 } from '@/lib/training-style-service'
 import { useOwnerInit } from '@/hooks/useOwnerInit'
 import { PRICING, TRIAL } from '@/lib/billing/pricing'
-import { hasProAccess } from '@/lib/feature-access'
-import { useSubscriptionDisplay } from '@/lib/billing/subscription-status'
+import { useEntitlement } from '@/hooks/useEntitlement'
 import Link from 'next/link'
 import {
   getAthleteProfile,
@@ -51,13 +50,29 @@ import { UpdateMetricsCard } from '@/components/dashboard/UpdateMetricsCard'
 import { useToast } from '@/hooks/use-toast'
 
 // Subscription Billing Card - handles Pro, Trial, and Free states with graceful error handling
+// Uses useEntitlement() hook (database-backed) instead of localStorage
 function SubscriptionBillingCard() {
-  const subscriptionInfo = useSubscriptionDisplay()
+  const entitlement = useEntitlement()
   const [billingStatus, setBillingStatus] = useState<'idle' | 'loading' | 'error' | 'no-account'>('idle')
   const [billingMessage, setBillingMessage] = useState('')
   
+  // Loading state
+  if (entitlement.isLoading) {
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center gap-3 p-4 rounded-lg bg-[#1A1A1A] border border-[#3A3A3A] animate-pulse">
+          <div className="w-10 h-10 rounded-lg bg-[#3A3A3A]" />
+          <div className="flex-1 space-y-2">
+            <div className="h-4 w-24 bg-[#3A3A3A] rounded" />
+            <div className="h-3 w-48 bg-[#3A3A3A] rounded" />
+          </div>
+        </div>
+      </div>
+    )
+  }
+  
   // Free user - show upgrade CTA instead of billing management
-  if (subscriptionInfo.status === 'free' && !subscriptionInfo.isOwner) {
+  if (!entitlement.hasProAccess && !entitlement.isOwner) {
     return (
       <div className="space-y-4">
         <div className="flex items-center gap-3 p-4 rounded-lg bg-[#1A1A1A] border border-[#3A3A3A]">
@@ -83,9 +98,9 @@ function SubscriptionBillingCard() {
     )
   }
   
-  const statusLabel = subscriptionInfo.isTrialing ? 'Trial Active' : 'Active'
-  const statusDescription = subscriptionInfo.isTrialing 
-    ? `${subscriptionInfo.trialDaysRemaining} day${subscriptionInfo.trialDaysRemaining !== 1 ? 's' : ''} remaining in your trial. You won't be charged until it ends.`
+  const statusLabel = entitlement.isTrialing ? 'Trial Active' : 'Active'
+  const statusDescription = entitlement.isTrialing 
+    ? 'Your trial is active. You won\'t be charged until it ends.'
     : 'Full access to all training intelligence features.'
   
   const handleManageBilling = async () => {
@@ -120,7 +135,7 @@ function SubscriptionBillingCard() {
     <div className="space-y-4">
       <div className="flex items-center gap-3 p-4 rounded-lg bg-gradient-to-r from-amber-500/10 to-transparent border border-amber-500/20">
         <div className="w-10 h-10 rounded-lg bg-amber-500/20 flex items-center justify-center">
-          {subscriptionInfo.isTrialing ? (
+          {entitlement.isTrialing ? (
             <Sparkles className="w-5 h-5 text-amber-400" />
           ) : (
             <Crown className="w-5 h-5 text-amber-400" />
@@ -165,7 +180,7 @@ function SubscriptionBillingCard() {
         {billingStatus === 'loading' ? 'Opening Billing...' : 'Manage Billing'}
       </Button>
       <p className="text-xs text-[#6B7280]">
-        {subscriptionInfo.isTrialing ? (
+        {entitlement.isTrialing ? (
           <>
             View or update payment method. You won&apos;t be charged until your trial ends.{' '}
             <a href="mailto:billing@spartanlab.app" className="text-[#A5A5A5] hover:text-[#F5F5F5] transition-colors">

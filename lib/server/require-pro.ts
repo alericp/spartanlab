@@ -9,7 +9,10 @@
  * 2. User is on an active trial (trialing status)
  * 3. User is the platform owner (OWNER_EMAIL match)
  * 
- * IMPORTANT: This is server-only and reads from the DATABASE, not localStorage.
+ * IMPORTANT: 
+ * - This is server-only and reads from the DATABASE, not localStorage.
+ * - Owner simulation mode (for testing) is CLIENT-ONLY and does NOT affect server checks.
+ * - Server always enforces real database subscription status.
  */
 
 import 'server-only'

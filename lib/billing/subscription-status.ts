@@ -2,7 +2,13 @@
  * Subscription Status Helper
  * 
  * Normalizes subscription state into simple UI-friendly statuses.
- * Single source of truth for subscription display logic.
+ * 
+ * IMPORTANT: This file uses the legacy localStorage-based subscription check.
+ * For new code, prefer using:
+ * - useEntitlement() hook from hooks/useEntitlement.ts (database-backed)
+ * - The /api/entitlement endpoint for server-backed subscription state
+ * 
+ * The canonical source of truth is the DATABASE, not localStorage.
  * 
  * Includes owner-only simulation mode for testing Free/Pro states.
  */

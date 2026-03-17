@@ -274,11 +274,26 @@ export function getProFeatures(): FeatureDefinition[] {
 }
 
 // =============================================================================
-// SUBSCRIPTION STORAGE (localStorage for demo, DB in production)
+// SUBSCRIPTION STORAGE
+// =============================================================================
+// 
+// IMPORTANT: localStorage is NO LONGER the source of truth for subscription status.
+// The canonical source of truth is the DATABASE, accessed via:
+// - Server: lib/subscription-service.ts (getUserSubscription)
+// - Client: hooks/useEntitlement.ts (useEntitlement hook)
+// 
+// These legacy functions exist for backward compatibility but will be deprecated.
+// New code should use:
+// - useEntitlement() hook for client components
+// - checkProAccess() from lib/server/require-pro.ts for server components/API routes
 // =============================================================================
 
 const SUBSCRIPTION_KEY = 'spartanlab_subscription'
 
+/**
+ * @deprecated Use useEntitlement() hook instead. localStorage is no longer authoritative.
+ * This function reads from localStorage cache only - it may be stale.
+ */
 export function getSubscription(): SubscriptionInfo {
   if (typeof window === 'undefined') return DEFAULT_SUBSCRIPTION
   
@@ -306,6 +321,9 @@ export function getSubscription(): SubscriptionInfo {
   }
 }
 
+/**
+ * @deprecated localStorage is no longer authoritative. Subscription updates come from Stripe webhooks.
+ */
 export function saveSubscription(subscription: SubscriptionInfo): void {
   if (typeof window === 'undefined') return
   localStorage.setItem(SUBSCRIPTION_KEY, JSON.stringify(subscription))
@@ -318,6 +336,11 @@ export function saveSubscription(subscription: SubscriptionInfo): void {
 /**
  * Check if user has Pro subscription
  * Owner accounts have Pro access unless simulating Free
+ * 
+ * @deprecated Use useEntitlement() hook for client components, or checkProAccess() for server code.
+ * This function reads from localStorage which may be stale. The database is the source of truth.
+ * 
+ * This function is kept for backward compatibility but should be migrated to useEntitlement().
  */
 export function hasProAccess(): boolean {
   // Check owner simulation first
@@ -328,7 +351,7 @@ export function hasProAccess(): boolean {
   // Owner without simulation has Pro access
   if (isCurrentUserOwner()) return true
   
-  // Regular users - standard check
+  // Regular users - standard check (reads from localStorage cache)
   const subscription = getSubscription()
   return subscription.tier === 'pro' && 
          (subscription.status === 'active' || subscription.status === 'trialing')

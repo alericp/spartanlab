@@ -16,6 +16,13 @@
  * - Recovery overlap management
  * - Hybrid programming rules
  * - Explanation generation for hybrid decisions
+ * 
+ * INTELLIGENCE INTEGRATION:
+ * Uses strength-intelligence-engine for:
+ * - Method profiles (volume/intensity/hybrid/streetlifting bias)
+ * - Fatigue category tracking
+ * - Progression models
+ * - Auto-bias detection
  */
 
 import {
@@ -28,6 +35,26 @@ import {
   shouldIncludeDeadlift,
   getDefaultHybridStrengthProfile,
 } from './athlete-profile'
+
+import {
+  type StrengthMethodId,
+  type IntensityZone,
+  type FatigueState,
+  type ProgressionModel,
+  type StrengthBiasProfile,
+  STRENGTH_METHOD_PROFILES,
+  selectStrengthMethod,
+  getFrequencyRecommendation,
+  getProgressionRecommendation,
+  detectStrengthBias,
+  checkFatigueOverload,
+  getFatigueBasedVolumeReduction,
+  getExerciseFatigueContribution,
+  coordinateStreetliftingSession,
+  shouldHoldProgression,
+  generateStrengthExplanation,
+  generateWeeklySummary,
+} from './strength-intelligence-engine'
 
 // =============================================================================
 // TYPES
@@ -58,6 +85,7 @@ export interface FatigueConflict {
 
 /**
  * Hybrid programming context for session assembly
+ * Extended with intelligence engine data
  */
 export interface HybridProgrammingContext {
   isHybridEnabled: boolean
@@ -69,6 +97,13 @@ export interface HybridProgrammingContext {
   shouldReducePullVolume: boolean
   shouldReduceHingeAccessories: boolean
   explanationSummary: string
+  
+  // Intelligence engine extensions
+  strengthMethodId: StrengthMethodId | null
+  currentFatigueState: FatigueState
+  progressionModel: ProgressionModel | null
+  strengthBias: StrengthBiasProfile | null
+  intelligentExplanations: string[]
 }
 
 /**
@@ -193,13 +228,18 @@ export const DEADLIFT_CONFLICT_MAP: Record<string, FatigueConflict> = {
 
 /**
  * Build full hybrid programming context from profile and equipment
+ * Now includes intelligence engine data for smarter programming
  */
 export function buildHybridProgrammingContext(
   hybridProfile: HybridStrengthProfile | null | undefined,
   equipment: EquipmentType[],
   jointCautions: JointCaution[],
   trainingDaysPerWeek: number,
-  primaryGoal: string
+  primaryGoal: string,
+  // Optional intelligence inputs
+  pullUpMax?: number | null,
+  dipMax?: number | null,
+  bodyweight?: number | null
 ): HybridProgrammingContext {
   // Default: calisthenics-only, no hybrid features
   const profile = hybridProfile || getDefaultHybridStrengthProfile()
@@ -207,19 +247,64 @@ export function buildHybridProgrammingContext(
   const isEnabled = isHybridStrengthEnabled(profile, equipment)
   const deadliftCheck = shouldIncludeDeadlift(profile, equipment, jointCautions)
   
-  // Determine weekly deadlift budget based on modality and training days
-  let weeklyDeadliftBudget = 0
-  if (deadliftCheck.eligible) {
-    if (profile.modality === 'hybrid_light') {
-      weeklyDeadliftBudget = 1
-    } else if (profile.modality === 'streetlifting_biased') {
-      weeklyDeadliftBudget = trainingDaysPerWeek >= 4 ? 2 : 1
-    }
+  // Get frequency recommendations from intelligence engine
+  const frequencyRec = getFrequencyRecommendation(
+    profile.modality,
+    trainingDaysPerWeek,
+    profile.deadliftExperience
+  )
+  
+  // Determine weekly deadlift budget from intelligence engine
+  const weeklyDeadliftBudget = deadliftCheck.eligible ? frequencyRec.deadliftPerWeek : 0
+  
+  // Select strength method based on context
+  const strengthMethodId = isEnabled 
+    ? selectStrengthMethod(profile.modality, profile.deadliftExperience, primaryGoal)
+    : null
+  
+  // Get progression recommendation
+  const progressionRec = strengthMethodId
+    ? getProgressionRecommendation(profile.deadliftExperience, strengthMethodId, 'deadlift')
+    : null
+  
+  // Detect strength bias if we have data
+  const strengthBias = (pullUpMax || dipMax || profile.deadlift1RM)
+    ? detectStrengthBias(
+        pullUpMax ?? null,
+        dipMax ?? null,
+        profile.deadlift1RM,
+        bodyweight ?? null,
+        primaryGoal
+      )
+    : null
+  
+  // Initialize fatigue state (will be updated during session planning)
+  const currentFatigueState: FatigueState = {
+    neural: 0,
+    posterior_chain: 0,
+    pulling: 0,
+    pushing: 0,
+    grip: 0,
+    spinal: 0,
   }
   
   // Determine if we should reduce pull/hinge volume
   const shouldReducePullVolume = profile.modality === 'streetlifting_biased' && deadliftCheck.eligible
   const shouldReduceHingeAccessories = deadliftCheck.eligible
+  
+  // Build intelligent explanations
+  const intelligentExplanations: string[] = []
+  if (strengthMethodId) {
+    const summaries = generateWeeklySummary(strengthMethodId, frequencyRec, strengthBias || {
+      pullStrength: 'average',
+      pushStrength: 'average',
+      legStrength: 'average',
+      coreStrength: 'average',
+      overallBias: 'balanced',
+      recommendations: [],
+    })
+    intelligentExplanations.push(...summaries)
+  }
   
   // Build explanation
   const explanationSummary = generateHybridExplanationSummary(profile, deadliftCheck, primaryGoal)
@@ -234,6 +319,13 @@ export function buildHybridProgrammingContext(
     shouldReducePullVolume,
     shouldReduceHingeAccessories,
     explanationSummary,
+    
+    // Intelligence engine extensions
+    strengthMethodId,
+    currentFatigueState,
+    progressionModel: progressionRec?.model ?? null,
+    strengthBias,
+    intelligentExplanations,
   }
 }
 
@@ -370,6 +462,126 @@ export function checkStreetliftingConflicts(
   }
   
   return { hasConflict: false, message: '', adjustments: [] }
+}
+
+// =============================================================================
+// INTELLIGENT SESSION PLANNING
+// =============================================================================
+
+/**
+ * Plan session with fatigue-aware exercise selection
+ * Uses the strength intelligence engine to prevent overload
+ */
+export function planIntelligentHybridSession(
+  context: HybridProgrammingContext,
+  plannedExercises: string[],
+  sessionIntensity: IntensityZone,
+  sets: number
+): {
+  approvedExercises: string[]
+  volumeReductions: Record<string, number>
+  fatigueWarnings: string[]
+  sessionExplanation: string
+} {
+  const volumeReductions: Record<string, number> = {}
+  const fatigueWarnings: string[] = []
+  let workingFatigue = { ...context.currentFatigueState }
+  
+  // Check streetlifting coordination if applicable
+  if (context.modality === 'streetlifting_biased') {
+    const coordination = coordinateStreetliftingSession(
+      plannedExercises,
+      workingFatigue,
+      false // Not competition prep
+    )
+    
+    if (!coordination.canTrainAllThreeToday) {
+      fatigueWarnings.push(coordination.reasoning)
+      // Apply volume caps
+      for (const [exercise, cap] of Object.entries(coordination.volumeCaps)) {
+        if (cap === 0) {
+          plannedExercises = plannedExercises.filter(e => e !== exercise)
+        } else {
+          volumeReductions[exercise] = cap / sets
+        }
+      }
+    }
+  }
+  
+  // Check each exercise for fatigue overload
+  for (const exerciseId of plannedExercises) {
+    const contribution = getExerciseFatigueContribution(exerciseId, sessionIntensity, sets)
+    const overloadCheck = checkFatigueOverload(workingFatigue, contribution.fatigueAdded)
+    
+    if (overloadCheck.overloaded) {
+      // Try with reduced volume
+      const reducedContribution = getExerciseFatigueContribution(exerciseId, sessionIntensity, Math.ceil(sets * 0.6))
+      const reducedCheck = checkFatigueOverload(workingFatigue, reducedContribution.fatigueAdded)
+      
+      if (reducedCheck.overloaded) {
+        fatigueWarnings.push(`${exerciseId} excluded - ${overloadCheck.recommendation}`)
+        plannedExercises = plannedExercises.filter(e => e !== exerciseId)
+      } else {
+        volumeReductions[exerciseId] = 0.6
+        fatigueWarnings.push(`${exerciseId} volume reduced 40% - fatigue management`)
+        // Add reduced fatigue
+        for (const [cat, val] of Object.entries(reducedContribution.fatigueAdded)) {
+          workingFatigue[cat as keyof FatigueState] += val as number
+        }
+      }
+    } else {
+      // Add full fatigue contribution
+      for (const [cat, val] of Object.entries(contribution.fatigueAdded)) {
+        workingFatigue[cat as keyof FatigueState] += val as number
+      }
+    }
+  }
+  
+  // Generate session explanation
+  const explanation = generateStrengthExplanation({
+    exercise: plannedExercises[0] || 'session',
+    intensityZone: sessionIntensity,
+    fatigueState: workingFatigue,
+    volumeReduction: Object.values(volumeReductions)[0] || 1.0,
+    progressionHeld: false,
+  })
+  
+  return {
+    approvedExercises: plannedExercises,
+    volumeReductions,
+    fatigueWarnings,
+    sessionExplanation: explanation.body,
+  }
+}
+
+/**
+ * Check if progression should advance, hold, or deload
+ */
+export function checkProgressionStatus(
+  context: HybridProgrammingContext,
+  consecutiveFailures: number,
+  weeksSinceDeload: number
+): { action: 'progress' | 'hold' | 'deload'; reason: string } {
+  if (!context.strengthMethodId) {
+    return { action: 'progress', reason: 'No strength method active.' }
+  }
+  
+  const progressionCheck = shouldHoldProgression(
+    context.currentFatigueState,
+    consecutiveFailures,
+    weeksSinceDeload,
+    context.strengthMethodId
+  )
+  
+  if (progressionCheck.deload) {
+    return { action: 'deload', reason: progressionCheck.reason }
+  }
+  
+  if (progressionCheck.hold) {
+    return { action: 'hold', reason: progressionCheck.reason }
+  }
+  
+  return { action: 'progress', reason: 'Continue progression.' }
 }
 
 // =============================================================================
@@ -542,3 +754,29 @@ export {
   shouldIncludeDeadlift,
   getDefaultHybridStrengthProfile,
 }
+
+// Re-export intelligence engine types and functions for convenience
+export {
+  type StrengthMethodId,
+  type IntensityZone,
+  type FatigueState,
+  type FatigueCategory,
+  type ProgressionModel,
+  type StrengthBiasProfile,
+  type FrequencyRecommendation,
+  STRENGTH_METHOD_PROFILES,
+  INTENSITY_ZONES,
+  selectStrengthMethod,
+  getFrequencyRecommendation,
+  getProgressionRecommendation,
+  detectStrengthBias,
+  checkFatigueOverload,
+  getFatigueBasedVolumeReduction,
+  getExerciseFatigueContribution,
+  coordinateStreetliftingSession,
+  shouldHoldProgression,
+  generateStrengthExplanation,
+  generateWeeklySummary,
+  classifyIntensity,
+  canStackHeavyLifts,
+} from './strength-intelligence-engine'

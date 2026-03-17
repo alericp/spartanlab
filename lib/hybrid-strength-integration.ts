@@ -9,6 +9,11 @@
  * - Adds deadlift/hybrid exercises as SUPPLEMENTARY content
  * - Respects existing recovery and fatigue systems
  * - Provides explanation hooks for coach messaging
+ * 
+ * INTELLIGENCE INTEGRATION:
+ * - Uses strength-intelligence-engine for fatigue management
+ * - Applies method profiles for set/rep schemes
+ * - Coordinates streetlifting movements intelligently
  */
 
 import {
@@ -23,7 +28,17 @@ import {
   recommendDeadliftPlacement,
   checkStreetliftingConflicts,
   generateDeadliftExplanation,
+  planIntelligentHybridSession,
+  checkProgressionStatus,
   DEADLIFT_CONFLICT_MAP,
+  // Re-exported from strength-intelligence-engine
+  type IntensityZone,
+  type FatigueState,
+  type StrengthMethodId,
+  STRENGTH_METHOD_PROFILES,
+  classifyIntensity,
+  getFrequencyRecommendation,
+  getFatigueBasedVolumeReduction,
 } from './hybrid-strength-engine'
 
 import {
@@ -79,12 +94,14 @@ export interface HybridProgramExplanation {
 /**
  * Get hybrid decision for a specific session
  * Called by program builder during session assembly
+ * Now uses intelligent fatigue-aware planning
  */
 export function getHybridSessionDecision(
   dayIndex: number,
   weeklyPlan: HybridWeeklyPlan,
   plannedExercises: string[],
-  hybridContext: HybridProgrammingContext
+  hybridContext: HybridProgrammingContext,
+  targetSets: number = 5
 ): HybridSessionDecision {
   // Check if this is a deadlift day
   const isDeadliftDay = weeklyPlan.deadliftDay === dayIndex
@@ -99,22 +116,61 @@ export function getHybridSessionDecision(
     }
   }
   
-  // Get conflicts for planned exercises
+  // Select deadlift variant based on experience and modality
+  const variant = selectDeadliftVariant(hybridContext)
+  
+  // Add deadlift to planned exercises for intelligent planning
+  const exercisesWithDeadlift = [...plannedExercises, variant]
+  
+  // Use intelligent session planning if method is available
+  if (hybridContext.strengthMethodId) {
+    const intensityZone: IntensityZone = hybridContext.modality === 'streetlifting_biased' ? 'heavy' : 'moderate'
+    
+    const intelligentPlan = planIntelligentHybridSession(
+      hybridContext,
+      exercisesWithDeadlift,
+      intensityZone,
+      targetSets
+    )
+    
+    // Build exclusions from intelligent plan
+    const excludedByFatigue = plannedExercises.filter(
+      e => !intelligentPlan.approvedExercises.includes(e)
+    )
+    
+    // Build reductions from intelligent plan
+    const reductionExercises = Object.keys(intelligentPlan.volumeReductions)
+    
+    // Generate intelligent explanation
+    let explanation = `Deadlift day: ${variant.replace(/_/g, ' ')}.`
+    if (intelligentPlan.fatigueWarnings.length > 0) {
+      explanation += ` ${intelligentPlan.fatigueWarnings[0]}`
+    } else {
+      explanation += ` ${intelligentPlan.sessionExplanation}`
+    }
+    
+    return {
+      includeDeadlift: true,
+      deadliftVariant: variant,
+      excludeExercises: excludedByFatigue,
+      reduceVolumeExercises: reductionExercises,
+      explanation,
+    }
+  }
+  
+  // Fallback to basic conflict detection
   const exclusions = getDeadliftDayExclusions()
   const reductions = getDeadliftDayReductions()
   
   const conflictingExclusions = plannedExercises.filter(e => exclusions.includes(e))
   const conflictingReductions = plannedExercises.filter(e => reductions.includes(e))
   
-  // Select deadlift variant based on experience and modality
-  const variant = selectDeadliftVariant(hybridContext)
-  
   return {
     includeDeadlift: true,
     deadliftVariant: variant,
     excludeExercises: conflictingExclusions,
     reduceVolumeExercises: conflictingReductions,
-    explanation: `Deadlift day: ${variant.replace('_', ' ')}. ${conflictingExclusions.length} exercises excluded, ${conflictingReductions.length} exercises reduced.`,
+    explanation: `Deadlift day: ${variant.replace(/_/g, ' ')}. ${conflictingExclusions.length} exercises excluded, ${conflictingReductions.length} exercises reduced.`,
   }
 }
 
@@ -223,6 +279,7 @@ export function getHybridVolumeReduction(
 
 /**
  * Generate explanation entries for program explanation layer
+ * Now includes intelligent method-aware explanations
  */
 export function generateHybridExplanations(
   context: HybridProgrammingContext,
@@ -244,19 +301,78 @@ export function generateHybridExplanations(
     icon: 'dumbbell',
   })
   
+  // Method-specific explanation if using intelligence engine
+  if (context.strengthMethodId) {
+    const method = STRENGTH_METHOD_PROFILES[context.strengthMethodId]
+    explanations.push({
+      section: 'hybrid_strength',
+      title: 'Training Method',
+      body: method.description,
+      bulletPoints: [
+        `Heavy work: ${method.repRangeDistribution.heavy}% of sets`,
+        `Moderate work: ${method.repRangeDistribution.moderate}% of sets`,
+        `Volume work: ${method.repRangeDistribution.volume}% of sets`,
+        `Deload every ${method.deloadFrequency} weeks`,
+      ],
+      icon: 'target',
+    })
+  }
+  
+  // Progression explanation if available
+  if (context.progressionModel) {
+    const progressionDescriptions: Record<string, string> = {
+      linear: 'Adding weight each session when target reps are hit.',
+      wave: 'Three-week waves cycling light, medium, and heavy intensities.',
+      top_set_backoff: 'One heavy top set drives adaptation, backoffs build volume.',
+      double_progression: 'Building reps before adding weight for sustainable progress.',
+      dip_wave: 'Streetlifting-specific wave for weighted dips.',
+    }
+    explanations.push({
+      section: 'hybrid_strength',
+      title: 'Progression Style',
+      body: progressionDescriptions[context.progressionModel] || 'Progressive overload applied.',
+      bulletPoints: [],
+      icon: 'target',
+    })
+  }
+  
+  // Strength bias explanation if detected
+  if (context.strengthBias && context.strengthBias.recommendations.length > 0) {
+    explanations.push({
+      section: 'hybrid_strength',
+      title: 'Strength Balance',
+      body: `Detected bias: ${context.strengthBias.overallBias.replace(/_/g, ' ')}.`,
+      bulletPoints: context.strengthBias.recommendations,
+      icon: 'shield',
+    })
+  }
+  
   // Conflict management explanation
   if (weeklyPlan.conflictManagedDays.length > 0) {
     explanations.push({
       section: 'hybrid_strength',
-      title: 'Recovery Management',
-      body: 'Posterior chain and neural loading managed across the week to prevent interference.',
+      title: 'Neural Fatigue Management',
+      body: 'Heavy lifts separated to preserve pulling and skill performance.',
       bulletPoints: [
-        'Front lever volume reduced on adjacent days',
-        'Weighted pull-up intensity moderated near deadlift',
-        'Recovery windows preserved for skill work',
+        'Deadlift intensity managed to protect CNS',
+        'Heavy weighted pulls and deadlift on separate days',
+        'Volume adjusted to support progression without overreaching',
       ],
       icon: 'shield',
     })
+  }
+  
+  // Add intelligent explanations if available
+  if (context.intelligentExplanations && context.intelligentExplanations.length > 0) {
+    for (const exp of context.intelligentExplanations.slice(0, 2)) {
+      explanations.push({
+        section: 'hybrid_strength',
+        title: 'Programming Intelligence',
+        body: exp,
+        bulletPoints: [],
+        icon: 'target',
+      })
+    }
   }
   
   return explanations
@@ -366,4 +482,17 @@ export {
   checkDeadliftConflict,
   isHybridStrengthEnabled,
   getDefaultHybridStrengthProfile,
+  planIntelligentHybridSession,
+  checkProgressionStatus,
+}
+
+// Re-export intelligence engine functions for convenience
+export {
+  type IntensityZone,
+  type FatigueState,
+  type StrengthMethodId,
+  STRENGTH_METHOD_PROFILES,
+  classifyIntensity,
+  getFrequencyRecommendation,
+  getFatigueBasedVolumeReduction,
 }

@@ -159,7 +159,7 @@ function EmptyState() {
             Log workouts, skills, and strength data to unlock personalized training intelligence.
           </p>
           <div className="flex flex-wrap gap-2">
-            <Link href="/skills">
+            <Link href="/my-skills">
               <Button variant="outline" size="sm" className="border-[#2B313A] text-[#A4ACB8] hover:bg-[#2B313A]">
                 Log Skills
               </Button>

@@ -356,7 +356,7 @@ export default function ResultsPage() {
                 Generate a calisthenics program tailored to your strength level and training goals. The Adaptive Training Engine builds your program and adjusts it as you progress.
               </p>
               <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-                <Link href="/programs">
+                <Link href="/my-programs">
                   <Button size="lg" className="bg-[#C1121F] hover:bg-[#A30F1A] px-8">
                     Generate Program
                     <ArrowRight className="w-5 h-5 ml-2" />
@@ -391,7 +391,7 @@ export default function ResultsPage() {
           <div className="flex items-center gap-6">
             <Link href="/guides" className="hover:text-[#E6E9EF] transition-colors">Guides</Link>
             <Link href="/tools" className="hover:text-[#E6E9EF] transition-colors">Tools</Link>
-            <Link href="/programs" className="hover:text-[#E6E9EF] transition-colors">Programs</Link>
+            <Link href="/my-programs" className="hover:text-[#E6E9EF] transition-colors">Programs</Link>
             <Link href="/dashboard" className="hover:text-[#E6E9EF] transition-colors">Dashboard</Link>
           </div>
         </div>

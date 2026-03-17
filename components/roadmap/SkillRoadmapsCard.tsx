@@ -44,7 +44,7 @@ export function SkillRoadmapsCard({ maxDisplay = 4 }: SkillRoadmapsCardProps) {
                 </p>
               </div>
             </div>
-            <Link href="/skills">
+            <Link href="/my-skills">
               <Button variant="ghost" size="sm" className="text-[#A4ACB8] hover:text-[#E6E9EF]">
                 View All
                 <ChevronRight className="w-4 h-4 ml-1" />

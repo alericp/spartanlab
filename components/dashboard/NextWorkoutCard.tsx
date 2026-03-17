@@ -470,7 +470,7 @@ function renderActionButton(state: WorkoutState) {
       )
     case 'week_complete':
       return (
-        <Link href="/programs">
+        <Link href="/my-programs">
           <Button 
             size="lg" 
             variant="outline"
@@ -483,7 +483,7 @@ function renderActionButton(state: WorkoutState) {
       )
     case 'no_program':
       return (
-        <Link href="/programs">
+        <Link href="/my-programs">
           <Button 
             size="lg" 
             className="bg-[#C1121F] hover:bg-[#A30F1A] text-white gap-2 font-semibold"
@@ -539,7 +539,7 @@ function renderSecondaryAction(state: WorkoutState) {
   }
 
   return (
-    <Link href="/programs">
+    <Link href="/my-programs">
       <Button 
         variant="outline" 
         size="lg"

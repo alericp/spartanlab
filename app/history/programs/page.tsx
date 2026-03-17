@@ -125,7 +125,7 @@ function ProgramsPageContent() {
             <p className="text-sm text-[#A4ACB8] mb-6">
               Generate your first training program to get started.
             </p>
-            <Link href="/programs">
+            <Link href="/my-programs">
               <Button className="bg-[#C1121F] hover:bg-[#A30F1A] text-white">
                 Create a Program
               </Button>

@@ -48,7 +48,7 @@ export function ProgramSnapshotCard({ className }: ProgramSnapshotCardProps) {
           <p className="text-xs text-[#6B7280] mb-4">
             Create a program to get structured training
           </p>
-          <Link href="/programs">
+          <Link href="/my-programs">
             <Button size="sm" className="bg-[#C1121F] hover:bg-[#A30F1A] text-white gap-2">
               <Calendar className="w-4 h-4" />
               Create Program
@@ -96,7 +96,7 @@ export function ProgramSnapshotCard({ className }: ProgramSnapshotCardProps) {
 
         {/* Action */}
         <Link 
-          href="/programs" 
+          href="/my-programs" 
           className="inline-flex items-center gap-1 text-xs text-[#C1121F] hover:underline"
         >
           View Program

@@ -198,7 +198,7 @@ export function TodayFocusCard({ className }: TodayFocusCardProps) {
           )}
           
           {!isFirstWorkout && (
-            <Link href="/programs">
+            <Link href="/my-programs">
               <Button 
                 variant="outline" 
                 size="lg"

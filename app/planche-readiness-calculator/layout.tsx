@@ -2,16 +2,20 @@ import { Metadata } from 'next'
 import { generateFAQSchema, generateBreadcrumbSchema, SITE_CONFIG } from '@/lib/seo'
 
 export const metadata: Metadata = {
-  title: 'Planche Readiness Calculator | Check Your Pushing Strength | SpartanLab',
-  description: 'Calculate your planche readiness based on pushing strength, dip strength, and planche lean ability. Find your limiting factors and get personalized training recommendations.',
+  title: 'Planche Readiness Calculator | Test Your Strength | SpartanLab',
+  description: 'Test your planche readiness using push strength, lean strength, compression, and body control. See your limiting factors, get your readiness score, and find out what to improve next.',
   keywords: [
     'planche calculator',
     'planche readiness',
     'planche requirements',
     'am I ready for planche',
     'planche test',
+    'planche strength test',
     'planche prerequisites',
     'how strong for planche',
+    'planche lean requirements',
+    'planche dip strength',
+    'planche benchmark',
   ],
   alternates: {
     canonical: `${SITE_CONFIG.url}/planche-readiness-calculator`,

@@ -5,8 +5,10 @@
  * Sign-Up Page - Minimal native Clerk only
  */
 
+import { useEffect } from 'react'
 import { SignUp } from '@clerk/nextjs'
 import { AUTH_BUILD_STAMP } from '@/lib/build-stamp'
+import { trackSignupStarted } from '@/lib/analytics'
 
 // ============================================================================
 // CLERK APPEARANCE
@@ -39,6 +41,11 @@ const clerkAppearance = {
 export default function SignUpPage() {
   console.log("[AUTH_PROOF] sign-up auth-prod-unblock-v1")
   console.log(`[SpartanLab] Build: ${AUTH_BUILD_STAMP} (sign-up-render)`)
+  
+  // Track when user lands on sign-up page
+  useEffect(() => {
+    trackSignupStarted('sign-up-page')
+  }, [])
   
   return (
     <div className="min-h-screen flex items-center justify-center bg-[#0F1115]">

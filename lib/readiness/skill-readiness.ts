@@ -1602,6 +1602,254 @@ export function calculateLSitReadiness(inputs: LSitInputs): ReadinessResult {
 }
 
 // =============================================================================
+// V-SIT READINESS
+// =============================================================================
+
+export interface VSitInputs {
+  maxPushUps: number
+  maxDips: number
+  lSitHoldTime: number // seconds - must have solid L-sit first
+  hollowHoldTime: number // seconds
+  pikeCompressionQuality: 'poor' | 'moderate' | 'good' | 'excellent' // touching toes standing, pike stretch
+  hamstringFlexibility: 'poor' | 'moderate' | 'good' | 'excellent'
+  hipFlexorStrength: 'weak' | 'moderate' | 'strong' | 'very_strong'
+  hasParallettes: boolean
+  hasFloor: boolean
+}
+
+export function calculateVSitReadiness(inputs: VSitInputs): ReadinessResult {
+  const breakdown: ScoreBreakdown[] = []
+  
+  // ===================
+  // Factor 1: L-Sit Foundation (max 30 points)
+  // ===================
+  // V-sit requires solid L-sit first - this is the most critical prerequisite
+  let lSitScore = 0
+  let lSitStatus: ScoreBreakdown['status'] = 'weak'
+  
+  if (inputs.lSitHoldTime >= 30) {
+    lSitScore = 30
+    lSitStatus = 'strong'
+  } else if (inputs.lSitHoldTime >= 20) {
+    lSitScore = 24
+    lSitStatus = 'strong'
+  } else if (inputs.lSitHoldTime >= 15) {
+    lSitScore = 18
+    lSitStatus = 'adequate'
+  } else if (inputs.lSitHoldTime >= 10) {
+    lSitScore = 12
+    lSitStatus = 'developing'
+  } else if (inputs.lSitHoldTime >= 5) {
+    lSitScore = 6
+    lSitStatus = 'weak'
+  } else {
+    lSitScore = Math.max(0, inputs.lSitHoldTime)
+    lSitStatus = 'weak'
+  }
+  
+  breakdown.push({
+    factor: 'L-Sit Foundation',
+    score: lSitScore,
+    maxScore: 30,
+    status: lSitStatus,
+  })
+
+  // ===================
+  // Factor 2: Pike Compression Strength (max 25 points)
+  // ===================
+  // V-sit demands extreme compression beyond L-sit
+  const compressionScores: Record<string, number> = {
+    'poor': 5,
+    'moderate': 12,
+    'good': 20,
+    'excellent': 25,
+  }
+  const compressionStatuses: Record<string, ScoreBreakdown['status']> = {
+    'poor': 'weak',
+    'moderate': 'developing',
+    'good': 'adequate',
+    'excellent': 'strong',
+  }
+  
+  breakdown.push({
+    factor: 'Pike Compression Strength',
+    score: compressionScores[inputs.pikeCompressionQuality],
+    maxScore: 25,
+    status: compressionStatuses[inputs.pikeCompressionQuality],
+  })
+
+  // ===================
+  // Factor 3: Hip Flexor Strength (max 20 points)
+  // ===================
+  // Critical for lifting legs above horizontal
+  const hipFlexorScores: Record<string, number> = {
+    'weak': 4,
+    'moderate': 10,
+    'strong': 16,
+    'very_strong': 20,
+  }
+  const hipFlexorStatuses: Record<string, ScoreBreakdown['status']> = {
+    'weak': 'weak',
+    'moderate': 'developing',
+    'strong': 'adequate',
+    'very_strong': 'strong',
+  }
+  
+  breakdown.push({
+    factor: 'Hip Flexor Strength',
+    score: hipFlexorScores[inputs.hipFlexorStrength],
+    maxScore: 20,
+    status: hipFlexorStatuses[inputs.hipFlexorStrength],
+  })
+
+  // ===================
+  // Factor 4: Hamstring Flexibility (max 15 points)
+  // ===================
+  // Allows legs to elevate without rounding lower back
+  const hamstringScores: Record<string, number> = {
+    'poor': 3,
+    'moderate': 8,
+    'good': 12,
+    'excellent': 15,
+  }
+  const hamstringStatuses: Record<string, ScoreBreakdown['status']> = {
+    'poor': 'weak',
+    'moderate': 'developing',
+    'good': 'adequate',
+    'excellent': 'strong',
+  }
+  
+  breakdown.push({
+    factor: 'Hamstring Flexibility',
+    score: hamstringScores[inputs.hamstringFlexibility],
+    maxScore: 15,
+    status: hamstringStatuses[inputs.hamstringFlexibility],
+  })
+
+  // ===================
+  // Factor 5: Core Stability / Hollow Hold (max 10 points)
+  // ===================
+  let coreScore = 0
+  let coreStatus: ScoreBreakdown['status'] = 'weak'
+  
+  if (inputs.hollowHoldTime >= 60) {
+    coreScore = 10
+    coreStatus = 'strong'
+  } else if (inputs.hollowHoldTime >= 45) {
+    coreScore = 8
+    coreStatus = 'adequate'
+  } else if (inputs.hollowHoldTime >= 30) {
+    coreScore = 6
+    coreStatus = 'developing'
+  } else {
+    coreScore = Math.max(0, Math.floor(inputs.hollowHoldTime / 6))
+    coreStatus = 'weak'
+  }
+  
+  breakdown.push({
+    factor: 'Core Stability (Hollow Hold)',
+    score: coreScore,
+    maxScore: 10,
+    status: coreStatus,
+  })
+
+  // ===================
+  // Calculate Total Score
+  // ===================
+  const totalScore = breakdown.reduce((sum, b) => sum + b.score, 0)
+  
+  // ===================
+  // Determine Level & Labels
+  // ===================
+  let level: ReadinessLevel
+  let label: string
+  let nextProgression: string
+  
+  if (totalScore >= 85) {
+    level = 'advanced-ready'
+    label = 'V-Sit Training Ready'
+    nextProgression = 'V-sit progressions, straddle V-sit, manna work'
+  } else if (totalScore >= 65) {
+    level = 'intermediate-progression'
+    label = 'High L-Sit / V-Sit Entry Ready'
+    nextProgression = 'High L-sit holds, active pike compression drills, hip flexor strengthening'
+  } else if (totalScore >= 45) {
+    level = 'early-progression'
+    label = 'L-Sit Consolidation Phase'
+    nextProgression = 'Build 30+ second L-sit, pike stretching, compression work'
+  } else if (totalScore >= 25) {
+    level = 'foundation-phase'
+    label = 'Foundation Building'
+    nextProgression = 'Focus on L-sit basics, hamstring flexibility, and core strength'
+  } else {
+    level = 'not-ready'
+    label = 'Not Ready Yet'
+    nextProgression = 'Build L-sit foundation first, then compression and flexibility work'
+  }
+
+  // ===================
+  // Determine Limiting Factor
+  // ===================
+  const weakestFactor = [...breakdown]
+    .sort((a, b) => (a.score / a.maxScore) - (b.score / b.maxScore))[0]
+  
+  const limitingFactorMap: Record<string, { factor: string; explanation: string }> = {
+    'L-Sit Foundation': {
+      factor: 'L-sit strength deficit',
+      explanation: 'V-sit builds directly on L-sit. You need a solid 20-30 second L-sit before attempting V-sit progressions.'
+    },
+    'Pike Compression Strength': {
+      factor: 'Compression weakness',
+      explanation: 'V-sit requires extreme active pike compression. Focus on compression drills like seated pike pulses and standing pike compressions.'
+    },
+    'Hip Flexor Strength': {
+      factor: 'Hip flexor weakness',
+      explanation: 'The hip flexors must be strong enough to lift and hold the legs above horizontal. Add weighted hip flexor work.'
+    },
+    'Hamstring Flexibility': {
+      factor: 'Hamstring flexibility limitation',
+      explanation: 'Tight hamstrings prevent leg elevation and cause lower back rounding. Prioritize pike stretching and PNF hamstring work.'
+    },
+    'Core Stability (Hollow Hold)': {
+      factor: 'Core stability deficit',
+      explanation: 'Core tension maintains the V position. Build hollow body strength as a foundation.'
+    },
+  }
+  
+  const limitingInfo = limitingFactorMap[weakestFactor?.factor] || {
+    factor: 'General compression preparedness',
+    explanation: 'Focus on building L-sit strength and active pike compression.'
+  }
+
+  // ===================
+  // Generate Recommendation
+  // ===================
+  let recommendation: string
+  if (level === 'not-ready') {
+    recommendation = 'Master the L-sit first. Target 15+ second L-sit holds and work on hamstring flexibility before V-sit progressions.'
+  } else if (level === 'foundation-phase') {
+    recommendation = 'Continue building your L-sit while adding compression drills. Pike pulses and active flexibility work will accelerate progress.'
+  } else if (level === 'early-progression') {
+    recommendation = 'Your L-sit is developing. Add high L-sit attempts (trying to lift legs slightly higher) and dedicated compression work 3x per week.'
+  } else if (level === 'intermediate-progression') {
+    recommendation = 'You are close to V-sit readiness. Focus on active pike compression against resistance and hip flexor strengthening with weights.'
+  } else {
+    recommendation = 'You have the foundation for V-sit training. Begin with supported V-sit holds on parallettes, focusing on gradually increasing hold time.'
+  }
+
+  return {
+    score: totalScore,
+    level,
+    label,
+    limitingFactor: limitingInfo.factor,
+    limitingFactorExplanation: limitingInfo.explanation,
+    recommendation,
+    nextProgression,
+    breakdown,
+  }
+}
+
+// =============================================================================
 // IRON CROSS READINESS
 // =============================================================================
 

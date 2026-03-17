@@ -2,16 +2,19 @@ import { Metadata } from 'next'
 import { generateFAQSchema, generateBreadcrumbSchema, SITE_CONFIG } from '@/lib/seo'
 
 export const metadata: Metadata = {
-  title: 'Muscle-Up Readiness Calculator | Check Your Transition Strength | SpartanLab',
-  description: 'Calculate your muscle-up readiness based on pull-up strength, dip strength, and explosive power. Find your limiting factors and get personalized training recommendations.',
+  title: 'Muscle-Up Readiness Calculator | Test Your Strength | SpartanLab',
+  description: 'Test if you are strong enough for a muscle-up. Enter your pull strength, dip strength, and explosive power to see your readiness score and what to improve next.',
   keywords: [
     'muscle-up calculator',
     'muscle-up readiness',
     'muscle-up requirements',
     'am I ready for muscle-up',
     'muscle-up test',
+    'muscle-up strength test',
     'how many pull-ups for muscle-up',
     'muscle-up prerequisites',
+    'muscle-up benchmark',
+    'chest to bar for muscle-up',
   ],
   alternates: {
     canonical: `${SITE_CONFIG.url}/muscle-up-readiness-calculator`,

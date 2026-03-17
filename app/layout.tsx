@@ -4,6 +4,7 @@ import { Geist, Geist_Mono } from 'next/font/google'
 import { ClerkProvider } from '@clerk/nextjs'
 import { GlobalErrorBoundary } from '@/components/shared/GlobalErrorBoundary'
 import { OwnerSimulationToggle } from '@/components/billing/OwnerSimulationToggle'
+import { AnalyticsProvider } from '@/components/providers/AnalyticsProvider'
 import { Toaster } from '@/components/ui/toaster'
 import { AUTH_BUILD_STAMP } from '@/lib/build-stamp'
 import { JsonLdMultiple } from '@/components/seo/JsonLd'
@@ -115,12 +116,14 @@ export default function RootLayout({
       </head>
       <body className="font-sans antialiased bg-[#0F1115] text-[#E6E9EF]">
         <ClerkProvider>
-          <GlobalErrorBoundary>
-            {children}
-            {/* Owner-only simulation toggle for testing Free/Pro states */}
-            <OwnerSimulationToggle />
-            <Toaster />
-          </GlobalErrorBoundary>
+          <AnalyticsProvider>
+            <GlobalErrorBoundary>
+              {children}
+              {/* Owner-only simulation toggle for testing Free/Pro states */}
+              <OwnerSimulationToggle />
+              <Toaster />
+            </GlobalErrorBoundary>
+          </AnalyticsProvider>
         </ClerkProvider>
       </body>
     </html>

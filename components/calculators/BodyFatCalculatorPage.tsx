@@ -12,11 +12,16 @@ import {
   RefreshCw,
   Ruler,
   ChevronRight,
+  ChevronDown,
   User,
-  Users
+  Users,
+  HelpCircle
 } from 'lucide-react'
+import { cn } from '@/lib/utils'
 import { SpartanIcon } from '@/components/brand/SpartanLogo'
 import { NextSteps } from '@/components/seo/RelatedContent'
+import { ToolConversionCard } from '@/components/tools/ToolConversionCard'
+import { trackToolUsed } from '@/lib/analytics'
 import { getToolCluster } from '@/lib/seo/skill-clusters'
 import { 
   calculateBodyFat, 
@@ -26,6 +31,26 @@ import {
   type Sex
 } from '@/lib/body-fat-calculator'
 
+// FAQ Data
+const faqs = [
+  {
+    question: 'How accurate is the U.S. Navy body fat calculator?',
+    answer: 'The U.S. Navy method is typically accurate within 3-4% of actual body fat when measurements are taken correctly. While not as precise as DEXA scans or hydrostatic weighing, it provides a reliable estimate for tracking progress over time.'
+  },
+  {
+    question: 'Why does body fat percentage matter for calisthenics?',
+    answer: 'Body fat affects your strength-to-weight ratio, which is critical for bodyweight skills like pull-ups, muscle-ups, and advanced levers. Lower body fat (within healthy ranges) generally makes these movements easier and reduces joint stress.'
+  },
+  {
+    question: 'What is a good body fat percentage for calisthenics?',
+    answer: 'For men, 10-17% body fat is ideal for calisthenics performance. For women, 18-25% is optimal. Athletes and advanced practitioners often maintain 8-15% (men) or 16-23% (women) for better strength-to-weight ratios.'
+  },
+  {
+    question: 'How often should I measure my body fat?',
+    answer: 'Measure every 2-4 weeks for tracking progress. Always measure at the same time of day (morning is ideal), under similar conditions, to get consistent results. Body fat changes slowly, so more frequent measurements add unnecessary noise.'
+  },
+]
+
 export function BodyFatCalculatorPage() {
   const [sex, setSex] = useState<Sex | null>(null)
   const [height, setHeight] = useState('')
@@ -34,8 +59,17 @@ export function BodyFatCalculatorPage() {
   const [hip, setHip] = useState('')
   const [result, setResult] = useState<BodyFatResult | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [openFaqs, setOpenFaqs] = useState<number[]>([])
 
   const isFemale = sex === 'female'
+  
+  const toggleFaq = (index: number) => {
+    setOpenFaqs(prev => 
+      prev.includes(index) 
+        ? prev.filter(i => i !== index)
+        : [...prev, index]
+    )
+  }
 
   const handleCalculate = () => {
     setError(null)
@@ -67,6 +101,9 @@ export function BodyFatCalculatorPage() {
       
       const calcResult = calculateBodyFat(inputs)
       setResult(calcResult)
+      
+      // Track tool usage
+      trackToolUsed('body_fat_calculator', { body_fat_percent: calcResult.bodyFatPercent })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Calculation error')
     }
@@ -106,9 +143,12 @@ export function BodyFatCalculatorPage() {
           <h1 className="text-3xl md:text-4xl font-bold text-[#E6E9EF] mb-4">
             Body Fat Calculator
           </h1>
-          <p className="text-[#A4ACB8] text-lg max-w-2xl mx-auto">
+          <p className="text-[#A4ACB8] text-lg max-w-2xl mx-auto mb-3">
             Estimate your body fat percentage using the U.S. Navy circumference method - 
             one of the most accurate tape-measure-based methods available.
+          </p>
+          <p className="text-xs text-[#6B7280] max-w-lg mx-auto">
+            Based on the official U.S. Navy body composition assessment formula used by military fitness programs.
           </p>
         </div>
 
@@ -304,9 +344,22 @@ export function BodyFatCalculatorPage() {
           </div>
         </div>
 
+        {/* Conversion CTA */}
+        {result && (
+          <section className="mt-12">
+            <ToolConversionCard
+              context="body-fat"
+              toolData={{
+                bodyweight: undefined, // Bodyweight isn't collected separately
+                bodyFatPercentage: result.bodyFatPercentage,
+              }}
+            />
+          </section>
+        )}
+
         {/* Train With This Data - Internal Linking */}
         {result && getToolCluster('body-fat-calculator') && (
-          <div className="mt-12">
+          <div className="mt-8">
             <NextSteps 
               cluster={getToolCluster('body-fat-calculator')!} 
               title="Train With This Data"
@@ -329,6 +382,66 @@ export function BodyFatCalculatorPage() {
               for tracking changes over time. The formula accounts for the relationship between body 
               measurements and body fat distribution.
             </p>
+          </div>
+        </section>
+
+        {/* FAQ Section */}
+        <section className="mt-12">
+          <div className="flex items-center gap-2 mb-6">
+            <HelpCircle className="w-5 h-5 text-[#C1121F]" />
+            <h2 className="text-2xl font-bold text-[#E6E9EF]">Frequently Asked Questions</h2>
+          </div>
+          <div className="space-y-3">
+            {faqs.map((faq, index) => (
+              <Card key={index} className="bg-[#0F1115] border-[#2B313A] overflow-hidden">
+                <button
+                  onClick={() => toggleFaq(index)}
+                  className="w-full p-4 flex items-center justify-between text-left hover:bg-[#1A1F26]/50 transition-colors"
+                >
+                  <span className="text-[#E6E9EF] font-medium pr-4">{faq.question}</span>
+                  <ChevronDown className={cn(
+                    "w-5 h-5 text-[#6B7280] transition-transform flex-shrink-0",
+                    openFaqs.includes(index) && "rotate-180"
+                  )} />
+                </button>
+                {openFaqs.includes(index) && (
+                  <div className="px-4 pb-4 text-[#A4ACB8] text-sm leading-relaxed">
+                    {faq.answer}
+                  </div>
+                )}
+              </Card>
+            ))}
+          </div>
+        </section>
+
+        {/* Related Tools - Internal Linking */}
+        <section className="mt-12">
+          <h2 className="text-xl font-bold text-[#E6E9EF] mb-4">Related Fitness Tools</h2>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <Link href="/calisthenics-strength-standards" className="block">
+              <Card className="bg-[#0F1115] border-[#2B313A] p-4 hover:border-[#C1121F]/50 transition-colors">
+                <h3 className="text-[#E6E9EF] font-medium text-sm">Strength Standards</h3>
+                <p className="text-xs text-[#6B7280] mt-1">Test your calisthenics strength level</p>
+              </Card>
+            </Link>
+            <Link href="/front-lever-readiness-calculator" className="block">
+              <Card className="bg-[#0F1115] border-[#2B313A] p-4 hover:border-[#C1121F]/50 transition-colors">
+                <h3 className="text-[#E6E9EF] font-medium text-sm">Front Lever Calculator</h3>
+                <p className="text-xs text-[#6B7280] mt-1">Check your front lever readiness</p>
+              </Card>
+            </Link>
+            <Link href="/planche-readiness-calculator" className="block">
+              <Card className="bg-[#0F1115] border-[#2B313A] p-4 hover:border-[#C1121F]/50 transition-colors">
+                <h3 className="text-[#E6E9EF] font-medium text-sm">Planche Calculator</h3>
+                <p className="text-xs text-[#6B7280] mt-1">Check your planche readiness</p>
+              </Card>
+            </Link>
+            <Link href="/muscle-up-readiness-calculator" className="block">
+              <Card className="bg-[#0F1115] border-[#2B313A] p-4 hover:border-[#C1121F]/50 transition-colors">
+                <h3 className="text-[#E6E9EF] font-medium text-sm">Muscle-Up Calculator</h3>
+                <p className="text-xs text-[#6B7280] mt-1">Check your muscle-up readiness</p>
+              </Card>
+            </Link>
           </div>
         </section>
 

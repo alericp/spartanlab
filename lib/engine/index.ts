@@ -334,3 +334,53 @@ export {
   DOCTRINE_STABILITY_PERIOD_DAYS,
   DOCTRINE_REEVAL_TRIGGERS,
 } from '../doctrine-integration-layer'
+
+// Skill Readiness Calculator Engine
+export {
+  // Service Functions
+  calculateSkillReadiness,
+  calculateAllSkillReadiness,
+  analyzeSkillProfile,
+  getSkillPrerequisites,
+  getSupportedSkills,
+  interpretReadinessScore,
+  getRecommendedFocus,
+  SKILL_PREREQUISITES,
+  
+  // Engine API
+  SkillReadinessEngine,
+  quickReadinessCheck,
+  getPrimaryLimiter,
+  meetsBaselineRequirements,
+  getTrainingRecommendations,
+  
+  // Prerequisite Data
+  SKILL_PREREQUISITE_PROFILES,
+  getPrerequisiteProfile,
+  getAllPrerequisiteProfiles,
+  getSkillsByDifficulty,
+  getCoachingNotes,
+  getInjuryPreventionTips,
+  
+  // Validation
+  validateCalculatorInput,
+  
+  // Types
+  type SkillReadinessInput,
+  type SkillReadinessResult,
+  type ReadinessClassification,
+  type ProgressionStage,
+  type LimitingFactorDetail,
+  type ComponentBreakdown,
+  type SkillPrerequisites as SkillPrerequisitesType,
+  type PrerequisiteCategory,
+  type PrerequisiteMetric,
+  type SkillPrerequisiteProfile,
+  type ValidationResult,
+  type ValidationError,
+  type CalculatorPageConfig,
+  type InputFieldConfig,
+  type CalculatorState,
+  type SkillReadinessAPIRequest,
+  type SkillReadinessAPIResponse,
+} from '../skill-readiness'

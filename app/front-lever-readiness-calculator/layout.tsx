@@ -2,16 +2,20 @@ import { Metadata } from 'next'
 import { generateFAQSchema, generateBreadcrumbSchema, SITE_CONFIG } from '@/lib/seo'
 
 export const metadata: Metadata = {
-  title: 'Front Lever Readiness Calculator | Check Your Strength | SpartanLab',
-  description: 'Calculate your front lever readiness based on pull-up strength, weighted pull-ups, and core compression. Find your limiting factors and get personalized training recommendations.',
+  title: 'Front Lever Readiness Calculator | Test Your Strength | SpartanLab',
+  description: 'Test your front lever readiness using pull-up strength, weighted pull-ups, and core compression. See your limiting factors, get your readiness score, and find out what to improve next.',
   keywords: [
     'front lever calculator',
     'front lever readiness',
     'front lever requirements',
     'am I ready for front lever',
     'front lever test',
+    'front lever strength test',
     'how many pull-ups for front lever',
     'front lever strength requirements',
+    'how strong for front lever',
+    'front lever prerequisites',
+    'front lever benchmark',
   ],
   alternates: {
     canonical: `${SITE_CONFIG.url}/front-lever-readiness-calculator`,

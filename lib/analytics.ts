@@ -1,15 +1,24 @@
 /**
  * SpartanLab Product Analytics
  * 
- * Lightweight analytics system using PostHog for tracking
- * key product and conversion events.
+ * Lightweight analytics system supporting both PostHog and Google Analytics 4.
+ * Uses PostHog for detailed product analytics and GA4 for traffic/SEO analysis.
  * 
- * Environment variables required:
- * - NEXT_PUBLIC_POSTHOG_KEY
+ * Environment variables:
+ * - NEXT_PUBLIC_POSTHOG_KEY (optional)
  * - NEXT_PUBLIC_POSTHOG_HOST (optional, defaults to PostHog cloud)
+ * - NEXT_PUBLIC_GA_MEASUREMENT_ID (optional, for GA4)
  */
 
 import posthog from 'posthog-js'
+
+// Google Analytics 4 types
+declare global {
+  interface Window {
+    gtag?: (...args: unknown[]) => void
+    dataLayer?: unknown[]
+  }
+}
 
 // Analytics event names - centralized for consistency
 export const AnalyticsEvents = {
@@ -38,22 +47,62 @@ export const AnalyticsEvents = {
   // Feature Usage
   SKILL_TRACKED: 'skill_tracked',
   STRENGTH_LOGGED: 'strength_logged',
+  
+  // CTA and Conversion
+  CTA_CLICKED: 'spartanlab_cta_click',
+  PROGRAM_GENERATED: 'program_generated',
+  SIGNUP_STARTED: 'signup_started',
+  SIGNUP_COMPLETED: 'signup_completed',
 } as const
 
 export type AnalyticsEvent = typeof AnalyticsEvents[keyof typeof AnalyticsEvents]
 
-// Initialize PostHog - call once at app startup
-let initialized = false
+// Initialize analytics - call once at app startup
+let posthogInitialized = false
+let ga4Initialized = false
 
-export function initAnalytics(): void {
+// Initialize Google Analytics 4
+export function initGA4(): void {
   if (typeof window === 'undefined') return
-  if (initialized) return
+  if (ga4Initialized) return
+  
+  const measurementId = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID
+  
+  if (!measurementId) {
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[Analytics] GA4 measurement ID not configured')
+    }
+    return
+  }
+  
+  // Initialize dataLayer
+  window.dataLayer = window.dataLayer || []
+  window.gtag = function gtag(...args: unknown[]) {
+    window.dataLayer?.push(args)
+  }
+  
+  window.gtag('js', new Date())
+  window.gtag('config', measurementId, {
+    page_path: window.location.pathname,
+    send_page_view: false, // We'll track manually for SPA
+  })
+  
+  ga4Initialized = true
+  
+  if (process.env.NODE_ENV === 'development') {
+    console.log('[Analytics] GA4 initialized')
+  }
+}
+
+// Initialize PostHog
+export function initPostHog(): void {
+  if (typeof window === 'undefined') return
+  if (posthogInitialized) return
   
   const posthogKey = process.env.NEXT_PUBLIC_POSTHOG_KEY
   const posthogHost = process.env.NEXT_PUBLIC_POSTHOG_HOST || 'https://us.i.posthog.com'
   
   if (!posthogKey) {
-    // Analytics not configured - fail silently in production
     if (process.env.NODE_ENV === 'development') {
       console.log('[Analytics] PostHog key not configured')
     }
@@ -74,13 +123,19 @@ export function initAnalytics(): void {
     },
   })
   
-  initialized = true
+  posthogInitialized = true
+}
+
+// Initialize all analytics providers
+export function initAnalytics(): void {
+  initPostHog()
+  initGA4()
 }
 
 // Identify user after authentication
 export function identifyUser(userId: string, properties?: Record<string, unknown>): void {
   if (typeof window === 'undefined') return
-  if (!initialized && !process.env.NEXT_PUBLIC_POSTHOG_KEY) return
+  if (!posthogInitialized && !process.env.NEXT_PUBLIC_POSTHOG_KEY) return
   
   posthog.identify(userId, properties)
 }
@@ -88,32 +143,51 @@ export function identifyUser(userId: string, properties?: Record<string, unknown
 // Reset user identity on logout
 export function resetUser(): void {
   if (typeof window === 'undefined') return
-  if (!initialized && !process.env.NEXT_PUBLIC_POSTHOG_KEY) return
+  if (!posthogInitialized && !process.env.NEXT_PUBLIC_POSTHOG_KEY) return
   
   posthog.reset()
 }
 
-// Track a custom event
+// Track a custom event (sends to both PostHog and GA4)
 export function trackEvent(
   event: AnalyticsEvent | string,
   properties?: Record<string, unknown>
 ): void {
   if (typeof window === 'undefined') return
-  if (!initialized && !process.env.NEXT_PUBLIC_POSTHOG_KEY) return
   
-  posthog.capture(event, properties)
+  // Send to PostHog
+  if (posthogInitialized || process.env.NEXT_PUBLIC_POSTHOG_KEY) {
+    posthog.capture(event, properties)
+  }
+  
+  // Send to GA4
+  if (ga4Initialized && window.gtag) {
+    window.gtag('event', event, properties)
+  }
 }
 
-// Track page view
+// Track page view (sends to both PostHog and GA4)
 export function trackPageView(pageName: string, properties?: Record<string, unknown>): void {
   if (typeof window === 'undefined') return
-  if (!initialized && !process.env.NEXT_PUBLIC_POSTHOG_KEY) return
   
-  posthog.capture('$pageview', {
-    $current_url: window.location.href,
-    page_name: pageName,
-    ...properties,
-  })
+  // Send to PostHog
+  if (posthogInitialized || process.env.NEXT_PUBLIC_POSTHOG_KEY) {
+    posthog.capture('$pageview', {
+      $current_url: window.location.href,
+      page_name: pageName,
+      ...properties,
+    })
+  }
+  
+  // Send to GA4
+  if (ga4Initialized && window.gtag) {
+    window.gtag('event', 'page_view', {
+      page_title: pageName,
+      page_location: window.location.href,
+      page_path: window.location.pathname,
+      ...properties,
+    })
+  }
 }
 
 // ============================================
@@ -211,4 +285,35 @@ export function trackSkillTracked(skillName: string): void {
 
 export function trackStrengthLogged(exerciseType: string): void {
   trackEvent(AnalyticsEvents.STRENGTH_LOGGED, { exercise_type: exerciseType })
+}
+
+// CTA and Conversion Events
+export function trackCTAClicked(sourceTool: string, destination?: string): void {
+  trackEvent(AnalyticsEvents.CTA_CLICKED, { 
+    source_tool: sourceTool,
+    destination: destination || 'onboarding',
+    clicked_at: new Date().toISOString()
+  })
+}
+
+export function trackProgramGenerated(programType?: string, skillFocus?: string): void {
+  trackEvent(AnalyticsEvents.PROGRAM_GENERATED, { 
+    program_type: programType,
+    skill_focus: skillFocus,
+    generated_at: new Date().toISOString()
+  })
+}
+
+export function trackSignupStarted(source?: string): void {
+  trackEvent(AnalyticsEvents.SIGNUP_STARTED, { 
+    source,
+    started_at: new Date().toISOString()
+  })
+}
+
+export function trackSignupCompleted(userId?: string): void {
+  trackEvent(AnalyticsEvents.SIGNUP_COMPLETED, { 
+    user_id: userId,
+    completed_at: new Date().toISOString()
+  })
 }

@@ -16,6 +16,10 @@ import {
   trackProgramCreated,
   trackSkillTracked,
   trackStrengthLogged,
+  trackCTAClicked,
+  trackProgramGenerated,
+  trackSignupStarted,
+  trackSignupCompleted,
   identifyUser,
   AnalyticsEvents,
 } from '@/lib/analytics'
@@ -93,6 +97,22 @@ export function useAnalytics() {
     trackStrengthLogged(exerciseType)
   }, [])
   
+  const trackCTA = useCallback((sourceTool: string, destination?: string) => {
+    trackCTAClicked(sourceTool, destination)
+  }, [])
+  
+  const trackProgramGen = useCallback((programType?: string, skillFocus?: string) => {
+    trackProgramGenerated(programType, skillFocus)
+  }, [])
+  
+  const trackSignupStart = useCallback((source?: string) => {
+    trackSignupStarted(source)
+  }, [])
+  
+  const trackSignupComplete = useCallback(() => {
+    trackSignupCompleted(user?.id)
+  }, [user])
+  
   const track = useCallback((event: string, properties?: Record<string, unknown>) => {
     trackEvent(event, {
       ...properties,
@@ -115,6 +135,10 @@ export function useAnalytics() {
     trackProgram,
     trackSkill,
     trackStrength,
+    trackCTA,
+    trackProgramGen,
+    trackSignupStart,
+    trackSignupComplete,
     track,
     events: AnalyticsEvents,
   }

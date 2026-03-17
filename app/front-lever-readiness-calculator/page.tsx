@@ -24,6 +24,8 @@ import {
 import { spartanScoreFromFrontLeverInputs, type SpartanStrengthResult } from '@/lib/strength/spartan-strength-score'
 import { ReadinessResultCard } from '@/components/calculators/ReadinessResultCard'
 import { SpartanScoreCard } from '@/components/athlete/SpartanScoreCard'
+import { ToolConversionCard } from '@/components/tools/ToolConversionCard'
+import { trackToolUsed } from '@/lib/analytics'
 import { cn } from '@/lib/utils'
 
 // FAQ Data
@@ -52,8 +54,11 @@ export default function FrontLeverReadinessCalculator() {
   const [weightedPullUpLoad, setWeightedPullUpLoad] = useState('')
   const [hollowHoldTime, setHollowHoldTime] = useState('')
   const [tuckFrontLeverHold, setTuckFrontLeverHold] = useState('')
+  const [lSitHoldTime, setLSitHoldTime] = useState('')
+  const [bodyweight, setBodyweight] = useState('')
   const [hasRings, setHasRings] = useState(false)
   const [hasBar, setHasBar] = useState(true)
+  const [showAdvanced, setShowAdvanced] = useState(false)
   
   // Result state
   const [result, setResult] = useState<ReadinessResult | null>(null)
@@ -88,6 +93,9 @@ export default function FrontLeverReadinessCalculator() {
     const calcResult = calculateFrontLeverReadiness(inputs)
     setResult(calcResult)
     
+    // Track tool usage
+    trackToolUsed('front_lever_calculator', { readiness_score: calcResult.readinessScore })
+    
     // Calculate Spartan Strength Score
     const spartanResult = spartanScoreFromFrontLeverInputs({
       maxPullUps: pullUps,
@@ -106,8 +114,11 @@ export default function FrontLeverReadinessCalculator() {
     setWeightedPullUpLoad('')
     setHollowHoldTime('')
     setTuckFrontLeverHold('')
+    setLSitHoldTime('')
+    setBodyweight('')
     setHasRings(false)
     setHasBar(true)
+    setShowAdvanced(false)
   }
 
   const toggleFaq = (index: number) => {
@@ -142,9 +153,12 @@ export default function FrontLeverReadinessCalculator() {
           <h1 className="text-3xl md:text-4xl font-bold text-[#E6E9EF] mb-4">
             Front Lever Readiness Calculator
           </h1>
-          <p className="text-[#A4ACB8] text-lg max-w-2xl mx-auto">
+          <p className="text-[#A4ACB8] text-lg max-w-2xl mx-auto mb-3">
             Evaluate your pulling strength, core tension, and skill experience to determine
             your readiness for front lever progressions.
+          </p>
+          <p className="text-xs text-[#6B7280] max-w-lg mx-auto">
+            Built from structured calisthenics readiness principles used to evaluate real front lever progress.
           </p>
         </div>
 
@@ -220,6 +234,52 @@ export default function FrontLeverReadinessCalculator() {
                 />
                 <p className="text-xs text-[#6B7280]">Leave blank if you cannot hold a tuck</p>
               </div>
+
+              {/* L-Sit Hold Time (Optional) */}
+              <div className="space-y-2">
+                <Label htmlFor="lsit" className="text-[#E6E9EF]">
+                  L-Sit Hold (seconds) <span className="text-[#6B7280]">- optional</span>
+                </Label>
+                <Input
+                  id="lsit"
+                  type="number"
+                  placeholder="e.g., 20"
+                  value={lSitHoldTime}
+                  onChange={(e) => setLSitHoldTime(e.target.value)}
+                  className="bg-[#1A1F26] border-[#2B313A] text-[#E6E9EF]"
+                />
+                <p className="text-xs text-[#6B7280]">Indicates core compression strength</p>
+              </div>
+
+              {/* Advanced Options Toggle */}
+              <button
+                type="button"
+                onClick={() => setShowAdvanced(!showAdvanced)}
+                className="text-sm text-[#C1121F] hover:text-[#A50E1A] flex items-center gap-1 mt-2"
+              >
+                {showAdvanced ? 'Hide' : 'Show'} advanced options
+                <ChevronDown className={cn("w-4 h-4 transition-transform", showAdvanced && "rotate-180")} />
+              </button>
+
+              {/* Advanced Options */}
+              {showAdvanced && (
+                <div className="space-y-4 pt-2 border-t border-[#2B313A]">
+                  <div className="space-y-2">
+                    <Label htmlFor="bodyweight" className="text-[#E6E9EF]">
+                      Bodyweight (lbs) <span className="text-[#6B7280]">- optional</span>
+                    </Label>
+                    <Input
+                      id="bodyweight"
+                      type="number"
+                      placeholder="e.g., 165"
+                      value={bodyweight}
+                      onChange={(e) => setBodyweight(e.target.value)}
+                      className="bg-[#1A1F26] border-[#2B313A] text-[#E6E9EF]"
+                    />
+                    <p className="text-xs text-[#6B7280]">Helps contextualize weighted pull-up strength</p>
+                  </div>
+                </div>
+              )}
 
               {/* Equipment */}
               <div className="space-y-3">
@@ -445,21 +505,20 @@ export default function FrontLeverReadinessCalculator() {
           </div>
         </section>
 
-        {/* Final CTA Section */}
-        <section className="mt-12 bg-gradient-to-br from-[#C1121F]/10 to-[#C1121F]/5 border border-[#C1121F]/20 rounded-xl p-6 text-center">
-          <h2 className="text-xl font-bold text-[#E6E9EF] mb-2">
-            Ready to Train for Front Lever?
-          </h2>
-          <p className="text-[#A4ACB8] mb-4 max-w-md mx-auto">
-            SpartanLab generates adaptive programs that target your limiting factors and track your progress toward front lever mastery.
-          </p>
-          <Link href="/onboarding">
-            <Button className="bg-[#C1121F] hover:bg-[#A50E1A] text-white px-6">
-              Build Your Front Lever Program
-              <ChevronRight className="w-4 h-4 ml-1" />
-            </Button>
-          </Link>
-          <p className="text-xs text-[#6B7280] mt-2">Free to start. No credit card required.</p>
+        {/* Conversion CTA */}
+        <section className="mt-12">
+          <ToolConversionCard
+            context="front-lever"
+            toolData={result ? {
+              maxPullUps: maxPullUps ? parseInt(maxPullUps) : undefined,
+              weightedPullUp: weightedPullUpLoad ? parseFloat(weightedPullUpLoad) : undefined,
+              hollowHold: hollowHoldTime ? parseInt(hollowHoldTime) : undefined,
+              tuckFrontLeverHold: tuckFrontLeverHold ? parseInt(tuckFrontLeverHold) : undefined,
+              readinessScore: result.readinessScore,
+              classification: result.classification,
+              limitingFactors: result.limitingFactors.map(lf => lf.factor),
+            } : undefined}
+          />
         </section>
 
         {/* Back to Tools */}

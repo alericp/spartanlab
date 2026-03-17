@@ -25,6 +25,7 @@ import { SpartanIcon } from '@/components/brand/SpartanLogo'
 import { getOnboardingProfile, calculateReadinessScores } from '@/lib/athlete-profile'
 import { hasProAccess, isInTrial, getTrialDaysRemaining } from '@/lib/feature-access'
 import { PRICING, TRIAL } from '@/lib/billing/pricing'
+import { trackSignupCompleted, trackProgramGenerated } from '@/lib/analytics'
 
 // Pro feature highlights
 const PRO_FEATURES = [
@@ -65,6 +66,10 @@ export default function OnboardingCompletePage() {
     setIsTrial(isInTrial())
     setTrialDays(getTrialDaysRemaining())
     setProfile(getOnboardingProfile())
+    
+    // Track signup completion and program generation
+    trackSignupCompleted()
+    trackProgramGenerated('onboarding', getOnboardingProfile()?.primaryGoal)
   }, [])
 
   if (!mounted) {

@@ -106,6 +106,9 @@ import { LeaderboardPreviewCard } from '@/components/leaderboards/LeaderboardTab
 import { ProgressDashboard } from '@/components/dashboard/ProgressDashboard'
 import { ChallengeNotification } from '@/components/challenges/ChallengeNotification'
 import { WelcomeBanner } from '@/components/dashboard/WelcomeBanner'
+import { ProgressSignals } from '@/components/dashboard/ProgressSignals'
+import { ReturnVisitCard, SessionCounter } from '@/components/dashboard/DailyEngagement'
+import { SmartUpgradeBanner } from '@/components/upgrade/SmartUpgradeTrigger'
 
 function DashboardContent() {
   const { isLoaded: isAuthLoaded } = useAuth()
@@ -458,6 +461,11 @@ function DashboardContent() {
           <TrainingConsistencyCard />
         </SafeWidget>
         
+        {/* Progress Signals - Lightweight progress indicators */}
+        <div className="px-4">
+          <ProgressSignals variant="inline" />
+        </div>
+        
         {/* ============================================================= */}
         {/* PRIORITY 3: READINESS + PROGRAM SNAPSHOT - Quick Status */}
         {/* ============================================================= */}
@@ -730,8 +738,8 @@ function DashboardContent() {
             {/* Update Metrics - Allow users to refine their program */}
             <UpdateMetricsCard />
             
-            {/* Pro upgrade prompt - non-intrusive card */}
-            <DashboardUpgradeCard />
+            {/* Smart upgrade prompt - contextual based on engagement */}
+            <SmartUpgradeBanner />
           </div>
         </Section>
 
@@ -830,6 +838,7 @@ function DashboardContent() {
         
         {/* Mobile Help Links */}
         <div className="sm:hidden flex flex-col items-center gap-3 pt-4 pb-8">
+          <SessionCounter />
           <TrainingSystemsLink />
           <HowSpartanLabWorksButton 
             onOpen={() => setShowIntroduction(true)} 

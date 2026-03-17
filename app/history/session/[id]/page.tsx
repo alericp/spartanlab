@@ -18,11 +18,12 @@ import type { WorkoutSessionHistory } from '@/types/history'
 
 async function fetchSession(sessionId: string): Promise<WorkoutSessionHistory | null> {
   try {
-    const response = await fetch(`/api/history/session/${sessionId}`)
+    const response = await fetch(`/api/history/sessions/${sessionId}`)
     if (!response.ok) {
       return null
     }
-    return await response.json()
+    const data = await response.json()
+    return data.session || null
   } catch (error) {
     console.error('[SessionPage] Error fetching session:', error)
     return null

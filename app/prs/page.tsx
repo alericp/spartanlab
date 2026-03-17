@@ -352,7 +352,7 @@ function PRDetailPanel({ group, onClose }: PRDetailPanelProps) {
                         </span>
                         {pr.workoutSessionId && (
                           <Link
-                            href={`/history/sessions/${pr.workoutSessionId}`}
+                            href={`/history/session/${pr.workoutSessionId}`}
                             className="text-xs text-[#C1121F] hover:underline"
                             onClick={(e) => e.stopPropagation()}
                           >
@@ -372,7 +372,7 @@ function PRDetailPanel({ group, onClose }: PRDetailPanelProps) {
               {best.workoutSessionId && (
                 <div className="mt-3 pt-3 border-t border-[#2B313A]">
                   <Link
-                    href={`/history/sessions/${best.workoutSessionId}`}
+                    href={`/history/session/${best.workoutSessionId}`}
                     className="text-xs text-[#C1121F] hover:underline flex items-center gap-1"
                   >
                     View session where this was achieved

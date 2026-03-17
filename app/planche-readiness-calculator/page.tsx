@@ -48,11 +48,15 @@ export default function PlancheReadinessCalculator() {
   // Form state
   const [maxPushUps, setMaxPushUps] = useState('')
   const [maxDips, setMaxDips] = useState('')
+  const [weightedDipLoad, setWeightedDipLoad] = useState('')
   const [plancheLeanHold, setPlancheLeanHold] = useState('')
   const [wallHandstandHold, setWallHandstandHold] = useState('')
+  const [lSitHoldTime, setLSitHoldTime] = useState('')
+  const [bodyweight, setBodyweight] = useState('')
   const [shoulderMobility, setShoulderMobility] = useState<'poor' | 'moderate' | 'good' | 'excellent'>('moderate')
   const [hasParallettes, setHasParallettes] = useState(false)
   const [hasFloor, setHasFloor] = useState(true)
+  const [showAdvanced, setShowAdvanced] = useState(false)
   
   // Result state
   const [result, setResult] = useState<ReadinessResult | null>(null)
@@ -93,11 +97,15 @@ export default function PlancheReadinessCalculator() {
     setError(null)
     setMaxPushUps('')
     setMaxDips('')
+    setWeightedDipLoad('')
     setPlancheLeanHold('')
     setWallHandstandHold('')
+    setLSitHoldTime('')
+    setBodyweight('')
     setShoulderMobility('moderate')
     setHasParallettes(false)
     setHasFloor(true)
+    setShowAdvanced(false)
   }
 
   const toggleFaq = (index: number) => {
@@ -132,9 +140,12 @@ export default function PlancheReadinessCalculator() {
           <h1 className="text-3xl md:text-4xl font-bold text-[#E6E9EF] mb-4">
             Planche Readiness Calculator
           </h1>
-          <p className="text-[#A4ACB8] text-lg max-w-2xl mx-auto">
+          <p className="text-[#A4ACB8] text-lg max-w-2xl mx-auto mb-3">
             Evaluate your pushing strength, shoulder conditioning, and lean tolerance to determine
             your readiness for planche progressions.
+          </p>
+          <p className="text-xs text-[#6B7280] max-w-lg mx-auto">
+            Built from structured calisthenics readiness principles used to evaluate real planche progress.
           </p>
         </div>
 
@@ -179,6 +190,22 @@ export default function PlancheReadinessCalculator() {
                 />
               </div>
 
+              {/* Weighted Dip (Optional) */}
+              <div className="space-y-2">
+                <Label htmlFor="weightedDip" className="text-[#E6E9EF]">
+                  Weighted Dip Load (lbs added) <span className="text-[#6B7280]">- optional</span>
+                </Label>
+                <Input
+                  id="weightedDip"
+                  type="number"
+                  placeholder="e.g., 45"
+                  value={weightedDipLoad}
+                  onChange={(e) => setWeightedDipLoad(e.target.value)}
+                  className="bg-[#1A1F26] border-[#2B313A] text-[#E6E9EF]"
+                />
+                <p className="text-xs text-[#6B7280]">Enter 0 if you don't train weighted</p>
+              </div>
+
               {/* Planche Lean */}
               <div className="space-y-2">
                 <Label htmlFor="lean" className="text-[#E6E9EF]">
@@ -209,6 +236,52 @@ export default function PlancheReadinessCalculator() {
                   className="bg-[#1A1F26] border-[#2B313A] text-[#E6E9EF]"
                 />
               </div>
+
+              {/* L-Sit Hold Time (Optional) */}
+              <div className="space-y-2">
+                <Label htmlFor="lsit" className="text-[#E6E9EF]">
+                  L-Sit Hold (seconds) <span className="text-[#6B7280]">- optional</span>
+                </Label>
+                <Input
+                  id="lsit"
+                  type="number"
+                  placeholder="e.g., 20"
+                  value={lSitHoldTime}
+                  onChange={(e) => setLSitHoldTime(e.target.value)}
+                  className="bg-[#1A1F26] border-[#2B313A] text-[#E6E9EF]"
+                />
+                <p className="text-xs text-[#6B7280]">Indicates core compression and body tension</p>
+              </div>
+
+              {/* Advanced Options Toggle */}
+              <button
+                type="button"
+                onClick={() => setShowAdvanced(!showAdvanced)}
+                className="text-sm text-[#C1121F] hover:text-[#A50E1A] flex items-center gap-1 mt-2"
+              >
+                {showAdvanced ? 'Hide' : 'Show'} advanced options
+                <ChevronDown className={cn("w-4 h-4 transition-transform", showAdvanced && "rotate-180")} />
+              </button>
+
+              {/* Advanced Options */}
+              {showAdvanced && (
+                <div className="space-y-4 pt-2 border-t border-[#2B313A]">
+                  <div className="space-y-2">
+                    <Label htmlFor="bodyweight" className="text-[#E6E9EF]">
+                      Bodyweight (lbs) <span className="text-[#6B7280]">- optional</span>
+                    </Label>
+                    <Input
+                      id="bodyweight"
+                      type="number"
+                      placeholder="e.g., 165"
+                      value={bodyweight}
+                      onChange={(e) => setBodyweight(e.target.value)}
+                      className="bg-[#1A1F26] border-[#2B313A] text-[#E6E9EF]"
+                    />
+                    <p className="text-xs text-[#6B7280]">Lighter bodyweight generally favors planche progression</p>
+                  </div>
+                </div>
+              )}
 
               {/* Shoulder Mobility */}
               <div className="space-y-2">

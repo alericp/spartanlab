@@ -1,6 +1,11 @@
 import type { MovementBias } from '@/lib/movement-bias-detection-engine'
 import type { ProgressionKnowledge, ExerciseKnowledge } from '@/lib/knowledge-bubble-content'
 import { EXERCISE_KNOWLEDGE, PROGRESSION_KNOWLEDGE } from '@/lib/knowledge-bubble-content'
+import {
+  analyzeProgression as analyzeBandProgression,
+  type ResistanceBandColor,
+  BAND_SHORT_LABELS,
+} from '@/lib/band-progression-engine'
 
 // =============================================================================
 // INSIGHT TEXT GENERATION FROM AI SYSTEMS
@@ -147,7 +152,8 @@ export function getOverrideProtectionInsight(
   exerciseId: string,
   exerciseName: string
 ): { reason: string; carryover: string[] } | null {
-  const knowledge = KNOWLEDGE_BUBBLE_CONTENT[exerciseId]
+  const normalizedId = exerciseId.toLowerCase().replace(/\s+/g, '_').replace(/-/g, '_')
+  const knowledge = EXERCISE_KNOWLEDGE[normalizedId] || EXERCISE_KNOWLEDGE[exerciseId]
   if (!knowledge) return null
 
   return {
@@ -160,7 +166,8 @@ export function getOverrideProtectionInsight(
  * Generates safety notes from exercise knowledge.
  */
 export function getExerciseSafetyNote(exerciseId: string): string | null {
-  const knowledge = KNOWLEDGE_BUBBLE_CONTENT[exerciseId]
+  const normalizedId = exerciseId.toLowerCase().replace(/\s+/g, '_').replace(/-/g, '_')
+  const knowledge = EXERCISE_KNOWLEDGE[normalizedId] || EXERCISE_KNOWLEDGE[exerciseId]
   if (!knowledge || !knowledge.safetyNote) return null
   return knowledge.safetyNote
 }
@@ -169,7 +176,113 @@ export function getExerciseSafetyNote(exerciseId: string): string | null {
  * Generates common mistake warning from exercise knowledge.
  */
 export function getExerciseCommonMistake(exerciseId: string): string | null {
-  const knowledge = KNOWLEDGE_BUBBLE_CONTENT[exerciseId]
+  const normalizedId = exerciseId.toLowerCase().replace(/\s+/g, '_').replace(/-/g, '_')
+  const knowledge = EXERCISE_KNOWLEDGE[normalizedId] || EXERCISE_KNOWLEDGE[exerciseId]
   if (!knowledge || !knowledge.commonMistake) return null
   return knowledge.commonMistake
+}
+
+// =============================================================================
+// BAND PROGRESSION INSIGHTS
+// =============================================================================
+
+/**
+ * Generates band progression insight for an exercise.
+ * Returns coaching message about band assistance status and recommendations.
+ */
+export function getBandProgressionInsight(exerciseId: string, exerciseName: string): {
+  message: string | null
+  status: 'ready_to_reduce' | 'progressing' | 'maintaining' | 'stagnating' | 'regressing' | 'new' | null
+  currentBand: ResistanceBandColor | null
+  recommendedBand: ResistanceBandColor | null
+} {
+  const analysis = analyzeBandProgression(exerciseId, exerciseName)
+  
+  if (analysis.status === 'new') {
+    return {
+      message: null,
+      status: null,
+      currentBand: null,
+      recommendedBand: analysis.recommendedBand,
+    }
+  }
+  
+  // Generate coaching message based on status
+  let message: string | null = null
+  
+  switch (analysis.status) {
+    case 'ready_to_reduce':
+      if (analysis.currentBand && analysis.recommendedBand) {
+        message = `Band assistance reduced based on recent performance. Moving from ${BAND_SHORT_LABELS[analysis.currentBand]} to ${BAND_SHORT_LABELS[analysis.recommendedBand]}.`
+      } else if (analysis.currentBand && !analysis.recommendedBand) {
+        message = `Ready to attempt unassisted! Your ${BAND_SHORT_LABELS[analysis.currentBand]} band performance indicates you may be ready.`
+      }
+      break
+      
+    case 'progressing':
+      message = 'Making good progress with band assistance. Continue building strength at this level.'
+      break
+      
+    case 'maintaining':
+      message = 'Assistance maintained to preserve form quality while building strength.'
+      break
+      
+    case 'stagnating':
+      message = analysis.reason || 'Performance plateaued. Consider accessory work to break through.'
+      break
+      
+    case 'regressing':
+      if (analysis.recommendedBand) {
+        message = `Performance declining - consider moving to ${BAND_SHORT_LABELS[analysis.recommendedBand]} band until recovered.`
+      } else {
+        message = 'Performance declining - maintain current band level until recovered.'
+      }
+      break
+  }
+  
+  // Add fatigue warning if present
+  if (analysis.fatigueWarning && analysis.fatigueReason) {
+    message = analysis.fatigueReason
+  }
+  
+  return {
+    message,
+    status: analysis.status,
+    currentBand: analysis.currentBand,
+    recommendedBand: analysis.recommendedBand,
+  }
+}
+
+/**
+ * Get a simple band change notification message.
+ * Used when band selection changes during logging.
+ */
+export function getBandChangeNotification(
+  previousBand: ResistanceBandColor | null,
+  newBand: ResistanceBandColor | null
+): string | null {
+  if (previousBand === newBand) return null
+  
+  if (!previousBand && newBand) {
+    return `Using ${BAND_SHORT_LABELS[newBand]} band assistance.`
+  }
+  
+  if (previousBand && !newBand) {
+    return 'Training unassisted! Great progress.'
+  }
+  
+  if (previousBand && newBand) {
+    // Determine if this is progression or regression
+    const bandOrder: ResistanceBandColor[] = ['blue', 'green', 'purple', 'black', 'red', 'yellow']
+    const prevIndex = bandOrder.indexOf(previousBand)
+    const newIndex = bandOrder.indexOf(newBand)
+    
+    if (newIndex > prevIndex) {
+      return `Reduced assistance from ${BAND_SHORT_LABELS[previousBand]} to ${BAND_SHORT_LABELS[newBand]}. Progress!`
+    } else {
+      return `Increased assistance to ${BAND_SHORT_LABELS[newBand]}. Smart to maintain form quality.`
+    }
+  }
+  
+  return null
 }

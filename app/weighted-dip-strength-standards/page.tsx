@@ -1,4 +1,8 @@
 import { Metadata } from 'next'
+
+// Prevent static prerendering to avoid auth issues during build
+export const dynamic = 'force-dynamic'
+
 import Link from 'next/link'
 import { Dumbbell, ArrowRight, ChevronRight, CheckCircle2, Calculator, Target } from 'lucide-react'
 import { Card } from '@/components/ui/card'

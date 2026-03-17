@@ -12,7 +12,9 @@ import {
   type FatigueContext,
   type TrainingStyleMode,
   type SessionAdjustments,
+  type MovementBiasContext,
 } from './unified-coaching-engine'
+import { applyBiasToVolume } from './movement-bias-detection-engine'
 import { selectMethodProfiles, type SelectedMethods, type SelectionContext } from './training-principles-engine'
 import { getSmartSubstitutions, mapEquipmentArray } from './exercise-family-integration'
 import { type MovementFamily, type EquipmentTag } from './movement-family-registry'
@@ -100,6 +102,12 @@ export interface WeeklyStructure {
     strength: number
     accessory: number
   }
+  biasAdjustment?: {
+    pushVolumeRatio: number
+    pullVolumeRatio: number
+    emphasizePush: boolean
+    emphasizePull: boolean
+  }
 }
 
 // =============================================================================
@@ -174,6 +182,18 @@ function buildWeeklyStructure(context: UnifiedEngineContext): WeeklyStructure {
   const baseVolume = getBaseVolume(context.athlete.trainingStyle, context.athlete.styleProgrammingRules)
   const volumeMultiplier = context.fatigue.sessionAdjustments.volumeMultiplier
   
+  // Apply movement bias adjustments to volume distribution
+  // This ensures pull-dominant athletes get more push volume and vice versa
+  const biasAdjustment = context.movementBias.volumeAdjustment
+  const pushPullRatio = {
+    push: biasAdjustment.pushVolumeRatio,
+    pull: biasAdjustment.pullVolumeRatio,
+  }
+  
+  // Calculate bias-adjusted strength volume
+  // If athlete is pull-dominant, increase push volume within strength allocation
+  const strengthVolume = Math.round(baseVolume.strength * volumeMultiplier)
+  
   return {
     totalDays: days,
     primaryDays,
@@ -181,8 +201,15 @@ function buildWeeklyStructure(context: UnifiedEngineContext): WeeklyStructure {
     restDays,
     weeklyVolume: {
       skill: Math.round(baseVolume.skill * volumeMultiplier),
-      strength: Math.round(baseVolume.strength * volumeMultiplier),
+      strength: strengthVolume,
       accessory: Math.round(baseVolume.accessory * volumeMultiplier),
+    },
+    // Include bias adjustment ratios for session-level use
+    biasAdjustment: {
+      pushVolumeRatio: pushPullRatio.push,
+      pullVolumeRatio: pushPullRatio.pull,
+      emphasizePush: biasAdjustment.emphasizePush,
+      emphasizePull: biasAdjustment.emphasizePull,
     },
   }
 }

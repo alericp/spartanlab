@@ -36,6 +36,15 @@ import {
   type CoachingFrameworkId,
   type FrameworkSelectionInput,
 } from './coaching-framework-engine'
+import {
+  detectMovementBias,
+  applyBiasToVolume,
+  generateBiasCoachMessage,
+  type MovementBias,
+  type BiasType,
+  type BiasAdjustment,
+  type BenchmarkInput,
+} from './movement-bias-detection-engine'
 
 // =============================================================================
 // TYPES - UNIFIED ENGINE CONTEXT
@@ -220,6 +229,16 @@ export interface FrameworkContext {
   switchReason: string | null
 }
 
+export interface MovementBiasContext {
+  biasType: BiasType
+  dominantPattern: string
+  weakerPattern: string
+  confidenceScore: number
+  volumeAdjustment: BiasAdjustment
+  coachingMessage: string
+  hasStrongBias: boolean
+}
+
 export interface UnifiedEngineContext {
   // Core athlete data
   athlete: AthleteContext
@@ -241,6 +260,9 @@ export interface UnifiedEngineContext {
   
   // Coaching framework methodology
   framework: FrameworkContext
+  
+  // Movement bias (push/pull/compression dominance)
+  movementBias: MovementBiasContext
   
   // Program decisions
   programDecision: ProgramDecision
@@ -305,7 +327,15 @@ export async function buildUnifiedContext(userId: string): Promise<UnifiedEngine
     envelopeContext
   )
   
-  // Step 9: Determine program decisions
+  // Step 9: Detect movement bias (push/pull/compression dominance)
+  const movementBiasContext = buildMovementBiasContext(
+    userId,
+    athleteContext,
+    skillContext,
+    constraintContext
+  )
+  
+  // Step 10: Determine program decisions
   const programDecision = determineProgramDecision(
     athleteContext,
     fatigueContext,
@@ -313,17 +343,18 @@ export async function buildUnifiedContext(userId: string): Promise<UnifiedEngine
     frameworkContext
   )
   
-  // Step 10: Generate coaching summary
+  // Step 11: Generate coaching summary
   const coachingSummary = generateCoachingSummary(
     athleteContext,
     skillContext,
     constraintContext,
     fatigueContext,
     envelopeContext,
-    frameworkContext
+    frameworkContext,
+    movementBiasContext
   )
   
-  // Step 11: Assess data quality
+  // Step 12: Assess data quality
   const dataQuality = assessDataQuality(skillContext, envelopeContext, fatigueContext)
   
   return {
@@ -334,6 +365,7 @@ export async function buildUnifiedContext(userId: string): Promise<UnifiedEngine
     fatigue: fatigueContext,
     protocols: protocolContext,
     framework: frameworkContext,
+    movementBias: movementBiasContext,
     programDecision,
     coachingSummary,
     dataQuality,
@@ -855,7 +887,88 @@ function getExperienceLevelFromTrainingAge(trainingAge: number): 'beginner' | 'i
 }
 
 // =============================================================================
-// STEP 9: PROGRAM DECISION
+// STEP 9: MOVEMENT BIAS CONTEXT
+// =============================================================================
+
+function buildMovementBiasContext(
+  userId: string,
+  athleteContext: AthleteContext,
+  skillContext: SkillContext,
+  constraintContext: ConstraintContext
+): MovementBiasContext {
+  // Build benchmark input from skill readiness breakdown
+  const benchmarks: BenchmarkInput = {}
+  
+  // Extract readiness scores from skill context
+  const readiness = skillContext.readinessBreakdown
+  if (readiness) {
+    // Convert readiness scores to estimated benchmarks
+    // Pull strength component maps to pull-up estimate
+    if (readiness.pullStrengthScore > 0) {
+      benchmarks.pullUps = Math.round(readiness.pullStrengthScore / 5) // ~20 at 100 score
+      benchmarks.frontLeverReadiness = readiness.straightArmScore
+    }
+    // Push strength component maps to dip estimate
+    if (readiness.pushStrengthScore > 0) {
+      benchmarks.dips = Math.round(readiness.pushStrengthScore / 4) // ~25 at 100 score
+      benchmarks.plancheReadiness = readiness.straightArmScore * 0.8 // Planche typically harder
+    }
+    // Compression component maps to hollow hold
+    if (readiness.compressionScore > 0) {
+      benchmarks.hollowHold = Math.round(readiness.compressionScore * 0.6) // ~60s at 100 score
+      benchmarks.lSit = Math.round(readiness.compressionScore * 0.3) // ~30s at 100 score
+    }
+  }
+  
+  // Add bodyweight if available
+  if (athleteContext.weightKg) {
+    benchmarks.bodyweight = athleteContext.weightKg
+  }
+  
+  // Detect movement bias
+  const bias = detectMovementBias({
+    athleteId: userId,
+    benchmarks,
+    skillState: {
+      frontLever: skillContext.states.find(s => s.skill === 'front_lever')
+        ? {
+            readiness: readiness?.straightArmScore || 50,
+            currentNode: skillContext.states.find(s => s.skill === 'front_lever')?.currentNode || 'tuck',
+            confidence: 0.7,
+          }
+        : undefined,
+      planche: skillContext.states.find(s => s.skill === 'planche')
+        ? {
+            readiness: readiness?.straightArmScore ? readiness.straightArmScore * 0.8 : 40,
+            currentNode: skillContext.states.find(s => s.skill === 'planche')?.currentNode || 'lean',
+            confidence: 0.7,
+          }
+        : undefined,
+    },
+    weakPoints: constraintContext.primaryConstraint 
+      ? [constraintContext.primaryConstraint as any]
+      : [],
+  })
+  
+  // Generate coaching message
+  const coachingMessage = generateBiasCoachMessage(bias)
+  
+  // Determine if bias is significant enough to influence programming
+  const hasStrongBias = bias.biasType !== 'balanced' && bias.confidenceScore >= 0.6
+  
+  return {
+    biasType: bias.biasType,
+    dominantPattern: bias.dominantPattern,
+    weakerPattern: bias.weakerPattern,
+    confidenceScore: bias.confidenceScore,
+    volumeAdjustment: bias.recommendedAdjustments,
+    coachingMessage,
+    hasStrongBias,
+  }
+}
+
+// =============================================================================
+// STEP 10: PROGRAM DECISION
 // =============================================================================
 
 function determineProgramDecision(
@@ -920,7 +1033,8 @@ function generateCoachingSummary(
   constraintContext: ConstraintContext,
   fatigueContext: FatigueContext,
   envelopeContext: EnvelopeContext,
-  frameworkContext: FrameworkContext
+  frameworkContext: FrameworkContext,
+  movementBiasContext: MovementBiasContext
 ): CoachingSummary {
   const focusAreas: string[] = []
   const sessionNotes: string[] = []
@@ -943,6 +1057,11 @@ function generateCoachingSummary(
     focusAreas.push(...constraintContext.volumeAdjustments.increasePriority.slice(0, 2))
   }
   focusAreas.push(athleteContext.primaryGoal.replace(/_/g, ' '))
+  
+  // Add movement bias focus area if significant
+  if (movementBiasContext.hasStrongBias) {
+    focusAreas.push(`${movementBiasContext.weakerPattern} development`)
+  }
   
   // Build constraint note
   let constraintNote: string | null = null
@@ -970,6 +1089,11 @@ function generateCoachingSummary(
   
   // Session notes from fatigue adjustments
   sessionNotes.push(...fatigueContext.sessionAdjustments.notes)
+  
+  // Add movement bias coaching note if significant
+  if (movementBiasContext.hasStrongBias && movementBiasContext.coachingMessage) {
+    sessionNotes.push(movementBiasContext.coachingMessage)
+  }
   
   // Add envelope-based insight if available
   if (envelopeContext.hasHighConfidenceData && envelopeContext.recommendations.preferredRepRange) {

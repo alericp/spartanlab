@@ -363,3 +363,22 @@ export interface PRQueryOptions extends HistoryQueryOptions {
   prType?: PRType
   exerciseCategory?: ExerciseCategory
 }
+
+// =============================================================================
+// WORKOUT SESSION DATA TYPES (shared for persistence)
+// =============================================================================
+
+/**
+ * Data for a completed set in a workout session
+ */
+export interface CompletedSetData {
+  exerciseId: string
+  exerciseName: string
+  exerciseCategory: string
+  setNumber: number
+  targetReps: number
+  actualReps: number
+  targetRPE: number
+  actualRPE: number
+  restSeconds: number
+}

@@ -730,3 +730,32 @@ export async function getAllTimeBestPRs(
     return new Map()
   }
 }
+
+/**
+ * Check if a session was already persisted (for idempotency)
+ * Prevents duplicate history entries for the same workout
+ */
+export async function isSessionAlreadyPersisted(
+  userId: string,
+  workoutName: string,
+  workoutDate: string
+): Promise<boolean> {
+  if (!(await isDatabaseAvailable())) return false
+
+  const sql = await getSqlClient()
+  if (!sql) return false
+
+  try {
+    const result = await sql`
+      SELECT id FROM workout_session_history
+      WHERE user_id = ${userId}
+        AND workout_name = ${workoutName}
+        AND workout_date = ${workoutDate}
+      LIMIT 1
+    `
+    return result.length > 0
+  } catch (error) {
+    console.error('[HistoryService] Error checking session existence:', error)
+    return false
+  }
+}

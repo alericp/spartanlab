@@ -74,6 +74,11 @@ export default function robots(): MetadataRoute.Robots {
           '/iron-cross-readiness-calculator',
           // Protocols (joint health content)
           '/protocols/',
+          // Strength requirements pages (high-intent skill prerequisites)
+          '/planche-strength-requirements',
+          '/front-lever-strength-requirements',
+          '/muscle-up-strength-requirements',
+          '/hspu-strength-requirements',
         ],
         disallow: [
           // App/private pages - user-specific content

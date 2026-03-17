@@ -383,8 +383,39 @@ export default function GuidesPage() {
             </div>
           </Card>
 
-          {/* Related Resources */}
+          {/* Strength Requirements */}
           <div className="mt-12 pt-8 border-t border-[#2B313A]">
+            <h2 className="text-lg font-semibold text-[#E6E9EF] mb-4">Strength Requirements</h2>
+            <div className="grid sm:grid-cols-4 gap-4 mb-8">
+              <Link href="/front-lever-strength-requirements">
+                <Card className="bg-[#1A1F26] border-[#2B313A] p-4 hover:border-[#C1121F]/50 transition-all h-full">
+                  <h3 className="font-medium text-[#E6E9EF] text-sm mb-1">Front Lever</h3>
+                  <p className="text-xs text-[#6B7280]">Pulling strength needed</p>
+                </Card>
+              </Link>
+              <Link href="/planche-strength-requirements">
+                <Card className="bg-[#1A1F26] border-[#2B313A] p-4 hover:border-[#C1121F]/50 transition-all h-full">
+                  <h3 className="font-medium text-[#E6E9EF] text-sm mb-1">Planche</h3>
+                  <p className="text-xs text-[#6B7280]">Pushing strength needed</p>
+                </Card>
+              </Link>
+              <Link href="/muscle-up-strength-requirements">
+                <Card className="bg-[#1A1F26] border-[#2B313A] p-4 hover:border-[#C1121F]/50 transition-all h-full">
+                  <h3 className="font-medium text-[#E6E9EF] text-sm mb-1">Muscle-Up</h3>
+                  <p className="text-xs text-[#6B7280]">Explosive strength needed</p>
+                </Card>
+              </Link>
+              <Link href="/hspu-strength-requirements">
+                <Card className="bg-[#1A1F26] border-[#2B313A] p-4 hover:border-[#C1121F]/50 transition-all h-full">
+                  <h3 className="font-medium text-[#E6E9EF] text-sm mb-1">HSPU</h3>
+                  <p className="text-xs text-[#6B7280]">Pressing strength needed</p>
+                </Card>
+              </Link>
+            </div>
+          </div>
+
+          {/* Related Resources */}
+          <div className="pt-8 border-t border-[#2B313A]">
             <h2 className="text-lg font-semibold text-[#E6E9EF] mb-4">Related Resources</h2>
             <div className="grid sm:grid-cols-4 gap-4 mb-8">
               <Link href="/calculators">

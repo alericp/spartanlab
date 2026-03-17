@@ -278,6 +278,19 @@ export default function sitemap(): MetadataRoute.Sitemap {
     priority: 0.8,
   }))
 
+  // Strength requirements pages - high-intent skill prerequisites
+  const strengthRequirementsPages: MetadataRoute.Sitemap = [
+    'planche-strength-requirements',
+    'front-lever-strength-requirements',
+    'muscle-up-strength-requirements',
+    'hspu-strength-requirements',
+  ].map(slug => ({
+    url: `${baseUrl}/${slug}`,
+    lastModified: currentDate,
+    changeFrequency: 'monthly' as const,
+    priority: 0.8,
+  }))
+
   // Skill threshold pages - targeting search questions
   const skillThresholdPages: MetadataRoute.Sitemap = [
     'how-many-pull-ups-for-front-lever',
@@ -352,6 +365,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     ...exercisePages,
     ...guidePages,
     ...strengthStandardsPages,
+    ...strengthRequirementsPages,
     ...skillThresholdPages,
     ...comparisonPages,
     ...infoPages,

@@ -4,8 +4,18 @@ import { SITE_CONFIG } from '@/lib/seo'
 
 export const metadata: Metadata = {
   title: 'Body Fat Calculator (U.S. Navy Method) | SpartanLab',
-  description: 'Calculate your body fat percentage using the accurate U.S. Navy circumference method. Free body fat calculator with measurement instructions for men and women.',
-  keywords: ['body fat calculator', 'navy body fat formula', 'body fat percentage', 'fitness calculator', 'calisthenics', 'body composition'],
+  description: 'Estimate your body fat percentage using the U.S. Navy formula. Enter your measurements to see your body fat level and fitness classification. Free and accurate.',
+  keywords: [
+    'body fat calculator',
+    'navy body fat calculator', 
+    'body fat percentage calculator',
+    'body fat estimate',
+    'navy body fat formula', 
+    'fitness calculator', 
+    'calisthenics body composition',
+    'body fat test',
+    'circumference body fat method',
+  ],
   alternates: {
     canonical: `${SITE_CONFIG.url}/body-fat-calculator`,
   },

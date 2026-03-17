@@ -22,10 +22,10 @@ export function MarketingFooter() {
               <span className="text-lg font-bold tracking-tight text-[#E6E9EF]">SpartanLab</span>
             </Link>
             <p className="text-sm text-[#A4ACB8] max-w-sm mb-4">
-              The Calisthenics Training Decision Engine. Analyzes your training data and tells you exactly what to train next.
+              Calisthenics-first training intelligence. Analyzes your performance and builds adaptive programs using real strength methodologies.
             </p>
             <p className="text-xs text-[#6B7280]">
-              Like having a coach analyzing your training 24/7.
+              Built from real training systems.
             </p>
           </div>
 
@@ -36,6 +36,11 @@ export function MarketingFooter() {
               <li>
                 <Link href="/how-it-works" className="text-sm text-[#A4ACB8] hover:text-[#E6E9EF] transition-colors">
                   How It Works
+                </Link>
+              </li>
+              <li>
+                <Link href="/training-systems" className="text-sm text-[#A4ACB8] hover:text-[#E6E9EF] transition-colors">
+                  Training Systems
                 </Link>
               </li>
               <li>

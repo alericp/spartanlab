@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import Link from 'next/link'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { 
@@ -14,6 +15,7 @@ import {
   Brain,
   Sparkles,
   HelpCircle,
+  BookOpen,
 } from 'lucide-react'
 import { SpartanIcon } from '@/components/brand/SpartanLogo'
 import { 
@@ -289,5 +291,41 @@ export function FeatureHint({ feature, className }: FeatureHintProps) {
         <X className="w-3 h-3" />
       </button>
     </div>
+  )
+}
+
+// Link to Training Systems page
+interface TrainingSystemsLinkProps {
+  className?: string
+  variant?: 'inline' | 'button'
+}
+
+export function TrainingSystemsLink({ className, variant = 'inline' }: TrainingSystemsLinkProps) {
+  if (variant === 'button') {
+    return (
+      <Link
+        href="/training-systems"
+        className={cn(
+          'inline-flex items-center gap-2 px-3 py-2 text-sm text-[#A4ACB8] bg-[#1A1F26] hover:bg-[#2B313A] rounded-lg border border-[#2B313A] transition-colors',
+          className
+        )}
+      >
+        <BookOpen className="w-4 h-4 text-[#C1121F]" />
+        How Your Training Is Built
+      </Link>
+    )
+  }
+
+  return (
+    <Link
+      href="/training-systems"
+      className={cn(
+        'inline-flex items-center gap-1.5 text-xs text-[#6B7280] hover:text-[#A4ACB8] transition-colors',
+        className
+      )}
+    >
+      <BookOpen className="w-3.5 h-3.5" />
+      How Your Training Is Built
+    </Link>
   )
 }

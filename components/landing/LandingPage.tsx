@@ -572,6 +572,7 @@ function Footer() {
           </div>
           <div className="flex items-center gap-6 text-sm text-[#6B7280]">
             <Link href="/dashboard" className="hover:text-[#E6E9EF] transition-colors">Dashboard</Link>
+            <Link href="/training-systems" className="hover:text-[#E6E9EF] transition-colors">Training Systems</Link>
             <Link href="/tools" className="hover:text-[#E6E9EF] transition-colors">Free Tools</Link>
             <Link href="/about" className="hover:text-[#E6E9EF] transition-colors">About</Link>
           </div>

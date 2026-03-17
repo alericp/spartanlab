@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { 
@@ -17,6 +18,7 @@ import {
   BarChart3,
   RefreshCcw,
   Crown,
+  BookOpen,
 } from 'lucide-react'
 import { SpartanIcon } from '@/components/brand/SpartanLogo'
 import { TRIAL, PRICING } from '@/lib/billing/pricing'
@@ -492,6 +494,15 @@ export function OnboardingComplete({ onContinue }: OnboardingCompleteProps) {
           Start First Session
           <ArrowRight className="w-4 h-4 ml-2" />
         </Button>
+        
+        {/* Training Systems link */}
+        <Link
+          href="/training-systems"
+          className="flex items-center justify-center gap-1.5 mt-3 text-xs text-[#6B7280] hover:text-[#A4ACB8] transition-colors"
+        >
+          <BookOpen className="w-3.5 h-3.5" />
+          How your training is built
+        </Link>
       </Card>
     </div>
   )

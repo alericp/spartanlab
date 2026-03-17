@@ -30,7 +30,7 @@ import { ShareProgressSection } from '@/components/dashboard/ShareProgressSectio
 import { DeloadStatusCard } from '@/components/dashboard/DailyAdjustmentCard'
 import { DailyReadinessCard } from '@/components/dashboard/DailyReadinessCard'
 import { WelcomeCard } from '@/components/dashboard/WelcomeCard'
-import { DashboardIntroduction, HowSpartanLabWorksButton } from '@/components/dashboard/DashboardIntroduction'
+import { DashboardIntroduction, HowSpartanLabWorksButton, TrainingSystemsLink } from '@/components/dashboard/DashboardIntroduction'
 import { calculateSpartanScore } from '@/lib/strength-score-engine'
 import { isFirstRun } from '@/lib/onboarding-service'
 import { syncProgramToHistory } from '@/lib/use-program-history'
@@ -410,10 +410,12 @@ function DashboardContent() {
               </p>
               <SubscriptionTierBadge className="hidden sm:inline-flex" />
             </div>
-            <HowSpartanLabWorksButton 
-              onOpen={() => setShowIntroduction(true)} 
-              className="hidden sm:flex shrink-0"
-            />
+            <div className="hidden sm:flex items-center gap-4 shrink-0">
+              <TrainingSystemsLink />
+              <HowSpartanLabWorksButton 
+                onOpen={() => setShowIntroduction(true)} 
+              />
+            </div>
           </div>
         )}
         
@@ -826,8 +828,9 @@ function DashboardContent() {
           </div>
         </Section>
         
-        {/* Mobile Help Link */}
-        <div className="sm:hidden flex justify-center pt-4 pb-8">
+        {/* Mobile Help Links */}
+        <div className="sm:hidden flex flex-col items-center gap-3 pt-4 pb-8">
+          <TrainingSystemsLink />
           <HowSpartanLabWorksButton 
             onOpen={() => setShowIntroduction(true)} 
           />

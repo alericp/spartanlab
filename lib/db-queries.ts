@@ -1,5 +1,3 @@
-import 'server-only'
-
 import { getSqlClient, isDatabaseAvailable } from './db'
 import type { SkillProgression, AthleteProfile } from '@/types/domain'
 

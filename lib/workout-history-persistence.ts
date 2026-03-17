@@ -1,5 +1,3 @@
-import 'server-only'
-
 /**
  * Workout History Persistence Module
  * 

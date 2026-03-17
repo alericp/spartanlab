@@ -92,6 +92,11 @@ export default function robots(): MetadataRoute.Robots {
           '/muscle-up-training-program',
           '/planche-training-program',
           '/front-lever-training-program',
+          // Diagnostic "why you can't" pages
+          '/why-you-cant-front-lever',
+          '/why-you-cant-planche',
+          '/why-you-cant-muscle-up',
+          '/why-your-hspu-is-stuck',
         ],
         disallow: [
           // App/private pages - user-specific content

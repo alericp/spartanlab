@@ -333,6 +333,19 @@ export default function sitemap(): MetadataRoute.Sitemap {
     priority: 0.8,
   }))
 
+  // Diagnostic "why you can't" pages - frustration-based search intent
+  const diagnosticPages: MetadataRoute.Sitemap = [
+    'why-you-cant-front-lever',
+    'why-you-cant-planche',
+    'why-you-cant-muscle-up',
+    'why-your-hspu-is-stuck',
+  ].map(slug => ({
+    url: `${baseUrl}/${slug}`,
+    lastModified: currentDate,
+    changeFrequency: 'monthly' as const,
+    priority: 0.8,
+  }))
+
   // Comparison and training guide pages
   const comparisonPages: MetadataRoute.Sitemap = [
     'front-lever-vs-planche',
@@ -397,6 +410,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     ...strengthStandardsPages,
     ...strengthRequirementsPages,
     ...hybridStrengthPages,
+    ...diagnosticPages,
     ...skillThresholdPages,
     ...comparisonPages,
     ...infoPages,

@@ -11,7 +11,7 @@
 
 import { useState, useCallback } from 'react'
 import type { AdaptiveProgram } from './adaptive-program-builder'
-import type { GenerationReason } from './program-version-service'
+import type { GenerationReason } from './program-history-versioning'
 import type { ProgramHistory } from '@/types/history'
 
 interface ProgramHistoryState {

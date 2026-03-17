@@ -11,6 +11,7 @@ import {
   SectionHeader, 
   DashboardSkeleton 
 } from '@/components/layout'
+import { ErrorBoundary } from '@/components/shared/ErrorBoundary'
 
 // =============================================================================
 // ISOLATION TEST FLAG - Set to true for normal operation
@@ -915,11 +916,39 @@ function DashboardContent() {
   )
 }
 
-// Dashboard route - Protected by AuthGuard to prevent mixed auth state
+// Error fallback for dashboard - fail-soft rendering instead of full-page crash
+function DashboardErrorFallback() {
+  return (
+    <PageContainer>
+      <div className="py-12">
+        <div className="bg-[#1A1D23] border border-[#2A2F38] rounded-xl p-8 text-center max-w-md mx-auto">
+          <h1 className="text-xl font-semibold text-[#E6E9EF] mb-2">Dashboard Loading</h1>
+          <p className="text-[#A4ACB8] text-sm mb-4">
+            The dashboard is temporarily unavailable. Please try refreshing the page.
+          </p>
+          <Button
+            onClick={() => window.location.reload()}
+            className="bg-[#C1121F] hover:bg-[#A30F1A]"
+            size="sm"
+          >
+            Refresh Dashboard
+          </Button>
+          <p className="text-xs text-[#6B7280] mt-4">
+            If this persists, please try clearing your browser cache.
+          </p>
+        </div>
+      </div>
+    </PageContainer>
+  )
+}
+
+// Dashboard route - Protected by AuthGuard and error boundary to prevent full-page crashes
 export default function DashboardPage() {
   return (
     <AuthGuard redirectTo="/sign-in">
-      <DashboardContent />
+      <ErrorBoundary fallback={<DashboardErrorFallback />}>
+        <DashboardContent />
+      </ErrorBoundary>
     </AuthGuard>
   )
 }

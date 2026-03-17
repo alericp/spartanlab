@@ -36,11 +36,16 @@ export class WidgetErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     // Log error with widget context
+    const widgetName = this.props.widgetName || 'unknown'
     console.error(
-      `[WidgetErrorBoundary] Error in ${this.props.widgetName || 'unknown widget'}:`,
-      error
+      `[v0] Widget crash detected: ${widgetName}`,
+      error.message
     )
-    console.error('[WidgetErrorBoundary] Component stack:', errorInfo.componentStack)
+    console.error(
+      `[v0] Stack trace for ${widgetName}:`,
+      error.stack
+    )
+    console.error('[v0] Component stack:', errorInfo.componentStack)
   }
 
   render() {

@@ -216,6 +216,21 @@ export default function sitemap(): MetadataRoute.Sitemap {
     priority: 0.8,
   }))
 
+  // High-conversion program generator pages
+  const programGeneratorPages: MetadataRoute.Sitemap = [
+    'calisthenics-program-generator',
+    'weighted-calisthenics-program',
+    'hybrid-strength-program',
+    'muscle-up-training-program',
+    'planche-training-program',
+    'front-lever-training-program',
+  ].map(slug => ({
+    url: `${baseUrl}/${slug}`,
+    lastModified: currentDate,
+    changeFrequency: 'monthly' as const,
+    priority: 0.85,
+  }))
+
   // Exercise pages - individual exercise guides
   const exercisePages: MetadataRoute.Sitemap = [
     'pull-up',
@@ -376,6 +391,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     ...staticPages,
     ...programPages,
     ...trainingPages,
+    ...programGeneratorPages,
     ...exercisePages,
     ...guidePages,
     ...strengthStandardsPages,

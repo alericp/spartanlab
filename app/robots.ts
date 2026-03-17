@@ -85,6 +85,13 @@ export default function robots(): MetadataRoute.Robots {
           '/streetlifting-strength-standards',
           '/hybrid-training-program',
           '/weighted-calisthenics-vs-powerlifting',
+          // High-conversion program generator pages
+          '/calisthenics-program-generator',
+          '/weighted-calisthenics-program',
+          '/hybrid-strength-program',
+          '/muscle-up-training-program',
+          '/planche-training-program',
+          '/front-lever-training-program',
         ],
         disallow: [
           // App/private pages - user-specific content

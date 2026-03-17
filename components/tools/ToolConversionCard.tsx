@@ -1,10 +1,10 @@
+'use client'
+
 /**
- * ToolConversionCard - SSR-safe wrapper for conversion funnel component
+ * ToolConversionCard - Client wrapper for conversion funnel component
  * 
- * This wrapper is safe to render during SSR/prerender because it uses
- * next/dynamic with ssr: false to load the auth-aware client component.
- * 
- * The actual Clerk useAuth() hook only runs on the client side.
+ * This wrapper uses next/dynamic with ssr: false to load the auth-aware
+ * client component. The actual Clerk useAuth() hook only runs on the client side.
  */
 
 import dynamic from 'next/dynamic'

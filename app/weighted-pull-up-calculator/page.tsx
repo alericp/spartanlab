@@ -1,5 +1,8 @@
 'use client'
 
+// Prevent static prerendering to avoid auth issues during build
+export const dynamic = 'force-dynamic'
+
 import { useState } from 'react'
 import Link from 'next/link'
 import { SeoPageLayout } from '@/components/seo/SeoPageLayout'

@@ -17,6 +17,8 @@ import {
   ArrowLeft
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { ToolConversionCard } from '@/components/tools/ToolConversionCard'
+import { trackToolUsed } from '@/lib/analytics'
 
 // Scoring logic
 function calculateStrengthRatios(
@@ -129,10 +131,13 @@ export default function BodyweightStrengthRatioCalculator() {
       return
     }
     
-    const calcResult = calculateStrengthRatios(bw, pull, push)
-    setResult(calcResult)
+  const calcResult = calculateStrengthRatios(bw, pull, push)
+  setResult(calcResult)
+  
+  // Track tool usage
+  trackToolUsed('bodyweight_strength_ratio', { pullRatio: calcResult.pullRatio, pushRatio: calcResult.pushRatio })
   }
-
+  
   const handleReset = () => {
     setResult(null)
     setError(null)
@@ -463,13 +468,19 @@ Calculate yours at SpartanLab.io/calculators/bodyweight-strength-ratio`
                 <p className="text-xs text-[#6B7280]">Detailed readiness assessment</p>
               </Card>
             </Link>
-            <Link href="/calisthenics-program-builder">
-              <Card className="bg-[#1A1F26] border-[#2B313A] p-4 hover:border-[#C1121F]/50 transition-colors cursor-pointer">
-                <h3 className="font-medium text-[#E6E9EF] mb-1">Program Builder</h3>
-                <p className="text-xs text-[#6B7280]">Create your training plan</p>
-              </Card>
-            </Link>
           </div>
+        </section>
+
+        {/* Conversion CTA */}
+        <section className="mb-8">
+          <ToolConversionCard
+            context="general"
+            toolData={result ? {
+              bodyweight: parseInt(bodyweight) || undefined,
+              weightedPullUp: parseInt(weightedPullUp) || undefined,
+              weightedDip: parseInt(weightedDip) || undefined,
+            } : undefined}
+          />
         </section>
       </div>
     </main>

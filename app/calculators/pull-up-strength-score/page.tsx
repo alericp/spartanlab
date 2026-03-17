@@ -20,6 +20,8 @@ import {
 } from 'lucide-react'
 import { SpartanIcon } from '@/components/brand/SpartanLogo'
 import { cn } from '@/lib/utils'
+import { ToolConversionCard } from '@/components/tools/ToolConversionCard'
+import { trackToolUsed } from '@/lib/analytics'
 
 // Scoring logic
 function calculatePullUpStrengthScore(
@@ -129,10 +131,13 @@ export default function PullUpStrengthScoreCalculator() {
       return
     }
     
-    const calcResult = calculatePullUpStrengthScore(pullUps, bw, weighted)
-    setResult(calcResult)
+  const calcResult = calculatePullUpStrengthScore(pullUps, bw, weighted)
+  setResult(calcResult)
+  
+  // Track tool usage
+  trackToolUsed('pull_up_strength_score', { score: calcResult.score, classification: calcResult.classification })
   }
-
+  
   const handleReset = () => {
     setResult(null)
     setError(null)
@@ -427,13 +432,18 @@ Calculate yours at SpartanLab.io/calculators/pull-up-strength-score`
                 <p className="text-xs text-[#6B7280]">View all benchmarks</p>
               </Card>
             </Link>
-            <Link href="/calisthenics-program-builder">
-              <Card className="bg-[#1A1F26] border-[#2B313A] p-4 hover:border-[#C1121F]/50 transition-colors cursor-pointer">
-                <h3 className="font-medium text-[#E6E9EF] mb-1">Program Builder</h3>
-                <p className="text-xs text-[#6B7280]">Create your training plan</p>
-              </Card>
-            </Link>
           </div>
+        </section>
+
+        {/* Conversion CTA */}
+        <section className="mb-8">
+          <ToolConversionCard
+            context="front-lever"
+            toolData={result ? {
+              maxPullUps: parseInt(maxPullUps) || undefined,
+              weightedPullUp: parseInt(weightedLoad) || undefined,
+            } : undefined}
+          />
         </section>
       </div>
     </main>

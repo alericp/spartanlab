@@ -22,6 +22,8 @@ import {
   type ReadinessResult
 } from '@/lib/readiness/skill-readiness'
 import { ReadinessResultCard } from '@/components/calculators/ReadinessResultCard'
+import { ToolConversionCard } from '@/components/tools/ToolConversionCard'
+import { trackToolUsed } from '@/lib/analytics'
 import { cn } from '@/lib/utils'
 
 import type { Metadata } from 'next'
@@ -86,8 +88,11 @@ export default function HSPUReadinessCalculator() {
       hasParallettes,
     }
     
-    const calcResult = calculateHSPUReadiness(inputs)
-    setResult(calcResult)
+  const calcResult = calculateHSPUReadiness(inputs)
+  setResult(calcResult)
+  
+  // Track tool usage
+  trackToolUsed('hspu_readiness_calculator', { readiness_score: calcResult.readinessScore })
   }
 
   const handleReset = () => {
@@ -469,23 +474,17 @@ export default function HSPUReadinessCalculator() {
           </div>
         </section>
 
-        {/* CTA */}
-        <section className="mt-12 text-center">
-          <Card className="bg-[#0F1115] border-[#2B313A] p-8">
-            <h2 className="text-2xl font-bold text-[#E6E9EF] mb-3">
-              Ready to Master the Handstand Push-Up?
-            </h2>
-            <p className="text-[#A4ACB8] mb-6 max-w-lg mx-auto">
-              SpartanLab creates personalized programs that build HSPU strength systematically.
-              Intelligent progression. Zero guesswork.
-            </p>
-            <Link href="/onboarding">
-              <Button className="bg-[#C1121F] hover:bg-[#A50E1A] text-white px-8">
-                Start Free Training Plan
-                <ChevronRight className="w-4 h-4 ml-1" />
-              </Button>
-            </Link>
-          </Card>
+        {/* Conversion CTA */}
+        <section className="mt-12">
+          <ToolConversionCard
+            context="handstand"
+            toolData={result ? {
+              maxDips: maxDips ? parseInt(maxDips) : undefined,
+              readinessScore: result.readinessScore,
+              classification: result.classification,
+              limitingFactors: result.limitingFactors.map(lf => lf.factor),
+            } : undefined}
+          />
         </section>
 
         {/* Back to Tools */}

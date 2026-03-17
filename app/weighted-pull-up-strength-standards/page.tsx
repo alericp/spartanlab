@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { JsonLdMultiple } from '@/components/seo/JsonLd'
 import { FAQ } from '@/components/seo/FAQ'
+import { ToolConversionCard } from '@/components/tools/ToolConversionCard'
 import { generateArticleSchema, generateBreadcrumbSchema, generateFAQSchema, SITE_CONFIG } from '@/lib/seo'
 
 export const metadata: Metadata = {
@@ -269,6 +270,11 @@ export default function WeightedPullUpStandardsPage() {
               </Button>
             </Link>
           </div>
+        </section>
+
+        {/* Conversion CTA */}
+        <section className="mb-12">
+          <ToolConversionCard context="front-lever" />
         </section>
       </div>
     </main>

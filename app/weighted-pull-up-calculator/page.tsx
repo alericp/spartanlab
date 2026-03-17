@@ -4,6 +4,8 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { SeoPageLayout } from '@/components/seo/SeoPageLayout'
 import { RelatedFeatureCTA } from '@/components/seo/RelatedFeatureCTA'
+import { ToolConversionCard } from '@/components/tools/ToolConversionCard'
+import { trackToolUsed } from '@/lib/analytics'
 import { Dumbbell, Calculator, ArrowRight, Info } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -33,6 +35,9 @@ export default function WeightedPullUpCalculatorPage() {
       totalWeight,
       relativeStrength: Math.round(relativeStrength),
     })
+    
+    // Track tool usage
+    trackToolUsed('weighted_pull_up_calculator', { relative_strength: Math.round(relativeStrength) })
   }
 
   const getStrengthLevel = (relativeStrength: number) => {
@@ -210,6 +215,19 @@ export default function WeightedPullUpCalculatorPage() {
               </p>
             </div>
           </div>
+        </div>
+      </section>
+
+      {/* Conversion CTA */}
+      <section className="py-12 px-4 sm:px-6">
+        <div className="max-w-4xl mx-auto">
+          <ToolConversionCard
+            context="front-lever"
+            toolData={result ? {
+              weightedPullUp: result.estimated1RM - parseFloat(bodyweight),
+              bodyweight: parseFloat(bodyweight),
+            } : undefined}
+          />
         </div>
       </section>
 

@@ -18,6 +18,8 @@ import {
   ArrowRight
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { ToolConversionCard } from '@/components/tools/ToolConversionCard'
+import { trackToolUsed } from '@/lib/analytics'
 
 // Scoring logic
 function calculateSkillReadiness(
@@ -159,8 +161,11 @@ export default function SkillReadinessScoreCalculator() {
       return
     }
     
-    const calcResult = calculateSkillReadiness(pullUps, dips, core, weighted)
-    setResult(calcResult)
+  const calcResult = calculateSkillReadiness(pullUps, dips, core, weighted)
+  setResult(calcResult)
+  
+  // Track tool usage
+  trackToolUsed('skill_readiness_score', { closest_skill: calcResult.closestSkill })
   }
 
   const handleReset = () => {
@@ -470,22 +475,17 @@ Calculate yours at SpartanLab.io/calculators/skill-readiness-score`
           </div>
         </section>
 
-        {/* CTA */}
+        {/* Conversion CTA */}
         <section>
-          <Card className="bg-gradient-to-r from-[#C1121F]/10 to-[#1A1F26] border-[#C1121F]/20 p-6 text-center">
-            <h2 className="text-lg font-bold text-[#E6E9EF] mb-2">
-              Ready to Start Training?
-            </h2>
-            <p className="text-sm text-[#A4ACB8] mb-4">
-              Build a personalized program based on your skill goals.
-            </p>
-            <Link href="/calisthenics-program-builder">
-              <Button className="bg-[#C1121F] hover:bg-[#A50E1A] text-white">
-                Create Your Program
-                <ArrowRight className="w-4 h-4 ml-2" />
-              </Button>
-            </Link>
-          </Card>
+          <ToolConversionCard
+            context="general"
+            toolData={result ? {
+              maxPullUps: parseInt(maxPullUps) || undefined,
+              maxDips: parseInt(maxDips) || undefined,
+              hollowHold: parseInt(coreHoldTime) || undefined,
+              weightedPullUp: parseInt(weightedPullUp) || undefined,
+            } : undefined}
+          />
         </section>
       </div>
     </main>

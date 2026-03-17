@@ -4,8 +4,23 @@
  * Premium, disciplined layout components following the design specification.
  * Consistent spacing grid: 4, 8, 16, 24, 32, 48px
  * 
+ * IMPORTANT ARCHITECTURAL NOTE:
+ * =============================
+ * This file contains PageContainer which imports auth-aware Navigation.
+ * Therefore, these components are ONLY safe for use in pages under app/(app)/
+ * which have ClerkProvider from app/(app)/layout.tsx.
+ * 
+ * DO NOT use PageContainer in:
+ * - app/(public)/* pages (will break prerender - no ClerkProvider)
+ * - Root-level app/* pages (no ClerkProvider unless explicitly added)
+ * 
+ * For public/SEO pages, use:
+ * - SeoPageLayout from @/components/seo/SeoPageLayout
+ * - MarketingHeader from @/components/marketing/MarketingHeader
+ * - MarketingFooter from @/components/marketing/MarketingFooter
+ * 
  * Hierarchy:
- * 1. PageContainer - Root container with Navigation
+ * 1. PageContainer - Root container with auth-aware Navigation (app/(app) only!)
  * 2. Section - Major content blocks (48px gap between)
  * 3. SectionHeader - Section title with optional action
  * 4. CardGrid - Grid layouts (2-col, 4-col responsive)

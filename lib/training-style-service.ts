@@ -1049,9 +1049,10 @@ export function getStyleEquipmentExercises(
 // =============================================================================
 
 /**
- * Refine style programming based on performance envelope data
+ * Refine style programming rules based on performance envelope data
+ * (Simplified version for quick rule adjustments)
  */
-export function refineStyleWithEnvelope(
+export function refineStyleRulesWithEnvelope(
   styleMode: TrainingStyleMode,
   envelopeData: {
     optimalRepRange?: { min: number; max: number }

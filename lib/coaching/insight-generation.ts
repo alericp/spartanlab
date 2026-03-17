@@ -6,6 +6,12 @@ import {
   type ResistanceBandColor,
   BAND_SHORT_LABELS,
 } from '@/lib/band-progression-engine'
+import {
+  validateSkillPreparation,
+  getPreparationChain,
+  getOverrideGuidance,
+  type PreparationValidation,
+} from '@/lib/preparation-chain-engine'
 
 // =============================================================================
 // INSIGHT TEXT GENERATION FROM AI SYSTEMS
@@ -290,13 +296,6 @@ export function getBandChangeNotification(
 // =============================================================================
 // PREPARATION CHAIN INSIGHTS
 // =============================================================================
-
-import {
-  validateSkillPreparation,
-  getPreparationChain,
-  getOverrideGuidance,
-  type PreparationValidation,
-} from '@/lib/preparation-chain-engine'
 
 /**
  * Get preparation insight for a skill in the workout.

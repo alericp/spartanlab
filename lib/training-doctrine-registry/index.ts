@@ -68,6 +68,8 @@ export type {
   ProgressionPhilosophy,
   MovementBiasTendency,
   PrimaryFocus,
+  PreferredStructure,
+  AdvancedApplicability,
   TrainingDoctrine,
   DoctrineQueryFilters,
   DoctrineAttributes

@@ -104,6 +104,36 @@ export type PrimaryFocus =
   | 'general_strength'
 
 // =============================================================================
+// PREFERRED STRUCTURES
+// =============================================================================
+
+export type PreferredStructure =
+  | 'static_hold_blocks'        // Focused isometric hold work
+  | 'weighted_strength_sets'    // Heavy weighted exercise sets
+  | 'density_blocks'            // Compressed rest circuit work
+  | 'full_body_sessions'        // Integrated full body training
+  | 'ring_support_progressions' // Ring stability and support work
+  | 'skill_specific_blocks'     // Dedicated skill practice blocks
+  | 'pyramid_ladders'           // Volume accumulation structures
+  | 'emom_blocks'               // Every minute on the minute work
+  | 'superset_pairings'         // Paired exercise structures
+  | 'wave_loading'              // Intensity wave patterns
+  | 'straight_arm_blocks'       // Dedicated straight-arm work
+  | 'bent_arm_blocks'           // Dedicated bent-arm work
+  | 'prehab_mobility_blocks'    // Prep and mobility focused work
+
+// =============================================================================
+// ADVANCED APPLICABILITY
+// =============================================================================
+
+export type AdvancedApplicability =
+  | 'beginner_only'             // Only suitable for beginners
+  | 'beginner_intermediate'     // Beginners through intermediate
+  | 'intermediate_advanced'     // Intermediate through advanced
+  | 'advanced_only'             // Only for advanced athletes
+  | 'all_levels'                // Scalable to any level
+
+// =============================================================================
 // TRAINING DOCTRINE MODEL
 // =============================================================================
 
@@ -114,8 +144,14 @@ export interface TrainingDoctrine {
   /** Human-readable name */
   name: string
   
+  /** Display name for UI (optional, falls back to name) */
+  displayName?: string
+  
   /** Short description of the methodology */
   description: string
+  
+  /** One-line summary of the doctrine */
+  summary: string
   
   /** Category classification */
   category: DoctrineCategory
@@ -155,6 +191,18 @@ export interface TrainingDoctrine {
   
   /** Key principles of this doctrine */
   keyPrinciples: string[]
+  
+  /** Specific use cases where this doctrine excels */
+  bestUseCases: string[]
+  
+  /** Conditions where this doctrine should be avoided */
+  avoidWhen: string[]
+  
+  /** Preferred session/block structures */
+  preferredStructures: PreferredStructure[]
+  
+  /** What skill levels this doctrine applies to */
+  advancedApplicability: AdvancedApplicability
 }
 
 // =============================================================================

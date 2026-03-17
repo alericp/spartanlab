@@ -70,11 +70,9 @@ export async function checkProAccess(): Promise<ProAccessResult> {
     // 4. Check database subscription status
     const subscription = await getUserSubscription(userId)
 
-    // Pro plan with active status
-    if (subscription.plan === 'pro') {
-      // Check if it's a trial or active subscription
-      // Note: getUserSubscription returns 'active' if there's a stripe_subscription_id
-      // Trials are still considered active in our system
+    // Pro plan with active or trialing status
+    if (subscription.plan === 'pro' && 
+        (subscription.status === 'active' || subscription.status === 'trialing')) {
       return {
         hasAccess: true,
         reason: subscription.status === 'trialing' ? 'trial' : 'pro',
@@ -83,7 +81,7 @@ export async function checkProAccess(): Promise<ProAccessResult> {
       }
     }
 
-    // Free user - no access
+    // Free user or canceled subscription - no access
     return {
       hasAccess: false,
       reason: 'free',

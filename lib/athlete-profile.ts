@@ -918,6 +918,11 @@ export interface OnboardingProfile {
   workoutDurationPreference: WorkoutDurationPreference | null  // Semantic duration for program builder
   sessionStyle: SessionStylePreference | null
   
+  // Short Session Preferences (10-25 minute express sessions)
+  shortSessionsEnabled: boolean
+  shortSessionPreferredFormat: 'auto' | 'emom' | 'ladder' | 'pyramid' | 'density_block' | 'express' | 'skill_micro'
+  shortSessionPreferredDuration: 10 | 15 | 20 | 25
+  
   // Section 9: Recovery / Lifestyle
   recovery: RecoveryProfile | null
   
@@ -1386,6 +1391,11 @@ export function createEmptyOnboardingProfile(): OnboardingProfile {
   sessionLengthMinutes: null,
   workoutDurationPreference: null,
   sessionStyle: null,
+  
+  // Short Session Preferences
+  shortSessionsEnabled: false,
+  shortSessionPreferredFormat: 'auto',
+  shortSessionPreferredDuration: 15,
   
   // Section 9: Recovery / Lifestyle
     recovery: null,

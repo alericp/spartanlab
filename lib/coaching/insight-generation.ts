@@ -1,6 +1,6 @@
 import type { MovementBias } from '@/lib/movement-bias-detection-engine'
-import type { ProgressionKnowledge } from '@/lib/knowledge-bubble-content'
-import { KNOWLEDGE_BUBBLE_CONTENT, PROGRESSION_KNOWLEDGE } from '@/lib/knowledge-bubble-content'
+import type { ProgressionKnowledge, ExerciseKnowledge } from '@/lib/knowledge-bubble-content'
+import { EXERCISE_KNOWLEDGE, PROGRESSION_KNOWLEDGE } from '@/lib/knowledge-bubble-content'
 
 // =============================================================================
 // INSIGHT TEXT GENERATION FROM AI SYSTEMS
@@ -11,7 +11,9 @@ import { KNOWLEDGE_BUBBLE_CONTENT, PROGRESSION_KNOWLEDGE } from '@/lib/knowledge
  * Pulls from existing knowledge bubble content.
  */
 export function getExerciseSelectionInsight(exerciseId: string): string | null {
-  const knowledge = KNOWLEDGE_BUBBLE_CONTENT[exerciseId]
+  // Normalize exercise ID to match knowledge base keys
+  const normalizedId = exerciseId.toLowerCase().replace(/\s+/g, '_').replace(/-/g, '_')
+  const knowledge = EXERCISE_KNOWLEDGE[normalizedId] || EXERCISE_KNOWLEDGE[exerciseId]
   if (!knowledge) return null
   return knowledge.shortReason || null
 }
@@ -20,7 +22,8 @@ export function getExerciseSelectionInsight(exerciseId: string): string | null {
  * Generates skill carryover insight from exercise knowledge.
  */
 export function getSkillCarryoverInsight(exerciseId: string): string[] | null {
-  const knowledge = KNOWLEDGE_BUBBLE_CONTENT[exerciseId]
+  const normalizedId = exerciseId.toLowerCase().replace(/\s+/g, '_').replace(/-/g, '_')
+  const knowledge = EXERCISE_KNOWLEDGE[normalizedId] || EXERCISE_KNOWLEDGE[exerciseId]
   if (!knowledge || !knowledge.skillCarryover) return null
   return knowledge.skillCarryover
 }

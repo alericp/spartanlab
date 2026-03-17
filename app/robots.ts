@@ -79,6 +79,12 @@ export default function robots(): MetadataRoute.Robots {
           '/front-lever-strength-requirements',
           '/muscle-up-strength-requirements',
           '/hspu-strength-requirements',
+          // Hybrid, powerlifting, and streetlifting SEO pages
+          '/deadlift-strength-standards',
+          '/powerlifting-strength-standards',
+          '/streetlifting-strength-standards',
+          '/hybrid-training-program',
+          '/weighted-calisthenics-vs-powerlifting',
         ],
         disallow: [
           // App/private pages - user-specific content

@@ -284,6 +284,39 @@ export default function CalisthenicsStrengthStandardsPage() {
         </div>
       </section>
 
+      {/* Hybrid & Barbell Strength */}
+      <section className="py-12 px-4 sm:px-6 border-t border-[#2B313A]">
+        <div className="max-w-4xl mx-auto">
+          <h2 className="text-xl font-bold mb-6 text-[#E6E9EF]">Hybrid & Barbell Strength</h2>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <Link href="/streetlifting-strength-standards">
+              <Card className="bg-[#1A1F26] border-[#2B313A] p-4 hover:border-[#C1121F]/50 transition-colors h-full">
+                <h3 className="font-medium text-[#E6E9EF] mb-1">Streetlifting Standards</h3>
+                <p className="text-xs text-[#6B7280]">Weighted calisthenics benchmarks</p>
+              </Card>
+            </Link>
+            <Link href="/powerlifting-strength-standards">
+              <Card className="bg-[#1A1F26] border-[#2B313A] p-4 hover:border-[#C1121F]/50 transition-colors h-full">
+                <h3 className="font-medium text-[#E6E9EF] mb-1">Powerlifting Standards</h3>
+                <p className="text-xs text-[#6B7280]">SBD benchmarks by bodyweight</p>
+              </Card>
+            </Link>
+            <Link href="/deadlift-strength-standards">
+              <Card className="bg-[#1A1F26] border-[#2B313A] p-4 hover:border-[#C1121F]/50 transition-colors h-full">
+                <h3 className="font-medium text-[#E6E9EF] mb-1">Deadlift Standards</h3>
+                <p className="text-xs text-[#6B7280]">Relative pulling power</p>
+              </Card>
+            </Link>
+            <Link href="/weighted-calisthenics-vs-powerlifting">
+              <Card className="bg-[#1A1F26] border-[#2B313A] p-4 hover:border-[#C1121F]/50 transition-colors h-full">
+                <h3 className="font-medium text-[#E6E9EF] mb-1">Systems Compared</h3>
+                <p className="text-xs text-[#6B7280]">Choose your training path</p>
+              </Card>
+            </Link>
+          </div>
+        </div>
+      </section>
+
       {/* Related Resources */}
       <section className="py-12 px-4 sm:px-6 border-t border-[#2B313A]">
         <div className="max-w-4xl mx-auto">
@@ -295,10 +328,10 @@ export default function CalisthenicsStrengthStandardsPage() {
                 <p className="text-xs text-[#6B7280]">Advanced pulling benchmarks</p>
               </Card>
             </Link>
-            <Link href="/guides">
+            <Link href="/hybrid-training-program">
               <Card className="bg-[#1A1F26] border-[#2B313A] p-4 hover:border-[#C1121F]/50 transition-colors h-full">
-                <h3 className="font-medium text-[#E6E9EF] mb-1">Training Guides</h3>
-                <p className="text-xs text-[#6B7280]">In-depth progression guides</p>
+                <h3 className="font-medium text-[#E6E9EF] mb-1">Hybrid Training</h3>
+                <p className="text-xs text-[#6B7280]">Combine barbell + bodyweight</p>
               </Card>
             </Link>
             <Link href="/programs">

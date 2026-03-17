@@ -304,6 +304,20 @@ export default function sitemap(): MetadataRoute.Sitemap {
     priority: 0.8,
   }))
 
+  // Hybrid, powerlifting, and streetlifting SEO pages
+  const hybridStrengthPages: MetadataRoute.Sitemap = [
+    'deadlift-strength-standards',
+    'powerlifting-strength-standards',
+    'streetlifting-strength-standards',
+    'hybrid-training-program',
+    'weighted-calisthenics-vs-powerlifting',
+  ].map(slug => ({
+    url: `${baseUrl}/${slug}`,
+    lastModified: currentDate,
+    changeFrequency: 'monthly' as const,
+    priority: 0.8,
+  }))
+
   // Comparison and training guide pages
   const comparisonPages: MetadataRoute.Sitemap = [
     'front-lever-vs-planche',
@@ -366,6 +380,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     ...guidePages,
     ...strengthStandardsPages,
     ...strengthRequirementsPages,
+    ...hybridStrengthPages,
     ...skillThresholdPages,
     ...comparisonPages,
     ...infoPages,

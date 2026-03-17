@@ -6,15 +6,15 @@ import { Button } from '@/components/ui/button'
 import { SITE_CONFIG } from '@/lib/seo'
 
 export const metadata: Metadata = {
-  title: 'Calisthenics Training Guides | SpartanLab',
-  description: 'Explore 25+ SpartanLab calisthenics guides covering front lever, planche, muscle-up, HSPU progressions, strength requirements, and complete training programs from beginner to advanced.',
-  keywords: ['calisthenics training guides', 'front lever guide', 'planche progression guide', 'muscle-up training guide', 'calisthenics strength standards', 'calisthenics program', 'HSPU progression', 'calisthenics strength requirements'],
+  title: 'Calisthenics Training Guides | Skill Progressions & Programming | SpartanLab',
+  description: 'Expert calisthenics guides for front lever, planche, muscle-up, handstand, and weighted calisthenics. Complete progressions, strength requirements, and programming principles.',
+  keywords: ['calisthenics training guides', 'front lever guide', 'planche progression', 'muscle-up training', 'weighted pull-up training', 'calisthenics programming', 'skill progression'],
   alternates: {
     canonical: `${SITE_CONFIG.url}/guides`,
   },
   openGraph: {
     title: 'Calisthenics Training Guides | SpartanLab',
-    description: 'Explore 25+ SpartanLab calisthenics guides covering front lever, planche, muscle-up, HSPU progressions, strength requirements, and complete training programs.',
+    description: 'Expert calisthenics guides for front lever, planche, muscle-up, handstand, and weighted calisthenics training.',
     url: `${SITE_CONFIG.url}/guides`,
     siteName: SITE_CONFIG.name,
     type: 'website',
@@ -22,9 +22,16 @@ export const metadata: Metadata = {
   twitter: {
     card: 'summary_large_image',
     title: 'Calisthenics Training Guides | SpartanLab',
-    description: 'Explore 25+ calisthenics training guides for front lever, planche, muscle-up, and more.',
+    description: 'Expert calisthenics guides for front lever, planche, muscle-up, and weighted calisthenics training.',
   },
 }
+
+// Only include guides that have real corresponding pages
+// Pages verified: testing, front-lever-training, planche-progression, handstand-training, iron-cross-training,
+// back-lever-training, weighted-pull-up-training, one-arm-pull-up-training, pull-up-endurance-training,
+// weighted-dip-training, muscle-up-training, handstand-push-up-progression, six-pack-abs-training,
+// skill-cycles-guide, training-phases-guide, pancake-flexibility, toe-touch-flexibility, front-splits-flexibility,
+// side-splits-flexibility, flexibility-vs-mobility, splits-mobility, pancake-mobility, military-fitness-prep, marine-pft-prep
 
 const GUIDES = [
   {
@@ -44,14 +51,6 @@ const GUIDES = [
     category: 'Skill Progression',
     readTime: '15 min read',
     featured: true,
-  },
-  {
-    slug: 'front-lever-progression',
-    title: 'Front Lever Progression Guide',
-    description: 'Master the front lever from tuck to full with clear benchmarks and prerequisite strength standards.',
-    icon: Target,
-    category: 'Skill Progression',
-    readTime: '8 min read',
   },
   {
     slug: 'planche-progression',
@@ -90,37 +89,12 @@ const GUIDES = [
     featured: true,
   },
   {
-    slug: 'calisthenics-strength-standards',
-    title: 'Calisthenics Strength Standards',
-    description: 'Benchmark your pulling and pushing strength against calisthenics standards from beginner to elite.',
-    icon: Trophy,
-    category: 'Strength',
-    readTime: '6 min read',
-  },
-  {
     slug: 'weighted-pull-up-training',
     title: 'Weighted Pull-Up Strength Guide',
     description: 'Complete guide to building pulling strength with weighted pull-ups. Includes strength levels, exercises, and programming.',
     icon: Dumbbell,
     category: 'Strength',
     readTime: '10 min read',
-    featured: true,
-  },
-  {
-    slug: 'weighted-pull-up-standards',
-    title: 'Weighted Pull-Up Standards',
-    description: 'Learn the weighted pull-up benchmarks that correlate with advanced skill acquisition.',
-    icon: Dumbbell,
-    category: 'Strength',
-    readTime: '5 min read',
-  },
-  {
-    slug: '../calisthenics-strength-standards',
-    title: 'Calisthenics Strength Standards',
-    description: 'Complete benchmarks for pull-ups, dips, push-ups, and weighted exercises. Know your level from beginner to elite.',
-    icon: Trophy,
-    category: 'Reference',
-    readTime: '8 min read',
     featured: true,
   },
   {
@@ -141,14 +115,6 @@ const GUIDES = [
     readTime: '10 min read',
   },
   {
-    slug: 'pull-up-strength-progressions',
-    title: 'Pull-Up Strength Progressions',
-    description: 'From beginner to advanced pulling strength. Complete exercise library with progressions for all levels.',
-    icon: Dumbbell,
-    category: 'Strength',
-    readTime: '12 min read',
-  },
-  {
     slug: 'weighted-dip-training',
     title: 'Weighted Dip Training Guide',
     description: 'Complete guide to building pushing strength with weighted dips. Includes strength levels, exercises, and programming.',
@@ -165,14 +131,6 @@ const GUIDES = [
     category: 'Skill Progression',
     readTime: '12 min read',
     featured: true,
-  },
-  {
-    slug: 'muscle-up-progression',
-    title: 'Muscle-Up Progression Guide',
-    description: 'Progress from your first muscle-up to weighted reps. Prerequisites, technique cues, and common mistakes.',
-    icon: Zap,
-    category: 'Skill Progression',
-    readTime: '7 min read',
   },
   {
     slug: 'handstand-push-up-progression',
@@ -193,14 +151,6 @@ const GUIDES = [
     featured: true,
   },
   {
-    slug: 'calisthenics-training-program',
-    title: 'Calisthenics Training Program Guide',
-    description: 'Structure your calisthenics training for consistent progress. Learn programming principles that work.',
-    icon: GraduationCap,
-    category: 'Programming',
-    readTime: '12 min read',
-  },
-  {
     slug: 'skill-cycles-guide',
     title: 'Calisthenics Skill Cycles',
     description: 'Learn how to structure skill-focused training cycles for planche, front lever, handstand, and muscle-up development.',
@@ -208,22 +158,6 @@ const GUIDES = [
     category: 'Programming',
     readTime: '10 min read',
     featured: true,
-  },
-  {
-    slug: 'strength-cycles-guide',
-    title: 'Calisthenics Strength Cycles',
-    description: 'Master weighted calisthenics and build raw strength with structured strength cycles.',
-    icon: Dumbbell,
-    category: 'Programming',
-    readTime: '10 min read',
-  },
-  {
-    slug: 'hypertrophy-cycles-guide',
-    title: 'Calisthenics Hypertrophy Cycles',
-    description: 'Build muscle mass with calisthenics using structured hypertrophy training cycles.',
-    icon: Flame,
-    category: 'Programming',
-    readTime: '10 min read',
   },
   {
     slug: 'training-phases-guide',
@@ -234,107 +168,7 @@ const GUIDES = [
     readTime: '12 min read',
     featured: true,
   },
-  {
-    slug: 'calisthenics-periodization',
-    title: 'Calisthenics Periodization Guide',
-    description: 'Learn how to structure training cycles with mesocycles, deloads, and skill blocks for optimal progress.',
-    icon: GraduationCap,
-    category: 'Programming',
-    readTime: '10 min read',
-  },
-  {
-    slug: 'hspu-progression',
-    title: 'Handstand Push-Up Guide',
-    description: 'Progress from wall HSPU to freestanding. Learn prerequisites, technique, and training tips.',
-    icon: Target,
-    category: 'Skill Progression',
-    readTime: '8 min read',
-  },
-  {
-    slug: 'l-sit-training',
-    title: 'L-Sit Training Guide',
-    description: 'Master L-sit progression from tucked holds to full extension. Build core compression strength and readiness for advanced skills.',
-    icon: Target,
-    category: 'Compression Skills',
-    readTime: '10 min read',
-    featured: true,
-  },
-  {
-    slug: 'v-sit-progression',
-    title: 'V-Sit Progression Guide',
-    description: 'Progress toward V-sit mastery. Understand prerequisites, compression requirements, and training strategies.',
-    icon: Target,
-    category: 'Compression Skills',
-    readTime: '8 min read',
-  },
-  {
-    slug: 'compression-strength-guide',
-    title: 'Compression Strength Guide',
-    description: 'Build core compression strength for L-sit, V-sit, and advanced calisthenics skills. Exercises and programming principles.',
-    icon: Target,
-    category: 'Compression Skills',
-    readTime: '12 min read',
-  },
-  // Strength Requirements Guides
-  {
-    slug: 'front-lever-strength-requirements',
-    title: 'Front Lever Strength Requirements',
-    description: 'Detailed strength benchmarks for each front lever progression level. Know exactly how strong you need to be.',
-    icon: Dumbbell,
-    category: 'Strength',
-    readTime: '8 min read',
-  },
-  {
-    slug: 'planche-strength-requirements',
-    title: 'Planche Strength Requirements',
-    description: 'Detailed strength benchmarks for planche progressions. Weighted dip, PPPU, and core requirements.',
-    icon: Dumbbell,
-    category: 'Strength',
-    readTime: '8 min read',
-  },
-  {
-    slug: 'muscle-up-strength-requirements',
-    title: 'Muscle-Up Strength Requirements',
-    description: 'Pulling, pushing, and explosive power requirements for strict muscle-ups on bar and rings.',
-    icon: Dumbbell,
-    category: 'Strength',
-    readTime: '8 min read',
-  },
-  {
-    slug: 'hspu-strength-requirements',
-    title: 'HSPU Strength Requirements',
-    description: 'Pressing, core, and balance prerequisites for wall and freestanding handstand push-ups.',
-    icon: Dumbbell,
-    category: 'Strength',
-    readTime: '8 min read',
-  },
-  // Program Guides
-  {
-    slug: 'calisthenics-beginner-program',
-    title: 'Calisthenics Beginner Program',
-    description: 'Complete beginner program with exercises, sets, reps, and progression guidelines for new athletes.',
-    icon: GraduationCap,
-    category: 'Programming',
-    readTime: '10 min read',
-    featured: true,
-  },
-  {
-    slug: 'calisthenics-intermediate-program',
-    title: 'Calisthenics Intermediate Program',
-    description: 'Intermediate program introducing skill work and weighted training. Bridge to advanced skills.',
-    icon: GraduationCap,
-    category: 'Programming',
-    readTime: '10 min read',
-  },
-  {
-    slug: 'calisthenics-advanced-program',
-    title: 'Calisthenics Advanced Program',
-    description: 'Advanced programming for elite skill mastery. Periodization, specialization, and recovery strategies.',
-    icon: GraduationCap,
-    category: 'Programming',
-    readTime: '12 min read',
-  },
-  // Flexibility & Mobility Guides
+  // Flexibility & Mobility Guides (verified pages exist)
   {
     slug: 'pancake-flexibility',
     title: 'Pancake Flexibility Guide',
@@ -393,7 +227,7 @@ const GUIDES = [
     category: 'Mobility',
     readTime: '8 min read',
   },
-  // Military Fitness Prep Guides
+  // Military Fitness Prep Guides (verified pages exist)
   {
     slug: 'military-fitness-prep',
     title: 'Military Fitness Test Prep Guide',
@@ -410,47 +244,6 @@ const GUIDES = [
     icon: Shield,
     category: 'Military Prep',
     readTime: '12 min read',
-  },
-  {
-    slug: 'marine-cft-prep',
-    title: 'Marine Corps CFT Prep Guide',
-    description: 'Train for the Combat Fitness Test with movement to contact, ammo lift, and maneuver under fire preparation.',
-    icon: Shield,
-    category: 'Military Prep',
-    readTime: '12 min read',
-  },
-  {
-    slug: 'army-acft-prep',
-    title: 'Army ACFT Prep Guide',
-    description: 'Complete guide to the Army Combat Fitness Test. All six events with training strategies and programming.',
-    icon: Shield,
-    category: 'Military Prep',
-    readTime: '15 min read',
-  },
-  {
-    slug: 'navy-prt-prep',
-    title: 'Navy PRT Prep Guide',
-    description: 'Prepare for the Navy Physical Readiness Test with push-up, plank, and cardio training strategies.',
-    icon: Shield,
-    category: 'Military Prep',
-    readTime: '10 min read',
-  },
-  {
-    slug: 'air-force-pt-prep',
-    title: 'Air Force PT Test Prep Guide',
-    description: 'Complete preparation guide for the Air Force Physical Training Test. Push-ups, sit-ups, and 1.5-mile run.',
-    icon: Shield,
-    category: 'Military Prep',
-    readTime: '10 min read',
-  },
-  {
-    slug: 'boot-camp-readiness',
-    title: 'Boot Camp Readiness Guide',
-    description: 'Prepare physically for any military basic training. Build the fitness foundation needed to succeed from day one.',
-    icon: Shield,
-    category: 'Military Prep',
-    readTime: '12 min read',
-    featured: true,
   },
 ]
 
@@ -590,15 +383,34 @@ export default function GuidesPage() {
             </div>
           </Card>
 
-          {/* Footer Links */}
+          {/* Related Resources */}
           <div className="mt-12 pt-8 border-t border-[#2B313A]">
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-[#6B7280]">
-              <p>Explore more SpartanLab training resources</p>
-              <div className="flex items-center gap-6">
-                <Link href="/tools" className="hover:text-[#E6E9EF] transition-colors">Free Tools</Link>
-                <Link href="/programs" className="hover:text-[#E6E9EF] transition-colors">Program Builder</Link>
-                <Link href="/results" className="hover:text-[#E6E9EF] transition-colors">Results</Link>
-              </div>
+            <h2 className="text-lg font-semibold text-[#E6E9EF] mb-4">Related Resources</h2>
+            <div className="grid sm:grid-cols-4 gap-4 mb-8">
+              <Link href="/calculators">
+                <Card className="bg-[#1A1F26] border-[#2B313A] p-4 hover:border-[#C1121F]/50 transition-all h-full">
+                  <h3 className="font-medium text-[#E6E9EF] text-sm mb-1">Readiness Calculators</h3>
+                  <p className="text-xs text-[#6B7280]">Test your skill prerequisites</p>
+                </Card>
+              </Link>
+              <Link href="/calisthenics-strength-standards">
+                <Card className="bg-[#1A1F26] border-[#2B313A] p-4 hover:border-[#C1121F]/50 transition-all h-full">
+                  <h3 className="font-medium text-[#E6E9EF] text-sm mb-1">Strength Standards</h3>
+                  <p className="text-xs text-[#6B7280]">Benchmark your level</p>
+                </Card>
+              </Link>
+              <Link href="/programs">
+                <Card className="bg-[#1A1F26] border-[#2B313A] p-4 hover:border-[#C1121F]/50 transition-all h-full">
+                  <h3 className="font-medium text-[#E6E9EF] text-sm mb-1">Training Programs</h3>
+                  <p className="text-xs text-[#6B7280]">Structured skill programs</p>
+                </Card>
+              </Link>
+              <Link href="/training">
+                <Card className="bg-[#1A1F26] border-[#2B313A] p-4 hover:border-[#C1121F]/50 transition-all h-full">
+                  <h3 className="font-medium text-[#E6E9EF] text-sm mb-1">Training Hub</h3>
+                  <p className="text-xs text-[#6B7280]">Browse all training options</p>
+                </Card>
+              </Link>
             </div>
           </div>
         </div>

@@ -60,6 +60,20 @@ export default function robots(): MetadataRoute.Robots {
           '/weighted-pull-up-calculator',
           '/calisthenics-program-builder',
           '/tools/',
+          // Training hub and program pages
+          '/training/',
+          '/training-systems',
+          // Strength standards pages
+          '/weighted-pull-up-strength-standards',
+          '/weighted-dip-strength-standards',
+          '/pull-up-strength-standards',
+          '/dip-strength-standards',
+          '/push-up-strength-standards',
+          // Additional readiness calculators
+          '/hspu-readiness-calculator',
+          '/iron-cross-readiness-calculator',
+          // Protocols (joint health content)
+          '/protocols/',
         ],
         disallow: [
           // App/private pages - user-specific content

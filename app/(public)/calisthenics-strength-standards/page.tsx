@@ -284,6 +284,33 @@ export default function CalisthenicsStrengthStandardsPage() {
         </div>
       </section>
 
+      {/* Related Resources */}
+      <section className="py-12 px-4 sm:px-6 border-t border-[#2B313A]">
+        <div className="max-w-4xl mx-auto">
+          <h2 className="text-xl font-bold mb-6 text-[#E6E9EF]">Related Resources</h2>
+          <div className="grid sm:grid-cols-3 gap-4">
+            <Link href="/weighted-pull-up-strength-standards">
+              <Card className="bg-[#1A1F26] border-[#2B313A] p-4 hover:border-[#C1121F]/50 transition-colors h-full">
+                <h3 className="font-medium text-[#E6E9EF] mb-1">Weighted Pull-Up Standards</h3>
+                <p className="text-xs text-[#6B7280]">Advanced pulling benchmarks</p>
+              </Card>
+            </Link>
+            <Link href="/guides">
+              <Card className="bg-[#1A1F26] border-[#2B313A] p-4 hover:border-[#C1121F]/50 transition-colors h-full">
+                <h3 className="font-medium text-[#E6E9EF] mb-1">Training Guides</h3>
+                <p className="text-xs text-[#6B7280]">In-depth progression guides</p>
+              </Card>
+            </Link>
+            <Link href="/programs">
+              <Card className="bg-[#1A1F26] border-[#2B313A] p-4 hover:border-[#C1121F]/50 transition-colors h-full">
+                <h3 className="font-medium text-[#E6E9EF] mb-1">Training Programs</h3>
+                <p className="text-xs text-[#6B7280]">Structured skill programs</p>
+              </Card>
+            </Link>
+          </div>
+        </div>
+      </section>
+
       {/* Conversion CTA - Static version (server-rendered) */}
       <section className="py-12 px-4 sm:px-6 bg-[#0F1115]">
         <div className="max-w-4xl mx-auto">

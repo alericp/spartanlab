@@ -173,6 +173,19 @@ export default function sitemap(): MetadataRoute.Sitemap {
       changeFrequency: 'weekly',
       priority: 0.8,
     },
+    // Training hub and methodology
+    {
+      url: `${baseUrl}/training`,
+      lastModified: currentDate,
+      changeFrequency: 'weekly',
+      priority: 0.8,
+    },
+    {
+      url: `${baseUrl}/training-systems`,
+      lastModified: currentDate,
+      changeFrequency: 'monthly',
+      priority: 0.7,
+    },
   ]
 
   // Program template pages - educational workout programs
@@ -187,6 +200,20 @@ export default function sitemap(): MetadataRoute.Sitemap {
     lastModified: currentDate,
     changeFrequency: 'monthly' as const,
     priority: 0.75,
+  }))
+
+  // SEO training program pages - high-intent landing pages
+  const trainingPages: MetadataRoute.Sitemap = [
+    'front-lever-program',
+    'planche-program',
+    'weighted-pull-up-program',
+    'calisthenics-program',
+    'hybrid-strength-program',
+  ].map(slug => ({
+    url: `${baseUrl}/training/${slug}`,
+    lastModified: currentDate,
+    changeFrequency: 'monthly' as const,
+    priority: 0.8,
   }))
 
   // Exercise pages - individual exercise guides
@@ -321,6 +348,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
   return [
     ...staticPages,
     ...programPages,
+    ...trainingPages,
     ...exercisePages,
     ...guidePages,
     ...strengthStandardsPages,

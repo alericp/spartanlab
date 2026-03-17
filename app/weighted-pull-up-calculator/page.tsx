@@ -1,13 +1,10 @@
 'use client'
 
-// Prevent static prerendering to avoid auth issues during build
-export const dynamic = 'force-dynamic'
-
 import { useState } from 'react'
 import Link from 'next/link'
 import { SeoPageLayout } from '@/components/seo/SeoPageLayout'
 import { RelatedFeatureCTA } from '@/components/seo/RelatedFeatureCTA'
-import { ToolConversionCard } from '@/components/tools/ToolConversionCard'
+import { ToolConversionCardStatic } from '@/components/tools/ToolConversionCardStatic'
 import { trackToolUsed } from '@/lib/analytics'
 import { Dumbbell, Calculator, ArrowRight, Info } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -224,7 +221,7 @@ export default function WeightedPullUpCalculatorPage() {
       {/* Conversion CTA */}
       <section className="py-12 px-4 sm:px-6">
         <div className="max-w-4xl mx-auto">
-          <ToolConversionCard
+          <ToolConversionCardStatic
             context="front-lever"
             toolData={result ? {
               weightedPullUp: result.estimated1RM - parseFloat(bodyweight),

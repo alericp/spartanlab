@@ -1,10 +1,23 @@
 'use client'
 
 /**
- * ToolConversionCard - Client wrapper for conversion funnel component
+ * ToolConversionCard - Auth-aware conversion funnel component
  * 
- * This wrapper uses next/dynamic with ssr: false to load the auth-aware
- * client component. The actual Clerk useAuth() hook only runs on the client side.
+ * This component uses Clerk's useAuth() hook to show different CTAs based on
+ * whether the user is logged in. It uses next/dynamic with ssr: false.
+ * 
+ * IMPORTANT: Do NOT use this component in public SEO pages that need to be
+ * statically prerendered. Instead, use ToolConversionCardStatic for those pages.
+ * 
+ * Use this component:
+ * - In authenticated app screens
+ * - In client-only contexts
+ * - Where auth-aware behavior is needed (different CTA for logged-in users)
+ * 
+ * Use ToolConversionCardStatic instead:
+ * - In public SEO pages (/calisthenics-strength-standards, calculators, etc.)
+ * - In pages that need to be statically prerendered
+ * - Where auth state doesn't affect the CTA behavior
  */
 
 import dynamic from 'next/dynamic'

@@ -1,8 +1,4 @@
 import { Metadata } from 'next'
-
-// Prevent static prerendering to avoid auth issues during build
-export const dynamic = 'force-dynamic'
-
 import Link from 'next/link'
 import { Dumbbell, ArrowRight, ChevronRight, CheckCircle2, Calculator, Target } from 'lucide-react'
 import { Card } from '@/components/ui/card'
@@ -10,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { JsonLdMultiple } from '@/components/seo/JsonLd'
 import { FAQ } from '@/components/seo/FAQ'
-import { ToolConversionCard } from '@/components/tools/ToolConversionCard'
+import { ToolConversionCardStatic } from '@/components/tools/ToolConversionCardStatic'
 import { generateArticleSchema, generateBreadcrumbSchema, generateFAQSchema, SITE_CONFIG } from '@/lib/seo'
 
 export const metadata: Metadata = {
@@ -278,7 +274,7 @@ export default function WeightedPullUpStandardsPage() {
 
         {/* Conversion CTA */}
         <section className="mb-12">
-          <ToolConversionCard context="front-lever" />
+          <ToolConversionCardStatic context="front-lever" />
         </section>
       </div>
     </main>

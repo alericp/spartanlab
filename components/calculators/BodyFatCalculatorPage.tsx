@@ -20,7 +20,7 @@ import {
 import { cn } from '@/lib/utils'
 import { SpartanIcon } from '@/components/brand/SpartanLogo'
 import { NextSteps } from '@/components/seo/RelatedContent'
-import { ToolConversionCard } from '@/components/tools/ToolConversionCard'
+import { ToolConversionCardStatic } from '@/components/tools/ToolConversionCardStatic'
 import { trackToolUsed } from '@/lib/analytics'
 import { getToolCluster } from '@/lib/seo/skill-clusters'
 import { 
@@ -347,7 +347,7 @@ export function BodyFatCalculatorPage() {
         {/* Conversion CTA */}
         {result && (
           <section className="mt-12">
-            <ToolConversionCard
+            <ToolConversionCardStatic
               context="body-fat"
               toolData={{
                 bodyweight: undefined, // Bodyweight isn't collected separately

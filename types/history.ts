@@ -41,6 +41,13 @@ export interface AthleteInputsSnapshot {
   sleepQuality?: string
   stressLevel?: string
   recoveryConfidence?: string
+  
+  // Hybrid strength benchmarks (Phase 2)
+  deadlift1RM?: number
+  deadliftExperience?: 'none' | 'beginner' | 'intermediate' | 'advanced'
+  hybridModality?: HybridModality
+  includesDeadlift?: boolean
+  streetliftingTotal?: number  // WPU + WDip + Deadlift combined
 }
 
 /**
@@ -58,6 +65,12 @@ export interface GoalsSnapshot {
     targetValue?: number
     unit?: string
   }>
+  
+  // Hybrid strength goals
+  hybridModality?: HybridModality
+  includesDeadlift?: boolean
+  deadliftGoal?: number  // Target 1RM
+  streetliftingGoal?: number  // Target total
 }
 
 /**
@@ -180,7 +193,33 @@ export type PRType =
   | 'best_level' 
   | 'best_sets'
   | 'first_unlock'
-export type ExerciseCategory = 'skill' | 'strength' | 'weighted' | 'bodyweight' | 'mobility' | 'conditioning'
+  // Hybrid/barbell PR types
+  | 'barbell_1rm'          // True 1RM for barbell lifts (deadlift, squat, bench)
+  | 'barbell_top_set'      // Best top set (weight x reps) for barbell
+  | 'weighted_calisthenics' // Weighted pull-up/dip PRs (bodyweight + added weight)
+  | 'relative_strength'    // Ratio to bodyweight (e.g., 1.5x BW deadlift)
+  
+export type ExerciseCategory = 
+  | 'skill' 
+  | 'strength' 
+  | 'weighted' 
+  | 'bodyweight' 
+  | 'mobility' 
+  | 'conditioning'
+  // Hybrid categories
+  | 'barbell_hinge'        // Deadlift variants
+  | 'barbell_squat'        // Squat variants (future)
+  | 'barbell_press'        // Bench/overhead (future)
+  | 'weighted_calisthenics' // Weighted pull-up, dip, muscle-up
+
+/**
+ * Hybrid strength modality for program context
+ */
+export type HybridModality = 
+  | 'calisthenics_only' 
+  | 'weighted_calisthenics' 
+  | 'hybrid_light' 
+  | 'streetlifting_biased'
 
 /**
  * Program history entry

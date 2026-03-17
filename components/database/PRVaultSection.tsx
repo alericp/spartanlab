@@ -1,7 +1,7 @@
 'use client'
 
 import { Card } from '@/components/ui/card'
-import { Trophy, Dumbbell, Target, Flame } from 'lucide-react'
+import { Trophy, Dumbbell, Target, Flame, Zap } from 'lucide-react'
 import type { PRVault } from '@/lib/pr-vault-engine'
 
 interface PRVaultSectionProps {
@@ -12,8 +12,10 @@ export function PRVaultSection({ vault }: PRVaultSectionProps) {
   const hasSkillPRs = vault.skillPRs.some(p => p.hasData)
   const hasStrengthPRs = vault.strengthPRs.some(p => p.hasData)
   const hasTrainingPRs = vault.trainingPRs.some(p => p.hasData)
+  const hasBarbellPRs = vault.barbellPRs?.some(p => p.hasData) ?? false
+  const hasStreetliftingTotal = vault.streetliftingTotal?.hasData ?? false
   
-  if (!hasSkillPRs && !hasStrengthPRs && !hasTrainingPRs) {
+  if (!hasSkillPRs && !hasStrengthPRs && !hasTrainingPRs && !hasBarbellPRs) {
     return (
       <Card className="bg-[#2A2A2A] border-[#3A3A3A] p-6">
         <div className="flex items-center gap-3 mb-4">
@@ -70,7 +72,7 @@ export function PRVaultSection({ vault }: PRVaultSectionProps) {
         </div>
       )}
       
-      {/* Strength PRs */}
+      {/* Weighted Calisthenics PRs */}
       {hasStrengthPRs && (
         <div className="grid gap-3 sm:grid-cols-3">
           {vault.strengthPRs.filter(p => p.hasData).map(pr => (
@@ -95,6 +97,70 @@ export function PRVaultSection({ vault }: PRVaultSectionProps) {
             </Card>
           ))}
         </div>
+      )}
+      
+      {/* Barbell PRs (Hybrid Strength) */}
+      {hasBarbellPRs && (
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <Zap className="w-4 h-4 text-amber-400" />
+            <span className="text-sm font-medium text-[#AAAAAA]">Barbell Strength</span>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {vault.barbellPRs?.filter(p => p.hasData).map(pr => (
+              <Card 
+                key={pr.exercise}
+                className="bg-[#2A2A2A] border-[#3A3A3A] p-4"
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <Dumbbell className="w-4 h-4 text-amber-400" />
+                    <span className="text-sm font-medium">{pr.exerciseLabel}</span>
+                  </div>
+                  <span className="text-xs text-[#6A6A6A]">{pr.variant}</span>
+                </div>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-2xl font-bold">{pr.bestWeight}</span>
+                  <span className="text-xs text-[#6A6A6A]">kg x {pr.bestReps}</span>
+                </div>
+                <div className="flex items-center gap-3 mt-2 text-xs text-[#6A6A6A]">
+                  <span>Est. 1RM: {pr.estimated1RM}kg</span>
+                  {pr.relativeStrength && (
+                    <span className="text-amber-400">{pr.relativeStrength}x BW</span>
+                  )}
+                </div>
+              </Card>
+            ))}
+          </div>
+        </div>
+      )}
+      
+      {/* Streetlifting Total */}
+      {hasStreetliftingTotal && vault.streetliftingTotal && (
+        <Card className="bg-[#2A2A2A] border-[#3A3A3A] p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <Trophy className="w-4 h-4 text-purple-400" />
+            <span className="text-sm font-medium">Streetlifting Total</span>
+          </div>
+          <div className="flex items-baseline gap-2 mb-3">
+            <span className="text-3xl font-bold">{vault.streetliftingTotal.total}</span>
+            <span className="text-xs text-[#6A6A6A]">kg combined</span>
+          </div>
+          <div className="grid grid-cols-3 gap-3 text-xs text-[#6A6A6A]">
+            <div>
+              <span className="block text-[#AAAAAA]">W. Pull-Up</span>
+              <span>{vault.streetliftingTotal.weightedPullUp1RM ?? '-'} kg</span>
+            </div>
+            <div>
+              <span className="block text-[#AAAAAA]">W. Dip</span>
+              <span>{vault.streetliftingTotal.weightedDip1RM ?? '-'} kg</span>
+            </div>
+            <div>
+              <span className="block text-[#AAAAAA]">Deadlift</span>
+              <span>{vault.streetliftingTotal.deadlift1RM ?? '-'} kg</span>
+            </div>
+          </div>
+        </Card>
       )}
       
       {/* Training PRs */}

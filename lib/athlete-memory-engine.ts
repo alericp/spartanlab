@@ -62,13 +62,15 @@ export type InactivityLevel = 'none' | 'mild' | 'moderate' | 'significant' | 'ma
 export interface ExerciseStrengthMetrics {
   exerciseKey: string
   exerciseName: string
-  category: 'pull' | 'push' | 'straight_arm' | 'core' | 'legs' | 'other'
+  category: 'pull' | 'push' | 'straight_arm' | 'core' | 'legs' | 'other' | 'barbell_hinge' | 'barbell_squat' | 'barbell_press' | 'weighted_calisthenics'
   
   // Best values
   maxWeight?: number
   maxReps?: number
   maxHold?: number
   maxVolume?: number
+  max1RM?: number  // Estimated 1RM for barbell/weighted work
+  relativeStrength?: number  // Ratio to bodyweight
   
   // Dates
   lastPRDate: string | null
@@ -81,6 +83,11 @@ export interface StrengthDropEstimate {
   straightArmDrop: number
   coreDrop: number
   overallDrop: number
+  
+  // Hybrid strength drops (barbell/loaded work)
+  barbellHingeDrop: number  // Deadlift variants
+  barbellSquatDrop: number  // Squat variants
+  weightedCalisthenicsDrop: number  // WPU, WDip
   
   // Reasoning
   explanation: string
@@ -281,10 +288,18 @@ function estimateStrengthDrop(
   // Different muscle groups detrain at different rates
   // Pull strength tends to be more resilient
   // Straight-arm work detrains faster (neural component)
+  // Barbell strength detrains slower than bodyweight (more CNS-dependent)
   const pullDrop = Math.round(baseDrop * 0.8)
   const pushDrop = Math.round(baseDrop * 1.0)
   const straightArmDrop = Math.round(baseDrop * 1.2)
   const coreDrop = Math.round(baseDrop * 0.9)
+  
+  // Hybrid/barbell detraining rates
+  // Deadlift and squats retain better due to lower neural complexity vs skills
+  // Weighted calisthenics falls between pure bodyweight and barbell
+  const barbellHingeDrop = Math.round(baseDrop * 0.7)  // Deadlift retains well
+  const barbellSquatDrop = Math.round(baseDrop * 0.75) // Squat slightly more
+  const weightedCalisthenicsDrop = Math.round(baseDrop * 0.85) // Between barbell and BW
   
   const overallDrop = Math.round((pullDrop + pushDrop + straightArmDrop + coreDrop) / 4)
   
@@ -307,6 +322,12 @@ function estimateStrengthDrop(
     straightArmDrop,
     coreDrop,
     overallDrop,
+    
+    // Hybrid strength drops
+    barbellHingeDrop,
+    barbellSquatDrop,
+    weightedCalisthenicsDrop,
+    
     explanation,
   }
 }
@@ -715,16 +736,23 @@ function assessDataQuality(
   return 'rich'
 }
 
-function categorizeExercise(exerciseKey: string): 'pull' | 'push' | 'straight_arm' | 'core' | 'legs' | 'other' {
+function categorizeExercise(exerciseKey: string): 'pull' | 'push' | 'straight_arm' | 'core' | 'legs' | 'other' | 'barbell_hinge' | 'barbell_squat' | 'barbell_press' | 'weighted_calisthenics' {
   const key = exerciseKey.toLowerCase()
   
+  // Hybrid/barbell categories first (more specific)
+  if (key.includes('deadlift') || key.includes('rdl') || key.includes('romanian')) return 'barbell_hinge'
+  if (key.includes('back_squat') || key.includes('front_squat') || key.includes('barbell_squat')) return 'barbell_squat'
+  if (key.includes('bench_press') || key.includes('overhead_press') || key.includes('barbell_press')) return 'barbell_press'
+  if (key.includes('weighted_pull') || key.includes('weighted_dip') || key.includes('weighted_muscle')) return 'weighted_calisthenics'
+  
+  // Traditional calisthenics categories
   if (key.includes('pull') || key.includes('row') || key.includes('curl')) return 'pull'
   if (key.includes('push') || key.includes('dip') || key.includes('press')) return 'push'
   if (key.includes('lever') || key.includes('planche') || key.includes('support')) return 'straight_arm'
   if (key.includes('core') || key.includes('hollow') || key.includes('l-sit')) return 'core'
   if (key.includes('squat') || key.includes('lunge')) return 'legs'
   return 'other'
-}
+  }
 
 function isPullExercise(key: string): boolean {
   return categorizeExercise(key) === 'pull'
@@ -741,9 +769,26 @@ function isStraightArmExercise(key: string): boolean {
 function isSkillExercise(key: string): boolean {
   const k = key.toLowerCase()
   return k.includes('lever') || k.includes('planche') || k.includes('muscle_up') || k.includes('handstand')
-}
+  }
 
-// =============================================================================
+function isBarbellExercise(key: string): boolean {
+  const category = categorizeExercise(key)
+  return ['barbell_hinge', 'barbell_squat', 'barbell_press'].includes(category)
+  }
+
+function isDeadliftExercise(key: string): boolean {
+  return categorizeExercise(key) === 'barbell_hinge'
+  }
+
+function isWeightedCalisthenicsExercise(key: string): boolean {
+  return categorizeExercise(key) === 'weighted_calisthenics'
+  }
+
+function isHybridExercise(key: string): boolean {
+  return isBarbellExercise(key) || isWeightedCalisthenicsExercise(key)
+  }
+  
+  // =============================================================================
 // PROGRAM GENERATION ADJUSTMENTS
 // =============================================================================
 

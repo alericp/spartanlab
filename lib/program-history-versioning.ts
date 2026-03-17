@@ -59,6 +59,7 @@ export interface ProgramVersionResult {
 
 /**
  * Generate a concise, professional explanation for why a program was created
+ * Extended to support hybrid strength reasoning
  */
 export function generateProgramReasonSummary(
   context: ProgramHistoryContext
@@ -87,10 +88,21 @@ export function generateProgramReasonSummary(
   // Get style context from engineContext or recovery level
   const style = program.recoveryLevel || 'balanced'
   
+  // Detect hybrid strength context
+  const hasDeadlift = detectHybridElement(program, 'deadlift')
+  const hasWeightedCalisthenics = detectHybridElement(program, 'weighted')
+  const isHybrid = hasDeadlift || (hasWeightedCalisthenics && hasDeadlift)
+  const hybridBias = program.hybridStrengthBias || (hasDeadlift ? 'streetlifting_biased' : null)
+  
   // Build reason based on generation trigger
+  // If hybrid, add hybrid context to the generated reason
+  const hybridSuffix = isHybrid 
+    ? buildHybridReasonSuffix(hasDeadlift, hasWeightedCalisthenics, hybridBias)
+    : ''
+    
   switch (generationReason) {
     case 'onboarding_initial_generation':
-      return buildInitialProgramReason(goal, days, sessionMins, equipmentNote, constraintNote, style)
+      return buildInitialProgramReason(goal, days, sessionMins, equipmentNote, constraintNote, style) + hybridSuffix
     
     case 'settings_schedule_change':
       return buildScheduleChangeReason(goal, days, sessionMins, previousProgram)
@@ -238,11 +250,77 @@ function getStyleDescription(style: string): string {
 }
 
 // =============================================================================
+// HYBRID STRENGTH REASON HELPERS
+// =============================================================================
+
+/**
+ * Detect if program contains hybrid strength elements
+ */
+function detectHybridElement(
+  program: AdaptiveProgram,
+  element: 'deadlift' | 'weighted' | 'squat' | 'bench'
+): boolean {
+  const sessions = program.sessions || []
+  
+  for (const session of sessions) {
+    const exercises = session.exercises || []
+    for (const ex of exercises) {
+      const name = (ex.name || '').toLowerCase()
+      const id = (ex.id || '').toLowerCase()
+      
+      switch (element) {
+        case 'deadlift':
+          if (name.includes('deadlift') || id.includes('deadlift')) return true
+          break
+        case 'weighted':
+          if (name.includes('weighted') || id.includes('weighted')) return true
+          break
+        case 'squat':
+          if (name.includes('squat') || id.includes('squat')) return true
+          break
+        case 'bench':
+          if (name.includes('bench') || id.includes('bench')) return true
+          break
+      }
+    }
+  }
+  
+  return false
+}
+
+/**
+ * Build hybrid-specific reason suffix
+ */
+function buildHybridReasonSuffix(
+  hasDeadlift: boolean,
+  hasWeightedCalisthenics: boolean,
+  hybridBias: string | null
+): string {
+  if (hasDeadlift && hasWeightedCalisthenics) {
+    if (hybridBias === 'streetlifting_biased') {
+      return ' Weighted pull-up and dip prioritized with deadlift support under hybrid strength bias.'
+    }
+    return ' Deadlift included once weekly to support posterior-chain force production while preserving upper-body skill recovery.'
+  }
+  
+  if (hasDeadlift) {
+    return ' Deadlift integrated for hip-hinge strength without compromising calisthenics skill work.'
+  }
+  
+  if (hasWeightedCalisthenics) {
+    return ' Weighted calisthenics emphasized for progressive overload alongside bodyweight skill development.'
+  }
+  
+  return ''
+}
+
+// =============================================================================
 // SNAPSHOT BUILDERS
 // =============================================================================
 
 /**
  * Build athlete inputs snapshot from current state
+ * Extended for hybrid strength context
  */
 export function buildAthleteInputsSnapshot(
   profile: OnboardingProfile | null,
@@ -252,6 +330,18 @@ export function buildAthleteInputsSnapshot(
   const sessionLengthMinutes = typeof program.sessionLength === 'number'
     ? program.sessionLength
     : parseInt(String(program.sessionLength)) || 60
+  
+  // Detect hybrid context
+  const hasDeadlift = detectHybridElement(program, 'deadlift')
+  const hasWeightedCalisthenics = detectHybridElement(program, 'weighted')
+  
+  // Determine hybrid modality
+  let hybridModality: 'calisthenics_only' | 'weighted_calisthenics' | 'hybrid_light' | 'streetlifting_biased' = 'calisthenics_only'
+  if (hasDeadlift && hasWeightedCalisthenics) {
+    hybridModality = program.hybridStrengthBias === 'streetlifting_biased' ? 'streetlifting_biased' : 'hybrid_light'
+  } else if (hasWeightedCalisthenics) {
+    hybridModality = 'weighted_calisthenics'
+  }
   
   return {
     bodyweight: profile?.bodyweight || undefined,
@@ -276,16 +366,38 @@ export function buildAthleteInputsSnapshot(
     sleepQuality: profile?.sleepQuality,
     stressLevel: profile?.stressLevel,
     recoveryConfidence: profile?.recoveryConfidence,
+    
+    // Hybrid strength fields (Phase 2)
+    deadlift1RM: (profile as unknown as { deadlift1RM?: number })?.deadlift1RM,
+    deadliftExperience: (profile as unknown as { deadliftExperience?: 'none' | 'beginner' | 'intermediate' | 'advanced' })?.deadliftExperience,
+    hybridModality,
+    includesDeadlift: hasDeadlift,
+    streetliftingTotal: undefined, // Computed elsewhere
   }
 }
 
 /**
  * Build goals snapshot from program
+ * Extended for hybrid strength goals
  */
 export function buildGoalsSnapshot(
   profile: OnboardingProfile | null,
   program: AdaptiveProgram
 ): GoalsSnapshot {
+  // Detect hybrid context
+  const hasDeadlift = detectHybridElement(program, 'deadlift')
+  const hasWeightedCalisthenics = detectHybridElement(program, 'weighted')
+  
+  // Determine hybrid modality for goals
+  let hybridModality: 'calisthenics_only' | 'weighted_calisthenics' | 'hybrid_light' | 'streetlifting_biased' | undefined
+  if (hasDeadlift && hasWeightedCalisthenics) {
+    hybridModality = program.hybridStrengthBias === 'streetlifting_biased' ? 'streetlifting_biased' : 'hybrid_light'
+  } else if (hasDeadlift) {
+    hybridModality = 'hybrid_light'
+  } else if (hasWeightedCalisthenics) {
+    hybridModality = 'weighted_calisthenics'
+  }
+  
   return {
     primaryGoal: program.primaryGoal || 'general',
     primaryGoalLabel: program.goalLabel || program.primaryGoal,
@@ -293,6 +405,12 @@ export function buildGoalsSnapshot(
     selectedSkills: profile?.skillInterests || [],
     targetTimeline: undefined,
     specificTargets: [],
+    
+    // Hybrid strength goals
+    hybridModality,
+    includesDeadlift: hasDeadlift,
+    deadliftGoal: (profile as unknown as { deadliftGoal?: number })?.deadliftGoal,
+    streetliftingGoal: (profile as unknown as { streetliftingGoal?: number })?.streetliftingGoal,
   }
 }
 

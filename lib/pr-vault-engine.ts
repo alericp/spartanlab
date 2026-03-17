@@ -1,8 +1,21 @@
 // PR Vault Engine
 // Surfaces the athlete's most meaningful personal records across skills and strength
+// Extended to support hybrid strength (deadlift, barbell work, streetlifting)
 
 import { getSkillSessions, getSkillSessionStats } from './skill-session-service'
-import { getStrengthRecords, getPersonalRecords, type ExerciseType, type StrengthRecord } from './strength-service'
+import { 
+  getStrengthRecords, 
+  getPersonalRecords, 
+  getPersonalRecordsByCategory,
+  getBestDeadliftPR,
+  getStreetliftingTotal,
+  type ExerciseType, 
+  type StrengthRecord,
+  type StrengthExerciseCategory,
+  EXERCISE_DEFINITIONS,
+  isBarbellExercise,
+  isDeadliftVariant,
+} from './strength-service'
 import { getWorkoutLogs, type WorkoutLog } from './workout-log-service'
 import { getSkillProgressions } from './data-service'
 import { getAthleteProfile } from './data-service'
@@ -25,11 +38,40 @@ export interface SkillPR {
 export interface StrengthPR {
   exercise: ExerciseType
   exerciseLabel: string
+  category: StrengthExerciseCategory
+  isBarbell: boolean
   bestWeightAdded: number
   bestReps: number
   bestOneRM: number
   relativeStrength: number | null // ratio to bodyweight
   dateAchieved: string
+  hasData: boolean
+}
+
+/**
+ * Barbell-specific PR for deadlift, squat, bench
+ */
+export interface BarbellPR {
+  exercise: ExerciseType
+  exerciseLabel: string
+  variant: string  // e.g., "conventional", "sumo"
+  bestWeight: number
+  bestReps: number
+  estimated1RM: number
+  relativeStrength: number | null
+  dateAchieved: string
+  hasData: boolean
+}
+
+/**
+ * Streetlifting total PR
+ */
+export interface StreetliftingTotalPR {
+  total: number
+  weightedPullUp1RM: number | null
+  weightedDip1RM: number | null
+  deadlift1RM: number | null
+  dateComputed: string
   hasData: boolean
 }
 
@@ -43,10 +85,18 @@ export interface TrainingPR {
 }
 
 export interface PRVault {
+  // Calisthenics PRs
   skillPRs: SkillPR[]
-  strengthPRs: StrengthPR[]
+  strengthPRs: StrengthPR[]  // Weighted calisthenics
   trainingPRs: TrainingPR[]
+  
+  // Hybrid/Barbell PRs
+  barbellPRs: BarbellPR[]
+  streetliftingTotal: StreetliftingTotalPR | null
+  
+  // Aggregates
   totalPRs: number
+  hasHybridData: boolean
   lastUpdated: string
 }
 
@@ -106,7 +156,7 @@ function getSkillPRs(): SkillPR[] {
 }
 
 // =============================================================================
-// STRENGTH PRS
+// STRENGTH PRS (Weighted Calisthenics)
 // =============================================================================
 
 function getStrengthPRs(): StrengthPR[] {
@@ -114,11 +164,8 @@ function getStrengthPRs(): StrengthPR[] {
   const profile = getAthleteProfile()
   const bodyweight = profile.bodyweight
   
-  const exercises: { id: ExerciseType; label: string }[] = [
-    { id: 'weighted_pull_up', label: 'Weighted Pull-Up' },
-    { id: 'weighted_dip', label: 'Weighted Dip' },
-    { id: 'weighted_muscle_up', label: 'Weighted Muscle-Up' },
-  ]
+  // Only include weighted calisthenics here
+  const exercises = EXERCISE_DEFINITIONS.filter(e => e.category === 'weighted_calisthenics')
   
   return exercises.map(exercise => {
     const pr = prs[exercise.id]
@@ -126,7 +173,9 @@ function getStrengthPRs(): StrengthPR[] {
     if (!pr) {
       return {
         exercise: exercise.id,
-        exerciseLabel: exercise.label,
+        exerciseLabel: exercise.name,
+        category: exercise.category,
+        isBarbell: false,
         bestWeightAdded: 0,
         bestReps: 0,
         bestOneRM: 0,
@@ -142,7 +191,9 @@ function getStrengthPRs(): StrengthPR[] {
     
     return {
       exercise: exercise.id,
-      exerciseLabel: exercise.label,
+      exerciseLabel: exercise.name,
+      category: exercise.category,
+      isBarbell: false,
       bestWeightAdded: pr.weightAdded,
       bestReps: pr.reps,
       bestOneRM: pr.estimatedOneRM,
@@ -151,6 +202,84 @@ function getStrengthPRs(): StrengthPR[] {
       hasData: true,
     }
   })
+}
+
+// =============================================================================
+// BARBELL PRS (Hybrid Strength)
+// =============================================================================
+
+function getBarbellPRs(): BarbellPR[] {
+  const prs = getPersonalRecords()
+  const profile = getAthleteProfile()
+  const bodyweight = profile.bodyweight
+  
+  // Get all barbell exercises
+  const barbellExercises = EXERCISE_DEFINITIONS.filter(e => e.isBarbell)
+  
+  const results: BarbellPR[] = []
+  
+  for (const exercise of barbellExercises) {
+    const pr = prs[exercise.id]
+    
+    if (pr) {
+      const relativeStrength = bodyweight && exercise.trackRelativeStrength
+        ? Math.round((pr.estimatedOneRM / bodyweight) * 100) / 100
+        : null
+      
+      results.push({
+        exercise: exercise.id,
+        exerciseLabel: exercise.name,
+        variant: getVariantName(exercise.id),
+        bestWeight: pr.weightAdded,
+        bestReps: pr.reps,
+        estimated1RM: pr.estimatedOneRM,
+        relativeStrength,
+        dateAchieved: pr.dateLogged,
+        hasData: true,
+      })
+    }
+  }
+  
+  return results
+}
+
+function getVariantName(exerciseId: ExerciseType): string {
+  const variantMap: Partial<Record<ExerciseType, string>> = {
+    conventional_deadlift: 'Conventional',
+    sumo_deadlift: 'Sumo',
+    romanian_deadlift: 'Romanian',
+    trap_bar_deadlift: 'Trap Bar',
+    back_squat: 'Back',
+    front_squat: 'Front',
+    bench_press: 'Flat',
+    overhead_press: 'Standing',
+  }
+  return variantMap[exerciseId] ?? 'Standard'
+}
+
+// =============================================================================
+// STREETLIFTING TOTAL
+// =============================================================================
+
+function getStreetliftingTotalPR(): StreetliftingTotalPR | null {
+  const profile = getAthleteProfile()
+  const bodyweight = profile.bodyweight
+  
+  const streetTotal = getStreetliftingTotal(bodyweight)
+  
+  // Only return if we have at least one component
+  const hasData = !!(streetTotal.weightedPullUp || streetTotal.weightedDip || streetTotal.deadlift)
+  
+  if (!hasData) return null
+  
+  return {
+    total: streetTotal.total,
+    weightedPullUp1RM: streetTotal.weightedPullUp?.estimatedOneRM ?? null,
+    weightedDip1RM: streetTotal.weightedDip?.estimatedOneRM ?? null,
+    deadlift1RM: streetTotal.deadlift?.estimatedOneRM ?? null,
+    dateComputed: new Date().toISOString(),
+    hasData: true,
+  }
 }
 
 // =============================================================================
@@ -319,18 +448,26 @@ export function getPRVault(): PRVault {
   const skillPRs = getSkillPRs()
   const strengthPRs = getStrengthPRs()
   const trainingPRs = getTrainingPRs()
+  const barbellPRs = getBarbellPRs()
+  const streetliftingTotal = getStreetliftingTotalPR()
   
   const totalPRs = [
     ...skillPRs.filter(p => p.hasData),
     ...strengthPRs.filter(p => p.hasData),
     ...trainingPRs.filter(p => p.hasData),
+    ...barbellPRs.filter(p => p.hasData),
   ].length
+  
+  const hasHybridData = barbellPRs.length > 0 || (streetliftingTotal?.hasData ?? false)
   
   return {
     skillPRs,
     strengthPRs,
     trainingPRs,
+    barbellPRs,
+    streetliftingTotal,
     totalPRs,
+    hasHybridData,
     lastUpdated: new Date().toISOString(),
   }
 }

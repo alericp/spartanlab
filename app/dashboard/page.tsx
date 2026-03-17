@@ -101,7 +101,6 @@ import { AchievementNotification } from '@/components/achievements/AchievementNo
 import { SkillReadinessModule } from '@/components/readiness/SkillReadinessModule'
 import { SkillReadinessPanel } from '@/components/readiness/SkillReadinessPanel'
 import { LeaderboardPreviewCard } from '@/components/leaderboards/LeaderboardTabs'
-import { ChallengesCard } from '@/components/challenges/ChallengesCard'
 import { ProgressDashboard } from '@/components/dashboard/ProgressDashboard'
 import { ChallengeNotification } from '@/components/challenges/ChallengeNotification'
 import { WelcomeBanner } from '@/components/dashboard/WelcomeBanner'

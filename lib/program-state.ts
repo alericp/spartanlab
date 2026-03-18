@@ -6,10 +6,46 @@
  * for consistent behavior.
  * 
  * CRITICAL: This utility MUST NEVER throw. It always returns a safe object.
+ * 
+ * MIGRATION: This module handles backward compatibility with old storage keys:
+ * - spartanlab_first_program (old onboarding key) → migrated to canonical storage
+ * - spartanlab_adaptive_programs (canonical key) → preferred source of truth
  */
 
-import { getLatestAdaptiveProgram, type AdaptiveProgram } from './adaptive-program-builder'
+import { getLatestAdaptiveProgram, saveAdaptiveProgram, type AdaptiveProgram } from './adaptive-program-builder'
 import { getLatestProgram, type GeneratedProgram } from './program-service'
+
+// =============================================================================
+// MIGRATION HELPERS - Handle old storage keys
+// =============================================================================
+
+/**
+ * Attempt to recover a program from the old spartanlab_first_program key
+ * and migrate it to canonical storage. This is idempotent - safe to call multiple times.
+ */
+function migrateFirstProgramIfNeeded(): AdaptiveProgram | null {
+  if (typeof window === 'undefined') return null
+  
+  try {
+    const stored = localStorage.getItem('spartanlab_first_program')
+    if (!stored) return null
+    
+    const parsed = JSON.parse(stored)
+    
+    // Validate it looks like an AdaptiveProgram
+    if (!parsed || typeof parsed !== 'object') return null
+    if (!Array.isArray(parsed.sessions) || parsed.sessions.length === 0) return null
+    if (!parsed.sessions[0]?.exercises || parsed.sessions[0].exercises.length === 0) return null
+    
+    // This looks valid - save it to canonical storage
+    // saveAdaptiveProgram handles deduplication by ID
+    const saved = saveAdaptiveProgram(parsed)
+    
+    return saved
+  } catch {
+    return null
+  }
+}
 
 export interface ProgramState {
   /** Whether a usable workout program exists */
@@ -50,12 +86,19 @@ export function getProgramState(): ProgramState {
     let adaptiveProgram: AdaptiveProgram | null = null
     let legacyProgram: GeneratedProgram | null = null
     
+    // Step 1: Try to get from canonical adaptive storage
     try {
       adaptiveProgram = getLatestAdaptiveProgram()
     } catch {
       adaptiveProgram = null
     }
     
+    // Step 2: If no adaptive program, try migration from old storage
+    if (!adaptiveProgram) {
+      adaptiveProgram = migrateFirstProgramIfNeeded()
+    }
+    
+    // Step 3: Legacy program fallback (old program-service system)
     try {
       legacyProgram = getLatestProgram()
     } catch {

@@ -12,7 +12,7 @@ import {
 } from './athlete-profile'
 import { getAthleteCalibration } from './athlete-calibration'
 import { detectWeakPoints, type WeakPointSummary } from './weak-point-detection'
-import { generateAdaptiveProgram, type AdaptiveProgramInputs, type AdaptiveProgram } from './adaptive-program-builder'
+import { generateAdaptiveProgram, saveAdaptiveProgram, type AdaptiveProgramInputs, type AdaptiveProgram } from './adaptive-program-builder'
 import { evaluateTrainingBehavior, type TrainingBehaviorResult } from './adaptive-progression-engine'
 import { createInitialProgramHistoryEntry } from './program-history-versioning'
 import type { PrimaryGoal, ExperienceLevel, TrainingDays, SessionLength } from './program-service'
@@ -194,15 +194,20 @@ export function generateFirstProgram(): FirstRunResult {
     // Generate the program
     const program = generateAdaptiveProgram(programInputs)
     
-    // Save program to localStorage for dashboard
+    // Save program to CANONICAL adaptive storage - this is the source of truth
+    // that /program, first-session, and workout/session all read from
     if (typeof window !== 'undefined') {
+      // Primary: save to canonical adaptive programs storage
+      saveAdaptiveProgram(program)
+      
+      // Secondary: backward-compatible mirror for legacy code paths
       localStorage.setItem('spartanlab_first_program', JSON.stringify(program))
       localStorage.setItem('spartanlab_onboarding_complete', 'true')
     }
     
     // Note: Program history entry will be created server-side via API
-    // when user ID is available (after auth). The localStorage save above
-    // ensures the program is immediately available for display.
+    // when user ID is available (after auth). The saveAdaptiveProgram call above
+    // ensures the program is immediately available for all app surfaces.
     
     return {
       success: true,

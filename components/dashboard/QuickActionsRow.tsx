@@ -33,7 +33,7 @@ export function QuickActionsRow() {
       label: 'Strength',
     },
     {
-      href: '/my-programs',
+      href: '/program',
       icon: Calendar,
       label: 'Program',
     },

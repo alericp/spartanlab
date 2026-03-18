@@ -31,7 +31,8 @@ import {
 } from '@/lib/training-style-service'
 import { useOwnerInit } from '@/hooks/useOwnerInit'
 import { PRICING, TRIAL } from '@/lib/billing/pricing'
-import { useEntitlement } from '@/hooks/useEntitlement'
+import { useEntitlement, setSimulationMode, type SimulationMode } from '@/hooks/useEntitlement'
+import { Beaker } from 'lucide-react'
 import Link from 'next/link'
 import {
   getAthleteProfile,
@@ -196,6 +197,98 @@ function SubscriptionBillingCard() {
           </>
         )}
       </p>
+    </div>
+  )
+}
+
+// =============================================================================
+// OWNER-ONLY INLINE SIMULATION CONTROL
+// Visible only to the platform owner in the Settings Subscription section
+// =============================================================================
+function OwnerInlineSimulationControl() {
+  const entitlement = useEntitlement()
+  const mode = entitlement?.simulationMode || 'off'
+  const realStatus = entitlement?.plan || 'unknown'
+  const ownerEmailConfigured = typeof process !== 'undefined' && (
+    process.env?.OWNER_EMAIL || process.env?.NEXT_PUBLIC_OWNER_EMAIL
+  )
+  
+  const handleModeChange = (newMode: SimulationMode) => {
+    try {
+      setSimulationMode(newMode)
+      entitlement?.mutate?.()
+      window.location.reload()
+    } catch (e) {
+      console.error('[v0] OwnerInlineSimulationControl: mode change failed:', e)
+    }
+  }
+  
+  const isActive = mode !== 'off'
+  
+  return (
+    <div className="mt-6 pt-6 border-t border-dashed border-[#3A3A3A]">
+      {/* Header */}
+      <div className="flex items-center gap-2 mb-3">
+        <Beaker className="w-4 h-4 text-amber-400" />
+        <span className="text-sm font-semibold text-amber-400">Owner Simulation</span>
+        <span className="text-xs px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-500 border border-amber-500/20">
+          Testing Only
+        </span>
+      </div>
+      
+      {/* Current status */}
+      {isActive && (
+        <div className="text-xs text-amber-300/80 bg-amber-900/20 px-3 py-2 rounded mb-3 border border-amber-500/20">
+          Simulating: <strong className="text-amber-200">{mode.toUpperCase()}</strong>
+          <span className="text-amber-400/60 ml-2">(real: {realStatus})</span>
+        </div>
+      )}
+      
+      {/* Mode buttons */}
+      <div className="flex items-center gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => handleModeChange('off')}
+          className={mode === 'off' 
+            ? "bg-[#3A3A3A] text-[#F5F5F5] border-[#4A4A4A]" 
+            : "border-[#3A3A3A] text-[#6B7280] hover:bg-[#2A2A2A]"
+          }
+        >
+          Off
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => handleModeChange('free')}
+          className={mode === 'free' 
+            ? "bg-[#3A3A3A] text-[#F5F5F5] border-[#4A4A4A]" 
+            : "border-[#3A3A3A] text-[#6B7280] hover:bg-[#2A2A2A]"
+          }
+        >
+          Free
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => handleModeChange('pro')}
+          className={mode === 'pro' 
+            ? "bg-amber-600 text-white border-amber-500" 
+            : "border-[#3A3A3A] text-[#6B7280] hover:bg-[#2A2A2A]"
+          }
+        >
+          Pro
+        </Button>
+      </div>
+      
+      {/* Owner diagnostic info */}
+      <div className="mt-4 text-xs text-[#4A4A4A] space-y-1 font-mono">
+        <p>owner detection: <span className="text-green-500">active</span></p>
+        <p>owner email configured: <span className={ownerEmailConfigured ? "text-green-500" : "text-red-400"}>{ownerEmailConfigured ? 'yes' : 'no'}</span></p>
+      </div>
     </div>
   )
 }
@@ -756,6 +849,9 @@ export default function SettingsPage() {
             </p>
           </div>
           <SubscriptionBillingCard />
+          
+          {/* OWNER ONLY: Inline Simulation Control */}
+          {isOwner && <OwnerInlineSimulationControl />}
         </Card>
     </PageContainer>
   )

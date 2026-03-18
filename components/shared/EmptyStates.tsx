@@ -1,5 +1,6 @@
 'use client'
 
+import { useRef, useCallback } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
@@ -114,10 +115,31 @@ export function EmptyState({
 
 export function DashboardEmptyState() {
   const router = useRouter()
+  const isNavigatingRef = useRef(false)
   
-  const handleStartWorkout = () => {
-    router.push('/first-session')
-  }
+  // Hardened mobile-safe navigation with double-tap protection and fallback
+  const handleStartWorkout = useCallback(() => {
+    // Prevent double-triggering from rapid taps
+    if (isNavigatingRef.current) return
+    isNavigatingRef.current = true
+    
+    const targetPath = '/first-session'
+    
+    // Attempt client-side navigation
+    router.push(targetPath)
+    
+    // Fallback: if pathname hasn't changed after 200ms, force full navigation
+    setTimeout(() => {
+      if (typeof window !== 'undefined' && !window.location.pathname.startsWith(targetPath)) {
+        window.location.assign(targetPath)
+      }
+    }, 200)
+    
+    // Reset lock after navigation attempt window
+    setTimeout(() => {
+      isNavigatingRef.current = false
+    }, 1000)
+  }, [router])
   
   return (
     <div className="space-y-6">
@@ -145,10 +167,11 @@ export function DashboardEmptyState() {
             Each workout builds your training intelligence for smarter recommendations.
           </p>
 
-          {/* Single dominant CTA - uses router.push for reliable mobile navigation */}
+          {/* Single dominant CTA - hardened mobile navigation with fallback */}
           <Button 
+            type="button"
             size="lg" 
-            className="bg-[#E63946] hover:bg-[#D62828] text-white gap-2 px-8 py-6 text-lg font-semibold"
+            className="bg-[#E63946] hover:bg-[#D62828] text-white gap-2 px-8 py-6 text-lg font-semibold relative z-20 pointer-events-auto touch-manipulation"
             onClick={handleStartWorkout}
           >
             <Dumbbell className="w-5 h-5" />

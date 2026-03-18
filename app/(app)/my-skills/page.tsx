@@ -1,43 +1,55 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+/**
+ * My Skills Page - Import-isolated skill tracking route
+ * 
+ * This file contains ONLY lightweight imports for the skill selection view.
+ * The heavy detail view (SkillDetailPageContent) is dynamically imported
+ * ONLY when a skill is selected, preventing import-time crashes from
+ * affecting the skill selection grid.
+ */
+
+import { useState, useEffect } from 'react'
+import dynamic from 'next/dynamic'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Navigation } from '@/components/shared/Navigation'
-import { SkillSessionLogger } from '@/components/skills/SkillSessionLogger'
-import { SkillSessionHistory } from '@/components/skills/SkillSessionHistory'
-import { SkillReadinessCard } from '@/components/skills/SkillReadinessCard'
-import { SkillEmptyState } from '@/components/skills/SkillEmptyState'
-import { SkillRoadmapDisplay } from '@/components/roadmap'
-import { type SkillRoadmapType, SKILL_ROADMAPS } from '@/lib/roadmap/skill-roadmap-service'
-import {
-  TrendingUp,
-  Target,
-  Activity,
-  Clock,
-  Crown,
-  ArrowLeft,
-} from 'lucide-react'
-import Link from 'next/link'
-import { hasProAccess } from '@/lib/feature-access'
+import { Target } from 'lucide-react'
 import { PageHeader } from '@/components/shared/PageHeader'
 import { SKILL_PROGRESSIONS, type EnhancedSkillDefinition } from '@/lib/skill-progression-rules'
-import { getSkillSessions, getSessionsBySkill, seedSampleSessions } from '@/lib/skill-session-service'
-import { generateSkillAnalysis } from '@/lib/skill-readiness-engine'
-import { getStrengthRecords } from '@/lib/strength-service'
-import { getAthleteProfile, saveSkillProgression, getSkillProgressions } from '@/lib/data-service'
-import type { SkillAnalysis, SkillSession } from '@/types/skill-readiness'
+import { getSkillSessions, seedSampleSessions } from '@/lib/skill-session-service'
+import { getSkillProgressions } from '@/lib/data-service'
 
 type SkillKey = keyof typeof SKILL_PROGRESSIONS
 
+// =============================================================================
+// DYNAMIC IMPORT - Heavy detail view loaded only when needed
+// =============================================================================
+
+const SkillDetailPageContent = dynamic(
+  () => import('@/components/skills/SkillDetailPageContent').then(mod => mod.SkillDetailPageContent),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="animate-pulse space-y-6">
+        <div className="h-8 bg-[#2A2A2A] rounded w-1/4"></div>
+        <div className="h-32 bg-[#2A2A2A] rounded"></div>
+        <div className="grid lg:grid-cols-2 gap-6">
+          <div className="h-64 bg-[#2A2A2A] rounded"></div>
+          <div className="h-64 bg-[#2A2A2A] rounded"></div>
+        </div>
+      </div>
+    ),
+  }
+)
+
+// =============================================================================
+// MAIN PAGE COMPONENT
+// =============================================================================
+
 export default function SkillsPage() {
   const [selectedSkill, setSelectedSkill] = useState<SkillKey | null>(null)
-  const [currentLevel, setCurrentLevel] = useState<number>(0)
-  const [targetLevel, setTargetLevel] = useState<number>(1)
-  const [analysis, setAnalysis] = useState<SkillAnalysis | null>(null)
-  const [sessions, setSessions] = useState<SkillSession[]>([])
   const [mounted, setMounted] = useState(false)
-  const [saving, setSaving] = useState(false)
 
   // Load initial data
   useEffect(() => {
@@ -45,62 +57,6 @@ export default function SkillsPage() {
     // Seed sample data for demo (only if no sessions exist)
     seedSampleSessions()
   }, [])
-
-  // Load analysis when skill is selected
-  const loadAnalysis = useCallback(() => {
-    if (!selectedSkill) return
-    
-    const allSessions = getSkillSessions()
-    const skillSessions = getSessionsBySkill(selectedSkill)
-    const strengthRecords = getStrengthRecords()
-    const profile = getAthleteProfile()
-    
-    setSessions(skillSessions)
-    
-    const newAnalysis = generateSkillAnalysis(
-      allSessions,
-      selectedSkill,
-      currentLevel,
-      targetLevel,
-      strengthRecords,
-      profile.bodyweight,
-      profile.experienceLevel
-    )
-    
-    setAnalysis(newAnalysis)
-  }, [selectedSkill, currentLevel, targetLevel])
-
-  useEffect(() => {
-    if (selectedSkill) {
-      loadAnalysis()
-    }
-  }, [selectedSkill, currentLevel, targetLevel, loadAnalysis])
-
-  const handleSkillSelect = (skillKey: SkillKey) => {
-    setSelectedSkill(skillKey)
-    
-    // Load existing progression if available
-    const progressions = getSkillProgressions()
-    const existing = progressions.find(p => p.skillName === skillKey)
-    if (existing) {
-      setCurrentLevel(existing.currentLevel)
-      setTargetLevel(existing.targetLevel)
-    } else {
-      setCurrentLevel(0)
-      setTargetLevel(1)
-    }
-  }
-
-  const handleSaveProgression = () => {
-    if (!selectedSkill) return
-    setSaving(true)
-    saveSkillProgression(selectedSkill, currentLevel, targetLevel)
-    setTimeout(() => setSaving(false), 500)
-  }
-
-  const handleSessionSaved = () => {
-    loadAnalysis()
-  }
 
   // Loading state
   if (!mounted) {
@@ -120,38 +76,26 @@ export default function SkillsPage() {
     )
   }
 
-  const skillDef = selectedSkill ? SKILL_PROGRESSIONS[selectedSkill] : null
-
   return (
     <div className="min-h-screen bg-[#121212] text-[#F5F5F5]">
       <Navigation />
 
       <main className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
         {!selectedSkill ? (
-          <SkillSelectionView onSelect={handleSkillSelect} />
-        ) : skillDef ? (
-          <SkillDetailView
+          <SkillSelectionView onSelect={setSelectedSkill} />
+        ) : (
+          <SkillDetailPageContent
             skillKey={selectedSkill}
-            skillDef={skillDef}
-            currentLevel={currentLevel}
-            targetLevel={targetLevel}
-            analysis={analysis}
-            sessions={sessions}
-            saving={saving}
             onBack={() => setSelectedSkill(null)}
-            onCurrentLevelChange={setCurrentLevel}
-            onTargetLevelChange={setTargetLevel}
-            onSaveProgression={handleSaveProgression}
-            onSessionSaved={handleSessionSaved}
           />
-        ) : null}
+        )}
       </main>
     </div>
   )
 }
 
 // =============================================================================
-// SKILL SELECTION VIEW
+// SKILL SELECTION VIEW - Lightweight, no heavy imports
 // =============================================================================
 
 function SkillSelectionView({ onSelect }: { onSelect: (key: SkillKey) => void }) {
@@ -273,243 +217,6 @@ function SkillSelectionView({ onSelect }: { onSelect: (key: SkillKey) => void })
           )
         })}
       </div>
-    </div>
-  )
-}
-
-// =============================================================================
-// SKILL DETAIL VIEW
-// =============================================================================
-
-interface SkillDetailViewProps {
-  skillKey: SkillKey
-  skillDef: EnhancedSkillDefinition
-  currentLevel: number
-  targetLevel: number
-  analysis: SkillAnalysis | null
-  sessions: SkillSession[]
-  saving: boolean
-  onBack: () => void
-  onCurrentLevelChange: (level: number) => void
-  onTargetLevelChange: (level: number) => void
-  onSaveProgression: () => void
-  onSessionSaved: () => void
-}
-
-function SkillDetailView({
-  skillKey,
-  skillDef,
-  currentLevel,
-  targetLevel,
-  analysis,
-  sessions,
-  saving,
-  onBack,
-  onCurrentLevelChange,
-  onTargetLevelChange,
-  onSaveProgression,
-  onSessionSaved,
-}: SkillDetailViewProps) {
-  const levelNames = skillDef.levels.map(l => l.name)
-  
-  // Safely clamp level indices to valid range to prevent crashes from stale localStorage data
-  const maxLevel = skillDef.levels.length - 1
-  const safeCurrentLevel = Math.max(0, Math.min(currentLevel, maxLevel))
-  const safeTargetLevel = Math.max(0, Math.min(targetLevel, maxLevel))
-  
-  const currentLevelDef = skillDef.levels[safeCurrentLevel]
-  const targetLevelDef = skillDef.levels[safeTargetLevel]
-  const hasSessionData = sessions.filter(s => s.level === safeCurrentLevel).length > 0
-
-  return (
-    <div className="space-y-8">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <button
-            onClick={onBack}
-            className="flex items-center gap-2 text-[#A5A5A5] hover:text-[#F5F5F5] mb-2 transition-colors"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            Back to skills
-          </button>
-          <h2 className="text-3xl font-bold">{skillDef.name}</h2>
-          <p className="text-[#A5A5A5]">{skillDef.description}</p>
-        </div>
-      </div>
-
-      {/* Level Selection */}
-      <Card className="bg-[#2A2A2A] border-[#3A3A3A] p-6">
-        <div className="flex flex-col lg:flex-row gap-6">
-          {/* Current Level */}
-          <div className="flex-1">
-            <p className="text-sm text-[#A5A5A5] mb-3">Current Level</p>
-            <div className="grid grid-cols-2 gap-2">
-              {skillDef.levels.map((level, index) => (
-                <Button
-                  key={index}
-                  variant={currentLevel === index ? 'default' : 'outline'}
-                  size="sm"
-                  className={
-                    currentLevel === index
-                      ? 'bg-[#E63946] hover:bg-[#D62828] text-white'
-                      : 'border-[#3A3A3A] hover:bg-[#3A3A3A]'
-                  }
-                  onClick={() => {
-                    onCurrentLevelChange(index)
-                    if (index >= targetLevel) {
-                      onTargetLevelChange(Math.min(index + 1, skillDef.levels.length - 1))
-                    }
-                  }}
-                >
-                  {level.name}
-                </Button>
-              ))}
-            </div>
-          </div>
-
-          {/* Target Level */}
-          <div className="flex-1">
-            <p className="text-sm text-[#A5A5A5] mb-3">Target Level</p>
-            <div className="grid grid-cols-2 gap-2">
-              {skillDef.levels.map((level, index) => (
-                <Button
-                  key={index}
-                  variant={targetLevel === index ? 'default' : 'outline'}
-                  size="sm"
-                  disabled={index < currentLevel}
-                  className={
-                    targetLevel === index
-                      ? 'bg-[#3A3A3A] border-[#E63946] text-[#E63946]'
-                      : 'border-[#3A3A3A] hover:bg-[#3A3A3A] disabled:opacity-30'
-                  }
-                  onClick={() => onTargetLevelChange(index)}
-                >
-                  {level.name}
-                </Button>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        <div className="mt-6 pt-6 border-t border-[#3A3A3A]">
-          <Button
-            onClick={onSaveProgression}
-            disabled={saving}
-            className="bg-[#E63946] hover:bg-[#D62828]"
-          >
-            {saving ? 'Saving...' : 'Save Progression'}
-          </Button>
-        </div>
-      </Card>
-
-      {/* Main Content Grid */}
-      <div className="grid lg:grid-cols-2 gap-6">
-        {/* Left Column: Logging */}
-        <div className="space-y-6">
-          <SkillSessionLogger
-            skillName={skillKey}
-            levelName={currentLevelDef.name}
-            levelIndex={safeCurrentLevel}
-            onSessionSaved={onSessionSaved}
-          />
-          
-          <SkillSessionHistory
-            sessions={sessions.filter(s => s.level === safeCurrentLevel)}
-            levelNames={levelNames}
-            onSessionDeleted={onSessionSaved}
-          />
-        </div>
-
-        {/* Right Column: Readiness Analysis */}
-        <div className="space-y-6">
-          {analysis && hasSessionData ? (
-            <>
-              <SkillReadinessCard
-                analysis={analysis}
-                levelName={currentLevelDef.name}
-                targetLevelName={targetLevelDef.name}
-              />
-              {/* Pro upgrade hint for detailed progression */}
-              {!hasProAccess() && (
-                <Link href="/upgrade">
-                  <div className="flex items-center gap-3 p-4 rounded-lg bg-amber-500/5 border border-amber-500/20 hover:bg-amber-500/10 transition-colors cursor-pointer">
-                    <div className="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center shrink-0">
-                      <Crown className="w-4 h-4 text-amber-400" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-[#E6E9EF]">Unlock Skill Progression Intelligence</p>
-                      <p className="text-xs text-[#6B7280]">See what is limiting your progress and when you will reach your next level</p>
-                    </div>
-                  </div>
-                </Link>
-              )}
-            </>
-          ) : (
-            <SkillEmptyState type="no_sessions" skillName={skillDef.name} />
-          )}
-          
-          {/* Skill Roadmap - show if roadmap exists for this skill */}
-          {(() => {
-            // Map skill key to roadmap type
-            const roadmapKeyMap: Record<string, SkillRoadmapType> = {
-              'front_lever': 'front-lever',
-              'frontLever': 'front-lever',
-              'planche': 'planche',
-              'muscle_up': 'muscle-up',
-              'muscleUp': 'muscle-up',
-              'hspu': 'hspu',
-              'handstand_pushup': 'hspu',
-            }
-            const roadmapKey = roadmapKeyMap[skillKey]
-            if (roadmapKey && SKILL_ROADMAPS[roadmapKey]) {
-              return (
-                <SkillRoadmapDisplay 
-                  skillKey={roadmapKey}
-                  onLevelSelect={(level) => {
-                    onCurrentLevelChange(level)
-                    if (level >= targetLevel) {
-                      onTargetLevelChange(Math.min(level + 1, skillDef.levels.length - 1))
-                    }
-                  }}
-                />
-              )
-            }
-            return null
-          })()}
-        </div>
-      </div>
-
-      {/* Level Requirements Info */}
-      <Card className="bg-[#1A1A1A] border-[#3A3A3A] p-6">
-        <h3 className="text-lg font-semibold mb-4">Level Requirements</h3>
-        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div>
-            <p className="text-sm text-[#A5A5A5] mb-1">Min Hold for Ownership</p>
-            <p className="text-2xl font-bold">{currentLevelDef.minHoldForOwnership}s</p>
-            <p className="text-xs text-[#5A5A5A]">4+ clean repeatable holds</p>
-          </div>
-          <div>
-            <p className="text-sm text-[#A5A5A5] mb-1">Target Hold</p>
-            <p className="text-2xl font-bold">{currentLevelDef.targetHold}s</p>
-            <p className="text-xs text-[#5A5A5A]">Before progression</p>
-          </div>
-          <div>
-            <p className="text-sm text-[#A5A5A5] mb-1">Support Exercise</p>
-            <p className="text-lg font-bold">
-              {skillDef.supportStrengthRequirements.primaryExercise.replace(/_/g, ' ')}
-            </p>
-            <p className="text-xs text-[#5A5A5A]">Primary strength indicator</p>
-          </div>
-          <div>
-            <p className="text-sm text-[#A5A5A5] mb-1">Target Support 1RM</p>
-            <p className="text-2xl font-bold">
-              +{skillDef.supportStrengthRequirements.minOneRMPercent[safeCurrentLevel] ?? 0}%
-            </p>
-            <p className="text-xs text-[#5A5A5A]">% of bodyweight added</p>
-          </div>
-        </div>
-      </Card>
     </div>
   )
 }

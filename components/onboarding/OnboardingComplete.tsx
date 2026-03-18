@@ -78,24 +78,34 @@ export function OnboardingComplete({ onContinue }: OnboardingCompleteProps) {
     // Check Pro status
     setIsPro(hasProAccess())
 
-    // Generate program
+    // Generate program with error handling
     const generateProgram = async () => {
       await new Promise(resolve => setTimeout(resolve, 1200))
       
-      const result = generateFirstProgram()
-      setProgramResult(result)
-      
-      // Generate program reasoning
-      const reasoning = getProgramReasoning(result.program)
-      setProgramReasoning(reasoning)
-      
-      // Calculate initial Spartan Score
-      const score = calculateSpartanScore()
-      setSpartanScore(score.totalScore)
-      
-      // Create program history entry via API (if authenticated)
-      // This runs in background - don't block the UI flow
-      if (result.success && result.program) {
+      try {
+        console.log('[v0] OnboardingComplete component: Starting program generation')
+        const result = generateFirstProgram()
+        setProgramResult(result)
+        
+        if (!result.success || !result.program) {
+          console.error('[v0] OnboardingComplete component: Generation failed:', result.error)
+          // Still continue to allow user to retry or use demo
+          setStep('ready')
+          return
+        }
+        
+        console.log('[v0] OnboardingComplete component: Generation succeeded')
+        
+        // Generate program reasoning
+        const reasoning = getProgramReasoning(result.program)
+        setProgramReasoning(reasoning)
+        
+        // Calculate initial Spartan Score
+        const score = calculateSpartanScore()
+        setSpartanScore(score.totalScore)
+        
+        // Create program history entry via API (if authenticated)
+        // This runs in background - don't block the UI flow
         fetch('/api/program/history', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -108,17 +118,21 @@ export function OnboardingComplete({ onContinue }: OnboardingCompleteProps) {
           // Silent fail - history will be created later if needed
           console.error('[OnboardingComplete] Failed to create program history:', err)
         })
-      }
-      
-      // Show readiness for 2 seconds
-      setStep('readiness')
-      await new Promise(resolve => setTimeout(resolve, 2500))
-      
-      // If already Pro, skip upgrade step
-      if (hasProAccess()) {
+        
+        // Show readiness for 2 seconds
+        setStep('readiness')
+        await new Promise(resolve => setTimeout(resolve, 2500))
+        
+        // If already Pro, skip upgrade step
+        if (hasProAccess()) {
+          setStep('ready')
+        } else {
+          setStep('upgrade')
+        }
+      } catch (err) {
+        console.error('[v0] OnboardingComplete component: Caught exception:', err)
+        // Still allow user to continue
         setStep('ready')
-      } else {
-        setStep('upgrade')
       }
     }
     

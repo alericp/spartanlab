@@ -357,8 +357,18 @@ function WorkoutSessionContent() {
     router.push('/dashboard?workout=completed')
   }
   
+  // Deterministic exit routing - never use router.back() for critical paths
   const handleCancel = () => {
-    router.back()
+    if (isFirstSession) {
+      // Coming from first-session flow - return there
+      router.push('/first-session')
+    } else if (demoMode) {
+      // Demo mode - go to dashboard
+      router.push('/dashboard')
+    } else {
+      // Normal workout - go to dashboard
+      router.push('/dashboard')
+    }
   }
   
   if (loading) {
@@ -413,6 +423,8 @@ function WorkoutSessionContent() {
         reasoningSummary={reasoningSummary}
         onComplete={handleComplete}
         onCancel={handleCancel}
+        isDemo={demoMode}
+        isFirstSession={isFirstSession}
       />
     </WorkoutErrorBoundary>
   )

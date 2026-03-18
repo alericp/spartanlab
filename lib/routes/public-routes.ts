@@ -70,10 +70,37 @@ export const CLERK_PUBLIC_ROUTE_PATTERNS = [
   '/dip-strength-standards',
   '/weighted-pull-up-strength-standards',
   '/weighted-dip-strength-standards',
+  '/deadlift-strength-standards',
+  '/powerlifting-strength-standards',
+  '/streetlifting-strength-standards',
+  
+  // SEO hybrid/comparison pages
+  '/hybrid-training-program',
+  '/weighted-calisthenics-vs-powerlifting',
   
   // SEO progression pages
   '/front-lever-progression',
   '/planche-progression',
+  
+  // SEO skill strength requirements pages
+  '/planche-strength-requirements',
+  '/front-lever-strength-requirements',
+  '/muscle-up-strength-requirements',
+  '/hspu-strength-requirements',
+  
+  // SEO program generator pages
+  '/calisthenics-program-generator',
+  '/weighted-calisthenics-program',
+  '/hybrid-strength-program',
+  '/muscle-up-training-program',
+  '/planche-training-program',
+  '/front-lever-training-program',
+  
+  // SEO diagnostic pages
+  '/why-you-cant-front-lever',
+  '/why-you-cant-planche',
+  '/why-you-cant-muscle-up',
+  '/why-your-hspu-is-stuck',
   
   // Public API routes
   '/api/public(.*)',
@@ -130,6 +157,22 @@ export const PUBLIC_ROUTE_PATTERNS: RegExp[] = [
   // Strength standards pages
   /^\/[a-z-]+-strength-standards$/,
   /^\/weighted-[a-z-]+-strength-standards$/,
+  
+  // Strength requirements pages
+  /^\/[a-z-]+-strength-requirements$/,
+  
+  // Training program pages
+  /^\/[a-z-]+-training-program$/,
+  /^\/[a-z-]+-program-generator$/,
+  /^\/weighted-[a-z-]+-program$/,
+  /^\/hybrid-[a-z-]+-program$/,
+  
+  // Diagnostic pages
+  /^\/why-you-cant-[a-z-]+$/,
+  /^\/why-your-[a-z-]+-is-stuck$/,
+  
+  // Comparison pages
+  /^\/[a-z-]+-vs-[a-z-]+$/,
   
   // Progression pages
   /^\/[a-z-]+-progression$/,

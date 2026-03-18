@@ -419,32 +419,38 @@ export function StreamlinedWorkoutSession({
   // Timer
   const timerRef = useRef<NodeJS.Timeout | null>(null)
   
-  // Current exercise
-  const currentExercise = session.exercises[state.currentExerciseIndex]
-  const totalExercises = session.exercises.length
-  const totalSets = session.exercises.reduce((sum, ex) => sum + ex.sets, 0)
+  // Safety guard: ensure exercises array exists and is valid
+  const exercises = session?.exercises ?? []
+  const hasValidExercises = exercises.length > 0
+  
+  // Current exercise (with safety guard)
+  const currentExercise = hasValidExercises ? exercises[state.currentExerciseIndex] : null
+  const totalExercises = exercises.length
+  const totalSets = exercises.reduce((sum, ex) => sum + (ex?.sets || 0), 0)
   const completedSetsCount = state.completedSets.length
   
-  // Determine if exercise uses holds or reps
+  // Determine if exercise uses holds or reps (with safety)
   const isHoldExercise = currentExercise?.repsOrTime?.toLowerCase().includes('sec') || 
                          currentExercise?.repsOrTime?.toLowerCase().includes('hold')
   
-  // Parse target value
-  const getTargetValue = (): number => {
-    if (!currentExercise) return 5
-    const match = currentExercise.repsOrTime.match(/(\d+)/)
+  // Parse target value (with full safety)
+  const getTargetValue = useCallback((): number => {
+    const repsOrTime = currentExercise?.repsOrTime
+    if (!repsOrTime) return 5
+    const match = repsOrTime.match(/(\d+)/)
     return match ? parseInt(match[1], 10) : 5
-  }
+  }, [currentExercise])
   
   // Recommended band from exercise (if any)
-  const getRecommendedBand = (): ResistanceBandColor | undefined => {
-    if (!currentExercise?.note) return undefined
-    const note = currentExercise.note.toLowerCase()
+  const getRecommendedBand = useCallback((): ResistanceBandColor | undefined => {
+    const note = currentExercise?.note
+    if (!note) return undefined
+    const noteLower = note.toLowerCase()
     for (const band of ALL_BAND_COLORS) {
-      if (note.includes(band)) return band
+      if (noteLower.includes(band)) return band
     }
     return undefined
-  }
+  }, [currentExercise])
   
   // Auto-save on state changes - skip for demo sessions
   useEffect(() => {
@@ -465,7 +471,7 @@ export function StreamlinedWorkoutSession({
       const recBand = getRecommendedBand()
       setBandUsed(recBand || 'none')
     }
-  }, [state.currentExerciseIndex])
+  }, [state.currentExerciseIndex, currentExercise, getTargetValue, getRecommendedBand])
   
   // Timer effect
   useEffect(() => {
@@ -546,7 +552,7 @@ export function StreamlinedWorkoutSession({
     
     const newCompletedSets = [...state.completedSets, setData]
     const isLastSet = state.currentSetNumber >= currentExercise.sets
-    const isLastExercise = state.currentExerciseIndex >= session.exercises.length - 1
+    const isLastExercise = state.currentExerciseIndex >= exercises.length - 1
     
     const lastRPE = selectedRPE || 8
     
@@ -585,7 +591,7 @@ export function StreamlinedWorkoutSession({
     setSelectedRPE(null)
     setRepsValue(getTargetValue())
     setHoldValue(getTargetValue())
-  }, [currentExercise, state, repsValue, holdValue, selectedRPE, bandUsed, isHoldExercise, session.exercises.length])
+  }, [currentExercise, state, repsValue, holdValue, selectedRPE, bandUsed, isHoldExercise, exercises.length])
   
   // Rest complete / skip rest
   const handleRestComplete = useCallback(() => {
@@ -598,7 +604,7 @@ export function StreamlinedWorkoutSession({
   
   // Skip exercise
   const handleSkipExercise = useCallback(() => {
-    const isLastExercise = state.currentExerciseIndex >= session.exercises.length - 1
+    const isLastExercise = state.currentExerciseIndex >= exercises.length - 1
     if (isLastExercise) {
       setState(prev => ({ ...prev, status: 'completed' }))
       clearSessionStorage()
@@ -610,7 +616,7 @@ export function StreamlinedWorkoutSession({
       }))
     }
     setSelectedRPE(null)
-  }, [state.currentExerciseIndex, session.exercises.length])
+  }, [state.currentExerciseIndex, exercises.length])
   
   // ==========================================================================
   // EXERCISE OVERRIDE HANDLERS
@@ -619,7 +625,7 @@ export function StreamlinedWorkoutSession({
   // Handle exercise replacement
   const handleReplaceExercise = useCallback((newExercise: { id: string; name: string }) => {
     const exerciseIndex = state.currentExerciseIndex
-    const originalExercise = session.exercises[exerciseIndex]
+    const originalExercise = exercises[exerciseIndex]
     
     // Record override in storage for adaptive tracking
     const override: ExerciseOverride = {
@@ -646,12 +652,12 @@ export function StreamlinedWorkoutSession({
         },
       },
     }))
-  }, [sessionId, state.currentExerciseIndex, session.exercises])
+  }, [sessionId, state.currentExerciseIndex, exercises])
   
   // Handle exercise skip via menu (different from skip button)
   const handleMenuSkipExercise = useCallback(() => {
     const exerciseIndex = state.currentExerciseIndex
-    const originalExercise = session.exercises[exerciseIndex]
+    const originalExercise = exercises[exerciseIndex]
     
     // Record skip override for adaptive tracking
     const override: ExerciseOverride = {
@@ -679,12 +685,12 @@ export function StreamlinedWorkoutSession({
     
     // Then advance to next exercise
     handleSkipExercise()
-  }, [sessionId, state.currentExerciseIndex, session.exercises, handleSkipExercise])
+  }, [sessionId, state.currentExerciseIndex, exercises, handleSkipExercise])
   
   // Handle progression adjustment
   const handleProgressionChange = useCallback((newProgression: { id: string; name: string }) => {
     const exerciseIndex = state.currentExerciseIndex
-    const originalExercise = session.exercises[exerciseIndex]
+    const originalExercise = exercises[exerciseIndex]
     
     // Record progression adjustment for adaptive tracking
     const override: ExerciseOverride = {
@@ -711,7 +717,7 @@ export function StreamlinedWorkoutSession({
         },
       },
     }))
-  }, [sessionId, state.currentExerciseIndex, session.exercises])
+  }, [sessionId, state.currentExerciseIndex, exercises])
   
   // Handle undo override
   const handleUndoOverride = useCallback(() => {
@@ -730,7 +736,7 @@ export function StreamlinedWorkoutSession({
   
   // Get effective exercise (with override applied)
   const getEffectiveExercise = useCallback((index: number) => {
-    const baseExercise = session.exercises[index]
+    const baseExercise = exercises[index]
     const override = state.exerciseOverrides[index]
     
     if (!override) return baseExercise
@@ -743,7 +749,7 @@ export function StreamlinedWorkoutSession({
       isSkipped: override.isSkipped,
       isProgressionAdjusted: override.isProgressionAdjusted,
     }
-  }, [session.exercises, state.exerciseOverrides])
+  }, [exercises, state.exerciseOverrides])
   
   // Get current effective exercise
   const effectiveExercise = getEffectiveExercise(state.currentExerciseIndex)
@@ -772,7 +778,7 @@ export function StreamlinedWorkoutSession({
       } = {}
       
       // Find best performance for key exercises
-      session.exercises.forEach((exercise, exerciseIndex) => {
+      exercises.forEach((exercise, exerciseIndex) => {
         const exerciseSets = state.completedSets.filter(s => s.exerciseIndex === exerciseIndex)
         if (exerciseSets.length === 0) return
         
@@ -803,15 +809,15 @@ export function StreamlinedWorkoutSession({
           ? 'strength'
           : 'mixed'
       
-      const focusArea: FocusArea = session.exercises.some(e => e.name.toLowerCase().includes('planche'))
+      const focusArea: FocusArea = exercises.some(e => e.name.toLowerCase().includes('planche'))
         ? 'planche'
-        : session.exercises.some(e => e.name.toLowerCase().includes('front lever'))
+        : exercises.some(e => e.name.toLowerCase().includes('front lever'))
           ? 'front_lever'
-          : session.exercises.some(e => e.name.toLowerCase().includes('muscle'))
+          : exercises.some(e => e.name.toLowerCase().includes('muscle'))
             ? 'muscle_up'
-            : session.exercises.some(e => e.name.toLowerCase().includes('hspu') || e.name.toLowerCase().includes('handstand push'))
+            : exercises.some(e => e.name.toLowerCase().includes('hspu') || e.name.toLowerCase().includes('handstand push'))
               ? 'handstand_pushup'
-              : session.exercises.some(e => e.name.toLowerCase().includes('weighted'))
+              : exercises.some(e => e.name.toLowerCase().includes('weighted'))
                 ? 'weighted_strength'
                 : 'general'
       
@@ -895,6 +901,34 @@ export function StreamlinedWorkoutSession({
       estimatedVolume: totalSetsCompleted * 10, // simplified
       elapsedSeconds: state.elapsedSeconds,
     }
+  }
+  
+  // ==========================================================================
+  // RENDER: SAFETY FALLBACK - No Valid Exercises
+  // ==========================================================================
+  
+  if (!hasValidExercises) {
+    return (
+      <div className="min-h-screen bg-[#0F1115] flex items-center justify-center p-4">
+        <div className="text-center max-w-sm">
+          <div className="w-16 h-16 rounded-full bg-[#1A1F26] border border-[#2B313A] flex items-center justify-center mx-auto mb-4">
+            <Dumbbell className="w-8 h-8 text-[#C1121F]" />
+          </div>
+          <h2 className="text-lg font-semibold text-[#E6E9EF] mb-2">Session Not Available</h2>
+          <p className="text-[#A4ACB8] mb-6">
+            This workout session doesn&apos;t have any exercises loaded. Please try again or create a new program.
+          </p>
+          <div className="space-y-3">
+            <Button 
+              onClick={onCancel}
+              className="w-full bg-[#C1121F] hover:bg-[#A30F1A] text-white"
+            >
+              Go Back
+            </Button>
+          </div>
+        </div>
+      </div>
+    )
   }
   
   // ==========================================================================
@@ -995,7 +1029,7 @@ export function StreamlinedWorkoutSession({
               {session.dayLabel}
             </h1>
             <p className="text-[#A4ACB8]">
-              {session.exercises.length} exercises • {totalSets} sets
+              {exercises.length} exercises • {totalSets} sets
             </p>
             {session.estimatedMinutes && (
               <p className="text-xs text-[#6B7280] mt-1">
@@ -1021,7 +1055,7 @@ export function StreamlinedWorkoutSession({
               )}
             </div>
             <div className="space-y-2">
-              {session.exercises.slice(0, 5).map((ex, i) => (
+              {exercises.slice(0, 5).map((ex, i) => (
                 <div key={i} className="flex items-center justify-between py-2 border-b border-[#2B313A]/50 last:border-0">
                   <div className="flex items-center gap-3">
                     <span className="w-6 h-6 rounded-full bg-[#2B313A] text-[#6B7280] text-xs flex items-center justify-center font-medium">
@@ -1032,9 +1066,9 @@ export function StreamlinedWorkoutSession({
                   <span className="text-xs text-[#6B7280]">{ex.sets} × {ex.repsOrTime}</span>
                 </div>
               ))}
-              {session.exercises.length > 5 && (
+              {exercises.length > 5 && (
                 <p className="text-xs text-[#6B7280] text-center pt-2">
-                  +{session.exercises.length - 5} more exercises
+                  +{exercises.length - 5} more exercises
                 </p>
               )}
             </div>
@@ -1110,7 +1144,7 @@ export function StreamlinedWorkoutSession({
       },
       state.completedSets.map(s => {
         // Get target for this specific exercise
-        const exercise = session.exercises[s.exerciseIndex]
+        const exercise = exercises[s.exerciseIndex]
         const match = exercise?.repsOrTime?.match(/(\d+)/)
         const target = match ? parseInt(match[1], 10) : 5
         return {
@@ -1127,7 +1161,7 @@ export function StreamlinedWorkoutSession({
     const performance = getSessionPerformance(performanceInput)
     
     // Generate skill signal if skill exercises were performed
-    const skillExercises = session.exercises.filter(ex => 
+    const skillExercises = exercises.filter(ex => 
       ex.name.toLowerCase().includes('front lever') ||
       ex.name.toLowerCase().includes('planche') ||
       ex.name.toLowerCase().includes('muscle-up') ||
@@ -1671,7 +1705,7 @@ export function StreamlinedWorkoutSession({
             className="w-full h-16 bg-[#C1121F] hover:bg-[#A30F1A] text-white text-lg font-bold disabled:opacity-50"
           >
             <Check className="w-6 h-6 mr-2" />
-            {state.currentSetNumber >= currentExercise.sets && state.currentExerciseIndex >= session.exercises.length - 1
+            {state.currentSetNumber >= currentExercise.sets && state.currentExerciseIndex >= exercises.length - 1
               ? 'Finish Workout'
               : state.currentSetNumber >= currentExercise.sets
                 ? 'Complete & Next Exercise'

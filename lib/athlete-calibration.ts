@@ -19,6 +19,9 @@ import type {
   SkillHistoryEntry,
   TendonAdaptationLevel,
   SkillGoal,
+  BandLevel,
+  SkillBenchmark,
+  SkillLastTrained,
 } from './athlete-profile'
 import { getOnboardingProfile } from './athlete-profile'
 import { getAthleteProfile, type AthleteProfile as DataServiceAthleteProfile } from './data-service'
@@ -124,9 +127,37 @@ export interface AthleteCalibration {
     v_sit: TendonAdaptationLevel
   } | null
   
+  // Skill calibration data — used for progression placement and programming
+  // Captures current level, hold times, assistance, and historical ceiling
+  skillCalibration: {
+    front_lever: SkillCalibrationEntry | null
+    planche: SkillCalibrationEntry | null
+    hspu: SkillCalibrationEntry | null
+    muscle_up: SkillCalibrationEntry | null
+  } | null
+  
   // Metadata
   calibrationComplete: boolean
   calibrationDate: string | null
+}
+
+// Skill calibration entry — normalized from onboarding SkillBenchmark + history
+export interface SkillCalibrationEntry {
+  currentLevel: string
+  holdSeconds: number | null
+  isAssisted: boolean
+  bandLevel: BandLevel | null
+  // Estimated true strength factor: 1.0 = raw, <1.0 = assisted strength discount
+  estimatedStrengthFactor: number
+  // Historical data
+  highestLevelEverReached: string | null
+  hasHistoricalCeiling: boolean
+  // Training recency
+  trainingRecency: 'current' | 'recent' | 'extended_break' | 'long_break'
+  // Programming hints
+  needsSupportWork: boolean
+  needsTransitionWork: boolean
+  useConservativeStart: boolean
 }
 
 // =============================================================================
@@ -531,6 +562,116 @@ function suggestRestModifier(
 }
 
 // =============================================================================
+// SKILL CALIBRATION HELPERS
+// =============================================================================
+
+/**
+ * Band level to strength discount factor
+ * Heavier bands = more assistance = lower true strength
+ */
+const BAND_STRENGTH_DISCOUNT: Record<BandLevel, number> = {
+  'yellow': 0.85,  // Light band - 15% discount
+  'red': 0.75,     // Light-medium - 25% discount
+  'black': 0.65,   // Medium - 35% discount
+  'purple': 0.55,  // Heavy - 45% discount
+  'green': 0.45,   // Very heavy - 55% discount
+}
+
+/**
+ * Map last trained timing to training recency category
+ */
+function mapLastTrainedToRecency(lastTrained: SkillLastTrained | null): 'current' | 'recent' | 'extended_break' | 'long_break' {
+  if (!lastTrained) return 'long_break'
+  switch (lastTrained) {
+    case 'currently':
+    case 'within_3_months':
+      return 'current'
+    case '3_to_6_months':
+      return 'recent'
+    case '6_to_12_months':
+    case '1_to_2_years':
+      return 'extended_break'
+    case 'over_2_years':
+      return 'long_break'
+    default:
+      return 'long_break'
+  }
+}
+
+/**
+ * Calibrate a single skill from benchmark + history data
+ */
+function calibrateSkillEntry(
+  benchmark: SkillBenchmark | null,
+  history: SkillHistoryEntry | undefined,
+): SkillCalibrationEntry | null {
+  if (!benchmark || !benchmark.progression || benchmark.progression === 'none' || benchmark.progression === 'unknown') {
+    return null
+  }
+  
+  const isAssisted = benchmark.isAssisted ?? false
+  const bandLevel = benchmark.bandLevel ?? null
+  
+  // Calculate strength factor based on assistance
+  let estimatedStrengthFactor = 1.0
+  if (isAssisted && bandLevel) {
+    estimatedStrengthFactor = BAND_STRENGTH_DISCOUNT[bandLevel] ?? 0.7
+  } else if (isAssisted) {
+    // Assisted but no band specified - assume medium assistance
+    estimatedStrengthFactor = 0.7
+  }
+  
+  // Determine if user has historical ceiling (previously stronger)
+  const highestLevelEverReached = benchmark.highestLevelEverReached ?? null
+  const hasHistoricalCeiling = !!(
+    highestLevelEverReached && 
+    highestLevelEverReached !== benchmark.progression &&
+    history?.trainingHistory === 'previously_strong'
+  )
+  
+  // Training recency
+  const trainingRecency = mapLastTrainedToRecency(history?.lastTrained ?? null)
+  
+  // Determine programming hints
+  const needsSupportWork = isAssisted || estimatedStrengthFactor < 0.8
+  const needsTransitionWork = hasHistoricalCeiling && trainingRecency !== 'current'
+  const useConservativeStart = (
+    isAssisted || 
+    hasHistoricalCeiling || 
+    trainingRecency === 'extended_break' || 
+    trainingRecency === 'long_break'
+  )
+  
+  return {
+    currentLevel: benchmark.progression,
+    holdSeconds: benchmark.holdSeconds ?? null,
+    isAssisted,
+    bandLevel,
+    estimatedStrengthFactor,
+    highestLevelEverReached,
+    hasHistoricalCeiling,
+    trainingRecency,
+    needsSupportWork,
+    needsTransitionWork,
+    useConservativeStart,
+  }
+}
+
+/**
+ * Build complete skill calibration from onboarding profile
+ */
+function buildSkillCalibration(profile: OnboardingProfile): AthleteCalibration['skillCalibration'] {
+  const skillHistory = profile.skillHistory ?? {}
+  
+  return {
+    front_lever: calibrateSkillEntry(profile.frontLever, skillHistory.front_lever),
+    planche: calibrateSkillEntry(profile.planche, skillHistory.planche),
+    hspu: calibrateSkillEntry(profile.hspu, skillHistory.handstand_pushup),
+    muscle_up: null, // muscle_up uses different structure (MuscleUpReadiness)
+  }
+}
+
+// =============================================================================
 // MAIN CALIBRATION FUNCTION
 // =============================================================================
 
@@ -643,6 +784,11 @@ export function calibrateAthleteProfile(profile: CalibrationProfile): AthleteCal
     v_sit: skillHistory.v_sit?.tendonAdaptationScore ?? 'low' as TendonAdaptationLevel,
   } : null
 
+  // Build skill calibration from onboarding profile (band assistance, hold times, historical ceiling)
+  const skillCalibration = !isAthleteProfile 
+    ? buildSkillCalibration(profile as OnboardingProfile)
+    : null
+
   // Suggest adjustments (enhanced with readiness scores)
   let suggestedProgressionLevel = suggestProgressionLevel(
     leverageProfile,
@@ -709,6 +855,7 @@ export function calibrateAthleteProfile(profile: CalibrationProfile): AthleteCal
     suggestedRestModifier,
     readinessScores,
     tendonAdaptation,
+    skillCalibration,
     calibrationComplete: true,
     calibrationDate: new Date().toISOString(),
   }
@@ -741,6 +888,7 @@ needsCompressionWork: true,
     suggestedRestModifier: 1.0,
     readinessScores: null,
     tendonAdaptation: null,
+    skillCalibration: null,
     calibrationComplete: false,
     calibrationDate: null,
   }

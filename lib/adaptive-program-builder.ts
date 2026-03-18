@@ -777,10 +777,45 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
     calibrationAdjustments.includeEnduranceFinisher
   const shouldIncludeDensity = outcomeTrainingStyle.includeDensityBlocks
   
+  // Extract skill calibration insights for programming
+  const skillCalibration = athleteCalibration.skillCalibration
+  const hasAssistedHolds = !!(
+    skillCalibration?.front_lever?.isAssisted || 
+    skillCalibration?.planche?.isAssisted ||
+    skillCalibration?.hspu?.isAssisted
+  )
+  const hasHistoricalCeiling = !!(
+    skillCalibration?.front_lever?.hasHistoricalCeiling ||
+    skillCalibration?.planche?.hasHistoricalCeiling ||
+    skillCalibration?.hspu?.hasHistoricalCeiling
+  )
+  const needsConservativeStart = !!(
+    skillCalibration?.front_lever?.useConservativeStart ||
+    skillCalibration?.planche?.useConservativeStart ||
+    skillCalibration?.hspu?.useConservativeStart
+  )
+  const needsSupportWork = !!(
+    skillCalibration?.front_lever?.needsSupportWork ||
+    skillCalibration?.planche?.needsSupportWork ||
+    skillCalibration?.hspu?.needsSupportWork
+  )
+  
+  // Build skill calibration notes for program reasoning
+  const skillCalibrationNotes: string[] = []
+  if (hasAssistedHolds) {
+    skillCalibrationNotes.push('Current holds are band-assisted — program includes extra support strength work')
+  }
+  if (hasHistoricalCeiling) {
+    skillCalibrationNotes.push('Prior higher-level experience detected — using reacquisition strategy')
+  }
+  if (needsConservativeStart) {
+    skillCalibrationNotes.push('Conservative progression start for measured re-entry')
+  }
+  
   const calibrationContext = athleteCalibration.calibrationComplete ? {
   isCalibrated: true,
   message: calibrationAdjustments.calibrationMessage,
-  notes: calibrationAdjustments.progressionNotes,
+  notes: [...calibrationAdjustments.progressionNotes, ...skillCalibrationNotes],
   includesCompressionWork: calibrationAdjustments.includeCompressionWork || biasTowardCompression,
   includesEnduranceFinisher: shouldIncludeEndurance,
   includesDensityBlocks: shouldIncludeDensity,
@@ -790,6 +825,12 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
   prioritizesStrength: shouldPrioritizeStrength,
   workoutDuration: workoutDuration,
   durationConfig: durationConfig,
+  // Skill calibration flags for exercise selection
+  hasAssistedHolds,
+  hasHistoricalCeiling,
+  needsConservativeStart,
+  needsSupportWork,
+  skillCalibration: skillCalibration,
   compressionReadiness: {
   currentLevel: compressionReadiness.currentLevelLabel,
   nextMilestone: compressionReadiness.nextMilestoneLabel,
@@ -809,6 +850,11 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
   prioritizesStrength: shouldPrioritizeStrength,
   workoutDuration: workoutDuration,
   durationConfig: durationConfig,
+  hasAssistedHolds: false,
+  hasHistoricalCeiling: false,
+  needsConservativeStart: false,
+  needsSupportWork: false,
+  skillCalibration: null,
   }
   
   // Get fatigue-based training decision (runs client-side only)

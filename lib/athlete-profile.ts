@@ -387,9 +387,12 @@ export interface SkillBenchmark {
   progression: string
   holdSeconds?: number
   reps?: number
-  // Band assistance data — captured in UI, used later by engine for strength estimation
+  // Band assistance data — used by engine for strength estimation and progression placement
   isAssisted?: boolean
   bandLevel?: BandLevel | null
+  // Historical ceiling — if user previously reached a higher level than current
+  // Used for reacquisition programming and smarter progression placement
+  highestLevelEverReached?: string | null
 }
 
 // =============================================================================

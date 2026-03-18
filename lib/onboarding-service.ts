@@ -383,7 +383,17 @@ export function getProgramReasoning(program: AdaptiveProgram | null): ProgramRea
       'straddle': 'Straddle',
       'full': 'Full',
     }
-    detectedSkills.push({ skill: 'Front lever', level: flLabels[profile.frontLever.progression] || profile.frontLever.progression })
+    let levelLabel = flLabels[profile.frontLever.progression] || profile.frontLever.progression
+    // Add band assistance indicator
+    if (profile.frontLever.isAssisted && profile.frontLever.bandLevel) {
+      levelLabel += ` (${profile.frontLever.bandLevel} band)`
+    }
+    // Add historical ceiling indicator
+    if (profile.frontLever.highestLevelEverReached && profile.frontLever.highestLevelEverReached !== profile.frontLever.progression) {
+      const historicalLabel = flLabels[profile.frontLever.highestLevelEverReached] || profile.frontLever.highestLevelEverReached
+      levelLabel += ` — was ${historicalLabel}`
+    }
+    detectedSkills.push({ skill: 'Front lever', level: levelLabel })
   }
   
   if (profile?.planche?.progression && profile.planche.progression !== 'none' && profile.planche.progression !== 'unknown') {
@@ -394,7 +404,17 @@ export function getProgramReasoning(program: AdaptiveProgram | null): ProgramRea
       'straddle': 'Straddle',
       'full': 'Full',
     }
-    detectedSkills.push({ skill: 'Planche', level: plLabels[profile.planche.progression] || profile.planche.progression })
+    let levelLabel = plLabels[profile.planche.progression] || profile.planche.progression
+    // Add band assistance indicator
+    if (profile.planche.isAssisted && profile.planche.bandLevel) {
+      levelLabel += ` (${profile.planche.bandLevel} band)`
+    }
+    // Add historical ceiling indicator
+    if (profile.planche.highestLevelEverReached && profile.planche.highestLevelEverReached !== profile.planche.progression) {
+      const historicalLabel = plLabels[profile.planche.highestLevelEverReached] || profile.planche.highestLevelEverReached
+      levelLabel += ` — was ${historicalLabel}`
+    }
+    detectedSkills.push({ skill: 'Planche', level: levelLabel })
   }
   
   if (profile?.muscleUp && profile.muscleUp !== 'none' && profile.muscleUp !== 'unknown') {

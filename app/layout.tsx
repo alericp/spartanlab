@@ -125,6 +125,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
+        <meta name="google-site-verification" content="n302TRNGAeOTVkU3PA14R8x6MBPovgFYZq9iILqrcjg" />
         <JsonLdMultiple schemas={globalSchemas} />
       </head>
       <body className="font-sans antialiased bg-[#0F1115] text-[#E6E9EF]">

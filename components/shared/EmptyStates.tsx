@@ -123,9 +123,11 @@ export function DashboardEmptyState() {
     <div className="space-y-6">
       {/* Hero Empty State - One Dominant CTA */}
       <Card className="bg-gradient-to-br from-[#1A1A1A] via-[#2A2A2A] to-[#1A1A1A] border-[#3A3A3A] p-8 sm:p-12 relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-bl from-[#E63946]/10 to-transparent rounded-full blur-3xl" />
+        {/* Decorative glow - non-interactive */}
+        <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-bl from-[#E63946]/10 to-transparent rounded-full blur-3xl pointer-events-none" />
         
-        <div className="relative text-center max-w-xl mx-auto">
+        {/* Content wrapper - above decorative layers */}
+        <div className="relative z-10 text-center max-w-xl mx-auto">
           <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-gradient-to-br from-[#E63946]/20 to-[#E63946]/5 border border-[#E63946]/20 mb-6">
             <Zap className="w-10 h-10 text-[#E63946]" />
           </div>

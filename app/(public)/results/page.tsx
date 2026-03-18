@@ -131,7 +131,7 @@ export default function ResultsPage() {
             <Link href="/tools" className="text-sm text-[#A4ACB8] hover:text-[#E6E9EF] transition-colors">
               Tools
             </Link>
-            <Link href="/dashboard">
+            <Link href="/sign-in?redirect_url=/dashboard">
               <Button size="sm" className="bg-[#C1121F] hover:bg-[#A30F1A]">
                 Open App
               </Button>
@@ -335,7 +335,7 @@ export default function ResultsPage() {
                   </p>
                 </div>
                 <div className="flex-shrink-0">
-                  <Link href="/dashboard">
+                  <Link href="/sign-in?redirect_url=/dashboard">
                     <Button variant="outline" className="border-[#C1121F]/30 text-[#C1121F] hover:bg-[#C1121F]/10">
                       See How It Works
                       <ChevronRight className="w-4 h-4 ml-1" />
@@ -392,7 +392,7 @@ export default function ResultsPage() {
             <Link href="/guides" className="hover:text-[#E6E9EF] transition-colors">Guides</Link>
             <Link href="/tools" className="hover:text-[#E6E9EF] transition-colors">Tools</Link>
             <Link href="/my-programs" className="hover:text-[#E6E9EF] transition-colors">Programs</Link>
-            <Link href="/dashboard" className="hover:text-[#E6E9EF] transition-colors">Dashboard</Link>
+            <Link href="/sign-in?redirect_url=/dashboard" className="hover:text-[#E6E9EF] transition-colors">Dashboard</Link>
           </div>
         </div>
       </footer>

@@ -1287,7 +1287,7 @@ export default async function GuidePage({ params }: Props) {
               goals, and identified limiters.
             </p>
             <Button asChild size="lg" className="bg-[#C1121F] hover:bg-[#A30F1A]">
-              <Link href="/dashboard">
+              <Link href="/sign-in?redirect_url=/dashboard">
                 Generate Adaptive Training Plan
                 <ArrowRight className="w-4 h-4 ml-2" />
               </Link>

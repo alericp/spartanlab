@@ -158,7 +158,7 @@ export default function WeightedPullUpTrainingGuide() {
             <ArrowLeft className="w-4 h-4" />
             All Guides
           </Link>
-          <Link href="/dashboard">
+          <Link href="/sign-in?redirect_url=/dashboard">
             <Button size="sm" variant="outline" className="border-[#2B313A] text-[#A4ACB8] hover:text-[#E6E9EF]">
               Open SpartanLab
             </Button>
@@ -502,7 +502,7 @@ export default function WeightedPullUpTrainingGuide() {
                 </div>
               </Card>
             </Link>
-            <Link href="/dashboard">
+            <Link href="/sign-in?redirect_url=/dashboard">
               <Card className="bg-[#1A1F26] border-[#2B313A] p-4 h-full hover:border-[#C1121F]/50 transition-all cursor-pointer group">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-lg bg-[#0F1115] flex items-center justify-center flex-shrink-0">
@@ -546,7 +546,7 @@ export default function WeightedPullUpTrainingGuide() {
               <Link href="/guides" className="hover:text-[#E6E9EF] transition-colors">Guides</Link>
               <Link href="/tools" className="hover:text-[#E6E9EF] transition-colors">Tools</Link>
               <Link href="/programs" className="hover:text-[#E6E9EF] transition-colors">Programs</Link>
-              <Link href="/dashboard" className="hover:text-[#E6E9EF] transition-colors">Dashboard</Link>
+              <Link href="/sign-in?redirect_url=/dashboard" className="hover:text-[#E6E9EF] transition-colors">Dashboard</Link>
             </div>
           </div>
         </div>

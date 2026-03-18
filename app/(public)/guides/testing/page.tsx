@@ -211,7 +211,7 @@ export default function TestingGuidesPage() {
               </p>
               <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
                 <Button asChild size="lg" className="bg-[#C1121F] hover:bg-[#A30F1A]">
-                  <Link href="/dashboard">
+                  <Link href="/sign-in?redirect_url=/dashboard">
                     Go to Dashboard
                     <ArrowRight className="w-5 h-5 ml-2" />
                   </Link>

@@ -230,7 +230,7 @@ export default function ToolsIndexPage() {
             </Link>
           </div>
           <Button asChild size="sm" className="bg-[#C1121F] hover:bg-[#A30F1A]">
-            <Link href="/dashboard">Open App</Link>
+            <Link href="/sign-in?redirect_url=/dashboard">Open App</Link>
           </Button>
         </div>
       </nav>
@@ -460,7 +460,7 @@ export default function ToolsIndexPage() {
           <div className="flex items-center gap-6">
             <Link href="/guides" className="hover:text-[#E6E9EF] transition-colors">Guides</Link>
             <Link href="/programs" className="hover:text-[#E6E9EF] transition-colors">Program Builder</Link>
-            <Link href="/dashboard" className="hover:text-[#E6E9EF] transition-colors">Dashboard</Link>
+            <Link href="/sign-in?redirect_url=/dashboard" className="hover:text-[#E6E9EF] transition-colors">Dashboard</Link>
             <Link href="/results" className="hover:text-[#E6E9EF] transition-colors">Results</Link>
           </div>
         </div>

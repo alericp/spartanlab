@@ -26,7 +26,9 @@ function FirstSessionShell() {
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(true)
   const [hasProgram, setHasProgram] = useState(false)
-  const [isNavigating, setIsNavigating] = useState(false)
+  // Separate navigation states per action to prevent UI confusion
+  const [isStartingWorkout, setIsStartingWorkout] = useState(false)
+  const [isStartingDemo, setIsStartingDemo] = useState(false)
 
   // Check program state using unified utility
   useEffect(() => {
@@ -43,14 +45,17 @@ function FirstSessionShell() {
   }, [])
 
   const handleStartWorkout = () => {
-    setIsNavigating(true)
+    setIsStartingWorkout(true)
     router.push('/workout/session?day=1&first=true')
   }
 
   const handleTryDemo = () => {
-    setIsNavigating(true)
+    setIsStartingDemo(true)
     router.push('/workout/session?demo=true')
   }
+  
+  // Derived state for disabling buttons during any navigation
+  const isNavigating = isStartingWorkout || isStartingDemo
 
   // Loading state
   if (isLoading) {
@@ -110,7 +115,7 @@ function FirstSessionShell() {
                 disabled={isNavigating}
                 className="w-full bg-[#E63946] hover:bg-[#D62828] text-white h-12 text-base font-semibold gap-2 disabled:opacity-50"
               >
-                {isNavigating ? (
+                {isStartingWorkout ? (
                   <>
                     <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                     Loading...
@@ -174,7 +179,7 @@ function FirstSessionShell() {
               disabled={isNavigating}
               className="w-full border-[#2A2A2A] text-[#A5A5A5] hover:bg-[#1A1A1A] hover:text-[#F5F5F5] h-11 gap-2"
             >
-              {isNavigating ? (
+              {isStartingDemo ? (
                 <>
                   <div className="w-4 h-4 border-2 border-[#A5A5A5]/30 border-t-[#A5A5A5] rounded-full animate-spin" />
                   Loading Demo...

@@ -241,6 +241,7 @@ export function TodayFocusCard({ className }: TodayFocusCardProps) {
 // Compact version for sidebar or secondary placement
 export function TodayFocusCompact({ className }: TodayFocusCardProps) {
   const [hasActiveSession, setHasActiveSession] = useState(false)
+  const [isFirstWorkout, setIsFirstWorkout] = useState(false)
 
   useEffect(() => {
     try {
@@ -254,11 +255,26 @@ export function TodayFocusCompact({ className }: TodayFocusCardProps) {
     } catch {
       setHasActiveSession(false)
     }
+    
+    // Check for first workout
+    try {
+      const logs = getWorkoutLogs()
+      setIsFirstWorkout(logs.length === 0)
+    } catch {
+      setIsFirstWorkout(false)
+    }
   }, [])
+
+  // Use canonical routing: first workout → /first-session, resume → /workout/session
+  const targetHref = hasActiveSession 
+    ? '/workout/session' 
+    : isFirstWorkout 
+    ? '/first-session' 
+    : '/workout/session'
 
   return (
     <Link 
-      href="/workout/session"
+      href={targetHref}
       className={`block bg-[#1A1F26] border border-[#2B313A] rounded-xl p-4 hover:border-[#C1121F]/50 transition-colors ${className}`}
     >
       <div className="flex items-center justify-between">
@@ -274,10 +290,10 @@ export function TodayFocusCompact({ className }: TodayFocusCardProps) {
           </div>
           <div>
             <p className="text-sm font-semibold text-[#E6E9EF]">
-              {hasActiveSession ? 'Resume Workout' : 'Start Workout'}
+              {hasActiveSession ? 'Resume Workout' : isFirstWorkout ? 'Start First Workout' : 'Start Workout'}
             </p>
             <p className="text-xs text-[#6B7280]">
-              {hasActiveSession ? 'Continue your session' : 'Begin today\'s training'}
+              {hasActiveSession ? 'Continue your session' : isFirstWorkout ? 'Begin your training journey' : 'Begin today\'s training'}
             </p>
           </div>
         </div>

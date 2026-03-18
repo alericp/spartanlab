@@ -625,9 +625,16 @@ export function NextWorkoutCompact({ className }: NextWorkoutCardProps) {
     }
   }, [])
 
+  // Use canonical routing: first workout goes to /first-session, resume/continuing goes to /workout/session
+  const targetHref = hasActiveSession 
+    ? '/workout/session' 
+    : isFirstWorkout 
+    ? '/first-session' 
+    : '/workout/session'
+
   return (
     <Link 
-      href="/workout/session"
+      href={targetHref}
       className={`block bg-[#1A1F26] border border-[#2B313A] rounded-xl p-4 hover:border-[#C1121F]/50 transition-colors ${className}`}
     >
       <div className="flex items-center justify-between">

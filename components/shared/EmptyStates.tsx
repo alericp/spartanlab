@@ -116,7 +116,7 @@ export function DashboardEmptyState() {
   const router = useRouter()
   
   const handleStartWorkout = () => {
-    router.push('/workout/session')
+    router.push('/first-session')
   }
   
   return (

@@ -143,15 +143,13 @@ export function SkillDetailPageContent({ skillKey, onBack }: SkillDetailPageCont
             <p className="text-sm text-[#A5A5A5] mb-3">Current Level</p>
             <div className="grid grid-cols-2 gap-2">
               {skillDef.levels.map((level, index) => (
-                <Button
+                <button
                   key={index}
-                  variant={currentLevel === index ? 'default' : 'outline'}
-                  size="sm"
-                  className={
+                  className={`min-h-[44px] w-full rounded-md border px-3 py-2 text-xs font-medium leading-tight text-center transition-colors whitespace-normal ${
                     currentLevel === index
-                      ? 'bg-[#E63946] hover:bg-[#D62828] text-white'
-                      : 'border-[#3A3A3A] hover:bg-[#3A3A3A]'
-                  }
+                      ? 'bg-[#E63946] border-[#E63946] text-white hover:bg-[#D62828]'
+                      : 'bg-transparent border-[#3A3A3A] text-[#A5A5A5] hover:bg-[#3A3A3A] hover:text-[#F5F5F5]'
+                  }`}
                   onClick={() => {
                     setCurrentLevel(index)
                     if (index >= targetLevel) {
@@ -160,7 +158,7 @@ export function SkillDetailPageContent({ skillKey, onBack }: SkillDetailPageCont
                   }}
                 >
                   {level.name}
-                </Button>
+                </button>
               ))}
             </div>
           </div>
@@ -170,20 +168,18 @@ export function SkillDetailPageContent({ skillKey, onBack }: SkillDetailPageCont
             <p className="text-sm text-[#A5A5A5] mb-3">Target Level</p>
             <div className="grid grid-cols-2 gap-2">
               {skillDef.levels.map((level, index) => (
-                <Button
+                <button
                   key={index}
-                  variant={targetLevel === index ? 'default' : 'outline'}
-                  size="sm"
                   disabled={index < currentLevel}
-                  className={
+                  className={`min-h-[44px] w-full rounded-md border px-3 py-2 text-xs font-medium leading-tight text-center transition-colors whitespace-normal disabled:opacity-30 disabled:cursor-not-allowed ${
                     targetLevel === index
                       ? 'bg-[#3A3A3A] border-[#E63946] text-[#E63946]'
-                      : 'border-[#3A3A3A] hover:bg-[#3A3A3A] disabled:opacity-30'
-                  }
-                  onClick={() => setTargetLevel(index)}
+                      : 'bg-transparent border-[#3A3A3A] text-[#A5A5A5] hover:bg-[#3A3A3A] hover:text-[#F5F5F5]'
+                  }`}
+                  onClick={() => !index || index >= currentLevel ? setTargetLevel(index) : undefined}
                 >
                   {level.name}
-                </Button>
+                </button>
               ))}
             </div>
           </div>

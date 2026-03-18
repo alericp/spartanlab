@@ -83,25 +83,26 @@ function safeIsPublicRoute(pathname: string | null): boolean {
   }
 }
 
-export function OwnerSimulationToggleWrapper() {
-  let pathname: string | null = null
-  
-  try {
-    pathname = usePathname()
-  } catch (e) {
-    console.error('[v0] OwnerSimulationToggleWrapper: usePathname failed:', e)
-    return null
-  }
+function OwnerSimulationToggleWrapperInner() {
+  // usePathname is called unconditionally per React rules of hooks
+  // If it throws, the WrapperErrorBoundary will catch it
+  const pathname = usePathname()
   
   // Don't render on public routes - these need to be prerenderable
   if (safeIsPublicRoute(pathname)) {
     return null
   }
   
-  // Only render on authenticated app routes, wrapped in error boundary
+  // Only render on authenticated app routes
+  return <OwnerSimulationToggle />
+}
+
+export function OwnerSimulationToggleWrapper() {
+  // Wrap the entire inner component in error boundary
+  // This catches any hook failures (usePathname, etc.)
   return (
     <WrapperErrorBoundary>
-      <OwnerSimulationToggle />
+      <OwnerSimulationToggleWrapperInner />
     </WrapperErrorBoundary>
   )
 }

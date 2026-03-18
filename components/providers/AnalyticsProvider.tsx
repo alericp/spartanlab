@@ -1,17 +1,39 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, Component, ReactNode } from 'react'
 import { usePathname } from 'next/navigation'
 import Script from 'next/script'
 
 /**
- * Analytics Provider Component
- * 
- * Initializes PostHog and Google Analytics 4, tracks page views automatically.
- * CRITICAL: This component must NEVER crash the app. All analytics
- * operations are wrapped in try/catch for production safety.
+ * Error boundary to ensure analytics never crashes the app
  */
-export function AnalyticsProvider({ children }: { children: React.ReactNode }) {
+class AnalyticsErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean }> {
+  constructor(props: { children: ReactNode }) {
+    super(props)
+    this.state = { hasError: false }
+  }
+  
+  static getDerivedStateFromError() {
+    return { hasError: true }
+  }
+  
+  componentDidCatch(error: Error) {
+    console.error('[v0] AnalyticsProvider crashed (caught safely):', error.message)
+  }
+  
+  render() {
+    if (this.state.hasError) {
+      // On error, just render children without analytics
+      return this.props.children
+    }
+    return this.props.children
+  }
+}
+
+/**
+ * Inner Analytics Provider with hook calls
+ */
+function AnalyticsProviderInner({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const [mounted, setMounted] = useState(false)
   
@@ -89,5 +111,20 @@ export function AnalyticsProvider({ children }: { children: React.ReactNode }) {
       )}
       {children}
     </>
+  )
+}
+
+/**
+ * Analytics Provider Component
+ * 
+ * Initializes PostHog and Google Analytics 4, tracks page views automatically.
+ * CRITICAL: This component must NEVER crash the app. Wrapped in error boundary
+ * to ensure any analytics failure doesn't take down the app.
+ */
+export function AnalyticsProvider({ children }: { children: React.ReactNode }) {
+  return (
+    <AnalyticsErrorBoundary>
+      <AnalyticsProviderInner>{children}</AnalyticsProviderInner>
+    </AnalyticsErrorBoundary>
   )
 }

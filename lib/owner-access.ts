@@ -63,6 +63,7 @@ export function clearCurrentUserEmail(): void {
 
 /**
  * Check if the given email is the platform owner
+ * Applies trim and case-insensitive comparison
  */
 export function isOwner(currentEmail?: string | null): boolean {
   const ownerEmail = getOwnerEmail()
@@ -72,7 +73,8 @@ export function isOwner(currentEmail?: string | null): boolean {
     return false
   }
   
-  return ownerEmail.toLowerCase() === emailToCheck.toLowerCase()
+  // Normalize: trim whitespace and compare case-insensitively
+  return ownerEmail.trim().toLowerCase() === emailToCheck.trim().toLowerCase()
 }
 
 /**

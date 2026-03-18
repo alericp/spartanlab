@@ -37,7 +37,10 @@ export async function GET() {
       return NextResponse.json({ isOwner: false })
     }
     
-    const isOwner = user.email?.toLowerCase() === ownerEmail.toLowerCase()
+    // Normalize: trim whitespace and compare case-insensitively
+    const normalizedUserEmail = user.email?.trim().toLowerCase()
+    const normalizedOwnerEmail = ownerEmail.trim().toLowerCase()
+    const isOwner = normalizedUserEmail === normalizedOwnerEmail
     
     return NextResponse.json({ isOwner })
   } catch {

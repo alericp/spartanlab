@@ -63,7 +63,9 @@ export function useOwnerInit(): { isOwner: boolean; isLoaded: boolean; userEmail
         if (isLoaded) {
           if (user) {
             // Safe property access with optional chaining
-            const email = user?.emailAddresses?.[0]?.emailAddress || null
+            // Trim whitespace to ensure consistent comparison
+            const rawEmail = user?.emailAddresses?.[0]?.emailAddress
+            const email = rawEmail ? rawEmail.trim() : null
             ownerAccess.setCurrentUserEmail(email)
             setUserEmail(email)
             // Check owner status after setting email

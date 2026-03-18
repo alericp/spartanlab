@@ -4,9 +4,33 @@ import { Badge } from '@/components/ui/badge'
 import { Crown, Sparkles } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useEntitlement } from '@/hooks/useEntitlement'
+import { Component, ReactNode } from 'react'
 
 // UI status type for component props
 export type UISubscriptionStatus = 'free' | 'trial' | 'pro'
+
+// Error boundary for SubscriptionBadge - returns null on error (fail invisible)
+class BadgeErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean }> {
+  constructor(props: { children: ReactNode }) {
+    super(props)
+    this.state = { hasError: false }
+  }
+  
+  static getDerivedStateFromError() {
+    return { hasError: true }
+  }
+  
+  componentDidCatch(error: Error) {
+    console.error('[v0] SubscriptionBadge crashed (hiding safely):', error.message)
+  }
+  
+  render() {
+    if (this.state.hasError) {
+      return null // Fail invisible - don't show badge if it crashes
+    }
+    return this.props.children
+  }
+}
 
 // =============================================================================
 // SUBSCRIPTION BADGE COMPONENT
@@ -24,13 +48,9 @@ interface SubscriptionBadgeProps {
 }
 
 /**
- * SubscriptionBadge - Displays user's subscription status
- * 
- * - Pro: Gold crown badge
- * - Trial: Gold sparkle badge with optional days remaining
- * - Free: No badge shown (returns null)
+ * Inner SubscriptionBadge implementation
  */
-export function SubscriptionBadge({ 
+function SubscriptionBadgeInner({ 
   status: statusOverride, 
   size = 'sm',
   showTrialDays = true,
@@ -70,6 +90,22 @@ export function SubscriptionBadge({
       )} />
       {label}
     </Badge>
+  )
+}
+
+/**
+ * SubscriptionBadge - Displays user's subscription status
+ * 
+ * Wrapped in error boundary to prevent crashes from propagating.
+ * - Pro: Gold crown badge
+ * - Trial: Gold sparkle badge with optional days remaining
+ * - Free: No badge shown (returns null)
+ */
+export function SubscriptionBadge(props: SubscriptionBadgeProps) {
+  return (
+    <BadgeErrorBoundary>
+      <SubscriptionBadgeInner {...props} />
+    </BadgeErrorBoundary>
   )
 }
 

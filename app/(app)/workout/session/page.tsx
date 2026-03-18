@@ -13,9 +13,10 @@ import { Dumbbell } from 'lucide-react'
 
 // Demo session for testing when no program exists
 // CRITICAL: This must be a complete AdaptiveSession shape to avoid downstream errors
+// IMPORTANT: dayLabel uses 'DEMO-' prefix to ensure unique storage key and prevent collisions
 const DEMO_SESSION: AdaptiveSession = {
-  dayNumber: 0, // Use 0 to indicate demo mode for unique storage key
-  dayLabel: 'Demo Workout',
+  dayNumber: 0, // Use 0 to indicate demo mode
+  dayLabel: 'DEMO-Workout', // DEMO- prefix ensures unique sessionId in StreamlinedWorkoutSession
   focus: 'skill',
   focusLabel: 'Skill Focus',
   isPrimary: true,
@@ -91,20 +92,21 @@ function WorkoutSessionContent() {
     
     // Use unified program state check for consistency
     // Wrapped in try-catch for safety - must never crash
-    let hasProgram = false
+    let hasUsableProgram = false
     let adaptiveProgram = null
     
     try {
       const programState = getProgramState()
-      hasProgram = programState.hasProgram
+      // Use hasUsableWorkoutProgram for stricter validation
+      hasUsableProgram = programState.hasUsableWorkoutProgram
       adaptiveProgram = programState.adaptiveProgram
     } catch {
       // If program state check fails, treat as no program
-      hasProgram = false
+      hasUsableProgram = false
       adaptiveProgram = null
     }
     
-    if (!hasProgram || !adaptiveProgram) {
+    if (!hasUsableProgram || !adaptiveProgram) {
       setError('No active program found. Please create a program first.')
       setLoading(false)
       return

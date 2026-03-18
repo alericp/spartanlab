@@ -16,6 +16,7 @@ import {
   Activity,
   Clock,
   Crown,
+  ArrowLeft,
 } from 'lucide-react'
 import Link from 'next/link'
 import { hasProAccess } from '@/lib/feature-access'
@@ -157,7 +158,7 @@ function SkillSelectionView({ onSelect }: { onSelect: (key: SkillKey) => void })
   const progressions = getSkillProgressions()
   const allSessions = getSkillSessions()
   
-  const getSkillSummary = (skillKey: string) => {
+  const getSkillSummary = (skillKey: string, def: EnhancedSkillDefinition) => {
     const prog = progressions.find(p => p.skillName === skillKey)
     const sessions = allSessions.filter(s => s.skillName === skillKey)
     const recentSessions = sessions.filter(s => {
@@ -166,10 +167,17 @@ function SkillSelectionView({ onSelect }: { onSelect: (key: SkillKey) => void })
       return new Date(s.sessionDate) >= weekAgo
     })
     
+    // Safely clamp level indices to valid range
+    const maxLevel = def.levels.length - 1
+    const rawCurrentLevel = prog?.currentLevel ?? 0
+    const rawTargetLevel = prog?.targetLevel ?? 1
+    const safeCurrentLevel = Math.max(0, Math.min(rawCurrentLevel, maxLevel))
+    const safeTargetLevel = Math.max(0, Math.min(rawTargetLevel, maxLevel))
+    
     return {
       hasProgression: !!prog,
-      currentLevel: prog?.currentLevel ?? 0,
-      targetLevel: prog?.targetLevel ?? 1,
+      currentLevel: safeCurrentLevel,
+      targetLevel: safeTargetLevel < safeCurrentLevel ? Math.min(safeCurrentLevel + 1, maxLevel) : safeTargetLevel,
       progressScore: prog?.progressScore ?? 0,
       totalSessions: sessions.length,
       weeklyDensity: recentSessions.reduce((sum, s) => sum + s.sessionDensity, 0),
@@ -188,7 +196,7 @@ function SkillSelectionView({ onSelect }: { onSelect: (key: SkillKey) => void })
       
       <div className="grid md:grid-cols-2 gap-6">
         {Object.entries(SKILL_PROGRESSIONS).map(([key, def]) => {
-          const summary = getSkillSummary(key)
+          const summary = getSkillSummary(key, def)
           
           return (
             <Card
@@ -303,8 +311,15 @@ function SkillDetailView({
   onSessionSaved,
 }: SkillDetailViewProps) {
   const levelNames = skillDef.levels.map(l => l.name)
-  const currentLevelDef = skillDef.levels[currentLevel]
-  const hasSessionData = sessions.filter(s => s.level === currentLevel).length > 0
+  
+  // Safely clamp level indices to valid range to prevent crashes from stale localStorage data
+  const maxLevel = skillDef.levels.length - 1
+  const safeCurrentLevel = Math.max(0, Math.min(currentLevel, maxLevel))
+  const safeTargetLevel = Math.max(0, Math.min(targetLevel, maxLevel))
+  
+  const currentLevelDef = skillDef.levels[safeCurrentLevel]
+  const targetLevelDef = skillDef.levels[safeTargetLevel]
+  const hasSessionData = sessions.filter(s => s.level === safeCurrentLevel).length > 0
 
   return (
     <div className="space-y-8">
@@ -395,12 +410,12 @@ function SkillDetailView({
           <SkillSessionLogger
             skillName={skillKey}
             levelName={currentLevelDef.name}
-            levelIndex={currentLevel}
+            levelIndex={safeCurrentLevel}
             onSessionSaved={onSessionSaved}
           />
           
           <SkillSessionHistory
-            sessions={sessions.filter(s => s.level === currentLevel)}
+            sessions={sessions.filter(s => s.level === safeCurrentLevel)}
             levelNames={levelNames}
             onSessionDeleted={onSessionSaved}
           />
@@ -413,7 +428,7 @@ function SkillDetailView({
               <SkillReadinessCard
                 analysis={analysis}
                 levelName={currentLevelDef.name}
-                targetLevelName={skillDef.levels[targetLevel].name}
+                targetLevelName={targetLevelDef.name}
               />
               {/* Pro upgrade hint for detailed progression */}
               {!hasProAccess() && (
@@ -489,7 +504,7 @@ function SkillDetailView({
           <div>
             <p className="text-sm text-[#A5A5A5] mb-1">Target Support 1RM</p>
             <p className="text-2xl font-bold">
-              +{skillDef.supportStrengthRequirements.minOneRMPercent[currentLevel]}%
+              +{skillDef.supportStrengthRequirements.minOneRMPercent[safeCurrentLevel] ?? 0}%
             </p>
             <p className="text-xs text-[#5A5A5A]">% of bodyweight added</p>
           </div>

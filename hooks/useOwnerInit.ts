@@ -62,63 +62,48 @@ export function useOwnerInit(): { isOwner: boolean; isLoaded: boolean; userEmail
   const [ownerStatus, setOwnerStatus] = useState(false)
   const [userEmail, setUserEmail] = useState<string | null>(null)
   const [hookLoaded, setHookLoaded] = useState(false)
-  const [isPreview, setIsPreview] = useState(false)
+  
+  // Detect preview environment on initial render (client-side only)
+  const [inPreview, setInPreview] = useState(false)
   
   // Call useUser unconditionally (React rules of hooks)
-  // If this throws, the error boundary wrapping the component will catch it
-  let user: ReturnType<typeof useUser>['user'] = null
-  let isLoaded = false
-  
-  try {
-    const clerkResult = useUser()
-    user = clerkResult.user
-    isLoaded = clerkResult.isLoaded
-  } catch {
-    // Clerk failed (e.g., domain restriction in preview)
-    isLoaded = true // Treat as loaded since we know it won't work
-  }
+  // In preview mode, Clerk will log errors but the hook still returns safely
+  const { user, isLoaded } = useUser()
   
   useEffect(() => {
-    // Check if we're in a preview environment
-    const inPreview = isPreviewEnvironment()
-    setIsPreview(inPreview)
+    // Check if we're in a preview environment (must be in useEffect for SSR safety)
+    const isPreview = isPreviewEnvironment()
+    setInPreview(isPreview)
     
     const init = async () => {
       try {
         const ownerAccess = await loadOwnerAccess()
         
-        // In preview environments, check if NEXT_PUBLIC_OWNER_EMAIL is set
-        // This allows owner features to work for testing
-        if (inPreview) {
-          const ownerEmailConfigured = !!process.env.NEXT_PUBLIC_OWNER_EMAIL
-          if (ownerEmailConfigured) {
-            // In preview mode with owner email configured, enable owner features
-            setOwnerStatus(true)
-            setUserEmail('preview-mode@spartanlab.app')
-            setHookLoaded(true)
-            return
-          }
+        // In preview environments, enable owner features for testing
+        // This allows the Free/Pro toggle to appear even when Clerk auth fails
+        if (isPreview) {
+          setOwnerStatus(true)
+          setUserEmail('preview-mode@spartanlab.app')
+          setHookLoaded(true)
+          return
         }
         
         if (isLoaded) {
           if (user) {
             // Safe property access with optional chaining
-            // Trim whitespace to ensure consistent comparison
             const rawEmail = user?.emailAddresses?.[0]?.emailAddress
             const email = rawEmail ? rawEmail.trim() : null
             ownerAccess.setCurrentUserEmail(email)
             setUserEmail(email)
-            // Check owner status after setting email
             setOwnerStatus(ownerAccess.isCurrentUserOwner())
           } else {
-            // User signed out - clear the cached email
             ownerAccess.clearCurrentUserEmail()
             setUserEmail(null)
             setOwnerStatus(false)
           }
         }
-      } catch (e) {
-        console.error('[v0] useOwnerInit: init failed:', e)
+      } catch {
+        // Silently fail - owner features will be disabled
         setOwnerStatus(false)
         setUserEmail(null)
       }
@@ -130,7 +115,7 @@ export function useOwnerInit(): { isOwner: boolean; isLoaded: boolean; userEmail
   }, [user, isLoaded])
   
   return {
-    isOwner: ownerStatus || isPreview, // In preview mode, always show owner controls
+    isOwner: ownerStatus || inPreview, // In preview mode, always show owner controls
     isLoaded: isLoaded && hookLoaded,
     userEmail,
   }

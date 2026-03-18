@@ -1,37 +1,52 @@
 'use client'
 
 /**
- * SkillDetailPageContent - Heavy skill detail implementation
+ * SkillDetailPageContent - Lightweight skill detail shell
  * 
- * This file contains ALL heavy imports for the skill detail view.
- * It is dynamically imported by the my-skills page ONLY when a skill is selected.
- * This isolation prevents import-time crashes from affecting the skill selection view.
+ * This file contains ONLY lightweight imports for the skill detail shell.
+ * Heavy detail sections are dynamically imported via next/dynamic.
+ * This isolation prevents import-time crashes from affecting the detail shell.
  */
 
 // =============================================================================
 // DETAIL VIEW SAFE MODE FLAG
 // Set to true to render only the lightweight shell without heavy components
+// When true: NO heavy imports are loaded at all (true import isolation)
+// When false: Heavy sections are dynamically loaded via next/dynamic
 // =============================================================================
 const SKILL_DETAIL_SAFE_MODE = true
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
+import dynamic from 'next/dynamic'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
-import { SkillSessionLogger } from '@/components/skills/SkillSessionLogger'
-import { SkillSessionHistory } from '@/components/skills/SkillSessionHistory'
-import { SkillReadinessCard } from '@/components/skills/SkillReadinessCard'
-import { SkillEmptyState } from '@/components/skills/SkillEmptyState'
-import { SkillRoadmapDisplay } from '@/components/roadmap'
-import { type SkillRoadmapType, SKILL_ROADMAPS } from '@/lib/roadmap/skill-roadmap-service'
-import { ArrowLeft, Crown } from 'lucide-react'
-import Link from 'next/link'
-import { hasProAccess } from '@/lib/feature-access'
-import { SKILL_PROGRESSIONS, type EnhancedSkillDefinition } from '@/lib/skill-progression-rules'
-import { getSkillSessions, getSessionsBySkill } from '@/lib/skill-session-service'
-import { generateSkillAnalysis } from '@/lib/skill-readiness-engine'
-import { getStrengthRecords } from '@/lib/strength-service'
-import { getAthleteProfile, saveSkillProgression, getSkillProgressions } from '@/lib/data-service'
-import type { SkillAnalysis, SkillSession } from '@/types/skill-readiness'
+import { ArrowLeft } from 'lucide-react'
+import { SKILL_PROGRESSIONS } from '@/lib/skill-progression-rules'
+import { saveSkillProgression, getSkillProgressions } from '@/lib/data-service'
+
+// Dynamically import heavy sections ONLY when safe mode is disabled
+const SkillDetailHeavySections = dynamic(
+  () => import('@/components/skills/detail/SkillDetailHeavySections').then(mod => mod.SkillDetailHeavySections),
+  { 
+    ssr: false,
+    loading: () => (
+      <div className="grid lg:grid-cols-2 gap-6">
+        <div className="space-y-6">
+          <Card className="bg-[#1A1A1A] border-[#3A3A3A] p-6 animate-pulse">
+            <div className="h-6 bg-[#2A2A2A] rounded w-1/3 mb-4" />
+            <div className="h-32 bg-[#2A2A2A] rounded" />
+          </Card>
+        </div>
+        <div className="space-y-6">
+          <Card className="bg-[#1A1A1A] border-[#3A3A3A] p-6 animate-pulse">
+            <div className="h-6 bg-[#2A2A2A] rounded w-1/2 mb-4" />
+            <div className="h-48 bg-[#2A2A2A] rounded" />
+          </Card>
+        </div>
+      </div>
+    )
+  }
+)
 
 type SkillKey = keyof typeof SKILL_PROGRESSIONS
 
@@ -43,76 +58,65 @@ interface SkillDetailPageContentProps {
 export function SkillDetailPageContent({ skillKey, onBack }: SkillDetailPageContentProps) {
   const [currentLevel, setCurrentLevel] = useState<number>(0)
   const [targetLevel, setTargetLevel] = useState<number>(1)
-  const [analysis, setAnalysis] = useState<SkillAnalysis | null>(null)
-  const [sessions, setSessions] = useState<SkillSession[]>([])
   const [saving, setSaving] = useState(false)
 
   const skillDef = SKILL_PROGRESSIONS[skillKey]
 
+  // Safely get max level
+  const maxLevel = skillDef?.levels?.length ? skillDef.levels.length - 1 : 0
+
   // Load existing progression on mount
   useEffect(() => {
-    const progressions = getSkillProgressions()
-    const existing = progressions.find(p => p.skillName === skillKey)
-    if (existing) {
-      // Safely clamp level indices
-      const maxLevel = skillDef.levels.length - 1
-      setCurrentLevel(Math.max(0, Math.min(existing.currentLevel, maxLevel)))
-      setTargetLevel(Math.max(0, Math.min(existing.targetLevel, maxLevel)))
+    try {
+      const progressions = getSkillProgressions()
+      const existing = progressions.find(p => p.skillName === skillKey)
+      if (existing) {
+        // Safely clamp level indices
+        setCurrentLevel(Math.max(0, Math.min(existing.currentLevel, maxLevel)))
+        setTargetLevel(Math.max(0, Math.min(existing.targetLevel, maxLevel)))
+      }
+    } catch (error) {
+      console.error('[v0] Error loading progressions:', error)
     }
-  }, [skillKey, skillDef.levels.length])
-
-  // Load analysis when skill/levels change - ONLY when not in safe mode
-  const loadAnalysis = useCallback(() => {
-    if (SKILL_DETAIL_SAFE_MODE) {
-      // In safe mode, skip all heavy analysis/service calls
-      return
-    }
-    
-    const allSessions = getSkillSessions()
-    const skillSessions = getSessionsBySkill(skillKey)
-    const strengthRecords = getStrengthRecords()
-    const profile = getAthleteProfile()
-    
-    setSessions(skillSessions)
-    
-    const newAnalysis = generateSkillAnalysis(
-      allSessions,
-      skillKey,
-      currentLevel,
-      targetLevel,
-      strengthRecords,
-      profile.bodyweight,
-      profile.experienceLevel
-    )
-    
-    setAnalysis(newAnalysis)
-  }, [skillKey, currentLevel, targetLevel])
-
-  useEffect(() => {
-    if (!SKILL_DETAIL_SAFE_MODE) {
-      loadAnalysis()
-    }
-  }, [loadAnalysis])
+  }, [skillKey, maxLevel])
 
   const handleSaveProgression = () => {
     setSaving(true)
-    saveSkillProgression(skillKey, currentLevel, targetLevel)
+    try {
+      saveSkillProgression(skillKey, currentLevel, targetLevel)
+    } catch (error) {
+      console.error('[v0] Error saving progression:', error)
+    }
     setTimeout(() => setSaving(false), 500)
   }
 
-  const handleSessionSaved = () => {
-    loadAnalysis()
+  const handleLevelChange = (current: number, target: number) => {
+    setCurrentLevel(current)
+    setTargetLevel(target)
   }
 
   // Safely clamp level indices for rendering
-  const maxLevel = skillDef.levels.length - 1
   const safeCurrentLevel = Math.max(0, Math.min(currentLevel, maxLevel))
   const safeTargetLevel = Math.max(0, Math.min(targetLevel, maxLevel))
-  
-  const levelNames = skillDef.levels.map(l => l.name)
-  const currentLevelDef = skillDef.levels[safeCurrentLevel]
-  const targetLevelDef = skillDef.levels[safeTargetLevel]
-  const hasSessionData = sessions.filter(s => s.level === safeCurrentLevel).length > 0
+  const currentLevelDef = skillDef?.levels?.[safeCurrentLevel]
+
+  // Guard against missing skill definition
+  if (!skillDef || !skillDef.levels) {
+    return (
+      <div className="space-y-8">
+        <button
+          onClick={onBack}
+          className="flex items-center gap-2 text-[#A5A5A5] hover:text-[#F5F5F5] transition-colors"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          Back to skills
+        </button>
+        <Card className="bg-[#1A1D23] border border-red-500/30 p-6 text-center">
+          <p className="text-red-400">Skill definition not found for: {skillKey}</p>
+        </Card>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-8">
@@ -151,7 +155,7 @@ export function SkillDetailPageContent({ skillKey, onBack }: SkillDetailPageCont
                   onClick={() => {
                     setCurrentLevel(index)
                     if (index >= targetLevel) {
-                      setTargetLevel(Math.min(index + 1, skillDef.levels.length - 1))
+                      setTargetLevel(Math.min(index + 1, maxLevel))
                     }
                   }}
                 >
@@ -214,86 +218,17 @@ export function SkillDetailPageContent({ skillKey, onBack }: SkillDetailPageCont
         </Card>
       )}
 
-      {/* Main Content Grid - ONLY when not in safe mode */}
+      {/* Heavy Detail Sections - ONLY loaded when safe mode is false */}
       {!SKILL_DETAIL_SAFE_MODE && (
-        <div className="grid lg:grid-cols-2 gap-6">
-          {/* Left Column: Logging */}
-          <div className="space-y-6">
-            <SkillSessionLogger
-              skillName={skillKey}
-              levelName={currentLevelDef.name}
-              levelIndex={safeCurrentLevel}
-              onSessionSaved={handleSessionSaved}
-            />
-            
-            <SkillSessionHistory
-              sessions={sessions.filter(s => s.level === safeCurrentLevel)}
-              levelNames={levelNames}
-              onSessionDeleted={handleSessionSaved}
-            />
-          </div>
-
-          {/* Right Column: Readiness Analysis */}
-          <div className="space-y-6">
-            {analysis && hasSessionData ? (
-              <>
-                <SkillReadinessCard
-                  analysis={analysis}
-                  levelName={currentLevelDef.name}
-                  targetLevelName={targetLevelDef.name}
-                />
-                {/* Pro upgrade hint for detailed progression */}
-                {!hasProAccess() && (
-                  <Link href="/upgrade">
-                    <div className="flex items-center gap-3 p-4 rounded-lg bg-amber-500/5 border border-amber-500/20 hover:bg-amber-500/10 transition-colors cursor-pointer">
-                      <div className="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center shrink-0">
-                        <Crown className="w-4 h-4 text-amber-400" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-[#E6E9EF]">Unlock Skill Progression Intelligence</p>
-                        <p className="text-xs text-[#6B7280]">See what is limiting your progress and when you will reach your next level</p>
-                      </div>
-                    </div>
-                  </Link>
-                )}
-              </>
-            ) : (
-              <SkillEmptyState type="no_sessions" skillName={skillDef.name} />
-            )}
-            
-            {/* Skill Roadmap - show if roadmap exists for this skill */}
-            {(() => {
-              // Map skill key to roadmap type
-              const roadmapKeyMap: Record<string, SkillRoadmapType> = {
-                'front_lever': 'front-lever',
-                'frontLever': 'front-lever',
-                'planche': 'planche',
-                'muscle_up': 'muscle-up',
-                'muscleUp': 'muscle-up',
-                'hspu': 'hspu',
-                'handstand_pushup': 'hspu',
-              }
-              const roadmapKey = roadmapKeyMap[skillKey]
-              if (roadmapKey && SKILL_ROADMAPS[roadmapKey]) {
-                return (
-                  <SkillRoadmapDisplay 
-                    skillKey={roadmapKey}
-                    onLevelSelect={(level) => {
-                      setCurrentLevel(level)
-                      if (level >= targetLevel) {
-                        setTargetLevel(Math.min(level + 1, skillDef.levels.length - 1))
-                      }
-                    }}
-                  />
-                )
-              }
-              return null
-            })()}
-          </div>
-        </div>
+        <SkillDetailHeavySections
+          skillKey={skillKey}
+          currentLevel={safeCurrentLevel}
+          targetLevel={safeTargetLevel}
+          onLevelChange={handleLevelChange}
+        />
       )}
 
-      {/* Level Requirements Info */}
+      {/* Level Requirements Info - Lightweight, uses local skillDef only */}
       {currentLevelDef && (
         <Card className="bg-[#1A1A1A] border-[#3A3A3A] p-6">
           <h3 className="text-lg font-semibold mb-4">Level Requirements</h3>

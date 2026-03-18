@@ -1,5 +1,19 @@
 'use client'
 
+/**
+ * Onboarding Complete Page
+ * 
+ * CRITICAL: This page MUST call generateFirstProgram() to actually create
+ * the user's program. Without this, the user has onboarding data but no
+ * usable workout program.
+ * 
+ * Flow:
+ * 1. Show "generating" state
+ * 2. Call generateFirstProgram() to create program from onboarding data
+ * 3. Save program to canonical storage
+ * 4. Route to first-session (which will now find a real program)
+ */
+
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
@@ -18,13 +32,14 @@ import {
   Brain,
   Activity,
   Shield,
-  Timer,
   ChevronRight,
+  AlertCircle,
 } from 'lucide-react'
 import { SpartanIcon } from '@/components/brand/SpartanLogo'
 import { getOnboardingProfile, calculateReadinessScores } from '@/lib/athlete-profile'
+import { generateFirstProgram, getProgramReasoning, type FirstRunResult } from '@/lib/onboarding-service'
 import { hasProAccess, isInTrial, getTrialDaysRemaining } from '@/lib/feature-access'
-import { PRICING, TRIAL } from '@/lib/billing/pricing'
+import { PRICING } from '@/lib/billing/pricing'
 import { trackSignupCompleted, trackProgramGenerated } from '@/lib/analytics'
 
 // Pro feature highlights
@@ -51,25 +66,71 @@ const PRO_FEATURES = [
   },
 ]
 
+type PageStep = 'generating' | 'ready' | 'error'
+
 export default function OnboardingCompletePage() {
   const router = useRouter()
   const [mounted, setMounted] = useState(false)
+  const [step, setStep] = useState<PageStep>('generating')
   const [isPro, setIsPro] = useState(false)
   const [isTrial, setIsTrial] = useState(false)
   const [trialDays, setTrialDays] = useState(0)
   const [isLoading, setIsLoading] = useState(false)
   const [profile, setProfile] = useState<ReturnType<typeof getOnboardingProfile> | null>(null)
+  const [programResult, setProgramResult] = useState<FirstRunResult | null>(null)
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
   useEffect(() => {
     setMounted(true)
     setIsPro(hasProAccess())
     setIsTrial(isInTrial())
     setTrialDays(getTrialDaysRemaining())
-    setProfile(getOnboardingProfile())
     
-    // Track signup completion and program generation
-    trackSignupCompleted()
-    trackProgramGenerated('onboarding', getOnboardingProfile()?.primaryGoal)
+    const loadedProfile = getOnboardingProfile()
+    setProfile(loadedProfile)
+    
+    // CRITICAL: Generate the program from onboarding data
+    const generateProgram = async () => {
+      // Small delay for UX
+      await new Promise(resolve => setTimeout(resolve, 1000))
+      
+      try {
+        // This saves the program to canonical storage (spartanlab_adaptive_programs)
+        // AND to backward-compatible storage (spartanlab_first_program)
+        const result = generateFirstProgram()
+        setProgramResult(result)
+        
+        if (result.success && result.program) {
+          // Track analytics
+          trackSignupCompleted()
+          trackProgramGenerated('onboarding', loadedProfile?.primaryGoal)
+          
+          // Create program history entry via API (if authenticated)
+          fetch('/api/program/history', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              program: result.program,
+              isInitial: true,
+              reason: 'onboarding_initial_generation',
+            }),
+          }).catch(err => {
+            console.error('[OnboardingComplete] Failed to create program history:', err)
+          })
+          
+          setStep('ready')
+        } else {
+          setErrorMessage(result.error || 'Failed to generate program')
+          setStep('error')
+        }
+      } catch (err) {
+        console.error('[OnboardingComplete] Program generation error:', err)
+        setErrorMessage(String(err))
+        setStep('error')
+      }
+    }
+    
+    generateProgram()
   }, [])
 
   if (!mounted) {
@@ -101,8 +162,6 @@ export default function OnboardingCompletePage() {
   const handleStartTrial = async () => {
     setIsLoading(true)
     try {
-      // Use canonical checkout path - no body params needed
-      // Route uses PRICING.pro.trialDays and env vars for all config
       const response = await fetch('/api/stripe/create-checkout-session', {
         method: 'POST',
       })
@@ -110,7 +169,6 @@ export default function OnboardingCompletePage() {
       
       if (data.error) {
         console.error('Checkout error:', data.error)
-        // If authentication failed, redirect to sign-in with return URL
         if (response.status === 401) {
           router.push('/sign-in?redirect_url=/upgrade')
           return
@@ -128,7 +186,77 @@ export default function OnboardingCompletePage() {
     }
   }
 
-  // If already Pro, show success and go to dashboard
+  // Generating state
+  if (step === 'generating') {
+    return (
+      <div className="min-h-screen bg-[#0F1115] flex items-center justify-center p-4">
+        <Card className="bg-[#1A1F26] border-[#2B313A] p-8 max-w-md w-full text-center">
+          <div className="animate-pulse mb-6">
+            <SpartanIcon size={56} className="mx-auto" />
+          </div>
+          <h2 className="text-xl font-bold text-[#E6E9EF] mb-2">
+            Building Your Program
+          </h2>
+          <div className="space-y-1.5 mb-6">
+            <p className="text-sm text-[#A4ACB8]">
+              Analyzing your profile and generating personalized workouts...
+            </p>
+          </div>
+          <div className="flex justify-center gap-1.5">
+            <div className="w-2 h-2 rounded-full bg-[#C1121F] animate-pulse" style={{ animationDelay: '0ms' }} />
+            <div className="w-2 h-2 rounded-full bg-[#C1121F] animate-pulse" style={{ animationDelay: '150ms' }} />
+            <div className="w-2 h-2 rounded-full bg-[#C1121F] animate-pulse" style={{ animationDelay: '300ms' }} />
+          </div>
+        </Card>
+      </div>
+    )
+  }
+
+  // Error state
+  if (step === 'error') {
+    return (
+      <div className="min-h-screen bg-[#0F1115] flex items-center justify-center p-4">
+        <Card className="bg-[#1A1F26] border-[#2B313A] p-8 max-w-md w-full text-center">
+          <div className="w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center mx-auto mb-4">
+            <AlertCircle className="w-8 h-8 text-amber-500" />
+          </div>
+          <h2 className="text-xl font-bold text-[#E6E9EF] mb-2">
+            Generation Issue
+          </h2>
+          <p className="text-sm text-[#A4ACB8] mb-6">
+            {errorMessage || 'There was an issue generating your program. You can try again or use a demo workout.'}
+          </p>
+          <div className="space-y-3">
+            <Button 
+              onClick={() => {
+                setStep('generating')
+                setErrorMessage(null)
+                const result = generateFirstProgram()
+                setProgramResult(result)
+                if (result.success) {
+                  setStep('ready')
+                } else {
+                  setErrorMessage(result.error || 'Failed to generate program')
+                  setStep('error')
+                }
+              }}
+              className="w-full bg-[#C1121F] hover:bg-[#A30F1A] text-white"
+            >
+              Try Again
+            </Button>
+            <Link href="/workout/session?demo=true" className="block">
+              <Button variant="outline" className="w-full border-[#2B313A] text-[#A4ACB8] hover:bg-[#2B313A]">
+                <Dumbbell className="w-4 h-4 mr-2" />
+                Try Demo Workout
+              </Button>
+            </Link>
+          </div>
+        </Card>
+      </div>
+    )
+  }
+
+  // If already Pro, show success and go to first session
   if (isPro) {
     return (
       <div className="min-h-screen bg-[#0F1115] flex items-center justify-center p-4">
@@ -140,11 +268,11 @@ export default function OnboardingCompletePage() {
           </div>
           
           <h1 className="text-2xl md:text-3xl font-bold text-[#E6E9EF] mb-3">
-            Your Adaptive Program is Ready
+            Your Program is Ready
           </h1>
           
           <p className="text-[#A4ACB8] mb-2">
-            SpartanLab has analyzed your profile and generated a program targeting your specific goals and limiting factors.
+            SpartanLab has analyzed your profile and generated a personalized program targeting your goals.
           </p>
           
           {isTrial && trialDays > 0 && (

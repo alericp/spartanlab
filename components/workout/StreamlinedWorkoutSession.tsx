@@ -340,8 +340,18 @@ export function StreamlinedWorkoutSession({
   onComplete,
   onCancel
 }: StreamlinedWorkoutSessionProps) {
+  // Create safe session with guaranteed defaults (extra safety layer)
+  const safeSession = useMemo(() => ({
+    ...session,
+    dayLabel: session?.dayLabel || 'Workout',
+    dayNumber: session?.dayNumber ?? 1,
+    focus: session?.focus || 'general',
+    focusLabel: session?.focusLabel || 'Training',
+    exercises: session?.exercises ?? [],
+  }), [session])
+  
   // Generate unique sessionId - demo sessions use different prefix to prevent storage collisions
-  const isDemoSession = session.dayLabel?.startsWith('DEMO-') || session.dayNumber === 0
+  const isDemoSession = safeSession.dayLabel?.startsWith('DEMO-') || safeSession.dayNumber === 0
   
   // Use useMemo to ensure stable sessionId across renders
   // Demo sessions don't persist/restore from storage, so they use a fixed demo key
@@ -349,8 +359,8 @@ export function StreamlinedWorkoutSession({
     if (isDemoSession) {
       return 'demo-session-isolated' // Fixed ID, but demo won't auto-save/restore
     }
-    return `session-${session.dayLabel}-${session.dayNumber}`
-  }, [isDemoSession, session.dayLabel, session.dayNumber])
+    return `session-${safeSession.dayLabel}-${safeSession.dayNumber}`
+  }, [isDemoSession, safeSession.dayLabel, safeSession.dayNumber])
   
   // Check for existing session on mount
   const [existingSession, setExistingSession] = useState<SavedSessionInfo | null>(null)
@@ -420,14 +430,29 @@ export function StreamlinedWorkoutSession({
   const timerRef = useRef<NodeJS.Timeout | null>(null)
   
   // Safety guard: ensure exercises array exists and is valid
-  const exercises = session?.exercises ?? []
+  const exercises = safeSession.exercises
   const hasValidExercises = exercises.length > 0
   
-  // Current exercise (with safety guard)
-  const currentExercise = hasValidExercises ? exercises[state.currentExerciseIndex] : null
+  // Validate currentExerciseIndex is within bounds
+  const safeExerciseIndex = Math.max(0, Math.min(state.currentExerciseIndex, exercises.length - 1))
+  const isIndexOutOfBounds = hasValidExercises && state.currentExerciseIndex !== safeExerciseIndex
+  
+  // Current exercise (with safety guard for both array existence AND index bounds)
+  const currentExercise = hasValidExercises ? exercises[safeExerciseIndex] ?? null : null
   const totalExercises = exercises.length
   const totalSets = exercises.reduce((sum, ex) => sum + (ex?.sets || 0), 0)
   const completedSetsCount = state.completedSets.length
+  
+  // Repair index if out of bounds (happens on next render cycle)
+  useEffect(() => {
+    if (isIndexOutOfBounds && hasValidExercises) {
+      setState(prev => ({
+        ...prev,
+        currentExerciseIndex: safeExerciseIndex,
+        currentSetNumber: 1,
+      }))
+    }
+  }, [isIndexOutOfBounds, safeExerciseIndex, hasValidExercises])
   
   // Determine if exercise uses holds or reps (with safety)
   const isHoldExercise = currentExercise?.repsOrTime?.toLowerCase().includes('sec') || 
@@ -551,7 +576,8 @@ export function StreamlinedWorkoutSession({
     }
     
     const newCompletedSets = [...state.completedSets, setData]
-    const isLastSet = state.currentSetNumber >= currentExercise.sets
+    const totalExerciseSets = currentExercise?.sets ?? 1
+    const isLastSet = state.currentSetNumber >= totalExerciseSets
     const isLastExercise = state.currentExerciseIndex >= exercises.length - 1
     
     const lastRPE = selectedRPE || 8
@@ -803,9 +829,9 @@ export function StreamlinedWorkoutSession({
       })
       
       // Determine session type and focus area
-      const sessionType: SessionType = session.dayLabel.toLowerCase().includes('skill') 
+      const sessionType: SessionType = safeSession.dayLabel.toLowerCase().includes('skill') 
         ? 'skill' 
-        : session.dayLabel.toLowerCase().includes('strength')
+        : safeSession.dayLabel.toLowerCase().includes('strength')
           ? 'strength'
           : 'mixed'
       
@@ -823,7 +849,7 @@ export function StreamlinedWorkoutSession({
       
       // Quick log the workout
       quickLogWorkout({
-        sessionName: session.dayLabel,
+        sessionName: safeSession.dayLabel,
         sessionType,
         focusArea,
         durationMinutes: Math.round(state.elapsedSeconds / 60),
@@ -1026,7 +1052,7 @@ export function StreamlinedWorkoutSession({
               Ready to Train
             </Badge>
             <h1 className="text-2xl font-bold text-[#E6E9EF] mb-2">
-              {session.dayLabel}
+              {safeSession.dayLabel}
             </h1>
             <p className="text-[#A4ACB8]">
               {exercises.length} exercises • {totalSets} sets
@@ -1050,7 +1076,7 @@ export function StreamlinedWorkoutSession({
                 />
               ) : (
                 <Badge variant="outline" className="text-xs border-[#2B313A] text-[#A4ACB8]">
-                  {session.focusLabel}
+                  {safeSession.focusLabel}
                 </Badge>
               )}
             </div>
@@ -1155,7 +1181,7 @@ export function StreamlinedWorkoutSession({
         }
       }),
       'mixed',
-      session.dayLabel,
+      safeSession.dayLabel,
       readiness || undefined
     )
     const performance = getSessionPerformance(performanceInput)
@@ -1278,17 +1304,17 @@ export function StreamlinedWorkoutSession({
                 elapsedSeconds: state.elapsedSeconds,
                 averageRPE: stats.averageRPE || undefined,
               }}
-              sessionName={session.dayLabel}
+              sessionName={safeSession.dayLabel}
               onReturnToDashboard={() => handleSaveWorkout(perceivedDifficulty || 'normal')}
               onViewProgram={() => handleSaveWorkout(perceivedDifficulty || 'normal')}
               bandProgressNote={bandProgressNote}
               skillSignal={skillSignal}
               overrideSummary={getOverrideSummary(sessionId)}
-              goalContext={session.focusLabel ? `This ${session.focusLabel.toLowerCase()} session builds toward your primary goal. Consistent training accelerates progress.` : "Workout completed. Consistent training builds skill faster."}
+              goalContext={safeSession.focusLabel ? `This ${safeSession.focusLabel.toLowerCase()} session builds toward your primary goal. Consistent training accelerates progress.` : "Workout completed. Consistent training builds skill faster."}
               nextSession={(() => {
                 const program = getLatestAdaptiveProgram()
                 if (!program?.sessions) return null
-                const currentIdx = program.sessions.findIndex(s => s.dayNumber === session.dayNumber)
+                const currentIdx = program.sessions.findIndex(s => s.dayNumber === safeSession.dayNumber)
                 const nextIdx = (currentIdx + 1) % program.sessions.length
                 const next = program.sessions[nextIdx]
                 if (!next) return null
@@ -1319,7 +1345,7 @@ export function StreamlinedWorkoutSession({
               {isPartialSession ? 'Partial Session Logged' : 'Workout Complete'}
             </h1>
             <p className="text-[#A4ACB8]">
-              {session.dayLabel} • {stats.completedSets}/{stats.totalSets} sets
+              {safeSession.dayLabel} • {stats.completedSets}/{stats.totalSets} sets
             </p>
           </div>
           
@@ -1391,7 +1417,7 @@ export function StreamlinedWorkoutSession({
               <div className="flex items-center gap-2">
                 <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
                 <span className="font-semibold text-[#E6E9EF] truncate max-w-[180px]">
-                  {session.dayLabel}
+                  {safeSession.dayLabel}
                 </span>
               </div>
               <div className="flex items-center gap-2">
@@ -1504,7 +1530,7 @@ export function StreamlinedWorkoutSession({
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
               <span className="font-semibold text-[#E6E9EF] truncate max-w-[180px]">
-                {session.dayLabel}
+                {safeSession.dayLabel}
               </span>
             </div>
             <div className="flex items-center gap-2">

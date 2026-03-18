@@ -11,6 +11,54 @@ import { Button } from '@/components/ui/button'
 import Link from 'next/link'
 import { Dumbbell } from 'lucide-react'
 
+// =============================================================================
+// SESSION NORMALIZER - Ensures all sessions have valid, safe structure
+// =============================================================================
+
+function normalizeSession(rawSession: AdaptiveSession | null | undefined): AdaptiveSession | null {
+  if (!rawSession) return null
+  
+  // Normalize exercises array
+  const normalizedExercises = (rawSession.exercises ?? []).map((ex, idx) => ({
+    id: ex?.id || `exercise-${idx}`,
+    name: ex?.name || 'Unknown Exercise',
+    category: ex?.category || 'general',
+    sets: typeof ex?.sets === 'number' && ex.sets > 0 ? ex.sets : 3,
+    repsOrTime: ex?.repsOrTime || '8-12 reps',
+    note: ex?.note || '',
+    isOverrideable: ex?.isOverrideable ?? true,
+    selectionReason: ex?.selectionReason || '',
+  }))
+  
+  return {
+    ...rawSession,
+    dayNumber: typeof rawSession.dayNumber === 'number' ? rawSession.dayNumber : 1,
+    dayLabel: rawSession.dayLabel || 'Workout',
+    focus: rawSession.focus || 'general',
+    focusLabel: rawSession.focusLabel || 'Training',
+    rationale: rawSession.rationale || '',
+    exercises: normalizedExercises,
+    warmup: rawSession.warmup ?? [],
+    cooldown: rawSession.cooldown ?? [],
+    estimatedMinutes: typeof rawSession.estimatedMinutes === 'number' ? rawSession.estimatedMinutes : 45,
+    isPrimary: rawSession.isPrimary ?? true,
+    finisherIncluded: rawSession.finisherIncluded ?? false,
+  }
+}
+
+function isRunnableSession(session: AdaptiveSession | null): boolean {
+  if (!session) return false
+  if (!Array.isArray(session.exercises)) return false
+  if (session.exercises.length === 0) return false
+  // Check at least first exercise is valid
+  const firstEx = session.exercises[0]
+  return !!(firstEx?.name && firstEx?.sets > 0)
+}
+
+// =============================================================================
+// DEMO SESSION
+// =============================================================================
+
 // Demo session for testing when no program exists
 // CRITICAL: This must be a complete AdaptiveSession shape to avoid downstream errors
 // IMPORTANT: dayLabel uses 'DEMO-' prefix to ensure unique storage key and prevent collisions
@@ -85,7 +133,13 @@ function WorkoutSessionContent() {
     // DEMO MODE: Always allow, completely isolated from program state
     // Demo must work regardless of any other conditions
     if (demoMode) {
-      setSession(DEMO_SESSION)
+      const normalizedDemo = normalizeSession(DEMO_SESSION)
+      if (normalizedDemo && isRunnableSession(normalizedDemo)) {
+        setSession(normalizedDemo)
+      } else {
+        // Fallback if demo session is somehow invalid (should never happen)
+        setSession(DEMO_SESSION)
+      }
       setLoading(false)
       return
     }
@@ -126,15 +180,24 @@ function WorkoutSessionContent() {
       sessionIndex = Math.min(today === 0 ? 6 : today - 1, adaptiveProgram.sessions.length - 1)
     }
     
-    const targetSession = adaptiveProgram.sessions[sessionIndex] || adaptiveProgram.sessions[0]
+    const rawSession = adaptiveProgram.sessions[sessionIndex] || adaptiveProgram.sessions[0]
     
-    if (!targetSession) {
+    if (!rawSession) {
       setError('No workout scheduled for this day.')
       setLoading(false)
       return
     }
     
-    setSession(targetSession)
+    // Normalize session to ensure all fields are safe
+    const normalizedSession = normalizeSession(rawSession)
+    
+    if (!normalizedSession || !isRunnableSession(normalizedSession)) {
+      setError('This workout session is not properly configured.')
+      setLoading(false)
+      return
+    }
+    
+    setSession(normalizedSession)
     // Extract workout reasoning summary from the program
     if (adaptiveProgram.workoutReasoningSummary) {
       setReasoningSummary(adaptiveProgram.workoutReasoningSummary)

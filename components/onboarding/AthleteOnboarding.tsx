@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -294,9 +294,10 @@ function OptionButton({ selected, onClick, children, description, className = ''
     <button
       type="button"
       onClick={onClick}
+      data-selected={selected ? 'true' : 'false'}
       className={`py-3 px-4 rounded-lg border text-sm font-medium transition-all duration-150 flex items-center gap-2 text-left ${
         selected
-          ? 'bg-[#C1121F]/10 border-[#C1121F] text-[#E6E9EF] ring-1 ring-[#C1121F]/30'
+          ? 'bg-[#C1121F]/15 border-[#C1121F] text-[#E6E9EF] ring-1 ring-[#C1121F]/40 shadow-[0_0_0_1px_rgba(193,18,31,0.2)]'
           : 'bg-[#0F1115] border-[#2B313A] text-[#A4ACB8] hover:border-[#4F6D8A] hover:text-[#E6E9EF]'
       } ${className}`}
     >
@@ -761,8 +762,8 @@ function ReadinessCalibrationSection({ profile, updateProfile }: SectionProps) {
         
         {/* Q8: Joint Cautions (multi-select) */}
         <div className="space-y-3">
-          <label className="text-sm font-medium text-[#A4ACB8]">Any joints we should protect while training?</label>
-          <p className="text-xs text-[#6B7280] -mt-1">Select all that apply</p>
+          <label className="text-sm font-medium text-[#A4ACB8]">Any joints we should prioritize?</label>
+          <p className="text-xs text-[#6B7280] -mt-1">Adds targeted warm-ups, prep, and recovery work — great for durability and prevention</p>
           <div className="grid grid-cols-3 gap-2">
             {(Object.keys(JOINT_CAUTION_LABELS) as JointCaution[]).map((joint) => (
               <OptionButton
@@ -773,6 +774,7 @@ function ReadinessCalibrationSection({ profile, updateProfile }: SectionProps) {
                   const updated = current.includes(joint)
                     ? current.filter(j => j !== joint)
                     : [...current, joint]
+                  // Selecting a specific joint removes "None" state
                   updateProfile({ jointCautions: updated })
                 }}
               >
@@ -785,7 +787,7 @@ function ReadinessCalibrationSection({ profile, updateProfile }: SectionProps) {
             onClick={() => updateProfile({ jointCautions: [] })}
             className="w-full"
           >
-            None - all good
+            No priority — balanced prep is fine
           </OptionButton>
         </div>
       </div>
@@ -1867,6 +1869,18 @@ const SKILL_PROGRESSION_OPTIONS: Record<string, { value: string; label: string }
     { value: 'full_wall', label: 'Full Wall' },
     { value: 'freestanding', label: 'Freestanding' },
   ],
+  'l_sit': [
+    { value: 'tuck', label: 'Tucked L-sit' },
+    { value: 'l_sit', label: 'Full L-sit' },
+    { value: 'v_sit', label: 'V-sit' },
+    { value: 'i_sit', label: 'I-sit (Manna prep)' },
+  ],
+  'v_sit': [
+    { value: 'l_sit', label: 'L-sit' },
+    { value: 'v_sit', label: 'V-sit' },
+    { value: 'i_sit', label: 'I-sit' },
+    { value: 'manna', label: 'Manna' },
+  ],
 }
 
 function SkillHistoryInput({ skillKey, skillLabel, profile, updateProfile }: SkillHistoryInputProps) {
@@ -2671,9 +2685,9 @@ function ScheduleSection({ profile, updateProfile }: SectionProps) {
   >
   {len === 'flexible' ? (
     <span className="flex items-center gap-1.5">
-      Flexible / varies
-      <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-[#C1121F]/15 text-[#E05A64] border border-[#C1121F]/20 leading-none">
-        Adaptive Time
+      Varies
+      <span className="inline-flex items-center px-1 py-0.5 rounded text-[9px] font-medium bg-[#C1121F]/15 text-[#E05A64] leading-none">
+        Auto
       </span>
     </span>
   ) : SESSION_LENGTH_LABELS[len]}
@@ -3160,7 +3174,7 @@ function ReviewSection({ profile, onEditSection }: ReviewSectionProps) {
               )}
               {profile.jointCautions && profile.jointCautions.length > 0 && (
                 <div className="flex justify-between">
-                  <span className="text-[#6B7280]">Joint protection:</span>
+                  <span className="text-[#6B7280]">Joint priority:</span>
                   <span className="text-[#E6E9EF]">{profile.jointCautions.map(j => JOINT_CAUTION_LABELS[j]).join(', ')}</span>
                 </div>
               )}
@@ -3255,6 +3269,21 @@ export function AthleteOnboarding() {
     }
   }, [currentSection, profile])
 
+  // Scroll to top on every step change
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
+  
+  useEffect(() => {
+    // Reset both window scroll and any scroll container
+    window.scrollTo({ top: 0, behavior: 'instant' })
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTop = 0
+    }
+    // Also handle any delayed scroll restoration
+    requestAnimationFrame(() => {
+      window.scrollTo(0, 0)
+    })
+  }, [currentSectionIndex])
+  
   const handleNext = () => {
     if (!canProceed) return
     
@@ -3393,7 +3422,7 @@ export function AthleteOnboarding() {
         />
       </div>
 
-      <div className="flex-1 flex items-start justify-center p-4 pt-8 pb-24 overflow-y-auto">
+      <div ref={scrollContainerRef} className="flex-1 flex items-start justify-center p-4 pt-8 pb-24 overflow-y-auto">
         <div className="w-full max-w-lg">
           {/* Header */}
           <div className="text-center mb-6">

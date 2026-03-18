@@ -48,6 +48,7 @@ import {
   type WallHSPUReps,
   type FrontLeverProgression,
   type PlancheProgression,
+  type BandLevel,
   type MuscleUpReadiness,
   type HSPUProgression,
   type LSitHoldCapacity,
@@ -1928,6 +1929,95 @@ function SkillHistoryInput({ skillKey, skillLabel, profile, updateProfile }: Ski
   )
 }
 
+// =============================================================================
+// BAND ASSIST INPUT — optional UI block shown below hold-seconds fields
+// Captures isAssisted + bandLevel. No engine logic — prep data only.
+// =============================================================================
+
+const BAND_OPTIONS: { value: BandLevel; label: string; dot: string }[] = [
+  { value: 'yellow', label: 'Yellow',  dot: '#D4B800' }, // muted gold
+  { value: 'red',    label: 'Red',     dot: '#B03030' }, // muted red
+  { value: 'black',  label: 'Black',   dot: '#555E68' }, // muted slate
+  { value: 'purple', label: 'Purple',  dot: '#7B5EA7' }, // muted purple
+  { value: 'green',  label: 'Green',   dot: '#3D7A50' }, // muted green
+]
+
+interface BandAssistInputProps {
+  isAssisted: boolean
+  bandLevel: BandLevel | null | undefined
+  onAssistedChange: (v: boolean) => void
+  onBandChange: (v: BandLevel | null) => void
+}
+
+function BandAssistInput({ isAssisted, bandLevel, onAssistedChange, onBandChange }: BandAssistInputProps) {
+  return (
+    <div className="mt-3 space-y-2.5">
+      {/* Was this assisted? */}
+      <div className="space-y-1.5">
+        <label className="text-xs text-[#6B7280]">Was this assisted?</label>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => { onAssistedChange(false); onBandChange(null) }}
+            className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+              !isAssisted
+                ? 'bg-[#1A2030] border-[#3A4560] text-[#C8D0DC]'
+                : 'bg-transparent border-[#2B313A] text-[#6B7280] hover:border-[#3A4560] hover:text-[#A4ACB8]'
+            }`}
+          >
+            No
+          </button>
+          <button
+            type="button"
+            onClick={() => onAssistedChange(true)}
+            className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+              isAssisted
+                ? 'bg-[#1A2030] border-[#3A4560] text-[#C8D0DC]'
+                : 'bg-transparent border-[#2B313A] text-[#6B7280] hover:border-[#3A4560] hover:text-[#A4ACB8]'
+            }`}
+          >
+            Yes (band)
+          </button>
+        </div>
+      </div>
+
+      {/* Band level — only when assisted */}
+      {isAssisted && (
+        <div className="space-y-1.5">
+          <label className="text-xs text-[#6B7280]">Band level</label>
+          <div className="flex flex-wrap gap-2">
+            {BAND_OPTIONS.map(({ value, label, dot }) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => onBandChange(value)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+                  bandLevel === value
+                    ? 'bg-[#1A2030] border-[#3A4560] text-[#C8D0DC]'
+                    : 'bg-transparent border-[#2B313A] text-[#6B7280] hover:border-[#3A4560] hover:text-[#A4ACB8]'
+                }`}
+              >
+                <span
+                  className="w-2 h-2 rounded-full flex-shrink-0"
+                  style={{ backgroundColor: dot }}
+                />
+                {label}
+              </button>
+            ))}
+          </div>
+          <p className="text-[10px] text-[#4F5D6B]">
+            Band assistance helps SpartanLab estimate your true strength more accurately.
+          </p>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// =============================================================================
+// SKILL BENCHMARKS SECTION
+// =============================================================================
+
 function SkillBenchmarksSection({ profile, updateProfile }: SectionProps) {
   const hasSkill = (skill: SkillGoal) => profile.selectedSkills.includes(skill)
   
@@ -1967,20 +2057,42 @@ function SkillBenchmarksSection({ profile, updateProfile }: SectionProps) {
             Don't know / Skip for now
           </OptionButton>
           {profile.frontLever?.progression && profile.frontLever.progression !== 'none' && profile.frontLever.progression !== 'unknown' && (
-            <div className="mt-2">
+            <div className="mt-2 space-y-1">
               <label className="text-xs text-[#6B7280]">Current best hold (seconds) — optional</label>
-              <p className="text-[10px] text-[#4F5D6B] mb-1">Use your current usable hold, not all-time best</p>
+              <p className="text-[10px] text-[#4F5D6B]">Use your cleanest, controlled hold — not partial or heavily assisted positions.</p>
+              <p className="text-[10px] text-[#4F5D6B]">If using a band, select it below for better accuracy.</p>
               <Input
                 type="number"
                 placeholder="e.g. 10"
                 value={profile.frontLever?.holdSeconds || ''}
                 onChange={(e) => updateProfile({
                   frontLever: {
+                    ...profile.frontLever,
                     progression: profile.frontLever?.progression || 'none',
                     holdSeconds: e.target.value ? parseInt(e.target.value) : undefined
                   }
                 })}
                 className="mt-1 bg-[#0F1115] border-[#2B313A] text-[#E6E9EF] w-24"
+              />
+              <BandAssistInput
+                isAssisted={profile.frontLever?.isAssisted ?? false}
+                bandLevel={profile.frontLever?.bandLevel ?? null}
+                onAssistedChange={(v) => updateProfile({
+                  frontLever: {
+                    ...profile.frontLever,
+                    progression: profile.frontLever?.progression || 'none',
+                    isAssisted: v,
+                    bandLevel: v ? (profile.frontLever?.bandLevel ?? null) : null,
+                  }
+                })}
+                onBandChange={(v) => updateProfile({
+                  frontLever: {
+                    ...profile.frontLever,
+                    progression: profile.frontLever?.progression || 'none',
+                    isAssisted: true,
+                    bandLevel: v,
+                  }
+                })}
               />
             </div>
           )}
@@ -2020,20 +2132,42 @@ function SkillBenchmarksSection({ profile, updateProfile }: SectionProps) {
             Don't know / Skip for now
           </OptionButton>
           {profile.planche?.progression && profile.planche.progression !== 'none' && profile.planche.progression !== 'unknown' && (
-            <div className="mt-2">
+            <div className="mt-2 space-y-1">
               <label className="text-xs text-[#6B7280]">Current best hold (seconds) — optional</label>
-              <p className="text-[10px] text-[#4F5D6B] mb-1">Use your current usable hold, not all-time best</p>
+              <p className="text-[10px] text-[#4F5D6B]">Use your cleanest, controlled hold — not partial or heavily assisted positions.</p>
+              <p className="text-[10px] text-[#4F5D6B]">If using a band, select it below for better accuracy.</p>
               <Input
                 type="number"
                 placeholder="e.g. 10"
                 value={profile.planche?.holdSeconds || ''}
                 onChange={(e) => updateProfile({
                   planche: {
+                    ...profile.planche,
                     progression: profile.planche?.progression || 'none',
                     holdSeconds: e.target.value ? parseInt(e.target.value) : undefined
                   }
                 })}
                 className="mt-1 bg-[#0F1115] border-[#2B313A] text-[#E6E9EF] w-24"
+              />
+              <BandAssistInput
+                isAssisted={profile.planche?.isAssisted ?? false}
+                bandLevel={profile.planche?.bandLevel ?? null}
+                onAssistedChange={(v) => updateProfile({
+                  planche: {
+                    ...profile.planche,
+                    progression: profile.planche?.progression || 'none',
+                    isAssisted: v,
+                    bandLevel: v ? (profile.planche?.bandLevel ?? null) : null,
+                  }
+                })}
+                onBandChange={(v) => updateProfile({
+                  planche: {
+                    ...profile.planche,
+                    progression: profile.planche?.progression || 'none',
+                    isAssisted: true,
+                    bandLevel: v,
+                  }
+                })}
               />
             </div>
           )}
@@ -2425,10 +2559,20 @@ function ScheduleSection({ profile, updateProfile }: SectionProps) {
   onClick={() => updateProfile({ trainingDaysPerWeek: day })}
   className="justify-center"
   >
-  {TRAINING_DAYS_LABELS[day]}
+  {day === 'flexible' ? (
+    <span className="flex items-center gap-1.5 justify-center">
+      Flexible
+      <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-[#C1121F]/15 text-[#E05A64] border border-[#C1121F]/20 leading-none">
+        Adaptive
+      </span>
+    </span>
+  ) : TRAINING_DAYS_LABELS[day]}
   </OptionButton>
   ))}
   </div>
+  <p className="text-xs text-[#6B7280] pt-1">
+    Flexible adapts your training week based on recovery, missed sessions, and performance to maintain consistent progress.
+  </p>
   </div>
   
   {/* Session length */}
@@ -2445,16 +2589,29 @@ function ScheduleSection({ profile, updateProfile }: SectionProps) {
     workoutDurationPreference: sessionLengthToDurationPreference(len)
   })}
   >
-  {SESSION_LENGTH_LABELS[len]}
+  {len === 'flexible' ? (
+    <span className="flex items-center gap-1.5">
+      Flexible / varies
+      <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-[#C1121F]/15 text-[#E05A64] border border-[#C1121F]/20 leading-none">
+        Adaptive Time
+      </span>
+    </span>
+  ) : SESSION_LENGTH_LABELS[len]}
   </OptionButton>
   ))}
+  </div>
+  <div className="pt-1 space-y-0.5">
+    <p className="text-xs text-[#6B7280]">
+      SpartanLab adjusts session length based on your availability, recovery, and training priority for that day.
+    </p>
+    <p className="text-xs text-[#55606B]">Maintains progress even on shorter days.</p>
   </div>
   </div>
 
       {/* Session style */}
       <div className="space-y-3">
         <label className="text-sm font-medium text-[#A4ACB8]">Preferred session style</label>
-        <p className="text-xs text-[#6B7280] -mt-1">How much time do you want to invest per workout?</p>
+        <p className="text-xs text-[#6B7280] -mt-1">How should SpartanLab prioritize your session structure?</p>
         <div className="grid grid-cols-1 gap-2">
           {(Object.keys(SESSION_STYLE_LABELS) as SessionStylePreference[]).map((style) => (
             <OptionButton
@@ -2467,7 +2624,15 @@ function ScheduleSection({ profile, updateProfile }: SectionProps) {
             </OptionButton>
           ))}
         </div>
+        <p className="text-xs text-[#6B7280] pt-0.5">
+          Flexible scheduling will automatically adjust this based on your time and recovery.
+        </p>
       </div>
+
+      {/* System clarification — above Continue, below all options */}
+      <p className="text-xs text-[#55606B] text-center pt-1 border-t border-[#1E2530]">
+        SpartanLab adapts your training dynamically — these settings guide the system, not limit it.
+      </p>
     </div>
   )
 }

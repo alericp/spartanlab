@@ -93,7 +93,7 @@ export function WelcomeBanner() {
               Your training program is now fully personalized.
             </p>
             <div className="flex flex-wrap gap-2">
-              <Link href="/my-programs">
+              <Link href="/program">
                 <Button size="sm" className="bg-amber-500 hover:bg-amber-600 text-black font-medium">
                   View Your Program
                   <ArrowRight className="w-3.5 h-3.5 ml-1" />

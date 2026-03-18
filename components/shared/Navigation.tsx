@@ -74,11 +74,12 @@ function NavigationFallback() {
 }
 
 // Primary navigation - essential daily actions
-// NOTE: /my-programs and /my-skills are app-only routes (authenticated)
+// NOTE: /program is the canonical current-program route (authenticated)
+// /my-programs is legacy and redirects to /program
 // Public SEO pages exist at /programs and /skills under (public) route group
 const NAV_ITEMS = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/my-programs', label: 'Program', icon: Calendar },
+  { href: '/program', label: 'Program', icon: Calendar },
   { href: '/my-skills', label: 'Skills', icon: Target },
   { href: '/strength', label: 'Strength', icon: Dumbbell },
   { href: '/guides', label: 'Guides', icon: BookOpen },
@@ -98,7 +99,8 @@ const SECONDARY_NAV_ITEMS = [
 // Page title mapping for all known routes
 const PAGE_TITLES: Record<string, string> = {
   '/dashboard': 'Dashboard',
-  '/my-programs': 'Program',
+  '/program': 'Program',
+  '/my-programs': 'Program', // Legacy redirect
   '/my-skills': 'Skills',
   '/strength': 'Strength',
   '/guides': 'Guides',

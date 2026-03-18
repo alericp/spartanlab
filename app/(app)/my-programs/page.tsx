@@ -1,30 +1,33 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { Navigation } from '@/components/shared/Navigation'
-import { ProgramBuilderForm } from '@/components/programs/ProgramBuilderForm'
-import { GeneratedProgramCard } from '@/components/programs/GeneratedProgramCard'
-import { SavedProgramsList } from '@/components/programs/SavedProgramsList'
-import {
-  generateProgram,
-  getSavedPrograms,
-  saveProgram,
-  getDefaultInputs,
-  type ProgramInputs,
-  type GeneratedProgram,
-} from '@/lib/program-service'
-import { getConstraintInsight } from '@/lib/constraint-engine'
-import { getAthleteCalibration } from '@/lib/athlete-calibration'
-import { getProgramStatus, initializeProgramState } from '@/lib/program-adjustment-engine'
-import { PageHeader } from '@/components/shared/PageHeader'
-import { ProgramAdjustmentModal } from '@/components/programs/ProgramAdjustmentModal'
-import { AdaptiveEngineBadge, ENGINE_MESSAGES } from '@/components/shared/AdaptiveEngineBadge'
-import { useIsPremium, PremiumHelperText, PREMIUM_MESSAGES, UpgradeTriggerPanel, UPGRADE_TRIGGERS } from '@/components/premium/PremiumFeature'
-import { AdaptiveProgramUpgradeCard } from '@/components/upgrade/AdaptiveProgramUpgradeCard'
-import { Calendar, Brain, Target } from 'lucide-react'
-import { Card } from '@/components/ui/card'
+/**
+ * Legacy /my-programs route
+ * 
+ * This route now redirects to /program (the canonical current-program route).
+ * The old program builder is preserved at /program for users who need it.
+ */
+
+import { useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 
 export default function ProgramsPage() {
+  const router = useRouter()
+  
+  // Redirect to canonical /program route
+  useEffect(() => {
+    router.replace('/program')
+  }, [router])
+  
+  // Show loading state during redirect
+  return (
+    <div className="min-h-screen bg-[#121212] text-[#F5F5F5] flex items-center justify-center">
+      <div className="text-center">
+        <div className="w-8 h-8 border-2 border-[#C1121F] border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+        <p className="text-[#6B7280]">Redirecting to your program...</p>
+      </div>
+    </div>
+  )
+}
   const [inputs, setInputs] = useState<ProgramInputs>(getDefaultInputs())
   const [currentProgram, setCurrentProgram] = useState<GeneratedProgram | null>(null)
   const [savedPrograms, setSavedPrograms] = useState<GeneratedProgram[]>([])

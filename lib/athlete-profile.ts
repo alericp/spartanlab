@@ -1301,7 +1301,7 @@ export const SESSION_LENGTH_LABELS: Record<SessionLengthPreference, string> = {
   45: '45–60 minutes',
   60: '60–75 minutes',
   75: '75–90 minutes',
-  'flexible': 'Flexible / varies',
+  'flexible': 'Flexible / varies (Recommended)',
 }
 
 export const TRAINING_DAYS_LABELS: Record<TrainingDaysPerWeek, string> = {
@@ -1310,7 +1310,7 @@ export const TRAINING_DAYS_LABELS: Record<TrainingDaysPerWeek, string> = {
   4: '4 days',
   5: '5 days',
   6: '6 days',
-  'flexible': 'Flexible',
+  'flexible': 'Flexible (Recommended)',
 }
 
   export const SESSION_STYLE_LABELS: Record<SessionStylePreference, string> = {
@@ -1319,8 +1319,8 @@ export const TRAINING_DAYS_LABELS: Record<TrainingDaysPerWeek, string> = {
   }
   
   export const SESSION_STYLE_DESCRIPTIONS: Record<SessionStylePreference, string> = {
-  'efficient': 'Highest-impact work, less total volume',
-  'full': 'More skill, strength, and accessory work',
+  'efficient': 'Highest-impact work with tighter time efficiency',
+  'full': 'More complete sessions with additional skill and volume work',
   }
   
   // PR Timeframe labels for all-time PR tracking

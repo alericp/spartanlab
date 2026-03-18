@@ -2425,10 +2425,20 @@ function ScheduleSection({ profile, updateProfile }: SectionProps) {
   onClick={() => updateProfile({ trainingDaysPerWeek: day })}
   className="justify-center"
   >
-  {TRAINING_DAYS_LABELS[day]}
+  {day === 'flexible' ? (
+    <span className="flex items-center gap-1.5 justify-center">
+      Flexible
+      <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-[#C1121F]/15 text-[#E05A64] border border-[#C1121F]/20 leading-none">
+        Adaptive
+      </span>
+    </span>
+  ) : TRAINING_DAYS_LABELS[day]}
   </OptionButton>
   ))}
   </div>
+  <p className="text-xs text-[#6B7280] pt-1">
+    Flexible adapts your training week based on recovery, missed sessions, and performance to maintain consistent progress.
+  </p>
   </div>
   
   {/* Session length */}
@@ -2445,16 +2455,29 @@ function ScheduleSection({ profile, updateProfile }: SectionProps) {
     workoutDurationPreference: sessionLengthToDurationPreference(len)
   })}
   >
-  {SESSION_LENGTH_LABELS[len]}
+  {len === 'flexible' ? (
+    <span className="flex items-center gap-1.5">
+      Flexible / varies
+      <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-[#C1121F]/15 text-[#E05A64] border border-[#C1121F]/20 leading-none">
+        Adaptive Time
+      </span>
+    </span>
+  ) : SESSION_LENGTH_LABELS[len]}
   </OptionButton>
   ))}
+  </div>
+  <div className="pt-1 space-y-0.5">
+    <p className="text-xs text-[#6B7280]">
+      SpartanLab adjusts session length based on your availability, recovery, and training priority for that day.
+    </p>
+    <p className="text-xs text-[#55606B]">Maintains progress even on shorter days.</p>
   </div>
   </div>
 
       {/* Session style */}
       <div className="space-y-3">
         <label className="text-sm font-medium text-[#A4ACB8]">Preferred session style</label>
-        <p className="text-xs text-[#6B7280] -mt-1">How much time do you want to invest per workout?</p>
+        <p className="text-xs text-[#6B7280] -mt-1">How should SpartanLab prioritize your session structure?</p>
         <div className="grid grid-cols-1 gap-2">
           {(Object.keys(SESSION_STYLE_LABELS) as SessionStylePreference[]).map((style) => (
             <OptionButton
@@ -2467,7 +2490,15 @@ function ScheduleSection({ profile, updateProfile }: SectionProps) {
             </OptionButton>
           ))}
         </div>
+        <p className="text-xs text-[#6B7280] pt-0.5">
+          Flexible scheduling will automatically adjust this based on your time and recovery.
+        </p>
       </div>
+
+      {/* System clarification — above Continue, below all options */}
+      <p className="text-xs text-[#55606B] text-center pt-1 border-t border-[#1E2530]">
+        SpartanLab adapts your training dynamically — these settings guide the system, not limit it.
+      </p>
     </div>
   )
 }

@@ -99,8 +99,8 @@ export default function WhyYourHSPUIsStuckPage() {
       title: 'Why Your HSPU Is Stuck (Diagnostic Guide)',
       description: 'Structured breakdown of the 5 most common HSPU limiting factors.',
       url: `${SITE_CONFIG.url}/why-your-hspu-is-stuck`,
-      datePublished: '2024-01-15',
-      dateModified: new Date().toISOString().split('T')[0],
+      publishedDate: '2024-01-15',
+      modifiedDate: new Date().toISOString().split('T')[0],
     }),
     generateBreadcrumbSchema([
       { name: 'Home', url: SITE_CONFIG.url },
@@ -257,7 +257,7 @@ export default function WhyYourHSPUIsStuckPage() {
       {/* FAQ */}
       <section className="py-12 px-4 sm:px-6 bg-[#0F1115]">
         <div className="max-w-4xl mx-auto">
-          <FAQ items={faqItems} title="Common Questions" />
+          <FAQ faqs={faqItems} title="Common Questions" />
         </div>
       </section>
 

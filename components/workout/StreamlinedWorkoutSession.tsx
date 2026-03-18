@@ -16,6 +16,8 @@ import {
   MessageSquare,
   CheckCircle2,
   Lightbulb,
+  SkipForward,
+  X,
 } from 'lucide-react'
 import { Textarea } from '@/components/ui/textarea'
 import type { AdaptiveSession } from '@/lib/adaptive-program-builder'

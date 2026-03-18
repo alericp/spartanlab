@@ -60,9 +60,11 @@ export async function query<T>(
 
   try {
     if (typeof sql === 'string') {
-      // String query with params
-      const result = await client(sql, params)
-      return result as T[]
+      // String query with params - use client.query() for conventional parameterized calls
+      // Note: neon() returns a function that can be used as tagged template OR via .query()
+      const result = await client.query(sql, params)
+      // client.query() returns { rows: T[], ... } - extract rows array
+      return (result?.rows ?? result) as T[]
     } else {
       // Template string (will be handled by neon's sql`` function)
       return [] // This path shouldn't normally happen

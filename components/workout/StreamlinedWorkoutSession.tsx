@@ -209,46 +209,31 @@ interface RPEQuickSelectorProps {
 }
 
 function RPEQuickSelector({ value, onChange, targetRPE }: RPEQuickSelectorProps) {
-  // Use common RPE values for quick selection
   const quickValues = RPE_QUICK_OPTIONS
   
   return (
-    <div className="space-y-2">
+    <div className="space-y-1.5">
       <div className="flex items-center justify-between">
         <span className="text-sm font-medium text-[#A4ACB8]">RPE</span>
         {targetRPE && (
           <span className="text-xs text-[#6B7280]">Target: {targetRPE}</span>
         )}
       </div>
-      <div className="grid grid-cols-4 gap-2">
+      <div className="grid grid-cols-4 gap-1.5">
         {quickValues.map((rpe) => (
           <button
             key={rpe}
             onClick={() => onChange(rpe)}
-            className={`
-              py-3 rounded-lg text-lg font-bold transition-all
-              ${value === rpe 
-                ? 'bg-[#C1121F] text-white scale-105' 
-                : 'bg-[#1A1F26] text-[#A4ACB8] border border-[#2B313A] active:bg-[#2B313A]'
-              }
-            `}
+            className={`py-2.5 rounded-lg text-base font-bold transition-all ${
+              value === rpe 
+                ? 'bg-[#C1121F] text-white scale-[1.02]' 
+                : 'bg-[#0F1115] text-[#A4ACB8] border border-[#2B313A] active:bg-[#2B313A]'
+            }`}
           >
             {rpe}
           </button>
         ))}
       </div>
-      {value && (
-        <p className="text-xs text-[#6B7280] text-center">
-          {value <= 6 && 'Easy - Could do many more'}
-          {value === 7 && 'Moderate - 3+ reps left'}
-          {value === 7.5 && 'Moderate-hard - 2-3 reps left'}
-          {value === 8 && 'Hard - 2 reps left'}
-          {value === 8.5 && 'Very hard - 1-2 reps left'}
-          {value === 9 && 'Near max - 1 rep left'}
-          {value === 9.5 && 'Almost max'}
-          {value === 10 && 'Max effort - No more possible'}
-        </p>
-      )}
     </div>
   )
 }
@@ -261,27 +246,27 @@ interface RepsHoldInputProps {
 }
 
 function RepsHoldInput({ type, value, onChange, targetValue }: RepsHoldInputProps) {
-  const label = type === 'reps' ? 'Reps' : 'Hold (sec)'
+  const label = type === 'reps' ? 'Actual Reps' : 'Hold (sec)'
   
   return (
-    <div className="space-y-2">
+    <div className="space-y-1.5">
       <div className="flex items-center justify-between">
         <span className="text-sm font-medium text-[#A4ACB8]">{label}</span>
         <span className="text-xs text-[#6B7280]">Target: {targetValue}</span>
       </div>
-      <div className="flex items-center justify-center gap-4">
+      <div className="flex items-center justify-center gap-3">
         <button
           onClick={() => onChange(Math.max(1, value - 1))}
-          className="w-14 h-14 rounded-xl bg-[#1A1F26] border border-[#2B313A] text-[#A4ACB8] text-2xl font-bold active:bg-[#2B313A]"
+          className="w-12 h-12 rounded-lg bg-[#0F1115] border border-[#2B313A] text-[#A4ACB8] text-xl font-bold active:bg-[#2B313A]"
         >
           -
         </button>
-        <span className="w-20 text-center text-4xl font-bold text-[#E6E9EF]">
+        <span className="w-16 text-center text-3xl font-bold text-[#E6E9EF] tabular-nums">
           {value}
         </span>
         <button
           onClick={() => onChange(value + 1)}
-          className="w-14 h-14 rounded-xl bg-[#1A1F26] border border-[#2B313A] text-[#A4ACB8] text-2xl font-bold active:bg-[#2B313A]"
+          className="w-12 h-12 rounded-lg bg-[#0F1115] border border-[#2B313A] text-[#A4ACB8] text-xl font-bold active:bg-[#2B313A]"
         >
           +
         </button>
@@ -300,14 +285,14 @@ function BandSelector({ value, onChange, recommendedBand }: BandSelectorProps) {
   const bandOptions: (ResistanceBandColor | 'none')[] = ['none', ...ALL_BAND_COLORS]
   
   return (
-    <div className="space-y-2">
+    <div className="space-y-1.5">
       <div className="flex items-center justify-between">
-        <span className="text-sm font-medium text-[#A4ACB8]">Band Used</span>
+        <span className="text-sm font-medium text-[#A4ACB8]">Band</span>
         {recommendedBand && (
           <span className="text-xs text-[#6B7280]">Rec: {BAND_SHORT_LABELS[recommendedBand]}</span>
         )}
       </div>
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap gap-1.5">
         {bandOptions.map((band) => {
           const isSelected = value === band
           const colors = band === 'none' ? null : BAND_COLORS[band]
@@ -316,17 +301,15 @@ function BandSelector({ value, onChange, recommendedBand }: BandSelectorProps) {
             <button
               key={band}
               onClick={() => onChange(band)}
-              className={`
-                px-4 py-2.5 rounded-lg text-sm font-medium transition-all
-                ${isSelected 
+              className={`px-3 py-2 rounded-md text-xs font-medium transition-all ${
+                isSelected 
                   ? band === 'none'
-                    ? 'bg-[#2B313A] text-[#E6E9EF] ring-2 ring-[#C1121F]'
-                    : `${colors?.bg} ${colors?.text} ring-2 ring-current`
+                    ? 'bg-[#2B313A] text-[#E6E9EF] ring-1 ring-[#C1121F]'
+                    : `${colors?.bg} ${colors?.text} ring-1 ring-current`
                   : band === 'none'
-                    ? 'bg-[#1A1F26] text-[#6B7280] border border-[#2B313A]'
-                    : `${colors?.bg} ${colors?.text} opacity-60`
-                }
-              `}
+                    ? 'bg-[#0F1115] text-[#6B7280] border border-[#2B313A]'
+                    : `${colors?.bg} ${colors?.text} opacity-50`
+              }`}
             >
               {band === 'none' ? 'None' : BAND_SHORT_LABELS[band]}
             </button>
@@ -346,13 +329,17 @@ interface StreamlinedWorkoutSessionProps {
   reasoningSummary?: WorkoutReasoningSummary
   onComplete: () => void
   onCancel: () => void
+  isDemo?: boolean
+  isFirstSession?: boolean
 }
 
 export function StreamlinedWorkoutSession({
   session,
   reasoningSummary,
   onComplete,
-  onCancel
+  onCancel,
+  isDemo = false,
+  isFirstSession = false
 }: StreamlinedWorkoutSessionProps) {
   // CRITICAL: Early validation - if session is completely invalid, render fallback immediately
   // This prevents any downstream code from crashing on a null/undefined session
@@ -461,6 +448,9 @@ export function StreamlinedWorkoutSession({
   const [isSaving, setIsSaving] = useState(false)
   const [perceivedDifficulty, setPerceivedDifficulty] = useState<PerceivedDifficulty | null>(null)
   const [showQuickLog, setShowQuickLog] = useState(false)
+  
+  // Exit confirmation modal
+  const [showExitConfirm, setShowExitConfirm] = useState(false)
   
   // Timer
   const timerRef = useRef<NodeJS.Timeout | null>(null)
@@ -854,12 +844,35 @@ export function StreamlinedWorkoutSession({
   // Get current effective exercise (with fallback to safe exercise)
   const effectiveExercise = getEffectiveExercise(state.currentExerciseIndex) || safeCurrentExercise
   
-  // Finish workout
+  // Finish workout (moves to completed state for logging)
   const handleFinish = useCallback(() => {
     setState(prev => ({ ...prev, status: 'completed' }))
     clearSessionStorage()
     clearRestTimerState()
   }, [])
+  
+  // Request exit confirmation (only if there's progress)
+  const handleRequestExit = useCallback(() => {
+    if (state.status === 'ready' || state.completedSets.length === 0) {
+      // No progress yet - just clean up and exit
+      clearSessionStorage()
+      clearRestTimerState()
+      clearSessionOverrides()
+      onCancel()
+    } else {
+      // Has progress - show confirmation
+      setShowExitConfirm(true)
+    }
+  }, [state.status, state.completedSets.length, onCancel])
+  
+  // Discard and exit (clears all state, no logging)
+  const handleDiscardAndExit = useCallback(() => {
+    clearSessionStorage()
+    clearRestTimerState()
+    clearSessionOverrides()
+    setShowExitConfirm(false)
+    onCancel()
+  }, [onCancel])
   
   // Save completed workout with full logging
   const handleSaveWorkout = useCallback(async (difficulty?: PerceivedDifficulty) => {
@@ -1115,33 +1128,33 @@ export function StreamlinedWorkoutSession({
   
   if (state.status === 'ready') {
     return (
-      <div className="min-h-screen bg-[#0F1115] p-4 sm:p-6">
-        <div className="max-w-lg mx-auto space-y-6">
-          {/* Header with Session Context */}
-          <div className="text-center pt-8">
-            <div className="w-20 h-20 rounded-full bg-[#C1121F]/10 border-2 border-[#C1121F]/30 flex items-center justify-center mx-auto mb-4">
-              <Dumbbell className="w-10 h-10 text-[#C1121F]" />
+      <div className="min-h-screen bg-[#0F1115] p-4 sm:p-5">
+        <div className="max-w-lg mx-auto space-y-4">
+          {/* Compact Header */}
+          <div className="text-center pt-6 pb-2">
+            <div className="w-14 h-14 rounded-full bg-[#C1121F]/10 border border-[#C1121F]/30 flex items-center justify-center mx-auto mb-3">
+              <Dumbbell className="w-7 h-7 text-[#C1121F]" />
             </div>
-            <Badge className="bg-[#C1121F]/10 text-[#C1121F] border-0 mb-4">
-              Ready to Train
-            </Badge>
-            <h1 className="text-2xl font-bold text-[#E6E9EF] mb-2">
-              {safeSession.dayLabel}
+            <h1 className="text-xl font-bold text-[#E6E9EF] mb-1">
+              {safeSession.dayLabel.replace('DEMO-', '')}
             </h1>
-            <p className="text-[#A4ACB8]">
-              {exercises.length} exercises • {totalSets} sets
-            </p>
-            {session.estimatedMinutes && (
-              <p className="text-xs text-[#6B7280] mt-1">
-                Est. {session.estimatedMinutes} minutes
-              </p>
-            )}
+            <div className="flex items-center justify-center gap-2 text-sm text-[#A4ACB8]">
+              <span>{exercises.length} exercises</span>
+              <span className="text-[#6B7280]">·</span>
+              <span>{totalSets} sets</span>
+              {session.estimatedMinutes && (
+                <>
+                  <span className="text-[#6B7280]">·</span>
+                  <span className="text-[#6B7280]">~{session.estimatedMinutes}min</span>
+                </>
+              )}
+            </div>
           </div>
           
-          {/* Session Overview Card */}
-          <Card className="bg-[#1A1F26] border-[#2B313A] p-4">
-            <div className="flex items-center justify-between mb-4">
-              <p className="text-xs text-[#6B7280] uppercase tracking-wide">Today&apos;s Workout</p>
+          {/* Session Overview Card - Compact */}
+          <Card className="bg-[#1A1F26] border-[#2B313A] p-3">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-[11px] text-[#6B7280] uppercase tracking-wider font-medium">Today&apos;s Plan</p>
               {reasoningSummary ? (
                 <WorkoutFocusBadge 
                   focus={reasoningSummary.workoutFocus} 
@@ -1149,33 +1162,28 @@ export function StreamlinedWorkoutSession({
                   size="sm"
                 />
               ) : (
-                <Badge variant="outline" className="text-xs border-[#2B313A] text-[#A4ACB8]">
+                <Badge variant="outline" className="text-[10px] border-[#2B313A] text-[#A4ACB8] px-2 py-0.5">
                   {safeSession.focusLabel}
                 </Badge>
               )}
             </div>
-            <div className="space-y-2">
-              {exercises.slice(0, 5).map((ex, i) => (
-                <div key={i} className="flex items-center justify-between py-2 border-b border-[#2B313A]/50 last:border-0">
-                  <div className="flex items-center gap-3">
-                    <span className="w-6 h-6 rounded-full bg-[#2B313A] text-[#6B7280] text-xs flex items-center justify-center font-medium">
+            <div className="space-y-0">
+              {exercises.map((ex, i) => (
+                <div key={i} className="flex items-center justify-between py-1.5 border-b border-[#2B313A]/30 last:border-0">
+                  <div className="flex items-center gap-2.5">
+                    <span className="w-5 h-5 rounded-full bg-[#2B313A] text-[#6B7280] text-[10px] flex items-center justify-center font-medium">
                       {i + 1}
                     </span>
                     <span className="text-sm text-[#E6E9EF]">{ex.name}</span>
                   </div>
-                  <span className="text-xs text-[#6B7280]">{ex.sets} × {ex.repsOrTime}</span>
+                  <span className="text-[11px] text-[#6B7280] tabular-nums">{ex.sets}×{ex.repsOrTime}</span>
                 </div>
               ))}
-              {exercises.length > 5 && (
-                <p className="text-xs text-[#6B7280] text-center pt-2">
-                  +{exercises.length - 5} more exercises
-                </p>
-              )}
             </div>
           </Card>
           
-          {/* Why This Workout - Reasoning Explanation */}
-          {reasoningSummary && (
+          {/* Why This Workout - Only for adaptive/pro users */}
+          {reasoningSummary && !isDemo && (
             <WhyThisWorkout
               reasoning={reasoningSummary}
               defaultCollapsed={true}
@@ -1183,40 +1191,21 @@ export function StreamlinedWorkoutSession({
             />
           )}
           
-          {/* What to Expect */}
-          <div className="bg-[#1A1F26]/50 border border-[#2B313A]/50 rounded-lg p-4">
-            <p className="text-xs text-[#6B7280] uppercase tracking-wide mb-2">When You Start</p>
-            <ul className="space-y-1.5 text-sm text-[#A4ACB8]">
-              <li className="flex items-center gap-2">
-                <Clock className="w-3.5 h-3.5 text-[#6B7280]" />
-                Session timer will begin
-              </li>
-              <li className="flex items-center gap-2">
-                <Dumbbell className="w-3.5 h-3.5 text-[#6B7280]" />
-                Log sets as you complete them
-              </li>
-              <li className="flex items-center gap-2">
-                <CheckCircle2 className="w-3.5 h-3.5 text-[#6B7280]" />
-                Progress auto-saves if you pause
-              </li>
-            </ul>
-          </div>
-          
-          {/* Start Button - Large and Prominent */}
+          {/* Start Button - Primary CTA */}
           <Button
             onClick={handleStart}
-            className="w-full h-16 bg-[#C1121F] hover:bg-[#A30F1A] text-white text-lg font-bold shadow-lg shadow-[#C1121F]/20"
+            className="w-full h-14 bg-[#C1121F] hover:bg-[#A30F1A] text-white text-base font-bold shadow-lg shadow-[#C1121F]/20"
           >
-            <Play className="w-6 h-6 mr-2" />
+            <Play className="w-5 h-5 mr-2" />
             Start Workout
           </Button>
           
           <Button
             variant="ghost"
             onClick={onCancel}
-            className="w-full text-[#6B7280]"
+            className="w-full text-[#6B7280] text-sm h-10"
           >
-            Cancel
+            Back
           </Button>
         </div>
       </div>
@@ -1485,40 +1474,31 @@ export function StreamlinedWorkoutSession({
     
     return (
       <div className="min-h-screen bg-[#0F1115] flex flex-col">
-        {/* Sticky Session Header - Consistent with Active State */}
-        <div className="sticky top-0 z-10 bg-[#0F1115] border-b border-[#2B313A]">
-          {/* Workout Title Bar */}
-          <div className="px-4 py-2 bg-[#1A1F26]/80">
-            <div className="max-w-lg mx-auto flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
-                <span className="font-semibold text-[#E6E9EF] truncate max-w-[180px]">
-                  {safeSession.dayLabel}
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Clock className="w-3.5 h-3.5 text-[#6B7280]" />
-                <span className="font-mono text-sm font-bold text-[#E6E9EF]">
-                  {formatDuration(state.elapsedSeconds)}
-                </span>
-              </div>
-            </div>
-          </div>
-          
-          {/* Exercise Progress Bar */}
-          <div className="px-4 py-3">
+        {/* Sticky Session Header - Compact (same as active) */}
+        <div className="sticky top-0 z-10 bg-[#0F1115]/95 backdrop-blur-sm border-b border-[#2B313A]">
+          <div className="px-4 py-2.5">
             <div className="max-w-lg mx-auto">
+              {/* Top row: Session + Timer */}
               <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-medium text-[#A4ACB8]">
-                  Exercise {state.currentExerciseIndex + 1} of {totalExercises}
-                </span>
-                <span className="text-xs text-[#6B7280]">
-                  {completedSetsCount}/{totalSets} sets
-                </span>
+                <div className="flex items-center gap-2">
+                  <div className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
+                  <span className="text-sm font-medium text-[#E6E9EF] truncate max-w-[160px]">
+                    {safeSession.dayLabel.replace('DEMO-', '')}
+                  </span>
+                  <span className="text-xs text-[#6B7280]">
+                    {state.currentExerciseIndex + 1}/{totalExercises}
+                  </span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="text-xs text-[#6B7280]">{completedSetsCount}/{totalSets}</span>
+                  <span className="font-mono text-sm font-bold text-[#E6E9EF] tabular-nums">
+                    {formatDuration(state.elapsedSeconds)}
+                  </span>
+                </div>
               </div>
               
-              {/* Overall Progress Bar */}
-              <div className="h-1.5 bg-[#2B313A] rounded-full overflow-hidden">
+              {/* Progress Bar */}
+              <div className="h-1 bg-[#2B313A] rounded-full overflow-hidden">
                 <div 
                   className="h-full bg-[#C1121F] transition-all duration-300"
                   style={{ width: `${(completedSetsCount / totalSets) * 100}%` }}
@@ -1529,8 +1509,8 @@ export function StreamlinedWorkoutSession({
         </div>
         
         {/* Main Content Area */}
-        <div className="flex-1 p-4 sm:p-6">
-        <div className="max-w-lg mx-auto space-y-4">
+        <div className="flex-1 px-4 py-3 sm:p-5">
+        <div className="max-w-lg mx-auto space-y-3">
           
           {/* Last Set Summary */}
           {state.lastSetRPE && (
@@ -1598,40 +1578,31 @@ export function StreamlinedWorkoutSession({
   
   return (
     <div className="min-h-screen bg-[#0F1115] flex flex-col">
-      {/* Sticky Session Header */}
-      <div className="sticky top-0 z-10 bg-[#0F1115] border-b border-[#2B313A]">
-        {/* Workout Title Bar */}
-        <div className="px-4 py-2 bg-[#1A1F26]/80">
-          <div className="max-w-lg mx-auto flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-              <span className="font-semibold text-[#E6E9EF] truncate max-w-[180px]">
-                {safeSession.dayLabel}
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Clock className="w-3.5 h-3.5 text-[#6B7280]" />
-              <span className="font-mono text-sm font-bold text-[#E6E9EF]">
-                {formatDuration(state.elapsedSeconds)}
-              </span>
-            </div>
-          </div>
-        </div>
-        
-        {/* Exercise Progress Bar */}
-        <div className="px-4 py-3">
+      {/* Sticky Session Header - Compact */}
+      <div className="sticky top-0 z-10 bg-[#0F1115]/95 backdrop-blur-sm border-b border-[#2B313A]">
+        <div className="px-4 py-2.5">
           <div className="max-w-lg mx-auto">
+            {/* Top row: Session + Timer */}
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-medium text-[#A4ACB8]">
-                Exercise {state.currentExerciseIndex + 1} of {totalExercises}
-              </span>
-              <span className="text-xs text-[#6B7280]">
-                {completedSetsCount}/{totalSets} sets
-              </span>
+              <div className="flex items-center gap-2">
+                <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+                <span className="text-sm font-medium text-[#E6E9EF] truncate max-w-[160px]">
+                  {safeSession.dayLabel.replace('DEMO-', '')}
+                </span>
+                <span className="text-xs text-[#6B7280]">
+                  {state.currentExerciseIndex + 1}/{totalExercises}
+                </span>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="text-xs text-[#6B7280]">{completedSetsCount}/{totalSets}</span>
+                <span className="font-mono text-sm font-bold text-[#E6E9EF] tabular-nums">
+                  {formatDuration(state.elapsedSeconds)}
+                </span>
+              </div>
             </div>
             
-            {/* Overall Progress Bar */}
-            <div className="h-1.5 bg-[#2B313A] rounded-full overflow-hidden">
+            {/* Progress Bar */}
+            <div className="h-1 bg-[#2B313A] rounded-full overflow-hidden">
               <div 
                 className="h-full bg-[#C1121F] transition-all duration-300"
                 style={{ width: `${(completedSetsCount / totalSets) * 100}%` }}
@@ -1641,35 +1612,22 @@ export function StreamlinedWorkoutSession({
         </div>
       </div>
       
-      {/* Main Content Area */}
-      <div className="flex-1 p-4 sm:p-6">
-      <div className="max-w-lg mx-auto space-y-4">
+      {/* Main Content Area - Tighter spacing */}
+      <div className="flex-1 px-4 py-3 sm:p-5">
+      <div className="max-w-lg mx-auto space-y-3">
         
-        {/* Exercise Header Card */}
-        <Card className="bg-[#1A1F26] border-[#2B313A] p-4">
-          <div className="flex items-start justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <Badge variant="outline" className="text-[#C1121F] border-[#C1121F]/30 text-xs uppercase">
+        {/* Current Exercise - Compact Card */}
+        <Card className="bg-[#1A1F26] border-[#2B313A] p-3">
+          {/* Header row */}
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <Badge variant="outline" className="text-[#C1121F] border-[#C1121F]/30 text-[10px] uppercase px-1.5 py-0">
                 {currentExercise.category}
               </Badge>
-              {currentExercise.note && (
-                <Badge className="bg-amber-500/10 text-amber-400 border-0 text-xs">
-                  {currentExercise.note.includes('band') ? 'Band Assisted' : 'Note'}
-                </Badge>
-              )}
-              {/* Override indicator badges */}
               {state.exerciseOverrides[state.currentExerciseIndex]?.isReplaced && (
-                <Badge className="bg-blue-500/10 text-blue-400 border-0 text-xs">
-                  Replaced
-                </Badge>
-              )}
-              {state.exerciseOverrides[state.currentExerciseIndex]?.isProgressionAdjusted && (
-                <Badge className="bg-purple-500/10 text-purple-400 border-0 text-xs">
-                  Adjusted
-                </Badge>
+                <Badge className="bg-blue-500/10 text-blue-400 border-0 text-[10px] px-1.5 py-0">Swapped</Badge>
               )}
             </div>
-            {/* Exercise Options Menu */}
             <ExerciseOptionsMenu
               exercise={currentExercise}
               exerciseIndex={state.currentExerciseIndex}
@@ -1681,88 +1639,56 @@ export function StreamlinedWorkoutSession({
             />
           </div>
           
-          <h2 className="text-xl font-bold text-[#E6E9EF] mb-1">
+          {/* Exercise Name */}
+          <h2 className="text-lg font-bold text-[#E6E9EF] leading-tight">
             {effectiveExercise.name}
           </h2>
           
-          {/* Show original exercise name if changed */}
-          {state.exerciseOverrides[state.currentExerciseIndex] && (
-            <p className="text-xs text-[#6B7280] mb-2">
-              Originally: {state.exerciseOverrides[state.currentExerciseIndex].originalName}
-            </p>
-          )}
-          
-          {/* Set Progress Dots */}
-          <div className="flex items-center gap-2 mb-3">
-            {Array.from({ length: currentExercise.sets }).map((_, idx) => (
-              <div
-                key={idx}
-                className={`
-                  h-2.5 flex-1 rounded-full transition-all
-                  ${idx < state.currentSetNumber - 1 
-                    ? 'bg-green-500' 
-                    : idx === state.currentSetNumber - 1 
-                      ? 'bg-[#C1121F]' 
-                      : 'bg-[#2B313A]'
-                  }
-                `}
-              />
-            ))}
+          {/* Prescription row */}
+          <div className="flex items-center gap-2 mt-1.5 text-sm">
+            <span className="text-[#A4ACB8]">Target:</span>
+            <span className="text-[#E6E9EF] font-medium">{currentExercise.repsOrTime}</span>
+            <span className="text-[#6B7280]">·</span>
+            <span className="text-[#A4ACB8]">RPE {targetRPE}</span>
           </div>
           
-          {/* Current Set Info */}
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-[#A4ACB8]">
-              Set <span className="text-lg font-bold text-[#E6E9EF]">{state.currentSetNumber}</span> of {currentExercise.sets}
-            </span>
-            <span className="text-[#A4ACB8]">
-              {isHoldExercise ? 'Hold' : 'Reps'}: <span className="text-[#E6E9EF] font-medium">{currentExercise.repsOrTime}</span>
+          {/* Set Progress - Inline */}
+          <div className="flex items-center gap-3 mt-3">
+            <div className="flex items-center gap-1.5 flex-1">
+              {Array.from({ length: currentExercise.sets }).map((_, idx) => (
+                <div
+                  key={idx}
+                  className={`h-2 flex-1 rounded-full transition-all ${
+                    idx < state.currentSetNumber - 1 
+                      ? 'bg-green-500' 
+                      : idx === state.currentSetNumber - 1 
+                        ? 'bg-[#C1121F]' 
+                        : 'bg-[#2B313A]'
+                  }`}
+                />
+              ))}
+            </div>
+            <span className="text-sm font-medium text-[#E6E9EF] whitespace-nowrap">
+              Set {state.currentSetNumber}/{currentExercise.sets}
             </span>
           </div>
         </Card>
         
-        {/* Exercise Coaching Insight - Why This Exercise */}
-        {(() => {
+        {/* Coaching Insight - Collapsed by default, only for pro users */}
+        {!isDemo && (() => {
           const insight = getExerciseSelectionInsight(currentExercise.id || currentExercise.name)
-          const carryover = getSkillCarryoverInsight(currentExercise.id || currentExercise.name)
-          
           if (!insight) return null
           
           return (
-            <div className="text-xs text-[#6B7280] rounded-lg bg-[#1A1A1A] border border-[#2B313A]/50 p-2.5 flex items-start gap-2">
+            <div className="text-[11px] text-[#6B7280] rounded-md bg-[#1A1A1A]/50 border border-[#2B313A]/30 px-2.5 py-2 flex items-start gap-2">
               <Lightbulb className="w-3 h-3 shrink-0 mt-0.5 text-[#4F6D8A]" />
-              <div className="flex-1 min-w-0">
-                <p className="text-[#A4ACB8] leading-relaxed">{insight}</p>
-                {carryover && carryover.length > 0 && (
-                  <p className="text-[#6B7280] mt-1">
-                    Supports: <span className="text-[#4F6D8A]">{carryover.join(', ')}</span>
-                  </p>
-                )}
-              </div>
+              <p className="text-[#A4ACB8] leading-relaxed line-clamp-2">{insight}</p>
             </div>
           )
         })()}
         
-        {/* Override Protection Warning */}
-        {state.exerciseOverrides[state.currentExerciseIndex]?.isReplaced && (() => {
-          const original = state.exerciseOverrides[state.currentExerciseIndex]?.originalName
-          const originalInsight = original ? getExerciseSelectionInsight(original) : null
-          const originalCarryover = original ? getSkillCarryoverInsight(original) : null
-          
-          if (!original) return null
-          
-          return (
-            <OverrideProtectionInsight
-              originalExerciseName={original}
-              selectionReason={originalInsight || `${original} was selected for specific training benefit.`}
-              skillCarryover={originalCarryover || []}
-              confirming={false}
-            />
-          )
-        })()}
-        
-        {/* Input Section */}
-        <Card className="bg-[#1A1F26] border-[#2B313A] p-4 space-y-5">
+        {/* Log This Set - Input Section */}
+        <Card className="bg-[#1A1F26] border-[#2B313A] p-3 space-y-4">
           {/* Reps or Hold Input */}
           {isHoldExercise ? (
             <RepsHoldInput
@@ -1798,50 +1724,85 @@ export function StreamlinedWorkoutSession({
           )}
         </Card>
         
-        {/* Action Buttons */}
-        <div className="space-y-3 pt-2">
-          {/* Complete Set - Large Touch Target */}
-          <Button
-            onClick={handleCompleteSet}
-            disabled={selectedRPE === null}
-            className="w-full h-16 bg-[#C1121F] hover:bg-[#A30F1A] text-white text-lg font-bold disabled:opacity-50"
-          >
-            <Check className="w-6 h-6 mr-2" />
-            {state.currentSetNumber >= currentExercise.sets && state.currentExerciseIndex >= exercises.length - 1
-              ? 'Finish Workout'
-              : state.currentSetNumber >= currentExercise.sets
-                ? 'Complete & Next Exercise'
-                : 'Complete Set'
-            }
-          </Button>
-          
-          {/* Skip Exercise */}
+        {/* Complete Set Button - Primary CTA */}
+        <Button
+          onClick={handleCompleteSet}
+          disabled={selectedRPE === null}
+          className="w-full h-14 bg-[#C1121F] hover:bg-[#A30F1A] text-white text-base font-bold disabled:opacity-50"
+        >
+          <Check className="w-5 h-5 mr-2" />
+          {state.currentSetNumber >= currentExercise.sets && state.currentExerciseIndex >= exercises.length - 1
+            ? 'Finish Workout'
+            : state.currentSetNumber >= currentExercise.sets
+              ? 'Next Exercise'
+              : 'Log Set'
+          }
+        </Button>
+        
+        {/* Secondary Actions */}
+        <div className="flex items-center justify-between pt-2">
           <Button
             variant="ghost"
             onClick={handleSkipExercise}
-            className="w-full text-[#6B7280] hover:text-[#A4ACB8]"
+            className="text-[#6B7280] hover:text-[#A4ACB8] text-sm h-9 px-3"
           >
-            <SkipForward className="w-4 h-4 mr-2" />
-            Skip Exercise
+            <SkipForward className="w-3.5 h-3.5 mr-1.5" />
+            Skip
           </Button>
-        </div>
-        
-        {/* End Workout Section - Clear Exit Point */}
-        <div className="pt-6 mt-6 border-t border-[#2B313A]/50">
-          <p className="text-xs text-[#6B7280] text-center mb-3">
-            Done early or need to stop?
-          </p>
           <Button
-            variant="outline"
-            onClick={handleFinish}
-            className="w-full h-12 border-[#C1121F]/30 text-[#C1121F] hover:bg-[#C1121F]/10 hover:border-[#C1121F]/50"
+            variant="ghost"
+            onClick={handleRequestExit}
+            className="text-[#6B7280] hover:text-[#A4ACB8] text-sm h-9 px-3"
           >
-            <X className="w-4 h-4 mr-2" />
-            End Workout
+            <X className="w-3.5 h-3.5 mr-1.5" />
+            End Early
           </Button>
         </div>
       </div>
       </div>
+      
+      {/* Exit Confirmation Modal */}
+      {showExitConfirm && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="w-full max-w-md bg-[#1A1F26] border-t sm:border border-[#2B313A] sm:rounded-xl p-5 space-y-4 animate-in slide-in-from-bottom-4 sm:slide-in-from-bottom-0">
+            <div className="text-center mb-2">
+              <h3 className="text-lg font-semibold text-[#E6E9EF] mb-1">Leave Workout?</h3>
+              <p className="text-sm text-[#A4ACB8]">
+                You have {state.completedSets.length} {state.completedSets.length === 1 ? 'set' : 'sets'} logged.
+              </p>
+            </div>
+            
+            <div className="space-y-2">
+              <Button
+                onClick={() => setShowExitConfirm(false)}
+                className="w-full h-12 bg-[#C1121F] hover:bg-[#A30F1A] text-white font-medium"
+              >
+                Resume Workout
+              </Button>
+              
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowExitConfirm(false)
+                  handleFinish()
+                }}
+                className="w-full h-12 border-[#2B313A] text-[#E6E9EF] hover:bg-[#2B313A]"
+              >
+                <Check className="w-4 h-4 mr-2" />
+                Save & Finish Early
+              </Button>
+              
+              <Button
+                variant="ghost"
+                onClick={handleDiscardAndExit}
+                className="w-full h-10 text-[#6B7280] hover:text-[#A4ACB8]"
+              >
+                Discard & Exit
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

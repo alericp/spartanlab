@@ -372,7 +372,7 @@ export default function DashboardHeavyContent({
               description="Your progression toward skill milestones"
               icon={Target}
               action={
-                <Link href="/skills">
+                <Link href="/my-skills">
                   <Button variant="ghost" size="sm" className="text-[#A4ACB8] hover:text-[#E6E9EF] gap-1">
                     All Skills
                     <ArrowRight className="w-4 h-4" />

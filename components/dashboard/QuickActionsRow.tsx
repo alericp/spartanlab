@@ -5,7 +5,7 @@ import { Target, Dumbbell, Calendar, Play, ArrowRight, Archive, Trophy } from 'l
 export function QuickActionsRow() {
   const secondaryActions = [
     {
-      href: '/skills',
+      href: '/my-skills',
       icon: Target,
       label: 'Skills',
     },
@@ -15,7 +15,7 @@ export function QuickActionsRow() {
       label: 'Strength',
     },
     {
-      href: '/programs',
+      href: '/my-programs',
       icon: Calendar,
       label: 'Program',
     },

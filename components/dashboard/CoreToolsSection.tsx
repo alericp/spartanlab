@@ -25,7 +25,7 @@ export function CoreToolsSection({
 }: CoreToolsSectionProps) {
   const tools = [
     {
-      href: '/skills',
+      href: '/my-skills',
       icon: Target,
       title: 'Skill Progression',
       description: 'Track skills with readiness analysis and personalized guidance.',

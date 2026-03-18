@@ -1,13 +1,14 @@
 'use client'
 
 /**
- * First Session Page - Import-Isolated Entry Point
+ * First Session Page
  * 
- * This page checks if a program exists and either:
- * 1. Shows a "ready" state if program exists → navigate to workout session
- * 2. Shows a "needs setup" state if no program → offer demo or program creation
+ * Entry point for users starting their first workout.
+ * Uses unified program state check for consistency with dashboard.
  * 
- * Light imports only - program check uses dynamic import for isolation
+ * Flow:
+ * - hasProgram=true → Show "ready" state → navigate to workout session
+ * - hasProgram=false → Show setup options (create program OR demo)
  */
 
 import { Suspense, useState, useEffect } from 'react'
@@ -15,9 +16,10 @@ import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Play, Dumbbell, ArrowRight, Sparkles, Target } from 'lucide-react'
+import { getProgramState } from '@/lib/program-state'
 
 // =============================================================================
-// FIRST SESSION SHELL - Checks program availability and shows appropriate UI
+// FIRST SESSION SHELL - Uses unified program state check
 // =============================================================================
 
 function FirstSessionShell() {
@@ -26,21 +28,12 @@ function FirstSessionShell() {
   const [hasProgram, setHasProgram] = useState(false)
   const [isNavigating, setIsNavigating] = useState(false)
 
-  // Check if a program exists on mount
+  // Check program state using unified utility
   useEffect(() => {
-    const checkProgram = async () => {
-      try {
-        // Dynamic import to avoid heavy dependencies at module level
-        const { getLatestAdaptiveProgram } = await import('@/lib/adaptive-program-builder')
-        const program = getLatestAdaptiveProgram()
-        setHasProgram(!!program && Array.isArray(program.sessions) && program.sessions.length > 0)
-      } catch {
-        setHasProgram(false)
-      } finally {
-        setIsLoading(false)
-      }
-    }
-    checkProgram()
+    // Use the unified program state check for consistency
+    const programState = getProgramState()
+    setHasProgram(programState.hasProgram)
+    setIsLoading(false)
   }, [])
 
   const handleStartWorkout = () => {

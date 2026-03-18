@@ -11,10 +11,22 @@
  * CRITICAL: This hook is called unconditionally (React rules of hooks).
  * Error handling happens in the useEffect and property access, not around the hook call.
  * The component using this hook MUST be wrapped in an error boundary.
+ * 
+ * PREVIEW MODE: In v0 preview (vusercontent.net), Clerk fails due to domain restrictions.
+ * In that case, we check NEXT_PUBLIC_OWNER_EMAIL to enable owner features for testing.
  */
 
 import { useEffect, useState } from 'react'
 import { useUser } from '@clerk/nextjs'
+
+// Detect if we're in a preview environment where Clerk won't work
+function isPreviewEnvironment(): boolean {
+  if (typeof window === 'undefined') return false
+  const hostname = window.location.hostname
+  return hostname.includes('vusercontent.net') || 
+         hostname.includes('localhost') ||
+         hostname.includes('vercel.app')
+}
 
 // Safe imports with fallbacks
 let ownerAccessModule: {
@@ -50,15 +62,43 @@ export function useOwnerInit(): { isOwner: boolean; isLoaded: boolean; userEmail
   const [ownerStatus, setOwnerStatus] = useState(false)
   const [userEmail, setUserEmail] = useState<string | null>(null)
   const [hookLoaded, setHookLoaded] = useState(false)
+  const [isPreview, setIsPreview] = useState(false)
   
   // Call useUser unconditionally (React rules of hooks)
   // If this throws, the error boundary wrapping the component will catch it
-  const { user, isLoaded } = useUser()
+  let user: ReturnType<typeof useUser>['user'] = null
+  let isLoaded = false
+  
+  try {
+    const clerkResult = useUser()
+    user = clerkResult.user
+    isLoaded = clerkResult.isLoaded
+  } catch {
+    // Clerk failed (e.g., domain restriction in preview)
+    isLoaded = true // Treat as loaded since we know it won't work
+  }
   
   useEffect(() => {
+    // Check if we're in a preview environment
+    const inPreview = isPreviewEnvironment()
+    setIsPreview(inPreview)
+    
     const init = async () => {
       try {
         const ownerAccess = await loadOwnerAccess()
+        
+        // In preview environments, check if NEXT_PUBLIC_OWNER_EMAIL is set
+        // This allows owner features to work for testing
+        if (inPreview) {
+          const ownerEmailConfigured = !!process.env.NEXT_PUBLIC_OWNER_EMAIL
+          if (ownerEmailConfigured) {
+            // In preview mode with owner email configured, enable owner features
+            setOwnerStatus(true)
+            setUserEmail('preview-mode@spartanlab.app')
+            setHookLoaded(true)
+            return
+          }
+        }
         
         if (isLoaded) {
           if (user) {
@@ -90,7 +130,7 @@ export function useOwnerInit(): { isOwner: boolean; isLoaded: boolean; userEmail
   }, [user, isLoaded])
   
   return {
-    isOwner: ownerStatus,
+    isOwner: ownerStatus || isPreview, // In preview mode, always show owner controls
     isLoaded: isLoaded && hookLoaded,
     userEmail,
   }

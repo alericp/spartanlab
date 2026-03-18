@@ -22,7 +22,8 @@ import {
   type GeneratedProgram,
   type PrimaryGoal,
 } from './program-service'
-import { getLatestAdaptiveProgram, type AdaptiveProgram } from './adaptive-program-builder'
+import { type AdaptiveProgram } from './adaptive-program-builder'
+import { getProgramState } from './program-state'
 import { SKILL_DEFINITIONS } from './skills'
 import { getSkillSessions } from './skill-session-service'
 import { generateSkillAnalysis } from './skill-readiness-engine'
@@ -211,14 +212,14 @@ export function getStrengthSummary(overview: DashboardOverview): StrengthSummary
   }
 }
 
-// Get program summary
+// Get program summary - uses unified program state check
 export function getProgramSummary(overview: DashboardOverview): ProgramSummary {
   const { latestProgram } = overview
   
-  // Check for adaptive program first
-  const adaptiveProgram = getLatestAdaptiveProgram()
+  // Use unified program state check for consistency across the app
+  const { adaptiveProgram, hasProgram } = getProgramState()
   
-  if (adaptiveProgram) {
+  if (hasProgram && adaptiveProgram) {
     return {
       goalLabel: adaptiveProgram.goalLabel,
       daysPerWeek: adaptiveProgram.trainingDaysPerWeek,

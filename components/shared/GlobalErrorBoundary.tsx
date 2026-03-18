@@ -31,10 +31,30 @@ export class GlobalErrorBoundary extends Component<Props, State> {
   }
 
   static getDerivedStateFromError(error: Error): Partial<State> {
+    // Check if this is a Clerk domain restriction error - don't treat as crash
+    const isClerkDomainError = error.message?.includes('Production Keys are only allowed') ||
+      error.message?.includes('HTTP Origin header')
+    
+    if (isClerkDomainError) {
+      // Log but don't show error UI for Clerk domain issues
+      console.warn('[GlobalErrorBoundary] Clerk domain restriction (expected in preview):', error.message)
+      return { hasError: false, error: null }
+    }
+    
     return { hasError: true, error }
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    // Check if this is a Clerk domain restriction error
+    const isClerkDomainError = error.message?.includes('Production Keys are only allowed') ||
+      error.message?.includes('HTTP Origin header')
+    
+    if (isClerkDomainError) {
+      // Don't treat Clerk domain errors as crashes
+      console.warn('[GlobalErrorBoundary] Clerk domain restriction - app will continue without auth')
+      return
+    }
+    
     // Log the error for debugging
     console.error('[GlobalErrorBoundary] Caught error:', error)
     console.error('[GlobalErrorBoundary] Error info:', errorInfo)

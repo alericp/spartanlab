@@ -49,6 +49,7 @@ import {
   type FrontLeverProgression,
   type PlancheProgression,
   type BandLevel,
+  type SkillBenchmark,
   type MuscleUpReadiness,
   type HSPUProgression,
   type LSitHoldCapacity,
@@ -1839,12 +1840,53 @@ interface SkillHistoryInputProps {
   updateProfile: (updates: Partial<OnboardingProfile>) => void
 }
 
+// Progression ladders for "highest level ever reached" selector
+const SKILL_PROGRESSION_OPTIONS: Record<string, { value: string; label: string }[]> = {
+  'front_lever': [
+    { value: 'tuck', label: 'Tuck' },
+    { value: 'adv_tuck', label: 'Advanced Tuck' },
+    { value: 'one_leg', label: 'One Leg' },
+    { value: 'straddle', label: 'Straddle' },
+    { value: 'full', label: 'Full' },
+  ],
+  'planche': [
+    { value: 'lean', label: 'Lean' },
+    { value: 'tuck', label: 'Tuck' },
+    { value: 'adv_tuck', label: 'Advanced Tuck' },
+    { value: 'straddle', label: 'Straddle' },
+    { value: 'full', label: 'Full' },
+  ],
+  'muscle_up': [
+    { value: 'kipping', label: 'Kipping' },
+    { value: 'strict_1_3', label: '1-3 Strict' },
+    { value: 'strict_4_plus', label: '4+ Strict' },
+  ],
+  'handstand_pushup': [
+    { value: 'negative', label: 'Negative' },
+    { value: 'partial', label: 'Partial ROM' },
+    { value: 'full_wall', label: 'Full Wall' },
+    { value: 'freestanding', label: 'Freestanding' },
+  ],
+}
+
 function SkillHistoryInput({ skillKey, skillLabel, profile, updateProfile }: SkillHistoryInputProps) {
   const historyOptions: SkillTrainingHistory[] = ['never', 'tried_little', 'trained_consistently', 'previously_strong']
   const lastTrainedOptions: SkillLastTrained[] = ['currently', 'within_3_months', '3_to_6_months', '6_to_12_months', '1_to_2_years', 'over_2_years']
   
   const currentHistory = profile.skillHistory?.[skillKey]
   const showLastTrained = currentHistory?.trainingHistory && currentHistory.trainingHistory !== 'never'
+  const showHighestLevel = currentHistory?.trainingHistory === 'previously_strong'
+  const progressionOptions = SKILL_PROGRESSION_OPTIONS[skillKey] || []
+  
+  // Get the corresponding skill benchmark to store highestLevelEverReached
+  const skillBenchmarkKey = skillKey === 'front_lever' ? 'frontLever' 
+    : skillKey === 'planche' ? 'planche'
+    : skillKey === 'handstand_pushup' ? 'hspu'
+    : null
+  
+  const currentHighestLevel = skillBenchmarkKey 
+    ? (profile[skillBenchmarkKey as keyof OnboardingProfile] as SkillBenchmark | null)?.highestLevelEverReached 
+    : null
   
   const updateHistory = (trainingHistory: SkillTrainingHistory) => {
     const lastTrained = trainingHistory === 'never' ? null : (currentHistory?.lastTrained || null)
@@ -1878,6 +1920,18 @@ function SkillHistoryInput({ skillKey, skillLabel, profile, updateProfile }: Ski
     })
   }
   
+  const updateHighestLevel = (level: string) => {
+    if (!skillBenchmarkKey) return
+    const currentBenchmark = profile[skillBenchmarkKey as keyof OnboardingProfile] as SkillBenchmark | null
+    updateProfile({
+      [skillBenchmarkKey]: {
+        ...currentBenchmark,
+        progression: currentBenchmark?.progression || 'none',
+        highestLevelEverReached: level,
+      }
+    })
+  }
+  
   return (
     <div className="bg-[#0F1115] border border-[#2B313A] rounded-lg p-3 space-y-3">
       <div className="space-y-2">
@@ -1901,6 +1955,32 @@ function SkillHistoryInput({ skillKey, skillLabel, profile, updateProfile }: Ski
           ))}
         </div>
       </div>
+      
+      {/* Highest level ever reached — only shown when "Reached higher level" is selected */}
+      {showHighestLevel && progressionOptions.length > 0 && (
+        <div className="space-y-2 pt-2 border-t border-[#2B313A]">
+          <label className="text-xs text-[#6B7280]">Highest level you ever reached</label>
+          <p className="text-[10px] text-[#4F5D6B]">Your all-time best, even if you can't do it now</p>
+          <div className="grid grid-cols-3 gap-1.5">
+            {progressionOptions.map((opt) => (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => updateHighestLevel(opt.value)}
+                className={`
+                  px-2 py-1.5 rounded text-xs transition-colors
+                  ${currentHighestLevel === opt.value
+                    ? 'bg-[#C1121F]/20 text-[#E05A64] border border-[#C1121F]/30'
+                    : 'bg-[#1A1D24] text-[#A4ACB8] hover:bg-[#2B313A]'
+                  }
+                `}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
       
       {showLastTrained && (
         <div className="space-y-2 pt-2 border-t border-[#2B313A]">
@@ -2792,6 +2872,17 @@ function ReviewSection({ profile, onEditSection }: ReviewSectionProps) {
   // Front Lever
   if (profile.frontLever?.progression && profile.frontLever.progression !== 'unknown' && profile.frontLever.progression !== 'none') {
     let flSummary = `Front Lever: ${FRONT_LEVER_LABELS[profile.frontLever.progression]}`
+    // Add hold time + band assistance
+    if (profile.frontLever.holdSeconds) {
+      flSummary += ` ${profile.frontLever.holdSeconds}s`
+    }
+    if (profile.frontLever.isAssisted && profile.frontLever.bandLevel) {
+      flSummary += ` (${profile.frontLever.bandLevel} band)`
+    }
+    // Add highest level ever
+    if (profile.frontLever.highestLevelEverReached && profile.frontLever.highestLevelEverReached !== profile.frontLever.progression) {
+      flSummary += ` — was ${FRONT_LEVER_LABELS[profile.frontLever.highestLevelEverReached as FrontLeverProgression] || profile.frontLever.highestLevelEverReached}`
+    }
     const flHistory = profile.skillHistory?.front_lever
     if (flHistory?.trainingHistory && flHistory.trainingHistory !== 'never') {
       flSummary += ` • ${SKILL_TRAINING_HISTORY_LABELS[flHistory.trainingHistory]}`
@@ -2805,6 +2896,17 @@ function ReviewSection({ profile, onEditSection }: ReviewSectionProps) {
   // Planche
   if (profile.planche?.progression && profile.planche.progression !== 'unknown' && profile.planche.progression !== 'none') {
     let plSummary = `Planche: ${PLANCHE_LABELS[profile.planche.progression]}`
+    // Add hold time + band assistance
+    if (profile.planche.holdSeconds) {
+      plSummary += ` ${profile.planche.holdSeconds}s`
+    }
+    if (profile.planche.isAssisted && profile.planche.bandLevel) {
+      plSummary += ` (${profile.planche.bandLevel} band)`
+    }
+    // Add highest level ever
+    if (profile.planche.highestLevelEverReached && profile.planche.highestLevelEverReached !== profile.planche.progression) {
+      plSummary += ` — was ${PLANCHE_LABELS[profile.planche.highestLevelEverReached as PlancheProgression] || profile.planche.highestLevelEverReached}`
+    }
     const plHistory = profile.skillHistory?.planche
     if (plHistory?.trainingHistory && plHistory.trainingHistory !== 'never') {
       plSummary += ` • ${SKILL_TRAINING_HISTORY_LABELS[plHistory.trainingHistory]}`

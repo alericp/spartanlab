@@ -420,6 +420,10 @@ export interface SkillHistoryEntry {
   trainingHistory: SkillTrainingHistory
   lastTrained: SkillLastTrained | null  // null if "never"
   tendonAdaptationScore: TendonAdaptationLevel
+  // Highest level ever reached — used for skills without dedicated SkillBenchmark objects
+  // (e.g., muscle_up, v_sit, l_sit). Skills with SkillBenchmark objects (frontLever, planche, hspu)
+  // store this on the benchmark object instead.
+  highestLevelEverReached?: string | null
 }
 
   // Labels for UI - clearer wording for athletic history

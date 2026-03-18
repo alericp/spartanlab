@@ -54,6 +54,11 @@ export interface CompressionReadinessResult {
   lSitReady: boolean
   vSitReady: boolean
   iSitReady: boolean
+  
+  // Historical ceiling data for reacquisition programming
+  hasHistoricalCeiling: boolean
+  historicalHighest: string | null | undefined
+  useReacquisitionStrategy: boolean
 }
 
 // =============================================================================
@@ -341,6 +346,12 @@ export function getCompressionReadiness(
   const compressionTier = effectiveCalibration?.coreCompressionTier ?? 'low'
   const leverageProfile = effectiveCalibration?.leverageProfile ?? 'average'
   
+  // Check for historical compression ceiling (user previously reached higher level)
+  const vSitCalibration = effectiveCalibration?.skillCalibration?.v_sit
+  const lSitCalibration = effectiveCalibration?.skillCalibration?.l_sit
+  const hasHistoricalCeiling = !!(vSitCalibration?.hasHistoricalCeiling || lSitCalibration?.hasHistoricalCeiling)
+  const historicalHighest = vSitCalibration?.highestLevelEverReached || lSitCalibration?.highestLevelEverReached
+  
   // Calculate current level
   const currentLevel = inferCurrentLevel(lSitCapacity, compressionTier, leverageProfile)
   
@@ -404,6 +415,11 @@ export function getCompressionReadiness(
     lSitReady,
     vSitReady,
     iSitReady,
+    // Historical ceiling data for reacquisition programming
+    hasHistoricalCeiling,
+    historicalHighest,
+    // If user had higher level before, use reacquisition strategy (faster ramp, less beginner work)
+    useReacquisitionStrategy: hasHistoricalCeiling && currentLevel !== historicalHighest,
   }
 }
 

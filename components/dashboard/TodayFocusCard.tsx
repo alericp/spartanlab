@@ -189,7 +189,7 @@ export function TodayFocusCard({ className }: TodayFocusCardProps) {
                   ? 'bg-[#C1121F] hover:bg-[#A30F1A] text-white px-8' 
                   : 'bg-[#C1121F] hover:bg-[#A30F1A] text-white'
               }`}
-              onClick={() => router.push('/workout/session')}
+              onClick={() => router.push(isFirstWorkout ? '/first-session' : '/workout/session')}
             >
               <Play className="w-5 h-5" />
               {isFirstWorkout ? 'Start First Workout' : 'Start Workout'}

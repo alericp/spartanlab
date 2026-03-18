@@ -1,4 +1,4 @@
-// AUTH_PROD_UNBLOCK_V1
+// AUTH_PROD_UNBLOCK_V2
 'use client'
 
 import Link from 'next/link'
@@ -7,10 +7,71 @@ import { useAuth } from '@clerk/nextjs'
 import { Button } from '@/components/ui/button'
 import { LayoutDashboard, Target, Dumbbell, Calendar, ClipboardList, TrendingUp, Activity, Settings, Menu, X, Wrench, BookOpen, LogIn, LogOut, Trophy, Swords, Archive } from 'lucide-react'
 import { SpartanIcon } from '@/components/brand/SpartanLogo'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Component, ReactNode } from 'react'
 import { cn } from '@/lib/utils'
 import { SubscriptionBadge, useEntitlement } from '@/components/billing/SubscriptionBadge'
 import { useOwnerInit } from '@/hooks/useOwnerInit'
+
+// =============================================================================
+// NAVIGATION ERROR BOUNDARY
+// =============================================================================
+
+/**
+ * Error boundary specifically for Navigation component.
+ * If any hook (useAuth, useEntitlement, usePathname) throws,
+ * we render a minimal safe navigation shell instead of crashing the page.
+ */
+class NavigationErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean }> {
+  constructor(props: { children: ReactNode }) {
+    super(props)
+    this.state = { hasError: false }
+  }
+  
+  static getDerivedStateFromError() {
+    return { hasError: true }
+  }
+  
+  componentDidCatch(error: Error) {
+    console.error('[v0] Navigation crashed (caught safely):', error.message)
+  }
+  
+  render() {
+    if (this.state.hasError) {
+      // Render minimal safe navigation fallback
+      return <NavigationFallback />
+    }
+    return this.props.children
+  }
+}
+
+/**
+ * Minimal navigation fallback when the main navigation crashes.
+ * Shows logo and basic structure without auth-dependent features.
+ */
+function NavigationFallback() {
+  return (
+    <header className="border-b border-[#2B313A] bg-[#0F1115] sticky top-0 z-50">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6">
+        <div className="relative flex items-center justify-between h-16">
+          <div className="flex items-center gap-2 shrink-0">
+            <Link href="/dashboard" className="flex items-center gap-2">
+              <SpartanIcon size={28} />
+              <span className="text-xl font-bold hidden sm:inline">SpartanLab</span>
+            </Link>
+          </div>
+          <div className="flex items-center gap-2">
+            <Link href="/sign-in">
+              <Button size="sm" variant="ghost" className="text-[#A4ACB8] hover:text-[#E6E9EF]">
+                <LogIn className="w-4 h-4 mr-2" />
+                Sign In
+              </Button>
+            </Link>
+          </div>
+        </div>
+      </div>
+    </header>
+  )
+}
 
 // Primary navigation - essential daily actions
 // NOTE: /my-programs and /my-skills are app-only routes (authenticated)
@@ -71,7 +132,11 @@ function getPageTitle(pathname: string): string {
   return ''
 }
 
-export function Navigation() {
+/**
+ * Inner Navigation component with all hooks.
+ * Wrapped by NavigationErrorBoundary to prevent crashes from propagating.
+ */
+function NavigationInner() {
   const pathname = usePathname()
   const [mobileOpen, setMobileOpen] = useState(false)
   const { userId, signOut, isLoaded } = useAuth()
@@ -283,5 +348,22 @@ export function Navigation() {
         </nav>
       )}
     </header>
+  )
+}
+
+// =============================================================================
+// EXPORTED NAVIGATION COMPONENT
+// =============================================================================
+
+/**
+ * Navigation - The main exported component.
+ * Wraps NavigationInner in an error boundary to ensure Navigation
+ * can never crash the dashboard or other authenticated pages.
+ */
+export function Navigation() {
+  return (
+    <NavigationErrorBoundary>
+      <NavigationInner />
+    </NavigationErrorBoundary>
   )
 }

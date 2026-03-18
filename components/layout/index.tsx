@@ -25,12 +25,51 @@
  * 3. SectionHeader - Section title with optional action
  * 4. CardGrid - Grid layouts (2-col, 4-col responsive)
  * 5. MetricCard - Consistent card structure
+ * 
+ * STABILITY NOTE:
+ * Navigation is wrapped in its own error boundary, but we add a secondary
+ * fallback here in case the import itself fails.
  */
 
-import { ReactNode } from 'react'
+import { ReactNode, Component } from 'react'
 import { Card } from '@/components/ui/card'
 import { Navigation } from '@/components/shared/Navigation'
 import { LucideIcon } from 'lucide-react'
+
+// =============================================================================
+// PAGE CONTAINER ERROR BOUNDARY (secondary fallback)
+// =============================================================================
+
+class PageContainerNavBoundary extends Component<{ children: ReactNode }, { hasError: boolean }> {
+  constructor(props: { children: ReactNode }) {
+    super(props)
+    this.state = { hasError: false }
+  }
+  
+  static getDerivedStateFromError() {
+    return { hasError: true }
+  }
+  
+  componentDidCatch(error: Error) {
+    console.error('[v0] PageContainer Navigation boundary caught error:', error.message)
+  }
+  
+  render() {
+    if (this.state.hasError) {
+      // Minimal header fallback
+      return (
+        <header className="border-b border-[#2B313A] bg-[#0F1115] sticky top-0 z-50">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6">
+            <div className="flex items-center justify-between h-16">
+              <span className="text-xl font-bold">SpartanLab</span>
+            </div>
+          </div>
+        </header>
+      )
+    }
+    return this.props.children
+  }
+}
 
 // =============================================================================
 // SPACING CONSTANTS
@@ -70,7 +109,9 @@ export function PageContainer({
 
   return (
     <div className="min-h-screen bg-[#0F1115] text-[#E6E9EF]">
-      <Navigation />
+      <PageContainerNavBoundary>
+        <Navigation />
+      </PageContainerNavBoundary>
       <main className={`${maxWidthClass} mx-auto px-4 sm:px-6 py-8 sm:py-12 ${className}`}>
         {children}
       </main>

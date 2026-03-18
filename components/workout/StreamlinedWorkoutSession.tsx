@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -132,10 +132,21 @@ function loadSessionFromStorage(sessionId: string): WorkoutSessionState | null {
     const data = JSON.parse(saved)
     // Only restore if same session and less than 4 hours old
     if (data.sessionId === sessionId && Date.now() - data.savedAt < 4 * 60 * 60 * 1000) {
-      return data
+      // Validate the saved data has required structure
+      if (
+        typeof data.status === 'string' &&
+        typeof data.currentExerciseIndex === 'number' &&
+        Array.isArray(data.completedSets)
+      ) {
+        return data
+      }
     }
     return null
   } catch {
+    // If parsing fails, clear corrupted data
+    try {
+      localStorage.removeItem(STORAGE_KEY)
+    } catch {}
     return null
   }
 }
@@ -329,14 +340,40 @@ export function StreamlinedWorkoutSession({
   onComplete,
   onCancel
 }: StreamlinedWorkoutSessionProps) {
-  const sessionId = `session-${session.dayLabel}-${session.dayNumber}`
+  // Generate unique sessionId - demo sessions use different prefix to prevent storage collisions
+  const isDemoSession = session.dayLabel?.startsWith('DEMO-') || session.dayNumber === 0
+  
+  // Use useMemo to ensure stable sessionId across renders
+  // Demo sessions don't persist/restore from storage, so they use a fixed demo key
+  const sessionId = useMemo(() => {
+    if (isDemoSession) {
+      return 'demo-session-isolated' // Fixed ID, but demo won't auto-save/restore
+    }
+    return `session-${session.dayLabel}-${session.dayNumber}`
+  }, [isDemoSession, session.dayLabel, session.dayNumber])
   
   // Check for existing session on mount
   const [existingSession, setExistingSession] = useState<SavedSessionInfo | null>(null)
   const [showResumePrompt, setShowResumePrompt] = useState(false)
   
-  // Try to restore from storage
+  // Try to restore from storage - demo sessions never restore
   const [state, setState] = useState<WorkoutSessionState>(() => {
+    // Don't try to restore demo sessions
+    if (isDemoSession) {
+      return {
+        status: 'ready',
+        currentExerciseIndex: 0,
+        currentSetNumber: 1,
+        completedSets: [],
+        startTime: null,
+        elapsedSeconds: 0,
+        lastSetRPE: null,
+        workoutNotes: '',
+        exerciseOverrides: {},
+      }
+    }
+    
+    // Try to restore real sessions
     const saved = loadSessionFromStorage(sessionId)
     if (saved && saved.status !== 'completed') {
       return saved
@@ -354,15 +391,18 @@ export function StreamlinedWorkoutSession({
     }
   })
   
-  // Check for resume prompt on mount
+  // Check for resume prompt on mount - skip for demo sessions
   useEffect(() => {
+    // Demo sessions never show resume prompts
+    if (isDemoSession) return
+    
     const existing = getExistingSessionInfo()
     if (existing && existing.sessionId === sessionId && state.completedSets.length > 0 && state.status === 'ready') {
       // We have a saved session that matches - show resume prompt
       setExistingSession(existing)
       setShowResumePrompt(true)
     }
-  }, [])
+  }, [isDemoSession])
   
   // Current set input state
   const [selectedRPE, setSelectedRPE] = useState<RPEValue | null>(null)
@@ -406,12 +446,15 @@ export function StreamlinedWorkoutSession({
     return undefined
   }
   
-  // Auto-save on state changes
+  // Auto-save on state changes - skip for demo sessions
   useEffect(() => {
+    // Demo sessions don't persist to storage
+    if (isDemoSession) return
+    
     if (state.status !== 'ready') {
       saveSessionToStorage(state, sessionId)
     }
-  }, [state, sessionId])
+  }, [state, sessionId, isDemoSession])
   
   // Initialize values when exercise changes
   useEffect(() => {

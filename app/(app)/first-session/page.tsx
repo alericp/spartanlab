@@ -33,10 +33,12 @@ function FirstSessionShell() {
   // Check program state using unified utility
   useEffect(() => {
     // Use the unified program state check for consistency
+    // Use hasUsableWorkoutProgram for stricter validation - ensures sessions are actually runnable
     // Wrapped in try-catch for safety - must never crash
     try {
       const programState = getProgramState()
-      setHasProgram(programState.hasProgram)
+      // Use hasUsableWorkoutProgram to ensure we have actual runnable sessions, not just a program object
+      setHasProgram(programState.hasUsableWorkoutProgram || programState.hasProgram)
     } catch {
       // If program state check fails, treat as no program
       setHasProgram(false)

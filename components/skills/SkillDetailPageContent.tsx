@@ -8,6 +8,12 @@
  * This isolation prevents import-time crashes from affecting the skill selection view.
  */
 
+// =============================================================================
+// DETAIL VIEW SAFE MODE FLAG
+// Set to true to render only the lightweight shell without heavy components
+// =============================================================================
+const SKILL_DETAIL_SAFE_MODE = true
+
 import { useState, useEffect, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -55,8 +61,13 @@ export function SkillDetailPageContent({ skillKey, onBack }: SkillDetailPageCont
     }
   }, [skillKey, skillDef.levels.length])
 
-  // Load analysis when skill/levels change
+  // Load analysis when skill/levels change - ONLY when not in safe mode
   const loadAnalysis = useCallback(() => {
+    if (SKILL_DETAIL_SAFE_MODE) {
+      // In safe mode, skip all heavy analysis/service calls
+      return
+    }
+    
     const allSessions = getSkillSessions()
     const skillSessions = getSessionsBySkill(skillKey)
     const strengthRecords = getStrengthRecords()
@@ -78,7 +89,9 @@ export function SkillDetailPageContent({ skillKey, onBack }: SkillDetailPageCont
   }, [skillKey, currentLevel, targetLevel])
 
   useEffect(() => {
-    loadAnalysis()
+    if (!SKILL_DETAIL_SAFE_MODE) {
+      loadAnalysis()
+    }
   }, [loadAnalysis])
 
   const handleSaveProgression = () => {
@@ -183,113 +196,135 @@ export function SkillDetailPageContent({ skillKey, onBack }: SkillDetailPageCont
         </div>
       </Card>
 
-      {/* Main Content Grid */}
-      <div className="grid lg:grid-cols-2 gap-6">
-        {/* Left Column: Logging */}
-        <div className="space-y-6">
-          <SkillSessionLogger
-            skillName={skillKey}
-            levelName={currentLevelDef.name}
-            levelIndex={safeCurrentLevel}
-            onSessionSaved={handleSessionSaved}
-          />
-          
-          <SkillSessionHistory
-            sessions={sessions.filter(s => s.level === safeCurrentLevel)}
-            levelNames={levelNames}
-            onSessionDeleted={handleSessionSaved}
-          />
-        </div>
+      {/* Safe Mode Confirmation */}
+      {SKILL_DETAIL_SAFE_MODE && (
+        <Card className="bg-[#1A1D23] border border-green-500/30 p-6 text-center">
+          <div className="w-10 h-10 mx-auto mb-3 rounded-full bg-green-500/20 flex items-center justify-center">
+            <svg className="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            </svg>
+          </div>
+          <h3 className="text-lg font-semibold text-[#E6E9EF] mb-1">Detail Shell Working</h3>
+          <p className="text-sm text-[#6B7280]">
+            Safe mode is active. The lightweight detail shell rendered successfully.
+          </p>
+          <p className="text-xs text-[#4B5563] mt-2 font-mono">
+            SKILL_DETAIL_SAFE_MODE = true (set to false for full detail view)
+          </p>
+        </Card>
+      )}
 
-        {/* Right Column: Readiness Analysis */}
-        <div className="space-y-6">
-          {analysis && hasSessionData ? (
-            <>
-              <SkillReadinessCard
-                analysis={analysis}
-                levelName={currentLevelDef.name}
-                targetLevelName={targetLevelDef.name}
-              />
-              {/* Pro upgrade hint for detailed progression */}
-              {!hasProAccess() && (
-                <Link href="/upgrade">
-                  <div className="flex items-center gap-3 p-4 rounded-lg bg-amber-500/5 border border-amber-500/20 hover:bg-amber-500/10 transition-colors cursor-pointer">
-                    <div className="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center shrink-0">
-                      <Crown className="w-4 h-4 text-amber-400" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-[#E6E9EF]">Unlock Skill Progression Intelligence</p>
-                      <p className="text-xs text-[#6B7280]">See what is limiting your progress and when you will reach your next level</p>
-                    </div>
-                  </div>
-                </Link>
-              )}
-            </>
-          ) : (
-            <SkillEmptyState type="no_sessions" skillName={skillDef.name} />
-          )}
-          
-          {/* Skill Roadmap - show if roadmap exists for this skill */}
-          {(() => {
-            // Map skill key to roadmap type
-            const roadmapKeyMap: Record<string, SkillRoadmapType> = {
-              'front_lever': 'front-lever',
-              'frontLever': 'front-lever',
-              'planche': 'planche',
-              'muscle_up': 'muscle-up',
-              'muscleUp': 'muscle-up',
-              'hspu': 'hspu',
-              'handstand_pushup': 'hspu',
-            }
-            const roadmapKey = roadmapKeyMap[skillKey]
-            if (roadmapKey && SKILL_ROADMAPS[roadmapKey]) {
-              return (
-                <SkillRoadmapDisplay 
-                  skillKey={roadmapKey}
-                  onLevelSelect={(level) => {
-                    setCurrentLevel(level)
-                    if (level >= targetLevel) {
-                      setTargetLevel(Math.min(level + 1, skillDef.levels.length - 1))
-                    }
-                  }}
+      {/* Main Content Grid - ONLY when not in safe mode */}
+      {!SKILL_DETAIL_SAFE_MODE && (
+        <div className="grid lg:grid-cols-2 gap-6">
+          {/* Left Column: Logging */}
+          <div className="space-y-6">
+            <SkillSessionLogger
+              skillName={skillKey}
+              levelName={currentLevelDef.name}
+              levelIndex={safeCurrentLevel}
+              onSessionSaved={handleSessionSaved}
+            />
+            
+            <SkillSessionHistory
+              sessions={sessions.filter(s => s.level === safeCurrentLevel)}
+              levelNames={levelNames}
+              onSessionDeleted={handleSessionSaved}
+            />
+          </div>
+
+          {/* Right Column: Readiness Analysis */}
+          <div className="space-y-6">
+            {analysis && hasSessionData ? (
+              <>
+                <SkillReadinessCard
+                  analysis={analysis}
+                  levelName={currentLevelDef.name}
+                  targetLevelName={targetLevelDef.name}
                 />
-              )
-            }
-            return null
-          })()}
+                {/* Pro upgrade hint for detailed progression */}
+                {!hasProAccess() && (
+                  <Link href="/upgrade">
+                    <div className="flex items-center gap-3 p-4 rounded-lg bg-amber-500/5 border border-amber-500/20 hover:bg-amber-500/10 transition-colors cursor-pointer">
+                      <div className="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center shrink-0">
+                        <Crown className="w-4 h-4 text-amber-400" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-[#E6E9EF]">Unlock Skill Progression Intelligence</p>
+                        <p className="text-xs text-[#6B7280]">See what is limiting your progress and when you will reach your next level</p>
+                      </div>
+                    </div>
+                  </Link>
+                )}
+              </>
+            ) : (
+              <SkillEmptyState type="no_sessions" skillName={skillDef.name} />
+            )}
+            
+            {/* Skill Roadmap - show if roadmap exists for this skill */}
+            {(() => {
+              // Map skill key to roadmap type
+              const roadmapKeyMap: Record<string, SkillRoadmapType> = {
+                'front_lever': 'front-lever',
+                'frontLever': 'front-lever',
+                'planche': 'planche',
+                'muscle_up': 'muscle-up',
+                'muscleUp': 'muscle-up',
+                'hspu': 'hspu',
+                'handstand_pushup': 'hspu',
+              }
+              const roadmapKey = roadmapKeyMap[skillKey]
+              if (roadmapKey && SKILL_ROADMAPS[roadmapKey]) {
+                return (
+                  <SkillRoadmapDisplay 
+                    skillKey={roadmapKey}
+                    onLevelSelect={(level) => {
+                      setCurrentLevel(level)
+                      if (level >= targetLevel) {
+                        setTargetLevel(Math.min(level + 1, skillDef.levels.length - 1))
+                      }
+                    }}
+                  />
+                )
+              }
+              return null
+            })()}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Level Requirements Info */}
-      <Card className="bg-[#1A1A1A] border-[#3A3A3A] p-6">
-        <h3 className="text-lg font-semibold mb-4">Level Requirements</h3>
-        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div>
-            <p className="text-sm text-[#A5A5A5] mb-1">Min Hold for Ownership</p>
-            <p className="text-2xl font-bold">{currentLevelDef.minHoldForOwnership}s</p>
-            <p className="text-xs text-[#5A5A5A]">4+ clean repeatable holds</p>
+      {currentLevelDef && (
+        <Card className="bg-[#1A1A1A] border-[#3A3A3A] p-6">
+          <h3 className="text-lg font-semibold mb-4">Level Requirements</h3>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div>
+              <p className="text-sm text-[#A5A5A5] mb-1">Min Hold for Ownership</p>
+              <p className="text-2xl font-bold">{currentLevelDef.minHoldForOwnership ?? 0}s</p>
+              <p className="text-xs text-[#5A5A5A]">4+ clean repeatable holds</p>
+            </div>
+            <div>
+              <p className="text-sm text-[#A5A5A5] mb-1">Target Hold</p>
+              <p className="text-2xl font-bold">{currentLevelDef.targetHold ?? 0}s</p>
+              <p className="text-xs text-[#5A5A5A]">Before progression</p>
+            </div>
+            <div>
+              <p className="text-sm text-[#A5A5A5] mb-1">Support Exercise</p>
+              <p className="text-lg font-bold">
+                {skillDef.supportStrengthRequirements?.primaryExercise?.replace(/_/g, ' ') ?? 'N/A'}
+              </p>
+              <p className="text-xs text-[#5A5A5A]">Primary strength indicator</p>
+            </div>
+            <div>
+              <p className="text-sm text-[#A5A5A5] mb-1">Target Support 1RM</p>
+              <p className="text-2xl font-bold">
+                +{skillDef.supportStrengthRequirements?.minOneRMPercent?.[safeCurrentLevel] ?? 0}%
+              </p>
+              <p className="text-xs text-[#5A5A5A]">% of bodyweight added</p>
+            </div>
           </div>
-          <div>
-            <p className="text-sm text-[#A5A5A5] mb-1">Target Hold</p>
-            <p className="text-2xl font-bold">{currentLevelDef.targetHold}s</p>
-            <p className="text-xs text-[#5A5A5A]">Before progression</p>
-          </div>
-          <div>
-            <p className="text-sm text-[#A5A5A5] mb-1">Support Exercise</p>
-            <p className="text-lg font-bold">
-              {skillDef.supportStrengthRequirements.primaryExercise.replace(/_/g, ' ')}
-            </p>
-            <p className="text-xs text-[#5A5A5A]">Primary strength indicator</p>
-          </div>
-          <div>
-            <p className="text-sm text-[#A5A5A5] mb-1">Target Support 1RM</p>
-            <p className="text-2xl font-bold">
-              +{skillDef.supportStrengthRequirements.minOneRMPercent[safeCurrentLevel] ?? 0}%
-            </p>
-            <p className="text-xs text-[#5A5A5A]">% of bodyweight added</p>
-          </div>
-        </div>
-      </Card>
+        </Card>
+      )}
     </div>
   )
 }

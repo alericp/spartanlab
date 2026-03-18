@@ -101,6 +101,18 @@ export default function OnboardingCompletePage() {
         setProgramResult(result)
         
         if (result.success && result.program) {
+          // VERIFICATION STEP: Confirm program is actually readable from canonical storage
+          // This prevents routing to first-session if save didn't work
+          const { getProgramState } = await import('@/lib/program-state')
+          const verificationState = getProgramState()
+          
+          if (!verificationState.hasUsableWorkoutProgram) {
+            console.error('[OnboardingComplete] Program saved but not readable from program-state')
+            setErrorMessage('Program was created but could not be verified. Please try again.')
+            setStep('error')
+            return
+          }
+          
           // Track analytics
           trackSignupCompleted()
           trackProgramGenerated('onboarding', loadedProfile?.primaryGoal)
@@ -228,15 +240,28 @@ export default function OnboardingCompletePage() {
           </p>
           <div className="space-y-3">
             <Button 
-              onClick={() => {
+              onClick={async () => {
                 setStep('generating')
                 setErrorMessage(null)
-                const result = generateFirstProgram()
-                setProgramResult(result)
-                if (result.success) {
-                  setStep('ready')
-                } else {
-                  setErrorMessage(result.error || 'Failed to generate program')
+                try {
+                  const result = generateFirstProgram()
+                  setProgramResult(result)
+                  if (result.success && result.program) {
+                    // Verify program is readable
+                    const { getProgramState } = await import('@/lib/program-state')
+                    const verificationState = getProgramState()
+                    if (verificationState.hasUsableWorkoutProgram) {
+                      setStep('ready')
+                    } else {
+                      setErrorMessage('Program was created but could not be verified.')
+                      setStep('error')
+                    }
+                  } else {
+                    setErrorMessage(result.error || 'Failed to generate program')
+                    setStep('error')
+                  }
+                } catch (err) {
+                  setErrorMessage(String(err))
                   setStep('error')
                 }
               }}

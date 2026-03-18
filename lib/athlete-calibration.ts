@@ -134,6 +134,8 @@ export interface AthleteCalibration {
     planche: SkillCalibrationEntry | null
     hspu: SkillCalibrationEntry | null
     muscle_up: SkillCalibrationEntry | null
+    v_sit: SkillCalibrationEntry | null
+    l_sit: SkillCalibrationEntry | null
   } | null
   
   // Metadata
@@ -658,16 +660,77 @@ function calibrateSkillEntry(
 }
 
 /**
+ * Calibrate skills that store highestLevelEverReached on SkillHistoryEntry
+ * (muscle_up, v_sit, l_sit) instead of on a SkillBenchmark object
+ */
+function calibrateHistoryBasedSkill(
+  history: SkillHistoryEntry | undefined,
+  currentLevel: string | null,
+): SkillCalibrationEntry | null {
+  if (!history || !currentLevel || currentLevel === 'none' || currentLevel === 'unknown') {
+    // Still return calibration if we have historical data even without current level
+    if (history?.highestLevelEverReached && history.trainingHistory === 'previously_strong') {
+      const trainingRecency = mapLastTrainedToRecency(history.lastTrained ?? null)
+      return {
+        currentLevel: 'none',
+        holdSeconds: null,
+        isAssisted: false,
+        bandLevel: null,
+        estimatedStrengthFactor: 1.0,
+        highestLevelEverReached: history.highestLevelEverReached,
+        hasHistoricalCeiling: true,
+        trainingRecency,
+        needsSupportWork: true,
+        needsTransitionWork: true,
+        useConservativeStart: true,
+      }
+    }
+    return null
+  }
+  
+  const highestLevelEverReached = history.highestLevelEverReached ?? null
+  const hasHistoricalCeiling = !!(
+    highestLevelEverReached && 
+    highestLevelEverReached !== currentLevel &&
+    history.trainingHistory === 'previously_strong'
+  )
+  
+  const trainingRecency = mapLastTrainedToRecency(history.lastTrained ?? null)
+  
+  return {
+    currentLevel,
+    holdSeconds: null,
+    isAssisted: false,
+    bandLevel: null,
+    estimatedStrengthFactor: 1.0,
+    highestLevelEverReached,
+    hasHistoricalCeiling,
+    trainingRecency,
+    needsSupportWork: hasHistoricalCeiling,
+    needsTransitionWork: hasHistoricalCeiling && trainingRecency !== 'current',
+    useConservativeStart: hasHistoricalCeiling || trainingRecency === 'extended_break' || trainingRecency === 'long_break',
+  }
+}
+
+/**
  * Build complete skill calibration from onboarding profile
  */
 function buildSkillCalibration(profile: OnboardingProfile): AthleteCalibration['skillCalibration'] {
   const skillHistory = profile.skillHistory ?? {}
   
+  // Get current levels from non-SkillBenchmark objects
+  // muscleUp is MuscleUpReadiness (string), not an object
+  const muscleUpCurrentLevel = profile.muscleUp ?? null
+  const vSitCurrentLevel = profile.vSitHold ?? null
+  const lSitCurrentLevel = profile.lSitHold ?? null
+  
   return {
     front_lever: calibrateSkillEntry(profile.frontLever, skillHistory.front_lever),
     planche: calibrateSkillEntry(profile.planche, skillHistory.planche),
     hspu: calibrateSkillEntry(profile.hspu, skillHistory.handstand_pushup),
-    muscle_up: null, // muscle_up uses different structure (MuscleUpReadiness)
+    muscle_up: calibrateHistoryBasedSkill(skillHistory.muscle_up, muscleUpCurrentLevel),
+    v_sit: calibrateHistoryBasedSkill(skillHistory.v_sit, vSitCurrentLevel),
+    l_sit: calibrateHistoryBasedSkill(skillHistory.l_sit, lSitCurrentLevel),
   }
 }
 

@@ -763,7 +763,7 @@ function ReadinessCalibrationSection({ profile, updateProfile }: SectionProps) {
         {/* Q8: Joint Cautions (multi-select) */}
         <div className="space-y-3">
           <label className="text-sm font-medium text-[#A4ACB8]">Any joints we should prioritize?</label>
-          <p className="text-xs text-[#6B7280] -mt-1">Adds targeted warm-ups, prep, and recovery work — great for durability and prevention</p>
+          <p className="text-xs text-[#6B7280] -mt-1">Adds targeted warm-ups, prep, and recovery work — useful for durability, prevention, and high-stress skill training</p>
           <div className="grid grid-cols-3 gap-2">
             {(Object.keys(JOINT_CAUTION_LABELS) as JointCaution[]).map((joint) => (
               <OptionButton
@@ -1892,15 +1892,17 @@ function SkillHistoryInput({ skillKey, skillLabel, profile, updateProfile }: Ski
   const showHighestLevel = currentHistory?.trainingHistory === 'previously_strong'
   const progressionOptions = SKILL_PROGRESSION_OPTIONS[skillKey] || []
   
-  // Get the corresponding skill benchmark to store highestLevelEverReached
+  // Skills with dedicated SkillBenchmark objects store highestLevelEverReached on the benchmark
+  // Skills without (muscle_up, l_sit, v_sit) store it on SkillHistoryEntry
   const skillBenchmarkKey = skillKey === 'front_lever' ? 'frontLever' 
     : skillKey === 'planche' ? 'planche'
     : skillKey === 'handstand_pushup' ? 'hspu'
     : null
   
+  // Get current highest level from the appropriate storage location
   const currentHighestLevel = skillBenchmarkKey 
     ? (profile[skillBenchmarkKey as keyof OnboardingProfile] as SkillBenchmark | null)?.highestLevelEverReached 
-    : null
+    : currentHistory?.highestLevelEverReached ?? null
   
   const updateHistory = (trainingHistory: SkillTrainingHistory) => {
     const lastTrained = trainingHistory === 'never' ? null : (currentHistory?.lastTrained || null)
@@ -1910,6 +1912,7 @@ function SkillHistoryInput({ skillKey, skillLabel, profile, updateProfile }: Ski
       skillHistory: {
         ...profile.skillHistory,
         [skillKey]: {
+          ...currentHistory,
           trainingHistory,
           lastTrained,
           tendonAdaptationScore,
@@ -1926,6 +1929,7 @@ function SkillHistoryInput({ skillKey, skillLabel, profile, updateProfile }: Ski
       skillHistory: {
         ...profile.skillHistory,
         [skillKey]: {
+          ...currentHistory,
           trainingHistory,
           lastTrained,
           tendonAdaptationScore,
@@ -1935,15 +1939,34 @@ function SkillHistoryInput({ skillKey, skillLabel, profile, updateProfile }: Ski
   }
   
   const updateHighestLevel = (level: string) => {
-    if (!skillBenchmarkKey) return
-    const currentBenchmark = profile[skillBenchmarkKey as keyof OnboardingProfile] as SkillBenchmark | null
-    updateProfile({
-      [skillBenchmarkKey]: {
-        ...currentBenchmark,
-        progression: currentBenchmark?.progression || 'none',
-        highestLevelEverReached: level,
-      }
-    })
+    // For skills with SkillBenchmark objects, store on the benchmark
+    if (skillBenchmarkKey) {
+      const currentBenchmark = profile[skillBenchmarkKey as keyof OnboardingProfile] as SkillBenchmark | null
+      updateProfile({
+        [skillBenchmarkKey]: {
+          ...currentBenchmark,
+          progression: currentBenchmark?.progression || 'none',
+          highestLevelEverReached: level,
+        }
+      })
+    } else {
+      // For skills without SkillBenchmark (muscle_up, l_sit, v_sit), store on SkillHistoryEntry
+      const trainingHistory = currentHistory?.trainingHistory || 'previously_strong'
+      const tendonAdaptationScore = currentHistory?.tendonAdaptationScore || calculateTendonAdaptation(trainingHistory, currentHistory?.lastTrained ?? null)
+      
+      updateProfile({
+        skillHistory: {
+          ...profile.skillHistory,
+          [skillKey]: {
+            ...currentHistory,
+            trainingHistory,
+            lastTrained: currentHistory?.lastTrained ?? null,
+            tendonAdaptationScore,
+            highestLevelEverReached: level,
+          }
+        }
+      })
+    }
   }
   
   return (
@@ -2685,9 +2708,9 @@ function ScheduleSection({ profile, updateProfile }: SectionProps) {
   >
   {len === 'flexible' ? (
     <span className="flex items-center gap-1.5">
-      Varies
-      <span className="inline-flex items-center px-1 py-0.5 rounded text-[9px] font-medium bg-[#C1121F]/15 text-[#E05A64] leading-none">
-        Auto
+      Flexible
+      <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-[#C1121F]/15 text-[#E05A64] border border-[#C1121F]/20 leading-none">
+        Adaptive
       </span>
     </span>
   ) : SESSION_LENGTH_LABELS[len]}
@@ -2935,6 +2958,11 @@ function ReviewSection({ profile, onEditSection }: ReviewSectionProps) {
   if (profile.muscleUp && profile.muscleUp !== 'unknown' && profile.muscleUp !== 'none') {
     let muSummary = `Muscle-Up: ${MUSCLE_UP_LABELS[profile.muscleUp]}`
     const muHistory = profile.skillHistory?.muscle_up
+    // Add highest level ever reached from skill history
+    if (muHistory?.highestLevelEverReached && muHistory.highestLevelEverReached !== profile.muscleUp) {
+      const highestLabel = SKILL_PROGRESSION_OPTIONS['muscle_up']?.find(o => o.value === muHistory.highestLevelEverReached)?.label || muHistory.highestLevelEverReached
+      muSummary += ` — was ${highestLabel}`
+    }
     if (muHistory?.trainingHistory && muHistory.trainingHistory !== 'never') {
       muSummary += ` • ${SKILL_TRAINING_HISTORY_LABELS[muHistory.trainingHistory]}`
       if (muHistory.lastTrained) {
@@ -2955,6 +2983,42 @@ function ReviewSection({ profile, onEditSection }: ReviewSectionProps) {
       }
     }
     items.push(hspuSummary)
+  }
+  
+  // L-sit
+  if (profile.lSitHold && profile.lSitHold !== 'unknown' && profile.lSitHold !== 'none') {
+    let lSitSummary = `L-sit: ${LSIT_HOLD_LABELS[profile.lSitHold]}`
+    const lSitHistory = profile.skillHistory?.l_sit
+    // Add highest level ever reached from skill history
+    if (lSitHistory?.highestLevelEverReached) {
+      const highestLabel = SKILL_PROGRESSION_OPTIONS['l_sit']?.find(o => o.value === lSitHistory.highestLevelEverReached)?.label || lSitHistory.highestLevelEverReached
+      lSitSummary += ` — was ${highestLabel}`
+    }
+    if (lSitHistory?.trainingHistory && lSitHistory.trainingHistory !== 'never') {
+      lSitSummary += ` • ${SKILL_TRAINING_HISTORY_LABELS[lSitHistory.trainingHistory]}`
+      if (lSitHistory.lastTrained) {
+        lSitSummary += ` (${SKILL_LAST_TRAINED_LABELS[lSitHistory.lastTrained]})`
+      }
+    }
+    items.push(lSitSummary)
+  }
+  
+  // V-sit
+  if (profile.vSitHold && profile.vSitHold !== 'unknown' && profile.vSitHold !== 'none') {
+    let vSitSummary = `V-sit: ${VSIT_HOLD_LABELS[profile.vSitHold]}`
+    const vSitHistory = profile.skillHistory?.v_sit
+    // Add highest level ever reached from skill history
+    if (vSitHistory?.highestLevelEverReached) {
+      const highestLabel = SKILL_PROGRESSION_OPTIONS['v_sit']?.find(o => o.value === vSitHistory.highestLevelEverReached)?.label || vSitHistory.highestLevelEverReached
+      vSitSummary += ` — was ${highestLabel}`
+    }
+    if (vSitHistory?.trainingHistory && vSitHistory.trainingHistory !== 'never') {
+      vSitSummary += ` • ${SKILL_TRAINING_HISTORY_LABELS[vSitHistory.trainingHistory]}`
+      if (vSitHistory.lastTrained) {
+        vSitSummary += ` (${SKILL_LAST_TRAINED_LABELS[vSitHistory.lastTrained]})`
+      }
+    }
+    items.push(vSitSummary)
   }
   
   return items.length > 0 ? items : null
@@ -3273,14 +3337,20 @@ export function AthleteOnboarding() {
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   
   useEffect(() => {
-    // Reset both window scroll and any scroll container
+    // Reset all possible scroll targets for cross-browser/mobile compatibility
     window.scrollTo({ top: 0, behavior: 'instant' })
+    document.documentElement.scrollTop = 0
+    document.body.scrollTop = 0
     if (scrollContainerRef.current) {
       scrollContainerRef.current.scrollTop = 0
     }
-    // Also handle any delayed scroll restoration
+    // Double-tap with requestAnimationFrame for delayed scroll restoration issues
     requestAnimationFrame(() => {
       window.scrollTo(0, 0)
+      document.documentElement.scrollTop = 0
+      if (scrollContainerRef.current) {
+        scrollContainerRef.current.scrollTop = 0
+      }
     })
   }, [currentSectionIndex])
   

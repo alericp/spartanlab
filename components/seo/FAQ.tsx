@@ -68,6 +68,11 @@ export function FAQ({
     )
   }
 
+  // Defensive guard: if faqs is undefined or not an array, return null
+  if (!faqs || !Array.isArray(faqs) || faqs.length === 0) {
+    return null
+  }
+
   return (
     <section className="py-12 px-4 sm:px-6">
       <div className="max-w-4xl mx-auto">

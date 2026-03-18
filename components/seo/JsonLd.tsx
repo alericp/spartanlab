@@ -23,8 +23,15 @@ export function JsonLd({ data }: JsonLdProps) {
 
 /**
  * Render multiple JSON-LD schemas
+ * 
+ * Defensive: Returns null if schemas is undefined/empty to prevent prerender crashes
  */
 export function JsonLdMultiple({ schemas }: { schemas: Record<string, unknown>[] }) {
+  // Defensive guard: if schemas is undefined or not an array, return null
+  if (!schemas || !Array.isArray(schemas) || schemas.length === 0) {
+    return null
+  }
+
   return (
     <>
       {schemas.map((schema, index) => (

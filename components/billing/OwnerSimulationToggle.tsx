@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Component, ReactNode } from 'react'
 import { Button } from '@/components/ui/button'
 import { Beaker, FlaskConical } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -17,10 +17,38 @@ import { useEntitlement, setSimulationMode, type SimulationMode } from '@/hooks/
  * 
  * Position: Bottom-right corner, above mobile nav safe area
  * z-index: 9999 to ensure it's always on top
+ * 
+ * CRITICAL: This component is wrapped in an error boundary to ensure it NEVER
+ * crashes the authenticated app layout. If any hook fails, we silently
+ * return null instead of propagating the error.
  */
-export function OwnerSimulationToggle() {
+
+// Error boundary to prevent crashes from propagating
+class ToggleErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean }> {
+  constructor(props: { children: ReactNode }) {
+    super(props)
+    this.state = { hasError: false }
+  }
+  
+  static getDerivedStateFromError() {
+    return { hasError: true }
+  }
+  
+  componentDidCatch(error: Error) {
+    console.error('[v0] OwnerSimulationToggle crashed (caught safely):', error.message)
+  }
+  
+  render() {
+    if (this.state.hasError) {
+      return null // Silently hide on error
+    }
+    return this.props.children
+  }
+}
+
+function OwnerSimulationToggleInner() {
   // Initialize owner detection from Clerk user email
-  const { isOwner, isLoaded, userEmail } = useOwnerInit()
+  const { isOwner, isLoaded } = useOwnerInit()
   // Use the new entitlement hook (database-backed)
   const entitlement = useEntitlement()
   const [mounted, setMounted] = useState(false)
@@ -32,6 +60,8 @@ export function OwnerSimulationToggle() {
   
   // Listen for simulation changes from other tabs/components
   useEffect(() => {
+    if (!entitlement?.mutate) return
+    
     const handleChange = () => {
       // Revalidate entitlement when simulation changes
       entitlement.mutate()
@@ -46,17 +76,24 @@ export function OwnerSimulationToggle() {
   // Only render for owner after auth is loaded
   if (!mounted || !isLoaded || !isOwner) return null
   
+  // Safe access to entitlement properties
+  if (!entitlement) return null
+  
   // Get mode from entitlement hook
-  const mode = entitlement.simulationMode
+  const mode = entitlement.simulationMode || 'off'
   // Real status from database (before simulation overlay)
   const realStatus = entitlement.plan || 'unknown'
   
   const handleModeChange = (newMode: SimulationMode) => {
-    setSimulationMode(newMode)
-    // Revalidate entitlement to pick up simulation change
-    entitlement.mutate()
-    // Force page refresh to update all feature gating (components using legacy hasProAccess)
-    window.location.reload()
+    try {
+      setSimulationMode(newMode)
+      // Revalidate entitlement to pick up simulation change
+      entitlement.mutate?.()
+      // Force page refresh to update all feature gating (components using legacy hasProAccess)
+      window.location.reload()
+    } catch (e) {
+      console.error('[v0] OwnerSimulationToggle: handleModeChange failed:', e)
+    }
   }
   
   const isActive = mode !== 'off'
@@ -194,5 +231,14 @@ export function OwnerSimulationToggle() {
         Owner-only test mode
       </p>
     </div>
+  )
+}
+
+// Export wrapped component that can never crash parent
+export function OwnerSimulationToggle() {
+  return (
+    <ToggleErrorBoundary>
+      <OwnerSimulationToggleInner />
+    </ToggleErrorBoundary>
   )
 }

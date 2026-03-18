@@ -111,8 +111,18 @@ import { ProgressSignals } from '@/components/dashboard/ProgressSignals'
 import { ReturnVisitCard, SessionCounter } from '@/components/dashboard/DailyEngagement'
 import { SmartUpgradeBanner } from '@/components/upgrade/SmartUpgradeTrigger'
 
+// Safe hook wrapper for useAuth to prevent crashes
+function useSafeAuth() {
+  try {
+    return useAuth()
+  } catch (e) {
+    console.error('[v0] Dashboard: useAuth failed:', e)
+    return { isLoaded: true, userId: null, isSignedIn: false }
+  }
+}
+
 function DashboardContent() {
-  const { isLoaded: isAuthLoaded } = useAuth()
+  const { isLoaded: isAuthLoaded } = useSafeAuth()
   const [overview, setOverview] = useState<DashboardOverview | null>(null)
   const [skillSummary, setSkillSummary] = useState<PrimarySkillSummary | null>(null)
   const [strengthSummary, setStrengthSummary] = useState<StrengthSummary | null>(null)

@@ -117,30 +117,20 @@ export function DashboardEmptyState() {
   const router = useRouter()
   const isNavigatingRef = useRef(false)
   
-  // Log on render to confirm this component is the visible CTA
-  console.log('[CTA_TRACE] DashboardEmptyState rendered')
-  
   // Hardened mobile-safe navigation with double-tap protection and fallback
   const handleStartWorkout = useCallback(() => {
-    console.log('[CTA_TRACE] Start First Workout clicked')
-    
     // Prevent double-triggering from rapid taps
-    if (isNavigatingRef.current) {
-      console.log('[CTA_TRACE] Navigation already in progress, ignoring')
-      return
-    }
+    if (isNavigatingRef.current) return
     isNavigatingRef.current = true
     
     const targetPath = '/first-session'
     
-    console.log('[CTA_TRACE] pushing /first-session via router.push')
     // Attempt client-side navigation
     router.push(targetPath)
     
     // Fallback: if pathname hasn't changed after 200ms, force full navigation
     setTimeout(() => {
       if (typeof window !== 'undefined' && !window.location.pathname.startsWith(targetPath)) {
-        console.log('[CTA_TRACE] fallback assign /first-session via window.location')
         window.location.assign(targetPath)
       }
     }, 200)

@@ -207,11 +207,11 @@ function SubscriptionBillingCard() {
 // =============================================================================
 function OwnerInlineSimulationControl() {
   const entitlement = useEntitlement()
+  const { userEmail } = useOwnerInit()
   const mode = entitlement?.simulationMode || 'off'
   const realStatus = entitlement?.plan || 'unknown'
-  const ownerEmailConfigured = typeof process !== 'undefined' && (
-    process.env?.OWNER_EMAIL || process.env?.NEXT_PUBLIC_OWNER_EMAIL
-  )
+  // Client-side can only access NEXT_PUBLIC_ prefixed env vars
+  const ownerEmailConfigured = !!process.env.NEXT_PUBLIC_OWNER_EMAIL
   
   const handleModeChange = (newMode: SimulationMode) => {
     try {
@@ -288,6 +288,7 @@ function OwnerInlineSimulationControl() {
       <div className="mt-4 text-xs text-[#4A4A4A] space-y-1 font-mono">
         <p>owner detection: <span className="text-green-500">active</span></p>
         <p>owner email configured: <span className={ownerEmailConfigured ? "text-green-500" : "text-red-400"}>{ownerEmailConfigured ? 'yes' : 'no'}</span></p>
+        <p>signed in as: <span className="text-[#6B7280]">{userEmail || 'unknown'}</span></p>
       </div>
     </div>
   )

@@ -86,7 +86,19 @@ function WorkoutSessionContent() {
     }
     
     // Use unified program state check for consistency
-    const { hasProgram, adaptiveProgram } = getProgramState()
+    // Wrapped in try-catch for safety - must never crash
+    let hasProgram = false
+    let adaptiveProgram = null
+    
+    try {
+      const programState = getProgramState()
+      hasProgram = programState.hasProgram
+      adaptiveProgram = programState.adaptiveProgram
+    } catch {
+      // If program state check fails, treat as no program
+      hasProgram = false
+      adaptiveProgram = null
+    }
     
     if (!hasProgram || !adaptiveProgram) {
       setError('No active program found. Please create a program first.')

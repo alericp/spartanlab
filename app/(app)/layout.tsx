@@ -34,21 +34,11 @@ export default function AppLayout({
 }: {
   children: React.ReactNode
 }) {
-  // Check if we're likely in a preview/development environment where Clerk may fail
-  const isPreviewEnv = typeof window !== 'undefined' && 
-    !window.location.hostname.includes('spartanlab.app')
-  
-  // In preview environments, wrap ClerkProvider in try-catch at render time
-  // Clerk errors are caught by GlobalErrorBoundary
+  // ClerkProvider requires a valid publishable key
+  // In preview environments where Clerk fails due to domain restrictions,
+  // the app will still render but auth features won't work
   return (
-    <ClerkProvider 
-      publishableKey={process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY}
-      // Allow the app to render even if Clerk fails to initialize
-      {...(isPreviewEnv ? { 
-        // Suppress Clerk console errors in preview
-        appearance: { elements: {} }
-      } : {})}
-    >
+    <ClerkProvider publishableKey={process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY}>
       <AnalyticsProvider>
         <GlobalErrorBoundary>
           {children}

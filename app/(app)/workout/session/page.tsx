@@ -12,55 +12,59 @@ import Link from 'next/link'
 import { Dumbbell } from 'lucide-react'
 
 // Demo session for testing when no program exists
+// CRITICAL: This must be a complete AdaptiveSession shape to avoid downstream errors
 const DEMO_SESSION: AdaptiveSession = {
-  dayNumber: 1,
+  dayNumber: 0, // Use 0 to indicate demo mode for unique storage key
   dayLabel: 'Demo Workout',
   focus: 'skill',
   focusLabel: 'Skill Focus',
   isPrimary: true,
-  rationale: 'Demo session for testing the workout interface',
+  rationale: 'Demo session - experience the SpartanLab workout interface',
   exercises: [
     {
-      id: 'demo-1',
+      id: 'demo-ex-1',
       name: 'Front Lever Progression',
       category: 'skill',
       sets: 4,
       repsOrTime: '8 seconds',
-      note: 'Use band assistance as needed',
+      note: 'Use band assistance as needed. Focus on body tension.',
       isOverrideable: false,
-      selectionReason: 'Demo exercise',
+      selectionReason: 'Demo exercise - core skill work',
     },
     {
-      id: 'demo-2',
+      id: 'demo-ex-2',
       name: 'Weighted Pull-Ups',
       category: 'pull',
       sets: 4,
       repsOrTime: '5-8 reps',
+      note: 'Control the eccentric. Full range of motion.',
       isOverrideable: false,
-      selectionReason: 'Demo exercise',
+      selectionReason: 'Demo exercise - pulling strength',
     },
     {
-      id: 'demo-3',
+      id: 'demo-ex-3',
       name: 'Planche Lean',
       category: 'skill',
       sets: 3,
       repsOrTime: '15 seconds',
+      note: 'Protract shoulders and lean forward gradually.',
       isOverrideable: false,
-      selectionReason: 'Demo exercise',
+      selectionReason: 'Demo exercise - planche foundation',
     },
     {
-      id: 'demo-4',
+      id: 'demo-ex-4',
       name: 'Dips',
       category: 'push',
       sets: 3,
       repsOrTime: '8-12 reps',
+      note: 'Keep elbows tucked. Full lockout at top.',
       isOverrideable: false,
-      selectionReason: 'Demo exercise',
+      selectionReason: 'Demo exercise - pushing strength',
     },
   ],
   warmup: [],
   cooldown: [],
-  estimatedMinutes: 45,
+  estimatedMinutes: 35,
   finisherIncluded: false,
 }
 
@@ -164,26 +168,25 @@ function WorkoutSessionContent() {
           </div>
           <h2 className="text-lg font-semibold text-[#E6E9EF] mb-2">Ready to Train?</h2>
           <p className="text-[#A4ACB8] mb-6">
-            Create a program first, or try a demo workout to explore SpartanLab.
+            Create a personalized program to unlock your workouts, or try a demo session to explore SpartanLab.
           </p>
           <div className="space-y-3">
-            <Link href="/my-programs" className="block">
+            <Link href="/onboarding" className="block">
               <Button className="w-full bg-[#C1121F] hover:bg-[#A30F1A] text-white gap-2">
                 Create Your Program
               </Button>
             </Link>
             <Link href="/workout/session?demo=true" className="block">
-              <Button variant="outline" className="w-full border-[#2B313A] text-[#A4ACB8] gap-2">
+              <Button variant="outline" className="w-full border-[#2B313A] text-[#A4ACB8] hover:bg-[#1A1F26] gap-2">
                 <Dumbbell className="w-4 h-4" />
                 Try Demo Workout
               </Button>
             </Link>
-            <button
-              onClick={() => router.push('/dashboard')}
-              className="text-sm text-[#6B7280] hover:text-[#A4ACB8] underline"
-            >
-              Return to Dashboard
-            </button>
+            <Link href="/dashboard" className="block">
+              <Button variant="ghost" className="w-full text-[#6B7280] hover:text-[#A4ACB8]">
+                Return to Dashboard
+              </Button>
+            </Link>
           </div>
         </div>
       </div>

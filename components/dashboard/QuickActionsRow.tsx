@@ -1,8 +1,26 @@
+'use client'
+
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Target, Dumbbell, Calendar, Play, ArrowRight, Archive, Trophy } from 'lucide-react'
+import { getWorkoutLogs } from '@/lib/workout-log-service'
 
 export function QuickActionsRow() {
+  const [isFirstWorkout, setIsFirstWorkout] = useState(false)
+  
+  useEffect(() => {
+    try {
+      const logs = getWorkoutLogs()
+      setIsFirstWorkout(logs.length === 0)
+    } catch {
+      setIsFirstWorkout(false)
+    }
+  }, [])
+  
+  // Use canonical routing: first workout goes to /first-session
+  const workoutHref = isFirstWorkout ? '/first-session' : '/workout/session'
+  
   const secondaryActions = [
     {
       href: '/my-skills',
@@ -33,13 +51,13 @@ export function QuickActionsRow() {
 
   return (
     <div className="space-y-3">
-      {/* Primary CTA - Start Workout */}
-      <Link href="/workout/session" className="block">
+      {/* Primary CTA - Start Workout (uses canonical routing) */}
+      <Link href={workoutHref} className="block">
         <Button 
           className="w-full sm:w-auto bg-[#C1121F] hover:bg-[#A30F1A] text-white gap-2 h-12 px-6 text-base"
         >
           <Play className="w-5 h-5" />
-          Start Workout
+          {isFirstWorkout ? 'Start First Workout' : 'Start Workout'}
           <ArrowRight className="w-4 h-4 ml-1" />
         </Button>
       </Link>

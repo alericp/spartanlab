@@ -823,8 +823,8 @@ export function StreamlinedWorkoutSession({
     }
   }, [exercises, state.exerciseOverrides])
   
-  // Get current effective exercise
-  const effectiveExercise = getEffectiveExercise(state.currentExerciseIndex)
+  // Get current effective exercise (with fallback to safe exercise)
+  const effectiveExercise = getEffectiveExercise(state.currentExerciseIndex) || safeCurrentExercise
   
   // Finish workout
   const handleFinish = useCallback(() => {
@@ -1214,18 +1214,20 @@ export function StreamlinedWorkoutSession({
         elapsedSeconds: stats.elapsedSeconds,
         averageRPE: stats.averageRPE || undefined,
       },
-      state.completedSets.map(s => {
-        // Get target for this specific exercise
-        const exercise = exercises[s.exerciseIndex]
-        const match = exercise?.repsOrTime?.match(/(\d+)/)
-        const target = match ? parseInt(match[1], 10) : 5
-        return {
-          targetReps: target,
-          actualReps: s.actualReps || s.holdSeconds || target,
-          targetRPE: 8,
-          actualRPE: s.actualRPE,
-        }
-      }),
+      state.completedSets
+        .filter(s => s.exerciseIndex >= 0 && s.exerciseIndex < exercises.length) // Filter invalid indexes
+        .map(s => {
+          // Get target for this specific exercise (with safety)
+          const exercise = exercises[s.exerciseIndex]
+          const match = exercise?.repsOrTime?.match(/(\d+)/)
+          const target = match ? parseInt(match[1], 10) : 5
+          return {
+            targetReps: target,
+            actualReps: s.actualReps || s.holdSeconds || target,
+            targetRPE: 8,
+            actualRPE: s.actualRPE,
+          }
+        }),
       'mixed',
       safeSession.dayLabel,
       readiness || undefined

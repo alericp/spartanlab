@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import {
@@ -112,6 +113,12 @@ export function EmptyState({
 // ============================================================================
 
 export function DashboardEmptyState() {
+  const router = useRouter()
+  
+  const handleStartWorkout = () => {
+    router.push('/workout/session')
+  }
+  
   return (
     <div className="space-y-6">
       {/* Hero Empty State - One Dominant CTA */}
@@ -136,14 +143,16 @@ export function DashboardEmptyState() {
             Each workout builds your training intelligence for smarter recommendations.
           </p>
 
-          {/* Single dominant CTA */}
-          <Link href="/workout/session">
-            <Button size="lg" className="bg-[#E63946] hover:bg-[#D62828] text-white gap-2 px-8 py-6 text-lg font-semibold">
-              <Dumbbell className="w-5 h-5" />
-              Start First Workout
-              <ArrowRight className="w-5 h-5" />
-            </Button>
-          </Link>
+          {/* Single dominant CTA - uses router.push for reliable mobile navigation */}
+          <Button 
+            size="lg" 
+            className="bg-[#E63946] hover:bg-[#D62828] text-white gap-2 px-8 py-6 text-lg font-semibold"
+            onClick={handleStartWorkout}
+          >
+            <Dumbbell className="w-5 h-5" />
+            Start First Workout
+            <ArrowRight className="w-5 h-5" />
+          </Button>
           
           {/* Secondary option - subtle */}
           <p className="mt-4 text-sm text-[#6A6A6A]">

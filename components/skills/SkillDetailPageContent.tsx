@@ -200,24 +200,6 @@ export function SkillDetailPageContent({ skillKey, onBack }: SkillDetailPageCont
         </div>
       </Card>
 
-      {/* Safe Mode Confirmation */}
-      {SKILL_DETAIL_SAFE_MODE && (
-        <Card className="bg-[#1A1D23] border border-green-500/30 p-6 text-center">
-          <div className="w-10 h-10 mx-auto mb-3 rounded-full bg-green-500/20 flex items-center justify-center">
-            <svg className="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-            </svg>
-          </div>
-          <h3 className="text-lg font-semibold text-[#E6E9EF] mb-1">Detail Shell Working</h3>
-          <p className="text-sm text-[#6B7280]">
-            Safe mode is active. The lightweight detail shell rendered successfully.
-          </p>
-          <p className="text-xs text-[#4B5563] mt-2 font-mono">
-            SKILL_DETAIL_SAFE_MODE = true (set to false for full detail view)
-          </p>
-        </Card>
-      )}
-
       {/* Heavy Detail Sections - ONLY loaded when safe mode is false */}
       {!SKILL_DETAIL_SAFE_MODE && (
         <SkillDetailHeavySections

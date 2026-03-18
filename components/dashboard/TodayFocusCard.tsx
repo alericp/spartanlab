@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { 
@@ -25,6 +26,7 @@ interface TodayFocusCardProps {
 }
 
 export function TodayFocusCard({ className }: TodayFocusCardProps) {
+  const router = useRouter()
   const [hasActiveSession, setHasActiveSession] = useState(false)
   const [coachDecision, setCoachDecision] = useState<CoachDecision | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -171,30 +173,28 @@ export function TodayFocusCard({ className }: TodayFocusCardProps) {
         {/* Action Button - More prominent for first workout */}
         <div className="flex items-center gap-3">
           {hasActiveSession ? (
-            <Link href="/workout/session">
-              <Button 
-                size="lg" 
-                className="bg-amber-600 hover:bg-amber-700 text-white gap-2 font-semibold"
-              >
-                <RotateCcw className="w-5 h-5" />
-                Resume Workout
-              </Button>
-            </Link>
+            <Button 
+              size="lg" 
+              className="bg-amber-600 hover:bg-amber-700 text-white gap-2 font-semibold"
+              onClick={() => router.push('/workout/session')}
+            >
+              <RotateCcw className="w-5 h-5" />
+              Resume Workout
+            </Button>
           ) : (
-            <Link href="/workout/session">
-              <Button 
-                size={isFirstWorkout ? 'lg' : 'lg'} 
-                className={`gap-2 font-semibold ${
-                  isFirstWorkout 
-                    ? 'bg-[#C1121F] hover:bg-[#A30F1A] text-white px-8' 
-                    : 'bg-[#C1121F] hover:bg-[#A30F1A] text-white'
-                }`}
-              >
-                <Play className="w-5 h-5" />
-                {isFirstWorkout ? 'Start First Workout' : 'Start Workout'}
-                {isFirstWorkout && <ArrowRight className="w-4 h-4" />}
-              </Button>
-            </Link>
+            <Button 
+              size="lg" 
+              className={`gap-2 font-semibold ${
+                isFirstWorkout 
+                  ? 'bg-[#C1121F] hover:bg-[#A30F1A] text-white px-8' 
+                  : 'bg-[#C1121F] hover:bg-[#A30F1A] text-white'
+              }`}
+              onClick={() => router.push('/workout/session')}
+            >
+              <Play className="w-5 h-5" />
+              {isFirstWorkout ? 'Start First Workout' : 'Start Workout'}
+              {isFirstWorkout && <ArrowRight className="w-4 h-4" />}
+            </Button>
           )}
           
           {!isFirstWorkout && (

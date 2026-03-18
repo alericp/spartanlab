@@ -11,12 +11,75 @@
  * - hasProgram=false → Show setup options (create program OR demo)
  */
 
-import { Suspense, useState, useEffect } from 'react'
+import { Suspense, useState, useEffect, Component, type ReactNode, type ErrorInfo } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
-import { Play, Dumbbell, ArrowRight, Sparkles, Target } from 'lucide-react'
+import { Play, Dumbbell, ArrowRight, Sparkles, Target, AlertTriangle } from 'lucide-react'
 import { getProgramState } from '@/lib/program-state'
+import Link from 'next/link'
+
+// =============================================================================
+// LOCAL ERROR BOUNDARY - Catches first-session crashes locally
+// =============================================================================
+
+interface FirstSessionErrorBoundaryState {
+  hasError: boolean
+}
+
+class FirstSessionErrorBoundary extends Component<{ children: ReactNode }, FirstSessionErrorBoundaryState> {
+  constructor(props: { children: ReactNode }) {
+    super(props)
+    this.state = { hasError: false }
+  }
+
+  static getDerivedStateFromError(): FirstSessionErrorBoundaryState {
+    return { hasError: true }
+  }
+
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    console.error('[First Session Error Boundary]', error, errorInfo)
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen bg-[#0D0D0D] flex items-center justify-center p-4">
+          <Card className="bg-gradient-to-b from-[#1A1A1A] to-[#151515] border-[#2A2A2A] p-8 max-w-md w-full">
+            <div className="text-center">
+              <div className="w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center mx-auto mb-4">
+                <AlertTriangle className="w-8 h-8 text-amber-500" />
+              </div>
+              <h1 className="text-xl font-bold text-[#F5F5F5] mb-3">Something Went Wrong</h1>
+              <p className="text-[#A5A5A5] mb-6">We had trouble loading this page. Please try again.</p>
+              <div className="space-y-3">
+                <Button 
+                  onClick={() => window.location.reload()}
+                  className="w-full bg-[#E63946] hover:bg-[#D62828] text-white"
+                >
+                  Try Again
+                </Button>
+                <Link href="/workout/session?demo=true" className="block">
+                  <Button variant="outline" className="w-full border-[#2A2A2A] text-[#A5A5A5] hover:bg-[#1A1A1A] gap-2">
+                    <Dumbbell className="w-4 h-4" />
+                    Try Demo Workout
+                  </Button>
+                </Link>
+                <Link href="/dashboard" className="block">
+                  <Button variant="ghost" className="w-full text-[#6A6A6A] hover:text-[#A5A5A5]">
+                    Return to Dashboard
+                  </Button>
+                </Link>
+              </div>
+            </div>
+          </Card>
+        </div>
+      )
+    }
+
+    return this.props.children
+  }
+}
 
 // =============================================================================
 // FIRST SESSION SHELL - Uses unified program state check
@@ -215,12 +278,14 @@ function FirstSessionShell() {
 
 export default function FirstSessionPage() {
   return (
-    <Suspense fallback={
-      <div className="min-h-screen bg-[#0D0D0D] flex items-center justify-center">
-        <div className="w-8 h-8 border-2 border-[#E63946] border-t-transparent rounded-full animate-spin" />
-      </div>
-    }>
-      <FirstSessionShell />
-    </Suspense>
+    <FirstSessionErrorBoundary>
+      <Suspense fallback={
+        <div className="min-h-screen bg-[#0D0D0D] flex items-center justify-center">
+          <div className="w-8 h-8 border-2 border-[#E63946] border-t-transparent rounded-full animate-spin" />
+        </div>
+      }>
+        <FirstSessionShell />
+      </Suspense>
+    </FirstSessionErrorBoundary>
   )
 }

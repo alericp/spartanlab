@@ -354,6 +354,25 @@ export function StreamlinedWorkoutSession({
   onComplete,
   onCancel
 }: StreamlinedWorkoutSessionProps) {
+  // CRITICAL: Early validation - if session is completely invalid, render fallback immediately
+  // This prevents any downstream code from crashing on a null/undefined session
+  if (!session || typeof session !== 'object') {
+    return (
+      <div className="min-h-screen bg-[#0F1115] flex items-center justify-center p-4">
+        <div className="text-center max-w-sm">
+          <div className="w-16 h-16 rounded-full bg-[#1A1F26] border border-[#2B313A] flex items-center justify-center mx-auto mb-4">
+            <Dumbbell className="w-8 h-8 text-[#C1121F]" />
+          </div>
+          <h2 className="text-lg font-semibold text-[#E6E9EF] mb-2">Session Not Available</h2>
+          <p className="text-[#A4ACB8] mb-6">Unable to load workout session data.</p>
+          <Button onClick={onCancel} className="w-full bg-[#C1121F] hover:bg-[#A30F1A] text-white">
+            Go Back
+          </Button>
+        </div>
+      </div>
+    )
+  }
+  
   // Create safe session with guaranteed defaults (extra safety layer)
   const safeSession = useMemo(() => ({
     ...session,

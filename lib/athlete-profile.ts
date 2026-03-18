@@ -380,10 +380,16 @@ export type VSitHoldCapacity =
   | '10_plus'
   | 'unknown'
 
+// Band assistance level — ordered light → heavy
+export type BandLevel = 'yellow' | 'red' | 'black' | 'purple' | 'green'
+
 export interface SkillBenchmark {
   progression: string
   holdSeconds?: number
   reps?: number
+  // Band assistance data — captured in UI, used later by engine for strength estimation
+  isAssisted?: boolean
+  bandLevel?: BandLevel | null
 }
 
 // =============================================================================

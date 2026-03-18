@@ -79,9 +79,9 @@ const jsonLdSchemas = [
   generateArticleSchema({
     title: 'Powerlifting Strength Standards',
     description: 'Complete SBD standards for all levels and bodyweight classes',
-    slug: 'powerlifting-strength-standards',
-    datePublished: '2024-01-01',
-    dateModified: new Date().toISOString().split('T')[0],
+    url: `${SITE_CONFIG.url}/powerlifting-strength-standards`,
+    publishedDate: '2024-01-01',
+    modifiedDate: new Date().toISOString().split('T')[0],
   }),
   generateBreadcrumbSchema([
     { name: 'Home', url: SITE_CONFIG.url },
@@ -321,7 +321,7 @@ export default function PowerliftingStrengthStandardsPage() {
       {/* FAQ */}
       <section className="py-8 px-4 sm:px-6">
         <div className="max-w-4xl mx-auto">
-          <FAQ items={faqs} title="Common Questions" />
+          <FAQ faqs={faqs} title="Common Questions" />
         </div>
       </section>
 

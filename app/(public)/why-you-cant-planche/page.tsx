@@ -99,8 +99,8 @@ export default function WhyYouCantPlanchePage() {
       title: 'Why You Can\'t Planche (Diagnostic Guide)',
       description: 'Structured breakdown of the 5 most common planche limiting factors.',
       url: `${SITE_CONFIG.url}/why-you-cant-planche`,
-      datePublished: '2024-01-15',
-      dateModified: new Date().toISOString().split('T')[0],
+      publishedDate: '2024-01-15',
+      modifiedDate: new Date().toISOString().split('T')[0],
     }),
     generateBreadcrumbSchema([
       { name: 'Home', url: SITE_CONFIG.url },
@@ -257,7 +257,7 @@ export default function WhyYouCantPlanchePage() {
       {/* FAQ */}
       <section className="py-12 px-4 sm:px-6 bg-[#0F1115]">
         <div className="max-w-4xl mx-auto">
-          <FAQ items={faqItems} title="Common Questions" />
+          <FAQ faqs={faqItems} title="Common Questions" />
         </div>
       </section>
 

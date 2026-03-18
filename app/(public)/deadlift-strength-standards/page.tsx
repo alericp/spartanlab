@@ -64,9 +64,9 @@ const jsonLdSchemas = [
   generateArticleSchema({
     title: 'Deadlift Strength Standards',
     description: 'Complete guide to deadlift strength standards by bodyweight ratio',
-    slug: 'deadlift-strength-standards',
-    datePublished: '2024-01-01',
-    dateModified: new Date().toISOString().split('T')[0],
+    url: `${SITE_CONFIG.url}/deadlift-strength-standards`,
+    publishedDate: '2024-01-01',
+    modifiedDate: new Date().toISOString().split('T')[0],
   }),
   generateBreadcrumbSchema([
     { name: 'Home', url: SITE_CONFIG.url },
@@ -271,7 +271,7 @@ export default function DeadliftStrengthStandardsPage() {
       {/* FAQ */}
       <section className="py-8 px-4 sm:px-6">
         <div className="max-w-4xl mx-auto">
-          <FAQ items={faqs} title="Common Questions" />
+          <FAQ faqs={faqs} title="Common Questions" />
         </div>
       </section>
 

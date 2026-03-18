@@ -89,9 +89,9 @@ const jsonLdSchemas = [
   generateArticleSchema({
     title: 'Weighted Calisthenics vs Powerlifting',
     description: 'Complete comparison of training systems for strength development',
-    slug: 'weighted-calisthenics-vs-powerlifting',
-    datePublished: '2024-01-01',
-    dateModified: new Date().toISOString().split('T')[0],
+    url: `${SITE_CONFIG.url}/weighted-calisthenics-vs-powerlifting`,
+    publishedDate: '2024-01-01',
+    modifiedDate: new Date().toISOString().split('T')[0],
   }),
   generateBreadcrumbSchema([
     { name: 'Home', url: SITE_CONFIG.url },
@@ -369,7 +369,7 @@ export default function WeightedCalisthenicsVsPowerliftingPage() {
       {/* FAQ */}
       <section className="py-8 px-4 sm:px-6">
         <div className="max-w-4xl mx-auto">
-          <FAQ items={faqs} title="Common Questions" />
+          <FAQ faqs={faqs} title="Common Questions" />
         </div>
       </section>
 

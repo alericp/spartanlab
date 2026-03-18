@@ -106,9 +106,9 @@ const jsonLdSchemas = [
   generateArticleSchema({
     title: 'Hybrid Training Program',
     description: 'Complete guide to combining calisthenics and barbell training',
-    slug: 'hybrid-training-program',
-    datePublished: '2024-01-01',
-    dateModified: new Date().toISOString().split('T')[0],
+    url: `${SITE_CONFIG.url}/hybrid-training-program`,
+    publishedDate: '2024-01-01',
+    modifiedDate: new Date().toISOString().split('T')[0],
   }),
   generateBreadcrumbSchema([
     { name: 'Home', url: SITE_CONFIG.url },
@@ -332,7 +332,7 @@ export default function HybridTrainingProgramPage() {
       {/* FAQ */}
       <section className="py-8 px-4 sm:px-6">
         <div className="max-w-4xl mx-auto">
-          <FAQ items={faqs} title="Common Questions" />
+          <FAQ faqs={faqs} title="Common Questions" />
         </div>
       </section>
 

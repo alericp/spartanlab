@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, Suspense } from 'react'
+import { useState, useEffect, Suspense, Component, type ReactNode, type ErrorInfo } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { StreamlinedWorkoutSession } from '@/components/workout/StreamlinedWorkoutSession'
 import { type AdaptiveSession } from '@/lib/adaptive-program-builder'
@@ -9,7 +9,71 @@ import type { WorkoutReasoningSummary } from '@/lib/readiness/canonical-readines
 import { Spinner } from '@/components/ui/spinner'
 import { Button } from '@/components/ui/button'
 import Link from 'next/link'
-import { Dumbbell } from 'lucide-react'
+import { Dumbbell, AlertTriangle } from 'lucide-react'
+
+// =============================================================================
+// LOCAL ERROR BOUNDARY - Catches workout engine crashes locally
+// =============================================================================
+
+interface WorkoutErrorBoundaryState {
+  hasError: boolean
+  error: Error | null
+}
+
+class WorkoutErrorBoundary extends Component<{ children: ReactNode }, WorkoutErrorBoundaryState> {
+  constructor(props: { children: ReactNode }) {
+    super(props)
+    this.state = { hasError: false, error: null }
+  }
+
+  static getDerivedStateFromError(error: Error): WorkoutErrorBoundaryState {
+    return { hasError: true, error }
+  }
+
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    // Log error for debugging but don't crash the app
+    console.error('[Workout Error Boundary]', error, errorInfo)
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen bg-[#0F1115] flex items-center justify-center p-4">
+          <div className="text-center max-w-sm">
+            <div className="w-16 h-16 rounded-full bg-[#1A1F26] border border-[#2B313A] flex items-center justify-center mx-auto mb-4">
+              <AlertTriangle className="w-8 h-8 text-amber-500" />
+            </div>
+            <h2 className="text-lg font-semibold text-[#E6E9EF] mb-2">Workout Session Issue</h2>
+            <p className="text-[#A4ACB8] mb-6">
+              Something went wrong loading your workout. Please try again or start fresh.
+            </p>
+            <div className="space-y-3">
+              <Button 
+                onClick={() => window.location.reload()}
+                className="w-full bg-[#C1121F] hover:bg-[#A30F1A] text-white"
+              >
+                Try Again
+              </Button>
+              <Link href="/workout/session?demo=true" className="block">
+                <Button variant="outline" className="w-full border-[#2B313A] text-[#A4ACB8] hover:bg-[#1A1F26] gap-2">
+                  <Dumbbell className="w-4 h-4" />
+                  Try Demo Workout
+                </Button>
+              </Link>
+              <Link href="/dashboard" className="block">
+                <Button variant="ghost" className="w-full text-[#6B7280] hover:text-[#A4ACB8]">
+                  Return to Dashboard
+                </Button>
+              </Link>
+            </div>
+          </div>
+        </div>
+      )
+    }
+
+    return this.props.children
+  }
+}
 
 // =============================================================================
 // SESSION NORMALIZER - Ensures all sessions have valid, safe structure
@@ -50,9 +114,17 @@ function isRunnableSession(session: AdaptiveSession | null): boolean {
   if (!session) return false
   if (!Array.isArray(session.exercises)) return false
   if (session.exercises.length === 0) return false
-  // Check at least first exercise is valid
-  const firstEx = session.exercises[0]
-  return !!(firstEx?.name && firstEx?.sets > 0)
+  
+  // Validate ALL exercises have required fields
+  const allExercisesValid = session.exercises.every(ex => {
+    if (!ex) return false
+    if (typeof ex.name !== 'string' || ex.name.trim() === '') return false
+    if (typeof ex.sets !== 'number' || ex.sets <= 0) return false
+    if (typeof ex.repsOrTime !== 'string' || ex.repsOrTime.trim() === '') return false
+    return true
+  })
+  
+  return allExercisesValid
 }
 
 // =============================================================================
@@ -259,12 +331,14 @@ function WorkoutSessionContent() {
   }
   
   return (
-    <StreamlinedWorkoutSession
-      session={session}
-      reasoningSummary={reasoningSummary}
-      onComplete={handleComplete}
-      onCancel={handleCancel}
-    />
+    <WorkoutErrorBoundary>
+      <StreamlinedWorkoutSession
+        session={session}
+        reasoningSummary={reasoningSummary}
+        onComplete={handleComplete}
+        onCancel={handleCancel}
+      />
+    </WorkoutErrorBoundary>
   )
 }
 

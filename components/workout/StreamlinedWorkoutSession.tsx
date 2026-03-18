@@ -136,9 +136,16 @@ function loadSessionFromStorage(sessionId: string): WorkoutSessionState | null {
       if (
         typeof data.status === 'string' &&
         typeof data.currentExerciseIndex === 'number' &&
+        data.currentExerciseIndex >= 0 && // Ensure index is non-negative
         Array.isArray(data.completedSets)
       ) {
-        return data
+        // Ensure currentSetNumber is valid
+        return {
+          ...data,
+          currentSetNumber: typeof data.currentSetNumber === 'number' && data.currentSetNumber > 0 
+            ? data.currentSetNumber 
+            : 1,
+        }
       }
     }
     return null
@@ -442,6 +449,18 @@ export function StreamlinedWorkoutSession({
   const totalExercises = exercises.length
   const totalSets = exercises.reduce((sum, ex) => sum + (ex?.sets || 0), 0)
   const completedSetsCount = state.completedSets.length
+  
+  // Create a guaranteed-safe exercise object for rendering (avoids null checks everywhere)
+  const safeCurrentExercise = useMemo(() => ({
+    name: currentExercise?.name ?? 'Exercise',
+    category: currentExercise?.category ?? 'general',
+    sets: currentExercise?.sets ?? 3,
+    repsOrTime: currentExercise?.repsOrTime ?? '8-12 reps',
+    note: currentExercise?.note ?? '',
+    id: currentExercise?.id ?? 'unknown',
+    isOverrideable: currentExercise?.isOverrideable ?? true,
+    selectionReason: currentExercise?.selectionReason ?? '',
+  }), [currentExercise])
   
   // Repair index if out of bounds (happens on next render cycle)
   useEffect(() => {
@@ -1400,9 +1419,9 @@ export function StreamlinedWorkoutSession({
     const restRecommendation = getRestRecommendationForCurrentExercise()
     const savedRestState = loadRestTimerState()
     
-    // Determine next set info
+    // Determine next set info (safely handle null currentExercise)
     const nextSetInfo = currentExercise ? {
-      exerciseName: currentExercise.name,
+      exerciseName: currentExercise?.name ?? 'Exercise',
       setNumber: state.currentSetNumber,
       isNewExercise: false, // We skip rest between exercises now
     } : undefined

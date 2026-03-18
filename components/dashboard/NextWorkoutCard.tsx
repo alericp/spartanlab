@@ -23,8 +23,9 @@ import {
 import { getCoachDecision, type CoachDecision } from '@/lib/training-coach'
 import { getOnboardingProfile } from '@/lib/athlete-profile'
 import { getWorkoutLogs } from '@/lib/workout-log-service'
-import { getLatestProgram, type GeneratedProgram } from '@/lib/program-service'
-import { getLatestAdaptiveProgram, type AdaptiveProgram } from '@/lib/adaptive-program-builder'
+import { type GeneratedProgram } from '@/lib/program-service'
+import { type AdaptiveProgram } from '@/lib/adaptive-program-builder'
+import { getProgramState } from '@/lib/program-state'
 import { analyzeDifficultyTrends } from '@/lib/adaptive-progression-engine'
 
 const WORKOUT_STORAGE_KEY = 'spartanlab_workout_session'
@@ -86,12 +87,15 @@ export function NextWorkoutCard({ className }: NextWorkoutCardProps) {
         isFirstWorkout = true
       }
 
-      // Get program info
+      // Get program info using unified state check
       let program: GeneratedProgram | null = null
       let adaptiveProgram: AdaptiveProgram | null = null
+      let hasProgram = false
       try {
-        program = getLatestProgram()
-        adaptiveProgram = getLatestAdaptiveProgram()
+        const programState = getProgramState()
+        program = programState.legacyProgram
+        adaptiveProgram = programState.adaptiveProgram
+        hasProgram = programState.hasProgram
       } catch {
         // No program
       }
@@ -166,8 +170,8 @@ export function NextWorkoutCard({ className }: NextWorkoutCardProps) {
       let dayNumber: number | undefined
       let totalDays: number | undefined
 
-      // No program case
-      if (!program && !adaptiveProgram) {
+      // No program case - use unified hasProgram check
+      if (!hasProgram) {
         state = 'no_program'
         sessionName = 'No Active Program'
         focusAreas = ['Build your first program to get started']

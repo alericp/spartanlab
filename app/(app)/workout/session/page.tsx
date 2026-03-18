@@ -3,7 +3,8 @@
 import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { StreamlinedWorkoutSession } from '@/components/workout/StreamlinedWorkoutSession'
-import { getLatestAdaptiveProgram, type AdaptiveSession, type AdaptiveProgram } from '@/lib/adaptive-program-builder'
+import { type AdaptiveSession } from '@/lib/adaptive-program-builder'
+import { getProgramState } from '@/lib/program-state'
 import type { WorkoutReasoningSummary } from '@/lib/readiness/canonical-readiness-engine'
 import { Spinner } from '@/components/ui/spinner'
 import { Button } from '@/components/ui/button'
@@ -76,16 +77,18 @@ function WorkoutSessionContent() {
   const [error, setError] = useState<string | null>(null)
   
   useEffect(() => {
-    // Demo mode for testing
+    // DEMO MODE: Always allow, completely isolated from program state
+    // Demo must work regardless of any other conditions
     if (demoMode) {
       setSession(DEMO_SESSION)
       setLoading(false)
       return
     }
     
-    const program = getLatestAdaptiveProgram()
+    // Use unified program state check for consistency
+    const { hasProgram, adaptiveProgram } = getProgramState()
     
-    if (!program) {
+    if (!hasProgram || !adaptiveProgram) {
       setError('No active program found. Please create a program first.')
       setLoading(false)
       return
@@ -102,10 +105,10 @@ function WorkoutSessionContent() {
       sessionIndex = parseInt(dayParam, 10) - 1
     } else {
       const today = new Date().getDay() // 0=Sunday through 6=Saturday
-      sessionIndex = Math.min(today === 0 ? 6 : today - 1, program.sessions.length - 1)
+      sessionIndex = Math.min(today === 0 ? 6 : today - 1, adaptiveProgram.sessions.length - 1)
     }
     
-    const targetSession = program.sessions[sessionIndex] || program.sessions[0]
+    const targetSession = adaptiveProgram.sessions[sessionIndex] || adaptiveProgram.sessions[0]
     
     if (!targetSession) {
       setError('No workout scheduled for this day.')
@@ -115,8 +118,8 @@ function WorkoutSessionContent() {
     
     setSession(targetSession)
     // Extract workout reasoning summary from the program
-    if (program.workoutReasoningSummary) {
-      setReasoningSummary(program.workoutReasoningSummary)
+    if (adaptiveProgram.workoutReasoningSummary) {
+      setReasoningSummary(adaptiveProgram.workoutReasoningSummary)
     }
     setLoading(false)
   }, [dayParam, demoMode, isFirstSession])

@@ -1,15 +1,49 @@
 'use client'
 
+/**
+ * Workout Session Page
+ * 
+ * CRITICAL: Uses LAZY dynamic imports for heavy modules to prevent module-level crashes.
+ * The route must be able to render even if program-state or other heavy modules fail to load.
+ */
+
 import { useState, useEffect, Suspense, Component, type ReactNode, type ErrorInfo } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { StreamlinedWorkoutSession } from '@/components/workout/StreamlinedWorkoutSession'
 import { type AdaptiveSession } from '@/lib/adaptive-program-builder'
-import { getProgramState } from '@/lib/program-state'
+// REMOVED: import { getProgramState } from '@/lib/program-state' - now lazily imported
 import type { WorkoutReasoningSummary } from '@/lib/readiness/canonical-readiness-engine'
 import { Spinner } from '@/components/ui/spinner'
 import { Button } from '@/components/ui/button'
 import Link from 'next/link'
 import { Dumbbell, AlertTriangle } from 'lucide-react'
+
+// =============================================================================
+// LAZY PROGRAM STATE RESOLVER - Never throws, always returns a safe result
+// =============================================================================
+
+interface LazyProgramStateResult {
+  hasUsableProgram: boolean
+  adaptiveProgram: { sessions: AdaptiveSession[]; workoutReasoningSummary?: WorkoutReasoningSummary } | null
+}
+
+async function resolveProgramStateLazily(): Promise<LazyProgramStateResult> {
+  try {
+    // Dynamic import to avoid module-level evaluation crashes
+    const { getProgramState } = await import('@/lib/program-state')
+    const programState = getProgramState()
+    return {
+      hasUsableProgram: programState.hasUsableWorkoutProgram === true,
+      adaptiveProgram: programState.adaptiveProgram,
+    }
+  } catch (error) {
+    console.error('[workout/session] Failed to resolve program state:', error)
+    return {
+      hasUsableProgram: false,
+      adaptiveProgram: null,
+    }
+  }
+}
 
 // =============================================================================
 // LOCAL ERROR BOUNDARY - Catches workout engine crashes locally
@@ -202,113 +236,120 @@ function WorkoutSessionContent() {
   const [error, setError] = useState<string | null>(null)
   
   useEffect(() => {
-    // Wrap EVERYTHING in try-catch to ensure no crash can escape
-    try {
-      // DEMO MODE: Always allow, completely isolated from program state
-      // Demo must work regardless of any other conditions
-      if (demoMode) {
+    let mounted = true
+    
+    async function initializeSession() {
+      try {
+        // DEMO MODE: Always allow, completely isolated from program state
+        // Demo must work regardless of any other conditions
+        // CRITICAL: Demo does NOT call resolveProgramStateLazily() - fully isolated
+        if (demoMode) {
+          console.log('[workout/session] initializing demo mode')
+          try {
+            const normalizedDemo = normalizeSession(DEMO_SESSION)
+            if (mounted) {
+              if (normalizedDemo && isRunnableSession(normalizedDemo)) {
+                setSession(normalizedDemo)
+              } else {
+                setSession(DEMO_SESSION)
+              }
+              setLoading(false)
+            }
+          } catch {
+            if (mounted) {
+              setSession(DEMO_SESSION)
+              setLoading(false)
+            }
+          }
+          return
+        }
+        
+        console.log('[workout/session] initializing real workout mode')
+        
+        // LAZY import and resolve program state
+        const { hasUsableProgram, adaptiveProgram } = await resolveProgramStateLazily()
+        
+        if (!mounted) return
+        
+        if (!hasUsableProgram || !adaptiveProgram) {
+          setError('No active program found. Please create a program first.')
+          setLoading(false)
+          return
+        }
+        
+        // Validate sessions array exists and has content
+        if (!Array.isArray(adaptiveProgram.sessions) || adaptiveProgram.sessions.length === 0) {
+          setError('No workout sessions available. Please create a program first.')
+          setLoading(false)
+          return
+        }
+        
+        // Find the session for the requested day (or today)
+        // Sessions array contains all workout days, ordered by dayNumber
+        // If coming from first-session flow, always use day 1 (index 0)
+        let sessionIndex: number
+        if (isFirstSession || dayParam === '1') {
+          sessionIndex = 0
+        } else if (dayParam) {
+          // dayParam is 1-indexed, convert to 0-indexed
+          const parsed = parseInt(dayParam, 10)
+          sessionIndex = isNaN(parsed) ? 0 : Math.max(0, parsed - 1)
+        } else {
+          const today = new Date().getDay() // 0=Sunday through 6=Saturday
+          sessionIndex = Math.min(today === 0 ? 6 : today - 1, adaptiveProgram.sessions.length - 1)
+        }
+        
+        // Clamp session index to valid range
+        sessionIndex = Math.max(0, Math.min(sessionIndex, adaptiveProgram.sessions.length - 1))
+        
+        const rawSession = adaptiveProgram.sessions[sessionIndex] || adaptiveProgram.sessions[0]
+        
+        if (!rawSession) {
+          setError('No workout scheduled for this day.')
+          setLoading(false)
+          return
+        }
+        
+        // Normalize session to ensure all fields are safe
+        let normalizedSession = null
         try {
-          const normalizedDemo = normalizeSession(DEMO_SESSION)
-          if (normalizedDemo && isRunnableSession(normalizedDemo)) {
-            setSession(normalizedDemo)
-          } else {
-            // Fallback if demo session is somehow invalid (should never happen)
-            setSession(DEMO_SESSION)
+          normalizedSession = normalizeSession(rawSession)
+        } catch {
+          setError('This workout session could not be loaded.')
+          setLoading(false)
+          return
+        }
+        
+        if (!normalizedSession || !isRunnableSession(normalizedSession)) {
+          setError('This workout session is not properly configured.')
+          setLoading(false)
+          return
+        }
+        
+        setSession(normalizedSession)
+        // Extract workout reasoning summary from the program
+        try {
+          if (adaptiveProgram.workoutReasoningSummary) {
+            setReasoningSummary(adaptiveProgram.workoutReasoningSummary as WorkoutReasoningSummary)
           }
         } catch {
-          // If demo normalization fails, use raw demo session
-          setSession(DEMO_SESSION)
+          // Reasoning summary is optional, don't fail if it can't be read
         }
         setLoading(false)
-        return
-      }
-      
-      // Use unified program state check for consistency
-      // Wrapped in try-catch for safety - must never crash
-      let hasUsableProgram = false
-      let adaptiveProgram = null
-      
-      try {
-        const programState = getProgramState()
-        // Use hasUsableWorkoutProgram for stricter validation
-        hasUsableProgram = programState.hasUsableWorkoutProgram === true
-        adaptiveProgram = programState.adaptiveProgram
-      } catch {
-        // If program state check fails, treat as no program
-        hasUsableProgram = false
-        adaptiveProgram = null
-      }
-      
-      if (!hasUsableProgram || !adaptiveProgram) {
-        setError('No active program found. Please create a program first.')
-        setLoading(false)
-        return
-      }
-      
-      // Validate sessions array exists and has content
-      if (!Array.isArray(adaptiveProgram.sessions) || adaptiveProgram.sessions.length === 0) {
-        setError('No workout sessions available. Please create a program first.')
-        setLoading(false)
-        return
-      }
-      
-      // Find the session for the requested day (or today)
-      // Sessions array contains all workout days, ordered by dayNumber
-      // If coming from first-session flow, always use day 1 (index 0)
-      let sessionIndex: number
-      if (isFirstSession || dayParam === '1') {
-        sessionIndex = 0
-      } else if (dayParam) {
-        // dayParam is 1-indexed, convert to 0-indexed
-        const parsed = parseInt(dayParam, 10)
-        sessionIndex = isNaN(parsed) ? 0 : Math.max(0, parsed - 1)
-      } else {
-        const today = new Date().getDay() // 0=Sunday through 6=Saturday
-        sessionIndex = Math.min(today === 0 ? 6 : today - 1, adaptiveProgram.sessions.length - 1)
-      }
-      
-      // Clamp session index to valid range
-      sessionIndex = Math.max(0, Math.min(sessionIndex, adaptiveProgram.sessions.length - 1))
-      
-      const rawSession = adaptiveProgram.sessions[sessionIndex] || adaptiveProgram.sessions[0]
-      
-      if (!rawSession) {
-        setError('No workout scheduled for this day.')
-        setLoading(false)
-        return
-      }
-      
-      // Normalize session to ensure all fields are safe
-      let normalizedSession = null
-      try {
-        normalizedSession = normalizeSession(rawSession)
-      } catch {
-        setError('This workout session could not be loaded.')
-        setLoading(false)
-        return
-      }
-      
-      if (!normalizedSession || !isRunnableSession(normalizedSession)) {
-        setError('This workout session is not properly configured.')
-        setLoading(false)
-        return
-      }
-      
-      setSession(normalizedSession)
-      // Extract workout reasoning summary from the program
-      try {
-        if (adaptiveProgram.workoutReasoningSummary) {
-          setReasoningSummary(adaptiveProgram.workoutReasoningSummary)
+      } catch (e) {
+        // Catch-all: if anything unexpected happens, show a safe error
+        console.error('[workout/session] Unexpected error during initialization:', e)
+        if (mounted) {
+          setError('An unexpected error occurred. Please try again.')
+          setLoading(false)
         }
-      } catch {
-        // Reasoning summary is optional, don't fail if it can't be read
       }
-      setLoading(false)
-    } catch (e) {
-      // Catch-all: if anything unexpected happens, show a safe error
-      console.error('[Workout Session] Unexpected error during initialization:', e)
-      setError('An unexpected error occurred. Please try again.')
-      setLoading(false)
+    }
+    
+    initializeSession()
+    
+    return () => {
+      mounted = false
     }
   }, [dayParam, demoMode, isFirstSession])
   

@@ -4,20 +4,50 @@
  * First Session Page
  * 
  * Entry point for users starting their first workout.
- * Uses unified program state check for consistency with dashboard.
+ * Uses LAZY dynamic import for program state to prevent module-level crashes.
  * 
  * Flow:
  * - hasProgram=true → Show "ready" state → navigate to workout session
  * - hasProgram=false → Show setup options (create program OR demo)
+ * 
+ * CRITICAL: Do NOT add static imports of heavy modules like program-state here.
+ * The route must be able to render even if those modules fail to load.
  */
 
-import { Suspense, useState, useEffect, Component, type ReactNode, type ErrorInfo } from 'react'
+import { Suspense, useState, useEffect, useCallback, Component, type ReactNode, type ErrorInfo } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Play, Dumbbell, ArrowRight, Sparkles, Target, AlertTriangle } from 'lucide-react'
-import { getProgramState } from '@/lib/program-state'
 import Link from 'next/link'
+
+// =============================================================================
+// LAZY PROGRAM STATE RESOLVER - Never throws, always returns a safe result
+// =============================================================================
+
+interface ProgramStateResult {
+  isLoaded: boolean
+  hasUsableProgram: boolean
+}
+
+async function resolveProgramStateSafely(): Promise<ProgramStateResult> {
+  try {
+    // Dynamic import to avoid module-level evaluation crashes
+    const { getProgramState } = await import('@/lib/program-state')
+    const programState = getProgramState()
+    return {
+      isLoaded: true,
+      hasUsableProgram: programState.hasUsableWorkoutProgram === true,
+    }
+  } catch (error) {
+    // Log for debugging but never crash
+    console.error('[first-session] Failed to resolve program state:', error)
+    return {
+      isLoaded: true,
+      hasUsableProgram: false,
+    }
+  }
+}
 
 // =============================================================================
 // LOCAL ERROR BOUNDARY - Catches first-session crashes locally
@@ -93,32 +123,39 @@ function FirstSessionShell() {
   const [isStartingWorkout, setIsStartingWorkout] = useState(false)
   const [isStartingDemo, setIsStartingDemo] = useState(false)
 
-  // Check program state using unified utility
+  // Check program state using LAZY dynamic import
+  // This prevents module-level crashes from breaking the entire route
   useEffect(() => {
-    // Use the unified program state check for consistency
-    // Use hasUsableWorkoutProgram for stricter validation - ensures sessions are actually runnable
-    // Wrapped in try-catch for safety - must never crash
-    try {
-      const programState = getProgramState()
-      // CRITICAL: Use ONLY hasUsableWorkoutProgram - ensures we have actual runnable sessions
-      // Do NOT fallback to hasProgram which may have an empty/invalid program
-      setHasProgram(programState.hasUsableWorkoutProgram === true)
-    } catch {
-      // If program state check fails, treat as no program
-      setHasProgram(false)
+    let mounted = true
+    
+    async function loadProgramState() {
+      const result = await resolveProgramStateSafely()
+      if (mounted) {
+        setHasProgram(result.hasUsableProgram)
+        setIsLoading(false)
+      }
     }
-    setIsLoading(false)
+    
+    loadProgramState()
+    
+    return () => {
+      mounted = false
+    }
   }, [])
 
-  const handleStartWorkout = () => {
+  const handleStartWorkout = useCallback(() => {
+    if (isStartingWorkout) return // Prevent double-click
+    console.log('[first-session] navigating start workout')
     setIsStartingWorkout(true)
     router.push('/workout/session?day=1&first=true')
-  }
+  }, [router, isStartingWorkout])
 
-  const handleTryDemo = () => {
+  const handleTryDemo = useCallback(() => {
+    if (isStartingDemo) return // Prevent double-click
+    console.log('[first-session] navigating demo workout')
     setIsStartingDemo(true)
     router.push('/workout/session?demo=true')
-  }
+  }, [router, isStartingDemo])
   
   // Derived state for disabling buttons during any navigation
   const isNavigating = isStartingWorkout || isStartingDemo

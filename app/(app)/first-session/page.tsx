@@ -37,8 +37,9 @@ function FirstSessionShell() {
     // Wrapped in try-catch for safety - must never crash
     try {
       const programState = getProgramState()
-      // Use hasUsableWorkoutProgram to ensure we have actual runnable sessions, not just a program object
-      setHasProgram(programState.hasUsableWorkoutProgram || programState.hasProgram)
+      // CRITICAL: Use ONLY hasUsableWorkoutProgram - ensures we have actual runnable sessions
+      // Do NOT fallback to hasProgram which may have an empty/invalid program
+      setHasProgram(programState.hasUsableWorkoutProgram === true)
     } catch {
       // If program state check fails, treat as no program
       setHasProgram(false)

@@ -698,7 +698,9 @@ export function StreamlinedWorkoutSession({
   
   // Handle exercise replacement
   const handleReplaceExercise = useCallback((newExercise: { id: string; name: string }) => {
-    const exerciseIndex = state.currentExerciseIndex
+    // Use clamped safe index to prevent out-of-bounds access
+    const exerciseIndex = Math.max(0, Math.min(state.currentExerciseIndex, exercises.length - 1))
+    if (exercises.length === 0) return
     const originalExercise = exercises[exerciseIndex]
     
     // Safety: validate exercise exists at index
@@ -733,7 +735,12 @@ export function StreamlinedWorkoutSession({
   
   // Handle exercise skip via menu (different from skip button)
   const handleMenuSkipExercise = useCallback(() => {
-    const exerciseIndex = state.currentExerciseIndex
+    // Use clamped safe index to prevent out-of-bounds access
+    const exerciseIndex = Math.max(0, Math.min(state.currentExerciseIndex, exercises.length - 1))
+    if (exercises.length === 0) {
+      handleSkipExercise()
+      return
+    }
     const originalExercise = exercises[exerciseIndex]
     
     // Safety: validate exercise exists at index
@@ -772,7 +779,9 @@ export function StreamlinedWorkoutSession({
   
   // Handle progression adjustment
   const handleProgressionChange = useCallback((newProgression: { id: string; name: string }) => {
-    const exerciseIndex = state.currentExerciseIndex
+    // Use clamped safe index to prevent out-of-bounds access
+    const exerciseIndex = Math.max(0, Math.min(state.currentExerciseIndex, exercises.length - 1))
+    if (exercises.length === 0) return
     const originalExercise = exercises[exerciseIndex]
     
     // Safety: validate exercise exists at index

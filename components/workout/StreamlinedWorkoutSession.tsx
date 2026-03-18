@@ -124,7 +124,7 @@ function saveSessionToStorage(state: WorkoutSessionState, sessionId: string) {
   } catch {}
 }
 
-function loadSessionFromStorage(sessionId: string): WorkoutSessionState | null {
+function loadSessionFromStorage(sessionId: string, exerciseCount?: number): WorkoutSessionState | null {
   if (typeof window === 'undefined') return null
   try {
     const saved = localStorage.getItem(STORAGE_KEY)
@@ -139,6 +139,13 @@ function loadSessionFromStorage(sessionId: string): WorkoutSessionState | null {
         data.currentExerciseIndex >= 0 && // Ensure index is non-negative
         Array.isArray(data.completedSets)
       ) {
+        // If we know the exercise count, validate index is within bounds
+        if (exerciseCount !== undefined && data.currentExerciseIndex >= exerciseCount) {
+          // Index is out of bounds for current session - discard saved state
+          try { localStorage.removeItem(STORAGE_KEY) } catch {}
+          return null
+        }
+        
         // Ensure currentSetNumber is valid
         return {
           ...data,
@@ -390,8 +397,11 @@ export function StreamlinedWorkoutSession({
       }
     }
     
-    // Try to restore real sessions
-    const saved = loadSessionFromStorage(sessionId)
+    // Get exercise count for validation
+    const exerciseCount = safeSession.exercises?.length ?? 0
+    
+    // Try to restore real sessions (with exercise count validation)
+    const saved = loadSessionFromStorage(sessionId, exerciseCount)
     if (saved && saved.status !== 'completed') {
       return saved
     }
@@ -672,6 +682,9 @@ export function StreamlinedWorkoutSession({
     const exerciseIndex = state.currentExerciseIndex
     const originalExercise = exercises[exerciseIndex]
     
+    // Safety: validate exercise exists at index
+    if (!originalExercise) return
+    
     // Record override in storage for adaptive tracking
     const override: ExerciseOverride = {
       originalExerciseId: originalExercise.id || originalExercise.name,
@@ -703,6 +716,12 @@ export function StreamlinedWorkoutSession({
   const handleMenuSkipExercise = useCallback(() => {
     const exerciseIndex = state.currentExerciseIndex
     const originalExercise = exercises[exerciseIndex]
+    
+    // Safety: validate exercise exists at index
+    if (!originalExercise) {
+      handleSkipExercise() // Still advance even if exercise invalid
+      return
+    }
     
     // Record skip override for adaptive tracking
     const override: ExerciseOverride = {
@@ -736,6 +755,9 @@ export function StreamlinedWorkoutSession({
   const handleProgressionChange = useCallback((newProgression: { id: string; name: string }) => {
     const exerciseIndex = state.currentExerciseIndex
     const originalExercise = exercises[exerciseIndex]
+    
+    // Safety: validate exercise exists at index
+    if (!originalExercise) return
     
     // Record progression adjustment for adaptive tracking
     const override: ExerciseOverride = {
@@ -781,7 +803,12 @@ export function StreamlinedWorkoutSession({
   
   // Get effective exercise (with override applied)
   const getEffectiveExercise = useCallback((index: number) => {
+    // Safety: validate index is within bounds
+    if (index < 0 || index >= exercises.length) return null
+    
     const baseExercise = exercises[index]
+    if (!baseExercise) return null
+    
     const override = state.exerciseOverrides[index]
     
     if (!override) return baseExercise

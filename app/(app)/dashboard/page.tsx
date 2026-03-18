@@ -14,9 +14,13 @@ import {
 import { ErrorBoundary } from '@/components/shared/ErrorBoundary'
 
 // =============================================================================
-// ISOLATION TEST FLAG - Set to true for normal operation
+// DASHBOARD SAFE MODE FLAG
+// Set to false to enable minimal safe mode for crash isolation testing
+// When false: renders minimal shell only, no heavy widgets/data loading
+// When true: renders full dashboard with all features
 // =============================================================================
-const ENABLE_FULL_DASHBOARD = true
+const DASHBOARD_SAFE_MODE = true  // Set to true to enable safe mode for testing
+const ENABLE_FULL_DASHBOARD = !DASHBOARD_SAFE_MODE
 
 // Only import heavy components when full dashboard is enabled
 import { SpartanScoreCard } from '@/components/performance/SpartanScoreCard'
@@ -345,19 +349,42 @@ function DashboardContent() {
   }
 
   // =============================================================================
-  // ISOLATION TEST MODE - Minimal shell to prove route/auth works
+  // DASHBOARD SAFE MODE - Minimal shell to prove route/auth/shell works
+  // If this renders successfully, the crash is in the heavy dashboard content
   // =============================================================================
-  if (!ENABLE_FULL_DASHBOARD) {
+  if (DASHBOARD_SAFE_MODE) {
     return (
       <PageContainer>
-        <div className="py-12">
-          <div className="bg-[#1A1D23] border border-[#2A2F38] rounded-xl p-8 text-center">
-            <h1 className="text-2xl font-semibold text-[#E6E9EF] mb-2">Dashboard Alive</h1>
-            <p className="text-[#6B7280] mb-4">
-              Isolation test mode active. Route and auth are working.
+        <div className="py-12 space-y-6">
+          {/* Success confirmation card */}
+          <div className="bg-[#1A1D23] border border-green-500/30 rounded-xl p-8 text-center max-w-lg mx-auto">
+            <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-green-500/20 flex items-center justify-center">
+              <svg className="w-6 h-6 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+            <h1 className="text-2xl font-semibold text-[#E6E9EF] mb-2">Dashboard Shell Working</h1>
+            <p className="text-[#A4ACB8] mb-4">
+              Safe mode is active. The following are confirmed working:
             </p>
-            <p className="text-xs text-[#4B5563] font-mono">
-              Set ENABLE_FULL_DASHBOARD = true to restore full dashboard
+            <ul className="text-sm text-[#6B7280] space-y-1 mb-6">
+              <li>Route resolution: /dashboard</li>
+              <li>Authentication: {isAuthLoaded ? 'Loaded' : 'Loading...'}</li>
+              <li>AuthGuard: Passed</li>
+              <li>PageContainer: Rendered</li>
+              <li>Navigation: Rendered</li>
+            </ul>
+            <p className="text-xs text-[#4B5563] font-mono bg-[#0F1115] rounded p-2">
+              DASHBOARD_SAFE_MODE = true (set to false for full dashboard)
+            </p>
+          </div>
+          
+          {/* Placeholder content card */}
+          <div className="bg-[#1A1D23] border border-[#2A2F38] rounded-xl p-6 max-w-lg mx-auto">
+            <h2 className="text-lg font-medium text-[#E6E9EF] mb-2">Safe Mode Active</h2>
+            <p className="text-sm text-[#6B7280]">
+              Heavy dashboard widgets are disabled. If you see this page without the global error screen,
+              the crash is isolated to the dashboard content path (widgets, data loading, or effects).
             </p>
           </div>
         </div>

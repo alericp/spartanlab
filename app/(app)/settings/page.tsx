@@ -218,8 +218,8 @@ function OwnerInlineSimulationControl() {
       setSimulationMode(newMode)
       entitlement?.mutate?.()
       window.location.reload()
-    } catch (e) {
-      console.error('[v0] OwnerInlineSimulationControl: mode change failed:', e)
+    } catch {
+      // Silent fail - simulation mode change is non-critical
     }
   }
   
@@ -295,8 +295,6 @@ function OwnerInlineSimulationControl() {
 }
 
 export default function SettingsPage() {
-  console.log("[AUTH_PROOF] settings auth-prod-unblock-v1")
-  
   // Initialize owner detection from Clerk auth
   const { isOwner } = useOwnerInit()
   const { toast } = useToast()

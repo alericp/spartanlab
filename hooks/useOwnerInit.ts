@@ -8,8 +8,9 @@
  * 
  * Usage: Call this hook in a high-level client component (like Navigation or layout wrapper)
  * 
- * CRITICAL: This hook is fail-soft. If Clerk's useUser throws or returns
- * unexpected data, we return safe defaults rather than crashing.
+ * CRITICAL: This hook is called unconditionally (React rules of hooks).
+ * Error handling happens in the useEffect and property access, not around the hook call.
+ * The component using this hook MUST be wrapped in an error boundary.
  */
 
 import { useEffect, useState } from 'react'
@@ -42,25 +43,17 @@ async function loadOwnerAccess() {
  * Initialize owner detection with the current Clerk user's email.
  * Returns whether the current user is the owner.
  * 
- * This hook never throws - it returns safe defaults on any error.
+ * NOTE: This hook calls useUser unconditionally per React rules.
+ * Components using this hook should be wrapped in an error boundary.
  */
 export function useOwnerInit(): { isOwner: boolean; isLoaded: boolean; userEmail: string | null } {
   const [ownerStatus, setOwnerStatus] = useState(false)
   const [userEmail, setUserEmail] = useState<string | null>(null)
   const [hookLoaded, setHookLoaded] = useState(false)
   
-  // Safe access to useUser - wrapped in try-catch
-  let user: ReturnType<typeof useUser>['user'] = null
-  let isLoaded = false
-  
-  try {
-    const userHook = useUser()
-    user = userHook.user
-    isLoaded = userHook.isLoaded
-  } catch (e) {
-    console.error('[v0] useOwnerInit: useUser threw:', e)
-    isLoaded = true // Pretend loaded to avoid infinite loading
-  }
+  // Call useUser unconditionally (React rules of hooks)
+  // If this throws, the error boundary wrapping the component will catch it
+  const { user, isLoaded } = useUser()
   
   useEffect(() => {
     const init = async () => {
@@ -69,8 +62,8 @@ export function useOwnerInit(): { isOwner: boolean; isLoaded: boolean; userEmail
         
         if (isLoaded) {
           if (user) {
-            // Set the user's primary email for owner detection
-            const email = user.emailAddresses?.[0]?.emailAddress || null
+            // Safe property access with optional chaining
+            const email = user?.emailAddresses?.[0]?.emailAddress || null
             ownerAccess.setCurrentUserEmail(email)
             setUserEmail(email)
             // Check owner status after setting email

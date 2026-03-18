@@ -252,7 +252,7 @@ export default async function TestingGuidePage({ params }: PageProps) {
                 Once you have tested, update your metrics in SpartanLab for a more accurate training program.
               </p>
               <Button asChild className="bg-[#C1121F] hover:bg-[#A30F1A]">
-                <Link href="/dashboard">
+                <Link href="/sign-in?redirect_url=/dashboard">
                   Go to Dashboard
                   <ArrowRight className="w-4 h-4 ml-2" />
                 </Link>

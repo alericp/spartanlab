@@ -59,7 +59,7 @@ export function MarketingFooter() {
                 </Link>
               </li>
               <li>
-                <Link href="/dashboard" className="text-sm text-[#A4ACB8] hover:text-[#E6E9EF] transition-colors">
+                <Link href="/sign-in?redirect_url=/dashboard" className="text-sm text-[#A4ACB8] hover:text-[#E6E9EF] transition-colors">
                   Open App
                 </Link>
               </li>

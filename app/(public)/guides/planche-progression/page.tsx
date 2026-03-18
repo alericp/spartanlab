@@ -487,7 +487,7 @@ export default function PlancheProgressionGuide() {
               <Link href="/guides" className="hover:text-[#E6E9EF] transition-colors">Guides</Link>
               <Link href="/tools" className="hover:text-[#E6E9EF] transition-colors">Tools</Link>
               <Link href="/programs" className="hover:text-[#E6E9EF] transition-colors">Programs</Link>
-              <Link href="/dashboard" className="hover:text-[#E6E9EF] transition-colors">Dashboard</Link>
+              <Link href="/sign-in?redirect_url=/dashboard" className="hover:text-[#E6E9EF] transition-colors">Dashboard</Link>
             </div>
           </div>
         </div>

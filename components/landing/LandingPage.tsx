@@ -459,7 +459,7 @@ function PricingSection() {
               ))}
             </ul>
             <Button asChild variant="outline" className="w-full border-[#2B313A] hover:bg-[#2B313A]">
-              <Link href="/dashboard">Start Free</Link>
+              <Link href="/sign-up?redirect_url=/dashboard">Start Free</Link>
             </Button>
           </Card>
           
@@ -571,7 +571,7 @@ function Footer() {
             <span className="font-semibold">SpartanLab</span>
           </div>
           <div className="flex items-center gap-6 text-sm text-[#6B7280]">
-            <Link href="/dashboard" className="hover:text-[#E6E9EF] transition-colors">Dashboard</Link>
+            <Link href="/sign-in?redirect_url=/dashboard" className="hover:text-[#E6E9EF] transition-colors">Dashboard</Link>
             <Link href="/training-systems" className="hover:text-[#E6E9EF] transition-colors">Training Systems</Link>
             <Link href="/tools" className="hover:text-[#E6E9EF] transition-colors">Free Tools</Link>
             <Link href="/about" className="hover:text-[#E6E9EF] transition-colors">About</Link>
@@ -600,7 +600,7 @@ function Navigation() {
           <a href="#pricing" className="hover:text-[#E6E9EF] transition-colors">Pricing</a>
         </div>
         <Button asChild size="sm" className="bg-[#C1121F] hover:bg-[#A30F1A]">
-          <Link href="/dashboard">Open App</Link>
+          <Link href="/sign-in?redirect_url=/dashboard">Open App</Link>
         </Button>
       </div>
     </nav>

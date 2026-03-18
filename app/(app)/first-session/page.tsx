@@ -31,8 +31,14 @@ function FirstSessionShell() {
   // Check program state using unified utility
   useEffect(() => {
     // Use the unified program state check for consistency
-    const programState = getProgramState()
-    setHasProgram(programState.hasProgram)
+    // Wrapped in try-catch for safety - must never crash
+    try {
+      const programState = getProgramState()
+      setHasProgram(programState.hasProgram)
+    } catch {
+      // If program state check fails, treat as no program
+      setHasProgram(false)
+    }
     setIsLoading(false)
   }, [])
 

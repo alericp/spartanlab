@@ -234,12 +234,15 @@ function getWelcomeMessage(profile: OnboardingProfile, experienceLevel: Experien
 
 /**
  * Generate the first program for a new user
+ * CRITICAL: This should only be called from /onboarding/complete/page.tsx
+ * Other components should read existing program via getProgramState()
  */
 export function generateFirstProgram(): FirstRunResult {
   try {
     const profile = getOnboardingProfile()
     
     if (!profile || !isOnboardingComplete()) {
+      console.log('[OnboardingService] generateFirstProgram: onboarding not complete')
       return {
         success: false,
         program: null,
@@ -248,6 +251,8 @@ export function generateFirstProgram(): FirstRunResult {
         error: 'Onboarding incomplete',
       }
     }
+    
+    console.log('[OnboardingService] generateFirstProgram: starting generation')
     
     // Get calibration from profile
     const calibration = getAthleteCalibration()
@@ -293,6 +298,8 @@ export function generateFirstProgram(): FirstRunResult {
     // Note: Program history entry will be created server-side via API
     // when user ID is available (after auth). The saveAdaptiveProgram call above
     // ensures the program is immediately available for all app surfaces.
+    
+    console.log('[OnboardingService] generateFirstProgram: success, sessions:', program.sessions.length)
     
     return {
       success: true,

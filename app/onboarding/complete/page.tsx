@@ -315,7 +315,9 @@ export default function OnboardingCompletePage() {
             <p className="text-lg text-[#E6E9EF] font-semibold">{getPrimaryGoalDisplay()}</p>
             {profile?.trainingDaysPerWeek && (
               <p className="text-sm text-[#6B7280] mt-1">
-                {profile.trainingDaysPerWeek} training days per week
+                {typeof profile.trainingDaysPerWeek === 'number' 
+                  ? `${profile.trainingDaysPerWeek} training days per week`
+                  : 'Flexible training schedule'}
               </p>
             )}
           </div>

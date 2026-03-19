@@ -83,18 +83,15 @@ export function OnboardingComplete({ onContinue }: OnboardingCompleteProps) {
       await new Promise(resolve => setTimeout(resolve, 1200))
       
       try {
-        console.log('[v0] OnboardingComplete component: Starting program generation')
         const result = generateFirstProgram()
         setProgramResult(result)
         
         if (!result.success || !result.program) {
-          console.error('[v0] OnboardingComplete component: Generation failed:', result.error)
+          console.error('[OnboardingComplete] Generation failed:', result.error)
           // Still continue to allow user to retry or use demo
           setStep('ready')
           return
         }
-        
-        console.log('[v0] OnboardingComplete component: Generation succeeded')
         
         // Generate program reasoning
         const reasoning = getProgramReasoning(result.program)
@@ -130,7 +127,7 @@ export function OnboardingComplete({ onContinue }: OnboardingCompleteProps) {
           setStep('upgrade')
         }
       } catch (err) {
-        console.error('[v0] OnboardingComplete component: Caught exception:', err)
+        console.error('[OnboardingComplete] Exception:', err)
         // Still allow user to continue
         setStep('ready')
       }

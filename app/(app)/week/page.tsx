@@ -16,7 +16,8 @@ import {
   Clock,
 } from 'lucide-react'
 import Link from 'next/link'
-import { getLatestAdaptiveProgram, type AdaptiveProgram } from '@/lib/adaptive-program-builder'
+import { type AdaptiveProgram } from '@/lib/adaptive-program-builder'
+import { getProgramState } from '@/lib/program-state'
 import {
   calculateWeekState,
   calculateWeekAdjustment,
@@ -36,10 +37,11 @@ export default function WeekAdjustmentPage() {
   useEffect(() => {
     setMounted(true)
     
-    const prog = getLatestAdaptiveProgram()
-    // Safe guard: verify program and sessions array exist before using
-    if (!prog || !Array.isArray(prog.sessions) || prog.sessions.length === 0) return
+    // Use safe unified program state
+    const { adaptiveProgram, hasUsableWorkoutProgram } = getProgramState()
+    if (!hasUsableWorkoutProgram || !adaptiveProgram) return
     
+    const prog = adaptiveProgram
     setProgram(prog)
     
     // In a real app, this would come from localStorage or a database

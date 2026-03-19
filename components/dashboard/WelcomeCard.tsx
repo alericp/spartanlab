@@ -8,12 +8,13 @@ import Link from 'next/link'
 import { CheckCircle2, Calendar, Target, Dumbbell, X, TrendingUp, TrendingDown, Minus, Play, ArrowRight } from 'lucide-react'
 import { SpartanIcon } from '@/components/brand/SpartanLogo'
 import {
-  generateFirstProgram,
   getOnboardingSummary,
   getProgramReasoning,
+  getFirstProgram,
   type FirstRunResult,
   type ProgramReasoning,
 } from '@/lib/onboarding-service'
+import { getProgramState } from '@/lib/program-state'
 import { getOnboardingProfile, hasEstimatedValues } from '@/lib/athlete-profile'
 import { AlertCircle } from 'lucide-react'
 
@@ -22,35 +23,63 @@ interface WelcomeCardProps {
   onProgramReady?: (result: FirstRunResult) => void
 }
 
+/**
+ * WelcomeCard - READ-ONLY component
+ * 
+ * CRITICAL: This card displays an already-generated program.
+ * It does NOT generate the program itself.
+ * Program generation happens in /onboarding/complete/page.tsx
+ */
 export function WelcomeCard({ onDismiss, onProgramReady }: WelcomeCardProps) {
-  const [isGenerating, setIsGenerating] = useState(true)
+  const [isLoading, setIsLoading] = useState(true)
   const [result, setResult] = useState<FirstRunResult | null>(null)
   const [summary, setSummary] = useState<ReturnType<typeof getOnboardingSummary>>(null)
   const [reasoning, setReasoning] = useState<ProgramReasoning | null>(null)
 
   useEffect(() => {
-    // Generate the first program
-    const generateProgram = async () => {
-      setIsGenerating(true)
+    // READ existing program state - do NOT regenerate
+    const loadExistingProgram = async () => {
+      setIsLoading(true)
       
-      // Small delay for UX
-      await new Promise(resolve => setTimeout(resolve, 800))
+      // Small delay for smooth UX transition
+      await new Promise(resolve => setTimeout(resolve, 300))
       
-      const programResult = generateFirstProgram()
-      setResult(programResult)
-      setSummary(getOnboardingSummary())
-      setReasoning(getProgramReasoning(programResult.program))
-      setIsGenerating(false)
+      // Get existing program from program-state (the safe unified source)
+      const { adaptiveProgram, hasUsableWorkoutProgram } = getProgramState()
       
-      if (programResult.success && onProgramReady) {
-        onProgramReady(programResult)
+      if (hasUsableWorkoutProgram && adaptiveProgram) {
+        // Program exists - create display result from existing data
+        const displayResult: FirstRunResult = {
+          success: true,
+          program: adaptiveProgram,
+          calibration: null, // Not needed for display
+          welcomeMessage: 'Your personalized program is ready.',
+        }
+        setResult(displayResult)
+        setSummary(getOnboardingSummary())
+        setReasoning(getProgramReasoning(adaptiveProgram))
+        
+        if (onProgramReady) {
+          onProgramReady(displayResult)
+        }
+      } else {
+        // No valid program - show error state
+        setResult({
+          success: false,
+          program: null,
+          calibration: null,
+          welcomeMessage: 'No program found.',
+          error: 'Program not generated yet. Please complete onboarding.',
+        })
       }
+      
+      setIsLoading(false)
     }
     
-    generateProgram()
+    loadExistingProgram()
   }, [onProgramReady])
 
-  if (isGenerating) {
+  if (isLoading) {
     return (
       <Card className="bg-gradient-to-br from-[#1A1F26] to-[#0F1115] border-[#2B313A] p-6 relative overflow-hidden">
         <div className="flex flex-col items-center justify-center py-8">
@@ -58,10 +87,10 @@ export function WelcomeCard({ onDismiss, onProgramReady }: WelcomeCardProps) {
             <SpartanIcon size={48} />
           </div>
           <h2 className="text-lg font-semibold text-[#E6E9EF] mb-2">
-            Building Your Program
+            Loading Your Program
           </h2>
           <p className="text-sm text-[#6B7280] text-center">
-            Calibrating the adaptive training engine...
+            Preparing your training dashboard...
           </p>
           <div className="mt-4 flex gap-1">
             {[0, 1, 2].map(i => (

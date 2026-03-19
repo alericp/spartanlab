@@ -11,7 +11,8 @@ import {
   Play,
 } from 'lucide-react'
 import Link from 'next/link'
-import { getLatestAdaptiveProgram, type AdaptiveSession } from '@/lib/adaptive-program-builder'
+import { type AdaptiveSession } from '@/lib/adaptive-program-builder'
+import { getProgramState } from '@/lib/program-state'
 import {
   calculateSessionAdjustment,
   inferWellnessFromRecovery,
@@ -31,12 +32,13 @@ export function TodayAdjustmentWidget() {
   useEffect(() => {
     setMounted(true)
     
-    const program = getLatestAdaptiveProgram()
-    // Safe guard: verify program and sessions array exist before accessing
-    if (!program || !Array.isArray(program.sessions) || program.sessions.length === 0) {
+    // Use safe unified program state
+    const { adaptiveProgram, hasUsableWorkoutProgram } = getProgramState()
+    if (!hasUsableWorkoutProgram || !adaptiveProgram) {
       setCurrentSession(null)
       return
     }
+    const program = adaptiveProgram
     
     // Get today's session
     const today = new Date().getDay()

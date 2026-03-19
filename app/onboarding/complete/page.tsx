@@ -499,8 +499,7 @@ export default function OnboardingCompletePage() {
             className="w-full text-[#6B7280] hover:text-[#A4ACB8] mt-3"
           >
             View Dashboard First
-            </Button>
-          </Link>
+          </Button>
         </div>
       </div>
     )

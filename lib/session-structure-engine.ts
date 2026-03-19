@@ -20,6 +20,7 @@ import type { StyleProgrammingRules, TrainingStyleMode } from './training-style-
 import type { PerformanceEnvelope, MovementFamily } from './performance-envelope-engine'
 import type { WeakPointType } from './weak-point-engine'
 import type { ExerciseTier } from './constraint-aware-assembly-engine'
+import type { DeliveryStyle, SessionLoadBudget } from './session-load-intelligence'
 
 // =============================================================================
 // SESSION STRUCTURE TYPES
@@ -88,6 +89,11 @@ export interface SessionStructure {
   // Constraints
   requiresEquipment: string[]
   minimumExperienceLevel: 'beginner' | 'intermediate' | 'advanced'
+  
+  // Session Load Intelligence fields
+  deliveryStyle?: DeliveryStyle               // How exercises in this structure are delivered
+  recommendedLoadBudget?: Partial<SessionLoadBudget>  // Load limits for this structure type
+  loadRationale?: string                      // Explanation of load expectations
 }
 
 export type StructureUseCase =
@@ -191,6 +197,15 @@ export function buildEMOMStructure(
     
     requiresEquipment: [],
     minimumExperienceLevel: 'beginner',
+    
+    // Session Load Intelligence - EMOMs get special treatment
+    deliveryStyle: 'emom',
+    recommendedLoadBudget: {
+      maxWeightedLoad: 6.0,  // Higher effective load allowed due to built-in rest
+      maxHighFatigueExercises: 2,  // Keep high-fatigue items limited
+      maxTotalExercises: exerciseCount + 2,  // EMOM structure + warmup/cooldown
+    },
+    loadRationale: 'EMOM format manages fatigue through structured rest, allowing more exercises while preserving quality.',
   }
 }
 
@@ -414,6 +429,16 @@ export function buildDensityBlockStructure(
     
     requiresEquipment: [],
     minimumExperienceLevel: 'beginner',
+    
+    // Session Load Intelligence - Density blocks allow more items due to grouped delivery
+    deliveryStyle: 'density',
+    recommendedLoadBudget: {
+      maxWeightedLoad: 7.0,  // Higher allowed - density format manages fatigue
+      maxHighFatigueExercises: 2,  // Keep high-fatigue limited
+      maxPrimaryExercises: 2,  // Density is about volume, not heavy primaries
+      maxTotalExercises: exerciseCount + 4,  // Density exercises + session structure
+    },
+    loadRationale: 'Density block exercises count as a grouped cluster, not individual primary movements.',
   }
 }
 
@@ -845,6 +870,17 @@ function buildStandardStructure(durationMinutes: number): SessionStructure {
     
     requiresEquipment: [],
     minimumExperienceLevel: 'beginner',
+    
+    // Session Load Intelligence - Standard sessions have strict load budgets
+    deliveryStyle: 'standalone',
+    recommendedLoadBudget: {
+      maxWeightedLoad: 5.0,  // Standard sessions: 3-5 meaningful exercises
+      maxHighFatigueExercises: 3,
+      maxStraightArmHolds: 2,  // Tendon protection
+      maxPrimaryExercises: 3,
+      maxTotalExercises: durationMinutes >= 45 ? 8 : 6,
+    },
+    loadRationale: 'Standard session structure targets 3-6 meaningful exercises to preserve quality and recovery.',
   }
 }
 
@@ -859,10 +895,10 @@ function generateStructureExplanation(
 ): string {
   const explanations: Record<SessionStructureType, (input: StructureSelectionInput) => string> = {
     standard: () => 
-      'Your workout follows a traditional structure with skill work first, followed by strength and support movements. This proven format ensures quality practice when you are freshest.',
+      'Your workout follows a traditional structure with skill work first, followed by strength and support movements. This compact session targets 3-6 meaningful exercises to preserve quality and recovery.',
     
     emom: (input) => 
-      `Your workout uses a ${structure.totalDurationMinutes}-minute EMOM (Every Minute On the Minute) structure. This format provides ${input.fatigueLevel === 'fatigued' ? 'built-in recovery time to manage your current fatigue' : 'structured timing that encourages quality reps with consistent rest periods'}.`,
+      `Your workout uses a ${structure.totalDurationMinutes}-minute EMOM (Every Minute On the Minute) structure. ${input.fatigueLevel === 'fatigued' ? 'Built-in recovery manages your current fatigue.' : 'Structured timing ensures quality reps.'} Additional items are grouped within the EMOM format, not added as extra primary load.`,
     
     ladder: () =>
       'Your workout uses a ladder structure with progressively increasing reps. This builds work capacity while naturally managing fatigue through varying intensity.',
@@ -872,19 +908,25 @@ function generateStructureExplanation(
     
     density_block: (input) =>
       input.primaryWeakPoint
-        ? `Your workout includes a density block to reinforce ${input.primaryWeakPoint.replace(/_/g, ' ')} - your current limiter. The timed format accumulates quality volume efficiently.`
-        : 'Your workout uses a density block to reinforce skill work in a time-efficient format.',
+        ? `Your workout includes a density block to reinforce ${input.primaryWeakPoint.replace(/_/g, ' ')} - your current limiter. Density block exercises count as a grouped cluster, not as individual primary movements.`
+        : 'Your workout uses a density block format. Multiple exercises are grouped as a single training cluster, not added as separate primary work.',
     
     short_circuit: (input) =>
       `Your ${input.availableMinutes}-minute express session preserves meaningful training stimulus despite limited time. Focus areas are prioritized while maintaining quality.`,
     
     skill_micro: (input) =>
       input.isDeloadWeek
-        ? 'This skill micro-session maintains motor patterns during your deload week with minimal fatigue accumulation.'
+        ? 'This skill micro-session maintains motor patterns during your deload week with minimal fatigue accumulation. Prep and recovery work are included but do not count as primary session load.'
         : `This ${structure.totalDurationMinutes}-minute micro-session focuses on quality skill practice with low fatigue impact.`,
   }
   
-  return explanations[structure.structureType](input)
+  // Append load rationale if available
+  let explanation = explanations[structure.structureType](input)
+  if (structure.loadRationale && !explanation.includes(structure.loadRationale)) {
+    explanation += ` ${structure.loadRationale}`
+  }
+  
+  return explanation
 }
 
 // =============================================================================

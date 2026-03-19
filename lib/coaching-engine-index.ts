@@ -185,11 +185,29 @@ export {
   getSessionDurationMinutes,
   validateSessionAssembly,
   
+  // Session Load Intelligence
+  buildExerciseLoadMetadata,
+  calculateSessionLoad,
+  determineSessionStyle,
+  getSessionLoadBudget,
+  validateSessionAntiBloat,
+  generateSessionLoadRationale,
+  applyGroupedDeliveryStyle,
+  SESSION_SIZE_GUIDELINES,
+  
   // Types
   type SessionBlockType,
   type SessionBlock,
   type SessionTemplate,
   type SessionAssemblyContext,
+  type ExerciseRole,
+  type FatigueWeight,
+  type DeliveryStyle,
+  type ExerciseLoadMetadata,
+  type SessionLoadBudget,
+  type SessionLoadSummary,
+  type TrainingSessionStyle,
+  type AntiBloatResult,
 } from './session-assembly-engine'
 
 // =============================================================================
@@ -646,5 +664,9 @@ export function getEngineCapabilitySummary(): string[] {
     'Phase transition recommendations',
     'Deload and peaking protocols',
     'Back lever progression system with mobility gates',
+    'Session load intelligence with weighted exercise count',
+    'Anti-bloat validation preventing overloaded sessions',
+    'Grouped delivery style handling for supersets and circuits',
+    'Tendon-protective straight-arm limits per session',
   ]
 }

@@ -13,6 +13,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { WorkoutReasoningSummary } from '@/lib/readiness/canonical-readiness-engine'
+import type { SessionLoadSummary, TrainingSessionStyle } from '@/lib/session-load-intelligence'
 
 // =============================================================================
 // WHY THIS WORKOUT COMPONENT
@@ -403,6 +404,140 @@ export function LimiterInsightCard({
           )}
         </div>
       </div>
+    </div>
+  )
+}
+
+// =============================================================================
+// SESSION LOAD INSIGHT
+// =============================================================================
+
+interface SessionLoadInsightProps {
+  /** The session load summary from exercise selection */
+  loadSummary: SessionLoadSummary
+  /** The session style */
+  sessionStyle: TrainingSessionStyle
+  /** Optional rationale strings */
+  rationale?: string[]
+  /** Anti-bloat validation results */
+  antiBloatValidation?: {
+    isValid: boolean
+    issues: string[]
+    suggestions: string[]
+  }
+  /** Visual variant */
+  variant?: 'compact' | 'detailed'
+  /** Additional CSS classes */
+  className?: string
+}
+
+/**
+ * Displays session load information and anti-bloat validation.
+ * Helps athletes understand the structured exercise count philosophy.
+ */
+export function SessionLoadInsight({
+  loadSummary,
+  sessionStyle,
+  rationale,
+  antiBloatValidation,
+  variant = 'compact',
+  className,
+}: SessionLoadInsightProps) {
+  // Format session style for display
+  const styleLabel = sessionStyle.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+  
+  // Determine load quality indicator
+  const getLoadQuality = () => {
+    if (!antiBloatValidation) return 'balanced'
+    if (antiBloatValidation.isValid) return 'balanced'
+    if (antiBloatValidation.issues.length <= 1) return 'moderate'
+    return 'heavy'
+  }
+  
+  const loadQuality = getLoadQuality()
+  
+  if (variant === 'compact') {
+    return (
+      <div className={cn(
+        'flex items-center gap-2 text-xs text-[#6B7280]',
+        className
+      )}>
+        <div className={cn(
+          'w-2 h-2 rounded-full',
+          loadQuality === 'balanced' ? 'bg-green-500' :
+          loadQuality === 'moderate' ? 'bg-yellow-500' : 'bg-red-500'
+        )} />
+        <span>
+          {loadSummary.weightedExerciseCount.toFixed(1)} effective load
+          {loadSummary.totalExerciseCount !== Math.round(loadSummary.weightedExerciseCount) && (
+            <span className="text-[#4F6D8A]"> ({loadSummary.totalExerciseCount} items)</span>
+          )}
+        </span>
+      </div>
+    )
+  }
+  
+  // Detailed variant
+  return (
+    <div className={cn(
+      'rounded-lg bg-[#1A1A1A] border border-[#2B313A] p-3 space-y-2',
+      className
+    )}>
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <div className={cn(
+            'w-2.5 h-2.5 rounded-full',
+            loadQuality === 'balanced' ? 'bg-green-500' :
+            loadQuality === 'moderate' ? 'bg-yellow-500' : 'bg-red-500'
+          )} />
+          <span className="text-sm font-medium text-[#E5E7EB]">Session Load</span>
+        </div>
+        <span className="text-xs text-[#6B7280] px-2 py-0.5 rounded bg-[#252525]">
+          {styleLabel}
+        </span>
+      </div>
+      
+      {/* Load breakdown */}
+      <div className="grid grid-cols-2 gap-2 text-xs">
+        <div className="flex justify-between">
+          <span className="text-[#6B7280]">Weighted load:</span>
+          <span className="text-[#A4ACB8]">{loadSummary.weightedExerciseCount.toFixed(1)}</span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-[#6B7280]">Total items:</span>
+          <span className="text-[#A4ACB8]">{loadSummary.totalExerciseCount}</span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-[#6B7280]">High-fatigue:</span>
+          <span className="text-[#A4ACB8]">{loadSummary.highFatigueCount}</span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-[#6B7280]">Primary moves:</span>
+          <span className="text-[#A4ACB8]">{loadSummary.primaryCount}</span>
+        </div>
+      </div>
+      
+      {/* Rationale */}
+      {rationale && rationale.length > 0 && (
+        <div className="pt-2 border-t border-[#2B313A]">
+          <p className="text-xs text-[#A4ACB8] leading-relaxed">
+            {rationale[0]}
+          </p>
+        </div>
+      )}
+      
+      {/* Anti-bloat warnings */}
+      {antiBloatValidation && !antiBloatValidation.isValid && (
+        <div className="pt-2 border-t border-[#2B313A] space-y-1">
+          {antiBloatValidation.issues.slice(0, 2).map((issue, i) => (
+            <div key={i} className="flex items-start gap-1.5 text-xs">
+              <Shield className="w-3 h-3 shrink-0 mt-0.5 text-yellow-500" />
+              <span className="text-yellow-400/80">{issue}</span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

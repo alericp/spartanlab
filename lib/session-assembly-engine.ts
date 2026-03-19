@@ -768,3 +768,55 @@ export function generateIntelligentMobilityBlock(context: MobilityActivationCont
  */
 export { generateIntelligentPrehab } from './prehab'
 export type { IntelligentPrehabContext, IntelligentPrehabResult } from './prehab'
+
+// =============================================================================
+// SESSION LOAD INTELLIGENCE INTEGRATION
+// =============================================================================
+
+/**
+ * Re-export session load intelligence for unified access
+ */
+export {
+  buildExerciseLoadMetadata,
+  calculateSessionLoad,
+  determineSessionStyle,
+  getSessionLoadBudget,
+  validateSessionAntiBloat,
+  generateSessionLoadRationale,
+  applyGroupedDeliveryStyle,
+  type ExerciseRole,
+  type FatigueWeight,
+  type DeliveryStyle,
+  type ExerciseLoadMetadata,
+  type SessionLoadBudget,
+  type SessionLoadSummary,
+  type TrainingSessionStyle,
+  type AntiBloatResult,
+} from './session-load-intelligence'
+
+/**
+ * Session size guidelines by block type
+ * Used for coaching explanations and validation
+ */
+export const SESSION_SIZE_GUIDELINES = {
+  skill_strength_dominant: {
+    typicalExerciseCount: '3-6 meaningful exercises',
+    maxPrimaryMovements: 3,
+    description: 'Prioritizes skill and strength quality over volume',
+  },
+  hypertrophy_mixed: {
+    typicalExerciseCount: '4-7 total items (weighted load controlled)',
+    maxPrimaryMovements: 4,
+    description: 'Higher volume with controlled fatigue accumulation',
+  },
+  circuit_density: {
+    typicalExerciseCount: 'More listed items allowed (grouped as clusters)',
+    maxPrimaryMovements: 2,
+    description: 'Density format groups exercises, reducing per-item load impact',
+  },
+  prep_recovery: {
+    typicalExerciseCount: 'Multiple low-fatigue items allowed',
+    maxPrimaryMovements: 1,
+    description: 'Focus on movement quality and recovery, not load',
+  },
+} as const

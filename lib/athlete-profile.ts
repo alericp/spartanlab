@@ -1440,6 +1440,173 @@ export function saveOnboardingProfile(profile: OnboardingProfile): void {
   }
 }
 
+// =============================================================================
+// CANONICAL NORMALIZATION BARRIER
+// =============================================================================
+
+/**
+ * Safely normalizes raw parsed JSON into a valid OnboardingProfile shape.
+ * This is the CANONICAL barrier that prevents malformed/legacy localStorage data
+ * from propagating through the app and crashing downstream consumers.
+ * 
+ * CRITICAL: All downstream consumers receive normalized data, never raw JSON.parse output.
+ * 
+ * @param raw - Unknown data from localStorage JSON.parse
+ * @returns Normalized OnboardingProfile or null if data is completely unusable
+ */
+function normalizeOnboardingProfile(raw: unknown): OnboardingProfile | null {
+  // Must be a non-null object
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    console.warn('[AthleteProfile] normalizeOnboardingProfile: raw data is not an object')
+    return null
+  }
+  
+  const data = raw as Record<string, unknown>
+  
+  // Helper: safely extract string enum/value
+  const safeString = <T extends string>(val: unknown, valid?: readonly T[]): T | null => {
+    if (typeof val !== 'string') return null
+    if (valid && !valid.includes(val as T)) return null
+    return val as T
+  }
+  
+  // Helper: safely extract number
+  const safeNumber = (val: unknown): number | null => {
+    if (typeof val !== 'number' || !Number.isFinite(val)) return null
+    return val
+  }
+  
+  // Helper: safely extract boolean
+  const safeBoolean = (val: unknown, defaultVal: boolean): boolean => {
+    if (typeof val !== 'boolean') return defaultVal
+    return val
+  }
+  
+  // Helper: safely extract array of strings
+  const safeStringArray = <T extends string>(val: unknown): T[] => {
+    if (!Array.isArray(val)) return []
+    return val.filter((item): item is T => typeof item === 'string')
+  }
+  
+  // Helper: safely extract object or null
+  const safeObject = <T>(val: unknown): T | null => {
+    if (!val || typeof val !== 'object' || Array.isArray(val)) return null
+    return val as T
+  }
+  
+  // Track if any normalization fallbacks were applied
+  let fallbacksApplied = false
+  
+  // Normalize arrays - these are critical crash points
+  const normalizeArray = <T extends string>(val: unknown, fieldName: string): T[] => {
+    if (!Array.isArray(val)) {
+      if (val !== undefined && val !== null) {
+        console.warn(`[AthleteProfile] normalizeOnboardingProfile: ${fieldName} was not an array, defaulting to []`)
+        fallbacksApplied = true
+      }
+      return []
+    }
+    return val.filter((item): item is T => typeof item === 'string')
+  }
+  
+  // Build normalized profile
+  const normalized: OnboardingProfile = {
+    // Section 1: Athlete Profile - string enums
+    sex: safeString(data.sex, ['male', 'female'] as const),
+    heightRange: safeString(data.heightRange),
+    weightRange: safeString(data.weightRange),
+    bodyFatRange: safeString(data.bodyFatRange),
+    bodyFatPercent: safeNumber(data.bodyFatPercent),
+    bodyFatSource: safeString(data.bodyFatSource, ['manual', 'calculator', 'unknown'] as const),
+    trainingExperience: safeString(data.trainingExperience, ['new', 'some', 'intermediate', 'advanced'] as const),
+    
+    // Section 1b: Primary Training Outcome
+    primaryTrainingOutcome: safeString(data.primaryTrainingOutcome, ['strength', 'max_reps', 'military', 'skills', 'endurance', 'general_fitness'] as const),
+    
+    // Section 1b-military: Military Profile - nested object
+    militaryProfile: safeObject<MilitaryProfile>(data.militaryProfile),
+    
+    // Section 1c: Training Path Type
+    trainingPathType: safeString(data.trainingPathType),
+    
+    // Section 2: Goals
+    primaryGoal: safeString(data.primaryGoal),
+    secondaryGoal: safeString(data.secondaryGoal),
+    goalCategories: normalizeArray(data.goalCategories, 'goalCategories'),
+    
+    // Section 3: Skill Selection - CRITICAL ARRAYS
+    selectedSkills: normalizeArray(data.selectedSkills, 'selectedSkills'),
+    selectedFlexibility: normalizeArray(data.selectedFlexibility, 'selectedFlexibility'),
+    
+    // Section 4: Strength Benchmarks
+    pullUpMax: safeString(data.pullUpMax),
+    pushUpMax: safeString(data.pushUpMax),
+    dipMax: safeString(data.dipMax),
+    wallHSPUReps: safeString(data.wallHSPUReps),
+    weightedPullUp: safeObject<WeightedBenchmark>(data.weightedPullUp),
+    weightedDip: safeObject<WeightedBenchmark>(data.weightedDip),
+    
+    // Section 4b: All-time PR benchmarks
+    allTimePRPullUp: safeObject<AllTimePRBenchmark>(data.allTimePRPullUp),
+    allTimePRDip: safeObject<AllTimePRBenchmark>(data.allTimePRDip),
+    
+    // Section 5: Skill Benchmarks
+    frontLever: safeObject<SkillBenchmark>(data.frontLever),
+    planche: safeObject<SkillBenchmark>(data.planche),
+    muscleUp: safeString(data.muscleUp),
+    hspu: safeObject<SkillBenchmark>(data.hspu),
+    lSitHold: safeString(data.lSitHold),
+    vSitHold: safeString(data.vSitHold),
+    
+    // Section 5b: Skill Training History - nested object with safe default
+    skillHistory: safeObject<OnboardingProfile['skillHistory']>(data.skillHistory) ?? {},
+    
+    // Section 6: Flexibility Benchmarks
+    pancake: safeObject<FlexibilityBenchmark>(data.pancake),
+    toeTouch: safeObject<FlexibilityBenchmark>(data.toeTouch),
+    frontSplits: safeObject<FlexibilityBenchmark>(data.frontSplits),
+    sideSplits: safeObject<FlexibilityBenchmark>(data.sideSplits),
+    
+    // Section 7: Equipment - CRITICAL ARRAY
+    equipment: normalizeArray(data.equipment, 'equipment'),
+    
+    // Section 8: Training Schedule
+    trainingDaysPerWeek: safeNumber(data.trainingDaysPerWeek) as TrainingDaysPerWeek | null,
+    sessionLengthMinutes: safeNumber(data.sessionLengthMinutes) as SessionLengthPreference | null,
+    workoutDurationPreference: safeString(data.workoutDurationPreference),
+    sessionStyle: safeString(data.sessionStyle),
+    
+    // Short Session Preferences
+    shortSessionsEnabled: safeBoolean(data.shortSessionsEnabled, false),
+    shortSessionPreferredFormat: safeString(data.shortSessionPreferredFormat, ['auto', 'emom', 'ladder', 'pyramid', 'density_block', 'express', 'skill_micro'] as const) ?? 'auto',
+    shortSessionPreferredDuration: (safeNumber(data.shortSessionPreferredDuration) as 10 | 15 | 20 | 25) ?? 15,
+    
+    // Section 9: Recovery / Lifestyle
+    recovery: safeObject<RecoveryProfile>(data.recovery),
+    
+    // Section 10: Readiness Calibration
+    readinessCalibration: safeObject<ReadinessCalibration>(data.readinessCalibration),
+    
+    // Section 11: Athlete Diagnostics
+    primaryLimitation: safeString(data.primaryLimitation),
+    weakestArea: safeString(data.weakestArea),
+    jointCautions: normalizeArray(data.jointCautions, 'jointCautions'),
+    
+    // Section 12: Hybrid Strength Profile
+    hybridStrengthProfile: safeObject<HybridStrengthProfile>(data.hybridStrengthProfile),
+    
+    // Meta
+    hasSeenDashboardIntro: safeBoolean(data.hasSeenDashboardIntro, false),
+    onboardingComplete: safeBoolean(data.onboardingComplete, false),
+  }
+  
+  if (fallbacksApplied) {
+    console.log('[AthleteProfile] normalizeOnboardingProfile: normalization completed with fallbacks applied')
+  }
+  
+  return normalized
+}
+
 export function getOnboardingProfile(): OnboardingProfile | null {
   if (typeof window === 'undefined') return null
   
@@ -1447,8 +1614,16 @@ export function getOnboardingProfile(): OnboardingProfile | null {
   if (!stored) return null
   
   try {
-    return JSON.parse(stored)
-  } catch {
+    const parsed = JSON.parse(stored)
+    // CRITICAL: Pass through normalization barrier - never return raw JSON.parse output
+    const normalized = normalizeOnboardingProfile(parsed)
+    if (!normalized) {
+      console.warn('[AthleteProfile] getOnboardingProfile: normalization returned null, stored data unusable')
+      return null
+    }
+    return normalized
+  } catch (err) {
+    console.error('[AthleteProfile] getOnboardingProfile: JSON.parse failed:', err)
     return null
   }
 }

@@ -60,6 +60,13 @@ export interface WorkoutLog {
     removedExerciseCount: number
     reducedExerciseCount: number
   }
+  // FEEDBACK LOOP: Completion status for adaptive engine
+  completionStatus?: 'completed' | 'partial' | 'skipped'
+  // FEEDBACK LOOP: Whether this log is trusted for adaptive decisions
+  // Only true for real user-completed workouts, not demo/debug
+  trusted?: boolean
+  // FEEDBACK LOOP: Source route for tracking
+  sourceRoute?: 'workout_session' | 'first_session' | 'quick_log' | 'demo'
 }
 
 const STORAGE_KEY = 'spartanlab_workout_logs'
@@ -106,11 +113,18 @@ export function saveWorkoutLog(log: Omit<WorkoutLog, 'id' | 'createdAt'>): Worko
   
   // Auto-save session feedback for fatigue tracking
   // Uses perceived difficulty from the workout log
+  // FEEDBACK LOOP: Pass trusted flag so only real workouts affect adaptation
   try {
     saveSessionFeedback(newLog.id, {
       difficulty: newLog.perceivedDifficulty || 'normal',
       completed: newLog.exercises.every(e => e.completed),
+      trusted: newLog.trusted !== false && newLog.sourceRoute !== 'demo',
       // Regional soreness can be added via separate UI - default to undefined
+    })
+    console.log('[fatigue-loop] Session feedback saved:', {
+      sessionId: newLog.id,
+      difficulty: newLog.perceivedDifficulty || 'normal',
+      trusted: newLog.trusted !== false && newLog.sourceRoute !== 'demo',
     })
   } catch {
     // Non-blocking - don't fail the save if feedback capture fails
@@ -187,13 +201,36 @@ interface QuickLogInput {
   generatedWorkoutId?: string
   keyPerformance?: WorkoutLog['keyPerformance']
   notes?: string
+  // FEEDBACK LOOP: Exercise-level outcomes for progression engine
+  exercises?: WorkoutExercise[]
+  // FEEDBACK LOOP: Mark as demo/debug to exclude from adaptive logic
+  isDemo?: boolean
+  // FEEDBACK LOOP: Completion quality
+  completionStatus?: 'completed' | 'partial' | 'skipped'
+  sourceRoute?: 'workout_session' | 'first_session' | 'quick_log' | 'demo'
 }
 
 /**
  * Quick log a completed workout with minimal input
  * Used for fast logging of generated workouts
+ * 
+ * FEEDBACK LOOP: This is the canonical entry point for workout logging.
+ * All completed sessions should flow through here for adaptive decisions.
  */
 export function quickLogWorkout(input: QuickLogInput): WorkoutLog {
+  // Demo workouts are never trusted for adaptive logic
+  const isDemo = input.isDemo === true
+  const trusted = !isDemo
+  
+  console.log('[workout-log] Saving workout:', {
+    sessionName: input.sessionName,
+    isDemo,
+    trusted,
+    completionStatus: input.completionStatus || 'completed',
+    exerciseCount: input.exercises?.length || 0,
+    sourceRoute: input.sourceRoute || (isDemo ? 'demo' : 'workout_session'),
+  })
+  
   return saveWorkoutLog({
     sessionName: input.sessionName,
     sessionType: input.sessionType,
@@ -205,7 +242,11 @@ export function quickLogWorkout(input: QuickLogInput): WorkoutLog {
     generatedWorkoutId: input.generatedWorkoutId,
     keyPerformance: input.keyPerformance,
     notes: input.notes,
-    exercises: [], // Quick logs may not have detailed exercises
+    exercises: input.exercises || [], // Include exercise-level outcomes
+    // FEEDBACK LOOP fields
+    completionStatus: input.completionStatus || 'completed',
+    trusted,
+    sourceRoute: input.sourceRoute || (isDemo ? 'demo' : 'workout_session'),
   })
 }
 

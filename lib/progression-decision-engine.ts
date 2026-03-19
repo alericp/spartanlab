@@ -323,6 +323,9 @@ function evaluateRepProgression(
 
 /**
  * Get recent performance for an exercise from workout logs.
+ * 
+ * FEEDBACK LOOP: Only uses trusted logs (real user data, not demo/debug)
+ * to ensure progression decisions are based on actual performance.
  */
 export function getRecentPerformance(
   exerciseId: string,
@@ -338,13 +341,29 @@ export function getRecentPerformance(
       new Date(b.sessionDate).getTime() - new Date(a.sessionDate).getTime()
     )
     
-    for (const log of sortedLogs) {
+    // Filter for trusted logs only
+    const trustedLogs = sortedLogs.filter(log => {
+      // Explicit trusted field takes precedence
+      if (log.trusted === false) return false
+      // Demo sources are never trusted
+      if (log.sourceRoute === 'demo') return false
+      // Default to trusted for legacy logs
+      return log.trusted !== false
+    })
+    
+    console.log('[progression-loop] Getting recent performance:', {
+      exerciseName,
+      totalLogs: logs.length,
+      trustedLogs: trustedLogs.length,
+    })
+    
+    for (const log of trustedLogs) {
       const exercise = log.exercises.find(e => 
         e.id === exerciseId || 
         e.name.toLowerCase() === exerciseName.toLowerCase()
       )
       
-      if (exercise) {
+      if (exercise && exercise.completed) {
         performances.push({
           reps: exercise.reps,
           holdSeconds: exercise.holdSeconds,
@@ -356,7 +375,8 @@ export function getRecentPerformance(
     }
     
     return performances
-  } catch {
+  } catch (err) {
+    console.warn('[progression-loop] Failed to get recent performance:', err)
     return []
   }
 }

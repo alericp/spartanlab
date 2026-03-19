@@ -124,6 +124,13 @@ import {
   type FatigueStateFromFeedback,
 } from './session-feedback'
 import {
+  buildTrainingFeedbackSummary,
+  getFlexibleScheduleInput,
+  hasEnoughDataForAdaptation,
+  type TrainingFeedbackSummary,
+  type AdjustmentReasonCode,
+} from './training-feedback-loop'
+import {
   getConsistencyStatus,
   getComebackWorkoutConfig,
   getConsistencyAdjustments,
@@ -393,6 +400,19 @@ export interface AdaptiveProgram {
     intensityModifier: number
     summary: string
     confidence: 'medium' | 'high'
+  }
+  // Training feedback loop - why the plan adapted based on real workouts
+  trainingFeedbackLoop?: {
+    adjustmentReasons: AdjustmentReasonCode[]
+    adjustmentSummary: string
+    recentCompletionRate: number
+    difficultyTrend: 'increasing' | 'stable' | 'decreasing'
+    fatigueTrend: 'increasing' | 'stable' | 'decreasing'
+    adherenceQuality: 'excellent' | 'good' | 'moderate' | 'poor' | 'insufficient_data'
+    trustedWorkoutCount: number
+    dataConfidence: 'none' | 'low' | 'medium' | 'high'
+    progressionSuccessRate: number
+    daysSinceLastWorkout: number | null
   }
   // Deload recommendation for UI
   deloadRecommendation?: {
@@ -854,6 +874,17 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
   const inputScheduleMode = inputs.scheduleMode || normalizeScheduleMode(trainingDaysPerWeek)
   console.log('[schedule-mode] Detected mode:', inputScheduleMode)
   
+  // BUILD TRAINING FEEDBACK SUMMARY - canonical source for adaptive decisions
+  const trainingFeedback = buildTrainingFeedbackSummary()
+  const hasFeedbackData = hasEnoughDataForAdaptation(trainingFeedback)
+  console.log('[feedback-loop] Training feedback summary:', {
+    trustedWorkouts: trainingFeedback.trustedWorkoutCount,
+    completionRate: trainingFeedback.recentCompletionRate.toFixed(2),
+    fatigueTrend: trainingFeedback.recentFatigueTrend,
+    adjustmentReasons: trainingFeedback.adjustmentReasons,
+    hasSufficientData: hasFeedbackData,
+  })
+  
   // Resolve flexible frequency if applicable
   let flexibleWeekStructure: FlexibleWeekStructure | null = null
   let effectiveTrainingDays: TrainingDays = typeof trainingDaysPerWeek === 'number' 
@@ -868,12 +899,48 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
       jointCautions: profile?.jointCautions,
       recoveryProfile: profile?.recoveryProfile,
       trainingStyle: (profile as AthleteProfile & { trainingStyle?: string })?.trainingStyle,
+      // Feed real workout data into frequency resolution
+      recentWorkoutCount: trainingFeedback.totalSessionsLast7Days,
     })
+    
+    // Apply feedback-based weekly adaptation if we have enough data
+    if (hasFeedbackData && trainingFeedback.totalSessionsLast7Days > 0) {
+      const flexInput = getFlexibleScheduleInput(trainingFeedback)
+      console.log('[flex-loop] Applying real workout feedback to schedule:', flexInput)
+      
+      // Conservative adjustment based on recent performance
+      let adjustedFrequency = flexibleWeekStructure.currentWeekFrequency
+      
+      if (flexInput.completionRate < 0.6 && adjustedFrequency > flexibleWeekStructure.recommendedMinDays) {
+        // Low completion - consider reducing
+        adjustedFrequency = Math.max(flexibleWeekStructure.recommendedMinDays, adjustedFrequency - 1)
+        console.log('[flex-loop] Reducing frequency due to low completion:', adjustedFrequency)
+      } else if (
+        flexInput.completionRate >= 0.95 && 
+        flexInput.fatigueTrend !== 'increasing' &&
+        flexInput.progressionStable &&
+        adjustedFrequency < flexibleWeekStructure.recommendedMaxDays
+      ) {
+        // Excellent compliance, stable progression - careful expansion
+        adjustedFrequency = Math.min(flexibleWeekStructure.recommendedMaxDays, adjustedFrequency + 1)
+        console.log('[flex-loop] Expanding frequency due to high compliance:', adjustedFrequency)
+      }
+      
+      flexibleWeekStructure = {
+        ...flexibleWeekStructure,
+        currentWeekFrequency: adjustedFrequency,
+        suggestedNextWeekAdjustment: flexInput.completionRate >= 0.9 && flexInput.fatigueTrend !== 'increasing'
+          ? 'maintain' : flexInput.completionRate < 0.6 ? 'decrease' : 'maintain',
+        adjustmentReason: trainingFeedback.adjustmentSummary,
+      }
+    }
+    
     effectiveTrainingDays = flexibleWeekStructure.currentWeekFrequency as TrainingDays
     console.log('[flex-frequency] Resolved week:', {
       frequency: effectiveTrainingDays,
       range: `${flexibleWeekStructure.recommendedMinDays}-${flexibleWeekStructure.recommendedMaxDays}`,
       distribution: flexibleWeekStructure.intensityDistribution,
+      adjustmentReason: flexibleWeekStructure.adjustmentReason || 'none',
     })
   } else {
     effectiveTrainingDays = getEffectiveFrequency(trainingDaysPerWeek) as TrainingDays
@@ -1455,6 +1522,19 @@ fatigueDecision: fatigueDecision ? {
     intensityModifier: feedbackState.intensityModifier,
     summary: feedbackState.summary,
     confidence: feedbackState.confidence,
+  } : undefined,
+  // Training feedback loop - actual workout outcomes feeding into adaptation
+  trainingFeedbackLoop: hasFeedbackData ? {
+    adjustmentReasons: trainingFeedback.adjustmentReasons,
+    adjustmentSummary: trainingFeedback.adjustmentSummary,
+    recentCompletionRate: trainingFeedback.recentCompletionRate,
+    difficultyTrend: trainingFeedback.recentDifficultyTrend,
+    fatigueTrend: trainingFeedback.recentFatigueTrend,
+    adherenceQuality: trainingFeedback.adherenceQuality,
+    trustedWorkoutCount: trainingFeedback.trustedWorkoutCount,
+    dataConfidence: trainingFeedback.dataConfidence,
+    progressionSuccessRate: trainingFeedback.progressionSuccessRate,
+    daysSinceLastWorkout: trainingFeedback.daysSinceLastWorkout,
   } : undefined,
   // Deload recommendation
   deloadRecommendation,

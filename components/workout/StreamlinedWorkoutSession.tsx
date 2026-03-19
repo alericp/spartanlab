@@ -934,7 +934,35 @@ export function StreamlinedWorkoutSession({
                 ? 'weighted_strength'
                 : 'general'
       
-      // Quick log the workout
+      // Build exercise-level outcomes for progression engine
+      const exerciseOutcomes = exercises.map((exercise, exerciseIndex) => {
+        const exerciseSets = state.completedSets.filter(s => s.exerciseIndex === exerciseIndex)
+        const completedSetCount = exerciseSets.length
+        const isCompleted = completedSetCount >= (exercise.sets || 1)
+        const bestReps = exerciseSets.length > 0 ? Math.max(...exerciseSets.map(s => s.actualReps)) : 0
+        const bestHold = exerciseSets.length > 0 ? Math.max(...exerciseSets.map(s => s.holdSeconds || 0)) : 0
+        const bandUsed = exerciseSets.find(s => s.bandUsed && s.bandUsed !== 'none')?.bandUsed
+        
+        return {
+          id: exercise.id || `ex-${exerciseIndex}`,
+          name: exercise.name,
+          category: exercise.category as 'skill' | 'push' | 'pull' | 'core' | 'legs' | 'mobility',
+          sets: exercise.sets || 1,
+          reps: bestReps > 0 ? bestReps : undefined,
+          holdSeconds: bestHold > 0 ? bestHold : undefined,
+          completed: isCompleted,
+          band: bandUsed ? { bandColor: bandUsed, assisted: true } : undefined,
+        }
+      })
+      
+      // Determine completion status
+      const totalExercises = exercises.length
+      const completedExercises = exerciseOutcomes.filter(e => e.completed).length
+      const completionStatus: 'completed' | 'partial' | 'skipped' = 
+        completedExercises >= totalExercises * 0.8 ? 'completed' :
+        completedExercises > 0 ? 'partial' : 'skipped'
+      
+      // Quick log the workout with full feedback loop data
       quickLogWorkout({
         sessionName: safeSession.dayLabel,
         sessionType,
@@ -944,6 +972,12 @@ export function StreamlinedWorkoutSession({
         generatedWorkoutId: sessionId,
         keyPerformance,
         notes: state.workoutNotes || undefined,
+        // FEEDBACK LOOP: Exercise-level outcomes for progression engine
+        exercises: exerciseOutcomes,
+        // FEEDBACK LOOP: Mark demo sessions to exclude from adaptive logic
+        isDemo: isDemoSession || isDemo,
+        completionStatus,
+        sourceRoute: isFirstSession ? 'first_session' : 'workout_session',
       })
       
       // Evaluate achievements and challenges

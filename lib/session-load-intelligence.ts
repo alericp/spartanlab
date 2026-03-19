@@ -636,6 +636,272 @@ export function generateSessionLoadRationale(
 }
 
 // =============================================================================
+// SESSION LOAD OPTIMIZATION
+// =============================================================================
+
+/**
+ * Target load ranges for session balancing
+ */
+export const TARGET_LOAD = {
+  min: 3.5,     // Below this, session is too light
+  optimal: 5.0, // Sweet spot
+  max: 6.5,     // Above this, risk of bloat
+} as const
+
+/**
+ * Priority order for exercise removal when over budget
+ * Lower priority = removed first
+ */
+const REMOVAL_PRIORITY: Record<ExerciseRole, number> = {
+  skill_primary: 100,      // Never remove
+  strength_primary: 95,    // Almost never remove
+  secondary: 70,           // Remove only if necessary
+  core: 50,                // Can be trimmed
+  accessory: 40,           // First to trim
+  conditioning: 35,        // Easy to trim
+  rehab_prep: 30,          // Can be moved to separate time
+}
+
+export interface ExerciseWithMetadata {
+  exerciseId: string
+  name: string
+  metadata: ExerciseLoadMetadata
+}
+
+export interface OptimizedSessionResult {
+  originalExercises: ExerciseWithMetadata[]
+  optimizedExercises: ExerciseWithMetadata[]
+  removed: ExerciseWithMetadata[]
+  added: ExerciseWithMetadata[]
+  originalLoad: SessionLoadSummary
+  optimizedLoad: SessionLoadSummary
+  wasModified: boolean
+  modifications: string[]
+}
+
+/**
+ * Optimize session load by removing lowest-priority exercises when over budget.
+ * 
+ * Rules:
+ * - Never remove skill_primary or strength_primary exercises
+ * - Remove accessories first, then core, then secondary
+ * - Stop when within TARGET_LOAD range
+ * - If still under min, optionally suggest additions
+ */
+export function optimizeSessionLoad(
+  exercises: ExerciseWithMetadata[],
+  sessionStyle: TrainingSessionStyle,
+  options?: {
+    allowAdditions?: boolean
+    preserveIds?: string[]
+    maxRemovals?: number
+  }
+): OptimizedSessionResult {
+  const budget = getSessionLoadBudget(sessionStyle)
+  const modifications: string[] = []
+  const removed: ExerciseWithMetadata[] = []
+  const added: ExerciseWithMetadata[] = []
+  
+  // Calculate original load
+  const originalMetadata = exercises.map(e => e.metadata)
+  const originalLoad = calculateSessionLoad(originalMetadata, budget)
+  
+  // Make a mutable copy
+  let optimized = [...exercises]
+  
+  // Sort by removal priority (lowest priority first for removal candidates)
+  const sortedForRemoval = [...optimized].sort(
+    (a, b) => REMOVAL_PRIORITY[a.metadata.role] - REMOVAL_PRIORITY[b.metadata.role]
+  )
+  
+  // Identify exercises that can be removed
+  const removable = sortedForRemoval.filter(e => {
+    // Never remove primary exercises
+    if (e.metadata.role === 'skill_primary' || e.metadata.role === 'strength_primary') {
+      return false
+    }
+    // Don't remove preserved IDs
+    if (options?.preserveIds?.includes(e.exerciseId)) {
+      return false
+    }
+    return true
+  })
+  
+  // Calculate current load
+  let currentLoad = originalLoad.weightedExerciseCount
+  let removalCount = 0
+  const maxRemovals = options?.maxRemovals ?? 3
+  
+  // Remove exercises until within budget
+  for (const candidate of removable) {
+    if (currentLoad <= TARGET_LOAD.max && originalLoad.isWithinBudget) {
+      break
+    }
+    if (removalCount >= maxRemovals) {
+      break
+    }
+    
+    // Remove this exercise
+    optimized = optimized.filter(e => e.exerciseId !== candidate.exerciseId)
+    removed.push(candidate)
+    removalCount++
+    
+    // Recalculate load
+    const newMetadata = optimized.map(e => e.metadata)
+    const newLoad = calculateSessionLoad(newMetadata, budget)
+    currentLoad = newLoad.weightedExerciseCount
+    
+    modifications.push(
+      `Removed ${candidate.name} (${candidate.metadata.role}) to reduce load`
+    )
+  }
+  
+  // Calculate final optimized load
+  const optimizedMetadata = optimized.map(e => e.metadata)
+  const optimizedLoad = calculateSessionLoad(optimizedMetadata, budget)
+  
+  // Check if we should add exercises (if under min and allowed)
+  if (options?.allowAdditions && optimizedLoad.weightedExerciseCount < TARGET_LOAD.min) {
+    modifications.push(
+      `Session load (${optimizedLoad.weightedExerciseCount.toFixed(1)}) below minimum - consider adding core or accessory work`
+    )
+  }
+  
+  return {
+    originalExercises: exercises,
+    optimizedExercises: optimized,
+    removed,
+    added,
+    originalLoad,
+    optimizedLoad,
+    wasModified: removed.length > 0 || added.length > 0,
+    modifications,
+  }
+}
+
+/**
+ * Apply anti-bloat rules to a session and return issues
+ */
+export function enforceAntiBloatRules(
+  exercises: ExerciseWithMetadata[],
+  sessionStyle: TrainingSessionStyle
+): {
+  isValid: boolean
+  violations: string[]
+  trimSuggestions: ExerciseWithMetadata[]
+} {
+  const validation = validateSessionAntiBloat(
+    exercises.map(e => e.metadata),
+    sessionStyle
+  )
+  
+  // If valid, return immediately
+  if (validation.isValid) {
+    return {
+      isValid: true,
+      violations: [],
+      trimSuggestions: [],
+    }
+  }
+  
+  // Find exercises that could be trimmed to fix violations
+  const trimSuggestions: ExerciseWithMetadata[] = []
+  
+  // Check for excessive straight-arm stress
+  const straightArmExercises = exercises.filter(
+    e => e.metadata.jointStressCategory === 'straight_arm'
+  )
+  if (straightArmExercises.length > 3) {
+    // Suggest removing lowest-priority straight-arm exercises
+    const sortedStraightArm = [...straightArmExercises].sort(
+      (a, b) => REMOVAL_PRIORITY[a.metadata.role] - REMOVAL_PRIORITY[b.metadata.role]
+    )
+    const toRemove = sortedStraightArm.slice(0, straightArmExercises.length - 2)
+    trimSuggestions.push(...toRemove)
+  }
+  
+  // Check for excessive high-fatigue exercises
+  const highFatigue = exercises.filter(e => e.metadata.fatigueWeight === 'high')
+  if (highFatigue.length > 3) {
+    const sortedHighFatigue = [...highFatigue].sort(
+      (a, b) => REMOVAL_PRIORITY[a.metadata.role] - REMOVAL_PRIORITY[b.metadata.role]
+    )
+    const nonPrimary = sortedHighFatigue.filter(
+      e => e.metadata.role !== 'skill_primary' && e.metadata.role !== 'strength_primary'
+    )
+    trimSuggestions.push(...nonPrimary.slice(0, highFatigue.length - 3))
+  }
+  
+  // Deduplicate suggestions
+  const uniqueSuggestions = [...new Map(trimSuggestions.map(e => [e.exerciseId, e])).values()]
+  
+  return {
+    isValid: false,
+    violations: validation.issues,
+    trimSuggestions: uniqueSuggestions,
+  }
+}
+
+/**
+ * Quick check if session load is optimal
+ */
+export function isSessionLoadOptimal(exercises: ExerciseLoadMetadata[]): {
+  status: 'under' | 'optimal' | 'over'
+  currentLoad: number
+  target: typeof TARGET_LOAD
+} {
+  const budget = SESSION_LOAD_BUDGETS.skill_strength_dominant
+  const load = calculateSessionLoad(exercises, budget)
+  
+  let status: 'under' | 'optimal' | 'over'
+  if (load.weightedExerciseCount < TARGET_LOAD.min) {
+    status = 'under'
+  } else if (load.weightedExerciseCount > TARGET_LOAD.max) {
+    status = 'over'
+  } else {
+    status = 'optimal'
+  }
+  
+  return {
+    status,
+    currentLoad: load.weightedExerciseCount,
+    target: TARGET_LOAD,
+  }
+}
+
+/**
+ * Build metadata for exercises in a session
+ * Convenience function for use with program builder
+ */
+export function buildSessionMetadata(
+  exercises: Array<{
+    id: string
+    name: string
+    category: ExerciseCategory
+    neuralDemand: number
+    fatigueCost: number
+    movementPattern?: string
+    isIsometric?: boolean
+  }>,
+  deliveryStyles?: Record<string, DeliveryStyle>
+): ExerciseWithMetadata[] {
+  return exercises.map(ex => ({
+    exerciseId: ex.id,
+    name: ex.name,
+    metadata: buildExerciseLoadMetadata(
+      {
+        category: ex.category,
+        neuralDemand: ex.neuralDemand,
+        fatigueCost: ex.fatigueCost,
+        movementPattern: ex.movementPattern,
+        isIsometric: ex.isIsometric,
+      },
+      deliveryStyles?.[ex.id] ?? 'standalone'
+    ),
+  }))
+}
+
+// =============================================================================
 // EXPORTS
 // =============================================================================
 
@@ -644,4 +910,6 @@ export {
   DELIVERY_STYLE_MULTIPLIERS,
   FATIGUE_WEIGHT_VALUES,
   SESSION_LOAD_BUDGETS,
+  TARGET_LOAD,
+  REMOVAL_PRIORITY,
 }

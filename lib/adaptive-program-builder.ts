@@ -96,6 +96,17 @@ import {
   type ExerciseIntelligenceContext,
 } from './exercise-intelligence-engine'
 import {
+  optimizeSessionLoad,
+  buildSessionMetadata,
+  determineSessionStyle,
+  calculateSessionLoad,
+  getSessionLoadBudget,
+  TARGET_LOAD,
+  type SessionLoadSummary,
+  type TrainingSessionStyle,
+  type ExerciseWithMetadata,
+} from './session-load-intelligence'
+import {
   analyzeSignalsForAdaptive,
   type AdaptiveSignalFeedback,
 } from './override-signal-service'
@@ -261,6 +272,12 @@ export interface AdaptiveSession {
   }
   // Weak point-based accessories added to session
   weakPointAccessories?: string[]
+  // Session load summary (for UI display)
+  loadSummary?: {
+    weightedLoad: number
+    isOptimal: boolean
+    removed: string[]
+  }
 }
 
 export interface AdaptiveExercise {
@@ -1140,6 +1157,71 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
       // Add note about fatigue-based volume reduction
       session.adaptationNotes = session.adaptationNotes || []
       session.adaptationNotes.push('No additional support work - focus on recovery')
+    }
+    
+    // =========================================================================
+    // SESSION LOAD OPTIMIZATION
+    // =========================================================================
+    // Ensure session is balanced and not bloated using weighted load calculation
+    const sessionStyleForLoad = determineSessionStyle(
+      session.estimatedMinutes,
+      primaryGoal === 'skill' ? 'skill' : 
+        primaryGoal === 'strength' ? 'strength' : 'mixed',
+      undefined,
+      fatigueDecision?.decision === 'REDUCE_INTENSITY' ? 'very_low' : undefined
+    )
+    
+    // Build metadata for load calculation
+    const exercisesWithMeta = buildSessionMetadata(
+      session.exercises.map(ex => ({
+        id: ex.id,
+        name: ex.name,
+        category: ex.category,
+        neuralDemand: ex.category === 'skill' ? 4 : 3,
+        fatigueCost: ex.category === 'skill' ? 3 : ex.category === 'strength' ? 4 : 2,
+        movementPattern: undefined,
+        isIsometric: ex.repsOrTime?.includes('s') ?? false,
+      }))
+    )
+    
+    // Optimize if over budget
+    const loadBudget = getSessionLoadBudget(sessionStyleForLoad)
+    const currentLoad = calculateSessionLoad(
+      exercisesWithMeta.map(e => e.metadata),
+      loadBudget
+    )
+    
+    if (!currentLoad.isWithinBudget || currentLoad.weightedExerciseCount > TARGET_LOAD.max) {
+      // Run optimization
+      const optimized = optimizeSessionLoad(
+        exercisesWithMeta,
+        sessionStyleForLoad,
+        {
+          maxRemovals: 2,
+          preserveIds: session.exercises
+            .filter(e => e.category === 'skill' || e.selectionReason?.includes('primary'))
+            .map(e => e.id),
+        }
+      )
+      
+      if (optimized.wasModified) {
+        // Filter exercises to keep only those that weren't removed
+        const keptIds = new Set(optimized.optimizedExercises.map(e => e.exerciseId))
+        session.exercises = session.exercises.filter(ex => keptIds.has(ex.id))
+        
+        // Add adaptation notes
+        session.adaptationNotes = session.adaptationNotes || []
+        session.adaptationNotes.push(
+          `Session balanced: ${optimized.modifications[0] || 'Load optimized for quality'}`
+        )
+        
+        // Store load summary for UI
+        session.loadSummary = {
+          weightedLoad: optimized.optimizedLoad.weightedExerciseCount,
+          isOptimal: optimized.optimizedLoad.isWithinBudget,
+          removed: optimized.removed.map(r => r.name),
+        }
+      }
     }
     
     return session

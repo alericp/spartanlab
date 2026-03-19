@@ -286,6 +286,7 @@ export default function OnboardingCompletePage() {
 
   // If already Pro, show success and go to first session
   if (isPro) {
+    console.log('[OnboardingComplete] Rendering Pro success branch')
     return (
       <div className="min-h-screen bg-[#0F1115] flex items-center justify-center p-4">
         <div className="w-full max-w-lg text-center">
@@ -315,11 +316,9 @@ export default function OnboardingCompletePage() {
               <span className="text-[#E6E9EF] font-medium">Primary Goal</span>
             </div>
             <p className="text-lg text-[#E6E9EF] font-semibold">{getPrimaryGoalDisplay()}</p>
-            {profile?.trainingDaysPerWeek && (
+            {typeof profile?.trainingDaysPerWeek === 'number' && profile.trainingDaysPerWeek > 0 && (
               <p className="text-sm text-[#6B7280] mt-1">
-                {typeof profile.trainingDaysPerWeek === 'number' 
-                  ? `${profile.trainingDaysPerWeek} training days per week`
-                  : 'Flexible training schedule'}
+                {profile.trainingDaysPerWeek} training days per week
               </p>
             )}
           </div>
@@ -345,6 +344,11 @@ export default function OnboardingCompletePage() {
   }
 
   // Free user - show program preview with upgrade opportunity
+  console.log('[OnboardingComplete] Rendering free preview branch', {
+    hasProfile: !!profile,
+    hasSelectedSkills: Array.isArray(profile?.selectedSkills),
+    hasReadiness: !!readiness,
+  })
   return (
     <div className="min-h-screen bg-[#0F1115] py-8 px-4">
       <div className="max-w-2xl mx-auto">
@@ -379,7 +383,7 @@ export default function OnboardingCompletePage() {
             </div>
 
             {/* Training Schedule */}
-            {profile?.trainingDaysPerWeek && (
+            {typeof profile?.trainingDaysPerWeek === 'number' && profile.trainingDaysPerWeek > 0 && (
               <div className="flex items-start gap-3">
                 <div className="w-10 h-10 rounded-lg bg-[#4F6D8A]/10 flex items-center justify-center shrink-0">
                   <Calendar className="w-5 h-5 text-[#4F6D8A]" />
@@ -388,14 +392,14 @@ export default function OnboardingCompletePage() {
                   <p className="text-xs text-[#6B7280] uppercase tracking-wide">Schedule</p>
                   <p className="text-[#E6E9EF]">
                     {profile.trainingDaysPerWeek} days/week
-                    {profile.sessionLengthMinutes && typeof profile.sessionLengthMinutes === 'number' && ` • ${profile.sessionLengthMinutes} min sessions`}
+                    {typeof profile.sessionLengthMinutes === 'number' && profile.sessionLengthMinutes > 0 && ` • ${profile.sessionLengthMinutes} min sessions`}
                   </p>
                 </div>
               </div>
             )}
 
             {/* Readiness Summary */}
-            {readiness && (
+            {readiness && typeof readiness === 'object' && (
               <div className="flex items-start gap-3">
                 <div className="w-10 h-10 rounded-lg bg-emerald-500/10 flex items-center justify-center shrink-0">
                   <Zap className="w-5 h-5 text-emerald-400" />
@@ -405,11 +409,15 @@ export default function OnboardingCompletePage() {
                   <div className="flex items-center gap-3 mt-1">
                     <div className="flex items-center gap-1.5">
                       <span className="text-sm text-[#A4ACB8]">Strength</span>
-                      <span className="text-sm text-[#E6E9EF] font-medium">{readiness.strengthReadiness}%</span>
+                      <span className="text-sm text-[#E6E9EF] font-medium">
+                        {typeof readiness.strengthReadiness === 'number' ? readiness.strengthReadiness : 0}%
+                      </span>
                     </div>
                     <div className="flex items-center gap-1.5">
                       <span className="text-sm text-[#A4ACB8]">Skill</span>
-                      <span className="text-sm text-[#E6E9EF] font-medium">{readiness.skillReadiness}%</span>
+                      <span className="text-sm text-[#E6E9EF] font-medium">
+                        {typeof readiness.skillReadiness === 'number' ? readiness.skillReadiness : 0}%
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -417,7 +425,7 @@ export default function OnboardingCompletePage() {
             )}
 
             {/* Skills to Train */}
-            {profile?.selectedSkills && profile.selectedSkills.length > 0 && (
+            {Array.isArray(profile?.selectedSkills) && profile.selectedSkills.length > 0 && (
               <div className="flex items-start gap-3">
                 <div className="w-10 h-10 rounded-lg bg-amber-500/10 flex items-center justify-center shrink-0">
                   <Dumbbell className="w-5 h-5 text-amber-400" />
@@ -434,7 +442,7 @@ export default function OnboardingCompletePage() {
                         l_sit: 'L-Sit',
                         v_sit: 'V-Sit',
                       }
-                      return labels[s] || s
+                      return typeof s === 'string' ? (labels[s] || s) : String(s)
                     }).join(', ')}
                   </p>
                 </div>

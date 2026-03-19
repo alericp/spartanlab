@@ -5,9 +5,15 @@ import { useSearchParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { X, Sparkles, ArrowRight, Target, Calendar, Dumbbell, ChevronRight } from 'lucide-react'
-import { getOnboardingProfile, type OnboardingProfile } from '@/lib/athlete-profile'
-import { hasProAccess, isInTrial, getTrialDaysRemaining } from '@/lib/feature-access'
 import { cn } from '@/lib/utils'
+
+// =============================================================================
+// IMPORT SAFETY: Heavy helpers are now dynamically imported at runtime
+// This prevents module-evaluation failures from crashing the entire import graph
+// =============================================================================
+
+// Type-only imports are safe at module scope
+import type { OnboardingProfile } from '@/lib/athlete-profile'
 
 const WELCOME_DISMISSED_KEY = 'spartanlab_welcome_dismissed'
 
@@ -35,34 +41,57 @@ function WelcomeBannerInner() {
 
   useEffect(() => {
     setMounted(true)
+    console.log('[WelcomeBanner] Mounted, loading helpers via dynamic import')
     
-    // Defensively wrap all localStorage/feature-access calls
-    try {
-      setProfile(getOnboardingProfile())
-    } catch (err) {
-      console.error('[WelcomeBanner] getOnboardingProfile failed:', err)
+    // =======================================================================
+    // DYNAMIC IMPORT: Load heavy modules at runtime, not at module evaluation
+    // This prevents import-graph crashes from taking down the entire route
+    // =======================================================================
+    const loadHelpers = async () => {
+      // Load athlete-profile module dynamically
+      try {
+        const athleteModule = await import('@/lib/athlete-profile')
+        setProfile(athleteModule.getOnboardingProfile())
+        console.log('[WelcomeBanner] athlete-profile module loaded successfully')
+      } catch (err) {
+        console.error('[WelcomeBanner] Failed to load athlete-profile module:', err)
+      }
+      
+      // Load feature-access module dynamically
+      try {
+        const featureModule = await import('@/lib/feature-access')
+        
+        try {
+          setIsPro(featureModule.hasProAccess())
+        } catch (err) {
+          console.error('[WelcomeBanner] hasProAccess failed:', err)
+          setIsPro(false)
+        }
+        
+        try {
+          setIsTrial(featureModule.isInTrial())
+        } catch (err) {
+          console.error('[WelcomeBanner] isInTrial failed:', err)
+          setIsTrial(false)
+        }
+        
+        try {
+          setTrialDays(featureModule.getTrialDaysRemaining())
+        } catch (err) {
+          console.error('[WelcomeBanner] getTrialDaysRemaining failed:', err)
+          setTrialDays(0)
+        }
+        
+        console.log('[WelcomeBanner] feature-access module loaded successfully')
+      } catch (err) {
+        console.error('[WelcomeBanner] Failed to load feature-access module:', err)
+        setIsPro(false)
+        setIsTrial(false)
+        setTrialDays(0)
+      }
     }
     
-    try {
-      setIsPro(hasProAccess())
-    } catch (err) {
-      console.error('[WelcomeBanner] hasProAccess failed:', err)
-      setIsPro(false)
-    }
-    
-    try {
-      setIsTrial(isInTrial())
-    } catch (err) {
-      console.error('[WelcomeBanner] isInTrial failed:', err)
-      setIsTrial(false)
-    }
-    
-    try {
-      setTrialDays(getTrialDaysRemaining())
-    } catch (err) {
-      console.error('[WelcomeBanner] getTrialDaysRemaining failed:', err)
-      setTrialDays(0)
-    }
+    loadHelpers()
 
     // Check if already dismissed
     try {

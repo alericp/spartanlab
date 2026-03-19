@@ -76,10 +76,12 @@ export function buildProgramExplanation(
   context: ExplanationContext,
   sessions: SessionContext[]
 ): ProgramExplanationMetadata {
-  console.log('[explanation] Building program explanation with context:', {
+  console.log('[explanation] Building program explanation:', {
     goal: context.primaryGoal,
     scheduleMode: context.scheduleMode,
     dataConfidence: context.dataConfidence,
+    isFirstProgram: context.isFirstProgram,
+    limiters: context.limiters?.length || 0,
   })
   
   // Build summary

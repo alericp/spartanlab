@@ -153,7 +153,7 @@ export const METHOD_PROFILES: Record<MethodProfileType, MethodProfile> = {
       mobility: 0.0,
     },
     conditions: {
-      compatibleGoals: ['one_arm_chin_up', 'front_lever', 'planche', 'muscle_up', 'hspu', 'general_strength'],
+      compatibleGoals: ['weighted_strength', 'front_lever', 'planche', 'muscle_up', 'handstand_pushup', 'strength'],
       compatibleLevels: ['intermediate', 'advanced'],
       fatigueStateRequired: 'low',
     },
@@ -193,7 +193,7 @@ export const METHOD_PROFILES: Record<MethodProfileType, MethodProfile> = {
       mobility: 0.05,
     },
     conditions: {
-      compatibleGoals: ['muscle_up', 'general_strength', 'physique', 'pull_up_mastery', 'dip_strength'],
+      compatibleGoals: ['muscle_up', 'strength', 'general', 'weighted_strength'],
       compatibleLevels: ['beginner', 'intermediate', 'advanced'],
       fatigueStateRequired: 'any',
     },
@@ -233,7 +233,7 @@ export const METHOD_PROFILES: Record<MethodProfileType, MethodProfile> = {
       mobility: 0.05,
     },
     conditions: {
-      compatibleGoals: ['general_strength', 'muscle_up', 'l_sit', 'pull_up_mastery', 'endurance'],
+      compatibleGoals: ['strength', 'muscle_up', 'general', 'endurance'],
       compatibleLevels: ['beginner', 'intermediate', 'advanced'],
       maxSessionMinutes: 45,
       fatigueStateRequired: 'low',
@@ -274,7 +274,7 @@ export const METHOD_PROFILES: Record<MethodProfileType, MethodProfile> = {
       mobility: 0.25,
     },
     conditions: {
-      compatibleGoals: ['front_lever', 'planche', 'handstand', 'l_sit', 'flexibility', 'pancake', 'splits'],
+      compatibleGoals: ['front_lever', 'planche', 'flexibility', 'pancake', 'front_splits', 'side_splits', 'skill'],
       compatibleLevels: ['beginner', 'intermediate', 'advanced'],
       fatigueStateRequired: 'high',
     },
@@ -314,7 +314,7 @@ export const METHOD_PROFILES: Record<MethodProfileType, MethodProfile> = {
       mobility: 0.0,
     },
     conditions: {
-      compatibleGoals: ['one_arm_chin_up', 'muscle_up', 'front_lever', 'general_strength'],
+      compatibleGoals: ['weighted_strength', 'muscle_up', 'front_lever', 'strength'],
       compatibleLevels: ['intermediate', 'advanced'],
       fatigueStateRequired: 'low',
     },
@@ -355,7 +355,7 @@ export const METHOD_PROFILES: Record<MethodProfileType, MethodProfile> = {
       mobility: 0.35,
     },
     conditions: {
-      compatibleGoals: ['flexibility', 'pancake', 'splits', 'l_sit', 'v_sit', 'handstand'],
+      compatibleGoals: ['flexibility', 'pancake', 'front_splits', 'side_splits', 'toe_touch', 'skill'],
       compatibleLevels: ['beginner', 'intermediate', 'advanced'],
       fatigueStateRequired: 'any',
     },
@@ -424,7 +424,7 @@ export function selectMethodProfile(
   }
   
   // Flexibility-focused for flexibility goals
-  if (['flexibility', 'pancake', 'splits'].includes(primaryGoal)) {
+  if (['flexibility', 'pancake', 'front_splits', 'side_splits', 'toe_touch'].includes(primaryGoal)) {
     console.log('[doctrine] Selected: flexibility_integration (flexibility goal)')
     return {
       profile: METHOD_PROFILES.flexibility_integration,
@@ -435,7 +435,7 @@ export function selectMethodProfile(
   // Weighted basics for strength-focused advanced athletes
   if (
     experienceLevel === 'advanced' &&
-    ['one_arm_chin_up', 'general_strength'].includes(primaryGoal) &&
+    ['weighted_strength', 'strength'].includes(primaryGoal) &&
     fatigueState === 'low'
   ) {
     console.log('[doctrine] Selected: weighted_basics (advanced strength goal)')
@@ -448,7 +448,7 @@ export function selectMethodProfile(
   // Neural strength for low fatigue + advanced skills
   if (
     fatigueState === 'low' &&
-    ['one_arm_chin_up', 'front_lever', 'planche'].includes(primaryGoal) &&
+    ['weighted_strength', 'front_lever', 'planche'].includes(primaryGoal) &&
     experienceLevel !== 'beginner'
   ) {
     console.log('[doctrine] Selected: neural_strength (low fatigue, advanced skill)')
@@ -460,7 +460,7 @@ export function selectMethodProfile(
   
   // Skill-frequency for skill goals
   if (
-    ['front_lever', 'planche', 'muscle_up', 'handstand', 'hspu', 'l_sit', 'iron_cross'].includes(primaryGoal)
+    ['front_lever', 'planche', 'muscle_up', 'handstand_pushup', 'iron_cross', 'back_lever', 'skill'].includes(primaryGoal)
   ) {
     console.log('[doctrine] Selected: skill_frequency (skill goal)')
     return {

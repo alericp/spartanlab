@@ -64,12 +64,19 @@ function getMostCommonFocus(logs: WorkoutLog[]): FocusArea | null {
 }
 
 // Filter to only trusted workouts - excludes demo/seed/untrusted data
+// PHASE 5: Stricter filtering - require explicit trust OR known good sourceRoute
 function getTrustedWorkouts() {
   return getWorkoutLogs().filter(log => {
     // Reject demo workouts
     if (log.sourceRoute === 'demo' || (log as any).isDemo === true) return false
-    // Only include explicitly trusted logs or logs without the flag (legacy data)
-    return log.trusted !== false
+    // Reject explicitly untrusted
+    if (log.trusted === false) return false
+    // PHASE 5: Require explicit trust OR known good sourceRoute
+    const hasValidSource = log.sourceRoute === 'workout_session' || 
+                          log.sourceRoute === 'first_session' || 
+                          log.sourceRoute === 'quick_log'
+    const hasExplicitTrust = log.trusted === true
+    return hasValidSource || hasExplicitTrust
   })
 }
 

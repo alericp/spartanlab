@@ -134,6 +134,124 @@ const SAFE_DEFAULT_STATE: ProgramState = {
   sessionCount: 0,
 }
 
+// =============================================================================
+// PROGRAM NORMALIZATION - Crash-proof display helpers
+// =============================================================================
+
+/**
+ * Check if a program is safe to render in AdaptiveProgramDisplay
+ * Returns false if any critical display property could cause a crash
+ */
+export function isRenderableProgram(program: AdaptiveProgram | null): boolean {
+  if (!program || typeof program !== 'object') return false
+  if (!Array.isArray(program.sessions)) return false
+  if (!program.goalLabel || typeof program.goalLabel !== 'string') return false
+  if (!program.createdAt) return false
+  return true
+}
+
+/**
+ * Default values for missing nested objects in AdaptiveProgram
+ * Used to prevent crashes when accessing optional properties
+ */
+const DEFAULT_CONSTRAINT_INSIGHT = {
+  hasInsight: false,
+  label: 'Training Balanced',
+  category: 'none' as const,
+  severity: 'low' as const,
+}
+
+const DEFAULT_STRUCTURE = {
+  structureName: 'Custom Program',
+  rationale: 'Personalized training structure',
+  dayTypes: [],
+}
+
+const DEFAULT_ENGINE_CONTEXT = {
+  plateauStatus: 'no_plateau' as const,
+  strengthSupportLevel: 'unknown' as const,
+  fatigueState: 'normal' as const,
+  recommendations: [],
+}
+
+const DEFAULT_EQUIPMENT_PROFILE = {
+  hasFullSetup: true,
+  adaptationNotes: [],
+  available: [],
+  missing: [],
+}
+
+/**
+ * Normalize a program for safe display
+ * Fills in missing nested objects with safe defaults to prevent crashes
+ * 
+ * IMPORTANT: This does NOT validate the program is usable for workouts,
+ * only that it won't crash when rendered.
+ */
+export function normalizeProgramForDisplay(program: AdaptiveProgram | null): AdaptiveProgram | null {
+  if (!program || typeof program !== 'object') return null
+  
+  try {
+    // Create a safe copy with defaults for all potentially missing nested objects
+    const normalized: AdaptiveProgram = {
+      ...program,
+      // Ensure required string fields have defaults
+      goalLabel: program.goalLabel || 'Training Program',
+      experienceLevel: program.experienceLevel || 'intermediate',
+      programRationale: program.programRationale || '',
+      recoveryLevel: program.recoveryLevel || 'MODERATE',
+      createdAt: program.createdAt || new Date().toISOString(),
+      
+      // Ensure numeric fields have defaults
+      sessionLength: program.sessionLength || 60,
+      trainingDaysPerWeek: program.trainingDaysPerWeek || 3,
+      currentWeekFrequency: program.currentWeekFrequency || program.trainingDaysPerWeek || 3,
+      
+      // Ensure nested objects have defaults
+      constraintInsight: {
+        ...DEFAULT_CONSTRAINT_INSIGHT,
+        ...(program.constraintInsight || {}),
+      },
+      structure: {
+        ...DEFAULT_STRUCTURE,
+        ...(program.structure || {}),
+      },
+      engineContext: program.engineContext ? {
+        ...DEFAULT_ENGINE_CONTEXT,
+        ...program.engineContext,
+        recommendations: Array.isArray(program.engineContext.recommendations) 
+          ? program.engineContext.recommendations 
+          : [],
+      } : undefined,
+      equipmentProfile: program.equipmentProfile ? {
+        ...DEFAULT_EQUIPMENT_PROFILE,
+        ...program.equipmentProfile,
+        adaptationNotes: Array.isArray(program.equipmentProfile.adaptationNotes)
+          ? program.equipmentProfile.adaptationNotes
+          : [],
+      } : undefined,
+      
+      // Ensure sessions array exists and filter out invalid sessions
+      sessions: Array.isArray(program.sessions) 
+        ? program.sessions.filter(s => s && typeof s === 'object' && Array.isArray(s.exercises))
+        : [],
+    }
+    
+    console.log('[ProgramState] Normalized program for display:', {
+      originalSessions: program.sessions?.length || 0,
+      normalizedSessions: normalized.sessions.length,
+      hasConstraintInsight: !!program.constraintInsight,
+      hasStructure: !!program.structure,
+      hasEngineContext: !!program.engineContext,
+    })
+    
+    return normalized
+  } catch (err) {
+    console.error('[ProgramState] Error normalizing program:', err)
+    return null
+  }
+}
+
 /**
  * Get unified program state - THE canonical check for program existence
  * 

@@ -224,6 +224,17 @@ import {
 import {
   verifyExerciseInDatabase,
 } from './exercise-database-resolver'
+import {
+  resolveFlexibleFrequency,
+  normalizeScheduleMode,
+  getEffectiveFrequency,
+  type ScheduleMode,
+  type FlexibleWeekStructure,
+  type DayStressLevel,
+} from './flexible-schedule-engine'
+
+// Re-export schedule types for consumers
+export type { ScheduleMode, DayStressLevel } from './flexible-schedule-engine'
   
 // =============================================================================
 // TYPES
@@ -239,10 +250,12 @@ type AdaptiveSessionContext = {
 export interface AdaptiveProgramInputs {
   primaryGoal: PrimaryGoal
   experienceLevel: ExperienceLevel
-  trainingDaysPerWeek: TrainingDays
+  trainingDaysPerWeek: TrainingDays | 'flexible'  // Can be numeric or 'flexible'
   sessionLength: SessionLength
   equipment: EquipmentType[]
   todaySessionMinutes?: number // Override for today's available time
+  // Flexible scheduling support
+  scheduleMode?: ScheduleMode  // 'static' or 'flexible'
 }
 
 export interface AdaptiveSession {
@@ -331,9 +344,13 @@ export interface AdaptiveProgram {
   experienceLevel: ExperienceLevel
   trainingDaysPerWeek: TrainingDays
   sessionLength: SessionLength
-  // DATABASE ENFORCEMENT: Preserve flexible scheduling intent
-  scheduleMode?: 'static' | 'flexible'
+  // FLEXIBLE SCHEDULING: Preserve user's schedule mode and current week resolution
+  scheduleMode?: ScheduleMode
+  currentWeekFrequency?: number  // Actual days for this generated week
   recommendedFrequencyRange?: { min: number; max: number }
+  flexibleWeekRationale?: string  // Why engine chose this frequency
+  dayStressPattern?: DayStressLevel[]  // Stress distribution for the week
+  weekNumber?: number  // For tracking week-over-week adaptation
   structure: WeeklyStructure
   sessions: AdaptiveSession[]
   equipmentProfile: EquipmentProfile
@@ -833,6 +850,36 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
   const trainingPath = onboardingProfile?.trainingPathType || 'hybrid'
   const workoutDuration = onboardingProfile?.workoutDurationPreference || 'medium'
   
+  // FLEXIBLE SCHEDULING: Resolve schedule mode and week structure
+  const inputScheduleMode = inputs.scheduleMode || normalizeScheduleMode(trainingDaysPerWeek)
+  console.log('[schedule-mode] Detected mode:', inputScheduleMode)
+  
+  // Resolve flexible frequency if applicable
+  let flexibleWeekStructure: FlexibleWeekStructure | null = null
+  let effectiveTrainingDays: TrainingDays = typeof trainingDaysPerWeek === 'number' 
+    ? trainingDaysPerWeek as TrainingDays 
+    : 4 // Default fallback
+    
+  if (inputScheduleMode === 'flexible') {
+    flexibleWeekStructure = resolveFlexibleFrequency({
+      scheduleMode: 'flexible',
+      primaryGoal,
+      experienceLevel,
+      jointCautions: profile?.jointCautions,
+      recoveryProfile: profile?.recoveryProfile,
+      trainingStyle: (profile as AthleteProfile & { trainingStyle?: string })?.trainingStyle,
+    })
+    effectiveTrainingDays = flexibleWeekStructure.currentWeekFrequency as TrainingDays
+    console.log('[flex-frequency] Resolved week:', {
+      frequency: effectiveTrainingDays,
+      range: `${flexibleWeekStructure.recommendedMinDays}-${flexibleWeekStructure.recommendedMaxDays}`,
+      distribution: flexibleWeekStructure.intensityDistribution,
+    })
+  } else {
+    effectiveTrainingDays = getEffectiveFrequency(trainingDaysPerWeek) as TrainingDays
+    console.log('[schedule-mode] Static mode, using:', effectiveTrainingDays, 'days')
+  }
+  
   // Get duration-based configuration for exercise count and structure
   const durationConfig = getDurationConfig(workoutDuration)
   
@@ -1061,10 +1108,10 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
     coachingTip: getCoachingMessage(selectedMethods),
   }
   
-  // Select optimal weekly structure
+  // Select optimal weekly structure - USE effectiveTrainingDays for flexible support
   const structure = selectOptimalStructure({
     primaryGoal,
-    trainingDays: trainingDaysPerWeek,
+    trainingDays: effectiveTrainingDays,  // Uses resolved flexible frequency
     recoveryLevel: recoverySignal.level,
     constraintType: constraintInsight.hasInsight ? constraintInsight.label : undefined,
   })
@@ -1080,7 +1127,7 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
     trainingStyle: trainingStyleMode,
     primaryConstraint: constraintInsight.hasInsight ? constraintInsight.label : null,
     experienceLevel: experienceLevel as 'beginner' | 'intermediate' | 'advanced',
-    weeklyDays: trainingDaysPerWeek,
+    weeklyDays: effectiveTrainingDays,  // Uses resolved flexible frequency
     existingIntents: [],
   })
   
@@ -1343,13 +1390,18 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
     dbCoverage: totalExercises > 0 ? `${Math.round((dbVerifiedExercises / totalExercises) * 100)}%` : 'N/A',
   })
   
-  // DATABASE ENFORCEMENT: Detect schedule mode from profile
-  const profileScheduleFlexible = onboardingProfile?.trainingDaysPerWeek === 'flexible' ||
-    onboardingProfile?.sessionLengthMinutes === 'flexible'
-  const scheduleMode: 'static' | 'flexible' = profileScheduleFlexible ? 'flexible' : 'static'
-  const recommendedFrequencyRange = profileScheduleFlexible 
-    ? { min: 3, max: 5 } // Flexible users can train 3-5 days
-    : { min: trainingDaysPerWeek, max: trainingDaysPerWeek }
+  // FLEXIBLE SCHEDULING: Use resolved schedule data
+  const finalScheduleMode = inputScheduleMode
+  const finalFrequencyRange = flexibleWeekStructure 
+    ? { min: flexibleWeekStructure.recommendedMinDays, max: flexibleWeekStructure.recommendedMaxDays }
+    : { min: effectiveTrainingDays, max: effectiveTrainingDays }
+  
+  console.log('[week-structure] Final program metadata:', {
+    scheduleMode: finalScheduleMode,
+    currentWeekFrequency: effectiveTrainingDays,
+    range: `${finalFrequencyRange.min}-${finalFrequencyRange.max}`,
+    hasFlexibleStructure: !!flexibleWeekStructure,
+  })
   
   return {
     id: `adaptive-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
@@ -1357,11 +1409,15 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
     primaryGoal,
     goalLabel: GOAL_LABELS[primaryGoal],
     experienceLevel,
-    trainingDaysPerWeek,
+    trainingDaysPerWeek: effectiveTrainingDays,  // Store actual generated days
     sessionLength,
-    // DATABASE ENFORCEMENT: Preserve schedule mode semantics
-    scheduleMode,
-    recommendedFrequencyRange,
+    // FLEXIBLE SCHEDULING: Full schedule mode semantics
+    scheduleMode: finalScheduleMode,
+    currentWeekFrequency: effectiveTrainingDays,
+    recommendedFrequencyRange: finalFrequencyRange,
+    flexibleWeekRationale: flexibleWeekStructure?.rationale,
+    dayStressPattern: flexibleWeekStructure?.dayStressPattern,
+    weekNumber: 1,  // First generated week
     structure,
     sessions,
     equipmentProfile,

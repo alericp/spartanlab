@@ -12,7 +12,7 @@ import {
 } from './athlete-profile'
 import { getAthleteCalibration } from './athlete-calibration'
 import { detectWeakPoints, type WeakPointSummary } from './weak-point-detection'
-import { generateAdaptiveProgram, saveAdaptiveProgram, type AdaptiveProgramInputs, type AdaptiveProgram } from './adaptive-program-builder'
+import { generateAdaptiveProgram, saveAdaptiveProgram, type AdaptiveProgramInputs, type AdaptiveProgram, type ScheduleMode } from './adaptive-program-builder'
 import { validateAndLogProgram } from './program-validation'
 import { evaluateTrainingBehavior, type TrainingBehaviorResult } from './adaptive-progression-engine'
 import { createInitialProgramHistoryEntry } from './program-history-versioning'
@@ -271,6 +271,11 @@ export function generateFirstProgram(): FirstRunResult {
     // Normalize profile to safe inputs (handles legacy + current field names)
     const normalized = normalizeProfileForGeneration(profile)
     
+    // Detect schedule mode from onboarding data
+    const isFlexibleMode = normalized.trainingDaysPerWeek === 'flexible' || 
+      normalized.sessionLengthMinutes === 'flexible' ||
+      (profile as OnboardingProfile & { scheduleMode?: string }).scheduleMode === 'flexible'
+    
     // Map normalized data to program inputs
     const programInputs: AdaptiveProgramInputs = {
       primaryGoal: mapSkillInterestsToPrimaryGoal(normalized.selectedSkills, normalized.primaryGoal),
@@ -278,7 +283,11 @@ export function generateFirstProgram(): FirstRunResult {
       trainingDaysPerWeek: mapTrainingDays(normalized.trainingDaysPerWeek),
       sessionLength: mapSessionLength(normalized.sessionLengthMinutes),
       equipment: mapEquipment(normalized.equipment),
+      // FLEXIBLE SCHEDULING: Pass through schedule mode
+      scheduleMode: isFlexibleMode ? 'flexible' : 'static',
     }
+    
+    console.log('[OnboardingService] Schedule mode:', isFlexibleMode ? 'flexible' : 'static')
     
     // Generate the program
     const program = generateAdaptiveProgram(programInputs)

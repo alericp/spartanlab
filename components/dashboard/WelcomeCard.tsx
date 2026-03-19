@@ -254,9 +254,9 @@ export function WelcomeCard({ onDismiss, onProgramReady }: WelcomeCardProps) {
           </p>
           <div className="flex flex-wrap gap-1.5">
             <span className="px-2 py-0.5 bg-[#0F1115] rounded text-xs text-[#A4ACB8] capitalize">
-              {summary.strengthTier.replace('_', ' ')} level
+              {(summary.strengthTier || 'intermediate').replace('_', ' ')} level
             </span>
-            {summary.skillInterests.slice(0, 2).map(skill => (
+            {Array.isArray(summary.skillInterests) && summary.skillInterests.slice(0, 2).map(skill => (
               <span
                 key={skill}
                 className="px-2 py-0.5 bg-[#C1121F]/10 rounded text-xs text-[#C1121F] capitalize"

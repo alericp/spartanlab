@@ -1,5 +1,15 @@
 'use client'
 
+/**
+ * @deprecated UNUSED COMPONENT - DO NOT USE
+ * 
+ * This component is NOT routed to and NOT imported anywhere.
+ * The LIVE onboarding complete flow uses: app/onboarding/complete/page.tsx
+ * 
+ * This file is kept for reference only and should be deleted in a future cleanup.
+ * If you need onboarding complete functionality, use the live route page instead.
+ */
+
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'

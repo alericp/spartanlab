@@ -130,16 +130,46 @@ export function getAthleteProfile(): AthleteProfile | null {
 }
 
 // Save athlete profile
+// NOTE: This is a local fallback store for client truth-state continuity
+// when DB-backed profile hydration is unavailable. For real users without
+// an existing local profile, we create a safe new local profile object.
 export function saveAthleteProfile(profile: Partial<AthleteProfile>): AthleteProfile {
   if (!isBrowser()) return DEFAULT_PROFILE
   
   const current = getAthleteProfile()
+  
+  // TASK 1 FIX: Handle case where no existing profile exists (null)
+  // For real users, create safe local-only identity rather than crashing
+  const baseProfile: AthleteProfile = current ?? {
+    id: 'local-profile',
+    userId: 'local-user',
+    sex: null,
+    height: null,
+    heightUnit: 'inches',
+    bodyweight: null,
+    weightUnit: 'lbs',
+    bodyFatPercent: null,
+    bodyFatSource: null,
+    experienceLevel: 'beginner',
+    trainingDaysPerWeek: 3,
+    sessionLengthMinutes: 60,
+    primaryGoal: null,
+    equipmentAvailable: [],
+    jointCautions: [],
+    weakestArea: null,
+    trainingStyle: 'balanced_hybrid',
+    scheduleMode: 'static',
+    onboardingComplete: false,
+    createdAt: new Date().toISOString(),
+  }
+  
   const updated: AthleteProfile = {
-    ...current,
+    ...baseProfile,
     ...profile,
-    id: current.id,
-    userId: current.userId,
-    createdAt: current.createdAt,
+    // Preserve identity fields from existing profile, or use new safe defaults
+    id: baseProfile.id,
+    userId: baseProfile.userId,
+    createdAt: baseProfile.createdAt,
   }
   
   localStorage.setItem(STORAGE_KEYS.profile, JSON.stringify(updated))

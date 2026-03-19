@@ -219,10 +219,11 @@ export function EmptyHistoryState({ type }: EmptyHistoryStateProps) {
     },
     programs: {
       icon: Calendar,
-      title: 'No program history yet',
-      description: 'Your training programs will be preserved here automatically.',
-      cta: 'View Program',
-      ctaHref: '/programs',
+      title: 'No archived programs yet',
+      // TASK 7: Clarify that this is archive history, not current program
+      description: 'Past programs are archived here when you create new ones. Your current program is on the Program page.',
+      cta: 'View Current Program',
+      ctaHref: '/program',
     },
     prs: {
       icon: Trophy,

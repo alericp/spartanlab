@@ -67,7 +67,9 @@ export async function GET() {
     `, [userId])
     
     if (!profiles || profiles.length === 0) {
+      // TASK 4: Return stable response shape even when no profile exists
       return NextResponse.json({ 
+        success: true,
         profile: null,
         message: 'No profile found. Complete onboarding to create your profile.'
       })

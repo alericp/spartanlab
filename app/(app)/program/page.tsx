@@ -3,32 +3,48 @@
 /**
  * Program Page - The canonical current-program experience
  * 
+ * TASK 5: Import isolation for crash-resistance
+ * Heavy program modules are loaded dynamically in useEffect to prevent
+ * hydration/SSR crashes that cause the global error boundary.
+ * 
  * Priority order:
  * 1. Show existing adaptive program if available
  * 2. Migration from spartanlab_first_program handled by getProgramState()
  * 3. Show builder as secondary action for creating/regenerating
  */
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { AdaptiveProgramForm } from '@/components/programs/AdaptiveProgramForm'
-import { AdaptiveProgramDisplay } from '@/components/programs/AdaptiveProgramDisplay'
-import { ProgramAdjustmentModal } from '@/components/programs/ProgramAdjustmentModal'
-import {
-  generateAdaptiveProgram,
-  saveAdaptiveProgram,
-  deleteAdaptiveProgram,
-  getDefaultAdaptiveInputs,
-  type AdaptiveProgramInputs,
-  type AdaptiveProgram,
-} from '@/lib/adaptive-program-builder'
-import { getProgramState, normalizeProgramForDisplay, isRenderableProgram } from '@/lib/program-state'
-import { runClientDataHygiene } from '@/lib/client-data-hygiene'
-import { getConstraintInsight } from '@/lib/constraint-engine'
-import { getProgramStatus, recordProgramEnd } from '@/lib/program-adjustment-engine'
-import { ArrowLeft, Dumbbell, Plus, Sparkles, AlertTriangle } from 'lucide-react'
+import { ArrowLeft, Dumbbell, Plus, Sparkles, AlertTriangle, Loader2 } from 'lucide-react'
 import Link from 'next/link'
+
+// TASK 5: Lightweight type imports only - actual modules loaded dynamically
+import type { AdaptiveProgramInputs, AdaptiveProgram } from '@/lib/adaptive-program-builder'
+
+// TASK 5: Lazy load heavy components to prevent SSR/hydration crashes
+import dynamic from 'next/dynamic'
+
+const AdaptiveProgramForm = dynamic(
+  () => import('@/components/programs/AdaptiveProgramForm').then(mod => ({ default: mod.AdaptiveProgramForm })),
+  { 
+    loading: () => <div className="animate-pulse h-64 bg-[#2A2A2A] rounded-lg" />,
+    ssr: false 
+  }
+)
+
+const AdaptiveProgramDisplay = dynamic(
+  () => import('@/components/programs/AdaptiveProgramDisplay').then(mod => ({ default: mod.AdaptiveProgramDisplay })),
+  { 
+    loading: () => <div className="animate-pulse h-64 bg-[#2A2A2A] rounded-lg" />,
+    ssr: false 
+  }
+)
+
+const ProgramAdjustmentModal = dynamic(
+  () => import('@/components/programs/ProgramAdjustmentModal').then(mod => ({ default: mod.ProgramAdjustmentModal })),
+  { ssr: false }
+)
 
 export default function ProgramPage() {
   const [inputs, setInputs] = useState<AdaptiveProgramInputs | null>(null)
@@ -38,104 +54,175 @@ export default function ProgramPage() {
   const [showBuilder, setShowBuilder] = useState(false)
   const [showAdjustmentModal, setShowAdjustmentModal] = useState(false)
   const [mounted, setMounted] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  
+  // TASK 5: Store dynamically imported module references
+  const [programModules, setProgramModules] = useState<{
+    generateAdaptiveProgram: typeof import('@/lib/adaptive-program-builder').generateAdaptiveProgram | null
+    saveAdaptiveProgram: typeof import('@/lib/adaptive-program-builder').saveAdaptiveProgram | null
+    deleteAdaptiveProgram: typeof import('@/lib/adaptive-program-builder').deleteAdaptiveProgram | null
+    getDefaultAdaptiveInputs: typeof import('@/lib/adaptive-program-builder').getDefaultAdaptiveInputs | null
+    getProgramState: typeof import('@/lib/program-state').getProgramState | null
+    normalizeProgramForDisplay: typeof import('@/lib/program-state').normalizeProgramForDisplay | null
+    isRenderableProgram: typeof import('@/lib/program-state').isRenderableProgram | null
+    getProgramStatus: typeof import('@/lib/program-adjustment-engine').getProgramStatus | null
+    recordProgramEnd: typeof import('@/lib/program-adjustment-engine').recordProgramEnd | null
+  }>({
+    generateAdaptiveProgram: null,
+    saveAdaptiveProgram: null,
+    deleteAdaptiveProgram: null,
+    getDefaultAdaptiveInputs: null,
+    getProgramState: null,
+    normalizeProgramForDisplay: null,
+    isRenderableProgram: null,
+    getProgramStatus: null,
+    recordProgramEnd: null,
+  })
 
   useEffect(() => {
-    setMounted(true)
-    
-    // PHASE 5: Run hygiene to clean stale data before loading program
-    runClientDataHygiene()
-    
-    // Load default inputs
-    const defaultInputs = getDefaultAdaptiveInputs()
-    setInputs(defaultInputs)
-    
-    // PHASE 1: Load existing program with crash-proof normalization
-    // getProgramState() handles migration and validation
-    // normalizeProgramForDisplay() ensures all nested objects have safe defaults
-    try {
-      const programState = getProgramState()
-      
-      // Diagnostic: Log program state for debugging client crashes
-      console.log('[ProgramPage] Program state:', {
-        hasUsableWorkoutProgram: programState.hasUsableWorkoutProgram,
-        adaptiveProgramExists: !!programState.adaptiveProgram,
-        sessionCount: programState.sessionCount,
-        source: programState.adaptiveProgram ? 'canonical' : programState.legacyProgram ? 'legacy' : 'none',
-      })
-      
-      if (programState.hasUsableWorkoutProgram && programState.adaptiveProgram) {
-        // PHASE 1: Normalize program before setting state to prevent render crashes
-        const normalizedProgram = normalizeProgramForDisplay(programState.adaptiveProgram)
+    // TASK 5: Dynamically import heavy modules to prevent hydration crashes
+    const loadModules = async () => {
+      try {
+        const [builderMod, stateMod, adjustmentMod, hygieneMod, constraintMod] = await Promise.all([
+          import('@/lib/adaptive-program-builder'),
+          import('@/lib/program-state'),
+          import('@/lib/program-adjustment-engine'),
+          import('@/lib/client-data-hygiene'),
+          import('@/lib/constraint-engine'),
+        ])
         
-        if (normalizedProgram && isRenderableProgram(normalizedProgram)) {
-          setProgram(normalizedProgram)
-          setShowBuilder(false)
-          console.log('[ProgramPage] Loaded and normalized usable adaptive program')
-        } else {
-          // Program exists but couldn't be normalized - show builder
-          console.log('[ProgramPage] Program exists but failed normalization - showing builder')
+        setProgramModules({
+          generateAdaptiveProgram: builderMod.generateAdaptiveProgram,
+          saveAdaptiveProgram: builderMod.saveAdaptiveProgram,
+          deleteAdaptiveProgram: builderMod.deleteAdaptiveProgram,
+          getDefaultAdaptiveInputs: builderMod.getDefaultAdaptiveInputs,
+          getProgramState: stateMod.getProgramState,
+          normalizeProgramForDisplay: stateMod.normalizeProgramForDisplay,
+          isRenderableProgram: stateMod.isRenderableProgram,
+          getProgramStatus: adjustmentMod.getProgramStatus,
+          recordProgramEnd: adjustmentMod.recordProgramEnd,
+        })
+        
+        // Run hygiene
+        hygieneMod.runClientDataHygiene()
+        
+        // Load default inputs
+        const defaultInputs = builderMod.getDefaultAdaptiveInputs()
+        setInputs(defaultInputs)
+        
+        // Load existing program with crash-proof normalization
+        try {
+          const programState = stateMod.getProgramState()
+          
+          console.log('[ProgramPage] Program state:', {
+            hasUsableWorkoutProgram: programState.hasUsableWorkoutProgram,
+            adaptiveProgramExists: !!programState.adaptiveProgram,
+            sessionCount: programState.sessionCount,
+            source: programState.adaptiveProgram ? 'canonical' : programState.legacyProgram ? 'legacy' : 'none',
+          })
+          
+          if (programState.hasUsableWorkoutProgram && programState.adaptiveProgram) {
+            const normalizedProgram = stateMod.normalizeProgramForDisplay(programState.adaptiveProgram)
+            
+            if (normalizedProgram && stateMod.isRenderableProgram(normalizedProgram)) {
+              setProgram(normalizedProgram)
+              setShowBuilder(false)
+              console.log('[ProgramPage] Loaded and normalized usable adaptive program')
+            } else {
+              console.log('[ProgramPage] Program exists but failed normalization - showing builder')
+              setShowBuilder(true)
+            }
+          } else {
+            if (programState.adaptiveProgram && !programState.hasUsableWorkoutProgram) {
+              console.log('[ProgramPage] Adaptive program exists but is not usable - showing builder')
+            }
+            setShowBuilder(true)
+          }
+        } catch (err) {
+          console.error('[ProgramPage] Error loading program:', err)
           setShowBuilder(true)
         }
-      } else {
-        // No usable program - show builder
-        if (programState.adaptiveProgram && !programState.hasUsableWorkoutProgram) {
-          console.log('[ProgramPage] Adaptive program exists but is not usable - showing builder')
+        
+        // Get constraint insight
+        try {
+          const insight = constraintMod.getConstraintInsight()
+          setConstraintLabel(insight.label)
+        } catch (err) {
+          console.error('[ProgramPage] Error getting constraint insight:', err)
+          setConstraintLabel('')
         }
-        setShowBuilder(true)
+        
+        setMounted(true)
+      } catch (err) {
+        // TASK 5: Handle module load failure gracefully - show local error, not global crash
+        console.error('[ProgramPage] Failed to load program modules:', err)
+        setLoadError('Failed to load program. Please refresh the page.')
+        setMounted(true)
       }
-    } catch (err) {
-      // PHASE 1: Catch any errors during program loading
-      console.error('[ProgramPage] Error loading program:', err)
-      setShowBuilder(true)
     }
     
-    // Get constraint insight (also wrap in try-catch)
-    try {
-      const insight = getConstraintInsight()
-      setConstraintLabel(insight.label)
-    } catch (err) {
-      console.error('[ProgramPage] Error getting constraint insight:', err)
-      setConstraintLabel('')
-    }
+    loadModules()
   }, [])
 
-  const handleGenerate = () => {
-    if (!inputs) return
+  // TASK 5: Handlers use dynamically imported modules
+  const handleGenerate = useCallback(() => {
+    if (!inputs || !programModules.generateAdaptiveProgram || !programModules.saveAdaptiveProgram) return
     
     setIsGenerating(true)
     
     // Small delay for UX
     setTimeout(() => {
-      const newProgram = generateAdaptiveProgram(inputs)
-      saveAdaptiveProgram(newProgram)
+      const newProgram = programModules.generateAdaptiveProgram(inputs)
+      programModules.saveAdaptiveProgram(newProgram)
       setProgram(newProgram)
       setShowBuilder(false)
       setIsGenerating(false)
     }, 500)
-  }
+  }, [inputs, programModules])
 
-  const handleDelete = () => {
-    if (program) {
-      deleteAdaptiveProgram(program.id)
+  const handleDelete = useCallback(() => {
+    if (program && programModules.deleteAdaptiveProgram) {
+      programModules.deleteAdaptiveProgram(program.id)
       setProgram(null)
       setShowBuilder(true)
     }
-  }
+  }, [program, programModules])
 
-  const handleNewProgram = () => {
+  const handleNewProgram = useCallback(() => {
     // If there's an active program, show the adjustment modal first
-    const status = getProgramStatus()
+    const status = programModules.getProgramStatus?.()
     if (status && program) {
       setShowAdjustmentModal(true)
       return
     }
     setShowBuilder(true)
-  }
+  }, [program, programModules])
 
-  const handleConfirmNewProgram = () => {
-    recordProgramEnd('new_program')
+  const handleConfirmNewProgram = useCallback(() => {
+    programModules.recordProgramEnd?.('new_program')
     setShowAdjustmentModal(false)
     setShowBuilder(true)
+  }, [programModules])
+
+  // TASK 5: Show error state for module load failure
+  if (loadError) {
+    return (
+      <div className="min-h-screen bg-[#0A0A0A] text-white">
+        <div className="max-w-4xl mx-auto p-4 sm:p-6">
+          <Card className="bg-[#2A2A2A] border-[#3A3A3A] p-8 text-center">
+            <AlertTriangle className="w-12 h-12 text-amber-500 mx-auto mb-4" />
+            <h3 className="text-lg font-medium mb-2">Unable to Load Program</h3>
+            <p className="text-sm text-[#6A6A6A] mb-4">{loadError}</p>
+            <Button
+              onClick={() => window.location.reload()}
+              className="bg-[#E63946] hover:bg-[#D62828]"
+            >
+              Refresh Page
+            </Button>
+          </Card>
+        </div>
+      </div>
+    )
   }
 
   if (!mounted || !inputs) {
@@ -217,12 +304,12 @@ export default function ProgramPage() {
               </Button>
             )}
           </div>
-        ) : program && isRenderableProgram(program) ? (
+        ) : program && programModules.isRenderableProgram?.(program) ? (
           <AdaptiveProgramDisplay
             program={program}
             onDelete={handleDelete}
           />
-        ) : program && !isRenderableProgram(program) ? (
+        ) : program && !programModules.isRenderableProgram?.(program) ? (
           // PHASE 1: Program exists but is malformed - show recovery state
           <Card className="bg-[#2A2A2A] border-[#3A3A3A] p-8 text-center">
             <AlertTriangle className="w-12 h-12 text-amber-500 mx-auto mb-4" />

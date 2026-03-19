@@ -1439,7 +1439,26 @@ export const CORE_EXERCISES_POOL: Exercise[] = [
     isIsometric: true,
     notes: 'Compression in hang',
   },
-  // ===== DRAGON FLAG =====
+  // ===== DRAGON FLAG PROGRESSION =====
+  // Progression: Tuck -> Negatives -> Assisted (band) -> Full
+  {
+    id: 'dragon_flag_tuck',
+    name: 'Tuck Dragon Flag',
+    category: 'core',
+    movementPattern: 'core',
+    primaryMuscles: ['rectus_abdominis', 'obliques'],
+    equipment: ['floor'],
+    neuralDemand: 2,
+    fatigueCost: 2,
+    transferTo: ['front_lever'],
+    defaultSets: 3,
+    defaultRepsOrTime: '8-10',
+    supportsBandAssistance: false,
+    difficultyLevel: 'beginner',
+    movementCategory: 'core',
+    supportsRPE: true,
+    notes: 'Entry progression - knees tucked, focus on body tension',
+  },
   {
     id: 'dragon_flag_neg',
     name: 'Dragon Flag Negatives',
@@ -1456,7 +1475,25 @@ export const CORE_EXERCISES_POOL: Exercise[] = [
     difficultyLevel: 'intermediate',
     movementCategory: 'core',
     supportsRPE: true,
-    notes: 'Eccentric full body control',
+    notes: 'Eccentric focus - 4-5s lowering phase',
+  },
+  {
+    id: 'dragon_flag_assisted',
+    name: 'Band-Assisted Dragon Flag',
+    category: 'core',
+    movementPattern: 'core',
+    primaryMuscles: ['rectus_abdominis', 'obliques', 'hip_flexors'],
+    equipment: ['floor', 'bands'],
+    neuralDemand: 3,
+    fatigueCost: 3,
+    transferTo: ['front_lever'],
+    defaultSets: 3,
+    defaultRepsOrTime: '6-8',
+    supportsBandAssistance: true,
+    difficultyLevel: 'intermediate',
+    movementCategory: 'core',
+    supportsRPE: true,
+    notes: 'Band assists concentric phase - builds full ROM strength',
   },
   {
     id: 'dragon_flag',
@@ -1474,7 +1511,7 @@ export const CORE_EXERCISES_POOL: Exercise[] = [
     difficultyLevel: 'advanced',
     movementCategory: 'core',
     supportsRPE: true,
-    notes: 'Full dragon flag both phases',
+    notes: 'Full dragon flag - both concentric and eccentric phases',
   },
   // ===== ANTI-EXTENSION =====
   {

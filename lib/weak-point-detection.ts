@@ -14,11 +14,13 @@ export type DevelopmentFocus =
   | 'pulling_strength'
   | 'pushing_strength'
   | 'core_compression'
+  | 'core_anti_extension'
   | 'shoulder_stability'
   | 'skill_coordination'
   | 'hip_mobility'
   | 'posterior_chain'
   | 'balanced_development'
+  | 'general_fatigue'
 
 export type MobilityEmphasis = 'none' | 'moderate' | 'high'
 
@@ -65,11 +67,13 @@ const FOCUS_LABELS: Record<DevelopmentFocus, string> = {
   'pulling_strength': 'Pull strength development',
   'pushing_strength': 'Push strength development',
   'core_compression': 'Core and compression',
+  'core_anti_extension': 'Core anti-extension',
   'shoulder_stability': 'Shoulder stability',
   'skill_coordination': 'Skill coordination',
   'hip_mobility': 'Hip mobility',
   'posterior_chain': 'Posterior chain flexibility',
   'balanced_development': 'Balanced development',
+  'general_fatigue': 'Recovery focus',
 }
 
 // =============================================================================
@@ -621,8 +625,14 @@ export function getExerciseSelectionGuidance(weakPoints: WeakPointSummary): {
       additionalNotes.push('Emphasize pushing volume')
       break
     case 'core_compression':
-      priorityExerciseTypes.push('L-sits', 'hollow holds', 'compression work')
+      priorityExerciseTypes.push('L-sits', 'dragon flag negatives', 'compression work')
       additionalNotes.push('Include compression in every session')
+      additionalNotes.push('Dragon flags build compression + anti-extension together')
+      break
+    case 'core_anti_extension':
+      priorityExerciseTypes.push('hollow holds', 'dragon flags', 'front lever raises')
+      additionalNotes.push('Focus on maintaining body tension against gravity')
+      additionalNotes.push('Progress dragon flag: tuck -> negatives -> assisted -> full')
       break
     case 'shoulder_stability':
       priorityExerciseTypes.push('scapular work', 'support holds', 'shoulder prep')
@@ -631,6 +641,10 @@ export function getExerciseSelectionGuidance(weakPoints: WeakPointSummary): {
     case 'skill_coordination':
       priorityExerciseTypes.push('skill practice', 'technique drills')
       additionalNotes.push('Prioritize skill practice when fresh')
+      break
+    case 'general_fatigue':
+      deprioritizedTypes.push('high-intensity strength work')
+      additionalNotes.push('Reduce volume and intensity - recovery focus')
       break
   }
   

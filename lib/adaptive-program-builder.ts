@@ -18,16 +18,22 @@ import { getProgramBuilderContext } from './adaptive-athlete-engine'
 import { getAthleteCalibration, getProgramCalibrationAdjustments, type AthleteCalibration, type ProgramCalibrationAdjustments } from './athlete-calibration'
 import { getOnboardingProfile, type PrimaryTrainingOutcome, type TrainingPathType, type WorkoutDurationPreference, type PrimaryLimitation, type WeakestArea, type JointCaution } from './athlete-profile'
 import { detectWeakPoints, getVolumeDistribution, type WeakPointSummary } from './weak-point-detection'
-import { 
-  detectWeakPoints as detectUnifiedWeakPoints, 
-  weakPointToLimitingFactor,
-  type WeakPointAssessment,
-  type SkillTarget,
+import {
+  detectWeakPoints as detectUnifiedWeakPoints,
+  type WeakPointAssessment as UnifiedWeakPointAssessment,
+  type WeakPointType,
+  WEAK_POINT_LABELS,
+  getWeakPointAccessories,
+  shouldReduceVolumeForWeakPoint,
+  getVolumeModifierForWeakPoint,
+  detectWeakPointsForProfile,
+  type DetectedWeakPoints,
 } from './weak-point-engine'
 import { getUnifiedSkillIntelligence, generateTrainingAdjustments, type UnifiedSkillIntelligence } from './skill-intelligence-layer'
 import { getCompressionReadiness, shouldBiasTowardCompression, type CompressionReadinessResult } from './compression-readiness'
 import { selectOptimalStructure, getDayExplanation } from './program-structure-engine'
-import { selectExercisesForSession } from './program-exercise-selector'
+import { selectExercisesForSession, evaluateSessionProgressions, getSmartProgressionExercise } from './program-exercise-selector'
+import { evaluateExerciseProgression, type ProgressionDecision as SimpleProgressionDecision } from './progression-decision-engine'
 import { generateSessionVariants, type SessionVariant } from './session-compression-engine'
 import { analyzeEquipmentProfile, adaptSessionForEquipment, getEquipmentRecommendations, type EquipmentProfile } from './equipment-adaptation-engine'
 import { GOAL_LABELS } from './program-service'
@@ -90,6 +96,17 @@ import {
   type ExerciseIntelligenceContext,
 } from './exercise-intelligence-engine'
 import {
+  optimizeSessionLoad,
+  buildSessionMetadata,
+  determineSessionStyle,
+  calculateSessionLoad,
+  getSessionLoadBudget,
+  TARGET_LOAD,
+  type SessionLoadSummary,
+  type TrainingSessionStyle,
+  type ExerciseWithMetadata,
+} from './session-load-intelligence'
+import {
   analyzeSignalsForAdaptive,
   type AdaptiveSignalFeedback,
 } from './override-signal-service'
@@ -100,6 +117,12 @@ import {
   getMobilityRecoveryStatus,
   type ReadinessAssessment,
 } from './recovery-fatigue-engine'
+import {
+  computeFatigueStateFromFeedback,
+  getVolumeModifierFromFeedback,
+  getIntensityModifierFromFeedback,
+  type FatigueStateFromFeedback,
+} from './session-feedback'
 import {
   getConsistencyStatus,
   getComebackWorkoutConfig,
@@ -247,6 +270,14 @@ export interface AdaptiveSession {
     isIntentionalRepetition: boolean
     repetitionReason?: string
   }
+  // Weak point-based accessories added to session
+  weakPointAccessories?: string[]
+  // Session load summary (for UI display)
+  loadSummary?: {
+    weightedLoad: number
+    isOptimal: boolean
+    removed: string[]
+  }
 }
 
 export interface AdaptiveExercise {
@@ -268,6 +299,12 @@ export interface AdaptiveExercise {
   isSkipped?: boolean // Set when exercise is skipped
   isReplaced?: boolean // Set when exercise is replaced
   isProgressionAdjusted?: boolean // Set when progression is changed
+  // Performance-based progression decision
+  progressionDecision?: {
+    decision: SimpleProgressionDecision
+    confidence: number
+    reason: string
+  }
 }
 
 export interface AdaptiveProgram {
@@ -307,9 +344,19 @@ export interface AdaptiveProgram {
   }
   // Fatigue decision for UI
   fatigueDecision?: {
-    decision: TrainingDecision
-    guidance: string
-    needsAttention: boolean
+  decision: TrainingDecision
+  guidance: string
+  needsAttention: boolean
+  }
+  // Session feedback state (user-reported difficulty/soreness)
+  sessionFeedbackState?: {
+    fatigueScore: number
+    trend: 'improving' | 'stable' | 'worsening'
+    needsDeload: boolean
+    volumeModifier: number
+    intensityModifier: number
+    summary: string
+    confidence: 'medium' | 'high'
   }
   // Deload recommendation for UI
   deloadRecommendation?: {
@@ -738,6 +785,9 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
   const equipmentProfile = analyzeEquipmentProfile(equipment)
   const engineContext = getProgramBuilderContext()
   
+  // Get session feedback state for volume/intensity adjustments
+  const feedbackState = computeFatigueStateFromFeedback()
+  
   // Get enhanced constraint context for program generation
   const constraintContext = getConstraintContextForProgram(primaryGoal)
   
@@ -1038,6 +1088,142 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
       }
     }
     
+    // Apply session feedback volume modifier if feedback confidence is sufficient
+    if (feedbackState.confidence !== 'low' && feedbackState.volumeModifier !== 1.0) {
+      session.exercises = applyVolumeModifier(session.exercises, feedbackState.volumeModifier)
+      session.adaptationNotes = session.adaptationNotes || []
+      if (feedbackState.needsDeload) {
+        session.adaptationNotes.push('Volume reduced based on recent session feedback (deload recommended)')
+      } else if (feedbackState.volumeModifier < 1.0) {
+        session.adaptationNotes.push('Volume slightly adjusted based on recent session feedback')
+      } else {
+        session.adaptationNotes.push('Ready to push - volume increased based on recovery feedback')
+      }
+    }
+    
+    // =========================================================================
+    // WEAK POINT ACCESSORY INJECTION
+    // =========================================================================
+    // Add targeted accessories based on detected weak points (max 1-2 per session)
+    // Only add if session isn't already overloaded
+    const sessionExerciseCount = session.exercises.length
+    const maxExercisesForSession = sessionLength === '<30' ? 5 : sessionLength === '30-45' ? 6 : 8
+    
+    // Use rule-based detection with fatigue state
+    const fatigueNeedsDeload = fatigueDecision?.decision === 'SKIP_TODAY' || 
+                               fatigueDecision?.decision === 'DELOAD_RECOMMENDED'
+    const fatigueScoreForDetection = fatigueDecision?.decision === 'SKIP_TODAY' ? 90 :
+                                     fatigueDecision?.decision === 'REDUCE_INTENSITY' ? 70 :
+                                     fatigueDecision?.decision === 'DELOAD_RECOMMENDED' ? 80 : 40
+    
+    const detectedWeakPoints = detectWeakPointsForProfile(
+      onboardingProfile,
+      athleteCalibration,
+      fatigueNeedsDeload,
+      fatigueScoreForDetection
+    )
+    
+    // Check if fatigue is the primary weak point - skip accessories if so
+    const isFatigued = detectedWeakPoints.primary.includes('general_fatigue')
+    
+    if (!isFatigued && sessionExerciseCount < maxExercisesForSession - 1 && 
+        (detectedWeakPoints.primary.length > 0 || detectedWeakPoints.secondary.length > 0)) {
+      // Combine primary and secondary weak points, primary first
+      const allWeakPoints = [...detectedWeakPoints.primary, ...detectedWeakPoints.secondary]
+      
+      // Get recommended accessories (max 2)
+      const maxAccessories = Math.min(2, maxExercisesForSession - sessionExerciseCount)
+      const recommendedAccessories = getWeakPointAccessories(allWeakPoints, maxAccessories)
+      
+      // Add accessories to session if found
+      if (recommendedAccessories.length > 0) {
+        session.adaptationNotes = session.adaptationNotes || []
+        
+        // Build coaching note based on detected weak points
+        const primaryLabel = detectedWeakPoints.primary[0] 
+          ? WEAK_POINT_LABELS[detectedWeakPoints.primary[0]] 
+          : null
+        
+        if (primaryLabel) {
+          session.adaptationNotes.push(
+            `Support work added for ${primaryLabel.toLowerCase()}`
+          )
+        }
+        
+        // Mark session as having weak-point-based additions
+        session.weakPointAccessories = recommendedAccessories
+      }
+    } else if (isFatigued) {
+      // Add note about fatigue-based volume reduction
+      session.adaptationNotes = session.adaptationNotes || []
+      session.adaptationNotes.push('No additional support work - focus on recovery')
+    }
+    
+    // =========================================================================
+    // SESSION LOAD OPTIMIZATION
+    // =========================================================================
+    // Ensure session is balanced and not bloated using weighted load calculation
+    const sessionStyleForLoad = determineSessionStyle(
+      session.estimatedMinutes,
+      primaryGoal === 'skill' ? 'skill' : 
+        primaryGoal === 'strength' ? 'strength' : 'mixed',
+      undefined,
+      fatigueDecision?.decision === 'REDUCE_INTENSITY' ? 'very_low' : undefined
+    )
+    
+    // Build metadata for load calculation
+    const exercisesWithMeta = buildSessionMetadata(
+      session.exercises.map(ex => ({
+        id: ex.id,
+        name: ex.name,
+        category: ex.category,
+        neuralDemand: ex.category === 'skill' ? 4 : 3,
+        fatigueCost: ex.category === 'skill' ? 3 : ex.category === 'strength' ? 4 : 2,
+        movementPattern: undefined,
+        isIsometric: ex.repsOrTime?.includes('s') ?? false,
+      }))
+    )
+    
+    // Optimize if over budget
+    const loadBudget = getSessionLoadBudget(sessionStyleForLoad)
+    const currentLoad = calculateSessionLoad(
+      exercisesWithMeta.map(e => e.metadata),
+      loadBudget
+    )
+    
+    if (!currentLoad.isWithinBudget || currentLoad.weightedExerciseCount > TARGET_LOAD.max) {
+      // Run optimization
+      const optimized = optimizeSessionLoad(
+        exercisesWithMeta,
+        sessionStyleForLoad,
+        {
+          maxRemovals: 2,
+          preserveIds: session.exercises
+            .filter(e => e.category === 'skill' || e.selectionReason?.includes('primary'))
+            .map(e => e.id),
+        }
+      )
+      
+      if (optimized.wasModified) {
+        // Filter exercises to keep only those that weren't removed
+        const keptIds = new Set(optimized.optimizedExercises.map(e => e.exerciseId))
+        session.exercises = session.exercises.filter(ex => keptIds.has(ex.id))
+        
+        // Add adaptation notes
+        session.adaptationNotes = session.adaptationNotes || []
+        session.adaptationNotes.push(
+          `Session balanced: ${optimized.modifications[0] || 'Load optimized for quality'}`
+        )
+        
+        // Store load summary for UI
+        session.loadSummary = {
+          weightedLoad: optimized.optimizedLoad.weightedExerciseCount,
+          isOptimal: optimized.optimizedLoad.isWithinBudget,
+          removed: optimized.removed.map(r => r.name),
+        }
+      }
+    }
+    
     return session
   })
   
@@ -1122,6 +1308,16 @@ fatigueDecision: fatigueDecision ? {
   decision: fatigueDecision.decision,
   guidance: fatigueDecision.shortGuidance,
   needsAttention: fatigueDecision.needsAttention,
+  } : undefined,
+  // Session feedback state (user-reported difficulty/soreness)
+  sessionFeedbackState: feedbackState.confidence !== 'low' ? {
+    fatigueScore: feedbackState.fatigueScore,
+    trend: feedbackState.trend,
+    needsDeload: feedbackState.needsDeload,
+    volumeModifier: feedbackState.volumeModifier,
+    intensityModifier: feedbackState.intensityModifier,
+    summary: feedbackState.summary,
+    confidence: feedbackState.confidence,
   } : undefined,
   // Deload recommendation
   deloadRecommendation,
@@ -1933,6 +2129,34 @@ function mapToAdaptiveExercises(
       failureBudget.currentNearFailureSets += 1
     }
     
+    // Evaluate progression decision for skill and strength exercises
+    let progressionDecision: AdaptiveExercise['progressionDecision'] = undefined
+    if (s.exercise.category === 'skill' || s.exercise.category === 'strength') {
+      try {
+        const isIsometric = s.exercise.category === 'skill' && 
+          (s.exercise.defaultRepsOrTime?.includes('s') || 
+           s.exercise.id.includes('hold') ||
+           s.exercise.id.includes('lever') ||
+           s.exercise.id.includes('planche') ||
+           s.exercise.id.includes('l_sit'))
+        
+        const evaluation = evaluateExerciseProgression(
+          s.exercise.id,
+          s.exercise.name,
+          undefined, // Use default target range
+          isIsometric
+        )
+        
+        progressionDecision = {
+          decision: evaluation.decision,
+          confidence: evaluation.confidence,
+          reason: evaluation.reasoning,
+        }
+      } catch {
+        // Non-blocking - continue without progression decision
+      }
+    }
+    
     return {
       id: s.exercise.id,
       name: s.exercise.name,
@@ -1944,6 +2168,7 @@ function mapToAdaptiveExercises(
       selectionReason: s.selectionReason,
       method,
       methodLabel: getMethodLabel(method),
+      progressionDecision,
     }
   })
 }
@@ -2001,6 +2226,40 @@ function generateProgramRationale(
   }
   
   return parts.join(' ')
+}
+
+// =============================================================================
+// SESSION FEEDBACK VOLUME MODIFIER
+// =============================================================================
+
+/**
+ * Apply volume modifier to exercises based on session feedback fatigue state.
+ * Reduces or increases sets while preserving exercise selection.
+ */
+function applyVolumeModifier(exercises: AdaptiveExercise[], modifier: number): AdaptiveExercise[] {
+  if (modifier === 1.0) return exercises
+  
+  return exercises.map(exercise => {
+    // Calculate adjusted sets
+    let adjustedSets = Math.round(exercise.sets * modifier)
+    
+    // Ensure minimum of 1 set, maximum of original + 1
+    adjustedSets = Math.max(1, Math.min(exercise.sets + 1, adjustedSets))
+    
+    // If sets changed, mark as adapted
+    if (adjustedSets !== exercise.sets) {
+      return {
+        ...exercise,
+        sets: adjustedSets,
+        wasAdapted: true,
+        note: exercise.note 
+          ? `${exercise.note} (volume adjusted)`
+          : 'Volume adjusted based on recovery feedback',
+      }
+    }
+    
+    return exercise
+  })
 }
 
 // =============================================================================

@@ -48,6 +48,11 @@ import {
   type SubstituteOption,
 } from './progression-ladders'
 import {
+  evaluateExerciseProgression,
+  type ProgressionDecision,
+  type ProgressionEvaluation,
+} from './progression-decision-engine'
+import {
   generateWarmUp,
   type GeneratedWarmUp,
   type WarmUpGenerationContext,
@@ -1372,6 +1377,162 @@ export function getProgressionExercise(
   }
   
   return null
+}
+
+/**
+ * Smart progression exercise selection based on performance data.
+ * Uses the Progression Decision Engine to determine if exercise should
+ * progress, maintain, or regress based on actual performance.
+ * 
+ * This is the performance-based entry point that respects:
+ * - Recent rep/hold performance
+ * - RPE data
+ * - Fatigue state
+ * - Consistency requirements (2-3 successful sessions)
+ */
+export function getSmartProgressionExercise(
+  exercise: Exercise,
+  equipment: EquipmentType[],
+  targetRange?: { min: number; max: number }
+): { 
+  exercise: Exercise
+  reason: string
+  decision: ProgressionDecision
+  confidence: number 
+} | null {
+  const allExercises = getAllExercises()
+  
+  // Evaluate progression decision based on performance data
+  const isIsometric = exercise.category === 'skill' && 
+    (exercise.defaultRepsOrTime?.includes('s') || 
+     exercise.id.includes('hold') ||
+     exercise.id.includes('lever') ||
+     exercise.id.includes('planche') ||
+     exercise.id.includes('l_sit'))
+  
+  const evaluation = evaluateExerciseProgression(
+    exercise.id,
+    exercise.name,
+    targetRange,
+    isIsometric
+  )
+  
+  // Handle based on decision
+  switch (evaluation.decision) {
+    case 'progress': {
+      const progressionId = getProgressionUp(exercise.id)
+      if (progressionId) {
+        const progressionExercise = allExercises.find(e => e.id === progressionId)
+        if (progressionExercise && hasRequiredEquipment(progressionExercise, equipment)) {
+          const ladder = getExerciseLadder(exercise.id)
+          return {
+            exercise: progressionExercise,
+            reason: evaluation.reasoning || (ladder ? `Progress in ${ladder.ladderName}` : 'Ready to progress'),
+            decision: 'progress',
+            confidence: evaluation.confidence,
+          }
+        }
+      }
+      // If no progression available, maintain
+      return {
+        exercise,
+        reason: 'At top of progression - maintaining current level',
+        decision: 'maintain',
+        confidence: evaluation.confidence,
+      }
+    }
+    
+    case 'regress': {
+      const regressionId = getProgressionDown(exercise.id)
+      if (regressionId) {
+        const regressionExercise = allExercises.find(e => e.id === regressionId)
+        if (regressionExercise && hasRequiredEquipment(regressionExercise, equipment)) {
+          return {
+            exercise: regressionExercise,
+            reason: evaluation.reasoning || 'Stepping back to build strength',
+            decision: 'regress',
+            confidence: evaluation.confidence,
+          }
+        }
+      }
+      // If no regression available, maintain with note
+      return {
+        exercise,
+        reason: 'Consider adding band assistance or reducing volume',
+        decision: 'maintain',
+        confidence: evaluation.confidence,
+      }
+    }
+    
+    case 'maintain':
+    default:
+      return {
+        exercise,
+        reason: evaluation.reasoning || 'Building consistency at current level',
+        decision: 'maintain',
+        confidence: evaluation.confidence,
+      }
+  }
+}
+
+/**
+ * Batch evaluate progressions for a list of exercises.
+ * Returns exercises with their progression recommendations.
+ */
+export function evaluateSessionProgressions(
+  exercises: SelectedExercise[],
+  equipment: EquipmentType[]
+): Array<{
+  original: SelectedExercise
+  recommended: Exercise
+  decision: ProgressionDecision
+  reason: string
+  confidence: number
+}> {
+  const results: Array<{
+    original: SelectedExercise
+    recommended: Exercise
+    decision: ProgressionDecision
+    reason: string
+    confidence: number
+  }> = []
+  
+  for (const selected of exercises) {
+    // Only evaluate skill and strength exercises
+    if (selected.exercise.category !== 'skill' && 
+        selected.exercise.category !== 'strength') {
+      results.push({
+        original: selected,
+        recommended: selected.exercise,
+        decision: 'maintain',
+        reason: 'Non-progression exercise',
+        confidence: 1,
+      })
+      continue
+    }
+    
+    const smartResult = getSmartProgressionExercise(selected.exercise, equipment)
+    
+    if (smartResult) {
+      results.push({
+        original: selected,
+        recommended: smartResult.exercise,
+        decision: smartResult.decision,
+        reason: smartResult.reason,
+        confidence: smartResult.confidence,
+      })
+    } else {
+      results.push({
+        original: selected,
+        recommended: selected.exercise,
+        decision: 'maintain',
+        reason: 'No progression data available',
+        confidence: 0.5,
+      })
+    }
+  }
+  
+  return results
 }
 
 /**

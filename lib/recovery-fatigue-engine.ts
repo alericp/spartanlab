@@ -11,6 +11,11 @@ import { calculateRecoverySignal, type RecoverySignal } from './recovery-engine'
 import { getFatigueTrainingDecision, type FatigueDecision, type TrainingDecision } from './fatigue-decision-engine'
 import { calculateDailyReadiness, type DailyReadinessResult } from './daily-readiness'
 import { type MethodProfileId, METHOD_PROFILES } from './training-principles-engine'
+import { 
+  computeFatigueStateFromFeedback, 
+  getRecentSessionFeedback,
+  type FatigueStateFromFeedback,
+} from './session-feedback'
 
 // =============================================================================
 // TYPES
@@ -737,6 +742,9 @@ export function getReadinessAssessment(): ReadinessAssessment {
   const contributions = analyzeFatigueContributions()
   const dominantFatigue = getDominantFatigueType(contributions)
   
+  // Get session feedback state (integrates user-reported difficulty/soreness)
+  const feedbackState = computeFatigueStateFromFeedback()
+  
   // Get method-specific guidance
   const methodRecommendations = getMethodRecoveryGuidance(contributions)
   
@@ -771,6 +779,13 @@ export function getReadinessAssessment(): ReadinessAssessment {
   // Adjust for fatigue contributions
   const totalFatigue = contributions.reduce((sum, c) => sum + c.level, 0) / Math.max(1, contributions.length)
   score = Math.round(score - (totalFatigue * 0.3))
+  
+  // Integrate session feedback fatigue score (0-10 scale, normalized to 0-30 impact)
+  // Only apply if we have medium or high confidence from feedback
+  if (feedbackState.confidence !== 'low') {
+    const feedbackImpact = (feedbackState.fatigueScore - 5) * 3 // -15 to +15 adjustment
+    score = Math.round(score - feedbackImpact)
+  }
   
   // Adjust for user input
   if (input?.sleepQuality === 'poor') score -= 10
@@ -807,11 +822,17 @@ export function getReadinessAssessment(): ReadinessAssessment {
     shouldProgress = false
   }
   
-  // Override if deload is triggered
+  // Override if deload is triggered (from traditional signals or session feedback)
   if (deloadTrigger.triggered && deloadTrigger.urgency === 'required') {
     state = 'recovery_focused'
     shortLabel = 'Deload Needed'
     coachMessage = 'Multiple fatigue indicators suggest a deload.'
+    shouldProgress = false
+  } else if (feedbackState.needsDeload && feedbackState.confidence !== 'low') {
+    // Session feedback also indicates deload needed
+    state = 'recovery_focused'
+    shortLabel = 'Recovery Needed'
+    coachMessage = feedbackState.summary
     shouldProgress = false
   }
   

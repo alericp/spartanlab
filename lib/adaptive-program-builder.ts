@@ -101,6 +101,12 @@ import {
   type ReadinessAssessment,
 } from './recovery-fatigue-engine'
 import {
+  computeFatigueStateFromFeedback,
+  getVolumeModifierFromFeedback,
+  getIntensityModifierFromFeedback,
+  type FatigueStateFromFeedback,
+} from './session-feedback'
+import {
   getConsistencyStatus,
   getComebackWorkoutConfig,
   getConsistencyAdjustments,
@@ -307,9 +313,19 @@ export interface AdaptiveProgram {
   }
   // Fatigue decision for UI
   fatigueDecision?: {
-    decision: TrainingDecision
-    guidance: string
-    needsAttention: boolean
+  decision: TrainingDecision
+  guidance: string
+  needsAttention: boolean
+  }
+  // Session feedback state (user-reported difficulty/soreness)
+  sessionFeedbackState?: {
+    fatigueScore: number
+    trend: 'improving' | 'stable' | 'worsening'
+    needsDeload: boolean
+    volumeModifier: number
+    intensityModifier: number
+    summary: string
+    confidence: 'medium' | 'high'
   }
   // Deload recommendation for UI
   deloadRecommendation?: {
@@ -738,6 +754,9 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
   const equipmentProfile = analyzeEquipmentProfile(equipment)
   const engineContext = getProgramBuilderContext()
   
+  // Get session feedback state for volume/intensity adjustments
+  const feedbackState = computeFatigueStateFromFeedback()
+  
   // Get enhanced constraint context for program generation
   const constraintContext = getConstraintContextForProgram(primaryGoal)
   
@@ -1038,6 +1057,19 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
       }
     }
     
+    // Apply session feedback volume modifier if feedback confidence is sufficient
+    if (feedbackState.confidence !== 'low' && feedbackState.volumeModifier !== 1.0) {
+      session.exercises = applyVolumeModifier(session.exercises, feedbackState.volumeModifier)
+      session.adaptationNotes = session.adaptationNotes || []
+      if (feedbackState.needsDeload) {
+        session.adaptationNotes.push('Volume reduced based on recent session feedback (deload recommended)')
+      } else if (feedbackState.volumeModifier < 1.0) {
+        session.adaptationNotes.push('Volume slightly adjusted based on recent session feedback')
+      } else {
+        session.adaptationNotes.push('Ready to push - volume increased based on recovery feedback')
+      }
+    }
+    
     return session
   })
   
@@ -1122,6 +1154,16 @@ fatigueDecision: fatigueDecision ? {
   decision: fatigueDecision.decision,
   guidance: fatigueDecision.shortGuidance,
   needsAttention: fatigueDecision.needsAttention,
+  } : undefined,
+  // Session feedback state (user-reported difficulty/soreness)
+  sessionFeedbackState: feedbackState.confidence !== 'low' ? {
+    fatigueScore: feedbackState.fatigueScore,
+    trend: feedbackState.trend,
+    needsDeload: feedbackState.needsDeload,
+    volumeModifier: feedbackState.volumeModifier,
+    intensityModifier: feedbackState.intensityModifier,
+    summary: feedbackState.summary,
+    confidence: feedbackState.confidence,
   } : undefined,
   // Deload recommendation
   deloadRecommendation,
@@ -2001,6 +2043,40 @@ function generateProgramRationale(
   }
   
   return parts.join(' ')
+}
+
+// =============================================================================
+// SESSION FEEDBACK VOLUME MODIFIER
+// =============================================================================
+
+/**
+ * Apply volume modifier to exercises based on session feedback fatigue state.
+ * Reduces or increases sets while preserving exercise selection.
+ */
+function applyVolumeModifier(exercises: AdaptiveExercise[], modifier: number): AdaptiveExercise[] {
+  if (modifier === 1.0) return exercises
+  
+  return exercises.map(exercise => {
+    // Calculate adjusted sets
+    let adjustedSets = Math.round(exercise.sets * modifier)
+    
+    // Ensure minimum of 1 set, maximum of original + 1
+    adjustedSets = Math.max(1, Math.min(exercise.sets + 1, adjustedSets))
+    
+    // If sets changed, mark as adapted
+    if (adjustedSets !== exercise.sets) {
+      return {
+        ...exercise,
+        sets: adjustedSets,
+        wasAdapted: true,
+        note: exercise.note 
+          ? `${exercise.note} (volume adjusted)`
+          : 'Volume adjusted based on recovery feedback',
+      }
+    }
+    
+    return exercise
+  })
 }
 
 // =============================================================================

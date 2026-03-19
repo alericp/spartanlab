@@ -1,6 +1,8 @@
 // Workout Log service layer for preview mode
 // Uses localStorage for persistence, easy to swap to Prisma later
 
+import { saveSessionFeedback } from './session-feedback'
+
 export type SessionType = 'skill' | 'strength' | 'mixed' | 'recovery'
 export type FocusArea = 'planche' | 'front_lever' | 'muscle_up' | 'handstand_pushup' | 'weighted_strength' | 'general'
 export type ExerciseCategory = 'skill' | 'push' | 'pull' | 'core' | 'legs' | 'mobility'
@@ -101,6 +103,18 @@ export function saveWorkoutLog(log: Omit<WorkoutLog, 'id' | 'createdAt'>): Worko
   
   logs.push(newLog)
   localStorage.setItem(STORAGE_KEY, JSON.stringify(logs))
+  
+  // Auto-save session feedback for fatigue tracking
+  // Uses perceived difficulty from the workout log
+  try {
+    saveSessionFeedback(newLog.id, {
+      difficulty: newLog.perceivedDifficulty || 'normal',
+      completed: newLog.exercises.every(e => e.completed),
+      // Regional soreness can be added via separate UI - default to undefined
+    })
+  } catch {
+    // Non-blocking - don't fail the save if feedback capture fails
+  }
   
   return newLog
 }

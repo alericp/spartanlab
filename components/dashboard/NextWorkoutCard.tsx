@@ -27,8 +27,6 @@ import { type GeneratedProgram } from '@/lib/program-service'
 import { type AdaptiveProgram } from '@/lib/adaptive-program-builder'
 import { getProgramState } from '@/lib/program-state'
 import { analyzeDifficultyTrends } from '@/lib/adaptive-progression-engine'
-import { WhyThisWorkout } from '@/components/why-this-workout'
-import type { ProgramExplanation } from '@/lib/explanations/types'
 
 const WORKOUT_STORAGE_KEY = 'spartanlab_workout_session'
 
@@ -61,7 +59,6 @@ interface WorkoutContext {
 export function NextWorkoutCard({ className }: NextWorkoutCardProps) {
   const [workoutContext, setWorkoutContext] = useState<WorkoutContext | null>(null)
   const [coachDecision, setCoachDecision] = useState<CoachDecision | null>(null)
-  const [programExplanation, setProgramExplanation] = useState<ProgramExplanation | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
@@ -99,11 +96,6 @@ export function NextWorkoutCard({ className }: NextWorkoutCardProps) {
         program = programState.legacyProgram
         adaptiveProgram = programState.adaptiveProgram
         hasProgram = programState.hasProgram
-        
-        // Extract explanation metadata if available
-        if (adaptiveProgram?.explanation) {
-          setProgramExplanation(adaptiveProgram.explanation)
-        }
       } catch {
         // No program
       }
@@ -349,17 +341,8 @@ export function NextWorkoutCard({ className }: NextWorkoutCardProps) {
           </div>
         )}
 
-        {/* Why This Plan - Explanation from real engine outputs */}
-        {programExplanation && state !== 'no_program' && state !== 'recovery_day' && (
-          <WhyThisWorkout 
-            explanation={programExplanation} 
-            variant="inline" 
-            className="mb-4"
-          />
-        )}
-
         {/* Adaptive Note */}
-        {adaptiveNote && !programExplanation && (
+        {adaptiveNote && (
           <div className="flex items-start gap-2 p-3 bg-[#1A1F26]/50 border border-[#2B313A]/50 rounded-lg mb-4">
             <RefreshCw className="w-4 h-4 text-[#4F6D8A] mt-0.5 shrink-0" />
             <p className="text-xs text-[#A4ACB8] leading-relaxed">{adaptiveNote}</p>

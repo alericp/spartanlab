@@ -1,5 +1,12 @@
 'use client'
 
+// =============================================================================
+// ROUTE CONFIGURATION
+// =============================================================================
+// This page is a SIDE-EFFECT route that runs generateFirstProgram() on mount.
+// It must NOT be cached, prefetched as stale content, or treated as static.
+// The dynamic export ensures Next.js treats this as a fresh render each time.
+
 // Module-safe init check - this logs at import time to confirm no import-time crashes
 if (typeof window !== 'undefined') {
   console.log('[OnboardingComplete] Module evaluation complete - no import-time crashes')
@@ -17,9 +24,12 @@ if (typeof window !== 'undefined') {
  * 2. Call generateFirstProgram() to create program from onboarding data
  * 3. Save program to canonical storage
  * 4. Route to first-session (which will now find a real program)
+ * 
+ * IDEMPOTENCY: Generation is guarded by a ref + sessionStorage token to prevent
+ * duplicate execution from remounts, history navigation, or cache revalidation.
  */
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
@@ -73,6 +83,9 @@ const PRO_FEATURES = [
 
 type PageStep = 'generating' | 'ready' | 'error'
 
+// Session-scoped idempotency key for this specific onboarding completion flow
+const GENERATION_SESSION_KEY = 'spartanlab_onboarding_generation_attempted'
+
 export default function OnboardingCompletePage() {
   const router = useRouter()
   const [mounted, setMounted] = useState(false)
@@ -84,6 +97,10 @@ export default function OnboardingCompletePage() {
   const [profile, setProfile] = useState<ReturnType<typeof getOnboardingProfile> | null>(null)
   const [programResult, setProgramResult] = useState<FirstRunResult | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  
+  // IDEMPOTENCY GUARD: Prevent duplicate generation from remounts/history/cache
+  const generationAttemptedRef = useRef(false)
+  const [generationSkipped, setGenerationSkipped] = useState(false)
 
   useEffect(() => {
     setMounted(true)
@@ -146,6 +163,41 @@ export default function OnboardingCompletePage() {
     
     // CRITICAL: Generate the program from onboarding data
     const generateProgram = async () => {
+      // =======================================================================
+      // IDEMPOTENCY CHECK: Prevent duplicate generation
+      // =======================================================================
+      // Check 1: In-memory ref guard (handles React strict mode double-mount)
+      if (generationAttemptedRef.current) {
+        console.log('[OnboardingComplete] IDEMPOTENCY: Generation already attempted in this mount cycle, skipping')
+        setGenerationSkipped(true)
+        return
+      }
+      generationAttemptedRef.current = true
+      
+      // Check 2: Session storage guard (handles browser back/forward, cache revalidation)
+      // Only check this if we haven't already successfully generated in this session
+      try {
+        const sessionToken = sessionStorage.getItem(GENERATION_SESSION_KEY)
+        if (sessionToken) {
+          const tokenData = JSON.parse(sessionToken)
+          // If generation completed successfully in this session, skip and go to ready
+          if (tokenData.completed && tokenData.timestamp) {
+            const elapsed = Date.now() - tokenData.timestamp
+            // Token valid for 5 minutes (prevents stale session data issues)
+            if (elapsed < 5 * 60 * 1000) {
+              console.log('[OnboardingComplete] IDEMPOTENCY: Generation already completed in this session, showing ready state')
+              setGenerationSkipped(true)
+              setStep('ready')
+              return
+            }
+          }
+        }
+      } catch (err) {
+        console.error('[OnboardingComplete] Session token check failed (non-fatal):', err)
+      }
+      
+      console.log('[OnboardingComplete] IDEMPOTENCY: Fresh generation starting')
+      
       // Small delay for UX
       await new Promise(resolve => setTimeout(resolve, 1000))
       
@@ -169,6 +221,18 @@ export default function OnboardingCompletePage() {
           }
           
           console.log('[OnboardingComplete] Verification passed, program ready for dashboard')
+          
+          // IDEMPOTENCY: Mark generation as completed in session storage
+          // This prevents duplicate generation if user navigates back to this page
+          try {
+            sessionStorage.setItem(GENERATION_SESSION_KEY, JSON.stringify({
+              completed: true,
+              timestamp: Date.now(),
+            }))
+            console.log('[OnboardingComplete] Session token set for idempotency')
+          } catch (err) {
+            console.error('[OnboardingComplete] Failed to set session token (non-fatal):', err)
+          }
           
           // Track analytics - non-blocking, wrapped so failures don't crash the route
           try {
@@ -316,8 +380,19 @@ export default function OnboardingCompletePage() {
           <div className="space-y-3">
             <Button 
               onClick={async () => {
+                console.log('[OnboardingComplete] RETRY: User explicitly requested retry')
                 setStep('generating')
                 setErrorMessage(null)
+                setGenerationSkipped(false)
+                
+                // CRITICAL: Clear idempotency guards for explicit retry
+                generationAttemptedRef.current = false
+                try {
+                  sessionStorage.removeItem(GENERATION_SESSION_KEY)
+                } catch {
+                  // Ignore sessionStorage errors
+                }
+                
                 try {
                   const result = generateFirstProgram()
                   setProgramResult(result)
@@ -326,6 +401,15 @@ export default function OnboardingCompletePage() {
                     const { getProgramState } = await import('@/lib/program-state')
                     const verificationState = getProgramState()
                     if (verificationState.hasUsableWorkoutProgram) {
+                      // Set session token on successful retry
+                      try {
+                        sessionStorage.setItem(GENERATION_SESSION_KEY, JSON.stringify({
+                          completed: true,
+                          timestamp: Date.now(),
+                        }))
+                      } catch {
+                        // Ignore
+                      }
                       setStep('ready')
                     } else {
                       setErrorMessage('Program was created but could not be verified.')
@@ -395,19 +479,26 @@ export default function OnboardingCompletePage() {
             )}
           </div>
           
-          <Link href="/first-session?from=onboarding">
-            <Button className="w-full bg-[#C1121F] hover:bg-[#A30F1A] text-white py-6 text-lg font-medium">
-              Start First Session
-              <ArrowRight className="w-5 h-5 ml-2" />
-            </Button>
-          </Link>
+          <Button 
+            onClick={() => {
+              console.log('[OnboardingComplete] Navigating to first-session (replace)')
+              router.replace('/first-session?from=onboarding')
+            }}
+            className="w-full bg-[#C1121F] hover:bg-[#A30F1A] text-white py-6 text-lg font-medium"
+          >
+            Start First Session
+            <ArrowRight className="w-5 h-5 ml-2" />
+          </Button>
           
-          <Link href="/dashboard?welcome=true" className="block mt-3">
-            <Button 
-              variant="ghost" 
-              className="w-full text-[#6B7280] hover:text-[#A4ACB8]"
-            >
-              View Dashboard First
+          <Button 
+            variant="ghost" 
+            onClick={() => {
+              console.log('[OnboardingComplete] Navigating to dashboard (replace)')
+              router.replace('/dashboard?welcome=true')
+            }}
+            className="w-full text-[#6B7280] hover:text-[#A4ACB8] mt-3"
+          >
+            View Dashboard First
             </Button>
           </Link>
         </div>
@@ -583,15 +674,17 @@ export default function OnboardingCompletePage() {
 
         {/* Continue Free Option */}
         <div className="text-center">
-          <Link href="/first-session?from=onboarding">
-            <Button
-              variant="ghost"
-              className="text-[#6B7280] hover:text-[#A4ACB8] hover:bg-transparent"
-            >
-              Start First Session
-              <ArrowRight className="w-4 h-4 ml-1" />
-            </Button>
-          </Link>
+          <Button
+            variant="ghost"
+            onClick={() => {
+              console.log('[OnboardingComplete] Free user navigating to first-session (replace)')
+              router.replace('/first-session?from=onboarding')
+            }}
+            className="text-[#6B7280] hover:text-[#A4ACB8] hover:bg-transparent"
+          >
+            Start First Session
+            <ArrowRight className="w-4 h-4 ml-1" />
+          </Button>
           <p className="text-xs text-[#4A5568] mt-2">
             You can upgrade anytime from Settings
           </p>

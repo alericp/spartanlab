@@ -113,6 +113,20 @@ export default function OnboardingCompletePage() {
     let loadedProfile = null
     try {
       loadedProfile = getOnboardingProfile()
+      // Diagnostic: confirm normalized profile shape
+      if (loadedProfile) {
+        console.log('[OnboardingComplete] Profile loaded (normalized):', {
+          hasArrayFields: {
+            equipment: Array.isArray(loadedProfile.equipment),
+            selectedSkills: Array.isArray(loadedProfile.selectedSkills),
+            jointCautions: Array.isArray(loadedProfile.jointCautions),
+          },
+          hasNumericFields: {
+            trainingDaysPerWeek: typeof loadedProfile.trainingDaysPerWeek,
+            sessionLengthMinutes: typeof loadedProfile.sessionLengthMinutes,
+          },
+        })
+      }
     } catch (err) {
       console.error('[OnboardingComplete] getOnboardingProfile failed:', err)
     }

@@ -229,6 +229,20 @@ import {
   validateAndLogProgram,
 } from './program-validation'
 import {
+  type ProgramExplanation,
+  createExplanationAccumulator,
+  recordReasonCode,
+  recordFlexibleScheduleDecision,
+  recordProgressionDecision,
+  recordFatigueDecision,
+  recordDayStress,
+  recordExerciseSelection,
+  recordFeedbackContext,
+  recordPriorProgramComparison,
+  finalizeExplanation,
+  type ExplanationAccumulator,
+} from './explanations/explanation-generator'
+import {
   verifyExerciseInDatabase,
 } from './exercise-database-resolver'
 import {
@@ -635,6 +649,9 @@ exerciseExplanations?: {
   }
   // Secondary Emphasis - for hybrid programs
   secondaryEmphasis?: string
+  // Explanation Layer - structured explanation metadata for UI
+  // Contains reason codes and resolved explanations for "why this workout"
+  explanation?: ProgramExplanation
 }
 
 // =============================================================================
@@ -885,6 +902,18 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
     hasSufficientData: hasFeedbackData,
   })
   
+  // EXPLANATION LAYER: Initialize accumulator for capturing reason codes
+  const explanationAccumulator = createExplanationAccumulator(
+    primaryGoal,
+    inputScheduleMode,
+    typeof trainingDaysPerWeek === 'number' ? trainingDaysPerWeek : 4,
+    experienceLevel
+  )
+  
+  // Record feedback context for explanation layer
+  recordFeedbackContext(explanationAccumulator, trainingFeedback)
+  console.log('[explanation] Initialized accumulator with data confidence:', trainingFeedback.dataConfidence)
+  
   // Resolve flexible frequency if applicable
   let flexibleWeekStructure: FlexibleWeekStructure | null = null
   let effectiveTrainingDays: TrainingDays = typeof trainingDaysPerWeek === 'number' 
@@ -926,6 +955,14 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
         console.log('[flex-loop] Expanding frequency due to high compliance:', adjustedFrequency)
       }
       
+      // EXPLANATION: Record flex frequency adjustment
+      const flexAdjustment = adjustedFrequency < flexibleWeekStructure.currentWeekFrequency 
+        ? 'decrease' 
+        : adjustedFrequency > flexibleWeekStructure.currentWeekFrequency 
+          ? 'increase' 
+          : 'maintain'
+      recordFlexibleScheduleDecision(explanationAccumulator, flexAdjustment, trainingFeedback.adjustmentSummary)
+      
       flexibleWeekStructure = {
         ...flexibleWeekStructure,
         currentWeekFrequency: adjustedFrequency,
@@ -933,7 +970,13 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
           ? 'maintain' : flexInput.completionRate < 0.6 ? 'decrease' : 'maintain',
         adjustmentReason: trainingFeedback.adjustmentSummary,
       }
+    } else {
+      // No feedback data yet, record maintain
+      recordFlexibleScheduleDecision(explanationAccumulator, 'maintain', 'Initial program')
     }
+    
+    // Update accumulator with resolved frequency
+    explanationAccumulator.currentWeekFrequency = flexibleWeekStructure.currentWeekFrequency
     
     effectiveTrainingDays = flexibleWeekStructure.currentWeekFrequency as TrainingDays
     console.log('[flex-frequency] Resolved week:', {
@@ -944,6 +987,9 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
     })
   } else {
     effectiveTrainingDays = getEffectiveFrequency(trainingDaysPerWeek) as TrainingDays
+    // EXPLANATION: Record static schedule
+    recordReasonCode(explanationAccumulator, 'static_schedule_set')
+    explanationAccumulator.currentWeekFrequency = effectiveTrainingDays
     console.log('[schedule-mode] Static mode, using:', effectiveTrainingDays, 'days')
   }
   
@@ -1381,6 +1427,38 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
       }
     }
     
+    // =========================================================================
+    // EXPLANATION LAYER: Record day stress and metadata
+    // =========================================================================
+    const dayStressLevel: DayStressLevel = day.isPrimary 
+      ? 'high_neural_skill' 
+      : fatigueDecision?.decision === 'RECOVERY_DAY' 
+        ? 'recovery_bias_technical'
+        : 'moderate_strength'
+    
+    recordDayStress(explanationAccumulator, day.dayNumber, dayStressLevel, {
+      label: day.label || `Day ${day.dayNumber}`,
+      focus: day.focus,
+      isPrimary: day.isPrimary,
+      limiters: detectedWeakPoints.primary.map(wp => WEAK_POINT_LABELS[wp] || wp),
+    })
+    
+    // Record fatigue decision for explanation
+    if (fatigueDecision?.decision === 'REDUCE_INTENSITY' || fatigueDecision?.decision === 'REDUCE_VOLUME') {
+      recordFatigueDecision(explanationAccumulator, 'high', day.dayNumber)
+    } else if (fatigueDecision?.decision === 'TRAIN_AS_PLANNED') {
+      recordFatigueDecision(explanationAccumulator, 'low', day.dayNumber)
+    }
+    
+    // Record exercise selections with reasons
+    for (const ex of session.exercises) {
+      recordExerciseSelection(explanationAccumulator, ex.id, ex.selectionReason || 'Selected for goal', {
+        dayNumber: day.dayNumber,
+        isForWeakPoint: session.weakPointAccessories?.includes(ex.id),
+        isForSkillTransfer: ex.category === 'skill',
+      })
+    }
+    
     return session
   })
   
@@ -1462,6 +1540,34 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
   const finalFrequencyRange = flexibleWeekStructure 
     ? { min: flexibleWeekStructure.recommendedMinDays, max: flexibleWeekStructure.recommendedMaxDays }
     : { min: effectiveTrainingDays, max: effectiveTrainingDays }
+  
+  // EXPLANATION LAYER: Finalize the explanation with all captured reason codes
+  const allExercises: Array<{
+    dayNumber: number
+    id: string
+    name: string
+    movementPattern?: string
+    skillTransfer?: string[]
+    isSubstitutable?: boolean
+  }> = []
+  
+  for (const session of sessions) {
+    for (const ex of session.exercises || []) {
+      allExercises.push({
+        dayNumber: session.dayNumber,
+        id: ex.id,
+        name: ex.name,
+        movementPattern: ex.category === 'skill' ? 'skill' : ex.category,
+        isSubstitutable: ex.isOverrideable,
+      })
+    }
+  }
+  
+  // Record goal reason code
+  recordReasonCode(explanationAccumulator, 'primary_goal_direct')
+  
+  const programExplanation = finalizeExplanation(explanationAccumulator, allExercises)
+  console.log('[explanation] Finalized with', programExplanation.activeReasonCodes.length, 'active reason codes')
   
   console.log('[week-structure] Final program metadata:', {
     scheduleMode: finalScheduleMode,
@@ -2055,6 +2161,8 @@ return explanations.length > 0 ? explanations : undefined
         return undefined
       }
     })(),
+    // Explanation Layer - canonical "why this workout" metadata
+    explanation: programExplanation,
   }
 }
 

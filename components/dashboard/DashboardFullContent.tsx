@@ -25,6 +25,13 @@ import { useAuth } from '@clerk/nextjs'
 // Set sections to false to disable them and narrow down the crash source
 // =============================================================================
 const ENABLE_SECTION_HEADER = true           // Dashboard intro/header - MINIMAL
+
+// =============================================================================
+// WIDGET ISOLATION FLAGS - Fine-grained control for header widgets
+// These can be toggled independently to isolate which widget causes issues
+// =============================================================================
+const ENABLE_WIDGET_WELCOME_BANNER = true    // WelcomeBanner widget
+const ENABLE_WIDGET_WELCOME_CARD = true      // WelcomeCard widget
 const ENABLE_SECTION_FIRST_RUN = false       // First run guide
 const ENABLE_SECTION_NEXT_WORKOUT = false    // Next workout card
 const ENABLE_SECTION_CONSISTENCY = false     // Training consistency
@@ -209,12 +216,14 @@ export function DashboardFullContent() {
         {ENABLE_SECTION_HEADER && (
           <Suspense fallback={<div className="h-32 bg-[#1A1D23] rounded-xl animate-pulse" />}>
             {/* Welcome Banner for Post-Onboarding */}
-            <SafeWidget name="WelcomeBanner" hideOnError>
-              <WelcomeBanner />
-            </SafeWidget>
+            {ENABLE_WIDGET_WELCOME_BANNER && (
+              <SafeWidget name="WelcomeBanner" hideOnError>
+                <WelcomeBanner />
+              </SafeWidget>
+            )}
             
             {/* Welcome Card for First-Run Users */}
-            {showWelcome && (
+            {showWelcome && ENABLE_WIDGET_WELCOME_CARD && (
               <SafeWidget name="WelcomeCard" hideOnError>
                 <WelcomeCard 
                   onDismiss={() => setShowWelcome(false)}

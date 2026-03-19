@@ -5,18 +5,17 @@ import { useRouter } from 'next/navigation'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import Link from 'next/link'
-import { CheckCircle2, Calendar, Target, Dumbbell, X, TrendingUp, TrendingDown, Minus, Play, ArrowRight } from 'lucide-react'
+import { CheckCircle2, Calendar, Target, Dumbbell, X, TrendingUp, TrendingDown, Minus, Play, ArrowRight, AlertCircle } from 'lucide-react'
 import { SpartanIcon } from '@/components/brand/SpartanLogo'
-import {
-  getOnboardingSummary,
-  getProgramReasoning,
-  getFirstProgram,
-  type FirstRunResult,
-  type ProgramReasoning,
-} from '@/lib/onboarding-service'
-import { getProgramState } from '@/lib/program-state'
-import { getOnboardingProfile, hasEstimatedValues } from '@/lib/athlete-profile'
-import { AlertCircle } from 'lucide-react'
+
+// =============================================================================
+// IMPORT SAFETY: Heavy helpers are now dynamically imported at runtime
+// This prevents module-evaluation failures from crashing the entire import graph
+// =============================================================================
+
+// Type-only imports are safe at module scope
+import type { FirstRunResult, ProgramReasoning } from '@/lib/onboarding-service'
+import type { OnboardingProfile } from '@/lib/athlete-profile'
 
 interface WelcomeCardProps {
   onDismiss?: () => void
@@ -40,12 +39,48 @@ export function WelcomeCard({ onDismiss, onProgramReady }: WelcomeCardProps) {
     // READ existing program state - do NOT regenerate
     const loadExistingProgram = async () => {
       setIsLoading(true)
-      console.log('[WelcomeCard] Loading existing program state')
+      console.log('[WelcomeCard] Loading existing program state via dynamic imports')
       
       // Small delay for smooth UX transition
       await new Promise(resolve => setTimeout(resolve, 300))
       
       try {
+        // =======================================================================
+        // DYNAMIC IMPORT: Load heavy modules at runtime, not at module evaluation
+        // This prevents import-graph crashes from taking down the entire route
+        // =======================================================================
+        let getProgramState: () => { adaptiveProgram: unknown; hasUsableWorkoutProgram: boolean }
+        let getOnboardingSummary: () => unknown
+        let getProgramReasoning: (program: unknown) => ProgramReasoning | null
+        
+        try {
+          const programStateModule = await import('@/lib/program-state')
+          getProgramState = programStateModule.getProgramState
+          console.log('[WelcomeCard] program-state module loaded successfully')
+        } catch (err) {
+          console.error('[WelcomeCard] Failed to load program-state module:', err)
+          setResult({
+            success: false,
+            program: null,
+            calibration: null,
+            welcomeMessage: 'Error loading program.',
+            error: 'Failed to load program state module.',
+          })
+          setIsLoading(false)
+          return
+        }
+        
+        try {
+          const onboardingModule = await import('@/lib/onboarding-service')
+          getOnboardingSummary = onboardingModule.getOnboardingSummary
+          getProgramReasoning = onboardingModule.getProgramReasoning
+          console.log('[WelcomeCard] onboarding-service module loaded successfully')
+        } catch (err) {
+          console.error('[WelcomeCard] Failed to load onboarding-service module (non-fatal):', err)
+          getOnboardingSummary = () => null
+          getProgramReasoning = () => null
+        }
+        
         // Get existing program from program-state (the safe unified source)
         let programState
         try {
@@ -155,15 +190,25 @@ export function WelcomeCard({ onDismiss, onProgramReady }: WelcomeCardProps) {
     )
   }
 
-  // Wrap render-time calls to prevent crashes
-  let profile = null
-  let hasEstimates = false
-  try {
-    profile = getOnboardingProfile()
-    hasEstimates = profile ? hasEstimatedValues(profile) : false
-  } catch (err) {
-    console.error('[WelcomeCard] Error getting profile for estimates check:', err)
-  }
+  // Profile and estimate check is now done via state set in useEffect
+  // to avoid render-time dynamic imports which can cause issues
+  const [hasEstimates, setHasEstimates] = useState(false)
+  
+  // Load profile for estimates check in a separate effect
+  useEffect(() => {
+    const checkEstimates = async () => {
+      try {
+        const athleteModule = await import('@/lib/athlete-profile')
+        const profile = athleteModule.getOnboardingProfile()
+        if (profile) {
+          setHasEstimates(athleteModule.hasEstimatedValues(profile))
+        }
+      } catch (err) {
+        console.error('[WelcomeCard] Error checking estimates:', err)
+      }
+    }
+    checkEstimates()
+  }, [])
 
   return (
     <Card className="bg-gradient-to-br from-[#1A1F26] to-[#0F1115] border-[#C1121F]/30 p-6 relative overflow-hidden">

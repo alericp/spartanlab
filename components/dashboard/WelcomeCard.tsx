@@ -229,9 +229,9 @@ export function WelcomeCard({ onDismiss, onProgramReady }: WelcomeCardProps) {
       {reasoning?.hasAdaptations && Array.isArray(reasoning.adaptiveMessages) && reasoning.adaptiveMessages.length > 0 && (
         <div className="bg-[#C1121F]/5 border border-[#C1121F]/20 rounded-lg p-3 mt-4">
           <div className="flex items-center gap-2 mb-2">
-            {reasoning.trainingBehavior?.progressTrend.overallTrend === 'improving' ? (
+            {reasoning.trainingBehavior?.progressTrend?.overallTrend === 'improving' ? (
               <TrendingUp className="w-4 h-4 text-green-400" />
-            ) : reasoning.trainingBehavior?.progressTrend.overallTrend === 'declining' ? (
+            ) : reasoning.trainingBehavior?.progressTrend?.overallTrend === 'declining' ? (
               <TrendingDown className="w-4 h-4 text-amber-400" />
             ) : (
               <Minus className="w-4 h-4 text-blue-400" />

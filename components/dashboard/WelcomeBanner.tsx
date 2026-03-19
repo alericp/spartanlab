@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
@@ -11,7 +11,8 @@ import { cn } from '@/lib/utils'
 
 const WELCOME_DISMISSED_KEY = 'spartanlab_welcome_dismissed'
 
-export function WelcomeBanner() {
+// Inner component that uses useSearchParams (requires Suspense boundary)
+function WelcomeBannerInner() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const [mounted, setMounted] = useState(false)
@@ -21,22 +22,58 @@ export function WelcomeBanner() {
   const [isTrial, setIsTrial] = useState(false)
   const [trialDays, setTrialDays] = useState(0)
 
-  const isWelcome = searchParams.get('welcome') === 'true'
-  const trialStarted = searchParams.get('trial') === 'started'
+  // Safe access to search params with fallbacks
+  let isWelcome = false
+  let trialStarted = false
+  try {
+    isWelcome = searchParams?.get('welcome') === 'true'
+    trialStarted = searchParams?.get('trial') === 'started'
+  } catch {
+    // searchParams may be null during SSR or in certain edge cases
+    console.log('[WelcomeBanner] searchParams access failed, using defaults')
+  }
 
   useEffect(() => {
     setMounted(true)
-    setProfile(getOnboardingProfile())
-    setIsPro(hasProAccess())
-    setIsTrial(isInTrial())
-    setTrialDays(getTrialDaysRemaining())
+    
+    // Defensively wrap all localStorage/feature-access calls
+    try {
+      setProfile(getOnboardingProfile())
+    } catch (err) {
+      console.error('[WelcomeBanner] getOnboardingProfile failed:', err)
+    }
+    
+    try {
+      setIsPro(hasProAccess())
+    } catch (err) {
+      console.error('[WelcomeBanner] hasProAccess failed:', err)
+      setIsPro(false)
+    }
+    
+    try {
+      setIsTrial(isInTrial())
+    } catch (err) {
+      console.error('[WelcomeBanner] isInTrial failed:', err)
+      setIsTrial(false)
+    }
+    
+    try {
+      setTrialDays(getTrialDaysRemaining())
+    } catch (err) {
+      console.error('[WelcomeBanner] getTrialDaysRemaining failed:', err)
+      setTrialDays(0)
+    }
 
     // Check if already dismissed
-    if (typeof window !== 'undefined') {
-      const dismissed = sessionStorage.getItem(WELCOME_DISMISSED_KEY)
-      if (dismissed === 'true') {
-        setIsDismissed(true)
+    try {
+      if (typeof window !== 'undefined') {
+        const dismissed = sessionStorage.getItem(WELCOME_DISMISSED_KEY)
+        if (dismissed === 'true') {
+          setIsDismissed(true)
+        }
       }
+    } catch (err) {
+      console.error('[WelcomeBanner] sessionStorage check failed:', err)
     }
   }, [])
 
@@ -162,6 +199,15 @@ export function WelcomeBanner() {
         </div>
       </div>
     </div>
+  )
+}
+
+// Exported wrapper with Suspense boundary for WelcomeBanner
+export function WelcomeBanner() {
+  return (
+    <Suspense fallback={null}>
+      <WelcomeBannerInner />
+    </Suspense>
   )
 }
 

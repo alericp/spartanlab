@@ -297,11 +297,15 @@ export function trackCTAClicked(sourceTool: string, destination?: string): void 
 }
 
 export function trackProgramGenerated(programType?: string, skillFocus?: string): void {
-  trackEvent(AnalyticsEvents.PROGRAM_GENERATED, { 
-    program_type: programType,
-    skill_focus: skillFocus,
-    generated_at: new Date().toISOString()
-  })
+  try {
+    trackEvent(AnalyticsEvents.PROGRAM_GENERATED, { 
+      program_type: programType,
+      skill_focus: skillFocus,
+      generated_at: new Date().toISOString()
+    })
+  } catch (err) {
+    console.error('[Analytics] trackProgramGenerated failed (non-fatal):', err)
+  }
 }
 
 export function trackSignupStarted(source?: string): void {
@@ -312,8 +316,12 @@ export function trackSignupStarted(source?: string): void {
 }
 
 export function trackSignupCompleted(userId?: string): void {
-  trackEvent(AnalyticsEvents.SIGNUP_COMPLETED, { 
-    user_id: userId,
-    completed_at: new Date().toISOString()
-  })
+  try {
+    trackEvent(AnalyticsEvents.SIGNUP_COMPLETED, { 
+      user_id: userId,
+      completed_at: new Date().toISOString()
+    })
+  } catch (err) {
+    console.error('[Analytics] trackSignupCompleted failed (non-fatal):', err)
+  }
 }

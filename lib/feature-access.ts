@@ -343,18 +343,23 @@ export function saveSubscription(subscription: SubscriptionInfo): void {
  * This function is kept for backward compatibility but should be migrated to useEntitlement().
  */
 export function hasProAccess(): boolean {
-  // Check owner simulation first
-  const simMode = getOwnerSimulationMode()
-  if (simMode === 'free') return false
-  if (simMode === 'pro') return true
-  
-  // Owner without simulation has Pro access
-  if (isCurrentUserOwner()) return true
-  
-  // Regular users - standard check (reads from localStorage cache)
-  const subscription = getSubscription()
-  return subscription.tier === 'pro' && 
-         (subscription.status === 'active' || subscription.status === 'trialing')
+  try {
+    // Check owner simulation first
+    const simMode = getOwnerSimulationMode()
+    if (simMode === 'free') return false
+    if (simMode === 'pro') return true
+    
+    // Owner without simulation has Pro access
+    if (isCurrentUserOwner()) return true
+    
+    // Regular users - standard check (reads from localStorage cache)
+    const subscription = getSubscription()
+    return subscription.tier === 'pro' && 
+           (subscription.status === 'active' || subscription.status === 'trialing')
+  } catch (err) {
+    console.error('[FeatureAccess] hasProAccess failed, defaulting to false:', err)
+    return false
+  }
 }
 
 /**
@@ -389,24 +394,34 @@ export function getCurrentTier(): SubscriptionTier {
  * Check if user is in trial period
  */
 export function isInTrial(): boolean {
-  const subscription = getSubscription()
-  return subscription.status === 'trialing' && 
-         subscription.trialEndsAt !== null &&
-         new Date(subscription.trialEndsAt) > new Date()
+  try {
+    const subscription = getSubscription()
+    return subscription.status === 'trialing' && 
+           subscription.trialEndsAt !== null &&
+           new Date(subscription.trialEndsAt) > new Date()
+  } catch (err) {
+    console.error('[FeatureAccess] isInTrial failed, defaulting to false:', err)
+    return false
+  }
 }
 
 /**
  * Get days remaining in trial
  */
 export function getTrialDaysRemaining(): number {
-  const subscription = getSubscription()
-  if (!subscription.trialEndsAt) return 0
-  
-  const endDate = new Date(subscription.trialEndsAt)
-  const now = new Date()
-  const diff = endDate.getTime() - now.getTime()
-  
-  return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)))
+  try {
+    const subscription = getSubscription()
+    if (!subscription.trialEndsAt) return 0
+    
+    const endDate = new Date(subscription.trialEndsAt)
+    const now = new Date()
+    const diff = endDate.getTime() - now.getTime()
+    
+    return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)))
+  } catch (err) {
+    console.error('[FeatureAccess] getTrialDaysRemaining failed, defaulting to 0:', err)
+    return 0
+  }
 }
 
 // =============================================================================

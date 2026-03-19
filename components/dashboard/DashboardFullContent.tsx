@@ -104,30 +104,49 @@ export function DashboardFullContent() {
 
   useEffect(() => {
     setMounted(true)
+    console.log('[DashboardFullContent] Mounted, checking first-load state')
     
     // Check if this is a first-run welcome scenario
     try {
-      const urlParams = new URLSearchParams(window.location.search)
-      const isWelcome = urlParams.get('welcome') === 'true'
-      
-      if (isWelcome) {
-        console.log('[DashboardFullContent] Welcome flow detected, showing WelcomeCard')
-        setShowWelcome(true)
-        window.history.replaceState({}, '', '/dashboard')
+      if (typeof window !== 'undefined' && window.location?.search) {
+        const urlParams = new URLSearchParams(window.location.search)
+        const isWelcome = urlParams.get('welcome') === 'true'
+        
+        if (isWelcome) {
+          console.log('[DashboardFullContent] Welcome flow detected, showing WelcomeCard')
+          setShowWelcome(true)
+          try {
+            window.history.replaceState({}, '', '/dashboard')
+          } catch {
+            // history.replaceState may fail in some contexts, ignore
+          }
+        }
       }
     } catch (err) {
-      console.error('[DashboardFullContent] Error parsing URL params:', err)
+      console.error('[DashboardFullContent] Error parsing URL params (non-fatal):', err)
     }
     
     // Quick check for meaningful data (lightweight)
     try {
+      if (typeof window === 'undefined') {
+        setHasMeaningfulData(false)
+        return
+      }
       const stored = localStorage.getItem('spartanlab_workouts')
-      const workouts = stored ? JSON.parse(stored) : []
-      const hasData = Array.isArray(workouts) && workouts.length > 0
-      console.log('[DashboardFullContent] Data check:', { hasData, workoutCount: Array.isArray(workouts) ? workouts.length : 0 })
+      let workouts: unknown[] = []
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored)
+          workouts = Array.isArray(parsed) ? parsed : []
+        } catch {
+          workouts = []
+        }
+      }
+      const hasData = workouts.length > 0
+      console.log('[DashboardFullContent] Data check:', { hasData, workoutCount: workouts.length, branch: hasData ? 'content' : 'empty-state' })
       setHasMeaningfulData(hasData)
     } catch (err) {
-      console.error('[DashboardFullContent] Error checking workout data:', err)
+      console.error('[DashboardFullContent] Error checking workout data (defaulting to empty-state):', err)
       setHasMeaningfulData(false)
     }
   }, [])

@@ -117,6 +117,9 @@ export function DashboardEmptyState() {
   const router = useRouter()
   const isNavigatingRef = useRef(false)
   
+  // Diagnostic: confirm this component rendered
+  console.log('[DashboardEmptyState] Rendered as first-load path')
+  
   // Hardened mobile-safe navigation with double-tap protection and fallback
   const handleStartWorkout = useCallback(() => {
     // Prevent double-triggering from rapid taps

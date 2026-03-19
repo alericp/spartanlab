@@ -7,10 +7,6 @@
  * The route must be able to render even if program-state or other heavy modules fail to load.
  */
 
-// Force dynamic rendering to prevent stale cached output during debugging
-export const dynamic = 'force-dynamic'
-export const revalidate = 0
-
 import { useState, useEffect, Suspense, Component, type ReactNode, type ErrorInfo } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { StreamlinedWorkoutSession } from '@/components/workout/StreamlinedWorkoutSession'

@@ -840,6 +840,7 @@ function ReadinessCalibrationSection({ profile, updateProfile }: SectionProps) {
                   // Selecting a specific joint removes "None" state
                   updateProfile({ jointCautions: updated })
                 }}
+                contentMode="wrapSafe"
               >
                 {JOINT_CAUTION_LABELS[joint]}
               </OptionButton>

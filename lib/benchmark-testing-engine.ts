@@ -12,11 +12,30 @@
  * - Plateaus are detected and trigger framework adjustments
  */
 
-import { neon } from '@neondatabase/serverless'
+import { neon, type NeonQueryFunction } from '@neondatabase/serverless'
 import type { MovementFamily } from './movement-family-registry'
 import type { SkillKey, SkillState } from './skill-state-service'
 
-const sql = neon(process.env.DATABASE_URL!)
+// =============================================================================
+// LAZY DATABASE CONNECTION
+// Do NOT initialize at module scope - this allows the module to be imported
+// even when DATABASE_URL is absent (e.g., during first-run onboarding)
+// =============================================================================
+
+let _sql: NeonQueryFunction<false, false> | null = null
+
+function getSql(): NeonQueryFunction<false, false> | null {
+  if (_sql) return _sql
+  
+  const connectionString = process.env.DATABASE_URL
+  if (!connectionString) {
+    console.log('[BenchmarkTesting] DATABASE_URL not available - DB features disabled')
+    return null
+  }
+  
+  _sql = neon(connectionString)
+  return _sql
+}
 
 // =============================================================================
 // TYPES
@@ -345,7 +364,13 @@ export function getTestsForSkill(skill: SkillKey): BaselineTestDefinition[] {
 export async function createBenchmark(
   userId: string,
   input: BenchmarkInput
-): Promise<Benchmark> {
+): Promise<Benchmark | null> {
+  const sql = getSql()
+  if (!sql) {
+    console.log('[BenchmarkTesting] createBenchmark: DB unavailable')
+    return null
+  }
+  
   const id = `bench_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`
   
   // Get previous benchmark for comparison
@@ -382,6 +407,11 @@ export async function getLatestBenchmark(
   userId: string,
   testName: string
 ): Promise<Benchmark | null> {
+  const sql = getSql()
+  if (!sql) {
+    return null
+  }
+  
   const results = await sql`
     SELECT * FROM benchmarks
     WHERE user_id = ${userId} AND test_name = ${testName}
@@ -396,6 +426,11 @@ export async function getLatestBenchmark(
  * Get all benchmarks for a user
  */
 export async function getUserBenchmarks(userId: string): Promise<Benchmark[]> {
+  const sql = getSql()
+  if (!sql) {
+    return []
+  }
+  
   const results = await sql`
     SELECT * FROM benchmarks
     WHERE user_id = ${userId}
@@ -413,6 +448,11 @@ export async function getBenchmarkHistory(
   testName: string,
   limitDays: number = 365
 ): Promise<Benchmark[]> {
+  const sql = getSql()
+  if (!sql) {
+    return []
+  }
+  
   const results = await sql`
     SELECT * FROM benchmarks
     WHERE user_id = ${userId} 
@@ -431,6 +471,11 @@ export async function getBenchmarksByFamily(
   userId: string,
   movementFamily: BenchmarkMovementFamily
 ): Promise<Benchmark[]> {
+  const sql = getSql()
+  if (!sql) {
+    return []
+  }
+  
   const results = await sql`
     SELECT * FROM benchmarks
     WHERE user_id = ${userId} AND movement_family = ${movementFamily}

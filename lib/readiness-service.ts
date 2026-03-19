@@ -1,7 +1,26 @@
-import { neon } from '@neondatabase/serverless'
+import { neon, type NeonQueryFunction } from '@neondatabase/serverless'
 import type { SkillReadiness, ReadinessSnapshot } from '@/types/skill-readiness'
 
-const sql = neon(process.env.DATABASE_URL!)
+// =============================================================================
+// LAZY DATABASE CONNECTION
+// Do NOT initialize at module scope - this allows the module to be imported
+// even when DATABASE_URL is absent (e.g., during first-run onboarding)
+// =============================================================================
+
+let _sql: NeonQueryFunction<false, false> | null = null
+
+function getSql(): NeonQueryFunction<false, false> | null {
+  if (_sql) return _sql
+  
+  const connectionString = process.env.DATABASE_URL
+  if (!connectionString) {
+    console.log('[Readiness] DATABASE_URL not available - DB features disabled')
+    return null
+  }
+  
+  _sql = neon(connectionString)
+  return _sql
+}
 
 export interface SkillReadinessData {
   id: string
@@ -23,6 +42,11 @@ export interface SkillReadinessData {
 export async function getAthleteSkillReadiness(
   athleteId: string
 ): Promise<SkillReadinessData[]> {
+  const sql = getSql()
+  if (!sql) {
+    return [] // Return empty when DB unavailable
+  }
+  
   try {
     const results = await sql`
       SELECT 
@@ -55,6 +79,11 @@ export async function getSkillReadiness(
   athleteId: string,
   skill: string
 ): Promise<SkillReadinessData | null> {
+  const sql = getSql()
+  if (!sql) {
+    return null // Return null when DB unavailable
+  }
+  
   try {
     const results = await sql`
       SELECT 
@@ -96,6 +125,12 @@ export async function saveSkillReadiness(
     limitingFactor: string
   }
 ): Promise<void> {
+  const sql = getSql()
+  if (!sql) {
+    // No-op when DB unavailable
+    return
+  }
+  
   try {
     const now = new Date().toISOString()
     
@@ -163,6 +198,11 @@ export async function getReadinessHistory(
   skill: string,
   days: number = 30
 ): Promise<ReadinessSnapshot[]> {
+  const sql = getSql()
+  if (!sql) {
+    return [] // Return empty when DB unavailable
+  }
+  
   try {
     const dateThreshold = new Date()
     dateThreshold.setDate(dateThreshold.getDate() - days)

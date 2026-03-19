@@ -3,7 +3,7 @@
 // Source of truth for skill-specific coaching decisions
 // Now integrated with Skill Progression Graph Engine for explicit node-based tracking
 
-import { neon } from '@neondatabase/serverless'
+import { neon, type NeonQueryFunction } from '@neondatabase/serverless'
 import {
   determineGraphPosition,
   getSkillGraph,
@@ -13,7 +13,26 @@ import {
   type ProgressionNode,
 } from './skill-progression-graph-engine'
 
-const sql = neon(process.env.DATABASE_URL!)
+// =============================================================================
+// LAZY DATABASE CONNECTION
+// Do NOT initialize at module scope - this allows the module to be imported
+// even when DATABASE_URL is absent (e.g., during first-run onboarding)
+// =============================================================================
+
+let _sql: NeonQueryFunction<false, false> | null = null
+
+function getSql(): NeonQueryFunction<false, false> | null {
+  if (_sql) return _sql
+  
+  const connectionString = process.env.DATABASE_URL
+  if (!connectionString) {
+    console.log('[SkillState] DATABASE_URL not available - DB features disabled')
+    return null
+  }
+  
+  _sql = neon(connectionString)
+  return _sql
+}
 
 // =============================================================================
 // TYPES
@@ -84,6 +103,11 @@ export interface SkillStateInput {
  * Get all skill states for an athlete
  */
 export async function getAthleteSkillStates(userId: string): Promise<SkillState[]> {
+  const sql = getSql()
+  if (!sql) {
+    return [] // Return empty when DB unavailable
+  }
+  
   try {
     const results = await sql`
       SELECT 
@@ -125,6 +149,11 @@ export async function getSkillState(
   userId: string,
   skill: SkillKey
 ): Promise<SkillState | null> {
+  const sql = getSql()
+  if (!sql) {
+    return null // Return null when DB unavailable
+  }
+  
   try {
     const results = await sql`
       SELECT 
@@ -167,6 +196,11 @@ export async function saveSkillState(
   skill: SkillKey,
   data: SkillStateInput
 ): Promise<SkillState | null> {
+  const sql = getSql()
+  if (!sql) {
+    return null // Return null when DB unavailable
+  }
+  
   try {
     const now = new Date().toISOString()
     const id = `skill-state-${userId}-${skill}`
@@ -275,6 +309,12 @@ export async function recordSkillTraining(
   userId: string,
   skill: SkillKey
 ): Promise<void> {
+  const sql = getSql()
+  if (!sql) {
+    // No-op when DB unavailable
+    return
+  }
+  
   try {
     const now = new Date().toISOString()
     
@@ -304,6 +344,11 @@ export async function getSkillStateHistory(
   metric: number
   readiness: number
 }[]> {
+  const sql = getSql()
+  if (!sql) {
+    return [] // Return empty when DB unavailable
+  }
+  
   try {
     const results = await sql`
       SELECT 

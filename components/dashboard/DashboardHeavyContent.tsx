@@ -54,11 +54,13 @@ import {
   getStrengthSummary,
   getProgramSummary,
   getCurrentFocusSummary,
+  getDashboardUserState,
   type DashboardOverview,
   type PrimarySkillSummary,
   type StrengthSummary,
   type ProgramSummary,
   type CurrentFocus,
+  type DashboardUserState,
 } from '@/lib/dashboard-service'
 
 import { Brain, Target, Dumbbell, ArrowRight } from 'lucide-react'
@@ -155,8 +157,13 @@ export default function DashboardHeavyContent({
   const [trainingMethods, setTrainingMethods] = useState<SelectedMethods | null>(null)
   const [progressionInsights, setProgressionInsights] = useState<ProgressionInsight[]>([])
   const [loaded, setLoaded] = useState(false)
+  const [userState, setUserState] = useState<DashboardUserState | null>(null)
 
   useEffect(() => {
+    // Load canonical user state first - this gates what we display
+    const dashboardState = getDashboardUserState()
+    setUserState(dashboardState)
+    
     // Sync program to history if needed
     syncProgramToHistory().then(result => {
       if (result?.success) {
@@ -247,11 +254,16 @@ export default function DashboardHeavyContent({
     }
   }, [ENABLE_SECTION_TRAINING_EMPHASIS])
 
-  if (!loaded || !overview) {
+  if (!loaded || !overview || !userState) {
     return <DashboardSkeleton />
   }
 
-  const isEarlyStageUser = !workoutAnalytics || typeof workoutAnalytics.totalWorkouts !== 'number' || workoutAnalytics.totalWorkouts < 3
+  // Use canonical state for gating - isEarlyStageUser means fewer than 3 real workouts
+  const isEarlyStageUser = !userState.hasRealWorkoutLogs || userState.workoutCount < 3
+  // Pre-workout state means program exists but no real workouts yet
+  const isPreWorkoutState = userState.isPreWorkoutState
+  // Show mature widgets only for users with real data
+  const showMatureWidgets = userState.hasMeaningfulRealData && userState.workoutCount >= 3
   const safeProgressOverview = progressOverview && typeof progressOverview === 'object' ? progressOverview : null
   const safeSkills = safeProgressOverview && Array.isArray(safeProgressOverview.skills) ? safeProgressOverview.skills : []
   const safeStrength = safeProgressOverview && Array.isArray(safeProgressOverview.strength) ? safeProgressOverview.strength : []
@@ -341,8 +353,8 @@ export default function DashboardHeavyContent({
         </>
       )}
       
-      {/* SECTION: SKILL PROGRESS */}
-      {ENABLE_SECTION_SKILL_PROGRESS && safeSkills.filter(s => s && (s.progressPercent > 0 || s.sessionsThisMonth > 0)).length > 0 && (
+      {/* SECTION: SKILL PROGRESS - Only show if user has real workout data or skill sessions */}
+      {ENABLE_SECTION_SKILL_PROGRESS && userState.hasRealWorkoutLogs && safeSkills.filter(s => s && (s.progressPercent > 0 || s.sessionsThisMonth > 0)).length > 0 && (
         <>
           <Section id="skill-progress" priority="primary">
             <SectionHeader 
@@ -382,8 +394,8 @@ export default function DashboardHeavyContent({
         </>
       )}
       
-      {/* SECTION: SKILL READINESS */}
-      {ENABLE_SECTION_SKILL_READINESS && !isEarlyStageUser && overview?.profile && (
+      {/* SECTION: SKILL READINESS - Only show for users with real workout data */}
+      {ENABLE_SECTION_SKILL_READINESS && showMatureWidgets && overview?.profile && (
         <SafeWidget name="SkillReadinessPanel">
           <SkillReadinessPanel 
             athleteProfile={{
@@ -401,22 +413,22 @@ export default function DashboardHeavyContent({
         </SafeWidget>
       )}
       
-      {/* SECTION: ROADMAPS */}
-      {ENABLE_SECTION_ROADMAPS && !isEarlyStageUser && (
+      {/* SECTION: ROADMAPS - Only show for users with real workout data */}
+      {ENABLE_SECTION_ROADMAPS && showMatureWidgets && (
         <SafeWidget name="SkillRoadmapsCard">
           <SkillRoadmapsCard maxDisplay={4} />
         </SafeWidget>
       )}
       
-      {/* SECTION: ACHIEVEMENTS */}
-      {ENABLE_SECTION_ACHIEVEMENTS && (
+      {/* SECTION: ACHIEVEMENTS - Only show if user has real workout data */}
+      {ENABLE_SECTION_ACHIEVEMENTS && userState.hasRealWorkoutLogs && (
         <SafeWidget name="AchievementsCard">
           <AchievementsCard maxDisplay={isEarlyStageUser ? 3 : 6} />
         </SafeWidget>
       )}
       
-      {/* SECTION: CHALLENGES + H2H */}
-      {ENABLE_SECTION_CHALLENGES && !isEarlyStageUser && (
+      {/* SECTION: CHALLENGES + H2H - Only show for users with meaningful real data */}
+      {ENABLE_SECTION_CHALLENGES && showMatureWidgets && (
         <>
           <SafeWidget name="ChallengesCard">
             <ChallengesCard maxDisplay={3} />
@@ -428,15 +440,15 @@ export default function DashboardHeavyContent({
         </>
       )}
       
-      {/* SECTION: LEADERBOARD */}
-      {ENABLE_SECTION_LEADERBOARD && !isEarlyStageUser && (
+      {/* SECTION: LEADERBOARD - Only show for users with meaningful real data */}
+      {ENABLE_SECTION_LEADERBOARD && showMatureWidgets && (
         <SafeWidget name="LeaderboardPreviewCard">
           <LeaderboardPreviewCard />
         </SafeWidget>
       )}
       
-      {/* SECTION: GOAL PROJECTIONS */}
-      {ENABLE_SECTION_GOAL_PROJECTIONS && nextMilestone && (
+      {/* SECTION: GOAL PROJECTIONS - Only show for users with real workout data */}
+      {ENABLE_SECTION_GOAL_PROJECTIONS && nextMilestone && userState.hasRealWorkoutLogs && (
         <>
           <Section id="goal-projections" priority="secondary">
             <SectionHeader 
@@ -475,8 +487,8 @@ export default function DashboardHeavyContent({
         </>
       )}
 
-      {/* SECTION: DETAILED INSIGHTS */}
-      {ENABLE_SECTION_DETAILED_INSIGHTS && (
+      {/* SECTION: DETAILED INSIGHTS - Only show for users with real workout data */}
+      {ENABLE_SECTION_DETAILED_INSIGHTS && userState.hasRealWorkoutLogs && (
         <Section id="training-insights" priority="secondary">
           <SectionHeader 
             title="Detailed Analysis"
@@ -520,8 +532,8 @@ export default function DashboardHeavyContent({
         </Section>
       )}
 
-      {/* SECTION: STRENGTH PROGRESS */}
-      {ENABLE_SECTION_STRENGTH_PROGRESS && safeStrength.filter(s => s && s.currentBest > 0).length > 0 && (
+      {/* SECTION: STRENGTH PROGRESS - Only show for users with real workout data */}
+      {ENABLE_SECTION_STRENGTH_PROGRESS && userState.hasRealWorkoutLogs && safeStrength.filter(s => s && s.currentBest > 0).length > 0 && (
         <SafeWidget name="StrengthProgressSection" hideOnError>
           <div className="space-y-3">
             <div className="flex items-center justify-between">
@@ -543,8 +555,8 @@ export default function DashboardHeavyContent({
         </SafeWidget>
       )}
       
-      {/* SECTION: PROGRESS TRACKING */}
-      {ENABLE_SECTION_PROGRESS_TRACKING && (
+      {/* SECTION: PROGRESS TRACKING - Only show for users with real workout data */}
+      {ENABLE_SECTION_PROGRESS_TRACKING && userState.hasRealWorkoutLogs && (
         <>
           <Section id="progress-tracking" priority="secondary">
             <SectionHeader 
@@ -570,8 +582,8 @@ export default function DashboardHeavyContent({
         </>
       )}
       
-      {/* SECTION: PERFORMANCE OVERVIEW */}
-      {ENABLE_SECTION_PERFORMANCE_OVERVIEW && (
+      {/* SECTION: PERFORMANCE OVERVIEW - Only show for users with real workout data */}
+      {ENABLE_SECTION_PERFORMANCE_OVERVIEW && userState.hasRealWorkoutLogs && (
         <div className="grid gap-4 md:grid-cols-2">
           {spartanScore && (
             <SafeWidget name="SpartanScoreCard" hideOnError>
@@ -622,8 +634,8 @@ export default function DashboardHeavyContent({
         </>
       )}
       
-      {/* SECTION: NOTIFICATIONS */}
-      {ENABLE_SECTION_NOTIFICATIONS && (
+      {/* SECTION: NOTIFICATIONS - Only show for users with real workout data */}
+      {ENABLE_SECTION_NOTIFICATIONS && userState.hasRealWorkoutLogs && (
         <>
           <SafeWidget name="AchievementNotification" hideOnError>
             <AchievementNotification />

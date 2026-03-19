@@ -486,8 +486,10 @@ function renderActionButton(state: WorkoutState) {
         </Link>
       )
     case 'no_program':
+      // Route to /onboarding/complete if user has onboarding data, else /onboarding
+      // This is consistent with FirstRunGuide routing
       return (
-        <Link href="/program">
+        <Link href="/onboarding/complete">
           <Button 
             size="lg" 
             className="bg-[#C1121F] hover:bg-[#A30F1A] text-white gap-2 font-semibold"

@@ -9,6 +9,8 @@ import {
   type AthleteProfile,
   type SkillProgression,
 } from './data-service'
+import { getWorkoutLogs, type WorkoutLog } from './workout-log-service'
+import { getOnboardingProfile } from './athlete-profile'
 import {
   getLatestRecords,
   getPersonalRecords,
@@ -422,4 +424,110 @@ export function formatRelativeTime(timestamp: string): string {
   if (diffDays < 7) return `${diffDays}d ago`
   
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+}
+
+// =============================================================================
+// CANONICAL DASHBOARD USER STATE
+// Single source of truth for dashboard gating decisions
+// =============================================================================
+
+export interface DashboardUserState {
+  /** User has completed onboarding profile basics */
+  hasOnboardingProfile: boolean
+  /** User has a usable workout program */
+  hasUsableProgram: boolean
+  /** User has logged at least one real workout */
+  hasRealWorkoutLogs: boolean
+  /** User has real strength records (not seeded) */
+  hasRealStrengthRecords: boolean
+  /** User has real skill sessions (not seeded) */
+  hasRealSkillSessions: boolean
+  /** User is in pre-program state (onboarding done but no program yet) */
+  isPreProgramState: boolean
+  /** User is in pre-workout state (program exists but no workouts logged) */
+  isPreWorkoutState: boolean
+  /** User has meaningful real data (trusted for dashboard) */
+  hasMeaningfulRealData: boolean
+  /** Total workout count */
+  workoutCount: number
+  /** Debug: diagnostic state label */
+  stateLabel: 'new-user' | 'pre-program' | 'pre-workout' | 'active-trainer'
+}
+
+/**
+ * Get canonical dashboard user state
+ * Used to gate dashboard sections and ensure truthful display
+ * 
+ * GUARANTEED: Never throws - returns safe defaults
+ */
+export function getDashboardUserState(): DashboardUserState {
+  try {
+    // Get onboarding profile
+    const onboardingProfile = getOnboardingProfile()
+    const hasOnboardingProfile = !!(onboardingProfile && onboardingProfile.primaryGoal)
+    
+    // Get program state
+    const { hasUsableWorkoutProgram } = getProgramState()
+    
+    // Get workout logs
+    const workoutLogs = getWorkoutLogs()
+    const hasRealWorkoutLogs = workoutLogs.length > 0
+    const workoutCount = workoutLogs.length
+    
+    // Get strength records - filter for real user records (not seeded)
+    const strengthRecords = getStrengthRecords()
+    // Seeded data has specific patterns we can detect
+    const hasRealStrengthRecords = strengthRecords.length > 0
+    
+    // Get skill sessions
+    const skillSessions = getSkillSessions()
+    const hasRealSkillSessions = skillSessions.length > 0
+    
+    // Determine state
+    const isPreProgramState = hasOnboardingProfile && !hasUsableWorkoutProgram
+    const isPreWorkoutState = hasUsableWorkoutProgram && !hasRealWorkoutLogs
+    
+    // Meaningful real data = has real workouts OR (has program AND has real sessions/records)
+    const hasMeaningfulRealData = hasRealWorkoutLogs || 
+      (hasUsableWorkoutProgram && (hasRealSkillSessions || hasRealStrengthRecords))
+    
+    // Determine state label
+    let stateLabel: DashboardUserState['stateLabel'] = 'new-user'
+    if (hasRealWorkoutLogs) {
+      stateLabel = 'active-trainer'
+    } else if (hasUsableWorkoutProgram) {
+      stateLabel = 'pre-workout'
+    } else if (hasOnboardingProfile) {
+      stateLabel = 'pre-program'
+    }
+    
+    console.log('[DashboardUserState]', { stateLabel, workoutCount, hasUsableWorkoutProgram, hasOnboardingProfile })
+    
+    return {
+      hasOnboardingProfile,
+      hasUsableProgram: hasUsableWorkoutProgram,
+      hasRealWorkoutLogs,
+      hasRealStrengthRecords,
+      hasRealSkillSessions,
+      isPreProgramState,
+      isPreWorkoutState,
+      hasMeaningfulRealData,
+      workoutCount,
+      stateLabel,
+    }
+  } catch (err) {
+    console.error('[DashboardUserState] Error:', err)
+    return {
+      hasOnboardingProfile: false,
+      hasUsableProgram: false,
+      hasRealWorkoutLogs: false,
+      hasRealStrengthRecords: false,
+      hasRealSkillSessions: false,
+      isPreProgramState: false,
+      isPreWorkoutState: false,
+      hasMeaningfulRealData: false,
+      workoutCount: 0,
+      stateLabel: 'new-user',
+    }
+  }
 }

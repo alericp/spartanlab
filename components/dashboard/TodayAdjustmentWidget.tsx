@@ -86,7 +86,8 @@ export function TodayAdjustmentWidget() {
             <p className="text-xs text-[#6B7280] uppercase tracking-wider mb-1">Today&apos;s Session</p>
             <p className="font-semibold text-[#A4ACB8]">No Active Program</p>
           </div>
-          <Link href="/program">
+          {/* Route to /onboarding/complete for program generation */}
+          <Link href="/onboarding/complete">
             <Button size="sm" className="bg-[#C1121F] hover:bg-[#A30F1A] text-white">
               Create
             </Button>

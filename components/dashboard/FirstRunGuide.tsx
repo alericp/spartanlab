@@ -61,6 +61,7 @@ export function FirstRunGuide() {
     const hasWorkout = logs.length > 0
 
     // Build steps with completion status
+    // Use canonical routing: /onboarding/complete for program generation (not /programs which is marketing)
     const setupSteps: SetupStep[] = [
       {
         id: 'profile',
@@ -74,7 +75,8 @@ export function FirstRunGuide() {
         id: 'program',
         label: 'Create Your Program',
         description: 'Build a personalized training plan',
-        href: '/programs',
+        // Route to /onboarding/complete for real in-app generation, not /programs (marketing page)
+        href: hasProfile ? '/onboarding/complete' : '/onboarding',
         icon: Calendar,
         isComplete: hasProgram,
       },
@@ -87,6 +89,8 @@ export function FirstRunGuide() {
         isComplete: hasWorkout,
       },
     ]
+    
+    console.log('[FirstRunGuide] State:', { hasProfile, hasProgram, hasWorkout })
 
     setSteps(setupSteps)
     
@@ -260,7 +264,8 @@ export function SetupReminderBanner() {
         id: 'program',
         label: 'Create your training program',
         description: 'Get started with structured training',
-        href: '/programs',
+        // Route to /onboarding/complete for real in-app generation
+        href: '/onboarding/complete',
         icon: Calendar,
         isComplete: false,
       })

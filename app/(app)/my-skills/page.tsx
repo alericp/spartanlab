@@ -17,7 +17,8 @@ import { Navigation } from '@/components/shared/Navigation'
 import { Target } from 'lucide-react'
 import { PageHeader } from '@/components/shared/PageHeader'
 import { SKILL_PROGRESSIONS, type EnhancedSkillDefinition } from '@/lib/skill-progression-rules'
-import { getSkillSessions, seedSampleSessions } from '@/lib/skill-session-service'
+import { getSkillSessions } from '@/lib/skill-session-service'
+// NOTE: seedSampleSessions removed - must not auto-seed real user data
 import { getSkillProgressions } from '@/lib/data-service'
 
 type SkillKey = keyof typeof SKILL_PROGRESSIONS
@@ -51,11 +52,9 @@ export default function SkillsPage() {
   const [selectedSkill, setSelectedSkill] = useState<SkillKey | null>(null)
   const [mounted, setMounted] = useState(false)
 
-  // Load initial data
+  // Load initial data - no auto-seeding
   useEffect(() => {
     setMounted(true)
-    // Seed sample data for demo (only if no sessions exist)
-    seedSampleSessions()
   }, [])
 
   // Loading state

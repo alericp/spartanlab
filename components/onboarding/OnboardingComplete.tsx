@@ -93,6 +93,17 @@ export function OnboardingComplete({ onContinue }: OnboardingCompleteProps) {
           return
         }
         
+        // CRITICAL: Verify program is actually readable from canonical storage
+        // This prevents routing forward if save didn't work
+        const { getProgramState } = await import('@/lib/program-state')
+        const verificationState = getProgramState()
+        
+        if (!verificationState.hasUsableWorkoutProgram) {
+          console.error('[OnboardingComplete] Program saved but not readable from program-state')
+          setStep('ready')
+          return
+        }
+        
         // Generate program reasoning
         const reasoning = getProgramReasoning(result.program)
         setProgramReasoning(reasoning)
@@ -327,7 +338,7 @@ export function OnboardingComplete({ onContinue }: OnboardingCompleteProps) {
           </div>
           
           {/* Program Reasoning Summary */}
-          {programReasoning && (
+          {programReasoning && Array.isArray(programReasoning.strategyFocus) && programReasoning.strategyFocus.length > 0 && (
             <div className="bg-[#0F1115] rounded-lg p-3 border border-[#2B313A] mb-4">
               <p className="text-xs text-[#6B7280] uppercase tracking-wide mb-2">Your Starting Focus</p>
               <div className="space-y-1.5">
@@ -351,19 +362,23 @@ export function OnboardingComplete({ onContinue }: OnboardingCompleteProps) {
           )}
 
           {/* Program summary */}
-          {programResult?.program && Array.isArray(programResult.program.sessions) && (
+          {programResult?.program && Array.isArray(programResult.program.sessions) && programResult.program.sessions.length > 0 && (
             <div className="grid grid-cols-3 gap-2 mb-4">
               <div className="bg-[#0F1115] rounded-lg p-2.5 text-center border border-[#2B313A]">
                 <Calendar className="w-3.5 h-3.5 text-[#4F6D8A] mx-auto mb-1" />
                 <p className="text-base font-bold text-[#E6E9EF]">
-                  {programResult.program.trainingDaysPerWeek || programResult.program.sessions.length}
+                  {typeof programResult.program.trainingDaysPerWeek === 'number' 
+                    ? programResult.program.trainingDaysPerWeek 
+                    : programResult.program.sessions.length}
                 </p>
                 <p className="text-[10px] text-[#6B7280]">Days/Week</p>
               </div>
               <div className="bg-[#0F1115] rounded-lg p-2.5 text-center border border-[#2B313A]">
                 <Target className="w-3.5 h-3.5 text-[#C1121F] mx-auto mb-1" />
                 <p className="text-base font-bold text-[#E6E9EF] capitalize truncate">
-                  {programResult.program.goalLabel?.split(' ')[0] || 'Strength'}
+                  {(typeof programResult.program.goalLabel === 'string' && programResult.program.goalLabel)
+                    ? programResult.program.goalLabel.split(' ')[0]
+                    : 'Strength'}
                 </p>
                 <p className="text-[10px] text-[#6B7280]">Focus</p>
               </div>
@@ -475,7 +490,7 @@ export function OnboardingComplete({ onContinue }: OnboardingCompleteProps) {
         </div>
 
         {/* Program Reasoning Summary */}
-        {programReasoning && (
+        {programReasoning && Array.isArray(programReasoning.strategyFocus) && programReasoning.strategyFocus.length > 0 && (
           <div className="bg-[#0F1115] rounded-lg p-3 border border-[#2B313A] mb-4">
             <p className="text-xs text-[#6B7280] uppercase tracking-wide mb-2">Training Strategy</p>
             <div className="space-y-1.5">

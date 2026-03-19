@@ -94,7 +94,7 @@ function normalizeProfileForGeneration(profile: OnboardingProfile): NormalizedPr
   const strengthTier = estimateStrengthTier(profile)
   const experienceLevel = mapStrengthTierToExperience(strengthTier)
 
-  return {
+  const normalized = {
     selectedSkills,
     primaryGoal: profile.primaryGoal,
     trainingDaysPerWeek,
@@ -102,6 +102,16 @@ function normalizeProfileForGeneration(profile: OnboardingProfile): NormalizedPr
     equipment,
     experienceLevel,
   }
+  
+  console.log('[OnboardingService] Normalized profile:', {
+    skills: normalized.selectedSkills.length,
+    goal: normalized.primaryGoal,
+    days: normalized.trainingDaysPerWeek,
+    minutes: normalized.sessionLengthMinutes,
+    level: normalized.experienceLevel,
+  })
+  
+  return normalized
 }
 
 // =============================================================================
@@ -325,7 +335,11 @@ export function generateFirstProgram(): FirstRunResult {
       program.goalLabel = 'Strength Training'
     }
     
-    console.log('[OnboardingService] All sessions validated:', program.sessions.length)
+    console.log('[OnboardingService] Strict validation passed:', {
+      sessions: program.sessions.length,
+      trainingDaysPerWeek: program.trainingDaysPerWeek,
+      goalLabel: program.goalLabel,
+    })
     
     // Save program to CANONICAL adaptive storage - this is the source of truth
     // that /program, first-session, and workout/session all read from

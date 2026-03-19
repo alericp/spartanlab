@@ -14,7 +14,7 @@ import { getEliteInsights, type EliteInsightsSnapshot } from '@/lib/elite-insigh
 import { getQuickEngineStatus } from '@/lib/adaptive-athlete-engine'
 import { calculateSpartanScore, type StrengthScoreBreakdown, getLevelColor } from '@/lib/strength-score-engine'
 import { getCurrentUser, getAthleteProfile } from '@/lib/data-service'
-import { seedSampleSessions } from '@/lib/skill-session-service'
+// NOTE: seedSampleSessions removed - must not auto-seed real user data
 import { Database, Crown, Sparkles, ChevronRight } from 'lucide-react'
 import { PageHeader } from '@/components/shared/PageHeader'
 import { PerformanceVaultEmptyState } from '@/components/shared/EmptyStates'
@@ -31,17 +31,13 @@ export default function DatabasePage() {
   
   useEffect(() => {
     setMounted(true)
-    // Seed sample data for demo
-    seedSampleSessions()
-    // Small delay to ensure data is seeded
-    setTimeout(() => {
-      setPRVault(getPRVault())
-      setMilestones(getMilestones())
-      setHistory(getHistoryOverview())
-      setInsights(getEliteInsights())
-      setSpartanScore(calculateSpartanScore())
-      setEngineStatus(getQuickEngineStatus())
-    }, 50)
+    // Load real user data only - no auto-seeding
+    setPRVault(getPRVault())
+    setMilestones(getMilestones())
+    setHistory(getHistoryOverview())
+    setInsights(getEliteInsights())
+    setSpartanScore(calculateSpartanScore())
+    setEngineStatus(getQuickEngineStatus())
   }, [])
   
   if (!mounted) {

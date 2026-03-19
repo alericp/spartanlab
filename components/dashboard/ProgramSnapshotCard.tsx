@@ -48,7 +48,8 @@ export function ProgramSnapshotCard({ className }: ProgramSnapshotCardProps) {
           <p className="text-xs text-[#6B7280] mb-4">
             Create a program to get structured training
           </p>
-          <Link href="/program">
+          {/* Route to /onboarding/complete for program generation (consistent with FirstRunGuide) */}
+          <Link href="/onboarding/complete">
             <Button size="sm" className="bg-[#C1121F] hover:bg-[#A30F1A] text-white gap-2">
               <Calendar className="w-4 h-4" />
               Create Program

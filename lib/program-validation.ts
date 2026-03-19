@@ -305,6 +305,85 @@ export function validateProgramEquipment(
 }
 
 /**
+ * Validate biomechanical coherence using movement intelligence
+ */
+export function validateBiomechanicalCoherence(
+  program: ProgramToValidate
+): ProgramValidationResult['biomechanicalValidation'] {
+  const result: ProgramValidationResult['biomechanicalValidation'] = {
+    isCoherent: true,
+    sessionCoherence: [],
+    weeklyAnalysis: {
+      straightArmDays: 0,
+      pushPullRatio: 0,
+      warnings: [],
+      recommendations: [],
+    },
+  }
+  
+  const sessions = program.sessions || []
+  const sessionExerciseSets: MovementIntelligentExercise[][] = []
+  
+  // Process each session
+  for (const session of sessions) {
+    const exercises = session.exercises || []
+    const movementIntelligentExercises: MovementIntelligentExercise[] = []
+    
+    for (const ex of exercises) {
+      const exerciseId = ex.exercise?.id || ex.id
+      if (!exerciseId) continue
+      
+      const dbExercise = getExerciseById(exerciseId)
+      if (dbExercise) {
+        const movementIntel = normalizeToMovementIntelligent(dbExercise)
+        movementIntelligentExercises.push(movementIntel)
+      }
+    }
+    
+    sessionExerciseSets.push(movementIntelligentExercises)
+    
+    // Validate session coherence
+    if (movementIntelligentExercises.length > 0) {
+      const coherenceCheck = validateSessionCoherence(movementIntelligentExercises)
+      result.sessionCoherence.push({
+        dayNumber: session.dayNumber || result.sessionCoherence.length + 1,
+        passed: coherenceCheck.passed,
+        warnings: coherenceCheck.warnings,
+      })
+      
+      if (!coherenceCheck.passed) {
+        result.isCoherent = false
+      }
+    }
+  }
+  
+  // Validate weekly coherence
+  if (sessionExerciseSets.length > 0 && sessionExerciseSets.some(s => s.length > 0)) {
+    const weeklyCoherence = validateWeeklyCoherence(sessionExerciseSets)
+    const weeklyAnalysis = analyzeWeeklyPatterns(sessionExerciseSets)
+    
+    result.weeklyAnalysis = {
+      straightArmDays: weeklyAnalysis.totalStraightArmSessions,
+      pushPullRatio: weeklyAnalysis.pushPullRatio,
+      warnings: [...weeklyCoherence.warnings, ...weeklyAnalysis.warnings],
+      recommendations: [...weeklyCoherence.suggestions, ...weeklyAnalysis.recommendations],
+    }
+    
+    if (!weeklyCoherence.passed) {
+      result.isCoherent = false
+    }
+  }
+  
+  console.log('[program-validate] Biomechanical coherence:', {
+    isCoherent: result.isCoherent,
+    sessionsChecked: result.sessionCoherence.length,
+    weeklyWarnings: result.weeklyAnalysis.warnings.length,
+  })
+  
+  return result
+}
+
+/**
  * Full program validation
  */
 export function validateProgramFromDatabase(
@@ -326,6 +405,7 @@ export function validateProgramFromDatabase(
     program,
     context?.availableEquipment
   )
+  const biomechanicalValidation = validateBiomechanicalCoherence(program)
   
   // Build diagnostics
   diagnostics.push(
@@ -356,19 +436,36 @@ export function validateProgramFromDatabase(
     diagnostics.push(`Equipment violations: ${equipmentValidation.violations.length}`)
   }
   
+  // Biomechanical coherence diagnostics
+  if (!biomechanicalValidation.isCoherent) {
+    diagnostics.push(`Biomechanical coherence issues detected`)
+    const failedSessions = biomechanicalValidation.sessionCoherence
+      .filter(s => !s.passed)
+      .map(s => `Day ${s.dayNumber}`)
+    if (failedSessions.length > 0) {
+      diagnostics.push(`Sessions with warnings: ${failedSessions.join(', ')}`)
+    }
+  }
+  
+  if (biomechanicalValidation.weeklyAnalysis.warnings.length > 0) {
+    diagnostics.push(...biomechanicalValidation.weeklyAnalysis.warnings.slice(0, 2))
+  }
+  
   // Determine overall validity
   const isValid = 
     exerciseValidation.invalid === 0 &&
     structureValidation.hasValidSessions &&
     structureValidation.duplicateExercises.length === 0 &&
     volumeValidation.isPlausible &&
-    (context?.strictMode ? equipmentValidation.isRespected : true)
+    (context?.strictMode ? equipmentValidation.isRespected : true) &&
+    (context?.strictMode ? biomechanicalValidation.isCoherent : true)
   
   console.log('[program-validate] Validation complete:', {
     isValid,
     exerciseValid: exerciseValidation.invalid === 0,
     structureValid: structureValidation.hasValidSessions,
     volumeValid: volumeValidation.isPlausible,
+    biomechanicalCoherent: biomechanicalValidation.isCoherent,
   })
   
   return {
@@ -377,6 +474,7 @@ export function validateProgramFromDatabase(
     structureValidation,
     volumeValidation,
     equipmentValidation,
+    biomechanicalValidation,
     diagnostics,
   }
 }

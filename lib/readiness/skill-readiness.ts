@@ -2129,6 +2129,270 @@ export function calculateIronCrossReadiness(inputs: IronCrossInputs): ReadinessR
 }
 
 // =============================================================================
+// DRAGON FLAG READINESS
+// =============================================================================
+
+export interface DragonFlagInputs {
+  dragonFlagTuckReps: number // reps of tuck progression
+  legRaiseMax: number // max reps of leg raises
+  abWheelRolloutMax: number // max reps of ab wheel
+  hollowHoldTime: number // seconds - core tension foundation
+  lowerBackMobility: 'poor' | 'moderate' | 'good' | 'excellent'
+}
+
+export function calculateDragonFlagReadiness(inputs: DragonFlagInputs): ReadinessResult {
+  const breakdown: ScoreBreakdown[] = []
+  
+  // ===================
+  // Factor 1: Dragon Flag Tuck Progression (max 25 points)
+  // ===================
+  // Most direct indicator of dragon flag readiness
+  let dragonFlagTuckScore = 0
+  let dragonFlagTuckStatus: ScoreBreakdown['status'] = 'weak'
+  
+  if (inputs.dragonFlagTuckReps >= 15) {
+    dragonFlagTuckScore = 25
+    dragonFlagTuckStatus = 'strong'
+  } else if (inputs.dragonFlagTuckReps >= 10) {
+    dragonFlagTuckScore = 20
+    dragonFlagTuckStatus = 'strong'
+  } else if (inputs.dragonFlagTuckReps >= 6) {
+    dragonFlagTuckScore = 15
+    dragonFlagTuckStatus = 'adequate'
+  } else if (inputs.dragonFlagTuckReps >= 3) {
+    dragonFlagTuckScore = 10
+    dragonFlagTuckStatus = 'developing'
+  } else if (inputs.dragonFlagTuckReps >= 1) {
+    dragonFlagTuckScore = 5
+    dragonFlagTuckStatus = 'weak'
+  }
+  
+  breakdown.push({
+    factor: 'Dragon Flag Tuck',
+    score: dragonFlagTuckScore,
+    maxScore: 25,
+    status: dragonFlagTuckStatus,
+  })
+
+  // ===================
+  // Factor 2: Core Compression (Hollow Body) (max 20 points)
+  // ===================
+  // Foundation for full-body tension in dragon flag
+  let compressionScore = 0
+  let compressionStatus: ScoreBreakdown['status'] = 'weak'
+  
+  if (inputs.hollowHoldTime >= 90) {
+    compressionScore = 20
+    compressionStatus = 'strong'
+  } else if (inputs.hollowHoldTime >= 60) {
+    compressionScore = 16
+    compressionStatus = 'strong'
+  } else if (inputs.hollowHoldTime >= 45) {
+    compressionScore = 12
+    compressionStatus = 'adequate'
+  } else if (inputs.hollowHoldTime >= 30) {
+    compressionScore = 8
+    compressionStatus = 'developing'
+  } else if (inputs.hollowHoldTime >= 15) {
+    compressionScore = 4
+    compressionStatus = 'weak'
+  }
+  
+  breakdown.push({
+    factor: 'Core Tension (Hollow Hold)',
+    score: compressionScore,
+    maxScore: 20,
+    status: compressionStatus,
+  })
+
+  // ===================
+  // Factor 3: Leg Raise Strength (max 20 points)
+  // ===================
+  // Hip flexor power and control under load
+  let legRaiseScore = 0
+  let legRaiseStatus: ScoreBreakdown['status'] = 'weak'
+  
+  if (inputs.legRaiseMax >= 25) {
+    legRaiseScore = 20
+    legRaiseStatus = 'strong'
+  } else if (inputs.legRaiseMax >= 18) {
+    legRaiseScore = 16
+    legRaiseStatus = 'strong'
+  } else if (inputs.legRaiseMax >= 12) {
+    legRaiseScore = 12
+    legRaiseStatus = 'adequate'
+  } else if (inputs.legRaiseMax >= 8) {
+    legRaiseScore = 8
+    legRaiseStatus = 'developing'
+  } else if (inputs.legRaiseMax >= 3) {
+    legRaiseScore = 4
+    legRaiseStatus = 'weak'
+  }
+  
+  breakdown.push({
+    factor: 'Leg Raise Strength',
+    score: legRaiseScore,
+    maxScore: 20,
+    status: legRaiseStatus,
+  })
+
+  // ===================
+  // Factor 4: Anti-Extension Strength (Ab Wheel) (max 20 points)
+  // ===================
+  // Anti-extension control from shoulders to hips
+  let antiExtensionScore = 0
+  let antiExtensionStatus: ScoreBreakdown['status'] = 'weak'
+  
+  if (inputs.abWheelRolloutMax >= 20) {
+    antiExtensionScore = 20
+    antiExtensionStatus = 'strong'
+  } else if (inputs.abWheelRolloutMax >= 15) {
+    antiExtensionScore = 16
+    antiExtensionStatus = 'strong'
+  } else if (inputs.abWheelRolloutMax >= 10) {
+    antiExtensionScore = 12
+    antiExtensionStatus = 'adequate'
+  } else if (inputs.abWheelRolloutMax >= 6) {
+    antiExtensionScore = 8
+    antiExtensionStatus = 'developing'
+  } else if (inputs.abWheelRolloutMax >= 3) {
+    antiExtensionScore = 4
+    antiExtensionStatus = 'weak'
+  }
+  
+  breakdown.push({
+    factor: 'Ab Wheel Rollout',
+    score: antiExtensionScore,
+    maxScore: 20,
+    status: antiExtensionStatus,
+  })
+
+  // ===================
+  // Factor 5: Lower Back Mobility (max 15 points)
+  // ===================
+  // Comfortable spinal extension for full ROM
+  let mobilityScore = 0
+  let mobilityStatus: ScoreBreakdown['status'] = 'weak'
+  
+  switch (inputs.lowerBackMobility) {
+    case 'excellent':
+      mobilityScore = 15
+      mobilityStatus = 'strong'
+      break
+    case 'good':
+      mobilityScore = 11
+      mobilityStatus = 'adequate'
+      break
+    case 'moderate':
+      mobilityScore = 6
+      mobilityStatus = 'developing'
+      break
+    case 'poor':
+      mobilityScore = 2
+      mobilityStatus = 'weak'
+      break
+  }
+  
+  breakdown.push({
+    factor: 'Lower Back Mobility',
+    score: mobilityScore,
+    maxScore: 15,
+    status: mobilityStatus,
+  })
+
+  // ===================
+  // FINAL SCORING
+  // ===================
+  const totalScore = breakdown.reduce((sum, b) => sum + b.score, 0)
+  const maxTotalScore = breakdown.reduce((sum, b) => sum + b.maxScore, 0)
+  const percentScore = (totalScore / maxTotalScore) * 100
+
+  let level: ReadinessLevel = 'not-ready'
+  let label = 'Not Ready Yet'
+
+  if (percentScore >= 85) {
+    level = 'advanced-ready'
+    label = 'Advanced Ready'
+  } else if (percentScore >= 70) {
+    level = 'intermediate-progression'
+    label = 'Intermediate Progression'
+  } else if (percentScore >= 50) {
+    level = 'early-progression'
+    label = 'Early Progression'
+  } else if (percentScore >= 30) {
+    level = 'foundation-phase'
+    label = 'Foundation Phase'
+  }
+
+  // Limiting factor detection
+  const sortedFactors = [...breakdown]
+    .sort((a, b) => (a.score / a.maxScore) - (b.score / b.maxScore))
+  
+  const limitingInfo = {
+    factor: sortedFactors[0]?.factor || 'Overall preparation',
+    explanation: getLimitingExplanation(sortedFactors[0]?.factor || '', inputs),
+  }
+
+  let recommendation = 'Build dragon flag strength progressively through tuck holds and compression work.'
+  let nextProgression = 'Progress from tuck holds to negatives with 4-5s descent phase.'
+
+  if (percentScore >= 85) {
+    recommendation = 'You have excellent dragon flag readiness. Focus on perfect form and consistent practice.'
+    nextProgression = 'Begin working toward full dragon flag with strict form.'
+  } else if (percentScore >= 70) {
+    recommendation = 'Strong progress. Continue developing the limiting factor to reach full readiness.'
+    nextProgression = 'Work on the limiting factor with targeted accessory work.'
+  } else if (percentScore >= 50) {
+    recommendation = 'Solid foundation. Build consistency in your weak areas before advancing.'
+    nextProgression = 'Focus on dragon flag tuck holds and hollow body position.'
+  } else if (percentScore >= 30) {
+    recommendation = 'You have foundational potential. Prioritize core compression and leg raise strength.'
+    nextProgression = 'Master hollow body hold and leg raise strength first.'
+  } else {
+    recommendation = 'Build your core strength foundation with hollow body holds and leg raises.'
+    nextProgression = 'Start with hollow body holds for 30-60 seconds, then add leg raise work.'
+  }
+
+  return {
+    score: Math.round(percentScore),
+    level,
+    label,
+    limitingFactor: limitingInfo.factor,
+    limitingFactorExplanation: limitingInfo.explanation,
+    recommendation,
+    nextProgression,
+    breakdown,
+  }
+}
+
+function getLimitingExplanation(factor: string, inputs: DragonFlagInputs): string {
+  switch (factor) {
+    case 'Dragon Flag Tuck':
+      return inputs.dragonFlagTuckReps < 3 
+        ? 'You need more direct dragon flag progression work. Start with tuck holds and progress reps.'
+        : 'Dragon flag tuck is underdeveloped relative to other factors. Increase tuck hold volume.'
+    case 'Core Tension (Hollow Hold)':
+      return inputs.hollowHoldTime < 30
+        ? 'Core tension is weak. Develop a strong hollow body hold before heavy dragon flag work.'
+        : 'Hollow body position needs more development. Practice daily.'
+    case 'Leg Raise Strength':
+      return inputs.legRaiseMax < 8
+        ? 'Hip flexor strength is insufficient. Build leg raise strength as foundation work.'
+        : 'Leg raise strength is limiting progression. Add more repetitions.'
+    case 'Ab Wheel Rollout':
+      return inputs.abWheelRolloutMax < 6
+        ? 'Anti-extension control is weak. Build ab wheel strength for spinal stability.'
+        : 'Anti-extension strength needs development. Increase rollout volume.'
+    case 'Lower Back Mobility':
+      return inputs.lowerBackMobility === 'poor'
+        ? 'Lower back mobility is limiting. Add daily mobility work before heavy dragon flag loading.'
+        : 'Lower back mobility could be improved. Include regular mobility work.'
+    default:
+      return 'Address the limiting factors above to improve readiness.'
+  }
+}
+
+// =============================================================================
 // READINESS TIERS (UNIFIED SYSTEM)
 // =============================================================================
 

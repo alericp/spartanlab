@@ -87,24 +87,36 @@ export default function OnboardingCompletePage() {
 
   useEffect(() => {
     setMounted(true)
+    console.log('[OnboardingComplete] useEffect mount started')
     
     // Branch setup calls - wrapped defensively to prevent crashes
+    // CRITICAL: Capture results locally so we can use them in diagnostics
+    let localIsPro = false
+    let localIsTrial = false
+    let localTrialDays = 0
+    
     try {
-      setIsPro(hasProAccess())
+      localIsPro = hasProAccess()
+      setIsPro(localIsPro)
+      console.log('[OnboardingComplete] hasProAccess succeeded:', localIsPro)
     } catch (err) {
       console.error('[OnboardingComplete] hasProAccess failed, defaulting to false:', err)
       setIsPro(false)
     }
     
     try {
-      setIsTrial(isInTrial())
+      localIsTrial = isInTrial()
+      setIsTrial(localIsTrial)
+      console.log('[OnboardingComplete] isInTrial succeeded:', localIsTrial)
     } catch (err) {
       console.error('[OnboardingComplete] isInTrial failed, defaulting to false:', err)
       setIsTrial(false)
     }
     
     try {
-      setTrialDays(getTrialDaysRemaining())
+      localTrialDays = getTrialDaysRemaining()
+      setTrialDays(localTrialDays)
+      console.log('[OnboardingComplete] getTrialDaysRemaining succeeded:', localTrialDays)
     } catch (err) {
       console.error('[OnboardingComplete] getTrialDaysRemaining failed, defaulting to 0:', err)
       setTrialDays(0)
@@ -180,9 +192,10 @@ export default function OnboardingCompletePage() {
           })
           
           console.log('[OnboardingComplete] SUCCESS: Setting step to ready', { 
-            isPro, 
-            isTrial, 
-            sessionCount: verificationState.sessionCount 
+            isPro: localIsPro, 
+            isTrial: localIsTrial, 
+            sessionCount: verificationState.sessionCount,
+            branch: localIsPro ? 'pro-success' : 'free-preview'
           })
           setStep('ready')
         } else {

@@ -1936,10 +1936,14 @@ function generateAdaptiveSession(
     constraintType,
   })
   
-  // Adapt for equipment
-  const adaptedMain = adaptSessionForEquipment(selection.main, equipment)
-  const adaptedWarmup = adaptSessionForEquipment(selection.warmup, equipment)
-  const adaptedCooldown = adaptSessionForEquipment(selection.cooldown, equipment)
+  // Adapt for equipment - use safe fallbacks if selection properties are missing
+  const safeMain = Array.isArray(selection?.main) ? selection.main : []
+  const safeWarmup = Array.isArray(selection?.warmup) ? selection.warmup : []
+  const safeCooldown = Array.isArray(selection?.cooldown) ? selection.cooldown : []
+  
+  const adaptedMain = adaptSessionForEquipment(safeMain, equipment)
+  const adaptedWarmup = adaptSessionForEquipment(safeWarmup, equipment)
+  const adaptedCooldown = adaptSessionForEquipment(safeCooldown, equipment)
   
   // Generate session variants (30, 45, full)
   const variants = generateSessionVariants(selection, sessionLength)
@@ -1960,10 +1964,16 @@ function generateAdaptiveSession(
     const mainWorkMinutes = selection.totalEstimatedTime - 10 // Subtract warmup/cooldown estimate
     const sessionTimeFit = fitEnduranceToSession(sessionLength, mainWorkMinutes)
     
+    // SAFETY: Ensure selection.exercises is a valid array before calling .some()
+    const safeSelectionExercises = Array.isArray(selection?.exercises) ? selection.exercises : []
+    if (!Array.isArray(selection?.exercises)) {
+      console.log('[generateAdaptiveSession] Warning: selection.exercises was not an array, using empty fallback')
+    }
+    
     // Calculate session neural demand
-    const sessionNeuralDemand = selection.exercises.some(e => e.exercise.neuralDemand >= 4) 
+    const sessionNeuralDemand = safeSelectionExercises.some(e => e?.exercise?.neuralDemand >= 4) 
       ? 'high' as const
-      : selection.exercises.some(e => e.exercise.neuralDemand >= 3)
+      : safeSelectionExercises.some(e => e?.exercise?.neuralDemand >= 3)
         ? 'moderate' as const
         : 'low' as const
 
@@ -2007,15 +2017,16 @@ function generateAdaptiveSession(
       focusLabel: day.focusLabel,
       isPrimary: day.isPrimary,
       rationale,
+// SAFETY: Ensure adapted arrays are valid before passing to mapper
 exercises: mapToAdaptiveExercises(
-      adaptedMain.adapted, 
+      Array.isArray(adaptedMain?.adapted) ? adaptedMain.adapted : [], 
       primaryGoal, 
       sessionLength, 
       athleteCalibration.fatigueSensitivity,
       recoverySignal.level === 'red' ? 80 : recoverySignal.level === 'yellow' ? 60 : 40
     ),
-    warmup: mapToAdaptiveExercises(adaptedWarmup.adapted, primaryGoal, sessionLength),
-    cooldown: mapToAdaptiveExercises(adaptedCooldown.adapted, primaryGoal, sessionLength),
+    warmup: mapToAdaptiveExercises(Array.isArray(adaptedWarmup?.adapted) ? adaptedWarmup.adapted : [], primaryGoal, sessionLength),
+    cooldown: mapToAdaptiveExercises(Array.isArray(adaptedCooldown?.adapted) ? adaptedCooldown.adapted : [], primaryGoal, sessionLength),
       estimatedMinutes: selection.totalEstimatedTime + (finisher?.durationMinutes || 0),
       variants,
       adaptationNotes: adaptationNotes.length > 0 ? adaptationNotes : undefined,
@@ -2032,6 +2043,15 @@ function mapToAdaptiveExercises(
   fatigueSensitivity: 'high' | 'moderate' | 'low' = 'moderate',
   currentFatigueScore: number = 50
 ): AdaptiveExercise[] {
+  // SAFETY: Ensure selected is a valid array before any array operations
+  const safeSelected = Array.isArray(selected) ? selected : []
+  
+  // Early return if no exercises to map
+  if (safeSelected.length === 0) {
+    console.log('[mapToAdaptiveExercises] Empty or invalid input, returning []')
+    return []
+  }
+  
   let fatigueBudgetRemaining = 100
   
   // Calculate session type for failure budget
@@ -2040,10 +2060,10 @@ function mapToAdaptiveExercises(
     : primaryGoal === 'strength' ? 'strength' as const
     : 'mixed' as const
   
-  // Determine session neural demand
-  const sessionNeuralDemand = selected.some(s => s.exercise.neuralDemand >= 4) 
+  // Determine session neural demand (using safe array)
+  const sessionNeuralDemand = safeSelected.some(s => s?.exercise?.neuralDemand >= 4) 
     ? 'high' as const
-    : selected.some(s => s.exercise.neuralDemand >= 3)
+    : safeSelected.some(s => s?.exercise?.neuralDemand >= 3)
       ? 'moderate' as const
       : 'low' as const
   
@@ -2056,7 +2076,13 @@ function mapToAdaptiveExercises(
     sessionNeuralDemand,
   })
   
-  return selected.map((s, index) => {
+  return safeSelected.map((s, index) => {
+    // SAFETY: Skip malformed entries
+    if (!s?.exercise) {
+      console.log('[mapToAdaptiveExercises] Skipping malformed entry at index', index)
+      return null
+    }
+    
     // Get method compatibility for exercise
     const compatibility = s.exercise.methodCompatibility || 
       getDefaultMethodCompatibility(s.exercise.category, s.exercise.movementPattern, s.exercise.neuralDemand)
@@ -2066,7 +2092,7 @@ function mapToAdaptiveExercises(
       getDefaultFailureRisk(s.exercise.category, s.exercise.neuralDemand, s.exercise.movementPattern)
     
     // Determine if this is near end of session
-    const isEndOfSession = index >= selected.length - 2
+    const isEndOfSession = index >= safeSelected.length - 2
     
     // Check for potential superset partner
     const nextExercise = selected[index + 1]
@@ -2170,7 +2196,7 @@ function mapToAdaptiveExercises(
       methodLabel: getMethodLabel(method),
       progressionDecision,
     }
-  })
+  }).filter((e): e is AdaptiveExercise => e !== null)
 }
 
 // =============================================================================

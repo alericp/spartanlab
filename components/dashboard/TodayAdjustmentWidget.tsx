@@ -40,10 +40,24 @@ export function TodayAdjustmentWidget() {
     }
     const program = adaptiveProgram
     
+    // Safety: Validate sessions array exists
+    if (!Array.isArray(program.sessions) || program.sessions.length === 0) {
+      console.log('[TodayAdjustmentWidget] No sessions array')
+      setCurrentSession(null)
+      return
+    }
+    
     // Get today's session
     const today = new Date().getDay()
     const sessionIdx = Math.min(today === 0 ? 6 : today - 1, program.sessions.length - 1)
     const session = program.sessions[sessionIdx] || program.sessions[0]
+    
+    // Safety: Validate session object and exercises array
+    if (!session || typeof session !== 'object' || !Array.isArray(session.exercises)) {
+      console.log('[TodayAdjustmentWidget] Invalid session structure')
+      setCurrentSession(null)
+      return
+    }
     
     setCurrentSession(session)
     
@@ -51,11 +65,12 @@ export function TodayAdjustmentWidget() {
     const inferredWellness = inferWellnessFromRecovery()
     setWellnessState(inferredWellness)
     
-    // Calculate adjustment
+    // Calculate adjustment with safe defaults
+    const estimatedMinutes = typeof session.estimatedMinutes === 'number' ? session.estimatedMinutes : 45
     const adj = calculateSessionAdjustment(session, {
       wellnessState: inferredWellness,
-      availableMinutes: session.estimatedMinutes,
-      plannedMinutes: session.estimatedMinutes,
+      availableMinutes: estimatedMinutes,
+      plannedMinutes: estimatedMinutes,
     })
     setAdjustment(adj)
   }, [])
@@ -91,14 +106,14 @@ export function TodayAdjustmentWidget() {
             <ProBadge size="sm" />
           </div>
           
-          <p className="font-bold text-lg text-[#E6E9EF] mb-1">{currentSession.focusLabel}</p>
+          <p className="font-bold text-lg text-[#E6E9EF] mb-1">{currentSession.focusLabel || 'Today\'s Session'}</p>
           
           <div className="flex items-center gap-3 text-sm text-[#6B7280]">
             <span className="flex items-center gap-1">
               <Clock className="w-3.5 h-3.5" />
-              ~{currentSession.estimatedMinutes} min
+              ~{typeof currentSession.estimatedMinutes === 'number' ? currentSession.estimatedMinutes : 45} min
             </span>
-            <span>{currentSession.exercises.length} exercises</span>
+            <span>{Array.isArray(currentSession.exercises) ? currentSession.exercises.length : 0} exercises</span>
           </div>
           
           {adjustment?.wasAdjusted && (

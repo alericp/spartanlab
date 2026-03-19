@@ -165,19 +165,23 @@ export function WelcomeCard({ onDismiss, onProgramReady }: WelcomeCardProps) {
       </p>
 
       {/* Program Summary */}
-      {result.program && Array.isArray(result.program.sessions) && (
+      {result.program && Array.isArray(result.program.sessions) && result.program.sessions.length > 0 && (
         <div className="grid grid-cols-3 gap-3 mb-4">
           <div className="bg-[#0F1115] rounded-lg p-3 text-center">
             <Calendar className="w-4 h-4 text-[#4F6D8A] mx-auto mb-1" />
             <p className="text-lg font-bold text-[#E6E9EF]">
-              {result.program.trainingDaysPerWeek || result.program.sessions.length}
+              {typeof result.program.trainingDaysPerWeek === 'number' 
+                ? result.program.trainingDaysPerWeek 
+                : result.program.sessions.length}
             </p>
             <p className="text-xs text-[#6B7280]">Days/Week</p>
           </div>
           <div className="bg-[#0F1115] rounded-lg p-3 text-center">
             <Target className="w-4 h-4 text-[#C1121F] mx-auto mb-1" />
             <p className="text-lg font-bold text-[#E6E9EF] capitalize">
-              {result.program.goalLabel?.split(' ')[0] || 'Strength'}
+              {(typeof result.program.goalLabel === 'string' && result.program.goalLabel)
+                ? result.program.goalLabel.split(' ')[0]
+                : 'Strength'}
             </p>
             <p className="text-xs text-[#6B7280]">Focus</p>
           </div>
@@ -192,7 +196,7 @@ export function WelcomeCard({ onDismiss, onProgramReady }: WelcomeCardProps) {
       )}
 
       {/* Training Strategy */}
-      {reasoning && reasoning.strategyFocus.length > 0 && (
+      {reasoning && Array.isArray(reasoning.strategyFocus) && reasoning.strategyFocus.length > 0 && (
         <div className="border-t border-[#2B313A] pt-4 mt-4">
           <p className="text-xs text-[#6B7280] uppercase tracking-wide mb-2">
             Training Strategy
@@ -222,7 +226,7 @@ export function WelcomeCard({ onDismiss, onProgramReady }: WelcomeCardProps) {
       )}
 
       {/* Adaptive Coach Messages */}
-      {reasoning?.hasAdaptations && reasoning.adaptiveMessages.length > 0 && (
+      {reasoning?.hasAdaptations && Array.isArray(reasoning.adaptiveMessages) && reasoning.adaptiveMessages.length > 0 && (
         <div className="bg-[#C1121F]/5 border border-[#C1121F]/20 rounded-lg p-3 mt-4">
           <div className="flex items-center gap-2 mb-2">
             {reasoning.trainingBehavior?.progressTrend.overallTrend === 'improving' ? (

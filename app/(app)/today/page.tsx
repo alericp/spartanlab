@@ -58,18 +58,40 @@ export default function TodaySessionPage() {
     }
     const program = adaptiveProgram
     
+    // Safety: Ensure sessions array exists and has valid length
+    if (!Array.isArray(program.sessions) || program.sessions.length === 0) {
+      console.log('[TodayPage] No sessions array in program')
+      setCurrentSession(null)
+      return
+    }
+    
     // Get today's session (simple: use first incomplete or first session)
     const today = new Date().getDay()
     const sessionIdx = Math.min(today === 0 ? 6 : today - 1, program.sessions.length - 1)
     const session = program.sessions[sessionIdx] || program.sessions[0]
     
+    // Safety: Validate selected session before using
+    if (!session || typeof session !== 'object') {
+      console.log('[TodayPage] Selected session is invalid')
+      setCurrentSession(null)
+      return
+    }
+    
+    // Safety: Ensure exercises array exists (may be empty but must be array)
+    if (!Array.isArray(session.exercises)) {
+      console.log('[TodayPage] Session has no exercises array')
+      setCurrentSession(null)
+      return
+    }
+    
     setCurrentSession(session)
     
-    // Calculate adjustment
+    // Calculate adjustment with safe defaults
+    const plannedMinutes = typeof session.estimatedMinutes === 'number' ? session.estimatedMinutes : 45
     const adj = calculateSessionAdjustment(session, {
       wellnessState,
       availableMinutes,
-      plannedMinutes: session.estimatedMinutes,
+      plannedMinutes,
     })
     setAdjustment(adj)
     
@@ -234,11 +256,11 @@ export default function TodaySessionPage() {
                       {adjustment.label}
                     </span>
                   </div>
-                  <p className="text-lg font-bold">{activeSession?.focusLabel}</p>
-                </div>
-                <div className="text-right">
-                  <p className="text-sm text-[#A5A5A5]">~{activeSession?.estimatedMinutes} min</p>
-                  <p className="text-xs text-[#6A6A6A]">{activeSession?.exercises.length} exercises</p>
+                <p className="text-lg font-bold">{activeSession?.focusLabel || 'Today\'s Session'}</p>
+              </div>
+              <div className="text-right">
+                <p className="text-sm text-[#A5A5A5]">~{typeof activeSession?.estimatedMinutes === 'number' ? activeSession.estimatedMinutes : 45} min</p>
+                <p className="text-xs text-[#6A6A6A]">{Array.isArray(activeSession?.exercises) ? activeSession.exercises.length : 0} exercises</p>
                 </div>
               </div>
               
@@ -363,7 +385,7 @@ export default function TodaySessionPage() {
                   <ChevronDown className={`w-5 h-5 text-[#6A6A6A] transition-transform ${showExercises ? 'rotate-180' : ''}`} />
                 </button>
                 
-                {showExercises && (
+                {showExercises && Array.isArray(activeSession.exercises) && (
                   <div className="px-4 pb-4 space-y-2">
                     {activeSession.exercises.map((exercise, idx) => (
                       <ExerciseRow
@@ -385,7 +407,7 @@ export default function TodaySessionPage() {
                 {getSessionAdjustmentExplanation(
                   adjustment.type,
                   wellnessState,
-                  { available: availableMinutes, planned: currentSession.estimatedMinutes }
+                  { available: availableMinutes, planned: typeof currentSession.estimatedMinutes === 'number' ? currentSession.estimatedMinutes : 45 }
                 ).scienceBasis}
               </p>
             </Card>

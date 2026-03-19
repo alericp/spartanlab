@@ -42,18 +42,30 @@ export default function WeekAdjustmentPage() {
     if (!hasUsableWorkoutProgram || !adaptiveProgram) return
     
     const prog = adaptiveProgram
+    
+    // Safety: Validate sessions array before proceeding
+    if (!Array.isArray(prog.sessions) || prog.sessions.length === 0) {
+      console.log('[WeekPage] Program has no valid sessions array')
+      return
+    }
+    
     setProgram(prog)
     
     // In a real app, this would come from localStorage or a database
     const completed: string[] = []
     setCompletedSessionIds(completed)
     
-    const state = calculateWeekState(prog, completed)
-    const adjustment = calculateWeekAdjustment(prog, state)
-    const status = getQuickWeekStatus(prog, completed)
-    
-    setWeekAdjustment(adjustment)
-    setWeekStatus(status)
+    try {
+      const state = calculateWeekState(prog, completed)
+      const adjustment = calculateWeekAdjustment(prog, state)
+      const status = getQuickWeekStatus(prog, completed)
+      
+      setWeekAdjustment(adjustment)
+      setWeekStatus(status)
+    } catch (err) {
+      console.error('[WeekPage] Error calculating week state:', err)
+      // Leave in fallback state - page will show "No Active Program"
+    }
   }, [])
 
   if (!mounted) {
@@ -234,16 +246,16 @@ export default function WeekAdjustmentPage() {
                       </div>
                       <div>
                         <div className="flex items-center gap-2">
-                          <span className="font-medium">{session.focusLabel}</span>
+                          <span className="font-medium">{session.focusLabel || `Day ${idx + 1}`}</span>
                           {session.isPrimary && (
                             <Zap className="w-4 h-4 text-[#E63946]" />
                           )}
                         </div>
                         <div className="flex items-center gap-2 text-xs text-[#6A6A6A]">
                           <Clock className="w-3 h-3" />
-                          <span>~{session.estimatedMinutes} min</span>
+                          <span>~{typeof session.estimatedMinutes === 'number' ? session.estimatedMinutes : 45} min</span>
                           <span>•</span>
-                          <span>{session.exercises.length} exercises</span>
+                          <span>{Array.isArray(session.exercises) ? session.exercises.length : 0} exercises</span>
                         </div>
                       </div>
                     </div>

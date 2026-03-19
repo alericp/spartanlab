@@ -107,13 +107,15 @@ export function DashboardFullContent() {
     console.log('[DashboardFullContent] Mounted, checking first-load state')
     
     // Check if this is a first-run welcome scenario
+    // CRITICAL: Welcome detection happens FIRST and takes priority
+    let isWelcomeFlow = false
     try {
       if (typeof window !== 'undefined' && window.location?.search) {
         const urlParams = new URLSearchParams(window.location.search)
-        const isWelcome = urlParams.get('welcome') === 'true'
+        isWelcomeFlow = urlParams.get('welcome') === 'true'
         
-        if (isWelcome) {
-          console.log('[DashboardFullContent] Welcome flow detected, showing WelcomeCard')
+        if (isWelcomeFlow) {
+          console.log('[DashboardFullContent] Welcome flow detected via ?welcome=true, setting showWelcome=true')
           setShowWelcome(true)
           try {
             window.history.replaceState({}, '', '/dashboard')
@@ -127,27 +129,55 @@ export function DashboardFullContent() {
     }
     
     // Quick check for meaningful data (lightweight)
+    // FIX: Use correct storage key 'spartanlab_workout_logs' (matches workout-log-service.ts)
+    // Also check legacy key 'spartanlab_workouts' for backward compatibility
     try {
       if (typeof window === 'undefined') {
-        setHasMeaningfulData(false)
+        // If welcome flow is active, don't short-circuit to empty state
+        setHasMeaningfulData(isWelcomeFlow ? true : false)
         return
       }
-      const stored = localStorage.getItem('spartanlab_workouts')
+      
+      // Check canonical key first
       let workouts: unknown[] = []
-      if (stored) {
+      const storedLogs = localStorage.getItem('spartanlab_workout_logs')
+      if (storedLogs) {
         try {
-          const parsed = JSON.parse(stored)
+          const parsed = JSON.parse(storedLogs)
           workouts = Array.isArray(parsed) ? parsed : []
         } catch {
           workouts = []
         }
       }
+      
+      // Also check legacy key for backward compatibility
+      if (workouts.length === 0) {
+        const storedLegacy = localStorage.getItem('spartanlab_workouts')
+        if (storedLegacy) {
+          try {
+            const parsed = JSON.parse(storedLegacy)
+            workouts = Array.isArray(parsed) ? parsed : []
+          } catch {
+            workouts = []
+          }
+        }
+      }
+      
       const hasData = workouts.length > 0
-      console.log('[DashboardFullContent] Data check:', { hasData, workoutCount: workouts.length, branch: hasData ? 'content' : 'empty-state' })
-      setHasMeaningfulData(hasData)
+      console.log('[DashboardFullContent] Data check:', { 
+        hasData, 
+        workoutCount: workouts.length, 
+        isWelcomeFlow,
+        branch: isWelcomeFlow ? 'welcome-flow' : (hasData ? 'content' : 'empty-state')
+      })
+      
+      // CRITICAL: If welcome flow is active, treat as having data to prevent empty-state preemption
+      // This ensures the welcome experience renders before empty-state logic takes over
+      setHasMeaningfulData(isWelcomeFlow ? true : hasData)
     } catch (err) {
-      console.error('[DashboardFullContent] Error checking workout data (defaulting to empty-state):', err)
-      setHasMeaningfulData(false)
+      console.error('[DashboardFullContent] Error checking workout data:', err)
+      // On error, allow welcome flow to proceed, otherwise default to empty-state
+      setHasMeaningfulData(isWelcomeFlow ? true : false)
     }
   }, [])
 

@@ -20,6 +20,7 @@ interface ProgramHistoryState {
   totalVersions: number
   isLoading: boolean
   error: string | null
+  historyAvailable: boolean // PHASE 4: Track if history schema is ready
 }
 
 interface SaveProgramResult {
@@ -28,6 +29,7 @@ interface SaveProgramResult {
   versionNumber: number
   reasonSummary: string
   error?: string
+  historyAvailable?: boolean // PHASE 4: Indicate if persistence worked
 }
 
 /**
@@ -40,22 +42,38 @@ export function useProgramHistory() {
     totalVersions: 0,
     isLoading: false,
     error: null,
+    historyAvailable: true, // Assume available until proven otherwise
   })
 
   /**
    * Fetch program history from API
+   * PHASE 4: Handles historyAvailable: false gracefully
    */
   const fetchHistory = useCallback(async (): Promise<void> => {
     setState(prev => ({ ...prev, isLoading: true, error: null }))
     
     try {
       const response = await fetch('/api/program/history')
+      const data = await response.json()
       
-      if (!response.ok) {
-        throw new Error('Failed to fetch program history')
+      // PHASE 4: Handle schema-not-ready state gracefully
+      if (data.historyAvailable === false) {
+        console.log('[useProgramHistory] History schema not available')
+        setState(prev => ({
+          ...prev,
+          activeProgram: null,
+          archivedPrograms: [],
+          totalVersions: 0,
+          isLoading: false,
+          historyAvailable: false,
+          error: null, // Not an error - just schema not ready
+        }))
+        return
       }
       
-      const data = await response.json()
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to fetch program history')
+      }
       
       setState(prev => ({
         ...prev,
@@ -63,6 +81,7 @@ export function useProgramHistory() {
         archivedPrograms: data.archivedPrograms ?? [],
         totalVersions: data.totalVersions ?? 0,
         isLoading: false,
+        historyAvailable: true,
       }))
     } catch (error) {
       setState(prev => ({
@@ -75,6 +94,7 @@ export function useProgramHistory() {
 
   /**
    * Save a program to history (creates new version, archives current if exists)
+   * PHASE 4: Handles historyAvailable: false without crashing
    */
   const saveProgram = useCallback(async (
     program: AdaptiveProgram,
@@ -92,20 +112,33 @@ export function useProgramHistory() {
         }),
       })
       
-      if (!response.ok) {
-        const errorData = await response.json()
+      const data = await response.json()
+      
+      // PHASE 4: Handle schema-not-ready state - NOT a failure
+      // Program is still usable locally, just not persisted to history DB
+      if (data.historyAvailable === false) {
+        console.log('[useProgramHistory] History persistence unavailable - program saved locally only')
+        return {
+          success: true, // Local program still works
+          programHistoryId: null,
+          versionNumber: 0,
+          reasonSummary: data.reasonSummary || 'Saved locally',
+          historyAvailable: false,
+        }
+      }
+      
+      if (!response.ok || !data.success) {
         return {
           success: false,
           programHistoryId: null,
           versionNumber: 0,
           reasonSummary: '',
-          error: errorData.error || 'Failed to save program',
+          error: data.error || 'Failed to save program',
+          historyAvailable: data.historyAvailable ?? true,
         }
       }
       
-      const data = await response.json()
-      
-      // Refresh history after save
+      // Refresh history after successful save
       await fetchHistory()
       
       return {
@@ -113,6 +146,7 @@ export function useProgramHistory() {
         programHistoryId: data.programHistoryId,
         versionNumber: data.versionNumber,
         reasonSummary: data.reasonSummary,
+        historyAvailable: true,
       }
     } catch (error) {
       return {
@@ -121,6 +155,7 @@ export function useProgramHistory() {
         versionNumber: 0,
         reasonSummary: '',
         error: error instanceof Error ? error.message : 'Unknown error',
+        historyAvailable: false,
       }
     }
   }, [fetchHistory])
@@ -182,6 +217,7 @@ export async function shouldSyncProgramToHistory(): Promise<boolean> {
 /**
  * Sync localStorage program to database history
  * Call this after user signs in to ensure program is persisted
+ * PHASE 4: Handles schema-not-ready gracefully
  */
 export async function syncProgramToHistory(): Promise<SaveProgramResult | null> {
   try {
@@ -206,23 +242,37 @@ export async function syncProgramToHistory(): Promise<SaveProgramResult | null> 
       }),
     })
     
-    if (!response.ok) {
-      const errorData = await response.json()
+    const data = await response.json()
+    
+    // PHASE 4: Handle schema-not-ready - program still usable locally
+    if (data.historyAvailable === false) {
+      console.log('[syncProgramToHistory] History unavailable - program remains local-only')
+      return {
+        success: true, // Local program works
+        programHistoryId: null,
+        versionNumber: 0,
+        reasonSummary: 'Saved locally (history persistence unavailable)',
+        historyAvailable: false,
+      }
+    }
+    
+    if (!response.ok || !data.success) {
       return {
         success: false,
         programHistoryId: null,
         versionNumber: 0,
         reasonSummary: '',
-        error: errorData.error || 'Failed to sync program',
+        error: data.error || 'Failed to sync program',
+        historyAvailable: data.historyAvailable ?? true,
       }
     }
     
-    const data = await response.json()
     return {
       success: true,
       programHistoryId: data.programHistoryId,
       versionNumber: data.versionNumber,
       reasonSummary: data.reasonSummary,
+      historyAvailable: true,
     }
   } catch (error) {
     return {
@@ -231,6 +281,7 @@ export async function syncProgramToHistory(): Promise<SaveProgramResult | null> 
       versionNumber: 0,
       reasonSummary: '',
       error: error instanceof Error ? error.message : 'Unknown error',
+      historyAvailable: false,
     }
   }
 }

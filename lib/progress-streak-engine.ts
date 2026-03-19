@@ -202,9 +202,10 @@ export function calculateTrainingStreak(): TrainingStreak {
 
 /**
  * Calculate weekly training progress based on workout logs and target
+ * PHASE 6: Uses trusted workouts only to prevent fake weekly completion display
  */
 export function calculateWeeklyProgress(): WeeklyProgress {
-  const logs = getWorkoutLogs()
+  const logs = getTrustedWorkouts()
   
   // Get target from athlete profile or default to 4
   let targetSessions = 4

@@ -105,6 +105,115 @@ export async function isDatabaseConnected(): Promise<boolean> {
   }
 }
 
+// =============================================================================
+// SCHEMA READINESS GUARDS
+// =============================================================================
+
+// Cache for schema readiness checks (to avoid repeated queries)
+let programHistorySchemaReady: boolean | null = null
+let schemaCheckTimestamp = 0
+const SCHEMA_CHECK_TTL = 30000 // 30 seconds
+
+/**
+ * Check if the program_history table exists in the database
+ * This prevents 500 errors when the schema hasn't been migrated yet
+ * 
+ * Results are cached briefly to avoid repeated queries
+ */
+export async function isProgramHistorySchemaReady(): Promise<boolean> {
+  if (isPreviewMode()) {
+    return false
+  }
+
+  // Return cached result if still valid
+  if (programHistorySchemaReady !== null && Date.now() - schemaCheckTimestamp < SCHEMA_CHECK_TTL) {
+    return programHistorySchemaReady
+  }
+
+  try {
+    const client = await getSqlClient()
+    if (!client) {
+      programHistorySchemaReady = false
+      schemaCheckTimestamp = Date.now()
+      return false
+    }
+
+    // Query information_schema to check if table exists
+    const result = await client`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'program_history'
+      ) as exists
+    `
+
+    programHistorySchemaReady = result[0]?.exists === true
+    schemaCheckTimestamp = Date.now()
+    
+    if (!programHistorySchemaReady) {
+      console.log('[DB] program_history schema not ready - history features will be unavailable')
+    }
+    
+    return programHistorySchemaReady
+  } catch (error) {
+    console.error('[DB] Error checking schema readiness:', error)
+    programHistorySchemaReady = false
+    schemaCheckTimestamp = Date.now()
+    return false
+  }
+}
+
+/**
+ * Check if all history tables exist
+ * Checks: program_history, workout_session_history, personal_record_history
+ */
+export async function isFullHistorySchemaReady(): Promise<{
+  ready: boolean
+  programHistory: boolean
+  workoutHistory: boolean
+  prHistory: boolean
+}> {
+  if (isPreviewMode()) {
+    return { ready: false, programHistory: false, workoutHistory: false, prHistory: false }
+  }
+
+  try {
+    const client = await getSqlClient()
+    if (!client) {
+      return { ready: false, programHistory: false, workoutHistory: false, prHistory: false }
+    }
+
+    const result = await client`
+      SELECT 
+        EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'program_history') as program_history,
+        EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'workout_session_history') as workout_history,
+        EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'personal_record_history') as pr_history
+    `
+
+    const programHistory = result[0]?.program_history === true
+    const workoutHistory = result[0]?.workout_history === true
+    const prHistory = result[0]?.pr_history === true
+
+    return {
+      ready: programHistory && workoutHistory && prHistory,
+      programHistory,
+      workoutHistory,
+      prHistory,
+    }
+  } catch (error) {
+    console.error('[DB] Error checking full history schema:', error)
+    return { ready: false, programHistory: false, workoutHistory: false, prHistory: false }
+  }
+}
+
+/**
+ * Reset schema cache - call when schema might have changed (e.g., after migrations)
+ */
+export function resetSchemaCache(): void {
+  programHistorySchemaReady = null
+  schemaCheckTimestamp = 0
+}
+
 /**
  * Get the Neon SQL client
  * Returns null if database is not available

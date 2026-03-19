@@ -36,6 +36,26 @@ export function AdaptiveProgramDisplay({
     MODERATE: 'text-yellow-400 bg-yellow-400/10 border-yellow-400/20',
     LOW: 'text-red-400 bg-red-400/10 border-red-400/20',
   }
+  
+  // Safe accessor for recoveryColors - returns default if key is missing/invalid
+  const getRecoveryColor = (level: string | undefined): string => {
+    if (!level || typeof level !== 'string') return recoveryColors.MODERATE
+    return recoveryColors[level] || recoveryColors.MODERATE
+  }
+  
+  // Safe accessor for fatigue state display
+  const formatFatigueState = (state: string | undefined): string => {
+    if (!state || typeof state !== 'string') return 'Normal'
+    return state.charAt(0).toUpperCase() + state.slice(1)
+  }
+  
+  // Diagnostic: Log if we detect partial program data (only once per render)
+  if (!program.recoveryLevel || !(program.recoveryLevel in recoveryColors)) {
+    console.log('[AdaptiveProgramDisplay] Using fallback for recoveryLevel:', program.recoveryLevel)
+  }
+  if (!program.engineContext?.fatigueState) {
+    console.log('[AdaptiveProgramDisplay] engineContext or fatigueState missing')
+  }
 
   return (
     <div className="space-y-6">
@@ -98,7 +118,9 @@ export function AdaptiveProgramDisplay({
         </div>
         
         {/* Adaptive Coach Messages */}
-        {program.trainingBehaviorAnalysis?.adaptationNeeded && program.trainingBehaviorAnalysis.coachMessages.length > 0 && (
+        {program.trainingBehaviorAnalysis?.adaptationNeeded && 
+         Array.isArray(program.trainingBehaviorAnalysis.coachMessages) && 
+         program.trainingBehaviorAnalysis.coachMessages.length > 0 && (
           <div className="mt-4 p-3 bg-[#E63946]/5 border border-[#E63946]/20 rounded-lg">
             <div className="flex items-center gap-2 mb-2">
               {program.trainingBehaviorAnalysis.progressTrend === 'improving' ? (
@@ -158,19 +180,19 @@ export function AdaptiveProgramDisplay({
         <Card className="bg-[#2A2A2A] border-[#3A3A3A] p-4">
           <div className="flex items-start gap-3">
             <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
-              recoveryColors[program.recoveryLevel].split(' ').slice(1).join(' ')
+              getRecoveryColor(program.recoveryLevel).split(' ').slice(1).join(' ')
             }`}>
-              <Activity className={`w-4 h-4 ${recoveryColors[program.recoveryLevel].split(' ')[0]}`} />
+              <Activity className={`w-4 h-4 ${getRecoveryColor(program.recoveryLevel).split(' ')[0]}`} />
             </div>
             <div>
               <p className="text-xs text-[#6A6A6A]">Recovery State</p>
-              <p className={`font-medium ${recoveryColors[program.recoveryLevel].split(' ')[0]}`}>
+              <p className={`font-medium ${getRecoveryColor(program.recoveryLevel).split(' ')[0]}`}>
                 {program.recoveryLevel === 'HIGH' ? 'Fresh' : program.recoveryLevel === 'MODERATE' ? 'Normal' : 'Fatigued'}
               </p>
               <p className="text-xs text-[#A5A5A5] mt-1">
                 {program.recoveryLevel === 'HIGH' && 'Ready for high-intensity work'}
                 {program.recoveryLevel === 'MODERATE' && 'Standard training volume appropriate'}
-                {program.recoveryLevel === 'LOW' && 'Consider lighter sessions'}
+                {(!program.recoveryLevel || program.recoveryLevel === 'LOW') && 'Consider lighter sessions'}
               </p>
             </div>
           </div>
@@ -212,15 +234,15 @@ export function AdaptiveProgramDisplay({
             <div className="bg-[#1A1A1A] rounded-lg p-2">
               <p className="text-xs text-[#6A6A6A]">Fatigue State</p>
               <p className={`text-sm font-medium ${
-                program.engineContext.fatigueState === 'fresh' ? 'text-green-400' :
-                program.engineContext.fatigueState === 'normal' ? 'text-blue-400' :
-                program.engineContext.fatigueState === 'fatigued' ? 'text-amber-400' :
+                program.engineContext?.fatigueState === 'fresh' ? 'text-green-400' :
+                program.engineContext?.fatigueState === 'normal' ? 'text-blue-400' :
+                program.engineContext?.fatigueState === 'fatigued' ? 'text-amber-400' :
                 'text-red-400'
               }`}>
-                {program.engineContext.fatigueState.charAt(0).toUpperCase() + program.engineContext.fatigueState.slice(1)}
+                {formatFatigueState(program.engineContext?.fatigueState)}
               </p>
             </div>
-            {program.engineContext.recommendations[0] && (
+            {Array.isArray(program.engineContext?.recommendations) && program.engineContext.recommendations[0] && (
               <div className="bg-[#1A1A1A] rounded-lg p-2 col-span-2 sm:col-span-1">
                 <p className="text-xs text-[#6A6A6A]">Top Recommendation</p>
                 <p className="text-xs text-[#A5A5A5] line-clamp-2">{program.engineContext.recommendations[0]}</p>
@@ -231,7 +253,9 @@ export function AdaptiveProgramDisplay({
       )}
 
       {/* Equipment Notes */}
-      {!program.equipmentProfile.hasFullSetup && (
+      {program.equipmentProfile && !program.equipmentProfile.hasFullSetup && 
+       Array.isArray(program.equipmentProfile.adaptationNotes) && 
+       program.equipmentProfile.adaptationNotes.length > 0 && (
         <Card className="bg-amber-500/5 border-amber-500/20 p-4">
           <div className="flex items-start gap-3">
             <Info className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
@@ -261,17 +285,23 @@ export function AdaptiveProgramDisplay({
       {/* Sessions */}
       <div className="space-y-4">
         <h4 className="text-lg font-bold">Training Sessions</h4>
-        {program.sessions.map((session) => (
-          <AdaptiveSessionCard
-            key={session.dayNumber}
-            session={session}
-            onExerciseReplace={
-              onExerciseReplace 
-                ? (exerciseId) => onExerciseReplace(session.dayNumber, exerciseId)
-                : undefined
-            }
-          />
-        ))}
+        {Array.isArray(program.sessions) && program.sessions.length > 0 ? (
+          program.sessions.map((session) => (
+            <AdaptiveSessionCard
+              key={session.dayNumber}
+              session={session}
+              onExerciseReplace={
+                onExerciseReplace 
+                  ? (exerciseId) => onExerciseReplace(session.dayNumber, exerciseId)
+                  : undefined
+              }
+            />
+          ))
+        ) : (
+          <Card className="bg-[#2A2A2A] border-[#3A3A3A] p-6 text-center">
+            <p className="text-sm text-[#6A6A6A]">No training sessions available</p>
+          </Card>
+        )}
       </div>
     </div>
   )

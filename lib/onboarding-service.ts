@@ -104,6 +104,45 @@ function normalizeProfileForGeneration(profile: OnboardingProfile): NormalizedPr
   }
 }
 
+/**
+ * Validate that a generated program has the minimum required shape
+ * Returns true if valid, false if something is missing
+ */
+function validateGeneratedProgram(program: unknown): program is AdaptiveProgram {
+  if (!program || typeof program !== 'object') {
+    console.error('[OnboardingService] validateGeneratedProgram: program is null or not an object')
+    return false
+  }
+
+  const p = program as Record<string, unknown>
+
+  // Check required top-level fields
+  if (!p.id || typeof p.id !== 'string') {
+    console.error('[OnboardingService] validateGeneratedProgram: missing or invalid id')
+    return false
+  }
+
+  if (!p.primaryGoal || typeof p.primaryGoal !== 'string') {
+    console.error('[OnboardingService] validateGeneratedProgram: missing or invalid primaryGoal')
+    return false
+  }
+
+  // Check sessions array exists and has content
+  if (!Array.isArray(p.sessions) || p.sessions.length === 0) {
+    console.error('[OnboardingService] validateGeneratedProgram: sessions array missing or empty')
+    return false
+  }
+
+  // Check first session has exercises
+  const firstSession = p.sessions[0] as Record<string, unknown> | undefined
+  if (!firstSession || !Array.isArray(firstSession.exercises) || firstSession.exercises.length === 0) {
+    console.error('[OnboardingService] validateGeneratedProgram: first session has no exercises')
+    return false
+  }
+
+  return true
+}
+
 // =============================================================================
 // MAPPING FUNCTIONS
 // =============================================================================
@@ -239,11 +278,10 @@ export function generateFirstProgram(): FirstRunResult {
   try {
     const profile = getOnboardingProfile()
     
-    // Debug logging for troubleshooting
-    console.log('[v0] generateFirstProgram: profile keys:', profile ? Object.keys(profile).slice(0, 15) : 'null')
+
     
     if (!profile || !isOnboardingComplete()) {
-      console.log('[v0] generateFirstProgram: onboarding incomplete')
+
       return {
         success: false,
         program: null,
@@ -258,13 +296,7 @@ export function generateFirstProgram(): FirstRunResult {
     
     // Normalize profile to safe inputs (handles legacy + current field names)
     const normalized = normalizeProfileForGeneration(profile)
-    console.log('[v0] generateFirstProgram: normalized inputs:', {
-      skills: normalized.selectedSkills,
-      days: normalized.trainingDaysPerWeek,
-      minutes: normalized.sessionLengthMinutes,
-      equipment: normalized.equipment.slice(0, 3),
-      experience: normalized.experienceLevel,
-    })
+
     
     // Map normalized data to program inputs
     const programInputs: AdaptiveProgramInputs = {
@@ -275,10 +307,24 @@ export function generateFirstProgram(): FirstRunResult {
       equipment: mapEquipment(normalized.equipment),
     }
     
-    console.log('[v0] generateFirstProgram: programInputs:', programInputs)
+
     
     // Generate the program
     const program = generateAdaptiveProgram(programInputs)
+    
+    // VALIDATION: Ensure generated program has required shape before saving
+    if (!validateGeneratedProgram(program)) {
+      console.error('[OnboardingService] generateFirstProgram: program validation failed')
+      return {
+        success: false,
+        program: null,
+        calibration: null,
+        welcomeMessage: 'Program generation failed validation.',
+        error: 'Generated program is missing required fields or sessions',
+      }
+    }
+    
+
     
     // Save program to CANONICAL adaptive storage - this is the source of truth
     // that /program, first-session, and workout/session all read from
@@ -299,7 +345,7 @@ export function generateFirstProgram(): FirstRunResult {
       success: true,
       program,
       calibration,
-      welcomeMessage: getWelcomeMessage(profile, experienceLevel),
+      welcomeMessage: getWelcomeMessage(profile, normalized.experienceLevel),
     }
   } catch (error) {
     console.error('Failed to generate first program:', error)

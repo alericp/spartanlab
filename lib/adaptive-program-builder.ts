@@ -1,5 +1,10 @@
-// Adaptive Program Builder
-// Main entry point for constraint-aware, time-adaptive program generation
+/**
+ * Adaptive Program Builder
+ * 
+ * DO NOT DRIFT: This is the CANONICAL PROGRAM GENERATOR.
+ * All program generation MUST flow through generateAdaptiveProgram().
+ * Do NOT create parallel generators or bypass this path.
+ */
 
 import type { PrimaryGoal, ExperienceLevel, TrainingDays, SessionLength } from './program-service'
 import type { EquipmentType } from './adaptive-exercise-pool'

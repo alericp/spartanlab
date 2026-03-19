@@ -42,6 +42,10 @@ import {
   verifyFeedbackLoopUsed,
   recordIntegrationProof,
 } from './engine-integration-proof'
+import { 
+  assertDashboardTruthful,
+  markCanonicalPathUsed,
+} from './production-safety'
 
 export interface DashboardOverview {
   user: User
@@ -473,7 +477,9 @@ export interface DashboardUserState {
 
 /**
  * Get canonical dashboard user state
- * Used to gate dashboard sections and ensure truthful display
+ * 
+ * DO NOT DRIFT: This is the CANONICAL TRUTH-STATE for dashboard gating.
+ * All dashboard widgets MUST use this to determine what to show.
  * 
  * GUARANTEED: Never throws - returns safe defaults
  */
@@ -543,6 +549,18 @@ export function getDashboardUserState(): DashboardUserState {
       stateLabel = 'pre-program'
     }
     
+    // PRODUCTION SAFETY: Verify dashboard state is truthful
+    markCanonicalPathUsed('truth_state')
+    const dashboardSafetyCheck = assertDashboardTruthful({
+      stateLabel,
+      dataConfidence,
+      workoutCount: trustedWorkoutCount,
+      isMatureTrainingState,
+    })
+    
+    // If contradiction detected, downgrade mature state
+    const safeMatureState = dashboardSafetyCheck.ok ? isMatureTrainingState : false
+    
     // ENGINE PROOF: Verify truth-state is being used for classification
     verifyTruthStateUsed(stateLabel, dataConfidence, trustedWorkoutCount)
     
@@ -570,7 +588,7 @@ export function getDashboardUserState(): DashboardUserState {
       isPreProgramState,
       isPreWorkoutState,
       isEarlyProgramState,
-      isMatureTrainingState,
+      isMatureTrainingState: safeMatureState,
       hasMeaningfulRealData,
       workoutCount,
       trustedWorkoutCount,

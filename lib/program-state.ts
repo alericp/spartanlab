@@ -1,9 +1,8 @@
 /**
  * Unified Program State Utility
  * 
- * SINGLE SOURCE OF TRUTH for program existence checks across the app.
- * All routes MUST use this instead of direct getLatestAdaptiveProgram() calls
- * for consistent behavior.
+ * DO NOT DRIFT: This is the CANONICAL SOURCE OF TRUTH for program existence checks.
+ * All routes MUST use getProgramState() instead of direct getLatestAdaptiveProgram() calls.
  * 
  * CRITICAL: This utility MUST NEVER throw. It always returns a safe object.
  * 
@@ -14,6 +13,10 @@
 
 import { getLatestAdaptiveProgram, saveAdaptiveProgram, type AdaptiveProgram } from './adaptive-program-builder'
 import { getLatestProgram, type GeneratedProgram } from './program-service'
+import { 
+  assertProgramStateUsable, 
+  markCanonicalPathUsed,
+} from './production-safety'
 
 // =============================================================================
 // MIGRATION HELPERS - Handle old storage keys
@@ -183,6 +186,21 @@ export function getProgramState(): ProgramState {
     const hasUsableWorkoutProgram = hasUsableAdaptiveProgram
     
     const sessionCount = adaptiveProgram?.sessions?.length || legacyProgram?.trainingDaysPerWeek || 0
+    
+    // PRODUCTION SAFETY: Verify state coherence before returning
+    markCanonicalPathUsed('program_read')
+    const safetyCheck = assertProgramStateUsable({
+      hasProgram,
+      hasUsableWorkoutProgram,
+      sessionCount,
+      adaptiveProgram,
+    })
+    
+    // If safety check fails and should degrade, return safe default
+    if (!safetyCheck.ok && safetyCheck.shouldDegrade) {
+      console.warn('[ProgramState] Safety check failed, degrading to safe default:', safetyCheck.reason)
+      return SAFE_DEFAULT_STATE
+    }
     
     // Minimal diagnostic for debugging post-onboarding state
     console.log('[ProgramState] Validation result:', {

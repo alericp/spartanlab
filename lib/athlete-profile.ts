@@ -1,6 +1,10 @@
-// Athlete Profile Types for Onboarding
-// Comprehensive onboarding data model for calisthenics programming
-// Supports beginners, intermediates, and advanced athletes
+/**
+ * Athlete Profile Types for Onboarding
+ * 
+ * DO NOT DRIFT: This is the CANONICAL PROFILE SOURCE OF TRUTH.
+ * getOnboardingProfile() is the single source for user training preferences.
+ * All settings, generation, and dashboard code MUST read from this.
+ */
 
 import type { MilitaryProfile } from './military-test-config'
 

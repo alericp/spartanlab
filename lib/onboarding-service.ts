@@ -25,6 +25,10 @@ import {
   verifyDbResolverUsed,
   verifyLivePath,
 } from './engine-integration-proof'
+import { 
+  markCanonicalPathUsed,
+  assertFlexibleModeIntact,
+} from './production-safety'
 
 // =============================================================================
 // TYPES
@@ -252,11 +256,16 @@ function getWelcomeMessage(profile: OnboardingProfile, experienceLevel: Experien
 
 /**
  * Generate the first program for a new user
- * CRITICAL: This should only be called from /onboarding/complete/page.tsx
- * Other components should read existing program via getProgramState()
+ * 
+ * DO NOT DRIFT: This is the CANONICAL PROGRAM GENERATION entrypoint.
+ * Only call from /onboarding/complete/page.tsx.
+ * All other code should use getProgramState() to read existing programs.
  */
 export function generateFirstProgram(): FirstRunResult {
   try {
+    // PRODUCTION SAFETY: Mark canonical generation path
+    markCanonicalPathUsed('program_generation')
+    
     // ENGINE PROOF: Reset proof log for new generation cycle
     resetProofLog()
     
@@ -308,6 +317,12 @@ export function generateFirstProgram(): FirstRunResult {
       normalized.trainingDaysPerWeek,
       'profile'
     )
+    
+    // PRODUCTION SAFETY: Verify flexible mode semantics are intact
+    assertFlexibleModeIntact({
+      scheduleMode: programInputs.scheduleMode,
+      trainingDaysPerWeek: normalized.trainingDaysPerWeek,
+    })
     
     // Generate the program
     const program = generateAdaptiveProgram(programInputs)

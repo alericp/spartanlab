@@ -80,6 +80,18 @@ import {
   type AthletePrerequisiteContext,
   type GateCheckResult,
 } from './prerequisite-gate-engine'
+import {
+  buildExerciseLoadMetadata,
+  calculateSessionLoad,
+  determineSessionStyle,
+  getSessionLoadBudget,
+  validateSessionAntiBloat,
+  generateSessionLoadRationale,
+  type ExerciseLoadMetadata,
+  type DeliveryStyle,
+  type TrainingSessionStyle,
+  type SessionLoadSummary,
+} from './session-load-intelligence'
 
 export interface SelectedExercise {
   exercise: Exercise
@@ -93,6 +105,9 @@ export interface SelectedExercise {
   knowledgeBubble?: string
   wasSubstituted?: boolean
   originalExerciseId?: string
+  // Session Load Intelligence fields
+  loadMetadata?: ExerciseLoadMetadata
+  deliveryStyle?: DeliveryStyle
 }
 
 // =============================================================================
@@ -147,6 +162,15 @@ export interface ExerciseSelection {
   main: SelectedExercise[]
   cooldown: SelectedExercise[]
   totalEstimatedTime: number
+  // Session Load Intelligence fields
+  sessionLoadSummary?: SessionLoadSummary
+  sessionStyle?: TrainingSessionStyle
+  loadRationale?: string[]
+  antiBloatValidation?: {
+    isValid: boolean
+    issues: string[]
+    suggestions: string[]
+  }
 }
 
 interface ExerciseSelectionInputs {
@@ -267,11 +291,62 @@ export function selectExercisesForSession(inputs: ExerciseSelectionInputs): Exer
   // Calculate total time
   const totalEstimatedTime = calculateTotalTime(warmup, main, cooldown)
   
+  // =========================================================================
+  // SESSION LOAD INTELLIGENCE
+  // =========================================================================
+  
+  // Determine session style based on context
+  const primaryFocus = day.focus === 'skill' || day.focus === 'push_skill' || day.focus === 'pull_skill' 
+    ? 'skill' as const
+    : day.focus === 'push_strength' || day.focus === 'pull_strength'
+      ? 'strength' as const
+      : day.focus === 'support_recovery'
+        ? 'recovery' as const
+        : 'mixed' as const
+  
+  const sessionStyle = determineSessionStyle(
+    sessionMinutes,
+    primaryFocus,
+    undefined, // structureType - could be passed from context
+    undefined  // fatigueProfile
+  )
+  
+  // Build load metadata for main exercises
+  const mainLoadMetadata: ExerciseLoadMetadata[] = main.map(ex => {
+    const metadata = buildExerciseLoadMetadata(
+      {
+        category: ex.exercise.category,
+        neuralDemand: ex.exercise.neuralDemand,
+        fatigueCost: ex.exercise.fatigueCost,
+        movementPattern: ex.exercise.movementPattern,
+        isIsometric: ex.exercise.isIsometric,
+      },
+      ex.deliveryStyle || 'standalone'
+    )
+    // Attach metadata to exercise for downstream use
+    ex.loadMetadata = metadata
+    return metadata
+  })
+  
+  // Calculate session load and validate
+  const loadBudget = getSessionLoadBudget(sessionStyle)
+  const sessionLoadSummary = calculateSessionLoad(mainLoadMetadata, loadBudget)
+  const antiBloatResult = validateSessionAntiBloat(mainLoadMetadata, sessionStyle)
+  const loadRationale = generateSessionLoadRationale(sessionLoadSummary, sessionStyle)
+  
   return {
     warmup,
     main,
     cooldown,
     totalEstimatedTime,
+    sessionLoadSummary,
+    sessionStyle,
+    loadRationale,
+    antiBloatValidation: {
+      isValid: antiBloatResult.isValid,
+      issues: antiBloatResult.issues,
+      suggestions: antiBloatResult.suggestions,
+    },
   }
 }
 
@@ -319,16 +394,67 @@ function selectMainExercises(
   const selected: SelectedExercise[] = []
   const usedIds = new Set<string>()
   
-  // Helper to add exercise with prerequisite gate check
+  // =========================================================================
+  // SESSION LOAD TRACKING FOR ANTI-BLOAT
+  // =========================================================================
+  let currentWeightedLoad = 0
+  let highFatigueCount = 0
+  let straightArmCount = 0
+  let primaryCount = 0
+  
+  // Session load limits based on typical skill/strength session
+  const WEIGHTED_LOAD_LIMIT = 5.5  // Typical max for skill_strength_dominant
+  const HIGH_FATIGUE_LIMIT = 3
+  const STRAIGHT_ARM_LIMIT = 2
+  const PRIMARY_LIMIT = 3
+  
+  // Helper to check if we can add more based on load
+  const canAddMore = (exercise: Exercise, deliveryStyle: DeliveryStyle = 'standalone'): boolean => {
+    const metadata = buildExerciseLoadMetadata(
+      {
+        category: exercise.category,
+        neuralDemand: exercise.neuralDemand,
+        fatigueCost: exercise.fatigueCost,
+        movementPattern: exercise.movementPattern,
+        isIsometric: exercise.isIsometric,
+      },
+      deliveryStyle
+    )
+    
+    // Check if adding this exercise would exceed limits
+    const newWeightedLoad = currentWeightedLoad + metadata.sessionCountWeight
+    const newHighFatigue = highFatigueCount + (metadata.fatigueWeight === 'high' ? 1 : 0)
+    const newStraightArm = straightArmCount + (metadata.jointStressCategory === 'straight_arm' ? 1 : 0)
+    const newPrimary = primaryCount + (metadata.role === 'skill_primary' || metadata.role === 'strength_primary' ? 1 : 0)
+    
+    // For accessory/rehab/core, be more lenient with raw exercise count
+    const isLowImpact = metadata.role === 'accessory' || metadata.role === 'rehab_prep' || metadata.role === 'core'
+    
+    // Critical limits that should never be exceeded
+    if (newHighFatigue > HIGH_FATIGUE_LIMIT + 1) return false
+    if (newStraightArm > STRAIGHT_ARM_LIMIT + 1) return false
+    if (newPrimary > PRIMARY_LIMIT + 1) return false
+    
+    // Weighted load check (more lenient for low-impact exercises)
+    if (!isLowImpact && newWeightedLoad > WEIGHTED_LOAD_LIMIT + 1) return false
+    
+    return true
+  }
+  
+  // Helper to add exercise with prerequisite gate check and load tracking
   const addExercise = (
     exercise: Exercise,
     reason: string,
     setsOverride?: number,
     repsOverride?: string,
-    noteOverride?: string
+    noteOverride?: string,
+    deliveryStyle: DeliveryStyle = 'standalone'
   ) => {
     if (usedIds.has(exercise.id)) return false
     if (selected.length >= maxExercises) return false
+    
+    // Check load limits before adding
+    if (!canAddMore(exercise, deliveryStyle)) return false
     
     // Apply prerequisite gate check
     const { exercise: finalExercise, gateResult, wasSubstituted, originalId } = 
@@ -339,6 +465,24 @@ function selectMainExercises(
     
     // Get knowledge bubble for educational context
     const knowledgeBubble = getExerciseKnowledgeBubble(exercise.id)
+    
+    // Build load metadata
+    const loadMetadata = buildExerciseLoadMetadata(
+      {
+        category: finalExercise.category,
+        neuralDemand: finalExercise.neuralDemand,
+        fatigueCost: finalExercise.fatigueCost,
+        movementPattern: finalExercise.movementPattern,
+        isIsometric: finalExercise.isIsometric,
+      },
+      deliveryStyle
+    )
+    
+    // Update running totals
+    currentWeightedLoad += loadMetadata.sessionCountWeight
+    if (loadMetadata.fatigueWeight === 'high') highFatigueCount++
+    if (loadMetadata.jointStressCategory === 'straight_arm') straightArmCount++
+    if (loadMetadata.role === 'skill_primary' || loadMetadata.role === 'strength_primary') primaryCount++
     
     selected.push({
       exercise: finalExercise,
@@ -355,6 +499,8 @@ function selectMainExercises(
       knowledgeBubble: knowledgeBubble || undefined,
       wasSubstituted,
       originalExerciseId: originalId,
+      loadMetadata,
+      deliveryStyle,
     })
     return true
   }

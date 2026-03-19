@@ -87,11 +87,35 @@ export default function OnboardingCompletePage() {
 
   useEffect(() => {
     setMounted(true)
-    setIsPro(hasProAccess())
-    setIsTrial(isInTrial())
-    setTrialDays(getTrialDaysRemaining())
     
-    const loadedProfile = getOnboardingProfile()
+    // Branch setup calls - wrapped defensively to prevent crashes
+    try {
+      setIsPro(hasProAccess())
+    } catch (err) {
+      console.error('[OnboardingComplete] hasProAccess failed, defaulting to false:', err)
+      setIsPro(false)
+    }
+    
+    try {
+      setIsTrial(isInTrial())
+    } catch (err) {
+      console.error('[OnboardingComplete] isInTrial failed, defaulting to false:', err)
+      setIsTrial(false)
+    }
+    
+    try {
+      setTrialDays(getTrialDaysRemaining())
+    } catch (err) {
+      console.error('[OnboardingComplete] getTrialDaysRemaining failed, defaulting to 0:', err)
+      setTrialDays(0)
+    }
+    
+    let loadedProfile = null
+    try {
+      loadedProfile = getOnboardingProfile()
+    } catch (err) {
+      console.error('[OnboardingComplete] getOnboardingProfile failed:', err)
+    }
     setProfile(loadedProfile)
     
     // CRITICAL: Generate the program from onboarding data
@@ -120,9 +144,13 @@ export default function OnboardingCompletePage() {
           
           console.log('[OnboardingComplete] Verification passed, program ready for dashboard')
           
-          // Track analytics
-          trackSignupCompleted()
-          trackProgramGenerated('onboarding', loadedProfile?.primaryGoal)
+          // Track analytics - non-blocking, wrapped so failures don't crash the route
+          try {
+            trackSignupCompleted()
+            trackProgramGenerated('onboarding', loadedProfile?.primaryGoal)
+          } catch (analyticsErr) {
+            console.error('[OnboardingComplete] Analytics failed (non-fatal):', analyticsErr)
+          }
           
           // Create program history entry via API (if authenticated)
           fetch('/api/program/history', {
@@ -137,6 +165,11 @@ export default function OnboardingCompletePage() {
             console.error('[OnboardingComplete] Failed to create program history:', err)
           })
           
+          console.log('[OnboardingComplete] SUCCESS: Setting step to ready', { 
+            isPro, 
+            isTrial, 
+            sessionCount: verificationState.sessionCount 
+          })
           setStep('ready')
         } else {
           console.error('[OnboardingComplete] Generation failed:', result.error)
@@ -161,8 +194,15 @@ export default function OnboardingCompletePage() {
     )
   }
 
-  // Calculate readiness if profile exists
-  const readiness = profile ? calculateReadinessScores(profile) : null
+  // Calculate readiness if profile exists - wrapped defensively
+  let readiness = null
+  if (profile) {
+    try {
+      readiness = calculateReadinessScores(profile)
+    } catch (err) {
+      console.error('[OnboardingComplete] calculateReadinessScores failed:', err)
+    }
+  }
 
   // Get primary goal display
   const getPrimaryGoalDisplay = () => {

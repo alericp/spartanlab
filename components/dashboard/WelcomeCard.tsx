@@ -47,7 +47,13 @@ export function WelcomeCard({ onDismiss, onProgramReady }: WelcomeCardProps) {
       
       try {
         // Get existing program from program-state (the safe unified source)
-        const { adaptiveProgram, hasUsableWorkoutProgram } = getProgramState()
+        let programState
+        try {
+          programState = getProgramState()
+        } catch {
+          programState = { adaptiveProgram: null, hasUsableWorkoutProgram: false }
+        }
+        const { adaptiveProgram, hasUsableWorkoutProgram } = programState
         console.log('[WelcomeCard] Program state:', { hasUsableWorkoutProgram, programExists: !!adaptiveProgram })
         
         if (hasUsableWorkoutProgram && adaptiveProgram) {
@@ -59,11 +65,28 @@ export function WelcomeCard({ onDismiss, onProgramReady }: WelcomeCardProps) {
             welcomeMessage: 'Your personalized program is ready.',
           }
           setResult(displayResult)
-          setSummary(getOnboardingSummary())
-          setReasoning(getProgramReasoning(adaptiveProgram))
+          
+          // Wrap helper calls - these should not crash the card
+          try {
+            setSummary(getOnboardingSummary())
+          } catch (err) {
+            console.error('[WelcomeCard] getOnboardingSummary failed:', err)
+            setSummary(null)
+          }
+          
+          try {
+            setReasoning(getProgramReasoning(adaptiveProgram))
+          } catch (err) {
+            console.error('[WelcomeCard] getProgramReasoning failed:', err)
+            setReasoning(null)
+          }
           
           if (onProgramReady) {
-            onProgramReady(displayResult)
+            try {
+              onProgramReady(displayResult)
+            } catch (err) {
+              console.error('[WelcomeCard] onProgramReady callback failed:', err)
+            }
           }
         } else {
           // No valid program - show error state
@@ -132,8 +155,15 @@ export function WelcomeCard({ onDismiss, onProgramReady }: WelcomeCardProps) {
     )
   }
 
-  const profile = getOnboardingProfile()
-  const hasEstimates = profile ? hasEstimatedValues(profile) : false
+  // Wrap render-time calls to prevent crashes
+  let profile = null
+  let hasEstimates = false
+  try {
+    profile = getOnboardingProfile()
+    hasEstimates = profile ? hasEstimatedValues(profile) : false
+  } catch (err) {
+    console.error('[WelcomeCard] Error getting profile for estimates check:', err)
+  }
 
   return (
     <Card className="bg-gradient-to-br from-[#1A1F26] to-[#0F1115] border-[#C1121F]/30 p-6 relative overflow-hidden">

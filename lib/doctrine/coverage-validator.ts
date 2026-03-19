@@ -75,21 +75,27 @@ export interface MethodProfileCoverageStatus {
 // =============================================================================
 
 const SKILL_GOAL_EXERCISE_PATTERNS: Record<string, string[]> = {
+  // Skill-based goals (maps from PrimaryGoal)
   front_lever: ['tuck_fl', 'adv_tuck_fl', 'straddle_fl', 'full_fl', 'fl_raises', 'front_lever_pull'],
   planche: ['planche_lean', 'tuck_planche', 'adv_tuck_planche', 'straddle_planche', 'planche_pushup'],
   muscle_up: ['muscle_up', 'banded_muscle_up', 'explosive_pull_up', 'chest_to_bar_pull_up'],
-  handstand: ['wall_handstand', 'freestanding_handstand', 'hspu', 'wall_hspu'],
-  hspu: ['pike_push_up', 'elevated_pike_push_up', 'wall_hspu', 'hspu', 'deficit_hspu'],
-  l_sit: ['l_sit_floor', 'l_sit_parallettes', 'l_sit_rings', 'v_sit'],
-  v_sit: ['v_sit', 'l_sit_floor', 'manna'],
-  iron_cross: ['ring_support_hold', 'rto_support_hold', 'assisted_cross_hold', 'cross_negatives'],
-  one_arm_chin_up: ['archer_pull_up', 'weighted_pull_up', 'one_arm_assisted', 'one_arm_pull_up'],
   back_lever: ['german_hang', 'skin_the_cat', 'tuck_back_lever', 'back_lever'],
-  dragon_flag: ['dragon_flag_tuck', 'dragon_flag_neg', 'dragon_flag_assisted', 'dragon_flag'],
-  general_strength: ['pull_up', 'dip', 'push_up', 'bodyweight_row'],
+  handstand_pushup: ['pike_push_up', 'elevated_pike_push_up', 'wall_hspu', 'hspu', 'deficit_hspu'],
+  iron_cross: ['ring_support_hold', 'rto_support_hold', 'assisted_cross_hold', 'cross_negatives'],
+  weighted_strength: ['weighted_pull_up', 'weighted_dip', 'weighted_push_up', 'weighted_chin_up'],
+  general: ['pull_up', 'dip', 'push_up', 'bodyweight_row'],
+  skill: ['pull_up', 'dip', 'push_up', 'l_sit_floor', 'handstand_hold'],
+  strength: ['pull_up', 'dip', 'push_up', 'bodyweight_row', 'weighted_pull_up'],
+  endurance: ['pull_up', 'push_up', 'burpee', 'mountain_climber'],
+  abs: ['hollow_body_hold', 'dragon_flag_tuck', 'leg_raises', 'plank'],
+  // Flexibility goals
   flexibility: ['pancake_stretch', 'pike_stretch', 'middle_split_stretch'],
   pancake: ['pancake_stretch', 'pancake_active', 'compression_drill'],
-  splits: ['front_split_stretch', 'middle_split_stretch', 'hip_flexor_stretch'],
+  toe_touch: ['pike_stretch', 'standing_pike', 'jefferson_curl'],
+  front_splits: ['front_split_stretch', 'hip_flexor_stretch', 'lunge_stretch'],
+  side_splits: ['middle_split_stretch', 'horse_stance', 'adductor_stretch'],
+  // Internal dragon flag tracking
+  dragon_flag: ['dragon_flag_tuck', 'dragon_flag_neg', 'dragon_flag_assisted', 'dragon_flag'],
 }
 
 // =============================================================================

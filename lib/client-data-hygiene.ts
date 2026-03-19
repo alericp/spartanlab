@@ -8,7 +8,8 @@
  * It does NOT wipe legitimate user data.
  */
 
-const HYGIENE_VERSION = 'v1'
+// PHASE 5: Bump version to force re-run and clean legacy logs without trusted flag
+const HYGIENE_VERSION = 'v2'
 const HYGIENE_KEY = 'spartanlab_hygiene_pass'
 
 // Known preview/seed profile indicators
@@ -58,27 +59,39 @@ function isPreviewProfile(data: unknown): boolean {
 }
 
 /**
- * Check if workout logs contain demo/seed data that should be removed
+ * Check if workout logs contain demo/seed/untrusted data that should be removed
+ * PHASE 5: Now also catches legacy logs without proper source tracking
  */
-function containsDemoWorkouts(logs: unknown): boolean {
+function containsUntrustedWorkouts(logs: unknown): boolean {
   if (!Array.isArray(logs)) return false
   return logs.some(log => {
     if (!log || typeof log !== 'object') return false
     const obj = log as Record<string, unknown>
     // Check for explicit demo/seed markers
-    return obj.sourceRoute === 'demo' || obj.isDemo === true || obj.trusted === false
+    if (obj.sourceRoute === 'demo' || obj.isDemo === true || obj.trusted === false) return true
+    // PHASE 5: Legacy logs without proper source tracking are suspect
+    // Real workouts from workout_session or quick_log will have sourceRoute set
+    if (!obj.sourceRoute && !obj.trusted) return true
+    return false
   })
 }
 
 /**
- * Filter out demo/seed workouts from logs array
+ * Filter out demo/seed/untrusted workouts from logs array
+ * PHASE 5: Only keep workouts with explicit trusted=true or valid sourceRoute
  */
 function filterRealWorkouts(logs: unknown[]): unknown[] {
   return logs.filter(log => {
     if (!log || typeof log !== 'object') return false
     const obj = log as Record<string, unknown>
-    // Keep only trusted, non-demo workouts
-    return obj.sourceRoute !== 'demo' && obj.isDemo !== true && obj.trusted !== false
+    // Reject explicit demo/untrusted
+    if (obj.sourceRoute === 'demo' || obj.isDemo === true || obj.trusted === false) return false
+    // PHASE 5: Require explicit trust OR known good sourceRoute
+    const hasValidSource = obj.sourceRoute === 'workout_session' || 
+                          obj.sourceRoute === 'first_session' || 
+                          obj.sourceRoute === 'quick_log'
+    const hasExplicitTrust = obj.trusted === true
+    return hasValidSource || hasExplicitTrust
   })
 }
 
@@ -146,7 +159,7 @@ export function runClientDataHygiene(): HygieneResult {
     if (logsStr) {
       try {
         const logs = JSON.parse(logsStr)
-        if (Array.isArray(logs) && containsDemoWorkouts(logs)) {
+        if (Array.isArray(logs) && containsUntrustedWorkouts(logs)) {
           const realLogs = filterRealWorkouts(logs)
           if (realLogs.length === 0) {
             localStorage.removeItem(STORAGE_KEYS.workoutLogs)

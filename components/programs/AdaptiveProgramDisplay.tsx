@@ -39,23 +39,41 @@ export function AdaptiveProgramDisplay({
     LOW: 'text-red-400 bg-red-400/10 border-red-400/20',
   }
   
-  // Safe accessor for recoveryColors - returns default if key is missing/invalid
+  // PHASE 2: Safe accessor for recoveryColors - returns default if key is missing/invalid
   const getRecoveryColor = (level: string | undefined): string => {
     if (!level || typeof level !== 'string') return recoveryColors.MODERATE
     return recoveryColors[level] || recoveryColors.MODERATE
   }
   
-  // Safe accessor for fatigue state display
+  // PHASE 2: Safe accessor for fatigue state display
   const formatFatigueState = (state: string | undefined): string => {
     if (!state || typeof state !== 'string') return 'Normal'
     return state.charAt(0).toUpperCase() + state.slice(1)
   }
   
+  // PHASE 2: Safe accessors for nested objects - prevent crashes on partial data
+  const constraintInsight = program.constraintInsight || { 
+    hasInsight: false, 
+    label: 'Training Balanced' 
+  }
+  const structure = program.structure || { 
+    structureName: 'Custom Program', 
+    rationale: 'Personalized training structure' 
+  }
+  const engineContext = program.engineContext
+  const equipmentProfile = program.equipmentProfile
+  const trainingBehaviorAnalysis = program.trainingBehaviorAnalysis
+  
+  // PHASE 2: Filter sessions to only include valid ones
+  const validSessions = Array.isArray(program.sessions) 
+    ? program.sessions.filter(s => s && typeof s === 'object' && Array.isArray(s.exercises))
+    : []
+  
   // Diagnostic: Log if we detect partial program data (only once per render)
   if (!program.recoveryLevel || !(program.recoveryLevel in recoveryColors)) {
     console.log('[AdaptiveProgramDisplay] Using fallback for recoveryLevel:', program.recoveryLevel)
   }
-  if (!program.engineContext?.fatigueState) {
+  if (!engineContext?.fatigueState) {
     console.log('[AdaptiveProgramDisplay] engineContext or fatigueState missing')
   }
 
@@ -145,15 +163,15 @@ export function AdaptiveProgramDisplay({
           </div>
         )}
         
-        {/* Adaptive Coach Messages */}
-        {program.trainingBehaviorAnalysis?.adaptationNeeded && 
-         Array.isArray(program.trainingBehaviorAnalysis.coachMessages) && 
-         program.trainingBehaviorAnalysis.coachMessages.length > 0 && (
+        {/* Adaptive Coach Messages - PHASE 2: Uses safe accessor */}
+        {trainingBehaviorAnalysis?.adaptationNeeded && 
+         Array.isArray(trainingBehaviorAnalysis.coachMessages) && 
+         trainingBehaviorAnalysis.coachMessages.length > 0 && (
           <div className="mt-4 p-3 bg-[#E63946]/5 border border-[#E63946]/20 rounded-lg">
             <div className="flex items-center gap-2 mb-2">
-              {program.trainingBehaviorAnalysis.progressTrend === 'improving' ? (
+              {trainingBehaviorAnalysis.progressTrend === 'improving' ? (
                 <TrendingUp className="w-4 h-4 text-green-400" />
-              ) : program.trainingBehaviorAnalysis.progressTrend === 'declining' ? (
+              ) : trainingBehaviorAnalysis.progressTrend === 'declining' ? (
                 <TrendingDown className="w-4 h-4 text-amber-400" />
               ) : (
                 <Minus className="w-4 h-4 text-blue-400" />
@@ -161,7 +179,7 @@ export function AdaptiveProgramDisplay({
               <span className="text-xs font-medium text-[#E63946]">Adaptive Coaching</span>
             </div>
             <ul className="space-y-1">
-              {program.trainingBehaviorAnalysis.coachMessages.map((msg, idx) => (
+              {trainingBehaviorAnalysis.coachMessages.map((msg, idx) => (
                 <li key={idx} className="text-sm text-[#A5A5A5]">{msg}</li>
               ))}
             </ul>
@@ -171,17 +189,17 @@ export function AdaptiveProgramDisplay({
 
       {/* Constraint & Recovery Status */}
       <div className="grid md:grid-cols-2 gap-4">
-        {/* Constraint Card */}
+        {/* Constraint Card - PHASE 2: Uses safe accessor */}
         <Card className="bg-[#2A2A2A] border-[#3A3A3A] p-4">
           <div className="flex items-start gap-3">
-            {program.constraintInsight.hasInsight && program.constraintInsight.label !== 'Training Balanced' ? (
+            {constraintInsight.hasInsight && constraintInsight.label !== 'Training Balanced' ? (
               <>
                 <div className="w-8 h-8 rounded-lg bg-[#E63946]/10 flex items-center justify-center shrink-0">
                   <AlertTriangle className="w-4 h-4 text-[#E63946]" />
                 </div>
                 <div>
                   <p className="text-xs text-[#6A6A6A]">Current Limiter</p>
-                  <p className="font-medium text-[#E63946]">{program.constraintInsight.label}</p>
+                  <p className="font-medium text-[#E63946]">{constraintInsight.label}</p>
                   <p className="text-xs text-[#A5A5A5] mt-1">
                     Program prioritizes addressing this constraint
                   </p>
@@ -227,8 +245,8 @@ export function AdaptiveProgramDisplay({
         </Card>
       </div>
 
-      {/* Engine Context (if available) */}
-      {program.engineContext && (
+      {/* Engine Context (if available) - PHASE 2: Uses safe accessor */}
+      {engineContext && (
         <Card className="bg-gradient-to-r from-[#2A2A2A] to-[#1A1A1A] border-[#3A3A3A] p-4">
           <div className="flex items-center gap-2 mb-3">
             <Brain className="w-4 h-4 text-[#C41E3A]" />
@@ -238,59 +256,59 @@ export function AdaptiveProgramDisplay({
             <div className="bg-[#1A1A1A] rounded-lg p-2">
               <p className="text-xs text-[#6A6A6A]">Plateau Status</p>
               <p className={`text-sm font-medium ${
-                program.engineContext.plateauStatus === 'plateau_detected' ? 'text-amber-400' :
-                program.engineContext.plateauStatus === 'possible_plateau' ? 'text-yellow-400' :
+                engineContext.plateauStatus === 'plateau_detected' ? 'text-amber-400' :
+                engineContext.plateauStatus === 'possible_plateau' ? 'text-yellow-400' :
                 'text-green-400'
               }`}>
-                {program.engineContext.plateauStatus === 'no_plateau' ? 'Clear' :
-                 program.engineContext.plateauStatus === 'possible_plateau' ? 'Possible' : 'Detected'}
+                {engineContext.plateauStatus === 'no_plateau' ? 'Clear' :
+                 engineContext.plateauStatus === 'possible_plateau' ? 'Possible' : 'Detected'}
               </p>
             </div>
             <div className="bg-[#1A1A1A] rounded-lg p-2">
               <p className="text-xs text-[#6A6A6A]">Strength Support</p>
               <p className={`text-sm font-medium ${
-                program.engineContext.strengthSupportLevel === 'sufficient' ? 'text-green-400' :
-                program.engineContext.strengthSupportLevel === 'developing' ? 'text-blue-400' :
-                program.engineContext.strengthSupportLevel === 'insufficient' ? 'text-amber-400' :
+                engineContext.strengthSupportLevel === 'sufficient' ? 'text-green-400' :
+                engineContext.strengthSupportLevel === 'developing' ? 'text-blue-400' :
+                engineContext.strengthSupportLevel === 'insufficient' ? 'text-amber-400' :
                 'text-[#A5A5A5]'
               }`}>
-                {program.engineContext.strengthSupportLevel === 'sufficient' ? 'Strong' :
-                 program.engineContext.strengthSupportLevel === 'developing' ? 'Building' :
-                 program.engineContext.strengthSupportLevel === 'insufficient' ? 'Needs Work' : 'Unknown'}
+                {engineContext.strengthSupportLevel === 'sufficient' ? 'Strong' :
+                 engineContext.strengthSupportLevel === 'developing' ? 'Building' :
+                 engineContext.strengthSupportLevel === 'insufficient' ? 'Needs Work' : 'Unknown'}
               </p>
             </div>
             <div className="bg-[#1A1A1A] rounded-lg p-2">
               <p className="text-xs text-[#6A6A6A]">Fatigue State</p>
               <p className={`text-sm font-medium ${
-                program.engineContext?.fatigueState === 'fresh' ? 'text-green-400' :
-                program.engineContext?.fatigueState === 'normal' ? 'text-blue-400' :
-                program.engineContext?.fatigueState === 'fatigued' ? 'text-amber-400' :
+                engineContext.fatigueState === 'fresh' ? 'text-green-400' :
+                engineContext.fatigueState === 'normal' ? 'text-blue-400' :
+                engineContext.fatigueState === 'fatigued' ? 'text-amber-400' :
                 'text-red-400'
               }`}>
-                {formatFatigueState(program.engineContext?.fatigueState)}
+                {formatFatigueState(engineContext.fatigueState)}
               </p>
             </div>
-            {Array.isArray(program.engineContext?.recommendations) && program.engineContext.recommendations[0] && (
+            {Array.isArray(engineContext.recommendations) && engineContext.recommendations[0] && (
               <div className="bg-[#1A1A1A] rounded-lg p-2 col-span-2 sm:col-span-1">
                 <p className="text-xs text-[#6A6A6A]">Top Recommendation</p>
-                <p className="text-xs text-[#A5A5A5] line-clamp-2">{program.engineContext.recommendations[0]}</p>
+                <p className="text-xs text-[#A5A5A5] line-clamp-2">{engineContext.recommendations[0]}</p>
               </div>
             )}
           </div>
         </Card>
       )}
 
-      {/* Equipment Notes */}
-      {program.equipmentProfile && !program.equipmentProfile.hasFullSetup && 
-       Array.isArray(program.equipmentProfile.adaptationNotes) && 
-       program.equipmentProfile.adaptationNotes.length > 0 && (
+      {/* Equipment Notes - PHASE 2: Uses safe accessor */}
+      {equipmentProfile && !equipmentProfile.hasFullSetup && 
+       Array.isArray(equipmentProfile.adaptationNotes) && 
+       equipmentProfile.adaptationNotes.length > 0 && (
         <Card className="bg-amber-500/5 border-amber-500/20 p-4">
           <div className="flex items-start gap-3">
             <Info className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
             <div>
               <p className="text-sm font-medium text-amber-500">Equipment Adaptations Applied</p>
               <ul className="text-xs text-amber-500/70 mt-1 space-y-1">
-                {program.equipmentProfile.adaptationNotes.map((note, idx) => (
+                {equipmentProfile.adaptationNotes.map((note, idx) => (
                   <li key={idx}>{note}</li>
                 ))}
               </ul>
@@ -299,22 +317,22 @@ export function AdaptiveProgramDisplay({
         </Card>
       )}
 
-      {/* Structure Overview */}
+      {/* Structure Overview - PHASE 2: Uses safe accessor */}
       <Card className="bg-[#2A2A2A] border-[#3A3A3A] p-4">
         <div className="flex items-center gap-2 mb-3">
           <Badge variant="outline" className="border-[#E63946]/30 text-[#E63946]">
-            {program.structure.structureName}
+            {structure.structureName}
           </Badge>
           <span className="text-xs text-[#6A6A6A]">Weekly Structure</span>
         </div>
-        <p className="text-sm text-[#A5A5A5]">{program.structure.rationale}</p>
+        <p className="text-sm text-[#A5A5A5]">{structure.rationale}</p>
       </Card>
 
-      {/* Sessions */}
+      {/* Sessions - PHASE 2: Uses safe validSessions array */}
       <div className="space-y-4">
         <h4 className="text-lg font-bold">Training Sessions</h4>
-        {Array.isArray(program.sessions) && program.sessions.length > 0 ? (
-          program.sessions.map((session) => (
+        {validSessions.length > 0 ? (
+          validSessions.map((session) => (
             <AdaptiveSessionCard
               key={session.dayNumber}
               session={session}

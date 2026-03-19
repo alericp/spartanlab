@@ -38,7 +38,39 @@ interface AdaptiveSessionCardProps {
   onExerciseOverride?: (override: ExerciseOverride) => void
 }
 
-export function AdaptiveSessionCard({ session, onExerciseReplace, onWorkoutComplete, onExerciseOverride }: AdaptiveSessionCardProps) {
+/**
+ * PHASE 3: Normalize session for safe display
+ * Ensures all required properties exist with safe defaults
+ */
+function normalizeSessionForDisplay(session: AdaptiveSession): AdaptiveSession {
+  if (!session || typeof session !== 'object') {
+    console.log('[AdaptiveSessionCard] Session is invalid, using empty default')
+    return {
+      name: 'Session',
+      dayNumber: 0,
+      dayLabel: 'Day',
+      focusLabel: 'Training',
+      estimatedMinutes: 60,
+      exercises: [],
+    } as AdaptiveSession
+  }
+  
+  return {
+    ...session,
+    name: session.name || 'Training Session',
+    dayNumber: session.dayNumber || 0,
+    dayLabel: session.dayLabel || `Day ${session.dayNumber || 1}`,
+    focusLabel: session.focusLabel || 'General Training',
+    estimatedMinutes: session.estimatedMinutes || 60,
+    exercises: Array.isArray(session.exercises) ? session.exercises : [],
+    warmup: Array.isArray(session.warmup) ? session.warmup : [],
+    cooldown: Array.isArray(session.cooldown) ? session.cooldown : [],
+  }
+}
+
+export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, onWorkoutComplete, onExerciseOverride }: AdaptiveSessionCardProps) {
+  // PHASE 3: Normalize session immediately to prevent crashes
+  const session = normalizeSessionForDisplay(rawSession)
   const router = useRouter()
   const [isExpanded, setIsExpanded] = useState(true)
   const [showWarmup, setShowWarmup] = useState(false)

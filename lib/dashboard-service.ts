@@ -649,6 +649,7 @@ export function getDashboardUserState(): DashboardUserState {
  * Check if a workout log appears to be real user data
  * Returns true for logs that have expected structure and completion indicators
  * Rejects demo/seed/preview data
+ * PHASE 5: Stricter - requires explicit trust OR known good sourceRoute
  */
 function isTrustedWorkoutLog(log: ReturnType<typeof getWorkoutLogs>[number]): boolean {
   try {
@@ -656,6 +657,13 @@ function isTrustedWorkoutLog(log: ReturnType<typeof getWorkoutLogs>[number]): bo
     if (log.sourceRoute === 'demo') return false
     if ((log as any).isDemo === true) return false
     if (log.trusted === false) return false
+    
+    // PHASE 5: Require explicit trust OR known good sourceRoute
+    const hasValidSource = log.sourceRoute === 'workout_session' || 
+                          log.sourceRoute === 'first_session' || 
+                          log.sourceRoute === 'quick_log'
+    const hasExplicitTrust = log.trusted === true
+    if (!hasValidSource && !hasExplicitTrust) return false
     
     // Must have basic required fields
     if (!log.id || !log.sessionDate || !log.createdAt) return false

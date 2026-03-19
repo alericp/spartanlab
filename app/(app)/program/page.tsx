@@ -23,10 +23,11 @@ import {
   type AdaptiveProgramInputs,
   type AdaptiveProgram,
 } from '@/lib/adaptive-program-builder'
-import { getProgramState } from '@/lib/program-state'
+import { getProgramState, normalizeProgramForDisplay, isRenderableProgram } from '@/lib/program-state'
+import { runClientDataHygiene } from '@/lib/client-data-hygiene'
 import { getConstraintInsight } from '@/lib/constraint-engine'
 import { getProgramStatus, recordProgramEnd } from '@/lib/program-adjustment-engine'
-import { ArrowLeft, Dumbbell, Plus, Sparkles } from 'lucide-react'
+import { ArrowLeft, Dumbbell, Plus, Sparkles, AlertTriangle } from 'lucide-react'
 import Link from 'next/link'
 
 export default function ProgramPage() {
@@ -40,32 +41,62 @@ export default function ProgramPage() {
 
   useEffect(() => {
     setMounted(true)
+    
+    // PHASE 5: Run hygiene to clean stale data before loading program
+    runClientDataHygiene()
+    
     // Load default inputs
     const defaultInputs = getDefaultAdaptiveInputs()
     setInputs(defaultInputs)
     
-    // Load existing program using unified state (handles migration automatically)
-    // getProgramState() will migrate spartanlab_first_program to canonical storage if needed
-    // CRITICAL: Only use adaptiveProgram when hasUsableWorkoutProgram is TRUE
-    // This prevents partial/malformed programs from being passed to AdaptiveProgramDisplay
-    const programState = getProgramState()
-    if (programState.hasUsableWorkoutProgram && programState.adaptiveProgram) {
-      setProgram(programState.adaptiveProgram)
-      // Program exists and is usable - don't show builder by default
-      setShowBuilder(false)
-      console.log('[ProgramPage] Loaded usable adaptive program')
-    } else {
-      // No usable program - show builder
-      // If adaptiveProgram exists but is not usable, log it for diagnostics
-      if (programState.adaptiveProgram && !programState.hasUsableWorkoutProgram) {
-        console.log('[ProgramPage] Adaptive program exists but is not usable - showing builder')
+    // PHASE 1: Load existing program with crash-proof normalization
+    // getProgramState() handles migration and validation
+    // normalizeProgramForDisplay() ensures all nested objects have safe defaults
+    try {
+      const programState = getProgramState()
+      
+      // Diagnostic: Log program state for debugging client crashes
+      console.log('[ProgramPage] Program state:', {
+        hasUsableWorkoutProgram: programState.hasUsableWorkoutProgram,
+        adaptiveProgramExists: !!programState.adaptiveProgram,
+        sessionCount: programState.sessionCount,
+        source: programState.adaptiveProgram ? 'canonical' : programState.legacyProgram ? 'legacy' : 'none',
+      })
+      
+      if (programState.hasUsableWorkoutProgram && programState.adaptiveProgram) {
+        // PHASE 1: Normalize program before setting state to prevent render crashes
+        const normalizedProgram = normalizeProgramForDisplay(programState.adaptiveProgram)
+        
+        if (normalizedProgram && isRenderableProgram(normalizedProgram)) {
+          setProgram(normalizedProgram)
+          setShowBuilder(false)
+          console.log('[ProgramPage] Loaded and normalized usable adaptive program')
+        } else {
+          // Program exists but couldn't be normalized - show builder
+          console.log('[ProgramPage] Program exists but failed normalization - showing builder')
+          setShowBuilder(true)
+        }
+      } else {
+        // No usable program - show builder
+        if (programState.adaptiveProgram && !programState.hasUsableWorkoutProgram) {
+          console.log('[ProgramPage] Adaptive program exists but is not usable - showing builder')
+        }
+        setShowBuilder(true)
       }
+    } catch (err) {
+      // PHASE 1: Catch any errors during program loading
+      console.error('[ProgramPage] Error loading program:', err)
       setShowBuilder(true)
     }
     
-    // Get constraint insight
-    const insight = getConstraintInsight()
-    setConstraintLabel(insight.label)
+    // Get constraint insight (also wrap in try-catch)
+    try {
+      const insight = getConstraintInsight()
+      setConstraintLabel(insight.label)
+    } catch (err) {
+      console.error('[ProgramPage] Error getting constraint insight:', err)
+      setConstraintLabel('')
+    }
   }, [])
 
   const handleGenerate = () => {
@@ -186,11 +217,29 @@ export default function ProgramPage() {
               </Button>
             )}
           </div>
-        ) : program ? (
+        ) : program && isRenderableProgram(program) ? (
           <AdaptiveProgramDisplay
             program={program}
             onDelete={handleDelete}
           />
+        ) : program && !isRenderableProgram(program) ? (
+          // PHASE 1: Program exists but is malformed - show recovery state
+          <Card className="bg-[#2A2A2A] border-[#3A3A3A] p-8 text-center">
+            <AlertTriangle className="w-12 h-12 text-amber-500 mx-auto mb-4" />
+            <h3 className="text-lg font-medium mb-2">Program Needs Refresh</h3>
+            <p className="text-sm text-[#6A6A6A] mb-4">
+              Your program data needs to be regenerated. This only takes a moment.
+            </p>
+            <Button
+              onClick={() => {
+                setProgram(null)
+                setShowBuilder(true)
+              }}
+              className="bg-[#E63946] hover:bg-[#D62828]"
+            >
+              Regenerate Program
+            </Button>
+          </Card>
         ) : (
           <Card className="bg-[#2A2A2A] border-[#3A3A3A] p-8 text-center">
             <Dumbbell className="w-12 h-12 text-[#6A6A6A] mx-auto mb-4" />

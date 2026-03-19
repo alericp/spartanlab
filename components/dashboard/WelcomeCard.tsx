@@ -34,6 +34,38 @@ export function WelcomeCard({ onDismiss, onProgramReady }: WelcomeCardProps) {
   const [result, setResult] = useState<FirstRunResult | null>(null)
   const [summary, setSummary] = useState<ReturnType<typeof getOnboardingSummary>>(null)
   const [reasoning, setReasoning] = useState<ProgramReasoning | null>(null)
+  
+  // ==========================================================================
+  // HOOK ORDER FIX: All hooks MUST be declared before any conditional returns
+  // This useState was previously after early returns, violating Rules of Hooks
+  // ==========================================================================
+  const [hasEstimates, setHasEstimates] = useState(false)
+
+  // ==========================================================================
+  // HOOK ORDER FIX: This useEffect was previously after early returns
+  // Now moved to top-level with guards inside the effect body
+  // ==========================================================================
+  useEffect(() => {
+    // Guard: Only check estimates when we have a successful result
+    if (isLoading || !result?.success) {
+      setHasEstimates(false)
+      return
+    }
+    
+    const checkEstimates = async () => {
+      try {
+        const athleteModule = await import('@/lib/athlete-profile')
+        const profile = athleteModule.getOnboardingProfile()
+        if (profile) {
+          setHasEstimates(athleteModule.hasEstimatedValues(profile))
+        }
+      } catch (err) {
+        console.error('[WelcomeCard] Error checking estimates:', err)
+        setHasEstimates(false)
+      }
+    }
+    checkEstimates()
+  }, [isLoading, result?.success])
 
   useEffect(() => {
     // READ existing program state - do NOT regenerate
@@ -189,26 +221,6 @@ export function WelcomeCard({ onDismiss, onProgramReady }: WelcomeCardProps) {
       </Card>
     )
   }
-
-  // Profile and estimate check is now done via state set in useEffect
-  // to avoid render-time dynamic imports which can cause issues
-  const [hasEstimates, setHasEstimates] = useState(false)
-  
-  // Load profile for estimates check in a separate effect
-  useEffect(() => {
-    const checkEstimates = async () => {
-      try {
-        const athleteModule = await import('@/lib/athlete-profile')
-        const profile = athleteModule.getOnboardingProfile()
-        if (profile) {
-          setHasEstimates(athleteModule.hasEstimatedValues(profile))
-        }
-      } catch (err) {
-        console.error('[WelcomeCard] Error checking estimates:', err)
-      }
-    }
-    checkEstimates()
-  }, [])
 
   return (
     <Card className="bg-gradient-to-br from-[#1A1F26] to-[#0F1115] border-[#C1121F]/30 p-6 relative overflow-hidden">

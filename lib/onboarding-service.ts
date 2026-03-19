@@ -426,6 +426,10 @@ export function clearFirstRunState(): void {
 /**
  * Get onboarding summary for display
  */
+/**
+ * Get onboarding summary for display in welcome components
+ * GUARANTEED: This function NEVER throws - returns null on any error
+ */
 export function getOnboardingSummary(): {
   strengthTier: string
   primaryGoal: string
@@ -435,20 +439,25 @@ export function getOnboardingSummary(): {
   hasFlexibilityGoals: boolean
   likesEndurance: boolean
 } | null {
-  const profile = getOnboardingProfile()
-  if (!profile) return null
-  
-  // Use normalization to safely handle old and new field names
-  const normalized = normalizeProfileForGeneration(profile)
-  
-  return {
-    strengthTier: estimateStrengthTier(profile),
-    primaryGoal: profile.primaryGoal || 'general',
-    skillInterests: normalized.selectedSkills,
-    trainingDays: normalized.trainingDaysPerWeek,
-    sessionLength: normalized.sessionLengthMinutes,
-    hasFlexibilityGoals: Array.isArray(profile.selectedFlexibility) && profile.selectedFlexibility.length > 0,
-    likesEndurance: (profile as any).enduranceInterest === 'yes' || (profile as any).enduranceInterest === 'occasionally',
+  try {
+    const profile = getOnboardingProfile()
+    if (!profile) return null
+    
+    // Use normalization to safely handle old and new field names
+    const normalized = normalizeProfileForGeneration(profile)
+    
+    return {
+      strengthTier: estimateStrengthTier(profile),
+      primaryGoal: profile.primaryGoal || 'general',
+      skillInterests: Array.isArray(normalized.selectedSkills) ? normalized.selectedSkills : [],
+      trainingDays: typeof normalized.trainingDaysPerWeek === 'number' ? normalized.trainingDaysPerWeek : 4,
+      sessionLength: typeof normalized.sessionLengthMinutes === 'number' ? normalized.sessionLengthMinutes : 45,
+      hasFlexibilityGoals: Array.isArray(profile.selectedFlexibility) && profile.selectedFlexibility.length > 0,
+      likesEndurance: (profile as any).enduranceInterest === 'yes' || (profile as any).enduranceInterest === 'occasionally',
+    }
+  } catch (err) {
+    console.error('[OnboardingService] Error in getOnboardingSummary:', err)
+    return null
   }
 }
 

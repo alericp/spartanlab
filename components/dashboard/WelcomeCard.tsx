@@ -40,36 +40,50 @@ export function WelcomeCard({ onDismiss, onProgramReady }: WelcomeCardProps) {
     // READ existing program state - do NOT regenerate
     const loadExistingProgram = async () => {
       setIsLoading(true)
+      console.log('[WelcomeCard] Loading existing program state')
       
       // Small delay for smooth UX transition
       await new Promise(resolve => setTimeout(resolve, 300))
       
-      // Get existing program from program-state (the safe unified source)
-      const { adaptiveProgram, hasUsableWorkoutProgram } = getProgramState()
-      
-      if (hasUsableWorkoutProgram && adaptiveProgram) {
-        // Program exists - create display result from existing data
-        const displayResult: FirstRunResult = {
-          success: true,
-          program: adaptiveProgram,
-          calibration: null, // Not needed for display
-          welcomeMessage: 'Your personalized program is ready.',
-        }
-        setResult(displayResult)
-        setSummary(getOnboardingSummary())
-        setReasoning(getProgramReasoning(adaptiveProgram))
+      try {
+        // Get existing program from program-state (the safe unified source)
+        const { adaptiveProgram, hasUsableWorkoutProgram } = getProgramState()
+        console.log('[WelcomeCard] Program state:', { hasUsableWorkoutProgram, programExists: !!adaptiveProgram })
         
-        if (onProgramReady) {
-          onProgramReady(displayResult)
+        if (hasUsableWorkoutProgram && adaptiveProgram) {
+          // Program exists - create display result from existing data
+          const displayResult: FirstRunResult = {
+            success: true,
+            program: adaptiveProgram,
+            calibration: null, // Not needed for display
+            welcomeMessage: 'Your personalized program is ready.',
+          }
+          setResult(displayResult)
+          setSummary(getOnboardingSummary())
+          setReasoning(getProgramReasoning(adaptiveProgram))
+          
+          if (onProgramReady) {
+            onProgramReady(displayResult)
+          }
+        } else {
+          // No valid program - show error state
+          console.log('[WelcomeCard] No valid program found, showing fallback')
+          setResult({
+            success: false,
+            program: null,
+            calibration: null,
+            welcomeMessage: 'No program found.',
+            error: 'Program not generated yet. Please complete onboarding.',
+          })
         }
-      } else {
-        // No valid program - show error state
+      } catch (err) {
+        console.error('[WelcomeCard] Error loading program:', err)
         setResult({
           success: false,
           program: null,
           calibration: null,
-          welcomeMessage: 'No program found.',
-          error: 'Program not generated yet. Please complete onboarding.',
+          welcomeMessage: 'Error loading program.',
+          error: 'An error occurred while loading your program.',
         })
       }
       
@@ -247,21 +261,21 @@ export function WelcomeCard({ onDismiss, onProgramReady }: WelcomeCardProps) {
       )}
 
       {/* Calibration Highlights */}
-      {summary && (
+      {summary && typeof summary === 'object' && (
         <div className="border-t border-[#2B313A] pt-3 mt-4">
           <p className="text-xs text-[#6B7280] uppercase tracking-wide mb-2">
             Calibration Profile
           </p>
           <div className="flex flex-wrap gap-1.5">
             <span className="px-2 py-0.5 bg-[#0F1115] rounded text-xs text-[#A4ACB8] capitalize">
-              {(summary.strengthTier || 'intermediate').replace('_', ' ')} level
+              {(typeof summary.strengthTier === 'string' ? summary.strengthTier : 'intermediate').replace('_', ' ')} level
             </span>
             {Array.isArray(summary.skillInterests) && summary.skillInterests.slice(0, 2).map(skill => (
               <span
-                key={skill}
+                key={typeof skill === 'string' ? skill : String(skill)}
                 className="px-2 py-0.5 bg-[#C1121F]/10 rounded text-xs text-[#C1121F] capitalize"
               >
-                {skill.replace('_', ' ')}
+                {typeof skill === 'string' ? skill.replace('_', ' ') : 'skill'}
               </span>
             ))}
             {summary.hasFlexibilityGoals && (

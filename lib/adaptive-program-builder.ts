@@ -222,6 +222,13 @@ import {
 // TYPES
 // =============================================================================
 
+// Context for explicit dependency passing to session generation (fixes scope bug)
+type AdaptiveSessionContext = {
+  athleteCalibration: ReturnType<typeof getAthleteCalibration>
+  onboardingProfile: ReturnType<typeof getOnboardingProfile>
+  recoverySignal: ReturnType<typeof calculateRecoverySignal>
+}
+
 export interface AdaptiveProgramInputs {
   primaryGoal: PrimaryGoal
   experienceLevel: ExperienceLevel
@@ -1053,6 +1060,18 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
   const repetitionJustifications = generateRepetitionJustifications(sessionIntents)
   
   // Generate each session with variety info
+  // Build context object for session generation (explicit dependency passing)
+  const sessionContext: AdaptiveSessionContext = {
+    athleteCalibration,
+    onboardingProfile,
+    recoverySignal,
+  }
+  console.log('[generateAdaptiveProgram] Passing context to sessions:', {
+    hasAthleteCalibration: !!athleteCalibration,
+    hasOnboardingProfile: !!onboardingProfile,
+    hasRecoverySignal: !!recoverySignal,
+  })
+  
   const sessions: AdaptiveSession[] = structure.days.map((day, index) => {
     const intent = sessionIntents[index]
     const session = generateAdaptiveSession(
@@ -1061,7 +1080,8 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
       experienceLevel,
       equipment,
       sessionLength,
-      constraintInsight.hasInsight ? constraintInsight.label : undefined
+      constraintInsight.hasInsight ? constraintInsight.label : undefined,
+      sessionContext
     )
     
     // Attach session intent and variety info
@@ -1924,8 +1944,20 @@ function generateAdaptiveSession(
   experienceLevel: ExperienceLevel,
   equipment: EquipmentType[],
   sessionLength: SessionLength,
-  constraintType?: string
+  constraintType: string | undefined,
+  context: AdaptiveSessionContext
 ): AdaptiveSession {
+  // Destructure context to get explicit dependencies (fixes scope bug)
+  const { athleteCalibration, recoverySignal } = context
+  console.log('[generateAdaptiveSession] Context received:', {
+    hasAthleteCalibration: !!athleteCalibration,
+    hasRecoverySignal: !!recoverySignal,
+  })
+  
+  // Safe fallbacks for calibration subfields
+  const fatigueSensitivity = athleteCalibration?.fatigueSensitivity ?? 'moderate'
+  const sessionCapacity = athleteCalibration?.sessionCapacity ?? 'standard'
+  const enduranceCompatibility = athleteCalibration?.enduranceCompatibility ?? 'moderate'
   // Select exercises
   const selection = selectExercisesForSession({
     day,
@@ -1977,27 +2009,28 @@ function generateAdaptiveSession(
         ? 'moderate' as const
         : 'low' as const
 
-    // Select endurance block
+    // Select endurance block (using local safe variables)
+    const currentFatigueScore = recoverySignal?.level === 'red' ? 80 : recoverySignal?.level === 'yellow' ? 60 : 40
     const enduranceResult = selectEnduranceBlock({
       primaryGoal,
       sessionLength,
-      sessionCapacity: athleteCalibration.sessionCapacity,
-      enduranceCompatibility: athleteCalibration.enduranceCompatibility,
-      fatigueSensitivity: athleteCalibration.fatigueSensitivity,
-      currentFatigueScore: recoverySignal.level === 'red' ? 80 : recoverySignal.level === 'yellow' ? 60 : 40,
+      sessionCapacity,
+      enduranceCompatibility,
+      fatigueSensitivity,
+      currentFatigueScore,
       sessionNeuralDemand,
       timeRemainingMinutes: sessionTimeFit.recommendedDuration,
       availableEquipment: equipment,
     })
 
-    // Generate the finisher if needed
+    // Generate the finisher if needed (using local safe variables)
     let finisher: GeneratedFinisher | undefined
     if (enduranceResult.shouldIncludeEndurance && enduranceResult.blockType) {
       // Adjust for fatigue
       const fatigueAdjustment = adjustBlockForFatigue(
         enduranceResult.duration,
-        recoverySignal.level === 'red' ? 80 : recoverySignal.level === 'yellow' ? 60 : 40,
-        athleteCalibration.fatigueSensitivity
+        currentFatigueScore,
+        fatigueSensitivity
       )
       
       if (!fatigueAdjustment.shouldSkip) {
@@ -2005,7 +2038,7 @@ function generateAdaptiveSession(
           enduranceResult.blockType,
           fatigueAdjustment.adjustedDuration,
           equipment,
-          athleteCalibration.fatigueSensitivity
+          fatigueSensitivity
         )
       }
     }
@@ -2017,13 +2050,13 @@ function generateAdaptiveSession(
       focusLabel: day.focusLabel,
       isPrimary: day.isPrimary,
       rationale,
-// SAFETY: Ensure adapted arrays are valid before passing to mapper
+// SAFETY: Ensure adapted arrays are valid before passing to mapper (using local safe variables)
 exercises: mapToAdaptiveExercises(
       Array.isArray(adaptedMain?.adapted) ? adaptedMain.adapted : [], 
       primaryGoal, 
       sessionLength, 
-      athleteCalibration.fatigueSensitivity,
-      recoverySignal.level === 'red' ? 80 : recoverySignal.level === 'yellow' ? 60 : 40
+      fatigueSensitivity,
+      currentFatigueScore
     ),
     warmup: mapToAdaptiveExercises(Array.isArray(adaptedWarmup?.adapted) ? adaptedWarmup.adapted : [], primaryGoal, sessionLength),
     cooldown: mapToAdaptiveExercises(Array.isArray(adaptedCooldown?.adapted) ? adaptedCooldown.adapted : [], primaryGoal, sessionLength),

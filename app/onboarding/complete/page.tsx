@@ -1,5 +1,10 @@
 'use client'
 
+// Module-safe init check - this logs at import time to confirm no import-time crashes
+if (typeof window !== 'undefined') {
+  console.log('[OnboardingComplete] Module loaded successfully')
+}
+
 /**
  * Onboarding Complete Page
  * 
@@ -410,13 +415,13 @@ export default function OnboardingCompletePage() {
                     <div className="flex items-center gap-1.5">
                       <span className="text-sm text-[#A4ACB8]">Strength</span>
                       <span className="text-sm text-[#E6E9EF] font-medium">
-                        {typeof readiness.strengthReadiness === 'number' ? readiness.strengthReadiness : 0}%
+                        {typeof readiness.strengthPotentialScore === 'number' ? readiness.strengthPotentialScore : 50}%
                       </span>
                     </div>
                     <div className="flex items-center gap-1.5">
                       <span className="text-sm text-[#A4ACB8]">Skill</span>
                       <span className="text-sm text-[#E6E9EF] font-medium">
-                        {typeof readiness.skillReadiness === 'number' ? readiness.skillReadiness : 0}%
+                        {typeof readiness.skillAdaptationScore === 'number' ? readiness.skillAdaptationScore : 50}%
                       </span>
                     </div>
                   </div>

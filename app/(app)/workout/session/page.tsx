@@ -272,10 +272,11 @@ function WorkoutSessionContent() {
           return
         }
         
-        console.log('[workout/session] initializing real workout mode')
+        console.log('[workout/session] safe route loaded - initializing real workout mode')
         
         // LAZY import and resolve program state
         const { hasUsableProgram, adaptiveProgram } = await resolveProgramStateLazily()
+        console.log('[workout/session] program state resolved', { hasUsableProgram, hasAdaptiveProgram: !!adaptiveProgram })
         
         if (!mounted) return
         
@@ -329,6 +330,10 @@ function WorkoutSessionContent() {
         }
         
         if (!normalizedSession || !isRunnableSession(normalizedSession)) {
+          console.log('[workout/session] normalized session invalid', { 
+            hasNormalized: !!normalizedSession, 
+            isRunnable: normalizedSession ? isRunnableSession(normalizedSession) : false 
+          })
           setError('This workout session is not properly configured.')
           setLoading(false)
           return

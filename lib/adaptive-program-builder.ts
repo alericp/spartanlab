@@ -801,6 +801,13 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
   // Get athlete calibration from onboarding
   const athleteCalibration = getAthleteCalibration()
   const onboardingProfile = getOnboardingProfile()
+  
+  // Resolve athlete ID for optional side effects (constraint history, analytics)
+  // This is best-effort - program generation must succeed even without a valid ID
+  const profile = getAthleteProfile()
+  const resolvedAthleteId: string | null = profile?.userId || onboardingProfile?.userId || null
+  console.log('[program-gen] resolvedAthleteId:', resolvedAthleteId ? 'present' : 'null')
+  
   const trainingOutcome = onboardingProfile?.primaryTrainingOutcome || 'general_fitness'
   const trainingPath = onboardingProfile?.trainingPathType || 'hybrid'
   const workoutDuration = onboardingProfile?.workoutDurationPreference || 'medium'
@@ -1252,10 +1259,12 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
     constraintInterventions = [intervention]
   }
   
-  // Record constraint detection in history (async, non-blocking)
-  if (athleteId && constraintInsight.hasInsight) {
+  // Record constraint detection in history (async, non-blocking, best-effort)
+  // Uses resolvedAthleteId - skipped if no valid athlete ID exists
+  if (resolvedAthleteId && constraintInsight.hasInsight) {
+    console.log('[program-gen] recording constraint history for athlete')
     recordConstraintHistory(
-      athleteId,
+      resolvedAthleteId,
       primaryGoal,
       {
         category: constraintInsight.focus || 'none',
@@ -1263,20 +1272,24 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
         indicatorMetrics: [],
         isPrimaryLimiter: true,
       } as any
-    ).catch(err => console.error('Failed to record constraint history:', err))
+    ).catch(err => console.error('[program-gen] Failed to record constraint history:', err))
+  } else if (!resolvedAthleteId) {
+    console.log('[program-gen] skipping constraint history - no athlete ID')
   }
   
-  // Fetch constraint improvement history for display (async)
+  // Fetch constraint improvement history for display (async, best-effort)
   let constraintImprovementData: any = undefined
-  if (athleteId) {
-    calculateConstraintImprovement(athleteId, primaryGoal, 6)
+  if (resolvedAthleteId) {
+    calculateConstraintImprovement(resolvedAthleteId, primaryGoal, 6)
       .then(improvements => {
         constraintImprovementData = {
           improvingConstraints: improvements.filter(c => c.trend === 'improving'),
           stableConstraints: improvements.filter(c => c.trend === 'stable'),
         }
       })
-      .catch(err => console.error('Failed to fetch constraint improvements:', err))
+      .catch(err => console.error('[program-gen] Failed to fetch constraint improvements:', err))
+  } else {
+    console.log('[program-gen] skipping constraint improvement lookup - no athlete ID')
   }
   
   // Generate program rationale
@@ -1287,6 +1300,8 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
     recoverySignal.level,
     equipmentProfile
   )
+  
+  console.log('[program-gen] generation succeeded', { sessionCount: sessions.length, primaryGoal })
   
   return {
     id: `adaptive-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,

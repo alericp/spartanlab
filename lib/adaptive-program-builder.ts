@@ -804,7 +804,7 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
   
   // Resolve athlete ID for optional side effects (constraint history, analytics)
   // This is best-effort - program generation must succeed even without a valid ID
-  const profile = getAthleteProfile()
+  // NOTE: Uses `profile` already declared above at function start
   const resolvedAthleteId: string | null = profile?.userId || onboardingProfile?.userId || null
   console.log('[program-gen] resolvedAthleteId:', resolvedAthleteId ? 'present' : 'null')
   

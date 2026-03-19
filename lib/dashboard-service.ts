@@ -442,14 +442,26 @@ export interface DashboardUserState {
   hasRealStrengthRecords: boolean
   /** User has real skill sessions (not seeded) */
   hasRealSkillSessions: boolean
+  /** Program state is trusted (not just an object in storage) */
+  hasTrustedProgramState: boolean
+  /** Performance data is trusted (enough real data for metrics) */
+  hasTrustedPerformanceData: boolean
   /** User is in pre-program state (onboarding done but no program yet) */
   isPreProgramState: boolean
   /** User is in pre-workout state (program exists but no workouts logged) */
   isPreWorkoutState: boolean
+  /** User is in early-program state (has program but < 3 workouts) */
+  isEarlyProgramState: boolean
+  /** User is in mature training state (enough data for full dashboard) */
+  isMatureTrainingState: boolean
   /** User has meaningful real data (trusted for dashboard) */
   hasMeaningfulRealData: boolean
   /** Total workout count */
   workoutCount: number
+  /** Trusted workout count (validated real workouts only) */
+  trustedWorkoutCount: number
+  /** Data confidence level for dashboard display decisions */
+  dataConfidence: 'none' | 'low' | 'medium' | 'high'
   /** Debug: diagnostic state label */
   stateLabel: 'new-user' | 'pre-program' | 'pre-workout' | 'active-trainer'
 }
@@ -467,29 +479,54 @@ export function getDashboardUserState(): DashboardUserState {
     const hasOnboardingProfile = !!(onboardingProfile && onboardingProfile.primaryGoal)
     
     // Get program state
-    const { hasUsableWorkoutProgram } = getProgramState()
+    const programState = getProgramState()
+    const hasUsableWorkoutProgram = programState.hasUsableWorkoutProgram
     
-    // Get workout logs
+    // Get workout logs - validate they look like real workout data
     const workoutLogs = getWorkoutLogs()
-    const hasRealWorkoutLogs = workoutLogs.length > 0
+    const trustedWorkouts = workoutLogs.filter(log => isTrustedWorkoutLog(log))
+    const hasRealWorkoutLogs = trustedWorkouts.length > 0
     const workoutCount = workoutLogs.length
+    const trustedWorkoutCount = trustedWorkouts.length
     
-    // Get strength records - filter for real user records (not seeded)
+    // Get strength records - validate they look like real records
     const strengthRecords = getStrengthRecords()
-    // Seeded data has specific patterns we can detect
-    const hasRealStrengthRecords = strengthRecords.length > 0
+    const trustedStrengthRecords = strengthRecords.filter(rec => isTrustedStrengthRecord(rec))
+    const hasRealStrengthRecords = trustedStrengthRecords.length > 0
     
-    // Get skill sessions
+    // Get skill sessions - validate they look like real sessions
     const skillSessions = getSkillSessions()
-    const hasRealSkillSessions = skillSessions.length > 0
+    const trustedSkillSessions = skillSessions.filter(sess => isTrustedSkillSession(sess))
+    const hasRealSkillSessions = trustedSkillSessions.length > 0
     
-    // Determine state
+    // Determine program trust state
+    const hasTrustedProgramState = hasUsableWorkoutProgram && 
+      programState.sessionCount > 0 && 
+      !!programState.adaptiveProgram
+    
+    // Determine performance data trust
+    // Requires real workouts to trust performance metrics
+    const hasTrustedPerformanceData = trustedWorkoutCount >= 3
+    
+    // Determine state phases
     const isPreProgramState = hasOnboardingProfile && !hasUsableWorkoutProgram
     const isPreWorkoutState = hasUsableWorkoutProgram && !hasRealWorkoutLogs
+    const isEarlyProgramState = hasUsableWorkoutProgram && hasRealWorkoutLogs && trustedWorkoutCount < 3
+    const isMatureTrainingState = trustedWorkoutCount >= 3
     
     // Meaningful real data = has real workouts OR (has program AND has real sessions/records)
     const hasMeaningfulRealData = hasRealWorkoutLogs || 
       (hasUsableWorkoutProgram && (hasRealSkillSessions || hasRealStrengthRecords))
+    
+    // Compute data confidence level
+    let dataConfidence: DashboardUserState['dataConfidence'] = 'none'
+    if (trustedWorkoutCount >= 10) {
+      dataConfidence = 'high'
+    } else if (trustedWorkoutCount >= 3) {
+      dataConfidence = 'medium'
+    } else if (trustedWorkoutCount >= 1 || hasUsableWorkoutProgram) {
+      dataConfidence = 'low'
+    }
     
     // Determine state label
     let stateLabel: DashboardUserState['stateLabel'] = 'new-user'
@@ -501,7 +538,15 @@ export function getDashboardUserState(): DashboardUserState {
       stateLabel = 'pre-program'
     }
     
-    console.log('[DashboardUserState]', { stateLabel, workoutCount, hasUsableWorkoutProgram, hasOnboardingProfile })
+    console.log('[dashboard-truth]', { 
+      stateLabel, 
+      workoutCount, 
+      trustedWorkoutCount,
+      dataConfidence,
+      hasUsableWorkoutProgram, 
+      hasOnboardingProfile,
+      isMatureTrainingState,
+    })
     
     return {
       hasOnboardingProfile,
@@ -509,25 +554,117 @@ export function getDashboardUserState(): DashboardUserState {
       hasRealWorkoutLogs,
       hasRealStrengthRecords,
       hasRealSkillSessions,
+      hasTrustedProgramState,
+      hasTrustedPerformanceData,
       isPreProgramState,
       isPreWorkoutState,
+      isEarlyProgramState,
+      isMatureTrainingState,
       hasMeaningfulRealData,
       workoutCount,
+      trustedWorkoutCount,
+      dataConfidence,
       stateLabel,
     }
   } catch (err) {
-    console.error('[DashboardUserState] Error:', err)
+    console.error('[dashboard-truth] Error:', err)
     return {
       hasOnboardingProfile: false,
       hasUsableProgram: false,
       hasRealWorkoutLogs: false,
       hasRealStrengthRecords: false,
       hasRealSkillSessions: false,
+      hasTrustedProgramState: false,
+      hasTrustedPerformanceData: false,
       isPreProgramState: false,
       isPreWorkoutState: false,
+      isEarlyProgramState: false,
+      isMatureTrainingState: false,
       hasMeaningfulRealData: false,
       workoutCount: 0,
+      trustedWorkoutCount: 0,
+      dataConfidence: 'none',
       stateLabel: 'new-user',
     }
+  }
+}
+
+// =============================================================================
+// TRUSTED DATA VALIDATORS
+// Narrow, deterministic checks for real user data vs seeded/debug data
+// =============================================================================
+
+/**
+ * Check if a workout log appears to be real user data
+ * Returns true for logs that have expected structure and completion indicators
+ */
+function isTrustedWorkoutLog(log: ReturnType<typeof getWorkoutLogs>[number]): boolean {
+  try {
+    // Must have basic required fields
+    if (!log.id || !log.sessionDate || !log.createdAt) return false
+    
+    // Must have valid session date within reasonable range (not from the future or ancient past)
+    const sessionDate = new Date(log.sessionDate)
+    const now = new Date()
+    const oneYearAgo = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000)
+    if (sessionDate > now || sessionDate < oneYearAgo) return false
+    
+    // Must have exercises array (even if empty is technically valid after completion)
+    if (!Array.isArray(log.exercises)) return false
+    
+    // If it has duration, must be reasonable (1-300 minutes)
+    if (log.durationMinutes && (log.durationMinutes < 1 || log.durationMinutes > 300)) return false
+    
+    // Passed all checks - appears to be real user data
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Check if a strength record appears to be real user data
+ */
+function isTrustedStrengthRecord(record: ReturnType<typeof getStrengthRecords>[number]): boolean {
+  try {
+    // Must have required fields
+    if (!record.id || !record.exercise || !record.dateLogged) return false
+    
+    // Must have valid date
+    const logDate = new Date(record.dateLogged)
+    const now = new Date()
+    const oneYearAgo = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000)
+    if (logDate > now || logDate < oneYearAgo) return false
+    
+    // Must have reasonable values
+    if (record.reps && (record.reps < 1 || record.reps > 100)) return false
+    if (record.weightAdded && (record.weightAdded < 0 || record.weightAdded > 500)) return false
+    
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Check if a skill session appears to be real user data
+ */
+function isTrustedSkillSession(session: ReturnType<typeof getSkillSessions>[number]): boolean {
+  try {
+    // Must have required fields
+    if (!session.id || !session.skillName || !session.sessionDate) return false
+    
+    // Must have valid date
+    const sessionDate = new Date(session.sessionDate)
+    const now = new Date()
+    const oneYearAgo = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000)
+    if (sessionDate > now || sessionDate < oneYearAgo) return false
+    
+    // Must have sets array
+    if (!Array.isArray(session.sets)) return false
+    
+    return true
+  } catch {
+    return false
   }
 }

@@ -258,19 +258,25 @@ export default function DashboardHeavyContent({
     return <DashboardSkeleton />
   }
 
-  // Use canonical state for gating - isEarlyStageUser means fewer than 3 real workouts
-  const isEarlyStageUser = !userState.hasRealWorkoutLogs || userState.workoutCount < 3
-  // Pre-workout state means program exists but no real workouts yet
+  // Use canonical truth state for gating decisions
+  // isEarlyStageUser: user has workouts but less than 3 trusted ones
+  const isEarlyStageUser = userState.isEarlyProgramState
+  // Pre-workout state: program exists but no real workouts yet
   const isPreWorkoutState = userState.isPreWorkoutState
-  // Show mature widgets only for users with real data
-  const showMatureWidgets = userState.hasMeaningfulRealData && userState.workoutCount >= 3
+  // Show mature widgets only for users with trusted performance data (>= 3 workouts)
+  const showMatureWidgets = userState.isMatureTrainingState
+  // Has any real workout data at all
+  const hasAnyWorkoutData = userState.hasRealWorkoutLogs
   
-  // Diagnostic: log dashboard state for debugging
-  console.log('[dashboard-state]', userState.stateLabel, {
+  // Diagnostic: log dashboard truth state for debugging
+  console.log('[dashboard-truth] render', userState.stateLabel, {
     hasProgram: userState.hasUsableProgram,
     hasWorkouts: userState.hasRealWorkoutLogs,
-    workoutCount: userState.workoutCount,
+    trustedWorkoutCount: userState.trustedWorkoutCount,
+    dataConfidence: userState.dataConfidence,
     showMatureWidgets,
+    isPreWorkoutState,
+    isEarlyStageUser,
   })
   const safeProgressOverview = progressOverview && typeof progressOverview === 'object' ? progressOverview : null
   const safeSkills = safeProgressOverview && Array.isArray(safeProgressOverview.skills) ? safeProgressOverview.skills : []
@@ -292,7 +298,8 @@ export default function DashboardHeavyContent({
             <NextWorkoutCard />
           </SafeWidget>
           
-          {unseenMilestones.length > 0 && (
+          {/* Only show milestone notifications for users with real workout data */}
+          {hasAnyWorkoutData && unseenMilestones.length > 0 && (
             <div className="space-y-2">
               {unseenMilestones.slice(0, 2).map(milestone => (
                 <MilestoneNotificationCard 
@@ -309,8 +316,8 @@ export default function DashboardHeavyContent({
         </>
       )}
       
-      {/* SECTION: TRAINING CONSISTENCY */}
-      {ENABLE_SECTION_CONSISTENCY && (
+      {/* SECTION: TRAINING CONSISTENCY - Only show when user has at least one real workout */}
+      {ENABLE_SECTION_CONSISTENCY && hasAnyWorkoutData && (
         <>
           <SafeWidget name="TrainingConsistencyCard">
             <TrainingConsistencyCard />
@@ -361,8 +368,8 @@ export default function DashboardHeavyContent({
         </>
       )}
       
-      {/* SECTION: SKILL PROGRESS - Only show if user has real workout data or skill sessions */}
-      {ENABLE_SECTION_SKILL_PROGRESS && userState.hasRealWorkoutLogs && safeSkills.filter(s => s && (s.progressPercent > 0 || s.sessionsThisMonth > 0)).length > 0 && (
+      {/* SECTION: SKILL PROGRESS - Only show if user has real workout data and actual skill progress */}
+      {ENABLE_SECTION_SKILL_PROGRESS && hasAnyWorkoutData && safeSkills.filter(s => s && (s.progressPercent > 0 || s.sessionsThisMonth > 0)).length > 0 && (
         <>
           <Section id="skill-progress" priority="primary">
             <SectionHeader 
@@ -429,7 +436,7 @@ export default function DashboardHeavyContent({
       )}
       
       {/* SECTION: ACHIEVEMENTS - Only show if user has real workout data */}
-      {ENABLE_SECTION_ACHIEVEMENTS && userState.hasRealWorkoutLogs && (
+      {ENABLE_SECTION_ACHIEVEMENTS && hasAnyWorkoutData && (
         <SafeWidget name="AchievementsCard">
           <AchievementsCard maxDisplay={isEarlyStageUser ? 3 : 6} />
         </SafeWidget>
@@ -455,8 +462,8 @@ export default function DashboardHeavyContent({
         </SafeWidget>
       )}
       
-      {/* SECTION: GOAL PROJECTIONS - Only show for users with real workout data */}
-      {ENABLE_SECTION_GOAL_PROJECTIONS && nextMilestone && userState.hasRealWorkoutLogs && (
+      {/* SECTION: GOAL PROJECTIONS - Only show for users with trusted performance data */}
+      {ENABLE_SECTION_GOAL_PROJECTIONS && nextMilestone && showMatureWidgets && (
         <>
           <Section id="goal-projections" priority="secondary">
             <SectionHeader 
@@ -495,8 +502,8 @@ export default function DashboardHeavyContent({
         </>
       )}
 
-      {/* SECTION: DETAILED INSIGHTS - Only show for users with real workout data */}
-      {ENABLE_SECTION_DETAILED_INSIGHTS && userState.hasRealWorkoutLogs && (
+      {/* SECTION: DETAILED INSIGHTS - Only show for users with trusted performance data */}
+      {ENABLE_SECTION_DETAILED_INSIGHTS && showMatureWidgets && (
         <Section id="training-insights" priority="secondary">
           <SectionHeader 
             title="Detailed Analysis"
@@ -540,8 +547,8 @@ export default function DashboardHeavyContent({
         </Section>
       )}
 
-      {/* SECTION: STRENGTH PROGRESS - Only show for users with real workout data */}
-      {ENABLE_SECTION_STRENGTH_PROGRESS && userState.hasRealWorkoutLogs && safeStrength.filter(s => s && s.currentBest > 0).length > 0 && (
+      {/* SECTION: STRENGTH PROGRESS - Only show for users with real workout data and actual strength records */}
+      {ENABLE_SECTION_STRENGTH_PROGRESS && hasAnyWorkoutData && safeStrength.filter(s => s && s.currentBest > 0).length > 0 && (
         <SafeWidget name="StrengthProgressSection" hideOnError>
           <div className="space-y-3">
             <div className="flex items-center justify-between">
@@ -563,8 +570,8 @@ export default function DashboardHeavyContent({
         </SafeWidget>
       )}
       
-      {/* SECTION: PROGRESS TRACKING - Only show for users with real workout data */}
-      {ENABLE_SECTION_PROGRESS_TRACKING && userState.hasRealWorkoutLogs && (
+      {/* SECTION: PROGRESS TRACKING - Only show for users with trusted performance data */}
+      {ENABLE_SECTION_PROGRESS_TRACKING && showMatureWidgets && (
         <>
           <Section id="progress-tracking" priority="secondary">
             <SectionHeader 
@@ -590,8 +597,8 @@ export default function DashboardHeavyContent({
         </>
       )}
       
-      {/* SECTION: PERFORMANCE OVERVIEW - Only show for users with real workout data */}
-      {ENABLE_SECTION_PERFORMANCE_OVERVIEW && userState.hasRealWorkoutLogs && (
+      {/* SECTION: PERFORMANCE OVERVIEW - Only show for users with trusted performance data */}
+      {ENABLE_SECTION_PERFORMANCE_OVERVIEW && showMatureWidgets && (
         <div className="grid gap-4 md:grid-cols-2">
           {spartanScore && (
             <SafeWidget name="SpartanScoreCard" hideOnError>
@@ -605,11 +612,11 @@ export default function DashboardHeavyContent({
         </div>
       )}
 
-      {/* SECTION: QUICK ACTIONS - Gate mature widgets for users with real workout data */}
+      {/* SECTION: QUICK ACTIONS - Gate mature widgets for users with trusted performance data */}
       {ENABLE_SECTION_QUICK_ACTIONS && (
         <>
-          {/* Only show Training Hub with mature data surfaces when user has real workouts */}
-          {userState.hasRealWorkoutLogs && (
+          {/* Only show Training Hub with mature data surfaces when user has mature training state */}
+          {showMatureWidgets && (
             <Section id="quick-actions" priority="tertiary">
               <SectionHeader 
                 title="Training Hub"
@@ -634,7 +641,7 @@ export default function DashboardHeavyContent({
           )}
           
           {/* Show session counter only when user has real workout data */}
-          {userState.hasRealWorkoutLogs && (
+          {hasAnyWorkoutData && (
             <div className="sm:hidden flex flex-col items-center gap-3 pt-4 pb-8">
               <SafeWidget name="SessionCounter" hideOnError>
                 <SessionCounter />
@@ -649,7 +656,7 @@ export default function DashboardHeavyContent({
       )}
       
       {/* SECTION: NOTIFICATIONS - Only show for users with real workout data */}
-      {ENABLE_SECTION_NOTIFICATIONS && userState.hasRealWorkoutLogs && (
+      {ENABLE_SECTION_NOTIFICATIONS && hasAnyWorkoutData && (
         <>
           <SafeWidget name="AchievementNotification" hideOnError>
             <AchievementNotification />

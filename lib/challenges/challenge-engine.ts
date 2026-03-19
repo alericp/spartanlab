@@ -211,8 +211,18 @@ function isDateInPeriod(date: string, startDate: string, endDate: string): boole
   return d >= startDate && d <= endDate
 }
 
+// Filter to only trusted workouts - excludes demo/seed/untrusted data
+function getTrustedWorkouts() {
+  return getWorkoutLogs().filter(log => {
+    // Reject demo workouts
+    if (log.sourceRoute === 'demo' || (log as any).isDemo === true) return false
+    // Only include explicitly trusted logs or logs without the flag (legacy data)
+    return log.trusted !== false
+  })
+}
+
 function calculateMetrics(): ChallengeMetrics {
-  const workouts = getWorkoutLogs()
+  const workouts = getTrustedWorkouts()
   const skillSessions = getSkillSessions()
   const streakData = calculateTrainingStreak()
   const strengthRecords = getStrengthRecords()
@@ -369,8 +379,8 @@ export function evaluateChallengeProgress(challenge: Challenge): number {
     case 'training_minutes':
       return metrics.trainingMinutesInPeriod[periodKey] || 0
     case 'exercise_count':
-      // For exercise count, sum all exercises across workouts
-      const workouts = getWorkoutLogs()
+      // For exercise count, sum all exercises across trusted workouts
+      const workouts = getTrustedWorkouts()
       let exerciseCount = 0
       workouts.forEach(workout => {
         const [start, end] = periodKey.split('_')

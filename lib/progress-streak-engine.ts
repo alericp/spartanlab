@@ -120,12 +120,22 @@ function calculateDaysDifference(date1: string, date2: string): number {
   return Math.floor(diffTime / (1000 * 60 * 60 * 24))
 }
 
+// Filter to only trusted workouts - excludes demo/seed/untrusted data
+function getTrustedWorkouts() {
+  return getWorkoutLogs().filter(log => {
+    // Reject demo workouts
+    if (log.sourceRoute === 'demo' || (log as any).isDemo === true) return false
+    // Only include explicitly trusted logs or logs without the flag (legacy data)
+    return log.trusted !== false
+  })
+}
+
 /**
- * Calculate training streak from workout logs
- * A streak continues if you train on consecutive days
- */
+* Calculate training streak from workout logs
+* A streak continues if you train on consecutive days
+*/
 export function calculateTrainingStreak(): TrainingStreak {
-  const logs = getWorkoutLogs()
+  const logs = getTrustedWorkouts()
   const storedData = getStoredStreakData()
   
   if (logs.length === 0) {

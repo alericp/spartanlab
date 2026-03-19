@@ -63,9 +63,19 @@ function getMostCommonFocus(logs: WorkoutLog[]): FocusArea | null {
   return mostCommon
 }
 
+// Filter to only trusted workouts - excludes demo/seed/untrusted data
+function getTrustedWorkouts() {
+  return getWorkoutLogs().filter(log => {
+    // Reject demo workouts
+    if (log.sourceRoute === 'demo' || (log as any).isDemo === true) return false
+    // Only include explicitly trusted logs or logs without the flag (legacy data)
+    return log.trusted !== false
+  })
+}
+
 // Get complete workout analytics
 export function getWorkoutAnalytics(): WorkoutAnalytics {
-  const allLogs = getWorkoutLogs()
+  const allLogs = getTrustedWorkouts()
   const weekLogs = getWorkoutsThisWeek(allLogs)
   const latestWorkout = getLatestWorkout()
   

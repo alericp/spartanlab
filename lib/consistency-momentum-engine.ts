@@ -653,11 +653,21 @@ function getHabitTip(state: ConsistencyState, metrics: ConsistencyMetrics): stri
 // MAIN EXPORTS
 // =============================================================================
 
+// Filter to only trusted workouts - excludes demo/seed/untrusted data
+function getTrustedWorkouts() {
+  return getWorkoutLogs().filter(log => {
+    // Reject demo workouts
+    if (log.sourceRoute === 'demo' || (log as any).isDemo === true) return false
+    // Only include explicitly trusted logs or logs without the flag (legacy data)
+    return log.trusted !== false
+  })
+}
+
 /**
  * Get the current consistency status for the user
  */
 export function getConsistencyStatus(): ConsistencyStatus {
-  const logs = getWorkoutLogs()
+  const logs = getTrustedWorkouts()
   const storedData = getStoredConsistencyData()
   const momentum = getTrainingMomentum()
   const readiness = getReadinessAssessment()
@@ -694,7 +704,7 @@ export function getConsistencyStatus(): ConsistencyStatus {
  * Get just the comeback workout configuration
  */
 export function getComebackWorkoutConfig(): ComebackWorkoutConfig {
-  const logs = getWorkoutLogs()
+  const logs = getTrustedWorkouts()
   const storedData = getStoredConsistencyData()
   const metrics = calculateConsistencyMetrics(logs, storedData.targetFrequency)
   return calculateComebackConfig(metrics)

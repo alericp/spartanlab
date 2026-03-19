@@ -88,27 +88,45 @@ function isBrowser(): boolean {
   return typeof window !== 'undefined'
 }
 
-// Get current user (preview mode always returns mock user)
+// Get current user
+// NOTE: In production, this should be replaced with Clerk auth user
+// For now, return a placeholder that doesn't leak preview data
 export function getCurrentUser(): User {
-  return PREVIEW_USER
+  // This is a legacy function - real user data comes from Clerk
+  // Return a safe placeholder that indicates no preview user
+  return {
+    id: 'awaiting-auth',
+    email: '',
+    username: 'User',
+    subscriptionTier: 'free',
+    createdAt: new Date().toISOString(),
+  }
 }
 
 // Get athlete profile
-export function getAthleteProfile(): AthleteProfile {
-  if (!isBrowser()) return DEFAULT_PROFILE
+// IMPORTANT: For real signed-in users, returns null if no profile exists
+// This prevents preview/default data from leaking into real user state
+export function getAthleteProfile(): AthleteProfile | null {
+  if (!isBrowser()) return null
   
   const stored = localStorage.getItem(STORAGE_KEYS.profile)
   if (stored) {
     try {
-      return JSON.parse(stored)
+      const parsed = JSON.parse(stored)
+      // [TruthState] Reject preview/seed data for real users
+      if (parsed.id === 'preview-profile' || parsed.userId === 'preview-user') {
+        console.log('[TruthState] Rejected preview profile in getAthleteProfile')
+        return null
+      }
+      return parsed
     } catch {
-      return DEFAULT_PROFILE
+      return null
     }
   }
   
-  // Initialize with default
-  localStorage.setItem(STORAGE_KEYS.profile, JSON.stringify(DEFAULT_PROFILE))
-  return DEFAULT_PROFILE
+  // DO NOT auto-initialize with default - return null for new real users
+  // This forces proper onboarding flow
+  return null
 }
 
 // Save athlete profile

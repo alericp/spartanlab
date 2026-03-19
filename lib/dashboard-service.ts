@@ -101,11 +101,33 @@ export interface RecentActivity {
   timestamp: string
 }
 
+// Safe empty profile for when no profile exists
+const EMPTY_PROFILE: AthleteProfile = {
+  id: '',
+  userId: '',
+  sex: null,
+  height: null,
+  heightUnit: 'inches',
+  bodyweight: null,
+  weightUnit: 'lbs',
+  experienceLevel: 'beginner',
+  trainingDaysPerWeek: 0,
+  sessionLengthMinutes: 0,
+  primaryGoal: null,
+  equipmentAvailable: [],
+  onboardingComplete: false,
+  createdAt: new Date().toISOString(),
+}
+
 // Get complete dashboard overview
+// SAFE: Returns empty/default values if no profile exists
 export function getDashboardOverview(): DashboardOverview {
+  const profile = getAthleteProfile()
+  
   return {
     user: getCurrentUser(),
-    profile: getAthleteProfile(),
+    // Return empty profile if none exists - dashboard will handle this state
+    profile: profile || EMPTY_PROFILE,
     progressions: getSkillProgressions(),
     strengthRecords: getLatestRecords(),
     latestProgram: getLatestProgram(),
@@ -626,9 +648,15 @@ export function getDashboardUserState(): DashboardUserState {
 /**
  * Check if a workout log appears to be real user data
  * Returns true for logs that have expected structure and completion indicators
+ * Rejects demo/seed/preview data
  */
 function isTrustedWorkoutLog(log: ReturnType<typeof getWorkoutLogs>[number]): boolean {
   try {
+    // PHASE 5: Reject demo/seed workouts explicitly
+    if (log.sourceRoute === 'demo') return false
+    if ((log as any).isDemo === true) return false
+    if (log.trusted === false) return false
+    
     // Must have basic required fields
     if (!log.id || !log.sessionDate || !log.createdAt) return false
     

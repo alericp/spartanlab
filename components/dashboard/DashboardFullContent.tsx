@@ -15,6 +15,7 @@ import {
   DashboardSkeleton 
 } from '@/components/layout'
 import { useAuth } from '@clerk/nextjs'
+import { runClientDataHygiene } from '@/lib/client-data-hygiene'
 
 // =============================================================================
 // DYNAMIC IMPORTS - Bundle-split dashboard components
@@ -46,6 +47,10 @@ export function DashboardFullContent() {
   useEffect(() => {
     setMounted(true)
     console.log('[DashboardFullContent] Mounted, checking first-load state')
+    
+    // PHASE 6: Run one-time client data hygiene to remove stale preview/seed data
+    // This must run BEFORE any data checks to ensure we're reading clean state
+    runClientDataHygiene()
     
     // Check if this is a first-run welcome scenario
     // CRITICAL: Welcome detection happens FIRST and takes priority

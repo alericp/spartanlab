@@ -183,9 +183,19 @@ function getSuggestion(level: MomentumLevel, workouts7d: number, daysSinceLast: 
   }
 }
 
+// Filter to only trusted workouts - excludes demo/seed/untrusted data
+function getTrustedWorkouts() {
+  return getWorkoutLogs().filter(log => {
+    // Reject demo workouts
+    if (log.sourceRoute === 'demo' || (log as any).isDemo === true) return false
+    // Only include explicitly trusted logs or logs without the flag (legacy data)
+    return log.trusted !== false
+  })
+}
+
 // Main function: Calculate Training Momentum
 export function calculateTrainingMomentum(): TrainingMomentum {
-  const logs = getWorkoutLogs()
+  const logs = getTrustedWorkouts()
   
   const workouts7d = getWorkoutsInRange(logs, 7)
   const workouts14d = getWorkoutsInRange(logs, 14)

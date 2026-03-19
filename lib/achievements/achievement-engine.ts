@@ -107,8 +107,18 @@ interface AchievementMetrics {
   balancedWeeks: number // weeks with both push and pull exercises
 }
 
+// Filter to only trusted workouts - excludes demo/seed/untrusted data
+function getTrustedWorkouts() {
+  return getWorkoutLogs().filter(log => {
+    // Reject demo workouts
+    if (log.sourceRoute === 'demo' || (log as any).isDemo === true) return false
+    // Only include explicitly trusted logs or logs without the flag (legacy data)
+    return log.trusted !== false
+  })
+}
+
 function calculateMetrics(): AchievementMetrics {
-  const workouts = getWorkoutLogs()
+  const workouts = getTrustedWorkouts()
   const strengthRecords = getStrengthRecords()
   const personalRecords = getPersonalRecords()
   const skillProgressions = getSkillProgressions()

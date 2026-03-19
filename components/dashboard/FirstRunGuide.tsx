@@ -15,7 +15,7 @@ import {
 } from 'lucide-react'
 import { SpartanIcon } from '@/components/brand/SpartanLogo'
 import { getOnboardingProfile } from '@/lib/athlete-profile'
-import { getLatestAdaptiveProgram } from '@/lib/adaptive-program-builder'
+import { getProgramState } from '@/lib/program-state'
 import { getWorkoutLogs } from '@/lib/workout-log-service'
 
 const FIRST_RUN_KEY = 'spartanlab_first_run_dismissed'
@@ -51,13 +51,13 @@ export function FirstRunGuide() {
       }
     } catch {}
 
-    // Determine completion status
+    // Determine completion status using safe unified state
     const profile = getOnboardingProfile()
-    const program = getLatestAdaptiveProgram()
+    const { hasUsableWorkoutProgram } = getProgramState()
     const logs = getWorkoutLogs()
     
     const hasProfile = profile && profile.primaryGoal
-    const hasProgram = program !== null
+    const hasProgram = hasUsableWorkoutProgram
     const hasWorkout = logs.length > 0
 
     // Build steps with completion status
@@ -244,7 +244,7 @@ export function SetupReminderBanner() {
     setMounted(true)
     
     const profile = getOnboardingProfile()
-    const program = getLatestAdaptiveProgram()
+    const { hasUsableWorkoutProgram } = getProgramState()
     
     if (!profile?.primaryGoal) {
       setNextStep({
@@ -255,7 +255,7 @@ export function SetupReminderBanner() {
         icon: Target,
         isComplete: false,
       })
-    } else if (!program) {
+    } else if (!hasUsableWorkoutProgram) {
       setNextStep({
         id: 'program',
         label: 'Create your training program',

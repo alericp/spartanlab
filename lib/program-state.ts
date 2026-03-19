@@ -129,6 +129,11 @@ export function getProgramState(): ProgramState {
     
     const sessionCount = adaptiveProgram?.sessions?.length || legacyProgram?.trainingDaysPerWeek || 0
     
+    // Minimal diagnostic for debugging post-onboarding state
+    if (!hasUsableWorkoutProgram) {
+      console.log('[ProgramState] No usable workout program found')
+    }
+    
     return {
       hasProgram,
       hasUsableWorkoutProgram,
@@ -137,8 +142,9 @@ export function getProgramState(): ProgramState {
       activeProgram,
       sessionCount,
     }
-  } catch {
+  } catch (err) {
     // Absolute safety: if anything fails, return safe default
+    console.error('[ProgramState] Error in getProgramState:', err)
     return SAFE_DEFAULT_STATE
   }
 }

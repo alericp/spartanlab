@@ -21,7 +21,8 @@ import {
   Dumbbell,
 } from 'lucide-react'
 import Link from 'next/link'
-import { getLatestAdaptiveProgram, type AdaptiveSession, type AdaptiveExercise } from '@/lib/adaptive-program-builder'
+import { type AdaptiveSession, type AdaptiveExercise } from '@/lib/adaptive-program-builder'
+import { getProgramState } from '@/lib/program-state'
 import {
   calculateSessionAdjustment,
   inferWellnessFromRecovery,
@@ -49,12 +50,13 @@ export default function TodaySessionPage() {
   const [mounted, setMounted] = useState(false)
 
   const loadData = useCallback(() => {
-    const program = getLatestAdaptiveProgram()
-    // Safe guard: verify program and sessions array exist before accessing
-    if (!program || !Array.isArray(program.sessions) || program.sessions.length === 0) {
+    // Use safe unified program state
+    const { adaptiveProgram, hasUsableWorkoutProgram } = getProgramState()
+    if (!hasUsableWorkoutProgram || !adaptiveProgram) {
       setCurrentSession(null)
       return
     }
+    const program = adaptiveProgram
     
     // Get today's session (simple: use first incomplete or first session)
     const today = new Date().getDay()

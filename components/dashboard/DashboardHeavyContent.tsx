@@ -264,6 +264,14 @@ export default function DashboardHeavyContent({
   const isPreWorkoutState = userState.isPreWorkoutState
   // Show mature widgets only for users with real data
   const showMatureWidgets = userState.hasMeaningfulRealData && userState.workoutCount >= 3
+  
+  // Diagnostic: log dashboard state for debugging
+  console.log('[dashboard-state]', userState.stateLabel, {
+    hasProgram: userState.hasUsableProgram,
+    hasWorkouts: userState.hasRealWorkoutLogs,
+    workoutCount: userState.workoutCount,
+    showMatureWidgets,
+  })
   const safeProgressOverview = progressOverview && typeof progressOverview === 'object' ? progressOverview : null
   const safeSkills = safeProgressOverview && Array.isArray(safeProgressOverview.skills) ? safeProgressOverview.skills : []
   const safeStrength = safeProgressOverview && Array.isArray(safeProgressOverview.strength) ? safeProgressOverview.strength : []
@@ -316,8 +324,8 @@ export default function DashboardHeavyContent({
         </>
       )}
       
-      {/* SECTION: READINESS + PROGRAM SNAPSHOT */}
-      {ENABLE_SECTION_READINESS && (
+      {/* SECTION: READINESS + PROGRAM SNAPSHOT - Only show with real program and workout data */}
+      {ENABLE_SECTION_READINESS && userState.hasUsableProgram && userState.hasRealWorkoutLogs && (
         <div className="grid gap-4 md:grid-cols-2">
           <SafeWidget name="DailyReadinessCard" hideOnError>
             <DailyReadinessCard compact />
@@ -329,8 +337,8 @@ export default function DashboardHeavyContent({
         </div>
       )}
       
-      {/* SECTION: TRAINING EMPHASIS */}
-      {ENABLE_SECTION_TRAINING_EMPHASIS && (
+      {/* SECTION: TRAINING EMPHASIS - Only show with real program and workout data */}
+      {ENABLE_SECTION_TRAINING_EMPHASIS && userState.hasUsableProgram && userState.hasRealWorkoutLogs && (
         <>
           {trainingMethods && (
             <SafeWidget name="TrainingEmphasis" hideOnError>
@@ -597,40 +605,46 @@ export default function DashboardHeavyContent({
         </div>
       )}
 
-      {/* SECTION: QUICK ACTIONS */}
+      {/* SECTION: QUICK ACTIONS - Gate mature widgets for users with real workout data */}
       {ENABLE_SECTION_QUICK_ACTIONS && (
         <>
-          <Section id="quick-actions" priority="tertiary">
-            <SectionHeader 
-              title="Training Hub"
-              description="Quick actions and performance records"
-              icon={Dumbbell}
-            />
-            
-            <div className="space-y-6">
-              <SafeWidget name="QuickActionsRow" hideOnError>
-                <QuickActionsRow />
-              </SafeWidget>
+          {/* Only show Training Hub with mature data surfaces when user has real workouts */}
+          {userState.hasRealWorkoutLogs && (
+            <Section id="quick-actions" priority="tertiary">
+              <SectionHeader 
+                title="Training Hub"
+                description="Quick actions and performance records"
+                icon={Dumbbell}
+              />
               
-              <SafeWidget name="PerformanceVaultCard" hideOnError>
-                <PerformanceVaultCard />
-              </SafeWidget>
-              
-              <SafeWidget name="ShareProgressSection">
-                <ShareProgressSection />
-              </SafeWidget>
-            </div>
-          </Section>
+              <div className="space-y-6">
+                <SafeWidget name="QuickActionsRow" hideOnError>
+                  <QuickActionsRow />
+                </SafeWidget>
+                
+                <SafeWidget name="PerformanceVaultCard" hideOnError>
+                  <PerformanceVaultCard />
+                </SafeWidget>
+                
+                <SafeWidget name="ShareProgressSection">
+                  <ShareProgressSection />
+                </SafeWidget>
+              </div>
+            </Section>
+          )}
           
-          <div className="sm:hidden flex flex-col items-center gap-3 pt-4 pb-8">
-            <SafeWidget name="SessionCounter" hideOnError>
-              <SessionCounter />
-            </SafeWidget>
-            <TrainingSystemsLink />
-            <HowSpartanLabWorksButton 
-              onOpen={() => setShowIntroduction(true)} 
-            />
-          </div>
+          {/* Show session counter only when user has real workout data */}
+          {userState.hasRealWorkoutLogs && (
+            <div className="sm:hidden flex flex-col items-center gap-3 pt-4 pb-8">
+              <SafeWidget name="SessionCounter" hideOnError>
+                <SessionCounter />
+              </SafeWidget>
+              <TrainingSystemsLink />
+              <HowSpartanLabWorksButton 
+                onOpen={() => setShowIntroduction(true)} 
+              />
+            </div>
+          )}
         </>
       )}
       

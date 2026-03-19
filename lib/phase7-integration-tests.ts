@@ -5,12 +5,12 @@
  * Run this during development to validate Phase 7 implementation
  */
 
-import { calculateCanonicalReadiness, type AthleteReadinessInput } from './lib/readiness/canonical-readiness-engine'
-import { EXERCISE_CLASSIFICATIONS } from './lib/exercise-classification-registry'
-import { PROGRESSION_LADDERS } from './lib/progression-ladders'
-import { SKILL_PREREQUISITE_PROFILES } from './lib/skill-readiness/skillPrerequisiteData'
-import { DOCTRINE_REGISTRY } from './lib/training-doctrine-registry/doctrineRegistry'
-import { generateDoctrineCoverageReport, logCoverageReport, validateDragonFlagIntegration } from './lib/doctrine-coverage-validator'
+import { calculateCanonicalReadiness, type AthleteReadinessInput } from './readiness/canonical-readiness-engine'
+import { EXERCISE_CLASSIFICATIONS } from './exercise-classification-registry'
+import { PROGRESSION_LADDERS } from './progression-ladders'
+import { SKILL_PREREQUISITE_PROFILES } from './skill-readiness/skillPrerequisiteData'
+import { DOCTRINE_REGISTRY } from './training-doctrine-registry/doctrineRegistry'
+import { generateDoctrineCoverageReport, logCoverageReport, validateDragonFlagIntegration } from './doctrine-coverage-validator'
 
 /**
  * Test 1: Dragon Flag Readiness Calculation

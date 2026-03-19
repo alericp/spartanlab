@@ -495,6 +495,47 @@ export const SKILL_SUPPORT_MAPPINGS: Record<SkillCarryover, SkillSupportMapping>
       tendonSensitive: false,
     },
   },
+  
+  dragon_flag: {
+    skillId: 'dragon_flag',
+    displayName: 'Dragon Flag',
+    primaryRequirements: ['anti_extension_core', 'compression_core'],
+    supportPatterns: ['scapular_control', 'vertical_pull'],
+    commonLimiters: [
+      {
+        limiterId: 'dragon_flag_core_strength',
+        description: 'Anti-extension core strength',
+        supportPatterns: ['anti_extension_core'],
+        exerciseIds: ['hollow_body_hold', 'body_lever', 'hanging_leg_raise', 'dragon_flag_tuck'],
+      },
+      {
+        limiterId: 'dragon_flag_lat_engagement',
+        description: 'Lat engagement for stable anchor',
+        supportPatterns: ['vertical_pull', 'scapular_control'],
+        exerciseIds: ['pull_up', 'scapular_pulls', 'bodyweight_row'],
+      },
+      {
+        limiterId: 'dragon_flag_trunk_tension',
+        description: 'Full body tension and stiffness',
+        supportPatterns: ['anti_extension_core', 'compression_core'],
+        exerciseIds: ['hollow_body_rock', 'plank_hold', 'ring_body_saw'],
+      },
+    ],
+    safeAlternatives: ['dragon_flag_tuck', 'hollow_body_hold', 'body_lever'],
+    directSupportExercises: ['dragon_flag_tuck', 'dragon_flag_neg', 'dragon_flag_assisted', 'dragon_flag'],
+    accessorySupportExercises: ['hollow_body_hold', 'hollow_body_rock', 'hanging_leg_raise', 'body_lever', 'toes_to_bar'],
+    prerequisiteExercises: [
+      { exerciseId: 'hollow_body_hold', requirement: '45s hold', isCritical: true },
+      { exerciseId: 'hanging_leg_raise', requirement: '10 reps', isCritical: true },
+      { exerciseId: 'dragon_flag_tuck', requirement: '8 reps', isCritical: true },
+    ],
+    constraints: {
+      maxStraightArmPerSession: 3,
+      restDaysBetweenHeavySessions: 1,
+      preferredFrequencyPerWeek: 3,
+      tendonSensitive: false,
+    },
+  },
 }
 
 // =============================================================================

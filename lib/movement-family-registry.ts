@@ -95,6 +95,7 @@ export type SkillCarryover =
   | 'human_flag'
   | 'one_arm_pull_up'
   | 'one_arm_push_up'
+  | 'dragon_flag'
 
 // =============================================================================
 // EQUIPMENT DEFINITIONS
@@ -947,6 +948,13 @@ export const SKILL_CARRYOVER_METADATA: Record<SkillCarryover, SkillCarryoverMeta
     name: 'One Arm Push-Up',
     primaryFamilies: ['horizontal_push'],
     supportFamilies: ['anti_rotation_core'],
+    keyIntents: ['strength', 'skill'],
+  },
+  dragon_flag: {
+    id: 'dragon_flag',
+    name: 'Dragon Flag',
+    primaryFamilies: ['anti_extension_core', 'compression_core'],
+    supportFamilies: ['scapular_control', 'vertical_pull'],
     keyIntents: ['strength', 'skill'],
   },
 }

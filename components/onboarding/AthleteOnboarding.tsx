@@ -287,9 +287,53 @@ interface OptionButtonProps {
   children: React.ReactNode
   description?: string
   className?: string
+  /**
+   * Content rendering mode:
+   * - "compact": for short numeric/range labels (0, 1–3, 21–25) — centered, no wrapping
+   * - "standard": default behavior with controlled wrapping
+   * - "wrapSafe": for two-word labels that may wrap cleanly (Adv. tuck, One leg)
+   */
+  contentMode?: 'compact' | 'standard' | 'wrapSafe'
 }
 
-function OptionButton({ selected, onClick, children, description, className = '' }: OptionButtonProps) {
+function OptionButton({ selected, onClick, children, description, className = '', contentMode = 'standard' }: OptionButtonProps) {
+  // Compact mode: centered content, no icon slot, no text wrapping
+  if (contentMode === 'compact') {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        data-selected={selected ? 'true' : 'false'}
+        className={`py-2.5 px-2 rounded-lg border text-sm font-medium transition-all duration-150 flex items-center justify-center min-h-[44px] ${
+          selected
+            ? 'bg-[#C1121F]/15 border-[#C1121F] text-[#E6E9EF] ring-1 ring-[#C1121F]/40 shadow-[0_0_0_1px_rgba(193,18,31,0.2)]'
+            : 'bg-[#0F1115] border-[#2B313A] text-[#A4ACB8] hover:border-[#4F6D8A] hover:text-[#E6E9EF]'
+        } ${className}`}
+      >
+        <span className="whitespace-nowrap text-center">{children}</span>
+      </button>
+    )
+  }
+
+  // WrapSafe mode: allows controlled wrapping for multi-word labels
+  if (contentMode === 'wrapSafe') {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        data-selected={selected ? 'true' : 'false'}
+        className={`py-2.5 px-3 rounded-lg border text-sm font-medium transition-all duration-150 flex items-center justify-center text-center min-h-[44px] ${
+          selected
+            ? 'bg-[#C1121F]/15 border-[#C1121F] text-[#E6E9EF] ring-1 ring-[#C1121F]/40 shadow-[0_0_0_1px_rgba(193,18,31,0.2)]'
+            : 'bg-[#0F1115] border-[#2B313A] text-[#A4ACB8] hover:border-[#4F6D8A] hover:text-[#E6E9EF]'
+        } ${className}`}
+      >
+        <span className="leading-tight">{children}</span>
+      </button>
+    )
+  }
+
+  // Standard mode: original behavior with icon slot
   return (
     <button
       type="button"
@@ -306,9 +350,9 @@ function OptionButton({ selected, onClick, children, description, className = ''
         {selected && <Check className="w-4 h-4 text-[#C1121F]" />}
       </span>
       <div className="flex-1 min-w-0">
-        <span className="block break-words">{children}</span>
+        <span className="block">{children}</span>
         {description && (
-          <span className="text-xs text-[#6B7280] block mt-0.5 break-words">{description}</span>
+          <span className="text-xs text-[#6B7280] block mt-0.5">{description}</span>
         )}
       </div>
     </button>
@@ -1447,12 +1491,13 @@ function StrengthBenchmarksSection({ profile, updateProfile }: SectionProps) {
       <div className="space-y-3">
         <label className="text-sm font-medium text-[#A4ACB8]">Current max strict pull-ups</label>
         <p className="text-xs text-[#6B7280] -mt-1">Dead hang to chin over bar, no kipping</p>
-        <div className="grid grid-cols-4 gap-2">
+        <div className="grid grid-cols-4 gap-1.5">
           {pullupOptions.map((cap) => (
             <OptionButton
               key={cap}
               selected={profile.pullUpMax === cap}
               onClick={() => updateProfile({ pullUpMax: cap })}
+              contentMode="compact"
             >
               {PULLUP_LABELS[cap]}
             </OptionButton>
@@ -1472,12 +1517,13 @@ function StrengthBenchmarksSection({ profile, updateProfile }: SectionProps) {
       <div className="space-y-3">
         <label className="text-sm font-medium text-[#A4ACB8]">Current max dips</label>
         <p className="text-xs text-[#6B7280] -mt-1">Parallel bar dips, full depth</p>
-        <div className="grid grid-cols-4 gap-2">
+        <div className="grid grid-cols-4 gap-1.5">
           {dipOptions.map((cap) => (
             <OptionButton
               key={cap}
               selected={profile.dipMax === cap}
               onClick={() => updateProfile({ dipMax: cap })}
+              contentMode="compact"
             >
               {DIP_LABELS[cap]}
             </OptionButton>
@@ -1497,12 +1543,13 @@ function StrengthBenchmarksSection({ profile, updateProfile }: SectionProps) {
       <div className="space-y-3">
         <label className="text-sm font-medium text-[#A4ACB8]">Current max push-ups</label>
         <p className="text-xs text-[#6B7280] -mt-1">Full range, chest to ground</p>
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-3 gap-1.5">
           {pushupOptions.map((cap) => (
             <OptionButton
               key={cap}
               selected={profile.pushUpMax === cap}
               onClick={() => updateProfile({ pushUpMax: cap })}
+              contentMode="compact"
             >
               {PUSHUP_LABELS[cap]}
             </OptionButton>
@@ -1522,12 +1569,13 @@ function StrengthBenchmarksSection({ profile, updateProfile }: SectionProps) {
       <div className="space-y-3">
         <label className="text-sm font-medium text-[#A4ACB8]">Current wall handstand push-ups</label>
         <p className="text-xs text-[#6B7280] -mt-1">Full range against wall</p>
-        <div className="grid grid-cols-5 gap-2">
+        <div className="grid grid-cols-5 gap-1.5">
           {hspuOptions.map((reps) => (
             <OptionButton
               key={reps}
               selected={profile.wallHSPUReps === reps}
               onClick={() => updateProfile({ wallHSPUReps: reps })}
+              contentMode="compact"
             >
               {WALL_HSPU_LABELS[reps]}
             </OptionButton>
@@ -2172,7 +2220,7 @@ function SkillBenchmarksSection({ profile, updateProfile }: SectionProps) {
         <div className="space-y-3">
           <label className="text-sm font-medium text-[#A4ACB8]">Current front lever level</label>
           <p className="text-xs text-[#6B7280] -mt-1">Your current usable progression</p>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-3 gap-1.5">
             {flOptions.map((prog) => (
               <OptionButton
                 key={prog}
@@ -2180,6 +2228,7 @@ function SkillBenchmarksSection({ profile, updateProfile }: SectionProps) {
                 onClick={() => updateProfile({
                   frontLever: { progression: prog, holdSeconds: profile.frontLever?.holdSeconds }
                 })}
+                contentMode="wrapSafe"
               >
                 {FRONT_LEVER_LABELS[prog]}
               </OptionButton>
@@ -2247,7 +2296,7 @@ function SkillBenchmarksSection({ profile, updateProfile }: SectionProps) {
         <div className="space-y-3">
           <label className="text-sm font-medium text-[#A4ACB8]">Current planche level</label>
           <p className="text-xs text-[#6B7280] -mt-1">Your current usable progression</p>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-3 gap-1.5">
             {plancheOptions.map((prog) => (
               <OptionButton
                 key={prog}
@@ -2255,6 +2304,7 @@ function SkillBenchmarksSection({ profile, updateProfile }: SectionProps) {
                 onClick={() => updateProfile({
                   planche: { progression: prog, holdSeconds: profile.planche?.holdSeconds }
                 })}
+                contentMode="wrapSafe"
               >
                 {PLANCHE_LABELS[prog]}
               </OptionButton>
@@ -2321,12 +2371,13 @@ function SkillBenchmarksSection({ profile, updateProfile }: SectionProps) {
       {hasSkill('muscle_up') && (
         <div className="space-y-3">
           <label className="text-sm font-medium text-[#A4ACB8]">Current muscle-up ability</label>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-2 gap-1.5">
             {muOptions.map((level) => (
               <OptionButton
                 key={level}
                 selected={profile.muscleUp === level}
                 onClick={() => updateProfile({ muscleUp: level })}
+                contentMode="wrapSafe"
               >
                 {MUSCLE_UP_LABELS[level]}
               </OptionButton>
@@ -2353,7 +2404,7 @@ function SkillBenchmarksSection({ profile, updateProfile }: SectionProps) {
       {hasSkill('handstand_pushup') && (
         <div className="space-y-3">
           <label className="text-sm font-medium text-[#A4ACB8]">Current HSPU level</label>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-2 gap-1.5">
             {hspuOptions.map((prog) => (
               <OptionButton
                 key={prog}
@@ -2361,6 +2412,7 @@ function SkillBenchmarksSection({ profile, updateProfile }: SectionProps) {
                 onClick={() => updateProfile({
                   hspu: { progression: prog, reps: profile.hspu?.reps }
                 })}
+                contentMode="wrapSafe"
               >
                 {HSPU_LABELS[prog]}
               </OptionButton>
@@ -2387,12 +2439,13 @@ function SkillBenchmarksSection({ profile, updateProfile }: SectionProps) {
       {hasSkill('l_sit') && (
         <div className="space-y-3">
           <label className="text-sm font-medium text-[#A4ACB8]">Current L-sit hold</label>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-3 gap-1.5">
             {lsitOptions.map((hold) => (
               <OptionButton
                 key={hold}
                 selected={profile.lSitHold === hold}
                 onClick={() => updateProfile({ lSitHold: hold })}
+                contentMode="wrapSafe"
               >
                 {LSIT_HOLD_LABELS[hold]}
               </OptionButton>
@@ -2419,12 +2472,13 @@ function SkillBenchmarksSection({ profile, updateProfile }: SectionProps) {
       {hasSkill('v_sit') && (
         <div className="space-y-3">
           <label className="text-sm font-medium text-[#A4ACB8]">Current V-sit hold</label>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-2 gap-1.5">
             {vsitOptions.map((hold) => (
               <OptionButton
                 key={hold}
                 selected={profile.vSitHold === hold}
                 onClick={() => updateProfile({ vSitHold: hold })}
+                contentMode="wrapSafe"
               >
                 {VSIT_HOLD_LABELS[hold]}
               </OptionButton>
@@ -2486,12 +2540,13 @@ function FlexibilityBenchmarksSection({ profile, updateProfile }: SectionProps) 
       {hasGoal('pancake') && (
         <div className="space-y-3">
           <label className="text-sm font-medium text-[#A4ACB8]">Pancake</label>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-3 gap-1.5">
             {flexOptions.map((level) => (
               <OptionButton
                 key={level}
                 selected={profile.pancake?.level === level}
                 onClick={() => updateFlexBenchmark('pancake', level)}
+                contentMode="wrapSafe"
               >
                 {FLEXIBILITY_LEVEL_LABELS[level]}
               </OptionButton>
@@ -2528,12 +2583,13 @@ function FlexibilityBenchmarksSection({ profile, updateProfile }: SectionProps) 
       {hasGoal('toe_touch') && (
         <div className="space-y-3">
           <label className="text-sm font-medium text-[#A4ACB8]">Toe Touch / Forward Fold</label>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-3 gap-1.5">
             {flexOptions.map((level) => (
               <OptionButton
                 key={level}
                 selected={profile.toeTouch?.level === level}
                 onClick={() => updateFlexBenchmark('toeTouch', level)}
+                contentMode="wrapSafe"
               >
                 {FLEXIBILITY_LEVEL_LABELS[level]}
               </OptionButton>
@@ -2554,12 +2610,13 @@ function FlexibilityBenchmarksSection({ profile, updateProfile }: SectionProps) 
       {hasGoal('front_splits') && (
         <div className="space-y-3">
           <label className="text-sm font-medium text-[#A4ACB8]">Front Splits</label>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-3 gap-1.5">
             {flexOptions.map((level) => (
               <OptionButton
                 key={level}
                 selected={profile.frontSplits?.level === level}
                 onClick={() => updateFlexBenchmark('frontSplits', level)}
+                contentMode="wrapSafe"
               >
                 {FLEXIBILITY_LEVEL_LABELS[level]}
               </OptionButton>
@@ -2575,12 +2632,13 @@ function FlexibilityBenchmarksSection({ profile, updateProfile }: SectionProps) 
           {profile.frontSplits?.level !== 'unknown' && (
             <div className="mt-2">
               <label className="text-xs text-[#6B7280]">Training focus</label>
-              <div className="grid grid-cols-3 gap-2 mt-1">
+              <div className="grid grid-cols-3 gap-1.5 mt-1">
                 {(Object.keys(RANGE_INTENT_LABELS) as RangeTrainingIntent[]).map((intent) => (
                   <OptionButton
                     key={intent}
                     selected={profile.frontSplits?.rangeIntent === intent}
                     onClick={() => updateRangeIntent('frontSplits', intent)}
+                    contentMode="wrapSafe"
                   >
                     {RANGE_INTENT_LABELS[intent]}
                   </OptionButton>
@@ -2596,12 +2654,13 @@ function FlexibilityBenchmarksSection({ profile, updateProfile }: SectionProps) 
       {hasGoal('side_splits') && (
         <div className="space-y-3">
           <label className="text-sm font-medium text-[#A4ACB8]">Side Splits</label>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-3 gap-1.5">
             {flexOptions.map((level) => (
               <OptionButton
                 key={level}
                 selected={profile.sideSplits?.level === level}
                 onClick={() => updateFlexBenchmark('sideSplits', level)}
+                contentMode="wrapSafe"
               >
                 {FLEXIBILITY_LEVEL_LABELS[level]}
               </OptionButton>
@@ -2623,6 +2682,7 @@ function FlexibilityBenchmarksSection({ profile, updateProfile }: SectionProps) 
                     key={intent}
                     selected={profile.sideSplits?.rangeIntent === intent}
                     onClick={() => updateRangeIntent('sideSplits', intent)}
+                    contentMode="wrapSafe"
                   >
                     {RANGE_INTENT_LABELS[intent]}
                   </OptionButton>

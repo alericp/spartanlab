@@ -273,6 +273,7 @@ export function generateFirstProgram(): FirstRunResult {
     const program = generateAdaptiveProgram(programInputs)
     
     // Validate generated program has minimum required shape before saving
+    // CRITICAL: Check ALL sessions, not just existence, to prevent downstream crashes
     if (!program || !Array.isArray(program.sessions) || program.sessions.length === 0) {
       console.error('[OnboardingService] Generated program is invalid or has no sessions')
       return {
@@ -283,6 +284,48 @@ export function generateFirstProgram(): FirstRunResult {
         error: 'Generated program is missing sessions',
       }
     }
+    
+    // Validate every session has required structure for downstream readers
+    for (let i = 0; i < program.sessions.length; i++) {
+      const session = program.sessions[i]
+      if (!session || typeof session !== 'object') {
+        console.error(`[OnboardingService] Session ${i} is not a valid object`)
+        return {
+          success: false,
+          program: null,
+          calibration: null,
+          welcomeMessage: 'Program generation produced invalid session data.',
+          error: `Session ${i} is malformed`,
+        }
+      }
+      if (!Array.isArray(session.exercises)) {
+        console.error(`[OnboardingService] Session ${i} has no exercises array`)
+        return {
+          success: false,
+          program: null,
+          calibration: null,
+          welcomeMessage: 'Program generation produced incomplete session data.',
+          error: `Session ${i} is missing exercises array`,
+        }
+      }
+      // Ensure required session fields exist with safe defaults
+      if (typeof session.estimatedMinutes !== 'number') {
+        session.estimatedMinutes = 45 // Safe default
+      }
+      if (typeof session.focusLabel !== 'string' || !session.focusLabel) {
+        session.focusLabel = `Session ${i + 1}`
+      }
+    }
+    
+    // Ensure top-level fields used by downstream UI exist
+    if (typeof program.trainingDaysPerWeek !== 'number') {
+      program.trainingDaysPerWeek = program.sessions.length
+    }
+    if (typeof program.goalLabel !== 'string' || !program.goalLabel) {
+      program.goalLabel = 'Strength Training'
+    }
+    
+    console.log('[OnboardingService] All sessions validated:', program.sessions.length)
     
     // Save program to CANONICAL adaptive storage - this is the source of truth
     // that /program, first-session, and workout/session all read from
@@ -442,8 +485,28 @@ export interface ProgramReasoning {
 
 /**
  * Generate detailed program reasoning based on athlete profile
+ * GUARANTEED: This function NEVER throws - returns safe defaults on error
  */
 export function getProgramReasoning(program: AdaptiveProgram | null): ProgramReasoning {
+  // Safe default to return on any error
+  const SAFE_DEFAULT: ProgramReasoning = {
+    detectedStrength: { label: 'Unknown', detail: null },
+    detectedSkills: [],
+    weakPointSummary: null,
+    strategyFocus: ['Balanced development'],
+    volumeLevel: 'Moderate volume',
+    sessionStyle: 'Standard sessions',
+    firstSession: null,
+    areasToImprove: [],
+    primaryLimitation: null,
+    weakestArea: null,
+    jointProtection: [],
+    adaptiveMessages: [],
+    hasAdaptations: false,
+    trainingBehavior: null,
+  }
+
+  try {
   const profile = getOnboardingProfile()
   const calibration = getAthleteCalibration()
   
@@ -588,24 +651,34 @@ export function getProgramReasoning(program: AdaptiveProgram | null): ProgramRea
   
   // First session info
   let firstSession: ProgramReasoning['firstSession'] = null
-  if (program && program.sessions.length > 0) {
+  if (program && Array.isArray(program.sessions) && program.sessions.length > 0) {
     const session = program.sessions[0]
-    const totalExercises = session.blocks.reduce((sum, block) => sum + block.exercises.length, 0)
     
-    // Determine primary focus from session blocks
+    // Safety: Use exercises array if blocks don't exist (correct property is trainingBlocks, not blocks)
+    const blocks = Array.isArray(session.trainingBlocks) ? session.trainingBlocks : []
+    const exercisesCount = Array.isArray(session.exercises) ? session.exercises.length : 0
+    const totalExercises = blocks.length > 0 
+      ? blocks.reduce((sum, block) => sum + (Array.isArray(block.exercises) ? block.exercises.length : 0), 0)
+      : exercisesCount
+    
+    // Determine primary focus from session blocks or focusLabel
     let primaryFocus = 'Strength and skill development'
-    if (session.blocks.some(b => b.name.toLowerCase().includes('skill'))) {
-      const skillBlock = session.blocks.find(b => b.name.toLowerCase().includes('skill'))
-      primaryFocus = skillBlock?.name || 'Skill progression'
-    } else if (session.blocks.some(b => b.name.toLowerCase().includes('pull'))) {
-      primaryFocus = 'Pulling strength'
-    } else if (session.blocks.some(b => b.name.toLowerCase().includes('push'))) {
-      primaryFocus = 'Pushing strength'
+    if (blocks.length > 0) {
+      if (blocks.some(b => (b.name || '').toLowerCase().includes('skill'))) {
+        const skillBlock = blocks.find(b => (b.name || '').toLowerCase().includes('skill'))
+        primaryFocus = skillBlock?.name || 'Skill progression'
+      } else if (blocks.some(b => (b.name || '').toLowerCase().includes('pull'))) {
+        primaryFocus = 'Pulling strength'
+      } else if (blocks.some(b => (b.name || '').toLowerCase().includes('push'))) {
+        primaryFocus = 'Pushing strength'
+      }
+    } else if (session.focusLabel) {
+      primaryFocus = session.focusLabel
     }
     
     firstSession = {
-      title: session.name,
-      estimatedMinutes: session.estimatedMinutes || 45,
+      title: session.focusLabel || session.dayLabel || 'Day 1',
+      estimatedMinutes: typeof session.estimatedMinutes === 'number' ? session.estimatedMinutes : 45,
       primaryFocus,
       exerciseCount: totalExercises,
     }
@@ -691,5 +764,9 @@ export function getProgramReasoning(program: AdaptiveProgram | null): ProgramRea
     adaptiveMessages,
     hasAdaptations,
     trainingBehavior,
+  }
+  } catch (err) {
+    console.error('[OnboardingService] Error in getProgramReasoning:', err)
+    return SAFE_DEFAULT
   }
 }

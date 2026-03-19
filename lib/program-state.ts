@@ -22,6 +22,8 @@ import { getLatestProgram, type GeneratedProgram } from './program-service'
 /**
  * Attempt to recover a program from the old spartanlab_first_program key
  * and migrate it to canonical storage. This is idempotent - safe to call multiple times.
+ * 
+ * CRITICAL: Must validate ALL sessions before migrating to prevent saving malformed data
  */
 function migrateFirstProgramIfNeeded(): AdaptiveProgram | null {
   if (typeof window === 'undefined') return null
@@ -32,17 +34,36 @@ function migrateFirstProgramIfNeeded(): AdaptiveProgram | null {
     
     const parsed = JSON.parse(stored)
     
-    // Validate it looks like an AdaptiveProgram
+    // Validate basic structure
     if (!parsed || typeof parsed !== 'object') return null
     if (!Array.isArray(parsed.sessions) || parsed.sessions.length === 0) return null
-    if (!parsed.sessions[0]?.exercises || parsed.sessions[0].exercises.length === 0) return null
+    
+    // Validate ALL sessions have required structure before migrating
+    for (let i = 0; i < parsed.sessions.length; i++) {
+      const session = parsed.sessions[i]
+      if (!session || typeof session !== 'object') {
+        console.log(`[Migration] Session ${i} is invalid, skipping migration`)
+        return null
+      }
+      if (!Array.isArray(session.exercises)) {
+        console.log(`[Migration] Session ${i} has no exercises array, skipping migration`)
+        return null
+      }
+      // First session must have at least one exercise
+      if (i === 0 && session.exercises.length === 0) {
+        console.log('[Migration] First session has no exercises, skipping migration')
+        return null
+      }
+    }
     
     // This looks valid - save it to canonical storage
     // saveAdaptiveProgram handles deduplication by ID
     const saved = saveAdaptiveProgram(parsed)
+    console.log('[Migration] Successfully migrated first_program to canonical storage')
     
     return saved
-  } catch {
+  } catch (err) {
+    console.error('[Migration] Error during migration:', err)
     return null
   }
 }
@@ -60,6 +81,44 @@ export interface ProgramState {
   activeProgram: AdaptiveProgram | GeneratedProgram | null
   /** Number of sessions available */
   sessionCount: number
+}
+
+/**
+ * Validate that an adaptive program is fully usable by all downstream readers
+ * This checks ALL sessions, not just the first one, to prevent crashes in
+ * today/week/adjustment widgets that may access any session.
+ * 
+ * GUARANTEED: Never throws - returns false on any error
+ */
+function validateAdaptiveProgramUsability(program: AdaptiveProgram | null): boolean {
+  try {
+    if (!program || typeof program !== 'object') return false
+    if (!Array.isArray(program.sessions) || program.sessions.length === 0) return false
+    
+    // Validate EVERY session has required structure
+    for (let i = 0; i < program.sessions.length; i++) {
+      const session = program.sessions[i]
+      if (!session || typeof session !== 'object') {
+        console.log(`[ProgramState] Session ${i} is not a valid object`)
+        return false
+      }
+      if (!Array.isArray(session.exercises)) {
+        console.log(`[ProgramState] Session ${i} has no exercises array`)
+        return false
+      }
+      // Note: We don't require exercises.length > 0 - an empty session is still valid structure
+      // But first session should have exercises for a truly usable program
+      if (i === 0 && session.exercises.length === 0) {
+        console.log('[ProgramState] First session has no exercises')
+        return false
+      }
+    }
+    
+    return true
+  } catch (err) {
+    console.error('[ProgramState] Validation error:', err)
+    return false
+  }
 }
 
 /** Safe default state - used when anything fails */
@@ -109,12 +168,8 @@ export function getProgramState(): ProgramState {
     const activeProgram = adaptiveProgram || legacyProgram
     
     // Check if adaptive program has actual runnable sessions
-    const hasUsableAdaptiveProgram = !!(
-      adaptiveProgram && 
-      Array.isArray(adaptiveProgram.sessions) && 
-      adaptiveProgram.sessions.length > 0 &&
-      adaptiveProgram.sessions[0]?.exercises?.length > 0
-    )
+    // CRITICAL: Validate ALL sessions, not just the first one, to prevent downstream crashes
+    const hasUsableAdaptiveProgram = validateAdaptiveProgramUsability(adaptiveProgram)
     
     // Check if legacy program exists and has training days
     const hasUsableLegacyProgram = !!(

@@ -108,34 +108,33 @@ interface DashboardHeavyContentProps {
   setShowWelcome: (show: boolean) => void
   showIntroduction: boolean
   setShowIntroduction: (show: boolean) => void
-  sectionFlags: {
-    ENABLE_SECTION_FIRST_RUN: boolean
-    ENABLE_SECTION_NEXT_WORKOUT: boolean
-    ENABLE_SECTION_CONSISTENCY: boolean
-    ENABLE_SECTION_READINESS: boolean
-    ENABLE_SECTION_TRAINING_EMPHASIS: boolean
-    ENABLE_SECTION_SKILL_PROGRESS: boolean
-    ENABLE_SECTION_SKILL_READINESS: boolean
-    ENABLE_SECTION_ROADMAPS: boolean
-    ENABLE_SECTION_ACHIEVEMENTS: boolean
-    ENABLE_SECTION_CHALLENGES: boolean
-    ENABLE_SECTION_LEADERBOARD: boolean
-    ENABLE_SECTION_GOAL_PROJECTIONS: boolean
-    ENABLE_SECTION_DETAILED_INSIGHTS: boolean
-    ENABLE_SECTION_STRENGTH_PROGRESS: boolean
-    ENABLE_SECTION_PROGRESS_TRACKING: boolean
-    ENABLE_SECTION_PERFORMANCE_OVERVIEW: boolean
-    ENABLE_SECTION_QUICK_ACTIONS: boolean
-    ENABLE_SECTION_NOTIFICATIONS: boolean
-  }
 }
+
+// All sections enabled by default (production mode)
+const ENABLE_SECTION_FIRST_RUN = true
+const ENABLE_SECTION_NEXT_WORKOUT = true
+const ENABLE_SECTION_CONSISTENCY = true
+const ENABLE_SECTION_READINESS = true
+const ENABLE_SECTION_TRAINING_EMPHASIS = true
+const ENABLE_SECTION_SKILL_PROGRESS = true
+const ENABLE_SECTION_SKILL_READINESS = true
+const ENABLE_SECTION_ROADMAPS = true
+const ENABLE_SECTION_ACHIEVEMENTS = true
+const ENABLE_SECTION_CHALLENGES = true
+const ENABLE_SECTION_LEADERBOARD = true
+const ENABLE_SECTION_GOAL_PROJECTIONS = true
+const ENABLE_SECTION_DETAILED_INSIGHTS = true
+const ENABLE_SECTION_STRENGTH_PROGRESS = true
+const ENABLE_SECTION_PROGRESS_TRACKING = true
+const ENABLE_SECTION_PERFORMANCE_OVERVIEW = true
+const ENABLE_SECTION_QUICK_ACTIONS = true
+const ENABLE_SECTION_NOTIFICATIONS = true
 
 export default function DashboardHeavyContent({ 
   showWelcome, 
   setShowWelcome, 
   showIntroduction, 
-  setShowIntroduction,
-  sectionFlags 
+  setShowIntroduction
 }: DashboardHeavyContentProps) {
   const [overview, setOverview] = useState<DashboardOverview | null>(null)
   const [skillSummary, setSkillSummary] = useState<PrimarySkillSummary | null>(null)
@@ -156,27 +155,6 @@ export default function DashboardHeavyContent({
   const [trainingMethods, setTrainingMethods] = useState<SelectedMethods | null>(null)
   const [progressionInsights, setProgressionInsights] = useState<ProgressionInsight[]>([])
   const [loaded, setLoaded] = useState(false)
-
-  const {
-    ENABLE_SECTION_FIRST_RUN,
-    ENABLE_SECTION_NEXT_WORKOUT,
-    ENABLE_SECTION_CONSISTENCY,
-    ENABLE_SECTION_READINESS,
-    ENABLE_SECTION_TRAINING_EMPHASIS,
-    ENABLE_SECTION_SKILL_PROGRESS,
-    ENABLE_SECTION_SKILL_READINESS,
-    ENABLE_SECTION_ROADMAPS,
-    ENABLE_SECTION_ACHIEVEMENTS,
-    ENABLE_SECTION_CHALLENGES,
-    ENABLE_SECTION_LEADERBOARD,
-    ENABLE_SECTION_GOAL_PROJECTIONS,
-    ENABLE_SECTION_DETAILED_INSIGHTS,
-    ENABLE_SECTION_STRENGTH_PROGRESS,
-    ENABLE_SECTION_PROGRESS_TRACKING,
-    ENABLE_SECTION_PERFORMANCE_OVERVIEW,
-    ENABLE_SECTION_QUICK_ACTIONS,
-    ENABLE_SECTION_NOTIFICATIONS,
-  } = sectionFlags
 
   useEffect(() => {
     // Sync program to history if needed

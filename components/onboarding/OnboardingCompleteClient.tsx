@@ -452,7 +452,11 @@ export default function OnboardingCompleteClient() {
                 }
                 
                 try {
-                  const result = generateFirstProgram()
+                  // =======================================================================
+                  // DYNAMIC IMPORT: Load generation module for retry
+                  // =======================================================================
+                  const onboardingModule = await import('@/lib/onboarding-service')
+                  const result = onboardingModule.generateFirstProgram()
                   setProgramResult(result)
                   if (result.success && result.program) {
                     // Verify program is readable
@@ -468,6 +472,16 @@ export default function OnboardingCompleteClient() {
                       } catch {
                         // Ignore
                       }
+                      
+                      // Track analytics for retry success
+                      try {
+                        const analyticsModule = await import('@/lib/analytics')
+                        analyticsModule.trackSignupCompleted()
+                        analyticsModule.trackProgramGenerated('onboarding-retry', profile?.primaryGoal)
+                      } catch (analyticsErr) {
+                        console.error('[OnboardingCompleteClient] Retry analytics failed:', analyticsErr)
+                      }
+                      
                       setStep('ready')
                     } else {
                       setErrorMessage('Program was created but could not be verified.')
@@ -703,7 +717,7 @@ export default function OnboardingCompleteClient() {
                 <Sparkles className="w-4 h-4 text-amber-400" />
                 <span className="text-[#E6E9EF] font-medium">7-Day Free Trial</span>
               </div>
-              <span className="text-sm text-[#6B7280]">Then {PRICING.pro.displayWithPeriod}</span>
+              <span className="text-sm text-[#6B7280]">Then {pricingData?.pro?.displayWithPeriod || '$19.99/month'}</span>
             </div>
             <p className="text-xs text-[#6B7280]">
               No charge until your trial ends. Cancel anytime.

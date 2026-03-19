@@ -18,11 +18,16 @@ import { getProgramBuilderContext } from './adaptive-athlete-engine'
 import { getAthleteCalibration, getProgramCalibrationAdjustments, type AthleteCalibration, type ProgramCalibrationAdjustments } from './athlete-calibration'
 import { getOnboardingProfile, type PrimaryTrainingOutcome, type TrainingPathType, type WorkoutDurationPreference, type PrimaryLimitation, type WeakestArea, type JointCaution } from './athlete-profile'
 import { detectWeakPoints, getVolumeDistribution, type WeakPointSummary } from './weak-point-detection'
-import { 
-  detectWeakPoints as detectUnifiedWeakPoints, 
-  weakPointToLimitingFactor,
-  type WeakPointAssessment,
-  type SkillTarget,
+import {
+  detectWeakPoints as detectUnifiedWeakPoints,
+  type WeakPointAssessment as UnifiedWeakPointAssessment,
+  type WeakPointType,
+  WEAK_POINT_LABELS,
+  getWeakPointAccessories,
+  shouldReduceVolumeForWeakPoint,
+  getVolumeModifierForWeakPoint,
+  detectWeakPointsForProfile,
+  type DetectedWeakPoints,
 } from './weak-point-engine'
 import { getUnifiedSkillIntelligence, generateTrainingAdjustments, type UnifiedSkillIntelligence } from './skill-intelligence-layer'
 import { getCompressionReadiness, shouldBiasTowardCompression, type CompressionReadinessResult } from './compression-readiness'
@@ -253,6 +258,8 @@ export interface AdaptiveSession {
     isIntentionalRepetition: boolean
     repetitionReason?: string
   }
+  // Weak point-based accessories added to session
+  weakPointAccessories?: string[]
 }
 
 export interface AdaptiveExercise {
@@ -1068,6 +1075,64 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
       } else {
         session.adaptationNotes.push('Ready to push - volume increased based on recovery feedback')
       }
+    }
+    
+    // =========================================================================
+    // WEAK POINT ACCESSORY INJECTION
+    // =========================================================================
+    // Add targeted accessories based on detected weak points (max 1-2 per session)
+    // Only add if session isn't already overloaded
+    const sessionExerciseCount = session.exercises.length
+    const maxExercisesForSession = sessionLength === '<30' ? 5 : sessionLength === '30-45' ? 6 : 8
+    
+    // Use rule-based detection with fatigue state
+    const fatigueNeedsDeload = fatigueDecision?.decision === 'SKIP_TODAY' || 
+                               fatigueDecision?.decision === 'DELOAD_RECOMMENDED'
+    const fatigueScoreForDetection = fatigueDecision?.decision === 'SKIP_TODAY' ? 90 :
+                                     fatigueDecision?.decision === 'REDUCE_INTENSITY' ? 70 :
+                                     fatigueDecision?.decision === 'DELOAD_RECOMMENDED' ? 80 : 40
+    
+    const detectedWeakPoints = detectWeakPointsForProfile(
+      onboardingProfile,
+      athleteCalibration,
+      fatigueNeedsDeload,
+      fatigueScoreForDetection
+    )
+    
+    // Check if fatigue is the primary weak point - skip accessories if so
+    const isFatigued = detectedWeakPoints.primary.includes('general_fatigue')
+    
+    if (!isFatigued && sessionExerciseCount < maxExercisesForSession - 1 && 
+        (detectedWeakPoints.primary.length > 0 || detectedWeakPoints.secondary.length > 0)) {
+      // Combine primary and secondary weak points, primary first
+      const allWeakPoints = [...detectedWeakPoints.primary, ...detectedWeakPoints.secondary]
+      
+      // Get recommended accessories (max 2)
+      const maxAccessories = Math.min(2, maxExercisesForSession - sessionExerciseCount)
+      const recommendedAccessories = getWeakPointAccessories(allWeakPoints, maxAccessories)
+      
+      // Add accessories to session if found
+      if (recommendedAccessories.length > 0) {
+        session.adaptationNotes = session.adaptationNotes || []
+        
+        // Build coaching note based on detected weak points
+        const primaryLabel = detectedWeakPoints.primary[0] 
+          ? WEAK_POINT_LABELS[detectedWeakPoints.primary[0]] 
+          : null
+        
+        if (primaryLabel) {
+          session.adaptationNotes.push(
+            `Support work added for ${primaryLabel.toLowerCase()}`
+          )
+        }
+        
+        // Mark session as having weak-point-based additions
+        session.weakPointAccessories = recommendedAccessories
+      }
+    } else if (isFatigued) {
+      // Add note about fatigue-based volume reduction
+      session.adaptationNotes = session.adaptationNotes || []
+      session.adaptationNotes.push('No additional support work - focus on recovery')
     }
     
     return session

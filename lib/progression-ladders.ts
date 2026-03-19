@@ -352,15 +352,28 @@ export const PROGRESSION_LADDERS: ProgressionLadder[] = [
         prerequisiteReps: 8,
         cues: ['Touch toes to bar', 'No kip', 'Compression'],
       },
+      // Dragon flag progression: tuck -> negatives -> assisted -> full
+      {
+        exerciseId: 'dragon_flag_tuck',
+        level: 6,
+        prerequisiteReps: 8,
+        cues: ['Knees tucked', 'Shoulder blades down', 'Body tension'],
+      },
       {
         exerciseId: 'dragon_flag_neg',
-        level: 6,
+        level: 7,
         prerequisiteReps: 5,
-        cues: ['Slow descent', 'Body straight', 'Fight gravity'],
+        cues: ['4-5s descent', 'Body straight', 'Fight gravity'],
+      },
+      {
+        exerciseId: 'dragon_flag_assisted',
+        level: 8,
+        prerequisiteReps: 6,
+        cues: ['Band assists concentric', 'Full ROM', 'Control both phases'],
       },
       {
         exerciseId: 'dragon_flag',
-        level: 7,
+        level: 9,
         prerequisiteReps: 4,
         cues: ['Full concentric', 'Body line', 'Max tension'],
       },
@@ -753,11 +766,34 @@ export const SUBSTITUTION_MAPPINGS: SubstitutionMapping[] = [
   },
 
   // ===== CORE SUBSTITUTIONS =====
+  // Dragon flag full progression substitutes
   {
     exerciseId: 'dragon_flag',
     substitutes: [
+      { exerciseId: 'dragon_flag_assisted', suitability: 'ideal', reason: 'Band-assisted full ROM', fatigueAdjustment: 'easier' },
       { exerciseId: 'dragon_flag_neg', suitability: 'ideal', reason: 'Eccentric focus', fatigueAdjustment: 'easier' },
-      { exerciseId: 'hanging_leg_raise', suitability: 'good', reason: 'Hanging core', fatigueAdjustment: 'easier' },
+      { exerciseId: 'dragon_flag_tuck', suitability: 'good', reason: 'Tuck progression', fatigueAdjustment: 'easier' },
+    ],
+  },
+  {
+    exerciseId: 'dragon_flag_assisted',
+    substitutes: [
+      { exerciseId: 'dragon_flag_neg', suitability: 'ideal', reason: 'Eccentric-only focus', fatigueAdjustment: 'easier' },
+      { exerciseId: 'dragon_flag_tuck', suitability: 'good', reason: 'Tuck regression', fatigueAdjustment: 'easier' },
+    ],
+  },
+  {
+    exerciseId: 'dragon_flag_neg',
+    substitutes: [
+      { exerciseId: 'dragon_flag_tuck', suitability: 'ideal', reason: 'Tuck regression', fatigueAdjustment: 'easier' },
+      { exerciseId: 'hanging_leg_raise', suitability: 'good', reason: 'Hanging core alternative', fatigueAdjustment: 'easier' },
+    ],
+  },
+  {
+    exerciseId: 'dragon_flag_tuck',
+    substitutes: [
+      { exerciseId: 'hollow_body_hold', suitability: 'ideal', reason: 'Anti-extension foundation', fatigueAdjustment: 'easier' },
+      { exerciseId: 'dead_bug', suitability: 'good', reason: 'Core control basics', fatigueAdjustment: 'easier' },
     ],
   },
   {

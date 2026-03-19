@@ -46,11 +46,16 @@ export type WeakPointType =
   | 'push_strength'
   | 'straight_arm_pull_strength'
   | 'straight_arm_push_strength'
+  | 'bent_arm_pull'
+  | 'bent_arm_push'
   | 'compression_strength'
   | 'explosive_power'
   | 'transition_strength'
   | 'vertical_push_strength'
   | 'dip_strength'
+  // Core-specific
+  | 'core_compression'
+  | 'core_anti_extension'
   // Control-based
   | 'scapular_control'
   | 'shoulder_stability'
@@ -65,6 +70,7 @@ export type WeakPointType =
   // Recovery-based
   | 'recovery_capacity'
   | 'work_capacity'
+  | 'general_fatigue'
   // Equipment-based
   | 'equipment_limitation'
   // None
@@ -75,11 +81,15 @@ export const WEAK_POINT_LABELS: Record<WeakPointType, string> = {
   push_strength: 'Pushing Strength',
   straight_arm_pull_strength: 'Straight-Arm Pull Strength',
   straight_arm_push_strength: 'Straight-Arm Push Strength',
+  bent_arm_pull: 'Bent-Arm Pulling',
+  bent_arm_push: 'Bent-Arm Pushing',
   compression_strength: 'Compression Strength',
   explosive_power: 'Explosive Pull Power',
   transition_strength: 'Transition Strength',
   vertical_push_strength: 'Vertical Push Strength',
   dip_strength: 'Dip Strength',
+  core_compression: 'Core Compression',
+  core_anti_extension: 'Core Anti-Extension',
   scapular_control: 'Scapular Control',
   shoulder_stability: 'Shoulder Stability',
   core_control: 'Core Control',
@@ -91,6 +101,7 @@ export const WEAK_POINT_LABELS: Record<WeakPointType, string> = {
   shoulder_extension_mobility: 'Shoulder Extension Mobility',
   recovery_capacity: 'Recovery Capacity',
   work_capacity: 'Work Capacity',
+  general_fatigue: 'General Fatigue',
   equipment_limitation: 'Equipment Limitation',
   none: 'No Limiting Factor',
 }
@@ -685,6 +696,15 @@ function mapScoreToWeakPoint(factor: WeakPointType, scores: BenchmarkScores): nu
   if (factor === 'tendon_tolerance') return Math.min(scores.shoulderStability, 60)
   if (factor === 'shoulder_extension_mobility') return scores.mobility * 0.9
   
+  // New weak point type fallbacks
+  if (factor === 'bent_arm_pull') return scores.pullStrength
+  if (factor === 'bent_arm_push') return scores.pushStrength
+  if (factor === 'core_compression') return scores.compression
+  if (factor === 'core_anti_extension') return Math.min(scores.compression, scores.coreControl)
+  if (factor === 'general_fatigue') return 50 // Not strength-based
+  if (factor === 'recovery_capacity') return 50 // Not strength-based
+  if (factor === 'work_capacity') return scores.explosivePower * 0.9
+  
   return 50 // Default
 }
 
@@ -1195,5 +1215,407 @@ export function applyDoctrineInfluenceToWeakPointAssessment(
       ...assessment.primaryLimiter,
       severityScore: Math.min(100, Math.max(0, adjustedSeverity))
     }
+  }
+}
+
+// =============================================================================
+// RULE-BASED WEAK POINT DETECTION
+// =============================================================================
+
+/**
+ * Simple, deterministic weak point detection based on clear rules.
+ * This is the primary entry point for detecting limiting factors.
+ * 
+ * Rules:
+ * - Front Lever: Strong pull-ups + weak FL = core_anti_extension + straight_arm_pull_strength
+ * - Planche: Strong dips + weak planche = straight_arm_push_strength + shoulder_stability
+ * - L-sit/Compression: Weak compression = core_compression
+ * - Fatigue: High fatigue = general_fatigue (reduce volume)
+ * - Scapular: Pulling present but skill weak = scapular_control
+ */
+export interface DetectedWeakPoints {
+  primary: WeakPointType[]
+  secondary: WeakPointType[]
+}
+
+export interface DetectionInput {
+  // Onboarding profile data
+  pullUpMax?: number | null
+  dipMax?: number | null
+  weightedPullUp?: { load: number } | null
+  weightedDip?: { load: number } | null
+  // Skill levels
+  frontLeverLevel?: string | null
+  plancheLevel?: string | null
+  lSitLevel?: string | null
+  // Fatigue state
+  needsDeload?: boolean
+  fatigueScore?: number // 0-100, higher = more fatigued
+  // General strength context
+  experienceLevel?: 'beginner' | 'intermediate' | 'advanced'
+}
+
+/**
+ * Deterministic detection of weak points based on simple rules.
+ * Never throws, works with partial data, returns safe defaults.
+ */
+export function detectWeakPointsFromInput(input: DetectionInput): DetectedWeakPoints {
+  const primary: WeakPointType[] = []
+  const secondary: WeakPointType[] = []
+  
+  // Helper to check if pull strength is strong
+  const hasStrongPulls = (input.pullUpMax && input.pullUpMax >= 12) || 
+                         (input.weightedPullUp?.load && input.weightedPullUp.load >= 20)
+  
+  // Helper to check if push strength is strong
+  const hasStrongPush = (input.dipMax && input.dipMax >= 15) ||
+                        (input.weightedDip?.load && input.weightedDip.load >= 20)
+  
+  // ==========================================================================
+  // FATIGUE RULE (highest priority - affects all training)
+  // ==========================================================================
+  if (input.needsDeload || (input.fatigueScore && input.fatigueScore >= 75)) {
+    primary.push('general_fatigue')
+    // Don't add other weak points - focus on recovery
+    return { primary, secondary }
+  }
+  
+  // ==========================================================================
+  // FRONT LEVER LOGIC
+  // Strong pulls + weak front lever = core_anti_extension + straight_arm_pull_strength
+  // ==========================================================================
+  if (hasStrongPulls && (!input.frontLeverLevel || 
+      input.frontLeverLevel === 'none' || 
+      input.frontLeverLevel === 'tuck' ||
+      input.frontLeverLevel === 'unknown')) {
+    primary.push('core_anti_extension')
+    primary.push('straight_arm_pull_strength')
+  }
+  
+  // ==========================================================================
+  // PLANCHE LOGIC
+  // Strong dips + weak planche = straight_arm_push_strength + shoulder_stability
+  // ==========================================================================
+  if (hasStrongPush && (!input.plancheLevel || 
+      input.plancheLevel === 'none' || 
+      input.plancheLevel === 'lean' ||
+      input.plancheLevel === 'unknown')) {
+    primary.push('straight_arm_push_strength')
+    secondary.push('shoulder_stability')
+  }
+  
+  // ==========================================================================
+  // L-SIT / COMPRESSION LOGIC
+  // Weak L-sit = core_compression (dragon flag is good for this)
+  // ==========================================================================
+  if (!input.lSitLevel || 
+      input.lSitLevel === 'none' || 
+      input.lSitLevel === 'tuck' ||
+      input.lSitLevel === 'unknown') {
+    // Compression weakness
+    if (!primary.includes('core_compression')) {
+      primary.push('core_compression')
+    }
+    // Dragon flag helps both compression AND anti-extension
+    if (!primary.includes('core_anti_extension')) {
+      secondary.push('core_anti_extension')
+    }
+  }
+  
+  // ==========================================================================
+  // SCAPULAR LOGIC
+  // Has pulling capability but skill work weak = scapular_control
+  // ==========================================================================
+  if ((input.pullUpMax && input.pullUpMax >= 8) && 
+      ((!input.frontLeverLevel || input.frontLeverLevel === 'none' || input.frontLeverLevel === 'tuck') ||
+       (input.experienceLevel === 'intermediate' && !hasStrongPulls))) {
+    if (!primary.includes('scapular_control')) {
+      secondary.push('scapular_control')
+    }
+  }
+  
+  // ==========================================================================
+  // GENERAL STRENGTH DEFICITS
+  // ==========================================================================
+  if (input.pullUpMax !== undefined && input.pullUpMax !== null && input.pullUpMax < 8) {
+    primary.push('pull_strength')
+    primary.push('bent_arm_pull')
+  }
+  
+  if (input.dipMax !== undefined && input.dipMax !== null && input.dipMax < 10) {
+    primary.push('push_strength')
+    primary.push('bent_arm_push')
+  }
+  
+  // ==========================================================================
+  // DEDUPLICATE AND RETURN
+  // ==========================================================================
+  return {
+    primary: [...new Set(primary)],
+    secondary: [...new Set(secondary.filter(s => !primary.includes(s)))],
+  }
+}
+
+/**
+ * Combine detection results with onboarding profile.
+ * Convenience function for use in program builder.
+ */
+export function detectWeakPointsForProfile(
+  profile: OnboardingProfile | null,
+  calibration: AthleteCalibration | null,
+  fatigueNeedsDeload?: boolean,
+  fatigueScore?: number
+): DetectedWeakPoints {
+  if (!profile) {
+    return { primary: [], secondary: [] }
+  }
+  
+  const input: DetectionInput = {
+    pullUpMax: profile.pullUpMax,
+    dipMax: profile.dipMax,
+    weightedPullUp: profile.weightedPullUp,
+    weightedDip: profile.weightedDip,
+    frontLeverLevel: profile.frontLeverHold || profile.frontLever?.progression,
+    plancheLevel: profile.plancheHold || profile.planche?.progression,
+    lSitLevel: profile.lSitHold,
+    needsDeload: fatigueNeedsDeload,
+    fatigueScore: fatigueScore,
+    experienceLevel: calibration?.fitnessLevel as 'beginner' | 'intermediate' | 'advanced' || 'intermediate',
+  }
+  
+  return detectWeakPointsFromInput(input)
+}
+
+// =============================================================================
+// WEAK POINT TO ACCESSORY MAPPING
+// =============================================================================
+
+/**
+ * Maps weak point types to specific accessory exercises that address them.
+ * Used by the program builder to add targeted support work.
+ */
+export const WEAK_POINT_ACCESSORIES: Record<WeakPointType, {
+  primary: string[]
+  secondary: string[]
+  maxPerSession: number
+}> = {
+  // Core weak points - dragon flag integration
+  // Dragon flag progression: tuck -> negatives -> assisted -> full
+  // These address BOTH compression and anti-extension
+  core_compression: {
+    primary: ['tuck_l_sit', 'l_sit_core', 'hanging_l_sit'],
+    secondary: ['dragon_flag_tuck', 'dragon_flag_neg', 'hanging_knee_raise'],
+    maxPerSession: 2,
+  },
+  core_anti_extension: {
+    primary: ['hollow_body', 'dragon_flag_tuck', 'dragon_flag_neg'],
+    secondary: ['dead_bug', 'plank', 'tuck_front_lever_pull'],
+    maxPerSession: 2,
+  },
+  compression_strength: {
+    primary: ['l_sit_core', 'tuck_l_sit', 'pike_compression'],
+    secondary: ['dragon_flag_tuck', 'dragon_flag_neg', 'hanging_leg_raise'],
+    maxPerSession: 2,
+  },
+  core_control: {
+    primary: ['hollow_body', 'dead_bug', 'bird_dog'],
+    secondary: ['plank', 'side_hollow_hold'],
+    maxPerSession: 1,
+  },
+  
+  // Strength weak points
+  pull_strength: {
+    primary: ['pull_up', 'chin_up', 'inverted_row'],
+    secondary: ['band_assisted_pull_up', 'pull_up_negative'],
+    maxPerSession: 2,
+  },
+  bent_arm_pull: {
+    primary: ['chin_up', 'inverted_row', 'ring_row'],
+    secondary: ['band_assisted_pull_up', 'australian_pull_up'],
+    maxPerSession: 2,
+  },
+  push_strength: {
+    primary: ['dip', 'push_up', 'pike_push_up'],
+    secondary: ['diamond_push_up', 'dip_negative'],
+    maxPerSession: 2,
+  },
+  bent_arm_push: {
+    primary: ['push_up', 'dip', 'diamond_push_up'],
+    secondary: ['incline_push_up', 'dip_negative'],
+    maxPerSession: 2,
+  },
+  straight_arm_pull_strength: {
+    primary: ['tuck_front_lever_pull', 'pelican_curl_band', 'straight_arm_pull_down'],
+    secondary: ['scap_pull_up', 'active_hang'],
+    maxPerSession: 1,
+  },
+  straight_arm_push_strength: {
+    primary: ['planche_lean', 'pseudo_planche_push_up', 'maltese_lean'],
+    secondary: ['support_hold', 'ring_support_turn_out'],
+    maxPerSession: 1,
+  },
+  dip_strength: {
+    primary: ['dip', 'ring_dip', 'weighted_dip'],
+    secondary: ['dip_negative', 'bench_dip'],
+    maxPerSession: 1,
+  },
+  explosive_power: {
+    primary: ['chest_to_bar_pull_up', 'explosive_pull_up', 'jumping_muscle_up'],
+    secondary: ['clapping_push_up', 'kipping_pull_up'],
+    maxPerSession: 1,
+  },
+  transition_strength: {
+    primary: ['muscle_up_transition', 'low_bar_muscle_up', 'negative_muscle_up'],
+    secondary: ['straight_bar_dip', 'chest_to_bar_pull_up'],
+    maxPerSession: 1,
+  },
+  vertical_push_strength: {
+    primary: ['pike_push_up', 'wall_hspu', 'decline_pike_push_up'],
+    secondary: ['handstand_wall_touch', 'pike_hold'],
+    maxPerSession: 1,
+  },
+  
+  // Control weak points
+  scapular_control: {
+    primary: ['scap_pull_up', 'scap_pushup', 'scapular_retraction_hold'],
+    secondary: ['banded_pull_apart', 'prone_y_raise'],
+    maxPerSession: 1,
+  },
+  shoulder_stability: {
+    primary: ['support_hold', 'shoulder_tap', 'ring_support_turn_out'],
+    secondary: ['cuban_rotation', 'external_rotation'],
+    maxPerSession: 1,
+  },
+  balance_control: {
+    primary: ['wall_handstand', 'crow_pose', 'frog_stand'],
+    secondary: ['handstand_wall_touch', 'pike_walk'],
+    maxPerSession: 1,
+  },
+  ring_support_stability: {
+    primary: ['ring_support_hold', 'ring_support_turn_out', 'ring_push_up'],
+    secondary: ['ring_row', 'ring_plank'],
+    maxPerSession: 1,
+  },
+  
+  // Tolerance weak points
+  wrist_tolerance: {
+    primary: ['wrist_circle', 'wrist_extension_stretch', 'wrist_pushup'],
+    secondary: ['finger_extension', 'wrist_rock'],
+    maxPerSession: 1,
+  },
+  tendon_tolerance: {
+    primary: ['support_hold', 'dead_hang', 'planche_lean_light'],
+    secondary: ['wall_slide', 'external_rotation_light'],
+    maxPerSession: 1,
+  },
+  mobility: {
+    primary: ['shoulder_dislocate', 'deep_squat_hold', 'hip_flexor_stretch'],
+    secondary: ['pigeon_pose', 'pancake_stretch'],
+    maxPerSession: 1,
+  },
+  shoulder_extension_mobility: {
+    primary: ['german_hang_passive', 'shoulder_dislocate', 'skin_the_cat_negative'],
+    secondary: ['wall_slide', 'lat_stretch'],
+    maxPerSession: 1,
+  },
+  
+  // Recovery weak points
+  recovery_capacity: {
+    primary: [],
+    secondary: [],
+    maxPerSession: 0, // No accessories - reduce volume instead
+  },
+  work_capacity: {
+    primary: ['emom_pull_up', 'emom_push_up', 'circuit_training'],
+    secondary: ['high_rep_row', 'high_rep_push_up'],
+    maxPerSession: 1,
+  },
+  general_fatigue: {
+    primary: [],
+    secondary: [],
+    maxPerSession: 0, // No accessories - reduce volume instead
+  },
+  
+  // Other
+  equipment_limitation: {
+    primary: [],
+    secondary: [],
+    maxPerSession: 0,
+  },
+  none: {
+    primary: [],
+    secondary: [],
+    maxPerSession: 0,
+  },
+}
+
+/**
+ * Get recommended accessories for a list of weak points.
+ * Respects session limits and prioritizes primary limiters.
+ * 
+ * @param weakPoints - Array of weak point types, ordered by priority
+ * @param maxTotal - Maximum total accessories to return (default 2)
+ * @returns Array of exercise IDs to add to session
+ */
+export function getWeakPointAccessories(
+  weakPoints: WeakPointType[],
+  maxTotal: number = 2
+): string[] {
+  const selected: string[] = []
+  const usedIds = new Set<string>()
+  
+  // Process weak points in priority order
+  for (const wp of weakPoints) {
+    if (selected.length >= maxTotal) break
+    
+    const config = WEAK_POINT_ACCESSORIES[wp]
+    if (!config || config.maxPerSession === 0) continue
+    
+    // Add primary accessories first
+    for (const exerciseId of config.primary) {
+      if (selected.length >= maxTotal) break
+      if (usedIds.has(exerciseId)) continue
+      
+      selected.push(exerciseId)
+      usedIds.add(exerciseId)
+    }
+    
+    // Add secondary if still have room
+    for (const exerciseId of config.secondary) {
+      if (selected.length >= maxTotal) break
+      if (usedIds.has(exerciseId)) continue
+      
+      selected.push(exerciseId)
+      usedIds.add(exerciseId)
+      break // Only one secondary per weak point
+    }
+  }
+  
+  return selected
+}
+
+/**
+ * Check if a weak point indicates fatigue and should reduce volume.
+ */
+export function shouldReduceVolumeForWeakPoint(weakPoint: WeakPointType): boolean {
+  return weakPoint === 'general_fatigue' || 
+         weakPoint === 'recovery_capacity' ||
+         weakPoint === 'tendon_tolerance'
+}
+
+/**
+ * Get volume modifier based on weak point type.
+ * Returns a multiplier (e.g., 0.7 for 30% reduction).
+ */
+export function getVolumeModifierForWeakPoint(weakPoint: WeakPointType): number {
+  switch (weakPoint) {
+    case 'general_fatigue':
+      return 0.6 // 40% reduction
+    case 'recovery_capacity':
+      return 0.75 // 25% reduction
+    case 'tendon_tolerance':
+      return 0.85 // 15% reduction
+    default:
+      return 1.0
   }
 }

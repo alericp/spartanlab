@@ -7,9 +7,19 @@ import {
 } from '@/lib/program-history-versioning'
 import { getActiveProgramHistory } from '@/lib/history-service'
 import { startNewProgram, getProgramHistoryStats, type ResetReason } from '@/lib/program-history-helpers'
+import { isProgramHistorySchemaReady } from '@/lib/db'
 import type { GenerationReason } from '@/lib/program-version-service'
 
 export const dynamic = 'force-dynamic'
+
+// Response type for when history schema is not available
+const HISTORY_UNAVAILABLE_RESPONSE = {
+  success: true,
+  activeProgram: null,
+  archivedPrograms: [],
+  totalVersions: 0,
+  historyAvailable: false,
+}
 
 /**
  * GET /api/program/history
@@ -30,6 +40,13 @@ export async function GET(request: Request) {
       )
     }
     
+    // PHASE 1: Check schema readiness before any DB operations
+    const schemaReady = await isProgramHistorySchemaReady()
+    if (!schemaReady) {
+      console.log('[Program History] Schema not ready - returning unavailable state')
+      return NextResponse.json(HISTORY_UNAVAILABLE_RESPONSE)
+    }
+    
     // Check if stats requested
     const url = new URL(request.url)
     const includeStats = url.searchParams.get('stats') === 'true'
@@ -39,6 +56,7 @@ export async function GET(request: Request) {
       return NextResponse.json({
         success: true,
         stats,
+        historyAvailable: true,
       })
     }
     
@@ -46,13 +64,20 @@ export async function GET(request: Request) {
     
     return NextResponse.json({
       success: true,
+      historyAvailable: true,
       ...history,
     })
     
   } catch (error) {
     console.error('[Program History] Error fetching history:', error)
+    // Check if this is a schema-missing error
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    if (errorMessage.includes('relation') && errorMessage.includes('does not exist')) {
+      console.log('[Program History] Schema missing - returning unavailable state')
+      return NextResponse.json(HISTORY_UNAVAILABLE_RESPONSE)
+    }
     return NextResponse.json(
-      { error: 'Failed to fetch program history' },
+      { error: 'Failed to fetch program history', historyAvailable: false },
       { status: 500 }
     )
   }
@@ -89,6 +114,20 @@ export async function POST(request: Request) {
       )
     }
     
+    // PHASE 1: Check schema readiness before any DB operations
+    const schemaReady = await isProgramHistorySchemaReady()
+    if (!schemaReady) {
+      console.log('[Program History] Schema not ready - cannot persist program history')
+      return NextResponse.json({
+        success: false,
+        historyAvailable: false,
+        error: 'Program history persistence is not available yet',
+        programHistoryId: null,
+        versionNumber: 0,
+        reasonSummary: 'History persistence unavailable - program saved locally only',
+      }, { status: 202 }) // 202 Accepted - request understood but not fully processed
+    }
+    
     // Check if user already has an active program
     const existingActive = await getActiveProgramHistory(userId)
     
@@ -107,13 +146,14 @@ export async function POST(request: Request) {
     
     if (!result.success) {
       return NextResponse.json(
-        { error: result.error || 'Failed to create program history' },
+        { error: result.error || 'Failed to create program history', historyAvailable: true },
         { status: 500 }
       )
     }
     
     return NextResponse.json({
       success: true,
+      historyAvailable: true,
       programHistoryId: result.programHistoryId,
       versionNumber: result.versionNumber,
       reasonSummary: result.reasonSummary,
@@ -121,8 +161,17 @@ export async function POST(request: Request) {
     
   } catch (error) {
     console.error('[Program History] Error creating history:', error)
+    // Check if this is a schema-missing error
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    if (errorMessage.includes('relation') && errorMessage.includes('does not exist')) {
+      return NextResponse.json({
+        success: false,
+        historyAvailable: false,
+        error: 'Program history persistence is not available yet',
+      }, { status: 202 })
+    }
     return NextResponse.json(
-      { error: 'Failed to create program history' },
+      { error: 'Failed to create program history', historyAvailable: false },
       { status: 500 }
     )
   }
@@ -159,18 +208,33 @@ export async function PUT(request: Request) {
       )
     }
     
+    // PHASE 1: Check schema readiness before any DB operations
+    const schemaReady = await isProgramHistorySchemaReady()
+    if (!schemaReady) {
+      console.log('[Program History] Schema not ready - cannot persist new program')
+      return NextResponse.json({
+        success: false,
+        historyAvailable: false,
+        error: 'Program history persistence is not available yet',
+        programHistoryId: null,
+        versionNumber: 0,
+        reasonSummary: 'History persistence unavailable - program saved locally only',
+      }, { status: 202 })
+    }
+    
     // Use startNewProgram which handles archiving and version creation
     const result = await startNewProgram(userId, program, resetReason as ResetReason)
     
     if (!result.success) {
       return NextResponse.json(
-        { error: result.error || 'Failed to start new program' },
+        { error: result.error || 'Failed to start new program', historyAvailable: true },
         { status: 500 }
       )
     }
     
     return NextResponse.json({
       success: true,
+      historyAvailable: true,
       programHistoryId: result.programHistoryId,
       versionNumber: result.versionNumber,
       reasonSummary: result.reasonSummary,
@@ -179,8 +243,17 @@ export async function PUT(request: Request) {
     
   } catch (error) {
     console.error('[Program History] Error starting new program:', error)
+    // Check if this is a schema-missing error
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    if (errorMessage.includes('relation') && errorMessage.includes('does not exist')) {
+      return NextResponse.json({
+        success: false,
+        historyAvailable: false,
+        error: 'Program history persistence is not available yet',
+      }, { status: 202 })
+    }
     return NextResponse.json(
-      { error: 'Failed to start new program' },
+      { error: 'Failed to start new program', historyAvailable: false },
       { status: 500 }
     )
   }

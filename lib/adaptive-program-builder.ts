@@ -32,7 +32,8 @@ import {
 import { getUnifiedSkillIntelligence, generateTrainingAdjustments, type UnifiedSkillIntelligence } from './skill-intelligence-layer'
 import { getCompressionReadiness, shouldBiasTowardCompression, type CompressionReadinessResult } from './compression-readiness'
 import { selectOptimalStructure, getDayExplanation } from './program-structure-engine'
-import { selectExercisesForSession } from './program-exercise-selector'
+import { selectExercisesForSession, evaluateSessionProgressions, getSmartProgressionExercise } from './program-exercise-selector'
+import { evaluateExerciseProgression, type ProgressionDecision as SimpleProgressionDecision } from './progression-decision-engine'
 import { generateSessionVariants, type SessionVariant } from './session-compression-engine'
 import { analyzeEquipmentProfile, adaptSessionForEquipment, getEquipmentRecommendations, type EquipmentProfile } from './equipment-adaptation-engine'
 import { GOAL_LABELS } from './program-service'
@@ -281,6 +282,12 @@ export interface AdaptiveExercise {
   isSkipped?: boolean // Set when exercise is skipped
   isReplaced?: boolean // Set when exercise is replaced
   isProgressionAdjusted?: boolean // Set when progression is changed
+  // Performance-based progression decision
+  progressionDecision?: {
+    decision: SimpleProgressionDecision
+    confidence: number
+    reason: string
+  }
 }
 
 export interface AdaptiveProgram {
@@ -2040,6 +2047,34 @@ function mapToAdaptiveExercises(
       failureBudget.currentNearFailureSets += 1
     }
     
+    // Evaluate progression decision for skill and strength exercises
+    let progressionDecision: AdaptiveExercise['progressionDecision'] = undefined
+    if (s.exercise.category === 'skill' || s.exercise.category === 'strength') {
+      try {
+        const isIsometric = s.exercise.category === 'skill' && 
+          (s.exercise.defaultRepsOrTime?.includes('s') || 
+           s.exercise.id.includes('hold') ||
+           s.exercise.id.includes('lever') ||
+           s.exercise.id.includes('planche') ||
+           s.exercise.id.includes('l_sit'))
+        
+        const evaluation = evaluateExerciseProgression(
+          s.exercise.id,
+          s.exercise.name,
+          undefined, // Use default target range
+          isIsometric
+        )
+        
+        progressionDecision = {
+          decision: evaluation.decision,
+          confidence: evaluation.confidence,
+          reason: evaluation.reasoning,
+        }
+      } catch {
+        // Non-blocking - continue without progression decision
+      }
+    }
+    
     return {
       id: s.exercise.id,
       name: s.exercise.name,
@@ -2051,6 +2086,7 @@ function mapToAdaptiveExercises(
       selectionReason: s.selectionReason,
       method,
       methodLabel: getMethodLabel(method),
+      progressionDecision,
     }
   })
 }

@@ -239,11 +239,7 @@ export function generateFirstProgram(): FirstRunResult {
   try {
     const profile = getOnboardingProfile()
     
-    // Debug logging for troubleshooting
-    console.log('[v0] generateFirstProgram: profile keys:', profile ? Object.keys(profile).slice(0, 15) : 'null')
-    
     if (!profile || !isOnboardingComplete()) {
-      console.log('[v0] generateFirstProgram: onboarding incomplete')
       return {
         success: false,
         program: null,
@@ -258,13 +254,6 @@ export function generateFirstProgram(): FirstRunResult {
     
     // Normalize profile to safe inputs (handles legacy + current field names)
     const normalized = normalizeProfileForGeneration(profile)
-    console.log('[v0] generateFirstProgram: normalized inputs:', {
-      skills: normalized.selectedSkills,
-      days: normalized.trainingDaysPerWeek,
-      minutes: normalized.sessionLengthMinutes,
-      equipment: normalized.equipment.slice(0, 3),
-      experience: normalized.experienceLevel,
-    })
     
     // Map normalized data to program inputs
     const programInputs: AdaptiveProgramInputs = {
@@ -275,10 +264,20 @@ export function generateFirstProgram(): FirstRunResult {
       equipment: mapEquipment(normalized.equipment),
     }
     
-    console.log('[v0] generateFirstProgram: programInputs:', programInputs)
-    
     // Generate the program
     const program = generateAdaptiveProgram(programInputs)
+    
+    // Validate generated program has minimum required shape before saving
+    if (!program || !Array.isArray(program.sessions) || program.sessions.length === 0) {
+      console.error('[OnboardingService] Generated program is invalid or has no sessions')
+      return {
+        success: false,
+        program: null,
+        calibration: null,
+        welcomeMessage: 'Program generation produced invalid data.',
+        error: 'Generated program is missing sessions',
+      }
+    }
     
     // Save program to CANONICAL adaptive storage - this is the source of truth
     // that /program, first-session, and workout/session all read from
@@ -299,7 +298,7 @@ export function generateFirstProgram(): FirstRunResult {
       success: true,
       program,
       calibration,
-      welcomeMessage: getWelcomeMessage(profile, experienceLevel),
+      welcomeMessage: getWelcomeMessage(profile, normalized.experienceLevel),
     }
   } catch (error) {
     console.error('Failed to generate first program:', error)

@@ -22,8 +22,11 @@ export function AthleteOverviewCard({ user, profile }: AthleteOverviewCardProps)
           <p className="text-[#A5A5A5]">
             <span className="capitalize">{profile.experienceLevel}</span>
             {' Athlete'}
-            {profile.trainingDaysPerWeek > 0 && (
+            {typeof profile.trainingDaysPerWeek === 'number' && profile.trainingDaysPerWeek > 0 && (
               <span className="text-[#6A6A6A]"> • {profile.trainingDaysPerWeek} days/week</span>
+            )}
+            {profile.trainingDaysPerWeek === 'flexible' && (
+              <span className="text-[#6A6A6A]"> • Flexible schedule</span>
             )}
           </p>
           {goalName && (

@@ -37,7 +37,8 @@ export default function WeekAdjustmentPage() {
     setMounted(true)
     
     const prog = getLatestAdaptiveProgram()
-    if (!prog) return
+    // Safe guard: verify program and sessions array exist before using
+    if (!prog || !Array.isArray(prog.sessions) || prog.sessions.length === 0) return
     
     setProgram(prog)
     

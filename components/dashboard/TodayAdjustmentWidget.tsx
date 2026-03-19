@@ -32,7 +32,8 @@ export function TodayAdjustmentWidget() {
     setMounted(true)
     
     const program = getLatestAdaptiveProgram()
-    if (!program || program.sessions.length === 0) {
+    // Safe guard: verify program and sessions array exist before accessing
+    if (!program || !Array.isArray(program.sessions) || program.sessions.length === 0) {
       setCurrentSession(null)
       return
     }

@@ -95,24 +95,16 @@ export default function OnboardingCompletePage() {
       await new Promise(resolve => setTimeout(resolve, 1000))
       
       try {
-        // Debug: Log loaded profile state
-        console.log('[v0] OnboardingComplete: Starting program generation')
-        console.log('[v0] OnboardingComplete: Profile loaded:', loadedProfile ? 'yes' : 'no')
-        
         // This saves the program to canonical storage (spartanlab_adaptive_programs)
         // AND to backward-compatible storage (spartanlab_first_program)
         const result = generateFirstProgram()
         setProgramResult(result)
-        
-        console.log('[v0] OnboardingComplete: Generation result success:', result.success)
         
         if (result.success && result.program) {
           // VERIFICATION STEP: Confirm program is actually readable from canonical storage
           // This prevents routing to first-session if save didn't work
           const { getProgramState } = await import('@/lib/program-state')
           const verificationState = getProgramState()
-          
-          console.log('[v0] OnboardingComplete: Verification hasUsableWorkoutProgram:', verificationState.hasUsableWorkoutProgram)
           
           if (!verificationState.hasUsableWorkoutProgram) {
             console.error('[OnboardingComplete] Program saved but not readable from program-state')
@@ -138,15 +130,14 @@ export default function OnboardingCompletePage() {
             console.error('[OnboardingComplete] Failed to create program history:', err)
           })
           
-          console.log('[v0] OnboardingComplete: Success - moving to ready state')
           setStep('ready')
         } else {
-          console.error('[v0] OnboardingComplete: Generation failed:', result.error)
+          console.error('[OnboardingComplete] Generation failed:', result.error)
           setErrorMessage(result.error || 'Failed to generate program')
           setStep('error')
         }
       } catch (err) {
-        console.error('[v0] OnboardingComplete: Caught exception:', err)
+        console.error('[OnboardingComplete] Exception during generation:', err)
         setErrorMessage(String(err))
         setStep('error')
       }

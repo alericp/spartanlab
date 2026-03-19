@@ -39,11 +39,19 @@ import {
   AlertCircle,
 } from 'lucide-react'
 import { SpartanIcon } from '@/components/brand/SpartanLogo'
-import { getOnboardingProfile, calculateReadinessScores } from '@/lib/athlete-profile'
-import { generateFirstProgram, type FirstRunResult } from '@/lib/onboarding-service'
-import { hasProAccess, isInTrial, getTrialDaysRemaining } from '@/lib/feature-access'
-import { PRICING } from '@/lib/billing/pricing'
-import { trackSignupCompleted, trackProgramGenerated } from '@/lib/analytics'
+
+// =============================================================================
+// IMPORT SAFETY: Heavy runtime helpers are now dynamically imported
+// This prevents module-evaluation failures from crashing the entire page bundle
+// =============================================================================
+
+// Type-only imports are safe at module scope
+import type { FirstRunResult } from '@/lib/onboarding-service'
+import type { OnboardingProfile, ReadinessScores } from '@/lib/athlete-profile'
+
+// PRICING is a static const object - check if safe to keep at module scope
+// Moving to dynamic import for maximum safety
+// import { PRICING } from '@/lib/billing/pricing'
 
 // Pro feature highlights
 const PRO_FEATURES = [
@@ -82,9 +90,11 @@ export default function OnboardingCompleteClient() {
   const [isTrial, setIsTrial] = useState(false)
   const [trialDays, setTrialDays] = useState(0)
   const [isLoading, setIsLoading] = useState(false)
-  const [profile, setProfile] = useState<ReturnType<typeof getOnboardingProfile> | null>(null)
+  const [profile, setProfile] = useState<OnboardingProfile | null>(null)
+  const [readiness, setReadiness] = useState<ReadinessScores | null>(null)
   const [programResult, setProgramResult] = useState<FirstRunResult | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [pricingData, setPricingData] = useState<{ pro: { displayWithPeriod: string } } | null>(null)
   
   // IDEMPOTENCY GUARD: Prevent duplicate generation from remounts/history/cache
   const generationAttemptedRef = useRef(false)
@@ -92,62 +102,112 @@ export default function OnboardingCompleteClient() {
 
   useEffect(() => {
     setMounted(true)
-    console.log('[OnboardingCompleteClient] useEffect mount started')
+    console.log('[OnboardingCompleteClient] useEffect mount started - beginning bootstrap')
     
-    // Branch setup calls - wrapped defensively to prevent crashes
-    // CRITICAL: Capture results locally so we can use them in diagnostics
-    let localIsPro = false
-    let localIsTrial = false
-    let localTrialDays = 0
-    
-    try {
-      localIsPro = hasProAccess()
-      setIsPro(localIsPro)
-      console.log('[OnboardingCompleteClient] hasProAccess succeeded:', localIsPro)
-    } catch (err) {
-      console.error('[OnboardingCompleteClient] hasProAccess failed, defaulting to false:', err)
-      setIsPro(false)
-    }
-    
-    try {
-      localIsTrial = isInTrial()
-      setIsTrial(localIsTrial)
-      console.log('[OnboardingCompleteClient] isInTrial succeeded:', localIsTrial)
-    } catch (err) {
-      console.error('[OnboardingCompleteClient] isInTrial failed, defaulting to false:', err)
-      setIsTrial(false)
-    }
-    
-    try {
-      localTrialDays = getTrialDaysRemaining()
-      setTrialDays(localTrialDays)
-      console.log('[OnboardingCompleteClient] getTrialDaysRemaining succeeded:', localTrialDays)
-    } catch (err) {
-      console.error('[OnboardingCompleteClient] getTrialDaysRemaining failed, defaulting to 0:', err)
-      setTrialDays(0)
-    }
-    
-    let loadedProfile = null
-    try {
-      loadedProfile = getOnboardingProfile()
-      // Diagnostic: confirm normalized profile shape
-      if (loadedProfile) {
-        console.log('[OnboardingCompleteClient] Profile loaded (normalized):', {
-          hasArrayFields: {
-            equipment: Array.isArray(loadedProfile.equipment),
-            selectedSkills: Array.isArray(loadedProfile.selectedSkills),
-            jointCautions: Array.isArray(loadedProfile.jointCautions),
-          },
-          hasNumericFields: {
-            trainingDaysPerWeek: typeof loadedProfile.trainingDaysPerWeek,
-            sessionLengthMinutes: typeof loadedProfile.sessionLengthMinutes,
-          },
-        })
+    // =======================================================================
+    // BOOTSTRAP: Load all heavy modules via dynamic import
+    // This prevents module-evaluation failures from black-screening the page
+    // =======================================================================
+    const bootstrap = async () => {
+      let localIsPro = false
+      let localIsTrial = false
+      let localTrialDays = 0
+      let loadedProfile: OnboardingProfile | null = null
+      
+      // Load feature-access module dynamically
+      try {
+        console.log('[OnboardingCompleteClient] Loading feature-access module...')
+        const featureModule = await import('@/lib/feature-access')
+        
+        try {
+          localIsPro = featureModule.hasProAccess()
+          setIsPro(localIsPro)
+          console.log('[OnboardingCompleteClient] hasProAccess succeeded:', localIsPro)
+        } catch (err) {
+          console.error('[OnboardingCompleteClient] hasProAccess failed, defaulting to false:', err)
+          setIsPro(false)
+        }
+        
+        try {
+          localIsTrial = featureModule.isInTrial()
+          setIsTrial(localIsTrial)
+          console.log('[OnboardingCompleteClient] isInTrial succeeded:', localIsTrial)
+        } catch (err) {
+          console.error('[OnboardingCompleteClient] isInTrial failed, defaulting to false:', err)
+          setIsTrial(false)
+        }
+        
+        try {
+          localTrialDays = featureModule.getTrialDaysRemaining()
+          setTrialDays(localTrialDays)
+          console.log('[OnboardingCompleteClient] getTrialDaysRemaining succeeded:', localTrialDays)
+        } catch (err) {
+          console.error('[OnboardingCompleteClient] getTrialDaysRemaining failed, defaulting to 0:', err)
+          setTrialDays(0)
+        }
+        
+        console.log('[OnboardingCompleteClient] feature-access module loaded successfully')
+      } catch (err) {
+        console.error('[OnboardingCompleteClient] Failed to load feature-access module:', err)
+        setIsPro(false)
+        setIsTrial(false)
+        setTrialDays(0)
       }
-    } catch (err) {
-      console.error('[OnboardingCompleteClient] getOnboardingProfile failed:', err)
+      
+      // Load athlete-profile module dynamically
+      try {
+        console.log('[OnboardingCompleteClient] Loading athlete-profile module...')
+        const athleteModule = await import('@/lib/athlete-profile')
+        
+        try {
+          loadedProfile = athleteModule.getOnboardingProfile()
+          if (loadedProfile) {
+            console.log('[OnboardingCompleteClient] Profile loaded (normalized):', {
+              hasArrayFields: {
+                equipment: Array.isArray(loadedProfile.equipment),
+                selectedSkills: Array.isArray(loadedProfile.selectedSkills),
+                jointCautions: Array.isArray(loadedProfile.jointCautions),
+              },
+              hasNumericFields: {
+                trainingDaysPerWeek: typeof loadedProfile.trainingDaysPerWeek,
+                sessionLengthMinutes: typeof loadedProfile.sessionLengthMinutes,
+              },
+            })
+            setProfile(loadedProfile)
+            
+            // Calculate readiness scores
+            try {
+              const scores = athleteModule.calculateReadinessScores(loadedProfile)
+              setReadiness(scores)
+              console.log('[OnboardingCompleteClient] Readiness calculated')
+            } catch (err) {
+              console.error('[OnboardingCompleteClient] calculateReadinessScores failed:', err)
+              setReadiness(null)
+            }
+          }
+        } catch (err) {
+          console.error('[OnboardingCompleteClient] getOnboardingProfile failed:', err)
+        }
+        
+        console.log('[OnboardingCompleteClient] athlete-profile module loaded successfully')
+      } catch (err) {
+        console.error('[OnboardingCompleteClient] Failed to load athlete-profile module:', err)
+        setProfile(null)
+        setReadiness(null)
+      }
+      
+      // Load pricing module dynamically
+      try {
+        const pricingModule = await import('@/lib/billing/pricing')
+        setPricingData(pricingModule.PRICING)
+        console.log('[OnboardingCompleteClient] Pricing module loaded successfully')
+      } catch (err) {
+        console.error('[OnboardingCompleteClient] Failed to load pricing module:', err)
+        setPricingData(null)
+      }
+      
+      return { localIsPro, localIsTrial, localTrialDays, loadedProfile }
     }
-    setProfile(loadedProfile)
     
     // CRITICAL: Generate the program from onboarding data
     const generateProgram = async () => {
@@ -190,9 +250,16 @@ export default function OnboardingCompleteClient() {
       await new Promise(resolve => setTimeout(resolve, 1000))
       
       try {
+        // =======================================================================
+        // DYNAMIC IMPORT: Load generation module at runtime
+        // =======================================================================
+        console.log('[OnboardingCompleteClient] Loading onboarding-service module...')
+        const onboardingModule = await import('@/lib/onboarding-service')
+        console.log('[OnboardingCompleteClient] onboarding-service module loaded successfully')
+        
         // This saves the program to canonical storage (spartanlab_adaptive_programs)
         // AND to backward-compatible storage (spartanlab_first_program)
-        const result = generateFirstProgram()
+        const result = onboardingModule.generateFirstProgram()
         setProgramResult(result)
         
         if (result.success && result.program) {
@@ -224,8 +291,10 @@ export default function OnboardingCompleteClient() {
           
           // Track analytics - non-blocking, wrapped so failures don't crash the route
           try {
-            trackSignupCompleted()
-            trackProgramGenerated('onboarding', loadedProfile?.primaryGoal)
+            const analyticsModule = await import('@/lib/analytics')
+            analyticsModule.trackSignupCompleted()
+            analyticsModule.trackProgramGenerated('onboarding', bootstrapData?.loadedProfile?.primaryGoal)
+            console.log('[OnboardingCompleteClient] Analytics tracked successfully')
           } catch (analyticsErr) {
             console.error('[OnboardingCompleteClient] Analytics failed (non-fatal):', analyticsErr)
           }
@@ -244,10 +313,10 @@ export default function OnboardingCompleteClient() {
           })
           
           console.log('[OnboardingCompleteClient] SUCCESS: Setting step to ready', { 
-            isPro: localIsPro, 
-            isTrial: localIsTrial, 
+            isPro: bootstrapData?.localIsPro, 
+            isTrial: bootstrapData?.localIsTrial, 
             sessionCount: verificationState.sessionCount,
-            branch: localIsPro ? 'pro-success' : 'free-preview'
+            branch: bootstrapData?.localIsPro ? 'pro-success' : 'free-preview'
           })
           setStep('ready')
         } else {
@@ -262,7 +331,15 @@ export default function OnboardingCompleteClient() {
       }
     }
     
-    generateProgram()
+    // Chain: bootstrap first, then generate
+    let bootstrapData: { localIsPro: boolean; localIsTrial: boolean; localTrialDays: number; loadedProfile: OnboardingProfile | null } | null = null
+    
+    const run = async () => {
+      bootstrapData = await bootstrap()
+      await generateProgram()
+    }
+    
+    run()
   }, [])
 
   if (!mounted) {
@@ -273,15 +350,8 @@ export default function OnboardingCompleteClient() {
     )
   }
 
-  // Calculate readiness if profile exists - wrapped defensively
-  let readiness = null
-  if (profile) {
-    try {
-      readiness = calculateReadinessScores(profile)
-    } catch (err) {
-      console.error('[OnboardingCompleteClient] calculateReadinessScores failed:', err)
-    }
-  }
+  // Note: readiness is now computed during bootstrap and stored in state
+  // No render-time calculation needed
 
   // Get primary goal display
   const getPrimaryGoalDisplay = () => {
@@ -382,7 +452,11 @@ export default function OnboardingCompleteClient() {
                 }
                 
                 try {
-                  const result = generateFirstProgram()
+                  // =======================================================================
+                  // DYNAMIC IMPORT: Load generation module for retry
+                  // =======================================================================
+                  const onboardingModule = await import('@/lib/onboarding-service')
+                  const result = onboardingModule.generateFirstProgram()
                   setProgramResult(result)
                   if (result.success && result.program) {
                     // Verify program is readable
@@ -398,6 +472,16 @@ export default function OnboardingCompleteClient() {
                       } catch {
                         // Ignore
                       }
+                      
+                      // Track analytics for retry success
+                      try {
+                        const analyticsModule = await import('@/lib/analytics')
+                        analyticsModule.trackSignupCompleted()
+                        analyticsModule.trackProgramGenerated('onboarding-retry', profile?.primaryGoal)
+                      } catch (analyticsErr) {
+                        console.error('[OnboardingCompleteClient] Retry analytics failed:', analyticsErr)
+                      }
+                      
                       setStep('ready')
                     } else {
                       setErrorMessage('Program was created but could not be verified.')
@@ -633,7 +717,7 @@ export default function OnboardingCompleteClient() {
                 <Sparkles className="w-4 h-4 text-amber-400" />
                 <span className="text-[#E6E9EF] font-medium">7-Day Free Trial</span>
               </div>
-              <span className="text-sm text-[#6B7280]">Then {PRICING.pro.displayWithPeriod}</span>
+              <span className="text-sm text-[#6B7280]">Then {pricingData?.pro?.displayWithPeriod || '$19.99/month'}</span>
             </div>
             <p className="text-xs text-[#6B7280]">
               No charge until your trial ends. Cancel anytime.

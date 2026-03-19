@@ -95,6 +95,7 @@ export type SkillCarryover =
   | 'human_flag'
   | 'one_arm_pull_up'
   | 'one_arm_push_up'
+  | 'dragon_flag'
 
 // =============================================================================
 // EQUIPMENT DEFINITIONS
@@ -129,6 +130,49 @@ export type EquipmentTag =
  * Difficulty/progression bands
  */
 export type DifficultyBand = 'beginner' | 'intermediate' | 'advanced' | 'elite'
+
+// =============================================================================
+// ARM TYPE / LIMB POSITION DEFINITIONS
+// =============================================================================
+
+/**
+ * Arm type classification for exercise stress management
+ * Straight-arm work has distinct tendon stress patterns from bent-arm work
+ */
+export type ArmType = 'straight_arm' | 'bent_arm' | 'mixed' | 'none'
+
+// =============================================================================
+// TRUNK DEMAND DEFINITIONS
+// =============================================================================
+
+/**
+ * Trunk position and demand classification
+ * Important for core engagement and exercise pairing
+ */
+export type TrunkDemand = 
+  | 'hollow'           // Posterior pelvic tilt, rectus abdominis engaged
+  | 'arch'             // Anterior pelvic tilt, erector engagement
+  | 'anti_extension'   // Resisting spine extension
+  | 'compression'      // Active hip flexion and spine flexion
+  | 'neutral'          // Neutral spine position
+  | 'mixed'            // Multiple positions throughout exercise
+
+// =============================================================================
+// SCAPULAR DEMAND DEFINITIONS
+// =============================================================================
+
+/**
+ * Scapular position and demand classification
+ * Critical for shoulder health and skill transfer
+ */
+export type ScapularDemand = 
+  | 'depression'       // Scapulae pulled down (front lever, dips)
+  | 'retraction'       // Scapulae pulled together (rows)
+  | 'protraction'      // Scapulae pushed apart (planche, push-up)
+  | 'elevation'        // Scapulae pulled up (shrugs)
+  | 'upward_rotation'  // Overhead position (HSPU, overhead press)
+  | 'mixed'            // Multiple positions throughout exercise
+  | 'neutral'          // No significant scapular demand
 
 // =============================================================================
 // EXERCISE CLASSIFICATION INTERFACE
@@ -178,6 +222,11 @@ export interface ExerciseClassification {
   
   // Detailed joint stress profile
   jointStressProfile?: JointStressProfile
+  
+  // Movement intelligence fields for advanced programming
+  armType?: ArmType                   // Straight-arm vs bent-arm classification
+  trunkDemand?: TrunkDemand           // Trunk position requirement
+  scapularDemand?: ScapularDemand     // Scapular position requirement
 }
 
 // =============================================================================
@@ -465,6 +514,34 @@ export const EXERCISE_JOINT_STRESS_PROFILES: Record<string, JointStressProfile> 
     ],
     recoveryDays: 3,
     contraindications: ['biceps_tendinitis', 'shoulder_instability'],
+  },
+  
+  // Dragon flag progressions - anti-extension core stress
+  'dragon_flag': {
+    overallStress: 'moderate',
+    primaryStressors: [
+      { region: 'spine', level: 'moderate', notes: 'Anti-extension demand on lower back' },
+      { region: 'hip_flexor', level: 'moderate', notes: 'Hip flexor engagement for position' },
+    ],
+    recoveryDays: 2,
+    contraindications: ['lower_back_injury', 'hip_flexor_strain'],
+  },
+  'dragon_flag_tuck': {
+    overallStress: 'low',
+    primaryStressors: [
+      { region: 'spine', level: 'low', notes: 'Reduced lever arm in tuck position' },
+    ],
+    recoveryDays: 1,
+    contraindications: ['lower_back_injury'],
+  },
+  'dragon_flag_neg': {
+    overallStress: 'moderate',
+    primaryStressors: [
+      { region: 'spine', level: 'moderate', notes: 'Eccentric loading on spinal erectors' },
+      { region: 'hip_flexor', level: 'low', notes: 'Controlled descent' },
+    ],
+    recoveryDays: 2,
+    contraindications: ['lower_back_injury'],
   },
   
   // Compression work
@@ -871,6 +948,13 @@ export const SKILL_CARRYOVER_METADATA: Record<SkillCarryover, SkillCarryoverMeta
     name: 'One Arm Push-Up',
     primaryFamilies: ['horizontal_push'],
     supportFamilies: ['anti_rotation_core'],
+    keyIntents: ['strength', 'skill'],
+  },
+  dragon_flag: {
+    id: 'dragon_flag',
+    name: 'Dragon Flag',
+    primaryFamilies: ['anti_extension_core', 'compression_core'],
+    supportFamilies: ['scapular_control', 'vertical_pull'],
     keyIntents: ['strength', 'skill'],
   },
 }

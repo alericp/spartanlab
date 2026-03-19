@@ -33,6 +33,7 @@ export interface AthleteProfile {
   pullUpMax?: number | null
   dipMax?: number | null
   trainingStyle?: 'skill_focused' | 'strength_focused' | 'power_focused' | 'endurance_focused' | 'hypertrophy_supported' | 'balanced_hybrid'
+  scheduleMode?: 'static' | 'flexible'
   onboardingComplete: boolean
   createdAt: string
 }
@@ -72,6 +73,7 @@ const DEFAULT_PROFILE: AthleteProfile = {
   primaryGoal: 'planche',
   equipmentAvailable: ['pullup_bar', 'dip_bars', 'parallettes'],
   trainingStyle: 'balanced_hybrid',
+  scheduleMode: 'static',
   onboardingComplete: true,
   createdAt: new Date().toISOString(),
 }

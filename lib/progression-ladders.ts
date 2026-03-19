@@ -639,6 +639,70 @@ export const PROGRESSION_LADDERS: ProgressionLadder[] = [
       },
     ],
   },
+
+  // ===== ANTI-EXTENSION / DRAGON FLAG PROGRESSION =====
+  {
+    id: 'anti_extension_progression',
+    name: 'Anti-Extension / Dragon Flag',
+    description: 'Anti-extension core strength progression leading to full dragon flag',
+    skill: 'dragon_flag',
+    steps: [
+      {
+        exerciseId: 'hollow_body',
+        level: 1,
+        prerequisiteHoldTime: '45s',
+        cues: ['Lower back pressed to floor', 'Arms overhead', 'Tight body line'],
+      },
+      {
+        exerciseId: 'hollow_body_rock',
+        level: 2,
+        prerequisiteReps: 20,
+        cues: ['Maintain hollow shape', 'Rock without breaking', 'Controlled tempo'],
+      },
+      {
+        exerciseId: 'body_lever',
+        level: 3,
+        prerequisiteHoldTime: '20s',
+        cues: ['Anchor upper back', 'Resist extension', 'Build to straight legs'],
+      },
+      {
+        exerciseId: 'hanging_leg_raise',
+        level: 4,
+        prerequisiteReps: 12,
+        cues: ['No swing', 'Posterior pelvic tilt', 'Control descent'],
+      },
+      {
+        exerciseId: 'toes_to_bar',
+        level: 5,
+        prerequisiteReps: 8,
+        cues: ['Touch toes to bar', 'Maximum compression', 'Controlled eccentric'],
+      },
+      {
+        exerciseId: 'dragon_flag_tuck',
+        level: 6,
+        prerequisiteReps: 10,
+        cues: ['Shoulder blades anchor', 'Knees tucked', 'Full body tension'],
+      },
+      {
+        exerciseId: 'dragon_flag_neg',
+        level: 7,
+        prerequisiteReps: 5,
+        cues: ['5 second descent', 'Straight body line', 'Fight gravity'],
+      },
+      {
+        exerciseId: 'dragon_flag_assisted',
+        level: 8,
+        prerequisiteReps: 6,
+        cues: ['Band supports concentric', 'Full ROM', 'Progress to less assistance'],
+      },
+      {
+        exerciseId: 'dragon_flag',
+        level: 9,
+        prerequisiteReps: 4,
+        cues: ['Full concentric + eccentric', 'Perfect body line', 'Maximum tension'],
+      },
+    ],
+  },
 ]
 
 // =============================================================================

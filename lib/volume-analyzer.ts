@@ -60,23 +60,40 @@ function getStartOfWeek(): Date {
   return monday
 }
 
-// Get workouts from current week
+/**
+ * Filter function for trusted workout logs.
+ * FEEDBACK LOOP: Only trusted logs are used for volume/fatigue calculations.
+ */
+function isTrustedLog(log: WorkoutLog): boolean {
+  // Explicit trusted field takes precedence
+  if (log.trusted === false) return false
+  // Demo sources are never trusted
+  if (log.sourceRoute === 'demo') return false
+  // Default to trusted for legacy logs
+  return true
+}
+
+// Get workouts from current week (trusted only)
 function getWorkoutsThisWeek(): WorkoutLog[] {
   const logs = getWorkoutLogs()
   const startOfWeek = getStartOfWeek()
   return logs.filter(log => {
+    if (!isTrustedLog(log)) return false
     const logDate = new Date(log.sessionDate)
     return logDate >= startOfWeek
   })
 }
 
-// Get workouts from last N days
+// Get workouts from last N days (trusted only)
 export function getWorkoutsLastNDays(days: number): WorkoutLog[] {
   const logs = getWorkoutLogs()
   const cutoff = new Date()
   cutoff.setDate(cutoff.getDate() - days)
   cutoff.setHours(0, 0, 0, 0)
-  return logs.filter(log => new Date(log.sessionDate) >= cutoff)
+  return logs.filter(log => {
+    if (!isTrustedLog(log)) return false
+    return new Date(log.sessionDate) >= cutoff
+  })
 }
 
 // Calculate weekly volume summary

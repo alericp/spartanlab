@@ -279,16 +279,37 @@ export function buildExerciseLoadMetadata(
     exercise.isIsometric
   )
   
-  // Determine joint stress category
+  // Determine joint stress category using movement pattern analysis
+  // Enhanced to recognize straight-arm work from skill exercises
   let jointStressCategory: ExerciseLoadMetadata['jointStressCategory']
-  if (exercise.movementPattern?.includes('horizontal')) {
+  
+  const pattern = exercise.movementPattern?.toLowerCase() || ''
+  const isHighSkillCategory = exercise.category === 'skill'
+  
+  // Straight-arm detection: planche family, lever work, ring statics
+  const isStraightArmPattern = 
+    pattern.includes('horizontal_push') && isHighSkillCategory ||  // Planche work
+    pattern.includes('skill') && exercise.neuralDemand >= 4 ||      // High-skill isometrics
+    pattern === 'skill' ||                                           // General skill category
+    pattern.includes('transition')                                   // Muscle-up transitions have SA component
+  
+  // Bent-arm pulling/pushing is typical strength work
+  const isBentArmPattern =
+    pattern.includes('vertical_pull') ||
+    pattern.includes('vertical_push') ||
+    (pattern.includes('horizontal_pull') && !isHighSkillCategory) ||
+    (pattern.includes('horizontal_push') && !isHighSkillCategory)
+  
+  if (isStraightArmPattern) {
     jointStressCategory = 'straight_arm'
-  } else if (exercise.movementPattern?.includes('vertical')) {
+  } else if (isBentArmPattern) {
     jointStressCategory = 'bent_arm'
-  } else if (exercise.movementPattern?.includes('core') || exercise.movementPattern?.includes('compression')) {
+  } else if (pattern.includes('core') || pattern.includes('compression')) {
     jointStressCategory = 'core'
-  } else {
+  } else if (exercise.category === 'accessory' || exercise.fatigueCost <= 2) {
     jointStressCategory = 'minimal'
+  } else {
+    jointStressCategory = 'bent_arm' // Default to bent-arm for unknown strength work
   }
   
   return {

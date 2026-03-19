@@ -306,6 +306,7 @@ export default function SettingsPage() {
 
   const [bodyweight, setBodyweight] = useState('')
   const [experienceLevel, setExperienceLevel] = useState('beginner')
+  const [scheduleMode, setScheduleMode] = useState<'static' | 'flexible'>('static')
   const [trainingDays, setTrainingDays] = useState('3')
   const [sessionLength, setSessionLength] = useState('60')
   const [primaryGoal, setPrimaryGoal] = useState('none')
@@ -329,7 +330,15 @@ export default function SettingsPage() {
     setProfile(data)
     setBodyweight(data.bodyweight?.toString() || '')
     setExperienceLevel(data.experienceLevel || 'beginner')
-    setTrainingDays(data.trainingDaysPerWeek?.toString() || '3')
+    // Handle flexible schedule mode
+    const profileDays = data.trainingDaysPerWeek
+    if (profileDays === 'flexible' || (data as AthleteProfile & { scheduleMode?: string }).scheduleMode === 'flexible') {
+      setScheduleMode('flexible')
+      setTrainingDays('4')  // Default display for flexible
+    } else {
+      setScheduleMode('static')
+      setTrainingDays(profileDays?.toString() || '3')
+    }
     setSessionLength(data.sessionLengthMinutes?.toString() || '60')
     setPrimaryGoal(data.primaryGoal || 'none')
     setEquipment(data.equipmentAvailable || [])
@@ -342,11 +351,13 @@ export default function SettingsPage() {
     setSaving(true)
     setSaved(false)
     
-    // Prepare update payload
+    // Prepare update payload - preserve flexible mode semantics
     const updates = {
       bodyweight: bodyweight ? parseFloat(bodyweight) : null,
       experienceLevel: experienceLevel as 'beginner' | 'intermediate' | 'advanced',
-      trainingDaysPerWeek: parseInt(trainingDays),
+      // For flexible mode, store 'flexible' as the value, not a number
+      trainingDaysPerWeek: scheduleMode === 'flexible' ? 'flexible' as const : parseInt(trainingDays),
+      scheduleMode: scheduleMode,
       sessionLengthMinutes: parseInt(sessionLength) as 30 | 45 | 60 | 90,
       primaryGoal: primaryGoal === 'none' ? null : primaryGoal,
       equipmentAvailable: equipment,
@@ -556,22 +567,60 @@ export default function SettingsPage() {
             </p>
           </div>
 
-          {/* Training Days */}
+          {/* Schedule Mode */}
           <div className="space-y-2">
-            <Label className="text-[#F5F5F5]">Training Days Per Week</Label>
-            <Select value={trainingDays} onValueChange={setTrainingDays}>
+            <Label className="text-[#F5F5F5]">Schedule Type</Label>
+            <Select 
+              value={scheduleMode} 
+              onValueChange={(v) => setScheduleMode(v as 'static' | 'flexible')}
+            >
               <SelectTrigger className="bg-[#1A1A1A] border-[#3A3A3A] text-[#F5F5F5]">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent className="bg-[#2A2A2A] border-[#3A3A3A]">
-                {[1, 2, 3, 4, 5, 6, 7].map((day) => (
-                  <SelectItem key={day} value={day.toString()} className="text-[#F5F5F5] focus:bg-[#3A3A3A]">
-                    {day} day{day !== 1 ? 's' : ''}
-                  </SelectItem>
-                ))}
+                <SelectItem value="static" className="text-[#F5F5F5] focus:bg-[#3A3A3A]">
+                  Fixed Schedule
+                </SelectItem>
+                <SelectItem value="flexible" className="text-[#F5F5F5] focus:bg-[#3A3A3A]">
+                  Flexible / Adaptive
+                </SelectItem>
               </SelectContent>
             </Select>
+            <p className="text-xs text-[#A5A5A5] mt-1">
+              {scheduleMode === 'flexible' 
+                ? 'AI adapts your weekly frequency based on recovery and goals'
+                : 'Train on a fixed number of days each week'}
+            </p>
           </div>
+
+          {/* Training Days - Only show for static mode */}
+          {scheduleMode === 'static' && (
+            <div className="space-y-2">
+              <Label className="text-[#F5F5F5]">Training Days Per Week</Label>
+              <Select value={trainingDays} onValueChange={setTrainingDays}>
+                <SelectTrigger className="bg-[#1A1A1A] border-[#3A3A3A] text-[#F5F5F5]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-[#2A2A2A] border-[#3A3A3A]">
+                  {[2, 3, 4, 5, 6].map((day) => (
+                    <SelectItem key={day} value={day.toString()} className="text-[#F5F5F5] focus:bg-[#3A3A3A]">
+                      {day} days
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+          
+          {/* Flexible Mode Info */}
+          {scheduleMode === 'flexible' && (
+            <div className="p-3 rounded-lg bg-[#1A1A1A] border border-[#3A3A3A]">
+              <p className="text-sm text-[#A5A5A5]">
+                Your current week is set to <span className="text-[#F5F5F5] font-medium">{trainingDays} days</span> based on your recovery and goals.
+                This may adjust week-to-week.
+              </p>
+            </div>
+          )}
 
           {/* Session Length */}
           <div className="space-y-2">

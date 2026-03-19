@@ -27,18 +27,20 @@ import {
   calculateBackLeverReadiness,
   calculateVSitReadiness,
   calculateIronCrossReadiness,
+  calculateDragonFlagReadiness,
   type ReadinessResult,
   type ReadinessLevel,
   type ScoreBreakdown,
   type IronCrossInputs,
   type VSitInputs,
+  type DragonFlagInputs,
 } from './skill-readiness'
 
 // =============================================================================
 // UNIFIED READINESS OUTPUT TYPES
 // =============================================================================
 
-export type SkillType = 'front_lever' | 'back_lever' | 'planche' | 'hspu' | 'muscle_up' | 'l_sit' | 'v_sit' | 'iron_cross'
+export type SkillType = 'front_lever' | 'back_lever' | 'planche' | 'hspu' | 'muscle_up' | 'l_sit' | 'v_sit' | 'iron_cross' | 'dragon_flag'
 
 /**
  * Standardized readiness component scores (0-100)
@@ -205,6 +207,14 @@ l_sit: {
     'Shoulder Stability': 'shoulderStability',
     'Tendon Tolerance': 'tendonTolerance',
   },
+  dragon_flag: {
+    'Hollow Body Hold': 'compression',
+    'Dragon Flag Tuck': 'skillSpecific',
+    'Leg Raise Strength': 'compression',
+    'Ab Wheel Rollout': 'compression',
+    'Lower Back Mobility': 'mobility',
+    'Hip Flexor Strength': 'compression',
+  },
 }
 
 /**
@@ -270,6 +280,14 @@ l_sit: {
     'Tendon conditioning needed': 'tendon_tolerance',
     'Overall rings strength': 'straight_arm_push_strength',
   },
+  dragon_flag: {
+    'Core compression weakness': 'compression_strength',
+    'Dragon flag progression deficit': 'skill_coordination',
+    'Hip flexor weakness': 'compression_strength',
+    'Lower back mobility limitation': 'mobility',
+    'Anti-extension control': 'core_control',
+    'General preparedness': 'compression_strength',
+  },
 }
 
 // =============================================================================
@@ -334,6 +352,12 @@ export interface AthleteReadinessInput {
   shoulderStability?: 'unstable' | 'moderate' | 'stable' | 'very_stable'
   tendonTolerance?: 'low' | 'moderate' | 'high'
   assistedCrossHoldTime?: number
+  
+  // Dragon Flag specific
+  dragonFlagTuckReps?: number
+  legRaiseMax?: number
+  abWheelRolloutMax?: number
+  lowerBackMobility?: 'poor' | 'moderate' | 'good' | 'excellent'
   }
 
 // =============================================================================
@@ -361,7 +385,7 @@ export function calculateCanonicalReadiness(
 export function calculateAllSkillReadiness(
   input: AthleteReadinessInput
 ): Map<SkillType, CanonicalReadinessResult> {
-  const skills: SkillType[] = ['front_lever', 'back_lever', 'planche', 'hspu', 'muscle_up', 'l_sit']
+  const skills: SkillType[] = ['front_lever', 'back_lever', 'planche', 'hspu', 'muscle_up', 'l_sit', 'v_sit', 'iron_cross', 'dragon_flag']
   const results = new Map<SkillType, CanonicalReadinessResult>()
   
   for (const skill of skills) {
@@ -495,6 +519,15 @@ function calculateRawReadiness(skill: SkillType, input: AthleteReadinessInput): 
   tendonTolerance: input.tendonTolerance ?? 'low',
   hasRings: input.hasRings ?? false,
   assistedCrossHoldTime: input.assistedCrossHoldTime,
+  })
+  
+  case 'dragon_flag':
+  return calculateDragonFlagReadiness({
+  dragonFlagTuckReps: input.dragonFlagTuckReps ?? 0,
+  legRaiseMax: input.legRaiseMax ?? 0,
+  abWheelRolloutMax: input.abWheelRolloutMax ?? 0,
+  hollowHoldTime: input.hollowHoldTime ?? 0,
+  lowerBackMobility: input.lowerBackMobility ?? 'moderate',
   })
   
   default:

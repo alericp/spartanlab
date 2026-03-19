@@ -90,7 +90,7 @@ export function FirstRunGuide() {
       },
     ]
     
-    console.log('[FirstRunGuide] State:', { hasProfile, hasProgram, hasWorkout })
+    console.log('[first-run-cta] State:', { hasProfile, hasProgram, hasWorkout })
 
     setSteps(setupSteps)
     

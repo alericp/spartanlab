@@ -457,6 +457,74 @@ export const PREREQUISITE_RULES: PrerequisiteRule[] = [
     riskLevel: 'high',
   },
   
+  // ===== DRAGON FLAG =====
+  {
+    exerciseId: 'dragon_flag',
+    exerciseName: 'Dragon Flag',
+    requiredStrengthMetrics: [
+      {
+        metric: 'core_strength',
+        level: 'intermediate',
+        description: 'Strong anti-extension core control',
+      },
+    ],
+    requiredSkillStage: [
+      {
+        exerciseId: 'dragon_flag_neg',
+        exerciseName: 'Dragon Flag Negatives',
+        reps: 5,
+      },
+      {
+        exerciseId: 'dragon_flag_tuck',
+        exerciseName: 'Tuck Dragon Flag',
+        reps: 8,
+      },
+    ],
+    requiredJointStability: [
+      {
+        joint: 'lower_back',
+        stabilityThreshold: 60,
+        description: 'Spinal stability for anti-extension loading',
+      },
+    ],
+    minimumReadinessScore: 50,
+    warningMessage: 'Dragon flags require strong anti-extension core control. Build tuck dragon flags and negatives first.',
+    knowledgeBubble: 'Dragon flag negatives build eccentric control needed for full concentric dragon flags.',
+    safeProgressionLadder: ['hollow_body_hold', 'body_lever', 'dragon_flag_tuck', 'dragon_flag_neg', 'dragon_flag_assisted', 'dragon_flag'],
+    riskLevel: 'moderate',
+  },
+  
+  // ===== DRAGON FLAG NEGATIVES =====
+  {
+    exerciseId: 'dragon_flag_neg',
+    exerciseName: 'Dragon Flag Negatives',
+    requiredStrengthMetrics: [
+      {
+        metric: 'core_strength',
+        level: 'beginner',
+        description: 'Basic anti-extension core control',
+      },
+    ],
+    requiredSkillStage: [
+      {
+        exerciseId: 'dragon_flag_tuck',
+        exerciseName: 'Tuck Dragon Flag',
+        reps: 6,
+      },
+    ],
+    requiredJointStability: [
+      {
+        joint: 'lower_back',
+        stabilityThreshold: 50,
+        description: 'Core stability for eccentric loading',
+      },
+    ],
+    warningMessage: 'Dragon flag negatives require tuck dragon flag mastery first.',
+    knowledgeBubble: 'Tuck dragon flags build the core tension pattern needed for negatives.',
+    safeProgressionLadder: ['hollow_body_hold', 'body_lever', 'dragon_flag_tuck', 'dragon_flag_neg'],
+    riskLevel: 'moderate',
+  },
+  
   // ===== IRON CROSS (ASSISTED) =====
   {
     exerciseId: 'assisted_cross_hold',

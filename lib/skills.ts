@@ -106,6 +106,12 @@ export const SKILL_DEFINITIONS = {
     levels: ['Horse Stance', 'Frog Mobility', 'Elevated Middle Split', 'Deep Split Prep', 'Full Side Split'],
     description: 'Full leg split side-to-side - essential for straddle skills and hip mobility',
   },
+  dragon_flag: {
+    name: 'Dragon Flag',
+    category: 'compression' as SkillCategory,
+    levels: ['Tuck Hold', 'Advanced Tuck', 'Negatives', 'Assisted Full', 'Full Dragon Flag'],
+    description: 'Advanced anti-extension core and compression strength',
+  },
 };
 
 export type SkillKey = keyof typeof SKILL_DEFINITIONS;

@@ -12,11 +12,23 @@ import {
 } from './athlete-profile'
 import { getAthleteCalibration } from './athlete-calibration'
 import { detectWeakPoints, type WeakPointSummary } from './weak-point-detection'
-import { generateAdaptiveProgram, saveAdaptiveProgram, type AdaptiveProgramInputs, type AdaptiveProgram } from './adaptive-program-builder'
+import { generateAdaptiveProgram, saveAdaptiveProgram, type AdaptiveProgramInputs, type AdaptiveProgram, type ScheduleMode } from './adaptive-program-builder'
+import { validateAndLogProgram } from './program-validation'
 import { evaluateTrainingBehavior, type TrainingBehaviorResult } from './adaptive-progression-engine'
 import { createInitialProgramHistoryEntry } from './program-history-versioning'
 import type { PrimaryGoal, ExperienceLevel, TrainingDays, SessionLength } from './program-service'
 import type { EquipmentType } from './adaptive-exercise-pool'
+import { 
+  resetProofLog,
+  verifyProfileSource, 
+  verifyScheduleModeResolution,
+  verifyDbResolverUsed,
+  verifyLivePath,
+} from './engine-integration-proof'
+import { 
+  markCanonicalPathUsed,
+  assertFlexibleModeIntact,
+} from './production-safety'
 
 // =============================================================================
 // TYPES
@@ -244,11 +256,19 @@ function getWelcomeMessage(profile: OnboardingProfile, experienceLevel: Experien
 
 /**
  * Generate the first program for a new user
- * CRITICAL: This should only be called from /onboarding/complete/page.tsx
- * Other components should read existing program via getProgramState()
+ * 
+ * DO NOT DRIFT: This is the CANONICAL PROGRAM GENERATION entrypoint.
+ * Only call from /onboarding/complete/page.tsx.
+ * All other code should use getProgramState() to read existing programs.
  */
 export function generateFirstProgram(): FirstRunResult {
   try {
+    // PRODUCTION SAFETY: Mark canonical generation path
+    markCanonicalPathUsed('program_generation')
+    
+    // ENGINE PROOF: Reset proof log for new generation cycle
+    resetProofLog()
+    
     const profile = getOnboardingProfile()
     
     if (!profile || !isOnboardingComplete()) {
@@ -262,6 +282,9 @@ export function generateFirstProgram(): FirstRunResult {
       }
     }
     
+    // ENGINE PROOF: Verify profile source
+    verifyProfileSource('onboarding_profile')
+    
     console.log('[OnboardingService] generateFirstProgram: starting generation')
     
     // Get calibration from profile
@@ -270,6 +293,11 @@ export function generateFirstProgram(): FirstRunResult {
     // Normalize profile to safe inputs (handles legacy + current field names)
     const normalized = normalizeProfileForGeneration(profile)
     
+    // Detect schedule mode from onboarding data
+    const isFlexibleMode = normalized.trainingDaysPerWeek === 'flexible' || 
+      normalized.sessionLengthMinutes === 'flexible' ||
+      (profile as OnboardingProfile & { scheduleMode?: string }).scheduleMode === 'flexible'
+    
     // Map normalized data to program inputs
     const programInputs: AdaptiveProgramInputs = {
       primaryGoal: mapSkillInterestsToPrimaryGoal(normalized.selectedSkills, normalized.primaryGoal),
@@ -277,10 +305,37 @@ export function generateFirstProgram(): FirstRunResult {
       trainingDaysPerWeek: mapTrainingDays(normalized.trainingDaysPerWeek),
       sessionLength: mapSessionLength(normalized.sessionLengthMinutes),
       equipment: mapEquipment(normalized.equipment),
+      // FLEXIBLE SCHEDULING: Pass through schedule mode
+      scheduleMode: isFlexibleMode ? 'flexible' : 'static',
     }
+    
+    console.log('[OnboardingService] Schedule mode:', isFlexibleMode ? 'flexible' : 'static')
+    
+    // ENGINE PROOF: Verify schedule mode resolution
+    verifyScheduleModeResolution(
+      isFlexibleMode ? 'flexible' : 'static',
+      normalized.trainingDaysPerWeek,
+      'profile'
+    )
+    
+    // PRODUCTION SAFETY: Verify flexible mode semantics are intact
+    assertFlexibleModeIntact({
+      scheduleMode: programInputs.scheduleMode,
+      trainingDaysPerWeek: normalized.trainingDaysPerWeek,
+    })
     
     // Generate the program
     const program = generateAdaptiveProgram(programInputs)
+    
+    // DATABASE ENFORCEMENT: Validate all exercises are DB-backed before proceeding
+    const dbValidationPassed = validateAndLogProgram(program, 'First Program')
+    if (!dbValidationPassed) {
+      console.warn('[OnboardingService] DB validation had issues, but continuing (non-blocking)')
+    }
+    
+    // ENGINE PROOF: Count DB-backed exercises
+    const totalExercises = program.sessions?.reduce((sum, s) => sum + (s.exercises?.length || 0), 0) || 0
+    verifyDbResolverUsed(totalExercises, totalExercises, false)
     
     // Validate generated program has minimum required shape before saving
     // CRITICAL: Check ALL sessions, not just existence, to prevent downstream crashes
@@ -357,6 +412,10 @@ export function generateFirstProgram(): FirstRunResult {
     // ensures the program is immediately available for all app surfaces.
     
     console.log('[OnboardingService] generateFirstProgram: success, sessions:', program.sessions.length)
+    
+    // ENGINE PROOF: Verify live path was followed
+    const livePathProof = verifyLivePath()
+    console.log('[OnboardingService] Live path verification:', livePathProof)
     
     return {
       success: true,

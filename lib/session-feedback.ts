@@ -31,6 +31,8 @@ export interface SessionFeedback {
   timestamp: number
   /** Optional notes */
   notes?: string
+  /** FEEDBACK LOOP: Whether this feedback is from a trusted (non-demo) session */
+  trusted?: boolean
 }
 
 export interface FatigueStateFromFeedback {
@@ -179,6 +181,9 @@ export function clearSessionFeedback(): void {
  * 
  * This is the core algorithm that translates user feedback into actionable modifiers.
  * 
+ * FEEDBACK LOOP: Only uses trusted feedback (real user data, not demo/debug)
+ * to ensure fatigue decisions are based on actual performance.
+ * 
  * Difficulty scoring:
  * - easy = +1 fatigue point
  * - normal = +2 fatigue points
@@ -201,7 +206,10 @@ export function computeFatigueStateFromFeedback(feedbackList?: SessionFeedback[]
     summary: 'No recent feedback available. Training normally.',
   }
   
-  const entries = feedbackList ?? getRecentSessionFeedback(10)
+  const rawEntries = feedbackList ?? getRecentSessionFeedback(10)
+  
+  // Filter to trusted entries only
+  const entries = rawEntries.filter(e => e.trusted !== false)
   
   if (entries.length === 0) {
     return neutralState

@@ -29,6 +29,13 @@ import {
   type StyleProgrammingRules,
   type ComboBlock
 } from './training-style-service'
+import {
+  selectMethodProfile,
+  applyProfileToExerciseCount,
+  canAddStraightArmWork,
+  type MethodProfile,
+  type MethodProfileContext,
+} from './doctrine/method-profile-registry'
 
 // =============================================================================
 // TYPES
@@ -269,6 +276,21 @@ function generateSession(
   const focusLabel = isPrimaryDay 
     ? context.athlete.primaryGoalLabel 
     : 'Support & Recovery'
+  
+  // Select method profile based on context
+  const methodProfileContext: MethodProfileContext = {
+    primaryGoal: context.athlete.primaryGoal as Parameters<typeof selectMethodProfile>[0]['primaryGoal'],
+    experienceLevel: context.athlete.trainingAge > 3 ? 'advanced' : context.athlete.trainingAge > 1 ? 'intermediate' : 'beginner',
+    scheduleMode: 'fixed', // Could be dynamic based on athlete preferences
+    sessionMinutes: context.athlete.sessionDurationMinutes,
+    fatigueState: context.fatigue.fatigueLevel === 'fatigued' ? 'high' : 
+                  context.fatigue.fatigueLevel === 'normal' ? 'moderate' : 'low',
+    currentLimiter: context.skills.readinessBreakdown?.limitingFactor || undefined,
+  }
+  const { profile: methodProfile, reason: profileReason } = selectMethodProfile(methodProfileContext)
+  
+  console.log('[method-profile] Selected:', methodProfile.id, 'Reason:', profileReason)
+  appliedAdjustments.push(methodProfile.explanationText)
   
   // Day label
   const dayLabel = getDayLabel(dayNumber, isPrimaryDay, focus)

@@ -17,8 +17,10 @@ import {
   Brain,
   TrendingUp,
   TrendingDown,
-  Minus
+  Minus,
+  Sparkles
 } from 'lucide-react'
+import { WorkoutExplanation, PlanExplanationBadge, DataConfidenceBadge } from './WorkoutExplanation'
 
 interface AdaptiveProgramDisplayProps {
   program: AdaptiveProgram
@@ -92,8 +94,17 @@ export function AdaptiveProgramDisplay({
           <div className="flex items-center gap-2">
             <Calendar className="w-4 h-4 text-[#E63946]" />
             <div>
-              <p className="text-xs text-[#6A6A6A]">Days/Week</p>
-              <p className="text-sm font-medium">{program.trainingDaysPerWeek}</p>
+              <p className="text-xs text-[#6A6A6A]">
+                {program.scheduleMode === 'flexible' ? 'This Week' : 'Days/Week'}
+              </p>
+              <p className="text-sm font-medium">
+                {program.currentWeekFrequency || program.trainingDaysPerWeek}
+                {program.scheduleMode === 'flexible' && program.recommendedFrequencyRange && (
+                  <span className="text-xs text-[#6A6A6A] ml-1">
+                    ({program.recommendedFrequencyRange.min}-{program.recommendedFrequencyRange.max} range)
+                  </span>
+                )}
+              </p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -116,6 +127,23 @@ export function AdaptiveProgramDisplay({
         <div className="p-3 bg-[#1A1A1A] rounded-lg">
           <p className="text-sm text-[#A5A5A5]">{program.programRationale}</p>
         </div>
+        
+        {/* Why This Plan - Canonical Explanation */}
+        {program.explanationMetadata && (
+          <div className="mt-4">
+            <WorkoutExplanation 
+              metadata={program.explanationMetadata} 
+              variant="program" 
+              compact={true}
+            />
+            <div className="mt-2">
+              <DataConfidenceBadge 
+                confidence={program.explanationMetadata.dataConfidence}
+                workoutCount={program.explanationMetadata.trustedWorkoutCount}
+              />
+            </div>
+          </div>
+        )}
         
         {/* Adaptive Coach Messages */}
         {program.trainingBehaviorAnalysis?.adaptationNeeded && 

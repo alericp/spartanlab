@@ -249,3 +249,195 @@ export function generateUnifiedTrainingInsight(
     urgency,
   }
 }
+
+// =============================================================================
+// DOCTRINE-DRIVEN REASON CODES
+// =============================================================================
+
+/**
+ * Canonical reason codes for doctrine-driven exercise selection.
+ * Used by the explanation layer to describe why exercises were chosen.
+ */
+export type DoctrineReasonCode =
+  // Movement family support
+  | 'dragon_flag_support'
+  | 'straight_arm_pull_support'
+  | 'straight_arm_push_support'
+  | 'vertical_push_support'
+  | 'explosive_pull_support'
+  | 'transition_support'
+  | 'compression_support'
+  | 'mobility_support'
+  | 'anti_extension_support'
+  | 'scapular_control_support'
+  // Method profile reasons
+  | 'skill_frequency_profile'
+  | 'neural_strength_profile'
+  | 'mixed_hypertrophy_profile'
+  | 'density_structure_reason'
+  | 'recovery_bias_structure_reason'
+  | 'weighted_basics_profile'
+  | 'mobility_support_profile'
+  // Prerequisite/progression reasons
+  | 'prerequisite_not_met'
+  | 'progression_ladder_step'
+  | 'support_for_limiter'
+  // Training structure reasons
+  | 'tendon_load_conservative'
+  | 'straight_arm_limit_reached'
+  | 'joint_stress_avoidance'
+
+export interface DoctrineReasonExplanation {
+  headline: string
+  description: string
+  scienceBasis: string
+}
+
+/**
+ * Get human-readable explanation for a doctrine reason code.
+ */
+export function getDoctrineReasonExplanation(code: DoctrineReasonCode): DoctrineReasonExplanation {
+  const explanations: Record<DoctrineReasonCode, DoctrineReasonExplanation> = {
+    // Movement family support
+    dragon_flag_support: {
+      headline: 'Dragon Flag Support',
+      description: 'Anti-extension core work building toward dragon flag progression.',
+      scienceBasis: 'Dragon flags require exceptional trunk stiffness and anti-extension strength.',
+    },
+    straight_arm_pull_support: {
+      headline: 'Straight-Arm Pull Support',
+      description: 'Straight-arm pulling exercises supporting front lever development.',
+      scienceBasis: 'Front lever requires straight-arm pulling strength with scapular depression.',
+    },
+    straight_arm_push_support: {
+      headline: 'Straight-Arm Push Support',
+      description: 'Straight-arm pushing exercises supporting planche development.',
+      scienceBasis: 'Planche requires straight-arm pushing strength with scapular protraction.',
+    },
+    vertical_push_support: {
+      headline: 'Vertical Push Support',
+      description: 'Overhead pressing strength supporting HSPU progression.',
+      scienceBasis: 'HSPU requires strong vertical pressing with overhead stability.',
+    },
+    explosive_pull_support: {
+      headline: 'Explosive Pull Support',
+      description: 'Explosive pulling power supporting muscle-up transition.',
+      scienceBasis: 'Muscle-up transition requires pulling power to achieve sufficient height.',
+    },
+    transition_support: {
+      headline: 'Transition Support',
+      description: 'Transition-specific work for muscle-up development.',
+      scienceBasis: 'The muscle-up transition requires specific strength through the pullover position.',
+    },
+    compression_support: {
+      headline: 'Compression Support',
+      description: 'Hip flexor and compression work supporting L-sit/V-sit development.',
+      scienceBasis: 'L-sit requires active hip flexion strength to maintain leg elevation.',
+    },
+    mobility_support: {
+      headline: 'Mobility Support',
+      description: 'Flexibility work supporting skill prerequisites.',
+      scienceBasis: 'Many skills require specific mobility that must be developed alongside strength.',
+    },
+    anti_extension_support: {
+      headline: 'Anti-Extension Support',
+      description: 'Anti-extension core work supporting body position control.',
+      scienceBasis: 'Hollow body positions require anti-extension strength to maintain alignment.',
+    },
+    scapular_control_support: {
+      headline: 'Scapular Control Support',
+      description: 'Scapular stability work supporting skill execution.',
+      scienceBasis: 'Scapular control is foundational for both pulling and pushing skills.',
+    },
+    // Method profile reasons
+    skill_frequency_profile: {
+      headline: 'Skill-Frequency Approach',
+      description: 'Using repeated moderate exposure for motor learning.',
+      scienceBasis: 'Motor learning benefits from frequent practice at sub-maximal intensity.',
+    },
+    neural_strength_profile: {
+      headline: 'Neural Strength Approach',
+      description: 'High intensity with longer rest for maximal strength development.',
+      scienceBasis: 'Maximal strength requires high neural drive with full recovery between sets.',
+    },
+    mixed_hypertrophy_profile: {
+      headline: 'Mixed Strength-Hypertrophy',
+      description: 'Balanced approach for strength and muscle development.',
+      scienceBasis: 'Moderate intensity with sufficient volume supports both strength and hypertrophy.',
+    },
+    density_structure_reason: {
+      headline: 'Density Training Format',
+      description: 'Time-efficient grouped work for conditioning benefit.',
+      scienceBasis: 'Density training maintains stimulus while reducing total session time.',
+    },
+    recovery_bias_structure_reason: {
+      headline: 'Recovery-Biased Approach',
+      description: 'Lower intensity technical work for active recovery.',
+      scienceBasis: 'Active recovery maintains movement patterns while allowing adaptation.',
+    },
+    weighted_basics_profile: {
+      headline: 'Weighted Basics Foundation',
+      description: 'Heavy compounds building foundational strength.',
+      scienceBasis: 'Weighted basics develop the strength base that transfers to bodyweight skills.',
+    },
+    mobility_support_profile: {
+      headline: 'Flexibility Integration',
+      description: 'Mobility work integrated with skill development.',
+      scienceBasis: 'Flexibility and strength should be developed together for optimal skill acquisition.',
+    },
+    // Prerequisite/progression reasons
+    prerequisite_not_met: {
+      headline: 'Building Prerequisites',
+      description: 'Foundational work building toward advanced exercise requirements.',
+      scienceBasis: 'Advanced exercises require specific strength and stability prerequisites.',
+    },
+    progression_ladder_step: {
+      headline: 'Progression Step',
+      description: 'Current position in the progression ladder toward skill mastery.',
+      scienceBasis: 'Progressive overload through structured regression/progression ladders.',
+    },
+    support_for_limiter: {
+      headline: 'Addressing Limiter',
+      description: 'Targeted work addressing identified weak point.',
+      scienceBasis: 'Addressing limiting factors accelerates overall skill progression.',
+    },
+    // Training structure reasons
+    tendon_load_conservative: {
+      headline: 'Conservative Tendon Loading',
+      description: 'Reduced straight-arm volume for tendon health.',
+      scienceBasis: 'Tendons adapt slower than muscles and require careful load management.',
+    },
+    straight_arm_limit_reached: {
+      headline: 'Straight-Arm Limit',
+      description: 'Maximum straight-arm exercises for this session reached.',
+      scienceBasis: 'Limiting straight-arm work per session protects connective tissue.',
+    },
+    joint_stress_avoidance: {
+      headline: 'Joint Stress Management',
+      description: 'Exercise selected to minimize joint stress based on athlete profile.',
+      scienceBasis: 'Avoiding high stress on sensitive joints prevents injury and supports long-term training.',
+    },
+  }
+  
+  return explanations[code] || {
+    headline: 'Training Decision',
+    description: 'Exercise selected based on training goals and athlete state.',
+    scienceBasis: 'Programming decisions consider multiple factors for optimal outcomes.',
+  }
+}
+
+/**
+ * Format multiple doctrine reasons into a coaching-style explanation.
+ */
+export function formatDoctrineReasons(codes: DoctrineReasonCode[]): string {
+  if (codes.length === 0) return ''
+  
+  const explanations = codes.map(code => getDoctrineReasonExplanation(code))
+  
+  if (codes.length === 1) {
+    return explanations[0].description
+  }
+  
+  // Combine multiple reasons
+  return explanations.map(e => e.description).join(' ')
+}

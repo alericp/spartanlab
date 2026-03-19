@@ -111,6 +111,12 @@ import {
   type AdaptiveSignalFeedback,
 } from './override-signal-service'
 import {
+  buildProgramExplanation,
+  type ExplanationContext,
+  type SessionContext,
+} from './explanation-resolver'
+import type { ProgramExplanationMetadata } from './explanation-types'
+import {
   getReadinessAssessment,
   getSessionAdjustments,
   getFlexibilityRecoveryStatus,
@@ -635,6 +641,8 @@ exerciseExplanations?: {
   }
   // Secondary Emphasis - for hybrid programs
   secondaryEmphasis?: string
+  // Canonical Explanation Metadata - grounded explanations for "Why This Workout"
+  explanationMetadata?: ProgramExplanationMetadata
 }
 
 // =============================================================================
@@ -2052,6 +2060,53 @@ return explanations.length > 0 ? explanations : undefined
           warmupIntensityLevel: warmupNeeds.warmupIntensityLevel,
         }
       } catch {
+        return undefined
+      }
+    })(),
+    // Canonical Explanation Metadata - grounded explanations for "Why This Workout"
+    explanationMetadata: (() => {
+      try {
+        // Build explanation context from available data
+        const explanationContext: ExplanationContext = {
+          primaryGoal,
+          goalLabel: GOAL_LABELS[primaryGoal] || primaryGoal,
+          scheduleMode: inputScheduleMode,
+          currentWeekFrequency: effectiveTrainingDays,
+          previousWeekFrequency: undefined, // Would come from previous program comparison
+          experienceLevel,
+          fatigueState: feedbackState.needsDeload ? 'high' : 
+                       feedbackState.fatigueScore >= 70 ? 'moderate' : 'low',
+          dataConfidence: trainingFeedback.dataConfidence,
+          trustedWorkoutCount: trainingFeedback.trustedWorkoutCount,
+          adjustmentReasons: trainingFeedback.adjustmentReasons,
+          isFirstProgram: trainingFeedback.trustedWorkoutCount === 0,
+          limiters: profile?.weakestArea ? [profile.weakestArea] : undefined,
+          weakPoints: constraintContext?.weakPoints?.map(wp => wp.type),
+        }
+        
+        // Build session contexts from generated sessions
+        const sessionContexts: SessionContext[] = sessions.map((session, idx) => ({
+          dayNumber: idx + 1,
+          sessionTitle: session.dayLabel || `Day ${idx + 1}`,
+          primaryIntent: session.focusLabel || session.focus || 'Mixed',
+          isLowerFatigue: session.rationale?.toLowerCase().includes('recovery') || 
+                         session.rationale?.toLowerCase().includes('lighter'),
+          isRecoveryBias: session.focusLabel?.toLowerCase().includes('recovery'),
+          exercises: (session.exercises || []).map(ex => ({
+            exerciseId: ex.id,
+            displayName: ex.name,
+            role: ex.category || 'unknown',
+            coachingReason: ex.selectionReason,
+            movementPattern: undefined, // Would need lookup
+            skillTransfer: undefined, // Would need lookup
+          })),
+        }))
+        
+        console.log('[explanation] Building explanation metadata for', sessionContexts.length, 'sessions')
+        
+        return buildProgramExplanation(explanationContext, sessionContexts)
+      } catch (err) {
+        console.error('[explanation] Failed to build explanation metadata:', err)
         return undefined
       }
     })(),

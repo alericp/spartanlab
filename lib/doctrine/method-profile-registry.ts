@@ -112,7 +112,8 @@ export const METHOD_PROFILES: Record<MethodProfileType, MethodProfile> = {
       mobility: 0.05,
     },
     conditions: {
-      compatibleGoals: ['front_lever', 'planche', 'muscle_up', 'handstand', 'hspu', 'l_sit', 'iron_cross', 'one_arm_chin_up'],
+      // Note: using extended goal names that map from PrimaryGoal
+      compatibleGoals: ['front_lever', 'planche', 'muscle_up', 'handstand_pushup', 'iron_cross', 'skill'],
       compatibleLevels: ['intermediate', 'advanced'],
       fatigueStateRequired: 'any',
     },

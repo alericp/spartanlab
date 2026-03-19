@@ -113,6 +113,8 @@ export default function OnboardingCompletePage() {
             return
           }
           
+          console.log('[OnboardingComplete] Verification passed, program ready for dashboard')
+          
           // Track analytics
           trackSignupCompleted()
           trackProgramGenerated('onboarding', loadedProfile?.primaryGoal)

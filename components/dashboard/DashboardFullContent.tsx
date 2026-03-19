@@ -106,18 +106,28 @@ export function DashboardFullContent() {
     setMounted(true)
     
     // Check if this is a first-run welcome scenario
-    const urlParams = new URLSearchParams(window.location.search)
-    if (urlParams.get('welcome') === 'true') {
-      setShowWelcome(true)
-      window.history.replaceState({}, '', '/dashboard')
+    try {
+      const urlParams = new URLSearchParams(window.location.search)
+      const isWelcome = urlParams.get('welcome') === 'true'
+      
+      if (isWelcome) {
+        console.log('[DashboardFullContent] Welcome flow detected, showing WelcomeCard')
+        setShowWelcome(true)
+        window.history.replaceState({}, '', '/dashboard')
+      }
+    } catch (err) {
+      console.error('[DashboardFullContent] Error parsing URL params:', err)
     }
     
     // Quick check for meaningful data (lightweight)
     try {
       const stored = localStorage.getItem('spartanlab_workouts')
       const workouts = stored ? JSON.parse(stored) : []
-      setHasMeaningfulData(Array.isArray(workouts) && workouts.length > 0)
-    } catch {
+      const hasData = Array.isArray(workouts) && workouts.length > 0
+      console.log('[DashboardFullContent] Data check:', { hasData, workoutCount: Array.isArray(workouts) ? workouts.length : 0 })
+      setHasMeaningfulData(hasData)
+    } catch (err) {
+      console.error('[DashboardFullContent] Error checking workout data:', err)
       setHasMeaningfulData(false)
     }
   }, [])

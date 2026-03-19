@@ -51,8 +51,11 @@ export function WelcomeBanner() {
 
   // Don't render if not welcome or already dismissed
   if (!mounted || !isWelcome || isDismissed) {
+    console.log('[WelcomeBanner] Not rendering:', { mounted, isWelcome, isDismissed })
     return null
   }
+  
+  console.log('[WelcomeBanner] Rendering welcome banner')
 
   // Get primary goal display
   const getPrimaryGoalDisplay = () => {

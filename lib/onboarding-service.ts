@@ -31,6 +31,80 @@ export interface FirstRunResult {
 }
 
 // =============================================================================
+// NORMALIZATION LAYER
+// =============================================================================
+
+/**
+ * Normalized inputs for program generation
+ * This ensures we have stable, validated values regardless of the profile shape
+ */
+interface NormalizedProgramInputs {
+  selectedSkills: SkillInterest[]
+  primaryGoal: string | null
+  trainingDaysPerWeek: number
+  sessionLengthMinutes: number
+  equipment: string[]
+  experienceLevel: ExperienceLevel
+}
+
+/**
+ * Normalize onboarding profile into safe program generation inputs
+ * Handles both current and legacy field names with safe defaults
+ */
+function normalizeProfileForGeneration(profile: OnboardingProfile): NormalizedProgramInputs {
+  // Skills: prefer new field, fallback to legacy
+  const selectedSkills: SkillInterest[] = 
+    (Array.isArray(profile.selectedSkills) && profile.selectedSkills.length > 0)
+      ? profile.selectedSkills
+      : (Array.isArray((profile as any).skillInterests) && (profile as any).skillInterests.length > 0)
+        ? (profile as any).skillInterests
+        : []
+
+  // Training days: prefer new field, fallback to legacy
+  let trainingDaysPerWeek: number
+  if (typeof profile.trainingDaysPerWeek === 'number') {
+    trainingDaysPerWeek = profile.trainingDaysPerWeek
+  } else if (profile.trainingDaysPerWeek === 'flexible') {
+    trainingDaysPerWeek = 4 // Default for flexible
+  } else if ((profile as any).weeklyTraining) {
+    trainingDaysPerWeek = mapWeeklyTrainingToDays((profile as any).weeklyTraining)
+  } else {
+    trainingDaysPerWeek = 4 // Safe default
+  }
+
+  // Session length: prefer new field, fallback to legacy
+  let sessionLengthMinutes: number
+  if (typeof profile.sessionLengthMinutes === 'number') {
+    sessionLengthMinutes = profile.sessionLengthMinutes
+  } else if (profile.sessionLengthMinutes === 'flexible') {
+    sessionLengthMinutes = 45 // Default for flexible
+  } else if ((profile as any).trainingTime) {
+    sessionLengthMinutes = mapTrainingTimeToMinutes((profile as any).trainingTime)
+  } else {
+    sessionLengthMinutes = 45 // Safe default
+  }
+
+  // Equipment: ensure array with safe default
+  const equipment: string[] = 
+    Array.isArray(profile.equipment) && profile.equipment.length > 0
+      ? profile.equipment
+      : ['floor']
+
+  // Experience level from strength tier
+  const strengthTier = estimateStrengthTier(profile)
+  const experienceLevel = mapStrengthTierToExperience(strengthTier)
+
+  return {
+    selectedSkills,
+    primaryGoal: profile.primaryGoal,
+    trainingDaysPerWeek,
+    sessionLengthMinutes,
+    equipment,
+    experienceLevel,
+  }
+}
+
+// =============================================================================
 // MAPPING FUNCTIONS
 // =============================================================================
 
@@ -165,7 +239,11 @@ export function generateFirstProgram(): FirstRunResult {
   try {
     const profile = getOnboardingProfile()
     
+    // Debug logging for troubleshooting
+    console.log('[v0] generateFirstProgram: profile keys:', profile ? Object.keys(profile).slice(0, 15) : 'null')
+    
     if (!profile || !isOnboardingComplete()) {
+      console.log('[v0] generateFirstProgram: onboarding incomplete')
       return {
         success: false,
         program: null,
@@ -178,18 +256,26 @@ export function generateFirstProgram(): FirstRunResult {
     // Get calibration from profile
     const calibration = getAthleteCalibration()
     
-    // Determine experience level from strength tier
-    const strengthTier = estimateStrengthTier(profile)
-    const experienceLevel = mapStrengthTierToExperience(strengthTier)
+    // Normalize profile to safe inputs (handles legacy + current field names)
+    const normalized = normalizeProfileForGeneration(profile)
+    console.log('[v0] generateFirstProgram: normalized inputs:', {
+      skills: normalized.selectedSkills,
+      days: normalized.trainingDaysPerWeek,
+      minutes: normalized.sessionLengthMinutes,
+      equipment: normalized.equipment.slice(0, 3),
+      experience: normalized.experienceLevel,
+    })
     
-    // Map onboarding data to program inputs
+    // Map normalized data to program inputs
     const programInputs: AdaptiveProgramInputs = {
-      primaryGoal: mapSkillInterestsToPrimaryGoal(profile.skillInterests, profile.primaryGoal),
-      experienceLevel,
-      trainingDaysPerWeek: mapTrainingDays(mapWeeklyTrainingToDays(profile.weeklyTraining!)),
-      sessionLength: mapSessionLength(mapTrainingTimeToMinutes(profile.trainingTime!)),
-      equipment: mapEquipment(profile.equipment),
+      primaryGoal: mapSkillInterestsToPrimaryGoal(normalized.selectedSkills, normalized.primaryGoal),
+      experienceLevel: normalized.experienceLevel,
+      trainingDaysPerWeek: mapTrainingDays(normalized.trainingDaysPerWeek),
+      sessionLength: mapSessionLength(normalized.sessionLengthMinutes),
+      equipment: mapEquipment(normalized.equipment),
     }
+    
+    console.log('[v0] generateFirstProgram: programInputs:', programInputs)
     
     // Generate the program
     const program = generateAdaptiveProgram(programInputs)
@@ -289,14 +375,17 @@ export function getOnboardingSummary(): {
   const profile = getOnboardingProfile()
   if (!profile) return null
   
+  // Use normalization to safely handle old and new field names
+  const normalized = normalizeProfileForGeneration(profile)
+  
   return {
     strengthTier: estimateStrengthTier(profile),
     primaryGoal: profile.primaryGoal || 'general',
-    skillInterests: profile.skillInterests,
-    trainingDays: mapWeeklyTrainingToDays(profile.weeklyTraining || '3'),
-    sessionLength: mapTrainingTimeToMinutes(profile.trainingTime || '30_45'),
-    hasFlexibilityGoals: (profile.flexibilityGoals || []).length > 0,
-    likesEndurance: profile.enduranceInterest === 'yes' || profile.enduranceInterest === 'occasionally',
+    skillInterests: normalized.selectedSkills,
+    trainingDays: normalized.trainingDaysPerWeek,
+    sessionLength: normalized.sessionLengthMinutes,
+    hasFlexibilityGoals: Array.isArray(profile.selectedFlexibility) && profile.selectedFlexibility.length > 0,
+    likesEndurance: (profile as any).enduranceInterest === 'yes' || (profile as any).enduranceInterest === 'occasionally',
   }
 }
 
@@ -429,7 +518,11 @@ export function getProgramReasoning(program: AdaptiveProgram | null): ProgramRea
   
   // Training strategy - enhanced with weak point detection
   const strategyFocus: string[] = []
-  const skillInterests = profile?.skillInterests || []
+  // Use new field first, fallback to legacy
+  const skillInterests = 
+    (Array.isArray(profile?.selectedSkills) && profile.selectedSkills.length > 0)
+      ? profile.selectedSkills
+      : (profile as any)?.skillInterests || []
   
   // Primary focus from weak point detection
   if (weakPointSummary.primaryFocus !== 'balanced_development') {
@@ -463,8 +556,17 @@ export function getProgramReasoning(program: AdaptiveProgram | null): ProgramRea
     strategyFocus.push('Balanced strength development')
   }
   
-  // Volume level
-  const trainingDays = profile?.weeklyTraining ? mapWeeklyTrainingToDays(profile.weeklyTraining) : 3
+  // Volume level - use new field first, fallback to legacy
+  let trainingDays = 3
+  if (profile) {
+    if (typeof profile.trainingDaysPerWeek === 'number') {
+      trainingDays = profile.trainingDaysPerWeek
+    } else if (profile.trainingDaysPerWeek === 'flexible') {
+      trainingDays = 4
+    } else if ((profile as any).weeklyTraining) {
+      trainingDays = mapWeeklyTrainingToDays((profile as any).weeklyTraining)
+    }
+  }
   const volumeLabels: Record<number, string> = {
     2: 'Low volume (2 days/week)',
     3: 'Moderate volume (3 days/week)',

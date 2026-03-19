@@ -301,7 +301,10 @@ function OptionButton({ selected, onClick, children, description, className = ''
           : 'bg-[#0F1115] border-[#2B313A] text-[#A4ACB8] hover:border-[#4F6D8A] hover:text-[#E6E9EF]'
       } ${className}`}
     >
-      {selected && <Check className="w-4 h-4 text-[#C1121F] shrink-0" />}
+      {/* Fixed-width icon slot — always reserves space so content never shifts */}
+      <span className="w-4 h-4 shrink-0 flex items-center justify-center">
+        {selected && <Check className="w-4 h-4 text-[#C1121F]" />}
+      </span>
       <div className="flex-1 min-w-0">
         <span className="block break-words">{children}</span>
         {description && (
@@ -309,6 +312,22 @@ function OptionButton({ selected, onClick, children, description, className = ''
         )}
       </div>
     </button>
+  )
+}
+
+/**
+ * Label renderer for the "Flexible / Adaptive" schedule options.
+ * Keeps the badge on the same line when space allows and wraps gracefully
+ * on narrow grid cells without clipping or overflow.
+ */
+function FlexibleLabel() {
+  return (
+    <span className="inline-flex flex-wrap items-center gap-x-1.5 gap-y-1 leading-snug">
+      <span>Flexible</span>
+      <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-[#C1121F]/15 text-[#E05A64] border border-[#C1121F]/20 leading-none whitespace-nowrap shrink-0">
+        Adaptive
+      </span>
+    </span>
   )
 }
 
@@ -2674,16 +2693,9 @@ function ScheduleSection({ profile, updateProfile }: SectionProps) {
   key={String(day)}
   selected={profile.trainingDaysPerWeek === day}
   onClick={() => updateProfile({ trainingDaysPerWeek: day })}
-  className="justify-center"
+  className="justify-center min-h-[48px]"
   >
-  {day === 'flexible' ? (
-    <span className="flex items-center gap-1.5 justify-center">
-      Flexible
-      <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-[#C1121F]/15 text-[#E05A64] border border-[#C1121F]/20 leading-none">
-        Adaptive
-      </span>
-    </span>
-  ) : TRAINING_DAYS_LABELS[day]}
+  {day === 'flexible' ? <FlexibleLabel /> : TRAINING_DAYS_LABELS[day]}
   </OptionButton>
   ))}
   </div>
@@ -2705,15 +2717,9 @@ function ScheduleSection({ profile, updateProfile }: SectionProps) {
     sessionLengthMinutes: len,
     workoutDurationPreference: sessionLengthToDurationPreference(len)
   })}
+  className="min-h-[48px]"
   >
-  {len === 'flexible' ? (
-    <span className="flex items-center gap-1.5">
-      Flexible
-      <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-[#C1121F]/15 text-[#E05A64] border border-[#C1121F]/20 leading-none">
-        Adaptive
-      </span>
-    </span>
-  ) : SESSION_LENGTH_LABELS[len]}
+  {len === 'flexible' ? <FlexibleLabel /> : SESSION_LENGTH_LABELS[len]}
   </OptionButton>
   ))}
   </div>

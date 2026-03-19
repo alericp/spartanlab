@@ -77,11 +77,22 @@ export function NextWorkoutCard({ className }: NextWorkoutCardProps) {
         hasActiveSession = false
       }
 
-      // Check workout history
+      // Check workout history - TASK 6: Use trusted logs only
       let workoutLogs: ReturnType<typeof getWorkoutLogs> = []
       let isFirstWorkout = false
       try {
-        workoutLogs = getWorkoutLogs()
+        const allLogs = getWorkoutLogs()
+        // TASK 6: Filter to trusted logs only - no demo/seed/untrusted data
+        workoutLogs = allLogs.filter(log => {
+          if (log.sourceRoute === 'demo' || (log as any).isDemo === true) return false
+          if (log.trusted === false) return false
+          // Require explicit trust OR known good sourceRoute
+          const hasValidSource = log.sourceRoute === 'workout_session' || 
+                                log.sourceRoute === 'first_session' || 
+                                log.sourceRoute === 'quick_log'
+          const hasExplicitTrust = log.trusted === true
+          return hasValidSource || hasExplicitTrust
+        })
         isFirstWorkout = workoutLogs.length === 0
       } catch {
         isFirstWorkout = true

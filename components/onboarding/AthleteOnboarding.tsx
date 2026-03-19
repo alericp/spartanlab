@@ -3455,6 +3455,10 @@ export function AthleteOnboarding() {
       
       // Sync key onboarding data to the athlete profile (used by program builder)
       // This ensures the Program Builder doesn't ask the same questions again
+      // TASK 2 FIX: Preserve flexible schedule semantics - do NOT collapse to static 4 days
+      const isFlexibleSchedule = profile.trainingDaysPerWeek === 'flexible' || 
+                                  (profile as any).scheduleMode === 'flexible'
+      
       saveAthleteProfile({
         sex: profile.sex,
         experienceLevel: profile.trainingExperience === 'new' || profile.trainingExperience === 'some' 
@@ -3462,9 +3466,13 @@ export function AthleteOnboarding() {
           : profile.trainingExperience === 'intermediate' 
             ? 'intermediate' 
             : 'advanced',
-        trainingDaysPerWeek: typeof profile.trainingDaysPerWeek === 'number' 
-          ? profile.trainingDaysPerWeek 
-          : 4,
+        // TASK 2: Preserve flexible schedule mode correctly
+        // If flexible, store a reasonable default for engine math but mark as flexible
+        trainingDaysPerWeek: isFlexibleSchedule 
+          ? 4  // Internal default for engine calculations
+          : (typeof profile.trainingDaysPerWeek === 'number' ? profile.trainingDaysPerWeek : 4),
+        // CRITICAL: Store the actual schedule mode preference
+        scheduleMode: isFlexibleSchedule ? 'flexible' : 'static',
         sessionLengthMinutes: typeof profile.sessionLengthMinutes === 'number'
           ? (profile.sessionLengthMinutes <= 30 ? 30 
              : profile.sessionLengthMinutes <= 45 ? 45 

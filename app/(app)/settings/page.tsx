@@ -325,34 +325,60 @@ export default function SettingsPage() {
     loadProfile()
   }, [])
 
-  const loadProfile = () => {
+  // TASK 3: API-first hydration with localStorage fallback and canonical sync
+  const loadProfile = async () => {
+    // Step 1: Try API first (canonical truth for authenticated users)
+    try {
+      const response = await fetch('/api/settings')
+      if (response.ok) {
+        const result = await response.json()
+        if (result.success && result.profile) {
+          // Sync API response to localStorage for offline fallback
+          saveAthleteProfile(result.profile)
+          applyProfileToState(result.profile)
+          console.log('[Settings] Loaded from API and synced to localStorage')
+          return
+        }
+      }
+    } catch (err) {
+      console.warn('[Settings] API fetch failed, falling back to localStorage:', err)
+    }
+    
+    // Step 2: Fall back to localStorage
     const data = getAthleteProfile()
     if (!data) {
-      // No profile exists - leave defaults
       console.log('[TruthState] No profile found in settings, using defaults')
       return
     }
-    setProfile(data)
+    applyProfileToState(data)
+    console.log('[Settings] Loaded from localStorage fallback')
+  }
+  
+  // Helper to apply profile data to React state
+  const applyProfileToState = (data: AthleteProfile & { scheduleMode?: string; trainingStyle?: TrainingStyleMode }) => {
+    setProfile(data as AthleteProfile)
     setBodyweight(data.bodyweight?.toString() || '')
     setExperienceLevel(data.experienceLevel || 'beginner')
-    // Handle flexible schedule mode - preserve semantic distinction
-    const profileScheduleMode = (data as AthleteProfile & { scheduleMode?: string }).scheduleMode
-    const profileDays = data.trainingDaysPerWeek
-    if (profileScheduleMode === 'flexible' || profileDays === 'flexible') {
+    
+    // TASK 3: Handle flexible schedule mode correctly - do NOT show "4 days" for flexible users
+    const profileScheduleMode = data.scheduleMode
+    if (profileScheduleMode === 'flexible') {
       setScheduleMode('flexible')
-      // For flexible mode, we derive current week frequency from program, not stored preference
-      // Default to showing nothing specific - UI will explain this is adaptive
-      setTrainingDays('4') // Placeholder for current week display
+      // TASK 3 FIX: Do NOT set trainingDays to a fake placeholder
+      // The UI will hide the day selector and show flexible mode explanation instead
+      setTrainingDays('') // Empty - UI handles flexible mode separately
     } else {
       setScheduleMode('static')
+      const profileDays = data.trainingDaysPerWeek
       setTrainingDays(typeof profileDays === 'number' ? profileDays.toString() : '3')
     }
+    
     setSessionLength(data.sessionLengthMinutes?.toString() || '60')
     setPrimaryGoal(data.primaryGoal || 'none')
     setEquipment(data.equipmentAvailable || [])
     setJointCautions(data.jointCautions || [])
     setWeakestArea(data.weakestArea || 'none')
-    setTrainingStyle((data as AthleteProfile & { trainingStyle?: TrainingStyleMode }).trainingStyle || 'balanced_hybrid')
+    setTrainingStyle(data.trainingStyle || 'balanced_hybrid')
   }
 
   const handleSave = async () => {
@@ -360,11 +386,15 @@ export default function SettingsPage() {
     setSaved(false)
     
     // Prepare update payload - preserve flexible mode semantics
+    // TASK 3: For flexible mode, store a numeric default for engine math but preserve scheduleMode
     const updates = {
       bodyweight: bodyweight ? parseFloat(bodyweight) : null,
       experienceLevel: experienceLevel as 'beginner' | 'intermediate' | 'advanced',
-      // For flexible mode, store 'flexible' as the value, not a number
-      trainingDaysPerWeek: scheduleMode === 'flexible' ? 'flexible' as const : parseInt(trainingDays),
+      // For flexible mode, store a reasonable numeric default (engine internal math)
+      // The scheduleMode field is the canonical preference indicator
+      trainingDaysPerWeek: scheduleMode === 'flexible' 
+        ? 4  // Default for engine calculations
+        : parseInt(trainingDays || '3'),
       scheduleMode: scheduleMode,
       sessionLengthMinutes: parseInt(sessionLength) as 30 | 45 | 60 | 90,
       primaryGoal: primaryGoal === 'none' ? null : primaryGoal,
@@ -385,8 +415,9 @@ export default function SettingsPage() {
       if (response.ok) {
         const result = await response.json()
         
-        // Update local state with server response
+        // TASK 3: Sync API response to localStorage for canonical truth
         if (result.profile) {
+          saveAthleteProfile(result.profile)
           setProfile(result.profile)
         }
         
@@ -511,6 +542,16 @@ export default function SettingsPage() {
     }
     
     setTimeout(() => setSaved(false), 2000)
+  }
+  
+  // TASK 3: Wrap handleSave in try-finally to ensure saving state is always cleared
+  const handleSaveWithGuaranteedReset = async () => {
+    try {
+      await handleSave()
+    } finally {
+      // TASK 3: Guarantee saving state is cleared in ALL exit paths
+      setSaving(false)
+    }
   }
 
   // Loading state during hydration
@@ -816,7 +857,7 @@ export default function SettingsPage() {
             <Button
               size="lg"
               className="w-full bg-[#E63946] hover:bg-[#D62828] text-white font-semibold"
-              onClick={handleSave}
+              onClick={handleSaveWithGuaranteedReset}
               disabled={saving}
             >
               {saving ? (

@@ -1066,11 +1066,6 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
     onboardingProfile,
     recoverySignal,
   }
-  console.log('[generateAdaptiveProgram] Passing context to sessions:', {
-    hasAthleteCalibration: !!athleteCalibration,
-    hasOnboardingProfile: !!onboardingProfile,
-    hasRecoverySignal: !!recoverySignal,
-  })
   
   const sessions: AdaptiveSession[] = structure.days.map((day, index) => {
     const intent = sessionIntents[index]
@@ -1947,12 +1942,8 @@ function generateAdaptiveSession(
   constraintType: string | undefined,
   context: AdaptiveSessionContext
 ): AdaptiveSession {
-  // Destructure context to get explicit dependencies (fixes scope bug)
+  // Destructure context to get explicit dependencies (scope fix)
   const { athleteCalibration, recoverySignal } = context
-  console.log('[generateAdaptiveSession] Context received:', {
-    hasAthleteCalibration: !!athleteCalibration,
-    hasRecoverySignal: !!recoverySignal,
-  })
   
   // Safe fallbacks for calibration subfields
   const fatigueSensitivity = athleteCalibration?.fatigueSensitivity ?? 'moderate'
@@ -1998,9 +1989,6 @@ function generateAdaptiveSession(
     
     // SAFETY: Ensure selection.exercises is a valid array before calling .some()
     const safeSelectionExercises = Array.isArray(selection?.exercises) ? selection.exercises : []
-    if (!Array.isArray(selection?.exercises)) {
-      console.log('[generateAdaptiveSession] Warning: selection.exercises was not an array, using empty fallback')
-    }
     
     // Calculate session neural demand
     const sessionNeuralDemand = safeSelectionExercises.some(e => e?.exercise?.neuralDemand >= 4) 
@@ -2081,7 +2069,6 @@ function mapToAdaptiveExercises(
   
   // Early return if no exercises to map
   if (safeSelected.length === 0) {
-    console.log('[mapToAdaptiveExercises] Empty or invalid input, returning []')
     return []
   }
   

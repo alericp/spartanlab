@@ -240,6 +240,14 @@ function WorkoutSessionContent() {
     
     async function initializeSession() {
       try {
+        // Route diagnostic to confirm latest code is executing
+        console.log('[workout/session] live-init v3', {
+          demoMode,
+          isFirstSession,
+          dayParam,
+          timestamp: new Date().toISOString(),
+        })
+        
         // DEMO MODE: Always allow, completely isolated from program state
         // Demo must work regardless of any other conditions
         // CRITICAL: Demo does NOT call resolveProgramStateLazily() - fully isolated

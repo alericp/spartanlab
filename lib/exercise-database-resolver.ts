@@ -37,6 +37,7 @@ import {
   type CoherenceCheckResult,
 } from './movement-intelligence'
 import type { MovementFamily, SkillCarryover } from './movement-family-registry'
+import { recordIntegrationProof } from './engine-integration-proof'
 
 // =============================================================================
 // TYPES
@@ -442,6 +443,14 @@ export function resolveExerciseSlots(
       })
     }
   }
+  
+  // ENGINE PROOF: Record DB resolver usage
+  recordIntegrationProof('db_resolver', 'resolved exercise slots', {
+    slotsRequested: slots.length,
+    resolved: resolved.length,
+    failed: failures.length,
+    allFromDb: failures.length === 0,
+  })
   
   console.log('[exercise-resolver] Resolution complete:', {
     resolved: resolved.length,

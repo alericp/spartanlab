@@ -17,6 +17,7 @@ import { getWorkoutLogs, type WorkoutLog, type PerceivedDifficulty } from './wor
 import { getRecentSessionFeedback, type SessionFeedback, computeFatigueStateFromFeedback } from './session-feedback'
 import { getStrengthRecords, type StrengthRecord } from './strength-service'
 import { getSkillSessions, type SkillSession } from './skill-session-service'
+import { recordIntegrationProof } from './engine-integration-proof'
 
 // =============================================================================
 // TYPES
@@ -251,6 +252,14 @@ export function buildTrainingFeedbackSummary(): TrainingFeedbackSummary {
     volumeModifier: fatigueState.volumeModifier,
     needsDeload: fatigueState.needsDeload,
   }
+  
+  // ENGINE PROOF: Record feedback loop consumption
+  recordIntegrationProof('feedback_loop', 'built training feedback summary', {
+    trustedWorkouts: trustedLogs.length,
+    adjustmentReasonCount: adjustmentReasons.length,
+    dataConfidence,
+    completionRate: completionRate.toFixed(2),
+  })
   
   console.log('[feedback-summary] Summary built:', {
     trustedWorkouts: trustedLogs.length,

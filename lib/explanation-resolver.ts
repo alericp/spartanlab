@@ -27,6 +27,7 @@ import {
 } from './explanation-types'
 import type { AdjustmentReasonCode, TrainingFeedbackSummary } from './training-feedback-loop'
 import type { PrimaryGoal } from './program-service'
+import { verifyExplanationLayer, recordIntegrationProof } from './engine-integration-proof'
 
 // =============================================================================
 // TYPES
@@ -108,9 +109,21 @@ export function buildProgramExplanation(
     trustedWorkoutCount: context.trustedWorkoutCount,
   }
   
+  // ENGINE PROOF: Verify explanation layer is generating real metadata
+  const totalReasonCodes = sessionExplanations.reduce((sum, s) => 
+    sum + (s.exerciseExplanations?.length || 0), 0
+  )
+  verifyExplanationLayer(totalReasonCodes > 0, totalReasonCodes)
+  recordIntegrationProof('explanation_layer', 'built program explanation', {
+    sessionCount: sessionExplanations.length,
+    totalReasonCodes,
+    dataConfidence: context.dataConfidence,
+  })
+  
   console.log('[explanation] Built explanation metadata:', {
     sessionCount: sessionExplanations.length,
     hasChangeExplanation: !!changeExplanation,
+    reasonCodeCount: totalReasonCodes,
   })
   
   return metadata

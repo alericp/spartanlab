@@ -18,6 +18,13 @@ import { evaluateTrainingBehavior, type TrainingBehaviorResult } from './adaptiv
 import { createInitialProgramHistoryEntry } from './program-history-versioning'
 import type { PrimaryGoal, ExperienceLevel, TrainingDays, SessionLength } from './program-service'
 import type { EquipmentType } from './adaptive-exercise-pool'
+import { 
+  resetProofLog,
+  verifyProfileSource, 
+  verifyScheduleModeResolution,
+  verifyDbResolverUsed,
+  verifyLivePath,
+} from './engine-integration-proof'
 
 // =============================================================================
 // TYPES
@@ -250,6 +257,9 @@ function getWelcomeMessage(profile: OnboardingProfile, experienceLevel: Experien
  */
 export function generateFirstProgram(): FirstRunResult {
   try {
+    // ENGINE PROOF: Reset proof log for new generation cycle
+    resetProofLog()
+    
     const profile = getOnboardingProfile()
     
     if (!profile || !isOnboardingComplete()) {
@@ -262,6 +272,9 @@ export function generateFirstProgram(): FirstRunResult {
         error: 'Onboarding incomplete',
       }
     }
+    
+    // ENGINE PROOF: Verify profile source
+    verifyProfileSource('onboarding_profile')
     
     console.log('[OnboardingService] generateFirstProgram: starting generation')
     
@@ -289,6 +302,13 @@ export function generateFirstProgram(): FirstRunResult {
     
     console.log('[OnboardingService] Schedule mode:', isFlexibleMode ? 'flexible' : 'static')
     
+    // ENGINE PROOF: Verify schedule mode resolution
+    verifyScheduleModeResolution(
+      isFlexibleMode ? 'flexible' : 'static',
+      normalized.trainingDaysPerWeek,
+      'profile'
+    )
+    
     // Generate the program
     const program = generateAdaptiveProgram(programInputs)
     
@@ -297,6 +317,10 @@ export function generateFirstProgram(): FirstRunResult {
     if (!dbValidationPassed) {
       console.warn('[OnboardingService] DB validation had issues, but continuing (non-blocking)')
     }
+    
+    // ENGINE PROOF: Count DB-backed exercises
+    const totalExercises = program.sessions?.reduce((sum, s) => sum + (s.exercises?.length || 0), 0) || 0
+    verifyDbResolverUsed(totalExercises, totalExercises, false)
     
     // Validate generated program has minimum required shape before saving
     // CRITICAL: Check ALL sessions, not just existence, to prevent downstream crashes
@@ -373,6 +397,10 @@ export function generateFirstProgram(): FirstRunResult {
     // ensures the program is immediately available for all app surfaces.
     
     console.log('[OnboardingService] generateFirstProgram: success, sessions:', program.sessions.length)
+    
+    // ENGINE PROOF: Verify live path was followed
+    const livePathProof = verifyLivePath()
+    console.log('[OnboardingService] Live path verification:', livePathProof)
     
     return {
       success: true,

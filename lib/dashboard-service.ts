@@ -37,6 +37,11 @@ import {
   type UnifiedSkillIntelligence,
   type SkillKey,
 } from './skill-intelligence-layer'
+import { 
+  verifyTruthStateUsed,
+  verifyFeedbackLoopUsed,
+  recordIntegrationProof,
+} from './engine-integration-proof'
 
 export interface DashboardOverview {
   user: User
@@ -537,6 +542,12 @@ export function getDashboardUserState(): DashboardUserState {
     } else if (hasOnboardingProfile) {
       stateLabel = 'pre-program'
     }
+    
+    // ENGINE PROOF: Verify truth-state is being used for classification
+    verifyTruthStateUsed(stateLabel, dataConfidence, trustedWorkoutCount)
+    
+    // ENGINE PROOF: Verify feedback loop data is available
+    verifyFeedbackLoopUsed(trustedWorkoutCount, [])
     
     console.log('[dashboard-truth]', { 
       stateLabel, 

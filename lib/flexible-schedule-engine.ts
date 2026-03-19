@@ -22,6 +22,7 @@ import type {
   JointCaution,
   RecoveryProfile,
 } from './athlete-profile'
+import { recordIntegrationProof } from './engine-integration-proof'
 
 // =============================================================================
 // TYPES
@@ -212,6 +213,15 @@ export function resolveFlexibleFrequency(input: FlexibleFrequencyInput): Flexibl
     includesAdaptiveDay,
     isConservative: intensityDistribution === 'conservative',
   }
+  
+  // ENGINE PROOF: Record flexible schedule resolution
+  recordIntegrationProof('flexible_schedule', 'resolved week structure', {
+    scheduleMode: input.scheduleMode,
+    frequency: currentFrequency,
+    range: `${minDays}-${maxDays}`,
+    distribution: intensityDistribution,
+    hasJointCautions: (input.jointCautions?.length || 0) > 0,
+  })
   
   console.log('[flex-frequency] Resolved structure:', {
     frequency: currentFrequency,

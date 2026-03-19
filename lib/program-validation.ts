@@ -4,6 +4,11 @@
 
 import { validateExerciseSource, verifyExerciseInDatabase } from './exercise-database-resolver'
 import type { Exercise } from './adaptive-exercise-pool'
+import { 
+  verifyMovementIntelligence, 
+  verifyQaValidation,
+  recordIntegrationProof,
+} from './engine-integration-proof'
 import {
   normalizeToMovementIntelligent,
   validateSessionCoherence,
@@ -460,12 +465,24 @@ export function validateProgramFromDatabase(
     (context?.strictMode ? equipmentValidation.isRespected : true) &&
     (context?.strictMode ? biomechanicalValidation.isCoherent : true)
   
-  console.log('[program-validate] Validation complete:', {
-    isValid,
-    exerciseValid: exerciseValidation.invalid === 0,
-    structureValid: structureValidation.hasValidSessions,
-    volumeValid: volumeValidation.isPlausible,
+  // ENGINE PROOF: Verify movement intelligence is being used
+  const sessionsWithMoveData = biomechanicalValidation.sessionCoherence.filter(s => s.passed).length
+  verifyMovementIntelligence(exerciseValidation.total, sessionsWithMoveData > 0 ? exerciseValidation.valid : 0)
+  
+  // ENGINE PROOF: Record QA validation result
+  verifyQaValidation(isValid, diagnostics)
+  recordIntegrationProof('qa_validation', `program validation ${isValid ? 'passed' : 'failed'}`, {
+    exerciseCount: exerciseValidation.total,
+    validExercises: exerciseValidation.valid,
     biomechanicalCoherent: biomechanicalValidation.isCoherent,
+  })
+  
+  console.log('[program-validate] Validation complete:', {
+  isValid,
+  exerciseValid: exerciseValidation.invalid === 0,
+  structureValid: structureValidation.hasValidSessions,
+  volumeValid: volumeValidation.isPlausible,
+  biomechanicalCoherent: biomechanicalValidation.isCoherent,
   })
   
   return {

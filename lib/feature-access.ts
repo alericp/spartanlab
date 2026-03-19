@@ -25,12 +25,17 @@ const SIMULATION_KEY = 'spartanlab_owner_sim'
  * Returns 'off', 'free', or 'pro'
  */
 function getOwnerSimulationMode(): 'off' | 'free' | 'pro' {
-  if (typeof window === 'undefined') return 'off'
-  if (!isCurrentUserOwner()) return 'off'
-  
-  const stored = sessionStorage.getItem(SIMULATION_KEY)
-  if (stored === 'free' || stored === 'pro') return stored
-  return 'off'
+  try {
+    if (typeof window === 'undefined') return 'off'
+    if (!isCurrentUserOwner()) return 'off'
+    
+    const stored = sessionStorage.getItem(SIMULATION_KEY)
+    if (stored === 'free' || stored === 'pro') return stored
+    return 'off'
+  } catch {
+    // Any error (including isCurrentUserOwner throwing) defaults to off
+    return 'off'
+  }
 }
 
 // =============================================================================
@@ -301,7 +306,14 @@ export function getSubscription(): SubscriptionInfo {
     const stored = localStorage.getItem(SUBSCRIPTION_KEY)
     if (!stored) return DEFAULT_SUBSCRIPTION
     
-    const parsed = JSON.parse(stored) as SubscriptionInfo
+    const parsed = JSON.parse(stored)
+    
+    // CRITICAL: Validate parsed data is actually an object before accessing properties
+    // Malformed localStorage could contain non-object data (string, number, array)
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      console.warn('[FeatureAccess] getSubscription: stored data is not an object, returning default')
+      return DEFAULT_SUBSCRIPTION
+    }
     
     // Check if subscription has expired
     if (parsed.expiresAt && new Date(parsed.expiresAt) < new Date()) {
@@ -315,7 +327,7 @@ export function getSubscription(): SubscriptionInfo {
       return expired
     }
     
-    return parsed
+    return parsed as SubscriptionInfo
   } catch {
     return DEFAULT_SUBSCRIPTION
   }

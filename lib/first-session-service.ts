@@ -122,7 +122,7 @@ function generateConstraintExplanation(
   profile: OnboardingProfile | null
 ): string | null {
   // Fallback to profile-based constraint explanation
-  if (profile?.jointCautions && profile.jointCautions.length > 0) {
+  if (Array.isArray(profile?.jointCautions) && profile.jointCautions.length > 0) {
     const cautionMap: Record<string, string> = {
       shoulders: 'shoulder stability exercises are emphasized',
       wrists: 'wrist conditioning is integrated',

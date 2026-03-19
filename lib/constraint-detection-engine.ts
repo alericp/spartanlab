@@ -465,7 +465,7 @@ function calculateConstraintScores(
   }
   
   // Add joint caution-based constraints
-  if (profile.jointCautions && profile.jointCautions.length > 0) {
+  if (Array.isArray(profile.jointCautions) && profile.jointCautions.length > 0) {
     for (const caution of profile.jointCautions) {
       switch (caution) {
         case 'wrists':

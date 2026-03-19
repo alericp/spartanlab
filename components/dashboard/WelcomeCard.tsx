@@ -136,19 +136,19 @@ export function WelcomeCard({ onDismiss, onProgramReady }: WelcomeCardProps) {
       </p>
 
       {/* Program Summary */}
-      {result.program && (
+      {result.program && Array.isArray(result.program.sessions) && (
         <div className="grid grid-cols-3 gap-3 mb-4">
           <div className="bg-[#0F1115] rounded-lg p-3 text-center">
             <Calendar className="w-4 h-4 text-[#4F6D8A] mx-auto mb-1" />
             <p className="text-lg font-bold text-[#E6E9EF]">
-              {result.program.trainingDaysPerWeek}
+              {result.program.trainingDaysPerWeek || result.program.sessions.length}
             </p>
             <p className="text-xs text-[#6B7280]">Days/Week</p>
           </div>
           <div className="bg-[#0F1115] rounded-lg p-3 text-center">
             <Target className="w-4 h-4 text-[#C1121F] mx-auto mb-1" />
             <p className="text-lg font-bold text-[#E6E9EF] capitalize">
-              {result.program.goalLabel.split(' ')[0]}
+              {result.program.goalLabel?.split(' ')[0] || 'Strength'}
             </p>
             <p className="text-xs text-[#6B7280]">Focus</p>
           </div>

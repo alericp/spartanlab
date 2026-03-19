@@ -354,19 +354,19 @@ export function OnboardingComplete({ onContinue }: OnboardingCompleteProps) {
           )}
 
           {/* Program summary */}
-          {programResult?.program && (
+          {programResult?.program && Array.isArray(programResult.program.sessions) && (
             <div className="grid grid-cols-3 gap-2 mb-4">
               <div className="bg-[#0F1115] rounded-lg p-2.5 text-center border border-[#2B313A]">
                 <Calendar className="w-3.5 h-3.5 text-[#4F6D8A] mx-auto mb-1" />
                 <p className="text-base font-bold text-[#E6E9EF]">
-                  {programResult.program.trainingDaysPerWeek}
+                  {programResult.program.trainingDaysPerWeek || programResult.program.sessions.length}
                 </p>
                 <p className="text-[10px] text-[#6B7280]">Days/Week</p>
               </div>
               <div className="bg-[#0F1115] rounded-lg p-2.5 text-center border border-[#2B313A]">
                 <Target className="w-3.5 h-3.5 text-[#C1121F] mx-auto mb-1" />
                 <p className="text-base font-bold text-[#E6E9EF] capitalize truncate">
-                  {programResult.program.goalLabel.split(' ')[0]}
+                  {programResult.program.goalLabel?.split(' ')[0] || 'Strength'}
                 </p>
                 <p className="text-[10px] text-[#6B7280]">Focus</p>
               </div>

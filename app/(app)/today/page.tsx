@@ -50,7 +50,8 @@ export default function TodaySessionPage() {
 
   const loadData = useCallback(() => {
     const program = getLatestAdaptiveProgram()
-    if (!program || program.sessions.length === 0) {
+    // Safe guard: verify program and sessions array exist before accessing
+    if (!program || !Array.isArray(program.sessions) || program.sessions.length === 0) {
       setCurrentSession(null)
       return
     }

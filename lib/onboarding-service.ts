@@ -510,8 +510,27 @@ export function getProgramReasoning(program: AdaptiveProgram | null): ProgramRea
   const profile = getOnboardingProfile()
   const calibration = getAthleteCalibration()
   
-  // Weak point detection
-  const weakPointSummary = detectWeakPoints()
+  // Weak point detection - ensure we have a safe default if detection fails
+  let weakPointSummary: WeakPointSummary
+  try {
+    weakPointSummary = detectWeakPoints()
+  } catch {
+    // Safe default if weak point detection throws
+    weakPointSummary = {
+      primaryFocus: 'balanced_development',
+      primaryFocusLabel: 'Balanced development',
+      primaryFocusReason: '',
+      secondaryFocus: null,
+      secondaryFocusLabel: null,
+      mobilityEmphasis: 'moderate' as const,
+      mobilityAreas: [],
+      skillPriorities: [],
+      strengthImbalance: null,
+      volumeModifier: 1.0,
+      jointCautions: [],
+      confidenceLevel: 'low' as const,
+    }
+  }
   
   // Strength detection
   const strengthTier = profile ? estimateStrengthTier(profile) : 'intermediate'

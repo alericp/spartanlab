@@ -327,17 +327,25 @@ export default function SettingsPage() {
 
   const loadProfile = () => {
     const data = getAthleteProfile()
+    if (!data) {
+      // No profile exists - leave defaults
+      console.log('[TruthState] No profile found in settings, using defaults')
+      return
+    }
     setProfile(data)
     setBodyweight(data.bodyweight?.toString() || '')
     setExperienceLevel(data.experienceLevel || 'beginner')
-    // Handle flexible schedule mode
+    // Handle flexible schedule mode - preserve semantic distinction
+    const profileScheduleMode = (data as AthleteProfile & { scheduleMode?: string }).scheduleMode
     const profileDays = data.trainingDaysPerWeek
-    if (profileDays === 'flexible' || (data as AthleteProfile & { scheduleMode?: string }).scheduleMode === 'flexible') {
+    if (profileScheduleMode === 'flexible' || profileDays === 'flexible') {
       setScheduleMode('flexible')
-      setTrainingDays('4')  // Default display for flexible
+      // For flexible mode, we derive current week frequency from program, not stored preference
+      // Default to showing nothing specific - UI will explain this is adaptive
+      setTrainingDays('4') // Placeholder for current week display
     } else {
       setScheduleMode('static')
-      setTrainingDays(profileDays?.toString() || '3')
+      setTrainingDays(typeof profileDays === 'number' ? profileDays.toString() : '3')
     }
     setSessionLength(data.sessionLengthMinutes?.toString() || '60')
     setPrimaryGoal(data.primaryGoal || 'none')
@@ -612,12 +620,15 @@ export default function SettingsPage() {
             </div>
           )}
           
-          {/* Flexible Mode Info */}
+          {/* Flexible Mode Info - Show clear adaptive semantics */}
           {scheduleMode === 'flexible' && (
-            <div className="p-3 rounded-lg bg-[#1A1A1A] border border-[#3A3A3A]">
-              <p className="text-sm text-[#A5A5A5]">
-                Your current week is set to <span className="text-[#F5F5F5] font-medium">{trainingDays} days</span> based on your recovery and goals.
-                This may adjust week-to-week.
+            <div className="p-3 rounded-lg bg-[#1A1A1A] border border-[#3A3A3A] space-y-2">
+              <p className="text-sm text-[#F5F5F5] font-medium">
+                Flexible / Adaptive Schedule
+              </p>
+              <p className="text-xs text-[#A5A5A5]">
+                Your weekly training frequency is adjusted by the engine based on recovery, readiness, goals, and recent training load. 
+                This is not a fixed preference — it adapts week-to-week.
               </p>
             </div>
           )}

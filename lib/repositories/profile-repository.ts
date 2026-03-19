@@ -49,20 +49,25 @@ function isBrowser(): boolean {
 
 const previewProfileRepository: ProfileRepository = {
   async getProfile(userId: string): Promise<AthleteProfile | null> {
-    if (!isBrowser()) return DEFAULT_PROFILE
+    if (!isBrowser()) return null
 
     const stored = localStorage.getItem(STORAGE_KEY)
     if (stored) {
       try {
-        return JSON.parse(stored)
+        const parsed = JSON.parse(stored)
+        // [TruthState] Reject preview/seed data
+        if (parsed.id === 'preview-profile' || parsed.userId === 'preview-user') {
+          console.log('[TruthState] Rejected preview profile in previewProfileRepository')
+          return null
+        }
+        return parsed
       } catch {
-        return DEFAULT_PROFILE
+        return null
       }
     }
 
-    // Initialize with default
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(DEFAULT_PROFILE))
-    return DEFAULT_PROFILE
+    // DO NOT auto-initialize with default - return null for new users
+    return null
   },
 
   async saveProfile(
@@ -140,20 +145,26 @@ export const profileRepository: ProfileRepository = {
 // CONVENIENCE FUNCTIONS (backward compatibility)
 // =============================================================================
 
-export function getAthleteProfile(): AthleteProfile {
-  if (!isBrowser()) return DEFAULT_PROFILE
+export function getAthleteProfile(): AthleteProfile | null {
+  if (!isBrowser()) return null
 
   const stored = localStorage.getItem(STORAGE_KEY)
   if (stored) {
     try {
-      return JSON.parse(stored)
+      const parsed = JSON.parse(stored)
+      // [TruthState] Reject preview/seed data
+      if (parsed.id === 'preview-profile' || parsed.userId === 'preview-user') {
+        console.log('[TruthState] Rejected preview profile in getAthleteProfile convenience function')
+        return null
+      }
+      return parsed
     } catch {
-      return DEFAULT_PROFILE
+      return null
     }
   }
 
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(DEFAULT_PROFILE))
-  return DEFAULT_PROFILE
+  // DO NOT auto-initialize - return null for new users
+  return null
 }
 
 export function saveAthleteProfile(

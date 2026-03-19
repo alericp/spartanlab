@@ -263,7 +263,7 @@ export function OnboardingComplete({ onContinue }: OnboardingCompleteProps) {
             
             {/* Skill interests (if no detected skills) */}
             {(!programReasoning?.detectedSkills || programReasoning.detectedSkills.length === 0) && 
-              profile?.selectedSkills && profile.selectedSkills.length > 0 && (
+              Array.isArray(profile?.selectedSkills) && profile.selectedSkills.length > 0 && (
               <div className="bg-[#0F1115] rounded-lg p-3 border border-[#2B313A]">
                 <div className="flex items-center gap-2 mb-1">
                   <Target className="w-3.5 h-3.5 text-[#C1121F]" />

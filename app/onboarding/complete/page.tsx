@@ -2,7 +2,7 @@
 
 // Module-safe init check - this logs at import time to confirm no import-time crashes
 if (typeof window !== 'undefined') {
-  console.log('[OnboardingComplete] Module loaded successfully')
+  console.log('[OnboardingComplete] Module evaluation complete - no import-time crashes')
 }
 
 /**
@@ -331,7 +331,7 @@ export default function OnboardingCompletePage() {
 
   // If already Pro, show success and go to first session
   if (isPro) {
-    console.log('[OnboardingComplete] Rendering Pro success branch')
+    console.log('[OnboardingComplete] BRANCH: pro success', { isTrial, trialDays })
     return (
       <div className="min-h-screen bg-[#0F1115] flex items-center justify-center p-4">
         <div className="w-full max-w-lg text-center">
@@ -389,10 +389,11 @@ export default function OnboardingCompletePage() {
   }
 
   // Free user - show program preview with upgrade opportunity
-  console.log('[OnboardingComplete] Rendering free preview branch', {
+  console.log('[OnboardingComplete] BRANCH: free preview', {
     hasProfile: !!profile,
     hasSelectedSkills: Array.isArray(profile?.selectedSkills),
     hasReadiness: !!readiness,
+    primaryGoal: profile?.primaryGoal ?? 'none',
   })
   return (
     <div className="min-h-screen bg-[#0F1115] py-8 px-4">

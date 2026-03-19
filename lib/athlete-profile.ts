@@ -1454,21 +1454,27 @@ export function getOnboardingProfile(): OnboardingProfile | null {
 }
 
 export function isOnboardingComplete(): boolean {
-  const profile = getOnboardingProfile()
-  if (!profile) return false
-  
-  // Minimum requirements for a complete onboarding
-  return (
-    profile.onboardingComplete === true ||
-    (
-      profile.sex !== null &&
-      profile.trainingExperience !== null &&
-      profile.primaryGoal !== null &&
-      profile.trainingDaysPerWeek !== null &&
-      profile.sessionLengthMinutes !== null &&
-      profile.equipment.length > 0
+  try {
+    const profile = getOnboardingProfile()
+    if (!profile) return false
+    
+    // Minimum requirements for a complete onboarding
+    // CRITICAL: Use Array.isArray() before .length to prevent crash on legacy/malformed profiles
+    return (
+      profile.onboardingComplete === true ||
+      (
+        profile.sex !== null &&
+        profile.trainingExperience !== null &&
+        profile.primaryGoal !== null &&
+        profile.trainingDaysPerWeek !== null &&
+        profile.sessionLengthMinutes !== null &&
+        Array.isArray(profile.equipment) && profile.equipment.length > 0
+      )
     )
-  )
+  } catch (err) {
+    console.error('[AthleteProfile] isOnboardingComplete threw (defaulting to false):', err)
+    return false
+  }
 }
 
 export function createEmptyOnboardingProfile(): OnboardingProfile {

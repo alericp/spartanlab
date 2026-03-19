@@ -2067,7 +2067,14 @@ export function getSavedAdaptivePrograms(): AdaptiveProgram[] {
   const stored = localStorage.getItem(STORAGE_KEY)
   if (stored) {
     try {
-      return JSON.parse(stored)
+      const parsed = JSON.parse(stored)
+      // CRITICAL: Validate parsed data is actually an array before returning
+      // Malformed localStorage could contain non-array data which would crash .sort() and .length
+      if (!Array.isArray(parsed)) {
+        console.warn('[AdaptiveProgramBuilder] getSavedAdaptivePrograms: stored data is not an array, returning empty')
+        return []
+      }
+      return parsed
     } catch {
       return []
     }

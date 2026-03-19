@@ -46,13 +46,20 @@ export default function ProgramPage() {
     
     // Load existing program using unified state (handles migration automatically)
     // getProgramState() will migrate spartanlab_first_program to canonical storage if needed
+    // CRITICAL: Only use adaptiveProgram when hasUsableWorkoutProgram is TRUE
+    // This prevents partial/malformed programs from being passed to AdaptiveProgramDisplay
     const programState = getProgramState()
-    if (programState.adaptiveProgram) {
+    if (programState.hasUsableWorkoutProgram && programState.adaptiveProgram) {
       setProgram(programState.adaptiveProgram)
-      // Program exists - don't show builder by default
+      // Program exists and is usable - don't show builder by default
       setShowBuilder(false)
+      console.log('[ProgramPage] Loaded usable adaptive program')
     } else {
-      // No program - show builder
+      // No usable program - show builder
+      // If adaptiveProgram exists but is not usable, log it for diagnostics
+      if (programState.adaptiveProgram && !programState.hasUsableWorkoutProgram) {
+        console.log('[ProgramPage] Adaptive program exists but is not usable - showing builder')
+      }
       setShowBuilder(true)
     }
     

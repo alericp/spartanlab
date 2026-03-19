@@ -207,6 +207,12 @@ interface ExerciseSelectionInputs {
 // =============================================================================
 
 export function selectExercisesForSession(inputs: ExerciseSelectionInputs): ExerciseSelection {
+  console.log('[exercise-resolver] selectExercisesForSession called:', {
+    dayFocus: inputs.day.focus,
+    primaryGoal: inputs.primaryGoal,
+    sessionMinutes: inputs.sessionMinutes,
+  })
+  
   const {
     day,
     primaryGoal,
@@ -253,14 +259,23 @@ export function selectExercisesForSession(inputs: ExerciseSelectionInputs): Exer
     preferHighCarryover: true,
   }
   
-  // Get skill-specific exercises
+  // Get skill-specific exercises - ALL from DB
   const goalExercises = getExercisesByTransfer(primaryGoal)
   
-  // Filter by equipment
+  // Filter by equipment - ALL candidates from exercise database (adaptive-exercise-pool.ts)
   const availableSkills = SKILL_EXERCISES.filter(e => hasRequiredEquipment(e, equipment))
   const availableStrength = STRENGTH_EXERCISES.filter(e => hasRequiredEquipment(e, equipment))
   const availableAccessory = ACCESSORY_EXERCISES.filter(e => hasRequiredEquipment(e, equipment))
   const availableCore = CORE_EXERCISES_POOL.filter(e => hasRequiredEquipment(e, equipment))
+  
+  // DATABASE ENFORCEMENT: Log candidate counts from DB
+  console.log('[exercise-resolver] DB candidates available:', {
+    skills: availableSkills.length,
+    strength: availableStrength.length,
+    accessory: availableAccessory.length,
+    core: availableCore.length,
+    goalSpecific: goalExercises.length,
+  })
   
   // Select main exercises based on day focus with prerequisite gate checks
   const main = selectMainExercises(

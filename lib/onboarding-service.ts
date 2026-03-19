@@ -13,6 +13,7 @@ import {
 import { getAthleteCalibration } from './athlete-calibration'
 import { detectWeakPoints, type WeakPointSummary } from './weak-point-detection'
 import { generateAdaptiveProgram, saveAdaptiveProgram, type AdaptiveProgramInputs, type AdaptiveProgram } from './adaptive-program-builder'
+import { validateAndLogProgram } from './program-validation'
 import { evaluateTrainingBehavior, type TrainingBehaviorResult } from './adaptive-progression-engine'
 import { createInitialProgramHistoryEntry } from './program-history-versioning'
 import type { PrimaryGoal, ExperienceLevel, TrainingDays, SessionLength } from './program-service'
@@ -281,6 +282,12 @@ export function generateFirstProgram(): FirstRunResult {
     
     // Generate the program
     const program = generateAdaptiveProgram(programInputs)
+    
+    // DATABASE ENFORCEMENT: Validate all exercises are DB-backed before proceeding
+    const dbValidationPassed = validateAndLogProgram(program, 'First Program')
+    if (!dbValidationPassed) {
+      console.warn('[OnboardingService] DB validation had issues, but continuing (non-blocking)')
+    }
     
     // Validate generated program has minimum required shape before saving
     // CRITICAL: Check ALL sessions, not just existence, to prevent downstream crashes

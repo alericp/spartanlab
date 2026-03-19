@@ -217,6 +217,13 @@ import {
   type PlannedExercise,
   type SkillStressFocus,
 } from './skill-volume-governor-engine'
+import {
+  validateProgramFromDatabase,
+  validateAndLogProgram,
+} from './program-validation'
+import {
+  verifyExerciseInDatabase,
+} from './exercise-database-resolver'
   
 // =============================================================================
 // TYPES
@@ -297,6 +304,8 @@ export interface AdaptiveExercise {
   isOverrideable: boolean
   selectionReason: string
   wasAdapted?: boolean
+  // Database enforcement: marks exercise as DB-backed
+  source?: 'database'
   // Training method information
   method?: TrainingMethod
   methodLabel?: string
@@ -322,6 +331,9 @@ export interface AdaptiveProgram {
   experienceLevel: ExperienceLevel
   trainingDaysPerWeek: TrainingDays
   sessionLength: SessionLength
+  // DATABASE ENFORCEMENT: Preserve flexible scheduling intent
+  scheduleMode?: 'static' | 'flexible'
+  recommendedFrequencyRange?: { min: number; max: number }
   structure: WeeklyStructure
   sessions: AdaptiveSession[]
   equipmentProfile: EquipmentProfile
@@ -777,6 +789,15 @@ function getDurationConfig(duration: WorkoutDurationPreference): DurationConfig 
 // =============================================================================
 
 export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): AdaptiveProgram {
+  console.log('[program-gen] Starting adaptive program generation')
+  console.log('[program-gen] Inputs:', {
+    primaryGoal: inputs.primaryGoal,
+    experienceLevel: inputs.experienceLevel,
+    trainingDaysPerWeek: inputs.trainingDaysPerWeek,
+    sessionLength: inputs.sessionLength,
+    equipmentCount: inputs.equipment?.length || 0,
+  })
+  
   const {
     primaryGoal,
     experienceLevel,
@@ -1301,7 +1322,34 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
     equipmentProfile
   )
   
-  console.log('[program-gen] generation succeeded', { sessionCount: sessions.length, primaryGoal })
+  // DATABASE ENFORCEMENT: Log exercise verification stats
+  let totalExercises = 0
+  let dbVerifiedExercises = 0
+  for (const session of sessions) {
+    const exerciseList = session.exercises || []
+    for (const ex of exerciseList) {
+      totalExercises++
+      if (ex.id && verifyExerciseInDatabase(ex.id)) {
+        dbVerifiedExercises++
+      }
+    }
+  }
+  
+  console.log('[program-gen] Generation complete:', { 
+    sessionCount: sessions.length, 
+    primaryGoal,
+    totalExercises,
+    dbVerifiedExercises,
+    dbCoverage: totalExercises > 0 ? `${Math.round((dbVerifiedExercises / totalExercises) * 100)}%` : 'N/A',
+  })
+  
+  // DATABASE ENFORCEMENT: Detect schedule mode from profile
+  const profileScheduleFlexible = onboardingProfile?.trainingDaysPerWeek === 'flexible' ||
+    onboardingProfile?.sessionLengthMinutes === 'flexible'
+  const scheduleMode: 'static' | 'flexible' = profileScheduleFlexible ? 'flexible' : 'static'
+  const recommendedFrequencyRange = profileScheduleFlexible 
+    ? { min: 3, max: 5 } // Flexible users can train 3-5 days
+    : { min: trainingDaysPerWeek, max: trainingDaysPerWeek }
   
   return {
     id: `adaptive-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
@@ -1311,6 +1359,9 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
     experienceLevel,
     trainingDaysPerWeek,
     sessionLength,
+    // DATABASE ENFORCEMENT: Preserve schedule mode semantics
+    scheduleMode,
+    recommendedFrequencyRange,
     structure,
     sessions,
     equipmentProfile,
@@ -2227,6 +2278,7 @@ function mapToAdaptiveExercises(
       note: s.note,
       isOverrideable: s.isOverrideable,
       selectionReason: s.selectionReason,
+      source: 'database' as const, // DB enforcement: all exercises sourced from adaptive-exercise-pool
       method,
       methodLabel: getMethodLabel(method),
       progressionDecision,
@@ -2374,10 +2426,29 @@ function isBrowser(): boolean {
 export function saveAdaptiveProgram(program: AdaptiveProgram): AdaptiveProgram {
   if (!isBrowser()) return program
   
+  // DATABASE ENFORCEMENT: Validate program before save
+  console.log('[program-gen] Validating program before save...')
+  const validation = validateProgramFromDatabase(program)
+  
+  if (!validation.isValid) {
+    console.warn('[program-gen] Program validation issues detected:', validation.diagnostics)
+    // Log specific issues but don't block save - allow graceful degradation
+    if (validation.exerciseValidation.missingDbSource.length > 0) {
+      console.warn('[program-gen] Exercises missing DB source:', 
+        validation.exerciseValidation.missingDbSource.slice(0, 5))
+    }
+  } else {
+    console.log('[program-gen] Program validation passed:', {
+      exercises: validation.exerciseValidation.valid,
+      sessions: program.sessions?.length || 0,
+    })
+  }
+  
   const programs = getSavedAdaptivePrograms()
   programs.push(program)
   localStorage.setItem(STORAGE_KEY, JSON.stringify(programs))
   
+  console.log('[program-gen] Program saved successfully')
   return program
 }
 

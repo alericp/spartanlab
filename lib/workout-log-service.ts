@@ -1,6 +1,15 @@
 // Workout Log service layer for preview mode
 // Uses localStorage for persistence, easy to swap to Prisma later
 
+/**
+ * Workout Log Service
+ * 
+ * DO NOT DRIFT: This is the CANONICAL WORKOUT LOGGING entrypoint.
+ * All session completion MUST call saveWorkoutLog() with trusted=true ONLY for real user completions.
+ * The trusted flag determines whether data feeds back into next generation.
+ * Demo workouts (isDemo=true) are NEVER trusted and never affect adaptive logic.
+ */
+
 import { saveSessionFeedback } from './session-feedback'
 
 export type SessionType = 'skill' | 'strength' | 'mixed' | 'recovery'

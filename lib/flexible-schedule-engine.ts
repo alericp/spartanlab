@@ -1,6 +1,7 @@
 /**
  * Flexible Schedule Engine
  * 
+ * DO NOT DRIFT: CANONICAL FLEXIBLE SCHEDULE SEMANTICS.
  * Resolves adaptive weekly frequency for users who selected "flexible" schedule mode.
  * This engine determines the current week's training structure based on:
  * - Primary goal demands
@@ -8,6 +9,11 @@
  * - Joint cautions
  * - Training style
  * - Skill emphasis and tendon load
+ * 
+ * CRITICAL: Flexible schedule is a REAL semantic, not just a numeric variable.
+ * currentWeekFrequency is DERIVED (not identity-defining).
+ * Generator must preserve scheduleMode through entire flow.
+ * Dashboard must show frequency as "this week" not permanent choice.
  * 
  * KEY PRINCIPLES:
  * - Flexible does NOT mean 7 hard days

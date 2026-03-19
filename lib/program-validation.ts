@@ -1,4 +1,17 @@
-// Program Validation Layer
+/**
+ * Program Validation Layer
+ * 
+ * DO NOT DRIFT: CANONICAL QA VALIDATION before save/return.
+ * Ensures all exercises are DB-backed and program structure is coherent.
+ * 
+ * CRITICAL: validateProgramFromDatabase() MUST be called before:
+ * - saveAdaptiveProgram()
+ * - marking program usable for first-session
+ * - any dashboard mature-state rendering
+ * 
+ * This is NOT optional. No bypass paths.
+ */
+
 // Validates generated programs before save/return
 // Ensures all exercises are DB-backed and program structure is coherent
 

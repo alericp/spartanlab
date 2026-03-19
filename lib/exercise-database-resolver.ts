@@ -23,6 +23,20 @@ import {
   COOLDOWN_EXERCISES,
 } from './adaptive-exercise-pool'
 import type { JointCaution } from './athlete-profile'
+import {
+  type MovementIntelligentExercise,
+  normalizeToMovementIntelligent,
+  getMovementIntelligentExercise,
+  filterMovementIntelligent,
+  analyzeSessionPatterns,
+  validateSessionCoherence,
+  selectSupportForSkill,
+  selectSupportForLimiter,
+  type MovementFilterCriteria,
+  type SessionPatternAnalysis,
+  type CoherenceCheckResult,
+} from './movement-intelligence'
+import type { MovementFamily, SkillCarryover } from './movement-family-registry'
 
 // =============================================================================
 // TYPES
@@ -512,4 +526,227 @@ export function validateExerciseSource(exercise: unknown): ExerciseValidationRes
     hasRequiredFields,
     issues,
   }
+}
+
+// =============================================================================
+// MOVEMENT-INTELLIGENT RESOLUTION
+// =============================================================================
+
+export interface MovementIntelligentResolutionResult {
+  success: boolean
+  exercise: MovementIntelligentExercise | null
+  fallbackTier: 0 | 1 | 2 | 3 | 4
+  candidatesFound: number
+  diagnostics: string[]
+  patternInfo?: {
+    primaryPattern: MovementFamily
+    armType: string
+    jointStressLevel: string
+  }
+}
+
+/**
+ * Resolve an exercise slot and return a movement-intelligent exercise.
+ * This is the canonical resolution function for movement-aware programming.
+ */
+export function resolveMovementIntelligentSlot(
+  requirements: SlotRequirements,
+  context: {
+    primaryGoal?: string
+    availableEquipment?: EquipmentType[]
+    jointCautions?: JointCaution[]
+    usedIds?: Set<string>
+    preferLowJointStress?: boolean
+  } = {}
+): MovementIntelligentResolutionResult {
+  console.log('[exercise-resolver] Resolving movement-intelligent slot:', requirements.role, requirements.pattern)
+  
+  // First, use standard resolution
+  const standardResult = resolveExerciseSlot(requirements, context)
+  
+  if (!standardResult.success || !standardResult.exercise) {
+    return {
+      success: false,
+      exercise: null,
+      fallbackTier: 0,
+      candidatesFound: 0,
+      diagnostics: standardResult.diagnostics,
+    }
+  }
+  
+  // Get the original exercise for full normalization
+  const originalExercise = standardResult.exercise._original
+  if (!originalExercise) {
+    console.warn('[exercise-resolver] Resolved exercise missing _original reference')
+    return {
+      success: false,
+      exercise: null,
+      fallbackTier: 0,
+      candidatesFound: 0,
+      diagnostics: ['Missing original exercise reference'],
+    }
+  }
+  
+  // Normalize to movement-intelligent format
+  const movementIntelligent = normalizeToMovementIntelligent(
+    originalExercise,
+    standardResult.exercise.coachingReason
+  )
+  
+  console.log('[movement-intel] Resolved:', {
+    id: movementIntelligent.id,
+    pattern: movementIntelligent.primaryPattern,
+    armType: movementIntelligent.armType,
+    jointStress: movementIntelligent.jointStress,
+  })
+  
+  return {
+    success: true,
+    exercise: movementIntelligent,
+    fallbackTier: standardResult.fallbackTier,
+    candidatesFound: standardResult.candidatesFound,
+    diagnostics: standardResult.diagnostics,
+    patternInfo: {
+      primaryPattern: movementIntelligent.primaryPattern,
+      armType: movementIntelligent.armType,
+      jointStressLevel: calculateOverallJointStress(movementIntelligent),
+    },
+  }
+}
+
+/**
+ * Resolve multiple slots with movement intelligence
+ */
+export function resolveMovementIntelligentSlots(
+  slots: SlotRequirements[],
+  context: {
+    primaryGoal?: string
+    availableEquipment?: EquipmentType[]
+    jointCautions?: JointCaution[]
+  } = {}
+): {
+  resolved: MovementIntelligentExercise[]
+  failures: { slot: SlotRequirements; reason: string }[]
+  diagnostics: string[]
+  sessionAnalysis: SessionPatternAnalysis
+  coherenceCheck: CoherenceCheckResult
+} {
+  const resolved: MovementIntelligentExercise[] = []
+  const failures: { slot: SlotRequirements; reason: string }[] = []
+  const diagnostics: string[] = []
+  const usedIds = new Set<string>()
+  
+  console.log('[exercise-resolver] Resolving', slots.length, 'movement-intelligent slots')
+  
+  for (const slot of slots) {
+    const result = resolveMovementIntelligentSlot(slot, {
+      ...context,
+      usedIds,
+    })
+    
+    diagnostics.push(...result.diagnostics)
+    
+    if (result.success && result.exercise) {
+      resolved.push(result.exercise)
+      usedIds.add(result.exercise.id)
+    } else {
+      failures.push({
+        slot,
+        reason: result.diagnostics.join('; '),
+      })
+    }
+  }
+  
+  // Analyze pattern balance
+  const sessionAnalysis = analyzeSessionPatterns(resolved)
+  
+  // Validate coherence
+  const coherenceCheck = validateSessionCoherence(resolved)
+  
+  console.log('[exercise-resolver] Movement-intelligent resolution complete:', {
+    resolved: resolved.length,
+    failed: failures.length,
+    coherent: coherenceCheck.passed,
+    warnings: coherenceCheck.warnings.length,
+  })
+  
+  return { resolved, failures, diagnostics, sessionAnalysis, coherenceCheck }
+}
+
+function calculateOverallJointStress(ex: MovementIntelligentExercise): string {
+  const stressLevels = [
+    ex.jointStress.shoulder,
+    ex.jointStress.elbow,
+    ex.jointStress.wrist,
+    ex.jointStress.lowerBack,
+  ]
+  
+  if (stressLevels.includes('high') || stressLevels.includes('very_high')) return 'high'
+  if (stressLevels.filter(s => s === 'moderate').length >= 2) return 'moderate'
+  return 'low'
+}
+
+// =============================================================================
+// SKILL-TRANSFER AWARE SUPPORT SELECTION
+// =============================================================================
+
+/**
+ * Select support exercises based on skill transfer requirements.
+ * Uses movement intelligence for intelligent selection.
+ */
+export function selectSupportExercises(
+  targetSkill: SkillCarryover,
+  options: {
+    jointCautions?: JointCaution[]
+    maxDifficulty?: 'beginner' | 'intermediate' | 'advanced' | 'elite'
+    excludeIds?: string[]
+    preferLowFatigue?: boolean
+    preferStraightArm?: boolean
+    limit?: number
+  } = {}
+): MovementIntelligentExercise[] {
+  console.log('[exercise-resolver] Selecting support for skill:', targetSkill)
+  
+  return selectSupportForSkill({
+    targetSkill,
+    jointCautions: options.jointCautions,
+    maxDifficulty: options.maxDifficulty,
+    excludeIds: options.excludeIds,
+    preferLowFatigue: options.preferLowFatigue,
+    preferStraightArm: options.preferStraightArm,
+    limit: options.limit,
+  })
+}
+
+/**
+ * Select support exercises based on limiter/weak point.
+ * Uses movement intelligence limiter mapping.
+ */
+export function selectLimiterSupport(
+  limiterId: string,
+  options: {
+    jointCautions?: JointCaution[]
+    maxDifficulty?: 'beginner' | 'intermediate' | 'advanced' | 'elite'
+    excludeIds?: string[]
+    limit?: number
+  } = {}
+): MovementIntelligentExercise[] {
+  console.log('[exercise-resolver] Selecting limiter support:', limiterId)
+  
+  return selectSupportForLimiter(limiterId, options)
+}
+
+// =============================================================================
+// RE-EXPORTS FOR CONVENIENCE
+// =============================================================================
+
+export {
+  type MovementIntelligentExercise,
+  type MovementFilterCriteria,
+  type SessionPatternAnalysis,
+  type CoherenceCheckResult,
+  analyzeSessionPatterns,
+  validateSessionCoherence,
+  filterMovementIntelligent,
+  getMovementIntelligentExercise,
 }

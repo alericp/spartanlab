@@ -4,6 +4,18 @@
 
 import { validateExerciseSource, verifyExerciseInDatabase } from './exercise-database-resolver'
 import type { Exercise } from './adaptive-exercise-pool'
+import {
+  normalizeToMovementIntelligent,
+  validateSessionCoherence,
+  validateWeeklyCoherence,
+  analyzeSessionPatterns,
+  analyzeWeeklyPatterns,
+  type MovementIntelligentExercise,
+  type CoherenceCheckResult,
+  type SessionPatternAnalysis,
+  type WeeklyPatternAnalysis,
+} from './movement-intelligence'
+import { getExerciseById } from './adaptive-exercise-pool'
 
 // =============================================================================
 // TYPES
@@ -31,6 +43,16 @@ export interface ProgramValidationResult {
   equipmentValidation: {
     isRespected: boolean
     violations: string[]
+  }
+  biomechanicalValidation: {
+    isCoherent: boolean
+    sessionCoherence: { dayNumber: number; passed: boolean; warnings: string[] }[]
+    weeklyAnalysis: {
+      straightArmDays: number
+      pushPullRatio: number
+      warnings: string[]
+      recommendations: string[]
+    }
   }
   diagnostics: string[]
 }

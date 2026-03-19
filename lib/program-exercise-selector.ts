@@ -76,7 +76,20 @@ import {
   type IntelligentSelection,
 } from './exercise-intelligence-engine'
 import type { PerformanceEnvelope } from './performance-envelope-engine'
-import type { MovementFamily } from './movement-family-registry'
+import type { MovementFamily, ArmType, TrunkDemand, ScapularDemand, SkillCarryover, StressLevel } from './movement-family-registry'
+import {
+  normalizeToMovementIntelligent,
+  analyzeSessionPatterns,
+  validateSessionCoherence,
+  selectSupportForSkill,
+  selectSupportForLimiter,
+  getMovementIntelligentExercise,
+  filterMovementIntelligent,
+  LIMITER_MOVEMENT_REQUIREMENTS,
+  type MovementIntelligentExercise,
+  type SessionPatternAnalysis,
+  type CoherenceCheckResult,
+} from './movement-intelligence'
 import {
   checkExercisePrerequisite,
   buildPrerequisiteContext,
@@ -422,13 +435,42 @@ function selectMainExercises(
   let straightArmCount = 0
   let primaryCount = 0
   
+  // =========================================================================
+  // MOVEMENT INTELLIGENCE TRACKING
+  // =========================================================================
+  const movementIntelligentExercises: MovementIntelligentExercise[] = []
+  const jointStressAccumulator = {
+    shoulder: 0,
+    elbow: 0,
+    wrist: 0,
+    lowerBack: 0,
+  }
+  let compressionCoreCount = 0
+  let antiExtensionCoreCount = 0
+  let verticalPushCount = 0
+  let horizontalPushCount = 0
+  let verticalPullCount = 0
+  let horizontalPullCount = 0
+  
   // Session load limits based on typical skill/strength session
   const WEIGHTED_LOAD_LIMIT = 5.5  // Typical max for skill_strength_dominant
   const HIGH_FATIGUE_LIMIT = 3
   const STRAIGHT_ARM_LIMIT = 2
   const PRIMARY_LIMIT = 3
   
-  // Helper to check if we can add more based on load
+  // Joint stress limits (scaled from StressLevel: low=1, moderate=2, high=3, very_high=4)
+  const JOINT_STRESS_LIMITS = {
+    shoulder: 10,  // Allow up to moderate stress * 5 exercises
+    elbow: 8,
+    wrist: 8,
+    lowerBack: 8,
+  }
+  
+  const stressToNumber = (stress: StressLevel): number => {
+    return stress === 'low' ? 1 : stress === 'moderate' ? 2 : stress === 'high' ? 3 : 4
+  }
+  
+  // Helper to check if we can add more based on load and movement intelligence
   const canAddMore = (exercise: Exercise, deliveryStyle: DeliveryStyle = 'standalone'): boolean => {
     const metadata = buildExerciseLoadMetadata(
       {
@@ -441,10 +483,13 @@ function selectMainExercises(
       deliveryStyle
     )
     
+    // Get movement intelligence for this exercise
+    const movementIntel = normalizeToMovementIntelligent(exercise)
+    
     // Check if adding this exercise would exceed limits
     const newWeightedLoad = currentWeightedLoad + metadata.sessionCountWeight
     const newHighFatigue = highFatigueCount + (metadata.fatigueWeight === 'high' ? 1 : 0)
-    const newStraightArm = straightArmCount + (metadata.jointStressCategory === 'straight_arm' ? 1 : 0)
+    const newStraightArm = straightArmCount + (movementIntel.armType === 'straight_arm' ? 1 : 0)
     const newPrimary = primaryCount + (metadata.role === 'skill_primary' || metadata.role === 'strength_primary' ? 1 : 0)
     
     // For accessory/rehab/core, be more lenient with raw exercise count
@@ -457,6 +502,30 @@ function selectMainExercises(
     
     // Weighted load check (more lenient for low-impact exercises)
     if (!isLowImpact && newWeightedLoad > WEIGHTED_LOAD_LIMIT + 1) return false
+    
+    // =========================================================================
+    // MOVEMENT INTELLIGENCE CHECKS
+    // =========================================================================
+    
+    // Check joint stress accumulation
+    const newShoulderStress = jointStressAccumulator.shoulder + stressToNumber(movementIntel.jointStress.shoulder)
+    const newElbowStress = jointStressAccumulator.elbow + stressToNumber(movementIntel.jointStress.elbow)
+    const newWristStress = jointStressAccumulator.wrist + stressToNumber(movementIntel.jointStress.wrist)
+    const newLowerBackStress = jointStressAccumulator.lowerBack + stressToNumber(movementIntel.jointStress.lowerBack)
+    
+    // Reject if any joint is overloaded
+    if (newShoulderStress > JOINT_STRESS_LIMITS.shoulder) {
+      console.log('[movement-intel] Rejecting exercise due to shoulder stress:', exercise.id)
+      return false
+    }
+    if (newWristStress > JOINT_STRESS_LIMITS.wrist) {
+      console.log('[movement-intel] Rejecting exercise due to wrist stress:', exercise.id)
+      return false
+    }
+    if (newElbowStress > JOINT_STRESS_LIMITS.elbow) {
+      console.log('[movement-intel] Rejecting exercise due to elbow stress:', exercise.id)
+      return false
+    }
     
     return true
   }
@@ -503,6 +572,35 @@ function selectMainExercises(
     if (loadMetadata.fatigueWeight === 'high') highFatigueCount++
     if (loadMetadata.jointStressCategory === 'straight_arm') straightArmCount++
     if (loadMetadata.role === 'skill_primary' || loadMetadata.role === 'strength_primary') primaryCount++
+    
+    // =========================================================================
+    // UPDATE MOVEMENT INTELLIGENCE TRACKING
+    // =========================================================================
+    const movementIntel = normalizeToMovementIntelligent(finalExercise)
+    movementIntelligentExercises.push(movementIntel)
+    
+    // Update joint stress accumulator
+    jointStressAccumulator.shoulder += stressToNumber(movementIntel.jointStress.shoulder)
+    jointStressAccumulator.elbow += stressToNumber(movementIntel.jointStress.elbow)
+    jointStressAccumulator.wrist += stressToNumber(movementIntel.jointStress.wrist)
+    jointStressAccumulator.lowerBack += stressToNumber(movementIntel.jointStress.lowerBack)
+    
+    // Track pattern counts using movement intelligence
+    if (movementIntel.armType === 'straight_arm') straightArmCount++
+    if (movementIntel.primaryPattern === 'compression_core') compressionCoreCount++
+    if (movementIntel.primaryPattern === 'anti_extension_core') antiExtensionCoreCount++
+    if (movementIntel.primaryPattern === 'vertical_push') verticalPushCount++
+    if (movementIntel.primaryPattern === 'horizontal_push') horizontalPushCount++
+    if (movementIntel.primaryPattern === 'vertical_pull') verticalPullCount++
+    if (movementIntel.primaryPattern === 'horizontal_pull') horizontalPullCount++
+    
+    console.log('[movement-intel] Added exercise:', {
+      id: finalExercise.id,
+      pattern: movementIntel.primaryPattern,
+      armType: movementIntel.armType,
+      trunkDemand: movementIntel.trunkDemand,
+      jointStress: movementIntel.jointStress,
+    })
     
     selected.push({
       exercise: finalExercise,
@@ -763,14 +861,83 @@ function selectMainExercises(
     }
   }
   
-  // Always try to include core work
+  // =========================================================================
+  // MOVEMENT-INTELLIGENT CORE SELECTION
+  // =========================================================================
+  
+  // Always try to include core work using movement intelligence
   if (selected.length < maxExercises) {
-    const coreForGoal = availableCore.find(e => e.transferTo.includes(primaryGoal))
-    const corePick = coreForGoal || availableCore[0]
+    // Use movement intelligence to select appropriate core type
+    const needsCompression = compressionCoreCount === 0 && (
+      primaryGoal === 'l_sit' || primaryGoal === 'v_sit' || 
+      primaryGoal === 'front_lever' || primaryGoal === 'planche'
+    )
+    const needsAntiExtension = antiExtensionCoreCount === 0 && (
+      primaryGoal === 'front_lever' || primaryGoal === 'dragon_flag' ||
+      primaryGoal === 'planche' || primaryGoal === 'muscle_up'
+    )
     
-    if (corePick && !usedIds.has(corePick.id)) {
-      addExercise(corePick, `Core work supporting ${primaryGoal}`)
+    let corePick: Exercise | undefined
+    let coreReason = ''
+    
+    if (needsCompression) {
+      // Select compression core using movement intelligence
+      corePick = availableCore.find(e => {
+        if (usedIds.has(e.id)) return false
+        const intel = normalizeToMovementIntelligent(e)
+        return intel.primaryPattern === 'compression_core' || intel.trunkDemand === 'compression'
+      })
+      coreReason = 'Compression strength for skill transfer'
+    } else if (needsAntiExtension) {
+      // Select anti-extension core - prefer dragon flag progressions when appropriate
+      corePick = availableCore.find(e => {
+        if (usedIds.has(e.id)) return false
+        const intel = normalizeToMovementIntelligent(e)
+        
+        // Prefer dragon flag progressions for advanced goals
+        if (experienceLevel !== 'beginner' && (
+          e.id === 'dragon_flag' || e.id === 'dragon_flag_neg' || 
+          e.id === 'dragon_flag_tuck' || e.id === 'dragon_flag_assisted'
+        )) {
+          return true
+        }
+        
+        return intel.primaryPattern === 'anti_extension_core' || intel.trunkDemand === 'anti_extension'
+      })
+      coreReason = 'Anti-extension strength for body position control'
+    } else {
+      // Default: find core that transfers to goal
+      corePick = availableCore.find(e => 
+        !usedIds.has(e.id) && e.transferTo.includes(primaryGoal)
+      ) || availableCore.find(e => !usedIds.has(e.id))
+      coreReason = `Core work supporting ${primaryGoal}`
     }
+    
+    if (corePick) {
+      console.log('[movement-intel] Selected core exercise:', corePick.id, coreReason)
+      addExercise(corePick, coreReason)
+    }
+  }
+  
+  // =========================================================================
+  // SESSION COHERENCE VALIDATION
+  // =========================================================================
+  
+  if (movementIntelligentExercises.length > 0) {
+    const coherenceResult = validateSessionCoherence(movementIntelligentExercises)
+    if (!coherenceResult.passed) {
+      console.log('[movement-intel] Session coherence warnings:', coherenceResult.warnings)
+    }
+    
+    const patternAnalysis = analyzeSessionPatterns(movementIntelligentExercises)
+    console.log('[movement-intel] Session pattern analysis:', {
+      straightArmCount: patternAnalysis.straightArmCount,
+      pushCount: patternAnalysis.pushCount,
+      pullCount: patternAnalysis.pullCount,
+      compressionCount: patternAnalysis.compressionCount,
+      antiExtensionCount: patternAnalysis.antiExtensionCount,
+      totalJointStress: patternAnalysis.totalJointStress,
+    })
   }
   
   // Sort by neural demand (highest first)

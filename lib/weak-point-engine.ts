@@ -1619,3 +1619,114 @@ export function getVolumeModifierForWeakPoint(weakPoint: WeakPointType): number 
       return 1.0
   }
 }
+
+// =============================================================================
+// MOVEMENT-INTELLIGENT ACCESSORY SELECTION
+// =============================================================================
+
+import {
+  selectSupportForLimiter,
+  LIMITER_MOVEMENT_REQUIREMENTS,
+  type MovementIntelligentExercise,
+} from './movement-intelligence'
+import type { JointCaution } from './athlete-profile'
+
+/**
+ * Maps WeakPointType to movement intelligence limiter ID
+ */
+const WEAK_POINT_TO_LIMITER: Partial<Record<WeakPointType, string>> = {
+  straight_arm_pull_strength: 'front_lever_straight_arm_strength',
+  straight_arm_push_strength: 'planche_straight_arm_strength',
+  core_compression: 'compression_strength',
+  core_anti_extension: 'dragon_flag_anti_extension',
+  compression_strength: 'l_sit_compression',
+  scapular_control: 'planche_protraction',
+  vertical_push_strength: 'hspu_pressing_strength',
+}
+
+/**
+ * Get movement-intelligent accessory recommendations for weak points.
+ * This uses the canonical movement intelligence layer for selection.
+ */
+export function getMovementIntelligentAccessories(
+  weakPoints: WeakPointType[],
+  options: {
+    jointCautions?: JointCaution[]
+    maxDifficulty?: 'beginner' | 'intermediate' | 'advanced' | 'elite'
+    excludeIds?: string[]
+    maxTotal?: number
+  } = {}
+): MovementIntelligentExercise[] {
+  const maxTotal = options.maxTotal || 2
+  const selected: MovementIntelligentExercise[] = []
+  const usedIds = new Set<string>(options.excludeIds || [])
+  
+  console.log('[movement-intel] Selecting accessories for weak points:', weakPoints)
+  
+  for (const wp of weakPoints) {
+    if (selected.length >= maxTotal) break
+    
+    // Map to movement intelligence limiter ID
+    const limiterId = WEAK_POINT_TO_LIMITER[wp]
+    if (!limiterId) {
+      // Fall back to regular accessory selection if no movement intelligence mapping
+      continue
+    }
+    
+    // Use movement intelligence to find support exercises
+    const candidates = selectSupportForLimiter(limiterId, {
+      jointCautions: options.jointCautions,
+      maxDifficulty: options.maxDifficulty,
+      excludeIds: [...usedIds],
+      limit: 2,
+    })
+    
+    // Add candidates that haven't been used
+    for (const candidate of candidates) {
+      if (selected.length >= maxTotal) break
+      if (usedIds.has(candidate.id)) continue
+      
+      selected.push(candidate)
+      usedIds.add(candidate.id)
+      
+      console.log('[movement-intel] Selected accessory for', wp + ':', {
+        id: candidate.id,
+        pattern: candidate.primaryPattern,
+        armType: candidate.armType,
+        trunkDemand: candidate.trunkDemand,
+      })
+    }
+  }
+  
+  return selected
+}
+
+/**
+ * Get accessory exercise IDs using movement intelligence with fallback
+ */
+export function getSmartWeakPointAccessories(
+  weakPoints: WeakPointType[],
+  options: {
+    jointCautions?: JointCaution[]
+    maxDifficulty?: 'beginner' | 'intermediate' | 'advanced' | 'elite'
+    excludeIds?: string[]
+    maxTotal?: number
+  } = {}
+): string[] {
+  // First try movement-intelligent selection
+  const intelligentAccessories = getMovementIntelligentAccessories(weakPoints, options)
+  
+  if (intelligentAccessories.length >= (options.maxTotal || 2)) {
+    return intelligentAccessories.map(ex => ex.id)
+  }
+  
+  // Fill remaining with traditional selection
+  const neededMore = (options.maxTotal || 2) - intelligentAccessories.length
+  const usedIds = new Set(intelligentAccessories.map(ex => ex.id))
+  
+  const traditional = getWeakPointAccessories(weakPoints, neededMore + 2)
+    .filter(id => !usedIds.has(id))
+    .slice(0, neededMore)
+  
+  return [...intelligentAccessories.map(ex => ex.id), ...traditional]
+}

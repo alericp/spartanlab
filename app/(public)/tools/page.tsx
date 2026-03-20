@@ -32,6 +32,14 @@ export const metadata: Metadata = {
 
 const tools = [
   {
+    slug: '../preview',
+    title: 'Program Preview Generator',
+    description: 'See exactly what your personalized calisthenics program looks like. Generate a preview based on your goals and experience.',
+    icon: Sparkles,
+    category: 'Program Builder',
+    featured: true,
+  },
+  {
     slug: 'pull-up-strength-calculator',
     title: 'Pull-Up Strength Standards',
     description: 'Find out how your pull-up strength compares to calisthenics standards. From beginner to elite.',

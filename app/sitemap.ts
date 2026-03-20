@@ -46,6 +46,13 @@ export default function sitemap(): MetadataRoute.Sitemap {
       changeFrequency: 'weekly',
       priority: 0.9,
     },
+    // Program preview - conversion tool
+    {
+      url: `${baseUrl}/preview`,
+      lastModified: currentDate,
+      changeFrequency: 'weekly',
+      priority: 0.85,
+    },
     
     // Tools and calculators
     {

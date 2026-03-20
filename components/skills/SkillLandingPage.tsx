@@ -200,16 +200,21 @@ export function SkillLandingPage({ config }: SkillLandingPageProps) {
               SpartanLab creates adaptive programs that target your specific limiting factors and integrate {config.title.toLowerCase()} training with your other goals.
             </p>
             <div className="flex flex-wrap gap-3">
-              <Link href="/onboarding">
+              <Link href={`/preview?goal=${config.slug.replace(/-/g, '_')}`}>
                 <Button className="bg-[#C1121F] hover:bg-[#A50E1A]">
-                  Generate Your Program
+                  Preview Your Program
                   <ArrowRight className="w-4 h-4 ml-2" />
+                </Button>
+              </Link>
+              <Link href="/onboarding">
+                <Button variant="outline" className="border-[#2B313A] hover:bg-[#2B313A]">
+                  Start Full Setup
                 </Button>
               </Link>
               {config.readinessCalculatorHref && (
                 <Link href={config.readinessCalculatorHref}>
-                  <Button variant="outline" className="border-[#2B313A] hover:bg-[#2B313A]">
-                    Check Your Strength First
+                  <Button variant="ghost" className="text-[#6B7280] hover:text-[#A5A5A5]">
+                    Check Readiness First
                   </Button>
                 </Link>
               )}

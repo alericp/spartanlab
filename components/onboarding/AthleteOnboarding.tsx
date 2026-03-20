@@ -135,7 +135,8 @@ import {
   hasEstimatedValues,
 } from '@/lib/athlete-profile'
 import { BodyFatCalculator } from './BodyFatCalculator'
-import { getCanonicalProfile, logCanonicalProfileState } from '@/lib/canonical-profile-service'
+import { getCanonicalProfile, saveCanonicalProfile, logCanonicalProfileState } from '@/lib/canonical-profile-service'
+import { logProfileTruthState } from '@/lib/profile-truth-contract'
 import { getOnboardingProfile } from '@/lib/athlete-profile'
 import {
   type MilitaryBranch,
@@ -2920,9 +2921,12 @@ function RecoverySection({ profile, updateProfile }: SectionProps) {
 interface ReviewSectionProps {
   profile: OnboardingProfile
   onEditSection?: (sectionId: SectionId) => void
+  onClearAll?: () => void
+  showClearConfirm?: boolean
+  setShowClearConfirm?: (show: boolean) => void
 }
 
-function ReviewSection({ profile, onEditSection }: ReviewSectionProps) {
+function ReviewSection({ profile, onEditSection, onClearAll, showClearConfirm, setShowClearConfirm }: ReviewSectionProps) {
   const hasEstimates = hasEstimatedValues(profile)
 
   // Helper to format skill list
@@ -3324,6 +3328,48 @@ function ReviewSection({ profile, onEditSection }: ReviewSectionProps) {
           <span className="text-[#6B7280]">SpartanLab adapts as you improve — update your metrics anytime.</span>
         </p>
       </div>
+      
+      {/* Clear All option - for users who want to start fresh */}
+      {onClearAll && (
+        <div className="mt-6 pt-4 border-t border-[#2B313A]">
+          {showClearConfirm ? (
+            <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3">
+              <p className="text-xs text-red-400 mb-2 text-center">
+                Are you sure? This will clear all your onboarding selections and start fresh.
+                <br />
+                <span className="text-[#6B7280]">(Your workout history will NOT be affected)</span>
+              </p>
+              <div className="flex gap-2 justify-center">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowClearConfirm?.(false)}
+                  className="border-[#3A3A3A] text-[#A4ACB8] hover:bg-[#2A2A2A]"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={onClearAll}
+                  className="bg-red-600 hover:bg-red-700 text-white"
+                >
+                  Clear All Data
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setShowClearConfirm?.(true)}
+              className="w-full text-xs text-[#6B7280] hover:text-[#A4ACB8] transition-colors py-2"
+            >
+              Want to start over? Clear all selections
+            </button>
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -3352,25 +3398,117 @@ export function AthleteOnboarding() {
       console.log('[AthleteOnboarding] Prefilling from existing onboarding profile')
       setProfile(existingProfile)
     } else if (canonical.onboardingComplete || canonical.primaryGoal) {
-      // Fallback: Partially populate from canonical if onboarding profile is missing
-      console.log('[AthleteOnboarding] Prefilling partial data from canonical profile')
+      // Fallback: Comprehensively populate from canonical if onboarding profile is missing
+      console.log('[AthleteOnboarding] Prefilling comprehensive data from canonical profile')
+      logProfileTruthState('AthleteOnboarding prefill from canonical')
       setProfile(prev => ({
         ...prev,
+        // Demographics
+        sex: (canonical.sex as Sex) || prev.sex,
+        heightRange: (canonical.heightRange as HeightRange) || prev.heightRange,
+        weightRange: (canonical.weightRange as WeightRange) || prev.weightRange,
+        trainingExperience: (canonical.trainingExperience as TrainingExperience) || prev.trainingExperience,
+        
+        // Goals
         primaryGoal: (canonical.primaryGoal as PrimaryGoalType) || prev.primaryGoal,
+        secondaryGoal: (canonical.secondaryGoal as PrimaryGoalType) || prev.secondaryGoal,
         selectedSkills: canonical.selectedSkills as SkillGoal[] || prev.selectedSkills,
         selectedFlexibility: canonical.selectedFlexibility as FlexibilityGoal[] || prev.selectedFlexibility,
+        goalCategories: canonical.goalCategories as GoalCategory[] || prev.goalCategories,
+        trainingPathType: (canonical.trainingPathType as TrainingPathType) || prev.trainingPathType,
+        primaryTrainingOutcome: (canonical.primaryTrainingOutcome as PrimaryTrainingOutcome) || prev.primaryTrainingOutcome,
+        
+        // Schedule
         trainingDaysPerWeek: (canonical.trainingDaysPerWeek as TrainingDaysPerWeek) || prev.trainingDaysPerWeek,
         sessionLengthMinutes: canonical.sessionLengthMinutes || prev.sessionLengthMinutes,
+        sessionStyle: (canonical.sessionStylePreference as SessionStylePreference) || prev.sessionStyle,
+        
+        // Equipment & diagnostics
         equipment: canonical.equipmentAvailable as EquipmentType[] || prev.equipment,
         jointCautions: canonical.jointCautions as JointCaution[] || prev.jointCautions,
         weakestArea: (canonical.weakestArea as WeakestArea) || prev.weakestArea,
+        primaryLimitation: (canonical.primaryLimitation as PrimaryLimitation) || prev.primaryLimitation,
+        
+        // Strength benchmarks
         pullUpMax: (canonical.pullUpMax as PullUpCapacity) || prev.pullUpMax,
         dipMax: (canonical.dipMax as DipCapacity) || prev.dipMax,
+        pushUpMax: (canonical.pushUpMax as PushUpCapacity) || prev.pushUpMax,
+        wallHSPUReps: (canonical.wallHSPUReps as WallHSPUReps) || prev.wallHSPUReps,
+        weightedPullUp: canonical.weightedPullUp ? {
+          load: canonical.weightedPullUp.addedWeight,
+          reps: canonical.weightedPullUp.reps,
+          unit: canonical.weightedPullUp.unit || 'lbs',
+        } : prev.weightedPullUp,
+        weightedDip: canonical.weightedDip ? {
+          load: canonical.weightedDip.addedWeight,
+          reps: canonical.weightedDip.reps,
+          unit: canonical.weightedDip.unit || 'lbs',
+        } : prev.weightedDip,
+        
+        // All-time PRs
+        allTimePRPullUp: canonical.allTimePRPullUp || prev.allTimePRPullUp,
+        allTimePRDip: canonical.allTimePRDip || prev.allTimePRDip,
+        
+        // Skill benchmarks with band context
+        frontLever: canonical.frontLeverProgression ? {
+          progression: canonical.frontLeverProgression as FrontLeverProgression,
+          holdSeconds: canonical.frontLeverHoldSeconds ?? undefined,
+          isAssisted: canonical.frontLeverIsAssisted,
+          bandLevel: (canonical.frontLeverBandLevel as BandLevel) || undefined,
+          highestLevelEverReached: canonical.frontLeverHighestEver || undefined,
+        } : prev.frontLever,
+        planche: canonical.plancheProgression ? {
+          progression: canonical.plancheProgression as PlancheProgression,
+          holdSeconds: canonical.plancheHoldSeconds ?? undefined,
+          isAssisted: canonical.plancheIsAssisted,
+          bandLevel: (canonical.plancheBandLevel as BandLevel) || undefined,
+          highestLevelEverReached: canonical.plancheHighestEver || undefined,
+        } : prev.planche,
+        muscleUp: (canonical.muscleUpReadiness as MuscleUpReadiness) || prev.muscleUp,
+        hspu: canonical.hspuProgression ? {
+          progression: canonical.hspuProgression as HSPUProgression,
+        } : prev.hspu,
+        lSitHold: (canonical.lSitHoldSeconds as LSitHoldCapacity) || prev.lSitHold,
+        vSitHold: (canonical.vSitHoldSeconds as VSitHoldCapacity) || prev.vSitHold,
+        
+        // Flexibility with range intent
+        frontSplits: canonical.frontSplitsLevel ? {
+          level: canonical.frontSplitsLevel as FlexibilityLevel,
+          rangeIntent: (canonical.frontSplitsRangeIntent as RangeTrainingIntent) || null,
+        } : prev.frontSplits,
+        sideSplits: canonical.sideSplitsLevel ? {
+          level: canonical.sideSplitsLevel as FlexibilityLevel,
+          rangeIntent: (canonical.sideSplitsRangeIntent as RangeTrainingIntent) || null,
+        } : prev.sideSplits,
+        pancake: canonical.pancakeLevel ? {
+          level: canonical.pancakeLevel as FlexibilityLevel,
+          rangeIntent: (canonical.pancakeRangeIntent as RangeTrainingIntent) || null,
+        } : prev.pancake,
+        toeTouch: canonical.toeTouchLevel ? {
+          level: canonical.toeTouchLevel as FlexibilityLevel,
+          rangeIntent: (canonical.toeTouchRangeIntent as RangeTrainingIntent) || null,
+        } : prev.toeTouch,
       }))
     }
     
     setPrefillLoaded(true)
   }, [prefillLoaded])
+  
+  // Clear all onboarding data and reset to empty state (with confirmation)
+  const [showClearConfirm, setShowClearConfirm] = useState(false)
+  
+  const handleClearAllData = useCallback(() => {
+    console.log('[AthleteOnboarding] Clearing all onboarding data')
+    // Reset to empty profile
+    setProfile(createEmptyOnboardingProfile())
+    // Clear from localStorage
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('spartanlab_onboarding_profile')
+    }
+    setShowClearConfirm(false)
+    // Reset to first section
+    setCurrentSectionIndex(0)
+  }, [])
 
   // Filter sections based on showIf conditions
   const visibleSections = useMemo(() => {
@@ -3489,12 +3627,115 @@ export function AthleteOnboarding() {
       const finalProfile = { ...profile, onboardingComplete: true }
       saveOnboardingProfile(finalProfile)
       
-      // Sync key onboarding data to the athlete profile (used by program builder)
-      // This ensures the Program Builder doesn't ask the same questions again
-      // TASK 2 FIX: Preserve flexible schedule semantics - do NOT collapse to static 4 days
+      // CANONICAL FIX: Save ALL onboarding data to canonical profile service
+      // This ensures settings, metrics, builder, and generation all see the same truth
       const isFlexibleSchedule = profile.trainingDaysPerWeek === 'flexible' || 
                                   (profile as any).scheduleMode === 'flexible'
       
+      // Save comprehensive canonical profile with ALL fields
+      saveCanonicalProfile({
+        // Identity
+        onboardingComplete: true,
+        
+        // Demographics
+        sex: profile.sex,
+        heightRange: profile.heightRange,
+        weightRange: profile.weightRange,
+        trainingExperience: profile.trainingExperience,
+        
+        // Experience level (mapped)
+        experienceLevel: profile.trainingExperience === 'new' || profile.trainingExperience === 'some' 
+          ? 'beginner' 
+          : profile.trainingExperience === 'intermediate' 
+            ? 'intermediate' 
+            : 'advanced',
+        
+        // Goals - CRITICAL: preserve ALL goal data
+        primaryGoal: profile.primaryGoal,
+        secondaryGoal: profile.secondaryGoal,
+        selectedSkills: profile.selectedSkills,
+        selectedFlexibility: profile.selectedFlexibility,
+        goalCategories: profile.goalCategories,
+        trainingPathType: profile.trainingPathType,
+        primaryTrainingOutcome: profile.primaryTrainingOutcome,
+        
+        // Schedule - preserve flexible mode correctly
+        trainingDaysPerWeek: isFlexibleSchedule 
+          ? null  // null = truly flexible, engine derives at runtime
+          : (typeof profile.trainingDaysPerWeek === 'number' ? profile.trainingDaysPerWeek : null),
+        scheduleMode: isFlexibleSchedule ? 'flexible' : 'static',
+        sessionLengthMinutes: typeof profile.sessionLengthMinutes === 'number'
+          ? (profile.sessionLengthMinutes <= 30 ? 30 
+             : profile.sessionLengthMinutes <= 45 ? 45 
+             : profile.sessionLengthMinutes <= 60 ? 60 
+             : 90)
+          : 60,
+        sessionStylePreference: profile.sessionStyle,
+        
+        // Equipment
+        equipmentAvailable: profile.equipment,
+        
+        // Diagnostics
+        jointCautions: profile.jointCautions,
+        weakestArea: profile.weakestArea,
+        primaryLimitation: profile.primaryLimitation,
+        
+        // Strength benchmarks (current)
+        pullUpMax: profile.pullUpMax,
+        dipMax: profile.dipMax,
+        pushUpMax: profile.pushUpMax,
+        wallHSPUReps: profile.wallHSPUReps,
+        weightedPullUp: profile.weightedPullUp ? {
+          addedWeight: profile.weightedPullUp.load ?? profile.weightedPullUp.addedWeight ?? 0,
+          reps: profile.weightedPullUp.reps ?? 1,
+          unit: profile.weightedPullUp.unit ?? 'lbs',
+        } : null,
+        weightedDip: profile.weightedDip ? {
+          addedWeight: profile.weightedDip.load ?? profile.weightedDip.addedWeight ?? 0,
+          reps: profile.weightedDip.reps ?? 1,
+          unit: profile.weightedDip.unit ?? 'lbs',
+        } : null,
+        
+        // Strength benchmarks (all-time PR)
+        allTimePRPullUp: profile.allTimePRPullUp,
+        allTimePRDip: profile.allTimePRDip,
+        
+        // Skill benchmarks (with band/history context)
+        frontLeverProgression: profile.frontLever?.progression ?? null,
+        frontLeverHoldSeconds: profile.frontLever?.holdSeconds ?? null,
+        frontLeverIsAssisted: profile.frontLever?.isAssisted ?? false,
+        frontLeverBandLevel: profile.frontLever?.bandLevel ?? null,
+        frontLeverHighestEver: profile.frontLever?.highestLevelEverReached ?? null,
+        
+        plancheProgression: profile.planche?.progression ?? null,
+        plancheHoldSeconds: profile.planche?.holdSeconds ?? null,
+        plancheIsAssisted: profile.planche?.isAssisted ?? false,
+        plancheBandLevel: profile.planche?.bandLevel ?? null,
+        plancheHighestEver: profile.planche?.highestLevelEverReached ?? null,
+        
+        muscleUpReadiness: profile.muscleUp,
+        hspuProgression: profile.hspu?.progression ?? null,
+        lSitHoldSeconds: profile.lSitHold,
+        vSitHoldSeconds: profile.vSitHold,
+        
+        // Flexibility benchmarks (with range intent)
+        pancakeLevel: profile.pancake?.level ?? null,
+        pancakeRangeIntent: profile.pancake?.rangeIntent ?? null,
+        toeTouchLevel: profile.toeTouch?.level ?? null,
+        toeTouchRangeIntent: profile.toeTouch?.rangeIntent ?? null,
+        frontSplitsLevel: profile.frontSplits?.level ?? null,
+        frontSplitsRangeIntent: profile.frontSplits?.rangeIntent ?? null,
+        sideSplitsLevel: profile.sideSplits?.level ?? null,
+        sideSplitsRangeIntent: profile.sideSplits?.rangeIntent ?? null,
+        
+        // Recovery
+        recoveryQuality: profile.recovery?.quality ?? null,
+      })
+      
+      // Log canonical state after save for debugging
+      logProfileTruthState('After onboarding submit')
+      
+      // LEGACY: Also sync to athlete profile for backward compatibility
       saveAthleteProfile({
         sex: profile.sex,
         experienceLevel: profile.trainingExperience === 'new' || profile.trainingExperience === 'some' 
@@ -3502,12 +3743,9 @@ export function AthleteOnboarding() {
           : profile.trainingExperience === 'intermediate' 
             ? 'intermediate' 
             : 'advanced',
-        // TASK 2: Preserve flexible schedule mode correctly
-        // If flexible, store a reasonable default for engine math but mark as flexible
         trainingDaysPerWeek: isFlexibleSchedule 
           ? 4  // Internal default for engine calculations
           : (typeof profile.trainingDaysPerWeek === 'number' ? profile.trainingDaysPerWeek : 4),
-        // CRITICAL: Store the actual schedule mode preference
         scheduleMode: isFlexibleSchedule ? 'flexible' : 'static',
         sessionLengthMinutes: typeof profile.sessionLengthMinutes === 'number'
           ? (profile.sessionLengthMinutes <= 30 ? 30 
@@ -3639,7 +3877,7 @@ export function AthleteOnboarding() {
       case 'recovery':
         return <RecoverySection {...props} />
       case 'review':
-        return <ReviewSection profile={profile} onEditSection={goToSection} />
+        return <ReviewSection profile={profile} onEditSection={goToSection} onClearAll={handleClearAllData} showClearConfirm={showClearConfirm} setShowClearConfirm={setShowClearConfirm} />
       default:
         return null
     }

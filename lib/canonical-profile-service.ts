@@ -26,6 +26,12 @@ export interface CanonicalProgrammingProfile {
   userId: string
   onboardingComplete: boolean
   
+  // Athlete Demographics
+  sex: 'male' | 'female' | null
+  heightRange: string | null  // e.g., '5_7_to_5_10'
+  weightRange: string | null  // e.g., '160_180'
+  trainingExperience: string | null  // raw onboarding value: 'new' | 'some' | 'intermediate' | 'advanced'
+  
   // Goals
   primaryGoal: string | null
   secondaryGoal: string | null
@@ -33,12 +39,16 @@ export interface CanonicalProgrammingProfile {
   selectedFlexibility: string[]
   selectedStrength: string[]
   goalCategory: string | null
+  goalCategories: string[]  // Multiple goal categories from onboarding
+  trainingPathType: string | null  // 'skill_progression' | 'strength_endurance' | 'hybrid'
+  primaryTrainingOutcome: string | null  // 'strength' | 'max_reps' | 'military' | 'skills' | 'endurance' | 'general_fitness'
   
   // Training Preferences
   experienceLevel: 'beginner' | 'intermediate' | 'advanced'
   trainingDaysPerWeek: number | null  // null = flexible
   scheduleMode: 'static' | 'flexible'
   sessionLengthMinutes: number
+  sessionStylePreference: string | null  // 'longer_complete' | 'shorter_focused' | etc.
   equipmentAvailable: string[]
   trainingStyle: string | null
   
@@ -47,33 +57,60 @@ export interface CanonicalProgrammingProfile {
   weakestArea: string | null
   primaryLimitation: string | null
   
-  // Strength Benchmarks
+  // Strength Benchmarks (current)
   pullUpMax: string | null
   dipMax: string | null
   pushUpMax: string | null
   wallHSPUReps: string | null
-  weightedPullUp: { addedWeight: number; reps: number } | null
-  weightedDip: { addedWeight: number; reps: number } | null
+  weightedPullUp: { addedWeight: number; reps: number; unit?: 'lbs' | 'kg' } | null
+  weightedDip: { addedWeight: number; reps: number; unit?: 'lbs' | 'kg' } | null
   
-  // Skill Benchmarks
+  // Strength Benchmarks (all-time PR for rebound potential)
+  allTimePRPullUp: { load: number; reps: number; timeframe: string; unit: 'lbs' | 'kg' } | null
+  allTimePRDip: { load: number; reps: number; timeframe: string; unit: 'lbs' | 'kg' } | null
+  
+  // Skill Benchmarks (with band/history context)
   frontLeverProgression: string | null
   frontLeverHoldSeconds: number | null
+  frontLeverIsAssisted: boolean
+  frontLeverBandLevel: string | null  // 'yellow' | 'red' | 'black' | 'purple' | 'green'
+  frontLeverHighestEver: string | null  // Historical peak for reacquisition
+  
   plancheProgression: string | null
   plancheHoldSeconds: number | null
+  plancheIsAssisted: boolean
+  plancheBandLevel: string | null
+  plancheHighestEver: string | null
+  
   muscleUpReadiness: string | null
   hspuProgression: string | null
   lSitHoldSeconds: string | null
   vSitHoldSeconds: string | null
   
-  // Flexibility Benchmarks
+  // Skill Training History (for tendon adaptation)
+  skillHistory: {
+    front_lever?: { trainingHistory: string; lastTrained: string | null; tendonAdaptationScore: string }
+    planche?: { trainingHistory: string; lastTrained: string | null; tendonAdaptationScore: string }
+    muscle_up?: { trainingHistory: string; lastTrained: string | null; tendonAdaptationScore: string }
+    handstand_pushup?: { trainingHistory: string; lastTrained: string | null; tendonAdaptationScore: string }
+  }
+  
+  // Flexibility Benchmarks (with range intent)
   pancakeLevel: string | null
+  pancakeRangeIntent: string | null  // 'flexibility' | 'mobility' | 'hybrid'
   toeTouchLevel: string | null
+  toeTouchRangeIntent: string | null
   frontSplitsLevel: string | null
+  frontSplitsRangeIntent: string | null
   sideSplitsLevel: string | null
+  sideSplitsRangeIntent: string | null
   
   // Physical Stats (optional, for context)
   bodyweight: number | null
   height: number | null
+  
+  // Recovery context
+  recoveryQuality: string | null
 }
 
 // =============================================================================
@@ -124,6 +161,12 @@ export function reconcileCanonicalProfile(): CanonicalProgrammingProfile {
     userId: athleteProfile?.userId || onboardingProfile?.userId || 'unknown',
     onboardingComplete: pick(onboardingProfile?.onboardingComplete, athleteProfile?.onboardingComplete, false),
     
+    // Athlete Demographics - CRITICAL: preserve from onboarding
+    sex: onboardingProfile?.sex ?? null,
+    heightRange: onboardingProfile?.heightRange ?? null,
+    weightRange: onboardingProfile?.weightRange ?? null,
+    trainingExperience: onboardingProfile?.trainingExperience ?? null,
+    
     // Goals - prefer onboarding (more detailed)
     primaryGoal: pick(onboardingProfile?.primaryGoal, athleteProfile?.primaryGoal, null),
     secondaryGoal: pick(onboardingProfile?.secondaryGoal, (athleteProfile as unknown as { secondaryGoal?: string })?.secondaryGoal, null),
@@ -131,6 +174,9 @@ export function reconcileCanonicalProfile(): CanonicalProgrammingProfile {
     selectedFlexibility: pickArray(onboardingProfile?.selectedFlexibility, null),
     selectedStrength: pickArray(onboardingProfile?.selectedStrength, null),
     goalCategory: pick(onboardingProfile?.goalCategory, null, null),
+    goalCategories: pickArray(onboardingProfile?.goalCategories, null),
+    trainingPathType: onboardingProfile?.trainingPathType ?? null,
+    primaryTrainingOutcome: onboardingProfile?.primaryTrainingOutcome ?? null,
     
     // Training Preferences
     // TASK 1B: NO FALLBACKS - use null if missing (validation catches this)
@@ -153,8 +199,9 @@ export function reconcileCanonicalProfile(): CanonicalProgrammingProfile {
       athleteProfile?.sessionLengthMinutes,
       45  // Reasonable default for new users
     ),
+    sessionStylePreference: onboardingProfile?.sessionStyle ?? null,
     equipmentAvailable: pickArray(
-      onboardingProfile?.equipmentAvailable,
+      onboardingProfile?.equipment,
       athleteProfile?.equipmentAvailable
     ),
     trainingStyle: pick(onboardingProfile?.trainingStyle, athleteProfile?.trainingStyle, null),
@@ -164,29 +211,87 @@ export function reconcileCanonicalProfile(): CanonicalProgrammingProfile {
     weakestArea: pick(onboardingProfile?.weakestArea, athleteProfile?.weakestArea, null),
     primaryLimitation: pick(onboardingProfile?.primaryLimitation, null, null),
     
-    // Strength Benchmarks - CRITICAL: prefer onboarding (where metrics are saved)
+    // Strength Benchmarks (current) - CRITICAL: prefer onboarding (where metrics are saved)
     pullUpMax: pick(onboardingProfile?.pullUpMax, athleteProfile?.pullUpMax?.toString(), null),
     dipMax: pick(onboardingProfile?.dipMax, athleteProfile?.dipMax?.toString(), null),
     pushUpMax: pick(onboardingProfile?.pushUpMax, null, null),
     wallHSPUReps: pick(onboardingProfile?.wallHSPUReps, null, null),
-    weightedPullUp: onboardingProfile?.weightedPullUp ?? null,
-    weightedDip: onboardingProfile?.weightedDip ?? null,
+    weightedPullUp: onboardingProfile?.weightedPullUp ? {
+      addedWeight: onboardingProfile.weightedPullUp.load ?? onboardingProfile.weightedPullUp.addedWeight ?? 0,
+      reps: onboardingProfile.weightedPullUp.reps ?? 1,
+      unit: onboardingProfile.weightedPullUp.unit ?? 'lbs',
+    } : null,
+    weightedDip: onboardingProfile?.weightedDip ? {
+      addedWeight: onboardingProfile.weightedDip.load ?? onboardingProfile.weightedDip.addedWeight ?? 0,
+      reps: onboardingProfile.weightedDip.reps ?? 1,
+      unit: onboardingProfile.weightedDip.unit ?? 'lbs',
+    } : null,
     
-    // Skill Benchmarks - ONLY in onboarding profile
+    // Strength Benchmarks (all-time PR) - for rebound potential
+    allTimePRPullUp: onboardingProfile?.allTimePRPullUp ? {
+      load: onboardingProfile.allTimePRPullUp.load ?? 0,
+      reps: onboardingProfile.allTimePRPullUp.reps ?? 1,
+      timeframe: onboardingProfile.allTimePRPullUp.timeframe ?? 'over_2_years',
+      unit: onboardingProfile.allTimePRPullUp.unit ?? 'lbs',
+    } : null,
+    allTimePRDip: onboardingProfile?.allTimePRDip ? {
+      load: onboardingProfile.allTimePRDip.load ?? 0,
+      reps: onboardingProfile.allTimePRDip.reps ?? 1,
+      timeframe: onboardingProfile.allTimePRDip.timeframe ?? 'over_2_years',
+      unit: onboardingProfile.allTimePRDip.unit ?? 'lbs',
+    } : null,
+    
+    // Skill Benchmarks - ONLY in onboarding profile (with band/history context)
     frontLeverProgression: onboardingProfile?.frontLever?.progression ?? null,
     frontLeverHoldSeconds: onboardingProfile?.frontLever?.holdSeconds ?? null,
+    frontLeverIsAssisted: onboardingProfile?.frontLever?.isAssisted ?? false,
+    frontLeverBandLevel: onboardingProfile?.frontLever?.bandLevel ?? null,
+    frontLeverHighestEver: onboardingProfile?.frontLever?.highestLevelEverReached ?? null,
+    
     plancheProgression: onboardingProfile?.planche?.progression ?? null,
     plancheHoldSeconds: onboardingProfile?.planche?.holdSeconds ?? null,
+    plancheIsAssisted: onboardingProfile?.planche?.isAssisted ?? false,
+    plancheBandLevel: onboardingProfile?.planche?.bandLevel ?? null,
+    plancheHighestEver: onboardingProfile?.planche?.highestLevelEverReached ?? null,
+    
     muscleUpReadiness: onboardingProfile?.muscleUp ?? null,
     hspuProgression: onboardingProfile?.hspu?.progression ?? null,
     lSitHoldSeconds: onboardingProfile?.lSitHold ?? null,
     vSitHoldSeconds: onboardingProfile?.vSitHold ?? null,
     
-    // Flexibility Benchmarks - ONLY in onboarding profile
+    // Skill Training History - for tendon adaptation
+    skillHistory: {
+      front_lever: onboardingProfile?.skillHistory?.front_lever ? {
+        trainingHistory: onboardingProfile.skillHistory.front_lever.trainingHistory,
+        lastTrained: onboardingProfile.skillHistory.front_lever.lastTrained,
+        tendonAdaptationScore: onboardingProfile.skillHistory.front_lever.tendonAdaptationScore,
+      } : undefined,
+      planche: onboardingProfile?.skillHistory?.planche ? {
+        trainingHistory: onboardingProfile.skillHistory.planche.trainingHistory,
+        lastTrained: onboardingProfile.skillHistory.planche.lastTrained,
+        tendonAdaptationScore: onboardingProfile.skillHistory.planche.tendonAdaptationScore,
+      } : undefined,
+      muscle_up: onboardingProfile?.skillHistory?.muscle_up ? {
+        trainingHistory: onboardingProfile.skillHistory.muscle_up.trainingHistory,
+        lastTrained: onboardingProfile.skillHistory.muscle_up.lastTrained,
+        tendonAdaptationScore: onboardingProfile.skillHistory.muscle_up.tendonAdaptationScore,
+      } : undefined,
+      handstand_pushup: onboardingProfile?.skillHistory?.handstand_pushup ? {
+        trainingHistory: onboardingProfile.skillHistory.handstand_pushup.trainingHistory,
+        lastTrained: onboardingProfile.skillHistory.handstand_pushup.lastTrained,
+        tendonAdaptationScore: onboardingProfile.skillHistory.handstand_pushup.tendonAdaptationScore,
+      } : undefined,
+    },
+    
+    // Flexibility Benchmarks - with range intent
     pancakeLevel: onboardingProfile?.pancake?.level ?? null,
+    pancakeRangeIntent: onboardingProfile?.pancake?.rangeIntent ?? null,
     toeTouchLevel: onboardingProfile?.toeTouch?.level ?? null,
+    toeTouchRangeIntent: onboardingProfile?.toeTouch?.rangeIntent ?? null,
     frontSplitsLevel: onboardingProfile?.frontSplits?.level ?? null,
+    frontSplitsRangeIntent: onboardingProfile?.frontSplits?.rangeIntent ?? null,
     sideSplitsLevel: onboardingProfile?.sideSplits?.level ?? null,
+    sideSplitsRangeIntent: onboardingProfile?.sideSplits?.rangeIntent ?? null,
     
     // Physical Stats
     bodyweight: pick(
@@ -199,6 +304,33 @@ export function reconcileCanonicalProfile(): CanonicalProgrammingProfile {
       athleteProfile?.height,
       null
     ),
+    
+    // Recovery context
+    recoveryQuality: onboardingProfile?.recovery?.quality ?? null,
+  }
+  
+  // DEV LOGGING: Log key fields to verify reconciliation
+  if (process.env.NODE_ENV !== 'production') {
+    console.log('[CanonicalProfile] Reconciled profile summary:', {
+      primaryGoal: canonical.primaryGoal,
+      secondaryGoal: canonical.secondaryGoal,
+      selectedSkills: canonical.selectedSkills,
+      selectedFlexibility: canonical.selectedFlexibility,
+      scheduleMode: canonical.scheduleMode,
+      sessionLengthMinutes: canonical.sessionLengthMinutes,
+      experienceLevel: canonical.experienceLevel,
+      weightedPullUp: canonical.weightedPullUp,
+      weightedDip: canonical.weightedDip,
+      allTimePRPullUp: canonical.allTimePRPullUp,
+      allTimePRDip: canonical.allTimePRDip,
+      frontLeverProgression: canonical.frontLeverProgression,
+      frontLeverBandLevel: canonical.frontLeverBandLevel,
+      plancheProgression: canonical.plancheProgression,
+      plancheBandLevel: canonical.plancheBandLevel,
+      frontSplitsLevel: canonical.frontSplitsLevel,
+      sideSplitsLevel: canonical.sideSplitsLevel,
+      jointCautions: canonical.jointCautions,
+    })
   }
   
   return canonical
@@ -360,17 +492,35 @@ export function saveCanonicalProfile(updates: Partial<CanonicalProgrammingProfil
     if (updates.weightedPullUp !== undefined) onboardingUpdates.weightedPullUp = updates.weightedPullUp
     if (updates.weightedDip !== undefined) onboardingUpdates.weightedDip = updates.weightedDip
     
-    // Skill benchmarks
-    if (updates.frontLeverProgression !== undefined || updates.frontLeverHoldSeconds !== undefined) {
+    // All-time PR benchmarks
+    if (updates.allTimePRPullUp !== undefined) {
+      onboardingUpdates.allTimePRPullUp = updates.allTimePRPullUp as OnboardingProfile['allTimePRPullUp']
+    }
+    if (updates.allTimePRDip !== undefined) {
+      onboardingUpdates.allTimePRDip = updates.allTimePRDip as OnboardingProfile['allTimePRDip']
+    }
+    
+    // Skill benchmarks (with band/history context)
+    if (updates.frontLeverProgression !== undefined || updates.frontLeverHoldSeconds !== undefined || 
+        updates.frontLeverIsAssisted !== undefined || updates.frontLeverBandLevel !== undefined ||
+        updates.frontLeverHighestEver !== undefined) {
       onboardingUpdates.frontLever = {
         progression: (updates.frontLeverProgression ?? currentOnboarding.frontLever?.progression ?? 'none') as OnboardingProfile['frontLever']['progression'],
         holdSeconds: updates.frontLeverHoldSeconds ?? currentOnboarding.frontLever?.holdSeconds,
+        isAssisted: updates.frontLeverIsAssisted ?? currentOnboarding.frontLever?.isAssisted,
+        bandLevel: (updates.frontLeverBandLevel ?? currentOnboarding.frontLever?.bandLevel) as OnboardingProfile['frontLever']['bandLevel'],
+        highestLevelEverReached: updates.frontLeverHighestEver ?? currentOnboarding.frontLever?.highestLevelEverReached,
       }
     }
-    if (updates.plancheProgression !== undefined || updates.plancheHoldSeconds !== undefined) {
+    if (updates.plancheProgression !== undefined || updates.plancheHoldSeconds !== undefined ||
+        updates.plancheIsAssisted !== undefined || updates.plancheBandLevel !== undefined ||
+        updates.plancheHighestEver !== undefined) {
       onboardingUpdates.planche = {
         progression: (updates.plancheProgression ?? currentOnboarding.planche?.progression ?? 'none') as OnboardingProfile['planche']['progression'],
         holdSeconds: updates.plancheHoldSeconds ?? currentOnboarding.planche?.holdSeconds,
+        isAssisted: updates.plancheIsAssisted ?? currentOnboarding.planche?.isAssisted,
+        bandLevel: (updates.plancheBandLevel ?? currentOnboarding.planche?.bandLevel) as OnboardingProfile['planche']['bandLevel'],
+        highestLevelEverReached: updates.plancheHighestEver ?? currentOnboarding.planche?.highestLevelEverReached,
       }
     }
     if (updates.muscleUpReadiness !== undefined) {
@@ -388,21 +538,52 @@ export function saveCanonicalProfile(updates: Partial<CanonicalProgrammingProfil
       onboardingUpdates.vSitHold = updates.vSitHoldSeconds as OnboardingProfile['vSitHold']
     }
     
-    // Flexibility benchmarks
-    if (updates.pancakeLevel !== undefined) {
-      onboardingUpdates.pancake = { level: updates.pancakeLevel as OnboardingProfile['pancake']['level'], rangeIntent: currentOnboarding.pancake?.rangeIntent ?? null }
+    // Flexibility benchmarks (with range intent)
+    if (updates.pancakeLevel !== undefined || updates.pancakeRangeIntent !== undefined) {
+      onboardingUpdates.pancake = { 
+        level: (updates.pancakeLevel ?? currentOnboarding.pancake?.level ?? 'unknown') as OnboardingProfile['pancake']['level'], 
+        rangeIntent: (updates.pancakeRangeIntent ?? currentOnboarding.pancake?.rangeIntent ?? null) as OnboardingProfile['pancake']['rangeIntent'],
+      }
     }
-    if (updates.toeTouchLevel !== undefined) {
-      onboardingUpdates.toeTouch = { level: updates.toeTouchLevel as OnboardingProfile['toeTouch']['level'], rangeIntent: currentOnboarding.toeTouch?.rangeIntent ?? null }
+    if (updates.toeTouchLevel !== undefined || updates.toeTouchRangeIntent !== undefined) {
+      onboardingUpdates.toeTouch = { 
+        level: (updates.toeTouchLevel ?? currentOnboarding.toeTouch?.level ?? 'unknown') as OnboardingProfile['toeTouch']['level'], 
+        rangeIntent: (updates.toeTouchRangeIntent ?? currentOnboarding.toeTouch?.rangeIntent ?? null) as OnboardingProfile['toeTouch']['rangeIntent'],
+      }
     }
-    if (updates.frontSplitsLevel !== undefined) {
-      onboardingUpdates.frontSplits = { level: updates.frontSplitsLevel as OnboardingProfile['frontSplits']['level'], rangeIntent: currentOnboarding.frontSplits?.rangeIntent ?? null }
+    if (updates.frontSplitsLevel !== undefined || updates.frontSplitsRangeIntent !== undefined) {
+      onboardingUpdates.frontSplits = { 
+        level: (updates.frontSplitsLevel ?? currentOnboarding.frontSplits?.level ?? 'unknown') as OnboardingProfile['frontSplits']['level'], 
+        rangeIntent: (updates.frontSplitsRangeIntent ?? currentOnboarding.frontSplits?.rangeIntent ?? null) as OnboardingProfile['frontSplits']['rangeIntent'],
+      }
     }
-    if (updates.sideSplitsLevel !== undefined) {
-      onboardingUpdates.sideSplits = { level: updates.sideSplitsLevel as OnboardingProfile['sideSplits']['level'], rangeIntent: currentOnboarding.sideSplits?.rangeIntent ?? null }
+    if (updates.sideSplitsLevel !== undefined || updates.sideSplitsRangeIntent !== undefined) {
+      onboardingUpdates.sideSplits = { 
+        level: (updates.sideSplitsLevel ?? currentOnboarding.sideSplits?.level ?? 'unknown') as OnboardingProfile['sideSplits']['level'], 
+        rangeIntent: (updates.sideSplitsRangeIntent ?? currentOnboarding.sideSplits?.rangeIntent ?? null) as OnboardingProfile['sideSplits']['rangeIntent'],
+      }
     }
     
+    // Goal categories and training path
+    if (updates.goalCategories !== undefined) onboardingUpdates.goalCategories = updates.goalCategories as OnboardingProfile['goalCategories']
+    if (updates.trainingPathType !== undefined) onboardingUpdates.trainingPathType = updates.trainingPathType as OnboardingProfile['trainingPathType']
+    if (updates.primaryTrainingOutcome !== undefined) onboardingUpdates.primaryTrainingOutcome = updates.primaryTrainingOutcome as OnboardingProfile['primaryTrainingOutcome']
+    
+    // Demographics
+    if (updates.sex !== undefined) onboardingUpdates.sex = updates.sex
+    if (updates.heightRange !== undefined) onboardingUpdates.heightRange = updates.heightRange as OnboardingProfile['heightRange']
+    if (updates.weightRange !== undefined) onboardingUpdates.weightRange = updates.weightRange as OnboardingProfile['weightRange']
+    if (updates.trainingExperience !== undefined) onboardingUpdates.trainingExperience = updates.trainingExperience as OnboardingProfile['trainingExperience']
+    
+    // Session style
+    if (updates.sessionStylePreference !== undefined) onboardingUpdates.sessionStyle = updates.sessionStylePreference as OnboardingProfile['sessionStyle']
+    
     saveOnboardingProfile(onboardingUpdates as OnboardingProfile)
+    
+    // DEV LOGGING: Confirm save
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('[CanonicalProfile] Saved updates to onboarding profile:', Object.keys(updates).length, 'fields')
+    }
   }
 }
 

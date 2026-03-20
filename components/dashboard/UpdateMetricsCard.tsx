@@ -58,6 +58,7 @@ import {
 } from '@/lib/athlete-profile'
 import { TestingGuideLink } from '@/components/testing/TestingGuideModal'
 import { cn } from '@/lib/utils'
+import { logProfileTruthState } from '@/lib/profile-truth-contract'
 
 // =============================================================================
 // METRIC SELECTOR COMPONENT
@@ -365,6 +366,9 @@ export function UpdateMetricsCard({ variant = 'full', onUpdate }: UpdateMetricsC
     if (!pendingUpdates) return
 
     updateMetricsAndRecalculate(pendingUpdates, updateProgram)
+    
+    // Log canonical profile state after metrics update for debugging
+    logProfileTruthState('After UpdateMetricsCard save')
     
     setShowConfirmDialog(false)
     setPendingAnalysis(null)

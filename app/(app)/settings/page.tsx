@@ -41,6 +41,7 @@ import {
 } from '@/lib/data-service'
 import { saveCanonicalProfile, logCanonicalProfileState } from '@/lib/canonical-profile-service'
 import { DURATION_PREFERENCE_LABELS, type SessionDurationMinutes, logDurationTruth } from '@/lib/duration-contract'
+import { logProfileTruthState, diagnoseProfileData } from '@/lib/profile-truth-contract'
 import { getActiveProgram, clearActiveProgram } from '@/lib/program-service'
 import { 
   analyzeSettingsChanges, 
@@ -329,6 +330,11 @@ export default function SettingsPage() {
 
   // TASK 3: API-first hydration with localStorage fallback and canonical sync
   const loadProfile = async () => {
+    // Log canonical profile diagnostic state at load time
+    const diagnostics = diagnoseProfileData()
+    console.log('[Settings] Profile diagnostics:', diagnostics)
+    logProfileTruthState('Settings page load')
+    
     // Step 1: Try API first (canonical truth for authenticated users)
     try {
       const response = await fetch('/api/settings')

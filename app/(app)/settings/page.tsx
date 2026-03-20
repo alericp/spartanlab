@@ -365,7 +365,18 @@ export default function SettingsPage() {
   }
   
   // Helper to apply profile data to React state
+  // ISSUE E FIX: Real round-trip validation - this function hydrates UI from canonical truth
   const applyProfileToState = (data: AthleteProfile & { scheduleMode?: string; sessionDurationMode?: 'static' | 'adaptive'; trainingStyle?: TrainingStyleMode }) => {
+    // TASK 7: Dev logging for hydration verification
+    console.log('[Settings] applyProfileToState hydrating from canonical truth:', {
+      scheduleMode: data.scheduleMode,
+      sessionDurationMode: data.sessionDurationMode,
+      trainingDaysPerWeek: data.trainingDaysPerWeek,
+      sessionLengthMinutes: data.sessionLengthMinutes,
+      primaryGoal: data.primaryGoal,
+      equipmentCount: data.equipmentAvailable?.length || 0,
+    })
+    
     setProfile(data as AthleteProfile)
     setBodyweight(data.bodyweight?.toString() || '')
     setExperienceLevel(data.experienceLevel || 'beginner')
@@ -453,26 +464,69 @@ export default function SettingsPage() {
           console.log('[Settings] API save successful, profile returned:', !!result.profile)
           
           // CANONICAL FIX: Sync API response to BOTH localStorage and canonical profile
+          // ISSUE A/B FIX: Pass ALL profile fields to preserve full canonical truth
           if (result.profile) {
             saveAthleteProfile(result.profile)
             // Also sync to canonical profile for generation consumption
+            // CRITICAL: Must include ALL benchmark fields to prevent drift
             saveCanonicalProfile({
+              // Goals & Skills
               primaryGoal: result.profile.primaryGoal,
               secondaryGoal: result.profile.secondaryGoal,
               selectedSkills: result.profile.selectedSkills,
               selectedFlexibility: result.profile.selectedFlexibility,
               selectedStrength: result.profile.selectedStrength,
               goalCategory: result.profile.goalCategory,
+              
+              // Schedule & Session
               experienceLevel: result.profile.experienceLevel,
               trainingDaysPerWeek: result.profile.trainingDaysPerWeek,
               scheduleMode: result.profile.scheduleMode,
               // TASK 3D: Preserve sessionDurationMode for canonical profile
               sessionDurationMode: result.profile.sessionDurationMode || sessionDurationMode,
               sessionLengthMinutes: result.profile.sessionLengthMinutes,
+              
+              // Equipment & Diagnostics
               equipmentAvailable: result.profile.equipmentAvailable,
               jointCautions: result.profile.jointCautions,
               weakestArea: result.profile.weakestArea,
               trainingStyle: result.profile.trainingStyle,
+              
+              // ISSUE B FIX: Sync ALL strength benchmarks to prevent drift
+              pullUpMax: result.profile.pullUpMax,
+              dipMax: result.profile.dipMax,
+              pushUpMax: result.profile.pushUpMax,
+              wallHSPUReps: result.profile.wallHSPUReps,
+              weightedPullUp: result.profile.weightedPullUp,
+              weightedDip: result.profile.weightedDip,
+              allTimePRPullUp: result.profile.allTimePRPullUp,
+              allTimePRDip: result.profile.allTimePRDip,
+              
+              // ISSUE B FIX: Sync ALL skill benchmarks
+              frontLeverProgression: result.profile.frontLever?.progression,
+              frontLeverHoldSeconds: result.profile.frontLever?.holdSeconds,
+              frontLeverIsAssisted: result.profile.frontLever?.isAssisted,
+              frontLeverBandLevel: result.profile.frontLever?.bandLevel,
+              frontLeverHighestEver: result.profile.frontLever?.highestLevelEverReached,
+              plancheProgression: result.profile.planche?.progression,
+              plancheHoldSeconds: result.profile.planche?.holdSeconds,
+              plancheIsAssisted: result.profile.planche?.isAssisted,
+              plancheBandLevel: result.profile.planche?.bandLevel,
+              plancheHighestEver: result.profile.planche?.highestLevelEverReached,
+              muscleUpReadiness: result.profile.muscleUp,
+              hspuProgression: result.profile.hspu?.progression,
+              lSitHoldSeconds: result.profile.lSitHold,
+              vSitHoldSeconds: result.profile.vSitHold,
+              
+              // ISSUE B FIX: Sync ALL flexibility benchmarks
+              pancakeLevel: result.profile.pancake?.level,
+              pancakeRangeIntent: result.profile.pancake?.rangeIntent,
+              toeTouchLevel: result.profile.toeTouch?.level,
+              toeTouchRangeIntent: result.profile.toeTouch?.rangeIntent,
+              frontSplitsLevel: result.profile.frontSplits?.level,
+              frontSplitsRangeIntent: result.profile.frontSplits?.rangeIntent,
+              sideSplitsLevel: result.profile.sideSplits?.level,
+              sideSplitsRangeIntent: result.profile.sideSplits?.rangeIntent,
             })
             
             // TASK 3: Log settings saved schedule/duration

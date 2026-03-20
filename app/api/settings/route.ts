@@ -139,6 +139,16 @@ export async function PUT(request: Request) {
     
     const updates = await request.json()
     
+    // TASK 7: Dev logging for settings save verification
+    console.log('[Settings API] PUT received updates:', {
+      scheduleMode: updates.scheduleMode,
+      sessionDurationMode: updates.sessionDurationMode,
+      trainingDaysPerWeek: updates.trainingDaysPerWeek,
+      sessionLengthMinutes: updates.sessionLengthMinutes,
+      primaryGoal: updates.primaryGoal,
+      fieldCount: Object.keys(updates).length,
+    })
+    
     // CANONICAL FIX: Fetch FULL current profile for comparison including ALL benchmark fields
     const currentProfiles = await query(`
       SELECT 
@@ -332,6 +342,16 @@ export async function PUT(request: Request) {
   `, [userId])
     
     const updatedProfile = updatedProfiles[0] as AthleteProfile & { trainingStyle?: string }
+    
+    // TASK 7: Dev logging for round-trip verification
+    console.log('[Settings API] PUT updated profile (round-trip verification):', {
+      scheduleMode: updatedProfile.scheduleMode,
+      sessionDurationMode: (updatedProfile as unknown as { sessionDurationMode?: string }).sessionDurationMode,
+      trainingDaysPerWeek: updatedProfile.trainingDaysPerWeek,
+      sessionLengthMinutes: updatedProfile.sessionLengthMinutes,
+      primaryGoal: updatedProfile.primaryGoal,
+      secondaryGoal: (updatedProfile as unknown as { secondaryGoal?: string }).secondaryGoal,
+    })
     
     // Analyze the changes
     const analysis = analyzeSettingsChanges(previousProfile, updatedProfile)

@@ -3449,14 +3449,21 @@ export function AthleteOnboarding() {
     const canonical = getCanonicalProfile()
     
     // TASK 9: Dev-safe diagnostic for onboarding prefill
+    // TASK 7: Enhanced logging for round-trip verification
     if (process.env.NODE_ENV !== 'production') {
       console.log('[AthleteOnboarding] Prefill initialization:', {
         hasExistingProfile: !!existingProfile,
         existingOnboardingComplete: existingProfile?.onboardingComplete,
         existingPrimaryGoal: existingProfile?.primaryGoal,
+        existingScheduleMode: existingProfile?.scheduleMode,
+        existingSessionDurationMode: existingProfile?.sessionDurationMode,
         canonicalOnboardingComplete: canonical.onboardingComplete,
         canonicalPrimaryGoal: canonical.primaryGoal,
+        canonicalSecondaryGoal: canonical.secondaryGoal,
         canonicalScheduleMode: canonical.scheduleMode,
+        canonicalSessionDurationMode: canonical.sessionDurationMode,
+        canonicalTrainingDaysPerWeek: canonical.trainingDaysPerWeek,
+        canonicalSessionLengthMinutes: canonical.sessionLengthMinutes,
       })
     }
     logCanonicalProfileState('AthleteOnboarding prefill initialization')
@@ -3491,7 +3498,11 @@ export function AthleteOnboarding() {
         trainingDaysPerWeek: canonical.scheduleMode === 'flexible' 
           ? 'flexible' 
           : (canonical.trainingDaysPerWeek as TrainingDaysPerWeek) || prev.trainingDaysPerWeek,
-        sessionLengthMinutes: canonical.sessionLengthMinutes || prev.sessionLengthMinutes,
+        // ISSUE B FIX: Restore sessionDurationMode and sessionLengthMinutes correctly
+        // When sessionDurationMode is 'adaptive', set sessionLengthMinutes to 'flexible' string
+        sessionLengthMinutes: canonical.sessionDurationMode === 'adaptive'
+          ? 'flexible'
+          : canonical.sessionLengthMinutes || prev.sessionLengthMinutes,
         sessionStyle: (canonical.sessionStylePreference as SessionStylePreference) || prev.sessionStyle,
         
         // Equipment & diagnostics

@@ -54,45 +54,45 @@ export async function GET() {
         body_fat_percent as "bodyFatPercent",
         experience_level as "experienceLevel",
         training_days_per_week as "trainingDaysPerWeek",
-        COALESCE(schedule_mode, 'static') as "scheduleMode",
-        session_length_minutes as "sessionLengthMinutes",
-        primary_goal as "primaryGoal",
-        secondary_goal as "secondaryGoal",
-        goal_category as "goalCategory",
-        COALESCE(selected_skills, '[]'::jsonb) as "selectedSkills",
-        COALESCE(selected_flexibility, '[]'::jsonb) as "selectedFlexibility",
-        COALESCE(selected_strength, '[]'::jsonb) as "selectedStrength",
-        COALESCE(equipment_available, '[]'::jsonb) as "equipmentAvailable",
-        COALESCE(joint_cautions, '[]'::jsonb) as "jointCautions",
-        weakest_area as "weakestArea",
-        training_style as "trainingStyle",
-        onboarding_complete as "onboardingComplete",
-        -- STRENGTH BENCHMARKS (current)
-        pull_up_max as "pullUpMax",
-        dip_max as "dipMax",
-        push_up_max as "pushUpMax",
-        wall_hspu_reps as "wallHSPUReps",
-        weighted_pull_up as "weightedPullUp",
-        weighted_dip as "weightedDip",
-        -- STRENGTH BENCHMARKS (all-time PR for rebound potential)
-        all_time_pr_pull_up as "allTimePRPullUp",
-        all_time_pr_dip as "allTimePRDip",
-        -- SKILL BENCHMARKS (with band/history context)
-        front_lever as "frontLever",
-        planche as "planche",
-        muscle_up as "muscleUp",
-        hspu as "hspu",
-        l_sit_hold as "lSitHold",
-        v_sit_hold as "vSitHold",
-        -- FLEXIBILITY BENCHMARKS (with range intent)
-        pancake as "pancake",
-        toe_touch as "toeTouch",
-        front_splits as "frontSplits",
-        side_splits as "sideSplits"
-      FROM athlete_profiles
-      WHERE user_id = $1
-      LIMIT 1
-    `, [userId])
+      COALESCE(schedule_mode, 'static') as "scheduleMode",
+      COALESCE(session_duration_mode, 'static') as "sessionDurationMode",
+      session_length_minutes as "sessionLengthMinutes",
+      primary_goal as "primaryGoal",
+      secondary_goal as "secondaryGoal",
+      goal_category as "goalCategory",
+      COALESCE(selected_skills, '[]'::jsonb) as "selectedSkills",
+      COALESCE(selected_flexibility, '[]'::jsonb) as "selectedFlexibility",
+      COALESCE(selected_strength, '[]'::jsonb) as "selectedStrength",
+      COALESCE(equipment_available, '[]'::jsonb) as "equipmentAvailable",
+      COALESCE(joint_cautions, '[]'::jsonb) as "jointCautions",
+      weakest_area as "weakestArea",
+      training_style as "trainingStyle",
+      onboarding_complete as "onboardingComplete",
+      -- STRENGTH BENCHMARKS
+      pull_up_max as "pullUpMax",
+      dip_max as "dipMax",
+      push_up_max as "pushUpMax",
+      wall_hspu_reps as "wallHSPUReps",
+      weighted_pull_up as "weightedPullUp",
+      weighted_dip as "weightedDip",
+      all_time_pr_pull_up as "allTimePRPullUp",
+      all_time_pr_dip as "allTimePRDip",
+      -- SKILL BENCHMARKS
+      front_lever as "frontLever",
+      planche as "planche",
+      muscle_up as "muscleUp",
+      hspu as "hspu",
+      l_sit_hold as "lSitHold",
+      v_sit_hold as "vSitHold",
+      -- FLEXIBILITY BENCHMARKS
+      pancake as "pancake",
+      toe_touch as "toeTouch",
+      front_splits as "frontSplits",
+      side_splits as "sideSplits"
+    FROM athlete_profiles
+    WHERE user_id = $1
+    LIMIT 1
+  `, [userId])
     
     if (!profiles || profiles.length === 0) {
       // TASK 4: Return stable response shape even when no profile exists
@@ -152,6 +152,7 @@ export async function PUT(request: Request) {
         experience_level as "experienceLevel",
         training_days_per_week as "trainingDaysPerWeek",
         COALESCE(schedule_mode, 'static') as "scheduleMode",
+        COALESCE(session_duration_mode, 'static') as "sessionDurationMode",
         session_length_minutes as "sessionLengthMinutes",
         primary_goal as "primaryGoal",
         secondary_goal as "secondaryGoal",
@@ -210,6 +211,7 @@ export async function PUT(request: Request) {
     experienceLevel: 'experience_level',
     trainingDaysPerWeek: 'training_days_per_week',
     scheduleMode: 'schedule_mode',  // FLEXIBLE SCHEDULING support
+    sessionDurationMode: 'session_duration_mode',  // TASK 3: ADAPTIVE TIME support
     sessionLengthMinutes: 'session_length_minutes',
     primaryGoal: 'primary_goal',
     secondaryGoal: 'secondary_goal',
@@ -289,8 +291,9 @@ export async function PUT(request: Request) {
       body_fat_percent as "bodyFatPercent",
       experience_level as "experienceLevel",
       training_days_per_week as "trainingDaysPerWeek",
-      COALESCE(schedule_mode, 'static') as "scheduleMode",
-      session_length_minutes as "sessionLengthMinutes",
+        COALESCE(schedule_mode, 'static') as "scheduleMode",
+        COALESCE(session_duration_mode, 'static') as "sessionDurationMode",
+        session_length_minutes as "sessionLengthMinutes",
       primary_goal as "primaryGoal",
       secondary_goal as "secondaryGoal",
       goal_category as "goalCategory",

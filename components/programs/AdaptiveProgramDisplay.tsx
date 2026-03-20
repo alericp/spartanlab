@@ -113,16 +113,22 @@ export function AdaptiveProgramDisplay({
             <Calendar className="w-4 h-4 text-[#E63946]" />
             <div>
               <p className="text-xs text-[#6A6A6A]">
-                {program.scheduleMode === 'flexible' ? 'This Week' : 'Days/Week'}
+                {program.scheduleMode === 'flexible' ? 'Schedule' : 'Days/Week'}
               </p>
-              <p className="text-sm font-medium">
-                {program.currentWeekFrequency || program.trainingDaysPerWeek}
-                {program.scheduleMode === 'flexible' && program.recommendedFrequencyRange && (
-                  <span className="text-xs text-[#6A6A6A] ml-1">
-                    ({program.recommendedFrequencyRange.min}-{program.recommendedFrequencyRange.max} range)
+              {program.scheduleMode === 'flexible' ? (
+                // FLEXIBLE USER: Show adaptive identity + this week's frequency
+                <div className="flex items-center gap-1.5">
+                  <span className="text-sm font-medium">Adaptive</span>
+                  <span className="text-xs text-[#6A6A6A]">
+                    ({program.currentWeekFrequency || program.sessions?.length || '?'} this week)
                   </span>
-                )}
-              </p>
+                </div>
+              ) : (
+                // STATIC USER: Show fixed days as before
+                <p className="text-sm font-medium">
+                  {program.trainingDaysPerWeek} days
+                </p>
+              )}
             </div>
           </div>
           <div className="flex items-center gap-2">

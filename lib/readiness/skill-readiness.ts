@@ -2803,10 +2803,11 @@ export function calculateSkillReadiness(
     case 'hspu':
     case 'handstand_push_up':
       result = calculateHSPUReadiness({
-        maxPushUps: pushUps,
+        wallHSPUReps: 3, // Default estimate
+        pikeHSPUReps: Math.floor(pushUps * 0.4),
         maxDips: dips,
-        pikePushUpReps: Math.floor(pushUps * 0.4),
         wallHandstandHold: 30,
+        overheadPressStrength: 'moderate',
         hasWall: true,
         hasParallettes,
       })
@@ -2820,6 +2821,43 @@ export function calculateSkillReadiness(
         hipFlexorStrength: 'moderate',
         hasParallettes,
         hasFloor: true,
+      })
+      break
+    
+    case 'one_arm_pull_up':
+      result = calculateOneArmPullUpReadiness({
+        maxPullUps: pullUps,
+        weightedPullUpLoad: Math.max(0, (pullUps - 10) * 4), // Estimate
+        archerPullUpReps: Math.max(0, pullUps - 10),
+        hasBar,
+      })
+      break
+    
+    case 'one_arm_push_up':
+      result = calculateOneArmPushUpReadiness({
+        maxPushUps: pushUps,
+        archerPushUpReps: Math.max(0, Math.floor(pushUps * 0.3)),
+        hollowHoldTime: hollowHold,
+      })
+      break
+    
+    case 'dragon_flag':
+      result = calculateDragonFlagReadiness({
+        dragonFlagTuckReps: 0, // No default estimate
+        legRaiseMax: Math.max(0, Math.floor(pullUps * 0.6)),
+        abWheelRolloutMax: 0,
+        hollowHoldTime: hollowHold,
+        lowerBackMobility: 'moderate',
+      })
+      break
+    
+    case 'planche_push_up':
+      result = calculatePlanchePushUpReadiness({
+        plancheLeanHold: 15, // Default estimate
+        pseudoPlanchePushUpReps: Math.max(0, Math.floor(pushUps * 0.25)),
+        tuckPlancheHold: 0,
+        maxDips: dips,
+        wristCircles: true,
       })
       break
     
@@ -2862,5 +2900,394 @@ export function calculateSkillReadiness(
     limitingFactor: result.limitingFactor,
     level: result.level,
     recommendation: result.recommendation,
+  }
+}
+
+// =============================================================================
+// ONE-ARM PULL-UP READINESS
+// =============================================================================
+
+export interface OneArmPullUpInputs {
+  maxPullUps: number
+  weightedPullUpLoad: number // lbs added
+  archerPullUpReps: number
+  hasBar: boolean
+}
+
+export function calculateOneArmPullUpReadiness(inputs: OneArmPullUpInputs): ReadinessResult {
+  const breakdown: ScoreBreakdown[] = []
+  
+  // Factor 1: Pull-Up Strength (max 25 points)
+  let pullUpScore = 0
+  let pullUpStatus: ScoreBreakdown['status'] = 'weak'
+  
+  if (inputs.maxPullUps >= 20) {
+    pullUpScore = 25
+    pullUpStatus = 'strong'
+  } else if (inputs.maxPullUps >= 15) {
+    pullUpScore = 20
+    pullUpStatus = 'strong'
+  } else if (inputs.maxPullUps >= 12) {
+    pullUpScore = 15
+    pullUpStatus = 'adequate'
+  } else if (inputs.maxPullUps >= 8) {
+    pullUpScore = 8
+    pullUpStatus = 'developing'
+  } else {
+    pullUpScore = Math.max(0, inputs.maxPullUps * 1)
+    pullUpStatus = 'weak'
+  }
+  
+  breakdown.push({ factor: 'Pull-Up Strength', score: pullUpScore, maxScore: 25, status: pullUpStatus })
+
+  // Factor 2: Weighted Pull-Up (max 35 points) - KEY INDICATOR
+  let weightedScore = 0
+  let weightedStatus: ScoreBreakdown['status'] = 'weak'
+  
+  if (inputs.weightedPullUpLoad >= 80) {
+    weightedScore = 35
+    weightedStatus = 'strong'
+  } else if (inputs.weightedPullUpLoad >= 60) {
+    weightedScore = 28
+    weightedStatus = 'strong'
+  } else if (inputs.weightedPullUpLoad >= 45) {
+    weightedScore = 22
+    weightedStatus = 'adequate'
+  } else if (inputs.weightedPullUpLoad >= 30) {
+    weightedScore = 15
+    weightedStatus = 'developing'
+  } else if (inputs.weightedPullUpLoad >= 15) {
+    weightedScore = 8
+    weightedStatus = 'weak'
+  }
+  
+  breakdown.push({ factor: 'Weighted Pull-Up', score: weightedScore, maxScore: 35, status: weightedStatus })
+
+  // Factor 3: Archer Pull-Up (max 25 points)
+  let archerScore = 0
+  let archerStatus: ScoreBreakdown['status'] = 'weak'
+  
+  if (inputs.archerPullUpReps >= 10) {
+    archerScore = 25
+    archerStatus = 'strong'
+  } else if (inputs.archerPullUpReps >= 7) {
+    archerScore = 20
+    archerStatus = 'strong'
+  } else if (inputs.archerPullUpReps >= 5) {
+    archerScore = 15
+    archerStatus = 'adequate'
+  } else if (inputs.archerPullUpReps >= 3) {
+    archerScore = 8
+    archerStatus = 'developing'
+  } else if (inputs.archerPullUpReps >= 1) {
+    archerScore = 4
+    archerStatus = 'weak'
+  }
+  
+  breakdown.push({ factor: 'Archer Pull-Up Ability', score: archerScore, maxScore: 25, status: archerStatus })
+
+  // Factor 4: Equipment (max 15 points)
+  const equipScore = inputs.hasBar ? 15 : 0
+  breakdown.push({ factor: 'Equipment Access', score: equipScore, maxScore: 15, status: inputs.hasBar ? 'strong' : 'weak' })
+
+  const totalScore = breakdown.reduce((sum, b) => sum + b.score, 0)
+  
+  let level: ReadinessLevel = 'not-ready'
+  let label = 'Not Ready Yet'
+  let nextProgression = 'Build weighted pull-up strength to +50lbs first'
+  
+  if (totalScore >= 85) {
+    level = 'advanced-ready'
+    label = 'One-Arm Ready'
+    nextProgression = 'Begin one-arm assisted work and negatives'
+  } else if (totalScore >= 70) {
+    level = 'intermediate-progression'
+    label = 'Archer/Unilateral Phase'
+    nextProgression = 'Focus on archer pull-ups and typewriter pull-ups'
+  } else if (totalScore >= 50) {
+    level = 'early-progression'
+    label = 'Heavy Weighted Phase'
+    nextProgression = 'Build weighted pull-up strength to +60-80lbs'
+  } else if (totalScore >= 25) {
+    level = 'foundation-phase'
+    label = 'Strength Foundation'
+    nextProgression = 'Build pull-up volume and begin weighted pull-ups'
+  }
+
+  const weakest = [...breakdown].filter(b => b.maxScore > 5).sort((a, b) => (a.score / a.maxScore) - (b.score / b.maxScore))[0]
+  
+  return {
+    score: totalScore,
+    level,
+    label,
+    limitingFactor: weakest?.factor || 'General pulling strength',
+    limitingFactorExplanation: `${weakest?.factor || 'Pulling strength'} is your primary limiter for one-arm pull-up progress.`,
+    recommendation: `Focus on ${weakest?.factor?.toLowerCase() || 'pulling strength'} to progress toward one-arm pull-ups.`,
+    nextProgression,
+    breakdown,
+    suggestedProtocol: 'elbow_tendon_health_protocol',
+  }
+}
+
+// =============================================================================
+// ONE-ARM PUSH-UP READINESS
+// =============================================================================
+
+export interface OneArmPushUpInputs {
+  maxPushUps: number
+  archerPushUpReps: number
+  hollowHoldTime: number
+}
+
+export function calculateOneArmPushUpReadiness(inputs: OneArmPushUpInputs): ReadinessResult {
+  const breakdown: ScoreBreakdown[] = []
+  
+  // Factor 1: Push-Up Strength (max 30 points)
+  let pushUpScore = 0
+  let pushUpStatus: ScoreBreakdown['status'] = 'weak'
+  
+  if (inputs.maxPushUps >= 40) {
+    pushUpScore = 30
+    pushUpStatus = 'strong'
+  } else if (inputs.maxPushUps >= 30) {
+    pushUpScore = 25
+    pushUpStatus = 'strong'
+  } else if (inputs.maxPushUps >= 20) {
+    pushUpScore = 18
+    pushUpStatus = 'adequate'
+  } else if (inputs.maxPushUps >= 12) {
+    pushUpScore = 10
+    pushUpStatus = 'developing'
+  } else {
+    pushUpScore = Math.max(0, inputs.maxPushUps * 0.5)
+    pushUpStatus = 'weak'
+  }
+  
+  breakdown.push({ factor: 'Push-Up Strength', score: pushUpScore, maxScore: 30, status: pushUpStatus })
+
+  // Factor 2: Archer Push-Up (max 40 points) - KEY INDICATOR
+  let archerScore = 0
+  let archerStatus: ScoreBreakdown['status'] = 'weak'
+  
+  if (inputs.archerPushUpReps >= 12) {
+    archerScore = 40
+    archerStatus = 'strong'
+  } else if (inputs.archerPushUpReps >= 8) {
+    archerScore = 32
+    archerStatus = 'strong'
+  } else if (inputs.archerPushUpReps >= 5) {
+    archerScore = 24
+    archerStatus = 'adequate'
+  } else if (inputs.archerPushUpReps >= 3) {
+    archerScore = 15
+    archerStatus = 'developing'
+  } else if (inputs.archerPushUpReps >= 1) {
+    archerScore = 8
+    archerStatus = 'weak'
+  }
+  
+  breakdown.push({ factor: 'Archer Push-Up Ability', score: archerScore, maxScore: 40, status: archerStatus })
+
+  // Factor 3: Core Anti-Rotation (max 30 points)
+  let coreScore = 0
+  let coreStatus: ScoreBreakdown['status'] = 'weak'
+  
+  if (inputs.hollowHoldTime >= 60) {
+    coreScore = 30
+    coreStatus = 'strong'
+  } else if (inputs.hollowHoldTime >= 45) {
+    coreScore = 24
+    coreStatus = 'strong'
+  } else if (inputs.hollowHoldTime >= 30) {
+    coreScore = 18
+    coreStatus = 'adequate'
+  } else if (inputs.hollowHoldTime >= 15) {
+    coreScore = 10
+    coreStatus = 'developing'
+  } else {
+    coreScore = Math.max(0, inputs.hollowHoldTime * 0.5)
+    coreStatus = 'weak'
+  }
+  
+  breakdown.push({ factor: 'Core Anti-Rotation', score: coreScore, maxScore: 30, status: coreStatus })
+
+  const totalScore = breakdown.reduce((sum, b) => sum + b.score, 0)
+  
+  let level: ReadinessLevel = 'not-ready'
+  let label = 'Not Ready Yet'
+  let nextProgression = 'Build archer push-up strength first'
+  
+  if (totalScore >= 85) {
+    level = 'advanced-ready'
+    label = 'One-Arm Ready'
+    nextProgression = 'Begin elevated one-arm push-ups and negatives'
+  } else if (totalScore >= 70) {
+    level = 'intermediate-progression'
+    label = 'Archer Phase'
+    nextProgression = 'Master archer push-ups with 10+ reps each side'
+  } else if (totalScore >= 50) {
+    level = 'early-progression'
+    label = 'Unilateral Development'
+    nextProgression = 'Build archer push-up volume and core stability'
+  } else if (totalScore >= 25) {
+    level = 'foundation-phase'
+    label = 'Strength Foundation'
+    nextProgression = 'Build push-up volume and begin archer progressions'
+  }
+
+  const weakest = [...breakdown].sort((a, b) => (a.score / a.maxScore) - (b.score / b.maxScore))[0]
+  
+  return {
+    score: totalScore,
+    level,
+    label,
+    limitingFactor: weakest?.factor || 'General pressing strength',
+    limitingFactorExplanation: `${weakest?.factor || 'Pressing strength'} is your primary limiter for one-arm push-up progress.`,
+    recommendation: `Focus on ${weakest?.factor?.toLowerCase() || 'pressing strength'} to progress toward one-arm push-ups.`,
+    nextProgression,
+    breakdown,
+  }
+}
+
+// =============================================================================
+// PLANCHE PUSH-UP READINESS
+// =============================================================================
+
+export interface PlanchePushUpInputs {
+  plancheLeanHold: number
+  pseudoPlanchePushUpReps: number
+  tuckPlancheHold: number
+  maxDips: number
+  wristCircles: boolean
+}
+
+export function calculatePlanchePushUpReadiness(inputs: PlanchePushUpInputs): ReadinessResult {
+  const breakdown: ScoreBreakdown[] = []
+  
+  // Factor 1: Planche Hold Ability (max 30 points)
+  let plancheScore = 0
+  let plancheStatus: ScoreBreakdown['status'] = 'weak'
+  
+  if (inputs.tuckPlancheHold >= 20) {
+    plancheScore = 30
+    plancheStatus = 'strong'
+  } else if (inputs.tuckPlancheHold >= 12) {
+    plancheScore = 24
+    plancheStatus = 'strong'
+  } else if (inputs.tuckPlancheHold >= 8) {
+    plancheScore = 18
+    plancheStatus = 'adequate'
+  } else if (inputs.tuckPlancheHold >= 5) {
+    plancheScore = 10
+    plancheStatus = 'developing'
+  } else {
+    plancheScore = Math.max(0, inputs.tuckPlancheHold * 1.5)
+    plancheStatus = 'weak'
+  }
+  
+  breakdown.push({ factor: 'Planche Hold Ability', score: plancheScore, maxScore: 30, status: plancheStatus })
+
+  // Factor 2: Pseudo Planche Push-Up (max 35 points) - KEY INDICATOR
+  let ppuScore = 0
+  let ppuStatus: ScoreBreakdown['status'] = 'weak'
+  
+  if (inputs.pseudoPlanchePushUpReps >= 15) {
+    ppuScore = 35
+    ppuStatus = 'strong'
+  } else if (inputs.pseudoPlanchePushUpReps >= 10) {
+    ppuScore = 28
+    ppuStatus = 'strong'
+  } else if (inputs.pseudoPlanchePushUpReps >= 7) {
+    ppuScore = 22
+    ppuStatus = 'adequate'
+  } else if (inputs.pseudoPlanchePushUpReps >= 4) {
+    ppuScore = 14
+    ppuStatus = 'developing'
+  } else if (inputs.pseudoPlanchePushUpReps >= 1) {
+    ppuScore = 7
+    ppuStatus = 'weak'
+  }
+  
+  breakdown.push({ factor: 'Pseudo Planche Push-Up', score: ppuScore, maxScore: 35, status: ppuStatus })
+
+  // Factor 3: Planche Lean (max 20 points)
+  let leanScore = 0
+  let leanStatus: ScoreBreakdown['status'] = 'weak'
+  
+  if (inputs.plancheLeanHold >= 45) {
+    leanScore = 20
+    leanStatus = 'strong'
+  } else if (inputs.plancheLeanHold >= 30) {
+    leanScore = 16
+    leanStatus = 'strong'
+  } else if (inputs.plancheLeanHold >= 20) {
+    leanScore = 12
+    leanStatus = 'adequate'
+  } else if (inputs.plancheLeanHold >= 10) {
+    leanScore = 6
+    leanStatus = 'developing'
+  } else {
+    leanScore = Math.max(0, inputs.plancheLeanHold * 0.5)
+    leanStatus = 'weak'
+  }
+  
+  breakdown.push({ factor: 'Planche Lean / Shoulder Loading', score: leanScore, maxScore: 20, status: leanStatus })
+
+  // Factor 4: Dip Strength (max 15 points)
+  let dipScore = 0
+  let dipStatus: ScoreBreakdown['status'] = 'weak'
+  
+  if (inputs.maxDips >= 20) {
+    dipScore = 15
+    dipStatus = 'strong'
+  } else if (inputs.maxDips >= 15) {
+    dipScore = 12
+    dipStatus = 'strong'
+  } else if (inputs.maxDips >= 10) {
+    dipScore = 8
+    dipStatus = 'adequate'
+  } else if (inputs.maxDips >= 5) {
+    dipScore = 4
+    dipStatus = 'developing'
+  }
+  
+  breakdown.push({ factor: 'Dip Strength', score: dipScore, maxScore: 15, status: dipStatus })
+
+  const totalScore = breakdown.reduce((sum, b) => sum + b.score, 0)
+  
+  let level: ReadinessLevel = 'not-ready'
+  let label = 'Not Ready Yet'
+  let nextProgression = 'Build planche lean and pseudo planche push-up strength first'
+  
+  if (totalScore >= 85) {
+    level = 'advanced-ready'
+    label = 'Planche Push-Up Ready'
+    nextProgression = 'Begin tuck planche push-ups and progress to advanced tuck'
+  } else if (totalScore >= 70) {
+    level = 'intermediate-progression'
+    label = 'Tuck Planche Phase'
+    nextProgression = 'Master tuck planche holds and deep pseudo planche push-ups'
+  } else if (totalScore >= 50) {
+    level = 'early-progression'
+    label = 'PPPU Development'
+    nextProgression = 'Build pseudo planche push-up volume with deep lean'
+  } else if (totalScore >= 25) {
+    level = 'foundation-phase'
+    label = 'Lean Foundation'
+    nextProgression = 'Develop planche lean holds and basic PPPU'
+  }
+
+  const weakest = [...breakdown].filter(b => b.maxScore > 10).sort((a, b) => (a.score / a.maxScore) - (b.score / b.maxScore))[0]
+  
+  return {
+    score: totalScore,
+    level,
+    label,
+    limitingFactor: weakest?.factor || 'Planche strength',
+    limitingFactorExplanation: `${weakest?.factor || 'Planche hold strength'} is your primary limiter for planche push-up progress.`,
+    recommendation: `Focus on ${weakest?.factor?.toLowerCase() || 'planche holds'} to progress toward planche push-ups.`,
+    nextProgression,
+    breakdown,
+    suggestedProtocol: 'wrist_mobility_protocol',
   }
 }

@@ -3080,6 +3080,8 @@ function mapToAdaptiveExercises(
       method,
       methodLabel: getMethodLabel(method),
       progressionDecision,
+      // WEIGHTED LOAD PR: Include prescribed load if available from exercise selection
+      prescribedLoad: s.prescribedLoad,
     }
   }).filter((e): e is AdaptiveExercise => e !== null)
 }

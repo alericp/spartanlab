@@ -258,6 +258,11 @@ interface ExerciseSelectionInputs {
   // Prerequisite Gate Engine integration
   prerequisiteContext?: AthletePrerequisiteContext
   jointCautions?: string[]
+  // WEIGHTED LOAD PR: Weighted exercise benchmarks for load prescription
+  weightedBenchmarks?: {
+    weightedPullUp?: { current?: WeightedBenchmark; pr?: WeightedPRBenchmark }
+    weightedDip?: { current?: WeightedBenchmark; pr?: WeightedPRBenchmark }
+  }
 }
 
 // =============================================================================

@@ -2166,18 +2166,68 @@ fatigueDecision: fatigueDecision ? {
       confidenceLevel: weakPointSummary.confidenceLevel,
     } : undefined,
     // Adaptive Progression Engine - training behavior analysis
-    trainingBehaviorAnalysis: trainingBehavior ? {
-      adaptationNeeded: trainingBehavior.adaptationNeeded,
-      adaptationSummary: trainingBehavior.adaptationSummary,
-      coachMessages: trainingBehavior.coachMessages,
-      scheduleAdaptation: trainingBehavior.scheduleAnalysis.adaptation,
-      recommendedDays: trainingBehavior.scheduleAnalysis.recommendedDays,
-      volumeAdjustment: trainingBehavior.volumeAnalysis.volumeAdjustment,
-      volumeModifier: trainingBehavior.volumeAnalysis.recommendedVolumeModifier,
-      progressTrend: trainingBehavior.progressTrend.overallTrend,
-      trendSummary: trainingBehavior.progressTrend.trendSummary,
-      dataQuality: trainingBehavior.dataQuality,
-    } : undefined,
+    // ISSUE C FIX: Reconcile coaching messages with actual generated program session count
+    trainingBehaviorAnalysis: trainingBehavior ? (() => {
+      const actualSessionCount = sessions.length
+      const recommendedDays = trainingBehavior.scheduleAnalysis.recommendedDays
+      
+      // Filter out schedule-related coaching messages that contradict the actual program
+      // Only show schedule messages if they match the actual program or are clearly labeled as history
+      let reconciledMessages = trainingBehavior.coachMessages.filter(msg => {
+        // Filter out messages that mention a different session count than what was generated
+        const mentionsDifferentCount = (
+          msg.includes('resolves to') && 
+          !msg.includes(`${actualSessionCount} session`) &&
+          (msg.includes('2 session') || msg.includes('3 session') || msg.includes('4 session') || msg.includes('5 session'))
+        )
+        
+        if (mentionsDifferentCount) {
+          console.log('[program-gen] ISSUE C: Filtering contradictory coaching message:', {
+            message: msg,
+            actualSessionCount,
+            recommendedDays,
+          })
+          return false
+        }
+        return true
+      })
+      
+      // If schedule adaptation was triggered but actual program has different session count,
+      // adjust the adaptation status to not show misleading "reduce" recommendation
+      const scheduleAdaptation = recommendedDays !== actualSessionCount && 
+        trainingBehavior.scheduleAnalysis.adaptation !== 'maintain'
+        ? 'maintain' // Override to maintain if we're not following the recommendation
+        : trainingBehavior.scheduleAnalysis.adaptation
+      
+      // Add clarifying message if we have sufficient history but generated different from recommendation
+      if (trainingBehavior.scheduleAnalysis.historyConfidence === 'sufficient' && 
+          recommendedDays !== actualSessionCount &&
+          trainingBehavior.scheduleAnalysis.wordingSource === 'observed_history') {
+        reconciledMessages = reconciledMessages.filter(m => !m.includes('Based on your recent'))
+        reconciledMessages.push(`Your ${actualSessionCount}-session week is built to match your current program structure.`)
+      }
+      
+      console.log('[program-gen] ISSUE C: Reconciled coaching messages:', {
+        actualSessionCount,
+        recommendedDays,
+        originalMessageCount: trainingBehavior.coachMessages.length,
+        reconciledMessageCount: reconciledMessages.length,
+        scheduleAdaptation,
+      })
+      
+      return {
+        adaptationNeeded: trainingBehavior.adaptationNeeded,
+        adaptationSummary: trainingBehavior.adaptationSummary,
+        coachMessages: reconciledMessages,
+        scheduleAdaptation,
+        recommendedDays: actualSessionCount, // Use actual session count, not historical recommendation
+        volumeAdjustment: trainingBehavior.volumeAnalysis.volumeAdjustment,
+        volumeModifier: trainingBehavior.volumeAnalysis.recommendedVolumeModifier,
+        progressTrend: trainingBehavior.progressTrend.overallTrend,
+        trendSummary: trainingBehavior.progressTrend.trendSummary,
+        dataQuality: trainingBehavior.dataQuality,
+      }
+    })() : undefined,
     // Override Signal Feedback - patterns from user exercise overrides
     overrideSignalFeedback: getOverrideSignalFeedback(),
     // Constraint Detection - AI engine identifying limiting factors

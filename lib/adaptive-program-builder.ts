@@ -340,6 +340,11 @@ type AdaptiveSessionContext = {
     weightedPullUp?: { current?: WeightedBenchmark; pr?: WeightedPRBenchmark }
     weightedDip?: { current?: WeightedBenchmark; pr?: WeightedPRBenchmark }
   }
+  // SKILL EXPRESSION FIX: Pass selected skills and allocation for session-level expression
+  selectedSkills?: string[]
+  weightedSkillAllocation?: WeightedSkillAllocation[]
+  sessionIndex?: number  // Current session index for rotation logic
+  totalSessions?: number // Total sessions this week for allocation math
 }
 
 export interface AdaptiveProgramInputs {
@@ -1577,15 +1582,34 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
     })
   }
   
-  const sessionContext: AdaptiveSessionContext = {
-    athleteCalibration,
-    onboardingProfile,
-    recoverySignal,
-    weightedBenchmarks,
-  }
+  // SKILL EXPRESSION FIX: Log skill allocation being passed to session construction
+  console.log('[skill-expression] Weighted skill allocation for session construction:', {
+    allocations: weightedSkillAllocation.map(a => ({
+      skill: a.skill,
+      weight: Math.round(a.weight * 100) + '%',
+      exposureSessions: a.exposureSessions,
+      priority: a.priorityLevel,
+    })),
+    selectedSkills: canonicalProfile.selectedSkills,
+    totalSessions: effectiveTrainingDays,
+  })
   
   const sessions: AdaptiveSession[] = structure.days.map((day, index) => {
     const intent = sessionIntents[index]
+    
+    // SKILL EXPRESSION FIX: Create per-session context with skill allocation
+    const sessionContext: AdaptiveSessionContext = {
+      athleteCalibration,
+      onboardingProfile,
+      recoverySignal,
+      weightedBenchmarks,
+      // Pass skill data for session-level expression
+      selectedSkills: canonicalProfile.selectedSkills || [],
+      weightedSkillAllocation,
+      sessionIndex: index,
+      totalSessions: effectiveTrainingDays,
+    }
+    
     const session = generateAdaptiveSession(
       day,
       primaryGoal,
@@ -2870,6 +2894,104 @@ function getFatigueAdaptationNote(decision: TrainingDecision): string | null {
 }
 
 // =============================================================================
+// SKILL EXPRESSION HELPERS
+// =============================================================================
+
+/**
+ * SKILL EXPRESSION FIX: Determines which skills should be expressed in a given session
+ * based on weighted allocation, session index, and day focus.
+ * 
+ * Rules:
+ * - Primary skills (weight >= 0.3) appear in most sessions
+ * - Secondary skills (weight >= 0.15) appear in ~50-75% of sessions  
+ * - Tertiary skills (weight >= 0.05) rotate across the week
+ * - Skills below threshold may appear as warm-up/technical emphasis only
+ */
+type SessionSkillAllocation = {
+  skill: string
+  expressionMode: 'primary' | 'technical' | 'support' | 'warmup'
+  weight: number
+}
+
+function getSkillsForSession(
+  weightedAllocation: WeightedSkillAllocation[],
+  sessionIndex: number,
+  totalSessions: number,
+  dayFocus: string
+): SessionSkillAllocation[] {
+  if (!weightedAllocation || weightedAllocation.length === 0) {
+    return []
+  }
+  
+  const result: SessionSkillAllocation[] = []
+  
+  for (const allocation of weightedAllocation) {
+    const { skill, weight, exposureSessions, priorityLevel } = allocation
+    
+    // Primary skills always appear as primary expression
+    if (priorityLevel === 'primary' || weight >= 0.3) {
+      result.push({
+        skill,
+        expressionMode: 'primary',
+        weight,
+      })
+      continue
+    }
+    
+    // Secondary skills appear in most sessions as technical or support
+    if (priorityLevel === 'secondary' || weight >= 0.15) {
+      // Check if this session should include this secondary skill
+      // Based on exposureSessions vs totalSessions ratio
+      const shouldInclude = exposureSessions >= totalSessions || 
+        sessionIndex < exposureSessions ||
+        (sessionIndex % 2 === 0) // Even sessions get secondary skills
+      
+      if (shouldInclude) {
+        result.push({
+          skill,
+          expressionMode: dayFocus.includes('support') ? 'support' : 'technical',
+          weight,
+        })
+      }
+      continue
+    }
+    
+    // Tertiary skills rotate - each appears in their allocated sessions
+    if (priorityLevel === 'tertiary' || weight >= 0.05) {
+      // Distribute tertiary skills across sessions using modular arithmetic
+      const tertiaryIndex = weightedAllocation
+        .filter(a => a.priorityLevel === 'tertiary' || (a.weight >= 0.05 && a.weight < 0.15))
+        .findIndex(a => a.skill === skill)
+      
+      // Each tertiary skill gets specific sessions based on its index
+      const sessionForThisSkill = tertiaryIndex % totalSessions
+      const shouldInclude = sessionIndex === sessionForThisSkill || 
+        exposureSessions > 1 && (sessionIndex + 1) % Math.ceil(totalSessions / exposureSessions) === 0
+      
+      if (shouldInclude) {
+        result.push({
+          skill,
+          expressionMode: 'support',
+          weight,
+        })
+      }
+      continue
+    }
+    
+    // Support-level skills appear only as warm-up emphasis on specific days
+    if (priorityLevel === 'support' && sessionIndex === 0) {
+      result.push({
+        skill,
+        expressionMode: 'warmup',
+        weight,
+      })
+    }
+  }
+  
+  return result
+}
+
+// =============================================================================
 // SESSION GENERATION
 // =============================================================================
 
@@ -2883,12 +3005,38 @@ function generateAdaptiveSession(
   context: AdaptiveSessionContext
 ): AdaptiveSession {
   // Destructure context to get explicit dependencies (scope fix)
-  const { athleteCalibration, recoverySignal, weightedBenchmarks } = context
+  const { 
+    athleteCalibration, 
+    recoverySignal, 
+    weightedBenchmarks,
+    // SKILL EXPRESSION FIX: Extract skill allocation data
+    selectedSkills,
+    weightedSkillAllocation,
+    sessionIndex,
+    totalSessions,
+  } = context
   
   // Safe fallbacks for calibration subfields
   const fatigueSensitivity = athleteCalibration?.fatigueSensitivity ?? 'moderate'
   const sessionCapacity = athleteCalibration?.sessionCapacity ?? 'standard'
   const enduranceCompatibility = athleteCalibration?.enduranceCompatibility ?? 'moderate'
+  
+  // SKILL EXPRESSION FIX: Determine which skills should be expressed in this session
+  // based on weighted allocation and session index
+  const skillsForThisSession = getSkillsForSession(
+    weightedSkillAllocation || [],
+    sessionIndex || 0,
+    totalSessions || 1,
+    day.focus
+  )
+  
+  console.log('[skill-expression] Skills for session:', {
+    sessionIndex,
+    dayFocus: day.focus,
+    skillsForThisSession: skillsForThisSession.map(s => s.skill),
+    primaryGoal,
+  })
+  
   // Select exercises
   const selection = selectExercisesForSession({
     day,
@@ -2899,6 +3047,9 @@ function generateAdaptiveSession(
     constraintType,
     // WEIGHTED LOAD PR: Pass weighted benchmarks for load prescription
     weightedBenchmarks,
+    // SKILL EXPRESSION FIX: Pass selected skills and allocation for exercise variety
+    selectedSkills: selectedSkills || [],
+    skillsForSession: skillsForThisSession,
   })
   
   // Adapt for equipment - use safe fallbacks if selection properties are missing

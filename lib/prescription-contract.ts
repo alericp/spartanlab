@@ -1318,6 +1318,299 @@ export function logSupportWorkMapping(
 }
 
 // =============================================================================
+// WEIGHTED LOAD ESTIMATION - TASK 1 (WEIGHTED PRESCRIPTION PR)
+// =============================================================================
+
+/**
+ * Weighted benchmark data from user profile
+ */
+export interface WeightedBenchmark {
+  addedWeight: number
+  reps: number
+  unit?: 'lbs' | 'kg'
+}
+
+/**
+ * All-time PR benchmark data
+ */
+export interface AllTimePRBenchmark {
+  load: number
+  reps: number
+  timeframe: string
+  unit: 'lbs' | 'kg'
+}
+
+/**
+ * Prescribed load output for weighted exercises
+ */
+export interface PrescribedLoad {
+  weight: number
+  unit: 'lbs' | 'kg'
+  reps: number
+  sets: number
+  loadBasis: 'current_benchmark' | 'pr_benchmark' | 'estimated' | 'no_data'
+  percentageOf1RM?: number
+  estimatedE1RM?: number
+  coachingNote: string
+}
+
+/**
+ * Weighted exercise prescription role determines intensity band
+ */
+export type WeightedPrescriptionRole = 
+  | 'strength_primary'      // Heavy lower-rep (3-5 reps, 85-90% 1RM)
+  | 'strength_support'      // Moderate strength (5-8 reps, 75-85% 1RM)
+  | 'hypertrophy_support'   // Volume work (8-12 reps, 65-75% 1RM)
+  | 'backoff_volume'        // Lighter backoff work (10-15 reps, 60-70% 1RM)
+
+/**
+ * Intensity bands by prescription role
+ * These define the percentage of estimated 1RM to use
+ */
+const WEIGHTED_INTENSITY_BANDS: Record<WeightedPrescriptionRole, {
+  percentage1RM: [number, number]  // [min, max] percentage
+  targetReps: [number, number]     // [min, max] reps
+  targetSets: [number, number]     // [min, max] sets
+  coachingNote: string
+}> = {
+  strength_primary: {
+    percentage1RM: [85, 90],
+    targetReps: [3, 5],
+    targetSets: [4, 5],
+    coachingNote: 'Heavy strength work - focus on quality, full rest between sets',
+  },
+  strength_support: {
+    percentage1RM: [75, 82],
+    targetReps: [5, 8],
+    targetSets: [3, 4],
+    coachingNote: 'Moderate strength support - controlled tempo, build capacity',
+  },
+  hypertrophy_support: {
+    percentage1RM: [65, 75],
+    targetReps: [8, 12],
+    targetSets: [3, 4],
+    coachingNote: 'Hypertrophy-focused - controlled tempo, moderate rest',
+  },
+  backoff_volume: {
+    percentage1RM: [60, 70],
+    targetReps: [10, 15],
+    targetSets: [2, 3],
+    coachingNote: 'Volume accumulation - focus on pump and muscle endurance',
+  },
+}
+
+/**
+ * Estimate 1RM from a weight and rep count using the Epley formula.
+ * 
+ * FORMULA: Epley (1985)
+ * E1RM = weight × (1 + reps/30)
+ * 
+ * This is chosen over Brzycki because:
+ * - More accurate for rep ranges 1-10 which are common in weighted calisthenics
+ * - Simple and transparent calculation
+ * - Well-validated for compound movements like pull-ups and dips
+ * 
+ * @param weight The weight lifted (added weight for weighted calisthenics)
+ * @param reps Number of reps completed
+ * @returns Estimated 1 rep max
+ */
+export function estimateE1RM(weight: number, reps: number): number {
+  if (reps <= 0 || weight <= 0) return 0
+  if (reps === 1) return weight
+  
+  // Epley formula: E1RM = weight × (1 + reps/30)
+  const e1rm = weight * (1 + reps / 30)
+  
+  return Math.round(e1rm * 10) / 10 // Round to 1 decimal
+}
+
+/**
+ * Calculate working weight from E1RM and target percentage
+ * 
+ * @param e1rm Estimated 1RM
+ * @param percentage Target percentage (0-100)
+ * @returns Working weight rounded to nearest 2.5
+ */
+function calculateWorkingWeight(e1rm: number, percentage: number): number {
+  const rawWeight = e1rm * (percentage / 100)
+  // Round to nearest 2.5 for practical loading
+  return Math.round(rawWeight / 2.5) * 2.5
+}
+
+/**
+ * MAIN FUNCTION: Calculate prescribed load for a weighted exercise
+ * 
+ * Uses the athlete's current benchmark preferentially, with all-time PR as context.
+ * Returns a complete prescription including weight, reps, sets, and coaching guidance.
+ * 
+ * @param exerciseType 'weighted_pull_up' | 'weighted_dip' | etc.
+ * @param currentBenchmark Current performance data from canonical profile
+ * @param prBenchmark All-time PR data (optional, for context)
+ * @param role The prescription role (strength_primary, strength_support, etc.)
+ * @param defaultUnit Default unit if benchmark doesn't specify
+ */
+export function calculatePrescribedLoad(
+  exerciseType: string,
+  currentBenchmark: WeightedBenchmark | null | undefined,
+  prBenchmark: AllTimePRBenchmark | null | undefined,
+  role: WeightedPrescriptionRole = 'strength_support',
+  defaultUnit: 'lbs' | 'kg' = 'lbs'
+): PrescribedLoad {
+  const band = WEIGHTED_INTENSITY_BANDS[role]
+  
+  // CASE 1: No benchmark data at all - graceful fallback
+  if (!currentBenchmark && !prBenchmark) {
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('[WeightedLoad] No benchmark data available for', exerciseType)
+    }
+    return {
+      weight: 0,
+      unit: defaultUnit,
+      reps: band.targetReps[1], // Use higher end for bodyweight baseline
+      sets: band.targetSets[0],
+      loadBasis: 'no_data',
+      coachingNote: `Start with bodyweight, build base before adding load. ${band.coachingNote}`,
+    }
+  }
+  
+  // CASE 2: Use current benchmark (preferred)
+  if (currentBenchmark && currentBenchmark.addedWeight > 0 && currentBenchmark.reps > 0) {
+    const unit = currentBenchmark.unit || defaultUnit
+    const e1rm = estimateE1RM(currentBenchmark.addedWeight, currentBenchmark.reps)
+    
+    // Use middle of percentage band
+    const targetPercentage = (band.percentage1RM[0] + band.percentage1RM[1]) / 2
+    const workingWeight = calculateWorkingWeight(e1rm, targetPercentage)
+    
+    // Use middle of rep range
+    const targetReps = Math.round((band.targetReps[0] + band.targetReps[1]) / 2)
+    const targetSets = Math.round((band.targetSets[0] + band.targetSets[1]) / 2)
+    
+    // Check if PR is significantly higher (indicates detraining)
+    let note = band.coachingNote
+    if (prBenchmark && prBenchmark.load > currentBenchmark.addedWeight * 1.3) {
+      note = `Working back towards PR. ${band.coachingNote}`
+    }
+    
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('[WeightedLoad] Calculated from current benchmark:', {
+        exerciseType,
+        role,
+        benchmark: currentBenchmark,
+        e1rm,
+        targetPercentage,
+        workingWeight,
+        targetReps,
+      })
+    }
+    
+    return {
+      weight: workingWeight,
+      unit,
+      reps: targetReps,
+      sets: targetSets,
+      loadBasis: 'current_benchmark',
+      percentageOf1RM: Math.round(targetPercentage),
+      estimatedE1RM: e1rm,
+      coachingNote: note,
+    }
+  }
+  
+  // CASE 3: Only PR data available (coming back from layoff)
+  if (prBenchmark && prBenchmark.load > 0 && prBenchmark.reps > 0) {
+    const unit = prBenchmark.unit || defaultUnit
+    const prE1RM = estimateE1RM(prBenchmark.load, prBenchmark.reps)
+    
+    // Use conservative percentage (70% of PR-based E1RM) for comeback
+    const conservativeE1RM = prE1RM * 0.7
+    const targetPercentage = (band.percentage1RM[0] + band.percentage1RM[1]) / 2
+    const workingWeight = calculateWorkingWeight(conservativeE1RM, targetPercentage)
+    
+    const targetReps = Math.round((band.targetReps[0] + band.targetReps[1]) / 2)
+    const targetSets = Math.round((band.targetSets[0] + band.targetSets[1]) / 2)
+    
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('[WeightedLoad] Estimated from PR (conservative):', {
+        exerciseType,
+        role,
+        prBenchmark,
+        prE1RM,
+        conservativeE1RM,
+        workingWeight,
+      })
+    }
+    
+    return {
+      weight: workingWeight,
+      unit,
+      reps: targetReps,
+      sets: targetSets,
+      loadBasis: 'pr_benchmark',
+      percentageOf1RM: Math.round(targetPercentage),
+      estimatedE1RM: conservativeE1RM,
+      coachingNote: `Estimated from PR - adjust based on feel. ${band.coachingNote}`,
+    }
+  }
+  
+  // CASE 4: Benchmark exists but has 0 weight (bodyweight only)
+  return {
+    weight: 0,
+    unit: defaultUnit,
+    reps: band.targetReps[1],
+    sets: band.targetSets[0],
+    loadBasis: 'no_data',
+    coachingNote: `Build bodyweight capacity first. ${band.coachingNote}`,
+  }
+}
+
+/**
+ * Format prescribed load for display
+ * Examples: "+20 lbs", "+15 kg", "BW" (for bodyweight)
+ */
+export function formatPrescribedLoad(load: PrescribedLoad): string {
+  if (load.weight <= 0 || load.loadBasis === 'no_data') {
+    return 'BW'
+  }
+  return `+${load.weight} ${load.unit}`
+}
+
+/**
+ * Format full weighted prescription for display
+ * Example: "3 x 5 @ +20 lbs"
+ */
+export function formatWeightedPrescription(load: PrescribedLoad): string {
+  const loadStr = formatPrescribedLoad(load)
+  return `${load.sets} x ${load.reps} @ ${loadStr}`
+}
+
+/**
+ * Determine the prescription role for a weighted exercise based on context
+ */
+export function determineWeightedRole(
+  primaryGoal: string,
+  exerciseType: string,
+  isMainExercise: boolean
+): WeightedPrescriptionRole {
+  // If this is main skill work and weighted strength supports it
+  if (isMainExercise) {
+    return 'strength_primary'
+  }
+  
+  // For front lever / planche goals, weighted pulls/dips are strength support
+  if (['front_lever', 'planche', 'muscle_up', 'one_arm_pull_up'].includes(primaryGoal)) {
+    return 'strength_support'
+  }
+  
+  // For general strength goals, weighted work is primary
+  if (['weighted_strength', 'strength', 'pull_strength', 'push_strength'].includes(primaryGoal)) {
+    return 'strength_primary'
+  }
+  
+  // Default to support role
+  return 'hypertrophy_support'
+}
+
+// =============================================================================
 // DEV LOGGING UTILITIES - TASK 9
 // =============================================================================
 

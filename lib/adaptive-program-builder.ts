@@ -430,6 +430,16 @@ export interface AdaptiveExercise {
     confidence: number
     reason: string
   }
+  // WEIGHTED LOAD PRESCRIPTION (TASK D)
+  // Stores the prescribed weight for weighted exercises (pull-ups, dips, etc.)
+  prescribedLoad?: {
+    weight: number           // The prescribed weight to add
+    unit: 'lbs' | 'kg'       // Weight unit
+    loadBasis: 'current_benchmark' | 'pr_benchmark' | 'estimated' | 'no_data'
+    percentageOf1RM?: number // What % of estimated 1RM this represents
+    estimatedE1RM?: number   // The estimated 1RM used for calculation
+    coachingNote?: string    // Guidance for the athlete
+  }
 }
 
 export interface AdaptiveProgram {
@@ -1525,6 +1535,13 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
     athleteCalibration,
     onboardingProfile,
     recoverySignal,
+    // TASK B: Include weighted benchmarks for load prescription
+    weightedBenchmarks: {
+      weightedPullUp: canonicalProfile.weightedPullUp,
+      weightedDip: canonicalProfile.weightedDip,
+      allTimePRPullUp: canonicalProfile.allTimePRPullUp,
+      allTimePRDip: canonicalProfile.allTimePRDip,
+    },
   }
   
   const sessions: AdaptiveSession[] = structure.days.map((day, index) => {
@@ -2776,7 +2793,7 @@ function generateAdaptiveSession(
   context: AdaptiveSessionContext
 ): AdaptiveSession {
   // Destructure context to get explicit dependencies (scope fix)
-  const { athleteCalibration, recoverySignal } = context
+  const { athleteCalibration, recoverySignal, weightedBenchmarks } = context
   
   // Safe fallbacks for calibration subfields
   const fatigueSensitivity = athleteCalibration?.fatigueSensitivity ?? 'moderate'
@@ -2790,6 +2807,8 @@ function generateAdaptiveSession(
     equipment,
     sessionMinutes: sessionLength,
     constraintType,
+    // TASK B: Pass weighted benchmarks for load prescription
+    weightedBenchmarks,
   })
   
   // Adapt for equipment - use safe fallbacks if selection properties are missing
@@ -3068,6 +3087,15 @@ function mapToAdaptiveExercises(
       method,
       methodLabel: getMethodLabel(method),
       progressionDecision,
+      // TASK D: Pass through prescribed load for weighted exercises
+      prescribedLoad: s.prescribedLoad ? {
+        weight: s.prescribedLoad.weight,
+        unit: s.prescribedLoad.unit,
+        loadBasis: s.prescribedLoad.loadBasis,
+        percentageOf1RM: s.prescribedLoad.percentageOf1RM,
+        estimatedE1RM: s.prescribedLoad.estimatedE1RM,
+        coachingNote: s.prescribedLoad.coachingNote,
+      } : undefined,
     }
   }).filter((e): e is AdaptiveExercise => e !== null)
 }

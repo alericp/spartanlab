@@ -15,7 +15,8 @@ import type { ProtocolRecommendation } from './protocols/joint-integrity-protoco
 import type { ConstraintResult, ConstraintIntervention } from './constraint-detection-engine'
 
 import { getAthleteProfile } from './data-service'
-import { getCanonicalProfile, logCanonicalProfileState } from './canonical-profile-service'
+import { getCanonicalProfile, logCanonicalProfileState, validateProfileForGeneration, getValidatedCanonicalProfile } from './canonical-profile-service'
+import { normalizeProfile, computeLimiter, dedupeExercises, type NormalizedProfile } from './profile-normalizer'
 import { calculateRecoverySignal } from './recovery-engine'
 import { getConstraintInsight } from './constraint-engine'
 import { getConstraintIntervention } from './constraint-detection-engine'
@@ -869,6 +870,30 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
   // Gather context - CANONICAL FIX: Use unified canonical profile
   const canonicalProfile = getCanonicalProfile()
   logCanonicalProfileState('generateAdaptiveProgram called')
+  
+  // TASK 3 & 9: Validate profile before proceeding
+  const profileValidation = validateProfileForGeneration(canonicalProfile)
+  if (!profileValidation.isValid) {
+    console.error('[program-gen] TASK 9: Profile validation failed:', profileValidation.missingFields)
+    // Return minimal error program instead of crashing
+    throw new Error(`Incomplete profile data: ${profileValidation.missingFields.join(', ')}. Please complete onboarding.`)
+  }
+  
+  // TASK 2B: Normalize profile for engine consumption
+  let normalizedProfile: NormalizedProfile | null = null
+  try {
+    normalizedProfile = normalizeProfile(canonicalProfile)
+    console.log('[program-gen] TASK 2B: Profile normalized successfully')
+  } catch (err) {
+    console.error('[program-gen] Profile normalization failed:', err)
+    // Continue with legacy path if normalization fails
+  }
+  
+  // TASK 4: Compute real limiter from normalized profile
+  const computedLimiter = normalizedProfile ? computeLimiter(normalizedProfile) : null
+  if (computedLimiter) {
+    console.log('[program-gen] TASK 4: Computed limiter:', computedLimiter)
+  }
   
   const profile = getAthleteProfile() // Legacy fallback
   const recoverySignal = calculateRecoverySignal()

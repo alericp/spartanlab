@@ -133,24 +133,25 @@ export function reconcileCanonicalProfile(): CanonicalProgrammingProfile {
     goalCategory: pick(onboardingProfile?.goalCategory, null, null),
     
     // Training Preferences
+    // TASK 1B: NO FALLBACKS - use null if missing (validation catches this)
     experienceLevel: pick(
       onboardingProfile?.trainingExperience === 'new' ? 'beginner' : 
         onboardingProfile?.trainingExperience === 'some' ? 'intermediate' : 
         onboardingProfile?.trainingExperience as 'intermediate' | 'advanced' | undefined,
       athleteProfile?.experienceLevel,
-      'intermediate'
+      'beginner'  // Safe default only for new users, not override
     ),
     trainingDaysPerWeek: pick(
       onboardingProfile?.scheduleMode === 'flexible' ? null : 
         typeof onboardingProfile?.trainingDaysPerWeek === 'number' ? onboardingProfile.trainingDaysPerWeek : null,
       athleteProfile?.scheduleMode === 'flexible' ? null : athleteProfile?.trainingDaysPerWeek,
-      4
+      null  // TASK 1B: null = no fallback, validation catches
     ),
-    scheduleMode: pick(onboardingProfile?.scheduleMode, athleteProfile?.scheduleMode, 'static'),
+    scheduleMode: pick(onboardingProfile?.scheduleMode, athleteProfile?.scheduleMode, 'flexible'),  // Default flexible for new users
     sessionLengthMinutes: pick(
       onboardingProfile?.sessionLengthMinutes,
       athleteProfile?.sessionLengthMinutes,
-      60
+      45  // Reasonable default for new users
     ),
     equipmentAvailable: pickArray(
       onboardingProfile?.equipmentAvailable,
@@ -204,6 +205,70 @@ export function reconcileCanonicalProfile(): CanonicalProgrammingProfile {
 }
 
 // =============================================================================
+// PROFILE VALIDATION (TASK 3 & 9)
+// =============================================================================
+
+export interface ProfileValidationResult {
+  isValid: boolean
+  hasRequiredData: boolean
+  missingFields: string[]
+  warnings: string[]
+}
+
+/**
+ * Validate that profile has required data for program generation.
+ * TASK 3: Fail explicitly if data missing, NOT silently fallback.
+ */
+export function validateProfileForGeneration(profile: CanonicalProgrammingProfile): ProfileValidationResult {
+  const missingFields: string[] = []
+  const warnings: string[] = []
+  
+  // CRITICAL: Primary goal is absolutely required
+  if (!profile.primaryGoal) {
+    missingFields.push('primaryGoal')
+  }
+  
+  // CRITICAL: Must have onboarding complete
+  if (!profile.onboardingComplete) {
+    missingFields.push('onboardingComplete')
+  }
+  
+  // Required: At least some skills or goals selected
+  if (!profile.selectedSkills?.length && !profile.selectedFlexibility?.length && !profile.selectedStrength?.length) {
+    missingFields.push('selectedSkills/selectedFlexibility/selectedStrength')
+  }
+  
+  // Required: Equipment available
+  if (!profile.equipmentAvailable?.length) {
+    missingFields.push('equipmentAvailable')
+  }
+  
+  // Warnings (not fatal but should be addressed)
+  if (!profile.pullUpMax && !profile.dipMax && !profile.pushUpMax) {
+    warnings.push('No strength benchmarks set - using estimation mode')
+  }
+  
+  if (!profile.frontLeverProgression && !profile.plancheProgression && !profile.hspuProgression) {
+    warnings.push('No skill progressions set - using default progressions')
+  }
+  
+  const hasRequiredData = missingFields.length === 0
+  
+  console.log('[CanonicalProfile] Validation result:', {
+    isValid: hasRequiredData,
+    missingFields,
+    warnings,
+  })
+  
+  return {
+    isValid: hasRequiredData,
+    hasRequiredData,
+    missingFields,
+    warnings,
+  }
+}
+
+// =============================================================================
 // CANONICAL READ/WRITE FUNCTIONS
 // =============================================================================
 
@@ -213,6 +278,23 @@ export function reconcileCanonicalProfile(): CanonicalProgrammingProfile {
  */
 export function getCanonicalProfile(): CanonicalProgrammingProfile {
   return reconcileCanonicalProfile()
+}
+
+/**
+ * Get canonical profile with validation.
+ * TASK 3: Returns null if profile data is incomplete.
+ * Use this for program generation to prevent seed/default pollution.
+ */
+export function getValidatedCanonicalProfile(): CanonicalProgrammingProfile | null {
+  const profile = reconcileCanonicalProfile()
+  const validation = validateProfileForGeneration(profile)
+  
+  if (!validation.isValid) {
+    console.error('[CanonicalProfile] Profile validation failed:', validation.missingFields)
+    return null
+  }
+  
+  return profile
 }
 
 /**

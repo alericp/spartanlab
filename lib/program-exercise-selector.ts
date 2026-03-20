@@ -940,8 +940,30 @@ function selectMainExercises(
     })
   }
   
+  // TASK 6: Final deduplication pass to remove any duplicate exercises
+  const deduplicatedSelected = dedupeSelectedExercises(selected)
+  if (deduplicatedSelected.length !== selected.length) {
+    console.log('[exercise-selector] TASK 6: Removed', selected.length - deduplicatedSelected.length, 'duplicate exercises')
+  }
+  
   // Sort by neural demand (highest first)
-  return selected.sort((a, b) => b.exercise.neuralDemand - a.exercise.neuralDemand)
+  return deduplicatedSelected.sort((a, b) => b.exercise.neuralDemand - a.exercise.neuralDemand)
+}
+
+/**
+ * TASK 6: Deduplicate selected exercises by exercise ID.
+ */
+function dedupeSelectedExercises(exercises: SelectedExercise[]): SelectedExercise[] {
+  const seen = new Set<string>()
+  return exercises.filter(ex => {
+    const key = ex.exercise.id.toLowerCase()
+    if (seen.has(key)) {
+      console.log('[exercise-selector] TASK 6: Removing duplicate:', ex.exercise.name)
+      return false
+    }
+    seen.add(key)
+    return true
+  })
 }
 
 // =============================================================================

@@ -15,33 +15,9 @@ import { saveCanonicalProfile, logCanonicalProfileState } from '../canonical-pro
 
 const STORAGE_KEY = 'spartanlab_profile'
 
-// Default profile for preview mode
-const DEFAULT_PROFILE: AthleteProfile = {
-  id: 'preview-profile',
-  userId: 'preview-user',
-  sex: 'male',
-  height: 70,
-  heightUnit: 'inches',
-  bodyweight: 160,
-  weightUnit: 'lbs',
-  experienceLevel: 'intermediate',
-  trainingDaysPerWeek: 4,
-  scheduleMode: 'static',
-  sessionLengthMinutes: 60,
-  goalCategory: 'skills',
-  selectedSkills: ['planche'],
-  selectedFlexibility: [],
-  selectedStrength: [],
-  primaryGoal: 'planche',
-  secondaryGoal: 'front_lever', // TASK 3: Default secondary goal
-  equipmentAvailable: ['pullup_bar', 'dip_bars', 'parallettes'],
-  rangeIntent: null,
-  rangeTrainingMode: null,
-  pullUpMax: null,
-  dipMax: null,
-  onboardingComplete: true,
-  createdAt: new Date().toISOString(),
-}
+// TASK 1C: REMOVED DEFAULT_PROFILE - No more seed data pollution
+// Programs must use real user data from onboarding
+// If no data exists, validation will fail gracefully
 
 function isBrowser(): boolean {
   return typeof window !== 'undefined'
@@ -78,7 +54,10 @@ const previewProfileRepository: ProfileRepository = {
     userId: string,
     data: Partial<AthleteProfile>
   ): Promise<AthleteProfile> {
-    if (!isBrowser()) return DEFAULT_PROFILE
+    // TASK 1C: Throw error instead of returning fake data when not in browser
+    if (!isBrowser()) {
+      throw new Error('[ProfileRepository] Cannot save profile outside browser context')
+    }
 
     const current = (await this.getProfile(userId))
     
@@ -201,7 +180,10 @@ export function getAthleteProfile(): AthleteProfile | null {
 export function saveAthleteProfile(
   profile: Partial<AthleteProfile>
 ): AthleteProfile {
-  if (!isBrowser()) return DEFAULT_PROFILE
+  // TASK 1C: Throw error instead of returning fake data when not in browser
+  if (!isBrowser()) {
+    throw new Error('[ProfileRepository] Cannot save profile outside browser context')
+  }
 
   const current = getAthleteProfile()
   

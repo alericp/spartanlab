@@ -722,6 +722,23 @@ export interface EngineDiagnostics {
   warmupComponentsChosen: string[]
   warmupDedupeEvents: string[]
   goalWeighting: GoalHierarchyWeights
+  // TASK 10: Enhanced diagnostics for prescription quality
+  prescriptionModesUsed?: string[]
+  weightedSupportDecisions?: Array<{
+    skill: string
+    includedWeighted: boolean
+    suggestedLoad: string
+  }>
+  weeklyLoadBalance?: Array<{
+    day: number
+    stressProfile: string
+    primaryStress: string
+  }>
+  topLimiterIntervention?: {
+    limiter: string
+    volumeModifier: number
+    supportWorkPriority: string[]
+  }
 }
 
 /**
@@ -753,6 +770,19 @@ export function logEngineDiagnostics(diagnostics: EngineDiagnostics): void {
   })
   if (diagnostics.warmupDedupeEvents.length > 0) {
     console.log('[EngineDiagnostics] Warmup Deduped:', diagnostics.warmupDedupeEvents)
+  }
+  // TASK 10: Log enhanced prescription and weekly load diagnostics
+  if (diagnostics.prescriptionModesUsed && diagnostics.prescriptionModesUsed.length > 0) {
+    console.log('[EngineDiagnostics] Prescription Modes:', [...new Set(diagnostics.prescriptionModesUsed)])
+  }
+  if (diagnostics.weightedSupportDecisions && diagnostics.weightedSupportDecisions.length > 0) {
+    console.log('[EngineDiagnostics] Weighted Support Decisions:', diagnostics.weightedSupportDecisions)
+  }
+  if (diagnostics.weeklyLoadBalance && diagnostics.weeklyLoadBalance.length > 0) {
+    console.log('[EngineDiagnostics] Weekly Load Balance:', diagnostics.weeklyLoadBalance)
+  }
+  if (diagnostics.topLimiterIntervention) {
+    console.log('[EngineDiagnostics] Top Limiter Intervention:', diagnostics.topLimiterIntervention)
   }
   console.log('[EngineDiagnostics] ===== END SUMMARY =====')
 }

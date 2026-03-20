@@ -178,6 +178,19 @@ import {
   type TrainingStyleMode,
 } from './unified-coaching-engine'
 import {
+  generateWeeklyLoadBalance,
+  logWeeklyLoadDiagnostics,
+  calculateWeightedSupportPrescription,
+  type WeeklyLoadBalance,
+  type DayStressProfile,
+  WEIGHTED_CARRYOVER_MAP,
+} from './prescription-contract'
+import {
+  getLimiterProgrammingIntervention,
+  logLimiterProgrammingDiagnostics,
+  type LimiterProgrammingIntervention,
+} from './weak-point-engine'
+import {
   generateWeeklySessionIntents,
   detectDuplicateSession,
   generateRepetitionJustifications,
@@ -1370,6 +1383,21 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
     recoverySignal,
   }
   
+  // TASK 4: Calculate weekly load balance for recovery-aware programming
+  const hasWeightedSupport = equipment.includes('weights') || equipment.includes('kettlebell')
+  const weeklyLoadBalance = generateWeeklyLoadBalance(
+    effectiveTrainingDays,
+    primaryGoal,
+    secondaryGoal || canonicalProfile.secondaryGoal || null,
+    hasWeightedSupport
+  )
+  
+  // Dev diagnostics for weekly load
+  logWeeklyLoadDiagnostics(weeklyLoadBalance, {
+    primary: primaryGoal,
+    secondary: secondaryGoal || canonicalProfile.secondaryGoal || null,
+  })
+  
   const sessions: AdaptiveSession[] = structure.days.map((day, index) => {
     const intent = sessionIntents[index]
     const session = generateAdaptiveSession(
@@ -1634,6 +1662,29 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
   // ENGINE QUALITY: Log comprehensive diagnostics (dev only)
   if (process.env.NODE_ENV !== 'production') {
     const warmupComponents = sessions.flatMap(s => (s.warmup || []).map(w => w.name))
+    // TASK 10: Collect prescription modes used across sessions
+    const prescriptionModesUsed: string[] = []
+    sessions.forEach(s => {
+      (s.exercises || []).forEach(ex => {
+        if ((ex as any).prescriptionMode) {
+          prescriptionModesUsed.push((ex as any).prescriptionMode)
+        }
+      })
+    })
+    
+    // TASK 10: Get top limiter intervention for diagnostics
+    const topLimiter = rankedBottlenecks[0]
+    const topLimiterIntervention = topLimiter 
+      ? getLimiterProgrammingIntervention(topLimiter.type as any, topLimiter.severityScore, primaryGoal as any)
+      : undefined
+    
+    if (topLimiterIntervention) {
+      logLimiterProgrammingDiagnostics(topLimiterIntervention, {
+        targetSkill: primaryGoal,
+        experienceLevel,
+      })
+    }
+    
     const diagnostics: EngineDiagnostics = {
       normalizedInputSummary: {
         primaryGoal,
@@ -1650,6 +1701,18 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
       warmupComponentsChosen: [...new Set(warmupComponents)],
       warmupDedupeEvents: [], // Logged separately in warmup engine
       goalWeighting: goalHierarchyWeights,
+      // TASK 10: Enhanced diagnostics
+      prescriptionModesUsed,
+      weeklyLoadBalance: weeklyLoadBalance.map(d => ({
+        day: d.day,
+        stressProfile: d.stressProfile,
+        primaryStress: d.primaryStressType,
+      })),
+      topLimiterIntervention: topLimiterIntervention ? {
+        limiter: topLimiterIntervention.limiter,
+        volumeModifier: topLimiterIntervention.interventions.volumeModifier,
+        supportWorkPriority: topLimiterIntervention.interventions.supportWorkPriority,
+      } : undefined,
     }
     logEngineDiagnostics(diagnostics)
   }

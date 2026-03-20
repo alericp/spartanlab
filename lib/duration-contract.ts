@@ -454,24 +454,32 @@ export function resolveSessionBudget(targetMinutes: number): SessionBudget {
       }
       
     case 60:
+      // TASK 8: Enhanced 60-min complete session
+      // This should feel like a "real" complete training session with:
+      // - Fuller warmup with proper skill prep
+      // - Primary skill block with quality work
+      // - Meaningful strength/support block
+      // - Targeted accessory/core work
+      // - Optional finisher for conditioning
+      // - Sensible cooldown with flexibility
       return {
         targetMinutes: 60,
         warmup: {
-          minutesBudget: 6,
-          maxExercises: 6,
+          minutesBudget: 7,           // INCREASED for proper prep
+          maxExercises: 7,            // INCREASED to allow fuller warmup
           phases: ['general', 'specific', 'activation'],
         },
         mainWork: {
-          minutesBudget: 42,
+          minutesBudget: 40,          // Realistic main work window
           minExercises: 5,
-          maxExercises: 6,
-          skillSlots: 2,
-          strengthSlots: 3,
-          accessorySlots: 2,
+          maxExercises: 7,            // INCREASED for complete session feel
+          skillSlots: 2,              // Primary + secondary skill work
+          strengthSlots: 3,           // Weighted support + bodyweight strength
+          accessorySlots: 2,          // Targeted weak point work
         },
         cooldown: {
-          minutesBudget: 4,
-          maxExercises: 3,
+          minutesBudget: 5,           // INCREASED for meaningful cooldown
+          maxExercises: 4,            // INCREASED for flexibility goals
           includeFlexibility: true,
         },
         finisher: {

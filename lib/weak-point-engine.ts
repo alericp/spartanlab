@@ -1648,6 +1648,241 @@ export function getVolumeModifierForWeakPoint(weakPoint: WeakPointType): number 
 }
 
 // =============================================================================
+// TASK 7: LIMITER-TO-PROGRAMMING INTERVENTIONS
+// =============================================================================
+
+/**
+ * Programming intervention based on limiter type.
+ * Maps each limiter to specific programming changes.
+ */
+export interface LimiterProgrammingIntervention {
+  limiter: WeakPointType
+  interventions: {
+    volumeChange: 'increase' | 'decrease' | 'maintain'
+    volumeModifier: number
+    intensityFocus: 'high' | 'moderate' | 'low'
+    frequencyEmphasis: 'daily' | 'every_other' | 'weekly'
+    supportWorkPriority: string[]
+    weeklyStructureAdjustment?: string
+    restPeriodAdjustment: 'longer' | 'standard' | 'shorter'
+    progressionStrategy: string
+  }
+  coachingNote: string
+}
+
+/**
+ * TASK 7: Get actionable programming intervention for a limiter.
+ * This connects limiter detection to actual program changes.
+ */
+export function getLimiterProgrammingIntervention(
+  limiter: WeakPointType,
+  severityScore: number,
+  targetSkill?: SkillTarget
+): LimiterProgrammingIntervention {
+  // High severity = more aggressive intervention
+  const isHighSeverity = severityScore > 60
+  const isModerate = severityScore > 35
+  
+  switch (limiter) {
+    case 'pull_strength':
+    case 'bent_arm_pull':
+      return {
+        limiter,
+        interventions: {
+          volumeChange: isHighSeverity ? 'increase' : 'maintain',
+          volumeModifier: isHighSeverity ? 1.2 : 1.0,
+          intensityFocus: 'moderate',
+          frequencyEmphasis: 'every_other',
+          supportWorkPriority: ['weighted_pull_up', 'row', 'lat_pulldown'],
+          weeklyStructureAdjustment: 'Add dedicated pull day or increase pull volume on existing days',
+          restPeriodAdjustment: 'standard',
+          progressionStrategy: 'Linear progression on weighted pulls. Add 2.5kg every 1-2 weeks.',
+        },
+        coachingNote: `Pulling strength deficit detected (severity ${severityScore}%). Prioritizing weighted pulling and rowing volume.`,
+      }
+      
+    case 'straight_arm_pull_strength':
+      return {
+        limiter,
+        interventions: {
+          volumeChange: 'maintain',
+          volumeModifier: 1.0,
+          intensityFocus: 'high',
+          frequencyEmphasis: 'every_other',
+          supportWorkPriority: ['front_lever_pull', 'ice_cream_maker', 'straight_arm_pulldown'],
+          weeklyStructureAdjustment: 'Balance straight-arm stress across week. Never back-to-back.',
+          restPeriodAdjustment: 'longer',
+          progressionStrategy: 'Quality-focused. Progress hold time before difficulty.',
+        },
+        coachingNote: `Straight-arm pull deficit affecting ${targetSkill || 'lever'} work. Tendon-safe progression required.`,
+      }
+      
+    case 'straight_arm_push_strength':
+      return {
+        limiter,
+        interventions: {
+          volumeChange: 'maintain',
+          volumeModifier: 1.0,
+          intensityFocus: 'high',
+          frequencyEmphasis: 'every_other',
+          supportWorkPriority: ['planche_lean', 'pseudo_planche_push_up', 'weighted_dip'],
+          weeklyStructureAdjustment: 'Separate straight-arm push days by 48+ hours.',
+          restPeriodAdjustment: 'longer',
+          progressionStrategy: 'Hold time progression. Add 2-3s per week when stable.',
+        },
+        coachingNote: `Straight-arm pushing is the limiting factor. Focus on lean quality and weighted pressing support.`,
+      }
+      
+    case 'compression_strength':
+    case 'core_compression':
+      return {
+        limiter,
+        interventions: {
+          volumeChange: isHighSeverity ? 'increase' : 'maintain',
+          volumeModifier: isHighSeverity ? 1.15 : 1.0,
+          intensityFocus: 'moderate',
+          frequencyEmphasis: 'daily',
+          supportWorkPriority: ['l_sit_core', 'hanging_leg_raise', 'v_up', 'pike_compression'],
+          weeklyStructureAdjustment: 'Add compression work to most sessions as finishing element.',
+          restPeriodAdjustment: 'shorter',
+          progressionStrategy: 'Progressive range. Add depth before adding time.',
+        },
+        coachingNote: `Compression deficit detected. Adding daily L-sit/pike compression work.`,
+      }
+      
+    case 'scapular_control':
+      return {
+        limiter,
+        interventions: {
+          volumeChange: 'maintain',
+          volumeModifier: 1.0,
+          intensityFocus: 'moderate',
+          frequencyEmphasis: 'daily',
+          supportWorkPriority: ['scap_pull_up', 'scap_push_up', 'face_pull', 'band_pull_apart'],
+          weeklyStructureAdjustment: 'Include scapular activation in all warmups.',
+          restPeriodAdjustment: 'shorter',
+          progressionStrategy: 'Quality focus. Full range of motion before loading.',
+        },
+        coachingNote: `Scapular control is limiting skill progress. Adding targeted activation work.`,
+      }
+      
+    case 'shoulder_stability':
+      return {
+        limiter,
+        interventions: {
+          volumeChange: 'maintain',
+          volumeModifier: 1.0,
+          intensityFocus: 'moderate',
+          frequencyEmphasis: 'every_other',
+          supportWorkPriority: ['ring_support', 'face_pull', 'external_rotation', 'planche_lean'],
+          weeklyStructureAdjustment: 'Ensure shoulder stability work precedes demanding holds.',
+          restPeriodAdjustment: 'standard',
+          progressionStrategy: 'Time under tension progression. Build stability endurance.',
+        },
+        coachingNote: `Shoulder stability needs development. Adding ring support and rotator work.`,
+      }
+      
+    case 'wrist_tolerance':
+    case 'tendon_tolerance':
+      return {
+        limiter,
+        interventions: {
+          volumeChange: 'decrease',
+          volumeModifier: 0.85,
+          intensityFocus: 'low',
+          frequencyEmphasis: 'every_other',
+          supportWorkPriority: ['wrist_circles', 'wrist_push_up', 'rice_bucket'],
+          weeklyStructureAdjustment: 'Reduce straight-arm wrist loading. Add prep work.',
+          restPeriodAdjustment: 'longer',
+          progressionStrategy: 'Conservative. Prioritize tissue adaptation over skill progress.',
+        },
+        coachingNote: `Tendon/wrist tolerance limiting progress. Reducing volume, adding prep work.`,
+      }
+      
+    case 'general_fatigue':
+    case 'recovery_capacity':
+      return {
+        limiter,
+        interventions: {
+          volumeChange: 'decrease',
+          volumeModifier: 0.65,
+          intensityFocus: 'low',
+          frequencyEmphasis: 'weekly',
+          supportWorkPriority: [],
+          weeklyStructureAdjustment: 'Reduce training days. Add active recovery sessions.',
+          restPeriodAdjustment: 'longer',
+          progressionStrategy: 'Deload week recommended. Then gradual rebuild.',
+        },
+        coachingNote: `Recovery deficit detected. Reducing volume and intensity for recovery.`,
+      }
+      
+    case 'explosive_power':
+      return {
+        limiter,
+        interventions: {
+          volumeChange: 'maintain',
+          volumeModifier: 1.0,
+          intensityFocus: 'high',
+          frequencyEmphasis: 'every_other',
+          supportWorkPriority: ['explosive_pull_up', 'high_pull', 'clapping_push_up'],
+          weeklyStructureAdjustment: 'Fresh nervous system required. Place power work early in session.',
+          restPeriodAdjustment: 'longer',
+          progressionStrategy: 'Quality reps only. Stop when speed decreases.',
+        },
+        coachingNote: `Explosive power deficit. Adding power work early in sessions when fresh.`,
+      }
+      
+    default:
+      return {
+        limiter,
+        interventions: {
+          volumeChange: 'maintain',
+          volumeModifier: 1.0,
+          intensityFocus: 'moderate',
+          frequencyEmphasis: 'every_other',
+          supportWorkPriority: [],
+          restPeriodAdjustment: 'standard',
+          progressionStrategy: 'Standard linear progression.',
+        },
+        coachingNote: `Balanced progression recommended.`,
+      }
+  }
+}
+
+/**
+ * Get multiple interventions for a list of weak points.
+ * Returns interventions ranked by severity.
+ */
+export function getLimiterInterventions(
+  weakPoints: Array<{ type: WeakPointType; severity: number }>,
+  targetSkill?: SkillTarget
+): LimiterProgrammingIntervention[] {
+  return weakPoints
+    .sort((a, b) => b.severity - a.severity)
+    .slice(0, 3) // Top 3 limiters
+    .map(wp => getLimiterProgrammingIntervention(wp.type, wp.severity, targetSkill))
+}
+
+/**
+ * Dev diagnostics for limiter-to-programming connection.
+ */
+export function logLimiterProgrammingDiagnostics(
+  intervention: LimiterProgrammingIntervention,
+  context: { targetSkill?: string; experienceLevel?: string }
+): void {
+  if (process.env.NODE_ENV === 'production') return
+  
+  console.log('[LimiterProgramming]', {
+    limiter: intervention.limiter,
+    volumeModifier: intervention.interventions.volumeModifier,
+    intensityFocus: intervention.interventions.intensityFocus,
+    supportWork: intervention.interventions.supportWorkPriority.slice(0, 3),
+    progressionStrategy: intervention.interventions.progressionStrategy.substring(0, 50),
+    ...context,
+  })
+}
+
+// =============================================================================
 // MOVEMENT-INTELLIGENT ACCESSORY SELECTION
 // =============================================================================
 

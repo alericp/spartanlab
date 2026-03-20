@@ -110,6 +110,16 @@ import {
   type TrainingSessionStyle,
   type SessionLoadSummary,
 } from './session-load-intelligence'
+import {
+  detectPrescriptionMode,
+  generatePrescription,
+  generateSkillAwarePrescription,
+  calculateWeightedSupportPrescription,
+  logPrescriptionDiagnostics,
+  type PrescriptionMode,
+  type SkillProgressionLevel,
+  WEIGHTED_CARRYOVER_MAP,
+} from './prescription-contract'
 
 export interface SelectedExercise {
   exercise: Exercise
@@ -126,6 +136,10 @@ export interface SelectedExercise {
   // Session Load Intelligence fields
   loadMetadata?: ExerciseLoadMetadata
   deliveryStyle?: DeliveryStyle
+  // Prescription Contract fields (TASK 1)
+  prescriptionMode?: PrescriptionMode
+  restGuidance?: string
+  intensityTarget?: string
 }
 
 // =============================================================================
@@ -602,10 +616,42 @@ function selectMainExercises(
       jointStress: movementIntel.jointStress,
     })
     
+    // TASK 1: Detect prescription mode for this exercise
+    const isWeighted = finalExercise.name.toLowerCase().includes('weighted') || 
+      (loadMetadata?.role === 'strength_primary')
+    const isSkillHold = finalExercise.category === 'skill' && 
+      (finalExercise.name.toLowerCase().includes('hold') || 
+       finalExercise.name.toLowerCase().includes('lever') ||
+       finalExercise.name.toLowerCase().includes('planche'))
+    const isCore = finalExercise.category === 'core' ||
+      finalExercise.name.toLowerCase().includes('hollow') ||
+      finalExercise.name.toLowerCase().includes('compression')
+    const isWarmup = false // Main exercises are not warmup
+    
+    const prescriptionMode = detectPrescriptionMode(
+      finalExercise.id,
+      finalExercise.name,
+      finalExercise.category,
+      isWeighted,
+      isSkillHold,
+      isCore,
+      isWarmup
+    )
+    
+    // Generate prescription based on mode
+    const prescription = generatePrescription(prescriptionMode, experienceLevel, undefined, fatigueLevel)
+    
+    // Dev diagnostics
+    logPrescriptionDiagnostics(prescriptionMode, finalExercise.name, prescription, {
+      experienceLevel,
+      fatigueLevel,
+      isWeightedSupport: isWeighted,
+    })
+    
     selected.push({
       exercise: finalExercise,
-      sets: setsOverride ?? adjustSetsForLevel(finalExercise.defaultSets, experienceLevel),
-      repsOrTime: repsOverride ?? adjustRepsForLevel(finalExercise.defaultRepsOrTime, experienceLevel),
+      sets: setsOverride ?? prescription.sets,
+      repsOrTime: repsOverride ?? prescription.repsOrTime,
       note: wasSubstituted 
         ? `Substituted from ${exercise.name} - ${gateResult.recommendedSubstitute?.reason || 'Prerequisites not met'}`
         : noteOverride ?? finalExercise.notes,
@@ -619,6 +665,10 @@ function selectMainExercises(
       originalExerciseId: originalId,
       loadMetadata,
       deliveryStyle,
+      // TASK 1: Add prescription contract fields
+      prescriptionMode,
+      restGuidance: prescription.rest,
+      intensityTarget: prescription.notes,
     })
     return true
   }

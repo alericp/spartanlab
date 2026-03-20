@@ -16,6 +16,7 @@ import type { ConstraintResult, ConstraintIntervention } from './constraint-dete
 
 import { getAthleteProfile } from './data-service'
 import { getCanonicalProfile, logCanonicalProfileState, validateProfileForGeneration, getValidatedCanonicalProfile } from './canonical-profile-service'
+import { buildGenerationInput, getSystemStateFlags, type GenerationMode, type ProfileSnapshot } from './program-state-contract'
 import { normalizeProfile, computeLimiter, dedupeExercises, type NormalizedProfile } from './profile-normalizer'
 import { calculateRecoverySignal } from './recovery-engine'
 import { getConstraintInsight } from './constraint-engine'
@@ -266,6 +267,7 @@ import {
 
 // Re-export schedule types for consumers
 export type { ScheduleMode, DayStressLevel } from './flexible-schedule-engine'
+export type { GenerationMode, ProfileSnapshot } from './program-state-contract'
   
 // =============================================================================
 // TYPES
@@ -290,6 +292,10 @@ export interface AdaptiveProgramInputs {
   scheduleMode?: ScheduleMode  // 'static' or 'flexible'
   // TASK 7: Pass selected skills for multi-goal generation awareness
   selectedSkills?: string[]
+  // STATE CONTRACT: Generation mode for fresh vs regenerate distinction
+  regenerationMode?: GenerationMode
+  // STATE CONTRACT: Optional reason for regeneration (for logging/debugging)
+  regenerationReason?: string
 }
 
 export interface AdaptiveSession {
@@ -665,6 +671,10 @@ exerciseExplanations?: {
   secondaryEmphasis?: string
   // Canonical Explanation Metadata - grounded explanations for "Why This Workout"
   explanationMetadata?: ProgramExplanationMetadata
+  // STATE CONTRACT: Profile snapshot taken at generation time (for debugging and traceability)
+  profileSnapshot?: ProfileSnapshot
+  // STATE CONTRACT: Generation mode used ('fresh', 'regenerate', or 'continue')
+  generationMode?: GenerationMode
 }
 
 // =============================================================================
@@ -857,6 +867,19 @@ function getDurationConfig(duration: WorkoutDurationPreference): DurationConfig 
 
 export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): AdaptiveProgram {
   console.log('[program-gen] Starting adaptive program generation')
+  
+  // STATE CONTRACT: Get system state flags to determine generation context
+  const stateFlags = getSystemStateFlags()
+  const generationMode: GenerationMode = inputs.regenerationMode || stateFlags.recommendedMode
+  
+  console.log('[program-gen] STATE CONTRACT:', {
+    hasProfile: stateFlags.hasProfile,
+    hasHistory: stateFlags.hasHistory,
+    hasProgram: stateFlags.hasProgram,
+    profileChanged: stateFlags.profileChanged,
+    generationMode,
+  })
+  
   // TASK 7: Log ALL canonical profile fields consumed by generation
   console.log('[program-gen] Inputs:', {
     primaryGoal: inputs.primaryGoal,
@@ -867,6 +890,7 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
     equipmentCount: inputs.equipment?.length || 0,
     scheduleMode: inputs.scheduleMode || 'static',
     selectedSkills: inputs.selectedSkills || [],
+    generationMode,
   })
   
   const {
@@ -879,6 +903,7 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
   } = inputs
   
   // Gather context - CANONICAL FIX: Use unified canonical profile
+  // CRITICAL: This is the ONLY source of truth for generation
   const canonicalProfile = getCanonicalProfile()
   logCanonicalProfileState('generateAdaptiveProgram called')
   
@@ -2257,6 +2282,34 @@ return explanations.length > 0 ? explanations : undefined
         return undefined
       }
     })(),
+    // STATE CONTRACT: Profile snapshot taken at generation time (for debugging and traceability)
+    profileSnapshot: {
+      snapshotId: `snapshot_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
+      createdAt: new Date().toISOString(),
+      primaryGoal: canonicalProfile.primaryGoal,
+      secondaryGoal: canonicalProfile.secondaryGoal,
+      experienceLevel: canonicalProfile.experienceLevel,
+      trainingDaysPerWeek: canonicalProfile.trainingDaysPerWeek,
+      sessionLengthMinutes: canonicalProfile.sessionLengthMinutes,
+      scheduleMode: canonicalProfile.scheduleMode,
+      equipmentAvailable: canonicalProfile.equipmentAvailable || [],
+      jointCautions: canonicalProfile.jointCautions || [],
+      selectedSkills: canonicalProfile.selectedSkills || [],
+      strengthBenchmarks: {
+        pullUpMax: canonicalProfile.pullUpMax,
+        dipMax: canonicalProfile.dipMax,
+        pushUpMax: canonicalProfile.pushUpMax,
+        weightedPullUp: canonicalProfile.weightedPullUp,
+        weightedDip: canonicalProfile.weightedDip,
+      },
+      skillProgressions: {
+        frontLever: canonicalProfile.frontLeverProgression,
+        planche: canonicalProfile.plancheProgression,
+        hspu: canonicalProfile.hspuProgression,
+      },
+    },
+    // STATE CONTRACT: Generation mode used
+    generationMode,
   }
 }
 

@@ -259,6 +259,9 @@ export type SkillGoal =
   | 'handstand'
   | 'iron_cross'
   | 'one_arm_pull_up'
+  | 'one_arm_push_up'
+  | 'dragon_flag'
+  | 'planche_push_up'
   | 'l_sit'
   | 'v_sit'
   | 'i_sit'
@@ -1172,6 +1175,11 @@ export const SKILL_GOAL_LABELS: Record<SkillGoal, string> = {
   'muscle_up': 'Muscle-Up',
   'handstand_pushup': 'Handstand Push-Up',
   'handstand': 'Handstand',
+  'iron_cross': 'Iron Cross',
+  'one_arm_pull_up': 'One-Arm Pull-Up',
+  'one_arm_push_up': 'One-Arm Push-Up',
+  'dragon_flag': 'Dragon Flag',
+  'planche_push_up': 'Planche Push-Up',
   'l_sit': 'L-Sit',
   'v_sit': 'V-Sit',
   'i_sit': 'Manna / I-Sit',

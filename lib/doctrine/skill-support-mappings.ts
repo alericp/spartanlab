@@ -536,6 +536,47 @@ export const SKILL_SUPPORT_MAPPINGS: Record<SkillCarryover, SkillSupportMapping>
       tendonSensitive: false,
     },
   },
+  
+  planche_push_up: {
+    skillId: 'planche_push_up',
+    displayName: 'Planche Push-Up',
+    primaryRequirements: ['straight_arm_push', 'horizontal_push', 'scapular_control'],
+    supportPatterns: ['anti_extension_core', 'joint_integrity'],
+    commonLimiters: [
+      {
+        limiterId: 'planche_push_up_straight_arm',
+        description: 'Bent-arm planche position strength',
+        supportPatterns: ['straight_arm_push', 'horizontal_push'],
+        exerciseIds: ['pseudo_planche_pushup', 'tuck_planche', 'adv_tuck_planche', 'planche_lean'],
+      },
+      {
+        limiterId: 'planche_push_up_pressing',
+        description: 'Pressing out of planche position',
+        supportPatterns: ['horizontal_push'],
+        exerciseIds: ['pseudo_planche_pushup', 'deficit_push_up', 'ring_push_up'],
+      },
+      {
+        limiterId: 'planche_push_up_protraction',
+        description: 'Scapular protraction under load',
+        supportPatterns: ['scapular_control'],
+        exerciseIds: ['planche_lean', 'serratus_pushup', 'scapular_protraction'],
+      },
+    ],
+    safeAlternatives: ['pseudo_planche_pushup', 'tuck_planche_pushup', 'elevated_pseudo_planche_pushup'],
+    directSupportExercises: ['pseudo_planche_pushup', 'tuck_planche_pushup', 'adv_tuck_planche_pushup', 'straddle_planche_pushup', 'planche_pushup'],
+    accessorySupportExercises: ['planche_lean', 'serratus_pushup', 'tricep_extension', 'face_pull', 'hollow_body_hold'],
+    prerequisiteExercises: [
+      { exerciseId: 'pseudo_planche_pushup', requirement: '12 reps', isCritical: true },
+      { exerciseId: 'tuck_planche', requirement: '15s hold', isCritical: true },
+      { exerciseId: 'tuck_planche_pushup', requirement: '5 reps', isCritical: true },
+    ],
+    constraints: {
+      maxStraightArmPerSession: 2,
+      restDaysBetweenHeavySessions: 2,
+      preferredFrequencyPerWeek: 3,
+      tendonSensitive: true,
+    },
+  },
 }
 
 // =============================================================================

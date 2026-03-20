@@ -96,6 +96,7 @@ export type SkillCarryover =
   | 'one_arm_pull_up'
   | 'one_arm_push_up'
   | 'dragon_flag'
+  | 'planche_push_up'
 
 // =============================================================================
 // EQUIPMENT DEFINITIONS

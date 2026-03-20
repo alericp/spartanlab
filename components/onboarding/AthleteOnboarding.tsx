@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -135,7 +135,7 @@ import {
   hasEstimatedValues,
 } from '@/lib/athlete-profile'
 import { BodyFatCalculator } from './BodyFatCalculator'
-import { getCanonicalProfile, saveCanonicalProfile, logCanonicalProfileState, clearCanonicalProfileData } from '@/lib/canonical-profile-service'
+import { getCanonicalProfile, saveCanonicalProfile, logCanonicalProfileState, clearCanonicalProfileData, markProfileSchemaAsComplete } from '@/lib/canonical-profile-service'
 import { logProfileTruthState } from '@/lib/profile-truth-contract'
 import { getOnboardingProfile } from '@/lib/athlete-profile'
 import {
@@ -3548,6 +3548,12 @@ export function AthleteOnboarding() {
   // Clear all onboarding data and reset to empty state (with confirmation)
   const [showClearConfirm, setShowClearConfirm] = useState(false)
   
+  // Deep-link URL param handling for profile updates
+  // ?section=skill_selection&mode=update routes to specific section
+  const searchParams = useSearchParams()
+  const [isUpdateMode, setIsUpdateMode] = useState(false)
+  const [deepLinkProcessed, setDeepLinkProcessed] = useState(false)
+  
   const handleClearAllData = useCallback(() => {
     if (process.env.NODE_ENV !== 'production') {
       console.log('[AthleteOnboarding] Clear All confirmed - clearing onboarding data')
@@ -3578,6 +3584,38 @@ export function AthleteOnboarding() {
   const visibleSections = useMemo(() => {
     return SECTIONS.filter(section => !section.showIf || section.showIf(profile))
   }, [profile])
+  
+  // Process deep-link params after profile is loaded and visibleSections computed
+  useEffect(() => {
+    if (!prefillLoaded || deepLinkProcessed || visibleSections.length === 0) return
+    
+    try {
+      const sectionParam = searchParams?.get('section')
+      const modeParam = searchParams?.get('mode')
+      
+      if (modeParam === 'update') {
+        setIsUpdateMode(true)
+        console.log('[AthleteOnboarding] Update mode activated via URL param')
+      }
+      
+      if (sectionParam) {
+        const targetSectionId = sectionParam as SectionId
+        const sectionIndex = visibleSections.findIndex(s => s.id === targetSectionId)
+        
+        if (sectionIndex !== -1) {
+          console.log('[AthleteOnboarding] Deep-linking to section:', targetSectionId, 'at index:', sectionIndex)
+          setCurrentSectionIndex(sectionIndex)
+        } else {
+          console.log('[AthleteOnboarding] Section not found or not visible:', targetSectionId)
+        }
+      }
+      
+      setDeepLinkProcessed(true)
+    } catch (err) {
+      console.error('[AthleteOnboarding] Error processing URL params:', err)
+      setDeepLinkProcessed(true)
+    }
+  }, [prefillLoaded, deepLinkProcessed, searchParams, visibleSections])
 
   const currentSection = visibleSections[currentSectionIndex]
   const totalSections = visibleSections.length
@@ -3923,11 +3961,20 @@ export function AthleteOnboarding() {
       // Small delay for UX
       await new Promise(resolve => setTimeout(resolve, 500))
       
-      // Track completion
-      trackOnboardingCompleted('onboarding')
-      
-      // Navigate to program preview page (upgrade opportunity)
+// Track completion
+    trackOnboardingCompleted('onboarding')
+    
+    // Mark profile schema as up-to-date (clears profile update notification)
+    markProfileSchemaAsComplete()
+    console.log('[AthleteOnboarding] Profile schema marked as complete')
+    
+    // Navigate to program preview page (upgrade opportunity)
+    // If in update mode, return to dashboard instead
+    if (isUpdateMode) {
+      router.push('/dashboard')
+    } else {
       router.push('/onboarding/complete')
+    }
     } catch (error) {
       console.error('Failed to save profile:', error)
       setIsSubmitting(false)

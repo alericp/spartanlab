@@ -40,7 +40,7 @@ import {
 // UNIFIED READINESS OUTPUT TYPES
 // =============================================================================
 
-export type SkillType = 'front_lever' | 'back_lever' | 'planche' | 'hspu' | 'muscle_up' | 'l_sit' | 'v_sit' | 'iron_cross' | 'dragon_flag'
+export type SkillType = 'front_lever' | 'back_lever' | 'planche' | 'hspu' | 'muscle_up' | 'l_sit' | 'v_sit' | 'iron_cross' | 'dragon_flag' | 'one_arm_pull_up' | 'one_arm_push_up' | 'planche_push_up'
 
 /**
  * Standardized readiness component scores (0-100)
@@ -215,6 +215,28 @@ l_sit: {
     'Lower Back Mobility': 'mobility',
     'Hip Flexor Strength': 'compression',
   },
+  one_arm_pull_up: {
+    'Weighted Pull-Up Strength': 'pullStrength',
+    'Archer Pull-Up Ability': 'skillSpecific',
+    'Grip Strength': 'pullStrength',
+    'Elbow/Bicep Tendon Health': 'shoulderStability',
+    'Scapular Control': 'scapularControl',
+  },
+  one_arm_push_up: {
+    'Push-Up Strength': 'pushStrength',
+    'Archer Push-Up Ability': 'skillSpecific',
+    'Core Anti-Rotation': 'compression',
+    'Shoulder Stability': 'shoulderStability',
+    'Wrist Tolerance': 'wristTolerance',
+  },
+  planche_push_up: {
+    'Planche Hold Ability': 'straightArmStrength',
+    'Pseudo Planche Push-Up': 'skillSpecific',
+    'Scapular Protraction': 'scapularControl',
+    'Tricep Strength': 'pushStrength',
+    'Wrist Conditioning': 'wristTolerance',
+    'Core Tension': 'compression',
+  },
 }
 
 /**
@@ -288,6 +310,29 @@ l_sit: {
     'Anti-extension control': 'core_control',
     'General preparedness': 'compression_strength',
   },
+  one_arm_pull_up: {
+    'Base pulling strength': 'pull_strength',
+    'Weighted pulling strength': 'pull_strength',
+    'Unilateral pulling coordination': 'skill_coordination',
+    'Grip strength deficit': 'pull_strength',
+    'Tendon conditioning': 'tendon_tolerance',
+    'General preparedness': 'pull_strength',
+  },
+  one_arm_push_up: {
+    'Base pressing strength': 'push_strength',
+    'Unilateral pressing coordination': 'skill_coordination',
+    'Core anti-rotation weakness': 'core_control',
+    'Shoulder stability': 'shoulder_stability',
+    'General preparedness': 'push_strength',
+  },
+  planche_push_up: {
+    'Planche hold strength': 'straight_arm_push_strength',
+    'Pressing from planche': 'push_strength',
+    'Scapular protraction weakness': 'scapular_control',
+    'Wrist conditioning': 'wrist_tolerance',
+    'Core tension': 'compression_strength',
+    'General preparedness': 'straight_arm_push_strength',
+  },
 }
 
 // =============================================================================
@@ -358,6 +403,17 @@ export interface AthleteReadinessInput {
   legRaiseMax?: number
   abWheelRolloutMax?: number
   lowerBackMobility?: 'poor' | 'moderate' | 'good' | 'excellent'
+  
+  // One-Arm Pull-Up specific
+  archerPullUpReps?: number
+  
+  // One-Arm Push-Up specific
+  archerPushUpReps?: number
+  
+  // Planche Push-Up specific
+  pseudoPlanchePushUpReps?: number
+  tuckPlancheHold?: number
+  wristCircles?: boolean
   }
 
 // =============================================================================
@@ -385,7 +441,7 @@ export function calculateCanonicalReadiness(
 export function calculateAllSkillReadiness(
   input: AthleteReadinessInput
 ): Map<SkillType, CanonicalReadinessResult> {
-  const skills: SkillType[] = ['front_lever', 'back_lever', 'planche', 'hspu', 'muscle_up', 'l_sit', 'v_sit', 'iron_cross', 'dragon_flag']
+  const skills: SkillType[] = ['front_lever', 'back_lever', 'planche', 'hspu', 'muscle_up', 'l_sit', 'v_sit', 'iron_cross', 'dragon_flag', 'one_arm_pull_up', 'one_arm_push_up', 'planche_push_up']
   const results = new Map<SkillType, CanonicalReadinessResult>()
   
   for (const skill of skills) {
@@ -521,16 +577,43 @@ function calculateRawReadiness(skill: SkillType, input: AthleteReadinessInput): 
   assistedCrossHoldTime: input.assistedCrossHoldTime,
   })
   
-  case 'dragon_flag':
-  return calculateDragonFlagReadiness({
-  dragonFlagTuckReps: input.dragonFlagTuckReps ?? 0,
-  legRaiseMax: input.legRaiseMax ?? 0,
-  abWheelRolloutMax: input.abWheelRolloutMax ?? 0,
-  hollowHoldTime: input.hollowHoldTime ?? 0,
-  lowerBackMobility: input.lowerBackMobility ?? 'moderate',
-  })
-  
-  default:
+    case 'dragon_flag':
+      return calculateDragonFlagReadiness({
+        dragonFlagTuckReps: input.dragonFlagTuckReps ?? 0,
+        legRaiseMax: input.legRaiseMax ?? 0,
+        abWheelRolloutMax: input.abWheelRolloutMax ?? 0,
+        hollowHoldTime: input.hollowHoldTime ?? 0,
+        lowerBackMobility: input.lowerBackMobility ?? 'moderate',
+      })
+    
+    case 'one_arm_pull_up':
+      // Use weighted pull-up strength as primary indicator
+      return calculateOneArmPullUpReadiness({
+        maxPullUps: input.maxPullUps ?? 0,
+        weightedPullUpLoad: input.weightedPullUpLoad ?? 0,
+        archerPullUpReps: input.archerPullUpReps ?? 0,
+        hasBar: input.hasBar ?? true,
+      })
+    
+    case 'one_arm_push_up':
+      // Use push-up and archer push-up ability
+      return calculateOneArmPushUpReadiness({
+        maxPushUps: input.maxPushUps ?? 0,
+        archerPushUpReps: input.archerPushUpReps ?? 0,
+        hollowHoldTime: input.hollowHoldTime ?? 0,
+      })
+    
+    case 'planche_push_up':
+      // Requires strong planche hold plus pressing ability
+      return calculatePlanchePushUpReadiness({
+        plancheLeanHold: input.plancheLeanHold ?? 0,
+        pseudoPlanchePushUpReps: input.pseudoPlanchePushUpReps ?? 0,
+        tuckPlancheHold: input.tuckPlancheHold ?? 0,
+        maxDips: input.maxDips ?? 0,
+        wristCircles: input.wristCircles ?? true,
+      })
+    
+    default:
       // Fallback
       return calculateFrontLeverReadiness({
         maxPullUps: input.maxPullUps ?? 0,

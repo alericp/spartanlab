@@ -430,6 +430,18 @@ export interface AdaptiveExercise {
     confidence: number
     reason: string
   }
+  // WEIGHTED LOAD PR: Prescribed load for weighted exercises
+  // Stores actual weight to use based on user's benchmark data
+  prescribedLoad?: {
+    load: number              // Actual weight to add (e.g., 20 for +20 lbs)
+    unit: 'lbs' | 'kg'        // Weight unit
+    basis: 'current_benchmark' | 'pr_reference' | 'estimated' | 'no_data'
+    confidenceLevel: 'high' | 'moderate' | 'low' | 'none'
+    estimated1RM?: number     // Estimated 1RM for reference
+    targetReps?: number       // Target reps for this prescription
+    intensityBand?: 'strength' | 'support_volume' | 'hypertrophy'
+    notes?: string[]          // Context/coaching notes
+  }
 }
 
 export interface AdaptiveProgram {

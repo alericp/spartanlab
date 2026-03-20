@@ -1,4 +1,5 @@
 import { Metadata } from 'next'
+import { Suspense } from 'react'
 import { AthleteOnboarding } from '@/components/onboarding/AthleteOnboarding'
 
 export const metadata: Metadata = {
@@ -6,6 +7,19 @@ export const metadata: Metadata = {
   description: 'SpartanLab analyzes your strength, skill experience, equipment, and goals to build adaptive calisthenics programming based on real training methodologies.',
 }
 
+// Loading fallback for Suspense (useSearchParams requires Suspense boundary)
+function OnboardingLoading() {
+  return (
+    <div className="min-h-screen bg-[#0F1115] flex items-center justify-center">
+      <div className="w-8 h-8 border-2 border-[#C1121F] border-t-transparent rounded-full animate-spin" />
+    </div>
+  )
+}
+
 export default function OnboardingPage() {
-  return <AthleteOnboarding />
+  return (
+    <Suspense fallback={<OnboardingLoading />}>
+      <AthleteOnboarding />
+    </Suspense>
+  )
 }

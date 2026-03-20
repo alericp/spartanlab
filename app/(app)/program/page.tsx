@@ -329,13 +329,24 @@ export default function ProgramPage() {
   // TASK 5: Handlers use dynamically imported modules
   // HARDENED: Full try/catch/finally to prevent stuck spinner state
   const handleGenerate = useCallback(() => {
-    if (!inputs || !programModules.generateAdaptiveProgram || !programModules.saveAdaptiveProgram) return
+    // ISSUE A FIX: Validate prerequisites before starting generation
+    if (!inputs) {
+      console.error('[ProgramPage] handleGenerate: Missing inputs - cannot generate')
+      setGenerationError('Missing program inputs. Please refresh the page.')
+      return
+    }
+    if (!programModules.generateAdaptiveProgram || !programModules.saveAdaptiveProgram) {
+      console.error('[ProgramPage] handleGenerate: Modules not loaded yet')
+      setGenerationError('Program builder is still loading. Please wait a moment and try again.')
+      return
+    }
     
+    console.log('[ProgramPage] handleGenerate: Starting generation', { source: 'builder' })
     setIsGenerating(true)
     setGenerationError(null) // Clear any previous error
     
-    // Small delay for UX
-    setTimeout(() => {
+    // Small delay for UX - wrapped in try/catch for safety
+    const timeoutId = setTimeout(() => {
       let generationStage = 'starting'
       try {
         // STAGE 1: Generate program
@@ -375,15 +386,27 @@ export default function ProgramPage() {
         setProgram(newProgram)
         setShowBuilder(false)
         
-        console.log('[ProgramPage] Generation complete - all stages passed')
+        // ISSUE D FIX: Consistent result envelope for success
+        console.log('[ProgramPage] Generation complete - all stages passed', {
+          success: true,
+          stage: 'complete',
+          programId: newProgram.id,
+          programSaved: true,
+        })
       } catch (err) {
-        // Log failure stage for debugging
-        console.error(`[ProgramPage] Generation FAILED at stage: ${generationStage}`, err)
+        // ISSUE D FIX: Consistent result envelope for failure
+        const errorMessage = err instanceof Error ? err.message : 'Unknown error'
+        console.error(`[ProgramPage] Generation FAILED at stage: ${generationStage}`, {
+          success: false,
+          stage: generationStage,
+          error: errorMessage,
+        })
         setGenerationError(`Program generation failed at ${generationStage}. Please try again.`)
         // Keep builder visible and inputs intact for retry
       } finally {
-        // GUARANTEED: Always reset loading state
+        // GUARANTEED: Always reset loading state - ISSUE B FIX
         setIsGenerating(false)
+        console.log('[ProgramPage] Generation flow complete - loading state cleared')
       }
     }, 500)
   }, [inputs, programModules])
@@ -405,14 +428,27 @@ export default function ProgramPage() {
   // TASK 5: Regenerate Program - creates updated program from current profile truth
   // HARDENED: Full try/catch/finally to prevent stuck spinner state
   const handleRegenerate = useCallback(() => {
-    if (!inputs || !programModules.generateAdaptiveProgram || !programModules.saveAdaptiveProgram) return
+    // ISSUE A FIX: Validate prerequisites before starting regeneration
+    if (!inputs) {
+      console.error('[ProgramPage] handleRegenerate: Missing inputs - cannot regenerate')
+      setGenerationError('Missing program inputs. Please refresh the page.')
+      return
+    }
+    if (!programModules.generateAdaptiveProgram || !programModules.saveAdaptiveProgram) {
+      console.error('[ProgramPage] handleRegenerate: Modules not loaded yet')
+      setGenerationError('Program builder is still loading. Please wait a moment and try again.')
+      return
+    }
     
-    console.log('[ProgramPage] Regenerate started - will FULLY REPLACE stored program')
+    console.log('[ProgramPage] handleRegenerate: Starting regeneration', { 
+      source: 'regenerate',
+      oldProgramId: program?.id || 'none',
+    })
     
     setIsGenerating(true)
     setGenerationError(null) // Clear any previous error
     
-    // Small delay for UX
+    // Small delay for UX - wrapped in try/catch for safety
     setTimeout(() => {
       let regenerateStage = 'starting'
       try {
@@ -457,15 +493,27 @@ export default function ProgramPage() {
         setProgram(newProgram)
         setShowBuilder(false)
         
-        console.log('[ProgramPage] Regenerate complete - all stages passed')
+        // ISSUE D FIX: Consistent result envelope for success
+        console.log('[ProgramPage] Regenerate complete - all stages passed', {
+          success: true,
+          stage: 'complete',
+          programId: newProgram.id,
+          programSaved: true,
+        })
       } catch (err) {
-        // Log failure stage for debugging
-        console.error(`[ProgramPage] Regenerate FAILED at stage: ${regenerateStage}`, err)
+        // ISSUE D FIX: Consistent result envelope for failure
+        const errorMessage = err instanceof Error ? err.message : 'Unknown error'
+        console.error(`[ProgramPage] Regenerate FAILED at stage: ${regenerateStage}`, {
+          success: false,
+          stage: regenerateStage,
+          error: errorMessage,
+        })
         setGenerationError(`Program regeneration failed at ${regenerateStage}. Please try again.`)
         // Keep current program visible for retry
       } finally {
-        // GUARANTEED: Always reset loading state
+        // GUARANTEED: Always reset loading state - ISSUE B FIX
         setIsGenerating(false)
+        console.log('[ProgramPage] Regenerate flow complete - loading state cleared')
       }
     }, 500)
   }, [inputs, program, programModules])

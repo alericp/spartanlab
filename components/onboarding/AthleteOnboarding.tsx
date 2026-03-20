@@ -3990,13 +3990,20 @@ export function AthleteOnboarding() {
     
     // Navigate to program preview page (upgrade opportunity)
     // If in update mode, return to dashboard instead
-    if (isUpdateMode) {
-      router.push('/dashboard')
-    } else {
-      router.push('/onboarding/complete')
-    }
+    // ISSUE C FIX: Log navigation attempt for debugging
+    const targetRoute = isUpdateMode ? '/dashboard' : '/onboarding/complete'
+    console.log('[AthleteOnboarding] Navigating to:', targetRoute)
+    router.push(targetRoute)
+    
+    // Note: setIsSubmitting(false) is NOT called on success because we're navigating away
+    // The component will unmount, making the state irrelevant
     } catch (error) {
-      console.error('Failed to save profile:', error)
+      // ISSUE B/D FIX: Log failure with consistent envelope and always reset loading
+      console.error('[AthleteOnboarding] Submit FAILED:', {
+        success: false,
+        stage: 'submit',
+        error: error instanceof Error ? error.message : 'Unknown error',
+      })
       setIsSubmitting(false)
     }
   }

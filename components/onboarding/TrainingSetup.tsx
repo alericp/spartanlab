@@ -412,9 +412,19 @@ export function TrainingSetup() {
       
       logCanonicalProfileState('After TrainingSetup submit')
       
+      // ISSUE C FIX: Log navigation attempt for debugging
+      console.log('[TrainingSetup] Navigating to dashboard')
       router.push('/dashboard')
+      
+      // Note: setIsSubmitting(false) is NOT called on success because we're navigating away
+      // The component will unmount, making the state irrelevant
     } catch (error) {
-      console.error('Failed to save training setup:', error)
+      // ISSUE B/D FIX: Log failure with consistent envelope and always reset loading
+      console.error('[TrainingSetup] Submit FAILED:', {
+        success: false,
+        stage: 'submit',
+        error: error instanceof Error ? error.message : 'Unknown error',
+      })
       setIsSubmitting(false)
     }
   }

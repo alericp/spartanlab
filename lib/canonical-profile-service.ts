@@ -194,10 +194,15 @@ export function reconcileCanonicalProfile(): CanonicalProgrammingProfile {
     
     // Training Preferences
     // TASK 1B: NO FALLBACKS - use null if missing (validation catches this)
+    // TASK D FIX: Experience mapping must match onboarding: new|some -> beginner
     experienceLevel: pick(
-      onboardingProfile?.trainingExperience === 'new' ? 'beginner' : 
-        onboardingProfile?.trainingExperience === 'some' ? 'intermediate' : 
-        onboardingProfile?.trainingExperience as 'intermediate' | 'advanced' | undefined,
+      onboardingProfile?.trainingExperience === 'new' || onboardingProfile?.trainingExperience === 'some' 
+        ? 'beginner' 
+        : onboardingProfile?.trainingExperience === 'intermediate' 
+          ? 'intermediate' 
+          : onboardingProfile?.trainingExperience === 'advanced' 
+            ? 'advanced' 
+            : undefined,
       athleteProfile?.experienceLevel,
       'beginner'  // Safe default only for new users, not override
     ),
@@ -457,7 +462,37 @@ export function getValidatedCanonicalProfile(): CanonicalProgrammingProfile | nu
  * @param updates - Partial profile updates
  */
 export function saveCanonicalProfile(updates: Partial<CanonicalProgrammingProfile>): void {
-  console.log('[CanonicalProfile] Saving canonical updates:', Object.keys(updates))
+  // TASK 6: Log detailed save snapshot for verification
+  console.log('[CanonicalProfile] TASK 6: Saving canonical profile snapshot:', {
+    fieldCount: Object.keys(updates).length,
+    goals: {
+      primaryGoal: updates.primaryGoal || 'not set',
+      secondaryGoal: updates.secondaryGoal || 'not set',
+      selectedSkillsCount: updates.selectedSkills?.length || 0,
+      selectedFlexibilityCount: updates.selectedFlexibility?.length || 0,
+      goalCategoriesCount: updates.goalCategories?.length || 0,
+      trainingPathType: updates.trainingPathType || 'not set',
+    },
+    schedule: {
+      scheduleMode: updates.scheduleMode || 'not set',
+      sessionDurationMode: updates.sessionDurationMode || 'not set',
+      trainingDaysPerWeek: updates.trainingDaysPerWeek === undefined ? 'not set' : updates.trainingDaysPerWeek,
+      sessionLengthMinutes: updates.sessionLengthMinutes || 'not set',
+    },
+    benchmarks: {
+      hasPullUpMax: updates.pullUpMax !== undefined,
+      hasDipMax: updates.dipMax !== undefined,
+      hasWeightedPullUp: !!updates.weightedPullUp,
+      hasFrontLever: !!updates.frontLeverProgression,
+      hasPlanche: !!updates.plancheProgression,
+    },
+    diagnostics: {
+      equipmentCount: updates.equipmentAvailable?.length || 0,
+      jointCautionsCount: updates.jointCautions?.length || 0,
+      weakestArea: updates.weakestArea || 'not set',
+      hasRecovery: !!updates.recoveryQuality,
+    },
+  })
   
   // 1. Update athlete profile (data-service)
   const athleteUpdates: Partial<AthleteProfile> = {}
@@ -507,7 +542,8 @@ export function saveCanonicalProfile(updates: Partial<CanonicalProgrammingProfil
       (onboardingUpdates as any).sessionDurationMode = updates.sessionDurationMode
     }
     if (updates.sessionLengthMinutes !== undefined) onboardingUpdates.sessionLengthMinutes = updates.sessionLengthMinutes
-    if (updates.equipmentAvailable !== undefined) onboardingUpdates.equipmentAvailable = updates.equipmentAvailable
+    // TASK C FIX: OnboardingProfile uses 'equipment', not 'equipmentAvailable'
+    if (updates.equipmentAvailable !== undefined) onboardingUpdates.equipment = updates.equipmentAvailable as OnboardingProfile['equipment']
     if (updates.jointCautions !== undefined) onboardingUpdates.jointCautions = updates.jointCautions as OnboardingProfile['jointCautions']
     if (updates.weakestArea !== undefined) onboardingUpdates.weakestArea = updates.weakestArea as OnboardingProfile['weakestArea']
     if (updates.trainingStyle !== undefined) onboardingUpdates.trainingStyle = updates.trainingStyle as OnboardingProfile['trainingStyle']
@@ -606,6 +642,15 @@ export function saveCanonicalProfile(updates: Partial<CanonicalProgrammingProfil
     
     // Session style
     if (updates.sessionStylePreference !== undefined) onboardingUpdates.sessionStyle = updates.sessionStylePreference as OnboardingProfile['sessionStyle']
+    
+    // TASK A FIX: Recovery quality - map to onboarding profile recovery object
+    if (updates.recoveryQuality !== undefined) {
+      onboardingUpdates.recovery = {
+        ...(currentOnboarding.recovery || { sleepQuality: 'normal', energyLevel: 'normal', stressLevel: 'normal', recoveryConfidence: 'normal' }),
+        // Use recoveryQuality as the primary recovery indicator
+        recoveryConfidence: updates.recoveryQuality as OnboardingProfile['recovery']['recoveryConfidence'],
+      }
+    }
     
     saveOnboardingProfile(onboardingUpdates as OnboardingProfile)
     

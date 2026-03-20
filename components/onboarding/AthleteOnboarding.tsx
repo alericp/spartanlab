@@ -3698,7 +3698,10 @@ export function AthleteOnboarding() {
       // TASK 1A: Detect adaptive time preference from onboarding selection
       const isAdaptiveTime = profile.sessionLengthMinutes === 'flexible'
       
-      // Save comprehensive canonical profile with ALL fields
+      // ==========================================================================
+      // TASK A FIX: Save COMPLETE canonical profile with ALL onboarding fields
+      // Previously missing: equipment, benchmarks, skill data, recovery, cautions
+      // ==========================================================================
       saveCanonicalProfile({
         // Identity
         onboardingComplete: true,
@@ -3721,6 +3724,8 @@ export function AthleteOnboarding() {
         secondaryGoal: profile.secondaryGoal,
         selectedSkills: profile.selectedSkills,
         selectedFlexibility: profile.selectedFlexibility,
+        selectedStrength: profile.selectedStrength || [],
+        goalCategory: profile.goalCategory,
         goalCategories: profile.goalCategories,
         trainingPathType: profile.trainingPathType,
         primaryTrainingOutcome: profile.primaryTrainingOutcome,
@@ -3730,17 +3735,67 @@ export function AthleteOnboarding() {
           ? null  // null = truly flexible, engine derives at runtime
           : (typeof profile.trainingDaysPerWeek === 'number' ? profile.trainingDaysPerWeek : null),
         scheduleMode: isFlexibleSchedule ? 'flexible' : 'static',
-        // TASK 1A: Persist adaptive time preference
-        // sessionDurationMode: 'adaptive' means engine adapts session length based on recovery
-        // sessionDurationMode: 'static' means user prefers a fixed target duration
         sessionDurationMode: isAdaptiveTime ? 'adaptive' : 'static',
         sessionLengthMinutes: typeof profile.sessionLengthMinutes === 'number'
           ? (profile.sessionLengthMinutes <= 30 ? 30 
              : profile.sessionLengthMinutes <= 45 ? 45 
              : profile.sessionLengthMinutes <= 60 ? 60 
              : 90)
-          : 60,  // Default for adaptive time users - serves as target bucket
+          : 60,
         sessionStylePreference: profile.sessionStyle,
+        trainingStyle: profile.trainingStyle,
+        
+        // TASK A: Equipment - was missing from canonical save!
+        equipmentAvailable: profile.equipment || [],
+        
+        // TASK A: Athlete diagnostics - were missing!
+        jointCautions: profile.jointCautions || [],
+        weakestArea: profile.weakestArea || null,
+        primaryLimitation: profile.primaryLimitation || null,
+        
+        // TASK A: Strength benchmarks - CRITICAL for engine
+        pullUpMax: profile.pullUpMax || null,
+        dipMax: profile.dipMax || null,
+        pushUpMax: profile.pushUpMax || null,
+        wallHSPUReps: profile.wallHSPUReps || null,
+        weightedPullUp: profile.weightedPullUp || null,
+        weightedDip: profile.weightedDip || null,
+        allTimePRPullUp: profile.allTimePRPullUp || null,
+        allTimePRDip: profile.allTimePRDip || null,
+        
+        // TASK A: Skill benchmarks - CRITICAL for engine
+        frontLeverProgression: profile.frontLever?.progression || null,
+        frontLeverHoldSeconds: profile.frontLever?.holdSeconds || null,
+        frontLeverIsAssisted: profile.frontLever?.isAssisted || false,
+        frontLeverBandLevel: profile.frontLever?.bandLevel || null,
+        frontLeverHighestEver: profile.frontLever?.highestLevelEverReached || null,
+        
+        plancheProgression: profile.planche?.progression || null,
+        plancheHoldSeconds: profile.planche?.holdSeconds || null,
+        plancheIsAssisted: profile.planche?.isAssisted || false,
+        plancheBandLevel: profile.planche?.bandLevel || null,
+        plancheHighestEver: profile.planche?.highestLevelEverReached || null,
+        
+        muscleUpReadiness: profile.muscleUp || null,
+        hspuProgression: profile.hspu?.progression || null,
+        lSitHoldSeconds: profile.lSitHold || null,
+        vSitHoldSeconds: profile.vSitHold || null,
+        
+        // TASK A: Recovery context - was missing!
+        recoveryQuality: profile.recovery?.quality || null,
+      })
+      
+      // TASK 6: Log complete canonical save for verification
+      console.log('[onboarding] TASK A FIX: Complete canonical save:', {
+        primaryGoal: profile.primaryGoal,
+        secondaryGoal: profile.secondaryGoal,
+        selectedSkillsCount: profile.selectedSkills?.length || 0,
+        goalCategoriesCount: profile.goalCategories?.length || 0,
+        trainingPathType: profile.trainingPathType,
+        equipmentCount: profile.equipment?.length || 0,
+        hasBenchmarks: !!(profile.pullUpMax || profile.dipMax),
+        hasSkillData: !!(profile.frontLever?.progression || profile.planche?.progression),
+        hasRecovery: !!profile.recovery?.quality,
       })
       
       // TASK 2: Log onboarding saved schedule/duration
@@ -3783,11 +3838,14 @@ export function AthleteOnboarding() {
         onboardingComplete: true,
       })
       
-      // TASK 1: Also persist to the canonical DB for authenticated users
-      // This ensures onboarding truth == settings truth == dashboard truth
+      // ==========================================================================
+      // TASK A FIX: Persist COMPLETE profile to canonical DB for authenticated users
+      // Previously missing: secondaryGoal, selectedSkills, selectedFlexibility, 
+      // selectedStrength, goalCategory, sessionDurationMode
+      // ==========================================================================
       try {
-        const isFlexibleSchedule = profile.trainingDaysPerWeek === 'flexible' || 
-                                    (profile as any).scheduleMode === 'flexible'
+        // Re-compute isAdaptiveTime for DB payload (matches canonical save)
+        const isAdaptiveTimeForDB = profile.sessionLengthMinutes === 'flexible'
         
         const dbProfilePayload = {
           sex: profile.sex,
@@ -3796,26 +3854,40 @@ export function AthleteOnboarding() {
             : profile.trainingExperience === 'intermediate' 
               ? 'intermediate' 
               : 'advanced',
-          // TASK 2: For flexible users, store NULL for trainingDaysPerWeek to indicate true flexible
-          // The engine will derive effective frequency transiently - NOT stored as fake 4-day identity
           trainingDaysPerWeek: isFlexibleSchedule 
-            ? null  // NULL = truly flexible, engine derives frequency at runtime
+            ? null 
             : (typeof profile.trainingDaysPerWeek === 'number' ? profile.trainingDaysPerWeek : 4),
-          scheduleMode: isFlexibleSchedule ? 'flexible' : 'static',  // TASK 2: Preserve flexible as real preference
+          scheduleMode: isFlexibleSchedule ? 'flexible' : 'static',
+          sessionDurationMode: isAdaptiveTimeForDB ? 'adaptive' : 'static',
           sessionLengthMinutes: typeof profile.sessionLengthMinutes === 'number'
             ? (profile.sessionLengthMinutes <= 30 ? 30 
                : profile.sessionLengthMinutes <= 45 ? 45 
                : profile.sessionLengthMinutes <= 60 ? 60 
                : 90)
             : 60,
-          primaryGoal: profile.selectedSkills[0] || profile.primaryGoal || null,
-          equipmentAvailable: profile.equipment.filter(e => 
+          // TASK A FIX: primaryGoal should be the actual primary goal, not first selected skill
+          primaryGoal: profile.primaryGoal || null,
+          // TASK A FIX: Previously missing fields
+          secondaryGoal: profile.secondaryGoal || null,
+          selectedSkills: profile.selectedSkills || [],
+          selectedFlexibility: profile.selectedFlexibility || [],
+          selectedStrength: profile.selectedStrength || [],
+          goalCategory: profile.goalCategory || null,
+          equipmentAvailable: profile.equipment?.filter(e => 
             ['pullup_bar', 'dip_bars', 'parallettes', 'rings', 'resistance_bands'].includes(e)
-          ),
+          ) || [],
           jointCautions: profile.jointCautions || [],
           weakestArea: profile.weakestArea || null,
-          trainingStyle: (profile as any).trainingStyle || 'balanced_hybrid',
+          trainingStyle: profile.trainingStyle || 'balanced_hybrid',
         }
+        
+        // TASK 6: Log DB payload for verification
+        console.log('[Onboarding] TASK A FIX: DB payload with all fields:', {
+          primaryGoal: dbProfilePayload.primaryGoal,
+          secondaryGoal: dbProfilePayload.secondaryGoal,
+          selectedSkillsCount: dbProfilePayload.selectedSkills.length,
+          sessionDurationMode: dbProfilePayload.sessionDurationMode,
+        })
         
         const dbResponse = await fetch('/api/onboarding/profile', {
           method: 'POST',
@@ -3829,15 +3901,15 @@ export function AthleteOnboarding() {
           const dbResult = await dbResponse.json()
           console.log('[Onboarding] Profile upserted to DB successfully:', {
             scheduleMode: dbResult.profile?.scheduleMode,
+            sessionDurationMode: dbResult.profile?.sessionDurationMode,
+            selectedSkillsCount: dbResult.profile?.selectedSkills?.length || 0,
             onboardingComplete: dbResult.profile?.onboardingComplete,
           })
           
-          // TASK 1: Sync the canonical DB response back to local storage
-          // This ensures DB truth wins over local-only values
+          // Sync DB response back to local storage - DB truth wins
           if (dbResult.success && dbResult.profile) {
             saveAthleteProfile({
               ...dbResult.profile,
-              // Ensure local storage reflects DB canonical values
               onboardingComplete: true,
             })
             console.log('[Onboarding] Synced DB profile to local storage')

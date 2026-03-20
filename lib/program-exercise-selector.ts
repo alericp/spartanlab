@@ -263,6 +263,13 @@ interface ExerciseSelectionInputs {
     weightedPullUp?: { current?: WeightedBenchmark; pr?: WeightedPRBenchmark }
     weightedDip?: { current?: WeightedBenchmark; pr?: WeightedPRBenchmark }
   }
+  // SKILL EXPRESSION FIX: Selected skills and per-session allocation
+  selectedSkills?: string[]
+  skillsForSession?: Array<{
+    skill: string
+    expressionMode: 'primary' | 'technical' | 'support' | 'warmup'
+    weight: number
+  }>
 }
 
 // =============================================================================
@@ -292,7 +299,19 @@ export function selectExercisesForSession(inputs: ExerciseSelectionInputs): Exer
     jointCautions,
     // WEIGHTED LOAD PR: Extract weighted benchmarks for load prescription
     weightedBenchmarks,
+    // SKILL EXPRESSION FIX: Extract skill allocation for session expression
+    selectedSkills,
+    skillsForSession,
   } = inputs
+  
+  // SKILL EXPRESSION FIX: Log skill allocation for this session
+  if (skillsForSession && skillsForSession.length > 0) {
+    console.log('[skill-expression] Exercise selector received skills for session:', {
+      dayFocus: day.focus,
+      skillsForSession: skillsForSession.map(s => `${s.skill}(${s.expressionMode})`),
+      selectedSkillsCount: selectedSkills?.length || 0,
+    })
+  }
   
   // Build prerequisite context for gate checks
   const prerequisiteContext = inputContext || buildPrerequisiteContext({

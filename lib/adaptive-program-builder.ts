@@ -340,6 +340,11 @@ type AdaptiveSessionContext = {
     weightedPullUp?: { current?: WeightedBenchmark; pr?: WeightedPRBenchmark }
     weightedDip?: { current?: WeightedBenchmark; pr?: WeightedPRBenchmark }
   }
+  // SKILL EXPRESSION FIX: Pass selected skills and allocation for session-level expression
+  selectedSkills?: string[]
+  weightedSkillAllocation?: WeightedSkillAllocation[]
+  sessionIndex?: number  // Current session index for rotation logic
+  totalSessions?: number // Total sessions this week for allocation math
 }
 
 export interface AdaptiveProgramInputs {
@@ -1577,15 +1582,34 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
     })
   }
   
-  const sessionContext: AdaptiveSessionContext = {
-    athleteCalibration,
-    onboardingProfile,
-    recoverySignal,
-    weightedBenchmarks,
-  }
+  // SKILL EXPRESSION FIX: Log skill allocation being passed to session construction
+  console.log('[skill-expression] Weighted skill allocation for session construction:', {
+    allocations: weightedSkillAllocation.map(a => ({
+      skill: a.skill,
+      weight: Math.round(a.weight * 100) + '%',
+      exposureSessions: a.exposureSessions,
+      priority: a.priorityLevel,
+    })),
+    selectedSkills: canonicalProfile.selectedSkills,
+    totalSessions: effectiveTrainingDays,
+  })
   
   const sessions: AdaptiveSession[] = structure.days.map((day, index) => {
     const intent = sessionIntents[index]
+    
+    // SKILL EXPRESSION FIX: Create per-session context with skill allocation
+    const sessionContext: AdaptiveSessionContext = {
+      athleteCalibration,
+      onboardingProfile,
+      recoverySignal,
+      weightedBenchmarks,
+      // Pass skill data for session-level expression
+      selectedSkills: canonicalProfile.selectedSkills || [],
+      weightedSkillAllocation,
+      sessionIndex: index,
+      totalSessions: effectiveTrainingDays,
+    }
+    
     const session = generateAdaptiveSession(
       day,
       primaryGoal,
@@ -2166,18 +2190,68 @@ fatigueDecision: fatigueDecision ? {
       confidenceLevel: weakPointSummary.confidenceLevel,
     } : undefined,
     // Adaptive Progression Engine - training behavior analysis
-    trainingBehaviorAnalysis: trainingBehavior ? {
-      adaptationNeeded: trainingBehavior.adaptationNeeded,
-      adaptationSummary: trainingBehavior.adaptationSummary,
-      coachMessages: trainingBehavior.coachMessages,
-      scheduleAdaptation: trainingBehavior.scheduleAnalysis.adaptation,
-      recommendedDays: trainingBehavior.scheduleAnalysis.recommendedDays,
-      volumeAdjustment: trainingBehavior.volumeAnalysis.volumeAdjustment,
-      volumeModifier: trainingBehavior.volumeAnalysis.recommendedVolumeModifier,
-      progressTrend: trainingBehavior.progressTrend.overallTrend,
-      trendSummary: trainingBehavior.progressTrend.trendSummary,
-      dataQuality: trainingBehavior.dataQuality,
-    } : undefined,
+    // ISSUE C FIX: Reconcile coaching messages with actual generated program session count
+    trainingBehaviorAnalysis: trainingBehavior ? (() => {
+      const actualSessionCount = sessions.length
+      const recommendedDays = trainingBehavior.scheduleAnalysis.recommendedDays
+      
+      // Filter out schedule-related coaching messages that contradict the actual program
+      // Only show schedule messages if they match the actual program or are clearly labeled as history
+      let reconciledMessages = trainingBehavior.coachMessages.filter(msg => {
+        // Filter out messages that mention a different session count than what was generated
+        const mentionsDifferentCount = (
+          msg.includes('resolves to') && 
+          !msg.includes(`${actualSessionCount} session`) &&
+          (msg.includes('2 session') || msg.includes('3 session') || msg.includes('4 session') || msg.includes('5 session'))
+        )
+        
+        if (mentionsDifferentCount) {
+          console.log('[program-gen] ISSUE C: Filtering contradictory coaching message:', {
+            message: msg,
+            actualSessionCount,
+            recommendedDays,
+          })
+          return false
+        }
+        return true
+      })
+      
+      // If schedule adaptation was triggered but actual program has different session count,
+      // adjust the adaptation status to not show misleading "reduce" recommendation
+      const scheduleAdaptation = recommendedDays !== actualSessionCount && 
+        trainingBehavior.scheduleAnalysis.adaptation !== 'maintain'
+        ? 'maintain' // Override to maintain if we're not following the recommendation
+        : trainingBehavior.scheduleAnalysis.adaptation
+      
+      // Add clarifying message if we have sufficient history but generated different from recommendation
+      if (trainingBehavior.scheduleAnalysis.historyConfidence === 'sufficient' && 
+          recommendedDays !== actualSessionCount &&
+          trainingBehavior.scheduleAnalysis.wordingSource === 'observed_history') {
+        reconciledMessages = reconciledMessages.filter(m => !m.includes('Based on your recent'))
+        reconciledMessages.push(`Your ${actualSessionCount}-session week is built to match your current program structure.`)
+      }
+      
+      console.log('[program-gen] ISSUE C: Reconciled coaching messages:', {
+        actualSessionCount,
+        recommendedDays,
+        originalMessageCount: trainingBehavior.coachMessages.length,
+        reconciledMessageCount: reconciledMessages.length,
+        scheduleAdaptation,
+      })
+      
+      return {
+        adaptationNeeded: trainingBehavior.adaptationNeeded,
+        adaptationSummary: trainingBehavior.adaptationSummary,
+        coachMessages: reconciledMessages,
+        scheduleAdaptation,
+        recommendedDays: actualSessionCount, // Use actual session count, not historical recommendation
+        volumeAdjustment: trainingBehavior.volumeAnalysis.volumeAdjustment,
+        volumeModifier: trainingBehavior.volumeAnalysis.recommendedVolumeModifier,
+        progressTrend: trainingBehavior.progressTrend.overallTrend,
+        trendSummary: trainingBehavior.progressTrend.trendSummary,
+        dataQuality: trainingBehavior.dataQuality,
+      }
+    })() : undefined,
     // Override Signal Feedback - patterns from user exercise overrides
     overrideSignalFeedback: getOverrideSignalFeedback(),
     // Constraint Detection - AI engine identifying limiting factors
@@ -2820,6 +2894,104 @@ function getFatigueAdaptationNote(decision: TrainingDecision): string | null {
 }
 
 // =============================================================================
+// SKILL EXPRESSION HELPERS
+// =============================================================================
+
+/**
+ * SKILL EXPRESSION FIX: Determines which skills should be expressed in a given session
+ * based on weighted allocation, session index, and day focus.
+ * 
+ * Rules:
+ * - Primary skills (weight >= 0.3) appear in most sessions
+ * - Secondary skills (weight >= 0.15) appear in ~50-75% of sessions  
+ * - Tertiary skills (weight >= 0.05) rotate across the week
+ * - Skills below threshold may appear as warm-up/technical emphasis only
+ */
+type SessionSkillAllocation = {
+  skill: string
+  expressionMode: 'primary' | 'technical' | 'support' | 'warmup'
+  weight: number
+}
+
+function getSkillsForSession(
+  weightedAllocation: WeightedSkillAllocation[],
+  sessionIndex: number,
+  totalSessions: number,
+  dayFocus: string
+): SessionSkillAllocation[] {
+  if (!weightedAllocation || weightedAllocation.length === 0) {
+    return []
+  }
+  
+  const result: SessionSkillAllocation[] = []
+  
+  for (const allocation of weightedAllocation) {
+    const { skill, weight, exposureSessions, priorityLevel } = allocation
+    
+    // Primary skills always appear as primary expression
+    if (priorityLevel === 'primary' || weight >= 0.3) {
+      result.push({
+        skill,
+        expressionMode: 'primary',
+        weight,
+      })
+      continue
+    }
+    
+    // Secondary skills appear in most sessions as technical or support
+    if (priorityLevel === 'secondary' || weight >= 0.15) {
+      // Check if this session should include this secondary skill
+      // Based on exposureSessions vs totalSessions ratio
+      const shouldInclude = exposureSessions >= totalSessions || 
+        sessionIndex < exposureSessions ||
+        (sessionIndex % 2 === 0) // Even sessions get secondary skills
+      
+      if (shouldInclude) {
+        result.push({
+          skill,
+          expressionMode: dayFocus.includes('support') ? 'support' : 'technical',
+          weight,
+        })
+      }
+      continue
+    }
+    
+    // Tertiary skills rotate - each appears in their allocated sessions
+    if (priorityLevel === 'tertiary' || weight >= 0.05) {
+      // Distribute tertiary skills across sessions using modular arithmetic
+      const tertiaryIndex = weightedAllocation
+        .filter(a => a.priorityLevel === 'tertiary' || (a.weight >= 0.05 && a.weight < 0.15))
+        .findIndex(a => a.skill === skill)
+      
+      // Each tertiary skill gets specific sessions based on its index
+      const sessionForThisSkill = tertiaryIndex % totalSessions
+      const shouldInclude = sessionIndex === sessionForThisSkill || 
+        exposureSessions > 1 && (sessionIndex + 1) % Math.ceil(totalSessions / exposureSessions) === 0
+      
+      if (shouldInclude) {
+        result.push({
+          skill,
+          expressionMode: 'support',
+          weight,
+        })
+      }
+      continue
+    }
+    
+    // Support-level skills appear only as warm-up emphasis on specific days
+    if (priorityLevel === 'support' && sessionIndex === 0) {
+      result.push({
+        skill,
+        expressionMode: 'warmup',
+        weight,
+      })
+    }
+  }
+  
+  return result
+}
+
+// =============================================================================
 // SESSION GENERATION
 // =============================================================================
 
@@ -2833,12 +3005,38 @@ function generateAdaptiveSession(
   context: AdaptiveSessionContext
 ): AdaptiveSession {
   // Destructure context to get explicit dependencies (scope fix)
-  const { athleteCalibration, recoverySignal, weightedBenchmarks } = context
+  const { 
+    athleteCalibration, 
+    recoverySignal, 
+    weightedBenchmarks,
+    // SKILL EXPRESSION FIX: Extract skill allocation data
+    selectedSkills,
+    weightedSkillAllocation,
+    sessionIndex,
+    totalSessions,
+  } = context
   
   // Safe fallbacks for calibration subfields
   const fatigueSensitivity = athleteCalibration?.fatigueSensitivity ?? 'moderate'
   const sessionCapacity = athleteCalibration?.sessionCapacity ?? 'standard'
   const enduranceCompatibility = athleteCalibration?.enduranceCompatibility ?? 'moderate'
+  
+  // SKILL EXPRESSION FIX: Determine which skills should be expressed in this session
+  // based on weighted allocation and session index
+  const skillsForThisSession = getSkillsForSession(
+    weightedSkillAllocation || [],
+    sessionIndex || 0,
+    totalSessions || 1,
+    day.focus
+  )
+  
+  console.log('[skill-expression] Skills for session:', {
+    sessionIndex,
+    dayFocus: day.focus,
+    skillsForThisSession: skillsForThisSession.map(s => s.skill),
+    primaryGoal,
+  })
+  
   // Select exercises
   const selection = selectExercisesForSession({
     day,
@@ -2849,6 +3047,9 @@ function generateAdaptiveSession(
     constraintType,
     // WEIGHTED LOAD PR: Pass weighted benchmarks for load prescription
     weightedBenchmarks,
+    // SKILL EXPRESSION FIX: Pass selected skills and allocation for exercise variety
+    selectedSkills: selectedSkills || [],
+    skillsForSession: skillsForThisSession,
   })
   
   // Adapt for equipment - use safe fallbacks if selection properties are missing

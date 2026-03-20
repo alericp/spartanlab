@@ -60,7 +60,8 @@ export interface CanonicalProgrammingProfile {
   experienceLevel: 'beginner' | 'intermediate' | 'advanced'
   trainingDaysPerWeek: number | null  // null = flexible
   scheduleMode: 'static' | 'flexible'
-  sessionLengthMinutes: number
+  sessionDurationMode: 'static' | 'adaptive'  // TASK 1A: Distinguishes fixed vs adaptive time preference
+  sessionLengthMinutes: number  // Target duration bucket (30/45/60/90) even for adaptive mode
   sessionStylePreference: string | null  // 'longer_complete' | 'shorter_focused' | etc.
   equipmentAvailable: string[]
   trainingStyle: string | null
@@ -207,6 +208,13 @@ export function reconcileCanonicalProfile(): CanonicalProgrammingProfile {
       null  // TASK 1B: null = no fallback, validation catches
     ),
     scheduleMode: pick(onboardingProfile?.scheduleMode, athleteProfile?.scheduleMode, 'flexible'),  // Default flexible for new users
+    // TASK 1A: Session duration mode - 'static' = fixed duration, 'adaptive' = engine adapts based on recovery
+    // Currently defaults to 'static' for backward compatibility
+    sessionDurationMode: pick(
+      (onboardingProfile as unknown as { sessionDurationMode?: 'static' | 'adaptive' })?.sessionDurationMode,
+      (athleteProfile as unknown as { sessionDurationMode?: 'static' | 'adaptive' })?.sessionDurationMode,
+      'static'  // Default to static for backward compatibility
+    ),
     sessionLengthMinutes: pick(
       onboardingProfile?.sessionLengthMinutes,
       athleteProfile?.sessionLengthMinutes,
@@ -458,6 +466,10 @@ export function saveCanonicalProfile(updates: Partial<CanonicalProgrammingProfil
   if (updates.experienceLevel !== undefined) athleteUpdates.experienceLevel = updates.experienceLevel
   if (updates.trainingDaysPerWeek !== undefined) athleteUpdates.trainingDaysPerWeek = updates.trainingDaysPerWeek ?? 4
   if (updates.scheduleMode !== undefined) athleteUpdates.scheduleMode = updates.scheduleMode
+  // TASK 1A: sessionDurationMode - store in athlete profile for downstream consumption
+  if (updates.sessionDurationMode !== undefined) {
+    (athleteUpdates as any).sessionDurationMode = updates.sessionDurationMode
+  }
   if (updates.sessionLengthMinutes !== undefined) athleteUpdates.sessionLengthMinutes = updates.sessionLengthMinutes as 30 | 45 | 60 | 90
   if (updates.equipmentAvailable !== undefined) athleteUpdates.equipmentAvailable = updates.equipmentAvailable as AthleteProfile['equipmentAvailable']
   if (updates.jointCautions !== undefined) athleteUpdates.jointCautions = updates.jointCautions as AthleteProfile['jointCautions']
@@ -490,6 +502,10 @@ export function saveCanonicalProfile(updates: Partial<CanonicalProgrammingProfil
     if (updates.selectedStrength !== undefined) onboardingUpdates.selectedStrength = updates.selectedStrength
     if (updates.goalCategory !== undefined) onboardingUpdates.goalCategory = updates.goalCategory
     if (updates.scheduleMode !== undefined) onboardingUpdates.scheduleMode = updates.scheduleMode
+    // TASK 1A: sessionDurationMode - sync to onboarding profile
+    if (updates.sessionDurationMode !== undefined) {
+      (onboardingUpdates as any).sessionDurationMode = updates.sessionDurationMode
+    }
     if (updates.sessionLengthMinutes !== undefined) onboardingUpdates.sessionLengthMinutes = updates.sessionLengthMinutes
     if (updates.equipmentAvailable !== undefined) onboardingUpdates.equipmentAvailable = updates.equipmentAvailable
     if (updates.jointCautions !== undefined) onboardingUpdates.jointCautions = updates.jointCautions as OnboardingProfile['jointCautions']
@@ -638,6 +654,7 @@ export interface StalenessCheckResult {
  */
 const CRITICAL_FIELDS_SIGNIFICANT = [
   'primaryGoal',
+  'secondaryGoal',  // TASK 3: Secondary goal changes should trigger staleness
   'selectedSkills',
   'scheduleMode',
   'trainingDaysPerWeek',
@@ -814,38 +831,98 @@ export function clearCanonicalProfileData(): void {
 
 /**
  * Log canonical profile state for debugging.
- * DEV ONLY - minimal output.
- * TASK 8: Enhanced to log key fields driving program generation
+ * DEV ONLY - comprehensive output for benchmark truth verification.
+ * TASK 8: Enhanced to log ALL key fields driving program generation
  */
 export function logCanonicalProfileState(context: string): void {
+  if (process.env.NODE_ENV === 'production') return
+  
   const profile = getCanonicalProfile()
   
   console.log(`[CanonicalProfile] ${context}:`, {
     // Goals
     primaryGoal: profile.primaryGoal,
     secondaryGoal: profile.secondaryGoal,
-    selectedSkillsCount: profile.selectedSkills?.length || 0,
+    selectedSkills: profile.selectedSkills || [],
+    selectedFlexibility: profile.selectedFlexibility || [],
+    goalCategories: profile.goalCategories || [],
+    trainingPathType: profile.trainingPathType,
+    
     // Schedule
     scheduleMode: profile.scheduleMode,
     sessionLengthMinutes: profile.sessionLengthMinutes,
+    sessionDurationMode: profile.sessionDurationMode,
     trainingDaysPerWeek: profile.trainingDaysPerWeek,
-    // Strength benchmarks present
+    experienceLevel: profile.experienceLevel,
+    
+    // STRENGTH BENCHMARKS - current
     strengthBenchmarks: {
       pullUpMax: profile.pullUpMax || 'not set',
       dipMax: profile.dipMax || 'not set',
-      weightedPullUp: profile.weightedPullUp?.addedWeight || 'not set',
-      weightedDip: profile.weightedDip?.addedWeight || 'not set',
+      pushUpMax: profile.pushUpMax || 'not set',
+      wallHSPUReps: profile.wallHSPUReps || 'not set',
+      weightedPullUp: profile.weightedPullUp 
+        ? `${profile.weightedPullUp.addedWeight}${profile.weightedPullUp.unit || 'lbs'} x ${profile.weightedPullUp.reps}`
+        : 'not set',
+      weightedDip: profile.weightedDip 
+        ? `${profile.weightedDip.addedWeight}${profile.weightedDip.unit || 'lbs'} x ${profile.weightedDip.reps}`
+        : 'not set',
     },
-    // Skill benchmarks present
+    
+    // STRENGTH BENCHMARKS - all-time PR (for rebound potential)
+    allTimePR: {
+      pullUp: profile.allTimePRPullUp 
+        ? `${profile.allTimePRPullUp.load}${profile.allTimePRPullUp.unit} x ${profile.allTimePRPullUp.reps} (${profile.allTimePRPullUp.timeframe})`
+        : 'not set',
+      dip: profile.allTimePRDip 
+        ? `${profile.allTimePRDip.load}${profile.allTimePRDip.unit} x ${profile.allTimePRDip.reps} (${profile.allTimePRDip.timeframe})`
+        : 'not set',
+    },
+    
+    // SKILL BENCHMARKS - with band/history context
     skillBenchmarks: {
-      frontLever: profile.frontLeverProgression || 'not set',
-      planche: profile.plancheProgression || 'not set',
+      frontLever: {
+        progression: profile.frontLeverProgression || 'not set',
+        holdSeconds: profile.frontLeverHoldSeconds || 'not set',
+        isAssisted: profile.frontLeverIsAssisted,
+        bandLevel: profile.frontLeverBandLevel || 'not set',
+        highestEver: profile.frontLeverHighestEver || 'not set',
+      },
+      planche: {
+        progression: profile.plancheProgression || 'not set',
+        holdSeconds: profile.plancheHoldSeconds || 'not set',
+        isAssisted: profile.plancheIsAssisted,
+        bandLevel: profile.plancheBandLevel || 'not set',
+        highestEver: profile.plancheHighestEver || 'not set',
+      },
       hspu: profile.hspuProgression || 'not set',
       muscleUp: profile.muscleUpReadiness || 'not set',
+      lSit: profile.lSitHoldSeconds || 'not set',
+      vSit: profile.vSitHoldSeconds || 'not set',
     },
-    // Flexibility present
-    flexibilityPresent: !!(profile.frontSplitsLevel || profile.sideSplitsLevel || profile.pancakeLevel),
-    // Joint cautions
-    jointCautions: profile.jointCautions?.length || 0,
+    
+    // FLEXIBILITY BENCHMARKS - with range intent
+    flexibilityBenchmarks: {
+      pancake: profile.pancakeLevel 
+        ? { level: profile.pancakeLevel, rangeIntent: profile.pancakeRangeIntent }
+        : 'not set',
+      toeTouch: profile.toeTouchLevel 
+        ? { level: profile.toeTouchLevel, rangeIntent: profile.toeTouchRangeIntent }
+        : 'not set',
+      frontSplits: profile.frontSplitsLevel 
+        ? { level: profile.frontSplitsLevel, rangeIntent: profile.frontSplitsRangeIntent }
+        : 'not set',
+      sideSplits: profile.sideSplitsLevel 
+        ? { level: profile.sideSplitsLevel, rangeIntent: profile.sideSplitsRangeIntent }
+        : 'not set',
+    },
+    
+    // Diagnostics
+    jointCautions: profile.jointCautions || [],
+    weakestArea: profile.weakestArea,
+    primaryLimitation: profile.primaryLimitation,
+    
+    // Equipment
+    equipmentAvailable: profile.equipmentAvailable || [],
   })
 }

@@ -52,6 +52,14 @@ export function AdaptiveProgramDisplay({
   // TASK 2: Confirmation modal state for restart action
   const [showRestartConfirm, setShowRestartConfirm] = useState(false)
   
+  // TASK 5: Log program display with schedule/duration identity
+  console.log('[program-display] TASK 5: Rendered program with schedule identity:', {
+    scheduleMode: program.scheduleMode,
+    weeklyFrequency: program.weeklyFrequency,
+    sessionDurationMode: program.sessionDurationMode,
+    sessionLength: program.sessionLength,
+  })
+  
   // TASK 6: Check if program is stale relative to current profile
   const stalenessCheck = checkProgramStaleness(program.profileSnapshot as ProfileSnapshot | undefined)
   const recoveryColors: Record<string, string> = {
@@ -128,8 +136,16 @@ export function AdaptiveProgramDisplay({
           <div className="flex items-center gap-2">
             <Target className="w-4 h-4 text-[#E63946]" />
             <div>
-              <p className="text-xs text-[#6A6A6A]">Goal</p>
+              <p className="text-xs text-[#6A6A6A]">
+                {program.secondaryGoal ? 'Primary Goal' : 'Goal'}
+              </p>
               <p className="text-sm font-medium">{program.goalLabel}</p>
+              {/* TASK 5: Show secondary goal if present */}
+              {program.secondaryGoal && (
+                <p className="text-xs text-[#6A6A6A] mt-0.5">
+                  + {program.secondaryGoal.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
+                </p>
+              )}
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -157,8 +173,21 @@ export function AdaptiveProgramDisplay({
           <div className="flex items-center gap-2">
             <Clock className="w-4 h-4 text-[#E63946]" />
             <div>
-              <p className="text-xs text-[#6A6A6A]">Target Duration</p>
-              <p className="text-sm font-medium">{getDurationPreferenceLabel(program.sessionLength)}</p>
+              <p className="text-xs text-[#6A6A6A]">
+                {program.sessionDurationMode === 'adaptive' ? 'Duration' : 'Target Duration'}
+              </p>
+              {program.sessionDurationMode === 'adaptive' ? (
+                // ADAPTIVE USER: Show adaptive identity + target bucket
+                <div className="flex items-center gap-1.5">
+                  <span className="text-sm font-medium">Adaptive</span>
+                  <span className="text-xs text-[#6A6A6A]">
+                    (~{program.sessionLength || 60} min target)
+                  </span>
+                </div>
+              ) : (
+                // STATIC USER: Show fixed duration as before
+                <p className="text-sm font-medium">{getDurationPreferenceLabel(program.sessionLength)}</p>
+              )}
             </div>
           </div>
           <div className="flex items-center gap-2">

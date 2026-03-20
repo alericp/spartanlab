@@ -938,6 +938,14 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
   const canonicalProfile = getCanonicalProfile()
   logCanonicalProfileState('generateAdaptiveProgram called')
   
+  // TASK 6: Log schedule/duration truth consumption
+  console.log('[program-gen] TASK 6: Schedule/Duration truth consumed:', {
+    scheduleMode: canonicalProfile.scheduleMode,
+    trainingDaysPerWeek: canonicalProfile.trainingDaysPerWeek,
+    sessionDurationMode: canonicalProfile.sessionDurationMode,
+    sessionLengthMinutes: canonicalProfile.sessionLengthMinutes,
+  })
+  
   // TASK 3 & 9: Validate profile before proceeding
   const profileValidation = validateProfileForGeneration(canonicalProfile)
   if (!profileValidation.isValid) {
@@ -1719,6 +1727,8 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
     experienceLevel,
     trainingDaysPerWeek: effectiveTrainingDays,  // Store actual generated days
     sessionLength,
+    // TASK 5: Session duration mode - preserve adaptive time identity
+    sessionDurationMode: canonicalProfile.sessionDurationMode || 'static',
     // FLEXIBLE SCHEDULING: Full schedule mode semantics
     scheduleMode: finalScheduleMode,
     currentWeekFrequency: effectiveTrainingDays,
@@ -2393,6 +2403,7 @@ return explanations.length > 0 ? explanations : undefined
       experienceLevel: canonicalProfile.experienceLevel,
       trainingDaysPerWeek: canonicalProfile.trainingDaysPerWeek,
       sessionLengthMinutes: canonicalProfile.sessionLengthMinutes,
+      sessionDurationMode: canonicalProfile.sessionDurationMode,
       scheduleMode: canonicalProfile.scheduleMode,
       equipmentAvailable: canonicalProfile.equipmentAvailable || [],
       jointCautions: canonicalProfile.jointCautions || [],
@@ -3059,13 +3070,15 @@ export function getDefaultAdaptiveInputs(): AdaptiveProgramInputs {
     mappedEquipment.push('pull_bar', 'dip_bars')
   }
   
-  // Map session length from profile (30, 45, 60, 90) to SessionLength (30, 45, 60, 75)
+  // TASK 6: Unified duration contract - use canonical 30/45/60/90 minutes
+  // DO NOT map 90 to 75 - this caused label drift between settings and builder
   let sessionLength: SessionLength = 60
   const profileSessionLength = canonicalProfile.sessionLengthMinutes
   if (profileSessionLength === 30) sessionLength = 30
   else if (profileSessionLength === 45) sessionLength = 45
   else if (profileSessionLength === 60) sessionLength = 60
-  else if (profileSessionLength === 90) sessionLength = 75 // Map 90 to 75 (closest match)
+  else if (profileSessionLength === 75) sessionLength = 75 // Legacy support - normalize to 90 in display
+  else if (profileSessionLength === 90) sessionLength = 90 as SessionLength // Cast to handle type constraint
   
   // FLEXIBLE SCHEDULE FIX: Preserve schedule identity from canonical profile
   // Do NOT collapse flexible users into a fake fixed numeric value

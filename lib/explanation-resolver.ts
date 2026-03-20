@@ -158,12 +158,14 @@ function buildSummaryExplanation(context: ExplanationContext): ProgramExplanatio
     }
   }
   
-  // Schedule reason - explain flexible vs static
+  // TASK 4D: Schedule reason - explain flexible vs static with correct semantics
+  // Flexible users: do NOT say "as selected" - the frequency is derived, not chosen
+  // Static users: can say "as selected" because they explicitly chose this number
   let scheduleReason: string | undefined
   if (context.scheduleMode === 'flexible') {
-    scheduleReason = `Flexible mode: ${context.currentWeekFrequency} sessions planned based on your recovery state.`
+    scheduleReason = `Flexible mode: ${context.currentWeekFrequency} sessions planned this week based on recovery and readiness.`
   } else {
-    scheduleReason = `${context.currentWeekFrequency} sessions per week as selected.`
+    scheduleReason = `Training ${context.currentWeekFrequency} days per week on a fixed schedule.`
   }
   
   // Progression reason based on data confidence

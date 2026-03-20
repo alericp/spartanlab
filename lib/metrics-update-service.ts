@@ -387,27 +387,47 @@ export function saveMetricUpdates(updates: MetricUpdate): OnboardingProfile {
   // Save to onboarding profile (legacy)
   saveOnboardingProfile(updatedProfile)
   
-  // CANONICAL FIX: Also sync to canonical profile for generation consumption
-  // This ensures metrics updates are visible to the program builder
+  // =============================================================================
+  // REGRESSION GUARD: METRICS WRITE-THROUGH TO CANONICAL PROFILE
+  // =============================================================================
+  // This ensures metrics updates are visible to the program builder.
+  // ALL benchmark fields must be synced here when updated via UpdateMetricsCard.
   saveCanonicalProfile({
+    // Strength benchmarks (current)
     pullUpMax: updates.strength?.pullUpMax ?? undefined,
     dipMax: updates.strength?.dipMax ?? undefined,
     pushUpMax: updates.strength?.pushUpMax ?? undefined,
     wallHSPUReps: updates.strength?.wallHSPUReps ?? undefined,
     weightedPullUp: updates.strength?.weightedPullUp ?? undefined,
     weightedDip: updates.strength?.weightedDip ?? undefined,
+    
+    // Skill benchmarks (with band/history context when available)
     frontLeverProgression: updates.skills?.frontLever?.progression ?? undefined,
     frontLeverHoldSeconds: updates.skills?.frontLever?.holdSeconds ?? undefined,
+    frontLeverIsAssisted: (updates.skills?.frontLever as unknown as { isAssisted?: boolean })?.isAssisted ?? undefined,
+    frontLeverBandLevel: (updates.skills?.frontLever as unknown as { bandLevel?: string })?.bandLevel ?? undefined,
+    frontLeverHighestEver: (updates.skills?.frontLever as unknown as { highestLevelEverReached?: string })?.highestLevelEverReached ?? undefined,
+    
     plancheProgression: updates.skills?.planche?.progression ?? undefined,
     plancheHoldSeconds: updates.skills?.planche?.holdSeconds ?? undefined,
+    plancheIsAssisted: (updates.skills?.planche as unknown as { isAssisted?: boolean })?.isAssisted ?? undefined,
+    plancheBandLevel: (updates.skills?.planche as unknown as { bandLevel?: string })?.bandLevel ?? undefined,
+    plancheHighestEver: (updates.skills?.planche as unknown as { highestLevelEverReached?: string })?.highestLevelEverReached ?? undefined,
+    
     muscleUpReadiness: updates.skills?.muscleUp ?? undefined,
     hspuProgression: updates.skills?.hspu?.progression ?? undefined,
     lSitHoldSeconds: updates.skills?.lSitHold ?? undefined,
     vSitHoldSeconds: updates.skills?.vSitHold ?? undefined,
+    
+    // Flexibility benchmarks (with range intent when available)
     pancakeLevel: updates.flexibility?.pancake?.level ?? undefined,
+    pancakeRangeIntent: updates.flexibility?.pancake?.rangeIntent ?? undefined,
     toeTouchLevel: updates.flexibility?.toeTouch?.level ?? undefined,
+    toeTouchRangeIntent: updates.flexibility?.toeTouch?.rangeIntent ?? undefined,
     frontSplitsLevel: updates.flexibility?.frontSplits?.level ?? undefined,
+    frontSplitsRangeIntent: updates.flexibility?.frontSplits?.rangeIntent ?? undefined,
     sideSplitsLevel: updates.flexibility?.sideSplits?.level ?? undefined,
+    sideSplitsRangeIntent: updates.flexibility?.sideSplits?.rangeIntent ?? undefined,
   })
   
   // Log canonical state after update for debugging

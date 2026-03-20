@@ -311,6 +311,8 @@ export default function SettingsPage() {
   const [experienceLevel, setExperienceLevel] = useState('beginner')
   const [scheduleMode, setScheduleMode] = useState<'static' | 'flexible'>('static')
   const [trainingDays, setTrainingDays] = useState('3')
+  // TASK 3: Add sessionDurationMode state - 'static' = fixed duration, 'adaptive' = engine adapts
+  const [sessionDurationMode, setSessionDurationMode] = useState<'static' | 'adaptive'>('static')
   const [sessionLength, setSessionLength] = useState('60')
   const [primaryGoal, setPrimaryGoal] = useState('none')
   const [equipment, setEquipment] = useState<EquipmentType[]>([])
@@ -363,7 +365,7 @@ export default function SettingsPage() {
   }
   
   // Helper to apply profile data to React state
-  const applyProfileToState = (data: AthleteProfile & { scheduleMode?: string; trainingStyle?: TrainingStyleMode }) => {
+  const applyProfileToState = (data: AthleteProfile & { scheduleMode?: string; sessionDurationMode?: 'static' | 'adaptive'; trainingStyle?: TrainingStyleMode }) => {
     setProfile(data as AthleteProfile)
     setBodyweight(data.bodyweight?.toString() || '')
     setExperienceLevel(data.experienceLevel || 'beginner')
@@ -380,6 +382,10 @@ export default function SettingsPage() {
       const profileDays = data.trainingDaysPerWeek
       setTrainingDays(typeof profileDays === 'number' ? profileDays.toString() : '3')
     }
+    
+    // TASK 3D: Handle adaptive session duration mode - do NOT flatten to fixed 60
+    const profileDurationMode = data.sessionDurationMode
+    setSessionDurationMode(profileDurationMode === 'adaptive' ? 'adaptive' : 'static')
     
     setSessionLength(data.sessionLengthMinutes?.toString() || '60')
     setPrimaryGoal(data.primaryGoal || 'none')
@@ -423,6 +429,8 @@ export default function SettingsPage() {
           ? null  // TASK 2: NULL = truly flexible, engine derives at runtime
           : parseInt(trainingDays || '3'),
         scheduleMode: scheduleMode,
+        // TASK 3D: Preserve sessionDurationMode - 'adaptive' means engine adapts session length
+        sessionDurationMode: sessionDurationMode,
         sessionLengthMinutes: parseInt(sessionLength) as 30 | 45 | 60 | 90,
         primaryGoal: primaryGoal === 'none' ? null : primaryGoal,
         equipmentAvailable: equipment,
@@ -458,12 +466,23 @@ export default function SettingsPage() {
               experienceLevel: result.profile.experienceLevel,
               trainingDaysPerWeek: result.profile.trainingDaysPerWeek,
               scheduleMode: result.profile.scheduleMode,
+              // TASK 3D: Preserve sessionDurationMode for canonical profile
+              sessionDurationMode: result.profile.sessionDurationMode || sessionDurationMode,
               sessionLengthMinutes: result.profile.sessionLengthMinutes,
               equipmentAvailable: result.profile.equipmentAvailable,
               jointCautions: result.profile.jointCautions,
               weakestArea: result.profile.weakestArea,
               trainingStyle: result.profile.trainingStyle,
             })
+            
+            // TASK 3: Log settings saved schedule/duration
+            console.log('[Settings] TASK 3: Saved schedule/duration identity:', {
+              scheduleMode: scheduleMode,
+              trainingDaysPerWeek: scheduleMode === 'flexible' ? null : parseInt(trainingDays || '3'),
+              sessionDurationMode: sessionDurationMode,
+              sessionLengthMinutes: parseInt(sessionLength),
+            })
+            
             logCanonicalProfileState('After settings save')
             setProfile(result.profile)
             // Re-apply profile to UI state to ensure consistency

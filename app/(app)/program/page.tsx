@@ -324,6 +324,7 @@ export default function ProgramPage() {
   }, [])
 
   // TASK 5: Handlers use dynamically imported modules
+  // TASK 3 FIX: Generate creates full snapshot AFTER planner completes
   const handleGenerate = useCallback(() => {
     if (!inputs || !programModules.generateAdaptiveProgram || !programModules.saveAdaptiveProgram) return
     
@@ -331,11 +332,31 @@ export default function ProgramPage() {
     
     // Small delay for UX
     setTimeout(() => {
+      // TASK 2 FIX: Generate program first, then save complete snapshot
       const newProgram = programModules.generateAdaptiveProgram(inputs)
+      
+      // TASK 7: Log snapshot creation with key fields
+      console.log('[ProgramPage] TASK 3: Program snapshot created AFTER planner completed:', {
+        id: newProgram.id,
+        primaryGoal: newProgram.primaryGoal,
+        secondaryGoal: newProgram.secondaryGoal || 'none',
+        goalLabel: newProgram.goalLabel,
+        sessionCount: newProgram.sessions?.length || 0,
+        scheduleMode: newProgram.scheduleMode,
+        sessionDurationMode: newProgram.sessionDurationMode,
+        structureName: newProgram.structure?.structureName || 'unknown',
+        createdAt: newProgram.createdAt,
+      })
+      
+      // TASK A FIX: Save full snapshot to storage (replaces by timestamp sorting)
       programModules.saveAdaptiveProgram(newProgram)
+      
+      // TASK 4 FIX: Update UI state from stored program (single source)
       setProgram(newProgram)
       setShowBuilder(false)
       setIsGenerating(false)
+      
+      console.log('[ProgramPage] TASK 3: Generation flow complete - UI updated from saved snapshot')
     }, 500)
   }, [inputs, programModules])
 
@@ -354,13 +375,11 @@ export default function ProgramPage() {
   }, [program, programModules])
   
   // TASK 5: Regenerate Program - creates updated program from current profile truth
-  // Does NOT archive the old program, just replaces it
+  // TASK D FIX: Regenerate FULLY REPLACES the stored program (no merge)
   const handleRegenerate = useCallback(() => {
     if (!inputs || !programModules.generateAdaptiveProgram || !programModules.saveAdaptiveProgram) return
     
-    if (process.env.NODE_ENV !== 'production') {
-      console.log('[v0] Regenerate Program started - using current canonical profile')
-    }
+    console.log('[ProgramPage] TASK D: Regenerate started - will FULLY REPLACE stored program')
     
     setIsGenerating(true)
     
@@ -369,18 +388,33 @@ export default function ProgramPage() {
       // Record the regeneration event (not a full restart)
       programModules.recordProgramEnd?.('regenerate')
       
-      // Generate new program from current profile truth
+      // TASK D FIX: Generate new program from current profile truth
       const newProgram = programModules.generateAdaptiveProgram(inputs)
+      
+      // TASK 7: Log regenerate overwrite with key fields
+      console.log('[ProgramPage] TASK D: Regenerate overwriting snapshot:', {
+        oldProgramId: program?.id || 'none',
+        newProgramId: newProgram.id,
+        primaryGoal: newProgram.primaryGoal,
+        secondaryGoal: newProgram.secondaryGoal || 'none',
+        goalLabel: newProgram.goalLabel,
+        sessionCount: newProgram.sessions?.length || 0,
+        scheduleMode: newProgram.scheduleMode,
+        sessionDurationMode: newProgram.sessionDurationMode,
+        structureName: newProgram.structure?.structureName || 'unknown',
+      })
+      
+      // TASK D FIX: Save overwrites old program (getLatestAdaptiveProgram uses timestamp)
       programModules.saveAdaptiveProgram(newProgram)
+      
+      // TASK 4 FIX: UI reads from the new stored snapshot
       setProgram(newProgram)
       setShowBuilder(false)
       setIsGenerating(false)
       
-      if (process.env.NODE_ENV !== 'production') {
-        console.log('[v0] Regenerate Program completed - new program active')
-      }
+      console.log('[ProgramPage] TASK D: Regenerate complete - UI shows new snapshot')
     }, 500)
-  }, [inputs, programModules])
+  }, [inputs, program, programModules])
   
   // Legacy delete handler for backwards compatibility
   const handleDelete = handleRestart

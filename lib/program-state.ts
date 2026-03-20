@@ -372,11 +372,15 @@ export function getProgramState(): ProgramState {
       return SAFE_DEFAULT_STATE
     }
     
-    // Minimal diagnostic for debugging post-onboarding state
-    console.log('[ProgramState] Validation result:', {
+    // TASK 7: Enhanced diagnostic for debugging program snapshot state
+    console.log('[ProgramState] TASK 4: getProgramState read source:', {
+      source: adaptiveProgram ? 'adaptiveProgram' : legacyProgram ? 'legacyProgram' : 'none',
       hasUsableWorkoutProgram,
       adaptiveProgramExists: !!adaptiveProgram,
       sessionCount,
+      programId: adaptiveProgram?.id || 'none',
+      primaryGoal: adaptiveProgram?.primaryGoal || legacyProgram?.primaryGoal || 'none',
+      goalLabel: adaptiveProgram?.goalLabel || 'none',
     })
     
     return {

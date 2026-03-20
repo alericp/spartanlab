@@ -120,6 +120,11 @@ import {
   mapSupportToGoalsAndLimiters,
   logSupportWorkMapping,
   logPrescriptionDiagnostics,
+  // Weighted load estimation (Weighted Load PR)
+  estimateWeightedLoadPrescription,
+  determineWeightedPrescriptionMode,
+  formatWeightedLoadDisplay,
+  logWeightedLoadEstimation,
   type PrescriptionMode,
   type PrescriptionContract,
   type AthleteContext as PrescriptionAthleteContext,
@@ -128,6 +133,10 @@ import {
   type WeeklyProgressionRecommendation,
   type ProgressionPhase,
   type SupportWorkMapping,
+  type WeightedBenchmark,
+  type WeightedPRBenchmark,
+  type WeightedLoadPrescription,
+  type WeightedPrescriptionMode,
 } from './prescription-contract'
 import {
   getSkillPrescriptionRules,
@@ -151,6 +160,17 @@ export interface SelectedExercise {
   // Session Load Intelligence fields
   loadMetadata?: ExerciseLoadMetadata
   deliveryStyle?: DeliveryStyle
+  // Weighted Load Prescription fields (TASK 3 of Weighted Load PR)
+  prescribedLoad?: {
+    load: number              // Actual weight to add (e.g., 20 for +20 lbs)
+    unit: 'lbs' | 'kg'        // Weight unit
+    basis: 'current_benchmark' | 'pr_reference' | 'estimated' | 'no_data'
+    confidenceLevel: 'high' | 'moderate' | 'low' | 'none'
+    estimated1RM?: number     // Estimated 1RM for reference
+    targetReps?: number       // Target reps for this prescription
+    intensityBand?: 'strength' | 'support_volume' | 'hypertrophy'
+    notes?: string[]          // Context/coaching notes
+  }
 }
 
 // =============================================================================
@@ -238,6 +258,11 @@ interface ExerciseSelectionInputs {
   // Prerequisite Gate Engine integration
   prerequisiteContext?: AthletePrerequisiteContext
   jointCautions?: string[]
+  // WEIGHTED LOAD PR: Weighted exercise benchmarks for load prescription
+  weightedBenchmarks?: {
+    weightedPullUp?: { current?: WeightedBenchmark; pr?: WeightedPRBenchmark }
+    weightedDip?: { current?: WeightedBenchmark; pr?: WeightedPRBenchmark }
+  }
 }
 
 // =============================================================================
@@ -265,6 +290,8 @@ export function selectExercisesForSession(inputs: ExerciseSelectionInputs): Exer
     rangeTrainingMode,
     prerequisiteContext: inputContext,
     jointCautions,
+    // WEIGHTED LOAD PR: Extract weighted benchmarks for load prescription
+    weightedBenchmarks,
   } = inputs
   
   // Build prerequisite context for gate checks
@@ -672,6 +699,69 @@ function selectMainExercises(
       }
     }
     
+    // =========================================================================
+    // WEIGHTED LOAD PR: Calculate prescribed load for weighted exercises
+    // =========================================================================
+    let prescribedLoad: SelectedExercise['prescribedLoad'] = undefined
+    const isWeightedExercise = finalExercise.id.includes('weighted_pull') || 
+                               finalExercise.id.includes('weighted_dip') ||
+                               finalExercise.id.includes('weighted_push') ||
+                               finalExercise.id.includes('weighted_row')
+    
+    if (isWeightedExercise && weightedBenchmarks) {
+      // Determine exercise type and get appropriate benchmarks
+      const exerciseType: 'weighted_pull_up' | 'weighted_dip' | 'weighted_push_up' | 'weighted_row' =
+        finalExercise.id.includes('weighted_pull') ? 'weighted_pull_up' :
+        finalExercise.id.includes('weighted_dip') ? 'weighted_dip' :
+        finalExercise.id.includes('weighted_push') ? 'weighted_push_up' : 'weighted_row'
+      
+      const benchmarkData = exerciseType === 'weighted_pull_up' ? weightedBenchmarks.weightedPullUp
+        : exerciseType === 'weighted_dip' ? weightedBenchmarks.weightedDip
+        : null
+      
+      if (benchmarkData) {
+        // Determine prescription mode based on rep target
+        const repsStr = finalRepsOrTime || '5'
+        const repTarget = parseInt(repsStr.split('-')[0]) || 5
+        const prescriptionMode: WeightedPrescriptionMode = 
+          repTarget <= 5 ? 'strength_primary' :
+          repTarget <= 6 ? 'strength_support' :
+          repTarget <= 10 ? 'volume_support' : 'hypertrophy'
+        
+        const loadPrescription = estimateWeightedLoadPrescription(
+          exerciseType,
+          prescriptionMode,
+          benchmarkData.current,
+          benchmarkData.pr
+        )
+        
+        // Log the estimation
+        logWeightedLoadEstimation(exerciseType, prescriptionMode, loadPrescription)
+        
+        // Build prescribed load object if we have data
+        if (loadPrescription.loadBasis !== 'no_data') {
+          prescribedLoad = {
+            load: loadPrescription.prescribedLoad,
+            unit: loadPrescription.loadUnit,
+            basis: loadPrescription.loadBasis,
+            confidenceLevel: loadPrescription.confidenceLevel,
+            estimated1RM: loadPrescription.estimated1RM ?? undefined,
+            targetReps: loadPrescription.targetReps,
+            intensityBand: loadPrescription.intensityBand,
+            notes: loadPrescription.notes.length > 0 ? loadPrescription.notes : undefined,
+          }
+          
+          // Update note with load prescription
+          if (loadPrescription.prescribedLoad > 0) {
+            const loadDisplay = formatWeightedLoadDisplay(loadPrescription)
+            finalNote = finalNote 
+              ? `${loadDisplay}. ${finalNote}`
+              : `${loadDisplay}`
+          }
+        }
+      }
+    }
+    
     selected.push({
       exercise: finalExercise,
       sets: finalSets ?? adjustSetsForLevel(finalExercise.defaultSets, experienceLevel),
@@ -689,6 +779,8 @@ function selectMainExercises(
       originalExerciseId: originalId,
       loadMetadata,
       deliveryStyle,
+      // WEIGHTED LOAD PR: Include prescribed load if available
+      prescribedLoad,
     })
     return true
   }
@@ -1508,15 +1600,29 @@ export function getPrescriptionAwarePrescription(
   }
   
   // For weighted strength, use carryover-aware prescription (TASK 3)
+  // WEIGHTED LOAD PR: Now includes actual prescribed load
   if (prescriptionMode === 'weighted_strength') {
     const prescription = resolvePrescription(prescriptionMode, athleteContext)
     const formatted = formatPrescription(prescription)
+    
+    // Determine the weighted exercise type
+    const exerciseType: 'weighted_pull_up' | 'weighted_dip' | 'weighted_push_up' | 'weighted_row' | null = 
+      exercise.id.includes('weighted_pull') ? 'weighted_pull_up' :
+      exercise.id.includes('weighted_dip') ? 'weighted_dip' :
+      exercise.id.includes('weighted_push') ? 'weighted_push_up' :
+      exercise.id.includes('weighted_row') ? 'weighted_row' : null
+    
+    // If this is a recognized weighted exercise, calculate load
+    // Note: This function doesn't have direct access to benchmarks - that happens at session assembly level
+    // The prescribedLoad field will be populated by getWeightedStrengthPrescriptionForSkill when called with benchmarks
     
     return {
       sets: formatted.sets,
       repsOrTime: formatted.repsOrTime,
       note: formatted.note,
       prescriptionMode,
+      // Signal that this exercise supports weighted load prescription
+      supportsWeightedLoad: exerciseType !== null,
     }
   }
   
@@ -1534,16 +1640,23 @@ export function getPrescriptionAwarePrescription(
 
 /**
  * Adjust weighted strength prescription for skill carryover (TASK 3).
+ * 
+ * WEIGHTED LOAD PR UPDATE: Now includes actual prescribed load based on benchmarks.
  */
 export function getWeightedStrengthPrescriptionForSkill(
   exercise: Exercise,
   primarySkill: string,
   experienceLevel: ExperienceLevel,
-  currentWeightedPull?: { load: number; reps: number },
-  currentWeightedDip?: { load: number; reps: number },
-  prWeightedPull?: { load: number; reps: number },
-  prWeightedDip?: { load: number; reps: number }
-): { sets: number; repsOrTime: string; note: string } | null {
+  currentWeightedPull?: { load: number; reps: number; unit?: 'lbs' | 'kg' },
+  currentWeightedDip?: { load: number; reps: number; unit?: 'lbs' | 'kg' },
+  prWeightedPull?: { load: number; reps: number; unit?: 'lbs' | 'kg' },
+  prWeightedDip?: { load: number; reps: number; unit?: 'lbs' | 'kg' }
+): { 
+  sets: number
+  repsOrTime: string
+  note: string
+  prescribedLoad?: SelectedExercise['prescribedLoad']
+} | null {
   // Get carryover recommendations
   const carryovers = getWeightedStrengthCarryover(
     primarySkill,
@@ -1554,7 +1667,7 @@ export function getWeightedStrengthPrescriptionForSkill(
   )
   
   // Find matching carryover for this exercise
-  const exerciseType: WeightedStrengthCarryover['exercise'] | null = 
+  const exerciseType: 'weighted_pull_up' | 'weighted_dip' | 'weighted_push_up' | 'weighted_row' | null = 
     exercise.id.includes('weighted_pull') ? 'weighted_pull_up' :
     exercise.id.includes('weighted_dip') ? 'weighted_dip' :
     exercise.id.includes('weighted_push') ? 'weighted_push_up' :
@@ -1568,10 +1681,60 @@ export function getWeightedStrengthPrescriptionForSkill(
   const adj = carryover.prescriptionAdjustments
   const baseSets = experienceLevel === 'beginner' ? 3 : 4
   
+  // WEIGHTED LOAD PR: Calculate actual prescribed load
+  const currentBenchmark: WeightedBenchmark | null = 
+    exerciseType === 'weighted_pull_up' && currentWeightedPull 
+      ? { addedWeight: currentWeightedPull.load, reps: currentWeightedPull.reps, unit: currentWeightedPull.unit } 
+      : exerciseType === 'weighted_dip' && currentWeightedDip
+        ? { addedWeight: currentWeightedDip.load, reps: currentWeightedDip.reps, unit: currentWeightedDip.unit }
+        : null
+  
+  const prBenchmark: WeightedPRBenchmark | null =
+    exerciseType === 'weighted_pull_up' && prWeightedPull
+      ? { load: prWeightedPull.load, reps: prWeightedPull.reps, unit: prWeightedPull.unit || 'lbs' }
+      : exerciseType === 'weighted_dip' && prWeightedDip
+        ? { load: prWeightedDip.load, reps: prWeightedDip.reps, unit: prWeightedDip.unit || 'lbs' }
+        : null
+  
+  // Determine prescription mode based on rep range target
+  const avgTargetReps = Math.round((adj.repsRange[0] + adj.repsRange[1]) / 2)
+  const prescriptionMode: WeightedPrescriptionMode = 
+    avgTargetReps <= 5 ? 'strength_primary' :
+    avgTargetReps <= 6 ? 'strength_support' :
+    avgTargetReps <= 10 ? 'volume_support' : 'hypertrophy'
+  
+  // Estimate the actual load to use
+  const loadPrescription = estimateWeightedLoadPrescription(
+    exerciseType,
+    prescriptionMode,
+    currentBenchmark,
+    prBenchmark
+  )
+  
+  // Log the estimation in dev mode
+  logWeightedLoadEstimation(exerciseType, prescriptionMode, loadPrescription)
+  
+  // Build the note with load info if available
+  let note = `RPE ${adj.intensityTarget}. ${carryover.carryoverRationale.split('.')[0]}.`
+  if (loadPrescription.loadBasis !== 'no_data' && loadPrescription.prescribedLoad > 0) {
+    const loadDisplay = formatWeightedLoadDisplay(loadPrescription)
+    note = `${loadDisplay} @ RPE ${adj.intensityTarget}. ${carryover.carryoverRationale.split('.')[0]}.`
+  }
+  
   return {
     sets: baseSets + adj.setsModifier,
     repsOrTime: `${adj.repsRange[0]}-${adj.repsRange[1]} reps`,
-    note: `RPE ${adj.intensityTarget}. ${carryover.carryoverRationale.split('.')[0]}.`,
+    note,
+    prescribedLoad: loadPrescription.loadBasis !== 'no_data' ? {
+      load: loadPrescription.prescribedLoad,
+      unit: loadPrescription.loadUnit,
+      basis: loadPrescription.loadBasis,
+      confidenceLevel: loadPrescription.confidenceLevel,
+      estimated1RM: loadPrescription.estimated1RM ?? undefined,
+      targetReps: loadPrescription.targetReps,
+      intensityBand: loadPrescription.intensityBand,
+      notes: loadPrescription.notes.length > 0 ? loadPrescription.notes : undefined,
+    } : undefined,
   }
 }
 

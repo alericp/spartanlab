@@ -30,6 +30,7 @@ import type { EquipmentType } from './adaptive-exercise-pool'
 import type { RecoveryLevel } from './recovery-engine'
 import type { WeeklyStructure, DayStructure } from './program-structure-engine'
 import type { ExerciseSelection, SelectedExercise } from './program-exercise-selector'
+import type { WeightedBenchmark, WeightedPRBenchmark } from './prescription-contract'
 import type { ProtocolRecommendation } from './protocols/joint-integrity-protocol'
 import type { ConstraintResult, ConstraintIntervention } from './constraint-detection-engine'
 
@@ -334,6 +335,11 @@ type AdaptiveSessionContext = {
   athleteCalibration: ReturnType<typeof getAthleteCalibration>
   onboardingProfile: ReturnType<typeof getOnboardingProfile>
   recoverySignal: ReturnType<typeof calculateRecoverySignal>
+  // WEIGHTED LOAD PR: Pass weighted benchmarks for load prescription
+  weightedBenchmarks?: {
+    weightedPullUp?: { current?: WeightedBenchmark; pr?: WeightedPRBenchmark }
+    weightedDip?: { current?: WeightedBenchmark; pr?: WeightedPRBenchmark }
+  }
 }
 
 export interface AdaptiveProgramInputs {
@@ -429,6 +435,18 @@ export interface AdaptiveExercise {
     decision: SimpleProgressionDecision
     confidence: number
     reason: string
+  }
+  // WEIGHTED LOAD PR: Prescribed load for weighted exercises
+  // Stores actual weight to use based on user's benchmark data
+  prescribedLoad?: {
+    load: number              // Actual weight to add (e.g., 20 for +20 lbs)
+    unit: 'lbs' | 'kg'        // Weight unit
+    basis: 'current_benchmark' | 'pr_reference' | 'estimated' | 'no_data'
+    confidenceLevel: 'high' | 'moderate' | 'low' | 'none'
+    estimated1RM?: number     // Estimated 1RM for reference
+    targetReps?: number       // Target reps for this prescription
+    intensityBand?: 'strength' | 'support_volume' | 'hypertrophy'
+    notes?: string[]          // Context/coaching notes
   }
 }
 
@@ -1521,10 +1539,47 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
   
   // Generate each session with variety info
   // Build context object for session generation (explicit dependency passing)
+  
+  // WEIGHTED LOAD PR: Extract weighted benchmarks from canonical profile for load prescription
+  const weightedBenchmarks: AdaptiveSessionContext['weightedBenchmarks'] = {
+    weightedPullUp: canonicalProfile?.weightedPullUp ? {
+      current: canonicalProfile.weightedPullUp.addedWeight !== undefined ? {
+        addedWeight: canonicalProfile.weightedPullUp.addedWeight,
+        reps: canonicalProfile.weightedPullUp.reps,
+        unit: canonicalProfile.weightedPullUp.unit,
+      } : undefined,
+      pr: canonicalProfile?.allTimePRPullUp?.load ? {
+        load: canonicalProfile.allTimePRPullUp.load,
+        reps: canonicalProfile.allTimePRPullUp.reps || 1,
+        unit: canonicalProfile.allTimePRPullUp.unit || 'lbs',
+      } : undefined,
+    } : undefined,
+    weightedDip: canonicalProfile?.weightedDip ? {
+      current: canonicalProfile.weightedDip.addedWeight !== undefined ? {
+        addedWeight: canonicalProfile.weightedDip.addedWeight,
+        reps: canonicalProfile.weightedDip.reps,
+        unit: canonicalProfile.weightedDip.unit,
+      } : undefined,
+      pr: canonicalProfile?.allTimePRDip?.load ? {
+        load: canonicalProfile.allTimePRDip.load,
+        reps: canonicalProfile.allTimePRDip.reps || 1,
+        unit: canonicalProfile.allTimePRDip.unit || 'lbs',
+      } : undefined,
+    } : undefined,
+  }
+  
+  if (process.env.NODE_ENV !== 'production') {
+    console.log('[WeightedLoad] Extracted benchmarks for session generation:', {
+      pullUp: weightedBenchmarks.weightedPullUp,
+      dip: weightedBenchmarks.weightedDip,
+    })
+  }
+  
   const sessionContext: AdaptiveSessionContext = {
     athleteCalibration,
     onboardingProfile,
     recoverySignal,
+    weightedBenchmarks,
   }
   
   const sessions: AdaptiveSession[] = structure.days.map((day, index) => {
@@ -2776,7 +2831,7 @@ function generateAdaptiveSession(
   context: AdaptiveSessionContext
 ): AdaptiveSession {
   // Destructure context to get explicit dependencies (scope fix)
-  const { athleteCalibration, recoverySignal } = context
+  const { athleteCalibration, recoverySignal, weightedBenchmarks } = context
   
   // Safe fallbacks for calibration subfields
   const fatigueSensitivity = athleteCalibration?.fatigueSensitivity ?? 'moderate'
@@ -2790,6 +2845,8 @@ function generateAdaptiveSession(
     equipment,
     sessionMinutes: sessionLength,
     constraintType,
+    // WEIGHTED LOAD PR: Pass weighted benchmarks for load prescription
+    weightedBenchmarks,
   })
   
   // Adapt for equipment - use safe fallbacks if selection properties are missing
@@ -3068,6 +3125,8 @@ function mapToAdaptiveExercises(
       method,
       methodLabel: getMethodLabel(method),
       progressionDecision,
+      // WEIGHTED LOAD PR: Include prescribed load if available from exercise selection
+      prescribedLoad: s.prescribedLoad,
     }
   }).filter((e): e is AdaptiveExercise => e !== null)
 }

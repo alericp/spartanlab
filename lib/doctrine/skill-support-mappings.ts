@@ -324,10 +324,50 @@ export const SKILL_SUPPORT_MAPPINGS: Record<SkillCarryover, SkillSupportMapping>
     },
   },
   
+  i_sit: {
+  skillId: 'i_sit',
+  displayName: 'Manna / I-Sit',
+  primaryRequirements: ['compression_core', 'scapular_control', 'straight_arm_push'],
+  supportPatterns: ['mobility', 'dip_pattern'],
+  commonLimiters: [
+  {
+  limiterId: 'i_sit_compression',
+  description: 'Extreme active compression',
+  supportPatterns: ['compression_core'],
+  exerciseIds: ['v_sit', 'pike_compression', 'manna_progressions', 'compression_pulses'],
+  },
+  {
+  limiterId: 'i_sit_flexibility',
+  description: 'Pancake and pike flexibility',
+  supportPatterns: ['mobility'],
+  exerciseIds: ['pike_stretch', 'pancake_stretch', 'hamstring_pnf'],
+  },
+  {
+  limiterId: 'i_sit_shoulder_extension',
+  description: 'Shoulder extension for lean',
+  supportPatterns: ['mobility', 'straight_arm_push'],
+  exerciseIds: ['shoulder_dislocates', 'german_hang', 'planche_lean'],
+  },
+  ],
+  safeAlternatives: ['v_sit', 'manna_progressions', 'pike_compression'],
+  directSupportExercises: ['v_sit', 'manna_progressions', 'compression_pulses'],
+  accessorySupportExercises: ['pike_stretch', 'pancake_stretch', 'shoulder_dislocates', 'support_hold'],
+  prerequisiteExercises: [
+  { exerciseId: 'v_sit', requirement: '15s hold', isCritical: true },
+  { exerciseId: 'pancake_stretch', requirement: 'chest to floor', isCritical: false },
+  ],
+  constraints: {
+  maxStraightArmPerSession: 2,
+  restDaysBetweenHeavySessions: 1,
+  preferredFrequencyPerWeek: 4,
+  tendonSensitive: false,
+  },
+  },
+  
   handstand: {
-    skillId: 'handstand',
-    displayName: 'Handstand',
-    primaryRequirements: ['vertical_push', 'scapular_control'],
+  skillId: 'handstand',
+  displayName: 'Handstand',
+  primaryRequirements: ['vertical_push', 'scapular_control'],
     supportPatterns: ['anti_extension_core', 'joint_integrity'],
     commonLimiters: [
       {
@@ -534,6 +574,47 @@ export const SKILL_SUPPORT_MAPPINGS: Record<SkillCarryover, SkillSupportMapping>
       restDaysBetweenHeavySessions: 1,
       preferredFrequencyPerWeek: 3,
       tendonSensitive: false,
+    },
+  },
+  
+  planche_push_up: {
+    skillId: 'planche_push_up',
+    displayName: 'Planche Push-Up',
+    primaryRequirements: ['straight_arm_push', 'horizontal_push', 'scapular_control'],
+    supportPatterns: ['anti_extension_core', 'joint_integrity'],
+    commonLimiters: [
+      {
+        limiterId: 'planche_push_up_straight_arm',
+        description: 'Bent-arm planche position strength',
+        supportPatterns: ['straight_arm_push', 'horizontal_push'],
+        exerciseIds: ['pseudo_planche_pushup', 'tuck_planche', 'adv_tuck_planche', 'planche_lean'],
+      },
+      {
+        limiterId: 'planche_push_up_pressing',
+        description: 'Pressing out of planche position',
+        supportPatterns: ['horizontal_push'],
+        exerciseIds: ['pseudo_planche_pushup', 'deficit_push_up', 'ring_push_up'],
+      },
+      {
+        limiterId: 'planche_push_up_protraction',
+        description: 'Scapular protraction under load',
+        supportPatterns: ['scapular_control'],
+        exerciseIds: ['planche_lean', 'serratus_pushup', 'scapular_protraction'],
+      },
+    ],
+    safeAlternatives: ['pseudo_planche_pushup', 'tuck_planche_pushup', 'elevated_pseudo_planche_pushup'],
+    directSupportExercises: ['pseudo_planche_pushup', 'tuck_planche_pushup', 'adv_tuck_planche_pushup', 'straddle_planche_pushup', 'planche_pushup'],
+    accessorySupportExercises: ['planche_lean', 'serratus_pushup', 'tricep_extension', 'face_pull', 'hollow_body_hold'],
+    prerequisiteExercises: [
+      { exerciseId: 'pseudo_planche_pushup', requirement: '12 reps', isCritical: true },
+      { exerciseId: 'tuck_planche', requirement: '15s hold', isCritical: true },
+      { exerciseId: 'tuck_planche_pushup', requirement: '5 reps', isCritical: true },
+    ],
+    constraints: {
+      maxStraightArmPerSession: 2,
+      restDaysBetweenHeavySessions: 2,
+      preferredFrequencyPerWeek: 3,
+      tendonSensitive: true,
     },
   },
 }

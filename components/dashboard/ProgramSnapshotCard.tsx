@@ -106,7 +106,7 @@ export function ProgramSnapshotCard({ className }: ProgramSnapshotCardProps) {
   return (
     <Card className={`bg-[#1A1F26] border-[#2B313A] p-5 ${className}`}>
       <div className="space-y-4">
-        {/* Header */}
+        {/* Header with Primary/Secondary Goal */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-lg bg-[#4F6D8A]/10 flex items-center justify-center">
@@ -114,16 +114,60 @@ export function ProgramSnapshotCard({ className }: ProgramSnapshotCardProps) {
             </div>
             <div>
               <h3 className="text-sm font-medium text-[#E6E9EF]">Current Program</h3>
-              <p className="text-xs text-[#6B7280]">{program.programName || 'Custom Program'}</p>
+              <div className="flex items-center gap-1.5">
+                <p className="text-xs text-[#6B7280]">{program.goalLabel}</p>
+                {program.secondaryGoal && (
+                  <>
+                    <span className="text-xs text-[#4A4A4A]">+</span>
+                    <p className="text-xs text-[#6B7280]">
+                      {program.secondaryGoal.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
+                    </p>
+                  </>
+                )}
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Weekly Structure */}
-        {program.weeklyStructure && (
-          <div className="py-3 px-4 bg-[#0F1115] rounded-lg">
-            <p className="text-xs text-[#6B7280] mb-1">Weekly Structure</p>
-            <p className="text-sm font-medium text-[#E6E9EF]">
+        {/* Schedule & Duration Identity - Show adaptive vs fixed truthfully */}
+        <div className="flex flex-wrap gap-2">
+          {/* Schedule Mode Badge */}
+          <div className="flex items-center gap-1.5 px-2 py-1 bg-[#0F1115] rounded text-xs">
+            <Calendar className="w-3 h-3 text-[#6B7280]" />
+            <span className="text-[#A4ACB8]">
+              {program.scheduleMode === 'flexible' 
+                ? 'Adaptive Schedule' 
+                : `${program.daysPerWeek} days/week`}
+            </span>
+          </div>
+          {/* Duration Mode Badge */}
+          <div className="flex items-center gap-1.5 px-2 py-1 bg-[#0F1115] rounded text-xs">
+            <Clock className="w-3 h-3 text-[#6B7280]" />
+            <span className="text-[#A4ACB8]">
+              {program.sessionDurationMode === 'adaptive'
+                ? 'Adaptive Duration'
+                : `~${program.sessionLength} min`}
+            </span>
+          </div>
+        </div>
+
+        {/* Built Around - Shows selected skill mix concisely */}
+        {program.selectedSkills && program.selectedSkills.length > 0 && (
+          <div className="py-2 px-3 bg-[#0F1115] rounded-lg">
+            <p className="text-xs text-[#6B7280] mb-1">Built around</p>
+            <p className="text-xs text-[#A4ACB8]">
+              {program.selectedSkills.slice(0, 3).map(s => 
+                s.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())
+              ).join(', ')}
+              {program.selectedSkills.length > 3 && ` +${program.selectedSkills.length - 3} more`}
+            </p>
+          </div>
+        )}
+
+        {/* Weekly Structure - only if no selectedSkills shown */}
+        {(!program.selectedSkills || program.selectedSkills.length === 0) && program.weeklyStructure && (
+          <div className="py-2 px-3 bg-[#0F1115] rounded-lg">
+            <p className="text-xs text-[#A4ACB8]">
               {program.weeklyStructure}
             </p>
           </div>
@@ -132,7 +176,7 @@ export function ProgramSnapshotCard({ className }: ProgramSnapshotCardProps) {
         {/* Next Session */}
         <div className="flex items-center gap-2 text-sm">
           <Target className="w-4 h-4 text-[#A4ACB8]" />
-          <span className="text-[#6B7280]">Next session:</span>
+          <span className="text-[#6B7280]">Next:</span>
           <span className="text-[#E6E9EF] font-medium">
             {program.nextSessionFocus || 'Based on readiness'}
           </span>

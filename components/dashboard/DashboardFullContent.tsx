@@ -22,6 +22,7 @@ import { runClientDataHygiene } from '@/lib/client-data-hygiene'
 // =============================================================================
 const SafeWidget = dynamic(() => import('@/components/shared/WidgetErrorBoundary').then(m => ({ default: m.SafeWidget })), { ssr: false })
 const WelcomeBanner = dynamic(() => import('@/components/dashboard/WelcomeBanner').then(m => ({ default: m.WelcomeBanner })), { ssr: false })
+const ProfileUpdateBanner = dynamic(() => import('@/components/dashboard/ProfileUpdateBanner').then(m => ({ default: m.ProfileUpdateBanner })), { ssr: false })
 const WelcomeCard = dynamic(() => import('@/components/dashboard/WelcomeCard').then(m => ({ default: m.WelcomeCard })), { ssr: false })
 const DashboardIntroduction = dynamic(() => import('@/components/dashboard/DashboardIntroduction').then(m => ({ default: m.DashboardIntroduction })), { ssr: false })
 const HowSpartanLabWorksButton = dynamic(() => import('@/components/dashboard/DashboardIntroduction').then(m => ({ default: m.HowSpartanLabWorksButton })), { ssr: false })
@@ -150,6 +151,13 @@ export function DashboardFullContent() {
   return (
     <PageContainer>
       <SectionStack gap="xl">
+        
+        {/* Profile Update Banner - shows when new fields/skills available */}
+        <Suspense fallback={null}>
+          <SafeWidget name="ProfileUpdateBanner" hideOnError>
+            <ProfileUpdateBanner />
+          </SafeWidget>
+        </Suspense>
         
         {/* Welcome Banner for Post-Onboarding */}
         <Suspense fallback={<div className="h-32 bg-[#1A1D23] rounded-xl animate-pulse" />}>

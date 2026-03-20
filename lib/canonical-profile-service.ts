@@ -1045,3 +1045,215 @@ export function hasValidCanonicalProfile(): boolean {
   const profile = getCanonicalProfile()
   return !!(profile.onboardingComplete && profile.primaryGoal)
 }
+
+// =============================================================================
+// PROFILE COMPLETENESS / VERSION TRACKING
+// =============================================================================
+
+/**
+ * Current profile schema version.
+ * Increment this when new required fields/sections are added.
+ * 
+ * VERSION HISTORY:
+ * - v1: Initial schema (core_goals, schedule, benchmarks, equipment)
+ * - v2: Added selectedStrength goals
+ * - v3: Added new skill goals (one_arm_pull_up, one_arm_push_up, dragon_flag, planche_push_up)
+ */
+export const CURRENT_PROFILE_SCHEMA_VERSION = 3
+
+/**
+ * Profile field groups that define completeness.
+ * Each group maps to an onboarding section.
+ */
+export type ProfileFieldGroup = 
+  | 'core_goals'          // primaryGoal, secondaryGoal, trainingPathType
+  | 'schedule_identity'   // scheduleMode, trainingDaysPerWeek, sessionLengthMinutes
+  | 'benchmark_strength'  // pullUpMax, dipMax, pushUpMax, weightedPullUp, weightedDip
+  | 'benchmark_skills'    // skill progressions for selected skills
+  | 'flexibility_targets' // flexibility selections and benchmarks
+  | 'skill_selection'     // selectedSkills array (v3: includes new skills)
+  | 'equipment'           // equipmentAvailable
+  | 'recovery'            // recoveryQuality
+
+/**
+ * Mapping from field group to onboarding section ID
+ */
+export const FIELD_GROUP_TO_SECTION: Record<ProfileFieldGroup, string> = {
+  core_goals: 'goals',
+  schedule_identity: 'schedule',
+  benchmark_strength: 'strength_benchmarks',
+  benchmark_skills: 'skill_benchmarks',
+  flexibility_targets: 'flexibility_benchmarks',
+  skill_selection: 'skill_selection',
+  equipment: 'equipment',
+  recovery: 'recovery',
+}
+
+/**
+ * Human-readable labels for field groups (for notification UI)
+ */
+export const FIELD_GROUP_LABELS: Record<ProfileFieldGroup, string> = {
+  core_goals: 'Training Goals',
+  schedule_identity: 'Training Schedule',
+  benchmark_strength: 'Strength Benchmarks',
+  benchmark_skills: 'Skill Benchmarks',
+  flexibility_targets: 'Flexibility Goals',
+  skill_selection: 'Skill Selection',
+  equipment: 'Equipment Setup',
+  recovery: 'Recovery Profile',
+}
+
+/**
+ * Profile completeness status returned by getProfileCompletenessStatus
+ */
+export interface ProfileCompletenessStatus {
+  isCompleteForCurrentEngine: boolean
+  profileSchemaVersion: number
+  targetSchemaVersion: number
+  missingGroups: ProfileFieldGroup[]
+  suggestedOnboardingSection: string | null
+  hasNewSkillsAvailable: boolean
+  newSkillsAvailableCount: number
+}
+
+/**
+ * Get the stored profile schema version.
+ * Returns 1 if not set (legacy profiles).
+ */
+export function getStoredProfileSchemaVersion(): number {
+  if (typeof window === 'undefined') return 1
+  try {
+    const stored = localStorage.getItem('spartanlab_profile_schema_version')
+    return stored ? parseInt(stored, 10) : 1
+  } catch {
+    return 1
+  }
+}
+
+/**
+ * Save the profile schema version after completing updates.
+ */
+export function saveProfileSchemaVersion(version: number): void {
+  if (typeof window === 'undefined') return
+  try {
+    localStorage.setItem('spartanlab_profile_schema_version', version.toString())
+    console.log('[ProfileCompleteness] Saved schema version:', version)
+  } catch (err) {
+    console.error('[ProfileCompleteness] Failed to save schema version:', err)
+  }
+}
+
+/**
+ * All selectable skill goals that should be available in onboarding.
+ * V3 added: one_arm_pull_up, one_arm_push_up, dragon_flag, planche_push_up
+ */
+export const ALL_SELECTABLE_SKILLS = [
+  'front_lever',
+  'back_lever',
+  'planche',
+  'muscle_up',
+  'handstand_pushup',
+  'handstand',
+  'iron_cross',
+  'one_arm_pull_up',
+  'one_arm_push_up',
+  'dragon_flag',
+  'planche_push_up',
+  'l_sit',
+  'v_sit',
+  'i_sit',
+] as const
+
+/**
+ * Skills that were added after schema version 1.
+ * Users with older profiles may not have seen these options.
+ */
+export const NEW_SKILLS_V3 = [
+  'one_arm_pull_up',
+  'one_arm_push_up', 
+  'dragon_flag',
+  'planche_push_up',
+  'iron_cross',
+  'i_sit',
+] as const
+
+/**
+ * Determine profile completeness relative to current engine requirements.
+ * 
+ * This function checks:
+ * 1. Whether required field groups are complete
+ * 2. Whether the profile schema version is current
+ * 3. Whether new skills/options are available that user hasn't seen
+ */
+export function getProfileCompletenessStatus(profile?: CanonicalProgrammingProfile): ProfileCompletenessStatus {
+  const p = profile || getCanonicalProfile()
+  const storedVersion = getStoredProfileSchemaVersion()
+  const missingGroups: ProfileFieldGroup[] = []
+  
+  // Check core_goals (required)
+  if (!p.primaryGoal) {
+    missingGroups.push('core_goals')
+  }
+  
+  // Check schedule_identity (required)
+  if (!p.scheduleMode || (p.scheduleMode === 'static' && !p.trainingDaysPerWeek)) {
+    missingGroups.push('schedule_identity')
+  }
+  
+  // Check equipment (required)
+  if (!p.equipmentAvailable || p.equipmentAvailable.length === 0) {
+    missingGroups.push('equipment')
+  }
+  
+  // Check if user has seen the new skills (V3)
+  const hasNewSkillsAvailable = storedVersion < 3
+  const newSkillsAvailableCount = hasNewSkillsAvailable ? NEW_SKILLS_V3.length : 0
+  
+  // If user hasn't seen V3 skills and is interested in skills, suggest skill_selection
+  if (hasNewSkillsAvailable && (
+    p.trainingPathType === 'skill_progression' ||
+    p.trainingPathType === 'hybrid' ||
+    p.selectedSkills?.length > 0
+  )) {
+    // Only add to missing if not already there
+    if (!missingGroups.includes('skill_selection')) {
+      missingGroups.push('skill_selection')
+    }
+  }
+  
+  // Determine suggested section
+  let suggestedSection: string | null = null
+  if (missingGroups.length > 0) {
+    suggestedSection = FIELD_GROUP_TO_SECTION[missingGroups[0]]
+  }
+  
+  const isComplete = missingGroups.length === 0 && storedVersion >= CURRENT_PROFILE_SCHEMA_VERSION
+  
+  console.log('[ProfileCompleteness] Status check:', {
+    isComplete,
+    storedVersion,
+    targetVersion: CURRENT_PROFILE_SCHEMA_VERSION,
+    missingGroups,
+    hasNewSkillsAvailable,
+    suggestedSection,
+  })
+  
+  return {
+    isCompleteForCurrentEngine: isComplete,
+    profileSchemaVersion: storedVersion,
+    targetSchemaVersion: CURRENT_PROFILE_SCHEMA_VERSION,
+    missingGroups,
+    suggestedOnboardingSection: suggestedSection,
+    hasNewSkillsAvailable,
+    newSkillsAvailableCount,
+  }
+}
+
+/**
+ * Mark profile as updated to current schema version.
+ * Call this after user completes profile updates.
+ */
+export function markProfileSchemaAsComplete(): void {
+  saveProfileSchemaVersion(CURRENT_PROFILE_SCHEMA_VERSION)
+  console.log('[ProfileCompleteness] Marked profile as complete for schema v' + CURRENT_PROFILE_SCHEMA_VERSION)
+}

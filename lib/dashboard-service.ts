@@ -94,6 +94,11 @@ export interface ProgramSummary {
   secondaryGoal: string | null
   scheduleMode: string | null
   sessionDurationMode: string | null
+  // Program composition - shows what the plan is built around
+  selectedSkills: string[] | null
+  trainingPathType: string | null
+  // Program rationale for trust-building display
+  programRationale: string | null
 }
 
 export interface CurrentFocus {
@@ -294,6 +299,15 @@ export function getProgramSummary(overview: DashboardOverview): ProgramSummary {
     // TASK C FIX: Build program name from goal + structure
     const programName = `${adaptiveProgram.goalLabel} ${adaptiveProgram.structure?.structureName || 'Program'}`
     
+    // Dev log: Program summary composition
+    console.log('[dashboard-service] Program summary built:', {
+      primaryGoal: adaptiveProgram.goalLabel,
+      secondaryGoal: adaptiveProgram.secondaryGoal || 'none',
+      scheduleMode: adaptiveProgram.scheduleMode,
+      selectedSkillsCount: adaptiveProgram.selectedSkills?.length || 0,
+      trainingPathType: (adaptiveProgram as Record<string, unknown>).trainingPathType || 'not set',
+    })
+    
     return {
       goalLabel: adaptiveProgram.goalLabel,
       daysPerWeek: adaptiveProgram.trainingDaysPerWeek,
@@ -308,6 +322,10 @@ export function getProgramSummary(overview: DashboardOverview): ProgramSummary {
       scheduleMode: adaptiveProgram.scheduleMode || null,
       // TASK C FIX: Access sessionDurationMode safely (may not be typed but is set at runtime)
       sessionDurationMode: (adaptiveProgram as Record<string, unknown>).sessionDurationMode as string || null,
+      // Program composition fields
+      selectedSkills: adaptiveProgram.selectedSkills || null,
+      trainingPathType: (adaptiveProgram as Record<string, unknown>).trainingPathType as string || null,
+      programRationale: adaptiveProgram.programRationale || null,
     }
   }
   
@@ -324,6 +342,9 @@ export function getProgramSummary(overview: DashboardOverview): ProgramSummary {
       secondaryGoal: null,
       scheduleMode: null,
       sessionDurationMode: null,
+      selectedSkills: null,
+      trainingPathType: null,
+      programRationale: null,
     }
   }
   
@@ -340,6 +361,9 @@ export function getProgramSummary(overview: DashboardOverview): ProgramSummary {
     secondaryGoal: null,
     scheduleMode: null,
     sessionDurationMode: null,
+    selectedSkills: null,
+    trainingPathType: null,
+    programRationale: null,
   }
 }
 

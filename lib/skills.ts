@@ -112,6 +112,30 @@ export const SKILL_DEFINITIONS = {
     levels: ['Tuck Hold', 'Advanced Tuck', 'Negatives', 'Assisted Full', 'Full Dragon Flag'],
     description: 'Advanced anti-extension core and compression strength',
   },
+  one_arm_pull_up: {
+    name: 'One-Arm Pull-Up',
+    category: 'pull' as SkillCategory,
+    levels: ['Weighted Pull-Up', 'Archer Pull-Up', 'Assisted One-Arm', 'Negative One-Arm', 'Full One-Arm Pull-Up'],
+    description: 'Ultimate unilateral pulling strength',
+  },
+  one_arm_push_up: {
+    name: 'One-Arm Push-Up',
+    category: 'push' as SkillCategory,
+    levels: ['Elevated One-Arm', 'Archer Push-Up', 'Negative One-Arm', 'Full One-Arm Push-Up'],
+    description: 'Unilateral pressing strength with core anti-rotation',
+  },
+  planche_push_up: {
+    name: 'Planche Push-Up',
+    category: 'push' as SkillCategory,
+    levels: ['Pseudo Planche Push-Up', 'Tuck Planche Push-Up', 'Advanced Tuck Push-Up', 'Straddle Planche Push-Up', 'Full Planche Push-Up'],
+    description: 'Pressing from planche position - combines planche hold with dynamic pressing',
+  },
+  iron_cross: {
+    name: 'Iron Cross',
+    category: 'transition' as SkillCategory,
+    levels: ['Ring Support', 'RTO Support', 'Assisted Cross Hold', 'Partial Cross', 'Full Iron Cross'],
+    description: 'Elite ring strength skill requiring extreme straight-arm pressing',
+  },
 };
 
 export type SkillKey = keyof typeof SKILL_DEFINITIONS;

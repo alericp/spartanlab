@@ -32,6 +32,14 @@ export const metadata: Metadata = {
 
 const tools = [
   {
+    slug: '../preview',
+    title: 'Program Preview Generator',
+    description: 'See exactly what your personalized calisthenics program looks like. Generate a preview based on your goals and experience.',
+    icon: Sparkles,
+    category: 'Program Builder',
+    featured: true,
+  },
+  {
     slug: 'pull-up-strength-calculator',
     title: 'Pull-Up Strength Standards',
     description: 'Find out how your pull-up strength compares to calisthenics standards. From beginner to elite.',
@@ -76,6 +84,14 @@ const tools = [
     title: 'HSPU Readiness Calculator',
     description: 'Evaluate handstand push-up readiness based on pike push-up strength, dips, and wall handstand ability.',
     icon: Target,
+    category: 'Readiness Calculator',
+    featured: true,
+  },
+  {
+    slug: '../one-arm-pull-up-readiness-calculator',
+    title: 'One-Arm Pull-Up Readiness Calculator',
+    description: 'Test if you have the strength prerequisites for one-arm pull-up training. Uses weighted pull-up and archer metrics.',
+    icon: Trophy,
     category: 'Readiness Calculator',
     featured: true,
   },

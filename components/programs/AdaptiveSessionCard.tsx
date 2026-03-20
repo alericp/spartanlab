@@ -628,7 +628,20 @@ function ExerciseRow({
           <div className="text-right">
             <p className="text-sm text-[#A5A5A5]">
               {safeSets} x {safeReps}
+              {/* WEIGHTED LOAD PR: Display prescribed load for weighted exercises */}
+              {exercise.prescribedLoad && exercise.prescribedLoad.load > 0 && (
+                <span className="text-[#E63946] font-medium">
+                  {' @ '}+{exercise.prescribedLoad.load} {exercise.prescribedLoad.unit}
+                </span>
+              )}
             </p>
+            {/* Show confidence indicator for weighted load */}
+            {exercise.prescribedLoad && exercise.prescribedLoad.load > 0 && exercise.prescribedLoad.confidenceLevel !== 'high' && (
+              <p className="text-[10px] text-[#6A6A6A] mt-0.5">
+                {exercise.prescribedLoad.confidenceLevel === 'moderate' && '(from historical PR)'}
+                {exercise.prescribedLoad.confidenceLevel === 'low' && '(estimated)'}
+              </p>
+            )}
           </div>
           {!isWarmupCooldown && exercise.isOverrideable && sessionId && onReplace && onSkip && onProgressionAdjust && (
             <ExerciseActionMenu

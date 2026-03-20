@@ -5,6 +5,7 @@
 import { getAthleteProfile, type AthleteProfile } from './data-service'
 import { getOnboardingProfile, type OnboardingProfile, type JointCaution } from './athlete-profile'
 import { getCanonicalProfile, logCanonicalProfileState, type CanonicalProgrammingProfile } from './canonical-profile-service'
+import { logDurationTruth } from './duration-contract'
 import { getAthleteSkillStates, type SkillState, type SkillKey } from './skill-state-service'
 import { calculateReadinessDecision } from './skill-readiness-engine'
 import type { ReadinessDecision } from '@/types/skill-readiness'
@@ -481,7 +482,15 @@ async function loadAthleteContext(userId: string): Promise<AthleteContext> {
     secondaryGoals,
     // CANONICAL FIX: Use canonical schedule with flexible support
     trainingDaysPerWeek: canonical.scheduleMode === 'flexible' ? 4 : (canonical.trainingDaysPerWeek || onboarding?.trainingDaysPerWeek || 3),
-    sessionDurationMinutes: canonical.sessionLengthMinutes || getSessionMinutes(onboarding?.workoutDuration || 'standard'),
+    sessionDurationMinutes: (() => {
+      const durationMinutes = canonical.sessionLengthMinutes || getSessionMinutes(onboarding?.workoutDuration || 'standard')
+      logDurationTruth('loadAthleteContext', {
+        canonicalPreference: durationMinutes,
+        source: canonical.sessionLengthMinutes ? 'canonical-profile' : 'onboarding-fallback',
+        fallbackUsed: !canonical.sessionLengthMinutes,
+      })
+      return durationMinutes
+    })(),
     equipment,
     equipmentProfile,
     // CANONICAL FIX: Use canonical joint cautions

@@ -40,6 +40,7 @@ import {
   type AthleteProfile,
 } from '@/lib/data-service'
 import { saveCanonicalProfile, logCanonicalProfileState } from '@/lib/canonical-profile-service'
+import { DURATION_PREFERENCE_LABELS, type SessionDurationMinutes, logDurationTruth } from '@/lib/duration-contract'
 import { getActiveProgram, clearActiveProgram } from '@/lib/program-service'
 import { 
   analyzeSettingsChanges, 
@@ -736,28 +737,31 @@ export default function SettingsPage() {
 
           {/* Session Length */}
           <div className="space-y-2">
-            <Label className="text-[#F5F5F5]">Session Duration</Label>
-            <Select value={sessionLength} onValueChange={setSessionLength}>
+            <Label className="text-[#F5F5F5]">Target Session Duration</Label>
+            <Select value={sessionLength} onValueChange={(v) => {
+              setSessionLength(v)
+              logDurationTruth('Settings duration changed', {
+                canonicalPreference: parseInt(v),
+                source: 'settings-dropdown',
+              })
+            }}>
               <SelectTrigger className="bg-[#1A1A1A] border-[#3A3A3A] text-[#F5F5F5]">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent className="bg-[#2A2A2A] border-[#3A3A3A]">
-                <SelectItem value="30" className="text-[#F5F5F5] focus:bg-[#3A3A3A]">
-                  30 min focused session
-                </SelectItem>
-                <SelectItem value="45" className="text-[#F5F5F5] focus:bg-[#3A3A3A]">
-                  45 min balanced session
-                </SelectItem>
-                <SelectItem value="60" className="text-[#F5F5F5] focus:bg-[#3A3A3A]">
-                  60 min complete session
-                </SelectItem>
-                <SelectItem value="90" className="text-[#F5F5F5] focus:bg-[#3A3A3A]">
-                  90 min extended session
-                </SelectItem>
+                {([30, 45, 60, 90] as SessionDurationMinutes[]).map((minutes) => (
+                  <SelectItem 
+                    key={minutes} 
+                    value={String(minutes)} 
+                    className="text-[#F5F5F5] focus:bg-[#3A3A3A]"
+                  >
+                    {DURATION_PREFERENCE_LABELS[minutes].label}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
             <p className="text-xs text-[#A5A5A5] mt-1">
-              Changing this will regenerate your program
+              This is your target preference. Actual session times vary based on day focus.
             </p>
           </div>
 

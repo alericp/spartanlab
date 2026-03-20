@@ -30,6 +30,7 @@ import {
 } from '@/components/ui/dialog'
 import { useState } from 'react'
 import { WorkoutExplanation, PlanExplanationBadge, DataConfidenceBadge } from './WorkoutExplanation'
+import { getDurationPreferenceLabel } from '@/lib/duration-contract'
 
 interface AdaptiveProgramDisplayProps {
   program: AdaptiveProgram
@@ -149,8 +150,8 @@ export function AdaptiveProgramDisplay({
           <div className="flex items-center gap-2">
             <Clock className="w-4 h-4 text-[#E63946]" />
             <div>
-              <p className="text-xs text-[#6A6A6A]">Session</p>
-              <p className="text-sm font-medium">{program.sessionLength} min</p>
+              <p className="text-xs text-[#6A6A6A]">Target Duration</p>
+              <p className="text-sm font-medium">{getDurationPreferenceLabel(program.sessionLength)}</p>
             </div>
           </div>
           <div className="flex items-center gap-2">

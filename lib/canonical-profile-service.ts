@@ -331,21 +331,37 @@ export function saveCanonicalProfile(updates: Partial<CanonicalProgrammingProfil
 /**
  * Log canonical profile state for debugging.
  * DEV ONLY - minimal output.
+ * TASK 8: Enhanced to log key fields driving program generation
  */
 export function logCanonicalProfileState(context: string): void {
   const profile = getCanonicalProfile()
   
   console.log(`[CanonicalProfile] ${context}:`, {
+    // Goals
     primaryGoal: profile.primaryGoal,
     secondaryGoal: profile.secondaryGoal,
-    selectedSkills: profile.selectedSkills,
+    selectedSkillsCount: profile.selectedSkills?.length || 0,
+    // Schedule
     scheduleMode: profile.scheduleMode,
+    sessionLengthMinutes: profile.sessionLengthMinutes,
     trainingDaysPerWeek: profile.trainingDaysPerWeek,
-    benchmarksPresent: {
-      pullUp: !!profile.pullUpMax,
-      dip: !!profile.dipMax,
-      frontLever: !!profile.frontLeverProgression,
-      planche: !!profile.plancheProgression,
+    // Strength benchmarks present
+    strengthBenchmarks: {
+      pullUpMax: profile.pullUpMax || 'not set',
+      dipMax: profile.dipMax || 'not set',
+      weightedPullUp: profile.weightedPullUp?.addedWeight || 'not set',
+      weightedDip: profile.weightedDip?.addedWeight || 'not set',
     },
+    // Skill benchmarks present
+    skillBenchmarks: {
+      frontLever: profile.frontLeverProgression || 'not set',
+      planche: profile.plancheProgression || 'not set',
+      hspu: profile.hspuProgression || 'not set',
+      muscleUp: profile.muscleUpReadiness || 'not set',
+    },
+    // Flexibility present
+    flexibilityPresent: !!(profile.frontSplitsLevel || profile.sideSplitsLevel || profile.pancakeLevel),
+    // Joint cautions
+    jointCautions: profile.jointCautions?.length || 0,
   })
 }

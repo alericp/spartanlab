@@ -35,7 +35,9 @@ import { verifyExplanationLayer, recordIntegrationProof } from './engine-integra
 
 export interface ExplanationContext {
   primaryGoal: PrimaryGoal
+  secondaryGoal?: string | null  // TASK 6: Added for secondary goal explanation
   goalLabel: string
+  secondaryGoalLabel?: string  // TASK 6: Label for secondary goal
   scheduleMode: 'static' | 'flexible'
   currentWeekFrequency: number
   previousWeekFrequency?: number
@@ -135,7 +137,12 @@ export function buildProgramExplanation(
 
 function buildSummaryExplanation(context: ExplanationContext): ProgramExplanationMetadata['summary'] {
   // Primary goal reason - always present
-  const primaryGoalReason = getPrimaryGoalExplanation(context.primaryGoal, context.goalLabel)
+  let primaryGoalReason = getPrimaryGoalExplanation(context.primaryGoal, context.goalLabel)
+  
+  // TASK 6: Add secondary goal influence to explanation
+  if (context.secondaryGoal && context.secondaryGoalLabel) {
+    primaryGoalReason += ` Secondary emphasis: ${context.secondaryGoalLabel} development for complementary progress.`
+  }
   
   // Schedule reason - explain flexible vs static
   let scheduleReason: string | undefined

@@ -42,10 +42,14 @@ export async function GET() {
     const profile = getOnboardingProfile()
     
     // Get constraint insight
+    // ISSUE A FIX: Only get constraint insight if canonical primaryGoal exists
+    // Never fallback to 'front_lever' - let the user's actual goal drive this
     let constraintInsight: string | null = null
     try {
-      const insight = getConstraintInsight(profile?.primaryGoal || 'front_lever')
-      constraintInsight = insight?.coachingCue || null
+      if (profile?.primaryGoal) {
+        const insight = getConstraintInsight(profile.primaryGoal)
+        constraintInsight = insight?.coachingCue || null
+      }
     } catch {
       // Non-critical
     }

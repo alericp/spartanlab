@@ -399,11 +399,14 @@ export function getHybridContextFromProfile(
     )
   }
   
-  // REGRESSION GUARD: Preserve adaptive schedule semantics, avoid forcing fixed values
-  // 'flexible' mode should pass 4 as working default, but this is display only - not stored
+  // ISSUE A FIX: Preserve adaptive schedule semantics with explicit null checks
+  // 'flexible' mode uses 4 as working default for computation, but this is not stored
+  // Only fallback to 3 when canonical value is truly absent (null/undefined)
   const resolvedDays = profile.trainingDaysPerWeek === 'flexible' 
     ? 4  // Working default for flexible, not stored as fixed
-    : profile.trainingDaysPerWeek || 3
+    : profile.trainingDaysPerWeek !== null && profile.trainingDaysPerWeek !== undefined
+      ? profile.trainingDaysPerWeek
+      : 3  // Only for truly new users
   
   // REGRESSION GUARD: primaryGoal fallback uses 'general' not 'front_lever' to avoid goal pollution
   const resolvedGoal = profile.primaryGoal || 'general'

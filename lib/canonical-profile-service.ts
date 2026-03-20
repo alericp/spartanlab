@@ -506,7 +506,9 @@ export function saveCanonicalProfile(updates: Partial<CanonicalProgrammingProfil
   
   if (updates.primaryGoal !== undefined) athleteUpdates.primaryGoal = updates.primaryGoal
   if (updates.experienceLevel !== undefined) athleteUpdates.experienceLevel = updates.experienceLevel
-  if (updates.trainingDaysPerWeek !== undefined) athleteUpdates.trainingDaysPerWeek = updates.trainingDaysPerWeek ?? 4
+  // ISSUE A FIX: Do not fallback to 4 - preserve the actual canonical value
+  // Only use the value if explicitly set, never inject defaults during save
+  if (updates.trainingDaysPerWeek !== undefined) athleteUpdates.trainingDaysPerWeek = updates.trainingDaysPerWeek
   if (updates.scheduleMode !== undefined) athleteUpdates.scheduleMode = updates.scheduleMode
   // ISSUE A/B FIX: sessionDurationMode - store in athlete profile for downstream consumption
   if (updates.sessionDurationMode !== undefined) {

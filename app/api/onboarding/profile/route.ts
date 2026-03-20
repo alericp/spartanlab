@@ -111,11 +111,13 @@ export async function POST(request: Request) {
       userId,
       profileData.sex || null,
       profileData.experienceLevel || 'beginner',
-      // For flexible users, trainingDaysPerWeek is null - preserves flexible as true preference
-      profileData.scheduleMode === 'flexible' ? null : (profileData.trainingDaysPerWeek || 4),
+      // ISSUE A FIX: For flexible users, trainingDaysPerWeek is null
+      // For static users, use their actual value - do NOT fallback to 4
+      profileData.scheduleMode === 'flexible' ? null : (profileData.trainingDaysPerWeek ?? null),
       profileData.scheduleMode || 'static',
       profileData.sessionDurationMode || 'static',
-      profileData.sessionLengthMinutes || 60,
+      // ISSUE A FIX: Do NOT fallback to 60 - preserve actual canonical value
+      profileData.sessionLengthMinutes ?? null,
       profileData.primaryGoal || null,
       profileData.secondaryGoal || null,
       profileData.selectedSkills ? JSON.stringify(profileData.selectedSkills) : JSON.stringify([]),

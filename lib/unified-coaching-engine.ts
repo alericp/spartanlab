@@ -481,14 +481,34 @@ async function loadAthleteContext(userId: string): Promise<AthleteContext> {
     primaryGoal,
     primaryGoalLabel: getGoalLabel(primaryGoal),
     secondaryGoals,
-    // CANONICAL FIX: Use canonical schedule with flexible support
-    trainingDaysPerWeek: canonical.scheduleMode === 'flexible' ? 4 : (canonical.trainingDaysPerWeek || onboarding?.trainingDaysPerWeek || 3),
+    // ISSUE A FIX: Canonical schedule with explicit null checks
+    // Only use fallback when canonical value is truly absent (null/undefined)
+    trainingDaysPerWeek: (() => {
+      if (canonical.scheduleMode === 'flexible') return 4  // Flexible mode uses runtime resolution
+      if (canonical.trainingDaysPerWeek !== null && canonical.trainingDaysPerWeek !== undefined) {
+        return canonical.trainingDaysPerWeek
+      }
+      // Only fallback for legacy users without canonical data
+      console.log('[UnifiedCoaching] FALLBACK: trainingDaysPerWeek using onboarding fallback')
+      return onboarding?.trainingDaysPerWeek || 3
+    })(),
     sessionDurationMinutes: (() => {
-      const durationMinutes = canonical.sessionLengthMinutes || getSessionMinutes(onboarding?.workoutDuration || 'standard')
+      // ISSUE A FIX: Prefer canonical, only fallback when truly absent
+      if (canonical.sessionLengthMinutes !== null && canonical.sessionLengthMinutes !== undefined) {
+        logDurationTruth('loadAthleteContext', {
+          canonicalPreference: canonical.sessionLengthMinutes,
+          source: 'canonical-profile',
+          fallbackUsed: false,
+        })
+        return canonical.sessionLengthMinutes
+      }
+      // Only fallback for legacy users
+      const durationMinutes = getSessionMinutes(onboarding?.workoutDuration || 'standard')
+      console.log('[UnifiedCoaching] FALLBACK: sessionDurationMinutes using onboarding fallback')
       logDurationTruth('loadAthleteContext', {
         canonicalPreference: durationMinutes,
-        source: canonical.sessionLengthMinutes ? 'canonical-profile' : 'onboarding-fallback',
-        fallbackUsed: !canonical.sessionLengthMinutes,
+        source: 'onboarding-fallback',
+        fallbackUsed: true,
       })
       return durationMinutes
     })(),

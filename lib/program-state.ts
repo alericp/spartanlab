@@ -271,10 +271,11 @@ export function normalizeProgramForDisplay(program: AdaptiveProgram | null): Ada
       recoveryLevel: program.recoveryLevel || 'MODERATE',
       createdAt: program.createdAt || new Date().toISOString(),
       
-      // Ensure numeric fields have defaults
-      sessionLength: program.sessionLength || 60,
-      trainingDaysPerWeek: program.trainingDaysPerWeek || 3,
-      currentWeekFrequency: program.currentWeekFrequency || program.trainingDaysPerWeek || 3,
+      // ISSUE C FIX: Preserve actual program values - only use fallbacks for truly missing fields
+      // These fallbacks are for snapshot display only, not for generation truth
+      sessionLength: program.sessionLength ?? 60,  // Fallback only if truly null/undefined
+      trainingDaysPerWeek: program.trainingDaysPerWeek ?? 3,  // Fallback only if truly null/undefined
+      currentWeekFrequency: program.currentWeekFrequency ?? program.trainingDaysPerWeek ?? 3,
       
       // Ensure nested objects have defaults
       constraintInsight: {

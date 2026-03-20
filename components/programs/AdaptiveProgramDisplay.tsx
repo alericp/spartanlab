@@ -199,24 +199,37 @@ export function AdaptiveProgramDisplay({
           </div>
         </div>
 
-        {/* TASK 5: Program Context - Training Path & Selected Skills */}
-        {(program.trainingPathType || (program.selectedSkills && program.selectedSkills.length > 2)) && (
-          <div className="flex flex-wrap gap-2 mb-3">
-            {program.trainingPathType && program.trainingPathType !== 'balanced' && (
-              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-[#E63946]/10 text-[#E63946]">
-                {program.trainingPathType === 'hybrid' ? 'Hybrid Training' : 
-                 program.trainingPathType === 'skill_mastery' ? 'Skill Mastery' :
-                 program.trainingPathType === 'strength_focus' ? 'Strength Focus' :
-                 program.trainingPathType}
+        {/* Built Around Section - Shows training emphasis and selected skills concisely */}
+        <div className="flex flex-wrap items-center gap-2 mb-3">
+          {/* Training Path Type Badge */}
+          {program.trainingPathType && program.trainingPathType !== 'balanced' && (
+            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-[#E63946]/10 text-[#E63946]">
+              {program.trainingPathType === 'hybrid' ? 'Hybrid Training' : 
+               program.trainingPathType === 'skill_mastery' ? 'Skill Mastery' :
+               program.trainingPathType === 'strength_focus' ? 'Strength Focus' :
+               program.trainingPathType.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
+            </span>
+          )}
+          {/* Selected Skills Summary - show top 3 most relevant */}
+          {program.selectedSkills && program.selectedSkills.length > 0 && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-[#1A1A1A] text-[#A5A5A5]">
+              <Sparkles className="w-3 h-3 text-[#E63946]/60" />
+              <span className="text-[#6A6A6A]">Built around:</span>
+              <span className="text-[#D0D0D0]">
+                {program.selectedSkills.slice(0, 3).map(s => 
+                  s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+                ).join(', ')}
+                {program.selectedSkills.length > 3 && ` +${program.selectedSkills.length - 3}`}
               </span>
-            )}
-            {program.selectedSkills && program.selectedSkills.length > 2 && (
-              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-[#2A2A2A] text-[#A5A5A5]">
-                {program.selectedSkills.length} skills selected
-              </span>
-            )}
-          </div>
-        )}
+            </span>
+          )}
+          {/* Structure name if not showing training path */}
+          {(!program.trainingPathType || program.trainingPathType === 'balanced') && structure.structureName && (
+            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-[#2A2A2A] text-[#A5A5A5]">
+              {structure.structureName}
+            </span>
+          )}
+        </div>
         
         {/* Program Rationale */}
         <div className="p-3 bg-[#1A1A1A] rounded-lg">

@@ -474,6 +474,15 @@ export default function SettingsPage() {
               weakestArea: result.profile.weakestArea,
               trainingStyle: result.profile.trainingStyle,
             })
+            
+            // TASK 3: Log settings saved schedule/duration
+            console.log('[Settings] TASK 3: Saved schedule/duration identity:', {
+              scheduleMode: scheduleMode,
+              trainingDaysPerWeek: scheduleMode === 'flexible' ? null : parseInt(trainingDays || '3'),
+              sessionDurationMode: sessionDurationMode,
+              sessionLengthMinutes: parseInt(sessionLength),
+            })
+            
             logCanonicalProfileState('After settings save')
             setProfile(result.profile)
             // Re-apply profile to UI state to ensure consistency

@@ -938,6 +938,14 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
   const canonicalProfile = getCanonicalProfile()
   logCanonicalProfileState('generateAdaptiveProgram called')
   
+  // TASK 6: Log schedule/duration truth consumption
+  console.log('[program-gen] TASK 6: Schedule/Duration truth consumed:', {
+    scheduleMode: canonicalProfile.scheduleMode,
+    trainingDaysPerWeek: canonicalProfile.trainingDaysPerWeek,
+    sessionDurationMode: canonicalProfile.sessionDurationMode,
+    sessionLengthMinutes: canonicalProfile.sessionLengthMinutes,
+  })
+  
   // TASK 3 & 9: Validate profile before proceeding
   const profileValidation = validateProfileForGeneration(canonicalProfile)
   if (!profileValidation.isValid) {
@@ -1719,6 +1727,8 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
     experienceLevel,
     trainingDaysPerWeek: effectiveTrainingDays,  // Store actual generated days
     sessionLength,
+    // TASK 5: Session duration mode - preserve adaptive time identity
+    sessionDurationMode: canonicalProfile.sessionDurationMode || 'static',
     // FLEXIBLE SCHEDULING: Full schedule mode semantics
     scheduleMode: finalScheduleMode,
     currentWeekFrequency: effectiveTrainingDays,
@@ -2393,6 +2403,7 @@ return explanations.length > 0 ? explanations : undefined
       experienceLevel: canonicalProfile.experienceLevel,
       trainingDaysPerWeek: canonicalProfile.trainingDaysPerWeek,
       sessionLengthMinutes: canonicalProfile.sessionLengthMinutes,
+      sessionDurationMode: canonicalProfile.sessionDurationMode,
       scheduleMode: canonicalProfile.scheduleMode,
       equipmentAvailable: canonicalProfile.equipmentAvailable || [],
       jointCautions: canonicalProfile.jointCautions || [],

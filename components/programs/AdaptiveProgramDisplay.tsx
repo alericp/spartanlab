@@ -52,6 +52,14 @@ export function AdaptiveProgramDisplay({
   // TASK 2: Confirmation modal state for restart action
   const [showRestartConfirm, setShowRestartConfirm] = useState(false)
   
+  // TASK 5: Log program display with schedule/duration identity
+  console.log('[program-display] TASK 5: Rendered program with schedule identity:', {
+    scheduleMode: program.scheduleMode,
+    weeklyFrequency: program.weeklyFrequency,
+    sessionDurationMode: program.sessionDurationMode,
+    sessionLength: program.sessionLength,
+  })
+  
   // TASK 6: Check if program is stale relative to current profile
   const stalenessCheck = checkProgramStaleness(program.profileSnapshot as ProfileSnapshot | undefined)
   const recoveryColors: Record<string, string> = {

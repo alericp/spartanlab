@@ -3741,65 +3741,14 @@ export function AthleteOnboarding() {
              : 90)
           : 60,  // Default for adaptive time users - serves as target bucket
         sessionStylePreference: profile.sessionStyle,
-        
-        // Equipment
-        equipmentAvailable: profile.equipment,
-        
-        // Diagnostics
-        jointCautions: profile.jointCautions,
-        weakestArea: profile.weakestArea,
-        primaryLimitation: profile.primaryLimitation,
-        
-        // Strength benchmarks (current)
-        pullUpMax: profile.pullUpMax,
-        dipMax: profile.dipMax,
-        pushUpMax: profile.pushUpMax,
-        wallHSPUReps: profile.wallHSPUReps,
-        weightedPullUp: profile.weightedPullUp ? {
-          addedWeight: profile.weightedPullUp.load ?? profile.weightedPullUp.addedWeight ?? 0,
-          reps: profile.weightedPullUp.reps ?? 1,
-          unit: profile.weightedPullUp.unit ?? 'lbs',
-        } : null,
-        weightedDip: profile.weightedDip ? {
-          addedWeight: profile.weightedDip.load ?? profile.weightedDip.addedWeight ?? 0,
-          reps: profile.weightedDip.reps ?? 1,
-          unit: profile.weightedDip.unit ?? 'lbs',
-        } : null,
-        
-        // Strength benchmarks (all-time PR)
-        allTimePRPullUp: profile.allTimePRPullUp,
-        allTimePRDip: profile.allTimePRDip,
-        
-        // Skill benchmarks (with band/history context)
-        frontLeverProgression: profile.frontLever?.progression ?? null,
-        frontLeverHoldSeconds: profile.frontLever?.holdSeconds ?? null,
-        frontLeverIsAssisted: profile.frontLever?.isAssisted ?? false,
-        frontLeverBandLevel: profile.frontLever?.bandLevel ?? null,
-        frontLeverHighestEver: profile.frontLever?.highestLevelEverReached ?? null,
-        
-        plancheProgression: profile.planche?.progression ?? null,
-        plancheHoldSeconds: profile.planche?.holdSeconds ?? null,
-        plancheIsAssisted: profile.planche?.isAssisted ?? false,
-        plancheBandLevel: profile.planche?.bandLevel ?? null,
-        plancheHighestEver: profile.planche?.highestLevelEverReached ?? null,
-        
-        muscleUpReadiness: profile.muscleUp,
-        hspuProgression: profile.hspu?.progression ?? null,
-        lSitHoldSeconds: profile.lSitHold,
-        vSitHoldSeconds: profile.vSitHold,
-        
-        // Flexibility benchmarks (with range intent)
-        pancakeLevel: profile.pancake?.level ?? null,
-        pancakeRangeIntent: profile.pancake?.rangeIntent ?? null,
-        toeTouchLevel: profile.toeTouch?.level ?? null,
-        toeTouchRangeIntent: profile.toeTouch?.rangeIntent ?? null,
-        frontSplitsLevel: profile.frontSplits?.level ?? null,
-        frontSplitsRangeIntent: profile.frontSplits?.rangeIntent ?? null,
-        sideSplitsLevel: profile.sideSplits?.level ?? null,
-        sideSplitsRangeIntent: profile.sideSplits?.rangeIntent ?? null,
-        
-        // Recovery
-        recoveryQuality: profile.recovery?.quality ?? null,
+      })
+      
+      // TASK 2: Log onboarding saved schedule/duration
+      console.log('[onboarding] TASK 2: Saved schedule/duration identity:', {
+        scheduleMode: isFlexibleSchedule ? 'flexible' : 'static',
+        trainingDaysPerWeek: isFlexibleSchedule ? null : profile.trainingDaysPerWeek,
+        sessionDurationMode: isAdaptiveTime ? 'adaptive' : 'static',
+        sessionLengthMinutes: typeof profile.sessionLengthMinutes === 'number' ? profile.sessionLengthMinutes : 60,
       })
       
       // Log canonical state after save for debugging

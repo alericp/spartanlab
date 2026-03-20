@@ -365,7 +365,18 @@ export default function SettingsPage() {
   }
   
   // Helper to apply profile data to React state
+  // ISSUE E FIX: Real round-trip validation - this function hydrates UI from canonical truth
   const applyProfileToState = (data: AthleteProfile & { scheduleMode?: string; sessionDurationMode?: 'static' | 'adaptive'; trainingStyle?: TrainingStyleMode }) => {
+    // TASK 7: Dev logging for hydration verification
+    console.log('[Settings] applyProfileToState hydrating from canonical truth:', {
+      scheduleMode: data.scheduleMode,
+      sessionDurationMode: data.sessionDurationMode,
+      trainingDaysPerWeek: data.trainingDaysPerWeek,
+      sessionLengthMinutes: data.sessionLengthMinutes,
+      primaryGoal: data.primaryGoal,
+      equipmentCount: data.equipmentAvailable?.length || 0,
+    })
+    
     setProfile(data as AthleteProfile)
     setBodyweight(data.bodyweight?.toString() || '')
     setExperienceLevel(data.experienceLevel || 'beginner')
@@ -453,26 +464,69 @@ export default function SettingsPage() {
           console.log('[Settings] API save successful, profile returned:', !!result.profile)
           
           // CANONICAL FIX: Sync API response to BOTH localStorage and canonical profile
+          // ISSUE A/B FIX: Pass ALL profile fields to preserve full canonical truth
           if (result.profile) {
             saveAthleteProfile(result.profile)
             // Also sync to canonical profile for generation consumption
+            // CRITICAL: Must include ALL benchmark fields to prevent drift
             saveCanonicalProfile({
+              // Goals & Skills
               primaryGoal: result.profile.primaryGoal,
               secondaryGoal: result.profile.secondaryGoal,
               selectedSkills: result.profile.selectedSkills,
               selectedFlexibility: result.profile.selectedFlexibility,
               selectedStrength: result.profile.selectedStrength,
               goalCategory: result.profile.goalCategory,
+              
+              // Schedule & Session
               experienceLevel: result.profile.experienceLevel,
               trainingDaysPerWeek: result.profile.trainingDaysPerWeek,
               scheduleMode: result.profile.scheduleMode,
               // TASK 3D: Preserve sessionDurationMode for canonical profile
               sessionDurationMode: result.profile.sessionDurationMode || sessionDurationMode,
               sessionLengthMinutes: result.profile.sessionLengthMinutes,
+              
+              // Equipment & Diagnostics
               equipmentAvailable: result.profile.equipmentAvailable,
               jointCautions: result.profile.jointCautions,
               weakestArea: result.profile.weakestArea,
               trainingStyle: result.profile.trainingStyle,
+              
+              // ISSUE B FIX: Sync ALL strength benchmarks to prevent drift
+              pullUpMax: result.profile.pullUpMax,
+              dipMax: result.profile.dipMax,
+              pushUpMax: result.profile.pushUpMax,
+              wallHSPUReps: result.profile.wallHSPUReps,
+              weightedPullUp: result.profile.weightedPullUp,
+              weightedDip: result.profile.weightedDip,
+              allTimePRPullUp: result.profile.allTimePRPullUp,
+              allTimePRDip: result.profile.allTimePRDip,
+              
+              // ISSUE B FIX: Sync ALL skill benchmarks
+              frontLeverProgression: result.profile.frontLever?.progression,
+              frontLeverHoldSeconds: result.profile.frontLever?.holdSeconds,
+              frontLeverIsAssisted: result.profile.frontLever?.isAssisted,
+              frontLeverBandLevel: result.profile.frontLever?.bandLevel,
+              frontLeverHighestEver: result.profile.frontLever?.highestLevelEverReached,
+              plancheProgression: result.profile.planche?.progression,
+              plancheHoldSeconds: result.profile.planche?.holdSeconds,
+              plancheIsAssisted: result.profile.planche?.isAssisted,
+              plancheBandLevel: result.profile.planche?.bandLevel,
+              plancheHighestEver: result.profile.planche?.highestLevelEverReached,
+              muscleUpReadiness: result.profile.muscleUp,
+              hspuProgression: result.profile.hspu?.progression,
+              lSitHoldSeconds: result.profile.lSitHold,
+              vSitHoldSeconds: result.profile.vSitHold,
+              
+              // ISSUE B FIX: Sync ALL flexibility benchmarks
+              pancakeLevel: result.profile.pancake?.level,
+              pancakeRangeIntent: result.profile.pancake?.rangeIntent,
+              toeTouchLevel: result.profile.toeTouch?.level,
+              toeTouchRangeIntent: result.profile.toeTouch?.rangeIntent,
+              frontSplitsLevel: result.profile.frontSplits?.level,
+              frontSplitsRangeIntent: result.profile.frontSplits?.rangeIntent,
+              sideSplitsLevel: result.profile.sideSplits?.level,
+              sideSplitsRangeIntent: result.profile.sideSplits?.rangeIntent,
             })
             
             // TASK 3: Log settings saved schedule/duration
@@ -775,9 +829,56 @@ export default function SettingsPage() {
             </div>
           )}
 
-          {/* Session Length */}
+          {/* Session Duration Mode - TASK C FIX: Expose adaptive vs fixed toggle */}
           <div className="space-y-2">
-            <Label className="text-[#F5F5F5]">Target Session Duration</Label>
+            <Label className="text-[#F5F5F5]">Session Duration Type</Label>
+            <Select 
+              value={sessionDurationMode} 
+              onValueChange={(v) => {
+                setSessionDurationMode(v as 'static' | 'adaptive')
+                logDurationTruth('Settings duration mode changed', {
+                  canonicalPreference: parseInt(sessionLength),
+                  source: 'settings-duration-mode-dropdown',
+                })
+              }}
+            >
+              <SelectTrigger className="bg-[#1A1A1A] border-[#3A3A3A] text-[#F5F5F5]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent className="bg-[#2A2A2A] border-[#3A3A3A]">
+                <SelectItem value="static" className="text-[#F5F5F5] focus:bg-[#3A3A3A]">
+                  Fixed Duration
+                </SelectItem>
+                <SelectItem value="adaptive" className="text-[#F5F5F5] focus:bg-[#3A3A3A]">
+                  Adaptive / Flexible
+                </SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-[#A5A5A5] mt-1">
+              {sessionDurationMode === 'adaptive' 
+                ? 'Session length varies based on recovery, day focus, and training priority'
+                : 'Train with a consistent target session length'}
+            </p>
+          </div>
+          
+          {/* Adaptive Mode Info - Show clear adaptive semantics */}
+          {sessionDurationMode === 'adaptive' && (
+            <div className="p-3 rounded-lg bg-[#1A1A1A] border border-[#3A3A3A] space-y-2">
+              <p className="text-sm text-[#F5F5F5] font-medium">
+                Adaptive Session Duration
+              </p>
+              <p className="text-xs text-[#A5A5A5]">
+                Your session length is adjusted by the engine based on recovery, readiness, and training focus for each day. 
+                The target below is used as a baseline when planning, but actual sessions may be shorter or longer.
+              </p>
+            </div>
+          )}
+
+          {/* Session Length - Target duration (applies to both modes) */}
+          <div className="space-y-2">
+            <Label className="text-[#F5F5F5]">
+              {sessionDurationMode === 'adaptive' ? 'Target Session Duration (baseline)' : 'Target Session Duration'}
+            </Label>
             <Select value={sessionLength} onValueChange={(v) => {
               setSessionLength(v)
               logDurationTruth('Settings duration changed', {
@@ -801,7 +902,9 @@ export default function SettingsPage() {
               </SelectContent>
             </Select>
             <p className="text-xs text-[#A5A5A5] mt-1">
-              This is your target preference. Actual session times vary based on day focus.
+              {sessionDurationMode === 'adaptive'
+                ? 'This is your baseline target. Actual session times adapt based on day focus and recovery.'
+                : 'This is your target preference. Actual session times may vary slightly based on day focus.'}
             </p>
           </div>
 

@@ -1069,7 +1069,13 @@ export interface OnboardingProfile {
   
   // Section 8: Training Schedule
   trainingDaysPerWeek: TrainingDaysPerWeek | null
+  // ISSUE A/B FIX: Explicit scheduleMode for proper round-trip persistence
+  // When 'flexible', trainingDaysPerWeek is ignored and engine adapts at runtime
+  scheduleMode?: 'static' | 'flexible'
   sessionLengthMinutes: SessionLengthPreference | null
+  // ISSUE A/B FIX: Explicit sessionDurationMode for proper round-trip persistence
+  // When 'adaptive', sessionLengthMinutes is a hint and engine adapts based on recovery
+  sessionDurationMode?: 'static' | 'adaptive'
   workoutDurationPreference: WorkoutDurationPreference | null  // Semantic duration for program builder
   sessionStyle: SessionStylePreference | null
   
@@ -1589,11 +1595,19 @@ function normalizeOnboardingProfile(raw: unknown): OnboardingProfile | null {
     // Section 7: Equipment - CRITICAL ARRAY
     equipment: normalizeArray(data.equipment, 'equipment'),
     
-    // Section 8: Training Schedule
-    trainingDaysPerWeek: safeNumber(data.trainingDaysPerWeek) as TrainingDaysPerWeek | null,
-    sessionLengthMinutes: safeNumber(data.sessionLengthMinutes) as SessionLengthPreference | null,
-    workoutDurationPreference: safeString(data.workoutDurationPreference),
-    sessionStyle: safeString(data.sessionStyle),
+  // Section 8: Training Schedule
+  trainingDaysPerWeek: safeNumber(data.trainingDaysPerWeek) as TrainingDaysPerWeek | null,
+  // ISSUE A/B FIX: Parse explicit scheduleMode from persisted data
+  scheduleMode: data.scheduleMode === 'flexible' ? 'flexible' 
+    : data.scheduleMode === 'static' ? 'static' 
+    : data.trainingDaysPerWeek === 'flexible' ? 'flexible' : undefined,
+  sessionLengthMinutes: safeNumber(data.sessionLengthMinutes) as SessionLengthPreference | null,
+  // ISSUE A/B FIX: Parse explicit sessionDurationMode from persisted data
+  sessionDurationMode: data.sessionDurationMode === 'adaptive' ? 'adaptive'
+    : data.sessionDurationMode === 'static' ? 'static'
+    : data.sessionLengthMinutes === 'flexible' ? 'adaptive' : undefined,
+  workoutDurationPreference: safeString(data.workoutDurationPreference),
+  sessionStyle: safeString(data.sessionStyle),
     
     // Short Session Preferences
     shortSessionsEnabled: safeBoolean(data.shortSessionsEnabled, false),
@@ -1734,7 +1748,9 @@ export function createEmptyOnboardingProfile(): OnboardingProfile {
     
   // Section 8: Training Schedule
   trainingDaysPerWeek: null,
+  scheduleMode: undefined,  // ISSUE A/B FIX: Explicit field for round-trip
   sessionLengthMinutes: null,
+  sessionDurationMode: undefined,  // ISSUE A/B FIX: Explicit field for round-trip
   workoutDurationPreference: null,
   sessionStyle: null,
   

@@ -76,6 +76,9 @@ export interface FlexibleWeekStructure {
   includesAdaptiveDay: boolean
   isConservative: boolean
   
+  // ISSUE D FIX: Clear wording source tracking
+  wordingSource: 'saved_preference' | 'profile_resolution' | 'history_adaptation'
+  
   // For future weekly adaptation
   suggestedNextWeekAdjustment?: 'maintain' | 'increase' | 'decrease'
   adjustmentReason?: string
@@ -218,6 +221,8 @@ export function resolveFlexibleFrequency(input: FlexibleFrequencyInput): Flexibl
     rationale,
     includesAdaptiveDay,
     isConservative: intensityDistribution === 'conservative',
+    // ISSUE D FIX: Track wording source - this is based on profile resolution, not history yet
+    wordingSource: 'profile_resolution',
   }
   
   // ENGINE PROOF: Record flexible schedule resolution
@@ -335,22 +340,24 @@ function generateFrequencyRationale(
   const goalName = input.primaryGoal.replace(/_/g, ' ')
   const isHighTendon = HIGH_TENDON_GOALS.includes(input.primaryGoal)
   
-  let rationale = `Based on your ${goalName} focus`
+  // ISSUE C/D FIX: Clear wording that distinguishes saved preference vs current resolution
+  // Start with what this week resolves to (not what history says)
+  let rationale = `This week: ${frequency} training days`
   
   if (isHighTendon) {
-    rationale += `, ${frequency} training days this week balances skill exposure with tendon recovery`
+    rationale += ` (balancing ${goalName} skill work with tendon recovery)`
   } else {
-    rationale += `, ${frequency} training days provides effective stimulus while managing fatigue`
+    rationale += ` (optimized for ${goalName} progress)`
   }
   
   if (input.jointCautions && input.jointCautions.length > 0) {
-    rationale += `. Frequency adjusted for joint considerations`
+    rationale += `. Adjusted for joint considerations`
   }
   
   if (distribution === 'conservative') {
-    rationale += `. Taking a conservative approach to build consistency`
+    rationale += `. Conservative approach for consistent progress`
   } else if (distribution === 'aggressive') {
-    rationale += `. Higher frequency supported by your experience level`
+    rationale += `. Higher frequency supported by your experience`
   }
   
   return rationale + '.'
@@ -370,9 +377,11 @@ function createStaticWeekStructure(days: number): FlexibleWeekStructure {
     recommendedMaxDays: days,
     dayStressPattern: pattern,
     intensityDistribution: 'balanced',
-    rationale: `Static ${days}-day schedule as selected.`,
+    rationale: `${days}-day schedule as selected in your profile.`,
     includesAdaptiveDay: false,
     isConservative: false,
+    // ISSUE D FIX: Static mode is always based on saved preference
+    wordingSource: 'saved_preference',
   }
 }
 

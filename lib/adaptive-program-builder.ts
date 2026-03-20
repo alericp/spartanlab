@@ -459,6 +459,8 @@ export interface AdaptiveProgram {
   experienceLevel: ExperienceLevel
   trainingDaysPerWeek: TrainingDays
   sessionLength: SessionLength
+  // TASK E: Session duration mode - 'static' = fixed target, 'adaptive' = engine adapts per day
+  sessionDurationMode?: 'static' | 'adaptive'
   // FLEXIBLE SCHEDULING: Preserve user's schedule mode and current week resolution
   scheduleMode?: ScheduleMode
   currentWeekFrequency?: number  // Actual days for this generated week
@@ -3408,10 +3410,22 @@ export function getDefaultAdaptiveInputs(): AdaptiveProgramInputs {
   const scheduleMode: ScheduleMode = isFlexibleUser ? 'flexible' : 'static'
   
   // For flexible users: trainingDaysPerWeek = 'flexible' (identity)
-  // For static users: trainingDaysPerWeek = numeric value
+  // For static users: trainingDaysPerWeek = numeric value from canonical profile
+  // ISSUE A FIX: Only fallback to 4 if canonical field is truly null/undefined (new user)
+  // Use explicit null check to avoid treating 0 or other falsy values as missing
+  const canonicalDays = canonicalProfile.trainingDaysPerWeek
   const trainingDaysPerWeek: TrainingDays | 'flexible' = isFlexibleUser 
     ? 'flexible' 
-    : (canonicalProfile.trainingDaysPerWeek as TrainingDays) || 4
+    : canonicalDays !== null && canonicalDays !== undefined 
+      ? (canonicalDays as TrainingDays)
+      : 4  // Only for truly new users with no saved value
+  
+  // TASK 7: Track whether fallbacks were used for debugging seed/default dominance
+  const fallbacksUsed = {
+    trainingDaysPerWeek: canonicalDays === null || canonicalDays === undefined,
+    sessionLength: !canonicalProfile.sessionLengthMinutes,
+    primaryGoal: !canonicalProfile.primaryGoal,
+  }
   
   // CANONICAL FIX: Log which canonical profile fields were consumed for debugging
   console.log('[AdaptiveBuilder] getDefaultAdaptiveInputs consumed from CANONICAL:', {
@@ -3434,6 +3448,8 @@ export function getDefaultAdaptiveInputs(): AdaptiveProgramInputs {
       frontLever: !!canonicalProfile.frontLeverProgression,
       planche: !!canonicalProfile.plancheProgression,
     },
+    // TASK 7: Fallback usage tracking
+    fallbacksUsed,
   })
   
   return {

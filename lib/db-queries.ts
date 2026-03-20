@@ -422,7 +422,9 @@ export async function dbSaveProfile(
           ${data.pancakeLevel ?? null}, ${data.pancakeRangeIntent ?? null}, ${data.toeTouchLevel ?? null}, ${data.frontSplitsLevel ?? null},
           ${data.frontSplitsRangeIntent ?? null}, ${data.sideSplitsLevel ?? null}, ${data.sideSplitsRangeIntent ?? null},
           -- Equipment & schedule
-          ${data.equipmentAvailable ?? []}, ${data.trainingDaysPerWeek ?? 4}, ${data.sessionLengthMinutes ?? 60}, ${data.sessionStyle ?? null},
+          -- ISSUE A FIX: Use null instead of default values (4/60) to preserve canonical truth
+          -- Fallbacks should only apply at read-time for display, not at write-time
+          ${data.equipmentAvailable ?? []}, ${data.trainingDaysPerWeek ?? null}, ${data.sessionLengthMinutes ?? null}, ${data.sessionStyle ?? null},
           -- Recovery / lifestyle
           ${data.sleepQuality ?? null}, ${data.energyLevel ?? null}, ${data.stressLevel ?? null}, ${data.recoveryConfidence ?? null},
           -- Range intent

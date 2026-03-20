@@ -930,6 +930,10 @@ export interface ScheduleAnalysis {
   adaptationReason: string
   recommendedDays: number
   temporaryReduction: boolean
+  // ISSUE D FIX: Add history confidence to distinguish saved preference vs observed pattern
+  historyConfidence: 'insufficient' | 'limited' | 'sufficient'
+  // ISSUE D FIX: Track whether wording is based on history or saved preference
+  wordingSource: 'saved_preference' | 'observed_history' | 'current_week_resolution'
 }
 
 export interface VolumeAnalysis {
@@ -1019,29 +1023,65 @@ function analyzeSchedulePatterns(logs: WorkoutLog[]): ScheduleAnalysis {
   const weeklyVariance = Math.max(week1, week2, week3) - Math.min(week1, week2, week3)
   const consistentPattern = weeklyVariance <= 1
   
+  // ISSUE C/D FIX: Determine history confidence based on actual data volume
+  // Need at least 3 weeks of data to claim "actual pattern"
+  const totalWorkouts = getWorkoutsInDateRange(logs, 21).length
+  let historyConfidence: 'insufficient' | 'limited' | 'sufficient' = 'insufficient'
+  if (totalWorkouts >= 9) historyConfidence = 'sufficient'  // ~3+ per week for 3 weeks
+  else if (totalWorkouts >= 4) historyConfidence = 'limited'  // Some data but not enough
+  
   let adaptation: ScheduleAdaptation = 'maintain'
   let adaptationReason = 'Training frequency matches your target.'
   let recommendedDays = intendedDays
   let temporaryReduction = false
+  let wordingSource: 'saved_preference' | 'observed_history' | 'current_week_resolution' = 'saved_preference'
   
   if (scheduleMismatch) {
     if (actualDays < intendedDays) {
       if (consistentPattern) {
         adaptation = 'reduce'
         recommendedDays = Math.max(2, Math.round(actualDays))
-        adaptationReason = `Adapting to your actual ${recommendedDays}-day training pattern.`
+        // ISSUE C FIX: Only use "actual pattern" wording when we have sufficient history
+        if (historyConfidence === 'sufficient') {
+          adaptationReason = `Based on your recent training history (${totalWorkouts} sessions over 3 weeks), adjusting to ${recommendedDays} sessions/week.`
+          wordingSource = 'observed_history'
+        } else if (historyConfidence === 'limited') {
+          adaptationReason = `This week resolves to ${recommendedDays} sessions based on your adaptive profile and early training data.`
+          wordingSource = 'current_week_resolution'
+        } else {
+          adaptationReason = `This week resolves to ${recommendedDays} sessions based on your adaptive schedule preference.`
+          wordingSource = 'saved_preference'
+        }
       } else {
         adaptation = 'reduce'
         recommendedDays = Math.max(2, intendedDays - 1)
         temporaryReduction = true
         adaptationReason = 'Reducing volume temporarily while you settle into a rhythm.'
+        wordingSource = 'current_week_resolution'
       }
     } else {
       adaptation = 'increase'
       recommendedDays = Math.min(6, Math.round(actualDays))
-      adaptationReason = `You're training more than planned. Adjusted to ${recommendedDays} days.`
+      // ISSUE C FIX: Clear wording for increased frequency
+      if (historyConfidence === 'sufficient') {
+        adaptationReason = `Based on your recent training history, you're training ${recommendedDays} days/week.`
+        wordingSource = 'observed_history'
+      } else {
+        adaptationReason = `Training more than planned. Adjusted to ${recommendedDays} days this week.`
+        wordingSource = 'current_week_resolution'
+      }
     }
   }
+  
+  // TASK 6: Dev logging for wording branch
+  console.log('[adaptive-progression] Schedule analysis:', {
+    intendedDays,
+    actualDays,
+    historyConfidence,
+    wordingSource,
+    totalWorkouts,
+    adaptation,
+  })
   
   return {
     intendedDaysPerWeek: intendedDays,
@@ -1052,6 +1092,8 @@ function analyzeSchedulePatterns(logs: WorkoutLog[]): ScheduleAnalysis {
     adaptationReason,
     recommendedDays,
     temporaryReduction,
+    historyConfidence,
+    wordingSource,
   }
 }
 

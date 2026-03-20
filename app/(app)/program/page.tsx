@@ -323,40 +323,91 @@ export default function ProgramPage() {
     loadModules()
   }, [])
 
+  // Generation error state for recoverable failures
+  const [generationError, setGenerationError] = useState<string | null>(null)
+  
   // TASK 5: Handlers use dynamically imported modules
-  // TASK 3 FIX: Generate creates full snapshot AFTER planner completes
+  // HARDENED: Full try/catch/finally to prevent stuck spinner state
   const handleGenerate = useCallback(() => {
-    if (!inputs || !programModules.generateAdaptiveProgram || !programModules.saveAdaptiveProgram) return
+    // ISSUE A FIX: Validate prerequisites before starting generation
+    if (!inputs) {
+      console.error('[ProgramPage] handleGenerate: Missing inputs - cannot generate')
+      setGenerationError('Missing program inputs. Please refresh the page.')
+      return
+    }
+    if (!programModules.generateAdaptiveProgram || !programModules.saveAdaptiveProgram) {
+      console.error('[ProgramPage] handleGenerate: Modules not loaded yet')
+      setGenerationError('Program builder is still loading. Please wait a moment and try again.')
+      return
+    }
     
+    console.log('[ProgramPage] handleGenerate: Starting generation', { source: 'builder' })
     setIsGenerating(true)
+    setGenerationError(null) // Clear any previous error
     
-    // Small delay for UX
-    setTimeout(() => {
-      // TASK 2 FIX: Generate program first, then save complete snapshot
-      const newProgram = programModules.generateAdaptiveProgram(inputs)
-      
-      // TASK 7: Log snapshot creation with key fields
-      console.log('[ProgramPage] TASK 3: Program snapshot created AFTER planner completed:', {
-        id: newProgram.id,
-        primaryGoal: newProgram.primaryGoal,
-        secondaryGoal: newProgram.secondaryGoal || 'none',
-        goalLabel: newProgram.goalLabel,
-        sessionCount: newProgram.sessions?.length || 0,
-        scheduleMode: newProgram.scheduleMode,
-        sessionDurationMode: newProgram.sessionDurationMode,
-        structureName: newProgram.structure?.structureName || 'unknown',
-        createdAt: newProgram.createdAt,
-      })
-      
-      // TASK A FIX: Save full snapshot to storage (replaces by timestamp sorting)
-      programModules.saveAdaptiveProgram(newProgram)
-      
-      // TASK 4 FIX: Update UI state from stored program (single source)
-      setProgram(newProgram)
-      setShowBuilder(false)
-      setIsGenerating(false)
-      
-      console.log('[ProgramPage] TASK 3: Generation flow complete - UI updated from saved snapshot')
+    // Small delay for UX - wrapped in try/catch for safety
+    const timeoutId = setTimeout(() => {
+      let generationStage = 'starting'
+      try {
+        // STAGE 1: Generate program
+        generationStage = 'generating'
+        console.log('[ProgramPage] Generation stage: generating program...')
+        const newProgram = programModules.generateAdaptiveProgram(inputs)
+        
+        // STAGE 2: Validate program shape (fail fast on malformed data)
+        generationStage = 'validating'
+        console.log('[ProgramPage] Generation stage: validating program shape...')
+        if (!newProgram || !newProgram.id || !Array.isArray(newProgram.sessions) || newProgram.sessions.length === 0) {
+          throw new Error(`Invalid program shape: missing ${!newProgram ? 'program' : !newProgram.id ? 'id' : !newProgram.sessions ? 'sessions' : 'valid sessions'}`)
+        }
+        
+        // STAGE 3: Log snapshot creation
+        generationStage = 'logging'
+        console.log('[ProgramPage] Generation stage: program validated:', {
+          id: newProgram.id,
+          primaryGoal: newProgram.primaryGoal,
+          secondaryGoal: newProgram.secondaryGoal || 'none',
+          goalLabel: newProgram.goalLabel,
+          sessionCount: newProgram.sessions?.length || 0,
+          scheduleMode: newProgram.scheduleMode,
+          sessionDurationMode: newProgram.sessionDurationMode,
+          structureName: newProgram.structure?.structureName || 'unknown',
+          createdAt: newProgram.createdAt,
+        })
+        
+        // STAGE 4: Save to storage
+        generationStage = 'saving'
+        console.log('[ProgramPage] Generation stage: saving snapshot...')
+        programModules.saveAdaptiveProgram(newProgram)
+        
+        // STAGE 5: Update UI state
+        generationStage = 'updating-ui'
+        console.log('[ProgramPage] Generation stage: updating UI...')
+        setProgram(newProgram)
+        setShowBuilder(false)
+        
+        // ISSUE D FIX: Consistent result envelope for success
+        console.log('[ProgramPage] Generation complete - all stages passed', {
+          success: true,
+          stage: 'complete',
+          programId: newProgram.id,
+          programSaved: true,
+        })
+      } catch (err) {
+        // ISSUE D FIX: Consistent result envelope for failure
+        const errorMessage = err instanceof Error ? err.message : 'Unknown error'
+        console.error(`[ProgramPage] Generation FAILED at stage: ${generationStage}`, {
+          success: false,
+          stage: generationStage,
+          error: errorMessage,
+        })
+        setGenerationError(`Program generation failed at ${generationStage}. Please try again.`)
+        // Keep builder visible and inputs intact for retry
+      } finally {
+        // GUARANTEED: Always reset loading state - ISSUE B FIX
+        setIsGenerating(false)
+        console.log('[ProgramPage] Generation flow complete - loading state cleared')
+      }
     }, 500)
   }, [inputs, programModules])
 
@@ -375,44 +426,95 @@ export default function ProgramPage() {
   }, [program, programModules])
   
   // TASK 5: Regenerate Program - creates updated program from current profile truth
-  // TASK D FIX: Regenerate FULLY REPLACES the stored program (no merge)
+  // HARDENED: Full try/catch/finally to prevent stuck spinner state
   const handleRegenerate = useCallback(() => {
-    if (!inputs || !programModules.generateAdaptiveProgram || !programModules.saveAdaptiveProgram) return
+    // ISSUE A FIX: Validate prerequisites before starting regeneration
+    if (!inputs) {
+      console.error('[ProgramPage] handleRegenerate: Missing inputs - cannot regenerate')
+      setGenerationError('Missing program inputs. Please refresh the page.')
+      return
+    }
+    if (!programModules.generateAdaptiveProgram || !programModules.saveAdaptiveProgram) {
+      console.error('[ProgramPage] handleRegenerate: Modules not loaded yet')
+      setGenerationError('Program builder is still loading. Please wait a moment and try again.')
+      return
+    }
     
-    console.log('[ProgramPage] TASK D: Regenerate started - will FULLY REPLACE stored program')
+    console.log('[ProgramPage] handleRegenerate: Starting regeneration', { 
+      source: 'regenerate',
+      oldProgramId: program?.id || 'none',
+    })
     
     setIsGenerating(true)
+    setGenerationError(null) // Clear any previous error
     
-    // Small delay for UX
+    // Small delay for UX - wrapped in try/catch for safety
     setTimeout(() => {
-      // Record the regeneration event (not a full restart)
-      programModules.recordProgramEnd?.('regenerate')
-      
-      // TASK D FIX: Generate new program from current profile truth
-      const newProgram = programModules.generateAdaptiveProgram(inputs)
-      
-      // TASK 7: Log regenerate overwrite with key fields
-      console.log('[ProgramPage] TASK D: Regenerate overwriting snapshot:', {
-        oldProgramId: program?.id || 'none',
-        newProgramId: newProgram.id,
-        primaryGoal: newProgram.primaryGoal,
-        secondaryGoal: newProgram.secondaryGoal || 'none',
-        goalLabel: newProgram.goalLabel,
-        sessionCount: newProgram.sessions?.length || 0,
-        scheduleMode: newProgram.scheduleMode,
-        sessionDurationMode: newProgram.sessionDurationMode,
-        structureName: newProgram.structure?.structureName || 'unknown',
-      })
-      
-      // TASK D FIX: Save overwrites old program (getLatestAdaptiveProgram uses timestamp)
-      programModules.saveAdaptiveProgram(newProgram)
-      
-      // TASK 4 FIX: UI reads from the new stored snapshot
-      setProgram(newProgram)
-      setShowBuilder(false)
-      setIsGenerating(false)
-      
-      console.log('[ProgramPage] TASK D: Regenerate complete - UI shows new snapshot')
+      let regenerateStage = 'starting'
+      try {
+        // STAGE 1: Record regeneration event
+        regenerateStage = 'recording-event'
+        programModules.recordProgramEnd?.('regenerate')
+        
+        // STAGE 2: Generate new program
+        regenerateStage = 'generating'
+        console.log('[ProgramPage] Regenerate stage: generating program...')
+        const newProgram = programModules.generateAdaptiveProgram(inputs)
+        
+        // STAGE 3: Validate program shape
+        regenerateStage = 'validating'
+        console.log('[ProgramPage] Regenerate stage: validating program shape...')
+        if (!newProgram || !newProgram.id || !Array.isArray(newProgram.sessions) || newProgram.sessions.length === 0) {
+          throw new Error(`Invalid program shape: missing ${!newProgram ? 'program' : !newProgram.id ? 'id' : !newProgram.sessions ? 'sessions' : 'valid sessions'}`)
+        }
+        
+        // STAGE 4: Log snapshot
+        regenerateStage = 'logging'
+        console.log('[ProgramPage] Regenerate stage: program validated:', {
+          oldProgramId: program?.id || 'none',
+          newProgramId: newProgram.id,
+          primaryGoal: newProgram.primaryGoal,
+          secondaryGoal: newProgram.secondaryGoal || 'none',
+          goalLabel: newProgram.goalLabel,
+          sessionCount: newProgram.sessions?.length || 0,
+          scheduleMode: newProgram.scheduleMode,
+          sessionDurationMode: newProgram.sessionDurationMode,
+          structureName: newProgram.structure?.structureName || 'unknown',
+        })
+        
+        // STAGE 5: Save to storage
+        regenerateStage = 'saving'
+        console.log('[ProgramPage] Regenerate stage: saving snapshot...')
+        programModules.saveAdaptiveProgram(newProgram)
+        
+        // STAGE 6: Update UI state
+        regenerateStage = 'updating-ui'
+        console.log('[ProgramPage] Regenerate stage: updating UI...')
+        setProgram(newProgram)
+        setShowBuilder(false)
+        
+        // ISSUE D FIX: Consistent result envelope for success
+        console.log('[ProgramPage] Regenerate complete - all stages passed', {
+          success: true,
+          stage: 'complete',
+          programId: newProgram.id,
+          programSaved: true,
+        })
+      } catch (err) {
+        // ISSUE D FIX: Consistent result envelope for failure
+        const errorMessage = err instanceof Error ? err.message : 'Unknown error'
+        console.error(`[ProgramPage] Regenerate FAILED at stage: ${regenerateStage}`, {
+          success: false,
+          stage: regenerateStage,
+          error: errorMessage,
+        })
+        setGenerationError(`Program regeneration failed at ${regenerateStage}. Please try again.`)
+        // Keep current program visible for retry
+      } finally {
+        // GUARANTEED: Always reset loading state - ISSUE B FIX
+        setIsGenerating(false)
+        console.log('[ProgramPage] Regenerate flow complete - loading state cleared')
+      }
     }, 500)
   }, [inputs, program, programModules])
   
@@ -518,6 +620,27 @@ export default function ProgramPage() {
         {/* Content - TASK 2: Proper handling of malformed programs */}
         {showBuilder ? (
           <div className="space-y-6">
+            {/* HARDENED: Generation error banner - recoverable state */}
+            {generationError && (
+              <Card className="bg-amber-500/10 border-amber-500/30 p-4">
+                <div className="flex items-start gap-3">
+                  <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <p className="text-sm text-amber-200">{generationError}</p>
+                    <p className="text-xs text-amber-400/70 mt-1">Your inputs are preserved. Try again when ready.</p>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-amber-400 hover:text-amber-300 hover:bg-amber-500/20 h-7 px-2"
+                    onClick={() => setGenerationError(null)}
+                  >
+                    Dismiss
+                  </Button>
+                </div>
+              </Card>
+            )}
+            
             <AdaptiveProgramForm
               inputs={inputs}
               onInputChange={setInputs}

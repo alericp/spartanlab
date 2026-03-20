@@ -155,15 +155,17 @@ export function AdaptiveProgramDisplay({
                 {program.scheduleMode === 'flexible' ? 'Schedule' : 'Days/Week'}
               </p>
               {program.scheduleMode === 'flexible' ? (
-                // FLEXIBLE USER: Show adaptive identity + this week's frequency
-                <div className="flex items-center gap-1.5">
-                  <span className="text-sm font-medium">Adaptive</span>
+                // ISSUE D FIX: Clear distinction between saved adaptive preference and current week resolution
+                <div className="flex flex-col">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-sm font-medium">Adaptive</span>
+                  </div>
                   <span className="text-xs text-[#6A6A6A]">
-                    ({program.currentWeekFrequency || program.sessions?.length || '?'} this week)
+                    {program.currentWeekFrequency || program.sessions?.length || '?'} sessions this week
                   </span>
                 </div>
               ) : (
-                // STATIC USER: Show fixed days as before
+                // STATIC USER: Show fixed days as saved preference
                 <p className="text-sm font-medium">
                   {program.trainingDaysPerWeek} days
                 </p>
@@ -177,15 +179,17 @@ export function AdaptiveProgramDisplay({
                 {program.sessionDurationMode === 'adaptive' ? 'Duration' : 'Target Duration'}
               </p>
               {program.sessionDurationMode === 'adaptive' ? (
-                // ADAPTIVE USER: Show adaptive identity + target bucket
-                <div className="flex items-center gap-1.5">
-                  <span className="text-sm font-medium">Adaptive</span>
+                // ISSUE D FIX: Clear distinction between saved adaptive preference and resolved duration
+                <div className="flex flex-col">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-sm font-medium">Adaptive</span>
+                  </div>
                   <span className="text-xs text-[#6A6A6A]">
-                    (~{program.sessionLength || 60} min target)
+                    ~{program.sessionLength || 60} min base target
                   </span>
                 </div>
               ) : (
-                // STATIC USER: Show fixed duration as before
+                // STATIC USER: Show fixed duration as saved preference
                 <p className="text-sm font-medium">{getDurationPreferenceLabel(program.sessionLength)}</p>
               )}
             </div>

@@ -212,13 +212,20 @@ export function reconcileCanonicalProfile(): CanonicalProgrammingProfile {
       athleteProfile?.scheduleMode === 'flexible' ? null : athleteProfile?.trainingDaysPerWeek,
       null  // TASK 1B: null = no fallback, validation catches
     ),
-    scheduleMode: pick(onboardingProfile?.scheduleMode, athleteProfile?.scheduleMode, 'flexible'),  // Default flexible for new users
+    // ISSUE A/B FIX: Read explicit scheduleMode field (now in OnboardingProfile type)
+    scheduleMode: pick(
+      onboardingProfile?.scheduleMode, 
+      athleteProfile?.scheduleMode, 
+      // ISSUE D FIX: Infer from trainingDaysPerWeek if scheduleMode not set
+      onboardingProfile?.trainingDaysPerWeek === 'flexible' ? 'flexible' : 'static'
+    ),
+    // ISSUE A/B FIX: Read explicit sessionDurationMode field (now in OnboardingProfile type)
     // TASK 1A: Session duration mode - 'static' = fixed duration, 'adaptive' = engine adapts based on recovery
-    // Currently defaults to 'static' for backward compatibility
     sessionDurationMode: pick(
-      (onboardingProfile as unknown as { sessionDurationMode?: 'static' | 'adaptive' })?.sessionDurationMode,
-      (athleteProfile as unknown as { sessionDurationMode?: 'static' | 'adaptive' })?.sessionDurationMode,
-      'static'  // Default to static for backward compatibility
+      onboardingProfile?.sessionDurationMode,
+      athleteProfile?.sessionDurationMode as 'static' | 'adaptive' | undefined,
+      // ISSUE D FIX: Infer from sessionLengthMinutes if sessionDurationMode not set
+      onboardingProfile?.sessionLengthMinutes === 'flexible' ? 'adaptive' : 'static'
     ),
     sessionLengthMinutes: pick(
       onboardingProfile?.sessionLengthMinutes,
@@ -499,11 +506,13 @@ export function saveCanonicalProfile(updates: Partial<CanonicalProgrammingProfil
   
   if (updates.primaryGoal !== undefined) athleteUpdates.primaryGoal = updates.primaryGoal
   if (updates.experienceLevel !== undefined) athleteUpdates.experienceLevel = updates.experienceLevel
-  if (updates.trainingDaysPerWeek !== undefined) athleteUpdates.trainingDaysPerWeek = updates.trainingDaysPerWeek ?? 4
+  // ISSUE A FIX: Do not fallback to 4 - preserve the actual canonical value
+  // Only use the value if explicitly set, never inject defaults during save
+  if (updates.trainingDaysPerWeek !== undefined) athleteUpdates.trainingDaysPerWeek = updates.trainingDaysPerWeek
   if (updates.scheduleMode !== undefined) athleteUpdates.scheduleMode = updates.scheduleMode
-  // TASK 1A: sessionDurationMode - store in athlete profile for downstream consumption
+  // ISSUE A/B FIX: sessionDurationMode - store in athlete profile for downstream consumption
   if (updates.sessionDurationMode !== undefined) {
-    (athleteUpdates as any).sessionDurationMode = updates.sessionDurationMode
+    athleteUpdates.sessionDurationMode = updates.sessionDurationMode
   }
   if (updates.sessionLengthMinutes !== undefined) athleteUpdates.sessionLengthMinutes = updates.sessionLengthMinutes as 30 | 45 | 60 | 90
   if (updates.equipmentAvailable !== undefined) athleteUpdates.equipmentAvailable = updates.equipmentAvailable as AthleteProfile['equipmentAvailable']
@@ -536,10 +545,11 @@ export function saveCanonicalProfile(updates: Partial<CanonicalProgrammingProfil
     if (updates.selectedFlexibility !== undefined) onboardingUpdates.selectedFlexibility = updates.selectedFlexibility
     if (updates.selectedStrength !== undefined) onboardingUpdates.selectedStrength = updates.selectedStrength
     if (updates.goalCategory !== undefined) onboardingUpdates.goalCategory = updates.goalCategory
+    // ISSUE A/B FIX: Sync scheduleMode to onboarding profile (now properly typed)
     if (updates.scheduleMode !== undefined) onboardingUpdates.scheduleMode = updates.scheduleMode
-    // TASK 1A: sessionDurationMode - sync to onboarding profile
+    // ISSUE A/B FIX: Sync sessionDurationMode to onboarding profile (now properly typed)
     if (updates.sessionDurationMode !== undefined) {
-      (onboardingUpdates as any).sessionDurationMode = updates.sessionDurationMode
+      onboardingUpdates.sessionDurationMode = updates.sessionDurationMode
     }
     if (updates.sessionLengthMinutes !== undefined) onboardingUpdates.sessionLengthMinutes = updates.sessionLengthMinutes
     // TASK C FIX: OnboardingProfile uses 'equipment', not 'equipmentAvailable'

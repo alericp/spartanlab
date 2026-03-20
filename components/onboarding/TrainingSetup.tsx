@@ -43,7 +43,9 @@ interface FormData {
   
   // Step 4: Training schedule
   trainingDaysPerWeek: TrainingDays | null
-  sessionLengthMinutes: SessionLengthMinutes | null
+  // TASK B FIX: Support adaptive session duration mode
+  sessionDurationMode: 'static' | 'adaptive'
+  sessionLengthMinutes: SessionLengthMinutes | null  // Target duration (used as baseline for adaptive mode)
   equipmentAvailable: Equipment[]
   
   // Step 5: Strength inputs
@@ -139,6 +141,8 @@ export function TrainingSetup() {
     selectedStrength: [],
     rangeApproach: null,
     trainingDaysPerWeek: null,
+    // TASK B FIX: Default to static duration mode, but support adaptive
+    sessionDurationMode: 'static',
     sessionLengthMinutes: null,
     equipmentAvailable: [],
     pullUpMax: '',
@@ -180,6 +184,8 @@ export function TrainingSetup() {
         ) as StrengthGoal[],
         rangeApproach: null, // Range approach is per-session, not stored
         trainingDaysPerWeek: profile.scheduleMode === 'flexible' ? null : (profile.trainingDaysPerWeek as TrainingDays | null),
+        // TASK B FIX: Restore sessionDurationMode from canonical profile
+        sessionDurationMode: profile.sessionDurationMode === 'adaptive' ? 'adaptive' : 'static',
         sessionLengthMinutes: (profile.sessionLengthMinutes as SessionLengthMinutes) || null,
         equipmentAvailable: (profile.equipmentAvailable || []) as Equipment[],
         pullUpMax: profile.pullUpMax || '',
@@ -202,6 +208,8 @@ export function TrainingSetup() {
       selectedStrength: [],
       rangeApproach: null,
       trainingDaysPerWeek: null,
+      // TASK B FIX: Reset sessionDurationMode to static on clear
+      sessionDurationMode: 'static',
       sessionLengthMinutes: null,
       equipmentAvailable: [],
       pullUpMax: '',
@@ -218,6 +226,8 @@ export function TrainingSetup() {
       goalCategory: null,
       trainingDaysPerWeek: null,
       scheduleMode: 'static',
+      // TASK B FIX: Reset sessionDurationMode to static on clear
+      sessionDurationMode: 'static',
       sessionLengthMinutes: 60,
       equipmentAvailable: [],
       jointCautions: [],
@@ -247,7 +257,8 @@ export function TrainingSetup() {
     (formData.goalCategory === 'flexibility' && formData.selectedFlexibility.length > 0) ||
     (formData.goalCategory === 'strength' && formData.selectedStrength.length > 0)
   const isStep3Valid = !needsRangeStep || formData.rangeApproach !== null
-  const isStep4Valid = formData.trainingDaysPerWeek !== null && formData.sessionLengthMinutes !== null
+  // TASK B FIX: Adaptive mode doesn't require a fixed session length (it uses a default target)
+  const isStep4Valid = formData.trainingDaysPerWeek !== null && (formData.sessionDurationMode === 'adaptive' || formData.sessionLengthMinutes !== null)
   const isStep5Valid = true // Strength inputs are optional
   
   const canProceed = 
@@ -345,6 +356,12 @@ export function TrainingSetup() {
             ? 'both' as const
             : null
 
+      // TASK B FIX: Determine resolved session length for adaptive mode
+      // Adaptive mode uses 45 as default target if no specific length selected
+      const resolvedSessionLength = formData.sessionDurationMode === 'adaptive' && !formData.sessionLengthMinutes
+        ? 45
+        : formData.sessionLengthMinutes!
+
       // TASK 2: Save ALL canonical profile fields including secondaryGoal
       // This ensures downstream generation has complete athlete truth
       saveAthleteProfile({
@@ -355,7 +372,9 @@ export function TrainingSetup() {
         primaryGoal,
         secondaryGoal, // TASK 3: Now persisted canonically
         trainingDaysPerWeek: formData.trainingDaysPerWeek!,
-        sessionLengthMinutes: formData.sessionLengthMinutes!,
+        // TASK B FIX: Save sessionDurationMode and resolved session length
+        sessionDurationMode: formData.sessionDurationMode,
+        sessionLengthMinutes: resolvedSessionLength,
         equipmentAvailable: formData.equipmentAvailable,
         rangeIntent,
         rangeTrainingMode: formData.rangeApproach,
@@ -374,18 +393,38 @@ export function TrainingSetup() {
         secondaryGoal,
         trainingDaysPerWeek: formData.trainingDaysPerWeek,
         scheduleMode: formData.trainingDaysPerWeek ? 'static' : 'flexible',
-        sessionLengthMinutes: formData.sessionLengthMinutes!,
+        // TASK B FIX: Save sessionDurationMode canonically
+        sessionDurationMode: formData.sessionDurationMode,
+        sessionLengthMinutes: resolvedSessionLength,
         equipmentAvailable: formData.equipmentAvailable,
         pullUpMax: formData.pullUpMax || null,
         dipMax: formData.dipMax || null,
         onboardingComplete: true,
       })
       
+      // TASK 6: Dev-safe logging for duration mode verification
+      console.log('[TrainingSetup] TASK 6: Saved duration mode:', {
+        sessionDurationMode: formData.sessionDurationMode,
+        sessionLengthMinutes: resolvedSessionLength,
+        scheduleMode: formData.trainingDaysPerWeek ? 'static' : 'flexible',
+        trainingDaysPerWeek: formData.trainingDaysPerWeek,
+      })
+      
       logCanonicalProfileState('After TrainingSetup submit')
       
+      // ISSUE C FIX: Log navigation attempt for debugging
+      console.log('[TrainingSetup] Navigating to dashboard')
       router.push('/dashboard')
+      
+      // Note: setIsSubmitting(false) is NOT called on success because we're navigating away
+      // The component will unmount, making the state irrelevant
     } catch (error) {
-      console.error('Failed to save training setup:', error)
+      // ISSUE B/D FIX: Log failure with consistent envelope and always reset loading
+      console.error('[TrainingSetup] Submit FAILED:', {
+        success: false,
+        stage: 'submit',
+        error: error instanceof Error ? error.message : 'Unknown error',
+      })
       setIsSubmitting(false)
     }
   }
@@ -617,12 +656,55 @@ export function TrainingSetup() {
                 </div>
               </div>
 
-              {/* Session Length */}
+              {/* Session Duration Mode - TASK B FIX: Add adaptive option */}
               <div className="space-y-3">
                 <label className="flex items-center gap-2 text-sm font-medium text-[#A4ACB8]">
                   <Clock className="w-4 h-4" />
-                  Session length
+                  Session duration
                 </label>
+                {/* Duration mode toggle: Fixed vs Adaptive */}
+                <div className="grid grid-cols-2 gap-2 mb-3">
+                  <button
+                    type="button"
+                    onClick={() => setFormData(prev => ({ 
+                      ...prev, 
+                      sessionDurationMode: 'static',
+                      sessionLengthMinutes: prev.sessionLengthMinutes || 45
+                    }))}
+                    className={`py-3 rounded-lg border text-sm font-medium transition-colors ${
+                      formData.sessionDurationMode === 'static'
+                        ? 'bg-[#C1121F]/10 border-[#C1121F] text-[#E6E9EF]'
+                        : 'bg-[#0A0B0D] border-[#1E2329] text-[#A4ACB8] hover:border-[#3B4552]'
+                    }`}
+                  >
+                    Fixed Duration
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFormData(prev => ({ ...prev, sessionDurationMode: 'adaptive' }))}
+                    className={`py-3 rounded-lg border text-sm font-medium transition-colors ${
+                      formData.sessionDurationMode === 'adaptive'
+                        ? 'bg-[#C1121F]/10 border-[#C1121F] text-[#E6E9EF]'
+                        : 'bg-[#0A0B0D] border-[#1E2329] text-[#A4ACB8] hover:border-[#3B4552]'
+                    }`}
+                  >
+                    <span className="flex items-center justify-center gap-1.5">
+                      Adaptive
+                      <span className="px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-[#C1121F]/15 text-[#E05A64] border border-[#C1121F]/20">
+                        Flex
+                      </span>
+                    </span>
+                  </button>
+                </div>
+                
+                {/* Adaptive mode info */}
+                {formData.sessionDurationMode === 'adaptive' && (
+                  <p className="text-xs text-[#6B7280] mb-3 p-2 rounded bg-[#1E2329]/50">
+                    Session length adapts based on your recovery, day focus, and training priority. You can optionally select a target below as a baseline.
+                  </p>
+                )}
+                
+                {/* Fixed duration options (or optional target for adaptive) */}
                 <div className="grid grid-cols-4 gap-2">
                   {SESSION_LENGTHS.map((length) => (
                     <button
@@ -639,6 +721,13 @@ export function TrainingSetup() {
                     </button>
                   ))}
                 </div>
+                {formData.sessionDurationMode === 'adaptive' && (
+                  <p className="text-xs text-[#6B7280]">
+                    {formData.sessionLengthMinutes 
+                      ? `Target: ~${formData.sessionLengthMinutes} min (actual may vary)`
+                      : 'No target selected — engine will optimize based on your day'}
+                  </p>
+                )}
               </div>
 
               {/* Equipment */}

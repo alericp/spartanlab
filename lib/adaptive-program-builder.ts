@@ -2738,12 +2738,24 @@ export function getDefaultAdaptiveInputs(): AdaptiveProgramInputs {
   else if (profileSessionLength === 60) sessionLength = 60
   else if (profileSessionLength === 90) sessionLength = 75 // Map 90 to 75 (closest match)
   
+  // FLEXIBLE SCHEDULE FIX: Preserve schedule identity from profile
+  // Do NOT collapse flexible users into a fake fixed numeric value
+  const isFlexibleUser = profile.scheduleMode === 'flexible' || profile.trainingDaysPerWeek === null
+  const scheduleMode: ScheduleMode = isFlexibleUser ? 'flexible' : 'static'
+  
+  // For flexible users: trainingDaysPerWeek = 'flexible' (identity)
+  // For static users: trainingDaysPerWeek = numeric value
+  const trainingDaysPerWeek: TrainingDays | 'flexible' = isFlexibleUser 
+    ? 'flexible' 
+    : (profile.trainingDaysPerWeek as TrainingDays) || 4
+  
   return {
     primaryGoal,
     experienceLevel: profile.experienceLevel,
-    trainingDaysPerWeek: (profile.trainingDaysPerWeek as TrainingDays) || 4,
+    trainingDaysPerWeek,
     sessionLength,
     equipment: mappedEquipment,
+    scheduleMode,
   }
 }
 

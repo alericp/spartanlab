@@ -50,11 +50,13 @@ const ProgramAdjustmentModal = dynamic(
 // Catches render errors and triggers recovery state instead of crashing
 function ProgramDisplayWrapper({ 
   program, 
-  onDelete, 
+  onDelete,
+  onRestart,
   onRecoveryNeeded 
 }: { 
   program: AdaptiveProgram
   onDelete: () => void
+  onRestart: () => void
   onRecoveryNeeded: () => void 
 }) {
   const [hasRenderError, setHasRenderError] = useState(false)
@@ -89,6 +91,7 @@ function ProgramDisplayWrapper({
       <AdaptiveProgramDisplay
         program={program}
         onDelete={onDelete}
+        onRestart={onRestart}
       />
     )
   } catch (err) {
@@ -333,13 +336,19 @@ export default function ProgramPage() {
     }, 500)
   }, [inputs, programModules])
 
-  const handleDelete = useCallback(() => {
+  // TASK 3: Renamed from handleDelete - archives program before clearing
+  const handleRestart = useCallback(() => {
     if (program && programModules.deleteAdaptiveProgram) {
+      // Record program end for history/archival before deleting
+      programModules.recordProgramEnd?.('restart')
       programModules.deleteAdaptiveProgram(program.id)
       setProgram(null)
       setShowBuilder(true)
     }
   }, [program, programModules])
+  
+  // Legacy delete handler for backwards compatibility
+  const handleDelete = handleRestart
 
   const handleNewProgram = useCallback(() => {
     // If there's an active program, show the adjustment modal first
@@ -463,6 +472,7 @@ export default function ProgramPage() {
           <ProgramDisplayWrapper 
             program={program} 
             onDelete={handleDelete}
+            onRestart={handleRestart}
             onRecoveryNeeded={() => {
               console.log('[v0] Display render failed, showing recovery state')
               setLoadStage('display-render-error')

@@ -13,26 +13,39 @@ import {
   AlertTriangle,
   CheckCircle2,
   Info,
-  Trash2,
+  RotateCcw,
   Brain,
   TrendingUp,
   TrendingDown,
   Minus,
   Sparkles
 } from 'lucide-react'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog'
+import { useState } from 'react'
 import { WorkoutExplanation, PlanExplanationBadge, DataConfidenceBadge } from './WorkoutExplanation'
 
 interface AdaptiveProgramDisplayProps {
   program: AdaptiveProgram
   onDelete?: () => void
+  onRestart?: () => void // New: explicit restart action with archive
   onExerciseReplace?: (dayNumber: number, exerciseId: string) => void
 }
 
 export function AdaptiveProgramDisplay({ 
   program, 
   onDelete,
+  onRestart,
   onExerciseReplace 
 }: AdaptiveProgramDisplayProps) {
+  // TASK 2: Confirmation modal state for restart action
+  const [showRestartConfirm, setShowRestartConfirm] = useState(false)
   const recoveryColors: Record<string, string> = {
     HIGH: 'text-green-400 bg-green-400/10 border-green-400/20',
     MODERATE: 'text-yellow-400 bg-yellow-400/10 border-yellow-400/20',
@@ -88,14 +101,16 @@ export function AdaptiveProgramDisplay({
               Generated {new Date(program.createdAt).toLocaleDateString()}
             </p>
           </div>
-          {onDelete && (
+          {/* TASK 1: Restart Program action - truthful labeling instead of misleading trash icon */}
+          {(onRestart || onDelete) && (
             <Button
               variant="ghost"
               size="sm"
-              className="text-[#6A6A6A] hover:text-red-400"
-              onClick={onDelete}
+              className="text-[#6A6A6A] hover:text-amber-400 gap-1.5"
+              onClick={() => setShowRestartConfirm(true)}
             >
-              <Trash2 className="w-4 h-4" />
+              <RotateCcw className="w-4 h-4" />
+              <span className="text-xs hidden sm:inline">Restart</span>
             </Button>
           )}
         </div>
@@ -113,16 +128,22 @@ export function AdaptiveProgramDisplay({
             <Calendar className="w-4 h-4 text-[#E63946]" />
             <div>
               <p className="text-xs text-[#6A6A6A]">
-                {program.scheduleMode === 'flexible' ? 'This Week' : 'Days/Week'}
+                {program.scheduleMode === 'flexible' ? 'Schedule' : 'Days/Week'}
               </p>
-              <p className="text-sm font-medium">
-                {program.currentWeekFrequency || program.trainingDaysPerWeek}
-                {program.scheduleMode === 'flexible' && program.recommendedFrequencyRange && (
-                  <span className="text-xs text-[#6A6A6A] ml-1">
-                    ({program.recommendedFrequencyRange.min}-{program.recommendedFrequencyRange.max} range)
+              {program.scheduleMode === 'flexible' ? (
+                // FLEXIBLE USER: Show adaptive identity + this week's frequency
+                <div className="flex items-center gap-1.5">
+                  <span className="text-sm font-medium">Adaptive</span>
+                  <span className="text-xs text-[#6A6A6A]">
+                    ({program.currentWeekFrequency || program.sessions?.length || '?'} this week)
                   </span>
-                )}
-              </p>
+                </div>
+              ) : (
+                // STATIC USER: Show fixed days as before
+                <p className="text-sm font-medium">
+                  {program.trainingDaysPerWeek} days
+                </p>
+              )}
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -349,6 +370,49 @@ export function AdaptiveProgramDisplay({
           </Card>
         )}
       </div>
+
+      {/* TASK 2: Restart Program Confirmation Modal */}
+      <Dialog open={showRestartConfirm} onOpenChange={setShowRestartConfirm}>
+        <DialogContent className="bg-[#1A1F26] border-[#2B313A] max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-[#E6E9EF]">Restart Program?</DialogTitle>
+            <DialogDescription className="text-[#A4ACB8] pt-2 space-y-3">
+              <p>
+                Your current program will be archived to your program history. 
+                You can view it later in your training history.
+              </p>
+              <p>
+                After restarting, you can build a new program tailored to your 
+                updated goals and schedule.
+              </p>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex-col gap-2 sm:flex-col">
+            <Button
+              onClick={() => {
+                setShowRestartConfirm(false)
+                // Use onRestart if available, fall back to onDelete for backwards compatibility
+                if (onRestart) {
+                  onRestart()
+                } else if (onDelete) {
+                  onDelete()
+                }
+              }}
+              className="w-full bg-amber-600 hover:bg-amber-700 text-white"
+            >
+              <RotateCcw className="w-4 h-4 mr-2" />
+              Restart Program
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setShowRestartConfirm(false)}
+              className="w-full border-[#3A3A3A] text-[#A4ACB8] hover:bg-[#2A2A2A]"
+            >
+              Keep Current Program
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

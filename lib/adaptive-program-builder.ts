@@ -252,6 +252,17 @@ import {
   type FlexibleWeekStructure,
   type DayStressLevel,
 } from './flexible-schedule-engine'
+import {
+  calculateGoalHierarchyWeights,
+  calculateSessionDistribution,
+  getDurationVolumeConfig,
+  rankBottlenecks,
+  logEngineDiagnostics,
+  type GoalHierarchyWeights,
+  type SessionDistribution,
+  type RankedBottleneck,
+  type EngineDiagnostics,
+} from './engine-quality-contract'
 
 // Re-export schedule types for consumers
 export type { ScheduleMode, DayStressLevel } from './flexible-schedule-engine'
@@ -895,6 +906,37 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
     console.log('[program-gen] TASK 4: Computed limiter:', computedLimiter)
   }
   
+  // ENGINE QUALITY: Calculate goal hierarchy weighting for session distribution
+  const goalHierarchyWeights = calculateGoalHierarchyWeights(
+    primaryGoal,
+    secondaryGoal || canonicalProfile.secondaryGoal || null,
+    canonicalProfile.trainingPathType || 'hybrid'
+  )
+  console.log('[program-gen] Goal hierarchy weights:', goalHierarchyWeights)
+  
+  // ENGINE QUALITY: Rank bottlenecks from profile data
+  const rankedBottlenecks = normalizedProfile ? rankBottlenecks(
+    primaryGoal,
+    secondaryGoal || canonicalProfile.secondaryGoal || null,
+    normalizedProfile.strength,
+    normalizedProfile.skillProgressions,
+    normalizedProfile.equipment,
+    normalizedProfile.joints,
+    null // recovery level
+  ) : []
+  if (rankedBottlenecks.length > 0) {
+    console.log('[program-gen] Ranked bottlenecks:', rankedBottlenecks.map(b => ({
+      type: b.type,
+      severity: b.severityScore,
+      suggestedFocus: b.suggestedFocus,
+    })))
+  }
+  
+  // ENGINE QUALITY: Get duration-based volume config
+  const durationVolumeConfig = getDurationVolumeConfig(
+    typeof sessionLength === 'number' ? sessionLength : parseInt(String(sessionLength)) || 60
+  )
+  
   const profile = getAthleteProfile() // Legacy fallback
   const recoverySignal = calculateRecoverySignal()
   const constraintInsight = getConstraintInsight()
@@ -1008,6 +1050,15 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
     effectiveTrainingDays = getEffectiveFrequency(trainingDaysPerWeek) as TrainingDays
     console.log('[schedule-mode] Static mode, using:', effectiveTrainingDays, 'days')
   }
+  
+  // ENGINE QUALITY: Calculate session distribution based on goal hierarchy
+  const sessionDistribution = calculateSessionDistribution(
+    effectiveTrainingDays,
+    primaryGoal,
+    secondaryGoal || canonicalProfile.secondaryGoal || null,
+    canonicalProfile.trainingPathType || 'hybrid'
+  )
+  console.log('[program-gen] Session distribution:', sessionDistribution)
   
   // Get duration-based configuration for exercise count and structure
   const durationConfig = getDurationConfig(workoutDuration)
@@ -1546,6 +1597,29 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
     range: `${finalFrequencyRange.min}-${finalFrequencyRange.max}`,
     hasFlexibleStructure: !!flexibleWeekStructure,
   })
+  
+  // ENGINE QUALITY: Log comprehensive diagnostics (dev only)
+  if (process.env.NODE_ENV !== 'production') {
+    const warmupComponents = sessions.flatMap(s => (s.warmup || []).map(w => w.name))
+    const diagnostics: EngineDiagnostics = {
+      normalizedInputSummary: {
+        primaryGoal,
+        secondaryGoal: secondaryGoal || canonicalProfile.secondaryGoal || null,
+        experienceLevel,
+        sessionDuration: typeof sessionLength === 'number' ? sessionLength : parseInt(String(sessionLength)) || 60,
+        scheduleMode: finalScheduleMode,
+        strengthBenchmarks: normalizedProfile?.strength || {},
+        skillProgressions: normalizedProfile?.skillProgressions || {},
+      },
+      rankedBottlenecks,
+      sessionDistribution,
+      durationVolumeConfig,
+      warmupComponentsChosen: [...new Set(warmupComponents)],
+      warmupDedupeEvents: [], // Logged separately in warmup engine
+      goalWeighting: goalHierarchyWeights,
+    }
+    logEngineDiagnostics(diagnostics)
+  }
   
   return {
     id: `adaptive-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,

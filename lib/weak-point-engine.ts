@@ -709,7 +709,11 @@ function mapScoreToWeakPoint(factor: WeakPointType, scores: BenchmarkScores): nu
 }
 
 /**
- * Detect weak points for a specific skill target
+ * Detect weak points for a specific skill target.
+ * Returns ranked bottlenecks with severity scores and priority exercises.
+ * 
+ * ENGINE QUALITY: This is the canonical limiter detection function.
+ * All constraint/bottleneck analysis should flow through here.
  */
 export function detectWeakPoints(
   skillTarget: SkillTarget,
@@ -720,6 +724,18 @@ export function detectWeakPoints(
 ): WeakPointAssessment {
   const prerequisites = SKILL_PREREQUISITES[skillTarget]
   const scores = calculateBenchmarkScores(profile, calibration)
+  
+  // ENGINE QUALITY: Log benchmark scores for diagnostics (dev only)
+  if (process.env.NODE_ENV !== 'production') {
+    console.log('[WeakPointEngine] Benchmark scores for', skillTarget, ':', {
+      pullStrength: scores.pullStrength,
+      pushStrength: scores.pushStrength,
+      straightArmPull: scores.straightArmPull,
+      straightArmPush: scores.straightArmPush,
+      compression: scores.compression,
+      scapularControl: scores.scapularControl,
+    })
+  }
   
   // Calculate weighted scores for each prerequisite
   const prerequisiteScores = prerequisites.map(prereq => {
@@ -768,6 +784,17 @@ export function detectWeakPoints(
   
   // Generate coaching message
   const coachingMessage = generateCoachingMessage(skillTarget, primaryPrereq, secondaryPrereq)
+  
+  // ENGINE QUALITY: Log assessment summary (dev only)
+  if (process.env.NODE_ENV !== 'production') {
+    console.log('[WeakPointEngine] Assessment for', skillTarget, ':', {
+      primaryLimiter: primaryPrereq.factor,
+      primarySeverity: Math.round(primarySeverity),
+      secondaryLimiter: secondaryPrereq?.factor || 'none',
+      strongAreas: strongAreas.length,
+      confidence: confidenceScore.toFixed(2),
+    })
+  }
   
   return {
     athleteId: profile.userId || 'unknown',

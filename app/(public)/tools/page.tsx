@@ -80,6 +80,14 @@ const tools = [
     featured: true,
   },
   {
+    slug: '../one-arm-pull-up-readiness-calculator',
+    title: 'One-Arm Pull-Up Readiness Calculator',
+    description: 'Test if you have the strength prerequisites for one-arm pull-up training. Uses weighted pull-up and archer metrics.',
+    icon: Trophy,
+    category: 'Readiness Calculator',
+    featured: true,
+  },
+  {
     slug: 'planche-readiness',
     title: 'Planche Readiness Test (Legacy)',
     description: 'Evaluate your planche prerequisites and identify weak points.',

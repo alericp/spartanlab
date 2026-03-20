@@ -588,6 +588,214 @@ export function saveCanonicalProfile(updates: Partial<CanonicalProgrammingProfil
 }
 
 // =============================================================================
+// PROGRAM STALENESS DETECTION (TASK 6)
+// =============================================================================
+
+/**
+ * Profile snapshot type - matches the structure saved in program.profileSnapshot
+ */
+export interface ProfileSnapshot {
+  snapshotId: string
+  createdAt: string
+  primaryGoal: string | null
+  secondaryGoal: string | null
+  experienceLevel: string
+  trainingDaysPerWeek: number | null
+  sessionLengthMinutes: number
+  scheduleMode: 'static' | 'flexible'
+  equipmentAvailable: string[]
+  jointCautions: string[]
+  selectedSkills: string[]
+}
+
+/**
+ * Staleness check result
+ */
+export interface StalenessCheckResult {
+  isStale: boolean
+  staleDegree: 'none' | 'minor' | 'significant'
+  changedFields: string[]
+  recommendation: 'continue' | 'suggest_regenerate' | 'recommend_regenerate'
+}
+
+/**
+ * GENERATION-CRITICAL FIELDS - changes to these make program stale
+ * Minor changes: suggest regenerate but don't force it
+ * Significant changes: recommend regenerate
+ */
+const CRITICAL_FIELDS_SIGNIFICANT = [
+  'primaryGoal',
+  'selectedSkills',
+  'scheduleMode',
+  'trainingDaysPerWeek',
+] as const
+
+const CRITICAL_FIELDS_MINOR = [
+  'secondaryGoal',
+  'sessionLengthMinutes',
+  'experienceLevel',
+  'equipmentAvailable',
+  'jointCautions',
+] as const
+
+/**
+ * Check if the active program is stale relative to current canonical profile.
+ * 
+ * TASK 6: Detects when profile truth has drifted from the profile snapshot
+ * that was used to generate the active program.
+ * 
+ * @param programSnapshot - The profileSnapshot from the active program
+ * @returns Staleness check result with recommendation
+ */
+export function checkProgramStaleness(programSnapshot: ProfileSnapshot | undefined | null): StalenessCheckResult {
+  // If no snapshot, we can't determine staleness - treat as not stale
+  if (!programSnapshot) {
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('[CanonicalProfile] No program snapshot - cannot check staleness')
+    }
+    return {
+      isStale: false,
+      staleDegree: 'none',
+      changedFields: [],
+      recommendation: 'continue',
+    }
+  }
+  
+  const currentProfile = getCanonicalProfile()
+  const changedFields: string[] = []
+  let hasSignificantChange = false
+  let hasMinorChange = false
+  
+  // Check significant fields
+  if (currentProfile.primaryGoal !== programSnapshot.primaryGoal) {
+    changedFields.push('primaryGoal')
+    hasSignificantChange = true
+  }
+  
+  // Compare selectedSkills arrays
+  const currentSkills = currentProfile.selectedSkills || []
+  const snapshotSkills = programSnapshot.selectedSkills || []
+  if (currentSkills.length !== snapshotSkills.length || 
+      !currentSkills.every(s => snapshotSkills.includes(s))) {
+    changedFields.push('selectedSkills')
+    hasSignificantChange = true
+  }
+  
+  if (currentProfile.scheduleMode !== programSnapshot.scheduleMode) {
+    changedFields.push('scheduleMode')
+    hasSignificantChange = true
+  }
+  
+  // For static schedule users, check trainingDaysPerWeek
+  if (currentProfile.scheduleMode === 'static' && 
+      currentProfile.trainingDaysPerWeek !== programSnapshot.trainingDaysPerWeek) {
+    changedFields.push('trainingDaysPerWeek')
+    hasSignificantChange = true
+  }
+  
+  // Check minor fields
+  if (currentProfile.secondaryGoal !== programSnapshot.secondaryGoal) {
+    changedFields.push('secondaryGoal')
+    hasMinorChange = true
+  }
+  
+  if (currentProfile.sessionLengthMinutes !== programSnapshot.sessionLengthMinutes) {
+    changedFields.push('sessionLengthMinutes')
+    hasMinorChange = true
+  }
+  
+  if (currentProfile.experienceLevel !== programSnapshot.experienceLevel) {
+    changedFields.push('experienceLevel')
+    hasMinorChange = true
+  }
+  
+  // Compare equipment arrays
+  const currentEquipment = currentProfile.equipmentAvailable || []
+  const snapshotEquipment = programSnapshot.equipmentAvailable || []
+  if (currentEquipment.length !== snapshotEquipment.length || 
+      !currentEquipment.every(e => snapshotEquipment.includes(e))) {
+    changedFields.push('equipmentAvailable')
+    hasMinorChange = true
+  }
+  
+  // Compare joint cautions arrays
+  const currentCautions = currentProfile.jointCautions || []
+  const snapshotCautions = programSnapshot.jointCautions || []
+  if (currentCautions.length !== snapshotCautions.length || 
+      !currentCautions.every(c => snapshotCautions.includes(c))) {
+    changedFields.push('jointCautions')
+    hasMinorChange = true
+  }
+  
+  // Determine staleness level
+  const isStale = hasSignificantChange || hasMinorChange
+  const staleDegree = hasSignificantChange ? 'significant' : hasMinorChange ? 'minor' : 'none'
+  const recommendation = hasSignificantChange 
+    ? 'recommend_regenerate' 
+    : hasMinorChange 
+      ? 'suggest_regenerate' 
+      : 'continue'
+  
+  if (process.env.NODE_ENV !== 'production' && isStale) {
+    console.log('[CanonicalProfile] Program staleness detected:', {
+      staleDegree,
+      changedFields,
+      recommendation,
+    })
+  }
+  
+  return {
+    isStale,
+    staleDegree,
+    changedFields,
+    recommendation,
+  }
+}
+
+/**
+ * Clear canonical profile data (for Clear All functionality).
+ * 
+ * TASK 2: This clears onboarding/profile selections but:
+ * - DOES NOT clear workout history
+ * - DOES NOT clear completed sessions
+ * - DOES NOT clear archived programs
+ * 
+ * If an active program exists, it becomes stale but is NOT deleted.
+ */
+export function clearCanonicalProfileData(): void {
+  if (process.env.NODE_ENV !== 'production') {
+    console.log('[CanonicalProfile] Clearing canonical profile data (Clear All)')
+  }
+  
+  // Clear onboarding profile
+  if (typeof window !== 'undefined') {
+    localStorage.removeItem('spartanlab_onboarding_profile')
+  }
+  
+  // Clear athlete profile (data-service)
+  const emptyAthlete: Partial<AthleteProfile> = {
+    onboardingComplete: false,
+    primaryGoal: null,
+    experienceLevel: 'beginner',
+    trainingDaysPerWeek: 4,
+    sessionLengthMinutes: 60,
+    scheduleMode: 'flexible',
+    equipmentAvailable: [],
+    jointCautions: [],
+    weakestArea: null,
+    trainingStyle: null,
+    pullUpMax: null,
+    dipMax: null,
+    bodyweight: null,
+  }
+  saveAthleteProfile(emptyAthlete)
+  
+  if (process.env.NODE_ENV !== 'production') {
+    console.log('[CanonicalProfile] Clear All completed - profile data cleared, workout history preserved')
+  }
+}
+
+// =============================================================================
 // DEV DIAGNOSTIC LOGGING
 // =============================================================================
 

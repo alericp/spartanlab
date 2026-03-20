@@ -135,7 +135,7 @@ import {
   hasEstimatedValues,
 } from '@/lib/athlete-profile'
 import { BodyFatCalculator } from './BodyFatCalculator'
-import { getCanonicalProfile, saveCanonicalProfile, logCanonicalProfileState } from '@/lib/canonical-profile-service'
+import { getCanonicalProfile, saveCanonicalProfile, logCanonicalProfileState, clearCanonicalProfileData } from '@/lib/canonical-profile-service'
 import { logProfileTruthState } from '@/lib/profile-truth-contract'
 import { getOnboardingProfile } from '@/lib/athlete-profile'
 import {
@@ -3333,13 +3333,35 @@ function ReviewSection({ profile, onEditSection, onClearAll, showClearConfirm, s
       {onClearAll && (
         <div className="mt-6 pt-4 border-t border-[#2B313A]">
           {showClearConfirm ? (
-            <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3">
-              <p className="text-xs text-red-400 mb-2 text-center">
-                Are you sure? This will clear all your onboarding selections and start fresh.
-                <br />
-                <span className="text-[#6B7280]">(Your workout history will NOT be affected)</span>
-              </p>
-              <div className="flex gap-2 justify-center">
+            <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-4 space-y-3">
+              <div className="text-center">
+                <p className="text-sm text-red-400 font-medium mb-1">Clear All Profile Data?</p>
+                <p className="text-xs text-[#A4ACB8]">
+                  This will reset your onboarding selections and let you start fresh.
+                </p>
+              </div>
+              
+              {/* What will be cleared */}
+              <div className="bg-[#0F1115] rounded-lg p-2.5 space-y-1.5">
+                <p className="text-[10px] text-[#6B7280] uppercase tracking-wide font-medium">Will be cleared:</p>
+                <ul className="text-xs text-[#A4ACB8] space-y-0.5 pl-2">
+                  <li>• Goals and skill selections</li>
+                  <li>• Strength and skill benchmarks</li>
+                  <li>• Schedule and equipment preferences</li>
+                </ul>
+              </div>
+              
+              {/* What will be preserved */}
+              <div className="bg-[#1A2F1A]/30 border border-[#2D5A2D]/30 rounded-lg p-2.5 space-y-1.5">
+                <p className="text-[10px] text-[#4ADE80] uppercase tracking-wide font-medium">Will be preserved:</p>
+                <ul className="text-xs text-[#4ADE80]/80 space-y-0.5 pl-2">
+                  <li>• Workout history and completed sessions</li>
+                  <li>• Program history and archives</li>
+                  <li>• Account and billing information</li>
+                </ul>
+              </div>
+              
+              <div className="flex gap-2 justify-center pt-1">
                 <Button
                   type="button"
                   variant="outline"
@@ -3355,7 +3377,7 @@ function ReviewSection({ profile, onEditSection, onClearAll, showClearConfirm, s
                   onClick={onClearAll}
                   className="bg-red-600 hover:bg-red-700 text-white"
                 >
-                  Clear All Data
+                  Clear Profile Data
                 </Button>
               </div>
             </div>
@@ -3385,12 +3407,25 @@ export function AthleteOnboarding() {
   const [profile, setProfile] = useState<OnboardingProfile>(createEmptyOnboardingProfile())
   const [prefillLoaded, setPrefillLoaded] = useState(false)
   
-  // TASK 3: Prefill from existing profile on mount for edit mode
+  // TASK 1: Prefill from existing profile on mount for edit mode
+  // This enables onboarding to act as a true profile editor on revisit
   useEffect(() => {
     if (prefillLoaded) return
     
     const existingProfile = getOnboardingProfile()
     const canonical = getCanonicalProfile()
+    
+    // TASK 9: Dev-safe diagnostic for onboarding prefill
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('[AthleteOnboarding] Prefill initialization:', {
+        hasExistingProfile: !!existingProfile,
+        existingOnboardingComplete: existingProfile?.onboardingComplete,
+        existingPrimaryGoal: existingProfile?.primaryGoal,
+        canonicalOnboardingComplete: canonical.onboardingComplete,
+        canonicalPrimaryGoal: canonical.primaryGoal,
+        canonicalScheduleMode: canonical.scheduleMode,
+      })
+    }
     logCanonicalProfileState('AthleteOnboarding prefill initialization')
     
     // If user has existing onboarding data, prefill from it
@@ -3418,8 +3453,11 @@ export function AthleteOnboarding() {
         trainingPathType: (canonical.trainingPathType as TrainingPathType) || prev.trainingPathType,
         primaryTrainingOutcome: (canonical.primaryTrainingOutcome as PrimaryTrainingOutcome) || prev.primaryTrainingOutcome,
         
-        // Schedule
-        trainingDaysPerWeek: (canonical.trainingDaysPerWeek as TrainingDaysPerWeek) || prev.trainingDaysPerWeek,
+        // Schedule - TASK 1: Handle flexible schedule mode properly
+        // If scheduleMode is 'flexible', set trainingDaysPerWeek to 'flexible' string
+        trainingDaysPerWeek: canonical.scheduleMode === 'flexible' 
+          ? 'flexible' 
+          : (canonical.trainingDaysPerWeek as TrainingDaysPerWeek) || prev.trainingDaysPerWeek,
         sessionLengthMinutes: canonical.sessionLengthMinutes || prev.sessionLengthMinutes,
         sessionStyle: (canonical.sessionStylePreference as SessionStylePreference) || prev.sessionStyle,
         
@@ -3498,16 +3536,29 @@ export function AthleteOnboarding() {
   const [showClearConfirm, setShowClearConfirm] = useState(false)
   
   const handleClearAllData = useCallback(() => {
-    console.log('[AthleteOnboarding] Clearing all onboarding data')
-    // Reset to empty profile
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('[AthleteOnboarding] Clear All confirmed - clearing onboarding data')
+    }
+    
+    // TASK 2: Use canonical service to clear profile data properly
+    // This preserves workout history and archived programs
+    clearCanonicalProfileData()
+    
+    // Reset local state to empty profile
     setProfile(createEmptyOnboardingProfile())
-    // Clear from localStorage
+    
+    // Also clear the local onboarding profile key
     if (typeof window !== 'undefined') {
       localStorage.removeItem('spartanlab_onboarding_profile')
     }
+    
     setShowClearConfirm(false)
     // Reset to first section
     setCurrentSectionIndex(0)
+    
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('[AthleteOnboarding] Clear All completed - profile reset, workout history preserved')
+    }
   }, [])
 
   // Filter sections based on showIf conditions

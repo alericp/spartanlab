@@ -775,9 +775,56 @@ export default function SettingsPage() {
             </div>
           )}
 
-          {/* Session Length */}
+          {/* Session Duration Mode - TASK C FIX: Expose adaptive vs fixed toggle */}
           <div className="space-y-2">
-            <Label className="text-[#F5F5F5]">Target Session Duration</Label>
+            <Label className="text-[#F5F5F5]">Session Duration Type</Label>
+            <Select 
+              value={sessionDurationMode} 
+              onValueChange={(v) => {
+                setSessionDurationMode(v as 'static' | 'adaptive')
+                logDurationTruth('Settings duration mode changed', {
+                  canonicalPreference: parseInt(sessionLength),
+                  source: 'settings-duration-mode-dropdown',
+                })
+              }}
+            >
+              <SelectTrigger className="bg-[#1A1A1A] border-[#3A3A3A] text-[#F5F5F5]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent className="bg-[#2A2A2A] border-[#3A3A3A]">
+                <SelectItem value="static" className="text-[#F5F5F5] focus:bg-[#3A3A3A]">
+                  Fixed Duration
+                </SelectItem>
+                <SelectItem value="adaptive" className="text-[#F5F5F5] focus:bg-[#3A3A3A]">
+                  Adaptive / Flexible
+                </SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-[#A5A5A5] mt-1">
+              {sessionDurationMode === 'adaptive' 
+                ? 'Session length varies based on recovery, day focus, and training priority'
+                : 'Train with a consistent target session length'}
+            </p>
+          </div>
+          
+          {/* Adaptive Mode Info - Show clear adaptive semantics */}
+          {sessionDurationMode === 'adaptive' && (
+            <div className="p-3 rounded-lg bg-[#1A1A1A] border border-[#3A3A3A] space-y-2">
+              <p className="text-sm text-[#F5F5F5] font-medium">
+                Adaptive Session Duration
+              </p>
+              <p className="text-xs text-[#A5A5A5]">
+                Your session length is adjusted by the engine based on recovery, readiness, and training focus for each day. 
+                The target below is used as a baseline when planning, but actual sessions may be shorter or longer.
+              </p>
+            </div>
+          )}
+
+          {/* Session Length - Target duration (applies to both modes) */}
+          <div className="space-y-2">
+            <Label className="text-[#F5F5F5]">
+              {sessionDurationMode === 'adaptive' ? 'Target Session Duration (baseline)' : 'Target Session Duration'}
+            </Label>
             <Select value={sessionLength} onValueChange={(v) => {
               setSessionLength(v)
               logDurationTruth('Settings duration changed', {
@@ -801,7 +848,9 @@ export default function SettingsPage() {
               </SelectContent>
             </Select>
             <p className="text-xs text-[#A5A5A5] mt-1">
-              This is your target preference. Actual session times vary based on day focus.
+              {sessionDurationMode === 'adaptive'
+                ? 'This is your baseline target. Actual session times adapt based on day focus and recovery.'
+                : 'This is your target preference. Actual session times may vary slightly based on day focus.'}
             </p>
           </div>
 

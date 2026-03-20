@@ -60,6 +60,8 @@ export interface AthleteProfile {
   dipMax?: number | null
   trainingStyle?: 'skill_focused' | 'strength_focused' | 'power_focused' | 'endurance_focused' | 'hypertrophy_supported' | 'balanced_hybrid'
   scheduleMode?: 'static' | 'flexible'
+  // TASK A FIX: Session duration mode - 'static' = fixed duration, 'adaptive' = engine adapts based on day/recovery
+  sessionDurationMode?: 'static' | 'adaptive'
   onboardingComplete: boolean
   createdAt: string
 }
@@ -181,6 +183,8 @@ export function saveAthleteProfile(profile: Partial<AthleteProfile>): AthletePro
     weakestArea: null,
     trainingStyle: 'balanced_hybrid',
     scheduleMode: 'static',
+    // TASK A FIX: Default to static duration for backward compatibility
+    sessionDurationMode: 'static',
     onboardingComplete: false,
     createdAt: new Date().toISOString(),
   }

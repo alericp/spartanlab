@@ -459,6 +459,8 @@ export interface AdaptiveProgram {
   experienceLevel: ExperienceLevel
   trainingDaysPerWeek: TrainingDays
   sessionLength: SessionLength
+  // TASK E: Session duration mode - 'static' = fixed target, 'adaptive' = engine adapts per day
+  sessionDurationMode?: 'static' | 'adaptive'
   // FLEXIBLE SCHEDULING: Preserve user's schedule mode and current week resolution
   scheduleMode?: ScheduleMode
   currentWeekFrequency?: number  // Actual days for this generated week

@@ -120,9 +120,6 @@ import {
   mapSupportToGoalsAndLimiters,
   logSupportWorkMapping,
   logPrescriptionDiagnostics,
-  // WEIGHTED LOAD PRESCRIPTION
-  calculatePrescribedLoad,
-  determineWeightedRole,
   type PrescriptionMode,
   type PrescriptionContract,
   type AthleteContext as PrescriptionAthleteContext,
@@ -131,10 +128,6 @@ import {
   type WeeklyProgressionRecommendation,
   type ProgressionPhase,
   type SupportWorkMapping,
-  type WeightedBenchmark,
-  type AllTimePRBenchmark,
-  type PrescribedLoad,
-  type WeightedPrescriptionRole,
 } from './prescription-contract'
 import {
   getSkillPrescriptionRules,
@@ -158,8 +151,6 @@ export interface SelectedExercise {
   // Session Load Intelligence fields
   loadMetadata?: ExerciseLoadMetadata
   deliveryStyle?: DeliveryStyle
-  // WEIGHTED LOAD PRESCRIPTION (TASK D)
-  prescribedLoad?: PrescribedLoad
 }
 
 // =============================================================================
@@ -247,13 +238,6 @@ interface ExerciseSelectionInputs {
   // Prerequisite Gate Engine integration
   prerequisiteContext?: AthletePrerequisiteContext
   jointCautions?: string[]
-  // WEIGHTED LOAD PRESCRIPTION (TASK B) - Benchmark data for load calculation
-  weightedBenchmarks?: {
-    weightedPullUp?: WeightedBenchmark | null
-    weightedDip?: WeightedBenchmark | null
-    allTimePRPullUp?: AllTimePRBenchmark | null
-    allTimePRDip?: AllTimePRBenchmark | null
-  }
 }
 
 // =============================================================================
@@ -281,7 +265,6 @@ export function selectExercisesForSession(inputs: ExerciseSelectionInputs): Exer
     rangeTrainingMode,
     prerequisiteContext: inputContext,
     jointCautions,
-    weightedBenchmarks, // TASK B: Extract weighted benchmarks for load calculation
   } = inputs
   
   // Build prerequisite context for gate checks
@@ -344,8 +327,7 @@ export function selectExercisesForSession(inputs: ExerciseSelectionInputs): Exer
     availableCore,
     budget.mainExercises,
     constraintType,
-    prerequisiteContext,
-    weightedBenchmarks // TASK B: Pass weighted benchmarks for load calculation
+    prerequisiteContext
   )
   
   // Generate intelligent warmup based on main exercises
@@ -465,14 +447,7 @@ function selectMainExercises(
   availableCore: Exercise[],
   maxExercises: number,
   constraintType?: string,
-  prerequisiteContext?: AthletePrerequisiteContext,
-  // TASK B: Weighted benchmarks for load calculation
-  weightedBenchmarks?: {
-    weightedPullUp?: WeightedBenchmark | null
-    weightedDip?: WeightedBenchmark | null
-    allTimePRPullUp?: AllTimePRBenchmark | null
-    allTimePRDip?: AllTimePRBenchmark | null
-  }
+  prerequisiteContext?: AthletePrerequisiteContext
 ): SelectedExercise[] {
   const selected: SelectedExercise[] = []
   const usedIds = new Set<string>()
@@ -697,51 +672,6 @@ function selectMainExercises(
       }
     }
     
-    // =========================================================================
-    // TASK B: CALCULATE PRESCRIBED LOAD FOR WEIGHTED EXERCISES
-    // =========================================================================
-    let prescribedLoad: PrescribedLoad | undefined = undefined
-    
-    // Check if this is a weighted exercise that needs load prescription
-    const isWeightedPullUp = finalExercise.id === 'weighted_pull_up' || finalExercise.id === 'weighted-pull-up'
-    const isWeightedDip = finalExercise.id === 'weighted_dip' || finalExercise.id === 'weighted-dip'
-    
-    if (isWeightedPullUp && weightedBenchmarks) {
-      const role = determineWeightedRole(primaryGoal, 'weighted_pull_up', day.isPrimary || false)
-      prescribedLoad = calculatePrescribedLoad(
-        'weighted_pull_up',
-        weightedBenchmarks.weightedPullUp,
-        weightedBenchmarks.allTimePRPullUp,
-        role
-      )
-      
-      // Dev logging
-      if (process.env.NODE_ENV !== 'production') {
-        console.log('[WeightedLoad] Prescribed load for weighted pull-up:', {
-          role,
-          benchmark: weightedBenchmarks.weightedPullUp,
-          prescribedLoad,
-        })
-      }
-    } else if (isWeightedDip && weightedBenchmarks) {
-      const role = determineWeightedRole(primaryGoal, 'weighted_dip', day.isPrimary || false)
-      prescribedLoad = calculatePrescribedLoad(
-        'weighted_dip',
-        weightedBenchmarks.weightedDip,
-        weightedBenchmarks.allTimePRDip,
-        role
-      )
-      
-      // Dev logging
-      if (process.env.NODE_ENV !== 'production') {
-        console.log('[WeightedLoad] Prescribed load for weighted dip:', {
-          role,
-          benchmark: weightedBenchmarks.weightedDip,
-          prescribedLoad,
-        })
-      }
-    }
-    
     selected.push({
       exercise: finalExercise,
       sets: finalSets ?? adjustSetsForLevel(finalExercise.defaultSets, experienceLevel),
@@ -759,7 +689,6 @@ function selectMainExercises(
       originalExerciseId: originalId,
       loadMetadata,
       deliveryStyle,
-      prescribedLoad, // TASK D: Include prescribed load in selection
     })
     return true
   }

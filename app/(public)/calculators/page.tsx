@@ -28,6 +28,14 @@ export const metadata: Metadata = {
 
 const calculators = [
   {
+    slug: '1rm',
+    title: '1RM Calculator',
+    description: 'Estimate your one-rep max for weighted pull-ups, dips, bench, squat, and deadlift using the Epley formula.',
+    icon: Calculator,
+    category: '1RM Estimation',
+    featured: true,
+  },
+  {
     slug: 'pull-up-strength-score',
     title: 'Pull-Up Strength Score',
     description: 'Calculate your pull-up strength score based on max reps and weighted pull-up performance. Get your classification from Beginner to Elite.',

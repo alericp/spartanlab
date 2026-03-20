@@ -1730,3 +1730,358 @@ export function getSmartWeakPointAccessories(
   
   return [...intelligentAccessories.map(ex => ex.id), ...traditional]
 }
+
+// =============================================================================
+// TASK 7: LIMITER-TO-PROGRAMMING ACTION MAPPER
+// Ensures limiters shape actual programming, not just labels
+// =============================================================================
+
+export interface LimiterProgrammingAction {
+  limiter: WeakPointType
+  label: string
+  // Week structure changes
+  weekStructure: {
+    addSupportDays: number      // 0, 1, or 2 extra support days
+    reduceSkillDays: boolean    // Reduce main skill days
+    prioritizeRecovery: boolean // Add recovery elements
+  }
+  // Session changes
+  sessionChanges: {
+    addAccessorySlots: number        // How many extra accessory slots
+    addPrehabMinutes: number         // Extra prehab time
+    reduceMainVolumePercent: number  // Volume reduction (0-30)
+    addSpecificWarmup: boolean       // Extra warmup for limiter
+  }
+  // Exercise selection changes
+  exerciseChanges: {
+    priorityCategories: string[]     // Exercise categories to prioritize
+    avoidCategories: string[]        // Categories to reduce/avoid
+    addWeightedSupport: boolean      // Add weighted strength support
+    weightedSupportType: 'push' | 'pull' | 'both' | 'none'
+  }
+  // Prescription changes
+  prescriptionChanges: {
+    reduceHoldTargets: boolean    // Shorter holds for tendon issues
+    reduceRPECeiling: number      // Lower intensity ceiling (7-10)
+    addRestBetweenSets: number    // Extra rest seconds
+    useBandedRegressions: boolean // Prefer banded work
+  }
+  // Explanation
+  coachingRationale: string
+}
+
+/**
+ * TASK 7: Convert a detected limiter into concrete programming actions.
+ * This ensures the limiter doesn't just label a deficit - it shapes the actual plan.
+ */
+export function getLimiterProgrammingActions(
+  limiter: WeakPointType,
+  severityScore: number
+): LimiterProgrammingAction {
+  const label = WEAK_POINT_LABELS[limiter] || 'Unknown'
+  const isHighSeverity = severityScore >= 60
+  const isModerateSeverity = severityScore >= 40
+  
+  // Default conservative action
+  const defaultAction: LimiterProgrammingAction = {
+    limiter,
+    label,
+    weekStructure: {
+      addSupportDays: 0,
+      reduceSkillDays: false,
+      prioritizeRecovery: false,
+    },
+    sessionChanges: {
+      addAccessorySlots: 0,
+      addPrehabMinutes: 0,
+      reduceMainVolumePercent: 0,
+      addSpecificWarmup: false,
+    },
+    exerciseChanges: {
+      priorityCategories: [],
+      avoidCategories: [],
+      addWeightedSupport: false,
+      weightedSupportType: 'none',
+    },
+    prescriptionChanges: {
+      reduceHoldTargets: false,
+      reduceRPECeiling: 9,
+      addRestBetweenSets: 0,
+      useBandedRegressions: false,
+    },
+    coachingRationale: 'Continue balanced training.',
+  }
+  
+  // Limiter-specific actions
+  switch (limiter) {
+    case 'pull_strength':
+    case 'bent_arm_pull':
+      return {
+        ...defaultAction,
+        weekStructure: {
+          addSupportDays: isModerateSeverity ? 1 : 0,
+          reduceSkillDays: false,
+          prioritizeRecovery: false,
+        },
+        sessionChanges: {
+          addAccessorySlots: isHighSeverity ? 2 : 1,
+          addPrehabMinutes: 0,
+          reduceMainVolumePercent: 0,
+          addSpecificWarmup: false,
+        },
+        exerciseChanges: {
+          priorityCategories: ['weighted_pull', 'row', 'pull'],
+          avoidCategories: [],
+          addWeightedSupport: true,
+          weightedSupportType: 'pull',
+        },
+        prescriptionChanges: {
+          reduceHoldTargets: false,
+          reduceRPECeiling: 9,
+          addRestBetweenSets: 0,
+          useBandedRegressions: false,
+        },
+        coachingRationale: `Building pulling strength to support ${label.toLowerCase()}. Prioritizing weighted pulls and rows.`,
+      }
+      
+    case 'push_strength':
+    case 'bent_arm_push':
+      return {
+        ...defaultAction,
+        weekStructure: {
+          addSupportDays: isModerateSeverity ? 1 : 0,
+          reduceSkillDays: false,
+          prioritizeRecovery: false,
+        },
+        sessionChanges: {
+          addAccessorySlots: isHighSeverity ? 2 : 1,
+          addPrehabMinutes: 0,
+          reduceMainVolumePercent: 0,
+          addSpecificWarmup: false,
+        },
+        exerciseChanges: {
+          priorityCategories: ['weighted_push', 'dip', 'push'],
+          avoidCategories: [],
+          addWeightedSupport: true,
+          weightedSupportType: 'push',
+        },
+        prescriptionChanges: {
+          reduceHoldTargets: false,
+          reduceRPECeiling: 9,
+          addRestBetweenSets: 0,
+          useBandedRegressions: false,
+        },
+        coachingRationale: `Building pushing strength to support ${label.toLowerCase()}. Prioritizing weighted dips and pressing.`,
+      }
+      
+    case 'straight_arm_pull_strength':
+      return {
+        ...defaultAction,
+        weekStructure: {
+          addSupportDays: 0,
+          reduceSkillDays: isHighSeverity,
+          prioritizeRecovery: isHighSeverity,
+        },
+        sessionChanges: {
+          addAccessorySlots: 1,
+          addPrehabMinutes: 5,
+          reduceMainVolumePercent: isHighSeverity ? 15 : 0,
+          addSpecificWarmup: true,
+        },
+        exerciseChanges: {
+          priorityCategories: ['front_lever_prep', 'scap_work', 'lat_strength'],
+          avoidCategories: [],
+          addWeightedSupport: true,
+          weightedSupportType: 'pull',
+        },
+        prescriptionChanges: {
+          reduceHoldTargets: isModerateSeverity,
+          reduceRPECeiling: 8,
+          addRestBetweenSets: 15,
+          useBandedRegressions: true,
+        },
+        coachingRationale: 'Building straight-arm pulling tolerance. Using banded regressions and weighted pulls for carryover.',
+      }
+      
+    case 'straight_arm_push_strength':
+      return {
+        ...defaultAction,
+        weekStructure: {
+          addSupportDays: 0,
+          reduceSkillDays: isHighSeverity,
+          prioritizeRecovery: isHighSeverity,
+        },
+        sessionChanges: {
+          addAccessorySlots: 1,
+          addPrehabMinutes: 5,
+          reduceMainVolumePercent: isHighSeverity ? 15 : 0,
+          addSpecificWarmup: true,
+        },
+        exerciseChanges: {
+          priorityCategories: ['planche_prep', 'scap_push', 'anterior_delt'],
+          avoidCategories: [],
+          addWeightedSupport: true,
+          weightedSupportType: 'push',
+        },
+        prescriptionChanges: {
+          reduceHoldTargets: isModerateSeverity,
+          reduceRPECeiling: 8,
+          addRestBetweenSets: 15,
+          useBandedRegressions: true,
+        },
+        coachingRationale: 'Building straight-arm pushing tolerance. Using planche leans and weighted dips for strength transfer.',
+      }
+      
+    case 'tendon_tolerance':
+    case 'wrist_tolerance':
+      return {
+        ...defaultAction,
+        weekStructure: {
+          addSupportDays: 0,
+          reduceSkillDays: isHighSeverity,
+          prioritizeRecovery: true,
+        },
+        sessionChanges: {
+          addAccessorySlots: 0,
+          addPrehabMinutes: 10,
+          reduceMainVolumePercent: isHighSeverity ? 25 : 15,
+          addSpecificWarmup: true,
+        },
+        exerciseChanges: {
+          priorityCategories: ['prehab', 'mobility', 'controlled'],
+          avoidCategories: ['explosive', 'max_effort'],
+          addWeightedSupport: false,
+          weightedSupportType: 'none',
+        },
+        prescriptionChanges: {
+          reduceHoldTargets: true,
+          reduceRPECeiling: 7,
+          addRestBetweenSets: 30,
+          useBandedRegressions: true,
+        },
+        coachingRationale: 'Protecting tendons/wrists with reduced volume and intensity. Progressive tissue loading.',
+      }
+      
+    case 'compression_strength':
+    case 'core_compression':
+      return {
+        ...defaultAction,
+        sessionChanges: {
+          addAccessorySlots: 2,
+          addPrehabMinutes: 0,
+          reduceMainVolumePercent: 0,
+          addSpecificWarmup: false,
+        },
+        exerciseChanges: {
+          priorityCategories: ['compression', 'core', 'hip_flexor'],
+          avoidCategories: [],
+          addWeightedSupport: false,
+          weightedSupportType: 'none',
+        },
+        prescriptionChanges: {
+          reduceHoldTargets: false,
+          reduceRPECeiling: 9,
+          addRestBetweenSets: 0,
+          useBandedRegressions: false,
+        },
+        coachingRationale: 'Adding compression work to support L-sit, V-sit, and lever positions.',
+      }
+      
+    case 'recovery_capacity':
+    case 'general_fatigue':
+      return {
+        ...defaultAction,
+        weekStructure: {
+          addSupportDays: 0,
+          reduceSkillDays: true,
+          prioritizeRecovery: true,
+        },
+        sessionChanges: {
+          addAccessorySlots: -1,
+          addPrehabMinutes: 5,
+          reduceMainVolumePercent: 20,
+          addSpecificWarmup: false,
+        },
+        exerciseChanges: {
+          priorityCategories: ['mobility', 'recovery'],
+          avoidCategories: ['max_effort', 'high_volume'],
+          addWeightedSupport: false,
+          weightedSupportType: 'none',
+        },
+        prescriptionChanges: {
+          reduceHoldTargets: true,
+          reduceRPECeiling: 7,
+          addRestBetweenSets: 30,
+          useBandedRegressions: false,
+        },
+        coachingRationale: 'Managing fatigue with reduced volume and intensity. Focus on quality, not quantity.',
+      }
+      
+    case 'scapular_control':
+      return {
+        ...defaultAction,
+        sessionChanges: {
+          addAccessorySlots: 1,
+          addPrehabMinutes: 5,
+          reduceMainVolumePercent: 0,
+          addSpecificWarmup: true,
+        },
+        exerciseChanges: {
+          priorityCategories: ['scap_work', 'row', 'pull'],
+          avoidCategories: [],
+          addWeightedSupport: false,
+          weightedSupportType: 'none',
+        },
+        prescriptionChanges: {
+          reduceHoldTargets: false,
+          reduceRPECeiling: 9,
+          addRestBetweenSets: 0,
+          useBandedRegressions: false,
+        },
+        coachingRationale: 'Adding scapular activation work. Foundation for all pulling skills.',
+      }
+      
+    case 'shoulder_stability':
+      return {
+        ...defaultAction,
+        sessionChanges: {
+          addAccessorySlots: 1,
+          addPrehabMinutes: 5,
+          reduceMainVolumePercent: isHighSeverity ? 10 : 0,
+          addSpecificWarmup: true,
+        },
+        exerciseChanges: {
+          priorityCategories: ['shoulder_stability', 'rotator_cuff', 'support_hold'],
+          avoidCategories: [],
+          addWeightedSupport: false,
+          weightedSupportType: 'none',
+        },
+        prescriptionChanges: {
+          reduceHoldTargets: false,
+          reduceRPECeiling: 8,
+          addRestBetweenSets: 15,
+          useBandedRegressions: false,
+        },
+        coachingRationale: 'Building shoulder stability with targeted prehab and support holds.',
+      }
+      
+    default:
+      return defaultAction
+  }
+}
+
+/**
+ * TASK 10: Dev diagnostics for limiter actions
+ */
+export function logLimiterActionDiagnostics(action: LimiterProgrammingAction): void {
+  if (process.env.NODE_ENV === 'development') {
+    console.log('[WeakPointEngine] TASK 7/10 DIAG - Limiter Programming Action:', {
+      limiter: action.label,
+      addSupportDays: action.weekStructure.addSupportDays,
+      reduceVolume: action.sessionChanges.reduceMainVolumePercent,
+      addAccessories: action.sessionChanges.addAccessorySlots,
+      weightedSupport: action.exerciseChanges.weightedSupportType,
+      useBanded: action.prescriptionChanges.useBandedRegressions,
+    })
+  }
+}

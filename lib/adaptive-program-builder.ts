@@ -37,7 +37,31 @@ import {
   getVolumeModifierForWeakPoint,
   detectWeakPointsForProfile,
   type DetectedWeakPoints,
+  getLimiterProgrammingActions,
+  logLimiterActionDiagnostics,
+  type LimiterProgrammingAction,
 } from './weak-point-engine'
+// TASK 1, 2, 3: Prescription contract system
+import {
+  type PrescriptionMode,
+  type ResolvedPrescription,
+  resolvePrescription,
+  getSkillPrescription,
+  getWeightedStrengthPrescription,
+  determinePrescriptionMode,
+  logPrescriptionDiagnostics,
+  SKILL_PRESCRIPTION_PROFILES,
+  WEIGHTED_STRENGTH_PROFILES,
+} from './prescription-contract'
+// TASK 4: Weekly load balancing
+import {
+  analyzeWeeklyBalance,
+  classifyDayStress,
+  selectWeeklyTemplate,
+  logWeeklyBalanceDiagnostics,
+  type WeeklyStressBalance,
+  type DayStressProfile,
+} from './weekly-load-balancing'
 import { getUnifiedSkillIntelligence, generateTrainingAdjustments, type UnifiedSkillIntelligence } from './skill-intelligence-layer'
 import { getCompressionReadiness, shouldBiasTowardCompression, type CompressionReadinessResult } from './compression-readiness'
 import { selectOptimalStructure, getDayExplanation } from './program-structure-engine'
@@ -1494,6 +1518,37 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
     hasSecondaryPush: isPushSecondary,  // TASK 2: Secondary goal influence
   })
   
+  // ==========================================================================
+  // TASK 4: WEEKLY LOAD BALANCING ANALYSIS
+  // Analyzes the generated structure for stress distribution issues
+  // ==========================================================================
+  const hasRecoveryConcerns = profile?.jointCautions && profile.jointCautions.length >= 3
+  const selectedTemplate = selectWeeklyTemplate(
+    primaryGoal,
+    secondaryGoal,
+    effectiveTrainingDays,
+    hasRecoveryConcerns
+  )
+  
+  console.log('[program-gen] TASK 4: Weekly template selected:', selectedTemplate.name)
+  
+  // TASK 7: Get limiter-based programming actions
+  let limiterAction: LimiterProgrammingAction | null = null
+  if (bottleneckAnalysis) {
+    const primaryLimiterType = bottleneckAnalysis.primary.type as WeakPointType
+    limiterAction = getLimiterProgrammingActions(primaryLimiterType, bottleneckAnalysis.primary.score)
+    
+    // TASK 10: Log limiter action diagnostics
+    logLimiterActionDiagnostics(limiterAction)
+    
+    console.log('[program-gen] TASK 7: Limiter action resolved:', {
+      limiter: limiterAction.label,
+      addSupportDays: limiterAction.weekStructure.addSupportDays,
+      reduceVolume: limiterAction.sessionChanges.reduceMainVolumePercent,
+      weightedSupport: limiterAction.exerciseChanges.weightedSupportType,
+    })
+  }
+  
   // Generate session intents for variety
   const skillType = primaryGoal as 'front_lever' | 'planche' | 'muscle_up' | 'hspu' | 'back_lever' | 'iron_cross' | 'l_sit' | 'weighted_strength' | 'general'
   const trainingStyleMode = (['strength', 'skill', 'endurance', 'mixed'].includes(onboardingProfile?.primaryOutcome || '') 
@@ -1767,6 +1822,56 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
     dbVerifiedExercises,
     dbCoverage: totalExercises > 0 ? `${Math.round((dbVerifiedExercises / totalExercises) * 100)}%` : 'N/A',
   })
+  
+  // ==========================================================================
+  // TASK 10: COMPREHENSIVE ENGINE DIAGNOSTICS (DEV ONLY)
+  // ==========================================================================
+  if (process.env.NODE_ENV === 'development') {
+    console.log('[ENGINE-DIAG] TASK 10 - Engine Decision Summary:', {
+      // Goal weighting
+      goalHierarchy: {
+        primary: goalHierarchy.primaryEmphasis,
+        secondary: goalHierarchy.secondaryEmphasis,
+        weeklyDistribution: goalHierarchy.weeklyDistribution,
+        isHybridSkillGoals: goalHierarchy.isHybridSkillGoals,
+      },
+      // Session duration budget
+      sessionBudget: {
+        durationMinutes: sessionLength,
+        volumeTargets: {
+          mainExercises: volumeTargets.mainExerciseCount,
+          totalSets: volumeTargets.totalSetsBudget,
+        },
+      },
+      // Schedule mode
+      scheduleMode: {
+        mode: inputScheduleMode,
+        effectiveDays: effectiveTrainingDays,
+        isFlexible: inputScheduleMode === 'flexible',
+      },
+      // Limiter ranking
+      limiterRanking: bottleneckAnalysis ? {
+        primary: bottleneckAnalysis.primary.label,
+        primaryScore: bottleneckAnalysis.primary.score,
+        secondary: bottleneckAnalysis.secondary?.label || 'none',
+        suggestedEmphasis: bottleneckAnalysis.primary.suggestedEmphasis,
+      } : 'No bottleneck analysis',
+      // Limiter action
+      limiterAction: limiterAction ? {
+        label: limiterAction.label,
+        weightedSupport: limiterAction.exerciseChanges.weightedSupportType,
+        volumeReduction: limiterAction.sessionChanges.reduceMainVolumePercent,
+      } : 'No limiter action',
+      // Weighted support decisions
+      weightedSupport: {
+        goalSupportsWeightedPush: goalHierarchy.isPushPrimary,
+        goalSupportsWeightedPull: goalHierarchy.isPullPrimary,
+        strengthSupportDirection: goalHierarchy.strengthSupportDirection,
+      },
+      // Weekly template
+      weeklyTemplate: selectedTemplate.name,
+    })
+  }
   
   // FLEXIBLE SCHEDULING: Use resolved schedule data
   const finalScheduleMode = inputScheduleMode

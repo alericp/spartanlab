@@ -83,6 +83,11 @@ export async function POST(request: Request) {
       RETURNING 
         user_id as "userId",
         sex,
+        height,
+        height_unit as "heightUnit",
+        bodyweight,
+        weight_unit as "weightUnit",
+        body_fat_percent as "bodyFatPercent",
         experience_level as "experienceLevel",
         training_days_per_week as "trainingDaysPerWeek",
         COALESCE(schedule_mode, 'static') as "scheduleMode",
@@ -97,7 +102,9 @@ export async function POST(request: Request) {
       userId,
       profileData.sex || null,
       profileData.experienceLevel || 'beginner',
-      profileData.trainingDaysPerWeek || 4,
+      // TASK 2: For flexible users, trainingDaysPerWeek may be null - don't default to 4
+      // This preserves flexible as a true preference, not a fake 4-day identity
+      profileData.scheduleMode === 'flexible' ? null : (profileData.trainingDaysPerWeek || 4),
       profileData.scheduleMode || 'static',
       profileData.sessionLengthMinutes || 60,
       profileData.primaryGoal || null,

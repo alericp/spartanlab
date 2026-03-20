@@ -3503,8 +3503,10 @@ export function AthleteOnboarding() {
             : profile.trainingExperience === 'intermediate' 
               ? 'intermediate' 
               : 'advanced',
+          // TASK 2: For flexible users, store NULL for trainingDaysPerWeek to indicate true flexible
+          // The engine will derive effective frequency transiently - NOT stored as fake 4-day identity
           trainingDaysPerWeek: isFlexibleSchedule 
-            ? 4  // Internal default for engine calculations
+            ? null  // NULL = truly flexible, engine derives frequency at runtime
             : (typeof profile.trainingDaysPerWeek === 'number' ? profile.trainingDaysPerWeek : 4),
           scheduleMode: isFlexibleSchedule ? 'flexible' : 'static',  // TASK 2: Preserve flexible as real preference
           sessionLengthMinutes: typeof profile.sessionLengthMinutes === 'number'
@@ -3536,6 +3538,17 @@ export function AthleteOnboarding() {
             scheduleMode: dbResult.profile?.scheduleMode,
             onboardingComplete: dbResult.profile?.onboardingComplete,
           })
+          
+          // TASK 1: Sync the canonical DB response back to local storage
+          // This ensures DB truth wins over local-only values
+          if (dbResult.success && dbResult.profile) {
+            saveAthleteProfile({
+              ...dbResult.profile,
+              // Ensure local storage reflects DB canonical values
+              onboardingComplete: true,
+            })
+            console.log('[Onboarding] Synced DB profile to local storage')
+          }
         }
       } catch (dbError) {
         console.error('[Onboarding] Error persisting to DB:', dbError)

@@ -382,19 +382,22 @@ export default function SettingsPage() {
   }
 
   const handleSave = async () => {
+    console.log('[Settings] handleSave started')
     setSaving(true)
     setSaved(false)
     
     try {
       // Prepare update payload - preserve flexible mode semantics
-      // TASK 3: For flexible mode, store a numeric default for engine math but preserve scheduleMode
+      // TASK 2: For flexible mode, do NOT store a fake numeric default
+      // The API will store NULL for trainingDaysPerWeek when scheduleMode='flexible'
+      console.log('[Settings] Preparing save payload, scheduleMode:', scheduleMode)
       const updates = {
         bodyweight: bodyweight ? parseFloat(bodyweight) : null,
         experienceLevel: experienceLevel as 'beginner' | 'intermediate' | 'advanced',
-        // For flexible mode, store a reasonable numeric default (engine internal math)
+        // For flexible mode, send null - API will store it correctly
         // The scheduleMode field is the canonical preference indicator
         trainingDaysPerWeek: scheduleMode === 'flexible' 
-          ? 4  // Default for engine calculations
+          ? null  // TASK 2: NULL = truly flexible, engine derives at runtime
           : parseInt(trainingDays || '3'),
         scheduleMode: scheduleMode,
         sessionLengthMinutes: parseInt(sessionLength) as 30 | 45 | 60 | 90,
@@ -413,16 +416,21 @@ export default function SettingsPage() {
           body: JSON.stringify(updates),
         })
         
+        console.log('[Settings] API response status:', response.status)
         if (response.ok) {
           const result = await response.json()
+          console.log('[Settings] API save successful, profile returned:', !!result.profile)
           
-          // TASK 3: Sync API response to localStorage for canonical truth
+          // TASK 6: Sync API response to localStorage for canonical truth
           if (result.profile) {
             saveAthleteProfile(result.profile)
             setProfile(result.profile)
+            // TASK 6: Re-apply profile to UI state to ensure consistency
+            applyProfileToState(result.profile)
           }
           
           setSaved(true)
+          console.log('[Settings] Save complete, setSaved(true)')
           
           // Handle regeneration feedback with coaching explanation
           if (result.regenerated) {
@@ -461,16 +469,26 @@ export default function SettingsPage() {
               description: 'Your preferences have been updated.',
               duration: 3000,
             })
+          } else {
+            // TASK 6: No changes detected - still show a confirmation
+            toast({
+              title: 'Settings Saved',
+              description: 'No changes detected.',
+              duration: 2000,
+            })
           }
           
+          console.log('[Settings] API save path complete')
           return
         }
         
         // API failed - fall back to localStorage
-        console.warn('[Settings] API save failed, using localStorage fallback')
+        console.warn('[Settings] API save failed with status:', response.status, 'using localStorage fallback')
       } catch (error) {
         console.warn('[Settings] API error, using localStorage fallback:', error)
       }
+      
+      console.log('[Settings] Falling back to localStorage save')
       
       // FALLBACK: localStorage-based save (for preview/development mode)
       const previousProfile = profile
@@ -481,6 +499,7 @@ export default function SettingsPage() {
       
       setProfile(updated)
       setSaved(true)
+      console.log('[Settings] localStorage save complete')
       
       // Analyze settings changes using intelligent classification
       if (previousProfile) {
@@ -534,9 +553,30 @@ export default function SettingsPage() {
                 description: analysis.coachingMessage,
                 duration: 4000,
               })
+            } else {
+              // TASK 6: Show toast even when no structural changes
+              toast({
+                title: 'Settings Saved',
+                description: 'Your preferences have been updated.',
+                duration: 3000,
+              })
             }
+          } else {
+            // TASK 6: Show toast when no changes at all
+            toast({
+              title: 'Settings Saved',
+              description: 'Your preferences have been updated.',
+              duration: 3000,
+            })
           }
         }
+      } else {
+        // TASK 6: No previous profile - just show basic success
+        toast({
+          title: 'Settings Saved',
+          description: 'Your preferences have been saved.',
+          duration: 3000,
+        })
       }
     } finally {
       // TASK 8: GUARANTEE saving state is cleared in ALL exit paths

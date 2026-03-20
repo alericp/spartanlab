@@ -36,6 +36,7 @@ const jsonLdSchemas = [
 ]
 
 const SKILLS = [
+  // Static/Lever Skills
   {
     slug: 'front-lever',
     title: 'Front Lever',
@@ -44,6 +45,16 @@ const SKILLS = [
     difficulty: 'Intermediate',
     category: 'Pulling',
     prereqs: ['10+ strict pull-ups', 'Strong core', 'Scapular control'],
+    featured: true,
+  },
+  {
+    slug: 'back-lever',
+    title: 'Back Lever',
+    description: 'Foundational straight-arm skill. Build shoulder extension and body tension.',
+    icon: Target,
+    difficulty: 'Intermediate',
+    category: 'Pulling',
+    prereqs: ['German hang', 'Shoulder mobility', 'Body tension'],
     featured: true,
   },
   {
@@ -56,6 +67,7 @@ const SKILLS = [
     prereqs: ['Strong dips', 'Wrist conditioning', 'Shoulder stability'],
     featured: true,
   },
+  // Transition Skills
   {
     slug: 'muscle-up',
     title: 'Muscle-Up',
@@ -66,6 +78,7 @@ const SKILLS = [
     prereqs: ['12+ pull-ups', 'Explosive pull power', 'Straight bar dips'],
     featured: true,
   },
+  // Pressing Skills
   {
     slug: 'handstand-push-up',
     title: 'Handstand Push-Up',
@@ -74,6 +87,38 @@ const SKILLS = [
     difficulty: 'Intermediate-Advanced',
     category: 'Pushing',
     prereqs: ['Wall handstand', 'Pike push-ups', 'Overhead mobility'],
+    featured: true,
+  },
+  // Weighted Skills
+  {
+    slug: 'weighted-pull-up',
+    title: 'Weighted Pull-Up',
+    description: 'Build elite pulling strength. Foundation for front lever and one-arm pull-up.',
+    icon: Dumbbell,
+    difficulty: 'Intermediate',
+    category: 'Weighted',
+    prereqs: ['10+ strict pull-ups', 'Good form', 'Healthy shoulders'],
+    featured: true,
+  },
+  {
+    slug: 'weighted-dip',
+    title: 'Weighted Dip',
+    description: 'The king of upper body pushing. Build tricep and chest mass.',
+    icon: Dumbbell,
+    difficulty: 'Intermediate',
+    category: 'Weighted',
+    prereqs: ['15+ strict dips', 'Shoulder health', 'Core stability'],
+    featured: true,
+  },
+  // Elite Skills
+  {
+    slug: 'one-arm-pull-up',
+    title: 'One-Arm Pull-Up',
+    description: 'Ultimate display of relative pulling strength. Elite skill requiring years.',
+    icon: Trophy,
+    difficulty: 'Elite',
+    category: 'Pulling',
+    prereqs: ['+50% BW weighted pull-up', 'Strong grip', 'Healthy elbows'],
     featured: true,
   },
 ]

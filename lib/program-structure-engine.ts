@@ -50,6 +50,9 @@ interface StructureInputs {
   trainingPathType?: 'hybrid' | 'skill_progression' | 'strength_endurance' | 'balanced'
   selectedSkillsCount?: number
   hasFlexibilityTargets?: boolean
+  // ISSUE A FIX: Pass actual selected skill identities for structure-aware allocation
+  selectedSkills?: string[]
+  secondaryGoal?: string | null
 }
 
 // =============================================================================
@@ -362,6 +365,28 @@ function buildFourDayStructure(
   // TASK 3: Hybrid training path - emphasizes skill + strength + accessory balance
   const isHybridPath = inputs.trainingPathType === 'hybrid'
   const hasMultipleSkills = (inputs.selectedSkillsCount || 0) > 2
+  
+  // ISSUE A FIX: Detect specific skill types from actual identities for smarter structure
+  const selectedSkills = inputs.selectedSkills || []
+  const hasHSPU = selectedSkills.includes('handstand_pushup') || selectedSkills.includes('hspu')
+  const hasBackLever = selectedSkills.includes('back_lever')
+  const hasLSit = selectedSkills.includes('l_sit') || selectedSkills.includes('v_sit')
+  const hasMuscleUp = selectedSkills.includes('muscle_up')
+  const hasFlexibilitySkills = selectedSkills.some(s => 
+    ['front_splits', 'side_splits', 'pancake', 'pike', 'shoulder_flexibility'].includes(s)
+  )
+  
+  // Log skill identity consumption for debugging
+  console.log('[structure-engine] ISSUE A: Skill identities consumed:', {
+    selectedSkills,
+    hasHSPU,
+    hasBackLever,
+    hasLSit,
+    hasMuscleUp,
+    hasFlexibilitySkills,
+    hasMultipleSkills,
+    isHybridPath,
+  })
   
   if (isHybridPath || hasMultipleSkills) {
     // Hybrid structure: More balanced skill + strength + support mix

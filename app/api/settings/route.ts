@@ -41,7 +41,8 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
     
-    // CANONICAL FIX: Fetch FULL profile from database including all benchmark-relevant fields
+    // CANONICAL FIX: Fetch FULL profile from database including ALL benchmark-relevant fields
+    // This includes strength, skill, and flexibility benchmarks needed for proper hydration
     const profiles = await query(`
       SELECT 
         user_id as "userId",
@@ -65,7 +66,29 @@ export async function GET() {
         COALESCE(joint_cautions, '[]'::jsonb) as "jointCautions",
         weakest_area as "weakestArea",
         training_style as "trainingStyle",
-        onboarding_complete as "onboardingComplete"
+        onboarding_complete as "onboardingComplete",
+        -- STRENGTH BENCHMARKS (current)
+        pull_up_max as "pullUpMax",
+        dip_max as "dipMax",
+        push_up_max as "pushUpMax",
+        wall_hspu_reps as "wallHSPUReps",
+        weighted_pull_up as "weightedPullUp",
+        weighted_dip as "weightedDip",
+        -- STRENGTH BENCHMARKS (all-time PR for rebound potential)
+        all_time_pr_pull_up as "allTimePRPullUp",
+        all_time_pr_dip as "allTimePRDip",
+        -- SKILL BENCHMARKS (with band/history context)
+        front_lever as "frontLever",
+        planche as "planche",
+        muscle_up as "muscleUp",
+        hspu as "hspu",
+        l_sit_hold as "lSitHold",
+        v_sit_hold as "vSitHold",
+        -- FLEXIBILITY BENCHMARKS (with range intent)
+        pancake as "pancake",
+        toe_touch as "toeTouch",
+        front_splits as "frontSplits",
+        side_splits as "sideSplits"
       FROM athlete_profiles
       WHERE user_id = $1
       LIMIT 1
@@ -116,7 +139,7 @@ export async function PUT(request: Request) {
     
     const updates = await request.json()
     
-    // CANONICAL FIX: Fetch FULL current profile for comparison
+    // CANONICAL FIX: Fetch FULL current profile for comparison including ALL benchmark fields
     const currentProfiles = await query(`
       SELECT 
         user_id as "userId",
@@ -140,7 +163,28 @@ export async function PUT(request: Request) {
         COALESCE(joint_cautions, '[]'::jsonb) as "jointCautions",
         weakest_area as "weakestArea",
         training_style as "trainingStyle",
-        onboarding_complete as "onboardingComplete"
+        onboarding_complete as "onboardingComplete",
+        -- STRENGTH BENCHMARKS
+        pull_up_max as "pullUpMax",
+        dip_max as "dipMax",
+        push_up_max as "pushUpMax",
+        wall_hspu_reps as "wallHSPUReps",
+        weighted_pull_up as "weightedPullUp",
+        weighted_dip as "weightedDip",
+        all_time_pr_pull_up as "allTimePRPullUp",
+        all_time_pr_dip as "allTimePRDip",
+        -- SKILL BENCHMARKS
+        front_lever as "frontLever",
+        planche as "planche",
+        muscle_up as "muscleUp",
+        hspu as "hspu",
+        l_sit_hold as "lSitHold",
+        v_sit_hold as "vSitHold",
+        -- FLEXIBILITY BENCHMARKS
+        pancake as "pancake",
+        toe_touch as "toeTouch",
+        front_splits as "frontSplits",
+        side_splits as "sideSplits"
       FROM athlete_profiles
       WHERE user_id = $1
       LIMIT 1
@@ -160,7 +204,7 @@ export async function PUT(request: Request) {
     const updateValues: unknown[] = []
     let paramIndex = 1
     
-  // CANONICAL FIX: Expanded field mappings for full profile support
+  // CANONICAL FIX: Expanded field mappings for full profile support including ALL benchmarks
   const fieldMappings: Record<string, string> = {
     bodyweight: 'bodyweight',
     experienceLevel: 'experience_level',
@@ -177,6 +221,27 @@ export async function PUT(request: Request) {
     jointCautions: 'joint_cautions',
     weakestArea: 'weakest_area',
     trainingStyle: 'training_style',
+    // STRENGTH BENCHMARKS
+    pullUpMax: 'pull_up_max',
+    dipMax: 'dip_max',
+    pushUpMax: 'push_up_max',
+    wallHSPUReps: 'wall_hspu_reps',
+    weightedPullUp: 'weighted_pull_up',
+    weightedDip: 'weighted_dip',
+    allTimePRPullUp: 'all_time_pr_pull_up',
+    allTimePRDip: 'all_time_pr_dip',
+    // SKILL BENCHMARKS
+    frontLever: 'front_lever',
+    planche: 'planche',
+    muscleUp: 'muscle_up',
+    hspu: 'hspu',
+    lSitHold: 'l_sit_hold',
+    vSitHold: 'v_sit_hold',
+    // FLEXIBILITY BENCHMARKS
+    pancake: 'pancake',
+    toeTouch: 'toe_touch',
+    frontSplits: 'front_splits',
+    sideSplits: 'side_splits',
   }
     
     for (const [key, dbColumn] of Object.entries(fieldMappings)) {
@@ -212,7 +277,7 @@ export async function PUT(request: Request) {
       WHERE user_id = $${paramIndex}
     `, [...updateValues, userId])
     
-  // CANONICAL FIX: Fetch FULL updated profile
+  // CANONICAL FIX: Fetch FULL updated profile including ALL benchmark fields
   const updatedProfiles = await query(`
     SELECT
       user_id as "userId",
@@ -236,7 +301,28 @@ export async function PUT(request: Request) {
       COALESCE(joint_cautions, '[]'::jsonb) as "jointCautions",
       weakest_area as "weakestArea",
       training_style as "trainingStyle",
-      onboarding_complete as "onboardingComplete"
+      onboarding_complete as "onboardingComplete",
+      -- STRENGTH BENCHMARKS
+      pull_up_max as "pullUpMax",
+      dip_max as "dipMax",
+      push_up_max as "pushUpMax",
+      wall_hspu_reps as "wallHSPUReps",
+      weighted_pull_up as "weightedPullUp",
+      weighted_dip as "weightedDip",
+      all_time_pr_pull_up as "allTimePRPullUp",
+      all_time_pr_dip as "allTimePRDip",
+      -- SKILL BENCHMARKS
+      front_lever as "frontLever",
+      planche as "planche",
+      muscle_up as "muscleUp",
+      hspu as "hspu",
+      l_sit_hold as "lSitHold",
+      v_sit_hold as "vSitHold",
+      -- FLEXIBILITY BENCHMARKS
+      pancake as "pancake",
+      toe_touch as "toeTouch",
+      front_splits as "frontSplits",
+      side_splits as "sideSplits"
     FROM athlete_profiles
     WHERE user_id = $1
     LIMIT 1

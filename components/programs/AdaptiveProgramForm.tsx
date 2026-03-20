@@ -20,6 +20,7 @@ import {
 import type { AdaptiveProgramInputs } from '@/lib/adaptive-program-builder'
 import type { EquipmentType } from '@/lib/adaptive-exercise-pool'
 import { Sparkles, Info } from 'lucide-react'
+import { DURATION_PREFERENCE_LABELS, type SessionDurationMinutes } from '@/lib/duration-contract'
 
 interface AdaptiveProgramFormProps {
   inputs: AdaptiveProgramInputs
@@ -152,7 +153,7 @@ export function AdaptiveProgramForm({
 
           {/* Session Length */}
           <div className="space-y-2">
-            <label className="text-sm text-[#A5A5A5]">Session Duration</label>
+            <label className="text-sm text-[#A5A5A5]">Target Session Duration</label>
             <Select
               value={String(inputs.sessionLength)}
               onValueChange={(v) => updateInput('sessionLength', Number(v) as SessionLength)}
@@ -161,14 +162,15 @@ export function AdaptiveProgramForm({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent className="bg-[#2A2A2A] border-[#3A3A3A]">
-                <SelectItem value="30">30 min focused session</SelectItem>
-                <SelectItem value="45">45 min balanced session</SelectItem>
-                <SelectItem value="60">60 min complete session</SelectItem>
-                <SelectItem value="75">75 min extended session</SelectItem>
+                {([30, 45, 60, 75] as SessionDurationMinutes[]).map((minutes) => (
+                  <SelectItem key={minutes} value={String(minutes)}>
+                    {DURATION_PREFERENCE_LABELS[minutes].label}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
             <p className="text-xs text-[#6A6A6A]">
-              Pre-filled from your profile settings
+              Pre-filled from your profile. Actual sessions may vary based on day focus.
             </p>
           </div>
         </div>

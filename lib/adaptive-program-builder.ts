@@ -1,9 +1,28 @@
 /**
  * Adaptive Program Builder
  * 
+ * =============================================================================
+ * REGRESSION GUARD: THIS IS THE CANONICAL PROGRAM GENERATOR
+ * =============================================================================
+ * 
  * DO NOT DRIFT: This is the CANONICAL PROGRAM GENERATOR.
  * All program generation MUST flow through generateAdaptiveProgram().
  * Do NOT create parallel generators or bypass this path.
+ * 
+ * REGRESSION PREVENTION RULES:
+ * 1. All generation MUST use getCanonicalProfile() from canonical-profile-service.ts
+ * 2. Generation MUST call validateProfileForGeneration() before proceeding
+ * 3. DO NOT add fallback/default data that bypasses canonical profile
+ * 4. DO NOT silently succeed when profile validation fails
+ * 5. DO NOT read from active program snapshot for generation inputs
+ * 
+ * GENERATION INTEGRITY CHECKS (enforced in generateAdaptiveProgram):
+ * - primaryGoal must exist (throws error if missing)
+ * - onboardingComplete must be true (throws error if false)
+ * - At least one of: selectedSkills, selectedFlexibility, or selectedStrength must exist
+ * - equipmentAvailable must not be empty
+ * 
+ * These checks ensure we never generate garbage programs from incomplete data.
  */
 
 import type { PrimaryGoal, ExperienceLevel, TrainingDays, SessionLength } from './program-service'
@@ -16,6 +35,7 @@ import type { ConstraintResult, ConstraintIntervention } from './constraint-dete
 
 import { getAthleteProfile } from './data-service'
 import { getCanonicalProfile, logCanonicalProfileState, validateProfileForGeneration, getValidatedCanonicalProfile } from './canonical-profile-service'
+import { buildGenerationInput, getSystemStateFlags, type GenerationMode, type ProfileSnapshot } from './program-state-contract'
 import { normalizeProfile, computeLimiter, dedupeExercises, type NormalizedProfile } from './profile-normalizer'
 import { calculateRecoverySignal } from './recovery-engine'
 import { getConstraintInsight } from './constraint-engine'
@@ -35,6 +55,10 @@ import {
   getVolumeModifierForWeakPoint,
   detectWeakPointsForProfile,
   type DetectedWeakPoints,
+  // TASK 7: Limiter-driven program shaping
+  getLimiterDrivenProgramMods,
+  logLimiterDrivenMods,
+  type LimiterDrivenProgramMods,
 } from './weak-point-engine'
 import { getUnifiedSkillIntelligence, generateTrainingAdjustments, type UnifiedSkillIntelligence } from './skill-intelligence-layer'
 import { getCompressionReadiness, shouldBiasTowardCompression, type CompressionReadinessResult } from './compression-readiness'
@@ -252,9 +276,29 @@ import {
   type FlexibleWeekStructure,
   type DayStressLevel,
 } from './flexible-schedule-engine'
+import {
+  validateSession,
+  validateWarmupForSkill,
+} from './session-assembly-validation'
+import {
+  resolveSessionBudget,
+  type SessionBudget,
+} from './duration-contract'
+import {
+  calculateGoalHierarchyWeights,
+  calculateSessionDistribution,
+  getDurationVolumeConfig,
+  rankBottlenecks,
+  logEngineDiagnostics,
+  type GoalHierarchyWeights,
+  type SessionDistribution,
+  type RankedBottleneck,
+  type EngineDiagnostics,
+} from './engine-quality-contract'
 
 // Re-export schedule types for consumers
 export type { ScheduleMode, DayStressLevel } from './flexible-schedule-engine'
+export type { GenerationMode, ProfileSnapshot } from './program-state-contract'
   
 // =============================================================================
 // TYPES
@@ -279,6 +323,10 @@ export interface AdaptiveProgramInputs {
   scheduleMode?: ScheduleMode  // 'static' or 'flexible'
   // TASK 7: Pass selected skills for multi-goal generation awareness
   selectedSkills?: string[]
+  // STATE CONTRACT: Generation mode for fresh vs regenerate distinction
+  regenerationMode?: GenerationMode
+  // STATE CONTRACT: Optional reason for regeneration (for logging/debugging)
+  regenerationReason?: string
 }
 
 export interface AdaptiveSession {
@@ -654,6 +702,10 @@ exerciseExplanations?: {
   secondaryEmphasis?: string
   // Canonical Explanation Metadata - grounded explanations for "Why This Workout"
   explanationMetadata?: ProgramExplanationMetadata
+  // STATE CONTRACT: Profile snapshot taken at generation time (for debugging and traceability)
+  profileSnapshot?: ProfileSnapshot
+  // STATE CONTRACT: Generation mode used ('fresh', 'regenerate', or 'continue')
+  generationMode?: GenerationMode
 }
 
 // =============================================================================
@@ -846,6 +898,19 @@ function getDurationConfig(duration: WorkoutDurationPreference): DurationConfig 
 
 export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): AdaptiveProgram {
   console.log('[program-gen] Starting adaptive program generation')
+  
+  // STATE CONTRACT: Get system state flags to determine generation context
+  const stateFlags = getSystemStateFlags()
+  const generationMode: GenerationMode = inputs.regenerationMode || stateFlags.recommendedMode
+  
+  console.log('[program-gen] STATE CONTRACT:', {
+    hasProfile: stateFlags.hasProfile,
+    hasHistory: stateFlags.hasHistory,
+    hasProgram: stateFlags.hasProgram,
+    profileChanged: stateFlags.profileChanged,
+    generationMode,
+  })
+  
   // TASK 7: Log ALL canonical profile fields consumed by generation
   console.log('[program-gen] Inputs:', {
     primaryGoal: inputs.primaryGoal,
@@ -856,6 +921,7 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
     equipmentCount: inputs.equipment?.length || 0,
     scheduleMode: inputs.scheduleMode || 'static',
     selectedSkills: inputs.selectedSkills || [],
+    generationMode,
   })
   
   const {
@@ -868,6 +934,7 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
   } = inputs
   
   // Gather context - CANONICAL FIX: Use unified canonical profile
+  // CRITICAL: This is the ONLY source of truth for generation
   const canonicalProfile = getCanonicalProfile()
   logCanonicalProfileState('generateAdaptiveProgram called')
   
@@ -894,6 +961,52 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
   if (computedLimiter) {
     console.log('[program-gen] TASK 4: Computed limiter:', computedLimiter)
   }
+  
+  // ENGINE QUALITY: Calculate goal hierarchy weighting for session distribution
+  const goalHierarchyWeights = calculateGoalHierarchyWeights(
+    primaryGoal,
+    secondaryGoal || canonicalProfile.secondaryGoal || null,
+    canonicalProfile.trainingPathType || 'hybrid'
+  )
+  console.log('[program-gen] Goal hierarchy weights:', goalHierarchyWeights)
+  
+  // ENGINE QUALITY: Rank bottlenecks from profile data
+  const rankedBottlenecks = normalizedProfile ? rankBottlenecks(
+    primaryGoal,
+    secondaryGoal || canonicalProfile.secondaryGoal || null,
+    normalizedProfile.strength,
+    normalizedProfile.skillProgressions,
+    normalizedProfile.equipment,
+    normalizedProfile.joints,
+    null // recovery level
+  ) : []
+  if (rankedBottlenecks.length > 0) {
+    console.log('[program-gen] Ranked bottlenecks:', rankedBottlenecks.map(b => ({
+      type: b.type,
+      severity: b.severityScore,
+      suggestedFocus: b.suggestedFocus,
+    })))
+  }
+  
+  // TASK 7: Get limiter-driven program modifications
+  // This shapes the actual program structure based on the detected limiter
+  const primaryBottleneck = rankedBottlenecks[0]
+  const limiterDrivenMods: LimiterDrivenProgramMods | null = primaryBottleneck
+    ? getLimiterDrivenProgramMods(
+        primaryBottleneck.type as WeakPointType,
+        rankedBottlenecks[1]?.type as WeakPointType || null,
+        primaryBottleneck.severityScore
+      )
+    : null
+  
+  if (limiterDrivenMods && process.env.NODE_ENV !== 'production') {
+    logLimiterDrivenMods(primaryBottleneck.type as WeakPointType, limiterDrivenMods)
+  }
+  
+  // ENGINE QUALITY: Get duration-based volume config
+  const durationVolumeConfig = getDurationVolumeConfig(
+    typeof sessionLength === 'number' ? sessionLength : parseInt(String(sessionLength)) || 60
+  )
   
   const profile = getAthleteProfile() // Legacy fallback
   const recoverySignal = calculateRecoverySignal()
@@ -1008,6 +1121,15 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
     effectiveTrainingDays = getEffectiveFrequency(trainingDaysPerWeek) as TrainingDays
     console.log('[schedule-mode] Static mode, using:', effectiveTrainingDays, 'days')
   }
+  
+  // ENGINE QUALITY: Calculate session distribution based on goal hierarchy
+  const sessionDistribution = calculateSessionDistribution(
+    effectiveTrainingDays,
+    primaryGoal,
+    secondaryGoal || canonicalProfile.secondaryGoal || null,
+    canonicalProfile.trainingPathType || 'hybrid'
+  )
+  console.log('[program-gen] Session distribution:', sessionDistribution)
   
   // Get duration-based configuration for exercise count and structure
   const durationConfig = getDurationConfig(workoutDuration)
@@ -1546,6 +1668,47 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
     range: `${finalFrequencyRange.min}-${finalFrequencyRange.max}`,
     hasFlexibleStructure: !!flexibleWeekStructure,
   })
+  
+  // ENGINE QUALITY: Log comprehensive diagnostics (dev only)
+  if (process.env.NODE_ENV !== 'production') {
+    const warmupComponents = sessions.flatMap(s => (s.warmup || []).map(w => w.name))
+    const diagnostics: EngineDiagnostics = {
+      normalizedInputSummary: {
+        primaryGoal,
+        secondaryGoal: secondaryGoal || canonicalProfile.secondaryGoal || null,
+        experienceLevel,
+        sessionDuration: typeof sessionLength === 'number' ? sessionLength : parseInt(String(sessionLength)) || 60,
+        scheduleMode: finalScheduleMode,
+        strengthBenchmarks: normalizedProfile?.strength || {},
+        skillProgressions: normalizedProfile?.skillProgressions || {},
+      },
+      rankedBottlenecks,
+      sessionDistribution,
+      durationVolumeConfig,
+      warmupComponentsChosen: [...new Set(warmupComponents)],
+      warmupDedupeEvents: [], // Logged separately in warmup engine
+      goalWeighting: goalHierarchyWeights,
+      // TASK 10: Enhanced diagnostics
+      topLimiterRanking: rankedBottlenecks.slice(0, 3).map(b => ({
+        type: b.type,
+        severity: b.severityScore,
+        affectsGoals: b.affectsGoals,
+      })),
+      weeklyLoadBalance: limiterDrivenMods ? {
+        totalNeuralLoad: sessions.filter(s => s.isPrimary).length * 3 + sessions.filter(s => !s.isPrimary).length * 2,
+        straightArmDays: sessions.filter(s => s.focus?.includes('skill')).length,
+        hasRecoveryDay: limiterDrivenMods.suggestRecoveryDay || sessions.some(s => s.focus === 'support_recovery'),
+        balanceIssues: limiterDrivenMods.volumeModifier < 1 ? ['Volume reduced for recovery'] : [],
+      } : undefined,
+      weightedStrengthDecisions: limiterDrivenMods?.prioritizeExerciseTypes.filter(t => t.includes('weighted')).map(t => ({
+        exercise: t,
+        primaryTarget: primaryGoal,
+        included: true,
+        rationale: limiterDrivenMods.rationale,
+      })),
+    }
+    logEngineDiagnostics(diagnostics)
+  }
   
   return {
     id: `adaptive-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
@@ -2153,9 +2316,14 @@ return explanations.length > 0 ? explanations : undefined
           trustedWorkoutCount: trainingFeedback.trustedWorkoutCount,
           adjustmentReasons: trainingFeedback.adjustmentReasons,
           isFirstProgram: trainingFeedback.trustedWorkoutCount === 0,
-          limiters: profile?.weakestArea ? [profile.weakestArea] : undefined,
-          weakPoints: constraintContext?.weakPoints?.map(wp => wp.type),
-        }
+  limiters: profile?.weakestArea ? [profile.weakestArea] : undefined,
+  weakPoints: constraintContext?.weakPoints?.map(wp => wp.type),
+  // TASK 6: Pass engine-grounded session distribution for truthful explanation
+  sessionDistribution,
+  durationLabel: resolveSessionBudget(
+    typeof sessionLength === 'number' ? sessionLength : parseInt(String(sessionLength).split('-')[0]) || 45
+  ).label,
+  }
         
         // Build session contexts from generated sessions
         const sessionContexts: SessionContext[] = sessions.map((session, idx) => ({
@@ -2183,6 +2351,67 @@ return explanations.length > 0 ? explanations : undefined
         return undefined
       }
     })(),
+    // TASK 9: Final engine diagnostics (dev-safe logging)
+    engineDiagnostics: (() => {
+      // Only log in development
+      if (process.env.NODE_ENV === 'production') return undefined
+      
+      const diagnostics = {
+        primaryGoal,
+        secondaryGoal: secondaryGoal || canonicalProfile.secondaryGoal || 'none',
+        sessionDurationBudget: resolveSessionBudget(
+          typeof sessionLength === 'number' ? sessionLength : parseInt(String(sessionLength).split('-')[0]) || 45
+        ),
+        scheduleMode: inputs.scheduleMode || 'static',
+        effectiveTrainingDays,
+        goalHierarchyWeights,
+        sessionDistribution,
+        rankedBottlenecks: rankedBottlenecks.map(b => ({ type: b.type, severity: b.severityScore })),
+        warmupPatternType: sessions[0]?.warmup?.length > 0 ? 'skill-aware' : 'default',
+        weeklySplitTemplate: sessions.map(s => s.focus).join(' / '),
+        keyMetricsDetected: {
+          pullUpMax: canonicalProfile.pullUpMax,
+          dipMax: canonicalProfile.dipMax,
+          weightedPullUp: canonicalProfile.weightedPullUp,
+          weightedDip: canonicalProfile.weightedDip,
+          frontLeverProgression: canonicalProfile.frontLeverProgression,
+          plancheProgression: canonicalProfile.plancheProgression,
+        },
+      }
+      
+      console.log('[EngineDiagnostics] === GENERATION COMPLETE ===')
+      console.log('[EngineDiagnostics]', JSON.stringify(diagnostics, null, 2))
+      
+      return diagnostics
+    })(),
+    // STATE CONTRACT: Profile snapshot taken at generation time (for debugging and traceability)
+    profileSnapshot: {
+      snapshotId: `snapshot_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
+      createdAt: new Date().toISOString(),
+      primaryGoal: canonicalProfile.primaryGoal,
+      secondaryGoal: canonicalProfile.secondaryGoal,
+      experienceLevel: canonicalProfile.experienceLevel,
+      trainingDaysPerWeek: canonicalProfile.trainingDaysPerWeek,
+      sessionLengthMinutes: canonicalProfile.sessionLengthMinutes,
+      scheduleMode: canonicalProfile.scheduleMode,
+      equipmentAvailable: canonicalProfile.equipmentAvailable || [],
+      jointCautions: canonicalProfile.jointCautions || [],
+      selectedSkills: canonicalProfile.selectedSkills || [],
+      strengthBenchmarks: {
+        pullUpMax: canonicalProfile.pullUpMax,
+        dipMax: canonicalProfile.dipMax,
+        pushUpMax: canonicalProfile.pushUpMax,
+        weightedPullUp: canonicalProfile.weightedPullUp,
+        weightedDip: canonicalProfile.weightedDip,
+      },
+      skillProgressions: {
+        frontLever: canonicalProfile.frontLeverProgression,
+        planche: canonicalProfile.plancheProgression,
+        hspu: canonicalProfile.hspuProgression,
+      },
+    },
+    // STATE CONTRACT: Generation mode used
+    generationMode,
   }
 }
 
@@ -2361,6 +2590,31 @@ function generateAdaptiveSession(
       }
     }
 
+    // TASK 5: Map exercises first, then validate/dedupe
+    const rawExercises = mapToAdaptiveExercises(
+      Array.isArray(adaptedMain?.adapted) ? adaptedMain.adapted : [], 
+      primaryGoal, 
+      sessionLength, 
+      fatigueSensitivity,
+      currentFatigueScore
+    )
+    const rawWarmup = mapToAdaptiveExercises(Array.isArray(adaptedWarmup?.adapted) ? adaptedWarmup.adapted : [], primaryGoal, sessionLength)
+    const rawCooldown = mapToAdaptiveExercises(Array.isArray(adaptedCooldown?.adapted) ? adaptedCooldown.adapted : [], primaryGoal, sessionLength)
+    
+    // TASK 5: Session Assembly Validation Pass
+    // Dedupe, fix ordering, and validate session before returning
+    const sessionBudget = resolveSessionBudget(typeof sessionLength === 'number' ? sessionLength : parseInt(String(sessionLength).split('-')[0]) || 45)
+    const validatedSession = validateSession(rawExercises, rawWarmup, rawCooldown, {
+      isSkillFirstDay: day.isPrimary,
+      maxMainExercises: sessionBudget.mainWork.maxExercises,
+      maxWarmupExercises: sessionBudget.warmup.maxExercises,
+    })
+    
+    // Add validation fixes to adaptation notes
+    if (validatedSession.validation.fixesApplied.length > 0) {
+      adaptationNotes.push(...validatedSession.validation.fixesApplied)
+    }
+    
     return {
       dayNumber: day.dayNumber,
       dayLabel: `Day ${day.dayNumber}`,
@@ -2368,16 +2622,10 @@ function generateAdaptiveSession(
       focusLabel: day.focusLabel,
       isPrimary: day.isPrimary,
       rationale,
-// SAFETY: Ensure adapted arrays are valid before passing to mapper (using local safe variables)
-exercises: mapToAdaptiveExercises(
-      Array.isArray(adaptedMain?.adapted) ? adaptedMain.adapted : [], 
-      primaryGoal, 
-      sessionLength, 
-      fatigueSensitivity,
-      currentFatigueScore
-    ),
-    warmup: mapToAdaptiveExercises(Array.isArray(adaptedWarmup?.adapted) ? adaptedWarmup.adapted : [], primaryGoal, sessionLength),
-    cooldown: mapToAdaptiveExercises(Array.isArray(adaptedCooldown?.adapted) ? adaptedCooldown.adapted : [], primaryGoal, sessionLength),
+      // Use validated (deduped, reordered) exercises
+      exercises: validatedSession.exercises,
+      warmup: validatedSession.warmup,
+      cooldown: validatedSession.cooldown,
       estimatedMinutes: selection.totalEstimatedTime + (finisher?.durationMinutes || 0),
       variants,
       adaptationNotes: adaptationNotes.length > 0 ? adaptationNotes : undefined,

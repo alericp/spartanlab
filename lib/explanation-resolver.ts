@@ -49,6 +49,15 @@ export interface ExplanationContext {
   isFirstProgram?: boolean
   limiters?: string[]
   weakPoints?: string[]
+  // TASK 6: Engine-grounded session distribution
+  sessionDistribution?: {
+    primaryFocusSessions: number
+    secondaryFocusSessions: number
+    mixedSessions: number
+    rationale: string
+  }
+  // TASK 6: Resolved duration budget label
+  durationLabel?: string
 }
 
 export interface SessionContext {
@@ -139,9 +148,14 @@ function buildSummaryExplanation(context: ExplanationContext): ProgramExplanatio
   // Primary goal reason - always present
   let primaryGoalReason = getPrimaryGoalExplanation(context.primaryGoal, context.goalLabel)
   
-  // TASK 6: Add secondary goal influence to explanation
+  // TASK 6: Add secondary goal influence to explanation with grounded session distribution
   if (context.secondaryGoal && context.secondaryGoalLabel) {
-    primaryGoalReason += ` Secondary emphasis: ${context.secondaryGoalLabel} development for complementary progress.`
+    if (context.sessionDistribution) {
+      const { primaryFocusSessions, secondaryFocusSessions, mixedSessions } = context.sessionDistribution
+      primaryGoalReason += ` Secondary emphasis: ${context.secondaryGoalLabel} (${secondaryFocusSessions} dedicated session${secondaryFocusSessions !== 1 ? 's' : ''}, ${primaryFocusSessions} ${context.goalLabel}-primary, ${mixedSessions} mixed).`
+    } else {
+      primaryGoalReason += ` Secondary emphasis: ${context.secondaryGoalLabel} development for complementary progress.`
+    }
   }
   
   // Schedule reason - explain flexible vs static

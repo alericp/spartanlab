@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import type { AdaptiveProgram } from '@/lib/adaptive-program-builder'
 import { AdaptiveSessionCard } from './AdaptiveSessionCard'
+import { checkProgramStaleness, type ProfileSnapshot } from '@/lib/canonical-profile-service'
 import { 
   Target, 
   Calendar, 
@@ -18,7 +19,8 @@ import {
   TrendingUp,
   TrendingDown,
   Minus,
-  Sparkles
+  Sparkles,
+  RefreshCw,
 } from 'lucide-react'
 import {
   Dialog,
@@ -30,11 +32,13 @@ import {
 } from '@/components/ui/dialog'
 import { useState } from 'react'
 import { WorkoutExplanation, PlanExplanationBadge, DataConfidenceBadge } from './WorkoutExplanation'
+import { getDurationPreferenceLabel } from '@/lib/duration-contract'
 
 interface AdaptiveProgramDisplayProps {
   program: AdaptiveProgram
   onDelete?: () => void
-  onRestart?: () => void // New: explicit restart action with archive
+  onRestart?: () => void // Explicit restart action: archives current program, returns to builder
+  onRegenerate?: () => void // Explicit regenerate action: updates program from current profile
   onExerciseReplace?: (dayNumber: number, exerciseId: string) => void
 }
 
@@ -42,10 +46,14 @@ export function AdaptiveProgramDisplay({
   program, 
   onDelete,
   onRestart,
+  onRegenerate,
   onExerciseReplace 
 }: AdaptiveProgramDisplayProps) {
   // TASK 2: Confirmation modal state for restart action
   const [showRestartConfirm, setShowRestartConfirm] = useState(false)
+  
+  // TASK 6: Check if program is stale relative to current profile
+  const stalenessCheck = checkProgramStaleness(program.profileSnapshot as ProfileSnapshot | undefined)
   const recoveryColors: Record<string, string> = {
     HIGH: 'text-green-400 bg-green-400/10 border-green-400/20',
     MODERATE: 'text-yellow-400 bg-yellow-400/10 border-yellow-400/20',
@@ -149,8 +157,8 @@ export function AdaptiveProgramDisplay({
           <div className="flex items-center gap-2">
             <Clock className="w-4 h-4 text-[#E63946]" />
             <div>
-              <p className="text-xs text-[#6A6A6A]">Session</p>
-              <p className="text-sm font-medium">{program.sessionLength} min</p>
+              <p className="text-xs text-[#6A6A6A]">Target Duration</p>
+              <p className="text-sm font-medium">{getDurationPreferenceLabel(program.sessionLength)}</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -166,6 +174,54 @@ export function AdaptiveProgramDisplay({
         <div className="p-3 bg-[#1A1A1A] rounded-lg">
           <p className="text-sm text-[#A5A5A5]">{program.programRationale}</p>
         </div>
+        
+        {/* TASK 6: Profile Staleness Indicator */}
+        {stalenessCheck.isStale && (
+          <div className={`mt-4 p-3 rounded-lg border ${
+            stalenessCheck.staleDegree === 'significant' 
+              ? 'bg-amber-500/10 border-amber-500/30' 
+              : 'bg-blue-500/10 border-blue-500/30'
+          }`}>
+            <div className="flex items-start gap-3">
+              <RefreshCw className={`w-4 h-4 mt-0.5 shrink-0 ${
+                stalenessCheck.staleDegree === 'significant' 
+                  ? 'text-amber-400' 
+                  : 'text-blue-400'
+              }`} />
+              <div className="flex-1 min-w-0">
+                <p className={`text-sm font-medium mb-1 ${
+                  stalenessCheck.staleDegree === 'significant' 
+                    ? 'text-amber-400' 
+                    : 'text-blue-400'
+                }`}>
+                  {stalenessCheck.staleDegree === 'significant' 
+                    ? 'Your profile has changed' 
+                    : 'Minor profile updates detected'}
+                </p>
+                <p className="text-xs text-[#A5A5A5]">
+                  {stalenessCheck.staleDegree === 'significant' 
+                    ? 'Your goals or schedule have changed since this program was created. Consider regenerating for a better fit.'
+                    : 'Some settings have changed. You can continue or regenerate to apply the updates.'}
+                </p>
+                {onRegenerate && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={onRegenerate}
+                    className={`mt-2 h-7 px-2 text-xs ${
+                      stalenessCheck.staleDegree === 'significant'
+                        ? 'text-amber-400 hover:text-amber-300 hover:bg-amber-500/20'
+                        : 'text-blue-400 hover:text-blue-300 hover:bg-blue-500/20'
+                    }`}
+                  >
+                    <RefreshCw className="w-3 h-3 mr-1" />
+                    Regenerate Program
+                  </Button>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
         
         {/* Why This Plan - Canonical Explanation */}
         {program.explanationMetadata && (
@@ -371,38 +427,76 @@ export function AdaptiveProgramDisplay({
         )}
       </div>
 
-      {/* TASK 2: Restart Program Confirmation Modal */}
+      {/* TASK 4: Restart Program Confirmation Modal - clear semantics */}
       <Dialog open={showRestartConfirm} onOpenChange={setShowRestartConfirm}>
-        <DialogContent className="bg-[#1A1F26] border-[#2B313A] max-w-sm">
+        <DialogContent className="bg-[#1A1F26] border-[#2B313A] max-w-md">
           <DialogHeader>
             <DialogTitle className="text-[#E6E9EF]">Restart Program?</DialogTitle>
-            <DialogDescription className="text-[#A4ACB8] pt-2 space-y-3">
-              <p>
-                Your current program will be archived to your program history. 
-                You can view it later in your training history.
-              </p>
-              <p>
-                After restarting, you can build a new program tailored to your 
-                updated goals and schedule.
-              </p>
+            <DialogDescription className="text-[#A4ACB8] pt-2">
+              Choose how you want to proceed with your training program.
             </DialogDescription>
           </DialogHeader>
-          <DialogFooter className="flex-col gap-2 sm:flex-col">
-            <Button
+          
+          <div className="space-y-3 py-2">
+            {/* Option 1: Regenerate (update from current profile) */}
+            {onRegenerate && (
+              <button
+                onClick={() => {
+                  setShowRestartConfirm(false)
+                  onRegenerate()
+                }}
+                className="w-full flex items-start gap-3 p-4 bg-[#0F1115] rounded-lg border border-[#2B313A] hover:border-[#C1121F]/50 transition-colors text-left"
+              >
+                <div className="w-8 h-8 rounded-lg bg-[#C1121F]/10 flex items-center justify-center shrink-0 mt-0.5">
+                  <RefreshCw className="w-4 h-4 text-[#C1121F]" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-medium text-[#E6E9EF]">Regenerate Program</h4>
+                  <p className="text-xs text-[#6B7280] mt-1">
+                    Update your program based on your current profile settings. 
+                    Your workout history is preserved.
+                  </p>
+                  {stalenessCheck.isStale && (
+                    <span className="inline-block mt-2 text-[10px] px-2 py-0.5 rounded-full bg-[#C1121F]/10 text-[#C1121F] border border-[#C1121F]/20">
+                      Recommended - profile changed
+                    </span>
+                  )}
+                </div>
+              </button>
+            )}
+            
+            {/* Option 2: Full Restart (archive and start fresh) */}
+            <button
               onClick={() => {
                 setShowRestartConfirm(false)
-                // Use onRestart if available, fall back to onDelete for backwards compatibility
                 if (onRestart) {
                   onRestart()
                 } else if (onDelete) {
                   onDelete()
                 }
               }}
-              className="w-full bg-amber-600 hover:bg-amber-700 text-white"
+              className="w-full flex items-start gap-3 p-4 bg-[#0F1115] rounded-lg border border-[#2B313A] hover:border-amber-500/50 transition-colors text-left"
             >
-              <RotateCcw className="w-4 h-4 mr-2" />
-              Restart Program
-            </Button>
+              <div className="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center shrink-0 mt-0.5">
+                <RotateCcw className="w-4 h-4 text-amber-400" />
+              </div>
+              <div>
+                <h4 className="text-sm font-medium text-[#E6E9EF]">Restart from Scratch</h4>
+                <p className="text-xs text-[#6B7280] mt-1">
+                  Archive your current program and return to the builder to create a completely new program.
+                </p>
+              </div>
+            </button>
+          </div>
+          
+          {/* What's preserved notice */}
+          <div className="p-3 bg-[#1A2F1A]/30 border border-[#2D5A2D]/30 rounded-lg">
+            <p className="text-xs text-[#4ADE80]">
+              <span className="font-medium">Always preserved:</span> Your workout history, completed sessions, and progress data.
+            </p>
+          </div>
+          
+          <DialogFooter>
             <Button
               variant="outline"
               onClick={() => setShowRestartConfirm(false)}

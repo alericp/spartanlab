@@ -353,6 +353,31 @@ export const WARMUP_EXERCISE_POOL: WarmUpExercise[] = [
     priority: 1,
     intensity: 'low',
   },
+  // TASK 6: User-preferred specific phase exercises
+  {
+    id: 'plank_bird_dog',
+    name: 'Plank Press-to-Bird-Dog',
+    phase: 'specific',
+    targetPattern: ['core', 'horizontal_push'],
+    targetMuscles: ['core', 'glutes', 'shoulders'],
+    equipment: ['floor'],
+    reps: '8 each side',
+    notes: 'Core activation with shoulder stabilization',
+    priority: 3,
+    intensity: 'moderate',
+  },
+  {
+    id: 'leg_swings_lateral',
+    name: 'Leg Swings (Lateral)',
+    phase: 'specific',
+    targetPattern: ['compression', 'core'],
+    targetMuscles: ['hip_flexors', 'abductors'],
+    equipment: ['floor'],
+    reps: '10 each leg',
+    notes: 'Side-to-side dynamic stretch',
+    priority: 2,
+    intensity: 'low',
+  },
   
   // ACTIVATION PHASE - Neural priming
   {
@@ -612,8 +637,14 @@ export function generateWarmUp(context: WarmUpGenerationContext): GeneratedWarmU
     firstSkillProgression
   )
 
-  // TASK 6: Deduplicate exercises before output
-  const deduplicatedExercises = dedupeWarmUpExercises(selectedExercises)
+  // TASK 6: Deduplicate exercises before output (by ID and by name)
+  const deduplicatedByIdExercises = dedupeWarmUpExercises(selectedExercises)
+  const deduplicatedExercises = dedupeWarmUpByName(deduplicatedByIdExercises)
+  
+  // ENGINE QUALITY: Log warmup components for diagnostics
+  if (process.env.NODE_ENV !== 'production') {
+    console.log('[WarmUp] Final components:', deduplicatedExercises.map(e => e.name))
+  }
   
   // Format exercises for output
   const formattedExercises = deduplicatedExercises.map(ex => ({
@@ -760,18 +791,54 @@ function generateRationale(
 /**
  * Remove duplicate warm-up exercises by ID.
  * TASK 6: Prevents the same exercise appearing multiple times in warm-up.
+ * Returns deduped array and logs events for engine diagnostics.
  */
 function dedupeWarmUpExercises(exercises: WarmUpExercise[]): WarmUpExercise[] {
   const seen = new Set<string>()
-  return exercises.filter(ex => {
+  const duplicatesRemoved: string[] = []
+  
+  const result = exercises.filter(ex => {
     const key = ex.id.toLowerCase()
     if (seen.has(key)) {
-      console.log('[WarmUp] TASK 6: Removed duplicate exercise:', ex.name)
+      duplicatesRemoved.push(ex.name)
       return false
     }
     seen.add(key)
     return true
   })
+  
+  // Log dedupe events for engine diagnostics (dev only)
+  if (process.env.NODE_ENV !== 'production' && duplicatesRemoved.length > 0) {
+    console.log('[WarmUp] Dedupe: Removed duplicates:', duplicatesRemoved)
+  }
+  
+  return result
+}
+
+/**
+ * Also dedupe by exercise name (catches different IDs same exercise).
+ * More aggressive dedupe for clean warmup output.
+ */
+function dedupeWarmUpByName(exercises: WarmUpExercise[]): WarmUpExercise[] {
+  const seen = new Set<string>()
+  const duplicatesRemoved: string[] = []
+  
+  const result = exercises.filter(ex => {
+    // Normalize name for comparison
+    const normalizedName = ex.name.toLowerCase().replace(/[^a-z0-9]/g, '')
+    if (seen.has(normalizedName)) {
+      duplicatesRemoved.push(ex.name)
+      return false
+    }
+    seen.add(normalizedName)
+    return true
+  })
+  
+  if (process.env.NODE_ENV !== 'production' && duplicatesRemoved.length > 0) {
+    console.log('[WarmUp] Name dedupe: Removed duplicates:', duplicatesRemoved)
+  }
+  
+  return result
 }
 
 // =============================================================================

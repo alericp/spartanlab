@@ -310,14 +310,15 @@ export function useWorkoutSession(session: AdaptiveSession): UseWorkoutSessionRe
       }
 
       const exercises = Array.from(exerciseMap.values())
-      const durationMinutes = Math.round(state.elapsedSeconds / 60)
+      // Ensure minimum 1 minute duration to prevent 0-minute sessions
+      const durationMinutes = Math.max(1, Math.round(state.elapsedSeconds / 60))
 
       // Save to workout log (localStorage for quick access)
       saveWorkoutLog({
         sessionName: session.dayLabel,
         sessionType: 'mixed' as SessionType,
         sessionDate: new Date().toISOString().split('T')[0],
-        durationMinutes: durationMinutes || 1,
+        durationMinutes,
         focusArea: mapFocusToFocusArea(session.focusLabel),
         notes,
         exercises,
@@ -330,7 +331,7 @@ export function useWorkoutSession(session: AdaptiveSession): UseWorkoutSessionRe
           workoutName: session.dayLabel,
           dayLabel: session.dayLabel,
           focusArea: session.focusLabel,
-          durationMinutes: durationMinutes || 1,
+          durationMinutes,
           completedSets: state.completedSets,
           exercises: session.exercises.map(ex => ({
             id: ex.id,

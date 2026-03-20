@@ -15,6 +15,7 @@ import type { PrimaryTrainingOutcome } from './athlete-profile'
 import type { ExperienceLevel, SessionLength, PrimaryGoal } from './program-service'
 import { generateIntelligentPrehab } from './prehab'
 import type { IntelligentPrehabContext } from './prehab'
+import { getDurationVolumeConfig, type DurationVolumeConfig } from './engine-quality-contract'
 
 // =============================================================================
 // SESSION BLOCK TYPES
@@ -58,6 +59,9 @@ export interface SessionTemplate {
 // =============================================================================
 
 export function buildSkillFirstSession(duration: number): SessionTemplate {
+  // ENGINE QUALITY: Use canonical duration volume config
+  const volumeConfig = getDurationVolumeConfig(duration)
+  
   const isShort = duration <= 45
   const isMedium = duration > 45 && duration <= 60
   const isLong = duration > 60
@@ -66,8 +70,8 @@ export function buildSkillFirstSession(duration: number): SessionTemplate {
     {
       type: 'warmup',
       name: 'General Warm-up',
-      durationMinutes: 5,
-      exercises: 3,
+      durationMinutes: volumeConfig.warmupMinutes,
+      exercises: Math.max(3, Math.floor(volumeConfig.warmupExerciseCount / 2)),
       intensity: 'low',
       restBetweenSets: [30, 45],
       notes: ['Light cardio', 'Joint circles', 'Dynamic stretches'],
@@ -75,8 +79,8 @@ export function buildSkillFirstSession(duration: number): SessionTemplate {
     {
       type: 'mobility_activation',
       name: 'Specific Prep',
-      durationMinutes: isShort ? 3 : 5,
-      exercises: 2,
+      durationMinutes: isShort ? 3 : Math.min(5, volumeConfig.warmupMinutes),
+      exercises: Math.ceil(volumeConfig.warmupExerciseCount / 2),
       intensity: 'low',
       restBetweenSets: [30, 45],
       notes: ['Wrist prep', 'Shoulder activation', 'Scapular work'],
@@ -128,8 +132,8 @@ export function buildSkillFirstSession(duration: number): SessionTemplate {
   blocks.push({
     type: 'cooldown',
     name: 'Cooldown & Flexibility',
-    durationMinutes: isShort ? 3 : 5,
-    exercises: 2,
+    durationMinutes: volumeConfig.cooldownMinutes,
+    exercises: volumeConfig.cooldownExerciseCount,
     intensity: 'low',
     restBetweenSets: [0, 0],
     notes: ['Static stretching', 'Breathing exercises'],

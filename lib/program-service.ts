@@ -1,5 +1,26 @@
-// Program Builder service layer for preview mode
-// Uses localStorage for persistence, easy to swap to Prisma later
+/**
+ * PROGRAM SERVICE LAYER
+ * 
+ * =============================================================================
+ * REGRESSION GUARD: THIS IS A LEGACY SERVICE - USE ADAPTIVE-PROGRAM-BUILDER.TS
+ * =============================================================================
+ * 
+ * Uses localStorage for persistence, easy to swap to Prisma later.
+ * 
+ * CRITICAL ARCHITECTURAL NOTE:
+ * This is the LEGACY program builder. For new features:
+ * - Use adaptive-program-builder.ts -> generateAdaptiveProgram()
+ * - Use canonical-profile-service.ts for profile reads
+ * 
+ * This service still exists for:
+ * - Backward compatibility with existing programs
+ * - Active program state management (getActiveProgram, setActiveProgram, clearActiveProgram)
+ * - Program history retrieval
+ * 
+ * DO NOT:
+ * - Use generateProgram() for new programs (use generateAdaptiveProgram instead)
+ * - Add new fallback/default logic that bypasses canonical profile
+ */
 
 import {
   PLANCHE_EXERCISES,

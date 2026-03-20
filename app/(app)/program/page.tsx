@@ -52,11 +52,13 @@ function ProgramDisplayWrapper({
   program, 
   onDelete,
   onRestart,
+  onRegenerate,
   onRecoveryNeeded 
 }: { 
   program: AdaptiveProgram
   onDelete: () => void
   onRestart: () => void
+  onRegenerate: () => void
   onRecoveryNeeded: () => void 
 }) {
   const [hasRenderError, setHasRenderError] = useState(false)
@@ -92,6 +94,7 @@ function ProgramDisplayWrapper({
         program={program}
         onDelete={onDelete}
         onRestart={onRestart}
+        onRegenerate={onRegenerate}
       />
     )
   } catch (err) {
@@ -336,9 +339,12 @@ export default function ProgramPage() {
     }, 500)
   }, [inputs, programModules])
 
-  // TASK 3: Renamed from handleDelete - archives program before clearing
+  // TASK 4: Restart Program - archives current program and returns to builder
   const handleRestart = useCallback(() => {
     if (program && programModules.deleteAdaptiveProgram) {
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('[v0] Restart Program confirmed - archiving and returning to builder')
+      }
       // Record program end for history/archival before deleting
       programModules.recordProgramEnd?.('restart')
       programModules.deleteAdaptiveProgram(program.id)
@@ -346,6 +352,35 @@ export default function ProgramPage() {
       setShowBuilder(true)
     }
   }, [program, programModules])
+  
+  // TASK 5: Regenerate Program - creates updated program from current profile truth
+  // Does NOT archive the old program, just replaces it
+  const handleRegenerate = useCallback(() => {
+    if (!inputs || !programModules.generateAdaptiveProgram || !programModules.saveAdaptiveProgram) return
+    
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('[v0] Regenerate Program started - using current canonical profile')
+    }
+    
+    setIsGenerating(true)
+    
+    // Small delay for UX
+    setTimeout(() => {
+      // Record the regeneration event (not a full restart)
+      programModules.recordProgramEnd?.('regenerate')
+      
+      // Generate new program from current profile truth
+      const newProgram = programModules.generateAdaptiveProgram(inputs)
+      programModules.saveAdaptiveProgram(newProgram)
+      setProgram(newProgram)
+      setShowBuilder(false)
+      setIsGenerating(false)
+      
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('[v0] Regenerate Program completed - new program active')
+      }
+    }, 500)
+  }, [inputs, programModules])
   
   // Legacy delete handler for backwards compatibility
   const handleDelete = handleRestart
@@ -433,6 +468,7 @@ export default function ProgramPage() {
             </div>
           </div>
           
+          {/* TASK 3: Clear action semantics - "Update" opens adjustment modal, shows Regenerate/Restart options */}
           {program && !showBuilder && (
             <Button
               onClick={handleNewProgram}
@@ -440,7 +476,7 @@ export default function ProgramPage() {
               className="border-[#3A3A3A] hover:bg-[#2A2A2A]"
             >
               <Plus className="w-4 h-4 mr-2" />
-              Regenerate
+              Update Program
             </Button>
           )}
         </div>
@@ -473,6 +509,7 @@ export default function ProgramPage() {
             program={program} 
             onDelete={handleDelete}
             onRestart={handleRestart}
+            onRegenerate={handleRegenerate}
             onRecoveryNeeded={() => {
               console.log('[v0] Display render failed, showing recovery state')
               setLoadStage('display-render-error')

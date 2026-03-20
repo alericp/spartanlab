@@ -709,7 +709,11 @@ function mapScoreToWeakPoint(factor: WeakPointType, scores: BenchmarkScores): nu
 }
 
 /**
- * Detect weak points for a specific skill target
+ * Detect weak points for a specific skill target.
+ * Returns ranked bottlenecks with severity scores and priority exercises.
+ * 
+ * ENGINE QUALITY: This is the canonical limiter detection function.
+ * All constraint/bottleneck analysis should flow through here.
  */
 export function detectWeakPoints(
   skillTarget: SkillTarget,
@@ -720,6 +724,18 @@ export function detectWeakPoints(
 ): WeakPointAssessment {
   const prerequisites = SKILL_PREREQUISITES[skillTarget]
   const scores = calculateBenchmarkScores(profile, calibration)
+  
+  // ENGINE QUALITY: Log benchmark scores for diagnostics (dev only)
+  if (process.env.NODE_ENV !== 'production') {
+    console.log('[WeakPointEngine] Benchmark scores for', skillTarget, ':', {
+      pullStrength: scores.pullStrength,
+      pushStrength: scores.pushStrength,
+      straightArmPull: scores.straightArmPull,
+      straightArmPush: scores.straightArmPush,
+      compression: scores.compression,
+      scapularControl: scores.scapularControl,
+    })
+  }
   
   // Calculate weighted scores for each prerequisite
   const prerequisiteScores = prerequisites.map(prereq => {
@@ -768,6 +784,17 @@ export function detectWeakPoints(
   
   // Generate coaching message
   const coachingMessage = generateCoachingMessage(skillTarget, primaryPrereq, secondaryPrereq)
+  
+  // ENGINE QUALITY: Log assessment summary (dev only)
+  if (process.env.NODE_ENV !== 'production') {
+    console.log('[WeakPointEngine] Assessment for', skillTarget, ':', {
+      primaryLimiter: primaryPrereq.factor,
+      primarySeverity: Math.round(primarySeverity),
+      secondaryLimiter: secondaryPrereq?.factor || 'none',
+      strongAreas: strongAreas.length,
+      confidence: confidenceScore.toFixed(2),
+    })
+  }
   
   return {
     athleteId: profile.userId || 'unknown',
@@ -1729,4 +1756,316 @@ export function getSmartWeakPointAccessories(
     .slice(0, neededMore)
   
   return [...intelligentAccessories.map(ex => ex.id), ...traditional]
+}
+
+// =============================================================================
+// TASK 7: LIMITER-DRIVEN PROGRAM SHAPING
+// =============================================================================
+
+/**
+ * Program modifications driven by detected limiter.
+ * TASK 7: Ensures limiter detection actually shapes the program.
+ */
+export interface LimiterDrivenProgramMods {
+  // Volume adjustments
+  volumeModifier: number
+  intensityModifier: number
+  
+  // Session structure
+  skillSlotsAdjustment: number        // +/- skill exercise slots
+  strengthSlotsAdjustment: number     // +/- strength exercise slots
+  accessorySlotsAdjustment: number    // +/- accessory slots
+  
+  // Weekly structure
+  recommendedDaysPerWeek: { min: number; max: number }
+  suggestStraightArmRestDay: boolean
+  suggestRecoveryDay: boolean
+  
+  // Exercise selection guidance
+  prioritizeExerciseTypes: string[]
+  avoidExerciseTypes: string[]
+  
+  // Rest and intensity
+  restMultiplier: number              // For main work
+  warmupEmphasis: string[]            // Focus areas for warmup
+  
+  // Explanation for UI
+  rationale: string
+  coachingTip: string
+}
+
+/**
+ * Generate program modifications based on detected limiter.
+ * This is the canonical function for TASK 7.
+ * 
+ * @param primaryLimiter - The primary weak point detected
+ * @param secondaryLimiter - Optional secondary limiter
+ * @param severity - Severity score (0-100)
+ * @returns Program modifications that address the limiter
+ */
+export function getLimiterDrivenProgramMods(
+  primaryLimiter: WeakPointType,
+  secondaryLimiter: WeakPointType | null,
+  severity: number
+): LimiterDrivenProgramMods {
+  const baseMods: LimiterDrivenProgramMods = {
+    volumeModifier: 1.0,
+    intensityModifier: 1.0,
+    skillSlotsAdjustment: 0,
+    strengthSlotsAdjustment: 0,
+    accessorySlotsAdjustment: 0,
+    recommendedDaysPerWeek: { min: 3, max: 5 },
+    suggestStraightArmRestDay: false,
+    suggestRecoveryDay: false,
+    prioritizeExerciseTypes: [],
+    avoidExerciseTypes: [],
+    restMultiplier: 1.0,
+    warmupEmphasis: [],
+    rationale: '',
+    coachingTip: '',
+  }
+  
+  // =========================================================================
+  // PULLING STRENGTH DEFICIT
+  // =========================================================================
+  if (primaryLimiter === 'pull_strength' || primaryLimiter === 'bent_arm_pull') {
+    return {
+      ...baseMods,
+      strengthSlotsAdjustment: +1,
+      accessorySlotsAdjustment: +1,
+      prioritizeExerciseTypes: ['vertical_pull', 'horizontal_pull', 'weighted_pull'],
+      warmupEmphasis: ['scapular_activation', 'lat_activation'],
+      rationale: 'Your pulling strength is currently limiting skill progress. This program emphasizes pulling volume and weighted progressions.',
+      coachingTip: 'Focus on adding weight to your pull-ups before advancing lever work.',
+    }
+  }
+  
+  // =========================================================================
+  // PUSHING STRENGTH DEFICIT
+  // =========================================================================
+  if (primaryLimiter === 'push_strength' || primaryLimiter === 'bent_arm_push' || primaryLimiter === 'dip_strength') {
+    return {
+      ...baseMods,
+      strengthSlotsAdjustment: +1,
+      prioritizeExerciseTypes: ['vertical_push', 'horizontal_push', 'weighted_dip'],
+      warmupEmphasis: ['shoulder_activation', 'tricep_prep'],
+      rationale: 'Your pushing strength needs development. This program includes more pressing volume.',
+      coachingTip: 'Build your dip numbers before pushing hard on planche work.',
+    }
+  }
+  
+  // =========================================================================
+  // STRAIGHT-ARM PULL DEFICIT (Front Lever)
+  // =========================================================================
+  if (primaryLimiter === 'straight_arm_pull_strength') {
+    return {
+      ...baseMods,
+      skillSlotsAdjustment: +1,
+      accessorySlotsAdjustment: +1,
+      suggestStraightArmRestDay: true,
+      prioritizeExerciseTypes: ['straight_arm_pull', 'scapular_pull', 'front_lever_prep'],
+      avoidExerciseTypes: [], // Don't avoid bent-arm - it supports
+      warmupEmphasis: ['scapular_activation', 'lat_stretch', 'shoulder_circles'],
+      restMultiplier: 1.2, // Extra rest for tendon work
+      rationale: 'Straight-arm pulling strength is your primary limiter for front lever. The program includes targeted lever progressions with adequate tendon recovery.',
+      coachingTip: 'Quality holds at easier progressions build tendon strength. Avoid grinding long holds.',
+    }
+  }
+  
+  // =========================================================================
+  // STRAIGHT-ARM PUSH DEFICIT (Planche)
+  // =========================================================================
+  if (primaryLimiter === 'straight_arm_push_strength') {
+    return {
+      ...baseMods,
+      skillSlotsAdjustment: +1,
+      accessorySlotsAdjustment: +1,
+      suggestStraightArmRestDay: true,
+      prioritizeExerciseTypes: ['straight_arm_push', 'planche_lean', 'pseudo_planche'],
+      warmupEmphasis: ['wrist_prep', 'shoulder_protraction', 'scapular_activation'],
+      restMultiplier: 1.3, // Extra rest for wrist/tendon work
+      rationale: 'Straight-arm pushing strength is your primary limiter for planche. The program emphasizes lean work and shoulder protraction.',
+      coachingTip: 'Lean angle matters more than hold time. Build protraction strength gradually.',
+    }
+  }
+  
+  // =========================================================================
+  // CORE COMPRESSION DEFICIT
+  // =========================================================================
+  if (primaryLimiter === 'compression_strength' || primaryLimiter === 'core_compression') {
+    return {
+      ...baseMods,
+      accessorySlotsAdjustment: +1,
+      prioritizeExerciseTypes: ['compression', 'hip_flexor', 'l_sit_prep'],
+      warmupEmphasis: ['hip_flexor_activation', 'pike_stretch'],
+      rationale: 'Compression strength is limiting your L-sit and skill work. Additional core compression work is included.',
+      coachingTip: 'Pike compression drills transfer directly to lever and planche body position.',
+    }
+  }
+  
+  // =========================================================================
+  // CORE ANTI-EXTENSION DEFICIT
+  // =========================================================================
+  if (primaryLimiter === 'core_anti_extension') {
+    return {
+      ...baseMods,
+      accessorySlotsAdjustment: +1,
+      prioritizeExerciseTypes: ['anti_extension', 'hollow_body', 'dragon_flag'],
+      warmupEmphasis: ['hollow_hold', 'dead_bug'],
+      rationale: 'Anti-extension core strength is limiting your lever and planche line. Dragon flag progressions are included.',
+      coachingTip: 'Hollow body position is the foundation. If your back arches, regress the movement.',
+    }
+  }
+  
+  // =========================================================================
+  // SCAPULAR CONTROL DEFICIT
+  // =========================================================================
+  if (primaryLimiter === 'scapular_control') {
+    return {
+      ...baseMods,
+      accessorySlotsAdjustment: +1,
+      prioritizeExerciseTypes: ['scapular_pull', 'scapular_push', 'retraction'],
+      warmupEmphasis: ['scapular_circles', 'scap_pull_up', 'retraction_holds'],
+      rationale: 'Scapular control is essential for skill work. Additional scapular emphasis is included.',
+      coachingTip: 'Focus on initiating movements from the scapulae, not the arms.',
+    }
+  }
+  
+  // =========================================================================
+  // SHOULDER STABILITY DEFICIT
+  // =========================================================================
+  if (primaryLimiter === 'shoulder_stability') {
+    return {
+      ...baseMods,
+      restMultiplier: 1.2,
+      intensityModifier: 0.9,
+      prioritizeExerciseTypes: ['support_hold', 'ring_support', 'shoulder_stability'],
+      avoidExerciseTypes: ['explosive', 'max_effort'],
+      warmupEmphasis: ['rotator_cuff', 'shoulder_circles', 'wall_slides'],
+      rationale: 'Shoulder stability needs development before progressing to demanding skills. Program includes controlled stability work.',
+      coachingTip: 'Build time under tension in supported positions. Quality over intensity.',
+    }
+  }
+  
+  // =========================================================================
+  // WRIST TOLERANCE DEFICIT
+  // =========================================================================
+  if (primaryLimiter === 'wrist_tolerance') {
+    return {
+      ...baseMods,
+      restMultiplier: 1.3,
+      intensityModifier: 0.85,
+      prioritizeExerciseTypes: ['parallette', 'ring', 'wrist_prep'],
+      avoidExerciseTypes: ['floor_planche', 'extended_wrist_holds'],
+      warmupEmphasis: ['wrist_circles', 'wrist_rocks', 'finger_stretches'],
+      rationale: 'Wrist tolerance is a limiter. Program uses parallettes where possible and includes extra wrist prep.',
+      coachingTip: 'Build wrist strength gradually. Use parallettes to reduce strain while developing tolerance.',
+    }
+  }
+  
+  // =========================================================================
+  // TENDON TOLERANCE DEFICIT
+  // =========================================================================
+  if (primaryLimiter === 'tendon_tolerance') {
+    return {
+      ...baseMods,
+      volumeModifier: 0.85,
+      intensityModifier: 0.9,
+      restMultiplier: 1.4,
+      recommendedDaysPerWeek: { min: 3, max: 4 },
+      suggestStraightArmRestDay: true,
+      suggestRecoveryDay: true,
+      avoidExerciseTypes: ['high_volume_straight_arm', 'max_holds'],
+      warmupEmphasis: ['joint_circles', 'blood_flow', 'gradual_loading'],
+      rationale: 'Tendon tolerance requires patient development. Volume is reduced with extra recovery time between straight-arm sessions.',
+      coachingTip: 'Tendons adapt slower than muscles. Respect the rest days and avoid grinding.',
+    }
+  }
+  
+  // =========================================================================
+  // RECOVERY / FATIGUE
+  // =========================================================================
+  if (primaryLimiter === 'general_fatigue' || primaryLimiter === 'recovery_capacity') {
+    return {
+      ...baseMods,
+      volumeModifier: severity > 70 ? 0.6 : 0.75,
+      intensityModifier: severity > 70 ? 0.85 : 0.9,
+      skillSlotsAdjustment: -1,
+      accessorySlotsAdjustment: -1,
+      recommendedDaysPerWeek: { min: 2, max: 3 },
+      suggestRecoveryDay: true,
+      avoidExerciseTypes: ['max_effort', 'high_volume'],
+      warmupEmphasis: ['blood_flow', 'mobility'],
+      rationale: 'Current fatigue levels indicate a need for reduced volume. Focus on quality over quantity.',
+      coachingTip: 'Recovery is part of progress. Reduced sessions now will pay off later.',
+    }
+  }
+  
+  // =========================================================================
+  // VERTICAL PUSH DEFICIT (HSPU)
+  // =========================================================================
+  if (primaryLimiter === 'vertical_push_strength') {
+    return {
+      ...baseMods,
+      strengthSlotsAdjustment: +1,
+      prioritizeExerciseTypes: ['pike_push', 'wall_hspu', 'overhead_press'],
+      warmupEmphasis: ['shoulder_mobility', 'thoracic_extension', 'wrist_prep'],
+      rationale: 'Vertical pushing strength needs development for HSPU progress. Pike push-up progressions are emphasized.',
+      coachingTip: 'Wall-assisted work builds strength. Free-standing comes after wall strength is solid.',
+    }
+  }
+  
+  // =========================================================================
+  // EXPLOSIVE POWER DEFICIT (Muscle-Up)
+  // =========================================================================
+  if (primaryLimiter === 'explosive_power' || primaryLimiter === 'transition_strength') {
+    return {
+      ...baseMods,
+      skillSlotsAdjustment: +1,
+      prioritizeExerciseTypes: ['high_pull', 'chest_to_bar', 'transition_drill'],
+      warmupEmphasis: ['explosive_prep', 'hip_drive', 'lat_activation'],
+      rationale: 'Explosive pulling power is key for muscle-up success. High pulls and transition drills are included.',
+      coachingTip: 'Learn to pull explosively, not just strongly. Height matters.',
+    }
+  }
+  
+  // =========================================================================
+  // DEFAULT (NO SPECIFIC LIMITER)
+  // =========================================================================
+  if (primaryLimiter === 'none') {
+    return {
+      ...baseMods,
+      rationale: 'No clear limiter detected. Balanced progression across all areas.',
+      coachingTip: 'Continue consistent training across skill and strength work.',
+    }
+  }
+  
+  // Default fallback
+  return {
+    ...baseMods,
+    rationale: `Training emphasis adjusted for ${WEAK_POINT_LABELS[primaryLimiter].toLowerCase()}.`,
+    coachingTip: 'Consistent targeted work will address this area.',
+  }
+}
+
+/**
+ * DEV DIAGNOSTIC: Log limiter-driven modifications
+ */
+export function logLimiterDrivenMods(
+  limiter: WeakPointType,
+  mods: LimiterDrivenProgramMods
+): void {
+  if (process.env.NODE_ENV === 'production') return
+  
+  console.log('[LimiterDrivenMods] Limiter:', limiter)
+  console.log('[LimiterDrivenMods] Modifications:', {
+    volume: mods.volumeModifier,
+    intensity: mods.intensityModifier,
+    skillSlots: mods.skillSlotsAdjustment,
+    strengthSlots: mods.strengthSlotsAdjustment,
+    accessorySlots: mods.accessorySlotsAdjustment,
+    restMultiplier: mods.restMultiplier,
+    prioritize: mods.prioritizeExerciseTypes,
+  })
+  console.log('[LimiterDrivenMods] Rationale:', mods.rationale)
 }

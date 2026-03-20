@@ -16,7 +16,8 @@ import type { ConstraintResult, ConstraintIntervention } from './constraint-dete
 
 import { getAthleteProfile } from './data-service'
 import { getCanonicalProfile, logCanonicalProfileState, validateProfileForGeneration, getValidatedCanonicalProfile } from './canonical-profile-service'
-import { normalizeProfile, computeLimiter, dedupeExercises, type NormalizedProfile } from './profile-normalizer'
+import { normalizeProfile, computeLimiter, dedupeExercises, computeRankedBottlenecks, type NormalizedProfile, type BottleneckAnalysis } from './profile-normalizer'
+import { getVolumeTargetsForDuration, type DurationVolumeTargets } from './session-duration-contract'
 import { getCanonicalDurationPreference, logDurationState, type SessionDurationPreference } from './session-duration-contract'
 import { calculateRecoverySignal } from './recovery-engine'
 import { getConstraintInsight } from './constraint-engine'
@@ -785,6 +786,152 @@ interface DurationConfig {
  * Maps workout duration preference to exercise count and structure parameters.
  * This ensures programs fit within the user's available training time.
  */
+// =============================================================================
+// TASK 2: PRIMARY/SECONDARY GOAL HIERARCHY
+// Ensures the engine actually programs around the goal relationship
+// =============================================================================
+
+interface GoalHierarchy {
+  primaryEmphasis: 'push_skill' | 'pull_skill' | 'push_strength' | 'pull_strength' | 'mixed' | 'flexibility'
+  secondaryEmphasis: 'push_skill' | 'pull_skill' | 'push_strength' | 'pull_strength' | 'mixed' | 'flexibility' | null
+  weeklyDistribution: {
+    primaryDays: number  // How many days should focus on primary
+    secondaryDays: number  // How many days should focus on secondary
+    mixedDays: number  // How many days combine both or do support work
+  }
+  dayTypeAllocation: Array<{
+    dayType: 'primary_focus' | 'secondary_focus' | 'mixed' | 'recovery'
+    emphasis: string
+  }>
+  isPushPrimary: boolean
+  isPullPrimary: boolean
+  isHybridSkillGoals: boolean  // Both primary and secondary are skills
+  strengthSupportDirection: 'push' | 'pull' | 'both'
+}
+
+function computeGoalHierarchy(
+  primaryGoal: PrimaryGoal,
+  secondaryGoal: string | null,
+  normalizedProfile: NormalizedProfile | null
+): GoalHierarchy {
+  // Classify goals
+  const pushSkills = ['planche', 'handstand_pushup']
+  const pullSkills = ['front_lever', 'muscle_up', 'back_lever']
+  const strengthGoals = ['weighted_strength', 'military', 'max_reps']
+  const flexibilityGoals = ['flexibility', 'pancake', 'front_splits', 'side_splits']
+  
+  const isPushPrimary = pushSkills.includes(primaryGoal)
+  const isPullPrimary = pullSkills.includes(primaryGoal)
+  const isStrengthPrimary = strengthGoals.includes(primaryGoal)
+  const isFlexPrimary = flexibilityGoals.includes(primaryGoal)
+  
+  const isPushSecondary = secondaryGoal ? pushSkills.includes(secondaryGoal) : false
+  const isPullSecondary = secondaryGoal ? pullSkills.includes(secondaryGoal) : false
+  const isStrengthSecondary = secondaryGoal ? strengthGoals.includes(secondaryGoal) : false
+  
+  // Determine primary emphasis
+  let primaryEmphasis: GoalHierarchy['primaryEmphasis'] = 'mixed'
+  if (isPushPrimary) primaryEmphasis = 'push_skill'
+  else if (isPullPrimary) primaryEmphasis = 'pull_skill'
+  else if (isStrengthPrimary && normalizedProfile?.strength.weightedDip) primaryEmphasis = 'push_strength'
+  else if (isStrengthPrimary) primaryEmphasis = 'mixed'
+  else if (isFlexPrimary) primaryEmphasis = 'flexibility'
+  
+  // Determine secondary emphasis
+  let secondaryEmphasis: GoalHierarchy['secondaryEmphasis'] = null
+  if (isPushSecondary) secondaryEmphasis = 'push_skill'
+  else if (isPullSecondary) secondaryEmphasis = 'pull_skill'
+  else if (isStrengthSecondary) secondaryEmphasis = 'push_strength'
+  
+  // Check for hybrid skill goals (e.g., planche primary + front lever secondary)
+  const isHybridSkillGoals = (isPushPrimary || isPullPrimary) && (isPushSecondary || isPullSecondary)
+  
+  // Determine strength support direction based on goals
+  let strengthSupportDirection: 'push' | 'pull' | 'both' = 'both'
+  if (isPushPrimary && isPullSecondary) {
+    // Planche primary, FL secondary: support both but heavier push
+    strengthSupportDirection = 'both'
+  } else if (isPushPrimary) {
+    strengthSupportDirection = 'push'
+  } else if (isPullPrimary) {
+    strengthSupportDirection = 'pull'
+  }
+  
+  // Calculate weekly distribution based on goal relationship
+  // For 4-day hybrid athlete with planche primary / FL secondary:
+  // - 2 days primary-focused (planche emphasis)
+  // - 1 day secondary-focused (FL emphasis)
+  // - 1 day mixed/density (both + strength support)
+  let primaryDays = 2
+  let secondaryDays = secondaryGoal ? 1 : 0
+  let mixedDays = 1
+  
+  // If no secondary goal, redistribute
+  if (!secondaryGoal) {
+    primaryDays = 3
+    mixedDays = 1
+    secondaryDays = 0
+  }
+  
+  // If hybrid skill goals, ensure both get meaningful exposure
+  if (isHybridSkillGoals) {
+    primaryDays = 2
+    secondaryDays = 1
+    mixedDays = 1
+  }
+  
+  // Build day type allocation (for 4 days)
+  const dayTypeAllocation: GoalHierarchy['dayTypeAllocation'] = []
+  
+  // Day 1: Primary focus
+  dayTypeAllocation.push({
+    dayType: 'primary_focus',
+    emphasis: `${primaryGoal} skill work + primary strength support`,
+  })
+  
+  // Day 2: Secondary or mixed
+  if (secondaryGoal) {
+    dayTypeAllocation.push({
+      dayType: 'secondary_focus',
+      emphasis: `${secondaryGoal} skill work + secondary strength support`,
+    })
+  } else {
+    dayTypeAllocation.push({
+      dayType: 'mixed',
+      emphasis: 'strength + skill consolidation',
+    })
+  }
+  
+  // Day 3: Primary + secondary integration
+  dayTypeAllocation.push({
+    dayType: 'mixed',
+    emphasis: isHybridSkillGoals 
+      ? 'combined skill density + weighted strength'
+      : `${primaryGoal} progression + strength volume`,
+  })
+  
+  // Day 4: Primary emphasis again
+  dayTypeAllocation.push({
+    dayType: 'primary_focus',
+    emphasis: `${primaryGoal} skill progression + recovery-friendly accessories`,
+  })
+  
+  return {
+    primaryEmphasis,
+    secondaryEmphasis,
+    weeklyDistribution: {
+      primaryDays,
+      secondaryDays,
+      mixedDays,
+    },
+    dayTypeAllocation,
+    isPushPrimary,
+    isPullPrimary,
+    isHybridSkillGoals,
+    strengthSupportDirection,
+  }
+}
+
 function getDurationConfig(duration: WorkoutDurationPreference): DurationConfig {
   switch (duration) {
     case 'short':
@@ -895,6 +1042,36 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
   if (computedLimiter) {
     console.log('[program-gen] TASK 4: Computed limiter:', computedLimiter)
   }
+  
+  // TASK 3: Compute ranked bottlenecks for multi-dimensional constraint analysis
+  let bottleneckAnalysis: BottleneckAnalysis | null = null
+  if (normalizedProfile) {
+    bottleneckAnalysis = computeRankedBottlenecks(normalizedProfile)
+    console.log('[program-gen] TASK 3: Bottleneck analysis:', {
+      primary: bottleneckAnalysis.primary.label,
+      primaryScore: bottleneckAnalysis.primary.score,
+      secondary: bottleneckAnalysis.secondary?.label || 'none',
+      emphasis: bottleneckAnalysis.primary.suggestedEmphasis,
+    })
+  }
+  
+  // TASK 5: Get volume targets for selected duration
+  const volumeTargets: DurationVolumeTargets = getVolumeTargetsForDuration(sessionLength)
+  console.log('[program-gen] TASK 5: Volume targets for', sessionLength, 'min:', {
+    mainExercises: volumeTargets.mainExerciseCount,
+    totalSetsBudget: volumeTargets.totalSetsBudget,
+  })
+  
+  // TASK 2: Compute primary/secondary goal hierarchy
+  const secondaryGoal = canonicalProfile.secondaryGoal
+  const goalHierarchy = computeGoalHierarchy(primaryGoal, secondaryGoal, normalizedProfile)
+  console.log('[program-gen] TASK 2: Goal hierarchy:', {
+    primary: primaryGoal,
+    secondary: secondaryGoal || 'none',
+    primaryEmphasis: goalHierarchy.primaryEmphasis,
+    secondaryEmphasis: goalHierarchy.secondaryEmphasis,
+    weeklyDistribution: goalHierarchy.weeklyDistribution,
+  })
   
   const profile = getAthleteProfile() // Legacy fallback
   const recoverySignal = calculateRecoverySignal()
@@ -1240,7 +1417,7 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
   
   // TASK 2: Determine if secondary goal is pull or push dominant
   // This influences weekly structure to give credible secondary goal representation
-  const isPullSecondary = secondaryGoal === 'front_lever' || secondaryGoal === 'muscle_up'
+  const isPullSecondary = secondaryGoal === 'front_lever' || secondaryGoal === 'muscle_up' || secondaryGoal === 'back_lever'
   const isPushSecondary = secondaryGoal === 'planche' || secondaryGoal === 'handstand_pushup'
   
   console.log('[program-gen] Secondary goal influence:', {
@@ -1547,6 +1724,49 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
     range: `${finalFrequencyRange.min}-${finalFrequencyRange.max}`,
     hasFlexibleStructure: !!flexibleWeekStructure,
   })
+  
+  // ==========================================================================
+  // TASK 11: DEV-SAFE ENGINE DIAGNOSTICS SUMMARY
+  // ==========================================================================
+  if (process.env.NODE_ENV === 'development') {
+    console.log('[ENGINE-DIAG] ===========================================')
+    console.log('[ENGINE-DIAG] TASK 11: Engine Diagnostics Summary')
+    console.log('[ENGINE-DIAG] ===========================================')
+    console.log('[ENGINE-DIAG] Input Summary:', {
+      primaryGoal,
+      secondaryGoal: secondaryGoal || 'none',
+      experienceLevel,
+      sessionLength,
+      scheduleMode: finalScheduleMode,
+      equipmentCount: equipment.length,
+      jointCautionsCount: canonicalProfile.jointCautions?.length || 0,
+    })
+    console.log('[ENGINE-DIAG] Bottleneck Analysis:', {
+      primary: bottleneckAnalysis?.primary.label || computedLimiter || 'not computed',
+      primaryScore: bottleneckAnalysis?.primary.score || 'N/A',
+      secondary: bottleneckAnalysis?.secondary?.label || 'none',
+      emphasis: bottleneckAnalysis?.primary.suggestedEmphasis || 'N/A',
+    })
+    console.log('[ENGINE-DIAG] Goal Hierarchy:', {
+      primaryEmphasis: goalHierarchy.primaryEmphasis,
+      secondaryEmphasis: goalHierarchy.secondaryEmphasis || 'none',
+      weeklyDistribution: goalHierarchy.weeklyDistribution,
+      isHybridSkillGoals: goalHierarchy.isHybridSkillGoals,
+      strengthSupportDirection: goalHierarchy.strengthSupportDirection,
+    })
+    console.log('[ENGINE-DIAG] Volume Targets:', {
+      sessionLength,
+      mainExercises: volumeTargets.mainExerciseCount,
+      accessory: volumeTargets.accessoryExerciseCount,
+      totalSetsBudget: volumeTargets.totalSetsBudget,
+    })
+    console.log('[ENGINE-DIAG] Week Structure:', {
+      structureType: structure.structureType,
+      dayCount: sessions.length,
+      dayFocuses: sessions.map(s => s.dayFocus),
+    })
+    console.log('[ENGINE-DIAG] ===========================================')
+  }
   
   return {
     id: `adaptive-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,

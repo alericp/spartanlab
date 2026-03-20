@@ -353,6 +353,43 @@ export const WARMUP_EXERCISE_POOL: WarmUpExercise[] = [
     priority: 1,
     intensity: 'low',
   },
+  // TASK 6: Additional user-preferred prep exercises
+  {
+    id: 'plank_bird_dog',
+    name: 'Plank to Bird Dog',
+    phase: 'specific',
+    targetPattern: ['core', 'horizontal_push'],
+    targetMuscles: ['core', 'glutes', 'deltoids'],
+    equipment: ['floor'],
+    reps: '8 each side',
+    notes: 'Controlled movement, stable core',
+    priority: 3,  // TASK 6: User preferred
+    intensity: 'moderate',
+  },
+  {
+    id: 'prone_back_extension',
+    name: 'Prone Back Extensions',
+    phase: 'specific',
+    targetPattern: ['core', 'horizontal_pull'],
+    targetMuscles: ['lower_back', 'glutes', 'rear_deltoid'],
+    equipment: ['floor'],
+    reps: '10',
+    notes: 'Squeeze glutes at top',
+    priority: 2,
+    intensity: 'low',
+  },
+  {
+    id: 'shoulder_circles_floor',
+    name: 'Floor Shoulder Circles',
+    phase: 'specific',
+    targetPattern: ['horizontal_push', 'horizontal_pull'],
+    targetMuscles: ['rotator_cuff', 'deltoids'],
+    equipment: ['floor'],
+    reps: '10 each direction',
+    notes: 'Lying prone, arms extended',
+    priority: 2,
+    intensity: 'low',
+  },
   
   // ACTIVATION PHASE - Neural priming
   {
@@ -760,18 +797,32 @@ function generateRationale(
 /**
  * Remove duplicate warm-up exercises by ID.
  * TASK 6: Prevents the same exercise appearing multiple times in warm-up.
+ * TASK 11: Enhanced dev-safe logging for duplicate suppression events.
  */
 function dedupeWarmUpExercises(exercises: WarmUpExercise[]): WarmUpExercise[] {
   const seen = new Set<string>()
-  return exercises.filter(ex => {
+  const duplicates: string[] = []
+  
+  const filtered = exercises.filter(ex => {
     const key = ex.id.toLowerCase()
     if (seen.has(key)) {
-      console.log('[WarmUp] TASK 6: Removed duplicate exercise:', ex.name)
+      duplicates.push(ex.name)
       return false
     }
     seen.add(key)
     return true
   })
+  
+  // TASK 11: Dev-safe logging
+  if (process.env.NODE_ENV === 'development' && duplicates.length > 0) {
+    console.log('[WarmUp] TASK 6: Duplicate suppression events:', {
+      removed: duplicates,
+      count: duplicates.length,
+      finalCount: filtered.length,
+    })
+  }
+  
+  return filtered
 }
 
 // =============================================================================

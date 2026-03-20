@@ -199,6 +199,126 @@ export function getCanonicalDurationPreference(
 }
 
 // =============================================================================
+// TASK 5: DURATION-BASED VOLUME TARGETS
+// These targets ensure actual content scales with selected duration
+// =============================================================================
+
+export interface DurationVolumeTargets {
+  warmupExerciseCount: { min: number; max: number }
+  mainExerciseCount: { min: number; max: number }
+  accessoryExerciseCount: { min: number; max: number }
+  cooldownExerciseCount: { min: number; max: number }
+  skillSetsPerExercise: { min: number; max: number }
+  strengthSetsPerExercise: { min: number; max: number }
+  totalSetsBudget: { min: number; max: number }
+}
+
+export const DURATION_VOLUME_TARGETS: Record<SessionDurationPreference, DurationVolumeTargets> = {
+  30: {
+    warmupExerciseCount: { min: 4, max: 6 },
+    mainExerciseCount: { min: 2, max: 3 },
+    accessoryExerciseCount: { min: 0, max: 1 },
+    cooldownExerciseCount: { min: 2, max: 3 },
+    skillSetsPerExercise: { min: 3, max: 4 },
+    strengthSetsPerExercise: { min: 2, max: 3 },
+    totalSetsBudget: { min: 10, max: 15 },
+  },
+  45: {
+    warmupExerciseCount: { min: 5, max: 7 },
+    mainExerciseCount: { min: 3, max: 4 },
+    accessoryExerciseCount: { min: 1, max: 2 },
+    cooldownExerciseCount: { min: 3, max: 4 },
+    skillSetsPerExercise: { min: 3, max: 5 },
+    strengthSetsPerExercise: { min: 3, max: 4 },
+    totalSetsBudget: { min: 15, max: 22 },
+  },
+  60: {
+    warmupExerciseCount: { min: 6, max: 9 },
+    mainExerciseCount: { min: 4, max: 5 },
+    accessoryExerciseCount: { min: 2, max: 3 },
+    cooldownExerciseCount: { min: 4, max: 5 },
+    skillSetsPerExercise: { min: 4, max: 5 },
+    strengthSetsPerExercise: { min: 3, max: 4 },
+    totalSetsBudget: { min: 22, max: 30 },
+  },
+  75: {
+    warmupExerciseCount: { min: 7, max: 10 },
+    mainExerciseCount: { min: 5, max: 6 },
+    accessoryExerciseCount: { min: 3, max: 4 },
+    cooldownExerciseCount: { min: 4, max: 6 },
+    skillSetsPerExercise: { min: 4, max: 6 },
+    strengthSetsPerExercise: { min: 4, max: 5 },
+    totalSetsBudget: { min: 28, max: 38 },
+  },
+  90: {
+    warmupExerciseCount: { min: 8, max: 12 },
+    mainExerciseCount: { min: 6, max: 8 },
+    accessoryExerciseCount: { min: 4, max: 5 },
+    cooldownExerciseCount: { min: 5, max: 7 },
+    skillSetsPerExercise: { min: 5, max: 6 },
+    strengthSetsPerExercise: { min: 4, max: 5 },
+    totalSetsBudget: { min: 35, max: 48 },
+  },
+}
+
+/**
+ * Get volume targets for a given duration preference.
+ * TASK 5: Ensures actual content scales with selected duration.
+ */
+export function getVolumeTargetsForDuration(minutes: SessionDurationPreference): DurationVolumeTargets {
+  return DURATION_VOLUME_TARGETS[minutes] || DURATION_VOLUME_TARGETS[60]
+}
+
+// =============================================================================
+// TASK 10: FUTURE SHORT FORMAT HOOKS
+// Architectural preparation for 15-20 min circuit/round-based styles
+// NOT exposed in UI - internal engine hooks only
+// =============================================================================
+
+export type SessionFormat = 'standard' | 'circuit' | 'emom' | 'amrap'
+
+export interface ShortFormatConfig {
+  format: SessionFormat
+  durationMinutes: 15 | 20
+  roundCount: number
+  restBetweenRounds: number  // seconds
+  exercisesPerRound: number
+  workInterval?: number  // for EMOM/interval formats
+  restInterval?: number
+}
+
+export const SHORT_FORMAT_PRESETS: Record<string, ShortFormatConfig> = {
+  quick_circuit_15: {
+    format: 'circuit',
+    durationMinutes: 15,
+    roundCount: 3,
+    restBetweenRounds: 60,
+    exercisesPerRound: 4,
+  },
+  emom_skill_20: {
+    format: 'emom',
+    durationMinutes: 20,
+    roundCount: 20,  // 20 minutes = 20 rounds
+    restBetweenRounds: 0,
+    exercisesPerRound: 1,
+    workInterval: 40,
+    restInterval: 20,
+  },
+  amrap_conditioning_15: {
+    format: 'amrap',
+    durationMinutes: 15,
+    roundCount: 1,  // continuous
+    restBetweenRounds: 0,
+    exercisesPerRound: 4,
+  },
+}
+
+// Placeholder for future implementation
+export function isShortFormatSupported(): boolean {
+  return false  // Not yet exposed in UI
+}
+
+// =============================================================================
 // DEV LOGGING (TASK 9)
 // =============================================================================
 

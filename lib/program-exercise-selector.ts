@@ -58,6 +58,11 @@ import {
   type WarmUpGenerationContext,
 } from './warmup-engine'
 import {
+  getVolumeTargetsForDuration,
+  type SessionDurationPreference,
+  type DurationVolumeTargets,
+} from './session-duration-contract'
+import {
   generateCoolDown,
   type GeneratedCoolDown,
   type CoolDownGenerationContext,
@@ -391,20 +396,64 @@ interface ExerciseBudget {
   mainExercises: number
   warmupMinutes: number
   cooldownMinutes: number
+  // TASK 5: Additional budget data from volume targets
+  accessoryCount?: { min: number; max: number }
+  totalSetsBudget?: { min: number; max: number }
 }
 
+/**
+ * TASK 5: Calculate exercise budget using volume targets from duration contract.
+ * Ensures actual content scales with selected duration preference.
+ */
 function calculateExerciseBudget(sessionMinutes: number): ExerciseBudget {
-  if (sessionMinutes <= 30) {
-    return { mainExercises: 4, warmupMinutes: 5, cooldownMinutes: 3 }
+  // Map sessionMinutes to canonical duration preference
+  let durationPreference: SessionDurationPreference = 60
+  if (sessionMinutes <= 30) durationPreference = 30
+  else if (sessionMinutes <= 45) durationPreference = 45
+  else if (sessionMinutes <= 60) durationPreference = 60
+  else if (sessionMinutes <= 75) durationPreference = 75
+  else durationPreference = 90
+  
+  // Get volume targets from canonical contract
+  const volumeTargets = getVolumeTargetsForDuration(durationPreference)
+  
+  // Calculate main exercises using midpoint of range
+  const mainExercises = Math.round(
+    (volumeTargets.mainExerciseCount.min + volumeTargets.mainExerciseCount.max) / 2
+  )
+  
+  // Scale warmup/cooldown minutes based on duration
+  const warmupMinutes = durationPreference <= 30 ? 5 :
+                        durationPreference <= 45 ? 7 :
+                        durationPreference <= 60 ? 10 :
+                        durationPreference <= 75 ? 12 : 15
+  
+  const cooldownMinutes = durationPreference <= 30 ? 3 :
+                          durationPreference <= 45 ? 5 :
+                          durationPreference <= 60 ? 5 :
+                          durationPreference <= 75 ? 7 : 10
+  
+  console.log('[exercise-resolver] TASK 5: Budget from duration contract:', {
+    sessionMinutes,
+    durationPreference,
+    mainExercises,
+    warmupMinutes,
+    cooldownMinutes,
+    volumeTargets: {
+      main: volumeTargets.mainExerciseCount,
+      accessory: volumeTargets.accessoryExerciseCount,
+      totalSets: volumeTargets.totalSetsBudget,
+    },
+  })
+  
+  return { 
+    mainExercises, 
+    warmupMinutes, 
+    cooldownMinutes,
+    // TASK 5: Expose additional budget data
+    accessoryCount: volumeTargets.accessoryExerciseCount,
+    totalSetsBudget: volumeTargets.totalSetsBudget,
   }
-  if (sessionMinutes <= 45) {
-    return { mainExercises: 5, warmupMinutes: 7, cooldownMinutes: 5 }
-  }
-  if (sessionMinutes <= 60) {
-    return { mainExercises: 6, warmupMinutes: 10, cooldownMinutes: 5 }
-  }
-  // 75+ minutes
-  return { mainExercises: 7, warmupMinutes: 10, cooldownMinutes: 8 }
 }
 
 // =============================================================================

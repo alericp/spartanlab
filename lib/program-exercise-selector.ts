@@ -110,6 +110,20 @@ import {
   type TrainingSessionStyle,
   type SessionLoadSummary,
 } from './session-load-intelligence'
+import {
+  detectPrescriptionMode,
+  resolvePrescription,
+  formatPrescription,
+  type PrescriptionMode,
+  type PrescriptionContract,
+  type AthleteContext as PrescriptionAthleteContext,
+} from './prescription-contract'
+import {
+  getSkillPrescriptionRules,
+  getWeightedStrengthCarryover,
+  type SkillPrescriptionRules,
+  type WeightedStrengthCarryover,
+} from './engine-quality-contract'
 
 export interface SelectedExercise {
   exercise: Exercise
@@ -1367,6 +1381,142 @@ function adjustSetsForLevel(defaultSets: number, level: ExperienceLevel): number
 function adjustRepsForLevel(defaultReps: string, level: ExperienceLevel): string {
   // Keep reps as-is for now, could be refined
   return defaultReps
+}
+
+// =============================================================================
+// PRESCRIPTION-AWARE ADJUSTMENTS (TASK 1, TASK 2)
+// =============================================================================
+
+/**
+ * Get prescription-aware sets and reps for an exercise.
+ * TASK 1: Uses formalized prescription modes instead of generic logic.
+ * TASK 2: Skill work feels intentional and level-aware.
+ */
+export function getPrescriptionAwarePrescription(
+  exercise: Exercise,
+  experienceLevel: ExperienceLevel,
+  primaryGoal: string,
+  currentProgression?: string,
+  fatigueState?: 'fresh' | 'moderate' | 'fatigued',
+  recentPerformance?: { avgRPE?: number; completionRate?: number; improving?: boolean }
+): { sets: number; repsOrTime: string; note?: string; prescriptionMode: PrescriptionMode } {
+  // Detect prescription mode
+  const isWeighted = exercise.id.includes('weighted') || exercise.name.toLowerCase().includes('weighted')
+  const prescriptionMode = detectPrescriptionMode(
+    exercise.category,
+    exercise.isIsometric ?? false,
+    exercise.neuralDemand,
+    exercise.fatigueCost,
+    isWeighted,
+    exercise.id
+  )
+  
+  // Build athlete context
+  const athleteContext: PrescriptionAthleteContext = {
+    experienceLevel: experienceLevel as 'beginner' | 'intermediate' | 'advanced' | 'elite',
+    currentProgression,
+    recentPerformance,
+    fatigueState,
+  }
+  
+  // For skill work, use advanced skill prescription rules (TASK 2)
+  if (prescriptionMode === 'skill_hold' || prescriptionMode === 'skill_cluster') {
+    const skillRules = getSkillPrescriptionRules(
+      primaryGoal,
+      experienceLevel as 'beginner' | 'intermediate' | 'advanced' | 'elite',
+      currentProgression
+    )
+    
+    // Calculate sets in recommended range
+    const [minSets, maxSets] = skillRules.setsRange
+    let sets = Math.round((minSets + maxSets) / 2)
+    if (experienceLevel === 'beginner') sets = minSets
+    if (experienceLevel === 'advanced') sets = maxSets
+    if (fatigueState === 'fatigued') sets = Math.max(minSets, sets - 1)
+    
+    // Calculate hold time in recommended range
+    const [minHold, maxHold] = skillRules.holdSecondsRange
+    let holdSeconds = Math.round((minHold + maxHold) / 2)
+    if (experienceLevel === 'beginner') holdSeconds = minHold
+    if (experienceLevel === 'advanced') holdSeconds = maxHold
+    
+    // Build coaching note from rules
+    const note = skillRules.intensityNotes[0] || 'Quality over quantity'
+    
+    return {
+      sets,
+      repsOrTime: `${holdSeconds}s hold`,
+      note,
+      prescriptionMode,
+    }
+  }
+  
+  // For weighted strength, use carryover-aware prescription (TASK 3)
+  if (prescriptionMode === 'weighted_strength') {
+    const prescription = resolvePrescription(prescriptionMode, athleteContext)
+    const formatted = formatPrescription(prescription)
+    
+    return {
+      sets: formatted.sets,
+      repsOrTime: formatted.repsOrTime,
+      note: formatted.note,
+      prescriptionMode,
+    }
+  }
+  
+  // For other modes, use base prescription contract
+  const prescription = resolvePrescription(prescriptionMode, athleteContext)
+  const formatted = formatPrescription(prescription)
+  
+  return {
+    sets: formatted.sets,
+    repsOrTime: formatted.repsOrTime,
+    note: formatted.note,
+    prescriptionMode,
+  }
+}
+
+/**
+ * Adjust weighted strength prescription for skill carryover (TASK 3).
+ */
+export function getWeightedStrengthPrescriptionForSkill(
+  exercise: Exercise,
+  primarySkill: string,
+  experienceLevel: ExperienceLevel,
+  currentWeightedPull?: { load: number; reps: number },
+  currentWeightedDip?: { load: number; reps: number },
+  prWeightedPull?: { load: number; reps: number },
+  prWeightedDip?: { load: number; reps: number }
+): { sets: number; repsOrTime: string; note: string } | null {
+  // Get carryover recommendations
+  const carryovers = getWeightedStrengthCarryover(
+    primarySkill,
+    currentWeightedPull,
+    currentWeightedDip,
+    prWeightedPull,
+    prWeightedDip
+  )
+  
+  // Find matching carryover for this exercise
+  const exerciseType: WeightedStrengthCarryover['exercise'] | null = 
+    exercise.id.includes('weighted_pull') ? 'weighted_pull_up' :
+    exercise.id.includes('weighted_dip') ? 'weighted_dip' :
+    exercise.id.includes('weighted_push') ? 'weighted_push_up' :
+    exercise.id.includes('weighted_row') ? 'weighted_row' : null
+  
+  if (!exerciseType) return null
+  
+  const carryover = carryovers.find(c => c.exercise === exerciseType)
+  if (!carryover || !carryover.shouldInclude) return null
+  
+  const adj = carryover.prescriptionAdjustments
+  const baseSets = experienceLevel === 'beginner' ? 3 : 4
+  
+  return {
+    sets: baseSets + adj.setsModifier,
+    repsOrTime: `${adj.repsRange[0]}-${adj.repsRange[1]} reps`,
+    note: `RPE ${adj.intensityTarget}. ${carryover.carryoverRationale.split('.')[0]}.`,
+  }
 }
 
 /**

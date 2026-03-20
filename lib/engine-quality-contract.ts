@@ -722,11 +722,48 @@ export interface EngineDiagnostics {
   warmupComponentsChosen: string[]
   warmupDedupeEvents: string[]
   goalWeighting: GoalHierarchyWeights
+  // TASK 10: Enhanced diagnostics for prescription and load balancing
+  prescriptionModeUsage?: {
+    skill_hold: number
+    skill_cluster: number
+    weighted_strength: number
+    bodyweight_strength: number
+    hypertrophy_support: number
+    compression_core: number
+    mobility_prep: number
+    density_block: number
+  }
+  weeklyLoadBalance?: {
+    totalNeuralLoad: number
+    straightArmDays: number
+    hasRecoveryDay: boolean
+    balanceIssues: string[]
+  }
+  weightedStrengthDecisions?: Array<{
+    exercise: string
+    primaryTarget: string
+    included: boolean
+    rationale: string
+  }>
+  topLimiterRanking?: Array<{
+    type: string
+    severity: number
+    affectsGoals: string[]
+  }>
 }
 
 /**
  * Log engine diagnostics for debugging.
  * Only logs in development mode.
+ * 
+ * TASK 10: Enhanced diagnostics showing:
+ * - Goal weighting result
+ * - Selected split/day-type map
+ * - Session budget chosen
+ * - Prescription modes used
+ * - Top limiter ranking
+ * - Weighted support decisions
+ * - Warm-up progression mode chosen
  */
 export function logEngineDiagnostics(diagnostics: EngineDiagnostics): void {
   if (process.env.NODE_ENV === 'production') return
@@ -754,7 +791,327 @@ export function logEngineDiagnostics(diagnostics: EngineDiagnostics): void {
   if (diagnostics.warmupDedupeEvents.length > 0) {
     console.log('[EngineDiagnostics] Warmup Deduped:', diagnostics.warmupDedupeEvents)
   }
+  
+  // TASK 10: Enhanced diagnostics
+  if (diagnostics.prescriptionModeUsage) {
+    console.log('[EngineDiagnostics] Prescription Modes Used:', diagnostics.prescriptionModeUsage)
+  }
+  if (diagnostics.weeklyLoadBalance) {
+    console.log('[EngineDiagnostics] Weekly Load Balance:', {
+      neuralLoad: diagnostics.weeklyLoadBalance.totalNeuralLoad,
+      straightArmDays: diagnostics.weeklyLoadBalance.straightArmDays,
+      hasRecoveryDay: diagnostics.weeklyLoadBalance.hasRecoveryDay,
+      issues: diagnostics.weeklyLoadBalance.balanceIssues,
+    })
+  }
+  if (diagnostics.weightedStrengthDecisions && diagnostics.weightedStrengthDecisions.length > 0) {
+    console.log('[EngineDiagnostics] Weighted Support Decisions:', diagnostics.weightedStrengthDecisions)
+  }
+  if (diagnostics.topLimiterRanking && diagnostics.topLimiterRanking.length > 0) {
+    console.log('[EngineDiagnostics] Top Limiter Ranking:', diagnostics.topLimiterRanking)
+  }
+  
   console.log('[EngineDiagnostics] ===== END SUMMARY =====')
+}
+
+// =============================================================================
+// PRESCRIPTION MODE INTEGRATION (TASK 1)
+// =============================================================================
+
+/**
+ * Re-export prescription types for consumers
+ */
+export type {
+  PrescriptionMode,
+  PrescriptionContract,
+  AthleteContext as PrescriptionAthleteContext,
+  DayLoadProfile,
+  WeekLoadBalance,
+  PrescriptionDiagnostics,
+} from './prescription-contract'
+
+export {
+  PRESCRIPTION_TEMPLATES,
+  detectPrescriptionMode,
+  resolvePrescription,
+  formatPrescription,
+  resolveWeightedStrengthForSkill,
+  analyzeWeekLoadBalance,
+  suggestOptimalDayOrder,
+  logPrescriptionDiagnostics,
+} from './prescription-contract'
+
+// =============================================================================
+// ADVANCED PRESCRIPTION RULES (TASK 2 - SKILL PRESCRIPTION QUALITY)
+// =============================================================================
+
+/**
+ * Advanced skill prescription parameters based on athlete level and skill type.
+ * TASK 2: Makes skill holds feel intentional and level-aware.
+ */
+export interface SkillPrescriptionRules {
+  skillType: 'static_lever' | 'static_planche' | 'dynamic_transition' | 'balance' | 'compression'
+  athleteLevel: 'beginner' | 'intermediate' | 'advanced' | 'elite'
+  prescriptionStyle: 'cluster_exposure' | 'quality_holds' | 'max_effort' | 'volume_accumulation'
+  holdSecondsRange: [number, number]
+  setsRange: [number, number]
+  restSeconds: number
+  intensityNotes: string[]
+}
+
+/**
+ * Get skill prescription rules based on skill type and athlete level.
+ * TASK 2: Ensures planche, front lever, HSPU prescriptions match reality.
+ */
+export function getSkillPrescriptionRules(
+  skillType: string,
+  athleteLevel: 'beginner' | 'intermediate' | 'advanced' | 'elite',
+  currentProgression?: string
+): SkillPrescriptionRules {
+  // Map skill to skill type
+  const skillTypeMap: Record<string, SkillPrescriptionRules['skillType']> = {
+    planche: 'static_planche',
+    front_lever: 'static_lever',
+    back_lever: 'static_lever',
+    muscle_up: 'dynamic_transition',
+    handstand: 'balance',
+    hspu: 'dynamic_transition',
+    l_sit: 'compression',
+    v_sit: 'compression',
+  }
+  
+  const type = skillTypeMap[skillType] || 'static_lever'
+  
+  // Advanced/elite athletes with tuck or better progressions get quality-focused prescriptions
+  const isAdvancedProgression = currentProgression && 
+    ['tuck', 'adv_tuck', 'advanced_tuck', 'straddle', 'one_leg', 'full'].includes(currentProgression)
+  
+  // Static lever work (front lever, back lever)
+  if (type === 'static_lever') {
+    if (athleteLevel === 'advanced' || athleteLevel === 'elite') {
+      return {
+        skillType: type,
+        athleteLevel,
+        prescriptionStyle: isAdvancedProgression ? 'quality_holds' : 'cluster_exposure',
+        holdSecondsRange: isAdvancedProgression ? [5, 12] : [3, 8],
+        setsRange: [4, 6],
+        restSeconds: isAdvancedProgression ? 150 : 90,
+        intensityNotes: [
+          'Full body tension throughout',
+          'Stop when form breaks - quality over duration',
+          isAdvancedProgression ? 'Progress hold time before advancing variation' : 'Build exposure time at current level',
+        ],
+      }
+    }
+    return {
+      skillType: type,
+      athleteLevel,
+      prescriptionStyle: 'cluster_exposure',
+      holdSecondsRange: [3, 6],
+      setsRange: [4, 8],
+      restSeconds: 60,
+      intensityNotes: [
+        'Focus on position and tension',
+        'Multiple short exposures build neurological patterns',
+      ],
+    }
+  }
+  
+  // Static planche work
+  if (type === 'static_planche') {
+    if (athleteLevel === 'advanced' || athleteLevel === 'elite') {
+      return {
+        skillType: type,
+        athleteLevel,
+        prescriptionStyle: isAdvancedProgression ? 'quality_holds' : 'cluster_exposure',
+        holdSecondsRange: isAdvancedProgression ? [5, 10] : [3, 6],
+        setsRange: [4, 6],
+        restSeconds: isAdvancedProgression ? 180 : 120,
+        intensityNotes: [
+          'Protraction and posterior pelvic tilt throughout',
+          'Wrist prep is non-negotiable before planche work',
+          isAdvancedProgression ? 'Max quality holds - stop when lean angle drops' : 'Build lean angle tolerance',
+        ],
+      }
+    }
+    return {
+      skillType: type,
+      athleteLevel,
+      prescriptionStyle: 'cluster_exposure',
+      holdSecondsRange: [3, 5],
+      setsRange: [5, 8],
+      restSeconds: 90,
+      intensityNotes: [
+        'Prioritize lean angle and protraction',
+        'Cluster sets allow more total quality exposure',
+      ],
+    }
+  }
+  
+  // Dynamic transition work (muscle-up, HSPU)
+  if (type === 'dynamic_transition') {
+    if (athleteLevel === 'advanced' || athleteLevel === 'elite') {
+      return {
+        skillType: type,
+        athleteLevel,
+        prescriptionStyle: 'quality_holds',
+        holdSecondsRange: [1, 3], // For negatives/pauses
+        setsRange: [3, 5],
+        restSeconds: 150,
+        intensityNotes: [
+          'Control the transition - never rush',
+          'Quality singles/doubles > sloppy volume',
+        ],
+      }
+    }
+    return {
+      skillType: type,
+      athleteLevel,
+      prescriptionStyle: 'cluster_exposure',
+      holdSecondsRange: [1, 3],
+      setsRange: [4, 6],
+      restSeconds: 90,
+      intensityNotes: [
+        'Build the transition pattern with assistance',
+        'Focus on timing and coordination',
+      ],
+    }
+  }
+  
+  // Compression work (L-sit, V-sit)
+  if (type === 'compression') {
+    return {
+      skillType: type,
+      athleteLevel,
+      prescriptionStyle: athleteLevel === 'advanced' ? 'volume_accumulation' : 'cluster_exposure',
+      holdSecondsRange: athleteLevel === 'advanced' ? [15, 30] : [8, 20],
+      setsRange: [3, 5],
+      restSeconds: 60,
+      intensityNotes: [
+        'Posterior pelvic tilt is the priority',
+        'Compression strength transfers to all skills',
+      ],
+    }
+  }
+  
+  // Balance work (handstand)
+  return {
+    skillType: 'balance',
+    athleteLevel,
+    prescriptionStyle: 'cluster_exposure',
+    holdSecondsRange: athleteLevel === 'advanced' ? [20, 60] : [5, 20],
+    setsRange: [5, 10],
+    restSeconds: 30,
+    intensityNotes: [
+      'Many short holds build proprioception',
+      'Quality of entry and exit matters',
+    ],
+  }
+}
+
+// =============================================================================
+// WEIGHTED STRENGTH CARRYOVER LOGIC (TASK 3)
+// =============================================================================
+
+/**
+ * Calculate weighted strength prescription for skill support.
+ * TASK 3: Makes weighted dips/pulls serve skill development intentionally.
+ */
+export interface WeightedStrengthCarryover {
+  exercise: 'weighted_pull_up' | 'weighted_dip' | 'weighted_push_up' | 'weighted_row'
+  primarySkillTarget: string
+  carryoverRationale: string
+  prescriptionAdjustments: {
+    setsModifier: number
+    repsRange: [number, number]
+    restSeconds: number
+    intensityTarget: number // RPE
+  }
+  shouldInclude: boolean
+  alternativeIfSkipped?: string
+}
+
+/**
+ * Determine weighted strength carryover prescription for a skill goal.
+ */
+export function getWeightedStrengthCarryover(
+  primarySkill: string,
+  currentWeightedPull?: { load: number; reps: number },
+  currentWeightedDip?: { load: number; reps: number },
+  prWeightedPull?: { load: number; reps: number },
+  prWeightedDip?: { load: number; reps: number }
+): WeightedStrengthCarryover[] {
+  const carryovers: WeightedStrengthCarryover[] = []
+  
+  // Planche benefits from weighted dips
+  if (primarySkill === 'planche') {
+    const hasSignificantDipStrength = currentWeightedDip && currentWeightedDip.load >= 25
+    const isNearPR = prWeightedDip && currentWeightedDip && 
+      (currentWeightedDip.load / prWeightedDip.load) >= 0.85
+    
+    carryovers.push({
+      exercise: 'weighted_dip',
+      primarySkillTarget: 'planche',
+      carryoverRationale: 'Weighted dips build the pressing foundation for planche lean and support. The strength transfers directly to straight-arm pushing capacity.',
+      prescriptionAdjustments: {
+        setsModifier: isNearPR ? 0 : 1, // Extra set if building toward PR
+        repsRange: hasSignificantDipStrength ? [3, 6] : [5, 8],
+        restSeconds: hasSignificantDipStrength ? 180 : 120,
+        intensityTarget: isNearPR ? 7 : 8, // Maintenance vs building
+      },
+      shouldInclude: true,
+    })
+  }
+  
+  // Front lever benefits from weighted pulls
+  if (primarySkill === 'front_lever') {
+    const hasSignificantPullStrength = currentWeightedPull && currentWeightedPull.load >= 20
+    const isNearPR = prWeightedPull && currentWeightedPull && 
+      (currentWeightedPull.load / prWeightedPull.load) >= 0.85
+    
+    carryovers.push({
+      exercise: 'weighted_pull_up',
+      primarySkillTarget: 'front_lever',
+      carryoverRationale: 'Weighted pull-ups develop the pulling base and scapular control needed for front lever. The lat and grip strength transfers to horizontal pulling.',
+      prescriptionAdjustments: {
+        setsModifier: isNearPR ? 0 : 1,
+        repsRange: hasSignificantPullStrength ? [3, 5] : [5, 8],
+        restSeconds: hasSignificantPullStrength ? 180 : 120,
+        intensityTarget: isNearPR ? 7 : 8,
+      },
+      shouldInclude: true,
+    })
+  }
+  
+  // Muscle-up benefits from both
+  if (primarySkill === 'muscle_up') {
+    carryovers.push({
+      exercise: 'weighted_pull_up',
+      primarySkillTarget: 'muscle_up',
+      carryoverRationale: 'High pulls with added weight build explosive pulling power for the muscle-up transition.',
+      prescriptionAdjustments: {
+        setsModifier: 0,
+        repsRange: [3, 5],
+        restSeconds: 150,
+        intensityTarget: 8,
+      },
+      shouldInclude: true,
+    })
+    carryovers.push({
+      exercise: 'weighted_dip',
+      primarySkillTarget: 'muscle_up',
+      carryoverRationale: 'Dip strength ensures clean lockout after the transition.',
+      prescriptionAdjustments: {
+        setsModifier: 0,
+        repsRange: [5, 8],
+        restSeconds: 120,
+        intensityTarget: 7,
+      },
+      shouldInclude: true,
+    })
+  }
+  
+  return carryovers
 }
 
 // =============================================================================

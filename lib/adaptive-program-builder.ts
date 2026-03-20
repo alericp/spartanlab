@@ -36,6 +36,10 @@ import {
   getVolumeModifierForWeakPoint,
   detectWeakPointsForProfile,
   type DetectedWeakPoints,
+  // TASK 7: Limiter-driven program shaping
+  getLimiterDrivenProgramMods,
+  logLimiterDrivenMods,
+  type LimiterDrivenProgramMods,
 } from './weak-point-engine'
 import { getUnifiedSkillIntelligence, generateTrainingAdjustments, type UnifiedSkillIntelligence } from './skill-intelligence-layer'
 import { getCompressionReadiness, shouldBiasTowardCompression, type CompressionReadinessResult } from './compression-readiness'
@@ -965,6 +969,21 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
     })))
   }
   
+  // TASK 7: Get limiter-driven program modifications
+  // This shapes the actual program structure based on the detected limiter
+  const primaryBottleneck = rankedBottlenecks[0]
+  const limiterDrivenMods: LimiterDrivenProgramMods | null = primaryBottleneck
+    ? getLimiterDrivenProgramMods(
+        primaryBottleneck.type as WeakPointType,
+        rankedBottlenecks[1]?.type as WeakPointType || null,
+        primaryBottleneck.severityScore
+      )
+    : null
+  
+  if (limiterDrivenMods && process.env.NODE_ENV !== 'production') {
+    logLimiterDrivenMods(primaryBottleneck.type as WeakPointType, limiterDrivenMods)
+  }
+  
   // ENGINE QUALITY: Get duration-based volume config
   const durationVolumeConfig = getDurationVolumeConfig(
     typeof sessionLength === 'number' ? sessionLength : parseInt(String(sessionLength)) || 60
@@ -1650,6 +1669,24 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
       warmupComponentsChosen: [...new Set(warmupComponents)],
       warmupDedupeEvents: [], // Logged separately in warmup engine
       goalWeighting: goalHierarchyWeights,
+      // TASK 10: Enhanced diagnostics
+      topLimiterRanking: rankedBottlenecks.slice(0, 3).map(b => ({
+        type: b.type,
+        severity: b.severityScore,
+        affectsGoals: b.affectsGoals,
+      })),
+      weeklyLoadBalance: limiterDrivenMods ? {
+        totalNeuralLoad: sessions.filter(s => s.isPrimary).length * 3 + sessions.filter(s => !s.isPrimary).length * 2,
+        straightArmDays: sessions.filter(s => s.focus?.includes('skill')).length,
+        hasRecoveryDay: limiterDrivenMods.suggestRecoveryDay || sessions.some(s => s.focus === 'support_recovery'),
+        balanceIssues: limiterDrivenMods.volumeModifier < 1 ? ['Volume reduced for recovery'] : [],
+      } : undefined,
+      weightedStrengthDecisions: limiterDrivenMods?.prioritizeExerciseTypes.filter(t => t.includes('weighted')).map(t => ({
+        exercise: t,
+        primaryTarget: primaryGoal,
+        included: true,
+        rationale: limiterDrivenMods.rationale,
+      })),
     }
     logEngineDiagnostics(diagnostics)
   }

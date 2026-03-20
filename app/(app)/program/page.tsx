@@ -55,6 +55,7 @@ export default function ProgramPage() {
   const [showAdjustmentModal, setShowAdjustmentModal] = useState(false)
   const [mounted, setMounted] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [loadStage, setLoadStage] = useState<string>('initializing') // TASK 3: Track failure stage
   
   // TASK 5: Store dynamically imported module references
   const [programModules, setProgramModules] = useState<{
@@ -65,6 +66,7 @@ export default function ProgramPage() {
     getProgramState: typeof import('@/lib/program-state').getProgramState | null
     normalizeProgramForDisplay: typeof import('@/lib/program-state').normalizeProgramForDisplay | null
     isRenderableProgram: typeof import('@/lib/program-state').isRenderableProgram | null
+    isProgramDisplaySafe: typeof import('@/lib/program-state').isProgramDisplaySafe | null
     getProgramStatus: typeof import('@/lib/program-adjustment-engine').getProgramStatus | null
     recordProgramEnd: typeof import('@/lib/program-adjustment-engine').recordProgramEnd | null
   }>({
@@ -75,66 +77,80 @@ export default function ProgramPage() {
     getProgramState: null,
     normalizeProgramForDisplay: null,
     isRenderableProgram: null,
+    isProgramDisplaySafe: null,
     getProgramStatus: null,
     recordProgramEnd: null,
   })
 
   useEffect(() => {
-    // TASK 5: Load modules individually with proper error handling
+    // TASK 3: Load modules individually with proper error handling and stage tracking
     // Do not use Promise.all - if one non-essential module fails, page shouldn't die
     const loadModules = async () => {
       try {
         // CRITICAL: Load program state modules first (essential)
         let builderMod, stateMod, adjustmentMod
+        
+        // TASK 3: Stage 1 - Load adaptive-program-builder
+        setLoadStage('loading-builder')
         try {
           builderMod = await import('@/lib/adaptive-program-builder')
-          console.log('[ProgramPage] Loaded adaptive-program-builder')
+          console.log('[ProgramPage] Stage 1: Loaded adaptive-program-builder')
         } catch (err) {
-          console.error('[ProgramPage] CRITICAL: Failed to load adaptive-program-builder:', err)
+          console.error('[ProgramPage] CRITICAL Stage 1: Failed to load adaptive-program-builder:', err)
+          setLoadStage('failed-builder')
           setLoadError('Failed to load program builder. Please refresh the page.')
           setMounted(true)
           return
         }
         
+        // TASK 3: Stage 2 - Load program-state
+        setLoadStage('loading-state')
         try {
           stateMod = await import('@/lib/program-state')
-          console.log('[ProgramPage] Loaded program-state')
+          console.log('[ProgramPage] Stage 2: Loaded program-state')
         } catch (err) {
-          console.error('[ProgramPage] CRITICAL: Failed to load program-state:', err)
+          console.error('[ProgramPage] CRITICAL Stage 2: Failed to load program-state:', err)
+          setLoadStage('failed-state')
           setLoadError('Failed to load program state. Please refresh the page.')
           setMounted(true)
           return
         }
         
+        // TASK 3: Stage 3 - Load program-adjustment-engine
+        setLoadStage('loading-adjustment')
         try {
           adjustmentMod = await import('@/lib/program-adjustment-engine')
-          console.log('[ProgramPage] Loaded program-adjustment-engine')
+          console.log('[ProgramPage] Stage 3: Loaded program-adjustment-engine')
         } catch (err) {
-          console.error('[ProgramPage] CRITICAL: Failed to load program-adjustment-engine:', err)
+          console.error('[ProgramPage] CRITICAL Stage 3: Failed to load program-adjustment-engine:', err)
+          setLoadStage('failed-adjustment')
           setLoadError('Failed to load adjustment engine. Please refresh the page.')
           setMounted(true)
           return
         }
         
         // NON-CRITICAL: Load optional modules - page continues if these fail
+        // TASK 3: Stage 4 - Load optional modules
+        setLoadStage('loading-optional')
         let hygieneMod, constraintMod
         try {
           hygieneMod = await import('@/lib/client-data-hygiene')
-          console.log('[ProgramPage] Loaded client-data-hygiene')
+          console.log('[ProgramPage] Stage 4a: Loaded client-data-hygiene')
         } catch (err) {
-          console.warn('[ProgramPage] Optional: Failed to load client-data-hygiene:', err)
+          console.warn('[ProgramPage] Stage 4a: Optional client-data-hygiene failed (non-fatal):', err)
           // Continue - not essential
         }
         
         try {
           constraintMod = await import('@/lib/constraint-engine')
-          console.log('[ProgramPage] Loaded constraint-engine')
+          console.log('[ProgramPage] Stage 4b: Loaded constraint-engine')
         } catch (err) {
-          console.warn('[ProgramPage] Optional: Failed to load constraint-engine:', err)
+          console.warn('[ProgramPage] Stage 4b: Optional constraint-engine failed (non-fatal):', err)
           // Continue - not essential
         }
         
-        // TASK 5: Store loaded modules
+        // TASK 3: Stage 5 - Store loaded modules
+        setLoadStage('storing-modules')
         setProgramModules({
           generateAdaptiveProgram: builderMod.generateAdaptiveProgram,
           saveAdaptiveProgram: builderMod.saveAdaptiveProgram,
@@ -143,6 +159,7 @@ export default function ProgramPage() {
           getProgramState: stateMod.getProgramState,
           normalizeProgramForDisplay: stateMod.normalizeProgramForDisplay,
           isRenderableProgram: stateMod.isRenderableProgram,
+          isProgramDisplaySafe: stateMod.isProgramDisplaySafe,
           getProgramStatus: adjustmentMod.getProgramStatus,
           recordProgramEnd: adjustmentMod.recordProgramEnd,
         })
@@ -156,57 +173,82 @@ export default function ProgramPage() {
           }
         }
         
-        // Load default inputs
+        // TASK 3: Stage 6 - Load default inputs
+        setLoadStage('loading-default-inputs')
         const defaultInputs = builderMod.getDefaultAdaptiveInputs()
         setInputs(defaultInputs)
+        console.log('[ProgramPage] Stage 6: Default inputs loaded')
         
-        // TASK 6: Load current program as the first critical operation
+        // TASK 3: Stage 7 - Load current program as the critical operation
+        setLoadStage('loading-program-state')
         try {
           const programState = stateMod.getProgramState()
           
-          console.log('[ProgramPage] Program state loaded:', {
+          console.log('[ProgramPage] Stage 7: Program state loaded:', {
             hasUsableWorkoutProgram: programState.hasUsableWorkoutProgram,
             adaptiveProgramExists: !!programState.adaptiveProgram,
             sessionCount: programState.sessionCount,
           })
           
-          // TASK 6: If canonical program exists and is renderable, show it
+          // TASK 3: Stage 8 - Normalize and validate program for display
+          setLoadStage('normalizing-program')
           if (programState.hasUsableWorkoutProgram && programState.adaptiveProgram) {
             const normalizedProgram = stateMod.normalizeProgramForDisplay(programState.adaptiveProgram)
             
-            if (normalizedProgram && stateMod.isRenderableProgram(normalizedProgram)) {
+            // TASK 4: Display-sanity gate - verify all critical display fields
+            // Uses isProgramDisplaySafe for detailed failure reason
+            const displayCheck = 'isProgramDisplaySafe' in stateMod && stateMod.isProgramDisplaySafe
+              ? stateMod.isProgramDisplaySafe(normalizedProgram)
+              : { safe: stateMod.isRenderableProgram(normalizedProgram), reason: undefined }
+            
+            if (displayCheck.safe) {
+              // Log summary for diagnostics
+              console.log('[ProgramPage] Stage 8: Program display-safe:', {
+                goalLabel: normalizedProgram?.goalLabel,
+                sessionCount: normalizedProgram?.sessions?.length,
+                createdAt: normalizedProgram?.createdAt,
+              })
               setProgram(normalizedProgram)
               setShowBuilder(false)
-              console.log('[ProgramPage] Current program loaded successfully')
+              setLoadStage('program-ready')
             } else {
-              console.log('[ProgramPage] Program exists but is malformed - showing recovery state')
+              console.log('[ProgramPage] Stage 8: Program fails display-sanity:', displayCheck.reason || 'unknown')
+              setLoadStage(`program-malformed:${displayCheck.reason || 'unknown'}`)
               setShowBuilder(true)
             }
           } else {
             // No usable program - show builder
+            console.log('[ProgramPage] Stage 7: No usable program - showing builder')
+            setLoadStage('no-program')
             setShowBuilder(true)
           }
         } catch (err) {
-          console.error('[ProgramPage] Error loading current program:', err)
+          console.error('[ProgramPage] Stage 7: Error loading current program:', err)
+          setLoadStage('program-load-error')
           setShowBuilder(true)
         }
         
-        // Get constraint insight if available (non-critical)
+        // TASK 3: Stage 9 - Get constraint insight if available (non-critical)
+        setLoadStage('loading-constraints')
         if (constraintMod) {
           try {
             const insight = constraintMod.getConstraintInsight()
             setConstraintLabel(insight.label)
+            console.log('[ProgramPage] Stage 9: Constraint insight loaded:', insight.label)
           } catch (err) {
-            console.warn('[ProgramPage] Constraint insight failed:', err)
+            console.warn('[ProgramPage] Stage 9: Constraint insight failed (non-fatal):', err)
             setConstraintLabel('')
           }
         }
         
+        setLoadStage('complete')
         setMounted(true)
+        console.log('[ProgramPage] All stages complete')
       } catch (err) {
         // Fallback catch for unexpected errors
-        console.error('[ProgramPage] Unexpected error during module loading:', err)
-        setLoadError('An unexpected error occurred. Please refresh the page.')
+        console.error('[ProgramPage] Unexpected error during module loading at stage:', loadStage, err)
+        setLoadStage('unexpected-error')
+        setLoadError(`An unexpected error occurred at stage: ${loadStage}. Please refresh the page.`)
         setMounted(true)
       }
     }
@@ -254,7 +296,7 @@ export default function ProgramPage() {
     setShowBuilder(true)
   }, [programModules])
 
-  // TASK 5: Show error state for module load failure
+  // TASK 3: Show error state for module load failure with stage info
   if (loadError) {
     return (
       <div className="min-h-screen bg-[#0A0A0A] text-white">
@@ -263,6 +305,7 @@ export default function ProgramPage() {
             <AlertTriangle className="w-12 h-12 text-amber-500 mx-auto mb-4" />
             <h3 className="text-lg font-medium mb-2">Unable to Load Program</h3>
             <p className="text-sm text-[#6A6A6A] mb-4">{loadError}</p>
+            <p className="text-xs text-[#4A4A4A] mb-4 font-mono">Stage: {loadStage}</p>
             <Button
               onClick={() => window.location.reload()}
               className="bg-[#E63946] hover:bg-[#D62828]"

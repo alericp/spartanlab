@@ -532,12 +532,25 @@ function ExerciseRow({
   onProgressionAdjust,
 }: ExerciseRowProps) {
   const [showReason, setShowReason] = useState(false)
-  const hasRPE = !isWarmupCooldown && exerciseSupportsRPE(exercise.name)
-  const exerciseId = exercise.name.toLowerCase().replace(/[\s-]+/g, '_')
+  
+  // TASK 3: Safety guard for malformed exercise data
+  if (!exercise || typeof exercise !== 'object') {
+    console.warn('[ExerciseRow] Received invalid exercise:', exercise)
+    return null
+  }
+  
+  // Ensure required fields have safe defaults
+  const safeName = exercise.name || 'Exercise'
+  const safeCategory = exercise.category || 'accessory'
+  const safeSets = exercise.sets ?? 3
+  const safeReps = exercise.repsOrTime || '8-12'
+  
+  const hasRPE = !isWarmupCooldown && exerciseSupportsRPE(safeName)
+  const exerciseId = safeName.toLowerCase().replace(/[\s-]+/g, '_')
   const hasKnowledge = hasExerciseKnowledge(exerciseId)
   
   // Display name - show adjusted name if progression was changed
-  const displayName = adjustedName || exercise.name
+  const displayName = adjustedName || safeName
 
   const categoryColors: Record<string, string> = {
     skill: 'text-[#E63946]',
@@ -558,7 +571,7 @@ function ExerciseRow({
               <span className="text-xs text-[#6A6A6A] font-mono w-4">{index}.</span>
             )}
             <SkipForward className="w-4 h-4 text-[#6A6A6A]" />
-            <span className="text-sm text-[#6A6A6A] line-through">{exercise.name}</span>
+            <span className="text-sm text-[#6A6A6A] line-through">{safeName}</span>
           </div>
           <span className="text-xs text-[#6A6A6A]">Skipped</span>
         </div>
@@ -580,8 +593,8 @@ function ExerciseRow({
             {index && (
               <span className="text-xs text-[#6A6A6A] font-mono w-4">{index}.</span>
             )}
-            <span className={`text-xs uppercase tracking-wider ${categoryColors[exercise.category] || 'text-[#6A6A6A]'}`}>
-              {exercise.category}
+            <span className={`text-xs uppercase tracking-wider ${categoryColors[safeCategory] || 'text-[#6A6A6A]'}`}>
+              {safeCategory}
             </span>
             {exercise.methodLabel && exercise.method !== 'straight_sets' && (
               <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#4F6D8A]/10 text-[#4F6D8A] font-medium">
@@ -604,7 +617,7 @@ function ExerciseRow({
           </div>
           {adjustedName && (
             <p className="text-xs text-[#4F6D8A] mt-0.5">
-              Originally: {exercise.name}
+              Originally: {safeName}
             </p>
           )}
           {exercise.note && (
@@ -614,7 +627,7 @@ function ExerciseRow({
         <div className="flex items-start gap-2 shrink-0">
           <div className="text-right">
             <p className="text-sm text-[#A5A5A5]">
-              {exercise.sets} x {exercise.repsOrTime}
+              {safeSets} x {safeReps}
             </p>
           </div>
           {!isWarmupCooldown && exercise.isOverrideable && sessionId && onReplace && onSkip && onProgressionAdjust && (

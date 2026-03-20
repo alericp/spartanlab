@@ -141,13 +141,65 @@ const SAFE_DEFAULT_STATE: ProgramState = {
 /**
  * Check if a program is safe to render in AdaptiveProgramDisplay
  * Returns false if any critical display property could cause a crash
+ * 
+ * TASK 4: Enhanced display-sanity gate that validates enough fields
+ * to guarantee the display layer won't explode
  */
 export function isRenderableProgram(program: AdaptiveProgram | null): boolean {
   if (!program || typeof program !== 'object') return false
   if (!Array.isArray(program.sessions)) return false
   if (!program.goalLabel || typeof program.goalLabel !== 'string') return false
   if (!program.createdAt) return false
+  
+  // TASK 4: Validate every rendered session has minimal safe fields
+  for (let i = 0; i < program.sessions.length; i++) {
+    const session = program.sessions[i]
+    if (!session || typeof session !== 'object') return false
+    if (!Array.isArray(session.exercises)) return false
+    // First session must have exercises for display to be meaningful
+    if (i === 0 && session.exercises.length === 0) return false
+  }
+  
   return true
+}
+
+/**
+ * TASK 4: Display-safe verification helper
+ * Returns true only if the program is fully safe for the display layer
+ * This is a stricter check than isRenderableProgram for the final sanity gate
+ */
+export function isProgramDisplaySafe(program: AdaptiveProgram | null): {
+  safe: boolean
+  reason?: string
+} {
+  if (!program || typeof program !== 'object') {
+    return { safe: false, reason: 'program_null_or_invalid' }
+  }
+  if (!Array.isArray(program.sessions)) {
+    return { safe: false, reason: 'sessions_not_array' }
+  }
+  if (program.sessions.length === 0) {
+    return { safe: false, reason: 'sessions_empty' }
+  }
+  if (!program.goalLabel || typeof program.goalLabel !== 'string') {
+    return { safe: false, reason: 'goalLabel_missing' }
+  }
+  if (!program.createdAt) {
+    return { safe: false, reason: 'createdAt_missing' }
+  }
+  
+  // Validate each session
+  for (let i = 0; i < program.sessions.length; i++) {
+    const session = program.sessions[i]
+    if (!session || typeof session !== 'object') {
+      return { safe: false, reason: `session_${i}_invalid` }
+    }
+    if (!Array.isArray(session.exercises)) {
+      return { safe: false, reason: `session_${i}_exercises_not_array` }
+    }
+  }
+  
+  return { safe: true }
 }
 
 /**

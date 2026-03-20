@@ -166,7 +166,13 @@ export async function PUT(request: Request) {
     for (const [key, dbColumn] of Object.entries(fieldMappings)) {
       if (updates[key] !== undefined) {
         updateFields.push(`${dbColumn} = $${paramIndex}`)
-        updateValues.push(updates[key])
+        // TASK 2: For flexible users, store NULL for trainingDaysPerWeek
+        // to preserve flexible as a true preference, not fake 4-day
+        let value = updates[key]
+        if (key === 'trainingDaysPerWeek' && updates.scheduleMode === 'flexible') {
+          value = null
+        }
+        updateValues.push(value)
         paramIndex++
       }
     }

@@ -1,13 +1,28 @@
 /**
  * PROGRAM STATE CONTRACT
  * 
+ * =============================================================================
+ * REGRESSION GUARD: STATE SEPARATION IS LOAD-BEARING ARCHITECTURE
+ * =============================================================================
+ * 
  * This file defines the clear separation between:
  * 1. CANONICAL PROFILE - User's onboarding + metrics truth (source of truth)
  * 2. ACTIVE PROGRAM - Current generated plan being followed
  * 3. PROGRAM SNAPSHOT - Frozen copy of profile used at generation time
  * 4. WORKOUT HISTORY - Completed sessions only
  * 
- * CRITICAL: Program generation MUST ALWAYS use canonical profile, never stale program data.
+ * REGRESSION PREVENTION RULES:
+ * - Program generation MUST ALWAYS use canonical profile via buildGenerationInput()
+ * - NEVER read from stale program.profileSnapshot for new generation inputs
+ * - NEVER let active program metadata override canonical profile values
+ * - Snapshots are for debugging and staleness detection ONLY, not for generation
+ * 
+ * STATE LIFECYCLE:
+ * - Fresh generation: canonical profile -> generateAdaptiveProgram() -> active program + snapshot
+ * - Regeneration: canonical profile (current truth) -> new program (old snapshot becomes stale)
+ * - Restart: archive active program -> clear state -> return to builder-ready
+ * 
+ * If you need to detect staleness, use checkProgramStaleness() from canonical-profile-service.ts
  */
 
 import { getCanonicalProfile, validateProfileForGeneration, type CanonicalProgrammingProfile } from './canonical-profile-service'

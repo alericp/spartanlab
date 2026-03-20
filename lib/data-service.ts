@@ -1,5 +1,31 @@
-// Data service layer for preview mode
-// Uses localStorage for persistence, easy to swap to Prisma + Clerk later
+/**
+ * DATA SERVICE LAYER
+ * 
+ * =============================================================================
+ * REGRESSION GUARD: THIS IS A COMPATIBILITY LAYER, NOT THE SOURCE OF TRUTH
+ * =============================================================================
+ * 
+ * Uses localStorage for persistence, easy to swap to Prisma + Clerk later.
+ * 
+ * CRITICAL ARCHITECTURAL NOTE:
+ * This service is a FALLBACK/COMPATIBILITY layer for storing athlete profile data.
+ * It is NOT the source of truth for program generation.
+ * 
+ * For program generation:
+ * - Use canonical-profile-service.ts -> getCanonicalProfile()
+ * - Use canonical-profile-service.ts -> validateProfileForGeneration()
+ * - Use canonical-profile-service.ts -> getValidatedCanonicalProfile()
+ * 
+ * This service MAY be used for:
+ * - Client-side truth-state continuity when DB-backed profile hydration is unavailable
+ * - Backward compatibility for users who haven't gone through canonical reconciliation
+ * - Legacy code paths during migration
+ * 
+ * DO NOT:
+ * - Import getAthleteProfile() directly for program generation
+ * - Treat this as the primary source of truth for generation inputs
+ * - Add seed/default data that leaks into real user flows
+ */
 
 export interface User {
   id: string
@@ -56,8 +82,20 @@ const PREVIEW_USER: User = {
   createdAt: new Date().toISOString(),
 }
 
-// TASK 1C: REMOVED DEFAULT_PROFILE - No more seed data pollution
-// Programs must use real user data from onboarding
+/**
+ * REGRESSION GUARD: DEFAULT_PROFILE REMOVED
+ * 
+ * Previously, there was a DEFAULT_PROFILE constant here that provided seed data.
+ * This was removed to prevent seed data pollution in real user flows.
+ * 
+ * Programs MUST use real user data from:
+ * 1. canonical-profile-service.ts (PRIMARY)
+ * 2. Onboarding flow completion
+ * 
+ * DO NOT re-add a DEFAULT_PROFILE here. If you need default values:
+ * - For new users: Route them through onboarding
+ * - For testing: Use explicit test fixtures, not production defaults
+ */
 
 const STORAGE_KEYS = {
   profile: 'spartanlab_profile',

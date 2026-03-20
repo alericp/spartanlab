@@ -1,13 +1,26 @@
 /**
  * CANONICAL PROFILE SERVICE
  * 
+ * =============================================================================
+ * REGRESSION GUARD: CANONICAL PROFILE IS THE ONLY SOURCE OF PROGRAMMING TRUTH
+ * =============================================================================
+ * 
  * This is the SINGLE SOURCE OF TRUTH for athlete programming profile.
  * All generation, regeneration, settings, and metric updates MUST use this.
  * 
- * DO NOT import getAthleteProfile/saveAthleteProfile from data-service directly.
- * DO NOT import getOnboardingProfile/saveOnboardingProfile from athlete-profile directly.
+ * REGRESSION PREVENTION RULES:
+ * 1. DO NOT import getAthleteProfile/saveAthleteProfile from data-service directly for generation
+ * 2. DO NOT import getOnboardingProfile/saveOnboardingProfile from athlete-profile directly for generation
+ * 3. DO NOT add fallback logic that uses shallow/default/seed data when canonical exists
+ * 4. DO NOT bypass validateProfileForGeneration() before program generation
+ * 5. DO NOT modify reconcileCanonicalProfile() without understanding the priority order
  * 
- * USE THIS SERVICE INSTEAD.
+ * ALLOWED COMPATIBILITY PATHS:
+ * - data-service.ts may be read as a fallback layer for users who haven't completed onboarding
+ * - athlete-profile.ts may be read for backward compatibility reconciliation
+ * - Both are written to for consistency but are NOT the source of truth for generation
+ * 
+ * USE THIS SERVICE FOR ALL PROGRAMMING-RELATED READS AND WRITES.
  */
 
 import { getAthleteProfile, saveAthleteProfile, type AthleteProfile } from './data-service'

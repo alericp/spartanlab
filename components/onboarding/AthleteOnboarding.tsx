@@ -3407,8 +3407,21 @@ export function AthleteOnboarding() {
   const [profile, setProfile] = useState<OnboardingProfile>(createEmptyOnboardingProfile())
   const [prefillLoaded, setPrefillLoaded] = useState(false)
   
-  // TASK 1: Prefill from existing profile on mount for edit mode
-  // This enables onboarding to act as a true profile editor on revisit
+  // =============================================================================
+  // REGRESSION GUARD: ONBOARDING PREFILL BEHAVIOR
+  // =============================================================================
+  // 
+  // This useEffect enables onboarding to act as a true profile editor on revisit.
+  // 
+  // REQUIRED BEHAVIOR (DO NOT REGRESS):
+  // 1. On revisit, all previously saved values MUST appear pre-selected
+  // 2. Prefill source priority: existingProfile > canonical > defaults
+  // 3. If canonical profile has data, it MUST be reflected in selections
+  // 4. Editing one step MUST NOT wipe unrelated untouched fields
+  // 5. Clear All is the ONLY way to reset - not navigation or refresh
+  // 
+  // If this behavior breaks, users will see blank forms after saving.
+  // =============================================================================
   useEffect(() => {
     if (prefillLoaded) return
     

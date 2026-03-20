@@ -1,9 +1,28 @@
 /**
  * Adaptive Program Builder
  * 
+ * =============================================================================
+ * REGRESSION GUARD: THIS IS THE CANONICAL PROGRAM GENERATOR
+ * =============================================================================
+ * 
  * DO NOT DRIFT: This is the CANONICAL PROGRAM GENERATOR.
  * All program generation MUST flow through generateAdaptiveProgram().
  * Do NOT create parallel generators or bypass this path.
+ * 
+ * REGRESSION PREVENTION RULES:
+ * 1. All generation MUST use getCanonicalProfile() from canonical-profile-service.ts
+ * 2. Generation MUST call validateProfileForGeneration() before proceeding
+ * 3. DO NOT add fallback/default data that bypasses canonical profile
+ * 4. DO NOT silently succeed when profile validation fails
+ * 5. DO NOT read from active program snapshot for generation inputs
+ * 
+ * GENERATION INTEGRITY CHECKS (enforced in generateAdaptiveProgram):
+ * - primaryGoal must exist (throws error if missing)
+ * - onboardingComplete must be true (throws error if false)
+ * - At least one of: selectedSkills, selectedFlexibility, or selectedStrength must exist
+ * - equipmentAvailable must not be empty
+ * 
+ * These checks ensure we never generate garbage programs from incomplete data.
  */
 
 import type { PrimaryGoal, ExperienceLevel, TrainingDays, SessionLength } from './program-service'

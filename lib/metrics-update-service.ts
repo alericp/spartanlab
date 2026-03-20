@@ -4,6 +4,21 @@
 // Handles updating athlete metrics and triggering program recalculation
 // Preserves training history while adapting future sessions
 // 
+// =============================================================================
+// REGRESSION GUARD: METRICS MUST WRITE-THROUGH TO CANONICAL PROFILE
+// =============================================================================
+// 
+// This service MUST call saveCanonicalProfile() when updating metrics.
+// Metrics edits are one of three profile-editing surfaces:
+// 1. Onboarding (writes to canonical via saveOnboardingProfile)
+// 2. Settings (writes to canonical via saveCanonicalProfile)
+// 3. Metrics (this service - writes to canonical via saveCanonicalProfile)
+// 
+// If write-through is removed:
+// - Metrics changes won't reflect in program generation
+// - Staleness detection will be inaccurate
+// - The canonical truth contract will be violated
+//
 // CANONICAL PROFILE FIX: Now writes to canonical profile service to ensure
 // metrics updates flow through to program generation.
 

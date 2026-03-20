@@ -1,6 +1,10 @@
 /**
  * PUBLIC Route Group Layout - Minimal Server-Safe Shell
  * 
+ * =============================================================================
+ * REGRESSION GUARD: PUBLIC PRERENDER SAFETY - DO NOT BREAK BUILD
+ * =============================================================================
+ * 
  * This layout wraps ALL public SEO/marketing pages that must be prerenderable.
  * 
  * CRITICAL ARCHITECTURAL DECISIONS:
@@ -25,14 +29,28 @@
  * - Static program info pages (/programs/*-program)
  * - Legal pages (/terms, /privacy, /about)
  * 
- * DO NOT add to this layout:
- * - ClerkProvider
- * - OwnerSimulationToggleWrapper
- * - AnalyticsProvider (already in root layout)
- * - GlobalErrorBoundary (client component - use in app layout only)
- * - Toaster (client component - use in app layout only)
- * - Any component that uses useAuth, useUser, or Clerk hooks
- * - Any component that requires auth context during SSR
+ * =============================================================================
+ * REGRESSION PREVENTION: DO NOT ADD THESE TO THIS LAYOUT OR ITS CHILDREN
+ * =============================================================================
+ * 
+ * The following will BREAK the build if added directly to public pages:
+ * - ClerkProvider (requires client context)
+ * - OwnerSimulationToggleWrapper (requires auth)
+ * - Any component that uses useAuth, useUser, useClerk hooks
+ * - Any component that imports from @clerk/nextjs directly
+ * - GlobalErrorBoundary (client component)
+ * - Toaster (client component)
+ * 
+ * If you need auth-aware behavior on a public page:
+ * 1. Keep the page itself a server component
+ * 2. Create a client island component that checks auth
+ * 3. Do NOT import auth hooks at the page level
+ * 4. Test build locally with `npm run build` before committing
+ * 
+ * Previous build failures were caused by:
+ * - Importing useAuth/useUser in pricing/page.tsx
+ * - Importing ToolConversionCardClient (which used useAuth) in SEO pages
+ * - Adding ClerkProvider to this layout
  */
 export default function PublicLayout({
   children,

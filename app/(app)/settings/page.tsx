@@ -389,8 +389,23 @@ export default function SettingsPage() {
     setTrainingStyle(data.trainingStyle || 'balanced_hybrid')
   }
 
+  // =============================================================================
+  // REGRESSION GUARD: SETTINGS MUST WRITE-THROUGH TO CANONICAL PROFILE
+  // =============================================================================
+  // 
+  // This save function MUST call saveCanonicalProfile() to maintain
+  // write-through consistency. All profile-editing surfaces must:
+  // 1. Call saveCanonicalProfile() with the updated fields
+  // 2. Also call saveAthleteProfile() for backward compatibility
+  // 3. Log the canonical state after save for debugging
+  // 
+  // If this write-through breaks:
+  // - Settings changes won't reflect in program generation
+  // - Onboarding and settings will diverge
+  // - The canonical truth contract will be violated
+  // =============================================================================
   const handleSave = async () => {
-    console.log('[Settings] handleSave started')
+    console.log('[Settings] handleSave started - REGRESSION GUARD: must call saveCanonicalProfile')
     setSaving(true)
     setSaved(false)
     

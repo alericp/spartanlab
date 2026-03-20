@@ -962,12 +962,14 @@ export function StreamlinedWorkoutSession({
         completedExercises >= totalExercises * 0.8 ? 'completed' :
         completedExercises > 0 ? 'partial' : 'skipped'
       
-      // Quick log the workout with full feedback loop data
-      quickLogWorkout({
-        sessionName: safeSession.dayLabel,
-        sessionType,
-        focusArea,
-        durationMinutes: Math.round(state.elapsedSeconds / 60),
+  // Quick log the workout with full feedback loop data
+    // Ensure minimum 1 minute duration to prevent 0-minute sessions
+    const durationMinutes = Math.max(1, Math.round(state.elapsedSeconds / 60))
+    quickLogWorkout({
+      sessionName: safeSession.dayLabel,
+      sessionType,
+      focusArea,
+      durationMinutes,
         perceivedDifficulty: finalDifficulty,
         generatedWorkoutId: sessionId,
         keyPerformance,
@@ -1449,12 +1451,12 @@ export function StreamlinedWorkoutSession({
           </div>
           
           {/* Quick Stats Feedback */}
-          <Card className="bg-[#1A1F26] border-[#2B313A] p-4">
-            <div className="grid grid-cols-3 gap-4 text-center">
-              <div>
-                <p className="text-xl font-bold text-[#E6E9EF]">{Math.round(state.elapsedSeconds / 60)}</p>
-                <p className="text-xs text-[#6B7280]">minutes</p>
-              </div>
+<Card className="bg-[#1A1F26] border-[#2B313A] p-4">
+              <div className="grid grid-cols-3 gap-4 text-center">
+                <div>
+                  <p className="text-xl font-bold text-[#E6E9EF]">{Math.max(1, Math.round(state.elapsedSeconds / 60))}</p>
+                  <p className="text-xs text-[#6B7280]">minutes</p>
+                </div>
               <div>
                 <p className="text-xl font-bold text-[#E6E9EF]">{stats.completedSets}</p>
                 <p className="text-xs text-[#6B7280]">sets</p>

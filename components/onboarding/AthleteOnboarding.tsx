@@ -3695,6 +3695,8 @@ export function AthleteOnboarding() {
       // This ensures settings, metrics, builder, and generation all see the same truth
       const isFlexibleSchedule = profile.trainingDaysPerWeek === 'flexible' || 
                                   (profile as any).scheduleMode === 'flexible'
+      // TASK 1A: Detect adaptive time preference from onboarding selection
+      const isAdaptiveTime = profile.sessionLengthMinutes === 'flexible'
       
       // Save comprehensive canonical profile with ALL fields
       saveCanonicalProfile({
@@ -3728,12 +3730,16 @@ export function AthleteOnboarding() {
           ? null  // null = truly flexible, engine derives at runtime
           : (typeof profile.trainingDaysPerWeek === 'number' ? profile.trainingDaysPerWeek : null),
         scheduleMode: isFlexibleSchedule ? 'flexible' : 'static',
+        // TASK 1A: Persist adaptive time preference
+        // sessionDurationMode: 'adaptive' means engine adapts session length based on recovery
+        // sessionDurationMode: 'static' means user prefers a fixed target duration
+        sessionDurationMode: isAdaptiveTime ? 'adaptive' : 'static',
         sessionLengthMinutes: typeof profile.sessionLengthMinutes === 'number'
           ? (profile.sessionLengthMinutes <= 30 ? 30 
              : profile.sessionLengthMinutes <= 45 ? 45 
              : profile.sessionLengthMinutes <= 60 ? 60 
              : 90)
-          : 60,
+          : 60,  // Default for adaptive time users - serves as target bucket
         sessionStylePreference: profile.sessionStyle,
         
         // Equipment

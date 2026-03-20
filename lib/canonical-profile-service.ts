@@ -60,7 +60,8 @@ export interface CanonicalProgrammingProfile {
   experienceLevel: 'beginner' | 'intermediate' | 'advanced'
   trainingDaysPerWeek: number | null  // null = flexible
   scheduleMode: 'static' | 'flexible'
-  sessionLengthMinutes: number
+  sessionDurationMode: 'static' | 'adaptive'  // TASK 1A: Distinguishes fixed vs adaptive time preference
+  sessionLengthMinutes: number  // Target duration bucket (30/45/60/90) even for adaptive mode
   sessionStylePreference: string | null  // 'longer_complete' | 'shorter_focused' | etc.
   equipmentAvailable: string[]
   trainingStyle: string | null
@@ -207,6 +208,13 @@ export function reconcileCanonicalProfile(): CanonicalProgrammingProfile {
       null  // TASK 1B: null = no fallback, validation catches
     ),
     scheduleMode: pick(onboardingProfile?.scheduleMode, athleteProfile?.scheduleMode, 'flexible'),  // Default flexible for new users
+    // TASK 1A: Session duration mode - 'static' = fixed duration, 'adaptive' = engine adapts based on recovery
+    // Currently defaults to 'static' for backward compatibility
+    sessionDurationMode: pick(
+      (onboardingProfile as unknown as { sessionDurationMode?: 'static' | 'adaptive' })?.sessionDurationMode,
+      (athleteProfile as unknown as { sessionDurationMode?: 'static' | 'adaptive' })?.sessionDurationMode,
+      'static'  // Default to static for backward compatibility
+    ),
     sessionLengthMinutes: pick(
       onboardingProfile?.sessionLengthMinutes,
       athleteProfile?.sessionLengthMinutes,
@@ -458,6 +466,10 @@ export function saveCanonicalProfile(updates: Partial<CanonicalProgrammingProfil
   if (updates.experienceLevel !== undefined) athleteUpdates.experienceLevel = updates.experienceLevel
   if (updates.trainingDaysPerWeek !== undefined) athleteUpdates.trainingDaysPerWeek = updates.trainingDaysPerWeek ?? 4
   if (updates.scheduleMode !== undefined) athleteUpdates.scheduleMode = updates.scheduleMode
+  // TASK 1A: sessionDurationMode - store in athlete profile for downstream consumption
+  if (updates.sessionDurationMode !== undefined) {
+    (athleteUpdates as any).sessionDurationMode = updates.sessionDurationMode
+  }
   if (updates.sessionLengthMinutes !== undefined) athleteUpdates.sessionLengthMinutes = updates.sessionLengthMinutes as 30 | 45 | 60 | 90
   if (updates.equipmentAvailable !== undefined) athleteUpdates.equipmentAvailable = updates.equipmentAvailable as AthleteProfile['equipmentAvailable']
   if (updates.jointCautions !== undefined) athleteUpdates.jointCautions = updates.jointCautions as AthleteProfile['jointCautions']
@@ -490,6 +502,10 @@ export function saveCanonicalProfile(updates: Partial<CanonicalProgrammingProfil
     if (updates.selectedStrength !== undefined) onboardingUpdates.selectedStrength = updates.selectedStrength
     if (updates.goalCategory !== undefined) onboardingUpdates.goalCategory = updates.goalCategory
     if (updates.scheduleMode !== undefined) onboardingUpdates.scheduleMode = updates.scheduleMode
+    // TASK 1A: sessionDurationMode - sync to onboarding profile
+    if (updates.sessionDurationMode !== undefined) {
+      (onboardingUpdates as any).sessionDurationMode = updates.sessionDurationMode
+    }
     if (updates.sessionLengthMinutes !== undefined) onboardingUpdates.sessionLengthMinutes = updates.sessionLengthMinutes
     if (updates.equipmentAvailable !== undefined) onboardingUpdates.equipmentAvailable = updates.equipmentAvailable
     if (updates.jointCautions !== undefined) onboardingUpdates.jointCautions = updates.jointCautions as OnboardingProfile['jointCautions']
@@ -638,6 +654,7 @@ export interface StalenessCheckResult {
  */
 const CRITICAL_FIELDS_SIGNIFICANT = [
   'primaryGoal',
+  'secondaryGoal',  // TASK 3: Secondary goal changes should trigger staleness
   'selectedSkills',
   'scheduleMode',
   'trainingDaysPerWeek',

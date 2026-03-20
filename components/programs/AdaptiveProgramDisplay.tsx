@@ -128,8 +128,16 @@ export function AdaptiveProgramDisplay({
           <div className="flex items-center gap-2">
             <Target className="w-4 h-4 text-[#E63946]" />
             <div>
-              <p className="text-xs text-[#6A6A6A]">Goal</p>
+              <p className="text-xs text-[#6A6A6A]">
+                {program.secondaryGoal ? 'Primary Goal' : 'Goal'}
+              </p>
               <p className="text-sm font-medium">{program.goalLabel}</p>
+              {/* TASK 5: Show secondary goal if present */}
+              {program.secondaryGoal && (
+                <p className="text-xs text-[#6A6A6A] mt-0.5">
+                  + {program.secondaryGoal.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
+                </p>
+              )}
             </div>
           </div>
           <div className="flex items-center gap-2">

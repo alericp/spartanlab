@@ -162,7 +162,8 @@ export function AdaptiveProgramForm({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent className="bg-[#2A2A2A] border-[#3A3A3A]">
-                {([30, 45, 60, 75] as SessionDurationMinutes[]).map((minutes) => (
+                {/* TASK 6: Unified duration labels - use 30/45/60/90 across all surfaces */}
+                {([30, 45, 60, 90] as SessionDurationMinutes[]).map((minutes) => (
                   <SelectItem key={minutes} value={String(minutes)}>
                     {DURATION_PREFERENCE_LABELS[minutes].label}
                   </SelectItem>

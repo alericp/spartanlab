@@ -13,7 +13,7 @@
  * 3. Show builder as secondary action for creating/regenerating
  */
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, type ReactNode } from 'react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { ArrowLeft, Dumbbell, Plus, Sparkles, AlertTriangle, Loader2 } from 'lucide-react'
@@ -45,6 +45,59 @@ const ProgramAdjustmentModal = dynamic(
   () => import('@/components/programs/ProgramAdjustmentModal').then(mod => ({ default: mod.ProgramAdjustmentModal })),
   { ssr: false }
 )
+
+// TASK 1: Error boundary wrapper for AdaptiveProgramDisplay
+// Catches render errors and triggers recovery state instead of crashing
+function ProgramDisplayWrapper({ 
+  program, 
+  onDelete, 
+  onRecoveryNeeded 
+}: { 
+  program: AdaptiveProgram
+  onDelete: () => void
+  onRecoveryNeeded: () => void 
+}) {
+  const [hasRenderError, setHasRenderError] = useState(false)
+  
+  // Reset error state when program changes
+  useEffect(() => {
+    setHasRenderError(false)
+  }, [program?.id])
+  
+  if (hasRenderError) {
+    return (
+      <Card className="bg-[#2A2A2A] border-[#3A3A3A] p-8 text-center">
+        <AlertTriangle className="w-12 h-12 text-amber-500 mx-auto mb-4" />
+        <h3 className="text-lg font-medium mb-2">Display Error</h3>
+        <p className="text-sm text-[#6A6A6A] mb-4">
+          There was a problem displaying your program. Try refreshing.
+        </p>
+        <Button
+          onClick={() => window.location.reload()}
+          className="bg-[#E63946] hover:bg-[#D62828]"
+        >
+          Refresh Page
+        </Button>
+      </Card>
+    )
+  }
+  
+  // Wrap in try-catch at render time
+  try {
+    console.log('[v0] ProgramDisplayWrapper: Rendering AdaptiveProgramDisplay')
+    return (
+      <AdaptiveProgramDisplay
+        program={program}
+        onDelete={onDelete}
+      />
+    )
+  } catch (err) {
+    console.error('[v0] ProgramDisplayWrapper: Render error:', err)
+    setHasRenderError(true)
+    onRecoveryNeeded()
+    return null
+  }
+}
 
 export default function ProgramPage() {
   const [inputs, setInputs] = useState<AdaptiveProgramInputs | null>(null)
@@ -179,51 +232,59 @@ export default function ProgramPage() {
         setInputs(defaultInputs)
         console.log('[ProgramPage] Stage 6: Default inputs loaded')
         
-        // TASK 3: Stage 7 - Load current program as the critical operation
+        // TASK 1: Stage 7 - Load current program as the critical operation
         setLoadStage('loading-program-state')
+        let loadedProgram: AdaptiveProgram | null = null
         try {
+          console.log('[v0] Stage 7: Calling getProgramState()')
           const programState = stateMod.getProgramState()
           
-          console.log('[ProgramPage] Stage 7: Program state loaded:', {
+          console.log('[v0] Stage 7: Program state loaded:', {
             hasUsableWorkoutProgram: programState.hasUsableWorkoutProgram,
             adaptiveProgramExists: !!programState.adaptiveProgram,
             sessionCount: programState.sessionCount,
           })
           
-          // TASK 3: Stage 8 - Normalize and validate program for display
+          // TASK 2: Stage 8 - Normalize and validate program for display
           setLoadStage('normalizing-program')
           if (programState.hasUsableWorkoutProgram && programState.adaptiveProgram) {
+            console.log('[v0] Stage 8: Normalizing program for display')
             const normalizedProgram = stateMod.normalizeProgramForDisplay(programState.adaptiveProgram)
             
-            // TASK 4: Display-sanity gate - verify all critical display fields
-            // Uses isProgramDisplaySafe for detailed failure reason
+            // TASK 2: Display-sanity gate - verify all critical display fields
+            // This prevents crashes in AdaptiveProgramDisplay when program is malformed
+            console.log('[v0] Stage 8: Running display-sanity check')
             const displayCheck = 'isProgramDisplaySafe' in stateMod && stateMod.isProgramDisplaySafe
               ? stateMod.isProgramDisplaySafe(normalizedProgram)
               : { safe: stateMod.isRenderableProgram(normalizedProgram), reason: undefined }
             
             if (displayCheck.safe) {
               // Log summary for diagnostics
-              console.log('[ProgramPage] Stage 8: Program display-safe:', {
+              console.log('[v0] Stage 8: Program display-safe:', {
                 goalLabel: normalizedProgram?.goalLabel,
                 sessionCount: normalizedProgram?.sessions?.length,
                 createdAt: normalizedProgram?.createdAt,
               })
+              loadedProgram = normalizedProgram
               setProgram(normalizedProgram)
               setShowBuilder(false)
               setLoadStage('program-ready')
             } else {
-              console.log('[ProgramPage] Stage 8: Program fails display-sanity:', displayCheck.reason || 'unknown')
+              // TASK 2: Program exists but fails display sanity - show recovery state, not fatal error
+              console.log('[v0] Stage 8: Program fails display-sanity:', displayCheck.reason || 'unknown')
               setLoadStage(`program-malformed:${displayCheck.reason || 'unknown'}`)
-              setShowBuilder(true)
+              // Keep program reference so we can show "Program Needs Refresh" state
+              setProgram(normalizedProgram)
+              setShowBuilder(false) // Don't auto-show builder, show recovery state instead
             }
           } else {
             // No usable program - show builder
-            console.log('[ProgramPage] Stage 7: No usable program - showing builder')
+            console.log('[v0] Stage 7: No usable program - showing builder')
             setLoadStage('no-program')
             setShowBuilder(true)
           }
         } catch (err) {
-          console.error('[ProgramPage] Stage 7: Error loading current program:', err)
+          console.error('[v0] Stage 7: Error loading current program:', err)
           setLoadStage('program-load-error')
           setShowBuilder(true)
         }
@@ -375,7 +436,7 @@ export default function ProgramPage() {
           )}
         </div>
 
-        {/* Content */}
+        {/* Content - TASK 2: Proper handling of malformed programs */}
         {showBuilder ? (
           <div className="space-y-6">
             <AdaptiveProgramForm
@@ -398,18 +459,24 @@ export default function ProgramPage() {
             )}
           </div>
         ) : program && programModules.isRenderableProgram?.(program) ? (
-          <AdaptiveProgramDisplay
-            program={program}
+          // TASK 1: Wrap display in error boundary-like try-catch via component
+          <ProgramDisplayWrapper 
+            program={program} 
             onDelete={handleDelete}
+            onRecoveryNeeded={() => {
+              console.log('[v0] Display render failed, showing recovery state')
+              setLoadStage('display-render-error')
+            }}
           />
-        ) : program && !programModules.isRenderableProgram?.(program) ? (
-          // PHASE 1: Program exists but is malformed - show recovery state
+        ) : program ? (
+          // TASK 2: Program exists but is malformed - show recovery state (not fatal error)
           <Card className="bg-[#2A2A2A] border-[#3A3A3A] p-8 text-center">
             <AlertTriangle className="w-12 h-12 text-amber-500 mx-auto mb-4" />
             <h3 className="text-lg font-medium mb-2">Program Needs Refresh</h3>
             <p className="text-sm text-[#6A6A6A] mb-4">
               Your program data needs to be regenerated. This only takes a moment.
             </p>
+            <p className="text-xs text-[#4A4A4A] mb-4 font-mono">Stage: {loadStage}</p>
             <Button
               onClick={() => {
                 setProgram(null)

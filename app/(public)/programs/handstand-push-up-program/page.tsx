@@ -5,6 +5,7 @@ import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { JsonLdMultiple } from '@/components/seo/JsonLd'
 import { generateArticleSchema, generateBreadcrumbSchema, generateHowToSchema, SITE_CONFIG } from '@/lib/seo'
+import { AuthAwareProgramCTA } from '@/components/shared/AuthAwareProgramCTA'
 
 export const metadata: Metadata = {
   title: 'Handstand Push-Up Program | 12-24 Week Plan | SpartanLab',
@@ -245,25 +246,14 @@ export default function HSPUProgramPage() {
         </div>
       </section>
 
-      {/* Program Builder CTA */}
+      {/* Program Builder CTA - Auth-aware */}
       <section className="py-12 px-4 sm:px-6">
         <div className="max-w-4xl mx-auto">
-          <Card className="bg-[#C1121F]/10 border-[#C1121F]/20 p-6">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-              <div>
-                <h2 className="text-xl font-bold text-[#E6E9EF] mb-2">Build Your Personalized Program</h2>
-                <p className="text-sm text-[#A5A5A5]">
-                  Use the SpartanLab Program Builder to create a customized training plan.
-                </p>
-              </div>
-              <Link href="/calisthenics-program-builder">
-                <Button className="bg-[#C1121F] hover:bg-[#A50E1A] text-white whitespace-nowrap">
-                  <Zap className="w-4 h-4 mr-2" />
-                  Open Program Builder
-                </Button>
-              </Link>
-            </div>
-          </Card>
+          <AuthAwareProgramCTA 
+            headline="Build Your Personalized Program"
+            description="Use the SpartanLab Program Builder to create a customized handstand push-up training plan."
+            skillContext="handstand push-up"
+          />
         </div>
       </section>
 

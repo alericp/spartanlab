@@ -28,6 +28,7 @@ import { getSkillProgressions, getAthleteProfile } from './data-service'
 import { getStrengthRecords } from './strength-service'
 import { calculateRecoverySignal } from './recovery-engine'
 import { calculateMovementBalance, calculateWeeklyVolume } from './volume-analyzer'
+import { getWorkoutLogs } from './workout-log-service'
 import { calculateSkillDensityMetrics, analyzeHoldTrend, getAggregateSessionStats } from './skill-density-engine'
 import { calculateRelativeStrengthMetrics, type RelativeStrengthTier } from './relative-strength-engine'
 import { assessFrontLeverSupport, assessPlancheSupport } from './strength-support-rules'
@@ -161,6 +162,11 @@ export function analyzeConstraints(): ConstraintResult {
   const movementBalance = calculateMovementBalance()
   const weeklyVolume = calculateWeeklyVolume()
   
+  // TASK 3: Get total workout history for clean-slate detection
+  // Users with < 3 workouts should not be flagged as "inconsistent"
+  const allWorkoutLogs = getWorkoutLogs()
+  const totalWorkoutsLogged = allWorkoutLogs.length
+  
   const volumeInputs: VolumeSignalInputs = {
     weeklyPushSets: movementBalance.pushSets,
     weeklyPullSets: movementBalance.pullSets,
@@ -168,6 +174,7 @@ export function analyzeConstraints(): ConstraintResult {
     hasVolumeData: weeklyVolume.workoutsThisWeek > 0,
     primarySkillGoal: primaryGoal,
     workoutsThisWeek: weeklyVolume.workoutsThisWeek,
+    totalWorkoutsLogged, // Pass total history for inconsistency filtering
   }
   
   // ==========================================================================

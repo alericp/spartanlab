@@ -166,9 +166,17 @@ export function ToolConversionCardClient({
   const { isLoaded, userId } = useAuth()
   const config = CONTEXT_CONFIG[context] || CONTEXT_CONFIG['general']
   
-  // Build onboarding URL with optional data payload
-  const buildOnboardingUrl = () => {
-    const baseUrl = userId ? '/program-builder' : '/onboarding'
+  // Build destination URL based on auth state
+  // ROUTING FIX: Signed-in users go to /program (canonical authenticated route)
+  // Signed-out users go to /onboarding to start the funnel
+  const buildDestinationUrl = () => {
+    // Signed-in users go directly to their program
+    if (userId) {
+      return '/program'
+    }
+    
+    // Signed-out users go to onboarding with optional context params
+    const baseUrl = '/onboarding'
     
     if (!toolData) return baseUrl
     
@@ -198,7 +206,7 @@ export function ToolConversionCardClient({
     return `${baseUrl}?${params.toString()}`
   }
   
-  const onboardingUrl = buildOnboardingUrl()
+  const destinationUrl = buildDestinationUrl()
   const Icon = config.icon
   
   // Compact version for inline use
@@ -220,9 +228,9 @@ export function ToolConversionCardClient({
                 </p>
               </div>
             </div>
-            <Link href={onboardingUrl}>
+            <Link href={destinationUrl}>
               <Button size="sm" className="bg-[#C1121F] hover:bg-[#A50E1A] text-white">
-                {userId ? 'Build Program' : 'Get Started'}
+                {userId ? 'Open Program' : 'Get Started'}
                 <ArrowRight className="w-4 h-4 ml-1" />
               </Button>
             </Link>
@@ -265,11 +273,11 @@ export function ToolConversionCardClient({
             {/* CTAs */}
             <div className="flex flex-col sm:flex-row gap-3">
               <Link 
-                href={onboardingUrl}
-                onClick={() => trackCTAClicked(context, userId ? 'program-builder' : 'onboarding')}
+                href={destinationUrl}
+                onClick={() => trackCTAClicked(context, userId ? 'program' : 'onboarding')}
               >
                 <Button className="bg-[#C1121F] hover:bg-[#A50E1A] text-white w-full sm:w-auto">
-                  {primaryCtaText || config.primaryCta}
+                  {userId ? 'Open Your Program' : (primaryCtaText || config.primaryCta)}
                   <ChevronRight className="w-4 h-4 ml-1" />
                 </Button>
               </Link>

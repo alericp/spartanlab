@@ -5,6 +5,7 @@ import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { JsonLdMultiple } from '@/components/seo/JsonLd'
 import { generateArticleSchema, generateBreadcrumbSchema, generateHowToSchema, SITE_CONFIG } from '@/lib/seo'
+import { AuthAwareProgramCTA } from '@/components/shared/AuthAwareProgramCTA'
 
 export const metadata: Metadata = {
   title: 'Front Lever Training Program | 12-24 Week Plan | SpartanLab',
@@ -292,22 +293,12 @@ export default function FrontLeverProgramPage() {
           </div>
         </section>
 
-        {/* Program Builder CTA */}
-        <section className="bg-gradient-to-r from-[#C1121F]/20 to-[#1C1F26] border border-[#C1121F]/30 rounded-xl p-8 text-center">
-          <h2 className="text-2xl font-bold text-white mb-3">
-            Want a Personalized Version?
-          </h2>
-          <p className="text-[#A5A5A5] mb-6 max-w-xl mx-auto">
-            Use the SpartanLab Program Builder to generate a custom front lever program 
-            based on your current strength level, available equipment, and training schedule.
-          </p>
-          <Link href="/programs">
-            <Button className="bg-[#C1121F] hover:bg-[#A50E1A] text-white">
-              Build Your Custom Program
-              <ArrowRight className="w-4 h-4 ml-2" />
-            </Button>
-          </Link>
-        </section>
+        {/* Program Builder CTA - Auth-aware */}
+        <AuthAwareProgramCTA 
+          headline="Want a Personalized Version?"
+          description="Use the SpartanLab Program Builder to generate a custom front lever program based on your current strength level, available equipment, and training schedule."
+          skillContext="front lever"
+        />
       </div>
     </main>
   )

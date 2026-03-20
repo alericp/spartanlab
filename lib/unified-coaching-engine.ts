@@ -4,6 +4,7 @@
 
 import { getAthleteProfile, type AthleteProfile } from './data-service'
 import { getOnboardingProfile, type OnboardingProfile, type JointCaution } from './athlete-profile'
+import { getCanonicalProfile, logCanonicalProfileState, type CanonicalProgrammingProfile } from './canonical-profile-service'
 import { getAthleteSkillStates, type SkillState, type SkillKey } from './skill-state-service'
 import { calculateReadinessDecision } from './skill-readiness-engine'
 import type { ReadinessDecision } from '@/types/skill-readiness'
@@ -427,14 +428,21 @@ export async function buildUnifiedContext(userId: string): Promise<UnifiedEngine
 // =============================================================================
 
 async function loadAthleteContext(userId: string): Promise<AthleteContext> {
+  // CANONICAL FIX: Use unified canonical profile as primary truth
+  const canonical = getCanonicalProfile()
+  logCanonicalProfileState('loadAthleteContext')
+  
+  // Legacy reads for backward compatibility (async sources)
   const profile = await getAthleteProfile(userId)
   const onboarding = await getOnboardingProfile(userId)
   
   // Load training style profile from DB (if exists)
   const styleProfileFromDb = await getTrainingStyleProfile(userId)
   
-  // Merge data from both sources, preferring AthleteProfile
-  const equipment = profile?.equipment || onboarding?.equipment || ['pull_bar', 'dip_bars', 'floor']
+  // CANONICAL FIX: Use canonical profile as primary source, with fallbacks
+  const equipment = canonical.equipmentAvailable.length > 0 
+    ? canonical.equipmentAvailable 
+    : (profile?.equipment || onboarding?.equipment || ['pull_bar', 'dip_bars', 'floor'])
   const equipmentProfile = analyzeEquipmentProfile(equipment)
   
   // Determine training style - prefer DB, then infer from onboarding
@@ -452,23 +460,33 @@ async function loadAthleteContext(userId: string): Promise<AthleteContext> {
   // Get programming rules for the style
   const styleProgrammingRules = getStyleProgrammingRules(trainingStyle)
   
+  // CANONICAL FIX: Use canonical profile for primary goal truth
+  const primaryGoal = canonical.primaryGoal || onboarding?.primaryGoal || 'front_lever'
+  const secondaryGoal = canonical.secondaryGoal
+  const secondaryGoals = secondaryGoal 
+    ? [secondaryGoal, ...(canonical.selectedSkills || []).filter(s => s !== primaryGoal && s !== secondaryGoal)]
+    : (canonical.selectedSkills || []).filter(s => s !== primaryGoal)
+  
   return {
     userId,
     username: profile?.username || 'Athlete',
     sex: (onboarding?.sex as 'male' | 'female') || 'male',
-    heightCm: onboarding?.heightCm || null,
-    weightKg: onboarding?.weightKg || null,
+    heightCm: canonical.height || onboarding?.heightCm || null,
+    weightKg: canonical.bodyweight || onboarding?.weightKg || null,
     bodyFatPercent: onboarding?.bodyFatPercent || null,
     trainingAge: onboarding?.trainingAge || 1,
-    primaryGoal: onboarding?.primaryGoal || 'front_lever',
-    primaryGoalLabel: getGoalLabel(onboarding?.primaryGoal || 'front_lever'),
-    secondaryGoals: onboarding?.secondaryGoals || [],
-    trainingDaysPerWeek: onboarding?.trainingDaysPerWeek || 3,
-    sessionDurationMinutes: getSessionMinutes(onboarding?.workoutDuration || 'standard'),
+    // CANONICAL FIX: Use canonical goals
+    primaryGoal,
+    primaryGoalLabel: getGoalLabel(primaryGoal),
+    secondaryGoals,
+    // CANONICAL FIX: Use canonical schedule with flexible support
+    trainingDaysPerWeek: canonical.scheduleMode === 'flexible' ? 4 : (canonical.trainingDaysPerWeek || onboarding?.trainingDaysPerWeek || 3),
+    sessionDurationMinutes: canonical.sessionLengthMinutes || getSessionMinutes(onboarding?.workoutDuration || 'standard'),
     equipment,
     equipmentProfile,
-    jointCautions: onboarding?.jointCautions || [],
-    hasActiveInjury: (onboarding?.jointCautions?.length || 0) > 0,
+    // CANONICAL FIX: Use canonical joint cautions
+    jointCautions: canonical.jointCautions.length > 0 ? canonical.jointCautions : (onboarding?.jointCautions || []),
+    hasActiveInjury: canonical.jointCautions.length > 0 || (onboarding?.jointCautions?.length || 0) > 0,
     trainingStyle,
     stylePriorities,
     styleProgrammingRules,

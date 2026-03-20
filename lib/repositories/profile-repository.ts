@@ -11,6 +11,7 @@ import type { AthleteProfile, ProfileRepository } from '@/types/domain'
 import { onTrainingEvent } from '@/lib/achievements/achievement-engine'
 import { showAchievementNotifications } from '@/components/achievements/achievement-notification'
 import { saveOnboardingProfile, getOnboardingProfile } from '../athlete-profile'
+import { saveCanonicalProfile, logCanonicalProfileState } from '../canonical-profile-service'
 
 const STORAGE_KEY = 'spartanlab_profile'
 
@@ -269,6 +270,27 @@ export function saveAthleteProfile(
     }
   } catch (err) {
     console.warn('[ProfileRepository] Failed to sync to onboarding profile:', err)
+  }
+  
+  // CANONICAL PROFILE FIX: Also sync to canonical profile service for unified truth
+  try {
+    saveCanonicalProfile({
+      primaryGoal: updated.primaryGoal ?? undefined,
+      secondaryGoal: updated.secondaryGoal ?? undefined,
+      goalCategory: updated.goalCategory ?? undefined,
+      selectedSkills: updated.selectedSkills ?? undefined,
+      selectedFlexibility: updated.selectedFlexibility ?? undefined,
+      selectedStrength: updated.selectedStrength ?? undefined,
+      trainingDaysPerWeek: updated.trainingDaysPerWeek ?? undefined,
+      scheduleMode: updated.scheduleMode ?? undefined,
+      sessionLengthMinutes: updated.sessionLengthMinutes ?? undefined,
+      equipmentAvailable: updated.equipmentAvailable ?? undefined,
+      trainingStyle: updated.trainingStyle ?? undefined,
+      onboardingComplete: updated.onboardingComplete ?? undefined,
+    })
+    logCanonicalProfileState('After saveAthleteProfile sync')
+  } catch (err) {
+    console.warn('[ProfileRepository] Failed to sync to canonical profile:', err)
   }
   
   // Check for newly unlocked achievements (strength milestones, etc.)

@@ -1,14 +1,23 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
-import { Target, Calendar, Clock, Wrench, ArrowRight, ArrowLeft, Check, Dumbbell, Zap, StretchHorizontal } from 'lucide-react'
+import { Target, Calendar, Clock, Wrench, ArrowRight, ArrowLeft, Check, Dumbbell, Zap, StretchHorizontal, RotateCcw } from 'lucide-react'
 import { SpartanIcon } from '@/components/brand/SpartanLogo'
 import { saveAthleteProfile } from '@/lib/repositories/profile-repository'
+import { getCanonicalProfile, saveCanonicalProfile, logCanonicalProfileState } from '@/lib/canonical-profile-service'
 import type { Equipment, SessionLengthMinutes } from '@/types/domain'
 import { RANGE_MODE_COPY, type RangeTrainingMode } from '@/lib/range-training-system'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 
 // =============================================================================
 // TYPES
@@ -120,6 +129,8 @@ export function TrainingSetup() {
   const router = useRouter()
   const [step, setStep] = useState(1)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [showClearConfirm, setShowClearConfirm] = useState(false)
+  const [prefillLoaded, setPrefillLoaded] = useState(false)
   
   const [formData, setFormData] = useState<FormData>({
     goalCategory: null,
@@ -133,6 +144,97 @@ export function TrainingSetup() {
     pullUpMax: '',
     dipMax: '',
   })
+  
+  // TASK 3: Prefill from canonical profile on mount
+  // This makes onboarding behave like a persistent editor
+  useEffect(() => {
+    if (prefillLoaded) return
+    
+    const profile = getCanonicalProfile()
+    logCanonicalProfileState('TrainingSetup prefill initialization')
+    
+    // Only prefill if there's existing data
+    if (profile.onboardingComplete || profile.primaryGoal || profile.selectedSkills?.length > 0) {
+      console.log('[TrainingSetup] Prefilling from canonical profile')
+      
+      // Determine goal category from selected goals
+      let goalCategory: GoalCategory | null = null
+      if (profile.selectedSkills?.length > 0 || profile.goalCategory === 'skills') {
+        goalCategory = 'skills'
+      } else if (profile.selectedFlexibility?.length > 0 || profile.goalCategory === 'flexibility') {
+        goalCategory = 'flexibility'
+      } else if (profile.selectedStrength?.length > 0 || profile.goalCategory === 'strength') {
+        goalCategory = 'strength'
+      }
+      
+      setFormData({
+        goalCategory,
+        selectedSkills: (profile.selectedSkills || []).filter(s => 
+          ['front_lever', 'back_lever', 'planche', 'muscle_up', 'handstand', 'l_sit', 'muscle_up_bar'].includes(s)
+        ) as SkillGoal[],
+        selectedFlexibility: (profile.selectedFlexibility || []).filter(f => 
+          ['pancake', 'toe_touch', 'front_splits', 'side_splits'].includes(f)
+        ) as FlexibilityGoal[],
+        selectedStrength: (profile.selectedStrength || []).filter(s => 
+          ['general_strength', 'weighted_pull', 'weighted_dip'].includes(s)
+        ) as StrengthGoal[],
+        rangeApproach: null, // Range approach is per-session, not stored
+        trainingDaysPerWeek: profile.scheduleMode === 'flexible' ? null : (profile.trainingDaysPerWeek as TrainingDays | null),
+        sessionLengthMinutes: (profile.sessionLengthMinutes as SessionLengthMinutes) || null,
+        equipmentAvailable: (profile.equipmentAvailable || []) as Equipment[],
+        pullUpMax: profile.pullUpMax || '',
+        dipMax: profile.dipMax || '',
+      })
+    }
+    
+    setPrefillLoaded(true)
+  }, [prefillLoaded])
+  
+  // TASK 3: Clear All handler with confirmation
+  const handleClearAll = () => {
+    console.log('[TrainingSetup] Clearing all onboarding data')
+    
+    // Clear form state
+    setFormData({
+      goalCategory: null,
+      selectedSkills: [],
+      selectedFlexibility: [],
+      selectedStrength: [],
+      rangeApproach: null,
+      trainingDaysPerWeek: null,
+      sessionLengthMinutes: null,
+      equipmentAvailable: [],
+      pullUpMax: '',
+      dipMax: '',
+    })
+    
+    // Clear canonical profile (but preserve user ID and meta fields)
+    saveCanonicalProfile({
+      primaryGoal: null,
+      secondaryGoal: null,
+      selectedSkills: [],
+      selectedFlexibility: [],
+      selectedStrength: [],
+      goalCategory: null,
+      trainingDaysPerWeek: null,
+      scheduleMode: 'static',
+      sessionLengthMinutes: 60,
+      equipmentAvailable: [],
+      jointCautions: [],
+      weakestArea: null,
+      trainingStyle: null,
+      pullUpMax: null,
+      dipMax: null,
+      pushUpMax: null,
+      onboardingComplete: false,
+    })
+    
+    // Reset to step 1
+    setStep(1)
+    setShowClearConfirm(false)
+    
+    logCanonicalProfileState('After Clear All')
+  }
 
   // Determine total steps based on goal category
   const needsRangeStep = formData.goalCategory === 'flexibility' && formData.selectedFlexibility.length > 0
@@ -261,6 +363,25 @@ export function TrainingSetup() {
         dipMax: formData.dipMax ? parseInt(formData.dipMax) : null,
         onboardingComplete: true,
       })
+      
+      // CANONICAL FIX: Also save to canonical profile service for unified truth
+      saveCanonicalProfile({
+        goalCategory: formData.goalCategory,
+        selectedSkills: formData.selectedSkills,
+        selectedFlexibility: formData.selectedFlexibility,
+        selectedStrength: formData.selectedStrength,
+        primaryGoal,
+        secondaryGoal,
+        trainingDaysPerWeek: formData.trainingDaysPerWeek,
+        scheduleMode: formData.trainingDaysPerWeek ? 'static' : 'flexible',
+        sessionLengthMinutes: formData.sessionLengthMinutes!,
+        equipmentAvailable: formData.equipmentAvailable,
+        pullUpMax: formData.pullUpMax || null,
+        dipMax: formData.dipMax || null,
+        onboardingComplete: true,
+      })
+      
+      logCanonicalProfileState('After TrainingSetup submit')
       
       router.push('/dashboard')
     } catch (error) {
@@ -630,11 +751,56 @@ export function TrainingSetup() {
           </div>
         </Card>
 
-        {/* Footer */}
-        <p className="text-center text-xs text-[#4B5563] mt-6">
-          You can update this anytime in Settings.
-        </p>
+        {/* Footer with Clear All option */}
+        <div className="flex flex-col items-center gap-2 mt-6">
+          <p className="text-center text-xs text-[#4B5563]">
+            You can update this anytime in Settings.
+          </p>
+          {prefillLoaded && (formData.goalCategory || formData.selectedSkills.length > 0 || formData.equipmentAvailable.length > 0) && (
+            <button
+              type="button"
+              onClick={() => setShowClearConfirm(true)}
+              className="text-xs text-[#6B7280] hover:text-[#C1121F] flex items-center gap-1 transition-colors"
+            >
+              <RotateCcw className="w-3 h-3" />
+              Clear All & Start Fresh
+            </button>
+          )}
+        </div>
       </div>
+      
+      {/* TASK 3: Clear All Confirmation Dialog */}
+      <Dialog open={showClearConfirm} onOpenChange={setShowClearConfirm}>
+        <DialogContent className="bg-[#1A1F26] border-[#2B313A] max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-[#E6E9EF]">Clear All Selections?</DialogTitle>
+            <DialogDescription className="text-[#A4ACB8] pt-2 space-y-3">
+              <p>
+                This will reset all your training preferences and goals.
+              </p>
+              <p>
+                Your workout history and program data will NOT be affected.
+              </p>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex-col gap-2 sm:flex-col">
+            <Button
+              onClick={handleClearAll}
+              className="w-full bg-[#C1121F] hover:bg-[#9E0F19] text-white"
+            >
+              <RotateCcw className="w-4 h-4 mr-2" />
+              Clear All & Start Fresh
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setShowClearConfirm(false)}
+              className="w-full border-[#3A3A3A] text-[#A4ACB8] hover:bg-[#2A2A2A]"
+            >
+              Keep My Selections
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

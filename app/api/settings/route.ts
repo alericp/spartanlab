@@ -41,7 +41,7 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
     
-    // Fetch profile from database
+    // CANONICAL FIX: Fetch FULL profile from database including all benchmark-relevant fields
     const profiles = await query(`
       SELECT 
         user_id as "userId",
@@ -56,8 +56,13 @@ export async function GET() {
         COALESCE(schedule_mode, 'static') as "scheduleMode",
         session_length_minutes as "sessionLengthMinutes",
         primary_goal as "primaryGoal",
-        equipment_available as "equipmentAvailable",
-        joint_cautions as "jointCautions",
+        secondary_goal as "secondaryGoal",
+        goal_category as "goalCategory",
+        COALESCE(selected_skills, '[]'::jsonb) as "selectedSkills",
+        COALESCE(selected_flexibility, '[]'::jsonb) as "selectedFlexibility",
+        COALESCE(selected_strength, '[]'::jsonb) as "selectedStrength",
+        COALESCE(equipment_available, '[]'::jsonb) as "equipmentAvailable",
+        COALESCE(joint_cautions, '[]'::jsonb) as "jointCautions",
         weakest_area as "weakestArea",
         training_style as "trainingStyle",
         onboarding_complete as "onboardingComplete"
@@ -111,7 +116,7 @@ export async function PUT(request: Request) {
     
     const updates = await request.json()
     
-    // Fetch current profile for comparison
+    // CANONICAL FIX: Fetch FULL current profile for comparison
     const currentProfiles = await query(`
       SELECT 
         user_id as "userId",
@@ -126,8 +131,13 @@ export async function PUT(request: Request) {
         COALESCE(schedule_mode, 'static') as "scheduleMode",
         session_length_minutes as "sessionLengthMinutes",
         primary_goal as "primaryGoal",
-        equipment_available as "equipmentAvailable",
-        joint_cautions as "jointCautions",
+        secondary_goal as "secondaryGoal",
+        goal_category as "goalCategory",
+        COALESCE(selected_skills, '[]'::jsonb) as "selectedSkills",
+        COALESCE(selected_flexibility, '[]'::jsonb) as "selectedFlexibility",
+        COALESCE(selected_strength, '[]'::jsonb) as "selectedStrength",
+        COALESCE(equipment_available, '[]'::jsonb) as "equipmentAvailable",
+        COALESCE(joint_cautions, '[]'::jsonb) as "jointCautions",
         weakest_area as "weakestArea",
         training_style as "trainingStyle",
         onboarding_complete as "onboardingComplete"
@@ -150,18 +160,24 @@ export async function PUT(request: Request) {
     const updateValues: unknown[] = []
     let paramIndex = 1
     
-    const fieldMappings: Record<string, string> = {
-      bodyweight: 'bodyweight',
-      experienceLevel: 'experience_level',
-      trainingDaysPerWeek: 'training_days_per_week',
-      scheduleMode: 'schedule_mode',  // FLEXIBLE SCHEDULING support
-      sessionLengthMinutes: 'session_length_minutes',
-      primaryGoal: 'primary_goal',
-      equipmentAvailable: 'equipment_available',
-      jointCautions: 'joint_cautions',
-      weakestArea: 'weakest_area',
-      trainingStyle: 'training_style',
-    }
+  // CANONICAL FIX: Expanded field mappings for full profile support
+  const fieldMappings: Record<string, string> = {
+    bodyweight: 'bodyweight',
+    experienceLevel: 'experience_level',
+    trainingDaysPerWeek: 'training_days_per_week',
+    scheduleMode: 'schedule_mode',  // FLEXIBLE SCHEDULING support
+    sessionLengthMinutes: 'session_length_minutes',
+    primaryGoal: 'primary_goal',
+    secondaryGoal: 'secondary_goal',
+    goalCategory: 'goal_category',
+    selectedSkills: 'selected_skills',
+    selectedFlexibility: 'selected_flexibility',
+    selectedStrength: 'selected_strength',
+    equipmentAvailable: 'equipment_available',
+    jointCautions: 'joint_cautions',
+    weakestArea: 'weakest_area',
+    trainingStyle: 'training_style',
+  }
     
     for (const [key, dbColumn] of Object.entries(fieldMappings)) {
       if (updates[key] !== undefined) {
@@ -196,30 +212,35 @@ export async function PUT(request: Request) {
       WHERE user_id = $${paramIndex}
     `, [...updateValues, userId])
     
-    // Fetch updated profile
-    const updatedProfiles = await query(`
-      SELECT 
-        user_id as "userId",
-        sex,
-        height,
-        height_unit as "heightUnit",
-        bodyweight,
-        weight_unit as "weightUnit",
-        body_fat_percent as "bodyFatPercent",
-        experience_level as "experienceLevel",
-        training_days_per_week as "trainingDaysPerWeek",
-        COALESCE(schedule_mode, 'static') as "scheduleMode",
-        session_length_minutes as "sessionLengthMinutes",
-        primary_goal as "primaryGoal",
-        equipment_available as "equipmentAvailable",
-        joint_cautions as "jointCautions",
-        weakest_area as "weakestArea",
-        training_style as "trainingStyle",
-        onboarding_complete as "onboardingComplete"
-      FROM athlete_profiles
-      WHERE user_id = $1
-      LIMIT 1
-    `, [userId])
+  // CANONICAL FIX: Fetch FULL updated profile
+  const updatedProfiles = await query(`
+    SELECT
+      user_id as "userId",
+      sex,
+      height,
+      height_unit as "heightUnit",
+      bodyweight,
+      weight_unit as "weightUnit",
+      body_fat_percent as "bodyFatPercent",
+      experience_level as "experienceLevel",
+      training_days_per_week as "trainingDaysPerWeek",
+      COALESCE(schedule_mode, 'static') as "scheduleMode",
+      session_length_minutes as "sessionLengthMinutes",
+      primary_goal as "primaryGoal",
+      secondary_goal as "secondaryGoal",
+      goal_category as "goalCategory",
+      COALESCE(selected_skills, '[]'::jsonb) as "selectedSkills",
+      COALESCE(selected_flexibility, '[]'::jsonb) as "selectedFlexibility",
+      COALESCE(selected_strength, '[]'::jsonb) as "selectedStrength",
+      COALESCE(equipment_available, '[]'::jsonb) as "equipmentAvailable",
+      COALESCE(joint_cautions, '[]'::jsonb) as "jointCautions",
+      weakest_area as "weakestArea",
+      training_style as "trainingStyle",
+      onboarding_complete as "onboardingComplete"
+    FROM athlete_profiles
+    WHERE user_id = $1
+    LIMIT 1
+  `, [userId])
     
     const updatedProfile = updatedProfiles[0] as AthleteProfile & { trainingStyle?: string }
     

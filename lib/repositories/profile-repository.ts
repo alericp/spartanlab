@@ -10,6 +10,7 @@ import { dbGetProfile, dbSaveProfile } from '../db-queries'
 import type { AthleteProfile, ProfileRepository } from '@/types/domain'
 import { onTrainingEvent } from '@/lib/achievements/achievement-engine'
 import { showAchievementNotifications } from '@/components/achievements/achievement-notification'
+import { saveOnboardingProfile, getOnboardingProfile } from '../athlete-profile'
 
 const STORAGE_KEY = 'spartanlab_profile'
 
@@ -240,6 +241,35 @@ export function saveAthleteProfile(
   }
 
   localStorage.setItem(STORAGE_KEY, JSON.stringify(updated))
+  
+  // CANONICAL PROFILE FIX: Sync profile changes to onboarding profile
+  // This ensures metrics and generation use the same truth
+  try {
+    const currentOnboarding = getOnboardingProfile()
+    if (currentOnboarding) {
+      saveOnboardingProfile({
+        ...currentOnboarding,
+        primaryGoal: updated.primaryGoal ?? currentOnboarding.primaryGoal,
+        secondaryGoal: updated.secondaryGoal ?? currentOnboarding.secondaryGoal,
+        goalCategory: updated.goalCategory ?? currentOnboarding.goalCategory,
+        selectedSkills: updated.selectedSkills ?? currentOnboarding.selectedSkills,
+        selectedFlexibility: updated.selectedFlexibility ?? currentOnboarding.selectedFlexibility,
+        selectedStrength: updated.selectedStrength ?? currentOnboarding.selectedStrength,
+        trainingDaysPerWeek: updated.trainingDaysPerWeek ?? currentOnboarding.trainingDaysPerWeek,
+        sessionLengthMinutes: updated.sessionLengthMinutes ?? currentOnboarding.sessionLengthMinutes,
+        equipmentAvailable: updated.equipmentAvailable ?? currentOnboarding.equipmentAvailable,
+        scheduleMode: updated.scheduleMode ?? currentOnboarding.scheduleMode,
+        trainingStyle: updated.trainingStyle ?? currentOnboarding.trainingStyle,
+        onboardingComplete: updated.onboardingComplete ?? currentOnboarding.onboardingComplete,
+        // Sync strength benchmarks if present
+        pullUpMax: updated.pullUpMax?.toString() as any ?? currentOnboarding.pullUpMax,
+        dipMax: updated.dipMax?.toString() as any ?? currentOnboarding.dipMax,
+      })
+      console.log('[ProfileRepository] Synced profile changes to onboarding profile')
+    }
+  } catch (err) {
+    console.warn('[ProfileRepository] Failed to sync to onboarding profile:', err)
+  }
   
   // Check for newly unlocked achievements (strength milestones, etc.)
   const newAchievements = onTrainingEvent()

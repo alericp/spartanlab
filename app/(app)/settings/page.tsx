@@ -39,6 +39,7 @@ import {
   saveAthleteProfile,
   type AthleteProfile,
 } from '@/lib/data-service'
+import { saveCanonicalProfile, logCanonicalProfileState } from '@/lib/canonical-profile-service'
 import { getActiveProgram, clearActiveProgram } from '@/lib/program-service'
 import { 
   analyzeSettingsChanges, 
@@ -421,11 +422,29 @@ export default function SettingsPage() {
           const result = await response.json()
           console.log('[Settings] API save successful, profile returned:', !!result.profile)
           
-          // TASK 6: Sync API response to localStorage for canonical truth
+          // CANONICAL FIX: Sync API response to BOTH localStorage and canonical profile
           if (result.profile) {
             saveAthleteProfile(result.profile)
+            // Also sync to canonical profile for generation consumption
+            saveCanonicalProfile({
+              primaryGoal: result.profile.primaryGoal,
+              secondaryGoal: result.profile.secondaryGoal,
+              selectedSkills: result.profile.selectedSkills,
+              selectedFlexibility: result.profile.selectedFlexibility,
+              selectedStrength: result.profile.selectedStrength,
+              goalCategory: result.profile.goalCategory,
+              experienceLevel: result.profile.experienceLevel,
+              trainingDaysPerWeek: result.profile.trainingDaysPerWeek,
+              scheduleMode: result.profile.scheduleMode,
+              sessionLengthMinutes: result.profile.sessionLengthMinutes,
+              equipmentAvailable: result.profile.equipmentAvailable,
+              jointCautions: result.profile.jointCautions,
+              weakestArea: result.profile.weakestArea,
+              trainingStyle: result.profile.trainingStyle,
+            })
+            logCanonicalProfileState('After settings save')
             setProfile(result.profile)
-            // TASK 6: Re-apply profile to UI state to ensure consistency
+            // Re-apply profile to UI state to ensure consistency
             applyProfileToState(result.profile)
           }
           

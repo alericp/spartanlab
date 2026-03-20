@@ -15,6 +15,7 @@ import type { ProtocolRecommendation } from './protocols/joint-integrity-protoco
 import type { ConstraintResult, ConstraintIntervention } from './constraint-detection-engine'
 
 import { getAthleteProfile } from './data-service'
+import { getCanonicalProfile, logCanonicalProfileState } from './canonical-profile-service'
 import { calculateRecoverySignal } from './recovery-engine'
 import { getConstraintInsight } from './constraint-engine'
 import { getConstraintIntervention } from './constraint-detection-engine'
@@ -2705,22 +2706,28 @@ export function deleteAdaptiveProgram(id: string): boolean {
 // =============================================================================
 
 export function getDefaultAdaptiveInputs(): AdaptiveProgramInputs {
-  const profile = getAthleteProfile()
+  // CANONICAL FIX: Use the unified canonical profile instead of split sources
+  // This ensures metrics, goals, and schedule preferences all come from one truth
+  const canonicalProfile = getCanonicalProfile()
+  const legacyProfile = getAthleteProfile() // Fallback for fields not yet in canonical
+  
+  // Log canonical state for debugging
+  logCanonicalProfileState('getDefaultAdaptiveInputs called')
   
   // TASK 4: Read canonical goals from saved profile, not stale program state
-  // Determine primary goal from AthleteProfile
+  // Determine primary goal from CanonicalProfile
   let primaryGoal: PrimaryGoal = 'planche'
-  if (profile.primaryGoal && ['planche', 'front_lever', 'muscle_up', 'handstand_pushup', 'weighted_strength'].includes(profile.primaryGoal)) {
-    primaryGoal = profile.primaryGoal as PrimaryGoal
+  if (canonicalProfile.primaryGoal && ['planche', 'front_lever', 'muscle_up', 'handstand_pushup', 'weighted_strength'].includes(canonicalProfile.primaryGoal)) {
+    primaryGoal = canonicalProfile.primaryGoal as PrimaryGoal
   }
   
   // TASK 3: Read secondaryGoal from canonical profile if persisted
   let secondaryGoal: PrimaryGoal | undefined = undefined
-  if (profile.secondaryGoal && ['planche', 'front_lever', 'muscle_up', 'handstand_pushup', 'weighted_strength'].includes(profile.secondaryGoal)) {
-    secondaryGoal = profile.secondaryGoal as PrimaryGoal
+  if (canonicalProfile.secondaryGoal && ['planche', 'front_lever', 'muscle_up', 'handstand_pushup', 'weighted_strength'].includes(canonicalProfile.secondaryGoal)) {
+    secondaryGoal = canonicalProfile.secondaryGoal as PrimaryGoal
   }
   
-  // Map AthleteProfile equipment to EquipmentType
+  // Map equipment to EquipmentType
   // AthleteProfile uses: 'pullup_bar' | 'dip_bars' | 'parallettes' | 'rings' | 'resistance_bands'
   // AdaptiveProgramInputs uses: 'pull_bar' | 'dip_bars' | 'rings' | 'parallettes' | 'bands' | 'floor' | 'wall'
   const equipmentMap: Record<string, EquipmentType> = {
@@ -2734,9 +2741,9 @@ export function getDefaultAdaptiveInputs(): AdaptiveProgramInputs {
   // Start with floor and wall (always available)
   const mappedEquipment: EquipmentType[] = ['floor', 'wall']
   
-  // Add equipment from profile
-  if (profile.equipmentAvailable && profile.equipmentAvailable.length > 0) {
-    for (const eq of profile.equipmentAvailable) {
+  // Add equipment from canonical profile
+  if (canonicalProfile.equipmentAvailable && canonicalProfile.equipmentAvailable.length > 0) {
+    for (const eq of canonicalProfile.equipmentAvailable) {
       const mapped = equipmentMap[eq]
       if (mapped && !mappedEquipment.includes(mapped)) {
         mappedEquipment.push(mapped)
@@ -2749,44 +2756,50 @@ export function getDefaultAdaptiveInputs(): AdaptiveProgramInputs {
   
   // Map session length from profile (30, 45, 60, 90) to SessionLength (30, 45, 60, 75)
   let sessionLength: SessionLength = 60
-  const profileSessionLength = profile.sessionLengthMinutes
+  const profileSessionLength = canonicalProfile.sessionLengthMinutes
   if (profileSessionLength === 30) sessionLength = 30
   else if (profileSessionLength === 45) sessionLength = 45
   else if (profileSessionLength === 60) sessionLength = 60
   else if (profileSessionLength === 90) sessionLength = 75 // Map 90 to 75 (closest match)
   
-  // FLEXIBLE SCHEDULE FIX: Preserve schedule identity from profile
+  // FLEXIBLE SCHEDULE FIX: Preserve schedule identity from canonical profile
   // Do NOT collapse flexible users into a fake fixed numeric value
-  const isFlexibleUser = profile.scheduleMode === 'flexible' || profile.trainingDaysPerWeek === null
+  const isFlexibleUser = canonicalProfile.scheduleMode === 'flexible' || canonicalProfile.trainingDaysPerWeek === null
   const scheduleMode: ScheduleMode = isFlexibleUser ? 'flexible' : 'static'
   
   // For flexible users: trainingDaysPerWeek = 'flexible' (identity)
   // For static users: trainingDaysPerWeek = numeric value
   const trainingDaysPerWeek: TrainingDays | 'flexible' = isFlexibleUser 
     ? 'flexible' 
-    : (profile.trainingDaysPerWeek as TrainingDays) || 4
+    : (canonicalProfile.trainingDaysPerWeek as TrainingDays) || 4
   
-  // TASK 7: Log which profile fields were consumed for debugging
-  console.log('[AdaptiveBuilder] getDefaultAdaptiveInputs consumed:', {
+  // CANONICAL FIX: Log which canonical profile fields were consumed for debugging
+  console.log('[AdaptiveBuilder] getDefaultAdaptiveInputs consumed from CANONICAL:', {
     primaryGoal,
     secondaryGoal: secondaryGoal || 'none',
     scheduleMode,
     trainingDaysPerWeek,
     sessionLength,
     equipmentCount: mappedEquipment.length,
-    experienceLevel: profile.experienceLevel,
+    experienceLevel: canonicalProfile.experienceLevel,
+    benchmarksPresent: {
+      pullUp: !!canonicalProfile.pullUpMax,
+      dip: !!canonicalProfile.dipMax,
+      frontLever: !!canonicalProfile.frontLeverProgression,
+      planche: !!canonicalProfile.plancheProgression,
+    },
   })
   
   return {
     primaryGoal,
     secondaryGoal, // TASK 3: Now included in generation inputs
-    experienceLevel: profile.experienceLevel,
+    experienceLevel: canonicalProfile.experienceLevel,
     trainingDaysPerWeek,
     sessionLength,
     equipment: mappedEquipment,
     scheduleMode,
     // TASK 7: Pass selected skills array for multi-goal awareness
-    selectedSkills: profile.selectedSkills || [],
+    selectedSkills: canonicalProfile.selectedSkills || [],
   }
 }
 

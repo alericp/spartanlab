@@ -3,6 +3,9 @@
 // =============================================================================
 // Handles updating athlete metrics and triggering program recalculation
 // Preserves training history while adapting future sessions
+// 
+// CANONICAL PROFILE FIX: Now writes to canonical profile service to ensure
+// metrics updates flow through to program generation.
 
 import { 
   getOnboardingProfile, 
@@ -23,6 +26,7 @@ import {
   type SkillBenchmark,
   type FlexibilityBenchmark,
 } from './athlete-profile'
+import { saveCanonicalProfile, logCanonicalProfileState } from './canonical-profile-service'
 
 // =============================================================================
 // TYPES
@@ -293,6 +297,9 @@ export function analyzeMetricChanges(
 /**
  * Save updated metrics to the profile
  * Does NOT trigger recalculation - that's handled separately
+ * 
+ * CANONICAL FIX: Now writes to BOTH onboarding profile AND canonical profile
+ * to ensure metrics flow through to program generation.
  */
 export function saveMetricUpdates(updates: MetricUpdate): OnboardingProfile {
   const profile = getOnboardingProfile()
@@ -362,8 +369,34 @@ export function saveMetricUpdates(updates: MetricUpdate): OnboardingProfile {
     }
   }
 
-  // Save the updated profile
+  // Save to onboarding profile (legacy)
   saveOnboardingProfile(updatedProfile)
+  
+  // CANONICAL FIX: Also sync to canonical profile for generation consumption
+  // This ensures metrics updates are visible to the program builder
+  saveCanonicalProfile({
+    pullUpMax: updates.strength?.pullUpMax ?? undefined,
+    dipMax: updates.strength?.dipMax ?? undefined,
+    pushUpMax: updates.strength?.pushUpMax ?? undefined,
+    wallHSPUReps: updates.strength?.wallHSPUReps ?? undefined,
+    weightedPullUp: updates.strength?.weightedPullUp ?? undefined,
+    weightedDip: updates.strength?.weightedDip ?? undefined,
+    frontLeverProgression: updates.skills?.frontLever?.progression ?? undefined,
+    frontLeverHoldSeconds: updates.skills?.frontLever?.holdSeconds ?? undefined,
+    plancheProgression: updates.skills?.planche?.progression ?? undefined,
+    plancheHoldSeconds: updates.skills?.planche?.holdSeconds ?? undefined,
+    muscleUpReadiness: updates.skills?.muscleUp ?? undefined,
+    hspuProgression: updates.skills?.hspu?.progression ?? undefined,
+    lSitHoldSeconds: updates.skills?.lSitHold ?? undefined,
+    vSitHoldSeconds: updates.skills?.vSitHold ?? undefined,
+    pancakeLevel: updates.flexibility?.pancake?.level ?? undefined,
+    toeTouchLevel: updates.flexibility?.toeTouch?.level ?? undefined,
+    frontSplitsLevel: updates.flexibility?.frontSplits?.level ?? undefined,
+    sideSplitsLevel: updates.flexibility?.sideSplits?.level ?? undefined,
+  })
+  
+  // Log canonical state after update for debugging
+  logCanonicalProfileState('After metrics update')
 
   return updatedProfile
 }

@@ -56,27 +56,8 @@ const PREVIEW_USER: User = {
   createdAt: new Date().toISOString(),
 }
 
-// Preview mode mock profile
-const DEFAULT_PROFILE: AthleteProfile = {
-  id: 'preview-profile',
-  userId: 'preview-user',
-  sex: 'male',
-  height: 70,
-  heightUnit: 'inches',
-  bodyweight: 160,
-  weightUnit: 'lbs',
-  bodyFatPercent: null,
-  bodyFatSource: null,
-  experienceLevel: 'intermediate',
-  trainingDaysPerWeek: 4,
-  sessionLengthMinutes: 60,
-  primaryGoal: 'planche',
-  equipmentAvailable: ['pullup_bar', 'dip_bars', 'parallettes'],
-  trainingStyle: 'balanced_hybrid',
-  scheduleMode: 'static',
-  onboardingComplete: true,
-  createdAt: new Date().toISOString(),
-}
+// TASK 1C: REMOVED DEFAULT_PROFILE - No more seed data pollution
+// Programs must use real user data from onboarding
 
 const STORAGE_KEYS = {
   profile: 'spartanlab_profile',
@@ -134,7 +115,10 @@ export function getAthleteProfile(): AthleteProfile | null {
 // when DB-backed profile hydration is unavailable. For real users without
 // an existing local profile, we create a safe new local profile object.
 export function saveAthleteProfile(profile: Partial<AthleteProfile>): AthleteProfile {
-  if (!isBrowser()) return DEFAULT_PROFILE
+  // TASK 1C: Throw error instead of returning fake data
+  if (!isBrowser()) {
+    throw new Error('[DataService] Cannot save profile outside browser context')
+  }
   
   const current = getAthleteProfile()
   

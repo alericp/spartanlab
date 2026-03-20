@@ -612,8 +612,11 @@ export function generateWarmUp(context: WarmUpGenerationContext): GeneratedWarmU
     firstSkillProgression
   )
 
+  // TASK 6: Deduplicate exercises before output
+  const deduplicatedExercises = dedupeWarmUpExercises(selectedExercises)
+  
   // Format exercises for output
-  const formattedExercises = selectedExercises.map(ex => ({
+  const formattedExercises = deduplicatedExercises.map(ex => ({
     name: ex.name,
     prescription: ex.reps,
     note: ex.notes,
@@ -748,6 +751,27 @@ function generateRationale(
   }
 
   return 'General preparation for calisthenics training'
+}
+
+// =============================================================================
+// TASK 6: DEDUPLICATION HELPERS
+// =============================================================================
+
+/**
+ * Remove duplicate warm-up exercises by ID.
+ * TASK 6: Prevents the same exercise appearing multiple times in warm-up.
+ */
+function dedupeWarmUpExercises(exercises: WarmUpExercise[]): WarmUpExercise[] {
+  const seen = new Set<string>()
+  return exercises.filter(ex => {
+    const key = ex.id.toLowerCase()
+    if (seen.has(key)) {
+      console.log('[WarmUp] TASK 6: Removed duplicate exercise:', ex.name)
+      return false
+    }
+    seen.add(key)
+    return true
+  })
 }
 
 // =============================================================================

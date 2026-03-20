@@ -213,15 +213,24 @@ export function TrainingSetup() {
     setIsSubmitting(true)
     
     try {
-      // Determine primary goal
-      let primaryGoal: string
+      // TASK 3: Determine primary AND secondary goals from selected items
+      // Primary = first selected, Secondary = second selected (if any)
+      let primaryGoal: string | null = null
+      let secondaryGoal: string | null = null
+      
       if (formData.goalCategory === 'skills' && formData.selectedSkills.length > 0) {
         primaryGoal = formData.selectedSkills[0]
+        secondaryGoal = formData.selectedSkills.length > 1 ? formData.selectedSkills[1] : null
       } else if (formData.goalCategory === 'flexibility' && formData.selectedFlexibility.length > 0) {
         primaryGoal = formData.selectedFlexibility[0]
+        secondaryGoal = formData.selectedFlexibility.length > 1 ? formData.selectedFlexibility[1] : null
       } else if (formData.goalCategory === 'strength' && formData.selectedStrength.length > 0) {
         primaryGoal = formData.selectedStrength[0]
-      } else {
+        secondaryGoal = formData.selectedStrength.length > 1 ? formData.selectedStrength[1] : null
+      }
+      
+      // Fallback if no goal selected
+      if (!primaryGoal) {
         primaryGoal = 'general_strength'
       }
 
@@ -234,12 +243,15 @@ export function TrainingSetup() {
             ? 'both' as const
             : null
 
+      // TASK 2: Save ALL canonical profile fields including secondaryGoal
+      // This ensures downstream generation has complete athlete truth
       saveAthleteProfile({
         goalCategory: formData.goalCategory,
         selectedSkills: formData.selectedSkills,
         selectedFlexibility: formData.selectedFlexibility,
         selectedStrength: formData.selectedStrength,
         primaryGoal,
+        secondaryGoal, // TASK 3: Now persisted canonically
         trainingDaysPerWeek: formData.trainingDaysPerWeek!,
         sessionLengthMinutes: formData.sessionLengthMinutes!,
         equipmentAvailable: formData.equipmentAvailable,

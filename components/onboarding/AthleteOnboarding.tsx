@@ -3490,6 +3490,58 @@ export function AthleteOnboarding() {
         onboardingComplete: true,
       })
       
+      // TASK 1: Also persist to the canonical DB for authenticated users
+      // This ensures onboarding truth == settings truth == dashboard truth
+      try {
+        const isFlexibleSchedule = profile.trainingDaysPerWeek === 'flexible' || 
+                                    (profile as any).scheduleMode === 'flexible'
+        
+        const dbProfilePayload = {
+          sex: profile.sex,
+          experienceLevel: profile.trainingExperience === 'new' || profile.trainingExperience === 'some' 
+            ? 'beginner' 
+            : profile.trainingExperience === 'intermediate' 
+              ? 'intermediate' 
+              : 'advanced',
+          trainingDaysPerWeek: isFlexibleSchedule 
+            ? 4  // Internal default for engine calculations
+            : (typeof profile.trainingDaysPerWeek === 'number' ? profile.trainingDaysPerWeek : 4),
+          scheduleMode: isFlexibleSchedule ? 'flexible' : 'static',  // TASK 2: Preserve flexible as real preference
+          sessionLengthMinutes: typeof profile.sessionLengthMinutes === 'number'
+            ? (profile.sessionLengthMinutes <= 30 ? 30 
+               : profile.sessionLengthMinutes <= 45 ? 45 
+               : profile.sessionLengthMinutes <= 60 ? 60 
+               : 90)
+            : 60,
+          primaryGoal: profile.selectedSkills[0] || profile.primaryGoal || null,
+          equipmentAvailable: profile.equipment.filter(e => 
+            ['pullup_bar', 'dip_bars', 'parallettes', 'rings', 'resistance_bands'].includes(e)
+          ),
+          jointCautions: profile.jointCautions || [],
+          weakestArea: profile.weakestArea || null,
+          trainingStyle: (profile as any).trainingStyle || 'balanced_hybrid',
+        }
+        
+        const dbResponse = await fetch('/api/onboarding/profile', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(dbProfilePayload),
+        })
+        
+        if (!dbResponse.ok) {
+          console.error('[Onboarding] DB profile save failed:', dbResponse.status, dbResponse.statusText)
+        } else {
+          const dbResult = await dbResponse.json()
+          console.log('[Onboarding] Profile upserted to DB successfully:', {
+            scheduleMode: dbResult.profile?.scheduleMode,
+            onboardingComplete: dbResult.profile?.onboardingComplete,
+          })
+        }
+      } catch (dbError) {
+        console.error('[Onboarding] Error persisting to DB:', dbError)
+        // Non-fatal - local storage was saved, continue
+      }
+      
       // Small delay for UX
       await new Promise(resolve => setTimeout(resolve, 500))
       

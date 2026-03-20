@@ -80,17 +80,61 @@ export default function ProgramPage() {
   })
 
   useEffect(() => {
-    // TASK 5: Dynamically import heavy modules to prevent hydration crashes
+    // TASK 5: Load modules individually with proper error handling
+    // Do not use Promise.all - if one non-essential module fails, page shouldn't die
     const loadModules = async () => {
       try {
-        const [builderMod, stateMod, adjustmentMod, hygieneMod, constraintMod] = await Promise.all([
-          import('@/lib/adaptive-program-builder'),
-          import('@/lib/program-state'),
-          import('@/lib/program-adjustment-engine'),
-          import('@/lib/client-data-hygiene'),
-          import('@/lib/constraint-engine'),
-        ])
+        // CRITICAL: Load program state modules first (essential)
+        let builderMod, stateMod, adjustmentMod
+        try {
+          builderMod = await import('@/lib/adaptive-program-builder')
+          console.log('[ProgramPage] Loaded adaptive-program-builder')
+        } catch (err) {
+          console.error('[ProgramPage] CRITICAL: Failed to load adaptive-program-builder:', err)
+          setLoadError('Failed to load program builder. Please refresh the page.')
+          setMounted(true)
+          return
+        }
         
+        try {
+          stateMod = await import('@/lib/program-state')
+          console.log('[ProgramPage] Loaded program-state')
+        } catch (err) {
+          console.error('[ProgramPage] CRITICAL: Failed to load program-state:', err)
+          setLoadError('Failed to load program state. Please refresh the page.')
+          setMounted(true)
+          return
+        }
+        
+        try {
+          adjustmentMod = await import('@/lib/program-adjustment-engine')
+          console.log('[ProgramPage] Loaded program-adjustment-engine')
+        } catch (err) {
+          console.error('[ProgramPage] CRITICAL: Failed to load program-adjustment-engine:', err)
+          setLoadError('Failed to load adjustment engine. Please refresh the page.')
+          setMounted(true)
+          return
+        }
+        
+        // NON-CRITICAL: Load optional modules - page continues if these fail
+        let hygieneMod, constraintMod
+        try {
+          hygieneMod = await import('@/lib/client-data-hygiene')
+          console.log('[ProgramPage] Loaded client-data-hygiene')
+        } catch (err) {
+          console.warn('[ProgramPage] Optional: Failed to load client-data-hygiene:', err)
+          // Continue - not essential
+        }
+        
+        try {
+          constraintMod = await import('@/lib/constraint-engine')
+          console.log('[ProgramPage] Loaded constraint-engine')
+        } catch (err) {
+          console.warn('[ProgramPage] Optional: Failed to load constraint-engine:', err)
+          // Continue - not essential
+        }
+        
+        // TASK 5: Store loaded modules
         setProgramModules({
           generateAdaptiveProgram: builderMod.generateAdaptiveProgram,
           saveAdaptiveProgram: builderMod.saveAdaptiveProgram,
@@ -103,60 +147,66 @@ export default function ProgramPage() {
           recordProgramEnd: adjustmentMod.recordProgramEnd,
         })
         
-        // Run hygiene
-        hygieneMod.runClientDataHygiene()
+        // Run hygiene if available
+        if (hygieneMod) {
+          try {
+            hygieneMod.runClientDataHygiene()
+          } catch (err) {
+            console.warn('[ProgramPage] Hygiene execution failed:', err)
+          }
+        }
         
         // Load default inputs
         const defaultInputs = builderMod.getDefaultAdaptiveInputs()
         setInputs(defaultInputs)
         
-        // Load existing program with crash-proof normalization
+        // TASK 6: Load current program as the first critical operation
         try {
           const programState = stateMod.getProgramState()
           
-          console.log('[ProgramPage] Program state:', {
+          console.log('[ProgramPage] Program state loaded:', {
             hasUsableWorkoutProgram: programState.hasUsableWorkoutProgram,
             adaptiveProgramExists: !!programState.adaptiveProgram,
             sessionCount: programState.sessionCount,
-            source: programState.adaptiveProgram ? 'canonical' : programState.legacyProgram ? 'legacy' : 'none',
           })
           
+          // TASK 6: If canonical program exists and is renderable, show it
           if (programState.hasUsableWorkoutProgram && programState.adaptiveProgram) {
             const normalizedProgram = stateMod.normalizeProgramForDisplay(programState.adaptiveProgram)
             
             if (normalizedProgram && stateMod.isRenderableProgram(normalizedProgram)) {
               setProgram(normalizedProgram)
               setShowBuilder(false)
-              console.log('[ProgramPage] Loaded and normalized usable adaptive program')
+              console.log('[ProgramPage] Current program loaded successfully')
             } else {
-              console.log('[ProgramPage] Program exists but failed normalization - showing builder')
+              console.log('[ProgramPage] Program exists but is malformed - showing recovery state')
               setShowBuilder(true)
             }
           } else {
-            if (programState.adaptiveProgram && !programState.hasUsableWorkoutProgram) {
-              console.log('[ProgramPage] Adaptive program exists but is not usable - showing builder')
-            }
+            // No usable program - show builder
             setShowBuilder(true)
           }
         } catch (err) {
-          console.error('[ProgramPage] Error loading program:', err)
+          console.error('[ProgramPage] Error loading current program:', err)
           setShowBuilder(true)
         }
         
-        // Get constraint insight
-        try {
-          const insight = constraintMod.getConstraintInsight()
-          setConstraintLabel(insight.label)
-        } catch (err) {
-          console.error('[ProgramPage] Error getting constraint insight:', err)
-          setConstraintLabel('')
+        // Get constraint insight if available (non-critical)
+        if (constraintMod) {
+          try {
+            const insight = constraintMod.getConstraintInsight()
+            setConstraintLabel(insight.label)
+          } catch (err) {
+            console.warn('[ProgramPage] Constraint insight failed:', err)
+            setConstraintLabel('')
+          }
         }
         
         setMounted(true)
       } catch (err) {
-        // TASK 5: Handle module load failure gracefully - show local error, not global crash
-        console.error('[ProgramPage] Failed to load program modules:', err)
-        setLoadError('Failed to load program. Please refresh the page.')
+        // Fallback catch for unexpected errors
+        console.error('[ProgramPage] Unexpected error during module loading:', err)
+        setLoadError('An unexpected error occurred. Please refresh the page.')
         setMounted(true)
       }
     }

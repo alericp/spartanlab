@@ -5,10 +5,11 @@ import { query } from '@/lib/db'
 export const dynamic = 'force-dynamic'
 
 /**
- * POST /api/onboarding/profile - Upsert athlete profile on onboarding completion
+ * TASK 1: POST /api/onboarding/profile - Canonical DB write for onboarding
  * 
- * This is the canonical DB write for authenticated users completing onboarding.
- * After this, /api/settings can read the real profile immediately.
+ * This endpoint upserts the athlete profile to the real authenticated database.
+ * After this completes, /api/settings can immediately read the real profile.
+ * This is the key to ensuring onboarding truth == settings truth == dashboard truth.
  */
 export async function POST(request: Request) {
   try {
@@ -17,13 +18,12 @@ export async function POST(request: Request) {
     if (!userId) {
       return NextResponse.json({ 
         success: false, 
-        error: 'Unauthorized - must be signed in to save profile' 
+        error: 'Unauthorized' 
       }, { status: 401 })
     }
     
     const profileData = await request.json()
     
-    // Validate required fields
     if (!profileData || typeof profileData !== 'object') {
       return NextResponse.json({ 
         success: false, 
@@ -31,7 +31,8 @@ export async function POST(request: Request) {
       }, { status: 400 })
     }
     
-    // Upsert athlete profile - create or update
+    // TASK 1: Upsert - creates new or updates existing profile
+    // This ensures one canonical DB row per authenticated user
     const upsertResult = await query(`
       INSERT INTO athlete_profiles (
         id,
@@ -45,6 +46,7 @@ export async function POST(request: Request) {
         equipment_available,
         joint_cautions,
         weakest_area,
+        training_style,
         onboarding_complete,
         created_at,
         updated_at
@@ -60,24 +62,25 @@ export async function POST(request: Request) {
         $8,
         $9,
         $10,
+        $11,
         true,
         NOW(),
         NOW()
       )
       ON CONFLICT (user_id) DO UPDATE SET
-        sex = COALESCE(EXCLUDED.sex, athlete_profiles.sex),
-        experience_level = COALESCE(EXCLUDED.experience_level, athlete_profiles.experience_level),
-        training_days_per_week = COALESCE(EXCLUDED.training_days_per_week, athlete_profiles.training_days_per_week),
-        schedule_mode = COALESCE(EXCLUDED.schedule_mode, athlete_profiles.schedule_mode),
-        session_length_minutes = COALESCE(EXCLUDED.session_length_minutes, athlete_profiles.session_length_minutes),
-        primary_goal = COALESCE(EXCLUDED.primary_goal, athlete_profiles.primary_goal),
-        equipment_available = COALESCE(EXCLUDED.equipment_available, athlete_profiles.equipment_available),
-        joint_cautions = COALESCE(EXCLUDED.joint_cautions, athlete_profiles.joint_cautions),
-        weakest_area = COALESCE(EXCLUDED.weakest_area, athlete_profiles.weakest_area),
+        sex = COALESCE($2::text, athlete_profiles.sex),
+        experience_level = COALESCE($3::text, athlete_profiles.experience_level),
+        training_days_per_week = COALESCE($4::int, athlete_profiles.training_days_per_week),
+        schedule_mode = COALESCE($5::text, athlete_profiles.schedule_mode),
+        session_length_minutes = COALESCE($6::int, athlete_profiles.session_length_minutes),
+        primary_goal = COALESCE($7::text, athlete_profiles.primary_goal),
+        equipment_available = COALESCE($8::jsonb, athlete_profiles.equipment_available),
+        joint_cautions = COALESCE($9::jsonb, athlete_profiles.joint_cautions),
+        weakest_area = COALESCE($10::text, athlete_profiles.weakest_area),
+        training_style = COALESCE($11::text, athlete_profiles.training_style),
         onboarding_complete = true,
         updated_at = NOW()
       RETURNING 
-        id,
         user_id as "userId",
         sex,
         experience_level as "experienceLevel",
@@ -88,8 +91,8 @@ export async function POST(request: Request) {
         equipment_available as "equipmentAvailable",
         joint_cautions as "jointCautions",
         weakest_area as "weakestArea",
-        onboarding_complete as "onboardingComplete",
-        created_at as "createdAt"
+        training_style as "trainingStyle",
+        onboarding_complete as "onboardingComplete"
     `, [
       userId,
       profileData.sex || null,
@@ -98,13 +101,14 @@ export async function POST(request: Request) {
       profileData.scheduleMode || 'static',
       profileData.sessionLengthMinutes || 60,
       profileData.primaryGoal || null,
-      JSON.stringify(profileData.equipmentAvailable || []),
-      JSON.stringify(profileData.jointCautions || []),
+      profileData.equipmentAvailable ? JSON.stringify(profileData.equipmentAvailable) : JSON.stringify([]),
+      profileData.jointCautions ? JSON.stringify(profileData.jointCautions) : JSON.stringify([]),
       profileData.weakestArea || null,
+      profileData.trainingStyle || 'balanced_hybrid',
     ])
     
     if (!upsertResult || upsertResult.length === 0) {
-      console.error('[Onboarding API] Upsert returned no result')
+      console.error('[Onboarding API] Upsert returned no result for user:', userId)
       return NextResponse.json({ 
         success: false, 
         error: 'Failed to save profile' 
@@ -113,12 +117,14 @@ export async function POST(request: Request) {
     
     const savedProfile = upsertResult[0]
     
-    console.log('[Onboarding API] Profile upserted successfully for user:', userId)
+    console.log('[Onboarding API] Profile upserted successfully for user:', userId, {
+      scheduleMode: savedProfile.scheduleMode,
+      onboardingComplete: savedProfile.onboardingComplete,
+    })
     
     return NextResponse.json({
       success: true,
       profile: savedProfile,
-      message: 'Profile saved to database',
     })
     
   } catch (error) {

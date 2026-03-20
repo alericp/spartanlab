@@ -76,13 +76,40 @@ const previewProfileRepository: ProfileRepository = {
   ): Promise<AthleteProfile> {
     if (!isBrowser()) return DEFAULT_PROFILE
 
-    const current = (await this.getProfile(userId)) || DEFAULT_PROFILE
+    const current = (await this.getProfile(userId))
+    
+    // TASK 3: Handle null profile safely
+    const baseProfile: AthleteProfile = current ?? {
+      id: 'local-profile',
+      userId: 'local-user',
+      sex: null as any,
+      height: null as any,
+      heightUnit: 'inches',
+      bodyweight: null as any,
+      weightUnit: 'lbs',
+      experienceLevel: 'beginner',
+      trainingDaysPerWeek: 3,
+      sessionLengthMinutes: 60,
+      goalCategory: null as any,
+      selectedSkills: [],
+      selectedFlexibility: [],
+      selectedStrength: [],
+      primaryGoal: null,
+      equipmentAvailable: [],
+      rangeIntent: null,
+      rangeTrainingMode: null,
+      pullUpMax: null,
+      dipMax: null,
+      onboardingComplete: false,
+      createdAt: new Date().toISOString(),
+    }
+    
     const updated: AthleteProfile = {
-      ...current,
+      ...baseProfile,
       ...data,
-      id: current.id,
-      userId: current.userId,
-      createdAt: current.createdAt,
+      id: baseProfile.id,
+      userId: baseProfile.userId,
+      createdAt: baseProfile.createdAt,
       updatedAt: new Date().toISOString(),
     }
 
@@ -173,12 +200,40 @@ export function saveAthleteProfile(
   if (!isBrowser()) return DEFAULT_PROFILE
 
   const current = getAthleteProfile()
+  
+  // TASK 3: Handle null profile safely - create safe local-only base if needed
+  const baseProfile: AthleteProfile = current ?? {
+    id: 'local-profile',
+    userId: 'local-user',
+    sex: null as any,
+    height: null as any,
+    heightUnit: 'inches',
+    bodyweight: null as any,
+    weightUnit: 'lbs',
+    experienceLevel: 'beginner',
+    trainingDaysPerWeek: 3,
+    sessionLengthMinutes: 60,
+    goalCategory: null as any,
+    selectedSkills: [],
+    selectedFlexibility: [],
+    selectedStrength: [],
+    primaryGoal: null,
+    equipmentAvailable: [],
+    rangeIntent: null,
+    rangeTrainingMode: null,
+    pullUpMax: null,
+    dipMax: null,
+    onboardingComplete: false,
+    createdAt: new Date().toISOString(),
+  }
+  
+  // TASK 3: Now safely merge - baseProfile is guaranteed to exist
   const updated: AthleteProfile = {
-    ...current,
+    ...baseProfile,
     ...profile,
-    id: current.id,
-    userId: current.userId,
-    createdAt: current.createdAt,
+    id: baseProfile.id,
+    userId: baseProfile.userId,
+    createdAt: baseProfile.createdAt,
     updatedAt: new Date().toISOString(),
   }
 

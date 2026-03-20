@@ -385,122 +385,47 @@ export default function SettingsPage() {
     setSaving(true)
     setSaved(false)
     
-    // Prepare update payload - preserve flexible mode semantics
-    // TASK 3: For flexible mode, store a numeric default for engine math but preserve scheduleMode
-    const updates = {
-      bodyweight: bodyweight ? parseFloat(bodyweight) : null,
-      experienceLevel: experienceLevel as 'beginner' | 'intermediate' | 'advanced',
-      // For flexible mode, store a reasonable numeric default (engine internal math)
-      // The scheduleMode field is the canonical preference indicator
-      trainingDaysPerWeek: scheduleMode === 'flexible' 
-        ? 4  // Default for engine calculations
-        : parseInt(trainingDays || '3'),
-      scheduleMode: scheduleMode,
-      sessionLengthMinutes: parseInt(sessionLength) as 30 | 45 | 60 | 90,
-      primaryGoal: primaryGoal === 'none' ? null : primaryGoal,
-      equipmentAvailable: equipment,
-      jointCautions: jointCautions,
-      weakestArea: weakestArea === 'none' ? null : weakestArea,
-      trainingStyle: trainingStyle,
-    }
-    
     try {
-      // Try API-based save first (for authenticated users)
-      const response = await fetch('/api/settings', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updates),
-      })
-      
-      if (response.ok) {
-        const result = await response.json()
-        
-        // TASK 3: Sync API response to localStorage for canonical truth
-        if (result.profile) {
-          saveAthleteProfile(result.profile)
-          setProfile(result.profile)
-        }
-        
-        setSaved(true)
-        
-        // Handle regeneration feedback with coaching explanation
-        if (result.regenerated) {
-          // Record timestamp for NextWorkoutCard to show update notice
-          try {
-            localStorage.setItem('spartanlab_program_version_timestamp', new Date().toISOString())
-          } catch {
-            // localStorage unavailable
-          }
-          
-          setLastChangeResult({
-            regenerated: true,
-            message: result.analysis?.coachingMessage || 'Your program has been regenerated.',
-            affectedSystems: result.analysis?.affectedSystems || [],
-          })
-          toast({
-            title: 'Program Regenerated',
-            description: result.analysis?.coachingMessage || 'Your program has been regenerated to match your new settings.',
-            duration: 5000,
-          })
-        } else if (result.adaptations && result.adaptations.length > 0) {
-          setLastChangeResult({
-            regenerated: false,
-            message: result.analysis?.coachingMessage || 'Future sessions will reflect these changes.',
-            affectedSystems: result.analysis?.affectedSystems || [],
-          })
-          toast({
-            title: 'Settings Adjusted',
-            description: result.analysis?.coachingMessage || 'Future sessions will reflect these changes.',
-            duration: 4000,
-          })
-        } else if (result.analysis?.changes?.length > 0) {
-          setLastChangeResult(null)
-          toast({
-            title: 'Settings Saved',
-            description: 'Your preferences have been updated.',
-            duration: 3000,
-          })
-        }
-        
-        setSaving(false)
-        setTimeout(() => setSaved(false), 2000)
-        return
+      // Prepare update payload - preserve flexible mode semantics
+      // TASK 3: For flexible mode, store a numeric default for engine math but preserve scheduleMode
+      const updates = {
+        bodyweight: bodyweight ? parseFloat(bodyweight) : null,
+        experienceLevel: experienceLevel as 'beginner' | 'intermediate' | 'advanced',
+        // For flexible mode, store a reasonable numeric default (engine internal math)
+        // The scheduleMode field is the canonical preference indicator
+        trainingDaysPerWeek: scheduleMode === 'flexible' 
+          ? 4  // Default for engine calculations
+          : parseInt(trainingDays || '3'),
+        scheduleMode: scheduleMode,
+        sessionLengthMinutes: parseInt(sessionLength) as 30 | 45 | 60 | 90,
+        primaryGoal: primaryGoal === 'none' ? null : primaryGoal,
+        equipmentAvailable: equipment,
+        jointCautions: jointCautions,
+        weakestArea: weakestArea === 'none' ? null : weakestArea,
+        trainingStyle: trainingStyle,
       }
       
-      // API failed - fall back to localStorage
-      console.warn('[Settings] API save failed, using localStorage fallback')
-    } catch (error) {
-      console.warn('[Settings] API error, using localStorage fallback:', error)
-    }
-    
-    // FALLBACK: localStorage-based save (for preview/development mode)
-    const previousProfile = profile
-    
-    const updated = saveAthleteProfile({
-      ...updates,
-    } as Parameters<typeof saveAthleteProfile>[0])
-    
-    setProfile(updated)
-    setSaved(true)
-    setSaving(false)
-    
-    // Analyze settings changes using intelligent classification
-    if (previousProfile) {
-      const analysis = analyzeSettingsChanges(
-        previousProfile, 
-        updated as AthleteProfile & { trainingStyle?: string }
-      )
-      
-      if (analysis.changes.length > 0) {
-        const activeProgram = getActiveProgram()
+      try {
+        // Try API-based save first (for authenticated users)
+        const response = await fetch('/api/settings', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updates),
+        })
         
-        if (analysis.requiresRegeneration && activeProgram) {
-          // STRUCTURAL CHANGE: Clear active program to trigger new version
-          // Check debounce to prevent rapid regenerations
-          if (canRegenerate('current-user')) {
-            clearActiveProgram()
-            markRegeneration('current-user')
-            
+        if (response.ok) {
+          const result = await response.json()
+          
+          // TASK 3: Sync API response to localStorage for canonical truth
+          if (result.profile) {
+            saveAthleteProfile(result.profile)
+            setProfile(result.profile)
+          }
+          
+          setSaved(true)
+          
+          // Handle regeneration feedback with coaching explanation
+          if (result.regenerated) {
             // Record timestamp for NextWorkoutCard to show update notice
             try {
               localStorage.setItem('spartanlab_program_version_timestamp', new Date().toISOString())
@@ -510,38 +435,114 @@ export default function SettingsPage() {
             
             setLastChangeResult({
               regenerated: true,
-              message: analysis.coachingMessage,
-              affectedSystems: analysis.affectedSystems,
+              message: result.analysis?.coachingMessage || 'Your program has been regenerated.',
+              affectedSystems: result.analysis?.affectedSystems || [],
             })
-            
             toast({
               title: 'Program Regenerated',
-              description: analysis.coachingMessage,
+              description: result.analysis?.coachingMessage || 'Your program has been regenerated to match your new settings.',
               duration: 5000,
             })
-          }
-        } else if (analysis.changes.some(c => c.affectsFutureSessions)) {
-          // MINOR CHANGE: Apply session adaptations without new version
-          const adaptations = getSessionAdaptations(analysis)
-          
-          if (adaptations.length > 0) {
+          } else if (result.adaptations && result.adaptations.length > 0) {
             setLastChangeResult({
               regenerated: false,
-              message: analysis.coachingMessage,
-              affectedSystems: analysis.affectedSystems,
+              message: result.analysis?.coachingMessage || 'Future sessions will reflect these changes.',
+              affectedSystems: result.analysis?.affectedSystems || [],
             })
-            
             toast({
               title: 'Settings Adjusted',
-              description: analysis.coachingMessage,
+              description: result.analysis?.coachingMessage || 'Future sessions will reflect these changes.',
               duration: 4000,
             })
+          } else if (result.analysis?.changes?.length > 0) {
+            setLastChangeResult(null)
+            toast({
+              title: 'Settings Saved',
+              description: 'Your preferences have been updated.',
+              duration: 3000,
+            })
+          }
+          
+          return
+        }
+        
+        // API failed - fall back to localStorage
+        console.warn('[Settings] API save failed, using localStorage fallback')
+      } catch (error) {
+        console.warn('[Settings] API error, using localStorage fallback:', error)
+      }
+      
+      // FALLBACK: localStorage-based save (for preview/development mode)
+      const previousProfile = profile
+      
+      const updated = saveAthleteProfile({
+        ...updates,
+      } as Parameters<typeof saveAthleteProfile>[0])
+      
+      setProfile(updated)
+      setSaved(true)
+      
+      // Analyze settings changes using intelligent classification
+      if (previousProfile) {
+        const analysis = analyzeSettingsChanges(
+          previousProfile, 
+          updated as AthleteProfile & { trainingStyle?: string }
+        )
+        
+        if (analysis.changes.length > 0) {
+          const activeProgram = getActiveProgram()
+          
+          if (analysis.requiresRegeneration && activeProgram) {
+            // STRUCTURAL CHANGE: Clear active program to trigger new version
+            // Check debounce to prevent rapid regenerations
+            if (canRegenerate('current-user')) {
+              clearActiveProgram()
+              markRegeneration('current-user')
+              
+              // Record timestamp for NextWorkoutCard to show update notice
+              try {
+                localStorage.setItem('spartanlab_program_version_timestamp', new Date().toISOString())
+              } catch {
+                // localStorage unavailable
+              }
+              
+              setLastChangeResult({
+                regenerated: true,
+                message: analysis.coachingMessage,
+                affectedSystems: analysis.affectedSystems,
+              })
+              
+              toast({
+                title: 'Program Regenerated',
+                description: analysis.coachingMessage,
+                duration: 5000,
+              })
+            }
+          } else if (analysis.changes.some(c => c.affectsFutureSessions)) {
+            // MINOR CHANGE: Apply session adaptations without new version
+            const adaptations = getSessionAdaptations(analysis)
+            
+            if (adaptations.length > 0) {
+              setLastChangeResult({
+                regenerated: false,
+                message: analysis.coachingMessage,
+                affectedSystems: analysis.affectedSystems,
+              })
+              
+              toast({
+                title: 'Settings Adjusted',
+                description: analysis.coachingMessage,
+                duration: 4000,
+              })
+            }
           }
         }
       }
+    } finally {
+      // TASK 8: GUARANTEE saving state is cleared in ALL exit paths
+      setSaving(false)
+      setTimeout(() => setSaved(false), 2000)
     }
-    
-    setTimeout(() => setSaved(false), 2000)
   }
   
   // TASK 3: Wrap handleSave in try-finally to ensure saving state is always cleared

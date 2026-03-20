@@ -179,6 +179,9 @@ export interface VolumeSignalInputs {
   workoutsThisWeek?: number
   missedSessions?: number
   trainingStreak?: number
+  // TASK 3: Total workout history for clean-slate detection
+  // Users with < 3 workouts should not be flagged as "inconsistent"
+  totalWorkoutsLogged?: number
 }
 
 export function evaluateVolumeSignals(inputs: VolumeSignalInputs): ConstraintSignal[] {
@@ -233,24 +236,29 @@ export function evaluateVolumeSignals(inputs: VolumeSignalInputs): ConstraintSig
   }
   
   // Training Inconsistency (missed sessions or low workout frequency)
-  if (inputs.workoutsThisWeek !== undefined && inputs.workoutsThisWeek < 2) {
+  // TASK 3: Only flag if user has meaningful workout history
+  // Clean-slate users (0-2 total workouts) should not be classified as "inconsistent"
+  const totalWorkoutHistory = inputs.totalWorkoutsLogged ?? 0
+  const hasEnoughHistoryForInconsistency = totalWorkoutHistory >= 3
+  
+  if (hasEnoughHistoryForInconsistency && inputs.workoutsThisWeek !== undefined && inputs.workoutsThisWeek < 2) {
     signals.push({
       type: 'training_inconsistency',
       category: 'volume',
       score: inputs.workoutsThisWeek === 0 ? 7 : 5,
-      confidence: 'high',
-      rawMetrics: { workoutsThisWeek: inputs.workoutsThisWeek },
+      confidence: totalWorkoutHistory >= 6 ? 'high' : 'medium',
+      rawMetrics: { workoutsThisWeek: inputs.workoutsThisWeek, totalHistory: totalWorkoutHistory },
     })
   }
   
-  // Training Inconsistency (missed sessions)
-  if (inputs.missedSessions !== undefined && inputs.missedSessions >= 2) {
+  // Training Inconsistency (missed sessions) - only if enough history
+  if (hasEnoughHistoryForInconsistency && inputs.missedSessions !== undefined && inputs.missedSessions >= 2) {
     signals.push({
       type: 'training_inconsistency',
       category: 'volume',
       score: Math.min(7, inputs.missedSessions * 2),
-      confidence: 'high',
-      rawMetrics: { missedSessions: inputs.missedSessions },
+      confidence: totalWorkoutHistory >= 6 ? 'high' : 'medium',
+      rawMetrics: { missedSessions: inputs.missedSessions, totalHistory: totalWorkoutHistory },
     })
   }
   

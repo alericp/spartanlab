@@ -4,6 +4,7 @@
 
 import type { OnboardingProfile, PrimaryLimitation, WeakestArea, JointCaution } from './athlete-profile'
 import { getOnboardingProfile } from './athlete-profile'
+import { getCanonicalProfile, type CanonicalProgrammingProfile } from './canonical-profile-service'
 import { getAthleteCalibration, type AthleteCalibration } from './athlete-calibration'
 
 // =============================================================================
@@ -353,11 +354,20 @@ function calculateConfidence(profile: OnboardingProfile): 'low' | 'medium' | 'hi
 // =============================================================================
 
 /**
- * Detect weak points and generate training focus summary
- */
+* Detect weak points and generate training focus summary
+* CANONICAL FIX: Now uses canonical profile as primary truth
+*/
 export function detectWeakPoints(): WeakPointSummary {
-  const profile = getOnboardingProfile()
+  const canonical = getCanonicalProfile()
+  const profile = getOnboardingProfile() // Fallback for detailed benchmark data
   const calibration = getAthleteCalibration()
+  
+  // Log canonical profile state for debugging
+  console.log('[WeakPointDetection] Using canonical profile:', {
+    primaryGoal: canonical.primaryGoal,
+    jointCautions: canonical.jointCautions?.length || 0,
+    benchmarksPresent: !!canonical.pullUpMax || !!canonical.frontLeverProgression,
+  })
   
   // Default result for missing profile
   if (!profile) {

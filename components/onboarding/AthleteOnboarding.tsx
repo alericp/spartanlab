@@ -135,6 +135,8 @@ import {
   hasEstimatedValues,
 } from '@/lib/athlete-profile'
 import { BodyFatCalculator } from './BodyFatCalculator'
+import { getCanonicalProfile, logCanonicalProfileState } from '@/lib/canonical-profile-service'
+import { getOnboardingProfile } from '@/lib/athlete-profile'
 import {
   type MilitaryBranch,
   type MilitaryTest,
@@ -3335,6 +3337,40 @@ export function AthleteOnboarding() {
   const [currentSectionIndex, setCurrentSectionIndex] = useState(0)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [profile, setProfile] = useState<OnboardingProfile>(createEmptyOnboardingProfile())
+  const [prefillLoaded, setPrefillLoaded] = useState(false)
+  
+  // TASK 3: Prefill from existing profile on mount for edit mode
+  useEffect(() => {
+    if (prefillLoaded) return
+    
+    const existingProfile = getOnboardingProfile()
+    const canonical = getCanonicalProfile()
+    logCanonicalProfileState('AthleteOnboarding prefill initialization')
+    
+    // If user has existing onboarding data, prefill from it
+    if (existingProfile && (existingProfile.onboardingComplete || existingProfile.primaryGoal)) {
+      console.log('[AthleteOnboarding] Prefilling from existing onboarding profile')
+      setProfile(existingProfile)
+    } else if (canonical.onboardingComplete || canonical.primaryGoal) {
+      // Fallback: Partially populate from canonical if onboarding profile is missing
+      console.log('[AthleteOnboarding] Prefilling partial data from canonical profile')
+      setProfile(prev => ({
+        ...prev,
+        primaryGoal: (canonical.primaryGoal as PrimaryGoalType) || prev.primaryGoal,
+        selectedSkills: canonical.selectedSkills as SkillGoal[] || prev.selectedSkills,
+        selectedFlexibility: canonical.selectedFlexibility as FlexibilityGoal[] || prev.selectedFlexibility,
+        trainingDaysPerWeek: (canonical.trainingDaysPerWeek as TrainingDaysPerWeek) || prev.trainingDaysPerWeek,
+        sessionLengthMinutes: canonical.sessionLengthMinutes || prev.sessionLengthMinutes,
+        equipment: canonical.equipmentAvailable as EquipmentType[] || prev.equipment,
+        jointCautions: canonical.jointCautions as JointCaution[] || prev.jointCautions,
+        weakestArea: (canonical.weakestArea as WeakestArea) || prev.weakestArea,
+        pullUpMax: (canonical.pullUpMax as PullUpCapacity) || prev.pullUpMax,
+        dipMax: (canonical.dipMax as DipCapacity) || prev.dipMax,
+      }))
+    }
+    
+    setPrefillLoaded(true)
+  }, [prefillLoaded])
 
   // Filter sections based on showIf conditions
   const visibleSections = useMemo(() => {

@@ -866,8 +866,11 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
     equipment,
   } = inputs
   
-  // Gather context
-  const profile = getAthleteProfile()
+  // Gather context - CANONICAL FIX: Use unified canonical profile
+  const canonicalProfile = getCanonicalProfile()
+  logCanonicalProfileState('generateAdaptiveProgram called')
+  
+  const profile = getAthleteProfile() // Legacy fallback
   const recoverySignal = calculateRecoverySignal()
   const constraintInsight = getConstraintInsight()
   const equipmentProfile = analyzeEquipmentProfile(equipment)
@@ -881,7 +884,7 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
   
   // Get athlete calibration from onboarding
   const athleteCalibration = getAthleteCalibration()
-  const onboardingProfile = getOnboardingProfile()
+  const onboardingProfile = getOnboardingProfile() // Legacy fallback for benchmark details
   
   // Resolve athlete ID for optional side effects (constraint history, analytics)
   // This is best-effort - program generation must succeed even without a valid ID
@@ -889,9 +892,20 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
   const resolvedAthleteId: string | null = profile?.userId || onboardingProfile?.userId || null
   console.log('[program-gen] resolvedAthleteId:', resolvedAthleteId ? 'present' : 'null')
   
-  const trainingOutcome = onboardingProfile?.primaryTrainingOutcome || 'general_fitness'
+  // CANONICAL FIX: Use canonical training style, fallback to onboarding profile
+  const trainingOutcome = (canonicalProfile.trainingStyle as PrimaryTrainingOutcome) || onboardingProfile?.primaryTrainingOutcome || 'general_fitness'
   const trainingPath = onboardingProfile?.trainingPathType || 'hybrid'
   const workoutDuration = onboardingProfile?.workoutDurationPreference || 'medium'
+  
+  // CANONICAL FIX: Log consumed canonical fields for generation
+  console.log('[program-gen] Using canonical profile:', {
+    primaryGoal: canonicalProfile.primaryGoal,
+    secondaryGoal: canonicalProfile.secondaryGoal,
+    scheduleMode: canonicalProfile.scheduleMode,
+    sessionLength: canonicalProfile.sessionLengthMinutes,
+    equipmentCount: canonicalProfile.equipmentAvailable?.length || 0,
+    jointCautions: canonicalProfile.jointCautions?.length || 0,
+  })
   
   // FLEXIBLE SCHEDULING: Resolve schedule mode and week structure
   const inputScheduleMode = inputs.scheduleMode || normalizeScheduleMode(trainingDaysPerWeek)

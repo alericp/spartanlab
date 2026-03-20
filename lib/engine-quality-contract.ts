@@ -847,6 +847,14 @@ export type {
   DayLoadProfile,
   WeekLoadBalance,
   PrescriptionDiagnostics,
+  // TASK 4: Weekly progression types
+  ProgressionPhase,
+  WeeklyProgressionContext,
+  WeeklyProgressionRecommendation,
+  // TASK 2: Advanced skill prescription
+  AdvancedSkillPrescription,
+  // TASK 7: Support work mapping
+  SupportWorkMapping,
 } from './prescription-contract'
 
 export {
@@ -858,6 +866,18 @@ export {
   analyzeWeekLoadBalance,
   suggestOptimalDayOrder,
   logPrescriptionDiagnostics,
+  // TASK 4: Weekly progression functions
+  getWeeklyProgressionRecommendation,
+  determineProgressionPhase,
+  // TASK 2: Advanced skill prescription
+  getAdvancedSkillPrescription,
+  // TASK 7: Support work mapping
+  mapSupportToGoalsAndLimiters,
+  logSupportWorkMapping,
+  // TASK 9: Dev-safe logging utilities
+  logWeeklyProgressionDecision,
+  logWeeklyLoadBalance,
+  logAdvancedSkillPrescription,
 } from './prescription-contract'
 
 // =============================================================================

@@ -294,6 +294,14 @@ import {
   calculateWeightedSkillAllocation,
   calculateIntensityDistribution,
   planFlexibilityInsertions,
+  // TASK 4: Weekly progression logic
+  getWeeklyProgressionRecommendation,
+  determineProgressionPhase,
+  // TASK 7: Support work mapping
+  mapSupportToGoalsAndLimiters,
+  logSupportWorkMapping,
+  // TASK 6: Weekly load balancing
+  analyzeWeekLoadBalance,
   type GoalHierarchyWeights,
   type SessionDistribution,
   type RankedBottleneck,
@@ -302,6 +310,15 @@ import {
   type WeightedSkillAllocation,
   type WeeklyIntensityDistribution,
   type FlexibilityInsertion,
+  // TASK 4: Progression types
+  type ProgressionPhase,
+  type WeeklyProgressionRecommendation,
+  type WeeklyProgressionContext,
+  // TASK 7: Support mapping types
+  type SupportWorkMapping,
+  // TASK 6: Load balancing types
+  type DayLoadProfile,
+  type WeekLoadBalance,
 } from './engine-quality-contract'
 
 // Re-export schedule types for consumers
@@ -501,6 +518,25 @@ export interface AdaptiveProgram {
     coachingMessage: string
     volumeReductionPercent: number
     recommendedProtocols: string[]
+  }
+  // TASK 4: Weekly progression context
+  weeklyProgressionContext?: {
+    phase: ProgressionPhase
+    phaseRationale: string
+    skillVolumeModifier: number
+    strengthVolumeModifier: number
+    intensityModifier: number
+    shouldProgressSkill: boolean
+    shouldProgressStrength: boolean
+    guidance: string[]
+  }
+  // TASK 6: Weekly load balance summary
+  weeklyLoadBalance?: {
+    totalNeuralLoad: number
+    straightArmDays: number
+    hasRecoveryDay: boolean
+    balanceIssues: string[]
+    suggestions: string[]
   }
   // Athlete calibration context from onboarding
   calibrationContext?: {
@@ -1669,6 +1705,82 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
   // Calculate variety score (0-1, higher = more varied)
   const varietyScore = calculateVarietyScore(sessionIntents)
   
+  // ==========================================================================
+  // TASK 6: WEEKLY LOAD BALANCING ANALYSIS
+  // Analyze fatigue distribution across the week
+  // ==========================================================================
+  const dayLoadProfiles: DayLoadProfile[] = sessions.map((session, index) => {
+    const hasSkillWork = session.exercises.some(e => e.category === 'skill')
+    const hasHeavyStrength = session.exercises.some(e => 
+      e.category === 'strength' && e.name.toLowerCase().includes('weighted')
+    )
+    const isStraightArmFocused = session.focus?.includes('skill') && 
+      ['planche', 'front_lever', 'back_lever'].some(s => primaryGoal.includes(s))
+    
+    // Determine neural load
+    let neuralLoad: 'high' | 'moderate' | 'low' = 'moderate'
+    if (hasSkillWork && hasHeavyStrength) {
+      neuralLoad = 'high'
+    } else if (hasSkillWork || hasHeavyStrength) {
+      neuralLoad = session.isPrimary ? 'high' : 'moderate'
+    } else if (session.focus === 'support_recovery') {
+      neuralLoad = 'low'
+    }
+    
+    // Determine straight-arm stress
+    let straightArmStress: 'high' | 'moderate' | 'low' | 'none' = 'none'
+    if (isStraightArmFocused) {
+      straightArmStress = session.isPrimary ? 'high' : 'moderate'
+    }
+    
+    // Determine focus type
+    let focusType: DayLoadProfile['focus'] = 'mixed'
+    if (session.focus?.includes('push') && session.focus.includes('skill')) {
+      focusType = 'push_skill'
+    } else if (session.focus?.includes('pull') && session.focus.includes('skill')) {
+      focusType = 'pull_skill'
+    } else if (session.focus?.includes('push') && session.focus.includes('strength')) {
+      focusType = 'push_strength'
+    } else if (session.focus?.includes('pull') && session.focus.includes('strength')) {
+      focusType = 'pull_strength'
+    } else if (session.focus === 'support_recovery') {
+      focusType = 'recovery'
+    }
+    
+    return {
+      dayNumber: index + 1,
+      neuralLoad,
+      straightArmStress,
+      muscularFatigue: neuralLoad === 'high' ? 'high' : neuralLoad === 'moderate' ? 'moderate' : 'low',
+      focus: focusType,
+    }
+  })
+  
+  // Analyze weekly balance
+  const weeklyLoadBalance = analyzeWeekLoadBalance(dayLoadProfiles)
+  
+  // Log balance issues in dev mode
+  if (process.env.NODE_ENV !== 'production' && weeklyLoadBalance.balanceIssues.length > 0) {
+    console.log('[program-gen] TASK 6: Weekly load balance issues detected:', {
+      issues: weeklyLoadBalance.balanceIssues,
+      suggestions: weeklyLoadBalance.suggestions,
+      straightArmDays: weeklyLoadBalance.straightArmDays,
+      hasRecoveryDay: weeklyLoadBalance.hasRecoveryDay,
+    })
+  }
+  
+  // Add balance notes to program if issues exist
+  if (weeklyLoadBalance.balanceIssues.length > 0) {
+    // Mark sessions that could use adjustment
+    sessions.forEach((session, index) => {
+      if (dayLoadProfiles[index].neuralLoad === 'high' && 
+          weeklyLoadBalance.balanceIssues.some(i => i.includes('consecutive'))) {
+        session.adaptationNotes = session.adaptationNotes || []
+        session.adaptationNotes.push('High neural demand day - ensure adequate recovery before next session')
+      }
+    })
+  }
+  
   // Get constraint interventions for primary constraint
   let constraintInterventions: ConstraintIntervention[] = []
   if (constraintInsight.hasInsight && constraintInsight.focus) {
@@ -1893,6 +2005,54 @@ fatigueDecision: fatigueDecision ? {
     repetitionJustifications,
     varietyScore,
   },
+  // TASK 4 & 6: Weekly progression and load balancing
+  weeklyProgressionContext: (() => {
+    try {
+      // Determine current phase based on week number
+      const weekNumber = 1 // First generated week
+      const cycleLength = 4 // Standard 4-week mesocycle
+      const phase = determineProgressionPhase(weekNumber, cycleLength, deloadRecommendation?.shouldDeload)
+      
+      // Build progression context
+      const progressionContext: WeeklyProgressionContext = {
+        weekNumber,
+        totalWeeksInCycle: cycleLength,
+        phase,
+        primaryGoal,
+        experienceLevel: experienceLevel as 'beginner' | 'intermediate' | 'advanced' | 'elite',
+        recentPerformance: hasFeedbackData ? {
+          skillHoldTrend: trainingFeedback.recentFatigueTrend === 'increasing' ? 'declining' : 
+            trainingFeedback.progressionSuccessRate > 0.8 ? 'improving' : 'stable',
+          strengthTrend: trainingFeedback.progressionSuccessRate > 0.7 ? 'improving' : 'stable',
+          completionRate: trainingFeedback.recentCompletionRate * 100,
+          avgRPE: 7, // Default RPE estimate
+        } : undefined,
+      }
+      
+      const recommendation = getWeeklyProgressionRecommendation(progressionContext)
+      
+      return {
+        phase,
+        phaseRationale: recommendation.phaseRationale,
+        skillVolumeModifier: recommendation.skillVolumeModifier,
+        strengthVolumeModifier: recommendation.strengthVolumeModifier,
+        intensityModifier: recommendation.intensityModifier,
+        shouldProgressSkill: recommendation.shouldProgressSkill,
+        shouldProgressStrength: recommendation.shouldProgressStrength,
+        guidance: recommendation.progressionGuidance,
+      }
+    } catch {
+      return undefined
+    }
+  })(),
+  // TASK 6: Weekly load balance summary
+  weeklyLoadBalance: weeklyLoadBalance ? {
+    totalNeuralLoad: weeklyLoadBalance.totalNeuralLoad,
+    straightArmDays: weeklyLoadBalance.straightArmDays,
+    hasRecoveryDay: weeklyLoadBalance.hasRecoveryDay,
+    balanceIssues: weeklyLoadBalance.balanceIssues.slice(0, 2), // Top 2 issues
+    suggestions: weeklyLoadBalance.suggestions.slice(0, 2),
+  } : undefined,
   // Constraint improvement tracking (populated async - may be undefined initially)
   constraintImprovementData,
     // Training Principles Engine emphasis

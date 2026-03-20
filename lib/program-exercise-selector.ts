@@ -114,9 +114,20 @@ import {
   detectPrescriptionMode,
   resolvePrescription,
   formatPrescription,
+  getAdvancedSkillPrescription,
+  getWeeklyProgressionRecommendation,
+  determineProgressionPhase,
+  mapSupportToGoalsAndLimiters,
+  logSupportWorkMapping,
+  logPrescriptionDiagnostics,
   type PrescriptionMode,
   type PrescriptionContract,
   type AthleteContext as PrescriptionAthleteContext,
+  type AdvancedSkillPrescription,
+  type WeeklyProgressionContext,
+  type WeeklyProgressionRecommendation,
+  type ProgressionPhase,
+  type SupportWorkMapping,
 } from './prescription-contract'
 import {
   getSkillPrescriptionRules,
@@ -616,13 +627,58 @@ function selectMainExercises(
       jointStress: movementIntel.jointStress,
     })
     
+    // =========================================================================
+    // PRESCRIPTION-AWARE SETS/REPS/NOTES (TASK 1, 2)
+    // Use prescription contract for intelligent programming instead of generic defaults
+    // =========================================================================
+    let finalSets = setsOverride
+    let finalRepsOrTime = repsOverride
+    let finalNote = noteOverride
+    
+    // Only apply prescription logic if no override provided
+    if (finalSets === undefined || finalRepsOrTime === undefined) {
+      const prescriptionResult = getPrescriptionAwarePrescription(
+        finalExercise,
+        experienceLevel,
+        primaryGoal,
+        undefined, // currentProgression - could be passed from context
+        undefined, // fatigueState - could be passed from context
+        undefined  // recentPerformance - could be passed from context
+      )
+      
+      if (finalSets === undefined) {
+        finalSets = prescriptionResult.sets
+      }
+      if (finalRepsOrTime === undefined) {
+        finalRepsOrTime = prescriptionResult.repsOrTime
+      }
+      if (finalNote === undefined && prescriptionResult.note) {
+        finalNote = prescriptionResult.note
+      }
+      
+      // Log prescription decision in dev mode
+      if (process.env.NODE_ENV !== 'production') {
+        logPrescriptionDiagnostics({
+          exerciseId: finalExercise.id,
+          detectedMode: prescriptionResult.prescriptionMode,
+          resolvedPrescription: {
+            sets: prescriptionResult.sets.toString(),
+            volume: prescriptionResult.repsOrTime,
+            rest: 'default',
+            intensity: prescriptionResult.note || 'standard',
+          },
+          athleteAdjustments: [`Level: ${experienceLevel}`],
+        })
+      }
+    }
+    
     selected.push({
       exercise: finalExercise,
-      sets: setsOverride ?? adjustSetsForLevel(finalExercise.defaultSets, experienceLevel),
-      repsOrTime: repsOverride ?? adjustRepsForLevel(finalExercise.defaultRepsOrTime, experienceLevel),
+      sets: finalSets ?? adjustSetsForLevel(finalExercise.defaultSets, experienceLevel),
+      repsOrTime: finalRepsOrTime ?? adjustRepsForLevel(finalExercise.defaultRepsOrTime, experienceLevel),
       note: wasSubstituted 
         ? `Substituted from ${exercise.name} - ${gateResult.recommendedSubstitute?.reason || 'Prerequisites not met'}`
-        : noteOverride ?? finalExercise.notes,
+        : finalNote ?? finalExercise.notes,
       isOverrideable: finalExercise.category !== 'skill', // Skills are harder to replace
       selectionReason: wasSubstituted 
         ? `${reason} (safe progression substitute)`

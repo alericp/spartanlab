@@ -324,10 +324,50 @@ export const SKILL_SUPPORT_MAPPINGS: Record<SkillCarryover, SkillSupportMapping>
     },
   },
   
+  i_sit: {
+  skillId: 'i_sit',
+  displayName: 'Manna / I-Sit',
+  primaryRequirements: ['compression_core', 'scapular_control', 'straight_arm_push'],
+  supportPatterns: ['mobility', 'dip_pattern'],
+  commonLimiters: [
+  {
+  limiterId: 'i_sit_compression',
+  description: 'Extreme active compression',
+  supportPatterns: ['compression_core'],
+  exerciseIds: ['v_sit', 'pike_compression', 'manna_progressions', 'compression_pulses'],
+  },
+  {
+  limiterId: 'i_sit_flexibility',
+  description: 'Pancake and pike flexibility',
+  supportPatterns: ['mobility'],
+  exerciseIds: ['pike_stretch', 'pancake_stretch', 'hamstring_pnf'],
+  },
+  {
+  limiterId: 'i_sit_shoulder_extension',
+  description: 'Shoulder extension for lean',
+  supportPatterns: ['mobility', 'straight_arm_push'],
+  exerciseIds: ['shoulder_dislocates', 'german_hang', 'planche_lean'],
+  },
+  ],
+  safeAlternatives: ['v_sit', 'manna_progressions', 'pike_compression'],
+  directSupportExercises: ['v_sit', 'manna_progressions', 'compression_pulses'],
+  accessorySupportExercises: ['pike_stretch', 'pancake_stretch', 'shoulder_dislocates', 'support_hold'],
+  prerequisiteExercises: [
+  { exerciseId: 'v_sit', requirement: '15s hold', isCritical: true },
+  { exerciseId: 'pancake_stretch', requirement: 'chest to floor', isCritical: false },
+  ],
+  constraints: {
+  maxStraightArmPerSession: 2,
+  restDaysBetweenHeavySessions: 1,
+  preferredFrequencyPerWeek: 4,
+  tendonSensitive: false,
+  },
+  },
+  
   handstand: {
-    skillId: 'handstand',
-    displayName: 'Handstand',
-    primaryRequirements: ['vertical_push', 'scapular_control'],
+  skillId: 'handstand',
+  displayName: 'Handstand',
+  primaryRequirements: ['vertical_push', 'scapular_control'],
     supportPatterns: ['anti_extension_core', 'joint_integrity'],
     commonLimiters: [
       {

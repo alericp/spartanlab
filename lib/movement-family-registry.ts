@@ -90,6 +90,7 @@ export type SkillCarryover =
   | 'muscle_up'
   | 'l_sit'
   | 'v_sit'
+  | 'i_sit'           // Manna - highest compression skill
   | 'handstand'
   | 'iron_cross'
   | 'human_flag'

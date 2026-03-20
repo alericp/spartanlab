@@ -1313,20 +1313,40 @@ function GoalsSection({ profile, updateProfile }: SectionProps) {
     updateProfile({ goalCategories: updated })
   }
 
+  // Primary/Secondary goal options - includes all first-class skills
+  // Skills PR: Added one_arm_pull_up, one_arm_push_up, dragon_flag, planche_push_up, back_lever, iron_cross, i_sit
   const goalOptions: PrimaryGoalType[] = [
-    'front_lever', 'planche', 'muscle_up', 'handstand_pushup', 'handstand',
-    'l_sit', 'v_sit', 'pancake', 'front_splits', 'side_splits',
+    // Lever/Static Skills
+    'front_lever', 'back_lever', 'planche', 'planche_push_up',
+    // Transition Skills
+    'muscle_up', 'iron_cross',
+    // Pressing Skills
+    'handstand_pushup', 'handstand',
+    // Unilateral Strength Skills
+    'one_arm_pull_up', 'one_arm_push_up',
+    // Core/Compression Skills
+    'dragon_flag', 'l_sit', 'v_sit', 'i_sit',
+    // Flexibility Goals
+    'pancake', 'front_splits', 'side_splits',
+    // Strength Goals
     'weighted_pull', 'weighted_dip', 'general_strength', 'muscle_building', 'work_capacity'
   ]
 
   const goalLabels: Record<PrimaryGoalType, string> = {
     'front_lever': 'Front Lever',
+    'back_lever': 'Back Lever',
     'planche': 'Planche',
+    'planche_push_up': 'Planche Push-Up',
     'muscle_up': 'Muscle-Up',
+    'iron_cross': 'Iron Cross',
     'handstand_pushup': 'Handstand Push-Up',
     'handstand': 'Handstand',
+    'one_arm_pull_up': 'One-Arm Pull-Up',
+    'one_arm_push_up': 'One-Arm Push-Up',
+    'dragon_flag': 'Dragon Flag',
     'l_sit': 'L-Sit',
     'v_sit': 'V-Sit',
+    'i_sit': 'Manna / I-Sit',
     'pancake': 'Pancake',
     'front_splits': 'Front Splits',
     'side_splits': 'Side Splits',

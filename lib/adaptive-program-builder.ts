@@ -290,10 +290,18 @@ import {
   getDurationVolumeConfig,
   rankBottlenecks,
   logEngineDiagnostics,
+  // TASK 1: Expanded athlete context for deep planner
+  calculateWeightedSkillAllocation,
+  calculateIntensityDistribution,
+  planFlexibilityInsertions,
   type GoalHierarchyWeights,
   type SessionDistribution,
   type RankedBottleneck,
   type EngineDiagnostics,
+  type ExpandedAthleteContext,
+  type WeightedSkillAllocation,
+  type WeeklyIntensityDistribution,
+  type FlexibilityInsertion,
 } from './engine-quality-contract'
 
 // Re-export schedule types for consumers
@@ -1139,6 +1147,68 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
   )
   console.log('[program-gen] Session distribution:', sessionDistribution)
   
+  // ==========================================================================
+  // TASK 1-4: EXPANDED ATHLETE CONTEXT FOR DEEP PLANNER CONSUMPTION
+  // ==========================================================================
+  
+  // Build expanded athlete context for weighted allocation
+  const expandedContext: ExpandedAthleteContext = {
+    primaryGoal,
+    secondaryGoal: secondaryGoal || canonicalProfile.secondaryGoal || null,
+    selectedSkills: canonicalProfile.selectedSkills || inputs.selectedSkills || [],
+    goalCategories: canonicalProfile.goalCategories || inputs.goalCategories || [],
+    trainingPathType: (canonicalProfile.trainingPathType || 'hybrid') as 'hybrid' | 'skill_progression' | 'strength_endurance' | 'balanced',
+    scheduleMode: (canonicalProfile.scheduleMode || 'static') as 'static' | 'flexible',
+    trainingDaysPerWeek: canonicalProfile.trainingDaysPerWeek,
+    sessionDurationMode: (canonicalProfile.sessionDurationMode || 'static') as 'static' | 'adaptive',
+    sessionLengthMinutes: canonicalProfile.sessionLengthMinutes || sessionLength,
+    selectedFlexibility: canonicalProfile.selectedFlexibility || inputs.selectedFlexibility || [],
+    pullUpMax: canonicalProfile.pullUpMax || null,
+    dipMax: canonicalProfile.dipMax || null,
+    weightedPullUp: canonicalProfile.weightedPullUpWeight ? { weight: canonicalProfile.weightedPullUpWeight, reps: 1 } : null,
+    weightedDip: canonicalProfile.weightedDipWeight ? { weight: canonicalProfile.weightedDipWeight, reps: 1 } : null,
+    frontLeverProgression: canonicalProfile.frontLeverProgression || null,
+    plancheProgression: canonicalProfile.plancheProgression || null,
+    hspuProgression: canonicalProfile.hspuProgression || null,
+    jointCautions: canonicalProfile.jointCautions || [],
+    recoveryLevel: recoverySignal.level || null,
+    experienceLevel: canonicalProfile.experienceLevel || 'intermediate',
+  }
+  
+  // TASK 2: Calculate weighted skill allocation
+  const weightedSkillAllocation = calculateWeightedSkillAllocation(
+    expandedContext,
+    effectiveTrainingDays
+  )
+  
+  // TASK F: Calculate intensity distribution based on recovery and adaptive scheduling
+  const intensityDistribution = calculateIntensityDistribution(
+    effectiveTrainingDays,
+    expandedContext.recoveryLevel,
+    expandedContext.sessionDurationMode,
+    expandedContext.trainingPathType
+  )
+  
+  // TASK 4: Plan flexibility insertions
+  const flexibilityInsertions = planFlexibilityInsertions(
+    expandedContext.selectedFlexibility,
+    effectiveTrainingDays,
+    expandedContext.sessionDurationMode,
+    expandedContext.sessionLengthMinutes
+  )
+  
+  // TASK 9: Log expanded planner consumption
+  console.log('[program-gen] TASK 1-4: Expanded planner context consumed:', {
+    selectedSkillsCount: expandedContext.selectedSkills.length,
+    goalCategoriesCount: expandedContext.goalCategories.length,
+    trainingPathType: expandedContext.trainingPathType,
+    sessionDurationMode: expandedContext.sessionDurationMode,
+    flexibilityTargetsCount: expandedContext.selectedFlexibility.length,
+    weightedAllocationSummary: weightedSkillAllocation.map(a => `${a.skill}:${Math.round(a.weight * 100)}%`).join(', '),
+    intensityPattern: intensityDistribution.suggestedPattern.join('-'),
+    flexibilityInsertionsCount: flexibilityInsertions.length,
+  })
+  
   // Get duration-based configuration for exercise count and structure
   const durationConfig = getDurationConfig(workoutDuration)
   
@@ -1381,6 +1451,7 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
   
   // Select optimal weekly structure - USE effectiveTrainingDays for flexible support
   // TASK 2: Pass secondary goal flags so structure can adapt
+  // TASK 3: Pass hybrid path and multi-skill flags for expanded structure awareness
   const structure = selectOptimalStructure({
     primaryGoal,
     trainingDays: effectiveTrainingDays,  // Uses resolved flexible frequency
@@ -1388,6 +1459,10 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
     constraintType: constraintInsight.hasInsight ? constraintInsight.label : undefined,
     hasSecondaryPull: isPullSecondary,  // TASK 2: Secondary goal influence
     hasSecondaryPush: isPushSecondary,  // TASK 2: Secondary goal influence
+    // TASK 3: Hybrid path and multi-skill awareness
+    trainingPathType: expandedContext.trainingPathType,
+    selectedSkillsCount: expandedContext.selectedSkills.length,
+    hasFlexibilityTargets: expandedContext.selectedFlexibility.length > 0,
   })
   
   // Generate session intents for variety
@@ -1733,6 +1808,25 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
     goalCategories: canonicalProfile.goalCategories || [],
     // TASK 5: Session duration mode - preserve adaptive time identity
     sessionDurationMode: canonicalProfile.sessionDurationMode || 'static',
+    // TASK 1-4: Store expanded planner context for display and traceability
+    weightedSkillAllocation: weightedSkillAllocation.map(a => ({
+      skill: a.skill,
+      weight: a.weight,
+      sessions: a.exposureSessions,
+      priority: a.priorityLevel,
+    })),
+    intensityDistribution: {
+      highDays: intensityDistribution.highIntensityDays,
+      moderateDays: intensityDistribution.moderateIntensityDays,
+      lightDays: intensityDistribution.lightIntensityDays,
+      pattern: intensityDistribution.suggestedPattern,
+      rationale: intensityDistribution.rationale,
+    },
+    flexibilityInsertions: flexibilityInsertions.map(f => ({
+      point: f.insertionPoint,
+      targets: f.targetedMuscles,
+      frequency: f.frequency,
+    })),
     // FLEXIBLE SCHEDULING: Full schedule mode semantics
     scheduleMode: finalScheduleMode,
     currentWeekFrequency: effectiveTrainingDays,

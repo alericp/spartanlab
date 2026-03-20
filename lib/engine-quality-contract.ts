@@ -281,6 +281,25 @@ export interface DurationVolumeConfig {
 }
 
 export const DURATION_VOLUME_CONFIGS: Record<number, DurationVolumeConfig> = {
+  // TASK 8: Short-form foundation for future 15-20 min circuit/round modes
+  15: {
+    warmupMinutes: 2,
+    warmupExerciseCount: 3,
+    mainExerciseCount: { min: 2, max: 3 },
+    accessoryCount: { min: 0, max: 0 },
+    cooldownMinutes: 1,
+    cooldownExerciseCount: 1,
+    totalEstimatedMinutes: { min: 12, max: 15 },
+  },
+  20: {
+    warmupMinutes: 3,
+    warmupExerciseCount: 3,
+    mainExerciseCount: { min: 2, max: 3 },
+    accessoryCount: { min: 0, max: 1 },
+    cooldownMinutes: 1,
+    cooldownExerciseCount: 2,
+    totalEstimatedMinutes: { min: 17, max: 20 },
+  },
   30: {
     warmupMinutes: 4,
     warmupExerciseCount: 4,
@@ -338,8 +357,8 @@ export function getDurationVolumeConfig(sessionMinutes: number): DurationVolumeC
     return DURATION_VOLUME_CONFIGS[sessionMinutes]
   }
   
-  // Find nearest bucket
-  const buckets = [30, 45, 60, 75, 90]
+  // Find nearest bucket (TASK 8: includes 15/20 for future short-form modes)
+  const buckets = [15, 20, 30, 45, 60, 75, 90]
   const nearest = buckets.reduce((prev, curr) => 
     Math.abs(curr - sessionMinutes) < Math.abs(prev - sessionMinutes) ? curr : prev
   )
@@ -1166,4 +1185,316 @@ export function getSessionFormatConfig(
     exerciseCount: getDurationVolumeConfig(targetMinutes).mainExerciseCount.max,
     roundBased: false,
   }
+}
+
+// =============================================================================
+// EXPANDED ATHLETE CONTEXT (TASK 1 - DEEP PLANNER INPUT)
+// =============================================================================
+
+/**
+ * Full athlete context for deep planner consumption.
+ * Includes all relevant profile data for intelligent weekly construction.
+ */
+export interface ExpandedAthleteContext {
+  // Core goals
+  primaryGoal: string
+  secondaryGoal: string | null
+  selectedSkills: string[]
+  goalCategories: string[]
+  
+  // Training path
+  trainingPathType: 'hybrid' | 'skill_progression' | 'strength_endurance' | 'balanced'
+  
+  // Schedule identity
+  scheduleMode: 'static' | 'flexible'
+  trainingDaysPerWeek: number | null
+  sessionDurationMode: 'static' | 'adaptive'
+  sessionLengthMinutes: number
+  
+  // Flexibility targets
+  selectedFlexibility: string[]
+  
+  // Strength benchmarks
+  pullUpMax: number | null
+  dipMax: number | null
+  weightedPullUp: { weight: number; reps: number } | null
+  weightedDip: { weight: number; reps: number } | null
+  
+  // Skill progressions
+  frontLeverProgression: string | null
+  plancheProgression: string | null
+  hspuProgression: string | null
+  
+  // Recovery/caution
+  jointCautions: string[]
+  recoveryLevel: string | null
+  
+  // Experience
+  experienceLevel: 'beginner' | 'intermediate' | 'advanced'
+}
+
+/**
+ * Weighted skill allocation for the week.
+ * Determines how much exposure each skill gets across sessions.
+ */
+export interface WeightedSkillAllocation {
+  skill: string
+  weight: number           // 0-1, normalized
+  exposureSessions: number // How many sessions include this skill
+  priorityLevel: 'primary' | 'secondary' | 'tertiary' | 'support'
+  rationale: string
+}
+
+/**
+ * Calculate weighted skill allocation across the week.
+ * TASK 2: Implements weighted distribution so primary/secondary get most exposure
+ * while other selected skills still get meaningful representation.
+ */
+export function calculateWeightedSkillAllocation(
+  context: ExpandedAthleteContext,
+  totalSessions: number
+): WeightedSkillAllocation[] {
+  const allocations: WeightedSkillAllocation[] = []
+  
+  // Get goal hierarchy weights
+  const goalWeights = calculateGoalHierarchyWeights(
+    context.primaryGoal,
+    context.secondaryGoal,
+    context.trainingPathType
+  )
+  
+  // Primary goal - highest weight
+  allocations.push({
+    skill: context.primaryGoal,
+    weight: goalWeights.primaryWeight,
+    exposureSessions: Math.ceil(totalSessions * goalWeights.primaryWeight),
+    priorityLevel: 'primary',
+    rationale: `Primary focus - ${Math.round(goalWeights.primaryWeight * 100)}% of training emphasis`,
+  })
+  
+  // Secondary goal - second highest weight
+  if (context.secondaryGoal) {
+    allocations.push({
+      skill: context.secondaryGoal,
+      weight: goalWeights.secondaryWeight,
+      exposureSessions: Math.max(1, Math.round(totalSessions * goalWeights.secondaryWeight)),
+      priorityLevel: 'secondary',
+      rationale: `Secondary focus - ${Math.round(goalWeights.secondaryWeight * 100)}% of training emphasis`,
+    })
+  }
+  
+  // Other selected skills - distribute support weight among them
+  const otherSkills = (context.selectedSkills || []).filter(
+    s => s !== context.primaryGoal && s !== context.secondaryGoal
+  )
+  
+  if (otherSkills.length > 0) {
+    const perSkillWeight = goalWeights.supportWeight / otherSkills.length
+    
+    otherSkills.forEach((skill, index) => {
+      // First tertiary skill gets more, subsequent get less
+      const adjustedWeight = perSkillWeight * (1 - (index * 0.15))
+      allocations.push({
+        skill,
+        weight: Math.max(0.05, adjustedWeight), // Minimum 5% weight
+        exposureSessions: Math.max(1, Math.round(totalSessions * adjustedWeight)),
+        priorityLevel: index === 0 ? 'tertiary' : 'support',
+        rationale: `Selected skill - included in ${Math.max(1, Math.round(totalSessions * adjustedWeight))} session(s)`,
+      })
+    })
+  }
+  
+  // TASK 9: Log allocation for diagnostics
+  console.log('[engine-quality] TASK 2: Weighted skill allocation:', {
+    primaryGoal: context.primaryGoal,
+    secondaryGoal: context.secondaryGoal,
+    selectedSkillsCount: otherSkills.length,
+    totalSessions,
+    allocations: allocations.map(a => ({
+      skill: a.skill,
+      weight: Math.round(a.weight * 100) + '%',
+      sessions: a.exposureSessions,
+      priority: a.priorityLevel,
+    })),
+  })
+  
+  return allocations
+}
+
+/**
+ * Determine intensity distribution for the week based on recovery and adaptive scheduling.
+ * TASK F: Recovery + adaptive scheduling shapes hard/medium/light distribution.
+ */
+export interface WeeklyIntensityDistribution {
+  highIntensityDays: number
+  moderateIntensityDays: number
+  lightIntensityDays: number
+  suggestedPattern: ('high' | 'moderate' | 'light')[]
+  rationale: string
+}
+
+export function calculateIntensityDistribution(
+  totalDays: number,
+  recoveryLevel: string | null,
+  sessionDurationMode: 'static' | 'adaptive',
+  trainingPathType: string
+): WeeklyIntensityDistribution {
+  // Base distribution
+  let highDays = Math.ceil(totalDays * 0.5)
+  let moderateDays = Math.floor(totalDays * 0.35)
+  let lightDays = Math.max(0, totalDays - highDays - moderateDays)
+  
+  // Adjust for recovery level
+  if (recoveryLevel === 'poor' || recoveryLevel === 'very_poor') {
+    // Reduce high intensity days
+    highDays = Math.max(1, highDays - 1)
+    moderateDays = Math.max(1, moderateDays)
+    lightDays = totalDays - highDays - moderateDays
+  }
+  
+  // Adaptive duration mode = more variation
+  if (sessionDurationMode === 'adaptive') {
+    // Ensure at least one light day for adaptive users
+    if (totalDays >= 3 && lightDays === 0) {
+      lightDays = 1
+      moderateDays = Math.max(0, moderateDays - 1)
+    }
+  }
+  
+  // Hybrid path = balanced intensity across modalities
+  if (trainingPathType === 'hybrid' && totalDays >= 4) {
+    // More moderate days for hybrid to avoid overtaxing any single modality
+    highDays = Math.min(2, highDays)
+    moderateDays = totalDays - highDays - lightDays
+  }
+  
+  // Build suggested pattern
+  const pattern: ('high' | 'moderate' | 'light')[] = []
+  
+  // Start with high, then moderate, then alternate
+  for (let i = 0; i < highDays; i++) {
+    pattern.push(i === 0 || pattern.length >= 2 ? 'high' : 'moderate')
+  }
+  for (let i = 0; i < moderateDays && pattern.length < totalDays; i++) {
+    pattern.push('moderate')
+  }
+  for (let i = 0; i < lightDays && pattern.length < totalDays; i++) {
+    pattern.push('light')
+  }
+  
+  // Interleave to avoid back-to-back high days
+  const interleavedPattern = interleaveIntensity(pattern)
+  
+  // Build rationale
+  const rationale = `${highDays} high-intensity session(s), ${moderateDays} moderate, ${lightDays} light/recovery. ` +
+    (recoveryLevel === 'poor' || recoveryLevel === 'very_poor' 
+      ? 'Reduced intensity due to recovery constraints. '
+      : '') +
+    (sessionDurationMode === 'adaptive' 
+      ? 'Adaptive scheduling allows intensity variation. '
+      : '') +
+    (trainingPathType === 'hybrid' 
+      ? 'Hybrid training uses balanced intensity to manage multiple modalities.'
+      : '')
+  
+  console.log('[engine-quality] TASK F: Intensity distribution:', {
+    totalDays,
+    highDays,
+    moderateDays,
+    lightDays,
+    pattern: interleavedPattern,
+    recoveryLevel,
+    sessionDurationMode,
+    trainingPathType,
+  })
+  
+  return {
+    highIntensityDays: highDays,
+    moderateIntensityDays: moderateDays,
+    lightIntensityDays: lightDays,
+    suggestedPattern: interleavedPattern,
+    rationale,
+  }
+}
+
+function interleaveIntensity(pattern: ('high' | 'moderate' | 'light')[]): ('high' | 'moderate' | 'light')[] {
+  // Avoid back-to-back high intensity days
+  const result = [...pattern]
+  for (let i = 1; i < result.length; i++) {
+    if (result[i] === 'high' && result[i - 1] === 'high') {
+      // Find a non-high day to swap with
+      for (let j = i + 1; j < result.length; j++) {
+        if (result[j] !== 'high') {
+          [result[i], result[j]] = [result[j], result[i]]
+          break
+        }
+      }
+    }
+  }
+  return result
+}
+
+/**
+ * Determine flexibility insertion points in the week.
+ * TASK 4: Flexibility targets affect weekly inclusion.
+ */
+export interface FlexibilityInsertion {
+  insertionPoint: 'session_end' | 'dedicated_block' | 'warmup_extended' | 'off_day'
+  targetedMuscles: string[]
+  durationMinutes: number
+  frequency: number // Times per week
+  rationale: string
+}
+
+export function planFlexibilityInsertions(
+  selectedFlexibility: string[],
+  totalSessions: number,
+  sessionDurationMode: 'static' | 'adaptive',
+  sessionLengthMinutes: number
+): FlexibilityInsertion[] {
+  if (!selectedFlexibility || selectedFlexibility.length === 0) {
+    return []
+  }
+  
+  const insertions: FlexibilityInsertion[] = []
+  
+  // Map flexibility targets to muscle groups
+  const targetMuscleMap: Record<string, string[]> = {
+    'front_splits': ['hip_flexors', 'hamstrings'],
+    'side_splits': ['adductors', 'hip_flexors'],
+    'pancake': ['hamstrings', 'adductors', 'lower_back'],
+    'pike': ['hamstrings', 'lower_back'],
+    'bridges': ['hip_flexors', 'shoulders', 'spine'],
+    'shoulder_flexibility': ['shoulders', 'chest'],
+  }
+  
+  // Calculate how much flexibility work can fit
+  const hasTimeForDedicated = sessionLengthMinutes >= 60 || sessionDurationMode === 'adaptive'
+  const maxFlexMinutes = sessionLengthMinutes >= 90 ? 10 : sessionLengthMinutes >= 60 ? 6 : 4
+  
+  selectedFlexibility.forEach(target => {
+    const muscles = targetMuscleMap[target] || []
+    
+    // Primary flexibility targets get more attention
+    const isPrimary = selectedFlexibility.indexOf(target) < 2
+    
+    insertions.push({
+      insertionPoint: hasTimeForDedicated && isPrimary ? 'session_end' : 'warmup_extended',
+      targetedMuscles: muscles,
+      durationMinutes: isPrimary ? Math.min(maxFlexMinutes, 6) : Math.min(maxFlexMinutes, 3),
+      frequency: isPrimary ? Math.min(totalSessions, 3) : Math.min(totalSessions, 2),
+      rationale: `${target.replace(/_/g, ' ')} work ${isPrimary ? 'prioritized' : 'included'} for flexibility development`,
+    })
+  })
+  
+  console.log('[engine-quality] TASK 4: Flexibility insertions planned:', {
+    selectedFlexibility,
+    insertions: insertions.map(i => ({
+      target: i.targetedMuscles.join('/'),
+      point: i.insertionPoint,
+      frequency: i.frequency,
+    })),
+  })
+  
+  return insertions
 }

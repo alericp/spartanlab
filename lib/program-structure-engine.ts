@@ -46,6 +46,10 @@ interface StructureInputs {
   hasSecondaryPull?: boolean // Has front lever or muscle-up secondary
   hasSecondaryPush?: boolean // Has planche or HSPU secondary
   constraintType?: string
+  // TASK 3: Expanded inputs for hybrid/multi-skill awareness
+  trainingPathType?: 'hybrid' | 'skill_progression' | 'strength_endurance' | 'balanced'
+  selectedSkillsCount?: number
+  hasFlexibilityTargets?: boolean
 }
 
 // =============================================================================
@@ -352,6 +356,55 @@ function buildFourDayStructure(
         },
       ],
       rationale: `Hybrid skill focus: ${skillLabel} primary skill training, ${secondaryLabel} secondary skill development, ${skillLabel.toLowerCase()} strength, and mixed skill density session.`,
+    }
+  }
+  
+  // TASK 3: Hybrid training path - emphasizes skill + strength + accessory balance
+  const isHybridPath = inputs.trainingPathType === 'hybrid'
+  const hasMultipleSkills = (inputs.selectedSkillsCount || 0) > 2
+  
+  if (isHybridPath || hasMultipleSkills) {
+    // Hybrid structure: More balanced skill + strength + support mix
+    return {
+      structureType: 'push_pull_skill',
+      structureName: `Hybrid ${skillLabel} Focus`,
+      days: [
+        {
+          dayNumber: 1,
+          focus: isPushGoal ? 'push_skill' : 'pull_skill',
+          focusLabel: `${skillLabel} Skill (Primary)`,
+          isPrimary: true,
+          movementEmphasis: isPushGoal ? 'push' : 'pull',
+          targetIntensity: 'high',
+        },
+        {
+          dayNumber: 2,
+          // TASK 3: Hybrid day 2 = strength-focused with accessory support
+          focus: isPushGoal ? 'pull_strength' : 'push_strength',
+          focusLabel: `${supportLabel} Strength + Accessories`,
+          isPrimary: false,
+          movementEmphasis: isPushGoal ? 'pull' : 'push',
+          targetIntensity: 'moderate',
+        },
+        {
+          dayNumber: 3,
+          focus: isPushGoal ? 'push_strength' : 'pull_strength',
+          focusLabel: `${skillLabel} Strength + Support`,
+          isPrimary: true,
+          movementEmphasis: isPushGoal ? 'push' : 'pull',
+          targetIntensity: day3Intensity as 'high' | 'moderate',
+        },
+        {
+          dayNumber: 4,
+          // TASK 3: Hybrid day 4 = mixed skills + flexibility if targets exist
+          focus: inputs.hasFlexibilityTargets ? 'flexibility_focus' : 'mixed_upper',
+          focusLabel: inputs.hasFlexibilityTargets ? 'Mixed + Flexibility' : 'Mixed Skills + Density',
+          isPrimary: false,
+          movementEmphasis: 'mixed',
+          targetIntensity: 'moderate',
+        },
+      ],
+      rationale: `Hybrid training: ${skillLabel} skill as primary focus, balanced strength support across push/pull, accessory hypertrophy work, and mixed session for skill density${inputs.hasFlexibilityTargets ? ' with flexibility targets' : ''}.`,
     }
   }
   

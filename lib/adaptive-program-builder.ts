@@ -1727,6 +1727,10 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
     experienceLevel,
     trainingDaysPerWeek: effectiveTrainingDays,  // Store actual generated days
     sessionLength,
+    // TASK 3C: Store training path and selected skills for summary display
+    trainingPathType: canonicalProfile.trainingPathType || 'balanced',
+    selectedSkills: canonicalProfile.selectedSkills || [],
+    goalCategories: canonicalProfile.goalCategories || [],
     // TASK 5: Session duration mode - preserve adaptive time identity
     sessionDurationMode: canonicalProfile.sessionDurationMode || 'static',
     // FLEXIBLE SCHEDULING: Full schedule mode semantics
@@ -2408,6 +2412,10 @@ return explanations.length > 0 ? explanations : undefined
       equipmentAvailable: canonicalProfile.equipmentAvailable || [],
       jointCautions: canonicalProfile.jointCautions || [],
       selectedSkills: canonicalProfile.selectedSkills || [],
+      // TASK 3C: Include training path and goal categories in snapshot
+      trainingPathType: canonicalProfile.trainingPathType || 'balanced',
+      goalCategories: canonicalProfile.goalCategories || [],
+      selectedFlexibility: canonicalProfile.selectedFlexibility || [],
       strengthBenchmarks: {
         pullUpMax: canonicalProfile.pullUpMax,
         dipMax: canonicalProfile.dipMax,
@@ -3098,8 +3106,14 @@ export function getDefaultAdaptiveInputs(): AdaptiveProgramInputs {
     scheduleMode,
     trainingDaysPerWeek,
     sessionLength,
+    sessionDurationMode: canonicalProfile.sessionDurationMode || 'static',
     equipmentCount: mappedEquipment.length,
     experienceLevel: canonicalProfile.experienceLevel,
+    // TASK 3C: Log expanded context for hybrid/multi-goal awareness
+    trainingPathType: canonicalProfile.trainingPathType || 'balanced',
+    goalCategoriesCount: canonicalProfile.goalCategories?.length || 0,
+    selectedSkillsCount: canonicalProfile.selectedSkills?.length || 0,
+    selectedFlexibilityCount: canonicalProfile.selectedFlexibility?.length || 0,
     benchmarksPresent: {
       pullUp: !!canonicalProfile.pullUpMax,
       dip: !!canonicalProfile.dipMax,
@@ -3118,6 +3132,13 @@ export function getDefaultAdaptiveInputs(): AdaptiveProgramInputs {
     scheduleMode,
     // TASK 7: Pass selected skills array for multi-goal awareness
     selectedSkills: canonicalProfile.selectedSkills || [],
+    // TASK 3C: Pass training path and goal categories for richer planner context
+    trainingPathType: canonicalProfile.trainingPathType || 'balanced',
+    goalCategories: canonicalProfile.goalCategories || [],
+    // TASK 3C: Pass session duration mode for adaptive time awareness
+    sessionDurationMode: canonicalProfile.sessionDurationMode || 'static',
+    // TASK 3C: Pass flexibility targets when selected
+    selectedFlexibility: canonicalProfile.selectedFlexibility || [],
   }
 }
 

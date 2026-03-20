@@ -24,7 +24,7 @@ import {
   type GenerationReason,
 } from '@/lib/program-version-service'
 import { createProgramVersionOnSettingsChange } from '@/lib/program-history-versioning'
-import { generateAdaptiveProgram, type AdaptiveProgramInputs } from '@/lib/adaptive-program-builder'
+import { generateAdaptiveProgram, getDefaultAdaptiveInputs, type AdaptiveProgramInputs } from '@/lib/adaptive-program-builder'
 import type { AthleteProfile } from '@/lib/data-service'
 
 export const dynamic = 'force-dynamic'
@@ -373,14 +373,14 @@ export async function PUT(request: Request) {
           
           // Also save to program history for version tracking
           // Generate the actual program to store as snapshot
+          // TASK 1 FIX: Use getDefaultAdaptiveInputs() for unified canonical truth
           try {
-            const programInputs: AdaptiveProgramInputs = {
-              primaryGoal: (context.athlete.primaryGoal || 'front_lever') as AdaptiveProgramInputs['primaryGoal'],
-              experienceLevel: 'intermediate',
-              trainingDaysPerWeek: (context.athlete.trainingDaysPerWeek || 4) as AdaptiveProgramInputs['trainingDaysPerWeek'],
-              sessionLength: (context.athlete.sessionDurationMinutes || 60) as AdaptiveProgramInputs['sessionLength'],
-              equipment: context.athlete.equipment as AdaptiveProgramInputs['equipment'],
-            }
+            const programInputs = getDefaultAdaptiveInputs()
+            console.log('[Settings API] TASK 1 FIX: Using canonical profile for regeneration:', {
+              primaryGoal: programInputs.primaryGoal,
+              secondaryGoal: programInputs.secondaryGoal || 'none',
+              scheduleMode: programInputs.scheduleMode,
+            })
             const program = generateAdaptiveProgram(programInputs)
             
             // Save to program history (archives previous, creates new entry)

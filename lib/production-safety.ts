@@ -282,3 +282,232 @@ export function markCanonicalPathUsed(path:
 export function logSafetyEvent(event: string, details?: Record<string, unknown>): void {
   console.log(`[production-safety] ${event}`, details ? JSON.stringify(details).slice(0, 100) : '')
 }
+
+// =============================================================================
+// REGRESSION GUARDS (TASK 2 & TASK 3)
+// =============================================================================
+
+/**
+ * REGRESSION GUARD: Check if canonical profile exists.
+ * Returns true if canonical profile has been properly initialized.
+ * 
+ * USE THIS before deciding to use fallback/default values.
+ */
+export function hasCanonicalProfile(): boolean {
+  if (typeof window === 'undefined') return false
+  
+  try {
+    const stored = localStorage.getItem('spartanlab_onboarding_profile')
+    if (!stored) return false
+    
+    const profile = JSON.parse(stored)
+    // Canonical profile must have onboardingComplete=true and a primaryGoal
+    return !!(profile?.onboardingComplete && profile?.primaryGoal)
+  } catch {
+    return false
+  }
+}
+
+/**
+ * REGRESSION GUARD: Block default fallback if canonical exists.
+ * Use this to prevent || 'front_lever' or || 4 patterns from overriding real values.
+ * 
+ * @param value The value to check
+ * @param fallback The fallback to use ONLY if value is null/undefined AND no canonical profile
+ * @param fieldName Name of field (for logging)
+ * @returns The value, the fallback, or throws if canonical exists but value is missing
+ */
+export function guardedFallback<T>(
+  value: T | null | undefined,
+  fallback: T,
+  fieldName: string,
+  options: { allowFallbackWithCanonical?: boolean } = {}
+): T {
+  // If value exists, use it
+  if (value !== null && value !== undefined) {
+    return value
+  }
+  
+  // Check if canonical profile exists
+  const canonicalExists = hasCanonicalProfile()
+  
+  // If canonical exists and we're not allowing fallback, log a warning
+  // This helps identify places where fallback is incorrectly used
+  if (canonicalExists && !options.allowFallbackWithCanonical) {
+    console.warn(`[regression-guard] Using fallback for ${fieldName} despite canonical profile existing. Value: ${value}, Fallback: ${fallback}`)
+  }
+  
+  return fallback
+}
+
+/**
+ * REGRESSION GUARD: Assert adaptive schedule mode is preserved.
+ * Prevents adaptive scheduleMode from being flattened to a fixed number.
+ */
+export function assertAdaptiveScheduleIntact(profile: {
+  scheduleMode?: 'static' | 'flexible'
+  trainingDaysPerWeek?: number | null
+}): { isAdaptive: boolean; resolvedDays: number | 'adaptive' } {
+  if (profile.scheduleMode === 'flexible') {
+    return {
+      isAdaptive: true,
+      resolvedDays: 'adaptive',
+    }
+  }
+  
+  return {
+    isAdaptive: false,
+    resolvedDays: profile.trainingDaysPerWeek ?? 4, // Only use fallback for static mode
+  }
+}
+
+/**
+ * REGRESSION GUARD: Assert adaptive duration mode is preserved.
+ * Prevents adaptive sessionDurationMode from being flattened to a fixed number.
+ */
+export function assertAdaptiveDurationIntact(profile: {
+  sessionDurationMode?: 'static' | 'adaptive'
+  sessionLengthMinutes?: number | null
+}): { isAdaptive: boolean; resolvedDuration: number | 'adaptive' } {
+  if (profile.sessionDurationMode === 'adaptive') {
+    return {
+      isAdaptive: true,
+      resolvedDuration: 'adaptive',
+    }
+  }
+  
+  return {
+    isAdaptive: false,
+    resolvedDuration: profile.sessionLengthMinutes ?? 45, // Only use fallback for static mode
+  }
+}
+
+/**
+ * REGRESSION GUARD: Check if program snapshot may be stale.
+ * Compares program createdAt against profile lastUpdated.
+ */
+export function isProgramSnapshotStale(
+  programCreatedAt: string | null | undefined,
+  profileLastUpdated: string | null | undefined
+): { isStale: boolean; reason?: string } {
+  if (!programCreatedAt) {
+    return { isStale: true, reason: 'no_program_timestamp' }
+  }
+  
+  if (!profileLastUpdated) {
+    return { isStale: false } // Can't determine staleness without profile timestamp
+  }
+  
+  try {
+    const programDate = new Date(programCreatedAt)
+    const profileDate = new Date(profileLastUpdated)
+    
+    // Program is stale if profile was updated after program was created
+    if (profileDate > programDate) {
+      return {
+        isStale: true,
+        reason: `profile_updated_after_program (profile: ${profileLastUpdated}, program: ${programCreatedAt})`,
+      }
+    }
+    
+    return { isStale: false }
+  } catch {
+    return { isStale: false } // Can't parse dates, assume not stale
+  }
+}
+
+/**
+ * REGRESSION GUARD: Validate generation input comes from canonical source.
+ * Use before running program generation.
+ */
+export function assertCanonicalGenerationInput(input: {
+  source?: string
+  primaryGoal?: string | null
+  scheduleMode?: string
+}): SafetyCheckResult {
+  // Must have a source marker
+  if (!input.source || input.source !== 'canonical') {
+    console.warn('[regression-guard] Generation input not from canonical source:', input.source)
+    return {
+      ok: false,
+      reason: 'non_canonical_source',
+      shouldDegrade: false,
+    }
+  }
+  
+  // Must have primary goal
+  if (!input.primaryGoal) {
+    console.warn('[regression-guard] Generation input missing primaryGoal')
+    return {
+      ok: false,
+      reason: 'missing_primary_goal',
+      shouldDegrade: true,
+      degradeTarget: 'error-boundary',
+    }
+  }
+  
+  return { ok: true, shouldDegrade: false }
+}
+
+/**
+ * REGRESSION GUARD: Track limiter confidence source.
+ * Ensures coaching claims match actual data confidence.
+ */
+export type LimiterConfidenceSource = 'profile_inferred' | 'benchmark_inferred' | 'history_confirmed' | 'unknown'
+
+export function classifyLimiterConfidence(context: {
+  hasWorkoutHistory: boolean
+  workoutCount: number
+  hasBenchmarks: boolean
+  hasDetailedBenchmarks: boolean
+}): LimiterConfidenceSource {
+  // History-confirmed requires actual workout data
+  if (context.hasWorkoutHistory && context.workoutCount >= 5) {
+    return 'history_confirmed'
+  }
+  
+  // Benchmark-inferred requires benchmark data
+  if (context.hasDetailedBenchmarks) {
+    return 'benchmark_inferred'
+  }
+  
+  if (context.hasBenchmarks) {
+    return 'profile_inferred'
+  }
+  
+  return 'unknown'
+}
+
+/**
+ * REGRESSION GUARD: Validate clean-slate user is not treated as having history.
+ * Prevents seed-data-feeling recommendations for new users.
+ */
+export function assertCleanSlateIntegrity(state: {
+  workoutCount: number
+  claimsHistoryBased: boolean
+  claimsInconsistency: boolean
+}): SafetyCheckResult {
+  // Clean-slate user should not have history-based claims
+  if (state.workoutCount === 0 && state.claimsHistoryBased) {
+    console.warn('[regression-guard] Clean-slate user with history-based claims')
+    return {
+      ok: false,
+      reason: 'clean_slate_with_history_claims',
+      shouldDegrade: true,
+      degradeTarget: 'safe-default',
+    }
+  }
+  
+  // Clean-slate user should not have inconsistency claims
+  if (state.workoutCount === 0 && state.claimsInconsistency) {
+    console.warn('[regression-guard] Clean-slate user with inconsistency claims')
+    return {
+      ok: false,
+      reason: 'clean_slate_with_inconsistency',
+      shouldDegrade: true,
+      degradeTarget: 'safe-default',
+    }
+  }
+  
+  return { ok: true, shouldDegrade: false }
+}

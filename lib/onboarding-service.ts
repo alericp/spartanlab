@@ -154,16 +154,18 @@ function mapSkillInterestsToPrimaryGoal(
     }
   }
   
-  // Map primary goal to program goal
+  // REGRESSION GUARD: Map primary goal to program goal
+  // DO NOT use 'front_lever' as catch-all fallback - use 'general' to avoid goal pollution
   const goalMap: Record<string, PrimaryGoal> = {
-    'skill': 'front_lever', // Default skill
+    'skill': 'general', // No specific skill selected, use general
     'strength': 'weighted_strength',
-    'endurance': 'front_lever',
-    'abs': 'front_lever',
-    'general': 'front_lever',
+    'endurance': 'general', // Changed from front_lever
+    'abs': 'general', // Changed from front_lever
+    'general': 'general',
   }
   
-  return goalMap[primaryGoal || 'general'] || 'front_lever'
+  // REGRESSION GUARD: fallback to 'general' not 'front_lever' 
+  return goalMap[primaryGoal || 'general'] || 'general'
 }
 
 /**

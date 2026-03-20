@@ -343,11 +343,14 @@ export function buildAthleteInputsSnapshot(
     hybridModality = 'weighted_calisthenics'
   }
   
+  // REGRESSION GUARD: These fallbacks are for historical snapshots only.
+  // Live program generation uses canonical-profile-service instead.
   return {
     bodyweight: profile?.bodyweight || undefined,
     weightUnit: profile?.weightUnit || 'kg',
+    // Note: fallback values here are for snapshot display, not generation truth
     experienceLevel: program.experienceLevel || 'intermediate',
-    trainingDaysPerWeek: program.trainingDaysPerWeek || 4,
+    trainingDaysPerWeek: program.trainingDaysPerWeek || 4,  // Snapshot display only
     sessionLengthMinutes,
     equipmentAvailable: program.equipmentProfile?.available || [],
     jointCautions: profile?.jointCautions || [],
@@ -398,9 +401,11 @@ export function buildGoalsSnapshot(
     hybridModality = 'weighted_calisthenics'
   }
   
+  // REGRESSION GUARD: 'general' is the safe fallback, not 'front_lever'
+  // This preserves correct goal identity when primary goal is missing
   return {
     primaryGoal: program.primaryGoal || 'general',
-    primaryGoalLabel: program.goalLabel || program.primaryGoal,
+    primaryGoalLabel: program.goalLabel || program.primaryGoal || 'General',
     secondaryEmphasis: program.secondaryEmphasis,
     selectedSkills: profile?.skillInterests || [],
     targetTimeline: undefined,
@@ -423,12 +428,14 @@ export function buildProgramStructureSnapshot(
   // AdaptiveProgram uses 'sessions' array, not 'days'
   const sessions = program.sessions || []
   
+  // REGRESSION GUARD: These fallbacks are for historical snapshots only
+  // Note: daysPerWeek || 4 and || 60 are ONLY for snapshot display, not generation truth
   return {
-    programName: program.goalLabel || `${program.primaryGoal} Program`,
-    daysPerWeek: program.trainingDaysPerWeek || 4,
+    programName: program.goalLabel || `${program.primaryGoal || 'General'} Program`,
+    daysPerWeek: program.trainingDaysPerWeek || 4,  // Snapshot display fallback only
     sessionLengthMinutes: typeof program.sessionLength === 'number' 
       ? program.sessionLength 
-      : parseInt(String(program.sessionLength)) || 60,
+      : parseInt(String(program.sessionLength)) || 60,  // Snapshot display fallback only
     blockStructure: program.structure?.pattern || undefined,
     days: sessions.map((session, index) => ({
       dayNumber: session.dayNumber || index + 1,

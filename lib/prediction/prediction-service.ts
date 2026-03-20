@@ -167,14 +167,16 @@ function gatherPredictionInputs(skillId: SkillId): PredictionInputs {
   }
   
   // Try to get weak points (may not be available)
+  // REGRESSION GUARD: Fallbacks here are for prediction display only, not generation truth
+  // These || fallbacks are acceptable since this is a read-only analysis path
   let weakPointsList: WeakPointAssessment[] | null = null
   try {
     const wpResult = analyzeWeakPoints({
       experienceLevel: profile.experienceLevel as any || 'intermediate',
       primaryOutcome: onboarding?.primaryOutcome || 'skill_mastery',
       skillGoals: onboarding?.primaryGoals,
-      trainingDaysPerWeek: profile.trainingDaysPerWeek || 3,
-      sessionLengthMinutes: profile.sessionLengthMinutes || 60,
+      trainingDaysPerWeek: profile.trainingDaysPerWeek || 3,  // Prediction display fallback
+      sessionLengthMinutes: profile.sessionLengthMinutes || 60,  // Prediction display fallback
       pullUpMax: profile.pullUpMax,
       pushUpMax: profile.pushUpMax,
       dipMax: profile.dipMax,

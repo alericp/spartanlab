@@ -399,12 +399,21 @@ export function getHybridContextFromProfile(
     )
   }
   
+  // REGRESSION GUARD: Preserve adaptive schedule semantics, avoid forcing fixed values
+  // 'flexible' mode should pass 4 as working default, but this is display only - not stored
+  const resolvedDays = profile.trainingDaysPerWeek === 'flexible' 
+    ? 4  // Working default for flexible, not stored as fixed
+    : profile.trainingDaysPerWeek || 3
+  
+  // REGRESSION GUARD: primaryGoal fallback uses 'general' not 'front_lever' to avoid goal pollution
+  const resolvedGoal = profile.primaryGoal || 'general'
+  
   return buildHybridProgrammingContext(
     profile.hybridStrengthProfile,
     profile.equipment,
     profile.jointCautions,
-    profile.trainingDaysPerWeek === 'flexible' ? 4 : profile.trainingDaysPerWeek || 3,
-    profile.primaryGoal || 'front_lever'
+    resolvedDays,
+    resolvedGoal
   )
 }
 

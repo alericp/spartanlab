@@ -1872,6 +1872,7 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
         primaryGoal,
         secondaryGoal: secondaryGoal || canonicalProfile.secondaryGoal || null,
         experienceLevel,
+        // REGRESSION GUARD: This || 60 is for diagnostics display only
         sessionDuration: typeof sessionLength === 'number' ? sessionLength : parseInt(String(sessionLength)) || 60,
         scheduleMode: finalScheduleMode,
         strengthBenchmarks: normalizedProfile?.strength || {},

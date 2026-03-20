@@ -252,8 +252,22 @@ export function getStrengthSummary(overview: DashboardOverview): StrengthSummary
   }
 }
 
-// Get program summary - uses unified program state check
-// TASK B/C FIX: Derives ALL fields from stored adaptive program (single source of truth)
+/**
+ * Get program summary - uses unified program state check
+ * 
+ * =============================================================================
+ * REGRESSION GUARD: PROGRAM SNAPSHOT CONSISTENCY
+ * =============================================================================
+ * 
+ * This function derives ALL display fields from the stored AdaptiveProgram.
+ * DO NOT add fallback logic that reads from other sources (onboarding, settings).
+ * 
+ * RULES:
+ * - adaptiveProgram is the ONLY source of truth for displayed program state
+ * - If adaptiveProgram is null, show "No Program" - do not fabricate data
+ * - daysPerWeek, sessionLength, goalLabel all come from stored program
+ * - DO NOT let profile schedule changes "leak" into program display without regeneration
+ */
 export function getProgramSummary(overview: DashboardOverview): ProgramSummary {
   const { latestProgram } = overview
   

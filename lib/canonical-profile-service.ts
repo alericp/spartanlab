@@ -971,3 +971,77 @@ export function logCanonicalProfileState(context: string): void {
     equipmentAvailable: profile.equipmentAvailable || [],
   })
 }
+
+// =============================================================================
+// PLANNER INPUT RESOLVER (OBJECTIVE 3)
+// =============================================================================
+
+/**
+ * REGRESSION GUARD: Unified planner input resolver
+ * 
+ * This function ensures BOTH onboarding first-generation AND regenerate/update-program
+ * use the SAME input contract for program generation.
+ * 
+ * RULES:
+ * 1. This is the ONLY function that should build planner inputs
+ * 2. Both onboarding-service and settings-regeneration-service MUST use this
+ * 3. DO NOT create separate input-building logic in other files
+ * 4. All inputs are derived from canonical profile
+ * 
+ * @returns Object with source marker and all generation-relevant fields
+ */
+export function resolveCanonicalPlannerInput(): {
+  source: 'canonical'
+  isValid: boolean
+  profile: CanonicalProgrammingProfile
+  // Generation-critical fields (pre-validated)
+  primaryGoal: string | null
+  secondaryGoal: string | null
+  experienceLevel: 'beginner' | 'intermediate' | 'advanced'
+  scheduleMode: 'static' | 'flexible'
+  sessionDurationMode: 'static' | 'adaptive'
+  trainingDaysPerWeek: number | null
+  sessionLengthMinutes: number
+  selectedSkills: string[]
+  equipmentAvailable: string[]
+  jointCautions: string[]
+} {
+  const profile = getCanonicalProfile()
+  const validation = validateProfileForGeneration(profile)
+  
+  console.log('[CanonicalProfile] REGRESSION GUARD: Resolved planner input', {
+    source: 'canonical',
+    isValid: validation.isValid,
+    primaryGoal: profile.primaryGoal,
+    scheduleMode: profile.scheduleMode,
+    sessionDurationMode: profile.sessionDurationMode,
+  })
+  
+  return {
+    source: 'canonical',
+    isValid: validation.isValid,
+    profile,
+    // Pre-extracted generation-critical fields
+    primaryGoal: profile.primaryGoal,
+    secondaryGoal: profile.secondaryGoal,
+    experienceLevel: profile.experienceLevel,
+    scheduleMode: profile.scheduleMode,
+    sessionDurationMode: profile.sessionDurationMode,
+    trainingDaysPerWeek: profile.trainingDaysPerWeek,
+    sessionLengthMinutes: profile.sessionLengthMinutes,
+    selectedSkills: profile.selectedSkills || [],
+    equipmentAvailable: profile.equipmentAvailable || [],
+    jointCautions: profile.jointCautions || [],
+  }
+}
+
+/**
+ * REGRESSION GUARD: Check if canonical profile exists and is valid
+ * 
+ * Use this before deciding whether to use fallback/default values.
+ * If this returns true, fallback values should NOT be used.
+ */
+export function hasValidCanonicalProfile(): boolean {
+  const profile = getCanonicalProfile()
+  return !!(profile.onboardingComplete && profile.primaryGoal)
+}

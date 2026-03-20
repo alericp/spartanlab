@@ -461,8 +461,9 @@ async function loadAthleteContext(userId: string): Promise<AthleteContext> {
   // Get programming rules for the style
   const styleProgrammingRules = getStyleProgrammingRules(trainingStyle)
   
-  // CANONICAL FIX: Use canonical profile for primary goal truth
-  const primaryGoal = canonical.primaryGoal || onboarding?.primaryGoal || 'front_lever'
+  // REGRESSION GUARD: canonical profile IS the source of truth
+  // Fallback to 'general' not 'front_lever' to avoid goal pollution for users without a goal
+  const primaryGoal = canonical.primaryGoal || onboarding?.primaryGoal || 'general'
   const secondaryGoal = canonical.secondaryGoal
   const secondaryGoals = secondaryGoal 
     ? [secondaryGoal, ...(canonical.selectedSkills || []).filter(s => s !== primaryGoal && s !== secondaryGoal)]

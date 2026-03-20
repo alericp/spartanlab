@@ -5,6 +5,7 @@ import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { JsonLdMultiple } from '@/components/seo/JsonLd'
 import { generateArticleSchema, generateBreadcrumbSchema, generateHowToSchema, SITE_CONFIG } from '@/lib/seo'
+import { AuthAwareProgramCTA } from '@/components/shared/AuthAwareProgramCTA'
 
 export const metadata: Metadata = {
   title: 'Planche Training Program | 24-48 Week Plan | SpartanLab',
@@ -268,20 +269,14 @@ export default function PlancheProgramPage() {
         </div>
       </section>
 
-      {/* Program Builder CTA */}
+      {/* Program Builder CTA - Auth-aware */}
       <section className="py-12 px-4 sm:px-6 bg-[#1A1A1A]/50">
-        <div className="max-w-4xl mx-auto text-center">
-          <h2 className="text-2xl font-bold mb-4">Build Your Personalized Program</h2>
-          <p className="text-[#A5A5A5] mb-6 max-w-xl mx-auto">
-            Use the SpartanLab Program Builder to generate a training plan customized to your current strength level, 
-            available equipment, and schedule.
-          </p>
-          <Link href="/calisthenics-program-builder">
-            <Button size="lg" className="bg-[#C1121F] hover:bg-[#A50E1A] text-white">
-              Open Program Builder
-              <ArrowRight className="w-4 h-4 ml-2" />
-            </Button>
-          </Link>
+        <div className="max-w-4xl mx-auto">
+          <AuthAwareProgramCTA 
+            headline="Build Your Personalized Program"
+            description="Use the SpartanLab Program Builder to generate a training plan customized to your current strength level, available equipment, and schedule."
+            skillContext="planche"
+          />
         </div>
       </section>
 

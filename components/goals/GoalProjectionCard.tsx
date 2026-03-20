@@ -171,19 +171,19 @@ export function GoalProjectionCard({ projection, showFullActions = true }: GoalP
             </div>
           </div>
           
-          {/* Generate Program CTA */}
+          {/* Generate Program CTA - routes to canonical /program */}
           {showFullActions && (
             <div className="pt-4 border-t border-[#2B313A]">
-              <Link href={`/program-builder?goal=${projection.goalType}`}>
+              <Link href="/program">
                 <Button 
                   className="w-full bg-[#C1121F] hover:bg-[#A30F1A] text-white gap-2"
                 >
-                  Generate Program for This Goal
+                  Open Your Program
                   <ArrowRight className="w-4 h-4" />
                 </Button>
               </Link>
               <p className="text-xs text-[#6B7280] text-center mt-2">
-                Uses your current level, limiter, and readiness
+                Your program is tailored to your goals and readiness
               </p>
             </div>
           )}

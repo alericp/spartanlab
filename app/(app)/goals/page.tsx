@@ -155,9 +155,9 @@ export default function GoalsPage() {
                         )}
                       </div>
                     </div>
-                    <Link href={`/program-builder?goal=${nearestMilestone.goalType}`}>
+                    <Link href="/program">
                       <Button className="bg-[#C1121F] hover:bg-[#A30F1A] text-white gap-2 whitespace-nowrap">
-                        Generate Program
+                        Open Program
                         <ArrowRight className="w-4 h-4" />
                       </Button>
                     </Link>

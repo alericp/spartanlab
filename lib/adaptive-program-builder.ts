@@ -254,6 +254,14 @@ import {
   type DayStressLevel,
 } from './flexible-schedule-engine'
 import {
+  validateSession,
+  validateWarmupForSkill,
+} from './session-assembly-validation'
+import {
+  resolveSessionBudget,
+  type SessionBudget,
+} from './duration-contract'
+import {
   calculateGoalHierarchyWeights,
   calculateSessionDistribution,
   getDurationVolumeConfig,
@@ -2252,9 +2260,14 @@ return explanations.length > 0 ? explanations : undefined
           trustedWorkoutCount: trainingFeedback.trustedWorkoutCount,
           adjustmentReasons: trainingFeedback.adjustmentReasons,
           isFirstProgram: trainingFeedback.trustedWorkoutCount === 0,
-          limiters: profile?.weakestArea ? [profile.weakestArea] : undefined,
-          weakPoints: constraintContext?.weakPoints?.map(wp => wp.type),
-        }
+  limiters: profile?.weakestArea ? [profile.weakestArea] : undefined,
+  weakPoints: constraintContext?.weakPoints?.map(wp => wp.type),
+  // TASK 6: Pass engine-grounded session distribution for truthful explanation
+  sessionDistribution,
+  durationLabel: resolveSessionBudget(
+    typeof sessionLength === 'number' ? sessionLength : parseInt(String(sessionLength).split('-')[0]) || 45
+  ).label,
+  }
         
         // Build session contexts from generated sessions
         const sessionContexts: SessionContext[] = sessions.map((session, idx) => ({
@@ -2281,6 +2294,39 @@ return explanations.length > 0 ? explanations : undefined
         console.error('[explanation] Failed to build explanation metadata:', err)
         return undefined
       }
+    })(),
+    // TASK 9: Final engine diagnostics (dev-safe logging)
+    engineDiagnostics: (() => {
+      // Only log in development
+      if (process.env.NODE_ENV === 'production') return undefined
+      
+      const diagnostics = {
+        primaryGoal,
+        secondaryGoal: secondaryGoal || canonicalProfile.secondaryGoal || 'none',
+        sessionDurationBudget: resolveSessionBudget(
+          typeof sessionLength === 'number' ? sessionLength : parseInt(String(sessionLength).split('-')[0]) || 45
+        ),
+        scheduleMode: inputs.scheduleMode || 'static',
+        effectiveTrainingDays,
+        goalHierarchyWeights,
+        sessionDistribution,
+        rankedBottlenecks: rankedBottlenecks.map(b => ({ type: b.type, severity: b.severityScore })),
+        warmupPatternType: sessions[0]?.warmup?.length > 0 ? 'skill-aware' : 'default',
+        weeklySplitTemplate: sessions.map(s => s.focus).join(' / '),
+        keyMetricsDetected: {
+          pullUpMax: canonicalProfile.pullUpMax,
+          dipMax: canonicalProfile.dipMax,
+          weightedPullUp: canonicalProfile.weightedPullUp,
+          weightedDip: canonicalProfile.weightedDip,
+          frontLeverProgression: canonicalProfile.frontLeverProgression,
+          plancheProgression: canonicalProfile.plancheProgression,
+        },
+      }
+      
+      console.log('[EngineDiagnostics] === GENERATION COMPLETE ===')
+      console.log('[EngineDiagnostics]', JSON.stringify(diagnostics, null, 2))
+      
+      return diagnostics
     })(),
     // STATE CONTRACT: Profile snapshot taken at generation time (for debugging and traceability)
     profileSnapshot: {
@@ -2488,6 +2534,31 @@ function generateAdaptiveSession(
       }
     }
 
+    // TASK 5: Map exercises first, then validate/dedupe
+    const rawExercises = mapToAdaptiveExercises(
+      Array.isArray(adaptedMain?.adapted) ? adaptedMain.adapted : [], 
+      primaryGoal, 
+      sessionLength, 
+      fatigueSensitivity,
+      currentFatigueScore
+    )
+    const rawWarmup = mapToAdaptiveExercises(Array.isArray(adaptedWarmup?.adapted) ? adaptedWarmup.adapted : [], primaryGoal, sessionLength)
+    const rawCooldown = mapToAdaptiveExercises(Array.isArray(adaptedCooldown?.adapted) ? adaptedCooldown.adapted : [], primaryGoal, sessionLength)
+    
+    // TASK 5: Session Assembly Validation Pass
+    // Dedupe, fix ordering, and validate session before returning
+    const sessionBudget = resolveSessionBudget(typeof sessionLength === 'number' ? sessionLength : parseInt(String(sessionLength).split('-')[0]) || 45)
+    const validatedSession = validateSession(rawExercises, rawWarmup, rawCooldown, {
+      isSkillFirstDay: day.isPrimary,
+      maxMainExercises: sessionBudget.mainWork.maxExercises,
+      maxWarmupExercises: sessionBudget.warmup.maxExercises,
+    })
+    
+    // Add validation fixes to adaptation notes
+    if (validatedSession.validation.fixesApplied.length > 0) {
+      adaptationNotes.push(...validatedSession.validation.fixesApplied)
+    }
+    
     return {
       dayNumber: day.dayNumber,
       dayLabel: `Day ${day.dayNumber}`,
@@ -2495,16 +2566,10 @@ function generateAdaptiveSession(
       focusLabel: day.focusLabel,
       isPrimary: day.isPrimary,
       rationale,
-// SAFETY: Ensure adapted arrays are valid before passing to mapper (using local safe variables)
-exercises: mapToAdaptiveExercises(
-      Array.isArray(adaptedMain?.adapted) ? adaptedMain.adapted : [], 
-      primaryGoal, 
-      sessionLength, 
-      fatigueSensitivity,
-      currentFatigueScore
-    ),
-    warmup: mapToAdaptiveExercises(Array.isArray(adaptedWarmup?.adapted) ? adaptedWarmup.adapted : [], primaryGoal, sessionLength),
-    cooldown: mapToAdaptiveExercises(Array.isArray(adaptedCooldown?.adapted) ? adaptedCooldown.adapted : [], primaryGoal, sessionLength),
+      // Use validated (deduped, reordered) exercises
+      exercises: validatedSession.exercises,
+      warmup: validatedSession.warmup,
+      cooldown: validatedSession.cooldown,
       estimatedMinutes: selection.totalEstimatedTime + (finisher?.durationMinutes || 0),
       variants,
       adaptationNotes: adaptationNotes.length > 0 ? adaptationNotes : undefined,

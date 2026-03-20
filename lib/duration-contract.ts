@@ -339,6 +339,248 @@ export function analyzeDurationDeviation(
 }
 
 // =============================================================================
+// SESSION BUDGET RESOLVER (TASK 1)
+// =============================================================================
+
+/**
+ * CANONICAL SESSION BUDGET RESOLVER
+ * 
+ * This is THE function to use when the engine needs to know how much content
+ * to generate for a session. It returns a real programming budget, not just a label.
+ * 
+ * This ensures:
+ * - 30 min feels clearly shorter and more minimal
+ * - 45 min feels balanced
+ * - 60 min feels meaningfully fuller
+ * - Duration label reflects actual programming behavior
+ */
+export interface SessionBudget {
+  targetMinutes: SessionDurationMinutes
+  warmup: {
+    minutesBudget: number
+    maxExercises: number
+    phases: ('general' | 'specific' | 'activation')[]
+  }
+  mainWork: {
+    minutesBudget: number
+    minExercises: number
+    maxExercises: number
+    skillSlots: number      // Number of skill-focused exercise slots
+    strengthSlots: number   // Number of strength/support exercise slots
+    accessorySlots: number  // Number of accessory/weak-point slots
+  }
+  cooldown: {
+    minutesBudget: number
+    maxExercises: number
+    includeFlexibility: boolean
+  }
+  finisher: {
+    canInclude: boolean
+    maxMinutes: number
+  }
+  label: string
+  variant: 'focused' | 'balanced' | 'complete' | 'extended' | 'circuit_short'
+}
+
+/**
+ * Resolve session budget from target duration.
+ * This is the SINGLE SOURCE OF TRUTH for session content volume.
+ */
+export function resolveSessionBudget(targetMinutes: number): SessionBudget {
+  const normalized = normalizeDurationMinutes(targetMinutes)
+  
+  // Log for engine diagnostics
+  if (process.env.NODE_ENV !== 'production') {
+    console.log('[duration-contract] resolveSessionBudget:', { input: targetMinutes, normalized })
+  }
+  
+  switch (normalized) {
+    case 30:
+      return {
+        targetMinutes: 30,
+        warmup: {
+          minutesBudget: 4,
+          maxExercises: 4,
+          phases: ['general', 'specific'], // No activation phase for short sessions
+        },
+        mainWork: {
+          minutesBudget: 20,
+          minExercises: 3,
+          maxExercises: 4,
+          skillSlots: 1,
+          strengthSlots: 2,
+          accessorySlots: 0, // No accessories in focused session
+        },
+        cooldown: {
+          minutesBudget: 2,
+          maxExercises: 2,
+          includeFlexibility: false,
+        },
+        finisher: {
+          canInclude: false,
+          maxMinutes: 0,
+        },
+        label: '30 min focused session',
+        variant: 'focused',
+      }
+      
+    case 45:
+      return {
+        targetMinutes: 45,
+        warmup: {
+          minutesBudget: 5,
+          maxExercises: 5,
+          phases: ['general', 'specific', 'activation'],
+        },
+        mainWork: {
+          minutesBudget: 30,
+          minExercises: 4,
+          maxExercises: 5,
+          skillSlots: 2,
+          strengthSlots: 2,
+          accessorySlots: 1,
+        },
+        cooldown: {
+          minutesBudget: 3,
+          maxExercises: 3,
+          includeFlexibility: true,
+        },
+        finisher: {
+          canInclude: false,
+          maxMinutes: 0,
+        },
+        label: '45 min balanced session',
+        variant: 'balanced',
+      }
+      
+    case 60:
+      return {
+        targetMinutes: 60,
+        warmup: {
+          minutesBudget: 6,
+          maxExercises: 6,
+          phases: ['general', 'specific', 'activation'],
+        },
+        mainWork: {
+          minutesBudget: 42,
+          minExercises: 5,
+          maxExercises: 6,
+          skillSlots: 2,
+          strengthSlots: 3,
+          accessorySlots: 2,
+        },
+        cooldown: {
+          minutesBudget: 4,
+          maxExercises: 3,
+          includeFlexibility: true,
+        },
+        finisher: {
+          canInclude: true,
+          maxMinutes: 6,
+        },
+        label: '60 min complete session',
+        variant: 'complete',
+      }
+      
+    case 75:
+      return {
+        targetMinutes: 75,
+        warmup: {
+          minutesBudget: 7,
+          maxExercises: 7,
+          phases: ['general', 'specific', 'activation'],
+        },
+        mainWork: {
+          minutesBudget: 52,
+          minExercises: 5,
+          maxExercises: 7,
+          skillSlots: 3,
+          strengthSlots: 3,
+          accessorySlots: 2,
+        },
+        cooldown: {
+          minutesBudget: 5,
+          maxExercises: 4,
+          includeFlexibility: true,
+        },
+        finisher: {
+          canInclude: true,
+          maxMinutes: 8,
+        },
+        label: '75 min extended session',
+        variant: 'extended',
+      }
+      
+    case 90:
+    default:
+      return {
+        targetMinutes: 90,
+        warmup: {
+          minutesBudget: 8,
+          maxExercises: 8,
+          phases: ['general', 'specific', 'activation'],
+        },
+        mainWork: {
+          minutesBudget: 62,
+          minExercises: 6,
+          maxExercises: 8,
+          skillSlots: 3,
+          strengthSlots: 4,
+          accessorySlots: 3,
+        },
+        cooldown: {
+          minutesBudget: 6,
+          maxExercises: 4,
+          includeFlexibility: true,
+        },
+        finisher: {
+          canInclude: true,
+          maxMinutes: 10,
+        },
+        label: '90 min comprehensive session',
+        variant: 'extended',
+      }
+  }
+}
+
+/**
+ * Get a SHORT-FORMAT budget for future 15-20 min circuit sessions.
+ * TASK 7: This is a structural hook for future expansion.
+ * Currently NOT used by default generation - only available for explicit short-format requests.
+ */
+export function resolveShortFormatBudget(targetMinutes: number): SessionBudget {
+  const clampedMinutes = Math.max(15, Math.min(25, targetMinutes))
+  
+  return {
+    targetMinutes: clampedMinutes as SessionDurationMinutes,
+    warmup: {
+      minutesBudget: 3,
+      maxExercises: 3,
+      phases: ['general', 'specific'],
+    },
+    mainWork: {
+      minutesBudget: clampedMinutes - 5,
+      minExercises: 3,
+      maxExercises: 4,
+      skillSlots: 1,
+      strengthSlots: 2,
+      accessorySlots: 0,
+    },
+    cooldown: {
+      minutesBudget: 2,
+      maxExercises: 2,
+      includeFlexibility: false,
+    },
+    finisher: {
+      canInclude: false,
+      maxMinutes: 0,
+    },
+    label: `${clampedMinutes} min circuit session`,
+    variant: 'circuit_short',
+  }
+}
+
+// =============================================================================
 // DEV LOGGING
 // =============================================================================
 

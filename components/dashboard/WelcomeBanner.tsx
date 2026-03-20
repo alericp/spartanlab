@@ -40,6 +40,7 @@ function WelcomeBannerInner() {
   }
 
   useEffect(() => {
+    let isCancelled = false
     setMounted(true)
     console.log('[WelcomeBanner] Mounted, loading helpers via dynamic import')
     
@@ -51,8 +52,10 @@ function WelcomeBannerInner() {
       // Load athlete-profile module dynamically
       try {
         const athleteModule = await import('@/lib/athlete-profile')
-        setProfile(athleteModule.getOnboardingProfile())
-        console.log('[WelcomeBanner] athlete-profile module loaded successfully')
+        if (!isCancelled) {
+          setProfile(athleteModule.getOnboardingProfile())
+          console.log('[WelcomeBanner] athlete-profile module loaded successfully')
+        }
       } catch (err) {
         console.error('[WelcomeBanner] Failed to load athlete-profile module:', err)
       }
@@ -61,33 +64,37 @@ function WelcomeBannerInner() {
       try {
         const featureModule = await import('@/lib/feature-access')
         
+        if (isCancelled) return
+        
         try {
           setIsPro(featureModule.hasProAccess())
         } catch (err) {
           console.error('[WelcomeBanner] hasProAccess failed:', err)
-          setIsPro(false)
+          if (!isCancelled) setIsPro(false)
         }
         
         try {
-          setIsTrial(featureModule.isInTrial())
+          if (!isCancelled) setIsTrial(featureModule.isInTrial())
         } catch (err) {
           console.error('[WelcomeBanner] isInTrial failed:', err)
-          setIsTrial(false)
+          if (!isCancelled) setIsTrial(false)
         }
         
         try {
-          setTrialDays(featureModule.getTrialDaysRemaining())
+          if (!isCancelled) setTrialDays(featureModule.getTrialDaysRemaining())
         } catch (err) {
           console.error('[WelcomeBanner] getTrialDaysRemaining failed:', err)
-          setTrialDays(0)
+          if (!isCancelled) setTrialDays(0)
         }
         
         console.log('[WelcomeBanner] feature-access module loaded successfully')
       } catch (err) {
         console.error('[WelcomeBanner] Failed to load feature-access module:', err)
-        setIsPro(false)
-        setIsTrial(false)
-        setTrialDays(0)
+        if (!isCancelled) {
+          setIsPro(false)
+          setIsTrial(false)
+          setTrialDays(0)
+        }
       }
     }
     
@@ -103,6 +110,10 @@ function WelcomeBannerInner() {
       }
     } catch (err) {
       console.error('[WelcomeBanner] sessionStorage check failed:', err)
+    }
+    
+    return () => {
+      isCancelled = true
     }
   }, [])
 

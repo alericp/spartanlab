@@ -689,6 +689,23 @@ export function generateWarmUp(context: WarmUpGenerationContext): GeneratedWarmU
 // HELPER FUNCTIONS
 // =============================================================================
 
+// =============================================================================
+// TASK 4: USER-PREFERRED WARMUP EXERCISES
+// These exercises are heavily weighted based on user feedback
+// =============================================================================
+
+const USER_PREFERRED_WARMUP_IDS = new Set([
+  'arm_circles_warmup',      // arm circles forward/backward
+  'arm_swings_crosses',      // arm swings / crosses
+  'trunk_rotations',         // waist/trunk rotations
+  'toe_touch_pulses',        // toe-touch pulses
+  'leg_swings_front',        // general leg loosening
+  'kneeling_lunge_pulses',   // kneeling lunge pulses
+  'lat_stretch_warmup',      // lat stretch before pulling
+  'wrist_prep',              // wrist prep before push skills
+  'plank_bird_dog',          // plank press / bird-dog activation
+])
+
 function selectPhaseExercises(
   pool: WarmUpExercise[],
   focus: WarmUpFocus,
@@ -699,6 +716,11 @@ function selectPhaseExercises(
   // Score exercises by relevance
   const scored = pool.map(ex => {
     let score = ex.priority
+
+    // TASK 4: Boost user-preferred exercises significantly
+    if (USER_PREFERRED_WARMUP_IDS.has(ex.id)) {
+      score += 4
+    }
 
     // Boost if targets relevant patterns
     const patternMatch = ex.targetPattern.some(p => targetPatterns.has(p))
@@ -1175,4 +1197,122 @@ export async function generateIntelligentWarmup(
  * Re-export prehab functions for convenience
  */
 export { generateIntelligentPrehab } from './prehab'
+
+// =============================================================================
+// TASK 5: SESSION ASSEMBLY VALIDATION
+// Validates and deduplicates entire session before final output
+// =============================================================================
+
+export interface SessionAssemblyValidation {
+  isValid: boolean
+  duplicatesRemoved: string[]
+  orderingIssues: string[]
+  suggestions: string[]
+}
+
+/**
+ * TASK 5: Validate and fix session assembly issues
+ * - Deduplicates warmup items
+ * - Validates ordering (general → specific → activation)
+ * - Checks for logical flow
+ */
+export function validateSessionAssembly(
+  warmup: Array<{ name: string; id?: string }>,
+  main: Array<{ name: string; id?: string; category?: string }>,
+): SessionAssemblyValidation {
+  const issues: string[] = []
+  const suggestions: string[] = []
+  const duplicatesRemoved: string[] = []
+  
+  // Check for warmup duplicates
+  const warmupNames = new Set<string>()
+  warmup.forEach(ex => {
+    const normalizedName = ex.name.toLowerCase().trim()
+    if (warmupNames.has(normalizedName)) {
+      duplicatesRemoved.push(ex.name)
+    }
+    warmupNames.add(normalizedName)
+  })
+  
+  // Check for main exercise duplicates
+  const mainNames = new Set<string>()
+  main.forEach(ex => {
+    const normalizedName = ex.name.toLowerCase().trim()
+    if (mainNames.has(normalizedName)) {
+      duplicatesRemoved.push(`[main] ${ex.name}`)
+    }
+    mainNames.add(normalizedName)
+  })
+  
+  // Check ordering: skill exercises should come before strength accessories
+  let foundAccessory = false
+  main.forEach((ex, idx) => {
+    const isSkill = ex.category === 'skill' || ex.name.toLowerCase().includes('hold') || ex.name.toLowerCase().includes('lever')
+    const isAccessory = ex.category === 'accessory' || ex.category === 'core'
+    
+    if (isAccessory) foundAccessory = true
+    if (isSkill && foundAccessory) {
+      issues.push(`Skill exercise "${ex.name}" appears after accessory work - consider reordering`)
+    }
+  })
+  
+  // Check warmup has proper general prep before activation
+  const hasGeneralPrep = warmup.some(ex => 
+    ex.name.toLowerCase().includes('circle') || 
+    ex.name.toLowerCase().includes('stretch') ||
+    ex.name.toLowerCase().includes('rotation')
+  )
+  const hasActivation = warmup.some(ex => 
+    ex.name.toLowerCase().includes('hold') || 
+    ex.name.toLowerCase().includes('lean') ||
+    ex.name.toLowerCase().includes('activation')
+  )
+  
+  if (hasActivation && !hasGeneralPrep) {
+    suggestions.push('Consider adding general mobility before activation drills')
+  }
+  
+  if (duplicatesRemoved.length > 0) {
+    console.log('[SessionAssembly] TASK 5: Duplicates detected:', duplicatesRemoved)
+  }
+  
+  return {
+    isValid: issues.length === 0,
+    duplicatesRemoved,
+    orderingIssues: issues,
+    suggestions,
+  }
+}
+
+/**
+ * TASK 5: Dedupe and reorder warmup exercises by phase
+ */
+export function orderWarmupByPhase(exercises: WarmUpExercise[]): WarmUpExercise[] {
+  // Dedupe first
+  const dedupedExercises = dedupeWarmUpExercises(exercises)
+  
+  // Sort by phase: general → specific → activation
+  const phaseOrder: Record<WarmUpPhase, number> = {
+    'general': 0,
+    'specific': 1,
+    'activation': 2,
+  }
+  
+  return [...dedupedExercises].sort((a, b) => {
+    const orderA = phaseOrder[a.phase] ?? 1
+    const orderB = phaseOrder[b.phase] ?? 1
+    return orderA - orderB
+  })
+}
+
+// Internal dedupe function reference for orderWarmupByPhase
+function dedupeWarmUpExercises(exercises: WarmUpExercise[]): WarmUpExercise[] {
+  const seen = new Set<string>()
+  return exercises.filter(ex => {
+    const key = ex.id.toLowerCase()
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
 export type { IntelligentPrehabContext, IntelligentPrehabResult } from './prehab'

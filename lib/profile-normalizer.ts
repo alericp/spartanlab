@@ -650,3 +650,94 @@ function getFlexibilityLevel(level: string | null): number {
   
   return levels[level.toLowerCase()] ?? 50
 }
+
+// =============================================================================
+// TASK 3: METRIC-BASED EXERCISE SELECTION GUIDANCE
+// Uses actual profile metrics to guide exercise choices
+// =============================================================================
+
+export interface ExerciseSelectionGuidance {
+  preferWeightedSupport: boolean
+  skillTier: 'foundational' | 'intermediate' | 'advanced'
+  pushVariantLevel: 'basic' | 'intermediate' | 'advanced'
+  pullVariantLevel: 'basic' | 'intermediate' | 'advanced'
+  compressionReady: boolean
+  jointCautionAreas: string[]
+  warmupEmphasis: string[]
+  suggestedIntensity: 'conservative' | 'moderate' | 'aggressive'
+}
+
+/**
+ * TASK 3: Compute exercise selection guidance from profile metrics.
+ * This ensures actual benchmarks affect exercise choices.
+ */
+export function computeExerciseSelectionGuidance(profile: NormalizedProfile): ExerciseSelectionGuidance {
+  const { strength, skillProgressions, joints, level } = profile
+  
+  // Determine if weighted support is appropriate
+  const preferWeightedSupport = !!(
+    (strength.weightedPull && strength.weightedPull.weight >= 15) ||
+    (strength.weightedDip && strength.weightedDip.weight >= 20) ||
+    (strength.pullups !== null && strength.pullups >= 15) ||
+    (strength.dips !== null && strength.dips >= 20)
+  )
+  
+  // Determine skill tier from progression levels
+  const plancheLevel = getProgressionLevel(skillProgressions.planche.progression)
+  const flLevel = getProgressionLevel(skillProgressions.frontLever.progression)
+  const maxSkillLevel = Math.max(plancheLevel, flLevel)
+  
+  let skillTier: ExerciseSelectionGuidance['skillTier'] = 'foundational'
+  if (maxSkillLevel >= 3) skillTier = 'advanced'
+  else if (maxSkillLevel >= 2 || level === 'intermediate') skillTier = 'intermediate'
+  
+  // Determine push variant level from strength metrics
+  let pushVariantLevel: ExerciseSelectionGuidance['pushVariantLevel'] = 'basic'
+  if (strength.dips !== null && strength.dips >= 20) pushVariantLevel = 'advanced'
+  else if (strength.dips !== null && strength.dips >= 12) pushVariantLevel = 'intermediate'
+  else if (strength.pushups !== null && strength.pushups >= 30) pushVariantLevel = 'intermediate'
+  
+  // Determine pull variant level from strength metrics
+  let pullVariantLevel: ExerciseSelectionGuidance['pullVariantLevel'] = 'basic'
+  if (strength.pullups !== null && strength.pullups >= 18) pullVariantLevel = 'advanced'
+  else if (strength.pullups !== null && strength.pullups >= 10) pullVariantLevel = 'intermediate'
+  
+  // Check compression readiness
+  const compressionReady = !!(
+    skillProgressions.lSit.holdSeconds && skillProgressions.lSit.holdSeconds >= 10
+  )
+  
+  // Map joint cautions to warmup emphasis
+  const warmupEmphasis: string[] = []
+  if (joints.includes('shoulders')) warmupEmphasis.push('shoulder_prep', 'rotator_cuff')
+  if (joints.includes('wrists')) warmupEmphasis.push('wrist_prep', 'forearm_stretches')
+  if (joints.includes('elbows')) warmupEmphasis.push('elbow_prep', 'controlled_tempo')
+  if (joints.includes('lower_back')) warmupEmphasis.push('core_activation', 'hip_mobility')
+  
+  // Determine intensity approach based on joint cautions and level
+  let suggestedIntensity: ExerciseSelectionGuidance['suggestedIntensity'] = 'moderate'
+  if (joints.length >= 3) suggestedIntensity = 'conservative'
+  else if (level === 'advanced' && joints.length <= 1) suggestedIntensity = 'aggressive'
+  
+  const guidance: ExerciseSelectionGuidance = {
+    preferWeightedSupport,
+    skillTier,
+    pushVariantLevel,
+    pullVariantLevel,
+    compressionReady,
+    jointCautionAreas: joints,
+    warmupEmphasis,
+    suggestedIntensity,
+  }
+  
+  // Dev logging
+  console.log('[ProfileNormalizer] TASK 3: Exercise selection guidance:', {
+    preferWeightedSupport,
+    skillTier,
+    pushVariant: pushVariantLevel,
+    pullVariant: pullVariantLevel,
+    intensity: suggestedIntensity,
+  })
+  
+  return guidance
+}

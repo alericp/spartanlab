@@ -44,16 +44,33 @@
 // DURATION PREFERENCE TYPES
 // =============================================================================
 
-export type SessionDurationPreference = 30 | 45 | 60 | 75 | 90
+// TASK 1 & 7: Canonical duration tiers including future short-format support
+export type SessionDurationPreference = 15 | 20 | 30 | 45 | 60 | 75 | 90
 
 export interface DurationPreferenceLabel {
   value: SessionDurationPreference
   label: string
   shortLabel: string
   description: string
+  isShortFormat?: boolean  // TASK 7: Flag for circuit/round-based sessions
 }
 
 export const DURATION_PREFERENCE_LABELS: Record<SessionDurationPreference, DurationPreferenceLabel> = {
+  // TASK 7: Short format tiers (dormant - not exposed in UI yet)
+  15: {
+    value: 15,
+    label: '15 min quick circuit',
+    shortLabel: '15 min',
+    description: 'Fast circuit or EMOM format',
+    isShortFormat: true,
+  },
+  20: {
+    value: 20,
+    label: '20 min skill focus',
+    shortLabel: '20 min',
+    description: 'Focused skill work or conditioning circuit',
+    isShortFormat: true,
+  },
   30: {
     value: 30,
     label: '30 min focused session',
@@ -179,23 +196,92 @@ export function getDurationShortLabel(minutes: number): string {
 
 const DEFAULT_DURATION_PREFERENCE: SessionDurationPreference = 60
 
+// TASK 1: Canonical duration resolver - single source of truth
 export function getCanonicalDurationPreference(
   profileMinutes: number | null | undefined,
   source: string = 'unknown'
 ): SessionDurationPreference {
-  const validPreferences: SessionDurationPreference[] = [30, 45, 60, 75, 90]
+  // TASK 7: All valid tiers including short format (15, 20 are dormant)
+  const validPreferences: SessionDurationPreference[] = [15, 20, 30, 45, 60, 75, 90]
   
   if (profileMinutes && validPreferences.includes(profileMinutes as SessionDurationPreference)) {
     if (process.env.NODE_ENV === 'development') {
-      console.log(`[DurationContract] Loaded preference: ${profileMinutes} min from ${source}`)
+      console.log(`[DurationContract] TASK 1: Loaded preference: ${profileMinutes} min from ${source}`)
     }
     return profileMinutes as SessionDurationPreference
   }
   
   if (process.env.NODE_ENV === 'development') {
-    console.warn(`[DurationContract] FALLBACK: Using ${DEFAULT_DURATION_PREFERENCE} min (missing from ${source})`)
+    console.warn(`[DurationContract] TASK 1: FALLBACK to ${DEFAULT_DURATION_PREFERENCE} min (missing from ${source})`)
   }
   return DEFAULT_DURATION_PREFERENCE
+}
+
+// =============================================================================
+// TASK 1: UNIFIED SESSION BUDGET RESOLVER
+// Single function that returns real programming budget, not just a label
+// =============================================================================
+
+export interface SessionBudget {
+  durationMinutes: SessionDurationPreference
+  label: string
+  volumeTargets: DurationVolumeTargets
+  warmupDepth: 'minimal' | 'standard' | 'extended'
+  includeAccessories: boolean
+  includeCooldown: boolean
+  includeCompression: boolean
+  isShortFormat: boolean
+  formatStyle: 'standard' | 'circuit' | 'emom' | 'amrap'
+}
+
+/**
+ * TASK 1: Resolves session duration to a real programming budget.
+ * This is the single source of truth for how duration affects session content.
+ */
+export function resolveSessionBudget(
+  durationMinutes: SessionDurationPreference
+): SessionBudget {
+  const label = DURATION_PREFERENCE_LABELS[durationMinutes]?.label || `${durationMinutes} min session`
+  const volumeTargets = getVolumeTargetsForDuration(durationMinutes)
+  const isShortFormat = durationMinutes <= 20
+  
+  // Determine warmup depth based on duration
+  let warmupDepth: SessionBudget['warmupDepth'] = 'standard'
+  if (durationMinutes <= 20) warmupDepth = 'minimal'
+  else if (durationMinutes >= 75) warmupDepth = 'extended'
+  
+  // Determine what components to include
+  const includeAccessories = durationMinutes >= 45
+  const includeCooldown = durationMinutes >= 30
+  const includeCompression = durationMinutes >= 45
+  
+  // Short format sessions default to circuit style
+  const formatStyle = isShortFormat ? 'circuit' : 'standard'
+  
+  const budget: SessionBudget = {
+    durationMinutes,
+    label,
+    volumeTargets,
+    warmupDepth,
+    includeAccessories,
+    includeCooldown,
+    includeCompression,
+    isShortFormat,
+    formatStyle,
+  }
+  
+  if (process.env.NODE_ENV === 'development') {
+    console.log('[DurationContract] TASK 1: Resolved session budget:', {
+      duration: durationMinutes,
+      warmupDepth,
+      mainExercises: volumeTargets.mainExerciseCount,
+      totalSets: volumeTargets.totalSetsBudget,
+      includeAccessories,
+      isShortFormat,
+    })
+  }
+  
+  return budget
 }
 
 // =============================================================================
@@ -214,6 +300,25 @@ export interface DurationVolumeTargets {
 }
 
 export const DURATION_VOLUME_TARGETS: Record<SessionDurationPreference, DurationVolumeTargets> = {
+  // TASK 7: Short format tiers - minimal but intentional
+  15: {
+    warmupExerciseCount: { min: 2, max: 3 },
+    mainExerciseCount: { min: 2, max: 3 },
+    accessoryExerciseCount: { min: 0, max: 0 },
+    cooldownExerciseCount: { min: 1, max: 2 },
+    skillSetsPerExercise: { min: 2, max: 3 },
+    strengthSetsPerExercise: { min: 2, max: 2 },
+    totalSetsBudget: { min: 6, max: 10 },
+  },
+  20: {
+    warmupExerciseCount: { min: 3, max: 4 },
+    mainExerciseCount: { min: 2, max: 3 },
+    accessoryExerciseCount: { min: 0, max: 1 },
+    cooldownExerciseCount: { min: 2, max: 3 },
+    skillSetsPerExercise: { min: 3, max: 3 },
+    strengthSetsPerExercise: { min: 2, max: 3 },
+    totalSetsBudget: { min: 8, max: 12 },
+  },
   30: {
     warmupExerciseCount: { min: 4, max: 6 },
     mainExerciseCount: { min: 2, max: 3 },

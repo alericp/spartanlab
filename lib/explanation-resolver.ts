@@ -144,6 +144,12 @@ function buildSummaryExplanation(context: ExplanationContext): ProgramExplanatio
     primaryGoalReason += ` Secondary emphasis: ${context.secondaryGoalLabel} development for complementary progress.`
   }
   
+  // TASK 6: Add detected limiter to explanation when available
+  if (context.limiters && context.limiters.length > 0) {
+    const primaryLimiter = context.limiters[0]
+    primaryGoalReason += ` Support work targets: ${primaryLimiter}.`
+  }
+  
   // Schedule reason - explain flexible vs static
   let scheduleReason: string | undefined
   if (context.scheduleMode === 'flexible') {

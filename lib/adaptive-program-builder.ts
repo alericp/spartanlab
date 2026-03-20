@@ -2414,7 +2414,7 @@ return explanations.length > 0 ? explanations : undefined
     explanationMetadata: (() => {
       try {
         // Build explanation context from available data
-        // TASK 6: Include secondary goal in explanation context
+        // TASK 6: Include secondary goal and bottleneck analysis in explanation context
         const explanationContext: ExplanationContext = {
           primaryGoal,
           secondaryGoal: secondaryGoal || canonicalProfile.secondaryGoal,  // TASK 6
@@ -2430,7 +2430,10 @@ return explanations.length > 0 ? explanations : undefined
           trustedWorkoutCount: trainingFeedback.trustedWorkoutCount,
           adjustmentReasons: trainingFeedback.adjustmentReasons,
           isFirstProgram: trainingFeedback.trustedWorkoutCount === 0,
-          limiters: profile?.weakestArea ? [profile.weakestArea] : undefined,
+          // TASK 6: Enhanced limiter information from bottleneck analysis
+          limiters: bottleneckAnalysis 
+            ? [bottleneckAnalysis.primary.label, bottleneckAnalysis.secondary?.label].filter(Boolean) as string[]
+            : (profile?.weakestArea ? [profile.weakestArea] : (computedLimiter ? [computedLimiter] : undefined)),
           weakPoints: constraintContext?.weakPoints?.map(wp => wp.type),
         }
         

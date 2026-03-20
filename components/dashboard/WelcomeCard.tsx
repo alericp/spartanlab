@@ -46,6 +46,8 @@ export function WelcomeCard({ onDismiss, onProgramReady }: WelcomeCardProps) {
   // Now moved to top-level with guards inside the effect body
   // ==========================================================================
   useEffect(() => {
+    let isCancelled = false
+    
     // Guard: Only check estimates when we have a successful result
     if (isLoading || !result?.success) {
       setHasEstimates(false)
@@ -56,18 +58,24 @@ export function WelcomeCard({ onDismiss, onProgramReady }: WelcomeCardProps) {
       try {
         const athleteModule = await import('@/lib/athlete-profile')
         const profile = athleteModule.getOnboardingProfile()
-        if (profile) {
+        if (profile && !isCancelled) {
           setHasEstimates(athleteModule.hasEstimatedValues(profile))
         }
       } catch (err) {
         console.error('[WelcomeCard] Error checking estimates:', err)
-        setHasEstimates(false)
+        if (!isCancelled) setHasEstimates(false)
       }
     }
     checkEstimates()
+    
+    return () => {
+      isCancelled = true
+    }
   }, [isLoading, result?.success])
 
   useEffect(() => {
+    let isCancelled = false
+    
     // READ existing program state - do NOT regenerate
     const loadExistingProgram = async () => {
       setIsLoading(true)
@@ -75,6 +83,8 @@ export function WelcomeCard({ onDismiss, onProgramReady }: WelcomeCardProps) {
       
       // Small delay for smooth UX transition
       await new Promise(resolve => setTimeout(resolve, 300))
+      
+      if (isCancelled) return
       
       try {
         // =======================================================================
@@ -91,16 +101,20 @@ export function WelcomeCard({ onDismiss, onProgramReady }: WelcomeCardProps) {
           console.log('[WelcomeCard] program-state module loaded successfully')
         } catch (err) {
           console.error('[WelcomeCard] Failed to load program-state module:', err)
-          setResult({
-            success: false,
-            program: null,
-            calibration: null,
-            welcomeMessage: 'Error loading program.',
-            error: 'Failed to load program state module.',
-          })
-          setIsLoading(false)
+          if (!isCancelled) {
+            setResult({
+              success: false,
+              program: null,
+              calibration: null,
+              welcomeMessage: 'Error loading program.',
+              error: 'Failed to load program state module.',
+            })
+            setIsLoading(false)
+          }
           return
         }
+        
+        if (isCancelled) return
         
         try {
           const onboardingModule = await import('@/lib/onboarding-service')
@@ -113,6 +127,8 @@ export function WelcomeCard({ onDismiss, onProgramReady }: WelcomeCardProps) {
           getProgramReasoning = () => null
         }
         
+        if (isCancelled) return
+        
         // Get existing program from program-state (the safe unified source)
         let programState
         try {
@@ -122,6 +138,8 @@ export function WelcomeCard({ onDismiss, onProgramReady }: WelcomeCardProps) {
         }
         const { adaptiveProgram, hasUsableWorkoutProgram } = programState
         console.log('[WelcomeCard] Program state:', { hasUsableWorkoutProgram, programExists: !!adaptiveProgram })
+        
+        if (isCancelled) return
         
         if (hasUsableWorkoutProgram && adaptiveProgram) {
           // Program exists - create display result from existing data
@@ -138,17 +156,17 @@ export function WelcomeCard({ onDismiss, onProgramReady }: WelcomeCardProps) {
             setSummary(getOnboardingSummary())
           } catch (err) {
             console.error('[WelcomeCard] getOnboardingSummary failed:', err)
-            setSummary(null)
+            if (!isCancelled) setSummary(null)
           }
           
           try {
-            setReasoning(getProgramReasoning(adaptiveProgram))
+            if (!isCancelled) setReasoning(getProgramReasoning(adaptiveProgram))
           } catch (err) {
             console.error('[WelcomeCard] getProgramReasoning failed:', err)
-            setReasoning(null)
+            if (!isCancelled) setReasoning(null)
           }
           
-          if (onProgramReady) {
+          if (onProgramReady && !isCancelled) {
             try {
               onProgramReady(displayResult)
             } catch (err) {
@@ -158,29 +176,37 @@ export function WelcomeCard({ onDismiss, onProgramReady }: WelcomeCardProps) {
         } else {
           // No valid program - show error state
           console.log('[WelcomeCard] No valid program found, showing fallback')
+          if (!isCancelled) {
+            setResult({
+              success: false,
+              program: null,
+              calibration: null,
+              welcomeMessage: 'No program found.',
+              error: 'Program not generated yet. Please complete onboarding.',
+            })
+          }
+        }
+      } catch (err) {
+        console.error('[WelcomeCard] Error loading program:', err)
+        if (!isCancelled) {
           setResult({
             success: false,
             program: null,
             calibration: null,
-            welcomeMessage: 'No program found.',
-            error: 'Program not generated yet. Please complete onboarding.',
+            welcomeMessage: 'Error loading program.',
+            error: 'An error occurred while loading your program.',
           })
         }
-      } catch (err) {
-        console.error('[WelcomeCard] Error loading program:', err)
-        setResult({
-          success: false,
-          program: null,
-          calibration: null,
-          welcomeMessage: 'Error loading program.',
-          error: 'An error occurred while loading your program.',
-        })
       }
       
-      setIsLoading(false)
+      if (!isCancelled) setIsLoading(false)
     }
     
     loadExistingProgram()
+    
+    return () => {
+      isCancelled = true
+    }
   }, [onProgramReady])
 
   if (isLoading) {

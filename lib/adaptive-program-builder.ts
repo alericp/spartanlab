@@ -267,6 +267,7 @@ type AdaptiveSessionContext = {
 
 export interface AdaptiveProgramInputs {
   primaryGoal: PrimaryGoal
+  secondaryGoal?: PrimaryGoal // TASK 3: Secondary goal from canonical profile
   experienceLevel: ExperienceLevel
   trainingDaysPerWeek: TrainingDays | 'flexible'  // Can be numeric or 'flexible'
   sessionLength: SessionLength
@@ -274,6 +275,8 @@ export interface AdaptiveProgramInputs {
   todaySessionMinutes?: number // Override for today's available time
   // Flexible scheduling support
   scheduleMode?: ScheduleMode  // 'static' or 'flexible'
+  // TASK 7: Pass selected skills for multi-goal generation awareness
+  selectedSkills?: string[]
 }
 
 export interface AdaptiveSession {
@@ -358,6 +361,7 @@ export interface AdaptiveProgram {
   id: string
   createdAt: string
   primaryGoal: PrimaryGoal
+  secondaryGoal?: PrimaryGoal // TASK 3: Secondary goal from canonical profile
   goalLabel: string
   experienceLevel: ExperienceLevel
   trainingDaysPerWeek: TrainingDays
@@ -840,16 +844,21 @@ function getDurationConfig(duration: WorkoutDurationPreference): DurationConfig 
 
 export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): AdaptiveProgram {
   console.log('[program-gen] Starting adaptive program generation')
+  // TASK 7: Log ALL canonical profile fields consumed by generation
   console.log('[program-gen] Inputs:', {
     primaryGoal: inputs.primaryGoal,
+    secondaryGoal: inputs.secondaryGoal || 'none', // TASK 3
     experienceLevel: inputs.experienceLevel,
     trainingDaysPerWeek: inputs.trainingDaysPerWeek,
     sessionLength: inputs.sessionLength,
     equipmentCount: inputs.equipment?.length || 0,
+    scheduleMode: inputs.scheduleMode || 'static',
+    selectedSkills: inputs.selectedSkills || [],
   })
   
   const {
     primaryGoal,
+    secondaryGoal, // TASK 3: Now destructured for use
     experienceLevel,
     trainingDaysPerWeek,
     sessionLength,
@@ -1487,6 +1496,7 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
     id: `adaptive-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
     createdAt: new Date().toISOString(),
     primaryGoal,
+    secondaryGoal, // TASK 3: Store canonical secondary goal
     goalLabel: GOAL_LABELS[primaryGoal],
     experienceLevel,
     trainingDaysPerWeek: effectiveTrainingDays,  // Store actual generated days
@@ -2697,10 +2707,17 @@ export function deleteAdaptiveProgram(id: string): boolean {
 export function getDefaultAdaptiveInputs(): AdaptiveProgramInputs {
   const profile = getAthleteProfile()
   
+  // TASK 4: Read canonical goals from saved profile, not stale program state
   // Determine primary goal from AthleteProfile
   let primaryGoal: PrimaryGoal = 'planche'
   if (profile.primaryGoal && ['planche', 'front_lever', 'muscle_up', 'handstand_pushup', 'weighted_strength'].includes(profile.primaryGoal)) {
     primaryGoal = profile.primaryGoal as PrimaryGoal
+  }
+  
+  // TASK 3: Read secondaryGoal from canonical profile if persisted
+  let secondaryGoal: PrimaryGoal | undefined = undefined
+  if (profile.secondaryGoal && ['planche', 'front_lever', 'muscle_up', 'handstand_pushup', 'weighted_strength'].includes(profile.secondaryGoal)) {
+    secondaryGoal = profile.secondaryGoal as PrimaryGoal
   }
   
   // Map AthleteProfile equipment to EquipmentType
@@ -2749,13 +2766,27 @@ export function getDefaultAdaptiveInputs(): AdaptiveProgramInputs {
     ? 'flexible' 
     : (profile.trainingDaysPerWeek as TrainingDays) || 4
   
+  // TASK 7: Log which profile fields were consumed for debugging
+  console.log('[AdaptiveBuilder] getDefaultAdaptiveInputs consumed:', {
+    primaryGoal,
+    secondaryGoal: secondaryGoal || 'none',
+    scheduleMode,
+    trainingDaysPerWeek,
+    sessionLength,
+    equipmentCount: mappedEquipment.length,
+    experienceLevel: profile.experienceLevel,
+  })
+  
   return {
     primaryGoal,
+    secondaryGoal, // TASK 3: Now included in generation inputs
     experienceLevel: profile.experienceLevel,
     trainingDaysPerWeek,
     sessionLength,
     equipment: mappedEquipment,
     scheduleMode,
+    // TASK 7: Pass selected skills array for multi-goal awareness
+    selectedSkills: profile.selectedSkills || [],
   }
 }
 

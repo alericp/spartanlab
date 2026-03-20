@@ -3338,8 +3338,19 @@ export function AthleteOnboarding() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [profile, setProfile] = useState<OnboardingProfile>(createEmptyOnboardingProfile())
   const [prefillLoaded, setPrefillLoaded] = useState(false)
+  // TASK 9: Clear-all confirmation state
+  const [showClearConfirm, setShowClearConfirm] = useState(false)
+  
+  // TASK 9: Handle clear all onboarding selections
+  const handleClearAll = useCallback(() => {
+    console.log('[AthleteOnboarding] TASK 9: Clearing all onboarding selections')
+    setProfile(createEmptyOnboardingProfile())
+    setCurrentSectionIndex(0)
+    setShowClearConfirm(false)
+  }, [])
   
   // TASK 3: Prefill from existing profile on mount for edit mode
+  // TASK 9: Onboarding revisit must show saved state as selected
   useEffect(() => {
     if (prefillLoaded) return
     
@@ -3349,23 +3360,74 @@ export function AthleteOnboarding() {
     
     // If user has existing onboarding data, prefill from it
     if (existingProfile && (existingProfile.onboardingComplete || existingProfile.primaryGoal)) {
-      console.log('[AthleteOnboarding] Prefilling from existing onboarding profile')
+      console.log('[AthleteOnboarding] TASK 9: Prefilling from existing onboarding profile', {
+        primaryGoal: existingProfile.primaryGoal,
+        secondaryGoal: existingProfile.secondaryGoal,
+        selectedSkills: existingProfile.selectedSkills?.length,
+        pullUpMax: existingProfile.pullUpMax,
+        weightedPullUp: existingProfile.weightedPullUp,
+      })
       setProfile(existingProfile)
     } else if (canonical.onboardingComplete || canonical.primaryGoal) {
-      // Fallback: Partially populate from canonical if onboarding profile is missing
-      console.log('[AthleteOnboarding] Prefilling partial data from canonical profile')
+      // Fallback: Populate from canonical if onboarding profile is missing
+      // TASK 4: Include ALL canonical fields for complete hydration
+      console.log('[AthleteOnboarding] TASK 9: Prefilling from canonical profile', {
+        primaryGoal: canonical.primaryGoal,
+        secondaryGoal: canonical.secondaryGoal,
+        selectedSkills: canonical.selectedSkills?.length,
+      })
       setProfile(prev => ({
         ...prev,
+        // Goals
         primaryGoal: (canonical.primaryGoal as PrimaryGoalType) || prev.primaryGoal,
+        secondaryGoal: (canonical.secondaryGoal as SkillGoal) || prev.secondaryGoal,
         selectedSkills: canonical.selectedSkills as SkillGoal[] || prev.selectedSkills,
         selectedFlexibility: canonical.selectedFlexibility as FlexibilityGoal[] || prev.selectedFlexibility,
-        trainingDaysPerWeek: (canonical.trainingDaysPerWeek as TrainingDaysPerWeek) || prev.trainingDaysPerWeek,
+        // Schedule
+        trainingDaysPerWeek: canonical.scheduleMode === 'flexible' 
+          ? 'flexible' as TrainingDaysPerWeek 
+          : (canonical.trainingDaysPerWeek as TrainingDaysPerWeek) || prev.trainingDaysPerWeek,
+        scheduleMode: canonical.scheduleMode || prev.scheduleMode,
         sessionLengthMinutes: canonical.sessionLengthMinutes || prev.sessionLengthMinutes,
+        // Equipment & Constraints
         equipment: canonical.equipmentAvailable as EquipmentType[] || prev.equipment,
         jointCautions: canonical.jointCautions as JointCaution[] || prev.jointCautions,
         weakestArea: (canonical.weakestArea as WeakestArea) || prev.weakestArea,
+        // Strength Benchmarks
         pullUpMax: (canonical.pullUpMax as PullUpCapacity) || prev.pullUpMax,
         dipMax: (canonical.dipMax as DipCapacity) || prev.dipMax,
+        pushUpMax: (canonical.pushUpMax as PushUpCapacity) || prev.pushUpMax,
+        wallHSPUReps: (canonical.wallHSPUReps as WallHSPUReps) || prev.wallHSPUReps,
+        weightedPullUp: canonical.weightedPullUp || prev.weightedPullUp,
+        weightedDip: canonical.weightedDip || prev.weightedDip,
+        // Skill Benchmarks
+        frontLever: canonical.frontLeverProgression ? {
+          progression: canonical.frontLeverProgression as FrontLeverProgression,
+          holdSeconds: canonical.frontLeverHoldSeconds || undefined,
+        } : prev.frontLever,
+        planche: canonical.plancheProgression ? {
+          progression: canonical.plancheProgression as PlancheProgression,
+          holdSeconds: canonical.plancheHoldSeconds || undefined,
+        } : prev.planche,
+        muscleUp: (canonical.muscleUpReadiness as MuscleUpReadiness) || prev.muscleUp,
+        hspu: canonical.hspuProgression ? {
+          progression: canonical.hspuProgression as HSPUProgression,
+        } : prev.hspu,
+        lSitHold: (canonical.lSitHoldSeconds as LSitHoldCapacity) || prev.lSitHold,
+        vSitHold: (canonical.vSitHoldSeconds as VSitHoldCapacity) || prev.vSitHold,
+        // Flexibility Benchmarks
+        pancake: canonical.pancakeLevel ? {
+          level: canonical.pancakeLevel as FlexibilityLevel,
+        } : prev.pancake,
+        toeTouch: canonical.toeTouchLevel ? {
+          level: canonical.toeTouchLevel as FlexibilityLevel,
+        } : prev.toeTouch,
+        frontSplits: canonical.frontSplitsLevel ? {
+          level: canonical.frontSplitsLevel as FlexibilityLevel,
+        } : prev.frontSplits,
+        sideSplits: canonical.sideSplitsLevel ? {
+          level: canonical.sideSplitsLevel as FlexibilityLevel,
+        } : prev.sideSplits,
       }))
     }
     
@@ -3532,6 +3594,7 @@ export function AthleteOnboarding() {
         const isFlexibleSchedule = profile.trainingDaysPerWeek === 'flexible' || 
                                     (profile as any).scheduleMode === 'flexible'
         
+        // TASK 3: Build complete DB payload including secondaryGoal and skills
         const dbProfilePayload = {
           sex: profile.sex,
           experienceLevel: profile.trainingExperience === 'new' || profile.trainingExperience === 'some' 
@@ -3551,7 +3614,12 @@ export function AthleteOnboarding() {
                : profile.sessionLengthMinutes <= 60 ? 60 
                : 90)
             : 60,
+          // TASK 3: Include primaryGoal, secondaryGoal, and selectedSkills
           primaryGoal: profile.selectedSkills[0] || profile.primaryGoal || null,
+          secondaryGoal: profile.secondaryGoal || (profile.selectedSkills.length > 1 ? profile.selectedSkills[1] : null),
+          selectedSkills: profile.selectedSkills || [],
+          selectedFlexibility: profile.selectedFlexibility || [],
+          goalCategories: profile.goalCategories || [],
           equipmentAvailable: profile.equipment.filter(e => 
             ['pullup_bar', 'dip_bars', 'parallettes', 'rings', 'resistance_bands'].includes(e)
           ),
@@ -3672,8 +3740,18 @@ export function AthleteOnboarding() {
         <div className="w-full max-w-lg">
           {/* Header */}
           <div className="text-center mb-6">
-            <div className="flex justify-center mb-4">
+            <div className="flex justify-center mb-4 relative">
               <SpartanIcon size={36} />
+              {/* TASK 9: Clear-all button - only show if profile has data */}
+              {(profile.primaryGoal || profile.selectedSkills.length > 0 || profile.pullUpMax) && (
+                <button
+                  type="button"
+                  onClick={() => setShowClearConfirm(true)}
+                  className="absolute right-0 top-0 text-xs text-[#6B7280] hover:text-[#C1121F] transition-colors"
+                >
+                  Reset
+                </button>
+              )}
             </div>
             <p className="text-xs text-[#6B7280] uppercase tracking-wider mb-1">
               {currentSectionIndex === 0 
@@ -3691,6 +3769,36 @@ export function AthleteOnboarding() {
               {currentSection.subtitle}
             </p>
           </div>
+          
+          {/* TASK 9: Clear-all confirmation dialog */}
+          {showClearConfirm && (
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+              <Card className="bg-[#1A1F26] border-[#2B313A] p-6 max-w-sm w-full">
+                <h3 className="text-lg font-semibold text-[#E6E9EF] mb-2">Reset All Selections?</h3>
+                <p className="text-sm text-[#A4ACB8] mb-4">
+                  This will clear all your onboarding selections and start fresh. 
+                  Your workout history and programs will not be affected.
+                </p>
+                <div className="flex gap-3">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setShowClearConfirm(false)}
+                    className="flex-1 border-[#2B313A] hover:bg-[#2B313A] text-[#A4ACB8]"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={handleClearAll}
+                    className="flex-1 bg-[#C1121F] hover:bg-[#A30F1A] text-white"
+                  >
+                    Reset
+                  </Button>
+                </div>
+              </Card>
+            </div>
+          )}
 
           {/* Content Card */}
           <Card className="bg-[#1A1F26] border-[#2B313A] p-4 md:p-6">

@@ -26,7 +26,7 @@ import {
   type SkillBenchmark,
   type FlexibilityBenchmark,
 } from './athlete-profile'
-import { saveCanonicalProfile, logCanonicalProfileState } from './canonical-profile-service'
+import { saveCanonicalProfile, logCanonicalProfileState, getCanonicalProfile } from './canonical-profile-service'
 
 // =============================================================================
 // TYPES
@@ -437,38 +437,69 @@ export function clearPendingRecalculation(): void {
 }
 
 /**
- * Get the current metrics from the profile
- */
+* Get the current metrics from the profile
+* TASK 4: Uses canonical profile as primary source, with onboarding fallback
+* This ensures Settings, UpdateMetricsCard, and generation all read the same truth
+*/
 export function getCurrentMetrics(): {
   strength: StrengthMetrics
   skills: SkillMetrics
   flexibility: FlexibilityMetrics
-} {
+  } {
+  // TASK 4: Read from canonical profile first (unified truth)
+  const canonical = getCanonicalProfile()
   const profile = getOnboardingProfile()
   
+  // TASK 11: Dev-safe diagnostic logging
+  console.log('[MetricsService] getCurrentMetrics loading from:', {
+    hasCanonical: !!canonical?.onboardingComplete,
+    hasOnboarding: !!profile?.onboardingComplete,
+    pullUpMax: canonical?.pullUpMax || profile?.pullUpMax,
+    weightedPullUp: canonical?.weightedPullUp || profile?.weightedPullUp,
+  })
+  
   return {
-    strength: {
-      pullUpMax: profile?.pullUpMax ?? null,
-      pushUpMax: profile?.pushUpMax ?? null,
-      dipMax: profile?.dipMax ?? null,
-      wallHSPUReps: profile?.wallHSPUReps ?? null,
-      weightedPullUp: profile?.weightedPullUp ?? null,
-      weightedDip: profile?.weightedDip ?? null,
-    },
-    skills: {
-      frontLever: profile?.frontLever ?? null,
-      planche: profile?.planche ?? null,
-      muscleUp: profile?.muscleUp ?? null,
-      hspu: profile?.hspu ?? null,
-      lSitHold: profile?.lSitHold ?? null,
-      vSitHold: profile?.vSitHold ?? null,
-    },
-    flexibility: {
-      pancake: profile?.pancake ?? null,
-      toeTouch: profile?.toeTouch ?? null,
-      frontSplits: profile?.frontSplits ?? null,
-      sideSplits: profile?.sideSplits ?? null,
-    },
+  strength: {
+    // TASK 4: Prefer canonical, fallback to onboarding profile
+    pullUpMax: (canonical?.pullUpMax as PullUpCapacity) ?? profile?.pullUpMax ?? null,
+    pushUpMax: (canonical?.pushUpMax as PushUpCapacity) ?? profile?.pushUpMax ?? null,
+    dipMax: (canonical?.dipMax as DipCapacity) ?? profile?.dipMax ?? null,
+    wallHSPUReps: (canonical?.wallHSPUReps as WallHSPUReps) ?? profile?.wallHSPUReps ?? null,
+    weightedPullUp: canonical?.weightedPullUp ?? profile?.weightedPullUp ?? null,
+    weightedDip: canonical?.weightedDip ?? profile?.weightedDip ?? null,
+  },
+  skills: {
+    // TASK 4: Reconstruct skill benchmarks from canonical fields
+    frontLever: canonical?.frontLeverProgression ? {
+      progression: canonical.frontLeverProgression as FrontLeverProgression,
+      holdSeconds: canonical.frontLeverHoldSeconds ?? undefined,
+    } : profile?.frontLever ?? null,
+    planche: canonical?.plancheProgression ? {
+      progression: canonical.plancheProgression as PlancheProgression,
+      holdSeconds: canonical.plancheHoldSeconds ?? undefined,
+    } : profile?.planche ?? null,
+    muscleUp: (canonical?.muscleUpReadiness as MuscleUpReadiness) ?? profile?.muscleUp ?? null,
+    hspu: canonical?.hspuProgression ? {
+      progression: canonical.hspuProgression as HSPUProgression,
+    } : profile?.hspu ?? null,
+    lSitHold: (canonical?.lSitHoldSeconds as LSitHoldCapacity) ?? profile?.lSitHold ?? null,
+    vSitHold: (canonical?.vSitHoldSeconds as VSitHoldCapacity) ?? profile?.vSitHold ?? null,
+  },
+  flexibility: {
+    // TASK 4: Reconstruct flexibility benchmarks from canonical fields
+    pancake: canonical?.pancakeLevel ? {
+      level: canonical.pancakeLevel as FlexibilityLevel,
+    } : profile?.pancake ?? null,
+    toeTouch: canonical?.toeTouchLevel ? {
+      level: canonical.toeTouchLevel as FlexibilityLevel,
+    } : profile?.toeTouch ?? null,
+    frontSplits: canonical?.frontSplitsLevel ? {
+      level: canonical.frontSplitsLevel as FlexibilityLevel,
+    } : profile?.frontSplits ?? null,
+    sideSplits: canonical?.sideSplitsLevel ? {
+      level: canonical.sideSplitsLevel as FlexibilityLevel,
+    } : profile?.sideSplits ?? null,
+  },
   }
 }
 

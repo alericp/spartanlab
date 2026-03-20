@@ -54,6 +54,9 @@ export interface CanonicalProgrammingProfile {
   wallHSPUReps: string | null
   weightedPullUp: { addedWeight: number; reps: number } | null
   weightedDip: { addedWeight: number; reps: number } | null
+  // TASK 2: All-time PR benchmarks for rebound potential analysis
+  weightedPullUpPR: { addedWeight: number; reps: number; timeframe: string } | null
+  weightedDipPR: { addedWeight: number; reps: number; timeframe: string } | null
   
   // Skill Benchmarks
   frontLeverProgression: string | null
@@ -171,6 +174,17 @@ export function reconcileCanonicalProfile(): CanonicalProgrammingProfile {
     wallHSPUReps: pick(onboardingProfile?.wallHSPUReps, null, null),
     weightedPullUp: onboardingProfile?.weightedPullUp ?? null,
     weightedDip: onboardingProfile?.weightedDip ?? null,
+    // TASK 2: All-time PR benchmarks from onboarding
+    weightedPullUpPR: onboardingProfile?.allTimePRPullUp ? {
+      addedWeight: onboardingProfile.allTimePRPullUp.addedWeight,
+      reps: onboardingProfile.allTimePRPullUp.reps,
+      timeframe: onboardingProfile.allTimePRPullUp.timeframe,
+    } : null,
+    weightedDipPR: onboardingProfile?.allTimePRDip ? {
+      addedWeight: onboardingProfile.allTimePRDip.addedWeight,
+      reps: onboardingProfile.allTimePRDip.reps,
+      timeframe: onboardingProfile.allTimePRDip.timeframe,
+    } : null,
     
     // Skill Benchmarks - ONLY in onboarding profile
     frontLeverProgression: onboardingProfile?.frontLever?.progression ?? null,
@@ -433,6 +447,9 @@ export function logCanonicalProfileState(context: string): void {
       dipMax: profile.dipMax || 'not set',
       weightedPullUp: profile.weightedPullUp?.addedWeight || 'not set',
       weightedDip: profile.weightedDip?.addedWeight || 'not set',
+      // TASK 11: PR fields for rebound potential
+      weightedPullUpPR: profile.weightedPullUpPR?.addedWeight || 'not set',
+      weightedDipPR: profile.weightedDipPR?.addedWeight || 'not set',
     },
     // Skill benchmarks present
     skillBenchmarks: {

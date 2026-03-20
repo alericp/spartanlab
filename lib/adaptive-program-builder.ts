@@ -656,6 +656,24 @@ exerciseExplanations?: {
   secondaryEmphasis?: string
   // Canonical Explanation Metadata - grounded explanations for "Why This Workout"
   explanationMetadata?: ProgramExplanationMetadata
+  // TASK 5: Profile snapshot at generation time for drift detection
+  profileSnapshot?: {
+    primaryGoal?: string
+    secondaryGoal?: string | null
+    experienceLevel?: string
+    trainingDaysPerWeek?: number | null
+    sessionLengthMinutes?: number
+    scheduleMode?: string
+    pullUpMax?: string | null
+    dipMax?: string | null
+    weightedPullUp?: { addedWeight: number; reps: number } | null
+    weightedDip?: { addedWeight: number; reps: number } | null
+    frontLeverProgression?: string | null
+    plancheProgression?: string | null
+    snapshotTimestamp?: number
+  }
+  // TASK 10: Generation mode for diagnostics
+  generationMode?: 'generate' | 'regenerate'
 }
 
 // =============================================================================
@@ -994,6 +1012,17 @@ function getDurationConfig(duration: WorkoutDurationPreference): DurationConfig 
 
 export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): AdaptiveProgram {
   console.log('[program-gen] Starting adaptive program generation')
+  
+  // TASK 10: Dev diagnostics - log generation context
+  let generationContext: { hasProfile: boolean; hasHistory: boolean; hasProgram: boolean; mode: string } | null = null
+  try {
+    const { getGenerationContext } = require('./program-state')
+    generationContext = getGenerationContext()
+    console.log('[program-gen] TASK 10: Generation context:', generationContext)
+  } catch {
+    console.log('[program-gen] TASK 10: Could not get generation context')
+  }
+  
   // TASK 7: Log ALL canonical profile fields consumed by generation
   console.log('[program-gen] Inputs:', {
     primaryGoal: inputs.primaryGoal,
@@ -1016,8 +1045,26 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
   } = inputs
   
   // Gather context - CANONICAL FIX: Use unified canonical profile
+  // TASK 3: Generation MUST use canonical profile, NEVER stale program data
   const canonicalProfile = getCanonicalProfile()
   logCanonicalProfileState('generateAdaptiveProgram called')
+  
+  // TASK 6 & 9: CRITICAL GUARD - Generation requires valid canonical profile
+  // This ensures we never fall back to defaults or stale data
+  if (!canonicalProfile) {
+    console.error('[program-gen] TASK 6: CRITICAL - No canonical profile found')
+    throw new Error('Missing canonical profile for generation. Please complete onboarding.')
+  }
+  
+  // TASK 6: Explicit flags for diagnostics
+  const hasProfile = !!(canonicalProfile.onboardingComplete || canonicalProfile.primaryGoal)
+  if (!hasProfile) {
+    console.error('[program-gen] TASK 6: Profile exists but is incomplete:', {
+      onboardingComplete: canonicalProfile.onboardingComplete,
+      primaryGoal: canonicalProfile.primaryGoal,
+    })
+    throw new Error('Incomplete profile data. Please complete onboarding first.')
+  }
   
   // TASK 3 & 9: Validate profile before proceeding
   const profileValidation = validateProfileForGeneration(canonicalProfile)
@@ -1026,6 +1073,15 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
     // Return minimal error program instead of crashing
     throw new Error(`Incomplete profile data: ${profileValidation.missingFields.join(', ')}. Please complete onboarding.`)
   }
+  
+  // TASK 6 & 10: Log state flags for debugging
+  console.log('[program-gen] TASK 6: Generation context verified:', {
+    hasProfile: true,
+    profileSource: 'canonical_profile_service',
+    primaryGoal: canonicalProfile.primaryGoal,
+    secondaryGoal: canonicalProfile.secondaryGoal || 'none',
+    onboardingComplete: canonicalProfile.onboardingComplete,
+  })
   
   // TASK 2B: Normalize profile for engine consumption
   let normalizedProfile: NormalizedProfile | null = null
@@ -2404,6 +2460,31 @@ return explanations.length > 0 ? explanations : undefined
         return undefined
       }
     })(),
+    // TASK 5: Profile snapshot for state tracking and debugging
+    // Captures canonical profile at generation time to detect drift
+    profileSnapshot: (() => {
+      try {
+        return {
+          primaryGoal: canonicalProfile.primaryGoal,
+          secondaryGoal: canonicalProfile.secondaryGoal,
+          experienceLevel: canonicalProfile.experienceLevel,
+          trainingDaysPerWeek: canonicalProfile.trainingDaysPerWeek,
+          sessionLengthMinutes: canonicalProfile.sessionLengthMinutes,
+          scheduleMode: canonicalProfile.scheduleMode,
+          pullUpMax: canonicalProfile.pullUpMax,
+          dipMax: canonicalProfile.dipMax,
+          weightedPullUp: canonicalProfile.weightedPullUp,
+          weightedDip: canonicalProfile.weightedDip,
+          frontLeverProgression: canonicalProfile.frontLeverProgression,
+          plancheProgression: canonicalProfile.plancheProgression,
+          snapshotTimestamp: Date.now(),
+        }
+      } catch {
+        return undefined
+      }
+    })(),
+    // TASK 10: Generation mode for diagnostics
+    generationMode: 'generate' as const,  // Always fresh from generateAdaptiveProgram
   }
 }
 

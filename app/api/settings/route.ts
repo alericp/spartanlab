@@ -284,14 +284,31 @@ export async function PUT(request: Request) {
           
           // Also save to program history for version tracking
           // Generate the actual program to store as snapshot
+          // TASK 9: Use ONLY canonical profile from context, not stale data
           try {
+            // TASK 3 & 9: Build inputs exclusively from fresh context.athlete (canonical profile)
             const programInputs: AdaptiveProgramInputs = {
               primaryGoal: (context.athlete.primaryGoal || 'front_lever') as AdaptiveProgramInputs['primaryGoal'],
-              experienceLevel: 'intermediate',
+              secondaryGoal: context.athlete.secondaryGoal as AdaptiveProgramInputs['secondaryGoal'],
+              experienceLevel: (context.athlete.experienceLevel || 'intermediate') as AdaptiveProgramInputs['experienceLevel'],
               trainingDaysPerWeek: (context.athlete.trainingDaysPerWeek || 4) as AdaptiveProgramInputs['trainingDaysPerWeek'],
               sessionLength: (context.athlete.sessionDurationMinutes || 60) as AdaptiveProgramInputs['sessionLength'],
               equipment: context.athlete.equipment as AdaptiveProgramInputs['equipment'],
+              scheduleMode: context.athlete.scheduleMode as AdaptiveProgramInputs['scheduleMode'],
+              selectedSkills: context.athlete.selectedSkills as AdaptiveProgramInputs['selectedSkills'],
             }
+            
+            // TASK 10: Log generation input for diagnostics
+            console.log('[Settings API] REGENERATION programInputs:', {
+              mode: 'regenerate',
+              fromProfile: true,
+              primaryGoal: programInputs.primaryGoal,
+              secondaryGoal: programInputs.secondaryGoal || 'none',
+              experienceLevel: programInputs.experienceLevel,
+              trainingDays: programInputs.trainingDaysPerWeek,
+              sessionLength: programInputs.sessionLength,
+            })
+            
             const program = generateAdaptiveProgram(programInputs)
             
             // Save to program history (archives previous, creates new entry)

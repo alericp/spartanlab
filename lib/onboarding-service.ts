@@ -53,6 +53,7 @@ export interface FirstRunResult {
 interface NormalizedProgramInputs {
   selectedSkills: SkillInterest[]
   primaryGoal: string | null
+  secondaryGoal: string | null  // TASK 3: Include secondary goal for hybrid programming
   trainingDaysPerWeek: number
   sessionLengthMinutes: number
   equipment: string[]
@@ -109,6 +110,7 @@ function normalizeProfileForGeneration(profile: OnboardingProfile): NormalizedPr
   const normalized = {
     selectedSkills,
     primaryGoal: profile.primaryGoal,
+    secondaryGoal: (profile as OnboardingProfile & { secondaryGoal?: string | null }).secondaryGoal || null, // TASK 3
     trainingDaysPerWeek,
     sessionLengthMinutes,
     equipment,
@@ -118,6 +120,7 @@ function normalizeProfileForGeneration(profile: OnboardingProfile): NormalizedPr
   console.log('[OnboardingService] Normalized profile:', {
     skills: normalized.selectedSkills.length,
     goal: normalized.primaryGoal,
+    secondaryGoal: normalized.secondaryGoal || 'none', // TASK 10
     days: normalized.trainingDaysPerWeek,
     minutes: normalized.sessionLengthMinutes,
     level: normalized.experienceLevel,
@@ -298,16 +301,29 @@ export function generateFirstProgram(): FirstRunResult {
       normalized.sessionLengthMinutes === 'flexible' ||
       (profile as OnboardingProfile & { scheduleMode?: string }).scheduleMode === 'flexible'
     
-    // Map normalized data to program inputs
+    // TASK 9: Map normalized data to program inputs - ONLY from canonical profile
     const programInputs: AdaptiveProgramInputs = {
       primaryGoal: mapSkillInterestsToPrimaryGoal(normalized.selectedSkills, normalized.primaryGoal),
+      secondaryGoal: normalized.secondaryGoal as AdaptiveProgramInputs['secondaryGoal'],
       experienceLevel: normalized.experienceLevel,
       trainingDaysPerWeek: mapTrainingDays(normalized.trainingDaysPerWeek),
       sessionLength: mapSessionLength(normalized.sessionLengthMinutes),
       equipment: mapEquipment(normalized.equipment),
       // FLEXIBLE SCHEDULING: Pass through schedule mode
       scheduleMode: isFlexibleMode ? 'flexible' : 'static',
+      selectedSkills: normalized.selectedSkills,
     }
+    
+    // TASK 10: Log generation input for diagnostics
+    console.log('[OnboardingService] FIRST PROGRAM programInputs:', {
+      mode: 'generate',
+      fromProfile: true,
+      primaryGoal: programInputs.primaryGoal,
+      secondaryGoal: programInputs.secondaryGoal || 'none',
+      experienceLevel: programInputs.experienceLevel,
+      trainingDays: programInputs.trainingDaysPerWeek,
+      sessionLength: programInputs.sessionLength,
+    })
     
     console.log('[OnboardingService] Schedule mode:', isFlexibleMode ? 'flexible' : 'static')
     

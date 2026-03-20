@@ -406,3 +406,281 @@ export function hasActiveProgram(): boolean {
     return false
   }
 }
+
+// =============================================================================
+// TASK 1: STATE TYPE SEPARATION
+// Critical distinction between profile, program, and history
+// =============================================================================
+
+export type GenerationMode = 'generate' | 'regenerate'
+
+export interface GenerationContext {
+  /** Mode: fresh generation or regeneration based on profile changes */
+  mode: GenerationMode
+  /** Whether a valid canonical profile exists */
+  hasProfile: boolean
+  /** Whether workout history exists (completed sessions) */
+  hasHistory: boolean
+  /** Whether an active program exists */
+  hasProgram: boolean
+  /** Reason for generation (for logging/auditing) */
+  reason: string
+  /** Whether profile has meaningfully changed since last generation */
+  profileChanged: boolean
+}
+
+/**
+ * TASK 6: Get explicit state flags for generation decisions
+ * This ensures we never conflate missing history with missing profile
+ */
+export function getGenerationContext(): GenerationContext {
+  const { hasProgram, adaptiveProgram } = getProgramState()
+  
+  // Check for canonical profile
+  let hasProfile = false
+  try {
+    const { getCanonicalProfile } = require('./canonical-profile-service')
+    const canonical = getCanonicalProfile()
+    hasProfile = !!(canonical && (canonical.onboardingComplete || canonical.primaryGoal))
+  } catch {
+    hasProfile = false
+  }
+  
+  // Check for workout history (completed sessions)
+  // TASK 6: Check local storage for workout history evidence
+  let hasHistory = false
+  try {
+    if (typeof window !== 'undefined') {
+      // Check multiple possible workout history storage keys
+      const workoutLogs = localStorage.getItem('spartanlab_workout_logs')
+      const sessionHistory = localStorage.getItem('spartanlab_session_history')
+      hasHistory = !!(workoutLogs || sessionHistory)
+      
+      // Also check training feedback loop data which requires history
+      const feedbackData = localStorage.getItem('spartanlab_training_feedback')
+      if (feedbackData) {
+        try {
+          const parsed = JSON.parse(feedbackData)
+          hasHistory = hasHistory || (parsed.trustedWorkoutCount > 0)
+        } catch {
+          // Ignore parse errors
+        }
+      }
+    }
+  } catch {
+    hasHistory = false
+  }
+  
+  // TASK 6: Profile changed detection
+  let profileChanged = true  // Default to true for safety
+  if (adaptiveProgram?.profileSnapshot) {
+    try {
+      const { getCanonicalProfile } = require('./canonical-profile-service')
+      const current = getCanonicalProfile()
+      profileChanged = hasProfileChanged(adaptiveProgram.profileSnapshot, current)
+    } catch {
+      profileChanged = true
+    }
+  }
+  
+  // Determine generation mode
+  const mode: GenerationMode = hasProgram ? 'regenerate' : 'generate'
+  const reason = hasProgram 
+    ? (profileChanged ? 'profile_changed' : 'manual_regenerate')
+    : 'first_generation'
+  
+  console.log('[GenerationContext] TASK 6: State flags:', {
+    hasProfile,
+    hasHistory,
+    hasProgram,
+    profileChanged,
+    mode,
+    reason,
+  })
+  
+  return {
+    mode,
+    hasProfile,
+    hasHistory,
+    hasProgram,
+    reason,
+    profileChanged,
+  }
+}
+
+/**
+ * TASK 6: Check if profile has meaningfully changed since program generation
+ */
+function hasProfileChanged(snapshot: unknown, current: unknown): boolean {
+  if (!snapshot || !current) return true
+  
+  const s = snapshot as Record<string, unknown>
+  const c = current as Record<string, unknown>
+  
+  // Check critical fields that affect programming
+  const criticalFields = [
+    'primaryGoal',
+    'secondaryGoal',
+    'trainingDaysPerWeek',
+    'sessionLengthMinutes',
+    'scheduleMode',
+    'pullUpMax',
+    'dipMax',
+    'weightedPullUp',
+    'weightedDip',
+  ]
+  
+  for (const field of criticalFields) {
+    if (JSON.stringify(s[field]) !== JSON.stringify(c[field])) {
+      console.log('[ProfileChange] Field changed:', field, {
+        snapshot: s[field],
+        current: c[field],
+      })
+      return true
+    }
+  }
+  
+  return false
+}
+
+/**
+ * TASK 7: Reset program state (clean slate) WITHOUT touching profile or history
+ * This allows fresh generation without losing user data
+ */
+export function resetProgramState(): { success: boolean; message: string } {
+  try {
+    if (typeof window === 'undefined') {
+      return { success: false, message: 'Cannot reset server-side' }
+    }
+    
+    // Only remove program data, NOT profile or history
+    localStorage.removeItem('spartanlab_adaptive_programs')
+    localStorage.removeItem('spartanlab_first_program')
+    localStorage.removeItem('spartanlab_programs')
+    
+    console.log('[ProgramState] TASK 7: Program state reset (profile and history preserved)')
+    
+    return { success: true, message: 'Program cleared. Profile and history preserved.' }
+  } catch (err) {
+    console.error('[ProgramState] Reset failed:', err)
+    return { success: false, message: 'Failed to reset program state' }
+  }
+}
+
+/**
+ * TASK 8: Check if regeneration would be meaningful
+ * Prevents wasted computation when nothing has changed
+ */
+export function shouldRegenerate(): { 
+  should: boolean
+  reason: string 
+} {
+  const context = getGenerationContext()
+  
+  if (!context.hasProfile) {
+    return { should: false, reason: 'No profile exists - complete onboarding first' }
+  }
+  
+  if (!context.hasProgram) {
+    return { should: true, reason: 'No program exists - generation needed' }
+  }
+  
+  if (context.profileChanged) {
+    return { should: true, reason: 'Profile has changed since last generation' }
+  }
+  
+  return { should: false, reason: 'No meaningful changes detected - regeneration would be redundant' }
+}
+
+// =============================================================================
+// TASK 10 & 11: DIAGNOSTICS AND VERIFICATION
+// =============================================================================
+
+/**
+ * TASK 10: Get full state diagnostic for debugging
+ * Returns all relevant state information without modifying anything
+ */
+export function getStateDiagnostic(): {
+  profile: { exists: boolean; onboardingComplete: boolean; primaryGoal: string | null }
+  program: { exists: boolean; id: string | null; sessionCount: number; profileSnapshot: boolean }
+  history: { exists: boolean }
+  generation: GenerationContext
+} {
+  const programState = getProgramState()
+  const genContext = getGenerationContext()
+  
+  let profileInfo = { exists: false, onboardingComplete: false, primaryGoal: null as string | null }
+  try {
+    const { getCanonicalProfile } = require('./canonical-profile-service')
+    const canonical = getCanonicalProfile()
+    if (canonical) {
+      profileInfo = {
+        exists: true,
+        onboardingComplete: !!canonical.onboardingComplete,
+        primaryGoal: canonical.primaryGoal || null,
+      }
+    }
+  } catch {
+    // Profile service not available
+  }
+  
+  const diagnostic = {
+    profile: profileInfo,
+    program: {
+      exists: programState.hasProgram,
+      id: programState.adaptiveProgram?.id || null,
+      sessionCount: programState.sessionCount,
+      profileSnapshot: !!(programState.adaptiveProgram as any)?.profileSnapshot,
+    },
+    history: {
+      exists: genContext.hasHistory,
+    },
+    generation: genContext,
+  }
+  
+  console.log('[StateDiagnostic] Full state:', diagnostic)
+  
+  return diagnostic
+}
+
+/**
+ * TASK 11: Verify flow integrity
+ * Checks that all expected connections between profile, program, and history are valid
+ */
+export function verifyStateIntegrity(): {
+  valid: boolean
+  issues: string[]
+} {
+  const issues: string[] = []
+  const diagnostic = getStateDiagnostic()
+  
+  // Rule 1: If program exists, profile must exist
+  if (diagnostic.program.exists && !diagnostic.profile.exists) {
+    issues.push('INTEGRITY: Program exists but no profile found - program may be orphaned')
+  }
+  
+  // Rule 2: If profile has onboardingComplete, profile should have primaryGoal
+  if (diagnostic.profile.onboardingComplete && !diagnostic.profile.primaryGoal) {
+    issues.push('INTEGRITY: Onboarding marked complete but no primary goal set')
+  }
+  
+  // Rule 3: If program exists, it should have sessions
+  if (diagnostic.program.exists && diagnostic.program.sessionCount === 0) {
+    issues.push('INTEGRITY: Program exists but has no sessions')
+  }
+  
+  // Rule 4: Warn if program exists without profile snapshot
+  if (diagnostic.program.exists && !diagnostic.program.profileSnapshot) {
+    issues.push('WARNING: Program exists without profile snapshot - regeneration drift may occur')
+  }
+  
+  const valid = issues.filter(i => i.startsWith('INTEGRITY')).length === 0
+  
+  if (!valid) {
+    console.error('[StateIntegrity] Issues detected:', issues)
+  } else {
+    console.log('[StateIntegrity] State is valid')
+  }
+  
+  return { valid, issues }
+}

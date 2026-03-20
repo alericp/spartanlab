@@ -9,6 +9,7 @@ import { SpartanIcon } from '@/components/brand/SpartanLogo'
 import { saveAthleteProfile } from '@/lib/repositories/profile-repository'
 import { getCanonicalProfile, saveCanonicalProfile, logCanonicalProfileState } from '@/lib/canonical-profile-service'
 import type { Equipment, SessionLengthMinutes } from '@/types/domain'
+import { DURATION_PREFERENCE_LABELS, type SessionDurationPreference } from '@/lib/session-duration-contract'
 import { RANGE_MODE_COPY, type RangeTrainingMode } from '@/lib/range-training-system'
 import {
   Dialog,
@@ -107,10 +108,10 @@ const RANGE_APPROACHES: { value: RangeTrainingMode; label: string }[] = [
 const TRAINING_DAYS: TrainingDays[] = [2, 3, 4, 5, 6]
 
 const SESSION_LENGTHS: { value: SessionLengthMinutes; label: string }[] = [
-  { value: 30, label: '30 min' },
-  { value: 45, label: '45 min' },
-  { value: 60, label: '60 min' },
-  { value: 90, label: '90 min' },
+  { value: 30, label: DURATION_PREFERENCE_LABELS[30].shortLabel },
+  { value: 45, label: DURATION_PREFERENCE_LABELS[45].shortLabel },
+  { value: 60, label: DURATION_PREFERENCE_LABELS[60].shortLabel },
+  { value: 90, label: DURATION_PREFERENCE_LABELS[90].shortLabel },
 ]
 
 const EQUIPMENT: { value: Equipment; label: string }[] = [

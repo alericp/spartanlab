@@ -17,6 +17,7 @@ import type { ConstraintResult, ConstraintIntervention } from './constraint-dete
 import { getAthleteProfile } from './data-service'
 import { getCanonicalProfile, logCanonicalProfileState, validateProfileForGeneration, getValidatedCanonicalProfile } from './canonical-profile-service'
 import { normalizeProfile, computeLimiter, dedupeExercises, type NormalizedProfile } from './profile-normalizer'
+import { getCanonicalDurationPreference, logDurationState, type SessionDurationPreference } from './session-duration-contract'
 import { calculateRecoverySignal } from './recovery-engine'
 import { getConstraintInsight } from './constraint-engine'
 import { getConstraintIntervention } from './constraint-detection-engine'
@@ -2385,6 +2386,17 @@ exercises: mapToAdaptiveExercises(
       finisherIncluded: !!finisher,
       finisherRationale: enduranceResult.rationale,
     }
+    
+    // TASK 9: Log duration state for each generated session
+    logDurationState({
+      source: 'buildSession',
+      preference: sessionLength as number,
+      estimatedMinutes: session.estimatedMinutes,
+      dayNumber: day.dayNumber,
+      wasComputed: true,
+    })
+    
+    return session
   }
 
 function mapToAdaptiveExercises(
@@ -2811,13 +2823,25 @@ export function getDefaultAdaptiveInputs(): AdaptiveProgramInputs {
     mappedEquipment.push('pull_bar', 'dip_bars')
   }
   
-  // Map session length from profile (30, 45, 60, 90) to SessionLength (30, 45, 60, 75)
+  // TASK 6: Read sessionLength from canonical profile using duration contract
+  // Use getCanonicalDurationPreference for safe fallback and logging
+  const canonicalDuration = getCanonicalDurationPreference(
+    canonicalProfile.sessionLengthMinutes,
+    'getDefaultAdaptiveInputs'
+  )
+  // Map to SessionLength type (30, 45, 60, 75)
+  // Note: 90 min is supported by profile but mapped to 75 in builder
   let sessionLength: SessionLength = 60
-  const profileSessionLength = canonicalProfile.sessionLengthMinutes
-  if (profileSessionLength === 30) sessionLength = 30
-  else if (profileSessionLength === 45) sessionLength = 45
-  else if (profileSessionLength === 60) sessionLength = 60
-  else if (profileSessionLength === 90) sessionLength = 75 // Map 90 to 75 (closest match)
+  if (canonicalDuration === 30) sessionLength = 30
+  else if (canonicalDuration === 45) sessionLength = 45
+  else if (canonicalDuration === 60) sessionLength = 60
+  else if (canonicalDuration === 75 || canonicalDuration === 90) sessionLength = 75
+  
+  // TASK 9: Log duration state for debugging
+  logDurationState({
+    source: 'getDefaultAdaptiveInputs',
+    preference: canonicalDuration,
+  })
   
   // FLEXIBLE SCHEDULE FIX: Preserve schedule identity from canonical profile
   // Do NOT collapse flexible users into a fake fixed numeric value

@@ -20,6 +20,7 @@ import {
   EMPHASIS_LABELS,
 } from '@/lib/program-service'
 import { Sparkles } from 'lucide-react'
+import { DURATION_PREFERENCE_LABELS, type SessionDurationPreference } from '@/lib/session-duration-contract'
 
 interface ProgramBuilderFormProps {
   inputs: ProgramInputs
@@ -112,12 +113,13 @@ export function ProgramBuilderForm({
               <SelectTrigger className="bg-[#1A1A1A] border-[#3A3A3A]">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent className="bg-[#2A2A2A] border-[#3A3A3A]">
-                <SelectItem value="30">30 Minutes</SelectItem>
-                <SelectItem value="45">45 Minutes</SelectItem>
-                <SelectItem value="60">60 Minutes</SelectItem>
-                <SelectItem value="75">75 Minutes</SelectItem>
-              </SelectContent>
+  <SelectContent className="bg-[#2A2A2A] border-[#3A3A3A]">
+    {([30, 45, 60, 75] as SessionDurationPreference[]).map((mins) => (
+      <SelectItem key={mins} value={String(mins)}>
+        {DURATION_PREFERENCE_LABELS[mins].label}
+      </SelectItem>
+    ))}
+  </SelectContent>
             </Select>
           </div>
         </div>

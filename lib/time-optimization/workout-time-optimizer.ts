@@ -1,6 +1,10 @@
 // Workout Time Optimizer
 // Intelligently adjusts workout content to fit available training time
 // while preserving training intent and exercise priority
+//
+// NOTE: Duration labels are now defined in session-duration-contract.ts
+// TIME_TIER_LABELS here are kept for backward compatibility but should
+// eventually be replaced with imports from session-duration-contract.ts
 
 import type { AdaptiveSession, AdaptiveExercise } from '../adaptive-program-builder'
 

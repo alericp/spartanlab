@@ -40,6 +40,7 @@ import {
   type AthleteProfile,
 } from '@/lib/data-service'
 import { saveCanonicalProfile, logCanonicalProfileState } from '@/lib/canonical-profile-service'
+import { DURATION_PREFERENCE_LABELS, getCanonicalDurationPreference, logDurationState, type SessionDurationPreference } from '@/lib/session-duration-contract'
 import { getActiveProgram, clearActiveProgram } from '@/lib/program-service'
 import { 
   analyzeSettingsChanges, 
@@ -741,20 +742,13 @@ export default function SettingsPage() {
               <SelectTrigger className="bg-[#1A1A1A] border-[#3A3A3A] text-[#F5F5F5]">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent className="bg-[#2A2A2A] border-[#3A3A3A]">
-                <SelectItem value="30" className="text-[#F5F5F5] focus:bg-[#3A3A3A]">
-                  30 min focused session
-                </SelectItem>
-                <SelectItem value="45" className="text-[#F5F5F5] focus:bg-[#3A3A3A]">
-                  45 min balanced session
-                </SelectItem>
-                <SelectItem value="60" className="text-[#F5F5F5] focus:bg-[#3A3A3A]">
-                  60 min complete session
-                </SelectItem>
-                <SelectItem value="90" className="text-[#F5F5F5] focus:bg-[#3A3A3A]">
-                  90 min extended session
-                </SelectItem>
-              </SelectContent>
+  <SelectContent className="bg-[#2A2A2A] border-[#3A3A3A]">
+    {([30, 45, 60, 90] as SessionDurationPreference[]).map((mins) => (
+      <SelectItem key={mins} value={String(mins)} className="text-[#F5F5F5] focus:bg-[#3A3A3A]">
+        {DURATION_PREFERENCE_LABELS[mins].label}
+      </SelectItem>
+    ))}
+  </SelectContent>
             </Select>
             <p className="text-xs text-[#A5A5A5] mt-1">
               Changing this will regenerate your program

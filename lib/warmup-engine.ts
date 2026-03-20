@@ -74,6 +74,12 @@ export interface WarmUpGenerationContext {
   sessionLength: SessionLength
   equipment: EquipmentType[]
   jointCautions?: JointCaution[]
+  // TASK 4: First main skill progression for warm-up ramping
+  firstSkillProgression?: {
+    skillType: 'planche' | 'front_lever' | 'hspu' | 'muscle_up' | 'handstand' | 'back_lever' | 'l_sit' | 'v_sit' | 'other'
+    progressionLevel: string  // e.g., 'tuck_planche', 'straddle_fl', 'wall_hspu'
+    isAdvanced: boolean  // true if straddle/full or similar advanced level
+  }
 }
 
 export interface GeneratedWarmUp {
@@ -96,6 +102,7 @@ export interface GeneratedWarmUp {
 
 export const WARMUP_EXERCISE_POOL: WarmUpExercise[] = [
   // GENERAL PHASE - Joint prep and blood flow
+  // TASK 4: Added user-preferred general warmup drills
   {
     id: 'wrist_prep',
     name: 'Wrist Preparation',
@@ -115,8 +122,81 @@ export const WARMUP_EXERCISE_POOL: WarmUpExercise[] = [
     targetPattern: ['horizontal_push', 'vertical_push', 'horizontal_pull', 'vertical_pull'],
     targetMuscles: ['deltoids', 'rotator_cuff'],
     equipment: ['floor'],
+    reps: '10-15 each direction',
+    notes: 'Forward and backward',
+    priority: 3,  // TASK 4: Elevated priority for user preference
+    intensity: 'low',
+  },
+  {
+    id: 'arm_swings_crosses',
+    name: 'Arm Swings / Crosses',
+    phase: 'general',
+    targetPattern: ['horizontal_push', 'horizontal_pull'],
+    targetMuscles: ['chest', 'rear_deltoid', 'rotator_cuff'],
+    equipment: ['floor'],
+    reps: '10-15',
+    notes: 'Alternate crossing in front of chest',
+    priority: 3,  // TASK 4: User preferred drill
+    intensity: 'low',
+  },
+  {
+    id: 'trunk_rotations',
+    name: 'Trunk Rotations',
+    phase: 'general',
+    targetPattern: ['core'],
+    targetMuscles: ['obliques', 'spine'],
+    equipment: ['floor'],
     reps: '10 each direction',
-    priority: 2,
+    notes: 'Waist-level rotation, controlled tempo',
+    priority: 2,  // TASK 4: User preferred drill
+    intensity: 'low',
+  },
+  {
+    id: 'toe_touch_pulses',
+    name: 'Toe Touch Pulses',
+    phase: 'general',
+    targetPattern: ['core', 'compression'],
+    targetMuscles: ['hamstrings', 'lower_back'],
+    equipment: ['floor'],
+    reps: '10-15 pulses',
+    notes: 'Gentle bouncing reach',
+    priority: 2,  // TASK 4: User preferred drill
+    intensity: 'low',
+  },
+  {
+    id: 'leg_swings_front',
+    name: 'Leg Swings (Front)',
+    phase: 'general',
+    targetPattern: ['compression'],
+    targetMuscles: ['hip_flexors', 'hamstrings'],
+    equipment: ['floor'],
+    reps: '10 each leg',
+    notes: 'Hold wall for balance',
+    priority: 2,  // TASK 4: User preferred drill
+    intensity: 'low',
+  },
+  {
+    id: 'kneeling_lunge_pulses',
+    name: 'Kneeling Lunge Pulses',
+    phase: 'general',
+    targetPattern: ['compression', 'core'],
+    targetMuscles: ['hip_flexors', 'quads', 'glutes'],
+    equipment: ['floor'],
+    reps: '10 each side',
+    notes: 'Open hip flexors',
+    priority: 2,  // TASK 4: User preferred drill
+    intensity: 'low',
+  },
+  {
+    id: 'lat_stretch_warmup',
+    name: 'Lat Stretch',
+    phase: 'general',
+    targetPattern: ['vertical_pull', 'horizontal_pull'],
+    targetMuscles: ['lats', 'teres'],
+    equipment: ['floor', 'pull_bar'],
+    reps: '20-30s each side',
+    notes: 'Essential before pulling work',
+    priority: 3,  // TASK 4: User preferred before pull
     intensity: 'low',
   },
   {
@@ -438,7 +518,7 @@ export function calculateWarmUpDuration(sessionLength: SessionLength): {
 // =============================================================================
 
 export function generateWarmUp(context: WarmUpGenerationContext): GeneratedWarmUp {
-  const { mainExercises, primaryGoal, sessionLength, equipment } = context
+  const { mainExercises, primaryGoal, sessionLength, equipment, firstSkillProgression } = context
 
   // Detect session focus
   const focus = detectSessionFocus(mainExercises)
@@ -466,13 +546,23 @@ export function generateWarmUp(context: WarmUpGenerationContext): GeneratedWarmU
   // Select exercises by phase
   const selectedExercises: WarmUpExercise[] = []
 
+  // TASK 4: PROGRESSION-AWARE WARM-UP SELECTION
+  // If first skill is advanced, include prerequisite pattern prep
+  const progressionRampExercises = getProgressionRampExercises(
+    firstSkillProgression,
+    availableExercises,
+    equipment
+  )
+  
   // GENERAL PHASE - Always include wrist prep for calisthenics
+  // TASK 4: Increased general phase for longer sessions
+  const generalCount = duration.totalMinutes >= 7 ? 3 : 2
   const generalExercises = selectPhaseExercises(
     availableExercises.filter(e => e.phase === 'general'),
     focus,
     targetPatterns,
     targetMuscles,
-    2 // 2 general exercises
+    generalCount
   )
   selectedExercises.push(...generalExercises)
 
@@ -485,6 +575,19 @@ export function generateWarmUp(context: WarmUpGenerationContext): GeneratedWarmU
     duration.totalMinutes >= 5 ? 3 : 2
   )
   selectedExercises.push(...specificExercises)
+  
+  // TASK 4: Insert progression ramp exercises before activation
+  // These create a safe ladder toward the first main skill demand
+  if (progressionRampExercises.length > 0) {
+    // Add ramp exercises not already selected
+    const existingIds = new Set(selectedExercises.map(e => e.id))
+    progressionRampExercises.forEach(ex => {
+      if (!existingIds.has(ex.id)) {
+        selectedExercises.push(ex)
+        existingIds.add(ex.id)
+      }
+    })
+  }
 
   // ACTIVATION PHASE - Neural priming for skill/strength work
   if (duration.totalMinutes >= 5 && mainExercises.some(e => e.neuralDemand >= 3)) {
@@ -501,8 +604,13 @@ export function generateWarmUp(context: WarmUpGenerationContext): GeneratedWarmU
   // Generate focus label
   const focusLabel = getFocusLabel(focus, primaryGoal)
 
-  // Generate rationale
-  const rationale = generateRationale(focus, mainExercises, targetPatterns)
+  // TASK 4: Update rationale to reflect progression-aware logic
+  const rationale = generateProgressionAwareRationale(
+    focus, 
+    mainExercises, 
+    targetPatterns,
+    firstSkillProgression
+  )
 
   // Format exercises for output
   const formattedExercises = selectedExercises.map(ex => ({
@@ -618,6 +726,200 @@ function generateRationale(
   const hasSkillWork = exercises.some(e => e.category === 'skill' || e.neuralDemand >= 4)
   const hasCompression = patterns.has('compression')
   const hasExplosive = exercises.some(e => e.name.toLowerCase().includes('explosive'))
+
+  if (hasSkillWork) {
+    return 'Preparing joints and neural system for technical skill work'
+  }
+
+  if (focus === 'compression') {
+    return 'Hip flexor and core activation for compression training'
+  }
+
+  if (hasExplosive || focus === 'explosive') {
+    return 'Neural priming for explosive power output'
+  }
+
+  if (focus === 'pull') {
+    return 'Scapular and lat activation for pulling movements'
+  }
+
+  if (focus === 'push') {
+    return 'Shoulder and chest activation for pressing movements'
+  }
+
+  return 'General preparation for calisthenics training'
+}
+
+// =============================================================================
+// TASK 4: PROGRESSION-AWARE WARM-UP HELPERS
+// =============================================================================
+
+/**
+ * Get exercises that ramp up toward the first main skill's progression level
+ * TASK 4: Creates a safe ladder to prepare for advanced skill demands
+ */
+function getProgressionRampExercises(
+  firstSkillProgression: WarmUpGenerationContext['firstSkillProgression'],
+  availableExercises: WarmUpExercise[],
+  equipment: EquipmentType[]
+): WarmUpExercise[] {
+  if (!firstSkillProgression) return []
+  
+  const rampExercises: WarmUpExercise[] = []
+  const { skillType, isAdvanced } = firstSkillProgression
+  
+  // PLANCHE progression ramp
+  if (skillType === 'planche') {
+    // Always include wrist prep and scap protraction for planche
+    const wristPrep = availableExercises.find(e => e.id === 'wrist_prep')
+    if (wristPrep) rampExercises.push(wristPrep)
+    
+    const scapPushup = availableExercises.find(e => e.id === 'scap_pushup_specific')
+    if (scapPushup) rampExercises.push(scapPushup)
+    
+    // For advanced planche (tuck+), add planche lean as prerequisite
+    if (isAdvanced) {
+      const plancheLean = availableExercises.find(e => e.id === 'planche_lean_activation')
+      if (plancheLean) rampExercises.push(plancheLean)
+    }
+    
+    // Support hold for shoulder prep
+    if (equipment.includes('dip_bars') || equipment.includes('parallettes')) {
+      const supportHold = availableExercises.find(e => e.id === 'support_hold_warmup')
+      if (supportHold) rampExercises.push(supportHold)
+    }
+  }
+  
+  // FRONT LEVER progression ramp
+  if (skillType === 'front_lever') {
+    // Lat stretch essential before front lever
+    const latStretch = availableExercises.find(e => e.id === 'lat_stretch_warmup')
+    if (latStretch) rampExercises.push(latStretch)
+    
+    // Scap pull-ups for scapular depression
+    const scapPull = availableExercises.find(e => e.id === 'scap_pullup_warmup')
+    if (scapPull) rampExercises.push(scapPull)
+    
+    // Dead hang for decompression
+    const deadHang = availableExercises.find(e => e.id === 'dead_hang_warmup')
+    if (deadHang) rampExercises.push(deadHang)
+    
+    // For advanced front lever (straddle+), add tuck FL raises as primer
+    if (isAdvanced) {
+      const tuckFL = availableExercises.find(e => e.id === 'tuck_fl_activation')
+      if (tuckFL) rampExercises.push(tuckFL)
+    }
+    
+    // Arch body for posterior chain activation
+    const archBody = availableExercises.find(e => e.id === 'arch_body_activation')
+    if (archBody) rampExercises.push(archBody)
+  }
+  
+  // HSPU progression ramp
+  if (skillType === 'hspu') {
+    // Wrist prep crucial for HSPU
+    const wristPrep = availableExercises.find(e => e.id === 'wrist_prep')
+    if (wristPrep) rampExercises.push(wristPrep)
+    
+    // Shoulder dislocates for shoulder opening
+    const shoulderDislocates = availableExercises.find(e => e.id === 'shoulder_dislocates')
+    if (shoulderDislocates && equipment.includes('bands')) rampExercises.push(shoulderDislocates)
+    
+    // Scap push-ups for elevation/protraction control
+    const scapPushup = availableExercises.find(e => e.id === 'scap_pushup_specific')
+    if (scapPushup) rampExercises.push(scapPushup)
+    
+    // Support hold for pressing prep
+    if (equipment.includes('dip_bars') || equipment.includes('parallettes')) {
+      const supportHold = availableExercises.find(e => e.id === 'support_hold_warmup')
+      if (supportHold) rampExercises.push(supportHold)
+    }
+  }
+  
+  // MUSCLE UP progression ramp
+  if (skillType === 'muscle_up') {
+    // Lat stretch for full ROM
+    const latStretch = availableExercises.find(e => e.id === 'lat_stretch_warmup')
+    if (latStretch) rampExercises.push(latStretch)
+    
+    // Scap pull-ups
+    const scapPull = availableExercises.find(e => e.id === 'scap_pullup_warmup')
+    if (scapPull) rampExercises.push(scapPull)
+    
+    // Explosive pull primer for transition prep
+    const explosivePrimer = availableExercises.find(e => e.id === 'explosive_pullup_primer')
+    if (explosivePrimer) rampExercises.push(explosivePrimer)
+  }
+  
+  // L-SIT / V-SIT progression ramp
+  if (skillType === 'l_sit' || skillType === 'v_sit') {
+    // Pike pulses for hip flexor activation
+    const pikePulses = availableExercises.find(e => e.id === 'pike_pulses')
+    if (pikePulses) rampExercises.push(pikePulses)
+    
+    // Compression lifts
+    const compressionLifts = availableExercises.find(e => e.id === 'compression_lifts_warmup')
+    if (compressionLifts) rampExercises.push(compressionLifts)
+    
+    // Hollow body for core tension
+    const hollowBody = availableExercises.find(e => e.id === 'hollow_body_activation')
+    if (hollowBody) rampExercises.push(hollowBody)
+  }
+  
+  // HANDSTAND progression ramp
+  if (skillType === 'handstand') {
+    // Wrist prep essential
+    const wristPrep = availableExercises.find(e => e.id === 'wrist_prep')
+    if (wristPrep) rampExercises.push(wristPrep)
+    
+    // Shoulder dislocates
+    const shoulderDislocates = availableExercises.find(e => e.id === 'shoulder_dislocates')
+    if (shoulderDislocates && equipment.includes('bands')) rampExercises.push(shoulderDislocates)
+    
+    // Hollow body for line
+    const hollowBody = availableExercises.find(e => e.id === 'hollow_body_activation')
+    if (hollowBody) rampExercises.push(hollowBody)
+  }
+  
+  return rampExercises
+}
+
+/**
+ * Generate progression-aware rationale
+ * TASK 4: Explains warm-up in context of first skill demand
+ */
+function generateProgressionAwareRationale(
+  focus: WarmUpFocus,
+  exercises: WarmUpGenerationContext['mainExercises'],
+  patterns: Set<MovementPattern>,
+  firstSkillProgression?: WarmUpGenerationContext['firstSkillProgression']
+): string {
+  const hasSkillWork = exercises.some(e => e.category === 'skill' || e.neuralDemand >= 4)
+  const hasExplosive = exercises.some(e => e.name.toLowerCase().includes('explosive'))
+  
+  // TASK 4: Progression-specific rationale
+  if (firstSkillProgression) {
+    const { skillType, isAdvanced } = firstSkillProgression
+    
+    if (skillType === 'planche' && isAdvanced) {
+      return 'Progressive prep for advanced planche: wrist/scap activation → lean exposure → skill work'
+    }
+    if (skillType === 'planche') {
+      return 'Planche preparation: wrist prep, scapular protraction, and shoulder engagement'
+    }
+    if (skillType === 'front_lever' && isAdvanced) {
+      return 'Front lever ramp: lat decompression → scap depression → easier FL variant → main work'
+    }
+    if (skillType === 'front_lever') {
+      return 'Front lever prep: lat activation, scapular depression, and straight-arm pull patterns'
+    }
+    if (skillType === 'hspu') {
+      return 'HSPU preparation: shoulder opening, scapular elevation, and vertical press patterns'
+    }
+    if (skillType === 'muscle_up') {
+      return 'Muscle up prep: lat activation, explosive pull priming, and transition rehearsal'
+    }
+  }
 
   if (hasSkillWork) {
     return 'Preparing joints and neural system for technical skill work'

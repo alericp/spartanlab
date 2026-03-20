@@ -1212,12 +1212,27 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
     coachingTip: getCoachingMessage(selectedMethods),
   }
   
+  // TASK 2: Determine if secondary goal is pull or push dominant
+  // This influences weekly structure to give credible secondary goal representation
+  const isPullSecondary = secondaryGoal === 'front_lever' || secondaryGoal === 'muscle_up'
+  const isPushSecondary = secondaryGoal === 'planche' || secondaryGoal === 'handstand_pushup'
+  
+  console.log('[program-gen] Secondary goal influence:', {
+    secondaryGoal,
+    isPullSecondary,
+    isPushSecondary,
+    selectedSkills: canonicalProfile.selectedSkills,
+  })
+  
   // Select optimal weekly structure - USE effectiveTrainingDays for flexible support
+  // TASK 2: Pass secondary goal flags so structure can adapt
   const structure = selectOptimalStructure({
     primaryGoal,
     trainingDays: effectiveTrainingDays,  // Uses resolved flexible frequency
     recoveryLevel: recoverySignal.level,
     constraintType: constraintInsight.hasInsight ? constraintInsight.label : undefined,
+    hasSecondaryPull: isPullSecondary,  // TASK 2: Secondary goal influence
+    hasSecondaryPush: isPushSecondary,  // TASK 2: Secondary goal influence
   })
   
   // Generate session intents for variety
@@ -2097,9 +2112,12 @@ return explanations.length > 0 ? explanations : undefined
     explanationMetadata: (() => {
       try {
         // Build explanation context from available data
+        // TASK 6: Include secondary goal in explanation context
         const explanationContext: ExplanationContext = {
           primaryGoal,
+          secondaryGoal: secondaryGoal || canonicalProfile.secondaryGoal,  // TASK 6
           goalLabel: GOAL_LABELS[primaryGoal] || primaryGoal,
+          secondaryGoalLabel: secondaryGoal ? (GOAL_LABELS[secondaryGoal as PrimaryGoal] || secondaryGoal) : undefined,  // TASK 6
           scheduleMode: inputScheduleMode,
           currentWeekFrequency: effectiveTrainingDays,
           previousWeekFrequency: undefined, // Would come from previous program comparison

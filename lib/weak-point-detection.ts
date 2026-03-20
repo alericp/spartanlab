@@ -83,23 +83,31 @@ const FOCUS_LABELS: Record<DevelopmentFocus, string> = {
 
 /**
  * Estimate pull strength score (0-100)
+ * TASK 3: Enhanced to accept canonical benchmark data
  */
-function estimatePullStrengthScore(profile: OnboardingProfile): number {
+function estimatePullStrengthScore(
+  profile: OnboardingProfile,
+  canonicalBenchmarks?: { pullUpMax?: number | null; weightedPullUp?: { addedWeight: number; reps: number } | null }
+): number {
   let score = 50 // Default middle score
   
+  // TASK 3: Use canonical benchmark if available, else profile
+  const pullUpMax = canonicalBenchmarks?.pullUpMax ?? profile?.pullUpMax ?? null
+  
   // Pull-up max (major factor)
-  if (profile.pullUpMax !== null) {
-    if (profile.pullUpMax === 0) score = 10
-    else if (profile.pullUpMax <= 3) score = 25
-    else if (profile.pullUpMax <= 8) score = 45
-    else if (profile.pullUpMax <= 12) score = 60
-    else if (profile.pullUpMax <= 18) score = 75
-    else score = 90
+  if (pullUpMax !== null) {
+    if (pullUpMax === 0) score = 10
+    else if (pullUpMax <= 3) score = 25
+    else if (pullUpMax <= 8) score = 45
+    else if (pullUpMax <= 12) score = 60
+    else if (pullUpMax <= 18) score = 75
+    else score = 90  // 18+ pull-ups = advanced
   }
   
-  // Weighted pull-up bonus
-  if (profile.weightedPullUp?.load) {
-    const load = profile.weightedPullUp.load
+  // TASK 3: Weighted pull-up bonus (use canonical or profile)
+  const weightedPullUp = canonicalBenchmarks?.weightedPullUp || profile?.weightedPullUp
+  if (weightedPullUp?.addedWeight || (weightedPullUp as any)?.load) {
+    const load = weightedPullUp.addedWeight || (weightedPullUp as any).load || 0
     if (load >= 45) score = Math.max(score, 85)
     else if (load >= 25) score = Math.max(score, 70)
     else if (load >= 10) score = Math.max(score, 55)
@@ -110,28 +118,37 @@ function estimatePullStrengthScore(profile: OnboardingProfile): number {
 
 /**
  * Estimate push strength score (0-100)
+ * TASK 3: Enhanced to accept canonical benchmark data
  */
-function estimatePushStrengthScore(profile: OnboardingProfile): number {
+function estimatePushStrengthScore(
+  profile: OnboardingProfile,
+  canonicalBenchmarks?: { dipMax?: number | null; pushUpMax?: number | null; weightedDip?: { addedWeight: number; reps: number } | null }
+): number {
   let score = 50
   
+  // TASK 3: Use canonical benchmark if available
+  const dipMax = canonicalBenchmarks?.dipMax ?? profile?.dipMax ?? null
+  const pushUpMax = canonicalBenchmarks?.pushUpMax ?? profile?.pushUpMax ?? null
+  
   // Dip max
-  if (profile.dipMax !== null) {
-    if (profile.dipMax === 0) score = 15
-    else if (profile.dipMax <= 5) score = 30
-    else if (profile.dipMax <= 12) score = 50
-    else if (profile.dipMax <= 20) score = 70
-    else score = 85
+  if (dipMax !== null) {
+    if (dipMax === 0) score = 15
+    else if (dipMax <= 5) score = 30
+    else if (dipMax <= 12) score = 50
+    else if (dipMax <= 20) score = 70
+    else score = 85  // 20+ dips = advanced
   }
   
   // Push-up max bonus
-  if (profile.pushUpMax !== null) {
-    if (profile.pushUpMax >= 40) score = Math.max(score, 65)
-    else if (profile.pushUpMax >= 25) score = Math.max(score, 50)
+  if (pushUpMax !== null) {
+    if (pushUpMax >= 40) score = Math.max(score, 65)
+    else if (pushUpMax >= 25) score = Math.max(score, 50)
   }
   
-  // Weighted dip bonus
-  if (profile.weightedDip?.load) {
-    const load = profile.weightedDip.load
+  // TASK 3: Weighted dip bonus (use canonical or profile)
+  const weightedDip = canonicalBenchmarks?.weightedDip || profile?.weightedDip
+  if (weightedDip?.addedWeight || (weightedDip as any)?.load) {
+    const load = weightedDip.addedWeight || (weightedDip as any).load || 0
     if (load >= 45) score = Math.max(score, 85)
     else if (load >= 25) score = Math.max(score, 70)
     else if (load >= 10) score = Math.max(score, 55)
@@ -356,17 +373,43 @@ function calculateConfidence(profile: OnboardingProfile): 'low' | 'medium' | 'hi
 /**
 * Detect weak points and generate training focus summary
 * CANONICAL FIX: Now uses canonical profile as primary truth
+* TASK 3: Enhanced to derive limiter from real benchmark data + goal demands
 */
 export function detectWeakPoints(): WeakPointSummary {
   const canonical = getCanonicalProfile()
   const profile = getOnboardingProfile() // Fallback for detailed benchmark data
   const calibration = getAthleteCalibration()
   
-  // Log canonical profile state for debugging
-  console.log('[WeakPointDetection] Using canonical profile:', {
+  // TASK 3: Build unified benchmark view from canonical + profile
+  // Canonical is authoritative, profile fills gaps
+  const benchmarks = {
+    pullUpMax: canonical.pullUpMax ? parseInt(canonical.pullUpMax) : profile?.pullUpMax ?? null,
+    dipMax: canonical.dipMax ? parseInt(canonical.dipMax) : profile?.dipMax ?? null,
+    pushUpMax: canonical.pushUpMax ? parseInt(canonical.pushUpMax) : profile?.pushUpMax ?? null,
+    weightedPullUp: canonical.weightedPullUp || profile?.weightedPullUp || null,
+    weightedDip: canonical.weightedDip || profile?.weightedDip || null,
+    frontLeverProgression: canonical.frontLeverProgression || profile?.frontLeverProgress || null,
+    plancheProgression: canonical.plancheProgression || profile?.plancheProgress || null,
+    lSitHold: canonical.lSitHoldSeconds || profile?.lSitHold || null,
+    weakestArea: canonical.weakestArea || profile?.weakestArea || null,
+    primaryLimitation: canonical.primaryLimitation || profile?.primaryLimitation || null,
+    jointCautions: canonical.jointCautions?.length ? canonical.jointCautions : profile?.jointCautions || [],
     primaryGoal: canonical.primaryGoal,
-    jointCautions: canonical.jointCautions?.length || 0,
-    benchmarksPresent: !!canonical.pullUpMax || !!canonical.frontLeverProgression,
+    secondaryGoal: canonical.secondaryGoal,
+    selectedSkills: canonical.selectedSkills || [],
+  }
+  
+  // Log canonical profile state for debugging
+  console.log('[WeakPointDetection] TASK 3 - Using unified benchmarks:', {
+    primaryGoal: benchmarks.primaryGoal,
+    secondaryGoal: benchmarks.secondaryGoal,
+    pullUpMax: benchmarks.pullUpMax,
+    dipMax: benchmarks.dipMax,
+    weightedPullUp: benchmarks.weightedPullUp?.addedWeight || 'none',
+    weightedDip: benchmarks.weightedDip?.addedWeight || 'none',
+    frontLeverProgression: benchmarks.frontLeverProgression,
+    plancheProgression: benchmarks.plancheProgression,
+    jointCautions: benchmarks.jointCautions?.length || 0,
   })
   
   // Default result for missing profile
@@ -387,16 +430,31 @@ export function detectWeakPoints(): WeakPointSummary {
     }
   }
   
-  // Calculate strength scores
-  const pullScore = estimatePullStrengthScore(profile)
-  const pushScore = estimatePushStrengthScore(profile)
+  // TASK 3: Calculate strength scores using unified canonical benchmarks
+  const pullScore = estimatePullStrengthScore(profile, {
+    pullUpMax: benchmarks.pullUpMax,
+    weightedPullUp: benchmarks.weightedPullUp,
+  })
+  const pushScore = estimatePushStrengthScore(profile, {
+    dipMax: benchmarks.dipMax,
+    pushUpMax: benchmarks.pushUpMax,
+    weightedDip: benchmarks.weightedDip,
+  })
   const coreScore = estimateCoreStrengthScore(profile, calibration)
   const { score: flexScore, limitedAreas: flexLimitedAreas } = estimateFlexibilityScore(profile)
+  
+  console.log('[WeakPointDetection] TASK 3 - Calculated scores:', {
+    pullScore,
+    pushScore,
+    coreScore,
+    flexScore,
+    goalDemand: `${benchmarks.primaryGoal}/${benchmarks.secondaryGoal}`,
+  })
   
   // Detect imbalance
   const strengthImbalance = detectStrengthImbalance(pullScore, pushScore, coreScore)
   
-  // Detect skill bottlenecks
+  // TASK 3: Detect skill bottlenecks with goal context
   const skillPriorities = detectSkillBottlenecks(profile, pullScore, pushScore, coreScore)
   
   // Determine primary focus
@@ -464,6 +522,46 @@ export function detectWeakPoints(): WeakPointSummary {
         primaryFocus = 'posterior_chain'
         primaryFocusReason = 'Hamstring flexibility identified as your weakest area'
         break
+    }
+  }
+  
+  // TASK 3: Goal-aware limiter detection
+  // For skill-focused athletes, derive limiter from goal + progression demands
+  if (primaryFocus === 'balanced_development' && benchmarks.primaryGoal) {
+    const isPushGoal = benchmarks.primaryGoal === 'planche' || benchmarks.primaryGoal === 'handstand_pushup'
+    const isPullGoal = benchmarks.primaryGoal === 'front_lever' || benchmarks.primaryGoal === 'muscle_up'
+    const isPullSecondary = benchmarks.secondaryGoal === 'front_lever' || benchmarks.secondaryGoal === 'muscle_up'
+    const isPushSecondary = benchmarks.secondaryGoal === 'planche' || benchmarks.secondaryGoal === 'handstand_pushup'
+    
+    // For advanced athletes with high benchmarks, limiter shifts to skill support
+    const isAdvancedPull = pullScore >= 75  // e.g., 18+ pull-ups or 25lb+ weighted
+    const isAdvancedPush = pushScore >= 75  // e.g., 20+ dips or 40lb+ weighted
+    
+    // Planche primary: if pull is relatively weaker than push, it's still relevant for balance
+    if (isPushGoal && isPullSecondary && !isAdvancedPull && pushScore > pullScore + 10) {
+      primaryFocus = 'pulling_strength'
+      primaryFocusReason = `Pulling strength supports both planche balance and front lever secondary goal`
+    }
+    // Front lever primary: if push is weaker, it helps overall
+    else if (isPullGoal && isPushSecondary && !isAdvancedPush && pullScore > pushScore + 10) {
+      primaryFocus = 'pushing_strength'
+      primaryFocusReason = `Pushing strength supports both front lever balance and planche secondary goal`
+    }
+    // If both are advanced but still have imbalance, call it out
+    else if (isAdvancedPull && isAdvancedPush) {
+      // Advanced athlete - focus on skill coordination
+      if (skillPriorities.length > 0) {
+        primaryFocus = 'skill_coordination'
+        primaryFocusReason = `Strong base established; focus on skill-specific coordination for ${benchmarks.primaryGoal}`
+      }
+    }
+    // If core is the limiter for compression-based skills
+    else if (
+      (benchmarks.primaryGoal === 'planche' || benchmarks.primaryGoal === 'front_lever') && 
+      coreScore < 50 && coreScore < Math.min(pullScore, pushScore) - 10
+    ) {
+      primaryFocus = 'core_compression'
+      primaryFocusReason = `Core/compression strength is the limiting factor for ${benchmarks.primaryGoal} progress`
     }
   }
   

@@ -962,6 +962,9 @@ function selectIntelligentWarmup(
     sessionMinutes <= 60 ? '45-60' as SessionLength :
     '60+' as SessionLength
 
+  // TASK 4: Detect first main skill for progression-aware warm-up
+  const firstSkillProgression = detectFirstSkillProgression(mainExercises, primaryGoal)
+
   // Build context for warm-up engine
   const warmupContext: WarmUpGenerationContext = {
     mainExercises: mainExercises.map(e => ({
@@ -975,6 +978,8 @@ function selectIntelligentWarmup(
     primaryGoal,
     sessionLength,
     equipment,
+    // TASK 4: Pass first skill progression for warm-up ramping
+    firstSkillProgression,
   }
 
   // Generate intelligent warm-up
@@ -1010,6 +1015,74 @@ function selectIntelligentWarmup(
   })
 
   return selected
+}
+
+// =============================================================================
+// TASK 4: PROGRESSION-AWARE WARM-UP HELPERS
+// =============================================================================
+
+/**
+ * Detect first skill progression from main exercises for warm-up ramping
+ * TASK 4: Analyzes the first skill exercise to determine appropriate warm-up ramp
+ */
+function detectFirstSkillProgression(
+  mainExercises: SelectedExercise[],
+  primaryGoal: PrimaryGoal
+): WarmUpGenerationContext['firstSkillProgression'] {
+  // Find the first skill exercise (highest neural demand typically)
+  const firstSkill = mainExercises.find(e => 
+    e.exercise.category === 'skill' || e.exercise.neuralDemand >= 4
+  )
+  
+  if (!firstSkill) {
+    // No skill exercise, derive from primary goal
+    const goalSkillMap: Record<string, WarmUpGenerationContext['firstSkillProgression']> = {
+      'planche': { skillType: 'planche', progressionLevel: 'unknown', isAdvanced: false },
+      'front_lever': { skillType: 'front_lever', progressionLevel: 'unknown', isAdvanced: false },
+      'handstand_pushup': { skillType: 'hspu', progressionLevel: 'unknown', isAdvanced: false },
+      'muscle_up': { skillType: 'muscle_up', progressionLevel: 'unknown', isAdvanced: false },
+    }
+    return goalSkillMap[primaryGoal] || undefined
+  }
+  
+  const exerciseName = firstSkill.exercise.name.toLowerCase()
+  const exerciseId = firstSkill.exercise.id.toLowerCase()
+  
+  // Detect skill type
+  let skillType: 'planche' | 'front_lever' | 'hspu' | 'muscle_up' | 'handstand' | 'back_lever' | 'l_sit' | 'v_sit' | 'other' = 'other'
+  
+  if (exerciseName.includes('planche') || exerciseId.includes('planche')) {
+    skillType = 'planche'
+  } else if (exerciseName.includes('front lever') || exerciseId.includes('front_lever') || exerciseId.includes('fl_')) {
+    skillType = 'front_lever'
+  } else if (exerciseName.includes('hspu') || exerciseName.includes('handstand push') || exerciseId.includes('hspu')) {
+    skillType = 'hspu'
+  } else if (exerciseName.includes('muscle up') || exerciseId.includes('muscle_up')) {
+    skillType = 'muscle_up'
+  } else if (exerciseName.includes('handstand') || exerciseId.includes('handstand')) {
+    skillType = 'handstand'
+  } else if (exerciseName.includes('back lever') || exerciseId.includes('back_lever') || exerciseId.includes('bl_')) {
+    skillType = 'back_lever'
+  } else if (exerciseName.includes('l-sit') || exerciseName.includes('l sit') || exerciseId.includes('l_sit')) {
+    skillType = 'l_sit'
+  } else if (exerciseName.includes('v-sit') || exerciseName.includes('v sit') || exerciseId.includes('v_sit')) {
+    skillType = 'v_sit'
+  }
+  
+  // Detect if advanced progression
+  const isAdvanced = 
+    exerciseName.includes('straddle') ||
+    exerciseName.includes('full') ||
+    exerciseName.includes('one leg') ||
+    exerciseName.includes('half lay') ||
+    exerciseName.includes('advanced') ||
+    (exerciseName.includes('tuck') && !exerciseName.includes('advanced tuck')) === false
+  
+  return {
+    skillType,
+    progressionLevel: exerciseName,
+    isAdvanced,
+  }
 }
 
 // Legacy warmup function (kept for backward compatibility)

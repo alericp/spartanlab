@@ -169,7 +169,48 @@ function buildThreeDayStructure(
     }
   }
   
-  // Skill goal: Skill / Support / Skill
+  // TASK 2: Check for secondary goal that creates hybrid skill emphasis (3-day)
+  const hasOppositeSecondary = (isPushGoal && inputs.hasSecondaryPull) || (isPullGoal && inputs.hasSecondaryPush)
+  const skillLabel = isPushGoal ? 'Push' : 'Pull'
+  const secondaryLabel = isPushGoal ? 'Pull' : 'Push'
+  
+  if (hasOppositeSecondary) {
+    // TASK 2: 3-day hybrid - Day 2 becomes secondary skill day
+    return {
+      structureType: 'skill_dominant',
+      structureName: `${skillLabel}-${secondaryLabel}-${skillLabel} Hybrid`,
+      days: [
+        {
+          dayNumber: 1,
+          focus: isPushGoal ? 'push_skill' : 'pull_skill',
+          focusLabel: `${skillLabel} Skill (Primary)`,
+          isPrimary: true,
+          movementEmphasis: isPushGoal ? 'push' : 'pull',
+          targetIntensity: 'high',
+        },
+        {
+          dayNumber: 2,
+          // TASK 2: Day 2 becomes secondary skill + support
+          focus: isPushGoal ? 'pull_skill' : 'push_skill',
+          focusLabel: `${secondaryLabel} Skill (Secondary)`,
+          isPrimary: false,
+          movementEmphasis: isPushGoal ? 'pull' : 'push',
+          targetIntensity: 'high',
+        },
+        {
+          dayNumber: 3,
+          focus: isPushGoal ? 'push_strength' : 'pull_strength',
+          focusLabel: `${skillLabel} Strength + Skill`,
+          isPrimary: true,
+          movementEmphasis: isPushGoal ? 'push' : 'pull',
+          targetIntensity: 'high',
+        },
+      ],
+      rationale: `Hybrid skill development: ${skillLabel} primary focus with dedicated ${secondaryLabel} secondary skill session.`,
+    }
+  }
+  
+  // Standard skill goal: Skill / Support / Skill
   return {
     structureType: 'skill_dominant',
     structureName: 'Skill-Support-Skill',
@@ -177,7 +218,7 @@ function buildThreeDayStructure(
       {
         dayNumber: 1,
         focus: isPushGoal ? 'push_skill' : 'pull_skill',
-        focusLabel: `Primary ${isPushGoal ? 'Push' : 'Pull'} Skill`,
+        focusLabel: `Primary ${skillLabel} Skill`,
         isPrimary: true,
         movementEmphasis: isPushGoal ? 'push' : 'pull',
         targetIntensity: 'high',
@@ -185,7 +226,7 @@ function buildThreeDayStructure(
       {
         dayNumber: 2,
         focus: isPushGoal ? 'pull_strength' : 'push_strength',
-        focusLabel: `${isPushGoal ? 'Pull' : 'Push'} Strength Support`,
+        focusLabel: `${secondaryLabel} Strength Support`,
         isPrimary: false,
         movementEmphasis: isPushGoal ? 'pull' : 'push',
         targetIntensity: 'moderate',
@@ -193,13 +234,13 @@ function buildThreeDayStructure(
       {
         dayNumber: 3,
         focus: isPushGoal ? 'push_strength' : 'pull_strength',
-        focusLabel: `${isPushGoal ? 'Push' : 'Pull'} Strength + Skill`,
+        focusLabel: `${skillLabel} Strength + Skill`,
         isPrimary: true,
         movementEmphasis: isPushGoal ? 'push' : 'pull',
         targetIntensity: 'high',
       },
     ],
-    rationale: `Two ${isPushGoal ? 'push' : 'pull'} skill sessions per week builds skill density, with supporting ${isPushGoal ? 'pull' : 'push'} work between.`,
+    rationale: `Two ${skillLabel.toLowerCase()} skill sessions per week builds skill density, with supporting ${secondaryLabel.toLowerCase()} work between.`,
   }
 }
 
@@ -265,6 +306,56 @@ function buildFourDayStructure(
   // If recovery is low, make day 3 lighter
   const day3Intensity = recoveryLevel === 'LOW' ? 'moderate' : 'high'
   
+  // TASK 2: Check for secondary goal that creates hybrid skill emphasis
+  // e.g., Primary = Planche (push), Secondary = Front Lever (pull)
+  const hasOppositeSecondary = (isPushGoal && inputs.hasSecondaryPull) || (isPullGoal && inputs.hasSecondaryPush)
+  
+  if (hasOppositeSecondary) {
+    // TASK 2: Hybrid skill structure - dedicate a day to secondary goal skill work
+    const secondaryLabel = isPushGoal ? 'Pull' : 'Push'
+    return {
+      structureType: 'push_pull_skill',
+      structureName: `${skillLabel} + ${secondaryLabel} Skill Focus`,
+      days: [
+        {
+          dayNumber: 1,
+          focus: isPushGoal ? 'push_skill' : 'pull_skill',
+          focusLabel: `${skillLabel} Skill (Primary)`,
+          isPrimary: true,
+          movementEmphasis: isPushGoal ? 'push' : 'pull',
+          targetIntensity: 'high',
+        },
+        {
+          dayNumber: 2,
+          // TASK 2: Day 2 becomes secondary skill day instead of just support strength
+          focus: isPushGoal ? 'pull_skill' : 'push_skill',
+          focusLabel: `${secondaryLabel} Skill (Secondary)`,
+          isPrimary: false,
+          movementEmphasis: isPushGoal ? 'pull' : 'push',
+          targetIntensity: 'high',  // Elevated for skill work
+        },
+        {
+          dayNumber: 3,
+          focus: isPushGoal ? 'push_strength' : 'pull_strength',
+          focusLabel: `${skillLabel} Strength + Support`,
+          isPrimary: true,
+          movementEmphasis: isPushGoal ? 'push' : 'pull',
+          targetIntensity: day3Intensity as 'high' | 'moderate',
+        },
+        {
+          dayNumber: 4,
+          focus: 'mixed_upper',
+          focusLabel: 'Mixed Skills + Density',
+          isPrimary: false,
+          movementEmphasis: 'mixed',
+          targetIntensity: 'moderate',
+        },
+      ],
+      rationale: `Hybrid skill focus: ${skillLabel} primary skill training, ${secondaryLabel} secondary skill development, ${skillLabel.toLowerCase()} strength, and mixed skill density session.`,
+    }
+  }
+  
+  // Standard 4-day structure without secondary skill emphasis
   return {
     structureType: 'push_pull_skill',
     structureName: `${skillLabel} Skill Focus`,
@@ -374,7 +465,63 @@ function buildFiveDayStructure(
     }
   }
   
-  // Skill goal with 5 days - bias toward skill
+  // TASK 2: Check for secondary goal that creates hybrid skill emphasis (5-day)
+  const hasOppositeSecondary = (isPushGoal && inputs.hasSecondaryPull) || (isPullGoal && inputs.hasSecondaryPush)
+  
+  if (hasOppositeSecondary) {
+    // TASK 2: 5-day hybrid skill structure - dedicate a day to secondary goal
+    const secondaryLabel = isPushGoal ? 'Pull' : 'Push'
+    return {
+      structureType: 'skill_dominant',
+      structureName: `${skillLabel} + ${secondaryLabel} Hybrid`,
+      days: [
+        {
+          dayNumber: 1,
+          focus: isPushGoal ? 'push_skill' : 'pull_skill',
+          focusLabel: `${skillLabel} Skill (Primary)`,
+          isPrimary: true,
+          movementEmphasis: isPushGoal ? 'push' : 'pull',
+          targetIntensity: 'high',
+        },
+        {
+          dayNumber: 2,
+          // TASK 2: Day 2 becomes secondary skill day
+          focus: isPushGoal ? 'pull_skill' : 'push_skill',
+          focusLabel: `${secondaryLabel} Skill (Secondary)`,
+          isPrimary: false,
+          movementEmphasis: isPushGoal ? 'pull' : 'push',
+          targetIntensity: 'high',
+        },
+        {
+          dayNumber: 3,
+          focus: isPushGoal ? 'push_strength' : 'pull_strength',
+          focusLabel: `${skillLabel} Strength`,
+          isPrimary: true,
+          movementEmphasis: isPushGoal ? 'push' : 'pull',
+          targetIntensity: 'high',
+        },
+        {
+          dayNumber: 4,
+          focus: isPushGoal ? 'pull_strength' : 'push_strength',
+          focusLabel: `${secondaryLabel} Strength Support`,
+          isPrimary: false,
+          movementEmphasis: isPushGoal ? 'pull' : 'push',
+          targetIntensity: 'moderate',
+        },
+        {
+          dayNumber: 5,
+          focus: 'skill_density',
+          focusLabel: 'Mixed Skill Density',
+          isPrimary: false,
+          movementEmphasis: 'mixed',
+          targetIntensity: 'moderate',
+        },
+      ],
+      rationale: `Hybrid skill focus: ${skillLabel} primary skill emphasis with dedicated ${secondaryLabel} secondary skill day for balanced progression.`,
+    }
+  }
+  
+  // Standard skill goal with 5 days - bias toward primary skill
   return {
     structureType: 'skill_dominant',
     structureName: `${skillLabel} Skill Dominant`,

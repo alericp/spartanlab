@@ -1513,6 +1513,13 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
   // Select optimal weekly structure - USE effectiveTrainingDays for flexible support
   // TASK 2: Pass secondary goal flags so structure can adapt
   // TASK 3: Pass hybrid path and multi-skill flags for expanded structure awareness
+  // ISSUE A FIX: Log selected skills being passed to structure selector
+  console.log('[program-gen] ISSUE A: Selected skills passed to structure:', {
+    selectedSkills: expandedContext.selectedSkills,
+    secondaryGoal: secondaryGoal || canonicalProfile.secondaryGoal || null,
+    trainingPathType: expandedContext.trainingPathType,
+  })
+  
   const structure = selectOptimalStructure({
     primaryGoal,
     trainingDays: effectiveTrainingDays,  // Uses resolved flexible frequency
@@ -1524,6 +1531,9 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
     trainingPathType: expandedContext.trainingPathType,
     selectedSkillsCount: expandedContext.selectedSkills.length,
     hasFlexibilityTargets: expandedContext.selectedFlexibility.length > 0,
+    // ISSUE A FIX: Pass actual skill identities for smarter structure allocation
+    selectedSkills: expandedContext.selectedSkills,
+    secondaryGoal: secondaryGoal || canonicalProfile.secondaryGoal || null,
   })
   
   // Generate session intents for variety

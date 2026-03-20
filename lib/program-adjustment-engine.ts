@@ -451,14 +451,19 @@ export function swapExercise(
 ): ExerciseSwapResult {
   const profile = getOnboardingProfile()
   
+  // REGRESSION GUARD: Use profile values first, fallback only if genuinely missing
+  // DO NOT let || 'front_lever' override real user selections
+  const actualGoal = profile?.primaryGoal ?? null
+  
   // Build context for exercise intelligence
   const context: ExerciseIntelligenceContext = {
     experienceLevel: (profile?.experienceLevel as 'beginner' | 'intermediate' | 'advanced') || 'intermediate',
     availableEquipment,
-    primaryGoal: profile?.primaryGoal || 'front_lever',
-    targetSkills: [profile?.primaryGoal as any || 'front_lever'],
+    // REGRESSION GUARD: Only use fallback if profile truly has no goal
+    primaryGoal: actualGoal || 'general',  // 'general' not 'front_lever' to avoid goal pollution
+    targetSkills: actualGoal ? [actualGoal as any] : [],  // Empty array better than fake goal
     fatigueLevel: 'moderate',
-    sessionMinutes: 60,
+    sessionMinutes: profile?.sessionLengthMinutes || 60,
   }
 
   // Find replacement using exercise intelligence

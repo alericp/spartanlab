@@ -399,9 +399,13 @@ if (['planche', 'front_lever', 'back_lever', 'muscle_up', 'handstand_pushup', 'i
   }
   }
   
+  // REGRESSION GUARD: Use canonical profile values, avoid silent fallbacks
+  // trainingDaysPerWeek fallback to 4 only if profile field is genuinely missing
+  // sessionLength fallback to 45 only if profile field is genuinely missing
   return {
     primaryGoal,
     experienceLevel: profile.experienceLevel,
+    // Note: These fallbacks are for legacy compatibility - new users go through canonical flow
     trainingDaysPerWeek: (profile.trainingDaysPerWeek as TrainingDays) || 4,
     secondaryEmphasis: 'none',
     sessionLength: profile.sessionLengthMinutes as SessionLength || 45,

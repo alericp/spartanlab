@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -15,16 +15,58 @@ export function ProgramSnapshotCard({ className }: ProgramSnapshotCardProps) {
   const [program, setProgram] = useState<ProgramSummary | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
-  useEffect(() => {
+  // TASK F FIX: Memoized loader function for fresh reads
+  const loadProgramSummary = useCallback(() => {
     try {
+      // TASK 7: Log fresh read from source
+      console.log('[ProgramSnapshotCard] TASK 4: Loading program from SINGLE source (getProgramState)')
       const overview = getDashboardOverview()
       const summary = getProgramSummary(overview)
+      
+      // TASK 7: Log what was loaded
+      console.log('[ProgramSnapshotCard] TASK 4: Loaded program summary:', {
+        hasData: summary.hasData,
+        goalLabel: summary.goalLabel,
+        programName: summary.programName,
+        weeklyStructure: summary.weeklyStructure,
+      })
+      
       setProgram(summary)
     } catch (error) {
       console.error('Failed to load program summary:', error)
     }
     setIsLoading(false)
   }, [])
+
+  // TASK F FIX: Load on mount
+  useEffect(() => {
+    loadProgramSummary()
+  }, [loadProgramSummary])
+  
+  // TASK F FIX: Re-load when window regains focus (handles returning from program page)
+  useEffect(() => {
+    const handleFocus = () => {
+      console.log('[ProgramSnapshotCard] TASK F: Window focus - refreshing program data')
+      loadProgramSummary()
+    }
+    
+    window.addEventListener('focus', handleFocus)
+    return () => window.removeEventListener('focus', handleFocus)
+  }, [loadProgramSummary])
+  
+  // TASK F FIX: Listen for storage events (cross-tab sync)
+  useEffect(() => {
+    const handleStorage = (e: StorageEvent) => {
+      // Refresh if adaptive programs storage changed
+      if (e.key === 'spartanlab_adaptive_programs' || e.key === 'spartanlab_first_program') {
+        console.log('[ProgramSnapshotCard] TASK F: Storage changed - refreshing program data')
+        loadProgramSummary()
+      }
+    }
+    
+    window.addEventListener('storage', handleStorage)
+    return () => window.removeEventListener('storage', handleStorage)
+  }, [loadProgramSummary])
 
   if (isLoading) {
     return (
@@ -37,7 +79,8 @@ export function ProgramSnapshotCard({ className }: ProgramSnapshotCardProps) {
     )
   }
 
-  if (!program) {
+  // TASK B FIX: Check hasData flag (not just null) since getProgramSummary always returns object
+  if (!program || !program.hasData) {
     return (
       <Card className={`bg-[#1A1F26] border-[#2B313A] border-dashed p-5 ${className}`}>
         <div className="text-center py-2">

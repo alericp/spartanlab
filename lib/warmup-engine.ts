@@ -906,6 +906,31 @@ function getProgressionRampExercises(
     if (archBody) rampExercises.push(archBody)
   }
   
+  // BACK LEVER progression ramp (TASK 6: Added for complete skill coverage)
+  if (skillType === 'back_lever') {
+    // Lat stretch for shoulder extension
+    const latStretch = availableExercises.find(e => e.id === 'lat_stretch_warmup')
+    if (latStretch) rampExercises.push(latStretch)
+    
+    // Shoulder dislocates for extension prep
+    const shoulderDislocates = availableExercises.find(e => e.id === 'shoulder_dislocates')
+    if (shoulderDislocates && equipment.includes('bands')) rampExercises.push(shoulderDislocates)
+    
+    // Dead hang for decompression
+    const deadHang = availableExercises.find(e => e.id === 'dead_hang_warmup')
+    if (deadHang) rampExercises.push(deadHang)
+    
+    // Scap pull-ups for control
+    const scapPull = availableExercises.find(e => e.id === 'scap_pullup_warmup')
+    if (scapPull) rampExercises.push(scapPull)
+    
+    // For advanced back lever, add easier progression as primer
+    if (isAdvanced) {
+      const archBody = availableExercises.find(e => e.id === 'arch_body_activation')
+      if (archBody) rampExercises.push(archBody)
+    }
+  }
+  
   // HSPU progression ramp
   if (skillType === 'hspu') {
     // Wrist prep crucial for HSPU

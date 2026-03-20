@@ -87,6 +87,13 @@ export interface ProgramSummary {
   sessionLength: number
   createdAt: string
   hasData: boolean
+  // TASK C FIX: Additional fields for complete snapshot display
+  programName: string | null
+  weeklyStructure: string | null
+  nextSessionFocus: string | null
+  secondaryGoal: string | null
+  scheduleMode: string | null
+  sessionDurationMode: string | null
 }
 
 export interface CurrentFocus {
@@ -245,20 +252,62 @@ export function getStrengthSummary(overview: DashboardOverview): StrengthSummary
   }
 }
 
-// Get program summary - uses unified program state check
+/**
+ * Get program summary - uses unified program state check
+ * 
+ * =============================================================================
+ * REGRESSION GUARD: PROGRAM SNAPSHOT CONSISTENCY
+ * =============================================================================
+ * 
+ * This function derives ALL display fields from the stored AdaptiveProgram.
+ * DO NOT add fallback logic that reads from other sources (onboarding, settings).
+ * 
+ * RULES:
+ * - adaptiveProgram is the ONLY source of truth for displayed program state
+ * - If adaptiveProgram is null, show "No Program" - do not fabricate data
+ * - daysPerWeek, sessionLength, goalLabel all come from stored program
+ * - DO NOT let profile schedule changes "leak" into program display without regeneration
+ */
 export function getProgramSummary(overview: DashboardOverview): ProgramSummary {
   const { latestProgram } = overview
   
   // Use unified program state check for consistency across the app
   const { adaptiveProgram, hasProgram } = getProgramState()
   
+  // TASK 7: Log program summary source
+  console.log('[dashboard-service] TASK B: getProgramSummary source:', {
+    hasProgram,
+    adaptiveProgramExists: !!adaptiveProgram,
+    legacyProgramExists: !!latestProgram,
+    usingSource: hasProgram && adaptiveProgram ? 'adaptiveProgram' : latestProgram ? 'legacyProgram' : 'none',
+  })
+  
   if (hasProgram && adaptiveProgram) {
+    // TASK C FIX: Build weeklyStructure from actual stored program sessions
+    const weeklyStructure = adaptiveProgram.sessions?.length 
+      ? `${adaptiveProgram.sessions.length} sessions/week - ${adaptiveProgram.structure?.structureName || 'Custom'}`
+      : null
+    
+    // TASK C FIX: Derive next session focus from first session in program
+    const nextSessionFocus = adaptiveProgram.sessions?.[0]?.focusLabel || null
+    
+    // TASK C FIX: Build program name from goal + structure
+    const programName = `${adaptiveProgram.goalLabel} ${adaptiveProgram.structure?.structureName || 'Program'}`
+    
     return {
       goalLabel: adaptiveProgram.goalLabel,
       daysPerWeek: adaptiveProgram.trainingDaysPerWeek,
       sessionLength: adaptiveProgram.sessionLength,
       createdAt: adaptiveProgram.createdAt,
       hasData: true,
+      // TASK C FIX: Additional derived fields
+      programName,
+      weeklyStructure,
+      nextSessionFocus,
+      secondaryGoal: adaptiveProgram.secondaryGoal || null,
+      scheduleMode: adaptiveProgram.scheduleMode || null,
+      // TASK C FIX: Access sessionDurationMode safely (may not be typed but is set at runtime)
+      sessionDurationMode: (adaptiveProgram as Record<string, unknown>).sessionDurationMode as string || null,
     }
   }
   
@@ -269,15 +318,28 @@ export function getProgramSummary(overview: DashboardOverview): ProgramSummary {
       sessionLength: 0,
       createdAt: '',
       hasData: false,
+      programName: null,
+      weeklyStructure: null,
+      nextSessionFocus: null,
+      secondaryGoal: null,
+      scheduleMode: null,
+      sessionDurationMode: null,
     }
   }
   
+  // Legacy fallback - less rich data
   return {
     goalLabel: GOAL_LABELS[latestProgram.primaryGoal],
     daysPerWeek: latestProgram.trainingDaysPerWeek,
     sessionLength: latestProgram.sessionLength,
     createdAt: latestProgram.createdAt,
     hasData: true,
+    programName: GOAL_LABELS[latestProgram.primaryGoal] + ' Program',
+    weeklyStructure: `${latestProgram.trainingDaysPerWeek} days/week`,
+    nextSessionFocus: null,
+    secondaryGoal: null,
+    scheduleMode: null,
+    sessionDurationMode: null,
   }
 }
 

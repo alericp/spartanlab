@@ -775,3 +775,611 @@ export function logPrescriptionDiagnostics(
     ...(diagnostics.carryoverRationale && { carryover: diagnostics.carryoverRationale }),
   })
 }
+
+// =============================================================================
+// WEEKLY PROGRESSION LOGIC - TASK 4
+// =============================================================================
+
+export type ProgressionPhase = 'accumulation' | 'intensification' | 'realization' | 'deload'
+
+export interface WeeklyProgressionContext {
+  weekNumber: number
+  totalWeeksInCycle: number
+  phase: ProgressionPhase
+  primaryGoal: string
+  experienceLevel: 'beginner' | 'intermediate' | 'advanced' | 'elite'
+  recentPerformance?: {
+    skillHoldTrend: 'improving' | 'stable' | 'declining'
+    strengthTrend: 'improving' | 'stable' | 'declining'
+    completionRate: number
+    avgRPE: number
+  }
+}
+
+export interface WeeklyProgressionRecommendation {
+  skillVolumeModifier: number       // 0.8 - 1.2 multiplier
+  strengthVolumeModifier: number    // 0.8 - 1.2 multiplier
+  accessoryVolumeModifier: number   // 0.7 - 1.1 multiplier
+  intensityModifier: number         // -1 to +1 RPE adjustment
+  restModifier: number              // 0.8 - 1.2 multiplier
+  progressionGuidance: string[]
+  shouldProgressSkill: boolean
+  shouldProgressStrength: boolean
+  shouldReduceVolume: boolean
+  phaseRationale: string
+}
+
+/**
+ * Calculate weekly progression recommendations.
+ * TASK 4: Provides forward movement logic beyond static programming.
+ */
+export function getWeeklyProgressionRecommendation(
+  context: WeeklyProgressionContext
+): WeeklyProgressionRecommendation {
+  const { weekNumber, totalWeeksInCycle, phase, experienceLevel, recentPerformance } = context
+  
+  // Calculate position in cycle (0-1)
+  const cycleProgress = Math.min(1, weekNumber / Math.max(1, totalWeeksInCycle))
+  
+  // Base recommendations by phase
+  let skillVolMod = 1.0
+  let strengthVolMod = 1.0
+  let accessoryVolMod = 1.0
+  let intensityMod = 0
+  let restMod = 1.0
+  const guidance: string[] = []
+  let shouldProgressSkill = false
+  let shouldProgressStrength = false
+  let shouldReduceVolume = false
+  let phaseRationale = ''
+  
+  switch (phase) {
+    case 'accumulation':
+      // Build volume, moderate intensity
+      skillVolMod = 0.9 + (cycleProgress * 0.2) // 0.9 -> 1.1
+      strengthVolMod = 1.0 + (cycleProgress * 0.1) // 1.0 -> 1.1
+      accessoryVolMod = 1.0
+      intensityMod = -1 // Lower intensity, higher volume
+      restMod = 0.9 // Shorter rest, higher density
+      guidance.push('Build work capacity with controlled intensity')
+      guidance.push('Focus on volume accumulation, RPE 6-7')
+      shouldProgressSkill = false
+      shouldProgressStrength = cycleProgress > 0.5
+      phaseRationale = 'Accumulation phase: Building work capacity and skill exposure'
+      break
+      
+    case 'intensification':
+      // Reduce volume, increase intensity
+      skillVolMod = 1.0
+      strengthVolMod = 0.85 // Reduced volume
+      accessoryVolMod = 0.8
+      intensityMod = 1 // Higher intensity
+      restMod = 1.15 // Longer rest for quality
+      guidance.push('Increase intensity on primary exercises')
+      guidance.push('Quality over quantity - RPE 8-9')
+      shouldProgressSkill = cycleProgress > 0.3 && recentPerformance?.skillHoldTrend === 'improving'
+      shouldProgressStrength = true
+      phaseRationale = 'Intensification phase: Converting volume to strength'
+      break
+      
+    case 'realization':
+      // Peak performance window
+      skillVolMod = 0.85
+      strengthVolMod = 0.75
+      accessoryVolMod = 0.6
+      intensityMod = 1
+      restMod = 1.3 // Full rest for max output
+      guidance.push('Peak week - test max holds and heavy singles/doubles')
+      guidance.push('Minimal accessory work, focus on primary skills')
+      shouldProgressSkill = true
+      shouldProgressStrength = true
+      phaseRationale = 'Realization phase: Peak performance testing'
+      break
+      
+    case 'deload':
+      // Recovery week
+      skillVolMod = 0.6
+      strengthVolMod = 0.5
+      accessoryVolMod = 0.5
+      intensityMod = -2
+      restMod = 1.0
+      shouldReduceVolume = true
+      guidance.push('Recovery week - maintain movement patterns at low intensity')
+      guidance.push('Focus on mobility and technique refinement')
+      phaseRationale = 'Deload phase: Allowing adaptation and recovery'
+      break
+  }
+  
+  // Adjust based on recent performance
+  if (recentPerformance) {
+    // If struggling (high RPE, low completion), back off
+    if (recentPerformance.avgRPE > 8.5 || recentPerformance.completionRate < 75) {
+      skillVolMod *= 0.9
+      strengthVolMod *= 0.9
+      intensityMod -= 1
+      guidance.push('Reduced volume based on recent difficulty')
+      shouldProgressSkill = false
+      shouldProgressStrength = false
+    }
+    
+    // If crushing it, push slightly
+    if (recentPerformance.avgRPE < 6.5 && recentPerformance.completionRate > 95) {
+      skillVolMod = Math.min(1.15, skillVolMod * 1.05)
+      strengthVolMod = Math.min(1.15, strengthVolMod * 1.05)
+      guidance.push('Slight volume increase based on strong performance')
+    }
+    
+    // Skill-specific adjustments
+    if (recentPerformance.skillHoldTrend === 'declining') {
+      skillVolMod *= 0.85
+      guidance.push('Reducing skill volume to allow recovery')
+    }
+  }
+  
+  // Experience level adjustments
+  if (experienceLevel === 'beginner') {
+    // Beginners: more conservative progression
+    skillVolMod = Math.min(1.0, skillVolMod)
+    strengthVolMod = Math.min(1.05, strengthVolMod)
+    intensityMod = Math.min(0, intensityMod)
+    shouldProgressSkill = shouldProgressSkill && recentPerformance?.completionRate !== undefined && recentPerformance.completionRate > 90
+  } else if (experienceLevel === 'elite') {
+    // Elite: can handle more aggressive loading
+    restMod *= 1.1 // More rest for harder work
+  }
+  
+  return {
+    skillVolumeModifier: Math.round(skillVolMod * 100) / 100,
+    strengthVolumeModifier: Math.round(strengthVolMod * 100) / 100,
+    accessoryVolumeModifier: Math.round(accessoryVolMod * 100) / 100,
+    intensityModifier: Math.round(intensityMod),
+    restModifier: Math.round(restMod * 100) / 100,
+    progressionGuidance: guidance,
+    shouldProgressSkill,
+    shouldProgressStrength,
+    shouldReduceVolume,
+    phaseRationale,
+  }
+}
+
+/**
+ * Determine current progression phase based on week and performance.
+ */
+export function determineProgressionPhase(
+  weekNumber: number,
+  totalWeeksInCycle: number,
+  forceDeload: boolean = false
+): ProgressionPhase {
+  if (forceDeload) return 'deload'
+  
+  // Standard 4-week mesocycle: accumulate, intensify, realize, deload
+  const cycleWeek = ((weekNumber - 1) % totalWeeksInCycle) + 1
+  
+  if (totalWeeksInCycle <= 4) {
+    // 4-week cycle
+    if (cycleWeek === 4) return 'deload'
+    if (cycleWeek === 3) return 'realization'
+    if (cycleWeek === 2) return 'intensification'
+    return 'accumulation'
+  }
+  
+  // 6-week cycle
+  if (totalWeeksInCycle <= 6) {
+    if (cycleWeek === 6) return 'deload'
+    if (cycleWeek === 5) return 'realization'
+    if (cycleWeek >= 3) return 'intensification'
+    return 'accumulation'
+  }
+  
+  // 8-week cycle
+  const normalized = cycleWeek / totalWeeksInCycle
+  if (normalized > 0.875) return 'deload'
+  if (normalized > 0.75) return 'realization'
+  if (normalized > 0.4) return 'intensification'
+  return 'accumulation'
+}
+
+// =============================================================================
+// ADVANCED SKILL PRESCRIPTION - TASK 2
+// =============================================================================
+
+export interface AdvancedSkillPrescription {
+  mode: 'quality_singles' | 'cluster_exposure' | 'max_holds' | 'volume_accumulation'
+  setsRange: [number, number]
+  holdSecondsRange: [number, number]
+  restSeconds: number
+  rpe: number
+  clusterConfig?: {
+    holdsPerCluster: number
+    restWithinCluster: number
+    restBetweenClusters: number
+  }
+  coachingNotes: string[]
+  progressionThreshold: string
+}
+
+/**
+ * Get advanced skill prescription based on skill type, level, and progression.
+ * TASK 2: Makes skill work feel intentional and appropriately challenging.
+ */
+export function getAdvancedSkillPrescription(
+  skillType: 'planche' | 'front_lever' | 'back_lever' | 'muscle_up' | 'hspu' | 'handstand' | 'l_sit' | 'v_sit',
+  progressionLevel: 'beginner' | 'tuck' | 'adv_tuck' | 'straddle' | 'one_leg' | 'half_lay' | 'full',
+  athleteLevel: 'beginner' | 'intermediate' | 'advanced' | 'elite',
+  weeklyPhase?: ProgressionPhase
+): AdvancedSkillPrescription {
+  // Base prescription by skill type
+  const isStaticHold = ['planche', 'front_lever', 'back_lever', 'l_sit', 'v_sit'].includes(skillType)
+  const isDynamic = ['muscle_up', 'hspu'].includes(skillType)
+  const isBalance = skillType === 'handstand'
+  
+  // Determine prescription mode
+  let mode: AdvancedSkillPrescription['mode'] = 'cluster_exposure'
+  
+  // Advanced/elite athletes at harder progressions use quality-focused work
+  if ((athleteLevel === 'advanced' || athleteLevel === 'elite') && 
+      ['straddle', 'one_leg', 'half_lay', 'full'].includes(progressionLevel)) {
+    mode = weeklyPhase === 'realization' ? 'max_holds' : 'quality_singles'
+  }
+  
+  // Accumulation phase always uses cluster for exposure
+  if (weeklyPhase === 'accumulation') {
+    mode = 'cluster_exposure'
+  }
+  
+  // Beginners always use cluster exposure
+  if (athleteLevel === 'beginner' || progressionLevel === 'beginner') {
+    mode = 'cluster_exposure'
+  }
+  
+  // Calculate parameters based on mode and skill
+  let setsRange: [number, number]
+  let holdSecondsRange: [number, number]
+  let restSeconds: number
+  let rpe: number
+  let clusterConfig: AdvancedSkillPrescription['clusterConfig'] | undefined
+  const coachingNotes: string[] = []
+  let progressionThreshold: string
+  
+  switch (mode) {
+    case 'quality_singles':
+      // High quality, moderate volume
+      setsRange = [4, 6]
+      holdSecondsRange = isStaticHold ? [6, 12] : [1, 3]
+      restSeconds = isStaticHold ? 150 : 180
+      rpe = 8
+      coachingNotes.push('Quality over quantity - stop when position degrades')
+      coachingNotes.push('Full neural recovery between sets')
+      progressionThreshold = 'Consistent 10s+ holds with clean form for 4+ sets'
+      break
+      
+    case 'max_holds':
+      // Peak performance testing
+      setsRange = [3, 5]
+      holdSecondsRange = isStaticHold ? [8, 20] : [1, 5]
+      restSeconds = 180
+      rpe = 9
+      coachingNotes.push('Max effort - test your limits')
+      coachingNotes.push('Full 3+ minute rest between attempts')
+      progressionThreshold = 'Hit target time for 3 sets to confirm readiness'
+      break
+      
+    case 'volume_accumulation':
+      // Build total time under tension
+      setsRange = [5, 8]
+      holdSecondsRange = isStaticHold ? [5, 10] : [2, 4]
+      restSeconds = 90
+      rpe = 7
+      coachingNotes.push('Accumulate total hold time')
+      coachingNotes.push('Maintain consistent quality across all sets')
+      progressionThreshold = 'Total time > 60s across all sets'
+      break
+      
+    case 'cluster_exposure':
+    default:
+      // Multiple short exposures
+      setsRange = [5, 10]
+      holdSecondsRange = isStaticHold ? [3, 6] : [1, 2]
+      restSeconds = 60
+      rpe = 6
+      clusterConfig = {
+        holdsPerCluster: 3,
+        restWithinCluster: 20,
+        restBetweenClusters: 90,
+      }
+      coachingNotes.push('Short, frequent exposures build neural patterns')
+      coachingNotes.push('Each hold should feel controlled, not desperate')
+      progressionThreshold = 'Complete 8+ quality exposures per session'
+      break
+  }
+  
+  // Adjust for skill-specific characteristics
+  if (skillType === 'planche') {
+    restSeconds = Math.max(restSeconds, 120) // Planche needs more rest
+    coachingNotes.push('Maintain protraction and lean angle throughout')
+  } else if (skillType === 'front_lever') {
+    coachingNotes.push('Scapular depression and full body tension')
+  } else if (skillType === 'handstand') {
+    // Handstand uses many short attempts
+    setsRange = [6, 15]
+    holdSecondsRange = [5, 30]
+    restSeconds = 30
+    coachingNotes.push('Focus on quality of entry and balance corrections')
+  } else if (isDynamic) {
+    // Dynamic skills count reps, not holds
+    holdSecondsRange = [1, 5] // Reps, not seconds
+    coachingNotes.push('Control the full movement - no momentum cheating')
+  }
+  
+  // Phase adjustments
+  if (weeklyPhase === 'deload') {
+    setsRange = [Math.max(2, setsRange[0] - 2), setsRange[1] - 2]
+    rpe = Math.max(5, rpe - 2)
+    coachingNotes.push('Deload week - maintain pattern, reduce intensity')
+  }
+  
+  return {
+    mode,
+    setsRange,
+    holdSecondsRange,
+    restSeconds,
+    rpe,
+    clusterConfig,
+    coachingNotes,
+    progressionThreshold,
+  }
+}
+
+// =============================================================================
+// SUPPORT WORK MAPPING - TASK 7
+// =============================================================================
+
+export interface SupportWorkMapping {
+  exercise: string
+  category: 'weighted_strength' | 'bodyweight_strength' | 'hypertrophy' | 'compression' | 'mobility'
+  supportsGoals: string[]
+  addressesLimiters: string[]
+  carryoverRationale: string
+  priority: 'essential' | 'recommended' | 'optional'
+}
+
+/**
+ * Map support work to goals and limiters.
+ * TASK 7: Makes support work feel purposeful rather than random.
+ */
+export function mapSupportToGoalsAndLimiters(
+  primaryGoal: string,
+  secondaryGoal: string | null,
+  limiters: string[],
+  hasWeights: boolean
+): SupportWorkMapping[] {
+  const mappings: SupportWorkMapping[] = []
+  
+  // Core support mappings by goal
+  const goalMappings: Record<string, SupportWorkMapping[]> = {
+    planche: [
+      {
+        exercise: 'weighted_dip',
+        category: 'weighted_strength',
+        supportsGoals: ['planche'],
+        addressesLimiters: ['push_strength', 'straight_arm_push_strength'],
+        carryoverRationale: 'Builds pressing foundation for planche lean and support position',
+        priority: hasWeights ? 'essential' : 'optional',
+      },
+      {
+        exercise: 'pseudo_planche_pushup',
+        category: 'bodyweight_strength',
+        supportsGoals: ['planche'],
+        addressesLimiters: ['straight_arm_push_strength'],
+        carryoverRationale: 'Develops lean angle tolerance and straight-arm pushing',
+        priority: 'essential',
+      },
+      {
+        exercise: 'hollow_hold',
+        category: 'compression',
+        supportsGoals: ['planche', 'front_lever', 'l_sit'],
+        addressesLimiters: ['compression'],
+        carryoverRationale: 'Core compression is foundational for maintaining planche position',
+        priority: 'essential',
+      },
+    ],
+    front_lever: [
+      {
+        exercise: 'weighted_pull_up',
+        category: 'weighted_strength',
+        supportsGoals: ['front_lever'],
+        addressesLimiters: ['pull_strength', 'straight_arm_pull_strength'],
+        carryoverRationale: 'Lat and grip strength transfers to horizontal pulling demands',
+        priority: hasWeights ? 'essential' : 'optional',
+      },
+      {
+        exercise: 'front_lever_raise',
+        category: 'bodyweight_strength',
+        supportsGoals: ['front_lever'],
+        addressesLimiters: ['straight_arm_pull_strength'],
+        carryoverRationale: 'Builds specific pulling pattern through full range',
+        priority: 'essential',
+      },
+      {
+        exercise: 'active_hang',
+        category: 'mobility',
+        supportsGoals: ['front_lever', 'back_lever'],
+        addressesLimiters: ['pull_strength'],
+        carryoverRationale: 'Scapular engagement pattern required for lever hold',
+        priority: 'recommended',
+      },
+    ],
+    muscle_up: [
+      {
+        exercise: 'high_pull_up',
+        category: 'bodyweight_strength',
+        supportsGoals: ['muscle_up'],
+        addressesLimiters: ['pull_strength', 'explosive_power'],
+        carryoverRationale: 'Explosive pull height enables transition',
+        priority: 'essential',
+      },
+      {
+        exercise: 'weighted_pull_up',
+        category: 'weighted_strength',
+        supportsGoals: ['muscle_up'],
+        addressesLimiters: ['pull_strength'],
+        carryoverRationale: 'Raw pulling strength creates transition margin',
+        priority: hasWeights ? 'essential' : 'optional',
+      },
+      {
+        exercise: 'straight_bar_dip',
+        category: 'bodyweight_strength',
+        supportsGoals: ['muscle_up'],
+        addressesLimiters: ['push_strength'],
+        carryoverRationale: 'Develops push-out strength for lockout phase',
+        priority: 'essential',
+      },
+    ],
+    l_sit: [
+      {
+        exercise: 'compression_raises',
+        category: 'compression',
+        supportsGoals: ['l_sit', 'v_sit'],
+        addressesLimiters: ['compression'],
+        carryoverRationale: 'Direct compression strength development',
+        priority: 'essential',
+      },
+      {
+        exercise: 'pike_stretch',
+        category: 'mobility',
+        supportsGoals: ['l_sit', 'v_sit', 'pancake'],
+        addressesLimiters: ['hamstring_flexibility'],
+        carryoverRationale: 'Hamstring flexibility enables higher leg position',
+        priority: 'recommended',
+      },
+    ],
+  }
+  
+  // Add primary goal mappings
+  if (goalMappings[primaryGoal]) {
+    mappings.push(...goalMappings[primaryGoal])
+  }
+  
+  // Add secondary goal mappings (lower priority)
+  if (secondaryGoal && goalMappings[secondaryGoal]) {
+    goalMappings[secondaryGoal].forEach(mapping => {
+      // Don't duplicate and reduce priority
+      if (!mappings.find(m => m.exercise === mapping.exercise)) {
+        mappings.push({
+          ...mapping,
+          priority: mapping.priority === 'essential' ? 'recommended' : 'optional',
+        })
+      }
+    })
+  }
+  
+  // Add limiter-specific support
+  if (limiters.includes('compression') && !mappings.find(m => m.exercise === 'hollow_hold')) {
+    mappings.push({
+      exercise: 'hollow_hold',
+      category: 'compression',
+      supportsGoals: [],
+      addressesLimiters: ['compression'],
+      carryoverRationale: 'Addresses identified compression limiter',
+      priority: 'essential',
+    })
+  }
+  
+  if (limiters.includes('pull_strength') && !mappings.find(m => m.exercise === 'weighted_pull_up')) {
+    mappings.push({
+      exercise: hasWeights ? 'weighted_pull_up' : 'pull_up',
+      category: hasWeights ? 'weighted_strength' : 'bodyweight_strength',
+      supportsGoals: [],
+      addressesLimiters: ['pull_strength'],
+      carryoverRationale: 'Addresses identified pulling strength limiter',
+      priority: 'essential',
+    })
+  }
+  
+  return mappings
+}
+
+/**
+ * Log support work mapping decisions.
+ */
+export function logSupportWorkMapping(
+  mappings: SupportWorkMapping[],
+  primaryGoal: string,
+  limiters: string[]
+): void {
+  if (process.env.NODE_ENV === 'production') return
+  
+  console.log('[SupportWorkMapping] Mapping decisions:', {
+    primaryGoal,
+    topLimiters: limiters.slice(0, 3),
+    essentialSupport: mappings.filter(m => m.priority === 'essential').map(m => m.exercise),
+    recommendedSupport: mappings.filter(m => m.priority === 'recommended').map(m => m.exercise),
+  })
+}
+
+// =============================================================================
+// DEV LOGGING UTILITIES - TASK 9
+// =============================================================================
+
+/**
+ * Log weekly progression decision.
+ * TASK 9: Dev-safe logging for progression logic.
+ */
+export function logWeeklyProgressionDecision(
+  context: WeeklyProgressionContext,
+  recommendation: WeeklyProgressionRecommendation
+): void {
+  if (process.env.NODE_ENV === 'production') return
+  
+  console.log('[WeeklyProgression] Decision made:', {
+    week: context.weekNumber,
+    phase: context.phase,
+    primaryGoal: context.primaryGoal,
+    skillVolumeModifier: recommendation.skillVolumeModifier,
+    strengthVolumeModifier: recommendation.strengthVolumeModifier,
+    intensityModifier: recommendation.intensityModifier,
+    shouldProgressSkill: recommendation.shouldProgressSkill,
+    shouldProgressStrength: recommendation.shouldProgressStrength,
+    phaseRationale: recommendation.phaseRationale,
+  })
+}
+
+/**
+ * Log weekly load balance analysis.
+ * TASK 9: Dev-safe logging for fatigue distribution.
+ */
+export function logWeeklyLoadBalance(balance: WeekLoadBalance): void {
+  if (process.env.NODE_ENV === 'production') return
+  
+  console.log('[WeeklyLoadBalance] Analysis:', {
+    totalNeuralLoad: balance.totalNeuralLoad,
+    straightArmDays: balance.straightArmDays,
+    hasRecoveryDay: balance.hasRecoveryDay,
+    issueCount: balance.balanceIssues.length,
+    issues: balance.balanceIssues,
+    suggestions: balance.suggestions,
+  })
+}
+
+/**
+ * Log advanced skill prescription resolution.
+ * TASK 9: Dev-safe logging for skill prescription quality.
+ */
+export function logAdvancedSkillPrescription(
+  skillType: string,
+  progressionLevel: string,
+  prescription: AdvancedSkillPrescription
+): void {
+  if (process.env.NODE_ENV === 'production') return
+  
+  console.log('[AdvancedSkillPrescription] Resolved:', {
+    skill: skillType,
+    progression: progressionLevel,
+    mode: prescription.mode,
+    sets: `${prescription.setsRange[0]}-${prescription.setsRange[1]}`,
+    hold: `${prescription.holdSecondsRange[0]}-${prescription.holdSecondsRange[1]}s`,
+    rest: `${prescription.restSeconds}s`,
+    rpe: prescription.rpe,
+    hasClusterConfig: !!prescription.clusterConfig,
+  })
+}

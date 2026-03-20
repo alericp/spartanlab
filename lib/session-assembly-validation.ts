@@ -1,12 +1,24 @@
 /**
  * SESSION ASSEMBLY VALIDATION
  * 
+ * =============================================================================
+ * REGRESSION GUARD: WARM-UP / SESSION ASSEMBLY QUALITY
+ * =============================================================================
+ * 
  * This module provides validation and cleanup passes for generated sessions.
  * It ensures:
- * - No accidental duplicate exercises
+ * - No accidental duplicate exercises (OBJECTIVE 8)
  * - Sensible exercise ordering
  * - Proper skill-first placement
  * - Core/compression logical placement
+ * - Progression-aware warm-up logic
+ * 
+ * DO NOT REMOVE OR WEAKEN:
+ * - dedupeExerciseArray() - prevents duplicate warm-up items
+ * - checkCrossSectionDuplicates() - prevents warmup/main overlap
+ * - validateAndFixOrdering() - ensures skill-first and logical placement
+ * 
+ * If warm-up duplicates start appearing, CHECK THIS FILE FIRST.
  * 
  * TASK 5: Dedupe + Order Validation
  */

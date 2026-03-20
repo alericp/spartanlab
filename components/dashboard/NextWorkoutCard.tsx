@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -272,6 +272,15 @@ export function NextWorkoutCard({ className }: NextWorkoutCardProps) {
     }
 
     analyzeWorkoutState()
+    
+    // TASK F FIX: Re-analyze when window regains focus (handles returning from program page)
+    const handleFocus = () => {
+      console.log('[NextWorkoutCard] TASK F: Window focus - re-analyzing workout context')
+      analyzeWorkoutState()
+    }
+    
+    window.addEventListener('focus', handleFocus)
+    return () => window.removeEventListener('focus', handleFocus)
   }, [])
 
   if (isLoading) {

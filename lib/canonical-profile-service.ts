@@ -194,10 +194,15 @@ export function reconcileCanonicalProfile(): CanonicalProgrammingProfile {
     
     // Training Preferences
     // TASK 1B: NO FALLBACKS - use null if missing (validation catches this)
+    // TASK D FIX: Experience mapping must match onboarding: new|some -> beginner
     experienceLevel: pick(
-      onboardingProfile?.trainingExperience === 'new' ? 'beginner' : 
-        onboardingProfile?.trainingExperience === 'some' ? 'intermediate' : 
-        onboardingProfile?.trainingExperience as 'intermediate' | 'advanced' | undefined,
+      onboardingProfile?.trainingExperience === 'new' || onboardingProfile?.trainingExperience === 'some' 
+        ? 'beginner' 
+        : onboardingProfile?.trainingExperience === 'intermediate' 
+          ? 'intermediate' 
+          : onboardingProfile?.trainingExperience === 'advanced' 
+            ? 'advanced' 
+            : undefined,
       athleteProfile?.experienceLevel,
       'beginner'  // Safe default only for new users, not override
     ),
@@ -457,7 +462,37 @@ export function getValidatedCanonicalProfile(): CanonicalProgrammingProfile | nu
  * @param updates - Partial profile updates
  */
 export function saveCanonicalProfile(updates: Partial<CanonicalProgrammingProfile>): void {
-  console.log('[CanonicalProfile] Saving canonical updates:', Object.keys(updates))
+  // TASK 6: Log detailed save snapshot for verification
+  console.log('[CanonicalProfile] TASK 6: Saving canonical profile snapshot:', {
+    fieldCount: Object.keys(updates).length,
+    goals: {
+      primaryGoal: updates.primaryGoal || 'not set',
+      secondaryGoal: updates.secondaryGoal || 'not set',
+      selectedSkillsCount: updates.selectedSkills?.length || 0,
+      selectedFlexibilityCount: updates.selectedFlexibility?.length || 0,
+      goalCategoriesCount: updates.goalCategories?.length || 0,
+      trainingPathType: updates.trainingPathType || 'not set',
+    },
+    schedule: {
+      scheduleMode: updates.scheduleMode || 'not set',
+      sessionDurationMode: updates.sessionDurationMode || 'not set',
+      trainingDaysPerWeek: updates.trainingDaysPerWeek === undefined ? 'not set' : updates.trainingDaysPerWeek,
+      sessionLengthMinutes: updates.sessionLengthMinutes || 'not set',
+    },
+    benchmarks: {
+      hasPullUpMax: updates.pullUpMax !== undefined,
+      hasDipMax: updates.dipMax !== undefined,
+      hasWeightedPullUp: !!updates.weightedPullUp,
+      hasFrontLever: !!updates.frontLeverProgression,
+      hasPlanche: !!updates.plancheProgression,
+    },
+    diagnostics: {
+      equipmentCount: updates.equipmentAvailable?.length || 0,
+      jointCautionsCount: updates.jointCautions?.length || 0,
+      weakestArea: updates.weakestArea || 'not set',
+      hasRecovery: !!updates.recoveryQuality,
+    },
+  })
   
   // 1. Update athlete profile (data-service)
   const athleteUpdates: Partial<AthleteProfile> = {}
@@ -507,7 +542,8 @@ export function saveCanonicalProfile(updates: Partial<CanonicalProgrammingProfil
       (onboardingUpdates as any).sessionDurationMode = updates.sessionDurationMode
     }
     if (updates.sessionLengthMinutes !== undefined) onboardingUpdates.sessionLengthMinutes = updates.sessionLengthMinutes
-    if (updates.equipmentAvailable !== undefined) onboardingUpdates.equipmentAvailable = updates.equipmentAvailable
+    // TASK C FIX: OnboardingProfile uses 'equipment', not 'equipmentAvailable'
+    if (updates.equipmentAvailable !== undefined) onboardingUpdates.equipment = updates.equipmentAvailable as OnboardingProfile['equipment']
     if (updates.jointCautions !== undefined) onboardingUpdates.jointCautions = updates.jointCautions as OnboardingProfile['jointCautions']
     if (updates.weakestArea !== undefined) onboardingUpdates.weakestArea = updates.weakestArea as OnboardingProfile['weakestArea']
     if (updates.trainingStyle !== undefined) onboardingUpdates.trainingStyle = updates.trainingStyle as OnboardingProfile['trainingStyle']
@@ -606,6 +642,15 @@ export function saveCanonicalProfile(updates: Partial<CanonicalProgrammingProfil
     
     // Session style
     if (updates.sessionStylePreference !== undefined) onboardingUpdates.sessionStyle = updates.sessionStylePreference as OnboardingProfile['sessionStyle']
+    
+    // TASK A FIX: Recovery quality - map to onboarding profile recovery object
+    if (updates.recoveryQuality !== undefined) {
+      onboardingUpdates.recovery = {
+        ...(currentOnboarding.recovery || { sleepQuality: 'normal', energyLevel: 'normal', stressLevel: 'normal', recoveryConfidence: 'normal' }),
+        // Use recoveryQuality as the primary recovery indicator
+        recoveryConfidence: updates.recoveryQuality as OnboardingProfile['recovery']['recoveryConfidence'],
+      }
+    }
     
     saveOnboardingProfile(onboardingUpdates as OnboardingProfile)
     
@@ -925,4 +970,78 @@ export function logCanonicalProfileState(context: string): void {
     // Equipment
     equipmentAvailable: profile.equipmentAvailable || [],
   })
+}
+
+// =============================================================================
+// PLANNER INPUT RESOLVER (OBJECTIVE 3)
+// =============================================================================
+
+/**
+ * REGRESSION GUARD: Unified planner input resolver
+ * 
+ * This function ensures BOTH onboarding first-generation AND regenerate/update-program
+ * use the SAME input contract for program generation.
+ * 
+ * RULES:
+ * 1. This is the ONLY function that should build planner inputs
+ * 2. Both onboarding-service and settings-regeneration-service MUST use this
+ * 3. DO NOT create separate input-building logic in other files
+ * 4. All inputs are derived from canonical profile
+ * 
+ * @returns Object with source marker and all generation-relevant fields
+ */
+export function resolveCanonicalPlannerInput(): {
+  source: 'canonical'
+  isValid: boolean
+  profile: CanonicalProgrammingProfile
+  // Generation-critical fields (pre-validated)
+  primaryGoal: string | null
+  secondaryGoal: string | null
+  experienceLevel: 'beginner' | 'intermediate' | 'advanced'
+  scheduleMode: 'static' | 'flexible'
+  sessionDurationMode: 'static' | 'adaptive'
+  trainingDaysPerWeek: number | null
+  sessionLengthMinutes: number
+  selectedSkills: string[]
+  equipmentAvailable: string[]
+  jointCautions: string[]
+} {
+  const profile = getCanonicalProfile()
+  const validation = validateProfileForGeneration(profile)
+  
+  console.log('[CanonicalProfile] REGRESSION GUARD: Resolved planner input', {
+    source: 'canonical',
+    isValid: validation.isValid,
+    primaryGoal: profile.primaryGoal,
+    scheduleMode: profile.scheduleMode,
+    sessionDurationMode: profile.sessionDurationMode,
+  })
+  
+  return {
+    source: 'canonical',
+    isValid: validation.isValid,
+    profile,
+    // Pre-extracted generation-critical fields
+    primaryGoal: profile.primaryGoal,
+    secondaryGoal: profile.secondaryGoal,
+    experienceLevel: profile.experienceLevel,
+    scheduleMode: profile.scheduleMode,
+    sessionDurationMode: profile.sessionDurationMode,
+    trainingDaysPerWeek: profile.trainingDaysPerWeek,
+    sessionLengthMinutes: profile.sessionLengthMinutes,
+    selectedSkills: profile.selectedSkills || [],
+    equipmentAvailable: profile.equipmentAvailable || [],
+    jointCautions: profile.jointCautions || [],
+  }
+}
+
+/**
+ * REGRESSION GUARD: Check if canonical profile exists and is valid
+ * 
+ * Use this before deciding whether to use fallback/default values.
+ * If this returns true, fallback values should NOT be used.
+ */
+export function hasValidCanonicalProfile(): boolean {
+  const profile = getCanonicalProfile()
+  return !!(profile.onboardingComplete && profile.primaryGoal)
 }

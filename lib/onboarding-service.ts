@@ -12,7 +12,8 @@ import {
 } from './athlete-profile'
 import { getAthleteCalibration } from './athlete-calibration'
 import { detectWeakPoints, type WeakPointSummary } from './weak-point-detection'
-import { generateAdaptiveProgram, saveAdaptiveProgram, type AdaptiveProgramInputs, type AdaptiveProgram, type ScheduleMode } from './adaptive-program-builder'
+import { generateAdaptiveProgram, saveAdaptiveProgram, getDefaultAdaptiveInputs, type AdaptiveProgramInputs, type AdaptiveProgram, type ScheduleMode } from './adaptive-program-builder'
+import { getCanonicalProfile, logCanonicalProfileState } from './canonical-profile-service'
 import { validateAndLogProgram } from './program-validation'
 import { evaluateTrainingBehavior, type TrainingBehaviorResult } from './adaptive-progression-engine'
 import { createInitialProgramHistoryEntry } from './program-history-versioning'
@@ -153,16 +154,18 @@ function mapSkillInterestsToPrimaryGoal(
     }
   }
   
-  // Map primary goal to program goal
+  // REGRESSION GUARD: Map primary goal to program goal
+  // DO NOT use 'front_lever' as catch-all fallback - use 'general' to avoid goal pollution
   const goalMap: Record<string, PrimaryGoal> = {
-    'skill': 'front_lever', // Default skill
+    'skill': 'general', // No specific skill selected, use general
     'strength': 'weighted_strength',
-    'endurance': 'front_lever',
-    'abs': 'front_lever',
-    'general': 'front_lever',
+    'endurance': 'general', // Changed from front_lever
+    'abs': 'general', // Changed from front_lever
+    'general': 'general',
   }
   
-  return goalMap[primaryGoal || 'general'] || 'front_lever'
+  // REGRESSION GUARD: fallback to 'general' not 'front_lever' 
+  return goalMap[primaryGoal || 'general'] || 'general'
 }
 
 /**
@@ -290,42 +293,64 @@ export function generateFirstProgram(): FirstRunResult {
     // Get calibration from profile
     const calibration = getAthleteCalibration()
     
-    // Normalize profile to safe inputs (handles legacy + current field names)
-    const normalized = normalizeProfileForGeneration(profile)
+    // ==========================================================================
+    // TASK 1 FIX: Use SAME canonical profile source as regenerate/update-program
+    // ==========================================================================
+    // Previously this used `normalizeProfileForGeneration(profile)` and had its own
+    // `mapSkillInterestsToPrimaryGoal` logic that defaulted everything to 'front_lever'.
+    // Now we use getDefaultAdaptiveInputs() which reads from canonical profile truth.
+    // This ensures first-generation and regenerate use IDENTICAL truth sources.
     
-    // Detect schedule mode from onboarding data
-    const isFlexibleMode = normalized.trainingDaysPerWeek === 'flexible' || 
-      normalized.sessionLengthMinutes === 'flexible' ||
-      (profile as OnboardingProfile & { scheduleMode?: string }).scheduleMode === 'flexible'
+    // Log canonical profile state before consuming
+    logCanonicalProfileState('generateFirstProgram called')
     
-    // Map normalized data to program inputs
-    const programInputs: AdaptiveProgramInputs = {
-      primaryGoal: mapSkillInterestsToPrimaryGoal(normalized.selectedSkills, normalized.primaryGoal),
-      experienceLevel: normalized.experienceLevel,
-      trainingDaysPerWeek: mapTrainingDays(normalized.trainingDaysPerWeek),
-      sessionLength: mapSessionLength(normalized.sessionLengthMinutes),
-      equipment: mapEquipment(normalized.equipment),
-      // FLEXIBLE SCHEDULING: Pass through schedule mode
-      scheduleMode: isFlexibleMode ? 'flexible' : 'static',
-    }
+    // Get canonical profile for diagnostics
+    const canonicalProfile = getCanonicalProfile()
     
-    console.log('[OnboardingService] Schedule mode:', isFlexibleMode ? 'flexible' : 'static')
+    // TASK 1: Use the SAME input resolver as regenerate/update-program
+    // This is the unified entrypoint that reads from canonical profile truth
+    const programInputs = getDefaultAdaptiveInputs()
+    
+    // TASK 6: Dev logging - confirm canonical profile was consumed
+    console.log('[OnboardingService] TASK 1 FIX: First program using CANONICAL profile:', {
+      primaryGoal: programInputs.primaryGoal,
+      secondaryGoal: programInputs.secondaryGoal || 'none',
+      selectedSkillsCount: programInputs.selectedSkills?.length || 0,
+      scheduleMode: programInputs.scheduleMode,
+      trainingDaysPerWeek: programInputs.trainingDaysPerWeek,
+      sessionLength: programInputs.sessionLength,
+      // Verify canonical was source, not legacy fallback
+      canonicalPrimaryGoal: canonicalProfile.primaryGoal || 'not set',
+      canonicalSecondaryGoal: canonicalProfile.secondaryGoal || 'not set',
+      trainingPath: canonicalProfile.trainingPathType || 'not set',
+      sessionDurationMode: canonicalProfile.sessionDurationMode || 'not set',
+    })
     
     // ENGINE PROOF: Verify schedule mode resolution
     verifyScheduleModeResolution(
-      isFlexibleMode ? 'flexible' : 'static',
-      normalized.trainingDaysPerWeek,
-      'profile'
+      programInputs.scheduleMode || 'static',
+      programInputs.trainingDaysPerWeek,
+      'canonical_profile'
     )
     
     // PRODUCTION SAFETY: Verify flexible mode semantics are intact
     assertFlexibleModeIntact({
       scheduleMode: programInputs.scheduleMode,
-      trainingDaysPerWeek: normalized.trainingDaysPerWeek,
+      trainingDaysPerWeek: programInputs.trainingDaysPerWeek,
     })
     
     // Generate the program
     const program = generateAdaptiveProgram(programInputs)
+    
+    // TASK 6: Verify generated program focus matches canonical primary goal
+    console.log('[OnboardingService] First program generated:', {
+      programPrimaryGoal: program.primaryGoal,
+      programGoalLabel: program.goalLabel,
+      programSecondaryGoal: program.secondaryGoal || 'none',
+      inputPrimaryGoal: programInputs.primaryGoal,
+      inputSecondaryGoal: programInputs.secondaryGoal || 'none',
+      goalMatch: program.primaryGoal === programInputs.primaryGoal,
+    })
     
     // DATABASE ENFORCEMENT: Validate all exercises are DB-backed before proceeding
     const dbValidationPassed = validateAndLogProgram(program, 'First Program')

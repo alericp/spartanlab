@@ -1,10 +1,27 @@
 /**
  * Unified Program State Utility
  * 
+ * =============================================================================
+ * REGRESSION GUARD: PROGRAM SNAPSHOT CONSISTENCY (OBJECTIVE 4)
+ * =============================================================================
+ * 
  * DO NOT DRIFT: This is the CANONICAL SOURCE OF TRUTH for program existence checks.
  * All routes MUST use getProgramState() instead of direct getLatestAdaptiveProgram() calls.
  * 
  * CRITICAL: This utility MUST NEVER throw. It always returns a safe object.
+ * 
+ * RULES:
+ * - Generated program, stored snapshot, dashboard summary, and program page all
+ *   read from ONE consistent stored program state via getProgramState()
+ * - No partial snapshot writes allowed
+ * - Regenerate fully replaces current program snapshot
+ * - Summary cards derive from stored current program, not stale side-state
+ * - If current program is stale relative to profile, mark stale explicitly
+ * 
+ * DO NOT:
+ * - Bypass getProgramState() with direct localStorage reads
+ * - Write partial program snapshots
+ * - Let dashboard show different state than program page
  * 
  * MIGRATION: This module handles backward compatibility with old storage keys:
  * - spartanlab_first_program (old onboarding key) → migrated to canonical storage
@@ -372,11 +389,15 @@ export function getProgramState(): ProgramState {
       return SAFE_DEFAULT_STATE
     }
     
-    // Minimal diagnostic for debugging post-onboarding state
-    console.log('[ProgramState] Validation result:', {
+    // TASK 7: Enhanced diagnostic for debugging program snapshot state
+    console.log('[ProgramState] TASK 4: getProgramState read source:', {
+      source: adaptiveProgram ? 'adaptiveProgram' : legacyProgram ? 'legacyProgram' : 'none',
       hasUsableWorkoutProgram,
       adaptiveProgramExists: !!adaptiveProgram,
       sessionCount,
+      programId: adaptiveProgram?.id || 'none',
+      primaryGoal: adaptiveProgram?.primaryGoal || legacyProgram?.primaryGoal || 'none',
+      goalLabel: adaptiveProgram?.goalLabel || 'none',
     })
     
     return {

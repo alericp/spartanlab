@@ -199,6 +199,25 @@ export function AdaptiveProgramDisplay({
           </div>
         </div>
 
+        {/* TASK 5: Program Context - Training Path & Selected Skills */}
+        {(program.trainingPathType || (program.selectedSkills && program.selectedSkills.length > 2)) && (
+          <div className="flex flex-wrap gap-2 mb-3">
+            {program.trainingPathType && program.trainingPathType !== 'balanced' && (
+              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-[#E63946]/10 text-[#E63946]">
+                {program.trainingPathType === 'hybrid' ? 'Hybrid Training' : 
+                 program.trainingPathType === 'skill_mastery' ? 'Skill Mastery' :
+                 program.trainingPathType === 'strength_focus' ? 'Strength Focus' :
+                 program.trainingPathType}
+              </span>
+            )}
+            {program.selectedSkills && program.selectedSkills.length > 2 && (
+              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-[#2A2A2A] text-[#A5A5A5]">
+                {program.selectedSkills.length} skills selected
+              </span>
+            )}
+          </div>
+        )}
+        
         {/* Program Rationale */}
         <div className="p-3 bg-[#1A1A1A] rounded-lg">
           <p className="text-sm text-[#A5A5A5]">{program.programRationale}</p>

@@ -28,12 +28,284 @@
  * - spartanlab_adaptive_programs (canonical key) → preferred source of truth
  */
 
-import { getLatestAdaptiveProgram, saveAdaptiveProgram, type AdaptiveProgram } from './adaptive-program-builder'
+import { getLatestAdaptiveProgram, saveAdaptiveProgram, type AdaptiveProgram, type GenerationErrorCode } from './adaptive-program-builder'
 import { getLatestProgram, type GeneratedProgram } from './program-service'
 import { 
   assertProgramStateUsable, 
   markCanonicalPathUsed,
 } from './production-safety'
+
+// =============================================================================
+// REBUILD RESULT CONTRACT - TASK 1
+// =============================================================================
+// This contract provides truthful, structured results for every build attempt.
+// It answers all 7 questions from the PR goal without ambiguity.
+
+/**
+ * Status of a build/rebuild attempt.
+ * - 'success': New program fully replaced the old one
+ * - 'failed': Build failed at some stage, no replacement occurred
+ * - 'preserved_last_good': Build failed but last good program is still available
+ * - 'stale_visible_program': Visible program does not match current profile
+ */
+export type BuildAttemptStatus = 
+  | 'success'
+  | 'failed'
+  | 'preserved_last_good'
+  | 'stale_visible_program'
+
+/**
+ * Sub-codes that provide more detail about the failure.
+ */
+export type BuildAttemptSubCode =
+  | 'empty_structure_days'
+  | 'empty_final_session_array'
+  | 'session_count_mismatch'
+  | 'session_save_blocked'
+  | 'assembly_unknown_failure'
+  | 'empty_exercise_pool'
+  | 'invalid_warmup_block'
+  | 'invalid_cooldown_block'
+  | 'invalid_main_block'
+  | 'session_validation_failed'
+  | 'normalization_failed'
+  | 'display_safety_failed'
+  | 'none'
+
+/**
+ * Structured result from every build/rebuild attempt.
+ * TASK 1: This is the canonical contract for all generation outcomes.
+ */
+export interface BuildAttemptResult {
+  /** Unique ID for this attempt (for logging/debugging) */
+  attemptId: string
+  /** When the attempt started */
+  attemptedAt: string
+  /** Overall status of the attempt */
+  status: BuildAttemptStatus
+  /** Which stage failed (if any) */
+  stage: string
+  /** Error code from GenerationError (if any) */
+  errorCode: GenerationErrorCode | null
+  /** More specific sub-code (if any) */
+  subCode: BuildAttemptSubCode
+  /** Whether the visible program was replaced with a new one */
+  replacedVisibleProgram: boolean
+  /** Whether a last good program was preserved on failure */
+  preservedLastGoodProgram: boolean
+  /** Whether the visible program is now stale relative to current profile */
+  visibleProgramIsStale: boolean
+  /** User-facing message (concise, product-grade) */
+  userMessage: string
+  /** Dev-facing summary with more detail */
+  devSummary: string
+  /** Profile signature used for this attempt */
+  usedProfileSignature: string
+  /** Previous program ID (if any) */
+  previousProgramId: string | null
+  /** New program ID (if successful) */
+  newProgramId: string | null
+}
+
+/**
+ * Generate a unique attempt ID.
+ */
+function generateAttemptId(): string {
+  return `attempt_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
+}
+
+/**
+ * Create a profile signature for comparison.
+ * Used to detect if visible program matches current profile.
+ */
+export function createProfileSignature(profile: {
+  primaryGoal?: string | null
+  secondaryGoal?: string | null
+  scheduleMode?: string
+  trainingDaysPerWeek?: number | null
+  sessionLengthMinutes?: number
+  selectedSkills?: string[]
+}): string {
+  return JSON.stringify({
+    g: profile.primaryGoal || '',
+    g2: profile.secondaryGoal || '',
+    sm: profile.scheduleMode || '',
+    td: profile.trainingDaysPerWeek || 0,
+    sl: profile.sessionLengthMinutes || 0,
+    sk: (profile.selectedSkills || []).sort().join(','),
+  })
+}
+
+/**
+ * Map error codes to user-facing messages.
+ * TASK 5: Concise, stage-specific messaging.
+ */
+export function getErrorUserMessage(
+  errorCode: GenerationErrorCode | null,
+  subCode: BuildAttemptSubCode,
+  hasLastGoodProgram: boolean
+): string {
+  const suffix = hasLastGoodProgram 
+    ? ' Your previous plan is still available.' 
+    : ''
+  
+  switch (errorCode) {
+    case 'profile_validation_failed':
+      return 'Complete your training profile to build a plan.'
+    case 'input_resolution_failed':
+      return 'Missing required settings. Check your profile.' + suffix
+    case 'structure_selection_failed':
+      return 'Unable to create a plan with those settings. Try adjusting your schedule or goals.' + suffix
+    case 'session_assembly_failed':
+      if (subCode === 'empty_exercise_pool') {
+        return 'No suitable exercises found for your equipment. Check your equipment settings.' + suffix
+      }
+      if (subCode === 'empty_final_session_array') {
+        return 'Sessions could not be built. Try different goals or schedule.' + suffix
+      }
+      return 'Session building stopped unexpectedly.' + suffix
+    case 'warmup_generation_failed':
+      return 'Warmup generation encountered an issue.' + suffix
+    case 'validation_failed':
+      return 'Plan validation failed. Try adjusting your settings.' + suffix
+    case 'snapshot_normalization_failed':
+      return 'Plan could not be prepared for display.' + suffix
+    case 'snapshot_save_failed':
+      if (subCode === 'session_save_blocked') {
+        return 'Plan save was blocked due to validation issues.' + suffix
+      }
+      return 'Plan could not be saved.' + suffix
+    case 'unknown_generation_failure':
+    default:
+      return 'Unable to create your plan. Please try again.' + suffix
+  }
+}
+
+/**
+ * Create a successful build result.
+ */
+export function createSuccessBuildResult(
+  profileSignature: string,
+  previousProgramId: string | null,
+  newProgramId: string
+): BuildAttemptResult {
+  const result: BuildAttemptResult = {
+    attemptId: generateAttemptId(),
+    attemptedAt: new Date().toISOString(),
+    status: 'success',
+    stage: 'completed',
+    errorCode: null,
+    subCode: 'none',
+    replacedVisibleProgram: true,
+    preservedLastGoodProgram: false, // Not applicable on success
+    visibleProgramIsStale: false,
+    userMessage: 'Your new training plan is ready.',
+    devSummary: `SUCCESS: Program ${newProgramId} replaced ${previousProgramId || 'none'}`,
+    usedProfileSignature: profileSignature,
+    previousProgramId,
+    newProgramId,
+  }
+  
+  // Log for debugging
+  console.log('[program-rebuild-truth] BUILD SUCCESS:', {
+    attemptId: result.attemptId,
+    newProgramId,
+    previousProgramId,
+    replacedVisibleProgram: true,
+  })
+  
+  return result
+}
+
+/**
+ * Create a failed build result with last good program preserved.
+ */
+export function createFailedBuildResult(
+  errorCode: GenerationErrorCode | null,
+  stage: string,
+  subCode: BuildAttemptSubCode,
+  profileSignature: string,
+  previousProgramId: string | null,
+  errorMessage: string
+): BuildAttemptResult {
+  const hasLastGoodProgram = previousProgramId !== null
+  const userMessage = getErrorUserMessage(errorCode, subCode, hasLastGoodProgram)
+  
+  const result: BuildAttemptResult = {
+    attemptId: generateAttemptId(),
+    attemptedAt: new Date().toISOString(),
+    status: hasLastGoodProgram ? 'preserved_last_good' : 'failed',
+    stage,
+    errorCode,
+    subCode,
+    replacedVisibleProgram: false,
+    preservedLastGoodProgram: hasLastGoodProgram,
+    visibleProgramIsStale: hasLastGoodProgram, // If we have a last good program but failed to update, it's now stale
+    userMessage,
+    devSummary: `FAILED at ${stage} [${errorCode}/${subCode}]: ${errorMessage}. Last good: ${previousProgramId || 'none'}`,
+    usedProfileSignature: profileSignature,
+    previousProgramId,
+    newProgramId: null,
+  }
+  
+  // Log for debugging with searchable prefix
+  console.log('[program-rebuild-error] BUILD FAILED:', {
+    attemptId: result.attemptId,
+    stage,
+    errorCode,
+    subCode,
+    preservedLastGoodProgram: hasLastGoodProgram,
+    visibleProgramIsStale: result.visibleProgramIsStale,
+    previousProgramId,
+  })
+  
+  if (hasLastGoodProgram) {
+    console.log('[program-rebuild-fallback] Last good program preserved:', {
+      programId: previousProgramId,
+      message: 'User is viewing previous plan - new profile truth NOT applied',
+    })
+  }
+  
+  return result
+}
+
+/**
+ * Get the most recent build attempt result from storage.
+ * Used by UI to display current build status.
+ */
+export function getLastBuildAttemptResult(): BuildAttemptResult | null {
+  if (typeof window === 'undefined') return null
+  try {
+    const stored = localStorage.getItem('spartanlab_last_build_result')
+    if (!stored) return null
+    return JSON.parse(stored) as BuildAttemptResult
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Save the build attempt result to storage.
+ */
+export function saveLastBuildAttemptResult(result: BuildAttemptResult): void {
+  if (typeof window === 'undefined') return
+  try {
+    localStorage.setItem('spartanlab_last_build_result', JSON.stringify(result))
+    
+    // Also dispatch event for UI components to react
+    window.dispatchEvent(new CustomEvent('spartanlab:build-result', { detail: result }))
+  } catch (err) {
+    console.error('[program-rebuild-truth] Failed to save build result:', err)
+  }
+}
+
+/**
+ * Clear the last build result (e.g., when user starts fresh).
+ */
+export function clearLastBuildAttemptResult(): void {
+  if (typeof window === 'undefined') return
+  localStorage.removeItem('spartanlab_last_build_result')
+}
 
 // =============================================================================
 // MIGRATION HELPERS - Handle old storage keys

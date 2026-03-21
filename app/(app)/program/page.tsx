@@ -20,13 +20,24 @@ import { ArrowLeft, Dumbbell, Plus, Sparkles, AlertTriangle, Loader2, Info } fro
 import Link from 'next/link'
 
 // TASK 5: Lightweight type imports only - actual modules loaded dynamically
-import type { AdaptiveProgramInputs, AdaptiveProgram } from '@/lib/adaptive-program-builder'
+import type { AdaptiveProgramInputs, AdaptiveProgram, GenerationErrorCode } from '@/lib/adaptive-program-builder'
 // [profile-truth-sync] ISSUE A: Import drift detection for settings/program alignment
 import { 
   checkProfileProgramDrift, 
   isProfileSignatureAligned,
   type ProfileProgramDrift 
 } from '@/lib/canonical-profile-service'
+// [program-rebuild-truth] Import rebuild result contract for truthful error handling
+import {
+  type BuildAttemptResult,
+  type BuildAttemptSubCode,
+  createSuccessBuildResult,
+  createFailedBuildResult,
+  saveLastBuildAttemptResult,
+  getLastBuildAttemptResult,
+  clearLastBuildAttemptResult,
+  createProfileSignature,
+} from '@/lib/program-state'
 
 // TASK 5: Lazy load heavy components to prevent SSR/hydration crashes
 import dynamic from 'next/dynamic'
@@ -359,8 +370,17 @@ export default function ProgramPage() {
     loadModules()
   }, [])
 
-  // Generation error state for recoverable failures
+  // [program-rebuild-truth] Generation error state with full build result
   const [generationError, setGenerationError] = useState<string | null>(null)
+  const [lastBuildResult, setLastBuildResult] = useState<BuildAttemptResult | null>(null)
+  
+  // Load last build result on mount
+  useEffect(() => {
+    const stored = getLastBuildAttemptResult()
+    if (stored) {
+      setLastBuildResult(stored)
+    }
+  }, [])
   
   // TASK 5: Handlers use dynamically imported modules
   // HARDENED: Full try/catch/finally to prevent stuck spinner state
@@ -476,36 +496,64 @@ export default function ProgramPage() {
         setProgram(newProgram)
         setShowBuilder(false)
         
+        // [program-rebuild-truth] TASK 2: Create success result
+        const profileSig = createProfileSignature(inputs)
+        const successResult = createSuccessBuildResult(profileSig, null, newProgram.id)
+        setLastBuildResult(successResult)
+        saveLastBuildAttemptResult(successResult)
+        setGenerationError(null) // Clear any previous error
+        
         // [program-build] STAGE 8: Success envelope
-        console.log('[program-build] COMPLETE: All stages passed', {
+        console.log('[program-rebuild-truth] COMPLETE: All stages passed', {
           success: true,
           stage: 'complete',
           programId: newProgram.id,
           programSaved: true,
           sessionCount: newProgram.sessions?.length || 0,
+          attemptId: successResult.attemptId,
         })
       } catch (err) {
-        // [program-build] FAILURE: Extract classified error code if available
+        // [program-rebuild-truth] FAILURE: Extract classified error code if available
         // GenerationError from adaptive-program-builder provides stage + code
         const isGenerationError = err && typeof err === 'object' && 'code' in err && 'stage' in err
-        const errorCode = isGenerationError ? (err as { code: string }).code : 'unknown_generation_failure'
+        const errorCode = (isGenerationError ? (err as { code: string }).code : 'unknown_generation_failure') as GenerationErrorCode
         const errorStage = isGenerationError ? (err as { stage: string }).stage : generationStage
         const errorMessage = err instanceof Error ? err.message : 'Unknown error'
         
-        // [program-build] Check for specific failure types
-        const isSaveBlocked = errorMessage.includes('session_save_blocked')
-        const isEmptySessions = errorMessage.includes('sessions_empty') || errorMessage.includes('no_exercises')
-        const isNullProgram = errorMessage.includes('program_null')
+        // [program-rebuild-truth] Determine sub-code for more specific messaging
+        let subCode: BuildAttemptSubCode = 'none'
+        if (errorMessage.includes('session_save_blocked')) subCode = 'session_save_blocked'
+        else if (errorMessage.includes('empty_structure_days')) subCode = 'empty_structure_days'
+        else if (errorMessage.includes('empty_final_session_array') || errorMessage.includes('sessions_empty')) subCode = 'empty_final_session_array'
+        else if (errorMessage.includes('session_count_mismatch')) subCode = 'session_count_mismatch'
+        else if (errorMessage.includes('empty_exercise_pool')) subCode = 'empty_exercise_pool'
+        else if (errorMessage.includes('normalization')) subCode = 'normalization_failed'
+        else if (errorMessage.includes('display_safety')) subCode = 'display_safety_failed'
         
-        // [program-build] FAILURE: Structured logging for diagnosability
-        console.error(`[program-build] FAILURE at stage "${errorStage}" [${errorCode}]: ${errorMessage}`, {
+        // [program-rebuild-truth] TASK 2: Create failed build result
+        const profileSig = inputs ? createProfileSignature(inputs) : 'unknown'
+        const failedResult = createFailedBuildResult(
+          errorCode,
+          errorStage,
+          subCode,
+          profileSig,
+          null, // No previous program in fresh build
+          errorMessage
+        )
+        setLastBuildResult(failedResult)
+        saveLastBuildAttemptResult(failedResult)
+        
+        // [program-rebuild-truth] Use the user message from the contract
+        setGenerationError(failedResult.userMessage)
+        
+        // [program-rebuild-truth] Structured logging for diagnosability
+        console.error(`[program-rebuild-error] FAILURE at stage "${errorStage}" [${errorCode}/${subCode}]: ${errorMessage}`, {
+          attemptId: failedResult.attemptId,
           success: false,
           failureStage: errorStage,
           errorCode,
-          errorMessage,
-          isSaveBlocked,
-          isEmptySessions,
-          isNullProgram,
+          subCode,
+          preservedLastGoodProgram: failedResult.preservedLastGoodProgram,
           inputsSnapshot: {
             primaryGoal: inputs?.primaryGoal,
             secondaryGoal: inputs?.secondaryGoal || 'none',
@@ -515,30 +563,6 @@ export default function ProgramPage() {
             equipmentCount: inputs?.equipment?.length || 0,
           },
         })
-        
-        // [program-build] Log specific failure diagnosis
-        if (isSaveBlocked) {
-          console.error('[program-build] DIAGNOSIS: Save was blocked due to invalid session structure. Last good program preserved.')
-        } else if (isEmptySessions) {
-          console.error('[program-build] DIAGNOSIS: Program generated with empty sessions. Check exercise selection for this goal/equipment combo.')
-        } else if (isNullProgram) {
-          console.error('[program-build] DIAGNOSIS: Program generation returned null. Check profile validation and structure selection.')
-        }
-        
-        // [program-build] Product-grade error messages (user-facing)
-        const userMessage = errorCode === 'profile_validation_failed'
-          ? 'Complete your training profile to create a personalized plan.'
-          : errorCode === 'structure_selection_failed'
-          ? 'Unable to create a plan with those settings. Try adjusting your schedule or goals.'
-          : errorCode === 'session_assembly_failed'
-          ? 'Session assembly encountered an issue. Please try again.'
-          : isSaveBlocked
-          ? 'Unable to save your plan due to validation issues. Please try again.'
-          : isEmptySessions
-          ? 'Unable to create sessions with your current equipment. Please check your settings.'
-          : 'Unable to create your plan. Please try again.'
-        
-        setGenerationError(userMessage)
         // Keep builder visible and inputs intact for retry
       } finally {
         // [program-build] GUARANTEED: Always reset loading state
@@ -656,52 +680,77 @@ export default function ProgramPage() {
         }
         console.log('[program-build] REGEN STAGE 7b: Save verification PASSED')
         
-        // [program-build] REGEN STAGE 8: Update UI state
+        // [program-rebuild-truth] REGEN STAGE 8: Update UI state
         regenerateStage = 'updating_ui'
         setProgram(newProgram)
         setShowBuilder(false)
         
-        // [program-build] REGEN SUCCESS
-        console.log('[program-build] REGEN COMPLETE: All stages passed', {
+        // [program-rebuild-truth] TASK 2: Create success result for regeneration
+        const profileSig = inputs ? createProfileSignature(inputs) : 'unknown'
+        const successResult = createSuccessBuildResult(profileSig, program?.id || null, newProgram.id)
+        setLastBuildResult(successResult)
+        saveLastBuildAttemptResult(successResult)
+        setGenerationError(null) // Clear any previous error
+        
+        // [program-rebuild-truth] REGEN SUCCESS
+        console.log('[program-rebuild-truth] REGEN COMPLETE: All stages passed', {
           success: true,
+          attemptId: successResult.attemptId,
           oldProgramId: program?.id || 'none',
           newProgramId: newProgram.id,
           sessionCount: newProgram.sessions?.length || 0,
+          replacedVisibleProgram: true,
         })
       } catch (err) {
-        // [program-build] REGEN FAILURE: Extract classified error
+        // [program-rebuild-truth] REGEN FAILURE: Extract classified error
         const isGenerationError = err && typeof err === 'object' && 'code' in err && 'stage' in err
-        const errorCode = isGenerationError ? (err as { code: string }).code : 'unknown_generation_failure'
+        const errorCode = (isGenerationError ? (err as { code: string }).code : 'unknown_generation_failure') as GenerationErrorCode
         const errorStage = isGenerationError ? (err as { stage: string }).stage : regenerateStage
         const errorMessage = err instanceof Error ? err.message : 'Unknown error'
         
-        const isSaveBlocked = errorMessage.includes('session_save_blocked')
-        const isEmptySessions = errorMessage.includes('sessions_empty') || errorMessage.includes('no_exercises')
+        // [program-rebuild-truth] Determine sub-code
+        let subCode: BuildAttemptSubCode = 'none'
+        if (errorMessage.includes('session_save_blocked')) subCode = 'session_save_blocked'
+        else if (errorMessage.includes('empty_structure_days')) subCode = 'empty_structure_days'
+        else if (errorMessage.includes('empty_final_session_array') || errorMessage.includes('sessions_empty')) subCode = 'empty_final_session_array'
+        else if (errorMessage.includes('session_count_mismatch')) subCode = 'session_count_mismatch'
+        else if (errorMessage.includes('empty_exercise_pool')) subCode = 'empty_exercise_pool'
         
-        console.error(`[program-build] REGEN FAILURE at stage "${errorStage}" [${errorCode}]: ${errorMessage}`, {
+        // [program-rebuild-truth] TASK 2/3: Create failed build result with last good preserved
+        const profileSig = inputs ? createProfileSignature(inputs) : 'unknown'
+        const failedResult = createFailedBuildResult(
+          errorCode,
+          errorStage,
+          subCode,
+          profileSig,
+          program?.id || null, // ISSUE B: This is the last good program
+          errorMessage
+        )
+        setLastBuildResult(failedResult)
+        saveLastBuildAttemptResult(failedResult)
+        
+        // [program-rebuild-truth] Use the user message from the contract
+        setGenerationError(failedResult.userMessage)
+        
+        // [program-rebuild-fallback] TASK 3: Log that last good program is preserved
+        console.error(`[program-rebuild-error] REGEN FAILURE at stage "${errorStage}" [${errorCode}/${subCode}]`, {
+          attemptId: failedResult.attemptId,
           success: false,
           failureStage: errorStage,
           errorCode,
-          isSaveBlocked,
-          isEmptySessions,
+          subCode,
           oldProgramId: program?.id,
-          oldProgramPreserved: true,
+          preservedLastGoodProgram: failedResult.preservedLastGoodProgram,
+          visibleProgramIsStale: failedResult.visibleProgramIsStale,
         })
         
-        // [program-build] Product-grade error messages
-        const userMessage = errorCode === 'profile_validation_failed'
-          ? 'Profile incomplete. Please ensure your training profile is complete.'
-          : errorCode === 'structure_selection_failed'
-          ? 'Unable to determine optimal structure. Please try adjusting your settings.'
-          : errorCode === 'session_assembly_failed'
-          ? 'Session assembly encountered an issue. Please try again.'
-          : isSaveBlocked
-          ? 'Generated program had structural issues. Your current program is preserved.'
-          : isEmptySessions
-          ? 'Unable to create sessions. Your current program is preserved.'
-          : 'Program regeneration failed. Your current program is preserved.'
-        
-        setGenerationError(userMessage)
+        if (program) {
+          console.log('[program-rebuild-fallback] Last good program preserved:', {
+            programId: program.id,
+            sessionCount: program.sessions?.length || 0,
+            message: 'User is viewing previous plan - new profile truth NOT applied',
+          })
+        }
         // Keep current program visible and intact - ISSUE B: don't corrupt state
       } finally {
         // [program-build] GUARANTEED: Always reset loading state
@@ -820,13 +869,29 @@ export default function ProgramPage() {
                   <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
                   <div className="flex-1">
                     <p className="text-sm text-amber-200">{generationError}</p>
-                    <p className="text-xs text-amber-400/70 mt-1">Your inputs are preserved. Try again when ready.</p>
+                    {/* [program-rebuild-truth] ISSUE A/B: Show stage-specific failure info */}
+                    <p className="text-xs text-amber-400/70 mt-1">
+                      {lastBuildResult?.preservedLastGoodProgram 
+                        ? 'Your previous plan is still available.'
+                        : 'Your inputs are preserved. Try again when ready.'}
+                    </p>
+                    {/* [program-rebuild-truth] ISSUE G: Show failure stage for dev insight */}
+                    {lastBuildResult && lastBuildResult.status !== 'success' && (
+                      <p className="text-[10px] text-[#6A6A6A] mt-1 font-mono">
+                        Stage: {lastBuildResult.stage} | Code: {lastBuildResult.errorCode || 'unknown'}
+                        {lastBuildResult.subCode !== 'none' && ` (${lastBuildResult.subCode})`}
+                      </p>
+                    )}
                   </div>
                   <Button
                     variant="ghost"
                     size="sm"
                     className="text-amber-400 hover:text-amber-300 hover:bg-amber-500/20 h-7 px-2"
-                    onClick={() => setGenerationError(null)}
+                    onClick={() => {
+                      setGenerationError(null)
+                      setLastBuildResult(null)
+                      clearLastBuildAttemptResult()
+                    }}
                   >
                     Dismiss
                   </Button>
@@ -855,8 +920,46 @@ export default function ProgramPage() {
           </div>
         ) : program && programModules.isRenderableProgram?.(program) ? (
           <div className="space-y-4">
+            {/* [program-rebuild-truth] ISSUE B/C: Show rebuild failed warning if last build failed */}
+            {lastBuildResult?.status === 'preserved_last_good' && (
+              <Card className="bg-red-500/10 border-red-500/30 p-4">
+                <div className="flex items-start gap-3">
+                  <AlertTriangle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <p className="text-sm text-red-200 font-medium">Last rebuild did not complete</p>
+                    <p className="text-xs text-red-400/80 mt-1">
+                      {lastBuildResult.userMessage}
+                    </p>
+                    <p className="text-xs text-[#6A6A6A] mt-1">
+                      This is your previous plan. Your latest settings were not applied.
+                    </p>
+                    <div className="flex gap-2 mt-2">
+                      <Button
+                        size="sm"
+                        className="bg-red-600 hover:bg-red-700 text-white h-7 px-3 text-xs"
+                        onClick={handleRegenerate}
+                      >
+                        Try Again
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="text-red-400/70 hover:text-red-300 h-7 px-2 text-xs"
+                        onClick={() => {
+                          setLastBuildResult(null)
+                          clearLastBuildAttemptResult()
+                        }}
+                      >
+                        Dismiss
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </Card>
+            )}
+            
             {/* [program-alignment] ISSUE B/C: Show stale program warning with last good plan note */}
-            {profileProgramDrift?.isProgramStale && (
+            {profileProgramDrift?.isProgramStale && lastBuildResult?.status !== 'preserved_last_good' && (
               <Card className="bg-amber-500/10 border-amber-500/30 p-4">
                 <div className="flex items-start gap-3">
                   <Info className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
@@ -892,6 +995,18 @@ export default function ProgramPage() {
                   </div>
                 </div>
               </Card>
+            )}
+            
+            {/* [program-rebuild-truth] ISSUE C/E: Show current build status chip */}
+            {lastBuildResult && lastBuildResult.status === 'success' && (
+              <div className="flex items-center gap-2 text-xs text-green-500/80">
+                <div className="w-2 h-2 rounded-full bg-green-500" />
+                <span>Program up to date</span>
+                <span className="text-[#4A4A4A]">|</span>
+                <span className="text-[#6A6A6A]">
+                  Built {new Date(lastBuildResult.attemptedAt).toLocaleDateString()}
+                </span>
+              </div>
             )}
             
             {/* TASK 1: Wrap display in error boundary-like try-catch via component */}

@@ -2089,13 +2089,16 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
       subCode = 'session_validation_failed'
     }
     
-    console.error('[session-assembly] FAILURE:', {
-      subCode,
-      errorMessage,
-      structureName: structure?.structureName,
-      dayCount: structure?.days?.length,
-      currentStage,
-    })
+  // [program-rebuild-error] TASK 7: Use searchable prefix for failures
+  console.error('[program-rebuild-error] Session assembly failure:', {
+    stage: 'session_assembly',
+    errorCode: 'session_assembly_failed',
+    subCode,
+    errorMessage,
+    structureName: structure?.structureName,
+    dayCount: structure?.days?.length,
+    currentStage,
+  })
     
     throw new GenerationError(
       'session_assembly_failed',
@@ -2123,24 +2126,32 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
   })
   
   // [session-assembly] Throw if we have critically empty sessions
+  // [program-rebuild-error] TASK 7: Use searchable prefix for failures
   if (emptySessions.length > 0) {
-    console.error('[session-assembly] CRITICAL: Some sessions have no exercises', {
-      emptyDays: emptySessions.map(s => s.dayNumber),
-    })
-    throw new GenerationError(
-      'session_assembly_failed',
-      'session_assembly',
-      `${emptySessions.length} session(s) have no exercises`,
-      { subCode: 'empty_final_session_array', emptyDays: emptySessions.map(s => s.dayNumber) }
-    )
+  console.error('[program-rebuild-error] Empty sessions detected:', {
+    stage: 'session_assembly',
+    errorCode: 'session_assembly_failed',
+    subCode: 'empty_final_session_array',
+    emptyDays: emptySessions.map(s => s.dayNumber),
+  })
+  throw new GenerationError(
+  'session_assembly_failed',
+  'session_assembly',
+  `${emptySessions.length} session(s) have no exercises`,
+  { subCode: 'empty_final_session_array', emptyDays: emptySessions.map(s => s.dayNumber) }
+  )
   }
   
   // [session-assembly] Throw if session count doesn't match structure
+  // [program-rebuild-error] TASK 7: Use searchable prefix for failures
   if (sessions.length !== (structure.days?.length || 0)) {
-    console.error('[session-assembly] CRITICAL: Session count mismatch', {
-      assembled: sessions.length,
-      expected: structure.days?.length,
-    })
+  console.error('[program-rebuild-error] Session count mismatch:', {
+    stage: 'session_assembly',
+    errorCode: 'session_assembly_failed',
+    subCode: 'session_count_mismatch',
+    assembled: sessions.length,
+    expected: structure.days?.length,
+  })
     throw new GenerationError(
       'session_assembly_failed',
       'session_assembly',
@@ -4245,16 +4256,18 @@ export function saveAdaptiveProgram(program: AdaptiveProgram): AdaptiveProgram {
   // [program-build] Log session exercise counts for diagnosis
   console.log('[program-build] SAVE: Session exercise counts:', sessionExerciseCounts)
   
-  // [program-build] SAVE: If critical issues found, DO NOT save - preserve last good program
+  // [program-rebuild-truth] SAVE: If critical issues found, DO NOT save - preserve last good program
+  // TASK 4: Atomic replacement guard - reject malformed programs to preserve last good
   if (criticalIssues.length > 0) {
-    console.error('[program-build] SAVE BLOCKED: Program has invalid structure:', {
+    console.error('[program-rebuild-error] SAVE BLOCKED: Program has invalid structure:', {
       issues: criticalIssues,
       sessionCount: sessions.length,
       sessionExerciseCounts,
       programId: program?.id,
+      preservedLastGoodProgram: true,
     })
-    // Return the program object without saving - calling code can handle the rejection
-    // This preserves the last good program in storage
+    // [program-rebuild-fallback] This preserves the last good program in storage
+    console.log('[program-rebuild-fallback] Last good program preserved - malformed program rejected')
     throw new Error(`session_save_blocked: ${criticalIssues.join(', ')}`)
   }
   
@@ -4273,15 +4286,17 @@ export function saveAdaptiveProgram(program: AdaptiveProgram): AdaptiveProgram {
     console.log('[program-build] SAVE: Database validation passed')
   }
   
-  // [program-build] SAVE: Actually persist to localStorage
+  // [program-rebuild-truth] SAVE: Actually persist to localStorage
+  // TASK 4: Atomic replacement - this is the final commit step
   const programs = getSavedAdaptivePrograms()
   programs.push(program)
   localStorage.setItem(STORAGE_KEY, JSON.stringify(programs))
   
-  console.log('[program-build] SAVE: Program saved successfully', {
+  console.log('[program-rebuild-truth] SAVE: Program saved successfully - atomic replacement complete', {
     programId: program.id,
     sessionCount: sessions.length,
     totalExercises: sessionExerciseCounts.reduce((a, b) => a + b, 0),
+    replacedVisibleProgram: true,
   })
   return program
 }

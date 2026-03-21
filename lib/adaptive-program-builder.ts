@@ -1166,6 +1166,15 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
     composedAt: composedInput.composedAt,
   })
   
+  // [equipment-truth] STEP 8: Log equipment at generation time for sync verification
+  const hasLoadableEqAtGen = hasLoadableEquipment(inputs.equipment || [])
+  console.log('[equipment-truth] Equipment at generation:', {
+    equipmentCount: inputs.equipment?.length || 0,
+    hasLoadableEquipment: hasLoadableEqAtGen,
+    equipmentList: inputs.equipment?.slice(0, 6) || [],
+    canPrescribeWeights: hasLoadableEqAtGen,
+  })
+  
   // STATE CONTRACT: Get system state flags to determine generation context
   const stateFlags = getSystemStateFlags()
   const generationMode: GenerationMode = inputs.regenerationMode || stateFlags.recommendedMode

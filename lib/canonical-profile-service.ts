@@ -2170,10 +2170,12 @@ export function hasLoadableEquipment(equipmentArray?: string[]): boolean {
   
   const hasLoadable = equipment.some(e => LOADABLE_EQUIPMENT_KEYS.includes(e))
   
-  console.log('[loadability-truth] Equipment check:', {
+  // [load-gating] STEP 1: Canonical equipment check for auto load calculations
+  console.log('[load-gating] Equipment check:', {
     equipmentCount: equipment.length,
     hasLoadable,
     equipment: equipment.slice(0, 5), // Log first 5 for diagnosis
+    gateReason: hasLoadable ? 'loadable_equipment_present' : 'missing_loadable_equipment',
   })
   
   return hasLoadable
@@ -2225,12 +2227,16 @@ export function checkWeightedPrescriptionEligibility(): {
     recommendation = 'Enter your weighted pull-up or dip benchmarks in Settings to get personalized load prescriptions'
   }
   
-  console.log('[loadability-truth] Weighted prescription eligibility:', {
+  // [load-gating] STEP 6: Log weighted prescription eligibility status
+  console.log('[load-gating] Weighted prescription eligibility:', {
     eligible,
     hasWeightsEquipment,
     hasStrengthBenchmarks,
     hasPRData,
     reason,
+    gateStatus: !hasWeightsEquipment ? 'missing_loadable_equipment' : 
+                !hasStrengthBenchmarks && !hasPRData ? 'missing_strength_input' : 
+                'enabled',
   })
   
   return {

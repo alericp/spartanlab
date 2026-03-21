@@ -862,3 +862,118 @@ export function hasActiveProgram(): boolean {
     return false
   }
 }
+
+// =============================================================================
+// [adjustment-sync] STEP 1: CANONICAL ADJUSTMENT DISPLAY VALUES
+// =============================================================================
+// These helpers provide ONE source of truth for displaying program settings.
+// All adjustment controls, summaries, and displays should use these.
+
+/**
+ * Get canonical training days display string from program or inputs
+ * [adjustment-sync] STEP 1: Centralized training days display
+ */
+export function getCanonicalTrainingDaysDisplay(
+  trainingDaysPerWeek: number | 'flexible' | undefined,
+  scheduleMode?: 'static' | 'flexible',
+  sessionCount?: number
+): string {
+  // Log what we're displaying
+  console.log('[displayed-adjustment-truth] getCanonicalTrainingDaysDisplay:', {
+    trainingDaysPerWeek,
+    scheduleMode,
+    sessionCount,
+  })
+  
+  if (scheduleMode === 'flexible' || trainingDaysPerWeek === 'flexible') {
+    if (sessionCount && sessionCount > 0) {
+      return `Adaptive (${sessionCount} this week)`
+    }
+    return 'Adaptive'
+  }
+  
+  if (typeof trainingDaysPerWeek === 'number' && trainingDaysPerWeek > 0) {
+    return `${trainingDaysPerWeek} Days per Week`
+  }
+  
+  // Fallback to session count if available
+  if (sessionCount && sessionCount > 0) {
+    return `${sessionCount} Sessions`
+  }
+  
+  return 'Not set'
+}
+
+/**
+ * Get canonical session duration display string
+ * [adjustment-sync] STEP 1: Centralized session duration display
+ */
+export function getCanonicalSessionDurationDisplay(
+  sessionLength: number | undefined,
+  sessionDurationMode?: 'static' | 'adaptive'
+): string {
+  if (!sessionLength || sessionLength <= 0) {
+    return 'Not set'
+  }
+  
+  if (sessionDurationMode === 'adaptive') {
+    return `~${sessionLength} min (adaptive)`
+  }
+  
+  return `${sessionLength} min`
+}
+
+/**
+ * Get adjustment state summary for verification
+ * [adjustment-sync] STEP 2: Structured adjustment state for verification
+ */
+export interface AdjustmentVerificationState {
+  settingsSaved: boolean
+  rebuildAttempted: boolean
+  rebuildSucceeded: boolean
+  replacedProgramSnapshot: boolean
+  previousProgramId: string | null
+  nextProgramId: string | null
+  effectiveTrainingDaysBefore: number | 'flexible' | null
+  effectiveTrainingDaysAfter: number | 'flexible' | null
+  previousSessionCount: number
+  nextSessionCount: number
+  programIdChanged: boolean
+  sessionCountChanged: boolean
+  trainingDaysChanged: boolean
+}
+
+/**
+ * Create verification state for logging adjustment results
+ */
+export function createAdjustmentVerificationState(
+  previous: {
+    programId?: string | null
+    trainingDays?: number | 'flexible' | null
+    sessionCount?: number
+  },
+  next: {
+    programId?: string | null
+    trainingDays?: number | 'flexible' | null
+    sessionCount?: number
+  },
+  result: {
+    settingsSaved: boolean
+    rebuildAttempted: boolean
+    rebuildSucceeded: boolean
+    replacedProgramSnapshot: boolean
+  }
+): AdjustmentVerificationState {
+  return {
+    ...result,
+    previousProgramId: previous.programId || null,
+    nextProgramId: next.programId || null,
+    effectiveTrainingDaysBefore: previous.trainingDays ?? null,
+    effectiveTrainingDaysAfter: next.trainingDays ?? null,
+    previousSessionCount: previous.sessionCount || 0,
+    nextSessionCount: next.sessionCount || 0,
+    programIdChanged: previous.programId !== next.programId,
+    sessionCountChanged: previous.sessionCount !== next.sessionCount,
+    trainingDaysChanged: previous.trainingDays !== next.trainingDays,
+  }
+}

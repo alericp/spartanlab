@@ -1372,6 +1372,14 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
   let effectiveTrainingDays: TrainingDays = typeof trainingDaysPerWeek === 'number' 
     ? trainingDaysPerWeek as TrainingDays 
     : 4 // Default fallback
+  
+  // [adjustment-sync] STEP 5: Log input training days resolution
+  console.log('[adjustment-sync] Training days input resolution:', {
+    inputTrainingDaysPerWeek: trainingDaysPerWeek,
+    inputScheduleMode,
+    initialEffectiveTrainingDays: effectiveTrainingDays,
+    isNumericInput: typeof trainingDaysPerWeek === 'number',
+  })
     
   if (inputScheduleMode === 'flexible') {
     flexibleWeekStructure = resolveFlexibleFrequency({
@@ -1428,6 +1436,14 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
     effectiveTrainingDays = getEffectiveFrequency(trainingDaysPerWeek) as TrainingDays
     console.log('[schedule-mode] Static mode, using:', effectiveTrainingDays, 'days')
   }
+  
+  // [adjustment-sync] STEP 5 (continued): Log final resolved training days
+  console.log('[adjustment-sync] Final training days resolution:', {
+    finalEffectiveTrainingDays: effectiveTrainingDays,
+    sessionsToGenerate: effectiveTrainingDays,
+    scheduleMode: inputScheduleMode,
+    wasFlexible: inputScheduleMode === 'flexible',
+  })
   
   // ENGINE QUALITY: Calculate session distribution based on goal hierarchy
   const sessionDistribution = calculateSessionDistribution(

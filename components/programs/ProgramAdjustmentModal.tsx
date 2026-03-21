@@ -197,12 +197,21 @@ export function ProgramAdjustmentModal({
           newTrainingDays: selectedCategory === 'schedule' ? trainingDays : undefined,
         })
         
+        // [adjustment-sync] STEP 2: Log actual before/after values
+        console.log('[adjustment-sync] Adjustment confirmed:', {
+          settingsSaved: true,
+          rebuildSucceeded: true,
+          previousTrainingDays: currentTrainingDays,
+          newTrainingDays: trainingDays,
+          trainingDaysChanged: currentTrainingDays !== trainingDays,
+        })
+        
         // [canonical-rebuild] TASK J: Use truthful description and message from actual rebuild
         setAdjustmentResult({
           ...result,
           adjustment: {
             ...result.adjustment,
-            description: `Program rebuilt with ${trainingDays} training days per week`,
+            description: `Training days: ${currentTrainingDays} → ${trainingDays} days/week`,
           },
           coachMessage: `Your new program is ready with ${trainingDays} training days per week. All sessions have been regenerated to match your updated schedule.`,
         })
@@ -422,12 +431,15 @@ export function ProgramAdjustmentModal({
                 Adjust how many days per week you can train.
               </p>
               
+              {/* [adjustment-sync] STEP 6: Self-describing control - always show current value */}
               <Select
                 value={String(trainingDays)}
                 onValueChange={(v) => setTrainingDays(Number(v) as TrainingDays)}
               >
                 <SelectTrigger className="bg-[#0F1115] border-[#2B313A]">
-                  <SelectValue />
+                  <SelectValue placeholder={`${trainingDays} Days per Week`}>
+                    {trainingDays} Days per Week
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent className="bg-[#1A1F26] border-[#2B313A]">
                   <SelectItem value="2">2 Days per Week</SelectItem>

@@ -848,10 +848,23 @@ export default function ProgramPage() {
   
   // [canonical-rebuild] TASK B: Handle adjustment rebuilds that require full program regeneration
   const handleAdjustmentRebuild = useCallback(async (request: AdjustmentRebuildRequest): Promise<{ success: boolean; error?: string }> => {
-    console.log('[canonical-rebuild] Adjustment rebuild requested:', request)
+    // [adjustment-sync] STEP 2: Log initial adjustment state
+    const previousProgramId = program?.id || 'none'
+    const previousGeneratedAt = program?.createdAt || 'unknown'
+    const previousTrainingDays = inputs?.trainingDaysPerWeek || 'unknown'
+    const previousSessionCount = program?.sessions?.length || 0
+    
+    console.log('[adjustment-sync] Adjustment rebuild requested:', {
+      type: request.type,
+      previousProgramId,
+      previousGeneratedAt,
+      previousTrainingDays,
+      previousSessionCount,
+      requestedTrainingDays: request.newTrainingDays,
+    })
     
     if (!inputs) {
-      console.error('[canonical-rebuild] Missing inputs - cannot rebuild')
+      console.error('[adjustment-sync] Missing inputs - cannot rebuild')
       return { success: false, error: 'Missing program inputs' }
     }
     
@@ -919,6 +932,38 @@ export default function ProgramPage() {
       const successResult = createSuccessBuildResult(profileSig, program?.id || null, newProgram.id)
       setLastBuildResult(successResult)
       saveLastBuildAttemptResult(successResult)
+      
+      // [adjustment-sync] STEP 4: Verify program identity actually changed
+      const programIdChanged = newProgram.id !== previousProgramId
+      const sessionCountChanged = newProgram.sessions.length !== previousSessionCount
+      const trainingDaysChanged = updatedInputs.trainingDaysPerWeek !== previousTrainingDays
+      
+      console.log('[adjustment-sync] Rebuild verification:', {
+        settingsSaved: true,
+        rebuildAttempted: true,
+        rebuildSucceeded: true,
+        replacedProgramSnapshot: true,
+        previousProgramId,
+        nextProgramId: newProgram.id,
+        previousGeneratedAt,
+        nextGeneratedAt: newProgram.createdAt,
+        effectiveTrainingDaysBefore: previousTrainingDays,
+        effectiveTrainingDaysAfter: updatedInputs.trainingDaysPerWeek,
+        previousSessionCount,
+        nextSessionCount: newProgram.sessions.length,
+        programIdChanged,
+        sessionCountChanged,
+        trainingDaysChanged,
+      })
+      
+      // [adjustment-sync] Warn if session count didn't change when training days changed
+      if (trainingDaysChanged && !sessionCountChanged) {
+        console.warn('[adjustment-sync] WARNING: Training days changed but session count unchanged', {
+          requestedDays: request.newTrainingDays,
+          actualSessions: newProgram.sessions.length,
+          reason: 'Builder may have adaptive logic reducing sessions',
+        })
+      }
       
       console.log('[canonical-rebuild] SUCCESS: Program rebuilt and visible state replaced', {
         newProgramId: newProgram.id,

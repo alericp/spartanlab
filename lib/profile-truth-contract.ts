@@ -159,6 +159,20 @@ import {
   saveCanonicalProfile, 
   type CanonicalProgrammingProfile,
   logCanonicalProfileState,
+  // [profile-completeness] ISSUE A-F: Export completeness helpers
+  type ProfileFieldGroup,
+  type ProfileCompletenessStatus,
+  type EngineFieldConsumption,
+  getProfileCompletenessStatus,
+  getEngineFieldConsumption,
+  verifyEngineFieldWiring,
+  mergeProfileUpdates,
+  getMissingFieldGroupLinks,
+  getDeepLinkForFieldGroup,
+  FIELD_GROUP_LABELS,
+  FIELD_GROUP_TO_SECTION,
+  CURRENT_PROFILE_SCHEMA_VERSION,
+  markProfileSchemaAsComplete,
 } from './canonical-profile-service'
 
 // Re-export for convenience
@@ -167,6 +181,20 @@ export {
   saveCanonicalProfile, 
   type CanonicalProgrammingProfile,
   logCanonicalProfileState,
+  // [profile-completeness] ISSUE A-F: Export completeness helpers
+  type ProfileFieldGroup,
+  type ProfileCompletenessStatus,
+  type EngineFieldConsumption,
+  getProfileCompletenessStatus,
+  getEngineFieldConsumption,
+  verifyEngineFieldWiring,
+  mergeProfileUpdates,
+  getMissingFieldGroupLinks,
+  getDeepLinkForFieldGroup,
+  FIELD_GROUP_LABELS,
+  FIELD_GROUP_TO_SECTION,
+  CURRENT_PROFILE_SCHEMA_VERSION,
+  markProfileSchemaAsComplete,
 }
 
 /**

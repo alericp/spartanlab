@@ -60,7 +60,15 @@ import type { ProtocolRecommendation } from './protocols/joint-integrity-protoco
 import type { ConstraintResult, ConstraintIntervention } from './constraint-detection-engine'
 
 import { getAthleteProfile } from './data-service'
-import { getCanonicalProfile, logCanonicalProfileState, validateProfileForGeneration, getValidatedCanonicalProfile } from './canonical-profile-service'
+import { 
+  getCanonicalProfile, 
+  logCanonicalProfileState, 
+  validateProfileForGeneration, 
+  getValidatedCanonicalProfile,
+  // [profile-completeness] ISSUE E: Engine field consumption verification
+  getEngineFieldConsumption,
+  verifyEngineFieldWiring,
+} from './canonical-profile-service'
 import { buildGenerationInput, getSystemStateFlags, type GenerationMode, type ProfileSnapshot } from './program-state-contract'
 import { normalizeProfile, computeLimiter, dedupeExercises, type NormalizedProfile } from './profile-normalizer'
 import { calculateRecoverySignal } from './recovery-engine'
@@ -1084,10 +1092,23 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
   
   // TASK 6: Log schedule/duration truth consumption
   console.log('[program-generate] TASK 6: Schedule/Duration truth consumed:', {
-    scheduleMode: canonicalProfile.scheduleMode,
-    trainingDaysPerWeek: canonicalProfile.trainingDaysPerWeek,
-    sessionDurationMode: canonicalProfile.sessionDurationMode,
-    sessionLengthMinutes: canonicalProfile.sessionLengthMinutes,
+  scheduleMode: canonicalProfile.scheduleMode,
+  trainingDaysPerWeek: canonicalProfile.trainingDaysPerWeek,
+  sessionDurationMode: canonicalProfile.sessionDurationMode,
+  sessionLengthMinutes: canonicalProfile.sessionLengthMinutes,
+  })
+  
+  // [profile-completeness] ISSUE E: Verify engine field wiring before generation
+  // This confirms all new profile fields are actually being consumed
+  const engineConsumption = getEngineFieldConsumption(canonicalProfile)
+  const wiringStatus = verifyEngineFieldWiring(canonicalProfile)
+  console.log('[profile-completeness] Planner consuming new field groups:', {
+    hasWeightedData: engineConsumption.weightedStrengthInputs.hasWeightedData,
+    hasPRData: engineConsumption.weightedStrengthInputs.hasPRData,
+    hasSkillHistory: engineConsumption.advancedSkillInputs.hasSkillHistory,
+    hasBandLevels: engineConsumption.advancedSkillInputs.hasBandLevels,
+    consumedFieldGroups: wiringStatus.consumedFieldGroups,
+    isFullyWired: wiringStatus.isFullyWired,
   })
   
   // ISSUE A: Stage tracking for diagnosable failures

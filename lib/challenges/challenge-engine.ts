@@ -607,6 +607,12 @@ export function hasUnseenChallengeCompletions(): boolean {
 // CHALLENGE TYPES FOR PANEL COMPONENTS
 // =============================================================================
 
+// [baseline-earned-truth] ISSUE E: Completion source type for UI labeling
+export type ChallengeCompletionSource = 
+  | 'earned_in_app'         // Completed through in-app activity
+  | 'baseline_satisfied'     // Already satisfied from onboarding baseline
+  | 'not_completed'         // Not yet completed
+
 export interface ChallengeWithProgress {
   id: string
   name: string
@@ -623,11 +629,15 @@ export interface ChallengeWithProgress {
   tier?: number
   maxTier?: number
   timeRemaining?: {
-    days: number
-    hours: number
-    minutes: number
-    expired: boolean
+  days: number
+  hours: number
+  minutes: number
+  expired: boolean
   }
+  // [baseline-earned-truth] ISSUE E: Track completion source for UI differentiation
+  completionSource?: ChallengeCompletionSource
+  // True if challenge progress is from in-app activity only (no baseline inflation)
+  isEarnedProgress?: boolean
   isCompleted?: boolean
   progressPercent?: number
   // [baseline-vs-earned] ISSUE E: Track progress source for UI labeling
@@ -669,9 +679,15 @@ export function getChallengesByPeriodWithProgress(period: 'weekly' | 'monthly'):
 
 /**
   * Get all active challenges as ChallengeWithProgress[] for panel display
+  * [baseline-earned-truth] ISSUE B/E: Now includes completionSource for UI differentiation
   */
   export function getAllChallengesWithProgress(): ChallengeWithProgress[] {
   const all = getActiveChallengesWithProgress()
+  
+  // [baseline-earned-truth] Get summary to check if user has earned progress
+  const truthSummary = getBaselineVsEarnedSummary()
+  const hasAnyEarnedWorkouts = truthSummary.hasEarnedProgress
+  
   return all.map(item => {
   const now = new Date()
   const end = new Date(item.challenge.endDate + 'T23:59:59')
@@ -680,6 +696,39 @@ export function getChallengesByPeriodWithProgress(period: 'weekly' | 'monthly'):
   const days = Math.max(0, Math.floor(diff / (1000 * 60 * 60 * 24)))
   const hours = Math.max(0, Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)))
   const minutes = Math.max(0, Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60)))
+  
+  // [baseline-earned-truth] ISSUE B: Determine completion source
+  let completionSource: ChallengeCompletionSource = 'not_completed'
+  let isEarnedProgress = false
+  
+  if (item.progress.completed) {
+    // Check if this is a strength/skill challenge that might be baseline-satisfied
+    const category = item.challenge.category
+    if (category === 'strength' || category === 'skill') {
+      // For strength/skill challenges, check if user has any earned workouts
+      // If no earned workouts, it's likely baseline-satisfied
+      if (!hasAnyEarnedWorkouts) {
+        completionSource = 'baseline_satisfied'
+        isEarnedProgress = false
+      } else {
+        // Has earned workouts - trust the completion as earned
+        completionSource = 'earned_in_app'
+        isEarnedProgress = true
+      }
+    } else {
+      // Weekly/monthly/timed challenges require in-app activity
+      completionSource = 'earned_in_app'
+      isEarnedProgress = true
+    }
+  }
+  
+  console.log('[baseline-earned-truth] Challenge completion source:', {
+    challengeId: item.challenge.id,
+    category: item.challenge.category,
+    completed: item.progress.completed,
+    completionSource,
+    hasAnyEarnedWorkouts,
+  })
   
   return {
     id: item.challenge.id,
@@ -699,6 +748,9 @@ export function getChallengesByPeriodWithProgress(period: 'weekly' | 'monthly'):
     timeRemaining: { days, hours, minutes, expired },
     isCompleted: item.progress.completed,
     progressPercent: item.percentComplete,
+    // [baseline-earned-truth] ISSUE E: Add completion source for UI differentiation
+    completionSource,
+    isEarnedProgress,
   }
   })
   }

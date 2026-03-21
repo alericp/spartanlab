@@ -572,6 +572,24 @@ function validateWeightedPrescription(
     }
   }
   
+  // [prescription-drift] TASK 7: Critical check - weighted exercises appeared but no load attached
+  // This indicates prescription data was lost somewhere in the pipeline
+  if (hasWeightedData && userHasLoadableEquipment && weightedExercisesAppeared && !prescribedLoadsAttached) {
+    console.warn('[prescription-drift] CRITICAL: Weighted exercises appeared WITHOUT prescribed loads:', {
+      hasWeightedData,
+      userHasLoadableEquipment,
+      pullUp: { appeared: weightedPullUpAppeared, loadAttached: pullUpLoadAttached, profileData: profile.weightedPullUp },
+      dip: { appeared: weightedDipAppeared, loadAttached: dipLoadAttached, profileData: profile.weightedDip },
+      possibleCauses: [
+        'weightedBenchmarks not passed to selectExercisesForSession',
+        'prescribedLoad stripped during adaptSessionForEquipment',
+        'prescribedLoad not preserved in mapToAdaptiveExercises',
+        'prescribedLoad lost during session save/load',
+      ],
+    })
+    omissionReasons.push('DRIFT: Weighted exercises appeared but prescribedLoad missing - check generation pipeline')
+  }
+
   return {
     hasWeightedData,
     weightedPullUpData: hasWeightedPullUp,

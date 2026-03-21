@@ -206,6 +206,9 @@ export interface SelectedExercise {
     intensityBand?: 'strength' | 'support_volume' | 'hypertrophy'
     notes?: string[]          // Context/coaching notes
   }
+  // [weighted-prescription-truth] ISSUE E: RPE and rest metadata for coaching truth
+  targetRPE?: number          // Target RPE (7-9 typical for strength, 5-7 for mobility)
+  restSeconds?: number        // Recommended rest in seconds
   // [exercise-trace] TASK 2: Full selection traceability
   selectionTrace?: ExerciseSelectionTrace
 }
@@ -1048,6 +1051,24 @@ function selectMainExercises(
                                finalExercise.id.includes('weighted_dip') ||
                                finalExercise.id.includes('weighted_push') ||
                                finalExercise.id.includes('weighted_row')
+    
+    // [weighted-prescription-truth] TASK 8: Log weighted exercise eligibility
+    if (isWeightedExercise) {
+      console.log('[weighted-prescription-truth] Weighted exercise detected:', {
+        exerciseId: finalExercise.id,
+        exerciseName: finalExercise.name,
+        hasWeightedBenchmarks: !!weightedBenchmarks,
+        hasPullUpBenchmark: !!weightedBenchmarks?.weightedPullUp,
+        hasDipBenchmark: !!weightedBenchmarks?.weightedDip,
+      })
+      
+      if (!weightedBenchmarks) {
+        console.log('[prescription-drift] Weighted exercise WITHOUT benchmarks - will not prescribe load:', {
+          exerciseId: finalExercise.id,
+          reason: 'weightedBenchmarks not passed to selector',
+        })
+      }
+    }
     
     if (isWeightedExercise && weightedBenchmarks) {
       // Determine exercise type and get appropriate benchmarks

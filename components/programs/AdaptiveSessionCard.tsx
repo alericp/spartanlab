@@ -237,6 +237,7 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
   const availableEquipment: EquipmentType[] = ['floor', 'wall', ...profileEquipment.map(e => equipmentMap[e] || e).filter((e): e is EquipmentType => !!e)]
 
   // Get exercises to display based on variant selection
+  // [weighted-prescription-truth] Preserve prescribedLoad through variant mapping
   const displayExercises = selectedVariant !== null && session.variants?.[selectedVariant]
     ? session.variants[selectedVariant].selection.main.map(s => ({
         id: s.exercise.id,
@@ -247,6 +248,10 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
         note: s.note,
         isOverrideable: s.isOverrideable,
         selectionReason: s.selectionReason,
+        // Preserve prescription fields from variant selection
+        prescribedLoad: s.prescribedLoad,
+        targetRPE: s.targetRPE,
+        restSeconds: s.restSeconds,
       }))
     : session.exercises
 

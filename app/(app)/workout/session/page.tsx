@@ -130,6 +130,9 @@ function normalizeSession(rawSession: AdaptiveSession | null | undefined): Adapt
       selectionReason: ex?.selectionReason || '',
       // [prescription-render] TASK 2: Preserve prescribedLoad through snapshot/read path
       prescribedLoad: ex?.prescribedLoad,
+      // [weighted-prescription-truth] ISSUE E: Preserve targetRPE and restSeconds
+      targetRPE: ex?.targetRPE,
+      restSeconds: ex?.restSeconds,
       // Preserve other optional fields that might exist
       method: ex?.method,
       methodLabel: ex?.methodLabel,

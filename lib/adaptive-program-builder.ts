@@ -532,6 +532,9 @@ export interface AdaptiveExercise {
     intensityBand?: 'strength' | 'support_volume' | 'hypertrophy'
     notes?: string[]          // Context/coaching notes
   }
+  // [weighted-prescription-truth] ISSUE E: RPE and rest metadata for coaching truth
+  targetRPE?: number          // Target RPE for this exercise
+  restSeconds?: number        // Recommended rest in seconds between sets
 }
 
 export interface AdaptiveProgram {
@@ -3942,6 +3945,39 @@ function generateAdaptiveSession(
       }
     }
     
+    // [weighted-prescription-truth] TASK 8: Log prescription survival at session assembly
+    const exercisesWithPrescription = validatedSession.exercises.filter(
+      (e: AdaptiveExercise) => e.prescribedLoad && e.prescribedLoad.load > 0
+    )
+    if (exercisesWithPrescription.length > 0) {
+      console.log('[weighted-prescription-truth] Session has prescribed loads:', {
+        dayNumber: day.dayNumber,
+        dayFocus: day.focus,
+        exercisesWithLoads: exercisesWithPrescription.map((e: AdaptiveExercise) => ({
+          name: e.name,
+          id: e.id,
+          load: `+${e.prescribedLoad?.load} ${e.prescribedLoad?.unit}`,
+          confidence: e.prescribedLoad?.confidenceLevel,
+          basis: e.prescribedLoad?.basis,
+        })),
+      })
+    } else {
+      // Log why no weighted prescriptions exist
+      const weightedCapableExercises = validatedSession.exercises.filter(
+        (e: AdaptiveExercise) => 
+          e.id?.includes('weighted_pull') || 
+          e.id?.includes('weighted_dip') ||
+          e.name?.toLowerCase().includes('weighted')
+      )
+      if (weightedCapableExercises.length > 0) {
+        console.log('[weighted-prescription-truth] Weighted-capable exercises WITHOUT prescriptions:', {
+          dayNumber: day.dayNumber,
+          exercises: weightedCapableExercises.map((e: AdaptiveExercise) => e.name),
+          reason: 'prescribedLoad field is missing or zero - check if weightedBenchmarks were passed',
+        })
+      }
+    }
+
     return {
       dayNumber: day.dayNumber,
       dayLabel: `Day ${day.dayNumber}`,
@@ -4123,25 +4159,11 @@ function mapToAdaptiveExercises(
       progressionDecision,
       // WEIGHTED LOAD PR: Include prescribed load if available from exercise selection
       prescribedLoad: s.prescribedLoad,
+      // [weighted-prescription-truth] ISSUE E: Pass through RPE and rest metadata
+      targetRPE: s.targetRPE,
+      restSeconds: s.restSeconds,
     }
   }).filter((e): e is AdaptiveExercise => e !== null)
-  
-  // [prescription-render] TASK 6: Log prescription data in builder output
-  const exercisesWithLoads = exercises.filter(e => e.prescribedLoad && e.prescribedLoad.load > 0)
-  if (exercisesWithLoads.length > 0) {
-    console.log('[prescription-render] Builder output exercises with prescribedLoad:', {
-      sessionDay: day,
-      count: exercisesWithLoads.length,
-      exercises: exercisesWithLoads.map(e => ({
-        name: e.name,
-        load: e.prescribedLoad?.load,
-        unit: e.prescribedLoad?.unit,
-        confidence: e.prescribedLoad?.confidenceLevel,
-      })),
-    })
-  }
-  
-  return exercises
 }
 
 // =============================================================================

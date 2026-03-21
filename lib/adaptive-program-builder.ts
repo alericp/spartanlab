@@ -1995,25 +1995,29 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
       }
     }
     
-    // [session-assembly] Validate assembled session before returning
+    // [program-build] Validate assembled session before returning
     const exerciseCount = session.exercises?.length || 0
     const warmupCount = session.warmup?.length || 0
     
-    console.log('[session-assembly] Session assembled:', {
+    console.log('[program-build] Session assembled:', {
       dayNumber: session.dayNumber,
       exerciseCount,
       warmupCount,
       cooldownCount: session.cooldown?.length || 0,
       hasFinisher: !!session.finisher,
+      focus: session.focus,
     })
     
-    // [session-assembly] ISSUE D: Validate session has valid exercise structure
+    // [program-build] ISSUE D: Validate session has valid exercise structure
     if (exerciseCount === 0) {
-      console.warn('[session-assembly] WARNING: Session assembled with 0 exercises', {
+      console.error('[program-build] CRITICAL: Session assembled with 0 exercises', {
         dayNumber: session.dayNumber,
         focus: session.focus,
+        dayFocus: day.focus,
+        primaryGoal,
+        equipmentCount: equipment?.length || 0,
       })
-      // Don't throw - let final validation catch it, but log for diagnosis
+      // This will cause save to be blocked later - log for diagnosis
     }
     
     // Validate each exercise has required fields
@@ -3742,8 +3746,17 @@ function generateAdaptiveSession(
     }
 
     // TASK 5: Map exercises first, then validate/dedupe
+    // [program-build] Log inputs to mapToAdaptiveExercises for diagnosis
+    const adaptedMainArray = Array.isArray(adaptedMain?.adapted) ? adaptedMain.adapted : []
+    console.log('[program-build] Mapping exercises for session', {
+      dayNumber: day.dayNumber,
+      adaptedMainLength: adaptedMainArray.length,
+      adaptedWarmupLength: Array.isArray(adaptedWarmup?.adapted) ? adaptedWarmup.adapted.length : 0,
+      adaptedCooldownLength: Array.isArray(adaptedCooldown?.adapted) ? adaptedCooldown.adapted.length : 0,
+    })
+    
     const rawExercises = mapToAdaptiveExercises(
-      Array.isArray(adaptedMain?.adapted) ? adaptedMain.adapted : [], 
+      adaptedMainArray, 
       primaryGoal, 
       sessionLength, 
       fatigueSensitivity,
@@ -3751,6 +3764,14 @@ function generateAdaptiveSession(
     )
     const rawWarmup = mapToAdaptiveExercises(Array.isArray(adaptedWarmup?.adapted) ? adaptedWarmup.adapted : [], primaryGoal, sessionLength)
     const rawCooldown = mapToAdaptiveExercises(Array.isArray(adaptedCooldown?.adapted) ? adaptedCooldown.adapted : [], primaryGoal, sessionLength)
+    
+    // [program-build] Log mapping results
+    console.log('[program-build] Exercise mapping complete', {
+      dayNumber: day.dayNumber,
+      rawExercisesLength: rawExercises.length,
+      rawWarmupLength: rawWarmup.length,
+      rawCooldownLength: rawCooldown.length,
+    })
     
     // TASK 5: Session Assembly Validation Pass
     // Dedupe, fix ordering, and validate session before returning
@@ -4151,9 +4172,12 @@ function isBrowser(): boolean {
 export function saveAdaptiveProgram(program: AdaptiveProgram): AdaptiveProgram {
   if (!isBrowser()) return program
   
-  // [session-assembly] ISSUE D: Pre-save critical validation
+  // [program-build] SAVE: Pre-save critical validation
   // Reject programs with fundamentally broken session structure
-  console.log('[session-assembly] Pre-save validation starting...')
+  console.log('[program-build] SAVE: Starting pre-save validation...', {
+    programId: program?.id,
+    sessionCount: program?.sessions?.length || 0,
+  })
   
   const sessions = program.sessions || []
   const criticalIssues: string[] = []
@@ -4164,7 +4188,11 @@ export function saveAdaptiveProgram(program: AdaptiveProgram): AdaptiveProgram {
   }
   
   // Check 2: Each session must have exercises
+  const sessionExerciseCounts: number[] = []
   sessions.forEach((session, idx) => {
+    const exerciseCount = session?.exercises?.length || 0
+    sessionExerciseCounts.push(exerciseCount)
+    
     if (!session.exercises || session.exercises.length === 0) {
       criticalIssues.push(`session_${idx + 1}_no_exercises`)
     }
@@ -4178,11 +4206,16 @@ export function saveAdaptiveProgram(program: AdaptiveProgram): AdaptiveProgram {
     })
   })
   
-  // [session-assembly] ISSUE F: If critical issues found, DO NOT save - preserve last good program
+  // [program-build] Log session exercise counts for diagnosis
+  console.log('[program-build] SAVE: Session exercise counts:', sessionExerciseCounts)
+  
+  // [program-build] SAVE: If critical issues found, DO NOT save - preserve last good program
   if (criticalIssues.length > 0) {
-    console.error('[session-assembly] CRITICAL: Program has invalid structure, blocking save:', {
+    console.error('[program-build] SAVE BLOCKED: Program has invalid structure:', {
       issues: criticalIssues,
       sessionCount: sessions.length,
+      sessionExerciseCounts,
+      programId: program?.id,
     })
     // Return the program object without saving - calling code can handle the rejection
     // This preserves the last good program in storage
@@ -4190,28 +4223,30 @@ export function saveAdaptiveProgram(program: AdaptiveProgram): AdaptiveProgram {
   }
   
   // DATABASE ENFORCEMENT: Validate program before save
-  console.log('[program-generate] Validating program before save...')
+  console.log('[program-build] SAVE: Running database validation...')
   const validation = validateProgramFromDatabase(program)
   
   if (!validation.isValid) {
-    console.warn('[program-generate] Program validation issues detected:', validation.diagnostics)
+    console.warn('[program-build] SAVE: Database validation issues (non-blocking):', validation.diagnostics)
     // Log specific issues but don't block save - allow graceful degradation
     if (validation.exerciseValidation.missingDbSource.length > 0) {
-      console.warn('[program-generate] Exercises missing DB source:', 
+      console.warn('[program-build] SAVE: Exercises missing DB source:', 
         validation.exerciseValidation.missingDbSource.slice(0, 5))
     }
   } else {
-    console.log('[program-generate] Program validation passed:', {
-      exercises: validation.exerciseValidation.valid,
-      sessions: program.sessions?.length || 0,
-    })
+    console.log('[program-build] SAVE: Database validation passed')
   }
   
+  // [program-build] SAVE: Actually persist to localStorage
   const programs = getSavedAdaptivePrograms()
   programs.push(program)
   localStorage.setItem(STORAGE_KEY, JSON.stringify(programs))
   
-  console.log('[session-assembly] Program saved successfully')
+  console.log('[program-build] SAVE: Program saved successfully', {
+    programId: program.id,
+    sessionCount: sessions.length,
+    totalExercises: sessionExerciseCounts.reduce((a, b) => a + b, 0),
+  })
   return program
 }
 

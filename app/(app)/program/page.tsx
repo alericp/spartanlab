@@ -338,94 +338,165 @@ export default function ProgramPage() {
     const timeoutId = setTimeout(() => {
       let generationStage = 'starting'
       try {
-        // STAGE 1: Generate program
+        // [program-build] STAGE 1: Pre-generation diagnostics
+        generationStage = 'pre_generation_diagnostics'
+        console.log('[program-build] STAGE 1: Pre-generation diagnostics', {
+          hasInputs: !!inputs,
+          primaryGoal: inputs?.primaryGoal,
+          secondaryGoal: inputs?.secondaryGoal || 'none',
+          trainingDaysPerWeek: inputs?.trainingDaysPerWeek,
+          sessionLength: inputs?.sessionLength,
+          scheduleMode: inputs?.scheduleMode,
+          equipmentCount: inputs?.equipment?.length || 0,
+          selectedSkillsCount: inputs?.selectedSkills?.length || 0,
+        })
+        
+        // [program-build] STAGE 2: Generate program
         generationStage = 'generating'
-        console.log('[ProgramPage] Generation stage: generating program...')
+        console.log('[program-build] STAGE 2: Calling generateAdaptiveProgram...')
         const newProgram = programModules.generateAdaptiveProgram(inputs)
         
-        // STAGE 2: Validate program shape (fail fast on malformed data)
-        generationStage = 'validating'
-        console.log('[ProgramPage] Generation stage: validating program shape...')
-        if (!newProgram || !newProgram.id || !Array.isArray(newProgram.sessions) || newProgram.sessions.length === 0) {
-          throw new Error(`Invalid program shape: missing ${!newProgram ? 'program' : !newProgram.id ? 'id' : !newProgram.sessions ? 'sessions' : 'valid sessions'}`)
+        // [program-build] STAGE 3: Validate program shape (fail fast on malformed data)
+        generationStage = 'validating_shape'
+        console.log('[program-build] STAGE 3: Validating program shape...')
+        if (!newProgram) {
+          throw new Error('program_null: generateAdaptiveProgram returned null/undefined')
+        }
+        if (!newProgram.id) {
+          throw new Error('program_missing_id: program has no id field')
+        }
+        if (!Array.isArray(newProgram.sessions)) {
+          throw new Error('sessions_not_array: program.sessions is not an array')
+        }
+        if (newProgram.sessions.length === 0) {
+          throw new Error('sessions_empty: program has zero sessions')
         }
         
-        // STAGE 3: Log snapshot creation
-        generationStage = 'logging'
-        console.log('[ProgramPage] Generation stage: program validated:', {
+        // [program-build] STAGE 4: Validate session content
+        generationStage = 'validating_sessions'
+        console.log('[program-build] STAGE 4: Validating session content...')
+        const sessionStats = newProgram.sessions.map((s, idx) => ({
+          index: idx,
+          dayNumber: s?.dayNumber,
+          hasExercises: Array.isArray(s?.exercises),
+          exerciseCount: s?.exercises?.length || 0,
+          focus: s?.focus || 'unknown',
+        }))
+        console.log('[program-build] Session stats:', sessionStats)
+        
+        const emptySessionIndices = sessionStats.filter(s => s.exerciseCount === 0).map(s => s.index)
+        if (emptySessionIndices.length > 0) {
+          console.error('[program-build] WARNING: Sessions with no exercises:', emptySessionIndices)
+          // Don't throw here - let saveAdaptiveProgram's validation handle it
+        }
+        
+        // [program-build] STAGE 5: Log snapshot creation
+        generationStage = 'snapshot_logging'
+        console.log('[program-build] STAGE 5: Program validated, creating snapshot:', {
           id: newProgram.id,
           primaryGoal: newProgram.primaryGoal,
           secondaryGoal: newProgram.secondaryGoal || 'none',
           goalLabel: newProgram.goalLabel,
           sessionCount: newProgram.sessions?.length || 0,
+          totalExerciseCount: newProgram.sessions?.reduce((sum, s) => sum + (s.exercises?.length || 0), 0) || 0,
           scheduleMode: newProgram.scheduleMode,
           sessionDurationMode: newProgram.sessionDurationMode,
           structureName: newProgram.structure?.structureName || 'unknown',
           createdAt: newProgram.createdAt,
         })
         
-        // STAGE 4: Save to storage
+        // [program-build] STAGE 6: Save to storage
         generationStage = 'saving'
-        console.log('[ProgramPage] Generation stage: saving snapshot...')
+        console.log('[program-build] STAGE 6: Saving snapshot to storage...')
         programModules.saveAdaptiveProgram(newProgram)
+        console.log('[program-build] STAGE 6: Save completed successfully')
         
-        // STAGE 5: Update UI state
-        generationStage = 'updating-ui'
-        console.log('[ProgramPage] Generation stage: updating UI...')
+        // [program-build] STAGE 6b: Verify save succeeded by reading back
+        generationStage = 'verifying_save'
+        const savedState = programModules.getProgramState?.()
+        if (!savedState?.hasUsableWorkoutProgram) {
+          console.error('[program-build] STAGE 6b: Save verification FAILED - program not readable after save')
+          throw new Error('save_verification_failed: Program not readable after save')
+        }
+        console.log('[program-build] STAGE 6b: Save verification PASSED', {
+          readBackId: savedState.adaptiveProgram?.id,
+          matchesNew: savedState.adaptiveProgram?.id === newProgram.id,
+        })
+        
+        // [program-build] STAGE 7: Update UI state
+        generationStage = 'updating_ui'
+        console.log('[program-build] STAGE 7: Updating UI state...')
         setProgram(newProgram)
         setShowBuilder(false)
         
-        // ISSUE D FIX: Consistent result envelope for success
-        console.log('[ProgramPage] Generation complete - all stages passed', {
+        // [program-build] STAGE 8: Success envelope
+        console.log('[program-build] COMPLETE: All stages passed', {
           success: true,
           stage: 'complete',
           programId: newProgram.id,
           programSaved: true,
+          sessionCount: newProgram.sessions?.length || 0,
         })
       } catch (err) {
-        // ISSUE A & B FIX: Extract classified error code if available
+        // [program-build] FAILURE: Extract classified error code if available
         // GenerationError from adaptive-program-builder provides stage + code
         const isGenerationError = err && typeof err === 'object' && 'code' in err && 'stage' in err
         const errorCode = isGenerationError ? (err as { code: string }).code : 'unknown_generation_failure'
         const errorStage = isGenerationError ? (err as { stage: string }).stage : generationStage
         const errorMessage = err instanceof Error ? err.message : 'Unknown error'
         
-        // ISSUE A: Structured console logging for diagnosability
-        console.error(`[program-generate] CLIENT ERROR [${errorCode}] at stage "${errorStage}": ${errorMessage}`, {
+        // [program-build] Check for specific failure types
+        const isSaveBlocked = errorMessage.includes('session_save_blocked')
+        const isEmptySessions = errorMessage.includes('sessions_empty') || errorMessage.includes('no_exercises')
+        const isNullProgram = errorMessage.includes('program_null')
+        
+        // [program-build] FAILURE: Structured logging for diagnosability
+        console.error(`[program-build] FAILURE at stage "${errorStage}" [${errorCode}]: ${errorMessage}`, {
           success: false,
-          code: errorCode,
-          stage: errorStage,
-          error: errorMessage,
+          failureStage: errorStage,
+          errorCode,
+          errorMessage,
+          isSaveBlocked,
+          isEmptySessions,
+          isNullProgram,
           inputsSnapshot: {
             primaryGoal: inputs?.primaryGoal,
+            secondaryGoal: inputs?.secondaryGoal || 'none',
             scheduleMode: inputs?.scheduleMode,
             trainingDays: inputs?.trainingDaysPerWeek,
+            sessionLength: inputs?.sessionLength,
+            equipmentCount: inputs?.equipment?.length || 0,
           },
         })
         
-        // [session-assembly] Check if this was a save block (invalid session structure)
-        const isSaveBlocked = errorMessage.includes('session_save_blocked')
+        // [program-build] Log specific failure diagnosis
         if (isSaveBlocked) {
-          console.error('[session-assembly] Save was blocked due to invalid session structure - preserving last good program')
+          console.error('[program-build] DIAGNOSIS: Save was blocked due to invalid session structure. Last good program preserved.')
+        } else if (isEmptySessions) {
+          console.error('[program-build] DIAGNOSIS: Program generated with empty sessions. Check exercise selection for this goal/equipment combo.')
+        } else if (isNullProgram) {
+          console.error('[program-build] DIAGNOSIS: Program generation returned null. Check profile validation and structure selection.')
         }
         
-        // [trust-polish] ISSUE B: Product-grade error messages instead of technical ones
+        // [program-build] Product-grade error messages (user-facing)
         const userMessage = errorCode === 'profile_validation_failed'
           ? 'Complete your training profile to create a personalized plan.'
           : errorCode === 'structure_selection_failed'
           ? 'Unable to create a plan with those settings. Try adjusting your schedule or goals.'
           : errorCode === 'session_assembly_failed'
-          ? 'Unable to build your plan. Please try again.'
+          ? 'Session assembly encountered an issue. Please try again.'
           : isSaveBlocked
-          ? 'Unable to save your plan. Please try again.'
+          ? 'Unable to save your plan due to validation issues. Please try again.'
+          : isEmptySessions
+          ? 'Unable to create sessions with your current equipment. Please check your settings.'
           : 'Unable to create your plan. Please try again.'
         
         setGenerationError(userMessage)
         // Keep builder visible and inputs intact for retry
       } finally {
-        // GUARANTEED: Always reset loading state - ISSUE B FIX
+        // [program-build] GUARANTEED: Always reset loading state
         setIsGenerating(false)
-        console.log('[ProgramPage] Generation flow complete - loading state cleared')
+        console.log('[program-build] Generation flow complete - loading state cleared')
       }
     }, 500)
   }, [inputs, programModules])
@@ -471,77 +542,106 @@ export default function ProgramPage() {
     setTimeout(() => {
       let regenerateStage = 'starting'
       try {
-        // STAGE 1: Record regeneration event
-        regenerateStage = 'recording-event'
+        // [program-build] REGEN STAGE 1: Pre-regeneration diagnostics
+        regenerateStage = 'pre_regen_diagnostics'
+        console.log('[program-build] REGEN STAGE 1: Pre-regeneration diagnostics', {
+          oldProgramId: program?.id || 'none',
+          hasInputs: !!inputs,
+          primaryGoal: inputs?.primaryGoal,
+          secondaryGoal: inputs?.secondaryGoal || 'none',
+        })
+        
+        // [program-build] REGEN STAGE 2: Record regeneration event
+        regenerateStage = 'recording_event'
         programModules.recordProgramEnd?.('regenerate')
         
-        // STAGE 2: Generate new program
+        // [program-build] REGEN STAGE 3: Generate new program
         regenerateStage = 'generating'
-        console.log('[ProgramPage] Regenerate stage: generating program...')
+        console.log('[program-build] REGEN STAGE 3: Calling generateAdaptiveProgram...')
         const newProgram = programModules.generateAdaptiveProgram(inputs)
         
-        // STAGE 3: Validate program shape
-        regenerateStage = 'validating'
-        console.log('[ProgramPage] Regenerate stage: validating program shape...')
-        if (!newProgram || !newProgram.id || !Array.isArray(newProgram.sessions) || newProgram.sessions.length === 0) {
-          throw new Error(`Invalid program shape: missing ${!newProgram ? 'program' : !newProgram.id ? 'id' : !newProgram.sessions ? 'sessions' : 'valid sessions'}`)
+        // [program-build] REGEN STAGE 4: Validate program shape
+        regenerateStage = 'validating_shape'
+        console.log('[program-build] REGEN STAGE 4: Validating program shape...')
+        if (!newProgram) {
+          throw new Error('program_null: generateAdaptiveProgram returned null/undefined')
+        }
+        if (!newProgram.id) {
+          throw new Error('program_missing_id: program has no id field')
+        }
+        if (!Array.isArray(newProgram.sessions)) {
+          throw new Error('sessions_not_array: program.sessions is not an array')
+        }
+        if (newProgram.sessions.length === 0) {
+          throw new Error('sessions_empty: program has zero sessions')
         }
         
-        // STAGE 4: Log snapshot
-        regenerateStage = 'logging'
-        console.log('[ProgramPage] Regenerate stage: program validated:', {
+        // [program-build] REGEN STAGE 5: Validate session content
+        regenerateStage = 'validating_sessions'
+        const sessionStats = newProgram.sessions.map((s, idx) => ({
+          index: idx,
+          exerciseCount: s?.exercises?.length || 0,
+        }))
+        console.log('[program-build] REGEN STAGE 5: Session stats:', sessionStats)
+        
+        // [program-build] REGEN STAGE 6: Log snapshot
+        regenerateStage = 'snapshot_logging'
+        console.log('[program-build] REGEN STAGE 6: Program validated:', {
           oldProgramId: program?.id || 'none',
           newProgramId: newProgram.id,
           primaryGoal: newProgram.primaryGoal,
-          secondaryGoal: newProgram.secondaryGoal || 'none',
-          goalLabel: newProgram.goalLabel,
           sessionCount: newProgram.sessions?.length || 0,
-          scheduleMode: newProgram.scheduleMode,
-          sessionDurationMode: newProgram.sessionDurationMode,
-          structureName: newProgram.structure?.structureName || 'unknown',
+          totalExerciseCount: newProgram.sessions?.reduce((sum, s) => sum + (s.exercises?.length || 0), 0) || 0,
         })
         
-        // STAGE 5: Save to storage
+        // [program-build] REGEN STAGE 7: Save to storage
         regenerateStage = 'saving'
-        console.log('[ProgramPage] Regenerate stage: saving snapshot...')
+        console.log('[program-build] REGEN STAGE 7: Saving snapshot...')
         programModules.saveAdaptiveProgram(newProgram)
+        console.log('[program-build] REGEN STAGE 7: Save completed successfully')
         
-        // STAGE 6: Update UI state
-        regenerateStage = 'updating-ui'
-        console.log('[ProgramPage] Regenerate stage: updating UI...')
+        // [program-build] REGEN STAGE 7b: Verify save succeeded
+        regenerateStage = 'verifying_save'
+        const savedState = programModules.getProgramState?.()
+        if (!savedState?.hasUsableWorkoutProgram) {
+          console.error('[program-build] REGEN STAGE 7b: Save verification FAILED')
+          throw new Error('save_verification_failed: Program not readable after save')
+        }
+        console.log('[program-build] REGEN STAGE 7b: Save verification PASSED')
+        
+        // [program-build] REGEN STAGE 8: Update UI state
+        regenerateStage = 'updating_ui'
         setProgram(newProgram)
         setShowBuilder(false)
         
-        // ISSUE D FIX: Consistent result envelope for success
-        console.log('[ProgramPage] Regenerate complete - all stages passed', {
+        // [program-build] REGEN SUCCESS
+        console.log('[program-build] REGEN COMPLETE: All stages passed', {
           success: true,
-          stage: 'complete',
-          programId: newProgram.id,
-          programSaved: true,
+          oldProgramId: program?.id || 'none',
+          newProgramId: newProgram.id,
+          sessionCount: newProgram.sessions?.length || 0,
         })
       } catch (err) {
-        // ISSUE A & B FIX: Extract classified error code if available
+        // [program-build] REGEN FAILURE: Extract classified error
         const isGenerationError = err && typeof err === 'object' && 'code' in err && 'stage' in err
         const errorCode = isGenerationError ? (err as { code: string }).code : 'unknown_generation_failure'
         const errorStage = isGenerationError ? (err as { stage: string }).stage : regenerateStage
         const errorMessage = err instanceof Error ? err.message : 'Unknown error'
         
-        // ISSUE A: Structured console logging for diagnosability
-        console.error(`[program-generate] CLIENT ERROR [${errorCode}] at stage "${errorStage}": ${errorMessage}`, {
+        const isSaveBlocked = errorMessage.includes('session_save_blocked')
+        const isEmptySessions = errorMessage.includes('sessions_empty') || errorMessage.includes('no_exercises')
+        
+        console.error(`[program-build] REGEN FAILURE at stage "${errorStage}" [${errorCode}]: ${errorMessage}`, {
           success: false,
-          code: errorCode,
-          stage: errorStage,
-          error: errorMessage,
+          failureStage: errorStage,
+          errorCode,
+          isSaveBlocked,
+          isEmptySessions,
           oldProgramId: program?.id,
+          oldProgramPreserved: true,
         })
         
-        // [session-assembly] Check if this was a save block (invalid session structure)
-        const isSaveBlocked = errorMessage.includes('session_save_blocked')
-        if (isSaveBlocked) {
-          console.error('[session-assembly] Regenerate save was blocked - preserving current program')
-        }
-        
-        // ISSUE B & C: Prior program preserved - only show error, don't corrupt state
+        // [program-build] Product-grade error messages
         const userMessage = errorCode === 'profile_validation_failed'
           ? 'Profile incomplete. Please ensure your training profile is complete.'
           : errorCode === 'structure_selection_failed'
@@ -550,14 +650,16 @@ export default function ProgramPage() {
           ? 'Session assembly encountered an issue. Please try again.'
           : isSaveBlocked
           ? 'Generated program had structural issues. Your current program is preserved.'
-          : `Program regeneration failed at ${errorStage}. Your current program is preserved.`
+          : isEmptySessions
+          ? 'Unable to create sessions. Your current program is preserved.'
+          : 'Program regeneration failed. Your current program is preserved.'
         
         setGenerationError(userMessage)
-        // Keep current program visible and intact for retry
+        // Keep current program visible and intact - ISSUE B: don't corrupt state
       } finally {
-        // GUARANTEED: Always reset loading state - ISSUE B FIX
+        // [program-build] GUARANTEED: Always reset loading state
         setIsGenerating(false)
-        console.log('[program-generate] Regenerate flow complete - loading state cleared')
+        console.log('[program-build] Regenerate flow complete - loading state cleared')
       }
     }, 500)
   }, [inputs, program, programModules])

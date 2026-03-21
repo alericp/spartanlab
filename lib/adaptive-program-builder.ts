@@ -1525,6 +1525,34 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
     flexibilityInsertionsCount: flexibilityInsertions.length,
   })
   
+  // =========================================================================
+  // [planner-truth-input] STEP 2: Canonical profile truth that reached exercise selection
+  // This is the exact profile data that the planner is using - proof that database
+  // values are reaching the selection layer.
+  // =========================================================================
+  console.log('[planner-truth-input] Profile truth reaching exercise selection:', {
+    primaryGoal,
+    secondaryGoal: expandedContext.secondaryGoal || null,
+    selectedSkills: expandedContext.selectedSkills,
+    selectedSkillCount: expandedContext.selectedSkills.length,
+    scheduleMode: canonicalProfile.scheduleMode || 'static',
+    requestedDays: effectiveTrainingDays,
+    durationMode: expandedContext.sessionDurationMode,
+    baseDurationMinutes: expandedContext.sessionLengthMinutes,
+    trainingStyle: trainingPath,
+    trainingOutcome: trainingOutcome,
+    loadableEquipment: equipment.filter((e: string) => 
+      e === 'weight_belt' || e === 'weight_vest' || e === 'weighted_vest' || e === 'dumbbells'
+    ),
+    hasWeightedPullUpData: !!(canonicalProfile.weightedPullUp?.addedWeight !== undefined),
+    hasWeightedDipData: !!(canonicalProfile.weightedDip?.addedWeight !== undefined),
+    weightedPullUpValue: canonicalProfile.weightedPullUp?.addedWeight,
+    weightedDipValue: canonicalProfile.weightedDip?.addedWeight,
+    recoveryLevel: recoverySignal?.level || null,
+    limiterState: expandedContext.identifiedLimiters || [],
+    experienceLevel,
+  })
+  
   // Get duration-based configuration for exercise count and structure
   const durationConfig = getDurationConfig(workoutDuration)
   

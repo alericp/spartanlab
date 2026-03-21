@@ -552,10 +552,53 @@ export function selectExercisesForSession(inputs: ExerciseSelectionInputs): Exer
     rejectedAlternativeCount: rejectedCount,
   }
   
+  // [selected-skill-exposure] STEP 7: Log skill expression summary for this session
+  const skillExpressionSummary = {
+    directExpressions: main.filter(e => 
+      e.selectionTrace?.expressionMode === 'direct_intensity' || 
+      e.selectionTrace?.sessionRole === 'skill_primary'
+    ).map(e => e.name),
+    technicalExpressions: main.filter(e => 
+      e.selectionTrace?.expressionMode === 'technical_focus' ||
+      e.selectionTrace?.sessionRole === 'skill_secondary'
+    ).map(e => e.name),
+    supportExpressions: main.filter(e => 
+      e.selectionTrace?.expressionMode === 'strength_support' ||
+      e.selectionTrace?.sessionRole === 'strength_support'
+    ).map(e => e.name),
+    weightedExpressions: main.filter(e => e.prescribedLoad?.load).map(e => `${e.name}@${e.prescribedLoad?.load}${e.prescribedLoad?.unit}`),
+  }
+  
+  console.log('[selected-skill-exposure] Session skill expression summary:', {
+    dayFocus: day.focus,
+    primarySkill: sessionTraceResult.primarySkillExpressed,
+    secondarySkill: sessionTraceResult.secondarySkillExpressed,
+    directExpressions: skillExpressionSummary.directExpressions,
+    technicalExpressions: skillExpressionSummary.technicalExpressions,
+    supportExpressions: skillExpressionSummary.supportExpressions,
+    weightedExpressions: skillExpressionSummary.weightedExpressions,
+  })
+  
+  // [generic-shell-detect] STEP 9: Warn if session looks too generic
+  const doctrineBackedCount = main.filter(e => e.selectionTrace?.doctrineSource !== null).length
+  const skillAlignedCount = main.filter(e => 
+    (e.selectionTrace?.influencingSkills?.length || 0) > 0
+  ).length
+  
+  if (doctrineBackedCount === 0 && skillAlignedCount < 2 && main.length >= 4) {
+    console.warn('[generic-shell-detect] WARNING: Session may be too generic - no doctrine hits, few skill alignments', {
+      dayFocus: day.focus,
+      exerciseCount: main.length,
+      doctrineBackedCount,
+      skillAlignedCount,
+      exercises: main.map(e => e.name).slice(0, 5),
+    })
+  }
+  
   // [exercise-trace] TASK 7: Log session summary
   console.log('[exercise-trace] SESSION COMPLETE:', {
-    dayFocus: day.focus,
-    exerciseCount: main.length,
+  dayFocus: day.focus,
+  exerciseCount: main.length,
     weightedCount: weightedExerciseCount,
     doctrineHits: doctrineHitCount,
     rejected: rejectedCount,
@@ -1335,51 +1378,133 @@ function selectMainExercises(
     // Base score: general quality
     score += exercise.fatigueCost ? (5 - exercise.fatigueCost) * 2 : 5
     
-    // [selection-compression-fix] ISSUE B: Selected skill alignment (major boost)
-    for (const skillAlloc of sessionSkills) {
-      const skillLower = skillAlloc.skill.toLowerCase()
-      const transfersToSkill = exercise.transferTo?.some(t => t.toLowerCase().includes(skillLower))
-      
-      if (transfersToSkill) {
-        // Direct skill transfer gets biggest boost
-        if (skillAlloc.expressionMode === 'primary') {
-          score += 25 // Primary skill gets major boost
-        } else if (skillAlloc.expressionMode === 'technical') {
-          score += 18 // Technical gets solid boost  
-        } else if (skillAlloc.expressionMode === 'support') {
-          score += 12 // Support gets moderate boost
-        }
-      }
-    }
+  // [selection-compression-fix] ISSUE B: Selected skill alignment (increased boost for non-primary)
+  // STEP 3: Reduce primary goal compression by increasing secondary/technical weights
+  for (const skillAlloc of sessionSkills) {
+  const skillLower = skillAlloc.skill.toLowerCase()
+  const transfersToSkill = exercise.transferTo?.some(t => t.toLowerCase().includes(skillLower))
+  const exerciseNameMatch = exercise.id.toLowerCase().includes(skillLower) || 
+                            exercise.name.toLowerCase().includes(skillLower)
+  
+  if (transfersToSkill || exerciseNameMatch) {
+  // Direct skill transfer gets biggest boost
+  if (skillAlloc.expressionMode === 'primary') {
+  score += 30 // Primary skill gets major boost (increased from 25)
+  } else if (skillAlloc.expressionMode === 'technical') {
+  score += 24 // Technical gets strong boost (increased from 18 to reduce compression)
+  } else if (skillAlloc.expressionMode === 'support') {
+  score += 18 // Support gets solid boost (increased from 12)
+  } else if (skillAlloc.expressionMode === 'warmup') {
+  score += 8 // Warmup gets small boost
+  }
+  
+  // [selected-skill-exposure] Track which skill influenced this exercise
+  console.log('[selected-skill-exposure] Skill influence on exercise:', {
+    exerciseId: exercise.id,
+    skillId: skillAlloc.skill,
+    expressionMode: skillAlloc.expressionMode,
+    transferMatch: transfersToSkill,
+    nameMatch: exerciseNameMatch,
+    scoreBoost: skillAlloc.expressionMode === 'primary' ? 30 : 
+                skillAlloc.expressionMode === 'technical' ? 24 : 
+                skillAlloc.expressionMode === 'support' ? 18 : 8,
+  })
+  }
+  }
     
-    // [selection-compression-fix] ISSUE C: Session role differentiation
-    const isStrengthFocus = dayFocus.includes('strength')
-    const isSkillFocus = dayFocus.includes('skill')
-    const isMixedFocus = dayFocus.includes('mixed') || dayFocus.includes('support')
+  // [selection-compression-fix] ISSUE C: Session role differentiation (STEP 4 - strengthened)
+  const isStrengthFocus = dayFocus.includes('strength') || dayFocus.includes('support_heavy')
+  const isSkillFocus = dayFocus.includes('skill')
+  const isTechnicalFocus = dayFocus.includes('technical') || dayFocus.includes('density')
+  const isMixedFocus = dayFocus.includes('mixed')
+  const isRecoveryFocus = dayFocus.includes('recovery') || dayFocus.includes('light')
+  
+  // STEP 4: Make session roles actually change exercise composition
+  if (isStrengthFocus) {
+  if (exercise.category === 'strength') {
+    score += 20 // Strength exercises strongly favored on strength days (increased from 15)
+  }
+  // Penalize skill work on strength-focused days
+  if (exercise.category === 'skill' && exercise.fatigueCost && exercise.fatigueCost >= 4) {
+    score -= 10
+  }
+  } else if (isSkillFocus) {
+  if (exercise.category === 'skill') {
+    score += 20 // Skill exercises strongly favored (increased from 15)
+  }
+  // Penalize heavy strength work on skill days
+  if (exercise.category === 'strength' && exercise.fatigueCost && exercise.fatigueCost >= 4) {
+    score -= 8
+  }
+  } else if (isTechnicalFocus) {
+  // Technical days: favor lower fatigue, higher rep work
+  if (exercise.fatigueCost && exercise.fatigueCost <= 2) {
+    score += 15
+  }
+  if (exercise.category === 'skill') {
+    score += 10
+  }
+  } else if (isRecoveryFocus) {
+  // Recovery: strongly favor low fatigue
+  if (exercise.fatigueCost && exercise.fatigueCost <= 2) {
+    score += 18
+  } else if (exercise.fatigueCost && exercise.fatigueCost >= 4) {
+    score -= 15 // Strong penalty for high fatigue on recovery days
+  }
+  } else if (isMixedFocus) {
+  // Mixed days favor moderate fatigue exercises
+  if (exercise.fatigueCost && exercise.fatigueCost <= 3) {
+    score += 12 // Slightly increased from 10
+  }
+  }
+  
+  // [exercise-expression] Log session role influence
+  console.log('[exercise-expression] Session role scoring:', {
+  exerciseId: exercise.id,
+  dayFocus,
+  category: exercise.category,
+  fatigueCost: exercise.fatigueCost,
+  roleType: isStrengthFocus ? 'strength' : isSkillFocus ? 'skill' : isTechnicalFocus ? 'technical' : isRecoveryFocus ? 'recovery' : 'mixed',
+  })
     
-    if (isStrengthFocus && exercise.category === 'strength') {
-      score += 15
-    } else if (isSkillFocus && exercise.category === 'skill') {
-      score += 15
-    } else if (isMixedFocus) {
-      // Mixed days favor moderate fatigue exercises
-      if (exercise.fatigueCost && exercise.fatigueCost <= 3) {
-        score += 10
-      }
-    }
-    
-    // [selection-compression-fix] ISSUE D/E: Weighted-capable boost when equipment supports it
-    const isWeightedCapable = exercise.id.includes('weighted_') || 
-      exercise.id === 'pull_up' || 
-      exercise.id === 'dip' || 
-      exercise.id === 'push_up'
-    
-    if (hasWeightedEquipment && isWeightedCapable && isStrengthFocus) {
-      score += 12 // Significant boost for weighted when appropriate
-      console.log('[weighted-win-logic] Weighted exercise scored higher:', exercise.id)
-    }
-    
-    return score
+  // [selection-compression-fix] ISSUE D/E: Weighted-capable boost when equipment supports it
+  // STEP 5: Fix weighted-capable movement win conditions
+  const isWeightedCapable = exercise.id.includes('weighted_') ||
+  exercise.id === 'pull_up' ||
+  exercise.id === 'dip' ||
+  exercise.id === 'push_up' ||
+  exercise.id.includes('row') ||
+  exercise.id.includes('chin_up')
+  
+  // Weighted exercises get boost on strength AND mixed days when equipment supports
+  if (hasWeightedEquipment && isWeightedCapable) {
+  if (isStrengthFocus) {
+    score += 18 // Strong boost for weighted on strength days (increased from 12)
+    console.log('[weighted-win-logic] Weighted exercise scored high on strength day:', {
+    exerciseId: exercise.id,
+    boost: 18,
+    reason: 'strength_day_weighted_priority',
+    })
+  } else if (isMixedFocus) {
+    score += 10 // Moderate boost on mixed days
+    console.log('[weighted-win-logic] Weighted exercise scored moderate on mixed day:', {
+    exerciseId: exercise.id,
+    boost: 10,
+    reason: 'mixed_day_weighted_support',
+    })
+  }
+  }
+  
+  // [selection-competition] STEP 8: Track score for rejected alternative analysis
+  console.log('[selection-competition] Final exercise score:', {
+  exerciseId: exercise.id,
+  finalScore: score,
+  hasWeightedEquipment,
+  isWeightedCapable,
+  dayFocus,
+  })
+  
+  return score
   }
   
   /**
@@ -1415,13 +1540,28 @@ function selectMainExercises(
   // [weighted-truth] TASK A: Use canonical loadable equipment check
   const hasWeightedEquipment = hasLoadableEquipment(equipment)
   
-  // [weighted-truth] TASK A: Log weighted readiness at session selection
-  console.log('[weighted-truth] Session weighted readiness:', {
+  // [planner-truth-input] STEP 2: Log the EXACT profile truth reaching selection
+  console.log('[planner-truth-input] Exercise selection receiving:', {
+    primaryGoal,
     dayFocus: day.focus,
+    selectedSkillsCount: selectedSkills?.length || 0,
+    selectedSkills: selectedSkills?.slice(0, 5) || [],
+    skillsForSessionCount: skillsForSession?.length || 0,
+    skillsForSession: skillsForSession?.map(s => `${s.skill}(${s.expressionMode}:${s.weight})`),
     hasWeightedEquipment,
     hasBenchmarks: !!weightedBenchmarks,
-    pullUpBenchmark: !!weightedBenchmarks?.weightedPullUp?.current,
-    dipBenchmark: !!weightedBenchmarks?.weightedDip?.current,
+    experienceLevel,
+    equipmentCount: equipment?.length || 0,
+    constraintType,
+  })
+  
+  // [weighted-truth] TASK A: Log weighted readiness at session selection
+  console.log('[weighted-truth] Session weighted readiness:', {
+  dayFocus: day.focus,
+  hasWeightedEquipment,
+  hasBenchmarks: !!weightedBenchmarks,
+  pullUpBenchmark: !!weightedBenchmarks?.weightedPullUp?.current,
+  dipBenchmark: !!weightedBenchmarks?.weightedDip?.current,
   })
   
   // [selection-compression-fix] TASK 7: Log compression fix context

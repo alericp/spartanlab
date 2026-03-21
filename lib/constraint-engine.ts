@@ -110,6 +110,8 @@ export function analyzeConstraints(): ConstraintResult {
       readinessStatus: null, // Could be calculated but keeping simple
       holdTrend,
       hasSkillData: true,
+      // ISSUE D FIX: Pass total skill session history for clean-slate detection
+      totalSkillSessionsLogged: skillSessions.length,
     }
   }
   

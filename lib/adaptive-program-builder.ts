@@ -23,6 +23,31 @@
  * - equipmentAvailable must not be empty
  * 
  * These checks ensure we never generate garbage programs from incomplete data.
+ * 
+ * =============================================================================
+ * OBSERVABILITY & DEBUGGING NOTES (TASK 8)
+ * =============================================================================
+ * 
+ * LOG PREFIX: [program-generate]
+ * - Use this prefix in Vercel Runtime Logs or browser console to filter generation logs
+ * - Stages logged: initializing → profile_validation → structure_selection → 
+ *                  session_assembly → validation_complete
+ * 
+ * ERROR CODES (GenerationErrorCode type):
+ * - input_resolution_failed: Inputs couldn't be resolved from form/profile
+ * - profile_validation_failed: Profile incomplete or missing required fields
+ * - structure_selection_failed: Weekly structure couldn't be determined
+ * - session_assembly_failed: Individual sessions couldn't be built
+ * - warmup_generation_failed: Warmup exercise selection failed
+ * - validation_failed: Post-generation validation failed
+ * - snapshot_normalization_failed: Program couldn't be normalized for display
+ * - snapshot_save_failed: Program couldn't be saved to storage
+ * - unknown_generation_failure: Unclassified error (check stack trace)
+ * 
+ * WHERE TO FIND LOGS:
+ * - Client-side: Browser DevTools Console (filter: "[program-generate]")
+ * - Note: This code runs CLIENT-SIDE, not in Vercel serverless functions
+ * - For true server-side observability, generation would need to move to an API route
  */
 
 import type { PrimaryGoal, ExperienceLevel, TrainingDays, SessionLength } from './program-service'
@@ -965,14 +990,49 @@ function getDurationConfig(duration: WorkoutDurationPreference): DurationConfig 
 // MAIN GENERATION FUNCTION
 // =============================================================================
 
+// =============================================================================
+// ISSUE A & B: Generation Error Classification
+// These codes allow precise diagnosis when generation fails
+// =============================================================================
+export type GenerationErrorCode = 
+  | 'input_resolution_failed'
+  | 'profile_validation_failed'
+  | 'structure_selection_failed'
+  | 'session_assembly_failed'
+  | 'warmup_generation_failed'
+  | 'validation_failed'
+  | 'snapshot_normalization_failed'
+  | 'snapshot_save_failed'
+  | 'unknown_generation_failure'
+
+export class GenerationError extends Error {
+  code: GenerationErrorCode
+  stage: string
+  context?: Record<string, unknown>
+  
+  constructor(code: GenerationErrorCode, stage: string, message: string, context?: Record<string, unknown>) {
+    super(message)
+    this.name = 'GenerationError'
+    this.code = code
+    this.stage = stage
+    this.context = context
+    // ISSUE A: Structured logging for Vercel function logs
+    console.error(`[program-generate] ERROR [${code}] at stage "${stage}": ${message}`, context || {})
+  }
+}
+
 export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): AdaptiveProgram {
-  console.log('[program-gen] Starting adaptive program generation')
+  // ISSUE A: Track generation stage for precise error diagnosis
+  let currentStage = 'initializing'
+  
+  console.log('[program-generate] Starting adaptive program generation')
+  console.log('[program-generate] STAGE: initializing')
   
   // STATE CONTRACT: Get system state flags to determine generation context
   const stateFlags = getSystemStateFlags()
   const generationMode: GenerationMode = inputs.regenerationMode || stateFlags.recommendedMode
   
-  console.log('[program-gen] STATE CONTRACT:', {
+  console.log('[program-generate] STATE CONTRACT:', {
     hasProfile: stateFlags.hasProfile,
     hasHistory: stateFlags.hasHistory,
     hasProgram: stateFlags.hasProgram,
@@ -981,7 +1041,7 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
   })
   
   // TASK 7: Log ALL canonical profile fields consumed by generation
-  console.log('[program-gen] Inputs:', {
+  console.log('[program-generate] Inputs:', {
     primaryGoal: inputs.primaryGoal,
     secondaryGoal: inputs.secondaryGoal || 'none', // TASK 3
     experienceLevel: inputs.experienceLevel,
@@ -1008,35 +1068,42 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
   logCanonicalProfileState('generateAdaptiveProgram called')
   
   // TASK 6: Log schedule/duration truth consumption
-  console.log('[program-gen] TASK 6: Schedule/Duration truth consumed:', {
+  console.log('[program-generate] TASK 6: Schedule/Duration truth consumed:', {
     scheduleMode: canonicalProfile.scheduleMode,
     trainingDaysPerWeek: canonicalProfile.trainingDaysPerWeek,
     sessionDurationMode: canonicalProfile.sessionDurationMode,
     sessionLengthMinutes: canonicalProfile.sessionLengthMinutes,
   })
   
+  // ISSUE A: Stage tracking for diagnosable failures
+  currentStage = 'profile_validation'
+  console.log('[program-generate] STAGE: profile_validation')
+  
   // TASK 3 & 9: Validate profile before proceeding
   const profileValidation = validateProfileForGeneration(canonicalProfile)
   if (!profileValidation.isValid) {
-    console.error('[program-gen] TASK 9: Profile validation failed:', profileValidation.missingFields)
-    // Return minimal error program instead of crashing
-    throw new Error(`Incomplete profile data: ${profileValidation.missingFields.join(', ')}. Please complete onboarding.`)
+    throw new GenerationError(
+      'profile_validation_failed',
+      currentStage,
+      `Incomplete profile data: ${profileValidation.missingFields.join(', ')}. Please complete onboarding.`,
+      { missingFields: profileValidation.missingFields }
+    )
   }
   
   // TASK 2B: Normalize profile for engine consumption
   let normalizedProfile: NormalizedProfile | null = null
   try {
     normalizedProfile = normalizeProfile(canonicalProfile)
-    console.log('[program-gen] TASK 2B: Profile normalized successfully')
+    console.log('[program-generate] TASK 2B: Profile normalized successfully')
   } catch (err) {
-    console.error('[program-gen] Profile normalization failed:', err)
+    console.error('[program-generate] Profile normalization failed:', err)
     // Continue with legacy path if normalization fails
   }
   
   // TASK 4: Compute real limiter from normalized profile
   const computedLimiter = normalizedProfile ? computeLimiter(normalizedProfile) : null
   if (computedLimiter) {
-    console.log('[program-gen] TASK 4: Computed limiter:', computedLimiter)
+    console.log('[program-generate] TASK 4: Computed limiter:', computedLimiter)
   }
   
   // ENGINE QUALITY: Calculate goal hierarchy weighting for session distribution
@@ -1045,7 +1112,7 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
     secondaryGoal || canonicalProfile.secondaryGoal || null,
     canonicalProfile.trainingPathType || 'hybrid'
   )
-  console.log('[program-gen] Goal hierarchy weights:', goalHierarchyWeights)
+  console.log('[program-generate] Goal hierarchy weights:', goalHierarchyWeights)
   
   // ENGINE QUALITY: Rank bottlenecks from profile data
   const rankedBottlenecks = normalizedProfile ? rankBottlenecks(
@@ -1058,7 +1125,7 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
     null // recovery level
   ) : []
   if (rankedBottlenecks.length > 0) {
-    console.log('[program-gen] Ranked bottlenecks:', rankedBottlenecks.map(b => ({
+    console.log('[program-generate] Ranked bottlenecks:', rankedBottlenecks.map(b => ({
       type: b.type,
       severity: b.severityScore,
       suggestedFocus: b.suggestedFocus,
@@ -1105,7 +1172,7 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
   // This is best-effort - program generation must succeed even without a valid ID
   // NOTE: Uses `profile` already declared above at function start
   const resolvedAthleteId: string | null = profile?.userId || onboardingProfile?.userId || null
-  console.log('[program-gen] resolvedAthleteId:', resolvedAthleteId ? 'present' : 'null')
+  console.log('[program-generate] resolvedAthleteId:', resolvedAthleteId ? 'present' : 'null')
   
   // CANONICAL FIX: Use canonical training style, fallback to onboarding profile
   const trainingOutcome = (canonicalProfile.trainingStyle as PrimaryTrainingOutcome) || onboardingProfile?.primaryTrainingOutcome || 'general_fitness'
@@ -1113,7 +1180,7 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
   const workoutDuration = onboardingProfile?.workoutDurationPreference || 'medium'
   
   // CANONICAL FIX: Log consumed canonical fields for generation
-  console.log('[program-gen] Using canonical profile:', {
+  console.log('[program-generate] Using canonical profile:', {
     primaryGoal: canonicalProfile.primaryGoal,
     secondaryGoal: canonicalProfile.secondaryGoal,
     scheduleMode: canonicalProfile.scheduleMode,
@@ -1206,7 +1273,7 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
     secondaryGoal || canonicalProfile.secondaryGoal || null,
     canonicalProfile.trainingPathType || 'hybrid'
   )
-  console.log('[program-gen] Session distribution:', sessionDistribution)
+  console.log('[program-generate] Session distribution:', sessionDistribution)
   
   // ==========================================================================
   // TASK 1-4: EXPANDED ATHLETE CONTEXT FOR DEEP PLANNER CONSUMPTION
@@ -1259,7 +1326,7 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
   )
   
   // TASK 9: Log expanded planner consumption
-  console.log('[program-gen] TASK 1-4: Expanded planner context consumed:', {
+  console.log('[program-generate] TASK 1-4: Expanded planner context consumed:', {
     selectedSkillsCount: expandedContext.selectedSkills.length,
     goalCategoriesCount: expandedContext.goalCategories.length,
     trainingPathType: expandedContext.trainingPathType,
@@ -1503,7 +1570,7 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
   const isPullSecondary = secondaryGoal === 'front_lever' || secondaryGoal === 'muscle_up'
   const isPushSecondary = secondaryGoal === 'planche' || secondaryGoal === 'handstand_pushup'
   
-  console.log('[program-gen] Secondary goal influence:', {
+  console.log('[program-generate] Secondary goal influence:', {
     secondaryGoal,
     isPullSecondary,
     isPushSecondary,
@@ -1513,14 +1580,18 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
   // Select optimal weekly structure - USE effectiveTrainingDays for flexible support
   // TASK 2: Pass secondary goal flags so structure can adapt
   // TASK 3: Pass hybrid path and multi-skill flags for expanded structure awareness
-  // ISSUE A FIX: Log selected skills being passed to structure selector
-  console.log('[program-gen] ISSUE A: Selected skills passed to structure:', {
+  // ISSUE A: Stage tracking for structure selection
+  currentStage = 'structure_selection'
+  console.log('[program-generate] STAGE: structure_selection')
+  console.log('[program-generate] Selected skills passed to structure:', {
     selectedSkills: expandedContext.selectedSkills,
     secondaryGoal: secondaryGoal || canonicalProfile.secondaryGoal || null,
     trainingPathType: expandedContext.trainingPathType,
   })
   
-  const structure = selectOptimalStructure({
+  let structure: WeeklyStructure
+  try {
+    structure = selectOptimalStructure({
     primaryGoal,
     trainingDays: effectiveTrainingDays,  // Uses resolved flexible frequency
     recoveryLevel: recoverySignal.level,
@@ -1535,6 +1606,16 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
     selectedSkills: expandedContext.selectedSkills,
     secondaryGoal: secondaryGoal || canonicalProfile.secondaryGoal || null,
   })
+  } catch (err) {
+    throw new GenerationError(
+      'structure_selection_failed',
+      currentStage,
+      err instanceof Error ? err.message : 'Failed to select weekly structure',
+      { primaryGoal, trainingDays: effectiveTrainingDays, scheduleMode: inputScheduleMode }
+    )
+  }
+  
+  console.log('[program-generate] Structure selected:', structure.structureName)
   
   // Generate session intents for variety
   const skillType = primaryGoal as 'front_lever' | 'planche' | 'muscle_up' | 'hspu' | 'back_lever' | 'iron_cross' | 'l_sit' | 'weighted_strength' | 'general'
@@ -1604,7 +1685,13 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
     totalSessions: effectiveTrainingDays,
   })
   
-  const sessions: AdaptiveSession[] = structure.days.map((day, index) => {
+  // ISSUE A: Stage tracking for session assembly
+  currentStage = 'session_assembly'
+  console.log('[program-generate] STAGE: session_assembly')
+  
+  let sessions: AdaptiveSession[]
+  try {
+    sessions = structure.days.map((day, index) => {
     const intent = sessionIntents[index]
     
     // SKILL EXPRESSION FIX: Create per-session context with skill allocation
@@ -1792,6 +1879,18 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
     
     return session
   })
+  } catch (err) {
+    // ISSUE A: If error is already a GenerationError, re-throw as-is
+    if (err instanceof GenerationError) throw err
+    throw new GenerationError(
+      'session_assembly_failed',
+      currentStage,
+      err instanceof Error ? err.message : 'Failed to assemble sessions',
+      { structureName: structure.structureName, dayCount: structure.days?.length }
+    )
+  }
+  
+  console.log('[program-generate] Sessions assembled:', sessions.length)
   
   // Calculate variety score (0-1, higher = more varied)
   const varietyScore = calculateVarietyScore(sessionIntents)
@@ -1852,7 +1951,7 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
   
   // Log balance issues in dev mode
   if (process.env.NODE_ENV !== 'production' && weeklyLoadBalance.balanceIssues.length > 0) {
-    console.log('[program-gen] TASK 6: Weekly load balance issues detected:', {
+    console.log('[program-generate] TASK 6: Weekly load balance issues detected:', {
       issues: weeklyLoadBalance.balanceIssues,
       suggestions: weeklyLoadBalance.suggestions,
       straightArmDays: weeklyLoadBalance.straightArmDays,
@@ -1882,7 +1981,7 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
   // Record constraint detection in history (async, non-blocking, best-effort)
   // Uses resolvedAthleteId - skipped if no valid athlete ID exists
   if (resolvedAthleteId && constraintInsight.hasInsight) {
-    console.log('[program-gen] recording constraint history for athlete')
+    console.log('[program-generate] recording constraint history for athlete')
     recordConstraintHistory(
       resolvedAthleteId,
       primaryGoal,
@@ -1892,9 +1991,9 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
         indicatorMetrics: [],
         isPrimaryLimiter: true,
       } as any
-    ).catch(err => console.error('[program-gen] Failed to record constraint history:', err))
+    ).catch(err => console.error('[program-generate] Failed to record constraint history:', err))
   } else if (!resolvedAthleteId) {
-    console.log('[program-gen] skipping constraint history - no athlete ID')
+    console.log('[program-generate] skipping constraint history - no athlete ID')
   }
   
   // Fetch constraint improvement history for display (async, best-effort)
@@ -1907,9 +2006,9 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
           stableConstraints: improvements.filter(c => c.trend === 'stable'),
         }
       })
-      .catch(err => console.error('[program-gen] Failed to fetch constraint improvements:', err))
+      .catch(err => console.error('[program-generate] Failed to fetch constraint improvements:', err))
   } else {
-    console.log('[program-gen] skipping constraint improvement lookup - no athlete ID')
+    console.log('[program-generate] skipping constraint improvement lookup - no athlete ID')
   }
   
   // Generate program rationale
@@ -1934,12 +2033,17 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
     }
   }
   
-  console.log('[program-gen] Generation complete:', { 
+  // ISSUE A: Stage tracking for validation complete
+  currentStage = 'validation_complete'
+  console.log('[program-generate] STAGE: validation_complete')
+  console.log('[program-generate] Generation complete:', { 
     sessionCount: sessions.length, 
     primaryGoal,
     totalExercises,
     dbVerifiedExercises,
     dbCoverage: totalExercises > 0 ? `${Math.round((dbVerifiedExercises / totalExercises) * 100)}%` : 'N/A',
+    scheduleMode: inputScheduleMode,
+    selectedSkillsCount: expandedContext.selectedSkills.length,
   })
   
   // FLEXIBLE SCHEDULING: Use resolved schedule data
@@ -2216,7 +2320,7 @@ fatigueDecision: fatigueDecision ? {
         )
         
         if (mentionsDifferentCount) {
-          console.log('[program-gen] ISSUE C: Filtering contradictory coaching message:', {
+          console.log('[program-generate] ISSUE C: Filtering contradictory coaching message:', {
             message: msg,
             actualSessionCount,
             recommendedDays,
@@ -2241,7 +2345,7 @@ fatigueDecision: fatigueDecision ? {
         reconciledMessages.push(`Your ${actualSessionCount}-session week is built to match your current program structure.`)
       }
       
-      console.log('[program-gen] ISSUE C: Reconciled coaching messages:', {
+      console.log('[program-generate] ISSUE C: Reconciled coaching messages:', {
         actualSessionCount,
         recommendedDays,
         originalMessageCount: trainingBehavior.coachMessages.length,
@@ -3154,9 +3258,20 @@ function generateAdaptiveSession(
       maxWarmupExercises: sessionBudget.warmup.maxExercises,
     })
     
-    // Add validation fixes to adaptation notes
+    // ISSUE D FIX: Filter validation fixes - only surface user-meaningful fixes, not internal cleanup
+    // "Removed duplicate" messages are internal plumbing noise - keep as dev logs only
     if (validatedSession.validation.fixesApplied.length > 0) {
-      adaptationNotes.push(...validatedSession.validation.fixesApplied)
+      const userFacingFixes = validatedSession.validation.fixesApplied.filter(fix => 
+        // Skip internal duplicate cleanup messages - these are expected and not user-relevant
+        !fix.toLowerCase().includes('removed') || !fix.toLowerCase().includes('duplicate')
+      )
+      if (userFacingFixes.length > 0) {
+        adaptationNotes.push(...userFacingFixes)
+      }
+      // Log all fixes for debugging but don't surface to users
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('[program-generate] Validation fixes (internal):', validatedSession.validation.fixesApplied)
+      }
     }
     
     return {
@@ -3485,18 +3600,18 @@ export function saveAdaptiveProgram(program: AdaptiveProgram): AdaptiveProgram {
   if (!isBrowser()) return program
   
   // DATABASE ENFORCEMENT: Validate program before save
-  console.log('[program-gen] Validating program before save...')
+  console.log('[program-generate] Validating program before save...')
   const validation = validateProgramFromDatabase(program)
   
   if (!validation.isValid) {
-    console.warn('[program-gen] Program validation issues detected:', validation.diagnostics)
+    console.warn('[program-generate] Program validation issues detected:', validation.diagnostics)
     // Log specific issues but don't block save - allow graceful degradation
     if (validation.exerciseValidation.missingDbSource.length > 0) {
-      console.warn('[program-gen] Exercises missing DB source:', 
+      console.warn('[program-generate] Exercises missing DB source:', 
         validation.exerciseValidation.missingDbSource.slice(0, 5))
     }
   } else {
-    console.log('[program-gen] Program validation passed:', {
+    console.log('[program-generate] Program validation passed:', {
       exercises: validation.exerciseValidation.valid,
       sessions: program.sessions?.length || 0,
     })
@@ -3506,7 +3621,7 @@ export function saveAdaptiveProgram(program: AdaptiveProgram): AdaptiveProgram {
   programs.push(program)
   localStorage.setItem(STORAGE_KEY, JSON.stringify(programs))
   
-  console.log('[program-gen] Program saved successfully')
+  console.log('[program-generate] Program saved successfully')
   return program
 }
 

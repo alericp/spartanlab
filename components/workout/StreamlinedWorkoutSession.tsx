@@ -470,6 +470,7 @@ export function StreamlinedWorkoutSession({
   const completedSetsCount = state.completedSets.length
   
   // Create a guaranteed-safe exercise object for rendering (avoids null checks everywhere)
+  // [prescription-render] TASK 4: Include prescribedLoad for live workout display
   const safeCurrentExercise = useMemo(() => ({
     name: currentExercise?.name ?? 'Exercise',
     category: currentExercise?.category ?? 'general',
@@ -479,6 +480,8 @@ export function StreamlinedWorkoutSession({
     id: currentExercise?.id ?? 'unknown',
     isOverrideable: currentExercise?.isOverrideable ?? true,
     selectionReason: currentExercise?.selectionReason ?? '',
+    // [prescription-render] ISSUE C: Preserve prescribedLoad for live workout display
+    prescribedLoad: currentExercise?.prescribedLoad,
   }), [currentExercise])
   
   // Repair index if out of bounds (happens on next render cycle)
@@ -1716,12 +1719,29 @@ export function StreamlinedWorkoutSession({
           </h2>
           
           {/* Prescription row */}
-          <div className="flex items-center gap-2 mt-1.5 text-sm">
+          <div className="flex items-center gap-2 mt-1.5 text-sm flex-wrap">
             <span className="text-[#A4ACB8]">Target:</span>
             <span className="text-[#E6E9EF] font-medium">{currentExercise.repsOrTime}</span>
+            {/* [prescription-render] TASK 4: Display prescribedLoad on live workout */}
+            {currentExercise.prescribedLoad && currentExercise.prescribedLoad.load > 0 && (
+              <>
+                <span className="text-[#C1121F] font-semibold">
+                  @ +{currentExercise.prescribedLoad.load} {currentExercise.prescribedLoad.unit}
+                </span>
+              </>
+            )}
             <span className="text-[#6B7280]">·</span>
             <span className="text-[#A4ACB8]">RPE {targetRPE}</span>
           </div>
+          {/* [prescription-render] TASK 5: Show confidence for non-high confidence loads */}
+          {currentExercise.prescribedLoad && currentExercise.prescribedLoad.load > 0 && 
+           currentExercise.prescribedLoad.confidenceLevel !== 'high' && (
+            <p className="text-[10px] text-[#6B7280] mt-0.5">
+              {currentExercise.prescribedLoad.confidenceLevel === 'moderate' && 'Load based on historical PR'}
+              {currentExercise.prescribedLoad.confidenceLevel === 'low' && 'Estimated load - adjust as needed'}
+              {currentExercise.prescribedLoad.confidenceLevel === 'none' && 'Starting load - adjust based on feel'}
+            </p>
+          )}
           
           {/* Set Progress - Inline */}
           <div className="flex items-center gap-3 mt-3">

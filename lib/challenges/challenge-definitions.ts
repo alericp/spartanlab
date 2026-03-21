@@ -81,6 +81,8 @@ export interface ChallengeProgress {
   completed: boolean
   completedAt?: string
   startedAt: string
+  // [baseline-vs-earned] ISSUE E: Track source for UI labeling
+  progressSource?: 'earned' | 'baseline' | 'mixed'
 }
 
 export interface SeasonInfo {

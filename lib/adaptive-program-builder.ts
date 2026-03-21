@@ -1862,12 +1862,13 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
     if (feedbackState.confidence !== 'low' && feedbackState.volumeModifier !== 1.0) {
       session.exercises = applyVolumeModifier(session.exercises, feedbackState.volumeModifier)
       session.adaptationNotes = session.adaptationNotes || []
+      // [trust-polish] ISSUE D: Calmer, less mechanical language
       if (feedbackState.needsDeload) {
-        session.adaptationNotes.push('Volume reduced based on recent session feedback (deload recommended)')
+        session.adaptationNotes.push('Volume adjusted down — focus on recovery this week')
       } else if (feedbackState.volumeModifier < 1.0) {
-        session.adaptationNotes.push('Volume slightly adjusted based on recent session feedback')
+        session.adaptationNotes.push('Volume adjusted slightly based on your recent workouts')
       } else {
-        session.adaptationNotes.push('Ready to push - volume increased based on recovery feedback')
+        session.adaptationNotes.push('Volume increased — your recovery is strong')
       }
     }
     
@@ -2184,7 +2185,7 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
       if (dayLoadProfiles[index].neuralLoad === 'high' && 
           weeklyLoadBalance.balanceIssues.some(i => i.includes('consecutive'))) {
         session.adaptationNotes = session.adaptationNotes || []
-        session.adaptationNotes.push('High neural demand day - ensure adequate recovery before next session')
+            session.adaptationNotes.push('This session focuses on skill work — prioritize quality and rest')
       }
     })
   }
@@ -3325,11 +3326,80 @@ function getFatigueAdaptationNote(decision: TrainingDecision): string | null {
 // =============================================================================
 
 /**
+ * TASK 4: Session type based on position in the week.
+ * This creates variety in how skills are expressed across sessions.
+ */
+type WeeklySessionType = 
+  | 'direct_intensity'   // Max effort skill work (1-2 per week)
+  | 'technical_focus'    // Movement quality emphasis
+  | 'strength_support'   // Weighted work prioritized, skill maintenance
+  | 'mixed_balanced'     // Balanced skill + strength
+  | 'rotation_light'     // Lighter skill exposure, recovery emphasis
+
+/**
+ * TASK 4: Determine session type based on position in week.
+ * Front-loads intensity, back-loads recovery.
+ */
+function getSessionTypeForPosition(sessionIndex: number, totalSessions: number): WeeklySessionType {
+  const weekPosition = sessionIndex / totalSessions
+  
+  // First 40% of week: direct intensity / heavy work
+  if (weekPosition < 0.4) {
+    // First session is always direct intensity
+    if (sessionIndex === 0) return 'direct_intensity'
+    // Second session is technical focus
+    if (sessionIndex === 1) return 'technical_focus'
+    return 'direct_intensity'
+  }
+  
+  // Middle 30%: technical and mixed
+  if (weekPosition < 0.7) {
+    // Alternate between technical and strength support
+    return sessionIndex % 2 === 0 ? 'technical_focus' : 'strength_support'
+  }
+  
+  // Last 30%: lighter work for recovery
+  if (sessionIndex === totalSessions - 1) {
+    return 'rotation_light'
+  }
+  return 'mixed_balanced'
+}
+
+/**
+ * TASK 4: Get expression mode for primary skill based on session type.
+ * This ensures not every session is "max effort" for the primary skill.
+ */
+function getPrimarySkillExpressionForSessionType(
+  sessionType: WeeklySessionType,
+  sessionIndex: number
+): 'primary' | 'technical' | 'support' | 'warmup' {
+  switch (sessionType) {
+    case 'direct_intensity':
+      // Max effort skill work
+      return 'primary'
+    case 'technical_focus':
+      // Quality focus, lower intensity
+      return 'technical'
+    case 'strength_support':
+      // Skill as secondary, strength prioritized
+      return 'support'
+    case 'mixed_balanced':
+      // Alternate between primary and technical
+      return sessionIndex % 2 === 0 ? 'primary' : 'technical'
+    case 'rotation_light':
+      // Light maintenance only
+      return 'warmup'
+    default:
+      return 'primary'
+  }
+}
+
+/**
  * SKILL EXPRESSION FIX: Determines which skills should be expressed in a given session
  * based on weighted allocation, session index, and day focus.
  * 
  * Rules:
- * - Primary skills (weight >= 0.3) appear in most sessions
+ * - Primary skills (weight >= 0.3) appear in most sessions with VARIED expression modes
  * - Secondary skills (weight >= 0.15) appear in ~50-75% of sessions  
  * - Tertiary skills (weight >= 0.05) rotate across the week
  * - Skills below threshold may appear as warm-up/technical emphasis only
@@ -3355,6 +3425,10 @@ function getSkillsForSession(
   // [advanced-skill-expression] ISSUE B: Track which advanced skills need expression this session
   const advancedSkillsInAllocation = weightedAllocation.filter(a => isAdvancedSkill(a.skill))
   
+  // TASK 4: Calculate session type based on position in week
+  // This creates variety across sessions - not every session is max effort
+  const sessionType = getSessionTypeForPosition(sessionIndex, totalSessions)
+  
   for (const allocation of weightedAllocation) {
     const { skill, weight, exposureSessions, priorityLevel } = allocation
     
@@ -3362,11 +3436,13 @@ function getSkillsForSession(
     const isAdvanced = isAdvancedSkill(skill)
     const advancedFamily = isAdvanced ? getAdvancedSkillFamily(skill) : null
     
-    // Primary skills always appear as primary expression
+    // TASK 4: Primary skills get varied expression modes based on session type
+    // This reduces "sameness" - not every session is direct/max effort
     if (priorityLevel === 'primary' || weight >= 0.3) {
+      const expressionMode = getPrimarySkillExpressionForSessionType(sessionType, sessionIndex)
       result.push({
         skill,
-        expressionMode: 'primary',
+        expressionMode,
         weight,
       })
       continue
@@ -3527,10 +3603,16 @@ function generateAdaptiveSession(
     day.focus
   )
   
+  // TASK 4: Log session type for debugging session variety
+  const sessionType = getSessionTypeForPosition(sessionIndex || 0, totalSessions || 1)
   console.log('[skill-expression] Skills for session:', {
     sessionIndex,
+    sessionType, // TASK 4: Shows what type of session this is
     dayFocus: day.focus,
-    skillsForThisSession: skillsForThisSession.map(s => s.skill),
+    skillsForThisSession: skillsForThisSession.map(s => ({ 
+      skill: s.skill, 
+      mode: s.expressionMode // TASK 4: Now shows varied modes
+    })),
     primaryGoal,
   })
   
@@ -3878,6 +3960,23 @@ function mapToAdaptiveExercises(
       prescribedLoad: s.prescribedLoad,
     }
   }).filter((e): e is AdaptiveExercise => e !== null)
+  
+  // [prescription-render] TASK 6: Log prescription data in builder output
+  const exercisesWithLoads = exercises.filter(e => e.prescribedLoad && e.prescribedLoad.load > 0)
+  if (exercisesWithLoads.length > 0) {
+    console.log('[prescription-render] Builder output exercises with prescribedLoad:', {
+      sessionDay: day,
+      count: exercisesWithLoads.length,
+      exercises: exercisesWithLoads.map(e => ({
+        name: e.name,
+        load: e.prescribedLoad?.load,
+        unit: e.prescribedLoad?.unit,
+        confidence: e.prescribedLoad?.confidenceLevel,
+      })),
+    })
+  }
+  
+  return exercises
 }
 
 // =============================================================================

@@ -1,0 +1,481 @@
+/**
+ * BASELINE VS EARNED TRUTH CONTRACT
+ * 
+ * =============================================================================
+ * PURPOSE: Separate imported/onboarding capability from earned in-app progress
+ * =============================================================================
+ * 
+ * Three distinct truth buckets:
+ * 
+ * 1. BASELINE CAPABILITY (baselineCapability)
+ *    - What the user could already do when they started SpartanLab
+ *    - Derived from onboarding inputs (pull-up max, dip max, skill levels)
+ *    - Static reference point - doesn't change unless user updates profile
+ * 
+ * 2. INFERRED STARTING LEVEL (inferredStartingLevel)
+ *    - What the engine derives from profile metrics at program generation
+ *    - Used for initial exercise prescription difficulty
+ *    - Recalculated when profile changes
+ * 
+ * 3. EARNED IN-APP PROGRESS (earnedInAppProgress)
+ *    - What the user has actually logged, completed, or achieved inside SpartanLab
+ *    - Requires trusted workout completion or explicit in-app logging
+ *    - The only bucket that counts for "achievements" and "progress" displays
+ * 
+ * =============================================================================
+ * USAGE RULES:
+ * =============================================================================
+ * 
+ * - Challenges: MUST require earnedInAppProgress (except "baseline assessment" type)
+ * - Achievements: MUST require earnedInAppProgress
+ * - Analytics/Score: MUST clearly separate baseline contribution from earned contribution
+ * - Program generation: CAN use all three buckets for personalization
+ * - Progress displays: MUST distinguish baseline from earned
+ */
+
+import { getWorkoutLogs, type WorkoutLog } from './workout-log-service'
+import { getStrengthRecords, type StrengthRecord, type ExerciseType } from './strength-service'
+import { getSkillProgressions, type SkillProgression } from './data-service'
+import { getCanonicalProfile, type CanonicalProgrammingProfile } from './canonical-profile-service'
+
+// =============================================================================
+// TYPES
+// =============================================================================
+
+export type ProgressSource = 
+  | 'baseline_onboarding'      // From onboarding profile inputs
+  | 'baseline_import'          // From explicit import of prior achievements
+  | 'earned_workout_log'       // From completed trusted workout
+  | 'earned_skill_session'     // From completed skill practice session
+  | 'earned_challenge'         // From completed in-app challenge
+  | 'earned_manual_log'        // From user manually logging a PR/achievement
+  | 'inferred'                 // Engine-derived from other data
+
+export interface SourcedProgress {
+  source: ProgressSource
+  sourceDate: string
+  isEarned: boolean  // Convenience flag: true if source starts with 'earned_'
+  isBaseline: boolean // Convenience flag: true if source starts with 'baseline_'
+}
+
+export interface BaselineCapability {
+  // Strength baselines (from onboarding)
+  pullUpMax: number | null
+  dipMax: number | null
+  pushUpMax: number | null
+  weightedPullUp: { addedWeight: number; reps: number } | null
+  weightedDip: { addedWeight: number; reps: number } | null
+  
+  // Skill baselines (from onboarding progressions)
+  skillLevels: Record<string, number>
+  
+  // Metadata
+  capturedAt: string
+  profileVersion: number
+}
+
+export interface EarnedProgress {
+  // Strength PRs (from logged workouts only)
+  earnedPullUpMax: number | null
+  earnedDipMax: number | null
+  earnedPushUpMax: number | null
+  earnedWeightedPullUp: { addedWeight: number; reps: number; loggedAt: string } | null
+  earnedWeightedDip: { addedWeight: number; reps: number; loggedAt: string } | null
+  
+  // Skill progression (from tracked sessions)
+  earnedSkillLevels: Record<string, { level: number; achievedAt: string }>
+  
+  // Training volume
+  totalWorkoutsCompleted: number
+  totalTrainingMinutes: number
+  firstWorkoutDate: string | null
+  lastWorkoutDate: string | null
+  
+  // Metadata
+  lastUpdated: string
+}
+
+export interface BaselineVsEarnedSummary {
+  baseline: BaselineCapability
+  earned: EarnedProgress
+  
+  // Comparison helpers
+  hasEarnedProgress: boolean
+  hasBaselineOnly: boolean
+  earnedExceedsBaseline: {
+    pullUps: boolean
+    dips: boolean
+    anySkill: boolean
+  }
+}
+
+// =============================================================================
+// STORAGE
+// =============================================================================
+
+const BASELINE_KEY = 'spartanlab_baseline_capability'
+const EARNED_KEY = 'spartanlab_earned_progress'
+
+function isBrowser(): boolean {
+  return typeof window !== 'undefined'
+}
+
+// =============================================================================
+// BASELINE CAPABILITY
+// =============================================================================
+
+/**
+ * Capture baseline capability from current canonical profile.
+ * Call this after onboarding completes or when user first sets up profile.
+ */
+export function captureBaselineCapability(): BaselineCapability {
+  const profile = getCanonicalProfile()
+  
+  const baseline: BaselineCapability = {
+    pullUpMax: profile.pullUpMax ? parseInt(profile.pullUpMax.replace(/[^0-9]/g, '')) : null,
+    dipMax: profile.dipMax ? parseInt(profile.dipMax.replace(/[^0-9]/g, '')) : null,
+    pushUpMax: profile.pushUpMax ? parseInt(profile.pushUpMax.replace(/[^0-9]/g, '')) : null,
+    weightedPullUp: profile.weightedPullUp || null,
+    weightedDip: profile.weightedDip || null,
+    skillLevels: {},
+    capturedAt: new Date().toISOString(),
+    profileVersion: 1, // Version 1 = initial baseline capture
+  }
+  
+  // Capture skill levels from progressions
+  const progressions = getSkillProgressions()
+  progressions.forEach(p => {
+    baseline.skillLevels[p.skillName] = p.currentLevel
+  })
+  
+  // Store baseline
+  if (isBrowser()) {
+    localStorage.setItem(BASELINE_KEY, JSON.stringify(baseline))
+  }
+  
+  console.log('[baseline-vs-earned] Captured baseline capability:', {
+    pullUpMax: baseline.pullUpMax,
+    dipMax: baseline.dipMax,
+    skillCount: Object.keys(baseline.skillLevels).length,
+  })
+  
+  return baseline
+}
+
+/**
+ * Get stored baseline capability.
+ * Returns null if no baseline has been captured yet.
+ */
+export function getBaselineCapability(): BaselineCapability | null {
+  if (!isBrowser()) return null
+  
+  const stored = localStorage.getItem(BASELINE_KEY)
+  if (!stored) return null
+  
+  try {
+    return JSON.parse(stored)
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Check if baseline capability has been captured.
+ */
+export function hasBaselineCapability(): boolean {
+  return getBaselineCapability() !== null
+}
+
+// =============================================================================
+// EARNED PROGRESS
+// =============================================================================
+
+/**
+ * Get only trusted workout logs (earned in-app).
+ * This is the authoritative filter for "earned" progress.
+ */
+export function getTrustedWorkoutLogs(): WorkoutLog[] {
+  return getWorkoutLogs().filter(log => {
+    // Reject demo workouts
+    if (log.sourceRoute === 'demo' || (log as Record<string, unknown>).isDemo === true) return false
+    // Reject explicitly untrusted
+    if (log.trusted === false) return false
+    // Require explicit trust OR known good sourceRoute
+    const hasValidSource = log.sourceRoute === 'workout_session' || 
+                          log.sourceRoute === 'first_session' || 
+                          log.sourceRoute === 'quick_log'
+    const hasExplicitTrust = log.trusted === true
+    return hasValidSource || hasExplicitTrust
+  })
+}
+
+/**
+ * Get only earned strength records (logged through workouts, not imported).
+ */
+export function getEarnedStrengthRecords(): StrengthRecord[] {
+  const records = getStrengthRecords()
+  
+  // Filter to records that have workout-based dates
+  // Records without explicit source are assumed to be earned if they have recent dates
+  // and there are corresponding workout logs
+  const trustedLogs = getTrustedWorkoutLogs()
+  const trustedDates = new Set(trustedLogs.map(l => l.sessionDate?.split('T')[0] || l.createdAt?.split('T')[0]))
+  
+  return records.filter(r => {
+    const recordDate = r.dateLogged?.split('T')[0]
+    // If record date matches a trusted workout date, it's earned
+    // Also accept records with explicit "earned" source if that field exists
+    const source = (r as Record<string, unknown>).source as string | undefined
+    if (source?.startsWith('earned_')) return true
+    if (source?.startsWith('baseline_')) return false
+    // Fallback: check if date matches a trusted workout
+    return recordDate && trustedDates.has(recordDate)
+  })
+}
+
+/**
+ * Calculate earned progress from trusted workout logs and earned records.
+ */
+export function calculateEarnedProgress(): EarnedProgress {
+  const trustedLogs = getTrustedWorkoutLogs()
+  const earnedRecords = getEarnedStrengthRecords()
+  
+  const earned: EarnedProgress = {
+    earnedPullUpMax: null,
+    earnedDipMax: null,
+    earnedPushUpMax: null,
+    earnedWeightedPullUp: null,
+    earnedWeightedDip: null,
+    earnedSkillLevels: {},
+    totalWorkoutsCompleted: trustedLogs.length,
+    totalTrainingMinutes: trustedLogs.reduce((sum, l) => sum + (l.durationMinutes || 0), 0),
+    firstWorkoutDate: null,
+    lastWorkoutDate: null,
+    lastUpdated: new Date().toISOString(),
+  }
+  
+  // Find first and last workout dates
+  if (trustedLogs.length > 0) {
+    const sorted = [...trustedLogs].sort((a, b) => 
+      new Date(a.sessionDate || a.createdAt).getTime() - new Date(b.sessionDate || b.createdAt).getTime()
+    )
+    earned.firstWorkoutDate = sorted[0].sessionDate || sorted[0].createdAt
+    earned.lastWorkoutDate = sorted[sorted.length - 1].sessionDate || sorted[sorted.length - 1].createdAt
+  }
+  
+  // Extract max reps from workout logs
+  trustedLogs.forEach(log => {
+    log.exercises.forEach(ex => {
+      if (!ex.completed) return
+      const name = ex.name.toLowerCase()
+      const reps = ex.reps || 0
+      
+      if (name.includes('pull-up') || name.includes('pullup')) {
+        if (reps > (earned.earnedPullUpMax || 0)) {
+          earned.earnedPullUpMax = reps
+        }
+      }
+      if (name.includes('dip') && !name.includes('band')) {
+        if (reps > (earned.earnedDipMax || 0)) {
+          earned.earnedDipMax = reps
+        }
+      }
+      if (name.includes('push-up') || name.includes('pushup')) {
+        if (reps > (earned.earnedPushUpMax || 0)) {
+          earned.earnedPushUpMax = reps
+        }
+      }
+    })
+  })
+  
+  // Extract weighted PRs from earned records
+  earnedRecords.forEach(r => {
+    if (r.exercise === 'weighted_pull_up') {
+      if (!earned.earnedWeightedPullUp || r.weightAdded > earned.earnedWeightedPullUp.addedWeight) {
+        earned.earnedWeightedPullUp = {
+          addedWeight: r.weightAdded,
+          reps: r.reps,
+          loggedAt: r.dateLogged,
+        }
+      }
+    }
+    if (r.exercise === 'weighted_dip') {
+      if (!earned.earnedWeightedDip || r.weightAdded > earned.earnedWeightedDip.addedWeight) {
+        earned.earnedWeightedDip = {
+          addedWeight: r.weightAdded,
+          reps: r.reps,
+          loggedAt: r.dateLogged,
+        }
+      }
+    }
+  })
+  
+  // Store earned progress
+  if (isBrowser()) {
+    localStorage.setItem(EARNED_KEY, JSON.stringify(earned))
+  }
+  
+  console.log('[baseline-vs-earned] Calculated earned progress:', {
+    totalWorkouts: earned.totalWorkoutsCompleted,
+    earnedPullUpMax: earned.earnedPullUpMax,
+    earnedDipMax: earned.earnedDipMax,
+    hasWeightedPRs: !!(earned.earnedWeightedPullUp || earned.earnedWeightedDip),
+  })
+  
+  return earned
+}
+
+/**
+ * Get stored earned progress (cached calculation).
+ */
+export function getEarnedProgress(): EarnedProgress | null {
+  if (!isBrowser()) return null
+  
+  const stored = localStorage.getItem(EARNED_KEY)
+  if (!stored) return null
+  
+  try {
+    return JSON.parse(stored)
+  } catch {
+    return null
+  }
+}
+
+// =============================================================================
+// COMBINED SUMMARY
+// =============================================================================
+
+/**
+ * Get full baseline vs earned summary.
+ * This is the main function for components to understand the truth state.
+ */
+export function getBaselineVsEarnedSummary(): BaselineVsEarnedSummary {
+  // Ensure baseline exists
+  let baseline = getBaselineCapability()
+  if (!baseline) {
+    baseline = captureBaselineCapability()
+  }
+  
+  // Calculate earned progress
+  const earned = calculateEarnedProgress()
+  
+  // Determine comparison flags
+  const hasEarnedProgress = earned.totalWorkoutsCompleted > 0
+  const hasBaselineOnly = !hasEarnedProgress && (
+    baseline.pullUpMax !== null || 
+    baseline.dipMax !== null ||
+    Object.keys(baseline.skillLevels).length > 0
+  )
+  
+  // Check if earned exceeds baseline
+  const earnedExceedsBaseline = {
+    pullUps: (earned.earnedPullUpMax || 0) > (baseline.pullUpMax || 0),
+    dips: (earned.earnedDipMax || 0) > (baseline.dipMax || 0),
+    anySkill: false, // Would need skill session tracking to determine
+  }
+  
+  console.log('[baseline-vs-earned] Summary:', {
+    hasEarnedProgress,
+    hasBaselineOnly,
+    earnedExceedsBaseline,
+    baselinePullUp: baseline.pullUpMax,
+    earnedPullUp: earned.earnedPullUpMax,
+  })
+  
+  return {
+    baseline,
+    earned,
+    hasEarnedProgress,
+    hasBaselineOnly,
+    earnedExceedsBaseline,
+  }
+}
+
+// =============================================================================
+// CHALLENGE/ACHIEVEMENT HELPERS
+// =============================================================================
+
+/**
+ * Check if a strength milestone is satisfied by EARNED progress only.
+ * Use this for challenges/achievements that should require in-app completion.
+ */
+export function isStrengthMilestoneEarned(
+  exercise: 'pull_ups' | 'dips' | 'push_ups',
+  targetValue: number
+): { earned: boolean; currentEarned: number; baselineValue: number } {
+  const summary = getBaselineVsEarnedSummary()
+  
+  let currentEarned = 0
+  let baselineValue = 0
+  
+  switch (exercise) {
+    case 'pull_ups':
+      currentEarned = summary.earned.earnedPullUpMax || 0
+      baselineValue = summary.baseline.pullUpMax || 0
+      break
+    case 'dips':
+      currentEarned = summary.earned.earnedDipMax || 0
+      baselineValue = summary.baseline.dipMax || 0
+      break
+    case 'push_ups':
+      currentEarned = summary.earned.earnedPushUpMax || 0
+      baselineValue = summary.baseline.pushUpMax || 0
+      break
+  }
+  
+  return {
+    earned: currentEarned >= targetValue,
+    currentEarned,
+    baselineValue,
+  }
+}
+
+/**
+ * Check if a challenge should use baseline satisfaction.
+ * Some challenge types (like "baseline assessment") may intentionally use baseline.
+ */
+export function shouldChallengeUseBaseline(challengeType: string): boolean {
+  const baselineAllowedTypes = [
+    'baseline_assessment',
+    'starting_point',
+    'initial_benchmark',
+  ]
+  return baselineAllowedTypes.includes(challengeType)
+}
+
+/**
+ * Get progress source label for UI display.
+ */
+export function getProgressSourceLabel(source: ProgressSource): string {
+  switch (source) {
+    case 'baseline_onboarding': return 'Starting capability'
+    case 'baseline_import': return 'Imported record'
+    case 'earned_workout_log': return 'Logged in workout'
+    case 'earned_skill_session': return 'Skill session'
+    case 'earned_challenge': return 'Challenge completion'
+    case 'earned_manual_log': return 'Manual entry'
+    case 'inferred': return 'Estimated'
+    default: return 'Unknown'
+  }
+}
+
+// =============================================================================
+// INITIALIZATION
+// =============================================================================
+
+/**
+ * Initialize baseline vs earned tracking.
+ * Call this on app load after user authentication is confirmed.
+ */
+export function initializeBaselineTracking(): void {
+  if (!isBrowser()) return
+  
+  // Capture baseline if not already captured
+  if (!hasBaselineCapability()) {
+    console.log('[baseline-vs-earned] First-time baseline capture')
+    captureBaselineCapability()
+  }
+  
+  // Always recalculate earned progress
+  calculateEarnedProgress()
+}

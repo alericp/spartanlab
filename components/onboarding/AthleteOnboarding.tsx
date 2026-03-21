@@ -136,8 +136,10 @@ import {
 } from '@/lib/athlete-profile'
 import { BodyFatCalculator } from './BodyFatCalculator'
 import { getCanonicalProfile, saveCanonicalProfile, logCanonicalProfileState, clearCanonicalProfileData, markProfileSchemaAsComplete } from '@/lib/canonical-profile-service'
-import { logProfileTruthState } from '@/lib/profile-truth-contract'
-import { getOnboardingProfile } from '@/lib/athlete-profile'
+  import { logProfileTruthState } from '@/lib/profile-truth-contract'
+  import { getOnboardingProfile } from '@/lib/athlete-profile'
+  // [baseline-vs-earned] ISSUE A: Import baseline capture for onboarding completion
+  import { captureBaselineCapability } from '@/lib/baseline-earned-truth'
 import {
   type MilitaryBranch,
   type MilitaryTest,
@@ -3759,6 +3761,11 @@ export function AthleteOnboarding() {
       // Mark as complete and save onboarding profile
       const finalProfile = { ...profile, onboardingComplete: true }
       saveOnboardingProfile(finalProfile)
+      
+      // [baseline-vs-earned] ISSUE A: Capture baseline capability before any workouts
+      // This separates starting capability from earned in-app progress
+      captureBaselineCapability()
+      console.log('[baseline-vs-earned] Baseline capability captured at onboarding completion')
       
       // CANONICAL FIX: Save ALL onboarding data to canonical profile service
       // This ensures settings, metrics, builder, and generation all see the same truth

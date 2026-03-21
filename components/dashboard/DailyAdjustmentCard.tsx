@@ -150,11 +150,11 @@ export function DailyAdjustmentCard({
         </div>
       )}
       
-      {/* What's Cut */}
+      {/* [trust-polish] ISSUE A: Friendlier label for reduced exercises */}
       {adjustment.whatToCut.length > 0 && (
         <div className="mb-4">
           <p className="text-xs text-[#6A6A6A] uppercase tracking-wider mb-2">
-            Removed
+            Shortened
           </p>
           <div className="flex flex-wrap gap-1.5">
             {adjustment.whatToCut.map(exercise => (

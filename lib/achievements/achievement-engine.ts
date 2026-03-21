@@ -13,6 +13,11 @@ import { getSkillProgressions } from '../data-service'
 import { calculateTrainingStreak } from '../progress-streak-engine'
 import { getCompletedChallengeCount } from '../challenges/challenge-engine'
 import { getH2HStats } from '../h2h/h2h-service'
+// [baseline-vs-earned] ISSUE A: Import earned progress helpers
+import { 
+  getEarnedStrengthRecords,
+  getBaselineVsEarnedSummary,
+} from '../baseline-earned-truth'
 
 // =============================================================================
 // STORAGE
@@ -126,10 +131,19 @@ function getTrustedWorkouts() {
 
 function calculateMetrics(): AchievementMetrics {
   const workouts = getTrustedWorkouts()
-  const strengthRecords = getStrengthRecords()
-  const personalRecords = getPersonalRecords()
+  // [baseline-vs-earned] ISSUE B: Use earned-only records for achievements
+  const strengthRecords = getEarnedStrengthRecords()
+  const personalRecords = getPersonalRecords() // Note: PRs may still include baseline
   const skillProgressions = getSkillProgressions()
   const streak = calculateTrainingStreak()
+  
+  // [baseline-vs-earned] Log earned vs baseline state
+  const truthSummary = getBaselineVsEarnedSummary()
+  console.log('[baseline-vs-earned] Achievement metrics:', {
+    earnedWorkouts: workouts.length,
+    earnedStrengthRecords: strengthRecords.length,
+    hasEarnedProgress: truthSummary.hasEarnedProgress,
+  })
   
   // Count total reps
   let totalReps = 0
@@ -427,6 +441,8 @@ export interface AchievementWithProgress extends Achievement {
   progress: number // 0-100
   progressPercent: number // alias for progress
   currentValue: number // actual current value
+  // [baseline-vs-earned] ISSUE E: Track progress source
+  progressSource?: 'earned' | 'baseline_only' | 'not_started'
 }
 
 export interface AchievementSummary {

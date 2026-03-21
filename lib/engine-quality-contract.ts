@@ -116,35 +116,43 @@ export function calculateGoalHierarchyWeights(
   secondaryGoal: string | null,
   trainingPath: string | null
 ): GoalHierarchyWeights {
-  // Base weights
-  let primaryWeight = 0.65
-  let secondaryWeight = secondaryGoal ? 0.25 : 0
-  let supportWeight = 0.10
+  // IMPROVED: Reduced primary compression to give secondary goals meaningful presence
+  // Old weights: primary 0.65-0.70, secondary 0.20-0.30
+  // New weights: primary 0.50-0.55, secondary 0.30-0.35
+  
+  let primaryWeight = 0.50
+  let secondaryWeight = secondaryGoal ? 0.30 : 0
+  let supportWeight = 0.20
   
   // Adjust for training path
   if (trainingPath === 'hybrid') {
-    // Hybrid: balanced skill + strength
+    // Hybrid: balanced skill + strength - both goals get substantial attention
     if (isSkillGoal(primaryGoal) && secondaryGoal && isSkillGoal(secondaryGoal)) {
-      // Both are skills - split more evenly but primary still leads
-      primaryWeight = 0.55
-      secondaryWeight = 0.30
-      supportWeight = 0.15
+      // Both are skills - near-equal split with slight primary lead
+      primaryWeight = 0.45
+      secondaryWeight = 0.35
+      supportWeight = 0.20
     } else if (isSkillGoal(primaryGoal)) {
       // Primary skill + strength support
-      primaryWeight = 0.60
-      secondaryWeight = secondaryGoal ? 0.25 : 0
-      supportWeight = 0.15
+      primaryWeight = 0.50
+      secondaryWeight = secondaryGoal ? 0.30 : 0
+      supportWeight = 0.20
+    } else if (isStrengthGoal(primaryGoal)) {
+      // Primary strength + skill support
+      primaryWeight = 0.50
+      secondaryWeight = secondaryGoal ? 0.30 : 0
+      supportWeight = 0.20
     }
   } else if (trainingPath === 'skill_progression') {
-    // Skill-focused: strong primary emphasis
-    primaryWeight = 0.70
-    secondaryWeight = secondaryGoal ? 0.20 : 0
-    supportWeight = 0.10
-  } else if (trainingPath === 'strength_endurance') {
-    // Strength-focused: more balanced
+    // Skill-focused: primary leads but secondary still meaningful
     primaryWeight = 0.55
     secondaryWeight = secondaryGoal ? 0.30 : 0
     supportWeight = 0.15
+  } else if (trainingPath === 'strength_endurance') {
+    // Strength-focused: balanced approach
+    primaryWeight = 0.50
+    secondaryWeight = secondaryGoal ? 0.30 : 0
+    supportWeight = 0.20
   }
   
   // Normalize to sum to 1.0
@@ -264,6 +272,205 @@ const GOAL_DISPLAY_LABELS: Record<string, string> = {
   strength: 'Strength',
   flexibility: 'Flexibility',
   endurance: 'Endurance',
+}
+
+// =============================================================================
+// SESSION SKILL PLAN (TASK 4 - IMPROVED SKILL DISTRIBUTION)
+// =============================================================================
+
+/**
+ * Expression modes define how a skill is trained in a session.
+ * TASK 4: More intentional mode assignment to reduce sameness.
+ */
+export type SkillExpressionMode = 
+  | 'direct'      // Main skill work - max hold progressions
+  | 'technical'   // Movement quality focus - controlled reps/transitions  
+  | 'support'     // Accessory work building toward skill
+  | 'rotation'    // Lighter maintenance to allow recovery
+
+/**
+ * Per-day skill assignment with expression mode and rationale.
+ */
+export interface DaySkillAssignment {
+  dayIndex: number
+  dayLabel: string // "Day 1", "Push A", etc.
+  primarySkill: string | null
+  primaryMode: SkillExpressionMode
+  secondarySkill: string | null
+  secondaryMode: SkillExpressionMode | null
+  supportWork: string[]
+  dayRole: 'primary_focus' | 'secondary_focus' | 'mixed' | 'support_heavy' | 'recovery'
+  rationale: string
+}
+
+/**
+ * Complete session skill plan for a training week.
+ */
+export interface SessionSkillPlan {
+  totalDays: number
+  primaryGoal: string
+  secondaryGoal: string | null
+  days: DaySkillAssignment[]
+  weekRationale: string
+}
+
+/**
+ * Build a complete skill plan for the training week.
+ * TASK 4: Reduces session sameness by assigning intentional modes per day.
+ * 
+ * Key improvements:
+ * - Primary skill gets 'direct' mode on 1-2 days max (high intensity)
+ * - Secondary skill gets 'direct' mode on 1 day when applicable
+ * - Remaining days use 'technical', 'support', or 'rotation' modes
+ * - Better recovery distribution across the week
+ */
+export function buildSessionSkillPlan(
+  totalDays: number,
+  primaryGoal: string,
+  secondaryGoal: string | null,
+  trainingPath: string | null
+): SessionSkillPlan {
+  const days: DaySkillAssignment[] = []
+  const distribution = calculateSessionDistribution(totalDays, primaryGoal, secondaryGoal, trainingPath)
+  
+  // Determine expression mode rotation for primary skill
+  // Direct work is most demanding - limit to 1-2 sessions/week
+  const primaryDirectDays = Math.min(2, Math.ceil(totalDays * 0.4))
+  const secondaryDirectDays = secondaryGoal ? Math.min(1, Math.ceil(totalDays * 0.25)) : 0
+  
+  // Track mode assignments
+  let primaryDirectCount = 0
+  let secondaryDirectCount = 0
+  let primaryTechnicalCount = 0
+  
+  for (let i = 0; i < totalDays; i++) {
+    const dayIndex = i + 1
+    let assignment: DaySkillAssignment
+    
+    // Determine day role based on position in week
+    // First days of week = primary focus, mid-week = secondary, end = mixed/recovery
+    const weekPosition = i / totalDays
+    
+    if (i < distribution.primaryFocusSessions && primaryDirectCount < primaryDirectDays) {
+      // Primary focus day with direct work
+      primaryDirectCount++
+      assignment = {
+        dayIndex,
+        dayLabel: `Day ${dayIndex}`,
+        primarySkill: primaryGoal,
+        primaryMode: 'direct',
+        secondarySkill: secondaryGoal,
+        secondaryMode: secondaryGoal ? 'support' : null,
+        supportWork: getSupportWorkForGoal(primaryGoal),
+        dayRole: 'primary_focus',
+        rationale: `${GOAL_DISPLAY_LABELS[primaryGoal] || primaryGoal} direct work - max effort progressions with full rest. ${secondaryGoal ? (GOAL_DISPLAY_LABELS[secondaryGoal] || secondaryGoal) + ' receives support work.' : ''}`,
+      }
+    } else if (secondaryGoal && secondaryDirectCount < secondaryDirectDays) {
+      // Secondary focus day with direct work
+      secondaryDirectCount++
+      assignment = {
+        dayIndex,
+        dayLabel: `Day ${dayIndex}`,
+        primarySkill: secondaryGoal,
+        primaryMode: 'direct',
+        secondarySkill: primaryGoal,
+        secondaryMode: 'technical',
+        supportWork: getSupportWorkForGoal(secondaryGoal),
+        dayRole: 'secondary_focus',
+        rationale: `${GOAL_DISPLAY_LABELS[secondaryGoal] || secondaryGoal} direct work day. ${GOAL_DISPLAY_LABELS[primaryGoal] || primaryGoal} receives technical/quality focus.`,
+      }
+    } else if (primaryTechnicalCount < 1 && i < totalDays - 1) {
+      // Technical focus day for primary
+      primaryTechnicalCount++
+      assignment = {
+        dayIndex,
+        dayLabel: `Day ${dayIndex}`,
+        primarySkill: primaryGoal,
+        primaryMode: 'technical',
+        secondarySkill: secondaryGoal,
+        secondaryMode: secondaryGoal ? 'rotation' : null,
+        supportWork: [...getSupportWorkForGoal(primaryGoal), ...getStrengthSupportWork(primaryGoal)],
+        dayRole: 'mixed',
+        rationale: `Technical focus for ${GOAL_DISPLAY_LABELS[primaryGoal] || primaryGoal} - quality over intensity. Strength support prioritized.`,
+      }
+    } else {
+      // Mixed/support/recovery days
+      const isLastDay = i === totalDays - 1
+      const dayRole = isLastDay ? 'support_heavy' : 'mixed'
+      assignment = {
+        dayIndex,
+        dayLabel: `Day ${dayIndex}`,
+        primarySkill: primaryGoal,
+        primaryMode: isLastDay ? 'rotation' : 'support',
+        secondarySkill: secondaryGoal,
+        secondaryMode: secondaryGoal ? (isLastDay ? 'rotation' : 'technical') : null,
+        supportWork: getStrengthSupportWork(primaryGoal),
+        dayRole,
+        rationale: isLastDay 
+          ? `Rotation/maintenance day - lighter skill exposure, strength emphasis. Sets up recovery for next week.`
+          : `Balanced skill and strength work. Both goals receive attention without max effort demands.`,
+      }
+    }
+    
+    days.push(assignment)
+  }
+  
+  return {
+    totalDays,
+    primaryGoal,
+    secondaryGoal,
+    days,
+    weekRationale: buildWeekRationale(primaryGoal, secondaryGoal, days, trainingPath),
+  }
+}
+
+function getSupportWorkForGoal(goal: string): string[] {
+  const supportMap: Record<string, string[]> = {
+    planche: ['planche_lean', 'pseudo_planche_pushup', 'compression_drills'],
+    front_lever: ['front_lever_rows', 'straight_arm_pulldown', 'active_hang'],
+    back_lever: ['skin_the_cat', 'german_hang_holds', 'active_hang'],
+    muscle_up: ['high_pull', 'transition_drills', 'dip_negatives'],
+    hspu: ['pike_pushup', 'wall_walk', 'shoulder_taps'],
+    handstand: ['wall_handstand', 'kick_up_drills', 'shoulder_taps'],
+    l_sit: ['compression_work', 'pike_stretch', 'support_hold'],
+    v_sit: ['l_sit', 'pike_compression', 'straddle_lifts'],
+  }
+  return supportMap[goal] || ['strength_support']
+}
+
+function getStrengthSupportWork(goal: string): string[] {
+  const strengthMap: Record<string, string[]> = {
+    planche: ['weighted_dip', 'pseudo_planche_pushup', 'ring_support'],
+    front_lever: ['weighted_pullup', 'rows', 'scapular_pulls'],
+    back_lever: ['pullup_variations', 'rear_delt_work'],
+    muscle_up: ['weighted_pullup', 'dips', 'explosive_pulls'],
+    hspu: ['overhead_press', 'pike_pushup_variations'],
+    handstand: ['shoulder_strength', 'wrist_prep'],
+    l_sit: ['dips', 'core_compression'],
+    v_sit: ['pike_work', 'hip_flexor_strength'],
+  }
+  return strengthMap[goal] || ['general_strength']
+}
+
+function buildWeekRationale(
+  primary: string,
+  secondary: string | null,
+  days: DaySkillAssignment[],
+  trainingPath: string | null
+): string {
+  const primaryLabel = GOAL_DISPLAY_LABELS[primary] || primary
+  const secondaryLabel = secondary ? (GOAL_DISPLAY_LABELS[secondary] || secondary) : null
+  
+  const directDays = days.filter(d => d.primaryMode === 'direct').length
+  const technicalDays = days.filter(d => d.primaryMode === 'technical').length
+  
+  if (!secondary) {
+    return `${directDays} direct ${primaryLabel} sessions for max progression, ${technicalDays} technical sessions for movement quality, remaining sessions focus on strength support and recovery.`
+  }
+  
+  const secondaryDirectDays = days.filter(d => d.primarySkill === secondary && d.primaryMode === 'direct').length
+  
+  return `Week designed for dual-skill development: ${directDays} direct ${primaryLabel} sessions, ${secondaryDirectDays} direct ${secondaryLabel} session(s). Expression modes rotate to prevent staleness while maintaining progression stimulus.`
 }
 
 // =============================================================================

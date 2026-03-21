@@ -10,6 +10,8 @@ import { getSkillSessions } from './skill-session-service'
 import { getUnlockedAchievements, ACHIEVEMENTS, type AchievementTier } from './achievements/achievement-definitions'
 import { getTotalScoreBoost } from './challenges/challenge-engine'
 import { getTotalH2HRewards } from './h2h/h2h-service'
+// [baseline-vs-earned] ISSUE C: Import for analytics contribution tracking
+import { getBaselineVsEarnedSummary, getTrustedWorkoutLogs } from './baseline-earned-truth'
 
 export interface ScoreComponent {
   raw: number      // 0-100 raw score
@@ -57,6 +59,16 @@ export interface StrengthScoreBreakdown {
   
   // Score changes for display
   recentScoreGain?: number
+  
+  // [baseline-vs-earned] ISSUE C: Track baseline vs earned contributions
+  baselineVsEarned?: {
+    hasEarnedProgress: boolean
+    hasBaselineOnly: boolean
+    earnedWorkoutCount: number
+    baselineContribution: number  // Estimated points from baseline
+    earnedContribution: number    // Points from earned progress
+    message: string               // Human-readable explanation
+  }
 }
 
 export type SpartanLevel = 'Beginner' | 'Developing' | 'Intermediate' | 'Advanced' | 'Elite'
@@ -565,6 +577,34 @@ export function calculateSpartanScore(): StrengthScoreBreakdown {
     skillResult, strengthResult, readinessResult, consistencyResult, level
   )
   
+  // [baseline-vs-earned] ISSUE C: Track baseline vs earned contributions
+  const truthSummary = getBaselineVsEarnedSummary()
+  const earnedWorkouts = getTrustedWorkoutLogs()
+  
+  // Estimate baseline contribution (skill/strength scores without earned workouts)
+  const hasOnlyBaseline = truthSummary.hasBaselineOnly
+  const baselineContribution = hasOnlyBaseline ? Math.round((skillResult.score + strengthResult.score) / 2) : 0
+  const earnedContribution = truthSummary.hasEarnedProgress 
+    ? Math.round(baseScore) 
+    : 0
+  
+  let baselineMessage = ''
+  if (hasOnlyBaseline) {
+    baselineMessage = 'Score reflects your starting capability. Complete workouts to earn real progress.'
+  } else if (truthSummary.hasEarnedProgress && !truthSummary.earnedExceedsBaseline.pullUps && !truthSummary.earnedExceedsBaseline.dips) {
+    baselineMessage = 'Keep training to surpass your starting baseline.'
+  } else if (truthSummary.hasEarnedProgress) {
+    baselineMessage = 'Your earned progress is reflected in this score.'
+  }
+  
+  console.log('[baseline-vs-earned] Score breakdown:', {
+    hasOnlyBaseline,
+    hasEarnedProgress: truthSummary.hasEarnedProgress,
+    earnedWorkoutCount: earnedWorkouts.length,
+    baselineContribution,
+    earnedContribution,
+  })
+  
   return {
     skillScore: skillResult.score,
     strengthScore: strengthResult.score,
@@ -582,6 +622,15 @@ export function calculateSpartanScore(): StrengthScoreBreakdown {
     dataQuality,
     hasEnoughData,
     decayInfo,
+    // [baseline-vs-earned] ISSUE C: Include baseline vs earned info
+    baselineVsEarned: {
+      hasEarnedProgress: truthSummary.hasEarnedProgress,
+      hasBaselineOnly: hasOnlyBaseline,
+      earnedWorkoutCount: earnedWorkouts.length,
+      baselineContribution,
+      earnedContribution,
+      message: baselineMessage,
+    },
   }
 }
 

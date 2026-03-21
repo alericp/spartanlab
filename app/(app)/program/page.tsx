@@ -72,9 +72,9 @@ function ProgramDisplayWrapper({
     return (
       <Card className="bg-[#2A2A2A] border-[#3A3A3A] p-8 text-center">
         <AlertTriangle className="w-12 h-12 text-amber-500 mx-auto mb-4" />
-        <h3 className="text-lg font-medium mb-2">Display Error</h3>
+        <h3 className="text-lg font-medium mb-2">Unable to Display Plan</h3>
         <p className="text-sm text-[#6A6A6A] mb-4">
-          There was a problem displaying your program. Try refreshing.
+          We're having trouble displaying your plan. Refreshing may help.
         </p>
         <Button
           onClick={() => window.location.reload()}
@@ -88,7 +88,6 @@ function ProgramDisplayWrapper({
   
   // Wrap in try-catch at render time
   try {
-    console.log('[v0] ProgramDisplayWrapper: Rendering AdaptiveProgramDisplay')
     return (
       <AdaptiveProgramDisplay
         program={program}
@@ -98,7 +97,7 @@ function ProgramDisplayWrapper({
       />
     )
   } catch (err) {
-    console.error('[v0] ProgramDisplayWrapper: Render error:', err)
+    console.error('[ProgramPage] ProgramDisplayWrapper: Render error:', err)
     setHasRenderError(true)
     onRecoveryNeeded()
     return null
@@ -242,42 +241,26 @@ export default function ProgramPage() {
         setLoadStage('loading-program-state')
         let loadedProgram: AdaptiveProgram | null = null
         try {
-          console.log('[v0] Stage 7: Calling getProgramState()')
           const programState = stateMod.getProgramState()
-          
-          console.log('[v0] Stage 7: Program state loaded:', {
-            hasUsableWorkoutProgram: programState.hasUsableWorkoutProgram,
-            adaptiveProgramExists: !!programState.adaptiveProgram,
-            sessionCount: programState.sessionCount,
-          })
           
           // TASK 2: Stage 8 - Normalize and validate program for display
           setLoadStage('normalizing-program')
           if (programState.hasUsableWorkoutProgram && programState.adaptiveProgram) {
-            console.log('[v0] Stage 8: Normalizing program for display')
             const normalizedProgram = stateMod.normalizeProgramForDisplay(programState.adaptiveProgram)
             
             // TASK 2: Display-sanity gate - verify all critical display fields
             // This prevents crashes in AdaptiveProgramDisplay when program is malformed
-            console.log('[v0] Stage 8: Running display-sanity check')
             const displayCheck = 'isProgramDisplaySafe' in stateMod && stateMod.isProgramDisplaySafe
               ? stateMod.isProgramDisplaySafe(normalizedProgram)
               : { safe: stateMod.isRenderableProgram(normalizedProgram), reason: undefined }
             
             if (displayCheck.safe) {
-              // Log summary for diagnostics
-              console.log('[v0] Stage 8: Program display-safe:', {
-                goalLabel: normalizedProgram?.goalLabel,
-                sessionCount: normalizedProgram?.sessions?.length,
-                createdAt: normalizedProgram?.createdAt,
-              })
               loadedProgram = normalizedProgram
               setProgram(normalizedProgram)
               setShowBuilder(false)
               setLoadStage('program-ready')
             } else {
               // TASK 2: Program exists but fails display sanity - show recovery state, not fatal error
-              console.log('[v0] Stage 8: Program fails display-sanity:', displayCheck.reason || 'unknown')
               setLoadStage(`program-malformed:${displayCheck.reason || 'unknown'}`)
               // Keep program reference so we can show "Program Needs Refresh" state
               setProgram(normalizedProgram)
@@ -285,12 +268,11 @@ export default function ProgramPage() {
             }
           } else {
             // No usable program - show builder
-            console.log('[v0] Stage 7: No usable program - showing builder')
             setLoadStage('no-program')
             setShowBuilder(true)
           }
         } catch (err) {
-          console.error('[v0] Stage 7: Error loading current program:', err)
+          console.error('[ProgramPage] Stage 7: Error loading current program:', err)
           setLoadStage('program-load-error')
           setShowBuilder(true)
         }
@@ -427,16 +409,16 @@ export default function ProgramPage() {
           console.error('[session-assembly] Save was blocked due to invalid session structure - preserving last good program')
         }
         
-        // ISSUE B: User-friendly message that doesn't expose internals
+        // [trust-polish] ISSUE B: Product-grade error messages instead of technical ones
         const userMessage = errorCode === 'profile_validation_failed'
-          ? 'Profile incomplete. Please ensure your training profile is complete.'
+          ? 'Complete your training profile to create a personalized plan.'
           : errorCode === 'structure_selection_failed'
-          ? 'Unable to determine optimal structure. Please try adjusting your settings.'
+          ? 'Unable to create a plan with those settings. Try adjusting your schedule or goals.'
           : errorCode === 'session_assembly_failed'
-          ? 'Session assembly encountered an issue. Please try again.'
+          ? 'Unable to build your plan. Please try again.'
           : isSaveBlocked
-          ? 'Generated program had structural issues. Please try again.'
-          : `Program generation failed at ${errorStage}. Please try again.`
+          ? 'Unable to save your plan. Please try again.'
+          : 'Unable to create your plan. Please try again.'
         
         setGenerationError(userMessage)
         // Keep builder visible and inputs intact for retry

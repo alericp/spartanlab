@@ -125,6 +125,20 @@ export function SpartanScoreCard({ score }: SpartanScoreCardProps) {
               <span>{score.decayInfo.message}</span>
             </div>
           )}
+          
+          {/* [trust-polish] ISSUE C: Improved baseline vs earned messaging */}
+          {score.baselineVsEarned?.hasBaselineOnly && (
+            <div className="mt-3 flex items-center gap-2 text-xs text-blue-400">
+              <Target className="w-3.5 h-3.5" />
+              <span>Starting point based on your profile. Train to improve your score.</span>
+            </div>
+          )}
+          {score.baselineVsEarned?.hasEarnedProgress && score.baselineVsEarned.earnedWorkoutCount > 0 && (
+            <div className="mt-3 flex items-center gap-2 text-xs text-emerald-400">
+              <TrendingUp className="w-3.5 h-3.5" />
+              <span>Includes {score.baselineVsEarned.earnedWorkoutCount} logged workout{score.baselineVsEarned.earnedWorkoutCount > 1 ? 's' : ''}</span>
+            </div>
+          )}
         </div>
 
         {/* Score breakdown - Primary metrics */}

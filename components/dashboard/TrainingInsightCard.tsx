@@ -122,7 +122,7 @@ export function TrainingInsightCard({ insight }: TrainingInsightCardProps) {
   )
 }
 
-// Empty state version
+// [trust-polish] ISSUE D: Friendlier empty state
 export function TrainingInsightEmptyState() {
   return (
     <Card className="bg-[#1A1F26] border-[#2B313A] p-5 sm:p-6">
@@ -135,12 +135,12 @@ export function TrainingInsightEmptyState() {
             Training Insight
           </p>
           <h3 className="font-semibold text-[#6B7280]">
-            Awaiting Data
+            Getting to Know You
           </h3>
         </div>
       </div>
       <p className="text-sm text-[#6B7280]">
-        Log strength records, skill sessions, and workouts to unlock personalized constraint analysis.
+        Log a few workouts to unlock personalized training insights.
       </p>
     </Card>
   )

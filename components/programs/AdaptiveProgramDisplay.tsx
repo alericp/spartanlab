@@ -52,13 +52,7 @@ export function AdaptiveProgramDisplay({
   // TASK 2: Confirmation modal state for restart action
   const [showRestartConfirm, setShowRestartConfirm] = useState(false)
   
-  // TASK 5: Log program display with schedule/duration identity
-  console.log('[program-display] TASK 5: Rendered program with schedule identity:', {
-    scheduleMode: program.scheduleMode,
-    weeklyFrequency: program.weeklyFrequency,
-    sessionDurationMode: program.sessionDurationMode,
-    sessionLength: program.sessionLength,
-  })
+  // [trust-polish] Suppressed dev logging - TASK 5 marker removed
   
   // TASK 6: Check if program is stale relative to current profile
   const stalenessCheck = checkProgramStaleness(program.profileSnapshot as ProfileSnapshot | undefined)
@@ -305,7 +299,7 @@ export function AdaptiveProgramDisplay({
           </div>
         )}
         
-        {/* Adaptive Coach Messages - PHASE 2: Uses safe accessor */}
+        {/* [trust-polish] ISSUE D: Simpler coaching label */}
         {trainingBehaviorAnalysis?.adaptationNeeded && 
          Array.isArray(trainingBehaviorAnalysis.coachMessages) && 
          trainingBehaviorAnalysis.coachMessages.length > 0 && (
@@ -318,7 +312,7 @@ export function AdaptiveProgramDisplay({
               ) : (
                 <Minus className="w-4 h-4 text-blue-400" />
               )}
-              <span className="text-xs font-medium text-[#E63946]">Adaptive Coaching</span>
+              <span className="text-xs font-medium text-[#E63946]">Coaching Notes</span>
             </div>
             <ul className="space-y-1">
               {trainingBehaviorAnalysis.coachMessages.map((msg, idx) => (
@@ -387,12 +381,12 @@ export function AdaptiveProgramDisplay({
         </Card>
       </div>
 
-      {/* Engine Context (if available) - PHASE 2: Uses safe accessor */}
+      {/* [trust-polish] ISSUE D: Cleaner label for engine context */}
       {engineContext && (
         <Card className="bg-gradient-to-r from-[#2A2A2A] to-[#1A1A1A] border-[#3A3A3A] p-4">
           <div className="flex items-center gap-2 mb-3">
             <Brain className="w-4 h-4 text-[#C41E3A]" />
-            <span className="text-sm font-medium">Training Intelligence Context</span>
+            <span className="text-sm font-medium">Training Status</span>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div className="bg-[#1A1A1A] rounded-lg p-2">
@@ -440,7 +434,7 @@ export function AdaptiveProgramDisplay({
         </Card>
       )}
 
-      {/* Equipment Notes - PHASE 2: Uses safe accessor */}
+      {/* [trust-polish] ISSUE A: Equipment notes with product-grade language */}
       {equipmentProfile && !equipmentProfile.hasFullSetup && 
        Array.isArray(equipmentProfile.adaptationNotes) && 
        equipmentProfile.adaptationNotes.length > 0 && (
@@ -448,7 +442,7 @@ export function AdaptiveProgramDisplay({
           <div className="flex items-start gap-3">
             <Info className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
             <div>
-              <p className="text-sm font-medium text-amber-500">Equipment Adaptations Applied</p>
+              <p className="text-sm font-medium text-amber-500">Adjusted for Your Equipment</p>
               <ul className="text-xs text-amber-500/70 mt-1 space-y-1">
                 {equipmentProfile.adaptationNotes.map((note, idx) => (
                   <li key={idx}>{note}</li>

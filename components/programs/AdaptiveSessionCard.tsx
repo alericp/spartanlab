@@ -370,18 +370,21 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
     </div>
   )}
   
-  {/* Adaptation Notes */}
-  {session.adaptationNotes && session.adaptationNotes.length > 0 && (
-  <div className="p-3 bg-amber-500/10 rounded-lg border border-amber-500/20">
-  <div className="flex items-start gap-2">
-  <AlertCircle className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
-  <div className="text-sm">
-  {session.adaptationNotes.map((note, idx) => (
-  <p key={idx} className="text-amber-500/80">{note}</p>
-  ))}
-  </div>
-  </div>
-  </div>
+          {/* Adaptation Notes */}
+          {session.adaptationNotes && session.adaptationNotes.length > 0 && (
+          <div className="p-3 bg-amber-500/10 rounded-lg border border-amber-500/20">
+          <div className="flex items-start gap-2">
+          <AlertCircle className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
+          <div className="text-sm">
+          {session.adaptationNotes
+            // [trust-polish] ISSUE A: Filter out internal adjustment notes
+            .filter(note => !note.toLowerCase().includes('removed') && !note.toLowerCase().includes('compression'))
+            .map((note, idx) => (
+            <p key={idx} className="text-amber-500/80">{note}</p>
+            ))}
+          </div>
+          </div>
+          </div>
           )}
 
           {/* Time Variants */}

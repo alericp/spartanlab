@@ -227,7 +227,41 @@ export function validateProgramStructure(
         )
       }
     }
+    
+    // [session-assembly] ISSUE D: Validate each session has required structure
+    // Check that exercises have valid sets (positive integers)
+    for (const ex of exercises) {
+      if (typeof ex.sets !== 'number' || ex.sets <= 0) {
+        result.orderingIssues.push(
+          `Session ${sessionIndex + 1}: Exercise "${ex.name || ex.exercise?.name || 'unknown'}" has invalid sets: ${ex.sets}`
+        )
+      }
+      // Check for missing rep/hold schema
+      if (!ex.reps && !ex.time && !ex.hold && !ex.repsOrTime) {
+        result.orderingIssues.push(
+          `Session ${sessionIndex + 1}: Exercise "${ex.name || ex.exercise?.name || 'unknown'}" missing reps/hold/time`
+        )
+      }
+    }
+    
+    // [session-assembly] Check for empty session (exercises array is empty)
+    if (exercises.length === 0) {
+      result.emptyBlocks.push({
+        sessionIndex,
+        blockName: 'main_exercises',
+      })
+      console.warn('[session-assembly] Empty exercise array in session:', sessionIndex + 1)
+    }
   })
+  
+  // [session-assembly] Log validation results
+  if (result.orderingIssues.length > 0 || result.emptyBlocks.length > 0) {
+    console.log('[session-assembly] Structure validation issues:', {
+      orderingIssues: result.orderingIssues.length,
+      emptyBlocks: result.emptyBlocks.length,
+      duplicateExercises: result.duplicateExercises.length,
+    })
+  }
   
   return result
 }

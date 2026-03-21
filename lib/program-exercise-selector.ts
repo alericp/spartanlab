@@ -376,6 +376,24 @@ export function selectExercisesForSession(inputs: ExerciseSelectionInputs): Exer
     prerequisiteContext
   )
   
+  // [session-assembly] ISSUE C: Validate main exercises before proceeding
+  if (main.length === 0) {
+    console.error('[session-assembly] CRITICAL: selectMainExercises returned empty array', {
+      dayFocus: day.focus,
+      primaryGoal,
+      experienceLevel,
+      sessionMinutes,
+    })
+    // Don't throw here - let the session assembly validation catch it
+    // But log extensively for diagnosis
+  }
+  
+  console.log('[session-assembly] Main exercise selection complete:', {
+    exerciseCount: main.length,
+    dayFocus: day.focus,
+    primaryGoal,
+  })
+  
   // Generate intelligent warmup based on main exercises
   const warmup = selectIntelligentWarmup(
     main,
@@ -1125,6 +1143,25 @@ function selectMainExercises(
   const deduplicatedSelected = dedupeSelectedExercises(selected)
   if (deduplicatedSelected.length !== selected.length) {
     console.log('[exercise-selector] TASK 6: Removed', selected.length - deduplicatedSelected.length, 'duplicate exercises')
+  }
+  
+  // [session-assembly] ISSUE C: Log warning if exercise pool is too thin
+  if (deduplicatedSelected.length === 0) {
+    console.warn('[session-assembly] WARNING: selectMainExercises returned 0 exercises', {
+      dayFocus: day.focus,
+      primaryGoal,
+      availableSkillsCount: availableSkills.length,
+      availableStrengthCount: availableStrength.length,
+      goalExercisesCount: goalExercises.length,
+      maxExercises,
+    })
+  } else if (deduplicatedSelected.length < Math.min(3, maxExercises)) {
+    console.warn('[session-assembly] WARNING: selectMainExercises returned fewer than expected exercises', {
+      selected: deduplicatedSelected.length,
+      expected: Math.min(3, maxExercises),
+      dayFocus: day.focus,
+      primaryGoal,
+    })
   }
   
   // Sort by neural demand (highest first)

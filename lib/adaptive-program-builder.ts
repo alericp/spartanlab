@@ -1689,9 +1689,34 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
   currentStage = 'session_assembly'
   console.log('[program-generate] STAGE: session_assembly')
   
+  // [session-assembly] Log structure received for assembly
+  console.log('[session-assembly] Weekly structure received:', {
+    structureName: structure.structureName,
+    dayCount: structure.days?.length || 0,
+    dayRoles: structure.days?.map(d => d.focus) || [],
+  })
+  
+  // [session-assembly] Validate structure before assembly
+  if (!structure.days || structure.days.length === 0) {
+    throw new GenerationError(
+      'session_assembly_failed',
+      'session_assembly',
+      'Weekly structure has no days defined',
+      { structureName: structure.structureName, subCode: 'empty_structure_days' }
+    )
+  }
+  
   let sessions: AdaptiveSession[]
   try {
     sessions = structure.days.map((day, index) => {
+    // [session-assembly] Log each day's assembly start
+    console.log('[session-assembly] Assembling day:', {
+      dayNumber: day.dayNumber,
+      focus: day.focus,
+      isPrimary: day.isPrimary,
+      sessionIndex: index,
+    })
+    
     const intent = sessionIntents[index]
     
     // SKILL EXPRESSION FIX: Create per-session context with skill allocation
@@ -1877,20 +1902,121 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
       }
     }
     
+    // [session-assembly] Validate assembled session before returning
+    const exerciseCount = session.exercises?.length || 0
+    const warmupCount = session.warmup?.length || 0
+    
+    console.log('[session-assembly] Session assembled:', {
+      dayNumber: session.dayNumber,
+      exerciseCount,
+      warmupCount,
+      cooldownCount: session.cooldown?.length || 0,
+      hasFinisher: !!session.finisher,
+    })
+    
+    // [session-assembly] ISSUE D: Validate session has valid exercise structure
+    if (exerciseCount === 0) {
+      console.warn('[session-assembly] WARNING: Session assembled with 0 exercises', {
+        dayNumber: session.dayNumber,
+        focus: session.focus,
+      })
+      // Don't throw - let final validation catch it, but log for diagnosis
+    }
+    
+    // Validate each exercise has required fields
+    for (let i = 0; i < (session.exercises?.length || 0); i++) {
+      const ex = session.exercises?.[i]
+      if (!ex?.name || typeof ex?.sets !== 'number' || ex.sets <= 0) {
+        console.warn('[session-assembly] WARNING: Exercise missing required fields', {
+          exerciseIndex: i,
+          name: ex?.name,
+          sets: ex?.sets,
+          dayNumber: session.dayNumber,
+        })
+      }
+    }
+    
     return session
   })
   } catch (err) {
     // ISSUE A: If error is already a GenerationError, re-throw as-is
     if (err instanceof GenerationError) throw err
+    
+    // [session-assembly] Sub-classify assembly failures for better diagnosis
+    const errorMessage = err instanceof Error ? err.message : 'Failed to assemble sessions'
+    let subCode = 'assembly_unknown_failure'
+    
+    if (errorMessage.includes('exercise_selection_returned_null')) {
+      subCode = 'empty_exercise_pool'
+    } else if (errorMessage.includes('warmup') || errorMessage.includes('Warmup')) {
+      subCode = 'invalid_warmup_block'
+    } else if (errorMessage.includes('cooldown') || errorMessage.includes('Cooldown')) {
+      subCode = 'invalid_cooldown_block'
+    } else if (errorMessage.includes('main') || errorMessage.includes('exercise')) {
+      subCode = 'invalid_main_block'
+    } else if (errorMessage.includes('validation')) {
+      subCode = 'session_validation_failed'
+    }
+    
+    console.error('[session-assembly] FAILURE:', {
+      subCode,
+      errorMessage,
+      structureName: structure?.structureName,
+      dayCount: structure?.days?.length,
+      currentStage,
+    })
+    
     throw new GenerationError(
       'session_assembly_failed',
       currentStage,
-      err instanceof Error ? err.message : 'Failed to assemble sessions',
-      { structureName: structure.structureName, dayCount: structure.days?.length }
+      errorMessage,
+      { 
+        structureName: structure?.structureName, 
+        dayCount: structure?.days?.length,
+        subCode, // Include sub-classification for diagnosis
+      }
     )
   }
   
   console.log('[program-generate] Sessions assembled:', sessions.length)
+  
+  // [session-assembly] ISSUE D: Final validation of assembled sessions array
+  const sessionExerciseCounts = sessions.map(s => s.exercises?.length || 0)
+  const emptySessions = sessions.filter(s => !s.exercises || s.exercises.length === 0)
+  
+  console.log('[session-assembly] Final session validation:', {
+    totalSessions: sessions.length,
+    expectedSessions: structure.days?.length || 0,
+    exerciseCountsPerSession: sessionExerciseCounts,
+    emptySessionCount: emptySessions.length,
+  })
+  
+  // [session-assembly] Throw if we have critically empty sessions
+  if (emptySessions.length > 0) {
+    console.error('[session-assembly] CRITICAL: Some sessions have no exercises', {
+      emptyDays: emptySessions.map(s => s.dayNumber),
+    })
+    throw new GenerationError(
+      'session_assembly_failed',
+      'session_assembly',
+      `${emptySessions.length} session(s) have no exercises`,
+      { subCode: 'empty_final_session_array', emptyDays: emptySessions.map(s => s.dayNumber) }
+    )
+  }
+  
+  // [session-assembly] Throw if session count doesn't match structure
+  if (sessions.length !== (structure.days?.length || 0)) {
+    console.error('[session-assembly] CRITICAL: Session count mismatch', {
+      assembled: sessions.length,
+      expected: structure.days?.length,
+    })
+    throw new GenerationError(
+      'session_assembly_failed',
+      'session_assembly',
+      `Session count mismatch: assembled ${sessions.length}, expected ${structure.days?.length}`,
+      { subCode: 'session_count_mismatch' }
+    )
+  }
   
   // Calculate variety score (0-1, higher = more varied)
   const varietyScore = calculateVarietyScore(sessionIntents)
@@ -3152,12 +3278,25 @@ function generateAdaptiveSession(
   })
   
   // Select exercises
+  // [session-assembly] Convert sessionLength to number for exercise selection
+  const sessionMinutesResolved = typeof sessionLength === 'number' 
+    ? sessionLength 
+    : parseInt(String(sessionLength).split('-')[0]) || 60
+    
+  console.log('[session-assembly] Exercise selection starting:', {
+    dayFocus: day.focus,
+    dayNumber: day.dayNumber,
+    sessionMinutes: sessionMinutesResolved,
+    selectedSkillsCount: selectedSkills?.length || 0,
+    skillsForSessionCount: skillsForThisSession?.length || 0,
+  })
+  
   const selection = selectExercisesForSession({
     day,
     primaryGoal,
     experienceLevel,
     equipment,
-    sessionMinutes: sessionLength,
+    sessionMinutes: sessionMinutesResolved, // FIXED: Pass resolved number, not SessionLength type
     constraintType,
     // WEIGHTED LOAD PR: Pass weighted benchmarks for load prescription
     weightedBenchmarks,
@@ -3166,10 +3305,34 @@ function generateAdaptiveSession(
     skillsForSession: skillsForThisSession,
   })
   
+  // [session-assembly] Validate selection result before proceeding
+  if (!selection) {
+    console.error('[session-assembly] CRITICAL: selectExercisesForSession returned null/undefined')
+    throw new Error('exercise_selection_returned_null')
+  }
+  
   // Adapt for equipment - use safe fallbacks if selection properties are missing
   const safeMain = Array.isArray(selection?.main) ? selection.main : []
   const safeWarmup = Array.isArray(selection?.warmup) ? selection.warmup : []
   const safeCooldown = Array.isArray(selection?.cooldown) ? selection.cooldown : []
+  
+  // [session-assembly] Log exercise counts for debugging
+  console.log('[session-assembly] Exercise selection complete:', {
+    mainCount: safeMain.length,
+    warmupCount: safeWarmup.length,
+    cooldownCount: safeCooldown.length,
+    estimatedTime: selection.totalEstimatedTime,
+  })
+  
+  // [session-assembly] Validate we have at least some exercises
+  if (safeMain.length === 0) {
+    console.warn('[session-assembly] WARNING: Empty main exercise pool for day', {
+      dayFocus: day.focus,
+      dayNumber: day.dayNumber,
+      primaryGoal,
+    })
+    // Don't throw - let validation handle it downstream, but log for diagnosis
+  }
   
   const adaptedMain = adaptSessionForEquipment(safeMain, equipment)
   const adaptedWarmup = adaptSessionForEquipment(safeWarmup, equipment)
@@ -3194,13 +3357,14 @@ function generateAdaptiveSession(
     const mainWorkMinutes = selection.totalEstimatedTime - 10 // Subtract warmup/cooldown estimate
     const sessionTimeFit = fitEnduranceToSession(sessionLength, mainWorkMinutes)
     
-    // SAFETY: Ensure selection.exercises is a valid array before calling .some()
-    const safeSelectionExercises = Array.isArray(selection?.exercises) ? selection.exercises : []
+    // [session-assembly] FIX: Use selection.main (not selection.exercises which doesn't exist)
+    // ExerciseSelection interface has: { warmup, main, cooldown, totalEstimatedTime }
+    const safeSelectionMain = Array.isArray(selection?.main) ? selection.main : []
     
-    // Calculate session neural demand
-    const sessionNeuralDemand = safeSelectionExercises.some(e => e?.exercise?.neuralDemand >= 4) 
+    // Calculate session neural demand from main exercises
+    const sessionNeuralDemand = safeSelectionMain.some(e => e?.exercise?.neuralDemand >= 4) 
       ? 'high' as const
-      : safeSelectionExercises.some(e => e?.exercise?.neuralDemand >= 3)
+      : safeSelectionMain.some(e => e?.exercise?.neuralDemand >= 3)
         ? 'moderate' as const
         : 'low' as const
 
@@ -3599,6 +3763,44 @@ function isBrowser(): boolean {
 export function saveAdaptiveProgram(program: AdaptiveProgram): AdaptiveProgram {
   if (!isBrowser()) return program
   
+  // [session-assembly] ISSUE D: Pre-save critical validation
+  // Reject programs with fundamentally broken session structure
+  console.log('[session-assembly] Pre-save validation starting...')
+  
+  const sessions = program.sessions || []
+  const criticalIssues: string[] = []
+  
+  // Check 1: Must have at least one session
+  if (sessions.length === 0) {
+    criticalIssues.push('empty_session_array')
+  }
+  
+  // Check 2: Each session must have exercises
+  sessions.forEach((session, idx) => {
+    if (!session.exercises || session.exercises.length === 0) {
+      criticalIssues.push(`session_${idx + 1}_no_exercises`)
+    }
+    
+    // Check 3: Each exercise must have valid sets
+    const exercises = session.exercises || []
+    exercises.forEach((ex, exIdx) => {
+      if (typeof ex.sets !== 'number' || ex.sets <= 0) {
+        criticalIssues.push(`session_${idx + 1}_exercise_${exIdx + 1}_invalid_sets`)
+      }
+    })
+  })
+  
+  // [session-assembly] ISSUE F: If critical issues found, DO NOT save - preserve last good program
+  if (criticalIssues.length > 0) {
+    console.error('[session-assembly] CRITICAL: Program has invalid structure, blocking save:', {
+      issues: criticalIssues,
+      sessionCount: sessions.length,
+    })
+    // Return the program object without saving - calling code can handle the rejection
+    // This preserves the last good program in storage
+    throw new Error(`session_save_blocked: ${criticalIssues.join(', ')}`)
+  }
+  
   // DATABASE ENFORCEMENT: Validate program before save
   console.log('[program-generate] Validating program before save...')
   const validation = validateProgramFromDatabase(program)
@@ -3621,7 +3823,7 @@ export function saveAdaptiveProgram(program: AdaptiveProgram): AdaptiveProgram {
   programs.push(program)
   localStorage.setItem(STORAGE_KEY, JSON.stringify(programs))
   
-  console.log('[program-generate] Program saved successfully')
+  console.log('[session-assembly] Program saved successfully')
   return program
 }
 

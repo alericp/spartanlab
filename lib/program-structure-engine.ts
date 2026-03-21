@@ -22,12 +22,17 @@ export type DayFocus =
   | 'support_recovery'
   | 'transition_work'
   | 'flexibility_focus'
+  // ISSUE C FIX: New skill-identity-aware focus types
+  | 'vertical_push_skill'   // For HSPU dedicated sessions
+  | 'mixed_skill'           // For secondary skill expression
 
 export interface WeeklyStructure {
   structureType: StructureType
   structureName: string
   days: DayStructure[]
   rationale: string
+  // ISSUE C FIX: Track which selected skills got structure expression
+  selectedSkillsExpressed?: string[]
 }
 
 export interface DayStructure {
@@ -37,6 +42,9 @@ export interface DayStructure {
   isPrimary: boolean // True if this is a key session for the goal
   movementEmphasis: 'push' | 'pull' | 'mixed'
   targetIntensity: 'high' | 'moderate' | 'low'
+  // ISSUE D FIX: Skill identity tags for exercise selection
+  skillIdentity?: string            // Primary skill this day is dedicated to (e.g., 'handstand_pushup')
+  secondarySkillIdentities?: string[] // Secondary skills to express on mixed days
 }
 
 interface StructureInputs {
@@ -389,10 +397,56 @@ function buildFourDayStructure(
   })
   
   if (isHybridPath || hasMultipleSkills) {
+    // ISSUE C FIX: Build skill-identity-aware day structure
+    // Determine if we need a dedicated vertical push (HSPU) slot
+    const needsVerticalPushSlot = hasHSPU && !isPushGoal // HSPU selected but not primary
+    const needsBackLeverSlot = hasBackLever && !isPullGoal // Back lever selected but not primary
+    const needsLSitSlot = hasLSit
+    const needsMuscleUpSlot = hasMuscleUp && !isPullGoal
+    
+    // Build secondary skill label for rationale
+    const secondarySkillLabels: string[] = []
+    if (needsVerticalPushSlot) secondarySkillLabels.push('HSPU')
+    if (needsBackLeverSlot) secondarySkillLabels.push('Back Lever')
+    if (needsLSitSlot) secondarySkillLabels.push('L-Sit')
+    if (needsMuscleUpSlot) secondarySkillLabels.push('Muscle-Up')
+    
+    // ISSUE C FIX: Log skill-aware structure decision
+    console.log('[structure-engine] ISSUE C FIX: Skill-identity-aware hybrid structure:', {
+      needsVerticalPushSlot,
+      needsBackLeverSlot,
+      needsLSitSlot,
+      needsMuscleUpSlot,
+      secondarySkillLabels,
+    })
+    
+    // Day 2 focus: If HSPU selected but not primary, dedicate to vertical push
+    // Otherwise use support direction
+    const day2Focus = needsVerticalPushSlot 
+      ? 'vertical_push_skill'
+      : (isPushGoal ? 'pull_strength' : 'push_strength')
+    const day2Label = needsVerticalPushSlot
+      ? 'HSPU / Vertical Push Technical'
+      : `${supportLabel} Strength + Accessories`
+    const day2Movement = needsVerticalPushSlot ? 'push' : (isPushGoal ? 'pull' : 'push')
+    
+    // Day 4 focus: Mixed skills with specific skill expression if selected
+    const day4HasSecondarySkills = secondarySkillLabels.length > 0 || hasFlexibilitySkills
+    const day4Focus = inputs.hasFlexibilityTargets 
+      ? 'flexibility_focus' 
+      : (day4HasSecondarySkills ? 'mixed_skill' : 'mixed_upper')
+    const day4Label = inputs.hasFlexibilityTargets 
+      ? 'Mixed + Flexibility' 
+      : (day4HasSecondarySkills 
+          ? `Mixed Skills (${secondarySkillLabels.slice(0, 2).join(', ') || 'Secondary'})` 
+          : 'Mixed Skills + Density')
+    
     // Hybrid structure: More balanced skill + strength + support mix
     return {
       structureType: 'push_pull_skill',
       structureName: `Hybrid ${skillLabel} Focus`,
+      // ISSUE C FIX: Include selected skill identities in structure metadata
+      selectedSkillsExpressed: secondarySkillLabels,
       days: [
         {
           dayNumber: 1,
@@ -404,12 +458,14 @@ function buildFourDayStructure(
         },
         {
           dayNumber: 2,
-          // TASK 3: Hybrid day 2 = strength-focused with accessory support
-          focus: isPushGoal ? 'pull_strength' : 'push_strength',
-          focusLabel: `${supportLabel} Strength + Accessories`,
-          isPrimary: false,
-          movementEmphasis: isPushGoal ? 'pull' : 'push',
-          targetIntensity: 'moderate',
+          // ISSUE C FIX: Skill-identity-aware day 2
+          focus: day2Focus,
+          focusLabel: day2Label,
+          isPrimary: needsVerticalPushSlot, // Promote to primary if HSPU dedicated
+          movementEmphasis: day2Movement as 'push' | 'pull' | 'mixed',
+          targetIntensity: needsVerticalPushSlot ? 'high' : 'moderate',
+          // ISSUE D FIX: Tag day with skill identity if dedicated
+          skillIdentity: needsVerticalPushSlot ? 'handstand_pushup' : undefined,
         },
         {
           dayNumber: 3,
@@ -421,15 +477,19 @@ function buildFourDayStructure(
         },
         {
           dayNumber: 4,
-          // TASK 3: Hybrid day 4 = mixed skills + flexibility if targets exist
-          focus: inputs.hasFlexibilityTargets ? 'flexibility_focus' : 'mixed_upper',
-          focusLabel: inputs.hasFlexibilityTargets ? 'Mixed + Flexibility' : 'Mixed Skills + Density',
+          // ISSUE C FIX: Skill-identity-aware day 4
+          focus: day4Focus,
+          focusLabel: day4Label,
           isPrimary: false,
           movementEmphasis: 'mixed',
           targetIntensity: 'moderate',
+          // ISSUE D FIX: Tag with secondary skill identities for exercise selection
+          secondarySkillIdentities: secondarySkillLabels.length > 0 ? selectedSkills.filter(s => 
+            s !== inputs.primaryGoal && ['handstand_pushup', 'hspu', 'back_lever', 'l_sit', 'v_sit', 'muscle_up'].includes(s)
+          ) : undefined,
         },
       ],
-      rationale: `Hybrid training: ${skillLabel} skill as primary focus, balanced strength support across push/pull, accessory hypertrophy work, and mixed session for skill density${inputs.hasFlexibilityTargets ? ' with flexibility targets' : ''}.`,
+      rationale: `Hybrid training: ${skillLabel} skill as primary focus${secondarySkillLabels.length > 0 ? `, with dedicated ${secondarySkillLabels.join('/')} expression` : ''}, balanced strength support across push/pull, and mixed session for skill density${inputs.hasFlexibilityTargets ? ' with flexibility targets' : ''}.`,
     }
   }
   

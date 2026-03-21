@@ -562,6 +562,21 @@ function ExerciseRow({
   const safeSets = exercise.sets ?? 3
   const safeReps = exercise.repsOrTime || '8-12'
   
+  // [weighted-truth] TASK G: Log weighted exercises at display time
+  if (exercise.prescribedLoad?.load) {
+    console.log('[weighted-truth] Displaying weighted load:', {
+      exerciseName: safeName,
+      load: exercise.prescribedLoad.load,
+      unit: exercise.prescribedLoad.unit,
+      confidence: exercise.prescribedLoad.confidenceLevel,
+    })
+  } else if (exercise.noLoadReason) {
+    console.log('[weighted-truth] No load for exercise:', {
+      exerciseName: safeName,
+      reason: exercise.noLoadReason,
+    })
+  }
+  
   const hasRPE = !isWarmupCooldown && exerciseSupportsRPE(safeName)
   const exerciseId = safeName.toLowerCase().replace(/[\s-]+/g, '_')
   const hasKnowledge = hasExerciseKnowledge(exerciseId)
@@ -645,12 +660,25 @@ function ExerciseRow({
           <div className="text-right">
             <p className="text-sm text-[#A5A5A5]">
               {safeSets} x {safeReps}
-              {/* WEIGHTED LOAD PR: Display prescribed load for weighted exercises */}
-              {exercise.prescribedLoad && exercise.prescribedLoad.load > 0 && (
-                <span className="text-[#E63946] font-medium">
-                  {' @ '}+{exercise.prescribedLoad.load} {exercise.prescribedLoad.unit}
-                </span>
-              )}
+            {/* WEIGHTED LOAD PR: Display prescribed load for weighted exercises */}
+            {exercise.prescribedLoad && exercise.prescribedLoad.load > 0 && (
+              <span className="text-[#E63946] font-medium">
+                {' @ '}+{exercise.prescribedLoad.load} {exercise.prescribedLoad.unit}
+              </span>
+            )}
+            {/* [weighted-truth] TASK F & G: Log when weighted exercise has no load reason */}
+            {!exercise.prescribedLoad && exercise.noLoadReason && (
+              <span className="text-[#6A6A6A] text-xs">
+                {' ('}
+                {exercise.noLoadReason === 'no_loadable_equipment' && 'no equipment'}
+                {exercise.noLoadReason === 'missing_strength_inputs' && 'no strength data'}
+                {exercise.noLoadReason === 'exercise_not_load_eligible' && 'bodyweight focus'}
+                {exercise.noLoadReason === 'doctrine_prefers_bodyweight' && 'bodyweight preferred'}
+                {exercise.noLoadReason === 'skill_day_non_loaded_variant' && 'skill focus'}
+                {exercise.noLoadReason === 'support_day_volume_bias' && 'support day'}
+                {')'}
+              </span>
+            )}
             </p>
             {/* Show confidence indicator for weighted load */}
             {exercise.prescribedLoad && exercise.prescribedLoad.load > 0 && exercise.prescribedLoad.confidenceLevel !== 'high' && (

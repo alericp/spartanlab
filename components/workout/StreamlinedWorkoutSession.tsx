@@ -484,6 +484,18 @@ export function StreamlinedWorkoutSession({
     prescribedLoad: currentExercise?.prescribedLoad,
   }), [currentExercise])
   
+  // [weighted-truth] TASK H: Log workout session loading with prescribed load
+  useEffect(() => {
+    if (safeCurrentExercise.prescribedLoad?.load) {
+      console.log('[weighted-truth] Workout session loaded with prescribed load:', {
+        exerciseName: safeCurrentExercise.name,
+        load: safeCurrentExercise.prescribedLoad.load,
+        unit: safeCurrentExercise.prescribedLoad.unit,
+        confidence: safeCurrentExercise.prescribedLoad.confidenceLevel,
+      })
+    }
+  }, [safeCurrentExercise])
+  
   // Repair index if out of bounds (happens on next render cycle)
   useEffect(() => {
     if (isIndexOutOfBounds && hasValidExercises) {
@@ -1745,14 +1757,30 @@ export function StreamlinedWorkoutSession({
                 @ +{currentExercise.prescribedLoad.load} {currentExercise.prescribedLoad.unit}
               </span>
             ) : (
-              // Check if this is a weighted exercise type without load
+              // [prescription-render] STEP 4: Check if this is a weighted exercise type without load
               (() => {
                 const isWeightedType = currentExercise.id?.includes('weighted_') || 
                                        currentExercise.name?.toLowerCase().includes('weighted')
                 const isSkillHold = currentExercise.category === 'skill' || 
                                     currentExercise.repsOrTime?.toLowerCase().includes('sec')
+                const noLoadReason = (currentExercise as { noLoadReason?: string }).noLoadReason
                 
+                // [prescription-render] Log why load isn't shown for weighted-capable exercises
                 if (isWeightedType) {
+                  console.log('[prescription-render] Weighted exercise without load:', {
+                    exerciseName: currentExercise.name,
+                    reason: noLoadReason || 'no_reason_recorded',
+                  })
+                }
+                
+                if (isWeightedType && noLoadReason) {
+                  // Show specific reason for missing load
+                  const reasonText = noLoadReason === 'no_loadable_equipment' ? 'No weights' :
+                                     noLoadReason === 'missing_strength_inputs' ? 'No data' :
+                                     noLoadReason === 'doctrine_prefers_bodyweight' ? 'BW focus' :
+                                     'BW'
+                  return <span className="text-[#6B7280] text-xs">({reasonText})</span>
+                } else if (isWeightedType) {
                   // Weighted exercise type but no load prescribed
                   return <span className="text-[#6B7280] text-xs">(Bodyweight)</span>
                 } else if (isSkillHold) {

@@ -92,6 +92,17 @@ export function AdaptiveProgramDisplay({
     ? program.sessions.filter(s => s && typeof s === 'object' && Array.isArray(s.exercises))
     : []
   
+  // [displayed-adjustment-truth] STEP 3: Log what values are being displayed
+  // This helps verify that rebuild actually replaced the program snapshot
+  console.log('[displayed-adjustment-truth] Rendering program display:', {
+    programId: program.id,
+    createdAt: program.createdAt,
+    scheduleMode: program.scheduleMode,
+    trainingDaysPerWeek: program.trainingDaysPerWeek,
+    displayedSessionCount: validSessions.length,
+    currentWeekFrequency: (program as { currentWeekFrequency?: number }).currentWeekFrequency,
+  })
+  
   // Diagnostic: Log if we detect partial program data (only once per render)
   if (!program.recoveryLevel || !(program.recoveryLevel in recoveryColors)) {
     console.log('[AdaptiveProgramDisplay] Using fallback for recoveryLevel:', program.recoveryLevel)

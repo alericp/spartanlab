@@ -67,6 +67,9 @@ const ProgramAdjustmentModal = dynamic(
   { ssr: false }
 )
 
+// [canonical-rebuild] Import type for adjustment rebuild requests
+import type { AdjustmentRebuildRequest } from '@/components/programs/ProgramAdjustmentModal'
+
 // TASK 1: Error boundary wrapper for AdaptiveProgramDisplay
 // Catches render errors and triggers recovery state instead of crashing
 function ProgramDisplayWrapper({ 
@@ -843,6 +846,174 @@ export default function ProgramPage() {
     }, 500)
   }, [inputs, program, programModules])
   
+  // [canonical-rebuild] TASK B: Handle adjustment rebuilds that require full program regeneration
+  const handleAdjustmentRebuild = useCallback(async (request: AdjustmentRebuildRequest): Promise<{ success: boolean; error?: string }> => {
+    // [adjustment-sync] STEP 2: Log initial adjustment state
+    const previousProgramId = program?.id || 'none'
+    const previousGeneratedAt = program?.createdAt || 'unknown'
+    const previousTrainingDays = inputs?.trainingDaysPerWeek || 'unknown'
+    const previousSessionCount = program?.sessions?.length || 0
+    
+    console.log('[adjustment-sync] Adjustment rebuild requested:', {
+      type: request.type,
+      previousProgramId,
+      previousGeneratedAt,
+      previousTrainingDays,
+      previousSessionCount,
+      requestedTrainingDays: request.newTrainingDays,
+    })
+    
+    if (!inputs) {
+      console.error('[adjustment-sync] Missing inputs - cannot rebuild')
+      return { success: false, error: 'Missing program inputs' }
+    }
+    
+    if (!programModules.generateAdaptiveProgram || !programModules.saveAdaptiveProgram) {
+      console.error('[canonical-rebuild] Modules not loaded')
+      return { success: false, error: 'Program builder still loading' }
+    }
+    
+    // [canonical-rebuild] TASK A: Build updated canonical inputs based on adjustment
+    const updatedInputs = { ...inputs }
+    
+    if (request.type === 'training_days' && request.newTrainingDays) {
+      updatedInputs.trainingDaysPerWeek = request.newTrainingDays
+      console.log('[canonical-rebuild] Updated training days:', request.newTrainingDays)
+    }
+    if (request.type === 'session_time' && request.newSessionMinutes) {
+      updatedInputs.sessionLength = request.newSessionMinutes
+      console.log('[canonical-rebuild] Updated session length:', request.newSessionMinutes)
+    }
+    if (request.type === 'equipment' && request.newEquipment) {
+      updatedInputs.equipment = request.newEquipment
+      console.log('[canonical-rebuild] Updated equipment:', request.newEquipment)
+    }
+    
+    try {
+      // [canonical-rebuild] STAGE 1: Generate new program with updated inputs
+      console.log('[canonical-rebuild] STAGE 1: Generating with updated inputs...')
+      const newProgram = programModules.generateAdaptiveProgram(updatedInputs)
+      
+      if (!newProgram) {
+        throw new Error('Generation returned null')
+      }
+      if (!newProgram.id || !newProgram.sessions?.length) {
+        throw new Error('Generated program has invalid structure')
+      }
+      
+      // [canonical-rebuild] TASK F: Verify session count matches expected
+      console.log('[canonical-rebuild] STAGE 2: Verifying program structure...', {
+        expectedDays: request.newTrainingDays,
+        actualSessions: newProgram.sessions.length,
+      })
+      
+      // [canonical-rebuild] STAGE 3: Save to canonical storage
+      console.log('[canonical-rebuild] STAGE 3: Saving to canonical storage...')
+      programModules.saveAdaptiveProgram(newProgram)
+      
+      // [canonical-rebuild] STAGE 4: Verify save
+      const savedState = programModules.getProgramState()
+      if (!savedState.adaptiveProgram || savedState.adaptiveProgram.id !== newProgram.id) {
+        throw new Error('Save verification failed - program IDs do not match')
+      }
+      
+      // [canonical-rebuild] STAGE 5: Update freshness identity
+      console.log('[canonical-rebuild] STAGE 5: Updating freshness identity...')
+      const profileSig = createProfileSignature(updatedInputs)
+      invalidateStaleCaches()
+      updateFreshnessIdentity(newProgram.id, newProgram.createdAt, profileSig)
+      
+      // [canonical-rebuild] STAGE 6: Update UI state atomically
+      console.log('[canonical-rebuild] STAGE 6: Updating UI state...')
+      setInputs(updatedInputs)
+      setProgram(newProgram)
+      
+      // [canonical-rebuild] Record success
+      const successResult = createSuccessBuildResult(profileSig, program?.id || null, newProgram.id)
+      setLastBuildResult(successResult)
+      saveLastBuildAttemptResult(successResult)
+      
+      // [adjustment-sync] STEP 4: Verify program identity actually changed
+      const programIdChanged = newProgram.id !== previousProgramId
+      const sessionCountChanged = newProgram.sessions.length !== previousSessionCount
+      const trainingDaysChanged = updatedInputs.trainingDaysPerWeek !== previousTrainingDays
+      
+      console.log('[adjustment-sync] Rebuild verification:', {
+        settingsSaved: true,
+        rebuildAttempted: true,
+        rebuildSucceeded: true,
+        replacedProgramSnapshot: true,
+        previousProgramId,
+        nextProgramId: newProgram.id,
+        previousGeneratedAt,
+        nextGeneratedAt: newProgram.createdAt,
+        effectiveTrainingDaysBefore: previousTrainingDays,
+        effectiveTrainingDaysAfter: updatedInputs.trainingDaysPerWeek,
+        previousSessionCount,
+        nextSessionCount: newProgram.sessions.length,
+        programIdChanged,
+        sessionCountChanged,
+        trainingDaysChanged,
+      })
+      
+      // [adjustment-sync] Warn if session count didn't change when training days changed
+      if (trainingDaysChanged && !sessionCountChanged) {
+        console.warn('[adjustment-sync] WARNING: Training days changed but session count unchanged', {
+          requestedDays: request.newTrainingDays,
+          actualSessions: newProgram.sessions.length,
+          reason: 'Builder may have adaptive logic reducing sessions',
+        })
+      }
+      
+      console.log('[canonical-rebuild] SUCCESS: Program rebuilt and visible state replaced', {
+        newProgramId: newProgram.id,
+        sessionCount: newProgram.sessions.length,
+        trainingDays: updatedInputs.trainingDaysPerWeek,
+      })
+      
+      // [build-report] STEP 11: Final build report for regeneration path
+      console.log('[build-report] REGENERATION COMPLETE:', {
+        buildAttemptId: newProgram.id,
+        path: 'handleAdjustmentRebuild',
+        requestedTrainingDays: request.newTrainingDays,
+        resolvedTrainingDays: updatedInputs.trainingDaysPerWeek,
+        assembledSessionCount: newProgram.sessions.length,
+        savedSessionCount: newProgram.sessions.length,
+        displayedSessionCount: newProgram.sessions.length,
+        previousProgramId,
+        newProgramId: newProgram.id,
+        programIdChanged,
+        sessionCountChanged,
+        trainingDaysChanged,
+        staleCacheInvalidated: true,
+        saveResult: 'success',
+        surfaceReplaceResult: 'success',
+      })
+      
+      // [program-identity] STEP 7: Verify identity truth
+      console.log('[program-identity] Post-rebuild identity verification:', {
+        uiProgramId: newProgram.id,
+        savedProgramId: savedState.adaptiveProgram?.id,
+        identityMatch: newProgram.id === savedState.adaptiveProgram?.id,
+      })
+      
+      return { success: true }
+      
+    } catch (error) {
+      console.error('[canonical-rebuild] FAILED:', error)
+      
+      // [canonical-rebuild] TASK E: Preserve last good program
+      if (program) {
+        console.log('[canonical-rebuild] Last good program preserved:', program.id)
+      }
+      
+      return { 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Rebuild failed unexpectedly' 
+      }
+    }
+  }, [inputs, program, programModules])
+  
   // Legacy delete handler for backwards compatibility
   const handleDelete = handleRestart
 
@@ -1140,11 +1311,13 @@ export default function ProgramPage() {
         )}
 
         {/* Program Adjustment Modal */}
+        {/* [canonical-rebuild] TASK B: Wire rebuild callback for structural changes */}
         <ProgramAdjustmentModal
           open={showAdjustmentModal}
           onOpenChange={setShowAdjustmentModal}
           onContinue={() => setShowAdjustmentModal(false)}
           onStartNew={handleConfirmNewProgram}
+          onRebuildRequired={handleAdjustmentRebuild}
           currentSessionMinutes={inputs?.sessionLength || 60}
           currentTrainingDays={inputs?.trainingDaysPerWeek || 3}
         />

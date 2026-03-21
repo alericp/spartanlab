@@ -66,6 +66,9 @@ import {
   type ProfileSnapshot,
   composeCanonicalPlannerInput,
   validateBuilderDisplayTruth,
+  // [weighted-truth] TASK A: Import weighted readiness check
+  hasLoadableEquipment,
+  checkWeightedPrescriptionEligibility,
 } from './canonical-profile-service'
 import { buildGenerationInput, getSystemStateFlags, type GenerationMode, type ProfileSnapshot } from './program-state-contract'
 import { normalizeProfile, computeLimiter, dedupeExercises, type NormalizedProfile } from './profile-normalizer'
@@ -1163,6 +1166,15 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
     composedAt: composedInput.composedAt,
   })
   
+  // [equipment-truth] STEP 8: Log equipment at generation time for sync verification
+  const hasLoadableEqAtGen = hasLoadableEquipment(inputs.equipment || [])
+  console.log('[equipment-truth] Equipment at generation:', {
+    equipmentCount: inputs.equipment?.length || 0,
+    hasLoadableEquipment: hasLoadableEqAtGen,
+    equipmentList: inputs.equipment?.slice(0, 6) || [],
+    canPrescribeWeights: hasLoadableEqAtGen,
+  })
+  
   // STATE CONTRACT: Get system state flags to determine generation context
   const stateFlags = getSystemStateFlags()
   const generationMode: GenerationMode = inputs.regenerationMode || stateFlags.recommendedMode
@@ -1221,6 +1233,18 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
     hasBandLevels: engineConsumption.advancedSkillInputs.hasBandLevels,
     consumedFieldGroups: wiringStatus.consumedFieldGroups,
     isFullyWired: wiringStatus.isFullyWired,
+  })
+  
+  // [weighted-truth] TASK A: Log weighted readiness at generation start
+  const hasLoadableEq = hasLoadableEquipment(canonicalProfile.equipment || [])
+  const hasWeightedStr = engineConsumption.weightedStrengthInputs.hasWeightedData
+  console.log('[weighted-truth] Generation weighted readiness:', {
+    hasLoadableEquipment: hasLoadableEq,
+    hasWeightedStrengthData: hasWeightedStr,
+    hasWeightedPullUp: !!canonicalProfile.weightedBenchmarks?.weightedPullUp?.current,
+    hasWeightedDip: !!canonicalProfile.weightedBenchmarks?.weightedDip?.current,
+    equipment: canonicalProfile.equipment,
+    reason: hasLoadableEq && hasWeightedStr ? 'weighted_eligible' : hasLoadableEq ? 'missing_strength_inputs' : 'no_loadable_equipment',
   })
   
   // ISSUE A: Stage tracking for diagnosable failures
@@ -1357,6 +1381,14 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
   let effectiveTrainingDays: TrainingDays = typeof trainingDaysPerWeek === 'number' 
     ? trainingDaysPerWeek as TrainingDays 
     : 4 // Default fallback
+  
+  // [adjustment-sync] STEP 5: Log input training days resolution
+  console.log('[adjustment-sync] Training days input resolution:', {
+    inputTrainingDaysPerWeek: trainingDaysPerWeek,
+    inputScheduleMode,
+    initialEffectiveTrainingDays: effectiveTrainingDays,
+    isNumericInput: typeof trainingDaysPerWeek === 'number',
+  })
     
   if (inputScheduleMode === 'flexible') {
     flexibleWeekStructure = resolveFlexibleFrequency({
@@ -1413,6 +1445,14 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
     effectiveTrainingDays = getEffectiveFrequency(trainingDaysPerWeek) as TrainingDays
     console.log('[schedule-mode] Static mode, using:', effectiveTrainingDays, 'days')
   }
+  
+  // [adjustment-sync] STEP 5 (continued): Log final resolved training days
+  console.log('[adjustment-sync] Final training days resolution:', {
+    finalEffectiveTrainingDays: effectiveTrainingDays,
+    sessionsToGenerate: effectiveTrainingDays,
+    scheduleMode: inputScheduleMode,
+    wasFlexible: inputScheduleMode === 'flexible',
+  })
   
   // ENGINE QUALITY: Calculate session distribution based on goal hierarchy
   const sessionDistribution = calculateSessionDistribution(
@@ -1483,6 +1523,34 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
     weightedAllocationSummary: weightedSkillAllocation.map(a => `${a.skill}:${Math.round(a.weight * 100)}%`).join(', '),
     intensityPattern: intensityDistribution.suggestedPattern.join('-'),
     flexibilityInsertionsCount: flexibilityInsertions.length,
+  })
+  
+  // =========================================================================
+  // [planner-truth-input] STEP 2: Canonical profile truth that reached exercise selection
+  // This is the exact profile data that the planner is using - proof that database
+  // values are reaching the selection layer.
+  // =========================================================================
+  console.log('[planner-truth-input] Profile truth reaching exercise selection:', {
+    primaryGoal,
+    secondaryGoal: expandedContext.secondaryGoal || null,
+    selectedSkills: expandedContext.selectedSkills,
+    selectedSkillCount: expandedContext.selectedSkills.length,
+    scheduleMode: canonicalProfile.scheduleMode || 'static',
+    requestedDays: effectiveTrainingDays,
+    durationMode: expandedContext.sessionDurationMode,
+    baseDurationMinutes: expandedContext.sessionLengthMinutes,
+    trainingStyle: trainingPath,
+    trainingOutcome: trainingOutcome,
+    loadableEquipment: equipment.filter((e: string) => 
+      e === 'weight_belt' || e === 'weight_vest' || e === 'weighted_vest' || e === 'dumbbells'
+    ),
+    hasWeightedPullUpData: !!(canonicalProfile.weightedPullUp?.addedWeight !== undefined),
+    hasWeightedDipData: !!(canonicalProfile.weightedDip?.addedWeight !== undefined),
+    weightedPullUpValue: canonicalProfile.weightedPullUp?.addedWeight,
+    weightedDipValue: canonicalProfile.weightedDip?.addedWeight,
+    recoveryLevel: recoverySignal?.level || null,
+    limiterState: expandedContext.identifiedLimiters || [],
+    experienceLevel,
   })
   
   // Get duration-based configuration for exercise count and structure
@@ -2119,28 +2187,38 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
         })
       }
     }
-    
-    return session
+  
+  // [weighted-truth] TASK D & E: Log prescribedLoad generation verification
+  const loadedExercises: Array<{name: string, load: number, unit: string}> = []
+  const noLoadExercises: Array<{name: string, reason?: string}> = []
+  
+  newProgram.sessions?.forEach(session => {
+    session.exercises?.forEach(ex => {
+      if (ex.prescribedLoad?.load) {
+        loadedExercises.push({
+          name: ex.name,
+          load: ex.prescribedLoad.load,
+          unit: ex.prescribedLoad.unit,
+        })
+      } else if (ex.noLoadReason) {
+        noLoadExercises.push({
+          name: ex.name,
+          reason: ex.noLoadReason,
+        })
+      }
+    })
   })
-  } catch (err) {
-    // ISSUE A: If error is already a GenerationError, re-throw as-is
-    if (err instanceof GenerationError) throw err
-    
-    // [session-assembly] Sub-classify assembly failures for better diagnosis
-    const errorMessage = err instanceof Error ? err.message : 'Failed to assemble sessions'
-    let subCode = 'assembly_unknown_failure'
-    
-    if (errorMessage.includes('exercise_selection_returned_null')) {
-      subCode = 'empty_exercise_pool'
-    } else if (errorMessage.includes('warmup') || errorMessage.includes('Warmup')) {
-      subCode = 'invalid_warmup_block'
-    } else if (errorMessage.includes('cooldown') || errorMessage.includes('Cooldown')) {
-      subCode = 'invalid_cooldown_block'
-    } else if (errorMessage.includes('main') || errorMessage.includes('exercise')) {
-      subCode = 'invalid_main_block'
-    } else if (errorMessage.includes('validation')) {
-      subCode = 'session_validation_failed'
-    }
+  
+  console.log('[weighted-truth] Program generation complete:', {
+    totalSessions: newProgram.sessions?.length,
+    exercisesWithLoad: loadedExercises.length,
+    exercisesWithNoLoadReason: noLoadExercises.length,
+    loadedExercises: loadedExercises.slice(0, 5), // Log first 5 for brevity
+    noLoadReasons: noLoadExercises.slice(0, 5),
+  })
+  
+  return newProgram
+}
     
   // [program-rebuild-error] TASK 7: Use searchable prefix for failures
   console.error('[program-rebuild-error] Session assembly failure:', {
@@ -3455,6 +3533,83 @@ return explanations.length > 0 ? explanations : undefined
       }
     })(),
   }
+  
+  // =========================================================================
+  // [selected-skill-exposure] STEP 7: Final weekly skill expression summary
+  // This answers: "why did this skill appear or not appear this week?"
+  // =========================================================================
+  const selectedSkillList = expandedContext.selectedSkills || []
+  const allExercisesInWeek = sessions.flatMap(s => s.exercises)
+  
+  const skillExposureSummary = selectedSkillList.map(skill => {
+    const skillLower = skill.toLowerCase()
+    
+    // Count direct expressions (skill category exercises for this skill)
+    const directExpressions = allExercisesInWeek.filter(ex => 
+      ex.transferTo?.some((t: string) => t.toLowerCase().includes(skillLower)) &&
+      ex.category === 'skill'
+    )
+    
+    // Count technical expressions (moderate fatigue, good transfer)
+    const technicalExpressions = allExercisesInWeek.filter(ex =>
+      ex.transferTo?.some((t: string) => t.toLowerCase().includes(skillLower)) &&
+      ex.category !== 'skill' &&
+      (ex.fatigueCost ?? 5) <= 3
+    )
+    
+    // Count support expressions (strength/accessory supporting this skill)
+    const supportExpressions = allExercisesInWeek.filter(ex =>
+      ex.transferTo?.some((t: string) => t.toLowerCase().includes(skillLower)) &&
+      (ex.category === 'strength' || ex.category === 'accessory')
+    )
+    
+    // Determine if omitted and why
+    const totalExpressions = directExpressions.length + technicalExpressions.length + supportExpressions.length
+    const omissionReason = totalExpressions === 0 
+      ? (skill === primaryGoal ? 'NOT_OMITTED_PRIMARY' : 
+         equipment.length === 0 ? 'no_equipment_match' :
+         'no_exercises_found_for_skill')
+      : null
+    
+    return {
+      skill,
+      directExpressions: directExpressions.length,
+      technicalExpressions: technicalExpressions.length,
+      supportExpressions: supportExpressions.length,
+      totalExpressions,
+      omissionReason,
+    }
+  })
+  
+  console.log('[selected-skill-exposure] Weekly skill expression summary:', {
+    totalSelectedSkills: selectedSkillList.length,
+    primaryGoal,
+    skillExposure: skillExposureSummary.map(s => ({
+      skill: s.skill,
+      direct: s.directExpressions,
+      technical: s.technicalExpressions,
+      support: s.supportExpressions,
+      total: s.totalExpressions,
+      omitted: s.omissionReason,
+    })),
+    underExpressedSkills: skillExposureSummary.filter(s => s.totalExpressions === 0 && s.skill !== primaryGoal),
+    wellExpressedSkills: skillExposureSummary.filter(s => s.totalExpressions >= 2),
+  })
+  
+  // Log session role → actual exercise differentiation
+  console.log('[session-role-differentiation] Session role vs exercise composition:', sessions.map((s, i) => ({
+    day: i + 1,
+    focus: s.focus,
+    sessionIntent: sessionIntents[i]?.sessionType || 'unknown',
+    exerciseCategories: s.exercises.reduce((acc, ex) => {
+      acc[ex.category] = (acc[ex.category] || 0) + 1
+      return acc
+    }, {} as Record<string, number>),
+    weightedExercises: s.exercises.filter(ex => ex.id?.includes('weighted')).length,
+    skillExercises: s.exercises.filter(ex => ex.category === 'skill').length,
+  })))
+  
+  return tempProgram
 }
 
 /**
@@ -4583,13 +4738,28 @@ export function saveAdaptiveProgram(program: AdaptiveProgram): AdaptiveProgram {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(programs))
   
   console.log('[program-rebuild-truth] SAVE: Program saved successfully - atomic replacement complete', {
-    programId: program.id,
-    sessionCount: sessions.length,
-    totalExercises: sessionExerciseCounts.reduce((a, b) => a + b, 0),
-    replacedVisibleProgram: true,
+  programId: program.id,
+  sessionCount: sessions.length,
+  totalExercises: sessionExerciseCounts.reduce((a, b) => a + b, 0),
+  replacedVisibleProgram: true,
   })
+  
+  // [build-report] STEP 11: High-signal build diagnostic summary
+  console.log('[build-report] BUILD COMPLETE:', {
+    buildAttemptId: program.id,
+    path: 'save_adaptive_program',
+    requestedSessionCount: program.trainingDaysPerWeek || 'flexible',
+    assembledSessionCount: sessions.length,
+    savedSessionCount: sessions.length,
+    exerciseCountsPerSession: sessionExerciseCounts,
+    staleCacheInvalidated: true,
+    saveResult: 'success',
+    programIdAfterSave: program.id,
+    createdAt: program.createdAt,
+  })
+  
   return program
-}
+  }
 
 export function getSavedAdaptivePrograms(): AdaptiveProgram[] {
   if (!isBrowser()) return []

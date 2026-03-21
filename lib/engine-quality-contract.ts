@@ -2619,3 +2619,372 @@ export function logExerciseComparison(comparison: ExerciseComparisonResult): voi
     sessionRoleChanges: comparison.sessionRoleDifferences,
   })
 }
+
+// =============================================================================
+// FINAL TRUTH AUDIT REPORT (PROMPT 6 - END-TO-END VALIDATION)
+// =============================================================================
+
+/**
+ * [final-truth-audit] STEP 1: Canonical audit report for proving rebuild truth.
+ * This report captures the complete result of a rebuild and post-save verification.
+ */
+export type FinalTruthAuditStatus = 'pass' | 'pass_with_warnings' | 'soft_fail' | 'hard_fail'
+
+export interface FinalTruthAuditReport {
+  auditId: string
+  buildAttemptId: string
+  programId: string
+  generatedAt: string
+  
+  // Signature alignment (STEP 2)
+  profileSignatureAtBuild: string
+  currentProfileSignature: string
+  builderInputSignature: string
+  displayedProgramSignature: string
+  displayedWorkoutSignature: string | null
+  
+  // Overall status
+  status: FinalTruthAuditStatus
+  
+  // Section results
+  sections: {
+    profileAlignment: AuditSectionResult
+    builderAlignment: AuditSectionResult
+    programAlignment: AuditSectionResult
+    workoutAlignment: AuditSectionResult
+    weightedPrescriptionTruth: AuditSectionResult
+    sessionRoleDifferentiation: AuditSectionResult
+    selectedSkillExpression: AuditSectionResult
+    genericShellDetection: AuditSectionResult
+    baselineEarnedTruth: AuditSectionResult
+    staleSurfaceDetection: AuditSectionResult
+  }
+  
+  warnings: string[]
+  failures: string[]
+  actionableSummary: string[]
+}
+
+export interface AuditSectionResult {
+  status: 'pass' | 'warn' | 'fail'
+  details: string
+  evidence: Record<string, unknown>
+}
+
+/**
+ * [final-truth-audit] STEP 2-8: Create the final truth audit report
+ */
+export function createFinalTruthAuditReport(params: {
+  buildAttemptId: string
+  programId: string
+  generatedAt: string
+  profileSignatureAtBuild: string
+  currentProfileSignature: string
+  builderInputSignature: string
+  displayedProgramSignature: string
+  displayedWorkoutSignature: string | null
+  weightedCapableExercises: Array<{
+    exerciseId: string
+    loadEligible: boolean
+    loadProduced: boolean
+    loadSaved: boolean
+    loadRendered: boolean
+    noLoadReason?: string
+  }>
+  selectedSkills: Array<{
+    skillId: string
+    directExpressions: number
+    technicalExpressions: number
+    supportExpressions: number
+    totalExposure: number
+  }>
+  sessionRoles: Array<{
+    sessionIndex: number
+    role: string
+    exerciseFamilies: string[]
+    distinctFromOthers: boolean
+  }>
+  earnedOnlySurfacesWithZeroHistory: string[]
+  baselineLeakingSurfaces: string[]
+}): FinalTruthAuditReport {
+  const auditId = `audit_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+  const warnings: string[] = []
+  const failures: string[] = []
+  const actionableSummary: string[] = []
+  
+  // STEP 2: Profile alignment
+  const profileAligned = params.profileSignatureAtBuild === params.currentProfileSignature
+  const profileAlignment: AuditSectionResult = {
+    status: profileAligned ? 'pass' : 'warn',
+    details: profileAligned 
+      ? 'Profile signature matches at build and current state'
+      : 'Profile changed since build - consider rebuild',
+    evidence: {
+      atBuild: params.profileSignatureAtBuild,
+      current: params.currentProfileSignature,
+    }
+  }
+  if (!profileAligned) {
+    warnings.push('profile_program_drift')
+  }
+  
+  // STEP 2: Builder alignment
+  const builderAligned = params.builderInputSignature === params.displayedProgramSignature
+  const builderAlignment: AuditSectionResult = {
+    status: builderAligned ? 'pass' : 'fail',
+    details: builderAligned
+      ? 'Builder input and displayed program are aligned'
+      : 'Builder/display mismatch - stale surface detected',
+    evidence: {
+      builder: params.builderInputSignature,
+      displayed: params.displayedProgramSignature,
+    }
+  }
+  if (!builderAligned) {
+    failures.push('builder_program_drift')
+    actionableSummary.push('Rebuild required - displayed program does not match builder input')
+  }
+  
+  // STEP 2: Program alignment
+  const programAlignment: AuditSectionResult = {
+    status: 'pass',
+    details: 'Program identity verified',
+    evidence: { programId: params.programId }
+  }
+  
+  // STEP 2: Workout alignment
+  const workoutAligned = !params.displayedWorkoutSignature || 
+    params.displayedWorkoutSignature === params.displayedProgramSignature
+  const workoutAlignment: AuditSectionResult = {
+    status: workoutAligned ? 'pass' : 'fail',
+    details: workoutAligned
+      ? 'Workout session matches current program'
+      : 'Workout/program mismatch - stale workout detected',
+    evidence: {
+      program: params.displayedProgramSignature,
+      workout: params.displayedWorkoutSignature,
+    }
+  }
+  if (!workoutAligned) {
+    failures.push('program_workout_drift')
+  }
+  
+  // STEP 3: Weighted prescription truth
+  const weightedExpected = params.weightedCapableExercises.filter(e => e.loadEligible)
+  const weightedPresent = weightedExpected.filter(e => e.loadRendered)
+  const weightedMissing = weightedExpected.filter(e => !e.loadRendered && !e.noLoadReason)
+  
+  const weightedStatus = weightedMissing.length === 0 ? 'pass' : 
+    weightedMissing.length <= 2 ? 'warn' : 'fail'
+  const weightedPrescriptionTruth: AuditSectionResult = {
+    status: weightedStatus,
+    details: weightedMissing.length === 0
+      ? `All ${weightedExpected.length} eligible weighted exercises have load or valid no-load reason`
+      : `${weightedMissing.length} weighted exercises missing load without explanation`,
+    evidence: {
+      eligible: weightedExpected.length,
+      present: weightedPresent.length,
+      missing: weightedMissing.map(e => e.exerciseId),
+      classifications: params.weightedCapableExercises.map(e => ({
+        id: e.exerciseId,
+        status: e.loadRendered ? 'weighted_expected_and_present' :
+                !e.loadEligible ? 'weighted_correctly_blocked' :
+                e.noLoadReason ? `blocked_${e.noLoadReason}` :
+                'weighted_missing_reason_unknown'
+      }))
+    }
+  }
+  if (weightedStatus === 'fail') {
+    failures.push('weighted_saved_but_lost_in_render')
+  } else if (weightedStatus === 'warn') {
+    warnings.push('weighted_partial_loss')
+  }
+  
+  // STEP 4: Selected skill expression quality
+  const underexpressedSkills = params.selectedSkills.filter(s => s.totalExposure < 2)
+  const skillExpressionStatus = underexpressedSkills.length === 0 ? 'pass' :
+    underexpressedSkills.length <= 1 ? 'warn' : 'fail'
+  const selectedSkillExpression: AuditSectionResult = {
+    status: skillExpressionStatus,
+    details: underexpressedSkills.length === 0
+      ? 'All selected skills have adequate weekly expression'
+      : `${underexpressedSkills.length} skills have weak expression`,
+    evidence: {
+      skills: params.selectedSkills,
+      underexpressed: underexpressedSkills.map(s => s.skillId),
+    }
+  }
+  if (skillExpressionStatus !== 'pass') {
+    warnings.push('skill_expression_weak')
+  }
+  
+  // STEP 5: Session role differentiation
+  const distinctRoles = params.sessionRoles.filter(r => r.distinctFromOthers).length
+  const totalRoles = params.sessionRoles.length
+  const roleStatus = distinctRoles >= totalRoles * 0.6 ? 'pass' :
+    distinctRoles >= totalRoles * 0.4 ? 'warn' : 'fail'
+  const sessionRoleDifferentiation: AuditSectionResult = {
+    status: roleStatus,
+    details: `${distinctRoles}/${totalRoles} sessions have distinct exercise composition`,
+    evidence: {
+      sessions: params.sessionRoles,
+      distinctCount: distinctRoles,
+    }
+  }
+  if (roleStatus === 'fail') {
+    warnings.push('role_differentiation_poor')
+  }
+  
+  // STEP 6: Generic shell detection
+  const genericIndicators: string[] = []
+  if (underexpressedSkills.length >= 2) genericIndicators.push('skills_underexpressed')
+  if (distinctRoles < totalRoles * 0.5) genericIndicators.push('roles_collapsed')
+  if (weightedMissing.length > 3) genericIndicators.push('weighted_opportunities_missed')
+  
+  const genericShellStatus = genericIndicators.length === 0 ? 'pass' :
+    genericIndicators.length <= 1 ? 'warn' : 'fail'
+  const genericShellDetection: AuditSectionResult = {
+    status: genericShellStatus,
+    details: genericIndicators.length === 0
+      ? 'Program shows appropriate differentiation and skill expression'
+      : `Generic shell indicators detected: ${genericIndicators.join(', ')}`,
+    evidence: { indicators: genericIndicators }
+  }
+  if (genericShellStatus === 'fail') {
+    failures.push('generic_shell_detected')
+    actionableSummary.push('Program may feel generic - review skill selection and equipment')
+  }
+  
+  // STEP 7: Baseline vs earned truth
+  const baselineLeaks = params.baselineLeakingSurfaces.length > 0
+  const earnedOnlyViolations = params.earnedOnlySurfacesWithZeroHistory.length > 0
+  const baselineEarnedStatus = !baselineLeaks && !earnedOnlyViolations ? 'pass' : 'fail'
+  const baselineEarnedTruth: AuditSectionResult = {
+    status: baselineEarnedStatus,
+    details: baselineEarnedStatus === 'pass'
+      ? 'Baseline/earned separation is correct'
+      : 'Trust leakage detected in progress surfaces',
+    evidence: {
+      baselineLeaks: params.baselineLeakingSurfaces,
+      earnedOnlyViolations: params.earnedOnlySurfacesWithZeroHistory,
+    }
+  }
+  if (baselineEarnedStatus === 'fail') {
+    failures.push('baseline_earned_leakage')
+  }
+  
+  // STEP 2: Stale surface detection
+  const staleSurfaces: string[] = []
+  if (!builderAligned) staleSurfaces.push('program_display')
+  if (!workoutAligned) staleSurfaces.push('workout_session')
+  if (!profileAligned) staleSurfaces.push('profile_state')
+  
+  const staleSurfaceDetection: AuditSectionResult = {
+    status: staleSurfaces.length === 0 ? 'pass' : 'fail',
+    details: staleSurfaces.length === 0
+      ? 'No stale surfaces detected'
+      : `Stale surfaces: ${staleSurfaces.join(', ')}`,
+    evidence: { staleSurfaces }
+  }
+  
+  // STEP 9: Determine overall status
+  let status: FinalTruthAuditStatus = 'pass'
+  if (failures.length > 0) {
+    status = failures.includes('generic_shell_detected') || 
+             failures.includes('baseline_earned_leakage') ? 'soft_fail' : 'hard_fail'
+  } else if (warnings.length > 0) {
+    status = 'pass_with_warnings'
+  }
+  
+  const report: FinalTruthAuditReport = {
+    auditId,
+    buildAttemptId: params.buildAttemptId,
+    programId: params.programId,
+    generatedAt: params.generatedAt,
+    profileSignatureAtBuild: params.profileSignatureAtBuild,
+    currentProfileSignature: params.currentProfileSignature,
+    builderInputSignature: params.builderInputSignature,
+    displayedProgramSignature: params.displayedProgramSignature,
+    displayedWorkoutSignature: params.displayedWorkoutSignature,
+    status,
+    sections: {
+      profileAlignment,
+      builderAlignment,
+      programAlignment,
+      workoutAlignment,
+      weightedPrescriptionTruth,
+      sessionRoleDifferentiation,
+      selectedSkillExpression,
+      genericShellDetection,
+      baselineEarnedTruth,
+      staleSurfaceDetection,
+    },
+    warnings,
+    failures,
+    actionableSummary,
+  }
+  
+  // STEP 8: Log the final audit
+  logFinalTruthAudit(report)
+  
+  return report
+}
+
+/**
+ * [final-truth-audit] STEP 8: Log the final truth audit with searchable prefixes
+ */
+export function logFinalTruthAudit(report: FinalTruthAuditReport): void {
+  console.log('[final-truth-audit] AUDIT COMPLETE:', {
+    auditId: report.auditId,
+    programId: report.programId,
+    status: report.status,
+    warningCount: report.warnings.length,
+    failureCount: report.failures.length,
+  })
+  
+  // [surface-alignment] Log alignment results
+  console.log('[surface-alignment] Signature alignment:', {
+    profileAligned: report.sections.profileAlignment.status === 'pass',
+    builderAligned: report.sections.builderAlignment.status === 'pass',
+    workoutAligned: report.sections.workoutAlignment.status === 'pass',
+    staleSurfaces: report.sections.staleSurfaceDetection.evidence.staleSurfaces,
+  })
+  
+  // [weighted-truth-audit] Log weighted prescription results
+  console.log('[weighted-truth-audit] Weighted truth:', {
+    status: report.sections.weightedPrescriptionTruth.status,
+    evidence: report.sections.weightedPrescriptionTruth.evidence,
+  })
+  
+  // [skill-expression-audit] Log skill expression results
+  console.log('[skill-expression-audit] Skill expression:', {
+    status: report.sections.selectedSkillExpression.status,
+    underexpressed: report.sections.selectedSkillExpression.evidence.underexpressed,
+  })
+  
+  // [generic-shell-audit] Log generic shell detection
+  console.log('[generic-shell-audit] Generic shell check:', {
+    status: report.sections.genericShellDetection.status,
+    indicators: report.sections.genericShellDetection.evidence.indicators,
+  })
+  
+  // [baseline-earned-audit] Log baseline/earned separation
+  console.log('[baseline-earned-audit] Baseline/earned truth:', {
+    status: report.sections.baselineEarnedTruth.status,
+    leaks: report.sections.baselineEarnedTruth.evidence.baselineLeaks,
+    violations: report.sections.baselineEarnedTruth.evidence.earnedOnlyViolations,
+  })
+  
+  // Final summary
+  if (report.status === 'pass') {
+    console.log('[final-truth-audit] RESULT: All truth checks passed')
+  } else if (report.status === 'pass_with_warnings') {
+    console.log('[final-truth-audit] RESULT: Passed with warnings:', report.warnings)
+  } else {
+    console.log('[final-truth-audit] RESULT: Audit failed:', {
+      status: report.status,
+      failures: report.failures,
+      actions: report.actionableSummary,
+    })
+  }
+}

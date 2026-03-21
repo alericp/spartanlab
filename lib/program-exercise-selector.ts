@@ -2771,7 +2771,7 @@ function adjustSetsForLevel(defaultSets: number, level: ExperienceLevel): number
   if (level === 'advanced') return Math.min(5, defaultSets + 1)
   return defaultSets
 }
-  
+
 function adjustRepsForLevel(defaultReps: string, level: ExperienceLevel): string {
   // Keep reps as-is for now, could be refined
   return defaultReps

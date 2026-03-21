@@ -498,6 +498,29 @@ export default function ProgramPage() {
           createdAt: newProgram.createdAt,
         })
         
+        // [planner-truth-audit] STAGE 5b: Check audit result before saving
+        generationStage = 'audit_check'
+        if (newProgram.plannerTruthAudit) {
+          const audit = newProgram.plannerTruthAudit
+          console.log('[audit-severity] Pre-save audit check:', {
+            severity: audit.severity,
+            overallScore: audit.overallScore,
+            canSave: audit.canSave,
+            shouldWarn: audit.shouldWarn,
+          })
+          
+          // Hard fail blocks save entirely
+          if (!audit.canSave) {
+            console.error('[audit-severity] Audit blocked save:', audit.failureReasons)
+            throw new Error(`audit_blocked: ${audit.failureReasons[0] || 'Program failed quality audit'}`)
+          }
+          
+          // Soft fail or warnings get logged but allow save
+          if (audit.shouldWarn && audit.warnings.length > 0) {
+            console.warn('[audit-severity] Audit warnings:', audit.warnings)
+          }
+        }
+        
         // [program-build] STAGE 6: Save to storage
         generationStage = 'saving'
         console.log('[program-build] STAGE 6: Saving snapshot to storage...')

@@ -107,6 +107,8 @@ import { evaluateExerciseProgression, type ProgressionDecision as SimpleProgress
 import { generateSessionVariants, type SessionVariant } from './session-compression-engine'
 import { analyzeEquipmentProfile, adaptSessionForEquipment, getEquipmentRecommendations, type EquipmentProfile } from './equipment-adaptation-engine'
 import { GOAL_LABELS } from './program-service'
+// [planner-truth-audit] TASK 7: Final audit for generic shell detection
+import { runPlannerTruthAudit, getAuditGatingResult, type PlannerTruthAuditReport, type AuditSeverity } from './planner-truth-audit'
 import { getQuickFatigueDecision, getEnhancedFatigueDecision, type TrainingDecision, type SessionAdjustments } from './fatigue-decision-engine'
 import { getDeloadRecommendation, type FatigueSignalSummary } from './fatigue/deload-system'
 import { 
@@ -893,6 +895,16 @@ exerciseExplanations?: {
     fallbacksUsed: string[]
     overridesApplied: string[]
     composedAt: string
+  }
+  // [planner-truth-audit] Final audit result for generic shell detection
+  plannerTruthAudit?: {
+    severity: AuditSeverity
+    overallScore: number
+    failureReasons: string[]
+    warnings: string[]
+    recommendations: string[]
+    canSave: boolean
+    shouldWarn: boolean
   }
 }
 
@@ -3378,6 +3390,57 @@ return explanations.length > 0 ? explanations : undefined
         }
       } catch (err) {
         console.error('[program-profile-validate] Validation failed:', err)
+        return undefined
+      }
+    })(),
+    // [planner-truth-audit] TASK 1 & 7: Run final audit for generic shell detection
+    plannerTruthAudit: (() => {
+      try {
+        // Build temporary program for audit
+        const tempProgram = {
+          id: `adaptive-${Date.now()}`,
+          createdAt: new Date().toISOString(),
+          primaryGoal,
+          secondaryGoal: secondaryGoal || canonicalProfile.secondaryGoal,
+          goalLabel: GOAL_LABELS[primaryGoal],
+          sessions,
+          scheduleMode: finalScheduleMode,
+          weekNumber: 1,
+          programRationale,
+        } as unknown as AdaptiveProgram
+        
+        const auditReport = runPlannerTruthAudit(tempProgram, canonicalProfile)
+        const gating = getAuditGatingResult(auditReport)
+        
+        console.log('[planner-truth-audit] Final audit complete:', {
+          severity: auditReport.severity,
+          overallScore: auditReport.overallScore,
+          canSave: gating.canSave,
+          failureCount: auditReport.failureReasons.length,
+          warningCount: auditReport.warnings.length,
+        })
+        
+        // Log generic shell detection specifically
+        if (auditReport.genericShellAudit.isGenericShell) {
+          console.warn('[generic-shell-detect] Week flagged as generic shell:', {
+            genericityScore: auditReport.genericShellAudit.genericityScore,
+            primaryGoalDominance: auditReport.genericShellAudit.primaryGoalDominance,
+            underExpressedSkills: auditReport.genericShellAudit.selectedSkillUnderExpression,
+            familyRepetition: auditReport.genericShellAudit.exerciseFamilyRepetition,
+          })
+        }
+        
+        return {
+          severity: auditReport.severity,
+          overallScore: auditReport.overallScore,
+          failureReasons: auditReport.failureReasons,
+          warnings: auditReport.warnings,
+          recommendations: auditReport.recommendations,
+          canSave: gating.canSave,
+          shouldWarn: gating.shouldWarn,
+        }
+      } catch (err) {
+        console.error('[planner-truth-audit] Audit failed:', err)
         return undefined
       }
     })(),

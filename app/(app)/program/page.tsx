@@ -394,14 +394,36 @@ export default function ProgramPage() {
           programSaved: true,
         })
       } catch (err) {
-        // ISSUE D FIX: Consistent result envelope for failure
+        // ISSUE A & B FIX: Extract classified error code if available
+        // GenerationError from adaptive-program-builder provides stage + code
+        const isGenerationError = err && typeof err === 'object' && 'code' in err && 'stage' in err
+        const errorCode = isGenerationError ? (err as { code: string }).code : 'unknown_generation_failure'
+        const errorStage = isGenerationError ? (err as { stage: string }).stage : generationStage
         const errorMessage = err instanceof Error ? err.message : 'Unknown error'
-        console.error(`[ProgramPage] Generation FAILED at stage: ${generationStage}`, {
+        
+        // ISSUE A: Structured console logging for diagnosability
+        console.error(`[program-generate] CLIENT ERROR [${errorCode}] at stage "${errorStage}": ${errorMessage}`, {
           success: false,
-          stage: generationStage,
+          code: errorCode,
+          stage: errorStage,
           error: errorMessage,
+          inputsSnapshot: {
+            primaryGoal: inputs?.primaryGoal,
+            scheduleMode: inputs?.scheduleMode,
+            trainingDays: inputs?.trainingDaysPerWeek,
+          },
         })
-        setGenerationError(`Program generation failed at ${generationStage}. Please try again.`)
+        
+        // ISSUE B: User-friendly message that doesn't expose internals
+        const userMessage = errorCode === 'profile_validation_failed'
+          ? 'Profile incomplete. Please ensure your training profile is complete.'
+          : errorCode === 'structure_selection_failed'
+          ? 'Unable to determine optimal structure. Please try adjusting your settings.'
+          : errorCode === 'session_assembly_failed'
+          ? 'Session assembly encountered an issue. Please try again.'
+          : `Program generation failed at ${errorStage}. Please try again.`
+        
+        setGenerationError(userMessage)
         // Keep builder visible and inputs intact for retry
       } finally {
         // GUARANTEED: Always reset loading state - ISSUE B FIX
@@ -501,19 +523,34 @@ export default function ProgramPage() {
           programSaved: true,
         })
       } catch (err) {
-        // ISSUE D FIX: Consistent result envelope for failure
+        // ISSUE A & B FIX: Extract classified error code if available
+        const isGenerationError = err && typeof err === 'object' && 'code' in err && 'stage' in err
+        const errorCode = isGenerationError ? (err as { code: string }).code : 'unknown_generation_failure'
+        const errorStage = isGenerationError ? (err as { stage: string }).stage : regenerateStage
         const errorMessage = err instanceof Error ? err.message : 'Unknown error'
-        console.error(`[ProgramPage] Regenerate FAILED at stage: ${regenerateStage}`, {
+        
+        // ISSUE A: Structured console logging for diagnosability
+        console.error(`[program-generate] CLIENT ERROR [${errorCode}] at stage "${errorStage}": ${errorMessage}`, {
           success: false,
-          stage: regenerateStage,
+          code: errorCode,
+          stage: errorStage,
           error: errorMessage,
+          oldProgramId: program?.id,
         })
-        setGenerationError(`Program regeneration failed at ${regenerateStage}. Please try again.`)
-        // Keep current program visible for retry
+        
+        // ISSUE B & C: Prior program preserved - only show error, don't corrupt state
+        const userMessage = errorCode === 'profile_validation_failed'
+          ? 'Profile incomplete. Please ensure your training profile is complete.'
+          : errorCode === 'structure_selection_failed'
+          ? 'Unable to determine optimal structure. Please try adjusting your settings.'
+          : `Program regeneration failed at ${errorStage}. Your current program is preserved.`
+        
+        setGenerationError(userMessage)
+        // Keep current program visible and intact for retry
       } finally {
         // GUARANTEED: Always reset loading state - ISSUE B FIX
         setIsGenerating(false)
-        console.log('[ProgramPage] Regenerate flow complete - loading state cleared')
+        console.log('[program-generate] Regenerate flow complete - loading state cleared')
       }
     }, 500)
   }, [inputs, program, programModules])

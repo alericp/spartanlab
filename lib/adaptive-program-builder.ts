@@ -2188,49 +2188,21 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
       }
     }
   
-  // [weighted-truth] TASK D & E: Log prescribedLoad generation verification
-  const loadedExercises: Array<{name: string, load: number, unit: string}> = []
-  const noLoadExercises: Array<{name: string, reason?: string}> = []
-  
-  newProgram.sessions?.forEach(session => {
-    session.exercises?.forEach(ex => {
-      if (ex.prescribedLoad?.load) {
-        loadedExercises.push({
-          name: ex.name,
-          load: ex.prescribedLoad.load,
-          unit: ex.prescribedLoad.unit,
-        })
-      } else if (ex.noLoadReason) {
-        noLoadExercises.push({
-          name: ex.name,
-          reason: ex.noLoadReason,
-        })
-      }
+    // BUILD-HOTFIX: repaired misplaced session-assembly error block
+    // Return assembled session from map callback
+    return session
+  })
+  } catch (err) {
+    // Session assembly failed - log and rethrow with proper error info
+    const errorMessage = err instanceof Error ? err.message : 'Unknown session assembly error'
+    console.error('[program-rebuild-error] Session assembly failure:', {
+      stage: 'session_assembly',
+      errorCode: 'session_assembly_failed',
+      errorMessage,
+      structureName: structure?.structureName,
+      dayCount: structure?.days?.length,
+      currentStage,
     })
-  })
-  
-  console.log('[weighted-truth] Program generation complete:', {
-    totalSessions: newProgram.sessions?.length,
-    exercisesWithLoad: loadedExercises.length,
-    exercisesWithNoLoadReason: noLoadExercises.length,
-    loadedExercises: loadedExercises.slice(0, 5), // Log first 5 for brevity
-    noLoadReasons: noLoadExercises.slice(0, 5),
-  })
-  
-  return newProgram
-}
-    
-  // [program-rebuild-error] TASK 7: Use searchable prefix for failures
-  console.error('[program-rebuild-error] Session assembly failure:', {
-    stage: 'session_assembly',
-    errorCode: 'session_assembly_failed',
-    subCode,
-    errorMessage,
-    structureName: structure?.structureName,
-    dayCount: structure?.days?.length,
-    currentStage,
-  })
-    
     throw new GenerationError(
       'session_assembly_failed',
       currentStage,
@@ -2238,7 +2210,6 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
       { 
         structureName: structure?.structureName, 
         dayCount: structure?.days?.length,
-        subCode, // Include sub-classification for diagnosis
       }
     )
   }

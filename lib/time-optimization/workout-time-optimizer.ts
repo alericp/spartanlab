@@ -508,12 +508,10 @@ function generateCompressionExplanation(
 ): string {
   const parts: string[] = []
   
-  if (result.removedExercises.length > 0) {
-    parts.push(`Removed ${result.removedExercises.length} lower-priority exercise(s)`)
-  }
-  
+  // [trust-polish] ISSUE A: Don't surface internal compression mechanics to users
+  // These are expected backend optimizations, not user-relevant events
   if (result.reducedExercises.length > 0) {
-    parts.push(`Reduced sets on ${result.reducedExercises.length} exercise(s)`)
+    parts.push(`Adjusted volume on ${result.reducedExercises.length} exercise(s)`)
   }
   
   if (strategy.reduceWarmup) {

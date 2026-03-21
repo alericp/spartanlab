@@ -329,19 +329,19 @@ function generateCompressionExplanation(
   removed: string[],
   adjusted: string[]
 ): string {
+  // [trust-polish] ISSUE A: Session compression mechanics are internal optimizations
+  // Suppress detailed removal lists - users just need to know their session was adjusted
   const parts: string[] = []
   
   if (level === 'light') {
-    parts.push('Slightly reduced volume on accessory work.')
+    parts.push('Session adjusted to fit your available time.')
   } else if (level === 'moderate') {
-    parts.push('Removed lower-priority exercises to preserve core training effect.')
+    parts.push('Session adjusted to focus on essential movements.')
   } else {
-    parts.push('Significant compression applied — only essential movements retained.')
+    parts.push('Session focused on core training.')
   }
   
-  if (removed.length > 0) {
-    parts.push(`Removed: ${removed.join(', ')}.`)
-  }
+  // Don't list removed exercises - that's implementation detail
   
   return parts.join(' ')
 }

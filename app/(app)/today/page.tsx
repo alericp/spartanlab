@@ -268,12 +268,12 @@ export default function TodaySessionPage() {
                 {adjustment.explanation}
               </p>
               
-              {/* What's Preserved/Cut */}
+              {/* [trust-polish] ISSUE A: Simplified adjustment summary - less internal-feeling */}
               {adjustment.wasAdjusted && (
                 <div className="flex gap-4 mb-4">
                   {adjustment.whatToKeep.length > 0 && (
                     <div className="flex-1">
-                      <p className="text-xs text-[#6A6A6A] uppercase tracking-wider mb-1">Preserved</p>
+                      <p className="text-xs text-[#6A6A6A] uppercase tracking-wider mb-1">Keeping</p>
                       <p className="text-sm text-green-400">
                         {adjustment.whatToKeep.length} exercises
                       </p>
@@ -281,8 +281,8 @@ export default function TodaySessionPage() {
                   )}
                   {adjustment.whatToCut.length > 0 && (
                     <div className="flex-1">
-                      <p className="text-xs text-[#6A6A6A] uppercase tracking-wider mb-1">Removed</p>
-                      <p className="text-sm text-red-400">
+                      <p className="text-xs text-[#6A6A6A] uppercase tracking-wider mb-1">Shortened</p>
+                      <p className="text-sm text-amber-400">
                         {adjustment.whatToCut.length} exercises
                       </p>
                     </div>

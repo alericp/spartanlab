@@ -195,16 +195,19 @@ export function DataConfidenceBadge({ confidence, workoutCount }: DataConfidence
     return null // No need to show when confidence is high
   }
   
+  // [trust-polish] ISSUE D: Product-grade messaging for data confidence
   const messages: Record<typeof confidence, string> = {
-    none: 'Complete workouts to enable smart adaptation',
-    low: `${workoutCount} workout${workoutCount === 1 ? '' : 's'} logged — building data`,
-    medium: 'Building training history for smarter adaptation',
+    none: 'Log workouts to personalize your training',
+    low: workoutCount === 1 
+      ? 'First workout logged — personalization improving'
+      : `${workoutCount} workouts logged — learning your patterns`,
+    medium: 'Your training history is shaping your program',
   }
   
   const colors: Record<typeof confidence, string> = {
     none: 'text-[#6A6A6A]',
-    low: 'text-amber-400/70',
-    medium: 'text-blue-400/70',
+    low: 'text-blue-400/70',
+    medium: 'text-emerald-400/70',
   }
   
   return (

@@ -20,6 +20,10 @@
  * 
  * If warm-up duplicates start appearing, CHECK THIS FILE FIRST.
  * 
+ * [trust-polish] ISSUE A: Internal cleanup messages are suppressed from user-facing
+ * surfaces - deduplication is expected backend behavior, not a user-relevant "fix".
+ * See validateSession() for suppressed messages.
+ * 
  * TASK 5: Dedupe + Order Validation
  */
 
@@ -296,20 +300,33 @@ export function validateSession(
   
   // Step 1: Dedupe warmup
   const warmupResult = dedupeExerciseArray(warmup, 'warmup')
-  if (warmupResult.removed.length > 0) {
-    fixesApplied.push(`Removed ${warmupResult.removed.length} duplicate warmup exercise(s)`)
+  // [trust-polish] ISSUE A: Suppress internal duplicate removal messages
+  // Deduplication is expected backend behavior, not user-relevant
+  if (warmupResult.removed.length > 0 && process.env.NODE_ENV !== 'production') {
+    console.log('[session-validation] Deduplicated warmup:', {
+      removed: warmupResult.removed.length,
+      exerciseNames: warmupResult.removed,
+    })
   }
   
   // Step 2: Dedupe main exercises
   const mainResult = dedupeExerciseArray(exercises, 'main')
-  if (mainResult.removed.length > 0) {
-    fixesApplied.push(`Removed ${mainResult.removed.length} duplicate main exercise(s)`)
+  // [trust-polish] ISSUE A: Suppress internal duplicate removal messages
+  if (mainResult.removed.length > 0 && process.env.NODE_ENV !== 'production') {
+    console.log('[session-validation] Deduplicated main:', {
+      removed: mainResult.removed.length,
+      exerciseNames: mainResult.removed,
+    })
   }
   
   // Step 3: Dedupe cooldown
   const cooldownResult = dedupeExerciseArray(cooldown, 'cooldown')
-  if (cooldownResult.removed.length > 0) {
-    fixesApplied.push(`Removed ${cooldownResult.removed.length} duplicate cooldown exercise(s)`)
+  // [trust-polish] ISSUE A: Suppress internal duplicate removal messages
+  if (cooldownResult.removed.length > 0 && process.env.NODE_ENV !== 'production') {
+    console.log('[session-validation] Deduplicated cooldown:', {
+      removed: cooldownResult.removed.length,
+      exerciseNames: cooldownResult.removed,
+    })
   }
   
   // Step 4: Check cross-section duplicates (warmup vs main)

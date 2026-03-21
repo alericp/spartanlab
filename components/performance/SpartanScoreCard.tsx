@@ -126,17 +126,17 @@ export function SpartanScoreCard({ score }: SpartanScoreCardProps) {
             </div>
           )}
           
-          {/* [baseline-vs-earned] ISSUE E: Show baseline vs earned context */}
+          {/* [trust-polish] ISSUE C: Improved baseline vs earned messaging */}
           {score.baselineVsEarned?.hasBaselineOnly && (
             <div className="mt-3 flex items-center gap-2 text-xs text-blue-400">
-              <AlertCircle className="w-3.5 h-3.5" />
-              <span>Score reflects your starting capability. Complete workouts to earn real progress.</span>
+              <Target className="w-3.5 h-3.5" />
+              <span>Starting point based on your profile. Train to improve your score.</span>
             </div>
           )}
           {score.baselineVsEarned?.hasEarnedProgress && score.baselineVsEarned.earnedWorkoutCount > 0 && (
             <div className="mt-3 flex items-center gap-2 text-xs text-emerald-400">
               <TrendingUp className="w-3.5 h-3.5" />
-              <span>{score.baselineVsEarned.earnedWorkoutCount} workout{score.baselineVsEarned.earnedWorkoutCount > 1 ? 's' : ''} logged</span>
+              <span>Includes {score.baselineVsEarned.earnedWorkoutCount} logged workout{score.baselineVsEarned.earnedWorkoutCount > 1 ? 's' : ''}</span>
             </div>
           )}
         </div>

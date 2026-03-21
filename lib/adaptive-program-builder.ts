@@ -1862,12 +1862,13 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
     if (feedbackState.confidence !== 'low' && feedbackState.volumeModifier !== 1.0) {
       session.exercises = applyVolumeModifier(session.exercises, feedbackState.volumeModifier)
       session.adaptationNotes = session.adaptationNotes || []
+      // [trust-polish] ISSUE D: Calmer, less mechanical language
       if (feedbackState.needsDeload) {
-        session.adaptationNotes.push('Volume reduced based on recent session feedback (deload recommended)')
+        session.adaptationNotes.push('Volume adjusted down — focus on recovery this week')
       } else if (feedbackState.volumeModifier < 1.0) {
-        session.adaptationNotes.push('Volume slightly adjusted based on recent session feedback')
+        session.adaptationNotes.push('Volume adjusted slightly based on your recent workouts')
       } else {
-        session.adaptationNotes.push('Ready to push - volume increased based on recovery feedback')
+        session.adaptationNotes.push('Volume increased — your recovery is strong')
       }
     }
     
@@ -2184,7 +2185,7 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
       if (dayLoadProfiles[index].neuralLoad === 'high' && 
           weeklyLoadBalance.balanceIssues.some(i => i.includes('consecutive'))) {
         session.adaptationNotes = session.adaptationNotes || []
-        session.adaptationNotes.push('High neural demand day - ensure adequate recovery before next session')
+            session.adaptationNotes.push('This session focuses on skill work — prioritize quality and rest')
       }
     })
   }

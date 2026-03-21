@@ -66,6 +66,9 @@ import {
   type ProfileSnapshot,
   composeCanonicalPlannerInput,
   validateBuilderDisplayTruth,
+  // [weighted-truth] TASK A: Import weighted readiness check
+  hasLoadableEquipment,
+  checkWeightedPrescriptionEligibility,
 } from './canonical-profile-service'
 import { buildGenerationInput, getSystemStateFlags, type GenerationMode, type ProfileSnapshot } from './program-state-contract'
 import { normalizeProfile, computeLimiter, dedupeExercises, type NormalizedProfile } from './profile-normalizer'
@@ -1223,6 +1226,18 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
     isFullyWired: wiringStatus.isFullyWired,
   })
   
+  // [weighted-truth] TASK A: Log weighted readiness at generation start
+  const hasLoadableEq = hasLoadableEquipment(canonicalProfile.equipment || [])
+  const hasWeightedStr = engineConsumption.weightedStrengthInputs.hasWeightedData
+  console.log('[weighted-truth] Generation weighted readiness:', {
+    hasLoadableEquipment: hasLoadableEq,
+    hasWeightedStrengthData: hasWeightedStr,
+    hasWeightedPullUp: !!canonicalProfile.weightedBenchmarks?.weightedPullUp?.current,
+    hasWeightedDip: !!canonicalProfile.weightedBenchmarks?.weightedDip?.current,
+    equipment: canonicalProfile.equipment,
+    reason: hasLoadableEq && hasWeightedStr ? 'weighted_eligible' : hasLoadableEq ? 'missing_strength_inputs' : 'no_loadable_equipment',
+  })
+  
   // ISSUE A: Stage tracking for diagnosable failures
   currentStage = 'profile_validation'
   console.log('[program-generate] STAGE: profile_validation')
@@ -2119,28 +2134,38 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
         })
       }
     }
-    
-    return session
+  
+  // [weighted-truth] TASK D & E: Log prescribedLoad generation verification
+  const loadedExercises: Array<{name: string, load: number, unit: string}> = []
+  const noLoadExercises: Array<{name: string, reason?: string}> = []
+  
+  newProgram.sessions?.forEach(session => {
+    session.exercises?.forEach(ex => {
+      if (ex.prescribedLoad?.load) {
+        loadedExercises.push({
+          name: ex.name,
+          load: ex.prescribedLoad.load,
+          unit: ex.prescribedLoad.unit,
+        })
+      } else if (ex.noLoadReason) {
+        noLoadExercises.push({
+          name: ex.name,
+          reason: ex.noLoadReason,
+        })
+      }
+    })
   })
-  } catch (err) {
-    // ISSUE A: If error is already a GenerationError, re-throw as-is
-    if (err instanceof GenerationError) throw err
-    
-    // [session-assembly] Sub-classify assembly failures for better diagnosis
-    const errorMessage = err instanceof Error ? err.message : 'Failed to assemble sessions'
-    let subCode = 'assembly_unknown_failure'
-    
-    if (errorMessage.includes('exercise_selection_returned_null')) {
-      subCode = 'empty_exercise_pool'
-    } else if (errorMessage.includes('warmup') || errorMessage.includes('Warmup')) {
-      subCode = 'invalid_warmup_block'
-    } else if (errorMessage.includes('cooldown') || errorMessage.includes('Cooldown')) {
-      subCode = 'invalid_cooldown_block'
-    } else if (errorMessage.includes('main') || errorMessage.includes('exercise')) {
-      subCode = 'invalid_main_block'
-    } else if (errorMessage.includes('validation')) {
-      subCode = 'session_validation_failed'
-    }
+  
+  console.log('[weighted-truth] Program generation complete:', {
+    totalSessions: newProgram.sessions?.length,
+    exercisesWithLoad: loadedExercises.length,
+    exercisesWithNoLoadReason: noLoadExercises.length,
+    loadedExercises: loadedExercises.slice(0, 5), // Log first 5 for brevity
+    noLoadReasons: noLoadExercises.slice(0, 5),
+  })
+  
+  return newProgram
+}
     
   // [program-rebuild-error] TASK 7: Use searchable prefix for failures
   console.error('[program-rebuild-error] Session assembly failure:', {

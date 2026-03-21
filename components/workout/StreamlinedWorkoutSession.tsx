@@ -484,6 +484,18 @@ export function StreamlinedWorkoutSession({
     prescribedLoad: currentExercise?.prescribedLoad,
   }), [currentExercise])
   
+  // [weighted-truth] TASK H: Log workout session loading with prescribed load
+  useEffect(() => {
+    if (safeCurrentExercise.prescribedLoad?.load) {
+      console.log('[weighted-truth] Workout session loaded with prescribed load:', {
+        exerciseName: safeCurrentExercise.name,
+        load: safeCurrentExercise.prescribedLoad.load,
+        unit: safeCurrentExercise.prescribedLoad.unit,
+        confidence: safeCurrentExercise.prescribedLoad.confidenceLevel,
+      })
+    }
+  }, [safeCurrentExercise])
+  
   // Repair index if out of bounds (happens on next render cycle)
   useEffect(() => {
     if (isIndexOutOfBounds && hasValidExercises) {

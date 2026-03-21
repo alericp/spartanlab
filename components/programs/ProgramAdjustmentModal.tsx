@@ -43,11 +43,21 @@ import {
   type AdjustmentResult,
 } from '@/lib/program-adjustment-engine'
 
+// [canonical-rebuild] TASK B: Callback for requesting canonical rebuild with updated inputs
+export interface AdjustmentRebuildRequest {
+  type: 'training_days' | 'session_time' | 'equipment'
+  newTrainingDays?: TrainingDays
+  newSessionMinutes?: number
+  newEquipment?: EquipmentType[]
+}
+
 interface ProgramAdjustmentModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   onContinue: () => void
   onStartNew: () => void
+  // [canonical-rebuild] TASK B: Callback for triggering real canonical rebuild
+  onRebuildRequired?: (request: AdjustmentRebuildRequest) => Promise<{ success: boolean; error?: string }>
   currentEquipment?: EquipmentType[]
   currentSessionMinutes?: number
   currentTrainingDays?: TrainingDays
@@ -105,6 +115,7 @@ export function ProgramAdjustmentModal({
   onOpenChange,
   onContinue,
   onStartNew,
+  onRebuildRequired,
   currentEquipment = [],
   currentSessionMinutes = 60,
   currentTrainingDays = 3,
@@ -112,6 +123,9 @@ export function ProgramAdjustmentModal({
   const [view, setView] = useState<ModalView>('intercept')
   const [selectedCategory, setSelectedCategory] = useState<AdjustmentCategory | null>(null)
   const [adjustmentResult, setAdjustmentResult] = useState<AdjustmentResult | null>(null)
+  // [canonical-rebuild] TASK B: State for rebuild in progress and errors
+  const [isRebuilding, setIsRebuilding] = useState(false)
+  const [rebuildError, setRebuildError] = useState<string | null>(null)
   
   // Adjustment values
   const [sessionMinutes, setSessionMinutes] = useState(currentSessionMinutes)
@@ -132,9 +146,78 @@ export function ProgramAdjustmentModal({
     }
   }
 
-  const handleApplyAdjustment = () => {
+  // [canonical-rebuild] TASK B: Structural changes require canonical rebuild
+  const requiresCanonicalRebuild = (category: AdjustmentCategory): boolean => {
+    return category === 'schedule' || category === 'equipment'
+  }
+
+  const handleApplyAdjustment = async () => {
     if (!selectedCategory) return
 
+    console.log('[canonical-rebuild] Adjustment requested:', {
+      category: selectedCategory,
+      requiresRebuild: requiresCanonicalRebuild(selectedCategory),
+      hasRebuildCallback: !!onRebuildRequired,
+    })
+
+    // [canonical-rebuild] TASK B: For structural changes, trigger real canonical rebuild
+    if (requiresCanonicalRebuild(selectedCategory) && onRebuildRequired) {
+      setIsRebuilding(true)
+      setRebuildError(null)
+      
+      try {
+        console.log('[canonical-rebuild] Triggering canonical rebuild for:', selectedCategory)
+        
+        let rebuildRequest: AdjustmentRebuildRequest
+        if (selectedCategory === 'schedule') {
+          rebuildRequest = {
+            type: 'training_days',
+            newTrainingDays: trainingDays,
+          }
+        } else {
+          rebuildRequest = {
+            type: 'equipment',
+            newEquipment: currentEquipment, // Would need equipment state if changeable
+          }
+        }
+        
+        const rebuildResult = await onRebuildRequired(rebuildRequest)
+        
+        console.log('[canonical-rebuild] Rebuild result:', rebuildResult)
+        
+        if (!rebuildResult.success) {
+          setRebuildError(rebuildResult.error || 'Rebuild failed. Previous program preserved.')
+          setIsRebuilding(false)
+          return
+        }
+        
+        // Only now record the adjustment metadata (after successful rebuild)
+        const result = applyProgramAdjustment({
+          type: selectedCategory === 'schedule' ? 'training_days' : 'equipment',
+          newTrainingDays: selectedCategory === 'schedule' ? trainingDays : undefined,
+        })
+        
+        // [canonical-rebuild] TASK J: Use truthful description and message from actual rebuild
+        setAdjustmentResult({
+          ...result,
+          adjustment: {
+            ...result.adjustment,
+            description: `Program rebuilt with ${trainingDays} training days per week`,
+          },
+          coachMessage: `Your new program is ready with ${trainingDays} training days per week. All sessions have been regenerated to match your updated schedule.`,
+        })
+        setIsRebuilding(false)
+        setView('confirm')
+        
+      } catch (error) {
+        console.error('[canonical-rebuild] Rebuild error:', error)
+        setRebuildError('Rebuild failed unexpectedly. Previous program preserved.')
+        setIsRebuilding(false)
+      }
+      return
+    }
+
+    // Non-structural adjustments can use local metadata only
     let result: AdjustmentResult
 
     switch (selectedCategory) {
@@ -142,12 +225,6 @@ export function ProgramAdjustmentModal({
         result = applyProgramAdjustment({
           type: 'session_time',
           newSessionMinutes: sessionMinutes,
-        })
-        break
-      case 'schedule':
-        result = applyProgramAdjustment({
-          type: 'training_days',
-          newTrainingDays: trainingDays,
         })
         break
       case 'intensity':
@@ -369,12 +446,30 @@ export function ProgramAdjustmentModal({
               )}
             </div>
 
+            {/* [canonical-rebuild] TASK B: Show error if rebuild failed */}
+            {rebuildError && (
+              <div className="flex items-start gap-2 p-3 bg-[#1F1A1A] border border-[#3D2B2B] rounded-lg">
+                <AlertCircle className="w-4 h-4 text-[#EF4444] shrink-0 mt-0.5" />
+                <div className="text-xs text-[#EF4444]">
+                  {rebuildError}
+                </div>
+              </div>
+            )}
+
             <Button
               onClick={handleApplyAdjustment}
-              className="w-full bg-[#C1121F] hover:bg-[#A30F1A] text-white"
+              disabled={isRebuilding}
+              className="w-full bg-[#C1121F] hover:bg-[#A30F1A] text-white disabled:opacity-50"
             >
-              Apply Schedule Change
+              {isRebuilding ? 'Rebuilding Program...' : 'Apply Schedule Change'}
             </Button>
+            
+            {/* [canonical-rebuild] Note about what will happen */}
+            {onRebuildRequired && (
+              <p className="text-[10px] text-[#6B7280] text-center">
+                This will rebuild your entire program with the new schedule.
+              </p>
+            )}
           </div>
         )
 
@@ -456,8 +551,9 @@ export function ProgramAdjustmentModal({
           </div>
 
           <div className="text-center space-y-2">
+            {/* [canonical-rebuild] TASK J: Show truthful success message */}
             <h3 className="text-lg font-medium text-[#E6E9EF]">
-              Adjustment Applied
+              {selectedCategory === 'schedule' ? 'Program Rebuilt' : 'Adjustment Applied'}
             </h3>
             <p className="text-sm text-[#A4ACB8]">
               {adjustmentResult.adjustment.description}

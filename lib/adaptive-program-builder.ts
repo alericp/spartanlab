@@ -1175,6 +1175,20 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
     canPrescribeWeights: hasLoadableEqAtGen,
   })
   
+  // [build-input-truth] STEP 3: Capture canonical build input snapshot for diagnosis
+  console.log('[build-input-truth] Canonical build input snapshot:', {
+    primaryGoal: inputs.primaryGoal,
+    secondaryGoal: inputs.secondaryGoal || 'none',
+    trainingDaysPerWeek: inputs.trainingDaysPerWeek,
+    scheduleMode: inputs.scheduleMode,
+    sessionLength: inputs.sessionLength,
+    experienceLevel: inputs.experienceLevel,
+    equipment: inputs.equipment?.slice(0, 6) || [],
+    hasLoadableEquipment: hasLoadableEqAtGen,
+    trainingStyle: inputs.trainingStyle,
+    timestamp: new Date().toISOString(),
+  })
+  
   // STATE CONTRACT: Get system state flags to determine generation context
   const stateFlags = getSystemStateFlags()
   const generationMode: GenerationMode = inputs.regenerationMode || stateFlags.recommendedMode
@@ -2158,118 +2172,44 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
           dayNumber: session.dayNumber,
         })
       }
-    }
-  
-  // [weighted-truth] TASK D & E: Log prescribedLoad generation verification
-  const loadedExercises: Array<{name: string, load: number, unit: string}> = []
-  const noLoadExercises: Array<{name: string, reason?: string}> = []
-  
-  newProgram.sessions?.forEach(session => {
-    session.exercises?.forEach(ex => {
-      if (ex.prescribedLoad?.load) {
-        loadedExercises.push({
-          name: ex.name,
-          load: ex.prescribedLoad.load,
-          unit: ex.prescribedLoad.unit,
-        })
-      } else if (ex.noLoadReason) {
-        noLoadExercises.push({
-          name: ex.name,
-          reason: ex.noLoadReason,
-        })
-      }
-    })
-  })
-  
-  console.log('[weighted-truth] Program generation complete:', {
-    totalSessions: newProgram.sessions?.length,
-    exercisesWithLoad: loadedExercises.length,
-    exercisesWithNoLoadReason: noLoadExercises.length,
-    loadedExercises: loadedExercises.slice(0, 5), // Log first 5 for brevity
-    noLoadReasons: noLoadExercises.slice(0, 5),
-  })
-  
-  return newProgram
-}
-    
-  // [program-rebuild-error] TASK 7: Use searchable prefix for failures
-  console.error('[program-rebuild-error] Session assembly failure:', {
-    stage: 'session_assembly',
-    errorCode: 'session_assembly_failed',
-    subCode,
-    errorMessage,
-    structureName: structure?.structureName,
-    dayCount: structure?.days?.length,
-    currentStage,
-  })
-    
-    throw new GenerationError(
-      'session_assembly_failed',
-      currentStage,
-      errorMessage,
-      { 
-        structureName: structure?.structureName, 
-        dayCount: structure?.days?.length,
-        subCode, // Include sub-classification for diagnosis
-      }
-    )
-  }
-  
-  console.log('[program-generate] Sessions assembled:', sessions.length)
-  
-  // [session-assembly] ISSUE D: Final validation of assembled sessions array
-  const sessionExerciseCounts = sessions.map(s => s.exercises?.length || 0)
-  const emptySessions = sessions.filter(s => !s.exercises || s.exercises.length === 0)
-  
-  console.log('[session-assembly] Final session validation:', {
-    totalSessions: sessions.length,
-    expectedSessions: structure.days?.length || 0,
-    exerciseCountsPerSession: sessionExerciseCounts,
-    emptySessionCount: emptySessions.length,
-  })
-  
-  // [session-assembly] Throw if we have critically empty sessions
-  // [program-rebuild-error] TASK 7: Use searchable prefix for failures
-  if (emptySessions.length > 0) {
-  console.error('[program-rebuild-error] Empty sessions detected:', {
-    stage: 'session_assembly',
-    errorCode: 'session_assembly_failed',
-    subCode: 'empty_final_session_array',
-    emptyDays: emptySessions.map(s => s.dayNumber),
-  })
-  throw new GenerationError(
-  'session_assembly_failed',
-  'session_assembly',
-  `${emptySessions.length} session(s) have no exercises`,
-  { subCode: 'empty_final_session_array', emptyDays: emptySessions.map(s => s.dayNumber) }
-  )
-  }
-  
-  // [session-assembly] Throw if session count doesn't match structure
-  // [program-rebuild-error] TASK 7: Use searchable prefix for failures
-  if (sessions.length !== (structure.days?.length || 0)) {
-  console.error('[program-rebuild-error] Session count mismatch:', {
-    stage: 'session_assembly',
-    errorCode: 'session_assembly_failed',
-    subCode: 'session_count_mismatch',
-    assembled: sessions.length,
-    expected: structure.days?.length,
-  })
+    // Returning session from map callback - this marks end of individual session processing
+    return session
+  }) // End of sessions = structure.days.map(...)
+  } catch (err) {
+    // [session-assembly] Catch any errors during session map assembly
+    console.error('[session-assembly] Session assembly failed:', err)
     throw new GenerationError(
       'session_assembly_failed',
       'session_assembly',
-      `Session count mismatch: assembled ${sessions.length}, expected ${structure.days?.length}`,
-      { subCode: 'session_count_mismatch' }
+      err instanceof Error ? err.message : 'Session assembly encountered an unexpected error',
+      { subCode: 'assembly_unknown_failure' }
     )
   }
-  
-  // Calculate variety score (0-1, higher = more varied)
-  const varietyScore = calculateVarietyScore(sessionIntents)
-  
-  // ==========================================================================
-  // TASK 6: WEEKLY LOAD BALANCING ANALYSIS
-  // Analyze fatigue distribution across the week
-  // ==========================================================================
+
+  // [session-assembly] POST-MAP VALIDATION: Verify all sessions assembled successfully
+  console.log('[session-assembly] All sessions assembled:', {
+    sessionCount: sessions.length,
+    expectedCount: structure.days?.length || 0,
+    exerciseCountPerSession: sessions.map(s => s.exercises?.length || 0),
+  })
+
+  // Validate no empty sessions
+  const emptySessions = sessions.filter(s => !s.exercises || s.exercises.length === 0)
+  if (emptySessions.length > 0) {
+    console.error('[session-assembly] CRITICAL: Empty sessions detected', {
+      emptyDays: emptySessions.map(s => s.dayNumber),
+    })
+    throw new GenerationError(
+      'session_assembly_failed',
+      'session_assembly',
+      `${emptySessions.length} session(s) have no exercises`,
+      { subCode: 'empty_final_session_array', emptyDays: emptySessions.map(s => s.dayNumber) }
+    )
+  }
+
+  // =========================================================================
+  // WEEKLY LOAD BALANCE ANALYSIS
+  // =========================================================================
   const dayLoadProfiles: DayLoadProfile[] = sessions.map((session, index) => {
     const hasSkillWork = session.exercises.some(e => e.category === 'skill')
     const hasHeavyStrength = session.exercises.some(e => 

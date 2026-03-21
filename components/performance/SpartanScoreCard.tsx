@@ -125,6 +125,20 @@ export function SpartanScoreCard({ score }: SpartanScoreCardProps) {
               <span>{score.decayInfo.message}</span>
             </div>
           )}
+          
+          {/* [baseline-vs-earned] ISSUE E: Show baseline vs earned context */}
+          {score.baselineVsEarned?.hasBaselineOnly && (
+            <div className="mt-3 flex items-center gap-2 text-xs text-blue-400">
+              <AlertCircle className="w-3.5 h-3.5" />
+              <span>Score reflects your starting capability. Complete workouts to earn real progress.</span>
+            </div>
+          )}
+          {score.baselineVsEarned?.hasEarnedProgress && score.baselineVsEarned.earnedWorkoutCount > 0 && (
+            <div className="mt-3 flex items-center gap-2 text-xs text-emerald-400">
+              <TrendingUp className="w-3.5 h-3.5" />
+              <span>{score.baselineVsEarned.earnedWorkoutCount} workout{score.baselineVsEarned.earnedWorkoutCount > 1 ? 's' : ''} logged</span>
+            </div>
+          )}
         </div>
 
         {/* Score breakdown - Primary metrics */}

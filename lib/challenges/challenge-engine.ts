@@ -15,6 +15,14 @@ import { getSkillSessions } from '../skill-session-service'
 import { calculateTrainingStreak } from '../progress-streak-engine'
 import { getStrengthRecords } from '../strength-service'
 import { getSkillProgressions } from '../data-service'
+// [baseline-vs-earned] ISSUE A: Import earned progress helpers
+import { 
+  getEarnedStrengthRecords, 
+  getTrustedWorkoutLogs,
+  isStrengthMilestoneEarned,
+  shouldChallengeUseBaseline,
+  getBaselineVsEarnedSummary,
+} from '../baseline-earned-truth'
 
 // =============================================================================
 // SKILL & TIMED RESULTS STORAGE
@@ -232,11 +240,21 @@ function calculateMetrics(): ChallengeMetrics {
   const workouts = getTrustedWorkouts()
   const skillSessions = getSkillSessions()
   const streakData = calculateTrainingStreak()
-  const strengthRecords = getStrengthRecords()
+  // [baseline-vs-earned] ISSUE B: Use earned-only strength records for challenges
+  const strengthRecords = getEarnedStrengthRecords()
   const skillProgressions = getSkillProgressions()
   const skillAchievements = getSkillAchievements()
   const timedResults = getTimedResults()
   const prRecords = getPRRecords()
+  
+  // [baseline-vs-earned] Get baseline vs earned summary for logging
+  const truthSummary = getBaselineVsEarnedSummary()
+  console.log('[baseline-vs-earned] Challenge metrics using earned-only data:', {
+    earnedWorkouts: workouts.length,
+    earnedStrengthRecords: strengthRecords.length,
+    baselinePullUp: truthSummary.baseline.pullUpMax,
+    earnedPullUp: truthSummary.earned.earnedPullUpMax,
+  })
   
   const metrics: ChallengeMetrics = {
     workoutsInPeriod: {},
@@ -612,7 +630,11 @@ export interface ChallengeWithProgress {
   }
   isCompleted?: boolean
   progressPercent?: number
-  }
+  // [baseline-vs-earned] ISSUE E: Track progress source for UI labeling
+  progressSource?: 'earned' | 'baseline' | 'mixed'
+  baselineValue?: number // What user started with (if applicable)
+  earnedValue?: number   // What user earned in-app (if applicable)
+}
 
 export interface ChallengeSummary {
   totalActive: number

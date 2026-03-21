@@ -59,6 +59,19 @@ function AnalyticsProviderInner({ children }: { children: React.ReactNode }) {
       }).catch(() => {
         // Module import failed - continue silently
       })
+      
+      // [baseline-vs-earned] ISSUE F: Initialize baseline tracking for existing users
+      // This ensures baseline is captured even for users who completed onboarding
+      // before this feature was added
+      import('@/lib/baseline-earned-truth').then(({ initializeBaselineTracking }) => {
+        try {
+          initializeBaselineTracking()
+        } catch {
+          // Baseline init failed - continue silently
+        }
+      }).catch(() => {
+        // Module import failed - continue silently
+      })
     } catch {
       // Outer try-catch for any unexpected errors
     }

@@ -100,6 +100,13 @@ import { getUnifiedSkillIntelligence, generateTrainingAdjustments, type UnifiedS
 import { getCompressionReadiness, shouldBiasTowardCompression, type CompressionReadinessResult } from './compression-readiness'
 import { selectOptimalStructure, getDayExplanation } from './program-structure-engine'
 import { selectExercisesForSession, evaluateSessionProgressions, getSmartProgressionExercise } from './program-exercise-selector'
+// [exercise-trace] TASK 8: Import comparison utilities for build-to-build traceability
+import {
+  type ProgramSelectionTrace,
+  type SessionSelectionTrace,
+  compareExerciseSelectionTraces,
+  logExerciseComparison,
+} from './engine-quality-contract'
 import { evaluateExerciseProgression, type ProgressionDecision as SimpleProgressionDecision } from './progression-decision-engine'
 import { generateSessionVariants, type SessionVariant } from './session-compression-engine'
 import { analyzeEquipmentProfile, adaptSessionForEquipment, getEquipmentRecommendations, type EquipmentProfile } from './equipment-adaptation-engine'
@@ -2089,13 +2096,16 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
       subCode = 'session_validation_failed'
     }
     
-    console.error('[session-assembly] FAILURE:', {
-      subCode,
-      errorMessage,
-      structureName: structure?.structureName,
-      dayCount: structure?.days?.length,
-      currentStage,
-    })
+  // [program-rebuild-error] TASK 7: Use searchable prefix for failures
+  console.error('[program-rebuild-error] Session assembly failure:', {
+    stage: 'session_assembly',
+    errorCode: 'session_assembly_failed',
+    subCode,
+    errorMessage,
+    structureName: structure?.structureName,
+    dayCount: structure?.days?.length,
+    currentStage,
+  })
     
     throw new GenerationError(
       'session_assembly_failed',
@@ -2123,24 +2133,32 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
   })
   
   // [session-assembly] Throw if we have critically empty sessions
+  // [program-rebuild-error] TASK 7: Use searchable prefix for failures
   if (emptySessions.length > 0) {
-    console.error('[session-assembly] CRITICAL: Some sessions have no exercises', {
-      emptyDays: emptySessions.map(s => s.dayNumber),
-    })
-    throw new GenerationError(
-      'session_assembly_failed',
-      'session_assembly',
-      `${emptySessions.length} session(s) have no exercises`,
-      { subCode: 'empty_final_session_array', emptyDays: emptySessions.map(s => s.dayNumber) }
-    )
+  console.error('[program-rebuild-error] Empty sessions detected:', {
+    stage: 'session_assembly',
+    errorCode: 'session_assembly_failed',
+    subCode: 'empty_final_session_array',
+    emptyDays: emptySessions.map(s => s.dayNumber),
+  })
+  throw new GenerationError(
+  'session_assembly_failed',
+  'session_assembly',
+  `${emptySessions.length} session(s) have no exercises`,
+  { subCode: 'empty_final_session_array', emptyDays: emptySessions.map(s => s.dayNumber) }
+  )
   }
   
   // [session-assembly] Throw if session count doesn't match structure
+  // [program-rebuild-error] TASK 7: Use searchable prefix for failures
   if (sessions.length !== (structure.days?.length || 0)) {
-    console.error('[session-assembly] CRITICAL: Session count mismatch', {
-      assembled: sessions.length,
-      expected: structure.days?.length,
-    })
+  console.error('[program-rebuild-error] Session count mismatch:', {
+    stage: 'session_assembly',
+    errorCode: 'session_assembly_failed',
+    subCode: 'session_count_mismatch',
+    assembled: sessions.length,
+    expected: structure.days?.length,
+  })
     throw new GenerationError(
       'session_assembly_failed',
       'session_assembly',
@@ -4245,16 +4263,18 @@ export function saveAdaptiveProgram(program: AdaptiveProgram): AdaptiveProgram {
   // [program-build] Log session exercise counts for diagnosis
   console.log('[program-build] SAVE: Session exercise counts:', sessionExerciseCounts)
   
-  // [program-build] SAVE: If critical issues found, DO NOT save - preserve last good program
+  // [program-rebuild-truth] SAVE: If critical issues found, DO NOT save - preserve last good program
+  // TASK 4: Atomic replacement guard - reject malformed programs to preserve last good
   if (criticalIssues.length > 0) {
-    console.error('[program-build] SAVE BLOCKED: Program has invalid structure:', {
+    console.error('[program-rebuild-error] SAVE BLOCKED: Program has invalid structure:', {
       issues: criticalIssues,
       sessionCount: sessions.length,
       sessionExerciseCounts,
       programId: program?.id,
+      preservedLastGoodProgram: true,
     })
-    // Return the program object without saving - calling code can handle the rejection
-    // This preserves the last good program in storage
+    // [program-rebuild-fallback] This preserves the last good program in storage
+    console.log('[program-rebuild-fallback] Last good program preserved - malformed program rejected')
     throw new Error(`session_save_blocked: ${criticalIssues.join(', ')}`)
   }
   
@@ -4273,15 +4293,17 @@ export function saveAdaptiveProgram(program: AdaptiveProgram): AdaptiveProgram {
     console.log('[program-build] SAVE: Database validation passed')
   }
   
-  // [program-build] SAVE: Actually persist to localStorage
+  // [program-rebuild-truth] SAVE: Actually persist to localStorage
+  // TASK 4: Atomic replacement - this is the final commit step
   const programs = getSavedAdaptivePrograms()
   programs.push(program)
   localStorage.setItem(STORAGE_KEY, JSON.stringify(programs))
   
-  console.log('[program-build] SAVE: Program saved successfully', {
+  console.log('[program-rebuild-truth] SAVE: Program saved successfully - atomic replacement complete', {
     programId: program.id,
     sessionCount: sessions.length,
     totalExercises: sessionExerciseCounts.reduce((a, b) => a + b, 0),
+    replacedVisibleProgram: true,
   })
   return program
 }
@@ -4533,4 +4555,120 @@ export function getTimeOptimizationInfo(session: AdaptiveSession): {
     message: opt.coachingMessage,
     details: `${opt.removedExercises.length} exercise(s) removed, ${opt.reducedExercises.length} reduced`,
   }
+}
+
+// =============================================================================
+// [exercise-trace] TASK 8: BUILD-TO-BUILD COMPARISON
+// =============================================================================
+
+/**
+ * Build a ProgramSelectionTrace from an AdaptiveProgram.
+ * [exercise-trace] TASK 8: Creates trace structure for comparison.
+ */
+export function buildProgramSelectionTrace(program: AdaptiveProgram): ProgramSelectionTrace {
+  const sessionTraces: SessionSelectionTrace[] = program.sessions.map((session, index) => {
+    const exerciseTraces = session.exercises.map(ex => {
+      // Use existing selection trace if available, otherwise create minimal
+      if (ex.selectionTrace) {
+        return ex.selectionTrace
+      }
+      // Fallback: create minimal trace for older programs
+      return {
+        exerciseId: ex.exercise.id,
+        exerciseName: ex.exercise.name,
+        slotType: 'main' as const,
+        sessionRole: 'accessory' as const,
+        expressionMode: 'strength_support' as const,
+        primarySelectionReason: 'unknown' as const,
+        secondaryInfluences: [],
+        influencingSkills: [],
+        doctrineSource: null,
+        exerciseFamily: ex.exercise.movementPattern || null,
+        candidatePoolSummary: {
+          totalCandidates: 0,
+          filteredByEquipment: 0,
+          filteredBySessionRole: 0,
+          filteredBySkillWeight: 0,
+          finalRankedCandidates: 0,
+        },
+        rejectedAlternatives: [],
+        equipmentDecision: null,
+        loadabilityInfluence: null,
+        limiterInfluence: null,
+        recoveryInfluence: null,
+        confidence: 0.3,
+        traceQuality: 'minimal' as const,
+      }
+    })
+
+    return {
+      sessionIndex: index,
+      dayLabel: session.dayLabel || `Day ${index + 1}`,
+      sessionRole: session.dayType?.includes('skill') ? 'primary_focus' as const :
+                   session.dayType?.includes('support') ? 'recovery' as const :
+                   'mixed' as const,
+      primarySkillExpressed: program.primaryGoal,
+      secondarySkillExpressed: program.secondaryGoal || null,
+      exerciseTraces,
+      unexpressedSkills: [],
+      sessionRationale: session.explanation || '',
+    }
+  })
+
+  const aggregateStats = {
+    totalExercises: program.sessions.reduce((sum, s) => sum + s.exercises.length, 0),
+    skillDirectExercises: sessionTraces.flatMap(s => s.exerciseTraces)
+      .filter(e => e.primarySelectionReason === 'primary_skill_direct' || e.primarySelectionReason === 'secondary_skill_direct')
+      .length,
+    strengthSupportExercises: sessionTraces.flatMap(s => s.exerciseTraces)
+      .filter(e => e.primarySelectionReason === 'strength_foundation' || e.primarySelectionReason === 'selected_skill_support')
+      .length,
+    weightedExercises: sessionTraces.flatMap(s => s.exerciseTraces)
+      .filter(e => e.equipmentDecision?.weightedChosen === true)
+      .length,
+    bodyweightExercises: sessionTraces.flatMap(s => s.exerciseTraces)
+      .filter(e => e.equipmentDecision?.weightedChosen === false || !e.equipmentDecision)
+      .length,
+    doctrineHitCount: sessionTraces.flatMap(s => s.exerciseTraces)
+      .filter(e => e.doctrineSource !== null)
+      .length,
+    rejectedAlternativeCount: sessionTraces.flatMap(s => s.exerciseTraces)
+      .reduce((sum, e) => sum + (e.rejectedAlternatives?.length || 0), 0),
+  }
+
+  return {
+    programId: program.id,
+    generatedAt: program.createdAt,
+    profileSignature: program.profileSignature || '',
+    sessionTraces,
+    aggregateStats,
+  }
+}
+
+/**
+ * Compare current program with previous one and log differences.
+ * [exercise-trace] TASK 8: Explains why plans are similar or different.
+ */
+export function logProgramComparison(
+  previousProgram: AdaptiveProgram | null,
+  newProgram: AdaptiveProgram
+): void {
+  const prevTrace = previousProgram ? buildProgramSelectionTrace(previousProgram) : null
+  const newTrace = buildProgramSelectionTrace(newProgram)
+  
+  const comparison = compareExerciseSelectionTraces(prevTrace, newTrace)
+  logExerciseComparison(comparison)
+  
+  // [exercise-trace] Additional logging for debugging
+  console.log('[exercise-trace-compare] PROGRAM COMPARISON DETAILS:', {
+    previousId: previousProgram?.id || 'none',
+    newId: newProgram.id,
+    profileChanged: previousProgram?.profileSignature !== newProgram.profileSignature,
+    exercisesUnchanged: comparison.unchangedExercises.length,
+    exercisesAdded: comparison.addedExercises.length,
+    exercisesRemoved: comparison.removedExercises.length,
+    weightedInPrev: prevTrace?.aggregateStats.weightedExercises || 0,
+    weightedInNew: newTrace.aggregateStats.weightedExercises,
+    doctrineHitsInNew: newTrace.aggregateStats.doctrineHitCount,
+  })
 }

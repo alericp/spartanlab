@@ -155,7 +155,23 @@ import {
   getDirectSupportExercises,
   type SkillSupportMapping,
 } from './doctrine/skill-support-mappings'
-import type { SkillCarryover } from './movement-family-registry' from './engine-quality-contract'
+import {
+  // [exercise-trace] TASK 1: Import traceability types
+  type ExerciseSelectionTrace,
+  type ExerciseSelectionReason,
+  type TraceExpressionMode,
+  type TraceSessionRole,
+  type WeightedDecisionTrace,
+  type WeightedBlockerReason,
+  type RejectedAlternative,
+  type RejectionReason,
+  type DoctrineSourceTrace,
+  type SessionSelectionTrace,
+  type SkillExpressionMode,
+  createMinimalTrace,
+  logExerciseTrace,
+  logSessionTrace,
+} from './engine-quality-contract'
 import {
   // [advanced-skill-expression] ISSUE D: Intentional support work helpers
   getAdvancedSkillSupport,
@@ -190,6 +206,8 @@ export interface SelectedExercise {
     intensityBand?: 'strength' | 'support_volume' | 'hypertrophy'
     notes?: string[]          // Context/coaching notes
   }
+  // [exercise-trace] TASK 2: Full selection traceability
+  selectionTrace?: ExerciseSelectionTrace
 }
 
 // =============================================================================
@@ -252,6 +270,16 @@ export interface ExerciseSelection {
     isValid: boolean
     issues: string[]
     suggestions: string[]
+  }
+  // [exercise-trace] TASK 5: Session-level trace summary
+  sessionTrace?: {
+    sessionRole: 'primary_focus' | 'secondary_focus' | 'mixed' | 'support_heavy' | 'recovery'
+    primarySkillExpressed: string | null
+    secondarySkillExpressed: string | null
+    exerciseCount: number
+    weightedExerciseCount: number
+    doctrineHitCount: number
+    rejectedAlternativeCount: number
   }
 }
 
@@ -493,6 +521,34 @@ export function selectExercisesForSession(inputs: ExerciseSelectionInputs): Exer
     })
   }
   
+  // [exercise-trace] TASK 5/7: Build session-level trace summary
+  const weightedExerciseCount = main.filter(e => e.prescribedLoad && e.prescribedLoad.load > 0).length
+  const doctrineHitCount = main.filter(e => e.selectionTrace?.doctrineSource !== null).length
+  // Count rejected alternatives from all exercise traces
+  const rejectedCount = main.reduce((sum, e) => sum + (e.selectionTrace?.rejectedAlternatives?.length || 0), 0)
+  
+  const sessionTraceResult = {
+    sessionRole: (day.focus === 'skill' || day.focus === 'push_skill' || day.focus === 'pull_skill') ? 'primary_focus' as const :
+                 (day.focus === 'support_recovery') ? 'recovery' as const :
+                 (day.focus === 'mixed_upper') ? 'mixed' as const : 'support_heavy' as const,
+    primarySkillExpressed: skillsForSession?.find(s => s.expressionMode === 'primary')?.skill || primaryGoal,
+    secondarySkillExpressed: skillsForSession?.find(s => s.expressionMode === 'technical')?.skill || null,
+    exerciseCount: main.length,
+    weightedExerciseCount,
+    doctrineHitCount,
+    rejectedAlternativeCount: rejectedCount,
+  }
+  
+  // [exercise-trace] TASK 7: Log session summary
+  console.log('[exercise-trace] SESSION COMPLETE:', {
+    dayFocus: day.focus,
+    exerciseCount: main.length,
+    weightedCount: weightedExerciseCount,
+    doctrineHits: doctrineHitCount,
+    rejected: rejectedCount,
+    skillsExpressed: skillsForSession?.map(s => `${s.skill}(${s.expressionMode})`).join(', ') || primaryGoal,
+  })
+  
   return {
   warmup,
   main,
@@ -506,6 +562,8 @@ export function selectExercisesForSession(inputs: ExerciseSelectionInputs): Exer
   issues: antiBloatResult.issues,
   suggestions: antiBloatResult.suggestions,
   },
+  // [exercise-trace] TASK 5: Attach session trace
+  sessionTrace: sessionTraceResult,
   }
   }
 
@@ -755,6 +813,24 @@ function selectMainExercises(
     return stress === 'low' ? 1 : stress === 'moderate' ? 2 : stress === 'high' ? 3 : 4
   }
   
+  // [exercise-trace] Track rejected alternatives for traceability (moved before canAddMore)
+  const sessionRejectedAlternatives: RejectedAlternative[] = []
+  
+  // Helper to track a rejected alternative
+  const trackRejection = (
+    exerciseId: string,
+    exerciseName: string,
+    rejectionReason: RejectionReason,
+    details?: string
+  ) => {
+    // Keep only top 20 most recent rejects per session
+    if (sessionRejectedAlternatives.length >= 20) {
+      sessionRejectedAlternatives.shift()
+    }
+    sessionRejectedAlternatives.push({ exerciseId, exerciseName, rejectionReason, details })
+    console.log('[exercise-trace] REJECTED:', { exerciseId, reason: rejectionReason, details })
+  }
+
   // Helper to check if we can add more based on load and movement intelligence
   const canAddMore = (exercise: Exercise, deliveryStyle: DeliveryStyle = 'standalone'): boolean => {
     const metadata = buildExerciseLoadMetadata(
@@ -780,16 +856,28 @@ function selectMainExercises(
     // For accessory/rehab/core, be more lenient with raw exercise count
     const isLowImpact = metadata.role === 'accessory' || metadata.role === 'rehab_prep' || metadata.role === 'core'
     
-    // Critical limits that should never be exceeded
-    if (newHighFatigue > HIGH_FATIGUE_LIMIT + 1) return false
-    if (newStraightArm > STRAIGHT_ARM_LIMIT + 1) return false
-    if (newPrimary > PRIMARY_LIMIT + 1) return false
+    // Critical limits that should never be exceeded - [exercise-trace] TASK 4: Track rejections
+    if (newHighFatigue > HIGH_FATIGUE_LIMIT + 1) {
+      trackRejection(exercise.id, exercise.name, 'fatigue_limit', 'High fatigue limit exceeded')
+      return false
+    }
+    if (newStraightArm > STRAIGHT_ARM_LIMIT + 1) {
+      trackRejection(exercise.id, exercise.name, 'straight_arm_limit', 'Straight arm limit exceeded')
+      return false
+    }
+    if (newPrimary > PRIMARY_LIMIT + 1) {
+      trackRejection(exercise.id, exercise.name, 'fatigue_limit', 'Primary exercise limit exceeded')
+      return false
+    }
     
     // Weighted load check (more lenient for low-impact exercises)
-    if (!isLowImpact && newWeightedLoad > WEIGHTED_LOAD_LIMIT + 1) return false
+    if (!isLowImpact && newWeightedLoad > WEIGHTED_LOAD_LIMIT + 1) {
+      trackRejection(exercise.id, exercise.name, 'fatigue_limit', 'Weighted load limit exceeded')
+      return false
+    }
     
     // =========================================================================
-    // MOVEMENT INTELLIGENCE CHECKS
+    // MOVEMENT INTELLIGENCE CHECKS - [exercise-trace] TASK 4: Track joint stress rejections
     // =========================================================================
     
     // Check joint stress accumulation
@@ -800,29 +888,49 @@ function selectMainExercises(
     
     // Reject if any joint is overloaded
     if (newShoulderStress > JOINT_STRESS_LIMITS.shoulder) {
-      console.log('[movement-intel] Rejecting exercise due to shoulder stress:', exercise.id)
+      trackRejection(exercise.id, exercise.name, 'joint_stress_exceeded', 'Shoulder stress limit exceeded')
       return false
     }
     if (newWristStress > JOINT_STRESS_LIMITS.wrist) {
-      console.log('[movement-intel] Rejecting exercise due to wrist stress:', exercise.id)
+      trackRejection(exercise.id, exercise.name, 'joint_stress_exceeded', 'Wrist stress limit exceeded')
       return false
     }
     if (newElbowStress > JOINT_STRESS_LIMITS.elbow) {
-      console.log('[movement-intel] Rejecting exercise due to elbow stress:', exercise.id)
+      trackRejection(exercise.id, exercise.name, 'joint_stress_exceeded', 'Elbow stress limit exceeded')
       return false
     }
     
     return true
   }
   
-  // Helper to add exercise with prerequisite gate check and load tracking
+  // [exercise-trace] TASK 2: Enhanced addExercise with full traceability
+  // Helper to add exercise with prerequisite gate check, load tracking, and trace
   const addExercise = (
     exercise: Exercise,
     reason: string,
     setsOverride?: number,
     repsOverride?: string,
     noteOverride?: string,
-    deliveryStyle: DeliveryStyle = 'standalone'
+    deliveryStyle: DeliveryStyle = 'standalone',
+    // [exercise-trace] TASK 2: Trace context parameters
+    traceContext?: {
+      primarySelectionReason: ExerciseSelectionReason
+      sessionRole: TraceSessionRole
+      expressionMode: TraceExpressionMode
+      influencingSkills?: Array<{
+        skillId: string
+        influence: 'primary' | 'secondary' | 'selected' | 'limiter_related'
+        expressionMode: SkillExpressionMode
+      }>
+      doctrineSource?: DoctrineSourceTrace
+      exerciseFamily?: string
+      candidatePoolSize?: number
+      weightedConsidered?: boolean
+      weightedEligible?: boolean
+      weightedBlockerReason?: WeightedBlockerReason
+      limiterInfluence?: string
+      recoveryInfluence?: string
+    }
   ) => {
     if (usedIds.has(exercise.id)) return false
     if (selected.length >= maxExercises) return false
@@ -1026,6 +1134,70 @@ function selectMainExercises(
       }
     }
     
+    // =========================================================================
+    // [exercise-trace] TASK 2: Build selection trace
+    // =========================================================================
+    const isWeightedCapable = finalExercise.id.includes('pull_up') || 
+                               finalExercise.id.includes('dip') ||
+                               finalExercise.id.includes('push_up') ||
+                               finalExercise.id.includes('row')
+    
+    // Build weighted decision trace for weighted-capable exercises
+    let equipmentDecision: WeightedDecisionTrace | null = null
+    if (isWeightedCapable) {
+      const weightedChosen = isWeightedExercise && prescribedLoad !== undefined
+      equipmentDecision = {
+        weightedConsidered: traceContext?.weightedConsidered ?? isWeightedCapable,
+        weightedEligible: traceContext?.weightedEligible ?? (weightedBenchmarks !== undefined),
+        weightedChosen,
+        weightedBlockerReason: weightedChosen ? null : (
+          traceContext?.weightedBlockerReason ?? 
+          (!weightedBenchmarks ? 'no_benchmark_confidence' : 
+           !equipment?.includes('weight_belt') && !equipment?.includes('weight_vest') ? 'no_loadable_equipment' : 
+           null)
+        ),
+        prescribedLoad: weightedChosen && prescribedLoad ? {
+          load: prescribedLoad.load,
+          unit: prescribedLoad.unit,
+          basis: prescribedLoad.basis,
+        } : undefined,
+      }
+    }
+
+    // Determine selection reason from reason string if not provided
+    const inferredReason = inferSelectionReason(reason, finalExercise, primaryGoal)
+    
+    // Build the trace object
+    const selectionTrace: ExerciseSelectionTrace = {
+      exerciseId: finalExercise.id,
+      exerciseName: finalExercise.name,
+      slotType: 'main',
+      sessionRole: traceContext?.sessionRole ?? inferSessionRole(loadMetadata?.role),
+      expressionMode: traceContext?.expressionMode ?? 'strength_support',
+      primarySelectionReason: traceContext?.primarySelectionReason ?? inferredReason,
+      secondaryInfluences: [],
+      influencingSkills: traceContext?.influencingSkills ?? [],
+      doctrineSource: traceContext?.doctrineSource ?? null,
+      exerciseFamily: traceContext?.exerciseFamily ?? movementIntel.primaryPattern ?? null,
+      candidatePoolSummary: {
+        totalCandidates: traceContext?.candidatePoolSize ?? 0,
+        filteredByEquipment: 0,
+        filteredBySessionRole: 0,
+        filteredBySkillWeight: 0,
+        finalRankedCandidates: traceContext?.candidatePoolSize ?? 1,
+      },
+      rejectedAlternatives: sessionRejectedAlternatives.slice(-5), // Last 5 rejects
+      equipmentDecision,
+      loadabilityInfluence: prescribedLoad ? `Load: +${prescribedLoad.load}${prescribedLoad.unit}` : null,
+      limiterInfluence: traceContext?.limiterInfluence ?? null,
+      recoveryInfluence: traceContext?.recoveryInfluence ?? null,
+      confidence: traceContext ? 0.8 : 0.5,
+      traceQuality: traceContext ? 'partial' : 'minimal',
+    }
+    
+    // [exercise-trace] TASK 7: Log the trace
+    logExerciseTrace(selectionTrace)
+
     selected.push({
       exercise: finalExercise,
       sets: finalSets ?? adjustSetsForLevel(finalExercise.defaultSets, experienceLevel),
@@ -1045,8 +1217,44 @@ function selectMainExercises(
       deliveryStyle,
       // WEIGHTED LOAD PR: Include prescribed load if available
       prescribedLoad,
+      // [exercise-trace] TASK 2: Attach the trace
+      selectionTrace,
     })
     return true
+  }
+  
+  // =========================================================================
+  // [exercise-trace] HELPER FUNCTIONS FOR TRACE INFERENCE
+  // =========================================================================
+  
+  /** Infer selection reason from reason string */
+  function inferSelectionReason(reason: string, exercise: Exercise, goal: string): ExerciseSelectionReason {
+    const r = reason.toLowerCase()
+    if (r.includes('primary') && r.includes('skill')) return 'primary_skill_direct'
+    if (r.includes('secondary') && r.includes('skill')) return 'secondary_skill_direct'
+    if (r.includes('technical')) return 'primary_skill_technical'
+    if (r.includes('support') && r.includes('skill')) return 'selected_skill_support'
+    if (r.includes('limiter') || r.includes('weak point')) return 'limiter_correction'
+    if (r.includes('core') || r.includes('trunk') || r.includes('compression')) return 'trunk_core_support'
+    if (r.includes('mobility') || r.includes('flexibility')) return 'mobility_enabling'
+    if (r.includes('rotation') || r.includes('recovery')) return 'recovery_rotation'
+    if (r.includes('strength') || r.includes('foundation')) return 'strength_foundation'
+    if (r.includes('doctrine')) return 'doctrine_recommended'
+    if (r.includes('equipment') || r.includes('fallback')) return 'equipment_fallback'
+    if (r.includes('prerequisite')) return 'prerequisite_building'
+    return 'session_role_fill'
+  }
+  
+  /** Infer session role from load metadata role */
+  function inferSessionRole(loadRole: string | undefined): TraceSessionRole {
+    if (!loadRole) return 'accessory'
+    if (loadRole === 'skill_primary') return 'skill_primary'
+    if (loadRole === 'skill_secondary') return 'skill_secondary'
+    if (loadRole === 'strength_primary') return 'strength_primary'
+    if (loadRole === 'strength_support') return 'strength_support'
+    if (loadRole === 'core') return 'core'
+    if (loadRole === 'accessory') return 'accessory'
+    return 'accessory'
   }
   
   // ==========================================================================
@@ -1054,20 +1262,33 @@ function selectMainExercises(
   // ==========================================================================
   
   // 1. SKILL DAYS - Lead with skill work
+  // [exercise-trace] TASK 2/5: Thread trace context through selection
   if (day.focus === 'push_skill' || day.focus === 'pull_skill' || day.focus === 'skill_density') {
     // Add primary skill exercise(s)
     const skills = goalExercises.filter(e => e.category === 'skill')
     const primarySkill = selectByLevel(skills, experienceLevel)
     
     if (primarySkill) {
-      addExercise(primarySkill, `Primary ${primaryGoal} skill work`)
+      addExercise(primarySkill, `Primary ${primaryGoal} skill work`, undefined, undefined, undefined, 'standalone', {
+        primarySelectionReason: 'primary_skill_direct',
+        sessionRole: 'skill_primary',
+        expressionMode: 'direct_intensity',
+        influencingSkills: [{ skillId: primaryGoal, influence: 'primary', expressionMode: 'direct' }],
+        candidatePoolSize: skills.length,
+      })
     }
     
     // Add secondary skill for density days
     if (day.focus === 'skill_density' && skills.length > 1) {
       const secondarySkill = skills.find(s => s.id !== primarySkill?.id)
       if (secondarySkill) {
-        addExercise(secondarySkill, 'Additional skill density', undefined, undefined, 'Moderate intensity')
+        addExercise(secondarySkill, 'Additional skill density', undefined, undefined, 'Moderate intensity', 'standalone', {
+          primarySelectionReason: 'primary_skill_technical',
+          sessionRole: 'skill_secondary',
+          expressionMode: 'technical_focus',
+          influencingSkills: [{ skillId: primaryGoal, influence: 'secondary', expressionMode: 'technical' }],
+          candidatePoolSize: skills.length - 1,
+        })
       }
     }
     
@@ -1077,11 +1298,18 @@ function selectMainExercises(
       availableStrength.find(e => e.transferTo.includes(primaryGoal))
     
     if (strengthPick) {
-      addExercise(strengthPick, `Supports ${primaryGoal} development`)
+      addExercise(strengthPick, `Supports ${primaryGoal} development`, undefined, undefined, undefined, 'standalone', {
+        primarySelectionReason: 'selected_skill_support',
+        sessionRole: 'strength_support',
+        expressionMode: 'strength_support',
+        influencingSkills: [{ skillId: primaryGoal, influence: 'primary', expressionMode: 'support' }],
+        candidatePoolSize: primaryStrength.length,
+      })
     }
   }
   
   // 2. STRENGTH DAYS
+  // [exercise-trace] TASK 2/3: Thread weighted decision trace
   if (day.focus === 'push_strength' || day.focus === 'pull_strength') {
     const isPush = day.focus === 'push_strength'
     
@@ -1092,11 +1320,24 @@ function selectMainExercises(
     
     if (primaryWeighted) {
       const isHeavyDay = day.targetIntensity === 'high'
+      const hasBenchmarks = weightedBenchmarks && (isPush ? weightedBenchmarks.weightedDip : weightedBenchmarks.weightedPullUp)
       addExercise(
         primaryWeighted,
         isHeavyDay ? 'Primary strength builder (heavy)' : 'Primary strength builder (volume)',
         isHeavyDay ? 4 : 3,
-        isHeavyDay ? '3-5' : '6-8'
+        isHeavyDay ? '3-5' : '6-8',
+        undefined,
+        'standalone',
+        {
+          primarySelectionReason: 'strength_foundation',
+          sessionRole: 'strength_primary',
+          expressionMode: isHeavyDay ? 'direct_intensity' : 'volume_accumulation',
+          influencingSkills: [{ skillId: primaryGoal, influence: 'primary', expressionMode: 'support' }],
+          candidatePoolSize: availableStrength.length,
+          weightedConsidered: true,
+          weightedEligible: !!hasBenchmarks,
+          weightedBlockerReason: !hasBenchmarks ? 'no_benchmark_confidence' : undefined,
+        }
       )
     }
     
@@ -1106,7 +1347,13 @@ function selectMainExercises(
     )
     const strengthPick = selectByLevel(goalStrength, experienceLevel)
     if (strengthPick) {
-      addExercise(strengthPick, `Skill-specific ${isPush ? 'push' : 'pull'} strength`)
+      addExercise(strengthPick, `Skill-specific ${isPush ? 'push' : 'pull'} strength`, undefined, undefined, undefined, 'standalone', {
+        primarySelectionReason: 'selected_skill_support',
+        sessionRole: 'strength_support',
+        expressionMode: 'strength_support',
+        influencingSkills: [{ skillId: primaryGoal, influence: 'primary', expressionMode: 'support' }],
+        candidatePoolSize: goalStrength.length,
+      })
     }
     
     // Add skill exposure if this is a primary day
@@ -1114,7 +1361,13 @@ function selectMainExercises(
       const skills = goalExercises.filter(e => e.category === 'skill')
       const skillPick = selectByLevel(skills, experienceLevel)
       if (skillPick) {
-        addExercise(skillPick, 'Skill exposure alongside strength work')
+        addExercise(skillPick, 'Skill exposure alongside strength work', undefined, undefined, undefined, 'standalone', {
+          primarySelectionReason: 'primary_skill_technical',
+          sessionRole: 'skill_secondary',
+          expressionMode: 'technical_focus',
+          influencingSkills: [{ skillId: primaryGoal, influence: 'primary', expressionMode: 'rotation' }],
+          candidatePoolSize: skills.length,
+        })
       }
     }
   }

@@ -1929,3 +1929,392 @@ export function planFlexibilityInsertions(
   
   return insertions
 }
+
+// =============================================================================
+// EXERCISE SELECTION TRACE CONTRACT (TASK 1 - TRACEABILITY PR)
+// =============================================================================
+// This contract provides full audit trail for every exercise selected.
+// Answers: Why was this exercise selected? Which skills drove it?
+// Was it direct/technical/support? Why did weighted or bodyweight win?
+
+/**
+ * Primary reason an exercise was selected.
+ * [exercise-trace] ISSUE A: Explicit selection reasons.
+ */
+export type ExerciseSelectionReason =
+  | 'primary_skill_direct'       // Directly progresses primary skill (e.g., FL hold for front_lever)
+  | 'primary_skill_technical'    // Technical drill for primary skill quality
+  | 'secondary_skill_direct'     // Directly progresses secondary skill
+  | 'secondary_skill_technical'  // Technical drill for secondary skill
+  | 'selected_skill_support'     // Support work for a user-selected skill
+  | 'prerequisite_building'      // Building prerequisite strength/position
+  | 'limiter_correction'         // Addressing a detected limiter/weak point
+  | 'trunk_core_support'         // Compression/core/bodyline for skill transfer
+  | 'mobility_enabling'          // Flexibility work enabling skill positions
+  | 'recovery_rotation'          // Light rotation day / recovery work
+  | 'strength_foundation'        // General strength supporting skill goals
+  | 'equipment_fallback'         // Alternative due to equipment constraint
+  | 'session_role_fill'          // Filling session role requirement
+  | 'doctrine_recommended'       // Doctrine mapping recommended this
+  | 'unknown'                    // Fallback when reason cannot be determined
+
+/**
+ * Expression mode for how the skill is being trained.
+ * [exercise-trace] ISSUE B: Map to session intent.
+ */
+export type TraceExpressionMode =
+  | 'direct_intensity'    // Max effort progression work
+  | 'technical_focus'     // Quality/form emphasis
+  | 'strength_support'    // Building strength foundation
+  | 'volume_accumulation' // Volume for hypertrophy/endurance
+  | 'rotation_light'      // Recovery / maintenance
+  | 'mobility_prep'       // Range of motion work
+
+/**
+ * Session role that required this exercise slot.
+ * [exercise-trace] ISSUE E: Session role impact.
+ */
+export type TraceSessionRole =
+  | 'skill_primary'       // Primary skill slot
+  | 'skill_secondary'     // Secondary skill slot  
+  | 'strength_primary'    // Primary strength slot
+  | 'strength_support'    // Supporting strength work
+  | 'accessory'           // Accessory/isolation work
+  | 'core'                // Core/trunk work
+  | 'warmup'              // Warmup exercise
+  | 'cooldown'            // Cooldown exercise
+  | 'mobility'            // Dedicated mobility slot
+
+/**
+ * Equipment decision trace for weighted-capable exercises.
+ * [exercise-trace] ISSUE C: Bodyweight vs weighted traceability.
+ */
+export interface WeightedDecisionTrace {
+  /** Was weighted mode even considered for this movement? */
+  weightedConsidered: boolean
+  /** Was the athlete eligible for weighted mode (benchmarks, etc)? */
+  weightedEligible: boolean
+  /** Did weighted mode win the selection? */
+  weightedChosen: boolean
+  /** If weighted lost, why? */
+  weightedBlockerReason: WeightedBlockerReason | null
+  /** If weighted chosen, what load was prescribed? */
+  prescribedLoad?: {
+    load: number
+    unit: 'lbs' | 'kg'
+    basis: string
+  }
+}
+
+/**
+ * Reasons why weighted mode might not be chosen.
+ * [exercise-trace] ISSUE C: Explicit blockers.
+ */
+export type WeightedBlockerReason =
+  | 'no_loadable_equipment'           // No weight belt, vest, etc.
+  | 'no_benchmark_confidence'         // No PR/benchmark data
+  | 'session_role_calls_for_volume'   // Session wants bodyweight volume
+  | 'limiter_recovery_favored_unloaded' // Recovery/limiter logic said no
+  | 'weekly_weighted_quota_met'       // Already hit weighted allocation for week
+  | 'doctrine_favored_skill_specific' // Doctrine prioritized skill-specific over strength
+  | 'prerequisite_not_met'            // Not ready for loaded version
+  | 'joint_stress_limit_reached'      // Session joint budget exceeded
+
+/**
+ * Rejected alternative exercise with reason.
+ * [exercise-trace] ISSUE D: Rejected alternatives visible.
+ */
+export interface RejectedAlternative {
+  exerciseId: string
+  exerciseName: string
+  rejectionReason: RejectionReason
+  /** Additional context if helpful */
+  details?: string
+}
+
+export type RejectionReason =
+  | 'equipment_blocked'        // Doesn't match available equipment
+  | 'recovery_session_role'    // Session role didn't want this intensity
+  | 'skill_weighting_excluded' // Selected skill weighting deprioritized it
+  | 'doctrine_mismatch'        // Doctrine mapping didn't include it
+  | 'already_selected'         // Duplicate prevention
+  | 'joint_stress_exceeded'    // Would exceed session joint budget
+  | 'straight_arm_limit'       // Already hit straight-arm limit
+  | 'fatigue_limit'            // Would exceed fatigue budget
+  | 'prerequisite_blocked'     // Doesn't pass prerequisite gate
+  | 'lower_score'              // Lost to higher-scored candidate
+
+/**
+ * Doctrine source that contributed to selection.
+ * [exercise-trace] ISSUE F: Doctrine mapping traceability.
+ */
+export interface DoctrineSourceTrace {
+  /** Which doctrine mapping file/helper was used */
+  doctrineSource: string
+  /** Which skill/family triggered the mapping */
+  triggeringSkill: string
+  /** Whether it was direct, support, or prerequisite doctrine */
+  doctrineType: 'direct' | 'support' | 'prerequisite' | 'limiter'
+  /** The exercise family from doctrine */
+  exerciseFamily?: string
+}
+
+/**
+ * Full selection trace for a single exercise.
+ * [exercise-trace] TASK 1: Complete audit trail.
+ */
+export interface ExerciseSelectionTrace {
+  /** Exercise ID from database */
+  exerciseId: string
+  /** Exercise display name */
+  exerciseName: string
+  /** Slot type in session */
+  slotType: 'main' | 'warmup' | 'cooldown' | 'accessory'
+  /** Session role this exercise fills */
+  sessionRole: TraceSessionRole
+  /** Expression mode for this exercise */
+  expressionMode: TraceExpressionMode
+  /** Primary reason this exercise was selected */
+  primarySelectionReason: ExerciseSelectionReason
+  /** Additional influences on selection */
+  secondaryInfluences: ExerciseSelectionReason[]
+  /** Selected skills that influenced this pick */
+  influencingSkills: Array<{
+    skillId: string
+    influence: 'primary' | 'secondary' | 'selected' | 'limiter_related'
+    expressionMode: SkillExpressionMode
+  }>
+  /** Doctrine source if applicable */
+  doctrineSource: DoctrineSourceTrace | null
+  /** Exercise family from movement registry */
+  exerciseFamily: string | null
+  /** Summary of candidate pool considered */
+  candidatePoolSummary: {
+    totalCandidates: number
+    filteredByEquipment: number
+    filteredBySessionRole: number
+    filteredBySkillWeight: number
+    finalRankedCandidates: number
+  }
+  /** Top rejected alternatives */
+  rejectedAlternatives: RejectedAlternative[]
+  /** Equipment decision trace (for weighted-capable) */
+  equipmentDecision: WeightedDecisionTrace | null
+  /** Whether loadability affected selection */
+  loadabilityInfluence: string | null
+  /** Whether a limiter affected selection */
+  limiterInfluence: string | null
+  /** Whether recovery logic affected selection */
+  recoveryInfluence: string | null
+  /** Confidence in this selection (0-1) */
+  confidence: number
+  /** Quality of trace data (how much we actually know) */
+  traceQuality: 'full' | 'partial' | 'minimal'
+}
+
+/**
+ * Session-level trace summary.
+ * [exercise-trace] TASK 5: Session role impact.
+ */
+export interface SessionSelectionTrace {
+  sessionIndex: number
+  dayLabel: string
+  sessionRole: 'primary_focus' | 'secondary_focus' | 'mixed' | 'support_heavy' | 'recovery'
+  primarySkillExpressed: string | null
+  secondarySkillExpressed: string | null
+  exerciseTraces: ExerciseSelectionTrace[]
+  /** Summary of skills that were NOT expressed and why */
+  unexpressedSkills: Array<{
+    skillId: string
+    reason: 'session_role_mismatch' | 'quota_met' | 'prerequisite_blocked' | 'equipment_blocked' | 'recovery_allocation'
+  }>
+  /** Session-level rationale */
+  sessionRationale: string
+}
+
+/**
+ * Program-level trace for build-to-build comparison.
+ * [exercise-trace] TASK 8: Build comparison.
+ */
+export interface ProgramSelectionTrace {
+  programId: string
+  generatedAt: string
+  profileSignature: string
+  sessionTraces: SessionSelectionTrace[]
+  /** Aggregate stats */
+  aggregateStats: {
+    totalExercises: number
+    skillDirectExercises: number
+    strengthSupportExercises: number
+    weightedExercises: number
+    bodyweightExercises: number
+    doctrineHitCount: number
+    rejectedAlternativeCount: number
+  }
+}
+
+// =============================================================================
+// EXERCISE SELECTION TRACE HELPERS
+// =============================================================================
+
+/**
+ * Create an empty/minimal trace for when we can't determine full context.
+ */
+export function createMinimalTrace(
+  exerciseId: string,
+  exerciseName: string,
+  slotType: ExerciseSelectionTrace['slotType'],
+  reason: string
+): ExerciseSelectionTrace {
+  return {
+    exerciseId,
+    exerciseName,
+    slotType,
+    sessionRole: slotType === 'warmup' ? 'warmup' : slotType === 'cooldown' ? 'cooldown' : 'accessory',
+    expressionMode: 'strength_support',
+    primarySelectionReason: 'unknown',
+    secondaryInfluences: [],
+    influencingSkills: [],
+    doctrineSource: null,
+    exerciseFamily: null,
+    candidatePoolSummary: {
+      totalCandidates: 0,
+      filteredByEquipment: 0,
+      filteredBySessionRole: 0,
+      filteredBySkillWeight: 0,
+      finalRankedCandidates: 0,
+    },
+    rejectedAlternatives: [],
+    equipmentDecision: null,
+    loadabilityInfluence: null,
+    limiterInfluence: null,
+    recoveryInfluence: null,
+    confidence: 0.3,
+    traceQuality: 'minimal',
+  }
+}
+
+/**
+ * Log exercise selection trace with searchable prefix.
+ * [exercise-trace] TASK 7: Dev-safe logging.
+ */
+export function logExerciseTrace(trace: ExerciseSelectionTrace): void {
+  console.log('[exercise-trace] SELECTION:', {
+    exercise: trace.exerciseId,
+    slot: trace.slotType,
+    role: trace.sessionRole,
+    reason: trace.primarySelectionReason,
+    skills: trace.influencingSkills.map(s => `${s.skillId}(${s.influence})`),
+    doctrine: trace.doctrineSource?.doctrineSource || 'none',
+    weighted: trace.equipmentDecision?.weightedChosen || false,
+    weightedBlocker: trace.equipmentDecision?.weightedBlockerReason || 'n/a',
+    rejected: trace.rejectedAlternatives.slice(0, 3).map(r => `${r.exerciseId}:${r.rejectionReason}`),
+    confidence: trace.confidence,
+  })
+}
+
+/**
+ * Log session-level trace summary.
+ */
+export function logSessionTrace(trace: SessionSelectionTrace): void {
+  console.log('[exercise-trace] SESSION SUMMARY:', {
+    day: trace.dayLabel,
+    role: trace.sessionRole,
+    primarySkill: trace.primarySkillExpressed,
+    secondarySkill: trace.secondarySkillExpressed,
+    exerciseCount: trace.exerciseTraces.length,
+    unexpressed: trace.unexpressedSkills.map(u => `${u.skillId}:${u.reason}`),
+  })
+}
+
+/**
+ * Compare two programs to explain differences.
+ * [exercise-trace] TASK 8: Build-to-build comparison.
+ */
+export function compareExerciseSelectionTraces(
+  previousProgram: ProgramSelectionTrace | null,
+  newProgram: ProgramSelectionTrace
+): ExerciseComparisonResult {
+  if (!previousProgram) {
+    return {
+      comparisonType: 'new_build',
+      unchangedExercises: [],
+      changedExercises: [],
+      addedExercises: newProgram.sessionTraces.flatMap(s => s.exerciseTraces.map(e => e.exerciseId)),
+      removedExercises: [],
+      differenceReasons: ['First program generation - no previous comparison available'],
+      sessionRoleDifferences: [],
+      skillWeightDifferences: [],
+      equipmentDifferences: [],
+    }
+  }
+
+  const prevExerciseIds = new Set(previousProgram.sessionTraces.flatMap(s => s.exerciseTraces.map(e => e.exerciseId)))
+  const newExerciseIds = new Set(newProgram.sessionTraces.flatMap(s => s.exerciseTraces.map(e => e.exerciseId)))
+  
+  const unchangedExercises = [...prevExerciseIds].filter(id => newExerciseIds.has(id))
+  const addedExercises = [...newExerciseIds].filter(id => !prevExerciseIds.has(id))
+  const removedExercises = [...prevExerciseIds].filter(id => !newExerciseIds.has(id))
+  
+  const differenceReasons: string[] = []
+  
+  if (previousProgram.profileSignature !== newProgram.profileSignature) {
+    differenceReasons.push('Profile settings changed')
+  }
+  
+  // Check session role differences
+  const sessionRoleDifferences: string[] = []
+  for (let i = 0; i < Math.min(previousProgram.sessionTraces.length, newProgram.sessionTraces.length); i++) {
+    const prev = previousProgram.sessionTraces[i]
+    const curr = newProgram.sessionTraces[i]
+    if (prev.sessionRole !== curr.sessionRole) {
+      sessionRoleDifferences.push(`Day ${i + 1}: ${prev.sessionRole} → ${curr.sessionRole}`)
+    }
+  }
+  
+  if (sessionRoleDifferences.length > 0) {
+    differenceReasons.push('Session role distribution changed')
+  }
+  
+  if (addedExercises.length === 0 && removedExercises.length === 0) {
+    differenceReasons.push('Same exercises - profile truth unchanged with same equipment and recovery allocation')
+  }
+  
+  return {
+    comparisonType: unchangedExercises.length === prevExerciseIds.size ? 'identical' : 'modified',
+    unchangedExercises,
+    changedExercises: [], // Could be enhanced to track exercises that stayed but changed prescription
+    addedExercises,
+    removedExercises,
+    differenceReasons,
+    sessionRoleDifferences,
+    skillWeightDifferences: [], // Could be enhanced
+    equipmentDifferences: [],   // Could be enhanced
+  }
+}
+
+export interface ExerciseComparisonResult {
+  comparisonType: 'new_build' | 'identical' | 'modified'
+  unchangedExercises: string[]
+  changedExercises: string[]
+  addedExercises: string[]
+  removedExercises: string[]
+  differenceReasons: string[]
+  sessionRoleDifferences: string[]
+  skillWeightDifferences: string[]
+  equipmentDifferences: string[]
+}
+
+/**
+ * Log build-to-build comparison.
+ */
+export function logExerciseComparison(comparison: ExerciseComparisonResult): void {
+  console.log('[exercise-trace-compare] BUILD COMPARISON:', {
+    type: comparison.comparisonType,
+    unchanged: comparison.unchangedExercises.length,
+    added: comparison.addedExercises.length,
+    removed: comparison.removedExercises.length,
+    reasons: comparison.differenceReasons,
+    sessionRoleChanges: comparison.sessionRoleDifferences,
+  })
+}

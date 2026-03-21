@@ -3878,6 +3878,23 @@ function mapToAdaptiveExercises(
       prescribedLoad: s.prescribedLoad,
     }
   }).filter((e): e is AdaptiveExercise => e !== null)
+  
+  // [prescription-render] TASK 6: Log prescription data in builder output
+  const exercisesWithLoads = exercises.filter(e => e.prescribedLoad && e.prescribedLoad.load > 0)
+  if (exercisesWithLoads.length > 0) {
+    console.log('[prescription-render] Builder output exercises with prescribedLoad:', {
+      sessionDay: day,
+      count: exercisesWithLoads.length,
+      exercises: exercisesWithLoads.map(e => ({
+        name: e.name,
+        load: e.prescribedLoad?.load,
+        unit: e.prescribedLoad?.unit,
+        confidence: e.prescribedLoad?.confidenceLevel,
+      })),
+    })
+  }
+  
+  return exercises
 }
 
 // =============================================================================

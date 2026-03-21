@@ -116,17 +116,41 @@ class WorkoutErrorBoundary extends Component<{ children: ReactNode }, WorkoutErr
 function normalizeSession(rawSession: AdaptiveSession | null | undefined): AdaptiveSession | null {
   if (!rawSession) return null
   
-  // Normalize exercises array
-  const normalizedExercises = (rawSession.exercises ?? []).map((ex, idx) => ({
-    id: ex?.id || `exercise-${idx}`,
-    name: ex?.name || 'Unknown Exercise',
-    category: ex?.category || 'general',
-    sets: typeof ex?.sets === 'number' && ex.sets > 0 ? ex.sets : 3,
-    repsOrTime: ex?.repsOrTime || '8-12 reps',
-    note: ex?.note || '',
-    isOverrideable: ex?.isOverrideable ?? true,
-    selectionReason: ex?.selectionReason || '',
-  }))
+  // [prescription-render] ISSUE E: Preserve prescribedLoad through normalization
+  // Normalize exercises array while keeping all original fields
+  const normalizedExercises = (rawSession.exercises ?? []).map((ex, idx) => {
+    const normalized = {
+      id: ex?.id || `exercise-${idx}`,
+      name: ex?.name || 'Unknown Exercise',
+      category: ex?.category || 'general',
+      sets: typeof ex?.sets === 'number' && ex.sets > 0 ? ex.sets : 3,
+      repsOrTime: ex?.repsOrTime || '8-12 reps',
+      note: ex?.note || '',
+      isOverrideable: ex?.isOverrideable ?? true,
+      selectionReason: ex?.selectionReason || '',
+      // [prescription-render] TASK 2: Preserve prescribedLoad through snapshot/read path
+      prescribedLoad: ex?.prescribedLoad,
+      // Preserve other optional fields that might exist
+      method: ex?.method,
+      methodLabel: ex?.methodLabel,
+      blockId: ex?.blockId,
+      wasAdapted: ex?.wasAdapted,
+      source: ex?.source,
+      progressionDecision: ex?.progressionDecision,
+    }
+    
+    // [prescription-render] TASK 6: Log if prescribedLoad exists
+    if (normalized.prescribedLoad && normalized.prescribedLoad.load > 0) {
+      console.log('[prescription-render] Preserved prescribedLoad in normalization:', {
+        exerciseName: normalized.name,
+        load: normalized.prescribedLoad.load,
+        unit: normalized.prescribedLoad.unit,
+        confidence: normalized.prescribedLoad.confidenceLevel,
+      })
+    }
+    
+    return normalized
+  })
   
   return {
     ...rawSession,
@@ -195,6 +219,15 @@ const DEMO_SESSION: AdaptiveSession = {
       note: 'Control the eccentric. Full range of motion.',
       isOverrideable: false,
       selectionReason: 'Demo exercise - pulling strength',
+      // [prescription-render] Demo prescribed load to show feature
+      prescribedLoad: {
+        load: 25,
+        unit: 'lbs' as const,
+        basis: 'estimated' as const,
+        confidenceLevel: 'moderate' as const,
+        targetReps: 6,
+        intensityBand: 'strength' as const,
+      },
     },
     {
       id: 'demo-ex-3',
@@ -208,13 +241,22 @@ const DEMO_SESSION: AdaptiveSession = {
     },
     {
       id: 'demo-ex-4',
-      name: 'Dips',
+      name: 'Weighted Dips',
       category: 'push',
       sets: 3,
-      repsOrTime: '8-12 reps',
+      repsOrTime: '6-10 reps',
       note: 'Keep elbows tucked. Full lockout at top.',
       isOverrideable: false,
       selectionReason: 'Demo exercise - pushing strength',
+      // [prescription-render] Demo prescribed load for dips
+      prescribedLoad: {
+        load: 35,
+        unit: 'lbs' as const,
+        basis: 'current_benchmark' as const,
+        confidenceLevel: 'high' as const,
+        targetReps: 8,
+        intensityBand: 'strength' as const,
+      },
     },
   ],
   warmup: [],
@@ -345,6 +387,20 @@ function WorkoutSessionContent() {
           exerciseCount: normalizedSession.exercises.length,
           setCountPerExercise: normalizedSession.exercises.map(ex => ({ name: ex.name, sets: ex.sets })),
           totalSets: normalizedSession.exercises.reduce((sum, ex) => sum + ex.sets, 0),
+        })
+        
+        // [prescription-render] TASK 6: Log prescription data reaching UI
+        const exercisesWithLoads = normalizedSession.exercises.filter(
+          (ex: { prescribedLoad?: { load: number } }) => ex.prescribedLoad && ex.prescribedLoad.load > 0
+        )
+        console.log('[prescription-render] Exercises with prescribedLoad reaching UI:', {
+          count: exercisesWithLoads.length,
+          exercises: exercisesWithLoads.map((ex: { name: string; prescribedLoad?: { load: number; unit: string; confidenceLevel: string } }) => ({
+            name: ex.name,
+            load: ex.prescribedLoad?.load,
+            unit: ex.prescribedLoad?.unit,
+            confidence: ex.prescribedLoad?.confidenceLevel,
+          })),
         })
         
         setSession(normalizedSession)

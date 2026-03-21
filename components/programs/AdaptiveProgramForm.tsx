@@ -151,27 +151,59 @@ export function AdaptiveProgramForm({
             </p>
           </div>
 
-          {/* Session Length */}
+          {/* Session Length - ISSUE B FIX: Preserve duration mode + baseline separately */}
           <div className="space-y-2">
             <label className="text-sm text-[#A5A5A5]">Target Session Duration</label>
-            <Select
-              value={String(inputs.sessionLength)}
-              onValueChange={(v) => updateInput('sessionLength', Number(v) as SessionLength)}
-            >
-              <SelectTrigger className="bg-[#1A1A1A] border-[#3A3A3A]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent className="bg-[#2A2A2A] border-[#3A3A3A]">
-                {/* TASK 6: Unified duration labels - use 30/45/60/90 across all surfaces */}
-                {([30, 45, 60, 90] as SessionDurationMinutes[]).map((minutes) => (
-                  <SelectItem key={minutes} value={String(minutes)}>
-                    {DURATION_PREFERENCE_LABELS[minutes].label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {inputs.sessionDurationMode === 'adaptive' ? (
+              // ISSUE B FIX: Adaptive duration user - show adaptive state with baseline selector
+              <div className="space-y-2">
+                <div className="bg-[#1A1A1A] border border-[#3A3A3A] rounded-md px-3 py-2">
+                  <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                    <span className="text-sm font-medium">Adaptive Duration</span>
+                  </div>
+                  <p className="text-xs text-[#6A6A6A] mt-1">
+                    Session length varies by day focus and recovery
+                  </p>
+                </div>
+                <Select
+                  value={String(inputs.sessionLength)}
+                  onValueChange={(v) => updateInput('sessionLength', Number(v) as SessionLength)}
+                >
+                  <SelectTrigger className="bg-[#1A1A1A] border-[#3A3A3A]">
+                    <SelectValue placeholder="Base target" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-[#2A2A2A] border-[#3A3A3A]">
+                    {([30, 45, 60, 90] as SessionDurationMinutes[]).map((minutes) => (
+                      <SelectItem key={minutes} value={String(minutes)}>
+                        ~{DURATION_PREFERENCE_LABELS[minutes].label} base
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : (
+              // STATIC USER: Show fixed duration selector
+              <Select
+                value={String(inputs.sessionLength)}
+                onValueChange={(v) => updateInput('sessionLength', Number(v) as SessionLength)}
+              >
+                <SelectTrigger className="bg-[#1A1A1A] border-[#3A3A3A]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-[#2A2A2A] border-[#3A3A3A]">
+                  {([30, 45, 60, 90] as SessionDurationMinutes[]).map((minutes) => (
+                    <SelectItem key={minutes} value={String(minutes)}>
+                      {DURATION_PREFERENCE_LABELS[minutes].label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
             <p className="text-xs text-[#6A6A6A]">
-              Pre-filled from your profile. Actual sessions may vary based on day focus.
+              {inputs.sessionDurationMode === 'adaptive' 
+                ? 'Adaptive mode - sessions expand/contract based on day intensity'
+                : 'Pre-filled from your profile. Actual sessions may vary based on day focus.'}
             </p>
           </div>
         </div>

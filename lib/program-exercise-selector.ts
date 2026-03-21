@@ -2779,6 +2779,7 @@ function adjustRepsForLevel(defaultReps: string, level: ExperienceLevel): string
 
 // =============================================================================
 // PRESCRIPTION-AWARE ADJUSTMENTS (TASK 1, TASK 2)
+// BUILD-HOTFIX: restored top-level module scope for prescription-aware helper
 // =============================================================================
 
 /**

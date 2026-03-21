@@ -4319,14 +4319,16 @@ export function getDefaultAdaptiveInputs(): AdaptiveProgramInputs {
   }
   
   // Map equipment to EquipmentType
-  // AthleteProfile uses: 'pullup_bar' | 'dip_bars' | 'parallettes' | 'rings' | 'resistance_bands'
-  // AdaptiveProgramInputs uses: 'pull_bar' | 'dip_bars' | 'rings' | 'parallettes' | 'bands' | 'floor' | 'wall'
+  // AthleteProfile uses: 'pullup_bar' | 'dip_bars' | 'parallettes' | 'rings' | 'resistance_bands' | 'weights'
+  // AdaptiveProgramInputs uses: 'pull_bar' | 'dip_bars' | 'rings' | 'parallettes' | 'bands' | 'weights' | 'floor' | 'wall'
+  // [loadability-truth] ISSUE B: Include 'weights' mapping to preserve loadable equipment truth from Settings
   const equipmentMap: Record<string, EquipmentType> = {
     'pullup_bar': 'pull_bar',
     'dip_bars': 'dip_bars',
     'parallettes': 'parallettes',
     'rings': 'rings',
     'resistance_bands': 'bands',
+    'weights': 'weights',
   }
   
   // Start with floor and wall (always available)

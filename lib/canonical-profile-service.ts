@@ -1823,6 +1823,31 @@ export function checkProfileProgramDrift(program: {
   }
 }
 
+// =============================================================================
+// LOADABILITY TRUTH (ISSUE A/B/C)
+// =============================================================================
+
+/**
+ * [loadability-truth] TASK 1: Canonical function to check if user has loadable equipment.
+ * This is the single source of truth for weighted prescription eligibility (equipment gate).
+ * 
+ * Loadable equipment includes: weights, weight_plates, weight_belt, dumbbells, barbell
+ */
+export function hasLoadableEquipment(equipmentArray?: string[]): boolean {
+  const equipment = equipmentArray || getCanonicalProfile().equipmentAvailable || []
+  const LOADABLE_EQUIPMENT_KEYS = ['weights', 'weight_plates', 'weight_belt', 'dumbbells', 'barbell']
+  
+  const hasLoadable = equipment.some(e => LOADABLE_EQUIPMENT_KEYS.includes(e))
+  
+  console.log('[loadability-truth] Equipment check:', {
+    equipmentCount: equipment.length,
+    hasLoadable,
+    equipment: equipment.slice(0, 5), // Log first 5 for diagnosis
+  })
+  
+  return hasLoadable
+}
+
 /**
  * [profile-truth-sync] ISSUE B: Check if weighted prescriptions should be available.
  * Returns detailed info about why weighted loading is or isn't available.
@@ -1837,10 +1862,8 @@ export function checkWeightedPrescriptionEligibility(): {
 } {
   const profile = getCanonicalProfile()
   
-  // Check equipment - 'weights' or 'weight_plates' or 'weight_belt' enables weighted loading
-  const hasWeightsEquipment = (profile.equipmentAvailable || []).some(e => 
-    ['weights', 'weight_plates', 'weight_belt', 'dumbbells', 'barbell'].includes(e)
-  )
+  // [loadability-truth] Use canonical loadability check
+  const hasWeightsEquipment = hasLoadableEquipment(profile.equipmentAvailable)
   
   // Check strength benchmarks
   const hasWeightedPullUp = !!(profile.weightedPullUp && profile.weightedPullUp.addedWeight > 0)
@@ -1871,7 +1894,7 @@ export function checkWeightedPrescriptionEligibility(): {
     recommendation = 'Enter your weighted pull-up or dip benchmarks in Settings to get personalized load prescriptions'
   }
   
-  console.log('[profile-truth-sync] Weighted prescription eligibility:', {
+  console.log('[loadability-truth] Weighted prescription eligibility:', {
     eligible,
     hasWeightsEquipment,
     hasStrengthBenchmarks,

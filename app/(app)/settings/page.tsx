@@ -999,6 +999,16 @@ export default function SettingsPage() {
             <p className="text-xs text-[#6B7280]">
               Your program will be adjusted based on available equipment.
             </p>
+            {/* [loadability-truth] ISSUE E: Explain current prescription state */}
+            {equipment.includes('weights') ? (
+              <p className="text-xs text-emerald-500/80 mt-1">
+                Weighted loading enabled — automatic weight targets available for supported exercises.
+              </p>
+            ) : (
+              <p className="text-xs text-amber-500/70 mt-1">
+                Enable "Weights (for loading)" to unlock automatic weight targets for pull-ups, dips, and other supported exercises.
+              </p>
+            )}
           </div>
 
           {/* Joint Cautions */}

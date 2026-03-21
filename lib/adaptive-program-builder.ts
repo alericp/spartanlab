@@ -2418,25 +2418,26 @@ console.log('[program-generate] Generation complete:', {
   selectedSkillsCount: expandedContext.selectedSkills.length,
   })
   
-  // [selected-skill-exposure] TASK 7: Weekly skill exposure summary
+  // BUILD-HOTFIX: canonical skill exposure by trace (renamed to avoid duplicate with skillExposureSummary at line ~3515)
+  // [selected-skill-exposure] TASK 7: Weekly skill exposure by selection trace
   // This tracks how well selected skills received meaningful expression across the week
-  const skillExposureSummary: Record<string, { direct: number; technical: number; support: number; total: number }> = {}
+  const skillExposureByTrace: Record<string, { direct: number; technical: number; support: number; total: number }> = {}
   
   for (const session of sessions) {
     for (const exercise of session.exercises || []) {
       const trace = exercise.selectionTrace
       if (trace?.influencingSkills) {
         for (const skillInfluence of trace.influencingSkills) {
-          if (!skillExposureSummary[skillInfluence.skillId]) {
-            skillExposureSummary[skillInfluence.skillId] = { direct: 0, technical: 0, support: 0, total: 0 }
+          if (!skillExposureByTrace[skillInfluence.skillId]) {
+            skillExposureByTrace[skillInfluence.skillId] = { direct: 0, technical: 0, support: 0, total: 0 }
           }
-          skillExposureSummary[skillInfluence.skillId].total++
+          skillExposureByTrace[skillInfluence.skillId].total++
           if (trace.primarySelectionReason?.includes('direct')) {
-            skillExposureSummary[skillInfluence.skillId].direct++
+            skillExposureByTrace[skillInfluence.skillId].direct++
           } else if (trace.primarySelectionReason?.includes('technical')) {
-            skillExposureSummary[skillInfluence.skillId].technical++
+            skillExposureByTrace[skillInfluence.skillId].technical++
           } else if (trace.primarySelectionReason?.includes('support')) {
-            skillExposureSummary[skillInfluence.skillId].support++
+            skillExposureByTrace[skillInfluence.skillId].support++
           }
         }
       }
@@ -2450,7 +2451,7 @@ console.log('[program-generate] Generation complete:', {
   
   console.log('[selected-skill-exposure] WEEKLY SUMMARY:', {
     selectedSkills: expandedContext.selectedSkills,
-    skillExposureSummary,
+    skillExposureByTrace,
     totalExercises,
     weightedExerciseCount,
     doctrineHitCount: sessions.reduce((sum, s) => 
@@ -3508,6 +3509,7 @@ return explanations.length > 0 ? explanations : undefined
   // =========================================================================
   // [selected-skill-exposure] STEP 7: Final weekly skill expression summary
   // This answers: "why did this skill appear or not appear this week?"
+  // BUILD-HOTFIX: canonical skill exposure summary (duplicate removed - earlier version renamed to skillExposureByTrace)
   // =========================================================================
   const selectedSkillList = expandedContext.selectedSkills || []
   const allExercisesInWeek = sessions.flatMap(s => s.exercises)

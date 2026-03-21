@@ -281,12 +281,16 @@ const GOAL_DISPLAY_LABELS: Record<string, string> = {
 /**
  * Expression modes define how a skill is trained in a session.
  * TASK 4: More intentional mode assignment to reduce sameness.
+ * [exercise-expression] ISSUE B: Added additional expression modes for richer skill coverage
  */
 export type SkillExpressionMode = 
-  | 'direct'      // Main skill work - max hold progressions
-  | 'technical'   // Movement quality focus - controlled reps/transitions  
-  | 'support'     // Accessory work building toward skill
-  | 'rotation'    // Lighter maintenance to allow recovery
+  | 'direct'           // Main skill work - max hold progressions
+  | 'technical'        // Movement quality focus - controlled reps/transitions  
+  | 'support'          // Accessory work building toward skill
+  | 'rotation'         // Lighter maintenance to allow recovery
+  | 'prerequisite'     // Building prerequisite strength/positions
+  | 'trunk_support'    // Compression/core/bodyline work for skill transfer
+  | 'mobility_support' // Flexibility/range work enabling skill positions
 
 /**
  * Per-day skill assignment with expression mode and rationale.

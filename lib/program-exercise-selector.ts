@@ -147,7 +147,15 @@ import {
   ADVANCED_SKILL_FAMILIES,
   type SkillPrescriptionRules,
   type WeightedStrengthCarryover,
-} from './engine-quality-contract'
+} from './prescription-contract'
+import {
+  // [exercise-expression] TASK 3: Doctrine-backed skill support mappings
+  SKILL_SUPPORT_MAPPINGS,
+  getSupportMapping,
+  getDirectSupportExercises,
+  type SkillSupportMapping,
+} from './doctrine/skill-support-mappings'
+import type { SkillCarryover } from './movement-family-registry' from './engine-quality-contract'
 import {
   // [advanced-skill-expression] ISSUE D: Intentional support work helpers
   getAdvancedSkillSupport,
@@ -372,19 +380,22 @@ export function selectExercisesForSession(inputs: ExerciseSelectionInputs): Exer
     goalSpecific: goalExercises.length,
   })
   
-  // Select main exercises based on day focus with prerequisite gate checks
+  // [exercise-expression] ISSUE A: Pass skillsForSession to enable multi-skill expression
   const main = selectMainExercises(
-    day,
-    primaryGoal,
-    experienceLevel,
-    goalExercises,
-    availableSkills,
-    availableStrength,
-    availableAccessory,
-    availableCore,
-    budget.mainExercises,
-    constraintType,
-    prerequisiteContext
+  day,
+  primaryGoal,
+  experienceLevel,
+  goalExercises,
+  availableSkills,
+  availableStrength,
+  availableAccessory,
+  availableCore,
+  budget.mainExercises,
+  constraintType,
+  prerequisiteContext,
+  skillsForSession,  // TASK 2: Skill allocations for expression-aware selection
+  selectedSkills,    // Full selected skills list for reference
+  equipment          // Equipment for doctrine lookups
   )
   
   // [session-assembly] ISSUE C: Validate main exercises before proceeding
@@ -675,6 +686,13 @@ function getAdvancedSkillSupportExercises(
 // MAIN EXERCISE SELECTION
 // =============================================================================
 
+// [exercise-expression] Session skill allocation type for multi-skill expression
+type SessionSkillAllocation = {
+  skill: string
+  expressionMode: 'primary' | 'technical' | 'support' | 'warmup'
+  weight: number
+}
+
 function selectMainExercises(
   day: DayStructure,
   primaryGoal: PrimaryGoal,
@@ -686,8 +704,11 @@ function selectMainExercises(
   availableCore: Exercise[],
   maxExercises: number,
   constraintType?: string,
-  prerequisiteContext?: AthletePrerequisiteContext
-): SelectedExercise[] {
+  prerequisiteContext?: AthletePrerequisiteContext,
+  skillsForSession?: SessionSkillAllocation[],
+  selectedSkills?: string[],
+  equipment?: EquipmentType[]
+  ): SelectedExercise[] {
   const selected: SelectedExercise[] = []
   const usedIds = new Set<string>()
   
@@ -1236,6 +1257,143 @@ function selectMainExercises(
   // ==========================================================================
   // Fill remaining slots with support and core work
   // ==========================================================================
+  
+  // =========================================================================
+  // [exercise-expression] TASK 2/3/4: MULTI-SKILL EXPRESSION FROM DOCTRINE
+  // This is where selected skills beyond the primary goal get expressed
+  // =========================================================================
+  
+  if (skillsForSession && skillsForSession.length > 0 && selected.length < maxExercises) {
+    console.log('[exercise-expression] Processing skill allocations:', {
+      dayFocus: day.focus,
+      allocations: skillsForSession.map(s => `${s.skill}(${s.expressionMode})`),
+      currentExerciseCount: selected.length,
+      maxExercises,
+    })
+    
+    // Track which skills we've already expressed via primary goal
+    const expressedSkillIds = new Set<string>([primaryGoal])
+    
+    // Process each skill allocation by expression mode
+    for (const allocation of skillsForSession) {
+      if (selected.length >= maxExercises) break
+      if (expressedSkillIds.has(allocation.skill)) continue
+      
+      // Get doctrine support mapping for this skill
+      const supportMapping = getSupportMapping(allocation.skill as SkillCarryover)
+      
+      console.log('[exercise-expression] Processing skill allocation:', {
+        skill: allocation.skill,
+        expressionMode: allocation.expressionMode,
+        weight: allocation.weight,
+        hasDoctrine: !!supportMapping,
+        directExercises: supportMapping?.directSupportExercises?.slice(0, 3) || [],
+      })
+      
+      // Find exercises for this skill based on expression mode
+      let skillExercise: Exercise | undefined
+      let exerciseReason = ''
+      
+      if (allocation.expressionMode === 'primary' || allocation.expressionMode === 'technical') {
+        // Direct or technical expression: use direct support exercises from doctrine
+        if (supportMapping) {
+          for (const exerciseId of supportMapping.directSupportExercises) {
+            if (usedIds.has(exerciseId)) continue
+            skillExercise = [...availableSkills, ...availableStrength].find(e => e.id === exerciseId)
+            if (skillExercise && canAddMore(skillExercise)) {
+              exerciseReason = allocation.expressionMode === 'primary'
+                ? `Direct ${supportMapping.displayName} work`
+                : `Technical ${supportMapping.displayName} practice`
+              break
+            }
+          }
+        }
+        
+        // Fallback to transfer-based lookup
+        if (!skillExercise) {
+          skillExercise = [...availableSkills, ...availableStrength].find(e => 
+            !usedIds.has(e.id) && 
+            e.transferTo.includes(allocation.skill) &&
+            canAddMore(e)
+          )
+          if (skillExercise) {
+            exerciseReason = `${allocation.skill} skill development`
+          }
+        }
+      } else if (allocation.expressionMode === 'support') {
+        // Support expression: use accessory support exercises from doctrine
+        if (supportMapping) {
+          for (const exerciseId of supportMapping.accessorySupportExercises) {
+            if (usedIds.has(exerciseId)) continue
+            skillExercise = [...availableAccessory, ...availableStrength].find(e => e.id === exerciseId)
+            if (skillExercise && canAddMore(skillExercise)) {
+              exerciseReason = `Support work for ${supportMapping.displayName}`
+              break
+            }
+          }
+          
+          // Also try limiter-based support
+          if (!skillExercise && supportMapping.commonLimiters.length > 0) {
+            const limiter = supportMapping.commonLimiters[0]
+            for (const exerciseId of limiter.exerciseIds) {
+              if (usedIds.has(exerciseId)) continue
+              skillExercise = [...availableAccessory, ...availableStrength, ...availableCore].find(e => e.id === exerciseId)
+              if (skillExercise && canAddMore(skillExercise)) {
+                exerciseReason = `${limiter.description} (${supportMapping.displayName} prerequisite)`
+                break
+              }
+            }
+          }
+        }
+        
+        // Fallback to transfer-based lookup for accessories
+        if (!skillExercise) {
+          skillExercise = availableAccessory.find(e => 
+            !usedIds.has(e.id) && 
+            e.transferTo.includes(allocation.skill) &&
+            canAddMore(e)
+          )
+          if (skillExercise) {
+            exerciseReason = `${allocation.skill} support work`
+          }
+        }
+      } else if (allocation.expressionMode === 'warmup') {
+        // Warmup expression: handled in warm-up generation, skip here
+        continue
+      }
+      
+      // Add the selected exercise if found
+      if (skillExercise) {
+        const added = addExercise(skillExercise, exerciseReason)
+        if (added) {
+          expressedSkillIds.add(allocation.skill)
+          console.log('[exercise-expression] Added skill exercise:', {
+            skill: allocation.skill,
+            exerciseId: skillExercise.id,
+            expressionMode: allocation.expressionMode,
+            reason: exerciseReason,
+          })
+        }
+      } else {
+        console.log('[exercise-expression] Could not find exercise for skill:', {
+          skill: allocation.skill,
+          expressionMode: allocation.expressionMode,
+          searched: supportMapping?.directSupportExercises?.length || 0,
+        })
+      }
+    }
+    
+    // Log final expression summary
+    console.log('[exercise-expression] Session skill expression summary:', {
+      dayFocus: day.focus,
+      allocatedSkills: skillsForSession.length,
+      expressedSkills: expressedSkillIds.size,
+      unexpressedSkills: skillsForSession
+        .filter(s => !expressedSkillIds.has(s.skill))
+        .map(s => s.skill),
+      exerciseCount: selected.length,
+    })
+  }
   
   // Add constraint-responsive exercise if applicable
   if (constraintType && selected.length < maxExercises) {

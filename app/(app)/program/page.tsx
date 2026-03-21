@@ -25,7 +25,8 @@ import type { AdaptiveProgramInputs, AdaptiveProgram, GenerationErrorCode } from
 import { 
   checkProfileProgramDrift, 
   isProfileSignatureAligned,
-  type ProfileProgramDrift 
+  type ProfileProgramDrift,
+  validateBuilderDisplayTruth,
 } from '@/lib/canonical-profile-service'
 // [program-rebuild-truth] Import rebuild result contract for truthful error handling
 import {
@@ -294,6 +295,31 @@ export default function ProgramPage() {
         const defaultInputs = builderMod.getDefaultAdaptiveInputs()
         setInputs(defaultInputs)
         console.log('[ProgramPage] Stage 6: Default inputs loaded')
+        
+        // [planner-input-truth] TASK 6: Log builder hydration truth for debugging
+        console.log('[builder-hydration-truth] Builder hydrated with inputs:', {
+          primaryGoal: defaultInputs.primaryGoal,
+          scheduleMode: defaultInputs.scheduleMode,
+          sessionDurationMode: defaultInputs.sessionDurationMode,
+          trainingDaysPerWeek: defaultInputs.trainingDaysPerWeek,
+          sessionLength: defaultInputs.sessionLength,
+          equipmentCount: defaultInputs.equipment?.length || 0,
+          hasWeights: defaultInputs.equipment?.includes('weights') || false,
+        })
+        
+        // [builder-hydration-truth] Validate builder display matches canonical profile
+        const displayValidation = validateBuilderDisplayTruth({
+          primaryGoal: defaultInputs.primaryGoal,
+          scheduleMode: defaultInputs.scheduleMode,
+          sessionDurationMode: defaultInputs.sessionDurationMode,
+          trainingDaysPerWeek: defaultInputs.trainingDaysPerWeek,
+          sessionLength: defaultInputs.sessionLength,
+          equipment: defaultInputs.equipment,
+        })
+        
+        if (!displayValidation.isAligned) {
+          console.warn('[builder-hydration-truth] Builder display drift detected:', displayValidation.driftedFields)
+        }
         
         // TASK 1: Stage 7 - Load current program as the critical operation
         setLoadStage('loading-program-state')

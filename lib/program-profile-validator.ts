@@ -1586,3 +1586,144 @@ export function runComprehensiveValidation(
   
   return report
 }
+
+// =============================================================================
+// [planner-input-truth] TASK 6: BUILDER INPUT DRIFT VALIDATION
+// =============================================================================
+
+/**
+ * Validation result for builder display vs canonical truth.
+ * [program-profile-validate] Catches stale drafts and display drift.
+ */
+export interface BuilderInputDriftValidation {
+  isAligned: boolean
+  driftedFields: string[]
+  canonicalMissing: string[]  // Fields that canonical has but builder doesn't display
+  builderStale: string[]      // Fields where builder value is older/stale
+  recommendations: string[]
+  severity: 'none' | 'minor' | 'material' | 'critical'
+}
+
+/**
+ * [planner-input-truth] TASK 6: Validate builder input display against canonical profile
+ * 
+ * This catches scenarios where:
+ * - Builder shows stale draft values
+ * - Builder didn't hydrate from latest profile
+ * - Default values are displayed instead of user-saved values
+ */
+export function validateBuilderInputDrift(
+  profile: CanonicalProgrammingProfile,
+  builderInputs: {
+    primaryGoal?: string | null
+    secondaryGoal?: string | null
+    experienceLevel?: string
+    trainingDaysPerWeek?: number | 'flexible' | null
+    sessionLength?: number
+    scheduleMode?: string
+    sessionDurationMode?: string
+    equipment?: string[]
+    selectedSkills?: string[]
+  }
+): BuilderInputDriftValidation {
+  const driftedFields: string[] = []
+  const canonicalMissing: string[] = []
+  const builderStale: string[] = []
+  const recommendations: string[] = []
+  
+  // ISSUE A: Check primary goal alignment
+  if (builderInputs.primaryGoal !== undefined) {
+    if (profile.primaryGoal && builderInputs.primaryGoal !== profile.primaryGoal) {
+      driftedFields.push('primaryGoal')
+      recommendations.push(`Primary goal shows "${builderInputs.primaryGoal}" but profile says "${profile.primaryGoal}"`)
+    }
+  } else if (profile.primaryGoal) {
+    canonicalMissing.push('primaryGoal')
+  }
+  
+  // ISSUE B: Check schedule mode - critical for flexible/static identity
+  if (builderInputs.scheduleMode !== undefined) {
+    if (builderInputs.scheduleMode !== profile.scheduleMode) {
+      driftedFields.push('scheduleMode')
+      recommendations.push(`Schedule mode mismatch: builder="${builderInputs.scheduleMode}" vs profile="${profile.scheduleMode}"`)
+    }
+  } else if (profile.scheduleMode) {
+    canonicalMissing.push('scheduleMode')
+  }
+  
+  // ISSUE C: Check session duration mode - important for adaptive duration
+  if (builderInputs.sessionDurationMode !== undefined) {
+    if (builderInputs.sessionDurationMode !== profile.sessionDurationMode) {
+      driftedFields.push('sessionDurationMode')
+    }
+  }
+  
+  // ISSUE D: Check training days for static users
+  if (profile.scheduleMode === 'static' && builderInputs.trainingDaysPerWeek !== undefined) {
+    if (typeof builderInputs.trainingDaysPerWeek === 'number' && 
+        builderInputs.trainingDaysPerWeek !== profile.trainingDaysPerWeek) {
+      driftedFields.push('trainingDaysPerWeek')
+      builderStale.push('trainingDaysPerWeek')
+    }
+  }
+  
+  // ISSUE E: Check equipment - especially weights for loadable logic
+  if (builderInputs.equipment && profile.equipmentAvailable) {
+    const builderHasWeights = builderInputs.equipment.includes('weights')
+    const profileHasWeights = profile.equipmentAvailable.includes('weights')
+    
+    if (builderHasWeights !== profileHasWeights) {
+      driftedFields.push('equipment.weights')
+      recommendations.push(profileHasWeights 
+        ? 'Profile has weights enabled but builder is not showing them - weight targets may be missing'
+        : 'Builder shows weights but profile does not have them - stale draft?')
+    }
+  }
+  
+  // ISSUE F: Check selected skills alignment
+  if (builderInputs.selectedSkills && profile.selectedSkills) {
+    const builderSkills = new Set(builderInputs.selectedSkills)
+    const profileSkills = new Set(profile.selectedSkills)
+    
+    // Find skills in profile but not in builder
+    for (const skill of profileSkills) {
+      if (!builderSkills.has(skill)) {
+        canonicalMissing.push(`selectedSkills.${skill}`)
+      }
+    }
+  }
+  
+  // Determine severity
+  let severity: BuilderInputDriftValidation['severity'] = 'none'
+  if (driftedFields.includes('primaryGoal') || driftedFields.includes('scheduleMode')) {
+    severity = 'critical'
+  } else if (driftedFields.includes('equipment.weights') || canonicalMissing.length > 2) {
+    severity = 'material'
+  } else if (driftedFields.length > 0 || canonicalMissing.length > 0) {
+    severity = 'minor'
+  }
+  
+  const isAligned = driftedFields.length === 0 && canonicalMissing.length === 0 && builderStale.length === 0
+  
+  // Log validation result
+  if (!isAligned) {
+    console.log('[builder-hydration-truth] Drift validation failed:', {
+      severity,
+      driftedFields,
+      canonicalMissing,
+      builderStale,
+      recommendations,
+    })
+  } else {
+    console.log('[builder-hydration-truth] Builder inputs aligned with canonical profile')
+  }
+  
+  return {
+    isAligned,
+    driftedFields,
+    canonicalMissing,
+    builderStale,
+    recommendations,
+    severity,
+  }
+}

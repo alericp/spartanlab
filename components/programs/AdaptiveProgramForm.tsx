@@ -238,9 +238,13 @@ export function AdaptiveProgramForm({
             Pre-filled from your profile. Floor and wall are always available.
           </p>
           {/* [loadability-truth] ISSUE F: Explain weighted prescription state */}
-          {!inputs.equipment.includes('weights') && (
+          {inputs.equipment.includes('weights') ? (
+            <p className="text-xs text-emerald-500/80">
+              Weighted loading enabled — automatic weight targets will be prescribed based on your strength data.
+            </p>
+          ) : (
             <p className="text-xs text-amber-500/80">
-              No loadable equipment selected — weighted exercises will use bodyweight prescriptions.
+              No loadable equipment selected — weighted exercises will use bodyweight prescriptions. Add "Weights (for loading)" for automatic weight targets.
             </p>
           )}
         </div>

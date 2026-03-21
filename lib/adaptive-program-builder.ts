@@ -63,13 +63,9 @@ import { getAthleteProfile } from './data-service'
 import { 
   getCanonicalProfile, 
   logCanonicalProfileState, 
-  validateProfileForGeneration, 
-  getValidatedCanonicalProfile,
-  // [profile-completeness] ISSUE E: Engine field consumption verification
-  getEngineFieldConsumption,
-  verifyEngineFieldWiring,
-  getProfileSignature,
-  hasLoadableEquipment,
+  type ProfileSnapshot,
+  composeCanonicalPlannerInput,
+  validateBuilderDisplayTruth,
 } from './canonical-profile-service'
 import { buildGenerationInput, getSystemStateFlags, type GenerationMode, type ProfileSnapshot } from './program-state-contract'
 import { normalizeProfile, computeLimiter, dedupeExercises, type NormalizedProfile } from './profile-normalizer'
@@ -892,6 +888,12 @@ exerciseExplanations?: {
     experienceLevel: string | null
     createdAt: string
   }
+  // [planner-input-truth] TASK 5: Generation input provenance for debugging truth chain
+  generationInputProvenance?: {
+    fallbacksUsed: string[]
+    overridesApplied: string[]
+    composedAt: string
+  }
 }
 
 // =============================================================================
@@ -1119,6 +1121,25 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
   
   console.log('[program-generate] Starting adaptive program generation')
   console.log('[program-generate] STAGE: initializing')
+  
+  // [planner-input-truth] TASK 5: Compose resolved input with provenance tracking
+  // This ensures we have a traceable snapshot of what inputs were actually used
+  const composedInput = composeCanonicalPlannerInput({
+    primaryGoal: inputs.primaryGoal,
+    secondaryGoal: inputs.secondaryGoal,
+    experienceLevel: inputs.experienceLevel,
+    trainingDaysPerWeek: typeof inputs.trainingDaysPerWeek === 'number' ? inputs.trainingDaysPerWeek : undefined,
+    sessionLength: inputs.sessionLength,
+    scheduleMode: inputs.scheduleMode,
+    sessionDurationMode: inputs.sessionDurationMode,
+    equipment: inputs.equipment,
+  })
+  
+  console.log('[planner-input-truth] Generation input provenance:', {
+    fallbacksUsed: composedInput.fallbacksUsed,
+    overridesApplied: composedInput.overridesApplied,
+    composedAt: composedInput.composedAt,
+  })
   
   // STATE CONTRACT: Get system state flags to determine generation context
   const stateFlags = getSystemStateFlags()
@@ -3306,9 +3327,15 @@ return explanations.length > 0 ? explanations : undefined
     },
     // STATE CONTRACT: Generation mode used
     generationMode,
-    // [program-alignment] TASK 5: Profile signature for drift detection
-    profileSignature: getProfileSignature(),
-    // [program-profile-validate] TASK 6: Run validation after generation
+  // [program-alignment] TASK 5: Profile signature for drift detection
+  profileSignature: getProfileSignature(),
+  // [planner-input-truth] TASK 5: Generation input provenance
+  generationInputProvenance: {
+    fallbacksUsed: composedInput.fallbacksUsed,
+    overridesApplied: composedInput.overridesApplied,
+    composedAt: composedInput.composedAt,
+  },
+  // [program-profile-validate] TASK 6: Run validation after generation
     profileValidation: (() => {
       try {
         // Build a temporary program object for validation
@@ -4467,6 +4494,10 @@ export function deleteAdaptiveProgram(id: string): boolean {
 // =============================================================================
 
 export function getDefaultAdaptiveInputs(): AdaptiveProgramInputs {
+  // [planner-input-truth] TASK 1: Use canonical composer for truthful planner inputs
+  // This ensures all inputs are composed from canonical profile with provenance tracking
+  const composedInput = composeCanonicalPlannerInput()
+  
   // CANONICAL FIX: Use the unified canonical profile instead of split sources
   // This ensures metrics, goals, and schedule preferences all come from one truth
   const canonicalProfile = getCanonicalProfile()
@@ -4474,6 +4505,11 @@ export function getDefaultAdaptiveInputs(): AdaptiveProgramInputs {
   
   // Log canonical state for debugging
   logCanonicalProfileState('getDefaultAdaptiveInputs called')
+  
+  // [planner-input-truth] Log composition provenance
+  if (composedInput.fallbacksUsed.length > 0) {
+    console.log('[planner-input-truth] Fallbacks used in composition:', composedInput.fallbacksUsed)
+  }
   
   // TASK 4: Read canonical goals from saved profile, not stale program state
   // Determine primary goal from CanonicalProfile

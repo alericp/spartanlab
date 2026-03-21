@@ -296,11 +296,18 @@ export default function ProgramPage() {
         }
         
         // TASK 3: Stage 9 - Get constraint insight if available (non-critical)
+        // [limiter-truth] ISSUE D: This now uses canonical displayed-limiter helper
         setLoadStage('loading-constraints')
         if (constraintMod) {
           try {
             const insight = constraintMod.getConstraintInsight()
             setConstraintLabel(insight.label)
+            // [limiter-truth] Log the canonical limiter being displayed
+            console.log('[limiter-truth] ProgramPage using canonical constraint label:', {
+              label: insight.label,
+              hasInsight: insight.hasInsight,
+              confidence: insight.confidence,
+            })
             console.log('[ProgramPage] Stage 9: Constraint insight loaded:', insight.label)
           } catch (err) {
             console.warn('[ProgramPage] Stage 9: Constraint insight failed (non-fatal):', err)

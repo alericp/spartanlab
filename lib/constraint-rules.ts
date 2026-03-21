@@ -12,6 +12,16 @@ import type { RelativeStrengthTier } from './relative-strength-engine'
 // THRESHOLDS
 // =============================================================================
 
+// [limiter-truth] ISSUE B: Clean-slate / low-history guardrails
+// Users with fewer than this many total sessions should NOT be flagged as "inconsistent"
+// This prevents mislabeling users who just started using the app
+const CLEAN_SLATE_THRESHOLD = {
+  // Minimum total workout history to flag ANY inconsistency
+  minTotalWorkoutsForInconsistency: 6,  // INCREASED from 3
+  // Minimum skill sessions for skill-specific inconsistency
+  minSkillSessionsForInconsistency: 4,  // INCREASED from 3
+}
+
 const THRESHOLDS = {
   // Skill thresholds
   minWeeklyDensity: 30, // seconds
@@ -67,17 +77,26 @@ export function evaluateSkillSignals(inputs: SkillSignalInputs): ConstraintSigna
   }
   
   // Inconsistent Skill Exposure
-  // ISSUE D FIX: Only flag if user has meaningful skill session history
-  // Clean-slate users (0-2 total skill sessions) should not be classified as "inconsistent"
+  // [limiter-truth] ISSUE B: Only flag if user has meaningful skill session history
+  // Clean-slate users should NOT be classified as "inconsistent" - use higher threshold
   const totalSkillHistory = inputs.totalSkillSessionsLogged ?? 0
-  const hasEnoughSkillHistory = totalSkillHistory >= 3
+  const hasEnoughSkillHistory = totalSkillHistory >= CLEAN_SLATE_THRESHOLD.minSkillSessionsForInconsistency
+  
+  // [limiter-truth] Log skill inconsistency decision
+  console.log('[limiter-truth] Skill inconsistency check:', {
+    totalSkillHistory,
+    requiredThreshold: CLEAN_SLATE_THRESHOLD.minSkillSessionsForInconsistency,
+    hasEnoughHistory: hasEnoughSkillHistory,
+    sessionsThisWeek: inputs.sessionsThisWeek,
+    wouldFlag: hasEnoughSkillHistory && inputs.sessionsThisWeek < THRESHOLDS.minSessionsPerWeek,
+  })
   
   if (hasEnoughSkillHistory && inputs.sessionsThisWeek < THRESHOLDS.minSessionsPerWeek) {
     signals.push({
       type: 'inconsistent_skill_exposure',
       category: 'skill',
       score: inputs.sessionsThisWeek === 0 ? 6 : 4,
-      confidence: totalSkillHistory >= 6 ? 'high' : 'medium',
+      confidence: totalSkillHistory >= 8 ? 'high' : 'medium', // INCREASED confidence threshold
       rawMetrics: { sessionsThisWeek: inputs.sessionsThisWeek, totalSkillHistory },
     })
   }
@@ -244,17 +263,26 @@ export function evaluateVolumeSignals(inputs: VolumeSignalInputs): ConstraintSig
   }
   
   // Training Inconsistency (missed sessions or low workout frequency)
-  // TASK 3: Only flag if user has meaningful workout history
-  // Clean-slate users (0-2 total workouts) should not be classified as "inconsistent"
+  // [limiter-truth] ISSUE B: Only flag if user has meaningful workout history
+  // Clean-slate users should NOT be classified as "inconsistent" - use higher threshold
   const totalWorkoutHistory = inputs.totalWorkoutsLogged ?? 0
-  const hasEnoughHistoryForInconsistency = totalWorkoutHistory >= 3
+  const hasEnoughHistoryForInconsistency = totalWorkoutHistory >= CLEAN_SLATE_THRESHOLD.minTotalWorkoutsForInconsistency
+  
+  // [limiter-truth] Log volume inconsistency decision
+  console.log('[limiter-truth] Volume inconsistency check:', {
+    totalWorkoutHistory,
+    requiredThreshold: CLEAN_SLATE_THRESHOLD.minTotalWorkoutsForInconsistency,
+    hasEnoughHistory: hasEnoughHistoryForInconsistency,
+    workoutsThisWeek: inputs.workoutsThisWeek,
+    wouldFlag: hasEnoughHistoryForInconsistency && inputs.workoutsThisWeek !== undefined && inputs.workoutsThisWeek < 2,
+  })
   
   if (hasEnoughHistoryForInconsistency && inputs.workoutsThisWeek !== undefined && inputs.workoutsThisWeek < 2) {
     signals.push({
       type: 'training_inconsistency',
       category: 'volume',
       score: inputs.workoutsThisWeek === 0 ? 7 : 5,
-      confidence: totalWorkoutHistory >= 6 ? 'high' : 'medium',
+      confidence: totalWorkoutHistory >= 10 ? 'high' : 'medium', // INCREASED confidence threshold
       rawMetrics: { workoutsThisWeek: inputs.workoutsThisWeek, totalHistory: totalWorkoutHistory },
     })
   }
@@ -265,7 +293,7 @@ export function evaluateVolumeSignals(inputs: VolumeSignalInputs): ConstraintSig
       type: 'training_inconsistency',
       category: 'volume',
       score: Math.min(7, inputs.missedSessions * 2),
-      confidence: totalWorkoutHistory >= 6 ? 'high' : 'medium',
+      confidence: totalWorkoutHistory >= 10 ? 'high' : 'medium', // INCREASED confidence threshold
       rawMetrics: { missedSessions: inputs.missedSessions, totalHistory: totalWorkoutHistory },
     })
   }

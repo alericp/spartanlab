@@ -33,11 +33,13 @@ import { calculateSkillDensityMetrics, analyzeHoldTrend, getAggregateSessionStat
 import { calculateRelativeStrengthMetrics, type RelativeStrengthTier } from './relative-strength-engine'
 import { assessFrontLeverSupport, assessPlancheSupport } from './strength-support-rules'
 
-// Constraint labels - aligned with platform messaging
+// [limiter-truth] Constraint labels - aligned with platform messaging
+// ISSUE B: Inconsistency labels now require evidence and are distinct
 const LABELS: Record<string, string> = {
   skill_density_deficit: 'Skill Exposure Too Low',
-  progression_jump_too_large: 'Progression Too Advanced Too Early',
-  inconsistent_skill_exposure: 'Training Inconsistency',
+  progression_jump_too_large: 'Progression Too Advanced',
+  // [limiter-truth] ISSUE B: Distinct labels for different inconsistency types
+  inconsistent_skill_exposure: 'Skill Practice Gaps',  // More specific than generic "inconsistency"
   pull_strength_deficit: 'Pulling Strength Deficit',
   push_strength_deficit: 'Pushing Strength Deficit',
   core_tension_deficit: 'Core Tension Deficit',
@@ -48,9 +50,12 @@ const LABELS: Record<string, string> = {
   horizontal_pull_neglect: 'Horizontal Pulling Neglect',
   fatigue_accumulation: 'Recovery / Fatigue Limiter',
   recovery_deficit: 'Recovery / Fatigue Limiter',
-  training_inconsistency: 'Training Inconsistency',
+  training_inconsistency: 'Weekly Consistency Needed',  // More specific than generic "inconsistency"
   no_primary_constraint: 'No Primary Constraint',
   insufficient_data: 'More Data Needed',
+  // [limiter-truth] Additional labels for new states
+  early_calibration: 'Early Calibration',
+  building_consistency: 'Building Consistency',
 }
 
 // =============================================================================
@@ -262,8 +267,217 @@ export function analyzeConstraints(): ConstraintResult {
   }
 }
 
+// =============================================================================
+// [limiter-truth] CANONICAL DISPLAYED-LIMITER HELPER (ISSUE A/D)
+// =============================================================================
+
+/**
+ * Low-history state detection thresholds
+ * [limiter-truth] ISSUE B: These thresholds determine when we have enough data
+ * to confidently make limiter assertions
+ */
+const LOW_HISTORY_THRESHOLDS = {
+  minTotalWorkouts: 6,       // Minimum total workout history
+  minSkillSessions: 4,       // Minimum skill sessions for skill-related constraints
+  minStrengthRecords: 2,     // Minimum strength records for strength constraints
+}
+
+/**
+ * Determine if the user is in a low-history / clean-slate state
+ * [limiter-truth] ISSUE B: This must be checked before asserting any confident limiter
+ */
+function detectLowHistoryState(): {
+  isLowHistory: boolean
+  totalWorkouts: number
+  totalSkillSessions: number
+  totalStrengthRecords: number
+  reason: string | null
+} {
+  const workoutLogs = getWorkoutLogs()
+  const skillSessions = getSkillSessions()
+  const strengthRecords = getStrengthRecords()
+  
+  const totalWorkouts = workoutLogs.length
+  const totalSkillSessions = skillSessions.length
+  const totalStrengthRecords = strengthRecords.length
+  
+  const isLowWorkouts = totalWorkouts < LOW_HISTORY_THRESHOLDS.minTotalWorkouts
+  const isLowSkill = totalSkillSessions < LOW_HISTORY_THRESHOLDS.minSkillSessions
+  const isLowStrength = totalStrengthRecords < LOW_HISTORY_THRESHOLDS.minStrengthRecords
+  
+  // Overall low-history if any critical data source is thin
+  const isLowHistory = isLowWorkouts && isLowSkill
+  
+  let reason: string | null = null
+  if (isLowWorkouts && isLowSkill) {
+    reason = 'insufficient_overall_history'
+  } else if (isLowWorkouts) {
+    reason = 'insufficient_workout_history'
+  } else if (isLowSkill) {
+    reason = 'insufficient_skill_history'
+  }
+  
+  console.log('[limiter-truth] Low-history state detected:', {
+    isLowHistory,
+    totalWorkouts,
+    totalSkillSessions,
+    totalStrengthRecords,
+    reason,
+    thresholds: LOW_HISTORY_THRESHOLDS,
+  })
+  
+  return { isLowHistory, totalWorkouts, totalSkillSessions, totalStrengthRecords, reason }
+}
+
+/**
+ * CANONICAL DISPLAYED-LIMITER FUNCTION (TASK 2)
+ * [limiter-truth] ISSUE A/D: Single source of truth for displayed limiter across all surfaces
+ * 
+ * Priority order:
+ * 1. Check for low-history state first (prevents false confidence)
+ * 2. Real recent history / actual completed sessions
+ * 3. Real performance signals / strength metrics
+ * 4. Recovery constraints
+ * 5. Profile-based heuristics only when stronger evidence is missing
+ */
+export function deriveCanonicalDisplayedLimiter(): {
+  label: string
+  code: string
+  category: string
+  confidence: 'low' | 'medium' | 'high'
+  isLowHistory: boolean
+  isFallback: boolean
+  explanation: string
+  focus: string[]
+} {
+  // [limiter-truth] ISSUE B: Check low-history state first
+  const historyState = detectLowHistoryState()
+  
+  // [limiter-truth] ISSUE B/F: If low-history, return early with appropriate label
+  // Do NOT return "Training Inconsistency" for clean-slate users
+  if (historyState.isLowHistory) {
+    console.log('[limiter-truth] Returning early calibration label due to low history')
+    
+    return {
+      label: 'Early Calibration',
+      code: 'early_calibration',
+      category: 'calibration',
+      confidence: 'low',
+      isLowHistory: true,
+      isFallback: false, // This is intentional, not a fallback
+      explanation: 'Complete a few more training sessions to unlock personalized constraint analysis. We need more data to confidently identify your limiters.',
+      focus: [
+        'Log your workouts consistently',
+        'Track skill practice sessions',
+        'Complete at least 6 workouts total',
+      ],
+    }
+  }
+  
+  // [limiter-truth] Get full constraint analysis
+  const result = analyzeConstraints()
+  
+  // [limiter-truth] ISSUE B/F: Check if the result is "insufficient_data" despite having some history
+  // This means we have workout logs but not enough specific data for confident analysis
+  if (result.primaryConstraint === 'insufficient_data') {
+    console.log('[limiter-truth] Constraint engine returned insufficient_data with some history')
+    
+    return {
+      label: 'More Data Needed',
+      code: 'insufficient_data',
+      category: 'data',
+      confidence: 'low',
+      isLowHistory: false,
+      isFallback: true,
+      explanation: 'Your training data is being collected. Continue logging workouts and skill sessions for personalized insights.',
+      focus: [
+        'Log detailed workout sets',
+        'Track skill holds and progressions',
+        'Record strength benchmarks',
+      ],
+    }
+  }
+  
+  // [limiter-truth] No primary constraint = balanced training
+  if (result.primaryConstraint === 'no_primary_constraint') {
+    return {
+      label: 'Training Balanced',
+      code: 'no_primary_constraint',
+      category: 'balanced',
+      confidence: 'medium',
+      isLowHistory: false,
+      isFallback: false,
+      explanation: 'No major bottlenecks detected. Your training appears well-balanced across skill, strength, and volume.',
+      focus: [
+        'Continue current approach',
+        'Maintain consistency',
+        'Progress gradually',
+      ],
+    }
+  }
+  
+  // [limiter-truth] ISSUE B: Special handling for inconsistency labels
+  // These should ONLY appear with high confidence and sufficient history
+  if (
+    result.primaryConstraint === 'training_inconsistency' ||
+    result.primaryConstraint === 'inconsistent_skill_exposure'
+  ) {
+    // [limiter-truth] Double-check we have enough history for this assertion
+    if (historyState.totalWorkouts < 8) {
+      console.log('[limiter-truth] Suppressing inconsistency label due to borderline history:', {
+        constraint: result.primaryConstraint,
+        totalWorkouts: historyState.totalWorkouts,
+      })
+      
+      // Return a softer label instead
+      return {
+        label: 'Building Consistency',
+        code: 'building_consistency',
+        category: 'calibration',
+        confidence: 'medium',
+        isLowHistory: false,
+        isFallback: false,
+        explanation: 'Establishing your training baseline. Keep logging sessions to help us understand your patterns better.',
+        focus: [
+          'Train at least 3x per week',
+          'Log each workout session',
+          'Build a consistent routine',
+        ],
+      }
+    }
+  }
+  
+  // [limiter-truth] Return the actual constraint result
+  const focusItems = result.recommendedFocus
+    .filter(f => f.priority === 'primary')
+    .map(f => f.action)
+    .slice(0, 3)
+  
+  console.log('[limiter-truth] Returning canonical limiter:', {
+    code: result.primaryConstraint,
+    label: result.constraintLabel,
+    confidence: result.confidence,
+    historyState: {
+      totalWorkouts: historyState.totalWorkouts,
+      totalSkillSessions: historyState.totalSkillSessions,
+    },
+  })
+  
+  return {
+    label: result.constraintLabel,
+    code: result.primaryConstraint,
+    category: result.category.charAt(0).toUpperCase() + result.category.slice(1),
+    confidence: result.confidence,
+    isLowHistory: false,
+    isFallback: false,
+    explanation: result.explanation,
+    focus: focusItems.length > 0 ? focusItems : ['Continue current approach'],
+  }
+}
+
 /**
  * Get a simplified insight for dashboard display
+ * [limiter-truth] ISSUE D: Now uses canonical displayed-limiter helper
  */
 export function getConstraintInsight(): {
   hasInsight: boolean
@@ -273,39 +487,43 @@ export function getConstraintInsight(): {
   explanation: string
   confidence: string
 } {
-  const result = analyzeConstraints()
+  // [limiter-truth] Use canonical helper for unified truth
+  const canonical = deriveCanonicalDisplayedLimiter()
   
-  if (result.primaryConstraint === 'insufficient_data') {
+  // [limiter-truth] Log that we're using canonical source
+  console.log('[limiter-truth] getConstraintInsight using canonical source:', canonical.code)
+  
+  // Low-history or insufficient data = no confident insight
+  if (canonical.isLowHistory || canonical.code === 'insufficient_data') {
     return {
       hasInsight: false,
-      label: 'More Data Needed',
-      category: 'Data',
-      focus: ['Log workouts and skill sessions to unlock insights'],
-      explanation: 'Track your training consistently to receive personalized constraint analysis.',
-      confidence: 'low',
+      label: canonical.label,
+      category: canonical.category,
+      focus: canonical.focus,
+      explanation: canonical.explanation,
+      confidence: canonical.confidence,
     }
   }
   
-  if (result.primaryConstraint === 'no_primary_constraint') {
+  // Balanced training
+  if (canonical.code === 'no_primary_constraint') {
     return {
       hasInsight: true,
       label: 'Training Balanced',
       category: 'Balanced',
-      focus: ['Continue current approach', 'Maintain consistency'],
-      explanation: 'No major bottlenecks detected. Keep training consistently.',
-      confidence: 'medium',
+      focus: canonical.focus,
+      explanation: canonical.explanation,
+      confidence: canonical.confidence,
     }
   }
   
+  // Actual constraint insight
   return {
     hasInsight: true,
-    label: result.constraintLabel,
-    category: result.category.charAt(0).toUpperCase() + result.category.slice(1),
-    focus: result.recommendedFocus
-      .filter(f => f.priority === 'primary')
-      .map(f => f.action)
-      .slice(0, 3),
-    explanation: result.explanation,
-    confidence: result.confidence,
+    label: canonical.label,
+    category: canonical.category,
+    focus: canonical.focus,
+    explanation: canonical.explanation,
+    confidence: canonical.confidence,
   }
 }

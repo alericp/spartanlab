@@ -125,6 +125,21 @@ export function generateFocusItems(constraintType: ConstraintType): FocusItem[] 
         { action: 'Check back after 1-2 weeks of logging', priority: 'secondary' },
       ]
     
+    // [limiter-truth] New states for clean-slate / low-history users
+    case 'early_calibration':
+      return [
+        { action: 'Complete at least 6 logged workouts', priority: 'primary' },
+        { action: 'Track skill practice sessions', priority: 'primary' },
+        { action: 'Log strength benchmarks when ready', priority: 'secondary' },
+      ]
+    
+    case 'building_consistency':
+      return [
+        { action: 'Train at least 3x per week', priority: 'primary' },
+        { action: 'Log each workout session', priority: 'primary' },
+        { action: 'Build a consistent routine first', priority: 'secondary' },
+      ]
+    
     default:
       return [
         { action: 'Continue logging to improve insights', priority: 'primary' },
@@ -192,6 +207,13 @@ export function generateExplanation(
     
     case 'insufficient_data':
       return `Not enough training data to identify specific constraints. Log strength records, skill sessions, and workouts to unlock personalized insights.`
+    
+    // [limiter-truth] New states for clean-slate / low-history users
+    case 'early_calibration':
+      return `You're just getting started. Complete a few more training sessions and we'll be able to identify your specific limiters and optimize your programming.`
+    
+    case 'building_consistency':
+      return `You're building your training baseline. Keep logging sessions consistently and the system will soon have enough data to provide confident recommendations.`
     
     default:
       return `Continue training consistently and the system will refine its analysis.${confidenceNote}`

@@ -1,6 +1,7 @@
 // Constraint Engine Types
 // Types for the primary limiter detection system
 
+// [limiter-truth] Added early_calibration and building_consistency for low-history states
 export type ConstraintType =
   | 'skill_density_deficit'
   | 'progression_jump_too_large'
@@ -18,8 +19,11 @@ export type ConstraintType =
   | 'training_inconsistency'
   | 'no_primary_constraint'
   | 'insufficient_data'
+  | 'early_calibration'      // [limiter-truth] Low-history state
+  | 'building_consistency'   // [limiter-truth] Borderline history state
 
-export type ConstraintCategory = 'skill' | 'strength' | 'volume' | 'recovery' | 'none'
+// [limiter-truth] Added 'calibration' and 'data' for low-history / clean-slate states
+export type ConstraintCategory = 'skill' | 'strength' | 'volume' | 'recovery' | 'none' | 'calibration' | 'data' | 'balanced'
 
 export type ConfidenceLevel = 'high' | 'medium' | 'low'
 
@@ -49,11 +53,12 @@ export interface ConstraintResult {
   dataQuality: 'sufficient' | 'partial' | 'insufficient'
 }
 
-// Constraint labels for display
+// [limiter-truth] Constraint labels for display
+// ISSUE B: Inconsistency labels now more specific to avoid misleading clean-slate users
 export const CONSTRAINT_LABELS: Record<ConstraintType, string> = {
   skill_density_deficit: 'Skill Exposure Too Low',
   progression_jump_too_large: 'Progression Too Advanced',
-  inconsistent_skill_exposure: 'Training Inconsistency',
+  inconsistent_skill_exposure: 'Skill Practice Gaps',  // [limiter-truth] More specific
   pull_strength_deficit: 'Pulling Strength Deficit',
   push_strength_deficit: 'Pushing Strength Deficit',
   core_tension_deficit: 'Core Tension Deficit',
@@ -64,15 +69,21 @@ export const CONSTRAINT_LABELS: Record<ConstraintType, string> = {
   horizontal_pull_neglect: 'Horizontal Pulling Neglect',
   fatigue_accumulation: 'Recovery / Fatigue Limiter',
   recovery_deficit: 'Recovery / Fatigue Limiter',
-  training_inconsistency: 'Training Inconsistency',
+  training_inconsistency: 'Weekly Consistency Needed',  // [limiter-truth] More specific
   no_primary_constraint: 'No Primary Constraint',
   insufficient_data: 'More Data Needed',
+  early_calibration: 'Early Calibration',              // [limiter-truth] New
+  building_consistency: 'Building Consistency',        // [limiter-truth] New
 }
 
+// [limiter-truth] Added calibration and data category labels
 export const CONSTRAINT_CATEGORY_LABELS: Record<ConstraintCategory, string> = {
   skill: 'Skill Training',
   strength: 'Strength Foundation',
   volume: 'Training Volume',
   recovery: 'Recovery & Fatigue',
   none: 'Balanced',
+  calibration: 'Building Baseline',
+  data: 'Data Collection',
+  balanced: 'Balanced Training',
 }

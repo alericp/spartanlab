@@ -1258,145 +1258,514 @@ function selectMainExercises(
   }
   
   // ==========================================================================
+  // [selection-compression-fix] ISSUE A/B: SKILL-WEIGHTED RANKING SYSTEM
+  // ==========================================================================
+  // This reduces primary goal compression by creating scoring that respects
+  // selected skills, session roles, and weighted-capable movement preferences.
+  
+  /**
+   * Score an exercise based on skill alignment, session role, and weighted capability.
+   * [selection-compression-fix] TASK 3: Rebalanced ranking weights.
+   */
+  function scoreExerciseForSession(
+    exercise: Exercise,
+    sessionSkills: SessionSkillAllocation[],
+    dayFocus: string,
+    hasWeightedEquipment: boolean
+  ): number {
+    let score = 0
+    
+    // Base score: general quality
+    score += exercise.fatigueCost ? (5 - exercise.fatigueCost) * 2 : 5
+    
+    // [selection-compression-fix] ISSUE B: Selected skill alignment (major boost)
+    for (const skillAlloc of sessionSkills) {
+      const skillLower = skillAlloc.skill.toLowerCase()
+      const transfersToSkill = exercise.transferTo?.some(t => t.toLowerCase().includes(skillLower))
+      
+      if (transfersToSkill) {
+        // Direct skill transfer gets biggest boost
+        if (skillAlloc.expressionMode === 'primary') {
+          score += 25 // Primary skill gets major boost
+        } else if (skillAlloc.expressionMode === 'technical') {
+          score += 18 // Technical gets solid boost  
+        } else if (skillAlloc.expressionMode === 'support') {
+          score += 12 // Support gets moderate boost
+        }
+      }
+    }
+    
+    // [selection-compression-fix] ISSUE C: Session role differentiation
+    const isStrengthFocus = dayFocus.includes('strength')
+    const isSkillFocus = dayFocus.includes('skill')
+    const isMixedFocus = dayFocus.includes('mixed') || dayFocus.includes('support')
+    
+    if (isStrengthFocus && exercise.category === 'strength') {
+      score += 15
+    } else if (isSkillFocus && exercise.category === 'skill') {
+      score += 15
+    } else if (isMixedFocus) {
+      // Mixed days favor moderate fatigue exercises
+      if (exercise.fatigueCost && exercise.fatigueCost <= 3) {
+        score += 10
+      }
+    }
+    
+    // [selection-compression-fix] ISSUE D/E: Weighted-capable boost when equipment supports it
+    const isWeightedCapable = exercise.id.includes('weighted_') || 
+      exercise.id === 'pull_up' || 
+      exercise.id === 'dip' || 
+      exercise.id === 'push_up'
+    
+    if (hasWeightedEquipment && isWeightedCapable && isStrengthFocus) {
+      score += 12 // Significant boost for weighted when appropriate
+      console.log('[weighted-win-logic] Weighted exercise scored higher:', exercise.id)
+    }
+    
+    return score
+  }
+  
+  /**
+   * Get exercises that support a specific skill via doctrine mappings.
+   * [selection-compression-fix] ISSUE F: Prefer doctrine-backed support.
+   */
+  function getDoctrineBackedExercisesForSkill(
+    skill: string,
+    availableExercises: Exercise[]
+  ): { exercise: Exercise; doctrineSource: string }[] {
+    const mapping = getSupportMapping(skill as SkillCarryover)
+    if (!mapping) return []
+    
+    const results: { exercise: Exercise; doctrineSource: string }[] = []
+    
+    for (const exId of mapping.directSupportExercises) {
+      const found = availableExercises.find(e => e.id.toLowerCase() === exId.toLowerCase())
+      if (found) {
+        results.push({ exercise: found, doctrineSource: `skill-support-mapping:${skill}:direct` })
+      }
+    }
+    
+    for (const exId of mapping.accessorySupportExercises) {
+      const found = availableExercises.find(e => e.id.toLowerCase() === exId.toLowerCase())
+      if (found) {
+        results.push({ exercise: found, doctrineSource: `skill-support-mapping:${skill}:accessory` })
+      }
+    }
+    
+    return results
+  }
+  
+  // Check if we have weighted equipment
+  const hasWeightedEquipment = equipment?.some(e => 
+    e === 'weight_belt' || e === 'weight_vest' || e === 'dumbbells' || e === 'barbell'
+  ) ?? false
+  
+  // [selection-compression-fix] TASK 7: Log compression fix context
+  console.log('[selection-compression-fix] Session selection context:', {
+    dayFocus: day.focus,
+    skillsForSession: skillsForSession?.map(s => `${s.skill}(${s.expressionMode})`),
+    hasWeightedEquipment,
+    selectedSkillsCount: selectedSkills?.length || 0,
+    primaryGoal,
+  })
+  
+  // ==========================================================================
   // Selection based on day focus
   // ==========================================================================
   
   // 1. SKILL DAYS - Lead with skill work
   // [exercise-trace] TASK 2/5: Thread trace context through selection
+  // [selection-compression-fix] ISSUE A/B: Now uses skillsForSession for ranking
   if (day.focus === 'push_skill' || day.focus === 'pull_skill' || day.focus === 'skill_density') {
-    // Add primary skill exercise(s)
-    const skills = goalExercises.filter(e => e.category === 'skill')
-    const primarySkill = selectByLevel(skills, experienceLevel)
     
-    if (primarySkill) {
-      addExercise(primarySkill, `Primary ${primaryGoal} skill work`, undefined, undefined, undefined, 'standalone', {
-        primarySelectionReason: 'primary_skill_direct',
-        sessionRole: 'skill_primary',
-        expressionMode: 'direct_intensity',
-        influencingSkills: [{ skillId: primaryGoal, influence: 'primary', expressionMode: 'direct' }],
-        candidatePoolSize: skills.length,
-      })
-    }
+    // [selection-compression-fix] ISSUE B: Find exercises for ALL skills in session allocation
+    const sessionSkillsToExpress = skillsForSession && skillsForSession.length > 0
+      ? skillsForSession
+      : [{ skill: primaryGoal, expressionMode: 'primary' as const, weight: 1 }]
     
-    // Add secondary skill for density days
-    if (day.focus === 'skill_density' && skills.length > 1) {
-      const secondarySkill = skills.find(s => s.id !== primarySkill?.id)
-      if (secondarySkill) {
-        addExercise(secondarySkill, 'Additional skill density', undefined, undefined, 'Moderate intensity', 'standalone', {
-          primarySelectionReason: 'primary_skill_technical',
-          sessionRole: 'skill_secondary',
-          expressionMode: 'technical_focus',
-          influencingSkills: [{ skillId: primaryGoal, influence: 'secondary', expressionMode: 'technical' }],
-          candidatePoolSize: skills.length - 1,
+    // Primary skill exercise from session allocation
+    const primarySkillAlloc = sessionSkillsToExpress.find(s => s.expressionMode === 'primary')
+    if (primarySkillAlloc) {
+      // Find skill exercises that transfer to the allocated primary skill
+      const skillCandidates = [...availableSkills, ...goalExercises.filter(e => e.category === 'skill')]
+        .filter(e => e.transferTo?.some(t => t.toLowerCase().includes(primarySkillAlloc.skill.toLowerCase())))
+      
+      // Score and rank candidates
+      const scoredCandidates = skillCandidates.map(e => ({
+        exercise: e,
+        score: scoreExerciseForSession(e, sessionSkillsToExpress, day.focus, hasWeightedEquipment)
+      })).sort((a, b) => b.score - a.score)
+      
+      const primarySkill = scoredCandidates[0]?.exercise || selectByLevel(goalExercises.filter(e => e.category === 'skill'), experienceLevel)
+      
+      if (primarySkill) {
+        addExercise(primarySkill, `Primary ${primarySkillAlloc.skill} skill work`, undefined, undefined, undefined, 'standalone', {
+          primarySelectionReason: 'primary_skill_direct',
+          sessionRole: 'skill_primary',
+          expressionMode: 'direct_intensity',
+          influencingSkills: [{ skillId: primarySkillAlloc.skill, influence: 'primary', expressionMode: 'direct' }],
+          candidatePoolSize: skillCandidates.length,
+        })
+        
+        // Track rejected alternatives
+        scoredCandidates.slice(1, 4).forEach(c => {
+          trackRejection(c.exercise.id, c.exercise.name, 'lower_score', `Score: ${c.score}`)
         })
       }
     }
     
-    // Add primary strength work that supports skill
-    const primaryStrength = goalExercises.filter(e => e.category === 'strength')
-    const strengthPick = selectByLevel(primaryStrength, experienceLevel) ||
-      availableStrength.find(e => e.transferTo.includes(primaryGoal))
+    // [selection-compression-fix] ISSUE B: Technical/secondary skill expression
+    const technicalSkillAlloc = sessionSkillsToExpress.find(s => s.expressionMode === 'technical')
+    if (technicalSkillAlloc && technicalSkillAlloc.skill !== primarySkillAlloc?.skill) {
+      // Find exercises for the technical skill (may be different from primary!)
+      const techSkillCandidates = [...availableSkills, ...availableStrength]
+        .filter(e => e.transferTo?.some(t => t.toLowerCase().includes(technicalSkillAlloc.skill.toLowerCase())))
+        .filter(e => !usedIds.has(e.id))
+      
+      const scoredTech = techSkillCandidates.map(e => ({
+        exercise: e,
+        score: scoreExerciseForSession(e, sessionSkillsToExpress, day.focus, hasWeightedEquipment)
+      })).sort((a, b) => b.score - a.score)
+      
+      if (scoredTech[0]) {
+        addExercise(scoredTech[0].exercise, `Technical work for ${technicalSkillAlloc.skill}`, undefined, undefined, 'Moderate intensity', 'standalone', {
+          primarySelectionReason: 'secondary_skill_technical',
+          sessionRole: 'skill_secondary',
+          expressionMode: 'technical_focus',
+          influencingSkills: [{ skillId: technicalSkillAlloc.skill, influence: 'secondary', expressionMode: 'technical' }],
+          candidatePoolSize: techSkillCandidates.length,
+        })
+        console.log('[selected-skill-exposure] Technical skill expressed:', technicalSkillAlloc.skill)
+      }
+    } else if (day.focus === 'skill_density') {
+      // Fallback for density days - add secondary skill from same goal
+      const skills = goalExercises.filter(e => e.category === 'skill' && !usedIds.has(e.id))
+      if (skills.length > 0) {
+        const secondarySkill = selectByLevel(skills, experienceLevel)
+        if (secondarySkill) {
+          addExercise(secondarySkill, 'Additional skill density', undefined, undefined, 'Moderate intensity', 'standalone', {
+            primarySelectionReason: 'primary_skill_technical',
+            sessionRole: 'skill_secondary',
+            expressionMode: 'technical_focus',
+            influencingSkills: [{ skillId: primaryGoal, influence: 'secondary', expressionMode: 'technical' }],
+            candidatePoolSize: skills.length,
+          })
+        }
+      }
+    }
     
-    if (strengthPick) {
-      addExercise(strengthPick, `Supports ${primaryGoal} development`, undefined, undefined, undefined, 'standalone', {
-        primarySelectionReason: 'selected_skill_support',
-        sessionRole: 'strength_support',
-        expressionMode: 'strength_support',
-        influencingSkills: [{ skillId: primaryGoal, influence: 'primary', expressionMode: 'support' }],
-        candidatePoolSize: primaryStrength.length,
-      })
+    // [selection-compression-fix] ISSUE F: Doctrine-backed strength support
+    // Prefer support that specifically helps the session's allocated skills
+    const allSessionSkills = sessionSkillsToExpress.map(s => s.skill)
+    let strengthPicked = false
+    
+    for (const skill of allSessionSkills) {
+      if (strengthPicked) break
+      const doctrineExercises = getDoctrineBackedExercisesForSkill(skill, availableStrength)
+      for (const { exercise, doctrineSource } of doctrineExercises) {
+        if (!usedIds.has(exercise.id) && canAddMore(exercise, 'standalone')) {
+          addExercise(exercise, `Doctrine-backed support for ${skill}`, undefined, undefined, undefined, 'standalone', {
+            primarySelectionReason: 'doctrine_recommended',
+            sessionRole: 'strength_support',
+            expressionMode: 'strength_support',
+            influencingSkills: [{ skillId: skill, influence: 'selected', expressionMode: 'support' }],
+            doctrineSource: { doctrineSource, triggeringSkill: skill, doctrineType: 'support' },
+            candidatePoolSize: doctrineExercises.length,
+          })
+          strengthPicked = true
+          console.log('[selection-compression-fix] Doctrine-backed support won over generic:', exercise.id)
+          break
+        }
+      }
+    }
+    
+    // Fallback to generic goal-based strength if no doctrine match
+    if (!strengthPicked) {
+      const primaryStrength = goalExercises.filter(e => e.category === 'strength')
+      const strengthPick = selectByLevel(primaryStrength, experienceLevel) ||
+        availableStrength.find(e => e.transferTo?.includes(primaryGoal))
+      
+      if (strengthPick) {
+        addExercise(strengthPick, `Supports ${primaryGoal} development`, undefined, undefined, undefined, 'standalone', {
+          primarySelectionReason: 'selected_skill_support',
+          sessionRole: 'strength_support',
+          expressionMode: 'strength_support',
+          influencingSkills: [{ skillId: primaryGoal, influence: 'primary', expressionMode: 'support' }],
+          candidatePoolSize: primaryStrength.length,
+        })
+      }
     }
   }
   
   // 2. STRENGTH DAYS
   // [exercise-trace] TASK 2/3: Thread weighted decision trace
+  // [selection-compression-fix] ISSUE D/E: Improved weighted movement win conditions
   if (day.focus === 'push_strength' || day.focus === 'pull_strength') {
     const isPush = day.focus === 'push_strength'
+    const isHeavyDay = day.targetIntensity === 'high'
     
-    // Primary weighted movement
-    const primaryWeighted = isPush
-      ? availableStrength.find(e => e.id === 'weighted_dip')
-      : availableStrength.find(e => e.id === 'weighted_pull_up')
+    // [weighted-win-logic] ISSUE D: Check all conditions for weighted to win
+    const hasBenchmarks = weightedBenchmarks && (isPush ? weightedBenchmarks.weightedDip : weightedBenchmarks.weightedPullUp)
+    const hasLoadableEquipment = hasWeightedEquipment
+    const sessionRoleSupportsWeighted = true // Strength days always support weighted
+    const recoveryAllowsWeighted = day.targetIntensity !== 'low' // Not a recovery day
     
-    if (primaryWeighted) {
-      const isHeavyDay = day.targetIntensity === 'high'
-      const hasBenchmarks = weightedBenchmarks && (isPush ? weightedBenchmarks.weightedDip : weightedBenchmarks.weightedPullUp)
-      addExercise(
-        primaryWeighted,
-        isHeavyDay ? 'Primary strength builder (heavy)' : 'Primary strength builder (volume)',
-        isHeavyDay ? 4 : 3,
-        isHeavyDay ? '3-5' : '6-8',
-        undefined,
-        'standalone',
-        {
-          primarySelectionReason: 'strength_foundation',
-          sessionRole: 'strength_primary',
-          expressionMode: isHeavyDay ? 'direct_intensity' : 'volume_accumulation',
-          influencingSkills: [{ skillId: primaryGoal, influence: 'primary', expressionMode: 'support' }],
-          candidatePoolSize: availableStrength.length,
-          weightedConsidered: true,
-          weightedEligible: !!hasBenchmarks,
-          weightedBlockerReason: !hasBenchmarks ? 'no_benchmark_confidence' : undefined,
+    // [weighted-win-logic] Calculate if weighted should win
+    const weightedShouldWin = hasLoadableEquipment && (hasBenchmarks || hasLoadableEquipment) && 
+                              sessionRoleSupportsWeighted && recoveryAllowsWeighted
+    
+    console.log('[weighted-win-logic] Strength day decision:', {
+      isPush,
+      isHeavyDay,
+      hasBenchmarks: !!hasBenchmarks,
+      hasLoadableEquipment,
+      weightedShouldWin,
+      targetIntensity: day.targetIntensity,
+    })
+    
+    // Primary movement - prefer weighted when conditions met
+    let primaryAdded = false
+    
+    if (weightedShouldWin) {
+      // [weighted-win-logic] ISSUE E: Weighted wins - use weighted variant
+      const primaryWeighted = isPush
+        ? availableStrength.find(e => e.id === 'weighted_dip')
+        : availableStrength.find(e => e.id === 'weighted_pull_up')
+      
+      if (primaryWeighted) {
+        addExercise(
+          primaryWeighted,
+          isHeavyDay ? 'Primary strength builder (heavy)' : 'Primary strength builder (volume)',
+          isHeavyDay ? 4 : 3,
+          isHeavyDay ? '3-5' : '6-8',
+          undefined,
+          'standalone',
+          {
+            primarySelectionReason: 'strength_foundation',
+            sessionRole: 'strength_primary',
+            expressionMode: isHeavyDay ? 'direct_intensity' : 'volume_accumulation',
+            influencingSkills: [{ skillId: primaryGoal, influence: 'primary', expressionMode: 'support' }],
+            candidatePoolSize: availableStrength.length,
+            weightedConsidered: true,
+            weightedEligible: true,
+            weightedBlockerReason: undefined,
+          }
+        )
+        primaryAdded = true
+        console.log('[weighted-win-logic] Weighted movement WON:', primaryWeighted.id)
+      }
+    }
+    
+    // Fallback to bodyweight if weighted didn't win
+    if (!primaryAdded) {
+      const bodyweightPrimary = isPush
+        ? availableStrength.find(e => e.id === 'dip' || e.id === 'push_up')
+        : availableStrength.find(e => e.id === 'pull_up')
+      
+      if (bodyweightPrimary) {
+        const blockerReason: WeightedBlockerReason | undefined = !hasLoadableEquipment 
+          ? 'no_loadable_equipment' 
+          : !hasBenchmarks 
+            ? 'no_benchmark_confidence'
+            : !recoveryAllowsWeighted
+              ? 'limiter_recovery_favored_unloaded'
+              : undefined
+        
+        addExercise(
+          bodyweightPrimary,
+          isHeavyDay ? 'Primary strength builder (bodyweight)' : 'Bodyweight strength volume',
+          isHeavyDay ? 4 : 3,
+          isHeavyDay ? '5-8' : '8-12',
+          undefined,
+          'standalone',
+          {
+            primarySelectionReason: 'strength_foundation',
+            sessionRole: 'strength_primary',
+            expressionMode: isHeavyDay ? 'direct_intensity' : 'volume_accumulation',
+            influencingSkills: [{ skillId: primaryGoal, influence: 'primary', expressionMode: 'support' }],
+            candidatePoolSize: availableStrength.length,
+            weightedConsidered: true,
+            weightedEligible: !!hasBenchmarks,
+            weightedBlockerReason: blockerReason,
+          }
+        )
+        primaryAdded = true
+        console.log('[weighted-win-logic] Bodyweight movement won, blocker:', blockerReason)
+      }
+    }
+    
+    // [selection-compression-fix] ISSUE B: Secondary strength for session skills
+    const sessionSkillsToSupport = skillsForSession && skillsForSession.length > 0
+      ? skillsForSession
+      : [{ skill: primaryGoal, expressionMode: 'primary' as const, weight: 1 }]
+    
+    // Try to add doctrine-backed strength support for each skill
+    for (const skillAlloc of sessionSkillsToSupport) {
+      if (selected.length >= maxExercises - 2) break // Leave room for skill exposure
+      
+      const doctrineExercises = getDoctrineBackedExercisesForSkill(skillAlloc.skill, availableStrength)
+      for (const { exercise, doctrineSource } of doctrineExercises) {
+        if (!usedIds.has(exercise.id) && canAddMore(exercise, 'standalone')) {
+          addExercise(exercise, `Strength support for ${skillAlloc.skill}`, undefined, undefined, undefined, 'standalone', {
+            primarySelectionReason: 'doctrine_recommended',
+            sessionRole: 'strength_support',
+            expressionMode: 'strength_support',
+            influencingSkills: [{ skillId: skillAlloc.skill, influence: 'selected', expressionMode: 'support' }],
+            doctrineSource: { doctrineSource, triggeringSkill: skillAlloc.skill, doctrineType: 'support' },
+            candidatePoolSize: doctrineExercises.length,
+          })
+          console.log('[selected-skill-exposure] Strength support for selected skill:', skillAlloc.skill)
+          break
         }
-      )
+      }
     }
     
-    // Goal-specific strength if different from weighted movement
+    // Fallback: Goal-specific strength if no doctrine match found
     const goalStrength = goalExercises.filter(e => 
-      e.category === 'strength' && e.id !== primaryWeighted?.id
+      e.category === 'strength' && !usedIds.has(e.id)
     )
-    const strengthPick = selectByLevel(goalStrength, experienceLevel)
-    if (strengthPick) {
-      addExercise(strengthPick, `Skill-specific ${isPush ? 'push' : 'pull'} strength`, undefined, undefined, undefined, 'standalone', {
-        primarySelectionReason: 'selected_skill_support',
-        sessionRole: 'strength_support',
-        expressionMode: 'strength_support',
-        influencingSkills: [{ skillId: primaryGoal, influence: 'primary', expressionMode: 'support' }],
-        candidatePoolSize: goalStrength.length,
-      })
+    if (goalStrength.length > 0 && selected.length < maxExercises - 1) {
+      const strengthPick = selectByLevel(goalStrength, experienceLevel)
+      if (strengthPick) {
+        addExercise(strengthPick, `Skill-specific ${isPush ? 'push' : 'pull'} strength`, undefined, undefined, undefined, 'standalone', {
+          primarySelectionReason: 'selected_skill_support',
+          sessionRole: 'strength_support',
+          expressionMode: 'strength_support',
+          influencingSkills: [{ skillId: primaryGoal, influence: 'primary', expressionMode: 'support' }],
+          candidatePoolSize: goalStrength.length,
+        })
+      }
     }
     
-    // Add skill exposure if this is a primary day
+    // Add skill exposure if this is a primary day - use session allocation
     if (day.isPrimary) {
-      const skills = goalExercises.filter(e => e.category === 'skill')
-      const skillPick = selectByLevel(skills, experienceLevel)
-      if (skillPick) {
+      const primarySkillAlloc = sessionSkillsToSupport.find(s => s.expressionMode === 'primary') || sessionSkillsToSupport[0]
+      const skillCandidates = [...availableSkills, ...goalExercises.filter(e => e.category === 'skill')]
+        .filter(e => e.transferTo?.some(t => t.toLowerCase().includes(primarySkillAlloc?.skill.toLowerCase() || primaryGoal.toLowerCase())))
+        .filter(e => !usedIds.has(e.id))
+      
+      if (skillCandidates.length > 0) {
+        const skillPick = selectByLevel(skillCandidates, experienceLevel) || skillCandidates[0]
         addExercise(skillPick, 'Skill exposure alongside strength work', undefined, undefined, undefined, 'standalone', {
           primarySelectionReason: 'primary_skill_technical',
           sessionRole: 'skill_secondary',
           expressionMode: 'technical_focus',
-          influencingSkills: [{ skillId: primaryGoal, influence: 'primary', expressionMode: 'rotation' }],
-          candidatePoolSize: skills.length,
+          influencingSkills: [{ skillId: primarySkillAlloc?.skill || primaryGoal, influence: 'primary', expressionMode: 'rotation' }],
+          candidatePoolSize: skillCandidates.length,
         })
       }
     }
   }
   
   // 3. MIXED/SUPPORT DAYS
+  // [selection-compression-fix] ISSUE C: Make session roles create real differences
   if (day.focus === 'mixed_upper' || day.focus === 'support_recovery') {
     const isLightDay = day.focus === 'support_recovery' || day.targetIntensity === 'low'
     
-    // Balanced selection - some push, some pull
-    const pushAccessory = availableAccessory.filter(e => e.movementPattern.includes('push'))
-    const pullAccessory = availableAccessory.filter(e => e.movementPattern.includes('pull'))
+    // [selection-compression-fix] Use session skill allocation for variety
+    const sessionSkillsForMixed = skillsForSession && skillsForSession.length > 0
+      ? skillsForSession
+      : [{ skill: primaryGoal, expressionMode: 'support' as const, weight: 1 }]
     
-    // Add moderate push work
-    if (pushAccessory.length > 0) {
-      const pick = pushAccessory.find(e => e.fatigueCost <= (isLightDay ? 2 : 3)) || pushAccessory[0]
-      addExercise(pick, 'Balanced push work', isLightDay ? 3 : 4)
+    console.log('[selection-compression-fix] Mixed day selection:', {
+      isLightDay,
+      sessionSkills: sessionSkillsForMixed.map(s => `${s.skill}(${s.expressionMode})`),
+    })
+    
+    // [selection-compression-fix] ISSUE F: Prefer skill-specific accessories over generic
+    // First, try to find push/pull work that supports session skills
+    const allAccessory = [...availableAccessory, ...availableStrength.filter(e => e.fatigueCost <= 3)]
+    
+    // Find push work that aligns with session skills
+    const pushCandidates = allAccessory
+      .filter(e => e.movementPattern?.includes('push') || e.movementPattern === 'horizontal_push' || e.movementPattern === 'vertical_push')
+      .map(e => ({
+        exercise: e,
+        score: scoreExerciseForSession(e, sessionSkillsForMixed, day.focus, hasWeightedEquipment),
+        skillAligned: sessionSkillsForMixed.some(s => e.transferTo?.some(t => t.toLowerCase().includes(s.skill.toLowerCase())))
+      }))
+      .sort((a, b) => {
+        // Prefer skill-aligned exercises
+        if (a.skillAligned && !b.skillAligned) return -1
+        if (!a.skillAligned && b.skillAligned) return 1
+        return b.score - a.score
+      })
+    
+    if (pushCandidates.length > 0) {
+      const pick = isLightDay 
+        ? pushCandidates.find(c => c.exercise.fatigueCost <= 2) || pushCandidates[0]
+        : pushCandidates[0]
+      
+      const influencingSkill = sessionSkillsForMixed.find(s => 
+        pick.exercise.transferTo?.some(t => t.toLowerCase().includes(s.skill.toLowerCase()))
+      )
+      
+      addExercise(pick.exercise, pick.skillAligned ? `Push work supporting ${influencingSkill?.skill || 'skills'}` : 'Balanced push work', isLightDay ? 3 : 4, undefined, undefined, 'standalone', {
+        primarySelectionReason: pick.skillAligned ? 'selected_skill_support' : 'session_role_fill',
+        sessionRole: 'accessory',
+        expressionMode: isLightDay ? 'rotation_light' : 'strength_support',
+        influencingSkills: influencingSkill ? [{ skillId: influencingSkill.skill, influence: 'selected', expressionMode: 'support' }] : [],
+        candidatePoolSize: pushCandidates.length,
+      })
+      
+      if (pick.skillAligned) {
+        console.log('[selected-skill-exposure] Mixed day push aligned to skill:', influencingSkill?.skill)
+      }
     }
     
-    // Add moderate pull work
-    if (pullAccessory.length > 0) {
-      const pick = pullAccessory.find(e => e.fatigueCost <= (isLightDay ? 2 : 3)) || pullAccessory[0]
-      addExercise(pick, 'Balanced pull work', isLightDay ? 3 : 4)
+    // Find pull work that aligns with session skills
+    const pullCandidates = allAccessory
+      .filter(e => e.movementPattern?.includes('pull') || e.movementPattern === 'horizontal_pull' || e.movementPattern === 'vertical_pull')
+      .filter(e => !usedIds.has(e.id))
+      .map(e => ({
+        exercise: e,
+        score: scoreExerciseForSession(e, sessionSkillsForMixed, day.focus, hasWeightedEquipment),
+        skillAligned: sessionSkillsForMixed.some(s => e.transferTo?.some(t => t.toLowerCase().includes(s.skill.toLowerCase())))
+      }))
+      .sort((a, b) => {
+        if (a.skillAligned && !b.skillAligned) return -1
+        if (!a.skillAligned && b.skillAligned) return 1
+        return b.score - a.score
+      })
+    
+    if (pullCandidates.length > 0) {
+      const pick = isLightDay 
+        ? pullCandidates.find(c => c.exercise.fatigueCost <= 2) || pullCandidates[0]
+        : pullCandidates[0]
+      
+      const influencingSkill = sessionSkillsForMixed.find(s => 
+        pick.exercise.transferTo?.some(t => t.toLowerCase().includes(s.skill.toLowerCase()))
+      )
+      
+      addExercise(pick.exercise, pick.skillAligned ? `Pull work supporting ${influencingSkill?.skill || 'skills'}` : 'Balanced pull work', isLightDay ? 3 : 4, undefined, undefined, 'standalone', {
+        primarySelectionReason: pick.skillAligned ? 'selected_skill_support' : 'session_role_fill',
+        sessionRole: 'accessory',
+        expressionMode: isLightDay ? 'rotation_light' : 'strength_support',
+        influencingSkills: influencingSkill ? [{ skillId: influencingSkill.skill, influence: 'selected', expressionMode: 'support' }] : [],
+        candidatePoolSize: pullCandidates.length,
+      })
+      
+      if (pick.skillAligned) {
+        console.log('[selected-skill-exposure] Mixed day pull aligned to skill:', influencingSkill?.skill)
+      }
     }
     
-    // Add skill exposure at reduced intensity
-    const skills = goalExercises.filter(e => e.category === 'skill')
-    const skillPick = selectByLevel(skills, experienceLevel)
-    if (skillPick && !isLightDay) {
-      addExercise(skillPick, 'Skill maintenance', 3, undefined, 'Moderate intensity')
+    // Add skill exposure at reduced intensity - use session skill allocation
+    if (!isLightDay) {
+      const primarySkillAlloc = sessionSkillsForMixed.find(s => s.expressionMode === 'primary' || s.expressionMode === 'support')
+      const skillCandidates = [...availableSkills, ...goalExercises.filter(e => e.category === 'skill')]
+        .filter(e => e.transferTo?.some(t => t.toLowerCase().includes(primarySkillAlloc?.skill.toLowerCase() || primaryGoal.toLowerCase())))
+        .filter(e => !usedIds.has(e.id))
+      
+      if (skillCandidates.length > 0) {
+        const skillPick = selectByLevel(skillCandidates, experienceLevel) || skillCandidates[0]
+        addExercise(skillPick, 'Skill maintenance', 3, undefined, 'Moderate intensity', 'standalone', {
+          primarySelectionReason: 'recovery_rotation',
+          sessionRole: 'skill_secondary',
+          expressionMode: 'rotation_light',
+          influencingSkills: [{ skillId: primarySkillAlloc?.skill || primaryGoal, influence: 'selected', expressionMode: 'rotation' }],
+          candidatePoolSize: skillCandidates.length,
+        })
     }
   }
   

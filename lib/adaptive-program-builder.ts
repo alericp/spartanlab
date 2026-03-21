@@ -2313,14 +2313,62 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
   // ISSUE A: Stage tracking for validation complete
   currentStage = 'validation_complete'
   console.log('[program-generate] STAGE: validation_complete')
-  console.log('[program-generate] Generation complete:', { 
-    sessionCount: sessions.length, 
-    primaryGoal,
+console.log('[program-generate] Generation complete:', {
+  sessionCount: sessions.length,
+  primaryGoal,
+  totalExercises,
+  dbVerifiedExercises,
+  dbCoverage: totalExercises > 0 ? `${Math.round((dbVerifiedExercises / totalExercises) * 100)}%` : 'N/A',
+  scheduleMode: inputScheduleMode,
+  selectedSkillsCount: expandedContext.selectedSkills.length,
+  })
+  
+  // [selected-skill-exposure] TASK 7: Weekly skill exposure summary
+  // This tracks how well selected skills received meaningful expression across the week
+  const skillExposureSummary: Record<string, { direct: number; technical: number; support: number; total: number }> = {}
+  
+  for (const session of sessions) {
+    for (const exercise of session.exercises || []) {
+      const trace = exercise.selectionTrace
+      if (trace?.influencingSkills) {
+        for (const skillInfluence of trace.influencingSkills) {
+          if (!skillExposureSummary[skillInfluence.skillId]) {
+            skillExposureSummary[skillInfluence.skillId] = { direct: 0, technical: 0, support: 0, total: 0 }
+          }
+          skillExposureSummary[skillInfluence.skillId].total++
+          if (trace.primarySelectionReason?.includes('direct')) {
+            skillExposureSummary[skillInfluence.skillId].direct++
+          } else if (trace.primarySelectionReason?.includes('technical')) {
+            skillExposureSummary[skillInfluence.skillId].technical++
+          } else if (trace.primarySelectionReason?.includes('support')) {
+            skillExposureSummary[skillInfluence.skillId].support++
+          }
+        }
+      }
+    }
+  }
+  
+  // Count weighted exercises
+  const weightedExerciseCount = sessions.reduce((sum, s) => 
+    sum + (s.exercises || []).filter(e => e.prescribedLoad && e.prescribedLoad.load > 0).length, 0
+  )
+  
+  console.log('[selected-skill-exposure] WEEKLY SUMMARY:', {
+    selectedSkills: expandedContext.selectedSkills,
+    skillExposureSummary,
     totalExercises,
-    dbVerifiedExercises,
-    dbCoverage: totalExercises > 0 ? `${Math.round((dbVerifiedExercises / totalExercises) * 100)}%` : 'N/A',
-    scheduleMode: inputScheduleMode,
-    selectedSkillsCount: expandedContext.selectedSkills.length,
+    weightedExerciseCount,
+    doctrineHitCount: sessions.reduce((sum, s) => 
+      sum + (s.exercises || []).filter(e => e.selectionTrace?.doctrineSource).length, 0
+    ),
+  })
+  
+  // [weighted-win-logic] Log weighted exercise presence
+  console.log('[weighted-win-logic] Weekly weighted summary:', {
+    weightedExerciseCount,
+    weightedPercentage: totalExercises > 0 ? `${Math.round((weightedExerciseCount / totalExercises) * 100)}%` : '0%',
+    hasLoadableEquipment: hasLoadableEquipment(equipment),
+    hasBenchmarks: !!weightedBenchmarks?.weightedPullUp || !!weightedBenchmarks?.weightedDip,
   })
   
   // FLEXIBLE SCHEDULING: Use resolved schedule data
@@ -3487,6 +3535,10 @@ function getSkillsForSession(
   // This creates variety across sessions - not every session is max effort
   const sessionType = getSessionTypeForPosition(sessionIndex, totalSessions)
   
+  // [selection-compression-fix] TASK 2: Track which skills get expression this session
+  // to ensure weekly exposure guarantees are met
+  const skillExposureThisSession: string[] = []
+  
   for (const allocation of weightedAllocation) {
     const { skill, weight, exposureSessions, priorityLevel } = allocation
     
@@ -3503,27 +3555,53 @@ function getSkillsForSession(
         expressionMode,
         weight,
       })
+      skillExposureThisSession.push(skill)
       continue
     }
     
-    // Secondary skills appear in most sessions as technical or support
+    // [selection-compression-fix] ISSUE B: Secondary skills MUST appear more often
+    // This is the key fix for "selected skills don't affect the week"
     if (priorityLevel === 'secondary' || weight >= 0.15) {
-      // Check if this session should include this secondary skill
-      // Based on exposureSessions vs totalSessions ratio
-      const shouldInclude = exposureSessions >= totalSessions || 
-        sessionIndex < exposureSessions ||
-        (sessionIndex % 2 === 0) // Even sessions get secondary skills
+      // [selection-compression-fix] TASK 2: Stronger inclusion logic for secondary skills
+      // Secondary skills should appear in at least 70% of sessions
+      const minSessionsForSecondary = Math.max(Math.ceil(totalSessions * 0.7), exposureSessions)
+      const shouldInclude = sessionIndex < minSessionsForSecondary || 
+        exposureSessions >= totalSessions ||
+        (sessionIndex % 2 === 0) // Even sessions always get secondary skills
       
       if (shouldInclude) {
-        // [advanced-skill-expression] ISSUE B: Advanced secondary skills can have technical slot
-        const expressionMode = isAdvanced && advancedFamily?.technicalSlotWeight > 0.3
-          ? 'technical'
-          : (dayFocus.includes('support') ? 'support' : 'technical')
+        // [selection-compression-fix] TASK 4: Session role affects secondary skill expression mode
+        // Different day types should produce different expression modes
+        let expressionMode: 'primary' | 'technical' | 'support' | 'warmup' = 'technical'
+        
+        if (isAdvanced && advancedFamily?.technicalSlotWeight > 0.3) {
+          expressionMode = 'technical'
+        } else if (dayFocus.includes('support') || dayFocus.includes('recovery')) {
+          expressionMode = 'support'
+        } else if (dayFocus.includes('skill') && sessionIndex % 2 === 1) {
+          // Alternate sessions give secondary skill primary-ish expression
+          expressionMode = 'technical'
+        } else if (dayFocus.includes('strength')) {
+          // Strength days: secondary skills get support work
+          expressionMode = 'support'
+        } else {
+          expressionMode = 'technical'
+        }
         
         result.push({
           skill,
           expressionMode,
           weight,
+        })
+        skillExposureThisSession.push(skill)
+        
+        // [selected-skill-exposure] Log secondary skill inclusion
+        console.log('[selected-skill-exposure] Secondary skill included:', {
+          skill,
+          sessionIndex,
+          expressionMode,
+          dayFocus,
+          reason: 'secondary_skill_guarantee',
         })
       }
       continue
@@ -3618,6 +3696,18 @@ function getSkillsForSession(
       }
     }
   }
+  
+  // [selected-skill-exposure] TASK 7: Log session skill allocation summary
+  console.log('[selected-skill-exposure] Session allocation summary:', {
+    sessionIndex,
+    totalSessions,
+    dayFocus,
+    sessionType,
+    allocatedSkills: result.map(r => `${r.skill}(${r.expressionMode}:${Math.round(r.weight * 100)}%)`),
+    primaryExpressed: result.filter(r => r.expressionMode === 'primary').map(r => r.skill),
+    technicalExpressed: result.filter(r => r.expressionMode === 'technical').map(r => r.skill),
+    supportExpressed: result.filter(r => r.expressionMode === 'support').map(r => r.skill),
+  })
   
   return result
 }

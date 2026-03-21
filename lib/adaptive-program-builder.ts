@@ -300,6 +300,10 @@ import {
   validateAndLogProgram,
 } from './program-validation'
 import {
+  validateProgramAgainstProfile,
+  type ProgramProfileValidationResult,
+} from './program-profile-validator'
+import {
   verifyExerciseInDatabase,
 } from './exercise-database-resolver'
 import {
@@ -362,6 +366,15 @@ import {
 // Re-export schedule types for consumers
 export type { ScheduleMode, DayStressLevel } from './flexible-schedule-engine'
 export type { GenerationMode, ProfileSnapshot } from './program-state-contract'
+// [program-profile-validate] Re-export validation types
+export type { 
+  ProgramProfileValidationResult, 
+  ValidationCheck, 
+  SkillExpressionCheck,
+  ScheduleDurationCheck,
+  WeightedPrescriptionCheck,
+} from './program-profile-validator'
+export { validateProgramAgainstProfile, getValidationSummary } from './program-profile-validator'
   
 // =============================================================================
 // TYPES
@@ -823,6 +836,18 @@ exerciseExplanations?: {
   profileSnapshot?: ProfileSnapshot
   // STATE CONTRACT: Generation mode used ('fresh', 'regenerate', or 'continue')
   generationMode?: GenerationMode
+  // [program-profile-validate] Validation result from profile-vs-program comparison
+  profileValidation?: {
+    isValid: boolean
+    overallScore: number
+    passCount: number
+    warningCount: number
+    mismatchCount: number
+    criticalCount: number
+    passed: string[]
+    warnings: string[]
+    failures: string[]
+  }
 }
 
 // =============================================================================
@@ -3173,6 +3198,52 @@ return explanations.length > 0 ? explanations : undefined
     },
     // STATE CONTRACT: Generation mode used
     generationMode,
+    // [program-profile-validate] TASK 6: Run validation after generation
+    profileValidation: (() => {
+      try {
+        // Build a temporary program object for validation
+        const tempProgram = {
+          id: `adaptive-${Date.now()}`,
+          createdAt: new Date().toISOString(),
+          primaryGoal,
+          secondaryGoal: secondaryGoal || canonicalProfile.secondaryGoal,
+          goalLabel: GOAL_LABELS[primaryGoal],
+          sessions,
+          scheduleMode: finalScheduleMode,
+          currentWeekFrequency: effectiveTrainingDays,
+          trainingDaysPerWeek: effectiveTrainingDays,
+          sessionLength,
+          recoveryLevel: recoverySignal.level,
+          programRationale,
+          deloadRecommendation,
+          weightedStrengthPrescription: undefined, // Will be set after return
+        } as unknown as AdaptiveProgram
+        
+        const validationResult = validateProgramAgainstProfile(canonicalProfile, tempProgram)
+        
+        console.log('[program-profile-validate] TASK 6: Validation hooked into generation:', {
+          isValid: validationResult.isValid,
+          overallScore: validationResult.overallScore,
+          failures: validationResult.failures,
+          warnings: validationResult.warnings,
+        })
+        
+        return {
+          isValid: validationResult.isValid,
+          overallScore: validationResult.overallScore,
+          passCount: validationResult.passCount,
+          warningCount: validationResult.warningCount,
+          mismatchCount: validationResult.mismatchCount,
+          criticalCount: validationResult.criticalCount,
+          passed: validationResult.passed,
+          warnings: validationResult.warnings,
+          failures: validationResult.failures,
+        }
+      } catch (err) {
+        console.error('[program-profile-validate] Validation failed:', err)
+        return undefined
+      }
+    })(),
   }
 }
 

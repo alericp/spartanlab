@@ -460,6 +460,90 @@ export function getProgressSourceLabel(source: ProgressSource): string {
 }
 
 // =============================================================================
+// MILESTONE / ANALYTICS HELPERS
+// =============================================================================
+
+/**
+ * Check if an achievement/milestone should be displayed as "earned" vs "baseline".
+ * Use this for analytics surfaces that should distinguish earned progress.
+ */
+export function getMilestoneSource(
+  exerciseType: 'pull_ups' | 'dips' | 'push_ups' | 'skill',
+  achievementValue: number,
+  achievementDate: string
+): { source: 'earned' | 'baseline' | 'unknown'; label: string } {
+  const summary = getBaselineVsEarnedSummary()
+  
+  // Check if there are any earned workouts
+  if (!summary.hasEarnedProgress) {
+    // No earned workouts - this is baseline or unknown
+    return { source: 'baseline', label: 'Starting capability' }
+  }
+  
+  // If earned workouts exist after baseline capture, check dates
+  const baselineCapturedAt = summary.baseline.capturedAt
+  if (achievementDate > baselineCapturedAt) {
+    return { source: 'earned', label: 'Logged in app' }
+  }
+  
+  return { source: 'baseline', label: 'Starting capability' }
+}
+
+/**
+ * Get counts for analytics display, separating baseline from earned.
+ * Use this for dashboard/progress cards.
+ */
+export function getProgressCountsWithSources(): {
+  totalPRs: number
+  earnedPRs: number
+  baselinePRs: number
+  totalMilestones: number
+  earnedMilestones: number
+  baselineMilestones: number
+  displayLabel: string
+} {
+  const summary = getBaselineVsEarnedSummary()
+  const earned = summary.earned
+  const baseline = summary.baseline
+  
+  // Count earned PRs (from workout logs)
+  let earnedPRCount = 0
+  if (earned.earnedPullUpMax) earnedPRCount++
+  if (earned.earnedDipMax) earnedPRCount++
+  if (earned.earnedPushUpMax) earnedPRCount++
+  if (earned.earnedWeightedPullUp) earnedPRCount++
+  if (earned.earnedWeightedDip) earnedPRCount++
+  
+  // Count baseline PRs (from onboarding)
+  let baselinePRCount = 0
+  if (baseline.pullUpMax) baselinePRCount++
+  if (baseline.dipMax) baselinePRCount++
+  if (baseline.pushUpMax) baselinePRCount++
+  if (baseline.weightedPullUp) baselinePRCount++
+  if (baseline.weightedDip) baselinePRCount++
+  
+  const displayLabel = summary.hasEarnedProgress 
+    ? 'Progress logged in SpartanLab' 
+    : 'Starting capabilities from profile'
+  
+  console.log('[baseline-earned-truth] Progress counts:', {
+    earnedPRs: earnedPRCount,
+    baselinePRs: baselinePRCount,
+    hasEarnedProgress: summary.hasEarnedProgress,
+  })
+  
+  return {
+    totalPRs: earnedPRCount + baselinePRCount,
+    earnedPRs: earnedPRCount,
+    baselinePRs: baselinePRCount,
+    totalMilestones: 0, // Would need milestone tracking
+    earnedMilestones: 0,
+    baselineMilestones: 0,
+    displayLabel,
+  }
+}
+
+// =============================================================================
 // INITIALIZATION
 // =============================================================================
 

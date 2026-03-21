@@ -2,7 +2,8 @@
 // Curated high-value exercise library for calisthenics athletes
 // Each exercise includes transfer ratings, fatigue cost, and equipment requirements
 
-export type EquipmentType = 'pull_bar' | 'dip_bars' | 'rings' | 'parallettes' | 'bands' | 'floor' | 'wall'
+// [loadability-truth] ISSUE C: 'weights' enables automatic weight targets for weighted exercises
+export type EquipmentType = 'pull_bar' | 'dip_bars' | 'rings' | 'parallettes' | 'bands' | 'weights' | 'floor' | 'wall'
 export type MovementPattern = 'horizontal_push' | 'vertical_push' | 'horizontal_pull' | 'vertical_pull' | 'core' | 'compression' | 'transition' | 'skill' | 'mobility'
 export type ExerciseCategory = 'skill' | 'strength' | 'accessory' | 'core' | 'warmup' | 'cooldown' | 'flexibility'
 

@@ -30,12 +30,13 @@ interface AdaptiveProgramFormProps {
   constraintLabel?: string
 }
 
-const EQUIPMENT_OPTIONS: { id: EquipmentType; label: string }[] = [
+const EQUIPMENT_OPTIONS: { id: EquipmentType; label: string; hint?: string }[] = [
   { id: 'pull_bar', label: 'Pull-Up Bar' },
   { id: 'dip_bars', label: 'Dip Bars / Parallettes' },
   { id: 'rings', label: 'Gymnastics Rings' },
   { id: 'parallettes', label: 'Parallettes' },
   { id: 'bands', label: 'Resistance Bands' },
+  { id: 'weights', label: 'Weights (for loading)', hint: 'Enables automatic weight targets' },
 ]
 
 export function AdaptiveProgramForm({
@@ -214,23 +215,34 @@ export function AdaptiveProgramForm({
         <div className="space-y-3">
           <label className="text-sm text-[#A5A5A5]">Available Equipment</label>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            {EQUIPMENT_OPTIONS.map(({ id, label }) => (
+            {EQUIPMENT_OPTIONS.map(({ id, label, hint }) => (
               <label
                 key={id}
-                className="flex items-center gap-2 p-3 bg-[#1A1A1A] rounded-lg border border-[#3A3A3A] cursor-pointer hover:border-[#4A4A4A] transition-colors"
+                className={`flex items-center gap-2 p-3 bg-[#1A1A1A] rounded-lg border cursor-pointer hover:border-[#4A4A4A] transition-colors ${
+                  id === 'weights' ? 'border-[#4A4A4A]' : 'border-[#3A3A3A]'
+                }`}
               >
                 <Checkbox
                   checked={inputs.equipment.includes(id)}
                   onCheckedChange={() => toggleEquipment(id)}
                   className="border-[#4A4A4A] data-[state=checked]:bg-[#E63946] data-[state=checked]:border-[#E63946]"
                 />
-                <span className="text-sm">{label}</span>
+                <div className="flex flex-col">
+                  <span className="text-sm">{label}</span>
+                  {hint && <span className="text-[10px] text-[#6A6A6A]">{hint}</span>}
+                </div>
               </label>
             ))}
           </div>
           <p className="text-xs text-[#6A6A6A]">
             Pre-filled from your profile. Floor and wall are always available.
           </p>
+          {/* [loadability-truth] ISSUE F: Explain weighted prescription state */}
+          {!inputs.equipment.includes('weights') && (
+            <p className="text-xs text-amber-500/80">
+              No loadable equipment selected — weighted exercises will use bodyweight prescriptions.
+            </p>
+          )}
         </div>
 
         {/* Generate Button */}

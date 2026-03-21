@@ -68,6 +68,8 @@ import {
   // [profile-completeness] ISSUE E: Engine field consumption verification
   getEngineFieldConsumption,
   verifyEngineFieldWiring,
+  getProfileSignature,
+  hasLoadableEquipment,
 } from './canonical-profile-service'
 import { buildGenerationInput, getSystemStateFlags, type GenerationMode, type ProfileSnapshot } from './program-state-contract'
 import { normalizeProfile, computeLimiter, dedupeExercises, type NormalizedProfile } from './profile-normalizer'
@@ -373,8 +375,28 @@ export type {
   SkillExpressionCheck,
   ScheduleDurationCheck,
   WeightedPrescriptionCheck,
+  DisplayedStateDrift,
+  WeeklySkillExposureSummary,
+  ValidationSeverity,
+  PlannerInputTruth,
+  PlannerInputValidation,
+  ComprehensiveValidationReport,
+  ProfileSummary,
+  ProgramSummary,
 } from './program-profile-validator'
-export { validateProgramAgainstProfile, getValidationSummary } from './program-profile-validator'
+export { 
+  validateProgramAgainstProfile, 
+  getValidationSummary,
+  validateProgramWithDisplayState,
+  checkDisplayedStateDrift,
+  getWeeklySkillExposureSummary,
+  revalidateExistingProgram,
+  getValidationMismatches,
+  getUnexpressedSkills,
+  isSkillExpressed,
+  validatePlannerInputAlignment,
+  runComprehensiveValidation,
+} from './program-profile-validator'
   
 // =============================================================================
 // TYPES
@@ -847,6 +869,18 @@ exerciseExplanations?: {
     passed: string[]
     warnings: string[]
     failures: string[]
+  }
+  // [program-alignment] TASK 5: Profile signature at generation time for drift detection
+  profileSignature?: {
+    primaryGoal: string | null
+    secondaryGoal: string | null
+    scheduleMode: string | null
+    trainingDaysPerWeek: number | null
+    sessionLengthMinutes: number | null
+    equipmentHash: string
+    hasLoadableEquipment: boolean
+    experienceLevel: string | null
+    createdAt: string
   }
 }
 
@@ -3203,6 +3237,8 @@ return explanations.length > 0 ? explanations : undefined
     },
     // STATE CONTRACT: Generation mode used
     generationMode,
+    // [program-alignment] TASK 5: Profile signature for drift detection
+    profileSignature: getProfileSignature(),
     // [program-profile-validate] TASK 6: Run validation after generation
     profileValidation: (() => {
       try {
@@ -4319,14 +4355,16 @@ export function getDefaultAdaptiveInputs(): AdaptiveProgramInputs {
   }
   
   // Map equipment to EquipmentType
-  // AthleteProfile uses: 'pullup_bar' | 'dip_bars' | 'parallettes' | 'rings' | 'resistance_bands'
-  // AdaptiveProgramInputs uses: 'pull_bar' | 'dip_bars' | 'rings' | 'parallettes' | 'bands' | 'floor' | 'wall'
+  // AthleteProfile uses: 'pullup_bar' | 'dip_bars' | 'parallettes' | 'rings' | 'resistance_bands' | 'weights'
+  // AdaptiveProgramInputs uses: 'pull_bar' | 'dip_bars' | 'rings' | 'parallettes' | 'bands' | 'weights' | 'floor' | 'wall'
+  // [loadability-truth] ISSUE B: Include 'weights' mapping to preserve loadable equipment truth from Settings
   const equipmentMap: Record<string, EquipmentType> = {
     'pullup_bar': 'pull_bar',
     'dip_bars': 'dip_bars',
     'parallettes': 'parallettes',
     'rings': 'rings',
     'resistance_bands': 'bands',
+    'weights': 'weights',
   }
   
   // Start with floor and wall (always available)

@@ -121,11 +121,19 @@ export function ChallengeCard({ challenge, className, compact = false }: Challen
           </div>
           
           {/* Status/Timer */}
+          {/* [baseline-earned-truth] ISSUE E: Show completion source label */}
           <div className="flex items-center gap-1.5 shrink-0">
             {isCompleted ? (
-              <span className="flex items-center gap-1 text-xs font-medium text-amber-400">
+              <span className={cn(
+                "flex items-center gap-1 text-xs font-medium",
+                challenge.completionSource === 'baseline_satisfied' 
+                  ? "text-[#6B7280]" 
+                  : "text-amber-400"
+              )}>
                 <CheckCircle2 className="w-3.5 h-3.5" />
-                Complete
+                {challenge.completionSource === 'baseline_satisfied' 
+                  ? "Baseline met" 
+                  : "Earned"}
               </span>
             ) : (
               <span className="flex items-center gap-1 text-xs text-[#6B7280]">

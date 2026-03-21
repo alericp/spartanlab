@@ -7,6 +7,8 @@ import { getPRVault } from '@/lib/pr-vault-engine'
 import { getMilestones } from '@/lib/milestone-engine'
 import { getEliteInsights } from '@/lib/elite-insight-engine'
 import { getQuickEngineStatus } from '@/lib/adaptive-athlete-engine'
+// [baseline-earned-truth] ISSUE C: Import for separating baseline from earned
+import { getProgressCountsWithSources, getBaselineVsEarnedSummary } from '@/lib/baseline-earned-truth'
 import { useState, useEffect } from 'react'
 
 export function PerformanceVaultCard() {
@@ -17,6 +19,9 @@ export function PerformanceVaultCard() {
     topInsight: string | null
     momentum: string | null
     topConcern: string | null
+    // [baseline-earned-truth] ISSUE C: Track earned vs baseline
+    hasEarnedProgress: boolean
+    progressLabel: string
   } | null>(null)
   
   useEffect(() => {
@@ -25,6 +30,10 @@ export function PerformanceVaultCard() {
     const insights = getEliteInsights()
     const engineStatus = getQuickEngineStatus()
     
+    // [baseline-earned-truth] ISSUE C: Get earned vs baseline status
+    const progressCounts = getProgressCountsWithSources()
+    const truthSummary = getBaselineVsEarnedSummary()
+    
     setStats({
       totalPRs: vault.totalPRs,
       totalMilestones: milestones.totalMilestones,
@@ -32,6 +41,8 @@ export function PerformanceVaultCard() {
       topInsight: insights.primaryInsight?.value || null,
       momentum: engineStatus.hasData ? engineStatus.momentumLabel : null,
       topConcern: engineStatus.topConcern,
+      hasEarnedProgress: truthSummary.hasEarnedProgress,
+      progressLabel: progressCounts.displayLabel,
     })
   }, [])
   
@@ -90,7 +101,16 @@ export function PerformanceVaultCard() {
             </div>
           )}
           
-          {stats?.topInsight && (
+          {/* [baseline-earned-truth] ISSUE C/E: Show data source label */}
+          {stats && !stats.hasEarnedProgress && stats.totalPRs > 0 && (
+            <div className="mt-3 pt-3 border-t border-[#2B313A]">
+              <p className="text-xs text-[#6B7280] text-center">
+                Showing starting capabilities from your profile
+              </p>
+            </div>
+          )}
+          
+          {stats?.topInsight && stats.hasEarnedProgress && (
             <div className="mt-3 pt-3 border-t border-[#2B313A]">
               <div className="flex items-center gap-2">
                 <Sparkles className="w-3 h-3 text-amber-500" />

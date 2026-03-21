@@ -22,7 +22,11 @@ import Link from 'next/link'
 // TASK 5: Lightweight type imports only - actual modules loaded dynamically
 import type { AdaptiveProgramInputs, AdaptiveProgram } from '@/lib/adaptive-program-builder'
 // [profile-truth-sync] ISSUE A: Import drift detection for settings/program alignment
-import { checkProfileProgramDrift, type ProfileProgramDrift } from '@/lib/canonical-profile-service'
+import { 
+  checkProfileProgramDrift, 
+  isProfileSignatureAligned,
+  type ProfileProgramDrift 
+} from '@/lib/canonical-profile-service'
 
 // TASK 5: Lazy load heavy components to prevent SSR/hydration crashes
 import dynamic from 'next/dynamic'
@@ -117,9 +121,35 @@ export default function ProgramPage() {
   const [loadError, setLoadError] = useState<string | null>(null)
   const [loadStage, setLoadStage] = useState<string>('initializing') // TASK 3: Track failure stage
   
-  // [profile-truth-sync] ISSUE A/D: Detect profile-program drift
+  // [program-alignment] ISSUE A/D: Detect profile-program drift using both methods
   const profileProgramDrift = useMemo<ProfileProgramDrift | null>(() => {
     if (!program || !mounted) return null
+    
+    // Method 1: Check using profile signature if available (new programs)
+    const programWithSignature = program as typeof program & { 
+      profileSignature?: { primaryGoal: string | null; equipmentHash: string; hasLoadableEquipment: boolean } 
+    }
+    if (programWithSignature.profileSignature) {
+      const signatureCheck = isProfileSignatureAligned(programWithSignature.profileSignature)
+      console.log('[program-alignment] Signature-based drift check:', signatureCheck)
+      
+      if (!signatureCheck.aligned) {
+        return {
+          hasDrift: true,
+          isProgramStale: true,
+          driftFields: signatureCheck.driftedFields.map(f => ({ 
+            field: f, 
+            profileValue: null, 
+            programValue: null, 
+            severity: f === 'primaryGoal' ? 'critical' as const : 'major' as const 
+          })),
+          summary: signatureCheck.summary,
+          recommendation: signatureCheck.driftedFields.includes('primaryGoal') ? 'regenerate' as const : 'review' as const,
+        }
+      }
+    }
+    
+    // Method 2: Fallback to field-by-field comparison (legacy programs without signature)
     return checkProfileProgramDrift({
       primaryGoal: program.primaryGoal,
       secondaryGoal: (program as unknown as { secondaryGoal?: string }).secondaryGoal,
@@ -825,21 +855,38 @@ export default function ProgramPage() {
           </div>
         ) : program && programModules.isRenderableProgram?.(program) ? (
           <div className="space-y-4">
-            {/* [profile-truth-sync] ISSUE A/D: Show drift warning if settings don't match program */}
+            {/* [program-alignment] ISSUE B/C: Show stale program warning with last good plan note */}
             {profileProgramDrift?.isProgramStale && (
               <Card className="bg-amber-500/10 border-amber-500/30 p-4">
                 <div className="flex items-start gap-3">
                   <Info className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
                   <div className="flex-1">
-                    <p className="text-sm text-amber-200 font-medium">Settings have changed</p>
+                    <p className="text-sm text-amber-200 font-medium">
+                      {profileProgramDrift.recommendation === 'regenerate' 
+                        ? 'Your settings have changed' 
+                        : 'Minor settings changed'}
+                    </p>
                     <p className="text-xs text-amber-400/80 mt-1">{profileProgramDrift.summary}</p>
+                    <p className="text-xs text-[#6A6A6A] mt-1">
+                      Your current program is still available until you rebuild.
+                    </p>
                     {profileProgramDrift.recommendation === 'regenerate' && (
                       <Button
                         size="sm"
                         className="mt-2 bg-amber-600 hover:bg-amber-700 text-white h-7 px-3 text-xs"
                         onClick={handleRegenerate}
                       >
-                        Regenerate Program
+                        Build New Program
+                      </Button>
+                    )}
+                    {profileProgramDrift.recommendation === 'review' && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="mt-2 border-amber-500/50 text-amber-400 hover:bg-amber-500/10 h-7 px-3 text-xs"
+                        onClick={handleRegenerate}
+                      >
+                        Update Program
                       </Button>
                     )}
                   </div>

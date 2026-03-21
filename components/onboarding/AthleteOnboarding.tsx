@@ -2759,6 +2759,16 @@ function EquipmentSection({ profile, updateProfile }: SectionProps) {
       <p className="text-xs text-[#6B7280] italic pt-1 border-t border-[#2B313A]">
         Don't have much? That's fine — bodyweight training can take you far.
       </p>
+      {/* [loadability-truth] ISSUE D: Explain weighted prescription requirement */}
+      {profile.equipment.includes('weights') ? (
+        <p className="text-xs text-emerald-600/80 mt-2">
+          Weights selected — you'll get automatic load targets for weighted pull-ups, dips, and more.
+        </p>
+      ) : (
+        <p className="text-xs text-[#6B7280] mt-2">
+          Tip: Select "Weights" if you have a weight belt, dumbbells, or plates — this enables automatic weight targets for supported exercises.
+        </p>
+      )}
     </div>
   )
 }

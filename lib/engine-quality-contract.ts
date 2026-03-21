@@ -1265,10 +1265,131 @@ export interface WeightedSkillAllocation {
   rationale: string
 }
 
+// =============================================================================
+// [advanced-skill-expression] ISSUE A: Advanced Skill Family Definitions
+// =============================================================================
+
+/**
+ * Advanced skill families that need special expression handling.
+ * These skills require specific support work and progression paths.
+ */
+export const ADVANCED_SKILL_FAMILIES: Record<string, {
+  displayName: string
+  category: 'push' | 'pull' | 'core' | 'hybrid'
+  subcategory: 'vertical' | 'horizontal' | 'straight_arm' | 'bent_arm' | 'anti_extension' | 'compression'
+  tendonSensitive: boolean
+  minFrequencyPerWeek: number
+  maxFrequencyPerWeek: number
+  supportPatterns: string[]  // Exercise patterns that support this skill
+  technicalSlotWeight: number // How much technical work this skill needs (0-1)
+  directProgressions: string[] // Exercise IDs that are direct progressions
+  requiresPrerequisites: boolean
+}> = {
+  hspu: {
+    displayName: 'Handstand Push-Up',
+    category: 'push',
+    subcategory: 'vertical',
+    tendonSensitive: false,
+    minFrequencyPerWeek: 2,
+    maxFrequencyPerWeek: 4,
+    supportPatterns: ['vertical_push', 'overhead_press', 'pike_push'],
+    technicalSlotWeight: 0.3,
+    directProgressions: ['pike_push_up', 'elevated_pike_push_up', 'wall_hspu', 'deficit_hspu', 'freestanding_hspu'],
+    requiresPrerequisites: true,
+  },
+  back_lever: {
+    displayName: 'Back Lever',
+    category: 'pull',
+    subcategory: 'straight_arm',
+    tendonSensitive: true,
+    minFrequencyPerWeek: 2,
+    maxFrequencyPerWeek: 3,
+    supportPatterns: ['shoulder_extension', 'straight_arm_pull', 'german_hang'],
+    technicalSlotWeight: 0.4,
+    directProgressions: ['german_hang', 'skin_the_cat', 'tuck_back_lever', 'adv_tuck_back_lever', 'straddle_back_lever', 'full_back_lever'],
+    requiresPrerequisites: true,
+  },
+  dragon_flag: {
+    displayName: 'Dragon Flag',
+    category: 'core',
+    subcategory: 'anti_extension',
+    tendonSensitive: false,
+    minFrequencyPerWeek: 2,
+    maxFrequencyPerWeek: 4,
+    supportPatterns: ['anti_extension', 'eccentric_core', 'compression'],
+    technicalSlotWeight: 0.25,
+    directProgressions: ['hollow_body_hold', 'tuck_dragon_flag', 'one_leg_dragon_flag', 'straddle_dragon_flag', 'full_dragon_flag'],
+    requiresPrerequisites: false,
+  },
+  planche_pushup: {
+    displayName: 'Planche Push-Up',
+    category: 'push',
+    subcategory: 'straight_arm',
+    tendonSensitive: true,
+    minFrequencyPerWeek: 2,
+    maxFrequencyPerWeek: 3,
+    supportPatterns: ['planche_lean', 'pseudo_planche', 'straight_arm_push'],
+    technicalSlotWeight: 0.5,
+    directProgressions: ['planche_lean', 'pseudo_planche_pushup', 'tuck_planche_pushup', 'straddle_planche_pushup'],
+    requiresPrerequisites: true,
+  },
+  one_arm_pull_up: {
+    displayName: 'One-Arm Pull-Up',
+    category: 'pull',
+    subcategory: 'bent_arm',
+    tendonSensitive: true,
+    minFrequencyPerWeek: 2,
+    maxFrequencyPerWeek: 3,
+    supportPatterns: ['archer_pull', 'weighted_pull', 'unilateral_pull', 'eccentric_pull'],
+    technicalSlotWeight: 0.4,
+    directProgressions: ['weighted_pull_up', 'archer_pull_up', 'one_arm_pull_up_negative', 'assisted_one_arm_pull_up', 'one_arm_pull_up'],
+    requiresPrerequisites: true,
+  },
+  one_arm_chin_up: {
+    displayName: 'One-Arm Chin-Up',
+    category: 'pull',
+    subcategory: 'bent_arm',
+    tendonSensitive: true,
+    minFrequencyPerWeek: 2,
+    maxFrequencyPerWeek: 3,
+    supportPatterns: ['archer_chin', 'weighted_chin', 'unilateral_pull', 'eccentric_chin'],
+    technicalSlotWeight: 0.4,
+    directProgressions: ['weighted_chin_up', 'archer_chin_up', 'one_arm_chin_up_negative', 'assisted_one_arm_chin_up', 'one_arm_chin_up'],
+    requiresPrerequisites: true,
+  },
+  one_arm_push_up: {
+    displayName: 'One-Arm Push-Up',
+    category: 'push',
+    subcategory: 'horizontal',
+    tendonSensitive: false,
+    minFrequencyPerWeek: 2,
+    maxFrequencyPerWeek: 4,
+    supportPatterns: ['leverage_push', 'anti_rotation', 'archer_push', 'asymmetric_push'],
+    technicalSlotWeight: 0.3,
+    directProgressions: ['archer_push_up', 'one_arm_push_up_elevated', 'one_arm_push_up_negative', 'one_arm_push_up'],
+    requiresPrerequisites: false,
+  },
+}
+
+/**
+ * Check if a skill is an advanced skill that needs special expression handling.
+ */
+export function isAdvancedSkill(skillId: string): boolean {
+  return skillId in ADVANCED_SKILL_FAMILIES
+}
+
+/**
+ * Get the advanced skill family definition for a skill.
+ */
+export function getAdvancedSkillFamily(skillId: string) {
+  return ADVANCED_SKILL_FAMILIES[skillId] || null
+}
+
 /**
  * Calculate weighted skill allocation across the week.
  * TASK 2: Implements weighted distribution so primary/secondary get most exposure
  * while other selected skills still get meaningful representation.
+ * [advanced-skill-expression] ISSUE A: Enhanced to ensure advanced skills get proper expression.
  */
 export function calculateWeightedSkillAllocation(
   context: ExpandedAthleteContext,
@@ -1304,23 +1425,100 @@ export function calculateWeightedSkillAllocation(
   }
   
   // Other selected skills - distribute support weight among them
+  // [advanced-skill-expression] ISSUE A: Separate advanced skills for special handling
   const otherSkills = (context.selectedSkills || []).filter(
     s => s !== context.primaryGoal && s !== context.secondaryGoal
   )
   
+  // [advanced-skill-expression] Identify which "other" skills are advanced
+  const advancedOtherSkills = otherSkills.filter(s => isAdvancedSkill(s))
+  const normalOtherSkills = otherSkills.filter(s => !isAdvancedSkill(s))
+  
+  // [advanced-skill-expression] Log advanced skill detection
+  if (advancedOtherSkills.length > 0) {
+    console.log('[advanced-skill-expression] Detected advanced skills in selection:', {
+      advancedSkills: advancedOtherSkills,
+      normalSkills: normalOtherSkills,
+      primaryIsAdvanced: isAdvancedSkill(context.primaryGoal),
+      secondaryIsAdvanced: context.secondaryGoal ? isAdvancedSkill(context.secondaryGoal) : false,
+    })
+  }
+  
   if (otherSkills.length > 0) {
+    // [advanced-skill-expression] ISSUE A: Advanced skills get boosted allocation
+    // Give advanced skills a minimum of 2 exposure sessions when possible
+    const advancedSkillBoost = 0.05 // Extra weight for advanced skills
+    
     const perSkillWeight = goalWeights.supportWeight / otherSkills.length
     
     otherSkills.forEach((skill, index) => {
+      const isAdvanced = isAdvancedSkill(skill)
+      const advancedFamily = getAdvancedSkillFamily(skill)
+      
       // First tertiary skill gets more, subsequent get less
-      const adjustedWeight = perSkillWeight * (1 - (index * 0.15))
+      let adjustedWeight = perSkillWeight * (1 - (index * 0.15))
+      
+      // [advanced-skill-expression] ISSUE A: Boost advanced skills
+      if (isAdvanced) {
+        adjustedWeight = Math.max(adjustedWeight + advancedSkillBoost, 0.10)
+      }
+      
+      // Calculate exposure sessions with advanced skill minimum
+      let exposureSessions = Math.max(1, Math.round(totalSessions * adjustedWeight))
+      
+      // [advanced-skill-expression] ISSUE A: Ensure advanced skills meet minimum frequency
+      if (isAdvanced && advancedFamily) {
+        exposureSessions = Math.max(exposureSessions, advancedFamily.minFrequencyPerWeek)
+        // But don't exceed max frequency
+        exposureSessions = Math.min(exposureSessions, advancedFamily.maxFrequencyPerWeek, totalSessions)
+      }
+      
       allocations.push({
         skill,
-        weight: Math.max(0.05, adjustedWeight), // Minimum 5% weight
-        exposureSessions: Math.max(1, Math.round(totalSessions * adjustedWeight)),
+        weight: Math.max(0.05, adjustedWeight),
+        exposureSessions,
         priorityLevel: index === 0 ? 'tertiary' : 'support',
-        rationale: `Selected skill - included in ${Math.max(1, Math.round(totalSessions * adjustedWeight))} session(s)`,
+        rationale: isAdvanced
+          ? `[Advanced] ${advancedFamily?.displayName || skill} - minimum ${exposureSessions} session(s) per week`
+          : `Selected skill - included in ${exposureSessions} session(s)`,
       })
+      
+      // [advanced-skill-expression] Log advanced skill allocation
+      if (isAdvanced) {
+        console.log('[advanced-skill-expression] Advanced skill allocated:', {
+          skill,
+          displayName: advancedFamily?.displayName,
+          weight: Math.round(adjustedWeight * 100) + '%',
+          exposureSessions,
+          minFrequency: advancedFamily?.minFrequencyPerWeek,
+          maxFrequency: advancedFamily?.maxFrequencyPerWeek,
+          tendonSensitive: advancedFamily?.tendonSensitive,
+        })
+      }
+    })
+  }
+  
+  // [advanced-skill-expression] ISSUE A: Also check if primary/secondary are advanced
+  // and log their expression requirements
+  if (isAdvancedSkill(context.primaryGoal)) {
+    const family = getAdvancedSkillFamily(context.primaryGoal)
+    console.log('[advanced-skill-expression] Primary goal is advanced skill:', {
+      skill: context.primaryGoal,
+      displayName: family?.displayName,
+      minFrequency: family?.minFrequencyPerWeek,
+      technicalSlotWeight: family?.technicalSlotWeight,
+      supportPatterns: family?.supportPatterns,
+    })
+  }
+  
+  if (context.secondaryGoal && isAdvancedSkill(context.secondaryGoal)) {
+    const family = getAdvancedSkillFamily(context.secondaryGoal)
+    console.log('[advanced-skill-expression] Secondary goal is advanced skill:', {
+      skill: context.secondaryGoal,
+      displayName: family?.displayName,
+      minFrequency: family?.minFrequencyPerWeek,
+      technicalSlotWeight: family?.technicalSlotWeight,
+      supportPatterns: family?.supportPatterns,
     })
   }
   
@@ -1329,12 +1527,14 @@ export function calculateWeightedSkillAllocation(
     primaryGoal: context.primaryGoal,
     secondaryGoal: context.secondaryGoal,
     selectedSkillsCount: otherSkills.length,
+    advancedSkillsCount: advancedOtherSkills.length,
     totalSessions,
     allocations: allocations.map(a => ({
       skill: a.skill,
       weight: Math.round(a.weight * 100) + '%',
       sessions: a.exposureSessions,
       priority: a.priorityLevel,
+      isAdvanced: isAdvancedSkill(a.skill),
     })),
   })
   

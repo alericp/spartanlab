@@ -141,9 +141,20 @@ import {
 import {
   getSkillPrescriptionRules,
   getWeightedStrengthCarryover,
+  // [advanced-skill-expression] ISSUE A: Advanced skill helpers
+  isAdvancedSkill,
+  getAdvancedSkillFamily,
+  ADVANCED_SKILL_FAMILIES,
   type SkillPrescriptionRules,
   type WeightedStrengthCarryover,
 } from './engine-quality-contract'
+import {
+  // [advanced-skill-expression] ISSUE D: Intentional support work helpers
+  getAdvancedSkillSupport,
+  isExercisePrimarySupportFor,
+  getAllSupportExercisesFor,
+  ADVANCED_SKILL_SUPPORT_PATTERNS,
+} from './doctrine/skill-support-mappings'
 
 export interface SelectedExercise {
   exercise: Exercise
@@ -509,6 +520,155 @@ function calculateExerciseBudget(sessionMinutes: number): ExerciseBudget {
   }
   // 75+ minutes
   return { mainExercises: 7, warmupMinutes: 10, cooldownMinutes: 8 }
+}
+
+// =============================================================================
+// [advanced-skill-expression] ISSUE A/D: ADVANCED SKILL EXPRESSION HELPERS
+// =============================================================================
+
+/**
+ * Identifies exercises that should be included based on advanced skill expression.
+ * [advanced-skill-expression] ISSUE A: Ensures advanced skills get direct expression.
+ */
+function getAdvancedSkillExercises(
+  skillsForSession: Array<{ skill: string; expressionMode: string; weight: number }> | undefined,
+  availableSkills: Exercise[],
+  availableStrength: Exercise[],
+  dayFocus: string
+): { exerciseId: string; reason: string; priority: number }[] {
+  if (!skillsForSession || skillsForSession.length === 0) {
+    return []
+  }
+
+  const recommendations: { exerciseId: string; reason: string; priority: number }[] = []
+  
+  for (const allocation of skillsForSession) {
+    const { skill, expressionMode, weight } = allocation
+    
+    if (!isAdvancedSkill(skill)) continue
+    
+    const advancedFamily = getAdvancedSkillFamily(skill)
+    if (!advancedFamily) continue
+    
+    // [advanced-skill-expression] ISSUE B: HSPU special handling
+    if (skill === 'hspu') {
+      // HSPU should influence vertical push selection
+      if (dayFocus.includes('push') || dayFocus.includes('skill') || dayFocus.includes('vertical')) {
+        const hspuProgressions = advancedFamily.directProgressions
+        for (const exId of hspuProgressions) {
+          const found = [...availableSkills, ...availableStrength].find(
+            e => e.id.toLowerCase() === exId.toLowerCase()
+          )
+          if (found) {
+            recommendations.push({
+              exerciseId: found.id,
+              reason: `[HSPU progression] ${advancedFamily.displayName} direct expression`,
+              priority: expressionMode === 'primary' ? 3 : expressionMode === 'technical' ? 2 : 1,
+            })
+            break
+          }
+        }
+      }
+    }
+    
+    // [advanced-skill-expression] ISSUE C: Other advanced skills
+    if (skill === 'back_lever' || skill === 'dragon_flag' || skill === 'planche_pushup' ||
+        skill === 'one_arm_pull_up' || skill === 'one_arm_chin_up' || skill === 'one_arm_push_up') {
+      const progressions = advancedFamily.directProgressions
+      for (const exId of progressions) {
+        const found = [...availableSkills, ...availableStrength].find(
+          e => e.id.toLowerCase() === exId.toLowerCase()
+        )
+        if (found) {
+          recommendations.push({
+            exerciseId: found.id,
+            reason: `[Advanced] ${advancedFamily.displayName} ${expressionMode} expression`,
+            priority: expressionMode === 'primary' ? 3 : expressionMode === 'technical' ? 2 : 1,
+          })
+          break
+        }
+      }
+    }
+    
+    // [advanced-skill-expression] Log detected advanced skill for session
+    console.log('[advanced-skill-expression] Skill exercise recommendation:', {
+      skill,
+      displayName: advancedFamily.displayName,
+      expressionMode,
+      dayFocus,
+      recommendationsCount: recommendations.length,
+    })
+  }
+  
+  return recommendations
+}
+
+/**
+ * Gets intentional support exercises for advanced skills in this session.
+ * [advanced-skill-expression] ISSUE D: Support work should look intentional.
+ */
+function getAdvancedSkillSupportExercises(
+  skillsForSession: Array<{ skill: string; expressionMode: string; weight: number }> | undefined,
+  availableAccessory: Exercise[],
+  availableCore: Exercise[]
+): { exerciseId: string; reason: string; supportType: 'primary' | 'secondary' | 'trunk' }[] {
+  if (!skillsForSession || skillsForSession.length === 0) {
+    return []
+  }
+
+  const supportRecommendations: { exerciseId: string; reason: string; supportType: 'primary' | 'secondary' | 'trunk' }[] = []
+  const allAvailable = [...availableAccessory, ...availableCore]
+  
+  for (const allocation of skillsForSession) {
+    const { skill, expressionMode } = allocation
+    
+    if (!isAdvancedSkill(skill)) continue
+    
+    const supportPattern = ADVANCED_SKILL_SUPPORT_PATTERNS[skill]
+    if (!supportPattern) continue
+    
+    // Primary support work
+    if (expressionMode === 'primary' || expressionMode === 'technical') {
+      for (const primary of supportPattern.primarySupport) {
+        for (const exId of primary.exerciseIds) {
+          const found = allAvailable.find(e => e.id.toLowerCase() === exId.toLowerCase())
+          if (found) {
+            supportRecommendations.push({
+              exerciseId: found.id,
+              reason: `[${supportPattern.displayName}] ${primary.purpose}`,
+              supportType: 'primary',
+            })
+            break
+          }
+        }
+      }
+    }
+    
+    // Trunk support for all expression modes
+    const trunkSupport = supportPattern.trunkSupport
+    for (const exId of trunkSupport.exerciseIds) {
+      const found = allAvailable.find(e => e.id.toLowerCase() === exId.toLowerCase())
+      if (found) {
+        supportRecommendations.push({
+          exerciseId: found.id,
+          reason: `[${supportPattern.displayName} trunk] ${trunkSupport.purpose}`,
+          supportType: 'trunk',
+        })
+        break
+      }
+    }
+    
+    // [advanced-skill-expression] Log support recommendations
+    console.log('[advanced-skill-expression] Support work recommendation:', {
+      skill,
+      displayName: supportPattern.displayName,
+      expressionMode,
+      primarySupportCount: supportRecommendations.filter(s => s.supportType === 'primary').length,
+      trunkSupportCount: supportRecommendations.filter(s => s.supportType === 'trunk').length,
+    })
+  }
+  
+  return supportRecommendations
 }
 
 // =============================================================================

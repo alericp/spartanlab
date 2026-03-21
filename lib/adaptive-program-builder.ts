@@ -320,6 +320,10 @@ import {
   calculateWeightedSkillAllocation,
   calculateIntensityDistribution,
   planFlexibilityInsertions,
+  // [advanced-skill-expression] ISSUE A: Advanced skill helpers
+  isAdvancedSkill,
+  getAdvancedSkillFamily,
+  ADVANCED_SKILL_FAMILIES,
   // TASK 4: Weekly progression logic
   getWeeklyProgressionRecommendation,
   determineProgressionPhase,
@@ -1696,6 +1700,37 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
     totalSessions: effectiveTrainingDays,
   })
   
+  // [advanced-skill-expression] TASK 7: Log advanced skill detection and allocation
+  const advancedSkillsSelected = (canonicalProfile.selectedSkills || []).filter(s => isAdvancedSkill(s))
+  if (advancedSkillsSelected.length > 0) {
+    console.log('[advanced-skill-expression] Advanced skills detected in selection:', {
+      advancedSkills: advancedSkillsSelected.map(s => {
+        const family = getAdvancedSkillFamily(s)
+        return {
+          skillId: s,
+          displayName: family?.displayName || s,
+          category: family?.category,
+          minFrequency: family?.minFrequencyPerWeek,
+          tendonSensitive: family?.tendonSensitive,
+        }
+      }),
+      totalSelectedSkills: canonicalProfile.selectedSkills?.length || 0,
+      advancedSkillCount: advancedSkillsSelected.length,
+    })
+    
+    // Log which advanced skills got how many exposure sessions
+    const advancedAllocations = weightedSkillAllocation.filter(a => isAdvancedSkill(a.skill))
+    console.log('[advanced-skill-expression] Advanced skill weekly allocations:', {
+      allocations: advancedAllocations.map(a => ({
+        skill: a.skill,
+        displayName: getAdvancedSkillFamily(a.skill)?.displayName || a.skill,
+        exposureSessions: a.exposureSessions,
+        priority: a.priorityLevel,
+        meetsMinFrequency: a.exposureSessions >= (getAdvancedSkillFamily(a.skill)?.minFrequencyPerWeek || 2),
+      })),
+    })
+  }
+  
   // ISSUE A: Stage tracking for session assembly
   currentStage = 'session_assembly'
   console.log('[program-generate] STAGE: session_assembly')
@@ -2149,12 +2184,14 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
   }
   
   // Generate program rationale
+  // [advanced-skill-expression] ISSUE F: Pass selected skills for rationale truthfulness
   const programRationale = generateProgramRationale(
     primaryGoal,
     structure,
     constraintInsight,
     recoverySignal.level,
-    equipmentProfile
+    equipmentProfile,
+    canonicalProfile.selectedSkills || []
   )
   
   // DATABASE ENFORCEMENT: Log exercise verification stats
@@ -3223,8 +3260,15 @@ function getSkillsForSession(
   
   const result: SessionSkillAllocation[] = []
   
+  // [advanced-skill-expression] ISSUE B: Track which advanced skills need expression this session
+  const advancedSkillsInAllocation = weightedAllocation.filter(a => isAdvancedSkill(a.skill))
+  
   for (const allocation of weightedAllocation) {
     const { skill, weight, exposureSessions, priorityLevel } = allocation
+    
+    // [advanced-skill-expression] Check if this is an advanced skill
+    const isAdvanced = isAdvancedSkill(skill)
+    const advancedFamily = isAdvanced ? getAdvancedSkillFamily(skill) : null
     
     // Primary skills always appear as primary expression
     if (priorityLevel === 'primary' || weight >= 0.3) {
@@ -3245,20 +3289,71 @@ function getSkillsForSession(
         (sessionIndex % 2 === 0) // Even sessions get secondary skills
       
       if (shouldInclude) {
+        // [advanced-skill-expression] ISSUE B: Advanced secondary skills can have technical slot
+        const expressionMode = isAdvanced && advancedFamily?.technicalSlotWeight > 0.3
+          ? 'technical'
+          : (dayFocus.includes('support') ? 'support' : 'technical')
+        
         result.push({
           skill,
-          expressionMode: dayFocus.includes('support') ? 'support' : 'technical',
+          expressionMode,
           weight,
         })
       }
       continue
     }
     
-    // Tertiary skills rotate - each appears in their allocated sessions
+    // [advanced-skill-expression] ISSUE A: Advanced tertiary skills need better rotation
     if (priorityLevel === 'tertiary' || weight >= 0.05) {
-      // Distribute tertiary skills across sessions using modular arithmetic
+      // [advanced-skill-expression] Advanced skills get priority scheduling
+      if (isAdvanced) {
+        // Advanced skills should appear in more sessions based on minFrequencyPerWeek
+        const minFreq = advancedFamily?.minFrequencyPerWeek || 2
+        const targetSessions = Math.min(minFreq, totalSessions)
+        
+        // Distribute across sessions more evenly
+        const interval = Math.floor(totalSessions / targetSessions)
+        const shouldInclude = (sessionIndex % interval) === 0 || sessionIndex < targetSessions
+        
+        if (shouldInclude) {
+          // [advanced-skill-expression] ISSUE D: Choose expression mode based on skill type
+          let expressionMode: 'primary' | 'technical' | 'support' | 'warmup' = 'support'
+          
+          // Match day focus to skill category
+          if (advancedFamily?.category === 'push' && dayFocus.includes('push')) {
+            expressionMode = 'technical'
+          } else if (advancedFamily?.category === 'pull' && dayFocus.includes('pull')) {
+            expressionMode = 'technical'
+          } else if (advancedFamily?.category === 'core' && (dayFocus.includes('core') || dayFocus.includes('compression'))) {
+            expressionMode = 'technical'
+          } else if (advancedFamily?.subcategory === 'vertical' && dayFocus.includes('skill')) {
+            // HSPU on skill days gets technical slot
+            expressionMode = 'technical'
+          }
+          
+          result.push({
+            skill,
+            expressionMode,
+            weight,
+          })
+          
+          // [advanced-skill-expression] Log advanced skill session assignment
+          console.log('[advanced-skill-expression] Advanced skill assigned to session:', {
+            skill,
+            displayName: advancedFamily?.displayName,
+            sessionIndex,
+            expressionMode,
+            dayFocus,
+            targetSessions,
+          })
+        }
+        continue
+      }
+      
+      // Non-advanced tertiary skills: original rotation logic
       const tertiaryIndex = weightedAllocation
         .filter(a => a.priorityLevel === 'tertiary' || (a.weight >= 0.05 && a.weight < 0.15))
+        .filter(a => !isAdvancedSkill(a.skill)) // Don't count advanced skills in rotation
         .findIndex(a => a.skill === skill)
       
       // Each tertiary skill gets specific sessions based on its index
@@ -3277,12 +3372,24 @@ function getSkillsForSession(
     }
     
     // Support-level skills appear only as warm-up emphasis on specific days
-    if (priorityLevel === 'support' && sessionIndex === 0) {
-      result.push({
-        skill,
-        expressionMode: 'warmup',
-        weight,
-      })
+    // [advanced-skill-expression] Even support-level advanced skills should get some expression
+    if (priorityLevel === 'support') {
+      if (isAdvanced) {
+        // Advanced skills at support level still get 1-2 sessions
+        if (sessionIndex < 2) {
+          result.push({
+            skill,
+            expressionMode: 'support',
+            weight,
+          })
+        }
+      } else if (sessionIndex === 0) {
+        result.push({
+          skill,
+          expressionMode: 'warmup',
+          weight,
+        })
+      }
     }
   }
   
@@ -3690,7 +3797,9 @@ function generateProgramRationale(
   structure: WeeklyStructure,
   constraintInsight: ReturnType<typeof getConstraintInsight>,
   recoveryLevel: RecoveryLevel,
-  equipmentProfile: EquipmentProfile
+  equipmentProfile: EquipmentProfile,
+  // [advanced-skill-expression] ISSUE F: Accept selected skills for rationale
+  selectedSkills: string[] = []
 ): string {
   const parts: string[] = []
   
@@ -3732,7 +3841,35 @@ function generateProgramRationale(
   
   // Equipment notes
   if (!equipmentProfile.hasFullSetup) {
-    parts.push('Some exercises adapted for available equipment.')
+  parts.push('Some exercises adapted for available equipment.')
+  }
+  
+  // [advanced-skill-expression] ISSUE F: Include advanced skill expression in rationale
+  // Check if any advanced skills are in the selected skills
+  const advancedSkillsExpressed: string[] = []
+  
+  for (const skill of selectedSkills) {
+    if (isAdvancedSkill(skill)) {
+      const family = getAdvancedSkillFamily(skill)
+      if (family) {
+        advancedSkillsExpressed.push(family.displayName)
+      }
+    }
+  }
+  
+  if (advancedSkillsExpressed.length > 0) {
+    if (advancedSkillsExpressed.length === 1) {
+      parts.push(`${advancedSkillsExpressed[0]} receives dedicated progression and support work.`)
+    } else {
+      const skillList = advancedSkillsExpressed.slice(0, 2).join(' and ')
+      parts.push(`Advanced skills (${skillList}) receive structured progression and support.`)
+    }
+    
+    // [advanced-skill-expression] Log rationale inclusion
+    console.log('[advanced-skill-expression] Rationale includes advanced skills:', {
+      advancedSkillsExpressed,
+      selectedSkillsCount: selectedSkills.length,
+    })
   }
   
   return parts.join(' ')

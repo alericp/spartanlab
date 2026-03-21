@@ -3533,6 +3533,83 @@ return explanations.length > 0 ? explanations : undefined
       }
     })(),
   }
+  
+  // =========================================================================
+  // [selected-skill-exposure] STEP 7: Final weekly skill expression summary
+  // This answers: "why did this skill appear or not appear this week?"
+  // =========================================================================
+  const selectedSkillList = expandedContext.selectedSkills || []
+  const allExercisesInWeek = sessions.flatMap(s => s.exercises)
+  
+  const skillExposureSummary = selectedSkillList.map(skill => {
+    const skillLower = skill.toLowerCase()
+    
+    // Count direct expressions (skill category exercises for this skill)
+    const directExpressions = allExercisesInWeek.filter(ex => 
+      ex.transferTo?.some((t: string) => t.toLowerCase().includes(skillLower)) &&
+      ex.category === 'skill'
+    )
+    
+    // Count technical expressions (moderate fatigue, good transfer)
+    const technicalExpressions = allExercisesInWeek.filter(ex =>
+      ex.transferTo?.some((t: string) => t.toLowerCase().includes(skillLower)) &&
+      ex.category !== 'skill' &&
+      (ex.fatigueCost ?? 5) <= 3
+    )
+    
+    // Count support expressions (strength/accessory supporting this skill)
+    const supportExpressions = allExercisesInWeek.filter(ex =>
+      ex.transferTo?.some((t: string) => t.toLowerCase().includes(skillLower)) &&
+      (ex.category === 'strength' || ex.category === 'accessory')
+    )
+    
+    // Determine if omitted and why
+    const totalExpressions = directExpressions.length + technicalExpressions.length + supportExpressions.length
+    const omissionReason = totalExpressions === 0 
+      ? (skill === primaryGoal ? 'NOT_OMITTED_PRIMARY' : 
+         equipment.length === 0 ? 'no_equipment_match' :
+         'no_exercises_found_for_skill')
+      : null
+    
+    return {
+      skill,
+      directExpressions: directExpressions.length,
+      technicalExpressions: technicalExpressions.length,
+      supportExpressions: supportExpressions.length,
+      totalExpressions,
+      omissionReason,
+    }
+  })
+  
+  console.log('[selected-skill-exposure] Weekly skill expression summary:', {
+    totalSelectedSkills: selectedSkillList.length,
+    primaryGoal,
+    skillExposure: skillExposureSummary.map(s => ({
+      skill: s.skill,
+      direct: s.directExpressions,
+      technical: s.technicalExpressions,
+      support: s.supportExpressions,
+      total: s.totalExpressions,
+      omitted: s.omissionReason,
+    })),
+    underExpressedSkills: skillExposureSummary.filter(s => s.totalExpressions === 0 && s.skill !== primaryGoal),
+    wellExpressedSkills: skillExposureSummary.filter(s => s.totalExpressions >= 2),
+  })
+  
+  // Log session role → actual exercise differentiation
+  console.log('[session-role-differentiation] Session role vs exercise composition:', sessions.map((s, i) => ({
+    day: i + 1,
+    focus: s.focus,
+    sessionIntent: sessionIntents[i]?.sessionType || 'unknown',
+    exerciseCategories: s.exercises.reduce((acc, ex) => {
+      acc[ex.category] = (acc[ex.category] || 0) + 1
+      return acc
+    }, {} as Record<string, number>),
+    weightedExercises: s.exercises.filter(ex => ex.id?.includes('weighted')).length,
+    skillExercises: s.exercises.filter(ex => ex.category === 'skill').length,
+  })))
+  
+  return tempProgram
 }
 
 /**

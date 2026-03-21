@@ -492,6 +492,8 @@ export function getMilestoneSource(
 /**
  * Get counts for analytics display, separating baseline from earned.
  * Use this for dashboard/progress cards.
+ * 
+ * [display-source-truth] STEP 8: Ensures consistent source labeling across all surfaces
  */
 export function getProgressCountsWithSources(): {
   totalPRs: number
@@ -501,6 +503,7 @@ export function getProgressCountsWithSources(): {
   earnedMilestones: number
   baselineMilestones: number
   displayLabel: string
+  sourceType: 'earned' | 'baseline' | 'mixed' | 'empty'
 } {
   const summary = getBaselineVsEarnedSummary()
   const earned = summary.earned
@@ -526,10 +529,18 @@ export function getProgressCountsWithSources(): {
     ? 'Progress logged in SpartanLab' 
     : 'Starting capabilities from profile'
   
-  console.log('[baseline-earned-truth] Progress counts:', {
+  // [display-source-truth] STEP 8: Determine source type for consistent UI labeling
+  const sourceType = earnedPRCount > 0 && baselinePRCount > 0 ? 'mixed' :
+                     earnedPRCount > 0 ? 'earned' :
+                     baselinePRCount > 0 ? 'baseline' :
+                     'empty'
+  
+  console.log('[display-source-truth] Progress counts with source:', {
     earnedPRs: earnedPRCount,
     baselinePRs: baselinePRCount,
     hasEarnedProgress: summary.hasEarnedProgress,
+    sourceType,
+    displayLabel,
   })
   
   return {
@@ -540,6 +551,7 @@ export function getProgressCountsWithSources(): {
     earnedMilestones: 0,
     baselineMilestones: 0,
     displayLabel,
+    sourceType,
   }
 }
 

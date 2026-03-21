@@ -1715,3 +1715,140 @@ export function logWeightedLoadEstimation(
     intensityBand: prescription.intensityBand,
   })
 }
+
+// =============================================================================
+// DISPLAY PRESCRIPTION MODE (ISSUE C - Truthful UI Labels)
+// =============================================================================
+
+/**
+ * [prescription-truth] ISSUE C: User-facing prescription mode for exercise display.
+ * This is derived from real engine truth, not hardcoded UI heuristics.
+ */
+export type DisplayPrescriptionMode = 
+  | 'bodyweight'           // Bodyweight exercise by design (skills, bodyweight strength)
+  | 'weighted'             // Weighted exercise with load prescription
+  | 'bodyweight_for_now'   // Could be weighted but no data/equipment yet
+  | 'not_loadable'         // Exercise type that cannot use external loading
+  | 'load_unavailable'     // Equipment present but strength data missing
+
+/**
+ * Display prescription info for UI rendering
+ */
+export interface DisplayPrescription {
+  mode: DisplayPrescriptionMode
+  label: string               // Short label for display (e.g., "Bodyweight", "+25 lbs")
+  explanation?: string        // Longer explanation if needed
+  targetReps?: string         // e.g., "5-8 reps"
+  targetRPE?: number          // Target RPE
+  restSeconds?: number        // Rest recommendation
+  confidenceLevel?: 'high' | 'moderate' | 'low'
+}
+
+/**
+ * [prescription-truth] ISSUE C: Determine display prescription mode for an exercise.
+ * This provides truthful labeling based on actual engine state.
+ * 
+ * @param exercise - Exercise data with optional prescribedLoad
+ * @param hasWeightsEquipment - Whether user has loading equipment
+ * @param hasStrengthData - Whether user has entered strength benchmarks
+ */
+export function getDisplayPrescription(
+  exercise: {
+    id?: string
+    name?: string
+    category?: string
+    isIsometric?: boolean
+    prescribedLoad?: {
+      load: number
+      unit: 'lbs' | 'kg'
+      basis: string
+      confidenceLevel?: 'high' | 'moderate' | 'low'
+    }
+    sets?: number
+    repsOrTime?: string
+    targetRPE?: number
+    restSeconds?: number
+  },
+  hasWeightsEquipment: boolean = false,
+  hasStrengthData: boolean = false
+): DisplayPrescription {
+  const exerciseId = exercise.id || ''
+  const exerciseName = exercise.name || ''
+  const category = exercise.category || ''
+  const isIsometric = exercise.isIsometric ?? exerciseName.toLowerCase().includes('hold')
+  
+  // Check if this is a weighted exercise type
+  const isWeightedExerciseType = 
+    exerciseId.includes('weighted_pull') ||
+    exerciseId.includes('weighted_dip') ||
+    exerciseId.includes('weighted_push') ||
+    exerciseId.includes('weighted_row') ||
+    exerciseName.toLowerCase().includes('weighted')
+  
+  // Check if this is a skill/isometric that cannot be loaded
+  const isSkillHold = 
+    category === 'skill' ||
+    isIsometric ||
+    ['planche', 'front_lever', 'l_sit', 'v_sit', 'handstand'].some(s => exerciseId.includes(s))
+  
+  // Determine mode and label
+  let mode: DisplayPrescriptionMode
+  let label: string
+  let explanation: string | undefined
+  
+  if (exercise.prescribedLoad && exercise.prescribedLoad.load > 0) {
+    // Has actual weighted prescription
+    mode = 'weighted'
+    label = `+${exercise.prescribedLoad.load} ${exercise.prescribedLoad.unit}`
+    explanation = exercise.prescribedLoad.basis === 'current_benchmark' 
+      ? 'Based on your current benchmarks'
+      : exercise.prescribedLoad.basis === 'pr_reference'
+      ? 'Based on your historical PR'
+      : 'Estimated load'
+  } else if (isSkillHold) {
+    // Skill holds cannot be externally loaded
+    mode = 'not_loadable'
+    label = 'Skill Work'
+    explanation = 'Focus on position quality'
+  } else if (isWeightedExerciseType) {
+    // This is a weighted exercise type but no load prescribed
+    if (!hasWeightsEquipment) {
+      mode = 'bodyweight_for_now'
+      label = 'Bodyweight'
+      explanation = 'Add weights in Settings to enable loading'
+    } else if (!hasStrengthData) {
+      mode = 'load_unavailable'
+      label = 'Bodyweight'
+      explanation = 'Enter strength benchmarks to get load prescriptions'
+    } else {
+      // Has equipment and data but still no load - conservative start
+      mode = 'bodyweight_for_now'
+      label = 'Bodyweight'
+      explanation = 'Building baseline before adding load'
+    }
+  } else {
+    // Standard bodyweight exercise
+    mode = 'bodyweight'
+    label = 'Bodyweight'
+  }
+  
+  // Log for diagnosis
+  console.log('[prescription-truth] Display prescription:', {
+    exerciseId,
+    mode,
+    label,
+    hasWeightsEquipment,
+    hasStrengthData,
+    hasPrescribedLoad: !!(exercise.prescribedLoad && exercise.prescribedLoad.load > 0),
+  })
+  
+  return {
+    mode,
+    label,
+    explanation,
+    targetReps: exercise.repsOrTime,
+    targetRPE: exercise.targetRPE,
+    restSeconds: exercise.restSeconds,
+    confidenceLevel: exercise.prescribedLoad?.confidenceLevel,
+  }
+}

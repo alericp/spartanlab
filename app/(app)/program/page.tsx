@@ -13,14 +13,16 @@
  * 3. Show builder as secondary action for creating/regenerating
  */
 
-import { useState, useEffect, useCallback, type ReactNode } from 'react'
+import { useState, useEffect, useCallback, useMemo, type ReactNode } from 'react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { ArrowLeft, Dumbbell, Plus, Sparkles, AlertTriangle, Loader2 } from 'lucide-react'
+import { ArrowLeft, Dumbbell, Plus, Sparkles, AlertTriangle, Loader2, Info } from 'lucide-react'
 import Link from 'next/link'
 
 // TASK 5: Lightweight type imports only - actual modules loaded dynamically
 import type { AdaptiveProgramInputs, AdaptiveProgram } from '@/lib/adaptive-program-builder'
+// [profile-truth-sync] ISSUE A: Import drift detection for settings/program alignment
+import { checkProfileProgramDrift, type ProfileProgramDrift } from '@/lib/canonical-profile-service'
 
 // TASK 5: Lazy load heavy components to prevent SSR/hydration crashes
 import dynamic from 'next/dynamic'
@@ -114,6 +116,21 @@ export default function ProgramPage() {
   const [mounted, setMounted] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [loadStage, setLoadStage] = useState<string>('initializing') // TASK 3: Track failure stage
+  
+  // [profile-truth-sync] ISSUE A/D: Detect profile-program drift
+  const profileProgramDrift = useMemo<ProfileProgramDrift | null>(() => {
+    if (!program || !mounted) return null
+    return checkProfileProgramDrift({
+      primaryGoal: program.primaryGoal,
+      secondaryGoal: (program as unknown as { secondaryGoal?: string }).secondaryGoal,
+      trainingDaysPerWeek: program.trainingDaysPerWeek,
+      sessionLength: program.sessionLength,
+      scheduleMode: (program as unknown as { scheduleMode?: string }).scheduleMode,
+      equipment: program.equipment,
+      jointCautions: program.jointCautions,
+      experienceLevel: program.experienceLevel,
+    })
+  }, [program, mounted])
   
   // TASK 5: Store dynamically imported module references
   const [programModules, setProgramModules] = useState<{
@@ -807,17 +824,41 @@ export default function ProgramPage() {
             )}
           </div>
         ) : program && programModules.isRenderableProgram?.(program) ? (
-          // TASK 1: Wrap display in error boundary-like try-catch via component
-          <ProgramDisplayWrapper 
-            program={program} 
-            onDelete={handleDelete}
-            onRestart={handleRestart}
-            onRegenerate={handleRegenerate}
-            onRecoveryNeeded={() => {
-              console.log('[v0] Display render failed, showing recovery state')
-              setLoadStage('display-render-error')
-            }}
-          />
+          <div className="space-y-4">
+            {/* [profile-truth-sync] ISSUE A/D: Show drift warning if settings don't match program */}
+            {profileProgramDrift?.isProgramStale && (
+              <Card className="bg-amber-500/10 border-amber-500/30 p-4">
+                <div className="flex items-start gap-3">
+                  <Info className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <p className="text-sm text-amber-200 font-medium">Settings have changed</p>
+                    <p className="text-xs text-amber-400/80 mt-1">{profileProgramDrift.summary}</p>
+                    {profileProgramDrift.recommendation === 'regenerate' && (
+                      <Button
+                        size="sm"
+                        className="mt-2 bg-amber-600 hover:bg-amber-700 text-white h-7 px-3 text-xs"
+                        onClick={handleRegenerate}
+                      >
+                        Regenerate Program
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </Card>
+            )}
+            
+            {/* TASK 1: Wrap display in error boundary-like try-catch via component */}
+            <ProgramDisplayWrapper 
+              program={program} 
+              onDelete={handleDelete}
+              onRestart={handleRestart}
+              onRegenerate={handleRegenerate}
+              onRecoveryNeeded={() => {
+                console.log('[v0] Display render failed, showing recovery state')
+                setLoadStage('display-render-error')
+              }}
+            />
+          </div>
         ) : program ? (
           // TASK 2: Program exists but is malformed - show recovery state (not fatal error)
           <Card className="bg-[#2A2A2A] border-[#3A3A3A] p-8 text-center">

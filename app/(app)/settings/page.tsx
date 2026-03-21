@@ -529,12 +529,15 @@ export default function SettingsPage() {
               sideSplitsRangeIntent: result.profile.sideSplits?.rangeIntent,
             })
             
-            // TASK 3: Log settings saved schedule/duration
-            console.log('[Settings] TASK 3: Saved schedule/duration identity:', {
+            // [profile-truth-sync] Log settings saved for truth verification
+            console.log('[profile-truth-sync] Settings save complete:', {
+              primaryGoal: result.profile.primaryGoal,
               scheduleMode: scheduleMode,
               trainingDaysPerWeek: scheduleMode === 'flexible' ? null : parseInt(trainingDays || '3'),
               sessionDurationMode: sessionDurationMode,
               sessionLengthMinutes: parseInt(sessionLength),
+              equipmentCount: equipment.length,
+              hasWeights: equipment.includes('weights'),
             })
             
             logCanonicalProfileState('After settings save')

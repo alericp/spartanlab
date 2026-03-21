@@ -1722,18 +1722,36 @@ export function StreamlinedWorkoutSession({
           <div className="flex items-center gap-2 mt-1.5 text-sm flex-wrap">
             <span className="text-[#A4ACB8]">Target:</span>
             <span className="text-[#E6E9EF] font-medium">{currentExercise.repsOrTime}</span>
-            {/* [prescription-render] TASK 4: Display prescribedLoad on live workout */}
-            {currentExercise.prescribedLoad && currentExercise.prescribedLoad.load > 0 && (
-              <>
-                <span className="text-[#C1121F] font-semibold">
-                  @ +{currentExercise.prescribedLoad.load} {currentExercise.prescribedLoad.unit}
-                </span>
-              </>
+            {/* [prescription-truth] ISSUE C: Display prescription mode truthfully */}
+            {currentExercise.prescribedLoad && currentExercise.prescribedLoad.load > 0 ? (
+              // Weighted exercise with load
+              <span className="text-[#C1121F] font-semibold">
+                @ +{currentExercise.prescribedLoad.load} {currentExercise.prescribedLoad.unit}
+              </span>
+            ) : (
+              // Check if this is a weighted exercise type without load
+              (() => {
+                const isWeightedType = currentExercise.id?.includes('weighted_') || 
+                                       currentExercise.name?.toLowerCase().includes('weighted')
+                const isSkillHold = currentExercise.category === 'skill' || 
+                                    currentExercise.repsOrTime?.toLowerCase().includes('sec')
+                
+                if (isWeightedType) {
+                  // Weighted exercise type but no load prescribed
+                  return <span className="text-[#6B7280] text-xs">(Bodyweight)</span>
+                } else if (isSkillHold) {
+                  // Skill hold - show nothing extra
+                  return null
+                } else {
+                  // Regular bodyweight - show nothing
+                  return null
+                }
+              })()
             )}
             <span className="text-[#6B7280]">·</span>
             <span className="text-[#A4ACB8]">RPE {targetRPE}</span>
           </div>
-          {/* [prescription-render] TASK 5: Show confidence for non-high confidence loads */}
+          {/* [prescription-truth] ISSUE C: Show confidence for non-high confidence loads */}
           {currentExercise.prescribedLoad && currentExercise.prescribedLoad.load > 0 && 
            currentExercise.prescribedLoad.confidenceLevel !== 'high' && (
             <p className="text-[10px] text-[#6B7280] mt-0.5">

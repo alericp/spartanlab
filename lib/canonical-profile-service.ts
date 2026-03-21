@@ -1629,6 +1629,266 @@ export function getEngineFieldConsumption(profile?: CanonicalProgrammingProfile)
   return consumption
 }
 
+// =============================================================================
+// PROFILE-PROGRAM DRIFT DETECTION (ISSUE A/D)
+// =============================================================================
+
+/**
+ * Drift field with comparison info
+ */
+export interface DriftField {
+  field: string
+  profileValue: unknown
+  programValue: unknown
+  severity: 'critical' | 'major' | 'minor'
+}
+
+/**
+ * Profile-program drift detection result
+ */
+export interface ProfileProgramDrift {
+  hasDrift: boolean
+  isProgramStale: boolean
+  driftFields: DriftField[]
+  summary: string
+  recommendation: 'regenerate' | 'continue' | 'review'
+}
+
+/**
+ * [profile-truth-sync] ISSUE A/D: Check if current program matches canonical profile truth.
+ * This is the authoritative function for detecting settings/program drift.
+ * 
+ * @param program - The current active program to check against canonical profile
+ * @returns Detailed drift information
+ */
+export function checkProfileProgramDrift(program: {
+  primaryGoal?: string | null
+  secondaryGoal?: string | null
+  trainingDaysPerWeek?: number | null
+  sessionLength?: number | null
+  scheduleMode?: string | null
+  equipment?: string[] | null
+  jointCautions?: string[] | null
+  experienceLevel?: string | null
+} | null): ProfileProgramDrift {
+  if (!program) {
+    console.log('[profile-truth-sync] No program to check for drift')
+    return {
+      hasDrift: false,
+      isProgramStale: false,
+      driftFields: [],
+      summary: 'No active program',
+      recommendation: 'continue',
+    }
+  }
+  
+  const profile = getCanonicalProfile()
+  const driftFields: DriftField[] = []
+  
+  // CRITICAL FIELDS - require regeneration
+  if (profile.primaryGoal !== program.primaryGoal) {
+    driftFields.push({
+      field: 'primaryGoal',
+      profileValue: profile.primaryGoal,
+      programValue: program.primaryGoal,
+      severity: 'critical',
+    })
+  }
+  
+  // MAJOR FIELDS - should trigger regeneration
+  if (profile.scheduleMode !== program.scheduleMode) {
+    driftFields.push({
+      field: 'scheduleMode',
+      profileValue: profile.scheduleMode,
+      programValue: program.scheduleMode,
+      severity: 'major',
+    })
+  }
+  
+  if (profile.trainingDaysPerWeek !== program.trainingDaysPerWeek) {
+    driftFields.push({
+      field: 'trainingDaysPerWeek',
+      profileValue: profile.trainingDaysPerWeek,
+      programValue: program.trainingDaysPerWeek,
+      severity: 'major',
+    })
+  }
+  
+  if (profile.sessionLengthMinutes !== program.sessionLength) {
+    driftFields.push({
+      field: 'sessionLength',
+      profileValue: profile.sessionLengthMinutes,
+      programValue: program.sessionLength,
+      severity: 'major',
+    })
+  }
+  
+  // Equipment comparison (array comparison)
+  const profileEquipment = (profile.equipmentAvailable || []).sort().join(',')
+  const programEquipment = (program.equipment || []).sort().join(',')
+  if (profileEquipment !== programEquipment) {
+    driftFields.push({
+      field: 'equipment',
+      profileValue: profile.equipmentAvailable,
+      programValue: program.equipment,
+      severity: 'major',
+    })
+  }
+  
+  // MINOR FIELDS - can continue but note the difference
+  if (profile.secondaryGoal !== program.secondaryGoal) {
+    driftFields.push({
+      field: 'secondaryGoal',
+      profileValue: profile.secondaryGoal,
+      programValue: program.secondaryGoal,
+      severity: 'minor',
+    })
+  }
+  
+  if (profile.experienceLevel !== program.experienceLevel) {
+    driftFields.push({
+      field: 'experienceLevel',
+      profileValue: profile.experienceLevel,
+      programValue: program.experienceLevel,
+      severity: 'minor',
+    })
+  }
+  
+  // Joint cautions comparison
+  const profileCautions = (profile.jointCautions || []).sort().join(',')
+  const programCautions = (program.jointCautions || []).sort().join(',')
+  if (profileCautions !== programCautions) {
+    driftFields.push({
+      field: 'jointCautions',
+      profileValue: profile.jointCautions,
+      programValue: program.jointCautions,
+      severity: 'minor',
+    })
+  }
+  
+  const hasDrift = driftFields.length > 0
+  const criticalDrift = driftFields.some(d => d.severity === 'critical')
+  const majorDrift = driftFields.some(d => d.severity === 'major')
+  const isProgramStale = criticalDrift || majorDrift
+  
+  // Generate summary
+  let summary = 'Program matches current settings'
+  if (criticalDrift) {
+    const criticalFields = driftFields.filter(d => d.severity === 'critical').map(d => d.field)
+    summary = `Primary goal has changed (${criticalFields.join(', ')}). Program should be regenerated.`
+  } else if (majorDrift) {
+    const majorFields = driftFields.filter(d => d.severity === 'major').map(d => d.field)
+    summary = `Training settings have changed (${majorFields.join(', ')}). Consider regenerating.`
+  } else if (hasDrift) {
+    summary = 'Minor setting differences. Program can continue.'
+  }
+  
+  // Determine recommendation
+  let recommendation: 'regenerate' | 'continue' | 'review' = 'continue'
+  if (criticalDrift) {
+    recommendation = 'regenerate'
+  } else if (majorDrift) {
+    recommendation = 'review'
+  }
+  
+  // Log drift detection result
+  console.log('[profile-truth-sync] Profile-program drift check:', {
+    hasDrift,
+    isProgramStale,
+    criticalDrift,
+    majorDrift,
+    driftFieldCount: driftFields.length,
+    driftFields: driftFields.map(d => ({ field: d.field, severity: d.severity })),
+    recommendation,
+    profile: {
+      primaryGoal: profile.primaryGoal,
+      scheduleMode: profile.scheduleMode,
+      sessionLength: profile.sessionLengthMinutes,
+      equipmentCount: profile.equipmentAvailable?.length || 0,
+    },
+    program: {
+      primaryGoal: program.primaryGoal,
+      scheduleMode: program.scheduleMode,
+      sessionLength: program.sessionLength,
+      equipmentCount: program.equipment?.length || 0,
+    },
+  })
+  
+  return {
+    hasDrift,
+    isProgramStale,
+    driftFields,
+    summary,
+    recommendation,
+  }
+}
+
+/**
+ * [profile-truth-sync] ISSUE B: Check if weighted prescriptions should be available.
+ * Returns detailed info about why weighted loading is or isn't available.
+ */
+export function checkWeightedPrescriptionEligibility(): {
+  eligible: boolean
+  hasWeightsEquipment: boolean
+  hasStrengthBenchmarks: boolean
+  hasPRData: boolean
+  reason: string
+  recommendation: string
+} {
+  const profile = getCanonicalProfile()
+  
+  // Check equipment - 'weights' or 'weight_plates' or 'weight_belt' enables weighted loading
+  const hasWeightsEquipment = (profile.equipmentAvailable || []).some(e => 
+    ['weights', 'weight_plates', 'weight_belt', 'dumbbells', 'barbell'].includes(e)
+  )
+  
+  // Check strength benchmarks
+  const hasWeightedPullUp = !!(profile.weightedPullUp && profile.weightedPullUp.addedWeight > 0)
+  const hasWeightedDip = !!(profile.weightedDip && profile.weightedDip.addedWeight > 0)
+  const hasStrengthBenchmarks = hasWeightedPullUp || hasWeightedDip
+  
+  // Check PR data
+  const hasPRPullUp = !!(profile.allTimePRPullUp && profile.allTimePRPullUp.load > 0)
+  const hasPRDip = !!(profile.allTimePRDip && profile.allTimePRDip.load > 0)
+  const hasPRData = hasPRPullUp || hasPRDip
+  
+  // Determine eligibility
+  const eligible = hasWeightsEquipment && (hasStrengthBenchmarks || hasPRData)
+  
+  // Generate reason
+  let reason = 'Weighted prescriptions available'
+  if (!hasWeightsEquipment) {
+    reason = 'No loading equipment in settings (weights/plates/belt)'
+  } else if (!hasStrengthBenchmarks && !hasPRData) {
+    reason = 'No strength benchmarks entered yet'
+  }
+  
+  // Generate recommendation
+  let recommendation = ''
+  if (!hasWeightsEquipment) {
+    recommendation = 'Add "Weights (for loading)" in Settings > Equipment to enable weighted prescriptions'
+  } else if (!hasStrengthBenchmarks && !hasPRData) {
+    recommendation = 'Enter your weighted pull-up or dip benchmarks in Settings to get personalized load prescriptions'
+  }
+  
+  console.log('[profile-truth-sync] Weighted prescription eligibility:', {
+    eligible,
+    hasWeightsEquipment,
+    hasStrengthBenchmarks,
+    hasPRData,
+    reason,
+  })
+  
+  return {
+    eligible,
+    hasWeightsEquipment,
+    hasStrengthBenchmarks,
+    hasPRData,
+    reason,
+    recommendation,
+  }
+}
+
 /**
  * Verify all engine-relevant fields are being consumed.
  * [profile-completeness] ISSUE E: Call this before generation to confirm field wiring.

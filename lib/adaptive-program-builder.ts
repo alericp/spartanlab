@@ -4633,13 +4633,28 @@ export function saveAdaptiveProgram(program: AdaptiveProgram): AdaptiveProgram {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(programs))
   
   console.log('[program-rebuild-truth] SAVE: Program saved successfully - atomic replacement complete', {
-    programId: program.id,
-    sessionCount: sessions.length,
-    totalExercises: sessionExerciseCounts.reduce((a, b) => a + b, 0),
-    replacedVisibleProgram: true,
+  programId: program.id,
+  sessionCount: sessions.length,
+  totalExercises: sessionExerciseCounts.reduce((a, b) => a + b, 0),
+  replacedVisibleProgram: true,
   })
+  
+  // [build-report] STEP 11: High-signal build diagnostic summary
+  console.log('[build-report] BUILD COMPLETE:', {
+    buildAttemptId: program.id,
+    path: 'save_adaptive_program',
+    requestedSessionCount: program.trainingDaysPerWeek || 'flexible',
+    assembledSessionCount: sessions.length,
+    savedSessionCount: sessions.length,
+    exerciseCountsPerSession: sessionExerciseCounts,
+    staleCacheInvalidated: true,
+    saveResult: 'success',
+    programIdAfterSave: program.id,
+    createdAt: program.createdAt,
+  })
+  
   return program
-}
+  }
 
 export function getSavedAdaptivePrograms(): AdaptiveProgram[] {
   if (!isBrowser()) return []

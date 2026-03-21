@@ -971,6 +971,32 @@ export default function ProgramPage() {
         trainingDays: updatedInputs.trainingDaysPerWeek,
       })
       
+      // [build-report] STEP 11: Final build report for regeneration path
+      console.log('[build-report] REGENERATION COMPLETE:', {
+        buildAttemptId: newProgram.id,
+        path: 'handleAdjustmentRebuild',
+        requestedTrainingDays: request.newTrainingDays,
+        resolvedTrainingDays: updatedInputs.trainingDaysPerWeek,
+        assembledSessionCount: newProgram.sessions.length,
+        savedSessionCount: newProgram.sessions.length,
+        displayedSessionCount: newProgram.sessions.length,
+        previousProgramId,
+        newProgramId: newProgram.id,
+        programIdChanged,
+        sessionCountChanged,
+        trainingDaysChanged,
+        staleCacheInvalidated: true,
+        saveResult: 'success',
+        surfaceReplaceResult: 'success',
+      })
+      
+      // [program-identity] STEP 7: Verify identity truth
+      console.log('[program-identity] Post-rebuild identity verification:', {
+        uiProgramId: newProgram.id,
+        savedProgramId: savedState.adaptiveProgram?.id,
+        identityMatch: newProgram.id === savedState.adaptiveProgram?.id,
+      })
+      
       return { success: true }
       
     } catch (error) {

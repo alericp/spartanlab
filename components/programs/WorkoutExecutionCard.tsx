@@ -123,13 +123,28 @@ export function WorkoutExecutionCard({ session, onComplete, onCancel, sessionSta
 
   // Skip rest and proceed immediately
   const handleSkipRest = useCallback(() => {
+    // [workout-progress] Guard against invalid set progression
+    const maxSets = currentExercise?.sets ?? 1
+    
+    setProgress((prev) => {
+      // CRITICAL: Never increment past the total number of sets
+      if (prev.currentSet >= maxSets) {
+        console.log('[workout-progress] handleSkipRest blocked invalid increment:', {
+          currentSet: prev.currentSet,
+          maxSets,
+        })
+        return prev
+      }
+      
+      return {
+        ...prev,
+        currentSet: prev.currentSet + 1,
+      }
+    })
+    
     setIsResting(false)
     setShowSetComplete(false)
-    setProgress((prev) => ({
-      ...prev,
-      currentSet: prev.currentSet + 1,
-    }))
-  }, [])
+  }, [currentExercise?.sets])
 
   const handleSetComplete = () => {
     if (!currentExercise) return
@@ -275,7 +290,8 @@ export function WorkoutExecutionCard({ session, onComplete, onCancel, sessionSta
         setActualReps(null)
       }, 1500)
     } else {
-      // Start rest period
+      // Start rest period - DO NOT auto-increment here
+      // The user must explicitly click "Ready for Next Set" to advance
       const prescribedRest = currentPrescribedSet?.prescribedRestSeconds ?? 120
       const adjustedRest = adjustment?.adjustedRestSeconds
       setCurrentRestSeconds(prescribedRest)
@@ -308,24 +324,39 @@ export function WorkoutExecutionCard({ session, onComplete, onCancel, sessionSta
       setSelectedRPE(null)
       setActualReps(null)
 
-      // After rest complete message shown, advance to next set
+      // REMOVED: setTimeout auto-advance that caused double-increment bug
+      // The proceedToNextSet callback handles set advancement when user clicks "Ready for Next Set"
+      // Just hide the set complete overlay after a short delay
       setTimeout(() => {
         setShowSetComplete(false)
-        setProgress((prev) => ({
-          ...prev,
-          currentSet: prev.currentSet + 1,
-        }))
-      }, 2000)
+      }, 1500)
     }
   }
 
   const proceedToNextSet = () => {
+    // [workout-progress] Guard against invalid set progression
+    const maxSets = currentExercise?.sets ?? 1
+    
+    setProgress((prev) => {
+      // CRITICAL: Never increment past the total number of sets
+      // This prevents "Set 7 of 6" type bugs
+      if (prev.currentSet >= maxSets) {
+        console.log('[workout-progress] blocked invalid set increment:', {
+          currentSet: prev.currentSet,
+          maxSets,
+          exerciseName: currentExercise?.name,
+        })
+        return prev // Don't modify state
+      }
+      
+      return {
+        ...prev,
+        currentSet: prev.currentSet + 1,
+      }
+    })
+    
     setIsResting(false)
     setShowSetComplete(false)
-    setProgress((prev) => ({
-      ...prev,
-      currentSet: prev.currentSet + 1,
-    }))
   }
 
   const skipExercise = () => {
@@ -410,7 +441,8 @@ export function WorkoutExecutionCard({ session, onComplete, onCancel, sessionSta
               <div>
                 <p className="text-xs text-[#6B7280] mb-0.5">Up Next</p>
                 <p className="font-medium text-[#E6E9EF]">
-                  Set {progress.currentSet + 1} of {currentExercise.sets}
+                  {/* [workout-progress] Safe set display - never show set > total */}
+                  Set {Math.min(progress.currentSet + 1, currentExercise.sets)} of {currentExercise.sets}
                 </p>
               </div>
               <div className="text-right">
@@ -489,18 +521,22 @@ export function WorkoutExecutionCard({ session, onComplete, onCancel, sessionSta
       <div className="p-4 space-y-4">
         {/* Set Progress Indicator */}
         <div className="flex items-center gap-2">
-          {Array.from({ length: currentExercise.sets }).map((_, idx) => (
-            <div
-              key={idx}
-              className={`h-2 flex-1 rounded-full transition-colors ${
-                idx < progress.currentSet - 1
-                  ? 'bg-green-500'
-                  : idx === progress.currentSet - 1
-                  ? 'bg-[#C1121F]'
-                  : 'bg-[#2B313A]'
-              }`}
-            />
-          ))}
+          {/* [workout-progress] Safe set index - clamp to valid range */}
+          {Array.from({ length: currentExercise.sets }).map((_, idx) => {
+            const safeCurrentSet = Math.min(progress.currentSet, currentExercise.sets)
+            return (
+              <div
+                key={idx}
+                className={`h-2 flex-1 rounded-full transition-colors ${
+                  idx < safeCurrentSet - 1
+                    ? 'bg-green-500'
+                    : idx === safeCurrentSet - 1
+                    ? 'bg-[#C1121F]'
+                    : 'bg-[#2B313A]'
+                }`}
+              />
+            )
+          })}
         </div>
         
         {/* Fatigue Indicator */}
@@ -525,7 +561,8 @@ export function WorkoutExecutionCard({ session, onComplete, onCancel, sessionSta
         <div className="bg-[#0F1115] rounded-lg p-4">
           <div className="flex items-center justify-between mb-3">
             <span className="text-lg font-bold text-[#E6E9EF]">
-              Set {progress.currentSet} of {currentExercise.sets}
+              {/* [workout-progress] Safe set display - never show set > total */}
+              Set {Math.min(progress.currentSet, currentExercise.sets)} of {currentExercise.sets}
             </span>
             {supportsRPE && (
               <Badge className="bg-[#C1121F]/10 text-[#C1121F] border-0">

@@ -339,6 +339,14 @@ function WorkoutSessionContent() {
           return
         }
         
+        // [workout-init] Log normalized session data for debugging set progression
+        console.log('[workout-init] session normalized successfully:', {
+          dayLabel: normalizedSession.dayLabel,
+          exerciseCount: normalizedSession.exercises.length,
+          setCountPerExercise: normalizedSession.exercises.map(ex => ({ name: ex.name, sets: ex.sets })),
+          totalSets: normalizedSession.exercises.reduce((sum, ex) => sum + ex.sets, 0),
+        })
+        
         setSession(normalizedSession)
         // Extract workout reasoning summary from the program
         try {

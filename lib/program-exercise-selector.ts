@@ -179,6 +179,11 @@ import {
   getAllSupportExercisesFor,
   ADVANCED_SKILL_SUPPORT_PATTERNS,
 } from './doctrine/skill-support-mappings'
+import {
+  // [weighted-truth] TASK A: Canonical weighted readiness functions
+  hasLoadableEquipment,
+  checkWeightedPrescriptionEligibility,
+} from './canonical-profile-service'
 
 export interface SelectedExercise {
   exercise: Exercise
@@ -209,6 +214,11 @@ export interface SelectedExercise {
   // [weighted-prescription-truth] ISSUE E: RPE and rest metadata for coaching truth
   targetRPE?: number          // Target RPE (7-9 typical for strength, 5-7 for mobility)
   restSeconds?: number        // Recommended rest in seconds
+  // [weighted-truth] TASK F: No-load reason contract for explicit fallback tracking
+  noLoadReason?: 'no_loadable_equipment' | 'missing_strength_inputs' | 'exercise_not_load_eligible' | 
+                 'low_confidence_estimate_blocked' | 'doctrine_prefers_bodyweight' | 'skill_day_non_loaded_variant' |
+                 'support_day_volume_bias' | 'assisted_variant_selected' | 'recovery_session_role' | 
+                 'fallback_after_validation' | null
   // [exercise-trace] TASK 2: Full selection traceability
   selectionTrace?: ExerciseSelectionTrace
 }
@@ -1052,21 +1062,27 @@ function selectMainExercises(
                                finalExercise.id.includes('weighted_push') ||
                                finalExercise.id.includes('weighted_row')
     
+    // [weighted-truth] TASK F: Track no-load reason for weighted-eligible exercises
+    let noLoadReason: SelectedExercise['noLoadReason'] = null
+    
     // [weighted-prescription-truth] TASK 8: Log weighted exercise eligibility
     if (isWeightedExercise) {
-      console.log('[weighted-prescription-truth] Weighted exercise detected:', {
+      console.log('[weighted-truth] Weighted exercise detected:', {
         exerciseId: finalExercise.id,
         exerciseName: finalExercise.name,
+        hasWeightedEquipment,
         hasWeightedBenchmarks: !!weightedBenchmarks,
-        hasPullUpBenchmark: !!weightedBenchmarks?.weightedPullUp,
-        hasDipBenchmark: !!weightedBenchmarks?.weightedDip,
+        hasPullUpBenchmark: !!weightedBenchmarks?.weightedPullUp?.current,
+        hasDipBenchmark: !!weightedBenchmarks?.weightedDip?.current,
       })
       
-      if (!weightedBenchmarks) {
-        console.log('[prescription-drift] Weighted exercise WITHOUT benchmarks - will not prescribe load:', {
-          exerciseId: finalExercise.id,
-          reason: 'weightedBenchmarks not passed to selector',
-        })
+      // [weighted-truth] TASK F: Determine and log no-load reason
+      if (!hasWeightedEquipment) {
+        noLoadReason = 'no_loadable_equipment'
+        console.log('[weighted-truth] No load prescribed - reason:', noLoadReason)
+      } else if (!weightedBenchmarks) {
+        noLoadReason = 'missing_strength_inputs'
+        console.log('[weighted-truth] No load prescribed - reason:', noLoadReason)
       }
     }
     
@@ -1144,6 +1160,14 @@ function selectMainExercises(
             notes: loadPrescription.notes.length > 0 ? loadPrescription.notes : undefined,
           }
           
+          // [weighted-truth] Log successful prescription
+          console.log('[weighted-truth] Prescribed load generated:', {
+            exerciseId: finalExercise.id,
+            load: prescribedLoad.load,
+            unit: prescribedLoad.unit,
+            confidence: prescribedLoad.confidenceLevel,
+          })
+          
           // Update note with load prescription
           if (loadPrescription.prescribedLoad > 0) {
             const loadDisplay = formatWeightedLoadDisplay(loadPrescription)
@@ -1151,6 +1175,16 @@ function selectMainExercises(
               ? `${loadDisplay}. ${finalNote}`
               : `${loadDisplay}`
           }
+        } else {
+          // [weighted-truth] TASK F: Track no-data as a reason
+          noLoadReason = 'missing_strength_inputs'
+          console.log('[weighted-truth] No load - benchmark data returned no_data')
+        }
+      } else {
+        // [weighted-truth] TASK F: No benchmark for this specific exercise type
+        if (isWeightedExercise && !noLoadReason) {
+          noLoadReason = 'missing_strength_inputs'
+          console.log('[weighted-truth] No benchmark data for this exercise type')
         }
       }
     }
@@ -1236,10 +1270,12 @@ function selectMainExercises(
       originalExerciseId: originalId,
       loadMetadata,
       deliveryStyle,
-      // WEIGHTED LOAD PR: Include prescribed load if available
-      prescribedLoad,
-      // [exercise-trace] TASK 2: Attach the trace
-      selectionTrace,
+    // WEIGHTED LOAD PR: Include prescribed load if available
+    prescribedLoad,
+    // [weighted-truth] TASK F: Include no-load reason for transparency
+    noLoadReason,
+    // [exercise-trace] TASK 2: Attach the trace
+    selectionTrace,
     })
     return true
   }
@@ -1376,10 +1412,17 @@ function selectMainExercises(
     return results
   }
   
-  // Check if we have weighted equipment
-  const hasWeightedEquipment = equipment?.some(e => 
-    e === 'weight_belt' || e === 'weight_vest' || e === 'dumbbells' || e === 'barbell'
-  ) ?? false
+  // [weighted-truth] TASK A: Use canonical loadable equipment check
+  const hasWeightedEquipment = hasLoadableEquipment(equipment)
+  
+  // [weighted-truth] TASK A: Log weighted readiness at session selection
+  console.log('[weighted-truth] Session weighted readiness:', {
+    dayFocus: day.focus,
+    hasWeightedEquipment,
+    hasBenchmarks: !!weightedBenchmarks,
+    pullUpBenchmark: !!weightedBenchmarks?.weightedPullUp?.current,
+    dipBenchmark: !!weightedBenchmarks?.weightedDip?.current,
+  })
   
   // [selection-compression-fix] TASK 7: Log compression fix context
   console.log('[selection-compression-fix] Session selection context:', {

@@ -1248,7 +1248,15 @@ export function StreamlinedWorkoutSession({
                     </span>
                     <span className="text-sm text-[#E6E9EF]">{ex.name}</span>
                   </div>
-                  <span className="text-[11px] text-[#6B7280] tabular-nums">{ex.sets}×{ex.repsOrTime}</span>
+                  <span className="text-[11px] text-[#6B7280] tabular-nums">
+                    {ex.sets}×{ex.repsOrTime}
+                    {/* [weighted-prescription-truth] Show prescribed load in ready view */}
+                    {ex.prescribedLoad && ex.prescribedLoad.load > 0 && (
+                      <span className="ml-1 text-[#C1121F] font-medium">
+                        @ +{ex.prescribedLoad.load}{ex.prescribedLoad.unit}
+                      </span>
+                    )}
+                  </span>
                 </div>
               ))}
             </div>
@@ -1629,7 +1637,15 @@ export function StreamlinedWorkoutSession({
                     {/* [workout-progress] Safe set display - never show set > total */}
                     Set {Math.min(state.currentSetNumber, currentExercise.sets)}/{currentExercise.sets}
                   </p>
-                  <p className="text-xs text-[#6B7280]">{currentExercise.repsOrTime}</p>
+                  <p className="text-xs text-[#6B7280]">
+                    {currentExercise.repsOrTime}
+                    {/* [weighted-prescription-truth] Show load in resting state */}
+                    {currentExercise.prescribedLoad && currentExercise.prescribedLoad.load > 0 && (
+                      <span className="text-[#C1121F] font-medium ml-1">
+                        @ +{currentExercise.prescribedLoad.load}{currentExercise.prescribedLoad.unit}
+                      </span>
+                    )}
+                  </p>
                 </div>
               </div>
             </Card>

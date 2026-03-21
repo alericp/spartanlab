@@ -34,6 +34,45 @@ export interface ChallengeTier {
   reward: ChallengeReward
 }
 
+// =============================================================================
+// [baseline-earned-truth] TASK 2: Completion Source Policies
+// =============================================================================
+// Every challenge definition declares which progress sources count toward completion
+
+export type ChallengeCompletionPolicy = 
+  | 'earned_only'                    // ONLY in-app logged activity counts
+  | 'baseline_recognized'            // Baseline capability can satisfy (e.g., initial assessment)
+  | 'baseline_visible_not_completed' // Show baseline as reference but don't mark complete
+  | 'hybrid_with_source_label'       // Accept both but label source clearly in UI
+
+/**
+ * Default completion policy for each challenge category.
+ * Individual challenges can override via completionPolicy field.
+ */
+export const DEFAULT_COMPLETION_POLICIES: Record<ChallengeCategory, ChallengeCompletionPolicy> = {
+  weekly: 'earned_only',           // Weekly challenges require in-app activity
+  monthly: 'earned_only',          // Monthly challenges require in-app activity
+  seasonal: 'earned_only',         // Seasonal challenges require in-app activity
+  special: 'earned_only',          // Special challenges require in-app activity
+  skill: 'earned_only',            // Skill milestones must be logged in-app
+  strength: 'earned_only',         // Strength PRs must be logged in-app
+  time: 'earned_only',             // Timed challenges must be logged in-app
+  h2h: 'earned_only',              // H2H always requires in-app activity
+}
+
+/**
+ * Get the completion policy for a challenge.
+ * Uses challenge-specific policy if defined, otherwise falls back to category default.
+ */
+export function getCompletionPolicy(challenge: ChallengeDefinition | Challenge): ChallengeCompletionPolicy {
+  // Check for explicit policy on the challenge
+  if ('completionPolicy' in challenge && challenge.completionPolicy) {
+    return challenge.completionPolicy as ChallengeCompletionPolicy
+  }
+  // Fall back to category default
+  return DEFAULT_COMPLETION_POLICIES[challenge.category] || 'earned_only'
+}
+
 export interface ChallengeDefinition {
   baseId: string
   name: string
@@ -49,6 +88,9 @@ export interface ChallengeDefinition {
   timeLimit?: number
   // For one-time challenges that don't repeat
   oneTime?: boolean
+  // [baseline-earned-truth] TASK 2: Explicit completion source policy
+  // Defaults to category default (usually 'earned_only') if not specified
+  completionPolicy?: ChallengeCompletionPolicy
 }
 
 export interface Challenge {
@@ -73,6 +115,8 @@ export interface Challenge {
   timeLimit?: number
   // For one-time challenges
   oneTime?: boolean
+  // [baseline-earned-truth] TASK 2: Completion source policy
+  completionPolicy?: ChallengeCompletionPolicy
 }
 
 export interface ChallengeProgress {

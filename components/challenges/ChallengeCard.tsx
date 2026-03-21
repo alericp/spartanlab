@@ -9,7 +9,9 @@ import {
   getChallengeTimeRemaining,
   CHALLENGE_CATEGORY_LABELS,
   GOAL_TYPE_LABELS,
+  getCompletionPolicy,
 } from '@/lib/challenges/challenge-definitions'
+import { Info } from 'lucide-react'
 
 // Icon mapping
 const CHALLENGE_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -99,6 +101,21 @@ export function ChallengeCard({ challenge, progress, percentComplete, compact = 
   const colors = CATEGORY_COLORS[challenge.category] || CATEGORY_COLORS.weekly
   const isComplete = progress.completed
   
+  // [baseline-earned-truth] ISSUE F: Check if progress is from baseline vs earned
+  const progressSource = progress.progressSource
+  const isBaselineOnly = progressSource === 'baseline'
+  const policy = getCompletionPolicy(challenge)
+  
+  // [baseline-earned-truth] TASK 6: Determine completion label based on source
+  const getCompletionLabel = () => {
+    if (!isComplete) return null
+    if (isBaselineOnly && policy === 'baseline_recognized') {
+      return 'Recognized'
+    }
+    return 'Complete'
+  }
+  const completionLabel = getCompletionLabel()
+  
   if (compact) {
     return (
       <div className={`p-3 rounded-lg border ${isComplete ? 'bg-emerald-500/10 border-emerald-500/20' : `${colors.bg} ${colors.border}`}`}>
@@ -116,7 +133,8 @@ export function ChallengeCard({ challenge, progress, percentComplete, compact = 
                 {challenge.name}
               </span>
               <span className="text-xs text-[#6B7280] whitespace-nowrap">
-                {isComplete ? 'Complete' : `${progress.currentValue}/${challenge.goalValue}`}
+                {/* [baseline-earned-truth] TASK 6: Show appropriate status */}
+                {isComplete ? (completionLabel || 'Complete') : `${progress.currentValue}/${challenge.goalValue}`}
               </span>
             </div>
             <Progress 
@@ -166,9 +184,10 @@ export function ChallengeCard({ challenge, progress, percentComplete, compact = 
               <span>{timeRemaining.label}</span>
             </div>
           )}
+          {/* [baseline-earned-truth] TASK 6: Distinguish completion source */}
           {isComplete && (
             <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400">
-              Complete
+              {completionLabel || 'Complete'}
             </span>
           )}
         </div>

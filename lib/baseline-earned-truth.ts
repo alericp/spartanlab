@@ -544,6 +544,108 @@ export function getProgressCountsWithSources(): {
 }
 
 // =============================================================================
+// [baseline-earned-truth] TASK 8: VALIDATION / INVARIANT CHECKS
+// =============================================================================
+
+export interface TruthValidationResult {
+  valid: boolean
+  violations: string[]
+  warnings: string[]
+}
+
+/**
+ * Validate that baseline/earned truth model is internally consistent.
+ * Call this to detect trust leaks.
+ * 
+ * [baseline-earned-truth] TASK 8: Invariant enforcement
+ */
+export function validateTruthIntegrity(): TruthValidationResult {
+  const summary = getBaselineVsEarnedSummary()
+  const violations: string[] = []
+  const warnings: string[] = []
+  
+  // INVARIANT 1: If no earned workouts, earned metrics should be null/zero
+  if (!summary.hasEarnedProgress) {
+    if (summary.earned.earnedPullUpMax !== null && summary.earned.earnedPullUpMax > 0) {
+      violations.push('INVARIANT_VIOLATION: earnedPullUpMax > 0 but hasEarnedProgress is false')
+    }
+    if (summary.earned.earnedDipMax !== null && summary.earned.earnedDipMax > 0) {
+      violations.push('INVARIANT_VIOLATION: earnedDipMax > 0 but hasEarnedProgress is false')
+    }
+    if (summary.earned.totalWorkoutsCompleted > 0) {
+      violations.push('INVARIANT_VIOLATION: totalWorkoutsCompleted > 0 but hasEarnedProgress is false')
+    }
+  }
+  
+  // INVARIANT 2: Earned dates should be after baseline capture
+  if (summary.earned.firstWorkoutDate && summary.baseline.capturedAt) {
+    // This is actually fine - workouts can be logged before baseline was captured
+    // Just log as info
+  }
+  
+  // WARNING: If baseline exists but no profile data
+  if (summary.hasBaselineOnly && 
+      summary.baseline.pullUpMax === null && 
+      summary.baseline.dipMax === null &&
+      Object.keys(summary.baseline.skillLevels).length === 0) {
+    warnings.push('WARNING: hasBaselineOnly true but no baseline metrics recorded')
+  }
+  
+  console.log('[baseline-earned-truth] Truth integrity validation:', {
+    valid: violations.length === 0,
+    violations,
+    warnings,
+    hasEarnedProgress: summary.hasEarnedProgress,
+    hasBaselineOnly: summary.hasBaselineOnly,
+  })
+  
+  return {
+    valid: violations.length === 0,
+    violations,
+    warnings,
+  }
+}
+
+/**
+ * Check if displaying a completion/achievement from a given source would be misleading.
+ * Use this before rendering "Complete" badges.
+ * 
+ * [baseline-earned-truth] TASK 8: Prevent trust leaks in UI
+ */
+export function isCompletionDisplaySafe(params: {
+  isCompleted: boolean
+  progressSource: 'earned' | 'baseline' | 'mixed' | undefined
+  challengeCategory: string
+  policyOverride?: 'earned_only' | 'baseline_recognized'
+}): { safe: boolean; reason?: string; suggestedLabel?: string } {
+  const { isCompleted, progressSource, challengeCategory, policyOverride } = params
+  
+  if (!isCompleted) {
+    return { safe: true }
+  }
+  
+  const policy = policyOverride || (
+    ['weekly', 'monthly', 'time', 'h2h'].includes(challengeCategory) ? 'earned_only' : 'earned_only'
+  )
+  
+  // If policy is earned_only but source is baseline, this is a trust leak
+  if (policy === 'earned_only' && progressSource === 'baseline') {
+    console.log('[baseline-earned-truth] UI trust leak detected:', {
+      challengeCategory,
+      progressSource,
+      policy,
+    })
+    return { 
+      safe: false, 
+      reason: 'Completion marked but source is baseline-only with earned_only policy',
+      suggestedLabel: 'Baseline capability'
+    }
+  }
+  
+  return { safe: true }
+}
+
+// =============================================================================
 // INITIALIZATION
 // =============================================================================
 
@@ -556,10 +658,13 @@ export function initializeBaselineTracking(): void {
   
   // Capture baseline if not already captured
   if (!hasBaselineCapability()) {
-    console.log('[baseline-vs-earned] First-time baseline capture')
+    console.log('[baseline-earned-truth] First-time baseline capture')
     captureBaselineCapability()
   }
   
   // Always recalculate earned progress
   calculateEarnedProgress()
+  
+  // [baseline-earned-truth] TASK 8: Run validation on init
+  validateTruthIntegrity()
 }

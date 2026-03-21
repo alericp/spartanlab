@@ -130,6 +130,9 @@ function normalizeSession(rawSession: AdaptiveSession | null | undefined): Adapt
       selectionReason: ex?.selectionReason || '',
       // [prescription-render] TASK 2: Preserve prescribedLoad through snapshot/read path
       prescribedLoad: ex?.prescribedLoad,
+      // [weighted-prescription-truth] ISSUE E: Preserve targetRPE and restSeconds
+      targetRPE: ex?.targetRPE,
+      restSeconds: ex?.restSeconds,
       // Preserve other optional fields that might exist
       method: ex?.method,
       methodLabel: ex?.methodLabel,
@@ -137,6 +140,8 @@ function normalizeSession(rawSession: AdaptiveSession | null | undefined): Adapt
       wasAdapted: ex?.wasAdapted,
       source: ex?.source,
       progressionDecision: ex?.progressionDecision,
+      // [coach-meta-survival] TASK 5: Preserve coachingMeta through workout normalization
+      coachingMeta: ex?.coachingMeta,
     }
     
     // [prescription-render] TASK 6: Log if prescribedLoad exists
@@ -146,6 +151,15 @@ function normalizeSession(rawSession: AdaptiveSession | null | undefined): Adapt
         load: normalized.prescribedLoad.load,
         unit: normalized.prescribedLoad.unit,
         confidence: normalized.prescribedLoad.confidenceLevel,
+      })
+    }
+    
+    // [coach-meta-survival] Log coaching meta survival
+    if (normalized.coachingMeta) {
+      console.log('[coach-meta-survival] Preserved coachingMeta in workout normalization:', {
+        exerciseName: normalized.name,
+        expressionMode: normalized.coachingMeta.expressionMode,
+        loadDecision: normalized.coachingMeta.loadDecisionSummary,
       })
     }
     
@@ -429,6 +443,24 @@ function WorkoutSessionContent() {
       mounted = false
     }
   }, [dayParam, demoMode, isFirstSession])
+  
+  // [freshness-sync] TASK 3: Listen for snapshot replacement events
+  // If a new program replaces the old one, we should NOT be showing stale session data
+  useEffect(() => {
+    if (demoMode) return // Demo mode doesn't care about freshness
+    
+    const handleSnapshotReplaced = () => {
+      console.log('[surface-drift] Workout session received snapshot-replaced event - session may be stale')
+      // Don't auto-reload during active workout to avoid losing progress
+      // Just log the drift - user will see fresh data on next visit
+    }
+    
+    window.addEventListener('spartanlab:snapshot-replaced', handleSnapshotReplaced)
+    
+    return () => {
+      window.removeEventListener('spartanlab:snapshot-replaced', handleSnapshotReplaced)
+    }
+  }, [demoMode])
   
   const handleComplete = () => {
     router.push('/dashboard?workout=completed')

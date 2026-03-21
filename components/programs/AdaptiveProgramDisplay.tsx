@@ -282,6 +282,29 @@ export function AdaptiveProgramDisplay({
           </div>
         )}
         
+        {/* [planner-truth-audit] TASK 10: Audit warning banner - minimal, truthful */}
+        {program.plannerTruthAudit?.shouldWarn && program.plannerTruthAudit.warnings?.length > 0 && (
+          <div className="mt-4 p-3 rounded-lg border bg-amber-500/5 border-amber-500/20">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0 text-amber-400" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-amber-400 mb-1">
+                  Program Quality Notice
+                </p>
+                <p className="text-xs text-[#A5A5A5]">
+                  {program.plannerTruthAudit.recommendations?.[0] || 
+                   'Some preferences may not be fully reflected. Consider reviewing your profile settings.'}
+                </p>
+                {program.plannerTruthAudit.overallScore !== undefined && (
+                  <p className="text-[10px] text-[#6A6A6A] mt-1">
+                    Alignment score: {program.plannerTruthAudit.overallScore}/100
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+        
         {/* Why This Plan - Canonical Explanation */}
         {program.explanationMetadata && (
           <div className="mt-4">

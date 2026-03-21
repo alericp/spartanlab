@@ -63,13 +63,9 @@ import { getAthleteProfile } from './data-service'
 import { 
   getCanonicalProfile, 
   logCanonicalProfileState, 
-  validateProfileForGeneration, 
-  getValidatedCanonicalProfile,
-  // [profile-completeness] ISSUE E: Engine field consumption verification
-  getEngineFieldConsumption,
-  verifyEngineFieldWiring,
-  getProfileSignature,
-  hasLoadableEquipment,
+  type ProfileSnapshot,
+  composeCanonicalPlannerInput,
+  validateBuilderDisplayTruth,
 } from './canonical-profile-service'
 import { buildGenerationInput, getSystemStateFlags, type GenerationMode, type ProfileSnapshot } from './program-state-contract'
 import { normalizeProfile, computeLimiter, dedupeExercises, type NormalizedProfile } from './profile-normalizer'
@@ -111,6 +107,8 @@ import { evaluateExerciseProgression, type ProgressionDecision as SimpleProgress
 import { generateSessionVariants, type SessionVariant } from './session-compression-engine'
 import { analyzeEquipmentProfile, adaptSessionForEquipment, getEquipmentRecommendations, type EquipmentProfile } from './equipment-adaptation-engine'
 import { GOAL_LABELS } from './program-service'
+// [planner-truth-audit] TASK 7: Final audit for generic shell detection
+import { runPlannerTruthAudit, getAuditGatingResult, type PlannerTruthAuditReport, type AuditSeverity } from './planner-truth-audit'
 import { getQuickFatigueDecision, getEnhancedFatigueDecision, type TrainingDecision, type SessionAdjustments } from './fatigue-decision-engine'
 import { getDeloadRecommendation, type FatigueSignalSummary } from './fatigue/deload-system'
 import { 
@@ -353,6 +351,8 @@ import {
   logSupportWorkMapping,
   // TASK 6: Weekly load balancing
   analyzeWeekLoadBalance,
+  // [coach-layer] TASK 2: Coaching metadata builder
+  buildExerciseCoachingMeta,
   type GoalHierarchyWeights,
   type SessionDistribution,
   type RankedBottleneck,
@@ -531,6 +531,17 @@ export interface AdaptiveExercise {
     targetReps?: number       // Target reps for this prescription
     intensityBand?: 'strength' | 'support_volume' | 'hypertrophy'
     notes?: string[]          // Context/coaching notes
+  }
+  // [weighted-prescription-truth] ISSUE E: RPE and rest metadata for coaching truth
+  targetRPE?: number          // Target RPE for this exercise
+  restSeconds?: number        // Recommended rest in seconds between sets
+  // [coach-layer] TASK 1: Structured coaching metadata for coach-like display
+  coachingMeta?: {
+    expressionMode: string           // direct, technical, strength_support, etc.
+    progressionIntent: string        // skill_expression, strength_building, etc.
+    skillSupportTargets: string[]    // Skills this exercise supports
+    loadDecisionSummary: string      // "Weighted (+35 lb)" or "Bodyweight today"
+    restLabel?: string               // "90-120s" or "2-3 min"
   }
 }
 
@@ -889,6 +900,22 @@ exerciseExplanations?: {
     experienceLevel: string | null
     createdAt: string
   }
+  // [planner-input-truth] TASK 5: Generation input provenance for debugging truth chain
+  generationInputProvenance?: {
+    fallbacksUsed: string[]
+    overridesApplied: string[]
+    composedAt: string
+  }
+  // [planner-truth-audit] Final audit result for generic shell detection
+  plannerTruthAudit?: {
+    severity: AuditSeverity
+    overallScore: number
+    failureReasons: string[]
+    warnings: string[]
+    recommendations: string[]
+    canSave: boolean
+    shouldWarn: boolean
+  }
 }
 
 // =============================================================================
@@ -1116,6 +1143,25 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
   
   console.log('[program-generate] Starting adaptive program generation')
   console.log('[program-generate] STAGE: initializing')
+  
+  // [planner-input-truth] TASK 5: Compose resolved input with provenance tracking
+  // This ensures we have a traceable snapshot of what inputs were actually used
+  const composedInput = composeCanonicalPlannerInput({
+    primaryGoal: inputs.primaryGoal,
+    secondaryGoal: inputs.secondaryGoal,
+    experienceLevel: inputs.experienceLevel,
+    trainingDaysPerWeek: typeof inputs.trainingDaysPerWeek === 'number' ? inputs.trainingDaysPerWeek : undefined,
+    sessionLength: inputs.sessionLength,
+    scheduleMode: inputs.scheduleMode,
+    sessionDurationMode: inputs.sessionDurationMode,
+    equipment: inputs.equipment,
+  })
+  
+  console.log('[planner-input-truth] Generation input provenance:', {
+    fallbacksUsed: composedInput.fallbacksUsed,
+    overridesApplied: composedInput.overridesApplied,
+    composedAt: composedInput.composedAt,
+  })
   
   // STATE CONTRACT: Get system state flags to determine generation context
   const stateFlags = getSystemStateFlags()
@@ -2313,14 +2359,62 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
   // ISSUE A: Stage tracking for validation complete
   currentStage = 'validation_complete'
   console.log('[program-generate] STAGE: validation_complete')
-  console.log('[program-generate] Generation complete:', { 
-    sessionCount: sessions.length, 
-    primaryGoal,
+console.log('[program-generate] Generation complete:', {
+  sessionCount: sessions.length,
+  primaryGoal,
+  totalExercises,
+  dbVerifiedExercises,
+  dbCoverage: totalExercises > 0 ? `${Math.round((dbVerifiedExercises / totalExercises) * 100)}%` : 'N/A',
+  scheduleMode: inputScheduleMode,
+  selectedSkillsCount: expandedContext.selectedSkills.length,
+  })
+  
+  // [selected-skill-exposure] TASK 7: Weekly skill exposure summary
+  // This tracks how well selected skills received meaningful expression across the week
+  const skillExposureSummary: Record<string, { direct: number; technical: number; support: number; total: number }> = {}
+  
+  for (const session of sessions) {
+    for (const exercise of session.exercises || []) {
+      const trace = exercise.selectionTrace
+      if (trace?.influencingSkills) {
+        for (const skillInfluence of trace.influencingSkills) {
+          if (!skillExposureSummary[skillInfluence.skillId]) {
+            skillExposureSummary[skillInfluence.skillId] = { direct: 0, technical: 0, support: 0, total: 0 }
+          }
+          skillExposureSummary[skillInfluence.skillId].total++
+          if (trace.primarySelectionReason?.includes('direct')) {
+            skillExposureSummary[skillInfluence.skillId].direct++
+          } else if (trace.primarySelectionReason?.includes('technical')) {
+            skillExposureSummary[skillInfluence.skillId].technical++
+          } else if (trace.primarySelectionReason?.includes('support')) {
+            skillExposureSummary[skillInfluence.skillId].support++
+          }
+        }
+      }
+    }
+  }
+  
+  // Count weighted exercises
+  const weightedExerciseCount = sessions.reduce((sum, s) => 
+    sum + (s.exercises || []).filter(e => e.prescribedLoad && e.prescribedLoad.load > 0).length, 0
+  )
+  
+  console.log('[selected-skill-exposure] WEEKLY SUMMARY:', {
+    selectedSkills: expandedContext.selectedSkills,
+    skillExposureSummary,
     totalExercises,
-    dbVerifiedExercises,
-    dbCoverage: totalExercises > 0 ? `${Math.round((dbVerifiedExercises / totalExercises) * 100)}%` : 'N/A',
-    scheduleMode: inputScheduleMode,
-    selectedSkillsCount: expandedContext.selectedSkills.length,
+    weightedExerciseCount,
+    doctrineHitCount: sessions.reduce((sum, s) => 
+      sum + (s.exercises || []).filter(e => e.selectionTrace?.doctrineSource).length, 0
+    ),
+  })
+  
+  // [weighted-win-logic] Log weighted exercise presence
+  console.log('[weighted-win-logic] Weekly weighted summary:', {
+    weightedExerciseCount,
+    weightedPercentage: totalExercises > 0 ? `${Math.round((weightedExerciseCount / totalExercises) * 100)}%` : '0%',
+    hasLoadableEquipment: hasLoadableEquipment(equipment),
+    hasBenchmarks: !!weightedBenchmarks?.weightedPullUp || !!weightedBenchmarks?.weightedDip,
   })
   
   // FLEXIBLE SCHEDULING: Use resolved schedule data
@@ -3255,9 +3349,15 @@ return explanations.length > 0 ? explanations : undefined
     },
     // STATE CONTRACT: Generation mode used
     generationMode,
-    // [program-alignment] TASK 5: Profile signature for drift detection
-    profileSignature: getProfileSignature(),
-    // [program-profile-validate] TASK 6: Run validation after generation
+  // [program-alignment] TASK 5: Profile signature for drift detection
+  profileSignature: getProfileSignature(),
+  // [planner-input-truth] TASK 5: Generation input provenance
+  generationInputProvenance: {
+    fallbacksUsed: composedInput.fallbacksUsed,
+    overridesApplied: composedInput.overridesApplied,
+    composedAt: composedInput.composedAt,
+  },
+  // [program-profile-validate] TASK 6: Run validation after generation
     profileValidation: (() => {
       try {
         // Build a temporary program object for validation
@@ -3300,6 +3400,57 @@ return explanations.length > 0 ? explanations : undefined
         }
       } catch (err) {
         console.error('[program-profile-validate] Validation failed:', err)
+        return undefined
+      }
+    })(),
+    // [planner-truth-audit] TASK 1 & 7: Run final audit for generic shell detection
+    plannerTruthAudit: (() => {
+      try {
+        // Build temporary program for audit
+        const tempProgram = {
+          id: `adaptive-${Date.now()}`,
+          createdAt: new Date().toISOString(),
+          primaryGoal,
+          secondaryGoal: secondaryGoal || canonicalProfile.secondaryGoal,
+          goalLabel: GOAL_LABELS[primaryGoal],
+          sessions,
+          scheduleMode: finalScheduleMode,
+          weekNumber: 1,
+          programRationale,
+        } as unknown as AdaptiveProgram
+        
+        const auditReport = runPlannerTruthAudit(tempProgram, canonicalProfile)
+        const gating = getAuditGatingResult(auditReport)
+        
+        console.log('[planner-truth-audit] Final audit complete:', {
+          severity: auditReport.severity,
+          overallScore: auditReport.overallScore,
+          canSave: gating.canSave,
+          failureCount: auditReport.failureReasons.length,
+          warningCount: auditReport.warnings.length,
+        })
+        
+        // Log generic shell detection specifically
+        if (auditReport.genericShellAudit.isGenericShell) {
+          console.warn('[generic-shell-detect] Week flagged as generic shell:', {
+            genericityScore: auditReport.genericShellAudit.genericityScore,
+            primaryGoalDominance: auditReport.genericShellAudit.primaryGoalDominance,
+            underExpressedSkills: auditReport.genericShellAudit.selectedSkillUnderExpression,
+            familyRepetition: auditReport.genericShellAudit.exerciseFamilyRepetition,
+          })
+        }
+        
+        return {
+          severity: auditReport.severity,
+          overallScore: auditReport.overallScore,
+          failureReasons: auditReport.failureReasons,
+          warnings: auditReport.warnings,
+          recommendations: auditReport.recommendations,
+          canSave: gating.canSave,
+          shouldWarn: gating.shouldWarn,
+        }
+      } catch (err) {
+        console.error('[planner-truth-audit] Audit failed:', err)
         return undefined
       }
     })(),
@@ -3487,6 +3638,10 @@ function getSkillsForSession(
   // This creates variety across sessions - not every session is max effort
   const sessionType = getSessionTypeForPosition(sessionIndex, totalSessions)
   
+  // [selection-compression-fix] TASK 2: Track which skills get expression this session
+  // to ensure weekly exposure guarantees are met
+  const skillExposureThisSession: string[] = []
+  
   for (const allocation of weightedAllocation) {
     const { skill, weight, exposureSessions, priorityLevel } = allocation
     
@@ -3503,27 +3658,53 @@ function getSkillsForSession(
         expressionMode,
         weight,
       })
+      skillExposureThisSession.push(skill)
       continue
     }
     
-    // Secondary skills appear in most sessions as technical or support
+    // [selection-compression-fix] ISSUE B: Secondary skills MUST appear more often
+    // This is the key fix for "selected skills don't affect the week"
     if (priorityLevel === 'secondary' || weight >= 0.15) {
-      // Check if this session should include this secondary skill
-      // Based on exposureSessions vs totalSessions ratio
-      const shouldInclude = exposureSessions >= totalSessions || 
-        sessionIndex < exposureSessions ||
-        (sessionIndex % 2 === 0) // Even sessions get secondary skills
+      // [selection-compression-fix] TASK 2: Stronger inclusion logic for secondary skills
+      // Secondary skills should appear in at least 70% of sessions
+      const minSessionsForSecondary = Math.max(Math.ceil(totalSessions * 0.7), exposureSessions)
+      const shouldInclude = sessionIndex < minSessionsForSecondary || 
+        exposureSessions >= totalSessions ||
+        (sessionIndex % 2 === 0) // Even sessions always get secondary skills
       
       if (shouldInclude) {
-        // [advanced-skill-expression] ISSUE B: Advanced secondary skills can have technical slot
-        const expressionMode = isAdvanced && advancedFamily?.technicalSlotWeight > 0.3
-          ? 'technical'
-          : (dayFocus.includes('support') ? 'support' : 'technical')
+        // [selection-compression-fix] TASK 4: Session role affects secondary skill expression mode
+        // Different day types should produce different expression modes
+        let expressionMode: 'primary' | 'technical' | 'support' | 'warmup' = 'technical'
+        
+        if (isAdvanced && advancedFamily?.technicalSlotWeight > 0.3) {
+          expressionMode = 'technical'
+        } else if (dayFocus.includes('support') || dayFocus.includes('recovery')) {
+          expressionMode = 'support'
+        } else if (dayFocus.includes('skill') && sessionIndex % 2 === 1) {
+          // Alternate sessions give secondary skill primary-ish expression
+          expressionMode = 'technical'
+        } else if (dayFocus.includes('strength')) {
+          // Strength days: secondary skills get support work
+          expressionMode = 'support'
+        } else {
+          expressionMode = 'technical'
+        }
         
         result.push({
           skill,
           expressionMode,
           weight,
+        })
+        skillExposureThisSession.push(skill)
+        
+        // [selected-skill-exposure] Log secondary skill inclusion
+        console.log('[selected-skill-exposure] Secondary skill included:', {
+          skill,
+          sessionIndex,
+          expressionMode,
+          dayFocus,
+          reason: 'secondary_skill_guarantee',
         })
       }
       continue
@@ -3618,6 +3799,18 @@ function getSkillsForSession(
       }
     }
   }
+  
+  // [selected-skill-exposure] TASK 7: Log session skill allocation summary
+  console.log('[selected-skill-exposure] Session allocation summary:', {
+    sessionIndex,
+    totalSessions,
+    dayFocus,
+    sessionType,
+    allocatedSkills: result.map(r => `${r.skill}(${r.expressionMode}:${Math.round(r.weight * 100)}%)`),
+    primaryExpressed: result.filter(r => r.expressionMode === 'primary').map(r => r.skill),
+    technicalExpressed: result.filter(r => r.expressionMode === 'technical').map(r => r.skill),
+    supportExpressed: result.filter(r => r.expressionMode === 'support').map(r => r.skill),
+  })
   
   return result
 }
@@ -3852,6 +4045,48 @@ function generateAdaptiveSession(
       }
     }
     
+    // [weighted-prescription-truth] TASK 8: Log prescription survival at session assembly
+    const exercisesWithPrescription = validatedSession.exercises.filter(
+      (e: AdaptiveExercise) => e.prescribedLoad && e.prescribedLoad.load > 0
+    )
+    if (exercisesWithPrescription.length > 0) {
+      console.log('[weighted-prescription-truth] Session has prescribed loads:', {
+        dayNumber: day.dayNumber,
+        dayFocus: day.focus,
+        exercisesWithLoads: exercisesWithPrescription.map((e: AdaptiveExercise) => ({
+          name: e.name,
+          id: e.id,
+          load: `+${e.prescribedLoad?.load} ${e.prescribedLoad?.unit}`,
+          confidence: e.prescribedLoad?.confidenceLevel,
+          basis: e.prescribedLoad?.basis,
+        })),
+      })
+    } else {
+      // Log why no weighted prescriptions exist
+      const weightedCapableExercises = validatedSession.exercises.filter(
+        (e: AdaptiveExercise) => 
+          e.id?.includes('weighted_pull') || 
+          e.id?.includes('weighted_dip') ||
+          e.name?.toLowerCase().includes('weighted')
+      )
+      if (weightedCapableExercises.length > 0) {
+        console.log('[weighted-prescription-truth] Weighted-capable exercises WITHOUT prescriptions:', {
+          dayNumber: day.dayNumber,
+          exercises: weightedCapableExercises.map((e: AdaptiveExercise) => e.name),
+          reason: 'prescribedLoad field is missing or zero - check if weightedBenchmarks were passed',
+        })
+      }
+    }
+
+    // [coach-meta-survival] Log coaching meta at session assembly
+    const exercisesWithCoaching = validatedSession.exercises.filter((e: AdaptiveExercise) => e.coachingMeta)
+    console.log('[coach-meta-survival] Session assembly - coaching meta check:', {
+      dayNumber: day.dayNumber,
+      totalExercises: validatedSession.exercises.length,
+      withCoachingMeta: exercisesWithCoaching.length,
+      sampleMeta: exercisesWithCoaching[0]?.coachingMeta,
+    })
+
     return {
       dayNumber: day.dayNumber,
       dayLabel: `Day ${day.dayNumber}`,
@@ -4026,32 +4261,80 @@ function mapToAdaptiveExercises(
       repsOrTime: s.repsOrTime,
       note: s.note,
       isOverrideable: s.isOverrideable,
-      selectionReason: s.selectionReason,
-      source: 'database' as const, // DB enforcement: all exercises sourced from adaptive-exercise-pool
-      method,
-      methodLabel: getMethodLabel(method),
-      progressionDecision,
-      // WEIGHTED LOAD PR: Include prescribed load if available from exercise selection
-      prescribedLoad: s.prescribedLoad,
+    selectionReason: s.selectionReason,
+    source: 'database' as const, // DB enforcement: all exercises sourced from adaptive-exercise-pool
+    method,
+    methodLabel: getMethodLabel(method),
+    progressionDecision,
+    // WEIGHTED LOAD PR: Include prescribed load if available from exercise selection
+    prescribedLoad: s.prescribedLoad,
+    // [weighted-prescription-truth] ISSUE E: Pass through RPE and rest metadata
+    targetRPE: s.targetRPE,
+    restSeconds: s.restSeconds,
+    // [coach-layer] TASK 2: Build coaching metadata from selection trace
+    coachingMeta: buildExerciseCoachingMetaFromSelection(s, primaryGoal),
     }
   }).filter((e): e is AdaptiveExercise => e !== null)
+}
+
+/**
+ * [coach-layer] TASK 2: Map selection data to coaching metadata
+ * This converts raw selection trace into user-meaningful coaching info
+ */
+function buildExerciseCoachingMetaFromSelection(
+  selection: SelectedExercise,
+  primaryGoal: PrimaryGoal
+): AdaptiveExercise['coachingMeta'] {
+  const category = selection.exercise?.category || 'accessory'
+  const isWeighted = !!(selection.prescribedLoad?.load && selection.prescribedLoad.load > 0)
+  const hasLoadableEquipment = true // Assume true if we got here
+  const hasBenchmarkData = selection.prescribedLoad?.basis === 'current_benchmark' || 
+                           selection.prescribedLoad?.basis === 'pr_reference'
   
-  // [prescription-render] TASK 6: Log prescription data in builder output
-  const exercisesWithLoads = exercises.filter(e => e.prescribedLoad && e.prescribedLoad.load > 0)
-  if (exercisesWithLoads.length > 0) {
-    console.log('[prescription-render] Builder output exercises with prescribedLoad:', {
-      sessionDay: day,
-      count: exercisesWithLoads.length,
-      exercises: exercisesWithLoads.map(e => ({
-        name: e.name,
-        load: e.prescribedLoad?.load,
-        unit: e.prescribedLoad?.unit,
-        confidence: e.prescribedLoad?.confidenceLevel,
-      })),
-    })
+  // Derive prescription mode from intensity band if available
+  const prescriptionMode = selection.prescribedLoad?.intensityBand || 
+    (category === 'skill' ? 'skill_expression' : 'strength_building')
+  
+  // Extract skill targets from exercise's transferTo field or use primary goal
+  const skillTargets: string[] = (selection.exercise?.transferTo?.length ?? 0) > 0
+    ? selection.exercise!.transferTo 
+    : [primaryGoal]
+  
+  // Build using the canonical contract
+  const meta = buildExerciseCoachingMeta({
+    exerciseCategory: category,
+    selectionReason: selection.selectionReason || '',
+    prescriptionMode,
+    isWeighted,
+    loadValue: selection.prescribedLoad?.load,
+    loadUnit: selection.prescribedLoad?.unit,
+    hasLoadableEquipment,
+    hasBenchmarkData,
+    targetRPE: selection.targetRPE,
+    restSeconds: selection.restSeconds,
+    skillTargets,
+    isRecoveryDay: false,
+  })
+  
+  // Format rest label
+  const restLabel = meta.restGuidance?.label || (selection.restSeconds 
+    ? `${Math.round(selection.restSeconds / 60)}-${Math.round(selection.restSeconds / 60) + 1} min`
+    : undefined)
+  
+  console.log('[coach-meta-survival] Built coaching meta for:', {
+    exercise: selection.exercise?.name,
+    expressionMode: meta.expressionMode,
+    progressionIntent: meta.progressionIntent,
+    loadDecision: meta.loadDecision.summary,
+  })
+  
+  return {
+    expressionMode: meta.expressionMode,
+    progressionIntent: meta.progressionIntent,
+    skillSupportTargets: meta.skillSupportTargets,
+    loadDecisionSummary: meta.loadDecision.summary,
+    restLabel,
   }
-  
-  return exercises
 }
 
 // =============================================================================
@@ -4355,6 +4638,10 @@ export function deleteAdaptiveProgram(id: string): boolean {
 // =============================================================================
 
 export function getDefaultAdaptiveInputs(): AdaptiveProgramInputs {
+  // [planner-input-truth] TASK 1: Use canonical composer for truthful planner inputs
+  // This ensures all inputs are composed from canonical profile with provenance tracking
+  const composedInput = composeCanonicalPlannerInput()
+  
   // CANONICAL FIX: Use the unified canonical profile instead of split sources
   // This ensures metrics, goals, and schedule preferences all come from one truth
   const canonicalProfile = getCanonicalProfile()
@@ -4362,6 +4649,11 @@ export function getDefaultAdaptiveInputs(): AdaptiveProgramInputs {
   
   // Log canonical state for debugging
   logCanonicalProfileState('getDefaultAdaptiveInputs called')
+  
+  // [planner-input-truth] Log composition provenance
+  if (composedInput.fallbacksUsed.length > 0) {
+    console.log('[planner-input-truth] Fallbacks used in composition:', composedInput.fallbacksUsed)
+  }
   
   // TASK 4: Read canonical goals from saved profile, not stale program state
   // Determine primary goal from CanonicalProfile

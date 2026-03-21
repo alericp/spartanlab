@@ -114,6 +114,20 @@ export default function TodaySessionPage() {
     }
   }, [mounted, loadData])
 
+  // [freshness-sync] TASK 3: Listen for snapshot replacement and reload data
+  useEffect(() => {
+    const handleSnapshotReplaced = () => {
+      console.log('[freshness-sync] Today page received snapshot-replaced event - reloading data')
+      loadData()
+    }
+    
+    window.addEventListener('spartanlab:snapshot-replaced', handleSnapshotReplaced)
+    
+    return () => {
+      window.removeEventListener('spartanlab:snapshot-replaced', handleSnapshotReplaced)
+    }
+  }, [loadData])
+
   const handleWellnessChange = (newWellness: WellnessState) => {
     setWellnessState(newWellness)
     setUseAdjusted(null)

@@ -39,6 +39,11 @@ export function ChallengeCard({ challenge, className, compact = false }: Challen
   const Icon = iconMap[challenge.icon || 'target'] || Target
   const isCompleted = challenge.isCompleted || challenge.completed
   
+  // [baseline-earned-truth] TASK 6: Baseline-satisfied should NOT look completed
+  // Only truly earned completions get the "complete" visual treatment
+  const isEarnedComplete = isCompleted && challenge.completionSource !== 'baseline_satisfied'
+  const isBaselineSatisfied = challenge.completionSource === 'baseline_satisfied'
+  
   // Format time remaining
   const formatTimeRemaining = () => {
     if (!challenge.timeRemaining) {
@@ -68,14 +73,16 @@ export function ChallengeCard({ challenge, className, compact = false }: Challen
     <div
       className={cn(
         'relative overflow-hidden rounded-xl border transition-all duration-200',
-        isCompleted
+        isEarnedComplete
           ? 'bg-gradient-to-br from-amber-500/10 to-amber-600/5 border-amber-500/30'
-          : 'bg-[#1A1D23] border-[#2A2F38] hover:border-[#3A3F48]',
+          : isBaselineSatisfied
+            ? 'bg-[#1A1D23] border-[#2A2F38] border-dashed' // Dashed border for baseline
+            : 'bg-[#1A1D23] border-[#2A2F38] hover:border-[#3A3F48]',
         className
       )}
     >
-      {/* Completed overlay glow */}
-      {isCompleted && (
+      {/* Completed overlay glow - only for earned */}
+      {isEarnedComplete && (
         <div className="absolute inset-0 bg-gradient-to-r from-amber-500/5 via-transparent to-amber-500/5" />
       )}
       
@@ -88,7 +95,7 @@ export function ChallengeCard({ challenge, className, compact = false }: Challen
               className={cn(
                 'flex items-center justify-center rounded-lg',
                 compact ? 'w-8 h-8' : 'w-10 h-10',
-                isCompleted
+                isEarnedComplete
                   ? 'bg-amber-500/20'
                   : 'bg-[#2A2F38]'
               )}
@@ -96,7 +103,7 @@ export function ChallengeCard({ challenge, className, compact = false }: Challen
               <Icon
                 className={cn(
                   compact ? 'w-4 h-4' : 'w-5 h-5',
-                  isCompleted ? 'text-amber-400' : 'text-[#9CA3AF]'
+                  isEarnedComplete ? 'text-amber-400' : 'text-[#9CA3AF]'
                 )}
               />
             </div>
@@ -121,19 +128,19 @@ export function ChallengeCard({ challenge, className, compact = false }: Challen
           </div>
           
           {/* Status/Timer */}
-          {/* [baseline-earned-truth] ISSUE E: Show completion source label */}
+          {/* [baseline-earned-truth] TASK 6: Show completion source with appropriate labeling */}
           <div className="flex items-center gap-1.5 shrink-0">
-            {isCompleted ? (
-              <span className={cn(
-                "flex items-center gap-1 text-xs font-medium",
-                challenge.completionSource === 'baseline_satisfied' 
-                  ? "text-[#6B7280]" 
-                  : "text-amber-400"
-              )}>
+            {isCompleted && challenge.completionSource !== 'baseline_satisfied' ? (
+              <span className="flex items-center gap-1 text-xs font-medium text-amber-400">
                 <CheckCircle2 className="w-3.5 h-3.5" />
-                {challenge.completionSource === 'baseline_satisfied' 
-                  ? "Baseline met" 
-                  : "Earned"}
+                Earned
+              </span>
+            ) : challenge.completionSource === 'baseline_satisfied' ? (
+              // [baseline-earned-truth] TASK 6: Baseline-satisfied shows different state
+              // Not a "Complete" badge - just indicates starting capability
+              <span className="flex items-center gap-1 text-xs text-[#6B7280]">
+                <span className="w-2 h-2 rounded-full bg-[#6B7280]" />
+                Profile baseline
               </span>
             ) : (
               <span className="flex items-center gap-1 text-xs text-[#6B7280]">
@@ -159,16 +166,17 @@ export function ChallengeCard({ challenge, className, compact = false }: Challen
             </span>
             <span className={cn(
               'font-medium',
-              isCompleted ? 'text-amber-400' : 'text-[#E6E9EF]'
+              isEarnedComplete ? 'text-amber-400' : isBaselineSatisfied ? 'text-[#6B7280]' : 'text-[#E6E9EF]'
             )}>
               {challenge.progressPercent}%
+              {isBaselineSatisfied && ' (baseline)'}
             </span>
           </div>
           <Progress
             value={challenge.progressPercent}
             className={cn(
               'h-2',
-              isCompleted ? '[&>div]:bg-amber-500' : ''
+              isEarnedComplete ? '[&>div]:bg-amber-500' : isBaselineSatisfied ? '[&>div]:bg-[#4B5563]' : ''
             )}
           />
         </div>

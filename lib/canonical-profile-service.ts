@@ -1045,6 +1045,222 @@ export function resolveCanonicalPlannerInput(): {
   }
 }
 
+// =============================================================================
+// [planner-input-truth] TASK 1: CANONICAL PLANNER INPUT COMPOSER WITH PROVENANCE
+// =============================================================================
+
+export type FieldSource = 'canonical' | 'builder_override' | 'fallback'
+
+export interface PlannerInputProvenance {
+  field: string
+  source: FieldSource
+  canonicalValue: unknown
+  usedValue: unknown
+  overrideReason?: string
+}
+
+export interface ComposedPlannerInput {
+  // Final resolved values
+  primaryGoal: string | null
+  secondaryGoal: string | null
+  experienceLevel: 'beginner' | 'intermediate' | 'advanced'
+  scheduleMode: 'static' | 'flexible'
+  sessionDurationMode: 'static' | 'adaptive'
+  trainingDaysPerWeek: number | 'flexible' | null
+  sessionLengthMinutes: number
+  selectedSkills: string[]
+  equipmentAvailable: string[]
+  jointCautions: string[]
+  trainingPathType: string
+  goalCategories: string[]
+  selectedFlexibility: string[]
+  
+  // Provenance tracking
+  provenance: PlannerInputProvenance[]
+  fallbacksUsed: string[]
+  overridesApplied: string[]
+  
+  // Meta
+  composedAt: string
+  canonicalProfileId: string
+}
+
+/**
+ * [planner-input-truth] TASK 1: Canonical planner input composer
+ * 
+ * Composes the final planner input by merging:
+ * 1. Canonical profile truth (highest priority)
+ * 2. Builder overrides (for explicit user changes in builder)
+ * 3. Safe defaults (only for truly missing fields)
+ * 
+ * All composition is logged and traceable via provenance array.
+ */
+export function composeCanonicalPlannerInput(
+  builderOverrides?: Partial<{
+    primaryGoal: string
+    secondaryGoal: string
+    experienceLevel: 'beginner' | 'intermediate' | 'advanced'
+    trainingDaysPerWeek: number | 'flexible'
+    sessionLength: number
+    scheduleMode: 'static' | 'flexible'
+    sessionDurationMode: 'static' | 'adaptive'
+    equipment: string[]
+  }>
+): ComposedPlannerInput {
+  const profile = getCanonicalProfile()
+  const provenance: PlannerInputProvenance[] = []
+  const fallbacksUsed: string[] = []
+  const overridesApplied: string[] = []
+  
+  // Helper to track provenance
+  const resolve = <T>(
+    field: string,
+    canonicalValue: T | null | undefined,
+    overrideValue: T | null | undefined,
+    fallbackValue: T
+  ): T => {
+    if (overrideValue !== undefined && overrideValue !== null && overrideValue !== canonicalValue) {
+      provenance.push({
+        field,
+        source: 'builder_override',
+        canonicalValue,
+        usedValue: overrideValue,
+        overrideReason: 'Explicit builder selection',
+      })
+      overridesApplied.push(field)
+      return overrideValue
+    }
+    
+    if (canonicalValue !== undefined && canonicalValue !== null) {
+      provenance.push({
+        field,
+        source: 'canonical',
+        canonicalValue,
+        usedValue: canonicalValue,
+      })
+      return canonicalValue
+    }
+    
+    provenance.push({
+      field,
+      source: 'fallback',
+      canonicalValue,
+      usedValue: fallbackValue,
+    })
+    fallbacksUsed.push(field)
+    return fallbackValue
+  }
+  
+  const result: ComposedPlannerInput = {
+    primaryGoal: resolve('primaryGoal', profile.primaryGoal, builderOverrides?.primaryGoal, 'planche'),
+    secondaryGoal: resolve('secondaryGoal', profile.secondaryGoal, builderOverrides?.secondaryGoal, null),
+    experienceLevel: resolve('experienceLevel', profile.experienceLevel, builderOverrides?.experienceLevel, 'intermediate'),
+    scheduleMode: resolve('scheduleMode', profile.scheduleMode, builderOverrides?.scheduleMode, 'static'),
+    sessionDurationMode: resolve('sessionDurationMode', profile.sessionDurationMode, builderOverrides?.sessionDurationMode, 'static'),
+    trainingDaysPerWeek: profile.scheduleMode === 'flexible' 
+      ? 'flexible' 
+      : resolve('trainingDaysPerWeek', profile.trainingDaysPerWeek, builderOverrides?.trainingDaysPerWeek, 4),
+    sessionLengthMinutes: resolve('sessionLengthMinutes', profile.sessionLengthMinutes, builderOverrides?.sessionLength, 60),
+    selectedSkills: profile.selectedSkills || [],
+    equipmentAvailable: builderOverrides?.equipment || profile.equipmentAvailable || [],
+    jointCautions: profile.jointCautions || [],
+    trainingPathType: profile.trainingPathType || 'balanced',
+    goalCategories: profile.goalCategories || [],
+    selectedFlexibility: profile.selectedFlexibility || [],
+    
+    provenance,
+    fallbacksUsed,
+    overridesApplied,
+    composedAt: new Date().toISOString(),
+    canonicalProfileId: profile.userId || 'unknown',
+  }
+  
+  // [planner-input-truth] Log composition result
+  console.log('[planner-input-truth] Composed planner input:', {
+    canonicalSource: 'canonical-profile-service',
+    overridesApplied,
+    fallbacksUsed,
+    primaryGoal: result.primaryGoal,
+    scheduleMode: result.scheduleMode,
+    sessionDurationMode: result.sessionDurationMode,
+    equipmentCount: result.equipmentAvailable.length,
+    hasWeights: result.equipmentAvailable.includes('weights'),
+  })
+  
+  return result
+}
+
+/**
+ * [planner-input-truth] TASK 6: Validate builder display matches canonical truth
+ * 
+ * Detects when builder is displaying values that differ from canonical profile.
+ * This catches stale draft scenarios where UI shows old values.
+ */
+export function validateBuilderDisplayTruth(
+  displayedInputs: {
+    primaryGoal?: string
+    experienceLevel?: string
+    trainingDaysPerWeek?: number | 'flexible'
+    sessionLength?: number
+    scheduleMode?: string
+    equipment?: string[]
+  }
+): {
+  isAligned: boolean
+  driftedFields: string[]
+  recommendations: string[]
+} {
+  const profile = getCanonicalProfile()
+  const driftedFields: string[] = []
+  const recommendations: string[] = []
+  
+  // Check each displayed field against canonical
+  if (displayedInputs.primaryGoal && displayedInputs.primaryGoal !== profile.primaryGoal) {
+    driftedFields.push('primaryGoal')
+    recommendations.push(`Goal shows "${displayedInputs.primaryGoal}" but canonical is "${profile.primaryGoal}"`)
+  }
+  
+  if (displayedInputs.experienceLevel && displayedInputs.experienceLevel !== profile.experienceLevel) {
+    driftedFields.push('experienceLevel')
+  }
+  
+  if (displayedInputs.scheduleMode && displayedInputs.scheduleMode !== profile.scheduleMode) {
+    driftedFields.push('scheduleMode')
+    recommendations.push(`Schedule mode shows "${displayedInputs.scheduleMode}" but canonical is "${profile.scheduleMode}"`)
+  }
+  
+  // For static users, check training days
+  if (profile.scheduleMode === 'static' && 
+      typeof displayedInputs.trainingDaysPerWeek === 'number' &&
+      displayedInputs.trainingDaysPerWeek !== profile.trainingDaysPerWeek) {
+    driftedFields.push('trainingDaysPerWeek')
+  }
+  
+  if (displayedInputs.sessionLength && displayedInputs.sessionLength !== profile.sessionLengthMinutes) {
+    driftedFields.push('sessionLength')
+  }
+  
+  // Check equipment (simple length comparison for now)
+  if (displayedInputs.equipment && 
+      profile.equipmentAvailable &&
+      displayedInputs.equipment.length !== profile.equipmentAvailable.length) {
+    driftedFields.push('equipment')
+  }
+  
+  if (driftedFields.length > 0) {
+    console.warn('[builder-hydration-truth] Display drift detected:', {
+      driftedFields,
+      recommendations,
+    })
+  }
+  
+  return {
+    isAligned: driftedFields.length === 0,
+    driftedFields,
+    recommendations,
+  }
+}
+
 /**
  * REGRESSION GUARD: Check if canonical profile exists and is valid
  * 

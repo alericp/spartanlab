@@ -237,6 +237,7 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
   const availableEquipment: EquipmentType[] = ['floor', 'wall', ...profileEquipment.map(e => equipmentMap[e] || e).filter((e): e is EquipmentType => !!e)]
 
   // Get exercises to display based on variant selection
+  // [weighted-prescription-truth] Preserve prescribedLoad through variant mapping
   const displayExercises = selectedVariant !== null && session.variants?.[selectedVariant]
     ? session.variants[selectedVariant].selection.main.map(s => ({
         id: s.exercise.id,
@@ -247,6 +248,10 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
         note: s.note,
         isOverrideable: s.isOverrideable,
         selectionReason: s.selectionReason,
+        // Preserve prescription fields from variant selection
+        prescribedLoad: s.prescribedLoad,
+        targetRPE: s.targetRPE,
+        restSeconds: s.restSeconds,
       }))
     : session.exercises
 
@@ -666,6 +671,32 @@ function ExerciseRow({
           )}
         </div>
       </div>
+      
+      {/* [coach-layer] TASK 3: Coaching metadata display - appears above "Why this exercise?" */}
+      {!isWarmupCooldown && exercise.coachingMeta && (
+        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+          {/* Expression Mode Badge - capitalize and format nicely */}
+          <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#2A2A2A] text-[#A5A5A5] capitalize">
+            {exercise.coachingMeta.expressionMode.replace(/_/g, ' ')}
+          </span>
+          {/* Load Decision Summary - weighted gets highlight */}
+          {exercise.coachingMeta.loadDecisionSummary && (
+            <span className={`text-[10px] px-1.5 py-0.5 rounded ${
+              exercise.coachingMeta.loadDecisionSummary.toLowerCase().includes('weighted') 
+                ? 'bg-[#E63946]/10 text-[#E63946]' 
+                : 'bg-[#3A3A3A] text-[#8A8A8A]'
+            }`}>
+              {exercise.coachingMeta.loadDecisionSummary}
+            </span>
+          )}
+          {/* Rest Guidance - only show if we have meaningful rest data */}
+          {exercise.coachingMeta.restLabel && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#3A3A3A] text-[#8A8A8A]">
+              Rest: {exercise.coachingMeta.restLabel}
+            </span>
+          )}
+        </div>
+      )}
       
       {/* Selection Reason (expandable) with Knowledge Bubble */}
       {!isWarmupCooldown && (exercise.selectionReason || hasKnowledge) && (

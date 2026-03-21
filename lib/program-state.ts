@@ -308,6 +308,154 @@ export function clearLastBuildAttemptResult(): void {
 }
 
 // =============================================================================
+// FRESHNESS SYNC - TASK 1: Canonical freshness identity for cross-surface consistency
+// =============================================================================
+
+/**
+ * [freshness-sync] TASK 1: Canonical identity that all surfaces must compare against
+ * This ensures builder, program page, workout page, and today page all see the same snapshot
+ */
+export interface ProgramFreshnessIdentity {
+  /** Unique program ID */
+  programId: string
+  /** When this program was generated */
+  generatedAt: string
+  /** Profile signature at build time - for staleness detection */
+  profileSignatureAtBuild: string
+  /** Monotonically increasing version for fast equality checks */
+  snapshotVersion: number
+}
+
+/** Storage key for the current freshness identity */
+const FRESHNESS_IDENTITY_KEY = 'spartanlab_program_freshness_identity'
+
+/** In-memory version counter for this session */
+let currentSnapshotVersion = Date.now()
+
+/**
+ * [freshness-sync] TASK 1: Get the current canonical freshness identity
+ * All surfaces should compare against this to detect drift
+ */
+export function getCurrentFreshnessIdentity(): ProgramFreshnessIdentity | null {
+  if (typeof window === 'undefined') return null
+  try {
+    const stored = localStorage.getItem(FRESHNESS_IDENTITY_KEY)
+    if (!stored) return null
+    return JSON.parse(stored) as ProgramFreshnessIdentity
+  } catch {
+    return null
+  }
+}
+
+/**
+ * [freshness-sync] TASK 2: Update the canonical freshness identity after successful save
+ * This triggers cache invalidation across all surfaces
+ */
+export function updateFreshnessIdentity(
+  programId: string,
+  generatedAt: string,
+  profileSignature: string
+): ProgramFreshnessIdentity {
+  currentSnapshotVersion = Date.now()
+  
+  const identity: ProgramFreshnessIdentity = {
+    programId,
+    generatedAt,
+    profileSignatureAtBuild: profileSignature,
+    snapshotVersion: currentSnapshotVersion,
+  }
+  
+  if (typeof window !== 'undefined') {
+    localStorage.setItem(FRESHNESS_IDENTITY_KEY, JSON.stringify(identity))
+    
+    // [freshness-sync] TASK 4: Dispatch event for all surfaces to invalidate stale state
+    console.log('[freshness-sync] Dispatching snapshot-replaced event:', {
+      programId,
+      snapshotVersion: currentSnapshotVersion,
+    })
+    window.dispatchEvent(new CustomEvent('spartanlab:snapshot-replaced', { 
+      detail: identity 
+    }))
+  }
+  
+  return identity
+}
+
+/**
+ * [freshness-sync] TASK 6: Check if a cached/displayed program matches current canonical identity
+ * Returns drift info if there's a mismatch
+ */
+export function checkFreshnessDrift(displayedProgramId: string | undefined): {
+  hasDrift: boolean
+  currentIdentity: ProgramFreshnessIdentity | null
+  driftReason?: string
+} {
+  const currentIdentity = getCurrentFreshnessIdentity()
+  
+  if (!currentIdentity) {
+    // No canonical identity - can't detect drift
+    return { hasDrift: false, currentIdentity: null }
+  }
+  
+  if (!displayedProgramId) {
+    return { 
+      hasDrift: true, 
+      currentIdentity,
+      driftReason: 'surface_has_no_program_but_canonical_exists'
+    }
+  }
+  
+  if (displayedProgramId !== currentIdentity.programId) {
+    console.warn('[surface-drift] Detected drift:', {
+      displayed: displayedProgramId,
+      canonical: currentIdentity.programId,
+    })
+    return { 
+      hasDrift: true, 
+      currentIdentity,
+      driftReason: `program_id_mismatch: displayed=${displayedProgramId} canonical=${currentIdentity.programId}`
+    }
+  }
+  
+  return { hasDrift: false, currentIdentity }
+}
+
+/**
+ * [freshness-sync] TASK 4: Clear any stale cached state
+ * Called when a new snapshot replaces the old one
+ */
+export function invalidateStaleCaches(): void {
+  if (typeof window === 'undefined') return
+  
+  // Clear any session-level caches that might hold stale data
+  const staleCacheKeys = [
+    'spartanlab_builder_draft',
+    'spartanlab_workout_session_cache',
+    'spartanlab_today_session_cache',
+  ]
+  
+  staleCacheKeys.forEach(key => {
+    if (localStorage.getItem(key)) {
+      console.log('[freshness-sync] Invalidating stale cache:', key)
+      localStorage.removeItem(key)
+    }
+  })
+  
+  // Also clear sessionStorage caches
+  const sessionStaleCacheKeys = [
+    'spartanlab_current_session',
+    'spartanlab_workout_state',
+  ]
+  
+  sessionStaleCacheKeys.forEach(key => {
+    if (sessionStorage.getItem(key)) {
+      console.log('[freshness-sync] Invalidating sessionStorage cache:', key)
+      sessionStorage.removeItem(key)
+    }
+  })
+}
+
+// =============================================================================
 // MIGRATION HELPERS - Handle old storage keys
 // =============================================================================
 
@@ -663,6 +811,10 @@ export function getProgramState(): ProgramState {
     }
     
     // TASK 7: Enhanced diagnostic for debugging program snapshot state
+    // [freshness-sync] TASK 6: Include freshness identity in diagnostic
+    const currentFreshness = getCurrentFreshnessIdentity()
+    const freshnessAligned = currentFreshness?.programId === adaptiveProgram?.id
+    
     console.log('[ProgramState] TASK 4: getProgramState read source:', {
       source: adaptiveProgram ? 'adaptiveProgram' : legacyProgram ? 'legacyProgram' : 'none',
       hasUsableWorkoutProgram,
@@ -671,7 +823,17 @@ export function getProgramState(): ProgramState {
       programId: adaptiveProgram?.id || 'none',
       primaryGoal: adaptiveProgram?.primaryGoal || legacyProgram?.primaryGoal || 'none',
       goalLabel: adaptiveProgram?.goalLabel || 'none',
+      freshnessAligned,
+      currentFreshnessId: currentFreshness?.programId || 'none',
     })
+    
+    // [freshness-sync] Log drift warning if detected
+    if (adaptiveProgram && currentFreshness && !freshnessAligned) {
+      console.warn('[surface-drift] Program read may be stale - freshness mismatch:', {
+        storedProgramId: adaptiveProgram.id,
+        canonicalFreshnessId: currentFreshness.programId,
+      })
+    }
     
     return {
       hasProgram,

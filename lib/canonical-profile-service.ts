@@ -1634,6 +1634,121 @@ export function getEngineFieldConsumption(profile?: CanonicalProgrammingProfile)
 // =============================================================================
 
 /**
+ * [program-alignment] TASK 5: Profile signature for tracking what profile state a program was built from.
+ * This lightweight signature allows detecting when canonical profile has changed since program generation.
+ */
+export interface ProfileSignature {
+  primaryGoal: string | null
+  secondaryGoal: string | null
+  scheduleMode: string | null
+  trainingDaysPerWeek: number | null
+  sessionLengthMinutes: number | null
+  equipmentHash: string
+  hasLoadableEquipment: boolean
+  experienceLevel: string | null
+  createdAt: string
+}
+
+/**
+ * [program-alignment] TASK 5: Generate a profile signature from canonical profile.
+ * Store this with generated programs to enable reliable drift detection.
+ */
+export function getProfileSignature(): ProfileSignature {
+  const profile = getCanonicalProfile()
+  const equipment = (profile.equipmentAvailable || []).sort()
+  
+  const signature: ProfileSignature = {
+    primaryGoal: profile.primaryGoal,
+    secondaryGoal: profile.secondaryGoal || null,
+    scheduleMode: profile.scheduleMode,
+    trainingDaysPerWeek: profile.trainingDaysPerWeek,
+    sessionLengthMinutes: profile.sessionLengthMinutes,
+    equipmentHash: equipment.join(','),
+    hasLoadableEquipment: hasLoadableEquipment(equipment),
+    experienceLevel: profile.experienceLevel,
+    createdAt: new Date().toISOString(),
+  }
+  
+  console.log('[program-alignment] Generated profile signature:', {
+    primaryGoal: signature.primaryGoal,
+    scheduleMode: signature.scheduleMode,
+    sessionLength: signature.sessionLengthMinutes,
+    equipmentCount: equipment.length,
+    hasLoadableEquipment: signature.hasLoadableEquipment,
+  })
+  
+  return signature
+}
+
+/**
+ * [program-alignment] TASK 5: Compare stored profile signature against current canonical profile.
+ * Returns true if they match (program is aligned), false if drifted.
+ */
+export function isProfileSignatureAligned(storedSignature: ProfileSignature | null | undefined): {
+  aligned: boolean
+  driftedFields: string[]
+  summary: string
+} {
+  if (!storedSignature) {
+    return {
+      aligned: false,
+      driftedFields: ['no_signature'],
+      summary: 'Program was built before signature tracking',
+    }
+  }
+  
+  const currentSignature = getProfileSignature()
+  const driftedFields: string[] = []
+  
+  if (currentSignature.primaryGoal !== storedSignature.primaryGoal) {
+    driftedFields.push('primaryGoal')
+  }
+  if (currentSignature.scheduleMode !== storedSignature.scheduleMode) {
+    driftedFields.push('scheduleMode')
+  }
+  if (currentSignature.trainingDaysPerWeek !== storedSignature.trainingDaysPerWeek) {
+    driftedFields.push('trainingDaysPerWeek')
+  }
+  if (currentSignature.sessionLengthMinutes !== storedSignature.sessionLengthMinutes) {
+    driftedFields.push('sessionLength')
+  }
+  if (currentSignature.equipmentHash !== storedSignature.equipmentHash) {
+    driftedFields.push('equipment')
+  }
+  if (currentSignature.hasLoadableEquipment !== storedSignature.hasLoadableEquipment) {
+    driftedFields.push('loadableEquipment')
+  }
+  
+  const aligned = driftedFields.length === 0
+  let summary = 'Program matches current settings'
+  
+  if (!aligned) {
+    if (driftedFields.includes('primaryGoal')) {
+      summary = 'Your primary goal has changed since this program was built.'
+    } else if (driftedFields.includes('equipment') || driftedFields.includes('loadableEquipment')) {
+      summary = 'Your equipment settings have changed since this program was built.'
+    } else {
+      summary = `Settings changed: ${driftedFields.join(', ')}`
+    }
+  }
+  
+  console.log('[program-alignment] Signature alignment check:', {
+    aligned,
+    driftedFields,
+    current: {
+      primaryGoal: currentSignature.primaryGoal,
+      equipmentHash: currentSignature.equipmentHash.slice(0, 30) + '...',
+    },
+    stored: {
+      primaryGoal: storedSignature.primaryGoal,
+      equipmentHash: storedSignature.equipmentHash?.slice(0, 30) + '...',
+    },
+  })
+  
+  return { aligned, driftedFields, summary }
+}
+
+/**
  * Drift field with comparison info
  */
 export interface DriftField {

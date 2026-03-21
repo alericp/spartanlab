@@ -562,13 +562,6 @@ function ExerciseRow({
   const safeSets = exercise.sets ?? 3
   const safeReps = exercise.repsOrTime || '8-12'
   
-  // [coach-meta-survival] Log coaching meta arrival at UI
-  console.log('[v0] [coach-meta-survival] ExerciseRow received:', {
-    name: safeName,
-    hasCoachingMeta: !!exercise.coachingMeta,
-    coachingMeta: exercise.coachingMeta,
-  })
-  
   const hasRPE = !isWarmupCooldown && exerciseSupportsRPE(safeName)
   const exerciseId = safeName.toLowerCase().replace(/[\s-]+/g, '_')
   const hasKnowledge = hasExerciseKnowledge(exerciseId)

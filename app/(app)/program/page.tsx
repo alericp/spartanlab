@@ -29,6 +29,7 @@ import {
   validateBuilderDisplayTruth,
 } from '@/lib/canonical-profile-service'
 // [program-rebuild-truth] Import rebuild result contract for truthful error handling
+// [freshness-sync] TASK 1 & 2: Import freshness identity management for cross-surface consistency
 import {
   type BuildAttemptResult,
   type BuildAttemptSubCode,
@@ -38,6 +39,8 @@ import {
   getLastBuildAttemptResult,
   clearLastBuildAttemptResult,
   createProfileSignature,
+  updateFreshnessIdentity,
+  invalidateStaleCaches,
 } from '@/lib/program-state'
 
 // TASK 5: Lazy load heavy components to prevent SSR/hydration crashes
@@ -535,8 +538,23 @@ export default function ProgramPage() {
           throw new Error('save_verification_failed: Program not readable after save')
         }
         console.log('[program-build] STAGE 6b: Save verification PASSED', {
-          readBackId: savedState.adaptiveProgram?.id,
-          matchesNew: savedState.adaptiveProgram?.id === newProgram.id,
+        readBackId: savedState.adaptiveProgram?.id,
+        matchesNew: savedState.adaptiveProgram?.id === newProgram.id,
+        })
+        
+        // [freshness-sync] STAGE 6c: Update freshness identity and invalidate stale caches
+        generationStage = 'freshness_sync'
+        console.log('[freshness-sync] STAGE 6c: Updating canonical freshness identity...')
+        const profileSigForFreshness = createProfileSignature(inputs)
+        invalidateStaleCaches()
+        updateFreshnessIdentity(
+          newProgram.id,
+          newProgram.createdAt,
+          profileSigForFreshness
+        )
+        console.log('[snapshot-replace] Atomic replacement complete with freshness sync', {
+          programId: newProgram.id,
+          createdAt: newProgram.createdAt,
         })
         
         // [program-build] STAGE 7: Update UI state
@@ -728,6 +746,22 @@ export default function ProgramPage() {
           throw new Error('save_verification_failed: Program not readable after save')
         }
         console.log('[program-build] REGEN STAGE 7b: Save verification PASSED')
+        
+        // [freshness-sync] REGEN STAGE 7c: Update freshness identity and invalidate stale caches
+        regenerateStage = 'freshness_sync'
+        console.log('[freshness-sync] REGEN STAGE 7c: Updating canonical freshness identity...')
+        const regenProfileSig = inputs ? createProfileSignature(inputs) : 'unknown'
+        invalidateStaleCaches()
+        updateFreshnessIdentity(
+          newProgram.id,
+          newProgram.createdAt,
+          regenProfileSig
+        )
+        console.log('[snapshot-replace] REGEN: Atomic replacement complete with freshness sync', {
+          programId: newProgram.id,
+          createdAt: newProgram.createdAt,
+          previousProgramId: program?.id,
+        })
         
         // [program-rebuild-truth] REGEN STAGE 8: Update UI state
         regenerateStage = 'updating_ui'

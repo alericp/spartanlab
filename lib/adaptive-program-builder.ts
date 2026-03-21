@@ -588,6 +588,17 @@ export interface AdaptiveProgram {
     balanceIssues: string[]
     suggestions: string[]
   }
+  // [prescription] ISSUE F: Weighted strength prescription summary
+  weightedStrengthPrescription?: {
+    hasWeightedData: boolean
+    pullUpPrescribed: boolean
+    dipPrescribed: boolean
+    pullUpLoad?: string  // e.g., "+25 lbs" or "BW"
+    dipLoad?: string
+    prescriptionMode?: string  // e.g., "strength_primary", "strength_support"
+    dataSource: 'current_benchmark' | 'pr_reference' | 'no_data'
+    summary: string
+  }
   // Athlete calibration context from onboarding
   calibrationContext?: {
   isCalibrated: boolean
@@ -2375,6 +2386,53 @@ fatigueDecision: fatigueDecision ? {
     balanceIssues: weeklyLoadBalance.balanceIssues.slice(0, 2), // Top 2 issues
     suggestions: weeklyLoadBalance.suggestions.slice(0, 2),
   } : undefined,
+  // [prescription] ISSUE F: Weighted strength prescription summary
+  weightedStrengthPrescription: (() => {
+    const pullUp = weightedBenchmarks.weightedPullUp
+    const dip = weightedBenchmarks.weightedDip
+    const hasPullUpData = !!(pullUp?.current?.addedWeight || pullUp?.pr?.load)
+    const hasDipData = !!(dip?.current?.addedWeight || dip?.pr?.load)
+    const hasAnyData = hasPullUpData || hasDipData
+    
+    // Determine data source based on what's available
+    const dataSource: 'current_benchmark' | 'pr_reference' | 'no_data' = 
+      pullUp?.current?.addedWeight || dip?.current?.addedWeight ? 'current_benchmark' :
+      pullUp?.pr?.load || dip?.pr?.load ? 'pr_reference' : 'no_data'
+    
+    // Build summary string
+    const summaryParts: string[] = []
+    if (hasPullUpData) {
+      const load = pullUp?.current?.addedWeight ?? 
+        (pullUp?.pr?.load ? Math.round(pullUp.pr.load * 0.7) : 0)
+      const unit = pullUp?.current?.unit || pullUp?.pr?.unit || 'lbs'
+      summaryParts.push(`Weighted pull-up: +${load}${unit}`)
+    }
+    if (hasDipData) {
+      const load = dip?.current?.addedWeight ?? 
+        (dip?.pr?.load ? Math.round(dip.pr.load * 0.7) : 0)
+      const unit = dip?.current?.unit || dip?.pr?.unit || 'lbs'
+      summaryParts.push(`Weighted dip: +${load}${unit}`)
+    }
+    
+    console.log('[prescription] Weighted strength summary for program:', {
+      hasWeightedData: hasAnyData,
+      dataSource,
+      pullUpPrescribed: hasPullUpData,
+      dipPrescribed: hasDipData,
+    })
+    
+    return hasAnyData ? {
+      hasWeightedData: hasAnyData,
+      pullUpPrescribed: hasPullUpData,
+      dipPrescribed: hasDipData,
+      pullUpLoad: hasPullUpData ? 
+        `+${pullUp?.current?.addedWeight ?? Math.round((pullUp?.pr?.load ?? 0) * 0.7)} ${pullUp?.current?.unit || pullUp?.pr?.unit || 'lbs'}` : undefined,
+      dipLoad: hasDipData ?
+        `+${dip?.current?.addedWeight ?? Math.round((dip?.pr?.load ?? 0) * 0.7)} ${dip?.current?.unit || dip?.pr?.unit || 'lbs'}` : undefined,
+      dataSource,
+      summary: summaryParts.length > 0 ? summaryParts.join('; ') : 'No weighted benchmark data',
+    } : undefined
+  })(),
   // Constraint improvement tracking (populated async - may be undefined initially)
   constraintImprovementData,
     // Training Principles Engine emphasis
@@ -3654,11 +3712,13 @@ function generateProgramRationale(
     parts.push('Consider introducing new stimuli if progress stalls.')
   }
   
-  // Strength support awareness (new from engine)
+  // [prescription] ISSUE F: Weighted strength support with actual prescription awareness
   if (engineCtx.strengthSupportLevel === 'insufficient') {
     parts.push('Additional emphasis on weighted strength work to build foundational support.')
   } else if (engineCtx.strengthSupportLevel === 'developing') {
     parts.push('Continue building support strength alongside skill work.')
+  } else if (engineCtx.strengthSupportLevel === 'sufficient' || engineCtx.strengthSupportLevel === 'strong') {
+    parts.push('Weighted strength maintained to support skill development.')
   }
   
   // Recovery consideration (enhanced with fatigue state)

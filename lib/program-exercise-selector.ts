@@ -456,21 +456,36 @@ export function selectExercisesForSession(inputs: ExerciseSelectionInputs): Exer
   const antiBloatResult = validateSessionAntiBloat(mainLoadMetadata, sessionStyle)
   const loadRationale = generateSessionLoadRationale(sessionLoadSummary, sessionStyle)
   
-  return {
-    warmup,
-    main,
-    cooldown,
-    totalEstimatedTime,
-    sessionLoadSummary,
-    sessionStyle,
-    loadRationale,
-    antiBloatValidation: {
-      isValid: antiBloatResult.isValid,
-      issues: antiBloatResult.issues,
-      suggestions: antiBloatResult.suggestions,
-    },
+  // [prescription] TASK 7: Log weighted exercises with prescriptions for debugging
+  const weightedWithLoads = main.filter(e => e.prescribedLoad && e.prescribedLoad.load > 0)
+  if (weightedWithLoads.length > 0) {
+    console.log('[prescription] Session weighted exercise prescriptions:', {
+      dayFocus: day.focus,
+      exercises: weightedWithLoads.map(e => ({
+        id: e.exercise.id,
+        load: `+${e.prescribedLoad?.load} ${e.prescribedLoad?.unit}`,
+        basis: e.prescribedLoad?.basis,
+        confidence: e.prescribedLoad?.confidenceLevel,
+      })),
+      skillsExpressed: skillsForSession?.map(s => s.skill) || [],
+    })
   }
-}
+  
+  return {
+  warmup,
+  main,
+  cooldown,
+  totalEstimatedTime,
+  sessionLoadSummary,
+  sessionStyle,
+  loadRationale,
+  antiBloatValidation: {
+  isValid: antiBloatResult.isValid,
+  issues: antiBloatResult.issues,
+  suggestions: antiBloatResult.suggestions,
+  },
+  }
+  }
 
 // =============================================================================
 // EXERCISE BUDGET
@@ -757,13 +772,44 @@ function selectMainExercises(
         : null
       
       if (benchmarkData) {
-        // Determine prescription mode based on rep target
+        // [prescription] ISSUE D: Session role affects prescription mode
+        // Both rep target AND day focus influence the prescription
         const repsStr = finalRepsOrTime || '5'
         const repTarget = parseInt(repsStr.split('-')[0]) || 5
-        const prescriptionMode: WeightedPrescriptionMode = 
-          repTarget <= 5 ? 'strength_primary' :
-          repTarget <= 6 ? 'strength_support' :
-          repTarget <= 10 ? 'volume_support' : 'hypertrophy'
+        
+        // Determine if this is a heavier strength day based on focus
+        const isHeavyStrengthDay = day.focus === 'push_strength' || day.focus === 'pull_strength'
+        const isSupportDay = day.focus === 'support_recovery' || day.focus === 'support_conditioning'
+        const isSkillDay = day.focus === 'skill' || day.focus === 'push_skill' || day.focus === 'pull_skill'
+        
+        // [prescription] Session role modifies prescription mode
+        let prescriptionMode: WeightedPrescriptionMode
+        if (isHeavyStrengthDay) {
+          // Heavy strength days: bias toward heavier loads regardless of rep scheme
+          prescriptionMode = repTarget <= 6 ? 'strength_primary' : 'strength_support'
+        } else if (isSupportDay) {
+          // Support days: bias toward volume/hypertrophy
+          prescriptionMode = repTarget <= 8 ? 'volume_support' : 'hypertrophy'
+        } else if (isSkillDay) {
+          // Skill days: weighted work is support - moderate intensity
+          prescriptionMode = repTarget <= 5 ? 'strength_support' : 'volume_support'
+        } else {
+          // Mixed/default: use rep-based logic
+          prescriptionMode = 
+            repTarget <= 5 ? 'strength_primary' :
+            repTarget <= 6 ? 'strength_support' :
+            repTarget <= 10 ? 'volume_support' : 'hypertrophy'
+        }
+        
+        // [prescription] Log how session role influences load
+        console.log('[prescription] Session role → prescription mode:', {
+          exerciseId: finalExercise.id,
+          dayFocus: day.focus,
+          repTarget,
+          prescriptionMode,
+          hasBenchmark: !!benchmarkData.current,
+          hasPR: !!benchmarkData.pr,
+        })
         
         const loadPrescription = estimateWeightedLoadPrescription(
           exerciseType,

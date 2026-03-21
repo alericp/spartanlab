@@ -5,10 +5,13 @@ import {
   type Challenge,
   type ChallengeProgress,
   type ChallengeReward,
+  type ChallengeCompletionPolicy,
   getActiveChallenges,
   getChallengeById,
   markTierCompleted,
   getPeriodKeyForChallenge,
+  getCompletionPolicy,
+  DEFAULT_COMPLETION_POLICIES,
 } from './challenge-definitions'
 import { getWorkoutLogs } from '../workout-log-service'
 import { getSkillSessions } from '../skill-session-service'
@@ -22,6 +25,7 @@ import {
   isStrengthMilestoneEarned,
   shouldChallengeUseBaseline,
   getBaselineVsEarnedSummary,
+  validateTruthIntegrity,
 } from '../baseline-earned-truth'
 
 // =============================================================================
@@ -466,11 +470,133 @@ export function evaluateChallengeProgress(challenge: Challenge): number {
   }
 }
 
+// =============================================================================
+// [baseline-earned-truth] TASK 4: EMPTY-HISTORY SAFETY RULES
+// =============================================================================
+
+/**
+ * Check if a challenge completion should be blocked due to earned-only policy
+ * with no actual earned progress supporting it.
+ * 
+ * [earned-progress-gate] This is the core trust enforcement.
+ */
+function shouldBlockCompletionDueToPolicy(
+  challenge: Challenge,
+  currentValue: number,
+  goalValue: number
+): { blocked: boolean; reason?: string; progressSource: 'earned' | 'baseline' | 'mixed' } {
+  const policy = getCompletionPolicy(challenge)
+  const truthSummary = getBaselineVsEarnedSummary()
+  
+  console.log('[challenge-source-policy] Evaluating completion policy:', {
+    challengeId: challenge.id,
+    category: challenge.category,
+    policy,
+    currentValue,
+    goalValue,
+    hasEarnedProgress: truthSummary.hasEarnedProgress,
+    hasBaselineOnly: truthSummary.hasBaselineOnly,
+  })
+  
+  // If policy allows baseline, no blocking needed
+  if (policy === 'baseline_recognized') {
+    return { 
+      blocked: false, 
+      progressSource: truthSummary.hasEarnedProgress ? 'mixed' : 'baseline' 
+    }
+  }
+  
+  // For earned_only policy, check if there's actual earned progress
+  if (policy === 'earned_only') {
+    // Weekly/monthly/time challenges are tracked differently - they require workout count
+    if (challenge.category === 'weekly' || challenge.category === 'monthly' || challenge.category === 'time') {
+      // These are always earned via workout logs, no baseline concern
+      return { 
+        blocked: false, 
+        progressSource: 'earned' 
+      }
+    }
+    
+    // Skill/strength challenges need special handling
+    if (challenge.category === 'skill' || challenge.category === 'strength') {
+      // [earned-progress-gate] CRITICAL: If user has zero earned workouts,
+      // they cannot have earned this strength/skill milestone
+      if (!truthSummary.hasEarnedProgress) {
+        console.log('[earned-progress-gate] BLOCKED completion - no earned workouts:', {
+          challengeId: challenge.id,
+          currentValue,
+          goalValue,
+          reason: 'zero_earned_workouts',
+        })
+        return { 
+          blocked: true, 
+          reason: 'No in-app activity logged yet',
+          progressSource: 'baseline'
+        }
+      }
+      
+      // User has some earned progress - check if this specific metric is earned
+      if (challenge.exerciseType) {
+        const milestoneCheck = isStrengthMilestoneEarned(
+          challenge.exerciseType.replace('weighted_', '') as 'pull_ups' | 'dips' | 'push_ups',
+          challenge.goalValue
+        )
+        
+        if (!milestoneCheck.earned && milestoneCheck.baselineValue >= challenge.goalValue) {
+          console.log('[earned-progress-gate] BLOCKED - baseline satisfies but not earned:', {
+            challengeId: challenge.id,
+            earnedValue: milestoneCheck.currentEarned,
+            baselineValue: milestoneCheck.baselineValue,
+            goalValue: challenge.goalValue,
+          })
+          return { 
+            blocked: true, 
+            reason: 'Baseline capability - not yet logged in app',
+            progressSource: 'baseline'
+          }
+        }
+      }
+    }
+    
+    return { 
+      blocked: false, 
+      progressSource: 'earned' 
+    }
+  }
+  
+  // baseline_visible_not_completed - show progress but don't mark complete
+  if (policy === 'baseline_visible_not_completed') {
+    if (!truthSummary.hasEarnedProgress) {
+      return { 
+        blocked: true, 
+        reason: 'Awaiting in-app verification',
+        progressSource: 'baseline'
+      }
+    }
+  }
+  
+  return { blocked: false, progressSource: 'earned' }
+}
+
 // Evaluate all challenges and update progress
 export function evaluateAllChallenges(): {
   progress: ChallengeProgress[]
   newCompletions: Challenge[]
 } {
+  // [baseline-earned-truth] TASK 4: Run truth integrity check before evaluation
+  const truthCheck = validateTruthIntegrity()
+  if (truthCheck.violations.length > 0) {
+    console.warn('[earned-progress-gate] Truth integrity violations detected:', truthCheck.violations)
+  }
+  
+  // [baseline-earned-truth] TASK 4: Check empty history state
+  const truthSummary = getBaselineVsEarnedSummary()
+  const hasZeroEarnedWorkouts = !truthSummary.hasEarnedProgress
+  
+  if (hasZeroEarnedWorkouts) {
+    console.log('[earned-progress-gate] Empty history state - all earned_only challenges will be blocked from completion')
+  }
+  
   const challenges = getActiveChallenges()
   const existingProgress = getChallengeProgress()
   const existingCompletions = new Set(
@@ -482,7 +608,15 @@ export function evaluateAllChallenges(): {
   
   challenges.forEach(challenge => {
     const currentValue = evaluateChallengeProgress(challenge)
-    const isComplete = currentValue >= challenge.goalValue
+    
+    // [baseline-earned-truth] TASK 4: Apply empty-history safety rules
+    const policyCheck = shouldBlockCompletionDueToPolicy(challenge, currentValue, challenge.goalValue)
+    
+    // Raw completion check based on value
+    const valueMetGoal = currentValue >= challenge.goalValue
+    // Actual completion respects policy
+    const isComplete = valueMetGoal && !policyCheck.blocked
+    
     const wasComplete = existingCompletions.has(challenge.id)
     
     // Find existing progress or create new
@@ -496,6 +630,19 @@ export function evaluateAllChallenges(): {
         ? new Date().toISOString() 
         : existing?.completedAt,
       startedAt: existing?.startedAt || new Date().toISOString(),
+      // [baseline-earned-truth] TASK 7: Track progress source
+      progressSource: policyCheck.progressSource,
+    }
+    
+    // [baseline-earned-truth] Log progress source for debugging
+    if (policyCheck.blocked) {
+      console.log('[earned-progress-gate] Challenge progress blocked from completion:', {
+        challengeId: challenge.id,
+        currentValue,
+        goalValue: challenge.goalValue,
+        reason: policyCheck.reason,
+        progressSource: policyCheck.progressSource,
+      })
     }
     
     updatedProgress.push(progress)
@@ -697,37 +844,48 @@ export function getChallengesByPeriodWithProgress(period: 'weekly' | 'monthly'):
   const hours = Math.max(0, Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)))
   const minutes = Math.max(0, Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60)))
   
-  // [baseline-earned-truth] ISSUE B: Determine completion source
+  // [baseline-earned-truth] TASK 4/7: Determine completion source from progress record
   let completionSource: ChallengeCompletionSource = 'not_completed'
   let isEarnedProgress = false
   
   if (item.progress.completed) {
-    // Check if this is a strength/skill challenge that might be baseline-satisfied
-    const category = item.challenge.category
-    if (category === 'strength' || category === 'skill') {
-      // For strength/skill challenges, check if user has any earned workouts
-      // If no earned workouts, it's likely baseline-satisfied
-      if (!hasAnyEarnedWorkouts) {
-        completionSource = 'baseline_satisfied'
-        isEarnedProgress = false
-      } else {
-        // Has earned workouts - trust the completion as earned
-        completionSource = 'earned_in_app'
-        isEarnedProgress = true
-      }
-    } else {
-      // Weekly/monthly/timed challenges require in-app activity
+    // Progress record now carries the source
+    if (item.progress.progressSource === 'earned') {
       completionSource = 'earned_in_app'
       isEarnedProgress = true
+    } else if (item.progress.progressSource === 'baseline') {
+      // This shouldn't happen for earned_only challenges (they're blocked)
+      // but handle gracefully
+      completionSource = 'baseline_satisfied'
+      isEarnedProgress = false
+    } else {
+      // Mixed or legacy - check if user has earned workouts
+      if (hasAnyEarnedWorkouts) {
+        completionSource = 'earned_in_app'
+        isEarnedProgress = true
+      } else {
+        completionSource = 'baseline_satisfied'
+        isEarnedProgress = false
+      }
+    }
+  } else {
+    // Not completed - check if it's because policy blocked it
+    // (value met goal but baseline-only source)
+    const valueMetGoal = item.progress.currentValue >= item.challenge.goalValue
+    if (valueMetGoal && item.progress.progressSource === 'baseline') {
+      // Show as baseline_satisfied but not completed
+      completionSource = 'baseline_satisfied'
+      isEarnedProgress = false
     }
   }
   
-  console.log('[baseline-earned-truth] Challenge completion source:', {
+  console.log('[baseline-earned-truth] Challenge display source:', {
     challengeId: item.challenge.id,
     category: item.challenge.category,
     completed: item.progress.completed,
     completionSource,
-    hasAnyEarnedWorkouts,
+    progressSource: item.progress.progressSource,
+    valueMetGoal: item.progress.currentValue >= item.challenge.goalValue,
   })
   
   return {

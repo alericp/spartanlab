@@ -664,10 +664,12 @@ export function generateWarmUp(context: WarmUpGenerationContext): GeneratedWarmU
   // Add protocol time to total (max 2 protocols = max 8 min additional)
   const protocolMinutes = protocols.reduce((sum, p) => sum + p.protocol.durationMinutes, 0)
 
+  // ISSUE A FIX: Return deduplicated exercises in block, not raw selectedExercises
+  // This prevents downstream validation from needing to dedupe and surfacing "Removed duplicate"
   return {
     block: {
       focus,
-      exercises: selectedExercises,
+      exercises: deduplicatedExercises, // ISSUE A: Use deduplicated, not raw
       durationMinutes: duration.totalMinutes,
       rationale,
     },

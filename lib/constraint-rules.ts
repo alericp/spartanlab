@@ -42,6 +42,9 @@ export interface SkillSignalInputs {
   readinessStatus: ReadinessStatus | null
   holdTrend: 'improving' | 'stable' | 'declining' | 'insufficient_data'
   hasSkillData: boolean
+  // ISSUE D FIX: Total session history for clean-slate detection
+  // Users with < 3 sessions should not be flagged as "inconsistent"
+  totalSkillSessionsLogged?: number
 }
 
 export function evaluateSkillSignals(inputs: SkillSignalInputs): ConstraintSignal[] {
@@ -64,13 +67,18 @@ export function evaluateSkillSignals(inputs: SkillSignalInputs): ConstraintSigna
   }
   
   // Inconsistent Skill Exposure
-  if (inputs.sessionsThisWeek < THRESHOLDS.minSessionsPerWeek) {
+  // ISSUE D FIX: Only flag if user has meaningful skill session history
+  // Clean-slate users (0-2 total skill sessions) should not be classified as "inconsistent"
+  const totalSkillHistory = inputs.totalSkillSessionsLogged ?? 0
+  const hasEnoughSkillHistory = totalSkillHistory >= 3
+  
+  if (hasEnoughSkillHistory && inputs.sessionsThisWeek < THRESHOLDS.minSessionsPerWeek) {
     signals.push({
       type: 'inconsistent_skill_exposure',
       category: 'skill',
       score: inputs.sessionsThisWeek === 0 ? 6 : 4,
-      confidence: 'high',
-      rawMetrics: { sessionsThisWeek: inputs.sessionsThisWeek },
+      confidence: totalSkillHistory >= 6 ? 'high' : 'medium',
+      rawMetrics: { sessionsThisWeek: inputs.sessionsThisWeek, totalSkillHistory },
     })
   }
   

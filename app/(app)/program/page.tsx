@@ -787,31 +787,6 @@ export default function ProgramPage() {
           sessionCount: newProgram.sessions?.length || 0,
           replacedVisibleProgram: true,
         })
-        
-        // [build-report] STEP 11: High-signal build diagnostics
-        console.log('[build-report] Build attempt completed:', {
-          buildAttemptId: successResult.attemptId,
-          isInitialBuild: !program,
-          isRegenerate: !!program,
-          requestedInputs: {
-            primaryGoal: inputs?.primaryGoal,
-            trainingDaysPerWeek: inputs?.trainingDaysPerWeek,
-            sessionLength: inputs?.sessionLength,
-            scheduleMode: inputs?.scheduleMode,
-          },
-          builderReturnedSessionCount: newProgram.sessions?.length || 0,
-          sessionValidationPassed: (newProgram.sessions?.length || 0) > 0 && newProgram.sessions?.every(s => (s.exercises?.length || 0) > 0),
-          saveSucceeded: true,
-          activeIdentityBefore: program?.id || 'none',
-          activeIdentityAfter: newProgram.id,
-          staleCacheInvalidated: true,
-          displayedProgramMatchesSaved: true, // We just set it
-          mismatchFlags: {
-            dayCountMismatch: inputs?.trainingDaysPerWeek !== newProgram.sessions?.length,
-            sessionCountZero: (newProgram.sessions?.length || 0) === 0,
-            anyEmptySession: newProgram.sessions?.some(s => !s.exercises || s.exercises.length === 0) || false,
-          },
-        })
       } catch (err) {
         // [program-rebuild-truth] REGEN FAILURE: Extract classified error
         const isGenerationError = err && typeof err === 'object' && 'code' in err && 'stage' in err
@@ -863,30 +838,6 @@ export default function ProgramPage() {
           })
         }
         // Keep current program visible and intact - ISSUE B: don't corrupt state
-        
-        // [build-report] STEP 11: High-signal build diagnostics for failure
-        console.error('[build-report] Build attempt FAILED:', {
-          buildAttemptId: failedResult.attemptId,
-          isInitialBuild: !program,
-          isRegenerate: !!program,
-          failedAtStage: errorStage,
-          errorCode,
-          subCode,
-          requestedInputs: {
-            primaryGoal: inputs?.primaryGoal,
-            trainingDaysPerWeek: inputs?.trainingDaysPerWeek,
-            sessionLength: inputs?.sessionLength,
-            scheduleMode: inputs?.scheduleMode,
-          },
-          activeIdentityBefore: program?.id || 'none',
-          activeIdentityAfter: program?.id || 'none', // Unchanged on failure
-          staleCacheInvalidated: false, // Not invalidated on failure
-          lastGoodProgramPreserved: !!program,
-          mismatchFlags: {
-            buildAttemptFailed: true,
-            noNewProgramGenerated: true,
-          },
-        })
       } finally {
         // [program-build] GUARANTEED: Always reset loading state
         setIsGenerating(false)
@@ -1005,36 +956,12 @@ export default function ProgramPage() {
         trainingDaysChanged,
       })
       
-      // [adjustment-sync] STEP 8: Day count truth verification
-      // Detect if requested day count matches actual assembled session count
-      const requestedTrainingDays = request.newTrainingDays || updatedInputs.trainingDaysPerWeek
-      const assembledSessionCount = newProgram.sessions.length
-      const dayCountReconciled = requestedTrainingDays === assembledSessionCount
-      
-      console.log('[day-count-truth] Training days verification:', {
-        requestedTrainingDays,
-        resolvedTrainingDays: updatedInputs.trainingDaysPerWeek,
-        assembledSessionCount,
-        savedSessionCount: newProgram.sessions.length,
-        displayedSessionCount: newProgram.sessions.length, // Same at this point
-        dayCountReconciled,
-      })
-      
       // [adjustment-sync] Warn if session count didn't change when training days changed
       if (trainingDaysChanged && !sessionCountChanged) {
         console.warn('[adjustment-sync] WARNING: Training days changed but session count unchanged', {
           requestedDays: request.newTrainingDays,
           actualSessions: newProgram.sessions.length,
           reason: 'Builder may have adaptive logic reducing sessions',
-        })
-      }
-      
-      // [day-count-truth] Explicit warning if requested does not match assembled
-      if (!dayCountReconciled) {
-        console.warn('[day-count-truth] MISMATCH: Requested days does not equal assembled sessions', {
-          requested: requestedTrainingDays,
-          assembled: assembledSessionCount,
-          note: 'This may be intentional adaptive behavior - engine resolved to different count',
         })
       }
       

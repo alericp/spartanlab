@@ -375,8 +375,28 @@ export type {
   SkillExpressionCheck,
   ScheduleDurationCheck,
   WeightedPrescriptionCheck,
+  DisplayedStateDrift,
+  WeeklySkillExposureSummary,
+  ValidationSeverity,
+  PlannerInputTruth,
+  PlannerInputValidation,
+  ComprehensiveValidationReport,
+  ProfileSummary,
+  ProgramSummary,
 } from './program-profile-validator'
-export { validateProgramAgainstProfile, getValidationSummary } from './program-profile-validator'
+export { 
+  validateProgramAgainstProfile, 
+  getValidationSummary,
+  validateProgramWithDisplayState,
+  checkDisplayedStateDrift,
+  getWeeklySkillExposureSummary,
+  revalidateExistingProgram,
+  getValidationMismatches,
+  getUnexpressedSkills,
+  isSkillExpressed,
+  validatePlannerInputAlignment,
+  runComprehensiveValidation,
+} from './program-profile-validator'
   
 // =============================================================================
 // TYPES

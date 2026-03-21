@@ -129,7 +129,7 @@ export interface ProgramProfileValidationResult {
   programSummary: ProgramSummary
 }
 
-interface ProfileSummary {
+export interface ProfileSummary {
   primaryGoal: string | null
   secondaryGoal: string | null
   selectedSkills: string[]
@@ -143,7 +143,7 @@ interface ProfileSummary {
   experienceLevel: string
 }
 
-interface ProgramSummary {
+export interface ProgramSummary {
   primaryGoal: string
   secondaryGoal: string | null
   goalLabel: string
@@ -470,7 +470,16 @@ function validateScheduleDuration(
 }
 
 /**
+ * Check if user has loadable equipment (weights/belt/vest)
+ */
+function hasLoadableEquipment(equipment: string[]): boolean {
+  const loadableItems = ['weight_belt', 'dip_belt', 'weight_vest', 'weighted_vest', 'dumbbells', 'weights', 'kettlebell', 'plates']
+  return equipment.some(e => loadableItems.some(item => e.toLowerCase().includes(item)))
+}
+
+/**
  * Validate weighted prescription usage
+ * [program-profile-validate] ISSUE D: Also checks equipment/loadability truth
  */
 function validateWeightedPrescription(
   profile: CanonicalProgrammingProfile,
@@ -479,6 +488,18 @@ function validateWeightedPrescription(
   const hasWeightedPullUp = !!(profile.weightedPullUp?.addedWeight && profile.weightedPullUp.addedWeight > 0)
   const hasWeightedDip = !!(profile.weightedDip?.addedWeight && profile.weightedDip.addedWeight > 0)
   const hasWeightedData = hasWeightedPullUp || hasWeightedDip
+  
+  // [program-profile-validate] ISSUE D: Check if user has loadable equipment
+  const equipment = profile.equipmentAvailable || []
+  const userHasLoadableEquipment = hasLoadableEquipment(equipment)
+  
+  console.log('[program-profile-validate] ISSUE D: Loadability check:', {
+    hasWeightedData,
+    userHasLoadableEquipment,
+    equipmentCount: equipment.length,
+    weightedPullUp: hasWeightedPullUp ? profile.weightedPullUp?.addedWeight : 'none',
+    weightedDip: hasWeightedDip ? profile.weightedDip?.addedWeight : 'none',
+  })
   
   // Check for weighted exercises in program
   let weightedPullUpAppeared = false
@@ -519,9 +540,19 @@ function validateWeightedPrescription(
   
   // Determine if omission is explainable
   const omissionReasons: string[] = []
+  
+  // [program-profile-validate] ISSUE D: Check equipment availability
+  if (!userHasLoadableEquipment && hasWeightedData) {
+    omissionReasons.push('No loadable equipment in profile - weighted work unavailable')
+  }
   let omissionExplainable = false
   
   if (hasWeightedData && !weightedExercisesAppeared) {
+    // [program-profile-validate] ISSUE D: Equipment is the primary omission reason
+    if (!userHasLoadableEquipment) {
+      omissionExplainable = true
+      // Already added above
+    }
     // Check for valid omission reasons
     if (program.recoveryLevel === 'LOW') {
       omissionExplainable = true
@@ -1082,4 +1113,458 @@ export function getValidationMismatches(
       message: c.message,
       severity: c.severity,
     }))
+}
+
+// =============================================================================
+// ISSUE F: DISPLAYED STATE DRIFT DETECTION
+// =============================================================================
+
+/**
+ * Check if displayed program/workout state has drifted from generated plan.
+ * Detects when fields are lost during normalization or rendering.
+ */
+export interface DisplayedStateDrift {
+  hasDrift: boolean
+  droppedFields: string[]
+  driftDetails: {
+    field: string
+    generatedValue: unknown
+    displayedValue: unknown
+    category: 'exercise_metadata' | 'session_metadata' | 'program_metadata'
+  }[]
+}
+
+export function checkDisplayedStateDrift(
+  generatedProgram: AdaptiveProgram,
+  displayedProgram: Partial<AdaptiveProgram> | null
+): DisplayedStateDrift {
+  const droppedFields: string[] = []
+  const driftDetails: DisplayedStateDrift['driftDetails'] = []
+  
+  if (!displayedProgram) {
+    console.log('[program-profile-validate] ISSUE F: No displayed program to compare')
+    return { hasDrift: false, droppedFields: [], driftDetails: [] }
+  }
+  
+  // Check program-level metadata
+  if (generatedProgram.primaryGoal !== displayedProgram.primaryGoal) {
+    droppedFields.push('primaryGoal')
+    driftDetails.push({
+      field: 'primaryGoal',
+      generatedValue: generatedProgram.primaryGoal,
+      displayedValue: displayedProgram.primaryGoal,
+      category: 'program_metadata',
+    })
+  }
+  
+  if (generatedProgram.scheduleMode !== displayedProgram.scheduleMode) {
+    droppedFields.push('scheduleMode')
+    driftDetails.push({
+      field: 'scheduleMode',
+      generatedValue: generatedProgram.scheduleMode,
+      displayedValue: displayedProgram.scheduleMode,
+      category: 'program_metadata',
+    })
+  }
+  
+  // Check session count
+  const genSessions = generatedProgram.sessions?.length || 0
+  const displaySessions = displayedProgram.sessions?.length || 0
+  if (genSessions !== displaySessions) {
+    droppedFields.push('sessionCount')
+    driftDetails.push({
+      field: 'sessionCount',
+      generatedValue: genSessions,
+      displayedValue: displaySessions,
+      category: 'session_metadata',
+    })
+  }
+  
+  // Check for dropped prescribedLoad fields
+  let genExercisesWithLoad = 0
+  let displayExercisesWithLoad = 0
+  
+  for (const session of generatedProgram.sessions || []) {
+    for (const ex of session.exercises || []) {
+      if (ex.prescribedLoad?.load) genExercisesWithLoad++
+    }
+  }
+  
+  for (const session of displayedProgram.sessions || []) {
+    for (const ex of session.exercises || []) {
+      if (ex.prescribedLoad?.load) displayExercisesWithLoad++
+    }
+  }
+  
+  if (genExercisesWithLoad > 0 && displayExercisesWithLoad < genExercisesWithLoad) {
+    droppedFields.push('prescribedLoad')
+    driftDetails.push({
+      field: 'prescribedLoad',
+      generatedValue: `${genExercisesWithLoad} exercises with load`,
+      displayedValue: `${displayExercisesWithLoad} exercises with load`,
+      category: 'exercise_metadata',
+    })
+  }
+  
+  // Check for dropped rest/RPE fields
+  let genExercisesWithRest = 0
+  let displayExercisesWithRest = 0
+  
+  for (const session of generatedProgram.sessions || []) {
+    for (const ex of session.exercises || []) {
+      if (ex.rest) genExercisesWithRest++
+    }
+  }
+  
+  for (const session of displayedProgram.sessions || []) {
+    for (const ex of session.exercises || []) {
+      if (ex.rest) displayExercisesWithRest++
+    }
+  }
+  
+  if (genExercisesWithRest > 0 && displayExercisesWithRest < genExercisesWithRest) {
+    droppedFields.push('rest')
+    driftDetails.push({
+      field: 'rest',
+      generatedValue: `${genExercisesWithRest} exercises with rest`,
+      displayedValue: `${displayExercisesWithRest} exercises with rest`,
+      category: 'exercise_metadata',
+    })
+  }
+  
+  const hasDrift = droppedFields.length > 0
+  
+  if (hasDrift) {
+    console.log('[program-profile-validate] ISSUE F: Displayed state drift detected:', {
+      droppedFields,
+      driftCount: driftDetails.length,
+    })
+  }
+  
+  return { hasDrift, droppedFields, driftDetails }
+}
+
+/**
+ * Full program validation including displayed state drift.
+ * Combines profile validation with display drift detection.
+ */
+export function validateProgramWithDisplayState(
+  profile: CanonicalProgrammingProfile,
+  generatedProgram: AdaptiveProgram,
+  displayedProgram: Partial<AdaptiveProgram> | null
+): ProgramProfileValidationResult & { displayedStateDrift: DisplayedStateDrift } {
+  const baseResult = validateProgramAgainstProfile(profile, generatedProgram)
+  const displayDrift = checkDisplayedStateDrift(generatedProgram, displayedProgram)
+  
+  // Add display drift to failures/warnings if present
+  if (displayDrift.hasDrift) {
+    baseResult.warnings.push(...displayDrift.droppedFields.map(f => `displayed_drift_${f}`))
+    baseResult.warningCount += displayDrift.droppedFields.length
+    
+    // Add checks for display drift
+    for (const detail of displayDrift.driftDetails) {
+      baseResult.checks.push({
+        category: 'display_drift',
+        subcategory: detail.field,
+        severity: 'warning',
+        profileValue: null,
+        programValue: `Generated: ${detail.generatedValue}`,
+        message: `${detail.field} lost in display: ${detail.generatedValue} → ${detail.displayedValue}`,
+        details: detail.category,
+      })
+    }
+  }
+  
+  console.log('[program-profile-validate] Full validation with display state:', {
+    profileMatch: baseResult.isValid,
+    displayDrift: displayDrift.hasDrift,
+    totalWarnings: baseResult.warningCount,
+    totalFailures: baseResult.mismatchCount,
+  })
+  
+  return {
+    ...baseResult,
+    displayedStateDrift: displayDrift,
+  }
+}
+
+// =============================================================================
+// WEEKLY SKILL EXPOSURE SUMMARY
+// =============================================================================
+
+/**
+ * Get a summary of skill exposure across the week for debugging/display.
+ * [program-profile-validate] ISSUE B: Makes skill expression verification easy.
+ */
+export interface WeeklySkillExposureSummary {
+  selectedSkills: string[]
+  expressedSkills: { skill: string; mode: string; sessions: number }[]
+  unexpressedSkills: { skill: string; reason: string }[]
+  coveragePercent: number
+  recommendation: string
+}
+
+export function getWeeklySkillExposureSummary(
+  result: ProgramProfileValidationResult
+): WeeklySkillExposureSummary {
+  const selectedSkills = result.profileSummary.selectedSkills
+  
+  const expressedSkills = result.skillExpression
+    .filter(s => s.wasExpressed)
+    .map(s => ({
+      skill: s.skillLabel,
+      mode: s.expressionType,
+      sessions: s.exercisesFound.length,
+    }))
+  
+  const unexpressedSkills = result.skillExpression
+    .filter(s => !s.wasExpressed)
+    .map(s => ({
+      skill: s.skillLabel,
+      reason: s.omissionReason || 'No exercises found matching this skill',
+    }))
+  
+  const coveragePercent = selectedSkills.length > 0
+    ? Math.round((expressedSkills.length / selectedSkills.length) * 100)
+    : 100
+  
+  let recommendation = 'Good skill coverage this week'
+  if (coveragePercent < 50) {
+    recommendation = 'Consider adjusting selected skills or regenerating program'
+  } else if (coveragePercent < 75) {
+    recommendation = 'Some skills may be rotated - check future weeks'
+  }
+  
+  console.log('[program-profile-validate] Weekly skill exposure summary:', {
+    selected: selectedSkills.length,
+    expressed: expressedSkills.length,
+    unexpressed: unexpressedSkills.length,
+    coveragePercent,
+  })
+  
+  return {
+    selectedSkills,
+    expressedSkills,
+    unexpressedSkills,
+    coveragePercent,
+    recommendation,
+  }
+}
+
+// =============================================================================
+// PLANNER INPUT VALIDATION
+// =============================================================================
+
+/**
+ * Planner input structure for validation.
+ * [program-profile-validate] ISSUE A: Validate planner inputs match canonical profile.
+ */
+export interface PlannerInputTruth {
+  primaryGoal?: string | null
+  secondaryGoal?: string | null
+  selectedSkills?: string[]
+  scheduleMode?: 'static' | 'flexible'
+  trainingDaysPerWeek?: number | null
+  sessionLengthMinutes?: number
+  sessionDurationMode?: 'static' | 'adaptive'
+  experienceLevel?: string
+  equipmentAvailable?: string[]
+}
+
+export interface PlannerInputValidation {
+  isAligned: boolean
+  drifts: { field: string; profileValue: unknown; plannerValue: unknown }[]
+  summary: string
+}
+
+/**
+ * Validate that planner inputs align with canonical profile.
+ * [program-profile-validate] ISSUE A: Catch drift before generation.
+ */
+export function validatePlannerInputAlignment(
+  profile: CanonicalProgrammingProfile,
+  plannerInput: PlannerInputTruth
+): PlannerInputValidation {
+  const drifts: { field: string; profileValue: unknown; plannerValue: unknown }[] = []
+  
+  // Check primary goal
+  if (plannerInput.primaryGoal !== undefined && plannerInput.primaryGoal !== profile.primaryGoal) {
+    drifts.push({ field: 'primaryGoal', profileValue: profile.primaryGoal, plannerValue: plannerInput.primaryGoal })
+  }
+  
+  // Check secondary goal
+  if (plannerInput.secondaryGoal !== undefined && plannerInput.secondaryGoal !== profile.secondaryGoal) {
+    drifts.push({ field: 'secondaryGoal', profileValue: profile.secondaryGoal, plannerValue: plannerInput.secondaryGoal })
+  }
+  
+  // Check schedule mode
+  if (plannerInput.scheduleMode !== undefined && plannerInput.scheduleMode !== profile.scheduleMode) {
+    drifts.push({ field: 'scheduleMode', profileValue: profile.scheduleMode, plannerValue: plannerInput.scheduleMode })
+  }
+  
+  // Check training days
+  if (plannerInput.trainingDaysPerWeek !== undefined && plannerInput.trainingDaysPerWeek !== profile.trainingDaysPerWeek) {
+    drifts.push({ field: 'trainingDaysPerWeek', profileValue: profile.trainingDaysPerWeek, plannerValue: plannerInput.trainingDaysPerWeek })
+  }
+  
+  // Check session duration mode
+  if (plannerInput.sessionDurationMode !== undefined && plannerInput.sessionDurationMode !== profile.sessionDurationMode) {
+    drifts.push({ field: 'sessionDurationMode', profileValue: profile.sessionDurationMode, plannerValue: plannerInput.sessionDurationMode })
+  }
+  
+  // Check session length
+  if (plannerInput.sessionLengthMinutes !== undefined && plannerInput.sessionLengthMinutes !== profile.sessionLengthMinutes) {
+    drifts.push({ field: 'sessionLengthMinutes', profileValue: profile.sessionLengthMinutes, plannerValue: plannerInput.sessionLengthMinutes })
+  }
+  
+  // Check selected skills
+  if (plannerInput.selectedSkills !== undefined) {
+    const profileSkills = (profile.selectedSkills || []).sort().join(',')
+    const plannerSkills = (plannerInput.selectedSkills || []).sort().join(',')
+    if (profileSkills !== plannerSkills) {
+      drifts.push({ field: 'selectedSkills', profileValue: profile.selectedSkills, plannerValue: plannerInput.selectedSkills })
+    }
+  }
+  
+  const isAligned = drifts.length === 0
+  const summary = isAligned 
+    ? 'Planner inputs aligned with canonical profile'
+    : `Planner input drift detected: ${drifts.map(d => d.field).join(', ')}`
+  
+  if (!isAligned) {
+    console.log('[program-profile-validate] Planner input drift:', {
+      driftCount: drifts.length,
+      drifts,
+    })
+  }
+  
+  return { isAligned, drifts, summary }
+}
+
+// =============================================================================
+// COMPREHENSIVE VALIDATION RUN
+// =============================================================================
+
+/**
+ * Full diagnostic validation run that logs everything in a structured way.
+ * [program-profile-validate] TASK 8: This is the main debugging entry point.
+ */
+export interface ComprehensiveValidationReport {
+  timestamp: string
+  profileTruth: ProfileSummary
+  programTruth: ProgramSummary
+  plannerInputAligned: boolean
+  profileProgramValidation: ProgramProfileValidationResult
+  displayDrift: DisplayedStateDrift | null
+  skillExposure: WeeklySkillExposureSummary
+  overallHealth: 'healthy' | 'warnings' | 'issues' | 'critical'
+  actionableInsights: string[]
+}
+
+export function runComprehensiveValidation(
+  profile: CanonicalProgrammingProfile,
+  program: AdaptiveProgram,
+  plannerInput?: PlannerInputTruth,
+  displayedProgram?: Partial<AdaptiveProgram> | null
+): ComprehensiveValidationReport {
+  console.log('[program-profile-validate] ========================================')
+  console.log('[program-profile-validate] COMPREHENSIVE VALIDATION RUN')
+  console.log('[program-profile-validate] ========================================')
+  
+  // Step 1: Validate profile vs program
+  const profileProgramValidation = validateProgramAgainstProfile(profile, program)
+  
+  // Step 2: Check planner input alignment if provided
+  let plannerInputAligned = true
+  if (plannerInput) {
+    const plannerValidation = validatePlannerInputAlignment(profile, plannerInput)
+    plannerInputAligned = plannerValidation.isAligned
+  }
+  
+  // Step 3: Check display drift if provided
+  let displayDrift: DisplayedStateDrift | null = null
+  if (displayedProgram !== undefined) {
+    displayDrift = checkDisplayedStateDrift(program, displayedProgram)
+  }
+  
+  // Step 4: Get skill exposure summary
+  const skillExposure = getWeeklySkillExposureSummary(profileProgramValidation)
+  
+  // Step 5: Determine overall health
+  let overallHealth: 'healthy' | 'warnings' | 'issues' | 'critical' = 'healthy'
+  if (profileProgramValidation.criticalCount > 0) {
+    overallHealth = 'critical'
+  } else if (profileProgramValidation.mismatchCount > 0 || !plannerInputAligned) {
+    overallHealth = 'issues'
+  } else if (profileProgramValidation.warningCount > 0 || displayDrift?.hasDrift) {
+    overallHealth = 'warnings'
+  }
+  
+  // Step 6: Generate actionable insights
+  const actionableInsights: string[] = []
+  
+  // Goal alignment insights
+  if (profileProgramValidation.failures.includes('primary_goal')) {
+    actionableInsights.push('CRITICAL: Primary goal mismatch - regenerate program')
+  }
+  
+  // Skill expression insights
+  const unexpressedCritical = profileProgramValidation.skillExpression.filter(s => !s.wasExpressed && !s.omissionJustifiable)
+  if (unexpressedCritical.length > 0) {
+    actionableInsights.push(`Skills not expressed without justification: ${unexpressedCritical.map(s => s.skillLabel).join(', ')}`)
+  }
+  
+  // Schedule insights
+  if (profileProgramValidation.failures.includes('schedule_mode')) {
+    actionableInsights.push('Schedule mode drift detected - check settings')
+  }
+  
+  // Weighted prescription insights
+  if (profileProgramValidation.failures.includes('weighted_prescription')) {
+    actionableInsights.push('Weighted data available but not used - check equipment settings')
+  }
+  
+  // Display drift insights
+  if (displayDrift?.hasDrift) {
+    actionableInsights.push(`Display drift detected: ${displayDrift.droppedFields.join(', ')} lost`)
+  }
+  
+  // No issues
+  if (actionableInsights.length === 0) {
+    actionableInsights.push('No issues detected - program aligned with profile')
+  }
+  
+  const report: ComprehensiveValidationReport = {
+    timestamp: new Date().toISOString(),
+    profileTruth: profileProgramValidation.profileSummary,
+    programTruth: profileProgramValidation.programSummary,
+    plannerInputAligned,
+    profileProgramValidation,
+    displayDrift,
+    skillExposure,
+    overallHealth,
+    actionableInsights,
+  }
+  
+  // Log comprehensive summary
+  console.log('[program-profile-validate] ----------------------------------------')
+  console.log('[program-profile-validate] VALIDATION SUMMARY')
+  console.log('[program-profile-validate] ----------------------------------------')
+  console.log('[program-profile-validate] Overall Health:', overallHealth)
+  console.log('[program-profile-validate] Score:', profileProgramValidation.overallScore + '/100')
+  console.log('[program-profile-validate] Passed:', profileProgramValidation.passCount)
+  console.log('[program-profile-validate] Warnings:', profileProgramValidation.warningCount)
+  console.log('[program-profile-validate] Failures:', profileProgramValidation.mismatchCount)
+  console.log('[program-profile-validate] Critical:', profileProgramValidation.criticalCount)
+  console.log('[program-profile-validate] Skill Coverage:', skillExposure.coveragePercent + '%')
+  console.log('[program-profile-validate] Planner Aligned:', plannerInputAligned)
+  console.log('[program-profile-validate] Display Drift:', displayDrift?.hasDrift || false)
+  console.log('[program-profile-validate] ----------------------------------------')
+  console.log('[program-profile-validate] ACTIONABLE INSIGHTS:')
+  actionableInsights.forEach((insight, i) => {
+    console.log(`[program-profile-validate] ${i + 1}. ${insight}`)
+  })
+  console.log('[program-profile-validate] ========================================')
+  
+  return report
 }

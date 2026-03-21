@@ -351,6 +351,8 @@ import {
   logSupportWorkMapping,
   // TASK 6: Weekly load balancing
   analyzeWeekLoadBalance,
+  // [coach-layer] TASK 2: Coaching metadata builder
+  buildExerciseCoachingMeta,
   type GoalHierarchyWeights,
   type SessionDistribution,
   type RankedBottleneck,
@@ -533,6 +535,14 @@ export interface AdaptiveExercise {
   // [weighted-prescription-truth] ISSUE E: RPE and rest metadata for coaching truth
   targetRPE?: number          // Target RPE for this exercise
   restSeconds?: number        // Recommended rest in seconds between sets
+  // [coach-layer] TASK 1: Structured coaching metadata for coach-like display
+  coachingMeta?: {
+    expressionMode: string           // direct, technical, strength_support, etc.
+    progressionIntent: string        // skill_expression, strength_building, etc.
+    skillSupportTargets: string[]    // Skills this exercise supports
+    loadDecisionSummary: string      // "Weighted (+35 lb)" or "Bodyweight today"
+    restLabel?: string               // "90-120s" or "2-3 min"
+  }
 }
 
 export interface AdaptiveProgram {
@@ -4068,6 +4078,15 @@ function generateAdaptiveSession(
       }
     }
 
+    // [coach-meta-survival] Log coaching meta at session assembly
+    const exercisesWithCoaching = validatedSession.exercises.filter((e: AdaptiveExercise) => e.coachingMeta)
+    console.log('[coach-meta-survival] Session assembly - coaching meta check:', {
+      dayNumber: day.dayNumber,
+      totalExercises: validatedSession.exercises.length,
+      withCoachingMeta: exercisesWithCoaching.length,
+      sampleMeta: exercisesWithCoaching[0]?.coachingMeta,
+    })
+
     return {
       dayNumber: day.dayNumber,
       dayLabel: `Day ${day.dayNumber}`,
@@ -4242,18 +4261,80 @@ function mapToAdaptiveExercises(
       repsOrTime: s.repsOrTime,
       note: s.note,
       isOverrideable: s.isOverrideable,
-      selectionReason: s.selectionReason,
-      source: 'database' as const, // DB enforcement: all exercises sourced from adaptive-exercise-pool
-      method,
-      methodLabel: getMethodLabel(method),
-      progressionDecision,
-      // WEIGHTED LOAD PR: Include prescribed load if available from exercise selection
-      prescribedLoad: s.prescribedLoad,
-      // [weighted-prescription-truth] ISSUE E: Pass through RPE and rest metadata
-      targetRPE: s.targetRPE,
-      restSeconds: s.restSeconds,
+    selectionReason: s.selectionReason,
+    source: 'database' as const, // DB enforcement: all exercises sourced from adaptive-exercise-pool
+    method,
+    methodLabel: getMethodLabel(method),
+    progressionDecision,
+    // WEIGHTED LOAD PR: Include prescribed load if available from exercise selection
+    prescribedLoad: s.prescribedLoad,
+    // [weighted-prescription-truth] ISSUE E: Pass through RPE and rest metadata
+    targetRPE: s.targetRPE,
+    restSeconds: s.restSeconds,
+    // [coach-layer] TASK 2: Build coaching metadata from selection trace
+    coachingMeta: buildExerciseCoachingMetaFromSelection(s, primaryGoal),
     }
   }).filter((e): e is AdaptiveExercise => e !== null)
+}
+
+/**
+ * [coach-layer] TASK 2: Map selection data to coaching metadata
+ * This converts raw selection trace into user-meaningful coaching info
+ */
+function buildExerciseCoachingMetaFromSelection(
+  selection: SelectedExercise,
+  primaryGoal: PrimaryGoal
+): AdaptiveExercise['coachingMeta'] {
+  const category = selection.exercise?.category || 'accessory'
+  const isWeighted = !!(selection.prescribedLoad?.load && selection.prescribedLoad.load > 0)
+  const hasLoadableEquipment = true // Assume true if we got here
+  const hasBenchmarkData = selection.prescribedLoad?.basis === 'current_benchmark' || 
+                           selection.prescribedLoad?.basis === 'pr_reference'
+  
+  // Derive prescription mode from intensity band if available
+  const prescriptionMode = selection.prescribedLoad?.intensityBand || 
+    (category === 'skill' ? 'skill_expression' : 'strength_building')
+  
+  // Extract skill targets from exercise's transferTo field or use primary goal
+  const skillTargets: string[] = (selection.exercise?.transferTo?.length ?? 0) > 0
+    ? selection.exercise!.transferTo 
+    : [primaryGoal]
+  
+  // Build using the canonical contract
+  const meta = buildExerciseCoachingMeta({
+    exerciseCategory: category,
+    selectionReason: selection.selectionReason || '',
+    prescriptionMode,
+    isWeighted,
+    loadValue: selection.prescribedLoad?.load,
+    loadUnit: selection.prescribedLoad?.unit,
+    hasLoadableEquipment,
+    hasBenchmarkData,
+    targetRPE: selection.targetRPE,
+    restSeconds: selection.restSeconds,
+    skillTargets,
+    isRecoveryDay: false,
+  })
+  
+  // Format rest label
+  const restLabel = meta.restGuidance?.label || (selection.restSeconds 
+    ? `${Math.round(selection.restSeconds / 60)}-${Math.round(selection.restSeconds / 60) + 1} min`
+    : undefined)
+  
+  console.log('[coach-meta-survival] Built coaching meta for:', {
+    exercise: selection.exercise?.name,
+    expressionMode: meta.expressionMode,
+    progressionIntent: meta.progressionIntent,
+    loadDecision: meta.loadDecision.summary,
+  })
+  
+  return {
+    expressionMode: meta.expressionMode,
+    progressionIntent: meta.progressionIntent,
+    skillSupportTargets: meta.skillSupportTargets,
+    loadDecisionSummary: meta.loadDecision.summary,
+    restLabel,
+  }
 }
 
 // =============================================================================

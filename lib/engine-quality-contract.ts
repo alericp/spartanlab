@@ -578,6 +578,307 @@ export function getDurationVolumeConfig(sessionMinutes: number): DurationVolumeC
 }
 
 // =============================================================================
+// EXERCISE COACHING METADATA CONTRACT (COACH LAYER)
+// =============================================================================
+
+/**
+ * Expression mode - how the exercise contributes to the athlete's training
+ * This is the core coaching truth that must survive from selection to render
+ */
+export type ExerciseExpressionMode = 
+  | 'direct'           // Direct skill work toward goal (e.g., tuck planche for planche)
+  | 'technical'        // Technical practice for positioning/shape (e.g., planche lean)
+  | 'strength_support' // Strength building that supports skill (e.g., weighted dips for planche)
+  | 'prerequisite'     // Prerequisite strength/mobility (e.g., scap pulls for front lever)
+  | 'trunk_support'    // Core/compression work (e.g., hollow body for L-sit)
+  | 'mobility_support' // Mobility/flexibility work (e.g., shoulder stretches)
+  | 'recovery'         // Recovery-biased support work (e.g., light rows on easy day)
+  | 'rotation'         // Rotation for variety/movement health
+
+/**
+ * Progression intent - the training effect this exercise aims to achieve
+ */
+export type ProgressionIntent =
+  | 'skill_expression'      // Practice/express the skill directly
+  | 'technical_refinement'  // Refine positioning/shape without maximal effort
+  | 'strength_building'     // Build strength capacity
+  | 'endurance_support'     // Build work capacity/endurance
+  | 'mobility_maintenance'  // Maintain/improve range of motion
+  | 'neural_practice'       // Neural patterning with low volume
+  | 'fatigue_management'    // Lighter work to manage fatigue
+
+/**
+ * Load decision summary - why weighted vs bodyweight
+ */
+export type LoadDecisionReason =
+  | 'strength_support_day'       // Weighted to build supporting strength
+  | 'skill_priority_today'       // Bodyweight to preserve skill quality
+  | 'missing_loadable_equipment' // No weights available
+  | 'benchmark_missing'          // No benchmark data to prescribe load
+  | 'recovery_limited'           // Recovery state suggests lighter load
+  | 'progression_phase'          // Current phase dictates load type
+  | 'exercise_not_loadable'      // Exercise doesn't support external load
+
+/**
+ * Canonical coaching metadata for each exercise
+ * This must survive from exercise selection through render
+ */
+export interface ExerciseCoachingMeta {
+  // Core expression truth
+  expressionMode: ExerciseExpressionMode
+  progressionIntent: ProgressionIntent
+  
+  // What this exercise supports
+  skillSupportTargets: string[]  // Skills this exercise helps (e.g., ['planche', 'hspu'])
+  
+  // Selection context
+  selectionReasonSummary: string  // Concise why this exercise won
+  
+  // Load decision
+  loadDecision: {
+    isWeighted: boolean
+    reason: LoadDecisionReason
+    summary: string  // User-facing summary (e.g., "Weighted (+35 lb)" or "Bodyweight today")
+  }
+  
+  // Prescription truth
+  targetRPE?: number         // 6-10 scale
+  restGuidance?: {
+    seconds: number
+    label: string            // "90-120s" or "2-3 min"
+  }
+  
+  // Doctrine source
+  doctrineSourceSummary?: string  // Where this prescription came from
+  
+  // Confidence for debug
+  confidenceLevel?: 'high' | 'moderate' | 'low'
+}
+
+/**
+ * Maps raw selection trace/prescription data to coaching metadata
+ * Call this at exercise selection time
+ */
+export function buildExerciseCoachingMeta(params: {
+  exerciseCategory: string
+  selectionReason: string
+  prescriptionMode?: string
+  isWeighted: boolean
+  loadValue?: number
+  loadUnit?: string
+  hasLoadableEquipment: boolean
+  hasBenchmarkData: boolean
+  targetRPE?: number
+  restSeconds?: number
+  skillTargets?: string[]
+  isRecoveryDay?: boolean
+}): ExerciseCoachingMeta {
+  // Determine expression mode from category and context
+  const expressionMode = mapCategoryToExpressionMode(
+    params.exerciseCategory,
+    params.isWeighted,
+    params.isRecoveryDay
+  )
+  
+  // Determine progression intent
+  const progressionIntent = mapToProgressionIntent(
+    params.exerciseCategory,
+    params.prescriptionMode,
+    params.isRecoveryDay
+  )
+  
+  // Determine load decision
+  const loadDecision = buildLoadDecision(
+    params.isWeighted,
+    params.loadValue,
+    params.loadUnit,
+    params.hasLoadableEquipment,
+    params.hasBenchmarkData,
+    params.isRecoveryDay,
+    params.exerciseCategory
+  )
+  
+  // Build rest guidance if available
+  const restGuidance = params.restSeconds ? {
+    seconds: params.restSeconds,
+    label: formatRestLabel(params.restSeconds),
+  } : undefined
+  
+  console.log('[coach-layer] Built coaching meta:', {
+    expressionMode,
+    progressionIntent,
+    loadDecision: loadDecision.summary,
+    targetRPE: params.targetRPE,
+    skillTargets: params.skillTargets,
+  })
+  
+  return {
+    expressionMode,
+    progressionIntent,
+    skillSupportTargets: params.skillTargets || [],
+    selectionReasonSummary: params.selectionReason,
+    loadDecision,
+    targetRPE: params.targetRPE,
+    restGuidance,
+    confidenceLevel: params.hasBenchmarkData ? 'high' : 'moderate',
+  }
+}
+
+function mapCategoryToExpressionMode(
+  category: string,
+  isWeighted: boolean,
+  isRecoveryDay?: boolean
+): ExerciseExpressionMode {
+  if (isRecoveryDay) return 'recovery'
+  
+  switch (category) {
+    case 'skill':
+      return 'direct'
+    case 'technical':
+      return 'technical'
+    case 'strength':
+      return isWeighted ? 'strength_support' : 'strength_support'
+    case 'accessory':
+      return 'strength_support'
+    case 'core':
+      return 'trunk_support'
+    case 'warmup':
+    case 'mobility':
+      return 'mobility_support'
+    case 'cooldown':
+      return 'mobility_support'
+    default:
+      return 'rotation'
+  }
+}
+
+function mapToProgressionIntent(
+  category: string,
+  prescriptionMode?: string,
+  isRecoveryDay?: boolean
+): ProgressionIntent {
+  if (isRecoveryDay) return 'fatigue_management'
+  
+  if (prescriptionMode === 'skill_hold' || prescriptionMode === 'skill_cluster') {
+    return 'skill_expression'
+  }
+  if (prescriptionMode === 'weighted_strength') {
+    return 'strength_building'
+  }
+  
+  switch (category) {
+    case 'skill':
+      return 'skill_expression'
+    case 'technical':
+      return 'technical_refinement'
+    case 'strength':
+      return 'strength_building'
+    case 'accessory':
+      return 'strength_building'
+    case 'core':
+      return 'strength_building'
+    case 'warmup':
+    case 'mobility':
+    case 'cooldown':
+      return 'mobility_maintenance'
+    default:
+      return 'strength_building'
+  }
+}
+
+function buildLoadDecision(
+  isWeighted: boolean,
+  loadValue?: number,
+  loadUnit?: string,
+  hasLoadableEquipment?: boolean,
+  hasBenchmarkData?: boolean,
+  isRecoveryDay?: boolean,
+  category?: string
+): ExerciseCoachingMeta['loadDecision'] {
+  // Skill work is always bodyweight
+  if (category === 'skill' || category === 'technical') {
+    return {
+      isWeighted: false,
+      reason: 'skill_priority_today',
+      summary: 'Bodyweight (skill focus)',
+    }
+  }
+  
+  // Check if weighted
+  if (isWeighted && loadValue && loadValue > 0) {
+    return {
+      isWeighted: true,
+      reason: 'strength_support_day',
+      summary: `Weighted (+${loadValue} ${loadUnit || 'lbs'})`,
+    }
+  }
+  
+  // Determine why not weighted
+  if (!hasLoadableEquipment) {
+    return {
+      isWeighted: false,
+      reason: 'missing_loadable_equipment',
+      summary: 'Bodyweight (no weights available)',
+    }
+  }
+  
+  if (!hasBenchmarkData) {
+    return {
+      isWeighted: false,
+      reason: 'benchmark_missing',
+      summary: 'Bodyweight (add benchmark for load)',
+    }
+  }
+  
+  if (isRecoveryDay) {
+    return {
+      isWeighted: false,
+      reason: 'recovery_limited',
+      summary: 'Bodyweight (recovery focus)',
+    }
+  }
+  
+  return {
+    isWeighted: false,
+    reason: 'exercise_not_loadable',
+    summary: 'Bodyweight',
+  }
+}
+
+function formatRestLabel(seconds: number): string {
+  if (seconds < 60) return `${seconds}s`
+  if (seconds < 120) return `${Math.round(seconds / 60)} min`
+  return `${Math.floor(seconds / 60)}-${Math.ceil(seconds / 60) + 1} min`
+}
+
+/**
+ * Expression mode labels for UI display
+ */
+export const EXPRESSION_MODE_LABELS: Record<ExerciseExpressionMode, string> = {
+  direct: 'Direct Skill',
+  technical: 'Technical Practice',
+  strength_support: 'Strength Support',
+  prerequisite: 'Prerequisite Work',
+  trunk_support: 'Core/Compression',
+  mobility_support: 'Mobility',
+  recovery: 'Recovery Work',
+  rotation: 'Variety/Health',
+}
+
+/**
+ * Progression intent labels for UI display
+ */
+export const PROGRESSION_INTENT_LABELS: Record<ProgressionIntent, string> = {
+  skill_expression: 'Skill Expression',
+  technical_refinement: 'Technical Refinement',
+  strength_building: 'Strength Building',
+  endurance_support: 'Endurance Support',
+  mobility_maintenance: 'Mobility',
+  neural_practice: 'Neural Practice',
+  fatigue_management: 'Recovery',
+}
+
+// =============================================================================
 // RANKED BOTTLENECK MODEL (TASK 3)
 // =============================================================================
 

@@ -562,6 +562,13 @@ function ExerciseRow({
   const safeSets = exercise.sets ?? 3
   const safeReps = exercise.repsOrTime || '8-12'
   
+  // [coach-meta-survival] Log coaching meta arrival at UI
+  console.log('[v0] [coach-meta-survival] ExerciseRow received:', {
+    name: safeName,
+    hasCoachingMeta: !!exercise.coachingMeta,
+    coachingMeta: exercise.coachingMeta,
+  })
+  
   const hasRPE = !isWarmupCooldown && exerciseSupportsRPE(safeName)
   const exerciseId = safeName.toLowerCase().replace(/[\s-]+/g, '_')
   const hasKnowledge = hasExerciseKnowledge(exerciseId)
@@ -671,6 +678,32 @@ function ExerciseRow({
           )}
         </div>
       </div>
+      
+      {/* [coach-layer] TASK 3: Coaching metadata display - appears above "Why this exercise?" */}
+      {!isWarmupCooldown && exercise.coachingMeta && (
+        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+          {/* Expression Mode Badge - capitalize and format nicely */}
+          <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#2A2A2A] text-[#A5A5A5] capitalize">
+            {exercise.coachingMeta.expressionMode.replace(/_/g, ' ')}
+          </span>
+          {/* Load Decision Summary - weighted gets highlight */}
+          {exercise.coachingMeta.loadDecisionSummary && (
+            <span className={`text-[10px] px-1.5 py-0.5 rounded ${
+              exercise.coachingMeta.loadDecisionSummary.toLowerCase().includes('weighted') 
+                ? 'bg-[#E63946]/10 text-[#E63946]' 
+                : 'bg-[#3A3A3A] text-[#8A8A8A]'
+            }`}>
+              {exercise.coachingMeta.loadDecisionSummary}
+            </span>
+          )}
+          {/* Rest Guidance - only show if we have meaningful rest data */}
+          {exercise.coachingMeta.restLabel && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#3A3A3A] text-[#8A8A8A]">
+              Rest: {exercise.coachingMeta.restLabel}
+            </span>
+          )}
+        </div>
+      )}
       
       {/* Selection Reason (expandable) with Knowledge Bubble */}
       {!isWarmupCooldown && (exercise.selectionReason || hasKnowledge) && (

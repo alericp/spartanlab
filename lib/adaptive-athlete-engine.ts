@@ -2,7 +2,7 @@
 // Central integration layer that synthesizes all SpartanLab tools into unified athlete intelligence
 
 import { getAthleteProfile, getSkillProgressions, type AthleteProfile, type SkillProgression } from './data-service'
-import { getConstraintInsight, analyzeConstraints, type ConstraintResult } from './constraint-engine'
+import { getConstraintInsight, analyzeConstraints, deriveCanonicalDisplayedLimiter, type ConstraintResult } from './constraint-engine'
 import { assessDeloadNeed, type DeloadAssessment, type DeloadStatus } from './deload-detection-engine'
 import { calculateRecoverySignal, type RecoverySignal, type RecoveryLevel } from './recovery-engine'
 import { getStrengthRecords } from './strength-service'
@@ -669,14 +669,30 @@ export function buildAthleteState(): AthleteState {
     currentSkillLevel: primaryProgression?.currentLevel ?? 0,
     targetSkillLevel: primaryProgression?.targetLevel ?? 0,
     
-    // Constraints
-    primaryConstraint: constraintResult.primaryConstraint !== 'no_primary_constraint' &&
-                       constraintResult.primaryConstraint !== 'insufficient_data'
-      ? constraintResult.primaryConstraint
-      : null,
-    constraintLabel: constraintResult.constraintLabel,
-    constraintCategory: constraintResult.category,
-    constraintConfidence: constraintResult.confidence,
+    // [limiter-truth] ISSUE A/D: Use canonical displayed-limiter for unified truth
+    // This ensures AthleteIntelligenceCard and all other surfaces show the same limiter
+    ...(() => {
+      const canonical = deriveCanonicalDisplayedLimiter()
+      // [limiter-truth] Log the canonical limiter being used
+      console.log('[limiter-truth] buildAthleteState using canonical limiter:', {
+        code: canonical.code,
+        label: canonical.label,
+        isLowHistory: canonical.isLowHistory,
+        isFallback: canonical.isFallback,
+      })
+      // Don't show as primary constraint if low-history or insufficient data
+      const shouldShowConstraint = !canonical.isLowHistory && 
+                                   canonical.code !== 'insufficient_data' && 
+                                   canonical.code !== 'no_primary_constraint' &&
+                                   canonical.code !== 'early_calibration' &&
+                                   canonical.code !== 'building_consistency'
+      return {
+        primaryConstraint: shouldShowConstraint ? canonical.code : null,
+        constraintLabel: canonical.label,
+        constraintConfidence: canonical.confidence,
+      }
+    })(),
+    constraintCategory: constraintResult.category, // Keep for internal routing
     
     // Strength Support
     strengthSupportLevel,

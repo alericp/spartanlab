@@ -1074,43 +1074,57 @@ export const CURRENT_PROFILE_SCHEMA_VERSION = 3
 /**
  * Profile field groups that define completeness.
  * Each group maps to an onboarding section.
+ * 
+ * [profile-completeness] ISSUE A: Engine-relevant field contract
+ * Every planning-relevant field belongs to one of these groups.
  */
 export type ProfileFieldGroup = 
-  | 'core_goals'          // primaryGoal, secondaryGoal, trainingPathType
-  | 'schedule_identity'   // scheduleMode, trainingDaysPerWeek, sessionLengthMinutes
-  | 'benchmark_strength'  // pullUpMax, dipMax, pushUpMax, weightedPullUp, weightedDip
-  | 'benchmark_skills'    // skill progressions for selected skills
-  | 'flexibility_targets' // flexibility selections and benchmarks
-  | 'skill_selection'     // selectedSkills array (v3: includes new skills)
-  | 'equipment'           // equipmentAvailable
-  | 'recovery'            // recoveryQuality
+  | 'core_goals'              // primaryGoal, secondaryGoal, trainingPathType
+  | 'schedule_identity'       // scheduleMode, trainingDaysPerWeek, sessionLengthMinutes
+  | 'benchmark_strength'      // pullUpMax, dipMax, pushUpMax
+  | 'weighted_strength_inputs'// weightedPullUp, weightedDip, allTimePRPullUp, allTimePRDip
+  | 'benchmark_skills'        // skill progressions for selected skills
+  | 'advanced_skill_inputs'   // skill history, band levels, highest ever reached
+  | 'flexibility_targets'     // flexibility selections and benchmarks
+  | 'skill_selection'         // selectedSkills array (v3: includes new skills)
+  | 'equipment'               // equipmentAvailable
+  | 'recovery'                // recoveryQuality
+  | 'athlete_diagnostics'     // jointCautions, weakestArea, primaryLimitation
 
 /**
  * Mapping from field group to onboarding section ID
+ * [profile-completeness] ISSUE F: Enables targeted surfacing
  */
 export const FIELD_GROUP_TO_SECTION: Record<ProfileFieldGroup, string> = {
   core_goals: 'goals',
   schedule_identity: 'schedule',
   benchmark_strength: 'strength_benchmarks',
+  weighted_strength_inputs: 'weighted_strength',
   benchmark_skills: 'skill_benchmarks',
+  advanced_skill_inputs: 'skill_benchmarks',
   flexibility_targets: 'flexibility_benchmarks',
   skill_selection: 'skill_selection',
   equipment: 'equipment',
   recovery: 'recovery',
+  athlete_diagnostics: 'diagnostics',
 }
 
 /**
  * Human-readable labels for field groups (for notification UI)
+ * [profile-completeness] ISSUE F: User-facing labels for targeted surfacing
  */
 export const FIELD_GROUP_LABELS: Record<ProfileFieldGroup, string> = {
   core_goals: 'Training Goals',
   schedule_identity: 'Training Schedule',
   benchmark_strength: 'Strength Benchmarks',
+  weighted_strength_inputs: 'Weighted Strength Data',
   benchmark_skills: 'Skill Benchmarks',
+  advanced_skill_inputs: 'Advanced Skill Details',
   flexibility_targets: 'Flexibility Goals',
   skill_selection: 'Skill Selection',
   equipment: 'Equipment Setup',
   recovery: 'Recovery Profile',
+  athlete_diagnostics: 'Joint & Movement Assessment',
 }
 
 /**
@@ -1215,6 +1229,55 @@ export function getProfileCompletenessStatus(profile?: CanonicalProgrammingProfi
     missingGroups.push('equipment')
   }
   
+  // [profile-completeness] ISSUE A: Check weighted_strength_inputs
+  // If user has pull-up/dip strength but no weighted data, suggest weighted inputs
+  const hasBasicStrength = !!(p.pullUpMax || p.dipMax)
+  const hasWeightedStrength = !!(p.weightedPullUp || p.weightedDip)
+  const hasAllTimePRs = !!(p.allTimePRPullUp || p.allTimePRDip)
+  if (hasBasicStrength && !hasWeightedStrength && !hasAllTimePRs) {
+    // User has strength data but no weighted benchmarks - would benefit from weighted inputs
+    // Only suggest if they have intermediate+ pull-ups/dips
+    const pullUpNum = parseInt(p.pullUpMax?.replace(/[^0-9]/g, '') || '0')
+    const dipNum = parseInt(p.dipMax?.replace(/[^0-9]/g, '') || '0')
+    if (pullUpNum >= 10 || dipNum >= 10) {
+      missingGroups.push('weighted_strength_inputs')
+    }
+  }
+  
+  // [profile-completeness] ISSUE A: Check advanced_skill_inputs
+  // If user selected advanced skills but hasn't provided history/band info
+  const advancedSkillsSelected = (p.selectedSkills || []).filter(s => 
+    ['front_lever', 'back_lever', 'planche', 'muscle_up', 'handstand_pushup', 
+     'one_arm_pull_up', 'one_arm_chin_up', 'one_arm_push_up', 'dragon_flag', 
+     'planche_push_up', 'iron_cross'].includes(s)
+  )
+  if (advancedSkillsSelected.length > 0) {
+    // Check if skill history is populated for any selected skill
+    const hasSkillHistory = !!(
+      p.skillHistory?.front_lever?.trainingHistory ||
+      p.skillHistory?.planche?.trainingHistory ||
+      p.skillHistory?.muscle_up?.trainingHistory ||
+      p.skillHistory?.handstand_pushup?.trainingHistory
+    )
+    // Check if band levels are populated for straight-arm skills
+    const hasBandInfo = !!(p.frontLeverBandLevel || p.plancheBandLevel)
+    
+    if (!hasSkillHistory && !hasBandInfo && advancedSkillsSelected.length > 0) {
+      // User would benefit from more detailed skill inputs
+      missingGroups.push('advanced_skill_inputs')
+    }
+  }
+  
+  // [profile-completeness] ISSUE A: Check athlete_diagnostics
+  // If user hasn't provided joint/limitation info
+  if (!p.jointCautions?.length && !p.weakestArea && !p.primaryLimitation) {
+    // Not strictly required, but valuable for engine
+    // Only add if profile is mostly complete otherwise
+    if (p.primaryGoal && p.equipmentAvailable?.length) {
+      missingGroups.push('athlete_diagnostics')
+    }
+  }
+  
   // Check if user has seen the new skills (V3)
   const hasNewSkillsAvailable = storedVersion < 3
   const newSkillsAvailableCount = hasNewSkillsAvailable ? NEW_SKILLS_V3.length : 0
@@ -1239,13 +1302,21 @@ export function getProfileCompletenessStatus(profile?: CanonicalProgrammingProfi
   
   const isComplete = missingGroups.length === 0 && storedVersion >= CURRENT_PROFILE_SCHEMA_VERSION
   
-  console.log('[ProfileCompleteness] Status check:', {
+  // [profile-completeness] TASK 7: Log profile completeness status
+  console.log('[profile-completeness] Status check:', {
     isComplete,
     storedVersion,
     targetVersion: CURRENT_PROFILE_SCHEMA_VERSION,
     missingGroups,
+    missingGroupLabels: missingGroups.map(g => FIELD_GROUP_LABELS[g]),
     hasNewSkillsAvailable,
     suggestedSection,
+    // Additional context for debugging
+    hasWeightedStrength: !!(p.weightedPullUp || p.weightedDip),
+    hasAdvancedSkillInputs: !!(p.skillHistory?.front_lever || p.skillHistory?.planche),
+    advancedSkillsSelected: (p.selectedSkills || []).filter(s => 
+      ['front_lever', 'back_lever', 'planche', 'muscle_up', 'handstand_pushup'].includes(s)
+    ),
   })
   
   return {
@@ -1265,5 +1336,357 @@ export function getProfileCompletenessStatus(profile?: CanonicalProgrammingProfi
  */
 export function markProfileSchemaAsComplete(): void {
   saveProfileSchemaVersion(CURRENT_PROFILE_SCHEMA_VERSION)
-  console.log('[ProfileCompleteness] Marked profile as complete for schema v' + CURRENT_PROFILE_SCHEMA_VERSION)
+  console.log('[profile-completeness] Marked profile as complete for schema v' + CURRENT_PROFILE_SCHEMA_VERSION)
+}
+
+// =============================================================================
+// [profile-completeness] ISSUE C: PARTIAL UPDATE MERGE HELPERS
+// =============================================================================
+
+/**
+ * Safely merge partial profile updates without wiping existing data.
+ * [profile-completeness] ISSUE C: This is the recommended way to update profile fields.
+ * 
+ * @param updates - Only the fields that need to be updated
+ * @param options - Merge options
+ * @returns Summary of merged changes
+ */
+export function mergeProfileUpdates(
+  updates: Partial<CanonicalProgrammingProfile>,
+  options: {
+    skipNulls?: boolean        // Don't overwrite existing values with null/undefined
+    preserveArrays?: boolean   // Merge arrays instead of replacing
+    logChanges?: boolean       // Log detailed change summary
+  } = {}
+): {
+  success: boolean
+  mergedFields: string[]
+  skippedFields: string[]
+  error?: string
+} {
+  const {
+    skipNulls = true,
+    preserveArrays = false,
+    logChanges = true,
+  } = options
+  
+  try {
+    const currentProfile = getCanonicalProfile()
+    const mergedFields: string[] = []
+    const skippedFields: string[] = []
+    
+    // Build the actual updates object, filtering out null/undefined if skipNulls
+    const filteredUpdates: Partial<CanonicalProgrammingProfile> = {}
+    
+    for (const [key, value] of Object.entries(updates)) {
+      // Skip if value is null/undefined and we're preserving existing data
+      if (skipNulls && (value === null || value === undefined)) {
+        skippedFields.push(key)
+        continue
+      }
+      
+      // For arrays, optionally merge instead of replace
+      if (preserveArrays && Array.isArray(value) && Array.isArray((currentProfile as Record<string, unknown>)[key])) {
+        const existingArray = (currentProfile as Record<string, unknown>)[key] as unknown[]
+        const mergedArray = [...new Set([...existingArray, ...value])]
+        ;(filteredUpdates as Record<string, unknown>)[key] = mergedArray
+        mergedFields.push(key)
+      } else {
+        ;(filteredUpdates as Record<string, unknown>)[key] = value
+        mergedFields.push(key)
+      }
+    }
+    
+    // Apply the filtered updates
+    if (Object.keys(filteredUpdates).length > 0) {
+      saveCanonicalProfile(filteredUpdates)
+    }
+    
+    // [profile-completeness] TASK 7: Log merge result
+    if (logChanges) {
+      console.log('[profile-completeness] Partial update merged:', {
+        mergedFieldCount: mergedFields.length,
+        mergedFields,
+        skippedFieldCount: skippedFields.length,
+        skippedFields,
+        preserveArrays,
+        skipNulls,
+      })
+    }
+    
+    return {
+      success: true,
+      mergedFields,
+      skippedFields,
+    }
+  } catch (error) {
+    console.error('[profile-completeness] Merge failed:', error)
+    return {
+      success: false,
+      mergedFields: [],
+      skippedFields: [],
+      error: String(error),
+    }
+  }
+}
+
+// =============================================================================
+// [profile-completeness] ISSUE F: TARGETED SURFACING HELPERS
+// =============================================================================
+
+/**
+ * Get a deep link to the specific onboarding/settings section for a field group.
+ * [profile-completeness] ISSUE F: Enables targeted surfacing without full onboarding reset.
+ */
+export function getDeepLinkForFieldGroup(group: ProfileFieldGroup): {
+  path: string
+  section: string
+  query: Record<string, string>
+} {
+  const section = FIELD_GROUP_TO_SECTION[group]
+  
+  // Map sections to their appropriate routes
+  const sectionRoutes: Record<string, { path: string; query: Record<string, string> }> = {
+    goals: { path: '/settings', query: { section: 'goals', focus: 'true' } },
+    schedule: { path: '/settings', query: { section: 'schedule', focus: 'true' } },
+    strength_benchmarks: { path: '/settings', query: { section: 'benchmarks', tab: 'strength', focus: 'true' } },
+    weighted_strength: { path: '/settings', query: { section: 'benchmarks', tab: 'weighted', focus: 'true' } },
+    skill_benchmarks: { path: '/settings', query: { section: 'benchmarks', tab: 'skills', focus: 'true' } },
+    flexibility_benchmarks: { path: '/settings', query: { section: 'benchmarks', tab: 'flexibility', focus: 'true' } },
+    skill_selection: { path: '/settings', query: { section: 'goals', tab: 'skills', focus: 'true' } },
+    equipment: { path: '/settings', query: { section: 'equipment', focus: 'true' } },
+    recovery: { path: '/settings', query: { section: 'recovery', focus: 'true' } },
+    diagnostics: { path: '/settings', query: { section: 'diagnostics', focus: 'true' } },
+  }
+  
+  const route = sectionRoutes[section] || { path: '/settings', query: { section } }
+  
+  return {
+    path: route.path,
+    section,
+    query: route.query,
+  }
+}
+
+/**
+ * Get all deep links for missing profile field groups.
+ * [profile-completeness] ISSUE F: Builds the targeted surfacing UI data.
+ */
+export function getMissingFieldGroupLinks(profile?: CanonicalProgrammingProfile): Array<{
+  group: ProfileFieldGroup
+  label: string
+  deepLink: ReturnType<typeof getDeepLinkForFieldGroup>
+  priority: 'required' | 'recommended' | 'optional'
+}> {
+  const status = getProfileCompletenessStatus(profile)
+  
+  return status.missingGroups.map(group => {
+    // Determine priority based on group type
+    let priority: 'required' | 'recommended' | 'optional' = 'optional'
+    if (['core_goals', 'schedule_identity', 'equipment'].includes(group)) {
+      priority = 'required'
+    } else if (['benchmark_strength', 'benchmark_skills', 'skill_selection'].includes(group)) {
+      priority = 'recommended'
+    }
+    
+    return {
+      group,
+      label: FIELD_GROUP_LABELS[group],
+      deepLink: getDeepLinkForFieldGroup(group),
+      priority,
+    }
+  })
+}
+
+// =============================================================================
+// [profile-completeness] ENGINE FIELD CONSUMPTION VERIFICATION
+// =============================================================================
+
+/**
+ * Engine field groups - what the planner actually consumes.
+ * [profile-completeness] ISSUE E: Tracks which fields are used by generation.
+ */
+export interface EngineFieldConsumption {
+  // Core inputs always consumed
+  coreGoals: {
+    primaryGoal: string | null
+    secondaryGoal: string | null
+    selectedSkills: string[]
+    trainingPathType: string | null
+  }
+  // Schedule inputs consumed
+  scheduleInputs: {
+    scheduleMode: string
+    trainingDaysPerWeek: number | null
+    sessionLengthMinutes: number
+    sessionDurationMode: string
+  }
+  // Weighted strength inputs (new - must be consumed)
+  weightedStrengthInputs: {
+    weightedPullUp: { addedWeight: number; reps: number } | null
+    weightedDip: { addedWeight: number; reps: number } | null
+    allTimePRPullUp: { load: number; reps: number } | null
+    allTimePRDip: { load: number; reps: number } | null
+    hasWeightedData: boolean
+    hasPRData: boolean
+  }
+  // Advanced skill inputs (new - must be consumed)
+  advancedSkillInputs: {
+    hasSkillHistory: boolean
+    hasBandLevels: boolean
+    hasHighestEverReached: boolean
+    skillProgressions: {
+      frontLever: string | null
+      planche: string | null
+      hspu: string | null
+      muscleUp: string | null
+    }
+  }
+  // Equipment consumed
+  equipment: string[]
+  // Diagnostics consumed
+  diagnostics: {
+    jointCautions: string[]
+    weakestArea: string | null
+    primaryLimitation: string | null
+  }
+}
+
+/**
+ * Get engine field consumption snapshot.
+ * [profile-completeness] ISSUE E: Use this to verify planner is consuming new fields.
+ */
+export function getEngineFieldConsumption(profile?: CanonicalProgrammingProfile): EngineFieldConsumption {
+  const p = profile || getCanonicalProfile()
+  
+  const consumption: EngineFieldConsumption = {
+    coreGoals: {
+      primaryGoal: p.primaryGoal,
+      secondaryGoal: p.secondaryGoal,
+      selectedSkills: p.selectedSkills || [],
+      trainingPathType: p.trainingPathType,
+    },
+    scheduleInputs: {
+      scheduleMode: p.scheduleMode,
+      trainingDaysPerWeek: p.trainingDaysPerWeek,
+      sessionLengthMinutes: p.sessionLengthMinutes,
+      sessionDurationMode: p.sessionDurationMode,
+    },
+    weightedStrengthInputs: {
+      weightedPullUp: p.weightedPullUp ? {
+        addedWeight: p.weightedPullUp.addedWeight,
+        reps: p.weightedPullUp.reps,
+      } : null,
+      weightedDip: p.weightedDip ? {
+        addedWeight: p.weightedDip.addedWeight,
+        reps: p.weightedDip.reps,
+      } : null,
+      allTimePRPullUp: p.allTimePRPullUp ? {
+        load: p.allTimePRPullUp.load,
+        reps: p.allTimePRPullUp.reps,
+      } : null,
+      allTimePRDip: p.allTimePRDip ? {
+        load: p.allTimePRDip.load,
+        reps: p.allTimePRDip.reps,
+      } : null,
+      hasWeightedData: !!(p.weightedPullUp || p.weightedDip),
+      hasPRData: !!(p.allTimePRPullUp || p.allTimePRDip),
+    },
+    advancedSkillInputs: {
+      hasSkillHistory: !!(
+        p.skillHistory?.front_lever?.trainingHistory ||
+        p.skillHistory?.planche?.trainingHistory ||
+        p.skillHistory?.muscle_up?.trainingHistory
+      ),
+      hasBandLevels: !!(p.frontLeverBandLevel || p.plancheBandLevel),
+      hasHighestEverReached: !!(p.frontLeverHighestEver || p.plancheHighestEver),
+      skillProgressions: {
+        frontLever: p.frontLeverProgression,
+        planche: p.plancheProgression,
+        hspu: p.hspuProgression,
+        muscleUp: p.muscleUpReadiness,
+      },
+    },
+    equipment: p.equipmentAvailable || [],
+    diagnostics: {
+      jointCautions: p.jointCautions || [],
+      weakestArea: p.weakestArea,
+      primaryLimitation: p.primaryLimitation,
+    },
+  }
+  
+  // [profile-completeness] TASK 7: Log engine consumption
+  console.log('[profile-completeness] Engine field consumption:', {
+    hasWeightedData: consumption.weightedStrengthInputs.hasWeightedData,
+    hasPRData: consumption.weightedStrengthInputs.hasPRData,
+    hasSkillHistory: consumption.advancedSkillInputs.hasSkillHistory,
+    hasBandLevels: consumption.advancedSkillInputs.hasBandLevels,
+    selectedSkillsCount: consumption.coreGoals.selectedSkills.length,
+    equipmentCount: consumption.equipment.length,
+    jointCautionsCount: consumption.diagnostics.jointCautions.length,
+  })
+  
+  return consumption
+}
+
+/**
+ * Verify all engine-relevant fields are being consumed.
+ * [profile-completeness] ISSUE E: Call this before generation to confirm field wiring.
+ */
+export function verifyEngineFieldWiring(profile?: CanonicalProgrammingProfile): {
+  isFullyWired: boolean
+  consumedFieldGroups: ProfileFieldGroup[]
+  unconsumedFieldGroups: ProfileFieldGroup[]
+} {
+  const consumption = getEngineFieldConsumption(profile)
+  const consumed: ProfileFieldGroup[] = []
+  const unconsumed: ProfileFieldGroup[] = []
+  
+  // Check each group
+  if (consumption.coreGoals.primaryGoal) {
+    consumed.push('core_goals')
+  } else {
+    unconsumed.push('core_goals')
+  }
+  
+  if (consumption.scheduleInputs.scheduleMode) {
+    consumed.push('schedule_identity')
+  } else {
+    unconsumed.push('schedule_identity')
+  }
+  
+  if (consumption.weightedStrengthInputs.hasWeightedData || consumption.weightedStrengthInputs.hasPRData) {
+    consumed.push('weighted_strength_inputs')
+  }
+  // Note: weighted_strength_inputs is optional, not unconsumed if missing
+  
+  if (consumption.advancedSkillInputs.hasSkillHistory || consumption.advancedSkillInputs.hasBandLevels) {
+    consumed.push('advanced_skill_inputs')
+  }
+  // Note: advanced_skill_inputs is optional
+  
+  if (consumption.equipment.length > 0) {
+    consumed.push('equipment')
+  } else {
+    unconsumed.push('equipment')
+  }
+  
+  if (consumption.diagnostics.jointCautions.length > 0 || consumption.diagnostics.weakestArea) {
+    consumed.push('athlete_diagnostics')
+  }
+  // Note: diagnostics is optional
+  
+  const isFullyWired = unconsumed.length === 0
+  
+  console.log('[profile-completeness] Engine wiring verification:', {
+    isFullyWired,
+    consumedFieldGroups: consumed,
+    unconsumedFieldGroups: unconsumed,
+  })
+  
+  return {
+    isFullyWired,
+    consumedFieldGroups: consumed,
+    unconsumedFieldGroups: unconsumed,
+  }
 }

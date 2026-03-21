@@ -141,9 +141,20 @@ import {
 import {
   getSkillPrescriptionRules,
   getWeightedStrengthCarryover,
+  // [advanced-skill-expression] ISSUE A: Advanced skill helpers
+  isAdvancedSkill,
+  getAdvancedSkillFamily,
+  ADVANCED_SKILL_FAMILIES,
   type SkillPrescriptionRules,
   type WeightedStrengthCarryover,
 } from './engine-quality-contract'
+import {
+  // [advanced-skill-expression] ISSUE D: Intentional support work helpers
+  getAdvancedSkillSupport,
+  isExercisePrimarySupportFor,
+  getAllSupportExercisesFor,
+  ADVANCED_SKILL_SUPPORT_PATTERNS,
+} from './doctrine/skill-support-mappings'
 
 export interface SelectedExercise {
   exercise: Exercise
@@ -376,6 +387,24 @@ export function selectExercisesForSession(inputs: ExerciseSelectionInputs): Exer
     prerequisiteContext
   )
   
+  // [session-assembly] ISSUE C: Validate main exercises before proceeding
+  if (main.length === 0) {
+    console.error('[session-assembly] CRITICAL: selectMainExercises returned empty array', {
+      dayFocus: day.focus,
+      primaryGoal,
+      experienceLevel,
+      sessionMinutes,
+    })
+    // Don't throw here - let the session assembly validation catch it
+    // But log extensively for diagnosis
+  }
+  
+  console.log('[session-assembly] Main exercise selection complete:', {
+    exerciseCount: main.length,
+    dayFocus: day.focus,
+    primaryGoal,
+  })
+  
   // Generate intelligent warmup based on main exercises
   const warmup = selectIntelligentWarmup(
     main,
@@ -438,21 +467,36 @@ export function selectExercisesForSession(inputs: ExerciseSelectionInputs): Exer
   const antiBloatResult = validateSessionAntiBloat(mainLoadMetadata, sessionStyle)
   const loadRationale = generateSessionLoadRationale(sessionLoadSummary, sessionStyle)
   
-  return {
-    warmup,
-    main,
-    cooldown,
-    totalEstimatedTime,
-    sessionLoadSummary,
-    sessionStyle,
-    loadRationale,
-    antiBloatValidation: {
-      isValid: antiBloatResult.isValid,
-      issues: antiBloatResult.issues,
-      suggestions: antiBloatResult.suggestions,
-    },
+  // [prescription] TASK 7: Log weighted exercises with prescriptions for debugging
+  const weightedWithLoads = main.filter(e => e.prescribedLoad && e.prescribedLoad.load > 0)
+  if (weightedWithLoads.length > 0) {
+    console.log('[prescription] Session weighted exercise prescriptions:', {
+      dayFocus: day.focus,
+      exercises: weightedWithLoads.map(e => ({
+        id: e.exercise.id,
+        load: `+${e.prescribedLoad?.load} ${e.prescribedLoad?.unit}`,
+        basis: e.prescribedLoad?.basis,
+        confidence: e.prescribedLoad?.confidenceLevel,
+      })),
+      skillsExpressed: skillsForSession?.map(s => s.skill) || [],
+    })
   }
-}
+  
+  return {
+  warmup,
+  main,
+  cooldown,
+  totalEstimatedTime,
+  sessionLoadSummary,
+  sessionStyle,
+  loadRationale,
+  antiBloatValidation: {
+  isValid: antiBloatResult.isValid,
+  issues: antiBloatResult.issues,
+  suggestions: antiBloatResult.suggestions,
+  },
+  }
+  }
 
 // =============================================================================
 // EXERCISE BUDGET
@@ -476,6 +520,155 @@ function calculateExerciseBudget(sessionMinutes: number): ExerciseBudget {
   }
   // 75+ minutes
   return { mainExercises: 7, warmupMinutes: 10, cooldownMinutes: 8 }
+}
+
+// =============================================================================
+// [advanced-skill-expression] ISSUE A/D: ADVANCED SKILL EXPRESSION HELPERS
+// =============================================================================
+
+/**
+ * Identifies exercises that should be included based on advanced skill expression.
+ * [advanced-skill-expression] ISSUE A: Ensures advanced skills get direct expression.
+ */
+function getAdvancedSkillExercises(
+  skillsForSession: Array<{ skill: string; expressionMode: string; weight: number }> | undefined,
+  availableSkills: Exercise[],
+  availableStrength: Exercise[],
+  dayFocus: string
+): { exerciseId: string; reason: string; priority: number }[] {
+  if (!skillsForSession || skillsForSession.length === 0) {
+    return []
+  }
+
+  const recommendations: { exerciseId: string; reason: string; priority: number }[] = []
+  
+  for (const allocation of skillsForSession) {
+    const { skill, expressionMode, weight } = allocation
+    
+    if (!isAdvancedSkill(skill)) continue
+    
+    const advancedFamily = getAdvancedSkillFamily(skill)
+    if (!advancedFamily) continue
+    
+    // [advanced-skill-expression] ISSUE B: HSPU special handling
+    if (skill === 'hspu') {
+      // HSPU should influence vertical push selection
+      if (dayFocus.includes('push') || dayFocus.includes('skill') || dayFocus.includes('vertical')) {
+        const hspuProgressions = advancedFamily.directProgressions
+        for (const exId of hspuProgressions) {
+          const found = [...availableSkills, ...availableStrength].find(
+            e => e.id.toLowerCase() === exId.toLowerCase()
+          )
+          if (found) {
+            recommendations.push({
+              exerciseId: found.id,
+              reason: `[HSPU progression] ${advancedFamily.displayName} direct expression`,
+              priority: expressionMode === 'primary' ? 3 : expressionMode === 'technical' ? 2 : 1,
+            })
+            break
+          }
+        }
+      }
+    }
+    
+    // [advanced-skill-expression] ISSUE C: Other advanced skills
+    if (skill === 'back_lever' || skill === 'dragon_flag' || skill === 'planche_pushup' ||
+        skill === 'one_arm_pull_up' || skill === 'one_arm_chin_up' || skill === 'one_arm_push_up') {
+      const progressions = advancedFamily.directProgressions
+      for (const exId of progressions) {
+        const found = [...availableSkills, ...availableStrength].find(
+          e => e.id.toLowerCase() === exId.toLowerCase()
+        )
+        if (found) {
+          recommendations.push({
+            exerciseId: found.id,
+            reason: `[Advanced] ${advancedFamily.displayName} ${expressionMode} expression`,
+            priority: expressionMode === 'primary' ? 3 : expressionMode === 'technical' ? 2 : 1,
+          })
+          break
+        }
+      }
+    }
+    
+    // [advanced-skill-expression] Log detected advanced skill for session
+    console.log('[advanced-skill-expression] Skill exercise recommendation:', {
+      skill,
+      displayName: advancedFamily.displayName,
+      expressionMode,
+      dayFocus,
+      recommendationsCount: recommendations.length,
+    })
+  }
+  
+  return recommendations
+}
+
+/**
+ * Gets intentional support exercises for advanced skills in this session.
+ * [advanced-skill-expression] ISSUE D: Support work should look intentional.
+ */
+function getAdvancedSkillSupportExercises(
+  skillsForSession: Array<{ skill: string; expressionMode: string; weight: number }> | undefined,
+  availableAccessory: Exercise[],
+  availableCore: Exercise[]
+): { exerciseId: string; reason: string; supportType: 'primary' | 'secondary' | 'trunk' }[] {
+  if (!skillsForSession || skillsForSession.length === 0) {
+    return []
+  }
+
+  const supportRecommendations: { exerciseId: string; reason: string; supportType: 'primary' | 'secondary' | 'trunk' }[] = []
+  const allAvailable = [...availableAccessory, ...availableCore]
+  
+  for (const allocation of skillsForSession) {
+    const { skill, expressionMode } = allocation
+    
+    if (!isAdvancedSkill(skill)) continue
+    
+    const supportPattern = ADVANCED_SKILL_SUPPORT_PATTERNS[skill]
+    if (!supportPattern) continue
+    
+    // Primary support work
+    if (expressionMode === 'primary' || expressionMode === 'technical') {
+      for (const primary of supportPattern.primarySupport) {
+        for (const exId of primary.exerciseIds) {
+          const found = allAvailable.find(e => e.id.toLowerCase() === exId.toLowerCase())
+          if (found) {
+            supportRecommendations.push({
+              exerciseId: found.id,
+              reason: `[${supportPattern.displayName}] ${primary.purpose}`,
+              supportType: 'primary',
+            })
+            break
+          }
+        }
+      }
+    }
+    
+    // Trunk support for all expression modes
+    const trunkSupport = supportPattern.trunkSupport
+    for (const exId of trunkSupport.exerciseIds) {
+      const found = allAvailable.find(e => e.id.toLowerCase() === exId.toLowerCase())
+      if (found) {
+        supportRecommendations.push({
+          exerciseId: found.id,
+          reason: `[${supportPattern.displayName} trunk] ${trunkSupport.purpose}`,
+          supportType: 'trunk',
+        })
+        break
+      }
+    }
+    
+    // [advanced-skill-expression] Log support recommendations
+    console.log('[advanced-skill-expression] Support work recommendation:', {
+      skill,
+      displayName: supportPattern.displayName,
+      expressionMode,
+      primarySupportCount: supportRecommendations.filter(s => s.supportType === 'primary').length,
+      trunkSupportCount: supportRecommendations.filter(s => s.supportType === 'trunk').length,
+    })
+  }
+  
+  return supportRecommendations
 }
 
 // =============================================================================
@@ -739,13 +932,44 @@ function selectMainExercises(
         : null
       
       if (benchmarkData) {
-        // Determine prescription mode based on rep target
+        // [prescription] ISSUE D: Session role affects prescription mode
+        // Both rep target AND day focus influence the prescription
         const repsStr = finalRepsOrTime || '5'
         const repTarget = parseInt(repsStr.split('-')[0]) || 5
-        const prescriptionMode: WeightedPrescriptionMode = 
-          repTarget <= 5 ? 'strength_primary' :
-          repTarget <= 6 ? 'strength_support' :
-          repTarget <= 10 ? 'volume_support' : 'hypertrophy'
+        
+        // Determine if this is a heavier strength day based on focus
+        const isHeavyStrengthDay = day.focus === 'push_strength' || day.focus === 'pull_strength'
+        const isSupportDay = day.focus === 'support_recovery' || day.focus === 'support_conditioning'
+        const isSkillDay = day.focus === 'skill' || day.focus === 'push_skill' || day.focus === 'pull_skill'
+        
+        // [prescription] Session role modifies prescription mode
+        let prescriptionMode: WeightedPrescriptionMode
+        if (isHeavyStrengthDay) {
+          // Heavy strength days: bias toward heavier loads regardless of rep scheme
+          prescriptionMode = repTarget <= 6 ? 'strength_primary' : 'strength_support'
+        } else if (isSupportDay) {
+          // Support days: bias toward volume/hypertrophy
+          prescriptionMode = repTarget <= 8 ? 'volume_support' : 'hypertrophy'
+        } else if (isSkillDay) {
+          // Skill days: weighted work is support - moderate intensity
+          prescriptionMode = repTarget <= 5 ? 'strength_support' : 'volume_support'
+        } else {
+          // Mixed/default: use rep-based logic
+          prescriptionMode = 
+            repTarget <= 5 ? 'strength_primary' :
+            repTarget <= 6 ? 'strength_support' :
+            repTarget <= 10 ? 'volume_support' : 'hypertrophy'
+        }
+        
+        // [prescription] Log how session role influences load
+        console.log('[prescription] Session role → prescription mode:', {
+          exerciseId: finalExercise.id,
+          dayFocus: day.focus,
+          repTarget,
+          prescriptionMode,
+          hasBenchmark: !!benchmarkData.current,
+          hasPR: !!benchmarkData.pr,
+        })
         
         const loadPrescription = estimateWeightedLoadPrescription(
           exerciseType,
@@ -1125,6 +1349,25 @@ function selectMainExercises(
   const deduplicatedSelected = dedupeSelectedExercises(selected)
   if (deduplicatedSelected.length !== selected.length) {
     console.log('[exercise-selector] TASK 6: Removed', selected.length - deduplicatedSelected.length, 'duplicate exercises')
+  }
+  
+  // [session-assembly] ISSUE C: Log warning if exercise pool is too thin
+  if (deduplicatedSelected.length === 0) {
+    console.warn('[session-assembly] WARNING: selectMainExercises returned 0 exercises', {
+      dayFocus: day.focus,
+      primaryGoal,
+      availableSkillsCount: availableSkills.length,
+      availableStrengthCount: availableStrength.length,
+      goalExercisesCount: goalExercises.length,
+      maxExercises,
+    })
+  } else if (deduplicatedSelected.length < Math.min(3, maxExercises)) {
+    console.warn('[session-assembly] WARNING: selectMainExercises returned fewer than expected exercises', {
+      selected: deduplicatedSelected.length,
+      expected: Math.min(3, maxExercises),
+      dayFocus: day.focus,
+      primaryGoal,
+    })
   }
   
   // Sort by neural demand (highest first)

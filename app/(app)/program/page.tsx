@@ -296,11 +296,18 @@ export default function ProgramPage() {
         }
         
         // TASK 3: Stage 9 - Get constraint insight if available (non-critical)
+        // [limiter-truth] ISSUE D: This now uses canonical displayed-limiter helper
         setLoadStage('loading-constraints')
         if (constraintMod) {
           try {
             const insight = constraintMod.getConstraintInsight()
             setConstraintLabel(insight.label)
+            // [limiter-truth] Log the canonical limiter being displayed
+            console.log('[limiter-truth] ProgramPage using canonical constraint label:', {
+              label: insight.label,
+              hasInsight: insight.hasInsight,
+              confidence: insight.confidence,
+            })
             console.log('[ProgramPage] Stage 9: Constraint insight loaded:', insight.label)
           } catch (err) {
             console.warn('[ProgramPage] Stage 9: Constraint insight failed (non-fatal):', err)
@@ -414,6 +421,12 @@ export default function ProgramPage() {
           },
         })
         
+        // [session-assembly] Check if this was a save block (invalid session structure)
+        const isSaveBlocked = errorMessage.includes('session_save_blocked')
+        if (isSaveBlocked) {
+          console.error('[session-assembly] Save was blocked due to invalid session structure - preserving last good program')
+        }
+        
         // ISSUE B: User-friendly message that doesn't expose internals
         const userMessage = errorCode === 'profile_validation_failed'
           ? 'Profile incomplete. Please ensure your training profile is complete.'
@@ -421,6 +434,8 @@ export default function ProgramPage() {
           ? 'Unable to determine optimal structure. Please try adjusting your settings.'
           : errorCode === 'session_assembly_failed'
           ? 'Session assembly encountered an issue. Please try again.'
+          : isSaveBlocked
+          ? 'Generated program had structural issues. Please try again.'
           : `Program generation failed at ${errorStage}. Please try again.`
         
         setGenerationError(userMessage)
@@ -538,11 +553,21 @@ export default function ProgramPage() {
           oldProgramId: program?.id,
         })
         
+        // [session-assembly] Check if this was a save block (invalid session structure)
+        const isSaveBlocked = errorMessage.includes('session_save_blocked')
+        if (isSaveBlocked) {
+          console.error('[session-assembly] Regenerate save was blocked - preserving current program')
+        }
+        
         // ISSUE B & C: Prior program preserved - only show error, don't corrupt state
         const userMessage = errorCode === 'profile_validation_failed'
           ? 'Profile incomplete. Please ensure your training profile is complete.'
           : errorCode === 'structure_selection_failed'
           ? 'Unable to determine optimal structure. Please try adjusting your settings.'
+          : errorCode === 'session_assembly_failed'
+          ? 'Session assembly encountered an issue. Please try again.'
+          : isSaveBlocked
+          ? 'Generated program had structural issues. Your current program is preserved.'
           : `Program regeneration failed at ${errorStage}. Your current program is preserved.`
         
         setGenerationError(userMessage)

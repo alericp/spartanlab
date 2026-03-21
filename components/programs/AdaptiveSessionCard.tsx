@@ -107,9 +107,15 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
   const rpeExerciseCount = session.exercises.filter((e) => exerciseSupportsRPE(e.name)).length
 
   const handleStartWorkout = () => {
-    startSession()
-    setIsExpanded(true)
+    // [workout-route] UNIFIED ENTRY: Route to canonical workout session page
+    // This ensures all "Start Workout" paths use the same StreamlinedWorkoutSession experience
+    // The embedded WorkoutExecutionCard is no longer used for full workout execution
+    console.log('[workout-route] routing to canonical session from program card:', {
+      dayNumber: session.dayNumber,
+      sessionName: session.name,
+    })
     trackWorkoutStarted(session.name)
+    router.push(`/workout/session?day=${session.dayNumber || 1}`)
   }
 
   const handleWorkoutComplete = () => {
@@ -325,7 +331,10 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
               onReturnToProgram={handleReturnToProgram}
             />
           ) : (isActive || isPaused) ? (
-            /* Active Workout Execution */
+            /* [workout-route] UNIFIED: Active workouts now route to /workout/session
+             * This embedded execution path is kept for backward compatibility but
+             * should rarely be reached since handleStartWorkout now navigates away.
+             * If this renders, it means the user navigated back mid-workout. */
             <WorkoutExecutionCard
               session={session}
               onComplete={handleWorkoutComplete}

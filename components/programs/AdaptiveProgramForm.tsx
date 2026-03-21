@@ -64,7 +64,9 @@ export function AdaptiveProgramForm({
     <Card className="bg-[#2A2A2A] border-[#3A3A3A] p-6">
       <div className="space-y-6">
         {/* Constraint Insight Banner */}
-        {constraintLabel && constraintLabel !== 'More Data Needed' && (
+        {/* [limiter-truth] ISSUE B/D: Hide banner for low-history / calibration states */}
+        {constraintLabel && 
+         !['More Data Needed', 'Early Calibration', 'Building Consistency', 'No Primary Constraint', 'Training Balanced'].includes(constraintLabel) && (
           <div className="flex items-start gap-3 p-3 bg-[#1A1A1A] rounded-lg border border-[#3A3A3A]">
             <Info className="w-4 h-4 text-[#E63946] mt-0.5 shrink-0" />
             <div>

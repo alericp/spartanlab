@@ -669,3 +669,279 @@ export function getMaxStraightArmForSkill(skillId: SkillCarryover): number {
   const mapping = SKILL_SUPPORT_MAPPINGS[skillId]
   return mapping?.constraints.maxStraightArmPerSession || 2
 }
+
+// =============================================================================
+// [advanced-skill-expression] ISSUE D: INTENTIONAL SUPPORT WORK MAPPINGS
+// =============================================================================
+
+/**
+ * Advanced skill support work mappings.
+ * Provides more intentional support exercise selection based on skill category.
+ * ISSUE D: Support work should look intentional, not random accessories.
+ */
+export const ADVANCED_SKILL_SUPPORT_PATTERNS: Record<string, {
+  skillId: string
+  displayName: string
+  // Primary support patterns - these MUST appear when this skill is selected
+  primarySupport: {
+    exerciseIds: string[]
+    purpose: string
+  }[]
+  // Secondary support patterns - nice to have
+  secondarySupport: {
+    exerciseIds: string[]
+    purpose: string
+  }[]
+  // Core/trunk work that specifically serves this skill
+  trunkSupport: {
+    exerciseIds: string[]
+    purpose: string
+  }
+}> = {
+  hspu: {
+    skillId: 'hspu',
+    displayName: 'Handstand Push-Up',
+    primarySupport: [
+      {
+        exerciseIds: ['pike_push_up', 'elevated_pike_push_up', 'wall_hspu_negative', 'z_press'],
+        purpose: 'Vertical pressing strength progression',
+      },
+      {
+        exerciseIds: ['handstand_hold', 'wall_handstand', 'chest_to_wall_handstand'],
+        purpose: 'Overhead line and balance',
+      },
+    ],
+    secondarySupport: [
+      {
+        exerciseIds: ['face_pull', 'lateral_raise', 'shoulder_prehab'],
+        purpose: 'Shoulder stability and health',
+      },
+      {
+        exerciseIds: ['dip', 'ring_dip', 'weighted_dip'],
+        purpose: 'Pressing strength foundation',
+      },
+    ],
+    trunkSupport: {
+      exerciseIds: ['hollow_body_hold', 'handstand_shoulder_taps'],
+      purpose: 'Anti-extension for handstand line',
+    },
+  },
+  back_lever: {
+    skillId: 'back_lever',
+    displayName: 'Back Lever',
+    primarySupport: [
+      {
+        exerciseIds: ['german_hang', 'skin_the_cat', 'shoulder_dislocates'],
+        purpose: 'Shoulder extension mobility and strength',
+      },
+      {
+        exerciseIds: ['tuck_back_lever', 'adv_tuck_back_lever', 'back_lever_pull'],
+        purpose: 'Straight-arm pulling in extension',
+      },
+    ],
+    secondarySupport: [
+      {
+        exerciseIds: ['bodyweight_row', 'face_pull', 'rear_delt_fly'],
+        purpose: 'Posterior chain support',
+      },
+      {
+        exerciseIds: ['bicep_curl', 'hammer_curl'],
+        purpose: 'Tendon conditioning',
+      },
+    ],
+    trunkSupport: {
+      exerciseIds: ['hollow_body_hold', 'body_lever', 'hollow_body_rock'],
+      purpose: 'Body tension for lever position',
+    },
+  },
+  dragon_flag: {
+    skillId: 'dragon_flag',
+    displayName: 'Dragon Flag',
+    primarySupport: [
+      {
+        exerciseIds: ['hollow_body_hold', 'hollow_body_rock', 'body_lever'],
+        purpose: 'Anti-extension core foundation',
+      },
+      {
+        exerciseIds: ['dragon_flag_tuck', 'dragon_flag_neg', 'dragon_flag_one_leg'],
+        purpose: 'Eccentric control progression',
+      },
+    ],
+    secondarySupport: [
+      {
+        exerciseIds: ['hanging_leg_raise', 'toes_to_bar', 'l_sit_floor'],
+        purpose: 'Compression strength',
+      },
+      {
+        exerciseIds: ['pull_up', 'scapular_pulls'],
+        purpose: 'Lat engagement for anchor',
+      },
+    ],
+    trunkSupport: {
+      exerciseIds: ['hollow_body_hold', 'plank_hold', 'ab_wheel_rollout'],
+      purpose: 'Anti-extension stability',
+    },
+  },
+  planche_pushup: {
+    skillId: 'planche_pushup',
+    displayName: 'Planche Push-Up',
+    primarySupport: [
+      {
+        exerciseIds: ['pseudo_planche_pushup', 'planche_lean', 'tuck_planche'],
+        purpose: 'Planche position preparation',
+      },
+      {
+        exerciseIds: ['planche_lean', 'adv_tuck_planche', 'straddle_planche'],
+        purpose: 'Straight-arm pressing foundation',
+      },
+    ],
+    secondarySupport: [
+      {
+        exerciseIds: ['serratus_pushup', 'scapular_protraction', 'face_pull'],
+        purpose: 'Scapular protraction strength',
+      },
+      {
+        exerciseIds: ['tricep_extension', 'diamond_push_up'],
+        purpose: 'Elbow extension strength',
+      },
+    ],
+    trunkSupport: {
+      exerciseIds: ['hollow_body_hold', 'compression_hold', 'posterior_pelvic_tilt'],
+      purpose: 'Anterior chain control',
+    },
+  },
+  one_arm_pull_up: {
+    skillId: 'one_arm_pull_up',
+    displayName: 'One-Arm Pull-Up',
+    primarySupport: [
+      {
+        exerciseIds: ['weighted_pull_up', 'archer_pull_up', 'typewriter_pull_up'],
+        purpose: 'Unilateral pulling progression',
+      },
+      {
+        exerciseIds: ['one_arm_pull_up_negative', 'assisted_one_arm_pull_up', 'pulley_assisted_oap'],
+        purpose: 'Eccentric and assisted work',
+      },
+    ],
+    secondarySupport: [
+      {
+        exerciseIds: ['bicep_curl', 'hammer_curl', 'reverse_curl'],
+        purpose: 'Tendon-friendly elbow conditioning',
+      },
+      {
+        exerciseIds: ['scapular_pulls', 'face_pull'],
+        purpose: 'Scapular stability',
+      },
+    ],
+    trunkSupport: {
+      exerciseIds: ['pallof_press', 'side_plank', 'hanging_side_raises'],
+      purpose: 'Anti-rotation under load',
+    },
+  },
+  one_arm_chin_up: {
+    skillId: 'one_arm_chin_up',
+    displayName: 'One-Arm Chin-Up',
+    primarySupport: [
+      {
+        exerciseIds: ['weighted_chin_up', 'archer_chin_up', 'offset_chin_up'],
+        purpose: 'Unilateral pulling progression (supinated)',
+      },
+      {
+        exerciseIds: ['one_arm_chin_up_negative', 'assisted_one_arm_chin_up'],
+        purpose: 'Eccentric and assisted work',
+      },
+    ],
+    secondarySupport: [
+      {
+        exerciseIds: ['bicep_curl', 'incline_curl', 'preacher_curl'],
+        purpose: 'Bicep tendon conditioning',
+      },
+      {
+        exerciseIds: ['scapular_pulls', 'face_pull'],
+        purpose: 'Scapular stability',
+      },
+    ],
+    trunkSupport: {
+      exerciseIds: ['pallof_press', 'side_plank', 'anti_rotation_hold'],
+      purpose: 'Anti-rotation under load',
+    },
+  },
+  one_arm_push_up: {
+    skillId: 'one_arm_push_up',
+    displayName: 'One-Arm Push-Up',
+    primarySupport: [
+      {
+        exerciseIds: ['archer_push_up', 'one_arm_push_up_elevated', 'one_arm_push_up_negative'],
+        purpose: 'Leverage progression',
+      },
+      {
+        exerciseIds: ['decline_push_up', 'deficit_push_up', 'weighted_push_up'],
+        purpose: 'Pressing strength base',
+      },
+    ],
+    secondarySupport: [
+      {
+        exerciseIds: ['tricep_extension', 'close_grip_push_up'],
+        purpose: 'Elbow extension strength',
+      },
+      {
+        exerciseIds: ['face_pull', 'scapular_pushup'],
+        purpose: 'Scapular stability',
+      },
+    ],
+    trunkSupport: {
+      exerciseIds: ['pallof_press', 'side_plank', 'one_arm_plank'],
+      purpose: 'Anti-rotation stability',
+    },
+  },
+}
+
+/**
+ * Get intentional support work for an advanced skill.
+ * [advanced-skill-expression] ISSUE D: Returns support work that clearly serves the skill.
+ */
+export function getAdvancedSkillSupport(skillId: string): {
+  primary: { exerciseIds: string[]; purpose: string }[]
+  secondary: { exerciseIds: string[]; purpose: string }[]
+  trunk: { exerciseIds: string[]; purpose: string }
+} | null {
+  const pattern = ADVANCED_SKILL_SUPPORT_PATTERNS[skillId]
+  if (!pattern) {
+    return null
+  }
+  
+  return {
+    primary: pattern.primarySupport,
+    secondary: pattern.secondarySupport,
+    trunk: pattern.trunkSupport,
+  }
+}
+
+/**
+ * Check if an exercise is primary support for an advanced skill.
+ * [advanced-skill-expression] ISSUE D: Validates support work is skill-serving.
+ */
+export function isExercisePrimarySupportFor(exerciseId: string, skillId: string): boolean {
+  const pattern = ADVANCED_SKILL_SUPPORT_PATTERNS[skillId]
+  if (!pattern) return false
+  
+  return pattern.primarySupport.some(s => s.exerciseIds.includes(exerciseId))
+}
+
+/**
+ * Get all support exercises for an advanced skill (flattened).
+ * [advanced-skill-expression] ISSUE D: Returns all exercises that serve this skill.
+ */
+export function getAllSupportExercisesFor(skillId: string): string[] {
+  const pattern = ADVANCED_SKILL_SUPPORT_PATTERNS[skillId]
+  if (!pattern) return []
+  
+  const allExercises: string[] = []
+  
+  pattern.primarySupport.forEach(s => allExercises.push(...s.exerciseIds))
+  pattern.secondarySupport.forEach(s => allExercises.push(...s.exerciseIds))
+  allExercises.push(...pattern.trunkSupport.exerciseIds)
+  
+  // Remove duplicates
+  return [...new Set(allExercises)]
+}

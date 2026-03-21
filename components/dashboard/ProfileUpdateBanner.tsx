@@ -31,12 +31,26 @@ interface ProfileCompletenessStatus {
   newSkillsAvailableCount: number
 }
 
+// [profile-completeness] ISSUE F: Type for missing field group links
+interface MissingFieldGroupLink {
+  group: string
+  label: string
+  deepLink: {
+    path: string
+    section: string
+    query: Record<string, string>
+  }
+  priority: 'required' | 'recommended' | 'optional'
+}
+
 function ProfileUpdateBannerInner() {
   const router = useRouter()
   const [mounted, setMounted] = useState(false)
   const [isDismissed, setIsDismissed] = useState(false)
   const [status, setStatus] = useState<ProfileCompletenessStatus | null>(null)
   const [hasOnboarded, setHasOnboarded] = useState(false)
+  // [profile-completeness] ISSUE F: Track missing field group links for targeted surfacing
+  const [missingLinks, setMissingLinks] = useState<MissingFieldGroupLink[]>([])
 
   useEffect(() => {
     setMounted(true)
@@ -48,6 +62,14 @@ function ProfileUpdateBannerInner() {
         const completenessStatus = module.getProfileCompletenessStatus()
         setStatus(completenessStatus)
         setHasOnboarded(module.hasValidCanonicalProfile())
+        
+        // [profile-completeness] ISSUE F: Load targeted surfacing links
+        if (module.getMissingFieldGroupLinks) {
+          const links = module.getMissingFieldGroupLinks()
+          setMissingLinks(links)
+          console.log('[profile-completeness] Missing field groups for surfacing:', links)
+        }
+        
         console.log('[ProfileUpdateBanner] Loaded status:', completenessStatus)
       } catch (err) {
         console.error('[ProfileUpdateBanner] Failed to load completeness status:', err)
@@ -76,8 +98,17 @@ function ProfileUpdateBannerInner() {
     }
   }
 
-  const handleUpdateProfile = () => {
-    // Deep-link to onboarding with suggested section
+  const handleUpdateProfile = (specificGroup?: MissingFieldGroupLink) => {
+    // [profile-completeness] ISSUE F: Use targeted deep link if available
+    if (specificGroup?.deepLink) {
+      const { path, query } = specificGroup.deepLink
+      const searchParams = new URLSearchParams(query)
+      router.push(`${path}?${searchParams.toString()}`)
+      console.log('[profile-completeness] Navigating to specific section:', specificGroup.group)
+      return
+    }
+    
+    // Fallback: Deep-link to onboarding with suggested section
     const section = status?.suggestedOnboardingSection || 'skill_selection'
     router.push(`/onboarding?section=${section}&mode=update`)
   }
@@ -132,6 +163,29 @@ function ProfileUpdateBannerInner() {
                 <span className="px-2 py-0.5 bg-blue-500/10 text-[#A4ACB8] rounded">One-Arm Push-Up</span>
                 <span className="px-2 py-0.5 bg-blue-500/10 text-[#A4ACB8] rounded">Dragon Flag</span>
                 <span className="px-2 py-0.5 bg-blue-500/10 text-[#A4ACB8] rounded">Planche Push-Up</span>
+              </div>
+            </div>
+          )}
+          
+          {/* [profile-completeness] ISSUE F: Show specific missing sections for targeted access */}
+          {!status.hasNewSkillsAvailable && missingLinks.length > 0 && (
+            <div className="bg-[#0F1115]/50 rounded-md p-3 mb-3 border border-blue-500/10">
+              <p className="text-xs text-blue-400 font-medium mb-2">Sections to Complete</p>
+              <div className="flex flex-wrap gap-2 text-xs">
+                {missingLinks.slice(0, 4).map((link) => (
+                  <button
+                    key={link.group}
+                    onClick={() => handleUpdateProfile(link)}
+                    className={`px-2 py-0.5 rounded text-left transition-colors ${
+                      link.priority === 'required' 
+                        ? 'bg-amber-500/20 text-amber-300 hover:bg-amber-500/30' 
+                        : 'bg-blue-500/10 text-[#A4ACB8] hover:bg-blue-500/20'
+                    }`}
+                  >
+                    {link.label}
+                    {link.priority === 'required' && <span className="ml-1 text-[10px]">*</span>}
+                  </button>
+                ))}
               </div>
             </div>
           )}

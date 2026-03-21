@@ -104,13 +104,23 @@ export function normalizeProfile(canonical: CanonicalProgrammingProfile): Normal
     return match ? parseInt(match[0]) : null
   }
   
-  // Log normalized profile for debugging (TASK 8)
-  console.log('[ProfileNormalizer] Normalizing profile:', {
+  // [profile-completeness] TASK 7: Log normalized profile with new field awareness
+  console.log('[profile-completeness] Normalizing profile for engine:', {
     primaryGoal: canonical.primaryGoal,
     secondaryGoal: canonical.secondaryGoal,
     skillsCount: canonical.selectedSkills?.length || 0,
     hasStrengthBenchmarks: !!(canonical.pullUpMax || canonical.dipMax),
     hasSkillProgressions: !!(canonical.frontLeverProgression || canonical.plancheProgression),
+    // [profile-completeness] ISSUE E: Log new engine-relevant fields
+    hasWeightedStrength: !!(canonical.weightedPullUp || canonical.weightedDip),
+    hasAllTimePRs: !!(canonical.allTimePRPullUp || canonical.allTimePRDip),
+    hasSkillHistory: !!(
+      canonical.skillHistory?.front_lever?.trainingHistory ||
+      canonical.skillHistory?.planche?.trainingHistory
+    ),
+    hasBandLevels: !!(canonical.frontLeverBandLevel || canonical.plancheBandLevel),
+    hasJointCautions: (canonical.jointCautions?.length || 0) > 0,
+    hasRecoveryData: !!canonical.recoveryQuality,
   })
   
   return {

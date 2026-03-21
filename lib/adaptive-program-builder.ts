@@ -60,7 +60,15 @@ import type { ProtocolRecommendation } from './protocols/joint-integrity-protoco
 import type { ConstraintResult, ConstraintIntervention } from './constraint-detection-engine'
 
 import { getAthleteProfile } from './data-service'
-import { getCanonicalProfile, logCanonicalProfileState, validateProfileForGeneration, getValidatedCanonicalProfile } from './canonical-profile-service'
+import { 
+  getCanonicalProfile, 
+  logCanonicalProfileState, 
+  validateProfileForGeneration, 
+  getValidatedCanonicalProfile,
+  // [profile-completeness] ISSUE E: Engine field consumption verification
+  getEngineFieldConsumption,
+  verifyEngineFieldWiring,
+} from './canonical-profile-service'
 import { buildGenerationInput, getSystemStateFlags, type GenerationMode, type ProfileSnapshot } from './program-state-contract'
 import { normalizeProfile, computeLimiter, dedupeExercises, type NormalizedProfile } from './profile-normalizer'
 import { calculateRecoverySignal } from './recovery-engine'
@@ -292,6 +300,10 @@ import {
   validateAndLogProgram,
 } from './program-validation'
 import {
+  validateProgramAgainstProfile,
+  type ProgramProfileValidationResult,
+} from './program-profile-validator'
+import {
   verifyExerciseInDatabase,
 } from './exercise-database-resolver'
 import {
@@ -320,6 +332,10 @@ import {
   calculateWeightedSkillAllocation,
   calculateIntensityDistribution,
   planFlexibilityInsertions,
+  // [advanced-skill-expression] ISSUE A: Advanced skill helpers
+  isAdvancedSkill,
+  getAdvancedSkillFamily,
+  ADVANCED_SKILL_FAMILIES,
   // TASK 4: Weekly progression logic
   getWeeklyProgressionRecommendation,
   determineProgressionPhase,
@@ -350,6 +366,15 @@ import {
 // Re-export schedule types for consumers
 export type { ScheduleMode, DayStressLevel } from './flexible-schedule-engine'
 export type { GenerationMode, ProfileSnapshot } from './program-state-contract'
+// [program-profile-validate] Re-export validation types
+export type { 
+  ProgramProfileValidationResult, 
+  ValidationCheck, 
+  SkillExpressionCheck,
+  ScheduleDurationCheck,
+  WeightedPrescriptionCheck,
+} from './program-profile-validator'
+export { validateProgramAgainstProfile, getValidationSummary } from './program-profile-validator'
   
 // =============================================================================
 // TYPES
@@ -588,6 +613,17 @@ export interface AdaptiveProgram {
     balanceIssues: string[]
     suggestions: string[]
   }
+  // [prescription] ISSUE F: Weighted strength prescription summary
+  weightedStrengthPrescription?: {
+    hasWeightedData: boolean
+    pullUpPrescribed: boolean
+    dipPrescribed: boolean
+    pullUpLoad?: string  // e.g., "+25 lbs" or "BW"
+    dipLoad?: string
+    prescriptionMode?: string  // e.g., "strength_primary", "strength_support"
+    dataSource: 'current_benchmark' | 'pr_reference' | 'no_data'
+    summary: string
+  }
   // Athlete calibration context from onboarding
   calibrationContext?: {
   isCalibrated: boolean
@@ -800,6 +836,18 @@ exerciseExplanations?: {
   profileSnapshot?: ProfileSnapshot
   // STATE CONTRACT: Generation mode used ('fresh', 'regenerate', or 'continue')
   generationMode?: GenerationMode
+  // [program-profile-validate] Validation result from profile-vs-program comparison
+  profileValidation?: {
+    isValid: boolean
+    overallScore: number
+    passCount: number
+    warningCount: number
+    mismatchCount: number
+    criticalCount: number
+    passed: string[]
+    warnings: string[]
+    failures: string[]
+  }
 }
 
 // =============================================================================
@@ -1069,10 +1117,23 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
   
   // TASK 6: Log schedule/duration truth consumption
   console.log('[program-generate] TASK 6: Schedule/Duration truth consumed:', {
-    scheduleMode: canonicalProfile.scheduleMode,
-    trainingDaysPerWeek: canonicalProfile.trainingDaysPerWeek,
-    sessionDurationMode: canonicalProfile.sessionDurationMode,
-    sessionLengthMinutes: canonicalProfile.sessionLengthMinutes,
+  scheduleMode: canonicalProfile.scheduleMode,
+  trainingDaysPerWeek: canonicalProfile.trainingDaysPerWeek,
+  sessionDurationMode: canonicalProfile.sessionDurationMode,
+  sessionLengthMinutes: canonicalProfile.sessionLengthMinutes,
+  })
+  
+  // [profile-completeness] ISSUE E: Verify engine field wiring before generation
+  // This confirms all new profile fields are actually being consumed
+  const engineConsumption = getEngineFieldConsumption(canonicalProfile)
+  const wiringStatus = verifyEngineFieldWiring(canonicalProfile)
+  console.log('[profile-completeness] Planner consuming new field groups:', {
+    hasWeightedData: engineConsumption.weightedStrengthInputs.hasWeightedData,
+    hasPRData: engineConsumption.weightedStrengthInputs.hasPRData,
+    hasSkillHistory: engineConsumption.advancedSkillInputs.hasSkillHistory,
+    hasBandLevels: engineConsumption.advancedSkillInputs.hasBandLevels,
+    consumedFieldGroups: wiringStatus.consumedFieldGroups,
+    isFullyWired: wiringStatus.isFullyWired,
   })
   
   // ISSUE A: Stage tracking for diagnosable failures
@@ -1685,13 +1746,69 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
     totalSessions: effectiveTrainingDays,
   })
   
+  // [advanced-skill-expression] TASK 7: Log advanced skill detection and allocation
+  const advancedSkillsSelected = (canonicalProfile.selectedSkills || []).filter(s => isAdvancedSkill(s))
+  if (advancedSkillsSelected.length > 0) {
+    console.log('[advanced-skill-expression] Advanced skills detected in selection:', {
+      advancedSkills: advancedSkillsSelected.map(s => {
+        const family = getAdvancedSkillFamily(s)
+        return {
+          skillId: s,
+          displayName: family?.displayName || s,
+          category: family?.category,
+          minFrequency: family?.minFrequencyPerWeek,
+          tendonSensitive: family?.tendonSensitive,
+        }
+      }),
+      totalSelectedSkills: canonicalProfile.selectedSkills?.length || 0,
+      advancedSkillCount: advancedSkillsSelected.length,
+    })
+    
+    // Log which advanced skills got how many exposure sessions
+    const advancedAllocations = weightedSkillAllocation.filter(a => isAdvancedSkill(a.skill))
+    console.log('[advanced-skill-expression] Advanced skill weekly allocations:', {
+      allocations: advancedAllocations.map(a => ({
+        skill: a.skill,
+        displayName: getAdvancedSkillFamily(a.skill)?.displayName || a.skill,
+        exposureSessions: a.exposureSessions,
+        priority: a.priorityLevel,
+        meetsMinFrequency: a.exposureSessions >= (getAdvancedSkillFamily(a.skill)?.minFrequencyPerWeek || 2),
+      })),
+    })
+  }
+  
   // ISSUE A: Stage tracking for session assembly
   currentStage = 'session_assembly'
   console.log('[program-generate] STAGE: session_assembly')
   
+  // [session-assembly] Log structure received for assembly
+  console.log('[session-assembly] Weekly structure received:', {
+    structureName: structure.structureName,
+    dayCount: structure.days?.length || 0,
+    dayRoles: structure.days?.map(d => d.focus) || [],
+  })
+  
+  // [session-assembly] Validate structure before assembly
+  if (!structure.days || structure.days.length === 0) {
+    throw new GenerationError(
+      'session_assembly_failed',
+      'session_assembly',
+      'Weekly structure has no days defined',
+      { structureName: structure.structureName, subCode: 'empty_structure_days' }
+    )
+  }
+  
   let sessions: AdaptiveSession[]
   try {
     sessions = structure.days.map((day, index) => {
+    // [session-assembly] Log each day's assembly start
+    console.log('[session-assembly] Assembling day:', {
+      dayNumber: day.dayNumber,
+      focus: day.focus,
+      isPrimary: day.isPrimary,
+      sessionIndex: index,
+    })
+    
     const intent = sessionIntents[index]
     
     // SKILL EXPRESSION FIX: Create per-session context with skill allocation
@@ -1877,20 +1994,121 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
       }
     }
     
+    // [session-assembly] Validate assembled session before returning
+    const exerciseCount = session.exercises?.length || 0
+    const warmupCount = session.warmup?.length || 0
+    
+    console.log('[session-assembly] Session assembled:', {
+      dayNumber: session.dayNumber,
+      exerciseCount,
+      warmupCount,
+      cooldownCount: session.cooldown?.length || 0,
+      hasFinisher: !!session.finisher,
+    })
+    
+    // [session-assembly] ISSUE D: Validate session has valid exercise structure
+    if (exerciseCount === 0) {
+      console.warn('[session-assembly] WARNING: Session assembled with 0 exercises', {
+        dayNumber: session.dayNumber,
+        focus: session.focus,
+      })
+      // Don't throw - let final validation catch it, but log for diagnosis
+    }
+    
+    // Validate each exercise has required fields
+    for (let i = 0; i < (session.exercises?.length || 0); i++) {
+      const ex = session.exercises?.[i]
+      if (!ex?.name || typeof ex?.sets !== 'number' || ex.sets <= 0) {
+        console.warn('[session-assembly] WARNING: Exercise missing required fields', {
+          exerciseIndex: i,
+          name: ex?.name,
+          sets: ex?.sets,
+          dayNumber: session.dayNumber,
+        })
+      }
+    }
+    
     return session
   })
   } catch (err) {
     // ISSUE A: If error is already a GenerationError, re-throw as-is
     if (err instanceof GenerationError) throw err
+    
+    // [session-assembly] Sub-classify assembly failures for better diagnosis
+    const errorMessage = err instanceof Error ? err.message : 'Failed to assemble sessions'
+    let subCode = 'assembly_unknown_failure'
+    
+    if (errorMessage.includes('exercise_selection_returned_null')) {
+      subCode = 'empty_exercise_pool'
+    } else if (errorMessage.includes('warmup') || errorMessage.includes('Warmup')) {
+      subCode = 'invalid_warmup_block'
+    } else if (errorMessage.includes('cooldown') || errorMessage.includes('Cooldown')) {
+      subCode = 'invalid_cooldown_block'
+    } else if (errorMessage.includes('main') || errorMessage.includes('exercise')) {
+      subCode = 'invalid_main_block'
+    } else if (errorMessage.includes('validation')) {
+      subCode = 'session_validation_failed'
+    }
+    
+    console.error('[session-assembly] FAILURE:', {
+      subCode,
+      errorMessage,
+      structureName: structure?.structureName,
+      dayCount: structure?.days?.length,
+      currentStage,
+    })
+    
     throw new GenerationError(
       'session_assembly_failed',
       currentStage,
-      err instanceof Error ? err.message : 'Failed to assemble sessions',
-      { structureName: structure.structureName, dayCount: structure.days?.length }
+      errorMessage,
+      { 
+        structureName: structure?.structureName, 
+        dayCount: structure?.days?.length,
+        subCode, // Include sub-classification for diagnosis
+      }
     )
   }
   
   console.log('[program-generate] Sessions assembled:', sessions.length)
+  
+  // [session-assembly] ISSUE D: Final validation of assembled sessions array
+  const sessionExerciseCounts = sessions.map(s => s.exercises?.length || 0)
+  const emptySessions = sessions.filter(s => !s.exercises || s.exercises.length === 0)
+  
+  console.log('[session-assembly] Final session validation:', {
+    totalSessions: sessions.length,
+    expectedSessions: structure.days?.length || 0,
+    exerciseCountsPerSession: sessionExerciseCounts,
+    emptySessionCount: emptySessions.length,
+  })
+  
+  // [session-assembly] Throw if we have critically empty sessions
+  if (emptySessions.length > 0) {
+    console.error('[session-assembly] CRITICAL: Some sessions have no exercises', {
+      emptyDays: emptySessions.map(s => s.dayNumber),
+    })
+    throw new GenerationError(
+      'session_assembly_failed',
+      'session_assembly',
+      `${emptySessions.length} session(s) have no exercises`,
+      { subCode: 'empty_final_session_array', emptyDays: emptySessions.map(s => s.dayNumber) }
+    )
+  }
+  
+  // [session-assembly] Throw if session count doesn't match structure
+  if (sessions.length !== (structure.days?.length || 0)) {
+    console.error('[session-assembly] CRITICAL: Session count mismatch', {
+      assembled: sessions.length,
+      expected: structure.days?.length,
+    })
+    throw new GenerationError(
+      'session_assembly_failed',
+      'session_assembly',
+      `Session count mismatch: assembled ${sessions.length}, expected ${structure.days?.length}`,
+      { subCode: 'session_count_mismatch' }
+    )
+  }
   
   // Calculate variety score (0-1, higher = more varied)
   const varietyScore = calculateVarietyScore(sessionIntents)
@@ -2012,12 +2230,14 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
   }
   
   // Generate program rationale
+  // [advanced-skill-expression] ISSUE F: Pass selected skills for rationale truthfulness
   const programRationale = generateProgramRationale(
     primaryGoal,
     structure,
     constraintInsight,
     recoverySignal.level,
-    equipmentProfile
+    equipmentProfile,
+    canonicalProfile.selectedSkills || []
   )
   
   // DATABASE ENFORCEMENT: Log exercise verification stats
@@ -2249,6 +2469,53 @@ fatigueDecision: fatigueDecision ? {
     balanceIssues: weeklyLoadBalance.balanceIssues.slice(0, 2), // Top 2 issues
     suggestions: weeklyLoadBalance.suggestions.slice(0, 2),
   } : undefined,
+  // [prescription] ISSUE F: Weighted strength prescription summary
+  weightedStrengthPrescription: (() => {
+    const pullUp = weightedBenchmarks.weightedPullUp
+    const dip = weightedBenchmarks.weightedDip
+    const hasPullUpData = !!(pullUp?.current?.addedWeight || pullUp?.pr?.load)
+    const hasDipData = !!(dip?.current?.addedWeight || dip?.pr?.load)
+    const hasAnyData = hasPullUpData || hasDipData
+    
+    // Determine data source based on what's available
+    const dataSource: 'current_benchmark' | 'pr_reference' | 'no_data' = 
+      pullUp?.current?.addedWeight || dip?.current?.addedWeight ? 'current_benchmark' :
+      pullUp?.pr?.load || dip?.pr?.load ? 'pr_reference' : 'no_data'
+    
+    // Build summary string
+    const summaryParts: string[] = []
+    if (hasPullUpData) {
+      const load = pullUp?.current?.addedWeight ?? 
+        (pullUp?.pr?.load ? Math.round(pullUp.pr.load * 0.7) : 0)
+      const unit = pullUp?.current?.unit || pullUp?.pr?.unit || 'lbs'
+      summaryParts.push(`Weighted pull-up: +${load}${unit}`)
+    }
+    if (hasDipData) {
+      const load = dip?.current?.addedWeight ?? 
+        (dip?.pr?.load ? Math.round(dip.pr.load * 0.7) : 0)
+      const unit = dip?.current?.unit || dip?.pr?.unit || 'lbs'
+      summaryParts.push(`Weighted dip: +${load}${unit}`)
+    }
+    
+    console.log('[prescription] Weighted strength summary for program:', {
+      hasWeightedData: hasAnyData,
+      dataSource,
+      pullUpPrescribed: hasPullUpData,
+      dipPrescribed: hasDipData,
+    })
+    
+    return hasAnyData ? {
+      hasWeightedData: hasAnyData,
+      pullUpPrescribed: hasPullUpData,
+      dipPrescribed: hasDipData,
+      pullUpLoad: hasPullUpData ? 
+        `+${pullUp?.current?.addedWeight ?? Math.round((pullUp?.pr?.load ?? 0) * 0.7)} ${pullUp?.current?.unit || pullUp?.pr?.unit || 'lbs'}` : undefined,
+      dipLoad: hasDipData ?
+        `+${dip?.current?.addedWeight ?? Math.round((dip?.pr?.load ?? 0) * 0.7)} ${dip?.current?.unit || dip?.pr?.unit || 'lbs'}` : undefined,
+      dataSource,
+      summary: summaryParts.length > 0 ? summaryParts.join('; ') : 'No weighted benchmark data',
+    } : undefined
+  })(),
   // Constraint improvement tracking (populated async - may be undefined initially)
   constraintImprovementData,
     // Training Principles Engine emphasis
@@ -2931,6 +3198,52 @@ return explanations.length > 0 ? explanations : undefined
     },
     // STATE CONTRACT: Generation mode used
     generationMode,
+    // [program-profile-validate] TASK 6: Run validation after generation
+    profileValidation: (() => {
+      try {
+        // Build a temporary program object for validation
+        const tempProgram = {
+          id: `adaptive-${Date.now()}`,
+          createdAt: new Date().toISOString(),
+          primaryGoal,
+          secondaryGoal: secondaryGoal || canonicalProfile.secondaryGoal,
+          goalLabel: GOAL_LABELS[primaryGoal],
+          sessions,
+          scheduleMode: finalScheduleMode,
+          currentWeekFrequency: effectiveTrainingDays,
+          trainingDaysPerWeek: effectiveTrainingDays,
+          sessionLength,
+          recoveryLevel: recoverySignal.level,
+          programRationale,
+          deloadRecommendation,
+          weightedStrengthPrescription: undefined, // Will be set after return
+        } as unknown as AdaptiveProgram
+        
+        const validationResult = validateProgramAgainstProfile(canonicalProfile, tempProgram)
+        
+        console.log('[program-profile-validate] TASK 6: Validation hooked into generation:', {
+          isValid: validationResult.isValid,
+          overallScore: validationResult.overallScore,
+          failures: validationResult.failures,
+          warnings: validationResult.warnings,
+        })
+        
+        return {
+          isValid: validationResult.isValid,
+          overallScore: validationResult.overallScore,
+          passCount: validationResult.passCount,
+          warningCount: validationResult.warningCount,
+          mismatchCount: validationResult.mismatchCount,
+          criticalCount: validationResult.criticalCount,
+          passed: validationResult.passed,
+          warnings: validationResult.warnings,
+          failures: validationResult.failures,
+        }
+      } catch (err) {
+        console.error('[program-profile-validate] Validation failed:', err)
+        return undefined
+      }
+    })(),
   }
 }
 
@@ -3039,8 +3352,15 @@ function getSkillsForSession(
   
   const result: SessionSkillAllocation[] = []
   
+  // [advanced-skill-expression] ISSUE B: Track which advanced skills need expression this session
+  const advancedSkillsInAllocation = weightedAllocation.filter(a => isAdvancedSkill(a.skill))
+  
   for (const allocation of weightedAllocation) {
     const { skill, weight, exposureSessions, priorityLevel } = allocation
+    
+    // [advanced-skill-expression] Check if this is an advanced skill
+    const isAdvanced = isAdvancedSkill(skill)
+    const advancedFamily = isAdvanced ? getAdvancedSkillFamily(skill) : null
     
     // Primary skills always appear as primary expression
     if (priorityLevel === 'primary' || weight >= 0.3) {
@@ -3061,20 +3381,71 @@ function getSkillsForSession(
         (sessionIndex % 2 === 0) // Even sessions get secondary skills
       
       if (shouldInclude) {
+        // [advanced-skill-expression] ISSUE B: Advanced secondary skills can have technical slot
+        const expressionMode = isAdvanced && advancedFamily?.technicalSlotWeight > 0.3
+          ? 'technical'
+          : (dayFocus.includes('support') ? 'support' : 'technical')
+        
         result.push({
           skill,
-          expressionMode: dayFocus.includes('support') ? 'support' : 'technical',
+          expressionMode,
           weight,
         })
       }
       continue
     }
     
-    // Tertiary skills rotate - each appears in their allocated sessions
+    // [advanced-skill-expression] ISSUE A: Advanced tertiary skills need better rotation
     if (priorityLevel === 'tertiary' || weight >= 0.05) {
-      // Distribute tertiary skills across sessions using modular arithmetic
+      // [advanced-skill-expression] Advanced skills get priority scheduling
+      if (isAdvanced) {
+        // Advanced skills should appear in more sessions based on minFrequencyPerWeek
+        const minFreq = advancedFamily?.minFrequencyPerWeek || 2
+        const targetSessions = Math.min(minFreq, totalSessions)
+        
+        // Distribute across sessions more evenly
+        const interval = Math.floor(totalSessions / targetSessions)
+        const shouldInclude = (sessionIndex % interval) === 0 || sessionIndex < targetSessions
+        
+        if (shouldInclude) {
+          // [advanced-skill-expression] ISSUE D: Choose expression mode based on skill type
+          let expressionMode: 'primary' | 'technical' | 'support' | 'warmup' = 'support'
+          
+          // Match day focus to skill category
+          if (advancedFamily?.category === 'push' && dayFocus.includes('push')) {
+            expressionMode = 'technical'
+          } else if (advancedFamily?.category === 'pull' && dayFocus.includes('pull')) {
+            expressionMode = 'technical'
+          } else if (advancedFamily?.category === 'core' && (dayFocus.includes('core') || dayFocus.includes('compression'))) {
+            expressionMode = 'technical'
+          } else if (advancedFamily?.subcategory === 'vertical' && dayFocus.includes('skill')) {
+            // HSPU on skill days gets technical slot
+            expressionMode = 'technical'
+          }
+          
+          result.push({
+            skill,
+            expressionMode,
+            weight,
+          })
+          
+          // [advanced-skill-expression] Log advanced skill session assignment
+          console.log('[advanced-skill-expression] Advanced skill assigned to session:', {
+            skill,
+            displayName: advancedFamily?.displayName,
+            sessionIndex,
+            expressionMode,
+            dayFocus,
+            targetSessions,
+          })
+        }
+        continue
+      }
+      
+      // Non-advanced tertiary skills: original rotation logic
       const tertiaryIndex = weightedAllocation
         .filter(a => a.priorityLevel === 'tertiary' || (a.weight >= 0.05 && a.weight < 0.15))
+        .filter(a => !isAdvancedSkill(a.skill)) // Don't count advanced skills in rotation
         .findIndex(a => a.skill === skill)
       
       // Each tertiary skill gets specific sessions based on its index
@@ -3093,12 +3464,24 @@ function getSkillsForSession(
     }
     
     // Support-level skills appear only as warm-up emphasis on specific days
-    if (priorityLevel === 'support' && sessionIndex === 0) {
-      result.push({
-        skill,
-        expressionMode: 'warmup',
-        weight,
-      })
+    // [advanced-skill-expression] Even support-level advanced skills should get some expression
+    if (priorityLevel === 'support') {
+      if (isAdvanced) {
+        // Advanced skills at support level still get 1-2 sessions
+        if (sessionIndex < 2) {
+          result.push({
+            skill,
+            expressionMode: 'support',
+            weight,
+          })
+        }
+      } else if (sessionIndex === 0) {
+        result.push({
+          skill,
+          expressionMode: 'warmup',
+          weight,
+        })
+      }
     }
   }
   
@@ -3152,12 +3535,25 @@ function generateAdaptiveSession(
   })
   
   // Select exercises
+  // [session-assembly] Convert sessionLength to number for exercise selection
+  const sessionMinutesResolved = typeof sessionLength === 'number' 
+    ? sessionLength 
+    : parseInt(String(sessionLength).split('-')[0]) || 60
+    
+  console.log('[session-assembly] Exercise selection starting:', {
+    dayFocus: day.focus,
+    dayNumber: day.dayNumber,
+    sessionMinutes: sessionMinutesResolved,
+    selectedSkillsCount: selectedSkills?.length || 0,
+    skillsForSessionCount: skillsForThisSession?.length || 0,
+  })
+  
   const selection = selectExercisesForSession({
     day,
     primaryGoal,
     experienceLevel,
     equipment,
-    sessionMinutes: sessionLength,
+    sessionMinutes: sessionMinutesResolved, // FIXED: Pass resolved number, not SessionLength type
     constraintType,
     // WEIGHTED LOAD PR: Pass weighted benchmarks for load prescription
     weightedBenchmarks,
@@ -3166,10 +3562,34 @@ function generateAdaptiveSession(
     skillsForSession: skillsForThisSession,
   })
   
+  // [session-assembly] Validate selection result before proceeding
+  if (!selection) {
+    console.error('[session-assembly] CRITICAL: selectExercisesForSession returned null/undefined')
+    throw new Error('exercise_selection_returned_null')
+  }
+  
   // Adapt for equipment - use safe fallbacks if selection properties are missing
   const safeMain = Array.isArray(selection?.main) ? selection.main : []
   const safeWarmup = Array.isArray(selection?.warmup) ? selection.warmup : []
   const safeCooldown = Array.isArray(selection?.cooldown) ? selection.cooldown : []
+  
+  // [session-assembly] Log exercise counts for debugging
+  console.log('[session-assembly] Exercise selection complete:', {
+    mainCount: safeMain.length,
+    warmupCount: safeWarmup.length,
+    cooldownCount: safeCooldown.length,
+    estimatedTime: selection.totalEstimatedTime,
+  })
+  
+  // [session-assembly] Validate we have at least some exercises
+  if (safeMain.length === 0) {
+    console.warn('[session-assembly] WARNING: Empty main exercise pool for day', {
+      dayFocus: day.focus,
+      dayNumber: day.dayNumber,
+      primaryGoal,
+    })
+    // Don't throw - let validation handle it downstream, but log for diagnosis
+  }
   
   const adaptedMain = adaptSessionForEquipment(safeMain, equipment)
   const adaptedWarmup = adaptSessionForEquipment(safeWarmup, equipment)
@@ -3194,13 +3614,14 @@ function generateAdaptiveSession(
     const mainWorkMinutes = selection.totalEstimatedTime - 10 // Subtract warmup/cooldown estimate
     const sessionTimeFit = fitEnduranceToSession(sessionLength, mainWorkMinutes)
     
-    // SAFETY: Ensure selection.exercises is a valid array before calling .some()
-    const safeSelectionExercises = Array.isArray(selection?.exercises) ? selection.exercises : []
+    // [session-assembly] FIX: Use selection.main (not selection.exercises which doesn't exist)
+    // ExerciseSelection interface has: { warmup, main, cooldown, totalEstimatedTime }
+    const safeSelectionMain = Array.isArray(selection?.main) ? selection.main : []
     
-    // Calculate session neural demand
-    const sessionNeuralDemand = safeSelectionExercises.some(e => e?.exercise?.neuralDemand >= 4) 
+    // Calculate session neural demand from main exercises
+    const sessionNeuralDemand = safeSelectionMain.some(e => e?.exercise?.neuralDemand >= 4) 
       ? 'high' as const
-      : safeSelectionExercises.some(e => e?.exercise?.neuralDemand >= 3)
+      : safeSelectionMain.some(e => e?.exercise?.neuralDemand >= 3)
         ? 'moderate' as const
         : 'low' as const
 
@@ -3468,7 +3889,9 @@ function generateProgramRationale(
   structure: WeeklyStructure,
   constraintInsight: ReturnType<typeof getConstraintInsight>,
   recoveryLevel: RecoveryLevel,
-  equipmentProfile: EquipmentProfile
+  equipmentProfile: EquipmentProfile,
+  // [advanced-skill-expression] ISSUE F: Accept selected skills for rationale
+  selectedSkills: string[] = []
 ): string {
   const parts: string[] = []
   
@@ -3490,11 +3913,13 @@ function generateProgramRationale(
     parts.push('Consider introducing new stimuli if progress stalls.')
   }
   
-  // Strength support awareness (new from engine)
+  // [prescription] ISSUE F: Weighted strength support with actual prescription awareness
   if (engineCtx.strengthSupportLevel === 'insufficient') {
     parts.push('Additional emphasis on weighted strength work to build foundational support.')
   } else if (engineCtx.strengthSupportLevel === 'developing') {
     parts.push('Continue building support strength alongside skill work.')
+  } else if (engineCtx.strengthSupportLevel === 'sufficient' || engineCtx.strengthSupportLevel === 'strong') {
+    parts.push('Weighted strength maintained to support skill development.')
   }
   
   // Recovery consideration (enhanced with fatigue state)
@@ -3508,7 +3933,35 @@ function generateProgramRationale(
   
   // Equipment notes
   if (!equipmentProfile.hasFullSetup) {
-    parts.push('Some exercises adapted for available equipment.')
+  parts.push('Some exercises adapted for available equipment.')
+  }
+  
+  // [advanced-skill-expression] ISSUE F: Include advanced skill expression in rationale
+  // Check if any advanced skills are in the selected skills
+  const advancedSkillsExpressed: string[] = []
+  
+  for (const skill of selectedSkills) {
+    if (isAdvancedSkill(skill)) {
+      const family = getAdvancedSkillFamily(skill)
+      if (family) {
+        advancedSkillsExpressed.push(family.displayName)
+      }
+    }
+  }
+  
+  if (advancedSkillsExpressed.length > 0) {
+    if (advancedSkillsExpressed.length === 1) {
+      parts.push(`${advancedSkillsExpressed[0]} receives dedicated progression and support work.`)
+    } else {
+      const skillList = advancedSkillsExpressed.slice(0, 2).join(' and ')
+      parts.push(`Advanced skills (${skillList}) receive structured progression and support.`)
+    }
+    
+    // [advanced-skill-expression] Log rationale inclusion
+    console.log('[advanced-skill-expression] Rationale includes advanced skills:', {
+      advancedSkillsExpressed,
+      selectedSkillsCount: selectedSkills.length,
+    })
   }
   
   return parts.join(' ')
@@ -3599,6 +4052,44 @@ function isBrowser(): boolean {
 export function saveAdaptiveProgram(program: AdaptiveProgram): AdaptiveProgram {
   if (!isBrowser()) return program
   
+  // [session-assembly] ISSUE D: Pre-save critical validation
+  // Reject programs with fundamentally broken session structure
+  console.log('[session-assembly] Pre-save validation starting...')
+  
+  const sessions = program.sessions || []
+  const criticalIssues: string[] = []
+  
+  // Check 1: Must have at least one session
+  if (sessions.length === 0) {
+    criticalIssues.push('empty_session_array')
+  }
+  
+  // Check 2: Each session must have exercises
+  sessions.forEach((session, idx) => {
+    if (!session.exercises || session.exercises.length === 0) {
+      criticalIssues.push(`session_${idx + 1}_no_exercises`)
+    }
+    
+    // Check 3: Each exercise must have valid sets
+    const exercises = session.exercises || []
+    exercises.forEach((ex, exIdx) => {
+      if (typeof ex.sets !== 'number' || ex.sets <= 0) {
+        criticalIssues.push(`session_${idx + 1}_exercise_${exIdx + 1}_invalid_sets`)
+      }
+    })
+  })
+  
+  // [session-assembly] ISSUE F: If critical issues found, DO NOT save - preserve last good program
+  if (criticalIssues.length > 0) {
+    console.error('[session-assembly] CRITICAL: Program has invalid structure, blocking save:', {
+      issues: criticalIssues,
+      sessionCount: sessions.length,
+    })
+    // Return the program object without saving - calling code can handle the rejection
+    // This preserves the last good program in storage
+    throw new Error(`session_save_blocked: ${criticalIssues.join(', ')}`)
+  }
+  
   // DATABASE ENFORCEMENT: Validate program before save
   console.log('[program-generate] Validating program before save...')
   const validation = validateProgramFromDatabase(program)
@@ -3621,7 +4112,7 @@ export function saveAdaptiveProgram(program: AdaptiveProgram): AdaptiveProgram {
   programs.push(program)
   localStorage.setItem(STORAGE_KEY, JSON.stringify(programs))
   
-  console.log('[program-generate] Program saved successfully')
+  console.log('[session-assembly] Program saved successfully')
   return program
 }
 

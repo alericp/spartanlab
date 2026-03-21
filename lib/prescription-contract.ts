@@ -11,6 +11,9 @@
  * the appropriate sets, reps/holds, rest, and intensity for each exercise.
  */
 
+// [prescription] ISSUE B: Use shared 1RM math from canonical source
+import { estimateOneRepMax } from './strength/one-rep-max'
+
 // =============================================================================
 // PRESCRIPTION MODE TYPES
 // =============================================================================
@@ -1432,30 +1435,20 @@ export type WeightedPrescriptionMode =
   | 'hypertrophy'           // Lighter, high rep for muscle building (10-15 reps)
 
 /**
- * EPLEY FORMULA for 1RM estimation
+ * [prescription] SHARED 1RM WRAPPER (ISSUE B - Single Source of Truth)
  * 
- * Formula: 1RM = weight × (1 + reps / 30)
- * 
- * This is a well-established, calisthenics-safe formula that:
- * - Works well for rep ranges 1-15
- * - Is slightly conservative (safer for programming)
- * - Is easy to invert for working weight calculations
- * 
- * Reference: https://en.wikipedia.org/wiki/One-repetition_maximum
+ * Uses the canonical Epley formula from lib/strength/one-rep-max.ts
+ * No duplicate formula implementation - all 1RM math comes from one source.
  */
 function estimate1RM(weight: number, reps: number): number {
   if (reps <= 0 || weight <= 0) return 0
-  if (reps === 1) return weight
-  
-  // Epley formula: 1RM = w × (1 + r/30)
-  const estimated = weight * (1 + reps / 30)
-  
-  // Round to nearest 2.5 for practicality
-  return Math.round(estimated / 2.5) * 2.5
+  // [prescription] Use shared Epley formula from canonical source
+  return estimateOneRepMax({ weight, reps })
 }
 
 /**
  * Calculate working weight from 1RM at a target percentage
+ * [prescription] Rounds to nearest 2.5 lbs for practical loading
  */
 function calculateWorkingWeight(e1RM: number, percentage: number): number {
   const weight = e1RM * (percentage / 100)
@@ -1514,11 +1507,13 @@ export function estimateWeightedLoadPrescription(
   const targetReps = Math.round((intensityConfig.repRange[0] + intensityConfig.repRange[1]) / 2)
   const notes: string[] = []
   
-  // CASE 1: No benchmark data at all
+  // [prescription] CASE 1: No benchmark data at all
   if (!currentBenchmark && !prBenchmark) {
-    if (process.env.NODE_ENV !== 'production') {
-      console.log(`[WeightedLoad] No benchmark data for ${exerciseType}, returning no_data`)
-    }
+    console.log(`[prescription] No benchmark data for ${exerciseType}:`, {
+      mode,
+      fallbackUsed: true,
+      intensityBand: intensityConfig.intensityBand,
+    })
     return {
       prescribedLoad: 0,
       loadUnit: 'lbs',
@@ -1564,9 +1559,16 @@ export function estimateWeightedLoadPrescription(
     
     notes.push(`Based on current ${currentBenchmark.addedWeight}${currentBenchmark.unit || 'lbs'} × ${currentBenchmark.reps}`)
     
-    if (process.env.NODE_ENV !== 'production') {
-      console.log(`[WeightedLoad] ${exerciseType}: e1RM=${e1RM.toFixed(1)}lbs, ${intensityConfig.percentage}% → ${prescribedLoad}${outputUnit}`)
-    }
+    // [prescription] Log with stable prefix for debugging
+    console.log(`[prescription] ${exerciseType} load calculated:`, {
+      strengthSource: 'current_benchmark',
+      input: `${currentBenchmark.addedWeight}${currentBenchmark.unit || 'lbs'} × ${currentBenchmark.reps}`,
+      estimated1RM: Math.round(e1RM),
+      intensityBand: intensityConfig.intensityBand,
+      targetPercentage: intensityConfig.percentage,
+      prescribedLoad: `+${prescribedLoad} ${outputUnit}`,
+      mode,
+    })
     
     return {
       prescribedLoad: Math.max(0, prescribedLoad),
@@ -1594,9 +1596,18 @@ export function estimateWeightedLoadPrescription(
     notes.push('Based on historical PR (using conservative estimate)')
     notes.push(`PR reference: ${prBenchmark.load}${prBenchmark.unit} × ${prBenchmark.reps}`)
     
-    if (process.env.NODE_ENV !== 'production') {
-      console.log(`[WeightedLoad] ${exerciseType}: PR-based e1RM=${prE1RM.toFixed(1)}lbs, conservative=${conservativeE1RM.toFixed(1)}lbs → ${prescribedLoad}${outputUnit}`)
-    }
+    // [prescription] Log PR-based prescription with stable prefix
+    console.log(`[prescription] ${exerciseType} load from PR:`, {
+      strengthSource: 'pr_reference',
+      prInput: `${prBenchmark.load}${prBenchmark.unit} × ${prBenchmark.reps}`,
+      prE1RM: Math.round(prE1RM),
+      conservativeE1RM: Math.round(conservativeE1RM),
+      intensityBand: intensityConfig.intensityBand,
+      targetPercentage: intensityConfig.percentage,
+      prescribedLoad: `+${prescribedLoad} ${outputUnit}`,
+      mode,
+      confidenceLevel: 'moderate',
+    })
     
     return {
       prescribedLoad: Math.max(0, prescribedLoad),
@@ -1684,24 +1695,23 @@ export function formatWeightedLoadDisplay(prescription: WeightedLoadPrescription
 
 /**
  * Log weighted load estimation for debugging.
- * TASK 5: Dev-safe logging.
+ * [prescription] TASK 7: Dev-safe logging with stable prefix.
  */
 export function logWeightedLoadEstimation(
   exerciseType: string,
   mode: WeightedPrescriptionMode,
   prescription: WeightedLoadPrescription
 ): void {
-  if (process.env.NODE_ENV === 'production') return
-  
-  console.log('[WeightedLoad] Estimated:', {
-    exercise: exerciseType,
-    mode,
-    prescribedLoad: `${prescription.prescribedLoad} ${prescription.loadUnit}`,
-    basis: prescription.loadBasis,
-    confidence: prescription.confidenceLevel,
-    e1RM: prescription.estimated1RM,
-    targetReps: prescription.targetReps,
-    targetPercentage: prescription.targetPercentage,
+  // [prescription] Use stable prefix for all prescription-related logs
+  console.log('[prescription] Load estimation:', {
+  exercise: exerciseType,
+  mode,
+  prescribedLoad: prescription.prescribedLoad > 0 ? `+${prescription.prescribedLoad} ${prescription.loadUnit}` : 'BW',
+  basis: prescription.loadBasis,
+  confidence: prescription.confidenceLevel,
+  estimated1RM: prescription.estimated1RM,
+  targetReps: prescription.targetReps,
+  targetPercentage: prescription.targetPercentage,
     intensityBand: prescription.intensityBand,
   })
 }

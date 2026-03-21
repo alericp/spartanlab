@@ -642,11 +642,44 @@ export function StreamlinedWorkoutSession({
       }))
     } else {
       // Move to next set with rest
+      // [workout-progress] Increment set number but add safety bounds
+      const nextSetNumber = state.currentSetNumber + 1
+      const maxSets = totalExerciseSets
+      
+      // CRITICAL: Guard against incrementing past total sets
+      if (nextSetNumber > maxSets) {
+        console.log('[workout-progress] blocked invalid set increment in handleCompleteSet:', {
+          currentSet: state.currentSetNumber,
+          nextSet: nextSetNumber,
+          maxSets,
+          exerciseName: currentExercise?.name,
+        })
+        // This shouldn't happen, but if it does, transition to next exercise instead
+        if (state.currentExerciseIndex < exercises.length - 1) {
+          setState(prev => ({
+            ...prev,
+            status: 'active',
+            completedSets: newCompletedSets,
+            currentExerciseIndex: prev.currentExerciseIndex + 1,
+            currentSetNumber: 1,
+            lastSetRPE: lastRPE,
+          }))
+        } else {
+          setState(prev => ({
+            ...prev,
+            status: 'completed',
+            completedSets: newCompletedSets,
+            lastSetRPE: lastRPE,
+          }))
+        }
+        return
+      }
+      
       setState(prev => ({
         ...prev,
         status: 'resting',
         completedSets: newCompletedSets,
-        currentSetNumber: prev.currentSetNumber + 1,
+        currentSetNumber: nextSetNumber,
         lastSetRPE: lastRPE,
       }))
     }
@@ -1502,9 +1535,10 @@ export function StreamlinedWorkoutSession({
     const savedRestState = loadRestTimerState()
     
     // Determine next set info (safely handle null currentExercise)
+    // [workout-progress] Clamp setNumber to valid range
     const nextSetInfo = currentExercise ? {
       exerciseName: currentExercise?.name ?? 'Exercise',
-      setNumber: state.currentSetNumber,
+      setNumber: Math.min(state.currentSetNumber, currentExercise.sets),
       isNewExercise: false, // We skip rest between exercises now
     } : undefined
     
@@ -1589,7 +1623,8 @@ export function StreamlinedWorkoutSession({
                 </div>
                 <div className="text-right">
                   <p className="text-sm text-[#A4ACB8]">
-                    Set {state.currentSetNumber}/{currentExercise.sets}
+                    {/* [workout-progress] Safe set display - never show set > total */}
+                    Set {Math.min(state.currentSetNumber, currentExercise.sets)}/{currentExercise.sets}
                   </p>
                   <p className="text-xs text-[#6B7280]">{currentExercise.repsOrTime}</p>
                 </div>
@@ -1691,21 +1726,26 @@ export function StreamlinedWorkoutSession({
           {/* Set Progress - Inline */}
           <div className="flex items-center gap-3 mt-3">
             <div className="flex items-center gap-1.5 flex-1">
-              {Array.from({ length: currentExercise.sets }).map((_, idx) => (
-                <div
-                  key={idx}
-                  className={`h-2 flex-1 rounded-full transition-all ${
-                    idx < state.currentSetNumber - 1 
-                      ? 'bg-green-500' 
-                      : idx === state.currentSetNumber - 1 
-                        ? 'bg-[#C1121F]' 
-                        : 'bg-[#2B313A]'
-                  }`}
-                />
-              ))}
+              {/* [workout-progress] Safe set index - clamp to valid range */}
+              {Array.from({ length: currentExercise.sets }).map((_, idx) => {
+                const safeCurrentSet = Math.min(state.currentSetNumber, currentExercise.sets)
+                return (
+                  <div
+                    key={idx}
+                    className={`h-2 flex-1 rounded-full transition-all ${
+                      idx < safeCurrentSet - 1 
+                        ? 'bg-green-500' 
+                        : idx === safeCurrentSet - 1 
+                          ? 'bg-[#C1121F]' 
+                          : 'bg-[#2B313A]'
+                    }`}
+                  />
+                )
+              })}
             </div>
             <span className="text-sm font-medium text-[#E6E9EF] whitespace-nowrap">
-              Set {state.currentSetNumber}/{currentExercise.sets}
+              {/* [workout-progress] Safe set display - never show set > total */}
+              Set {Math.min(state.currentSetNumber, currentExercise.sets)}/{currentExercise.sets}
             </span>
           </div>
         </Card>

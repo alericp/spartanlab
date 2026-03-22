@@ -462,11 +462,23 @@ export interface AchievementSummary {
 
 /**
  * Get all achievements with their progress
+ * [achievement-truth] TASK 3: Include progressSource for truthful display
  */
 export function getAchievementsWithProgress(): AchievementWithProgress[] {
   const unlocked = getUnlockedAchievements()
   const unlockedMap = new Map(unlocked.map(u => [u.achievementId, u]))
   const metrics = calculateMetrics()
+  
+  // [achievement-truth] Get earned-only summary to determine progress source
+  const truthSummary = getBaselineVsEarnedSummary()
+  const hasEarnedWorkouts = truthSummary.hasEarnedProgress
+  
+  console.log('[achievement-truth] Evaluating achievements with source tracking:', {
+    hasEarnedWorkouts,
+    totalWorkouts: metrics.workoutCount,
+    baselinePullUp: truthSummary.baseline.pullUpMax,
+    earnedPullUp: truthSummary.earned.earnedPullUpMax,
+  })
   
   return ACHIEVEMENTS.map(achievement => {
     const status = unlockedMap.get(achievement.id)
@@ -476,44 +488,59 @@ export function getAchievementsWithProgress(): AchievementWithProgress[] {
     let progress = isUnlocked ? 100 : 0
     let currentValue = 0
     
+    // [achievement-truth] TASK 3: Track progress source
+    let progressSource: 'earned' | 'baseline_only' | 'not_started' = 'not_started'
+    
     if (!isUnlocked) {
       const { requirement } = achievement
       switch (requirement.type) {
         case 'workout_count':
           currentValue = metrics.workoutCount
           progress = Math.min(100, (currentValue / requirement.value) * 100)
+          // Workout count is always earned
+          progressSource = currentValue > 0 ? 'earned' : 'not_started'
           break
         case 'streak_days':
           currentValue = metrics.bestStreak
           progress = Math.min(100, (currentValue / requirement.value) * 100)
+          progressSource = currentValue > 0 ? 'earned' : 'not_started'
           break
         case 'total_reps':
           currentValue = metrics.totalReps
           progress = Math.min(100, (currentValue / requirement.value) * 100)
+          progressSource = currentValue > 0 ? 'earned' : 'not_started'
           break
         case 'strength_milestone':
           if (requirement.exercise) {
             currentValue = metrics.strengthRecords[requirement.exercise] || 0
             progress = Math.min(100, (currentValue / requirement.value) * 100)
+            // [achievement-truth] If no earned workouts, this is baseline_only
+            progressSource = hasEarnedWorkouts && currentValue > 0 ? 'earned' : 
+                           currentValue > 0 ? 'baseline_only' : 'not_started'
           }
           break
         case 'skill_level':
           if (requirement.skill) {
             currentValue = metrics.skillLevels[requirement.skill] || 0
             progress = Math.min(100, (currentValue / requirement.value) * 100)
+            progressSource = hasEarnedWorkouts && currentValue > 0 ? 'earned' : 
+                           currentValue > 0 ? 'baseline_only' : 'not_started'
           }
           break
         case 'challenge_count':
           currentValue = metrics.challengeCount
           progress = Math.min(100, (currentValue / requirement.value) * 100)
+          progressSource = currentValue > 0 ? 'earned' : 'not_started'
           break
         case 'weeks_active':
           currentValue = metrics.weeksActive
           progress = Math.min(100, (currentValue / requirement.value) * 100)
+          progressSource = currentValue > 0 ? 'earned' : 'not_started'
           break
       }
     } else {
       currentValue = achievement.requirement.value
+      progressSource = 'earned' // Unlocked = earned
     }
     
     return {
@@ -523,6 +550,7 @@ export function getAchievementsWithProgress(): AchievementWithProgress[] {
       progress: Math.round(progress),
       progressPercent: Math.round(progress),
       currentValue,
+      progressSource,
     }
   })
 }

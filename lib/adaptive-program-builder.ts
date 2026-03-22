@@ -4483,19 +4483,44 @@ function generateProgramRationale(
   // Get enhanced context from Adaptive Athlete Engine
   const engineCtx = getProgramBuilderContext()
   
+  // [history-language] TASK 8: Check if user has earned history
+  let hasEarnedHistory = false
+  try {
+    const { getBaselineVsEarnedSummary } = require('./baseline-earned-truth')
+    const summary = getBaselineVsEarnedSummary()
+    hasEarnedHistory = summary.hasEarnedProgress && summary.earned.totalWorkoutsCompleted >= 2
+    
+    console.log('[history-language] Rationale generation with history state:', {
+      hasEarnedHistory,
+      earnedWorkouts: summary.earned?.totalWorkoutsCompleted || 0,
+    })
+  } catch {
+    // Fallback - assume no history
+    hasEarnedHistory = false
+  }
+  
   // Structure choice
   parts.push(structure.rationale)
   
+  // [history-language] TASK 8: Only show constraint/adaptation language if we have history
   // Constraint awareness (from engine)
   if (engineCtx.primaryConstraint && constraintInsight.label !== 'Training Balanced') {
-    parts.push(`Program accounts for your current limiter: ${engineCtx.constraintLabel.toLowerCase()}.`)
+    if (hasEarnedHistory) {
+      parts.push(`Program accounts for your current limiter: ${engineCtx.constraintLabel.toLowerCase()}.`)
+    } else {
+      // Blank-slate: use calibration language instead
+      parts.push(`Program calibrated for initial assessment of ${engineCtx.constraintLabel.toLowerCase()}.`)
+    }
   }
   
+  // [history-language] TASK 8: Plateau language only with history
   // Plateau awareness (new from engine)
-  if (engineCtx.plateauStatus === 'plateau_detected') {
-    parts.push('Program includes variation to help break through the current plateau.')
-  } else if (engineCtx.plateauStatus === 'possible_plateau') {
-    parts.push('Consider introducing new stimuli if progress stalls.')
+  if (hasEarnedHistory) {
+    if (engineCtx.plateauStatus === 'plateau_detected') {
+      parts.push('Program includes variation to help break through the current plateau.')
+    } else if (engineCtx.plateauStatus === 'possible_plateau') {
+      parts.push('Consider introducing new stimuli if progress stalls.')
+    }
   }
   
   // [prescription] ISSUE F: Weighted strength support with actual prescription awareness
@@ -4507,13 +4532,21 @@ function generateProgramRationale(
     parts.push('Weighted strength maintained to support skill development.')
   }
   
+  // [history-language] TASK 8: Recovery language - only reference trends with history
   // Recovery consideration (enhanced with fatigue state)
-  if (engineCtx.recoveryState === 'overtrained' || engineCtx.recoveryState === 'fatigued') {
-    parts.push('Training load reduced due to elevated fatigue. Prioritize recovery.')
-  } else if (recoveryLevel === 'LOW') {
-    parts.push('Recovery state suggests including lighter sessions to prevent overtraining.')
-  } else if (recoveryLevel === 'HIGH') {
-    parts.push('Recovery state supports high-intensity training this week.')
+  if (hasEarnedHistory) {
+    if (engineCtx.recoveryState === 'overtrained' || engineCtx.recoveryState === 'fatigued') {
+      parts.push('Training load reduced due to elevated fatigue. Prioritize recovery.')
+    } else if (recoveryLevel === 'LOW') {
+      parts.push('Recovery state suggests including lighter sessions to prevent overtraining.')
+    } else if (recoveryLevel === 'HIGH') {
+      parts.push('Recovery state supports high-intensity training this week.')
+    }
+  } else {
+    // Blank-slate users: generic starting recovery guidance
+    if (recoveryLevel === 'LOW') {
+      parts.push('Program includes recovery-friendly session spacing.')
+    }
   }
   
   // Equipment notes

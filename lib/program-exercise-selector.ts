@@ -597,31 +597,32 @@ export function selectExercisesForSession(inputs: ExerciseSelectionInputs): Exer
   
   // [exercise-trace] TASK 7: Log session summary
   console.log('[exercise-trace] SESSION COMPLETE:', {
-  dayFocus: day.focus,
-  exerciseCount: main.length,
+    dayFocus: day.focus,
+    exerciseCount: main.length,
     weightedCount: weightedExerciseCount,
     doctrineHits: doctrineHitCount,
     rejected: rejectedCount,
     skillsExpressed: skillsForSession?.map(s => `${s.skill}(${s.expressionMode})`).join(', ') || primaryGoal,
   })
   
+  // BUILD-HOTFIX: balanced module structure and restored valid EOF closure
   return {
-  warmup,
-  main,
-  cooldown,
-  totalEstimatedTime,
-  sessionLoadSummary,
-  sessionStyle,
-  loadRationale,
-  antiBloatValidation: {
-  isValid: antiBloatResult.isValid,
-  issues: antiBloatResult.issues,
-  suggestions: antiBloatResult.suggestions,
-  },
-  // [exercise-trace] TASK 5: Attach session trace
-  sessionTrace: sessionTraceResult,
+    warmup,
+    main,
+    cooldown,
+    totalEstimatedTime,
+    sessionLoadSummary,
+    sessionStyle,
+    loadRationale,
+    antiBloatValidation: {
+      isValid: antiBloatResult.isValid,
+      issues: antiBloatResult.issues,
+      suggestions: antiBloatResult.suggestions,
+    },
+    // [exercise-trace] TASK 5: Attach session trace
+    sessionTrace: sessionTraceResult,
   }
-  }
+}
 
 // =============================================================================
 // EXERCISE BUDGET
@@ -2786,7 +2787,6 @@ function adjustRepsForLevel(defaultReps: string, level: ExperienceLevel): string
  * TASK 1: Uses formalized prescription modes instead of generic logic.
  * TASK 2: Skill work feels intentional and level-aware.
  */
-// BUILD-HOTFIX: balanced module structure and restored valid EOF closure
 export function getPrescriptionAwarePrescription(
   exercise: Exercise,
   experienceLevel: ExperienceLevel,

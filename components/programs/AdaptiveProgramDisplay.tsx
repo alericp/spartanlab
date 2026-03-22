@@ -94,14 +94,16 @@ export function AdaptiveProgramDisplay({
   
   // [displayed-adjustment-truth] STEP 3: Log what values are being displayed
   // This helps verify that rebuild actually replaced the program snapshot
-  console.log('[displayed-adjustment-truth] Rendering program display:', {
-    programId: program.id,
-    createdAt: program.createdAt,
-    scheduleMode: program.scheduleMode,
-    trainingDaysPerWeek: program.trainingDaysPerWeek,
-    displayedSessionCount: validSessions.length,
-    currentWeekFrequency: (program as { currentWeekFrequency?: number }).currentWeekFrequency,
-  })
+  // TASK 6: Explicit verification logging for program identity
+  console.log('[displayed-adjustment-truth] === DISPLAY TRUTH ===')
+  console.log('[displayed-adjustment-truth] Program ID:', program.id)
+  console.log('[displayed-adjustment-truth] Generated At:', program.createdAt)
+  console.log('[displayed-adjustment-truth] Schedule Mode:', program.scheduleMode)
+  console.log('[displayed-adjustment-truth] Program trainingDaysPerWeek:', program.trainingDaysPerWeek)
+  console.log('[displayed-adjustment-truth] Actual valid sessions count:', validSessions.length)
+  console.log('[displayed-adjustment-truth] currentWeekFrequency:', (program as { currentWeekFrequency?: number }).currentWeekFrequency)
+  console.log('[displayed-adjustment-truth] DISPLAYED SESSION COUNT:', validSessions.length)
+  console.log('[displayed-adjustment-truth] === END DISPLAY TRUTH ===')
   
   // Diagnostic: Log if we detect partial program data (only once per render)
   if (!program.recoveryLevel || !(program.recoveryLevel in recoveryColors)) {
@@ -166,13 +168,15 @@ export function AdaptiveProgramDisplay({
                     <span className="text-sm font-medium">Adaptive</span>
                   </div>
                   <span className="text-xs text-[#6A6A6A]">
-                    {program.currentWeekFrequency || program.sessions?.length || '?'} sessions this week
+                    {/* TASK 4: Use validSessions.length as canonical truth - never stale summary values */}
+                    {validSessions.length} sessions this week
                   </span>
                 </div>
               ) : (
-                // STATIC USER: Show fixed days as saved preference
+                // STATIC USER: Show actual session count from generated program - this is canonical
+                // TASK 4: Previously used program.trainingDaysPerWeek which could be stale
                 <p className="text-sm font-medium">
-                  {program.trainingDaysPerWeek} days
+                  {validSessions.length} days
                 </p>
               )}
             </div>

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import {
@@ -132,9 +132,28 @@ export function ProgramAdjustmentModal({
   const [trainingDays, setTrainingDays] = useState<TrainingDays>(currentTrainingDays)
   const [intensityLevel, setIntensityLevel] = useState<'mild' | 'moderate' | 'significant'>('mild')
 
+  // [adjustment-sync] TASK 5: Sync local state when props change (e.g., after rebuild)
+  useEffect(() => {
+    setSessionMinutes(currentSessionMinutes)
+    setTrainingDays(currentTrainingDays)
+    console.log('[adjustment-sync] Modal state synced from props:', {
+      sessionMinutes: currentSessionMinutes,
+      trainingDays: currentTrainingDays,
+    })
+  }, [currentSessionMinutes, currentTrainingDays])
+
   const interceptMessage = getExitInterceptMessage()
   const programStatus = getProgramStatus()
   const frequentRestartCheck = checkFrequentRestarts()
+
+  // [adjustment-sync] TASK 9: Log current values being displayed in modal
+  console.log('[adjustment-sync] === MODAL TRUTH STATE ===')
+  console.log('[adjustment-sync] currentTrainingDays (prop):', currentTrainingDays)
+  console.log('[adjustment-sync] trainingDays (local state):', trainingDays)
+  console.log('[adjustment-sync] currentSessionMinutes (prop):', currentSessionMinutes)
+  console.log('[adjustment-sync] sessionMinutes (local state):', sessionMinutes)
+  console.log('[adjustment-sync] currentEquipment (prop):', currentEquipment)
+  console.log('[adjustment-sync] === END MODAL TRUTH ===')
 
   const handleBack = () => {
     if (view === 'confirm') {
@@ -534,6 +553,47 @@ export function ProgramAdjustmentModal({
           </div>
         )
 
+      case 'equipment':
+        // [adjustment-sync] TASK 8: Show current equipment state clearly
+        return (
+          <div className="space-y-6">
+            <div>
+              <h4 className="text-sm font-medium text-[#E6E9EF] mb-2">Equipment Settings</h4>
+              <p className="text-xs text-[#6B7280] mb-4">
+                Manage equipment availability in Settings for full control.
+              </p>
+              
+              {/* Show current equipment summary */}
+              <div className="p-4 bg-[#0F1115] rounded-lg border border-[#2B313A]/50">
+                <p className="text-xs text-[#6B7280] mb-2">Current Equipment:</p>
+                <div className="flex flex-wrap gap-2">
+                  {currentEquipment.length > 0 ? (
+                    currentEquipment.map((eq) => (
+                      <span key={eq} className="px-2 py-1 bg-[#2B313A]/50 text-xs text-[#A4ACB8] rounded capitalize">
+                        {eq.replace(/_/g, ' ')}
+                      </span>
+                    ))
+                  ) : (
+                    <span className="text-xs text-[#6B7280]">No equipment selected</span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <Button
+              variant="outline"
+              onClick={() => {
+                onOpenChange(false)
+                // Navigate to settings
+                window.location.href = '/settings'
+              }}
+              className="w-full border-[#2B313A] text-[#E6E9EF]"
+            >
+              Go to Settings
+            </Button>
+          </div>
+        )
+
       default:
         return (
           <div className="py-8 text-center">
@@ -564,12 +624,18 @@ export function ProgramAdjustmentModal({
 
           <div className="text-center space-y-2">
             {/* [canonical-rebuild] TASK J: Show truthful success message */}
+            {/* [adjustment-sync] TASK 7: Confirmation must reflect actual rebuild result */}
             <h3 className="text-lg font-medium text-[#E6E9EF]">
-              {selectedCategory === 'schedule' ? 'Program Rebuilt' : 'Adjustment Applied'}
+              {selectedCategory === 'schedule' ? 'Program Rebuilt Successfully' : 'Adjustment Applied'}
             </h3>
             <p className="text-sm text-[#A4ACB8]">
               {adjustmentResult.adjustment.description}
             </p>
+            {selectedCategory === 'schedule' && (
+              <p className="text-xs text-[#4ADE80] mt-1">
+                Your program now has {trainingDays} sessions per week
+              </p>
+            )}
           </div>
 
           <Card className="bg-[#0F1115] border-[#2B313A]/50 p-4">

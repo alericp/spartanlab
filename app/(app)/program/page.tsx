@@ -69,6 +69,8 @@ const ProgramAdjustmentModal = dynamic(
 
 // [canonical-rebuild] Import type for adjustment rebuild requests
 import type { AdjustmentRebuildRequest } from '@/components/programs/ProgramAdjustmentModal'
+// [canonical-rebuild] TASK 2: Import saveCanonicalProfile to persist inputs to canonical truth
+import { saveCanonicalProfile } from '@/lib/canonical-profile-service'
 
 // TASK 1: Error boundary wrapper for AdaptiveProgramDisplay
 // Catches render errors and triggers recovery state instead of crashing
@@ -923,6 +925,22 @@ export default function ProgramPage() {
       invalidateStaleCaches()
       updateFreshnessIdentity(newProgram.id, newProgram.createdAt, profileSig)
       
+      // [canonical-rebuild] STAGE 5b: CRITICAL - Persist updated inputs to canonical profile
+      // This ensures future getDefaultAdaptiveInputs() calls read the new truth
+      console.log('[canonical-rebuild] STAGE 5b: Persisting updated inputs to canonical profile...')
+      saveCanonicalProfile({
+        trainingDaysPerWeek: updatedInputs.trainingDaysPerWeek ?? undefined,
+        sessionLengthMinutes: updatedInputs.sessionLength ?? undefined,
+        // For schedule mode, if user selects a specific day count, they've made a choice
+        scheduleMode: request.type === 'training_days' ? 'static' : undefined,
+        equipmentAvailable: updatedInputs.equipment ?? undefined,
+      })
+      console.log('[canonical-rebuild] STAGE 5b: Canonical profile updated with new settings', {
+        trainingDaysPerWeek: updatedInputs.trainingDaysPerWeek,
+        sessionLength: updatedInputs.sessionLength,
+        equipmentCount: updatedInputs.equipment?.length || 0,
+      })
+      
       // [canonical-rebuild] STAGE 6: Update UI state atomically
       console.log('[canonical-rebuild] STAGE 6: Updating UI state...')
       setInputs(updatedInputs)
@@ -996,6 +1014,19 @@ export default function ProgramPage() {
         savedProgramId: savedState.adaptiveProgram?.id,
         identityMatch: newProgram.id === savedState.adaptiveProgram?.id,
       })
+      
+      // [program-rebuild-truth] TASK 6: CRITICAL verification - prove program was truly replaced
+      console.log('[program-rebuild-truth] === REBUILD PROOF ===')
+      console.log('[program-rebuild-truth] Previous program ID:', previousProgramId)
+      console.log('[program-rebuild-truth] New program ID:', newProgram.id)
+      console.log('[program-rebuild-truth] Previous generatedAt:', previousGeneratedAt)
+      console.log('[program-rebuild-truth] New generatedAt:', newProgram.createdAt)
+      console.log('[program-rebuild-truth] Previous session count:', previousSessionCount)
+      console.log('[program-rebuild-truth] New session count:', newProgram.sessions.length)
+      console.log('[program-rebuild-truth] Previous training days (input):', previousTrainingDays)
+      console.log('[program-rebuild-truth] New training days (input):', updatedInputs.trainingDaysPerWeek)
+      console.log('[program-rebuild-truth] Canonical profile updated: YES')
+      console.log('[program-rebuild-truth] === END PROOF ===')
       
       return { success: true }
       

@@ -2713,67 +2713,77 @@ function selectIntelligentCooldown(
   return selected
 }
 
-// Legacy cooldown function (kept for backward compatibility)
 function selectCooldownLegacy(minutes: number): SelectedExercise[] {
-  const selected: SelectedExercise[] = []
-  
-  // Always include shoulder stretch
-  selected.push({
-    exercise: COOLDOWN_EXERCISES.find(e => e.id === 'shoulder_stretch')!,
-    sets: 1,
-    repsOrTime: '30s each',
-    isOverrideable: true,
-    selectionReason: 'Shoulder recovery',
-  })
-  
-  // Wrist stretches
+  var selected: SelectedExercise[] = [];
+  var shoulderStretch = COOLDOWN_EXERCISES.find(function(e) { return e.id === 'shoulder_stretch'; });
+  if (shoulderStretch) {
+    selected.push({
+      exercise: shoulderStretch,
+      sets: 1,
+      repsOrTime: '30s each',
+      isOverrideable: true,
+      selectionReason: 'Shoulder recovery',
+    });
+  }
   if (minutes >= 5) {
-    selected.push({
-      exercise: COOLDOWN_EXERCISES.find(e => e.id === 'wrist_stretches')!,
-      sets: 1,
-      repsOrTime: '30s each position',
-      isOverrideable: true,
-      selectionReason: 'Wrist care for calisthenics',
-    })
+    var wristStretch = COOLDOWN_EXERCISES.find(function(e) { return e.id === 'wrist_stretches'; });
+    if (wristStretch) {
+      selected.push({
+        exercise: wristStretch,
+        sets: 1,
+        repsOrTime: '30s each position',
+        isOverrideable: true,
+        selectionReason: 'Wrist care for calisthenics',
+      });
+    }
   }
-  
-  // Additional stretches for longer cooldowns
   if (minutes >= 8) {
-    selected.push({
-      exercise: COOLDOWN_EXERCISES.find(e => e.id === 'lat_stretch')!,
-      sets: 1,
-      repsOrTime: '30s each',
-      isOverrideable: true,
-      selectionReason: 'Lat recovery',
-    })
-    
-    selected.push({
-      exercise: COOLDOWN_EXERCISES.find(e => e.id === 'chest_stretch')!,
-      sets: 1,
-      repsOrTime: '30s each',
-      isOverrideable: true,
-      selectionReason: 'Chest/front delt recovery',
-    })
+    var latStretch = COOLDOWN_EXERCISES.find(function(e) { return e.id === 'lat_stretch'; });
+    if (latStretch) {
+      selected.push({
+        exercise: latStretch,
+        sets: 1,
+        repsOrTime: '30s each',
+        isOverrideable: true,
+        selectionReason: 'Lat recovery',
+      });
+    }
+    var chestStretch = COOLDOWN_EXERCISES.find(function(e) { return e.id === 'chest_stretch'; });
+    if (chestStretch) {
+      selected.push({
+        exercise: chestStretch,
+        sets: 1,
+        repsOrTime: '30s each',
+        isOverrideable: true,
+        selectionReason: 'Chest/front delt recovery',
+      });
+    }
   }
-  
-  return selected
+  return selected;
 }
 
 function selectByLevel(exercises: Exercise[], level: ExperienceLevel): Exercise | undefined {
-  const sorted = [...exercises].sort((a, b) => a.neuralDemand - b.neuralDemand);
-  if (level === 'beginner') return sorted[0];
-  if (level === 'intermediate') return sorted[Math.floor(sorted.length / 2)];
+  var sorted = exercises.slice().sort(function(a, b) { return a.neuralDemand - b.neuralDemand; });
+  if (level === 'beginner') {
+    return sorted[0];
+  }
+  if (level === 'intermediate') {
+    return sorted[Math.floor(sorted.length / 2)];
+  }
   return sorted[sorted.length - 1];
 }
 
 function adjustSetsForLevel(defaultSets: number, level: ExperienceLevel): number {
-  if (level === 'beginner') return Math.max(2, defaultSets - 1);
-  if (level === 'advanced') return Math.min(5, defaultSets + 1);
+  if (level === 'beginner') {
+    return Math.max(2, defaultSets - 1);
+  }
+  if (level === 'advanced') {
+    return Math.min(5, defaultSets + 1);
+  }
   return defaultSets;
 }
 
 function adjustRepsForLevel(defaultReps: string, level: ExperienceLevel): string {
-  void level;
   return defaultReps;
 }
 
@@ -2784,13 +2794,7 @@ export function getPrescriptionAwarePrescription(
   currentProgression?: string,
   fatigueState?: 'fresh' | 'moderate' | 'fatigued',
   recentPerformance?: { avgRPE?: number; completionRate?: number; improving?: boolean }
-): {
-  sets: number;
-  repsOrTime: string;
-  note?: string;
-  prescriptionMode: PrescriptionMode;
-  supportsWeightedLoad?: boolean;
-} {
+): { sets: number; repsOrTime: string; note?: string; prescriptionMode: PrescriptionMode; supportsWeightedLoad?: boolean } {
   // Detect prescription mode
   const isWeighted = exercise.id.includes('weighted') || exercise.name.toLowerCase().includes('weighted');
   const prescriptionMode = detectPrescriptionMode(

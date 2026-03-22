@@ -145,14 +145,16 @@ import {
   type WeightedStrengthCarryover,
 } from './prescription-contract'
 import {
-  // [exercise-expression] TASK 3: Doctrine-backed skill support mappings
   SKILL_SUPPORT_MAPPINGS,
   getSupportMapping,
   getDirectSupportExercises,
   type SkillSupportMapping,
+  getAdvancedSkillSupport,
+  isExercisePrimarySupportFor,
+  getAllSupportExercisesFor,
+  ADVANCED_SKILL_SUPPORT_PATTERNS,
 } from './doctrine/skill-support-mappings'
 import {
-  // [exercise-trace] TASK 1: Import traceability types
   type ExerciseSelectionTrace,
   type ExerciseSelectionReason,
   type TraceExpressionMode,
@@ -169,14 +171,6 @@ import {
   logSessionTrace,
 } from './engine-quality-contract'
 import {
-  // [advanced-skill-expression] ISSUE D: Intentional support work helpers
-  getAdvancedSkillSupport,
-  isExercisePrimarySupportFor,
-  getAllSupportExercisesFor,
-  ADVANCED_SKILL_SUPPORT_PATTERNS,
-} from './doctrine/skill-support-mappings'
-import {
-  // [weighted-truth] TASK A: Canonical weighted readiness functions
   hasLoadableEquipment,
   checkWeightedPrescriptionEligibility,
 } from './canonical-profile-service'

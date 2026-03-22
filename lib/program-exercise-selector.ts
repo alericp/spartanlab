@@ -2739,10 +2739,7 @@ function selectCooldownLegacy(minutes: number): SelectedExercise[] {
   return selected
 }
 
-function selectByLevel(
-  exercises: Exercise[],
-  level: ExperienceLevel
-): Exercise | undefined {
+function selectByLevel(exercises: Exercise[], level: ExperienceLevel): Exercise | undefined {
   const sorted = [...exercises].sort((a, b) => a.neuralDemand - b.neuralDemand)
   if (level === 'beginner') return sorted[0]
   if (level === 'intermediate') return sorted[Math.floor(sorted.length / 2)]
@@ -2755,7 +2752,8 @@ function adjustSetsForLevel(defaultSets: number, level: ExperienceLevel): number
   return defaultSets
 }
 
-function adjustRepsForLevel(defaultReps: string, _level: ExperienceLevel): string {
+function adjustRepsForLevel(defaultReps: string, level: ExperienceLevel): string {
+  void level
   return defaultReps
 }
 
@@ -2766,13 +2764,7 @@ export function getPrescriptionAwarePrescription(
   currentProgression?: string,
   fatigueState?: 'fresh' | 'moderate' | 'fatigued',
   recentPerformance?: { avgRPE?: number; completionRate?: number; improving?: boolean }
-): {
-  sets: number
-  repsOrTime: string
-  note?: string
-  prescriptionMode: PrescriptionMode
-  supportsWeightedLoad?: boolean
-} {
+): { sets: number; repsOrTime: string; note?: string; prescriptionMode: PrescriptionMode; supportsWeightedLoad?: boolean } {
   // Detect prescription mode
   const isWeighted = exercise.id.includes('weighted') || exercise.name.toLowerCase().includes('weighted')
   const prescriptionMode = detectPrescriptionMode(

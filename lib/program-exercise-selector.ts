@@ -513,57 +513,106 @@ export function selectExercisesForSession(inputs: ExerciseSelectionInputs): Exer
   const loadRationale = generateSessionLoadRationale(sessionLoadSummary, sessionStyle)
   
   // [prescription] TASK 7: Log weighted exercises with prescriptions for debugging
-  const weightedWithLoads = main.filter(e => e.prescribedLoad && e.prescribedLoad.load > 0)
+  var weightedWithLoads = main.filter(function(e) { return e.prescribedLoad && e.prescribedLoad.load > 0; });
   if (weightedWithLoads.length > 0) {
+    var weightedLogItems = [];
+    for (var i = 0; i < weightedWithLoads.length; i++) {
+      var we = weightedWithLoads[i];
+      weightedLogItems.push({
+        id: we.exercise.id,
+        load: '+' + (we.prescribedLoad?.load || 0) + ' ' + (we.prescribedLoad?.unit || ''),
+        basis: we.prescribedLoad?.basis,
+        confidence: we.prescribedLoad?.confidenceLevel,
+      });
+    }
+    var skillsList = [];
+    if (skillsForSession) {
+      for (var j = 0; j < skillsForSession.length; j++) {
+        skillsList.push(skillsForSession[j].skill);
+      }
+    }
     console.log('[prescription] Session weighted exercise prescriptions:', {
       dayFocus: day.focus,
-      exercises: weightedWithLoads.map(e => ({
-        id: e.exercise.id,
-        load: `+${e.prescribedLoad?.load} ${e.prescribedLoad?.unit}`,
-        basis: e.prescribedLoad?.basis,
-        confidence: e.prescribedLoad?.confidenceLevel,
-      })),
-      skillsExpressed: skillsForSession?.map(s => s.skill) || [],
-    })
+      exercises: weightedLogItems,
+      skillsExpressed: skillsList,
+    });
   }
   
-  // [exercise-trace] TASK 5/7: Build session-level trace summary
-  const weightedExerciseCount = main.filter(e => e.prescribedLoad && e.prescribedLoad.load > 0).length
-  const doctrineHitCount = main.filter(e => e.selectionTrace?.doctrineSource !== null).length
-  // Count rejected alternatives from all exercise traces
-  const rejectedCount = main.reduce((sum, e) => sum + (e.selectionTrace?.rejectedAlternatives?.length || 0), 0)
-  
-  const sessionTraceResult = {
-    sessionRole: (day.focus === 'skill' || day.focus === 'push_skill' || day.focus === 'pull_skill') ? 'primary_focus' as const :
-                 (day.focus === 'support_recovery') ? 'recovery' as const :
-                 (day.focus === 'mixed_upper') ? 'mixed' as const : 'support_heavy' as const,
-    primarySkillExpressed: skillsForSession?.find(s => s.expressionMode === 'primary')?.skill || primaryGoal,
-    secondarySkillExpressed: skillsForSession?.find(s => s.expressionMode === 'technical')?.skill || null,
+  var weightedExerciseCount = 0;
+  var doctrineHitCount = 0;
+  var rejectedCount = 0;
+  for (var wi = 0; wi < main.length; wi++) {
+    if (main[wi].prescribedLoad && main[wi].prescribedLoad.load > 0) {
+      weightedExerciseCount++;
+    }
+    if (main[wi].selectionTrace && main[wi].selectionTrace.doctrineSource !== null) {
+      doctrineHitCount++;
+    }
+    if (main[wi].selectionTrace && main[wi].selectionTrace.rejectedAlternatives) {
+      rejectedCount = rejectedCount + main[wi].selectionTrace.rejectedAlternatives.length;
+    }
+  }
+
+  var sessionRole: 'primary_focus' | 'recovery' | 'mixed' | 'support_heavy' = 'support_heavy';
+  if (day.focus === 'skill' || day.focus === 'push_skill' || day.focus === 'pull_skill') {
+    sessionRole = 'primary_focus';
+  } else if (day.focus === 'support_recovery') {
+    sessionRole = 'recovery';
+  } else if (day.focus === 'mixed_upper') {
+    sessionRole = 'mixed';
+  }
+
+  var primarySkillExpressed = primaryGoal;
+  var secondarySkillExpressed: string | null = null;
+  if (skillsForSession) {
+    for (var si = 0; si < skillsForSession.length; si++) {
+      if (skillsForSession[si].expressionMode === 'primary') {
+        primarySkillExpressed = skillsForSession[si].skill;
+      }
+      if (skillsForSession[si].expressionMode === 'technical') {
+        secondarySkillExpressed = skillsForSession[si].skill;
+      }
+    }
+  }
+
+  var sessionTraceResult = {
+    sessionRole: sessionRole,
+    primarySkillExpressed: primarySkillExpressed,
+    secondarySkillExpressed: secondarySkillExpressed,
     exerciseCount: main.length,
-    weightedExerciseCount,
-    doctrineHitCount,
+    weightedExerciseCount: weightedExerciseCount,
+    doctrineHitCount: doctrineHitCount,
     rejectedAlternativeCount: rejectedCount,
-  }
+  };
   
-  // [selected-skill-exposure] STEP 7: Log skill expression summary for this session
-  const skillExpressionSummary = {
-    directExpressions: main.filter(e => 
-      e.selectionTrace?.expressionMode === 'direct_intensity' || 
-      e.selectionTrace?.sessionRole === 'skill_primary'
-    ).map(e => e.name),
-    technicalExpressions: main.filter(e => 
-      e.selectionTrace?.expressionMode === 'technical_focus' ||
-      e.selectionTrace?.sessionRole === 'skill_secondary'
-    ).map(e => e.name),
-    supportExpressions: main.filter(e => 
-      e.selectionTrace?.expressionMode === 'strength_support' ||
-      e.selectionTrace?.sessionRole === 'strength_support'
-    ).map(e => e.name),
-    weightedExpressions: main.filter(function(e) { return e.prescribedLoad?.load; }).map(function(e) {
-      return e.name + '@' + (e.prescribedLoad?.load || '') + (e.prescribedLoad?.unit || '');
-    }),
+  var directExpressionNames = [];
+  var technicalExpressionNames = [];
+  var supportExpressionNames = [];
+  var weightedExpressionNames = [];
+  for (var idx = 0; idx < main.length; idx++) {
+    var ex = main[idx];
+    var trace = ex.selectionTrace;
+    if (trace) {
+      if (trace.expressionMode === 'direct_intensity' || trace.sessionRole === 'skill_primary') {
+        directExpressionNames.push(ex.name);
+      }
+      if (trace.expressionMode === 'technical_focus' || trace.sessionRole === 'skill_secondary') {
+        technicalExpressionNames.push(ex.name);
+      }
+      if (trace.expressionMode === 'strength_support' || trace.sessionRole === 'strength_support') {
+        supportExpressionNames.push(ex.name);
+      }
+    }
+    if (ex.prescribedLoad && ex.prescribedLoad.load) {
+      weightedExpressionNames.push(ex.name + '@' + ex.prescribedLoad.load + (ex.prescribedLoad.unit || ''));
+    }
   }
-  
+  var skillExpressionSummary = {
+    directExpressions: directExpressionNames,
+    technicalExpressions: technicalExpressionNames,
+    supportExpressions: supportExpressionNames,
+    weightedExpressions: weightedExpressionNames,
+  };
   console.log('[selected-skill-exposure] Session skill expression summary:', {
     dayFocus: day.focus,
     primarySkill: sessionTraceResult.primarySkillExpressed,
@@ -572,28 +621,41 @@ export function selectExercisesForSession(inputs: ExerciseSelectionInputs): Exer
     technicalExpressions: skillExpressionSummary.technicalExpressions,
     supportExpressions: skillExpressionSummary.supportExpressions,
     weightedExpressions: skillExpressionSummary.weightedExpressions,
-  })
-  
-  // [generic-shell-detect] STEP 9: Warn if session looks too generic
-  const doctrineBackedCount = main.filter(e => e.selectionTrace?.doctrineSource !== null).length
-  const skillAlignedCount = main.filter(e => 
-    (e.selectionTrace?.influencingSkills?.length || 0) > 0
-  ).length
+  });
+
+  var doctrineBackedCount = 0;
+  var skillAlignedCount = 0;
+  for (var k = 0; k < main.length; k++) {
+    if (main[k].selectionTrace && main[k].selectionTrace.doctrineSource !== null) {
+      doctrineBackedCount++;
+    }
+    if (main[k].selectionTrace && main[k].selectionTrace.influencingSkills && main[k].selectionTrace.influencingSkills.length > 0) {
+      skillAlignedCount++;
+    }
+  }
   
   if (doctrineBackedCount === 0 && skillAlignedCount < 2 && main.length >= 4) {
+    var exerciseNameList = [];
+    for (var m = 0; m < Math.min(main.length, 5); m++) {
+      exerciseNameList.push(main[m].name);
+    }
     console.warn('[generic-shell-detect] WARNING: Session may be too generic - no doctrine hits, few skill alignments', {
       dayFocus: day.focus,
       exerciseCount: main.length,
-      doctrineBackedCount,
-      skillAlignedCount,
-      exercises: main.map(e => e.name).slice(0, 5),
-    })
+      doctrineBackedCount: doctrineBackedCount,
+      skillAlignedCount: skillAlignedCount,
+      exercises: exerciseNameList,
+    });
   }
-  
-  // [exercise-trace] TASK 7: Log session summary
-  const skillsExpressedLabel = skillsForSession
-    ? skillsForSession.map(function(s) { return s.skill + '(' + s.expressionMode + ')'; }).join(', ')
-    : primaryGoal;
+
+  var skillsExpressedLabel = primaryGoal;
+  if (skillsForSession && skillsForSession.length > 0) {
+    var labelParts = [];
+    for (var n = 0; n < skillsForSession.length; n++) {
+      labelParts.push(skillsForSession[n].skill + '(' + skillsForSession[n].expressionMode + ')');
+    }
+    skillsExpressedLabel = labelParts.join(', ');
+  }
   console.log('[exercise-trace] SESSION COMPLETE:', {
     dayFocus: day.focus,
     exerciseCount: main.length,

@@ -1351,6 +1351,7 @@ export default function ProgramPage() {
           onRebuildRequired={handleAdjustmentRebuild}
           currentSessionMinutes={inputs?.sessionLength || 60}
           currentTrainingDays={inputs?.trainingDaysPerWeek || 3}
+          currentEquipment={inputs?.equipment || []}
         />
       </div>
     </div>

@@ -1187,6 +1187,14 @@ export function composeCanonicalPlannerInput(
     hasWeights: result.equipmentAvailable.includes('weights'),
   })
   
+  // [adjustment-sync] TASK 9: Additional diagnostic for adjustment surfaces
+  console.log('[adjustment-sync] Builder truth hydration:', {
+    trainingDaysPerWeek: result.trainingDaysPerWeek,
+    sessionLengthMinutes: result.sessionLengthMinutes,
+    scheduleMode: result.scheduleMode,
+    sessionDurationMode: result.sessionDurationMode,
+  })
+  
   return result
 }
 

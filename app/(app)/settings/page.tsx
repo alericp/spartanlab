@@ -332,9 +332,12 @@ export default function SettingsPage() {
 
   // TASK 3: API-first hydration with localStorage fallback and canonical sync
   const loadProfile = async () => {
+    // [adjustment-sync] TASK 9: Log settings truth read at load time
+    console.log('[adjustment-sync] === SETTINGS TRUTH LOAD ===')
+    
     // Log canonical profile diagnostic state at load time
     const diagnostics = diagnoseProfileData()
-    console.log('[Settings] Profile diagnostics:', diagnostics)
+    console.log('[adjustment-sync] Profile diagnostics:', diagnostics)
     logProfileTruthState('Settings page load')
     
     // Step 1: Try API first (canonical truth for authenticated users)
@@ -367,15 +370,16 @@ export default function SettingsPage() {
   // Helper to apply profile data to React state
   // ISSUE E FIX: Real round-trip validation - this function hydrates UI from canonical truth
   const applyProfileToState = (data: AthleteProfile & { scheduleMode?: string; sessionDurationMode?: 'static' | 'adaptive'; trainingStyle?: TrainingStyleMode }) => {
-    // TASK 7: Dev logging for hydration verification
-    console.log('[Settings] applyProfileToState hydrating from canonical truth:', {
-      scheduleMode: data.scheduleMode,
-      sessionDurationMode: data.sessionDurationMode,
-      trainingDaysPerWeek: data.trainingDaysPerWeek,
-      sessionLengthMinutes: data.sessionLengthMinutes,
-      primaryGoal: data.primaryGoal,
-      equipmentCount: data.equipmentAvailable?.length || 0,
-    })
+    // [adjustment-sync] TASK 9: Log canonical truth being applied to UI
+    console.log('[adjustment-sync] === APPLYING CANONICAL TRUTH TO UI ===')
+    console.log('[adjustment-sync] scheduleMode:', data.scheduleMode)
+    console.log('[adjustment-sync] sessionDurationMode:', data.sessionDurationMode)
+    console.log('[adjustment-sync] trainingDaysPerWeek:', data.trainingDaysPerWeek)
+    console.log('[adjustment-sync] sessionLengthMinutes:', data.sessionLengthMinutes)
+    console.log('[adjustment-sync] primaryGoal:', data.primaryGoal)
+    console.log('[adjustment-sync] equipmentAvailable:', data.equipmentAvailable)
+    console.log('[adjustment-sync] hasWeights:', data.equipmentAvailable?.includes('weights'))
+    console.log('[adjustment-sync] === END CANONICAL TRUTH ===')
     
     setProfile(data as AthleteProfile)
     setBodyweight(data.bodyweight?.toString() || '')
@@ -704,6 +708,18 @@ export default function SettingsPage() {
   
   // TASK 3: Wrap handleSave in try-finally to ensure saving state is always cleared
   const handleSaveWithGuaranteedReset = async () => {
+    // [adjustment-sync] TASK 9: Log values being saved for truth verification
+    console.log('[adjustment-sync] === SETTINGS SAVE INITIATED ===')
+    console.log('[adjustment-sync] scheduleMode:', scheduleMode)
+    console.log('[adjustment-sync] trainingDays:', trainingDays)
+    console.log('[adjustment-sync] sessionDurationMode:', sessionDurationMode)
+    console.log('[adjustment-sync] sessionLength:', sessionLength)
+    console.log('[adjustment-sync] equipmentCount:', equipment.length)
+    console.log('[adjustment-sync] hasWeights:', equipment.includes('weights'))
+    console.log('[adjustment-sync] primaryGoal:', primaryGoal)
+    console.log('[adjustment-sync] trainingStyle:', trainingStyle)
+    console.log('[adjustment-sync] === END SAVE INIT ===')
+    
     try {
       await handleSave()
     } finally {
@@ -753,9 +769,14 @@ export default function SettingsPage() {
           {/* Experience Level */}
           <div className="space-y-2">
             <Label className="text-[#F5F5F5]">Experience Level</Label>
+            {/* [adjustment-sync] TASK 2: Always show current value in collapsed state */}
             <Select value={experienceLevel} onValueChange={setExperienceLevel}>
               <SelectTrigger className="bg-[#1A1A1A] border-[#3A3A3A] text-[#F5F5F5]">
-                <SelectValue />
+                <SelectValue>
+                  {experienceLevel === 'beginner' && 'Beginner (8-12 weeks per level)'}
+                  {experienceLevel === 'intermediate' && 'Intermediate (6-10 weeks per level)'}
+                  {experienceLevel === 'advanced' && 'Advanced (4-8 weeks per level)'}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent className="bg-[#2A2A2A] border-[#3A3A3A]">
                 <SelectItem value="beginner" className="text-[#F5F5F5] focus:bg-[#3A3A3A]">
@@ -777,12 +798,15 @@ export default function SettingsPage() {
           {/* Schedule Mode */}
           <div className="space-y-2">
             <Label className="text-[#F5F5F5]">Schedule Type</Label>
+            {/* [adjustment-sync] TASK 2: Always show current value in collapsed state */}
             <Select 
               value={scheduleMode} 
               onValueChange={(v) => setScheduleMode(v as 'static' | 'flexible')}
             >
               <SelectTrigger className="bg-[#1A1A1A] border-[#3A3A3A] text-[#F5F5F5]">
-                <SelectValue />
+                <SelectValue>
+                  {scheduleMode === 'static' ? 'Fixed Schedule' : 'Flexible / Adaptive'}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent className="bg-[#2A2A2A] border-[#3A3A3A]">
                 <SelectItem value="static" className="text-[#F5F5F5] focus:bg-[#3A3A3A]">
@@ -804,9 +828,12 @@ export default function SettingsPage() {
           {scheduleMode === 'static' && (
             <div className="space-y-2">
               <Label className="text-[#F5F5F5]">Training Days Per Week</Label>
+              {/* [adjustment-sync] TASK 2: Always show current value in collapsed state */}
               <Select value={trainingDays} onValueChange={setTrainingDays}>
                 <SelectTrigger className="bg-[#1A1A1A] border-[#3A3A3A] text-[#F5F5F5]">
-                  <SelectValue />
+                  <SelectValue>
+                    {trainingDays ? `${trainingDays} days` : 'Select days'}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent className="bg-[#2A2A2A] border-[#3A3A3A]">
                   {[2, 3, 4, 5, 6].map((day) => (
@@ -835,6 +862,7 @@ export default function SettingsPage() {
           {/* Session Duration Mode - TASK C FIX: Expose adaptive vs fixed toggle */}
           <div className="space-y-2">
             <Label className="text-[#F5F5F5]">Session Duration Type</Label>
+            {/* [adjustment-sync] TASK 2: Always show current value in collapsed state */}
             <Select 
               value={sessionDurationMode} 
               onValueChange={(v) => {
@@ -846,7 +874,9 @@ export default function SettingsPage() {
               }}
             >
               <SelectTrigger className="bg-[#1A1A1A] border-[#3A3A3A] text-[#F5F5F5]">
-                <SelectValue />
+                <SelectValue>
+                  {sessionDurationMode === 'static' ? 'Fixed Duration' : 'Adaptive / Flexible'}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent className="bg-[#2A2A2A] border-[#3A3A3A]">
                 <SelectItem value="static" className="text-[#F5F5F5] focus:bg-[#3A3A3A]">
@@ -882,6 +912,7 @@ export default function SettingsPage() {
             <Label className="text-[#F5F5F5]">
               {sessionDurationMode === 'adaptive' ? 'Target Session Duration (baseline)' : 'Target Session Duration'}
             </Label>
+            {/* [adjustment-sync] TASK 2: Always show current value in collapsed state */}
             <Select value={sessionLength} onValueChange={(v) => {
               setSessionLength(v)
               logDurationTruth('Settings duration changed', {
@@ -890,7 +921,9 @@ export default function SettingsPage() {
               })
             }}>
               <SelectTrigger className="bg-[#1A1A1A] border-[#3A3A3A] text-[#F5F5F5]">
-                <SelectValue />
+                <SelectValue>
+                  {DURATION_PREFERENCE_LABELS[parseInt(sessionLength) as SessionDurationMinutes]?.label || `${sessionLength} min`}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent className="bg-[#2A2A2A] border-[#3A3A3A]">
                 {([30, 45, 60, 90] as SessionDurationMinutes[]).map((minutes) => (
@@ -914,9 +947,12 @@ export default function SettingsPage() {
           {/* Primary Goal */}
           <div className="space-y-2">
             <Label className="text-[#F5F5F5]">Primary Goal (Optional)</Label>
+            {/* [adjustment-sync] TASK 2: Always show current value in collapsed state */}
             <Select value={primaryGoal} onValueChange={setPrimaryGoal}>
               <SelectTrigger className="bg-[#1A1A1A] border-[#3A3A3A] text-[#F5F5F5]">
-                <SelectValue placeholder="Select a goal" />
+                <SelectValue placeholder="Select a goal">
+                  {primaryGoal === 'none' ? 'None' : (SKILL_DEFINITIONS[primaryGoal as keyof typeof SKILL_DEFINITIONS]?.name || primaryGoal)}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent className="bg-[#2A2A2A] border-[#3A3A3A]">
                 <SelectItem value="none" className="text-[#A5A5A5] focus:bg-[#3A3A3A]">
@@ -937,9 +973,12 @@ export default function SettingsPage() {
               <Target className="w-4 h-4 text-[#A5A5A5]" />
               <Label className="text-[#F5F5F5]">Training Style</Label>
             </div>
+            {/* [adjustment-sync] TASK 2: Always show current value in collapsed state */}
             <Select value={trainingStyle} onValueChange={(v) => setTrainingStyle(v as TrainingStyleMode)}>
               <SelectTrigger className="bg-[#1A1A1A] border-[#3A3A3A] text-[#F5F5F5]">
-                <SelectValue />
+                <SelectValue>
+                  {STYLE_MODE_DEFINITIONS[trainingStyle]?.label || trainingStyle}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent className="bg-[#2A2A2A] border-[#3A3A3A]">
                 {Object.entries(STYLE_MODE_DEFINITIONS).map(([key, def]) => (
@@ -1052,9 +1091,12 @@ export default function SettingsPage() {
           {/* Weakest Area */}
           <div className="space-y-2">
             <Label className="text-[#F5F5F5]">Weakest Area (Optional)</Label>
+            {/* [adjustment-sync] TASK 2: Always show current value in collapsed state */}
             <Select value={weakestArea} onValueChange={(v) => setWeakestArea(v as WeakestArea | 'none')}>
               <SelectTrigger className="bg-[#1A1A1A] border-[#3A3A3A] text-[#F5F5F5]">
-                <SelectValue placeholder="Select your weakest area" />
+                <SelectValue placeholder="Select your weakest area">
+                  {weakestArea === 'none' ? 'None / Not sure' : (WEAKEST_AREA_LABELS[weakestArea as WeakestArea] || weakestArea)}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent className="bg-[#2A2A2A] border-[#3A3A3A]">
                 <SelectItem value="none" className="text-[#A5A5A5] focus:bg-[#3A3A3A]">

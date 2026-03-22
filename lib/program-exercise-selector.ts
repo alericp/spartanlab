@@ -2779,7 +2779,6 @@ function adjustRepsForLevel(defaultReps: string, level: ExperienceLevel): string
 
 // =============================================================================
 // PRESCRIPTION-AWARE ADJUSTMENTS (TASK 1, TASK 2)
-// BUILD-HOTFIX: restored top-level module scope for prescription-aware helper
 // =============================================================================
 
 /**
@@ -2787,6 +2786,7 @@ function adjustRepsForLevel(defaultReps: string, level: ExperienceLevel): string
  * TASK 1: Uses formalized prescription modes instead of generic logic.
  * TASK 2: Skill work feels intentional and level-aware.
  */
+// BUILD-HOTFIX: balanced module structure and restored valid EOF closure
 export function getPrescriptionAwarePrescription(
   exercise: Exercise,
   experienceLevel: ExperienceLevel,
@@ -2794,7 +2794,7 @@ export function getPrescriptionAwarePrescription(
   currentProgression?: string,
   fatigueState?: 'fresh' | 'moderate' | 'fatigued',
   recentPerformance?: { avgRPE?: number; completionRate?: number; improving?: boolean }
-): { sets: number; repsOrTime: string; note?: string; prescriptionMode: PrescriptionMode } {
+): { sets: number; repsOrTime: string; note?: string; prescriptionMode: PrescriptionMode; supportsWeightedLoad?: boolean } {
   // Detect prescription mode
   const isWeighted = exercise.id.includes('weighted') || exercise.name.toLowerCase().includes('weighted')
   const prescriptionMode = detectPrescriptionMode(

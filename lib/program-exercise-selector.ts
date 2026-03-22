@@ -2040,6 +2040,7 @@ function selectMainExercises(
           influencingSkills: [{ skillId: primarySkillAlloc?.skill || primaryGoal, influence: 'selected', expressionMode: 'rotation' }],
           candidatePoolSize: skillCandidates.length,
         })
+      }
     }
   }
   

@@ -21,6 +21,7 @@ import Link from 'next/link'
 
 // TASK 5: Lightweight type imports only - actual modules loaded dynamically
 import type { AdaptiveProgramInputs, AdaptiveProgram, GenerationErrorCode } from '@/lib/adaptive-program-builder'
+import type { TrainingDays } from '@/lib/program-service'
 // [profile-truth-sync] ISSUE A: Import drift detection for settings/program alignment
 import { 
   checkProfileProgramDrift, 
@@ -68,7 +69,7 @@ const ProgramAdjustmentModal = dynamic(
 )
 
 // [canonical-rebuild] Import type for adjustment rebuild requests
-import type { AdjustmentRebuildRequest } from '@/components/programs/ProgramAdjustmentModal'
+import type { AdjustmentRebuildRequest, AdjustmentRebuildResult } from '@/components/programs/ProgramAdjustmentModal'
 // [canonical-rebuild] TASK 2: Import saveCanonicalProfile to persist inputs to canonical truth
 import { saveCanonicalProfile } from '@/lib/canonical-profile-service'
 
@@ -849,7 +850,7 @@ export default function ProgramPage() {
   }, [inputs, program, programModules])
   
   // [canonical-rebuild] TASK B: Handle adjustment rebuilds that require full program regeneration
-  const handleAdjustmentRebuild = useCallback(async (request: AdjustmentRebuildRequest): Promise<{ success: boolean; error?: string }> => {
+  const handleAdjustmentRebuild = useCallback(async (request: AdjustmentRebuildRequest): Promise<AdjustmentRebuildResult> => {
     // [adjustment-sync] STEP 2: Log initial adjustment state
     const previousProgramId = program?.id || 'none'
     const previousGeneratedAt = program?.createdAt || 'unknown'
@@ -1028,7 +1029,8 @@ export default function ProgramPage() {
       console.log('[program-rebuild-truth] Canonical profile updated: YES')
       console.log('[program-rebuild-truth] === END PROOF ===')
       
-      return { success: true }
+      // [adjustment-sync] Return actual session count to modal for truthful display
+      return { success: true, actualSessionCount: newProgram.sessions.length }
       
     } catch (error) {
       console.error('[canonical-rebuild] FAILED:', error)
@@ -1350,7 +1352,7 @@ export default function ProgramPage() {
           onStartNew={handleConfirmNewProgram}
           onRebuildRequired={handleAdjustmentRebuild}
           currentSessionMinutes={inputs?.sessionLength || 60}
-          currentTrainingDays={inputs?.trainingDaysPerWeek || 3}
+          currentTrainingDays={typeof inputs?.trainingDaysPerWeek === 'number' ? inputs.trainingDaysPerWeek : (program?.sessions?.length || 3) as TrainingDays}
           currentEquipment={inputs?.equipment || []}
         />
       </div>

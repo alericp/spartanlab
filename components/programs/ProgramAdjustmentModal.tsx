@@ -51,13 +51,20 @@ export interface AdjustmentRebuildRequest {
   newEquipment?: EquipmentType[]
 }
 
+// [adjustment-sync] Result from rebuild with actual generated values
+export interface AdjustmentRebuildResult {
+  success: boolean
+  error?: string
+  actualSessionCount?: number
+}
+
 interface ProgramAdjustmentModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   onContinue: () => void
   onStartNew: () => void
   // [canonical-rebuild] TASK B: Callback for triggering real canonical rebuild
-  onRebuildRequired?: (request: AdjustmentRebuildRequest) => Promise<{ success: boolean; error?: string }>
+  onRebuildRequired?: (request: AdjustmentRebuildRequest) => Promise<AdjustmentRebuildResult>
   currentEquipment?: EquipmentType[]
   currentSessionMinutes?: number
   currentTrainingDays?: TrainingDays
@@ -146,15 +153,6 @@ export function ProgramAdjustmentModal({
   const programStatus = getProgramStatus()
   const frequentRestartCheck = checkFrequentRestarts()
 
-  // [adjustment-sync] TASK 9: Log current values being displayed in modal
-  console.log('[adjustment-sync] === MODAL TRUTH STATE ===')
-  console.log('[adjustment-sync] currentTrainingDays (prop):', currentTrainingDays)
-  console.log('[adjustment-sync] trainingDays (local state):', trainingDays)
-  console.log('[adjustment-sync] currentSessionMinutes (prop):', currentSessionMinutes)
-  console.log('[adjustment-sync] sessionMinutes (local state):', sessionMinutes)
-  console.log('[adjustment-sync] currentEquipment (prop):', currentEquipment)
-  console.log('[adjustment-sync] === END MODAL TRUTH ===')
-
   const handleBack = () => {
     if (view === 'confirm') {
       setView('adjustments')
@@ -210,6 +208,9 @@ export function ProgramAdjustmentModal({
           return
         }
         
+        // [adjustment-sync] Use actual session count from rebuild if available
+        const actualSessions = rebuildResult.actualSessionCount ?? trainingDays
+        
         // Only now record the adjustment metadata (after successful rebuild)
         const result = applyProgramAdjustment({
           type: selectedCategory === 'schedule' ? 'training_days' : 'equipment',
@@ -221,7 +222,8 @@ export function ProgramAdjustmentModal({
           settingsSaved: true,
           rebuildSucceeded: true,
           previousTrainingDays: currentTrainingDays,
-          newTrainingDays: trainingDays,
+          requestedTrainingDays: trainingDays,
+          actualSessionCount: actualSessions,
           trainingDaysChanged: currentTrainingDays !== trainingDays,
         })
         
@@ -230,9 +232,9 @@ export function ProgramAdjustmentModal({
           ...result,
           adjustment: {
             ...result.adjustment,
-            description: `Training days: ${currentTrainingDays} → ${trainingDays} days/week`,
+            description: `Training days: ${currentTrainingDays} → ${actualSessions} days/week`,
           },
-          coachMessage: `Your new program is ready with ${trainingDays} training days per week. All sessions have been regenerated to match your updated schedule.`,
+          coachMessage: `Your new program is ready with ${actualSessions} training sessions this week. All sessions have been regenerated to match your updated schedule.`,
         })
         setIsRebuilding(false)
         setView('confirm')
@@ -401,10 +403,16 @@ export function ProgramAdjustmentModal({
                 Adjust your target workout time. Skill work will be prioritized.
               </p>
               
+              {/* Current value display */}
+              <div className="flex items-center justify-between mb-4 p-3 bg-[#0F1115] rounded-lg border border-[#2B313A]/50">
+                <span className="text-sm text-[#A4ACB8]">Current:</span>
+                <span className="text-sm font-medium text-[#E6E9EF]">{currentSessionMinutes} minutes</span>
+              </div>
+              
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-[#A4ACB8]">Current: {currentSessionMinutes} min</span>
-                  <span className="text-sm font-medium text-[#E6E9EF]">New: {sessionMinutes} min</span>
+                  <span className="text-xs text-[#6B7280]">New value:</span>
+                  <span className="text-sm font-medium text-[#E6E9EF]">{sessionMinutes} min</span>
                 </div>
                 
                 <Slider
@@ -422,6 +430,15 @@ export function ProgramAdjustmentModal({
                   <span>90 min</span>
                 </div>
               </div>
+              
+              {/* Show change indicator */}
+              {sessionMinutes !== currentSessionMinutes && (
+                <div className="mt-3 p-2 bg-[#C1121F]/10 border border-[#C1121F]/30 rounded-lg">
+                  <p className="text-xs text-[#E6E9EF] text-center">
+                    Change: {currentSessionMinutes} → {sessionMinutes} minutes
+                  </p>
+                </div>
+              )}
 
               {sessionMinutes < currentSessionMinutes && (
                 <div className="mt-4 p-3 bg-[#1A1F26] rounded-lg border border-[#2B313A]/50">
@@ -434,9 +451,10 @@ export function ProgramAdjustmentModal({
 
             <Button
               onClick={handleApplyAdjustment}
-              className="w-full bg-[#C1121F] hover:bg-[#A30F1A] text-white"
+              disabled={sessionMinutes === currentSessionMinutes}
+              className="w-full bg-[#C1121F] hover:bg-[#A30F1A] text-white disabled:opacity-50"
             >
-              Apply Time Adjustment
+              {sessionMinutes === currentSessionMinutes ? 'No Change' : 'Apply Time Adjustment'}
             </Button>
           </div>
         )
@@ -450,23 +468,41 @@ export function ProgramAdjustmentModal({
                 Adjust how many days per week you can train.
               </p>
               
-              {/* [adjustment-sync] STEP 6: Self-describing control - always show current value */}
-              <Select
-                value={String(trainingDays)}
-                onValueChange={(v) => setTrainingDays(Number(v) as TrainingDays)}
-              >
-                <SelectTrigger className="bg-[#0F1115] border-[#2B313A]">
-                  <SelectValue placeholder={`${trainingDays} Days per Week`}>
-                    {trainingDays} Days per Week
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent className="bg-[#1A1F26] border-[#2B313A]">
-                  <SelectItem value="2">2 Days per Week</SelectItem>
-                  <SelectItem value="3">3 Days per Week</SelectItem>
-                  <SelectItem value="4">4 Days per Week</SelectItem>
-                  <SelectItem value="5">5 Days per Week</SelectItem>
-                </SelectContent>
-              </Select>
+              {/* Current value display */}
+              <div className="flex items-center justify-between mb-3 p-3 bg-[#0F1115] rounded-lg border border-[#2B313A]/50">
+                <span className="text-sm text-[#A4ACB8]">Current:</span>
+                <span className="text-sm font-medium text-[#E6E9EF]">{currentTrainingDays} days/week</span>
+              </div>
+              
+              {/* New value selector */}
+              <div className="space-y-2">
+                <span className="text-xs text-[#6B7280]">New value:</span>
+                <Select
+                  value={String(trainingDays)}
+                  onValueChange={(v) => setTrainingDays(Number(v) as TrainingDays)}
+                >
+                  <SelectTrigger className="bg-[#0F1115] border-[#2B313A]">
+                    <SelectValue>
+                      {trainingDays} Days per Week
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent className="bg-[#1A1F26] border-[#2B313A]">
+                    <SelectItem value="2">2 Days per Week</SelectItem>
+                    <SelectItem value="3">3 Days per Week</SelectItem>
+                    <SelectItem value="4">4 Days per Week</SelectItem>
+                    <SelectItem value="5">5 Days per Week</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              {/* Show change indicator */}
+              {trainingDays !== currentTrainingDays && (
+                <div className="mt-3 p-2 bg-[#C1121F]/10 border border-[#C1121F]/30 rounded-lg">
+                  <p className="text-xs text-[#E6E9EF] text-center">
+                    Change: {currentTrainingDays} → {trainingDays} days/week
+                  </p>
+                </div>
+              )}
 
               {trainingDays < currentTrainingDays && (
                 <div className="mt-4 p-3 bg-[#1A1F26] rounded-lg border border-[#2B313A]/50">

@@ -120,11 +120,15 @@ import {
   mapSupportToGoalsAndLimiters,
   logSupportWorkMapping,
   logPrescriptionDiagnostics,
-  // Weighted load estimation (Weighted Load PR)
   estimateWeightedLoadPrescription,
   determineWeightedPrescriptionMode,
   formatWeightedLoadDisplay,
   logWeightedLoadEstimation,
+  getSkillPrescriptionRules,
+  getWeightedStrengthCarryover,
+  isAdvancedSkill,
+  getAdvancedSkillFamily,
+  ADVANCED_SKILL_FAMILIES,
   type PrescriptionMode,
   type PrescriptionContract,
   type AthleteContext as PrescriptionAthleteContext,
@@ -137,14 +141,6 @@ import {
   type WeightedPRBenchmark,
   type WeightedLoadPrescription,
   type WeightedPrescriptionMode,
-} from './prescription-contract'
-import {
-  getSkillPrescriptionRules,
-  getWeightedStrengthCarryover,
-  // [advanced-skill-expression] ISSUE A: Advanced skill helpers
-  isAdvancedSkill,
-  getAdvancedSkillFamily,
-  ADVANCED_SKILL_FAMILIES,
   type SkillPrescriptionRules,
   type WeightedStrengthCarryover,
 } from './prescription-contract'
@@ -2779,13 +2775,13 @@ function adjustRepsForLevel(defaultReps: string, level: ExperienceLevel): string
 }
 
 // =============================================================================
-// PRESCRIPTION-AWARE ADJUSTMENTS (TASK 1, TASK 2)
+// PRESCRIPTION-AWARE ADJUSTMENTS
 // =============================================================================
 
 /**
  * Get prescription-aware sets and reps for an exercise.
- * TASK 1: Uses formalized prescription modes instead of generic logic.
- * TASK 2: Skill work feels intentional and level-aware.
+ * Uses formalized prescription modes instead of generic logic.
+ * Skill work feels intentional and level-aware.
  */
 export function getPrescriptionAwarePrescription(
   exercise: Exercise,

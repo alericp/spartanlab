@@ -2745,10 +2745,6 @@ function selectCooldownLegacy(minutes: number): SelectedExercise[] {
   return selected
 }
 
-// =============================================================================
-// HELPERS
-// =============================================================================
-
 function selectByLevel(exercises: Exercise[], level: ExperienceLevel): Exercise | undefined {
   // Sort by neural demand
   const sorted = [...exercises].sort((a, b) => a.neuralDemand - b.neuralDemand)
@@ -2770,18 +2766,11 @@ function adjustSetsForLevel(defaultSets: number, level: ExperienceLevel): number
 }
 
 function adjustRepsForLevel(defaultReps: string, level: ExperienceLevel): string {
-  // Keep reps as-is for now, could be refined
   return defaultReps
 }
 
-// =============================================================================
-// PRESCRIPTION-AWARE ADJUSTMENTS
-// =============================================================================
-
 /**
  * Get prescription-aware sets and reps for an exercise.
- * Uses formalized prescription modes instead of generic logic.
- * Skill work feels intentional and level-aware.
  */
 export function getPrescriptionAwarePrescription(
   exercise: Exercise,

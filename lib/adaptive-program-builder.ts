@@ -102,7 +102,7 @@ import {
 import { getUnifiedSkillIntelligence, generateTrainingAdjustments, type UnifiedSkillIntelligence } from './skill-intelligence-layer'
 import { getCompressionReadiness, shouldBiasTowardCompression, type CompressionReadinessResult } from './compression-readiness'
 import { selectOptimalStructure, getDayExplanation } from './program-structure-engine'
-import { selectExercisesForSession, evaluateSessionProgressions, getSmartProgressionExercise } from './program-exercise-selector'
+import { selectExercisesForSession, evaluateSessionProgressions, getSmartProgressionExercise, buildFallbackSelectionForSession } from './program-exercise-selector'
 // [exercise-trace] TASK 8: Import comparison utilities for build-to-build traceability
 import {
   type ProgramSelectionTrace,
@@ -4188,17 +4188,59 @@ function generateAdaptiveSession(
     estimatedTime: selection.totalEstimatedTime,
   })
   
+  // ==========================================================================
+  // SESSION RESCUE: STEP B - Rescue empty sessions before downstream failure
+  // ==========================================================================
+  let rescuedMain = safeMain
+  let sessionWasRescued = false
+  let rescuePath = 'none'
+  
   // [session-assembly] Validate we have at least some exercises
   if (safeMain.length === 0) {
-    console.warn('[session-assembly] WARNING: Empty main exercise pool for day', {
+    console.warn('[session-rescue] Empty main exercise pool for day - attempting rescue', {
       dayFocus: day.focus,
       dayNumber: day.dayNumber,
       primaryGoal,
+      equipmentCount: equipment.length,
+      selectedSkillsCount: selectedSkills?.length || 0,
     })
-    // Don't throw - let validation handle it downstream, but log for diagnosis
+    
+    // STEP B2: Attempt fallback rescue
+    const sessionMinutesResolved = typeof sessionLength === 'number' 
+      ? sessionLength 
+      : parseInt(String(sessionLength).split('-')[0]) || 60
+      
+    const rescueResult = buildFallbackSelectionForSession(
+      day.focus,
+      primaryGoal,
+      equipment,
+      sessionMinutesResolved,
+      experienceLevel
+    )
+    
+    if (rescueResult.wasRescued && rescueResult.main.length > 0) {
+      rescuedMain = rescueResult.main
+      sessionWasRescued = true
+      rescuePath = rescueResult.rescuePath
+      console.log('[session-rescue-success] Session rescued with fallback exercises:', {
+        dayNumber: day.dayNumber,
+        dayFocus: day.focus,
+        rescuePath,
+        exerciseCount: rescuedMain.length,
+        exercises: rescuedMain.map(e => e.exercise.name),
+      })
+    } else {
+      // Rescue failed - will throw structured error below after final validation
+      console.error('[session-rescue-failed] No valid fallback path for session', {
+        dayNumber: day.dayNumber,
+        dayFocus: day.focus,
+        primaryGoal,
+        equipmentCount: equipment.length,
+      })
+    }
   }
   
-  const adaptedMain = adaptSessionForEquipment(safeMain, equipment)
+  const adaptedMain = adaptSessionForEquipment(rescuedMain, equipment)
   const adaptedWarmup = adaptSessionForEquipment(safeWarmup, equipment)
   const adaptedCooldown = adaptSessionForEquipment(safeCooldown, equipment)
   
@@ -4359,6 +4401,39 @@ function generateAdaptiveSession(
       totalExercises: validatedSession.exercises.length,
       withCoachingMeta: exercisesWithCoaching.length,
       sampleMeta: exercisesWithCoaching[0]?.coachingMeta,
+    })
+
+    // ==========================================================================
+    // STEP B3: Final validation - session MUST have exercises after all passes
+    // ==========================================================================
+    if (validatedSession.exercises.length === 0) {
+      console.error('[session-final-check-failed] Session still empty after rescue and validation:', {
+        dayNumber: day.dayNumber,
+        dayFocus: day.focus,
+        primaryGoal,
+        equipmentCount: equipment.length,
+        selectedSkillsCount: selectedSkills?.length || 0,
+        initialMainCount: safeMain.length,
+        rescuedMainCount: rescuedMain.length,
+        sessionWasRescued,
+        rescuePath,
+        rawExercisesCount: rawExercises.length,
+      })
+      
+      // STEP B4: Throw structured error with full context
+      throw new Error(
+        `session_has_no_exercises: day=${day.dayNumber} focus=${day.focus} ` +
+        `goal=${primaryGoal} fallbackAttempted=${sessionWasRescued} ` +
+        `equipment=${equipment.slice(0, 5).join(',')} rescuePath=${rescuePath}`
+      )
+    }
+    
+    console.log('[session-final-check] Session validated successfully:', {
+      dayNumber: day.dayNumber,
+      dayFocus: day.focus,
+      finalExerciseCount: validatedSession.exercises.length,
+      sessionWasRescued,
+      rescuePath: sessionWasRescued ? rescuePath : 'n/a',
     })
 
     return {

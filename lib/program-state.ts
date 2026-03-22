@@ -169,9 +169,9 @@ export function getErrorUserMessage(
     case 'save_verification_failed':
       return 'Plan could not be verified after saving. Please try again.' + suffix
     case 'exercise_selection_returned_null':
-      return 'No exercises found for your session. Check your equipment or goals.' + suffix
+      return 'A session could not be built from your current goals and equipment.' + suffix
     case 'session_has_no_exercises':
-      return 'One or more sessions have no exercises. Try different goals.' + suffix
+      return 'One part of your updated plan could not be built with the current settings.' + suffix
     case 'invalid_exercise_sets':
       return 'Exercise configuration is invalid. Please try again.' + suffix
     default:
@@ -193,7 +193,10 @@ export function getErrorUserMessage(
       if (subCode === 'empty_final_session_array') {
         return 'Sessions could not be built. Try different goals or schedule.' + suffix
       }
-      return 'Session building stopped unexpectedly.' + suffix
+      if (subCode === 'session_has_no_exercises') {
+        return 'One part of your updated plan could not be built with the current settings.' + suffix
+      }
+      return 'A session could not be assembled. Try adjusting your goals or equipment.' + suffix
     case 'warmup_generation_failed':
       return 'Warmup generation encountered an issue.' + suffix
     case 'validation_failed':

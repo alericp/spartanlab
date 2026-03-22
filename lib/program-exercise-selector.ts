@@ -2451,6 +2451,162 @@ function dedupeSelectedExercises(exercises: SelectedExercise[]): SelectedExercis
 }
 
 // =============================================================================
+// SESSION RESCUE: FALLBACK EXERCISE SELECTION
+// =============================================================================
+
+/**
+ * STEP B/C: Deterministic fallback when primary selection returns empty.
+ * This function attempts to build a minimal valid session backbone using
+ * progressively relaxed criteria while respecting equipment and day focus.
+ */
+export function buildFallbackSelectionForSession(
+  dayFocus: DayFocus,
+  primaryGoal: PrimaryGoal,
+  equipment: EquipmentType[],
+  sessionMinutes: number,
+  experienceLevel: ExperienceLevel
+): { main: SelectedExercise[]; rescuePath: string; wasRescued: boolean } {
+  console.log('[session-rescue] Starting fallback resolution:', {
+    dayFocus,
+    primaryGoal,
+    equipmentCount: equipment.length,
+    sessionMinutes,
+    experienceLevel,
+  })
+  
+  const rescueResult: SelectedExercise[] = []
+  let rescuePath = 'none'
+  
+  // Get all available exercises filtered by equipment
+  const availableStrength = STRENGTH_EXERCISES.filter(e => hasRequiredEquipment(e, equipment))
+  const availableAccessory = ACCESSORY_EXERCISES.filter(e => hasRequiredEquipment(e, equipment))
+  const availableCore = CORE_EXERCISES_POOL.filter(e => hasRequiredEquipment(e, equipment))
+  const availableSkills = SKILL_EXERCISES.filter(e => hasRequiredEquipment(e, equipment))
+  
+  console.log('[session-rescue] Available exercise pools:', {
+    strength: availableStrength.length,
+    accessory: availableAccessory.length,
+    core: availableCore.length,
+    skills: availableSkills.length,
+  })
+  
+  // Helper to convert Exercise to SelectedExercise with rescue metadata
+  const toSelectedExercise = (ex: Exercise, reason: string): SelectedExercise => ({
+    exercise: ex,
+    sets: ex.sets || 3,
+    repsOrTime: ex.reps || ex.time || '8-12',
+    isOverrideable: true,
+    selectionReason: `[Rescue] ${reason}`,
+    selectionTrace: {
+      exerciseId: ex.id,
+      exerciseName: ex.name,
+      reason: 'fallback_rescue' as const,
+      expressionMode: 'support',
+      sessionRole: 'support_heavy',
+      source: { type: 'doctrine', ruleName: 'session_rescue' },
+    }
+  })
+  
+  // RESCUE PATH 1: Goal-specific support work for the day focus
+  const goalFocusMap: Record<PrimaryGoal, string[]> = {
+    planche: ['straight_arm', 'push', 'shoulder'],
+    front_lever: ['pull', 'scapular', 'lat'],
+    handstand_pushup: ['vertical_push', 'shoulder', 'push'],
+    muscle_up: ['pull', 'push', 'transition'],
+    back_lever: ['pull', 'straight_arm', 'scapular'],
+    iron_cross: ['rings', 'straight_arm', 'shoulder'],
+    v_sit: ['core', 'compression', 'hip_flexor'],
+    manna: ['compression', 'shoulder', 'core'],
+    human_flag: ['oblique', 'shoulder', 'lat'],
+    full_rom_hspu: ['vertical_push', 'shoulder', 'mobility'],
+    one_arm_pull_up: ['pull', 'grip', 'lat'],
+    one_arm_push_up: ['push', 'core', 'horizontal_push'],
+    pistol_squat: ['leg', 'mobility', 'balance'],
+    nordic_curl: ['hamstring', 'eccentric', 'leg'],
+    reverse_nordic: ['quad', 'mobility', 'leg'],
+    general: ['compound', 'strength', 'core'],
+    strength: ['compound', 'strength', 'core'],
+    endurance: ['conditioning', 'core', 'compound'],
+    skill: ['skill', 'strength', 'core'],
+  }
+  
+  const targetTags = goalFocusMap[primaryGoal] || ['compound', 'strength', 'core']
+  
+  // Try to find exercises matching goal focus
+  const goalMatchingExercises = [...availableStrength, ...availableAccessory].filter(ex => {
+    const exTags = [
+      ex.category?.toLowerCase(),
+      ex.movementFamily?.toLowerCase(),
+      ...(ex.tags || []).map(t => t.toLowerCase())
+    ].filter(Boolean)
+    return targetTags.some(tag => exTags.some(et => et.includes(tag)))
+  })
+  
+  if (goalMatchingExercises.length >= 2) {
+    rescuePath = 'goal_support'
+    const selected = goalMatchingExercises.slice(0, Math.min(4, goalMatchingExercises.length))
+    rescueResult.push(...selected.map(ex => toSelectedExercise(ex, `Goal-aligned ${primaryGoal} support`)))
+    console.log('[session-rescue-success] Found goal-matching exercises:', {
+      count: rescueResult.length,
+      exercises: rescueResult.map(e => e.exercise.name),
+    })
+  }
+  
+  // RESCUE PATH 2: Day focus compatible work
+  if (rescueResult.length < 2) {
+    const focusCompatible = availableStrength.filter(ex => {
+      if (dayFocus.includes('push')) return ex.category === 'push' || ex.movementFamily === 'push'
+      if (dayFocus.includes('pull')) return ex.category === 'pull' || ex.movementFamily === 'pull'
+      if (dayFocus.includes('skill')) return true // Any strength work supports skill days
+      if (dayFocus === 'support_recovery') return ex.intensity !== 'high'
+      return true
+    })
+    
+    if (focusCompatible.length >= 2) {
+      rescuePath = 'focus_compatible'
+      const additional = focusCompatible
+        .filter(ex => !rescueResult.some(r => r.exercise.id === ex.id))
+        .slice(0, Math.max(0, 4 - rescueResult.length))
+      rescueResult.push(...additional.map(ex => toSelectedExercise(ex, `Focus-compatible ${dayFocus}`)))
+    }
+  }
+  
+  // RESCUE PATH 3: General strength/accessory fallback
+  if (rescueResult.length < 2) {
+    rescuePath = 'general_strength'
+    const generalExercises = [...availableStrength, ...availableAccessory]
+      .filter(ex => !rescueResult.some(r => r.exercise.id === ex.id))
+      .sort((a, b) => (b.carryover || 0) - (a.carryover || 0))
+      .slice(0, Math.max(0, 4 - rescueResult.length))
+    
+    rescueResult.push(...generalExercises.map(ex => toSelectedExercise(ex, 'General strength fallback')))
+  }
+  
+  // RESCUE PATH 4: Core work as minimum viable session
+  if (rescueResult.length < 2 && availableCore.length > 0) {
+    rescuePath = 'core_minimum'
+    const coreExercises = availableCore
+      .filter(ex => !rescueResult.some(r => r.exercise.id === ex.id))
+      .slice(0, Math.max(0, 3 - rescueResult.length))
+    
+    rescueResult.push(...coreExercises.map(ex => toSelectedExercise(ex, 'Core fallback')))
+  }
+  
+  const wasRescued = rescueResult.length > 0
+  
+  console.log(wasRescued ? '[session-rescue-success]' : '[session-rescue-failed]', {
+    dayFocus,
+    primaryGoal,
+    rescuePath,
+    finalMainCount: rescueResult.length,
+    equipmentCount: equipment.length,
+    exercises: rescueResult.map(e => e.exercise.name),
+  })
+  
+  return { main: rescueResult, rescuePath, wasRescued }
+}
+
+// =============================================================================
 // INTELLIGENT WARMUP SELECTION (Using Warm-Up Engine)
 // =============================================================================
 

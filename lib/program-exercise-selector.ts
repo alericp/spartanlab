@@ -2740,21 +2740,21 @@ function selectCooldownLegacy(minutes: number): SelectedExercise[] {
 }
 
 function selectByLevel(exercises: Exercise[], level: ExperienceLevel): Exercise | undefined {
-  const sorted = [...exercises].sort((a, b) => a.neuralDemand - b.neuralDemand)
-  if (level === 'beginner') return sorted[0]
-  if (level === 'intermediate') return sorted[Math.floor(sorted.length / 2)]
-  return sorted[sorted.length - 1]
+  const sorted = [...exercises].sort((a, b) => a.neuralDemand - b.neuralDemand);
+  if (level === 'beginner') return sorted[0];
+  if (level === 'intermediate') return sorted[Math.floor(sorted.length / 2)];
+  return sorted[sorted.length - 1];
 }
 
 function adjustSetsForLevel(defaultSets: number, level: ExperienceLevel): number {
-  if (level === 'beginner') return Math.max(2, defaultSets - 1)
-  if (level === 'advanced') return Math.min(5, defaultSets + 1)
-  return defaultSets
+  if (level === 'beginner') return Math.max(2, defaultSets - 1);
+  if (level === 'advanced') return Math.min(5, defaultSets + 1);
+  return defaultSets;
 }
 
 function adjustRepsForLevel(defaultReps: string, level: ExperienceLevel): string {
-  void level
-  return defaultReps
+  void level;
+  return defaultReps;
 }
 
 export function getPrescriptionAwarePrescription(
@@ -2764,9 +2764,15 @@ export function getPrescriptionAwarePrescription(
   currentProgression?: string,
   fatigueState?: 'fresh' | 'moderate' | 'fatigued',
   recentPerformance?: { avgRPE?: number; completionRate?: number; improving?: boolean }
-): { sets: number; repsOrTime: string; note?: string; prescriptionMode: PrescriptionMode; supportsWeightedLoad?: boolean } {
+): {
+  sets: number;
+  repsOrTime: string;
+  note?: string;
+  prescriptionMode: PrescriptionMode;
+  supportsWeightedLoad?: boolean;
+} {
   // Detect prescription mode
-  const isWeighted = exercise.id.includes('weighted') || exercise.name.toLowerCase().includes('weighted')
+  const isWeighted = exercise.id.includes('weighted') || exercise.name.toLowerCase().includes('weighted');
   const prescriptionMode = detectPrescriptionMode(
     exercise.category,
     exercise.isIsometric ?? false,

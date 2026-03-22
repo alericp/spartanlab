@@ -69,8 +69,12 @@ import {
   // [weighted-truth] TASK A: Import weighted readiness check
   hasLoadableEquipment,
   checkWeightedPrescriptionEligibility,
+  // [root-cause-fix] Import additional profile validation helpers
+  getEngineFieldConsumption,
+  verifyEngineFieldWiring,
+  validateProfileForGeneration,
 } from './canonical-profile-service'
-import { buildGenerationInput, getSystemStateFlags, type GenerationMode, type ProfileSnapshot } from './program-state-contract'
+import { buildGenerationInput, getSystemStateFlags, type GenerationMode } from './program-state-contract'
 import { normalizeProfile, computeLimiter, dedupeExercises, type NormalizedProfile } from './profile-normalizer'
 import { calculateRecoverySignal } from './recovery-engine'
 import { getConstraintInsight } from './constraint-engine'
@@ -1140,25 +1144,104 @@ export class GenerationError extends Error {
   }
 }
 
+// Mutable stage tracker for error classification
+interface StageTracker {
+  current: string
+}
+
 export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): AdaptiveProgram {
-  // ISSUE A: Track generation stage for precise error diagnosis
-  let currentStage = 'initializing'
+  // ISSUE A: Track generation stage for precise error diagnosis (mutable for top-level catch)
+  const stageTracker: StageTracker = { current: 'initializing' }
   
   console.log('[program-generate] Starting adaptive program generation')
   console.log('[program-generate] STAGE: initializing')
   
+  // TOP-LEVEL CLASSIFICATION WRAPPER: Ensure ALL errors are classified as GenerationError
+  // This prevents plain Error escaping as unknown_generation_failure
+  try {
+    return generateAdaptiveProgramImpl(inputs, stageTracker)
+  } catch (err) {
+    // If already a GenerationError, rethrow unchanged
+    if (err instanceof GenerationError) {
+      throw err
+    }
+    
+    // Convert plain errors to classified GenerationError
+    const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred'
+    const errorName = err instanceof Error ? err.name : 'UnknownError'
+    const errorStack = err instanceof Error ? err.stack : undefined
+    
+    // Log root cause summary for diagnosis
+    console.error('[program-root-cause-summary] Unclassified error in generateAdaptiveProgram:', {
+      source: 'generate',
+      stage: stageTracker.current,
+      code: 'unknown_generation_failure',
+      message: errorMessage,
+      originalName: errorName,
+      primaryGoal: inputs.primaryGoal,
+      secondaryGoal: inputs.secondaryGoal || null,
+      trainingDaysPerWeek: inputs.trainingDaysPerWeek,
+      sessionLength: inputs.sessionLength,
+      scheduleMode: inputs.scheduleMode,
+      equipmentCount: inputs.equipment?.length || 0,
+      selectedSkillsCount: inputs.selectedSkills?.length || 0,
+    })
+    
+    throw new GenerationError(
+      'unknown_generation_failure',
+      stageTracker.current,
+      `Generation failed: ${errorMessage}`,
+      {
+        originalName: errorName,
+        originalMessage: errorMessage,
+        stack: errorStack,
+        primaryGoal: inputs.primaryGoal,
+        secondaryGoal: inputs.secondaryGoal,
+        trainingDaysPerWeek: inputs.trainingDaysPerWeek,
+        sessionLength: inputs.sessionLength,
+        scheduleMode: inputs.scheduleMode,
+        equipmentCount: inputs.equipment?.length || 0,
+        selectedSkillsCount: inputs.selectedSkills?.length || 0,
+      }
+    )
+  }
+}
+
+// Internal implementation - all generation logic moved here for top-level error classification
+function generateAdaptiveProgramImpl(inputs: AdaptiveProgramInputs, stageTracker: StageTracker): AdaptiveProgram {
+  // Helper to update stage safely
+  const setStage = (stage: string) => {
+    stageTracker.current = stage
+    console.log(`[program-generate] STAGE: ${stage}`)
+  }
+  
+  // ==========================================================================
+  // EARLY HELPER GUARDS: Catch and reclassify failures in pre-generation setup
+  // ==========================================================================
+  
   // [planner-input-truth] TASK 5: Compose resolved input with provenance tracking
   // This ensures we have a traceable snapshot of what inputs were actually used
-  const composedInput = composeCanonicalPlannerInput({
-    primaryGoal: inputs.primaryGoal,
-    secondaryGoal: inputs.secondaryGoal,
-    experienceLevel: inputs.experienceLevel,
-    trainingDaysPerWeek: typeof inputs.trainingDaysPerWeek === 'number' ? inputs.trainingDaysPerWeek : undefined,
-    sessionLength: inputs.sessionLength,
-    scheduleMode: inputs.scheduleMode,
-    sessionDurationMode: inputs.sessionDurationMode,
-    equipment: inputs.equipment,
-  })
+  let composedInput: ReturnType<typeof composeCanonicalPlannerInput>
+  try {
+    composedInput = composeCanonicalPlannerInput({
+      primaryGoal: inputs.primaryGoal,
+      secondaryGoal: inputs.secondaryGoal,
+      experienceLevel: inputs.experienceLevel,
+      trainingDaysPerWeek: typeof inputs.trainingDaysPerWeek === 'number' ? inputs.trainingDaysPerWeek : undefined,
+      sessionLength: inputs.sessionLength,
+      scheduleMode: inputs.scheduleMode,
+      sessionDurationMode: inputs.sessionDurationMode,
+      equipment: inputs.equipment,
+    })
+  } catch (err) {
+    console.error('[program-root-cause] composeCanonicalPlannerInput failed:', err)
+    throw new GenerationError(
+      'input_resolution_failed',
+      'initializing',
+      `composeCanonicalPlannerInput failed: ${err instanceof Error ? err.message : 'Unknown error'}`,
+      { helper: 'composeCanonicalPlannerInput', inputs: { primaryGoal: inputs.primaryGoal } }
+    )
+  }
   
   console.log('[planner-input-truth] Generation input provenance:', {
     fallbacksUsed: composedInput.fallbacksUsed,
@@ -1167,7 +1250,13 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
   })
   
   // [equipment-truth] STEP 8: Log equipment at generation time for sync verification
-  const hasLoadableEqAtGen = hasLoadableEquipment(inputs.equipment || [])
+  let hasLoadableEqAtGen = false
+  try {
+    hasLoadableEqAtGen = hasLoadableEquipment(inputs.equipment || [])
+  } catch (err) {
+    console.error('[program-root-cause] hasLoadableEquipment failed:', err)
+    // Non-fatal - continue with false
+  }
   console.log('[equipment-truth] Equipment at generation:', {
     equipmentCount: inputs.equipment?.length || 0,
     hasLoadableEquipment: hasLoadableEqAtGen,
@@ -1176,7 +1265,18 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
   })
   
   // STATE CONTRACT: Get system state flags to determine generation context
-  const stateFlags = getSystemStateFlags()
+  let stateFlags: ReturnType<typeof getSystemStateFlags>
+  try {
+    stateFlags = getSystemStateFlags()
+  } catch (err) {
+    console.error('[program-root-cause] getSystemStateFlags failed:', err)
+    throw new GenerationError(
+      'input_resolution_failed',
+      'initializing',
+      `getSystemStateFlags failed: ${err instanceof Error ? err.message : 'Unknown error'}`,
+      { helper: 'getSystemStateFlags' }
+    )
+  }
   const generationMode: GenerationMode = inputs.regenerationMode || stateFlags.recommendedMode
   
   console.log('[program-generate] STATE CONTRACT:', {
@@ -1211,8 +1311,19 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
   
   // Gather context - CANONICAL FIX: Use unified canonical profile
   // CRITICAL: This is the ONLY source of truth for generation
-  const canonicalProfile = getCanonicalProfile()
-  logCanonicalProfileState('generateAdaptiveProgram called')
+  let canonicalProfile: ProfileSnapshot
+  try {
+    canonicalProfile = getCanonicalProfile()
+    logCanonicalProfileState('generateAdaptiveProgram called')
+  } catch (err) {
+    console.error('[program-root-cause] getCanonicalProfile failed:', err)
+    throw new GenerationError(
+      'profile_validation_failed',
+      'initializing',
+      `getCanonicalProfile failed: ${err instanceof Error ? err.message : 'Unknown error'}`,
+      { helper: 'getCanonicalProfile' }
+    )
+  }
   
   // TASK 6: Log schedule/duration truth consumption
   console.log('[program-generate] TASK 6: Schedule/Duration truth consumed:', {
@@ -1224,8 +1335,20 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
   
   // [profile-completeness] ISSUE E: Verify engine field wiring before generation
   // This confirms all new profile fields are actually being consumed
-  const engineConsumption = getEngineFieldConsumption(canonicalProfile)
-  const wiringStatus = verifyEngineFieldWiring(canonicalProfile)
+  let engineConsumption: ReturnType<typeof getEngineFieldConsumption>
+  let wiringStatus: ReturnType<typeof verifyEngineFieldWiring>
+  try {
+    engineConsumption = getEngineFieldConsumption(canonicalProfile)
+    wiringStatus = verifyEngineFieldWiring(canonicalProfile)
+  } catch (err) {
+    console.error('[program-root-cause] getEngineFieldConsumption/verifyEngineFieldWiring failed:', err)
+    throw new GenerationError(
+      'profile_validation_failed',
+      'initializing',
+      `Engine field wiring check failed: ${err instanceof Error ? err.message : 'Unknown error'}`,
+      { helper: 'getEngineFieldConsumption' }
+    )
+  }
   console.log('[profile-completeness] Planner consuming new field groups:', {
     hasWeightedData: engineConsumption.weightedStrengthInputs.hasWeightedData,
     hasPRData: engineConsumption.weightedStrengthInputs.hasPRData,
@@ -1236,7 +1359,13 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
   })
   
   // [weighted-truth] TASK A: Log weighted readiness at generation start
-  const hasLoadableEq = hasLoadableEquipment(canonicalProfile.equipment || [])
+  let hasLoadableEq = false
+  try {
+    hasLoadableEq = hasLoadableEquipment(canonicalProfile.equipment || [])
+  } catch (err) {
+    console.error('[program-root-cause] hasLoadableEquipment (canonical) failed:', err)
+    // Non-fatal - continue with false
+  }
   const hasWeightedStr = engineConsumption.weightedStrengthInputs.hasWeightedData
   console.log('[weighted-truth] Generation weighted readiness:', {
     hasLoadableEquipment: hasLoadableEq,
@@ -1248,15 +1377,25 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
   })
   
   // ISSUE A: Stage tracking for diagnosable failures
-  currentStage = 'profile_validation'
-  console.log('[program-generate] STAGE: profile_validation')
+  setStage('profile_validation')
   
   // TASK 3 & 9: Validate profile before proceeding
-  const profileValidation = validateProfileForGeneration(canonicalProfile)
+  let profileValidation: ReturnType<typeof validateProfileForGeneration>
+  try {
+    profileValidation = validateProfileForGeneration(canonicalProfile)
+  } catch (err) {
+    console.error('[program-root-cause] validateProfileForGeneration failed:', err)
+    throw new GenerationError(
+      'profile_validation_failed',
+      stageTracker.current,
+      `validateProfileForGeneration failed: ${err instanceof Error ? err.message : 'Unknown error'}`,
+      { helper: 'validateProfileForGeneration' }
+    )
+  }
   if (!profileValidation.isValid) {
     throw new GenerationError(
       'profile_validation_failed',
-      currentStage,
+      stageTracker.current,
       `Incomplete profile data: ${profileValidation.missingFields.join(', ')}. Please complete onboarding.`,
       { missingFields: profileValidation.missingFields }
     )
@@ -1268,14 +1407,24 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
     normalizedProfile = normalizeProfile(canonicalProfile)
     console.log('[program-generate] TASK 2B: Profile normalized successfully')
   } catch (err) {
-    console.error('[program-generate] Profile normalization failed:', err)
-    // Continue with legacy path if normalization fails
+    // Log with searchable prefix for diagnosis
+    console.error('[program-root-cause] normalizeProfile failed:', err)
+    console.error('[program-generate] Profile normalization failed - continuing with legacy path')
+    // Continue with legacy path if normalization fails (non-fatal)
   }
   
   // TASK 4: Compute real limiter from normalized profile
-  const computedLimiter = normalizedProfile ? computeLimiter(normalizedProfile) : null
-  if (computedLimiter) {
-    console.log('[program-generate] TASK 4: Computed limiter:', computedLimiter)
+  let computedLimiter: ReturnType<typeof computeLimiter> | null = null
+  if (normalizedProfile) {
+    try {
+      computedLimiter = computeLimiter(normalizedProfile)
+      if (computedLimiter) {
+        console.log('[program-generate] TASK 4: Computed limiter:', computedLimiter)
+      }
+    } catch (err) {
+      console.error('[program-root-cause] computeLimiter failed:', err)
+      // Non-fatal - continue without limiter
+    }
   }
   
   // ENGINE QUALITY: Calculate goal hierarchy weighting for session distribution
@@ -1797,8 +1946,7 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
   // TASK 2: Pass secondary goal flags so structure can adapt
   // TASK 3: Pass hybrid path and multi-skill flags for expanded structure awareness
   // ISSUE A: Stage tracking for structure selection
-  currentStage = 'structure_selection'
-  console.log('[program-generate] STAGE: structure_selection')
+  setStage('structure_selection')
   console.log('[program-generate] Selected skills passed to structure:', {
     selectedSkills: expandedContext.selectedSkills,
     secondaryGoal: secondaryGoal || canonicalProfile.secondaryGoal || null,
@@ -1825,7 +1973,7 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
   } catch (err) {
     throw new GenerationError(
       'structure_selection_failed',
-      currentStage,
+      stageTracker.current,
       err instanceof Error ? err.message : 'Failed to select weekly structure',
       { primaryGoal, trainingDays: effectiveTrainingDays, scheduleMode: inputScheduleMode }
     )
@@ -1933,8 +2081,7 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
   }
   
   // ISSUE A: Stage tracking for session assembly
-  currentStage = 'session_assembly'
-  console.log('[program-generate] STAGE: session_assembly')
+  setStage('session_assembly')
   
   // [session-assembly] Log structure received for assembly
   console.log('[session-assembly] Weekly structure received:', {
@@ -2201,11 +2348,11 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
       errorMessage,
       structureName: structure?.structureName,
       dayCount: structure?.days?.length,
-      currentStage,
+      currentStage: stageTracker.current,
     })
     throw new GenerationError(
       'session_assembly_failed',
-      currentStage,
+      stageTracker.current,
       errorMessage,
       { 
         structureName: structure?.structureName, 
@@ -2406,8 +2553,7 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
   }
   
   // ISSUE A: Stage tracking for validation complete
-  currentStage = 'validation_complete'
-  console.log('[program-generate] STAGE: validation_complete')
+  setStage('validation_complete')
 console.log('[program-generate] Generation complete:', {
   sessionCount: sessions.length,
   primaryGoal,

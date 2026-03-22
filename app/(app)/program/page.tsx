@@ -592,8 +592,20 @@ export default function ProgramPage() {
         const errorCode = (isGenerationError ? (err as { code: string }).code : 'unknown_generation_failure') as GenerationErrorCode
         const errorStage = isGenerationError ? (err as { stage: string }).stage : generationStage
         const errorMessage = err instanceof Error ? err.message : 'Unknown error'
+        const errorStack = err instanceof Error ? err.stack : undefined
+        const errorContext = isGenerationError ? (err as { context?: Record<string, unknown> }).context : undefined
         
-        // [program-rebuild-truth] Determine sub-code for more specific messaging
+        // Log unclassified errors with searchable prefix for root cause analysis
+        if (!isGenerationError) {
+          console.error('[program-root-cause] Unclassified error caught in handleGenerate:', {
+            name: err instanceof Error ? err.name : 'UnknownError',
+            message: errorMessage,
+            stack: errorStack,
+            generationStage,
+          })
+        }
+        
+        // [program-rebuild-truth] Determine sub-code for more specific messaging (expanded)
         let subCode: BuildAttemptSubCode = 'none'
         if (errorMessage.includes('session_save_blocked')) subCode = 'session_save_blocked'
         else if (errorMessage.includes('empty_structure_days')) subCode = 'empty_structure_days'
@@ -602,6 +614,10 @@ export default function ProgramPage() {
         else if (errorMessage.includes('empty_exercise_pool')) subCode = 'empty_exercise_pool'
         else if (errorMessage.includes('normalization')) subCode = 'normalization_failed'
         else if (errorMessage.includes('display_safety')) subCode = 'display_safety_failed'
+        else if (errorMessage.includes('helper_failure') || errorMessage.includes('failed:')) subCode = 'assembly_unknown_failure'
+        else if (errorMessage.includes('audit_blocked')) subCode = 'session_validation_failed'
+        else if (errorMessage.includes('save_verification_failed')) subCode = 'session_save_blocked'
+        else if (errorMessage.includes('exercise') && errorMessage.includes('null')) subCode = 'empty_exercise_pool'
         
         // [program-rebuild-truth] TASK 2: Create failed build result
         const profileSig = inputs ? createProfileSignature(inputs) : 'unknown'
@@ -619,22 +635,22 @@ export default function ProgramPage() {
         // [program-rebuild-truth] Use the user message from the contract
         setGenerationError(failedResult.userMessage)
         
-        // [program-rebuild-truth] Structured logging for diagnosability
-        console.error(`[program-rebuild-error] FAILURE at stage "${errorStage}" [${errorCode}/${subCode}]: ${errorMessage}`, {
-          attemptId: failedResult.attemptId,
-          success: false,
-          failureStage: errorStage,
-          errorCode,
+        // [program-root-cause-summary] TASK 6: Single high-signal root-cause summary log
+        console.error('[program-root-cause-summary]', {
+          source: 'generate',
+          stage: errorStage,
+          code: errorCode,
           subCode,
-          preservedLastGoodProgram: failedResult.preservedLastGoodProgram,
-          inputsSnapshot: {
-            primaryGoal: inputs?.primaryGoal,
-            secondaryGoal: inputs?.secondaryGoal || 'none',
-            scheduleMode: inputs?.scheduleMode,
-            trainingDays: inputs?.trainingDaysPerWeek,
-            sessionLength: inputs?.sessionLength,
-            equipmentCount: inputs?.equipment?.length || 0,
-          },
+          message: errorMessage,
+          primaryGoal: inputs?.primaryGoal,
+          secondaryGoal: inputs?.secondaryGoal || null,
+          trainingDaysPerWeek: inputs?.trainingDaysPerWeek,
+          sessionLength: inputs?.sessionLength,
+          scheduleMode: inputs?.scheduleMode,
+          selectedSkillsCount: inputs?.selectedSkills?.length || 0,
+          equipmentCount: inputs?.equipment?.length || 0,
+          preservedLastGoodProgram: false,
+          context: errorContext,
         })
         // Keep builder visible and inputs intact for retry
       } finally {
@@ -796,14 +812,32 @@ export default function ProgramPage() {
         const errorCode = (isGenerationError ? (err as { code: string }).code : 'unknown_generation_failure') as GenerationErrorCode
         const errorStage = isGenerationError ? (err as { stage: string }).stage : regenerateStage
         const errorMessage = err instanceof Error ? err.message : 'Unknown error'
+        const errorStack = err instanceof Error ? err.stack : undefined
+        const errorContext = isGenerationError ? (err as { context?: Record<string, unknown> }).context : undefined
         
-        // [program-rebuild-truth] Determine sub-code
+        // Log unclassified errors with searchable prefix for root cause analysis
+        if (!isGenerationError) {
+          console.error('[program-root-cause] Unclassified error caught in handleRegenerate:', {
+            name: err instanceof Error ? err.name : 'UnknownError',
+            message: errorMessage,
+            stack: errorStack,
+            regenerateStage,
+          })
+        }
+        
+        // [program-rebuild-truth] Determine sub-code (expanded)
         let subCode: BuildAttemptSubCode = 'none'
         if (errorMessage.includes('session_save_blocked')) subCode = 'session_save_blocked'
         else if (errorMessage.includes('empty_structure_days')) subCode = 'empty_structure_days'
         else if (errorMessage.includes('empty_final_session_array') || errorMessage.includes('sessions_empty')) subCode = 'empty_final_session_array'
         else if (errorMessage.includes('session_count_mismatch')) subCode = 'session_count_mismatch'
         else if (errorMessage.includes('empty_exercise_pool')) subCode = 'empty_exercise_pool'
+        else if (errorMessage.includes('normalization')) subCode = 'normalization_failed'
+        else if (errorMessage.includes('display_safety')) subCode = 'display_safety_failed'
+        else if (errorMessage.includes('helper_failure') || errorMessage.includes('failed:')) subCode = 'assembly_unknown_failure'
+        else if (errorMessage.includes('audit_blocked')) subCode = 'session_validation_failed'
+        else if (errorMessage.includes('save_verification_failed')) subCode = 'session_save_blocked'
+        else if (errorMessage.includes('exercise') && errorMessage.includes('null')) subCode = 'empty_exercise_pool'
         
         // [program-rebuild-truth] TASK 2/3: Create failed build result with last good preserved
         const profileSig = inputs ? createProfileSignature(inputs) : 'unknown'
@@ -821,16 +855,23 @@ export default function ProgramPage() {
         // [program-rebuild-truth] Use the user message from the contract
         setGenerationError(failedResult.userMessage)
         
-        // [program-rebuild-fallback] TASK 3: Log that last good program is preserved
-        console.error(`[program-rebuild-error] REGEN FAILURE at stage "${errorStage}" [${errorCode}/${subCode}]`, {
-          attemptId: failedResult.attemptId,
-          success: false,
-          failureStage: errorStage,
-          errorCode,
+        // [program-root-cause-summary] TASK 6: Single high-signal root-cause summary log
+        console.error('[program-root-cause-summary]', {
+          source: 'regenerate',
+          stage: errorStage,
+          code: errorCode,
           subCode,
-          oldProgramId: program?.id,
+          message: errorMessage,
+          primaryGoal: inputs?.primaryGoal,
+          secondaryGoal: inputs?.secondaryGoal || null,
+          trainingDaysPerWeek: inputs?.trainingDaysPerWeek,
+          sessionLength: inputs?.sessionLength,
+          scheduleMode: inputs?.scheduleMode,
+          selectedSkillsCount: inputs?.selectedSkills?.length || 0,
+          equipmentCount: inputs?.equipment?.length || 0,
           preservedLastGoodProgram: failedResult.preservedLastGoodProgram,
-          visibleProgramIsStale: failedResult.visibleProgramIsStale,
+          previousProgramId: program?.id || null,
+          context: errorContext,
         })
         
         if (program) {

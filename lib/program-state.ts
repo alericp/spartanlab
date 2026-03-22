@@ -56,6 +56,7 @@ export type BuildAttemptStatus =
 
 /**
  * Sub-codes that provide more detail about the failure.
+ * TASK 5: Expanded to cover more specific failure scenarios
  */
 export type BuildAttemptSubCode =
   | 'empty_structure_days'
@@ -70,6 +71,14 @@ export type BuildAttemptSubCode =
   | 'session_validation_failed'
   | 'normalization_failed'
   | 'display_safety_failed'
+  // TASK 5: Additional sub-codes for more precise diagnosis
+  | 'helper_failure'
+  | 'canonical_profile_failure'
+  | 'exercise_selection_returned_null'
+  | 'save_verification_failed'
+  | 'audit_blocked'
+  | 'session_has_no_exercises'
+  | 'invalid_exercise_sets'
   | 'none'
 
 /**
@@ -138,7 +147,7 @@ export function createProfileSignature(profile: {
 
 /**
  * Map error codes to user-facing messages.
- * TASK 5: Concise, stage-specific messaging.
+ * TASK 5: Concise, stage-specific messaging with expanded sub-code handling.
  */
 export function getErrorUserMessage(
   errorCode: GenerationErrorCode | null,
@@ -148,6 +157,27 @@ export function getErrorUserMessage(
   const suffix = hasLastGoodProgram 
     ? ' Your previous plan is still available.' 
     : ''
+  
+  // TASK 5: Handle sub-codes first for more specific messaging
+  switch (subCode) {
+    case 'canonical_profile_failure':
+      return 'Could not load your profile. Please refresh and try again.' + suffix
+    case 'helper_failure':
+      return 'A setup step failed. Please try again.' + suffix
+    case 'audit_blocked':
+      return 'Plan did not pass quality checks. Try different settings.' + suffix
+    case 'save_verification_failed':
+      return 'Plan could not be verified after saving. Please try again.' + suffix
+    case 'exercise_selection_returned_null':
+      return 'No exercises found for your session. Check your equipment or goals.' + suffix
+    case 'session_has_no_exercises':
+      return 'One or more sessions have no exercises. Try different goals.' + suffix
+    case 'invalid_exercise_sets':
+      return 'Exercise configuration is invalid. Please try again.' + suffix
+    default:
+      // Fall through to error code handling
+      break
+  }
   
   switch (errorCode) {
     case 'profile_validation_failed':

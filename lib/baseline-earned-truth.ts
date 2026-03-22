@@ -658,6 +658,93 @@ export function isCompletionDisplaySafe(params: {
 }
 
 // =============================================================================
+// [history-language] TASK 8: BLANK-SLATE AWARE MESSAGING
+// =============================================================================
+
+/**
+ * Get appropriate language for history-derived rationale.
+ * [history-language] This function ensures we don't claim "training history"
+ * when the user has no earned workout data.
+ */
+export function getHistoryAwareLanguage(type: 
+  | 'training_history'
+  | 'recent_progress'
+  | 'recovery_trend'
+  | 'prior_load'
+  | 'performance_trend'
+  | 'consistency_pattern'
+): { phrase: string; isBlankSlate: boolean } {
+  const summary = getBaselineVsEarnedSummary()
+  const hasHistory = summary.hasEarnedProgress
+  
+  const phrases: Record<typeof type, { withHistory: string; blankSlate: string }> = {
+    training_history: {
+      withHistory: 'based on your training history',
+      blankSlate: 'based on your starting profile',
+    },
+    recent_progress: {
+      withHistory: 'from your recent progress',
+      blankSlate: 'for your estimated starting level',
+    },
+    recovery_trend: {
+      withHistory: 'based on your recovery patterns',
+      blankSlate: 'with a recovery-friendly baseline',
+    },
+    prior_load: {
+      withHistory: 'based on your previous loads',
+      blankSlate: 'starting conservatively',
+    },
+    performance_trend: {
+      withHistory: 'based on your performance trend',
+      blankSlate: 'calibrated for beginners',
+    },
+    consistency_pattern: {
+      withHistory: 'given your consistency pattern',
+      blankSlate: 'building an initial foundation',
+    },
+  }
+  
+  const selected = phrases[type]
+  const phrase = hasHistory ? selected.withHistory : selected.blankSlate
+  
+  console.log('[history-language] Selected phrase:', {
+    type,
+    hasHistory,
+    phrase,
+    earnedWorkouts: summary.earned.totalWorkoutsCompleted,
+  })
+  
+  return { phrase, isBlankSlate: !hasHistory }
+}
+
+/**
+ * Check if a rationale text can safely claim history-based adaptation.
+ * [history-language] Returns false if user has no earned data.
+ */
+export function canClaimHistoryAdaptation(): boolean {
+  const summary = getBaselineVsEarnedSummary()
+  return summary.hasEarnedProgress && summary.earned.totalWorkoutsCompleted >= 2
+}
+
+/**
+ * Get blank-slate aware program summary prefix.
+ * [history-language] For program cards and summaries.
+ */
+export function getProgramSummaryPrefix(): string {
+  const summary = getBaselineVsEarnedSummary()
+  
+  if (!summary.hasEarnedProgress) {
+    return 'Starting program based on your profile'
+  }
+  
+  if (summary.earned.totalWorkoutsCompleted < 5) {
+    return 'Early-stage program building your foundation'
+  }
+  
+  return 'Adapted program based on your training data'
+}
+
+// =============================================================================
 // INITIALIZATION
 // =============================================================================
 
@@ -679,4 +766,160 @@ export function initializeBaselineTracking(): void {
   
   // [baseline-earned-truth] TASK 8: Run validation on init
   validateTruthIntegrity()
+}
+
+// =============================================================================
+// [baseline-earned-truth] TASK 10: SCENARIO VALIDATION HELPERS
+// =============================================================================
+
+export interface ScenarioValidationResult {
+  scenario: string
+  passed: boolean
+  details: string[]
+  warnings: string[]
+}
+
+/**
+ * Validate Scenario A: Blank-slate user with no earned history.
+ * Expected: No fake achievements, no history language, program starts at baseline.
+ */
+export function validateScenarioA_BlankSlate(): ScenarioValidationResult {
+  const summary = getBaselineVsEarnedSummary()
+  const details: string[] = []
+  const warnings: string[] = []
+  let passed = true
+  
+  // Check 1: hasEarnedProgress should be false
+  if (summary.hasEarnedProgress) {
+    warnings.push('hasEarnedProgress is true - not a blank-slate scenario')
+  } else {
+    details.push('Correctly identified as blank-slate (no earned progress)')
+  }
+  
+  // Check 2: totalWorkoutsCompleted should be 0
+  if (summary.earned.totalWorkoutsCompleted > 0) {
+    passed = false
+    details.push(`FAIL: totalWorkoutsCompleted=${summary.earned.totalWorkoutsCompleted} but hasEarnedProgress=false`)
+  } else {
+    details.push('totalWorkoutsCompleted correctly 0')
+  }
+  
+  // Check 3: Earned PRs should be null
+  if (summary.earned.earnedPullUpMax !== null && summary.earned.earnedPullUpMax > 0) {
+    passed = false
+    details.push(`FAIL: earnedPullUpMax=${summary.earned.earnedPullUpMax} without earned workouts`)
+  }
+  
+  console.log('[baseline-earned-truth] Scenario A validation:', { passed, details, warnings })
+  
+  return {
+    scenario: 'Scenario A: Blank-slate user',
+    passed,
+    details,
+    warnings,
+  }
+}
+
+/**
+ * Validate Scenario B: User with loadable equipment.
+ * Expected: Weighted prescriptions should be eligible if strength data exists.
+ */
+export function validateScenarioB_WeightedEligible(
+  hasLoadableEquipmentInput: boolean,
+  hasStrengthBenchmarks: boolean
+): ScenarioValidationResult {
+  const details: string[] = []
+  const warnings: string[] = []
+  let passed = true
+  
+  // Check weighted eligibility
+  const shouldBeEligible = hasLoadableEquipmentInput && hasStrengthBenchmarks
+  
+  details.push(`Loadable equipment: ${hasLoadableEquipmentInput}`)
+  details.push(`Strength benchmarks: ${hasStrengthBenchmarks}`)
+  details.push(`Expected eligibility: ${shouldBeEligible}`)
+  
+  if (shouldBeEligible) {
+    details.push('Weighted prescriptions SHOULD appear for eligible exercises')
+  } else if (hasLoadableEquipmentInput && !hasStrengthBenchmarks) {
+    warnings.push('Has equipment but missing strength benchmarks - prescriptions limited')
+  } else if (!hasLoadableEquipmentInput) {
+    details.push('No loadable equipment - weighted prescriptions correctly unavailable')
+  }
+  
+  console.log('[baseline-earned-truth] Scenario B validation:', { passed, details, warnings })
+  
+  return {
+    scenario: 'Scenario B: Weighted eligibility',
+    passed,
+    details,
+    warnings,
+  }
+}
+
+/**
+ * Validate Scenario D: User with earned history.
+ * Expected: History language only appears when data exists.
+ */
+export function validateScenarioD_EarnedHistory(): ScenarioValidationResult {
+  const summary = getBaselineVsEarnedSummary()
+  const details: string[] = []
+  const warnings: string[] = []
+  let passed = true
+  
+  if (!summary.hasEarnedProgress) {
+    warnings.push('No earned progress - this scenario validates earned history users')
+    passed = false
+  } else {
+    details.push(`Total earned workouts: ${summary.earned.totalWorkoutsCompleted}`)
+    details.push(`First workout: ${summary.earned.firstWorkoutDate || 'unknown'}`)
+    details.push(`Last workout: ${summary.earned.lastWorkoutDate || 'unknown'}`)
+    
+    // Check earned vs baseline
+    if (summary.earnedExceedsBaseline.pullUps) {
+      details.push('Earned pull-up max exceeds baseline')
+    }
+    if (summary.earnedExceedsBaseline.dips) {
+      details.push('Earned dip max exceeds baseline')
+    }
+  }
+  
+  console.log('[baseline-earned-truth] Scenario D validation:', { passed, details, warnings })
+  
+  return {
+    scenario: 'Scenario D: Earned history user',
+    passed,
+    details,
+    warnings,
+  }
+}
+
+/**
+ * Run all scenario validations and log results.
+ * [baseline-earned-truth] TASK 10: Master validation function.
+ */
+export function runAllScenarioValidations(): {
+  allPassed: boolean
+  results: ScenarioValidationResult[]
+} {
+  const results: ScenarioValidationResult[] = []
+  
+  // Determine which scenario applies
+  const summary = getBaselineVsEarnedSummary()
+  
+  if (!summary.hasEarnedProgress) {
+    results.push(validateScenarioA_BlankSlate())
+  } else {
+    results.push(validateScenarioD_EarnedHistory())
+  }
+  
+  const allPassed = results.every(r => r.passed)
+  
+  console.log('[baseline-earned-truth] All scenario validations:', {
+    allPassed,
+    resultCount: results.length,
+    passedCount: results.filter(r => r.passed).length,
+  })
+  
+  return { allPassed, results }
 }

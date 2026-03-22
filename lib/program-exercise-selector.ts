@@ -559,7 +559,9 @@ export function selectExercisesForSession(inputs: ExerciseSelectionInputs): Exer
       e.selectionTrace?.expressionMode === 'strength_support' ||
       e.selectionTrace?.sessionRole === 'strength_support'
     ).map(e => e.name),
-    weightedExpressions: main.filter(e => e.prescribedLoad?.load).map(e => `${e.name}@${e.prescribedLoad?.load}${e.prescribedLoad?.unit}`),
+    weightedExpressions: main.filter(function(e) { return e.prescribedLoad?.load; }).map(function(e) {
+      return e.name + '@' + (e.prescribedLoad?.load || '') + (e.prescribedLoad?.unit || '');
+    }),
   }
   
   console.log('[selected-skill-exposure] Session skill expression summary:', {
@@ -1874,10 +1876,13 @@ function selectMainExercises(
       ? skillsForSession
       : [{ skill: primaryGoal, expressionMode: 'support' as const, weight: 1 }]
     
+    const mixedDaySkillLabels = sessionSkillsForMixed.map(function(s) {
+      return s.skill + '(' + s.expressionMode + ')';
+    });
     console.log('[selection-compression-fix] Mixed day selection:', {
       isLightDay,
-      sessionSkills: sessionSkillsForMixed.map(s => `${s.skill}(${s.expressionMode})`),
-    })
+      sessionSkills: mixedDaySkillLabels,
+    });
     
     // [selection-compression-fix] ISSUE F: Prefer skill-specific accessories over generic
     // First, try to find push/pull work that supports session skills

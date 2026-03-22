@@ -356,11 +356,14 @@ export function selectExercisesForSession(inputs: ExerciseSelectionInputs): Exer
   
   // SKILL EXPRESSION FIX: Log skill allocation for this session
   if (skillsForSession && skillsForSession.length > 0) {
+    const sessionSkillLabels = skillsForSession.map(function(s) {
+      return s.skill + '(' + s.expressionMode + ')';
+    });
     console.log('[skill-expression] Exercise selector received skills for session:', {
       dayFocus: day.focus,
-      skillsForSession: skillsForSession.map(s => `${s.skill}(${s.expressionMode})`),
+      skillsForSession: sessionSkillLabels,
       selectedSkillsCount: selectedSkills?.length || 0,
-    })
+    });
   }
   
   // Build prerequisite context for gate checks
@@ -586,14 +589,17 @@ export function selectExercisesForSession(inputs: ExerciseSelectionInputs): Exer
   }
   
   // [exercise-trace] TASK 7: Log session summary
+  const skillsExpressedLabel = skillsForSession
+    ? skillsForSession.map(function(s) { return s.skill + '(' + s.expressionMode + ')'; }).join(', ')
+    : primaryGoal;
   console.log('[exercise-trace] SESSION COMPLETE:', {
     dayFocus: day.focus,
     exerciseCount: main.length,
     weightedCount: weightedExerciseCount,
     doctrineHits: doctrineHitCount,
     rejected: rejectedCount,
-    skillsExpressed: skillsForSession?.map(s => `${s.skill}(${s.expressionMode})`).join(', ') || primaryGoal,
-  })
+    skillsExpressed: skillsExpressedLabel,
+  });
   
   // BUILD-HOTFIX: balanced module structure and restored valid EOF closure
   return {
@@ -1532,19 +1538,22 @@ function selectMainExercises(
   const hasWeightedEquipment = hasLoadableEquipment(equipment)
   
   // [planner-truth-input] STEP 2: Log the EXACT profile truth reaching selection
+  const skillsForSessionLabels = skillsForSession
+    ? skillsForSession.map(function(s) { return s.skill + '(' + s.expressionMode + ':' + s.weight + ')'; })
+    : undefined;
   console.log('[planner-truth-input] Exercise selection receiving:', {
     primaryGoal,
     dayFocus: day.focus,
     selectedSkillsCount: selectedSkills?.length || 0,
     selectedSkills: selectedSkills?.slice(0, 5) || [],
     skillsForSessionCount: skillsForSession?.length || 0,
-    skillsForSession: skillsForSession?.map(s => `${s.skill}(${s.expressionMode}:${s.weight})`),
+    skillsForSession: skillsForSessionLabels,
     hasWeightedEquipment,
     hasBenchmarks: !!weightedBenchmarks,
     experienceLevel,
     equipmentCount: equipment?.length || 0,
     constraintType,
-  })
+  });
   
   // [weighted-truth] TASK A: Log weighted readiness at session selection
   console.log('[weighted-truth] Session weighted readiness:', {
@@ -1556,13 +1565,16 @@ function selectMainExercises(
   })
   
   // [selection-compression-fix] TASK 7: Log compression fix context
+  const compressionSkillLabels = skillsForSession
+    ? skillsForSession.map(function(s) { return s.skill + '(' + s.expressionMode + ')'; })
+    : undefined;
   console.log('[selection-compression-fix] Session selection context:', {
     dayFocus: day.focus,
-    skillsForSession: skillsForSession?.map(s => `${s.skill}(${s.expressionMode})`),
+    skillsForSession: compressionSkillLabels,
     hasWeightedEquipment,
     selectedSkillsCount: selectedSkills?.length || 0,
     primaryGoal,
-  })
+  });
   
   // ==========================================================================
   // Selection based on day focus
@@ -2081,12 +2093,15 @@ function selectMainExercises(
   // =========================================================================
   
   if (skillsForSession && skillsForSession.length > 0 && selected.length < maxExercises) {
+    const allocationLabels = skillsForSession.map(function(s) {
+      return s.skill + '(' + s.expressionMode + ')';
+    });
     console.log('[exercise-expression] Processing skill allocations:', {
       dayFocus: day.focus,
-      allocations: skillsForSession.map(s => `${s.skill}(${s.expressionMode})`),
+      allocations: allocationLabels,
       currentExerciseCount: selected.length,
       maxExercises,
-    })
+    });
     
     // Track which skills we've already expressed via primary goal
     const expressedSkillIds = new Set<string>([primaryGoal])

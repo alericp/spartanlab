@@ -124,11 +124,6 @@ import {
   determineWeightedPrescriptionMode,
   formatWeightedLoadDisplay,
   logWeightedLoadEstimation,
-  getSkillPrescriptionRules,
-  getWeightedStrengthCarryover,
-  isAdvancedSkill,
-  getAdvancedSkillFamily,
-  ADVANCED_SKILL_FAMILIES,
   type PrescriptionMode,
   type PrescriptionContract,
   type AthleteContext as PrescriptionAthleteContext,
@@ -141,8 +136,6 @@ import {
   type WeightedPRBenchmark,
   type WeightedLoadPrescription,
   type WeightedPrescriptionMode,
-  type SkillPrescriptionRules,
-  type WeightedStrengthCarryover,
 } from './prescription-contract'
 import {
   SKILL_SUPPORT_MAPPINGS,
@@ -155,6 +148,18 @@ import {
   ADVANCED_SKILL_SUPPORT_PATTERNS,
 } from './doctrine/skill-support-mappings'
 import {
+  // Runtime exports
+  getSkillPrescriptionRules,
+  getWeightedStrengthCarryover,
+  isAdvancedSkill,
+  getAdvancedSkillFamily,
+  ADVANCED_SKILL_FAMILIES,
+  createMinimalTrace,
+  logExerciseTrace,
+  logSessionTrace,
+  // Type exports
+  type SkillPrescriptionRules,
+  type WeightedStrengthCarryover,
   type ExerciseSelectionTrace,
   type ExerciseSelectionReason,
   type TraceExpressionMode,
@@ -166,9 +171,6 @@ import {
   type DoctrineSourceTrace,
   type SessionSelectionTrace,
   type SkillExpressionMode,
-  createMinimalTrace,
-  logExerciseTrace,
-  logSessionTrace,
 } from './engine-quality-contract'
 import {
   hasLoadableEquipment,

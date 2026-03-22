@@ -4189,6 +4189,28 @@ function generateAdaptiveSession(
   })
   
   // ==========================================================================
+  // STEP A: SESSION TRACE - Track exercise counts through every transformation
+  // ==========================================================================
+  const sessionTrace = {
+    dayNumber: day.dayNumber,
+    dayFocus: day.focus,
+    primaryGoal,
+    selectedSkillsCount: selectedSkills?.length || 0,
+    equipmentCount: equipment.length,
+    initialSelectionMainCount: safeMain.length,
+    rescueAttempted: false,
+    rescuePath: 'none' as string,
+    rescuedMainCount: 0,
+    postEquipmentMainCount: 0,
+    rawMappedMainCount: 0,
+    validatedMainCount: 0,
+    finalMainCount: 0,
+    collapseStage: 'none' as string,
+  }
+  
+  console.log('[session-trace-start]', sessionTrace)
+  
+  // ==========================================================================
   // SESSION RESCUE: STEP B - Rescue empty sessions before downstream failure
   // ==========================================================================
   let rescuedMain = safeMain
@@ -4205,11 +4227,9 @@ function generateAdaptiveSession(
       selectedSkillsCount: selectedSkills?.length || 0,
     })
     
+    sessionTrace.rescueAttempted = true
+    
     // STEP B2: Attempt fallback rescue
-    const sessionMinutesResolved = typeof sessionLength === 'number' 
-      ? sessionLength 
-      : parseInt(String(sessionLength).split('-')[0]) || 60
-      
     const rescueResult = buildFallbackSelectionForSession(
       day.focus,
       primaryGoal,
@@ -4222,6 +4242,8 @@ function generateAdaptiveSession(
       rescuedMain = rescueResult.main
       sessionWasRescued = true
       rescuePath = rescueResult.rescuePath
+      sessionTrace.rescuePath = rescuePath
+      sessionTrace.rescuedMainCount = rescuedMain.length
       console.log('[session-rescue-success] Session rescued with fallback exercises:', {
         dayNumber: day.dayNumber,
         dayFocus: day.focus,
@@ -4238,14 +4260,60 @@ function generateAdaptiveSession(
         equipmentCount: equipment.length,
       })
     }
+  } else {
+    sessionTrace.rescuedMainCount = rescuedMain.length
   }
   
+  console.log('[session-trace-post-rescue]', { ...sessionTrace, currentMainCount: rescuedMain.length })
+  
+  // ==========================================================================
+  // STEP C: Equipment adaptation with collapse detection
+  // ==========================================================================
   const adaptedMain = adaptSessionForEquipment(rescuedMain, equipment)
   const adaptedWarmup = adaptSessionForEquipment(safeWarmup, equipment)
   const adaptedCooldown = adaptSessionForEquipment(safeCooldown, equipment)
   
-  // Generate session variants (30, 45, full)
-  const variants = generateSessionVariants(selection, sessionLength)
+  sessionTrace.postEquipmentMainCount = adaptedMain.adapted.length
+  
+  // STEP C: Detect if equipment adaptation zeroed out rescued exercises
+  if (rescuedMain.length > 0 && adaptedMain.adapted.length === 0) {
+    sessionTrace.collapseStage = 'equipment_adaptation'
+    console.error('[session-collapse-point] Equipment adaptation removed all exercises:', {
+      stage: 'equipment_adaptation',
+      dayNumber: day.dayNumber,
+      dayFocus: day.focus,
+      primaryGoal,
+      inputCount: rescuedMain.length,
+      outputCount: 0,
+      inputExercises: rescuedMain.map(e => e.exercise.name),
+      equipment: equipment,
+      rescueAttempted: sessionWasRescued,
+    })
+    throw new Error(
+      `equipment_adaptation_zeroed_session: day=${day.dayNumber} focus=${day.focus} ` +
+      `goal=${primaryGoal} inputCount=${rescuedMain.length} equipment=${equipment.slice(0, 5).join(',')}`
+    )
+  }
+  
+  console.log('[session-trace-post-equipment]', { ...sessionTrace, currentMainCount: adaptedMain.adapted.length })
+  
+  // ==========================================================================
+  // STEP B: Build canonical effectiveSelection to fix split-brain logic
+  // ==========================================================================
+  // Recompute estimated time based on rescued/adapted exercises
+  const effectiveMainEstimatedTime = rescuedMain.length * 5 // ~5 min per exercise estimate
+  const effectiveTotalTime = effectiveMainEstimatedTime + 10 // Add warmup/cooldown buffer
+  
+  const effectiveSelection = {
+    ...selection,
+    main: rescuedMain,
+    warmup: safeWarmup,
+    cooldown: safeCooldown,
+    totalEstimatedTime: sessionWasRescued ? effectiveTotalTime : selection.totalEstimatedTime,
+  }
+  
+  // Generate session variants using effectiveSelection (not stale original)
+  const variants = generateSessionVariants(effectiveSelection, sessionLength)
   
   // Build adaptation notes
   const adaptationNotes: string[] = []
@@ -4260,17 +4328,17 @@ function generateAdaptiveSession(
   const rationale = getDayExplanation(day, GOAL_LABELS[primaryGoal])
   
 // Generate endurance finisher if appropriate
-    const mainWorkMinutes = selection.totalEstimatedTime - 10 // Subtract warmup/cooldown estimate
+    // STEP B FIX: Use effectiveSelection instead of stale original selection
+    const mainWorkMinutes = effectiveSelection.totalEstimatedTime - 10 // Subtract warmup/cooldown estimate
     const sessionTimeFit = fitEnduranceToSession(sessionLength, mainWorkMinutes)
     
-    // [session-assembly] FIX: Use selection.main (not selection.exercises which doesn't exist)
-    // ExerciseSelection interface has: { warmup, main, cooldown, totalEstimatedTime }
-    const safeSelectionMain = Array.isArray(selection?.main) ? selection.main : []
+    // [session-assembly] FIX: Use effectiveSelection.main (rescued exercises, not stale original)
+    const safeEffectiveMain = Array.isArray(effectiveSelection?.main) ? effectiveSelection.main : []
     
-    // Calculate session neural demand from main exercises
-    const sessionNeuralDemand = safeSelectionMain.some(e => e?.exercise?.neuralDemand >= 4) 
+    // Calculate session neural demand from main exercises (using rescued/effective selection)
+    const sessionNeuralDemand = safeEffectiveMain.some(e => e?.exercise?.neuralDemand >= 4) 
       ? 'high' as const
-      : safeSelectionMain.some(e => e?.exercise?.neuralDemand >= 3)
+      : safeEffectiveMain.some(e => e?.exercise?.neuralDemand >= 3)
         ? 'moderate' as const
         : 'low' as const
 
@@ -4336,6 +4404,29 @@ function generateAdaptiveSession(
       rawCooldownLength: rawCooldown.length,
     })
     
+    // Update session trace
+    sessionTrace.rawMappedMainCount = rawExercises.length
+    console.log('[session-trace-post-mapping]', { ...sessionTrace, currentMainCount: rawExercises.length })
+    
+    // STEP D: Detect if mapping zeroed out adapted exercises
+    if (adaptedMainArray.length > 0 && rawExercises.length === 0) {
+      sessionTrace.collapseStage = 'mapping'
+      console.error('[session-collapse-point] Mapping removed all exercises:', {
+        stage: 'mapping',
+        dayNumber: day.dayNumber,
+        dayFocus: day.focus,
+        primaryGoal,
+        inputCount: adaptedMainArray.length,
+        outputCount: 0,
+        inputExercises: adaptedMainArray.map(e => e.exercise?.name || 'unknown'),
+        rescueAttempted: sessionWasRescued,
+      })
+      throw new Error(
+        `mapping_zeroed_session: day=${day.dayNumber} focus=${day.focus} ` +
+        `goal=${primaryGoal} inputCount=${adaptedMainArray.length} rescueAttempted=${sessionWasRescued}`
+      )
+    }
+    
     // TASK 5: Session Assembly Validation Pass
     // Dedupe, fix ordering, and validate session before returning
     const sessionBudget = resolveSessionBudget(typeof sessionLength === 'number' ? sessionLength : parseInt(String(sessionLength).split('-')[0]) || 45)
@@ -4344,6 +4435,31 @@ function generateAdaptiveSession(
       maxMainExercises: sessionBudget.mainWork.maxExercises,
       maxWarmupExercises: sessionBudget.warmup.maxExercises,
     })
+    
+    // Update session trace after validation
+    sessionTrace.validatedMainCount = validatedSession.exercises.length
+    console.log('[session-trace-post-validation]', { ...sessionTrace, currentMainCount: validatedSession.exercises.length })
+    
+    // STEP E: Detect if validation zeroed out raw exercises
+    if (rawExercises.length > 0 && validatedSession.exercises.length === 0) {
+      sessionTrace.collapseStage = 'validation'
+      console.error('[session-collapse-point] Validation removed all exercises:', {
+        stage: 'validation',
+        dayNumber: day.dayNumber,
+        dayFocus: day.focus,
+        primaryGoal,
+        inputCount: rawExercises.length,
+        outputCount: 0,
+        inputExercises: rawExercises.map(e => e.name),
+        validationIssues: validatedSession.validation.issues,
+        fixesApplied: validatedSession.validation.fixesApplied,
+        rescueAttempted: sessionWasRescued,
+      })
+      throw new Error(
+        `validation_zeroed_session: day=${day.dayNumber} focus=${day.focus} ` +
+        `goal=${primaryGoal} inputCount=${rawExercises.length} rescueAttempted=${sessionWasRescued}`
+      )
+    }
     
     // ISSUE D FIX: Filter validation fixes - only surface user-meaningful fixes, not internal cleanup
     // "Removed duplicate" messages are internal plumbing noise - keep as dev logs only
@@ -4428,6 +4544,10 @@ function generateAdaptiveSession(
       )
     }
     
+    // STEP I: Final session trace before return
+    sessionTrace.finalMainCount = validatedSession.exercises.length
+    console.log('[session-trace-final]', sessionTrace)
+    
     console.log('[session-final-check] Session validated successfully:', {
       dayNumber: day.dayNumber,
       dayFocus: day.focus,
@@ -4447,7 +4567,8 @@ function generateAdaptiveSession(
       exercises: validatedSession.exercises,
       warmup: validatedSession.warmup,
       cooldown: validatedSession.cooldown,
-      estimatedMinutes: selection.totalEstimatedTime + (finisher?.durationMinutes || 0),
+      // STEP B FIX: Use effectiveSelection.totalEstimatedTime (not stale original)
+      estimatedMinutes: effectiveSelection.totalEstimatedTime + (finisher?.durationMinutes || 0),
       variants,
       adaptationNotes: adaptationNotes.length > 0 ? adaptationNotes : undefined,
       finisher,

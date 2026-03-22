@@ -2490,22 +2490,62 @@ export function buildFallbackSelectionForSession(
     skills: availableSkills.length,
   })
   
-  // Helper to convert Exercise to SelectedExercise with rescue metadata
-  const toSelectedExercise = (ex: Exercise, reason: string): SelectedExercise => ({
-    exercise: ex,
-    sets: ex.sets || 3,
-    repsOrTime: ex.reps || ex.time || '8-12',
-    isOverrideable: true,
-    selectionReason: `[Rescue] ${reason}`,
-    selectionTrace: {
-      exerciseId: ex.id,
-      exerciseName: ex.name,
-      reason: 'fallback_rescue' as const,
-      expressionMode: 'support',
-      sessionRole: 'support_heavy',
-      source: { type: 'doctrine', ruleName: 'session_rescue' },
+  // STEP H: Helper to convert Exercise to SelectedExercise with ALL required fields
+  // This ensures rescued exercises have complete metadata for downstream mapping/validation
+  const toSelectedExercise = (ex: Exercise, reason: string): SelectedExercise => {
+    // Compute safe defaults based on exercise category
+    const category = ex.category?.toLowerCase() || 'strength'
+    let defaultSets = 3
+    let defaultRepsOrTime = '8-12'
+    
+    // Category-specific defaults for proper prescriptions
+    if (category === 'skill' || category === 'hold') {
+      defaultSets = 3
+      defaultRepsOrTime = ex.time || '10-20s'
+    } else if (category === 'core' || category === 'compression') {
+      defaultSets = 3
+      defaultRepsOrTime = ex.time || ex.reps || '30s'
+    } else if (category === 'mobility' || category === 'flexibility') {
+      defaultSets = 2
+      defaultRepsOrTime = ex.time || '30-60s'
+    } else if (category === 'strength' || category === 'push' || category === 'pull') {
+      defaultSets = ex.defaultSets || 3
+      defaultRepsOrTime = ex.defaultRepsOrTime || ex.reps || '6-10'
+    } else if (category === 'accessory') {
+      defaultSets = 3
+      defaultRepsOrTime = ex.defaultRepsOrTime || ex.reps || '10-15'
     }
-  })
+    
+    return {
+      exercise: {
+        ...ex,
+        // Ensure all required exercise fields have safe defaults
+        id: ex.id || `rescue_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        name: ex.name || 'Unknown Exercise',
+        category: ex.category || 'strength',
+        movementPattern: ex.movementPattern || 'compound',
+        primaryMuscles: ex.primaryMuscles || ['general'],
+        equipment: ex.equipment || ['floor'],
+        neuralDemand: ex.neuralDemand ?? 2,
+        fatigueCost: ex.fatigueCost ?? 2,
+        transferTo: ex.transferTo || [],
+        defaultSets: ex.defaultSets || defaultSets,
+        defaultRepsOrTime: ex.defaultRepsOrTime || defaultRepsOrTime,
+      },
+      sets: ex.sets || ex.defaultSets || defaultSets,
+      repsOrTime: ex.reps || ex.time || ex.defaultRepsOrTime || defaultRepsOrTime,
+      isOverrideable: true,
+      selectionReason: `[Rescue] ${reason}`,
+      selectionTrace: {
+        exerciseId: ex.id,
+        exerciseName: ex.name,
+        reason: 'fallback_rescue' as const,
+        expressionMode: 'support',
+        sessionRole: 'support_heavy',
+        source: { type: 'doctrine', ruleName: 'session_rescue' },
+      }
+    }
+  }
   
   // RESCUE PATH 1: Goal-specific support work for the day focus
   const goalFocusMap: Record<PrimaryGoal, string[]> = {

@@ -4860,7 +4860,8 @@ function generateAdaptiveSession(
     // Dedupe, fix ordering, and validate session before returning
     sessionStep = 'validating_session'
     const sessionBudget = resolveSessionBudget(typeof sessionLength === 'number' ? sessionLength : parseInt(String(sessionLength).split('-')[0]) || 45)
-    const validatedSession = validateSession(rawExercises, rawWarmup, rawCooldown, {
+    // TASK 1-B: Use let to allow emergency fallback reassignment
+let validatedSession = validateSession(rawExercises, rawWarmup, rawCooldown, {
       isSkillFirstDay: day.isPrimary,
       maxMainExercises: sessionBudget.mainWork.maxExercises,
       maxWarmupExercises: sessionBudget.warmup.maxExercises,
@@ -4957,7 +4958,7 @@ function generateAdaptiveSession(
     // ==========================================================================
     sessionStep = 'final_session_nonempty_check'
     if (validatedSession.exercises.length === 0) {
-      console.error('[session-final-check-failed] Session still empty after rescue and validation:', {
+      console.warn('[session-final-check-failed] Session empty after rescue - attempting emergency fallback:', {
         dayNumber: day.dayNumber,
         dayFocus: day.focus,
         primaryGoal,
@@ -4970,12 +4971,96 @@ function generateAdaptiveSession(
         rawExercisesCount: rawExercises.length,
       })
       
-      // STEP B4: Throw structured error with full context
-      throw new Error(
-        `session_has_no_exercises: day=${day.dayNumber} focus=${day.focus} ` +
-        `goal=${primaryGoal} fallbackAttempted=${sessionWasRescued} ` +
-        `equipment=${equipment.slice(0, 5).join(',')} rescuePath=${rescuePath}`
+      // ==========================================================================
+      // TASK 1-B: Emergency minimum viable session contract
+      // Before throwing, try one more rescue with buildFallbackSelectionForSession
+      // This ensures we only fail if truly no equipment-valid path exists
+      // ==========================================================================
+      sessionStep = 'emergency_fallback_attempt'
+      const emergencyRescue = buildFallbackSelectionForSession(
+        day.focus,
+        primaryGoal,
+        equipment,
+        sessionMinutesResolved,
+        experienceLevel
       )
+      
+      if (emergencyRescue.wasRescued && emergencyRescue.main.length > 0) {
+        // Emergency rescue succeeded - build a minimal valid session
+        console.log('[constraint-session-downgrade] Emergency fallback succeeded:', {
+          dayNumber: day.dayNumber,
+          dayFocus: day.focus,
+          primaryGoal,
+          rescuePath: emergencyRescue.rescuePath,
+          exerciseCount: emergencyRescue.main.length,
+          originalExpression: 'direct',
+          downgradedExpression: 'emergency_support',
+        })
+        
+        // Build emergency session from rescue result
+        const emergencyExercises: AdaptiveExercise[] = emergencyRescue.main.map((selected, idx) => ({
+          id: `${selected.exercise.id}_d${day.dayNumber}_emergency`,
+          exerciseId: selected.exercise.id,
+          name: selected.exercise.name,
+          sets: selected.sets,
+          repsOrTime: selected.repsOrTime,
+          restPeriod: '60-90s',
+          category: (selected.exercise.category || 'strength') as AdaptiveExercise['category'],
+          movementPattern: selected.exercise.movementPattern || 'compound',
+          sessionRole: 'support' as const,
+          selectionReason: `[Emergency Fallback] ${selected.selectionReason}`,
+          neuralDemand: selected.exercise.neuralDemand ?? 2,
+          fatigueCost: selected.exercise.fatigueCost ?? 2,
+          order: idx,
+          adaptationOptions: {
+            regressionAvailable: false,
+            progressionAvailable: false,
+            alternativesAvailable: [],
+            tempoOptions: [],
+          },
+          isCore: selected.exercise.category === 'core',
+          isAccessory: selected.exercise.category === 'accessory',
+          expectedTimeMinutes: 5,
+        }))
+        
+        // Replace empty validatedSession with emergency exercises
+        validatedSession = {
+          ...validatedSession,
+          exercises: emergencyExercises,
+          estimatedDurationMinutes: emergencyExercises.length * 5 + 10,
+          sessionCharacter: {
+            neuralDemandLevel: 'moderate' as const,
+            fatigueProfile: 'standard' as const,
+            volumeCategory: 'minimal' as const,
+            sessionType: 'support_recovery' as const,
+          },
+        }
+        
+        console.log('[constraint-session-final] Emergency session built:', {
+          dayNumber: day.dayNumber,
+          primaryGoal,
+          constraintType: constraintType || 'unknown',
+          originalExpression: 'direct',
+          downgradedExpression: 'emergency_support',
+          finalExerciseCount: validatedSession.exercises.length,
+          exercises: validatedSession.exercises.map(e => e.name),
+        })
+      } else {
+        // Emergency rescue also failed - now we truly have no options
+        console.error('[session-final-check-failed] Emergency fallback also failed:', {
+          dayNumber: day.dayNumber,
+          dayFocus: day.focus,
+          primaryGoal,
+          equipmentCount: equipment.length,
+        })
+        
+        // TASK 1-I: Only hard-fail if truly no equipment-valid path exists
+        throw new Error(
+          `session_has_no_exercises: day=${day.dayNumber} focus=${day.focus} ` +
+          `goal=${primaryGoal} fallbackAttempted=true emergencyAttempted=true ` +
+          `equipment=${equipment.slice(0, 5).join(',')} rescuePath=${emergencyRescue.rescuePath}`
+        )
+      }
     }
     
     // STEP I: Final session trace before return

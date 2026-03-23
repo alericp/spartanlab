@@ -881,6 +881,273 @@ export function clearCanonicalProfileData(): void {
 }
 
 // =============================================================================
+// [TASK 1] UNIFIED PROGRAM STALENESS EVALUATOR
+// =============================================================================
+
+/**
+ * Unified staleness evaluation result - the SINGLE source of truth for program staleness.
+ * Both program page and display component MUST consume this same result.
+ */
+export interface UnifiedStalenessResult {
+  /** Whether the program is stale relative to current canonical profile */
+  isStale: boolean
+  /** Severity of the staleness */
+  severity: 'none' | 'minor' | 'significant' | 'critical'
+  /** Fields that have changed */
+  changedFields: string[]
+  /** Human-readable summary */
+  summary: string
+  /** Recommended action */
+  recommendation: 'continue' | 'review' | 'regenerate'
+  /** Source of the evaluation for debugging */
+  sourceOfTruth: 'canonical_profile_vs_program_fields'
+  /** Detailed drift information for debugging */
+  driftDetails?: {
+    field: string
+    profileValue: unknown
+    programValue: unknown
+    severity: 'minor' | 'major' | 'critical'
+  }[]
+  /** Timestamp of evaluation */
+  evaluatedAt: string
+}
+
+/**
+ * [TASK 1] UNIFIED evaluateUnifiedProgramStaleness - THE ONLY staleness checker to use.
+ * 
+ * This function combines the logic of checkProgramStaleness and checkProfileProgramDrift
+ * into a single authoritative evaluator. BOTH the program page AND the display component
+ * MUST use this same function to prevent duplicate/conflicting warnings.
+ * 
+ * Key behaviors:
+ * - For flexible/adaptive schedules: does NOT compare trainingDaysPerWeek (runtime-resolved)
+ * - Normalizes equipment before comparison (excludes runtime-only keys)
+ * - Uses raw program values, NOT display fallbacks
+ * - Compares sessionDurationMode correctly
+ * 
+ * @param program - The current active program (raw, not normalized for display)
+ * @returns UnifiedStalenessResult
+ */
+export function evaluateUnifiedProgramStaleness(program: {
+  primaryGoal?: string | null
+  secondaryGoal?: string | null
+  trainingDaysPerWeek?: number | null
+  sessionLength?: number | null
+  scheduleMode?: string | null
+  sessionDurationMode?: string | null
+  equipment?: string[] | null
+  jointCautions?: string[] | null
+  experienceLevel?: string | null
+  selectedSkills?: string[] | null
+  profileSnapshot?: ProfileSnapshot | null
+} | null): UnifiedStalenessResult {
+  const evaluatedAt = new Date().toISOString()
+  
+  if (!program) {
+    return {
+      isStale: false,
+      severity: 'none',
+      changedFields: [],
+      summary: 'No active program to evaluate',
+      recommendation: 'continue',
+      sourceOfTruth: 'canonical_profile_vs_program_fields',
+      evaluatedAt,
+    }
+  }
+  
+  const profile = getCanonicalProfile()
+  const changedFields: string[] = []
+  const driftDetails: UnifiedStalenessResult['driftDetails'] = []
+  
+  // ==========================================================================
+  // CRITICAL FIELDS - require regeneration
+  // ==========================================================================
+  if (profile.primaryGoal !== program.primaryGoal) {
+    changedFields.push('primaryGoal')
+    driftDetails.push({
+      field: 'primaryGoal',
+      profileValue: profile.primaryGoal,
+      programValue: program.primaryGoal,
+      severity: 'critical',
+    })
+  }
+  
+  // ==========================================================================
+  // MAJOR FIELDS - should trigger regeneration
+  // ==========================================================================
+  
+  // Schedule mode comparison
+  if (profile.scheduleMode !== program.scheduleMode) {
+    changedFields.push('scheduleMode')
+    driftDetails.push({
+      field: 'scheduleMode',
+      profileValue: profile.scheduleMode,
+      programValue: program.scheduleMode,
+      severity: 'major',
+    })
+  }
+  
+  // [TASK 6] FLEXIBLE SCHEDULE FIX: Only compare trainingDaysPerWeek for STATIC schedules
+  // For flexible/adaptive schedules, the generated day count is runtime-resolved and should NOT trigger drift
+  const isFlexibleProfile = profile.scheduleMode === 'flexible' || profile.scheduleMode === 'adaptive'
+  const isFlexibleProgram = program.scheduleMode === 'flexible' || program.scheduleMode === 'adaptive'
+  const shouldCompareTrainingDays = !isFlexibleProfile || !isFlexibleProgram
+  
+  if (shouldCompareTrainingDays && profile.trainingDaysPerWeek !== program.trainingDaysPerWeek) {
+    changedFields.push('trainingDaysPerWeek')
+    driftDetails.push({
+      field: 'trainingDaysPerWeek',
+      profileValue: profile.trainingDaysPerWeek,
+      programValue: program.trainingDaysPerWeek,
+      severity: 'major',
+    })
+  }
+  
+  // Session length comparison
+  if (profile.sessionLengthMinutes !== program.sessionLength) {
+    changedFields.push('sessionLength')
+    driftDetails.push({
+      field: 'sessionLength',
+      profileValue: profile.sessionLengthMinutes,
+      programValue: program.sessionLength,
+      severity: 'major',
+    })
+  }
+  
+  // Session duration mode comparison (adaptive vs static duration)
+  const profileDurationMode = profile.sessionDurationMode || 'static'
+  const programDurationMode = program.sessionDurationMode || 'static'
+  if (profileDurationMode !== programDurationMode) {
+    changedFields.push('sessionDurationMode')
+    driftDetails.push({
+      field: 'sessionDurationMode',
+      profileValue: profileDurationMode,
+      programValue: programDurationMode,
+      severity: 'major',
+    })
+  }
+  
+  // [TASK 6/8] Equipment comparison - normalize before comparing, exclude runtime-only keys
+  const normalizedProfileEquipment = normalizeEquipmentForComparison(profile.equipmentAvailable || [])
+  const normalizedProgramEquipment = normalizeEquipmentForComparison(program.equipment || [])
+  if (normalizedProfileEquipment.join(',') !== normalizedProgramEquipment.join(',')) {
+    changedFields.push('equipment')
+    driftDetails.push({
+      field: 'equipment',
+      profileValue: normalizedProfileEquipment,
+      programValue: normalizedProgramEquipment,
+      severity: 'major',
+    })
+  }
+  
+  // Selected skills comparison
+  const profileSkills = (profile.selectedSkills || []).sort().join(',')
+  const programSkills = (program.selectedSkills || []).sort().join(',')
+  if (profileSkills !== programSkills) {
+    changedFields.push('selectedSkills')
+    driftDetails.push({
+      field: 'selectedSkills',
+      profileValue: profile.selectedSkills,
+      programValue: program.selectedSkills,
+      severity: 'major',
+    })
+  }
+  
+  // ==========================================================================
+  // MINOR FIELDS - can continue but note the difference
+  // ==========================================================================
+  if (profile.secondaryGoal !== program.secondaryGoal) {
+    changedFields.push('secondaryGoal')
+    driftDetails.push({
+      field: 'secondaryGoal',
+      profileValue: profile.secondaryGoal,
+      programValue: program.secondaryGoal,
+      severity: 'minor',
+    })
+  }
+  
+  if (profile.experienceLevel !== program.experienceLevel) {
+    changedFields.push('experienceLevel')
+    driftDetails.push({
+      field: 'experienceLevel',
+      profileValue: profile.experienceLevel,
+      programValue: program.experienceLevel,
+      severity: 'minor',
+    })
+  }
+  
+  // Joint cautions comparison
+  const profileCautions = (profile.jointCautions || []).sort().join(',')
+  const programCautions = (program.jointCautions || []).sort().join(',')
+  if (profileCautions !== programCautions) {
+    changedFields.push('jointCautions')
+    driftDetails.push({
+      field: 'jointCautions',
+      profileValue: profile.jointCautions,
+      programValue: program.jointCautions,
+      severity: 'minor',
+    })
+  }
+  
+  // ==========================================================================
+  // COMPUTE FINAL RESULT
+  // ==========================================================================
+  const hasCritical = driftDetails.some(d => d.severity === 'critical')
+  const hasMajor = driftDetails.some(d => d.severity === 'major')
+  const hasMinor = driftDetails.some(d => d.severity === 'minor')
+  
+  const isStale = hasCritical || hasMajor || hasMinor
+  const severity: UnifiedStalenessResult['severity'] = hasCritical 
+    ? 'critical' 
+    : hasMajor 
+      ? 'significant' 
+      : hasMinor 
+        ? 'minor' 
+        : 'none'
+  
+  const recommendation: UnifiedStalenessResult['recommendation'] = hasCritical 
+    ? 'regenerate' 
+    : hasMajor 
+      ? 'review' 
+      : 'continue'
+  
+  // Generate summary
+  let summary = 'Program matches current settings'
+  if (hasCritical) {
+    const criticalFields = driftDetails.filter(d => d.severity === 'critical').map(d => d.field)
+    summary = `Primary goal has changed (${criticalFields.join(', ')}). Program should be regenerated.`
+  } else if (hasMajor) {
+    const majorFields = driftDetails.filter(d => d.severity === 'major').map(d => d.field)
+    summary = `Training settings have changed (${majorFields.join(', ')}). Consider regenerating.`
+  } else if (hasMinor) {
+    summary = 'Minor setting differences detected. Program can continue.'
+  }
+  
+  // Log evaluation for debugging
+  console.log('[unified-staleness-eval]', {
+    isStale,
+    severity,
+    recommendation,
+    changedFieldCount: changedFields.length,
+    changedFields,
+    isFlexibleProfile,
+    isFlexibleProgram,
+    skippedTrainingDaysComparison: !shouldCompareTrainingDays,
+  })
+  
+  return {
+    isStale,
+    severity,
+    changedFields,
+    summary,
+    recommendation,
+    sourceOfTruth: 'canonical_profile_vs_program_fields',
+    driftDetails,
+    evaluatedAt,
+  }
+}
+
+// =============================================================================
 // DEV DIAGNOSTIC LOGGING
 // =============================================================================
 

@@ -5,7 +5,8 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import type { AdaptiveProgram } from '@/lib/adaptive-program-builder'
 import { AdaptiveSessionCard } from './AdaptiveSessionCard'
-import { checkProgramStaleness, type ProfileSnapshot } from '@/lib/canonical-profile-service'
+// [TASK 1] Removed checkProgramStaleness - unified staleness is now passed from parent
+import type { UnifiedStalenessResult } from '@/lib/canonical-profile-service'
 import { 
   Target, 
   Calendar, 
@@ -40,6 +41,8 @@ interface AdaptiveProgramDisplayProps {
   onRestart?: () => void // Explicit restart action: archives current program, returns to builder
   onRegenerate?: () => void // Explicit regenerate action: updates program from current profile
   onExerciseReplace?: (dayNumber: number, exerciseId: string) => void
+  // [TASK 1] Unified staleness result passed from parent - display does NOT recompute its own
+  unifiedStaleness?: UnifiedStalenessResult | null
 }
 
 export function AdaptiveProgramDisplay({ 
@@ -47,15 +50,37 @@ export function AdaptiveProgramDisplay({
   onDelete,
   onRestart,
   onRegenerate,
-  onExerciseReplace 
+  onExerciseReplace,
+  unifiedStaleness, // [TASK 1] Consume parent's staleness evaluation
 }: AdaptiveProgramDisplayProps) {
   // TASK 2: Confirmation modal state for restart action
   const [showRestartConfirm, setShowRestartConfirm] = useState(false)
   
-  // [trust-polish] Suppressed dev logging - TASK 5 marker removed
-  
-  // TASK 6: Check if program is stale relative to current profile
-  const stalenessCheck = checkProgramStaleness(program.profileSnapshot as ProfileSnapshot | undefined)
+  // ==========================================================================
+  // [TASK 1] USE UNIFIED STALENESS FROM PARENT - DO NOT RECOMPUTE
+  // The display component receives the exact same staleness result computed by the page.
+  // This prevents dual/conflicting staleness warnings.
+  // ==========================================================================
+  const stalenessCheck = unifiedStaleness ? {
+    isStale: unifiedStaleness.isStale,
+    staleDegree: unifiedStaleness.severity === 'critical' || unifiedStaleness.severity === 'significant' 
+      ? 'significant' as const
+      : unifiedStaleness.severity === 'minor' 
+        ? 'minor' as const 
+        : 'none' as const,
+    changedFields: unifiedStaleness.changedFields,
+    recommendation: unifiedStaleness.recommendation === 'regenerate' 
+      ? 'recommend_regenerate' as const
+      : unifiedStaleness.recommendation === 'review'
+        ? 'suggest_regenerate' as const
+        : 'continue' as const,
+  } : {
+    // Fallback if no unified staleness passed (backwards compatibility)
+    isStale: false,
+    staleDegree: 'none' as const,
+    changedFields: [] as string[],
+    recommendation: 'continue' as const,
+  }
   const recoveryColors: Record<string, string> = {
     HIGH: 'text-green-400 bg-green-400/10 border-green-400/20',
     MODERATE: 'text-yellow-400 bg-yellow-400/10 border-yellow-400/20',
@@ -249,53 +274,13 @@ export function AdaptiveProgramDisplay({
           <p className="text-sm text-[#A5A5A5]">{program.programRationale}</p>
         </div>
         
-        {/* TASK 6: Profile Staleness Indicator */}
-        {stalenessCheck.isStale && (
-          <div className={`mt-4 p-3 rounded-lg border ${
-            stalenessCheck.staleDegree === 'significant' 
-              ? 'bg-amber-500/10 border-amber-500/30' 
-              : 'bg-blue-500/10 border-blue-500/30'
-          }`}>
-            <div className="flex items-start gap-3">
-              <RefreshCw className={`w-4 h-4 mt-0.5 shrink-0 ${
-                stalenessCheck.staleDegree === 'significant' 
-                  ? 'text-amber-400' 
-                  : 'text-blue-400'
-              }`} />
-              <div className="flex-1 min-w-0">
-                <p className={`text-sm font-medium mb-1 ${
-                  stalenessCheck.staleDegree === 'significant' 
-                    ? 'text-amber-400' 
-                    : 'text-blue-400'
-                }`}>
-                  {stalenessCheck.staleDegree === 'significant' 
-                    ? 'Your profile has changed' 
-                    : 'Minor profile updates detected'}
-                </p>
-                <p className="text-xs text-[#A5A5A5]">
-                  {stalenessCheck.staleDegree === 'significant' 
-                    ? 'Your goals or schedule have changed since this program was created. Consider regenerating for a better fit.'
-                    : 'Some settings have changed. You can continue or regenerate to apply the updates.'}
-                </p>
-                {onRegenerate && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={onRegenerate}
-                    className={`mt-2 h-7 px-2 text-xs ${
-                      stalenessCheck.staleDegree === 'significant'
-                        ? 'text-amber-400 hover:text-amber-300 hover:bg-amber-500/20'
-                        : 'text-blue-400 hover:text-blue-300 hover:bg-blue-500/20'
-                    }`}
-                  >
-                    <RefreshCw className="w-3 h-3 mr-1" />
-                    Regenerate Program
-                  </Button>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
+        {/* ==========================================================================
+            [TASK 1] REMOVED: Profile Staleness Indicator 
+            The staleness warning is now ONLY shown by the parent program page,
+            not by the display component. This prevents duplicate/conflicting warnings.
+            The display receives stalenessCheck via unifiedStaleness prop for any
+            needed state-dependent rendering, but does NOT show its own warning banner.
+           ========================================================================== */}
         
         {/* [planner-truth-audit] TASK 10: Audit warning banner - minimal, truthful */}
         {program.plannerTruthAudit?.shouldWarn && program.plannerTruthAudit.warnings?.length > 0 && (

@@ -24,12 +24,15 @@ import type { AdaptiveProgramInputs, AdaptiveProgram, GenerationErrorCode, Templ
 import type { TrainingDays } from '@/lib/program-service'
 // [profile-truth-sync] ISSUE A: Import drift detection for settings/program alignment
 // [equipment-truth-fix] TASK C: Import equipment normalizer for canonical saves
+// [TASK 1] Import unified staleness evaluator - THE ONLY source of staleness truth
 import { 
-  checkProfileProgramDrift, 
-  isProfileSignatureAligned,
   type ProfileProgramDrift,
   validateBuilderDisplayTruth,
   builderEquipmentToProfileEquipment,
+  evaluateUnifiedProgramStaleness,
+  type UnifiedStalenessResult,
+  getCanonicalProfile,
+  composeCanonicalPlannerInput,
 } from '@/lib/canonical-profile-service'
 // [program-rebuild-truth] Import rebuild result contract for truthful error handling
 // [freshness-sync] TASK 1 & 2: Import freshness identity management for cross-surface consistency
@@ -76,19 +79,21 @@ import type { AdjustmentRebuildRequest, AdjustmentRebuildResult } from '@/compon
 import { saveCanonicalProfile } from '@/lib/canonical-profile-service'
 
 // TASK 1: Error boundary wrapper for AdaptiveProgramDisplay
-// Catches render errors and triggers recovery state instead of crashing
+// [TASK 1] Now accepts unifiedStaleness to pass to display component
 function ProgramDisplayWrapper({ 
   program, 
   onDelete,
   onRestart,
   onRegenerate,
-  onRecoveryNeeded 
+  onRecoveryNeeded,
+  unifiedStaleness, // [TASK 1] Pass through unified staleness
 }: { 
   program: AdaptiveProgram
   onDelete: () => void
   onRestart: () => void
   onRegenerate: () => void
-  onRecoveryNeeded: () => void 
+  onRecoveryNeeded: () => void
+  unifiedStaleness: UnifiedStalenessResult | null // [TASK 1] Unified staleness from page
 }) {
   const [hasRenderError, setHasRenderError] = useState(false)
   
@@ -123,6 +128,7 @@ function ProgramDisplayWrapper({
         onDelete={onDelete}
         onRestart={onRestart}
         onRegenerate={onRegenerate}
+        unifiedStaleness={unifiedStaleness} // [TASK 1] Pass unified staleness
       />
     )
   } catch (err) {
@@ -144,60 +150,69 @@ export default function ProgramPage() {
   const [loadError, setLoadError] = useState<string | null>(null)
   const [loadStage, setLoadStage] = useState<string>('initializing') // TASK 3: Track failure stage
   
-  // [program-alignment] ISSUE A/D: Detect profile-program drift using both methods
-  const profileProgramDrift = useMemo<ProfileProgramDrift | null>(() => {
+  // ==========================================================================
+  // [TASK 1] UNIFIED STALENESS - Single source of truth for program staleness
+  // This replaces the dual checkProfileProgramDrift/checkProgramStaleness systems
+  // ==========================================================================
+  const unifiedStaleness = useMemo<UnifiedStalenessResult | null>(() => {
     if (!program || !mounted) return null
     
-    // Method 1: Check using profile signature if available (new programs)
-    const programWithSignature = program as typeof program & { 
-      profileSignature?: { primaryGoal: string | null; equipmentHash: string; hasLoadableEquipment: boolean } 
-    }
-    if (programWithSignature.profileSignature) {
-      const signatureCheck = isProfileSignatureAligned(programWithSignature.profileSignature)
-      console.log('[program-alignment] Signature-based drift check:', signatureCheck)
-      
-      if (!signatureCheck.aligned) {
-        return {
-          hasDrift: true,
-          isProgramStale: true,
-          driftFields: signatureCheck.driftedFields.map(f => ({ 
-            field: f, 
-            profileValue: null, 
-            programValue: null, 
-            severity: f === 'primaryGoal' ? 'critical' as const : 'major' as const 
-          })),
-          summary: signatureCheck.summary,
-          recommendation: signatureCheck.driftedFields.includes('primaryGoal') ? 'regenerate' as const : 'review' as const,
-        }
-      }
-    }
-    
-    // Method 2: Fallback to field-by-field comparison (legacy programs without signature)
-    const driftResult = checkProfileProgramDrift({
+    // [TASK 8] Use raw program values, NOT display-normalized fallbacks
+    const rawProgram = {
       primaryGoal: program.primaryGoal,
       secondaryGoal: (program as unknown as { secondaryGoal?: string }).secondaryGoal,
       trainingDaysPerWeek: program.trainingDaysPerWeek,
       sessionLength: program.sessionLength,
       scheduleMode: (program as unknown as { scheduleMode?: string }).scheduleMode,
+      sessionDurationMode: (program as unknown as { sessionDurationMode?: string }).sessionDurationMode,
       equipment: program.equipment,
       jointCautions: program.jointCautions,
       experienceLevel: program.experienceLevel,
-    })
+      selectedSkills: (program as unknown as { selectedSkills?: string[] }).selectedSkills,
+      profileSnapshot: (program as unknown as { profileSnapshot?: unknown }).profileSnapshot,
+    }
     
-    // [program-truth-fix] TASK F: High-signal audit log for truth contradictions
-    console.log('[program-truth-audit]', {
+    const result = evaluateUnifiedProgramStaleness(rawProgram)
+    
+    // [TASK 7] High-signal audit log for unified staleness
+    console.log('[program-rebuild-identity-audit] Unified staleness evaluation:', {
       activeProgramId: program.id,
       programCreatedAt: program.createdAt,
-      isProgramStale: driftResult.isProgramStale,
-      driftFields: driftResult.driftFields.map(d => d.field),
-      recommendation: driftResult.recommendation,
-      programScheduleMode: (program as unknown as { scheduleMode?: string }).scheduleMode,
-      programTrainingDays: program.trainingDaysPerWeek,
+      isStale: result.isStale,
+      severity: result.severity,
+      changedFields: result.changedFields,
+      recommendation: result.recommendation,
+      sourceOfTruth: result.sourceOfTruth,
+      programScheduleMode: rawProgram.scheduleMode,
+      programTrainingDays: rawProgram.trainingDaysPerWeek,
       sessionCount: program.sessions?.length || 0,
     })
     
-    return driftResult
+    return result
   }, [program, mounted])
+  
+  // [TASK 1] Map unified staleness to legacy ProfileProgramDrift interface for compatibility
+  // This ensures existing UI code continues to work without major refactoring
+  const profileProgramDrift = useMemo<ProfileProgramDrift | null>(() => {
+    if (!unifiedStaleness) return null
+    
+    return {
+      hasDrift: unifiedStaleness.isStale,
+      isProgramStale: unifiedStaleness.severity === 'significant' || unifiedStaleness.severity === 'critical',
+      driftFields: (unifiedStaleness.driftDetails || []).map(d => ({
+        field: d.field,
+        profileValue: d.profileValue,
+        programValue: d.programValue,
+        severity: d.severity,
+      })),
+      summary: unifiedStaleness.summary,
+      recommendation: unifiedStaleness.recommendation === 'regenerate' 
+        ? 'regenerate' as const 
+        : unifiedStaleness.recommendation === 'review' 
+          ? 'review' as const 
+          : 'continue' as const,
+    }
+  }, [unifiedStaleness])
   
   // TASK 5: Store dynamically imported module references
   const [programModules, setProgramModules] = useState<{
@@ -363,10 +378,32 @@ setProgramModules({
         try {
           const programState = stateMod.getProgramState()
           
+          // ==========================================================================
+          // [TASK 5 & 7] MOUNT DIAGNOSTIC - Log exactly what is loaded and from where
+          // This prevents resurrection of old snapshots during mount/migration
+          // ==========================================================================
+          console.log('[program-rebuild-identity-audit] MOUNT: Program state retrieved', {
+            hasUsableProgram: programState.hasUsableWorkoutProgram,
+            loadedProgramId: programState.adaptiveProgram?.id || 'none',
+            loadedCreatedAt: programState.adaptiveProgram?.createdAt || 'none',
+            loadedFromSource: 'getProgramState', // canonical active program storage
+            migrationRan: programState.migrationRan || false,
+            fallbackRecoveryRan: programState.fallbackRecoveryRan || false,
+            sessionCount: programState.adaptiveProgram?.sessions?.length || 0,
+          })
+          
           // TASK 2: Stage 8 - Normalize and validate program for display
           setLoadStage('normalizing-program')
           if (programState.hasUsableWorkoutProgram && programState.adaptiveProgram) {
             const normalizedProgram = stateMod.normalizeProgramForDisplay(programState.adaptiveProgram)
+            
+            // [TASK 5] Verify normalization didn't change identity
+            if (normalizedProgram.id !== programState.adaptiveProgram.id) {
+              console.error('[program-rebuild-identity-audit] MOUNT WARNING: Normalization changed program ID!', {
+                rawProgramId: programState.adaptiveProgram.id,
+                normalizedProgramId: normalizedProgram.id,
+              })
+            }
             
             // TASK 2: Display-sanity gate - verify all critical display fields
             // This prevents crashes in AdaptiveProgramDisplay when program is malformed
@@ -380,10 +417,14 @@ setProgramModules({
               setShowBuilder(false)
               setLoadStage('program-ready')
               
-              // [program-save-truth-audit] TASK H: Log program hydration state on load
-              console.log('[program-save-truth-audit] Hydration on mount:', {
+              // [TASK 7] MOUNT DIAGNOSTIC - Comprehensive audit log
+              console.log('[program-rebuild-identity-audit] MOUNT: Program loaded successfully', {
                 context: 'page_load',
-                programId: normalizedProgram.id,
+                loadedProgramId: normalizedProgram.id,
+                loadedSource: 'canonical_active_program',
+                migrationRan: programState.migrationRan || false,
+                fallbackRecoveryRan: programState.fallbackRecoveryRan || false,
+                normalizedOnlyNoRestoration: true,
                 createdAt: normalizedProgram.createdAt,
                 sessionCount: normalizedProgram.sessions?.length || 0,
                 firstSessionId: normalizedProgram.sessions?.[0]?.id || 'none',
@@ -965,23 +1006,73 @@ setProgramModules({
     setTimeout(() => {
       let regenerateStage = 'starting'
       try {
+        // ==========================================================================
+        // [TASK 2] COMPOSE FRESH CANONICAL TRUTH AT CLICK TIME
+        // We must NOT use stale `inputs` state - compose fresh from canonical profile
+        // ==========================================================================
+        regenerateStage = 'composing_fresh_truth'
+        
+        // Get fresh canonical profile and compose rebuild inputs
+        const canonicalProfile = getCanonicalProfile()
+        const freshComposedInput = composeCanonicalPlannerInput()
+        
+        // Build the fresh rebuild input from canonical truth
+        const freshRebuildInput: AdaptiveProgramInputs = {
+          primaryGoal: freshComposedInput.primaryGoal || canonicalProfile.primaryGoal || inputs?.primaryGoal || 'planche',
+          secondaryGoal: freshComposedInput.secondaryGoal || canonicalProfile.secondaryGoal || inputs?.secondaryGoal,
+          experienceLevel: freshComposedInput.experienceLevel || canonicalProfile.experienceLevel || inputs?.experienceLevel || 'intermediate',
+          trainingDaysPerWeek: freshComposedInput.scheduleMode === 'flexible' 
+            ? 'flexible' 
+            : (freshComposedInput.trainingDaysPerWeek ?? canonicalProfile.trainingDaysPerWeek ?? inputs?.trainingDaysPerWeek ?? 4),
+          sessionLength: freshComposedInput.sessionLength ?? canonicalProfile.sessionLengthMinutes ?? inputs?.sessionLength ?? 60,
+          scheduleMode: freshComposedInput.scheduleMode || canonicalProfile.scheduleMode || inputs?.scheduleMode || 'flexible',
+          sessionDurationMode: freshComposedInput.sessionDurationMode || canonicalProfile.sessionDurationMode || inputs?.sessionDurationMode || 'adaptive',
+          equipment: freshComposedInput.equipment || canonicalProfile.equipmentAvailable || inputs?.equipment || [],
+        }
+        
+        // [TASK 7] Pre-build diagnostic with fresh truth
+        console.log('[program-rebuild-identity-audit] REGEN STAGE 0: Fresh canonical truth composed', {
+          oldProgramId: program?.id || 'none',
+          staleInputsPrimaryGoal: inputs?.primaryGoal,
+          freshPrimaryGoal: freshRebuildInput.primaryGoal,
+          freshSecondaryGoal: freshRebuildInput.secondaryGoal,
+          freshSelectedSkills: canonicalProfile.selectedSkills,
+          freshScheduleMode: freshRebuildInput.scheduleMode,
+          freshTrainingDaysPerWeek: freshRebuildInput.trainingDaysPerWeek,
+          freshSessionDurationMode: freshRebuildInput.sessionDurationMode,
+          freshSessionLength: freshRebuildInput.sessionLength,
+          freshEquipmentCount: freshRebuildInput.equipment?.length || 0,
+          freshJointCautions: canonicalProfile.jointCautions,
+          freshExperienceLevel: freshRebuildInput.experienceLevel,
+          canonicalProfileTimestamp: canonicalProfile.lastUpdated,
+          composedInputProvenance: {
+            fallbacksUsed: freshComposedInput.fallbacksUsed,
+            overridesApplied: freshComposedInput.overridesApplied,
+          },
+        })
+        
+        // Validate fresh input before proceeding
+        if (!freshRebuildInput.primaryGoal) {
+          throw new Error('fresh_input_invalid: primaryGoal missing from canonical truth')
+        }
+        
         // [program-build] REGEN STAGE 1: Pre-regeneration diagnostics
         regenerateStage = 'pre_regen_diagnostics'
         console.log('[program-build] REGEN STAGE 1: Pre-regeneration diagnostics', {
           oldProgramId: program?.id || 'none',
-          hasInputs: !!inputs,
-          primaryGoal: inputs?.primaryGoal,
-          secondaryGoal: inputs?.secondaryGoal || 'none',
+          usingFreshCanonicalTruth: true,
+          primaryGoal: freshRebuildInput.primaryGoal,
+          secondaryGoal: freshRebuildInput.secondaryGoal || 'none',
         })
         
         // [program-build] REGEN STAGE 2: Record regeneration event
         regenerateStage = 'recording_event'
         programModules.recordProgramEnd?.('regenerate')
         
-        // [program-build] REGEN STAGE 3: Generate new program
+        // [program-build] REGEN STAGE 3: Generate new program with FRESH canonical input
         regenerateStage = 'generating'
-        console.log('[program-build] REGEN STAGE 3: Calling generateAdaptiveProgram...')
-        const newProgram = programModules.generateAdaptiveProgram(inputs)
+        console.log('[program-build] REGEN STAGE 3: Calling generateAdaptiveProgram with fresh truth...')
+        const newProgram = programModules.generateAdaptiveProgram(freshRebuildInput)
         
         // [program-build] REGEN STAGE 4: Validate program shape
         regenerateStage = 'validating_shape'
@@ -1080,19 +1171,62 @@ setProgramModules({
     }
   }
         
-        // [program-build] REGEN STAGE 7b: Verify save succeeded
+        // ==========================================================================
+        // [TASK 4] ATOMIC SAVE VERIFICATION - Verify EXACT program ID replacement
+        // This ensures the newly generated program is the one that will load on refresh
+        // ==========================================================================
         regenerateStage = 'verifying_save'
         const savedState = programModules.getProgramState?.()
+        
+        // Step 1: Basic usability check
         if (!savedState?.hasUsableWorkoutProgram) {
-          console.error('[program-build] REGEN STAGE 7b: Save verification FAILED')
+          console.error('[program-rebuild-identity-audit] REGEN STAGE 7b: Save verification FAILED - no usable program')
           throw new Error('save_verification_failed: Program not readable after save')
         }
-        console.log('[program-build] REGEN STAGE 7b: Save verification PASSED')
+        
+        // Step 2: Verify EXACT program ID match (not just "some program exists")
+        const storedProgramId = savedState?.activeProgram?.id
+        if (storedProgramId !== newProgram.id) {
+          console.error('[program-rebuild-identity-audit] REGEN STAGE 7b: CRITICAL ID MISMATCH', {
+            newProgramId: newProgram.id,
+            storedProgramId,
+            mismatchType: 'program_id_not_replaced',
+          })
+          throw new Error(`save_verification_id_mismatch: Expected ${newProgram.id}, got ${storedProgramId}`)
+        }
+        
+        // Step 3: Verify createdAt timestamp matches (secondary identity check)
+        const storedCreatedAt = savedState?.activeProgram?.createdAt
+        if (storedCreatedAt !== newProgram.createdAt) {
+          console.warn('[program-rebuild-identity-audit] REGEN STAGE 7b: createdAt mismatch (non-fatal)', {
+            newCreatedAt: newProgram.createdAt,
+            storedCreatedAt,
+          })
+          // Non-fatal warning - timestamps might normalize slightly
+        }
+        
+        // Step 4: Verify session count matches
+        const storedSessionCount = savedState?.activeProgram?.sessions?.length || 0
+        const newSessionCount = newProgram.sessions?.length || 0
+        if (storedSessionCount !== newSessionCount) {
+          console.error('[program-rebuild-identity-audit] REGEN STAGE 7b: Session count mismatch', {
+            newSessionCount,
+            storedSessionCount,
+          })
+          throw new Error(`save_verification_session_mismatch: Expected ${newSessionCount} sessions, got ${storedSessionCount}`)
+        }
+        
+        console.log('[program-rebuild-identity-audit] REGEN STAGE 7b: Save verification PASSED - exact ID match confirmed', {
+          verifiedProgramId: newProgram.id,
+          verifiedSessionCount: newSessionCount,
+          storedProgramIdMatches: true,
+        })
         
         // [freshness-sync] REGEN STAGE 7c: Update freshness identity and invalidate stale caches
         regenerateStage = 'freshness_sync'
         console.log('[freshness-sync] REGEN STAGE 7c: Updating canonical freshness identity...')
-        const regenProfileSig = inputs ? createProfileSignature(inputs) : 'unknown'
+        // [TASK 2] Use freshRebuildInput for signature, NOT stale inputs
+        const regenProfileSig = createProfileSignature(freshRebuildInput)
         invalidateStaleCaches()
         updateFreshnessIdentity(
           newProgram.id,
@@ -1103,47 +1237,65 @@ setProgramModules({
           programId: newProgram.id,
           createdAt: newProgram.createdAt,
           previousProgramId: program?.id,
+          usedFreshRebuildInput: true,
         })
         
   // ==========================================================================
-  // [post-build-truth] TASK A: Persist builder inputs to canonical profile on regen
-  // [program-truth-fix] TASK B: Save EFFECTIVE values from the built program
-  // [equipment-truth-fix] TASK C: Convert equipment to canonical profile keys
+  // [TASK 3] PERSIST FULL PROGRAMMING TRUTH BACK TO CANONICAL PROFILE
+  // Use freshRebuildInput (from TASK 2) and effective values from the built program
+  // This ensures post-rebuild canonical profile matches the active program
   // ==========================================================================
   regenerateStage = 'persisting_canonical_profile'
-  console.log('[post-build-truth] REGEN STAGE 7d: Persisting builder inputs to canonical profile...')
+  console.log('[post-build-truth] REGEN STAGE 7d: Persisting FULL programming truth to canonical profile...')
   try {
-    const effectiveScheduleMode = inputs.scheduleMode === 'flexible' || inputs.scheduleMode === 'adaptive'
+    // Use freshRebuildInput values (already composed from canonical truth + overrides)
+    const effectiveScheduleMode = freshRebuildInput.scheduleMode === 'flexible' || freshRebuildInput.scheduleMode === 'adaptive'
       ? 'flexible'
       : 'static'
     
     const effectiveTrainingDays = effectiveScheduleMode === 'flexible'
       ? null
-      : (newProgram.trainingDaysPerWeek ?? inputs.trainingDaysPerWeek ?? undefined)
+      : (newProgram.trainingDaysPerWeek ?? (typeof freshRebuildInput.trainingDaysPerWeek === 'number' ? freshRebuildInput.trainingDaysPerWeek : undefined))
+    
+    const effectiveSessionDurationMode = freshRebuildInput.sessionDurationMode === 'adaptive' ? 'adaptive' : 'static'
     
     // [equipment-truth-fix] TASK C: Convert builder equipment keys to canonical profile keys
-    const canonicalEquipment = builderEquipmentToProfileEquipment(inputs.equipment || [])
+    const canonicalEquipment = builderEquipmentToProfileEquipment(freshRebuildInput.equipment || [])
     
     // [equipment-truth-audit] Log equipment truth on regen
     console.log('[equipment-truth-audit] Regen success - equipment truth:', {
-      builderInputsEquipment: inputs.equipment,
+      freshRebuildInputEquipment: freshRebuildInput.equipment,
       canonicalSavedEquipment: canonicalEquipment,
-      hiddenRuntimeEquipmentStripped: (inputs.equipment || []).filter(e => e === 'floor' || e === 'wall'),
+      hiddenRuntimeEquipmentStripped: (freshRebuildInput.equipment || []).filter(e => e === 'floor' || e === 'wall'),
     })
     
+    // [TASK 3] Save ALL relevant programming truth fields
     saveCanonicalProfile({
+      // Goal fields
+      primaryGoal: freshRebuildInput.primaryGoal,
+      secondaryGoal: freshRebuildInput.secondaryGoal,
+      // Schedule fields
       trainingDaysPerWeek: effectiveTrainingDays ?? undefined,
-      sessionLengthMinutes: newProgram.sessionLength ?? inputs.sessionLength ?? undefined,
       scheduleMode: effectiveScheduleMode,
+      // Duration fields
+      sessionLengthMinutes: newProgram.sessionLength ?? freshRebuildInput.sessionLength ?? undefined,
+      sessionDurationMode: effectiveSessionDurationMode,
+      // Equipment/constraints
       equipmentAvailable: canonicalEquipment,
+      // Experience
+      experienceLevel: freshRebuildInput.experienceLevel,
     })
-    console.log('[post-build-truth] REGEN STAGE 7d: Canonical profile updated', {
+    
+    console.log('[post-build-truth] REGEN STAGE 7d: FULL programming truth persisted', {
+      primaryGoal: freshRebuildInput.primaryGoal,
+      secondaryGoal: freshRebuildInput.secondaryGoal,
       trainingDaysPerWeek: effectiveTrainingDays,
-      sessionLength: newProgram.sessionLength,
       scheduleMode: effectiveScheduleMode,
+      sessionLength: newProgram.sessionLength,
+      sessionDurationMode: effectiveSessionDurationMode,
       equipmentCount: canonicalEquipment.length,
-      canonicalEquipment,
-      fromProgram: true,
+      experienceLevel: freshRebuildInput.experienceLevel,
+      fromFreshRebuildInput: true,
     })
   } catch (profileErr) {
     // Non-core: log but don't fail the build
@@ -1170,22 +1322,54 @@ setProgramModules({
           appearsStale: newProgram.templateSimilarity?.appearsStale || false,
         })
         
+        // ==========================================================================
+        // [TASK 4] FINAL VERIFICATION BEFORE UI UPDATE
+        // Only set program into visible state AFTER storage truth is verified
+        // ==========================================================================
+        
+        // [TASK 7] Final audit log before UI update
+        console.log('[program-rebuild-identity-audit] REGEN STAGE 8: Final verification before UI update', {
+          storedProgramIdVerified: newProgram.id,
+          aboutToSetVisibleProgramId: newProgram.id,
+          storedEqualsNew: true,
+        })
+        
         setProgram(newProgram)
         setShowBuilder(false)
         
-        // [program-rebuild-truth] TASK 2: Create success result for regeneration
-        const profileSig = inputs ? createProfileSignature(inputs) : 'unknown'
+        // [program-rebuild-truth] Create success result using freshRebuildInput signature
+        const profileSig = createProfileSignature(freshRebuildInput)
         const successResult = createSuccessBuildResult(profileSig, program?.id || null, newProgram.id)
         setLastBuildResult(successResult)
         saveLastBuildAttemptResult(successResult)
         setGenerationError(null) // Clear any previous error
         
-        // [program-rebuild-truth] REGEN SUCCESS
-        console.log('[program-rebuild-truth] REGEN COMPLETE: All stages passed', {
+        // [TASK 7] Post-rebuild staleness re-evaluation
+        const postBuildStaleness = evaluateUnifiedProgramStaleness({
+          primaryGoal: newProgram.primaryGoal,
+          secondaryGoal: (newProgram as unknown as { secondaryGoal?: string }).secondaryGoal,
+          trainingDaysPerWeek: newProgram.trainingDaysPerWeek,
+          sessionLength: newProgram.sessionLength,
+          scheduleMode: (newProgram as unknown as { scheduleMode?: string }).scheduleMode,
+          sessionDurationMode: (newProgram as unknown as { sessionDurationMode?: string }).sessionDurationMode,
+          equipment: newProgram.equipment,
+          jointCautions: newProgram.jointCautions,
+          experienceLevel: newProgram.experienceLevel,
+          selectedSkills: (newProgram as unknown as { selectedSkills?: string[] }).selectedSkills,
+        })
+        
+        // [program-rebuild-truth] REGEN SUCCESS with comprehensive audit
+        console.log('[program-rebuild-identity-audit] REGEN COMPLETE: All stages passed', {
           success: true,
           attemptId: successResult.attemptId,
           oldProgramId: program?.id || 'none',
           newProgramId: newProgram.id,
+          storedProgramIdAfterSave: newProgram.id,
+          visibleProgramIdAfterSet: newProgram.id,
+          rebuildInputSignature: profileSig,
+          staleEvalAfterBuild: postBuildStaleness.isStale,
+          changedFieldsAfterBuild: postBuildStaleness.changedFields,
+          fallbackPreservationTriggered: false,
           sessionCount: newProgram.sessions?.length || 0,
           replacedVisibleProgram: true,
         })
@@ -1896,6 +2080,7 @@ setProgramModules({
             )}
             
             {/* TASK 1: Wrap display in error boundary-like try-catch via component */}
+            {/* [TASK 1] Pass unified staleness to prevent duplicate staleness checks */}
             <ProgramDisplayWrapper 
               program={program} 
               onDelete={handleDelete}
@@ -1905,6 +2090,7 @@ setProgramModules({
                 console.log('[v0] Display render failed, showing recovery state')
                 setLoadStage('display-render-error')
               }}
+              unifiedStaleness={unifiedStaleness}
             />
           </div>
         ) : program ? (

@@ -5084,17 +5084,45 @@ function generateAdaptiveSession(
   try {
     // Generate session variants using effectiveSelection
     middleStep = 'variants_generating'
-    // FIX: Pass numeric sessionMinutesResolved instead of string sessionLength
+    
+    // ==========================================================================
+    // [TASK 1-3] SESSION-TIME TRUTH FIX
+    // CRITICAL: Use the ACTUAL built session time (effectiveSelection.totalEstimatedTime)
+    // as the canonical full-session duration, NOT the target preference (sessionMinutesResolved).
+    // This ensures:
+    //   - Full Session = actual built session (e.g., 42 min)
+    //   - 45 Min = compressed from actual (only if actual > 45)
+    //   - 30 Min = compressed from actual (only if actual > 30)
+    // Previously this was passing sessionMinutesResolved (e.g., 60) which caused
+    // shorter variants to appear "fuller" than the canonical full session.
+    // ==========================================================================
+    const canonicalFullDuration = effectiveSelection.totalEstimatedTime
+    
+    // [TASK 1] Session time truth audit
+    console.log('[session-time-truth-audit]', {
+      dayNumber: day.dayNumber,
+      sessionName: day.focus,
+      sessionLengthInput: sessionLength,
+      sessionMinutesResolved,
+      effectiveTotalEstimatedTime: effectiveSelection.totalEstimatedTime,
+      finisherMinutes: 0, // Not yet computed at this point
+      canonicalFullDuration,
+      previouslyWouldHaveUsed: sessionMinutesResolved,
+      nowUsing: canonicalFullDuration,
+      verdict: canonicalFullDuration === sessionMinutesResolved ? 'aligned' : 'fixed_mixed_duration_truth',
+    })
+    
     console.log('[session-variants-diagnostic]', {
       mainCount: effectiveSelection.main.length,
       totalEstimatedTime: effectiveSelection.totalEstimatedTime,
       sessionLength,
       sessionMinutesResolved,
+      canonicalFullDuration,
       hasWarmup: effectiveSelection.warmup.length > 0,
       hasCooldown: effectiveSelection.cooldown.length > 0,
       wasRescued: sessionWasRescued,
     })
-    variants = generateSessionVariants(effectiveSelection, sessionMinutesResolved)
+    variants = generateSessionVariants(effectiveSelection, canonicalFullDuration)
     middleStep = 'variants_generated'
     
     // Build adaptation notes
@@ -5206,8 +5234,10 @@ function generateAdaptiveSession(
     
     if (hasValidCoreSession && middleStep !== 'before_effective_selection' && middleStep !== 'effective_selection_built') {
       // STEP E: Graceful degradation - variants/finisher are optional, proceed with defaults
-      console.log('[session-finisher-skipped-due-to-helper-failure]', { middleStep, dayNumber: day.dayNumber })
-      variants = variants || [{ duration: sessionMinutesResolved, label: 'Full Session', selection: effectiveSelection, compressionLevel: 'none' }]
+      // [TASK 2] Use actual built session time for fallback, not target preference
+      const fallbackCanonicalDuration = effectiveSelection.totalEstimatedTime || sessionMinutesResolved
+      console.log('[session-finisher-skipped-due-to-helper-failure]', { middleStep, dayNumber: day.dayNumber, fallbackCanonicalDuration })
+      variants = variants || [{ duration: fallbackCanonicalDuration, label: 'Full Session', selection: effectiveSelection, compressionLevel: 'none' }]
       adaptationNotes = adaptationNotes || []
       rationale = rationale || getDayExplanation(day, GOAL_LABELS[primaryGoal])
       enduranceResult = enduranceResult || { shouldIncludeEndurance: false, blockType: null, duration: 4, rationale: 'Skipped due to helper failure', wasCondensed: false }

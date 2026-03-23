@@ -417,6 +417,7 @@ export function selectExercisesForSession(inputs: ExerciseSelectionInputs): Exer
   })
   
   // [exercise-expression] ISSUE A: Pass skillsForSession to enable multi-skill expression
+  // TASK 1-B: Pass weightedBenchmarks to fix ReferenceError in selectMainExercises
   const main = selectMainExercises(
   day,
   primaryGoal,
@@ -431,7 +432,8 @@ export function selectExercisesForSession(inputs: ExerciseSelectionInputs): Exer
   prerequisiteContext,
   skillsForSession,  // TASK 2: Skill allocations for expression-aware selection
   selectedSkills,    // Full selected skills list for reference
-  equipment          // Equipment for doctrine lookups
+  equipment,         // Equipment for doctrine lookups
+  weightedBenchmarks // TASK 1-B: Weighted benchmark data for load prescription
   )
   
   // [session-assembly] ISSUE C: Validate main exercises before proceeding
@@ -884,8 +886,21 @@ function selectMainExercises(
   prerequisiteContext?: AthletePrerequisiteContext,
   skillsForSession?: SessionSkillAllocation[],
   selectedSkills?: string[],
-  equipment?: EquipmentType[]
+  equipment?: EquipmentType[],
+  // TASK 1-A: Thread weightedBenchmarks explicitly to fix ReferenceError
+  weightedBenchmarks?: {
+    weightedPullUp?: { current?: WeightedBenchmark; pr?: WeightedPRBenchmark }
+    weightedDip?: { current?: WeightedBenchmark; pr?: WeightedPRBenchmark }
+  }
   ): SelectedExercise[] {
+  // [selection-contract] TASK 1-F: Verify weighted benchmarks threading
+  console.log('[selection-contract]', {
+    dayFocus: day.focus,
+    primaryGoal,
+    hasWeightedBenchmarks: !!weightedBenchmarks,
+    hasPullUpBenchmark: !!weightedBenchmarks?.weightedPullUp?.current,
+    hasDipBenchmark: !!weightedBenchmarks?.weightedDip?.current,
+  })
   const selected: SelectedExercise[] = []
   const usedIds = new Set<string>()
   

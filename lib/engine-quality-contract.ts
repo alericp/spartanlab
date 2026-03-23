@@ -2257,6 +2257,11 @@ export type ExerciseSelectionReason =
   | 'equipment_fallback'         // Alternative due to equipment constraint
   | 'session_role_fill'          // Filling session role requirement
   | 'doctrine_recommended'       // Doctrine mapping recommended this
+  // TASK 1: Constraint-aware fallback reasons for skill exposure too low scenarios
+  | 'constraint_fallback_support'  // Support work due to constraint limiting direct skill expression
+  | 'constraint_fallback_limiter'  // Limiter correction work in constrained session
+  | 'constraint_fallback_core'     // Core work selected in constrained session
+  | 'constraint_fallback_general'  // General strength fallback when constrained
   | 'unknown'                    // Fallback when reason cannot be determined
 
 /**

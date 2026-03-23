@@ -1643,13 +1643,45 @@ function selectMainExercises(
   });
   
   // ==========================================================================
+  // TASK 1-B/D: Constraint-aware session expression detection
+  // Detect if athlete's constraints require downgraded expression BEFORE selection
+  // ==========================================================================
+  const isConstrainedSkillSession = constraintType && (
+    constraintType.includes('low') ||
+    constraintType.includes('deficit') ||
+    constraintType.includes('exposure') ||
+    constraintType === 'skill_exposure_too_low' ||
+    constraintType === 'skill_density_deficit'
+  )
+  
+  // Check if we can actually find viable direct skill exercises for this goal
+  const potentialDirectSkillPool = [...availableSkills, ...goalExercises.filter(e => e.category === 'skill')]
+    .filter(e => e.transferTo?.some(t => t.toLowerCase().includes(primaryGoal.toLowerCase())))
+    .filter(e => hasRequiredEquipment(e, equipment || []))
+  
+  // If constrained AND no viable direct skill pool, force support expression mode
+  const mustDowngradeToSupport = isConstrainedSkillSession && potentialDirectSkillPool.length === 0
+  
+  if (mustDowngradeToSupport) {
+    console.log('[constraint-session-downgrade] Detected constrained skill session with empty direct pool:', {
+      constraintType,
+      primaryGoal,
+      dayFocus: day.focus,
+      directSkillPoolSize: potentialDirectSkillPool.length,
+      originalExpression: 'direct',
+      downgradedExpression: 'support',
+    })
+  }
+  
+  // ==========================================================================
   // Selection based on day focus
   // ==========================================================================
   
-  // 1. SKILL DAYS - Lead with skill work
+  // 1. SKILL DAYS - Lead with skill work (unless constrained)
   // [exercise-trace] TASK 2/5: Thread trace context through selection
   // [selection-compression-fix] ISSUE A/B: Now uses skillsForSession for ranking
-  if (day.focus === 'push_skill' || day.focus === 'pull_skill' || day.focus === 'skill_density') {
+  // TASK 1-D: If mustDowngradeToSupport, convert to support session path
+  if ((day.focus === 'push_skill' || day.focus === 'pull_skill' || day.focus === 'skill_density') && !mustDowngradeToSupport) {
     
     // [selection-compression-fix] ISSUE B: Find exercises for ALL skills in session allocation
     const sessionSkillsToExpress = skillsForSession && skillsForSession.length > 0
@@ -2297,6 +2329,106 @@ function selectMainExercises(
     })
   }
   
+  // ==========================================================================
+  // TASK 1-B/C: Constraint-safe fallback for empty sessions
+  // If we reach here with no exercises AND were supposed to downgrade, build support session
+  // ==========================================================================
+  if (selected.length === 0 && mustDowngradeToSupport) {
+    console.log('[constraint-session-fallback] Building constraint-safe support session:', {
+      primaryGoal,
+      dayFocus: day.focus,
+      constraintType,
+    })
+    
+    // Deterministic fallback chain for constrained Planche/skill sessions
+    // TASK 1-C: Priority order - support strength > limiter correction > core > general
+    
+    // Step 1: Goal-relevant support strength
+    const goalSupportExercises = availableStrength.filter(e => 
+      e.transferTo?.some(t => t.toLowerCase().includes(primaryGoal.toLowerCase())) ||
+      (primaryGoal === 'planche' && (e.movementFamily === 'push' || e.tags?.includes('straight_arm'))) ||
+      (primaryGoal === 'front_lever' && (e.movementFamily === 'pull' || e.tags?.includes('straight_arm'))) ||
+      (primaryGoal === 'muscle_up' && (e.movementFamily === 'pull' || e.movementFamily === 'push'))
+    )
+    
+    for (const ex of goalSupportExercises.slice(0, 2)) {
+      if (selected.length >= maxExercises - 1) break
+      const added = addExercise(ex, `[Constrained] ${primaryGoal} support strength`, undefined, undefined, undefined, 'standalone', {
+        primarySelectionReason: 'constraint_fallback_support',
+        sessionRole: 'strength_support',
+        expressionMode: 'strength_support',
+        influencingSkills: [{ skillId: primaryGoal, influence: 'primary', expressionMode: 'support' }],
+        limiterInfluence: constraintType || undefined,
+      })
+      if (added) {
+        console.log('[constraint-session-fallback] Added support exercise:', ex.id)
+      }
+    }
+    
+    // Step 2: If still empty, add limiter-correction exercises
+    if (selected.length === 0) {
+      const limiterExercises = availableAccessory.filter(e => 
+        e.tags?.includes('prehab') || 
+        e.tags?.includes('mobility') ||
+        e.transferTo?.some(t => t.toLowerCase().includes(primaryGoal.toLowerCase()))
+      )
+      
+      for (const ex of limiterExercises.slice(0, 2)) {
+        if (selected.length >= maxExercises - 1) break
+        addExercise(ex, `[Constrained] Limiter correction for ${primaryGoal}`, undefined, undefined, undefined, 'standalone', {
+          primarySelectionReason: 'constraint_fallback_limiter',
+          sessionRole: 'support_volume',
+          expressionMode: 'prehab_focus',
+          limiterInfluence: constraintType || undefined,
+        })
+      }
+    }
+    
+    // Step 3: If still empty, add goal-relevant core
+    if (selected.length === 0) {
+      const coreForGoal = availableCore.filter(e => 
+        e.transferTo?.some(t => t.toLowerCase().includes(primaryGoal.toLowerCase())) ||
+        (primaryGoal === 'planche' && e.tags?.includes('compression')) ||
+        (primaryGoal === 'front_lever' && e.tags?.includes('anti_extension'))
+      )
+      
+      for (const ex of coreForGoal.slice(0, 2)) {
+        if (selected.length >= maxExercises - 1) break
+        addExercise(ex, `[Constrained] Core for ${primaryGoal}`, undefined, undefined, undefined, 'standalone', {
+          primarySelectionReason: 'constraint_fallback_core',
+          sessionRole: 'core',
+          expressionMode: 'core_focus',
+        })
+      }
+    }
+    
+    // Step 4: Final fallback - any goal-compatible strength
+    if (selected.length === 0 && availableStrength.length > 0) {
+      const fallbackStrength = availableStrength
+        .sort((a, b) => (b.carryover || 0) - (a.carryover || 0))
+        .slice(0, 3)
+      
+      for (const ex of fallbackStrength) {
+        if (selected.length >= maxExercises - 1) break
+        addExercise(ex, `[Constrained] General strength fallback`, undefined, undefined, undefined, 'standalone', {
+          primarySelectionReason: 'constraint_fallback_general',
+          sessionRole: 'strength_support',
+          expressionMode: 'strength_support',
+        })
+      }
+    }
+    
+    console.log('[constraint-session-final]', {
+      primaryGoal,
+      dayFocus: day.focus,
+      constraintType,
+      originalExpression: 'direct',
+      downgradedExpression: 'support',
+      finalExerciseCount: selected.length,
+      exercises: selected.map(e => e.exercise.id),
+    })
+  }
+  
   // Add constraint-responsive exercise if applicable
   if (constraintType && selected.length < maxExercises) {
     const constraintExercise = getConstraintTargetedExercise(
@@ -2405,6 +2537,57 @@ function selectMainExercises(
     })
   }
   
+  // ==========================================================================
+  // TASK 1-B: Last resort minimum viable session before return
+  // If we somehow still have no exercises, build minimal support session
+  // ==========================================================================
+  if (selected.length === 0) {
+    console.log('[constraint-session-fallback] Final fallback - building minimum viable session:', {
+      primaryGoal,
+      dayFocus: day.focus,
+      constraintType: constraintType || 'none',
+      mustDowngradeToSupport,
+    })
+    
+    // Try to add any available strength exercises
+    const lastResortStrength = availableStrength
+      .filter(e => !usedIds.has(e.id))
+      .sort((a, b) => (b.carryover || 0) - (a.carryover || 0))
+      .slice(0, 3)
+    
+    for (const ex of lastResortStrength) {
+      if (selected.length >= maxExercises) break
+      addExercise(ex, `[Last Resort] General strength`, undefined, undefined, undefined, 'standalone', {
+        primarySelectionReason: 'constraint_fallback_general',
+        sessionRole: 'strength_support',
+        expressionMode: 'strength_support',
+      })
+    }
+    
+    // If still empty, add any core exercises
+    if (selected.length === 0) {
+      const lastResortCore = availableCore
+        .filter(e => !usedIds.has(e.id))
+        .slice(0, 2)
+      
+      for (const ex of lastResortCore) {
+        if (selected.length >= maxExercises) break
+        addExercise(ex, `[Last Resort] Core work`, undefined, undefined, undefined, 'standalone', {
+          primarySelectionReason: 'constraint_fallback_core',
+          sessionRole: 'core',
+          expressionMode: 'core_focus',
+        })
+      }
+    }
+    
+    console.log('[constraint-session-final] Last resort session built:', {
+      primaryGoal,
+      constraintType: constraintType || 'none',
+      finalExerciseCount: selected.length,
+      exercises: selected.map(e => e.exercise.id),
+    })
+  }
+  
   // TASK 6: Final deduplication pass to remove any duplicate exercises
   const deduplicatedSelected = dedupeSelectedExercises(selected)
   if (deduplicatedSelected.length !== selected.length) {
@@ -2413,16 +2596,17 @@ function selectMainExercises(
   
   // [session-assembly] ISSUE C: Log warning if exercise pool is too thin
   if (deduplicatedSelected.length === 0) {
-    console.warn('[session-assembly] WARNING: selectMainExercises returned 0 exercises', {
+    console.warn('[session-assembly] WARNING: selectMainExercises returned 0 exercises after all fallbacks', {
       dayFocus: day.focus,
       primaryGoal,
       availableSkillsCount: availableSkills.length,
       availableStrengthCount: availableStrength.length,
       goalExercisesCount: goalExercises.length,
       maxExercises,
+      constraintType: constraintType || 'none',
     })
   } else if (deduplicatedSelected.length < Math.min(3, maxExercises)) {
-    console.warn('[session-assembly] WARNING: selectMainExercises returned fewer than expected exercises', {
+    console.log('[session-assembly] Note: Session has fewer exercises than typical', {
       selected: deduplicatedSelected.length,
       expected: Math.min(3, maxExercises),
       dayFocus: day.focus,
@@ -2634,16 +2818,55 @@ export function buildFallbackSelectionForSession(
   
   const wasRescued = rescueResult.length > 0
   
+  // ==========================================================================
+  // TASK 1-F: Pre-return structural validator for fallback-built items
+  // Ensure all rescued exercises have required fields for mapping/validation
+  // ==========================================================================
+  const validatedResult = rescueResult.filter((item, idx) => {
+    const ex = item.exercise
+    const hasRequiredFields = 
+      ex.id && typeof ex.id === 'string' && ex.id.length > 0 &&
+      ex.name && typeof ex.name === 'string' && ex.name.length > 0 &&
+      ex.category && typeof ex.category === 'string' &&
+      typeof item.sets === 'number' && item.sets > 0 &&
+      item.repsOrTime && typeof item.repsOrTime === 'string'
+    
+    if (!hasRequiredFields) {
+      console.warn('[session-rescue-item-repair] Malformed rescue item at index', idx, {
+        hasId: !!ex.id,
+        hasName: !!ex.name,
+        hasCategory: !!ex.category,
+        hasSets: typeof item.sets === 'number' && item.sets > 0,
+        hasReps: !!item.repsOrTime,
+      })
+      
+      // Attempt repair rather than drop
+      if (!ex.id) item.exercise.id = `rescue_repaired_${Date.now()}_${idx}`
+      if (!ex.name) item.exercise.name = 'Rescue Exercise'
+      if (!ex.category) item.exercise.category = 'strength'
+      if (typeof item.sets !== 'number' || item.sets <= 0) item.sets = 3
+      if (!item.repsOrTime) item.repsOrTime = '8-12'
+      
+      console.log('[session-rescue-item-repaired]', {
+        index: idx,
+        repairedId: item.exercise.id,
+        repairedName: item.exercise.name,
+      })
+    }
+    
+    return true // Keep all items after repair
+  })
+  
   console.log(wasRescued ? '[session-rescue-success]' : '[session-rescue-failed]', {
     dayFocus,
     primaryGoal,
     rescuePath,
-    finalMainCount: rescueResult.length,
+    finalMainCount: validatedResult.length,
     equipmentCount: equipment.length,
-    exercises: rescueResult.map(e => e.exercise.name),
+    exercises: validatedResult.map(e => e.exercise.name),
   })
   
-  return { main: rescueResult, rescuePath, wasRescued }
+  return { main: validatedResult, rescuePath, wasRescued }
 }
 
 // =============================================================================

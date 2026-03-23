@@ -4496,6 +4496,21 @@ function generateAdaptiveSession(
     sessionStep,
   })
   
+  // [adaptive-structure] TASK C: Log session intensity variation for adaptive scheduling
+  console.log('[adaptive-structure] Session intensity profile:', {
+    dayNumber: day.dayNumber,
+    dayFocus: day.focus,
+    targetIntensity: day.targetIntensity || 'moderate',
+    sessionIndex: context.sessionIndex || 0,
+    totalSessions: context.totalSessions || 1,
+    intensityLabel: day.targetIntensity === 'high' ? 'HEAVY' 
+      : day.targetIntensity === 'low' ? 'LIGHT' 
+      : 'MODERATE',
+    sessionVarietyNote: context.sessionIndex !== undefined
+      ? `Session ${context.sessionIndex + 1} of ${context.totalSessions}: ${day.focus} (${day.targetIntensity || 'moderate'} intensity)`
+      : undefined,
+  })
+  
   // ==========================================================================
   // STEP B: Wrap entire function body in try/catch for lifecycle classification
   // ==========================================================================

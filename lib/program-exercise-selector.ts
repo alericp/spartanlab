@@ -1658,33 +1658,57 @@ function selectMainExercises(
   });
   
   // ==========================================================================
-  // TASK 1-B/D: Constraint-aware session expression detection
-  // Detect if athlete's constraints require downgraded expression BEFORE selection
+  // [constraint-balance] TASK A/B: REBALANCED constraint-aware selection
+  // Constraints should NOT suppress skill work - they should restructure it safely
   // ==========================================================================
-  const isConstrainedSkillSession = constraintType && (
-    constraintType.includes('low') ||
-    constraintType.includes('deficit') ||
-    constraintType.includes('exposure') ||
-    constraintType === 'skill_exposure_too_low' ||
-    constraintType === 'skill_density_deficit'
-  )
   
   // Check if we can actually find viable direct skill exercises for this goal
+  // [exercise-selection] TASK B: Expanded pool search - include strength exercises with transfer
   const potentialDirectSkillPool = [...availableSkills, ...goalExercises.filter(e => e.category === 'skill')]
     .filter(e => e.transferTo?.some(t => t.toLowerCase().includes(primaryGoal.toLowerCase())))
     .filter(e => hasRequiredEquipment(e, equipment || []))
   
-  // If constrained AND no viable direct skill pool, force support expression mode
-  const mustDowngradeToSupport = isConstrainedSkillSession && potentialDirectSkillPool.length === 0
+  // [exercise-selection] TASK B: Also check strength exercises that transfer to goal
+  const potentialStrengthSupport = availableStrength
+    .filter(e => e.transferTo?.some(t => t.toLowerCase().includes(primaryGoal.toLowerCase())))
+    .filter(e => hasRequiredEquipment(e, equipment || []))
+  
+  // [constraint-balance] TASK A: CHANGED BEHAVIOR
+  // skill_density_deficit should NOT trigger downgrade - it means "increase frequency"
+  // Only TRULY limiting constraints should cause downgrade (e.g., injury, recovery)
+  const isTrulyLimitingConstraint = constraintType && (
+    constraintType.includes('recovery') ||
+    constraintType.includes('fatigue') ||
+    constraintType.includes('injury')
+  )
+  
+  // [constraint-balance] TASK A: Only downgrade if BOTH:
+  // 1. There's a true limiting constraint (not just low exposure)
+  // 2. AND there are zero viable skill exercises
+  const mustDowngradeToSupport = isTrulyLimitingConstraint && 
+    potentialDirectSkillPool.length === 0 && 
+    potentialStrengthSupport.length === 0
+  
+  // [exercise-selection] TASK B: Log exercise tier analysis
+  console.log('[exercise-selection] Exercise pool analysis:', {
+    primaryGoal,
+    dayFocus: day.focus,
+    constraintType: constraintType || 'none',
+    tier1_directSkill: potentialDirectSkillPool.length,
+    tier2_strengthSupport: potentialStrengthSupport.length,
+    tier3_generalAvailable: availableStrength.length,
+    isTrulyLimiting: isTrulyLimitingConstraint,
+    mustDowngrade: mustDowngradeToSupport,
+  })
   
   if (mustDowngradeToSupport) {
-    console.log('[constraint-session-downgrade] Detected constrained skill session with empty direct pool:', {
+    console.log('[constraint-session-downgrade] Detected truly constrained session:', {
       constraintType,
       primaryGoal,
       dayFocus: day.focus,
       directSkillPoolSize: potentialDirectSkillPool.length,
-      originalExpression: 'direct',
-      downgradedExpression: 'support',
+      strengthSupportPoolSize: potentialStrengthSupport.length,
+      reason: 'true_limiting_constraint_with_empty_pools',
     })
   }
   
@@ -2607,6 +2631,58 @@ function selectMainExercises(
   const deduplicatedSelected = dedupeSelectedExercises(selected)
   if (deduplicatedSelected.length !== selected.length) {
     console.log('[exercise-selector] TASK 6: Removed', selected.length - deduplicatedSelected.length, 'duplicate exercises')
+  }
+  
+  // ==========================================================================
+  // [skill-exposure-check] TASK A/B: Minimum skill floor enforcement
+  // Even under constraints, skill sessions MUST include direct skill work
+  // ==========================================================================
+  const isSkillFocusedDay = day.focus === 'push_skill' || day.focus === 'pull_skill' || day.focus === 'skill_density'
+  const directSkillExercises = deduplicatedSelected.filter(e => 
+    e.exercise.category === 'skill' || 
+    e.selectionContext?.sessionRole === 'skill_primary' ||
+    e.selectionContext?.sessionRole === 'skill_secondary'
+  )
+  const progressionExercises = deduplicatedSelected.filter(e =>
+    e.exercise.progressionLevel !== undefined ||
+    e.selectionContext?.expressionMode === 'direct_intensity' ||
+    e.selectionContext?.expressionMode === 'technical_focus'
+  )
+  
+  console.log('[skill-exposure-check] Session skill analysis:', {
+    dayFocus: day.focus,
+    primaryGoal,
+    totalExercises: deduplicatedSelected.length,
+    directSkillCount: directSkillExercises.length,
+    progressionCount: progressionExercises.length,
+    isSkillFocusedDay,
+    constraintType: constraintType || 'none',
+    meetsMinimumSkillFloor: !isSkillFocusedDay || directSkillExercises.length >= 2,
+    recommendation: directSkillExercises.length < 2 && isSkillFocusedDay 
+      ? 'NEEDS_MORE_SKILL_WORK' 
+      : 'ADEQUATE',
+  })
+  
+  // [skill-exposure-check] TASK A: Enforce minimum 2 skill exercises on skill days
+  if (isSkillFocusedDay && directSkillExercises.length < 2 && !mustDowngradeToSupport) {
+    console.log('[skill-exposure-check] Enforcing minimum skill floor - attempting to add skill exercises')
+    
+    // Find unused skill exercises that transfer to goal
+    const unusedSkillCandidates = [...availableSkills, ...goalExercises.filter(e => e.category === 'skill')]
+      .filter(e => !usedIds.has(e.id))
+      .filter(e => e.transferTo?.some(t => t.toLowerCase().includes(primaryGoal.toLowerCase())))
+      .slice(0, 2 - directSkillExercises.length)
+    
+    for (const candidate of unusedSkillCandidates) {
+      if (deduplicatedSelected.length >= maxExercises) break
+      addExercise(candidate, `[Skill Floor] Direct ${primaryGoal} work`, undefined, undefined, undefined, 'standalone', {
+        primarySelectionReason: 'skill_floor_enforcement',
+        sessionRole: 'skill_secondary',
+        expressionMode: 'technical_focus',
+        influencingSkills: [{ skillId: primaryGoal, influence: 'primary', expressionMode: 'direct' }],
+      })
+      console.log('[skill-exposure-check] Added skill floor exercise:', candidate.id)
+    }
   }
   
   // [session-assembly] ISSUE C: Log warning if exercise pool is too thin

@@ -361,6 +361,13 @@ export function generateSessionVariants(
   fullSelection: ExerciseSelection,
   originalMinutes: number
 ): SessionVariant[] {
+  // ==========================================================================
+  // [TASK 1-5] SESSION VARIANT GENERATION WITH TRUTH GUARDS
+  // - originalMinutes should now be the ACTUAL canonical full session duration
+  // - Only generate variants that are meaningfully different from full
+  // - Enforce monotonicity: Full >= 45 >= 30
+  // ==========================================================================
+  
   // STEP C: Validate inputs to prevent downstream failures
   // Ensure originalMinutes is a valid number
   let safeOriginalMinutes = originalMinutes
@@ -377,6 +384,8 @@ export function generateSessionVariants(
     totalEstimatedTime: Number.isFinite(fullSelection?.totalEstimatedTime) ? fullSelection.totalEstimatedTime : safeOriginalMinutes,
   }
   
+  const fullExerciseCount = safeSelection.main.length
+  
   const variants: SessionVariant[] = [
     {
       duration: safeOriginalMinutes,
@@ -386,8 +395,14 @@ export function generateSessionVariants(
     },
   ]
   
-  // 45 min variant
-  if (safeOriginalMinutes > 45) {
+  let variant45: SessionVariant | null = null
+  let variant30: SessionVariant | null = null
+  
+  // [TASK 5] Only generate 45 min variant if full session is meaningfully longer than 45
+  // Adding 5-minute buffer to prevent near-identical variants
+  const MEANINGFUL_DIFFERENCE_THRESHOLD = 5
+  
+  if (safeOriginalMinutes > 45 + MEANINGFUL_DIFFERENCE_THRESHOLD) {
     try {
       const compressed45 = compressSession({
         selection: safeSelection,
@@ -395,20 +410,36 @@ export function generateSessionVariants(
         originalMinutes: safeOriginalMinutes,
         preserveSkillWork: true,
       })
-      variants.push({
-        duration: 45,
-        label: '45 Min',
-        selection: compressed45.compressed,
-        compressionLevel: compressed45.compressionLevel,
-      })
+      
+      // [TASK 4] Monotonicity guard - 45 min must not be fuller than Full
+      const count45 = compressed45.compressed.main.length
+      if (count45 <= fullExerciseCount) {
+        variant45 = {
+          duration: 45,
+          label: '45 Min',
+          selection: compressed45.compressed,
+          compressionLevel: compressed45.compressionLevel,
+        }
+        variants.push(variant45)
+      } else {
+        console.warn('[session-variants] Skipping 45min variant - would be fuller than full session', {
+          fullCount: fullExerciseCount,
+          variant45Count: count45,
+        })
+      }
     } catch (err) {
       console.warn('[session-variants] Failed to generate 45min variant:', err instanceof Error ? err.message : String(err))
-      // Continue without 45min variant
     }
+  } else if (safeOriginalMinutes > 45) {
+    // [TASK 5] Session is between 45-50 min - don't show misleading 45 min button
+    console.log('[session-variants] Skipping 45min variant - full session already near 45 min', {
+      fullDuration: safeOriginalMinutes,
+      threshold: 45 + MEANINGFUL_DIFFERENCE_THRESHOLD,
+    })
   }
   
-  // 30 min variant
-  if (safeOriginalMinutes > 30) {
+  // [TASK 5] Only generate 30 min variant if full session is meaningfully longer than 30
+  if (safeOriginalMinutes > 30 + MEANINGFUL_DIFFERENCE_THRESHOLD) {
     try {
       const compressed30 = compressSession({
         selection: safeSelection,
@@ -416,17 +447,70 @@ export function generateSessionVariants(
         originalMinutes: safeOriginalMinutes,
         preserveSkillWork: true,
       })
-      variants.push({
-        duration: 30,
-        label: '30 Min',
-        selection: compressed30.compressed,
-        compressionLevel: compressed30.compressionLevel,
-      })
+      
+      const count30 = compressed30.compressed.main.length
+      const count45ForComparison = variant45?.selection.main.length ?? fullExerciseCount
+      
+      // [TASK 4] Monotonicity guard - 30 min must not be fuller than 45 min (or Full if no 45)
+      if (count30 <= count45ForComparison && count30 <= fullExerciseCount) {
+        variant30 = {
+          duration: 30,
+          label: '30 Min',
+          selection: compressed30.compressed,
+          compressionLevel: compressed30.compressionLevel,
+        }
+        variants.push(variant30)
+      } else {
+        console.warn('[session-variants] Skipping 30min variant - would be fuller than 45/full', {
+          fullCount: fullExerciseCount,
+          count45: count45ForComparison,
+          count30,
+        })
+      }
     } catch (err) {
       console.warn('[session-variants] Failed to generate 30min variant:', err instanceof Error ? err.message : String(err))
-      // Continue without 30min variant
     }
+  } else if (safeOriginalMinutes > 30) {
+    // [TASK 5] Session is between 30-35 min - don't show misleading 30 min button
+    console.log('[session-variants] Skipping 30min variant - full session already near 30 min', {
+      fullDuration: safeOriginalMinutes,
+      threshold: 30 + MEANINGFUL_DIFFERENCE_THRESHOLD,
+    })
   }
+  
+  // ==========================================================================
+  // [TASK 4] VARIANT MONOTONICITY AUDIT
+  // ==========================================================================
+  const duration45 = variant45?.duration ?? null
+  const duration30 = variant30?.duration ?? null
+  const count45 = variant45?.selection.main.length ?? null
+  const count30 = variant30?.selection.main.length ?? null
+  
+  const monotonicityPassed = 
+    (duration45 === null || safeOriginalMinutes >= duration45) &&
+    (duration30 === null || (duration45 ?? safeOriginalMinutes) >= duration30) &&
+    (count45 === null || fullExerciseCount >= count45) &&
+    (count30 === null || (count45 ?? fullExerciseCount) >= count30)
+  
+  let violationReason = ''
+  if (!monotonicityPassed) {
+    if (duration45 !== null && safeOriginalMinutes < duration45) violationReason = 'full_duration_less_than_45'
+    else if (duration30 !== null && (duration45 ?? safeOriginalMinutes) < duration30) violationReason = '45_duration_less_than_30'
+    else if (count45 !== null && fullExerciseCount < count45) violationReason = 'full_count_less_than_45'
+    else if (count30 !== null && (count45 ?? fullExerciseCount) < count30) violationReason = '45_count_less_than_30'
+  }
+  
+  console.log('[variant-monotonicity-audit]', {
+    fullDuration: safeOriginalMinutes,
+    duration45,
+    duration30,
+    fullExerciseCount,
+    count45,
+    count30,
+    monotonicityPassed,
+    violationReason: violationReason || null,
+    variantsGenerated: variants.length,
+  })
   
   return variants
 }

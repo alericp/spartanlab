@@ -353,6 +353,56 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
       activeExerciseCount: activeSessionView.exerciseCount,
       activeEstimatedMinutes: activeSessionView.estimatedMinutes,
     })
+    
+    // ==========================================================================
+    // [TASK 7] DEFAULT SESSION TIME VERDICT
+    // Explain why full session may appear shorter than expected
+    // ==========================================================================
+    const fullDuration = fullVariant?.duration || session.estimatedMinutes
+    const isFullShorterThanTarget = fullDuration < 45 // Common "expected" session length
+    
+    let defaultTimeVerdict = 'full_session_truthful_and_shorter_by_design'
+    if (fullExerciseNames.length < 3) {
+      defaultTimeVerdict = 'full_session_underbuilt'
+    } else if (!variant45 && !variant30 && fullDuration < 40) {
+      defaultTimeVerdict = 'full_session_compact_no_variants_needed'
+    }
+    
+    console.log('[default-session-time-verdict]', {
+      sessionDay: session.dayNumber,
+      canonicalFullDuration: fullDuration,
+      isFullShorterThanTarget,
+      fullExerciseCount: fullExerciseNames.length,
+      variantsAvailable: session.variants?.length || 1,
+      finalVerdict: defaultTimeVerdict,
+    })
+    
+    // ==========================================================================
+    // [TASK 9] FINAL SESSION-TIME CONSISTENCY AUDIT
+    // ==========================================================================
+    const baseMatchesFull = session.estimatedMinutes === fullVariant?.duration
+    const variantDurations = session.variants?.map(v => v.duration) || []
+    
+    let sessionTimeFinalVerdict = 'fully_aligned'
+    if (!baseMatchesFull) {
+      sessionTimeFinalVerdict = 'base_variant_mismatch_remaining'
+    } else if (variant45 && fullExerciseNames.length < variant45Names.length) {
+      sessionTimeFinalVerdict = 'variant_generation_still_misaligned'
+    } else if (fullExerciseNames.length < 3) {
+      sessionTimeFinalVerdict = 'session_underbuilt_but_truthful'
+    }
+    
+    console.log('[session-time-final-verdict]', {
+      dayNumber: session.dayNumber,
+      baseEstimatedMinutes: session.estimatedMinutes,
+      fullVariantDuration: fullVariant?.duration,
+      selectedVariantDurations: variantDurations,
+      baseExerciseCount: session.exercises?.length || 0,
+      fullVariantExerciseCount: fullExerciseNames.length,
+      visibleButtonLabels: session.variants?.map(v => v.label) || ['Full Session'],
+      baseAndFullAgree: baseMatchesFull,
+      finalVerdict: sessionTimeFinalVerdict,
+    })
   }
 
   return (

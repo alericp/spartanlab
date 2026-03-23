@@ -1107,6 +1107,21 @@ setProgramModules({
           secondaryGoal: freshRebuildInput.secondaryGoal || 'none',
         })
         
+        // ==========================================================================
+        // [TASK 4] REGENERATE EQUIPMENT INPUT AUDIT
+        // Verify equipment is correctly passed to the generator
+        // ==========================================================================
+        const regenEquipment = freshRebuildInput.equipment || []
+        console.log('[regenerate-equipment-input-audit]', {
+          canonicalEquipmentBeforeBuild: canonicalProfile.equipmentAvailable || canonicalProfile.equipment,
+          normalizedEquipmentPassedToGenerator: regenEquipment,
+          pullUpBarAvailable: regenEquipment.includes('pullup_bar') || regenEquipment.includes('pull_bar'),
+          dipBarsAvailable: regenEquipment.includes('dip_bars'),
+          ringsAvailable: regenEquipment.includes('rings'),
+          bandsAvailable: regenEquipment.includes('resistance_bands') || regenEquipment.includes('bands'),
+          weightsAvailable: regenEquipment.includes('weights'),
+        })
+        
         // [program-build] REGEN STAGE 2: Record regeneration event
         regenerateStage = 'recording_event'
         programModules.recordProgramEnd?.('regenerate')

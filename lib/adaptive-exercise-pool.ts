@@ -2440,12 +2440,45 @@ export function getExercisesByMovement(pattern: MovementPattern): Exercise[] {
   return getAllExercises().filter(e => e.movementPattern === pattern)
 }
 
+// =============================================================================
+// [TASK 2] EQUIPMENT KEY ALIAS MAPPING
+// The codebase has TWO EquipmentType definitions with different keys:
+//   - athlete-profile.ts: 'pullup_bar', 'resistance_bands'
+//   - adaptive-exercise-pool.ts: 'pull_bar', 'bands'
+// This ensures both can be recognized when checking equipment availability.
+// =============================================================================
+const EQUIPMENT_ALIASES: Record<string, string[]> = {
+  'pull_bar': ['pullup_bar', 'pull-up-bar', 'pullUpBar'],
+  'bands': ['resistance_bands', 'resistanceBands'],
+  'dip_bars': ['dipBars'],
+  'rings': [],
+  'parallettes': [],
+  'weights': [],
+  'floor': [],
+  'wall': [],
+}
+
+/**
+ * Check if a specific equipment type is available, accounting for key aliases.
+ * This handles the mismatch between athlete-profile.ts ('pullup_bar') and 
+ * adaptive-exercise-pool.ts ('pull_bar').
+ */
+function isEquipmentAvailable(equipmentNeeded: EquipmentType, available: EquipmentType[]): boolean {
+  // Direct match
+  if (available.includes(equipmentNeeded)) return true
+  
+  // Check aliases - if the exercise needs 'pull_bar', accept 'pullup_bar' in available
+  const aliases = EQUIPMENT_ALIASES[equipmentNeeded] || []
+  return aliases.some(alias => available.includes(alias as EquipmentType))
+}
+
 export function hasRequiredEquipment(exercise: Exercise, available: EquipmentType[]): boolean {
   // Floor and wall are always available
   const alwaysAvailable: EquipmentType[] = ['floor', 'wall']
   const allAvailable = [...alwaysAvailable, ...available]
   
-  return exercise.equipment.some(eq => allAvailable.includes(eq))
+  // [TASK 2] Use alias-aware equipment checking
+  return exercise.equipment.some(eq => isEquipmentAvailable(eq, allAvailable))
 }
 
 // =============================================================================

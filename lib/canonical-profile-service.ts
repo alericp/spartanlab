@@ -2044,7 +2044,25 @@ export function checkProfileProgramDrift(program: {
     })
   }
   
-  if (profile.trainingDaysPerWeek !== program.trainingDaysPerWeek) {
+  // ==========================================================================
+  // [program-truth-fix] TASK C: Fix trainingDaysPerWeek comparison for flexible schedules
+  // For flexible users:
+  // - profile.trainingDaysPerWeek may be null/undefined (meaning "adaptive")
+  // - program.trainingDaysPerWeek is always the effective generated count
+  // - This should NOT trigger drift if both are flexible mode
+  // For static users:
+  // - profile and program should match exactly
+  // ==========================================================================
+  const isFlexibleProfile = profile.scheduleMode === 'flexible' || profile.scheduleMode === 'adaptive'
+  const isFlexibleProgram = program.scheduleMode === 'flexible' || program.scheduleMode === 'adaptive'
+  
+  // Only compare trainingDaysPerWeek if:
+  // 1. Both are static mode (must match)
+  // 2. Or there's a mode mismatch (already caught above)
+  // Skip comparison if both are flexible - the effective days don't need to match the "identity"
+  const shouldCompareTrainingDays = !isFlexibleProfile || !isFlexibleProgram
+  
+  if (shouldCompareTrainingDays && profile.trainingDaysPerWeek !== program.trainingDaysPerWeek) {
     driftFields.push({
       field: 'trainingDaysPerWeek',
       profileValue: profile.trainingDaysPerWeek,

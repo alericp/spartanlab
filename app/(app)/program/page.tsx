@@ -171,7 +171,7 @@ export default function ProgramPage() {
     }
     
     // Method 2: Fallback to field-by-field comparison (legacy programs without signature)
-    return checkProfileProgramDrift({
+    const driftResult = checkProfileProgramDrift({
       primaryGoal: program.primaryGoal,
       secondaryGoal: (program as unknown as { secondaryGoal?: string }).secondaryGoal,
       trainingDaysPerWeek: program.trainingDaysPerWeek,
@@ -181,6 +181,20 @@ export default function ProgramPage() {
       jointCautions: program.jointCautions,
       experienceLevel: program.experienceLevel,
     })
+    
+    // [program-truth-fix] TASK F: High-signal audit log for truth contradictions
+    console.log('[program-truth-audit]', {
+      activeProgramId: program.id,
+      programCreatedAt: program.createdAt,
+      isProgramStale: driftResult.isProgramStale,
+      driftFields: driftResult.driftFields.map(d => d.field),
+      recommendation: driftResult.recommendation,
+      programScheduleMode: (program as unknown as { scheduleMode?: string }).scheduleMode,
+      programTrainingDays: program.trainingDaysPerWeek,
+      sessionCount: program.sessions?.length || 0,
+    })
+    
+    return driftResult
   }, [program, mounted])
   
   // TASK 5: Store dynamically imported module references
@@ -619,32 +633,42 @@ export default function ProgramPage() {
           createdAt: newProgram.createdAt,
         })
         
-        // ==========================================================================
-        // [post-build-truth] TASK A: Persist builder inputs to canonical profile
-        // This ensures future drift detection uses the actual values from this build
-        // ==========================================================================
-        generationStage = 'persisting_canonical_profile'
-        console.log('[post-build-truth] STAGE 6d: Persisting builder inputs to canonical profile...')
-        try {
-          saveCanonicalProfile({
-            trainingDaysPerWeek: inputs.trainingDaysPerWeek ?? undefined,
-            sessionLengthMinutes: inputs.sessionLength ?? undefined,
-            // Preserve schedule mode: flexible stays flexible, static stays static
-            scheduleMode: inputs.scheduleMode === 'flexible' || inputs.scheduleMode === 'adaptive' 
-              ? 'flexible' 
-              : 'static',
-            equipmentAvailable: inputs.equipment ?? undefined,
-          })
-          console.log('[post-build-truth] STAGE 6d: Canonical profile updated', {
-            trainingDaysPerWeek: inputs.trainingDaysPerWeek,
-            sessionLength: inputs.sessionLength,
-            scheduleMode: inputs.scheduleMode,
-            equipmentCount: inputs.equipment?.length || 0,
-          })
-        } catch (profileErr) {
-          // Non-core: log but don't fail the build
-          console.warn('[post-build-truth] STAGE 6d: Canonical profile save failed (non-core):', profileErr)
-        }
+  // ==========================================================================
+  // [post-build-truth] TASK A: Persist builder inputs to canonical profile
+  // [program-truth-fix] TASK B: Save EFFECTIVE values from the built program, not inputs
+  // This ensures drift detection compares against what was actually generated
+  // ==========================================================================
+  generationStage = 'persisting_canonical_profile'
+  console.log('[post-build-truth] STAGE 6d: Persisting builder inputs to canonical profile...')
+  try {
+    // Use the program's actual values for consistent drift detection
+    const effectiveScheduleMode = inputs.scheduleMode === 'flexible' || inputs.scheduleMode === 'adaptive'
+      ? 'flexible'
+      : 'static'
+    
+    // For flexible mode: save null to indicate "adaptive" identity
+    // For static mode: save the actual generated days
+    const effectiveTrainingDays = effectiveScheduleMode === 'flexible'
+      ? null // Flexible users don't have a fixed day count identity
+      : (newProgram.trainingDaysPerWeek ?? inputs.trainingDaysPerWeek ?? undefined)
+    
+    saveCanonicalProfile({
+      trainingDaysPerWeek: effectiveTrainingDays ?? undefined,
+      sessionLengthMinutes: newProgram.sessionLength ?? inputs.sessionLength ?? undefined,
+      scheduleMode: effectiveScheduleMode,
+      equipmentAvailable: inputs.equipment ?? undefined,
+    })
+    console.log('[post-build-truth] STAGE 6d: Canonical profile updated', {
+      trainingDaysPerWeek: effectiveTrainingDays,
+      sessionLength: newProgram.sessionLength,
+      scheduleMode: effectiveScheduleMode,
+      equipmentCount: inputs.equipment?.length || 0,
+      fromProgram: true,
+    })
+  } catch (profileErr) {
+    // Non-core: log but don't fail the build
+    console.warn('[post-build-truth] STAGE 6d: Canonical profile save failed (non-core):', profileErr)
+  }
         
         // [program-build] STAGE 7: Update UI state
         generationStage = 'updating_ui'
@@ -1004,30 +1028,38 @@ export default function ProgramPage() {
           previousProgramId: program?.id,
         })
         
-        // ==========================================================================
-        // [post-build-truth] TASK A: Persist builder inputs to canonical profile on regen
-        // ==========================================================================
-        regenerateStage = 'persisting_canonical_profile'
-        console.log('[post-build-truth] REGEN STAGE 7d: Persisting builder inputs to canonical profile...')
-        try {
-          saveCanonicalProfile({
-            trainingDaysPerWeek: inputs.trainingDaysPerWeek ?? undefined,
-            sessionLengthMinutes: inputs.sessionLength ?? undefined,
-            scheduleMode: inputs.scheduleMode === 'flexible' || inputs.scheduleMode === 'adaptive' 
-              ? 'flexible' 
-              : 'static',
-            equipmentAvailable: inputs.equipment ?? undefined,
-          })
-          console.log('[post-build-truth] REGEN STAGE 7d: Canonical profile updated', {
-            trainingDaysPerWeek: inputs.trainingDaysPerWeek,
-            sessionLength: inputs.sessionLength,
-            scheduleMode: inputs.scheduleMode,
-            equipmentCount: inputs.equipment?.length || 0,
-          })
-        } catch (profileErr) {
-          // Non-core: log but don't fail the build
-          console.warn('[post-build-truth] REGEN STAGE 7d: Canonical profile save failed (non-core):', profileErr)
-        }
+  // ==========================================================================
+  // [post-build-truth] TASK A: Persist builder inputs to canonical profile on regen
+  // [program-truth-fix] TASK B: Save EFFECTIVE values from the built program
+  // ==========================================================================
+  regenerateStage = 'persisting_canonical_profile'
+  console.log('[post-build-truth] REGEN STAGE 7d: Persisting builder inputs to canonical profile...')
+  try {
+    const effectiveScheduleMode = inputs.scheduleMode === 'flexible' || inputs.scheduleMode === 'adaptive'
+      ? 'flexible'
+      : 'static'
+    
+    const effectiveTrainingDays = effectiveScheduleMode === 'flexible'
+      ? null
+      : (newProgram.trainingDaysPerWeek ?? inputs.trainingDaysPerWeek ?? undefined)
+    
+    saveCanonicalProfile({
+      trainingDaysPerWeek: effectiveTrainingDays ?? undefined,
+      sessionLengthMinutes: newProgram.sessionLength ?? inputs.sessionLength ?? undefined,
+      scheduleMode: effectiveScheduleMode,
+      equipmentAvailable: inputs.equipment ?? undefined,
+    })
+    console.log('[post-build-truth] REGEN STAGE 7d: Canonical profile updated', {
+      trainingDaysPerWeek: effectiveTrainingDays,
+      sessionLength: newProgram.sessionLength,
+      scheduleMode: effectiveScheduleMode,
+      equipmentCount: inputs.equipment?.length || 0,
+      fromProgram: true,
+    })
+  } catch (profileErr) {
+    // Non-core: log but don't fail the build
+    console.warn('[post-build-truth] REGEN STAGE 7d: Canonical profile save failed (non-core):', profileErr)
+  }
         
         // [program-rebuild-truth] REGEN STAGE 8: Update UI state
         regenerateStage = 'updating_ui'
@@ -1731,7 +1763,8 @@ export default function ProgramPage() {
             )}
             
             {/* [program-rebuild-truth] ISSUE C/E: Show current build status chip */}
-            {lastBuildResult && lastBuildResult.status === 'success' && (
+            {/* [program-truth-fix] TASK D: Only show "up to date" if NO drift exists */}
+            {lastBuildResult && lastBuildResult.status === 'success' && !profileProgramDrift?.isProgramStale && (
               <div className="flex items-center gap-2 text-xs text-green-500/80">
                 <div className="w-2 h-2 rounded-full bg-green-500" />
                 <span>Program up to date</span>

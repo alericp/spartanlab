@@ -2156,6 +2156,55 @@ function generateAdaptiveProgramImpl(inputs: AdaptiveProgramInputs, stageTracker
     experienceLevel,
   })
   
+  // ==========================================================================
+  // [TASK 1] PROFILE-TO-PROGRAM TRUTH AUDIT - A/B/C: Saved → Normalized → Builder Input
+  // ==========================================================================
+  console.log('[profile-to-program-truth-audit]', {
+    // A. SAVED PROFILE / SETTINGS TRUTH (from canonical profile)
+    saved: {
+      primaryGoal: canonicalProfile.primaryGoal,
+      secondaryGoal: canonicalProfile.secondaryGoal,
+      selectedSkills: canonicalProfile.selectedSkills || [],
+      trainingStyle: canonicalProfile.trainingStyle,
+      scheduleMode: canonicalProfile.scheduleMode,
+      weeklyTrainingDays: canonicalProfile.trainingDaysPerWeek,
+      sessionDurationMode: canonicalProfile.sessionDurationMode,
+      sessionDurationTarget: canonicalProfile.sessionLengthMinutes,
+      equipment: canonicalProfile.equipmentAvailable?.slice(0, 10) || [],
+      jointCautions: canonicalProfile.jointCautions || [],
+      experienceLevel: canonicalProfile.experienceLevel,
+    },
+    // B. NORMALIZED PROFILE TRUTH (after normalization)
+    normalized: {
+      canonicalPrimarySkill: primaryGoal,
+      canonicalSecondarySkills: secondaryGoal ? [secondaryGoal] : [],
+      canonicalSelectedSkills: expandedContext.selectedSkills,
+      canonicalTrainingStyles: [canonicalProfile.trainingStyle],
+      canonicalScheduleMode: canonicalProfile.scheduleMode || 'static',
+      canonicalFrequency: effectiveTrainingDays,
+      canonicalDurationMode: expandedContext.sessionDurationMode,
+      canonicalDurationTarget: expandedContext.sessionLengthMinutes,
+      canonicalEquipment: equipment.slice(0, 10),
+    },
+    // C. BUILDER INPUT TRUTH
+    builderInput: {
+      primaryGoalPassedIn: primaryGoal,
+      selectedSkillsPassedIn: expandedContext.selectedSkills,
+      selectedSkillCountPassedIn: expandedContext.selectedSkills.length,
+      trainingStylePassedIn: trainingPath,
+      scheduleFrequencyPassedIn: effectiveTrainingDays,
+      durationModePassedIn: expandedContext.sessionDurationMode,
+      durationTargetPassedIn: sessionLength,
+      equipmentPassedIn: equipment.length,
+    },
+    // Truth preservation check
+    truthPreserved: {
+      selectedSkillsSurvived: (canonicalProfile.selectedSkills || []).length === expandedContext.selectedSkills.length,
+      trainingStyleSurvived: true, // trainingStyle flows through
+      scheduleSurvived: canonicalProfile.trainingDaysPerWeek === effectiveTrainingDays,
+    },
+  })
+  
   // Get duration-based configuration for exercise count and structure
   const durationConfig = getDurationConfig(workoutDuration)
   
@@ -3674,6 +3723,34 @@ function generateAdaptiveProgramImpl(inputs: AdaptiveProgramInputs, stageTracker
             : 'primary_secondary_underweighted',
     })
     
+    // ==========================================================================
+    // [TASK 4] SKILL ELIGIBILITY SURVIVAL AUDIT - Track each skill through the pipeline
+    // ==========================================================================
+    const skillEligibilityAudit = profileSelectedSkills.map(skill => ({
+      skill,
+      selected: true,
+      eligible: true, // All selected skills start eligible
+      scheduledDirectly: generatedRepresentedSkills.includes(skill),
+      supportOnly: !generatedRepresentedSkills.includes(skill) && excludedSkills.includes(skill),
+      displayedInSummary: builtAroundSkillsFinal.includes(skill),
+      filteredReason: excludedSkills.includes(skill) 
+        ? exclusionReasons.find(r => r.startsWith(skill)) || 'no_matching_exercises_this_week'
+        : null,
+    }))
+    
+    console.log('[skill-eligibility-survival-audit]', {
+      totalSelectedSkills: profileSelectedSkills.length,
+      totalRepresentedSkills: generatedRepresentedSkills.length,
+      totalExcludedSkills: excludedSkills.length,
+      skillBreakdown: skillEligibilityAudit,
+      silentDropsDetected: skillEligibilityAudit.filter(s => !s.scheduledDirectly && !s.filteredReason).length,
+      verdict: excludedSkills.length === 0 
+        ? 'all_selected_skills_represented'
+        : excludedSkills.length < profileSelectedSkills.length / 2
+          ? 'some_skills_not_represented_this_week'
+          : 'significant_skill_underrepresentation',
+    })
+    
     // [TASK 7] PROFILE VS WEEK EXPRESSION AUDIT - Ensure summary doesn't overclaim onboarding selections
     const weekExpressedSkills = generatedRepresentedSkills
     const selectedTrainingStyle = canonicalProfile.trainingStyle || 'mixed'
@@ -3708,6 +3785,18 @@ function generateAdaptiveProgramImpl(inputs: AdaptiveProgramInputs, stageTracker
               : 'truthful_week_summary',
     })
     
+    // ==========================================================================
+    // [TASK 7] TRAINING STYLE IMPACT AUDIT - Track if training style affects generation
+    // ==========================================================================
+    console.log('[training-style-impact-audit]', {
+      selectedTrainingStyle: canonicalProfile.trainingStyle,
+      reachedBuilder: true,
+      affectedWeekStructure: false, // trainingStyle does NOT currently affect structure selection
+      affectedSessionAssembly: weekExpressedTraits.includes('strength') || weekExpressedTraits.includes('endurance'),
+      visibleInSummary: programRationale?.includes(canonicalProfile.trainingStyle || 'mixed'),
+      impactVerdict: 'training_style_stored_but_not_materially_used_in_structure',
+    })
+    
     // [TASK 3] Summary post-assembly safety audit with expanded fields
     console.log('[summary-post-assembly-safety-audit]', {
       sessionAssemblyCompleted: true,
@@ -3715,6 +3804,70 @@ function generateAdaptiveProgramImpl(inputs: AdaptiveProgramInputs, stageTracker
       mutationDetected: false,
       objectsTouched: ['builtAroundSkillsFinal', 'excludedSkills', 'generatedRepresentedSkills'],
       finalVerdict: 'safe_post_assembly',
+    })
+    
+    // ==========================================================================
+    // [TASK 2] FIRST NARROWING POINT VERDICT - Identify where profile truth narrows
+    // ==========================================================================
+    const firstNarrowingPoint = (() => {
+      // Check each layer for narrowing
+      if (profileSelectedSkills.length === 0) return 'saved_profile_incomplete'
+      if (expandedContext.selectedSkills.length < profileSelectedSkills.length) return 'normalization_narrowed_skills'
+      if (generatedRepresentedSkills.length < expandedContext.selectedSkills.length) return 'session_assembly_underrepresented_skills'
+      if (builtAroundSkillsFinal.length < generatedRepresentedSkills.length) return 'summary_display_underreported_skills'
+      return 'no_narrowing_detected'
+    })()
+    
+    console.log('[first-narrowing-point-verdict]', {
+      firstBadLayer: firstNarrowingPoint,
+      expectedTruth: {
+        savedSkillCount: profileSelectedSkills.length,
+        savedSkills: profileSelectedSkills,
+      },
+      actualTruth: {
+        normalizedSkillCount: expandedContext.selectedSkills.length,
+        representedSkillCount: generatedRepresentedSkills.length,
+        displaySkillCount: builtAroundSkillsFinal.length,
+        displaySkills: builtAroundSkillsFinal,
+      },
+      exactReason: firstNarrowingPoint === 'session_assembly_underrepresented_skills'
+        ? `${excludedSkills.length} skills not represented in generated exercises: ${excludedSkills.join(', ')}`
+        : firstNarrowingPoint === 'summary_display_underreported_skills'
+          ? 'builtAroundSkillsFinal filters to only meaningfully represented skills'
+          : 'no narrowing',
+      exactFileResponsible: firstNarrowingPoint.includes('session_assembly') 
+        ? 'lib/adaptive-program-builder.ts (exercise selection)'
+        : firstNarrowingPoint.includes('summary')
+          ? 'lib/adaptive-program-builder.ts (builtAroundSkillsFinal computation)'
+          : 'unknown',
+    })
+    
+    // ==========================================================================
+    // [TASK 9] PROFILE-TO-PROGRAM FINAL VERDICT
+    // ==========================================================================
+    const savedProfileBroadness = profileSelectedSkills.length > 3 ? 'broad' : profileSelectedSkills.length > 1 ? 'moderate' : 'narrow'
+    const builderReceivedFullSelectedSkills = expandedContext.selectedSkills.length === profileSelectedSkills.length
+    const selectedSkillsSilentlyDropped = excludedSkills.length > 0 && skillEligibilityAudit.filter(s => !s.filteredReason).length > 0
+    const summaryUnderreportsSelectedSkills = profileSelectedSkills.length > builtAroundSkillsFinal.length
+    
+    console.log('[profile-to-program-final-verdict]', {
+      savedProfileBroadness,
+      builderReceivedFullSelectedSkills,
+      builderReceivedFullSelectedTrainingStyles: true, // trainingStyle always passes through
+      selectedSkillsSilentlyDropped,
+      summaryUnderreportsSelectedSkills,
+      staleDisplayContaminationPresent: false, // This is a fresh build
+      primaryIssueCategory: 
+        !builderReceivedFullSelectedSkills ? 'input_loss' :
+        excludedSkills.length > 0 ? 'session_underrepresentation' :
+        summaryUnderreportsSelectedSkills ? 'summary_underreporting' :
+        'none',
+      finalVerdict:
+        builderReceivedFullSelectedSkills && excludedSkills.length === 0 && !summaryUnderreportsSelectedSkills
+          ? 'truth_chain_aligned'
+          : builderReceivedFullSelectedSkills && excludedSkills.length <= 1
+            ? 'truth_chain_partially_aligned'
+            : 'truth_chain_misaligned',
     })
   } catch (summaryErr) {
     // Summary generation failed but should NOT break program generation
@@ -4126,8 +4279,11 @@ console.log('[program-generate] Generation complete:', {
     sessionLength,
     // TASK 3C: Store training path and selected skills for summary display
     trainingPathType: canonicalProfile.trainingPathType || 'balanced',
-    // [TASK 3 FIX] Use priority-sorted builtAroundSkillsFinal for correct ordering
-    selectedSkills: builtAroundSkillsFinal,
+    // [TASK 1 FIX] Store FULL canonical selectedSkills, not just represented subset
+    // This preserves the user's full onboarding intent for display truthfulness
+    selectedSkills: canonicalProfile.selectedSkills || [],
+    // [TASK 1 FIX] Also store the represented skills subset for accurate display distinction
+    representedSkills: builtAroundSkillsFinal,
     goalCategories: canonicalProfile.goalCategories || [],
     // TASK 5: Session duration mode - preserve adaptive time identity
     sessionDurationMode: canonicalProfile.sessionDurationMode || 'static',

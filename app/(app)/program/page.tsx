@@ -206,6 +206,24 @@ export default function ProgramPage() {
       finalVerdict: 'fully_truthful',
     })
     
+    // ==========================================================================
+    // [TASK 8] STALE VS CURRENT PROGRAM TRUTH AUDIT
+    // Verify whether displayed program is from current build or stale
+    // ==========================================================================
+    const representedSkills = (program as unknown as { representedSkills?: string[] }).representedSkills
+    console.log('[stale-vs-current-program-truth-audit]', {
+      programId: program.id,
+      programCreatedAt: program.createdAt,
+      hasServerRepresentedSkills: !!representedSkills,
+      serverRepresentedSkillsCount: representedSkills?.length || 0,
+      selectedSkillsCount: rawProgram.selectedSkills?.length || 0,
+      isLikelyCurrentBuild: !!representedSkills,
+      isLikelyStalePlan: !representedSkills && program.createdAt && 
+        new Date(program.createdAt).getTime() < Date.now() - 1000 * 60 * 60 * 24, // older than 24h
+      stalenessResult: result.isStale ? 'stale' : 'current',
+      verdict: representedSkills ? 'current_build_with_truth_data' : 'possibly_stale_or_legacy_build',
+    })
+    
     return result
   }, [program, mounted])
   

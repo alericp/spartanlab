@@ -285,40 +285,57 @@ export function AdaptiveProgramDisplay({
           )}
           {/* [TASK 1] Selected Skills Summary - show ALL skills neatly, no more +N truncation */}
           {/* [PHASE 5] DISPLAY SKILL TRUTH - distinguish profile-selected vs actually-represented */}
+          {/* [TASK 5/6 FIX] Use program.representedSkills if available (server-computed truth) */}
           {program.selectedSkills && program.selectedSkills.length > 0 && (() => {
-            // Compute which skills are actually represented in generated sessions
-            const allExerciseNames = program.sessions?.flatMap(s => 
-              s.exercises?.map(e => (e.exercise?.name || '').toLowerCase()) || []
-            ) || []
+            // Use server-computed representedSkills if available, otherwise compute client-side
+            const serverRepresentedSkills = (program as unknown as { representedSkills?: string[] }).representedSkills
             
-            // Check each selected skill for representation in the week
-            const skillRepresentationMap = program.selectedSkills.map(skill => {
-              const skillLower = skill.toLowerCase().replace(/_/g, ' ')
-              const isRepresented = allExerciseNames.some(name => 
-                name.includes(skillLower) || 
-                name.includes(skill.toLowerCase()) ||
-                // Common skill-exercise mappings
-                (skill === 'front_lever' && (name.includes('front lever') || name.includes('tuck front') || name.includes('adv front'))) ||
-                (skill === 'back_lever' && (name.includes('back lever') || name.includes('german hang'))) ||
-                (skill === 'planche' && (name.includes('planche') || name.includes('lean') || name.includes('tuck planche'))) ||
-                (skill === 'muscle_up' && (name.includes('muscle up') || name.includes('muscle-up') || name.includes('high pull'))) ||
-                (skill === 'handstand' && (name.includes('handstand') || name.includes('hs ') || name.includes('wall hs')))
-              )
-              return { skill, isRepresented }
-            })
+            // Fallback to client-side computation if server data not available
+            let representedSkills: string[]
+            if (serverRepresentedSkills && serverRepresentedSkills.length > 0) {
+              representedSkills = serverRepresentedSkills
+            } else {
+              // Client-side fallback computation
+              const allExerciseNames = program.sessions?.flatMap(s => 
+                s.exercises?.map(e => (e.exercise?.name || '').toLowerCase()) || []
+              ) || []
+              
+              const skillKeywords: Record<string, string[]> = {
+                'planche': ['planche', 'lean', 'tuck', 'pseudo'],
+                'front_lever': ['front lever', 'front-lever', 'tuck lever', 'adv tuck'],
+                'back_lever': ['back lever', 'back-lever', 'german hang'],
+                'handstand': ['handstand', 'pike', 'wall walk', 'freestanding'],
+                'muscle_up': ['muscle up', 'muscle-up', 'transition'],
+              }
+              
+              representedSkills = program.selectedSkills.filter(skill => {
+                const keywords = skillKeywords[skill] || [skill.replace(/_/g, ' ')]
+                return keywords.some(kw => allExerciseNames.some(name => name.includes(kw)))
+              })
+            }
             
-            const representedSkills = skillRepresentationMap.filter(s => s.isRepresented).map(s => s.skill)
-            const unrepresentedSkills = skillRepresentationMap.filter(s => !s.isRepresented).map(s => s.skill)
+            const unrepresentedSkills = program.selectedSkills.filter(s => !representedSkills.includes(s))
             
-            // Log display skill truth audit
+            // Log display skill truth audit with stale vs current distinction
             console.log('[display-skill-truth-audit]', {
               profileSelectedSkills: program.selectedSkills,
+              serverRepresentedSkills: serverRepresentedSkills || 'not_available',
               skillsRepresentedInWeek: representedSkills,
               skillsNotRepresentedInWeek: unrepresentedSkills,
-              totalExercisesInWeek: allExerciseNames.length,
+              usingServerTruth: !!serverRepresentedSkills,
               displayTruthVerdict: unrepresentedSkills.length === 0 
                 ? 'all_skills_represented' 
                 : 'some_skills_not_represented',
+            })
+            
+            // [TASK 8] STALE VS CURRENT PROGRAM TRUTH AUDIT
+            console.log('[stale-vs-current-program-truth-audit]', {
+              programId: program.id,
+              programCreatedAt: program.createdAt,
+              hasServerRepresentedSkills: !!serverRepresentedSkills,
+              isLikelyCurrentBuild: !!serverRepresentedSkills,
+              isLikelyStalePlan: !serverRepresentedSkills,
+              verdict: serverRepresentedSkills ? 'current_build' : 'possibly_stale_plan',
             })
             
             return (

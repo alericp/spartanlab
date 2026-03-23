@@ -2528,7 +2528,7 @@ function generateAdaptiveProgramImpl(inputs: AdaptiveProgramInputs, stageTracker
     // Session assembly failed - log and rethrow with proper error info
     const errorMessage = err instanceof Error ? err.message : 'Unknown session assembly error'
     
-    // STEP F: Root-cause summary for classified session failures (expanded with post-session patterns)
+    // Root-cause summary for classified session failures (expanded with all lifecycle patterns)
     const classifiedPatterns = [
       'equipment_adaptation_zeroed_session',
       'mapping_zeroed_session',
@@ -2539,9 +2539,12 @@ function generateAdaptiveProgramImpl(inputs: AdaptiveProgramInputs, stageTracker
       'finisher_helper_failed',
       'post_validation_mutation_zeroed_session',
       'session_has_no_exercises',
-      // New post-session patterns
+      'exercise_selection_returned_null',
+      // Post-session patterns
       'post_session_mutation_failed',
       'post_session_integrity_invalid',
+      // Full lifecycle pattern (STEP G)
+      'session_generation_failed',
     ]
     const matchedPattern = classifiedPatterns.find(p => errorMessage.includes(p)) || 'unclassified'
     
@@ -4327,6 +4330,12 @@ function generateAdaptiveSession(
   constraintType: string | undefined,
   context: AdaptiveSessionContext
 ): AdaptiveSession {
+  // ==========================================================================
+  // STEP A: Master sessionStep tracker for entire generateAdaptiveSession lifecycle
+  // ==========================================================================
+  let sessionStep = 'starting'
+  let middleStep = 'none' // Track middle helper step if we get that far
+  
   // Destructure context to get explicit dependencies (scope fix)
   const { 
     athleteCalibration, 
@@ -4339,10 +4348,35 @@ function generateAdaptiveSession(
     totalSessions,
   } = context
   
+  // Resolve sessionMinutes early for logging purposes
+  const sessionMinutesResolved = typeof sessionLength === 'number' 
+    ? sessionLength 
+    : parseInt(String(sessionLength).split('-')[0]) || 60
+  
+  console.log('[session-lifecycle-start]', {
+    dayNumber: day.dayNumber,
+    dayFocus: day.focus,
+    primaryGoal,
+    experienceLevel,
+    sessionLengthRaw: sessionLength,
+    sessionMinutesResolved,
+    equipmentCount: equipment.length,
+    selectedSkillsCount: selectedSkills?.length || 0,
+    sessionStep,
+  })
+  
+  // ==========================================================================
+  // STEP B: Wrap entire function body in try/catch for lifecycle classification
+  // ==========================================================================
+  try {
+    sessionStep = 'context_destructured'
+  
   // Safe fallbacks for calibration subfields
   const fatigueSensitivity = athleteCalibration?.fatigueSensitivity ?? 'moderate'
   const sessionCapacity = athleteCalibration?.sessionCapacity ?? 'standard'
   const enduranceCompatibility = athleteCalibration?.enduranceCompatibility ?? 'moderate'
+  
+  sessionStep = 'calibration_resolved'
   
   // SKILL EXPRESSION FIX: Determine which skills should be expressed in this session
   // based on weighted allocation and session index
@@ -4352,6 +4386,8 @@ function generateAdaptiveSession(
     totalSessions || 1,
     day.focus
   )
+  
+  sessionStep = 'skills_for_session_resolved'
   
   // TASK 4: Log session type for debugging session variety
   const sessionType = getSessionTypeForPosition(sessionIndex || 0, totalSessions || 1)
@@ -4365,13 +4401,9 @@ function generateAdaptiveSession(
     })),
     primaryGoal,
   })
-  
-  // Select exercises
-  // [session-assembly] Convert sessionLength to number for exercise selection
-  const sessionMinutesResolved = typeof sessionLength === 'number' 
-    ? sessionLength 
-    : parseInt(String(sessionLength).split('-')[0]) || 60
     
+  // Select exercises
+  sessionStep = 'selecting_exercises'
   console.log('[session-assembly] Exercise selection starting:', {
     dayFocus: day.focus,
     dayNumber: day.dayNumber,
@@ -4394,6 +4426,8 @@ function generateAdaptiveSession(
     skillsForSession: skillsForThisSession,
   })
   
+  sessionStep = 'selection_received'
+  
   // [session-assembly] Validate selection result before proceeding
   if (!selection) {
     console.error('[session-assembly] CRITICAL: selectExercisesForSession returned null/undefined')
@@ -4405,6 +4439,8 @@ function generateAdaptiveSession(
   const safeWarmup = Array.isArray(selection?.warmup) ? selection.warmup : []
   const safeCooldown = Array.isArray(selection?.cooldown) ? selection.cooldown : []
   
+  sessionStep = 'safe_selection_normalized'
+  
   // [session-assembly] Log exercise counts for debugging
   console.log('[session-assembly] Exercise selection complete:', {
     mainCount: safeMain.length,
@@ -4414,8 +4450,9 @@ function generateAdaptiveSession(
   })
   
   // ==========================================================================
-  // STEP A: SESSION TRACE - Track exercise counts through every transformation
+  // SESSION TRACE - Track exercise counts through every transformation
   // ==========================================================================
+  sessionStep = 'session_trace_starting'
   const sessionTrace = {
     dayNumber: day.dayNumber,
     dayFocus: day.focus,
@@ -4436,8 +4473,9 @@ function generateAdaptiveSession(
   console.log('[session-trace-start]', sessionTrace)
   
   // ==========================================================================
-  // SESSION RESCUE: STEP B - Rescue empty sessions before downstream failure
+  // SESSION RESCUE: Rescue empty sessions before downstream failure
   // ==========================================================================
+  sessionStep = 'rescue_evaluating'
   let rescuedMain = safeMain
   let sessionWasRescued = false
   let rescuePath = 'none'
@@ -4490,10 +4528,12 @@ function generateAdaptiveSession(
   }
   
   console.log('[session-trace-post-rescue]', { ...sessionTrace, currentMainCount: rescuedMain.length })
+  sessionStep = 'rescue_completed'
   
   // ==========================================================================
-  // STEP C: Equipment adaptation with collapse detection
+  // Equipment adaptation with collapse detection
   // ==========================================================================
+  sessionStep = 'equipment_adapting'
   const adaptedMain = adaptSessionForEquipment(rescuedMain, equipment)
   const adaptedWarmup = adaptSessionForEquipment(safeWarmup, equipment)
   const adaptedCooldown = adaptSessionForEquipment(safeCooldown, equipment)
@@ -4521,11 +4561,13 @@ function generateAdaptiveSession(
   }
   
   console.log('[session-trace-post-equipment]', { ...sessionTrace, currentMainCount: adaptedMain.adapted.length })
+  sessionStep = 'equipment_adaptation_completed'
   
   // ==========================================================================
-  // STEP A: Track middle helper execution for precise failure diagnosis
+  // Track middle helper execution for precise failure diagnosis
   // ==========================================================================
-  let middleStep = 'before_effective_selection'
+  sessionStep = 'effective_selection_building'
+  middleStep = 'before_effective_selection'
   
   // ==========================================================================
   // STEP B: Build canonical effectiveSelection to fix split-brain logic
@@ -4543,9 +4585,10 @@ function generateAdaptiveSession(
   }
   
   middleStep = 'effective_selection_built'
+  sessionStep = 'effective_selection_validating'
   
   // ==========================================================================
-  // STEP B: Validate effectiveSelection structure before proceeding
+  // Validate effectiveSelection structure before proceeding
   // ==========================================================================
   const effectiveSelectionValid = 
     Array.isArray(effectiveSelection.main) &&
@@ -4581,6 +4624,7 @@ function generateAdaptiveSession(
     )
   }
   
+  sessionStep = 'middle_helpers_running'
   console.log('[session-middle-start]', {
     dayNumber: day.dayNumber,
     dayFocus: day.focus,
@@ -4743,8 +4787,11 @@ function generateAdaptiveSession(
       )
     }
   }
+  
+  sessionStep = 'middle_helpers_completed'
 
-    // TASK 5: Map exercises first, then validate/dedupe
+    // Map exercises first, then validate/dedupe
+    sessionStep = 'mapping_exercises'
     // [program-build] Log inputs to mapToAdaptiveExercises for diagnosis
     const adaptedMainArray = Array.isArray(adaptedMain?.adapted) ? adaptedMain.adapted : []
     console.log('[program-build] Mapping exercises for session', {
@@ -4775,8 +4822,9 @@ function generateAdaptiveSession(
     // Update session trace
     sessionTrace.rawMappedMainCount = rawExercises.length
     console.log('[session-trace-post-mapping]', { ...sessionTrace, currentMainCount: rawExercises.length })
+    sessionStep = 'mapping_completed'
     
-    // STEP D: Detect if mapping zeroed out adapted exercises
+    // Detect if mapping zeroed out adapted exercises
     if (adaptedMainArray.length > 0 && rawExercises.length === 0) {
       sessionTrace.collapseStage = 'mapping'
       console.error('[session-collapse-point] Mapping removed all exercises:', {
@@ -4797,6 +4845,7 @@ function generateAdaptiveSession(
     
     // TASK 5: Session Assembly Validation Pass
     // Dedupe, fix ordering, and validate session before returning
+    sessionStep = 'validating_session'
     const sessionBudget = resolveSessionBudget(typeof sessionLength === 'number' ? sessionLength : parseInt(String(sessionLength).split('-')[0]) || 45)
     const validatedSession = validateSession(rawExercises, rawWarmup, rawCooldown, {
       isSkillFirstDay: day.isPrimary,
@@ -4807,8 +4856,9 @@ function generateAdaptiveSession(
     // Update session trace after validation
     sessionTrace.validatedMainCount = validatedSession.exercises.length
     console.log('[session-trace-post-validation]', { ...sessionTrace, currentMainCount: validatedSession.exercises.length })
+    sessionStep = 'validation_completed'
     
-    // STEP E: Detect if validation zeroed out raw exercises
+    // Detect if validation zeroed out raw exercises
     if (rawExercises.length > 0 && validatedSession.exercises.length === 0) {
       sessionTrace.collapseStage = 'validation'
       console.error('[session-collapse-point] Validation removed all exercises:', {
@@ -4845,7 +4895,8 @@ function generateAdaptiveSession(
       }
     }
     
-    // [weighted-prescription-truth] TASK 8: Log prescription survival at session assembly
+    // [weighted-prescription-truth] Log prescription survival at session assembly
+    sessionStep = 'prescription_survival_check'
     const exercisesWithPrescription = validatedSession.exercises.filter(
       (e: AdaptiveExercise) => e.prescribedLoad && e.prescribedLoad.load > 0
     )
@@ -4879,6 +4930,7 @@ function generateAdaptiveSession(
     }
 
     // [coach-meta-survival] Log coaching meta at session assembly
+    sessionStep = 'coaching_meta_check'
     const exercisesWithCoaching = validatedSession.exercises.filter((e: AdaptiveExercise) => e.coachingMeta)
     console.log('[coach-meta-survival] Session assembly - coaching meta check:', {
       dayNumber: day.dayNumber,
@@ -4888,8 +4940,9 @@ function generateAdaptiveSession(
     })
 
     // ==========================================================================
-    // STEP B3: Final validation - session MUST have exercises after all passes
+    // Final validation - session MUST have exercises after all passes
     // ==========================================================================
+    sessionStep = 'final_session_nonempty_check'
     if (validatedSession.exercises.length === 0) {
       console.error('[session-final-check-failed] Session still empty after rescue and validation:', {
         dayNumber: day.dayNumber,
@@ -4934,6 +4987,14 @@ function generateAdaptiveSession(
       rescuePath: sessionWasRescued ? rescuePath : 'n/a',
     })
 
+    sessionStep = 'returning_validated_session'
+    console.log('[session-lifecycle-success]', {
+      dayNumber: day.dayNumber,
+      dayFocus: day.focus,
+      sessionStep,
+      finalExerciseCount: validatedSession.exercises.length,
+    })
+
     return {
       dayNumber: day.dayNumber,
       dayLabel: `Day ${day.dayNumber}`,
@@ -4945,7 +5006,7 @@ function generateAdaptiveSession(
       exercises: validatedSession.exercises,
       warmup: validatedSession.warmup,
       cooldown: validatedSession.cooldown,
-      // STEP B FIX: Use effectiveSelection.totalEstimatedTime (not stale original)
+      // Use effectiveSelection.totalEstimatedTime (not stale original)
       estimatedMinutes: effectiveSelection.totalEstimatedTime + (finisher?.durationMinutes || 0),
       variants,
       adaptationNotes: adaptationNotes.length > 0 ? adaptationNotes : undefined,
@@ -4953,7 +5014,58 @@ function generateAdaptiveSession(
       finisherIncluded: !!finisher,
       finisherRationale: enduranceResult.rationale,
     }
+  
+  // ==========================================================================
+  // STEP B/D: Outer catch for entire generateAdaptiveSession lifecycle
+  // ==========================================================================
+  } catch (lifecycleErr) {
+    const errorMessage = lifecycleErr instanceof Error ? lifecycleErr.message : String(lifecycleErr)
+    
+    // Known classified patterns - if already classified, rethrow unchanged
+    const alreadyClassifiedPatterns = [
+      'exercise_selection_returned_null',
+      'equipment_adaptation_zeroed_session',
+      'mapping_zeroed_session',
+      'validation_zeroed_session',
+      'session_middle_helper_failed',
+      'effective_selection_invalid',
+      'session_variant_generation_failed',
+      'finisher_helper_failed',
+      'session_has_no_exercises',
+    ]
+    
+    const isAlreadyClassified = alreadyClassifiedPatterns.some(p => errorMessage.includes(p))
+    
+    if (isAlreadyClassified) {
+      // Rethrow already-classified error unchanged
+      throw lifecycleErr
+    }
+    
+    // Log full lifecycle failure diagnostic
+    console.error('[session-lifecycle-failure]', {
+      sessionStep,
+      middleStep,
+      dayNumber: day.dayNumber,
+      dayFocus: day.focus,
+      primaryGoal,
+      experienceLevel,
+      sessionLengthRaw: sessionLength,
+      sessionMinutesResolved,
+      equipmentCount: equipment.length,
+      selectedSkillsCount: selectedSkills?.length || 0,
+      errorName: lifecycleErr instanceof Error ? lifecycleErr.name : 'unknown',
+      errorMessage,
+      stack: lifecycleErr instanceof Error ? lifecycleErr.stack?.split('\n').slice(0, 5).join('\n') : undefined,
+    })
+    
+    // Convert to classified error with precise step information
+    const safeReason = errorMessage.slice(0, 120).replace(/[\n\r]/g, ' ').replace(/[^a-zA-Z0-9_\-\s.:,]/g, '')
+    throw new Error(
+      `session_generation_failed: step=${sessionStep} middleStep=${middleStep} ` +
+      `day=${day.dayNumber} focus=${day.focus} goal=${primaryGoal} reason=${safeReason}`
+    )
   }
+}
 
 function mapToAdaptiveExercises(
   selected: SelectedExercise[],

@@ -153,6 +153,7 @@ import {
   formatTrainingBlock,
   TRAINING_METHODS,
   ENDURANCE_BLOCK_TEMPLATES,
+  type EnduranceSelectionResult,
 } from './training-methods'
 import {
   analyzeExerciseProgression,
@@ -2342,6 +2343,35 @@ function generateAdaptiveProgramImpl(inputs: AdaptiveProgramInputs, stageTracker
   } catch (err) {
     // Session assembly failed - log and rethrow with proper error info
     const errorMessage = err instanceof Error ? err.message : 'Unknown session assembly error'
+    
+    // STEP H: Root-cause summary for classified session failures
+    const classifiedPatterns = [
+      'equipment_adaptation_zeroed_session',
+      'mapping_zeroed_session',
+      'validation_zeroed_session',
+      'session_middle_helper_failed',
+      'effective_selection_invalid',
+      'session_variant_generation_failed',
+      'finisher_helper_failed',
+      'post_validation_mutation_zeroed_session',
+      'session_has_no_exercises',
+    ]
+    const matchedPattern = classifiedPatterns.find(p => errorMessage.includes(p)) || 'unclassified'
+    
+    // Extract day/focus from error message if present
+    const dayMatch = errorMessage.match(/day=(\d+)/)
+    const focusMatch = errorMessage.match(/focus=([a-z_]+)/)
+    
+    console.error('[session-assembly-root-cause-summary]', {
+      matchedPattern,
+      isClassified: matchedPattern !== 'unclassified',
+      originalMessage: errorMessage,
+      dayNumber: dayMatch ? dayMatch[1] : 'unknown',
+      dayFocus: focusMatch ? focusMatch[1] : 'unknown',
+      structureName: structure?.structureName,
+      totalDays: structure?.days?.length,
+    })
+    
     console.error('[program-rebuild-error] Session assembly failure:', {
       stage: 'session_assembly',
       errorCode: 'session_assembly_failed',
@@ -4298,6 +4328,11 @@ function generateAdaptiveSession(
   console.log('[session-trace-post-equipment]', { ...sessionTrace, currentMainCount: adaptedMain.adapted.length })
   
   // ==========================================================================
+  // STEP A: Track middle helper execution for precise failure diagnosis
+  // ==========================================================================
+  let middleStep = 'before_effective_selection'
+  
+  // ==========================================================================
   // STEP B: Build canonical effectiveSelection to fix split-brain logic
   // ==========================================================================
   // Recompute estimated time based on rescued/adapted exercises
@@ -4312,39 +4347,123 @@ function generateAdaptiveSession(
     totalEstimatedTime: sessionWasRescued ? effectiveTotalTime : selection.totalEstimatedTime,
   }
   
-  // Generate session variants using effectiveSelection (not stale original)
-  const variants = generateSessionVariants(effectiveSelection, sessionLength)
+  middleStep = 'effective_selection_built'
   
-  // Build adaptation notes
-  const adaptationNotes: string[] = []
-  if (adaptedMain.adaptationCount > 0) {
-    adaptationNotes.push(`${adaptedMain.adaptationCount} exercise(s) adapted for available equipment.`)
+  // ==========================================================================
+  // STEP B: Validate effectiveSelection structure before proceeding
+  // ==========================================================================
+  const effectiveSelectionValid = 
+    Array.isArray(effectiveSelection.main) &&
+    effectiveSelection.main.every(item => item?.exercise?.name && (item.sets !== undefined || item.repsOrTime !== undefined)) &&
+    Number.isFinite(effectiveSelection.totalEstimatedTime) &&
+    effectiveSelection.totalEstimatedTime > 0 &&
+    Array.isArray(effectiveSelection.warmup) &&
+    Array.isArray(effectiveSelection.cooldown)
+  
+  if (!effectiveSelectionValid) {
+    const invalidReason = !Array.isArray(effectiveSelection.main) 
+      ? 'main_not_array'
+      : !effectiveSelection.main.every(item => item?.exercise?.name) 
+        ? 'main_items_missing_exercise_name'
+        : !Number.isFinite(effectiveSelection.totalEstimatedTime) 
+          ? 'totalEstimatedTime_not_finite'
+          : effectiveSelection.totalEstimatedTime <= 0
+            ? 'totalEstimatedTime_not_positive'
+            : 'warmup_or_cooldown_not_array'
+    
+    console.error('[session-middle-failure] effectiveSelection validation failed:', {
+      dayNumber: day.dayNumber,
+      dayFocus: day.focus,
+      primaryGoal,
+      invalidReason,
+      mainLength: effectiveSelection.main?.length,
+      totalEstimatedTime: effectiveSelection.totalEstimatedTime,
+      sessionWasRescued,
+      rescuePath,
+    })
+    throw new Error(
+      `effective_selection_invalid: day=${day.dayNumber} focus=${day.focus} reason=${invalidReason}`
+    )
   }
-  if (adaptedMain.significantLimitations.length > 0) {
-    adaptationNotes.push(...adaptedMain.significantLimitations)
-  }
   
-  // Get day explanation
-  const rationale = getDayExplanation(day, GOAL_LABELS[primaryGoal])
+  console.log('[session-middle-start]', {
+    dayNumber: day.dayNumber,
+    dayFocus: day.focus,
+    primaryGoal,
+    effectiveSelectionMainCount: effectiveSelection.main.length,
+    effectiveSelectionWarmupCount: effectiveSelection.warmup.length,
+    effectiveSelectionCooldownCount: effectiveSelection.cooldown.length,
+    effectiveTotalEstimatedTime: effectiveSelection.totalEstimatedTime,
+    sessionWasRescued,
+    rescuePath,
+  })
   
-// Generate endurance finisher if appropriate
-    // STEP B FIX: Use effectiveSelection instead of stale original selection
-    const mainWorkMinutes = effectiveSelection.totalEstimatedTime - 10 // Subtract warmup/cooldown estimate
+  // ==========================================================================
+  // MIDDLE HELPER BLOCK - Protected by try/catch for precise failure tracking
+  // ==========================================================================
+  let variants: SessionVariant[]
+  let adaptationNotes: string[] = []
+  let rationale: string
+  let finisher: GeneratedFinisher | undefined
+  let enduranceResult: EnduranceSelectionResult
+  let currentFatigueScore: number
+  
+  try {
+    // Generate session variants using effectiveSelection
+    middleStep = 'variants_generating'
+    // FIX: Pass numeric sessionMinutesResolved instead of string sessionLength
+    console.log('[session-variants-diagnostic]', {
+      mainCount: effectiveSelection.main.length,
+      totalEstimatedTime: effectiveSelection.totalEstimatedTime,
+      sessionLength,
+      sessionMinutesResolved,
+      hasWarmup: effectiveSelection.warmup.length > 0,
+      hasCooldown: effectiveSelection.cooldown.length > 0,
+      wasRescued: sessionWasRescued,
+    })
+    variants = generateSessionVariants(effectiveSelection, sessionMinutesResolved)
+    middleStep = 'variants_generated'
+    
+    // Build adaptation notes
+    if (adaptedMain.adaptationCount > 0) {
+      adaptationNotes.push(`${adaptedMain.adaptationCount} exercise(s) adapted for available equipment.`)
+    }
+    if (adaptedMain.significantLimitations.length > 0) {
+      adaptationNotes.push(...adaptedMain.significantLimitations)
+    }
+    
+    // Get day explanation
+    rationale = getDayExplanation(day, GOAL_LABELS[primaryGoal])
+    
+    // Generate endurance finisher if appropriate
+    middleStep = 'time_fit_resolving'
+    // STEP D: Sanitize mainWorkMinutes
+    let mainWorkMinutes = effectiveSelection.totalEstimatedTime - 10
+    if (!Number.isFinite(mainWorkMinutes) || mainWorkMinutes < 0) {
+      console.log('[session-time-sanitized] mainWorkMinutes clamped:', { original: mainWorkMinutes, clamped: 15 })
+      mainWorkMinutes = 15 // Safe minimum
+    }
+    if (mainWorkMinutes > 120) {
+      console.log('[session-time-sanitized] mainWorkMinutes clamped:', { original: mainWorkMinutes, clamped: 60 })
+      mainWorkMinutes = 60 // Safe maximum
+    }
+    
     const sessionTimeFit = fitEnduranceToSession(sessionLength, mainWorkMinutes)
+    middleStep = 'time_fit_resolved'
     
-    // [session-assembly] FIX: Use effectiveSelection.main (rescued exercises, not stale original)
+    // Calculate session neural demand from main exercises
     const safeEffectiveMain = Array.isArray(effectiveSelection?.main) ? effectiveSelection.main : []
-    
-    // Calculate session neural demand from main exercises (using rescued/effective selection)
     const sessionNeuralDemand = safeEffectiveMain.some(e => e?.exercise?.neuralDemand >= 4) 
       ? 'high' as const
       : safeEffectiveMain.some(e => e?.exercise?.neuralDemand >= 3)
         ? 'moderate' as const
         : 'low' as const
+    middleStep = 'neural_demand_resolved'
 
-    // Select endurance block (using local safe variables)
-    const currentFatigueScore = recoverySignal?.level === 'red' ? 80 : recoverySignal?.level === 'yellow' ? 60 : 40
-    const enduranceResult = selectEnduranceBlock({
+    // Select endurance block
+    currentFatigueScore = recoverySignal?.level === 'red' ? 80 : recoverySignal?.level === 'yellow' ? 60 : 40
+    middleStep = 'endurance_block_selecting'
+    enduranceResult = selectEnduranceBlock({
       primaryGoal,
       sessionLength,
       sessionCapacity,
@@ -4355,26 +4474,80 @@ function generateAdaptiveSession(
       timeRemainingMinutes: sessionTimeFit.recommendedDuration,
       availableEquipment: equipment,
     })
+    middleStep = 'endurance_block_selected'
 
-    // Generate the finisher if needed (using local safe variables)
-    let finisher: GeneratedFinisher | undefined
+    // Generate the finisher if needed
     if (enduranceResult.shouldIncludeEndurance && enduranceResult.blockType) {
-      // Adjust for fatigue
+      middleStep = 'fatigue_adjustment_resolving'
       const fatigueAdjustment = adjustBlockForFatigue(
         enduranceResult.duration,
         currentFatigueScore,
         fatigueSensitivity
       )
+      middleStep = 'fatigue_adjustment_resolved'
       
       if (!fatigueAdjustment.shouldSkip) {
+        middleStep = 'finisher_generating'
         finisher = generateFinisher(
           enduranceResult.blockType,
           fatigueAdjustment.adjustedDuration,
           equipment,
           fatigueSensitivity
         )
+        middleStep = 'finisher_generated'
+      } else {
+        middleStep = 'finisher_skipped'
       }
+    } else {
+      middleStep = 'finisher_not_needed'
     }
+    
+    console.log('[session-middle-success]', {
+      dayNumber: day.dayNumber,
+      dayFocus: day.focus,
+      middleStep,
+      hasVariants: variants.length > 0,
+      hasFinisher: !!finisher,
+    })
+    
+  } catch (middleError) {
+    // STEP E: Graceful degradation - if middle helpers fail but core session exists, continue
+    const hasValidCoreSession = adaptedMain.adapted.length > 0
+    
+    console.error('[session-middle-failure]', {
+      dayNumber: day.dayNumber,
+      dayFocus: day.focus,
+      primaryGoal,
+      sessionWasRescued,
+      rescuePath,
+      effectiveSelectionMainCount: effectiveSelection.main.length,
+      effectiveSelectionWarmupCount: effectiveSelection.warmup.length,
+      effectiveSelectionCooldownCount: effectiveSelection.cooldown.length,
+      effectiveTotalEstimatedTime: effectiveSelection.totalEstimatedTime,
+      helperStep: middleStep,
+      errorName: middleError instanceof Error ? middleError.name : 'unknown',
+      errorMessage: middleError instanceof Error ? middleError.message : String(middleError),
+      stack: middleError instanceof Error ? middleError.stack?.split('\n').slice(0, 5).join('\n') : undefined,
+      hasValidCoreSession,
+    })
+    
+    if (hasValidCoreSession && middleStep !== 'before_effective_selection' && middleStep !== 'effective_selection_built') {
+      // STEP E: Graceful degradation - variants/finisher are optional, proceed with defaults
+      console.log('[session-finisher-skipped-due-to-helper-failure]', { middleStep, dayNumber: day.dayNumber })
+      variants = variants || [{ duration: sessionMinutesResolved, label: 'Full Session', selection: effectiveSelection, compressionLevel: 'none' }]
+      adaptationNotes = adaptationNotes || []
+      rationale = rationale || getDayExplanation(day, GOAL_LABELS[primaryGoal])
+      enduranceResult = enduranceResult || { shouldIncludeEndurance: false, blockType: null, duration: 4, rationale: 'Skipped due to helper failure', wasCondensed: false }
+      currentFatigueScore = currentFatigueScore ?? 50
+      finisher = undefined
+    } else {
+      // Core failure - cannot continue
+      throw new Error(
+        `session_middle_helper_failed: step=${middleStep} day=${day.dayNumber} focus=${day.focus} ` +
+        `goal=${primaryGoal} reason=${middleError instanceof Error ? middleError.message.slice(0, 100) : 'unknown'}`
+      )
+    }
+  }
 
     // TASK 5: Map exercises first, then validate/dedupe
     // [program-build] Log inputs to mapToAdaptiveExercises for diagnosis
@@ -4547,6 +4720,16 @@ function generateAdaptiveSession(
     // STEP I: Final session trace before return
     sessionTrace.finalMainCount = validatedSession.exercises.length
     console.log('[session-trace-final]', sessionTrace)
+    
+    // STEP G: Core survival check - ensure no mutation zeroed out exercises
+    console.log('[session-core-survival-check]', {
+      dayNumber: day.dayNumber,
+      validatedCount: validatedSession.exercises.length,
+      finalReturnedCount: validatedSession.exercises.length, // Same at this point
+      hasVariants: variants && variants.length > 0,
+      hasFinisher: !!finisher,
+      adaptationNotesCount: adaptationNotes.length,
+    })
     
     console.log('[session-final-check] Session validated successfully:', {
       dayNumber: day.dayNumber,

@@ -361,45 +361,71 @@ export function generateSessionVariants(
   fullSelection: ExerciseSelection,
   originalMinutes: number
 ): SessionVariant[] {
+  // STEP C: Validate inputs to prevent downstream failures
+  // Ensure originalMinutes is a valid number
+  let safeOriginalMinutes = originalMinutes
+  if (typeof originalMinutes !== 'number' || !Number.isFinite(originalMinutes) || originalMinutes <= 0) {
+    console.warn('[session-variants] Invalid originalMinutes, using default:', { originalMinutes, usingDefault: 45 })
+    safeOriginalMinutes = 45
+  }
+  
+  // Ensure selection has required structure
+  const safeSelection: ExerciseSelection = {
+    warmup: Array.isArray(fullSelection?.warmup) ? fullSelection.warmup : [],
+    main: Array.isArray(fullSelection?.main) ? fullSelection.main : [],
+    cooldown: Array.isArray(fullSelection?.cooldown) ? fullSelection.cooldown : [],
+    totalEstimatedTime: Number.isFinite(fullSelection?.totalEstimatedTime) ? fullSelection.totalEstimatedTime : safeOriginalMinutes,
+  }
+  
   const variants: SessionVariant[] = [
     {
-      duration: originalMinutes,
+      duration: safeOriginalMinutes,
       label: 'Full Session',
-      selection: fullSelection,
+      selection: safeSelection,
       compressionLevel: 'none',
     },
   ]
   
   // 45 min variant
-  if (originalMinutes > 45) {
-    const compressed45 = compressSession({
-      selection: fullSelection,
-      targetMinutes: 45,
-      originalMinutes,
-      preserveSkillWork: true,
-    })
-    variants.push({
-      duration: 45,
-      label: '45 Min',
-      selection: compressed45.compressed,
-      compressionLevel: compressed45.compressionLevel,
-    })
+  if (safeOriginalMinutes > 45) {
+    try {
+      const compressed45 = compressSession({
+        selection: safeSelection,
+        targetMinutes: 45,
+        originalMinutes: safeOriginalMinutes,
+        preserveSkillWork: true,
+      })
+      variants.push({
+        duration: 45,
+        label: '45 Min',
+        selection: compressed45.compressed,
+        compressionLevel: compressed45.compressionLevel,
+      })
+    } catch (err) {
+      console.warn('[session-variants] Failed to generate 45min variant:', err instanceof Error ? err.message : String(err))
+      // Continue without 45min variant
+    }
   }
   
   // 30 min variant
-  if (originalMinutes > 30) {
-    const compressed30 = compressSession({
-      selection: fullSelection,
-      targetMinutes: 30,
-      originalMinutes,
-      preserveSkillWork: true,
-    })
-    variants.push({
-      duration: 30,
-      label: '30 Min',
-      selection: compressed30.compressed,
-      compressionLevel: compressed30.compressionLevel,
-    })
+  if (safeOriginalMinutes > 30) {
+    try {
+      const compressed30 = compressSession({
+        selection: safeSelection,
+        targetMinutes: 30,
+        originalMinutes: safeOriginalMinutes,
+        preserveSkillWork: true,
+      })
+      variants.push({
+        duration: 30,
+        label: '30 Min',
+        selection: compressed30.compressed,
+        compressionLevel: compressed30.compressionLevel,
+      })
+    } catch (err) {
+      console.warn('[session-variants] Failed to generate 30min variant:', err instanceof Error ? err.message : String(err))
+      // Continue without 30min variant
+    }
   }
   
   return variants

@@ -928,6 +928,105 @@ exerciseExplanations?: {
     canSave: boolean
     shouldWarn: boolean
   }
+  // ==========================================================================
+  // [anti-template] TASK A: Generation Provenance Metadata
+  // Tracks exactly how the program was built for debugging template-like output
+  // ==========================================================================
+  generationProvenance?: GenerationProvenance
+  // ==========================================================================
+  // [anti-template] TASK B: Template Similarity Detection
+  // Detects if rebuilds are producing meaningfully different output
+  // ==========================================================================
+  templateSimilarity?: TemplateSimilarityResult
+  // ==========================================================================
+  // [anti-template] TASK E: Quality Classification
+  // Tracks confidence tier based on how the program was assembled
+  // ==========================================================================
+  qualityClassification?: QualityClassification
+}
+
+// =============================================================================
+// [anti-template] TASK A: GENERATION PROVENANCE TYPES
+// =============================================================================
+
+export type GenerationMode_Provenance = 'direct' | 'constraint_downgraded' | 'rescued' | 'normalized' | 'mixed'
+export type GenerationFreshness = 'fresh_full_recompute' | 'reused_partial_structure' | 'reused_day_shell' | 'stale_like_output_detected'
+export type ScheduleDerivationMode = 'true_adaptive' | 'fixed_baseline' | 'adaptive_but_clamped'
+export type ExerciseSelectionMode = 'direct' | 'support_fallback' | 'rescue' | 'normalized'
+
+export interface GenerationProvenance {
+  /** How the generation was ultimately produced */
+  generationMode: GenerationMode_Provenance
+  /** Whether this was a truly fresh recompute or reused structure */
+  generationFreshness: GenerationFreshness
+  /** How the schedule/session count was derived */
+  scheduleDerivationMode: ScheduleDerivationMode
+  /** Per-session selection mode breakdown */
+  exerciseSelectionModePerDay: ExerciseSelectionMode[]
+  /** Whether any post-generation compression was applied */
+  postGenerationCompressionApplied: boolean
+  /** Count of sessions built through rescue path */
+  rescueSessionCount: number
+  /** Count of sessions built through fallback path */
+  fallbackSessionCount: number
+  /** Count of sessions built through direct path */
+  directSessionCount: number
+  /** Raw athlete inputs that were actually consumed */
+  athleteInputsConsumed: string[]
+  /** Athlete inputs that were available but ignored/unused */
+  athleteInputsIgnored: string[]
+  /** Specific compression points detected */
+  compressionPoints: string[]
+  /** Timestamp of generation */
+  generatedAt: string
+}
+
+// =============================================================================
+// [anti-template] TASK B: TEMPLATE SIMILARITY DETECTION TYPES
+// =============================================================================
+
+export interface TemplateSimilarityResult {
+  /** Structural similarity score 0-100 */
+  overallSimilarityScore: number
+  /** Whether this appears to be a stale/template-like output */
+  appearsStale: boolean
+  /** Specific similarity signals detected */
+  similaritySignals: TemplateSimilaritySignals
+  /** Reasons why output was flagged as stale-like */
+  staleReasons: string[]
+  /** What actually changed between programs */
+  actualChanges: string[]
+  /** What SHOULD have changed based on input delta */
+  expectedChanges: string[]
+  /** Comparison timestamp */
+  comparedAt: string
+}
+
+export interface TemplateSimilaritySignals {
+  sameSessionCount: boolean
+  sameDayFocusOrder: boolean
+  sameFirstTwoExercisesPerDay: boolean
+  sameDayDurations: boolean
+  sameSessionTitles: boolean
+  samePrimaryExerciseFamilies: boolean
+  sameLimiterPath: boolean
+  sameFallbackMode: boolean
+  sameRationale: boolean
+}
+
+// =============================================================================
+// [anti-template] TASK E: QUALITY CLASSIFICATION TYPES
+// =============================================================================
+
+export type QualityTier = 'direct_high_confidence' | 'direct_with_adjustments' | 'constraint_supported' | 'rescue_built' | 'low_confidence'
+
+export interface QualityClassification {
+  qualityTier: QualityTier
+  directSelectionRatio: number
+  fallbackSelectionRatio: number
+  rescueSelectionRatio: number
+  confidenceScore: number
+  tierReason: string
 }
 
 // =============================================================================
@@ -1606,6 +1705,25 @@ function generateAdaptiveProgramImpl(inputs: AdaptiveProgramInputs, stageTracker
     sessionsToGenerate: effectiveTrainingDays,
     scheduleMode: inputScheduleMode,
     wasFlexible: inputScheduleMode === 'flexible',
+  })
+  
+  // [adaptive-schedule-audit] TASK D: Log whether schedule is truly adaptive or clamped
+  console.log('[adaptive-schedule-audit]', {
+    inputScheduleMode,
+    wasFlexibleMode: inputScheduleMode === 'flexible',
+    effectiveTrainingDays,
+    isClamped: inputScheduleMode === 'flexible' && effectiveTrainingDays === 4,
+    flexStructure: flexibleWeekStructure ? {
+      recommendedMin: flexibleWeekStructure.recommendedMinDays,
+      recommendedMax: flexibleWeekStructure.recommendedMaxDays,
+      currentWeekFrequency: flexibleWeekStructure.currentWeekFrequency,
+      rationale: flexibleWeekStructure.rationale?.slice(0, 100),
+    } : null,
+    scheduleDerivation: inputScheduleMode === 'flexible' && flexibleWeekStructure
+      ? (flexibleWeekStructure.currentWeekFrequency !== 4 ? 'true_adaptive' : 'adaptive_but_clamped')
+      : 'fixed_baseline',
+    hasFeedbackData,
+    feedbackInfluenced: hasFeedbackData && trainingFeedback.totalSessionsLast7Days > 0,
   })
   
   // ENGINE QUALITY: Calculate session distribution based on goal hierarchy
@@ -2965,7 +3083,7 @@ console.log('[program-generate] Generation complete:', {
     hasGenerateCycleExplanation: typeof generateCycleExplanation === 'function',
   })
   
-  return {
+  const finalProgram: AdaptiveProgram = {
     id: `adaptive-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
     createdAt: new Date().toISOString(),
     primaryGoal,
@@ -3975,7 +4093,83 @@ return explanations.length > 0 ? explanations : undefined
         return undefined
       }
     })(),
+    // ==========================================================================
+    // [anti-template] TASK A/B/E: Generation Provenance & Similarity Detection
+    // ==========================================================================
+    generationProvenance: (() => {
+      try {
+        return buildGenerationProvenance(
+          sessions,
+          finalScheduleMode,
+          effectiveTrainingDays,
+          inputScheduleMode,
+          flexibleWeekStructure,
+          composedInput,
+          expandedContext
+        )
+      } catch (err) {
+        console.error('[program-provenance] Failed to build provenance:', err)
+        return undefined
+      }
+    })(),
+    qualityClassification: (() => {
+      try {
+        const provenance = buildGenerationProvenance(
+          sessions,
+          finalScheduleMode,
+          effectiveTrainingDays,
+          inputScheduleMode,
+          flexibleWeekStructure,
+          composedInput,
+          expandedContext
+        )
+        return computeQualityClassification(provenance)
+      } catch (err) {
+        console.error('[program-quality] Failed to compute quality:', err)
+        return undefined
+      }
+    })(),
   }
+  
+  // ==========================================================================
+  // [anti-template] FINAL DIAGNOSTIC SUMMARY
+  // This is the summary log that proves whether we got a true fresh build
+  // ==========================================================================
+  try {
+    const finalProvenance = finalProgram.generationProvenance
+    const finalQuality = finalProgram.qualityClassification
+    console.log('[anti-template-final-summary]', {
+      // Core identity
+      programId: finalProgram.id,
+      sessionCount: finalProgram.sessions.length,
+      // Provenance summary
+      generationMode: finalProvenance?.generationMode || 'unknown',
+      generationFreshness: finalProvenance?.generationFreshness || 'unknown',
+      scheduleDerivation: finalProvenance?.scheduleDerivationMode || 'unknown',
+      // Quality summary
+      qualityTier: finalQuality?.qualityTier || 'unknown',
+      confidenceScore: finalQuality?.confidenceScore || 0,
+      directRatio: finalQuality?.directSelectionRatio || 0,
+      fallbackRatio: finalQuality?.fallbackSelectionRatio || 0,
+      rescueRatio: finalQuality?.rescueSelectionRatio || 0,
+      // Athlete influence summary
+      athleteInputsConsumed: finalProvenance?.athleteInputsConsumed?.length || 0,
+      athleteInputsIgnored: finalProvenance?.athleteInputsIgnored?.length || 0,
+      // Compression summary  
+      compressionPointCount: finalProvenance?.compressionPoints?.length || 0,
+      compressionPoints: finalProvenance?.compressionPoints?.slice(0, 3) || [],
+      // Verdict
+      isTrueFreshBuild: finalProvenance?.generationFreshness === 'fresh_full_recompute' &&
+                        finalProvenance?.generationMode === 'direct' &&
+                        (finalQuality?.directSelectionRatio || 0) >= 0.8,
+      isFallbackHeavy: (finalQuality?.fallbackSelectionRatio || 0) > 0.3,
+      isRescueHeavy: (finalQuality?.rescueSelectionRatio || 0) > 0,
+    })
+  } catch (summaryErr) {
+    console.warn('[anti-template-final-summary] Failed to generate summary:', summaryErr)
+  }
+  
+  return finalProgram
   
   // TASK 2-B: End of post-validation try block - should never reach here due to return above
   } catch (postValidationError) {
@@ -6058,6 +6252,296 @@ export function migrateAndCleanupProgramStorage(): {
     console.error('[storage-quota-fix] Migration failed:', err)
     return { migrated: false, trimmedCount: 0, canonicalRestored: false }
   }
+}
+
+// =============================================================================
+// [anti-template] TASK A/B/E: GENERATION PROVENANCE & SIMILARITY DETECTION
+// =============================================================================
+
+/**
+ * [anti-template] TASK A: Build generation provenance metadata
+ * Tracks exactly how the program was assembled for debugging template-like output
+ */
+function buildGenerationProvenance(
+  sessions: AdaptiveSession[],
+  scheduleMode: string,
+  effectiveTrainingDays: number,
+  inputScheduleMode: string,
+  flexibleWeekStructure: FlexibleWeekStructure | null,
+  composedInput: { fallbacksUsed: string[], overridesApplied: string[] },
+  expandedContext: ExpandedAthleteContext
+): GenerationProvenance {
+  // Count session types
+  let rescueCount = 0
+  let fallbackCount = 0
+  let directCount = 0
+  const exerciseSelectionModes: ExerciseSelectionMode[] = []
+  
+  for (const session of sessions) {
+    // Check session metadata for rescue/fallback indicators
+    const wasRescued = session.exercises?.some(e => 
+      e.selectionContext?.primarySelectionReason?.includes('rescue') ||
+      e.selectionContext?.primarySelectionReason?.includes('fallback')
+    )
+    const wasDowngraded = session.exercises?.some(e =>
+      e.selectionContext?.expressionMode === 'support_fallback' ||
+      e.selectionContext?.expressionMode === 'emergency_support'
+    )
+    
+    if (wasRescued) {
+      rescueCount++
+      exerciseSelectionModes.push('rescue')
+    } else if (wasDowngraded) {
+      fallbackCount++
+      exerciseSelectionModes.push('support_fallback')
+    } else {
+      directCount++
+      exerciseSelectionModes.push('direct')
+    }
+  }
+  
+  // Determine overall generation mode
+  let generationMode: GenerationMode_Provenance = 'direct'
+  if (rescueCount > 0 && fallbackCount > 0) {
+    generationMode = 'mixed'
+  } else if (rescueCount > sessions.length / 2) {
+    generationMode = 'rescued'
+  } else if (fallbackCount > sessions.length / 2) {
+    generationMode = 'constraint_downgraded'
+  }
+  
+  // Determine schedule derivation
+  let scheduleDerivationMode: ScheduleDerivationMode = 'fixed_baseline'
+  if (inputScheduleMode === 'flexible' && flexibleWeekStructure) {
+    if (flexibleWeekStructure.currentWeekFrequency !== 4) {
+      scheduleDerivationMode = 'true_adaptive'
+    } else {
+      scheduleDerivationMode = 'adaptive_but_clamped'
+    }
+  }
+  
+  // Track which athlete inputs were consumed vs ignored
+  const athleteInputsConsumed: string[] = []
+  const athleteInputsIgnored: string[] = []
+  
+  // Check expanded context for actual consumption
+  if (expandedContext.weightedPullUp) athleteInputsConsumed.push('weightedPullUp')
+  else athleteInputsIgnored.push('weightedPullUp')
+  
+  if (expandedContext.weightedDip) athleteInputsConsumed.push('weightedDip')
+  else athleteInputsIgnored.push('weightedDip')
+  
+  if (expandedContext.frontLeverProgression) athleteInputsConsumed.push('frontLeverProgression')
+  if (expandedContext.plancheProgression) athleteInputsConsumed.push('plancheProgression')
+  if (expandedContext.hspuProgression) athleteInputsConsumed.push('hspuProgression')
+  if (expandedContext.recoveryLevel) athleteInputsConsumed.push('recoveryLevel')
+  if (expandedContext.jointCautions?.length) athleteInputsConsumed.push('jointCautions')
+  
+  // Detect compression points
+  const compressionPoints: string[] = []
+  if (effectiveTrainingDays === 4 && inputScheduleMode === 'flexible') {
+    compressionPoints.push('flexible_schedule_clamped_to_4_days')
+  }
+  if (composedInput.fallbacksUsed.length > 0) {
+    compressionPoints.push(`fallbacks_used: ${composedInput.fallbacksUsed.join(', ')}`)
+  }
+  
+  const provenance: GenerationProvenance = {
+    generationMode,
+    generationFreshness: composedInput.fallbacksUsed.length > 2 ? 'reused_partial_structure' : 'fresh_full_recompute',
+    scheduleDerivationMode,
+    exerciseSelectionModePerDay: exerciseSelectionModes,
+    postGenerationCompressionApplied: compressionPoints.length > 0,
+    rescueSessionCount: rescueCount,
+    fallbackSessionCount: fallbackCount,
+    directSessionCount: directCount,
+    athleteInputsConsumed,
+    athleteInputsIgnored,
+    compressionPoints,
+    generatedAt: new Date().toISOString(),
+  }
+  
+  // [program-provenance] Log provenance summary
+  console.log('[program-provenance]', {
+    generationMode: provenance.generationMode,
+    generationFreshness: provenance.generationFreshness,
+    scheduleDerivationMode: provenance.scheduleDerivationMode,
+    directCount: provenance.directSessionCount,
+    fallbackCount: provenance.fallbackSessionCount,
+    rescueCount: provenance.rescueSessionCount,
+    compressionPoints: provenance.compressionPoints,
+    athleteInputsConsumed: provenance.athleteInputsConsumed.length,
+    athleteInputsIgnored: provenance.athleteInputsIgnored.length,
+  })
+  
+  return provenance
+}
+
+/**
+ * [anti-template] TASK B: Compute template similarity between two programs
+ * Detects if a rebuild is producing meaningfully different output
+ */
+export function computeTemplateSimilarity(
+  newProgram: AdaptiveProgram,
+  previousProgram: AdaptiveProgram | null,
+  inputsChanged: boolean
+): TemplateSimilarityResult {
+  if (!previousProgram) {
+    return {
+      overallSimilarityScore: 0,
+      appearsStale: false,
+      similaritySignals: {
+        sameSessionCount: false,
+        sameDayFocusOrder: false,
+        sameFirstTwoExercisesPerDay: false,
+        sameDayDurations: false,
+        sameSessionTitles: false,
+        samePrimaryExerciseFamilies: false,
+        sameLimiterPath: false,
+        sameFallbackMode: false,
+        sameRationale: false,
+      },
+      staleReasons: [],
+      actualChanges: ['first_generation'],
+      expectedChanges: [],
+      comparedAt: new Date().toISOString(),
+    }
+  }
+  
+  const signals: TemplateSimilaritySignals = {
+    sameSessionCount: newProgram.sessions.length === previousProgram.sessions.length,
+    sameDayFocusOrder: newProgram.sessions.map(s => s.dayFocus).join(',') === 
+                       previousProgram.sessions.map(s => s.dayFocus).join(','),
+    sameFirstTwoExercisesPerDay: (() => {
+      if (newProgram.sessions.length !== previousProgram.sessions.length) return false
+      for (let i = 0; i < newProgram.sessions.length; i++) {
+        const newFirst2 = newProgram.sessions[i].exercises?.slice(0, 2).map(e => e.exercise?.id || e.name).join(',')
+        const prevFirst2 = previousProgram.sessions[i]?.exercises?.slice(0, 2).map(e => e.exercise?.id || e.name).join(',')
+        if (newFirst2 !== prevFirst2) return false
+      }
+      return true
+    })(),
+    sameDayDurations: newProgram.sessions.map(s => s.estimatedDuration || 0).join(',') ===
+                      previousProgram.sessions.map(s => s.estimatedDuration || 0).join(','),
+    sameSessionTitles: newProgram.sessions.map(s => s.title || '').join(',') ===
+                       previousProgram.sessions.map(s => s.title || '').join(','),
+    samePrimaryExerciseFamilies: (() => {
+      const getExerciseFamilies = (sessions: AdaptiveSession[]) => 
+        sessions.map(s => s.exercises?.slice(0, 3).map(e => e.exercise?.movementFamily || '').sort().join(',')).join('|')
+      return getExerciseFamilies(newProgram.sessions) === getExerciseFamilies(previousProgram.sessions)
+    })(),
+    sameLimiterPath: newProgram.constraintInsight?.primaryConstraint === previousProgram.constraintInsight?.primaryConstraint,
+    sameFallbackMode: newProgram.generationProvenance?.generationMode === previousProgram.generationProvenance?.generationMode,
+    sameRationale: newProgram.programRationale === previousProgram.programRationale,
+  }
+  
+  // Calculate similarity score (0-100)
+  const weights = {
+    sameSessionCount: 10,
+    sameDayFocusOrder: 15,
+    sameFirstTwoExercisesPerDay: 25,
+    sameDayDurations: 5,
+    sameSessionTitles: 5,
+    samePrimaryExerciseFamilies: 20,
+    sameLimiterPath: 10,
+    sameFallbackMode: 5,
+    sameRationale: 5,
+  }
+  
+  let similarityScore = 0
+  for (const [key, weight] of Object.entries(weights)) {
+    if (signals[key as keyof TemplateSimilaritySignals]) {
+      similarityScore += weight
+    }
+  }
+  
+  // Determine if stale
+  const staleReasons: string[] = []
+  const actualChanges: string[] = []
+  const expectedChanges: string[] = []
+  
+  // If inputs changed but similarity is high, something is wrong
+  if (inputsChanged && similarityScore >= 85) {
+    staleReasons.push('high_similarity_despite_input_change')
+    expectedChanges.push('expected_different_structure_from_input_change')
+  }
+  
+  // Track actual changes
+  if (!signals.sameSessionCount) actualChanges.push('session_count_changed')
+  if (!signals.sameDayFocusOrder) actualChanges.push('day_focus_order_changed')
+  if (!signals.sameFirstTwoExercisesPerDay) actualChanges.push('primary_exercises_changed')
+  if (!signals.samePrimaryExerciseFamilies) actualChanges.push('exercise_families_changed')
+  
+  const result: TemplateSimilarityResult = {
+    overallSimilarityScore: similarityScore,
+    appearsStale: similarityScore >= 85 && inputsChanged,
+    similaritySignals: signals,
+    staleReasons,
+    actualChanges,
+    expectedChanges,
+    comparedAt: new Date().toISOString(),
+  }
+  
+  // [program-similarity-audit] Log similarity analysis
+  console.log('[program-similarity-audit]', {
+    overallSimilarityScore: result.overallSimilarityScore,
+    appearsStale: result.appearsStale,
+    inputsChanged,
+    sameSessionCount: signals.sameSessionCount,
+    sameDayFocusOrder: signals.sameDayFocusOrder,
+    sameFirstTwoExercises: signals.sameFirstTwoExercisesPerDay,
+    samePrimaryFamilies: signals.samePrimaryExerciseFamilies,
+    actualChanges: result.actualChanges.length,
+    staleReasons: result.staleReasons,
+  })
+  
+  return result
+}
+
+/**
+ * [anti-template] TASK E: Compute quality classification based on assembly path
+ */
+function computeQualityClassification(provenance: GenerationProvenance): QualityClassification {
+  const totalSessions = provenance.directSessionCount + provenance.fallbackSessionCount + provenance.rescueSessionCount
+  
+  const directRatio = totalSessions > 0 ? provenance.directSessionCount / totalSessions : 0
+  const fallbackRatio = totalSessions > 0 ? provenance.fallbackSessionCount / totalSessions : 0
+  const rescueRatio = totalSessions > 0 ? provenance.rescueSessionCount / totalSessions : 0
+  
+  let qualityTier: QualityTier = 'direct_high_confidence'
+  let tierReason = ''
+  
+  if (rescueRatio > 0.5) {
+    qualityTier = 'rescue_built'
+    tierReason = 'More than half of sessions required rescue path'
+  } else if (rescueRatio > 0) {
+    qualityTier = 'low_confidence'
+    tierReason = 'Some sessions required rescue path'
+  } else if (fallbackRatio > 0.3) {
+    qualityTier = 'constraint_supported'
+    tierReason = 'Significant constraint-based fallback used'
+  } else if (fallbackRatio > 0) {
+    qualityTier = 'direct_with_adjustments'
+    tierReason = 'Minor constraint adjustments applied'
+  } else if (provenance.compressionPoints.length > 0) {
+    qualityTier = 'direct_with_adjustments'
+    tierReason = `Compression applied: ${provenance.compressionPoints[0]}`
+  }
+  
+  const confidenceScore = Math.round(
+    (directRatio * 100) - (fallbackRatio * 30) - (rescueRatio * 50)
+  )
+  
+  const classification: QualityClassification = {
+    qualityTier,
+    directSelectionRatio: Math.round(directRatio * 100) / 100,
+    fallbackSelectionRatio: Math.round(fallbackRatio * 100) / 100,
+    rescueSelectionRatio: Math.round(rescueRatio * 100) / 100,
+    confidenceScore: Math.max(0, Math.min(100, confidenceScore)),
+    tierReason,
+  }
+  
+  return classification
 }
 
 // =============================================================================

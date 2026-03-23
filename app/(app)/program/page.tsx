@@ -20,7 +20,7 @@ import { ArrowLeft, Dumbbell, Plus, Sparkles, AlertTriangle, Loader2, Info } fro
 import Link from 'next/link'
 
 // TASK 5: Lightweight type imports only - actual modules loaded dynamically
-import type { AdaptiveProgramInputs, AdaptiveProgram, GenerationErrorCode } from '@/lib/adaptive-program-builder'
+import type { AdaptiveProgramInputs, AdaptiveProgram, GenerationErrorCode, TemplateSimilarityResult } from '@/lib/adaptive-program-builder'
 import type { TrainingDays } from '@/lib/program-service'
 // [profile-truth-sync] ISSUE A: Import drift detection for settings/program alignment
 // [equipment-truth-fix] TASK C: Import equipment normalizer for canonical saves
@@ -205,6 +205,7 @@ export default function ProgramPage() {
     saveAdaptiveProgram: typeof import('@/lib/adaptive-program-builder').saveAdaptiveProgram | null
     deleteAdaptiveProgram: typeof import('@/lib/adaptive-program-builder').deleteAdaptiveProgram | null
     getDefaultAdaptiveInputs: typeof import('@/lib/adaptive-program-builder').getDefaultAdaptiveInputs | null
+    computeTemplateSimilarity: typeof import('@/lib/adaptive-program-builder').computeTemplateSimilarity | null
     getProgramState: typeof import('@/lib/program-state').getProgramState | null
     normalizeProgramForDisplay: typeof import('@/lib/program-state').normalizeProgramForDisplay | null
     isRenderableProgram: typeof import('@/lib/program-state').isRenderableProgram | null
@@ -216,6 +217,7 @@ export default function ProgramPage() {
     saveAdaptiveProgram: null,
     deleteAdaptiveProgram: null,
     getDefaultAdaptiveInputs: null,
+    computeTemplateSimilarity: null,
     getProgramState: null,
     normalizeProgramForDisplay: null,
     isRenderableProgram: null,
@@ -301,18 +303,19 @@ export default function ProgramPage() {
         
         // TASK 3: Stage 5 - Store loaded modules
         setLoadStage('storing-modules')
-        setProgramModules({
-          generateAdaptiveProgram: builderMod.generateAdaptiveProgram,
-          saveAdaptiveProgram: builderMod.saveAdaptiveProgram,
-          deleteAdaptiveProgram: builderMod.deleteAdaptiveProgram,
-          getDefaultAdaptiveInputs: builderMod.getDefaultAdaptiveInputs,
-          getProgramState: stateMod.getProgramState,
-          normalizeProgramForDisplay: stateMod.normalizeProgramForDisplay,
-          isRenderableProgram: stateMod.isRenderableProgram,
-          isProgramDisplaySafe: stateMod.isProgramDisplaySafe,
-          getProgramStatus: adjustmentMod.getProgramStatus,
-          recordProgramEnd: adjustmentMod.recordProgramEnd,
-        })
+setProgramModules({
+  generateAdaptiveProgram: builderMod.generateAdaptiveProgram,
+  saveAdaptiveProgram: builderMod.saveAdaptiveProgram,
+  deleteAdaptiveProgram: builderMod.deleteAdaptiveProgram,
+  getDefaultAdaptiveInputs: builderMod.getDefaultAdaptiveInputs,
+  computeTemplateSimilarity: builderMod.computeTemplateSimilarity,
+  getProgramState: stateMod.getProgramState,
+  normalizeProgramForDisplay: stateMod.normalizeProgramForDisplay,
+  isRenderableProgram: stateMod.isRenderableProgram,
+  isProgramDisplaySafe: stateMod.isProgramDisplaySafe,
+  getProgramStatus: adjustmentMod.getProgramStatus,
+  recordProgramEnd: adjustmentMod.recordProgramEnd,
+  })
         
         // Run hygiene if available
         if (hygieneMod) {
@@ -376,6 +379,18 @@ export default function ProgramPage() {
               setProgram(normalizedProgram)
               setShowBuilder(false)
               setLoadStage('program-ready')
+              
+              // [program-save-truth-audit] TASK H: Log program hydration state on load
+              console.log('[program-save-truth-audit] Hydration on mount:', {
+                context: 'page_load',
+                programId: normalizedProgram.id,
+                createdAt: normalizedProgram.createdAt,
+                sessionCount: normalizedProgram.sessions?.length || 0,
+                firstSessionId: normalizedProgram.sessions?.[0]?.id || 'none',
+                firstSessionExerciseCount: normalizedProgram.sessions?.[0]?.exercises?.length || 0,
+                provenanceMode: normalizedProgram.generationProvenance?.generationMode || 'unknown',
+                qualityTier: normalizedProgram.qualityClassification?.qualityTier || 'unknown',
+              })
             } else {
               // TASK 2: Program exists but fails display sanity - show recovery state, not fatal error
               setLoadStage(`program-malformed:${displayCheck.reason || 'unknown'}`)
@@ -688,6 +703,22 @@ export default function ProgramPage() {
         // [program-build] STAGE 7: Update UI state
         generationStage = 'updating_ui'
         console.log('[program-build] STAGE 7: Updating UI state...')
+        
+        // [program-save-truth-audit] TASK H: Verify program being saved matches what will display
+        console.log('[program-save-truth-audit]', {
+          programId: newProgram.id,
+          createdAt: newProgram.createdAt,
+          sessionCount: newProgram.sessions?.length || 0,
+          firstSessionId: newProgram.sessions?.[0]?.id || 'none',
+          firstSessionExerciseCount: newProgram.sessions?.[0]?.exercises?.length || 0,
+          provenanceMode: newProgram.generationProvenance?.generationMode || 'unknown',
+          provenanceFreshness: newProgram.generationProvenance?.generationFreshness || 'unknown',
+          qualityTier: newProgram.qualityClassification?.qualityTier || 'unknown',
+          directSessionRatio: newProgram.qualityClassification?.directSelectionRatio || 0,
+          templateSimilarity: newProgram.templateSimilarity?.overallSimilarityScore || 'not_computed',
+          appearsStale: newProgram.templateSimilarity?.appearsStale || false,
+        })
+        
         setProgram(newProgram)
         setShowBuilder(false)
         
@@ -986,6 +1017,37 @@ export default function ProgramPage() {
           totalExerciseCount: newProgram.sessions?.reduce((sum, s) => sum + (s.exercises?.length || 0), 0) || 0,
         })
         
+        // [anti-template] TASK B: Compute template similarity to previous program
+        regenerateStage = 'computing_similarity'
+        if (programModules.computeTemplateSimilarity && program) {
+          try {
+            const similarityResult = programModules.computeTemplateSimilarity(
+              newProgram,
+              program,
+              true // inputs changed since this is a regeneration
+            )
+            // Attach similarity result to new program
+            ;(newProgram as AdaptiveProgram & { templateSimilarity?: TemplateSimilarityResult }).templateSimilarity = similarityResult
+            
+            console.log('[program-similarity-audit] REGEN similarity computed:', {
+              overallSimilarityScore: similarityResult.overallSimilarityScore,
+              appearsStale: similarityResult.appearsStale,
+              actualChanges: similarityResult.actualChanges.length,
+              staleReasons: similarityResult.staleReasons,
+            })
+            
+            // Warn if rebuild appears stale-like
+            if (similarityResult.appearsStale) {
+              console.warn('[anti-template] REBUILD WARNING: New program appears template-like despite regeneration', {
+                similarityScore: similarityResult.overallSimilarityScore,
+                staleReasons: similarityResult.staleReasons,
+              })
+            }
+          } catch (simErr) {
+            console.warn('[program-similarity-audit] Failed to compute similarity:', simErr)
+          }
+        }
+        
   // [program-build] REGEN STAGE 7: Save to storage
   regenerateStage = 'saving'
   console.log('[program-build] REGEN STAGE 7: Saving snapshot...')
@@ -1090,6 +1152,24 @@ export default function ProgramPage() {
         
         // [program-rebuild-truth] REGEN STAGE 8: Update UI state
         regenerateStage = 'updating_ui'
+        
+        // [program-save-truth-audit] TASK H: Verify regenerated program matches what will display
+        console.log('[program-save-truth-audit]', {
+          context: 'regeneration',
+          oldProgramId: program?.id || 'none',
+          newProgramId: newProgram.id,
+          createdAt: newProgram.createdAt,
+          sessionCount: newProgram.sessions?.length || 0,
+          firstSessionId: newProgram.sessions?.[0]?.id || 'none',
+          firstSessionExerciseCount: newProgram.sessions?.[0]?.exercises?.length || 0,
+          provenanceMode: newProgram.generationProvenance?.generationMode || 'unknown',
+          provenanceFreshness: newProgram.generationProvenance?.generationFreshness || 'unknown',
+          qualityTier: newProgram.qualityClassification?.qualityTier || 'unknown',
+          directSessionRatio: newProgram.qualityClassification?.directSelectionRatio || 0,
+          templateSimilarity: newProgram.templateSimilarity?.overallSimilarityScore || 'not_computed',
+          appearsStale: newProgram.templateSimilarity?.appearsStale || false,
+        })
+        
         setProgram(newProgram)
         setShowBuilder(false)
         

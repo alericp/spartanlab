@@ -84,6 +84,9 @@ export type BuildAttemptSubCode =
   | 'session_middle_helper_failed'
   | 'session_variant_generation_failed'
   | 'finisher_helper_failed'
+  // Post-session mutation failures
+  | 'post_session_mutation_failed'
+  | 'post_session_integrity_invalid'
   | 'none'
 
 /**
@@ -188,6 +191,11 @@ export function getErrorUserMessage(
       return 'Session variants could not be prepared.' + suffix
     case 'finisher_helper_failed':
       return 'Optional session finishing work could not be added, but your core plan remains available.' + suffix
+    // STEP H: Post-session mutation failure messages
+    case 'post_session_mutation_failed':
+      return 'A session detail could not be finalized.' + suffix
+    case 'post_session_integrity_invalid':
+      return 'Your rebuilt session became invalid before final save.' + suffix
     default:
       // Fall through to error code handling
       break

@@ -1713,6 +1713,32 @@ function selectMainExercises(
   }
   
   // ==========================================================================
+  // [selection-influence-audit] TASK F: Log athlete data influence on selection
+  // ==========================================================================
+  console.log('[selection-influence-audit]', {
+    dayNumber: day.dayNumber,
+    dayFocus: day.focus,
+    primaryGoal,
+    // Input influence tracking
+    hasSkillsForSession: !!(skillsForSession && skillsForSession.length > 0),
+    skillsForSessionCount: skillsForSession?.length || 0,
+    skillsToExpress: skillsForSession?.map(s => s.skill).slice(0, 3) || [],
+    experienceLevel,
+    // Pool analysis
+    tier1_skillPoolSize: potentialDirectSkillPool.length,
+    tier2_strengthSupportSize: potentialStrengthSupport.length,
+    availableSkillsTotal: availableSkills.length,
+    availableStrengthTotal: availableStrength.length,
+    // Constraint influence
+    hasConstraint: !!constraintType,
+    constraintType: constraintType || 'none',
+    mustDowngrade: mustDowngradeToSupport,
+    // Equipment influence
+    equipmentCount: equipment.length,
+    hasWeightedEquipment,
+  })
+  
+  // ==========================================================================
   // Selection based on day focus
   // ==========================================================================
   

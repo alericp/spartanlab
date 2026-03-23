@@ -61,6 +61,65 @@ export interface FlexibleFrequencyInput {
   weekNumber?: number
 }
 
+// =============================================================================
+// [TASK 1] FLEXIBLE FREQUENCY ROOT-CAUSE CLASSIFICATION
+// =============================================================================
+
+/**
+ * [TASK 1] Why did the flexible frequency resolve to its final number?
+ * This is the critical diagnostic to distinguish true adaptive from baseline fallback.
+ */
+export type FlexibleFrequencyReasonCategory =
+  | 'goal_typical_baseline'        // Used goal's typical value (4 for most goals)
+  | 'joint_caution_conservative'   // Reduced due to joint cautions
+  | 'poor_recovery_reduction'      // Reduced due to recovery profile
+  | 'high_compliance_expansion'    // Increased due to good compliance history
+  | 'low_history_default'          // Low workout history, using safe default
+  | 'high_volume_conservative'     // Recent high volume, being conservative
+  | 'true_adaptive_adjustment'     // Real feedback-driven adjustment
+  | 'static_contamination'         // Flexible mode but static value leaked through
+  | 'fallback_frequency'           // Could not resolve, used emergency fallback
+  | 'experience_modifier_applied'  // Adjusted based on experience level
+
+/**
+ * [TASK 1] Root-cause audit for flexible frequency resolution.
+ * This enables precise diagnosis of why frequency landed on a specific value.
+ */
+export interface FlexibleFrequencyRootCauseAudit {
+  // Input values
+  canonicalScheduleMode: string
+  canonicalTrainingDaysPerWeek: number | string | null
+  canonicalSessionDurationMode: string
+  requestedScheduleMode: string
+  requestedTrainingDaysPerWeek: number | string | null
+  
+  // Goal-based resolution
+  goalRangeMin: number
+  goalRangeMax: number
+  goalTypical: number
+  
+  // Modifiers applied
+  experienceModifier: number
+  jointCautionPenalty: number
+  recoveryScore: number | null
+  recentWorkoutCount: number | null
+  
+  // Resolution trace
+  preAdjustmentFrequency: number
+  postAdjustmentFrequency: number
+  finalFrequency: number
+  
+  // Root cause classification
+  finalReasonCategory: FlexibleFrequencyReasonCategory
+  reasonDetails: string
+  
+  // Was this truly adaptive?
+  isTrueAdaptive: boolean
+  isBaselineDefault: boolean
+  wasModifiedFromBaseline: boolean
+  modificationSteps: string[]
+}
+
 export interface FlexibleWeekStructure {
   // Core output
   currentWeekFrequency: number
@@ -78,6 +137,9 @@ export interface FlexibleWeekStructure {
   
   // ISSUE D FIX: Clear wording source tracking
   wordingSource: 'saved_preference' | 'profile_resolution' | 'history_adaptation'
+  
+  // [TASK 1] Root-cause audit for why frequency resolved to this value
+  rootCauseAudit: FlexibleFrequencyRootCauseAudit
   
   // For future weekly adaptation
   suggestedNextWeekAdjustment?: 'maintain' | 'increase' | 'decrease'
@@ -136,6 +198,8 @@ const HIGH_TENDON_GOALS: PrimaryGoal[] = ['planche', 'front_lever', 'back_lever'
 /**
  * Resolves the current week's flexible training structure.
  * This is the main entry point for flexible schedule resolution.
+ * 
+ * [TASK 1] Now includes root-cause audit for precise diagnosis.
  */
 export function resolveFlexibleFrequency(input: FlexibleFrequencyInput): FlexibleWeekStructure {
   console.log('[flex-frequency] Resolving flexible week structure:', {
@@ -143,6 +207,10 @@ export function resolveFlexibleFrequency(input: FlexibleFrequencyInput): Flexibl
     primaryGoal: input.primaryGoal,
     experienceLevel: input.experienceLevel,
   })
+  
+  // [TASK 1] Track modification steps for root-cause audit
+  const modificationSteps: string[] = []
+  let reasonCategory: FlexibleFrequencyReasonCategory = 'goal_typical_baseline'
   
   // If static mode, return a simple structure matching the static days
   if (input.scheduleMode === 'static') {
@@ -159,40 +227,79 @@ export function resolveFlexibleFrequency(input: FlexibleFrequencyInput): Flexibl
   let maxDays = Math.min(6, goalRange.max + (expMod.canGoHigh ? 1 : 0))
   let typicalDays = goalRange.typical + expMod.freqMod
   
+  // [TASK 1] Track baseline before modifications
+  const goalTypicalBaseline = goalRange.typical
+  const preModificationTypical = typicalDays
+  modificationSteps.push(`Goal baseline: ${goalRange.typical}, with exp modifier: ${expMod.freqMod} -> ${typicalDays}`)
+  
+  if (expMod.freqMod !== 0) {
+    reasonCategory = 'experience_modifier_applied'
+  }
+  
+  // [TASK 1] Track joint caution penalty
+  let jointCautionPenalty = 0
+  
   // Apply joint caution adjustments
   if (input.jointCautions && input.jointCautions.length > 0) {
-    const cautionPenalty = Math.min(input.jointCautions.length, 2)
-    maxDays = Math.max(minDays, maxDays - cautionPenalty)
+    jointCautionPenalty = Math.min(input.jointCautions.length, 2)
+    const beforeCaution = typicalDays
+    maxDays = Math.max(minDays, maxDays - jointCautionPenalty)
     typicalDays = Math.max(minDays, typicalDays - 1)
-    console.log('[flex-frequency] Joint cautions applied:', { cautionPenalty, maxDays, typicalDays })
+    modificationSteps.push(`Joint caution penalty: -${jointCautionPenalty} max, -1 typical (${beforeCaution} -> ${typicalDays})`)
+    reasonCategory = 'joint_caution_conservative'
+    console.log('[flex-frequency] Joint cautions applied:', { cautionPenalty: jointCautionPenalty, maxDays, typicalDays })
   }
+  
+  // [TASK 1] Track recovery score
+  let recoveryScore: number | null = null
   
   // Apply recovery profile adjustments
   if (input.recoveryProfile) {
-    const recoveryScore = calculateRecoveryScore(input.recoveryProfile)
+    recoveryScore = calculateRecoveryScore(input.recoveryProfile)
+    const beforeRecovery = typicalDays
     if (recoveryScore < 0.5) {
       typicalDays = Math.max(minDays, typicalDays - 1)
+      modificationSteps.push(`Poor recovery (score: ${recoveryScore.toFixed(2)}): -1 (${beforeRecovery} -> ${typicalDays})`)
+      reasonCategory = 'poor_recovery_reduction'
       console.log('[flex-frequency] Poor recovery - reducing frequency')
     } else if (recoveryScore > 0.8 && expMod.canGoHigh) {
       typicalDays = Math.min(maxDays, typicalDays + 1)
+      modificationSteps.push(`Good recovery (score: ${recoveryScore.toFixed(2)}): +1 (${beforeRecovery} -> ${typicalDays})`)
+      reasonCategory = 'high_compliance_expansion'
       console.log('[flex-frequency] Good recovery - allowing higher frequency')
     }
   }
   
   // Apply recent training load check
   if (input.recentWorkoutCount !== undefined) {
+    const beforeWorkloadCheck = typicalDays
     if (input.recentWorkoutCount > 5) {
       // Already training frequently, be conservative
       typicalDays = Math.max(minDays, typicalDays - 1)
+      modificationSteps.push(`High recent volume (${input.recentWorkoutCount} sessions): -1 (${beforeWorkloadCheck} -> ${typicalDays})`)
+      reasonCategory = 'high_volume_conservative'
       console.log('[flex-frequency] High recent volume - being conservative')
     } else if (input.recentWorkoutCount < 2) {
       // Under-training, can encourage more
       typicalDays = Math.min(maxDays, typicalDays + 1)
+      modificationSteps.push(`Low recent volume (${input.recentWorkoutCount} sessions): +1 (${beforeWorkloadCheck} -> ${typicalDays})`)
+      reasonCategory = 'low_history_default'
     }
   }
   
   // Ensure typical is within bounds
   const currentFrequency = Math.max(minDays, Math.min(maxDays, typicalDays))
+  
+  // [TASK 1] Determine if this was truly adaptive or just baseline
+  const isBaselineDefault = currentFrequency === goalTypicalBaseline && modificationSteps.length <= 1
+  const wasModifiedFromBaseline = currentFrequency !== goalTypicalBaseline || modificationSteps.length > 1
+  const isTrueAdaptive = wasModifiedFromBaseline && reasonCategory !== 'goal_typical_baseline'
+  
+  // If nothing modified and we're at baseline, explicitly mark it
+  if (!wasModifiedFromBaseline) {
+    reasonCategory = 'goal_typical_baseline'
+    modificationSteps.push(`No modifiers applied - using goal baseline: ${goalTypicalBaseline}`)
+  }
   
   // Determine intensity distribution
   const intensityDistribution = determineIntensityDistribution(input, currentFrequency)
@@ -212,6 +319,31 @@ export function resolveFlexibleFrequency(input: FlexibleFrequencyInput): Flexibl
   // Generate rationale
   const rationale = generateFrequencyRationale(input, currentFrequency, intensityDistribution)
   
+  // [TASK 1] Build root-cause audit
+  const rootCauseAudit: FlexibleFrequencyRootCauseAudit = {
+    canonicalScheduleMode: input.scheduleMode,
+    canonicalTrainingDaysPerWeek: input.trainingDaysPerWeek ?? null,
+    canonicalSessionDurationMode: 'adaptive', // flexible always implies adaptive duration
+    requestedScheduleMode: input.scheduleMode,
+    requestedTrainingDaysPerWeek: input.trainingDaysPerWeek ?? null,
+    goalRangeMin: goalRange.min,
+    goalRangeMax: goalRange.max,
+    goalTypical: goalRange.typical,
+    experienceModifier: expMod.freqMod,
+    jointCautionPenalty,
+    recoveryScore,
+    recentWorkoutCount: input.recentWorkoutCount ?? null,
+    preAdjustmentFrequency: preModificationTypical,
+    postAdjustmentFrequency: typicalDays,
+    finalFrequency: currentFrequency,
+    finalReasonCategory: reasonCategory,
+    reasonDetails: modificationSteps.join(' | '),
+    isTrueAdaptive,
+    isBaselineDefault,
+    wasModifiedFromBaseline,
+    modificationSteps,
+  }
+  
   const result: FlexibleWeekStructure = {
     currentWeekFrequency: currentFrequency,
     recommendedMinDays: minDays,
@@ -223,6 +355,8 @@ export function resolveFlexibleFrequency(input: FlexibleFrequencyInput): Flexibl
     isConservative: intensityDistribution === 'conservative',
     // ISSUE D FIX: Track wording source - this is based on profile resolution, not history yet
     wordingSource: 'profile_resolution',
+    // [TASK 1] Include root-cause audit
+    rootCauseAudit,
   }
   
   // ENGINE PROOF: Record flexible schedule resolution
@@ -232,6 +366,22 @@ export function resolveFlexibleFrequency(input: FlexibleFrequencyInput): Flexibl
     range: `${minDays}-${maxDays}`,
     distribution: intensityDistribution,
     hasJointCautions: (input.jointCautions?.length || 0) > 0,
+  })
+  
+  // [TASK 1] Structured root-cause audit log
+  console.log('[flex-root-cause-audit]', {
+    finalFrequency: currentFrequency,
+    finalReasonCategory: reasonCategory,
+    isTrueAdaptive,
+    isBaselineDefault,
+    wasModifiedFromBaseline,
+    goalTypical: goalRange.typical,
+    goalRange: `${goalRange.min}-${goalRange.max}`,
+    experienceModifier: expMod.freqMod,
+    jointCautionPenalty,
+    recoveryScore,
+    recentWorkoutCount: input.recentWorkoutCount,
+    modificationSteps,
   })
   
   console.log('[flex-frequency] Resolved structure:', {
@@ -371,6 +521,31 @@ function createStaticWeekStructure(days: number): FlexibleWeekStructure {
     else pattern.push('lower_fatigue_density')
   }
   
+  // [TASK 1] Static mode root-cause audit - marks as static contamination if called for flexible
+  const staticRootCauseAudit: FlexibleFrequencyRootCauseAudit = {
+    canonicalScheduleMode: 'static',
+    canonicalTrainingDaysPerWeek: days,
+    canonicalSessionDurationMode: 'static',
+    requestedScheduleMode: 'static',
+    requestedTrainingDaysPerWeek: days,
+    goalRangeMin: days,
+    goalRangeMax: days,
+    goalTypical: days,
+    experienceModifier: 0,
+    jointCautionPenalty: 0,
+    recoveryScore: null,
+    recentWorkoutCount: null,
+    preAdjustmentFrequency: days,
+    postAdjustmentFrequency: days,
+    finalFrequency: days,
+    finalReasonCategory: 'static_contamination', // Static mode called - not true flexible
+    reasonDetails: `Static ${days}-day schedule from profile preference`,
+    isTrueAdaptive: false,
+    isBaselineDefault: true,
+    wasModifiedFromBaseline: false,
+    modificationSteps: [`Static mode: using ${days} days as configured`],
+  }
+  
   return {
     currentWeekFrequency: days,
     recommendedMinDays: days,
@@ -382,6 +557,8 @@ function createStaticWeekStructure(days: number): FlexibleWeekStructure {
     isConservative: false,
     // ISSUE D FIX: Static mode is always based on saved preference
     wordingSource: 'saved_preference',
+    // [TASK 1] Include root-cause audit even for static
+    rootCauseAudit: staticRootCauseAudit,
   }
 }
 
@@ -498,4 +675,6 @@ export type {
   FlexibleWeekStructure,
   WeeklyAdaptationInput,
   WeeklyAdaptationResult,
+  FlexibleFrequencyReasonCategory,
+  FlexibleFrequencyRootCauseAudit,
 }

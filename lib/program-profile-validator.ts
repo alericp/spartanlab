@@ -937,23 +937,58 @@ export function validateProgramAgainstProfile(
   else warnings.push('summary_rationale')
   
   // ==========================================================================
-  // CALCULATE OVERALL SCORE
+  // CALCULATE OVERALL SCORE - [constraint-balance] TASK E: Reweighted scoring
   // ==========================================================================
   const passCount = passed.length
   const warningCount = warnings.length
   const mismatchCount = failures.filter(f => !failures.includes(f)).length // avoid double count
   const criticalCount = checks.filter(c => c.severity === 'critical').length
   
-  // Score: pass=100%, warning=60%, mismatch=20%, critical=0%
-  const totalChecks = checks.length
-  const passScore = checks.filter(c => c.severity === 'pass').length * 100
-  const warningScore = checks.filter(c => c.severity === 'warning').length * 60
-  const mismatchScore = checks.filter(c => c.severity === 'mismatch').length * 20
-  const criticalScore = checks.filter(c => c.severity === 'critical').length * 0
+  // [constraint-balance] TASK E: Weight categories for quality scoring
+  // Direct skill work and progression clarity are weighted higher
+  // Generic strength volume is weighted lower
+  const CATEGORY_WEIGHTS: Record<string, number> = {
+    skill_expression: 2.0,    // Heavily weight direct skill work
+    goals: 1.5,               // Primary goal alignment is important
+    weighted_strength: 1.2,   // Weighted progression matters
+    schedule: 1.0,            // Standard weight
+    duration: 0.8,            // Less critical
+    summary: 0.6,             // Lower weight - cosmetic
+  }
   
-  const overallScore = totalChecks > 0 
-    ? Math.round((passScore + warningScore + mismatchScore + criticalScore) / totalChecks)
+  // Calculate weighted score
+  let weightedPassScore = 0
+  let weightedWarningScore = 0
+  let weightedMismatchScore = 0
+  let totalWeight = 0
+  
+  for (const check of checks) {
+    const categoryWeight = CATEGORY_WEIGHTS[check.category] || 1.0
+    totalWeight += categoryWeight
+    
+    if (check.severity === 'pass') {
+      weightedPassScore += 100 * categoryWeight
+    } else if (check.severity === 'warning') {
+      weightedWarningScore += 60 * categoryWeight
+    } else if (check.severity === 'mismatch') {
+      weightedMismatchScore += 20 * categoryWeight
+    }
+    // critical = 0 weight contribution
+  }
+  
+  const overallScore = totalWeight > 0 
+    ? Math.round((weightedPassScore + weightedWarningScore + weightedMismatchScore) / totalWeight)
     : 0
+  
+  // [constraint-balance] TASK E: Log quality score breakdown
+  console.log('[constraint-balance] Quality score calculation:', {
+    categoryWeights: CATEGORY_WEIGHTS,
+    skillExpressionChecks: checks.filter(c => c.category === 'skill_expression').length,
+    skillExpressionPassed: checks.filter(c => c.category === 'skill_expression' && c.severity === 'pass').length,
+    totalWeight,
+    weightedPassScore,
+    overallScore,
+  })
   
   const isValid = criticalCount === 0 && failures.length === 0
   

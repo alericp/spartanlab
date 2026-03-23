@@ -65,14 +65,34 @@ export function evaluateSkillSignals(inputs: SkillSignalInputs): ConstraintSigna
   }
   
   // Skill Density Deficit
+  // [constraint-balance] TASK A: Rebalanced - cap score at 5 instead of 8
+  // This prevents constraint from over-dominating primary skill expression
+  // A score of 5 still indicates need for more skill exposure, but doesn't suppress skill work
   if (inputs.weeklyDensity < THRESHOLDS.minWeeklyDensity) {
     const severity = 1 - (inputs.weeklyDensity / THRESHOLDS.minWeeklyDensity)
+    // [constraint-balance] TASK A: Maximum score capped at 5 (was 8)
+    // This is an INFORMATIONAL constraint, not a suppression constraint
+    const cappedScore = Math.min(5, Math.round(severity * 6))
+    
+    console.log('[constraint-balance] Skill density deficit evaluation:', {
+      weeklyDensity: inputs.weeklyDensity,
+      threshold: THRESHOLDS.minWeeklyDensity,
+      rawSeverity: severity,
+      cappedScore,
+      recommendation: 'increase_frequency_not_reduce_skill',
+    })
+    
     signals.push({
       type: 'skill_density_deficit',
       category: 'skill',
-      score: Math.min(8, Math.round(severity * 10)),
+      score: cappedScore,
       confidence: inputs.sessionsThisWeek > 0 ? 'high' : 'medium',
-      rawMetrics: { weeklyDensity: inputs.weeklyDensity, threshold: THRESHOLDS.minWeeklyDensity },
+      rawMetrics: { 
+        weeklyDensity: inputs.weeklyDensity, 
+        threshold: THRESHOLDS.minWeeklyDensity,
+        // [constraint-balance] TASK D: New behavior flag
+        behaviorMode: 'increase_frequency',
+      },
     })
   }
   

@@ -409,13 +409,33 @@ export default function ProgramPage() {
   const [generationError, setGenerationError] = useState<string | null>(null)
   const [lastBuildResult, setLastBuildResult] = useState<BuildAttemptResult | null>(null)
   
-  // Load last build result on mount
+  // Load last build result on mount - but clear stale failures if current program is newer
   useEffect(() => {
     const stored = getLastBuildAttemptResult()
     if (stored) {
+      // ==========================================================================
+      // [post-build-truth] TASK C: Prevent stale failure persistence
+      // If we have a valid program that's newer than a failed build result,
+      // the failure is obsolete and should not be shown
+      // ==========================================================================
+      if (stored.status !== 'success' && program) {
+        const programDate = new Date(program.createdAt).getTime()
+        const failureDate = new Date(stored.attemptedAt).getTime()
+        
+        // If current program is newer than the failure, clear the stale failure
+        if (programDate > failureDate) {
+          console.log('[post-build-truth] Clearing stale failure result - program is newer', {
+            programCreatedAt: program.createdAt,
+            failureAttemptedAt: stored.attemptedAt,
+            programId: program.id,
+          })
+          clearLastBuildAttemptResult()
+          return // Don't set the stale failure
+        }
+      }
       setLastBuildResult(stored)
     }
-  }, [])
+  }, [program])
   
   // TASK 5: Handlers use dynamically imported modules
   // HARDENED: Full try/catch/finally to prevent stuck spinner state
@@ -563,6 +583,33 @@ export default function ProgramPage() {
           createdAt: newProgram.createdAt,
         })
         
+        // ==========================================================================
+        // [post-build-truth] TASK A: Persist builder inputs to canonical profile
+        // This ensures future drift detection uses the actual values from this build
+        // ==========================================================================
+        generationStage = 'persisting_canonical_profile'
+        console.log('[post-build-truth] STAGE 6d: Persisting builder inputs to canonical profile...')
+        try {
+          saveCanonicalProfile({
+            trainingDaysPerWeek: inputs.trainingDaysPerWeek ?? undefined,
+            sessionLengthMinutes: inputs.sessionLength ?? undefined,
+            // Preserve schedule mode: flexible stays flexible, static stays static
+            scheduleMode: inputs.scheduleMode === 'flexible' || inputs.scheduleMode === 'adaptive' 
+              ? 'flexible' 
+              : 'static',
+            equipmentAvailable: inputs.equipment ?? undefined,
+          })
+          console.log('[post-build-truth] STAGE 6d: Canonical profile updated', {
+            trainingDaysPerWeek: inputs.trainingDaysPerWeek,
+            sessionLength: inputs.sessionLength,
+            scheduleMode: inputs.scheduleMode,
+            equipmentCount: inputs.equipment?.length || 0,
+          })
+        } catch (profileErr) {
+          // Non-core: log but don't fail the build
+          console.warn('[post-build-truth] STAGE 6d: Canonical profile save failed (non-core):', profileErr)
+        }
+        
         // [program-build] STAGE 7: Update UI state
         generationStage = 'updating_ui'
         console.log('[program-build] STAGE 7: Updating UI state...')
@@ -693,6 +740,22 @@ export default function ProgramPage() {
           failureDayNumber = dayMatch ? Number(dayMatch[1]) : null
           failureFocus = focusMatch ? focusMatch[1] : null
           failureGoal = goalMatch ? goalMatch[1] : null
+        }
+        
+        // ==========================================================================
+        // [post-build-truth] TASK D: Classify post-save failures precisely
+        // If failure happened in a post-generation stage and we don't have a structured step,
+        // use generationStage as the failureStep to eliminate "Step: unavailable"
+        // ==========================================================================
+        const postSaveStages = ['saving', 'verifying_save', 'freshness_sync', 'persisting_canonical_profile', 'persisting_build_result', 'updating_ui']
+        if (!failureStep && postSaveStages.includes(generationStage)) {
+          failureStep = generationStage
+          failureReason = failureReason || errorMessage.slice(0, 120)
+          console.log('[post-build-truth] Classified post-save failure:', {
+            stage: generationStage,
+            step: failureStep,
+            reason: failureReason?.slice(0, 60),
+          })
         }
         
         // [rebuild-error-response] Log what we're passing to state
@@ -879,6 +942,31 @@ export default function ProgramPage() {
           previousProgramId: program?.id,
         })
         
+        // ==========================================================================
+        // [post-build-truth] TASK A: Persist builder inputs to canonical profile on regen
+        // ==========================================================================
+        regenerateStage = 'persisting_canonical_profile'
+        console.log('[post-build-truth] REGEN STAGE 7d: Persisting builder inputs to canonical profile...')
+        try {
+          saveCanonicalProfile({
+            trainingDaysPerWeek: inputs.trainingDaysPerWeek ?? undefined,
+            sessionLengthMinutes: inputs.sessionLength ?? undefined,
+            scheduleMode: inputs.scheduleMode === 'flexible' || inputs.scheduleMode === 'adaptive' 
+              ? 'flexible' 
+              : 'static',
+            equipmentAvailable: inputs.equipment ?? undefined,
+          })
+          console.log('[post-build-truth] REGEN STAGE 7d: Canonical profile updated', {
+            trainingDaysPerWeek: inputs.trainingDaysPerWeek,
+            sessionLength: inputs.sessionLength,
+            scheduleMode: inputs.scheduleMode,
+            equipmentCount: inputs.equipment?.length || 0,
+          })
+        } catch (profileErr) {
+          // Non-core: log but don't fail the build
+          console.warn('[post-build-truth] REGEN STAGE 7d: Canonical profile save failed (non-core):', profileErr)
+        }
+        
         // [program-rebuild-truth] REGEN STAGE 8: Update UI state
         regenerateStage = 'updating_ui'
         setProgram(newProgram)
@@ -1007,6 +1095,20 @@ export default function ProgramPage() {
           failureDayNumber = dayMatch ? Number(dayMatch[1]) : null
           failureFocus = focusMatch ? focusMatch[1] : null
           failureGoal = goalMatch ? goalMatch[1] : null
+        }
+        
+        // ==========================================================================
+        // [post-build-truth] TASK D: Classify post-save failures precisely for regen
+        // ==========================================================================
+        const postSaveStages = ['saving', 'verifying_save', 'freshness_sync', 'persisting_canonical_profile', 'persisting_build_result', 'updating_ui']
+        if (!failureStep && postSaveStages.includes(regenerateStage)) {
+          failureStep = regenerateStage
+          failureReason = failureReason || errorMessage.slice(0, 120)
+          console.log('[post-build-truth] Classified post-save failure in regen:', {
+            stage: regenerateStage,
+            step: failureStep,
+            reason: failureReason?.slice(0, 60),
+          })
         }
         
         // [rebuild-error-response] Log what we're passing to state

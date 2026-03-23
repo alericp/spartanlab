@@ -73,6 +73,8 @@ import {
   getEngineFieldConsumption,
   verifyEngineFieldWiring,
   validateProfileForGeneration,
+  // TASK 3-A: Fix missing import for profile signature (was causing "getProfileSignature is not defined")
+  getProfileSignature,
 } from './canonical-profile-service'
 import { buildGenerationInput, getSystemStateFlags, type GenerationMode } from './program-state-contract'
 import { normalizeProfile, computeLimiter, dedupeExercises, type NormalizedProfile } from './profile-normalizer'
@@ -274,6 +276,8 @@ import {
 } from './constraint-aware-assembly-engine'
 import {
   initializeAdaptiveCycleState,
+  // TASK 3-B: Fix missing import for cycle explanation (prevents late-stage scope failure)
+  generateCycleExplanation,
   type AdaptiveCycleState,
   type CycleBuilderModifications,
   type AdaptiveCyclePhase,
@@ -2950,6 +2954,16 @@ console.log('[program-generate] Generation complete:', {
   if (!structure || !Array.isArray(sessions) || sessions.length === 0) {
     throw new Error(`Program integrity check failed: structure=${!!structure} sessions=${sessions.length}`)
   }
+  
+  // TASK 3-C: Finalization scope-safety audit - verify all late-stage helpers are in scope
+  console.log('[post-validation-scope-audit]', {
+    hasGetProfileSignature: typeof getProfileSignature === 'function',
+    hasGetProgressionInsights: typeof getProgressionInsights === 'function',
+    hasGetReadinessAssessment: typeof getReadinessAssessment === 'function',
+    hasGetReadyToProgress: typeof getReadyToProgress === 'function',
+    hasGetConsistencyStatus: typeof getConsistencyStatus === 'function',
+    hasGenerateCycleExplanation: typeof generateCycleExplanation === 'function',
+  })
   
   return {
     id: `adaptive-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,

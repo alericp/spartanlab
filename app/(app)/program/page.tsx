@@ -605,13 +605,13 @@ export default function ProgramPage() {
           })
         }
         
-        // [program-rebuild-truth] Determine sub-code for more specific messaging (expanded)
-        // STEP G: Read structured subCode from GenerationError context FIRST
+        // [program-rebuild-truth] Determine sub-code for more specific messaging
+        // Read structured subCode from GenerationError context FIRST
         const structuredSubCode = isGenerationError 
           ? (err as { context?: Record<string, unknown> }).context?.subCode as string | undefined
           : undefined
         
-        // STEP G: Known BuildAttemptSubCode values from structured context
+        // Known BuildAttemptSubCode values from structured context
         const knownSubCodes = [
           'empty_structure_days', 'empty_final_session_array', 'session_count_mismatch',
           'session_save_blocked', 'assembly_unknown_failure', 'empty_exercise_pool',
@@ -619,11 +619,12 @@ export default function ProgramPage() {
           'effective_selection_invalid', 'session_middle_helper_failed',
           'session_variant_generation_failed', 'finisher_helper_failed',
           'session_has_no_exercises', 'post_session_mutation_failed', 'post_session_integrity_invalid',
+          'session_generation_failed', 'exercise_selection_returned_null',
         ]
         
         let subCode: BuildAttemptSubCode = 'none'
         
-        // STEP G: Prefer structured subCode if it's a known value
+        // Prefer structured subCode if it's a known value
         if (structuredSubCode && knownSubCodes.includes(structuredSubCode)) {
           subCode = structuredSubCode as BuildAttemptSubCode
         } else {
@@ -632,6 +633,9 @@ export default function ProgramPage() {
           else if (errorMessage.includes('empty_structure_days')) subCode = 'empty_structure_days'
           else if (errorMessage.includes('empty_final_session_array') || errorMessage.includes('sessions_empty')) subCode = 'empty_final_session_array'
           else if (errorMessage.includes('session_count_mismatch')) subCode = 'session_count_mismatch'
+          // Full lifecycle failure (STEP H)
+          else if (errorMessage.includes('session_generation_failed')) subCode = 'session_generation_failed'
+          else if (errorMessage.includes('exercise_selection_returned_null')) subCode = 'exercise_selection_returned_null'
           // Post-session failures
           else if (errorMessage.includes('post_session_mutation_failed')) subCode = 'post_session_mutation_failed'
           else if (errorMessage.includes('post_session_integrity_invalid')) subCode = 'post_session_integrity_invalid'
@@ -654,7 +658,7 @@ export default function ProgramPage() {
           else if (errorMessage.includes('exercise') && errorMessage.includes('null')) subCode = 'empty_exercise_pool'
         }
         
-        // [program-rebuild-truth] TASK 2: Create failed build result
+        // Create failed build result
         const profileSig = inputs ? createProfileSignature(inputs) : 'unknown'
         const failedResult = createFailedBuildResult(
           errorCode,
@@ -860,13 +864,13 @@ export default function ProgramPage() {
           })
         }
         
-        // [program-rebuild-truth] Determine sub-code (expanded)
-        // STEP G: Read structured subCode from GenerationError context FIRST
+        // [program-rebuild-truth] Determine sub-code
+        // Read structured subCode from GenerationError context FIRST
         const structuredSubCode = isGenerationError 
           ? (err as { context?: Record<string, unknown> }).context?.subCode as string | undefined
           : undefined
         
-        // STEP G: Known BuildAttemptSubCode values from structured context
+        // Known BuildAttemptSubCode values from structured context
         const knownSubCodes = [
           'empty_structure_days', 'empty_final_session_array', 'session_count_mismatch',
           'session_save_blocked', 'assembly_unknown_failure', 'empty_exercise_pool',
@@ -874,11 +878,12 @@ export default function ProgramPage() {
           'effective_selection_invalid', 'session_middle_helper_failed',
           'session_variant_generation_failed', 'finisher_helper_failed',
           'session_has_no_exercises', 'post_session_mutation_failed', 'post_session_integrity_invalid',
+          'session_generation_failed', 'exercise_selection_returned_null',
         ]
         
         let subCode: BuildAttemptSubCode = 'none'
         
-        // STEP G: Prefer structured subCode if it's a known value
+        // Prefer structured subCode if it's a known value
         if (structuredSubCode && knownSubCodes.includes(structuredSubCode)) {
           subCode = structuredSubCode as BuildAttemptSubCode
         } else {
@@ -887,6 +892,9 @@ export default function ProgramPage() {
           else if (errorMessage.includes('empty_structure_days')) subCode = 'empty_structure_days'
           else if (errorMessage.includes('empty_final_session_array') || errorMessage.includes('sessions_empty')) subCode = 'empty_final_session_array'
           else if (errorMessage.includes('session_count_mismatch')) subCode = 'session_count_mismatch'
+          // Full lifecycle failure
+          else if (errorMessage.includes('session_generation_failed')) subCode = 'session_generation_failed'
+          else if (errorMessage.includes('exercise_selection_returned_null')) subCode = 'exercise_selection_returned_null'
           // Post-session failures
           else if (errorMessage.includes('post_session_mutation_failed')) subCode = 'post_session_mutation_failed'
           else if (errorMessage.includes('post_session_integrity_invalid')) subCode = 'post_session_integrity_invalid'

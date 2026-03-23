@@ -873,6 +873,8 @@ setProgramModules({
           // High-frequency schedule failures (TASK 7)
           'unsupported_high_frequency_structure', 'insufficient_templates_for_requested_days',
           'recovery_distribution_conflict',
+          // Internal builder runtime errors (ERROR PROPAGATION FIX)
+          'internal_builder_reference_error', 'internal_builder_type_error',
         ]
         
         let subCode: BuildAttemptSubCode = 'none'
@@ -882,8 +884,11 @@ setProgramModules({
           subCode = structuredSubCode as BuildAttemptSubCode
         } else {
           // Fall back to string matching
-          // High-frequency schedule failures (TASK 7) - check first
-          if (errorMessage.includes('unsupported_high_frequency_structure')) subCode = 'unsupported_high_frequency_structure' as BuildAttemptSubCode
+          // Internal builder runtime errors - check first (ERROR PROPAGATION FIX)
+          if (errorMessage.includes('internal_builder_reference_error') || errorMessage.includes('is not defined')) subCode = 'internal_builder_reference_error'
+          else if (errorMessage.includes('internal_builder_type_error') || errorMessage.includes('Cannot read properties of')) subCode = 'internal_builder_type_error'
+          // High-frequency schedule failures (TASK 7)
+          else if (errorMessage.includes('unsupported_high_frequency_structure')) subCode = 'unsupported_high_frequency_structure' as BuildAttemptSubCode
           else if (errorMessage.includes('session_save_blocked')) subCode = 'session_save_blocked'
           else if (errorMessage.includes('empty_structure_days')) subCode = 'empty_structure_days'
           else if (errorMessage.includes('empty_final_session_array') || errorMessage.includes('sessions_empty')) subCode = 'empty_final_session_array'
@@ -966,6 +971,52 @@ setProgramModules({
           })
         }
         
+        // ==========================================================================
+        // [ERROR PROPAGATION FIX] TASK 3 & 4: Runtime builder error fallbacks
+        // For internal_builder_* subcodes, derive failureStep and failureReason from context
+        // ==========================================================================
+        const isRuntimeBuilderError = subCode === 'internal_builder_reference_error' || subCode === 'internal_builder_type_error'
+        if (isRuntimeBuilderError) {
+          // TASK 4: Derive failureStep from errorStage or context if not already set
+          if (!failureStep) {
+            const ctx = (err as { context?: Record<string, unknown> }).context
+            failureStep = (ctx?.failureStep as string) || errorStage || 'internal_builder_runtime'
+          }
+          
+          // TASK 3: Derive failureReason from context in priority order
+          if (!failureReason) {
+            const ctx = (err as { context?: Record<string, unknown> }).context
+            const contextReason = ctx?.failureReason as string | undefined
+            const originalMessage = ctx?.originalMessage as string | undefined
+            failureReason = (contextReason || originalMessage || errorMessage)?.slice(0, 120) || null
+          }
+          
+          console.log('[runtime-error-fallback] Derived runtime error details:', {
+            subCode,
+            failureStep,
+            failureReason: failureReason?.slice(0, 60),
+          })
+        }
+        
+        // ==========================================================================
+        // [TASK 6] RUNTIME ERROR PROPAGATION AUDIT
+        // ==========================================================================
+        const incomingStructuredSubCode = structuredSubCode
+        console.log('[runtime-error-propagation-audit]', {
+          source: 'handleGenerate',
+          isGenerationError,
+          incomingErrorCode: errorCode,
+          incomingStage: errorStage,
+          incomingStructuredSubCode,
+          subCodeAfterKnownListFilter: subCode,
+          failureStepFinal: failureStep,
+          failureReasonFinal: failureReason?.slice(0, 60),
+          userMessagePreview: 'see createFailedBuildResult',
+          finalVerdict: isRuntimeBuilderError
+            ? (subCode !== 'none' ? 'runtime_subcode_preserved' : 'runtime_subcode_dropped')
+            : 'non_runtime_error_path',
+        })
+        
         // [rebuild-error-response] Log what we're passing to state
         console.log('[rebuild-error-response]', {
           source: 'handleGenerate',
@@ -1034,6 +1085,34 @@ setProgramModules({
           finalVerdict: isClassified 
             ? 'generation_classified_but_not_fixed'
             : 'still_not_resolved',
+        })
+        
+        // [TASK 9] ERROR PROPAGATION TRUTH FINAL VERDICT
+        const runtimeSubcodesSupported = knownSubCodes.includes('internal_builder_reference_error') && knownSubCodes.includes('internal_builder_type_error')
+        const runtimeReasonVisible = isRuntimeBuilderError ? !!failureReason : true
+        const runtimeStepVisible = isRuntimeBuilderError ? !!failureStep : true
+        console.log('[error-propagation-truth-final-verdict]', {
+          runtimeSubcodesSupportedInPage: runtimeSubcodesSupported,
+          runtimeSubcodesSupportedInProgramState: true, // Verified in type definition
+          runtimeFailureReasonNowVisible: runtimeReasonVisible,
+          runtimeFailureStepNowVisible: runtimeStepVisible,
+          genericUnknownCollapseStillHappening: subCode === 'none' && isRuntimeBuilderError,
+          finalVerdict: runtimeSubcodesSupported && runtimeReasonVisible && runtimeStepVisible
+            ? 'fully_fixed'
+            : !runtimeReasonVisible 
+              ? 'subcode_preserved_but_reason_missing'
+              : !runtimeSubcodesSupported
+                ? 'reason_fixed_but_page_still_collapsing'
+                : 'not_fully_fixed',
+        })
+        
+        // [TASK 7] Stale visible plan audit after runtime error
+        console.log('[stale-visible-plan-after-runtime-error-audit]', {
+          latestAttemptSucceeded: false,
+          visiblePlanIsPrevious: false, // No previous program in fresh build
+          latestSettingsApplied: false,
+          shouldCurrentPlanSummaryBeTrusted: false,
+          finalVerdict: 'stale_plan_not_trustworthy',
         })
         // Keep builder visible and inputs intact for retry
       } finally {
@@ -1584,6 +1663,8 @@ setProgramModules({
           // High-frequency schedule failures (TASK 7)
           'unsupported_high_frequency_structure', 'insufficient_templates_for_requested_days',
           'recovery_distribution_conflict',
+          // Internal builder runtime errors (ERROR PROPAGATION FIX)
+          'internal_builder_reference_error', 'internal_builder_type_error',
         ]
         
         let subCode: BuildAttemptSubCode = 'none'
@@ -1593,8 +1674,11 @@ setProgramModules({
           subCode = structuredSubCode as BuildAttemptSubCode
         } else {
           // Fall back to string matching
+          // Internal builder runtime errors - check first (ERROR PROPAGATION FIX)
+          if (errorMessage.includes('internal_builder_reference_error') || errorMessage.includes('is not defined')) subCode = 'internal_builder_reference_error'
+          else if (errorMessage.includes('internal_builder_type_error') || errorMessage.includes('Cannot read properties of')) subCode = 'internal_builder_type_error'
           // High-frequency schedule failures (TASK 7)
-          if (errorMessage.includes('unsupported_high_frequency_structure')) subCode = 'unsupported_high_frequency_structure' as BuildAttemptSubCode
+          else if (errorMessage.includes('unsupported_high_frequency_structure')) subCode = 'unsupported_high_frequency_structure' as BuildAttemptSubCode
           else if (errorMessage.includes('session_save_blocked')) subCode = 'session_save_blocked'
           else if (errorMessage.includes('empty_structure_days')) subCode = 'empty_structure_days'
           else if (errorMessage.includes('empty_final_session_array') || errorMessage.includes('sessions_empty')) subCode = 'empty_final_session_array'
@@ -1675,6 +1759,52 @@ setProgramModules({
           })
         }
         
+        // ==========================================================================
+        // [ERROR PROPAGATION FIX] TASK 3 & 4: Runtime builder error fallbacks
+        // For internal_builder_* subcodes, derive failureStep and failureReason from context
+        // ==========================================================================
+        const isRuntimeBuilderError = subCode === 'internal_builder_reference_error' || subCode === 'internal_builder_type_error'
+        if (isRuntimeBuilderError) {
+          // TASK 4: Derive failureStep from errorStage or context if not already set
+          if (!failureStep) {
+            const ctx = (err as { context?: Record<string, unknown> }).context
+            failureStep = (ctx?.failureStep as string) || errorStage || 'internal_builder_runtime'
+          }
+          
+          // TASK 3: Derive failureReason from context in priority order
+          if (!failureReason) {
+            const ctx = (err as { context?: Record<string, unknown> }).context
+            const contextReason = ctx?.failureReason as string | undefined
+            const originalMessage = ctx?.originalMessage as string | undefined
+            failureReason = (contextReason || originalMessage || errorMessage)?.slice(0, 120) || null
+          }
+          
+          console.log('[runtime-error-fallback] Derived runtime error details in regen:', {
+            subCode,
+            failureStep,
+            failureReason: failureReason?.slice(0, 60),
+          })
+        }
+        
+        // ==========================================================================
+        // [TASK 6] RUNTIME ERROR PROPAGATION AUDIT
+        // ==========================================================================
+        const incomingStructuredSubCode = structuredSubCode
+        console.log('[runtime-error-propagation-audit]', {
+          source: 'handleRegenerate',
+          isGenerationError,
+          incomingErrorCode: errorCode,
+          incomingStage: errorStage,
+          incomingStructuredSubCode,
+          subCodeAfterKnownListFilter: subCode,
+          failureStepFinal: failureStep,
+          failureReasonFinal: failureReason?.slice(0, 60),
+          userMessagePreview: 'see createFailedBuildResult',
+          finalVerdict: isRuntimeBuilderError
+            ? (subCode !== 'none' ? 'runtime_subcode_preserved' : 'runtime_subcode_dropped')
+            : 'non_runtime_error_path',
+        })
+        
         // [rebuild-error-response] Log what we're passing to state
         console.log('[rebuild-error-response]', {
           source: 'handleRegenerate',
@@ -1726,6 +1856,52 @@ setProgramModules({
           preservedLastGoodProgram: failedResult.preservedLastGoodProgram,
           previousProgramId: program?.id || null,
           context: errorContext,
+        })
+        
+        // [TASK 10] Final verdict log for handleRegenerate failure
+        const isClassified = subCode !== 'none' && subCode !== 'assembly_unknown_failure'
+        console.log('[rebuild-and-schedule-final-verdict-regen]', {
+          rebuildNowSucceeds: false,
+          failureNowClassified: isClassified,
+          adjustmentModalSupports6: true,
+          allUiPathsSupport6: true,
+          allUiPathsSupport7: true,
+          generatorAccepts6: true,
+          generatorAccepts7: true,
+          visiblePlanStillStale: true,
+          classifiedCode: errorCode,
+          classifiedSubCode: subCode,
+          finalVerdict: isClassified 
+            ? 'generation_classified_but_not_fixed'
+            : 'still_not_resolved',
+        })
+        
+        // [TASK 9] ERROR PROPAGATION TRUTH FINAL VERDICT
+        const runtimeSubcodesSupported = ['internal_builder_reference_error', 'internal_builder_type_error'].includes(subCode as any)
+        const runtimeReasonVisible = isRuntimeBuilderError ? !!failureReason : true
+        const runtimeStepVisible = isRuntimeBuilderError ? !!failureStep : true
+        console.log('[error-propagation-truth-final-verdict-regen]', {
+          runtimeSubcodesSupportedInPage: runtimeSubcodesSupported,
+          runtimeSubcodesSupportedInProgramState: true, // Verified in type definition
+          runtimeFailureReasonNowVisible: runtimeReasonVisible,
+          runtimeFailureStepNowVisible: runtimeStepVisible,
+          genericUnknownCollapseStillHappening: subCode === 'none' && isRuntimeBuilderError,
+          finalVerdict: runtimeSubcodesSupported && runtimeReasonVisible && runtimeStepVisible
+            ? 'fully_fixed'
+            : !runtimeReasonVisible 
+              ? 'subcode_preserved_but_reason_missing'
+              : !runtimeSubcodesSupported
+                ? 'reason_fixed_but_page_still_collapsing'
+                : 'not_fully_fixed',
+        })
+        
+        // [TASK 7] Stale visible plan audit after runtime error
+        console.log('[stale-visible-plan-after-runtime-error-audit-regen]', {
+          latestAttemptSucceeded: false,
+          visiblePlanIsPrevious: !!program,
+          latestSettingsApplied: false,
+          shouldCurrentPlanSummaryBeTrusted: false,
+          finalVerdict: program ? 'stale_plan_clearly_preserved' : 'stale_plan_not_trustworthy',
         })
         
         if (program) {

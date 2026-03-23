@@ -42,7 +42,8 @@ export type PrimaryGoal = 'planche' | 'front_lever' | 'back_lever' | 'muscle_up'
 export type ExperienceLevel = 'beginner' | 'intermediate' | 'advanced'
 export type SecondaryEmphasis = 'pulling_strength' | 'pushing_strength' | 'core_control' | 'skill_technique' | 'hypertrophy_support' | 'none'
 export type SessionLength = 30 | 45 | 60 | 75 | 90 | 120 | '10-20' | '20-30' | '30-45' | '45-60' | '60+'
-export type TrainingDays = 2 | 3 | 4 | 5
+// [TASK 5] Expanded to support 6 and 7 days/week for intensity-managed schedules
+export type TrainingDays = 2 | 3 | 4 | 5 | 6 | 7
 
 export interface ProgramInputs {
   primaryGoal: PrimaryGoal

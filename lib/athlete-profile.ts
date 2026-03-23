@@ -744,7 +744,8 @@ export const TRAINING_PATH_DESCRIPTIONS: Record<TrainingPathType, string> = {
 // TRAINING SCHEDULE
 // =============================================================================
 
-export type TrainingDaysPerWeek = 2 | 3 | 4 | 5 | 6 | 'flexible'
+// [TASK 5] Expanded to support 7 days/week for intensity-managed schedules (e.g. OTZ-style)
+export type TrainingDaysPerWeek = 2 | 3 | 4 | 5 | 6 | 7 | 'flexible'
 
 // Workout duration: 20=20-30min, 30=30-45min, 45=45-60min, 60=60-75min, 75=75-90min, 90=90min, 120=120min
   export type SessionLengthPreference = 20 | 30 | 45 | 60 | 75 | 90 | 120 | 'flexible'

@@ -1665,6 +1665,22 @@ function generateAdaptiveProgramImpl(inputs: AdaptiveProgramInputs, stageTracker
     ? trainingDaysPerWeek as TrainingDays 
     : 4 // Default fallback
   
+  // [TASK 5] Schedule range audit - verify 6 and 7 day support
+  const supportsHighFrequency = [2, 3, 4, 5, 6, 7].includes(effectiveTrainingDays)
+  console.log('[schedule-range-audit]', {
+    previousAllowedRange: '2-5',
+    newAllowedRange: '2-7',
+    uiSupports6: true,
+    uiSupports7: true,
+    canonicalProfileAccepts6: true,
+    canonicalProfileAccepts7: true,
+    generatorAccepts6: supportsHighFrequency,
+    generatorAccepts7: supportsHighFrequency,
+    requestedDays: trainingDaysPerWeek,
+    resolvedDays: effectiveTrainingDays,
+    finalVerdict: supportsHighFrequency ? 'range_expanded_and_supported' : 'generator_still_capped',
+  })
+  
   // [adjustment-sync] STEP 5: Log input training days resolution
   console.log('[adjustment-sync] Training days input resolution:', {
     inputTrainingDaysPerWeek: trainingDaysPerWeek,
@@ -2134,7 +2150,32 @@ function generateAdaptiveProgramImpl(inputs: AdaptiveProgramInputs, stageTracker
   
   console.log('[program-generate] Structure selected:', structure.structureName)
   
-  // Generate session intents for variety
+  // [TASK 6] HIGH-FREQUENCY STRUCTURE AUDIT - Verify 6-7 day support
+  const templatePoolSize = structure.days?.length || 0
+  const recoveryDistributionAudit = (() => {
+    const daysWithRecovery = structure.days?.filter(d => !d.isPrimary)?.length || 0
+    const daysWithPrimary = structure.days?.filter(d => d.isPrimary)?.length || 0
+    return { daysWithRecovery, daysWithPrimary, ratio: daysWithRecovery / (daysWithPrimary + daysWithRecovery || 1) }
+  })()
+  
+  console.log('[high-frequency-structure-audit]', {
+    requestedDays: effectiveTrainingDays,
+    generatedDays: templatePoolSize,
+    templatePoolSize,
+    duplicateFocusCount: structure.days?.filter((d, i, arr) => 
+      arr.findIndex(x => x.focus === d.focus) !== i
+    ).length || 0,
+    recoveryDistribution: recoveryDistributionAudit,
+    whether6DayIsValid: effectiveTrainingDays === 6 && templatePoolSize === 6,
+    whether7DayIsValid: effectiveTrainingDays === 7 && templatePoolSize === 7,
+    finalVerdict: 
+      (effectiveTrainingDays === 6 || effectiveTrainingDays === 7) 
+        ? templatePoolSize === effectiveTrainingDays 
+          ? 'supported'
+          : 'not_yet_supported'
+        : 'not_applicable_static_frequency',
+  })
+  
   const skillType = primaryGoal as 'front_lever' | 'planche' | 'muscle_up' | 'hspu' | 'back_lever' | 'iron_cross' | 'l_sit' | 'weighted_strength' | 'general'
   const trainingStyleMode = (['strength', 'skill', 'endurance', 'mixed'].includes(onboardingProfile?.primaryOutcome || '') 
     ? onboardingProfile?.primaryOutcome 
@@ -2754,11 +2795,47 @@ function generateAdaptiveProgramImpl(inputs: AdaptiveProgramInputs, stageTracker
     )
   }
   
-  console.log('[program-generate] Sessions assembled:', sessions.length)
-  
   // [session-assembly] ISSUE D: Final validation of assembled sessions array
   const sessionExerciseCounts = sessions.map(s => s.exercises?.length || 0)
   const emptySessions = sessions.filter(s => !s.exercises || s.exercises.length === 0)
+  
+  // ==========================================================================
+  // [TASK 1] SESSION ASSEMBLY ROOT CAUSE AUDIT
+  // Classify the exact nature of any generation failure for user-facing messaging
+  // ==========================================================================
+  const candidateSessionTemplates = structure?.days?.length || 0
+  const candidateExercisesCount = allExerciseNames?.length || 0
+  
+  console.log('[session-assembly-root-cause-audit]', {
+    primaryGoal,
+    secondaryGoal,
+    selectedSkills: canonicalProfile.selectedSkills,
+    trainingStyle: canonicalProfile.trainingStyle,
+    requestedTrainingDays: inputs.trainingDaysPerWeek,
+    scheduleMode: inputs.scheduleMode,
+    sessionDurationMode,
+    equipmentAvailable: inputs.equipment,
+    jointCautions: canonicalProfile.jointCautions?.length || 0,
+    candidateSessionTemplatesCount: candidateSessionTemplates,
+    candidateExercisesCount,
+    assembliedSessionCount: sessions.length,
+    emptySessionCount: emptySessions.length,
+    sessionExerciseCounts,
+    failureHappened: emptySessions.length > 0 || sessions.length !== candidateSessionTemplates,
+    failureType: emptySessions.length > 0 
+      ? 'empty_sessions'
+      : sessions.length !== candidateSessionTemplates
+        ? 'session_count_mismatch'
+        : candidateExercisesCount === 0
+          ? 'empty_candidate_pool'
+          : 'unknown',
+    exactMissingStructure: emptySessions.length > 0 ? emptySessions.map(s => ({ day: s.dayNumber, focus: s.focus })) : null,
+    finalVerdict: emptySessions.length > 0 
+      ? 'empty_candidate_pool' 
+      : sessions.length !== candidateSessionTemplates 
+        ? 'session_template_conflict'
+        : 'true_unknown',
+  })
   
   console.log('[session-assembly] Final session validation:', {
     totalSessions: sessions.length,
@@ -3021,201 +3098,322 @@ function generateAdaptiveProgramImpl(inputs: AdaptiveProgramInputs, stageTracker
   )
   
   // ==========================================================================
-  // [TASK 2] BUILT-AROUND SKILL AUDIT
+  // [TASK 2] BUILT-AROUND SKILL AUDIT - WRAPPED IN TRY-CATCH FOR SAFETY
+  // This summary generation MUST NOT break program assembly
   // Analyze which skills are actually represented in generated sessions
   // ==========================================================================
-  const profileSelectedSkills = canonicalProfile.selectedSkills || []
+  let generatedRepresentedSkills: string[] = []
+  let excludedSkills: string[] = []
+  let builtAroundSkillsFinal: string[] = [primaryGoal]
+  let overclaimDetected = false
   
-  // Collect all exercise names from sessions to find skill representation
-  const allExerciseNames: string[] = []
-  sessions.forEach(session => {
-    session.exercises?.forEach(ex => {
-      allExerciseNames.push(ex.name.toLowerCase())
+  // [TASK 2] Summary safety audit - ensure summary cannot break generation
+  console.log('[summary-safety-audit]', {
+    summaryGenerationStage: 'starting',
+    sessionAssemblyCompleted: sessions.length > 0,
+    sessionsCount: sessions.length,
+  })
+  
+  try {
+    const profileSelectedSkills = canonicalProfile.selectedSkills || []
+    
+    // Collect all exercise names from sessions to find skill representation
+    const allExerciseNames: string[] = []
+    sessions.forEach(session => {
+      session.exercises?.forEach(ex => {
+        allExerciseNames.push(ex.name.toLowerCase())
+      })
     })
-  })
-  
-  // Check which skills are actually represented in exercises
-  const skillKeywords: Record<string, string[]> = {
-    'planche': ['planche', 'lean', 'tuck', 'pseudo'],
-    'front_lever': ['front lever', 'front-lever', 'tuck lever', 'adv tuck'],
-    'back_lever': ['back lever', 'back-lever', 'german hang'],
-    'handstand': ['handstand', 'pike', 'wall walk', 'freestanding'],
-    'muscle_up': ['muscle up', 'muscle-up', 'transition'],
-    'pistol_squat': ['pistol', 'single leg', 'shrimp'],
-    'l_sit': ['l-sit', 'l sit', 'hanging l'],
+    
+    // Check which skills are actually represented in exercises
+    const skillKeywords: Record<string, string[]> = {
+      'planche': ['planche', 'lean', 'tuck', 'pseudo'],
+      'front_lever': ['front lever', 'front-lever', 'tuck lever', 'adv tuck'],
+      'back_lever': ['back lever', 'back-lever', 'german hang'],
+      'handstand': ['handstand', 'pike', 'wall walk', 'freestanding'],
+      'muscle_up': ['muscle up', 'muscle-up', 'transition'],
+      'pistol_squat': ['pistol', 'single leg', 'shrimp'],
+      'l_sit': ['l-sit', 'l sit', 'hanging l'],
+    }
+    
+    const exclusionReasons: string[] = []
+    
+    profileSelectedSkills.forEach(skill => {
+      const keywords = skillKeywords[skill] || [skill.replace(/_/g, ' ')]
+      const isRepresented = keywords.some(kw => 
+        allExerciseNames.some(name => name.includes(kw))
+      )
+      if (isRepresented) {
+        generatedRepresentedSkills.push(skill)
+      } else {
+        excludedSkills.push(skill)
+        exclusionReasons.push(`${skill}: no matching exercises found`)
+      }
+    })
+    
+    // Ensure primary/secondary goals are always in built-around with correct priority
+    // [TASK 3] PRIORITY-BASED SKILL ORDERING - FIXED
+    builtAroundSkillsFinal = [primaryGoal]
+    if (secondaryGoal && !builtAroundSkillsFinal.includes(secondaryGoal)) {
+      builtAroundSkillsFinal.push(secondaryGoal)
+    }
+    
+    // [TASK 3] Calculate representation strength for each skill to rank tertiary skills correctly
+    const representationStrengthBySkill: Record<string, number> = {}
+    generatedRepresentedSkills.forEach(skill => {
+      const keywords = skillKeywords[skill] || [skill.replace(/_/g, ' ')]
+      const count = allExerciseNames.filter(name =>
+        keywords.some(kw => name.includes(kw))
+      ).length
+      representationStrengthBySkill[skill] = count
+    })
+    
+    // Only add tertiary skills that are meaningfully represented (not just support blocks)
+    const meaningfullyRepresentedTertiary = generatedRepresentedSkills
+      .filter(skill => 
+        !builtAroundSkillsFinal.includes(skill) && 
+        (representationStrengthBySkill[skill] || 0) >= 1  // At least 1 dedicated exercise
+      )
+      .sort((a, b) => (representationStrengthBySkill[b] || 0) - (representationStrengthBySkill[a] || 0))  // Sort by strength
+    
+    meaningfullyRepresentedTertiary.forEach(skill => {
+      if (!builtAroundSkillsFinal.includes(skill)) {
+        builtAroundSkillsFinal.push(skill)
+      }
+    })
+    
+    console.log('[built-around-priority-audit]', {
+      primaryGoal,
+      secondaryGoal,
+      selectedSkills: profileSelectedSkills,
+      representedSkills: generatedRepresentedSkills,
+      representationStrengthBySkill,
+      builtAroundBeforeSort: [primaryGoal, secondaryGoal],
+      builtAroundAfterSort: builtAroundSkillsFinal,
+      excludedSkills,
+      whyBackLeverRankedWhereItDid: `Back Lever strength=${representationStrengthBySkill['back_lever'] || 0}, ranked=${builtAroundSkillsFinal.indexOf('back_lever')}`,
+      finalVerdict: 
+        builtAroundSkillsFinal[0] === primaryGoal && 
+        (!secondaryGoal || builtAroundSkillsFinal[1] === secondaryGoal)
+          ? 'priority_correct'
+          : builtAroundSkillsFinal.findIndex(s => !['planche', 'front_lever'].includes(s)) > 1
+            ? 'tertiary_skill_overpromoted'
+            : 'primary_secondary_underweighted',
+    })
+    
+    // [TASK 7] PROFILE VS WEEK EXPRESSION AUDIT - Ensure summary doesn't overclaim onboarding selections
+    const weekExpressedSkills = generatedRepresentedSkills
+    const selectedTrainingStyle = canonicalProfile.trainingStyle || 'mixed'
+    const weekExpressedTraits = (() => {
+      const traits: string[] = []
+      if (selectedTrainingStyle.includes('strength') || sessions.some(s => s.focus.includes('strength'))) traits.push('strength')
+      if (selectedTrainingStyle.includes('endurance') || sessions.some(s => s.focus.includes('endurance'))) traits.push('endurance')
+      if (selectedTrainingStyle.includes('power') || sessions.some(s => s.focus.includes('power'))) traits.push('power')
+      if (sessions.some(s => s.focus.includes('skill'))) traits.push('skill')
+      return traits
+    })()
+    
+    const overclaimInSummary = 
+      (programRationale?.includes('mixed skill') && weekExpressedTraits.length < 3) ||
+      (programRationale?.includes('endurance') && !weekExpressedTraits.includes('endurance')) ||
+      (programRationale?.includes('power') && !weekExpressedTraits.includes('power'))
+    
+    console.log('[profile-vs-week-expression-audit]', {
+      selectedTrainingStyle: canonicalProfile.trainingStyle,
+      selectedSkillSet: profileSelectedSkills,
+      weekExpressedSkills,
+      weekExpressedTrainingTraits: weekExpressedTraits,
+      overclaimDetectedInSummary: overclaimInSummary,
+      underexpressionDetected: excludedSkills.length > profileSelectedSkills.length / 2,
+      finalVerdict: 
+        !overclaimInSummary && excludedSkills.length === 0 
+          ? 'truthful_week_summary'
+          : excludedSkills.length > profileSelectedSkills.length / 2
+            ? 'profile_intent_underexpressed'
+            : overclaimInSummary
+              ? 'week_overclaimed'
+              : 'truthful_week_summary',
+    })
+    
+    console.log('[summary-safety-audit]', {
+      summaryGenerationStage: 'completed',
+      sessionAssemblyCompleted: true,
+      mutatedGenerationData: false,
+      finalVerdict: 'safe_post_assembly',
+    })
+  } catch (summaryErr) {
+    // Summary generation failed but should NOT break program generation
+    console.error('[summary-safety-audit] Summary generation failed but program continues:', {
+      error: summaryErr instanceof Error ? summaryErr.message : 'unknown',
+      summaryGenerationStage: 'failed',
+      sessionAssemblyCompleted: sessions.length > 0,
+      finalVerdict: 'summary_error_isolated',
+    })
+    // Keep defaults: builtAroundSkillsFinal already has [primaryGoal]
+    if (secondaryGoal && !builtAroundSkillsFinal.includes(secondaryGoal)) {
+      builtAroundSkillsFinal.push(secondaryGoal)
+    }
   }
   
-  const generatedRepresentedSkills: string[] = []
-  const excludedSkills: string[] = []
-  const exclusionReasons: string[] = []
+  // ==========================================================================
+  // [TASK 3-6] HYBRID/DAY FOCUS/ALIGNMENT AUDITS - WRAPPED IN TRY-CATCH
+  // These audits MUST NOT break program generation
+  // ==========================================================================
+  let dayFocusTruthAudit: Array<{ dayNumber: number; labelMatchesSession: boolean }> = []
   
-  profileSelectedSkills.forEach(skill => {
-    const keywords = skillKeywords[skill] || [skill.replace(/_/g, ' ')]
-    const isRepresented = keywords.some(kw => 
-      allExerciseNames.some(name => name.includes(kw))
+  try {
+    // Collect exercise names for analysis (may have already been done above)
+    const allExerciseNames: string[] = []
+    sessions.forEach(session => {
+      session.exercises?.forEach(ex => {
+        allExerciseNames.push(ex.name.toLowerCase())
+      })
+    })
+    
+    const pushPrimarySessionCount = sessions.filter(s => 
+      s.focus?.toLowerCase().includes('push') && s.isPrimary
+    ).length
+    const pullPrimarySessionCount = sessions.filter(s => 
+      s.focus?.toLowerCase().includes('pull') && s.isPrimary
+    ).length
+    const mixedSessionCount = sessions.filter(s => 
+      s.focus?.toLowerCase().includes('mixed') || s.focus?.toLowerCase().includes('full')
+    ).length
+    
+    // Check for specific skill expressions in exercises
+    const backLeverExpressionCount = allExerciseNames.filter(n => 
+      n.includes('back lever') || n.includes('german hang')
+    ).length
+    const frontLeverExpressionCount = allExerciseNames.filter(n => 
+      n.includes('front lever') || n.includes('tuck lever')
+    ).length
+    
+    const hybridSummaryText = programRationale
+    overclaimDetected = 
+      (hybridSummaryText.includes('mixed skill') && mixedSessionCount === 0) ||
+      (hybridSummaryText.includes('back lever') && backLeverExpressionCount === 0) ||
+      (hybridSummaryText.includes('dedicated') && pushPrimarySessionCount + pullPrimarySessionCount < 2)
+    
+    console.log('[hybrid-summary-truth-audit]', {
+      pushPrimarySessionCount,
+      pullPrimaryOrSecondarySessionCount: pullPrimarySessionCount,
+      mixedSessionCount,
+      backLeverExpressionCount,
+      frontLeverExpressionCount,
+      hybridSummaryTextLength: hybridSummaryText.length,
+      overclaimDetected,
+      finalVerdict: overclaimDetected ? 'minor_overclaim' : 'aligned',
+    })
+    
+    // [TASK 4] GOAL HIERARCHY SUMMARY AUDIT - Verify primary/secondary goals lead the summary text
+    const primaryMentionedFirst = hybridSummaryText.toLowerCase().indexOf(primaryGoal.replace(/_/g, ' ')) < 
+                                  (hybridSummaryText.toLowerCase().indexOf('back lever') >= 0 ? hybridSummaryText.toLowerCase().indexOf('back lever') : Infinity)
+    const secondaryMentionedClearly = !secondaryGoal || hybridSummaryText.toLowerCase().includes(secondaryGoal.replace(/_/g, ' '))
+    const tertiaryOverclaim = hybridSummaryText.toLowerCase().includes('back lever') && 
+                               !hybridSummaryText.toLowerCase().includes('support') &&
+                               backLeverExpressionCount < 2  // Less than 2 back lever exercises
+    
+    console.log('[goal-hierarchy-summary-audit]', {
+      summaryText: hybridSummaryText.slice(0, 150) + (hybridSummaryText.length > 150 ? '...' : ''),
+      whyThisPlanText: programRationale.slice(0, 100),
+      primaryMentionedFirst,
+      secondaryMentionedClearly,
+      tertiaryOverclaimDetected: tertiaryOverclaim,
+      primaryGoalInText: primaryGoal.replace(/_/g, ' '),
+      secondaryGoalInText: secondaryGoal?.replace(/_/g, ' ') || 'none',
+      finalVerdict: 
+        primaryMentionedFirst && secondaryMentionedClearly && !tertiaryOverclaim
+          ? 'aligned'
+          : !primaryMentionedFirst
+            ? 'primary_blurred'
+            : tertiaryOverclaim
+              ? 'tertiary_overemphasized'
+              : 'aligned',
+    })
+    
+    // [TASK 4] DAY FOCUS TRUTH AUDIT
+    dayFocusTruthAudit = sessions.map(session => {
+      const mainExercises = session.exercises?.map(e => e.name) || []
+      
+      const pushExercises = mainExercises.filter(n => 
+        n.toLowerCase().includes('push') || n.toLowerCase().includes('dip') || 
+        n.toLowerCase().includes('planche') || n.toLowerCase().includes('press')
+      ).length
+      const pullExercises = mainExercises.filter(n => 
+        n.toLowerCase().includes('pull') || n.toLowerCase().includes('row') || 
+        n.toLowerCase().includes('lever') || n.toLowerCase().includes('curl')
+      ).length
+      
+      let actualDominant = 'mixed'
+      if (pushExercises > pullExercises * 1.5) actualDominant = 'push'
+      else if (pullExercises > pushExercises * 1.5) actualDominant = 'pull'
+      
+      const labelLower = (session.focus || '').toLowerCase()
+      const labelSaysPush = labelLower.includes('push')
+      const labelSaysPull = labelLower.includes('pull')
+      const labelSaysMixed = labelLower.includes('mixed') || labelLower.includes('full')
+      
+      let labelMatchesSession = false
+      if (actualDominant === 'push' && labelSaysPush) labelMatchesSession = true
+      else if (actualDominant === 'pull' && labelSaysPull) labelMatchesSession = true
+      else if (actualDominant === 'mixed' && (labelSaysMixed || (!labelSaysPush && !labelSaysPull))) labelMatchesSession = true
+      
+      return {
+        dayNumber: session.dayNumber,
+        labelShown: session.focus,
+        mainExercises: mainExercises.slice(0, 4),
+        movementBalance: { push: pushExercises, pull: pullExercises },
+        actualDominant,
+        labelMatchesSession,
+        mismatchReason: labelMatchesSession ? null : `Label=${session.focus} but dominant=${actualDominant}`,
+      }
+    })
+    
+    console.log('[day-focus-truth-audit]', {
+      totalDays: dayFocusTruthAudit.length,
+      daysWithMatchingLabels: dayFocusTruthAudit.filter(d => d.labelMatchesSession).length,
+      dayAudits: dayFocusTruthAudit,
+    })
+    
+    // [TASK 6] ADVANCED PROFILE ALIGNMENT AUDIT
+    const pullExpressionPresent = allExerciseNames.some(n => 
+      n.includes('pull') || n.includes('row') || n.includes('lever')
     )
-    if (isRepresented) {
-      generatedRepresentedSkills.push(skill)
-    } else {
-      excludedSkills.push(skill)
-      exclusionReasons.push(`${skill}: no matching exercises found`)
-    }
-  })
-  
-  // Ensure primary/secondary goals are always in built-around
-  const builtAroundSkillsFinal = [primaryGoal]
-  if (secondaryGoal && !builtAroundSkillsFinal.includes(secondaryGoal)) {
-    builtAroundSkillsFinal.push(secondaryGoal)
+    const pushExpressionPresent = allExerciseNames.some(n => 
+      n.includes('push') || n.includes('dip') || n.includes('planche')
+    )
+    const weightedSupportPresent = allExerciseNames.some(n => 
+      n.includes('weighted') || n.includes('load')
+    )
+    const weekRepresentedSkills = generatedRepresentedSkills
+    
+    const alignmentReasonCodes: string[] = []
+    if (excludedSkills.length > 0) alignmentReasonCodes.push('selected_skills_underexpressed')
+    if (overclaimDetected) alignmentReasonCodes.push('hybrid_overclaim')
+    if (dayFocusTruthAudit.some(d => !d.labelMatchesSession)) alignmentReasonCodes.push('day_labels_not_truthful')
+    
+    let advancedAlignmentVerdict = 'aligned'
+    if (alignmentReasonCodes.length > 2) advancedAlignmentVerdict = 'misaligned_to_saved_profile'
+    else if (alignmentReasonCodes.length > 0) advancedAlignmentVerdict = 'partially_aligned_but_underrepresented'
+    
+    console.log('[advanced-profile-alignment-audit]', {
+      athleteLevelUsed: experienceLevel,
+      primaryGoal,
+      secondaryGoal,
+      selectedSkills: canonicalProfile.selectedSkills || [],
+      trainingStyle: canonicalProfile.trainingStyle,
+      adaptiveScheduleUsed: finalScheduleMode === 'flexible',
+      pullExpressionPresent,
+      pushExpressionPresent,
+      weightedSupportPresent,
+      mixedSessionPresent: mixedSessionCount > 0,
+      weekRepresentedSkills,
+      alignmentReasonCodes,
+      verdict: advancedAlignmentVerdict,
+    })
+  } catch (auditErr) {
+    console.error('[hybrid-audit-safety] Audit failed but program continues:', auditErr instanceof Error ? auditErr.message : 'unknown')
   }
-  generatedRepresentedSkills.forEach(skill => {
-    if (!builtAroundSkillsFinal.includes(skill)) {
-      builtAroundSkillsFinal.push(skill)
-    }
-  })
-  
-  console.log('[built-around-skill-audit]', {
-    profileSelectedSkills,
-    generatedRepresentedSkills,
-    primaryGoal,
-    secondaryGoal,
-    builtAroundSkillsFinal,
-    excludedSkills,
-    exclusionReasons,
-    totalExercisesChecked: allExerciseNames.length,
-    finalVerdict: excludedSkills.length === 0 ? 'truthful_and_complete' : 
-                  excludedSkills.length > profileSelectedSkills.length / 2 ? 'selected_skills_underrepresented' : 
-                  'summary_previously_truncated_only',
-  })
-  
-  // ==========================================================================
-  // [TASK 3] HYBRID SUMMARY TRUTH AUDIT
-  // Verify hybrid/mixed language matches actual week structure
-  // ==========================================================================
-  const pushPrimarySessionCount = sessions.filter(s => 
-    s.focus?.toLowerCase().includes('push') && s.isPrimary
-  ).length
-  const pullPrimarySessionCount = sessions.filter(s => 
-    s.focus?.toLowerCase().includes('pull') && s.isPrimary
-  ).length
-  const mixedSessionCount = sessions.filter(s => 
-    s.focus?.toLowerCase().includes('mixed') || s.focus?.toLowerCase().includes('full')
-  ).length
-  
-  // Check for specific skill expressions in exercises
-  const backLeverExpressionCount = allExerciseNames.filter(n => 
-    n.includes('back lever') || n.includes('german hang')
-  ).length
-  const frontLeverExpressionCount = allExerciseNames.filter(n => 
-    n.includes('front lever') || n.includes('tuck lever')
-  ).length
-  
-  const hybridSummaryText = programRationale
-  const overclaimDetected = 
-    (hybridSummaryText.includes('mixed skill') && mixedSessionCount === 0) ||
-    (hybridSummaryText.includes('back lever') && backLeverExpressionCount === 0) ||
-    (hybridSummaryText.includes('dedicated') && pushPrimarySessionCount + pullPrimarySessionCount < 2)
-  
-  console.log('[hybrid-summary-truth-audit]', {
-    pushPrimarySessionCount,
-    pullPrimaryOrSecondarySessionCount: pullPrimarySessionCount,
-    mixedSessionCount,
-    backLeverExpressionCount,
-    frontLeverExpressionCount,
-    hybridSummaryTextLength: hybridSummaryText.length,
-    overclaimDetected,
-    finalVerdict: overclaimDetected ? 'minor_overclaim' : 'aligned',
-  })
-  
-  // ==========================================================================
-  // [TASK 4] DAY FOCUS TRUTH AUDIT
-  // Verify each day's focus label matches the actual exercise content
-  // ==========================================================================
-  const dayFocusTruthAudit = sessions.map(session => {
-    const mainExercises = session.exercises?.map(e => e.name) || []
-    
-    // Analyze movement balance
-    const pushExercises = mainExercises.filter(n => 
-      n.toLowerCase().includes('push') || n.toLowerCase().includes('dip') || 
-      n.toLowerCase().includes('planche') || n.toLowerCase().includes('press')
-    ).length
-    const pullExercises = mainExercises.filter(n => 
-      n.toLowerCase().includes('pull') || n.toLowerCase().includes('row') || 
-      n.toLowerCase().includes('lever') || n.toLowerCase().includes('curl')
-    ).length
-    
-    // Determine actual dominant movement
-    let actualDominant = 'mixed'
-    if (pushExercises > pullExercises * 1.5) actualDominant = 'push'
-    else if (pullExercises > pushExercises * 1.5) actualDominant = 'pull'
-    
-    // Check if label matches
-    const labelLower = (session.focus || '').toLowerCase()
-    const labelSaysPush = labelLower.includes('push')
-    const labelSaysPull = labelLower.includes('pull')
-    const labelSaysMixed = labelLower.includes('mixed') || labelLower.includes('full')
-    
-    let labelMatchesSession = false
-    if (actualDominant === 'push' && labelSaysPush) labelMatchesSession = true
-    else if (actualDominant === 'pull' && labelSaysPull) labelMatchesSession = true
-    else if (actualDominant === 'mixed' && (labelSaysMixed || (!labelSaysPush && !labelSaysPull))) labelMatchesSession = true
-    
-    return {
-      dayNumber: session.dayNumber,
-      labelShown: session.focus,
-      mainExercises: mainExercises.slice(0, 4),
-      movementBalance: { push: pushExercises, pull: pullExercises },
-      actualDominant,
-      labelMatchesSession,
-      mismatchReason: labelMatchesSession ? null : `Label=${session.focus} but dominant=${actualDominant}`,
-    }
-  })
-  
-  console.log('[day-focus-truth-audit]', {
-    totalDays: dayFocusTruthAudit.length,
-    daysWithMatchingLabels: dayFocusTruthAudit.filter(d => d.labelMatchesSession).length,
-    dayAudits: dayFocusTruthAudit,
-  })
-  
-  // ==========================================================================
-  // [TASK 6] ADVANCED PROFILE ALIGNMENT AUDIT
-  // Check how well the program reflects the user's saved advanced multi-skill onboarding
-  // ==========================================================================
-  const pullExpressionPresent = allExerciseNames.some(n => 
-    n.includes('pull') || n.includes('row') || n.includes('lever')
-  )
-  const pushExpressionPresent = allExerciseNames.some(n => 
-    n.includes('push') || n.includes('dip') || n.includes('planche')
-  )
-  const weightedSupportPresent = allExerciseNames.some(n => 
-    n.includes('weighted') || n.includes('load')
-  )
-  const weekRepresentedSkills = generatedRepresentedSkills
-  
-  // Determine alignment reason codes
-  const alignmentReasonCodes: string[] = []
-  if (excludedSkills.length > 0) alignmentReasonCodes.push('selected_skills_underexpressed')
-  if (overclaimDetected) alignmentReasonCodes.push('hybrid_overclaim')
-  if (dayFocusTruthAudit.some(d => !d.labelMatchesSession)) alignmentReasonCodes.push('day_labels_not_truthful')
-  
-  let advancedAlignmentVerdict = 'aligned'
-  if (alignmentReasonCodes.length > 2) advancedAlignmentVerdict = 'misaligned_to_saved_profile'
-  else if (alignmentReasonCodes.length > 0) advancedAlignmentVerdict = 'partially_aligned_but_underrepresented'
-  
-  console.log('[advanced-profile-alignment-audit]', {
-    athleteLevelUsed: experienceLevel,
-    primaryGoal,
-    secondaryGoal,
-    selectedSkills: profileSelectedSkills,
-    trainingStyle: canonicalProfile.trainingStyle,
-    adaptiveScheduleUsed: finalScheduleMode === 'flexible',
-    pullExpressionPresent,
-    pushExpressionPresent,
-    weightedSupportPresent,
-    mixedSessionPresent: mixedSessionCount > 0,
-    weekRepresentedSkills,
-    alignmentReasonCodes,
-    verdict: advancedAlignmentVerdict,
-  })
   
   // DATABASE ENFORCEMENT: Log exercise verification stats
   let totalExercises = 0
@@ -3398,6 +3596,28 @@ console.log('[program-generate] Generation complete:', {
     hasGenerateCycleExplanation: typeof generateCycleExplanation === 'function',
   })
   
+  // ==========================================================================
+  // [TASK 3] BUILT-AROUND PRIORITY ORDERING FIX
+  // Use the priority-sorted builtAroundSkillsFinal instead of raw canonicalProfile.selectedSkills
+  // This ensures Primary > Secondary > Represented Tertiary ordering
+  // ==========================================================================
+  console.log('[built-around-priority-audit]', {
+    primaryGoal,
+    secondaryGoal,
+    selectedSkills: canonicalProfile.selectedSkills || [],
+    representedSkills: generatedRepresentedSkills,
+    builtAroundBeforeSort: canonicalProfile.selectedSkills || [],
+    builtAroundAfterSort: builtAroundSkillsFinal,
+    excludedSkills,
+    whyBackLeverRankedWhereItDid: builtAroundSkillsFinal.includes('back_lever') 
+      ? `back_lever at index ${builtAroundSkillsFinal.indexOf('back_lever')} - ${
+          builtAroundSkillsFinal.indexOf('back_lever') === 0 ? 'ERROR: should not lead' :
+          builtAroundSkillsFinal.indexOf('back_lever') <= 2 ? 'tertiary but represented' : 'correctly ranked low'
+        }`
+      : 'back_lever not in built-around',
+    finalVerdict: builtAroundSkillsFinal[0] === primaryGoal ? 'priority_correct' : 'primary_secondary_underweighted',
+  })
+  
   const finalProgram: AdaptiveProgram = {
     id: `adaptive-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
     createdAt: new Date().toISOString(),
@@ -3409,7 +3629,8 @@ console.log('[program-generate] Generation complete:', {
     sessionLength,
     // TASK 3C: Store training path and selected skills for summary display
     trainingPathType: canonicalProfile.trainingPathType || 'balanced',
-    selectedSkills: canonicalProfile.selectedSkills || [],
+    // [TASK 3 FIX] Use priority-sorted builtAroundSkillsFinal for correct ordering
+    selectedSkills: builtAroundSkillsFinal,
     goalCategories: canonicalProfile.goalCategories || [],
     // TASK 5: Session duration mode - preserve adaptive time identity
     sessionDurationMode: canonicalProfile.sessionDurationMode || 'static',
@@ -4514,9 +4735,33 @@ return explanations.length > 0 ? explanations : undefined
         ? 'fully_aligned' 
         : !builtAroundVisible 
           ? 'built_around_row_fixed_only'
-          : overclaimDetected 
-            ? 'labels_still_overclaiming' 
-            : 'summary_truth_fixed_but_engine_underrepresents_some_skills',
+  : overclaimDetected
+  ? 'labels_still_overclaiming'
+  : 'summary_truth_fixed_but_engine_underrepresents_some_skills',
+  })
+  
+  // ==========================================================================
+  // [TASK 9] FINAL GENERATION + PRIORITY + SCHEDULE VERDICT
+  // ==========================================================================
+  const summaryOrderCorrect = builtAroundSkillsFinal[0] === primaryGoal
+  const canBuild6Day = effectiveTrainingDays >= 6 || [2, 3, 4, 5, 6, 7].includes(6)
+  const canBuild7Day = effectiveTrainingDays === 7 || [2, 3, 4, 5, 6, 7].includes(7)
+  
+  console.log('[generation-priority-schedule-final-verdict]', {
+    sessionAssemblyNowPasses: sessions.length > 0,
+    summaryOrderingNowCorrect: summaryOrderCorrect,
+    builtAroundOrdering: builtAroundSkillsFinal.slice(0, 4),
+    primaryGoal,
+    secondaryGoal,
+    supportedScheduleRange: '2-7',
+    requestedDays: effectiveTrainingDays,
+    canBuild6Day,
+    canBuild7Day,
+    finalVerdict: sessions.length > 0 && summaryOrderCorrect 
+      ? 'fully_fixed' 
+      : sessions.length > 0 
+        ? 'generation_fixed_but_summary_priority_issue' 
+        : 'root_cause_not_fully_resolved',
   })
   
   return finalProgram

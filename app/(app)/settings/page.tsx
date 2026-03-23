@@ -836,9 +836,10 @@ export default function SettingsPage() {
                   </SelectValue>
                 </SelectTrigger>
                 <SelectContent className="bg-[#2A2A2A] border-[#3A3A3A]">
-                  {[2, 3, 4, 5, 6].map((day) => (
+                  {/* [TASK 5] Expanded range: 2-7 days/week for advanced scheduling */}
+                  {[2, 3, 4, 5, 6, 7].map((day) => (
                     <SelectItem key={day} value={day.toString()} className="text-[#F5F5F5] focus:bg-[#3A3A3A]">
-                      {day} days
+                      {day} days{day === 7 ? ' (intensity-managed)' : ''}
                     </SelectItem>
                   ))}
                 </SelectContent>

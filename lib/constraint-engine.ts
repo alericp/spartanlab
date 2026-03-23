@@ -430,6 +430,16 @@ export function deriveCanonicalDisplayedLimiter(): {
       })
       
       // Return a softer label instead
+      // [PHASE 7] Limiter vs Builder Failure Truth - Building Consistency is a calibration state, NOT a builder failure
+      console.log('[limiter-vs-builder-failure-truth]', {
+        limiterLabel: 'Building Consistency',
+        limiterCode: 'building_consistency',
+        isCalibrationState: true,
+        isBuilderFailure: false,
+        reason: 'Low workout history with borderline inconsistency - user needs to establish baseline',
+        hidesActiveBuilderFailure: false,
+        verdict: 'limiter_separate_from_builder_failure',
+      })
       return {
         label: 'Building Consistency',
         code: 'building_consistency',

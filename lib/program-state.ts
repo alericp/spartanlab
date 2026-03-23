@@ -234,7 +234,7 @@ export function getErrorUserMessage(
       return 'A session could not be built from the current inputs.' + suffix
     // High-frequency schedule failures
     case 'unsupported_high_frequency_structure':
-      return '6/7-day schedules are not fully supported yet. Try 5 days or fewer.' + suffix
+      return '6/7-day schedules require specific structure support. The selected goals may not fully support this frequency yet.' + suffix
     case 'insufficient_templates_for_requested_days':
       return 'Not enough session templates for your requested schedule. Try fewer days.' + suffix
     case 'recovery_distribution_conflict':
@@ -274,6 +274,7 @@ export function getErrorUserMessage(
     case 'structure_selection_failed':
       return 'Unable to create a plan with those settings. Try adjusting your schedule or goals.' + suffix
     case 'session_assembly_failed':
+      // [PHASE 4] Precise error messages for each session assembly subcode
       if (subCode === 'empty_exercise_pool') {
         return 'No suitable exercises found for your equipment. Check your equipment settings.' + suffix
       }
@@ -282,6 +283,21 @@ export function getErrorUserMessage(
       }
       if (subCode === 'session_has_no_exercises') {
         return 'One part of your updated plan could not be built with the current settings.' + suffix
+      }
+      if (subCode === 'session_count_mismatch') {
+        return 'Session count does not match the selected schedule. Try rebuilding your program.' + suffix
+      }
+      if (subCode === 'empty_structure_days') {
+        return 'Weekly structure has no days defined. Try a different schedule configuration.' + suffix
+      }
+      if (subCode === 'no_valid_candidate_after_filtering') {
+        return 'No valid exercises found after filtering. Try adjusting your equipment or goals.' + suffix
+      }
+      if (subCode === 'equipment_filtered_all_candidates') {
+        return 'Your equipment settings filtered out all exercises. Update your available equipment.' + suffix
+      }
+      if (subCode === 'hybrid_structure_unresolvable') {
+        return 'Hybrid training structure could not be resolved. Try fewer selected skills.' + suffix
       }
       return 'A session could not be assembled. Try adjusting your goals or equipment.' + suffix
     case 'warmup_generation_failed':

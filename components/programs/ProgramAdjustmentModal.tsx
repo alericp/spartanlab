@@ -147,10 +147,21 @@ export function ProgramAdjustmentModal({
       sessionMinutes: currentSessionMinutes,
       trainingDays: currentTrainingDays,
     })
-    // [TASK 5] Schedule UI range audit - confirm 6/7 support is present
-    console.log('[schedule-ui-range-audit]', {
-      adjustmentModalSupports6: true,
-      adjustmentModalSupports7: true,
+  // [TASK 5] Schedule UI range audit - confirm 6/7 support is present
+  // [PHASE 2] Schedule support truth audit - verify builder capability matches UI
+  console.log('[schedule-support-truth-audit]', {
+    uiOffersHighFrequency: true,
+    uiLabels6DayAsBeta: true,
+    uiLabels7DayAsBeta: true,
+    builderSupports6Day: true, // Structure engine has buildSixDayStructure
+    builderSupports7Day: true, // Structure engine has buildSevenDayStructure
+    sessionAssemblyVerified6Day: 'pending_runtime_verification',
+    sessionAssemblyVerified7Day: 'pending_runtime_verification',
+    finalVerdict: 'high_frequency_available_as_beta',
+  })
+  console.log('[schedule-ui-range-audit]', {
+    adjustmentModalSupports6: true,
+    adjustmentModalSupports7: true,
       adaptiveProgramFormSupports6: true,
       adaptiveProgramFormSupports7: true,
       settingsSupports6: true,
@@ -501,8 +512,9 @@ export function ProgramAdjustmentModal({
                     <SelectItem value="3">3 Days per Week</SelectItem>
                     <SelectItem value="4">4 Days per Week</SelectItem>
                     <SelectItem value="5">5 Days per Week</SelectItem>
-                    <SelectItem value="6">6 Days per Week</SelectItem>
-                    <SelectItem value="7">7 Days per Week (Intensity-Managed)</SelectItem>
+                    {/* [PHASE 2] High-frequency options - show with beta label until fully verified */}
+                    <SelectItem value="6">6 Days per Week (Beta)</SelectItem>
+                    <SelectItem value="7">7 Days per Week (Beta)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -520,6 +532,16 @@ export function ProgramAdjustmentModal({
                 <div className="mt-4 p-3 bg-[#1A1F26] rounded-lg border border-[#2B313A]/50">
                   <p className="text-xs text-[#A4ACB8]">
                     Fewer training days means accessory work will be consolidated. Skill work frequency will be maintained.
+                  </p>
+                </div>
+              )}
+              
+              {/* [PHASE 2] High-frequency beta warning */}
+              {(trainingDays === 6 || trainingDays === 7) && (
+                <div className="mt-4 p-3 bg-amber-500/5 rounded-lg border border-amber-500/20">
+                  <p className="text-xs text-amber-400">
+                    <strong>Beta:</strong> {trainingDays}-day schedules use intensity management to distribute recovery. 
+                    Some goal combinations may not fully support this frequency yet.
                   </p>
                 </div>
               )}

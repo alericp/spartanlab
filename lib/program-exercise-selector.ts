@@ -416,6 +416,28 @@ export function selectExercisesForSession(inputs: ExerciseSelectionInputs): Exer
     goalSpecific: goalExercises.length,
   })
   
+  // [PHASE 3] Equipment collapse truth audit
+  const equipmentCollapsedSkills = SKILL_EXERCISES.length - availableSkills.length
+  const equipmentCollapsedStrength = STRENGTH_EXERCISES.length - availableStrength.length
+  const totalCandidatesBeforeEquipment = SKILL_EXERCISES.length + STRENGTH_EXERCISES.length + ACCESSORY_EXERCISES.length + CORE_EXERCISES_POOL.length
+  const totalCandidatesAfterEquipment = availableSkills.length + availableStrength.length + availableAccessory.length + availableCore.length
+  
+  console.log('[equipment-collapse-truth]', {
+    equipmentProvided: equipment,
+    totalCandidatesBeforeFiltering: totalCandidatesBeforeEquipment,
+    totalCandidatesAfterEquipmentFiltering: totalCandidatesAfterEquipment,
+    collapsedByEquipment: totalCandidatesBeforeEquipment - totalCandidatesAfterEquipment,
+    skillsCollapsed: equipmentCollapsedSkills,
+    strengthCollapsed: equipmentCollapsedStrength,
+    remainingSkillPool: availableSkills.length,
+    remainingStrengthPool: availableStrength.length,
+    verdict: totalCandidatesAfterEquipment === 0 
+      ? 'equipment_filtered_all_candidates' 
+      : totalCandidatesAfterEquipment < 10 
+        ? 'equipment_severely_limited_pool'
+        : 'equipment_filtering_acceptable',
+  })
+  
   // [exercise-expression] ISSUE A: Pass skillsForSession to enable multi-skill expression
   // TASK 1-B: Pass weightedBenchmarks to fix ReferenceError in selectMainExercises
   const main = selectMainExercises(

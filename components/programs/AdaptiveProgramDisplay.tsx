@@ -283,7 +283,8 @@ export function AdaptiveProgramDisplay({
            ========================================================================== */}
         
         {/* [planner-truth-audit] TASK 10: Audit warning banner - minimal, truthful */}
-        {program.plannerTruthAudit?.shouldWarn && program.plannerTruthAudit.warnings?.length > 0 && (
+        {/* [TASK 5] Now shows topIssueDescription as the canonical explanation of the most important issue */}
+        {program.plannerTruthAudit?.shouldWarn && program.plannerTruthAudit.topIssueReason && program.plannerTruthAudit.topIssueReason !== 'none' && (
           <div className="mt-4 p-3 rounded-lg border bg-amber-500/5 border-amber-500/20">
             <div className="flex items-start gap-3">
               <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0 text-amber-400" />
@@ -292,7 +293,9 @@ export function AdaptiveProgramDisplay({
                   Program Quality Notice
                 </p>
                 <p className="text-xs text-[#A5A5A5]">
-                  {program.plannerTruthAudit.recommendations?.[0] || 
+                  {/* TASK 5: Use topIssueDescription as the canonical single-reason explanation */}
+                  {program.plannerTruthAudit.topIssueDescription || 
+                   program.plannerTruthAudit.recommendations?.[0] || 
                    'Some preferences may not be fully reflected. Consider reviewing your profile settings.'}
                 </p>
                 {program.plannerTruthAudit.overallScore !== undefined && (

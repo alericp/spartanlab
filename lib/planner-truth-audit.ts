@@ -35,6 +35,25 @@ export type AuditSeverity =
   | 'hard_fail_invalid'     // Week is fundamentally broken
 
 // =============================================================================
+// [TASK 5] SPECIFIC REASON CLASSES FOR QUALITY NOTICE
+// =============================================================================
+
+/**
+ * [TASK 5] Specific reason why the program quality score is reduced.
+ * The first applicable reason is the "top true issue" shown to the user.
+ */
+export type ProgramQualityIssueReason =
+  | 'selected_skills_overloaded_for_week'  // Too many skills selected for weekly capacity
+  | 'skills_under_expressed'               // Selected skills not adequately trained
+  | 'rationale_overclaim'                  // Rationale claims things not visible in exercises
+  | 'limiter_not_visible'                  // Claimed limiter not addressed in exercises
+  | 'session_density_underbuilt'           // Sessions have fewer exercises than expected
+  | 'weighted_load_truth_gap'              // Weighted exercises missing expected loads
+  | 'near_template_repetition'             // Sessions are too similar to each other
+  | 'primary_goal_under_expressed'         // Primary goal not adequately represented
+  | 'none'                                 // No issues detected
+
+// =============================================================================
 // AUDIT REPORT TYPES
 // =============================================================================
 
@@ -108,6 +127,10 @@ export interface PlannerTruthAuditReport {
   // Overall severity
   severity: AuditSeverity
   overallScore: number // 0-100 (100 = perfect truth alignment)
+  
+  // [TASK 5] Top issue reason - the most load-bearing actual problem
+  topIssueReason: ProgramQualityIssueReason
+  topIssueDescription: string
   
   // Audit summaries
   skillExpressionAudit: {
@@ -254,9 +277,13 @@ function auditSkillExpression(
     }
     
     const isCosmetic = expressingExercises.length > 0 && isInWarmupOnly
+    
+    // [TASK 6] Apply weighted thresholds based on priority level
+    // Primary/secondary goals are weighted much more heavily than tertiary skills
+    // Multi-skill advanced users should not be unfairly penalized for having many saved skills
     const isUnder = (expectedLevel === 'primary' && score < 60) ||
                     (expectedLevel === 'secondary' && score < 40) ||
-                    (expectedLevel === 'tertiary' && score < 20)
+                    (expectedLevel === 'tertiary' && score < 15) // Lowered threshold for tertiary
     
     if (isCosmetic) {
       cosmetic++
@@ -265,7 +292,14 @@ function auditSkillExpression(
     } else if (expressingExercises.length > 0) {
       wellExpressed++
     } else {
-      underExpressed++
+      // [TASK 6] Tertiary skills with no expression are acceptable if there are many
+      // Primary/secondary must still be expressed
+      if (expectedLevel === 'tertiary' && selectedSkills.length > 5) {
+        // Large skill library - don't penalize missing tertiary
+        wellExpressed++ // Count as acceptable
+      } else {
+        underExpressed++
+      }
     }
     
     details.push({
@@ -282,9 +316,36 @@ function auditSkillExpression(
     })
   }
   
-  const overallScore = selectedSkills.length > 0 
-    ? Math.round((wellExpressed / selectedSkills.length) * 100)
-    : 100
+  // [TASK 6] Calculate weighted overall score
+  // Primary goal: 50% weight, Secondary goal: 30% weight, Tertiary skills: 20% total weight
+  const primarySkillDetail = details.find(d => d.expectedExpressionLevel === 'primary')
+  const secondarySkillDetail = details.find(d => d.expectedExpressionLevel === 'secondary')
+  const tertiarySkillDetails = details.filter(d => d.expectedExpressionLevel === 'tertiary')
+  
+  const primaryScore = primarySkillDetail?.expressionScore || 0
+  const secondaryScore = secondarySkillDetail?.expressionScore || 100 // No secondary = full marks
+  const tertiaryAvgScore = tertiarySkillDetails.length > 0
+    ? tertiarySkillDetails.reduce((sum, d) => sum + d.expressionScore, 0) / tertiarySkillDetails.length
+    : 100 // No tertiary = full marks
+  
+  // Weighted calculation
+  const overallScore = Math.round(
+    (primaryScore * 0.5) + (secondaryScore * 0.3) + (tertiaryAvgScore * 0.2)
+  )
+  
+  // [TASK 6] Log weighted score breakdown
+  console.log('[planner-truth-audit] Skill expression weighted breakdown:', {
+    primarySkill: primarySkillDetail?.skill,
+    primaryScore,
+    primaryWeight: 0.5,
+    secondarySkill: secondarySkillDetail?.skill,
+    secondaryScore,
+    secondaryWeight: 0.3,
+    tertiarySkillCount: tertiarySkillDetails.length,
+    tertiaryAvgScore,
+    tertiaryWeight: 0.2,
+    weightedOverallScore: overallScore,
+  })
   
   console.log('[planner-truth-audit] Skill expression audit:', {
     skillsAudited: selectedSkills.length,
@@ -897,6 +958,59 @@ export function runPlannerTruthAudit(
     severity = 'pass_with_warnings'
   }
   
+  // ==========================================================================
+  // [TASK 5] DETERMINE TOP ISSUE REASON
+  // Priority order: primary goal -> sessions -> skills -> limiter -> rationale -> templates
+  // ==========================================================================
+  let topIssueReason: ProgramQualityIssueReason = 'none'
+  let topIssueDescription = 'Program quality meets expectations'
+  
+  // Check in priority order - first match wins
+  const primarySkillAudit = skillExpressionAudit.details.find(
+    d => d.expectedExpressionLevel === 'primary'
+  )
+  
+  if (primarySkillAudit && primarySkillAudit.isUnderExpressed) {
+    // Primary goal not adequately represented - highest priority issue
+    topIssueReason = 'primary_goal_under_expressed'
+    topIssueDescription = `Primary goal "${primarySkillAudit.skillLabel}" is under-expressed (score: ${primarySkillAudit.expressionScore}/100). The week may not adequately train your main focus.`
+  } else if (weekSummary.totalExercises < program.sessions.length * 3) {
+    // Sessions are sparse - likely underbuilt
+    topIssueReason = 'session_density_underbuilt'
+    topIssueDescription = `Sessions average only ${Math.round(weekSummary.totalExercises / program.sessions.length)} exercises. Consider regenerating for fuller training days.`
+  } else if (selectedSkills.length > 5 && skillExpressionAudit.skillsUnderExpressed > 2) {
+    // Too many skills for weekly capacity
+    topIssueReason = 'selected_skills_overloaded_for_week'
+    topIssueDescription = `You have ${selectedSkills.length} selected skills but ${skillExpressionAudit.skillsUnderExpressed} are under-expressed this week. Consider focusing on fewer skills or extending your training cycle.`
+  } else if (skillExpressionAudit.skillsUnderExpressed > 1) {
+    // General skill under-expression
+    topIssueReason = 'skills_under_expressed'
+    topIssueDescription = `${skillExpressionAudit.skillsUnderExpressed} selected skill(s) are not adequately trained this week.`
+  } else if (limiterInfluenceAudit.isInfluenceMissing) {
+    // Limiter claimed but not visible
+    topIssueReason = 'limiter_not_visible'
+    topIssueDescription = `Your identified limiter "${limiterInfluenceAudit.currentLimiter}" is not addressed in the exercises. Consider adding limiter-specific work.`
+  } else if (weightedEligibilityAudit.suspiciousAbsences > 0) {
+    // Weighted loads missing
+    topIssueReason = 'weighted_load_truth_gap'
+    topIssueDescription = `${weightedEligibilityAudit.suspiciousAbsences} exercise(s) could have weighted loads but don't. Check your weighted benchmarks.`
+  } else if (genericShellAudit.rationaleOverclaim) {
+    // Rationale claims things not visible
+    topIssueReason = 'rationale_overclaim'
+    topIssueDescription = `The program rationale claims skill influence not reflected in actual exercises.`
+  } else if (sessionDifferentiationAudit.pairsNearIdentical > 0) {
+    // Sessions too similar
+    topIssueReason = 'near_template_repetition'
+    topIssueDescription = `${sessionDifferentiationAudit.pairsNearIdentical} session pair(s) are nearly identical. Consider adding more variety.`
+  }
+  
+  console.log('[planner-truth-audit] Top issue classification:', {
+    topIssueReason,
+    topIssueDescription: topIssueDescription.slice(0, 100),
+    overallScore,
+    severity,
+  })
+  
   // Build planner input snapshot
   const plannerInputSnapshot = {
     primaryGoal: resolvedProfile.primaryGoal,
@@ -945,6 +1059,9 @@ export function runPlannerTruthAudit(
     programId: program.weekNumber?.toString() || 'current',
     severity,
     overallScore,
+    // [TASK 5] Include top issue classification
+    topIssueReason,
+    topIssueDescription,
     skillExpressionAudit,
     weightedEligibilityAudit,
     sessionDifferentiationAudit,

@@ -927,6 +927,9 @@ exerciseExplanations?: {
     recommendations: string[]
     canSave: boolean
     shouldWarn: boolean
+    // [TASK 5] Top issue tracking - the single most important quality problem
+    topIssueReason?: string  // e.g., 'primary_goal_under_expressed', 'session_density_underbuilt', etc.
+    topIssueDescription?: string  // Human-readable explanation for display
   }
   // ==========================================================================
   // [anti-template] TASK A: Generation Provenance Metadata
@@ -2772,6 +2775,94 @@ function generateAdaptiveProgramImpl(inputs: AdaptiveProgramInputs, stageTracker
     )
   }
   
+  // ==========================================================================
+  // [TASK 3 & 4] SESSION DENSITY AUDIT AND ENFORCEMENT
+  // Ensure no normal session is silently underbuilt (< minExercises for duration)
+  // ==========================================================================
+  const durationConfig = getDurationConfig(durationPref)
+  const sessionDensityAuditResults: {
+    dayNumber: number
+    focus: string
+    exerciseCount: number
+    intendedMin: number
+    intendedMax: number
+    isUnderbuilt: boolean
+    isIntentionallyLight: boolean
+    densityClassification: 'normal' | 'intentionally_light' | 'underbuilt' | 'repaired'
+    reason: string
+  }[] = []
+  
+  for (const session of sessions) {
+    const exerciseCount = session.exercises?.length || 0
+    const sessionFocus = session.focus || 'unknown'
+    const dayStress = flexibleWeekStructure?.dayStressPattern?.[session.dayNumber - 1]
+    
+    // Determine if this session is intentionally light (recovery/technical day)
+    const isIntentionallyLight = 
+      dayStress === 'recovery_bias_technical' ||
+      dayStress === 'lower_fatigue_density' ||
+      sessionFocus.includes('recovery') ||
+      sessionFocus.includes('mobility')
+    
+    // Set minimum based on session type
+    const intendedMin = isIntentionallyLight 
+      ? Math.max(2, durationConfig.minExercises - 2) // Light sessions allow 2 fewer
+      : durationConfig.minExercises
+    
+    const isUnderbuilt = exerciseCount < intendedMin
+    
+    let densityClassification: 'normal' | 'intentionally_light' | 'underbuilt' | 'repaired' = 'normal'
+    let reason = 'Session meets density requirements'
+    
+    if (isIntentionallyLight) {
+      densityClassification = 'intentionally_light'
+      reason = `Light/recovery session (${dayStress || sessionFocus}) - reduced minimum acceptable`
+    } else if (isUnderbuilt) {
+      densityClassification = 'underbuilt'
+      reason = `Session has ${exerciseCount} exercises, expected minimum ${intendedMin}`
+      
+      // [TASK 4] Log the underbuilt session for debugging
+      console.warn('[session-density-audit] UNDERBUILT session detected:', {
+        dayNumber: session.dayNumber,
+        focus: sessionFocus,
+        exerciseCount,
+        intendedMin,
+        intendedMax: durationConfig.maxExercises,
+        dayStress,
+        isIntentionallyLight,
+      })
+    }
+    
+    sessionDensityAuditResults.push({
+      dayNumber: session.dayNumber,
+      focus: sessionFocus,
+      exerciseCount,
+      intendedMin,
+      intendedMax: durationConfig.maxExercises,
+      isUnderbuilt,
+      isIntentionallyLight,
+      densityClassification,
+      reason,
+    })
+  }
+  
+  // [TASK 3] Output comprehensive session density audit
+  const underbuiltSessions = sessionDensityAuditResults.filter(s => s.isUnderbuilt && !s.isIntentionallyLight)
+  console.log('[session-density-audit]', {
+    totalSessions: sessions.length,
+    durationPreference: durationPref,
+    configuredMinExercises: durationConfig.minExercises,
+    configuredMaxExercises: durationConfig.maxExercises,
+    sessionDensities: sessionDensityAuditResults.map(s => ({
+      day: s.dayNumber,
+      count: s.exerciseCount,
+      classification: s.densityClassification,
+    })),
+    underbuiltCount: underbuiltSessions.length,
+    underbuiltDays: underbuiltSessions.map(s => s.dayNumber),
+    intentionallyLightCount: sessionDensityAuditResults.filter(s => s.isIntentionallyLight).length,
+  })
+  
   // Calculate variety score (0-1, higher = more varied)
   const varietyScore = calculateVarietyScore(sessionIntents)
   
@@ -4087,6 +4178,9 @@ return explanations.length > 0 ? explanations : undefined
           recommendations: auditReport.recommendations,
           canSave: gating.canSave,
           shouldWarn: gating.shouldWarn,
+          // [TASK 5] Top issue tracking - expose the canonical single-reason explanation
+          topIssueReason: auditReport.topIssueReason,
+          topIssueDescription: auditReport.topIssueDescription,
         }
       } catch (err) {
         console.error('[planner-truth-audit] Audit failed:', err)

@@ -96,6 +96,15 @@ export type BuildAttemptSubCode =
   // Internal builder runtime errors (TASK 5 - allExerciseNames fix)
   | 'internal_builder_reference_error'
   | 'internal_builder_type_error'
+  // Session assembly root fix subcodes (TASK 5 - precise failure classification)
+  | 'no_valid_candidate_after_filtering'
+  | 'selected_candidate_invalidated_by_constraints'
+  | 'equipment_filtered_all_candidates'
+  | 'hybrid_structure_unresolvable'
+  | 'final_validation_failed'
+  | 'equipment_adaptation_zeroed_session'
+  | 'validation_zeroed_session'
+  | 'mapping_zeroed_session'
   | 'none'
 
 /**
@@ -235,6 +244,23 @@ export function getErrorUserMessage(
       return 'An internal builder error occurred. Please try again or report this issue.' + suffix
     case 'internal_builder_type_error':
       return 'An internal data error occurred. Please try again or report this issue.' + suffix
+    // Session assembly root fix subcodes (precise failure classification)
+    case 'no_valid_candidate_after_filtering':
+      return 'No valid exercises remained after filtering. Try adjusting your equipment or skills.' + suffix
+    case 'selected_candidate_invalidated_by_constraints':
+      return 'Selected exercises were invalidated by constraints. Try fewer skills or different equipment.' + suffix
+    case 'equipment_filtered_all_candidates':
+      return 'Your equipment settings filtered out all suitable exercises. Check your equipment list.' + suffix
+    case 'hybrid_structure_unresolvable':
+      return 'Unable to build a hybrid session with current settings. Try fewer goals or skills.' + suffix
+    case 'final_validation_failed':
+      return 'Session validation failed. Try simplifying your goals or equipment.' + suffix
+    case 'equipment_adaptation_zeroed_session':
+      return 'Equipment adaptation removed all exercises. Check your equipment matches your goals.' + suffix
+    case 'validation_zeroed_session':
+      return 'Session validation removed all exercises. Try different settings.' + suffix
+    case 'mapping_zeroed_session':
+      return 'Exercise mapping failed. Please try again or report this issue.' + suffix
     default:
       // Fall through to error code handling
       break

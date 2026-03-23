@@ -283,18 +283,26 @@ export function AdaptiveProgramDisplay({
                program.trainingPathType.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
             </span>
           )}
-          {/* Selected Skills Summary - show top 3 most relevant */}
+          {/* [TASK 1] Selected Skills Summary - show ALL skills neatly, no more +N truncation */}
           {program.selectedSkills && program.selectedSkills.length > 0 && (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-[#1A1A1A] text-[#A5A5A5]">
-              <Sparkles className="w-3 h-3 text-[#E63946]/60" />
-              <span className="text-[#6A6A6A]">Built around:</span>
-              <span className="text-[#D0D0D0]">
-                {program.selectedSkills.slice(0, 3).map(s => 
-                  s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
-                ).join(', ')}
-                {program.selectedSkills.length > 3 && ` +${program.selectedSkills.length - 3}`}
+            <div className="flex flex-wrap items-center gap-1">
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-[#1A1A1A] text-[#6A6A6A]">
+                <Sparkles className="w-3 h-3 text-[#E63946]/60" />
+                Built around:
               </span>
-            </span>
+              {program.selectedSkills.map((skill, idx) => (
+                <span 
+                  key={skill}
+                  className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] ${
+                    idx < 2 
+                      ? 'bg-[#E63946]/10 text-[#E63946] border border-[#E63946]/20' 
+                      : 'bg-[#1A1A1A] text-[#A5A5A5]'
+                  }`}
+                >
+                  {skill.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
+                </span>
+              ))}
+            </div>
           )}
           {/* Structure name if not showing training path */}
           {(!program.trainingPathType || program.trainingPathType === 'balanced') && structure.structureName && (

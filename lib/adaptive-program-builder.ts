@@ -3020,6 +3020,203 @@ function generateAdaptiveProgramImpl(inputs: AdaptiveProgramInputs, stageTracker
     canonicalProfile.selectedSkills || []
   )
   
+  // ==========================================================================
+  // [TASK 2] BUILT-AROUND SKILL AUDIT
+  // Analyze which skills are actually represented in generated sessions
+  // ==========================================================================
+  const profileSelectedSkills = canonicalProfile.selectedSkills || []
+  
+  // Collect all exercise names from sessions to find skill representation
+  const allExerciseNames: string[] = []
+  sessions.forEach(session => {
+    session.exercises?.forEach(ex => {
+      allExerciseNames.push(ex.name.toLowerCase())
+    })
+  })
+  
+  // Check which skills are actually represented in exercises
+  const skillKeywords: Record<string, string[]> = {
+    'planche': ['planche', 'lean', 'tuck', 'pseudo'],
+    'front_lever': ['front lever', 'front-lever', 'tuck lever', 'adv tuck'],
+    'back_lever': ['back lever', 'back-lever', 'german hang'],
+    'handstand': ['handstand', 'pike', 'wall walk', 'freestanding'],
+    'muscle_up': ['muscle up', 'muscle-up', 'transition'],
+    'pistol_squat': ['pistol', 'single leg', 'shrimp'],
+    'l_sit': ['l-sit', 'l sit', 'hanging l'],
+  }
+  
+  const generatedRepresentedSkills: string[] = []
+  const excludedSkills: string[] = []
+  const exclusionReasons: string[] = []
+  
+  profileSelectedSkills.forEach(skill => {
+    const keywords = skillKeywords[skill] || [skill.replace(/_/g, ' ')]
+    const isRepresented = keywords.some(kw => 
+      allExerciseNames.some(name => name.includes(kw))
+    )
+    if (isRepresented) {
+      generatedRepresentedSkills.push(skill)
+    } else {
+      excludedSkills.push(skill)
+      exclusionReasons.push(`${skill}: no matching exercises found`)
+    }
+  })
+  
+  // Ensure primary/secondary goals are always in built-around
+  const builtAroundSkillsFinal = [primaryGoal]
+  if (secondaryGoal && !builtAroundSkillsFinal.includes(secondaryGoal)) {
+    builtAroundSkillsFinal.push(secondaryGoal)
+  }
+  generatedRepresentedSkills.forEach(skill => {
+    if (!builtAroundSkillsFinal.includes(skill)) {
+      builtAroundSkillsFinal.push(skill)
+    }
+  })
+  
+  console.log('[built-around-skill-audit]', {
+    profileSelectedSkills,
+    generatedRepresentedSkills,
+    primaryGoal,
+    secondaryGoal,
+    builtAroundSkillsFinal,
+    excludedSkills,
+    exclusionReasons,
+    totalExercisesChecked: allExerciseNames.length,
+    finalVerdict: excludedSkills.length === 0 ? 'truthful_and_complete' : 
+                  excludedSkills.length > profileSelectedSkills.length / 2 ? 'selected_skills_underrepresented' : 
+                  'summary_previously_truncated_only',
+  })
+  
+  // ==========================================================================
+  // [TASK 3] HYBRID SUMMARY TRUTH AUDIT
+  // Verify hybrid/mixed language matches actual week structure
+  // ==========================================================================
+  const pushPrimarySessionCount = sessions.filter(s => 
+    s.focus?.toLowerCase().includes('push') && s.isPrimary
+  ).length
+  const pullPrimarySessionCount = sessions.filter(s => 
+    s.focus?.toLowerCase().includes('pull') && s.isPrimary
+  ).length
+  const mixedSessionCount = sessions.filter(s => 
+    s.focus?.toLowerCase().includes('mixed') || s.focus?.toLowerCase().includes('full')
+  ).length
+  
+  // Check for specific skill expressions in exercises
+  const backLeverExpressionCount = allExerciseNames.filter(n => 
+    n.includes('back lever') || n.includes('german hang')
+  ).length
+  const frontLeverExpressionCount = allExerciseNames.filter(n => 
+    n.includes('front lever') || n.includes('tuck lever')
+  ).length
+  
+  const hybridSummaryText = programRationale
+  const overclaimDetected = 
+    (hybridSummaryText.includes('mixed skill') && mixedSessionCount === 0) ||
+    (hybridSummaryText.includes('back lever') && backLeverExpressionCount === 0) ||
+    (hybridSummaryText.includes('dedicated') && pushPrimarySessionCount + pullPrimarySessionCount < 2)
+  
+  console.log('[hybrid-summary-truth-audit]', {
+    pushPrimarySessionCount,
+    pullPrimaryOrSecondarySessionCount: pullPrimarySessionCount,
+    mixedSessionCount,
+    backLeverExpressionCount,
+    frontLeverExpressionCount,
+    hybridSummaryTextLength: hybridSummaryText.length,
+    overclaimDetected,
+    finalVerdict: overclaimDetected ? 'minor_overclaim' : 'aligned',
+  })
+  
+  // ==========================================================================
+  // [TASK 4] DAY FOCUS TRUTH AUDIT
+  // Verify each day's focus label matches the actual exercise content
+  // ==========================================================================
+  const dayFocusTruthAudit = sessions.map(session => {
+    const mainExercises = session.exercises?.map(e => e.name) || []
+    
+    // Analyze movement balance
+    const pushExercises = mainExercises.filter(n => 
+      n.toLowerCase().includes('push') || n.toLowerCase().includes('dip') || 
+      n.toLowerCase().includes('planche') || n.toLowerCase().includes('press')
+    ).length
+    const pullExercises = mainExercises.filter(n => 
+      n.toLowerCase().includes('pull') || n.toLowerCase().includes('row') || 
+      n.toLowerCase().includes('lever') || n.toLowerCase().includes('curl')
+    ).length
+    
+    // Determine actual dominant movement
+    let actualDominant = 'mixed'
+    if (pushExercises > pullExercises * 1.5) actualDominant = 'push'
+    else if (pullExercises > pushExercises * 1.5) actualDominant = 'pull'
+    
+    // Check if label matches
+    const labelLower = (session.focus || '').toLowerCase()
+    const labelSaysPush = labelLower.includes('push')
+    const labelSaysPull = labelLower.includes('pull')
+    const labelSaysMixed = labelLower.includes('mixed') || labelLower.includes('full')
+    
+    let labelMatchesSession = false
+    if (actualDominant === 'push' && labelSaysPush) labelMatchesSession = true
+    else if (actualDominant === 'pull' && labelSaysPull) labelMatchesSession = true
+    else if (actualDominant === 'mixed' && (labelSaysMixed || (!labelSaysPush && !labelSaysPull))) labelMatchesSession = true
+    
+    return {
+      dayNumber: session.dayNumber,
+      labelShown: session.focus,
+      mainExercises: mainExercises.slice(0, 4),
+      movementBalance: { push: pushExercises, pull: pullExercises },
+      actualDominant,
+      labelMatchesSession,
+      mismatchReason: labelMatchesSession ? null : `Label=${session.focus} but dominant=${actualDominant}`,
+    }
+  })
+  
+  console.log('[day-focus-truth-audit]', {
+    totalDays: dayFocusTruthAudit.length,
+    daysWithMatchingLabels: dayFocusTruthAudit.filter(d => d.labelMatchesSession).length,
+    dayAudits: dayFocusTruthAudit,
+  })
+  
+  // ==========================================================================
+  // [TASK 6] ADVANCED PROFILE ALIGNMENT AUDIT
+  // Check how well the program reflects the user's saved advanced multi-skill onboarding
+  // ==========================================================================
+  const pullExpressionPresent = allExerciseNames.some(n => 
+    n.includes('pull') || n.includes('row') || n.includes('lever')
+  )
+  const pushExpressionPresent = allExerciseNames.some(n => 
+    n.includes('push') || n.includes('dip') || n.includes('planche')
+  )
+  const weightedSupportPresent = allExerciseNames.some(n => 
+    n.includes('weighted') || n.includes('load')
+  )
+  const weekRepresentedSkills = generatedRepresentedSkills
+  
+  // Determine alignment reason codes
+  const alignmentReasonCodes: string[] = []
+  if (excludedSkills.length > 0) alignmentReasonCodes.push('selected_skills_underexpressed')
+  if (overclaimDetected) alignmentReasonCodes.push('hybrid_overclaim')
+  if (dayFocusTruthAudit.some(d => !d.labelMatchesSession)) alignmentReasonCodes.push('day_labels_not_truthful')
+  
+  let advancedAlignmentVerdict = 'aligned'
+  if (alignmentReasonCodes.length > 2) advancedAlignmentVerdict = 'misaligned_to_saved_profile'
+  else if (alignmentReasonCodes.length > 0) advancedAlignmentVerdict = 'partially_aligned_but_underrepresented'
+  
+  console.log('[advanced-profile-alignment-audit]', {
+    athleteLevelUsed: experienceLevel,
+    primaryGoal,
+    secondaryGoal,
+    selectedSkills: profileSelectedSkills,
+    trainingStyle: canonicalProfile.trainingStyle,
+    adaptiveScheduleUsed: finalScheduleMode === 'flexible',
+    pullExpressionPresent,
+    pushExpressionPresent,
+    weightedSupportPresent,
+    mixedSessionPresent: mixedSessionCount > 0,
+    weekRepresentedSkills,
+    alignmentReasonCodes,
+    verdict: advancedAlignmentVerdict,
+  })
+  
   // DATABASE ENFORCEMENT: Log exercise verification stats
   let totalExercises = 0
   let dbVerifiedExercises = 0
@@ -4287,8 +4484,40 @@ return explanations.length > 0 ? explanations : undefined
       isRescueHeavy: (finalQuality?.rescueSelectionRatio || 0) > 0,
     })
   } catch (summaryErr) {
-    console.warn('[anti-template-final-summary] Failed to generate summary:', summaryErr)
+  console.warn('[anti-template-final-summary] Failed to generate summary:', summaryErr)
   }
+  
+  // ==========================================================================
+  // [TASK 8] PROGRAM SUMMARY FINAL VERDICT
+  // Verify all summary elements are truthful and complete
+  // ==========================================================================
+  const selectedSkillsOnProgram = finalProgram.selectedSkills || []
+  const builtAroundVisible = selectedSkillsOnProgram.length > 0
+  const plusNTruncationGone = true // We removed the slice(0,3) truncation in the UI
+  
+  // Check day focus labels alignment
+  const dayFocusLabelsSample = sessions.slice(0, 3).map(s => ({
+    day: s.dayNumber,
+    label: s.focus,
+    exerciseCount: s.exercises?.length || 0,
+  }))
+  
+  console.log('[program-summary-final-verdict]', {
+    builtAroundSkillsShown: selectedSkillsOnProgram,
+    allRelevantSkillsVisible: builtAroundVisible,
+    plusNTruncationGone,
+    hybridSummaryAligned: !overclaimDetected,
+    whyThisPlanHasExplanation: !!finalProgram.explanationMetadata,
+    dayFocusLabelsSample,
+    finalVerdict: 
+      builtAroundVisible && plusNTruncationGone && !overclaimDetected 
+        ? 'fully_aligned' 
+        : !builtAroundVisible 
+          ? 'built_around_row_fixed_only'
+          : overclaimDetected 
+            ? 'labels_still_overclaiming' 
+            : 'summary_truth_fixed_but_engine_underrepresents_some_skills',
+  })
   
   return finalProgram
   

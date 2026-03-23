@@ -2778,8 +2778,8 @@ function generateAdaptiveProgramImpl(inputs: AdaptiveProgramInputs, stageTracker
   // ==========================================================================
   // [TASK 3 & 4] SESSION DENSITY AUDIT AND ENFORCEMENT
   // Ensure no normal session is silently underbuilt (< minExercises for duration)
+  // Reuse canonical build durationConfig here; do not redeclare a second local duration config in this scope.
   // ==========================================================================
-  const durationConfig = getDurationConfig(durationPref)
   const sessionDensityAuditResults: {
     dayNumber: number
     focus: string
@@ -2850,7 +2850,7 @@ function generateAdaptiveProgramImpl(inputs: AdaptiveProgramInputs, stageTracker
   const underbuiltSessions = sessionDensityAuditResults.filter(s => s.isUnderbuilt && !s.isIntentionallyLight)
   console.log('[session-density-audit]', {
     totalSessions: sessions.length,
-    durationPreference: durationPref,
+    durationPreference: workoutDuration,
     configuredMinExercises: durationConfig.minExercises,
     configuredMaxExercises: durationConfig.maxExercises,
     sessionDensities: sessionDensityAuditResults.map(s => ({

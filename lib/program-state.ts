@@ -400,16 +400,28 @@ export function getLastBuildAttemptResult(): BuildAttemptResult | null {
 
 /**
  * Save the build attempt result to storage.
+ * [storage-quota-fix] TASK D: Trim oversized fields to prevent quota issues
  */
 export function saveLastBuildAttemptResult(result: BuildAttemptResult): void {
   if (typeof window === 'undefined') return
   try {
-    localStorage.setItem('spartanlab_last_build_result', JSON.stringify(result))
+    // Create a trimmed version for storage - only essential fields
+    const trimmedResult: BuildAttemptResult = {
+      ...result,
+      // Trim potentially long strings to safe lengths
+      userMessage: result.userMessage?.slice(0, 200) || '',
+      devSummary: result.devSummary?.slice(0, 300) || '',
+      failureReason: result.failureReason?.slice(0, 150) || null,
+      usedProfileSignature: result.usedProfileSignature?.slice(0, 100) || '',
+    }
+    
+    localStorage.setItem('spartanlab_last_build_result', JSON.stringify(trimmedResult))
     
     // Also dispatch event for UI components to react
-    window.dispatchEvent(new CustomEvent('spartanlab:build-result', { detail: result }))
+    window.dispatchEvent(new CustomEvent('spartanlab:build-result', { detail: trimmedResult }))
   } catch (err) {
-    console.error('[program-rebuild-truth] Failed to save build result:', err)
+    // [storage-quota-fix] Log but don't fail - this is non-core bookkeeping
+    console.warn('[storage-quota-fix] Failed to save build result (non-core):', err)
   }
 }
 

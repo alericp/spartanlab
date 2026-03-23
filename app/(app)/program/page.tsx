@@ -994,6 +994,30 @@ setProgramModules({
       return
     }
     
+    // ==========================================================================
+    // [TASK 1] REGEN ENTRYPOINT AUDIT
+    // All regenerate paths (stale banner, display modal, etc.) call this handler
+    // This proves whether both buttons truly use the same path
+    // ==========================================================================
+    const canonicalProfileForAudit = getCanonicalProfile()
+    const entrypointProfileSignature = JSON.stringify({
+      primaryGoal: canonicalProfileForAudit.primaryGoal,
+      secondaryGoal: canonicalProfileForAudit.secondaryGoal,
+      scheduleMode: canonicalProfileForAudit.scheduleMode,
+      trainingDaysPerWeek: canonicalProfileForAudit.trainingDaysPerWeek,
+      selectedSkills: canonicalProfileForAudit.selectedSkills?.slice(0, 5),
+    })
+    
+    console.log('[regen-entrypoint-audit]', {
+      entrypointName: 'handleRegenerate', // All UI triggers use this same handler
+      handler: 'handleRegenerate',
+      oldProgramId: program?.id || 'none',
+      newProgramIdWillBe: 'pending_generation',
+      canonicalProfileSignature: entrypointProfileSignature.slice(0, 100),
+      rebuildInputSignatureWillBe: 'pending_fresh_composition',
+      triggeredAt: new Date().toISOString(),
+    })
+    
     console.log('[ProgramPage] handleRegenerate: Starting regeneration', { 
       source: 'regenerate',
       oldProgramId: program?.id || 'none',
@@ -1372,6 +1396,62 @@ setProgramModules({
           fallbackPreservationTriggered: false,
           sessionCount: newProgram.sessions?.length || 0,
           replacedVisibleProgram: true,
+        })
+        
+        // ==========================================================================
+        // [TASK 7] REGENERATE DETERMINISM AUDIT
+        // Verify whether same input produces same structure (for debugging)
+        // ==========================================================================
+        console.log('[regenerate-determinism-audit]', {
+          canonicalProfileSignature: profileSig.slice(0, 60),
+          rebuildInputSignature: profileSig,
+          generatedSessionFocusLabels: newProgram.sessions?.map(s => s.focusLabel || s.dayFocus).join(' | '),
+          perDayMainExerciseNames: newProgram.sessions?.map(s => 
+            s.exercises?.slice(0, 3).map(e => e.name).join(', ')
+          ),
+          perDayMainExerciseCounts: newProgram.sessions?.map(s => s.exercises?.length || 0),
+          templateSimilarityIfAvailable: newProgram.templateSimilarity?.appearsStale ? 'appears_stale' : 'fresh',
+          note: 'Compare this with previous regeneration logs to detect nondeterminism',
+        })
+        
+        // ==========================================================================
+        // [TASK 8] ONBOARDING ALIGNMENT AUDIT
+        // Verify if the generated plan actually matches the saved advanced profile
+        // ==========================================================================
+        const canonicalForAlignment = getCanonicalProfile()
+        const sessionExerciseCounts = newProgram.sessions?.map(s => s.exercises?.length || 0) || []
+        const avgExercisesPerSession = sessionExerciseCounts.length > 0 
+          ? sessionExerciseCounts.reduce((a, b) => a + b, 0) / sessionExerciseCounts.length 
+          : 0
+        
+        // Determine alignment verdict
+        let alignmentVerdict = 'aligned'
+        const alignmentReasons: string[] = []
+        
+        if (avgExercisesPerSession < 4 && canonicalForAlignment.experienceLevel === 'advanced') {
+          alignmentVerdict = 'partially_aligned_underexpressed'
+          alignmentReasons.push('too_thin_for_profile')
+        }
+        if (postBuildStaleness.isStale && postBuildStaleness.changedFields?.length > 0) {
+          alignmentVerdict = 'misaligned_to_advanced_profile'
+          alignmentReasons.push('session_variant_truth_mismatch')
+        }
+        
+        console.log('[onboarding-alignment-audit]', {
+          primaryGoal: newProgram.primaryGoal,
+          secondaryGoal: (newProgram as { secondaryGoal?: string }).secondaryGoal || 'none',
+          selectedSkillsCount: canonicalForAlignment.selectedSkills?.length || 0,
+          scheduleMode: (newProgram as { scheduleMode?: string }).scheduleMode || 'unknown',
+          currentWeekFrequency: newProgram.sessions?.length || 0,
+          durationMode: (newProgram as { sessionDurationMode?: string }).sessionDurationMode || 'unknown',
+          targetSessionLength: newProgram.sessionLength,
+          experienceLevel: newProgram.experienceLevel,
+          avgExercisesPerSession: Math.round(avgExercisesPerSession * 10) / 10,
+          weightedWorkIncluded: newProgram.sessions?.some(s => 
+            s.exercises?.some(e => e.prescribedLoad)
+          ) || false,
+          alignmentVerdict,
+          alignmentReasons,
         })
       } catch (err) {
         // [program-rebuild-truth] REGEN FAILURE: Extract classified error

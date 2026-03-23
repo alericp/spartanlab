@@ -117,6 +117,41 @@ export function AdaptiveProgramDisplay({
     ? program.sessions.filter(s => s && typeof s === 'object' && Array.isArray(s.exercises))
     : []
   
+  // ==========================================================================
+  // [TASK 10] PROGRAM PAGE TRUTH AUDIT
+  // Comprehensive consistency audit for debugging mixed truth display bugs
+  // ==========================================================================
+  const sessionExerciseCounts = validSessions.map(s => s.exercises?.length || 0)
+  const hasVariants = validSessions.some(s => s.variants && s.variants.length > 1)
+  
+  // Determine overall alignment verdict
+  let programPageVerdict = 'fully_aligned'
+  if (stalenessCheck.isStale) {
+    programPageVerdict = 'mixed_truth_display_bug'
+  }
+  if (hasVariants && validSessions.some(s => !s.variants?.[0]?.selection?.main)) {
+    programPageVerdict = 'variant_state_persistence_bug'
+  }
+  
+  console.log('[program-page-truth-audit]', {
+    visibleProgramId: program.id,
+    savedProgramId: program.id, // Same since this is what we loaded
+    sessionCardKeyStrategy: 'programId-dayNumber-sessionName',
+    sessionCount: validSessions.length,
+    sessionDensityPerDay: sessionExerciseCounts,
+    avgExercisesPerSession: sessionExerciseCounts.length > 0 
+      ? Math.round(sessionExerciseCounts.reduce((a, b) => a + b, 0) / sessionExerciseCounts.length * 10) / 10
+      : 0,
+    hasVariantsAvailable: hasVariants,
+    stalenessCheckIsStale: stalenessCheck.isStale,
+    stalenessChangedFields: stalenessCheck.changedFields,
+    plannerTruthSeverity: program.plannerTruthAudit?.severity || 'unknown',
+    topPlannerTruthReason: program.plannerTruthAudit?.topIssueReason || 'none',
+    scheduleMode: program.scheduleMode,
+    currentWeekFrequency: (program as { currentWeekFrequency?: number }).currentWeekFrequency || validSessions.length,
+    finalVerdict: programPageVerdict,
+  })
+  
   // [displayed-adjustment-truth] STEP 3: Log what values are being displayed
   // This helps verify that rebuild actually replaced the program snapshot
   // TASK 6: Explicit verification logging for program identity
@@ -493,11 +528,14 @@ export function AdaptiveProgramDisplay({
       {/* Sessions - PHASE 2: Uses safe validSessions array */}
       <div className="space-y-4">
         <h4 className="text-lg font-bold">Training Sessions</h4>
-        {validSessions.length > 0 ? (
-          validSessions.map((session) => (
-            <AdaptiveSessionCard
-              key={session.dayNumber}
-              session={session}
+  {validSessions.length > 0 ? (
+  validSessions.map((session) => (
+  <AdaptiveSessionCard
+  // [TASK 2] Use stable session identity that changes when program changes
+  // This forces React to remount cards after regeneration, clearing stale variant state
+  key={`${program.id}-${session.dayNumber}-${session.name || session.focusLabel}`}
+  session={session}
+  programId={program.id} // [TASK 4] Pass programId for variant state reset
               onExerciseReplace={
                 onExerciseReplace 
                   ? (exerciseId) => onExerciseReplace(session.dayNumber, exerciseId)

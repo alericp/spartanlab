@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -36,6 +36,22 @@ interface AdaptiveSessionCardProps {
   onExerciseReplace?: (exerciseId: string) => void
   onWorkoutComplete?: () => void
   onExerciseOverride?: (override: ExerciseOverride) => void
+  // [TASK 4] Program ID for variant state reset when program changes
+  programId?: string
+}
+
+// =============================================================================
+// [TASK 3] ACTIVE SESSION VIEW MODEL
+// Unified view of the session based on selected variant
+// All header/body/summary UI should use this instead of mixing base + variant data
+// =============================================================================
+interface ActiveSessionView {
+  exercises: AdaptiveExercise[]
+  exerciseCount: number
+  estimatedMinutes: number
+  variantLabel: string
+  isFullSession: boolean
+  isVariantSelected: boolean
 }
 
 /**
@@ -68,7 +84,7 @@ function normalizeSessionForDisplay(session: AdaptiveSession): AdaptiveSession {
   }
 }
 
-export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, onWorkoutComplete, onExerciseOverride }: AdaptiveSessionCardProps) {
+export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, onWorkoutComplete, onExerciseOverride, programId }: AdaptiveSessionCardProps) {
   // PHASE 3: Normalize session immediately to prevent crashes
   const session = normalizeSessionForDisplay(rawSession)
   const router = useRouter()
@@ -81,6 +97,27 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
   const [selectedExerciseForReplace, setSelectedExerciseForReplace] = useState<{id: string, name: string} | null>(null)
   const [skippedExercises, setSkippedExercises] = useState<Set<string>>(new Set())
   const [adjustedExercises, setAdjustedExercises] = useState<Map<string, string>>(new Map())
+  
+  // [TASK 4] Track session identity to reset variant state when session changes
+  // Using ref to avoid setting state during render
+  const lastSessionIdentityRef = useRef<string>('')
+  const currentSessionIdentity = `${programId || 'unknown'}-${session.dayNumber}-${session.name}`
+  
+  // [TASK 4] Reset variant state when program or session changes
+  // This prevents stale Full/45/30 selections from persisting across regenerations
+  useEffect(() => {
+    if (lastSessionIdentityRef.current !== '' && lastSessionIdentityRef.current !== currentSessionIdentity) {
+      console.log('[variant-state-reset] Session identity changed, resetting variant selection', {
+        oldIdentity: lastSessionIdentityRef.current,
+        newIdentity: currentSessionIdentity,
+        wasSelectedVariant: selectedVariant,
+      })
+      setSelectedVariant(null)
+      setSkippedExercises(new Set())
+      setAdjustedExercises(new Map())
+    }
+    lastSessionIdentityRef.current = currentSessionIdentity
+  }, [currentSessionIdentity]) // eslint-disable-line react-hooks/exhaustive-deps
   
   // Generate unique session ID for tracking overrides
   const sessionId = `${session.name}-${session.dayLabel}-${Date.now().toString(36)}`
@@ -236,6 +273,12 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
   }
   const availableEquipment: EquipmentType[] = ['floor', 'wall', ...profileEquipment.map(e => equipmentMap[e] || e).filter((e): e is EquipmentType => !!e)]
 
+  // ==========================================================================
+  // [TASK 3] ACTIVE SESSION VIEW MODEL
+  // Single source of truth for all session display - header, body, and summary
+  // This prevents contradictory displays like "2 exercises in header / 3 in body"
+  // ==========================================================================
+  
   // Get exercises to display based on variant selection
   // [weighted-prescription-truth] Preserve prescribedLoad through variant mapping
   const displayExercises = selectedVariant !== null && session.variants?.[selectedVariant]
@@ -254,6 +297,63 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
         restSeconds: s.restSeconds,
       }))
     : session.exercises
+  
+  // [TASK 3] Build unified active session view
+  const activeSessionView: ActiveSessionView = {
+    exercises: displayExercises,
+    exerciseCount: displayExercises.length,
+    // Calculate estimated minutes from variant if selected, otherwise use session default
+    estimatedMinutes: selectedVariant !== null && session.variants?.[selectedVariant]
+      ? session.variants[selectedVariant].duration
+      : session.estimatedMinutes,
+    variantLabel: selectedVariant !== null && session.variants?.[selectedVariant]
+      ? session.variants[selectedVariant].label
+      : 'Full Session',
+    isFullSession: selectedVariant === null || selectedVariant === 0,
+    isVariantSelected: selectedVariant !== null && selectedVariant > 0,
+  }
+  
+  // ==========================================================================
+  // [TASK 5] VARIANT TRUTH AUDIT
+  // Log whether 45 and 30 variants are actually different or collapsing together
+  // ==========================================================================
+  if (session.variants && session.variants.length > 1) {
+    const fullVariant = session.variants[0]
+    const variant45 = session.variants.find(v => v.label.includes('45') || v.duration === 45)
+    const variant30 = session.variants.find(v => v.label.includes('30') || v.duration === 30)
+    
+    const fullExerciseNames = fullVariant?.selection?.main?.map(s => s.exercise.name) || []
+    const variant45Names = variant45?.selection?.main?.map(s => s.exercise.name) || []
+    const variant30Names = variant30?.selection?.main?.map(s => s.exercise.name) || []
+    
+    // Check if 45 and 30 are identical
+    const are45And30Identical = variant45 && variant30 && 
+      JSON.stringify(variant45Names) === JSON.stringify(variant30Names)
+    
+    // Check if full and selected are identical
+    const selectedNames = activeSessionView.exercises.map(e => e.name)
+    const isSelectedIdenticalToFull = JSON.stringify(selectedNames) === JSON.stringify(fullExerciseNames)
+    
+    console.log('[variant-truth-audit]', {
+      sessionDay: session.dayNumber,
+      sessionName: session.name,
+      baseDuration: session.estimatedMinutes,
+      variant45Exists: !!variant45,
+      variant30Exists: !!variant30,
+      fullExerciseCount: fullExerciseNames.length,
+      variant45ExerciseCount: variant45Names.length,
+      variant30ExerciseCount: variant30Names.length,
+      fullExercises: fullExerciseNames.slice(0, 5).join(', '),
+      variant45Exercises: variant45Names.slice(0, 5).join(', '),
+      variant30Exercises: variant30Names.slice(0, 5).join(', '),
+      are45And30Identical,
+      isSelectedIdenticalToFull,
+      currentSelectedVariant: selectedVariant,
+      activeVariantLabel: activeSessionView.variantLabel,
+      activeExerciseCount: activeSessionView.exerciseCount,
+      activeEstimatedMinutes: activeSessionView.estimatedMinutes,
+    })
+  }
 
   return (
     <Card className="bg-[#2A2A2A] border-[#3A3A3A] overflow-hidden">
@@ -274,12 +374,16 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
               )}
             </div>
             <p className="text-sm text-[#E63946]">{session.focusLabel}</p>
+            {/* [TASK 3 & 6] Use activeSessionView for header - ensures header matches body */}
             <div className="flex items-center gap-3 mt-2 text-xs text-[#6A6A6A]">
               <span className="flex items-center gap-1">
                 <Clock className="w-3 h-3" />
-                ~{session.estimatedMinutes} min
+                ~{activeSessionView.estimatedMinutes} min
               </span>
-              <span>{session.exercises.length} exercises</span>
+              <span>{activeSessionView.exerciseCount} exercises</span>
+              {activeSessionView.isVariantSelected && (
+                <span className="text-[#E63946]/70">({activeSessionView.variantLabel})</span>
+              )}
               {rpeExerciseCount > 0 && (
                 <span className="text-[#E63946]">{rpeExerciseCount} RPE tracked</span>
               )}
@@ -348,11 +452,11 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
             />
           ) : (
             <>
-              {/* Start Workout Panel */}
+              {/* [TASK 6] Start Workout Panel - uses activeSessionView for truth */}
               <StartWorkoutPanel
                 sessionName={session.dayLabel}
-                exerciseCount={session.exercises.length}
-                estimatedMinutes={session.estimatedMinutes}
+                exerciseCount={activeSessionView.exerciseCount}
+                estimatedMinutes={activeSessionView.estimatedMinutes}
                 rpeExerciseCount={rpeExerciseCount}
                 onStart={handleStartWorkout}
               />
@@ -403,25 +507,45 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
             )
           })()}
 
-          {/* Time Variants */}
+          {/* [TASK 4] Time Variants - Improved toggle behavior
+              - Full Session = null or 0 (explicitly reset to full)
+              - 45 Min = idx of 45-minute variant
+              - 30 Min = idx of 30-minute variant
+              - Clicking Full Session explicitly resets to null for canonical full behavior */}
           {session.variants && session.variants.length > 1 && (
             <div className="flex gap-2 flex-wrap">
               <span className="text-xs text-[#6A6A6A] self-center mr-1">Session length:</span>
-              {session.variants.map((variant, idx) => (
-                <Button
-                  key={variant.duration}
-                  size="sm"
-                  variant={selectedVariant === idx || (selectedVariant === null && idx === 0) ? 'default' : 'outline'}
-                  className={
-                    selectedVariant === idx || (selectedVariant === null && idx === 0)
-                      ? 'bg-[#E63946] hover:bg-[#D62828] text-xs h-7'
-                      : 'border-[#3A3A3A] text-xs h-7'
-                  }
-                  onClick={() => setSelectedVariant(idx)}
-                >
-                  {variant.label}
-                </Button>
-              ))}
+              {session.variants.map((variant, idx) => {
+                // [TASK 4] Determine if this variant is the active selection
+                const isActive = selectedVariant === idx || (selectedVariant === null && idx === 0)
+                
+                return (
+                  <Button
+                    key={`${variant.duration}-${variant.label}`}
+                    size="sm"
+                    variant={isActive ? 'default' : 'outline'}
+                    className={
+                      isActive
+                        ? 'bg-[#E63946] hover:bg-[#D62828] text-xs h-7'
+                        : 'border-[#3A3A3A] text-xs h-7'
+                    }
+                    onClick={() => {
+                      // [TASK 4] Explicitly handle Full Session as null for canonical reset
+                      const newVariant = idx === 0 ? null : idx
+                      console.log('[variant-selection]', {
+                        sessionDay: session.dayNumber,
+                        previousVariant: selectedVariant,
+                        newVariant,
+                        variantLabel: variant.label,
+                        variantDuration: variant.duration,
+                      })
+                      setSelectedVariant(newVariant)
+                    }}
+                  >
+                    {variant.label}
+                  </Button>
+                )
+              })}
             </div>
           )}
 

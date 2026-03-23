@@ -1483,6 +1483,33 @@ function generateAdaptiveProgramImpl(inputs: AdaptiveProgramInputs, stageTracker
     reason: hasLoadableEq && hasWeightedStr ? 'weighted_eligible' : hasLoadableEq ? 'missing_strength_inputs' : 'no_loadable_equipment',
   })
   
+  // ==========================================================================
+  // [TASK 7] PULL EXPRESSION ALIGNMENT AUDIT
+  // Check if pull-up bar is correctly detected for vertical pulling eligibility
+  // ==========================================================================
+  const equipmentArray = canonicalProfile.equipment || canonicalProfile.equipmentAvailable || []
+  const hasPullUpBarDirect = equipmentArray.includes('pull_bar')
+  const hasPullUpBarAlias = equipmentArray.includes('pullup_bar')
+  const hasPullUpBarNormalized = hasPullUpBarDirect || hasPullUpBarAlias
+  const hasWeightsForPull = equipmentArray.includes('weights')
+  const hasFrontLeverSelected = canonicalProfile.selectedSkills?.includes('front_lever') || 
+                                canonicalProfile.secondaryGoal === 'front_lever'
+  
+  console.log('[pull-expression-alignment-audit]', {
+    primaryGoal: canonicalProfile.primaryGoal,
+    secondaryGoal: canonicalProfile.secondaryGoal,
+    selectedSkills: canonicalProfile.selectedSkills?.slice(0, 5),
+    rawEquipmentKeys: equipmentArray.slice(0, 8),
+    pullUpBarDirectKey: hasPullUpBarDirect,
+    pullUpBarAliasKey: hasPullUpBarAlias,
+    pullUpBarNormalized: hasPullUpBarNormalized,
+    weightsAvailable: hasWeightsForPull,
+    frontLeverSelected: hasFrontLeverSelected,
+    verticalPullingEligible: hasPullUpBarNormalized,
+    weightedPullingEligible: hasPullUpBarNormalized && hasWeightsForPull,
+    verdict: hasPullUpBarNormalized ? 'aligned' : 'underexpressed_due_to_equipment_false_negative',
+  })
+  
   // ISSUE A: Stage tracking for diagnosable failures
   setStage('profile_validation')
   

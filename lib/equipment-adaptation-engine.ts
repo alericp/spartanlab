@@ -4,6 +4,32 @@
 import type { EquipmentType, Exercise } from './adaptive-exercise-pool'
 import type { SelectedExercise } from './program-exercise-selector'
 
+// =============================================================================
+// [TASK 2] EQUIPMENT KEY NORMALIZATION
+// The codebase has TWO EquipmentType definitions with different keys:
+//   - athlete-profile.ts: 'pullup_bar', 'resistance_bands'
+//   - adaptive-exercise-pool.ts: 'pull_bar', 'bands'
+// This normalizer ensures both systems can communicate.
+// =============================================================================
+type AnyEquipmentKey = string
+
+const EQUIPMENT_KEY_ALIASES: Record<string, string[]> = {
+  'pull_bar': ['pullup_bar', 'pull-up-bar', 'pullUpBar', 'Pull-Up Bar'],
+  'bands': ['resistance_bands', 'resistanceBands', 'Resistance Bands'],
+  'dip_bars': ['dipBars', 'Dip Bars'],
+  'rings': ['Rings'],
+  'parallettes': ['Parallettes'],
+  'weights': ['Weights'],
+}
+
+/**
+ * Check if equipment is available, accounting for key aliases
+ */
+function hasEquipment(available: AnyEquipmentKey[], canonicalKey: string): boolean {
+  const aliases = EQUIPMENT_KEY_ALIASES[canonicalKey] || []
+  return available.includes(canonicalKey) || aliases.some(alias => available.includes(alias))
+}
+
 export interface EquipmentProfile {
   available: EquipmentType[]
   hasFullSetup: boolean
@@ -77,30 +103,63 @@ const FLOOR_ALTERNATIVES: Record<string, Exercise> = {
 // =============================================================================
 
 export function analyzeEquipmentProfile(available: EquipmentType[]): EquipmentProfile {
+  // ==========================================================================
+  // [TASK 1] EQUIPMENT TRUTH AUDIT
+  // Log the equipment state at analysis time for debugging
+  // ==========================================================================
+  const hasPullBar = hasEquipment(available, 'pull_bar')
+  const hasDipBars = hasEquipment(available, 'dip_bars')
+  const hasRings = hasEquipment(available, 'rings')
+  const hasBands = hasEquipment(available, 'bands')
+  const hasWeights = hasEquipment(available, 'weights')
+  
+  console.log('[equipment-truth-audit]', {
+    rawAvailableKeys: available.slice(0, 10),
+    normalizedPullBar: hasPullBar,
+    normalizedDipBars: hasDipBars,
+    normalizedRings: hasRings,
+    normalizedBands: hasBands,
+    normalizedWeights: hasWeights,
+    note: 'Using alias-aware equipment checking',
+  })
+  
   const criticalEquipment: EquipmentType[] = ['pull_bar', 'dip_bars']
-  const missingCritical = criticalEquipment.filter(eq => !available.includes(eq))
+  // Use alias-aware check for missing critical equipment
+  const missingCritical = criticalEquipment.filter(eq => !hasEquipment(available, eq))
   
   const notes: string[] = []
   
-  if (!available.includes('pull_bar')) {
+  // [TASK 2] Use alias-aware checks for equipment warnings
+  if (!hasPullBar) {
     notes.push('Pull-up bar missing — vertical pulling will be limited. Consider doorframe bar or outdoor bars.')
   }
   
-  if (!available.includes('dip_bars')) {
+  if (!hasDipBars) {
     notes.push('Dip bars missing — weighted dips not possible. Push-up progressions will substitute.')
   }
   
-  if (!available.includes('rings')) {
+  if (!hasRings) {
     notes.push('Rings not available — ring exercises will use bar/floor alternatives.')
   }
   
-  if (available.includes('pull_bar') && available.includes('dip_bars')) {
+  if (hasPullBar && hasDipBars) {
     notes.push('Core equipment available — full programming possible.')
   }
   
+  // [TASK 9] Final equipment verdict
+  const hasFullSetup = missingCritical.length === 0
+  console.log('[equipment-final-verdict]', {
+    settingsPullUpBar: available.includes('pullup_bar'),
+    canonicalPullUpBar: hasPullBar,
+    warningCardPullUpBarMissing: !hasPullBar,
+    verticalPullingNowEligible: hasPullBar,
+    weightedPullingNowEligible: hasPullBar && hasWeights,
+    finalVerdict: hasFullSetup ? 'fully_aligned' : 'equipment_limited',
+  })
+  
   return {
     available,
-    hasFullSetup: missingCritical.length === 0,
+    hasFullSetup,
     missingCritical,
     adaptationNotes: notes,
   }
@@ -110,9 +169,9 @@ export function adaptExerciseForEquipment(
   exercise: SelectedExercise,
   available: EquipmentType[]
 ): AdaptationResult {
-  // Check if exercise can be performed with available equipment
+  // [TASK 2] Check if exercise can be performed with available equipment using alias-aware check
   const canPerform = exercise.exercise.equipment.some(eq => 
-    eq === 'floor' || eq === 'wall' || available.includes(eq)
+    eq === 'floor' || eq === 'wall' || hasEquipment(available, eq)
   )
   
   if (canPerform) {
@@ -201,8 +260,8 @@ export function getEquipmentRecommendations(
 ): EquipmentRecommendation[] {
   const recommendations: EquipmentRecommendation[] = []
   
-  // Pull bar is essential for any pulling goal
-  if (!available.includes('pull_bar')) {
+  // [TASK 2] Pull bar is essential for any pulling goal - use alias-aware check
+  if (!hasEquipment(available, 'pull_bar')) {
     recommendations.push({
       equipment: 'pull_bar',
       priority: 'essential',
@@ -211,8 +270,8 @@ export function getEquipmentRecommendations(
     })
   }
   
-  // Dip bars for push goals
-  if (!available.includes('dip_bars') && 
+  // Dip bars for push goals - use alias-aware check
+  if (!hasEquipment(available, 'dip_bars') && 
       (primaryGoal === 'planche' || primaryGoal === 'muscle_up' || primaryGoal === 'weighted_strength')) {
     recommendations.push({
       equipment: 'dip_bars',
@@ -222,8 +281,8 @@ export function getEquipmentRecommendations(
     })
   }
   
-  // Rings for advanced work
-  if (!available.includes('rings')) {
+  // Rings for advanced work - use alias-aware check
+  if (!hasEquipment(available, 'rings')) {
     recommendations.push({
       equipment: 'rings',
       priority: 'recommended',
@@ -232,8 +291,8 @@ export function getEquipmentRecommendations(
     })
   }
   
-  // Parallettes for planche/L-sit
-  if (!available.includes('parallettes') && 
+  // Parallettes for planche/L-sit - use alias-aware check
+  if (!hasEquipment(available, 'parallettes') && 
       (primaryGoal === 'planche' || primaryGoal === 'handstand_pushup')) {
     recommendations.push({
       equipment: 'parallettes',
@@ -243,8 +302,8 @@ export function getEquipmentRecommendations(
     })
   }
   
-  // Bands for warmup
-  if (!available.includes('bands')) {
+  // Bands for warmup - use alias-aware check
+  if (!hasEquipment(available, 'bands')) {
     recommendations.push({
       equipment: 'bands',
       priority: 'nice_to_have',

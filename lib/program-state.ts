@@ -93,6 +93,9 @@ export type BuildAttemptSubCode =
   | 'unsupported_high_frequency_structure'
   | 'insufficient_templates_for_requested_days'
   | 'recovery_distribution_conflict'
+  // Internal builder runtime errors (TASK 5 - allExerciseNames fix)
+  | 'internal_builder_reference_error'
+  | 'internal_builder_type_error'
   | 'none'
 
 /**
@@ -227,6 +230,11 @@ export function getErrorUserMessage(
       return 'Not enough session templates for your requested schedule. Try fewer days.' + suffix
     case 'recovery_distribution_conflict':
       return 'Recovery days could not be properly distributed. Try fewer training days.' + suffix
+    // Internal builder runtime errors (TASK 5 - allExerciseNames fix)
+    case 'internal_builder_reference_error':
+      return 'An internal builder error occurred. Please try again or report this issue.' + suffix
+    case 'internal_builder_type_error':
+      return 'An internal data error occurred. Please try again or report this issue.' + suffix
     default:
       // Fall through to error code handling
       break

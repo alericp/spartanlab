@@ -544,6 +544,19 @@ setProgramModules({
         buildResultStatus: stored.status,
         programId: program?.id || null,
       })
+      
+      // [TASK 6] Stale-plan truth verification - explicit check for UI clarity
+      console.log('[stale-plan-truth-verification]', {
+        rebuildSucceeded,
+        visiblePlanIsPrevious,
+        latestSettingsApplied: rebuildSucceeded,
+        shouldCurrentSummaryBeTrusted: rebuildSucceeded,
+        finalVerdict: visiblePlanIsPrevious 
+          ? 'stale_plan_clearly_preserved' 
+          : rebuildSucceeded 
+            ? 'fresh_plan_displayed'
+            : 'stale_plan_truth_ambiguous',
+      })
     }
   }, [program])
   

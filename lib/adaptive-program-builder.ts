@@ -2137,168 +2137,271 @@ function generateAdaptiveProgramImpl(inputs: AdaptiveProgramInputs, stageTracker
       sessionContext
     )
     
-    // Attach session intent and variety info
-    session.sessionIntent = intent
+    // =========================================================================
+    // STEP A: Post-session mutation zone tracking
+    // =========================================================================
+    let postSessionStep = 'session_generated'
+    const sessionExerciseCountAtStart = session.exercises?.length || 0
     
-    // Check if this session is an intentional repetition
-    const justification = repetitionJustifications.find(
-      j => j.dayA === day.dayNumber || j.dayB === day.dayNumber
-    )
-    
-    session.varietyInfo = {
-      exerciseVariant: intent?.exerciseVariant || 'A',
-      supportVariant: intent?.supportVariant || 'primary',
-      isIntentionalRepetition: justification?.isIntentional || false,
-      repetitionReason: justification?.coachingNote,
-    }
-    
-    // Add fatigue-based adaptation notes if needed
-    if (fatigueDecision && fatigueDecision.decision !== 'TRAIN_AS_PLANNED') {
-      const fatigueNote = getFatigueAdaptationNote(fatigueDecision.decision)
-      if (fatigueNote) {
-        session.adaptationNotes = session.adaptationNotes || []
-        session.adaptationNotes.push(fatigueNote)
-      }
-    }
-    
-    // Apply session feedback volume modifier if feedback confidence is sufficient
-    if (feedbackState.confidence !== 'low' && feedbackState.volumeModifier !== 1.0) {
-      session.exercises = applyVolumeModifier(session.exercises, feedbackState.volumeModifier)
-      session.adaptationNotes = session.adaptationNotes || []
-      // [trust-polish] ISSUE D: Calmer, less mechanical language
-      if (feedbackState.needsDeload) {
-        session.adaptationNotes.push('Volume adjusted down — focus on recovery this week')
-      } else if (feedbackState.volumeModifier < 1.0) {
-        session.adaptationNotes.push('Volume adjusted slightly based on your recent workouts')
-      } else {
-        session.adaptationNotes.push('Volume increased — your recovery is strong')
-      }
-    }
+    console.log('[post-session-start]', {
+      dayNumber: day.dayNumber,
+      focus: day.focus,
+      primaryGoal,
+      sessionExerciseCount: sessionExerciseCountAtStart,
+      sessionWarmupCount: session.warmup?.length || 0,
+      sessionCooldownCount: session.cooldown?.length || 0,
+      hasFinisher: !!session.finisher,
+      hasVariants: !!session.variants?.length,
+      structureName: structure.structureName,
+      sessionLength,
+      equipmentCount: equipment.length,
+    })
     
     // =========================================================================
-    // WEAK POINT ACCESSORY INJECTION
+    // STEP B: Protected post-session mutation zone
     // =========================================================================
-    // Add targeted accessories based on detected weak points (max 1-2 per session)
-    // Only add if session isn't already overloaded
-    const sessionExerciseCount = session.exercises.length
-    const maxExercisesForSession = sessionLength === '<30' ? 5 : sessionLength === '30-45' ? 6 : 8
-    
-    // Use rule-based detection with fatigue state
-    const fatigueNeedsDeload = fatigueDecision?.decision === 'SKIP_TODAY' || 
-                               fatigueDecision?.decision === 'DELOAD_RECOMMENDED'
-    const fatigueScoreForDetection = fatigueDecision?.decision === 'SKIP_TODAY' ? 90 :
-                                     fatigueDecision?.decision === 'REDUCE_INTENSITY' ? 70 :
-                                     fatigueDecision?.decision === 'DELOAD_RECOMMENDED' ? 80 : 40
-    
-    const detectedWeakPoints = detectWeakPointsForProfile(
-      onboardingProfile,
-      athleteCalibration,
-      fatigueNeedsDeload,
-      fatigueScoreForDetection
-    )
-    
-    // Check if fatigue is the primary weak point - skip accessories if so
-    const isFatigued = detectedWeakPoints.primary.includes('general_fatigue')
-    
-    if (!isFatigued && sessionExerciseCount < maxExercisesForSession - 1 && 
-        (detectedWeakPoints.primary.length > 0 || detectedWeakPoints.secondary.length > 0)) {
-      // Combine primary and secondary weak points, primary first
-      const allWeakPoints = [...detectedWeakPoints.primary, ...detectedWeakPoints.secondary]
+    try {
+      // Attach session intent and variety info
+      postSessionStep = 'session_intent_attaching'
+      session.sessionIntent = intent
+      postSessionStep = 'session_intent_attached'
       
-      // Get recommended accessories (max 2)
-      const maxAccessories = Math.min(2, maxExercisesForSession - sessionExerciseCount)
-      const recommendedAccessories = getWeakPointAccessories(allWeakPoints, maxAccessories)
-      
-      // Add accessories to session if found
-      if (recommendedAccessories.length > 0) {
-        session.adaptationNotes = session.adaptationNotes || []
-        
-        // Build coaching note based on detected weak points
-        const primaryLabel = detectedWeakPoints.primary[0] 
-          ? WEAK_POINT_LABELS[detectedWeakPoints.primary[0]] 
-          : null
-        
-        if (primaryLabel) {
-          session.adaptationNotes.push(
-            `Support work added for ${primaryLabel.toLowerCase()}`
-          )
-        }
-        
-        // Mark session as having weak-point-based additions
-        session.weakPointAccessories = recommendedAccessories
-      }
-    } else if (isFatigued) {
-      // Add note about fatigue-based volume reduction
-      session.adaptationNotes = session.adaptationNotes || []
-      session.adaptationNotes.push('No additional support work - focus on recovery')
-    }
-    
-    // =========================================================================
-    // SESSION LOAD OPTIMIZATION
-    // =========================================================================
-    // Ensure session is balanced and not bloated using weighted load calculation
-    const sessionStyleForLoad = determineSessionStyle(
-      session.estimatedMinutes,
-      primaryGoal === 'skill' ? 'skill' : 
-        primaryGoal === 'strength' ? 'strength' : 'mixed',
-      undefined,
-      fatigueDecision?.decision === 'REDUCE_INTENSITY' ? 'very_low' : undefined
-    )
-    
-    // Build metadata for load calculation
-    const exercisesWithMeta = buildSessionMetadata(
-      session.exercises.map(ex => ({
-        id: ex.id,
-        name: ex.name,
-        category: ex.category,
-        neuralDemand: ex.category === 'skill' ? 4 : 3,
-        fatigueCost: ex.category === 'skill' ? 3 : ex.category === 'strength' ? 4 : 2,
-        movementPattern: undefined,
-        isIsometric: ex.repsOrTime?.includes('s') ?? false,
-      }))
-    )
-    
-    // Optimize if over budget
-    const loadBudget = getSessionLoadBudget(sessionStyleForLoad)
-    const currentLoad = calculateSessionLoad(
-      exercisesWithMeta.map(e => e.metadata),
-      loadBudget
-    )
-    
-    if (!currentLoad.isWithinBudget || currentLoad.weightedExerciseCount > TARGET_LOAD.max) {
-      // Run optimization
-      const optimized = optimizeSessionLoad(
-        exercisesWithMeta,
-        sessionStyleForLoad,
-        {
-          maxRemovals: 2,
-          preserveIds: session.exercises
-            .filter(e => e.category === 'skill' || e.selectionReason?.includes('primary'))
-            .map(e => e.id),
-        }
+      // Check if this session is an intentional repetition
+      const justification = repetitionJustifications.find(
+        j => j.dayA === day.dayNumber || j.dayB === day.dayNumber
       )
       
-      if (optimized.wasModified) {
-        // Filter exercises to keep only those that weren't removed
-        const keptIds = new Set(optimized.optimizedExercises.map(e => e.exerciseId))
-        session.exercises = session.exercises.filter(ex => keptIds.has(ex.id))
-        
-        // Add adaptation notes
-        session.adaptationNotes = session.adaptationNotes || []
-        session.adaptationNotes.push(
-          `Session balanced: ${optimized.modifications[0] || 'Load optimized for quality'}`
-        )
-        
-        // Store load summary for UI
-        session.loadSummary = {
-          weightedLoad: optimized.optimizedLoad.weightedExerciseCount,
-          isOptimal: optimized.optimizedLoad.isWithinBudget,
-          removed: optimized.removed.map(r => r.name),
+      postSessionStep = 'variety_info_attaching'
+      session.varietyInfo = {
+        exerciseVariant: intent?.exerciseVariant || 'A',
+        supportVariant: intent?.supportVariant || 'primary',
+        isIntentionalRepetition: justification?.isIntentional || false,
+        repetitionReason: justification?.coachingNote,
+      }
+      postSessionStep = 'variety_info_attached'
+      
+      // Add fatigue-based adaptation notes if needed
+      postSessionStep = 'fatigue_notes_applying'
+      if (fatigueDecision && fatigueDecision.decision !== 'TRAIN_AS_PLANNED') {
+        const fatigueNote = getFatigueAdaptationNote(fatigueDecision.decision)
+        if (fatigueNote) {
+          session.adaptationNotes = session.adaptationNotes || []
+          session.adaptationNotes.push(fatigueNote)
         }
       }
+      postSessionStep = 'fatigue_notes_applied'
+      
+      // Apply session feedback volume modifier if feedback confidence is sufficient
+      postSessionStep = 'volume_modifier_applying'
+      if (feedbackState.confidence !== 'low' && feedbackState.volumeModifier !== 1.0) {
+        // STEP I: Guard against invalid session.exercises before modification
+        if (Array.isArray(session.exercises) && session.exercises.length > 0) {
+          session.exercises = applyVolumeModifier(session.exercises, feedbackState.volumeModifier)
+          session.adaptationNotes = session.adaptationNotes || []
+          // [trust-polish] ISSUE D: Calmer, less mechanical language
+          if (feedbackState.needsDeload) {
+            session.adaptationNotes.push('Volume adjusted down — focus on recovery this week')
+          } else if (feedbackState.volumeModifier < 1.0) {
+            session.adaptationNotes.push('Volume adjusted slightly based on your recent workouts')
+          } else {
+            session.adaptationNotes.push('Volume increased — your recovery is strong')
+          }
+        }
+      }
+      postSessionStep = 'volume_modifier_applied'
+      
+      // =========================================================================
+      // WEAK POINT ACCESSORY INJECTION (STEP D: Optional - non-fatal)
+      // =========================================================================
+      postSessionStep = 'weak_points_detecting'
+      // Add targeted accessories based on detected weak points (max 1-2 per session)
+      // Only add if session isn't already overloaded
+      const sessionExerciseCount = session.exercises?.length || 0
+      const maxExercisesForSession = sessionLength === '<30' ? 5 : sessionLength === '30-45' ? 6 : 8
+      
+      // Use rule-based detection with fatigue state
+      const fatigueNeedsDeload = fatigueDecision?.decision === 'SKIP_TODAY' || 
+                                 fatigueDecision?.decision === 'DELOAD_RECOMMENDED'
+      const fatigueScoreForDetection = fatigueDecision?.decision === 'SKIP_TODAY' ? 90 :
+                                       fatigueDecision?.decision === 'REDUCE_INTENSITY' ? 70 :
+                                       fatigueDecision?.decision === 'DELOAD_RECOMMENDED' ? 80 : 40
+      
+      // STEP D: Wrap weak point detection in optional try/catch
+      let detectedWeakPoints = { primary: [] as string[], secondary: [] as string[] }
+      try {
+        detectedWeakPoints = detectWeakPointsForProfile(
+          onboardingProfile,
+          athleteCalibration,
+          fatigueNeedsDeload,
+          fatigueScoreForDetection
+        )
+        postSessionStep = 'weak_points_detected'
+      } catch (weakPointErr) {
+        console.warn('[post-session-optional-helper-failure] detectWeakPointsForProfile failed:', {
+          dayNumber: day.dayNumber,
+          error: weakPointErr instanceof Error ? weakPointErr.message : String(weakPointErr),
+        })
+        // Continue without weak point detection
+        postSessionStep = 'weak_points_skipped_due_to_error'
+      }
+    
+    // STEP D: Wrap weak point accessory selection in optional try/catch
+    postSessionStep = 'weak_point_accessories_selecting'
+    try {
+      // Check if fatigue is the primary weak point - skip accessories if so
+      const isFatigued = detectedWeakPoints.primary.includes('general_fatigue')
+      
+      if (!isFatigued && sessionExerciseCount < maxExercisesForSession - 1 && 
+          (detectedWeakPoints.primary.length > 0 || detectedWeakPoints.secondary.length > 0)) {
+        // Combine primary and secondary weak points, primary first
+        const allWeakPoints = [...detectedWeakPoints.primary, ...detectedWeakPoints.secondary]
+        
+        // Get recommended accessories (max 2)
+        const maxAccessories = Math.min(2, maxExercisesForSession - sessionExerciseCount)
+        const recommendedAccessories = getWeakPointAccessories(allWeakPoints, maxAccessories)
+        
+        // Add accessories to session if found
+        if (recommendedAccessories.length > 0) {
+          session.adaptationNotes = session.adaptationNotes || []
+          
+          // Build coaching note based on detected weak points
+          const primaryLabel = detectedWeakPoints.primary[0] 
+            ? WEAK_POINT_LABELS[detectedWeakPoints.primary[0]] 
+            : null
+          
+          if (primaryLabel) {
+            session.adaptationNotes.push(
+              `Support work added for ${primaryLabel.toLowerCase()}`
+            )
+          }
+          
+          // Mark session as having weak-point-based additions
+          session.weakPointAccessories = recommendedAccessories
+        }
+        postSessionStep = 'weak_point_accessories_attached'
+      } else if (isFatigued) {
+        // Add note about fatigue-based volume reduction
+        session.adaptationNotes = session.adaptationNotes || []
+        session.adaptationNotes.push('No additional support work - focus on recovery')
+        postSessionStep = 'weak_point_accessories_skipped_fatigue'
+      } else {
+        postSessionStep = 'weak_point_accessories_not_needed'
+      }
+    } catch (accessoryErr) {
+      console.warn('[post-session-optional-helper-failure] getWeakPointAccessories failed:', {
+        dayNumber: day.dayNumber,
+        error: accessoryErr instanceof Error ? accessoryErr.message : String(accessoryErr),
+      })
+      postSessionStep = 'weak_point_accessories_skipped_due_to_error'
+      // Continue without weak point accessories
     }
     
-    // [program-build] Validate assembled session before returning
+    // =========================================================================
+    // SESSION LOAD OPTIMIZATION (STEP D: Optional - non-fatal)
+    // =========================================================================
+    postSessionStep = 'session_load_optimizing'
+    // STEP I: Guard against invalid session.exercises before load optimization
+    if (Array.isArray(session.exercises) && session.exercises.length > 0) {
+      try {
+        // Ensure session is balanced and not bloated using weighted load calculation
+        const sessionStyleForLoad = determineSessionStyle(
+          session.estimatedMinutes,
+          primaryGoal === 'skill' ? 'skill' : 
+            primaryGoal === 'strength' ? 'strength' : 'mixed',
+          undefined,
+          fatigueDecision?.decision === 'REDUCE_INTENSITY' ? 'very_low' : undefined
+        )
+        postSessionStep = 'session_style_resolved'
+        
+        // Build metadata for load calculation
+        // STEP I: Guard each exercise has required fields before building metadata
+        const safeExercises = session.exercises.filter(ex => ex?.id && ex?.name)
+        const exercisesWithMeta = buildSessionMetadata(
+          safeExercises.map(ex => ({
+            id: ex.id,
+            name: ex.name,
+            category: ex.category || 'strength',
+            neuralDemand: ex.category === 'skill' ? 4 : 3,
+            fatigueCost: ex.category === 'skill' ? 3 : ex.category === 'strength' ? 4 : 2,
+            movementPattern: undefined,
+            isIsometric: ex.repsOrTime?.includes('s') ?? false,
+          }))
+        )
+        postSessionStep = 'session_metadata_built'
+        
+        // Optimize if over budget
+        const loadBudget = getSessionLoadBudget(sessionStyleForLoad)
+        const currentLoad = calculateSessionLoad(
+          exercisesWithMeta.map(e => e.metadata),
+          loadBudget
+        )
+        postSessionStep = 'session_load_calculated'
+        
+        if (!currentLoad.isWithinBudget || currentLoad.weightedExerciseCount > TARGET_LOAD.max) {
+          // Run optimization
+          const optimized = optimizeSessionLoad(
+            exercisesWithMeta,
+            sessionStyleForLoad,
+            {
+              maxRemovals: 2,
+              preserveIds: session.exercises
+                .filter(e => e.category === 'skill' || e.selectionReason?.includes('primary'))
+                .map(e => e.id),
+            }
+          )
+          postSessionStep = 'session_load_optimized'
+          
+          if (optimized.wasModified && Array.isArray(optimized.optimizedExercises)) {
+            // STEP I: Guard against keptIds zeroing the session
+            const keptIds = new Set(optimized.optimizedExercises.map(e => e.exerciseId))
+            const filteredExercises = session.exercises.filter(ex => keptIds.has(ex.id))
+            
+            // Only apply if we don't zero out the session
+            if (filteredExercises.length > 0) {
+              session.exercises = filteredExercises
+              
+              // Add adaptation notes
+              session.adaptationNotes = session.adaptationNotes || []
+              session.adaptationNotes.push(
+                `Session balanced: ${optimized.modifications[0] || 'Load optimized for quality'}`
+              )
+              
+              // Store load summary for UI
+              session.loadSummary = {
+                weightedLoad: optimized.optimizedLoad.weightedExerciseCount,
+                isOptimal: optimized.optimizedLoad.isWithinBudget,
+                removed: optimized.removed.map(r => r.name),
+              }
+              postSessionStep = 'session_post_optimization_applied'
+            } else {
+              // Optimization would zero session - skip it
+              console.warn('[post-session-optional-helper-failure] Load optimization would zero session, skipping:', {
+                dayNumber: day.dayNumber,
+                originalCount: session.exercises.length,
+                keptIdsCount: keptIds.size,
+              })
+              postSessionStep = 'session_optimization_skipped_would_zero'
+            }
+          }
+        } else {
+          postSessionStep = 'session_load_within_budget'
+        }
+      } catch (loadErr) {
+        console.warn('[post-session-optional-helper-failure] Load optimization failed:', {
+          dayNumber: day.dayNumber,
+          error: loadErr instanceof Error ? loadErr.message : String(loadErr),
+        })
+        postSessionStep = 'session_load_optimization_skipped_due_to_error'
+        // Continue without load optimization
+      }
+    } else {
+      postSessionStep = 'session_load_skipped_no_exercises'
+    }
+    
+    // =========================================================================
+    // STEP E: Post-mutation core integrity check
+    // =========================================================================
+    postSessionStep = 'final_session_validating'
     const exerciseCount = session.exercises?.length || 0
     const warmupCount = session.warmup?.length || 0
     
@@ -2311,7 +2414,29 @@ function generateAdaptiveProgramImpl(inputs: AdaptiveProgramInputs, stageTracker
       focus: session.focus,
     })
     
-    // [program-build] ISSUE D: Validate session has valid exercise structure
+    // STEP E: Core integrity validation - these failures are NOT optional
+    console.log('[post-session-core-integrity-check]', {
+      dayNumber: day.dayNumber,
+      focus: day.focus,
+      postSessionStep,
+      exerciseCount,
+      warmupCount,
+      hasDayNumber: session.dayNumber !== undefined,
+      hasFocus: !!session.focus,
+    })
+    
+    if (!session) {
+      throw new Error(
+        `post_session_integrity_invalid: day=${day.dayNumber} focus=${day.focus} reason=session_undefined`
+      )
+    }
+    
+    if (!Array.isArray(session.exercises)) {
+      throw new Error(
+        `post_session_integrity_invalid: day=${day.dayNumber} focus=${day.focus} reason=exercises_not_array`
+      )
+    }
+    
     if (exerciseCount === 0) {
       console.error('[program-build] CRITICAL: Session assembled with 0 exercises', {
         dayNumber: session.dayNumber,
@@ -2319,13 +2444,17 @@ function generateAdaptiveProgramImpl(inputs: AdaptiveProgramInputs, stageTracker
         dayFocus: day.focus,
         primaryGoal,
         equipmentCount: equipment?.length || 0,
+        postSessionStep,
       })
-      // This will cause save to be blocked later - log for diagnosis
+      throw new Error(
+        `post_session_integrity_invalid: day=${day.dayNumber} focus=${day.focus} reason=zero_exercises postStep=${postSessionStep}`
+      )
     }
     
     // Validate each exercise has required fields
-    for (let i = 0; i < (session.exercises?.length || 0); i++) {
-      const ex = session.exercises?.[i]
+    let invalidExerciseCount = 0
+    for (let i = 0; i < exerciseCount; i++) {
+      const ex = session.exercises[i]
       if (!ex?.name || typeof ex?.sets !== 'number' || ex.sets <= 0) {
         console.warn('[session-assembly] WARNING: Exercise missing required fields', {
           exerciseIndex: i,
@@ -2333,18 +2462,73 @@ function generateAdaptiveProgramImpl(inputs: AdaptiveProgramInputs, stageTracker
           sets: ex?.sets,
           dayNumber: session.dayNumber,
         })
+        invalidExerciseCount++
       }
     }
+    
+    // If ALL exercises are invalid, that's a core failure
+    if (invalidExerciseCount === exerciseCount) {
+      throw new Error(
+        `post_session_integrity_invalid: day=${day.dayNumber} focus=${day.focus} reason=all_exercises_invalid`
+      )
+    }
+    
+    postSessionStep = 'final_session_validated'
+    
+    console.log('[post-session-success]', {
+      dayNumber: day.dayNumber,
+      focus: day.focus,
+      postSessionStep,
+      finalExerciseCount: exerciseCount,
+    })
   
     // BUILD-HOTFIX: repaired misplaced session-assembly error block
     // Return assembled session from map callback
     return session
+    
+    } catch (postSessionErr) {
+      // STEP C: Classify post-session failure
+      const errorMessage = postSessionErr instanceof Error ? postSessionErr.message : String(postSessionErr)
+      
+      // Check if it's already a classified error from inside the block
+      const isAlreadyClassified = errorMessage.includes('post_session_integrity_invalid') ||
+                                   errorMessage.includes('post_session_mutation_failed')
+      
+      if (isAlreadyClassified) {
+        // Rethrow as-is
+        throw postSessionErr
+      }
+      
+      console.error('[post-session-failure]', {
+        dayNumber: day.dayNumber,
+        focus: day.focus,
+        primaryGoal,
+        postSessionStep,
+        sessionExerciseCountBeforeFailure: sessionExerciseCountAtStart,
+        sessionWarmupCountBeforeFailure: session?.warmup?.length || 0,
+        sessionCooldownCountBeforeFailure: session?.cooldown?.length || 0,
+        hasFinisher: !!session?.finisher,
+        hasVariants: !!session?.variants?.length,
+        errorName: postSessionErr instanceof Error ? postSessionErr.name : 'unknown',
+        errorMessage,
+        stack: postSessionErr instanceof Error ? postSessionErr.stack?.split('\n').slice(0, 5).join('\n') : undefined,
+        structureName: structure.structureName,
+        sessionLength,
+        equipmentCount: equipment.length,
+      })
+      
+      // Throw classified error
+      const safeReason = errorMessage.slice(0, 100).replace(/[^a-zA-Z0-9_\-\s]/g, '')
+      throw new Error(
+        `post_session_mutation_failed: step=${postSessionStep} day=${day.dayNumber} focus=${day.focus} goal=${primaryGoal} reason=${safeReason}`
+      )
+    }
   })
   } catch (err) {
     // Session assembly failed - log and rethrow with proper error info
     const errorMessage = err instanceof Error ? err.message : 'Unknown session assembly error'
     
-    // STEP H: Root-cause summary for classified session failures
+    // STEP F: Root-cause summary for classified session failures (expanded with post-session patterns)
     const classifiedPatterns = [
       'equipment_adaptation_zeroed_session',
       'mapping_zeroed_session',
@@ -2355,6 +2539,9 @@ function generateAdaptiveProgramImpl(inputs: AdaptiveProgramInputs, stageTracker
       'finisher_helper_failed',
       'post_validation_mutation_zeroed_session',
       'session_has_no_exercises',
+      // New post-session patterns
+      'post_session_mutation_failed',
+      'post_session_integrity_invalid',
     ]
     const matchedPattern = classifiedPatterns.find(p => errorMessage.includes(p)) || 'unclassified'
     
@@ -2380,6 +2567,8 @@ function generateAdaptiveProgramImpl(inputs: AdaptiveProgramInputs, stageTracker
       dayCount: structure?.days?.length,
       currentStage: stageTracker.current,
     })
+    
+    // STEP F: Preserve matchedPattern as structured subCode in GenerationError context
     throw new GenerationError(
       'session_assembly_failed',
       stageTracker.current,
@@ -2387,6 +2576,12 @@ function generateAdaptiveProgramImpl(inputs: AdaptiveProgramInputs, stageTracker
       { 
         structureName: structure?.structureName, 
         dayCount: structure?.days?.length,
+        // Structured subCode for page handlers to read directly
+        subCode: matchedPattern,
+        originalMessage: errorMessage,
+        classified: matchedPattern !== 'unclassified',
+        dayNumber: dayMatch ? Number(dayMatch[1]) : undefined,
+        dayFocus: focusMatch ? focusMatch[1] : undefined,
       }
     )
   }

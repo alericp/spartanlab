@@ -606,29 +606,53 @@ export default function ProgramPage() {
         }
         
         // [program-rebuild-truth] Determine sub-code for more specific messaging (expanded)
-        // STEP F: Added new classified failure subcodes for precise diagnosis
+        // STEP G: Read structured subCode from GenerationError context FIRST
+        const structuredSubCode = isGenerationError 
+          ? (err as { context?: Record<string, unknown> }).context?.subCode as string | undefined
+          : undefined
+        
+        // STEP G: Known BuildAttemptSubCode values from structured context
+        const knownSubCodes = [
+          'empty_structure_days', 'empty_final_session_array', 'session_count_mismatch',
+          'session_save_blocked', 'assembly_unknown_failure', 'empty_exercise_pool',
+          'session_validation_failed', 'normalization_failed', 'display_safety_failed',
+          'effective_selection_invalid', 'session_middle_helper_failed',
+          'session_variant_generation_failed', 'finisher_helper_failed',
+          'session_has_no_exercises', 'post_session_mutation_failed', 'post_session_integrity_invalid',
+        ]
+        
         let subCode: BuildAttemptSubCode = 'none'
-        if (errorMessage.includes('session_save_blocked')) subCode = 'session_save_blocked'
-        else if (errorMessage.includes('empty_structure_days')) subCode = 'empty_structure_days'
-        else if (errorMessage.includes('empty_final_session_array') || errorMessage.includes('sessions_empty')) subCode = 'empty_final_session_array'
-        else if (errorMessage.includes('session_count_mismatch')) subCode = 'session_count_mismatch'
-        // New classified middle-helper failures
-        else if (errorMessage.includes('effective_selection_invalid')) subCode = 'effective_selection_invalid'
-        else if (errorMessage.includes('session_middle_helper_failed')) subCode = 'session_middle_helper_failed'
-        else if (errorMessage.includes('session_variant_generation_failed')) subCode = 'session_variant_generation_failed'
-        else if (errorMessage.includes('finisher_helper_failed')) subCode = 'finisher_helper_failed'
-        // Existing collapse stage subcodes
-        else if (errorMessage.includes('equipment_adaptation_zeroed_session')) subCode = 'empty_exercise_pool'
-        else if (errorMessage.includes('mapping_zeroed_session')) subCode = 'session_validation_failed'
-        else if (errorMessage.includes('validation_zeroed_session')) subCode = 'session_validation_failed'
-        else if (errorMessage.includes('session_has_no_exercises')) subCode = 'session_has_no_exercises'
-        else if (errorMessage.includes('empty_exercise_pool')) subCode = 'empty_exercise_pool'
-        else if (errorMessage.includes('normalization')) subCode = 'normalization_failed'
-        else if (errorMessage.includes('display_safety')) subCode = 'display_safety_failed'
-        else if (errorMessage.includes('helper_failure') || errorMessage.includes('failed:')) subCode = 'assembly_unknown_failure'
-        else if (errorMessage.includes('audit_blocked')) subCode = 'session_validation_failed'
-        else if (errorMessage.includes('save_verification_failed')) subCode = 'session_save_blocked'
-        else if (errorMessage.includes('exercise') && errorMessage.includes('null')) subCode = 'empty_exercise_pool'
+        
+        // STEP G: Prefer structured subCode if it's a known value
+        if (structuredSubCode && knownSubCodes.includes(structuredSubCode)) {
+          subCode = structuredSubCode as BuildAttemptSubCode
+        } else {
+          // Fall back to string matching
+          if (errorMessage.includes('session_save_blocked')) subCode = 'session_save_blocked'
+          else if (errorMessage.includes('empty_structure_days')) subCode = 'empty_structure_days'
+          else if (errorMessage.includes('empty_final_session_array') || errorMessage.includes('sessions_empty')) subCode = 'empty_final_session_array'
+          else if (errorMessage.includes('session_count_mismatch')) subCode = 'session_count_mismatch'
+          // Post-session failures
+          else if (errorMessage.includes('post_session_mutation_failed')) subCode = 'post_session_mutation_failed'
+          else if (errorMessage.includes('post_session_integrity_invalid')) subCode = 'post_session_integrity_invalid'
+          // Middle-helper failures
+          else if (errorMessage.includes('effective_selection_invalid')) subCode = 'effective_selection_invalid'
+          else if (errorMessage.includes('session_middle_helper_failed')) subCode = 'session_middle_helper_failed'
+          else if (errorMessage.includes('session_variant_generation_failed')) subCode = 'session_variant_generation_failed'
+          else if (errorMessage.includes('finisher_helper_failed')) subCode = 'finisher_helper_failed'
+          // Existing collapse stage subcodes
+          else if (errorMessage.includes('equipment_adaptation_zeroed_session')) subCode = 'empty_exercise_pool'
+          else if (errorMessage.includes('mapping_zeroed_session')) subCode = 'session_validation_failed'
+          else if (errorMessage.includes('validation_zeroed_session')) subCode = 'session_validation_failed'
+          else if (errorMessage.includes('session_has_no_exercises')) subCode = 'session_has_no_exercises'
+          else if (errorMessage.includes('empty_exercise_pool')) subCode = 'empty_exercise_pool'
+          else if (errorMessage.includes('normalization')) subCode = 'normalization_failed'
+          else if (errorMessage.includes('display_safety')) subCode = 'display_safety_failed'
+          else if (errorMessage.includes('helper_failure') || errorMessage.includes('failed:')) subCode = 'assembly_unknown_failure'
+          else if (errorMessage.includes('audit_blocked')) subCode = 'session_validation_failed'
+          else if (errorMessage.includes('save_verification_failed')) subCode = 'session_save_blocked'
+          else if (errorMessage.includes('exercise') && errorMessage.includes('null')) subCode = 'empty_exercise_pool'
+        }
         
         // [program-rebuild-truth] TASK 2: Create failed build result
         const profileSig = inputs ? createProfileSignature(inputs) : 'unknown'
@@ -837,29 +861,53 @@ export default function ProgramPage() {
         }
         
         // [program-rebuild-truth] Determine sub-code (expanded)
-        // STEP F: Added new classified failure subcodes for precise diagnosis
+        // STEP G: Read structured subCode from GenerationError context FIRST
+        const structuredSubCode = isGenerationError 
+          ? (err as { context?: Record<string, unknown> }).context?.subCode as string | undefined
+          : undefined
+        
+        // STEP G: Known BuildAttemptSubCode values from structured context
+        const knownSubCodes = [
+          'empty_structure_days', 'empty_final_session_array', 'session_count_mismatch',
+          'session_save_blocked', 'assembly_unknown_failure', 'empty_exercise_pool',
+          'session_validation_failed', 'normalization_failed', 'display_safety_failed',
+          'effective_selection_invalid', 'session_middle_helper_failed',
+          'session_variant_generation_failed', 'finisher_helper_failed',
+          'session_has_no_exercises', 'post_session_mutation_failed', 'post_session_integrity_invalid',
+        ]
+        
         let subCode: BuildAttemptSubCode = 'none'
-        if (errorMessage.includes('session_save_blocked')) subCode = 'session_save_blocked'
-        else if (errorMessage.includes('empty_structure_days')) subCode = 'empty_structure_days'
-        else if (errorMessage.includes('empty_final_session_array') || errorMessage.includes('sessions_empty')) subCode = 'empty_final_session_array'
-        else if (errorMessage.includes('session_count_mismatch')) subCode = 'session_count_mismatch'
-        // New classified middle-helper failures
-        else if (errorMessage.includes('effective_selection_invalid')) subCode = 'effective_selection_invalid'
-        else if (errorMessage.includes('session_middle_helper_failed')) subCode = 'session_middle_helper_failed'
-        else if (errorMessage.includes('session_variant_generation_failed')) subCode = 'session_variant_generation_failed'
-        else if (errorMessage.includes('finisher_helper_failed')) subCode = 'finisher_helper_failed'
-        // Existing collapse stage subcodes
-        else if (errorMessage.includes('equipment_adaptation_zeroed_session')) subCode = 'empty_exercise_pool'
-        else if (errorMessage.includes('mapping_zeroed_session')) subCode = 'session_validation_failed'
-        else if (errorMessage.includes('validation_zeroed_session')) subCode = 'session_validation_failed'
-        else if (errorMessage.includes('session_has_no_exercises')) subCode = 'session_has_no_exercises'
-        else if (errorMessage.includes('empty_exercise_pool')) subCode = 'empty_exercise_pool'
-        else if (errorMessage.includes('normalization')) subCode = 'normalization_failed'
-        else if (errorMessage.includes('display_safety')) subCode = 'display_safety_failed'
-        else if (errorMessage.includes('helper_failure') || errorMessage.includes('failed:')) subCode = 'assembly_unknown_failure'
-        else if (errorMessage.includes('audit_blocked')) subCode = 'session_validation_failed'
-        else if (errorMessage.includes('save_verification_failed')) subCode = 'session_save_blocked'
-        else if (errorMessage.includes('exercise') && errorMessage.includes('null')) subCode = 'empty_exercise_pool'
+        
+        // STEP G: Prefer structured subCode if it's a known value
+        if (structuredSubCode && knownSubCodes.includes(structuredSubCode)) {
+          subCode = structuredSubCode as BuildAttemptSubCode
+        } else {
+          // Fall back to string matching
+          if (errorMessage.includes('session_save_blocked')) subCode = 'session_save_blocked'
+          else if (errorMessage.includes('empty_structure_days')) subCode = 'empty_structure_days'
+          else if (errorMessage.includes('empty_final_session_array') || errorMessage.includes('sessions_empty')) subCode = 'empty_final_session_array'
+          else if (errorMessage.includes('session_count_mismatch')) subCode = 'session_count_mismatch'
+          // Post-session failures
+          else if (errorMessage.includes('post_session_mutation_failed')) subCode = 'post_session_mutation_failed'
+          else if (errorMessage.includes('post_session_integrity_invalid')) subCode = 'post_session_integrity_invalid'
+          // Middle-helper failures
+          else if (errorMessage.includes('effective_selection_invalid')) subCode = 'effective_selection_invalid'
+          else if (errorMessage.includes('session_middle_helper_failed')) subCode = 'session_middle_helper_failed'
+          else if (errorMessage.includes('session_variant_generation_failed')) subCode = 'session_variant_generation_failed'
+          else if (errorMessage.includes('finisher_helper_failed')) subCode = 'finisher_helper_failed'
+          // Existing collapse stage subcodes
+          else if (errorMessage.includes('equipment_adaptation_zeroed_session')) subCode = 'empty_exercise_pool'
+          else if (errorMessage.includes('mapping_zeroed_session')) subCode = 'session_validation_failed'
+          else if (errorMessage.includes('validation_zeroed_session')) subCode = 'session_validation_failed'
+          else if (errorMessage.includes('session_has_no_exercises')) subCode = 'session_has_no_exercises'
+          else if (errorMessage.includes('empty_exercise_pool')) subCode = 'empty_exercise_pool'
+          else if (errorMessage.includes('normalization')) subCode = 'normalization_failed'
+          else if (errorMessage.includes('display_safety')) subCode = 'display_safety_failed'
+          else if (errorMessage.includes('helper_failure') || errorMessage.includes('failed:')) subCode = 'assembly_unknown_failure'
+          else if (errorMessage.includes('audit_blocked')) subCode = 'session_validation_failed'
+          else if (errorMessage.includes('save_verification_failed')) subCode = 'session_save_blocked'
+          else if (errorMessage.includes('exercise') && errorMessage.includes('null')) subCode = 'empty_exercise_pool'
+        }
         
         // [program-rebuild-truth] TASK 2/3: Create failed build result with last good preserved
         const profileSig = inputs ? createProfileSignature(inputs) : 'unknown'

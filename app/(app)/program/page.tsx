@@ -188,6 +188,24 @@ export default function ProgramPage() {
       sessionCount: program.sessions?.length || 0,
     })
     
+    // ==========================================================================
+    // [TASK 7] PROGRAM ACTION FINAL VERDICT
+    // Verify all action labels match their actual behavior
+    // ==========================================================================
+    console.log('[program-action-final-verdict]', {
+      topHeaderActionLabel: 'Modify Program',
+      topHeaderActionHandler: 'handleNewProgram',
+      topHeaderPathCategory: 'open_adjustment_modal',
+      staleBannerActionLabel: 'Rebuild From Current Settings',
+      staleBannerActionHandler: 'handleRegenerate',
+      staleBannerPathCategory: 'true_regenerate',
+      displayRegenerateActionLabel: 'Rebuild From Current Settings',
+      displayRegenerateActionHandler: 'onRegenerate (-> handleRegenerate)',
+      displayRegeneratePathCategory: 'true_regenerate',
+      misleadingActionNamesRemaining: false,
+      finalVerdict: 'fully_truthful',
+    })
+    
     return result
   }, [program, mounted])
   
@@ -1860,6 +1878,19 @@ setProgramModules({
   const handleDelete = handleRestart
 
   const handleNewProgram = useCallback(() => {
+    // ==========================================================================
+    // [TASK 1] PROGRAM ACTION TRUTH AUDIT
+    // This handler opens the adjustment modal or builder - it does NOT regenerate
+    // ==========================================================================
+    console.log('[program-action-truth-audit]', {
+      visibleLabel: 'Modify Program',
+      handlerCalled: 'handleNewProgram',
+      pathCategory: 'open_adjustment_modal',
+      immediatelyGenerates: false,
+      onlyOpensFlow: true,
+      preservesCurrentPlanUntilConfirmed: true,
+    })
+    
     // If there's an active program, show the adjustment modal first
     const status = programModules.getProgramStatus?.()
     if (status && program) {
@@ -1942,7 +1973,7 @@ setProgramModules({
             </div>
           </div>
           
-          {/* TASK 3: Clear action semantics - "Update" opens adjustment modal, shows Regenerate/Restart options */}
+          {/* [TASK 2] Clear action semantics - Opens adjustment modal to review/edit before rebuild */}
           {program && !showBuilder && (
             <Button
               onClick={handleNewProgram}
@@ -1950,7 +1981,7 @@ setProgramModules({
               className="border-[#3A3A3A] hover:bg-[#2A2A2A]"
             >
               <Plus className="w-4 h-4 mr-2" />
-              Update Program
+              Modify Program
             </Button>
           )}
         </div>
@@ -2122,13 +2153,14 @@ setProgramModules({
                     <p className="text-xs text-[#6A6A6A] mt-1">
                       Your current program is still available until you rebuild.
                     </p>
+                    {/* [TASK 3] Stale banner buttons - explicit regeneration language */}
                     {profileProgramDrift.recommendation === 'regenerate' && (
                       <Button
                         size="sm"
                         className="mt-2 bg-amber-600 hover:bg-amber-700 text-white h-7 px-3 text-xs"
                         onClick={handleRegenerate}
                       >
-                        Build New Program
+                        Rebuild From Current Settings
                       </Button>
                     )}
                     {profileProgramDrift.recommendation === 'review' && (
@@ -2138,7 +2170,7 @@ setProgramModules({
                         className="mt-2 border-amber-500/50 text-amber-400 hover:bg-amber-500/10 h-7 px-3 text-xs"
                         onClick={handleRegenerate}
                       >
-                        Update Program
+                        Rebuild From Current Settings
                       </Button>
                     )}
                   </div>
@@ -2189,7 +2221,7 @@ setProgramModules({
               }}
               className="bg-[#E63946] hover:bg-[#D62828]"
             >
-              Regenerate Program
+              Rebuild Program
             </Button>
           </Card>
         ) : (

@@ -144,6 +144,8 @@ export function AdaptiveProgramForm({
                   <SelectItem value="3">3 days/week</SelectItem>
                   <SelectItem value="4">4 days/week</SelectItem>
                   <SelectItem value="5">5 days/week</SelectItem>
+                  <SelectItem value="6">6 days/week</SelectItem>
+                  <SelectItem value="7">7 days/week</SelectItem>
                 </SelectContent>
               </Select>
             )}

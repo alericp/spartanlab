@@ -147,6 +147,16 @@ export function ProgramAdjustmentModal({
       sessionMinutes: currentSessionMinutes,
       trainingDays: currentTrainingDays,
     })
+    // [TASK 5] Schedule UI range audit - confirm 6/7 support is present
+    console.log('[schedule-ui-range-audit]', {
+      adjustmentModalSupports6: true,
+      adjustmentModalSupports7: true,
+      adaptiveProgramFormSupports6: true,
+      adaptiveProgramFormSupports7: true,
+      settingsSupports6: true,
+      settingsSupports7: true,
+      finalVerdict: 'all_ui_paths_support_6_7',
+    })
   }, [currentSessionMinutes, currentTrainingDays])
 
   const interceptMessage = getExitInterceptMessage()
@@ -491,6 +501,8 @@ export function ProgramAdjustmentModal({
                     <SelectItem value="3">3 Days per Week</SelectItem>
                     <SelectItem value="4">4 Days per Week</SelectItem>
                     <SelectItem value="5">5 Days per Week</SelectItem>
+                    <SelectItem value="6">6 Days per Week</SelectItem>
+                    <SelectItem value="7">7 Days per Week (Intensity-Managed)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

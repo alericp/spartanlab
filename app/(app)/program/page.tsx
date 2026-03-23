@@ -23,11 +23,13 @@ import Link from 'next/link'
 import type { AdaptiveProgramInputs, AdaptiveProgram, GenerationErrorCode } from '@/lib/adaptive-program-builder'
 import type { TrainingDays } from '@/lib/program-service'
 // [profile-truth-sync] ISSUE A: Import drift detection for settings/program alignment
+// [equipment-truth-fix] TASK C: Import equipment normalizer for canonical saves
 import { 
   checkProfileProgramDrift, 
   isProfileSignatureAligned,
   type ProfileProgramDrift,
   validateBuilderDisplayTruth,
+  builderEquipmentToProfileEquipment,
 } from '@/lib/canonical-profile-service'
 // [program-rebuild-truth] Import rebuild result contract for truthful error handling
 // [freshness-sync] TASK 1 & 2: Import freshness identity management for cross-surface consistency
@@ -636,6 +638,7 @@ export default function ProgramPage() {
   // ==========================================================================
   // [post-build-truth] TASK A: Persist builder inputs to canonical profile
   // [program-truth-fix] TASK B: Save EFFECTIVE values from the built program, not inputs
+  // [equipment-truth-fix] TASK C: Convert equipment to canonical profile keys
   // This ensures drift detection compares against what was actually generated
   // ==========================================================================
   generationStage = 'persisting_canonical_profile'
@@ -652,17 +655,29 @@ export default function ProgramPage() {
       ? null // Flexible users don't have a fixed day count identity
       : (newProgram.trainingDaysPerWeek ?? inputs.trainingDaysPerWeek ?? undefined)
     
+    // [equipment-truth-fix] TASK C: Convert builder equipment keys to canonical profile keys
+    // This strips floor/wall and maps pull_bar->pullup_bar, bands->resistance_bands
+    const canonicalEquipment = builderEquipmentToProfileEquipment(inputs.equipment || [])
+    
+    // [equipment-truth-audit] Log equipment truth on successful build
+    console.log('[equipment-truth-audit] Build success - equipment truth:', {
+      builderInputsEquipment: inputs.equipment,
+      canonicalSavedEquipment: canonicalEquipment,
+      hiddenRuntimeEquipmentStripped: (inputs.equipment || []).filter(e => e === 'floor' || e === 'wall'),
+    })
+    
     saveCanonicalProfile({
       trainingDaysPerWeek: effectiveTrainingDays ?? undefined,
       sessionLengthMinutes: newProgram.sessionLength ?? inputs.sessionLength ?? undefined,
       scheduleMode: effectiveScheduleMode,
-      equipmentAvailable: inputs.equipment ?? undefined,
+      equipmentAvailable: canonicalEquipment,
     })
     console.log('[post-build-truth] STAGE 6d: Canonical profile updated', {
       trainingDaysPerWeek: effectiveTrainingDays,
       sessionLength: newProgram.sessionLength,
       scheduleMode: effectiveScheduleMode,
-      equipmentCount: inputs.equipment?.length || 0,
+      equipmentCount: canonicalEquipment.length,
+      canonicalEquipment,
       fromProgram: true,
     })
   } catch (profileErr) {
@@ -1031,6 +1046,7 @@ export default function ProgramPage() {
   // ==========================================================================
   // [post-build-truth] TASK A: Persist builder inputs to canonical profile on regen
   // [program-truth-fix] TASK B: Save EFFECTIVE values from the built program
+  // [equipment-truth-fix] TASK C: Convert equipment to canonical profile keys
   // ==========================================================================
   regenerateStage = 'persisting_canonical_profile'
   console.log('[post-build-truth] REGEN STAGE 7d: Persisting builder inputs to canonical profile...')
@@ -1043,17 +1059,28 @@ export default function ProgramPage() {
       ? null
       : (newProgram.trainingDaysPerWeek ?? inputs.trainingDaysPerWeek ?? undefined)
     
+    // [equipment-truth-fix] TASK C: Convert builder equipment keys to canonical profile keys
+    const canonicalEquipment = builderEquipmentToProfileEquipment(inputs.equipment || [])
+    
+    // [equipment-truth-audit] Log equipment truth on regen
+    console.log('[equipment-truth-audit] Regen success - equipment truth:', {
+      builderInputsEquipment: inputs.equipment,
+      canonicalSavedEquipment: canonicalEquipment,
+      hiddenRuntimeEquipmentStripped: (inputs.equipment || []).filter(e => e === 'floor' || e === 'wall'),
+    })
+    
     saveCanonicalProfile({
       trainingDaysPerWeek: effectiveTrainingDays ?? undefined,
       sessionLengthMinutes: newProgram.sessionLength ?? inputs.sessionLength ?? undefined,
       scheduleMode: effectiveScheduleMode,
-      equipmentAvailable: inputs.equipment ?? undefined,
+      equipmentAvailable: canonicalEquipment,
     })
     console.log('[post-build-truth] REGEN STAGE 7d: Canonical profile updated', {
       trainingDaysPerWeek: effectiveTrainingDays,
       sessionLength: newProgram.sessionLength,
       scheduleMode: effectiveScheduleMode,
-      equipmentCount: inputs.equipment?.length || 0,
+      equipmentCount: canonicalEquipment.length,
+      canonicalEquipment,
       fromProgram: true,
     })
   } catch (profileErr) {
@@ -1351,21 +1378,34 @@ export default function ProgramPage() {
       invalidateStaleCaches()
       updateFreshnessIdentity(newProgram.id, newProgram.createdAt, profileSig)
       
-      // [canonical-rebuild] STAGE 5b: CRITICAL - Persist updated inputs to canonical profile
-      // This ensures future getDefaultAdaptiveInputs() calls read the new truth
-      console.log('[canonical-rebuild] STAGE 5b: Persisting updated inputs to canonical profile...')
-      saveCanonicalProfile({
-        trainingDaysPerWeek: updatedInputs.trainingDaysPerWeek ?? undefined,
-        sessionLengthMinutes: updatedInputs.sessionLength ?? undefined,
-        // For schedule mode, if user selects a specific day count, they've made a choice
-        scheduleMode: request.type === 'training_days' ? 'static' : undefined,
-        equipmentAvailable: updatedInputs.equipment ?? undefined,
-      })
-      console.log('[canonical-rebuild] STAGE 5b: Canonical profile updated with new settings', {
-        trainingDaysPerWeek: updatedInputs.trainingDaysPerWeek,
-        sessionLength: updatedInputs.sessionLength,
-        equipmentCount: updatedInputs.equipment?.length || 0,
-      })
+  // [canonical-rebuild] STAGE 5b: CRITICAL - Persist updated inputs to canonical profile
+  // [equipment-truth-fix] TASK C: Convert equipment to canonical profile keys
+  // This ensures future getDefaultAdaptiveInputs() calls read the new truth
+  console.log('[canonical-rebuild] STAGE 5b: Persisting updated inputs to canonical profile...')
+  
+  // [equipment-truth-fix] Convert builder equipment keys to canonical profile keys
+  const canonicalEquipment = builderEquipmentToProfileEquipment(updatedInputs.equipment || [])
+  
+  // [equipment-truth-audit] Log equipment truth on adjustment rebuild
+  console.log('[equipment-truth-audit] Adjustment rebuild - equipment truth:', {
+    builderInputsEquipment: updatedInputs.equipment,
+    canonicalSavedEquipment: canonicalEquipment,
+    hiddenRuntimeEquipmentStripped: (updatedInputs.equipment || []).filter(e => e === 'floor' || e === 'wall'),
+  })
+  
+  saveCanonicalProfile({
+    trainingDaysPerWeek: updatedInputs.trainingDaysPerWeek ?? undefined,
+    sessionLengthMinutes: updatedInputs.sessionLength ?? undefined,
+    // For schedule mode, if user selects a specific day count, they've made a choice
+    scheduleMode: request.type === 'training_days' ? 'static' : undefined,
+    equipmentAvailable: canonicalEquipment,
+  })
+  console.log('[canonical-rebuild] STAGE 5b: Canonical profile updated with new settings', {
+    trainingDaysPerWeek: updatedInputs.trainingDaysPerWeek,
+    sessionLength: updatedInputs.sessionLength,
+    equipmentCount: canonicalEquipment.length,
+    canonicalEquipment,
+  })
       
       // [canonical-rebuild] STAGE 6: Update UI state atomically
       console.log('[canonical-rebuild] STAGE 6: Updating UI state...')

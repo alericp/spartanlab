@@ -6109,6 +6109,14 @@ export function getDefaultAdaptiveInputs(): AdaptiveProgramInputs {
     mappedEquipment.push('pull_bar', 'dip_bars')
   }
   
+  // [equipment-hydration-audit] Log equipment truth when builder inputs are loaded
+  console.log('[equipment-hydration-audit] Builder inputs loaded from canonical:', {
+    canonicalProfileEquipment: canonicalProfile.equipmentAvailable,
+    mappedBuilderEquipment: mappedEquipment,
+    hiddenRuntimeAdded: ['floor', 'wall'],
+    usedFallbackDefaults: !canonicalProfile.equipmentAvailable || canonicalProfile.equipmentAvailable.length === 0,
+  })
+  
   // TASK 6: Unified duration contract - use canonical 30/45/60/90 minutes
   // DO NOT map 90 to 75 - this caused label drift between settings and builder
   let sessionLength: SessionLength = 60

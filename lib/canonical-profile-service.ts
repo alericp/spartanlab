@@ -1854,7 +1854,90 @@ export function getEngineFieldConsumption(profile?: CanonicalProgrammingProfile)
 }
 
 // =============================================================================
-// PROFILE-PROGRAM DRIFT DETECTION (ISSUE A/D)
+// [equipment-truth-fix] TASK B: BIDIRECTIONAL EQUIPMENT NORMALIZERS
+// =============================================================================
+
+/**
+ * Profile equipment keys (canonical/settings/onboarding layer)
+ */
+export type ProfileEquipmentKey = 'pullup_bar' | 'dip_bars' | 'parallettes' | 'rings' | 'resistance_bands' | 'weights'
+
+/**
+ * Builder equipment keys (runtime/program layer)
+ */
+export type BuilderEquipmentKey = 'pull_bar' | 'dip_bars' | 'parallettes' | 'rings' | 'bands' | 'weights' | 'floor' | 'wall'
+
+/**
+ * Hidden runtime-only equipment that should never be persisted to canonical profile
+ */
+const RUNTIME_ONLY_EQUIPMENT = ['floor', 'wall'] as const
+
+/**
+ * Convert profile/canonical equipment keys to builder/program keys
+ * Use when: loading canonical profile into builder inputs
+ */
+export function profileEquipmentToBuilderEquipment(profileEquipment: string[]): string[] {
+  const mapping: Record<string, string> = {
+    'pullup_bar': 'pull_bar',
+    'dip_bars': 'dip_bars',
+    'parallettes': 'parallettes',
+    'rings': 'rings',
+    'resistance_bands': 'bands',
+    'weights': 'weights',
+  }
+  
+  const result = profileEquipment
+    .map(e => mapping[e] || e)
+    .filter(e => e !== undefined)
+  
+  // Dedupe and sort for stable ordering
+  return [...new Set(result)].sort()
+}
+
+/**
+ * Convert builder/program equipment keys to profile/canonical keys
+ * Use when: saving to canonical profile after a build
+ * IMPORTANT: Strips runtime-only keys (floor, wall)
+ */
+export function builderEquipmentToProfileEquipment(builderEquipment: string[]): string[] {
+  const mapping: Record<string, string> = {
+    'pull_bar': 'pullup_bar',
+    'dip_bars': 'dip_bars',
+    'parallettes': 'parallettes',
+    'rings': 'rings',
+    'bands': 'resistance_bands',
+    'weights': 'weights',
+  }
+  
+  const result = builderEquipment
+    // Filter out runtime-only equipment
+    .filter(e => !RUNTIME_ONLY_EQUIPMENT.includes(e as typeof RUNTIME_ONLY_EQUIPMENT[number]))
+    .map(e => mapping[e] || e)
+    .filter(e => e !== undefined && e !== 'floor' && e !== 'wall')
+  
+  // Dedupe and sort for stable ordering
+  return [...new Set(result)].sort()
+}
+
+/**
+ * Normalize equipment arrays for comparison (both sides to canonical profile format)
+ * Use when: checking drift between profile and program
+ * Strips runtime-only keys from both sides before comparison
+ */
+export function normalizeEquipmentForComparison(equipment: string[]): string[] {
+  // First convert any builder keys to profile keys
+  const normalized = builderEquipmentToProfileEquipment(equipment)
+  // Then also handle any already-profile keys
+  return [...new Set([
+    ...normalized,
+    ...equipment.filter(e => 
+      ['pullup_bar', 'dip_bars', 'parallettes', 'rings', 'resistance_bands', 'weights'].includes(e)
+    )
+  ])].sort()
+}
+
+// =============================================================================
+// PROFILE-PROGRAM DRIFT DETECTION
 // =============================================================================
 
 /**
@@ -2080,10 +2163,25 @@ export function checkProfileProgramDrift(program: {
     })
   }
   
-  // Equipment comparison (array comparison)
-  const profileEquipment = (profile.equipmentAvailable || []).sort().join(',')
-  const programEquipment = (program.equipment || []).sort().join(',')
-  if (profileEquipment !== programEquipment) {
+  // ==========================================================================
+  // [equipment-truth-fix] TASK E: Normalize equipment before comparison
+  // Both sides must be in the same format, excluding runtime-only keys
+  // ==========================================================================
+  const normalizedProfileEquipment = normalizeEquipmentForComparison(profile.equipmentAvailable || [])
+  const normalizedProgramEquipment = normalizeEquipmentForComparison(program.equipment || [])
+  const profileEquipmentStr = normalizedProfileEquipment.join(',')
+  const programEquipmentStr = normalizedProgramEquipment.join(',')
+  
+  // [equipment-drift-audit] Log when equipment comparison happens
+  if (profileEquipmentStr !== programEquipmentStr) {
+    console.log('[equipment-drift-audit] Equipment drift detected:', {
+      rawProfileEquipment: profile.equipmentAvailable,
+      rawProgramEquipment: program.equipment,
+      normalizedProfile: normalizedProfileEquipment,
+      normalizedProgram: normalizedProgramEquipment,
+      profileStr: profileEquipmentStr,
+      programStr: programEquipmentStr,
+    })
     driftFields.push({
       field: 'equipment',
       profileValue: profile.equipmentAvailable,

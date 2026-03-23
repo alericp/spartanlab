@@ -658,7 +658,54 @@ export default function ProgramPage() {
           else if (errorMessage.includes('exercise') && errorMessage.includes('null')) subCode = 'empty_exercise_pool'
         }
         
-        // Create failed build result
+        // ==========================================================================
+        // TASK 1-D: Read structured failure details from GenerationError context
+        // ==========================================================================
+        let failureStep: string | null = null
+        let failureMiddleStep: string | null = null
+        let failureReason: string | null = null
+        let failureDayNumber: number | null = null
+        let failureFocus: string | null = null
+        let failureGoal: string | null = null
+        
+        if (isGenerationError) {
+          const ctx = (err as { context?: Record<string, unknown> }).context
+          failureStep = (ctx?.failureStep as string) ?? null
+          failureMiddleStep = (ctx?.failureMiddleStep as string) ?? null
+          failureReason = (ctx?.failureReason as string) ?? null
+          failureDayNumber = (ctx?.failureDayNumber as number) ?? null
+          failureFocus = (ctx?.failureFocus as string) ?? null
+          failureGoal = (ctx?.failureGoal as string) ?? null
+        }
+        
+        // Fallback: parse from errorMessage if structured fields missing
+        if (!failureStep && errorMessage.includes('session_generation_failed')) {
+          const stepMatch = errorMessage.match(/step=([a-z_]+)/i)
+          const middleMatch = errorMessage.match(/middleStep=([a-z_]+)/i)
+          const reasonMatch = errorMessage.match(/reason=(.+?)(?:\s+(?:day|focus|goal|step)=|$)/i)
+          const dayMatch = errorMessage.match(/day=(\d+)/)
+          const focusMatch = errorMessage.match(/focus=([a-z_]+)/i)
+          const goalMatch = errorMessage.match(/goal=([a-z_]+)/i)
+          
+          failureStep = stepMatch ? stepMatch[1] : null
+          failureMiddleStep = middleMatch && middleMatch[1] !== 'none' ? middleMatch[1] : null
+          failureReason = reasonMatch ? reasonMatch[1].trim().slice(0, 120) : null
+          failureDayNumber = dayMatch ? Number(dayMatch[1]) : null
+          failureFocus = focusMatch ? focusMatch[1] : null
+          failureGoal = goalMatch ? goalMatch[1] : null
+        }
+        
+        // [rebuild-error-response] Log what we're passing to state
+        console.log('[rebuild-error-response]', {
+          source: 'handleGenerate',
+          failureStep,
+          failureMiddleStep,
+          failureDayNumber,
+          failureFocus,
+          failureReason: failureReason?.slice(0, 60),
+        })
+        
+        // Create failed build result with structured diagnostics
         const profileSig = inputs ? createProfileSignature(inputs) : 'unknown'
         const failedResult = createFailedBuildResult(
           errorCode,
@@ -666,7 +713,15 @@ export default function ProgramPage() {
           subCode,
           profileSig,
           null, // No previous program in fresh build
-          errorMessage
+          errorMessage,
+          {
+            failureStep,
+            failureMiddleStep,
+            failureReason,
+            failureDayNumber,
+            failureFocus,
+            failureGoal,
+          }
         )
         setLastBuildResult(failedResult)
         saveLastBuildAttemptResult(failedResult)
@@ -917,15 +972,70 @@ export default function ProgramPage() {
           else if (errorMessage.includes('exercise') && errorMessage.includes('null')) subCode = 'empty_exercise_pool'
         }
         
-        // [program-rebuild-truth] TASK 2/3: Create failed build result with last good preserved
+        // ==========================================================================
+        // TASK 1-D: Read structured failure details from GenerationError context
+        // ==========================================================================
+        let failureStep: string | null = null
+        let failureMiddleStep: string | null = null
+        let failureReason: string | null = null
+        let failureDayNumber: number | null = null
+        let failureFocus: string | null = null
+        let failureGoal: string | null = null
+        
+        if (isGenerationError) {
+          const ctx = (err as { context?: Record<string, unknown> }).context
+          failureStep = (ctx?.failureStep as string) ?? null
+          failureMiddleStep = (ctx?.failureMiddleStep as string) ?? null
+          failureReason = (ctx?.failureReason as string) ?? null
+          failureDayNumber = (ctx?.failureDayNumber as number) ?? null
+          failureFocus = (ctx?.failureFocus as string) ?? null
+          failureGoal = (ctx?.failureGoal as string) ?? null
+        }
+        
+        // Fallback: parse from errorMessage if structured fields missing
+        if (!failureStep && errorMessage.includes('session_generation_failed')) {
+          const stepMatch = errorMessage.match(/step=([a-z_]+)/i)
+          const middleMatch = errorMessage.match(/middleStep=([a-z_]+)/i)
+          const reasonMatch = errorMessage.match(/reason=(.+?)(?:\s+(?:day|focus|goal|step)=|$)/i)
+          const dayMatch = errorMessage.match(/day=(\d+)/)
+          const focusMatch = errorMessage.match(/focus=([a-z_]+)/i)
+          const goalMatch = errorMessage.match(/goal=([a-z_]+)/i)
+          
+          failureStep = stepMatch ? stepMatch[1] : null
+          failureMiddleStep = middleMatch && middleMatch[1] !== 'none' ? middleMatch[1] : null
+          failureReason = reasonMatch ? reasonMatch[1].trim().slice(0, 120) : null
+          failureDayNumber = dayMatch ? Number(dayMatch[1]) : null
+          failureFocus = focusMatch ? focusMatch[1] : null
+          failureGoal = goalMatch ? goalMatch[1] : null
+        }
+        
+        // [rebuild-error-response] Log what we're passing to state
+        console.log('[rebuild-error-response]', {
+          source: 'handleRegenerate',
+          failureStep,
+          failureMiddleStep,
+          failureDayNumber,
+          failureFocus,
+          failureReason: failureReason?.slice(0, 60),
+        })
+        
+        // Create failed build result with structured diagnostics
         const profileSig = inputs ? createProfileSignature(inputs) : 'unknown'
         const failedResult = createFailedBuildResult(
           errorCode,
           errorStage,
           subCode,
           profileSig,
-          program?.id || null, // ISSUE B: This is the last good program
-          errorMessage
+          program?.id || null, // This is the last good program
+          errorMessage,
+          {
+            failureStep,
+            failureMiddleStep,
+            failureReason,
+            failureDayNumber,
+            failureFocus,
+            failureGoal,
+          }
         )
         setLastBuildResult(failedResult)
         saveLastBuildAttemptResult(failedResult)
@@ -1281,12 +1391,36 @@ export default function ProgramPage() {
                         ? 'Your previous plan is still available.'
                         : 'Your inputs are preserved. Try again when ready.'}
                     </p>
-                    {/* [program-rebuild-truth] ISSUE G: Show failure stage for dev insight */}
+                    {/* TASK 1-D: Structured diagnostic display */}
                     {lastBuildResult && lastBuildResult.status !== 'success' && (
-                      <p className="text-[10px] text-[#6A6A6A] mt-1 font-mono">
-                        Stage: {lastBuildResult.stage} | Code: {lastBuildResult.errorCode || 'unknown'}
-                        {lastBuildResult.subCode !== 'none' && ` (${lastBuildResult.subCode})`}
-                      </p>
+                      <div className="mt-2 space-y-0.5">
+                        {/* Line 1: Stage and Code */}
+                        <p className="text-[10px] text-[#6A6A6A] font-mono">
+                          Stage: {lastBuildResult.stage} | Code: {lastBuildResult.errorCode || 'unknown'}
+                          {lastBuildResult.subCode !== 'none' && ` (${lastBuildResult.subCode})`}
+                        </p>
+                        {/* Line 2: Step, Middle, Day, Focus - only if any exist */}
+                        {(lastBuildResult.failureStep || lastBuildResult.failureDayNumber || lastBuildResult.failureFocus) && (
+                          <p className="text-[10px] text-[#5A5A5A] font-mono">
+                            Step: {lastBuildResult.failureStep || 'none'}
+                            {lastBuildResult.failureMiddleStep && ` | Middle: ${lastBuildResult.failureMiddleStep}`}
+                            {lastBuildResult.failureDayNumber !== null && ` | Day: ${lastBuildResult.failureDayNumber}`}
+                            {lastBuildResult.failureFocus && ` | Focus: ${lastBuildResult.failureFocus}`}
+                          </p>
+                        )}
+                        {/* Line 3: Reason - only if exists */}
+                        {lastBuildResult.failureReason && (
+                          <p className="text-[10px] text-[#5A5A5A] font-mono truncate max-w-full">
+                            Reason: {lastBuildResult.failureReason.slice(0, 100)}
+                          </p>
+                        )}
+                        {/* TASK 1-E: Defensive fallback when no structured fields exist */}
+                        {!lastBuildResult.failureStep && !lastBuildResult.failureDayNumber && !lastBuildResult.failureReason && (
+                          <p className="text-[10px] text-[#5A5A5A] font-mono">
+                            Step: unavailable | Reason: unavailable
+                          </p>
+                        )}
+                      </div>
                     )}
                   </div>
                   <Button
@@ -1336,10 +1470,39 @@ export default function ProgramPage() {
                     <p className="text-xs text-red-400/80 mt-1">
                       {lastBuildResult.userMessage}
                     </p>
-                    <p className="text-xs text-[#6A6A6A] mt-1">
-                      This is your previous plan. Your latest settings were not applied.
-                    </p>
-                    <div className="flex gap-2 mt-2">
+  <p className="text-xs text-[#6A6A6A] mt-1">
+  This is your previous plan. Your latest settings were not applied.
+  </p>
+  {/* TASK 1-D: Structured diagnostic display for red card */}
+  <div className="mt-2 space-y-0.5">
+    {/* Line 1: Stage and Code */}
+    <p className="text-[10px] text-[#5A5A5A] font-mono">
+      Stage: {lastBuildResult.stage} | Code: {lastBuildResult.errorCode || 'unknown'}
+      {lastBuildResult.subCode !== 'none' && ` (${lastBuildResult.subCode})`}
+    </p>
+    {/* Line 2: Step, Middle, Day, Focus - only if any exist */}
+    {(lastBuildResult.failureStep || lastBuildResult.failureDayNumber || lastBuildResult.failureFocus) && (
+      <p className="text-[10px] text-[#4A4A4A] font-mono">
+        Step: {lastBuildResult.failureStep || 'none'}
+        {lastBuildResult.failureMiddleStep && ` | Middle: ${lastBuildResult.failureMiddleStep}`}
+        {lastBuildResult.failureDayNumber !== null && ` | Day: ${lastBuildResult.failureDayNumber}`}
+        {lastBuildResult.failureFocus && ` | Focus: ${lastBuildResult.failureFocus}`}
+      </p>
+    )}
+    {/* Line 3: Reason - only if exists */}
+    {lastBuildResult.failureReason && (
+      <p className="text-[10px] text-[#4A4A4A] font-mono truncate max-w-full">
+        Reason: {lastBuildResult.failureReason.slice(0, 100)}
+      </p>
+    )}
+    {/* TASK 1-E: Defensive fallback when no structured fields exist */}
+    {!lastBuildResult.failureStep && !lastBuildResult.failureDayNumber && !lastBuildResult.failureReason && (
+      <p className="text-[10px] text-[#4A4A4A] font-mono">
+        Step: unavailable | Reason: unavailable
+      </p>
+    )}
+  </div>
+  <div className="flex gap-2 mt-2">
                       <Button
                         size="sm"
                         className="bg-red-600 hover:bg-red-700 text-white h-7 px-3 text-xs"

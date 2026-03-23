@@ -2548,30 +2548,38 @@ function generateAdaptiveProgramImpl(inputs: AdaptiveProgramInputs, stageTracker
     ]
     const matchedPattern = classifiedPatterns.find(p => errorMessage.includes(p)) || 'unclassified'
     
-    // Extract day/focus from error message if present
+    // ==========================================================================
+    // TASK 1-A: Parse ALL structured fields from error message for UI propagation
+    // ==========================================================================
     const dayMatch = errorMessage.match(/day=(\d+)/)
-    const focusMatch = errorMessage.match(/focus=([a-z_]+)/)
+    const focusMatch = errorMessage.match(/focus=([a-z_]+)/i)
+    const stepMatch = errorMessage.match(/step=([a-z_]+)/i)
+    const middleStepMatch = errorMessage.match(/middleStep=([a-z_]+)/i)
+    const goalMatch = errorMessage.match(/goal=([a-z_]+)/i)
+    // Reason is last, capture everything after reason= until end or next field
+    const reasonMatch = errorMessage.match(/reason=(.+?)(?:\s+(?:day|focus|goal|step|middleStep)=|$)/i)
     
-    console.error('[session-assembly-root-cause-summary]', {
+    const parsedFailureStep = stepMatch ? stepMatch[1] : null
+    const parsedFailureMiddleStep = middleStepMatch && middleStepMatch[1] !== 'none' ? middleStepMatch[1] : null
+    const parsedFailureReason = reasonMatch ? reasonMatch[1].trim().slice(0, 120) : null
+    const parsedFailureGoal = goalMatch ? goalMatch[1] : null
+    
+    // [rebuild-error-builder] Log structured failure details for tracing
+    console.error('[rebuild-error-builder]', {
       matchedPattern,
       isClassified: matchedPattern !== 'unclassified',
-      originalMessage: errorMessage,
-      dayNumber: dayMatch ? dayMatch[1] : 'unknown',
-      dayFocus: focusMatch ? focusMatch[1] : 'unknown',
+      failureStep: parsedFailureStep,
+      failureMiddleStep: parsedFailureMiddleStep,
+      failureReason: parsedFailureReason,
+      failureGoal: parsedFailureGoal,
+      dayNumber: dayMatch ? dayMatch[1] : null,
+      dayFocus: focusMatch ? focusMatch[1] : null,
+      originalMessage: errorMessage.slice(0, 200),
       structureName: structure?.structureName,
       totalDays: structure?.days?.length,
     })
     
-    console.error('[program-rebuild-error] Session assembly failure:', {
-      stage: 'session_assembly',
-      errorCode: 'session_assembly_failed',
-      errorMessage,
-      structureName: structure?.structureName,
-      dayCount: structure?.days?.length,
-      currentStage: stageTracker.current,
-    })
-    
-    // STEP F: Preserve matchedPattern as structured subCode in GenerationError context
+    // TASK 1-B: Throw GenerationError with ALL structured fields for UI propagation
     throw new GenerationError(
       'session_assembly_failed',
       stageTracker.current,
@@ -2583,8 +2591,13 @@ function generateAdaptiveProgramImpl(inputs: AdaptiveProgramInputs, stageTracker
         subCode: matchedPattern,
         originalMessage: errorMessage,
         classified: matchedPattern !== 'unclassified',
-        dayNumber: dayMatch ? Number(dayMatch[1]) : undefined,
-        dayFocus: focusMatch ? focusMatch[1] : undefined,
+        // TASK 1: Structured failure fields for end-to-end UI propagation
+        failureStep: parsedFailureStep,
+        failureMiddleStep: parsedFailureMiddleStep,
+        failureReason: parsedFailureReason,
+        failureGoal: parsedFailureGoal,
+        failureDayNumber: dayMatch ? Number(dayMatch[1]) : null,
+        failureFocus: focusMatch ? focusMatch[1] : null,
       }
     )
   }

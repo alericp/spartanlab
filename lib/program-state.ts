@@ -124,6 +124,21 @@ export interface BuildAttemptResult {
   previousProgramId: string | null
   /** New program ID (if successful) */
   newProgramId: string | null
+  // ==========================================================================
+  // TASK 1-C: Structured failure diagnostic fields for UI display
+  // ==========================================================================
+  /** Exact step where failure occurred */
+  failureStep: string | null
+  /** Middle helper step if applicable */
+  failureMiddleStep: string | null
+  /** Reason string (trimmed for UI) */
+  failureReason: string | null
+  /** Day number where failure occurred */
+  failureDayNumber: number | null
+  /** Day focus where failure occurred */
+  failureFocus: string | null
+  /** Goal at time of failure */
+  failureGoal: string | null
 }
 
 /**
@@ -250,20 +265,27 @@ export function createSuccessBuildResult(
   newProgramId: string
 ): BuildAttemptResult {
   const result: BuildAttemptResult = {
-    attemptId: generateAttemptId(),
-    attemptedAt: new Date().toISOString(),
-    status: 'success',
-    stage: 'completed',
-    errorCode: null,
-    subCode: 'none',
-    replacedVisibleProgram: true,
-    preservedLastGoodProgram: false, // Not applicable on success
-    visibleProgramIsStale: false,
-    userMessage: 'Your new training plan is ready.',
-    devSummary: `SUCCESS: Program ${newProgramId} replaced ${previousProgramId || 'none'}`,
-    usedProfileSignature: profileSignature,
-    previousProgramId,
-    newProgramId,
+  attemptId: generateAttemptId(),
+  attemptedAt: new Date().toISOString(),
+  status: 'success',
+  stage: 'completed',
+  errorCode: null,
+  subCode: 'none',
+  replacedVisibleProgram: true,
+  preservedLastGoodProgram: false, // Not applicable on success
+  visibleProgramIsStale: false,
+  userMessage: 'Your new training plan is ready.',
+  devSummary: `SUCCESS: Program ${newProgramId} replaced ${previousProgramId || 'none'}`,
+  usedProfileSignature: profileSignature,
+  previousProgramId,
+  newProgramId,
+  // Failure diagnostic fields - null on success
+  failureStep: null,
+  failureMiddleStep: null,
+  failureReason: null,
+  failureDayNumber: null,
+  failureFocus: null,
+  failureGoal: null,
   }
   
   // Log for debugging
@@ -278,7 +300,21 @@ export function createSuccessBuildResult(
 }
 
 /**
+ * Structured failure details for diagnostic display.
+ * TASK 1-C: Canonical shape for UI-facing rebuild errors.
+ */
+export interface FailureDiagnostics {
+  failureStep?: string | null
+  failureMiddleStep?: string | null
+  failureReason?: string | null
+  failureDayNumber?: number | null
+  failureFocus?: string | null
+  failureGoal?: string | null
+}
+
+/**
  * Create a failed build result with last good program preserved.
+ * TASK 1-C: Now accepts optional structured failure diagnostics for UI display.
  */
 export function createFailedBuildResult(
   errorCode: GenerationErrorCode | null,
@@ -286,10 +322,17 @@ export function createFailedBuildResult(
   subCode: BuildAttemptSubCode,
   profileSignature: string,
   previousProgramId: string | null,
-  errorMessage: string
+  errorMessage: string,
+  diagnostics?: FailureDiagnostics
 ): BuildAttemptResult {
   const hasLastGoodProgram = previousProgramId !== null
   const userMessage = getErrorUserMessage(errorCode, subCode, hasLastGoodProgram)
+  
+  // Build enhanced devSummary with structured details
+  const stepInfo = diagnostics?.failureStep ? ` step=${diagnostics.failureStep}` : ''
+  const middleInfo = diagnostics?.failureMiddleStep ? ` middle=${diagnostics.failureMiddleStep}` : ''
+  const dayInfo = diagnostics?.failureDayNumber ? ` day=${diagnostics.failureDayNumber}` : ''
+  const focusInfo = diagnostics?.failureFocus ? ` focus=${diagnostics.failureFocus}` : ''
   
   const result: BuildAttemptResult = {
     attemptId: generateAttemptId(),
@@ -300,22 +343,33 @@ export function createFailedBuildResult(
     subCode,
     replacedVisibleProgram: false,
     preservedLastGoodProgram: hasLastGoodProgram,
-    visibleProgramIsStale: hasLastGoodProgram, // If we have a last good program but failed to update, it's now stale
+    visibleProgramIsStale: hasLastGoodProgram,
     userMessage,
-    devSummary: `FAILED at ${stage} [${errorCode}/${subCode}]: ${errorMessage}. Last good: ${previousProgramId || 'none'}`,
+    devSummary: `FAILED at ${stage} [${errorCode}/${subCode}]:${stepInfo}${middleInfo}${dayInfo}${focusInfo}. Last good: ${previousProgramId || 'none'}`,
     usedProfileSignature: profileSignature,
     previousProgramId,
     newProgramId: null,
+    // TASK 1-C: Structured failure diagnostics
+    failureStep: diagnostics?.failureStep ?? null,
+    failureMiddleStep: diagnostics?.failureMiddleStep ?? null,
+    failureReason: diagnostics?.failureReason ?? null,
+    failureDayNumber: diagnostics?.failureDayNumber ?? null,
+    failureFocus: diagnostics?.failureFocus ?? null,
+    failureGoal: diagnostics?.failureGoal ?? null,
   }
   
-  // Log for debugging with searchable prefix
-  console.log('[program-rebuild-error] BUILD FAILED:', {
+  // [rebuild-error-state] Log for debugging with searchable prefix
+  console.log('[rebuild-error-state]', {
     attemptId: result.attemptId,
     stage,
     errorCode,
     subCode,
+    failureStep: result.failureStep,
+    failureMiddleStep: result.failureMiddleStep,
+    failureDayNumber: result.failureDayNumber,
+    failureFocus: result.failureFocus,
+    failureReason: result.failureReason?.slice(0, 60),
     preservedLastGoodProgram: hasLastGoodProgram,
-    visibleProgramIsStale: result.visibleProgramIsStale,
     previousProgramId,
   })
   

@@ -284,26 +284,70 @@ export function AdaptiveProgramDisplay({
             </span>
           )}
           {/* [TASK 1] Selected Skills Summary - show ALL skills neatly, no more +N truncation */}
-          {program.selectedSkills && program.selectedSkills.length > 0 && (
-            <div className="flex flex-wrap items-center gap-1">
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-[#1A1A1A] text-[#6A6A6A]">
-                <Sparkles className="w-3 h-3 text-[#E63946]/60" />
-                Built around:
-              </span>
-              {program.selectedSkills.map((skill, idx) => (
-                <span 
-                  key={skill}
-                  className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] ${
-                    idx < 2 
-                      ? 'bg-[#E63946]/10 text-[#E63946] border border-[#E63946]/20' 
-                      : 'bg-[#1A1A1A] text-[#A5A5A5]'
-                  }`}
-                >
-                  {skill.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
+          {/* [PHASE 5] DISPLAY SKILL TRUTH - distinguish profile-selected vs actually-represented */}
+          {program.selectedSkills && program.selectedSkills.length > 0 && (() => {
+            // Compute which skills are actually represented in generated sessions
+            const allExerciseNames = program.sessions?.flatMap(s => 
+              s.exercises?.map(e => (e.exercise?.name || '').toLowerCase()) || []
+            ) || []
+            
+            // Check each selected skill for representation in the week
+            const skillRepresentationMap = program.selectedSkills.map(skill => {
+              const skillLower = skill.toLowerCase().replace(/_/g, ' ')
+              const isRepresented = allExerciseNames.some(name => 
+                name.includes(skillLower) || 
+                name.includes(skill.toLowerCase()) ||
+                // Common skill-exercise mappings
+                (skill === 'front_lever' && (name.includes('front lever') || name.includes('tuck front') || name.includes('adv front'))) ||
+                (skill === 'back_lever' && (name.includes('back lever') || name.includes('german hang'))) ||
+                (skill === 'planche' && (name.includes('planche') || name.includes('lean') || name.includes('tuck planche'))) ||
+                (skill === 'muscle_up' && (name.includes('muscle up') || name.includes('muscle-up') || name.includes('high pull'))) ||
+                (skill === 'handstand' && (name.includes('handstand') || name.includes('hs ') || name.includes('wall hs')))
+              )
+              return { skill, isRepresented }
+            })
+            
+            const representedSkills = skillRepresentationMap.filter(s => s.isRepresented).map(s => s.skill)
+            const unrepresentedSkills = skillRepresentationMap.filter(s => !s.isRepresented).map(s => s.skill)
+            
+            // Log display skill truth audit
+            console.log('[display-skill-truth-audit]', {
+              profileSelectedSkills: program.selectedSkills,
+              skillsRepresentedInWeek: representedSkills,
+              skillsNotRepresentedInWeek: unrepresentedSkills,
+              totalExercisesInWeek: allExerciseNames.length,
+              displayTruthVerdict: unrepresentedSkills.length === 0 
+                ? 'all_skills_represented' 
+                : 'some_skills_not_represented',
+            })
+            
+            return (
+              <div className="flex flex-wrap items-center gap-1">
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-[#1A1A1A] text-[#6A6A6A]">
+                  <Sparkles className="w-3 h-3 text-[#E63946]/60" />
+                  Built around:
                 </span>
-              ))}
-            </div>
-          )}
+                {program.selectedSkills.map((skill, idx) => {
+                  const isRepresented = representedSkills.includes(skill)
+                  return (
+                    <span 
+                      key={skill}
+                      className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] ${
+                        isRepresented
+                          ? idx < 2 
+                            ? 'bg-[#E63946]/10 text-[#E63946] border border-[#E63946]/20' 
+                            : 'bg-[#1A1A1A] text-[#A5A5A5]'
+                          : 'bg-[#1A1A1A]/50 text-[#6A6A6A] border border-dashed border-[#3A3A3A]' // Dimmed for not-represented
+                      }`}
+                      title={isRepresented ? 'Represented in this week' : 'Selected but not directly represented this week'}
+                    >
+                      {skill.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
+                    </span>
+                  )
+                })}
+              </div>
+            )
+          })()}
           {/* Structure name if not showing training path */}
           {(!program.trainingPathType || program.trainingPathType === 'balanced') && structure.structureName && (
             <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-[#2A2A2A] text-[#A5A5A5]">
@@ -316,6 +360,45 @@ export function AdaptiveProgramDisplay({
         <div className="p-3 bg-[#1A1A1A] rounded-lg">
           <p className="text-sm text-[#A5A5A5]">{program.programRationale}</p>
         </div>
+        
+        {/* [PHASE 6] SUMMARY CLAIM VS WEEK TRUTH AUDIT */}
+        {(() => {
+          // Compute actual week structure truth
+          const sessionFocuses = program.sessions?.map(s => s.focus || 'unknown') || []
+          const pushDominantCount = sessionFocuses.filter(f => f.includes('push')).length
+          const pullDominantCount = sessionFocuses.filter(f => f.includes('pull')).length
+          const mixedCount = sessionFocuses.filter(f => f.includes('mixed') || f.includes('support')).length
+          
+          // Check rationale claims
+          const rationale = (program.programRationale || '').toLowerCase()
+          const claimsPushPrimary = rationale.includes('push') && rationale.includes('primary')
+          const claimsPullPrimary = rationale.includes('pull') && rationale.includes('primary')
+          const claimsHybrid = rationale.includes('hybrid') || rationale.includes('mixed')
+          const claimsDensity = rationale.includes('density')
+          
+          // Verify claims against actual week
+          const pushClaimValid = !claimsPushPrimary || pushDominantCount >= pullDominantCount
+          const pullClaimValid = !claimsPullPrimary || pullDominantCount >= pushDominantCount
+          const hybridClaimValid = !claimsHybrid || (pushDominantCount > 0 && pullDominantCount > 0)
+          
+          console.log('[summary-claim-vs-week-truth]', {
+            pushDominantSessions: pushDominantCount,
+            pullDominantSessions: pullDominantCount,
+            mixedSessions: mixedCount,
+            claimsPushPrimary,
+            claimsPullPrimary,
+            claimsHybrid,
+            claimsDensity,
+            pushClaimValid,
+            pullClaimValid,
+            hybridClaimValid,
+            overallVerdict: (pushClaimValid && pullClaimValid && hybridClaimValid) 
+              ? 'claims_match_week_structure' 
+              : 'potential_overclaim',
+          })
+          
+          return null // No UI output, just audit logging
+        })()}
         
         {/* ==========================================================================
             [TASK 1] REMOVED: Profile Staleness Indicator 

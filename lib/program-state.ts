@@ -89,6 +89,10 @@ export type BuildAttemptSubCode =
   | 'post_session_integrity_invalid'
   // Full lifecycle classification
   | 'session_generation_failed'
+  // High-frequency schedule failures (TASK 7)
+  | 'unsupported_high_frequency_structure'
+  | 'insufficient_templates_for_requested_days'
+  | 'recovery_distribution_conflict'
   | 'none'
 
 /**
@@ -216,6 +220,13 @@ export function getErrorUserMessage(
     // Full lifecycle failure
     case 'session_generation_failed':
       return 'A session could not be built from the current inputs.' + suffix
+    // High-frequency schedule failures
+    case 'unsupported_high_frequency_structure':
+      return '6/7-day schedules are not fully supported yet. Try 5 days or fewer.' + suffix
+    case 'insufficient_templates_for_requested_days':
+      return 'Not enough session templates for your requested schedule. Try fewer days.' + suffix
+    case 'recovery_distribution_conflict':
+      return 'Recovery days could not be properly distributed. Try fewer training days.' + suffix
     default:
       // Fall through to error code handling
       break

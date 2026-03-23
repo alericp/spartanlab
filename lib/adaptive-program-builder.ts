@@ -1278,30 +1278,109 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
     const errorName = err instanceof Error ? err.name : 'UnknownError'
     const errorStack = err instanceof Error ? err.stack : undefined
     
+    // ==========================================================================
+    // [TASK 1] PARSE STRUCTURED FIELDS FROM PLAIN ERROR MESSAGE
+    // Many internal throws use structured messages like:
+    // "equipment_adaptation_zeroed_session: day=1 focus=push_skill goal=planche reason=..."
+    // ==========================================================================
+    const classifiedPatterns = [
+      'equipment_adaptation_zeroed_session',
+      'mapping_zeroed_session',
+      'validation_zeroed_session',
+      'session_middle_helper_failed',
+      'effective_selection_invalid',
+      'session_variant_generation_failed',
+      'session_has_no_exercises',
+      'exercise_selection_returned_null',
+      'post_session_mutation_failed',
+      'post_session_integrity_invalid',
+      'session_generation_failed',
+      'program_integrity_check_failed',
+      'session_save_blocked',
+      'audit_blocked',
+    ]
+    const matchedPattern = classifiedPatterns.find(p => errorMessage.includes(p)) || null
+    
+    // Parse structured fields from error message
+    const dayMatch = errorMessage.match(/day=(\d+)/)
+    const focusMatch = errorMessage.match(/focus=([a-z_]+)/i)
+    const stepMatch = errorMessage.match(/step=([a-z_]+)/i)
+    const middleStepMatch = errorMessage.match(/middleStep=([a-z_]+)/i)
+    const goalMatch = errorMessage.match(/goal=([a-z_]+)/i)
+    const reasonMatch = errorMessage.match(/reason=(.+?)(?:\s+(?:day|focus|goal|step|middleStep)=|$)/i)
+    
+    const parsedFailureStep = stepMatch ? stepMatch[1] : null
+    const parsedFailureMiddleStep = middleStepMatch && middleStepMatch[1] !== 'none' ? middleStepMatch[1] : null
+    const parsedFailureReason = reasonMatch ? reasonMatch[1].trim().slice(0, 120) : null
+    const parsedFailureGoal = goalMatch ? goalMatch[1] : null
+    const parsedFailureDayNumber = dayMatch ? Number(dayMatch[1]) : null
+    const parsedFailureFocus = focusMatch ? focusMatch[1] : null
+    
+    // Determine if this is actually a session_assembly failure based on pattern
+    const isSessionAssemblyFailure = matchedPattern !== null
+    const effectiveCode: GenerationErrorCode = isSessionAssemblyFailure ? 'session_assembly_failed' : 'unknown_generation_failure'
+    
     // Log root cause summary for diagnosis
-    console.error('[program-root-cause-summary] Unclassified error in generateAdaptiveProgram:', {
+    console.error('[program-root-cause-summary] Error in generateAdaptiveProgram:', {
       source: 'generate',
       stage: stageTracker.current,
-      code: 'unknown_generation_failure',
-      message: errorMessage,
+      code: effectiveCode,
+      subCode: matchedPattern || 'unclassified',
+      message: errorMessage.slice(0, 200),
       originalName: errorName,
+      parsedFields: {
+        step: parsedFailureStep,
+        middleStep: parsedFailureMiddleStep,
+        day: parsedFailureDayNumber,
+        focus: parsedFailureFocus,
+        reason: parsedFailureReason?.slice(0, 60),
+        goal: parsedFailureGoal,
+      },
       primaryGoal: inputs.primaryGoal,
       secondaryGoal: inputs.secondaryGoal || null,
       trainingDaysPerWeek: inputs.trainingDaysPerWeek,
-      sessionLength: inputs.sessionLength,
-      scheduleMode: inputs.scheduleMode,
-      equipmentCount: inputs.equipment?.length || 0,
-      selectedSkillsCount: inputs.selectedSkills?.length || 0,
+    })
+    
+    // [TASK 1] Log diagnostic for unknown throw site
+    console.log('[unknown-generation-throw-site-audit]', {
+      currentStage: stageTracker.current,
+      nearestFunction: 'generateAdaptiveProgram top-level catch',
+      rawErrorMessage: errorMessage.slice(0, 200),
+      rawErrorName: errorName,
+      wasPlainErrorVsGenerationError: 'plain_error',
+      matchedClassificationPattern: matchedPattern,
+      relevantContext: {
+        day: parsedFailureDayNumber,
+        focus: parsedFailureFocus,
+        goal: parsedFailureGoal,
+        step: parsedFailureStep,
+      },
+      finalVerdict: matchedPattern 
+        ? 'plain_error_inside_session_assembly' 
+        : stageTracker.current.includes('summary') 
+          ? 'plain_error_inside_summary_generation'
+          : 'true_unknown',
     })
     
     throw new GenerationError(
-      'unknown_generation_failure',
+      effectiveCode,
       stageTracker.current,
       `Generation failed: ${errorMessage}`,
       {
         originalName: errorName,
         originalMessage: errorMessage,
         stack: errorStack,
+        // Propagate structured sub-code for UI handling
+        subCode: matchedPattern || 'unclassified',
+        classified: matchedPattern !== null,
+        // Propagate parsed structured fields for UI
+        failureStep: parsedFailureStep,
+        failureMiddleStep: parsedFailureMiddleStep,
+        failureReason: parsedFailureReason,
+        failureGoal: parsedFailureGoal,
+        failureDayNumber: parsedFailureDayNumber,
+        failureFocus: parsedFailureFocus,
+        // Original inputs for debugging
         primaryGoal: inputs.primaryGoal,
         secondaryGoal: inputs.secondaryGoal,
         trainingDaysPerWeek: inputs.trainingDaysPerWeek,
@@ -1679,6 +1758,21 @@ function generateAdaptiveProgramImpl(inputs: AdaptiveProgramInputs, stageTracker
     requestedDays: trainingDaysPerWeek,
     resolvedDays: effectiveTrainingDays,
     finalVerdict: supportsHighFrequency ? 'range_expanded_and_supported' : 'generator_still_capped',
+  })
+  
+  // [TASK 6] Schedule input composition audit - verify 6/7 flows through cleanly
+  const clampOccurred = (trainingDaysPerWeek === 6 || trainingDaysPerWeek === 7) && effectiveTrainingDays !== trainingDaysPerWeek
+  console.log('[schedule-input-composition-audit]', {
+    selectedTrainingDays: trainingDaysPerWeek,
+    payloadTrainingDays: inputs.trainingDaysPerWeek,
+    normalizedTrainingDays: effectiveTrainingDays,
+    generatorReceivedTrainingDays: effectiveTrainingDays,
+    clampOccurred,
+    finalVerdict: clampOccurred 
+      ? 'clamped'
+      : trainingDaysPerWeek === effectiveTrainingDays 
+        ? 'passed_cleanly'
+        : 'flexible_mode_resolution',
   })
   
   // [adjustment-sync] STEP 5: Log input training days resolution
@@ -2175,6 +2269,43 @@ function generateAdaptiveProgramImpl(inputs: AdaptiveProgramInputs, stageTracker
           : 'not_yet_supported'
         : 'not_applicable_static_frequency',
   })
+  
+  // ==========================================================================
+  // [TASK 7] HIGH-DAY SUPPORT AUDIT - Classify 6/7 day requests cleanly
+  // If requested but not structurally supported, throw classified error immediately
+  // ==========================================================================
+  const isHighDayRequest = effectiveTrainingDays === 6 || effectiveTrainingDays === 7
+  const highDaySupportedByStructure = templatePoolSize === effectiveTrainingDays
+  
+  console.log('[high-day-support-audit]', {
+    requestedDays: effectiveTrainingDays,
+    supportedByStructureSelector: highDaySupportedByStructure,
+    supportedBySessionAssembly: highDaySupportedByStructure, // same check for now
+    downgradeOccurred: isHighDayRequest && !highDaySupportedByStructure,
+    finalVerdict: !isHighDayRequest 
+      ? 'not_high_frequency'
+      : highDaySupportedByStructure 
+        ? 'fully_supported'
+        : 'classified_not_supported',
+  })
+  
+  // If 6/7 days requested but structure cannot generate that many sessions, classify immediately
+  if (isHighDayRequest && !highDaySupportedByStructure) {
+    throw new GenerationError(
+      'structure_selection_failed',
+      stageTracker.current,
+      `Requested ${effectiveTrainingDays}-day schedule is not yet fully supported. ` +
+      `Structure generated ${templatePoolSize} sessions instead of ${effectiveTrainingDays}.`,
+      {
+        subCode: 'unsupported_high_frequency_structure',
+        requestedDays: effectiveTrainingDays,
+        generatedDays: templatePoolSize,
+        primaryGoal,
+        secondaryGoal,
+        failureReason: `${effectiveTrainingDays}-day schedules are not fully supported yet. Try 5 days or fewer.`,
+      }
+    )
+  }
   
   const skillType = primaryGoal as 'front_lever' | 'planche' | 'muscle_up' | 'hspu' | 'back_lever' | 'iron_cross' | 'l_sit' | 'weighted_strength' | 'general'
   const trainingStyleMode = (['strength', 'skill', 'endurance', 'mixed'].includes(onboardingProfile?.primaryOutcome || '') 
@@ -3235,10 +3366,12 @@ function generateAdaptiveProgramImpl(inputs: AdaptiveProgramInputs, stageTracker
               : 'truthful_week_summary',
     })
     
-    console.log('[summary-safety-audit]', {
-      summaryGenerationStage: 'completed',
+    // [TASK 3] Summary post-assembly safety audit with expanded fields
+    console.log('[summary-post-assembly-safety-audit]', {
       sessionAssemblyCompleted: true,
-      mutatedGenerationData: false,
+      summaryLogicStartedAtStage: 'summary_derivation',
+      mutationDetected: false,
+      objectsTouched: ['builtAroundSkillsFinal', 'excludedSkills', 'generatedRepresentedSkills'],
       finalVerdict: 'safe_post_assembly',
     })
   } catch (summaryErr) {

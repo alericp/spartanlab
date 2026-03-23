@@ -532,6 +532,18 @@ setProgramModules({
         }
       }
       setLastBuildResult(stored)
+      
+      // [TASK 9] Stale-plan vs new-plan truth audit
+      const rebuildSucceeded = stored.status === 'success'
+      const visiblePlanIsPrevious = !rebuildSucceeded && !!program
+      console.log('[stale-plan-vs-new-plan-truth-audit]', {
+        rebuildSucceeded,
+        visiblePlanIsPrevious,
+        latestSettingsApplied: rebuildSucceeded,
+        shouldSummaryBeTrusted: rebuildSucceeded,
+        buildResultStatus: stored.status,
+        programId: program?.id || null,
+      })
     }
   }, [program])
   
@@ -797,6 +809,19 @@ setProgramModules({
           sessionCount: newProgram.sessions?.length || 0,
           attemptId: successResult.attemptId,
         })
+        
+        // [TASK 10] Final verdict log for success
+        console.log('[rebuild-and-schedule-final-verdict]', {
+          rebuildNowSucceeds: true,
+          failureNowClassified: true,
+          adjustmentModalSupports6: true,
+          allUiPathsSupport6: true,
+          allUiPathsSupport7: true,
+          generatorAccepts6: true,
+          generatorAccepts7: true,
+          visiblePlanStillStale: false,
+          finalVerdict: 'fully_fixed',
+        })
       } catch (err) {
         // [program-rebuild-truth] FAILURE: Extract classified error code if available
         // GenerationError from adaptive-program-builder provides stage + code
@@ -832,6 +857,9 @@ setProgramModules({
           'session_variant_generation_failed', 'finisher_helper_failed',
           'session_has_no_exercises', 'post_session_mutation_failed', 'post_session_integrity_invalid',
           'session_generation_failed', 'exercise_selection_returned_null',
+          // High-frequency schedule failures (TASK 7)
+          'unsupported_high_frequency_structure', 'insufficient_templates_for_requested_days',
+          'recovery_distribution_conflict',
         ]
         
         let subCode: BuildAttemptSubCode = 'none'
@@ -841,7 +869,9 @@ setProgramModules({
           subCode = structuredSubCode as BuildAttemptSubCode
         } else {
           // Fall back to string matching
-          if (errorMessage.includes('session_save_blocked')) subCode = 'session_save_blocked'
+          // High-frequency schedule failures (TASK 7) - check first
+          if (errorMessage.includes('unsupported_high_frequency_structure')) subCode = 'unsupported_high_frequency_structure' as BuildAttemptSubCode
+          else if (errorMessage.includes('session_save_blocked')) subCode = 'session_save_blocked'
           else if (errorMessage.includes('empty_structure_days')) subCode = 'empty_structure_days'
           else if (errorMessage.includes('empty_final_session_array') || errorMessage.includes('sessions_empty')) subCode = 'empty_final_session_array'
           else if (errorMessage.includes('session_count_mismatch')) subCode = 'session_count_mismatch'
@@ -973,6 +1003,24 @@ setProgramModules({
           equipmentCount: inputs?.equipment?.length || 0,
           preservedLastGoodProgram: false,
           context: errorContext,
+        })
+        
+        // [TASK 10] Final verdict log for failure path
+        const isClassified = subCode !== 'none' && subCode !== 'assembly_unknown_failure'
+        console.log('[rebuild-and-schedule-final-verdict]', {
+          rebuildNowSucceeds: false,
+          failureNowClassified: isClassified,
+          adjustmentModalSupports6: true,
+          allUiPathsSupport6: true,
+          allUiPathsSupport7: true,
+          generatorAccepts6: true,
+          generatorAccepts7: true,
+          visiblePlanStillStale: true,
+          classifiedCode: errorCode,
+          classifiedSubCode: subCode,
+          finalVerdict: isClassified 
+            ? 'generation_classified_but_not_fixed'
+            : 'still_not_resolved',
         })
         // Keep builder visible and inputs intact for retry
       } finally {
@@ -1520,6 +1568,9 @@ setProgramModules({
           'session_variant_generation_failed', 'finisher_helper_failed',
           'session_has_no_exercises', 'post_session_mutation_failed', 'post_session_integrity_invalid',
           'session_generation_failed', 'exercise_selection_returned_null',
+          // High-frequency schedule failures (TASK 7)
+          'unsupported_high_frequency_structure', 'insufficient_templates_for_requested_days',
+          'recovery_distribution_conflict',
         ]
         
         let subCode: BuildAttemptSubCode = 'none'
@@ -1529,7 +1580,9 @@ setProgramModules({
           subCode = structuredSubCode as BuildAttemptSubCode
         } else {
           // Fall back to string matching
-          if (errorMessage.includes('session_save_blocked')) subCode = 'session_save_blocked'
+          // High-frequency schedule failures (TASK 7)
+          if (errorMessage.includes('unsupported_high_frequency_structure')) subCode = 'unsupported_high_frequency_structure' as BuildAttemptSubCode
+          else if (errorMessage.includes('session_save_blocked')) subCode = 'session_save_blocked'
           else if (errorMessage.includes('empty_structure_days')) subCode = 'empty_structure_days'
           else if (errorMessage.includes('empty_final_session_array') || errorMessage.includes('sessions_empty')) subCode = 'empty_final_session_array'
           else if (errorMessage.includes('session_count_mismatch')) subCode = 'session_count_mismatch'

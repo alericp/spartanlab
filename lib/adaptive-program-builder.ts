@@ -2795,6 +2795,13 @@ function generateAdaptiveProgramImpl(inputs: AdaptiveProgramInputs, stageTracker
   
   // ISSUE A: Stage tracking for validation complete
   setStage('validation_complete')
+  
+  // ==========================================================================
+  // TASK 2-A: Post-validation finalization zone step tracker
+  // Tracks exact substep for any crash in the finalization/return-object assembly
+  // ==========================================================================
+  let postValidationStep = 'starting_finalize'
+  
 console.log('[program-generate] Generation complete:', {
   sessionCount: sessions.length,
   primaryGoal,
@@ -2804,6 +2811,12 @@ console.log('[program-generate] Generation complete:', {
   scheduleMode: inputScheduleMode,
   selectedSkillsCount: expandedContext.selectedSkills.length,
   })
+  
+  // TASK 2-B: Wrap entire post-validation zone in classification boundary
+  try {
+  
+  // [post-validation-step] Step 1: Skill exposure summary
+  postValidationStep = 'finalize_skill_exposure_summary'
   
   // BUILD-HOTFIX: canonical skill exposure by trace (renamed to avoid duplicate with skillExposureSummary at line ~3515)
   // [selected-skill-exposure] TASK 7: Weekly skill exposure by selection trace
@@ -2831,6 +2844,9 @@ console.log('[program-generate] Generation complete:', {
     }
   }
   
+  // [post-validation-step] Step 2: Weighted summary
+  postValidationStep = 'finalize_weighted_summary'
+  
   // Count weighted exercises
   const weightedExerciseCount = sessions.reduce((sum, s) => 
     sum + (s.exercises || []).filter(e => e.prescribedLoad && e.prescribedLoad.load > 0).length, 0
@@ -2854,6 +2870,9 @@ console.log('[program-generate] Generation complete:', {
     hasBenchmarks: !!weightedBenchmarks?.weightedPullUp || !!weightedBenchmarks?.weightedDip,
   })
   
+  // [post-validation-step] Step 3: Schedule metadata
+  postValidationStep = 'finalize_schedule_metadata'
+  
   // FLEXIBLE SCHEDULING: Use resolved schedule data
   const finalScheduleMode = inputScheduleMode
   const finalFrequencyRange = flexibleWeekStructure 
@@ -2867,8 +2886,13 @@ console.log('[program-generate] Generation complete:', {
     hasFlexibleStructure: !!flexibleWeekStructure,
   })
   
+  // [post-validation-step] Step 4: Dev diagnostics
+  postValidationStep = 'finalize_dev_diagnostics'
+  
   // ENGINE QUALITY: Log comprehensive diagnostics (dev only)
+  // TASK 2-D: Dev diagnostics must never kill production - wrap in try/catch
   if (process.env.NODE_ENV !== 'production') {
+    try {
     const warmupComponents = sessions.flatMap(s => (s.warmup || []).map(w => w.name))
     const diagnostics: EngineDiagnostics = {
       normalizedInputSummary: {
@@ -2907,6 +2931,24 @@ console.log('[program-generate] Generation complete:', {
       })),
     }
     logEngineDiagnostics(diagnostics)
+    } catch (diagErr) {
+      console.warn('[post-validation-diagnostics-failed] Dev diagnostics failed, continuing:', diagErr)
+    }
+  }
+  
+  // [post-validation-step] Step 5: Program payload core assembly
+  postValidationStep = 'finalize_program_payload_core'
+  
+  // TASK 2-E: Final program integrity check before return
+  console.log('[post-validation-program-integrity-check]', {
+    hasStructure: !!structure,
+    sessionsIsArray: Array.isArray(sessions),
+    sessionCount: sessions.length,
+    firstSessionHasExercises: sessions[0]?.exercises?.length > 0,
+  })
+  
+  if (!structure || !Array.isArray(sessions) || sessions.length === 0) {
+    throw new Error(`Program integrity check failed: structure=${!!structure} sessions=${sessions.length}`)
   }
   
   return {
@@ -3010,7 +3052,9 @@ fatigueDecision: fatigueDecision ? {
     varietyScore,
   },
   // TASK 4 & 6: Weekly progression and load balancing
+  // [post-validation-step] Step 6: Weekly progression context
   weeklyProgressionContext: (() => {
+    postValidationStep = 'finalize_weekly_progression_context'
     try {
       // Determine current phase based on week number
       const weekNumber = 1 // First generated week
@@ -3058,7 +3102,15 @@ fatigueDecision: fatigueDecision ? {
     suggestions: weeklyLoadBalance.suggestions.slice(0, 2),
   } : undefined,
   // [prescription] ISSUE F: Weighted strength prescription summary
+  // [post-validation-step] Step 7: Weighted strength prescription
   weightedStrengthPrescription: (() => {
+    postValidationStep = 'finalize_weighted_strength_prescription'
+    
+    // TASK 2-C: Safe access - weightedBenchmarks may be undefined
+    if (!weightedBenchmarks) {
+      return undefined
+    }
+    
     const pullUp = weightedBenchmarks.weightedPullUp
     const dip = weightedBenchmarks.weightedDip
     const hasPullUpData = !!(pullUp?.current?.addedWeight || pullUp?.pr?.load)
@@ -3108,18 +3160,28 @@ fatigueDecision: fatigueDecision ? {
   constraintImprovementData,
     // Training Principles Engine emphasis
     trainingEmphasis,
+    // [post-validation-step] Step 8: Skill intelligence
     // Unified Skill Intelligence Layer
-    skillIntelligence: {
+    skillIntelligence: (() => {
+      postValidationStep = 'finalize_skill_intelligence'
+      return {
       prioritization: skillIntelligence.prioritization,
       globalLimiters: skillIntelligence.globalLimiters,
       dataQuality: skillIntelligence.dataQuality,
-      adjustments: intelligenceAdjustments.slice(0, 3), // Top 3 adjustments
-    },
+      adjustments: intelligenceAdjustments?.slice(0, 3) || [], // Top 3 adjustments
+      }
+    })(),
+    // [post-validation-step] Step 9: Progression insights
     // Adaptive Progression Engine insights
-    progressionInsights: getProgressionInsights(),
-    exercisesReadyToProgress: getReadyToProgress().map(p => p.exerciseName),
+    progressionInsights: (() => {
+      postValidationStep = 'finalize_progression_insights'
+      return getProgressionInsights()
+    })(),
+    exercisesReadyToProgress: getReadyToProgress()?.map(p => p.exerciseName) || [],
+    // [post-validation-step] Step 10: Readiness assessment
     // Recovery & Fatigue Engine assessment
     readinessAssessment: (() => {
+      postValidationStep = 'finalize_readiness_assessment'
       try {
         const assessment = getReadinessAssessment()
         return {
@@ -3133,8 +3195,10 @@ fatigueDecision: fatigueDecision ? {
         return undefined
       }
     })(),
+    // [post-validation-step] Step 11: Consistency status
     // Consistency & Momentum Engine status
     consistencyStatus: (() => {
+      postValidationStep = 'finalize_consistency_status'
       try {
         const consistency = getConsistencyStatus()
         return {
@@ -3148,19 +3212,25 @@ fatigueDecision: fatigueDecision ? {
         return undefined
       }
     })(),
+    // [post-validation-step] Step 12: Weak point detection
     // Weak Point Detection - automatic focus identification
-    weakPointDetection: weakPointSummary.confidenceLevel !== 'low' ? {
+    weakPointDetection: (() => {
+      postValidationStep = 'finalize_weak_point_detection'
+      return weakPointSummary?.confidenceLevel !== 'low' ? {
       primaryFocus: weakPointSummary.primaryFocus,
       primaryFocusLabel: weakPointSummary.primaryFocusLabel,
       primaryFocusReason: weakPointSummary.primaryFocusReason,
       secondaryFocus: weakPointSummary.secondaryFocusLabel,
       mobilityEmphasis: weakPointSummary.mobilityEmphasis,
       volumeModifier: weakPointSummary.volumeModifier,
-      confidenceLevel: weakPointSummary.confidenceLevel,
-    } : undefined,
+      confidenceLevel: weakPointSummary?.confidenceLevel,
+      } : undefined
+    })(),
+    // [post-validation-step] Step 13: Training behavior analysis
     // Adaptive Progression Engine - training behavior analysis
     // ISSUE C FIX: Reconcile coaching messages with actual generated program session count
     trainingBehaviorAnalysis: trainingBehavior ? (() => {
+      postValidationStep = 'finalize_training_behavior_analysis'
       const actualSessionCount = sessions.length
       const recommendedDays = trainingBehavior.scheduleAnalysis.recommendedDays
       
@@ -3891,6 +3961,40 @@ return explanations.length > 0 ? explanations : undefined
         return undefined
       }
     })(),
+  }
+  
+  // TASK 2-B: End of post-validation try block - should never reach here due to return above
+  } catch (postValidationError) {
+    // ==========================================================================
+    // TASK 2-B: Classify post-validation failures with exact step
+    // ==========================================================================
+    const errMsg = postValidationError instanceof Error ? postValidationError.message : String(postValidationError)
+    
+    console.error('[post-validation-root-cause-summary]', {
+      postValidationStep,
+      primaryGoal,
+      sessionCount: sessions?.length ?? 0,
+      selectedSkillsCount: expandedContext?.selectedSkills?.length ?? 0,
+      hasWeightedBenchmarks: !!weightedBenchmarks,
+      scheduleMode: inputScheduleMode,
+      originalMessage: errMsg.slice(0, 200),
+    })
+    
+    throw new GenerationError(
+      'unknown_generation_failure',
+      'validation_complete',
+      `Post-validation finalization failed: step=${postValidationStep} reason=${errMsg}`,
+      {
+        postValidationStep,
+        primaryGoal,
+        sessionCount: sessions?.length ?? 0,
+        selectedSkillsCount: expandedContext?.selectedSkills?.length ?? 0,
+        weightedExerciseCount: 0,
+        scheduleMode: inputScheduleMode,
+        failureStep: postValidationStep,
+        failureReason: errMsg.slice(0, 120),
+      }
+    )
   }
   
   // =========================================================================

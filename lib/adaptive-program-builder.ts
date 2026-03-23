@@ -1263,6 +1263,19 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
   console.log('[program-generate] Starting adaptive program generation')
   console.log('[program-generate] STAGE: initializing')
   
+  // [BUILDER_INPUT] STEP 3 - Validate critical inputs at start of builder
+  console.log('[BUILDER_INPUT]', {
+    goal: inputs.primaryGoal,
+    secondaryGoal: inputs.secondaryGoal || null,
+    level: inputs.experienceLevel,
+    trainingDays: inputs.trainingDaysPerWeek,
+    isAdaptive: inputs.regenerationMode || 'standard',
+    sessionDuration: inputs.sessionLength,
+    equipmentCount: inputs.equipment?.length || 0,
+    selectedSkillsCount: inputs.selectedSkills?.length || 0,
+    scheduleMode: inputs.scheduleMode,
+  })
+  
   // TOP-LEVEL CLASSIFICATION WRAPPER: Ensure ALL errors are classified as GenerationError
   // This prevents plain Error escaping as unknown_generation_failure
   try {
@@ -2975,6 +2988,15 @@ function generateAdaptiveProgramImpl(inputs: AdaptiveProgramInputs, stageTracker
   // ==========================================================================
   const candidateSessionTemplates = structure?.days?.length || 0
   const candidateExercisesCount = canonicalExerciseNames.length
+  
+  // [EXERCISE_POOL] STEP 4 - Validate exercise pool integrity
+  console.log('[EXERCISE_POOL]', {
+    totalExercises: canonicalExerciseNames?.length || 0,
+    isArray: Array.isArray(canonicalExerciseNames),
+    sessionsBuilt: sessions.length,
+    emptySessionsCount: emptySessions.length,
+    sessionExerciseCounts,
+  })
   
   console.log('[session-assembly-root-cause-audit]', {
     primaryGoal,
@@ -5560,6 +5582,22 @@ function generateAdaptiveSession(
   // [session-assembly] Validate selection result before proceeding
   if (!selection) {
     console.error('[session-assembly] CRITICAL: selectExercisesForSession returned null/undefined')
+    // [BUILDER_TRACE] STEP 2 - Diagnostic logging before throw
+    console.log('[BUILDER_TRACE]', {
+      stage: 'session_assembly',
+      step: 'BEFORE_THROW',
+      reason: 'exercise_selection_returned_null',
+      sessionsLength: 0,
+      daysRequested: day.dayNumber,
+      selectedSkills: selectedSkills?.slice(0, 5) || [],
+      availableExercisesCount: 0,
+      exercisePoolSize: 0,
+      isAdaptiveMode: true,
+      userLevel: experienceLevel,
+      dayFocus: day.focus,
+      primaryGoal,
+      equipmentCount: equipment?.length || 0,
+    })
     throw new Error('exercise_selection_returned_null')
   }
   
@@ -5682,6 +5720,23 @@ function generateAdaptiveSession(
       inputExercises: rescuedMain.map(e => e.exercise.name),
       equipment: equipment,
       rescueAttempted: sessionWasRescued,
+    })
+    // [BUILDER_TRACE] STEP 2 - Diagnostic logging before throw
+    console.log('[BUILDER_TRACE]', {
+      stage: 'session_assembly',
+      step: 'BEFORE_THROW',
+      reason: 'equipment_adaptation_zeroed_session',
+      sessionsLength: 0,
+      daysRequested: day.dayNumber,
+      selectedSkills: selectedSkills?.slice(0, 5) || [],
+      availableExercisesCount: rescuedMain.length,
+      exercisePoolSize: 0,
+      isAdaptiveMode: true,
+      userLevel: experienceLevel,
+      dayFocus: day.focus,
+      primaryGoal,
+      equipmentCount: equipment?.length || 0,
+      inputExercises: rescuedMain.map(e => e.exercise?.name || 'unknown').slice(0, 5),
     })
     throw new Error(
       `equipment_adaptation_zeroed_session: day=${day.dayNumber} focus=${day.focus} ` +
@@ -6198,6 +6253,25 @@ let validatedSession = validateSession(rawExercises, rawWarmup, rawCooldown, {
           dayFocus: day.focus,
           primaryGoal,
           equipmentCount: equipment.length,
+        })
+        
+        // [BUILDER_TRACE] STEP 2 - Diagnostic logging before throw
+        console.log('[BUILDER_TRACE]', {
+          stage: 'session_assembly',
+          step: 'BEFORE_THROW',
+          reason: 'session_has_no_exercises',
+          sessionsLength: 0,
+          daysRequested: day.dayNumber,
+          selectedSkills: selectedSkills?.slice(0, 5) || [],
+          availableExercisesCount: 0,
+          exercisePoolSize: 0,
+          isAdaptiveMode: true,
+          userLevel: experienceLevel,
+          dayFocus: day.focus,
+          primaryGoal,
+          equipmentCount: equipment?.length || 0,
+          rescueAttempted: sessionWasRescued,
+          rescuePath,
         })
         
         // TASK 1-I: Only hard-fail if truly no equipment-valid path exists

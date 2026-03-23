@@ -5709,9 +5709,26 @@ export function evaluateExerciseOverride(
 // STORAGE
 // =============================================================================
 
-const STORAGE_KEY = 'spartanlab_adaptive_programs'
+// =============================================================================
+// STORAGE KEYS - TASK 1: Separate active program from history
+// =============================================================================
+const STORAGE_KEY = 'spartanlab_adaptive_programs' // Legacy history array
+const CANONICAL_ACTIVE_KEY = 'spartanlab_active_program' // Single active program
+const MAX_HISTORY_PROGRAMS = 3 // Cap history to prevent quota issues
 
-function isBrowser(): boolean {
+// Custom error for storage failures
+export class StorageSaveError extends Error {
+  constructor(
+    public readonly errorType: 'storage_quota_exceeded' | 'active_program_save_failed' | 'history_save_failed' | 'serialization_failed',
+    message: string,
+    public readonly originalError?: unknown
+  ) {
+    super(message)
+    this.name = 'StorageSaveError'
+  }
+}
+  
+  function isBrowser(): boolean {
   return typeof window !== 'undefined'
 }
 
@@ -5785,17 +5802,89 @@ export function saveAdaptiveProgram(program: AdaptiveProgram): AdaptiveProgram {
     console.log('[program-build] SAVE: Database validation passed')
   }
   
-  // [program-rebuild-truth] SAVE: Actually persist to localStorage
-  // TASK 4: Atomic replacement - this is the final commit step
-  const programs = getSavedAdaptivePrograms()
-  programs.push(program)
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(programs))
+  // ==========================================================================
+  // [storage-quota-fix] TASK B/C: Atomic, quota-aware save strategy
+  // 1. Save canonical active program FIRST (highest priority, smallest footprint)
+  // 2. Then attempt bounded history save (non-core, can degrade gracefully)
+  // ==========================================================================
+  
+  // Step 1: Serialize the active program
+  let serializedProgram: string
+  try {
+    serializedProgram = JSON.stringify(program)
+  } catch (serErr) {
+    console.error('[storage-quota-fix] SAVE FAILED: Serialization error', serErr)
+    throw new StorageSaveError('serialization_failed', 'Failed to serialize program', serErr)
+  }
+  
+  // Step 2: Pre-save diagnostic - check approximate sizes
+  const existingHistory = getSavedAdaptivePrograms()
+  const existingHistorySize = JSON.stringify(existingHistory).length
+  console.log('[storage-quota-fix] Pre-save diagnostic:', {
+    programId: program.id,
+    sessionCount: sessions.length,
+    activeProgramSize: serializedProgram.length,
+    existingHistoryCount: existingHistory.length,
+    existingHistorySize,
+  })
+  
+  // Step 3: Save canonical active program FIRST (core - must succeed)
+  try {
+    localStorage.setItem(CANONICAL_ACTIVE_KEY, serializedProgram)
+    console.log('[storage-quota-fix] Canonical active program saved successfully')
+  } catch (activeErr) {
+    // Detect quota exceeded
+    const isQuotaError = activeErr instanceof Error && 
+      (activeErr.name === 'QuotaExceededError' || 
+       activeErr.message.includes('quota') ||
+       activeErr.message.includes('setItem'))
+    
+    console.error('[storage-quota-fix] CRITICAL: Active program save failed', {
+      isQuotaError,
+      error: activeErr instanceof Error ? activeErr.message : String(activeErr),
+    })
+    
+    throw new StorageSaveError(
+      isQuotaError ? 'storage_quota_exceeded' : 'active_program_save_failed',
+      `Failed to save active program: ${activeErr instanceof Error ? activeErr.message : 'unknown error'}`,
+      activeErr
+    )
+  }
+  
+  // Step 4: Build bounded history (deduped, capped, newest first)
+  let historySaveWarning: string | null = null
+  try {
+    // Remove duplicates by ID, keep only recent programs
+    const deduped = existingHistory.filter(p => p.id !== program.id)
+    const bounded = [program, ...deduped].slice(0, MAX_HISTORY_PROGRAMS)
+    
+    // Attempt history save
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(bounded))
+    console.log('[storage-quota-fix] History saved successfully', {
+      historyCount: bounded.length,
+      capped: deduped.length >= MAX_HISTORY_PROGRAMS,
+    })
+  } catch (histErr) {
+    // History save failed - this is NON-CORE, log but don't fail
+    historySaveWarning = histErr instanceof Error ? histErr.message : 'unknown error'
+    console.warn('[storage-quota-fix] History save failed (non-core):', historySaveWarning)
+    
+    // Try to at least keep minimal history (just the active program)
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify([program]))
+      console.log('[storage-quota-fix] Minimal history saved (active only)')
+    } catch {
+      // Even minimal history failed - just log, active program is already saved
+      console.warn('[storage-quota-fix] Even minimal history failed - active program still valid')
+    }
+  }
   
   console.log('[program-rebuild-truth] SAVE: Program saved successfully - atomic replacement complete', {
-  programId: program.id,
-  sessionCount: sessions.length,
-  totalExercises: sessionExerciseCounts.reduce((a, b) => a + b, 0),
-  replacedVisibleProgram: true,
+    programId: program.id,
+    sessionCount: sessions.length,
+    totalExercises: sessionExerciseCounts.reduce((a, b) => a + b, 0),
+    replacedVisibleProgram: true,
+    historySaveWarning,
   })
   
   // [build-report] STEP 11: High-signal build diagnostic summary
@@ -5837,6 +5926,22 @@ export function getSavedAdaptivePrograms(): AdaptiveProgram[] {
 }
 
 export function getLatestAdaptiveProgram(): AdaptiveProgram | null {
+  if (!isBrowser()) return null
+  
+  // [storage-quota-fix] Priority 1: Check canonical active key first
+  try {
+    const canonical = localStorage.getItem(CANONICAL_ACTIVE_KEY)
+    if (canonical) {
+      const parsed = JSON.parse(canonical)
+      if (parsed && parsed.id && parsed.sessions) {
+        return parsed
+      }
+    }
+  } catch (err) {
+    console.warn('[storage-quota-fix] Failed to read canonical active program:', err)
+  }
+  
+  // Priority 2: Fall back to history array
   const programs = getSavedAdaptivePrograms()
   if (programs.length === 0) return null
   
@@ -5855,6 +5960,89 @@ export function deleteAdaptiveProgram(id: string): boolean {
   
   localStorage.setItem(STORAGE_KEY, JSON.stringify(filtered))
   return true
+}
+
+// =============================================================================
+// [storage-quota-fix] TASK F: Legacy storage migration/cleanup
+// =============================================================================
+
+/**
+ * Migrate and clean up legacy oversized storage.
+ * Call this on app init to ensure storage is bounded.
+ */
+export function migrateAndCleanupProgramStorage(): { 
+  migrated: boolean
+  trimmedCount: number 
+  canonicalRestored: boolean
+} {
+  if (!isBrowser()) return { migrated: false, trimmedCount: 0, canonicalRestored: false }
+  
+  let migrated = false
+  let trimmedCount = 0
+  let canonicalRestored = false
+  
+  try {
+    const programs = getSavedAdaptivePrograms()
+    
+    // Nothing to migrate if empty
+    if (programs.length === 0) {
+      return { migrated: false, trimmedCount: 0, canonicalRestored: false }
+    }
+    
+    // Sort by date (newest first)
+    const sorted = [...programs].sort((a, b) => 
+      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    )
+    
+    // Check if canonical active key exists
+    const hasCanonical = !!localStorage.getItem(CANONICAL_ACTIVE_KEY)
+    
+    // If no canonical key, restore from latest in history
+    if (!hasCanonical && sorted.length > 0) {
+      try {
+        localStorage.setItem(CANONICAL_ACTIVE_KEY, JSON.stringify(sorted[0]))
+        canonicalRestored = true
+        console.log('[storage-quota-fix] Migration: Restored canonical active program from history')
+      } catch (err) {
+        console.warn('[storage-quota-fix] Migration: Failed to restore canonical:', err)
+      }
+    }
+    
+    // Trim history if over cap
+    if (sorted.length > MAX_HISTORY_PROGRAMS) {
+      trimmedCount = sorted.length - MAX_HISTORY_PROGRAMS
+      const trimmed = sorted.slice(0, MAX_HISTORY_PROGRAMS)
+      
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(trimmed))
+        migrated = true
+        console.log('[storage-quota-fix] Migration: Trimmed history', {
+          before: sorted.length,
+          after: trimmed.length,
+          trimmed: trimmedCount,
+        })
+      } catch (err) {
+        // If even trimmed history fails, try just keeping the latest
+        console.warn('[storage-quota-fix] Migration: Trimmed save failed, keeping only latest')
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify([sorted[0]]))
+          migrated = true
+          trimmedCount = sorted.length - 1
+        } catch {
+          // Complete failure - just clear history, canonical should still work
+          console.error('[storage-quota-fix] Migration: Complete history save failure, clearing')
+          localStorage.removeItem(STORAGE_KEY)
+          migrated = true
+          trimmedCount = sorted.length
+        }
+      }
+    }
+    
+    return { migrated, trimmedCount, canonicalRestored }
+  } catch (err) {
+    console.error('[storage-quota-fix] Migration failed:', err)
+    return { migrated: false, trimmedCount: 0, canonicalRestored: false }
+  }
 }
 
 // =============================================================================

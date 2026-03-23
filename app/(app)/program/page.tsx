@@ -221,6 +221,14 @@ export default function ProgramPage() {
         try {
           builderMod = await import('@/lib/adaptive-program-builder')
           console.log('[ProgramPage] Stage 1: Loaded adaptive-program-builder')
+          
+          // [storage-quota-fix] TASK F: Run migration/cleanup on init to handle legacy oversized storage
+          if (builderMod.migrateAndCleanupProgramStorage) {
+            const migrationResult = builderMod.migrateAndCleanupProgramStorage()
+            if (migrationResult.migrated || migrationResult.canonicalRestored) {
+              console.log('[storage-quota-fix] Storage migration completed:', migrationResult)
+            }
+          }
         } catch (err) {
           console.error('[ProgramPage] CRITICAL Stage 1: Failed to load adaptive-program-builder:', err)
           setLoadStage('failed-builder')
@@ -550,11 +558,39 @@ export default function ProgramPage() {
           }
         }
         
-        // [program-build] STAGE 6: Save to storage
-        generationStage = 'saving'
-        console.log('[program-build] STAGE 6: Saving snapshot to storage...')
-        programModules.saveAdaptiveProgram(newProgram)
-        console.log('[program-build] STAGE 6: Save completed successfully')
+  // [program-build] STAGE 6: Save to storage
+  generationStage = 'saving'
+  console.log('[program-build] STAGE 6: Saving snapshot to storage...')
+  try {
+    programModules.saveAdaptiveProgram(newProgram)
+    console.log('[program-build] STAGE 6: Save completed successfully')
+  } catch (saveErr) {
+    // [storage-quota-fix] TASK E: Classify storage save errors precisely
+    const isStorageSaveError = saveErr && typeof saveErr === 'object' && 'errorType' in saveErr
+    const errorType = isStorageSaveError ? (saveErr as { errorType: string }).errorType : 'unknown'
+    const isQuotaError = errorType === 'storage_quota_exceeded' || 
+      (saveErr instanceof Error && (
+        saveErr.message.includes('quota') || 
+        saveErr.message.includes('setItem') ||
+        saveErr.name === 'QuotaExceededError'
+      ))
+    
+    console.error('[storage-quota-fix] Save error classified:', {
+      errorType,
+      isQuotaError,
+      message: saveErr instanceof Error ? saveErr.message : String(saveErr),
+    })
+    
+    // Re-throw with precise classification
+    if (isQuotaError) {
+      throw new Error(`storage_quota_exceeded: ${saveErr instanceof Error ? saveErr.message : 'Storage full'}`)
+    } else if (errorType === 'history_save_failed') {
+      // History-only failure is non-core - continue if active program saved
+      console.warn('[storage-quota-fix] History save failed but continuing - active program should be saved')
+    } else {
+      throw saveErr // Re-throw unknown errors
+    }
+  }
         
         // [program-build] STAGE 6b: Verify save succeeded by reading back
         generationStage = 'verifying_save'
@@ -911,11 +947,37 @@ export default function ProgramPage() {
           totalExerciseCount: newProgram.sessions?.reduce((sum, s) => sum + (s.exercises?.length || 0), 0) || 0,
         })
         
-        // [program-build] REGEN STAGE 7: Save to storage
-        regenerateStage = 'saving'
-        console.log('[program-build] REGEN STAGE 7: Saving snapshot...')
-        programModules.saveAdaptiveProgram(newProgram)
-        console.log('[program-build] REGEN STAGE 7: Save completed successfully')
+  // [program-build] REGEN STAGE 7: Save to storage
+  regenerateStage = 'saving'
+  console.log('[program-build] REGEN STAGE 7: Saving snapshot...')
+  try {
+    programModules.saveAdaptiveProgram(newProgram)
+    console.log('[program-build] REGEN STAGE 7: Save completed successfully')
+  } catch (saveErr) {
+    // [storage-quota-fix] TASK E: Classify storage save errors precisely
+    const isStorageSaveError = saveErr && typeof saveErr === 'object' && 'errorType' in saveErr
+    const errorType = isStorageSaveError ? (saveErr as { errorType: string }).errorType : 'unknown'
+    const isQuotaError = errorType === 'storage_quota_exceeded' || 
+      (saveErr instanceof Error && (
+        saveErr.message.includes('quota') || 
+        saveErr.message.includes('setItem') ||
+        saveErr.name === 'QuotaExceededError'
+      ))
+    
+    console.error('[storage-quota-fix] REGEN save error classified:', {
+      errorType,
+      isQuotaError,
+      message: saveErr instanceof Error ? saveErr.message : String(saveErr),
+    })
+    
+    if (isQuotaError) {
+      throw new Error(`storage_quota_exceeded: ${saveErr instanceof Error ? saveErr.message : 'Storage full'}`)
+    } else if (errorType === 'history_save_failed') {
+      console.warn('[storage-quota-fix] REGEN: History save failed but continuing')
+    } else {
+      throw saveErr
+    }
+  }
         
         // [program-build] REGEN STAGE 7b: Verify save succeeded
         regenerateStage = 'verifying_save'

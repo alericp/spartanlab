@@ -606,12 +606,18 @@ export default function ProgramPage() {
         }
         
         // [program-rebuild-truth] Determine sub-code for more specific messaging (expanded)
-        // STEP G: Added new collapse stage subcodes for precise diagnosis
+        // STEP F: Added new classified failure subcodes for precise diagnosis
         let subCode: BuildAttemptSubCode = 'none'
         if (errorMessage.includes('session_save_blocked')) subCode = 'session_save_blocked'
         else if (errorMessage.includes('empty_structure_days')) subCode = 'empty_structure_days'
         else if (errorMessage.includes('empty_final_session_array') || errorMessage.includes('sessions_empty')) subCode = 'empty_final_session_array'
         else if (errorMessage.includes('session_count_mismatch')) subCode = 'session_count_mismatch'
+        // New classified middle-helper failures
+        else if (errorMessage.includes('effective_selection_invalid')) subCode = 'effective_selection_invalid'
+        else if (errorMessage.includes('session_middle_helper_failed')) subCode = 'session_middle_helper_failed'
+        else if (errorMessage.includes('session_variant_generation_failed')) subCode = 'session_variant_generation_failed'
+        else if (errorMessage.includes('finisher_helper_failed')) subCode = 'finisher_helper_failed'
+        // Existing collapse stage subcodes
         else if (errorMessage.includes('equipment_adaptation_zeroed_session')) subCode = 'empty_exercise_pool'
         else if (errorMessage.includes('mapping_zeroed_session')) subCode = 'session_validation_failed'
         else if (errorMessage.includes('validation_zeroed_session')) subCode = 'session_validation_failed'
@@ -831,12 +837,18 @@ export default function ProgramPage() {
         }
         
         // [program-rebuild-truth] Determine sub-code (expanded)
+        // STEP F: Added new classified failure subcodes for precise diagnosis
         let subCode: BuildAttemptSubCode = 'none'
         if (errorMessage.includes('session_save_blocked')) subCode = 'session_save_blocked'
         else if (errorMessage.includes('empty_structure_days')) subCode = 'empty_structure_days'
         else if (errorMessage.includes('empty_final_session_array') || errorMessage.includes('sessions_empty')) subCode = 'empty_final_session_array'
         else if (errorMessage.includes('session_count_mismatch')) subCode = 'session_count_mismatch'
-        // STEP G: Added new collapse stage subcodes for precise diagnosis
+        // New classified middle-helper failures
+        else if (errorMessage.includes('effective_selection_invalid')) subCode = 'effective_selection_invalid'
+        else if (errorMessage.includes('session_middle_helper_failed')) subCode = 'session_middle_helper_failed'
+        else if (errorMessage.includes('session_variant_generation_failed')) subCode = 'session_variant_generation_failed'
+        else if (errorMessage.includes('finisher_helper_failed')) subCode = 'finisher_helper_failed'
+        // Existing collapse stage subcodes
         else if (errorMessage.includes('equipment_adaptation_zeroed_session')) subCode = 'empty_exercise_pool'
         else if (errorMessage.includes('mapping_zeroed_session')) subCode = 'session_validation_failed'
         else if (errorMessage.includes('validation_zeroed_session')) subCode = 'session_validation_failed'

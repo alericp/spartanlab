@@ -79,6 +79,11 @@ export type BuildAttemptSubCode =
   | 'audit_blocked'
   | 'session_has_no_exercises'
   | 'invalid_exercise_sets'
+  // STEP F: New classified middle-helper failures
+  | 'effective_selection_invalid'
+  | 'session_middle_helper_failed'
+  | 'session_variant_generation_failed'
+  | 'finisher_helper_failed'
   | 'none'
 
 /**
@@ -159,6 +164,7 @@ export function getErrorUserMessage(
     : ''
   
   // TASK 5: Handle sub-codes first for more specific messaging
+  // STEP F: Added new classified failure subcodes
   switch (subCode) {
     case 'canonical_profile_failure':
       return 'Could not load your profile. Please refresh and try again.' + suffix
@@ -174,6 +180,14 @@ export function getErrorUserMessage(
       return 'One part of your updated plan could not be built with the current settings.' + suffix
     case 'invalid_exercise_sets':
       return 'Exercise configuration is invalid. Please try again.' + suffix
+    case 'effective_selection_invalid':
+      return 'One part of your updated plan became invalid before session assembly completed.' + suffix
+    case 'session_middle_helper_failed':
+      return 'A session detail could not be prepared.' + suffix
+    case 'session_variant_generation_failed':
+      return 'Session variants could not be prepared.' + suffix
+    case 'finisher_helper_failed':
+      return 'Optional session finishing work could not be added, but your core plan remains available.' + suffix
     default:
       // Fall through to error code handling
       break

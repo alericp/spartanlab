@@ -561,7 +561,7 @@ export function AdaptiveProgramDisplay({
           </DialogHeader>
           
           <div className="space-y-3 py-2">
-            {/* Option 1: Regenerate (update from current profile) */}
+            {/* [TASK 4] Option 1: Regenerate - true regeneration from current profile */}
             {onRegenerate && (
               <button
                 onClick={() => {
@@ -574,9 +574,9 @@ export function AdaptiveProgramDisplay({
                   <RefreshCw className="w-4 h-4 text-[#C1121F]" />
                 </div>
                 <div>
-                  <h4 className="text-sm font-medium text-[#E6E9EF]">Regenerate Program</h4>
+                  <h4 className="text-sm font-medium text-[#E6E9EF]">Rebuild From Current Settings</h4>
                   <p className="text-xs text-[#6B7280] mt-1">
-                    Update your program based on your current profile settings. 
+                    Immediately rebuild your program using your current profile. 
                     Your workout history is preserved.
                   </p>
                   {stalenessCheck.isStale && (

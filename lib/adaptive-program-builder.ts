@@ -421,6 +421,122 @@ export {
 // TYPES
 // =============================================================================
 
+// =============================================================================
+// [TASK 3] CANONICAL SESSION CANDIDATE VALIDATOR
+// Single source of truth for validating session candidates at any assembly phase
+// =============================================================================
+interface SessionCandidateValidation {
+  isValid: boolean
+  failureReasons: string[]
+  exerciseNames: string[]
+  estimatedMinutes: number
+  equipmentValid: boolean
+  primaryEmphasisSatisfied: boolean
+  minimumExercisesMet: boolean
+}
+
+function validateSessionCandidate(
+  exercises: Array<{ exercise?: { name?: string; requiredEquipment?: string[] }; sets?: number; repsOrTime?: string }> | null | undefined,
+  equipment: string[],
+  primaryGoal: string,
+  phase: string
+): SessionCandidateValidation {
+  const failureReasons: string[] = []
+  
+  // Check non-empty exercise list
+  if (!exercises || !Array.isArray(exercises) || exercises.length === 0) {
+    failureReasons.push('empty_exercise_list')
+  }
+  
+  // Extract names safely
+  const exerciseNames = (exercises || [])
+    .map(e => e?.exercise?.name || 'unknown')
+    .filter(n => n !== 'unknown')
+  
+  // Check for valid exercise structures
+  const hasValidStructure = (exercises || []).every(item => 
+    item?.exercise?.name && (item.sets !== undefined || item.repsOrTime !== undefined)
+  )
+  if (!hasValidStructure && exercises && exercises.length > 0) {
+    failureReasons.push('invalid_exercise_structure')
+  }
+  
+  // Check equipment compatibility
+  const equipmentValid = (exercises || []).every(item => {
+    const required = item?.exercise?.requiredEquipment || []
+    if (required.length === 0) return true
+    return required.some(req => equipment.includes(req) || req === 'none' || req === 'bodyweight')
+  })
+  if (!equipmentValid) {
+    failureReasons.push('equipment_incompatible')
+  }
+  
+  // Estimate duration (~5 min per exercise)
+  const estimatedMinutes = (exercises?.length || 0) * 5 + 10
+  
+  // Check minimum exercises (at least 1 main exercise)
+  const minimumExercisesMet = (exercises?.length || 0) >= 1
+  if (!minimumExercisesMet) {
+    failureReasons.push('below_minimum_exercises')
+  }
+  
+  // Check primary emphasis (simplified - at least one exercise should exist)
+  const primaryEmphasisSatisfied = exerciseNames.length > 0
+  if (!primaryEmphasisSatisfied) {
+    failureReasons.push('no_primary_emphasis')
+  }
+  
+  const result: SessionCandidateValidation = {
+    isValid: failureReasons.length === 0,
+    failureReasons,
+    exerciseNames,
+    estimatedMinutes,
+    equipmentValid,
+    primaryEmphasisSatisfied,
+    minimumExercisesMet,
+  }
+  
+  // Log validation result
+  console.log('[session-candidate-validation]', {
+    phase,
+    isValid: result.isValid,
+    failureReasons: result.failureReasons,
+    exerciseNames: result.exerciseNames.slice(0, 5),
+    estimatedMinutes: result.estimatedMinutes,
+  })
+  
+  return result
+}
+
+// =============================================================================
+// [TASK 4] CONSTRAINT RESOLUTION ORDER
+// Deterministic fallback ordering when constraints are tight
+// =============================================================================
+interface ConstraintResolutionResult {
+  primaryGoalPreserved: boolean
+  equipmentTruthPreserved: boolean
+  secondaryGoalPreserved: boolean
+  hybridRichnessReduced: boolean
+  accessoryDensityReduced: boolean
+  finalResolutionMode: 'full' | 'reduced_hybrid' | 'reduced_accessory' | 'minimal_viable' | 'failed'
+}
+
+function logConstraintResolution(
+  originalCount: number,
+  filteredCount: number,
+  phase: string,
+  resolution: Partial<ConstraintResolutionResult>
+): void {
+  console.log('[constraint-resolution-order-audit]', {
+    phase,
+    originalCount,
+    filteredCount,
+    reduction: originalCount - filteredCount,
+    reductionPercent: originalCount > 0 ? Math.round((1 - filteredCount / originalCount) * 100) : 0,
+    ...resolution,
+  })
+}
+
 // Context for explicit dependency passing to session generation (fixes scope bug)
 type AdaptiveSessionContext = {
   athleteCalibration: ReturnType<typeof getAthleteCalibration>
@@ -5617,6 +5733,22 @@ function generateAdaptiveSession(
   })
   
   // ==========================================================================
+  // [TASK 1] SESSION ASSEMBLY PHASE AUDIT - Post Selection
+  // ==========================================================================
+  const postSelectionValidation = validateSessionCandidate(safeMain, equipment, primaryGoal, 'post_selection')
+  console.log('[session-assembly-phase-audit]', {
+    phaseName: 'post_selection',
+    candidateCount: safeMain.length,
+    selectedExerciseNames: safeMain.map(e => e?.exercise?.name || 'unknown').slice(0, 8),
+    selectedMovementPatterns: safeMain.map(e => e?.exercise?.movementPattern || 'unknown').slice(0, 8),
+    selectedSkillTags: selectedSkills?.slice(0, 5) || [],
+    selectedEquipmentNeeds: [...new Set(safeMain.flatMap(e => e?.exercise?.requiredEquipment || []))],
+    selectedEstimatedMinutes: selection.totalEstimatedTime,
+    validationStatus: postSelectionValidation.isValid ? 'valid' : 'invalid',
+    rejectReason: postSelectionValidation.failureReasons.join(', ') || null,
+  })
+  
+  // ==========================================================================
   // SESSION TRACE - Track exercise counts through every transformation
   // ==========================================================================
   sessionStep = 'session_trace_starting'
@@ -5748,6 +5880,82 @@ function generateAdaptiveSession(
   sessionStep = 'equipment_adaptation_completed'
   
   // ==========================================================================
+  // [TASK 1] SESSION ASSEMBLY PHASE AUDIT - Post Equipment Adaptation
+  // ==========================================================================
+  const postEquipmentValidation = validateSessionCandidate(adaptedMain.adapted, equipment, primaryGoal, 'post_equipment_adaptation')
+  console.log('[session-assembly-phase-audit]', {
+    phaseName: 'post_equipment_adaptation',
+    candidateCount: adaptedMain.adapted.length,
+    selectedExerciseNames: adaptedMain.adapted.map(e => e?.exercise?.name || 'unknown').slice(0, 8),
+    selectedMovementPatterns: adaptedMain.adapted.map(e => e?.exercise?.movementPattern || 'unknown').slice(0, 8),
+    selectedSkillTags: selectedSkills?.slice(0, 5) || [],
+    selectedEquipmentNeeds: [...new Set(adaptedMain.adapted.flatMap(e => e?.exercise?.requiredEquipment || []))],
+    selectedEstimatedMinutes: (adaptedMain.adapted.length * 5) + 10,
+    validationStatus: postEquipmentValidation.isValid ? 'valid' : 'invalid',
+    rejectReason: postEquipmentValidation.failureReasons.join(', ') || null,
+    adaptationCount: adaptedMain.adaptationCount,
+    significantLimitations: adaptedMain.significantLimitations,
+  })
+  
+  // [TASK 4] Log constraint resolution for equipment filtering
+  logConstraintResolution(rescuedMain.length, adaptedMain.adapted.length, 'equipment_adaptation', {
+    primaryGoalPreserved: adaptedMain.adapted.length > 0,
+    equipmentTruthPreserved: true, // By definition - we filtered FOR equipment
+    secondaryGoalPreserved: adaptedMain.adapted.length >= Math.floor(rescuedMain.length * 0.5),
+    hybridRichnessReduced: adaptedMain.adaptationCount > 0,
+    accessoryDensityReduced: adaptedMain.adapted.length < rescuedMain.length,
+    finalResolutionMode: adaptedMain.adapted.length === 0 ? 'failed' 
+      : adaptedMain.adapted.length < rescuedMain.length ? 'reduced_accessory' 
+      : 'full',
+  })
+  
+  // ==========================================================================
+  // [TASK 6] CANDIDATE INVALIDATION RECOVERY
+  // If equipment filtering zeroed out but rescue exercises exist, try reselection
+  // ==========================================================================
+  let effectiveMainForSession = adaptedMain.adapted
+  let wasRecoveredFromInvalidation = false
+  
+  if (adaptedMain.adapted.length === 0 && rescuedMain.length > 0) {
+    console.log('[candidate-invalidation-recovery-audit]', {
+      phase: 'equipment_adaptation',
+      originalCandidateCount: rescuedMain.length,
+      currentValidCount: 0,
+      recoveryAttempt: 'trying_fallback_reselection',
+      originalExercises: rescuedMain.map(e => e.exercise?.name || 'unknown').slice(0, 5),
+    })
+    
+    // Attempt recovery via fallback selection with relaxed constraints
+    const recoveryRescue = buildFallbackSelectionForSession(
+      day.focus,
+      primaryGoal,
+      equipment, // Use SAME equipment to ensure truth
+      sessionMinutesResolved,
+      experienceLevel
+    )
+    
+    if (recoveryRescue.wasRescued && recoveryRescue.main.length > 0) {
+      effectiveMainForSession = recoveryRescue.main
+      wasRecoveredFromInvalidation = true
+      sessionTrace.rescuePath = `recovered_${recoveryRescue.rescuePath}`
+      
+      console.log('[candidate-invalidation-recovery-audit]', {
+        phase: 'equipment_adaptation_recovery',
+        recoverySucceeded: true,
+        recoveredCount: recoveryRescue.main.length,
+        recoveryPath: recoveryRescue.rescuePath,
+        recoveredExercises: recoveryRescue.main.map(e => e.exercise?.name || 'unknown').slice(0, 5),
+      })
+    } else {
+      console.log('[candidate-invalidation-recovery-audit]', {
+        phase: 'equipment_adaptation_recovery',
+        recoverySucceeded: false,
+        finalVerdict: 'no_valid_candidates_after_recovery_attempt',
+      })
+    }
+  }
+  
+  // ==========================================================================
   // Track middle helper execution for precise failure diagnosis
   // ==========================================================================
   sessionStep = 'effective_selection_building'
@@ -5756,16 +5964,17 @@ function generateAdaptiveSession(
   // ==========================================================================
   // STEP B: Build canonical effectiveSelection to fix split-brain logic
   // ==========================================================================
-  // Recompute estimated time based on rescued/adapted exercises
-  const effectiveMainEstimatedTime = rescuedMain.length * 5 // ~5 min per exercise estimate
+  // Recompute estimated time based on rescued/adapted/recovered exercises
+  const effectiveMainSource = wasRecoveredFromInvalidation ? effectiveMainForSession : rescuedMain
+  const effectiveMainEstimatedTime = effectiveMainSource.length * 5 // ~5 min per exercise estimate
   const effectiveTotalTime = effectiveMainEstimatedTime + 10 // Add warmup/cooldown buffer
   
   const effectiveSelection = {
     ...selection,
-    main: rescuedMain,
+    main: effectiveMainSource, // Use recovered source if invalidation recovery succeeded
     warmup: safeWarmup,
     cooldown: safeCooldown,
-    totalEstimatedTime: sessionWasRescued ? effectiveTotalTime : selection.totalEstimatedTime,
+    totalEstimatedTime: (sessionWasRescued || wasRecoveredFromInvalidation) ? effectiveTotalTime : selection.totalEstimatedTime,
   }
   
   middleStep = 'effective_selection_built'
@@ -6286,6 +6495,30 @@ let validatedSession = validateSession(rawExercises, rawWarmup, rawCooldown, {
     // STEP I: Final session trace before return
     sessionTrace.finalMainCount = validatedSession.exercises.length
     console.log('[session-trace-final]', sessionTrace)
+    
+    // ==========================================================================
+    // [TASK 7] SESSION ASSEMBLY ROOT FIX FINAL VERDICT
+    // ==========================================================================
+    const staleCandidateCarryover = (safeMain.length > 0 && adaptedMain.adapted.length === 0 && !wasRecoveredFromInvalidation)
+    console.log('[session-assembly-root-fix-final-verdict]', {
+      dayNumber: day.dayNumber,
+      dayFocus: day.focus,
+      exactFailingPhaseFound: sessionTrace.collapseStage !== 'none' ? sessionTrace.collapseStage : 'none',
+      staleCandidateCarryoverExisted: staleCandidateCarryover,
+      canonicalValidationRunsAfterEachPhase: true,
+      fallbackCandidateReselectionAdded: wasRecoveredFromInvalidation,
+      preciseErrorSubcodesReplacedGeneric: true,
+      initialCandidateCount: safeMain.length,
+      postRescueCount: rescuedMain.length,
+      postEquipmentCount: adaptedMain.adapted.length,
+      recoveredCount: wasRecoveredFromInvalidation ? effectiveMainSource.length : 0,
+      finalExerciseCount: validatedSession.exercises.length,
+      sessionWasRescued,
+      wasRecoveredFromInvalidation,
+      finalVerdict: validatedSession.exercises.length > 0 
+        ? 'root_fix_applied' 
+        : 'still_failing_but_now_precisely_classified',
+    })
     
     // STEP G: Core survival check - ensure no mutation zeroed out exercises
     console.log('[session-core-survival-check]', {

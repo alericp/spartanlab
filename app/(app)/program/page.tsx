@@ -875,6 +875,11 @@ setProgramModules({
           'recovery_distribution_conflict',
           // Internal builder runtime errors (ERROR PROPAGATION FIX)
           'internal_builder_reference_error', 'internal_builder_type_error',
+          // Session assembly root fix subcodes (SESSION ASSEMBLY ROOT FIX)
+          'no_valid_candidate_after_filtering', 'selected_candidate_invalidated_by_constraints',
+          'equipment_filtered_all_candidates', 'hybrid_structure_unresolvable',
+          'final_validation_failed', 'equipment_adaptation_zeroed_session',
+          'validation_zeroed_session', 'mapping_zeroed_session',
         ]
         
         let subCode: BuildAttemptSubCode = 'none'
@@ -887,6 +892,10 @@ setProgramModules({
           // Internal builder runtime errors - check first (ERROR PROPAGATION FIX)
           if (errorMessage.includes('internal_builder_reference_error') || errorMessage.includes('is not defined')) subCode = 'internal_builder_reference_error'
           else if (errorMessage.includes('internal_builder_type_error') || errorMessage.includes('Cannot read properties of')) subCode = 'internal_builder_type_error'
+          // Session assembly root fix subcodes - check for new precise failures
+          else if (errorMessage.includes('equipment_adaptation_zeroed_session')) subCode = 'equipment_adaptation_zeroed_session'
+          else if (errorMessage.includes('validation_zeroed_session')) subCode = 'validation_zeroed_session'
+          else if (errorMessage.includes('mapping_zeroed_session')) subCode = 'mapping_zeroed_session'
           // High-frequency schedule failures (TASK 7)
           else if (errorMessage.includes('unsupported_high_frequency_structure')) subCode = 'unsupported_high_frequency_structure' as BuildAttemptSubCode
           else if (errorMessage.includes('session_save_blocked')) subCode = 'session_save_blocked'
@@ -1665,6 +1674,11 @@ setProgramModules({
           'recovery_distribution_conflict',
           // Internal builder runtime errors (ERROR PROPAGATION FIX)
           'internal_builder_reference_error', 'internal_builder_type_error',
+          // Session assembly root fix subcodes (SESSION ASSEMBLY ROOT FIX)
+          'no_valid_candidate_after_filtering', 'selected_candidate_invalidated_by_constraints',
+          'equipment_filtered_all_candidates', 'hybrid_structure_unresolvable',
+          'final_validation_failed', 'equipment_adaptation_zeroed_session',
+          'validation_zeroed_session', 'mapping_zeroed_session',
         ]
         
         let subCode: BuildAttemptSubCode = 'none'
@@ -1677,6 +1691,10 @@ setProgramModules({
           // Internal builder runtime errors - check first (ERROR PROPAGATION FIX)
           if (errorMessage.includes('internal_builder_reference_error') || errorMessage.includes('is not defined')) subCode = 'internal_builder_reference_error'
           else if (errorMessage.includes('internal_builder_type_error') || errorMessage.includes('Cannot read properties of')) subCode = 'internal_builder_type_error'
+          // Session assembly root fix subcodes - use new precise subcodes (not old mappings)
+          else if (errorMessage.includes('equipment_adaptation_zeroed_session')) subCode = 'equipment_adaptation_zeroed_session'
+          else if (errorMessage.includes('mapping_zeroed_session')) subCode = 'mapping_zeroed_session'
+          else if (errorMessage.includes('validation_zeroed_session')) subCode = 'validation_zeroed_session'
           // High-frequency schedule failures (TASK 7)
           else if (errorMessage.includes('unsupported_high_frequency_structure')) subCode = 'unsupported_high_frequency_structure' as BuildAttemptSubCode
           else if (errorMessage.includes('session_save_blocked')) subCode = 'session_save_blocked'
@@ -1694,10 +1712,6 @@ setProgramModules({
           else if (errorMessage.includes('session_middle_helper_failed')) subCode = 'session_middle_helper_failed'
           else if (errorMessage.includes('session_variant_generation_failed')) subCode = 'session_variant_generation_failed'
           else if (errorMessage.includes('finisher_helper_failed')) subCode = 'finisher_helper_failed'
-          // Existing collapse stage subcodes
-          else if (errorMessage.includes('equipment_adaptation_zeroed_session')) subCode = 'empty_exercise_pool'
-          else if (errorMessage.includes('mapping_zeroed_session')) subCode = 'session_validation_failed'
-          else if (errorMessage.includes('validation_zeroed_session')) subCode = 'session_validation_failed'
           else if (errorMessage.includes('session_has_no_exercises')) subCode = 'session_has_no_exercises'
           else if (errorMessage.includes('empty_exercise_pool')) subCode = 'empty_exercise_pool'
           else if (errorMessage.includes('normalization')) subCode = 'normalization_failed'

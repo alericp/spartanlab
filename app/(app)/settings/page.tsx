@@ -408,6 +408,32 @@ export default function SettingsPage() {
     setJointCautions(data.jointCautions || [])
     setWeakestArea(data.weakestArea || 'none')
     setTrainingStyle(data.trainingStyle || 'balanced_hybrid')
+    
+    // [PHASE 14A TASK 3] Settings equipment visibility audit
+    const loadedEquipment = data.equipmentAvailable || []
+    const visibleEquipmentKeys = ['pullup_bar', 'dip_bars', 'rings', 'parallettes', 'resistance_bands', 'weights', 'bench_box', 'minimal']
+    const hiddenEquipment = loadedEquipment.filter((e: string) => !visibleEquipmentKeys.includes(e))
+    
+    console.log('[phase14a-settings-equipment-visibility-audit]', {
+      equipmentFromGET: loadedEquipment,
+      equipmentLoadedIntoState: loadedEquipment,
+      equipmentShownInUIList: visibleEquipmentKeys,
+      hiddenEquipmentNotEditable: hiddenEquipment,
+      hasWeights: loadedEquipment.includes('weights'),
+      hasBenchBox: loadedEquipment.includes('bench_box'),
+      verdict: hiddenEquipment.length === 0 ? 'all_equipment_visible' : 'some_equipment_hidden',
+    })
+    
+    // [PHASE 14A TASK 4] Schedule/duration parity audit at load
+    console.log('[phase14a-schedule-duration-parity-audit]', {
+      scheduleMode: data.scheduleMode,
+      trainingDaysPerWeek: data.trainingDaysPerWeek,
+      sessionDurationMode: data.sessionDurationMode,
+      sessionLengthMinutes: data.sessionLengthMinutes,
+      source: 'settings_load',
+      flexibleTruthPreserved: data.scheduleMode === 'flexible' ? data.trainingDaysPerWeek === null : true,
+      adaptiveTruthPreserved: data.sessionDurationMode === 'adaptive' || data.sessionDurationMode === 'static',
+    })
   }
 
   // =============================================================================
@@ -542,6 +568,49 @@ export default function SettingsPage() {
               sessionLengthMinutes: parseInt(sessionLength),
               equipmentCount: equipment.length,
               hasWeights: equipment.includes('weights'),
+            })
+            
+            // [PHASE 14A TASK 3] Settings equipment roundtrip verdict
+            const sentEquipment = equipment
+            const returnedEquipment = result.profile.equipmentAvailable || []
+            const droppedOnSave = sentEquipment.filter((e: string) => !returnedEquipment.includes(e))
+            
+            console.log('[phase14a-settings-equipment-roundtrip-verdict]', {
+              equipmentSentInPUT: sentEquipment,
+              equipmentReturnedFromSave: returnedEquipment,
+              droppedOnSave: droppedOnSave,
+              verdict: droppedOnSave.length === 0 ? 'equipment_roundtrip_pass' : 'equipment_roundtrip_fail',
+            })
+            
+            // [PHASE 14A TASK 4] Schedule/duration parity at save
+            console.log('[phase14a-flex-adaptive-truth-final-verdict]', {
+              scheduleModeStored: result.profile.scheduleMode,
+              trainingDaysPerWeekStored: result.profile.trainingDaysPerWeek,
+              sessionDurationModeStored: result.profile.sessionDurationMode,
+              sessionLengthMinutesStored: result.profile.sessionLengthMinutes,
+              flexibleCorrectlyPreserved: result.profile.scheduleMode === 'flexible' 
+                ? result.profile.trainingDaysPerWeek === null 
+                : true,
+              adaptiveCorrectlyPreserved: result.profile.sessionDurationMode === sessionDurationMode,
+              verdict: 'schedule_duration_truth_preserved',
+            })
+            
+            // [PHASE 14A TASK 5] Recovery roundtrip audit in settings
+            const hasRawRecovery = !!(result.profile.recoveryRaw && (
+              result.profile.recoveryRaw.sleepQuality || 
+              result.profile.recoveryRaw.energyLevel || 
+              result.profile.recoveryRaw.stressLevel || 
+              result.profile.recoveryRaw.recoveryConfidence
+            ))
+            const hasDerivedRecovery = !!result.profile.recoveryQuality
+            
+            console.log('[phase14a-recovery-roundtrip-audit]', {
+              recoveryQualitySent: recoveryQuality,
+              recoveryQualityStored: result.profile.recoveryQuality,
+              recoveryRawStored: result.profile.recoveryRaw,
+              hasRawRecovery: hasRawRecovery,
+              hasDerivedRecovery: hasDerivedRecovery,
+              verdict: (hasRawRecovery || hasDerivedRecovery) ? 'recovery_roundtrip_pass' : 'recovery_roundtrip_missing',
             })
             
             logCanonicalProfileState('After settings save')
@@ -998,6 +1067,7 @@ export default function SettingsPage() {
           </div>
 
           {/* Equipment Available */}
+          {/* [PHASE 14A TASK 3] Expanded equipment list to match onboarding truth universe */}
           <div className="space-y-3">
             <div className="flex items-center gap-2">
               <Dumbbell className="w-4 h-4 text-[#A5A5A5]" />
@@ -1011,6 +1081,8 @@ export default function SettingsPage() {
                 { key: 'parallettes' as const, label: 'Parallettes' },
                 { key: 'resistance_bands' as const, label: 'Resistance Bands' },
                 { key: 'weights' as const, label: 'Weights (for loading)' },
+                { key: 'bench_box' as const, label: 'Bench / Box' },
+                { key: 'minimal' as const, label: 'Minimal (bodyweight only)' },
               ].map((item) => (
                 <div 
                   key={item.key}

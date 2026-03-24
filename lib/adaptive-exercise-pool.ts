@@ -3,7 +3,8 @@
 // Each exercise includes transfer ratings, fatigue cost, and equipment requirements
 
 // [loadability-truth] ISSUE C: 'weights' enables automatic weight targets for weighted exercises
-export type EquipmentType = 'pull_bar' | 'dip_bars' | 'rings' | 'parallettes' | 'bands' | 'weights' | 'floor' | 'wall'
+// [PHASE 14A] Added 'bench' to support bench_box equipment from onboarding
+export type EquipmentType = 'pull_bar' | 'dip_bars' | 'rings' | 'parallettes' | 'bands' | 'weights' | 'floor' | 'wall' | 'bench'
 export type MovementPattern = 'horizontal_push' | 'vertical_push' | 'horizontal_pull' | 'vertical_pull' | 'core' | 'compression' | 'transition' | 'skill' | 'mobility'
 export type ExerciseCategory = 'skill' | 'strength' | 'accessory' | 'core' | 'warmup' | 'cooldown' | 'flexibility'
 

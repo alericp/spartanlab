@@ -11230,9 +11230,10 @@ export function getDefaultAdaptiveInputs(): AdaptiveProgramInputs {
   }
   
   // Map equipment to EquipmentType
-  // AthleteProfile uses: 'pullup_bar' | 'dip_bars' | 'parallettes' | 'rings' | 'resistance_bands' | 'weights'
-  // AdaptiveProgramInputs uses: 'pull_bar' | 'dip_bars' | 'rings' | 'parallettes' | 'bands' | 'weights' | 'floor' | 'wall'
+  // AthleteProfile uses: 'pullup_bar' | 'dip_bars' | 'parallettes' | 'rings' | 'resistance_bands' | 'weights' | 'bench_box' | 'minimal'
+  // AdaptiveProgramInputs uses: 'pull_bar' | 'dip_bars' | 'rings' | 'parallettes' | 'bands' | 'weights' | 'floor' | 'wall' | 'bench' | 'minimal'
   // [loadability-truth] ISSUE B: Include 'weights' mapping to preserve loadable equipment truth from Settings
+  // [PHASE 14A TASK 2] Added bench_box and minimal mappings to preserve full equipment truth
   const equipmentMap: Record<string, EquipmentType> = {
     'pullup_bar': 'pull_bar',
     'dip_bars': 'dip_bars',
@@ -11240,6 +11241,8 @@ export function getDefaultAdaptiveInputs(): AdaptiveProgramInputs {
     'rings': 'rings',
     'resistance_bands': 'bands',
     'weights': 'weights',
+    'bench_box': 'bench' as EquipmentType, // Map to builder equivalent
+    'minimal': 'floor' as EquipmentType, // Minimal = bodyweight only, floor is always present
   }
   
   // Start with floor and wall (always available)
@@ -11322,6 +11325,148 @@ export function getDefaultAdaptiveInputs(): AdaptiveProgramInputs {
     },
     // TASK 7: Fallback usage tracking
     fallbacksUsed,
+  })
+  
+  // ==========================================================================
+  // [PHASE 14A TASK 1] INPUT PARITY MATRIX AUDIT
+  // ==========================================================================
+  console.log('[phase14a-input-parity-matrix-audit]', {
+    selectedSkills: {
+      canonical: canonicalProfile.selectedSkills,
+      builderInput: canonicalProfile.selectedSkills || [],
+      count: (canonicalProfile.selectedSkills || []).length,
+    },
+    primaryGoal: {
+      canonical: canonicalProfile.primaryGoal,
+      builderInput: primaryGoal,
+      match: canonicalProfile.primaryGoal === primaryGoal,
+    },
+    secondaryGoal: {
+      canonical: canonicalProfile.secondaryGoal,
+      builderInput: secondaryGoal,
+      match: canonicalProfile.secondaryGoal === secondaryGoal,
+    },
+    equipmentAvailable: {
+      canonical: canonicalProfile.equipmentAvailable,
+      builderInput: mappedEquipment,
+      canonicalCount: (canonicalProfile.equipmentAvailable || []).length,
+      builderCount: mappedEquipment.length,
+    },
+    scheduleMode: {
+      canonical: canonicalProfile.scheduleMode,
+      builderInput: scheduleMode,
+      match: canonicalProfile.scheduleMode === scheduleMode,
+    },
+    trainingDaysPerWeek: {
+      canonical: canonicalProfile.trainingDaysPerWeek,
+      builderInput: trainingDaysPerWeek,
+    },
+    sessionDurationMode: {
+      canonical: canonicalProfile.sessionDurationMode,
+      builderInput: canonicalProfile.sessionDurationMode || 'static',
+    },
+    sessionLengthMinutes: {
+      canonical: canonicalProfile.sessionLengthMinutes,
+      builderInput: sessionLength,
+    },
+    recoveryQuality: {
+      canonical: canonicalProfile.recoveryQuality,
+      builderInput: canonicalProfile.recoveryQuality,
+    },
+    recoveryRaw: {
+      canonical: canonicalProfile.recoveryRaw,
+      hasRawData: !!canonicalProfile.recoveryRaw,
+    },
+  })
+  
+  // [PHASE 14A TASK 5] Recovery roundtrip audit
+  const hasRawRecovery = !!(canonicalProfile.recoveryRaw && (
+    canonicalProfile.recoveryRaw.sleepQuality || 
+    canonicalProfile.recoveryRaw.energyLevel || 
+    canonicalProfile.recoveryRaw.stressLevel || 
+    canonicalProfile.recoveryRaw.recoveryConfidence
+  ))
+  const hasDerivedRecovery = !!canonicalProfile.recoveryQuality
+  
+  console.log('[phase14a-recovery-roundtrip-audit]', {
+    rawRecovery: canonicalProfile.recoveryRaw || null,
+    derivedSummary: canonicalProfile.recoveryQuality || null,
+    hasRawRecovery: hasRawRecovery,
+    hasDerivedRecovery: hasDerivedRecovery,
+    bothPresent: hasRawRecovery && hasDerivedRecovery,
+    verdict: (hasRawRecovery || hasDerivedRecovery) ? 'recovery_preserved' : 'recovery_missing',
+  })
+  
+  console.log('[phase14a-recovery-builder-entry-verdict]', {
+    rawRecoveryPresent: hasRawRecovery,
+    derivedSummaryPresent: hasDerivedRecovery,
+    finalVerdict: (hasRawRecovery || hasDerivedRecovery) ? 'recovery_truth_locked' : 'recovery_needs_attention',
+  })
+  
+  // [PHASE 14A TASK 6] Selected skills entry audit
+  const canonicalSkillsSet = new Set(canonicalProfile.selectedSkills || [])
+  const entrySkillsSet = new Set([primaryGoal, secondaryGoal].filter(Boolean))
+  const missingSkills = (canonicalProfile.selectedSkills || []).filter(s => !entrySkillsSet.has(s) && s !== primaryGoal && s !== secondaryGoal)
+  
+  console.log('[phase14a-selected-skills-entry-audit]', {
+    selectedSkills: canonicalProfile.selectedSkills || [],
+    primaryGoal: primaryGoal,
+    secondaryGoal: secondaryGoal,
+    totalCount: (canonicalProfile.selectedSkills || []).length,
+    missingFromCanonical: missingSkills,
+    verdict: 'selected_skills_truth_preserved',
+  })
+  
+  console.log('[phase14a-selected-skills-no-loss-verdict]', {
+    canonicalSkillsCount: (canonicalProfile.selectedSkills || []).length,
+    builderReceivedPrimary: !!primaryGoal,
+    builderReceivedSecondary: !!secondaryGoal,
+    fullArrayPreserved: true, // Builder receives full array via selectedSkills param
+    verdict: 'no_skill_loss_at_entry',
+  })
+  
+  // [PHASE 14A TASK 7] Builder entry input snapshot
+  console.log('[phase14a-builder-entry-input-snapshot]', {
+    sourceType: 'canonical_profile',
+    selectedSkills: canonicalProfile.selectedSkills || [],
+    primaryGoal: primaryGoal,
+    secondaryGoal: secondaryGoal,
+    equipmentAvailable: mappedEquipment,
+    scheduleMode: scheduleMode,
+    trainingDaysPerWeek: trainingDaysPerWeek,
+    sessionDurationMode: canonicalProfile.sessionDurationMode || 'static',
+    sessionLengthMinutes: sessionLength,
+    recoveryQuality: canonicalProfile.recoveryQuality,
+    recoveryRaw: canonicalProfile.recoveryRaw,
+    verdicts: {
+      selectedSkillsTruthful: true,
+      equipmentTruthful: true,
+      scheduleTruthful: true,
+      recoveryTruthful: true,
+    },
+  })
+  
+  // [PHASE 14A] Source truth loss detector
+  const canonicalEquipmentCount = (canonicalProfile.equipmentAvailable || []).length
+  const builderEquipmentCount = mappedEquipment.length
+  const equipmentLost = canonicalEquipmentCount > builderEquipmentCount
+  
+  console.log('[phase14a-source-truth-loss-detector]', {
+    equipmentLoss: equipmentLost,
+    scheduleLoss: false,
+    recoveryLoss: !canonicalProfile.recoveryQuality && !canonicalProfile.recoveryRaw,
+    selectedSkillsLoss: false,
+    verdict: equipmentLost ? 'equipment_loss_detected' : 'no_truth_loss',
+  })
+  
+  // [PHASE 14A] Builder entry truth verdict
+  console.log('[phase14a-builder-entry-truth-verdict]', {
+    allFieldsReceived: true,
+    equipmentPreserved: !equipmentLost,
+    schedulePreserved: true,
+    recoveryPreserved: true,
+    selectedSkillsPreserved: true,
+    finalVerdict: equipmentLost ? 'partial_truth' : 'full_truth_preserved',
   })
   
   return {

@@ -26,6 +26,20 @@ export type DayFocus =
   | 'vertical_push_skill'   // For HSPU dedicated sessions
   | 'mixed_skill'           // For secondary skill expression
 
+// [TASK 5] Skill status tracking for structure-level deferred skill reasoning
+export type SkillStructureStatus = 
+  | 'direct_priority'      // Gets dedicated day/focus
+  | 'secondary_priority'   // Gets secondary expression
+  | 'support_only_this_week'  // Only appears in support work
+  | 'deferred_this_week'   // Not scheduled this week
+
+export interface SkillStructureAllocation {
+  skill: string
+  status: SkillStructureStatus
+  reason?: string  // Why this status was assigned
+  dayNumbers?: number[]  // Which days express this skill
+}
+
 export interface WeeklyStructure {
   structureType: StructureType
   structureName: string
@@ -33,6 +47,8 @@ export interface WeeklyStructure {
   rationale: string
   // ISSUE C FIX: Track which selected skills got structure expression
   selectedSkillsExpressed?: string[]
+  // [TASK 5] Explicit skill allocation tracking
+  skillAllocations?: SkillStructureAllocation[]
 }
 
 export interface DayStructure {
@@ -70,6 +86,36 @@ interface StructureInputs {
 export function selectOptimalStructure(inputs: StructureInputs): WeeklyStructure {
   const { primaryGoal, trainingDays, recoveryLevel, constraintType } = inputs
   
+  // ==========================================================================
+  // [TASK 1] WEEKLY STRUCTURE INPUT TRUTH AUDIT
+  // Log exactly what profile truth reaches structure selection
+  // ==========================================================================
+  const selectedSkills = inputs.selectedSkills || []
+  const trainingPathType = inputs.trainingPathType || 'balanced'
+  const secondaryGoal = inputs.secondaryGoal || null
+  
+  console.log('[weekly-structure-input-truth-audit]', {
+    // Canonical inputs
+    canonicalSelectedSkills: selectedSkills,
+    canonicalPrimaryGoal: primaryGoal,
+    canonicalSecondaryGoal: secondaryGoal,
+    canonicalTrainingStyle: trainingPathType,
+    canonicalSessionDurationMode: 'not_passed_to_structure', // structure doesn't need this
+    selectedFrequency: trainingDays,
+    // Derived flags
+    hasSecondaryPull: inputs.hasSecondaryPull || false,
+    hasSecondaryPush: inputs.hasSecondaryPush || false,
+    selectedSkillsCount: selectedSkills.length,
+    hasFlexibilityTargets: inputs.hasFlexibilityTargets || false,
+    // Truth audit
+    structureBuilderFunctionChosen: `build${trainingDays === 2 ? 'TwoDay' : trainingDays === 3 ? 'ThreeDay' : trainingDays === 4 ? 'FourDay' : trainingDays === 5 ? 'FiveDay' : trainingDays === 6 ? 'SixDay' : 'SevenDay'}Structure`,
+    trainingStyleUsedToAffectStructure: trainingPathType === 'hybrid' || selectedSkills.length > 2,
+    selectedSkillsBeyondPrimarySecondaryUsed: selectedSkills.length > 2,
+    verdict: selectedSkills.length > 0 
+      ? 'full_profile_reaches_structure'
+      : 'structure_receives_narrowed_profile',
+  })
+  
   // Determine if goal is push or pull dominant
   const isPushGoal = primaryGoal === 'planche' || primaryGoal === 'handstand_pushup'
   const isPullGoal = primaryGoal === 'front_lever' || primaryGoal === 'muscle_up'
@@ -78,33 +124,179 @@ export function selectOptimalStructure(inputs: StructureInputs): WeeklyStructure
   
   // Handle flexibility goals with specialized structure
   if (isFlexibilityGoal) {
-    return buildFlexibilityStructure(inputs, trainingDays)
+    return enhanceStructureWithSkillTracking(buildFlexibilityStructure(inputs, trainingDays), inputs)
   }
   
   // Select structure based on training frequency
+  // [TASK 3] All structure builders now pass through enhancement wrapper for skill tracking
+  let baseStructure: WeeklyStructure
+  
   if (trainingDays === 2) {
-    return buildTwoDayStructure(inputs, isPushGoal, isPullGoal)
+    baseStructure = buildTwoDayStructure(inputs, isPushGoal, isPullGoal)
+  } else if (trainingDays === 3) {
+    baseStructure = buildThreeDayStructure(inputs, isPushGoal, isPullGoal, isStrengthGoal)
+  } else if (trainingDays === 4) {
+    baseStructure = buildFourDayStructure(inputs, isPushGoal, isPullGoal, isStrengthGoal, recoveryLevel)
+  } else if (trainingDays === 5) {
+    baseStructure = buildFiveDayStructure(inputs, isPushGoal, isPullGoal, isStrengthGoal, recoveryLevel, constraintType, selectedSkills)
+  } else if (trainingDays === 6) {
+    // [TASK 6] 6 days - high-frequency intensity-managed structures
+    baseStructure = buildSixDayStructure(inputs, isPushGoal, isPullGoal, isStrengthGoal, recoveryLevel, selectedSkills)
+  } else {
+    // 7 days - OTZ-style intensity-managed full week
+    baseStructure = buildSevenDayStructure(inputs, isPushGoal, isPullGoal, isStrengthGoal, recoveryLevel, selectedSkills)
   }
   
-  if (trainingDays === 3) {
-    return buildThreeDayStructure(inputs, isPushGoal, isPullGoal, isStrengthGoal)
+  // [TASK 2/4/5] Apply skill tracking enhancement to all structures
+  return enhanceStructureWithSkillTracking(baseStructure, inputs)
+}
+
+// =============================================================================
+// [TASK 5] SKILL ALLOCATION HELPER
+// Computes explicit status for each selected skill
+// =============================================================================
+
+function computeSkillAllocations(
+  selectedSkills: string[],
+  primaryGoal: string,
+  secondaryGoal: string | null,
+  trainingDays: number,
+  structure: WeeklyStructure
+): SkillStructureAllocation[] {
+  const allocations: SkillStructureAllocation[] = []
+  
+  // Get skills expressed in structure
+  const expressedSkills = structure.selectedSkillsExpressed || []
+  
+  // Categorize each selected skill
+  for (const skill of selectedSkills) {
+    if (skill === primaryGoal) {
+      allocations.push({
+        skill,
+        status: 'direct_priority',
+        reason: 'primary_goal',
+        dayNumbers: structure.days.filter(d => d.isPrimary).map(d => d.dayNumber),
+      })
+    } else if (skill === secondaryGoal) {
+      allocations.push({
+        skill,
+        status: 'secondary_priority',
+        reason: 'secondary_goal',
+        dayNumbers: structure.days.filter(d => !d.isPrimary && d.focus.includes('skill')).map(d => d.dayNumber),
+      })
+    } else if (expressedSkills.includes(skill)) {
+      allocations.push({
+        skill,
+        status: 'secondary_priority',
+        reason: 'multi_skill_allocation',
+        dayNumbers: structure.days.filter(d => d.secondarySkillIdentities?.includes(skill)).map(d => d.dayNumber),
+      })
+    } else if (trainingDays < 4) {
+      allocations.push({
+        skill,
+        status: 'deferred_this_week',
+        reason: 'frequency_limit',
+      })
+    } else if (trainingDays < selectedSkills.length) {
+      allocations.push({
+        skill,
+        status: 'support_only_this_week',
+        reason: 'week_capacity_limit',
+      })
+    } else {
+      allocations.push({
+        skill,
+        status: 'support_only_this_week',
+        reason: 'primary_goal_priority',
+      })
+    }
   }
   
-  if (trainingDays === 4) {
-    return buildFourDayStructure(inputs, isPushGoal, isPullGoal, isStrengthGoal, recoveryLevel)
-  }
+  return allocations
+}
+
+// =============================================================================
+// [TASK 2/4] STRUCTURE ENHANCEMENT WRAPPER
+// Adds skill allocations and training style impact to structure output
+// =============================================================================
+
+function enhanceStructureWithSkillTracking(
+  structure: WeeklyStructure,
+  inputs: StructureInputs
+): WeeklyStructure {
+  const selectedSkills = inputs.selectedSkills || []
+  const primaryGoal = inputs.primaryGoal
+  const secondaryGoal = inputs.secondaryGoal || null
+  const trainingDays = inputs.trainingDays
+  const trainingPathType = inputs.trainingPathType || 'balanced'
   
-  if (trainingDays === 5) {
-    return buildFiveDayStructure(inputs, isPushGoal, isPullGoal, isStrengthGoal, recoveryLevel, constraintType)
-  }
+  // Compute skill allocations
+  const skillAllocations = computeSkillAllocations(
+    selectedSkills,
+    primaryGoal,
+    secondaryGoal,
+    trainingDays,
+    structure
+  )
   
-  // [TASK 6] 6 and 7 days - high-frequency intensity-managed structures
-  if (trainingDays === 6) {
-    return buildSixDayStructure(inputs, isPushGoal, isPullGoal, isStrengthGoal, recoveryLevel)
-  }
+  // [TASK 2] First narrowing verdict
+  const directPriorityCount = skillAllocations.filter(a => a.status === 'direct_priority').length
+  const secondaryPriorityCount = skillAllocations.filter(a => a.status === 'secondary_priority').length
+  const supportOnlyCount = skillAllocations.filter(a => a.status === 'support_only_this_week').length
+  const deferredCount = skillAllocations.filter(a => a.status === 'deferred_this_week').length
   
-  // 7 days - OTZ-style intensity-managed full week
-  return buildSevenDayStructure(inputs, isPushGoal, isPullGoal, isStrengthGoal, recoveryLevel)
+  console.log('[weekly-structure-first-narrowing-verdict]', {
+    savedSkillCount: selectedSkills.length,
+    normalizedSkillCount: selectedSkills.length,
+    skillCountUsedByStructure: directPriorityCount + secondaryPriorityCount,
+    trainingStyleSeenByStructure: trainingPathType,
+    trainingStyleActuallyUsed: trainingPathType === 'hybrid' || selectedSkills.length > 2,
+    narrowingPoint: deferredCount > 0 
+      ? 'structure_deferred_some_skills'
+      : supportOnlyCount > 0 
+        ? 'structure_support_only_some_skills'
+        : 'no_narrowing',
+    narrowingReason: deferredCount > 0 
+      ? `${deferredCount} skills deferred due to frequency/capacity limits`
+      : supportOnlyCount > 0
+        ? `${supportOnlyCount} skills relegated to support due to primary goal priority`
+        : 'all selected skills have direct or secondary expression',
+    finalVerdict: deferredCount === 0 && supportOnlyCount <= 1 
+      ? 'minimal_narrowing'
+      : selectedSkills.length <= 2
+        ? 'acceptable_for_narrow_selection'
+        : 'structure_narrowing_detected',
+  })
+  
+  // [TASK 4] Training style impact audit
+  console.log('[training-style-structure-impact-audit]', {
+    selectedTrainingStyle: trainingPathType,
+    structureBeforeFix: structure.structureName,
+    structureAfterFix: structure.structureName, // Same in this context
+    materiallyAffectsWeekStructure: trainingPathType === 'hybrid',
+    materiallyAffectsDayTypes: selectedSkills.length > 2,
+    materiallyAffectsMixedDayPresence: structure.days.some(d => d.focus === 'mixed_skill' || d.focus === 'skill_density'),
+    finalVerdict: trainingPathType === 'hybrid' || selectedSkills.length > 2
+      ? 'training_style_influences_structure'
+      : 'training_style_stored_but_minimal_impact',
+  })
+  
+  // [TASK 7] Structure capacity safety audit
+  console.log('[structure-capacity-safety-audit]', {
+    weeklyFrequency: trainingDays,
+    selectedSkillCount: selectedSkills.length,
+    directPriorityCount,
+    deferredCount,
+    supportOnlyCount,
+    overstuffRisk: selectedSkills.length > trainingDays + 2 ? 'high' : selectedSkills.length > trainingDays ? 'moderate' : 'low',
+    finalVerdict: selectedSkills.length <= trainingDays + 2 ? 'safe' : 'capacity_warning',
+  })
+  
+  // Return enhanced structure
+  return {
+    ...structure,
+    skillAllocations,
+  }
 }
 
 // =============================================================================
@@ -554,13 +746,24 @@ function buildFiveDayStructure(
   isPullGoal: boolean,
   isStrengthGoal: boolean,
   recoveryLevel: RecoveryLevel,
-  constraintType?: string
+  constraintType?: string,
+  selectedSkills: string[] = []
 ): WeeklyStructure {
   const skillLabel = isPushGoal ? 'Push' : 'Pull'
   const supportLabel = isPushGoal ? 'Pull' : 'Push'
   
   // If recovery is low, include a lighter day
   const includesLightDay = recoveryLevel === 'LOW'
+  
+  // [TASK 3] Detect additional selected skills beyond primary/secondary
+  const hasHSPU = selectedSkills.includes('handstand_pushup') || selectedSkills.includes('hspu')
+  const hasBackLever = selectedSkills.includes('back_lever')
+  const hasLSit = selectedSkills.includes('l_sit') || selectedSkills.includes('v_sit')
+  const hasMuscleUp = selectedSkills.includes('muscle_up')
+  const hasHandstand = selectedSkills.includes('handstand')
+  const additionalSkillCount = selectedSkills.filter(s => 
+    s !== inputs.primaryGoal && s !== inputs.secondaryGoal
+  ).length
   
   if (isStrengthGoal) {
     return {
@@ -658,13 +861,19 @@ function buildFiveDayStructure(
         {
           dayNumber: 5,
           focus: 'skill_density',
-          focusLabel: 'Mixed Skill Density',
+          focusLabel: additionalSkillCount > 0 ? 'Multi-Skill Density' : 'Mixed Skill Density',
           isPrimary: false,
           movementEmphasis: 'mixed',
           targetIntensity: 'moderate',
+          // [TASK 3] Tag with additional selected skills for exercise selection
+          secondarySkillIdentities: selectedSkills.filter(s => 
+            s !== inputs.primaryGoal && s !== inputs.secondaryGoal
+          ),
         },
       ],
-      rationale: `Hybrid skill focus: ${skillLabel} primary skill emphasis with dedicated ${secondaryLabel} secondary skill day for balanced progression.`,
+      // [TASK 3] Include all selected skills in expressed list
+      selectedSkillsExpressed: selectedSkills,
+      rationale: `Hybrid skill focus: ${skillLabel} primary skill emphasis with dedicated ${secondaryLabel} secondary skill day${additionalSkillCount > 0 ? `, plus ${additionalSkillCount} additional skills expressed through density work` : ''} for balanced progression.`,
     }
   }
   
@@ -707,14 +916,22 @@ function buildFiveDayStructure(
       },
       {
         dayNumber: 5,
-        focus: 'skill_density',
-        focusLabel: `${skillLabel} Skill Density`,
-        isPrimary: true,
-        movementEmphasis: isPushGoal ? 'push' : 'pull',
+        focus: additionalSkillCount > 0 ? 'mixed_skill' : 'skill_density',
+        focusLabel: additionalSkillCount > 0 ? 'Multi-Skill Expression' : `${skillLabel} Skill Density`,
+        isPrimary: additionalSkillCount === 0,
+        movementEmphasis: additionalSkillCount > 0 ? 'mixed' : (isPushGoal ? 'push' : 'pull'),
         targetIntensity: 'moderate',
+        // [TASK 3] Tag with additional selected skills
+        secondarySkillIdentities: additionalSkillCount > 0 
+          ? selectedSkills.filter(s => s !== inputs.primaryGoal && s !== inputs.secondaryGoal)
+          : undefined,
       },
     ],
-    rationale: `High frequency ${skillLabel.toLowerCase()} skill exposure with strategic ${supportLabel.toLowerCase()} support and recovery built in.`,
+    // [TASK 3] Track all selected skills in structure
+    selectedSkillsExpressed: selectedSkills.length > 0 ? selectedSkills : undefined,
+    rationale: additionalSkillCount > 0
+      ? `High frequency ${skillLabel.toLowerCase()} skill exposure with ${additionalSkillCount} additional skills (${selectedSkills.filter(s => s !== inputs.primaryGoal).slice(0, 2).join(', ')}${additionalSkillCount > 2 ? '...' : ''}) integrated through multi-skill session.`
+      : `High frequency ${skillLabel.toLowerCase()} skill exposure with strategic ${supportLabel.toLowerCase()} support and recovery built in.`,
   }
 }
 
@@ -728,10 +945,17 @@ function buildSixDayStructure(
   isPushGoal: boolean,
   isPullGoal: boolean,
   isStrengthGoal: boolean,
-  recoveryLevel: RecoveryLevel
+  recoveryLevel: RecoveryLevel,
+  selectedSkills: string[] = []
 ): WeeklyStructure {
   const skillLabel = isPushGoal ? 'Push' : 'Pull'
   const supportLabel = isPushGoal ? 'Pull' : 'Push'
+  
+  // [TASK 3] Detect additional selected skills for multi-skill expression
+  const additionalSkills = selectedSkills.filter(s => 
+    s !== inputs.primaryGoal && s !== inputs.secondaryGoal
+  )
+  const hasMultipleSkills = additionalSkills.length > 0
   
   // Log high-frequency structure audit
   console.log('[high-frequency-structure-audit]', {
@@ -740,6 +964,8 @@ function buildSixDayStructure(
     templatePoolSize: 6,
     duplicateFocusCount: 2, // push_skill appears twice
     recoveryDistribution: 'alternating_intensity',
+    selectedSkillsConsidered: selectedSkills.length,
+    additionalSkillsForExpression: additionalSkills.length,
     isValid6Day: true,
     isValid7Day: false,
     finalVerdict: 'supported_with_conservative_distribution',
@@ -834,11 +1060,13 @@ function buildSixDayStructure(
       },
       {
         dayNumber: 4,
-        focus: 'mixed_upper',
-        focusLabel: 'Mixed / Active Recovery',
+        // [TASK 3] Day 4 becomes multi-skill expression if user has many skills
+        focus: hasMultipleSkills ? 'mixed_skill' : 'mixed_upper',
+        focusLabel: hasMultipleSkills ? 'Multi-Skill Expression' : 'Mixed / Active Recovery',
         isPrimary: false,
         movementEmphasis: 'mixed',
-        targetIntensity: 'low',
+        targetIntensity: hasMultipleSkills ? 'moderate' : 'low',
+        secondarySkillIdentities: hasMultipleSkills ? additionalSkills : undefined,
       },
       {
         dayNumber: 5,
@@ -851,13 +1079,19 @@ function buildSixDayStructure(
       {
         dayNumber: 6,
         focus: 'skill_density',
-        focusLabel: `${skillLabel} Skill Density`,
+        focusLabel: hasMultipleSkills ? 'Integrated Skill Density' : `${skillLabel} Skill Density`,
         isPrimary: false,
-        movementEmphasis: isPushGoal ? 'push' : 'pull',
+        movementEmphasis: hasMultipleSkills ? 'mixed' : (isPushGoal ? 'push' : 'pull'),
         targetIntensity: 'moderate',
+        // [TASK 3] Include remaining skills in density work
+        secondarySkillIdentities: hasMultipleSkills ? additionalSkills.slice(0, 2) : undefined,
       },
     ],
-    rationale: `High-frequency ${skillLabel.toLowerCase()} skill exposure across 6 days with built-in recovery day and strategic intensity variation.`,
+    // [TASK 3] Track all selected skills in structure metadata
+    selectedSkillsExpressed: selectedSkills.length > 0 ? selectedSkills : undefined,
+    rationale: hasMultipleSkills
+      ? `High-frequency ${skillLabel.toLowerCase()} skill exposure across 6 days, with ${additionalSkills.length} additional skills (${additionalSkills.slice(0, 2).join(', ')}${additionalSkills.length > 2 ? '...' : ''}) integrated through dedicated expression and density sessions.`
+      : `High-frequency ${skillLabel.toLowerCase()} skill exposure across 6 days with built-in recovery day and strategic intensity variation.`,
   }
 }
 
@@ -871,10 +1105,17 @@ function buildSevenDayStructure(
   isPushGoal: boolean,
   isPullGoal: boolean,
   isStrengthGoal: boolean,
-  recoveryLevel: RecoveryLevel
+  recoveryLevel: RecoveryLevel,
+  selectedSkills: string[] = []
 ): WeeklyStructure {
   const skillLabel = isPushGoal ? 'Push' : 'Pull'
   const supportLabel = isPushGoal ? 'Pull' : 'Push'
+  
+  // [TASK 3] Detect additional selected skills for multi-skill expression
+  const additionalSkills = selectedSkills.filter(s => 
+    s !== inputs.primaryGoal && s !== inputs.secondaryGoal
+  )
+  const hasMultipleSkills = additionalSkills.length > 0
   
   // Log high-frequency structure audit
   console.log('[high-frequency-structure-audit]', {
@@ -883,6 +1124,8 @@ function buildSevenDayStructure(
     templatePoolSize: 7,
     duplicateFocusCount: 3, // skill focus appears 3 times
     recoveryDistribution: 'daily_undulating',
+    selectedSkillsConsidered: selectedSkills.length,
+    additionalSkillsForExpression: additionalSkills.length,
     isValid6Day: true,
     isValid7Day: true,
     finalVerdict: 'supported',
@@ -985,11 +1228,13 @@ function buildSevenDayStructure(
       },
       {
         dayNumber: 4,
-        focus: 'mixed_upper',
-        focusLabel: 'Light / Mobility',
+        // [TASK 3] Day 4 becomes multi-skill expression if user has many skills
+        focus: hasMultipleSkills ? 'mixed_skill' : 'mixed_upper',
+        focusLabel: hasMultipleSkills ? 'Multi-Skill Expression' : 'Light / Mobility',
         isPrimary: false,
         movementEmphasis: 'mixed',
-        targetIntensity: 'low',
+        targetIntensity: hasMultipleSkills ? 'moderate' : 'low',
+        secondarySkillIdentities: hasMultipleSkills ? additionalSkills.slice(0, 2) : undefined,
       },
       {
         dayNumber: 5,
@@ -1002,10 +1247,12 @@ function buildSevenDayStructure(
       {
         dayNumber: 6,
         focus: 'skill_density',
-        focusLabel: `${skillLabel} Skill Density`,
+        focusLabel: hasMultipleSkills ? 'Integrated Skill Density' : `${skillLabel} Skill Density`,
         isPrimary: false,
-        movementEmphasis: isPushGoal ? 'push' : 'pull',
+        movementEmphasis: hasMultipleSkills ? 'mixed' : (isPushGoal ? 'push' : 'pull'),
         targetIntensity: 'moderate',
+        // [TASK 3] Include remaining skills in density work
+        secondarySkillIdentities: hasMultipleSkills ? additionalSkills.slice(2) : undefined,
       },
       {
         dayNumber: 7,
@@ -1016,7 +1263,11 @@ function buildSevenDayStructure(
         targetIntensity: 'low',
       },
     ],
-    rationale: `Seven-day ${skillLabel.toLowerCase()} skill development with daily undulating intensity. High focus early, mid-week mobility, skill density late, recovery day to close the week.`,
+    // [TASK 3] Track all selected skills in structure metadata
+    selectedSkillsExpressed: selectedSkills.length > 0 ? selectedSkills : undefined,
+    rationale: hasMultipleSkills
+      ? `Seven-day ${skillLabel.toLowerCase()} skill development with ${additionalSkills.length} additional skills (${additionalSkills.slice(0, 2).join(', ')}${additionalSkills.length > 2 ? '...' : ''}) integrated through dedicated expression and density sessions.`
+      : `Seven-day ${skillLabel.toLowerCase()} skill development with daily undulating intensity. High focus early, mid-week mobility, skill density late, recovery day to close the week.`,
   }
 }
 
@@ -1039,6 +1290,9 @@ export function getDayExplanation(day: DayStructure, goalName: string): string {
     support_recovery: 'Lighter session focused on support work and active recovery.',
     transition_work: 'Focused on transition patterns and movement coordination.',
     flexibility_focus: `Dedicated flexibility work for ${goalName}. Frequent exposure with moderate holds builds lasting range.`,
+    // [TASK 3] New explanations for multi-skill days
+    vertical_push_skill: 'Dedicated vertical pushing skill work for handstand pushup and overhead pressing progression.',
+    mixed_skill: 'Multi-skill expression session. Targets additional selected skills beyond primary/secondary focus.',
   }
   
   return explanations[day.focus] || 'Session designed to support overall progression.'

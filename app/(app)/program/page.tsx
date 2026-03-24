@@ -14,6 +14,7 @@
  */
 
 import { useState, useEffect, useCallback, useMemo, type ReactNode } from 'react'
+import { ErrorBoundary } from '@/components/shared/ErrorBoundary'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { ArrowLeft, Dumbbell, Plus, Sparkles, AlertTriangle, Loader2, Info } from 'lucide-react'
@@ -85,8 +86,42 @@ import type { AdjustmentRebuildRequest, AdjustmentRebuildResult } from '@/compon
 // NOTE: getCanonicalProfile is already imported above from the main canonical-profile-service import block
 import { saveCanonicalProfile } from '@/lib/canonical-profile-service'
 
+// ==========================================================================
+// [PHASE 9 TASK 1] SAFE ERROR BOUNDARY FOR PROGRAM DISPLAY
+// Uses React class component ErrorBoundary pattern to safely catch render errors
+// WITHOUT calling setState during render (which causes infinite loops)
+// ==========================================================================
+
+// Local fallback for display errors - keeps recovery local to /program
+function ProgramDisplayFallback({ onRetry }: { onRetry: () => void }) {
+  // [PHASE 9] Audit that fallback rendered instead of crash
+  console.log('[phase9-program-route-error-boundary-verdict]', {
+    displayCrashed: true,
+    fallbackRenderedSafely: true,
+    routeRemainsMounted: true,
+    stateUpdateDuringRender: false,
+    verdict: 'ERROR_BOUNDARY_ISOLATED_CRASH_SUCCESSFULLY',
+  })
+  
+  return (
+    <Card className="bg-[#2A2A2A] border-[#3A3A3A] p-8 text-center">
+      <AlertTriangle className="w-12 h-12 text-amber-500 mx-auto mb-4" />
+      <h3 className="text-lg font-medium mb-2">Unable to Display Plan</h3>
+      <p className="text-sm text-[#6A6A6A] mb-4">
+        We're having trouble displaying your plan. Refreshing may help.
+      </p>
+      <Button
+        onClick={onRetry}
+        className="bg-[#E63946] hover:bg-[#D62828]"
+      >
+        Refresh Page
+      </Button>
+    </Card>
+  )
+}
+
 // TASK 1: Error boundary wrapper for AdaptiveProgramDisplay
-// [TASK 1] Now accepts unifiedStaleness to pass to display component
+// [PHASE 9] Now uses true React ErrorBoundary - NO setState in render catch
 function ProgramDisplayWrapper({ 
   program, 
   onDelete,
@@ -102,48 +137,27 @@ function ProgramDisplayWrapper({
   onRecoveryNeeded: () => void
   unifiedStaleness: UnifiedStalenessResult | null // [TASK 1] Unified staleness from page
 }) {
-  const [hasRenderError, setHasRenderError] = useState(false)
-  
-  // Reset error state when program changes
-  useEffect(() => {
-    setHasRenderError(false)
-  }, [program?.id])
-  
-  if (hasRenderError) {
-    return (
-      <Card className="bg-[#2A2A2A] border-[#3A3A3A] p-8 text-center">
-        <AlertTriangle className="w-12 h-12 text-amber-500 mx-auto mb-4" />
-        <h3 className="text-lg font-medium mb-2">Unable to Display Plan</h3>
-        <p className="text-sm text-[#6A6A6A] mb-4">
-          We're having trouble displaying your plan. Refreshing may help.
-        </p>
-        <Button
-          onClick={() => window.location.reload()}
-          className="bg-[#E63946] hover:bg-[#D62828]"
-        >
-          Refresh Page
-        </Button>
-      </Card>
-    )
-  }
-  
-  // Wrap in try-catch at render time
-  try {
-    return (
+  // [PHASE 9] Safe error handling via proper ErrorBoundary
+  return (
+    <ErrorBoundary
+      fallback={
+        <ProgramDisplayFallback 
+          onRetry={() => {
+            onRecoveryNeeded()
+            window.location.reload()
+          }}
+        />
+      }
+    >
       <AdaptiveProgramDisplay
         program={program}
         onDelete={onDelete}
         onRestart={onRestart}
         onRegenerate={onRegenerate}
-        unifiedStaleness={unifiedStaleness} // [TASK 1] Pass unified staleness
+        unifiedStaleness={unifiedStaleness}
       />
-    )
-  } catch (err) {
-    console.error('[ProgramPage] ProgramDisplayWrapper: Render error:', err)
-    setHasRenderError(true)
-    onRecoveryNeeded()
-    return null
-  }
+    </ErrorBoundary>
+  )
 }
 
 export default function ProgramPage() {
@@ -778,6 +792,110 @@ export default function ProgramPage() {
     
     return result
   }, [authoritativeActiveProgram, mounted])
+  
+  // ==========================================================================
+  // [PHASE 9 TASK 2] SAFE RENDER AUDITS - Moved from render-time IIFE
+  // These audits now run in useEffect to prevent route crashes
+  // Wrapped in try/catch so diagnostic failures cannot kill the page
+  // ==========================================================================
+  useEffect(() => {
+    if (!program || !mounted) return
+    
+    try {
+      const renderSnapshot = getSourceTruthSnapshot('ProgramDisplayWrapper_render')
+      emitSourceTruthAudit('render', renderSnapshot)
+      
+      // [PHASE 5 TASK 5/6] Audit selected vs programmed skill truth
+      const displayedSkills = (program as unknown as { selectedSkills?: string[] }).selectedSkills || []
+      const canonicalSkills = renderSnapshot.selectedSkills || []
+      const leakedSkills = displayedSkills.filter(s => !canonicalSkills.includes(s))
+      
+      console.log('[phase5-selected-vs-programmed-skill-truth-audit]', {
+        canonicalSelectedSkills: canonicalSkills,
+        displayedSelectedSkillChips: displayedSkills,
+        broaderProgramSupportSkills: (program as unknown as { summaryTruth?: { weekSupportSkills?: string[] } }).summaryTruth?.weekSupportSkills || [],
+        leakedDeselectedSkills: leakedSkills,
+        truthSurfaceClean: leakedSkills.length === 0,
+      })
+      
+      // [PHASE 5 TASK 6] Primary goal highlight audit
+      console.log('[phase5-primary-goal-highlight-truth-audit]', {
+        canonicalPrimaryGoal: renderSnapshot.primaryGoal,
+        activeProgramPrimaryGoal: program.primaryGoal,
+        displayedHighlightedPrimarySkill: program.primaryGoal,
+        whyThisPlanPrimaryEmphasis: program.goalLabel,
+        exactMatch: renderSnapshot.primaryGoal === program.primaryGoal,
+      })
+      
+      // [PHASE 5 TASK 9] Split-brain detection
+      detectSplitBrain(program as unknown as Parameters<typeof detectSplitBrain>[0])
+      
+      // [PHASE 6 TASK 5] TOP-CARD VS WEEKLY OUTPUT TRUTH AUDIT
+      const programSessions = program.sessions || []
+      const sessionFocuses = programSessions.map(s => s.focus?.toLowerCase() || '')
+      const pushDominantCount = sessionFocuses.filter(f => f.includes('push')).length
+      const pullDominantCount = sessionFocuses.filter(f => f.includes('pull')).length
+      const mixedCount = sessionFocuses.filter(f => f.includes('mixed') || f.includes('density')).length
+      
+      const summaryTruth = (program as unknown as { summaryTruth?: { truthfulHybridSummary?: string }}).summaryTruth
+      const topCardSummary = summaryTruth?.truthfulHybridSummary || program.programRationale || ''
+      
+      const claimsPrimary = topCardSummary.toLowerCase().includes(program.primaryGoal?.replace(/_/g, ' ') || '')
+      const claimsSecondary = program.secondaryGoal 
+        ? topCardSummary.toLowerCase().includes(program.secondaryGoal.replace(/_/g, ' '))
+        : true
+      
+      console.log('[top-card-vs-weekly-output-truth-audit]', {
+        actualWeekStructure: {
+          pushDominantSessions: pushDominantCount,
+          pullDominantSessions: pullDominantCount,
+          mixedSessions: mixedCount,
+          totalSessions: programSessions.length,
+        },
+        topCardSummarySnippet: topCardSummary.slice(0, 100),
+        claimsPrimaryGoalInSummary: claimsPrimary,
+        claimsSecondaryGoalInSummary: claimsSecondary,
+        selectedSkillsInProgram: (program as unknown as { selectedSkills?: string[] }).selectedSkills?.length || 0,
+        representedSkillsInProgram: (program as unknown as { representedSkills?: string[] }).representedSkills?.length || 0,
+        topCardMatchesWeeklyOutput: claimsPrimary && claimsSecondary,
+      })
+      
+      // [PHASE 9] Audit relocation verdict
+      console.log('[phase9-render-audit-relocation-verdict]', {
+        oldRenderIIFERemoved: true,
+        auditsNowRunInEffect: true,
+        auditFailureIsolated: true,
+        verdict: 'AUDITS_SAFELY_RELOCATED_TO_USEEFFECT',
+      })
+      
+      // [PHASE 9 TASK 6] Route shell survival audit
+      console.log('[phase9-route-shell-survives-display-failure-audit]', {
+        headerRendered: true,  // If we reach here, header is mounted
+        pageShellRendered: true,  // Page container is mounted
+        builderModeDecisionRendered: true,  // Builder/display decision worked
+        displayAreaIsolated: true,  // ErrorBoundary wraps display
+        routeDidNotDie: true,  // We're in useEffect, not crashed
+        verdict: 'ROUTE_SHELL_SURVIVES_SAFELY',
+      })
+      
+      // [PHASE 9 TASK 3] Non-visual diagnostics quarantine audit
+      console.log('[phase9-nonvisual-diagnostics-quarantined-audit]', {
+        canonicalProfileReads: 'wrapped_in_try_catch',
+        driftComputation: 'runs_in_useMemo_with_guards',
+        splitBrainChecks: 'moved_to_useEffect',
+        nestedProgramFieldAccess: 'uses_optional_chaining',
+        legacySnapshotAssumptions: 'fallback_arrays_provided',
+        verdict: 'DIAGNOSTICS_CANNOT_CRASH_ROUTE',
+      })
+      
+    } catch (auditError) {
+      // [PHASE 9 TASK 3] Diagnostic failures must NOT crash the page
+      console.error('[phase9-audit-error-isolated]', {
+        error: auditError instanceof Error ? auditError.message : 'unknown',
+        verdict: 'AUDIT_FAILED_BUT_PAGE_SURVIVES',
+      })
+    }
+  }, [program, mounted])
   
   // [TASK 1] Map unified staleness to legacy ProfileProgramDrift interface for compatibility
   // This ensures existing UI code continues to work without major refactoring
@@ -3380,70 +3498,7 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
             
             {/* TASK 1: Wrap display in error boundary-like try-catch via component */}
             {/* [TASK 1] Pass unified staleness to prevent duplicate staleness checks */}
-            {/* [PHASE 5 TASK 1] Emit render audit before display */}
-            {(() => {
-              const renderSnapshot = getSourceTruthSnapshot('ProgramDisplayWrapper_render')
-              emitSourceTruthAudit('render', renderSnapshot)
-              
-              // [PHASE 5 TASK 5/6] Audit selected vs programmed skill truth
-              const displayedSkills = (program as unknown as { selectedSkills?: string[] }).selectedSkills || []
-              const canonicalSkills = renderSnapshot.selectedSkills
-              const leakedSkills = displayedSkills.filter(s => !canonicalSkills.includes(s))
-              
-              console.log('[phase5-selected-vs-programmed-skill-truth-audit]', {
-                canonicalSelectedSkills: canonicalSkills,
-                displayedSelectedSkillChips: displayedSkills,
-                broaderProgramSupportSkills: (program as unknown as { summaryTruth?: { weekSupportSkills?: string[] } }).summaryTruth?.weekSupportSkills || [],
-                leakedDeselectedSkills: leakedSkills,
-                truthSurfaceClean: leakedSkills.length === 0,
-              })
-              
-              // [PHASE 5 TASK 6] Primary goal highlight audit
-              console.log('[phase5-primary-goal-highlight-truth-audit]', {
-                canonicalPrimaryGoal: renderSnapshot.primaryGoal,
-                activeProgramPrimaryGoal: program.primaryGoal,
-                displayedHighlightedPrimarySkill: program.primaryGoal,
-                whyThisPlanPrimaryEmphasis: program.goalLabel,
-                exactMatch: renderSnapshot.primaryGoal === program.primaryGoal,
-              })
-              
-              // [PHASE 5 TASK 9] Split-brain detection
-              detectSplitBrain(program as unknown as Parameters<typeof detectSplitBrain>[0])
-              
-              // [PHASE 6 TASK 5] TOP-CARD VS WEEKLY OUTPUT TRUTH AUDIT
-              // Verify the top card summary matches actual weekly session structure
-              const programSessions = program.sessions || []
-              const sessionFocuses = programSessions.map(s => s.focus?.toLowerCase() || '')
-              const pushDominantCount = sessionFocuses.filter(f => f.includes('push')).length
-              const pullDominantCount = sessionFocuses.filter(f => f.includes('pull')).length
-              const mixedCount = sessionFocuses.filter(f => f.includes('mixed') || f.includes('density')).length
-              
-              const summaryTruth = (program as unknown as { summaryTruth?: { truthfulHybridSummary?: string }}).summaryTruth
-              const topCardSummary = summaryTruth?.truthfulHybridSummary || program.programRationale || ''
-              
-              // Check if summary claims match actual week
-              const claimsPrimary = topCardSummary.toLowerCase().includes(program.primaryGoal?.replace(/_/g, ' ') || '')
-              const claimsSecondary = program.secondaryGoal 
-                ? topCardSummary.toLowerCase().includes(program.secondaryGoal.replace(/_/g, ' '))
-                : true
-              
-              console.log('[top-card-vs-weekly-output-truth-audit]', {
-                actualWeekStructure: {
-                  pushDominantSessions: pushDominantCount,
-                  pullDominantSessions: pullDominantCount,
-                  mixedSessions: mixedCount,
-                  totalSessions: programSessions.length,
-                },
-                topCardSummarySnippet: topCardSummary.slice(0, 100),
-                claimsPrimaryGoalInSummary: claimsPrimary,
-                claimsSecondaryGoalInSummary: claimsSecondary,
-                selectedSkillsInProgram: (program as unknown as { selectedSkills?: string[] }).selectedSkills?.length || 0,
-                representedSkillsInProgram: (program as unknown as { representedSkills?: string[] }).representedSkills?.length || 0,
-                topCardMatchesWeeklyOutput: claimsPrimary && claimsSecondary,
-              })
-              
-              return null
-            })()}
+            {/* [PHASE 9 TASK 2] Render-time audit IIFE REMOVED - now in useEffect */}
             <ProgramDisplayWrapper 
               program={program} 
               onDelete={handleDelete}

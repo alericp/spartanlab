@@ -27,6 +27,88 @@ import { getAthleteProfile, saveAthleteProfile, type AthleteProfile } from './da
 import { getOnboardingProfile, saveOnboardingProfile, type OnboardingProfile } from './athlete-profile'
 
 // =============================================================================
+// [PHASE 7A] TRAINING METHOD PREFERENCES
+// Defines HOW exercises are structured within a session (groupings, pacing)
+// =============================================================================
+
+export type TrainingMethodPreference = 
+  | 'straight_sets'      // Traditional sets with full rest
+  | 'supersets'          // Antagonist or non-competing pairs
+  | 'circuits'           // Multiple exercises in sequence
+  | 'drop_sets'          // Progressive resistance reduction
+  | 'density_blocks'     // Time-based work blocks (EMOM, AMRAP)
+  | 'ladder_sets'        // Ascending/descending rep schemes
+  | 'cluster_sets'       // Intra-set rest for quality
+  | 'rest_pause'         // Brief rest within a set
+
+export const TRAINING_METHOD_LABELS: Record<TrainingMethodPreference, string> = {
+  straight_sets: 'Straight Sets',
+  supersets: 'Supersets',
+  circuits: 'Circuits',
+  drop_sets: 'Drop Sets',
+  density_blocks: 'Density Blocks (EMOM/AMRAP)',
+  ladder_sets: 'Ladder Sets',
+  cluster_sets: 'Cluster Sets',
+  rest_pause: 'Rest-Pause',
+}
+
+export const TRAINING_METHOD_FEASIBILITY: Record<TrainingMethodPreference, {
+  applicableBlockTypes: string[]
+  incompatibleWith: string[]
+  requiresExperience: 'beginner' | 'intermediate' | 'advanced'
+  skillQualityImpact: 'none' | 'moderate' | 'high'  // How much it degrades neural quality
+}> = {
+  straight_sets: {
+    applicableBlockTypes: ['skill', 'strength', 'accessory', 'core'],
+    incompatibleWith: [],
+    requiresExperience: 'beginner',
+    skillQualityImpact: 'none',
+  },
+  supersets: {
+    applicableBlockTypes: ['strength', 'accessory', 'core'],
+    incompatibleWith: ['skill_isometric', 'skill_balance'],  // Don't superset high-neural skill work
+    requiresExperience: 'beginner',
+    skillQualityImpact: 'moderate',
+  },
+  circuits: {
+    applicableBlockTypes: ['accessory', 'core', 'conditioning'],
+    incompatibleWith: ['skill_isometric', 'skill_balance', 'primary_strength'],
+    requiresExperience: 'intermediate',
+    skillQualityImpact: 'high',
+  },
+  drop_sets: {
+    applicableBlockTypes: ['strength', 'accessory'],
+    incompatibleWith: ['skill_isometric', 'skill_balance', 'skill_dynamic'],
+    requiresExperience: 'intermediate',
+    skillQualityImpact: 'moderate',
+  },
+  density_blocks: {
+    applicableBlockTypes: ['skill_dynamic', 'accessory', 'conditioning'],
+    incompatibleWith: ['skill_isometric'],
+    requiresExperience: 'intermediate',
+    skillQualityImpact: 'moderate',
+  },
+  ladder_sets: {
+    applicableBlockTypes: ['strength', 'accessory', 'conditioning'],
+    incompatibleWith: ['skill_isometric'],
+    requiresExperience: 'intermediate',
+    skillQualityImpact: 'moderate',
+  },
+  cluster_sets: {
+    applicableBlockTypes: ['skill_isometric', 'strength'],
+    incompatibleWith: [],
+    requiresExperience: 'intermediate',
+    skillQualityImpact: 'none',  // Actually preserves quality
+  },
+  rest_pause: {
+    applicableBlockTypes: ['strength', 'accessory'],
+    incompatibleWith: ['skill_isometric', 'skill_balance'],
+    requiresExperience: 'advanced',
+    skillQualityImpact: 'moderate',
+  },
+}
+
+// =============================================================================
 // CANONICAL PROGRAMMING PROFILE TYPE
 // =============================================================================
 
@@ -65,6 +147,10 @@ export interface CanonicalProgrammingProfile {
   sessionStylePreference: string | null  // 'longer_complete' | 'shorter_focused' | etc.
   equipmentAvailable: string[]
   trainingStyle: string | null
+  
+  // [PHASE 7A] Training Method Preferences - HOW exercises are structured
+  // These influence exercise grouping (supersets, circuits, etc.) not just what exercises
+  trainingMethodPreferences: TrainingMethodPreference[]
   
   // Athlete Diagnostics
   jointCautions: string[]
@@ -238,6 +324,9 @@ export function reconcileCanonicalProfile(): CanonicalProgrammingProfile {
       athleteProfile?.equipmentAvailable
     ),
     trainingStyle: pick(onboardingProfile?.trainingStyle, athleteProfile?.trainingStyle, null),
+    
+    // [PHASE 7A] Training Method Preferences - default to straight_sets + supersets if not set
+    trainingMethodPreferences: inferTrainingMethodPreferences(onboardingProfile, athleteProfile),
     
     // Athlete Diagnostics
     jointCautions: pickArray(onboardingProfile?.jointCautions, athleteProfile?.jointCautions),
@@ -988,6 +1077,83 @@ export function clearCanonicalProfileData(): void {
   if (process.env.NODE_ENV !== 'production') {
     console.log('[CanonicalProfile] Clear All completed - profile data cleared, workout history preserved')
   }
+}
+
+// =============================================================================
+// [PHASE 7A] TRAINING METHOD PREFERENCE INFERENCE
+// =============================================================================
+
+/**
+ * Infers training method preferences from existing profile data.
+ * If not explicitly set, derives sensible defaults based on:
+ * - Training style (skill_focused → straight_sets + cluster_sets)
+ * - Session style preference (efficient → supersets + density_blocks)
+ * - Experience level (advanced → more variety available)
+ */
+function inferTrainingMethodPreferences(
+  onboardingProfile: OnboardingProfile | null,
+  athleteProfile: AthleteProfile | null
+): TrainingMethodPreference[] {
+  // Check if explicitly set (future-proofing for when UI captures this)
+  const explicitPrefs = (onboardingProfile as unknown as { trainingMethodPreferences?: TrainingMethodPreference[] })?.trainingMethodPreferences
+  if (explicitPrefs && explicitPrefs.length > 0) {
+    return explicitPrefs
+  }
+  
+  const preferences: TrainingMethodPreference[] = ['straight_sets']  // Always include as baseline
+  
+  // Infer from training style
+  const trainingStyle = onboardingProfile?.trainingStyle || athleteProfile?.trainingStyle
+  const sessionStyle = onboardingProfile?.sessionStyle
+  const experience = onboardingProfile?.trainingExperience || 'intermediate'
+  const isExperienced = experience === 'intermediate' || experience === 'advanced'
+  
+  // Skill-focused training benefits from cluster sets (quality preservation)
+  if (trainingStyle === 'skill_focused' || trainingStyle === 'skill') {
+    preferences.push('cluster_sets')
+  }
+  
+  // Strength-focused often uses supersets for antagonist work
+  if (trainingStyle === 'strength_focused' || trainingStyle === 'strength') {
+    preferences.push('supersets')
+  }
+  
+  // Endurance-focused benefits from density blocks and circuits
+  if (trainingStyle === 'endurance_focused' || trainingStyle === 'endurance') {
+    preferences.push('density_blocks')
+    if (isExperienced) {
+      preferences.push('circuits')
+    }
+  }
+  
+  // Efficient session style prefers time-saving methods
+  if (sessionStyle === 'efficient') {
+    if (!preferences.includes('supersets')) preferences.push('supersets')
+    if (!preferences.includes('density_blocks')) preferences.push('density_blocks')
+  }
+  
+  // Advanced athletes get access to more methods
+  if (experience === 'advanced') {
+    if (!preferences.includes('drop_sets')) preferences.push('drop_sets')
+    if (!preferences.includes('ladder_sets')) preferences.push('ladder_sets')
+  }
+  
+  // Hybrid/balanced gets a mix
+  if (trainingStyle === 'balanced_hybrid' || trainingStyle === 'hybrid') {
+    if (!preferences.includes('supersets')) preferences.push('supersets')
+    if (isExperienced && !preferences.includes('circuits')) preferences.push('circuits')
+  }
+  
+  console.log('[training-style-source-truth-audit]', {
+    rawSelectedTrainingStyles: trainingStyle,
+    rawSessionStyle: sessionStyle,
+    rawExperience: experience,
+    inferredMethodPreferences: preferences,
+    source: explicitPrefs ? 'explicit' : 'inferred',
+    verdict: 'method_preferences_resolved',
+  })
+  
+  return preferences
 }
 
 // =============================================================================

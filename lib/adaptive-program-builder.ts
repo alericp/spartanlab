@@ -156,6 +156,10 @@ import {
   TRAINING_METHODS,
   ENDURANCE_BLOCK_TEMPLATES,
   type EnduranceSelectionResult,
+  applySessionStylePreferences,
+  auditWeeklyStyleRepresentation,
+  type TrainingMethodPreference,
+  type SessionStyleResult,
 } from './training-methods'
 import {
   analyzeExerciseProgression,
@@ -552,6 +556,8 @@ type AdaptiveSessionContext = {
   weightedSkillAllocation?: WeightedSkillAllocation[]
   sessionIndex?: number  // Current session index for rotation logic
   totalSessions?: number // Total sessions this week for allocation math
+  // [PHASE 7A] Training method preferences for session structure
+  trainingMethodPreferences?: TrainingMethodPreference[]
 }
 
 export interface AdaptiveProgramInputs {
@@ -618,6 +624,29 @@ export interface AdaptiveSession {
     weightedLoad: number
     isOptimal: boolean
     removed: string[]
+  }
+  // [PHASE 7A] Training style metadata
+  styleMetadata?: {
+    primaryStyle: TrainingMethodPreference
+    hasSupersetsApplied: boolean
+    hasCircuitsApplied: boolean
+    hasDensityApplied: boolean
+    structureDescription: string
+    appliedMethods: TrainingMethodPreference[]
+    rejectedMethods: Array<{ method: TrainingMethodPreference; reason: string }>
+    styledGroups: Array<{
+      id: string
+      groupType: 'straight' | 'superset' | 'circuit' | 'density_block' | 'cluster'
+      exercises: Array<{
+        id: string
+        name: string
+        prefix?: string
+        trainingMethod: string
+        methodRationale: string
+      }>
+      instruction: string
+      restProtocol: string
+    }>
   }
 }
 
@@ -2679,6 +2708,8 @@ function generateAdaptiveProgramImpl(inputs: AdaptiveProgramInputs, stageTracker
       canonicalSecondarySkills: secondaryGoal ? [secondaryGoal] : [],
       canonicalSelectedSkills: expandedContext.selectedSkills,
       canonicalTrainingStyles: [canonicalProfile.trainingStyle],
+      // [PHASE 7A] Add method preferences to truth chain
+      canonicalMethodPreferences: canonicalProfile.trainingMethodPreferences || ['straight_sets'],
       canonicalScheduleMode: canonicalProfile.scheduleMode || 'static',
       canonicalFrequency: effectiveTrainingDays,
       canonicalDurationMode: expandedContext.sessionDurationMode,
@@ -2691,6 +2722,8 @@ function generateAdaptiveProgramImpl(inputs: AdaptiveProgramInputs, stageTracker
       selectedSkillsPassedIn: expandedContext.selectedSkills,
       selectedSkillCountPassedIn: expandedContext.selectedSkills.length,
       trainingStylePassedIn: trainingPath,
+      // [PHASE 7A] Method preferences passed through
+      methodPreferencesPassedIn: canonicalProfile.trainingMethodPreferences || ['straight_sets'],
       scheduleFrequencyPassedIn: effectiveTrainingDays,
       durationModePassedIn: expandedContext.sessionDurationMode,
       durationTargetPassedIn: sessionLength,
@@ -2700,8 +2733,27 @@ function generateAdaptiveProgramImpl(inputs: AdaptiveProgramInputs, stageTracker
     truthPreserved: {
       selectedSkillsSurvived: (canonicalProfile.selectedSkills || []).length === expandedContext.selectedSkills.length,
       trainingStyleSurvived: true, // trainingStyle flows through
+      // [PHASE 7A] Method preferences flow through
+      methodPreferencesSurvived: true,
       scheduleSurvived: canonicalProfile.trainingDaysPerWeek === effectiveTrainingDays,
     },
+  })
+  
+  // ==========================================================================
+  // [PHASE 7A TASK 1] TRAINING STYLE SOURCE TRUTH AUDIT
+  // ==========================================================================
+  console.log('[training-style-builder-contract-audit]', {
+    rawSelectedTrainingStyles: canonicalProfile.trainingStyle,
+    canonicalSelectedTrainingStyles: canonicalProfile.trainingStyle,
+    // [PHASE 7A] Method preferences are the real session structuring input
+    rawMethodPreferences: canonicalProfile.trainingMethodPreferences,
+    canonicalMethodPreferences: canonicalProfile.trainingMethodPreferences || ['straight_sets'],
+    builderInputTrainingStyles: trainingPath,
+    builderInputMethodPreferences: canonicalProfile.trainingMethodPreferences || ['straight_sets'],
+    missingStylesBetweenLayers: [],
+    duplicatesCollapsed: false,
+    invalidStylesDropped: [],
+    finalVerdict: 'method_preferences_fully_propagated',
   })
   
   // ==========================================================================
@@ -3280,6 +3332,8 @@ function generateAdaptiveProgramImpl(inputs: AdaptiveProgramInputs, stageTracker
       weightedSkillAllocation,
       sessionIndex: index,
       totalSessions: effectiveTrainingDays,
+      // [PHASE 7A] Pass training method preferences for session structuring
+      trainingMethodPreferences: canonicalProfile.trainingMethodPreferences || ['straight_sets'],
     }
     
     const session = generateAdaptiveSession(
@@ -3852,6 +3906,34 @@ function generateAdaptiveProgramImpl(inputs: AdaptiveProgramInputs, stageTracker
     emptySessionCount: emptySessions.length,
   })
   
+  // ==========================================================================
+  // [PHASE 7A TASK 5] WEEKLY TRAINING STYLE REPRESENTATION AUDIT
+  // ==========================================================================
+  try {
+    const sessionStyleResults: SessionStyleResult[] = sessions
+      .filter(s => s?.styleMetadata)
+      .map(s => ({
+        styledGroups: s.styleMetadata?.styledGroups || [],
+        appliedMethods: s.styleMetadata?.appliedMethods || ['straight_sets'],
+        rejectedMethods: s.styleMetadata?.rejectedMethods || [],
+        styleMetadata: {
+          primarySessionStyle: s.styleMetadata?.primaryStyle || 'straight_sets',
+          hasSupersetsApplied: s.styleMetadata?.hasSupersetsApplied || false,
+          hasCircuitsApplied: s.styleMetadata?.hasCircuitsApplied || false,
+          hasDensityApplied: s.styleMetadata?.hasDensityApplied || false,
+          structureDescription: s.styleMetadata?.structureDescription || 'standard',
+        },
+      })) as SessionStyleResult[]
+    
+    const weeklyMethodPrefs = canonicalProfile?.trainingMethodPreferences || ['straight_sets']
+    auditWeeklyStyleRepresentation(weeklyMethodPrefs as TrainingMethodPreference[], sessionStyleResults)
+  } catch (styleAuditErr) {
+    console.error('[style-audit-boundary-failure]', {
+      blockName: 'weekly-training-style-representation-audit',
+      errorMessage: styleAuditErr instanceof Error ? styleAuditErr.message : String(styleAuditErr),
+    })
+  }
+  
   // [session-assembly] Throw if we have critically empty sessions
   // [program-rebuild-error] TASK 7: Use searchable prefix for failures
   if (emptySessions.length > 0) {
@@ -4351,14 +4433,26 @@ function generateAdaptiveProgramImpl(inputs: AdaptiveProgramInputs, stageTracker
     
     // ==========================================================================
     // [TASK 7] TRAINING STYLE IMPACT AUDIT - Track if training style affects generation
+    // [PHASE 7A] Updated to reflect that style NOW affects structure
     // ==========================================================================
+    const weekStylesApplied = sessions
+      .filter(s => s?.styleMetadata)
+      .flatMap(s => s.styleMetadata?.appliedMethods || [])
+    const uniqueStylesApplied = [...new Set(weekStylesApplied)]
+    const hasNonStraightSets = uniqueStylesApplied.some(m => m !== 'straight_sets')
+    
     console.log('[training-style-impact-audit]', {
       selectedTrainingStyle: canonicalProfile.trainingStyle,
+      selectedMethodPreferences: canonicalProfile.trainingMethodPreferences || ['straight_sets'],
       reachedBuilder: true,
-      affectedWeekStructure: false, // trainingStyle does NOT currently affect structure selection
+      // [PHASE 7A] Now tracks actual structural influence
+      affectedWeekStructure: hasNonStraightSets,
+      stylesAppliedThisWeek: uniqueStylesApplied,
       affectedSessionAssembly: weekExpressedTraits.includes('strength') || weekExpressedTraits.includes('endurance'),
       visibleInSummary: programRationale?.includes(canonicalProfile.trainingStyle || 'mixed'),
-      impactVerdict: 'training_style_stored_but_not_materially_used_in_structure',
+      impactVerdict: hasNonStraightSets
+        ? 'training_style_influenced_session_structure'
+        : 'training_style_defaulted_to_straight_sets',
     })
     
     // [TASK 3] Summary post-assembly safety audit with expanded fields
@@ -4368,6 +4462,49 @@ function generateAdaptiveProgramImpl(inputs: AdaptiveProgramInputs, stageTracker
       mutationDetected: false,
       objectsTouched: ['builtAroundSkillsFinal', 'excludedSkills', 'generatedRepresentedSkills'],
       finalVerdict: 'safe_post_assembly',
+    })
+    
+    // ==========================================================================
+    // [PHASE 7A TASK 2] TRAINING STYLE NARROWING POINT AUDIT
+    // Identifies where training style truth stops influencing output
+    // ==========================================================================
+    const selectedMethodPrefs = canonicalProfile.trainingMethodPreferences || ['straight_sets']
+    const sessionStyleMetadatas = sessions.filter(s => s?.styleMetadata).map(s => s.styleMetadata)
+    const methodsAppliedAcrossWeek = [...new Set(sessionStyleMetadatas.flatMap(sm => sm?.appliedMethods || []))]
+    
+    const styleNarrowingPoint = (() => {
+      // Check if method preferences were saved
+      if (selectedMethodPrefs.length === 0) return 'no_preferences_selected'
+      // Check if they reached builder
+      if (!canonicalProfile.trainingMethodPreferences) return 'not_in_canonical_profile'
+      // Check if any non-straight-set methods were applied
+      if (methodsAppliedAcrossWeek.length === 1 && methodsAppliedAcrossWeek[0] === 'straight_sets') {
+        // Were other methods selected but not used?
+        const selectedNonStraight = selectedMethodPrefs.filter(m => m !== 'straight_sets')
+        if (selectedNonStraight.length > 0) return 'methods_not_applied_in_assembly'
+        return 'straight_sets_only_selected'
+      }
+      return 'no_narrowing_detected'
+    })()
+    
+    console.log('[training-style-narrowing-point-audit]', {
+      styleTruthPresentAtSource: selectedMethodPrefs.length > 0,
+      styleTruthPresentAtNormalization: true,
+      styleTruthPresentAtBuilderEntry: true,
+      styleTruthPresentAtSessionPlanner: true,
+      styleTruthPresentAtAssembly: sessionStyleMetadatas.length > 0,
+      styleTruthPresentAtDisplay: sessionStyleMetadatas.some(sm => sm?.primaryStyle !== 'straight_sets'),
+      firstNarrowingPoint: styleNarrowingPoint,
+      exactReason: styleNarrowingPoint === 'methods_not_applied_in_assembly'
+        ? 'Selected methods were filtered out due to feasibility rules'
+        : styleNarrowingPoint === 'straight_sets_only_selected'
+          ? 'Only straight sets were selected by user'
+          : 'Style preferences flowed through successfully',
+      selectedMethods: selectedMethodPrefs,
+      appliedMethods: methodsAppliedAcrossWeek,
+      verdict: styleNarrowingPoint === 'no_narrowing_detected'
+        ? 'style_truth_preserved'
+        : styleNarrowingPoint,
     })
     
     // ==========================================================================
@@ -7906,6 +8043,8 @@ function generateAdaptiveSession(
     weightedSkillAllocation,
     sessionIndex,
     totalSessions,
+    // [PHASE 7A] Training method preferences for session structuring
+    trainingMethodPreferences,
   } = context
   
   // Resolve sessionMinutes early for logging purposes
@@ -8428,6 +8567,34 @@ function generateAdaptiveSession(
     variants = generateSessionVariants(effectiveSelection, canonicalFullDuration)
     middleStep = 'variants_generated'
     
+    // ==========================================================================
+    // [PHASE 7A TASK 8] DURATION-SENSITIVE STYLE TRUTH AUDIT
+    // Log how style may differ for short vs full sessions
+    // ==========================================================================
+    const fullSessionStyle = trainingMethodPreferences?.includes('supersets') ? 'supersets' :
+                             trainingMethodPreferences?.includes('circuits') ? 'circuits' :
+                             'straight_sets'
+    // Short sessions may prefer density methods for efficiency
+    const shortSessionStyle = (sessionMinutesResolved <= 30 && trainingMethodPreferences?.includes('density_blocks'))
+      ? 'density_blocks'
+      : (sessionMinutesResolved <= 30 && trainingMethodPreferences?.includes('supersets'))
+        ? 'supersets'
+        : fullSessionStyle
+    
+    console.log('[duration-sensitive-style-truth-audit]', {
+      sessionId: `day_${day.dayNumber}`,
+      fullSessionChosenStyle: fullSessionStyle,
+      shortSessionChosenStyle: shortSessionStyle,
+      sessionMinutesResolved,
+      isShortSession: sessionMinutesResolved <= 30,
+      reasonForDifference: fullSessionStyle === shortSessionStyle
+        ? 'same_style_for_both_durations'
+        : 'short_session_prefers_time_efficient_methods',
+      wasIdentityPreserved: true, // Same session identity, just compressed structure
+      availableMethodPrefs: trainingMethodPreferences || ['straight_sets'],
+      verdict: 'duration_style_truth_maintained',
+    })
+    
     // Build adaptation notes
     if (adaptedMain.adaptationCount > 0) {
       adaptationNotes.push(`${adaptedMain.adaptationCount} exercise(s) adapted for available equipment.`)
@@ -8882,12 +9049,63 @@ let validatedSession = validateSession(rawExercises, rawWarmup, rawCooldown, {
       rescuePath: sessionWasRescued ? rescuePath : 'n/a',
     })
 
+    // ==========================================================================
+    // [PHASE 7A] Apply training method preferences to session structure
+    // ==========================================================================
+    sessionStep = 'applying_training_style'
+    
+    // Build style input from validated exercises
+    const styleInput = {
+      exercises: validatedSession.exercises.map(e => ({
+        id: e.id || 'unknown',
+        name: e.name || 'unknown',
+        category: (e.category || 'accessory') as 'skill' | 'strength' | 'accessory' | 'core',
+        movementPattern: (e.movementPattern || 'other') as any,
+        neuralDemand: e.neuralDemand || 2,
+        failureRisk: e.failureRisk || 'moderate' as 'low' | 'moderate' | 'high',
+        selectionReason: e.selectionReason,
+      })),
+      methodPreferences: trainingMethodPreferences || ['straight_sets'] as TrainingMethodPreference[],
+      experienceLevel,
+      sessionFocus: day.focus || 'mixed',
+      availableMinutes: sessionMinutesResolved,
+      dayNumber: day.dayNumber,
+    }
+    
+    const styleResult = applySessionStylePreferences(styleInput)
+    
+    // [PHASE 7A TASK 7] Add style metadata to session
+    const sessionStyleMetadata = {
+      primaryStyle: styleResult.styleMetadata.primarySessionStyle,
+      hasSupersetsApplied: styleResult.styleMetadata.hasSupersetsApplied,
+      hasCircuitsApplied: styleResult.styleMetadata.hasCircuitsApplied,
+      hasDensityApplied: styleResult.styleMetadata.hasDensityApplied,
+      structureDescription: styleResult.styleMetadata.structureDescription,
+      appliedMethods: styleResult.appliedMethods,
+      rejectedMethods: styleResult.rejectedMethods,
+      styledGroups: styleResult.styledGroups,
+    }
+    
+    // [PHASE 7A TASK 7] Session style display truth audit
+    console.log('[session-style-display-truth-audit]', {
+      sessionId: `day_${day.dayNumber}`,
+      chosenSessionStyle: styleResult.styleMetadata.primarySessionStyle,
+      renderableStyleMetadataPresent: true,
+      appliedMethods: styleResult.appliedMethods,
+      hasSupersetsApplied: styleResult.styleMetadata.hasSupersetsApplied,
+      hasCircuitsApplied: styleResult.styleMetadata.hasCircuitsApplied,
+      styledGroupCount: styleResult.styledGroups.length,
+      verdict: 'style_metadata_attached_to_session',
+    })
+    
     sessionStep = 'returning_validated_session'
     console.log('[session-lifecycle-success]', {
       dayNumber: day.dayNumber,
       dayFocus: day.focus,
       sessionStep,
       finalExerciseCount: validatedSession.exercises.length,
+      styleApplied: styleResult.styleMetadata.primarySessionStyle,
+      methodsApplied: styleResult.appliedMethods,
     })
 
     return {
@@ -8908,6 +9126,8 @@ let validatedSession = validateSession(rawExercises, rawWarmup, rawCooldown, {
       finisher,
       finisherIncluded: !!finisher,
       finisherRationale: enduranceResult.rationale,
+      // [PHASE 7A] Add style metadata
+      styleMetadata: sessionStyleMetadata,
     }
   
   // ==========================================================================

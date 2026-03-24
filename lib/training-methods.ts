@@ -1966,3 +1966,420 @@ export function adjustBlockForFatigue(
     adjustmentReason: 'Block duration maintained',
   }
 }
+
+// =============================================================================
+// [PHASE 7A] SESSION STYLE STRUCTURING ENGINE
+// Applies user training method preferences to session exercise structure
+// =============================================================================
+
+export type TrainingMethodPreference = 
+  | 'straight_sets'
+  | 'supersets'
+  | 'circuits'
+  | 'drop_sets'
+  | 'density_blocks'
+  | 'ladder_sets'
+  | 'cluster_sets'
+  | 'rest_pause'
+
+export interface SessionStyleInput {
+  exercises: Array<{
+    id: string
+    name: string
+    category: ExerciseCategory
+    movementPattern: MovementPattern
+    neuralDemand?: number
+    failureRisk?: 'low' | 'moderate' | 'high'
+    selectionReason?: string
+  }>
+  methodPreferences: TrainingMethodPreference[]
+  experienceLevel: 'beginner' | 'intermediate' | 'advanced'
+  sessionFocus: string  // 'skill' | 'strength' | 'endurance' | 'mixed'
+  availableMinutes: number
+  dayNumber: number
+}
+
+export interface StyledExerciseGroup {
+  id: string
+  groupType: 'straight' | 'superset' | 'circuit' | 'density_block' | 'cluster'
+  exercises: Array<{
+    id: string
+    name: string
+    prefix?: string  // 'A1', 'A2', etc. for supersets
+    trainingMethod: TrainingMethod
+    methodRationale: string
+  }>
+  instruction: string
+  restProtocol: string
+}
+
+export interface SessionStyleResult {
+  styledGroups: StyledExerciseGroup[]
+  appliedMethods: TrainingMethodPreference[]
+  rejectedMethods: Array<{ method: TrainingMethodPreference; reason: string }>
+  styleMetadata: {
+    primarySessionStyle: TrainingMethodPreference
+    hasSupersetsApplied: boolean
+    hasCircuitsApplied: boolean
+    hasDensityApplied: boolean
+    structureDescription: string
+  }
+}
+
+/**
+ * [PHASE 7A TASK 3] Apply training method preferences to structure a session
+ * This converts a flat exercise list into styled groups with appropriate methods
+ */
+export function applySessionStylePreferences(input: SessionStyleInput): SessionStyleResult {
+  const { exercises, methodPreferences, experienceLevel, sessionFocus, availableMinutes, dayNumber } = input
+  
+  const styledGroups: StyledExerciseGroup[] = []
+  const appliedMethods: TrainingMethodPreference[] = []
+  const rejectedMethods: Array<{ method: TrainingMethodPreference; reason: string }> = []
+  
+  // Categorize exercises by type for intelligent grouping
+  const skillExercises = exercises.filter(e => e.category === 'skill')
+  const strengthExercises = exercises.filter(e => e.category === 'strength')
+  const accessoryExercises = exercises.filter(e => e.category === 'accessory')
+  const coreExercises = exercises.filter(e => e.category === 'core')
+  
+  // ==========================================================================
+  // [PHASE 7A TASK 4] STYLE FEASIBILITY RULES
+  // ==========================================================================
+  const feasibleMethods = methodPreferences.filter(method => {
+    // Skill-focused sessions protect skill quality
+    if (sessionFocus === 'skill' && ['circuits', 'drop_sets', 'rest_pause'].includes(method)) {
+      if (skillExercises.length >= exercises.length / 2) {
+        rejectedMethods.push({ method, reason: 'skill_quality_protection' })
+        return false
+      }
+    }
+    
+    // Beginners limited on complex methods
+    if (experienceLevel === 'beginner' && ['circuits', 'drop_sets', 'rest_pause', 'cluster_sets'].includes(method)) {
+      rejectedMethods.push({ method, reason: 'experience_level_restriction' })
+      return false
+    }
+    
+    // Short sessions may need density methods
+    if (availableMinutes < 30 && !['supersets', 'density_blocks', 'circuits'].includes(method)) {
+      // Don't reject, just note it's less ideal
+    }
+    
+    return true
+  })
+  
+  let groupId = 0
+  const usedExerciseIds = new Set<string>()
+  
+  // ==========================================================================
+  // SKILL WORK: Always straight sets or cluster sets (never degrade quality)
+  // ==========================================================================
+  for (const exercise of skillExercises) {
+    if (usedExerciseIds.has(exercise.id)) continue
+    usedExerciseIds.add(exercise.id)
+    
+    const useCluster = feasibleMethods.includes('cluster_sets') && 
+                       (exercise.neuralDemand || 0) >= 3
+    
+    styledGroups.push({
+      id: `group_${groupId++}`,
+      groupType: useCluster ? 'cluster' : 'straight',
+      exercises: [{
+        id: exercise.id,
+        name: exercise.name,
+        trainingMethod: useCluster ? 'cluster_set' : 'straight_sets',
+        methodRationale: useCluster 
+          ? 'Cluster sets preserve neural quality on demanding skill work'
+          : 'Straight sets for focused skill practice',
+      }],
+      instruction: useCluster 
+        ? 'Rest 10-15s between mini-sets within each cluster'
+        : 'Full rest between sets for quality',
+      restProtocol: '2-3 min between sets',
+    })
+    
+    if (useCluster && !appliedMethods.includes('cluster_sets')) {
+      appliedMethods.push('cluster_sets')
+    }
+  }
+  
+  // ==========================================================================
+  // STRENGTH WORK: Check for superset opportunities with antagonist pairing
+  // ==========================================================================
+  const strengthNotUsed = strengthExercises.filter(e => !usedExerciseIds.has(e.id))
+  
+  if (feasibleMethods.includes('supersets') && strengthNotUsed.length >= 2) {
+    // Try to pair antagonist movements
+    const pullStrength = strengthNotUsed.filter(e => 
+      ['vertical_pull', 'horizontal_pull'].includes(e.movementPattern)
+    )
+    const pushStrength = strengthNotUsed.filter(e => 
+      ['vertical_push', 'horizontal_push'].includes(e.movementPattern)
+    )
+    
+    // Create pull-push supersets
+    const pairCount = Math.min(pullStrength.length, pushStrength.length)
+    for (let i = 0; i < pairCount; i++) {
+      const pull = pullStrength[i]
+      const push = pushStrength[i]
+      
+      // Don't superset high neural demand
+      if ((pull.neuralDemand || 2) >= 4 || (push.neuralDemand || 2) >= 4) {
+        continue
+      }
+      
+      usedExerciseIds.add(pull.id)
+      usedExerciseIds.add(push.id)
+      
+      styledGroups.push({
+        id: `group_${groupId++}`,
+        groupType: 'superset',
+        exercises: [
+          {
+            id: pull.id,
+            name: pull.name,
+            prefix: 'A1',
+            trainingMethod: 'superset',
+            methodRationale: 'Antagonist superset for time efficiency',
+          },
+          {
+            id: push.id,
+            name: push.name,
+            prefix: 'A2',
+            trainingMethod: 'superset',
+            methodRationale: 'Antagonist superset for time efficiency',
+          },
+        ],
+        instruction: 'Alternate between A1 and A2 with minimal rest',
+        restProtocol: '60-90s after completing both exercises',
+      })
+      
+      if (!appliedMethods.includes('supersets')) {
+        appliedMethods.push('supersets')
+      }
+    }
+  }
+  
+  // Remaining strength as straight sets
+  for (const exercise of strengthNotUsed.filter(e => !usedExerciseIds.has(e.id))) {
+    usedExerciseIds.add(exercise.id)
+    styledGroups.push({
+      id: `group_${groupId++}`,
+      groupType: 'straight',
+      exercises: [{
+        id: exercise.id,
+        name: exercise.name,
+        trainingMethod: 'straight_sets',
+        methodRationale: 'Focused strength work with full recovery',
+      }],
+      instruction: 'Complete all sets before moving on',
+      restProtocol: '2-3 min between sets',
+    })
+  }
+  
+  // ==========================================================================
+  // ACCESSORY/CORE: Prime candidates for circuits, supersets, density
+  // ==========================================================================
+  const accessoryNotUsed = [...accessoryExercises, ...coreExercises]
+    .filter(e => !usedExerciseIds.has(e.id))
+  
+  // Try circuits if preferred and we have enough exercises
+  if (feasibleMethods.includes('circuits') && accessoryNotUsed.length >= 3) {
+    const circuitExercises = accessoryNotUsed.slice(0, Math.min(4, accessoryNotUsed.length))
+    
+    for (const e of circuitExercises) {
+      usedExerciseIds.add(e.id)
+    }
+    
+    styledGroups.push({
+      id: `group_${groupId++}`,
+      groupType: 'circuit',
+      exercises: circuitExercises.map((e, i) => ({
+        id: e.id,
+        name: e.name,
+        prefix: `${i + 1}`,
+        trainingMethod: 'circuit',
+        methodRationale: 'Circuit for conditioning and efficiency',
+      })),
+      instruction: 'Move through exercises with minimal rest, rest after completing round',
+      restProtocol: '60-90s after each round, complete 2-3 rounds',
+    })
+    
+    if (!appliedMethods.includes('circuits')) {
+      appliedMethods.push('circuits')
+    }
+  }
+  // Try density blocks
+  else if (feasibleMethods.includes('density_blocks') && accessoryNotUsed.length >= 2) {
+    const densityExercises = accessoryNotUsed.slice(0, Math.min(3, accessoryNotUsed.length))
+    
+    for (const e of densityExercises) {
+      usedExerciseIds.add(e.id)
+    }
+    
+    styledGroups.push({
+      id: `group_${groupId++}`,
+      groupType: 'density_block',
+      exercises: densityExercises.map(e => ({
+        id: e.id,
+        name: e.name,
+        trainingMethod: 'density_block',
+        methodRationale: 'Density block for work capacity',
+      })),
+      instruction: 'AMRAP style: complete as many quality rounds as possible in 6-8 minutes',
+      restProtocol: 'Rest as needed to maintain quality',
+    })
+    
+    if (!appliedMethods.includes('density_blocks')) {
+      appliedMethods.push('density_blocks')
+    }
+  }
+  // Try accessory supersets
+  else if (feasibleMethods.includes('supersets') && accessoryNotUsed.length >= 2) {
+    for (let i = 0; i < accessoryNotUsed.length - 1; i += 2) {
+      const ex1 = accessoryNotUsed[i]
+      const ex2 = accessoryNotUsed[i + 1]
+      
+      usedExerciseIds.add(ex1.id)
+      usedExerciseIds.add(ex2.id)
+      
+      styledGroups.push({
+        id: `group_${groupId++}`,
+        groupType: 'superset',
+        exercises: [
+          {
+            id: ex1.id,
+            name: ex1.name,
+            prefix: 'B1',
+            trainingMethod: 'superset',
+            methodRationale: 'Superset for time efficiency',
+          },
+          {
+            id: ex2.id,
+            name: ex2.name,
+            prefix: 'B2',
+            trainingMethod: 'superset',
+            methodRationale: 'Superset for time efficiency',
+          },
+        ],
+        instruction: 'Alternate between exercises',
+        restProtocol: '60s after completing both',
+      })
+      
+      if (!appliedMethods.includes('supersets')) {
+        appliedMethods.push('supersets')
+      }
+    }
+  }
+  
+  // Any remaining exercises as straight sets
+  for (const exercise of accessoryNotUsed.filter(e => !usedExerciseIds.has(e.id))) {
+    usedExerciseIds.add(exercise.id)
+    styledGroups.push({
+      id: `group_${groupId++}`,
+      groupType: 'straight',
+      exercises: [{
+        id: exercise.id,
+        name: exercise.name,
+        trainingMethod: 'straight_sets',
+        methodRationale: 'Standard training approach',
+      }],
+      instruction: 'Complete all sets before moving on',
+      restProtocol: '60-90s between sets',
+    })
+  }
+  
+  // If no special methods were applied, add straight_sets as the applied method
+  if (appliedMethods.length === 0) {
+    appliedMethods.push('straight_sets')
+  }
+  
+  // Build style metadata
+  const primaryStyle = appliedMethods[0] || 'straight_sets'
+  const hasSupersetsApplied = styledGroups.some(g => g.groupType === 'superset')
+  const hasCircuitsApplied = styledGroups.some(g => g.groupType === 'circuit')
+  const hasDensityApplied = styledGroups.some(g => g.groupType === 'density_block')
+  
+  const structureDescParts: string[] = []
+  if (styledGroups.some(g => g.groupType === 'cluster')) structureDescParts.push('cluster sets for skill work')
+  if (hasSupersetsApplied) structureDescParts.push('antagonist supersets')
+  if (hasCircuitsApplied) structureDescParts.push('conditioning circuit')
+  if (hasDensityApplied) structureDescParts.push('density finisher')
+  if (structureDescParts.length === 0) structureDescParts.push('traditional straight sets')
+  
+  // ==========================================================================
+  // [PHASE 7A TASK 3] STRUCTURAL INFLUENCE AUDIT
+  // ==========================================================================
+  console.log('[training-style-structural-influence-audit]', {
+    sessionId: `day_${dayNumber}`,
+    selectedStyles: methodPreferences,
+    feasibleStylesForSession: feasibleMethods,
+    chosenStyleForSession: primaryStyle,
+    rejectedStylesForSession: rejectedMethods.map(r => r.method),
+    exactRejectionReasons: rejectedMethods,
+    didStyleActuallyChangeStructure: appliedMethods.length > 1 || primaryStyle !== 'straight_sets',
+    groupsCreated: styledGroups.length,
+    finalVerdict: hasSupersetsApplied || hasCircuitsApplied || hasDensityApplied
+      ? 'style_influenced_structure'
+      : 'straight_sets_default',
+  })
+  
+  return {
+    styledGroups,
+    appliedMethods,
+    rejectedMethods,
+    styleMetadata: {
+      primarySessionStyle: primaryStyle,
+      hasSupersetsApplied,
+      hasCircuitsApplied,
+      hasDensityApplied,
+      structureDescription: structureDescParts.join(', '),
+    },
+  }
+}
+
+/**
+ * [PHASE 7A TASK 5] Track weekly style representation
+ */
+export function auditWeeklyStyleRepresentation(
+  selectedStyles: TrainingMethodPreference[],
+  sessionsStyleResults: SessionStyleResult[]
+): void {
+  const representedStyles = new Set<TrainingMethodPreference>()
+  
+  for (const result of sessionsStyleResults) {
+    for (const method of result.appliedMethods) {
+      representedStyles.add(method)
+    }
+  }
+  
+  const neverUsed = selectedStyles.filter(s => !representedStyles.has(s))
+  const whyUnused: Record<string, string> = {}
+  
+  for (const style of neverUsed) {
+    // Aggregate rejection reasons from all sessions
+    const allReasons = sessionsStyleResults
+      .flatMap(r => r.rejectedMethods)
+      .filter(r => r.method === style)
+      .map(r => r.reason)
+    
+    whyUnused[style] = allReasons.length > 0 
+      ? [...new Set(allReasons)].join(', ')
+      : 'no_eligible_exercises_or_session_context'
+  }
+  
+  console.log('[weekly-training-style-representation-audit]', {
+    selectedStylesCanonical: selectedStyles,
+    stylesActuallyRepresentedThisWeek: [...representedStyles],
+    stylesNeverUsed: neverUsed,
+    whyUnused,
+    weekTooConstrained: neverUsed.length === selectedStyles.length,
+    structureTooGeneric: representedStyles.size === 1 && representedStyles.has('straight_sets'),
+    finalVerdict: neverUsed.length === 0 
+      ? 'all_selected_styles_represented'
+      : neverUsed.length < selectedStyles.length / 2
+        ? 'most_styles_represented'
+        : 'style_underrepresentation_detected',
+  })
+}

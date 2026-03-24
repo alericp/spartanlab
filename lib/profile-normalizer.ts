@@ -123,7 +123,8 @@ export function normalizeProfile(canonical: CanonicalProgrammingProfile): Normal
     hasRecoveryData: !!canonical.recoveryQuality,
   })
   
-  return {
+  // Build the normalized profile result
+  const result: NormalizedProfile = {
     level: canonical.experienceLevel,
     
     primaryGoal: canonical.primaryGoal,
@@ -189,6 +190,42 @@ export function normalizeProfile(canonical: CanonicalProgrammingProfile): Normal
     weakestArea: canonical.weakestArea,
     primaryLimitation: canonical.primaryLimitation,
   }
+  
+  // ==========================================================================
+  // [profile-normalization-truth-audit] TASK 4: Verify what comes in and out
+  // ==========================================================================
+  console.log('[profile-normalization-truth-audit]', {
+    // Incoming canonical values
+    incomingCanonical: {
+      selectedSkills: canonical.selectedSkills,
+      equipmentAvailable: canonical.equipmentAvailable,
+      trainingDaysPerWeek: canonical.trainingDaysPerWeek,
+      scheduleMode: canonical.scheduleMode,
+      sessionDurationMode: canonical.sessionDurationMode,
+      sessionLengthMinutes: canonical.sessionLengthMinutes,
+      trainingStyle: canonical.trainingStyle,
+      trainingPathType: canonical.trainingPathType,
+    },
+    // Outgoing normalized values
+    outgoingNormalized: {
+      skills: result.skills,
+      equipment: result.equipment,
+      trainingDays: result.trainingDays,
+      schedule: result.schedule,
+      sessionLength: result.sessionLength,
+    },
+    // Transformation audit
+    transformationAudit: {
+      skillsPreserved: canonical.selectedSkills?.length === result.skills.length,
+      skillsDropped: (canonical.selectedSkills || []).filter(s => !result.skills.includes(s)),
+      equipmentPreserved: (canonical.equipmentAvailable?.length || 0) === result.equipment.length,
+      equipmentDropped: (canonical.equipmentAvailable || []).filter(e => !result.equipment.includes(e)),
+      schedulePreserved: canonical.scheduleMode === result.schedule,
+      sessionLengthPreserved: canonical.sessionLengthMinutes === result.sessionLength,
+    },
+  })
+  
+  return result
 }
 
 // =============================================================================

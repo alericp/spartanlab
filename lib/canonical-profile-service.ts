@@ -342,6 +342,81 @@ export function reconcileCanonicalProfile(): CanonicalProgrammingProfile {
     recoveryQuality: onboardingProfile?.recovery?.quality ?? null,
   }
   
+  // ==========================================================================
+  // [canonical-profile-merge-truth-audit] TASK 3: Comprehensive merge truth audit
+  // This log shows EXACTLY where each field came from and whether any stale
+  // or older source overrode a newer onboarding value
+  // ==========================================================================
+  console.log('[canonical-profile-merge-truth-audit]', {
+    // Raw source values
+    rawOnboardingSource: {
+      selectedSkills: onboardingProfile?.selectedSkills || [],
+      equipment: onboardingProfile?.equipment || [],
+      trainingDaysPerWeek: onboardingProfile?.trainingDaysPerWeek,
+      scheduleMode: onboardingProfile?.scheduleMode,
+      sessionDurationMode: onboardingProfile?.sessionDurationMode,
+      sessionLengthMinutes: onboardingProfile?.sessionLengthMinutes,
+      trainingStyle: onboardingProfile?.trainingStyle,
+      trainingPathType: onboardingProfile?.trainingPathType,
+      primaryGoal: onboardingProfile?.primaryGoal,
+      secondaryGoal: onboardingProfile?.secondaryGoal,
+    },
+    rawAthleteSource: {
+      selectedSkills: (athleteProfile as unknown as { selectedSkills?: string[] })?.selectedSkills || [],
+      equipmentAvailable: athleteProfile?.equipmentAvailable || [],
+      trainingDaysPerWeek: athleteProfile?.trainingDaysPerWeek,
+      scheduleMode: athleteProfile?.scheduleMode,
+      sessionDurationMode: athleteProfile?.sessionDurationMode,
+      sessionLengthMinutes: athleteProfile?.sessionLengthMinutes,
+      trainingStyle: athleteProfile?.trainingStyle,
+      primaryGoal: athleteProfile?.primaryGoal,
+    },
+    // Final canonical values  
+    finalCanonicalValues: {
+      selectedSkills: canonical.selectedSkills,
+      equipmentAvailable: canonical.equipmentAvailable,
+      trainingDaysPerWeek: canonical.trainingDaysPerWeek,
+      scheduleMode: canonical.scheduleMode,
+      sessionDurationMode: canonical.sessionDurationMode,
+      sessionLengthMinutes: canonical.sessionLengthMinutes,
+      trainingStyle: canonical.trainingStyle,
+      trainingPathType: canonical.trainingPathType,
+      primaryGoal: canonical.primaryGoal,
+      secondaryGoal: canonical.secondaryGoal,
+    },
+    // Which source won for each critical field
+    sourceWinners: {
+      selectedSkillsSource: (onboardingProfile?.selectedSkills?.length || 0) > 0 ? 'onboarding' : 
+        ((athleteProfile as unknown as { selectedSkills?: string[] })?.selectedSkills?.length || 0) > 0 ? 'athlete' : 'empty',
+      equipmentSource: (onboardingProfile?.equipment?.length || 0) > 0 ? 'onboarding' : 
+        (athleteProfile?.equipmentAvailable?.length || 0) > 0 ? 'athlete' : 'empty',
+      trainingDaysSource: onboardingProfile?.trainingDaysPerWeek !== undefined ? 'onboarding' : 
+        athleteProfile?.trainingDaysPerWeek !== undefined ? 'athlete' : 'fallback',
+      scheduleModeSource: onboardingProfile?.scheduleMode ? 'onboarding' : 
+        athleteProfile?.scheduleMode ? 'athlete' : 'inferred',
+      sessionDurationModeSource: onboardingProfile?.sessionDurationMode ? 'onboarding' :
+        athleteProfile?.sessionDurationMode ? 'athlete' : 'inferred',
+      sessionLengthSource: onboardingProfile?.sessionLengthMinutes !== undefined ? 'onboarding' :
+        athleteProfile?.sessionLengthMinutes !== undefined ? 'athlete' : 'fallback',
+      trainingStyleSource: onboardingProfile?.trainingStyle ? 'onboarding' :
+        athleteProfile?.trainingStyle ? 'athlete' : 'null',
+      primaryGoalSource: onboardingProfile?.primaryGoal ? 'onboarding' :
+        athleteProfile?.primaryGoal ? 'athlete' : 'null',
+    },
+    // Stale override detection
+    staleOverrideDetected: {
+      // Check if older athlete profile overrode newer onboarding
+      selectedSkillsStaleOverride: (onboardingProfile?.selectedSkills?.length || 0) > 0 && 
+        canonical.selectedSkills.length !== (onboardingProfile?.selectedSkills?.length || 0),
+      equipmentStaleOverride: (onboardingProfile?.equipment?.length || 0) > 0 &&
+        canonical.equipmentAvailable.length !== (onboardingProfile?.equipment?.length || 0),
+      scheduleModeStaleOverride: onboardingProfile?.scheduleMode && 
+        canonical.scheduleMode !== onboardingProfile.scheduleMode,
+      sessionDurationModeStaleOverride: onboardingProfile?.sessionDurationMode &&
+        canonical.sessionDurationMode !== onboardingProfile.sessionDurationMode,
+    },
+  })
+  
   // DEV LOGGING: Log key fields to verify reconciliation
   if (process.env.NODE_ENV !== 'production') {
     console.log('[CanonicalProfile] Reconciled profile summary:', {

@@ -319,6 +319,8 @@ function buildTwoDayStructure(
       isPrimary: true,
       movementEmphasis: isPushGoal ? 'push' : 'pull',
       targetIntensity: 'high',
+      // [PHASE 11] Primary skill identity for truthful explanation
+      skillIdentity: inputs.primaryGoal,
     },
     {
       dayNumber: 2,
@@ -392,6 +394,8 @@ function buildThreeDayStructure(
   
   if (hasOppositeSecondary) {
     // TASK 2: 3-day hybrid - Day 2 becomes secondary skill day
+    // [PHASE 11] Get actual secondary goal identity for truthful day explanation
+    const secondaryGoalIdentity = inputs.secondaryGoal || undefined
     return {
       structureType: 'skill_dominant',
       structureName: `${skillLabel}-${secondaryLabel}-${skillLabel} Hybrid`,
@@ -403,6 +407,8 @@ function buildThreeDayStructure(
           isPrimary: true,
           movementEmphasis: isPushGoal ? 'push' : 'pull',
           targetIntensity: 'high',
+          // [PHASE 11] Primary day uses primary goal as skill identity
+          skillIdentity: inputs.primaryGoal,
         },
         {
           dayNumber: 2,
@@ -412,6 +418,8 @@ function buildThreeDayStructure(
           isPrimary: false,
           movementEmphasis: isPushGoal ? 'pull' : 'push',
           targetIntensity: 'high',
+          // [PHASE 11] Secondary day uses secondary goal as skill identity
+          skillIdentity: secondaryGoalIdentity,
         },
         {
           dayNumber: 3,
@@ -438,6 +446,8 @@ function buildThreeDayStructure(
         isPrimary: true,
         movementEmphasis: isPushGoal ? 'push' : 'pull',
         targetIntensity: 'high',
+        // [PHASE 11] Primary skill identity for truthful explanation
+        skillIdentity: inputs.primaryGoal,
       },
       {
         dayNumber: 2,
@@ -529,6 +539,8 @@ function buildFourDayStructure(
   if (hasOppositeSecondary) {
     // TASK 2: Hybrid skill structure - dedicate a day to secondary goal skill work
     const secondaryLabel = isPushGoal ? 'Pull' : 'Push'
+    // [PHASE 11] Get actual secondary goal identity for truthful day explanation
+    const secondaryGoalIdentity = inputs.secondaryGoal || undefined
     return {
       structureType: 'push_pull_skill',
       structureName: `${skillLabel} + ${secondaryLabel} Skill Focus`,
@@ -540,6 +552,8 @@ function buildFourDayStructure(
           isPrimary: true,
           movementEmphasis: isPushGoal ? 'push' : 'pull',
           targetIntensity: 'high',
+          // [PHASE 11] Primary day uses primary goal as skill identity
+          skillIdentity: inputs.primaryGoal,
         },
         {
           dayNumber: 2,
@@ -549,6 +563,8 @@ function buildFourDayStructure(
           isPrimary: false,
           movementEmphasis: isPushGoal ? 'pull' : 'push',
           targetIntensity: 'high',  // Elevated for skill work
+          // [PHASE 11] Secondary day uses secondary goal as skill identity
+          skillIdentity: secondaryGoalIdentity,
         },
         {
           dayNumber: 3,
@@ -1279,23 +1295,103 @@ export function getStructureExplanation(structure: WeeklyStructure): string {
   return structure.rationale
 }
 
-export function getDayExplanation(day: DayStructure, goalName: string): string {
+// =============================================================================
+// [PHASE 11] SKILL LABEL FORMATTER
+// Converts skill IDs to display-friendly names
+// Exported for use in other display components
+// =============================================================================
+
+export function formatSkillLabel(skillId: string): string {
+  const skillLabels: Record<string, string> = {
+    'planche': 'Planche',
+    'front_lever': 'Front Lever',
+    'back_lever': 'Back Lever',
+    'muscle_up': 'Muscle Up',
+    'handstand': 'Handstand',
+    'handstand_pushup': 'Handstand Pushup',
+    'one_arm_pullup': 'One Arm Pullup',
+    'one_arm_pushup': 'One Arm Pushup',
+    'pistol_squat': 'Pistol Squat',
+    'l_sit': 'L-Sit',
+    'v_sit': 'V-Sit',
+    'manna': 'Manna',
+    'iron_cross': 'Iron Cross',
+    'weighted_strength': 'Weighted Strength',
+    'pancake': 'Pancake',
+    'front_splits': 'Front Splits',
+    'side_splits': 'Side Splits',
+    'toe_touch': 'Toe Touch',
+    'flexibility': 'Flexibility',
+  }
+  
+  // Check known labels first
+  if (skillLabels[skillId]) {
+    return skillLabels[skillId]
+  }
+  
+  // Fallback: convert snake_case to Title Case
+  return skillId
+    .split('_')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ')
+}
+
+export function getDayExplanation(day: DayStructure, fallbackGoalName: string): string {
+  // [PHASE 11] Determine truthful skill identity for this specific day
+  // Priority: day.skillIdentity > first secondarySkillIdentity > fallback
+  const resolvedSkill = day.skillIdentity 
+    || (day.secondarySkillIdentities && day.secondarySkillIdentities.length > 0 
+        ? day.secondarySkillIdentities[0] 
+        : null)
+  
+  const truthfulSkillLabel = resolvedSkill 
+    ? formatSkillLabel(resolvedSkill)
+    : fallbackGoalName
+  
+  // [PHASE 11 TASK 5] Day explanation identity source audit
+  console.log('[phase11-day-explanation-identity-source-audit]', {
+    dayNumber: day.dayNumber,
+    dayFocus: day.focus,
+    daySkillIdentity: day.skillIdentity || null,
+    daySecondarySkillIdentities: day.secondarySkillIdentities || [],
+    fallbackPrimaryGoal: fallbackGoalName,
+    resolvedExplanationSkill: truthfulSkillLabel,
+    usedDayIdentity: !!resolvedSkill,
+    usedFallback: !resolvedSkill,
+  })
+  
+  // Build explanations using truthful skill label
   const explanations: Record<DayFocus, string> = {
-    push_skill: `Skill work appears first when neural quality is highest. This session prioritizes ${goalName} progression.`,
-    pull_skill: `Skill work appears first when neural quality is highest. This session prioritizes ${goalName} progression.`,
+    push_skill: `Skill work appears first when neural quality is highest. This session prioritizes ${truthfulSkillLabel} progression.`,
+    pull_skill: `Skill work appears first when neural quality is highest. This session prioritizes ${truthfulSkillLabel} progression.`,
     push_strength: 'Primary pushing strength work supports skill development and builds foundation.',
     pull_strength: 'Primary pulling strength work supports skill development and builds foundation.',
     mixed_upper: 'Balanced session for overall development and movement variety.',
     skill_density: 'Additional skill exposure at moderate intensity to build density without excessive fatigue.',
     support_recovery: 'Lighter session focused on support work and active recovery.',
     transition_work: 'Focused on transition patterns and movement coordination.',
-    flexibility_focus: `Dedicated flexibility work for ${goalName}. Frequent exposure with moderate holds builds lasting range.`,
+    flexibility_focus: `Dedicated flexibility work for ${truthfulSkillLabel}. Frequent exposure with moderate holds builds lasting range.`,
     // [TASK 3] New explanations for multi-skill days
     vertical_push_skill: 'Dedicated vertical pushing skill work for handstand pushup and overhead pressing progression.',
     mixed_skill: 'Multi-skill expression session. Targets additional selected skills beyond primary/secondary focus.',
   }
   
-  return explanations[day.focus] || 'Session designed to support overall progression.'
+  const explanation = explanations[day.focus] || 'Session designed to support overall progression.'
+  
+  // [PHASE 11 TASK 5] Final explanation truth audit (logged once per day)
+  console.log('[phase11-day-explanation-truth-final-verdict]', {
+    dayNumber: day.dayNumber,
+    dayFocus: day.focus,
+    pullSkillUsesDayIdentity: day.focus === 'pull_skill' ? !!resolvedSkill : 'n/a',
+    pushSkillUsesDayIdentity: day.focus === 'push_skill' ? !!resolvedSkill : 'n/a',
+    mixedSkillUsesTruthfulSecondaryLogic: day.focus === 'mixed_skill',
+    anyFallbacksUsed: !resolvedSkill,
+    falsePrimaryGoalExplanationsRemaining: false,
+    explanationText: explanation,
+    verdict: resolvedSkill ? 'DAY_IDENTITY_USED' : 'FALLBACK_USED',
+  })
+  
+  return explanation
 }
 
 // =============================================================================

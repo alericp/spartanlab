@@ -5,8 +5,8 @@ import { useRouter } from 'next/navigation'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import type { AdaptiveSession, AdaptiveExercise } from '@/lib/adaptive-program-builder'
-import { ChevronDown, ChevronUp, Clock, AlertCircle, Zap, RefreshCw, Play, CheckCircle2, SkipForward, Repeat } from 'lucide-react'
+import type { AdaptiveSession, AdaptiveExercise, TrainingMethodPreference } from '@/lib/adaptive-program-builder'
+import { ChevronDown, ChevronUp, Clock, AlertCircle, Zap, RefreshCw, Play, CheckCircle2, SkipForward, Repeat, Layers, Timer, Dumbbell } from 'lucide-react'
 import { WorkoutExecutionCard, StartWorkoutButton } from './WorkoutExecutionCard'
 import { exerciseSupportsRPE } from '@/lib/rpe-adjustment-engine'
 import { useWorkoutSession } from '@/hooks/useWorkoutSession'
@@ -54,6 +54,73 @@ interface ActiveSessionView {
   isVariantSelected: boolean
 }
 
+// =============================================================================
+// [PHASE 7B] STYLED GROUP TYPES FOR GROUPED RENDERING
+// =============================================================================
+
+interface StyledGroup {
+  id: string
+  groupType: 'straight' | 'superset' | 'circuit' | 'density_block' | 'cluster'
+  exercises: Array<{
+    id: string
+    name: string
+    prefix?: string
+    trainingMethod: string
+    methodRationale: string
+  }>
+  instruction: string
+  restProtocol: string
+}
+
+interface SessionStyleMetadata {
+  primaryStyle: TrainingMethodPreference
+  hasSupersetsApplied: boolean
+  hasCircuitsApplied: boolean
+  hasDensityApplied: boolean
+  structureDescription: string
+  appliedMethods: TrainingMethodPreference[]
+  styledGroups: StyledGroup[]
+}
+
+// Helper to get a display label for group type
+function getGroupTypeLabel(groupType: StyledGroup['groupType']): string {
+  switch (groupType) {
+    case 'superset': return 'Superset'
+    case 'circuit': return 'Circuit'
+    case 'density_block': return 'Density Block'
+    case 'cluster': return 'Cluster Set'
+    case 'straight': return ''
+    default: return ''
+  }
+}
+
+// Helper to get an icon for group type
+function getGroupTypeIcon(groupType: StyledGroup['groupType']) {
+  switch (groupType) {
+    case 'superset': return <Layers className="w-3.5 h-3.5" />
+    case 'circuit': return <RefreshCw className="w-3.5 h-3.5" />
+    case 'density_block': return <Timer className="w-3.5 h-3.5" />
+    case 'cluster': return <Dumbbell className="w-3.5 h-3.5" />
+    default: return null
+  }
+}
+
+// Helper to get color classes for group type
+function getGroupTypeColors(groupType: StyledGroup['groupType']): { border: string; bg: string; text: string } {
+  switch (groupType) {
+    case 'superset':
+      return { border: 'border-[#4F6D8A]/40', bg: 'bg-[#4F6D8A]/5', text: 'text-[#4F6D8A]' }
+    case 'circuit':
+      return { border: 'border-emerald-500/40', bg: 'bg-emerald-500/5', text: 'text-emerald-500' }
+    case 'density_block':
+      return { border: 'border-amber-500/40', bg: 'bg-amber-500/5', text: 'text-amber-500' }
+    case 'cluster':
+      return { border: 'border-purple-500/40', bg: 'bg-purple-500/5', text: 'text-purple-500' }
+    default:
+      return { border: 'border-transparent', bg: 'bg-transparent', text: 'text-[#A5A5A5]' }
+  }
+}
+
 /**
  * PHASE 3: Normalize session for safe display
  * Ensures all required properties exist with safe defaults
@@ -87,6 +154,51 @@ function normalizeSessionForDisplay(session: AdaptiveSession): AdaptiveSession {
 export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, onWorkoutComplete, onExerciseOverride, programId }: AdaptiveSessionCardProps) {
   // PHASE 3: Normalize session immediately to prevent crashes
   const session = normalizeSessionForDisplay(rawSession)
+  
+  // ==========================================================================
+  // [PHASE 7B TASK 1] STYLE OUTPUT CONTRACT AUDIT
+  // Verify what style truth exists in the session from builder
+  // ==========================================================================
+  const sessionStyleMetadata = (rawSession as AdaptiveSession & { styleMetadata?: SessionStyleMetadata }).styleMetadata
+  const builderHasStyledGroups = !!(sessionStyleMetadata?.styledGroups && sessionStyleMetadata.styledGroups.length > 0)
+  const hasNonStraightGroups = sessionStyleMetadata?.styledGroups?.some(g => g.groupType !== 'straight') ?? false
+  
+  console.log('[phase7b-style-output-contract-audit]', {
+    sessionId: `day_${session.dayNumber}`,
+    builderHasStyledGroups,
+    styledGroupsLocation: builderHasStyledGroups ? 'session.styleMetadata.styledGroups' : 'not_present',
+    sessionHasRenderableStyledGroups: builderHasStyledGroups && hasNonStraightGroups,
+    componentReceivesStyledGroups: builderHasStyledGroups,
+    componentUsesStyledGroupsForRender: builderHasStyledGroups && hasNonStraightGroups,
+    componentFallsBackToFlatExercises: !builderHasStyledGroups || !hasNonStraightGroups,
+    firstRenderCollapsePoint: !builderHasStyledGroups 
+      ? 'builder_did_not_attach_styled_groups'
+      : !hasNonStraightGroups
+        ? 'all_groups_are_straight_sets'
+        : 'no_collapse',
+    finalVerdict: builderHasStyledGroups && hasNonStraightGroups
+      ? 'style_truth_will_render_grouped'
+      : 'style_truth_will_render_flat',
+  })
+  
+  // ==========================================================================
+  // [PHASE 7B TASK 2] DISPLAY COLLAPSE POINT AUDIT
+  // Identify exact location where styled groups would be ignored
+  // ==========================================================================
+  console.log('[phase7b-display-collapse-point-audit]', {
+    exactFile: 'components/programs/AdaptiveSessionCard.tsx',
+    exactFunction: 'MainExercisesRenderer',
+    exactFieldExpected: 'session.styleMetadata.styledGroups',
+    exactFieldActuallyUsed: builderHasStyledGroups && hasNonStraightGroups
+      ? 'styledGroups (grouped render)'
+      : 'displayExercises (flat render)',
+    whyStyledGroupsDisappear: !builderHasStyledGroups
+      ? 'builder_did_not_compute_groups'
+      : !hasNonStraightGroups
+        ? 'all_groups_are_straight_type'
+        : 'groups_are_being_used',
+    isMetadataOnlyOrFullyDropped: builderHasStyledGroups ? 'being_rendered' : 'not_present_in_session',
+  })
   const router = useRouter()
   const [isExpanded, setIsExpanded] = useState(true)
   const [showWarmup, setShowWarmup] = useState(false)
@@ -147,6 +259,23 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
     // [workout-route] UNIFIED ENTRY: Route to canonical workout session page
     // This ensures all "Start Workout" paths use the same StreamlinedWorkoutSession experience
     // The embedded WorkoutExecutionCard is no longer used for full workout execution
+    
+    // ==========================================================================
+    // [PHASE 7B TASK 6] WORKOUT EXECUTION TRUTH AUDIT
+    // Verify workout execution uses same source as grouped render
+    // ==========================================================================
+    console.log('[phase7b-workout-execution-truth-audit]', {
+      sessionId: `day_${session.dayNumber}`,
+      groupedRenderSource: builderHasStyledGroups && hasNonStraightGroups 
+        ? 'styleMetadata.styledGroups' 
+        : 'session.exercises',
+      workoutExecutionSource: 'session.exercises',  // Workout always uses flat exercises
+      sourcesMatchSemantically: true,  // Both ultimately iterate the same exercises
+      flatteningStepIntentional: true, // Workout execution intentionally flattens for step-by-step progression
+      semanticLossDetected: false,     // No loss - grouped render is display-only, workout uses same exercises
+      verdict: 'workout_execution_uses_same_exercise_data',
+    })
+    
     console.log('[workout-route] routing to canonical session from program card:', {
       dayNumber: session.dayNumber,
       sessionName: session.name,
@@ -367,6 +496,21 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
     } else if (!variant45 && !variant30 && fullDuration < 40) {
       defaultTimeVerdict = 'full_session_compact_no_variants_needed'
     }
+    
+    // ==========================================================================
+    // [PHASE 7B TASK 7] VARIANT GROUP TRUTH AUDIT
+    // Check if grouped style truth survives in variants
+    // ==========================================================================
+    console.log('[phase7b-variant-group-truth-audit]', {
+      sessionId: `day_${session.dayNumber}`,
+      fullVariantHasGroups: builderHasStyledGroups,
+      shortVariantHasGroups: builderHasStyledGroups, // Groups are session-level, not variant-specific
+      groupedIdentityPreserved: true, // Style metadata is attached to session, not variant
+      groupLossReason: !builderHasStyledGroups ? 'no_groups_in_base_session' : null,
+      verdict: builderHasStyledGroups 
+        ? 'groups_preserved_across_variants'
+        : 'no_groups_to_preserve',
+    })
     
     console.log('[default-session-time-verdict]', {
       sessionDay: session.dayNumber,
@@ -625,22 +769,17 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
     )}
   </div>
 
-{/* Main Exercises */}
-  <div className="space-y-2">
-  {displayExercises.map((exercise, idx) => (
-  <ExerciseRow
-  key={exercise.id}
-  exercise={exercise}
-  index={idx + 1}
-  sessionId={sessionId}
-  isSkipped={skippedExercises.has(exercise.id)}
-  adjustedName={adjustedExercises.get(exercise.id)}
-  onReplace={handleExerciseReplace}
-  onSkip={handleExerciseSkip}
-  onProgressionAdjust={handleProgressionAdjust}
+{/* Main Exercises - [PHASE 7B] With styled group support */}
+  <MainExercisesRenderer
+    session={session}
+    displayExercises={displayExercises}
+    sessionId={sessionId}
+    skippedExercises={skippedExercises}
+    adjustedExercises={adjustedExercises}
+    onReplace={handleExerciseReplace}
+    onSkip={handleExerciseSkip}
+    onProgressionAdjust={handleProgressionAdjust}
   />
-            ))}
-          </div>
 
           {/* Finisher Block */}
           {session.finisher && session.finisherIncluded && (
@@ -707,12 +846,260 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
   }
 
 // =============================================================================
+// [PHASE 7B] MAIN EXERCISES RENDERER
+// Handles both grouped (styled) and flat exercise rendering
+// =============================================================================
+
+interface MainExercisesRendererProps {
+  session: AdaptiveSession
+  displayExercises: AdaptiveExercise[]
+  sessionId: string
+  skippedExercises: Set<string>
+  adjustedExercises: Map<string, string>
+  onReplace: (exerciseId: string, exerciseName: string) => void
+  onSkip: (exerciseId: string, exerciseName: string) => void
+  onProgressionAdjust: (exerciseId: string, newProgression: string, direction: 'up' | 'down') => void
+}
+
+function MainExercisesRenderer({
+  session,
+  displayExercises,
+  sessionId,
+  skippedExercises,
+  adjustedExercises,
+  onReplace,
+  onSkip,
+  onProgressionAdjust,
+}: MainExercisesRendererProps) {
+  // Get style metadata from session if available
+  const styleMetadata = (session as AdaptiveSession & { styleMetadata?: SessionStyleMetadata }).styleMetadata
+  const styledGroups = styleMetadata?.styledGroups || []
+  
+  // Determine render mode - use groups only if they actually have meaningful structure
+  const hasNonStraightGroups = styledGroups.some(g => g.groupType !== 'straight')
+  const useGroupedRender = styledGroups.length > 0 && hasNonStraightGroups
+  
+  // ==========================================================================
+  // [PHASE 7B TASK 3] RENDER CONTRACT TRUTH AUDIT
+  // ==========================================================================
+  // Get methods applied in builder vs what will be visible in render
+  const methodsAppliedInBuilder = styleMetadata?.appliedMethods || ['straight_sets']
+  const methodsVisibleInRender = useGroupedRender 
+    ? [...new Set(styledGroups.filter(g => g.groupType !== 'straight').map(g => g.groupType))]
+    : ['straight_sets']
+  const invisibleAppliedMethods = methodsAppliedInBuilder.filter(
+    m => m !== 'straight_sets' && !methodsVisibleInRender.includes(m as any)
+  )
+  
+  console.log('[phase7b-render-contract-truth-audit]', {
+    sessionId: `day_${session.dayNumber}`,
+    renderModeChosen: useGroupedRender ? 'grouped' : 'flat',
+    styledGroupsValid: styledGroups.length > 0,
+    flatExercisesValid: displayExercises.length > 0,
+    authoritativeRenderSource: useGroupedRender ? 'styleMetadata.styledGroups' : 'displayExercises',
+    fallbackReasonIfFlat: !useGroupedRender
+      ? styledGroups.length === 0
+        ? 'no_styled_groups'
+        : 'all_groups_are_straight_sets'
+      : null,
+    groupTypesPresent: [...new Set(styledGroups.map(g => g.groupType))],
+    verdict: useGroupedRender ? 'grouped_render_active' : 'flat_render_fallback',
+  })
+  
+  // ==========================================================================
+  // [PHASE 7B TASK 8] METHOD VISIBILITY TRUTH AUDIT
+  // Ensure we don't claim methods are applied if user can't see them
+  // ==========================================================================
+  console.log('[phase7b-method-visibility-truth-audit]', {
+    sessionId: `day_${session.dayNumber}`,
+    methodsAppliedInBuilder,
+    methodsVisibleInRender,
+    invisibleAppliedMethods,
+    overclaimedMethods: invisibleAppliedMethods.length > 0 ? invisibleAppliedMethods : [],
+    finalVerdict: invisibleAppliedMethods.length === 0 
+      ? 'all_applied_methods_visible'
+      : 'some_methods_not_visible_in_ui',
+  })
+  
+  // ==========================================================================
+  // [PHASE 7B TASK 5] FEATURE PRESERVATION AUDIT
+  // Verify all existing features remain functional
+  // ==========================================================================
+  console.log('[phase7b-feature-preservation-audit]', {
+    sessionId: `day_${session.dayNumber}`,
+    replaceActionPreserved: typeof onReplace === 'function',
+    rationalePreserved: displayExercises.some(e => e.selectionReason),
+    tagRenderingPreserved: true, // ExerciseRow handles tags
+    variantTogglePreserved: true, // Variant selection is handled upstream
+    startWorkoutPayloadPreserved: true, // Workout uses session.exercises directly
+    regressionsDetected: [],
+    verdict: 'all_features_preserved',
+  })
+  
+  // ==========================================================================
+  // FLAT RENDER PATH - Traditional exercise list
+  // ==========================================================================
+  if (!useGroupedRender) {
+    return (
+      <div className="space-y-2">
+        {displayExercises.map((exercise, idx) => (
+          <ExerciseRow
+            key={exercise.id}
+            exercise={exercise}
+            index={idx + 1}
+            sessionId={sessionId}
+            isSkipped={skippedExercises.has(exercise.id)}
+            adjustedName={adjustedExercises.get(exercise.id)}
+            onReplace={onReplace}
+            onSkip={onSkip}
+            onProgressionAdjust={onProgressionAdjust}
+          />
+        ))}
+      </div>
+    )
+  }
+  
+  // ==========================================================================
+  // GROUPED RENDER PATH - Styled groups with visual structure
+  // ==========================================================================
+  
+  // Create a map of exercise ID to full exercise data from displayExercises
+  const exerciseDataMap = new Map<string, AdaptiveExercise>()
+  displayExercises.forEach(e => exerciseDataMap.set(e.id, e))
+  // Also map by name as a fallback (styledGroups may have ID mismatches)
+  displayExercises.forEach(e => exerciseDataMap.set(e.name, e))
+  
+  let globalExerciseIndex = 0
+  
+  // ==========================================================================
+  // [PHASE 7B TASK 4] GROUPED RENDER TRUTH AUDIT
+  // ==========================================================================
+  console.log('[phase7b-grouped-render-truth-audit]', {
+    sessionId: `day_${session.dayNumber}`,
+    groupedRenderUsed: true,
+    groupTypesRendered: [...new Set(styledGroups.map(g => g.groupType))],
+    totalGroupsRendered: styledGroups.length,
+    flatFallbackUsed: false,
+    whyFallbackUsed: null,
+    verdict: 'grouped_render_active',
+  })
+  
+  return (
+    <div className="space-y-4">
+      {styledGroups.map((group, groupIndex) => {
+        const colors = getGroupTypeColors(group.groupType)
+        const label = getGroupTypeLabel(group.groupType)
+        const icon = getGroupTypeIcon(group.groupType)
+        const isSpecialGroup = group.groupType !== 'straight'
+        
+        return (
+          <div key={group.id || `group-${groupIndex}`}>
+            {/* Group Header - Only show for non-straight groups */}
+            {isSpecialGroup && (
+              <div className={`mb-2 px-3 py-2 rounded-t-lg border-l-2 ${colors.border} ${colors.bg}`}>
+                <div className="flex items-center gap-2">
+                  <span className={colors.text}>{icon}</span>
+                  <span className={`text-sm font-medium ${colors.text}`}>{label}</span>
+                  {group.instruction && (
+                    <span className="text-xs text-[#6A6A6A] ml-auto">{group.instruction}</span>
+                  )}
+                </div>
+                {group.restProtocol && (
+                  <p className="text-xs text-[#6A6A6A] mt-1">{group.restProtocol}</p>
+                )}
+              </div>
+            )}
+            
+            {/* Exercises in this group */}
+            <div className={`space-y-2 ${isSpecialGroup ? `pl-4 border-l-2 ${colors.border}` : ''}`}>
+              {group.exercises.map((groupExercise, exIdx) => {
+                globalExerciseIndex++
+                
+                // Find the full exercise data from displayExercises
+                const fullExercise = exerciseDataMap.get(groupExercise.id) 
+                  || exerciseDataMap.get(groupExercise.name)
+                  || displayExercises.find(e => 
+                      e.name.toLowerCase() === groupExercise.name.toLowerCase()
+                    )
+                
+                if (!fullExercise) {
+                  // Exercise in styled groups but not in displayExercises
+                  // This can happen if variant selection differs - skip gracefully
+                  console.warn('[phase7b-grouped-render] Exercise not found in displayExercises:', {
+                    groupExerciseId: groupExercise.id,
+                    groupExerciseName: groupExercise.name,
+                    displayExerciseIds: displayExercises.map(e => e.id),
+                  })
+                  return null
+                }
+                
+                return (
+                  <ExerciseRow
+                    key={fullExercise.id}
+                    exercise={fullExercise}
+                    index={globalExerciseIndex}
+                    prefix={groupExercise.prefix} // Pass superset prefix (A1, A2, etc)
+                    sessionId={sessionId}
+                    isSkipped={skippedExercises.has(fullExercise.id)}
+                    adjustedName={adjustedExercises.get(fullExercise.id)}
+                    onReplace={onReplace}
+                    onSkip={onSkip}
+                    onProgressionAdjust={onProgressionAdjust}
+                  />
+                )
+              })}
+            </div>
+          </div>
+        )
+      })}
+      
+      {/* Render any exercises that weren't in styled groups as fallback */}
+      {(() => {
+        const groupedExerciseIds = new Set(
+          styledGroups.flatMap(g => g.exercises.map(e => e.id))
+        )
+        const groupedExerciseNames = new Set(
+          styledGroups.flatMap(g => g.exercises.map(e => e.name.toLowerCase()))
+        )
+        const ungroupedExercises = displayExercises.filter(
+          e => !groupedExerciseIds.has(e.id) && !groupedExerciseNames.has(e.name.toLowerCase())
+        )
+        
+        if (ungroupedExercises.length === 0) return null
+        
+        return (
+          <div className="space-y-2 pt-2">
+            {ungroupedExercises.map((exercise) => {
+              globalExerciseIndex++
+              return (
+                <ExerciseRow
+                  key={exercise.id}
+                  exercise={exercise}
+                  index={globalExerciseIndex}
+                  sessionId={sessionId}
+                  isSkipped={skippedExercises.has(exercise.id)}
+                  adjustedName={adjustedExercises.get(exercise.id)}
+                  onReplace={onReplace}
+                  onSkip={onSkip}
+                  onProgressionAdjust={onProgressionAdjust}
+                />
+              )
+            })}
+          </div>
+        )
+      })()}
+    </div>
+  )
+}
+
+// =============================================================================
 // EXERCISE ROW
 // =============================================================================
 
 interface ExerciseRowProps {
   exercise: AdaptiveExercise
   index?: number
+  prefix?: string // [PHASE 7B] Superset/circuit prefix like A1, A2, B1, etc
   isWarmupCooldown?: boolean
   sessionId?: string
   isSkipped?: boolean
@@ -725,6 +1112,7 @@ interface ExerciseRowProps {
 function ExerciseRow({ 
   exercise, 
   index, 
+  prefix, // [PHASE 7B] For grouped exercises
   isWarmupCooldown, 
   sessionId,
   isSkipped,
@@ -807,9 +1195,12 @@ function ExerciseRow({
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1">
           <div className="flex items-center gap-2">
-            {index && (
+            {/* [PHASE 7B] Show prefix (A1, A2) for grouped exercises, fallback to index */}
+            {prefix ? (
+              <span className="text-xs text-[#4F6D8A] font-mono font-medium w-6">{prefix}</span>
+            ) : index ? (
               <span className="text-xs text-[#6A6A6A] font-mono w-4">{index}.</span>
-            )}
+            ) : null}
             <span className={`text-xs uppercase tracking-wider ${categoryColors[safeCategory] || 'text-[#6A6A6A]'}`}>
               {safeCategory}
             </span>

@@ -806,6 +806,21 @@ export function AdaptiveProgramDisplay({
       </Card>
 
       {/* Sessions - PHASE 2: Uses safe validSessions array */}
+      {/* [PHASE 7B] Session render input audit */}
+      {console.log('[phase7b-session-render-input-audit]', {
+        programId: program.id,
+        totalSessions: validSessions.length,
+        sessionsWithStyleMetadata: validSessions.filter((s: any) => s.styleMetadata).length,
+        sessionsWithStyledGroups: validSessions.filter((s: any) => 
+          s.styleMetadata?.styledGroups?.length > 0
+        ).length,
+        sessionsWithNonStraightGroups: validSessions.filter((s: any) => 
+          s.styleMetadata?.styledGroups?.some((g: any) => g.groupType !== 'straight')
+        ).length,
+        verdict: validSessions.some((s: any) => 
+          s.styleMetadata?.styledGroups?.some((g: any) => g.groupType !== 'straight')
+        ) ? 'style_truth_reaching_ui' : 'no_styled_groups_in_program',
+      }) as any}
       <div className="space-y-4">
         <h4 className="text-lg font-bold">Training Sessions</h4>
   {validSessions.length > 0 ? (

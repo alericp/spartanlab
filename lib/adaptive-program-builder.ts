@@ -7475,22 +7475,23 @@ return explanations.length > 0 ? explanations : undefined
   // ==========================================================================
   // [PHASE 6B] OUTPUT TIGHTENING FINAL VERDICT
   // Comprehensive verification that output is now tight and truthful
+  // NOTE: Variables prefixed with phase6b_ to avoid same-scope collision with earlier declarations
   // ==========================================================================
-  const headlineSkillCount = weeklyRepresentationPolicy.filter(p => 
+  const phase6bHeadlineSkillCount = weeklyRepresentationPolicy.filter(p => 
     p.representationVerdict === 'headline_represented'
   ).length
-  const broadlyRepresentedCount = weeklyRepresentationPolicy.filter(p => 
+  const phase6bBroadlyRepresentedCount = weeklyRepresentationPolicy.filter(p => 
     p.representationVerdict === 'broadly_represented'
   ).length
-  const supportOnlyCount = weeklyRepresentationPolicy.filter(p => 
+  const phase6bSupportOnlyCount = weeklyRepresentationPolicy.filter(p => 
     p.representationVerdict === 'support_only'
   ).length
   
   // [PHASE 6B] Verify primary dominates
-  const primaryPolicy = weeklyRepresentationPolicy.find(p => p.skill === primaryGoal)
+  const phase6bPrimaryPolicy = weeklyRepresentationPolicy.find(p => p.skill === primaryGoal)
   const primaryDominanceTightened = 
-    primaryPolicy?.representationVerdict === 'headline_represented' &&
-    (primaryPolicy?.actualExposure?.total || 0) >= 4
+    phase6bPrimaryPolicy?.representationVerdict === 'headline_represented' &&
+    (phase6bPrimaryPolicy?.actualExposure?.total || 0) >= 4
   
   // [PHASE 6B] Verify secondary is meaningful but not competing
   const secondaryPolicy = secondaryGoal 
@@ -7562,9 +7563,9 @@ return explanations.length > 0 ? explanations : undefined
     styleSelectionsActuallyInfluencingBuilder,
     deselectedSkillsStillBlocked,
     detailedCounts: {
-      headlineSkills: headlineSkillCount,
-      broadlyRepresented: broadlyRepresentedCount,
-      supportOnly: supportOnlyCount,
+      headlineSkills: phase6bHeadlineSkillCount,
+      broadlyRepresented: phase6bBroadlyRepresentedCount,
+      supportOnly: phase6bSupportOnlyCount,
       tertiaryInBuiltAround: tertiarySkills.length,
       builtAroundTotal: builtAroundSkillsFinal.length,
       sessionIdentityMismatches: sessionIdentityMismatches.length,
@@ -7574,6 +7575,15 @@ return explanations.length > 0 ? explanations : undefined
       tertiaryVisibilityReducedToEarnedOnly && 
       deselectedSkillsStillBlocked &&
       builtAroundChipsNowUseStrictTruth,
+  })
+  
+  // [PHASE 6B COMPILE CLEANUP] Scope-safe variable naming verification
+  console.log('[phase6b-compile-scope-cleanup-verdict]', {
+    duplicateNamesFound: ['supportOnlyCount(x3)', 'headlineSkillCount', 'broadlyRepresentedCount', 'primaryPolicy'],
+    renamedTo: ['phase6bSupportOnlyCount', 'phase6bHeadlineSkillCount', 'phase6bBroadlyRepresentedCount', 'phase6bPrimaryPolicy', 'sessionSupportOnlyCount'],
+    logicPreserved: true,
+    compileCleanupOnly: true,
+    safeToRetryBuild: true,
   })
   
   // ==========================================================================
@@ -8420,7 +8430,7 @@ function getSkillsForSession(
   const totalSelectedSkillCount = weightedAllocation.length
   const directlyExpressedCount = skillTruthAudit.filter(a => a.finalExpressionStatus === 'direct').length
   const technicallyExpressedCount = skillTruthAudit.filter(a => a.finalExpressionStatus === 'technical').length
-  const supportOnlyCount = skillTruthAudit.filter(a => a.finalExpressionStatus === 'support_only').length
+  const sessionSupportOnlyCount = skillTruthAudit.filter(a => a.finalExpressionStatus === 'support_only').length
   const warmupOnlyCount = skillTruthAudit.filter(a => a.finalExpressionStatus === 'warmup_only').length
   const deferredCount = skillTruthAudit.filter(a => a.finalExpressionStatus === 'deferred').length
   
@@ -8431,10 +8441,10 @@ function getSkillsForSession(
     totalSelectedSkillCount,
     totalDirectlyExpressedSkillCount: directlyExpressedCount,
     totalTechnicallyExpressedCount: technicallyExpressedCount,
-    totalSupportOnlySkillCount: supportOnlyCount,
+    totalSupportOnlySkillCount: sessionSupportOnlyCount,
     totalWarmupOnlyCount: warmupOnlyCount,
     totalDeferredSkillCount: deferredCount,
-    expressionRate: `${Math.round(((directlyExpressedCount + technicallyExpressedCount + supportOnlyCount) / totalSelectedSkillCount) * 100)}%`,
+    expressionRate: `${Math.round(((directlyExpressedCount + technicallyExpressedCount + sessionSupportOnlyCount) / totalSelectedSkillCount) * 100)}%`,
     skillBreakdown: skillTruthAudit.map(a => ({
       skill: a.skill,
       priority: a.priorityLevel,

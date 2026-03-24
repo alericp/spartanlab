@@ -84,8 +84,26 @@ function OwnerSimulationToggleInner() {
   // Real status from database (before simulation overlay)
   const realStatus = entitlement.plan || 'unknown'
   
+  // [PHASE 14B TASK 7] Render audit
+  console.log('[phase14b-owner-toggle-render-audit]', {
+    wrapperMounted: true,
+    authLoaded: isLoaded,
+    ownerVerdict: isOwner,
+    toggleRendered: true,
+    simulationMode: mode,
+    realStatus,
+  })
+  
   const handleModeChange = (newMode: SimulationMode) => {
     try {
+      // [PHASE 14B TASK 7] Log toggle change
+      console.log('[phase14b-owner-toggle-live-verdict]', {
+        previousMode: mode,
+        newMode,
+        entitlementWillChange: true,
+        pageWillReload: true,
+      })
+      
       setSimulationMode(newMode)
       // Revalidate entitlement to pick up simulation change
       entitlement.mutate?.()

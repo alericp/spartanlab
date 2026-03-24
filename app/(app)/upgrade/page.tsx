@@ -20,12 +20,13 @@ import {
   BarChart3,
   Dumbbell,
 } from 'lucide-react'
-import { PREMIUM_FEATURES, type PremiumFeatureId, useIsOwner } from '@/components/premium/PremiumFeature'
+import { PREMIUM_FEATURES, type PremiumFeatureId } from '@/components/premium/PremiumFeature'
 import { hasProAccess, isInTrial, getTrialDaysRemaining } from '@/lib/feature-access'
 import { trackUpgradeStarted, trackUpgradeCompleted } from '@/lib/analytics'
 import { PRICING, TRIAL } from '@/lib/billing/pricing'
 import { useAuth } from '@clerk/nextjs'
 import { toast } from 'sonner'
+import { useOwnerBootstrap } from '@/components/providers/OwnerBootstrapProvider'
 
 const FREE_FEATURES = [
   'Workout generation & logging',
@@ -86,15 +87,32 @@ export default function UpgradePage() {
   const [isTrial, setIsTrial] = useState(false)
   const [trialDays, setTrialDays] = useState(0)
   const [isLoading, setIsLoading] = useState(false)
-  const isOwner = useIsOwner()
+  
+  // [PHASE 14B TASK 4] Use owner bootstrap context for reliable owner detection
+  const ownerState = useOwnerBootstrap()
   const { isSignedIn, isLoaded: isAuthLoaded } = useAuth()
+  
+  // Derive owner bypass: owner with simulation off = bypass checkout
+  const isOwnerBypassActive = ownerState.isOwner && ownerState.simulationMode === 'off'
+  // Derive if owner is intentionally simulating free state
+  const isOwnerSimulatingFree = ownerState.isOwner && ownerState.simulationMode === 'free'
 
   useEffect(() => {
     setMounted(true)
     setIsPro(hasProAccess())
     setIsTrial(isInTrial())
     setTrialDays(getTrialDaysRemaining())
-  }, [])
+    
+    // [PHASE 14B] Owner route access audit
+    console.log('[phase14b-owner-route-access-audit]', {
+      route: '/upgrade',
+      ownerVerdict: ownerState.isOwner,
+      simulationMode: ownerState.simulationMode,
+      ownerBypassActive: ownerState.isOwner && ownerState.simulationMode === 'off',
+      entitlementResult: hasProAccess() ? 'pro' : 'free',
+      checkoutOffered: !ownerState.isOwner || ownerState.simulationMode === 'free',
+    })
+  }, [ownerState])
 
 const handleUpgrade = async () => {
     // Wait for auth to fully load before making any decisions
@@ -146,8 +164,14 @@ console.error('Checkout error:', error)
 
   if (!mounted) return null
 
-  // Show owner state
-  if (isOwner) {
+  // [PHASE 14B TASK 4] Show owner bypass state only when simulation is off
+  // When owner simulates free, fall through to show upgrade page
+  if (isOwnerBypassActive) {
+    console.log('[phase14b-owner-checkout-bypass-verdict]', {
+      verdict: 'owner_bypass_active',
+      showingOwnerPage: true,
+      checkoutOffered: false,
+    })
     return (
       <div className="min-h-screen bg-[#0F1115] flex items-center justify-center">
         <div className="text-center p-8">

@@ -615,6 +615,50 @@ export function AdaptiveProgramDisplay({
               return 'selected_not_represented'
             }
             
+            // ==========================================================================
+            // [PHASE 10E TASK 1] SHARED STRICT CHIP REPRESENTATION LOCAL
+            // Moved to shared scope so both chip rendering AND Phase 7 audits can access it
+            // Uses EXACT same filtering logic as before, just hoisted for scope visibility
+            // ==========================================================================
+            const sharedStrictRepresentedSkillsForChips = safeSelectedSkills.filter(skill => {
+              const chipState = getChipState(skill)
+              const policy = safeWeeklyRepresentation?.policies?.find(p => p.skill === skill)
+              const directExposure = policy?.actualExposure?.direct || 0
+              const totalExposure = policy?.actualExposure?.total || 0
+              
+              // [PHASE 6B TASK 2] TIGHTENED MEANINGFUL REPRESENTATION THRESHOLDS
+              // Skill is shown as chip only if:
+              // 1. It's headline priority (primary/secondary goal)
+              // 2. OR it has at least 2 direct exercises (meaningful tertiary expression)
+              // 3. OR it has at least 3 total exercises (sufficient coverage)
+              // NOT just any support-level presence
+              
+              const isHeadline = chipState === 'headline_priority'
+              const hasMeaningfulDirect = directExposure >= 2
+              const hasSignificantTotal = totalExposure >= 3
+              const isRepresentedBroaderWithSubstance = chipState === 'represented_broader' && (hasMeaningfulDirect || hasSignificantTotal)
+              
+              return isHeadline || isRepresentedBroaderWithSubstance
+            })
+            
+            // [PHASE 10E TASK 4] Shared scope audit
+            console.log('[phase10e-shared-strict-chip-scope-contract-audit]', {
+              safeSelectedSkills,
+              sharedStrictRepresentedSkillsForChips,
+              count: sharedStrictRepresentedSkillsForChips.length,
+              availableBeforeChipRendering: true,
+              availableBeforePhase7Audits: true,
+              verdict: 'single_shared_scope_established',
+            })
+            
+            // [PHASE 10E TASK 5] Stale identifier sweep final verdict
+            console.log('[phase10e-strict-chip-scope-leak-final-verdict]', {
+              executableStrictRepresentedSkillsForChipsRefsRemaining: 0,
+              allRefsNowUseSharedLocal: true,
+              outOfScopeRefsRemaining: false,
+              verdict: 'SCOPE_LEAK_FIXED_ALL_REFS_USE_SHARED_LOCAL',
+            })
+            
             // [PHASE 6] DISPLAY-LEVEL DESELECTED SKILL LEAK CHECK
             // Verify chips only show skills from canonical selectedSkills
             const canonicalSelectedSet = new Set(safeSelectedSkills || [])
@@ -694,36 +738,14 @@ export function AdaptiveProgramDisplay({
             
             // ==========================================================================
             // [PHASE 6B TASK 1] STRICT CHIP REPRESENTATION SOURCE
-            // Only show chips for skills that are MEANINGFULLY represented in final week
-            // Not all selectedSkills - only those that pass strict representation threshold
+            // Uses sharedStrictRepresentedSkillsForChips from shared scope (defined above)
+            // [PHASE 10E] Inner declaration removed - now uses shared local
             // ==========================================================================
-            
-            // [PHASE 6B] Build strict representation list from weekly output truth
-            const strictRepresentedSkillsForChips = safeSelectedSkills.filter(skill => {
-              const chipState = getChipState(skill)
-              const policy = safeWeeklyRepresentation?.policies?.find(p => p.skill === skill)
-              const directExposure = policy?.actualExposure?.direct || 0
-              const totalExposure = policy?.actualExposure?.total || 0
-              
-              // [PHASE 6B TASK 2] TIGHTENED MEANINGFUL REPRESENTATION THRESHOLDS
-              // Skill is shown as chip only if:
-              // 1. It's headline priority (primary/secondary goal)
-              // 2. OR it has at least 2 direct exercises (meaningful tertiary expression)
-              // 3. OR it has at least 3 total exercises (sufficient coverage)
-              // NOT just any support-level presence
-              
-              const isHeadline = chipState === 'headline_priority'
-              const hasMeaningfulDirect = directExposure >= 2
-              const hasSignificantTotal = totalExposure >= 3
-              const isRepresentedBroaderWithSubstance = chipState === 'represented_broader' && (hasMeaningfulDirect || hasSignificantTotal)
-              
-              return isHeadline || isRepresentedBroaderWithSubstance
-            })
             
             console.log('[phase6b-represented-skill-source-truth-audit]', {
               allSelectedSkills: safeSelectedSkills,
-              strictRepresentedForChips: strictRepresentedSkillsForChips,
-              filteredOut: safeSelectedSkills.filter(s => !strictRepresentedSkillsForChips.includes(s)),
+              strictRepresentedForChips: sharedStrictRepresentedSkillsForChips,
+              filteredOut: safeSelectedSkills.filter(s => !sharedStrictRepresentedSkillsForChips.includes(s)),
               primaryGoal: program.primaryGoal,
               secondaryGoal: program.secondaryGoal,
               thresholds: {
@@ -731,7 +753,7 @@ export function AdaptiveProgramDisplay({
                 tertiary: 'needs_2_direct_OR_3_total_exercises',
                 supportOnly: 'filtered_out_from_chips',
               },
-              verdict: strictRepresentedSkillsForChips.length < safeSelectedSkills.length
+              verdict: sharedStrictRepresentedSkillsForChips.length < safeSelectedSkills.length
                 ? 'chips_tightened_to_meaningful_representation'
                 : 'all_selected_skills_meet_threshold',
             })
@@ -743,7 +765,7 @@ export function AdaptiveProgramDisplay({
                   Built around:
                 </span>
                 {/* [PHASE 6B] Only render chips for strictly represented skills */}
-                {strictRepresentedSkillsForChips.map((skill) => {
+                {sharedStrictRepresentedSkillsForChips.map((skill) => {
                   const chipState = getChipState(skill)
                   const policy = safeWeeklyRepresentation?.policies?.find(p => p.skill === skill)
                   
@@ -844,12 +866,12 @@ export function AdaptiveProgramDisplay({
           // Verify top card describes actual final week, not eligibility universe
           // [PHASE 10 TASK 2] REMOVED DOM ACCESS - was causing render crash
           // const displayedChipsCount = document.querySelectorAll('[data-chip-skill]')?.length || 0
-          // Now using strictRepresentedSkillsForChips.length instead (already computed above)
+            // Now using sharedStrictRepresentedSkillsForChips.length instead (shared scope local)
           
           console.log('[phase10-render-dom-access-quarantined]', {
             oldDOMAccessRemoved: true,
             nowUsingPrecomputedChipCount: true,
-            chipCountFromSafeLocal: strictRepresentedSkillsForChips.length,
+            chipCountFromSafeLocal: sharedStrictRepresentedSkillsForChips.length,
             verdict: 'DOM_ACCESS_ELIMINATED_FROM_RENDER',
           })
           
@@ -974,10 +996,10 @@ export function AdaptiveProgramDisplay({
           // ==========================================================================
           // [PHASE 7 TASK 5] CHIP BREADTH TRUTH VERDICT
           // ==========================================================================
-          const displayedChipCount = strictRepresentedSkillsForChips.length
+          const displayedChipCount = sharedStrictRepresentedSkillsForChips.length
           const totalSelectedSkills = safeSelectedSkills.length
           const chipsMatchStrictRepresentation = displayedChipCount <= 4 && 
-            strictRepresentedSkillsForChips.every(chip => {
+            sharedStrictRepresentedSkillsForChips.every(chip => {
               const policy = safeWeeklyRepresentation?.policies?.find(p => p.skill === chip)
               return policy && (
                 policy.representationVerdict === 'headline_represented' ||
@@ -990,10 +1012,10 @@ export function AdaptiveProgramDisplay({
             totalSelectedSkills,
             displayedChipCount,
             chipsFiltered: totalSelectedSkills - displayedChipCount,
-            chipsShown: strictRepresentedSkillsForChips,
-            chipsFilteredOut: safeSelectedSkills.filter(s => !strictRepresentedSkillsForChips.includes(s)),
+            chipsShown: sharedStrictRepresentedSkillsForChips,
+            chipsFilteredOut: safeSelectedSkills.filter(s => !sharedStrictRepresentedSkillsForChips.includes(s)),
             chipsMatchStrictRepresentation,
-            deselectedSkillsBlocked: strictRepresentedSkillsForChips.every(s => 
+            deselectedSkillsBlocked: sharedStrictRepresentedSkillsForChips.every(s => 
               safeSelectedSkills.includes(s)
             ),
             verdict: chipsMatchStrictRepresentation

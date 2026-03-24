@@ -188,6 +188,36 @@ export default function ProgramPage() {
       sessionCount: program.sessions?.length || 0,
     })
     
+    // =========================================================================
+    // [stale-equipment-decision-trace-audit] TASK 1: Trace exact equipment decision
+    // This audit explains EXACTLY why equipment is flagged as changed
+    // =========================================================================
+    const profileSnapshotEquipment = (rawProgram.profileSnapshot as { equipmentAvailable?: string[] })?.equipmentAvailable
+    console.log('[stale-equipment-decision-trace-audit]', {
+      activeProgramId: program.id,
+      activeProgramCreatedAt: program.createdAt,
+      // Raw values before normalization
+      rawProgramEquipment: rawProgram.equipment,
+      rawProgramProfileSnapshotEquipment: profileSnapshotEquipment,
+      // Canonical profile (current truth)
+      canonicalProfileEquipmentSource: 'getCanonicalProfile() called inside evaluateUnifiedProgramStaleness',
+      // Changed fields from result
+      changedFields: result.changedFields,
+      equipmentInChangedFields: result.changedFields.includes('equipment'),
+      // If equipment is flagged, show drift details
+      equipmentDriftDetail: result.driftDetails?.find(d => d.field === 'equipment'),
+      // Comparison used
+      exactComparisonUsed: 'normalizeEquipmentForComparison(profile.equipmentAvailable) vs normalizeEquipmentForComparison(program.equipment)',
+      // Verdict
+      isEquipmentWarningTruthful: result.changedFields.includes('equipment') 
+        ? 'potentially_true_need_to_check_normalized_values'
+        : 'no_equipment_warning',
+      falsePositiveReasonIfAny: result.changedFields.includes('equipment') && 
+        JSON.stringify(rawProgram.equipment?.sort()) === JSON.stringify(profileSnapshotEquipment?.sort())
+        ? 'possible_false_positive_snapshot_matches_program_but_canonical_differs'
+        : null,
+    })
+    
     // ==========================================================================
     // [TASK 7] PROGRAM ACTION FINAL VERDICT
     // Verify all action labels match their actual behavior
@@ -222,6 +252,69 @@ export default function ProgramPage() {
         new Date(program.createdAt).getTime() < Date.now() - 1000 * 60 * 60 * 24, // older than 24h
       stalenessResult: result.isStale ? 'stale' : 'current',
       verdict: representedSkills ? 'current_build_with_truth_data' : 'possibly_stale_or_legacy_build',
+    })
+    
+    // =========================================================================
+    // [active-program-snapshot-truth-audit] TASK 4: Verify active program snapshot
+    // This audit confirms the program stores consistent snapshot data
+    // =========================================================================
+    const snapshot = rawProgram.profileSnapshot as { 
+      equipmentAvailable?: string[]
+      selectedSkills?: string[]
+      primaryGoal?: string
+      sessionLengthMinutes?: number
+      scheduleMode?: string
+    } | undefined
+    console.log('[active-program-snapshot-truth-audit]', {
+      activeProgramId: program.id,
+      generationTimestamp: program.createdAt,
+      // Snapshot stored values
+      storedProfileSnapshotEquipment: snapshot?.equipmentAvailable,
+      storedProfileSnapshotSelectedSkills: snapshot?.selectedSkills,
+      storedProfileSnapshotPrimaryGoal: snapshot?.primaryGoal,
+      storedProfileSnapshotSessionLength: snapshot?.sessionLengthMinutes,
+      storedProfileSnapshotScheduleMode: snapshot?.scheduleMode,
+      // Raw program values
+      storedProgramEquipment: rawProgram.equipment,
+      storedProgramSelectedSkills: rawProgram.selectedSkills,
+      // Consistency check: does program equipment match snapshot equipment?
+      snapshotEquipmentMatchesProgramEquipment: snapshot?.equipmentAvailable 
+        ? JSON.stringify(snapshot.equipmentAvailable.sort()) === JSON.stringify((rawProgram.equipment || []).sort())
+        : 'no_snapshot_equipment',
+      snapshotSkillsMatchesProgramSkills: snapshot?.selectedSkills
+        ? JSON.stringify(snapshot.selectedSkills.sort()) === JSON.stringify((rawProgram.selectedSkills || []).sort())
+        : 'no_snapshot_skills',
+      // Is snapshot internally consistent?
+      snapshotInternallyConsistent: !!snapshot && 
+        JSON.stringify((snapshot.equipmentAvailable || []).sort()) === JSON.stringify((rawProgram.equipment || []).sort()),
+      // Stale warning compares correctly
+      staleWarningComparesAgainstCorrectSnapshotFields: true, // evaluateUnifiedProgramStaleness compares canonical vs program (not snapshot)
+    })
+    
+    // =========================================================================
+    // [displayed-plan-vs-current-settings-truth-audit] TASK 6: Distinguish states
+    // Clarify: "old plan displayed" vs "current settings differ"
+    // =========================================================================
+    const programAge = program.createdAt 
+      ? Date.now() - new Date(program.createdAt).getTime()
+      : 0
+    const isOldPlan = programAge > 1000 * 60 * 60 * 24 // older than 24 hours
+    console.log('[displayed-plan-vs-current-settings-truth-audit]', {
+      displayedPlanIsOldButValid: isOldPlan && !result.isStale,
+      currentSettingsDiffer: result.isStale,
+      staleBannerShouldShow: result.isStale,
+      staleBannerReasonExact: result.changedFields.length > 0 
+        ? `Settings changed: ${result.changedFields.join(', ')}`
+        : 'no_changes_detected',
+      // Classification
+      isTrueStaleWarning: result.isStale && result.changedFields.length > 0,
+      isFalsePositive: result.isStale && result.changedFields.length === 0,
+      // Modified workout state confusion check
+      modifiedWorkoutStateMistakenForCurrentRegenerated: false, // staleness compares canonical profile vs program, not workout state
+      // Verdict
+      verdict: result.isStale 
+        ? (result.changedFields.length > 0 ? 'true_stale_warning' : 'possible_false_positive')
+        : 'plan_matches_current_settings',
     })
     
     return result

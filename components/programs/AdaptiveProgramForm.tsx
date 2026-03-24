@@ -126,8 +126,9 @@ export function AdaptiveProgramForm({
                   <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                   <span className="text-sm font-medium">Flexible / Adaptive</span>
                 </div>
+                {/* [PHASE 12 TASK 3] Truthful wording - calculation at build time */}
                 <p className="text-xs text-[#6A6A6A] mt-1">
-                  Weekly frequency adjusts based on recovery and readiness
+                  Weekly frequency calculated from recovery and training history
                 </p>
               </div>
             ) : (

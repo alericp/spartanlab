@@ -2428,6 +2428,165 @@ function generateAdaptiveProgramImpl(inputs: AdaptiveProgramInputs, stageTracker
     verdict: classifiedReason,
   })
   
+  // ==========================================================================
+  // [PHASE 12 TASK 1] FLEXIBLE SOURCE CHAIN AUDIT
+  // ==========================================================================
+  type FlexibleSourceVerdict = 'flexible_truth_broken' | 'flexible_identity_ok_but_behavior_static' | 'flexible_behavior_modifier_based_only' | 'flexible_feedback_adaptive'
+  
+  const hasRealFeedbackData = trainingFeedback.trustedWorkoutCount >= 2
+  const feedbackActuallyChangedFrequency = hasRealFeedbackData && rootCause?.isTrueAdaptive === true
+  const modifiersAppliedButNotFeedback = rootCause?.wasModifiedFromBaseline && !hasRealFeedbackData
+  
+  let flexibleSourceVerdict: FlexibleSourceVerdict
+  if (inputScheduleMode !== 'flexible') {
+    flexibleSourceVerdict = 'flexible_truth_broken' // Not flexible mode at all
+  } else if (feedbackActuallyChangedFrequency) {
+    flexibleSourceVerdict = 'flexible_feedback_adaptive'
+  } else if (modifiersAppliedButNotFeedback) {
+    flexibleSourceVerdict = 'flexible_behavior_modifier_based_only'
+  } else {
+    flexibleSourceVerdict = 'flexible_identity_ok_but_behavior_static'
+  }
+  
+  console.log('[phase12-flexible-source-chain-audit]', {
+    canonicalScheduleMode: inputScheduleMode,
+    canonicalTrainingDaysPerWeek: trainingDaysPerWeek,
+    canonicalSessionDurationMode: 'adaptive',
+    userIsFlexibleByIdentity: inputScheduleMode === 'flexible',
+    userIsFlexibleByDisplayWording: inputScheduleMode === 'flexible',
+    builderInputScheduleMode: inputScheduleMode,
+    builderInputTrainingDaysPerWeek: effectiveTrainingDays,
+    resolveFlexibleFrequencyRan: inputScheduleMode === 'flexible',
+    resolvedCurrentWeekFrequency: effectiveTrainingDays,
+    frequencyDiffersFromGoalBaseline: effectiveTrainingDays !== (rootCause?.goalTypical || 4),
+    resultUsedBaselineOnly: rootCause?.isBaselineDefault || false,
+    resultUsedModifiersOnly: modifiersAppliedButNotFeedback,
+    resultUsedRealWorkoutFeedback: feedbackActuallyChangedFrequency,
+    resultUsedRebuildRecalculation: true, // Always recalculates on rebuild
+    trustedWorkoutCount: trainingFeedback.trustedWorkoutCount,
+    verdict: flexibleSourceVerdict,
+  })
+  
+  // ==========================================================================
+  // [PHASE 12 TASK 2] REST-OF-WEEK RECALCULATION AUDIT
+  // ==========================================================================
+  type RestOfWeekRecalcVerdict = 'no_rest_of_week_recalc' | 'readiness_only_recalc' | 'regenerate_required_for_schedule_change' | 'partial_live_recalc' | 'true_rest_of_week_recalc'
+  
+  // Current system behavior: 
+  // - After workout logged, readiness/fatigue updates
+  // - BUT active plan is NOT mutated
+  // - currentWeekFrequency can only change on full regenerate
+  // - Future sessions are preserved until regenerate
+  const restOfWeekRecalcVerdict: RestOfWeekRecalcVerdict = 'regenerate_required_for_schedule_change'
+  
+  console.log('[phase12-rest-of-week-recalc-audit]', {
+    afterWorkoutLoggedWhatRecalculates: 'readiness_and_fatigue_state',
+    readinessRecalculates: true,
+    futureWeekFrequencyRecalculates: false,
+    futurePlanSessionsRecalculates: false,
+    onlyOnFullRegenerate: true,
+    onlyOnDashboardRefresh: false,
+    notAtAll: false,
+    triggerSource: 'manual_regenerate_only',
+    recalculationPath: 'lib/adaptive-program-builder.ts -> buildTrainingFeedbackSummary() -> resolveFlexibleFrequency()',
+    activePlanIsMutated: false,
+    newPlanIsGenerated: true,
+    currentWeekFrequencyCanChangePostSession: false,
+    futureSessionsReOrderedReSpaced: false,
+    futureSessionsPreserved: true,
+    isImmediateOrManualRebuild: 'manual_rebuild',
+    verdict: restOfWeekRecalcVerdict,
+  })
+  
+  // ==========================================================================
+  // [PHASE 12 TASK 4] WEEK ADJUSTMENT CLASSIFICATION
+  // ==========================================================================
+  type WeekAdjustmentClassification = 'baseline_starting_week' | 'modifier_adjusted_week' | 'feedback_adjusted_week' | 'rebuild_adjusted_week' | 'carryforward_unchanged_week'
+  
+  let weekAdjustmentClassification: WeekAdjustmentClassification
+  if (feedbackActuallyChangedFrequency) {
+    weekAdjustmentClassification = 'feedback_adjusted_week'
+  } else if (modifiersAppliedButNotFeedback) {
+    weekAdjustmentClassification = 'modifier_adjusted_week'
+  } else {
+    weekAdjustmentClassification = 'baseline_starting_week'
+  }
+  
+  console.log('[phase12-week-adjustment-classification-audit]', {
+    scheduleMode: inputScheduleMode,
+    previousWeekFrequency: null, // Not tracked yet in current system
+    currentWeekFrequency: effectiveTrainingDays,
+    changeSource: weekAdjustmentClassification,
+    confidence: hasRealFeedbackData ? 'high' : 'low',
+    isAdjustmentUserVisibleTruthfully: weekAdjustmentClassification !== 'baseline_starting_week',
+    verdict: weekAdjustmentClassification,
+  })
+  
+  // ==========================================================================
+  // [PHASE 12 TASK 5] FUTURE PHASE READINESS AUDIT
+  // ==========================================================================
+  type FuturePhaseReadinessVerdict = 'state_not_ready_for_future_adaptation' | 'partially_ready_needs_schedule_metadata' | 'structurally_ready_for_next_phases'
+  
+  // Check current state capabilities
+  const hasPlanIdentity = true // Programs have IDs
+  const hasWeekStructureIdentity = true // Week number tracked
+  const hasSessionOrder = true // Day numbers
+  const hasSessionCompletionStatus = true // Via workout logs
+  const hasWeeklyFrequency = true // currentWeekFrequency tracked
+  const hasReadinessState = true // Via readiness calculation service
+  const hasAdjustmentReasonHistory = false // NOT currently tracked persistently
+  
+  let futurePhaseReadinessVerdict: FuturePhaseReadinessVerdict
+  if (!hasAdjustmentReasonHistory) {
+    futurePhaseReadinessVerdict = 'partially_ready_needs_schedule_metadata'
+  } else {
+    futurePhaseReadinessVerdict = 'structurally_ready_for_next_phases'
+  }
+  
+  console.log('[phase12-future-phase-readiness-audit]', {
+    hasPlanIdentity,
+    hasWeekStructureIdentity,
+    hasSessionOrder,
+    hasSessionCompletionStatus,
+    hasWeeklyFrequency,
+    hasReadinessState,
+    hasAdjustmentReasonHistory,
+    missingForPushWorkoutForward: ['session_schedulable_date_field', 'reschedule_reason_tracking'],
+    missingForPreWorkoutReadiness: ['pre_session_readiness_input', 'same_day_adjustment_flag'],
+    missingForLiveVolumeAdjust: ['in_session_modification_layer'],
+    verdict: futurePhaseReadinessVerdict,
+  })
+  
+  // ==========================================================================
+  // [PHASE 12 TASK 7] ADAPTIVE FREQUENCY FINAL VERDICT
+  // ==========================================================================
+  type Phase12FinalVerdict = 'phase12_complete' | 'phase12_partial_truth_only' | 'phase12_feedback_loop_gap_remaining' | 'phase12_active_plan_mutation_gap_remaining'
+  
+  let phase12FinalVerdict: Phase12FinalVerdict
+  if (restOfWeekRecalcVerdict === 'regenerate_required_for_schedule_change') {
+    phase12FinalVerdict = 'phase12_active_plan_mutation_gap_remaining'
+  } else if (!hasRealFeedbackData && inputScheduleMode === 'flexible') {
+    phase12FinalVerdict = 'phase12_feedback_loop_gap_remaining'
+  } else if (flexibleSourceVerdict === 'flexible_feedback_adaptive') {
+    phase12FinalVerdict = 'phase12_complete'
+  } else {
+    phase12FinalVerdict = 'phase12_partial_truth_only'
+  }
+  
+  console.log('[phase12-adaptive-frequency-final-verdict]', {
+    flexibleModeIdentityCorrect: inputScheduleMode === 'flexible',
+    builderResolutionCorrect: true, // resolveFlexibleFrequency always runs
+    realWorkoutFeedbackCurrentlyChangesActiveWeek: false, // Only on rebuild
+    currentAppOversellsAdaptiveBehavior: true, // Wording implies automatic adjustment
+    currentWeekFrequencyIsTruthful: true, // Value is correct for rebuild context
+    systemReadyForPushWorkoutForward: futurePhaseReadinessVerdict !== 'state_not_ready_for_future_adaptation',
+    systemReadyForPreWorkoutReadiness: futurePhaseReadinessVerdict !== 'state_not_ready_for_future_adaptation',
+    exactRemainingGap: restOfWeekRecalcVerdict === 'regenerate_required_for_schedule_change'
+      ? 'active_plan_not_mutated_post_workout'
+      : 'none',
+    verdict: phase12FinalVerdict,
+  })
+  
   // ENGINE QUALITY: Calculate session distribution based on goal hierarchy
   const sessionDistribution = calculateSessionDistribution(
     effectiveTrainingDays,

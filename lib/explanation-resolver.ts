@@ -161,9 +161,16 @@ function buildSummaryExplanation(context: ExplanationContext): ProgramExplanatio
   // TASK 4D: Schedule reason - explain flexible vs static with correct semantics
   // Flexible users: do NOT say "as selected" - the frequency is derived, not chosen
   // Static users: can say "as selected" because they explicitly chose this number
+  // [PHASE 12 TASK 3] Tighten wording to match actual system behavior
   let scheduleReason: string | undefined
   if (context.scheduleMode === 'flexible') {
-    scheduleReason = `Flexible mode: ${context.currentWeekFrequency} sessions planned this week based on recovery and readiness.`
+    // [PHASE 12] More truthful wording: does NOT claim automatic adjustment mid-week
+    // Current system only adjusts on rebuild, not automatically after each workout
+    if (context.dataConfidence === 'none' || context.dataConfidence === 'low') {
+      scheduleReason = `Flexible mode: ${context.currentWeekFrequency} sessions for this week. Frequency will be recalculated when program is rebuilt.`
+    } else {
+      scheduleReason = `Flexible mode: ${context.currentWeekFrequency} sessions this week, based on your training history.`
+    }
   } else {
     scheduleReason = `Training ${context.currentWeekFrequency} days per week on a fixed schedule.`
   }
@@ -254,14 +261,16 @@ function buildWeekStructureExplanation(context: ExplanationContext): WeekStructu
   }
   
   // Build rationale
+  // [PHASE 12 TASK 3] Tighten wording to avoid implying automatic mid-week adjustment
   let rationale: string
   if (context.scheduleMode === 'flexible') {
     if (context.dataConfidence === 'none' || context.dataConfidence === 'low') {
-      rationale = `Starting with ${context.currentWeekFrequency} sessions. Flexible mode will adjust as we learn your recovery patterns.`
+      // [PHASE 12] Changed: Don't imply automatic adjustment - requires rebuild
+      rationale = `Starting with ${context.currentWeekFrequency} sessions. Future rebuilds will incorporate your training data.`
     } else if (context.fatigueState === 'high') {
       rationale = `${context.currentWeekFrequency} sessions this week to support recovery while maintaining training stimulus.`
     } else {
-      rationale = `${context.currentWeekFrequency} sessions based on your current recovery state and training consistency.`
+      rationale = `${context.currentWeekFrequency} sessions based on your recent training history.`
     }
   } else {
     rationale = `${context.currentWeekFrequency} sessions per week as selected in your training preferences.`

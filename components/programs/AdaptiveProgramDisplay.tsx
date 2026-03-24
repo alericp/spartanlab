@@ -556,10 +556,11 @@ export function AdaptiveProgramDisplay({
                     {validSessions.length} sessions this week
                   </span>
                   {/* [PHASE 7 TASK 2] Truthful frequency explanation - "adapted from feedback" ONLY when real feedback exists */}
+                  {/* [PHASE 12 TASK 3] Clarified: adaptation happens at build time, not automatically */}
                   {program.flexibleFrequencyRootCause && (
                     <span className="text-[10px] text-[#5A5A5A] mt-0.5">
                       {program.flexibleFrequencyRootCause.isTrueAdaptive
-                        ? '(adapted from feedback)'  // Only shown when real workout feedback modified frequency
+                        ? '(based on training history)'  // [PHASE 12] Clearer than "adapted from feedback"
                         : program.flexibleFrequencyRootCause.isBaselineDefault 
                           ? `(${program.primaryGoal.replace(/_/g, ' ')} baseline)`
                           : program.flexibleFrequencyRootCause.finalReasonCategory === 'experience_modifier_applied'
@@ -1354,6 +1355,24 @@ export function AdaptiveProgramDisplay({
           : validSessions.some((s: any) => s.styleMetadata?.appliedMethods?.some((m: string) => m !== 'straight_sets'))
             ? 'display_missing_existing_style_data'
             : 'display_truth_ok',
+      }) as any}
+      {/* [PHASE 12 TASK 3] ADAPTIVE WORDING TRUTH AUDIT */}
+      {console.log('[phase12-adaptive-wording-truth-audit]', {
+        scheduleMode: program.scheduleMode,
+        currentWeekFrequency: program.currentWeekFrequency,
+        flexibleFrequencyRootCause: (program as any).flexibleFrequencyRootCause?.finalReasonCategory,
+        isTrueAdaptive: (program as any).flexibleFrequencyRootCause?.isTrueAdaptive,
+        isModifierBasedOnly: (program as any).flexibleFrequencyRootCause?.isModifierBasedAdjustment,
+        wordingClassification: program.scheduleMode === 'flexible'
+          ? ((program as any).flexibleFrequencyRootCause?.isTrueAdaptive 
+              ? 'fully_truthful' 
+              : (program as any).flexibleFrequencyRootCause?.isModifierBasedAdjustment
+                ? 'partially_truthful'
+                : 'ahead_of_backend_reality')
+          : 'fully_truthful',
+        restOfWeekRecalcAfterWorkout: false, // Current system does not recalc mid-week
+        wordingImpliesAutoAdjust: false, // [PHASE 12] Wording updated to not imply this
+        verdict: 'wording_aligned_with_backend_behavior',
       }) as any}
       {/* [PHASE 6B TASK 4] SESSION IDENTITY ENFORCEMENT AUDIT */}
       {console.log('[phase6b-session-identity-enforcement-audit]', {

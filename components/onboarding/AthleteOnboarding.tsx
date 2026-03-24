@@ -2850,7 +2850,7 @@ function ScheduleSection({ profile, updateProfile }: SectionProps) {
   ))}
   </div>
   <p className="text-xs text-[#6B7280] pt-1">
-    Flexible adapts your training week based on recovery, missed sessions, and performance to maintain consistent progress.
+    Flexible calculates your weekly sessions based on recovery, training history, and goals when your program is built or rebuilt.
   </p>
   </div>
   

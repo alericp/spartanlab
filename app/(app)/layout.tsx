@@ -1,6 +1,7 @@
 import { ClerkProvider } from '@clerk/nextjs'
 import { AnalyticsProvider } from '@/components/providers/AnalyticsProvider'
 import { GlobalErrorBoundary } from '@/components/shared/GlobalErrorBoundary'
+import { OwnerBootstrapProvider } from '@/components/providers/OwnerBootstrapProvider'
 import { OwnerSimulationToggleWrapper } from '@/components/billing/OwnerSimulationToggleWrapper'
 import { Toaster } from '@/components/ui/toaster'
 
@@ -37,16 +38,20 @@ export default function AppLayout({
   // ClerkProvider requires a valid publishable key
   // In preview environments where Clerk fails due to domain restrictions,
   // the app will still render but auth features won't work
+  // [PHASE 14B TASK 1] OwnerBootstrapProvider runs early to initialize
+  // the owner email cache from Clerk auth before any entitlement checks.
   return (
     <ClerkProvider publishableKey={process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY}>
-      <AnalyticsProvider>
-        <GlobalErrorBoundary>
-          {children}
-          {/* Owner-only simulation toggle - for testing billing states */}
-          <OwnerSimulationToggleWrapper />
-          <Toaster />
-        </GlobalErrorBoundary>
-      </AnalyticsProvider>
+      <OwnerBootstrapProvider>
+        <AnalyticsProvider>
+          <GlobalErrorBoundary>
+            {children}
+            {/* Owner-only simulation toggle - for testing billing states */}
+            <OwnerSimulationToggleWrapper />
+            <Toaster />
+          </GlobalErrorBoundary>
+        </AnalyticsProvider>
+      </OwnerBootstrapProvider>
     </ClerkProvider>
   )
 }

@@ -69,8 +69,10 @@ export function setSimulationMode(mode: SimulationMode): void {
     sessionStorage.setItem(SIMULATION_KEY, mode)
   }
   
-  // Dispatch event for reactive updates
-  window.dispatchEvent(new CustomEvent('simulation-changed', { detail: { mode } }))
+  // [PHASE 14B TASK 2] Dispatch unified event for reactive updates
+  // Dispatching both event names to ensure all listeners receive the update
+  window.dispatchEvent(new CustomEvent('entitlement-simulation-changed', { detail: mode }))
+  window.dispatchEvent(new CustomEvent('simulation-mode-changed', { detail: mode }))
 }
 
 /**
@@ -78,6 +80,14 @@ export function setSimulationMode(mode: SimulationMode): void {
  */
 export function getSimulationState(): SimulationState {
   const mode = getSimulationMode()
+  
+  // [PHASE 14B TASK 2] Simulation tier verdict audit
+  console.log('[phase14b-owner-simulation-tier-verdict]', {
+    currentMode: mode,
+    isActive: mode !== 'off',
+    effectiveTier: mode === 'off' ? 'real_state' : mode,
+    sourceHelper: 'getSimulationState',
+  })
   
   return {
     mode,

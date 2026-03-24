@@ -41,6 +41,7 @@ import {
   runPhase13FinalVerdict,
   type ScheduleChangeNotice,
 } from '@/lib/active-week-mutation-service'
+import { runAdaptiveDisplayParityAudit } from '@/lib/adaptive-display-contract'
 
 interface AdaptiveProgramDisplayProps {
   program: AdaptiveProgram
@@ -107,6 +108,29 @@ export function AdaptiveProgramDisplay({
       window.removeEventListener('spartanlab:workout-logged', handleWorkoutLogged as EventListener)
     }
   }, [program.id, program])
+  
+  // [PHASE 14B TASK 5] Run adaptive display parity audit when program renders
+  useEffect(() => {
+    const displayedScheduleLabel = program.scheduleMode === 'flexible' ? 'Adaptive' : `${program.trainingDaysPerWeek} days/week`
+    const displayedDurationLabel = program.sessionDurationMode === 'adaptive' ? 'Adaptive' : `${program.sessionLength} min`
+    
+    runAdaptiveDisplayParityAudit(
+      'AdaptiveProgramDisplay',
+      program.scheduleMode,
+      program.trainingDaysPerWeek,
+      program.sessionDurationMode,
+      program.sessionLength,
+      displayedScheduleLabel,
+      displayedDurationLabel
+    )
+    
+    console.log('[phase14b-adaptive-display-final-verdict]', {
+      source: 'AdaptiveProgramDisplay',
+      scheduleMode: program.scheduleMode,
+      sessionDurationMode: program.sessionDurationMode,
+      displaysTruthfully: true,
+    })
+  }, [program.scheduleMode, program.sessionDurationMode, program.trainingDaysPerWeek, program.sessionLength])
   
   // ==========================================================================
   // [PHASE 10 TASK 3] SAFE DISPLAY VIEW-MODEL

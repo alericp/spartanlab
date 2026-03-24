@@ -15,6 +15,9 @@
  * 
  * IDEMPOTENCY: Generation is guarded by a ref + sessionStorage token to prevent
  * duplicate execution from remounts, history navigation, or cache revalidation.
+ * 
+ * [PHASE 14B] Owner detection: Uses useOwnerInit to properly detect platform owner
+ * before checking pro access, fixing the owner bypass gap.
  */
 
 import { useState, useEffect, useRef } from 'react'
@@ -39,6 +42,8 @@ import {
   AlertCircle,
 } from 'lucide-react'
 import { SpartanIcon } from '@/components/brand/SpartanLogo'
+import { useOwnerInit } from '@/hooks/useOwnerInit'
+import { getCompactScheduleLabel, getCompactDurationLabel } from '@/lib/adaptive-display-contract'
 
 // =============================================================================
 // IMPORT SAFETY: Heavy runtime helpers are now dynamically imported
@@ -96,6 +101,11 @@ export default function OnboardingCompleteClient() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [pricingData, setPricingData] = useState<{ pro: { displayWithPeriod: string } } | null>(null)
   
+  // [PHASE 14B TASK 3] Owner detection - must be called BEFORE checking pro access
+  // This initializes the owner email cache from Clerk auth
+  const { isOwner, isLoaded: ownerLoaded, userEmail } = useOwnerInit()
+  const [simulationMode, setSimulationMode] = useState<'off' | 'free' | 'pro'>('off')
+  
   // IDEMPOTENCY GUARD: Prevent duplicate generation from remounts/history/cache
   const generationAttemptedRef = useRef(false)
   const [generationSkipped, setGenerationSkipped] = useState(false)
@@ -114,13 +124,53 @@ export default function OnboardingCompleteClient() {
       let localTrialDays = 0
       let loadedProfile: OnboardingProfile | null = null
       
+      // [PHASE 14B TASK 3] Check owner simulation mode first
+      let simMode: 'off' | 'free' | 'pro' = 'off'
+      try {
+        const simStored = sessionStorage.getItem('spartanlab_owner_sim')
+        if (simStored === 'free' || simStored === 'pro') {
+          simMode = simStored
+          setSimulationMode(simStored)
+        }
+      } catch {
+        // Ignore sessionStorage errors
+      }
+      
+      // [PHASE 14B] Owner branch audit
+      console.log('[phase14b-onboarding-owner-branch-audit]', {
+        isOwner,
+        ownerLoaded,
+        userEmail,
+        simulationMode: simMode,
+      })
+      
       // Load feature-access module dynamically
       try {
         console.log('[OnboardingCompleteClient] Loading feature-access module...')
         const featureModule = await import('@/lib/feature-access')
         
         try {
+          // [PHASE 14B TASK 3] Owner detection is now initialized via useOwnerInit
+          // hasProAccess() will correctly return true for owner with simulation off
           localIsPro = featureModule.hasProAccess()
+          
+          // [PHASE 14B] Override for owner:
+          // - simulation off = Pro (owner bypass)
+          // - simulation free = free UX intentionally
+          // - simulation pro = pro UX intentionally
+          if (isOwner) {
+            if (simMode === 'off') {
+              localIsPro = true // Owner bypass
+              console.log('[OnboardingCompleteClient] OWNER BYPASS: Treating as Pro (simulation off)')
+            } else if (simMode === 'free') {
+              localIsPro = false // Intentional free simulation
+              console.log('[OnboardingCompleteClient] OWNER SIMULATION: Showing Free state')
+            } else if (simMode === 'pro') {
+              localIsPro = true // Intentional pro simulation
+              console.log('[OnboardingCompleteClient] OWNER SIMULATION: Showing Pro state')
+            }
+          }
+          
           setIsPro(localIsPro)
           console.log('[OnboardingCompleteClient] hasProAccess succeeded:', localIsPro)
         } catch (err) {
@@ -514,7 +564,30 @@ export default function OnboardingCompleteClient() {
 
   // If already Pro, show success and go to first session
   if (isPro) {
+    // [PHASE 14B] Audit: Log the owner branch decision
+    console.log('[phase14b-onboarding-owner-branch-verdict]', {
+      isOwner,
+      simulationMode,
+      entitlementResult: 'pro',
+      branchChosen: 'pro-success',
+      reason: isOwner && simulationMode === 'off' 
+        ? 'owner_bypass' 
+        : isOwner 
+          ? `owner_simulation_${simulationMode}` 
+          : 'regular_pro',
+    })
     console.log('[OnboardingCompleteClient] BRANCH: pro success', { isTrial, trialDays })
+    
+    // [PHASE 14B TASK 5] Get truthful adaptive display labels
+    const scheduleLabel = getCompactScheduleLabel(
+      profile?.scheduleMode,
+      profile?.trainingDaysPerWeek
+    )
+    const durationLabel = getCompactDurationLabel(
+      profile?.sessionDurationMode,
+      profile?.sessionLengthMinutes
+    )
+    
     return (
       <div className="min-h-screen bg-[#0F1115] flex items-center justify-center p-4">
         <div className="w-full max-w-lg text-center">
@@ -544,11 +617,10 @@ export default function OnboardingCompleteClient() {
               <span className="text-[#E6E9EF] font-medium">Primary Goal</span>
             </div>
             <p className="text-lg text-[#E6E9EF] font-semibold">{getPrimaryGoalDisplay()}</p>
-            {typeof profile?.trainingDaysPerWeek === 'number' && profile.trainingDaysPerWeek > 0 && (
-              <p className="text-sm text-[#6B7280] mt-1">
-                {profile.trainingDaysPerWeek} training days per week
-              </p>
-            )}
+            {/* [PHASE 14B TASK 5] Truthful adaptive display */}
+            <p className="text-sm text-[#6B7280] mt-1">
+              {scheduleLabel} {durationLabel ? `\u2022 ${durationLabel}` : ''}
+            </p>
           </div>
           
           <Button 
@@ -578,12 +650,32 @@ export default function OnboardingCompleteClient() {
   }
 
   // Free user - show program preview with upgrade opportunity
+  // [PHASE 14B] Audit: Log the free branch decision
+  console.log('[phase14b-onboarding-owner-branch-verdict]', {
+    isOwner,
+    simulationMode,
+    entitlementResult: 'free',
+    branchChosen: 'free-preview',
+    reason: isOwner && simulationMode === 'free' 
+      ? 'owner_simulation_free' 
+      : 'regular_free',
+  })
   console.log('[OnboardingCompleteClient] BRANCH: free preview', {
     hasProfile: !!profile,
     hasSelectedSkills: Array.isArray(profile?.selectedSkills),
     hasReadiness: !!readiness,
     primaryGoal: profile?.primaryGoal ?? 'none',
   })
+  
+  // [PHASE 14B TASK 5] Get truthful adaptive display labels for free branch
+  const scheduleLabel = getCompactScheduleLabel(
+    profile?.scheduleMode,
+    profile?.trainingDaysPerWeek
+  )
+  const durationLabel = getCompactDurationLabel(
+    profile?.sessionDurationMode,
+    profile?.sessionLengthMinutes
+  )
   return (
     <div className="min-h-screen bg-[#0F1115] py-8 px-4">
       <div className="max-w-2xl mx-auto">
@@ -617,21 +709,19 @@ export default function OnboardingCompleteClient() {
               </div>
             </div>
 
-            {/* Training Schedule */}
-            {typeof profile?.trainingDaysPerWeek === 'number' && profile.trainingDaysPerWeek > 0 && (
-              <div className="flex items-start gap-3">
-                <div className="w-10 h-10 rounded-lg bg-[#4F6D8A]/10 flex items-center justify-center shrink-0">
-                  <Calendar className="w-5 h-5 text-[#4F6D8A]" />
-                </div>
-                <div>
-                  <p className="text-xs text-[#6B7280] uppercase tracking-wide">Schedule</p>
-                  <p className="text-[#E6E9EF]">
-                    {profile.trainingDaysPerWeek} days/week
-                    {typeof profile.sessionLengthMinutes === 'number' && profile.sessionLengthMinutes > 0 && ` • ${profile.sessionLengthMinutes} min sessions`}
-                  </p>
-                </div>
+            {/* Training Schedule - [PHASE 14B TASK 5] Truthful adaptive display */}
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-lg bg-[#4F6D8A]/10 flex items-center justify-center shrink-0">
+                <Calendar className="w-5 h-5 text-[#4F6D8A]" />
               </div>
-            )}
+              <div>
+                <p className="text-xs text-[#6B7280] uppercase tracking-wide">Schedule</p>
+                <p className="text-[#E6E9EF]">
+                  {scheduleLabel}
+                  {durationLabel && ` \u2022 ${durationLabel}`}
+                </p>
+              </div>
+            </div>
 
             {/* Readiness Summary */}
             {readiness && typeof readiness === 'object' && (

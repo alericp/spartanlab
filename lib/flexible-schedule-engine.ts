@@ -117,6 +117,7 @@ export interface FlexibleFrequencyRootCauseAudit {
   isTrueAdaptive: boolean
   isBaselineDefault: boolean
   wasModifiedFromBaseline: boolean
+  isModifierBasedAdjustment: boolean  // [PHASE 7] Modified but without real feedback data
   modificationSteps: string[]
 }
 
@@ -293,7 +294,21 @@ export function resolveFlexibleFrequency(input: FlexibleFrequencyInput): Flexibl
   // [TASK 1] Determine if this was truly adaptive or just baseline
   const isBaselineDefault = currentFrequency === goalTypicalBaseline && modificationSteps.length <= 1
   const wasModifiedFromBaseline = currentFrequency !== goalTypicalBaseline || modificationSteps.length > 1
-  const isTrueAdaptive = wasModifiedFromBaseline && reasonCategory !== 'goal_typical_baseline'
+  
+  // ==========================================================================
+  // [PHASE 7 TASK 2] TIGHTENED "TRUE ADAPTIVE" DEFINITION
+  // "Adapted from feedback" should ONLY appear when:
+  // 1. There is real workout feedback data (recentWorkoutCount >= 2)
+  // 2. AND that feedback actually modified the frequency
+  // NOT just because experience/joint modifiers were applied at first build
+  // ==========================================================================
+  const hasRealFeedbackData = (input.recentWorkoutCount ?? 0) >= 2
+  const isTrueAdaptive = wasModifiedFromBaseline && 
+    reasonCategory !== 'goal_typical_baseline' && 
+    hasRealFeedbackData  // [PHASE 7] Must have real feedback to claim "adapted"
+  
+  // [PHASE 7] Additional audit flag for "modifier-based" vs "feedback-based"
+  const isModifierBasedAdjustment = wasModifiedFromBaseline && !hasRealFeedbackData
   
   // If nothing modified and we're at baseline, explicitly mark it
   if (!wasModifiedFromBaseline) {
@@ -341,6 +356,7 @@ export function resolveFlexibleFrequency(input: FlexibleFrequencyInput): Flexibl
     isTrueAdaptive,
     isBaselineDefault,
     wasModifiedFromBaseline,
+    isModifierBasedAdjustment,  // [PHASE 7] New: true if modified but without real feedback
     modificationSteps,
   }
   
@@ -543,6 +559,7 @@ function createStaticWeekStructure(days: number): FlexibleWeekStructure {
     isTrueAdaptive: false,
     isBaselineDefault: true,
     wasModifiedFromBaseline: false,
+    isModifierBasedAdjustment: false,  // [PHASE 7] Static mode has no modifiers
     modificationSteps: [`Static mode: using ${days} days as configured`],
   }
   

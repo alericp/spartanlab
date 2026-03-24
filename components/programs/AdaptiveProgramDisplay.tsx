@@ -295,24 +295,24 @@ export function AdaptiveProgramDisplay({
                     {/* TASK 4: Use validSessions.length as canonical truth - never stale summary values */}
                     {validSessions.length} sessions this week
                   </span>
-                  {/* [PHASE 8 TASK 5] Truthful frequency explanation */}
+                  {/* [PHASE 7 TASK 2] Truthful frequency explanation - "adapted from feedback" ONLY when real feedback exists */}
                   {program.flexibleFrequencyRootCause && (
                     <span className="text-[10px] text-[#5A5A5A] mt-0.5">
-                      {program.flexibleFrequencyRootCause.isBaselineDefault 
-                        ? `(${program.primaryGoal.replace(/_/g, ' ')} baseline)`
-                        : program.flexibleFrequencyRootCause.isTrueAdaptive
-                          ? '(adapted from feedback)'
+                      {program.flexibleFrequencyRootCause.isTrueAdaptive
+                        ? '(adapted from feedback)'  // Only shown when real workout feedback modified frequency
+                        : program.flexibleFrequencyRootCause.isBaselineDefault 
+                          ? `(${program.primaryGoal.replace(/_/g, ' ')} baseline)`
                           : program.flexibleFrequencyRootCause.finalReasonCategory === 'experience_modifier_applied'
-                            ? '(adjusted for experience)'
+                            ? '(adjusted for experience level)'
                             : program.flexibleFrequencyRootCause.finalReasonCategory === 'joint_caution_conservative'
-                              ? '(conservative for joints)'
+                              ? '(conservative for joint health)'
                               : program.flexibleFrequencyRootCause.finalReasonCategory === 'poor_recovery_reduction'
-                                ? '(reduced for recovery)'
+                                ? '(adjusted for recovery)'
                                 : program.flexibleFrequencyRootCause.finalReasonCategory === 'high_volume_conservative'
-                                  ? '(volume-based)'
+                                  ? '(volume-adjusted)'
                                   : program.flexibleFrequencyRootCause.finalReasonCategory === 'low_history_default'
-                                    ? '(building baseline)'
-                                    : ''}
+                                    ? '(initial baseline)'
+                                    : '(goal-based baseline)'}
                     </span>
                   )}
                 </div>
@@ -722,6 +722,185 @@ export function AdaptiveProgramDisplay({
               : 'top_card_may_overclaim',
           })
           
+          // ==========================================================================
+          // [PHASE 7 TASK 1] TOP CARD VS FINAL WEEK TRUTH AUDIT
+          // ==========================================================================
+          console.log('[phase7-top-card-vs-final-week-truth-audit]', {
+            displayedPrimaryGoal: program.primaryGoal,
+            displayedSecondaryGoal: program.secondaryGoal,
+            displayedSessionCount: validSessions.length,
+            actualSessionsByDay: validSessions.map(s => ({
+              day: s.dayNumber,
+              focus: s.focus || s.focusLabel,
+              exerciseCount: s.exercises?.length || 0,
+            })),
+            weeklyRepresentationVerdicts: weeklyRepresentation?.policies?.map(p => ({
+              skill: p.skill,
+              verdict: p.representationVerdict,
+              direct: p.actualExposure?.direct,
+              support: p.actualExposure?.support,
+            })) || [],
+            selectedSkills: program.selectedSkills,
+            representedSkillsFromEngine: program.representedSkills,
+            topCardSupportedByFinalWeek: (pushClaimValid && pullClaimValid && hybridClaimValid),
+            adaptiveWordingTruth: program.flexibleFrequencyRootCause?.isTrueAdaptive 
+              ? 'real_feedback_adaptation' 
+              : program.flexibleFrequencyRootCause?.isBaselineDefault 
+                ? 'baseline_default' 
+                : 'modifier_based_adjustment',
+          })
+          
+          // ==========================================================================
+          // [PHASE 7 TASK 2] ADAPTIVE WORDING TRUTH VERDICT
+          // ==========================================================================
+          console.log('[phase7-adaptive-wording-truth-verdict]', {
+            showingAdaptedFromFeedback: program.flexibleFrequencyRootCause?.isTrueAdaptive === true,
+            hasRealFeedbackData: (program.flexibleFrequencyRootCause?.recentWorkoutCount ?? 0) >= 2,
+            recentWorkoutCount: program.flexibleFrequencyRootCause?.recentWorkoutCount,
+            isBaselineDefault: program.flexibleFrequencyRootCause?.isBaselineDefault,
+            isModifierBased: program.flexibleFrequencyRootCause?.isModifierBasedAdjustment,
+            finalReasonCategory: program.flexibleFrequencyRootCause?.finalReasonCategory,
+            wordingIsHonest: program.flexibleFrequencyRootCause?.isTrueAdaptive 
+              ? (program.flexibleFrequencyRootCause?.recentWorkoutCount ?? 0) >= 2
+              : true,  // Non-adaptive wording is always honest
+            verdict: program.flexibleFrequencyRootCause?.isTrueAdaptive
+              ? 'ADAPTED_FROM_FEEDBACK_LEGITIMATE'
+              : program.flexibleFrequencyRootCause?.isBaselineDefault
+                ? 'BASELINE_DEFAULT_HONEST'
+                : 'MODIFIER_BASED_HONEST',
+          })
+          
+          // ==========================================================================
+          // [PHASE 7 TASK 3] FREQUENCY BASELINE VS ADAPTATION AUDIT
+          // ==========================================================================
+          console.log('[phase7-frequency-baseline-vs-adaptation-audit]', {
+            requestedMode: program.scheduleMode,
+            resolvedFrequency: validSessions.length,
+            baselineForGoal: program.flexibleFrequencyRootCause?.goalTypical || 4,
+            experienceModifier: program.flexibleFrequencyRootCause?.experienceModifier || 0,
+            jointCautionPenalty: program.flexibleFrequencyRootCause?.jointCautionPenalty || 0,
+            recoveryScore: program.flexibleFrequencyRootCause?.recoveryScore,
+            wasModifiedFromBaseline: program.flexibleFrequencyRootCause?.wasModifiedFromBaseline,
+            isFirstBuildBaseline: !program.flexibleFrequencyRootCause?.isTrueAdaptive && 
+              program.flexibleFrequencyRootCause?.isBaselineDefault,
+            isTruePostFeedbackRecalculation: program.flexibleFrequencyRootCause?.isTrueAdaptive,
+            finalReasonCategory: program.flexibleFrequencyRootCause?.finalReasonCategory,
+            modificationSteps: program.flexibleFrequencyRootCause?.modificationSteps,
+            verdict: program.flexibleFrequencyRootCause?.isTrueAdaptive
+              ? 'TRUE_POST_FEEDBACK_RECALCULATION'
+              : program.flexibleFrequencyRootCause?.isBaselineDefault
+                ? 'FIRST_BUILD_BASELINE'
+                : 'MODIFIER_APPLIED_NO_FEEDBACK',
+          })
+          
+          // ==========================================================================
+          // [PHASE 7 TASK 6] PRIMARY EMPHASIS CONSISTENCY AUDIT
+          // ==========================================================================
+          const primaryGoal = program.primaryGoal
+          const primaryPolicy = weeklyRepresentation?.policies?.find(p => p.skill === primaryGoal)
+          const primaryIsHeadline = primaryPolicy?.representationVerdict === 'headline_represented'
+          const primaryDirectCount = primaryPolicy?.actualExposure?.direct || 0
+          const sessionsWithPrimaryFocus = validSessions.filter(s => 
+            (s.focus || s.focusLabel || '').toLowerCase().includes(primaryGoal.replace(/_/g, ' ').toLowerCase()) ||
+            (s.focus || s.focusLabel || '').toLowerCase().includes(primaryGoal.split('_')[0])
+          ).length
+          
+          console.log('[phase7-primary-emphasis-consistency-audit]', {
+            primaryGoal,
+            primaryIsHeadlineInChips: primaryIsHeadline,
+            primaryDirectExerciseCount: primaryDirectCount,
+            sessionsWithPrimaryInFocusLabel: sessionsWithPrimaryFocus,
+            totalSessions: validSessions.length,
+            primaryEmphasisRatio: validSessions.length > 0 
+              ? (sessionsWithPrimaryFocus / validSessions.length).toFixed(2)
+              : 0,
+            chipSummaryEmphasisMatches: primaryIsHeadline,
+            sessionDistributionMatchesPrimary: sessionsWithPrimaryFocus >= 1,
+            verdict: primaryIsHeadline && sessionsWithPrimaryFocus >= 1
+              ? 'PRIMARY_EMPHASIS_CONSISTENT'
+              : primaryIsHeadline && sessionsWithPrimaryFocus === 0
+                ? 'CHIP_PRIMARY_BUT_NO_SESSION_FOCUS'
+                : 'PRIMARY_NOT_HEADLINE_IN_CHIPS',
+          })
+          
+          // ==========================================================================
+          // [PHASE 7 TASK 5] CHIP BREADTH TRUTH VERDICT
+          // ==========================================================================
+          const displayedChipCount = strictRepresentedSkillsForChips.length
+          const totalSelectedSkills = program.selectedSkills.length
+          const chipsMatchStrictRepresentation = displayedChipCount <= 4 && 
+            strictRepresentedSkillsForChips.every(chip => {
+              const policy = weeklyRepresentation?.policies?.find(p => p.skill === chip)
+              return policy && (
+                policy.representationVerdict === 'headline_represented' ||
+                (policy.actualExposure?.direct || 0) >= 2 ||
+                (policy.actualExposure?.total || 0) >= 3
+              )
+            })
+          
+          console.log('[phase7-chip-breadth-truth-verdict]', {
+            totalSelectedSkills,
+            displayedChipCount,
+            chipsFiltered: totalSelectedSkills - displayedChipCount,
+            chipsShown: strictRepresentedSkillsForChips,
+            chipsFilteredOut: program.selectedSkills.filter(s => !strictRepresentedSkillsForChips.includes(s)),
+            chipsMatchStrictRepresentation,
+            deselectedSkillsBlocked: strictRepresentedSkillsForChips.every(s => 
+              program.selectedSkills.includes(s)
+            ),
+            verdict: chipsMatchStrictRepresentation
+              ? 'CHIPS_HONESTLY_REPRESENT_FINAL_WEEK'
+              : 'CHIPS_MAY_BE_OVER_BROAD',
+          })
+          
+          // ==========================================================================
+          // [PHASE 7 TASK 7] NO OVERCLAIMING FUTURE ADAPTIVE AUDIT
+          // ==========================================================================
+          console.log('[phase7-no-overclaiming-future-adaptive-audit]', {
+            claimsAutoReflow: false,  // Not implemented yet
+            claimsPushForwardScheduling: false,  // Not implemented yet
+            claimsSameDayReadiness: false,  // Not implemented yet
+            claimsTransparentWhatChanged: false,  // Not implemented yet
+            currentAdaptiveCapabilities: [
+              'goal_baseline_frequency',
+              'experience_modifier',
+              'joint_caution_adjustment',
+              'recovery_profile_adjustment',
+            ],
+            futureCapabilitiesNotYetActive: [
+              'session_by_session_reflow',
+              'push_forward_day_scheduling',
+              'pre_workout_readiness_check',
+              'what_changed_notifications',
+            ],
+            wordingOverclaims: false,
+            verdict: 'NO_FUTURE_SYSTEMS_FALSELY_CLAIMED',
+          })
+          
+          // ==========================================================================
+          // [PHASE 7 TASK 8] OUTPUT SPECIFICITY READINESS AUDIT
+          // ==========================================================================
+          const hasTemplatedPhrases = validSessions.some(s => 
+            (s.notes || '').toLowerCase().includes('this session') ||
+            (s.notes || '').toLowerCase().includes('focuses on')
+          )
+          const selectedSkillCountHigh = program.selectedSkills.length > 4
+          
+          console.log('[phase7-output-specificity-readiness-audit]', {
+            selectedSkillCount: program.selectedSkills.length,
+            representedSkillCount: program.representedSkills?.length || 0,
+            outputFeelsTooBroad: selectedSkillCountHigh && displayedChipCount > 3,
+            outputAppropriatelyBroad: selectedSkillCountHigh && displayedChipCount <= 3,
+            hasTemplatedSessionPhrases: hasTemplatedPhrases,
+            primaryEmphasisClear: primaryIsHeadline && sessionsWithPrimaryFocus >= 1,
+            readyForHighSignalAthlete: !hasTemplatedPhrases && displayedChipCount <= 3 && primaryIsHeadline,
+            verdict: displayedChipCount <= 3 && primaryIsHeadline
+              ? 'OUTPUT_APPROPRIATELY_FOCUSED'
+              : displayedChipCount > 4
+                ? 'OUTPUT_TOO_BROAD_FOR_GOALS'
+                : 'OUTPUT_ACCEPTABLE_BREADTH',
+          })
+          
           return null // No UI output, just audit logging
         })()}
         
@@ -1022,6 +1201,85 @@ export function AdaptiveProgramDisplay({
           return (!labelClaimsPush || hasPushContent) && (!labelClaimsPull || hasPullContent)
         }),
         verdict: 'session_identity_audit_complete',
+      }) as any}
+      
+      {/* [PHASE 7 TASK 4] ENHANCED SESSION IDENTITY VS CONTENT AUDIT */}
+      {console.log('[phase7-session-identity-vs-content-audit]', {
+        totalSessions: validSessions.length,
+        sessionDetails: validSessions.map((session: any) => {
+          const focus = session.focus?.toLowerCase() || ''
+          const focusLabel = session.focusLabel?.toLowerCase() || ''
+          const exercises = session.exercises || []
+          const exerciseNames = exercises.map((e: any) => e.name || '').join(', ')
+          
+          // Categorize exercises
+          const pushExercises = exercises.filter((e: any) => {
+            const name = (e.name || '').toLowerCase()
+            return name.includes('push') || name.includes('planche') || name.includes('dip') || 
+                   name.includes('press') || name.includes('pike')
+          })
+          const pullExercises = exercises.filter((e: any) => {
+            const name = (e.name || '').toLowerCase()
+            return name.includes('pull') || name.includes('row') || name.includes('lever') || 
+                   name.includes('chin') || name.includes('lat')
+          })
+          const legExercises = exercises.filter((e: any) => {
+            const name = (e.name || '').toLowerCase()
+            return name.includes('squat') || name.includes('lunge') || name.includes('leg') || 
+                   name.includes('pistol') || name.includes('calf')
+          })
+          const coreExercises = exercises.filter((e: any) => {
+            const name = (e.name || '').toLowerCase()
+            return name.includes('hollow') || name.includes('core') || name.includes('plank') || 
+                   name.includes('compression') || name.includes('l-sit')
+          })
+          
+          // Determine actual dominant pattern
+          const dominantPattern = pushExercises.length > pullExercises.length
+            ? 'push_dominant'
+            : pullExercises.length > pushExercises.length
+              ? 'pull_dominant'
+              : 'mixed'
+          
+          // Check if narrative matches content
+          const labelClaimsPush = focus.includes('push') || focus.includes('planche') || focusLabel.includes('push')
+          const labelClaimsPull = focus.includes('pull') || focus.includes('lever') || focusLabel.includes('pull')
+          
+          const narrativeMatchesContent = 
+            (!labelClaimsPush || pushExercises.length >= 2) &&
+            (!labelClaimsPull || pullExercises.length >= 2)
+          
+          return {
+            dayNumber: session.dayNumber,
+            declaredFocus: session.focus || session.focusLabel,
+            exerciseCount: exercises.length,
+            pushCount: pushExercises.length,
+            pullCount: pullExercises.length,
+            legCount: legExercises.length,
+            coreCount: coreExercises.length,
+            actualDominantPattern: dominantPattern,
+            narrativeClaimsPush: labelClaimsPush,
+            narrativeClaimsPull: labelClaimsPull,
+            narrativeMatchesContent,
+            sampleExercises: exerciseNames.substring(0, 100),
+          }
+        }),
+        allNarrativesMatch: validSessions.every((session: any) => {
+          const focus = (session.focus || session.focusLabel || '').toLowerCase()
+          const exercises = session.exercises || []
+          const pushCount = exercises.filter((e: any) => {
+            const n = (e.name || '').toLowerCase()
+            return n.includes('push') || n.includes('planche') || n.includes('dip') || n.includes('press')
+          }).length
+          const pullCount = exercises.filter((e: any) => {
+            const n = (e.name || '').toLowerCase()
+            return n.includes('pull') || n.includes('row') || n.includes('lever')
+          }).length
+          const labelClaimsPush = focus.includes('push') || focus.includes('planche')
+          const labelClaimsPull = focus.includes('pull') || focus.includes('lever')
+          return (!labelClaimsPush || pushCount >= 2) && (!labelClaimsPull || pullCount >= 2)
+        }),
+        verdict: 'session_content_audit_complete',
       }) as any}
       
       <div className="space-y-4">

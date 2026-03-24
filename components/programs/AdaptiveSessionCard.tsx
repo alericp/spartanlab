@@ -252,8 +252,20 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
     save: saveSession,
   } = workoutSession
 
-  // Count RPE-enabled exercises
-  const rpeExerciseCount = session.exercises.filter((e) => exerciseSupportsRPE(e.name)).length
+  // Count RPE-enabled exercises - [PHASE 10] Safe access with fallback
+  const safeExercises = Array.isArray(session.exercises) ? session.exercises : []
+  const rpeExerciseCount = safeExercises.filter((e) => exerciseSupportsRPE(e.name)).length
+  
+  // [PHASE 10 TASK 5] Child display contract hardening audit
+  console.log('[phase10-child-display-contract-hardening-verdict]', {
+    component: 'AdaptiveSessionCard',
+    sessionExercisesExists: Array.isArray(session.exercises),
+    safeExercisesCount: safeExercises.length,
+    sessionVariantsExists: Array.isArray(session.variants),
+    sessionFocusExists: !!session.focus,
+    sessionDayNumberExists: typeof session.dayNumber === 'number',
+    verdict: 'CHILD_ENTRY_CONTRACT_SAFE',
+  })
 
   const handleStartWorkout = () => {
     // [workout-route] UNIFIED ENTRY: Route to canonical workout session page
@@ -319,7 +331,7 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
   const handleReplacementConfirm = (newExerciseId: string) => {
     if (selectedExerciseForReplace) {
       // Record the override
-      const exercise = session.exercises.find(e => e.id === selectedExerciseForReplace.id)
+      const exercise = safeExercises.find(e => e.id === selectedExerciseForReplace.id)
       const newName = newExerciseId.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
       
       const override: ExerciseOverride = {
@@ -374,7 +386,7 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
     setAdjustedExercises(prev => new Map(prev).set(exerciseId, newProgression))
     
     // Find original exercise name
-    const exercise = session.exercises.find(e => e.id === exerciseId)
+    const exercise = safeExercises.find(e => e.id === exerciseId)
     
     // Record the override
     const override: ExerciseOverride = {
@@ -425,7 +437,7 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
         targetRPE: s.targetRPE,
         restSeconds: s.restSeconds,
       }))
-    : session.exercises
+        : safeExercises
   
   // [TASK 3] Build unified active session view
   const activeSessionView: ActiveSessionView = {

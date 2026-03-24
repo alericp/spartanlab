@@ -338,25 +338,67 @@ export function AdaptiveProgramDisplay({
               verdict: serverRepresentedSkills ? 'current_build' : 'possibly_stale_plan',
             })
             
+            // [SUMMARY-TRUTH] TASK 6: Use server-provided summary truth if available
+            const summaryTruth = (program as unknown as { summaryTruth?: {
+              headlineFocusSkills?: string[]
+              weekRepresentedSkills?: string[]
+              weekSupportSkills?: string[]
+            }}).summaryTruth
+            
+            const headlineSkills = summaryTruth?.headlineFocusSkills || [program.primaryGoal, program.secondaryGoal].filter(Boolean)
+            const weekSupportSkills = summaryTruth?.weekSupportSkills || []
+            
+            // [SUMMARY-TRUTH] TASK 6: Determine chip state for each skill
+            type ChipState = 'headline_priority' | 'represented_broader' | 'support_only' | 'selected_not_represented'
+            
+            const getChipState = (skill: string): ChipState => {
+              if (headlineSkills.includes(skill)) return 'headline_priority'
+              if (representedSkills.includes(skill)) return 'represented_broader'
+              if (weekSupportSkills.includes(skill)) return 'support_only'
+              return 'selected_not_represented'
+            }
+            
+            // [SUMMARY-TRUTH] TASK 6: Log built-around chip truth audit
+            console.log('[built-around-chip-truth-audit]', {
+              chips: program.selectedSkills.map(skill => ({
+                skill,
+                chipState: getChipState(skill),
+                representedInWeek: representedSkills.includes(skill),
+                supportOnly: weekSupportSkills.includes(skill),
+                headlinePriority: headlineSkills.includes(skill),
+                selectedOnly: !representedSkills.includes(skill) && !weekSupportSkills.includes(skill),
+              })),
+            })
+            
             return (
               <div className="flex flex-wrap items-center gap-1">
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-[#1A1A1A] text-[#6A6A6A]">
                   <Sparkles className="w-3 h-3 text-[#E63946]/60" />
                   Built around:
                 </span>
-                {program.selectedSkills.map((skill, idx) => {
-                  const isRepresented = representedSkills.includes(skill)
+                {program.selectedSkills.map((skill) => {
+                  const chipState = getChipState(skill)
+                  
+                  // [SUMMARY-TRUTH] TASK 6: Style chips based on state
+                  const chipStyles = {
+                    headline_priority: 'bg-[#E63946]/10 text-[#E63946] border border-[#E63946]/20',
+                    represented_broader: 'bg-[#1A1A1A] text-[#A5A5A5] border border-[#3A3A3A]',
+                    support_only: 'bg-[#1A1A1A]/80 text-[#8A8A8A] border border-dotted border-[#3A3A3A]',
+                    selected_not_represented: 'bg-[#1A1A1A]/50 text-[#6A6A6A] border border-dashed border-[#3A3A3A]',
+                  }
+                  
+                  const chipTitles = {
+                    headline_priority: 'Primary focus this week',
+                    represented_broader: 'Represented in this week',
+                    support_only: 'Support-level expression this week',
+                    selected_not_represented: 'Selected but not directly expressed this week',
+                  }
+                  
                   return (
                     <span 
                       key={skill}
-                      className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] ${
-                        isRepresented
-                          ? idx < 2 
-                            ? 'bg-[#E63946]/10 text-[#E63946] border border-[#E63946]/20' 
-                            : 'bg-[#1A1A1A] text-[#A5A5A5]'
-                          : 'bg-[#1A1A1A]/50 text-[#6A6A6A] border border-dashed border-[#3A3A3A]' // Dimmed for not-represented
-                      }`}
-                      title={isRepresented ? 'Represented in this week' : 'Selected but not directly represented this week'}
+                      className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] ${chipStyles[chipState]}`}
+                      title={chipTitles[chipState]}
                     >
                       {skill.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
                     </span>
@@ -373,9 +415,14 @@ export function AdaptiveProgramDisplay({
           )}
         </div>
         
-        {/* Program Rationale */}
+        {/* Program Rationale - [SUMMARY-TRUTH] Use truthful hybrid summary if available */}
         <div className="p-3 bg-[#1A1A1A] rounded-lg">
-          <p className="text-sm text-[#A5A5A5]">{program.programRationale}</p>
+          <p className="text-sm text-[#A5A5A5]">
+            {(() => {
+              const summaryTruth = (program as unknown as { summaryTruth?: { truthfulHybridSummary?: string }}).summaryTruth
+              return summaryTruth?.truthfulHybridSummary || program.programRationale
+            })()}
+          </p>
         </div>
         
         {/* [PHASE 6] SUMMARY CLAIM VS WEEK TRUTH AUDIT */}

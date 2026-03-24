@@ -693,6 +693,11 @@ export interface AdaptiveProgram {
   weekNumber?: number  // For tracking week-over-week adaptation
   structure: WeeklyStructure
   sessions: AdaptiveSession[]
+  // [SUMMARY-TRUTH] Selected skills from profile and represented skills in this week
+  selectedSkills?: string[]
+  representedSkills?: string[]
+  goalCategories?: string[]
+  trainingPathType?: string
   equipmentProfile: EquipmentProfile
   constraintInsight: {
     hasInsight: boolean
@@ -711,6 +716,15 @@ export interface AdaptiveProgram {
   }
   recoveryLevel: RecoveryLevel
   programRationale: string
+  // [SUMMARY-TRUTH] Summary truth contract for accurate display
+  summaryTruth?: {
+    profileSelectedSkills: string[]
+    weekRepresentedSkills: string[]
+    weekSupportSkills: string[]
+    headlineFocusSkills: string[]
+    summaryRenderableSkills: string[]
+    truthfulHybridSummary: string
+  }
   // Adaptive Athlete Engine context
   engineContext?: {
     plateauStatus: string
@@ -4021,6 +4035,55 @@ function generateAdaptiveProgramImpl(inputs: AdaptiveProgramInputs, stageTracker
   // ==========================================================================
   let dayFocusTruthAudit: Array<{ dayNumber: number; labelMatchesSession: boolean }> = []
   
+  // ==========================================================================
+  // [SUMMARY-TRUTH] TASK 1: CANONICAL SUMMARY-TRUTH CONTRACT
+  // Separate the different skill arrays for truthful summary generation
+  // ==========================================================================
+  
+  // 1. Profile selected skills - full saved truth from user profile
+  const profileSelectedSkillsCanonical = canonicalProfile.selectedSkills || []
+  
+  // 2. Week represented skills - skills with actual presence in generated sessions
+  const weekRepresentedSkillsCanonical = generatedRepresentedSkills || []
+  
+  // 3. Week support skills - skills that appear in meaningful support/secondary ways
+  const weekSupportSkillsCanonical = profileSelectedSkillsCanonical.filter(skill => 
+    !weekRepresentedSkillsCanonical.includes(skill) && 
+    builtAroundSkillsFinal.includes(skill)
+  )
+  
+  // 4. Headline focus skills - small ordered subset for priority display (primary + secondary)
+  const headlineFocusSkillsCanonical = [primaryGoal]
+  if (secondaryGoal && secondaryGoal !== primaryGoal) {
+    headlineFocusSkillsCanonical.push(secondaryGoal)
+  }
+  
+  // 5. Summary renderable skills - skills that can be mentioned because they're actually in the week
+  const summaryRenderableSkillsCanonical = [
+    ...headlineFocusSkillsCanonical,
+    ...weekRepresentedSkillsCanonical.filter(s => !headlineFocusSkillsCanonical.includes(s)),
+    ...weekSupportSkillsCanonical.filter(s => !headlineFocusSkillsCanonical.includes(s) && !weekRepresentedSkillsCanonical.includes(s)),
+  ]
+  
+  console.log('[summary-truth-contract-audit]', {
+    profileSelectedSkillsCanonical,
+    weekRepresentedSkillsCanonical,
+    weekSupportSkillsCanonical,
+    headlineFocusSkillsCanonical,
+    summaryRenderableSkillsCanonical,
+    profileBroadness: profileSelectedSkillsCanonical.length,
+    weekBroadness: summaryRenderableSkillsCanonical.length,
+    underreportingRisk: summaryRenderableSkillsCanonical.length > headlineFocusSkillsCanonical.length,
+    finalVerdict: summaryRenderableSkillsCanonical.length >= profileSelectedSkillsCanonical.length * 0.7
+      ? 'summary_truth_aligned'
+      : summaryRenderableSkillsCanonical.length >= 2
+        ? 'summary_truth_acceptable'
+        : 'summary_truth_too_narrow',
+  })
+  
+  // [SUMMARY-TRUTH] Hoist truthfulHybridSummary so it can be used in summaryTruth object
+  let truthfulHybridSummary = programRationale
+  
   try {
     // Use canonical exercise names from earlier safe collection (TASK 2)
     const allExerciseNames = canonicalExerciseNames
@@ -4032,7 +4095,8 @@ function generateAdaptiveProgramImpl(inputs: AdaptiveProgramInputs, stageTracker
       s.focus?.toLowerCase().includes('pull') && s.isPrimary
     ).length
     const mixedSessionCount = sessions.filter(s => 
-      s.focus?.toLowerCase().includes('mixed') || s.focus?.toLowerCase().includes('full')
+      s.focus?.toLowerCase().includes('mixed') || s.focus?.toLowerCase().includes('full') ||
+      s.focus?.toLowerCase().includes('density') || s.focus?.toLowerCase().includes('hybrid')
     ).length
     
     // Check for specific skill expressions in exercises
@@ -4043,11 +4107,70 @@ function generateAdaptiveProgramImpl(inputs: AdaptiveProgramInputs, stageTracker
       n.includes('front lever') || n.includes('tuck lever')
     ).length
     
-    const hybridSummaryText = programRationale
+    // ==========================================================================
+    // [SUMMARY-TRUTH] TASK 4: GENERATE TRUTHFUL HYBRID SUMMARY TEXT
+    // This replaces the narrow programRationale with week-truth-aware summary
+    // ==========================================================================
+    const broaderRepresentedSkills = summaryRenderableSkillsCanonical.filter(s => 
+      !headlineFocusSkillsCanonical.includes(s)
+    )
+    const hasBroaderSkillExpression = broaderRepresentedSkills.length > 0
+    const isHybridWeek = mixedSessionCount > 0 || hasBroaderSkillExpression
+    
+    // Build truthful hybrid summary based on actual week structure
+    // (variable already declared above try block)
+    
+    // [SUMMARY-TRUTH] TASK 4: Enhance summary if broader skills are represented
+    if (hasBroaderSkillExpression && !truthfulHybridSummary.toLowerCase().includes('broader') &&
+        !truthfulHybridSummary.toLowerCase().includes('additional')) {
+      const broaderSkillNames = broaderRepresentedSkills.slice(0, 3).map(s => s.replace(/_/g, ' '))
+      const broaderClause = broaderSkillNames.length === 1
+        ? `${broaderSkillNames[0]} also receives meaningful support work.`
+        : `Additional skills (${broaderSkillNames.join(', ')}) receive support-level expression.`
+      truthfulHybridSummary = `${truthfulHybridSummary} ${broaderClause}`
+    }
+    
+    // [SUMMARY-TRUTH] TASK 4: Add mixed session awareness if applicable
+    if (mixedSessionCount > 0 && !truthfulHybridSummary.toLowerCase().includes('mixed')) {
+      truthfulHybridSummary = `${truthfulHybridSummary} Includes ${mixedSessionCount} mixed skill session${mixedSessionCount > 1 ? 's' : ''} for broader development.`
+    }
+    
+    const hybridSummaryText = truthfulHybridSummary
     overclaimDetected = 
       (hybridSummaryText.includes('mixed skill') && mixedSessionCount === 0) ||
       (hybridSummaryText.includes('back lever') && backLeverExpressionCount === 0) ||
       (hybridSummaryText.includes('dedicated') && pushPrimarySessionCount + pullPrimarySessionCount < 2)
+    
+    // [SUMMARY-TRUTH] TASK 2: Log narrowing point audit
+    console.log('[summary-narrowing-point-audit]', {
+      codeSection: 'hybrid_summary_generation',
+      inputArrays: {
+        profileSelectedSkillsCanonical: profileSelectedSkillsCanonical.length,
+        headlineFocusSkillsCanonical: headlineFocusSkillsCanonical.length,
+        summaryRenderableSkillsCanonical: summaryRenderableSkillsCanonical.length,
+      },
+      outputText: hybridSummaryText.slice(0, 100),
+      broaderRenderableSkillsDropped: profileSelectedSkillsCanonical.filter(s => 
+        !summaryRenderableSkillsCanonical.includes(s)
+      ),
+      dropIntended: true,  // Skills not in week are intentionally not mentioned
+      narrowingReason: 'only_mentioning_skills_actually_in_week',
+    })
+    
+    console.log('[hybrid-summary-render-truth-audit]', {
+      actualMixedSessionCount: mixedSessionCount,
+      pushDominantSessionCount: pushPrimarySessionCount,
+      pullDominantSessionCount: pullPrimarySessionCount,
+      broaderRepresentedSkillsBeyondTopTwo: broaderRepresentedSkills,
+      finalRenderedHybridSummaryText: hybridSummaryText.slice(0, 200),
+      verdict: mixedSessionCount === 0 && broaderRepresentedSkills.length === 0
+        ? 'truthful_compact'
+        : hybridSummaryText.includes(broaderRepresentedSkills[0]?.replace(/_/g, ' ') || '')
+          ? 'truthful_compact'
+          : broaderRepresentedSkills.length === 0
+            ? 'truthful_compact'
+            : 'too_narrow',
+    })
     
     console.log('[hybrid-summary-truth-audit]', {
       pushPrimarySessionCount,
@@ -4058,6 +4181,20 @@ function generateAdaptiveProgramImpl(inputs: AdaptiveProgramInputs, stageTracker
       hybridSummaryTextLength: hybridSummaryText.length,
       overclaimDetected,
       finalVerdict: overclaimDetected ? 'minor_overclaim' : 'aligned',
+    })
+    
+    // [SUMMARY-TRUTH] TASK 3: Headline vs broader truth audit
+    console.log('[headline-vs-broader-truth-audit]', {
+      headlineEmphasis: headlineFocusSkillsCanonical,
+      broaderRepresentation: broaderRepresentedSkills,
+      headlineAnswers: 'what_leads_the_week',
+      broaderAnswers: 'what_else_is_materially_included',
+      summaryReflectsBoth: hasBroaderSkillExpression 
+        ? hybridSummaryText.toLowerCase().includes(broaderRepresentedSkills[0]?.replace(/_/g, ' ') || '')
+        : true,
+      finalVerdict: hasBroaderSkillExpression && !hybridSummaryText.toLowerCase().includes('support')
+        ? 'headline_dominant_broader_hidden'
+        : 'balanced',
     })
     
     // [TASK 4] GOAL HIERARCHY SUMMARY AUDIT - Verify primary/secondary goals lead the summary text
@@ -4127,6 +4264,48 @@ function generateAdaptiveProgramImpl(inputs: AdaptiveProgramInputs, stageTracker
     console.log('[day-focus-truth-audit]', {
       totalDays: dayFocusTruthAudit.length,
       daysWithMatchingLabels: dayFocusTruthAudit.filter(d => d.labelMatchesSession).length,
+    })
+    
+    // ==========================================================================
+    // [SUMMARY-TRUTH] TASK 7: UNDERREPORTING FINAL CHECK
+    // Detect if summary text still underreports when week truth is broader
+    // ==========================================================================
+    const renderedSummaryReferencedSkills: string[] = []
+    const renderedWhyThisPlanReferencedSkills: string[] = []
+    
+    // Check which skills are mentioned in the summary text
+    summaryRenderableSkillsCanonical.forEach(skill => {
+      const skillName = skill.replace(/_/g, ' ')
+      if (truthfulHybridSummary.toLowerCase().includes(skillName)) {
+        renderedSummaryReferencedSkills.push(skill)
+      }
+      if (programRationale.toLowerCase().includes(skillName)) {
+        renderedWhyThisPlanReferencedSkills.push(skill)
+      }
+    })
+    
+    const underreportingDetected = 
+      summaryRenderableSkillsCanonical.length > headlineFocusSkillsCanonical.length &&
+      (renderedSummaryReferencedSkills.length <= headlineFocusSkillsCanonical.length ||
+       renderedWhyThisPlanReferencedSkills.length <= headlineFocusSkillsCanonical.length)
+    
+    console.log('[summary-underreporting-final-check]', {
+      profileSelectedSkillsCanonical,
+      summaryRenderableSkillsCanonical,
+      renderedSummaryReferencedSkills,
+      renderedWhyThisPlanReferencedSkills,
+      underreportingDetected,
+      broaderSkillsMentionedInSummary: renderedSummaryReferencedSkills.filter(s => 
+        !headlineFocusSkillsCanonical.includes(s)
+      ),
+      finalVerdict: underreportingDetected 
+        ? 'summary_underreports_broader_skills'
+        : summaryRenderableSkillsCanonical.length === headlineFocusSkillsCanonical.length
+          ? 'no_broader_skills_to_mention'
+          : 'summary_mentions_broader_skills',
+    })
+    
+    console.log('[day-focus-truth-audit-continued]', {
       dayAudits: dayFocusTruthAudit,
     })
     
@@ -4520,6 +4699,15 @@ console.log('[program-generate] Generation complete:', {
     },
     recoveryLevel: recoverySignal.level,
     programRationale,
+    // [SUMMARY-TRUTH] Store enhanced summary truth data for display
+    summaryTruth: {
+      profileSelectedSkills: profileSelectedSkillsCanonical,
+      weekRepresentedSkills: weekRepresentedSkillsCanonical,
+      weekSupportSkills: weekSupportSkillsCanonical,
+      headlineFocusSkills: headlineFocusSkillsCanonical,
+      summaryRenderableSkills: summaryRenderableSkillsCanonical,
+      truthfulHybridSummary,
+    },
     engineContext: {
       plateauStatus: engineContext.plateauStatus,
       strengthSupportLevel: engineContext.strengthSupportLevel,
@@ -7562,7 +7750,10 @@ function generateProgramRationale(
   recoveryLevel: RecoveryLevel,
   equipmentProfile: EquipmentProfile,
   // [advanced-skill-expression] ISSUE F: Accept selected skills for rationale
-  selectedSkills: string[] = []
+  selectedSkills: string[] = [],
+  // [SUMMARY-TRUTH] TASK 5: Accept broader represented skills for truthful why-this-plan
+  broaderRepresentedSkills: string[] = [],
+  secondaryGoal: string | null = null
 ): string {
   const parts: string[] = []
   
@@ -7667,6 +7858,44 @@ function generateProgramRationale(
       selectedSkillsCount: selectedSkills.length,
     })
   }
+  
+  // ==========================================================================
+  // [SUMMARY-TRUTH] TASK 5: Include broader represented skills in rationale
+  // This acknowledges skills beyond primary/secondary that are truly expressed
+  // ==========================================================================
+  const nonAdvancedBroaderSkills = broaderRepresentedSkills.filter(skill => 
+    !advancedSkillsExpressed.some(adv => skill.includes(adv.toLowerCase().replace(' ', '_')))
+  )
+  
+  if (nonAdvancedBroaderSkills.length > 0) {
+    const broaderSkillNames = nonAdvancedBroaderSkills.slice(0, 2).map(s => s.replace(/_/g, ' '))
+    if (broaderSkillNames.length === 1) {
+      parts.push(`${broaderSkillNames[0].charAt(0).toUpperCase() + broaderSkillNames[0].slice(1)} receives meaningful support-level expression.`)
+    } else {
+      parts.push(`Broader skills (${broaderSkillNames.join(', ')}) receive support-level expression throughout the week.`)
+    }
+    
+    console.log('[why-this-plan-broader-skills]', {
+      broaderSkillsIncluded: nonAdvancedBroaderSkills,
+      mentionedInRationale: broaderSkillNames,
+    })
+  }
+  
+  // [SUMMARY-TRUTH] TASK 5: Why this plan truth audit
+  console.log('[why-this-plan-truth-audit]', {
+    primaryGoal: primaryGoal.replace(/_/g, ' '),
+    secondaryGoal: secondaryGoal?.replace(/_/g, ' ') || 'none',
+    representedSupportSkills: broaderRepresentedSkills,
+    excludedOrFilteredSkills: selectedSkills.filter(s => 
+      s !== primaryGoal && s !== secondaryGoal && !broaderRepresentedSkills.includes(s)
+    ),
+    finalWhyThisPlanText: parts.join(' ').slice(0, 150),
+    verdict: broaderRepresentedSkills.length === 0 
+      ? 'no_broader_skills_to_mention'
+      : parts.some(p => p.includes('support') || p.includes('broader'))
+        ? 'broader_skills_acknowledged'
+        : 'broader_skills_not_mentioned',
+  })
   
   return parts.join(' ')
 }

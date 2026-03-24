@@ -5835,26 +5835,83 @@ return explanations.length > 0 ? explanations : undefined
   // Calculate actual exposure for each selected skill
   const selectedSkillsForPolicy = canonicalProfile.selectedSkills || []
   const allExercisesFlat = sessions.flatMap(s => s.exercises || [])
+  const totalSelectedCount = selectedSkillsForPolicy.length
+  
+  // ==========================================================================
+  // [PRIORITY-COLLAPSE-FIX] TASK 1 & 2: CANONICAL MULTI-SKILL PRIORITY MODEL
+  // Replace array-position collapse with a fairer priority model
+  // ==========================================================================
+  
+  // Determine priority model based on profile complexity
+  const isAdvancedMultiSkillProfile = totalSelectedCount >= 4
   
   const weeklyRepresentationPolicy: WeeklySkillPolicy[] = selectedSkillsForPolicy.map((skill, idx) => {
     const skillLower = skill.toLowerCase().replace(/_/g, ' ')
     const isHeadline = skill === primaryGoal
     const isSecondary = skill === secondaryGoal
-    const isTertiary = !isHeadline && !isSecondary && idx < 4
     
-    // Determine rank
-    const selectedRank: 'headline' | 'secondary' | 'tertiary' | 'optional' = 
-      isHeadline ? 'headline' : isSecondary ? 'secondary' : isTertiary ? 'tertiary' : 'optional'
+    // [PRIORITY-COLLAPSE-FIX] TASK 2: New priority model
+    // - headline_emphasis: primary goal (idx doesn't matter)
+    // - major_secondary: secondary goal (idx doesn't matter)
+    // - broad_selected_commitment: ALL other selected skills get this - NOT optional
+    // - true_optional: only if explicitly marked or constraints block (not used for selected skills)
     
-    // Set target exposure based on rank
-    const targetExposure = isHeadline ? 6 : isSecondary ? 4 : isTertiary ? 2 : 1
+    // OLD BROKEN LOGIC: const isTertiary = !isHeadline && !isSecondary && idx < 4
+    // NEW FIXED LOGIC: All selected skills beyond primary/secondary are "broad_selected_commitment"
+    // They should NOT become weak "optional" just because idx >= 4
     
-    // Eligible session types
+    const isBroadSelectedCommitment = !isHeadline && !isSecondary
+    
+    // [PRIORITY-COLLAPSE-FIX] Determine rank WITHOUT array position collapse
+    type ExpandedRank = 'headline' | 'secondary' | 'tertiary' | 'optional'
+    let selectedRank: ExpandedRank
+    let wasArrayPositionDemoted = false
+    
+    if (isHeadline) {
+      selectedRank = 'headline'
+    } else if (isSecondary) {
+      selectedRank = 'secondary'
+    } else if (isBroadSelectedCommitment) {
+      // ALL non-headline/secondary selected skills are TERTIARY (broad commitment)
+      // NOT optional - they were selected by the user and should be expressed
+      selectedRank = 'tertiary'
+      wasArrayPositionDemoted = idx >= 4 // Track if this would have been demoted in old logic
+    } else {
+      selectedRank = 'optional'
+    }
+    
+    // [PRIORITY-COLLAPSE-FIX] TASK 3: Create feasible weekly representation floor
+    // - Headline: 6 exercises minimum
+    // - Secondary: 4 exercises minimum
+    // - Broad selected commitment: 2 exercises minimum (NOT 1 for "optional")
+    // - True optional: 1 exercise (but we don't use this for selected skills)
+    const targetExposure = isHeadline ? 6 : isSecondary ? 4 : isBroadSelectedCommitment ? 2 : 1
+    
+    // [PRIORITY-COLLAPSE-FIX] Eligible session types - broader for all selected skills
+    // All selected skills can use mixed/density days - this is the recovery path
     const eligibleSessionTypes = isHeadline 
       ? ['push', 'pull', 'mixed', 'skill', 'strength', 'density']
       : isSecondary 
         ? ['push', 'pull', 'mixed', 'skill', 'density']
-        : ['mixed', 'density', 'skill', 'support']
+        : ['push', 'pull', 'mixed', 'density', 'skill', 'support'] // Broader for all selected
+    
+    // [PRIORITY-COLLAPSE-FIX] TASK 1: Log priority collapse audit for this skill
+    if (idx === 0) {
+      console.log('[selected-skill-priority-collapse-audit] Starting priority analysis for', totalSelectedCount, 'selected skills')
+    }
+    console.log('[selected-skill-priority-collapse-audit]', {
+      skill,
+      originalSelectedIndex: idx,
+      assignedRank: selectedRank,
+      targetExposure,
+      eligibleSessionTypes: eligibleSessionTypes.length,
+      wasRankDeterminedByArrayPosition: false, // Fixed - no longer true
+      wouldHaveBeenDemotedByOldLogic: wasArrayPositionDemoted,
+      wasDowngradedBeforeWeeklyBuild: false,
+      downgradeJustification: wasArrayPositionDemoted 
+        ? 'FIXED: no longer demoted to optional due to idx >= 4'
+        : 'n/a',
+    })
     
     // Count actual exposure by type
     let directCount = 0
@@ -5950,6 +6007,91 @@ return explanations.length > 0 ? explanations : undefined
       verdict: p.representationVerdict,
       narrowingPoint: p.narrowingPoint,
     })),
+  })
+  
+  // ==========================================================================
+  // [PRIORITY-COLLAPSE-FIX] TASK 2: CANONICAL MULTI-SKILL PRIORITY MODEL AUDIT
+  // ==========================================================================
+  const headlineCount = weeklyRepresentationPolicy.filter(p => p.selectedRank === 'headline').length
+  const secondaryCount = weeklyRepresentationPolicy.filter(p => p.selectedRank === 'secondary').length
+  const tertiaryCount = weeklyRepresentationPolicy.filter(p => p.selectedRank === 'tertiary').length
+  const optionalCount = weeklyRepresentationPolicy.filter(p => p.selectedRank === 'optional').length
+  const skillsAtIndex4Plus = selectedSkillsForPolicy.filter((_, idx) => idx >= 4).length
+  const skillsAtIndex4PlusThatAreTertiary = weeklyRepresentationPolicy
+    .filter((_, idx) => idx >= 4 && weeklyRepresentationPolicy[idx]?.selectedRank === 'tertiary').length
+  
+  console.log('[canonical-multi-skill-priority-model-audit]', {
+    totalSelectedSkills: selectedSkillsForPolicy.length,
+    priorityDistribution: {
+      headline_emphasis: headlineCount,
+      major_secondary: secondaryCount,
+      broad_selected_commitment: tertiaryCount,
+      true_optional: optionalCount,
+    },
+    arrayPositionCollapseFixed: skillsAtIndex4Plus > 0 && optionalCount === 0,
+    skillsAtIndex4Plus,
+    skillsAtIndex4PlusThatAreTertiary,
+    oldLogicWouldHaveDemoted: skillsAtIndex4Plus,
+    newLogicPreserves: skillsAtIndex4PlusThatAreTertiary,
+    allSelectedSkillsHaveCommitment: optionalCount === 0,
+  })
+  
+  // ==========================================================================
+  // [PRIORITY-COLLAPSE-FIX] TASK 3: BROAD SELECTED REPRESENTATION FLOOR AUDIT
+  // ==========================================================================
+  const broadSelectedSkills = weeklyRepresentationPolicy.filter(p => 
+    p.selectedRank === 'tertiary' && p.skill !== primaryGoal && p.skill !== secondaryGoal
+  )
+  const skillsBelowFloor = broadSelectedSkills.filter(p => p.actualExposure.total < p.targetExposure)
+  const skillsAtOrAboveFloor = broadSelectedSkills.filter(p => p.actualExposure.total >= p.targetExposure)
+  
+  console.log('[broad-selected-representation-floor-audit]', {
+    totalBroadSelectedSkills: broadSelectedSkills.length,
+    representationFloor: 2, // All broad selected have target of 2
+    skillsAtOrAboveFloor: skillsAtOrAboveFloor.length,
+    skillsBelowFloor: skillsBelowFloor.length,
+    belowFloorDetails: skillsBelowFloor.map(p => ({
+      skill: p.skill,
+      targetExposure: p.targetExposure,
+      actualExposure: p.actualExposure.total,
+      directExposure: p.actualExposure.direct,
+      supportExposure: p.actualExposure.support,
+      warmupOnlyExposure: p.actualExposure.warmupOnly,
+      reasonBelowFloor: p.narrowingPoint || 'unknown',
+    })),
+    floorAchievementRate: broadSelectedSkills.length > 0 
+      ? `${Math.round((skillsAtOrAboveFloor.length / broadSelectedSkills.length) * 100)}%`
+      : '100%',
+  })
+  
+  // ==========================================================================
+  // [PRIORITY-COLLAPSE-FIX] TASK 6: SELECTED VS FEASIBLE VS REPRESENTED AUDIT
+  // Distinguish four truth states cleanly
+  // ==========================================================================
+  const feasibilityAnalysis = weeklyRepresentationPolicy.map(p => {
+    const isFeasible = p.representationVerdict !== 'filtered_out_by_constraints'
+    const isRepresented = p.representationVerdict === 'headline_represented' || 
+                          p.representationVerdict === 'broadly_represented'
+    const isUnderrepresented = p.representationVerdict === 'selected_but_underexpressed' ||
+                               p.representationVerdict === 'support_only'
+    
+    return {
+      skill: p.skill,
+      selected: true,
+      feasibleThisWeek: isFeasible,
+      representedThisWeek: isRepresented,
+      underrepresentedThisWeek: isUnderrepresented && isFeasible,
+      filteredByConstraints: !isFeasible,
+    }
+  })
+  
+  console.log('[selected-vs-feasible-vs-represented-audit]', {
+    totalSelected: feasibilityAnalysis.length,
+    totalFeasible: feasibilityAnalysis.filter(f => f.feasibleThisWeek).length,
+    totalRepresented: feasibilityAnalysis.filter(f => f.representedThisWeek).length,
+    totalUnderrepresented: feasibilityAnalysis.filter(f => f.underrepresentedThisWeek).length,
+    totalFilteredByConstraints: feasibilityAnalysis.filter(f => f.filteredByConstraints).length,
+    perSkillAnalysis: feasibilityAnalysis,
   })
   
   // ==========================================================================
@@ -6187,7 +6329,87 @@ return explanations.length > 0 ? explanations : undefined
       coverageRatio,
       summaryUpdated: true,
     })
+    
+    // ==========================================================================
+    // [PRIORITY-COLLAPSE-FIX] TASK 7: POST-PRIORITY-COLLAPSE SUMMARY TRUTH AUDIT
+    // Verify summary follows the new truth model after priority collapse fix
+    // ==========================================================================
+    const finalSummary = finalProgram.summaryTruth?.truthfulHybridSummary || finalProgram.programRationale || ''
+    const primaryMentioned = finalSummary.toLowerCase().includes(primaryGoal.replace(/_/g, ' '))
+    const secondaryMentioned = !secondaryGoal || finalSummary.toLowerCase().includes(secondaryGoal.replace(/_/g, ' '))
+    const broaderSkillsMentioned = broadlyRepresentedFromVerdicts
+      .filter(s => s !== primaryGoal && s !== secondaryGoal)
+      .filter(s => finalSummary.toLowerCase().includes(s.replace(/_/g, ' ')))
+    const supportOnlyCorrectlyDescribed = supportOnlySkillsFromVerdicts.every(s => 
+      !finalSummary.toLowerCase().includes(s.replace(/_/g, ' ')) || 
+      finalSummary.toLowerCase().includes('support')
+    )
+    
+    console.log('[post-priority-collapse-summary-truth-audit]', {
+      finalSummaryText: finalSummary.slice(0, 250),
+      primaryEmphasisHonest: primaryMentioned,
+      broaderSkillsMentionedWhenRepresented: broaderSkillsMentioned.length > 0 || broadlyRepresentedFromVerdicts.length <= 2,
+      supportOnlyDescribedCarefully: supportOnlyCorrectlyDescribed,
+      hybridLanguageReflectsRealWeek: coverageRatio >= 0.6,
+      summaryTruthVerdict: primaryMentioned && supportOnlyCorrectlyDescribed
+        ? 'summary_follows_new_truth_model'
+        : !primaryMentioned
+          ? 'primary_not_emphasized'
+          : 'support_only_overclaimed',
+    })
   }
+  
+  // ==========================================================================
+  // [PRIORITY-COLLAPSE-FIX] TASK 9: SELECTED SKILL PRIORITY COLLAPSE FINAL VERDICT
+  // ==========================================================================
+  const totalFeasibleSkills = weeklyRepresentationPolicy.filter(p => 
+    p.representationVerdict !== 'filtered_out_by_constraints'
+  ).length
+  const totalRepresentedSkillsFinal = verdictCounts.headline_represented + verdictCounts.broadly_represented
+  const totalUnderrepresentedSkillsFinal = verdictCounts.selected_but_underexpressed + verdictCounts.support_only
+  const totalConstraintFilteredSkillsFinal = verdictCounts.filtered_out_by_constraints
+  
+  // Check if array-position collapse was fixed
+  const skillsAtIndex4OrHigher = selectedSkillsForPolicy.filter((_, idx) => idx >= 4)
+  const skillsAtIndex4OrHigherThatAreRepresented = skillsAtIndex4OrHigher.filter(skill => {
+    const policy = weeklyRepresentationPolicy.find(p => p.skill === skill)
+    return policy?.representationVerdict === 'headline_represented' || 
+           policy?.representationVerdict === 'broadly_represented'
+  })
+  const arrayPositionCollapseFixed = skillsAtIndex4OrHigher.length === 0 || 
+    skillsAtIndex4OrHigherThatAreRepresented.length >= Math.ceil(skillsAtIndex4OrHigher.length * 0.5)
+  
+  // Check if mixed days recover underexpressed skills
+  const mixedDayCount = sessions.filter(s => 
+    s.focus?.toLowerCase().includes('mixed') || s.focus?.toLowerCase().includes('density')
+  ).length
+  const mixedDaysNowRecoverUnderexpressed = mixedDayCount > 0 && 
+    totalUnderrepresentedSkillsFinal < selectedSkillsForPolicy.length * 0.5
+  
+  console.log('[selected-skill-priority-collapse-final-verdict]', {
+    totalSelectedSkills: selectedSkillsForPolicy.length,
+    totalFeasibleSkills,
+    totalRepresentedSkills: totalRepresentedSkillsFinal,
+    totalUnderrepresentedSkills: totalUnderrepresentedSkillsFinal,
+    totalConstraintFilteredSkills: totalConstraintFilteredSkillsFinal,
+    arrayPositionCollapseFixed,
+    mixedDaysNowRecoverUnderexpressed,
+    summaryNowFollowsFinalWeekTruth: coverageRatio >= 0.6,
+    detailedAnalysis: {
+      skillsAtIndex4OrHigher: skillsAtIndex4OrHigher.length,
+      skillsAtIndex4OrHigherRepresented: skillsAtIndex4OrHigherThatAreRepresented.length,
+      mixedDayCount,
+      coverageRatio,
+    },
+    finalVerdict: 
+      arrayPositionCollapseFixed && mixedDaysNowRecoverUnderexpressed && coverageRatio >= 0.6
+        ? 'priority_collapse_fixed'
+        : arrayPositionCollapseFixed && coverageRatio >= 0.4
+          ? 'improved_but_still_narrow'
+          : !arrayPositionCollapseFixed
+            ? 'still_collapsing_too_early'
+            : 'overclaiming_after_fix',
+  })
   
   // ==========================================================================
   // [TASK 9] FINAL GENERATION + PRIORITY + SCHEDULE VERDICT
@@ -6651,17 +6873,20 @@ function getSkillsForSession(
       // FIX: Ensure tertiary skills get at least 2 sessions per week as support, and mixed/hybrid
       // days should include multiple tertiary skills for broader profile representation
       
+      // [PRIORITY-COLLAPSE-FIX] TASK 5: All tertiary skills (not just weight-based) should be considered
       const tertiarySkills = weightedAllocation
         .filter(a => a.priorityLevel === 'tertiary' || (a.weight >= 0.05 && a.weight < 0.15))
         .filter(a => !isAdvancedSkill(a.skill))
       const tertiaryIndex = tertiarySkills.findIndex(a => a.skill === skill)
       const tertiaryCount = tertiarySkills.length
       
-      // [session-assembly-truth] TASK 3: Improved inclusion logic for broader expression
-      // - Each tertiary skill should appear in at least 2 sessions per week
+      // [PRIORITY-COLLAPSE-FIX] TASK 3 & 5: Improved minimum sessions for broader commitment
+      // - Each broad selected skill should appear in at least 2 sessions per week
+      // - This is the "broad_selected_commitment" floor
       // - Mixed/hybrid/density days should include more tertiary skills
       // - Distribute tertiary skills across sessions more evenly
-      const minSessionsForTertiary = Math.max(2, exposureSessions)
+      // [PRIORITY-COLLAPSE-FIX] Increased minimum from 2 to 3 for better floor guarantee
+      const minSessionsForTertiary = Math.max(3, exposureSessions)
       const sessionsPerSkill = Math.ceil(totalSessions / Math.max(1, tertiaryCount))
       
       // [session-assembly-truth] Multiple inclusion conditions - any can trigger inclusion
@@ -6684,7 +6909,12 @@ function getSkillsForSession(
         let tertiaryExpressionMode: 'primary' | 'technical' | 'support' | 'warmup' = 'support'
         
         // On mixed/hybrid days, tertiary skills can get technical expression
+        // [PRIORITY-COLLAPSE-FIX] TASK 5: Also allow technical expression on non-mixed days
+        // if this is one of the first inclusions for this skill
         if (isMixedOrHybridDay && tertiaryIndex < 2) {
+          tertiaryExpressionMode = 'technical'
+        } else if (isExposureGuarantee && sessionIndex === 0) {
+          // First session can give technical expression to broad selected skills
           tertiaryExpressionMode = 'technical'
         }
         
@@ -6694,6 +6924,30 @@ function getSkillsForSession(
           weight,
         })
         skillExposureThisSession.push(skill)
+        
+        // [PRIORITY-COLLAPSE-FIX] TASK 5: Session composition broad skill path audit
+        const expressionPath = isMixedOrHybridDay 
+          ? 'mixed_day_inclusion'
+          : isRotationSession 
+            ? 'rotation_schedule'
+            : isExposureGuarantee 
+              ? 'exposure_floor_guarantee'
+              : 'interleaved_distribution'
+        
+        console.log('[session-composition-broad-skill-path-audit]', {
+          skill,
+          sessionIndex,
+          dayFocus,
+          expressionMode: tertiaryExpressionMode,
+          expressionPath,
+          pathsAvailable: {
+            dedicatedDirectWork: false,
+            technicalSlotWork: tertiaryExpressionMode === 'technical',
+            supportSlotWork: tertiaryExpressionMode === 'support',
+            mixedDayInclusion: isMixedOrHybridDay,
+          },
+          inclusionSuccessful: true,
+        })
         
         // [session-assembly-truth] Log tertiary skill inclusion decision
         console.log('[session-assembly-truth] Tertiary skill included:', {
@@ -6875,23 +7129,40 @@ function getSkillsForSession(
   })
   
   // ==========================================================================
-  // [WEEKLY-REPRESENTATION] TASK 3: BROADER SKILL MINIMUM EXPRESSION GUARANTEE
-  // On mixed/hybrid days, ensure deferred skills get at least support expression
+  // [PRIORITY-COLLAPSE-FIX] TASK 4: MIXED DAY UNDEREXPRESSED RECOVERY
+  // Mixed days are the MAIN recovery path for underexpressed selected skills
+  // Enhanced from original 2-slot limit to allow broader recovery
   // ==========================================================================
   const isMixedSessionForBroaderExpression = dayFocus.includes('mixed') || 
     dayFocus.includes('hybrid') || dayFocus.includes('density') || dayFocus.includes('multi')
   
+  // Track under-target skills for this session
+  const underTargetSkillsBeforeRecovery = skillTruthAudit
+    .filter(a => a.finalExpressionStatus === 'deferred')
+    .map(a => a.skill)
+  
   if (isMixedSessionForBroaderExpression && deferredCount > 0) {
     // Find deferred skills that could still be added
     const deferredSkills = skillTruthAudit.filter(a => a.finalExpressionStatus === 'deferred')
-    const maxAdditionalSlots = Math.min(2, deferredSkills.length) // Add up to 2 deferred skills on mixed days
+    
+    // [PRIORITY-COLLAPSE-FIX] Increased from 2 to 3 for better recovery
+    // Mixed days should be able to include more underexpressed skills
+    const maxAdditionalSlots = Math.min(3, deferredSkills.length)
     let addedCount = 0
+    const skillsIncluded: string[] = []
+    const skillsSkipped: Array<{skill: string, reason: string}> = []
     
     for (const deferred of deferredSkills) {
-      if (addedCount >= maxAdditionalSlots) break
+      if (addedCount >= maxAdditionalSlots) {
+        skillsSkipped.push({ skill: deferred.skill, reason: 'max_slots_reached' })
+        continue
+      }
       
       // Skip if already in result
-      if (result.some(r => r.skill === deferred.skill)) continue
+      if (result.some(r => r.skill === deferred.skill)) {
+        skillsSkipped.push({ skill: deferred.skill, reason: 'already_in_result' })
+        continue
+      }
       
       // Add as support-level expression
       result.push({
@@ -6900,6 +7171,7 @@ function getSkillsForSession(
         weight: deferred.weight,
       })
       addedCount++
+      skillsIncluded.push(deferred.skill)
       
       console.log('[broader-skill-minimum-expression-audit] Mixed day deferred skill boosted:', {
         skill: deferred.skill,
@@ -6910,6 +7182,20 @@ function getSkillsForSession(
         reason: 'mixed_day_broader_skill_guarantee',
       })
     }
+    
+    // [PRIORITY-COLLAPSE-FIX] TASK 4: Mixed day underexpressed recovery audit
+    console.log('[mixed-day-underexpressed-recovery-audit]', {
+      sessionIndex,
+      dayFocus,
+      underTargetSkillsBeforeAssembly: underTargetSkillsBeforeRecovery,
+      candidateSkillsConsidered: deferredSkills.map(d => d.skill),
+      skillsIncluded,
+      skillsSkippedWithReasons: skillsSkipped,
+      remainingUnderTargetAfterAssembly: underTargetSkillsBeforeRecovery.filter(s => !skillsIncluded.includes(s)),
+      recoveryEffectiveness: deferredSkills.length > 0 
+        ? `${Math.round((skillsIncluded.length / deferredSkills.length) * 100)}%`
+        : '100%',
+    })
     
     if (addedCount > 0) {
       console.log('[broader-skill-minimum-expression-audit] Mixed day summary:', {

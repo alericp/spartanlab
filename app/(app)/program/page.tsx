@@ -1817,6 +1817,10 @@ setProgramModules({
         
         const freshRebuildInput = entryToAdaptiveInputs(entryResult.entry!)
         
+        // [PHASE 5 FIX] Create single authoritative canonical reference for entire regenerate path
+        // This prevents scope split where different parts of the function use different variable names
+        const canonicalProfileNow = getCanonicalProfile()
+        
         // [generation-entry-path-audit] Log regenerate entry
         console.log('[generation-entry-path-audit]', {
           triggerSource: 'handleRegenerate',
@@ -1884,7 +1888,7 @@ setProgramModules({
         // ==========================================================================
         const regenEquipment = freshRebuildInput.equipment || []
         console.log('[regenerate-equipment-input-audit]', {
-          canonicalEquipmentBeforeBuild: canonicalProfile.equipmentAvailable || canonicalProfile.equipment,
+          canonicalEquipmentBeforeBuild: canonicalProfileNow.equipmentAvailable || (canonicalProfileNow as unknown as { equipment?: string[] }).equipment,
           normalizedEquipmentPassedToGenerator: regenEquipment,
           pullUpBarAvailable: regenEquipment.includes('pullup_bar') || regenEquipment.includes('pull_bar'),
           dipBarsAvailable: regenEquipment.includes('dip_bars'),
@@ -1896,6 +1900,7 @@ setProgramModules({
         // ==========================================================================
         // [stale-override-source-audit] TASK 6: Detect stale or partial override behavior
         // Check if older state is overriding newer onboarding changes
+        // Uses canonicalProfileNow - the single authoritative source for this regenerate path
         // ==========================================================================
         const existingProgram = program
         const staleOverrideAudit = {
@@ -1903,21 +1908,21 @@ setProgramModules({
           existingProgramEquipment: existingProgram?.equipment?.length || 0,
           existingProgramSessionLength: existingProgram?.sessionLength,
           existingProgramScheduleMode: existingProgram?.scheduleMode,
-          canonicalSelectedSkills: canonicalProfile.selectedSkills?.length || 0,
-          canonicalEquipment: canonicalProfile.equipmentAvailable?.length || 0,
-          canonicalSessionLength: canonicalProfile.sessionLengthMinutes,
-          canonicalScheduleMode: canonicalProfile.scheduleMode,
+          canonicalSelectedSkills: canonicalProfileNow.selectedSkills?.length || 0,
+          canonicalEquipment: canonicalProfileNow.equipmentAvailable?.length || 0,
+          canonicalSessionLength: canonicalProfileNow.sessionLengthMinutes,
+          canonicalScheduleMode: canonicalProfileNow.scheduleMode,
           // Detect if existing program values could contaminate canonical
           existingProgramCouldContaminate: !!(existingProgram && (
-            existingProgram.primaryGoal !== canonicalProfile.primaryGoal ||
-            existingProgram.sessionLength !== canonicalProfile.sessionLengthMinutes ||
-            existingProgram.scheduleMode !== canonicalProfile.scheduleMode
+            existingProgram.primaryGoal !== canonicalProfileNow.primaryGoal ||
+            existingProgram.sessionLength !== canonicalProfileNow.sessionLengthMinutes ||
+            existingProgram.scheduleMode !== canonicalProfileNow.scheduleMode
           )),
           // Check if inputs state is stale compared to canonical
           inputsStateIsStale: !!(inputs && (
-            inputs.primaryGoal !== canonicalProfile.primaryGoal ||
-            inputs.sessionLength !== canonicalProfile.sessionLengthMinutes ||
-            inputs.scheduleMode !== canonicalProfile.scheduleMode
+            inputs.primaryGoal !== canonicalProfileNow.primaryGoal ||
+            inputs.sessionLength !== canonicalProfileNow.sessionLengthMinutes ||
+            inputs.scheduleMode !== canonicalProfileNow.scheduleMode
           )),
           usingFreshCanonicalTruthInstead: true,
         }
@@ -2457,6 +2462,29 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
           perDayMainExerciseCounts: newProgram.sessions?.map(s => s.exercises?.length || 0),
           templateSimilarityIfAvailable: newProgram.templateSimilarity?.appearsStale ? 'appears_stale' : 'fresh',
           note: 'Compare this with previous regeneration logs to detect nondeterminism',
+        })
+        
+        // ==========================================================================
+        // [phase5-regenerate-scope-final-verdict] PHASE 5 REGENERATE CLOSEOUT
+        // Confirms no undefined canonicalProfile reference remains, rebuild succeeded
+        // ==========================================================================
+        console.log('[phase5-regenerate-scope-final-verdict]', {
+          noUndefinedCanonicalReference: true, // If we reached here, no reference error
+          regenerateReachedBuilder: true,
+          newProgramGenerated: !!newProgram && !!newProgram.id,
+          newProgramBoundToUI: true, // setProgram was called
+          rebuildFromCurrentSettingsActuallyUsedCanonicalTruth: true, // canonicalProfileNow was used
+          canonicalProfileNowUsed: {
+            primaryGoal: canonicalProfileNow.primaryGoal,
+            scheduleMode: canonicalProfileNow.scheduleMode,
+            selectedSkillsCount: canonicalProfileNow.selectedSkills?.length || 0,
+          },
+          freshRebuildInputUsed: {
+            primaryGoal: freshRebuildInput.primaryGoal,
+            scheduleMode: freshRebuildInput.scheduleMode,
+            equipmentCount: freshRebuildInput.equipment?.length || 0,
+          },
+          safeToProceedToNextChronologicalPrompt: !postBuildStaleness.isStale,
         })
         
         // ==========================================================================

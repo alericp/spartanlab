@@ -725,6 +725,38 @@ export interface AdaptiveProgram {
     summaryRenderableSkills: string[]
     truthfulHybridSummary: string
   }
+  // [WEEKLY-REPRESENTATION] Per-skill exposure verdicts and coverage metrics
+  weeklyRepresentation?: {
+    policies: Array<{
+      skill: string
+      selectedRank: 'headline' | 'secondary' | 'tertiary' | 'optional'
+      targetExposure: number
+      eligibleSessionTypes: string[]
+      actualExposure: {
+        direct: number
+        technical: number
+        support: number
+        warmupOnly: number
+        total: number
+      }
+      representationVerdict: 
+        | 'headline_represented'
+        | 'broadly_represented'
+        | 'support_only'
+        | 'selected_but_underexpressed'
+        | 'filtered_out_by_constraints'
+        | 'not_selected'
+      narrowingPoint: string | null
+    }>
+    coverageRatio: number
+    verdictCounts: {
+      headline_represented: number
+      broadly_represented: number
+      support_only: number
+      selected_but_underexpressed: number
+      filtered_out_by_constraints: number
+    }
+  }
   // Adaptive Athlete Engine context
   engineContext?: {
     plateauStatus: string
@@ -5773,6 +5805,391 @@ return explanations.length > 0 ? explanations : undefined
   })
   
   // ==========================================================================
+  // [WEEKLY-REPRESENTATION] TASK 1: CANONICAL WEEKLY REPRESENTATION POLICY
+  // Defines minimum exposure targets and how representation is earned
+  // ==========================================================================
+  type SkillRepresentationVerdict = 
+    | 'headline_represented'
+    | 'broadly_represented'
+    | 'support_only'
+    | 'selected_but_underexpressed'
+    | 'filtered_out_by_constraints'
+    | 'not_selected'
+  
+  interface WeeklySkillPolicy {
+    skill: string
+    selectedRank: 'headline' | 'secondary' | 'tertiary' | 'optional'
+    targetExposure: number // Minimum exercises across week
+    eligibleSessionTypes: string[]
+    actualExposure: {
+      direct: number
+      technical: number
+      support: number
+      warmupOnly: number
+      total: number
+    }
+    representationVerdict: SkillRepresentationVerdict
+    narrowingPoint: string | null
+  }
+  
+  // Calculate actual exposure for each selected skill
+  const selectedSkillsForPolicy = canonicalProfile.selectedSkills || []
+  const allExercisesFlat = sessions.flatMap(s => s.exercises || [])
+  
+  const weeklyRepresentationPolicy: WeeklySkillPolicy[] = selectedSkillsForPolicy.map((skill, idx) => {
+    const skillLower = skill.toLowerCase().replace(/_/g, ' ')
+    const isHeadline = skill === primaryGoal
+    const isSecondary = skill === secondaryGoal
+    const isTertiary = !isHeadline && !isSecondary && idx < 4
+    
+    // Determine rank
+    const selectedRank: 'headline' | 'secondary' | 'tertiary' | 'optional' = 
+      isHeadline ? 'headline' : isSecondary ? 'secondary' : isTertiary ? 'tertiary' : 'optional'
+    
+    // Set target exposure based on rank
+    const targetExposure = isHeadline ? 6 : isSecondary ? 4 : isTertiary ? 2 : 1
+    
+    // Eligible session types
+    const eligibleSessionTypes = isHeadline 
+      ? ['push', 'pull', 'mixed', 'skill', 'strength', 'density']
+      : isSecondary 
+        ? ['push', 'pull', 'mixed', 'skill', 'density']
+        : ['mixed', 'density', 'skill', 'support']
+    
+    // Count actual exposure by type
+    let directCount = 0
+    let technicalCount = 0
+    let supportCount = 0
+    let warmupOnlyCount = 0
+    
+    allExercisesFlat.forEach(ex => {
+      const exName = (ex.exercise?.name || ex.name || '').toLowerCase()
+      const transferTo = ex.transferTo || ex.exercise?.transferTo || []
+      const category = ex.category || ex.exercise?.category || ''
+      
+      const matchesSkill = exName.includes(skillLower) || 
+        transferTo.some((t: string) => t.toLowerCase().includes(skillLower)) ||
+        (skill === 'front_lever' && (exName.includes('lever') || exName.includes('row'))) ||
+        (skill === 'back_lever' && (exName.includes('lever') || exName.includes('german'))) ||
+        (skill === 'l_sit' && (exName.includes('l-sit') || exName.includes('l sit') || exName.includes('compression'))) ||
+        (skill === 'handstand' && (exName.includes('handstand') || exName.includes('pike'))) ||
+        (skill === 'muscle_up' && (exName.includes('muscle') || exName.includes('transition'))) ||
+        (skill === 'v_sit' && (exName.includes('v-sit') || exName.includes('v sit') || exName.includes('straddle')))
+      
+      if (matchesSkill) {
+        const trace = ex.selectionTrace
+        const sessionRole = trace?.sessionRole || ''
+        const isWarmup = sessionRole === 'warmup' || category === 'warmup'
+        const isSupport = sessionRole.includes('support') || category === 'accessory'
+        const isTechnical = sessionRole.includes('technical') || category === 'skill'
+        
+        if (isWarmup) {
+          warmupOnlyCount++
+        } else if (isTechnical || category === 'skill') {
+          directCount++
+        } else if (isSupport) {
+          supportCount++
+        } else {
+          technicalCount++
+        }
+      }
+    })
+    
+    const totalNonWarmup = directCount + technicalCount + supportCount
+    const totalWithWarmup = totalNonWarmup + warmupOnlyCount
+    
+    // Determine representation verdict
+    let representationVerdict: SkillRepresentationVerdict
+    let narrowingPoint: string | null = null
+    
+    if (totalNonWarmup >= targetExposure) {
+      representationVerdict = isHeadline || isSecondary ? 'headline_represented' : 'broadly_represented'
+    } else if (totalNonWarmup >= Math.ceil(targetExposure * 0.5)) {
+      representationVerdict = 'broadly_represented'
+    } else if (supportCount > 0 || warmupOnlyCount > 0) {
+      representationVerdict = 'support_only'
+      narrowingPoint = 'insufficient_main_slot_allocation'
+    } else if (totalWithWarmup === 0) {
+      // Check if filtered by constraints
+      const hasEquipmentMatch = equipment.length > 0
+      representationVerdict = hasEquipmentMatch ? 'selected_but_underexpressed' : 'filtered_out_by_constraints'
+      narrowingPoint = hasEquipmentMatch ? 'no_exercises_selected_for_skill' : 'equipment_constraint'
+    } else {
+      representationVerdict = 'selected_but_underexpressed'
+      narrowingPoint = 'below_minimum_exposure_target'
+    }
+    
+    return {
+      skill,
+      selectedRank,
+      targetExposure,
+      eligibleSessionTypes,
+      actualExposure: {
+        direct: directCount,
+        technical: technicalCount,
+        support: supportCount,
+        warmupOnly: warmupOnlyCount,
+        total: totalWithWarmup,
+      },
+      representationVerdict,
+      narrowingPoint,
+    }
+  })
+  
+  console.log('[weekly-representation-policy-audit]', {
+    selectedSkillCount: selectedSkillsForPolicy.length,
+    policies: weeklyRepresentationPolicy.map(p => ({
+      skill: p.skill,
+      selectedRank: p.selectedRank,
+      targetExposure: p.targetExposure,
+      actualTotal: p.actualExposure.total,
+      direct: p.actualExposure.direct,
+      technical: p.actualExposure.technical,
+      support: p.actualExposure.support,
+      warmupOnly: p.actualExposure.warmupOnly,
+      verdict: p.representationVerdict,
+      narrowingPoint: p.narrowingPoint,
+    })),
+  })
+  
+  // ==========================================================================
+  // [WEEKLY-REPRESENTATION] TASK 2: WEEKLY DISTRIBUTION NARROWING AUDIT
+  // ==========================================================================
+  const underexpressedSkills = weeklyRepresentationPolicy.filter(p => 
+    p.representationVerdict === 'selected_but_underexpressed' ||
+    p.representationVerdict === 'support_only'
+  )
+  
+  console.log('[weekly-distribution-narrowing-audit]', {
+    totalSelectedSkills: selectedSkillsForPolicy.length,
+    underexpressedCount: underexpressedSkills.length,
+    underexpressedSkills: underexpressedSkills.map(p => ({
+      skill: p.skill,
+      rank: p.selectedRank,
+      targetExposure: p.targetExposure,
+      actualExposure: p.actualExposure.total,
+      firstNarrowingPoint: p.narrowingPoint,
+      couldHaveUsedMixedDays: p.eligibleSessionTypes.includes('mixed'),
+      couldHaveUsedSupportSlots: p.eligibleSessionTypes.includes('support'),
+      wasIntendedDeferral: p.selectedRank === 'optional',
+    })),
+    mixedDayCount: sessions.filter(s => s.focus?.toLowerCase().includes('mixed')).length,
+    densityDayCount: sessions.filter(s => s.focus?.toLowerCase().includes('density')).length,
+    totalSessions: sessions.length,
+  })
+  
+  // ==========================================================================
+  // [WEEKLY-REPRESENTATION] TASK 5: SKILL REPRESENTATION VERDICT AUDIT
+  // ==========================================================================
+  const verdictCounts = {
+    headline_represented: weeklyRepresentationPolicy.filter(p => p.representationVerdict === 'headline_represented').length,
+    broadly_represented: weeklyRepresentationPolicy.filter(p => p.representationVerdict === 'broadly_represented').length,
+    support_only: weeklyRepresentationPolicy.filter(p => p.representationVerdict === 'support_only').length,
+    selected_but_underexpressed: weeklyRepresentationPolicy.filter(p => p.representationVerdict === 'selected_but_underexpressed').length,
+    filtered_out_by_constraints: weeklyRepresentationPolicy.filter(p => p.representationVerdict === 'filtered_out_by_constraints').length,
+  }
+  
+  console.log('[skill-representation-verdict-audit]', {
+    verdictCounts,
+    verdictsBySkill: weeklyRepresentationPolicy.map(p => ({
+      skill: p.skill,
+      verdict: p.representationVerdict,
+    })),
+    headlineSkillsRepresented: verdictCounts.headline_represented,
+    broaderSkillsRepresented: verdictCounts.broadly_represented,
+    supportOnlySkills: verdictCounts.support_only,
+    underexpressedSkills: verdictCounts.selected_but_underexpressed,
+  })
+  
+  // ==========================================================================
+  // [WEEKLY-REPRESENTATION] TASK 7: MULTI-SKILL PROFILE COVERAGE SCORE
+  // ==========================================================================
+  const representedCount = verdictCounts.headline_represented + verdictCounts.broadly_represented
+  const supportOnlyCount = verdictCounts.support_only
+  const underexpressedCount = verdictCounts.selected_but_underexpressed
+  const filteredCount = verdictCounts.filtered_out_by_constraints
+  const totalSelected = selectedSkillsForPolicy.length
+  
+  const coverageRatio = totalSelected > 0 
+    ? Math.round(((representedCount + supportOnlyCount * 0.5) / totalSelected) * 100) / 100
+    : 1
+  
+  console.log('[multi-skill-coverage-score-audit]', {
+    selectedSkillsCount: totalSelected,
+    representedSkillsCount: representedCount,
+    supportOnlyCount,
+    underexpressedCount,
+    filteredByConstraintsCount: filteredCount,
+    coverageRatio,
+    coveragePercentage: `${Math.round(coverageRatio * 100)}%`,
+    coverageVerdict: coverageRatio >= 0.8 ? 'excellent' :
+      coverageRatio >= 0.6 ? 'good' :
+      coverageRatio >= 0.4 ? 'moderate' : 'needs_improvement',
+  })
+  
+  // ==========================================================================
+  // [WEEKLY-REPRESENTATION] TASK 6: EXPLANATION FROM EXPOSURE VERDICTS
+  // ==========================================================================
+  const broadlyRepresentedSkillNames = weeklyRepresentationPolicy
+    .filter(p => p.representationVerdict === 'broadly_represented')
+    .map(p => p.skill.replace(/_/g, ' '))
+  const supportOnlySkillNames = weeklyRepresentationPolicy
+    .filter(p => p.representationVerdict === 'support_only')
+    .map(p => p.skill.replace(/_/g, ' '))
+  const underexpressedSkillNames = weeklyRepresentationPolicy
+    .filter(p => p.representationVerdict === 'selected_but_underexpressed')
+    .map(p => p.skill.replace(/_/g, ' '))
+  
+  // Check if summary acknowledges broader skills
+  const summaryText = truthfulHybridSummary || programRationale || ''
+  const broaderSkillsAcknowledgedInSummary = broadlyRepresentedSkillNames.some(s => 
+    summaryText.toLowerCase().includes(s)
+  )
+  const underexpressedIncorrectlyImplied = underexpressedSkillNames.some(s =>
+    summaryText.toLowerCase().includes(s) && !summaryText.toLowerCase().includes('support')
+  )
+  
+  console.log('[explanation-from-exposure-audit]', {
+    renderedSummaryText: summaryText.slice(0, 200),
+    exposureVerdictsUsed: {
+      headlineRepresented: weeklyRepresentationPolicy.filter(p => p.representationVerdict === 'headline_represented').map(p => p.skill),
+      broadlyRepresented: broadlyRepresentedSkillNames,
+      supportOnly: supportOnlySkillNames,
+      underexpressed: underexpressedSkillNames,
+    },
+    broaderRepresentedSkillsAcknowledged: broaderSkillsAcknowledgedInSummary,
+    underexpressedSkillsIncorrectlyImplied: underexpressedIncorrectlyImplied,
+    narrativeVerdict: broaderSkillsAcknowledgedInSummary && !underexpressedIncorrectlyImplied
+      ? 'narrative_follows_exposure_truth'
+      : underexpressedIncorrectlyImplied
+        ? 'narrative_overclaims'
+        : 'narrative_could_mention_broader_skills',
+  })
+  
+  // ==========================================================================
+  // [WEEKLY-REPRESENTATION] TASK 4: MIXED DAY REPRESENTATION AUDIT
+  // ==========================================================================
+  const mixedDaySessions = sessions.filter(s => 
+    s.focus?.toLowerCase().includes('mixed') ||
+    s.focus?.toLowerCase().includes('density') ||
+    s.focus?.toLowerCase().includes('hybrid')
+  )
+  
+  const mixedDayRepresentationAudit = mixedDaySessions.map((session, idx) => {
+    const sessionExercises = session.exercises || []
+    const skillsInSession = new Set<string>()
+    
+    selectedSkillsForPolicy.forEach(skill => {
+      const skillLower = skill.replace(/_/g, ' ')
+      const isPresent = sessionExercises.some(ex => {
+        const exName = (ex.exercise?.name || ex.name || '').toLowerCase()
+        return exName.includes(skillLower) || exName.includes(skill)
+      })
+      if (isPresent) skillsInSession.add(skill)
+    })
+    
+    // Find under-target skills at time of this session
+    const underTargetSkills = weeklyRepresentationPolicy
+      .filter(p => p.actualExposure.total < p.targetExposure)
+      .map(p => p.skill)
+    
+    return {
+      mixedDayIndex: idx,
+      sessionDayNumber: session.dayNumber,
+      candidateSkillsConsidered: selectedSkillsForPolicy,
+      underTargetSkillsAtAssembly: underTargetSkills,
+      skillsIncluded: Array.from(skillsInSession),
+      skillsSkipped: selectedSkillsForPolicy.filter(s => !skillsInSession.has(s)),
+      remainingUnmetSkills: underTargetSkills.filter(s => !skillsInSession.has(s)),
+    }
+  })
+  
+  console.log('[mixed-day-representation-audit]', {
+    mixedDayCount: mixedDaySessions.length,
+    mixedDayAudits: mixedDayRepresentationAudit,
+    overallMixedDayEffectiveness: mixedDaySessions.length > 0
+      ? mixedDayRepresentationAudit.every(a => a.skillsIncluded.length >= 2)
+        ? 'effective_broader_coverage'
+        : 'could_include_more_skills'
+      : 'no_mixed_days_available',
+  })
+  
+  // ==========================================================================
+  // [WEEKLY-REPRESENTATION] TASK 8: FINAL VERDICT
+  // ==========================================================================
+  const narrativeMatchesExposure = broaderSkillsAcknowledgedInSummary || broadlyRepresentedSkillNames.length === 0
+  const noOverclaiming = !underexpressedIncorrectlyImplied
+  
+  console.log('[weekly-representation-final-verdict]', {
+    selectedSkillCount: totalSelected,
+    representedSkillCount: representedCount,
+    supportOnlyCount,
+    underexpressedSkillCount: underexpressedCount,
+    filteredOutSkillCount: filteredCount,
+    multiSkillCoverageRatio: coverageRatio,
+    narrativeNowMatchesExposureTruth: narrativeMatchesExposure,
+    noOverclaimingDetected: noOverclaiming,
+    finalVerdict: 
+      coverageRatio >= 0.7 && narrativeMatchesExposure && noOverclaiming
+        ? 'truthful_and_compact'
+        : coverageRatio >= 0.5 && noOverclaiming
+          ? 'improved_but_underexpressed'
+          : coverageRatio < 0.5
+            ? 'still_too_narrow'
+            : 'overclaiming',
+  })
+  
+  // Store weekly representation data on the program for display use
+  finalProgram.weeklyRepresentation = {
+    policies: weeklyRepresentationPolicy,
+    coverageRatio,
+    verdictCounts,
+  }
+  
+  // ==========================================================================
+  // [WEEKLY-REPRESENTATION] TASK 6B: Refine summary truth based on exposure verdicts
+  // Now that we have the actual exposure data, enhance the summary truth object
+  // ==========================================================================
+  if (finalProgram.summaryTruth) {
+    // Update week support skills based on actual verdicts
+    const supportOnlySkillsFromVerdicts = weeklyRepresentationPolicy
+      .filter(p => p.representationVerdict === 'support_only')
+      .map(p => p.skill)
+    
+    const broadlyRepresentedFromVerdicts = weeklyRepresentationPolicy
+      .filter(p => p.representationVerdict === 'broadly_represented' || p.representationVerdict === 'headline_represented')
+      .map(p => p.skill)
+    
+    // Patch summaryTruth with exposure-based data
+    finalProgram.summaryTruth.weekSupportSkills = supportOnlySkillsFromVerdicts
+    finalProgram.summaryTruth.weekRepresentedSkills = broadlyRepresentedFromVerdicts
+    
+    // Enhance truthful hybrid summary if broader skills were well-represented but not mentioned
+    if (broadlyRepresentedFromVerdicts.length > 2 && coverageRatio >= 0.7) {
+      const currentSummary = finalProgram.summaryTruth.truthfulHybridSummary || ''
+      const broaderNotMentioned = broadlyRepresentedFromVerdicts
+        .filter(s => s !== primaryGoal && s !== secondaryGoal)
+        .filter(s => !currentSummary.toLowerCase().includes(s.replace(/_/g, ' ')))
+      
+      if (broaderNotMentioned.length > 0 && !currentSummary.includes('additional skills')) {
+        const skillNames = broaderNotMentioned.slice(0, 2).map(s => s.replace(/_/g, ' '))
+        const enhancement = skillNames.length === 1
+          ? `${skillNames[0]} also receives dedicated work.`
+          : `Additional skills (${skillNames.join(', ')}) receive meaningful expression.`
+        finalProgram.summaryTruth.truthfulHybridSummary = `${currentSummary} ${enhancement}`
+        finalProgram.programRationale = finalProgram.summaryTruth.truthfulHybridSummary
+      }
+    }
+    
+    console.log('[exposure-based-summary-patch]', {
+      supportOnlySkillsFromVerdicts,
+      broadlyRepresentedFromVerdicts,
+      coverageRatio,
+      summaryUpdated: true,
+    })
+  }
+  
+  // ==========================================================================
   // [TASK 9] FINAL GENERATION + PRIORITY + SCHEDULE VERDICT
   // ==========================================================================
   const summaryOrderCorrect = builtAroundSkillsFinal[0] === primaryGoal
@@ -6456,6 +6873,55 @@ function getSkillsForSession(
       deferredCount <= 1 ? 'minimal_deferral' :
       deferredCount <= 2 ? 'acceptable_deferral' : 'excessive_deferral',
   })
+  
+  // ==========================================================================
+  // [WEEKLY-REPRESENTATION] TASK 3: BROADER SKILL MINIMUM EXPRESSION GUARANTEE
+  // On mixed/hybrid days, ensure deferred skills get at least support expression
+  // ==========================================================================
+  const isMixedSessionForBroaderExpression = dayFocus.includes('mixed') || 
+    dayFocus.includes('hybrid') || dayFocus.includes('density') || dayFocus.includes('multi')
+  
+  if (isMixedSessionForBroaderExpression && deferredCount > 0) {
+    // Find deferred skills that could still be added
+    const deferredSkills = skillTruthAudit.filter(a => a.finalExpressionStatus === 'deferred')
+    const maxAdditionalSlots = Math.min(2, deferredSkills.length) // Add up to 2 deferred skills on mixed days
+    let addedCount = 0
+    
+    for (const deferred of deferredSkills) {
+      if (addedCount >= maxAdditionalSlots) break
+      
+      // Skip if already in result
+      if (result.some(r => r.skill === deferred.skill)) continue
+      
+      // Add as support-level expression
+      result.push({
+        skill: deferred.skill,
+        expressionMode: 'support',
+        weight: deferred.weight,
+      })
+      addedCount++
+      
+      console.log('[broader-skill-minimum-expression-audit] Mixed day deferred skill boosted:', {
+        skill: deferred.skill,
+        sessionIndex,
+        dayFocus,
+        originalPriority: deferred.priorityLevel,
+        expressionMode: 'support',
+        reason: 'mixed_day_broader_skill_guarantee',
+      })
+    }
+    
+    if (addedCount > 0) {
+      console.log('[broader-skill-minimum-expression-audit] Mixed day summary:', {
+        sessionIndex,
+        dayFocus,
+        deferredSkillsBeforeBoost: deferredCount,
+        skillsBoostedOnMixedDay: addedCount,
+        remainingDeferred: deferredCount - addedCount,
+        finalResultCount: result.length,
+      })
+    }
+  }
   
   return result
 }

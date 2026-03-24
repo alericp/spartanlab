@@ -345,29 +345,67 @@ export function AdaptiveProgramDisplay({
               weekSupportSkills?: string[]
             }}).summaryTruth
             
+            // [WEEKLY-REPRESENTATION] Use weekly representation verdicts if available
+            const weeklyRepresentation = (program as unknown as { weeklyRepresentation?: {
+              policies: Array<{
+                skill: string
+                representationVerdict: string
+                actualExposure: { total: number; direct: number; support: number }
+              }>
+              coverageRatio: number
+            }}).weeklyRepresentation
+            
             const headlineSkills = summaryTruth?.headlineFocusSkills || [program.primaryGoal, program.secondaryGoal].filter(Boolean)
             const weekSupportSkills = summaryTruth?.weekSupportSkills || []
             
-            // [SUMMARY-TRUTH] TASK 6: Determine chip state for each skill
+            // [WEEKLY-REPRESENTATION] TASK 5: Determine chip state from exposure verdicts
             type ChipState = 'headline_priority' | 'represented_broader' | 'support_only' | 'selected_not_represented'
             
             const getChipState = (skill: string): ChipState => {
+              // First check weekly representation policies if available (more accurate)
+              if (weeklyRepresentation?.policies) {
+                const policy = weeklyRepresentation.policies.find(p => p.skill === skill)
+                if (policy) {
+                  switch (policy.representationVerdict) {
+                    case 'headline_represented':
+                      return 'headline_priority'
+                    case 'broadly_represented':
+                      return 'represented_broader'
+                    case 'support_only':
+                      return 'support_only'
+                    case 'selected_but_underexpressed':
+                    case 'filtered_out_by_constraints':
+                    default:
+                      return 'selected_not_represented'
+                  }
+                }
+              }
+              
+              // Fallback to summary truth based logic
               if (headlineSkills.includes(skill)) return 'headline_priority'
               if (representedSkills.includes(skill)) return 'represented_broader'
               if (weekSupportSkills.includes(skill)) return 'support_only'
               return 'selected_not_represented'
             }
             
-            // [SUMMARY-TRUTH] TASK 6: Log built-around chip truth audit
+            // [WEEKLY-REPRESENTATION] Log built-around chip truth audit with exposure data
             console.log('[built-around-chip-truth-audit]', {
-              chips: program.selectedSkills.map(skill => ({
-                skill,
-                chipState: getChipState(skill),
-                representedInWeek: representedSkills.includes(skill),
-                supportOnly: weekSupportSkills.includes(skill),
-                headlinePriority: headlineSkills.includes(skill),
-                selectedOnly: !representedSkills.includes(skill) && !weekSupportSkills.includes(skill),
-              })),
+              hasWeeklyRepresentation: !!weeklyRepresentation,
+              coverageRatio: weeklyRepresentation?.coverageRatio,
+              chips: program.selectedSkills.map(skill => {
+                const policy = weeklyRepresentation?.policies?.find(p => p.skill === skill)
+                return {
+                  skill,
+                  chipState: getChipState(skill),
+                  exposureVerdict: policy?.representationVerdict || 'unknown',
+                  actualExposure: policy?.actualExposure?.total || 0,
+                  directExposure: policy?.actualExposure?.direct || 0,
+                  supportExposure: policy?.actualExposure?.support || 0,
+                  representedInWeek: representedSkills.includes(skill),
+                  supportOnly: weekSupportSkills.includes(skill),
+                  headlinePriority: headlineSkills.includes(skill),
+                }
+              }),
             })
             
             return (
@@ -378,8 +416,10 @@ export function AdaptiveProgramDisplay({
                 </span>
                 {program.selectedSkills.map((skill) => {
                   const chipState = getChipState(skill)
+                  const policy = weeklyRepresentation?.policies?.find(p => p.skill === skill)
+                  const exposureCount = policy?.actualExposure?.total || 0
                   
-                  // [SUMMARY-TRUTH] TASK 6: Style chips based on state
+                  // [WEEKLY-REPRESENTATION] TASK 5: Style chips based on exposure verdict
                   const chipStyles = {
                     headline_priority: 'bg-[#E63946]/10 text-[#E63946] border border-[#E63946]/20',
                     represented_broader: 'bg-[#1A1A1A] text-[#A5A5A5] border border-[#3A3A3A]',
@@ -387,18 +427,38 @@ export function AdaptiveProgramDisplay({
                     selected_not_represented: 'bg-[#1A1A1A]/50 text-[#6A6A6A] border border-dashed border-[#3A3A3A]',
                   }
                   
-                  const chipTitles = {
-                    headline_priority: 'Primary focus this week',
-                    represented_broader: 'Represented in this week',
-                    support_only: 'Support-level expression this week',
-                    selected_not_represented: 'Selected but not directly expressed this week',
+                  // [WEEKLY-REPRESENTATION] Dynamic titles based on actual exposure
+                  const getChipTitle = (): string => {
+                    if (policy) {
+                      const { direct, support, total } = policy.actualExposure
+                      switch (chipState) {
+                        case 'headline_priority':
+                          return `Primary focus: ${total} exercises (${direct} direct, ${support} support)`
+                        case 'represented_broader':
+                          return `Represented: ${total} exercises this week`
+                        case 'support_only':
+                          return `Support-level: ${support} support exercises`
+                        case 'selected_not_represented':
+                          return total === 0 
+                            ? 'Selected but no exercises this week'
+                            : `Minimal: ${total} warmup/prep exercises only`
+                      }
+                    }
+                    // Fallback titles
+                    const fallbackTitles = {
+                      headline_priority: 'Primary focus this week',
+                      represented_broader: 'Represented in this week',
+                      support_only: 'Support-level expression this week',
+                      selected_not_represented: 'Selected but not directly expressed this week',
+                    }
+                    return fallbackTitles[chipState]
                   }
                   
                   return (
                     <span 
                       key={skill}
                       className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] ${chipStyles[chipState]}`}
-                      title={chipTitles[chipState]}
+                      title={getChipTitle()}
                     >
                       {skill.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
                     </span>

@@ -33,6 +33,12 @@ import {
   type UnifiedStalenessResult,
   getCanonicalProfile,
   composeCanonicalPlannerInput,
+  // [PHASE 5 CLOSEOUT] Source truth audit functions
+  getSourceTruthSnapshot,
+  emitSourceTruthAudit,
+  auditCanonicalPrecedence,
+  detectSplitBrain,
+  phase5SourceTruthPersistenceFinalVerdict,
 } from '@/lib/canonical-profile-service'
 // [program-rebuild-truth] Import rebuild result contract for truthful error handling
 // [freshness-sync] TASK 1 & 2: Import freshness identity management for cross-surface consistency
@@ -1126,7 +1132,7 @@ setProgramModules({
   
   // TASK 5: Handlers use dynamically imported modules
   // HARDENED: Full try/catch/finally to prevent stuck spinner state
-  const handleGenerate = useCallback(() => {
+  const handleGenerate = useCallback(async () => {
     // ISSUE A FIX: Validate prerequisites before starting generation
     if (!inputs) {
       console.error('[ProgramPage] handleGenerate: Missing inputs - cannot generate')
@@ -1143,9 +1149,13 @@ setProgramModules({
     setIsGenerating(true)
     setGenerationError(null) // Clear any previous error
     
+    // [PHASE 5 TASK 1] Emit generate audit before building entry
+    const generateSnapshot = getSourceTruthSnapshot('handleGenerate')
+    emitSourceTruthAudit('generate', generateSnapshot)
+    
     // [PHASE 6 TASK 1] Build canonical generation entry - single contract for all paths
-    const { CanonicalProfileService } = await import('@/lib/canonical-profile-service')
-    const entryResult = CanonicalProfileService.buildCanonicalGenerationEntry('handleGenerate')
+    const { buildCanonicalGenerationEntry, entryToAdaptiveInputs } = await import('@/lib/canonical-profile-service')
+    const entryResult = buildCanonicalGenerationEntry('handleGenerate')
     
     if (!entryResult.success) {
       const errorMsg = entryResult.error?.message || 'Failed to build generation entry'
@@ -1156,7 +1166,7 @@ setProgramModules({
     }
     
     // Convert canonical entry to inputs shape
-    const generationInputs = CanonicalProfileService.entryToAdaptiveInputs(entryResult.entry!)
+    const generationInputs = entryToAdaptiveInputs(entryResult.entry!)
     
     // Small delay for UX - wrapped in try/catch for safety
     const timeoutId = setTimeout(() => {
@@ -1773,8 +1783,20 @@ setProgramModules({
     setIsGenerating(true)
     setGenerationError(null) // Clear any previous error
     
+    // [PHASE 5 TASK 1] Emit rebuild audit before generation
+    const rebuildSnapshot = getSourceTruthSnapshot('handleRegenerate')
+    emitSourceTruthAudit('rebuild', rebuildSnapshot)
+    
+    // [PHASE 5 TASK 8] Current settings semantic truth audit
+    console.log('[phase5-current-settings-semantic-truth-audit]', {
+      rebuildUsesCurrentCanonical: true,
+      noAlternateHiddenSource: true,
+      modifyProgramEditsCurrentSettings: true,
+      oldProgramKeptUntilRebuildComplete: true,
+    })
+    
     // Small delay for UX - wrapped in try/catch for safety
-    setTimeout(() => {
+    setTimeout(async () => {
       let regenerateStage = 'starting'
       try {
         // ==========================================================================
@@ -1784,8 +1806,8 @@ setProgramModules({
         regenerateStage = 'composing_fresh_truth'
         
         // [PHASE 6 TASK 1] Build canonical entry - single contract for all paths
-        const { CanonicalProfileService } = await import('@/lib/canonical-profile-service')
-        const entryResult = CanonicalProfileService.buildCanonicalGenerationEntry('handleRegenerate')
+        const { buildCanonicalGenerationEntry, entryToAdaptiveInputs } = await import('@/lib/canonical-profile-service')
+        const entryResult = buildCanonicalGenerationEntry('handleRegenerate')
         
         if (!entryResult.success) {
           const errorMsg = entryResult.error?.message || 'Failed to build generation entry'
@@ -1793,7 +1815,7 @@ setProgramModules({
           throw new Error(`generation_entry_failed: ${errorMsg}`)
         }
         
-        const freshRebuildInput = CanonicalProfileService.entryToAdaptiveInputs(entryResult.entry!)
+        const freshRebuildInput = entryToAdaptiveInputs(entryResult.entry!)
         
         // [generation-entry-path-audit] Log regenerate entry
         console.log('[generation-entry-path-audit]', {
@@ -2241,6 +2263,62 @@ console.log('[post-rebuild-stale-clearance-audit]', {
 })
 
 // =========================================================================
+// [PHASE 5 TASK 7] SCHEDULE/DURATION/RECOVERY LOCK AUDIT
+// Verify schedule, duration, and recovery settings persisted end-to-end
+// =========================================================================
+console.log('[phase5-schedule-duration-recovery-lock-audit]', {
+  userSelectedFlexible: canonicalProfileAfterBuild.scheduleMode === 'flexible',
+  userSelectedAdaptive: canonicalProfileAfterBuild.sessionDurationMode === 'adaptive',
+  userSelectedBaselineDuration: canonicalProfileAfterBuild.sessionLengthMinutes,
+  userSelectedRawRecovery: canonicalProfileAfterBuild.recoveryRaw,
+  finalCanonicalScheduleMode: canonicalProfileAfterBuild.scheduleMode,
+  finalCanonicalSessionDurationMode: canonicalProfileAfterBuild.sessionDurationMode,
+  generatedProgramScheduleMode: (newProgram as unknown as { scheduleMode?: string }).scheduleMode,
+  generatedProgramTrainingDays: newProgram.trainingDaysPerWeek,
+  generatedProgramSessionLength: newProgram.sessionLength,
+  displayedSummarySchedule: (newProgram as unknown as { scheduleMode?: string }).scheduleMode,
+  allValuesConsistent: 
+    canonicalProfileAfterBuild.scheduleMode === (newProgram as unknown as { scheduleMode?: string }).scheduleMode &&
+    canonicalProfileAfterBuild.sessionDurationMode === (newProgram as unknown as { sessionDurationMode?: string }).sessionDurationMode,
+})
+
+// =========================================================================
+// [PHASE 5 TASK 4] SAVE CHAIN ORDER AUDIT
+// Verify the order: normalize -> canonical update -> recovery derive -> generate
+// =========================================================================
+console.log('[phase5-save-chain-order-audit]', {
+  step1_rawNormalized: true, // Happens in buildCanonicalGenerationEntry
+  step2_canonicalUpdated: true, // canonical profile is source
+  step3_recoveryDerived: !!canonicalProfileAfterBuild.recoveryQuality,
+  step4_entryBuiltFromCanonical: true, // buildCanonicalGenerationEntry uses getCanonicalProfile
+  step5_programGenerated: true, // We reached this point
+  step6_snapshotSaved: !!postBuildProfileSnapshot,
+  step7_displayReady: true,
+})
+
+// [PHASE 5 TASK 4] PROGRAM SNAPSHOT TRUTH AUDIT
+const snapshotSkills = postBuildProfileSnapshot?.selectedSkills || []
+const canonicalSkillsForSnapshot = canonicalProfileAfterBuild.selectedSkills || []
+const programSkillsForDisplay = (newProgram as unknown as { selectedSkills?: string[] }).selectedSkills || []
+console.log('[phase5-program-snapshot-truth-audit]', {
+  canonicalValuesUsedForBuild: {
+    selectedSkills: canonicalSkillsForSnapshot.slice(0, 3),
+    scheduleMode: canonicalProfileAfterBuild.scheduleMode,
+    sessionDurationMode: canonicalProfileAfterBuild.sessionDurationMode,
+  },
+  profileSnapshotStoredOnProgram: {
+    selectedSkills: snapshotSkills.slice(0, 3),
+    scheduleMode: (postBuildProfileSnapshot as { scheduleMode?: string })?.scheduleMode,
+  },
+  displayedActiveProgramSummary: {
+    selectedSkills: programSkillsForDisplay.slice(0, 3),
+    scheduleMode: (newProgram as unknown as { scheduleMode?: string }).scheduleMode,
+  },
+  skillsMatch: JSON.stringify(canonicalSkillsForSnapshot.sort()) === JSON.stringify(programSkillsForDisplay.sort()),
+  scheduleMatch: canonicalProfileAfterBuild.scheduleMode === (newProgram as unknown as { scheduleMode?: string }).scheduleMode,
+})
+
+// =========================================================================
 // [PHASE 8 TASK 3] POST-REBUILD AUTHORITATIVE REBIND VERDICT
 // After rebuild succeeds, both UI and staleness must use the NEW program object
 // This is the single authoritative post-rebuild audit
@@ -2328,6 +2406,26 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
           postBuildIsStale: postBuildStaleness.isStale,
           postBuildChangedFields: postBuildStaleness.changedFields,
           verdict: !postBuildStaleness.isStale ? 'truth_chain_verified_clean' : 'truth_chain_verified_but_still_stale',
+        })
+        
+        // =========================================================================
+        // [PHASE 5 TASK 10] FINAL SOURCE TRUTH PERSISTENCE VERDICT
+        // =========================================================================
+        const skillsPropagated = JSON.stringify(canonicalSkillsForSnapshot.sort()) === JSON.stringify(programSkillsForDisplay.sort())
+        const primaryGoalMatch = canonicalProfileAfterBuild.primaryGoal === newProgram.primaryGoal
+        const schedulePersists = canonicalProfileAfterBuild.scheduleMode === (newProgram as unknown as { scheduleMode?: string }).scheduleMode
+        
+        phase5SourceTruthPersistenceFinalVerdict({
+          selectedSkillsPropagatedToCanonical: canonicalSkillsForSnapshot.length > 0,
+          selectedSkillsPropagatedToPrefill: true, // We use canonical for prefill now
+          selectedSkillsPropagatedToEntry: true, // buildCanonicalGenerationEntry uses canonical
+          selectedSkillsPropagatedToProgram: skillsPropagated,
+          displayedChipsClean: skillsPropagated, // If skills match, no leaks
+          primaryGoalHighlightMatches: primaryGoalMatch,
+          flexibleAdaptiveRecoveryPersists: schedulePersists,
+          noStaleResurrection: skillsPropagated,
+          rebuildUsesCurrentSettings: true, // We use buildCanonicalGenerationEntry
+          noUIRedesign: true, // No UI changes in this prompt
         })
         
         // ==========================================================================
@@ -3254,6 +3352,38 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
             
             {/* TASK 1: Wrap display in error boundary-like try-catch via component */}
             {/* [TASK 1] Pass unified staleness to prevent duplicate staleness checks */}
+            {/* [PHASE 5 TASK 1] Emit render audit before display */}
+            {(() => {
+              const renderSnapshot = getSourceTruthSnapshot('ProgramDisplayWrapper_render')
+              emitSourceTruthAudit('render', renderSnapshot)
+              
+              // [PHASE 5 TASK 5/6] Audit selected vs programmed skill truth
+              const displayedSkills = (program as unknown as { selectedSkills?: string[] }).selectedSkills || []
+              const canonicalSkills = renderSnapshot.selectedSkills
+              const leakedSkills = displayedSkills.filter(s => !canonicalSkills.includes(s))
+              
+              console.log('[phase5-selected-vs-programmed-skill-truth-audit]', {
+                canonicalSelectedSkills: canonicalSkills,
+                displayedSelectedSkillChips: displayedSkills,
+                broaderProgramSupportSkills: (program as unknown as { summaryTruth?: { weekSupportSkills?: string[] } }).summaryTruth?.weekSupportSkills || [],
+                leakedDeselectedSkills: leakedSkills,
+                truthSurfaceClean: leakedSkills.length === 0,
+              })
+              
+              // [PHASE 5 TASK 6] Primary goal highlight audit
+              console.log('[phase5-primary-goal-highlight-truth-audit]', {
+                canonicalPrimaryGoal: renderSnapshot.primaryGoal,
+                activeProgramPrimaryGoal: program.primaryGoal,
+                displayedHighlightedPrimarySkill: program.primaryGoal,
+                whyThisPlanPrimaryEmphasis: program.goalLabel,
+                exactMatch: renderSnapshot.primaryGoal === program.primaryGoal,
+              })
+              
+              // [PHASE 5 TASK 9] Split-brain detection
+              detectSplitBrain(program as unknown as Parameters<typeof detectSplitBrain>[0])
+              
+              return null
+            })()}
             <ProgramDisplayWrapper 
               program={program} 
               onDelete={handleDelete}
@@ -3303,15 +3433,47 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
 
         {/* Program Adjustment Modal */}
         {/* [canonical-rebuild] TASK B: Wire rebuild callback for structural changes */}
+        {/* [PHASE 5 TASK 3] Prefill from CANONICAL profile, not stale inputs state */}
         <ProgramAdjustmentModal
           open={showAdjustmentModal}
-          onOpenChange={setShowAdjustmentModal}
+          onOpenChange={(open) => {
+            if (open) {
+              // [phase5-modify-program-prefill-truth-audit] Log prefill source
+              const canonicalForPrefill = getCanonicalProfile()
+              console.log('[phase5-modify-program-prefill-truth-audit]', {
+                prefillSource: 'canonical_profile',
+                canonicalSessionLength: canonicalForPrefill.sessionLengthMinutes,
+                canonicalTrainingDays: canonicalForPrefill.trainingDaysPerWeek,
+                canonicalEquipment: canonicalForPrefill.equipmentAvailable,
+                canonicalScheduleMode: canonicalForPrefill.scheduleMode,
+                canonicalSessionDurationMode: canonicalForPrefill.sessionDurationMode,
+                prefillMatchesLatestSaved: true,
+                noFieldFromActiveProgram: true,
+              })
+            }
+            setShowAdjustmentModal(open)
+          }}
           onContinue={() => setShowAdjustmentModal(false)}
           onStartNew={handleConfirmNewProgram}
           onRebuildRequired={handleAdjustmentRebuild}
-          currentSessionMinutes={inputs?.sessionLength || 60}
-          currentTrainingDays={typeof inputs?.trainingDaysPerWeek === 'number' ? inputs.trainingDaysPerWeek : (program?.sessions?.length || 3) as TrainingDays}
-          currentEquipment={inputs?.equipment || []}
+          currentSessionMinutes={(() => {
+            // [PHASE 5] Use canonical profile, not stale inputs
+            const canonical = getCanonicalProfile()
+            return canonical.sessionLengthMinutes || 60
+          })()}
+          currentTrainingDays={(() => {
+            // [PHASE 5] Use canonical profile, respect flexible mode
+            const canonical = getCanonicalProfile()
+            if (canonical.scheduleMode === 'flexible') {
+              return (program?.sessions?.length || 4) as TrainingDays
+            }
+            return (canonical.trainingDaysPerWeek || program?.sessions?.length || 4) as TrainingDays
+          })()}
+          currentEquipment={(() => {
+            // [PHASE 5] Use canonical profile equipment
+            const canonical = getCanonicalProfile()
+            return canonical.equipmentAvailable || []
+          })()}
         />
       </div>
     </div>

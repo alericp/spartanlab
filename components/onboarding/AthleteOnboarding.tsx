@@ -135,7 +135,17 @@ import {
   hasEstimatedValues,
 } from '@/lib/athlete-profile'
 import { BodyFatCalculator } from './BodyFatCalculator'
-import { getCanonicalProfile, saveCanonicalProfile, logCanonicalProfileState, clearCanonicalProfileData, markProfileSchemaAsComplete } from '@/lib/canonical-profile-service'
+import { 
+  getCanonicalProfile, 
+  saveCanonicalProfile, 
+  logCanonicalProfileState, 
+  clearCanonicalProfileData, 
+  markProfileSchemaAsComplete,
+  // [PHASE 5] Source truth audit functions
+  getSourceTruthSnapshot,
+  emitSourceTruthAudit,
+  auditCanonicalPrecedence,
+} from '@/lib/canonical-profile-service'
   import { logProfileTruthState } from '@/lib/profile-truth-contract'
   import { getOnboardingProfile } from '@/lib/athlete-profile'
   // [baseline-vs-earned] ISSUE A: Import baseline capture for onboarding completion
@@ -3980,6 +3990,21 @@ export function AthleteOnboarding() {
           (derivedRecoveryForVerdict !== null || !profile.recovery)  // recovery is optional
         ),
       })
+      
+      // [PHASE 5 TASK 4] SAVE CHAIN ORDER AUDIT - verify onboarding follows correct order
+      console.log('[phase5-save-chain-order-audit]', {
+        step1_rawNormalized: true, // Values are mapped above
+        step2_canonicalUpdated: true, // saveCanonicalProfile called above
+        step3_recoveryDerived: !!derivedRecoveryForVerdict,
+        step4_entryBuiltFromCanonical: 'will_happen_at_generation',
+        step5_programGenerated: 'will_happen_at_generation',
+        step6_snapshotSaved: 'will_happen_at_generation',
+        step7_displayReady: 'will_happen_at_generation',
+        onboardingSaveComplete: true,
+      })
+      
+      // [PHASE 5 TASK 2] Verify canonical precedence after save
+      auditCanonicalPrecedence()
       
       // Log canonical state after save for debugging
       logProfileTruthState('After onboarding submit')

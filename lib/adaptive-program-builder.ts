@@ -728,9 +728,14 @@ export interface AdaptiveProgram {
     isBaselineDefault: boolean
     isTrueAdaptive: boolean
     wasModifiedFromBaseline: boolean
+    isModifierBasedAdjustment: boolean  // [PHASE 7] Modified but without real feedback
     goalTypical: number
     modificationSteps: string[]
     reasonDetails: string
+    recentWorkoutCount: number | null  // [PHASE 7] For truth audit
+    experienceModifier: number  // [PHASE 7] For truth audit
+    jointCautionPenalty: number  // [PHASE 7] For truth audit
+    recoveryScore: number | null  // [PHASE 7] For truth audit
   }
   structure: WeeklyStructure
   sessions: AdaptiveSession[]
@@ -5683,14 +5688,20 @@ console.log('[program-generate] Generation complete:', {
     dayStressPattern: flexibleWeekStructure?.dayStressPattern,
     weekNumber: 1,  // First generated week
     // [PHASE 8] Root cause audit for truthful frequency explanation
+    // [PHASE 7] Enhanced with isModifierBasedAdjustment and additional audit fields
     flexibleFrequencyRootCause: flexibleWeekStructure?.rootCauseAudit ? {
       finalReasonCategory: flexibleWeekStructure.rootCauseAudit.finalReasonCategory,
       isBaselineDefault: flexibleWeekStructure.rootCauseAudit.isBaselineDefault,
       isTrueAdaptive: flexibleWeekStructure.rootCauseAudit.isTrueAdaptive,
       wasModifiedFromBaseline: flexibleWeekStructure.rootCauseAudit.wasModifiedFromBaseline,
+      isModifierBasedAdjustment: flexibleWeekStructure.rootCauseAudit.isModifierBasedAdjustment,
       goalTypical: flexibleWeekStructure.rootCauseAudit.goalTypical,
       modificationSteps: flexibleWeekStructure.rootCauseAudit.modificationSteps,
       reasonDetails: flexibleWeekStructure.rootCauseAudit.reasonDetails,
+      recentWorkoutCount: flexibleWeekStructure.rootCauseAudit.recentWorkoutCount,
+      experienceModifier: flexibleWeekStructure.rootCauseAudit.experienceModifier,
+      jointCautionPenalty: flexibleWeekStructure.rootCauseAudit.jointCautionPenalty,
+      recoveryScore: flexibleWeekStructure.rootCauseAudit.recoveryScore,
     } : undefined,
     structure,
     sessions,

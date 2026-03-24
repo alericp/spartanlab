@@ -24,7 +24,49 @@
  */
 
 import { getAthleteProfile, saveAthleteProfile, type AthleteProfile } from './data-service'
-import { getOnboardingProfile, saveOnboardingProfile, type OnboardingProfile } from './athlete-profile'
+import { getOnboardingProfile, saveOnboardingProfile, type OnboardingProfile, type RecoveryProfile } from './athlete-profile'
+
+// =============================================================================
+// [PHASE 5] RECOVERY QUALITY DERIVATION HELPER
+// =============================================================================
+
+/**
+ * Derives a summary recovery quality from the four recovery fields.
+ * Used to compute canonical `recoveryQuality` from real onboarding selections.
+ * 
+ * Rules:
+ * - If all four are null/missing → return null
+ * - Return 'poor' if 2 or more fields are 'poor'
+ * - Return 'good' if 3 or more fields are 'good'
+ * - Otherwise return 'normal'
+ */
+function deriveRecoveryQualityFromOnboardingRecovery(
+  recovery: RecoveryProfile | null | undefined
+): 'good' | 'normal' | 'poor' | null {
+  if (!recovery) return null
+  
+  const values = [
+    recovery.sleepQuality,
+    recovery.energyLevel,
+    recovery.stressLevel,  // Note: stressLevel uses same enum - 'good' = low stress, 'poor' = high stress
+    recovery.recoveryConfidence,
+  ].filter(Boolean) as Array<'good' | 'normal' | 'poor'>
+  
+  // If all four are null/missing
+  if (values.length === 0) return null
+  
+  const poorCount = values.filter(v => v === 'poor').length
+  const goodCount = values.filter(v => v === 'good').length
+  
+  // Return 'poor' if 2 or more fields are 'poor'
+  if (poorCount >= 2) return 'poor'
+  
+  // Return 'good' if 3 or more fields are 'good'
+  if (goodCount >= 3) return 'good'
+  
+  // Otherwise return 'normal'
+  return 'normal'
+}
 
 // =============================================================================
 // [PHASE 7A] TRAINING METHOD PREFERENCES
@@ -211,6 +253,13 @@ export interface CanonicalProgrammingProfile {
   
   // Recovery context
   recoveryQuality: string | null
+  // [PHASE 5] Raw recovery fields for normalizer truth flow
+  recoveryRaw: {
+    sleepQuality: string | null
+    energyLevel: string | null
+    stressLevel: string | null
+    recoveryConfidence: string | null
+  } | null
 }
 
 // =============================================================================
@@ -427,9 +476,23 @@ export function reconcileCanonicalProfile(): CanonicalProgrammingProfile {
       null
     ),
     
-    // Recovery context
-    recoveryQuality: onboardingProfile?.recovery?.quality ?? null,
+    // [PHASE 5] Recovery context - derive from real four-field object
+    recoveryQuality: deriveRecoveryQualityFromOnboardingRecovery(onboardingProfile?.recovery),
+    // [PHASE 5] Raw recovery fields for normalizer
+    recoveryRaw: onboardingProfile?.recovery ? {
+      sleepQuality: onboardingProfile.recovery.sleepQuality || null,
+      energyLevel: onboardingProfile.recovery.energyLevel || null,
+      stressLevel: onboardingProfile.recovery.stressLevel || null,
+      recoveryConfidence: onboardingProfile.recovery.recoveryConfidence || null,
+    } : null,
   }
+  
+  // [PHASE 5] [canonical-recovery-derivation-audit] Task 2
+  console.log('[canonical-recovery-derivation-audit]', {
+    rawRecoverySource: onboardingProfile?.recovery,
+    derivedRecoverySummary: canonical.recoveryQuality,
+    finalCanonicalRecoverySummary: canonical.recoveryQuality,
+  })
   
   // ==========================================================================
   // [canonical-profile-merge-truth-audit] TASK 3: Comprehensive merge truth audit

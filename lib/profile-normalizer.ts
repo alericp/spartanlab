@@ -179,10 +179,11 @@ export function normalizeProfile(canonical: CanonicalProgrammingProfile): Normal
     sessionLength: canonical.sessionLengthMinutes,
     trainingDays: canonical.trainingDaysPerWeek,
     
+    // [PHASE 5] Recovery - read from canonical recoveryRaw, not hardcoded null
     recovery: {
-      sleepQuality: null,  // Not in canonical yet
-      energyLevel: null,
-      stressLevel: null,
+      sleepQuality: canonical.recoveryRaw?.sleepQuality ?? null,
+      energyLevel: canonical.recoveryRaw?.energyLevel ?? null,
+      stressLevel: canonical.recoveryRaw?.stressLevel ?? null,
     },
     
     equipment: canonical.equipmentAvailable || [],
@@ -190,6 +191,19 @@ export function normalizeProfile(canonical: CanonicalProgrammingProfile): Normal
     weakestArea: canonical.weakestArea,
     primaryLimitation: canonical.primaryLimitation,
   }
+  
+  // ==========================================================================
+  // [PHASE 5] [profile-normalized-recovery-truth-audit] Task 3
+  // ==========================================================================
+  console.log('[profile-normalized-recovery-truth-audit]', {
+    canonicalRecoverySummary: canonical.recoveryQuality,
+    onboardingRecoveryObject: canonical.recoveryRaw,
+    outgoingNormalizedRecovery: result.recovery,
+    recoveryTruthPreserved: !!(
+      (canonical.recoveryRaw?.sleepQuality && result.recovery.sleepQuality === canonical.recoveryRaw.sleepQuality) ||
+      (!canonical.recoveryRaw?.sleepQuality && result.recovery.sleepQuality === null)
+    ),
+  })
   
   // ==========================================================================
   // [profile-normalization-truth-audit] TASK 4: Verify what comes in and out

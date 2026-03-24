@@ -391,6 +391,8 @@ import {
 // Re-export schedule types for consumers
 export type { ScheduleMode, DayStressLevel } from './flexible-schedule-engine'
 export type { GenerationMode, ProfileSnapshot } from './program-state-contract'
+// [PHASE 7B] Re-export training method preference type for UI components
+export type { TrainingMethodPreference } from './training-methods'
 // [program-profile-validate] Re-export validation types
 export type { 
   ProgramProfileValidationResult, 

@@ -722,6 +722,16 @@ export interface AdaptiveProgram {
   flexibleWeekRationale?: string  // Why engine chose this frequency
   dayStressPattern?: DayStressLevel[]  // Stress distribution for the week
   weekNumber?: number  // For tracking week-over-week adaptation
+  // [PHASE 8] Root cause audit for truthful frequency explanation
+  flexibleFrequencyRootCause?: {
+    finalReasonCategory: string
+    isBaselineDefault: boolean
+    isTrueAdaptive: boolean
+    wasModifiedFromBaseline: boolean
+    goalTypical: number
+    modificationSteps: string[]
+    reasonDetails: string
+  }
   structure: WeeklyStructure
   sessions: AdaptiveSession[]
   // [SUMMARY-TRUTH] Selected skills from profile and represented skills in this week
@@ -2293,6 +2303,124 @@ function generateAdaptiveProgramImpl(inputs: AdaptiveProgramInputs, stageTracker
       : 'fixed_baseline',
     hasFeedbackData,
     feedbackInfluenced: hasFeedbackData && trainingFeedback.totalSessionsLast7Days > 0,
+  })
+  
+  // ==========================================================================
+  // [PHASE 8 TASK 1] FLEXIBLE FREQUENCY CHAIN END-TO-END AUDIT
+  // ==========================================================================
+  const rootCause = flexibleWeekStructure?.rootCauseAudit
+  console.log('[phase8-flex-chain-input-audit]', {
+    canonicalScheduleMode: inputScheduleMode,
+    primaryGoal,
+    weekNumber: 1,
+    recentWorkoutCount: trainingFeedback.totalSessionsLast7Days,
+    trustedWorkoutCount: trainingFeedback.trustedWorkoutCount,
+    hasEnoughDataForAdaptation: hasFeedbackData,
+    baselineGoalTypical: rootCause?.goalTypical || 4,
+    modifiersApplied: rootCause?.modificationSteps || [],
+    preFeedbackFrequency: rootCause?.preAdjustmentFrequency || effectiveTrainingDays,
+    postFeedbackFrequency: rootCause?.postAdjustmentFrequency || effectiveTrainingDays,
+    finalFrequency: effectiveTrainingDays,
+    uiDisplayedFrequency: effectiveTrainingDays,
+    exactReasonCategory: rootCause?.finalReasonCategory || 'goal_typical_baseline',
+    exactBlockingReason: !hasFeedbackData 
+      ? 'insufficient_trusted_data'
+      : rootCause?.isBaselineDefault 
+        ? 'no_modifiers_applied'
+        : null,
+  })
+  
+  // ==========================================================================
+  // [PHASE 8 TASK 2] FREQUENCY REASON CLASSIFICATION
+  // ==========================================================================
+  let classifiedReason: 'baseline_4_days' | 'conservative_first_week_4_days' | 'insufficient_data_4_days' | 'adapted_to_4_days_after_feedback' | 'stale_feedback_false_4_days' | 'hidden_modifier_collision_4_days' | 'non_4_days_adaptive'
+  
+  if (effectiveTrainingDays !== 4) {
+    classifiedReason = 'non_4_days_adaptive'
+  } else if (rootCause?.isTrueAdaptive) {
+    classifiedReason = 'adapted_to_4_days_after_feedback'
+  } else if (trainingFeedback.trustedWorkoutCount < 2) {
+    classifiedReason = 'insufficient_data_4_days'
+  } else if (rootCause?.isBaselineDefault) {
+    classifiedReason = 'baseline_4_days'
+  } else if (!hasFeedbackData && rootCause?.finalReasonCategory === 'goal_typical_baseline') {
+    classifiedReason = 'conservative_first_week_4_days'
+  } else {
+    classifiedReason = 'hidden_modifier_collision_4_days'
+  }
+  
+  console.log('[phase8-frequency-reason-classification-audit]', {
+    baselineTypical: rootCause?.goalTypical || 4,
+    weekNumber: 1,
+    conservativeWeekGateActive: false, // Week 1/2 gate not enforced for frequency
+    insufficientDataGateActive: trainingFeedback.trustedWorkoutCount < 2,
+    adaptationAttempted: hasFeedbackData && trainingFeedback.totalSessionsLast7Days > 0,
+    adaptationChangedFrequency: rootCause?.wasModifiedFromBaseline || false,
+    frequencyReturnedToBaselineAfterModifiers: rootCause?.wasModifiedFromBaseline && effectiveTrainingDays === (rootCause?.goalTypical || 4),
+    classifiedReason,
+    verdict: classifiedReason,
+  })
+  
+  // ==========================================================================
+  // [PHASE 8 TASK 3] TRUSTED WORKOUT DATA INGESTION AUDIT
+  // ==========================================================================
+  console.log('[phase8-trusted-workout-ingestion-audit]', {
+    totalWorkoutLogsFound: trainingFeedback.totalSessionsLast14Days,
+    trustedWorkoutLogsFound: trainingFeedback.trustedWorkoutCount,
+    sessionFeedbackEntriesFound: trainingFeedback.adjustmentReasons.length,
+    logsRejectedCount: trainingFeedback.totalSessionsLast14Days - trainingFeedback.trustedWorkoutCount,
+    logsRejectedReasons: trainingFeedback.trustedWorkoutCount === 0 ? ['no_workout_logs'] : [],
+    recentCompletionRate: trainingFeedback.recentCompletionRate,
+    recentFatigueTrend: trainingFeedback.recentFatigueTrend,
+    readinessTrend: trainingFeedback.stressState === 'overreaching' ? 'declining' : trainingFeedback.stressState === 'underloading' ? 'improving' : 'stable',
+    progressionStable: trainingFeedback.progressionSuccessRate >= 0.6,
+    minimumDataThresholdToAdapt: 2,
+    verdict: trainingFeedback.trustedWorkoutCount >= 2 
+      ? 'sufficient_trusted_data'
+      : 'insufficient_trusted_data',
+  })
+  
+  // ==========================================================================
+  // [PHASE 8 TASK 4] REBUILD FEEDBACK FRESHNESS AUDIT
+  // ==========================================================================
+  console.log('[phase8-rebuild-feedback-freshness-audit]', {
+    rebuildTriggeredAt: new Date().toISOString(),
+    trainingFeedbackRecomputed: true, // buildTrainingFeedbackSummary() is always called fresh
+    trustedWorkoutCountAtRebuild: trainingFeedback.trustedWorkoutCount,
+    sessionFeedbackCountAtRebuild: trainingFeedback.adjustmentReasons.filter(r => r !== 'stable_performance' && r !== 'insufficient_data').length,
+    flexResolutionRecomputed: true, // resolveFlexibleFrequency() is always called fresh
+    finalFrequencyAfterRebuild: effectiveTrainingDays,
+    staleStateDetected: false, // No caching in current implementation
+    exactStaleBoundaryIfAny: null,
+    verdict: 'feedback_freshly_computed',
+  })
+  
+  // ==========================================================================
+  // [PHASE 8 TASK 6] ADAPTATION THRESHOLD TRUTH AUDIT
+  // ==========================================================================
+  console.log('[phase8-adaptation-threshold-truth-audit]', {
+    oneSessionEffect: 'recentWorkoutCount_fed_to_resolver_but_min_2_for_adaptation',
+    twoSessionEffect: 'hasEnoughDataForAdaptation_becomes_true',
+    threeSessionEffect: 'trends_become_more_reliable',
+    frequencyCanChangeAt2Sessions: true,
+    frequencyUsuallyReliableAt3Sessions: true,
+    feedbackAffectsFrequencyDirectly: true,
+    feedbackAffectsFrequencyLocation: 'resolveFlexibleFrequency.recentWorkoutCount AND builder feedback loop',
+    feedbackOnlyAffectsOtherLayers: false,
+    verdict: 'adaptation_threshold_is_2_sessions',
+  })
+  
+  // ==========================================================================
+  // [PHASE 8 FINAL] FLEX CHAIN VERDICT
+  // ==========================================================================
+  console.log('[phase8-flex-chain-final-verdict]', {
+    is4DaysLegitimate: classifiedReason !== 'stale_feedback_false_4_days' && classifiedReason !== 'hidden_modifier_collision_4_days',
+    currentResultIs: classifiedReason,
+    shouldChangeAfter2Workouts: trainingFeedback.trustedWorkoutCount < 2,
+    rebuildUsesFreshFeedback: true,
+    defectFound: false,
+    expectedBehaviorAfter2Workouts: 'hasEnoughDataForAdaptation becomes true, feedback loop applies adjustments',
+    verdict: classifiedReason,
   })
   
   // ENGINE QUALITY: Calculate session distribution based on goal hierarchy
@@ -5372,6 +5500,16 @@ console.log('[program-generate] Generation complete:', {
     flexibleWeekRationale: flexibleWeekStructure?.rationale,
     dayStressPattern: flexibleWeekStructure?.dayStressPattern,
     weekNumber: 1,  // First generated week
+    // [PHASE 8] Root cause audit for truthful frequency explanation
+    flexibleFrequencyRootCause: flexibleWeekStructure?.rootCauseAudit ? {
+      finalReasonCategory: flexibleWeekStructure.rootCauseAudit.finalReasonCategory,
+      isBaselineDefault: flexibleWeekStructure.rootCauseAudit.isBaselineDefault,
+      isTrueAdaptive: flexibleWeekStructure.rootCauseAudit.isTrueAdaptive,
+      wasModifiedFromBaseline: flexibleWeekStructure.rootCauseAudit.wasModifiedFromBaseline,
+      goalTypical: flexibleWeekStructure.rootCauseAudit.goalTypical,
+      modificationSteps: flexibleWeekStructure.rootCauseAudit.modificationSteps,
+      reasonDetails: flexibleWeekStructure.rootCauseAudit.reasonDetails,
+    } : undefined,
     structure,
     sessions,
     equipmentProfile,

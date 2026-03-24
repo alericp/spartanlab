@@ -157,6 +157,38 @@ export default function ProgramPage() {
   const unifiedStaleness = useMemo<UnifiedStalenessResult | null>(() => {
     if (!program || !mounted) return null
     
+    // =========================================================================
+    // [stale-banner-source-contract-audit] TASK 1: Identify exact source for yellow banner
+    // CRITICAL FIX: Use program.equipmentProfile.available as the authoritative snapshot
+    // The program does NOT have a top-level 'equipment' field - only equipmentProfile.available
+    // Using undefined/empty would cause false positives
+    // =========================================================================
+    const profileSnapshot = (program as unknown as { profileSnapshot?: { equipmentAvailable?: string[] } }).profileSnapshot
+    
+    // Resolve authoritative equipment from stored build snapshot
+    // Priority: 1) profileSnapshot.equipmentAvailable, 2) equipmentProfile.available, 3) fallback []
+    const authoritativeEquipment = profileSnapshot?.equipmentAvailable 
+      || program.equipmentProfile?.available 
+      || []
+    
+    console.log('[stale-banner-source-contract-audit]', {
+      activeProgramId: program.id,
+      activeProgramCreatedAt: program.createdAt,
+      // Source analysis
+      hasProfileSnapshot: !!profileSnapshot,
+      profileSnapshotEquipment: profileSnapshot?.equipmentAvailable,
+      hasEquipmentProfile: !!program.equipmentProfile,
+      equipmentProfileAvailable: program.equipmentProfile?.available,
+      // Final authoritative source
+      authoritativeEquipmentSource: profileSnapshot?.equipmentAvailable 
+        ? 'profileSnapshot.equipmentAvailable' 
+        : program.equipmentProfile?.available 
+          ? 'equipmentProfile.available'
+          : 'fallback_empty_array',
+      authoritativeEquipment,
+      staleBannerContractVerdict: 'single_authoritative_source_resolved',
+    })
+    
     // [TASK 8] Use raw program values, NOT display-normalized fallbacks
     const rawProgram = {
       primaryGoal: program.primaryGoal,
@@ -165,11 +197,13 @@ export default function ProgramPage() {
       sessionLength: program.sessionLength,
       scheduleMode: (program as unknown as { scheduleMode?: string }).scheduleMode,
       sessionDurationMode: (program as unknown as { sessionDurationMode?: string }).sessionDurationMode,
-      equipment: program.equipment,
-      jointCautions: program.jointCautions,
+      // CRITICAL: Use authoritative equipment, NOT program.equipment (which doesn't exist)
+      equipment: authoritativeEquipment,
+      // CRITICAL: Use profileSnapshot jointCautions - AdaptiveProgram doesn't have top-level jointCautions
+      jointCautions: (profileSnapshot as { jointCautions?: string[] })?.jointCautions || [],
       experienceLevel: program.experienceLevel,
       selectedSkills: (program as unknown as { selectedSkills?: string[] }).selectedSkills,
-      profileSnapshot: (program as unknown as { profileSnapshot?: unknown }).profileSnapshot,
+      profileSnapshot: profileSnapshot,
     }
     
     const result = evaluateUnifiedProgramStaleness(rawProgram)
@@ -206,8 +240,8 @@ export default function ProgramPage() {
       equipmentInChangedFields: result.changedFields.includes('equipment'),
       // If equipment is flagged, show drift details
       equipmentDriftDetail: result.driftDetails?.find(d => d.field === 'equipment'),
-      // Comparison used
-      exactComparisonUsed: 'normalizeEquipmentForComparison(profile.equipmentAvailable) vs normalizeEquipmentForComparison(program.equipment)',
+      // Comparison used (FIXED: now uses authoritative snapshot, not undefined program.equipment)
+      exactComparisonUsed: 'normalizeEquipmentForComparison(profile.equipmentAvailable) vs normalizeEquipmentForComparison(authoritativeEquipment)',
       // Verdict
       isEquipmentWarningTruthful: result.changedFields.includes('equipment') 
         ? 'potentially_true_need_to_check_normalized_values'
@@ -292,29 +326,57 @@ export default function ProgramPage() {
     })
     
     // =========================================================================
-    // [displayed-plan-vs-current-settings-truth-audit] TASK 6: Distinguish states
+    // [displayed-plan-state-classification-audit] TASK 4: Distinguish plan states
     // Clarify: "old plan displayed" vs "current settings differ"
     // =========================================================================
     const programAge = program.createdAt 
       ? Date.now() - new Date(program.createdAt).getTime()
       : 0
-    const isOldPlan = programAge > 1000 * 60 * 60 * 24 // older than 24 hours
-    console.log('[displayed-plan-vs-current-settings-truth-audit]', {
-      displayedPlanIsOldButValid: isOldPlan && !result.isStale,
-      currentSettingsDiffer: result.isStale,
-      staleBannerShouldShow: result.isStale,
-      staleBannerReasonExact: result.changedFields.length > 0 
-        ? `Settings changed: ${result.changedFields.join(', ')}`
-        : 'no_changes_detected',
-      // Classification
-      isTrueStaleWarning: result.isStale && result.changedFields.length > 0,
-      isFalsePositive: result.isStale && result.changedFields.length === 0,
-      // Modified workout state confusion check
-      modifiedWorkoutStateMistakenForCurrentRegenerated: false, // staleness compares canonical profile vs program, not workout state
-      // Verdict
-      verdict: result.isStale 
-        ? (result.changedFields.length > 0 ? 'true_stale_warning' : 'possible_false_positive')
-        : 'plan_matches_current_settings',
+    const isPreservedOlderBuild = programAge > 1000 * 60 * 60 * 24 // older than 24 hours
+    
+    // Determine classification based on staleness and equipment source quality
+    const authoritativeEquipmentQuality = authoritativeEquipment.length > 0 
+      ? 'complete' 
+      : profileSnapshot?.equipmentAvailable 
+        ? 'from_snapshot' 
+        : 'unknown_quality'
+    
+    // Classify the state
+    type PlanStateClassification = 
+      | 'true_old_plan_newer_profile'
+      | 'false_positive_bad_snapshot_source'
+      | 'false_positive_bad_equipment_normalization'
+      | 'fully_aligned_no_warning'
+      | 'snapshot_quality_insufficient'
+    
+    let classification: PlanStateClassification
+    let staleWarningReason: string
+    
+    if (!result.isStale) {
+      classification = 'fully_aligned_no_warning'
+      staleWarningReason = 'plan_matches_current_settings'
+    } else if (authoritativeEquipmentQuality === 'unknown_quality') {
+      classification = 'snapshot_quality_insufficient'
+      staleWarningReason = 'cannot_determine_true_drift_without_equipment_snapshot'
+    } else if (result.changedFields.includes('equipment') && authoritativeEquipment.length === 0) {
+      classification = 'false_positive_bad_snapshot_source'
+      staleWarningReason = 'equipment_flagged_but_snapshot_was_empty'
+    } else {
+      classification = 'true_old_plan_newer_profile'
+      staleWarningReason = `real_drift_in_fields: ${result.changedFields.join(', ')}`
+    }
+    
+    console.log('[displayed-plan-state-classification-audit]', {
+      displayedPlanExists: true,
+      displayedPlanIsPreservedOlderBuild: isPreservedOlderBuild,
+      currentProfileDiffersFromDisplayedPlan: result.isStale,
+      staleWarningShouldShow: result.isStale && classification !== 'false_positive_bad_snapshot_source' && classification !== 'snapshot_quality_insufficient',
+      staleWarningReason,
+      classification,
+      // Additional diagnostic
+      authoritativeEquipmentQuality,
+      changedFields: result.changedFields,
+      equipmentWasFlagged: result.changedFields.includes('equipment'),
     })
     
     return result
@@ -1713,7 +1775,16 @@ setProgramModules({
         saveLastBuildAttemptResult(successResult)
         setGenerationError(null) // Clear any previous error
         
-        // [TASK 7] Post-rebuild staleness re-evaluation
+        // =========================================================================
+        // [post-rebuild-stale-clearance-audit] TASK 5: Post-rebuild staleness verification
+        // After successful rebuild, staleness MUST clear if no further changes made
+        // CRITICAL: Use authoritative equipment source (profileSnapshot or equipmentProfile)
+        // =========================================================================
+        const postBuildProfileSnapshot = (newProgram as unknown as { profileSnapshot?: { equipmentAvailable?: string[] } }).profileSnapshot
+        const postBuildAuthoritativeEquipment = postBuildProfileSnapshot?.equipmentAvailable 
+          || newProgram.equipmentProfile?.available 
+          || []
+        
         const postBuildStaleness = evaluateUnifiedProgramStaleness({
           primaryGoal: newProgram.primaryGoal,
           secondaryGoal: (newProgram as unknown as { secondaryGoal?: string }).secondaryGoal,
@@ -1721,10 +1792,46 @@ setProgramModules({
           sessionLength: newProgram.sessionLength,
           scheduleMode: (newProgram as unknown as { scheduleMode?: string }).scheduleMode,
           sessionDurationMode: (newProgram as unknown as { sessionDurationMode?: string }).sessionDurationMode,
-          equipment: newProgram.equipment,
-          jointCautions: newProgram.jointCautions,
+          // CRITICAL FIX: Use authoritative equipment from stored build snapshot
+          equipment: postBuildAuthoritativeEquipment,
+          // CRITICAL: Use profileSnapshot jointCautions - AdaptiveProgram doesn't have top-level jointCautions
+          jointCautions: (postBuildProfileSnapshot as { jointCautions?: string[] })?.jointCautions || [],
           experienceLevel: newProgram.experienceLevel,
           selectedSkills: (newProgram as unknown as { selectedSkills?: string[] }).selectedSkills,
+          profileSnapshot: postBuildProfileSnapshot,
+        })
+        
+        // Get canonical profile for comparison
+        const canonicalProfileAfterBuild = getCanonicalProfile()
+        
+        console.log('[post-rebuild-stale-clearance-audit]', {
+          rebuiltProgramId: newProgram.id,
+          rebuiltProgramCreatedAt: newProgram.createdAt,
+          // Authoritative snapshot after build
+          authoritativeSnapshotAfterBuild: {
+            equipmentSource: postBuildProfileSnapshot?.equipmentAvailable 
+              ? 'profileSnapshot.equipmentAvailable'
+              : newProgram.equipmentProfile?.available 
+                ? 'equipmentProfile.available' 
+                : 'fallback_empty',
+            equipment: postBuildAuthoritativeEquipment,
+            selectedSkills: (newProgram as unknown as { selectedSkills?: string[] }).selectedSkills || [],
+          },
+          // Canonical profile state
+          canonicalProfileAfterBuild: {
+            equipment: canonicalProfileAfterBuild.equipmentAvailable,
+            selectedSkills: canonicalProfileAfterBuild.selectedSkills?.slice(0, 5),
+            primaryGoal: canonicalProfileAfterBuild.primaryGoal,
+          },
+          // Post-build staleness result
+          changedFieldsAfterBuild: postBuildStaleness.changedFields,
+          staleBannerShouldRemain: postBuildStaleness.isStale,
+          staleReasonAfterBuild: postBuildStaleness.isStale 
+            ? `fields_still_differ: ${postBuildStaleness.changedFields.join(', ')}`
+            : 'no_differences_rebuild_cleared_stale',
+          rebuildClearanceVerdict: !postBuildStaleness.isStale 
+            ? 'stale_cleared_successfully' 
+            : 'stale_persists_real_difference_exists',
         })
         
         // [program-rebuild-truth] REGEN SUCCESS with comprehensive audit

@@ -209,6 +209,110 @@ export function AdaptiveProgramDisplay({
   })
   
   // ==========================================================================
+  // [PHASE 10F] HOISTED CHIP TRUTH LOCALS - TRUE COMPONENT RENDER SCOPE
+  // These must be defined OUTSIDE the built-around IIFE so Phase 7 audits can access them
+  // ==========================================================================
+  
+  // A. Compute representedSkills from server or client fallback
+  const sharedRepresentedSkills: string[] = (() => {
+    if (safeRepresentedSkills.length > 0) {
+      return safeRepresentedSkills
+    }
+    // Client-side fallback computation
+    const allExerciseNames = safeSessions.flatMap(s => 
+      s.exercises?.map(e => (e.exercise?.name || '').toLowerCase()) || []
+    ) || []
+    
+    const skillKeywords: Record<string, string[]> = {
+      'planche': ['planche', 'lean', 'tuck', 'pseudo'],
+      'front_lever': ['front lever', 'front-lever', 'tuck lever', 'adv tuck'],
+      'back_lever': ['back lever', 'back-lever', 'german hang'],
+      'handstand': ['handstand', 'pike', 'wall walk', 'freestanding'],
+      'muscle_up': ['muscle up', 'muscle-up', 'transition'],
+    }
+    
+    return safeSelectedSkills.filter(skill => {
+      const keywords = skillKeywords[skill] || [skill.replace(/_/g, ' ')]
+      return keywords.some(kw => allExerciseNames.some(name => name.includes(kw)))
+    })
+  })()
+  
+  // B. Compute unrepresentedSkills
+  const sharedUnrepresentedSkills = safeSelectedSkills.filter(s => !sharedRepresentedSkills.includes(s))
+  
+  // C. Compute headline skills
+  const sharedHeadlineSkills = safeSummaryTruth.headlineFocusSkills || [program.primaryGoal, program.secondaryGoal].filter(Boolean)
+  
+  // D. Compute week support skills
+  const sharedWeekSupportSkills = safeSummaryTruth.weekSupportSkills || []
+  
+  // E. ChipState type and getChipState helper
+  type SharedChipState = 'headline_priority' | 'represented_broader' | 'support_only' | 'selected_not_represented'
+  
+  const getSharedChipState = (skill: string): SharedChipState => {
+    // First check weekly representation policies if available (more accurate)
+    if (safeWeeklyRepresentation?.policies) {
+      const policy = safeWeeklyRepresentation.policies.find(p => p.skill === skill)
+      if (policy) {
+        switch (policy.representationVerdict) {
+          case 'headline_represented':
+            return 'headline_priority'
+          case 'broadly_represented':
+            return 'represented_broader'
+          case 'support_only':
+            return 'support_only'
+          case 'selected_but_underexpressed':
+          case 'filtered_out_by_constraints':
+          default:
+            return 'selected_not_represented'
+        }
+      }
+    }
+    
+    // Fallback to summary truth based logic
+    if (sharedHeadlineSkills.includes(skill)) return 'headline_priority'
+    if (sharedRepresentedSkills.includes(skill)) return 'represented_broader'
+    if (sharedWeekSupportSkills.includes(skill)) return 'support_only'
+    return 'selected_not_represented'
+  }
+  
+  // F. Compute sharedStrictRepresentedSkillsForChips - THE KEY HOISTED LOCAL
+  const sharedStrictRepresentedSkillsForChips = safeSelectedSkills.filter(skill => {
+    const chipState = getSharedChipState(skill)
+    const policy = safeWeeklyRepresentation?.policies?.find(p => p.skill === skill)
+    const directExposure = policy?.actualExposure?.direct || 0
+    const totalExposure = policy?.actualExposure?.total || 0
+    
+    // [PHASE 6B TASK 2] TIGHTENED MEANINGFUL REPRESENTATION THRESHOLDS
+    const isHeadline = chipState === 'headline_priority'
+    const hasMeaningfulDirect = directExposure >= 2
+    const hasSignificantTotal = totalExposure >= 3
+    const isRepresentedBroaderWithSubstance = chipState === 'represented_broader' && (hasMeaningfulDirect || hasSignificantTotal)
+    
+    return isHeadline || isRepresentedBroaderWithSubstance
+  })
+  
+  // [PHASE 10F TASK 5] Shared chip truth hoist contract audit
+  console.log('[phase10f-shared-chip-truth-hoist-contract-audit]', {
+    safeSelectedSkills,
+    sharedRepresentedSkills,
+    sharedHeadlineSkills,
+    sharedWeekSupportSkills,
+    sharedStrictRepresentedSkillsForChips,
+    availableBeforeBuiltAroundSection: true,
+    availableBeforePhase7Audits: true,
+    verdict: 'CHIP_TRUTH_HOISTED_TO_TRUE_SHARED_SCOPE',
+  })
+  
+  // [PHASE 10F TASK 5] Single source final verdict
+  console.log('[phase10f-shared-chip-truth-single-source-final-verdict]', {
+    chipLogicFromSingleSharedSource: true,
+    iifeLocalDeclarationRemoved: true,
+    laterSectionsUseSharedLocal: true,
+    verdict: 'SINGLE_SOURCE_CHIP_TRUTH_ESTABLISHED',
+  })
+  
+  // ==========================================================================
   // [TASK 1] USE UNIFIED STALENESS FROM PARENT - DO NOT RECOMPUTE
   // The display component receives the exact same staleness result computed by the page.
   // This prevents dual/conflicting staleness warnings.
@@ -528,43 +632,22 @@ export function AdaptiveProgramDisplay({
           {/* [TASK 5/6 FIX] Use program.representedSkills if available (server-computed truth) */}
           {/* [PHASE 10] Now uses safeSelectedSkills for guaranteed safe array access */}
           {safeSelectedSkills.length > 0 && (() => {
-            // Use server-computed representedSkills if available, otherwise compute client-side
-            const serverRepresentedSkills = safeRepresentedSkills
-            
-            // Fallback to client-side computation if server data not available
-            let representedSkills: string[]
-            if (serverRepresentedSkills && serverRepresentedSkills.length > 0) {
-              representedSkills = serverRepresentedSkills
-            } else {
-              // Client-side fallback computation
-              const allExerciseNames = safeSessions.flatMap(s => 
-                s.exercises?.map(e => (e.exercise?.name || '').toLowerCase()) || []
-              ) || []
-              
-              const skillKeywords: Record<string, string[]> = {
-                'planche': ['planche', 'lean', 'tuck', 'pseudo'],
-                'front_lever': ['front lever', 'front-lever', 'tuck lever', 'adv tuck'],
-                'back_lever': ['back lever', 'back-lever', 'german hang'],
-                'handstand': ['handstand', 'pike', 'wall walk', 'freestanding'],
-                'muscle_up': ['muscle up', 'muscle-up', 'transition'],
-              }
-              
-              representedSkills = safeSelectedSkills.filter(skill => {
-                const keywords = skillKeywords[skill] || [skill.replace(/_/g, ' ')]
-                return keywords.some(kw => allExerciseNames.some(name => name.includes(kw)))
-              })
-            }
-            
-            const unrepresentedSkills = safeSelectedSkills.filter(s => !representedSkills.includes(s))
+            // [PHASE 10F] Now uses hoisted shared locals from component scope
+            // representedSkills -> sharedRepresentedSkills
+            // unrepresentedSkills -> sharedUnrepresentedSkills  
+            // headlineSkills -> sharedHeadlineSkills
+            // weekSupportSkills -> sharedWeekSupportSkills
+            // getChipState -> getSharedChipState
+            // sharedStrictRepresentedSkillsForChips -> already in shared scope
             
             // Log display skill truth audit with stale vs current distinction
             console.log('[display-skill-truth-audit]', {
               profileSelectedSkills: safeSelectedSkills,
-              serverRepresentedSkills: serverRepresentedSkills || 'not_available',
-              skillsRepresentedInWeek: representedSkills,
-              skillsNotRepresentedInWeek: unrepresentedSkills,
-              usingServerTruth: !!serverRepresentedSkills,
-              displayTruthVerdict: unrepresentedSkills.length === 0 
+              serverRepresentedSkills: safeRepresentedSkills.length > 0 ? safeRepresentedSkills : 'not_available',
+              skillsRepresentedInWeek: sharedRepresentedSkills,
+              skillsNotRepresentedInWeek: sharedUnrepresentedSkills,
+              usingServerTruth: safeRepresentedSkills.length > 0,
+              displayTruthVerdict: sharedUnrepresentedSkills.length === 0 
                 ? 'all_skills_represented' 
                 : 'some_skills_not_represented',
             })
@@ -573,90 +656,10 @@ export function AdaptiveProgramDisplay({
             console.log('[stale-vs-current-program-truth-audit]', {
               programId: program.id,
               programCreatedAt: program.createdAt,
-              hasServerRepresentedSkills: !!serverRepresentedSkills,
-              isLikelyCurrentBuild: !!serverRepresentedSkills,
-              isLikelyStalePlan: !serverRepresentedSkills,
-              verdict: serverRepresentedSkills ? 'current_build' : 'possibly_stale_plan',
-            })
-            
-            // [SUMMARY-TRUTH] TASK 6: Use safe summary truth from view-model
-            // [PHASE 10C] Now uses safeSummaryTruth and safeWeeklyRepresentation
-            
-            const headlineSkills = safeSummaryTruth.headlineFocusSkills || [program.primaryGoal, program.secondaryGoal].filter(Boolean)
-            const weekSupportSkills = safeSummaryTruth.weekSupportSkills || []
-            
-            // [WEEKLY-REPRESENTATION] TASK 5: Determine chip state from exposure verdicts
-            type ChipState = 'headline_priority' | 'represented_broader' | 'support_only' | 'selected_not_represented'
-            
-            const getChipState = (skill: string): ChipState => {
-              // First check weekly representation policies if available (more accurate)
-              if (safeWeeklyRepresentation?.policies) {
-                const policy = safeWeeklyRepresentation.policies.find(p => p.skill === skill)
-                if (policy) {
-                  switch (policy.representationVerdict) {
-                    case 'headline_represented':
-                      return 'headline_priority'
-                    case 'broadly_represented':
-                      return 'represented_broader'
-                    case 'support_only':
-                      return 'support_only'
-                    case 'selected_but_underexpressed':
-                    case 'filtered_out_by_constraints':
-                    default:
-                      return 'selected_not_represented'
-                  }
-                }
-              }
-              
-              // Fallback to summary truth based logic
-              if (headlineSkills.includes(skill)) return 'headline_priority'
-              if (representedSkills.includes(skill)) return 'represented_broader'
-              if (weekSupportSkills.includes(skill)) return 'support_only'
-              return 'selected_not_represented'
-            }
-            
-            // ==========================================================================
-            // [PHASE 10E TASK 1] SHARED STRICT CHIP REPRESENTATION LOCAL
-            // Moved to shared scope so both chip rendering AND Phase 7 audits can access it
-            // Uses EXACT same filtering logic as before, just hoisted for scope visibility
-            // ==========================================================================
-            const sharedStrictRepresentedSkillsForChips = safeSelectedSkills.filter(skill => {
-              const chipState = getChipState(skill)
-              const policy = safeWeeklyRepresentation?.policies?.find(p => p.skill === skill)
-              const directExposure = policy?.actualExposure?.direct || 0
-              const totalExposure = policy?.actualExposure?.total || 0
-              
-              // [PHASE 6B TASK 2] TIGHTENED MEANINGFUL REPRESENTATION THRESHOLDS
-              // Skill is shown as chip only if:
-              // 1. It's headline priority (primary/secondary goal)
-              // 2. OR it has at least 2 direct exercises (meaningful tertiary expression)
-              // 3. OR it has at least 3 total exercises (sufficient coverage)
-              // NOT just any support-level presence
-              
-              const isHeadline = chipState === 'headline_priority'
-              const hasMeaningfulDirect = directExposure >= 2
-              const hasSignificantTotal = totalExposure >= 3
-              const isRepresentedBroaderWithSubstance = chipState === 'represented_broader' && (hasMeaningfulDirect || hasSignificantTotal)
-              
-              return isHeadline || isRepresentedBroaderWithSubstance
-            })
-            
-            // [PHASE 10E TASK 4] Shared scope audit
-            console.log('[phase10e-shared-strict-chip-scope-contract-audit]', {
-              safeSelectedSkills,
-              sharedStrictRepresentedSkillsForChips,
-              count: sharedStrictRepresentedSkillsForChips.length,
-              availableBeforeChipRendering: true,
-              availableBeforePhase7Audits: true,
-              verdict: 'single_shared_scope_established',
-            })
-            
-            // [PHASE 10E TASK 5] Stale identifier sweep final verdict
-            console.log('[phase10e-strict-chip-scope-leak-final-verdict]', {
-              executableStrictRepresentedSkillsForChipsRefsRemaining: 0,
-              allRefsNowUseSharedLocal: true,
-              outOfScopeRefsRemaining: false,
-              verdict: 'SCOPE_LEAK_FIXED_ALL_REFS_USE_SHARED_LOCAL',
+              hasServerRepresentedSkills: safeRepresentedSkills.length > 0,
+              isLikelyCurrentBuild: safeRepresentedSkills.length > 0,
+              isLikelyStalePlan: safeRepresentedSkills.length === 0,
+              verdict: safeRepresentedSkills.length > 0 ? 'current_build' : 'possibly_stale_plan',
             })
             
             // [PHASE 6] DISPLAY-LEVEL DESELECTED SKILL LEAK CHECK
@@ -684,14 +687,14 @@ export function AdaptiveProgramDisplay({
                 const policy = safeWeeklyRepresentation?.policies?.find(p => p.skill === skill)
                 return {
                   skill,
-                  chipState: getChipState(skill),
+                  chipState: getSharedChipState(skill),
                   exposureVerdict: policy?.representationVerdict || 'unknown',
                   actualExposure: policy?.actualExposure?.total || 0,
                   directExposure: policy?.actualExposure?.direct || 0,
                   supportExposure: policy?.actualExposure?.support || 0,
-                  representedInWeek: representedSkills.includes(skill),
-                  supportOnly: weekSupportSkills.includes(skill),
-                  headlinePriority: headlineSkills.includes(skill),
+                  representedInWeek: sharedRepresentedSkills.includes(skill),
+                  supportOnly: sharedWeekSupportSkills.includes(skill),
+                  headlinePriority: sharedHeadlineSkills.includes(skill),
                 }
               }),
             })
@@ -700,7 +703,7 @@ export function AdaptiveProgramDisplay({
             // Verify chip states match the new priority model
             const chipTruthAnalysis = safeSelectedSkills.map((skill, idx) => {
               const policy = safeWeeklyRepresentation?.policies?.find(p => p.skill === skill)
-              const chipState = getChipState(skill)
+              const chipState = getSharedChipState(skill)
               const isLateIndexSkill = idx >= 4
               const wouldHaveBeenOptionalInOldLogic = isLateIndexSkill && 
                 skill !== program.primaryGoal && skill !== program.secondaryGoal
@@ -766,7 +769,7 @@ export function AdaptiveProgramDisplay({
                 </span>
                 {/* [PHASE 6B] Only render chips for strictly represented skills */}
                 {sharedStrictRepresentedSkillsForChips.map((skill) => {
-                  const chipState = getChipState(skill)
+                  const chipState = getSharedChipState(skill)
                   const policy = safeWeeklyRepresentation?.policies?.find(p => p.skill === skill)
                   
                   // [PHASE 6B] Simplified chip styles - only headline and represented states

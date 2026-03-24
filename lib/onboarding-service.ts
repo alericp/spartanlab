@@ -294,36 +294,56 @@ export function generateFirstProgram(): FirstRunResult {
     const calibration = getAthleteCalibration()
     
     // ==========================================================================
-    // TASK 1 FIX: Use SAME canonical profile source as regenerate/update-program
+    // [PHASE 6] USE CANONICAL ENTRY BUILDER
     // ==========================================================================
-    // Previously this used `normalizeProfileForGeneration(profile)` and had its own
-    // `mapSkillInterestsToPrimaryGoal` logic that defaulted everything to 'front_lever'.
-    // Now we use getDefaultAdaptiveInputs() which reads from canonical profile truth.
-    // This ensures first-generation and regenerate use IDENTICAL truth sources.
+    // This ensures first-generation uses the SAME validated entry contract
+    // as regenerate and modify-program, eliminating split-brain between entry types.
+    
+    // Import canonical entry builder
+    const { buildCanonicalGenerationEntry, entryToAdaptiveInputs } = require('./canonical-profile-service')
+    
+    // Build canonical entry - validates all required fields are present
+    const entryResult = buildCanonicalGenerationEntry('generateFirstProgram')
+    
+    if (!entryResult.success) {
+      console.error('[OnboardingService] Generation entry validation failed:', entryResult.error)
+      return {
+        success: false,
+        program: null,
+        calibration: null,
+        welcomeMessage: 'Program generation setup failed.',
+        error: entryResult.error?.message || 'Failed to prepare program generation',
+      }
+    }
+    
+    // [generation-entry-path-audit] Log entry for onboarding generation
+    console.log('[generation-entry-path-audit]', {
+      triggerSource: 'generateFirstProgram',
+      rawSettingsSource: 'onboarding_profile',
+      canonicalProfilePresent: true,
+      normalizedProfilePresent: true,
+      experienceLevelPresent: true,
+      selectedSkillsCount: entryResult.entry?.selectedSkills?.length || 0,
+      sessionDurationMode: entryResult.entry?.sessionDurationMode,
+      scheduleMode: entryResult.entry?.scheduleMode,
+    })
+    
+    // Convert canonical entry to program inputs
+    const programInputs = entryToAdaptiveInputs(entryResult.entry!)
     
     // Log canonical profile state before consuming
     logCanonicalProfileState('generateFirstProgram called')
     
-    // Get canonical profile for diagnostics
-    const canonicalProfile = getCanonicalProfile()
-    
-    // TASK 1: Use the SAME input resolver as regenerate/update-program
-    // This is the unified entrypoint that reads from canonical profile truth
-    const programInputs = getDefaultAdaptiveInputs()
-    
-    // TASK 6: Dev logging - confirm canonical profile was consumed
-    console.log('[OnboardingService] TASK 1 FIX: First program using CANONICAL profile:', {
+    // TASK 6: Dev logging - confirm canonical entry was used
+    console.log('[OnboardingService] [PHASE 6] First program using CANONICAL ENTRY:', {
       primaryGoal: programInputs.primaryGoal,
       secondaryGoal: programInputs.secondaryGoal || 'none',
+      experienceLevel: programInputs.experienceLevel,
       selectedSkillsCount: programInputs.selectedSkills?.length || 0,
       scheduleMode: programInputs.scheduleMode,
       trainingDaysPerWeek: programInputs.trainingDaysPerWeek,
       sessionLength: programInputs.sessionLength,
-      // Verify canonical was source, not legacy fallback
-      canonicalPrimaryGoal: canonicalProfile.primaryGoal || 'not set',
-      canonicalSecondaryGoal: canonicalProfile.secondaryGoal || 'not set',
-      trainingPath: canonicalProfile.trainingPathType || 'not set',
-      sessionDurationMode: canonicalProfile.sessionDurationMode || 'not set',
+      entrySource: entryResult.entry?.__entrySource,
     })
     
     // ENGINE PROOF: Verify schedule mode resolution
@@ -446,7 +466,7 @@ export function generateFirstProgram(): FirstRunResult {
       success: true,
       program,
       calibration,
-      welcomeMessage: getWelcomeMessage(profile, normalized.experienceLevel),
+      welcomeMessage: getWelcomeMessage(profile, programInputs.experienceLevel),
     }
   } catch (error) {
     console.error('Failed to generate first program:', error)

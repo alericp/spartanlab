@@ -1143,6 +1143,21 @@ setProgramModules({
     setIsGenerating(true)
     setGenerationError(null) // Clear any previous error
     
+    // [PHASE 6 TASK 1] Build canonical generation entry - single contract for all paths
+    const { CanonicalProfileService } = await import('@/lib/canonical-profile-service')
+    const entryResult = CanonicalProfileService.buildCanonicalGenerationEntry('handleGenerate')
+    
+    if (!entryResult.success) {
+      const errorMsg = entryResult.error?.message || 'Failed to build generation entry'
+      console.error('[ProgramPage] handleGenerate: Entry validation failed', entryResult.error)
+      setGenerationError(errorMsg)
+      setIsGenerating(false)
+      return
+    }
+    
+    // Convert canonical entry to inputs shape
+    const generationInputs = CanonicalProfileService.entryToAdaptiveInputs(entryResult.entry!)
+    
     // Small delay for UX - wrapped in try/catch for safety
     const timeoutId = setTimeout(() => {
       let generationStage = 'starting'
@@ -1150,20 +1165,21 @@ setProgramModules({
         // [program-build] STAGE 1: Pre-generation diagnostics
         generationStage = 'pre_generation_diagnostics'
         console.log('[program-build] STAGE 1: Pre-generation diagnostics', {
-          hasInputs: !!inputs,
-          primaryGoal: inputs?.primaryGoal,
-          secondaryGoal: inputs?.secondaryGoal || 'none',
-          trainingDaysPerWeek: inputs?.trainingDaysPerWeek,
-          sessionLength: inputs?.sessionLength,
-          scheduleMode: inputs?.scheduleMode,
-          equipmentCount: inputs?.equipment?.length || 0,
-          selectedSkillsCount: inputs?.selectedSkills?.length || 0,
+          hasInputs: !!generationInputs,
+          primaryGoal: generationInputs?.primaryGoal,
+          secondaryGoal: generationInputs?.secondaryGoal || 'none',
+          trainingDaysPerWeek: generationInputs?.trainingDaysPerWeek,
+          sessionLength: generationInputs?.sessionLength,
+          scheduleMode: generationInputs?.scheduleMode,
+          experienceLevel: generationInputs?.experienceLevel,
+          equipmentCount: generationInputs?.equipment?.length || 0,
+          selectedSkillsCount: generationInputs?.selectedSkills?.length || 0,
         })
         
         // [program-build] STAGE 2: Generate program
         generationStage = 'generating'
         console.log('[program-build] STAGE 2: Calling generateAdaptiveProgram...')
-        const newProgram = programModules.generateAdaptiveProgram(inputs)
+        const newProgram = programModules.generateAdaptiveProgram(generationInputs)
         
         // [program-build] STAGE 3: Validate program shape (fail fast on malformed data)
         generationStage = 'validating_shape'
@@ -1762,53 +1778,53 @@ setProgramModules({
       let regenerateStage = 'starting'
       try {
         // ==========================================================================
-        // [TASK 2] COMPOSE FRESH CANONICAL TRUTH AT CLICK TIME
-        // We must NOT use stale `inputs` state - compose fresh from canonical profile
+        // [TASK 2] [PHASE 6] USE CANONICAL ENTRY BUILDER FOR REGENERATE
+        // We must NOT use stale `inputs` state - use validated canonical entry
         // ==========================================================================
         regenerateStage = 'composing_fresh_truth'
         
-        // Get fresh canonical profile and compose rebuild inputs
-        const canonicalProfile = getCanonicalProfile()
-        const freshComposedInput = composeCanonicalPlannerInput()
+        // [PHASE 6 TASK 1] Build canonical entry - single contract for all paths
+        const { CanonicalProfileService } = await import('@/lib/canonical-profile-service')
+        const entryResult = CanonicalProfileService.buildCanonicalGenerationEntry('handleRegenerate')
         
-        // Build the fresh rebuild input from canonical truth
-        const freshRebuildInput: AdaptiveProgramInputs = {
-          primaryGoal: freshComposedInput.primaryGoal || canonicalProfile.primaryGoal || inputs?.primaryGoal || 'planche',
-          secondaryGoal: freshComposedInput.secondaryGoal || canonicalProfile.secondaryGoal || inputs?.secondaryGoal,
-          experienceLevel: freshComposedInput.experienceLevel || canonicalProfile.experienceLevel || inputs?.experienceLevel || 'intermediate',
-          trainingDaysPerWeek: freshComposedInput.scheduleMode === 'flexible' 
-            ? 'flexible' 
-            : (freshComposedInput.trainingDaysPerWeek ?? canonicalProfile.trainingDaysPerWeek ?? inputs?.trainingDaysPerWeek ?? 4),
-          sessionLength: freshComposedInput.sessionLength ?? canonicalProfile.sessionLengthMinutes ?? inputs?.sessionLength ?? 60,
-          scheduleMode: freshComposedInput.scheduleMode || canonicalProfile.scheduleMode || inputs?.scheduleMode || 'flexible',
-          sessionDurationMode: freshComposedInput.sessionDurationMode || canonicalProfile.sessionDurationMode || inputs?.sessionDurationMode || 'adaptive',
-          equipment: freshComposedInput.equipment || canonicalProfile.equipmentAvailable || inputs?.equipment || [],
+        if (!entryResult.success) {
+          const errorMsg = entryResult.error?.message || 'Failed to build generation entry'
+          console.error('[ProgramPage] handleRegenerate: Entry validation failed', entryResult.error)
+          throw new Error(`generation_entry_failed: ${errorMsg}`)
         }
         
+        const freshRebuildInput = CanonicalProfileService.entryToAdaptiveInputs(entryResult.entry!)
+        
+        // [generation-entry-path-audit] Log regenerate entry
+        console.log('[generation-entry-path-audit]', {
+          triggerSource: 'handleRegenerate',
+          rawSettingsSource: 'canonical_profile',
+          canonicalProfilePresent: true,
+          normalizedProfilePresent: true,
+          experienceLevelPresent: true,
+          selectedSkillsCount: freshRebuildInput.selectedSkills?.length || 0,
+          sessionDurationMode: freshRebuildInput.sessionDurationMode,
+          scheduleMode: freshRebuildInput.scheduleMode,
+        })
+        
         // [TASK 7] Pre-build diagnostic with fresh truth
-        console.log('[program-rebuild-identity-audit] REGEN STAGE 0: Fresh canonical truth composed', {
+        console.log('[program-rebuild-identity-audit] REGEN STAGE 0: Fresh canonical entry composed', {
           oldProgramId: program?.id || 'none',
-          staleInputsPrimaryGoal: inputs?.primaryGoal,
           freshPrimaryGoal: freshRebuildInput.primaryGoal,
           freshSecondaryGoal: freshRebuildInput.secondaryGoal,
-          freshSelectedSkills: canonicalProfile.selectedSkills,
+          freshExperienceLevel: freshRebuildInput.experienceLevel,
           freshScheduleMode: freshRebuildInput.scheduleMode,
           freshTrainingDaysPerWeek: freshRebuildInput.trainingDaysPerWeek,
           freshSessionDurationMode: freshRebuildInput.sessionDurationMode,
           freshSessionLength: freshRebuildInput.sessionLength,
           freshEquipmentCount: freshRebuildInput.equipment?.length || 0,
-          freshJointCautions: canonicalProfile.jointCautions,
-          freshExperienceLevel: freshRebuildInput.experienceLevel,
-          canonicalProfileTimestamp: canonicalProfile.lastUpdated,
-          composedInputProvenance: {
-            fallbacksUsed: freshComposedInput.fallbacksUsed,
-            overridesApplied: freshComposedInput.overridesApplied,
-          },
+          entrySource: entryResult.entry?.__entrySource,
+          fallbacksUsed: entryResult.entry?.__fallbacksUsed,
         })
         
         // Validate fresh input before proceeding
         if (!freshRebuildInput.primaryGoal) {
-          throw new Error('fresh_input_invalid: primaryGoal missing from canonical truth')
+          throw new Error('fresh_input_invalid: primaryGoal missing from canonical entry')
         }
         
         // ==========================================================================
@@ -1816,11 +1832,10 @@ setProgramModules({
         // This confirms rebuild/regenerate uses the same contract shape as onboarding
         // ==========================================================================
         console.log('[entry-path-unification-audit]', {
-          onboardingUsesUnifiedContract: true, // Uses getDefaultAdaptiveInputs() -> generateAdaptiveProgram
-          rebuildUsesUnifiedContract: true, // Uses freshRebuildInput -> generateAdaptiveProgram
-          retryUsesUnifiedContract: true, // Same as rebuild path
-          demoUsesUnifiedContract: false, // Demo path not applicable
-          allPathsUnified: true,
+          onboardingUsesUnifiedContract: true,
+          rebuildUsesUnifiedContract: true,
+          retryUsesUnifiedContract: true,
+          allPathsUsedCanonicalEntry: true,
           contractShape: {
             hasPrimaryGoal: !!freshRebuildInput.primaryGoal,
             hasExperienceLevel: !!freshRebuildInput.experienceLevel,
@@ -2711,21 +2726,46 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
       return { success: false, error: 'Program builder still loading' }
     }
     
-    // [canonical-rebuild] TASK A: Build updated canonical inputs based on adjustment
-    const updatedInputs = { ...inputs }
+    // [canonical-rebuild] TASK A: Build updated canonical entry based on adjustment
+    // [PHASE 6 TASK 2] Use canonical entry builder instead of just spreading inputs
+    const { CanonicalProfileService } = await import('@/lib/canonical-profile-service')
     
+    // Build canonical entry with overrides for the requested changes
+    const overrides: Record<string, any> = {}
     if (request.type === 'training_days' && request.newTrainingDays) {
-      updatedInputs.trainingDaysPerWeek = request.newTrainingDays
-      console.log('[canonical-rebuild] Updated training days:', request.newTrainingDays)
+      overrides.trainingDaysPerWeek = request.newTrainingDays
     }
     if (request.type === 'session_time' && request.newSessionMinutes) {
-      updatedInputs.sessionLength = request.newSessionMinutes
-      console.log('[canonical-rebuild] Updated session length:', request.newSessionMinutes)
+      overrides.sessionLength = request.newSessionMinutes
     }
     if (request.type === 'equipment' && request.newEquipment) {
-      updatedInputs.equipment = request.newEquipment
-      console.log('[canonical-rebuild] Updated equipment:', request.newEquipment)
+      overrides.equipment = request.newEquipment
     }
+    
+    const entryResult = CanonicalProfileService.buildCanonicalGenerationEntry(
+      'handleAdjustmentRebuild',
+      overrides
+    )
+    
+    if (!entryResult.success) {
+      console.error('[canonical-rebuild] Entry validation failed', entryResult.error)
+      return { 
+        success: false, 
+        error: entryResult.error?.message || 'Failed to build generation entry' 
+      }
+    }
+    
+    const updatedInputs = CanonicalProfileService.entryToAdaptiveInputs(entryResult.entry!)
+    
+    console.log('[canonical-rebuild] Built canonical entry with overrides:', {
+      type: request.type,
+      override_applied: Object.keys(overrides).length > 0,
+      updatedInputs: {
+        trainingDaysPerWeek: updatedInputs.trainingDaysPerWeek,
+        sessionLength: updatedInputs.sessionLength,
+        equipment: updatedInputs.equipment?.length,
+      },
+    })
     
     try {
       // [canonical-rebuild] STAGE 1: Generate new program with updated inputs

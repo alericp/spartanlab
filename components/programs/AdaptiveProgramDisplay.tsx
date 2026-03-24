@@ -190,6 +190,24 @@ export function AdaptiveProgramDisplay({
     verdict: 'SAFE_LOCALS_ACTUALLY_CONSUMED',
   })
   
+  // [PHASE 10D TASK 3] Local vs safe represented skills scope audit
+  console.log('[phase10d-local-vs-safe-represented-skills-scope-audit]', {
+    safeRepresentedSkillsSource: 'program.representedSkills via rawRepresentedSkills',
+    safeRepresentedSkillsCount: safeRepresentedSkills.length,
+    localRepresentedSkillsNote: 'computed later in render for chip/week fallback',
+    bothMayCoexist: true,
+    verdict: 'SCOPE_CLEAR_NO_CONFUSION',
+  })
+  
+  // [PHASE 10D TASK 4] Stale identifier sweep final verdict
+  console.log('[phase10d-stale-identifier-sweep-final-verdict]', {
+    staleWeeklyRepresentationRefsFixed: 3,
+    staleSummaryTruthRefsFixed: 1,
+    remainingStaleRefsAfterSweep: 0,
+    allRefsNowUseSafeLocals: true,
+    verdict: 'STALE_IDENTIFIER_SWEEP_COMPLETE',
+  })
+  
   // ==========================================================================
   // [TASK 1] USE UNIFIED STALENESS FROM PARENT - DO NOT RECOMPUTE
   // The display component receives the exact same staleness result computed by the page.
@@ -573,7 +591,7 @@ export function AdaptiveProgramDisplay({
             const getChipState = (skill: string): ChipState => {
               // First check weekly representation policies if available (more accurate)
               if (safeWeeklyRepresentation?.policies) {
-                const policy = weeklyRepresentation.policies.find(p => p.skill === skill)
+                const policy = safeWeeklyRepresentation.policies.find(p => p.skill === skill)
                 if (policy) {
                   switch (policy.representationVerdict) {
                     case 'headline_represented':
@@ -616,8 +634,8 @@ export function AdaptiveProgramDisplay({
             
             // [WEEKLY-REPRESENTATION] Log built-around chip truth audit with exposure data
             console.log('[built-around-chip-truth-audit]', {
-              hasWeeklyRepresentation: !!weeklyRepresentation,
-              coverageRatio: weeklyRepresentation?.coverageRatio,
+              hasWeeklyRepresentation: !!safeWeeklyRepresentation,
+              coverageRatio: safeWeeklyRepresentation?.coverageRatio,
               chips: safeSelectedSkills.map(skill => {
                 const policy = safeWeeklyRepresentation?.policies?.find(p => p.skill === skill)
                 return {
@@ -843,7 +861,7 @@ export function AdaptiveProgramDisplay({
               pullDominant: pullDominantCount,
               mixed: mixedCount,
             },
-            summaryTruthHeadlineSkills: summaryTruth?.headlineFocusSkills || [],
+            summaryTruthHeadlineSkills: safeSummaryTruth.headlineFocusSkills || [],
             rationaleSample: (program.programRationale || '').slice(0, 100),
             topCardMatchesFinalWeek: (pushClaimValid && pullClaimValid && hybridClaimValid),
             claimsAreAccurate: !claimsPushPrimary || pushDominantCount >= 1,

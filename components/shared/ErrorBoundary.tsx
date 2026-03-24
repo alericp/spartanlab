@@ -5,6 +5,7 @@ import React, { ReactNode } from 'react'
 interface ErrorBoundaryProps {
   children: ReactNode
   fallback?: ReactNode
+  onError?: (error: Error, errorInfo: React.ErrorInfo) => void  // [PHASE 10] Callback for exact error capture
 }
 
 interface ErrorBoundaryState {
@@ -15,6 +16,7 @@ interface ErrorBoundaryState {
 /**
  * Error Boundary - Catches React render errors and shows fallback UI
  * Prevents single widget crashes from taking down the entire page
+ * [PHASE 10] Enhanced with exact error capture for debugging
  */
 export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
   constructor(props: ErrorBoundaryProps) {
@@ -27,8 +29,18 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    // Log error for debugging
-    console.error('[v0] ErrorBoundary caught error:', error, errorInfo)
+    // [PHASE 10 TASK 1] Log exact error for debugging display crashes
+    console.error('[phase10-display-exact-crash-capture]', {
+      errorName: error.name,
+      errorMessage: error.message,
+      errorStack: error.stack?.split('\n').slice(0, 5).join('\n'), // First 5 stack frames
+      componentStack: errorInfo.componentStack?.split('\n').slice(0, 10).join('\n'), // First 10 component frames
+      crashedBeforeSessionsRendered: errorInfo.componentStack?.includes('AdaptiveSessionCard') ? false : true,
+      verdict: 'DISPLAY_CRASH_CAPTURED_EXACT_ERROR',
+    })
+    
+    // Call onError callback if provided
+    this.props.onError?.(error, errorInfo)
   }
 
   render() {

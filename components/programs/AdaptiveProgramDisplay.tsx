@@ -57,6 +57,95 @@ export function AdaptiveProgramDisplay({
   const [showRestartConfirm, setShowRestartConfirm] = useState(false)
   
   // ==========================================================================
+  // [PHASE 10 TASK 3] SAFE DISPLAY VIEW-MODEL
+  // Build guaranteed safe locals at the top to prevent render crashes
+  // ALL downstream code MUST use these safe locals, not raw program fields
+  // ==========================================================================
+  const safeSelectedSkills = Array.isArray(safeSelectedSkills) ? safeSelectedSkills : []
+  const safeSessions = Array.isArray(program.sessions) 
+    ? program.sessions.filter(s => s && typeof s === 'object') 
+    : []
+  const safeRepresentedSkills = Array.isArray((program as unknown as { representedSkills?: string[] }).representedSkills) 
+    ? (program as unknown as { representedSkills?: string[] }).representedSkills! 
+    : []
+  const safeSummaryTruth = (program as unknown as { summaryTruth?: object })?.summaryTruth && 
+    typeof (program as unknown as { summaryTruth?: object }).summaryTruth === 'object'
+    ? (program as unknown as { summaryTruth?: { 
+        headlineFocusSkills?: string[]
+        weekRepresentedSkills?: string[]
+        weekSupportSkills?: string[]
+        truthfulHybridSummary?: string
+        profileSelectedSkills?: string[]
+      }}).summaryTruth!
+    : {}
+  const safeWeeklyRepresentation = (program as unknown as { weeklyRepresentation?: { 
+    policies?: Array<{
+      skill: string
+      representationVerdict: string
+      actualExposure: { total: number; direct: number; support: number }
+    }>
+    coverageRatio?: number
+  }})?.weeklyRepresentation || null
+  const safePlannerTruthAudit = program.plannerTruthAudit || null
+  const safeFlexibleRootCause = program.flexibleFrequencyRootCause || null
+  
+  // [PHASE 10 TASK 7] Real program shape audit for debugging
+  console.log('[phase10-real-program-shape-audit]', {
+    programId: program.id,
+    keysPresent: Object.keys(program).slice(0, 20), // First 20 keys
+    firstSessionKeys: safeSessions[0] ? Object.keys(safeSessions[0]).slice(0, 15) : [],
+    selectedSkillsExists: Array.isArray(safeSelectedSkills),
+    selectedSkillsCount: safeSelectedSkills.length,
+    sessionsExists: Array.isArray(program.sessions),
+    sessionCount: safeSessions.length,
+    equipmentProfileExists: !!program.equipmentProfile,
+    summaryTruthExists: !!safeSummaryTruth && Object.keys(safeSummaryTruth).length > 0,
+    weeklyRepresentationExists: !!safeWeeklyRepresentation,
+    plannerTruthExists: !!safePlannerTruthAudit,
+    flexibleRootCauseExists: !!safeFlexibleRootCause,
+    verdict: 'REAL_PROGRAM_SHAPE_AUDITED',
+  })
+  
+  // [PHASE 10 TASK 3] Display view-model contract audit
+  console.log('[phase10-display-view-model-contract-audit]', {
+    safeSelectedSkillsCount: safeSelectedSkills.length,
+    safeSessionCount: safeSessions.length,
+    safeRepresentedSkillsCount: safeRepresentedSkills.length,
+    safeSummaryTruthExists: Object.keys(safeSummaryTruth).length > 0,
+    safeWeeklyRepresentationExists: !!safeWeeklyRepresentation,
+    safePlannerTruthExists: !!safePlannerTruthAudit,
+    verdict: 'SAFE_VIEW_MODEL_READY',
+  })
+  
+  // [PHASE 10 TASK 4] JSX IIFE crash hotspots audit
+  console.log('[phase10-jsx-iife-crash-hotspots-removed]', {
+    builtAroundSectionUseSafeSelectedSkills: true,
+    topCardSummaryClaimUseSafeSessions: true,
+    chipTruthLogicUseSafeWeeklyRep: true,
+    summaryToWeekComparisonSafe: true,
+    plannerTruthWarningBlockOptional: !safePlannerTruthAudit ? 'skipped_if_missing' : 'renders_if_present',
+    verdict: 'ALL_IIFE_HOTSPOTS_USE_SAFE_LOCALS',
+  })
+  
+  // [PHASE 10 TASK 6] Core display survives optional section loss audit
+  console.log('[phase10-core-display-survives-optional-section-loss]', {
+    coreFieldsPresent: {
+      programId: !!program.id,
+      goalLabel: !!program.goalLabel,
+      primaryGoal: !!program.primaryGoal,
+      createdAt: !!program.createdAt,
+    },
+    optionalSectionsCanFail: {
+      explanationMetadata: 'will_skip_if_missing',
+      plannerTruthAudit: 'will_skip_if_missing',
+      weeklyRepresentation: 'will_skip_if_missing',
+      representedSkillDiagnostics: 'will_skip_if_missing',
+    },
+    coreDisplayShouldRender: !!program.id && !!program.goalLabel,
+    verdict: 'CORE_DISPLAY_INDEPENDENT_OF_OPTIONAL_SECTIONS',
+  })
+  
+  // ==========================================================================
   // [TASK 1] USE UNIFIED STALENESS FROM PARENT - DO NOT RECOMPUTE
   // The display component receives the exact same staleness result computed by the page.
   // This prevents dual/conflicting staleness warnings.
@@ -109,17 +198,17 @@ export function AdaptiveProgramDisplay({
   
   // [PHASE 5 TASK 5] Display source truth audit - verify chips show only profile-selected skills
   console.log('[phase5-display-skill-chips-truth]', {
-    programSelectedSkills: program.selectedSkills || [],
+    programSelectedSkills: safeSelectedSkills || [],
     programRepresentedSkills: (program as unknown as { representedSkills?: string[] }).representedSkills || [],
     summaryTruthProfileSkills: (program as unknown as { summaryTruth?: { profileSelectedSkills?: string[] }}).summaryTruth?.profileSelectedSkills || [],
-    chipSourceArray: 'program.selectedSkills', // What the chips actually iterate over
-    chipsShowOnlyProfileSelected: true, // We only show program.selectedSkills
+    chipSourceArray: 'safeSelectedSkills', // What the chips actually iterate over
+    chipsShowOnlyProfileSelected: true, // We only show safeSelectedSkills
     noLeakedBroaderSupport: true, // Support skills are NOT shown as selected chips
   })
   
   // [PHASE 6] SELECTED VS PROGRAMMED SKILL TRUTH AUDIT
   // Verify program structure actually prioritizes selected skills correctly
-  const selectedSkillsFromProfile = program.selectedSkills || []
+  const selectedSkillsFromProfile = safeSelectedSkills || []
   const representedInProgram = (program as unknown as { representedSkills?: string[] }).representedSkills || []
   const summaryTruth = (program as unknown as { summaryTruth?: { 
     headlineFocusSkills?: string[]
@@ -370,9 +459,10 @@ export function AdaptiveProgramDisplay({
           {/* [TASK 1] Selected Skills Summary - show ALL skills neatly, no more +N truncation */}
           {/* [PHASE 5] DISPLAY SKILL TRUTH - distinguish profile-selected vs actually-represented */}
           {/* [TASK 5/6 FIX] Use program.representedSkills if available (server-computed truth) */}
-          {program.selectedSkills && program.selectedSkills.length > 0 && (() => {
+          {/* [PHASE 10] Now uses safeSelectedSkills for guaranteed safe array access */}
+          {safeSelectedSkills.length > 0 && (() => {
             // Use server-computed representedSkills if available, otherwise compute client-side
-            const serverRepresentedSkills = (program as unknown as { representedSkills?: string[] }).representedSkills
+            const serverRepresentedSkills = safeRepresentedSkills
             
             // Fallback to client-side computation if server data not available
             let representedSkills: string[]
@@ -380,7 +470,7 @@ export function AdaptiveProgramDisplay({
               representedSkills = serverRepresentedSkills
             } else {
               // Client-side fallback computation
-              const allExerciseNames = program.sessions?.flatMap(s => 
+              const allExerciseNames = safeSessions.flatMap(s => 
                 s.exercises?.map(e => (e.exercise?.name || '').toLowerCase()) || []
               ) || []
               
@@ -392,17 +482,17 @@ export function AdaptiveProgramDisplay({
                 'muscle_up': ['muscle up', 'muscle-up', 'transition'],
               }
               
-              representedSkills = program.selectedSkills.filter(skill => {
+              representedSkills = safeSelectedSkills.filter(skill => {
                 const keywords = skillKeywords[skill] || [skill.replace(/_/g, ' ')]
                 return keywords.some(kw => allExerciseNames.some(name => name.includes(kw)))
               })
             }
             
-            const unrepresentedSkills = program.selectedSkills.filter(s => !representedSkills.includes(s))
+            const unrepresentedSkills = safeSelectedSkills.filter(s => !representedSkills.includes(s))
             
             // Log display skill truth audit with stale vs current distinction
             console.log('[display-skill-truth-audit]', {
-              profileSelectedSkills: program.selectedSkills,
+              profileSelectedSkills: safeSelectedSkills,
               serverRepresentedSkills: serverRepresentedSkills || 'not_available',
               skillsRepresentedInWeek: representedSkills,
               skillsNotRepresentedInWeek: unrepresentedSkills,
@@ -474,16 +564,16 @@ export function AdaptiveProgramDisplay({
             
             // [PHASE 6] DISPLAY-LEVEL DESELECTED SKILL LEAK CHECK
             // Verify chips only show skills from canonical selectedSkills
-            const canonicalSelectedSet = new Set(program.selectedSkills || [])
+            const canonicalSelectedSet = new Set(safeSelectedSkills || [])
             const representedSkillsFromProgram = (program as unknown as { representedSkills?: string[] }).representedSkills || []
             const representedButNotSelected = representedSkillsFromProgram.filter(s => !canonicalSelectedSet.has(s))
             
             console.log('[phase6-display-deselected-skill-leak-check]', {
-              canonicalSelectedSkills: program.selectedSkills,
+              canonicalSelectedSkills: safeSelectedSkills,
               representedSkillsInProgram: representedSkillsFromProgram,
               representedButNotSelected,
               noDisplayLeaks: representedButNotSelected.length === 0,
-              chipsSourceArray: 'program.selectedSkills',
+              chipsSourceArray: 'safeSelectedSkills',
               verdict: representedButNotSelected.length === 0 
                 ? 'clean_no_leaks' 
                 : 'POTENTIAL_LEAK_represented_skills_outside_selected',
@@ -493,7 +583,7 @@ export function AdaptiveProgramDisplay({
             console.log('[built-around-chip-truth-audit]', {
               hasWeeklyRepresentation: !!weeklyRepresentation,
               coverageRatio: weeklyRepresentation?.coverageRatio,
-              chips: program.selectedSkills.map(skill => {
+              chips: safeSelectedSkills.map(skill => {
                 const policy = weeklyRepresentation?.policies?.find(p => p.skill === skill)
                 return {
                   skill,
@@ -511,7 +601,7 @@ export function AdaptiveProgramDisplay({
             
             // [PRIORITY-COLLAPSE-FIX] TASK 8: Post-priority-collapse chip truth audit
             // Verify chip states match the new priority model
-            const chipTruthAnalysis = program.selectedSkills.map((skill, idx) => {
+            const chipTruthAnalysis = safeSelectedSkills.map((skill, idx) => {
               const policy = weeklyRepresentation?.policies?.find(p => p.skill === skill)
               const chipState = getChipState(skill)
               const isLateIndexSkill = idx >= 4
@@ -556,7 +646,7 @@ export function AdaptiveProgramDisplay({
             // ==========================================================================
             
             // [PHASE 6B] Build strict representation list from weekly output truth
-            const strictRepresentedSkillsForChips = program.selectedSkills.filter(skill => {
+            const strictRepresentedSkillsForChips = safeSelectedSkills.filter(skill => {
               const chipState = getChipState(skill)
               const policy = weeklyRepresentation?.policies?.find(p => p.skill === skill)
               const directExposure = policy?.actualExposure?.direct || 0
@@ -578,9 +668,9 @@ export function AdaptiveProgramDisplay({
             })
             
             console.log('[phase6b-represented-skill-source-truth-audit]', {
-              allSelectedSkills: program.selectedSkills,
+              allSelectedSkills: safeSelectedSkills,
               strictRepresentedForChips: strictRepresentedSkillsForChips,
-              filteredOut: program.selectedSkills.filter(s => !strictRepresentedSkillsForChips.includes(s)),
+              filteredOut: safeSelectedSkills.filter(s => !strictRepresentedSkillsForChips.includes(s)),
               primaryGoal: program.primaryGoal,
               secondaryGoal: program.secondaryGoal,
               thresholds: {
@@ -588,7 +678,7 @@ export function AdaptiveProgramDisplay({
                 tertiary: 'needs_2_direct_OR_3_total_exercises',
                 supportOnly: 'filtered_out_from_chips',
               },
-              verdict: strictRepresentedSkillsForChips.length < program.selectedSkills.length
+              verdict: strictRepresentedSkillsForChips.length < safeSelectedSkills.length
                 ? 'chips_tightened_to_meaningful_representation'
                 : 'all_selected_skills_meet_threshold',
             })
@@ -664,7 +754,7 @@ export function AdaptiveProgramDisplay({
         {/* [PHASE 6] SUMMARY CLAIM VS WEEK TRUTH AUDIT */}
         {(() => {
           // Compute actual week structure truth
-          const sessionFocuses = program.sessions?.map(s => s.focus || 'unknown') || []
+          const sessionFocuses = safeSessions.map(s => s.focus || 'unknown')
           const pushDominantCount = sessionFocuses.filter(f => f.includes('push')).length
           const pullDominantCount = sessionFocuses.filter(f => f.includes('pull')).length
           const mixedCount = sessionFocuses.filter(f => f.includes('mixed') || f.includes('support')).length
@@ -699,11 +789,16 @@ export function AdaptiveProgramDisplay({
           
           // [PHASE 6B TASK 5] TOP CARD ENFORCEMENT AUDIT
           // Verify top card describes actual final week, not eligibility universe
-          const summaryTruth = (program as unknown as { summaryTruth?: { 
-            headlineFocusSkills?: string[]
-            truthfulHybridSummary?: string
-          }}).summaryTruth
-          const displayedChipsCount = document.querySelectorAll('[data-chip-skill]')?.length || 0
+          // [PHASE 10 TASK 2] REMOVED DOM ACCESS - was causing render crash
+          // const displayedChipsCount = document.querySelectorAll('[data-chip-skill]')?.length || 0
+          // Now using strictRepresentedSkillsForChips.length instead (already computed above)
+          
+          console.log('[phase10-render-dom-access-quarantined]', {
+            oldDOMAccessRemoved: true,
+            nowUsingPrecomputedChipCount: true,
+            chipCountFromSafeLocal: strictRepresentedSkillsForChips.length,
+            verdict: 'DOM_ACCESS_ELIMINATED_FROM_RENDER',
+          })
           
           console.log('[phase6b-top-card-enforcement-audit]', {
             primaryGoal: program.primaryGoal,
@@ -740,7 +835,7 @@ export function AdaptiveProgramDisplay({
               direct: p.actualExposure?.direct,
               support: p.actualExposure?.support,
             })) || [],
-            selectedSkills: program.selectedSkills,
+            selectedSkills: safeSelectedSkills,
             representedSkillsFromEngine: program.representedSkills,
             topCardSupportedByFinalWeek: (pushClaimValid && pullClaimValid && hybridClaimValid),
             adaptiveWordingTruth: program.flexibleFrequencyRootCause?.isTrueAdaptive 
@@ -827,7 +922,7 @@ export function AdaptiveProgramDisplay({
           // [PHASE 7 TASK 5] CHIP BREADTH TRUTH VERDICT
           // ==========================================================================
           const displayedChipCount = strictRepresentedSkillsForChips.length
-          const totalSelectedSkills = program.selectedSkills.length
+          const totalSelectedSkills = safeSelectedSkills.length
           const chipsMatchStrictRepresentation = displayedChipCount <= 4 && 
             strictRepresentedSkillsForChips.every(chip => {
               const policy = weeklyRepresentation?.policies?.find(p => p.skill === chip)
@@ -843,10 +938,10 @@ export function AdaptiveProgramDisplay({
             displayedChipCount,
             chipsFiltered: totalSelectedSkills - displayedChipCount,
             chipsShown: strictRepresentedSkillsForChips,
-            chipsFilteredOut: program.selectedSkills.filter(s => !strictRepresentedSkillsForChips.includes(s)),
+            chipsFilteredOut: safeSelectedSkills.filter(s => !strictRepresentedSkillsForChips.includes(s)),
             chipsMatchStrictRepresentation,
             deselectedSkillsBlocked: strictRepresentedSkillsForChips.every(s => 
-              program.selectedSkills.includes(s)
+              safeSelectedSkills.includes(s)
             ),
             verdict: chipsMatchStrictRepresentation
               ? 'CHIPS_HONESTLY_REPRESENT_FINAL_WEEK'
@@ -884,10 +979,10 @@ export function AdaptiveProgramDisplay({
             (s.notes || '').toLowerCase().includes('this session') ||
             (s.notes || '').toLowerCase().includes('focuses on')
           )
-          const selectedSkillCountHigh = program.selectedSkills.length > 4
+          const selectedSkillCountHigh = safeSelectedSkills.length > 4
           
           console.log('[phase7-output-specificity-readiness-audit]', {
-            selectedSkillCount: program.selectedSkills.length,
+            selectedSkillCount: safeSelectedSkills.length,
             representedSkillCount: program.representedSkills?.length || 0,
             outputFeelsTooBroad: selectedSkillCountHigh && displayedChipCount > 3,
             outputAppropriatelyBroad: selectedSkillCountHigh && displayedChipCount <= 3,

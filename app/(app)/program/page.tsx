@@ -122,6 +122,7 @@ function ProgramDisplayFallback({ onRetry }: { onRetry: () => void }) {
 
 // TASK 1: Error boundary wrapper for AdaptiveProgramDisplay
 // [PHASE 9] Now uses true React ErrorBoundary - NO setState in render catch
+// [PHASE 10] Enhanced with exact error capture for debugging display crashes
 function ProgramDisplayWrapper({ 
   program, 
   onDelete,
@@ -137,6 +138,23 @@ function ProgramDisplayWrapper({
   onRecoveryNeeded: () => void
   unifiedStaleness: UnifiedStalenessResult | null // [TASK 1] Unified staleness from page
 }) {
+  // [PHASE 10 TASK 1] Capture exact error with program context
+  const handleDisplayError = (error: Error, errorInfo: React.ErrorInfo) => {
+    console.error('[phase10-display-exact-crash-capture]', {
+      errorName: error.name,
+      errorMessage: error.message,
+      programId: program?.id,
+      hasSelectedSkills: Array.isArray(program?.selectedSkills),
+      selectedSkillsCount: program?.selectedSkills?.length ?? 'undefined',
+      hasSessions: Array.isArray(program?.sessions),
+      sessionCount: program?.sessions?.length ?? 'undefined',
+      hasSummaryTruth: !!(program as unknown as { summaryTruth?: object })?.summaryTruth,
+      hasWeeklyRepresentation: !!(program as unknown as { weeklyRepresentation?: object })?.weeklyRepresentation,
+      crashedBeforeSessionsRendered: !errorInfo.componentStack?.includes('AdaptiveSessionCard'),
+      verdict: 'EXACT_DISPLAY_ERROR_CAPTURED',
+    })
+  }
+  
   // [PHASE 9] Safe error handling via proper ErrorBoundary
   return (
     <ErrorBoundary
@@ -148,6 +166,7 @@ function ProgramDisplayWrapper({
           }}
         />
       }
+      onError={handleDisplayError}
     >
       <AdaptiveProgramDisplay
         program={program}

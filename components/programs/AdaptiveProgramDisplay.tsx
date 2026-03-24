@@ -116,6 +116,34 @@ export function AdaptiveProgramDisplay({
     chipsShowOnlyProfileSelected: true, // We only show program.selectedSkills
     noLeakedBroaderSupport: true, // Support skills are NOT shown as selected chips
   })
+  
+  // [PHASE 6] SELECTED VS PROGRAMMED SKILL TRUTH AUDIT
+  // Verify program structure actually prioritizes selected skills correctly
+  const selectedSkillsFromProfile = program.selectedSkills || []
+  const representedInProgram = (program as unknown as { representedSkills?: string[] }).representedSkills || []
+  const summaryTruth = (program as unknown as { summaryTruth?: { 
+    headlineFocusSkills?: string[]
+    weekRepresentedSkills?: string[]
+    weekSupportSkills?: string[]
+  }}).summaryTruth
+  
+  console.log('[selected-vs-programmed-skill-truth-audit]', {
+    canonicalSelectedSkills: selectedSkillsFromProfile,
+    programRepresentedSkills: representedInProgram,
+    headlineFocusSkills: summaryTruth?.headlineFocusSkills || [],
+    weekRepresentedSkills: summaryTruth?.weekRepresentedSkills || [],
+    weekSupportSkills: summaryTruth?.weekSupportSkills || [],
+    // Check for leaks: any represented skill not in selected
+    deselectedSkillsInRepresented: representedInProgram.filter(s => !selectedSkillsFromProfile.includes(s)),
+    // Check for proper prioritization
+    primaryIsHeadline: summaryTruth?.headlineFocusSkills?.[0] === program.primaryGoal,
+    secondaryIsRepresented: !program.secondaryGoal || 
+      summaryTruth?.headlineFocusSkills?.includes(program.secondaryGoal) ||
+      summaryTruth?.weekRepresentedSkills?.includes(program.secondaryGoal),
+    verdict: representedInProgram.filter(s => !selectedSkillsFromProfile.includes(s)).length === 0
+      ? 'clean_no_deselected_leaks'
+      : 'DESELECTED_SKILL_LEAKED_INTO_REPRESENTED',
+  })
   const recoveryColors: Record<string, string> = {
     HIGH: 'text-green-400 bg-green-400/10 border-green-400/20',
     MODERATE: 'text-yellow-400 bg-yellow-400/10 border-yellow-400/20',
@@ -443,6 +471,23 @@ export function AdaptiveProgramDisplay({
               if (weekSupportSkills.includes(skill)) return 'support_only'
               return 'selected_not_represented'
             }
+            
+            // [PHASE 6] DISPLAY-LEVEL DESELECTED SKILL LEAK CHECK
+            // Verify chips only show skills from canonical selectedSkills
+            const canonicalSelectedSet = new Set(program.selectedSkills || [])
+            const representedSkillsFromProgram = (program as unknown as { representedSkills?: string[] }).representedSkills || []
+            const representedButNotSelected = representedSkillsFromProgram.filter(s => !canonicalSelectedSet.has(s))
+            
+            console.log('[phase6-display-deselected-skill-leak-check]', {
+              canonicalSelectedSkills: program.selectedSkills,
+              representedSkillsInProgram: representedSkillsFromProgram,
+              representedButNotSelected,
+              noDisplayLeaks: representedButNotSelected.length === 0,
+              chipsSourceArray: 'program.selectedSkills',
+              verdict: representedButNotSelected.length === 0 
+                ? 'clean_no_leaks' 
+                : 'POTENTIAL_LEAK_represented_skills_outside_selected',
+            })
             
             // [WEEKLY-REPRESENTATION] Log built-around chip truth audit with exposure data
             console.log('[built-around-chip-truth-audit]', {

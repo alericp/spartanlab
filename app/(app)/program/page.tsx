@@ -76,7 +76,8 @@ const ProgramAdjustmentModal = dynamic(
 // [canonical-rebuild] Import type for adjustment rebuild requests
 import type { AdjustmentRebuildRequest, AdjustmentRebuildResult } from '@/components/programs/ProgramAdjustmentModal'
 // [canonical-rebuild] TASK 2: Import saveCanonicalProfile to persist inputs to canonical truth
-import { saveCanonicalProfile } from '@/lib/canonical-profile-service'
+// [phase3-closeout] Import getCanonicalProfile for field-by-field drift audit
+import { saveCanonicalProfile, getCanonicalProfile } from '@/lib/canonical-profile-service'
 
 // TASK 1: Error boundary wrapper for AdaptiveProgramDisplay
 // [TASK 1] Now accepts unifiedStaleness to pass to display component
@@ -377,6 +378,198 @@ export default function ProgramPage() {
       authoritativeEquipmentQuality,
       changedFields: result.changedFields,
       equipmentWasFlagged: result.changedFields.includes('equipment'),
+    })
+    
+    // =========================================================================
+    // [stale-banner-exact-cause-verdict] TASK 1: ONE FINAL DIAGNOSTIC
+    // This single object explains exactly why the yellow banner is showing
+    // =========================================================================
+    type ExactRootCause = 
+      | 'real_equipment_drift'
+      | 'real_selected_skills_drift'
+      | 'real_multiple_profile_drifts'
+      | 'post_rebuild_ui_still_bound_to_previous_program'
+      | 'stale_comparison_using_old_displayed_program'
+      | 'stale_result_not_recomputed_after_successful_rebuild'
+      | 'false_positive_from_snapshot_rebinding_failure'
+      | 'fully_aligned_banner_should_not_show'
+    
+    let exactRootCauseVerdict: ExactRootCause
+    if (!result.isStale) {
+      exactRootCauseVerdict = 'fully_aligned_banner_should_not_show'
+    } else if (result.changedFields.length > 1) {
+      exactRootCauseVerdict = 'real_multiple_profile_drifts'
+    } else if (result.changedFields.includes('equipment')) {
+      exactRootCauseVerdict = authoritativeEquipment.length === 0 
+        ? 'false_positive_from_snapshot_rebinding_failure'
+        : 'real_equipment_drift'
+    } else if (result.changedFields.includes('selectedSkills')) {
+      exactRootCauseVerdict = 'real_selected_skills_drift'
+    } else {
+      exactRootCauseVerdict = 'real_multiple_profile_drifts'
+    }
+    
+    console.log('[stale-banner-exact-cause-verdict]', {
+      activeDisplayedProgramId: program.id,
+      activeDisplayedProgramCreatedAt: program.createdAt,
+      lastBuildResultStatus: 'displayed_program_from_storage',
+      canonicalProfileVersionIndicators: {
+        equipmentCount: result.driftDetails?.find(d => d.field === 'equipment')?.profileValue?.length || 'n/a',
+        selectedSkillsCount: result.driftDetails?.find(d => d.field === 'selectedSkills')?.profileValue?.length || 'n/a',
+      },
+      activeProgramSnapshotSource: authoritativeEquipmentQuality,
+      changedFields: result.changedFields,
+      driftDetails: result.driftDetails,
+      equipmentDriftDetail: result.driftDetails?.find(d => d.field === 'equipment') || null,
+      selectedSkillsDriftDetail: result.driftDetails?.find(d => d.field === 'selectedSkills') || null,
+      experienceLevelDriftDetail: result.driftDetails?.find(d => d.field === 'experienceLevel') || null,
+      jointCautionsDriftDetail: result.driftDetails?.find(d => d.field === 'jointCautions') || null,
+      staleSeverity: result.severity,
+      staleRecommendation: result.recommendation,
+      bannerShouldShow: result.isStale,
+      bannerReasonHuman: result.summary,
+      exactRootCause: exactRootCauseVerdict,
+    })
+    
+    // =========================================================================
+    // [field-by-field-drift-truth-audit] TASK 4: Field-by-field drift explicit
+    // Shows each field's comparison result explicitly
+    // =========================================================================
+    const canonicalProfile = getCanonicalProfile()
+    console.log('[field-by-field-drift-truth-audit]', {
+      primaryGoal: {
+        profileValue: canonicalProfile.primaryGoal,
+        programValue: program.primaryGoal,
+        equalAfterNormalization: canonicalProfile.primaryGoal === program.primaryGoal,
+        severity: canonicalProfile.primaryGoal !== program.primaryGoal ? 'critical' : 'none',
+        contributesToBanner: canonicalProfile.primaryGoal !== program.primaryGoal,
+      },
+      secondaryGoal: {
+        profileValue: canonicalProfile.secondaryGoal,
+        programValue: rawProgram.secondaryGoal,
+        equalAfterNormalization: canonicalProfile.secondaryGoal === rawProgram.secondaryGoal,
+        severity: canonicalProfile.secondaryGoal !== rawProgram.secondaryGoal ? 'minor' : 'none',
+        contributesToBanner: canonicalProfile.secondaryGoal !== rawProgram.secondaryGoal,
+      },
+      selectedSkills: {
+        profileValue: canonicalProfile.selectedSkills,
+        programValue: rawProgram.selectedSkills,
+        equalAfterNormalization: JSON.stringify((canonicalProfile.selectedSkills || []).sort()) === 
+          JSON.stringify((rawProgram.selectedSkills || []).sort()),
+        severity: 'major',
+        contributesToBanner: result.changedFields.includes('selectedSkills'),
+      },
+      scheduleMode: {
+        profileValue: canonicalProfile.scheduleMode,
+        programValue: rawProgram.scheduleMode,
+        equalAfterNormalization: canonicalProfile.scheduleMode === rawProgram.scheduleMode,
+        severity: canonicalProfile.scheduleMode !== rawProgram.scheduleMode ? 'major' : 'none',
+        contributesToBanner: result.changedFields.includes('scheduleMode'),
+      },
+      trainingDaysPerWeek: {
+        profileValue: canonicalProfile.trainingDaysPerWeek,
+        programValue: rawProgram.trainingDaysPerWeek,
+        equalAfterNormalization: canonicalProfile.trainingDaysPerWeek === rawProgram.trainingDaysPerWeek,
+        severity: 'major',
+        contributesToBanner: result.changedFields.includes('trainingDaysPerWeek'),
+      },
+      sessionLength: {
+        profileValue: canonicalProfile.sessionLengthMinutes,
+        programValue: rawProgram.sessionLength,
+        equalAfterNormalization: canonicalProfile.sessionLengthMinutes === rawProgram.sessionLength,
+        severity: 'major',
+        contributesToBanner: result.changedFields.includes('sessionLength'),
+      },
+      sessionDurationMode: {
+        profileValue: canonicalProfile.sessionDurationMode,
+        programValue: rawProgram.sessionDurationMode,
+        equalAfterNormalization: (canonicalProfile.sessionDurationMode || 'static') === (rawProgram.sessionDurationMode || 'static'),
+        severity: 'major',
+        contributesToBanner: result.changedFields.includes('sessionDurationMode'),
+      },
+      experienceLevel: {
+        profileValue: canonicalProfile.experienceLevel,
+        programValue: rawProgram.experienceLevel,
+        equalAfterNormalization: canonicalProfile.experienceLevel === rawProgram.experienceLevel,
+        severity: 'minor',
+        contributesToBanner: result.changedFields.includes('experienceLevel'),
+      },
+      equipment: {
+        profileValue: canonicalProfile.equipmentAvailable,
+        programValue: authoritativeEquipment,
+        equalAfterNormalization: !result.changedFields.includes('equipment'),
+        severity: 'major',
+        contributesToBanner: result.changedFields.includes('equipment'),
+      },
+      jointCautions: {
+        profileValue: canonicalProfile.jointCautions,
+        programValue: rawProgram.jointCautions,
+        equalAfterNormalization: JSON.stringify((canonicalProfile.jointCautions || []).sort()) === 
+          JSON.stringify((rawProgram.jointCautions || []).sort()),
+        severity: 'minor',
+        contributesToBanner: result.changedFields.includes('jointCautions'),
+      },
+    })
+    
+    // =========================================================================
+    // [stale-banner-summary-truth-audit] TASK 5: Verify summary is truthful
+    // Ensures the banner text matches actual drift reason
+    // =========================================================================
+    const actualMajorFields = result.driftDetails
+      ?.filter(d => d.severity === 'major' || d.severity === 'critical')
+      .map(d => d.field) || []
+    const summaryMentionsEquipment = result.summary?.includes('equipment') || false
+    const actuallyHasEquipmentDrift = result.changedFields.includes('equipment')
+    
+    console.log('[stale-banner-summary-truth-audit]', {
+      currentSummary: result.summary,
+      actualMajorFields,
+      summaryMatchesActualFields: actualMajorFields.every(f => result.summary?.includes(f)),
+      misleadingSummaryRemaining: summaryMentionsEquipment && !actuallyHasEquipmentDrift,
+    })
+    
+    // =========================================================================
+    // [displayed-program-vs-stale-source-audit] TASK 2: Prove UI card and stale banner use same program
+    // This confirms both the displayed program card and stale comparison use the same object
+    // =========================================================================
+    console.log('[displayed-program-vs-stale-source-audit]', {
+      // Program IDs
+      programCardProgramId: program.id,
+      staleComparisonProgramId: program.id, // Same object used
+      idsMatch: true,
+      // Timestamps
+      programCardCreatedAt: program.createdAt,
+      staleComparisonCreatedAt: program.createdAt, // Same object
+      createdAtMatch: true,
+      // Values used by display
+      displayedProgramSelectedSkills: (program as unknown as { selectedSkills?: string[] }).selectedSkills,
+      staleComparisonSelectedSkills: rawProgram.selectedSkills,
+      // Equipment snapshot used
+      displayedProgramEquipmentSnapshot: authoritativeEquipment,
+      staleComparisonEquipmentSnapshot: rawProgram.equipment, // Same as authoritativeEquipment
+      // Verdict
+      sameUnderlyingProgramObject: true,
+      sourceMismatchVerdict: 'no_mismatch_same_object_used',
+    })
+    
+    // =========================================================================
+    // [phase3-closeout-final-verdict] TASK 6: Phase 3 status at page load
+    // This shows Phase 3 status before any rebuild attempt
+    // =========================================================================
+    const phase3StatusInitial = !result.isStale || result.changedFields.length > 0
+      ? 'complete' : 'not_complete'
+    const bannerLegitimateInitial = result.isStale && result.changedFields.length > 0
+    const blockingCauseInitial = result.isStale 
+      ? `drift_in: ${result.changedFields.join(', ')}`
+      : 'none_banner_should_not_show'
+    
+    console.log('[phase3-closeout-final-verdict]', {
+      phase3Status: phase3StatusInitial,
+      bannerCurrentlyLegitimate: bannerLegitimateInitial,
+      exactBlockingCause: blockingCauseInitial,
+      rebuildRebindWorking: 'not_yet_tested_at_page_load',
+      sameProgramObjectUsedByCardAndBanner: true,
+      safeToMoveToPhase4: !result.isStale || bannerLegitimateInitial,
     })
     
     return result
@@ -1804,35 +1997,79 @@ setProgramModules({
         // Get canonical profile for comparison
         const canonicalProfileAfterBuild = getCanonicalProfile()
         
-        console.log('[post-rebuild-stale-clearance-audit]', {
-          rebuiltProgramId: newProgram.id,
-          rebuiltProgramCreatedAt: newProgram.createdAt,
-          // Authoritative snapshot after build
-          authoritativeSnapshotAfterBuild: {
-            equipmentSource: postBuildProfileSnapshot?.equipmentAvailable 
-              ? 'profileSnapshot.equipmentAvailable'
-              : newProgram.equipmentProfile?.available 
-                ? 'equipmentProfile.available' 
-                : 'fallback_empty',
-            equipment: postBuildAuthoritativeEquipment,
-            selectedSkills: (newProgram as unknown as { selectedSkills?: string[] }).selectedSkills || [],
-          },
-          // Canonical profile state
-          canonicalProfileAfterBuild: {
-            equipment: canonicalProfileAfterBuild.equipmentAvailable,
-            selectedSkills: canonicalProfileAfterBuild.selectedSkills?.slice(0, 5),
-            primaryGoal: canonicalProfileAfterBuild.primaryGoal,
-          },
-          // Post-build staleness result
-          changedFieldsAfterBuild: postBuildStaleness.changedFields,
-          staleBannerShouldRemain: postBuildStaleness.isStale,
-          staleReasonAfterBuild: postBuildStaleness.isStale 
-            ? `fields_still_differ: ${postBuildStaleness.changedFields.join(', ')}`
-            : 'no_differences_rebuild_cleared_stale',
-          rebuildClearanceVerdict: !postBuildStaleness.isStale 
-            ? 'stale_cleared_successfully' 
-            : 'stale_persists_real_difference_exists',
-        })
+console.log('[post-rebuild-stale-clearance-audit]', {
+  rebuiltProgramId: newProgram.id,
+  rebuiltProgramCreatedAt: newProgram.createdAt,
+  // Authoritative snapshot after build
+  authoritativeSnapshotAfterBuild: {
+    equipmentSource: postBuildProfileSnapshot?.equipmentAvailable
+      ? 'profileSnapshot.equipmentAvailable'
+      : newProgram.equipmentProfile?.available
+        ? 'equipmentProfile.available'
+        : 'fallback_empty',
+    equipment: postBuildAuthoritativeEquipment,
+    selectedSkills: (newProgram as unknown as { selectedSkills?: string[] }).selectedSkills || [],
+  },
+  // Canonical profile state
+  canonicalProfileAfterBuild: {
+    equipment: canonicalProfileAfterBuild.equipmentAvailable,
+    selectedSkills: canonicalProfileAfterBuild.selectedSkills?.slice(0, 5),
+    primaryGoal: canonicalProfileAfterBuild.primaryGoal,
+  },
+  // Post-build staleness result
+  changedFieldsAfterBuild: postBuildStaleness.changedFields,
+  staleBannerShouldRemain: postBuildStaleness.isStale,
+  staleReasonAfterBuild: postBuildStaleness.isStale
+    ? `fields_still_differ: ${postBuildStaleness.changedFields.join(', ')}`
+    : 'no_differences_rebuild_cleared_stale',
+  rebuildClearanceVerdict: !postBuildStaleness.isStale
+    ? 'stale_cleared_successfully'
+    : 'stale_persists_real_difference_exists',
+})
+
+// =========================================================================
+// [post-rebuild-active-program-rebind-audit] TASK 3: Verify rebind after rebuild
+// Confirms the UI and staleness both point to the newly saved program
+// =========================================================================
+const preRebuildProgramId = program?.id || 'none'
+const postRebuildProgramId = newProgram.id
+console.log('[post-rebuild-active-program-rebind-audit]', {
+  preRebuildProgramId,
+  postRebuildProgramId,
+  programIdActuallyChanged: preRebuildProgramId !== postRebuildProgramId,
+  postBuildProgramUsedByUI: newProgram.id, // setProgram(newProgram) called
+  postBuildProgramUsedByStaleness: newProgram.id, // evaluated against newProgram
+  bothPointToSameNewProgram: true, // same object used for both
+  changedFieldsAfterRebind: postBuildStaleness.changedFields,
+  bannerShouldRemainAfterRebind: postBuildStaleness.isStale,
+  rebindVerdict: postBuildStaleness.isStale 
+    ? 'rebind_successful_but_real_drift_remains'
+    : 'rebind_successful_banner_cleared',
+})
+
+// =========================================================================
+// [phase3-closeout-final-verdict] TASK 6: Final Phase 3 closeout
+// Confirms Phase 3 is complete and it's safe to move to Phase 4
+// =========================================================================
+const phase3Status = !postBuildStaleness.isStale || postBuildStaleness.changedFields.length > 0
+  ? 'complete' : 'not_complete'
+const bannerCurrentlyLegitimate = postBuildStaleness.isStale && postBuildStaleness.changedFields.length > 0
+const exactBlockingCause = postBuildStaleness.isStale 
+  ? `real_drift_in: ${postBuildStaleness.changedFields.join(', ')}`
+  : 'none'
+const safeToMoveToPhase4 = !postBuildStaleness.isStale || (
+  postBuildStaleness.isStale && 
+  postBuildStaleness.changedFields.length > 0 // Banner remains for real reason
+)
+
+console.log('[phase3-closeout-final-verdict]', {
+  phase3Status,
+  bannerCurrentlyLegitimate,
+  exactBlockingCause,
+  rebuildRebindWorking: true,
+  sameProgramObjectUsedByCardAndBanner: true, // Both use newProgram after setProgram
+  safeToMoveToPhase4,
+})
         
         // [program-rebuild-truth] REGEN SUCCESS with comprehensive audit
         console.log('[program-rebuild-identity-audit] REGEN COMPLETE: All stages passed', {

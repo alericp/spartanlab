@@ -1222,6 +1222,13 @@ function inferTrainingMethodPreferences(
     if (!preferences.includes('density_blocks')) preferences.push('density_blocks')
   }
   
+  // [PHASE 11] For intermediate/advanced athletes, supersets are a core time-efficient method
+  // that works well with most training styles (except pure endurance circuits)
+  // Include by default for experienced athletes regardless of style
+  if (isExperienced && !preferences.includes('supersets')) {
+    preferences.push('supersets')
+  }
+  
   // Advanced athletes get access to more methods
   if (experience === 'advanced') {
     if (!preferences.includes('drop_sets')) preferences.push('drop_sets')
@@ -1241,6 +1248,24 @@ function inferTrainingMethodPreferences(
     inferredMethodPreferences: preferences,
     source: explicitPrefs ? 'explicit' : 'inferred',
     verdict: 'method_preferences_resolved',
+  })
+  
+  // [PHASE 11 TASK 1] Additional audit - style source chain truth
+  console.log('[phase11-style-source-chain-audit]', {
+    rawCanonicalTrainingStyle: trainingStyle,
+    rawCanonicalMethodPrefs: preferences,
+    supersetsIncluded: preferences.includes('supersets'),
+    circuitsIncluded: preferences.includes('circuits'),
+    densityIncluded: preferences.includes('density_blocks'),
+    clusterSetsIncluded: preferences.includes('cluster_sets'),
+    inferenceReason: isExperienced 
+      ? 'experienced_athlete_default_supersets'
+      : trainingStyle === 'strength_focused' || trainingStyle === 'strength'
+        ? 'strength_focused_supersets'
+        : sessionStyle === 'efficient'
+          ? 'efficient_session_style'
+          : 'baseline_straight_sets',
+    verdict: preferences.length > 1 ? 'style_source_valid' : 'style_source_minimal',
   })
   
   return preferences

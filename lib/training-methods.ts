@@ -2106,11 +2106,14 @@ export function applySessionStylePreferences(input: SessionStyleInput): SessionS
   
   // ==========================================================================
   // STRENGTH WORK: Check for superset opportunities with antagonist pairing
+  // [PHASE 11] Enhanced to be more willing to create supersets when preferred
   // ==========================================================================
   const strengthNotUsed = strengthExercises.filter(e => !usedExerciseIds.has(e.id))
+  const supersetsPreferred = methodPreferences.indexOf('supersets') !== -1 && 
+    (methodPreferences.indexOf('supersets') < methodPreferences.indexOf('circuits') || !methodPreferences.includes('circuits'))
   
   if (feasibleMethods.includes('supersets') && strengthNotUsed.length >= 2) {
-    // Try to pair antagonist movements
+    // Try to pair antagonist movements first
     const pullStrength = strengthNotUsed.filter(e => 
       ['vertical_pull', 'horizontal_pull'].includes(e.movementPattern)
     )
@@ -2159,6 +2162,65 @@ export function applySessionStylePreferences(input: SessionStyleInput): SessionS
         appliedMethods.push('supersets')
       }
     }
+    
+    // [PHASE 11] If supersets preferred but no antagonist pairs, try non-competing pairs
+    const remainingStrength = strengthNotUsed.filter(e => !usedExerciseIds.has(e.id))
+    if (supersetsPreferred && remainingStrength.length >= 2 && !appliedMethods.includes('supersets')) {
+      // Pair non-competing strength exercises (different movement patterns)
+      const grouped: Array<{ e1: typeof remainingStrength[0], e2: typeof remainingStrength[0] }> = []
+      const usedForPairing = new Set<string>()
+      
+      for (let i = 0; i < remainingStrength.length; i++) {
+        if (usedForPairing.has(remainingStrength[i].id)) continue
+        for (let j = i + 1; j < remainingStrength.length; j++) {
+          if (usedForPairing.has(remainingStrength[j].id)) continue
+          const e1 = remainingStrength[i]
+          const e2 = remainingStrength[j]
+          // Non-competing if different movement patterns
+          if (e1.movementPattern !== e2.movementPattern) {
+            // Also avoid pairing high neural demand
+            if ((e1.neuralDemand || 2) < 4 && (e2.neuralDemand || 2) < 4) {
+              grouped.push({ e1, e2 })
+              usedForPairing.add(e1.id)
+              usedForPairing.add(e2.id)
+              break
+            }
+          }
+        }
+      }
+      
+      for (const pair of grouped) {
+        usedExerciseIds.add(pair.e1.id)
+        usedExerciseIds.add(pair.e2.id)
+        
+        styledGroups.push({
+          id: `group_${groupId++}`,
+          groupType: 'superset',
+          exercises: [
+            {
+              id: pair.e1.id,
+              name: pair.e1.name,
+              prefix: 'A1',
+              trainingMethod: 'superset',
+              methodRationale: 'Non-competing superset for time efficiency',
+            },
+            {
+              id: pair.e2.id,
+              name: pair.e2.name,
+              prefix: 'A2',
+              trainingMethod: 'superset',
+              methodRationale: 'Non-competing superset for time efficiency',
+            },
+          ],
+          instruction: 'Alternate between A1 and A2 with minimal rest',
+          restProtocol: '60-90s after completing both exercises',
+        })
+        
+        if (!appliedMethods.includes('supersets')) {
+          appliedMethods.push('supersets')
+        }
+      }
+    }
   }
   
   // Remaining strength as straight sets
@@ -2180,13 +2242,65 @@ export function applySessionStylePreferences(input: SessionStyleInput): SessionS
   
   // ==========================================================================
   // ACCESSORY/CORE: Prime candidates for circuits, supersets, density
+  // [PHASE 11] Changed from else-if to prioritize supersets when preferred
   // ==========================================================================
   const accessoryNotUsed = [...accessoryExercises, ...coreExercises]
     .filter(e => !usedExerciseIds.has(e.id))
   
+  // [PHASE 11] Determine method priority - supersets first if preferred and not yet applied
+  const shouldPrioritizeAccessorySupersets = supersetsPreferred && 
+    !appliedMethods.includes('supersets') && 
+    accessoryNotUsed.length >= 2
+    
+  // [PHASE 11] Try accessory supersets FIRST if supersets are preferred method
+  if (shouldPrioritizeAccessorySupersets) {
+    // Create up to 2 superset pairs from accessories
+    const supersetPairCount = Math.min(2, Math.floor(accessoryNotUsed.length / 2))
+    for (let p = 0; p < supersetPairCount; p++) {
+      const idx = p * 2
+      const ex1 = accessoryNotUsed[idx]
+      const ex2 = accessoryNotUsed[idx + 1]
+      
+      if (!ex1 || !ex2) break
+      
+      usedExerciseIds.add(ex1.id)
+      usedExerciseIds.add(ex2.id)
+      
+      styledGroups.push({
+        id: `group_${groupId++}`,
+        groupType: 'superset',
+        exercises: [
+          {
+            id: ex1.id,
+            name: ex1.name,
+            prefix: `${String.fromCharCode(66 + p)}1`, // B1, C1, etc.
+            trainingMethod: 'superset',
+            methodRationale: 'Superset for time efficiency',
+          },
+          {
+            id: ex2.id,
+            name: ex2.name,
+            prefix: `${String.fromCharCode(66 + p)}2`, // B2, C2, etc.
+            trainingMethod: 'superset',
+            methodRationale: 'Superset for time efficiency',
+          },
+        ],
+        instruction: 'Alternate between exercises',
+        restProtocol: '60s after completing both',
+      })
+      
+      if (!appliedMethods.includes('supersets')) {
+        appliedMethods.push('supersets')
+      }
+    }
+  }
+  
+  // Re-calculate what's left after supersets
+  const accessoryStillNotUsed = accessoryNotUsed.filter(e => !usedExerciseIds.has(e.id))
+  
   // Try circuits if preferred and we have enough exercises
-  if (feasibleMethods.includes('circuits') && accessoryNotUsed.length >= 3) {
-    const circuitExercises = accessoryNotUsed.slice(0, Math.min(4, accessoryNotUsed.length))
+  if (feasibleMethods.includes('circuits') && accessoryStillNotUsed.length >= 3) {
+    const circuitExercises = accessoryStillNotUsed.slice(0, Math.min(4, accessoryStillNotUsed.length))
     
     for (const e of circuitExercises) {
       usedExerciseIds.add(e.id)
@@ -2210,9 +2324,9 @@ export function applySessionStylePreferences(input: SessionStyleInput): SessionS
       appliedMethods.push('circuits')
     }
   }
-  // Try density blocks
-  else if (feasibleMethods.includes('density_blocks') && accessoryNotUsed.length >= 2) {
-    const densityExercises = accessoryNotUsed.slice(0, Math.min(3, accessoryNotUsed.length))
+  // Try density blocks (only if circuits not used)
+  else if (feasibleMethods.includes('density_blocks') && accessoryStillNotUsed.length >= 2) {
+    const densityExercises = accessoryStillNotUsed.slice(0, Math.min(3, accessoryStillNotUsed.length))
     
     for (const e of densityExercises) {
       usedExerciseIds.add(e.id)
@@ -2235,11 +2349,11 @@ export function applySessionStylePreferences(input: SessionStyleInput): SessionS
       appliedMethods.push('density_blocks')
     }
   }
-  // Try accessory supersets
-  else if (feasibleMethods.includes('supersets') && accessoryNotUsed.length >= 2) {
-    for (let i = 0; i < accessoryNotUsed.length - 1; i += 2) {
-      const ex1 = accessoryNotUsed[i]
-      const ex2 = accessoryNotUsed[i + 1]
+  // [PHASE 11] Try accessory supersets as fallback (if not already applied and circuit didn't trigger)
+  else if (feasibleMethods.includes('supersets') && accessoryStillNotUsed.length >= 2 && !appliedMethods.includes('supersets')) {
+    for (let i = 0; i < accessoryStillNotUsed.length - 1; i += 2) {
+      const ex1 = accessoryStillNotUsed[i]
+      const ex2 = accessoryStillNotUsed[i + 1]
       
       usedExerciseIds.add(ex1.id)
       usedExerciseIds.add(ex2.id)

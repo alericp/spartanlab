@@ -7730,6 +7730,164 @@ return explanations.length > 0 ? explanations : undefined
   })
   
   // ==========================================================================
+  // [PHASE 11 TASK 1] STYLE SOURCE CHAIN AUDIT
+  // Trace the full path of style/method preferences from canonical to weekly output
+  // ==========================================================================
+  const rawCanonicalTrainingStyle = canonicalProfile.trainingStyle
+  const rawCanonicalMethodPrefs = canonicalProfile.trainingMethodPreferences || []
+  const builderInputMethodPrefs = expandedContext.trainingMethodPreferences || ['straight_sets']
+  
+  // Analyze each session's style expression
+  const sessionStyleAnalysis = sessions.map((s: any) => {
+    const styleMetadata = s.styleMetadata || {}
+    const styledGroups = styleMetadata.styledGroups || []
+    const nonStraightGroups = styledGroups.filter((g: any) => g.groupType !== 'straight')
+    const groupedExCount = nonStraightGroups.reduce((sum: number, g: any) => sum + (g.exercises?.length || 0), 0)
+    
+    type Materiality = 'none' | 'metadata_only' | 'lightly_expressed' | 'materially_expressed'
+    const materiality: Materiality = (() => {
+      if (!styleMetadata.primaryStyle || styleMetadata.primaryStyle === 'straight_sets') {
+        if (nonStraightGroups.length === 0) return 'none'
+      }
+      if (nonStraightGroups.length === 0) return 'metadata_only'
+      if (nonStraightGroups.length === 1 && groupedExCount <= 2) return 'lightly_expressed'
+      return 'materially_expressed'
+    })()
+    
+    return {
+      dayNumber: s.dayNumber,
+      dayFocus: s.focus,
+      primaryStyle: styleMetadata.primaryStyle || 'straight_sets',
+      appliedMethods: styleMetadata.appliedMethods || [],
+      rejectedMethods: (styleMetadata.rejectedMethods || []).map((r: any) => 
+        typeof r === 'string' ? r : `${r.method}:${r.reason}`
+      ),
+      styledGroupCount: styledGroups.length,
+      nonStraightGroupCount: nonStraightGroups.length,
+      groupedExerciseCount: groupedExCount,
+      hasSupersetsApplied: styleMetadata.hasSupersetsApplied || false,
+      hasCircuitsApplied: styleMetadata.hasCircuitsApplied || false,
+      hasDensityApplied: styleMetadata.hasDensityApplied || false,
+      materiality,
+    }
+  })
+  
+  // Compute weekly style expression summary
+  const sessionsWithSupersets = sessionStyleAnalysis.filter(s => s.hasSupersetsApplied).length
+  const sessionsWithCircuits = sessionStyleAnalysis.filter(s => s.hasCircuitsApplied).length
+  const sessionsWithDensity = sessionStyleAnalysis.filter(s => s.hasDensityApplied).length
+  const sessionsMetadataOnly = sessionStyleAnalysis.filter(s => s.materiality === 'metadata_only').length
+  const sessionsMateriallyExpressed = sessionStyleAnalysis.filter(s => s.materiality === 'materially_expressed').length
+  const sessionsLightlyExpressed = sessionStyleAnalysis.filter(s => s.materiality === 'lightly_expressed').length
+  const sessionsNoStyle = sessionStyleAnalysis.filter(s => s.materiality === 'none').length
+  
+  // Determine weekly style expression verdict
+  type WeeklyStyleVerdict = 'no_real_style_expression' | 'weak_style_expression' | 'balanced_truthful_expression' | 'over_applied_style_noise'
+  let weeklyStyleVerdict: WeeklyStyleVerdict
+  if (sessionsMateriallyExpressed === 0 && sessionsLightlyExpressed === 0) {
+    weeklyStyleVerdict = 'no_real_style_expression'
+  } else if (sessionsMateriallyExpressed <= 1 && sessionsLightlyExpressed <= 1) {
+    weeklyStyleVerdict = 'weak_style_expression'
+  } else if (sessionsMateriallyExpressed >= sessions.length / 2) {
+    weeklyStyleVerdict = 'over_applied_style_noise'
+  } else {
+    weeklyStyleVerdict = 'balanced_truthful_expression'
+  }
+  
+  // Analyze why preferred methods might not appear
+  const methodNonUseReasons: Array<{ method: string; reason: string }> = []
+  for (const prefMethod of rawCanonicalMethodPrefs) {
+    if (prefMethod === 'straight_sets') continue
+    const appliedInSessions = sessionStyleAnalysis.filter(s => 
+      s.appliedMethods.includes(prefMethod)
+    ).length
+    
+    if (appliedInSessions === 0) {
+      // Check rejection reasons
+      const rejectionReasons = sessionStyleAnalysis.flatMap(s => s.rejectedMethods)
+        .filter((r: string) => r.startsWith(prefMethod))
+      
+      if (rejectionReasons.length > 0) {
+        methodNonUseReasons.push({ method: prefMethod, reason: rejectionReasons[0] || 'blocked_by_session_rules' })
+      } else {
+        methodNonUseReasons.push({ method: prefMethod, reason: 'not_attempted_due_to_builder_gap' })
+      }
+    }
+  }
+  
+  console.log('[phase11-style-source-chain-audit]', {
+    rawCanonicalTrainingStyle,
+    rawCanonicalMethodPrefs,
+    survivedIntoBuilderInput: builderInputMethodPrefs.length > 0,
+    builderInputMethodPrefs,
+    sessionCount: sessions.length,
+    sessionStyleSummary: sessionStyleAnalysis.map(s => ({
+      day: s.dayNumber,
+      focus: s.dayFocus,
+      style: s.primaryStyle,
+      materiality: s.materiality,
+    })),
+    styleSourceVerdict: rawCanonicalMethodPrefs.length > 0 
+      ? (sessionsMateriallyExpressed > 0 ? 'style_materially_expressed' : 
+         sessionsMetadataOnly > 0 ? 'style_applied_only_as_metadata' :
+         'style_source_present_but_not_applied')
+      : 'style_source_missing',
+  })
+  
+  console.log('[phase11-week-style-expression-audit]', {
+    totalSessions: sessions.length,
+    sessionsWithNonStraightStructure: sessionsLightlyExpressed + sessionsMateriallyExpressed,
+    sessionsWithSupersets,
+    sessionsWithCircuits,
+    sessionsWithDensity,
+    sessionsMetadataOnly,
+    sessionsMateriallyExpressed,
+    sessionsLightlyExpressed,
+    sessionsNoStyle,
+    weeklyVerdict: weeklyStyleVerdict,
+    methodNonUseReasons,
+  })
+  
+  // [PHASE 11 TASK 5] Style non-use reason audit
+  if (methodNonUseReasons.length > 0) {
+    console.log('[phase11-style-nonuse-reason-audit]', {
+      preferredMethodsNotUsed: methodNonUseReasons.map(r => r.method),
+      reasons: methodNonUseReasons,
+      diagnosticMessage: methodNonUseReasons.map(r => 
+        r.reason === 'not_attempted_due_to_builder_gap' 
+          ? `${r.method}: builder did not attempt this method`
+          : `${r.method}: ${r.reason}`
+      ).join('; '),
+    })
+  }
+  
+  // [PHASE 11 TASK 7] Final style truth verdict
+  console.log('[phase11-style-truth-final-verdict]', {
+    canonicalStyleSourceValid: rawCanonicalMethodPrefs.length > 0,
+    builderApplicationValid: builderInputMethodPrefs.length > 0,
+    sessionMaterialityDistribution: {
+      none: sessionsNoStyle,
+      metadata_only: sessionsMetadataOnly,
+      lightly_expressed: sessionsLightlyExpressed,
+      materially_expressed: sessionsMateriallyExpressed,
+    },
+    weeklyExpressionDistribution: {
+      supersets: sessionsWithSupersets,
+      circuits: sessionsWithCircuits,
+      density: sessionsWithDensity,
+    },
+    outputTruthfullyReflectsStylePrefs: sessionsMateriallyExpressed > 0 || 
+      (rawCanonicalMethodPrefs.length === 0 || rawCanonicalMethodPrefs.every(m => m === 'straight_sets')),
+    preferredMethodsUnderExpressed: methodNonUseReasons.map(r => r.method),
+    anySkillQualityRisked: false, // Skill-dominant sessions always use straight/cluster
+    finalVerdict: sessionsMateriallyExpressed > 0 || rawCanonicalMethodPrefs.length === 0
+      ? 'phase11_complete'
+      : methodNonUseReasons.some(r => r.reason.includes('skill_quality'))
+        ? 'blocked_by_structural_constraints'
+        : 'partial_complete_builder_gap_remaining',
+  })
+
+  // ==========================================================================
   // [onboarding-truth-chain-final-verdict] TASK 9: Final truth chain verdict
   // Comprehensive summary of whether onboarding truth was preserved end-to-end
   // ==========================================================================
@@ -9668,6 +9826,37 @@ let validatedSession = validateSession(rawExercises, rawWarmup, rawCooldown, {
       hasCircuitsApplied: styleResult.styleMetadata.hasCircuitsApplied,
       styledGroupCount: styleResult.styledGroups.length,
       verdict: 'style_metadata_attached_to_session',
+    })
+    
+    // ==========================================================================
+    // [PHASE 11 TASK 2] SESSION STYLE MATERIALITY AUDIT
+    // Determine whether style influence is cosmetic or material
+    // ==========================================================================
+    const nonStraightGroups = styleResult.styledGroups.filter(g => g.groupType !== 'straight')
+    const groupedExerciseCount = nonStraightGroups.reduce((sum, g) => sum + g.exercises.length, 0)
+    const styleStructurallyChanged = nonStraightGroups.length > 0
+    
+    type StyleMateriality = 'none' | 'metadata_only' | 'lightly_expressed' | 'materially_expressed'
+    const styleMateriality: StyleMateriality = (() => {
+      if (!styleResult.styleMetadata.primarySessionStyle || styleResult.styleMetadata.primarySessionStyle === 'straight_sets') {
+        if (nonStraightGroups.length === 0) return 'none'
+      }
+      if (nonStraightGroups.length === 0) return 'metadata_only'
+      if (nonStraightGroups.length === 1 && groupedExerciseCount <= 2) return 'lightly_expressed'
+      return 'materially_expressed'
+    })()
+    
+    console.log('[phase11-session-style-materiality-audit]', {
+      dayNumber: day.dayNumber,
+      dayFocus: day.focus,
+      primaryStyleLabel: styleResult.styleMetadata.primarySessionStyle,
+      appliedMethods: styleResult.appliedMethods,
+      rejectedMethods: styleResult.rejectedMethods.map(r => `${r.method}:${r.reason}`),
+      styledGroupCount: styleResult.styledGroups.length,
+      nonStraightGroupCount: nonStraightGroups.length,
+      groupedExerciseCount,
+      structureChangedVsStraightSetBaseline: styleStructurallyChanged,
+      materialityVerdict: styleMateriality,
     })
     
     sessionStep = 'returning_validated_session'

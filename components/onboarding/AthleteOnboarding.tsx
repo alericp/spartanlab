@@ -4010,6 +4010,7 @@ export function AthleteOnboarding() {
       logProfileTruthState('After onboarding submit')
       
       // LEGACY: Also sync to athlete profile for backward compatibility
+      // [PHASE 14A TASK 2] FIX: Preserve FULL equipment array without lossy filtering
       saveAthleteProfile({
         sex: profile.sex,
         experienceLevel: profile.trainingExperience === 'new' || profile.trainingExperience === 'some' 
@@ -4028,9 +4029,8 @@ export function AthleteOnboarding() {
              : 90)
           : 60,
         primaryGoal: profile.selectedSkills[0] || profile.primaryGoal || null,
-        equipmentAvailable: profile.equipment.filter(e => 
-          ['pullup_bar', 'dip_bars', 'parallettes', 'rings', 'resistance_bands'].includes(e)
-        ) as ('pullup_bar' | 'dip_bars' | 'parallettes' | 'rings' | 'resistance_bands')[],
+        // [PHASE 14A] REMOVED LOSSY FILTER - preserve full equipment array
+        equipmentAvailable: profile.equipment || [],
         // Sync joint cautions for protocol recommendations and exercise selection
         jointCautions: profile.jointCautions || [],
         // Sync weakest area for programming emphasis
@@ -4073,9 +4073,8 @@ export function AthleteOnboarding() {
           selectedFlexibility: profile.selectedFlexibility || [],
           selectedStrength: profile.selectedStrength || [],
           goalCategory: profile.goalCategory || null,
-          equipmentAvailable: profile.equipment?.filter(e => 
-            ['pullup_bar', 'dip_bars', 'parallettes', 'rings', 'resistance_bands'].includes(e)
-          ) || [],
+          // [PHASE 14A TASK 2] FIX: Preserve FULL equipment array without lossy filtering
+          equipmentAvailable: profile.equipment || [],
           jointCautions: profile.jointCautions || [],
           weakestArea: profile.weakestArea || null,
           trainingStyle: profile.trainingStyle || 'balanced_hybrid',
@@ -4087,6 +4086,29 @@ export function AthleteOnboarding() {
           secondaryGoal: dbProfilePayload.secondaryGoal,
           selectedSkillsCount: dbProfilePayload.selectedSkills.length,
           sessionDurationMode: dbProfilePayload.sessionDurationMode,
+        })
+        
+        // [PHASE 14A TASK 2] Equipment roundtrip audit
+        const rawEquipment = profile.equipment || []
+        const canonicalEquipment = profile.equipment || [] // Now matches raw
+        const dbPayloadEquipment = dbProfilePayload.equipmentAvailable
+        const droppedEquipment = rawEquipment.filter(e => !dbPayloadEquipment.includes(e))
+        
+        console.log('[phase14a-onboarding-equipment-roundtrip-audit]', {
+          rawOnboardingEquipment: rawEquipment,
+          canonicalEquipmentSaved: canonicalEquipment,
+          dbPayloadEquipmentSaved: dbPayloadEquipment,
+          droppedValues: droppedEquipment,
+          hasWeights: rawEquipment.includes('weights'),
+          hasBenchBox: rawEquipment.includes('bench_box'),
+          verdict: droppedEquipment.length === 0 ? 'pass' : 'fail_equipment_dropped',
+        })
+        
+        console.log('[phase14a-no-equipment-loss-verdict]', {
+          noLoss: droppedEquipment.length === 0,
+          rawCount: rawEquipment.length,
+          savedCount: dbPayloadEquipment.length,
+          verdict: droppedEquipment.length === 0 ? 'equipment_truth_preserved' : 'equipment_truth_lost',
         })
         
         const dbResponse = await fetch('/api/onboarding/profile', {

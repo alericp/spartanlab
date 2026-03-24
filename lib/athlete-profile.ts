@@ -1462,6 +1462,28 @@ const ONBOARDING_STORAGE_KEY = 'spartanlab_onboarding_profile'
 
 export function saveOnboardingProfile(profile: OnboardingProfile): void {
   if (typeof window !== 'undefined') {
+    // [onboarding-save-payload-truth-audit] TASK 2: Log exact payload being saved
+    console.log('[onboarding-save-payload-truth-audit]', {
+      sourceComponent: 'saveOnboardingProfile',
+      timestamp: new Date().toISOString(),
+      // Critical fields being saved
+      selectedSkills: profile.selectedSkills || [],
+      selectedSkillsCount: profile.selectedSkills?.length || 0,
+      equipment: profile.equipment || [],
+      equipmentCount: profile.equipment?.length || 0,
+      trainingDaysPerWeek: profile.trainingDaysPerWeek,
+      scheduleMode: profile.scheduleMode,
+      sessionDurationMode: profile.sessionDurationMode,
+      sessionLengthMinutes: profile.sessionLengthMinutes,
+      trainingStyle: profile.trainingStyle,
+      trainingPathType: profile.trainingPathType,
+      primaryGoal: profile.primaryGoal,
+      secondaryGoal: profile.secondaryGoal,
+      // Meta
+      onboardingComplete: profile.onboardingComplete,
+      isFullReplace: true, // saveOnboardingProfile always does full replace
+    })
+    
     localStorage.setItem(ONBOARDING_STORAGE_KEY, JSON.stringify(profile))
   }
 }

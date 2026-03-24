@@ -248,6 +248,7 @@ export function AdaptiveProgramDisplay({
               </p>
               {program.scheduleMode === 'flexible' ? (
                 // ISSUE D FIX: Clear distinction between saved adaptive preference and current week resolution
+                // [PHASE 8] Show truthful reason for current frequency
                 <div className="flex flex-col">
                   <div className="flex items-center gap-1.5">
                     <span className="text-sm font-medium">Adaptive</span>
@@ -256,6 +257,26 @@ export function AdaptiveProgramDisplay({
                     {/* TASK 4: Use validSessions.length as canonical truth - never stale summary values */}
                     {validSessions.length} sessions this week
                   </span>
+                  {/* [PHASE 8 TASK 5] Truthful frequency explanation */}
+                  {program.flexibleFrequencyRootCause && (
+                    <span className="text-[10px] text-[#5A5A5A] mt-0.5">
+                      {program.flexibleFrequencyRootCause.isBaselineDefault 
+                        ? `(${program.primaryGoal.replace(/_/g, ' ')} baseline)`
+                        : program.flexibleFrequencyRootCause.isTrueAdaptive
+                          ? '(adapted from feedback)'
+                          : program.flexibleFrequencyRootCause.finalReasonCategory === 'experience_modifier_applied'
+                            ? '(adjusted for experience)'
+                            : program.flexibleFrequencyRootCause.finalReasonCategory === 'joint_caution_conservative'
+                              ? '(conservative for joints)'
+                              : program.flexibleFrequencyRootCause.finalReasonCategory === 'poor_recovery_reduction'
+                                ? '(reduced for recovery)'
+                                : program.flexibleFrequencyRootCause.finalReasonCategory === 'high_volume_conservative'
+                                  ? '(volume-based)'
+                                  : program.flexibleFrequencyRootCause.finalReasonCategory === 'low_history_default'
+                                    ? '(building baseline)'
+                                    : ''}
+                    </span>
+                  )}
                 </div>
               ) : (
                 // STATIC USER: Show actual session count from generated program - this is canonical
@@ -806,6 +827,28 @@ export function AdaptiveProgramDisplay({
       </Card>
 
       {/* Sessions - PHASE 2: Uses safe validSessions array */}
+      {/* [PHASE 8 TASK 5] Frequency explanation truth audit */}
+      {console.log('[phase8-frequency-explanation-truth-audit]', {
+        programId: program.id,
+        scheduleMode: program.scheduleMode,
+        displayedFrequency: validSessions.length,
+        hasRootCause: !!program.flexibleFrequencyRootCause,
+        frequencyReasonShownToUser: program.flexibleFrequencyRootCause?.isBaselineDefault 
+          ? 'baseline_shown'
+          : program.flexibleFrequencyRootCause?.isTrueAdaptive
+            ? 'adaptive_shown'
+            : 'no_reason_shown',
+        reasonMatchesEngineTruth: program.flexibleFrequencyRootCause 
+          ? program.flexibleFrequencyRootCause.finalReasonCategory !== 'static_contamination'
+          : true,
+        baselineVsAdaptiveClearlyDistinguished: program.scheduleMode === 'flexible' && program.flexibleFrequencyRootCause !== undefined,
+        hiddenAmbiguityRemaining: !program.flexibleFrequencyRootCause && program.scheduleMode === 'flexible',
+        verdict: program.flexibleFrequencyRootCause 
+          ? 'frequency_reason_truthfully_shown'
+          : program.scheduleMode === 'flexible'
+            ? 'no_root_cause_attached'
+            : 'static_mode_no_reason_needed',
+      }) as any}
       {/* [PHASE 7B] Session render input audit */}
       {console.log('[phase7b-session-render-input-audit]', {
         programId: program.id,

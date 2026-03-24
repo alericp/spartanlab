@@ -4449,11 +4449,57 @@ function generateAdaptiveProgramImpl(inputs: AdaptiveProgramInputs, stageTracker
       }
     })
     
-    // Ensure primary/secondary goals are always in built-around with correct priority
-    // [TASK 3] PRIORITY-BASED SKILL ORDERING - FIXED
-    builtAroundSkillsFinal = [primaryGoal]
-    if (secondaryGoal && !builtAroundSkillsFinal.includes(secondaryGoal)) {
+    // ==========================================================================
+    // [PHASE 6] DESELECTED SKILL LEAK PREVENTION
+    // CRITICAL: Only skills in profileSelectedSkills can appear in builtAround/summary
+    // Primary/secondary goals are only added if they're in the selected set
+    // ==========================================================================
+    const canonicalSelectedSet = new Set(profileSelectedSkills)
+    
+    // [PHASE 6 TASK 4] Verify primary/secondary are in selected set
+    const primaryGoalIsSelected = canonicalSelectedSet.has(primaryGoal)
+    const secondaryGoalIsSelected = secondaryGoal ? canonicalSelectedSet.has(secondaryGoal) : false
+    
+    console.log('[phase6-deselected-skill-leak-check]', {
+      primaryGoal,
+      secondaryGoal,
+      profileSelectedSkills,
+      primaryGoalIsSelected,
+      secondaryGoalIsSelected,
+      wouldLeakPrimary: !primaryGoalIsSelected,
+      wouldLeakSecondary: secondaryGoal && !secondaryGoalIsSelected,
+    })
+    
+    // [PHASE 6 TASK 1/4] Ensure primary/secondary are in built-around ONLY if selected
+    // This prevents deselected goals from appearing as active program lanes
+    builtAroundSkillsFinal = []
+    
+    // Only add primary if it's selected (it should always be, but guard against stale data)
+    if (primaryGoalIsSelected) {
+      builtAroundSkillsFinal.push(primaryGoal)
+    } else {
+      console.warn('[phase6-deselected-skill-leak-BLOCKED]', {
+        reason: 'primary_goal_not_in_selected_skills',
+        primaryGoal,
+        selectedSkills: profileSelectedSkills,
+        action: 'primary_excluded_from_built_around',
+      })
+      // Fall back to first selected skill as headline if primary isn't selected
+      if (profileSelectedSkills.length > 0) {
+        builtAroundSkillsFinal.push(profileSelectedSkills[0])
+      }
+    }
+    
+    // Only add secondary if it's selected
+    if (secondaryGoal && secondaryGoalIsSelected && !builtAroundSkillsFinal.includes(secondaryGoal)) {
       builtAroundSkillsFinal.push(secondaryGoal)
+    } else if (secondaryGoal && !secondaryGoalIsSelected) {
+      console.warn('[phase6-deselected-skill-leak-BLOCKED]', {
+        reason: 'secondary_goal_not_in_selected_skills',
+        secondaryGoal,
+        selectedSkills: profileSelectedSkills,
+        action: 'secondary_excluded_from_built_around',
+      })
     }
     
     // [TASK 3] Calculate representation strength for each skill to rank tertiary skills correctly
@@ -4466,19 +4512,41 @@ function generateAdaptiveProgramImpl(inputs: AdaptiveProgramInputs, stageTracker
       representationStrengthBySkill[skill] = count
     })
     
-    // Only add tertiary skills that are meaningfully represented (not just support blocks)
+    // [PHASE 6 TASK 2/4] Only add tertiary skills that are:
+    // 1. In the canonical selected set (DESELECTED SKILL LEAK PREVENTION)
+    // 2. Meaningfully represented (not just support blocks)
+    // 3. Have at least 2 dedicated exercises (stricter threshold for tertiary)
     const meaningfullyRepresentedTertiary = generatedRepresentedSkills
       .filter(skill => 
+        canonicalSelectedSet.has(skill) && // [PHASE 6] Must be selected
         !builtAroundSkillsFinal.includes(skill) && 
-        (representationStrengthBySkill[skill] || 0) >= 1  // At least 1 dedicated exercise
+        (representationStrengthBySkill[skill] || 0) >= 2  // At least 2 dedicated exercises for tertiary
       )
       .sort((a, b) => (representationStrengthBySkill[b] || 0) - (representationStrengthBySkill[a] || 0))  // Sort by strength
     
-    meaningfullyRepresentedTertiary.forEach(skill => {
+    // [PHASE 6 TASK 2] Limit tertiary skills in built-around to prevent chip bloat
+    // Only show top 2-3 tertiary skills maximum to keep summary truthful
+    const maxTertiaryInBuiltAround = 3
+    meaningfullyRepresentedTertiary.slice(0, maxTertiaryInBuiltAround).forEach(skill => {
       if (!builtAroundSkillsFinal.includes(skill)) {
         builtAroundSkillsFinal.push(skill)
       }
     })
+    
+    // [PHASE 6] Log any blocked tertiary skills
+    const blockedTertiarySkills = generatedRepresentedSkills
+      .filter(skill => !canonicalSelectedSet.has(skill))
+    if (blockedTertiarySkills.length > 0) {
+      console.warn('[phase6-deselected-skill-leak-BLOCKED]', {
+        reason: 'tertiary_skills_not_in_selected_set',
+        blockedSkills: blockedTertiarySkills,
+        action: 'excluded_from_built_around',
+      })
+    }
+    
+    // [PHASE 6 TASK 1/2/4] Enhanced built-around priority audit with leak detection
+    const canonicalSelectedSkillsSet = new Set(profileSelectedSkills)
+    const builtAroundLeaks = builtAroundSkillsFinal.filter(s => !canonicalSelectedSkillsSet.has(s))
     
     console.log('[built-around-priority-audit]', {
       primaryGoal,
@@ -4486,17 +4554,23 @@ function generateAdaptiveProgramImpl(inputs: AdaptiveProgramInputs, stageTracker
       selectedSkills: profileSelectedSkills,
       representedSkills: generatedRepresentedSkills,
       representationStrengthBySkill,
-      builtAroundBeforeSort: [primaryGoal, secondaryGoal],
-      builtAroundAfterSort: builtAroundSkillsFinal,
+      builtAroundFinal: builtAroundSkillsFinal,
       excludedSkills,
-      whyBackLeverRankedWhereItDid: `Back Lever strength=${representationStrengthBySkill['back_lever'] || 0}, ranked=${builtAroundSkillsFinal.indexOf('back_lever')}`,
+      // [PHASE 6] Deselected skill leak detection
+      deselectedSkillsInBuiltAround: builtAroundLeaks,
+      noDeselectedLeaks: builtAroundLeaks.length === 0,
+      // Priority ordering
+      primaryIsFirst: builtAroundSkillsFinal[0] === primaryGoal || 
+        (!primaryGoalIsSelected && builtAroundSkillsFinal[0] === profileSelectedSkills[0]),
+      secondaryIsSecond: !secondaryGoal || !secondaryGoalIsSelected || builtAroundSkillsFinal[1] === secondaryGoal,
+      tertiaryCount: builtAroundSkillsFinal.length - (secondaryGoal && secondaryGoalIsSelected ? 2 : 1),
       finalVerdict: 
-        builtAroundSkillsFinal[0] === primaryGoal && 
-        (!secondaryGoal || builtAroundSkillsFinal[1] === secondaryGoal)
-          ? 'priority_correct'
-          : builtAroundSkillsFinal.findIndex(s => !['planche', 'front_lever'].includes(s)) > 1
-            ? 'tertiary_skill_overpromoted'
-            : 'primary_secondary_underweighted',
+        builtAroundLeaks.length > 0
+          ? 'DESELECTED_SKILL_LEAKED'
+          : builtAroundSkillsFinal[0] === primaryGoal && 
+            (!secondaryGoal || !secondaryGoalIsSelected || builtAroundSkillsFinal[1] === secondaryGoal)
+            ? 'priority_correct_no_leaks'
+            : 'priority_ordering_issue',
     })
     
     // ==========================================================================
@@ -4583,6 +4657,43 @@ function generateAdaptiveProgramImpl(inputs: AdaptiveProgramInputs, stageTracker
       impactVerdict: hasNonStraightSets
         ? 'training_style_influenced_session_structure'
         : 'training_style_defaulted_to_straight_sets',
+    })
+    
+    // [PHASE 6] STYLE INPUT READ TRUTH AUDIT
+    // Determine if style selections are being read correctly vs ignored
+    const styleSelectionsReadCorrectly = (() => {
+      const methodPrefs = canonicalProfile.trainingMethodPreferences || []
+      const selectedStyle = canonicalProfile.trainingStyle
+      
+      // Style was read if it exists in canonical profile
+      const styleWasRead = !!selectedStyle || methodPrefs.length > 0
+      
+      // Style was applied if we see non-straight-sets methods
+      const styleWasApplied = hasNonStraightSets
+      
+      // If style was selected but not applied, check if constraints prevented it
+      const styleIgnoredOrConstraintBlocked = styleWasRead && !styleWasApplied
+      
+      return {
+        styleWasRead,
+        styleWasApplied,
+        styleIgnoredOrConstraintBlocked,
+        // A: style correctly read and applied OR no style selected
+        // B: style correctly read but constraints prevented application
+        classification: !styleWasRead
+          ? 'no_style_selected'
+          : styleWasApplied
+            ? 'style_correctly_applied'
+            : 'style_read_but_not_applied_constraints_likely'
+      }
+    })()
+    
+    console.log('[style-input-read-truth-audit]', {
+      selectedTrainingStyle: canonicalProfile.trainingStyle,
+      selectedMethodPreferences: canonicalProfile.trainingMethodPreferences || [],
+      stylesAppliedThisWeek: uniqueStylesApplied,
+      ...styleSelectionsReadCorrectly,
+      verdict: styleSelectionsReadCorrectly.classification,
     })
     
     // [TASK 3] Summary post-assembly safety audit with expanded fields
@@ -5081,6 +5192,27 @@ function generateAdaptiveProgramImpl(inputs: AdaptiveProgramInputs, stageTracker
     console.log('[day-focus-truth-audit]', {
       totalDays: dayFocusTruthAudit.length,
       daysWithMatchingLabels: dayFocusTruthAudit.filter(d => d.labelMatchesSession).length,
+    })
+    
+    // [PHASE 6 TASK 3] SESSION IDENTITY TRUTH AUDIT
+    // Verify session labels match actual content and aren't overstating specialization
+    const sessionIdentityMismatches = dayFocusTruthAudit.filter(d => !d.labelMatchesSession)
+    const sessionIdentityTruthVerdict = sessionIdentityMismatches.length === 0
+      ? 'all_labels_match_content'
+      : sessionIdentityMismatches.length <= 1
+        ? 'minor_label_drift'
+        : 'significant_identity_mismatch'
+    
+    console.log('[session-identity-truth-audit]', {
+      totalSessions: dayFocusTruthAudit.length,
+      sessionsWithMatchingLabels: dayFocusTruthAudit.filter(d => d.labelMatchesSession).length,
+      sessionIdentityMismatches: sessionIdentityMismatches.map(d => ({
+        day: d.dayNumber,
+        label: d.labelShown,
+        actualDominant: d.actualDominant,
+        reason: d.mismatchReason,
+      })),
+      verdict: sessionIdentityTruthVerdict,
     })
     
     // ==========================================================================
@@ -7285,6 +7417,84 @@ return explanations.length > 0 ? explanations : undefined
       : sessions.length > 0 
         ? 'generation_fixed_but_summary_priority_issue' 
         : 'root_cause_not_fully_resolved',
+  })
+  
+  // ==========================================================================
+  // [PHASE 6] OUTPUT ALIGNMENT FINAL AUDITS
+  // Verify generated program matches canonical profile truth
+  // ==========================================================================
+  
+  // [PHASE 6 TASK 1] Program output priority truth audit
+  const primaryGoalDominatesProgram = (() => {
+    // Check if primary goal has the most session exposure
+    const primarySessionCount = sessions.filter(s => 
+      s.focus?.toLowerCase().includes(primaryGoal.replace(/_/g, ' ').toLowerCase()) ||
+      (primaryGoal === 'planche' && s.focus?.toLowerCase().includes('push skill')) ||
+      (primaryGoal === 'front_lever' && s.focus?.toLowerCase().includes('pull skill'))
+    ).length
+    const totalSessions = sessions.length
+    return primarySessionCount >= Math.ceil(totalSessions * 0.3) // At least 30% dedicated to primary
+  })()
+  
+  const secondaryGoalMeaningfullySupports = (() => {
+    if (!secondaryGoal) return true // No secondary = passes by default
+    const secondarySessionCount = sessions.filter(s =>
+      s.focus?.toLowerCase().includes(secondaryGoal.replace(/_/g, ' ').toLowerCase()) ||
+      (secondaryGoal === 'planche' && s.focus?.toLowerCase().includes('push skill')) ||
+      (secondaryGoal === 'front_lever' && s.focus?.toLowerCase().includes('pull skill'))
+    ).length
+    return secondarySessionCount >= 1 // At least 1 session with secondary focus
+  })()
+  
+  // [PHASE 6 TASK 4] Deselected skill leak verdict
+  const profileSelectedSkillsSet = new Set(canonicalProfile.selectedSkills || [])
+  const builtAroundLeakingDeselected = builtAroundSkillsFinal.filter(s => !profileSelectedSkillsSet.has(s))
+  const summaryLeakingDeselected = (finalProgram.summaryTruth?.summaryRenderableSkills || [])
+    .filter(s => !profileSelectedSkillsSet.has(s))
+  const deselectedSkillsLeaking = builtAroundLeakingDeselected.length > 0 || summaryLeakingDeselected.length > 0
+  
+  console.log('[phase6-deselected-skill-leak-verdict]', {
+    profileSelectedSkills: Array.from(profileSelectedSkillsSet),
+    builtAroundSkills: builtAroundSkillsFinal,
+    summaryRenderableSkills: finalProgram.summaryTruth?.summaryRenderableSkills || [],
+    builtAroundLeakingDeselected,
+    summaryLeakingDeselected,
+    deselectedSkillsLeaking,
+    verdict: deselectedSkillsLeaking ? 'LEAK_DETECTED' : 'NO_LEAKS',
+  })
+  
+  // [PHASE 6 TASK 2] Built-around chips truthfulness
+  const builtAroundChipsTruthful = 
+    builtAroundSkillsFinal[0] === primaryGoal &&
+    (!secondaryGoal || builtAroundSkillsFinal.includes(secondaryGoal)) &&
+    !deselectedSkillsLeaking
+  
+  // [PHASE 6 TASK 5] Top card matches actual weekly output
+  const topCardMatchesActualWeeklyOutput = 
+    primaryGoalDominatesProgram && 
+    secondaryGoalMeaningfullySupports &&
+    builtAroundChipsTruthful
+  
+  // [PHASE 6] Style input read truth (was style selection used?)
+  const styleSelectionsBeingReadCorrectly = (() => {
+    const selectedStyle = canonicalProfile.trainingStyle || 'mixed'
+    const methodPrefs = canonicalProfile.trainingMethodPreferences || []
+    // Check if methods are being attempted (not necessarily always applied due to constraints)
+    return methodPrefs.length > 0 || selectedStyle !== 'mixed'
+  })()
+  
+  console.log('[phase6-output-alignment-final-verdict]', {
+    primaryGoalDominatesProgram,
+    secondaryGoalMeaningfullySupports,
+    tertiarySkillsOnlyAppearWhenEarned: !deselectedSkillsLeaking && builtAroundSkillsFinal.length <= 5,
+    deselectedSkillsLeaking,
+    builtAroundChipsTruthful,
+    topCardMatchesActualWeeklyOutput,
+    styleSelectionsBeingReadCorrectly,
+    safeToProceedToNextChronologicalPhase: 
+      primaryGoalDominatesProgram && 
+      !deselectedSkillsLeaking && 
+      builtAroundChipsTruthful,
   })
   
   // ==========================================================================

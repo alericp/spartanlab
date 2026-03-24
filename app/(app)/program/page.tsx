@@ -3410,6 +3410,38 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
               // [PHASE 5 TASK 9] Split-brain detection
               detectSplitBrain(program as unknown as Parameters<typeof detectSplitBrain>[0])
               
+              // [PHASE 6 TASK 5] TOP-CARD VS WEEKLY OUTPUT TRUTH AUDIT
+              // Verify the top card summary matches actual weekly session structure
+              const programSessions = program.sessions || []
+              const sessionFocuses = programSessions.map(s => s.focus?.toLowerCase() || '')
+              const pushDominantCount = sessionFocuses.filter(f => f.includes('push')).length
+              const pullDominantCount = sessionFocuses.filter(f => f.includes('pull')).length
+              const mixedCount = sessionFocuses.filter(f => f.includes('mixed') || f.includes('density')).length
+              
+              const summaryTruth = (program as unknown as { summaryTruth?: { truthfulHybridSummary?: string }}).summaryTruth
+              const topCardSummary = summaryTruth?.truthfulHybridSummary || program.programRationale || ''
+              
+              // Check if summary claims match actual week
+              const claimsPrimary = topCardSummary.toLowerCase().includes(program.primaryGoal?.replace(/_/g, ' ') || '')
+              const claimsSecondary = program.secondaryGoal 
+                ? topCardSummary.toLowerCase().includes(program.secondaryGoal.replace(/_/g, ' '))
+                : true
+              
+              console.log('[top-card-vs-weekly-output-truth-audit]', {
+                actualWeekStructure: {
+                  pushDominantSessions: pushDominantCount,
+                  pullDominantSessions: pullDominantCount,
+                  mixedSessions: mixedCount,
+                  totalSessions: programSessions.length,
+                },
+                topCardSummarySnippet: topCardSummary.slice(0, 100),
+                claimsPrimaryGoalInSummary: claimsPrimary,
+                claimsSecondaryGoalInSummary: claimsSecondary,
+                selectedSkillsInProgram: (program as unknown as { selectedSkills?: string[] }).selectedSkills?.length || 0,
+                representedSkillsInProgram: (program as unknown as { representedSkills?: string[] }).representedSkills?.length || 0,
+                topCardMatchesWeeklyOutput: claimsPrimary && claimsSecondary,
+              })
+              
               return null
             })()}
             <ProgramDisplayWrapper 

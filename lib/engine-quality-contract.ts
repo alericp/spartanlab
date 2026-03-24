@@ -1963,12 +1963,29 @@ export function calculateWeightedSkillAllocation(
     
     const perSkillWeight = goalWeights.supportWeight / otherSkills.length
     
+    // [PRIORITY-COLLAPSE-FIX] TASK 6: Calculate how many skills should get tertiary status
+    // For broad multi-skill profiles, we shouldn't collapse everything to support.
+    // Formula: allow ~30% of "other" skills to be tertiary, minimum 1, max based on sessions
+    const maxTertiarySkills = Math.min(
+      Math.max(1, Math.ceil(otherSkills.length * 0.4)), // 40% of other skills, minimum 1
+      Math.max(1, Math.floor(totalSessions / 2))         // But capped by session count / 2
+    )
+    
+    console.log('[priority-collapse-fix] Tertiary allocation calculation:', {
+      otherSkillsCount: otherSkills.length,
+      totalSessions,
+      oldBehavior: 'only_index_0_gets_tertiary',
+      newBehavior: `up_to_${maxTertiarySkills}_skills_get_tertiary`,
+      maxTertiarySkills,
+    })
+    
     otherSkills.forEach((skill, index) => {
       const isAdvanced = isAdvancedSkill(skill)
       const advancedFamily = getAdvancedSkillFamily(skill)
       
-      // First tertiary skill gets more, subsequent get less
-      let adjustedWeight = perSkillWeight * (1 - (index * 0.15))
+      // First tertiary skill gets more, subsequent get less (but slower decay)
+      // [PRIORITY-COLLAPSE-FIX] Reduced decay rate from 0.15 to 0.08 for more even distribution
+      let adjustedWeight = perSkillWeight * (1 - (index * 0.08))
       
       // [advanced-skill-expression] ISSUE A: Boost advanced skills
       if (isAdvanced) {
@@ -1985,14 +2002,21 @@ export function calculateWeightedSkillAllocation(
         exposureSessions = Math.min(exposureSessions, advancedFamily.maxFrequencyPerWeek, totalSessions)
       }
       
+      // [PRIORITY-COLLAPSE-FIX] TASK 6: Improved priority level assignment
+      // - First maxTertiarySkills skills get 'tertiary' 
+      // - Advanced skills always get at least 'tertiary' status
+      // - Remaining skills get 'support'
+      const shouldBeTertiary = index < maxTertiarySkills || isAdvanced
+      const priorityLevel = shouldBeTertiary ? 'tertiary' : 'support'
+      
       allocations.push({
         skill,
         weight: Math.max(0.05, adjustedWeight),
         exposureSessions,
-        priorityLevel: index === 0 ? 'tertiary' : 'support',
+        priorityLevel,
         rationale: isAdvanced
           ? `[Advanced] ${advancedFamily?.displayName || skill} - minimum ${exposureSessions} session(s) per week`
-          : `Selected skill - included in ${exposureSessions} session(s)`,
+          : `Selected skill - ${priorityLevel} priority, included in ${exposureSessions} session(s)`,
       })
       
       // [advanced-skill-expression] Log advanced skill allocation
@@ -2005,6 +2029,7 @@ export function calculateWeightedSkillAllocation(
           minFrequency: advancedFamily?.minFrequencyPerWeek,
           maxFrequency: advancedFamily?.maxFrequencyPerWeek,
           tendonSensitive: advancedFamily?.tendonSensitive,
+          priorityLevel,
         })
       }
     })

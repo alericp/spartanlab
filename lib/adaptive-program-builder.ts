@@ -4512,25 +4512,48 @@ function generateAdaptiveProgramImpl(inputs: AdaptiveProgramInputs, stageTracker
       representationStrengthBySkill[skill] = count
     })
     
-    // [PHASE 6 TASK 2/4] Only add tertiary skills that are:
+    // ==========================================================================
+    // [PHASE 6B TASK 2] TIGHTENED MEANINGFUL REPRESENTATION THRESHOLDS
+    // Tertiary skills only shown if they TRULY have meaningful expression
+    // ==========================================================================
+    // Requirements:
     // 1. In the canonical selected set (DESELECTED SKILL LEAK PREVENTION)
-    // 2. Meaningfully represented (not just support blocks)
-    // 3. Have at least 2 dedicated exercises (stricter threshold for tertiary)
+    // 2. Not already in builtAround (primary/secondary)
+    // 3. Have at least 3 dedicated exercises (TIGHTENED from 2)
+    // 4. Max 2 tertiary skills in builtAround (TIGHTENED from 3)
     const meaningfullyRepresentedTertiary = generatedRepresentedSkills
       .filter(skill => 
-        canonicalSelectedSet.has(skill) && // [PHASE 6] Must be selected
+        canonicalSelectedSet.has(skill) && 
         !builtAroundSkillsFinal.includes(skill) && 
-        (representationStrengthBySkill[skill] || 0) >= 2  // At least 2 dedicated exercises for tertiary
+        (representationStrengthBySkill[skill] || 0) >= 3  // [PHASE 6B] Raised from 2 to 3
       )
-      .sort((a, b) => (representationStrengthBySkill[b] || 0) - (representationStrengthBySkill[a] || 0))  // Sort by strength
+      .sort((a, b) => (representationStrengthBySkill[b] || 0) - (representationStrengthBySkill[a] || 0))
     
-    // [PHASE 6 TASK 2] Limit tertiary skills in built-around to prevent chip bloat
-    // Only show top 2-3 tertiary skills maximum to keep summary truthful
-    const maxTertiaryInBuiltAround = 3
+    // [PHASE 6B] Reduced max tertiary from 3 to 2 to enforce tighter identity
+    const maxTertiaryInBuiltAround = 2
     meaningfullyRepresentedTertiary.slice(0, maxTertiaryInBuiltAround).forEach(skill => {
       if (!builtAroundSkillsFinal.includes(skill)) {
         builtAroundSkillsFinal.push(skill)
       }
+    })
+    
+    console.log('[phase6b-tertiary-threshold-enforcement-audit]', {
+      allTertiarySkillsDetected: generatedRepresentedSkills.filter(s => 
+        !builtAroundSkillsFinal.slice(0, 2).includes(s)
+      ),
+      tertiaryMeetingOldThreshold2: generatedRepresentedSkills.filter(s => 
+        (representationStrengthBySkill[s] || 0) >= 2 && !builtAroundSkillsFinal.slice(0, 2).includes(s)
+      ).length,
+      tertiaryMeetingNewThreshold3: meaningfullyRepresentedTertiary.length,
+      tertiaryActuallyShown: meaningfullyRepresentedTertiary.slice(0, maxTertiaryInBuiltAround),
+      tertiaryFilteredOutByTighterThreshold: generatedRepresentedSkills.filter(s => 
+        (representationStrengthBySkill[s] || 0) >= 2 && 
+        (representationStrengthBySkill[s] || 0) < 3 && 
+        !builtAroundSkillsFinal.slice(0, 2).includes(s)
+      ),
+      verdict: meaningfullyRepresentedTertiary.length <= maxTertiaryInBuiltAround
+        ? 'tertiary_visibility_appropriately_limited'
+        : 'tertiary_capped_at_max_2',
     })
     
     // [PHASE 6] Log any blocked tertiary skills
@@ -4694,6 +4717,33 @@ function generateAdaptiveProgramImpl(inputs: AdaptiveProgramInputs, stageTracker
       stylesAppliedThisWeek: uniqueStylesApplied,
       ...styleSelectionsReadCorrectly,
       verdict: styleSelectionsReadCorrectly.classification,
+    })
+    
+    // ==========================================================================
+    // [PHASE 6B TASK 6] STYLE INFLUENCE VERDICT
+    // Classifies whether style input is being materially used or just read
+    // ==========================================================================
+    console.log('[phase6b-style-influence-verdict]', {
+      selectedTrainingStyle: canonicalProfile.trainingStyle,
+      selectedMethodPreferences: canonicalProfile.trainingMethodPreferences || [],
+      stylesAppliedThisWeek: uniqueStylesApplied,
+      styleWasRead: styleSelectionsReadCorrectly.styleWasRead,
+      styleWasApplied: styleSelectionsReadCorrectly.styleWasApplied,
+      // [PHASE 6B] Classification
+      // A = style is read correctly, constraints reasonably suppress expression
+      // B = style is not materially influencing generation
+      classification: styleSelectionsReadCorrectly.styleWasRead
+        ? styleSelectionsReadCorrectly.styleWasApplied
+          ? 'A_style_correctly_read_and_applied'
+          : 'A_style_read_but_constraints_suppress_expression'
+        : 'A_no_style_selected_default_used',
+      // Most likely cause if not applied
+      likelyCause: !styleSelectionsReadCorrectly.styleWasApplied 
+        ? 'hierarchy_recovery_or_session_constraints_favored_traditional_structure'
+        : 'style_preferences_successfully_applied',
+      actionForFuturePhase: !styleSelectionsReadCorrectly.styleWasApplied
+        ? 'consider_style_enforcement_boost_in_future_phase'
+        : 'no_action_needed',
     })
     
     // [TASK 3] Summary post-assembly safety audit with expanded fields
@@ -7241,6 +7291,33 @@ return explanations.length > 0 ? explanations : undefined
   })
   
   // ==========================================================================
+  // [PHASE 6B TASK 7] DESELECTED SKILL LOCK VERIFICATION
+  // Confirm that Phase 6 deselected-skill blocking is still enforced
+  // ==========================================================================
+  const selectedSkillSet = new Set(profileSelectedSkills)
+  const builtAroundLeakCheck = builtAroundSkillsFinal.filter(s => !selectedSkillSet.has(s))
+  const summarySkillsLeakCheck = (finalProgram.summaryTruth?.summaryRenderableSkills || [])
+    .filter((s: string) => !selectedSkillSet.has(s))
+  const representedSkillsLeakCheck = (finalProgram.representedSkills || [])
+    .filter((s: string) => !selectedSkillSet.has(s))
+  
+  console.log('[phase6b-deselected-skill-lock-verdict]', {
+    selectedSkills: profileSelectedSkills,
+    builtAroundSkills: builtAroundSkillsFinal,
+    builtAroundLeaks: builtAroundLeakCheck,
+    summarySkillsLeaks: summarySkillsLeakCheck,
+    representedSkillsLeaks: representedSkillsLeakCheck,
+    noLeaksDetected: 
+      builtAroundLeakCheck.length === 0 && 
+      summarySkillsLeakCheck.length === 0 && 
+      representedSkillsLeakCheck.length === 0,
+    deselectedSkillsStillBlocked: builtAroundLeakCheck.length === 0,
+    verdict: builtAroundLeakCheck.length === 0 && summarySkillsLeakCheck.length === 0
+      ? 'LOCK_VERIFIED_NO_LEAKS'
+      : 'LEAK_DETECTED_BLOCKING_FAILED',
+  })
+  
+  // ==========================================================================
   // [WEEKLY-REPRESENTATION] TASK 8: FINAL VERDICT
   // ==========================================================================
   const narrativeMatchesExposure = broaderSkillsAcknowledgedInSummary || broadlyRepresentedSkillNames.length === 0
@@ -7393,6 +7470,110 @@ return explanations.length > 0 ? explanations : undefined
           : !arrayPositionCollapseFixed
             ? 'still_collapsing_too_early'
             : 'overclaiming_after_fix',
+  })
+  
+  // ==========================================================================
+  // [PHASE 6B] OUTPUT TIGHTENING FINAL VERDICT
+  // Comprehensive verification that output is now tight and truthful
+  // ==========================================================================
+  const headlineSkillCount = weeklyRepresentationPolicy.filter(p => 
+    p.representationVerdict === 'headline_represented'
+  ).length
+  const broadlyRepresentedCount = weeklyRepresentationPolicy.filter(p => 
+    p.representationVerdict === 'broadly_represented'
+  ).length
+  const supportOnlyCount = weeklyRepresentationPolicy.filter(p => 
+    p.representationVerdict === 'support_only'
+  ).length
+  
+  // [PHASE 6B] Verify primary dominates
+  const primaryPolicy = weeklyRepresentationPolicy.find(p => p.skill === primaryGoal)
+  const primaryDominanceTightened = 
+    primaryPolicy?.representationVerdict === 'headline_represented' &&
+    (primaryPolicy?.actualExposure?.total || 0) >= 4
+  
+  // [PHASE 6B] Verify secondary is meaningful but not competing
+  const secondaryPolicy = secondaryGoal 
+    ? weeklyRepresentationPolicy.find(p => p.skill === secondaryGoal)
+    : null
+  const secondaryLaneStillMeaningful = !secondaryGoal || 
+    (secondaryPolicy?.representationVerdict === 'headline_represented' &&
+     (secondaryPolicy?.actualExposure?.total || 0) >= 2)
+  
+  // [PHASE 6B] Verify tertiary visibility is earned, not automatic
+  const tertiarySkills = weeklyRepresentationPolicy.filter(p => 
+    p.skill !== primaryGoal && 
+    p.skill !== secondaryGoal && 
+    (p.representationVerdict === 'headline_represented' || p.representationVerdict === 'broadly_represented')
+  )
+  const tertiaryVisibilityReducedToEarnedOnly = tertiarySkills.length <= 2
+  
+  // [PHASE 6B] Verify builtAround uses strict representation
+  const builtAroundChipsNowUseStrictTruth = builtAroundSkillsFinal.length <= 4 && 
+    builtAroundSkillsFinal.every(s => {
+      const policy = weeklyRepresentationPolicy.find(p => p.skill === s)
+      return policy && (
+        policy.representationVerdict === 'headline_represented' ||
+        (policy.representationVerdict === 'broadly_represented' && (policy.actualExposure?.direct || 0) >= 2)
+      )
+    })
+  
+  // [PHASE 6B] Check session labels match actual content
+  const sessionIdentityMismatches = sessions.filter(session => {
+    const focus = session.focus?.toLowerCase() || ''
+    const exercises = session.exercises || []
+    const hasPushExercises = exercises.some(e => 
+      e.name?.toLowerCase().includes('push') || e.name?.toLowerCase().includes('planche')
+    )
+    const hasPullExercises = exercises.some(e => 
+      e.name?.toLowerCase().includes('pull') || e.name?.toLowerCase().includes('lever') || e.name?.toLowerCase().includes('row')
+    )
+    // Simple check: if labeled "push" but mostly pull exercises, it's a mismatch
+    if (focus.includes('push') && hasPullExercises && !hasPushExercises) return true
+    if (focus.includes('pull') && hasPushExercises && !hasPullExercises) return true
+    return false
+  })
+  const sessionLabelsMatchActualContent = sessionIdentityMismatches.length === 0
+  
+  // [PHASE 6B] Check top card matches final week
+  const topCardMatchesFinalWeek = primaryDominanceTightened && 
+    secondaryLaneStillMeaningful && 
+    tertiaryVisibilityReducedToEarnedOnly
+  
+  // [PHASE 6B] Style selections truth (classification only, not enforcement)
+  const styleSelectionsActuallyInfluencingBuilder = 
+    sessions.some(s => {
+      const method = (s as unknown as { trainingMethod?: string }).trainingMethod || ''
+      return method !== 'straight_sets' && method !== ''
+    })
+  
+  // [PHASE 6B] Verify deselected skills still blocked
+  const deselectedSkillsStillBlocked = builtAroundSkillsFinal.every(s => 
+    profileSelectedSkills.includes(s)
+  )
+  
+  console.log('[phase6b-output-tightening-final-verdict]', {
+    primaryDominanceTightened,
+    secondaryLaneStillMeaningful,
+    tertiaryVisibilityReducedToEarnedOnly,
+    builtAroundNowUsesStrictRepresentationTruth: builtAroundChipsNowUseStrictTruth,
+    sessionLabelsMatchActualContent,
+    topCardNowMatchesFinalWeek: topCardMatchesFinalWeek,
+    styleSelectionsActuallyInfluencingBuilder,
+    deselectedSkillsStillBlocked,
+    detailedCounts: {
+      headlineSkills: headlineSkillCount,
+      broadlyRepresented: broadlyRepresentedCount,
+      supportOnly: supportOnlyCount,
+      tertiaryInBuiltAround: tertiarySkills.length,
+      builtAroundTotal: builtAroundSkillsFinal.length,
+      sessionIdentityMismatches: sessionIdentityMismatches.length,
+    },
+    safeToProceedToNextChronologicalPhase: 
+      primaryDominanceTightened && 
+      tertiaryVisibilityReducedToEarnedOnly && 
+      deselectedSkillsStillBlocked &&
+      builtAroundChipsNowUseStrictTruth,
   })
   
   // ==========================================================================

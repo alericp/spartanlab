@@ -549,18 +549,62 @@ export function AdaptiveProgramDisplay({
               },
             })
             
+            // ==========================================================================
+            // [PHASE 6B TASK 1] STRICT CHIP REPRESENTATION SOURCE
+            // Only show chips for skills that are MEANINGFULLY represented in final week
+            // Not all selectedSkills - only those that pass strict representation threshold
+            // ==========================================================================
+            
+            // [PHASE 6B] Build strict representation list from weekly output truth
+            const strictRepresentedSkillsForChips = program.selectedSkills.filter(skill => {
+              const chipState = getChipState(skill)
+              const policy = weeklyRepresentation?.policies?.find(p => p.skill === skill)
+              const directExposure = policy?.actualExposure?.direct || 0
+              const totalExposure = policy?.actualExposure?.total || 0
+              
+              // [PHASE 6B TASK 2] TIGHTENED MEANINGFUL REPRESENTATION THRESHOLDS
+              // Skill is shown as chip only if:
+              // 1. It's headline priority (primary/secondary goal)
+              // 2. OR it has at least 2 direct exercises (meaningful tertiary expression)
+              // 3. OR it has at least 3 total exercises (sufficient coverage)
+              // NOT just any support-level presence
+              
+              const isHeadline = chipState === 'headline_priority'
+              const hasMeaningfulDirect = directExposure >= 2
+              const hasSignificantTotal = totalExposure >= 3
+              const isRepresentedBroaderWithSubstance = chipState === 'represented_broader' && (hasMeaningfulDirect || hasSignificantTotal)
+              
+              return isHeadline || isRepresentedBroaderWithSubstance
+            })
+            
+            console.log('[phase6b-represented-skill-source-truth-audit]', {
+              allSelectedSkills: program.selectedSkills,
+              strictRepresentedForChips: strictRepresentedSkillsForChips,
+              filteredOut: program.selectedSkills.filter(s => !strictRepresentedSkillsForChips.includes(s)),
+              primaryGoal: program.primaryGoal,
+              secondaryGoal: program.secondaryGoal,
+              thresholds: {
+                headlinePriority: 'always_shown',
+                tertiary: 'needs_2_direct_OR_3_total_exercises',
+                supportOnly: 'filtered_out_from_chips',
+              },
+              verdict: strictRepresentedSkillsForChips.length < program.selectedSkills.length
+                ? 'chips_tightened_to_meaningful_representation'
+                : 'all_selected_skills_meet_threshold',
+            })
+            
             return (
               <div className="flex flex-wrap items-center gap-1">
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-[#1A1A1A] text-[#6A6A6A]">
                   <Sparkles className="w-3 h-3 text-[#E63946]/60" />
                   Built around:
                 </span>
-                {program.selectedSkills.map((skill) => {
+                {/* [PHASE 6B] Only render chips for strictly represented skills */}
+                {strictRepresentedSkillsForChips.map((skill) => {
                   const chipState = getChipState(skill)
                   const policy = weeklyRepresentation?.policies?.find(p => p.skill === skill)
-                  const exposureCount = policy?.actualExposure?.total || 0
                   
-                  // [WEEKLY-REPRESENTATION] TASK 5: Style chips based on exposure verdict
+                  // [PHASE 6B] Simplified chip styles - only headline and represented states
                   const chipStyles = {
                     headline_priority: 'bg-[#E63946]/10 text-[#E63946] border border-[#E63946]/20',
                     represented_broader: 'bg-[#1A1A1A] text-[#A5A5A5] border border-[#3A3A3A]',
@@ -568,7 +612,7 @@ export function AdaptiveProgramDisplay({
                     selected_not_represented: 'bg-[#1A1A1A]/50 text-[#6A6A6A] border border-dashed border-[#3A3A3A]',
                   }
                   
-                  // [WEEKLY-REPRESENTATION] Dynamic titles based on actual exposure
+                  // [PHASE 6B] Dynamic titles based on actual exposure
                   const getChipTitle = (): string => {
                     if (policy) {
                       const { direct, support, total } = policy.actualExposure
@@ -576,23 +620,14 @@ export function AdaptiveProgramDisplay({
                         case 'headline_priority':
                           return `Primary focus: ${total} exercises (${direct} direct, ${support} support)`
                         case 'represented_broader':
-                          return `Represented: ${total} exercises this week`
-                        case 'support_only':
-                          return `Support-level: ${support} support exercises`
-                        case 'selected_not_represented':
-                          return total === 0 
-                            ? 'Selected but no exercises this week'
-                            : `Minimal: ${total} warmup/prep exercises only`
+                          return `Represented: ${total} exercises this week (${direct} direct)`
+                        default:
+                          return `${total} exercises this week`
                       }
                     }
-                    // Fallback titles
-                    const fallbackTitles = {
-                      headline_priority: 'Primary focus this week',
-                      represented_broader: 'Represented in this week',
-                      support_only: 'Support-level expression this week',
-                      selected_not_represented: 'Selected but not directly expressed this week',
-                    }
-                    return fallbackTitles[chipState]
+                    return chipState === 'headline_priority' 
+                      ? 'Primary focus this week' 
+                      : 'Represented in this week'
                   }
                   
                   return (
@@ -660,6 +695,31 @@ export function AdaptiveProgramDisplay({
             overallVerdict: (pushClaimValid && pullClaimValid && hybridClaimValid) 
               ? 'claims_match_week_structure' 
               : 'potential_overclaim',
+          })
+          
+          // [PHASE 6B TASK 5] TOP CARD ENFORCEMENT AUDIT
+          // Verify top card describes actual final week, not eligibility universe
+          const summaryTruth = (program as unknown as { summaryTruth?: { 
+            headlineFocusSkills?: string[]
+            truthfulHybridSummary?: string
+          }}).summaryTruth
+          const displayedChipsCount = document.querySelectorAll('[data-chip-skill]')?.length || 0
+          
+          console.log('[phase6b-top-card-enforcement-audit]', {
+            primaryGoal: program.primaryGoal,
+            secondaryGoal: program.secondaryGoal,
+            sessionCountByFocus: {
+              pushDominant: pushDominantCount,
+              pullDominant: pullDominantCount,
+              mixed: mixedCount,
+            },
+            summaryTruthHeadlineSkills: summaryTruth?.headlineFocusSkills || [],
+            rationaleSample: (program.programRationale || '').slice(0, 100),
+            topCardMatchesFinalWeek: (pushClaimValid && pullClaimValid && hybridClaimValid),
+            claimsAreAccurate: !claimsPushPrimary || pushDominantCount >= 1,
+            verdict: (pushClaimValid && pullClaimValid && hybridClaimValid)
+              ? 'top_card_matches_final_week'
+              : 'top_card_may_overclaim',
           })
           
           return null // No UI output, just audit logging
@@ -919,6 +979,51 @@ export function AdaptiveProgramDisplay({
           s.styleMetadata?.styledGroups?.some((g: any) => g.groupType !== 'straight')
         ) ? 'style_truth_reaching_ui' : 'no_styled_groups_in_program',
       }) as any}
+      {/* [PHASE 6B TASK 4] SESSION IDENTITY ENFORCEMENT AUDIT */}
+      {console.log('[phase6b-session-identity-enforcement-audit]', {
+        totalSessions: validSessions.length,
+        sessionIdentities: validSessions.map((session: any) => {
+          const focus = session.focus?.toLowerCase() || ''
+          const exercises = session.exercises || []
+          const exerciseNames = exercises.map((e: any) => e.name?.toLowerCase() || '').join(' ')
+          
+          // Check if label matches actual content
+          const labelClaimsPush = focus.includes('push') || focus.includes('planche')
+          const labelClaimsPull = focus.includes('pull') || focus.includes('lever')
+          const labelClaimsMixed = focus.includes('mixed') || focus.includes('density')
+          
+          const hasPushContent = exerciseNames.includes('push') || exerciseNames.includes('planche') || exerciseNames.includes('dip')
+          const hasPullContent = exerciseNames.includes('pull') || exerciseNames.includes('row') || exerciseNames.includes('lever')
+          
+          const identityMatches = 
+            (!labelClaimsPush || hasPushContent) && 
+            (!labelClaimsPull || hasPullContent) &&
+            (!labelClaimsMixed || (hasPushContent || hasPullContent))
+          
+          return {
+            day: session.dayNumber,
+            label: session.focus,
+            labelClaimsPush,
+            labelClaimsPull,
+            labelClaimsMixed,
+            hasPushContent,
+            hasPullContent,
+            identityMatches,
+          }
+        }),
+        allSessionsMatchContent: validSessions.every((session: any) => {
+          const focus = session.focus?.toLowerCase() || ''
+          const exercises = session.exercises || []
+          const exerciseNames = exercises.map((e: any) => e.name?.toLowerCase() || '').join(' ')
+          const labelClaimsPush = focus.includes('push') || focus.includes('planche')
+          const labelClaimsPull = focus.includes('pull') || focus.includes('lever')
+          const hasPushContent = exerciseNames.includes('push') || exerciseNames.includes('planche') || exerciseNames.includes('dip')
+          const hasPullContent = exerciseNames.includes('pull') || exerciseNames.includes('row') || exerciseNames.includes('lever')
+          return (!labelClaimsPush || hasPushContent) && (!labelClaimsPull || hasPullContent)
+        }),
+        verdict: 'session_identity_audit_complete',
+      }) as any}
+      
       <div className="space-y-4">
         <h4 className="text-lg font-bold">Training Sessions</h4>
   {validSessions.length > 0 ? (

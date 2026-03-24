@@ -116,43 +116,47 @@ export function calculateGoalHierarchyWeights(
   secondaryGoal: string | null,
   trainingPath: string | null
 ): GoalHierarchyWeights {
-  // IMPROVED: Reduced primary compression to give secondary goals meaningful presence
-  // Old weights: primary 0.65-0.70, secondary 0.20-0.30
-  // New weights: primary 0.50-0.55, secondary 0.30-0.35
+  // ==========================================================================
+  // [PHASE 6B] TIGHTENED GOAL HIERARCHY FOR PRIMARY DOMINANCE
+  // Primary should visibly dominate, secondary meaningful but not competing
+  // Support is for complementary work, NOT for distributing across many tertiary skills
+  // ==========================================================================
+  // Phase 6B weights: primary 0.55-0.60, secondary 0.25-0.30, support 0.15
+  // (Increased primary, reduced support to prevent tertiary sprawl)
   
-  let primaryWeight = 0.50
+  let primaryWeight = 0.55  // [PHASE 6B] Raised from 0.50
   let secondaryWeight = secondaryGoal ? 0.30 : 0
-  let supportWeight = 0.20
+  let supportWeight = 0.15  // [PHASE 6B] Reduced from 0.20
   
   // Adjust for training path
   if (trainingPath === 'hybrid') {
-    // Hybrid: balanced skill + strength - both goals get substantial attention
+    // Hybrid: balanced skill + strength - primary still leads clearly
     if (isSkillGoal(primaryGoal) && secondaryGoal && isSkillGoal(secondaryGoal)) {
-      // Both are skills - near-equal split with slight primary lead
-      primaryWeight = 0.45
+      // Both are skills - primary still leads with clear margin
+      primaryWeight = 0.50  // [PHASE 6B] Raised from 0.45
       secondaryWeight = 0.35
-      supportWeight = 0.20
+      supportWeight = 0.15  // [PHASE 6B] Reduced from 0.20
     } else if (isSkillGoal(primaryGoal)) {
       // Primary skill + strength support
-      primaryWeight = 0.50
+      primaryWeight = 0.55
       secondaryWeight = secondaryGoal ? 0.30 : 0
-      supportWeight = 0.20
+      supportWeight = 0.15
     } else if (isStrengthGoal(primaryGoal)) {
       // Primary strength + skill support
-      primaryWeight = 0.50
+      primaryWeight = 0.55
       secondaryWeight = secondaryGoal ? 0.30 : 0
-      supportWeight = 0.20
+      supportWeight = 0.15
     }
   } else if (trainingPath === 'skill_progression') {
-    // Skill-focused: primary leads but secondary still meaningful
+    // Skill-focused: primary dominates
+    primaryWeight = 0.60  // [PHASE 6B] Raised from 0.55
+    secondaryWeight = secondaryGoal ? 0.28 : 0  // [PHASE 6B] Slightly reduced
+    supportWeight = 0.12  // [PHASE 6B] Reduced from 0.15
+  } else if (trainingPath === 'strength_endurance') {
+    // Strength-focused: primary still leads
     primaryWeight = 0.55
     secondaryWeight = secondaryGoal ? 0.30 : 0
     supportWeight = 0.15
-  } else if (trainingPath === 'strength_endurance') {
-    // Strength-focused: balanced approach
-    primaryWeight = 0.50
-    secondaryWeight = secondaryGoal ? 0.30 : 0
-    supportWeight = 0.20
   }
   
   // Normalize to sum to 1.0
@@ -1963,20 +1967,27 @@ export function calculateWeightedSkillAllocation(
     
     const perSkillWeight = goalWeights.supportWeight / otherSkills.length
     
-    // [PRIORITY-COLLAPSE-FIX] TASK 6: Calculate how many skills should get tertiary status
-    // For broad multi-skill profiles, we shouldn't collapse everything to support.
-    // Formula: allow ~30% of "other" skills to be tertiary, minimum 1, max based on sessions
+    // ==========================================================================
+    // [PHASE 6B TASK 3] TIGHTENED TERTIARY ALLOCATION
+    // Reduced from 40% to 20% of "other" skills to prevent over-broad identity
+    // Tertiary visibility is now EARNED, not automatic
+    // ==========================================================================
+    // Formula: allow ~20% of "other" skills to be tertiary, minimum 1, max 2
+    // This ensures primary/secondary dominate while allowing 1-2 meaningful tertiary lanes
     const maxTertiarySkills = Math.min(
-      Math.max(1, Math.ceil(otherSkills.length * 0.4)), // 40% of other skills, minimum 1
-      Math.max(1, Math.floor(totalSessions / 2))         // But capped by session count / 2
+      Math.max(1, Math.ceil(otherSkills.length * 0.20)), // [PHASE 6B] Reduced from 40% to 20%
+      2,                                                   // [PHASE 6B] Hard cap at 2 tertiary max
+      Math.max(1, Math.floor(totalSessions / 3))          // [PHASE 6B] Tighter session ratio
     )
     
-    console.log('[priority-collapse-fix] Tertiary allocation calculation:', {
+    console.log('[phase6b-tertiary-threshold-enforcement-audit]', {
       otherSkillsCount: otherSkills.length,
       totalSessions,
-      oldBehavior: 'only_index_0_gets_tertiary',
-      newBehavior: `up_to_${maxTertiarySkills}_skills_get_tertiary`,
-      maxTertiarySkills,
+      phase6aAllowedTertiary: Math.ceil(otherSkills.length * 0.4),
+      phase6bAllowedTertiary: maxTertiarySkills,
+      reductionReason: 'prevent_over_broad_visible_identity',
+      tertiaryMustBeEarned: true,
+      maxTertiaryHardCap: 2,
     })
     
     otherSkills.forEach((skill, index) => {

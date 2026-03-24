@@ -1331,6 +1331,30 @@ export function AdaptiveProgramDisplay({
           s.styleMetadata?.styledGroups?.some((g: any) => g.groupType !== 'straight')
         ) ? 'style_truth_reaching_ui' : 'no_styled_groups_in_program',
       }) as any}
+      {/* [PHASE 11 TASK 6] STYLE DISPLAY READ AUDIT */}
+      {console.log('[phase11-style-display-read-audit]', {
+        displayIsReadingStyleMetadata: validSessions.every((s: any) => s.styleMetadata !== undefined || s.exercises?.length === 0),
+        styledGroupsBeingRead: validSessions.filter((s: any) => s.styleMetadata?.styledGroups?.length > 0).length,
+        supersetsInData: validSessions.filter((s: any) => 
+          s.styleMetadata?.styledGroups?.some((g: any) => g.groupType === 'superset')
+        ).length,
+        circuitsInData: validSessions.filter((s: any) => 
+          s.styleMetadata?.styledGroups?.some((g: any) => g.groupType === 'circuit')
+        ).length,
+        densityInData: validSessions.filter((s: any) => 
+          s.styleMetadata?.styledGroups?.some((g: any) => g.groupType === 'density_block')
+        ).length,
+        prefixesPresent: validSessions.some((s: any) => 
+          s.styleMetadata?.styledGroups?.some((g: any) => 
+            g.exercises?.some((e: any) => e.prefix)
+          )
+        ),
+        verdict: validSessions.some((s: any) => s.styleMetadata?.styledGroups?.length > 0)
+          ? 'display_truth_ok'
+          : validSessions.some((s: any) => s.styleMetadata?.appliedMethods?.some((m: string) => m !== 'straight_sets'))
+            ? 'display_missing_existing_style_data'
+            : 'display_truth_ok',
+      }) as any}
       {/* [PHASE 6B TASK 4] SESSION IDENTITY ENFORCEMENT AUDIT */}
       {console.log('[phase6b-session-identity-enforcement-audit]', {
         totalSessions: validSessions.length,

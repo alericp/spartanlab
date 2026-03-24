@@ -848,14 +848,14 @@ export default function SettingsPage() {
           )}
           
           {/* Flexible Mode Info - Show clear adaptive semantics */}
+          {/* [PHASE 12 TASK 3] Truthful wording - does not imply automatic mid-week adjustment */}
           {scheduleMode === 'flexible' && (
             <div className="p-3 rounded-lg bg-[#1A1A1A] border border-[#3A3A3A] space-y-2">
               <p className="text-sm text-[#F5F5F5] font-medium">
                 Flexible / Adaptive Schedule
               </p>
               <p className="text-xs text-[#A5A5A5]">
-                Your weekly training frequency is adjusted by the engine based on recovery, readiness, goals, and recent training load. 
-                This is not a fixed preference — it adapts week-to-week.
+                Your weekly training frequency is calculated by the engine based on recovery, readiness, goals, and recent training load when your program is built or rebuilt.
               </p>
             </div>
           )}
@@ -896,14 +896,15 @@ export default function SettingsPage() {
           </div>
           
           {/* Adaptive Mode Info - Show clear adaptive semantics */}
+          {/* [PHASE 12 TASK 3] Truthful wording - calculation happens at program build time */}
           {sessionDurationMode === 'adaptive' && (
             <div className="p-3 rounded-lg bg-[#1A1A1A] border border-[#3A3A3A] space-y-2">
               <p className="text-sm text-[#F5F5F5] font-medium">
                 Adaptive Session Duration
               </p>
               <p className="text-xs text-[#A5A5A5]">
-                Your session length is adjusted by the engine based on recovery, readiness, and training focus for each day. 
-                The target below is used as a baseline when planning, but actual sessions may be shorter or longer.
+                Your session length is calculated by the engine based on recovery, readiness, and training focus when your program is built. 
+                The target below is used as a baseline when planning.
               </p>
             </div>
           )}

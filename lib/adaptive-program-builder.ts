@@ -8379,6 +8379,42 @@ function generateAdaptiveSession(
       verdict: canonicalFullDuration === sessionMinutesResolved ? 'aligned' : 'fixed_mixed_duration_truth',
     })
     
+    // ==========================================================================
+    // [PHASE 6A TASK 1] SESSION IDENTITY AUDIT BEFORE COMPRESSION
+    // Captures the truth of the full session BEFORE variants are generated
+    // ==========================================================================
+    const mainExercises = effectiveSelection.main || []
+    const skillExpressions = mainExercises
+      .filter(e => e.exercise.category === 'skill' || 
+                   e.selectionReason?.toLowerCase().includes('skill progression'))
+      .map(e => e.exercise.name)
+    const strengthSupport = mainExercises
+      .filter(e => e.exercise.category === 'strength' &&
+                   (e.selectionReason?.toLowerCase().includes('support') ||
+                    e.selectionReason?.toLowerCase().includes('hybrid')))
+      .map(e => e.exercise.name)
+    const genericCount = mainExercises.filter(e => 
+      (e.exercise.category === 'accessory' || e.exercise.category === 'core') &&
+      !e.selectionReason?.toLowerCase().includes('skill')
+    ).length
+    const rationaleCount = mainExercises.filter(e => 
+      e.selectionReason && e.selectionReason.length > 10
+    ).length
+    
+    console.log('[session-identity-before-variants-audit]', {
+      sessionId: day.dayNumber,
+      dayFocus: day.focus,
+      primaryGoal,
+      sessionPrimarySkillExpressions: skillExpressions,
+      sessionStrengthSupport: strengthSupport,
+      mainExerciseNames: mainExercises.map(e => e.exercise.name),
+      genericSupportCount: genericCount,
+      rationaleCoverage: `${rationaleCount}/${mainExercises.length}`,
+      verdict: skillExpressions.length > 0 
+        ? 'has_priority_skill_identity' 
+        : 'generic_session_identity',
+    })
+    
     console.log('[session-variants-diagnostic]', {
       mainCount: effectiveSelection.main.length,
       totalEstimatedTime: effectiveSelection.totalEstimatedTime,

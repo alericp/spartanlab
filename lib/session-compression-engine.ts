@@ -1,5 +1,6 @@
 // Session Compression Engine
 // Intelligently compresses or expands sessions based on available time
+// [PHASE 6A] Preserves session identity and exercise metadata through compression
 
 import type { ExerciseSelection, SelectedExercise } from './program-exercise-selector'
 
@@ -13,11 +14,91 @@ export interface CompressionResult {
   explanation: string
 }
 
+// =============================================================================
+// [PHASE 6A TASK 1] SESSION IDENTITY SNAPSHOT
+// Captures the truth of the full session BEFORE compression
+// =============================================================================
+interface SessionIdentitySnapshot {
+  sessionId?: string
+  dayFocus?: string
+  primarySkillExpressions: string[]
+  secondarySkillExpressions: string[]
+  broaderSkillExpressions: string[]
+  mainProgressionExercises: string[]
+  strengthSupportExercises: string[]
+  genericSupportCount: number
+  exercisesWithRationale: number
+  totalExercises: number
+}
+
+function captureSessionIdentity(selection: ExerciseSelection, dayFocus?: string): SessionIdentitySnapshot {
+  const main = selection.main || []
+  
+  // Identify skill expressions (category === 'skill' or selectionReason mentions skill)
+  const primarySkillExpressions = main
+    .filter(e => e.exercise.category === 'skill' || 
+                 e.selectionReason?.toLowerCase().includes('skill progression') ||
+                 e.selectionReason?.toLowerCase().includes('primary goal'))
+    .map(e => e.exercise.name)
+  
+  // Identify secondary/broader skill expressions
+  const secondarySkillExpressions = main
+    .filter(e => e.selectionReason?.toLowerCase().includes('secondary') ||
+                 e.selectionReason?.toLowerCase().includes('selected skill'))
+    .map(e => e.exercise.name)
+  
+  const broaderSkillExpressions = main
+    .filter(e => e.selectionReason?.toLowerCase().includes('hybrid') ||
+                 e.selectionReason?.toLowerCase().includes('advanced') ||
+                 e.selectionReason?.toLowerCase().includes('expression'))
+    .map(e => e.exercise.name)
+  
+  // Identify main progression exercises
+  const mainProgressionExercises = main
+    .filter(e => e.exercise.category === 'skill' || 
+                 e.selectionReason?.toLowerCase().includes('progression'))
+    .map(e => e.exercise.name)
+  
+  // Identify strength support (not generic accessory)
+  const strengthSupportExercises = main
+    .filter(e => e.exercise.category === 'strength' &&
+                 (e.selectionReason?.toLowerCase().includes('support') ||
+                  e.selectionReason?.toLowerCase().includes('strength')))
+    .map(e => e.exercise.name)
+  
+  // Count generic support (accessory/core without specific purpose)
+  const genericSupportCount = main.filter(e => 
+    (e.exercise.category === 'accessory' || e.exercise.category === 'core') &&
+    !e.selectionReason?.toLowerCase().includes('skill') &&
+    !e.selectionReason?.toLowerCase().includes('progression')
+  ).length
+  
+  // Count exercises with meaningful rationale
+  const exercisesWithRationale = main.filter(e => 
+    e.selectionReason && 
+    e.selectionReason.length > 10 &&
+    !e.selectionReason.toLowerCase().includes('fallback')
+  ).length
+  
+  return {
+    dayFocus,
+    primarySkillExpressions,
+    secondarySkillExpressions,
+    broaderSkillExpressions,
+    mainProgressionExercises,
+    strengthSupportExercises,
+    genericSupportCount,
+    exercisesWithRationale,
+    totalExercises: main.length,
+  }
+}
+
 interface CompressionInputs {
   selection: ExerciseSelection
   targetMinutes: number
   originalMinutes: number
   preserveSkillWork: boolean
+  dayFocus?: string // [PHASE 6A] Session identity context
 }
 
 // =============================================================================
@@ -25,7 +106,27 @@ interface CompressionInputs {
 // =============================================================================
 
 export function compressSession(inputs: CompressionInputs): CompressionResult {
-  const { selection, targetMinutes, originalMinutes, preserveSkillWork } = inputs
+  const { selection, targetMinutes, originalMinutes, preserveSkillWork, dayFocus } = inputs
+  
+  // ==========================================================================
+  // [PHASE 6A TASK 1] CAPTURE SESSION IDENTITY BEFORE COMPRESSION
+  // ==========================================================================
+  const sessionIdentity = captureSessionIdentity(selection, dayFocus)
+  
+  console.log('[session-identity-before-compression-audit]', {
+    sessionId: dayFocus || 'unknown',
+    dayFocus,
+    primaryGoal: 'from_context', // Not directly available here
+    sessionPrimarySkillExpressions: sessionIdentity.primarySkillExpressions,
+    sessionSecondarySkillExpressions: sessionIdentity.secondarySkillExpressions,
+    sessionBroaderSkillExpressions: sessionIdentity.broaderSkillExpressions,
+    mainExerciseNames: selection.main.map(e => e.exercise.name),
+    genericSupportCount: sessionIdentity.genericSupportCount,
+    rationaleCoverage: `${sessionIdentity.exercisesWithRationale}/${sessionIdentity.totalExercises}`,
+    verdict: sessionIdentity.primarySkillExpressions.length > 0 
+      ? 'has_priority_skill_identity' 
+      : 'generic_session_identity',
+  })
   
   // No compression needed
   if (targetMinutes >= originalMinutes) {
@@ -52,8 +153,8 @@ export function compressSession(inputs: CompressionInputs): CompressionResult {
     compressionLevel = 'heavy'
   }
   
-  // Create compressed version
-  const compressed = compressSelection(selection, compressionLevel, preserveSkillWork)
+  // Create compressed version with session identity preservation
+  const compressed = compressSelection(selection, compressionLevel, preserveSkillWork, sessionIdentity)
   
   // Track what was removed/adjusted
   const removedExercises = findRemovedExercises(selection.main, compressed.main)
@@ -64,6 +165,83 @@ export function compressSession(inputs: CompressionInputs): CompressionResult {
     removedExercises,
     adjustedSets
   )
+  
+  // ==========================================================================
+  // [PHASE 6A TASK 2] COMPRESSED SESSION IDENTITY PRESERVATION AUDIT
+  // ==========================================================================
+  const preservedPrimarySkill = sessionIdentity.primarySkillExpressions.some(skill =>
+    compressed.main.some(e => e.exercise.name === skill)
+  )
+  const preservedSecondaryOrBroader = 
+    sessionIdentity.secondarySkillExpressions.some(skill =>
+      compressed.main.some(e => e.exercise.name === skill)
+    ) ||
+    sessionIdentity.broaderSkillExpressions.some(skill =>
+      compressed.main.some(e => e.exercise.name === skill)
+    )
+  
+  const compressedGenericCount = compressed.main.filter(e => 
+    (e.exercise.category === 'accessory' || e.exercise.category === 'core') &&
+    !e.selectionReason?.toLowerCase().includes('skill')
+  ).length
+  
+  const genericDominates = compressedGenericCount > compressed.main.length / 2
+  
+  const droppedIdentityElements = [
+    ...sessionIdentity.primarySkillExpressions.filter(skill =>
+      !compressed.main.some(e => e.exercise.name === skill)
+    ).map(s => `${s} (primary skill)`),
+    ...sessionIdentity.strengthSupportExercises.filter(skill =>
+      !compressed.main.some(e => e.exercise.name === skill)
+    ).map(s => `${s} (strength support)`),
+  ]
+  
+  console.log('[compressed-session-identity-preservation-audit]', {
+    sessionId: dayFocus || 'unknown',
+    targetMinutes,
+    fullSessionIdentity: {
+      primarySkills: sessionIdentity.primarySkillExpressions.length,
+      secondarySkills: sessionIdentity.secondarySkillExpressions.length,
+      totalExercises: sessionIdentity.totalExercises,
+    },
+    compressedExerciseNames: compressed.main.map(e => e.exercise.name),
+    preservedPrimarySkillExpression: preservedPrimarySkill,
+    preservedSecondaryOrBroaderExpression: preservedSecondaryOrBroader,
+    genericSupportDominated: genericDominates,
+    exactDroppedIdentityElements: droppedIdentityElements,
+    verdict: genericDominates 
+      ? 'WARNING_generic_collapse' 
+      : preservedPrimarySkill 
+        ? 'identity_preserved' 
+        : 'identity_partially_lost',
+  })
+  
+  // ==========================================================================
+  // [PHASE 6A TASK 6] VARIANT DERIVED FROM FULL SESSION TRUTH AUDIT
+  // ==========================================================================
+  const inheritedDirectly = compressed.main.filter(e =>
+    selection.main.some(orig => orig.exercise.id === e.exercise.id)
+  ).length
+  
+  const genericFallbackLike = compressed.main.filter(e =>
+    !selection.main.some(orig => orig.exercise.id === e.exercise.id) ||
+    (e.selectionReason?.toLowerCase().includes('fallback') ||
+     e.selectionReason?.toLowerCase().includes('rescue'))
+  ).length
+  
+  console.log('[variant-derived-from-full-session-truth-audit]', {
+    sessionId: dayFocus || 'unknown',
+    fullExerciseNames: selection.main.map(e => e.exercise.name),
+    shortVariantExerciseNames: compressed.main.map(e => e.exercise.name),
+    inheritedDirectlyCount: inheritedDirectly,
+    adaptedFromFullCount: 0, // No adaptation in compression, just selection
+    genericFallbackLikeCount: genericFallbackLike,
+    verdict: inheritedDirectly === compressed.main.length 
+      ? 'derived_from_full_session' 
+      : genericFallbackLike > 0 
+        ? 'WARNING_fallback_like_exercises_present'
+        : 'derived_with_adaptations',
+  })
   
   return {
     original: selection,
@@ -83,11 +261,51 @@ export function compressSession(inputs: CompressionInputs): CompressionResult {
 function compressSelection(
   selection: ExerciseSelection,
   level: 'light' | 'moderate' | 'heavy',
-  preserveSkillWork: boolean
+  preserveSkillWork: boolean,
+  sessionIdentity?: SessionIdentitySnapshot
 ): ExerciseSelection {
+  // ==========================================================================
+  // [PHASE 6A TASK 4] PRESERVE EXERCISE METADATA THROUGH COMPRESSION
+  // Ensure selectionReason, selectionTrace, and other fields survive
+  // ==========================================================================
+  const compressedMain = compressMain(selection.main, level, preserveSkillWork, sessionIdentity)
+  
+  // [PHASE 6A TASK 4-5] Audit rationale and role preservation
+  const mainWithRationale = selection.main.filter(e => e.selectionReason && e.selectionReason.length > 5).length
+  const compressedWithRationale = compressedMain.filter(e => e.selectionReason && e.selectionReason.length > 5).length
+  const missingRationale = compressedMain
+    .filter(e => !e.selectionReason || e.selectionReason.length < 5)
+    .map(e => e.exercise.name)
+  
+  console.log('[compressed-rationale-preservation-audit]', {
+    fullMainExerciseCount: selection.main.length,
+    compressedMainExerciseCount: compressedMain.length,
+    rationaleCountBefore: mainWithRationale,
+    rationaleCountAfter: compressedWithRationale,
+    exercisesMissingRationaleAfterCompression: missingRationale,
+    adaptedExercisesNeedingRemap: compressedMain.filter(e => e.wasSubstituted).map(e => e.exercise.name),
+    verdict: missingRationale.length === 0 ? 'all_rationale_preserved' : 'some_rationale_missing',
+  })
+  
+  // [PHASE 6A TASK 5] Audit role label preservation
+  const mainWithRole = selection.main.filter(e => e.exercise.category).length
+  const compressedWithRole = compressedMain.filter(e => e.exercise.category).length
+  const missingRoleLabels = compressedMain
+    .filter(e => !e.exercise.category)
+    .map(e => e.exercise.name)
+  
+  console.log('[compressed-role-label-truth-audit]', {
+    exercisesWithRoleBefore: mainWithRole,
+    exercisesWithRoleAfter: compressedWithRole,
+    missingRoleLabels,
+    changedRoleLabels: [], // Roles don't change in compression, just preserved
+    unjustifiedRoleLoss: missingRoleLabels.length > 0,
+    verdict: missingRoleLabels.length === 0 ? 'all_roles_preserved' : 'role_labels_missing',
+  })
+  
   return {
     warmup: compressWarmup(selection.warmup, level),
-    main: compressMain(selection.main, level, preserveSkillWork),
+    main: compressedMain,
     cooldown: compressCooldown(selection.cooldown, level),
     totalEstimatedTime: 0, // Recalculated after compression
   }
@@ -97,25 +315,26 @@ function compressWarmup(
   warmup: SelectedExercise[],
   level: 'light' | 'moderate' | 'heavy'
 ): SelectedExercise[] {
+  // [PHASE 6A TASK 4-5] Preserve all metadata through compression
   if (level === 'light') {
-    // Keep all warmup, maybe reduce sets
+    // Keep all warmup, maybe reduce sets - preserve all metadata
     return warmup.map(e => ({
-      ...e,
+      ...e, // Preserve selectionReason, selectionTrace, etc.
       sets: Math.max(1, e.sets),
     }))
   }
   
   if (level === 'moderate') {
-    // Keep essential warmup only (first 3)
+    // Keep essential warmup only (first 3) - preserve all metadata
     return warmup.slice(0, 3).map(e => ({
-      ...e,
+      ...e, // Preserve selectionReason, selectionTrace, etc.
       sets: 1,
     }))
   }
   
-  // Heavy compression - minimal warmup
+  // Heavy compression - minimal warmup but preserve metadata
   return warmup.slice(0, 2).map(e => ({
-    ...e,
+    ...e, // Preserve selectionReason, selectionTrace, etc.
     sets: 1,
     repsOrTime: reduceRepsOrTime(e.repsOrTime),
   }))
@@ -124,20 +343,74 @@ function compressWarmup(
 function compressMain(
   main: SelectedExercise[],
   level: 'light' | 'moderate' | 'heavy',
-  preserveSkillWork: boolean
+  preserveSkillWork: boolean,
+  sessionIdentity?: SessionIdentitySnapshot
 ): SelectedExercise[] {
-  // Sort by priority: skill > strength > accessory > core
-  const prioritized = [...main].sort((a, b) => {
-    const priorityOrder = { skill: 0, strength: 1, accessory: 2, core: 3 }
-    return (priorityOrder[a.exercise.category] ?? 4) - (priorityOrder[b.exercise.category] ?? 4)
+  // ==========================================================================
+  // [PHASE 6A TASK 2] IDENTITY-PRESERVING COMPRESSION
+  // The 30-min variant must preserve session identity, not just category sort
+  // Priority: 1) Priority skill expression, 2) Session-specific strength support
+  //           3) Secondary/broader skill support, 4) Generic accessory/core
+  // ==========================================================================
+  
+  // Compute exercise identity scores based on session context
+  const scoredExercises = main.map(e => {
+    let identityScore = 0
+    const reason = e.selectionReason?.toLowerCase() || ''
+    const name = e.exercise.name.toLowerCase()
+    
+    // Primary skill expressions get highest priority
+    if (e.exercise.category === 'skill') identityScore += 100
+    if (reason.includes('skill progression') || reason.includes('primary goal')) identityScore += 80
+    if (sessionIdentity?.primarySkillExpressions.some(s => s.toLowerCase() === name)) identityScore += 70
+    
+    // Session-specific support gets second priority
+    if (reason.includes('support') && reason.includes('skill')) identityScore += 50
+    if (reason.includes('hybrid') || reason.includes('advanced')) identityScore += 45
+    if (sessionIdentity?.strengthSupportExercises.some(s => s.toLowerCase() === name)) identityScore += 40
+    
+    // Secondary/broader skill expressions
+    if (sessionIdentity?.secondarySkillExpressions.some(s => s.toLowerCase() === name)) identityScore += 35
+    if (sessionIdentity?.broaderSkillExpressions.some(s => s.toLowerCase() === name)) identityScore += 30
+    if (reason.includes('secondary') || reason.includes('selected skill')) identityScore += 25
+    
+    // Strength category gets moderate priority
+    if (e.exercise.category === 'strength') identityScore += 20
+    
+    // Generic support/accessory gets lowest priority
+    if (e.exercise.category === 'accessory') identityScore += 5
+    if (e.exercise.category === 'core') identityScore += 10
+    
+    // Penalize exercises with weak/fallback rationale
+    if (reason.includes('fallback') || reason.includes('rescue')) identityScore -= 10
+    if (!e.selectionReason || e.selectionReason.length < 10) identityScore -= 5
+    
+    return { exercise: e, identityScore }
+  })
+  
+  // Sort by identity score (highest first)
+  const prioritized = scoredExercises
+    .sort((a, b) => b.identityScore - a.identityScore)
+    .map(s => s.exercise)
+  
+  // Log identity-aware sorting
+  console.log('[compression-identity-sort]', {
+    level,
+    originalOrder: main.map(e => e.exercise.name).slice(0, 5),
+    identitySortedOrder: prioritized.map(e => e.exercise.name).slice(0, 5),
+    topScores: scoredExercises.sort((a, b) => b.identityScore - a.identityScore).slice(0, 5).map(s => ({
+      name: s.exercise.exercise.name,
+      score: s.identityScore,
+    })),
   })
   
   if (level === 'light') {
     // Keep all exercises, reduce sets on lower priority ones
+    // [PHASE 6A] Preserve all metadata from original exercises
     return prioritized.map((e, idx) => {
-      if (idx < 2) return e // Keep top 2 unchanged
+      if (idx < 2) return { ...e } // Keep top 2 unchanged with all metadata
       return {
-        ...e,
+        ...e, // Preserve selectionReason, selectionTrace, etc.
         sets: Math.max(2, e.sets - 1),
       }
     })
@@ -145,51 +418,153 @@ function compressMain(
   
   if (level === 'moderate') {
     // Keep top 4-5 exercises, reduce sets
+    // [PHASE 6A] Preserve session identity - keep skill expressions first
     const kept = prioritized.slice(0, 5)
     return kept.map((e, idx) => {
-      if (preserveSkillWork && e.exercise.category === 'skill') return e
+      if (preserveSkillWork && e.exercise.category === 'skill') {
+        return { ...e } // Preserve full metadata
+      }
       if (idx < 2) return { ...e, sets: Math.max(3, e.sets) }
       return { ...e, sets: Math.max(2, e.sets - 1) }
     })
   }
   
-  // Heavy compression - essential only
-  const essential = prioritized.filter(e => 
-    e.exercise.category === 'skill' || 
-    e.exercise.category === 'strength'
-  ).slice(0, 3)
+  // ==========================================================================
+  // [PHASE 6A TASK 2-3] HEAVY COMPRESSION - IDENTITY PRESERVATION
+  // For 30-min variants: Keep at least one true priority skill expression
+  // Don't let generic support dominate the short session
+  // ==========================================================================
   
-  // Always include at least one core movement if we have room
-  if (essential.length < 4) {
-    const coreExercise = prioritized.find(e => e.exercise.category === 'core')
+  const result: SelectedExercise[] = []
+  const droppedIdentityElements: string[] = []
+  
+  // STEP 1: Preserve at least one priority skill expression if it existed
+  const prioritySkillExercise = prioritized.find(e => 
+    e.exercise.category === 'skill' ||
+    e.selectionReason?.toLowerCase().includes('skill progression') ||
+    e.selectionReason?.toLowerCase().includes('primary goal')
+  )
+  
+  if (prioritySkillExercise) {
+    result.push({ ...prioritySkillExercise }) // Preserve all metadata
+  }
+  
+  // STEP 2: Add session-specific strength support if it supports the skill
+  const specificStrengthSupport = prioritized.find(e => 
+    e.exercise.category === 'strength' &&
+    !result.some(r => r.exercise.id === e.exercise.id) &&
+    (e.selectionReason?.toLowerCase().includes('support') ||
+     e.selectionReason?.toLowerCase().includes('hybrid') ||
+     e.selectionReason?.toLowerCase().includes('advanced'))
+  )
+  
+  if (specificStrengthSupport && result.length < 3) {
+    result.push({ ...specificStrengthSupport, sets: Math.max(2, specificStrengthSupport.sets - 1) })
+  }
+  
+  // STEP 3: Add secondary/broader skill expression if time allows
+  const secondaryExpression = prioritized.find(e => 
+    !result.some(r => r.exercise.id === e.exercise.id) &&
+    (e.selectionReason?.toLowerCase().includes('secondary') ||
+     e.selectionReason?.toLowerCase().includes('selected skill') ||
+     e.selectionReason?.toLowerCase().includes('broader'))
+  )
+  
+  if (secondaryExpression && result.length < 3) {
+    result.push({ ...secondaryExpression, sets: Math.max(2, secondaryExpression.sets - 1) })
+  }
+  
+  // STEP 4: Fill remaining slots with strength/accessory (not letting generic dominate)
+  let genericCount = 0
+  const maxGeneric = Math.max(1, 4 - result.length) // At least 4 exercises total
+  
+  for (const e of prioritized) {
+    if (result.length >= 4) break
+    if (result.some(r => r.exercise.id === e.exercise.id)) continue
+    
+    const isGeneric = (e.exercise.category === 'accessory' || e.exercise.category === 'core') &&
+                      !e.selectionReason?.toLowerCase().includes('skill')
+    
+    if (isGeneric) {
+      if (genericCount >= maxGeneric) {
+        droppedIdentityElements.push(`${e.exercise.name} (generic support capped)`)
+        continue
+      }
+      genericCount++
+    }
+    
+    result.push({ ...e, sets: Math.max(2, e.sets - 1) })
+  }
+  
+  // STEP 5: Always include at least one core movement if we have room
+  if (result.length < 4 && !result.some(e => e.exercise.category === 'core')) {
+    const coreExercise = prioritized.find(e => 
+      e.exercise.category === 'core' &&
+      !result.some(r => r.exercise.id === e.exercise.id)
+    )
     if (coreExercise) {
-      essential.push({
-        ...coreExercise,
-        sets: 2,
-      })
+      result.push({ ...coreExercise, sets: 2 })
     }
   }
   
-  return essential.map(e => ({
-    ...e,
-    sets: Math.max(2, e.sets - 1),
-  }))
+  // ==========================================================================
+  // [PHASE 6A TASK 3] GENERIC COLLAPSE GUARD AUDIT
+  // ==========================================================================
+  const fullHadPrioritySkill = prioritized.some(e => 
+    e.exercise.category === 'skill' ||
+    e.selectionReason?.toLowerCase().includes('skill progression')
+  )
+  const fullHadHybridSupport = prioritized.some(e => 
+    e.selectionReason?.toLowerCase().includes('hybrid') ||
+    e.selectionReason?.toLowerCase().includes('advanced')
+  )
+  const shortPreservedSkill = result.some(e => 
+    e.exercise.category === 'skill' ||
+    e.selectionReason?.toLowerCase().includes('skill progression')
+  )
+  const shortPreservedHybrid = result.some(e => 
+    e.selectionReason?.toLowerCase().includes('hybrid') ||
+    e.selectionReason?.toLowerCase().includes('advanced')
+  )
+  
+  const genericDominates = result.filter(e => 
+    (e.exercise.category === 'accessory' || e.exercise.category === 'core') &&
+    !e.selectionReason?.toLowerCase().includes('skill')
+  ).length > result.length / 2
+  
+  console.log('[short-variant-generic-collapse-guard-audit]', {
+    fullSessionHadPrioritySkill: fullHadPrioritySkill,
+    fullSessionHadHybridSpecificSupport: fullHadHybridSupport,
+    shortVariantPreservedThem: shortPreservedSkill || shortPreservedHybrid,
+    collapseWasForced: !shortPreservedSkill && fullHadPrioritySkill,
+    exactForcedReason: !shortPreservedSkill && fullHadPrioritySkill 
+      ? 'no_skill_exercise_available_after_filtering' 
+      : null,
+    genericDominated: genericDominates,
+    droppedIdentityElements,
+    verdict: genericDominates ? 'WARNING_generic_support_dominates' : 'identity_preserved',
+  })
+  
+  return result
 }
 
 function compressCooldown(
   cooldown: SelectedExercise[],
   level: 'light' | 'moderate' | 'heavy'
 ): SelectedExercise[] {
+  // [PHASE 6A TASK 4-5] Preserve all metadata through compression
   if (level === 'light') {
-    return cooldown
+    // Preserve all metadata by spreading each exercise
+    return cooldown.map(e => ({ ...e }))
   }
   
   if (level === 'moderate') {
-    return cooldown.slice(0, 2)
+    // Keep first 2 with all metadata preserved
+    return cooldown.slice(0, 2).map(e => ({ ...e }))
   }
   
-  // Heavy - minimal stretch
-  return cooldown.slice(0, 1)
+  // Heavy - minimal stretch but preserve metadata
+  return cooldown.slice(0, 1).map(e => ({ ...e }))
 }
 
 // =============================================================================
@@ -210,11 +585,11 @@ export function expandSession(
   const addedExercises: string[] = []
   const addedSets: string[] = []
   
-  // Clone selection
+  // Clone selection - [PHASE 6A] Preserve all metadata through spread
   const expanded: ExerciseSelection = {
-    warmup: selection.warmup.map(e => ({ ...e })),
-    main: selection.main.map(e => ({ ...e })),
-    cooldown: selection.cooldown.map(e => ({ ...e })),
+    warmup: selection.warmup.map(e => ({ ...e })), // Preserve selectionReason, etc.
+    main: selection.main.map(e => ({ ...e })), // Preserve selectionReason, etc.
+    cooldown: selection.cooldown.map(e => ({ ...e })), // Preserve selectionReason, etc.
     totalEstimatedTime: selection.totalEstimatedTime + extraMinutes,
   }
   

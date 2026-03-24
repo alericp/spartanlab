@@ -158,6 +158,50 @@ import {
 } from '@/lib/military-test-config'
 
 // =============================================================================
+// [PHASE 5] RECOVERY QUALITY DERIVATION HELPER
+// =============================================================================
+
+import type { RecoveryProfile as OnboardingRecoveryProfile } from '@/lib/athlete-profile'
+
+/**
+ * Derives a summary recovery quality from the four recovery fields.
+ * Used to compute canonical `recoveryQuality` from real onboarding selections.
+ * 
+ * Rules:
+ * - If all four are null/missing → return null
+ * - Return 'poor' if 2 or more fields are 'poor'
+ * - Return 'good' if 3 or more fields are 'good'
+ * - Otherwise return 'normal'
+ */
+function deriveRecoveryQualityFromOnboarding(
+  recovery: OnboardingRecoveryProfile | null | undefined
+): 'good' | 'normal' | 'poor' | null {
+  if (!recovery) return null
+  
+  const values = [
+    recovery.sleepQuality,
+    recovery.energyLevel,
+    recovery.stressLevel,  // Note: stressLevel uses same enum - 'good' = low stress, 'poor' = high stress
+    recovery.recoveryConfidence,
+  ].filter(Boolean) as Array<'good' | 'normal' | 'poor'>
+  
+  // If all four are null/missing
+  if (values.length === 0) return null
+  
+  const poorCount = values.filter(v => v === 'poor').length
+  const goodCount = values.filter(v => v === 'good').length
+  
+  // Return 'poor' if 2 or more fields are 'poor'
+  if (poorCount >= 2) return 'poor'
+  
+  // Return 'good' if 3 or more fields are 'good'
+  if (goodCount >= 3) return 'good'
+  
+  // Otherwise return 'normal'
+  return 'normal'
+}
+
+// =============================================================================
 // SECTION DEFINITIONS
 // =============================================================================
 
@@ -3867,8 +3911,19 @@ export function AthleteOnboarding() {
         lSitHoldSeconds: profile.lSitHold || null,
         vSitHoldSeconds: profile.vSitHold || null,
         
-        // TASK A: Recovery context - was missing!
-        recoveryQuality: profile.recovery?.quality || null,
+        // [PHASE 5] Recovery context - derive from real four-field object
+        recoveryQuality: deriveRecoveryQualityFromOnboarding(profile.recovery),
+      })
+      
+      // [PHASE 5] [onboarding-recovery-truth-audit] Log recovery derivation
+      const derivedRecoveryQuality = deriveRecoveryQualityFromOnboarding(profile.recovery)
+      console.log('[onboarding-recovery-truth-audit]', {
+        rawRecoveryObject: profile.recovery,
+        derivedRecoveryQuality,
+        sleepQuality: profile.recovery?.sleepQuality || null,
+        energyLevel: profile.recovery?.energyLevel || null,
+        stressLevel: profile.recovery?.stressLevel || null,
+        recoveryConfidence: profile.recovery?.recoveryConfidence || null,
       })
       
       // TASK 6: Log complete canonical save for verification
@@ -3881,7 +3936,7 @@ export function AthleteOnboarding() {
         equipmentCount: profile.equipment?.length || 0,
         hasBenchmarks: !!(profile.pullUpMax || profile.dipMax),
         hasSkillData: !!(profile.frontLever?.progression || profile.planche?.progression),
-        hasRecovery: !!profile.recovery?.quality,
+        hasRecovery: !!derivedRecoveryQuality,
       })
       
       // TASK 2: Log onboarding saved schedule/duration
@@ -3890,6 +3945,40 @@ export function AthleteOnboarding() {
         trainingDaysPerWeek: isFlexibleSchedule ? null : profile.trainingDaysPerWeek,
         sessionDurationMode: isAdaptiveTime ? 'adaptive' : 'static',
         sessionLengthMinutes: typeof profile.sessionLengthMinutes === 'number' ? profile.sessionLengthMinutes : 60,
+      })
+      
+      // [PHASE 5] [schedule-duration-source-truth-audit] - Task 4
+      console.log('[schedule-duration-source-truth-audit]', {
+        rawOnboardingValues: {
+          trainingDaysPerWeek: profile.trainingDaysPerWeek,
+          sessionLengthMinutes: profile.sessionLengthMinutes,
+        },
+        canonicalSavedValues: {
+          scheduleMode: isFlexibleSchedule ? 'flexible' : 'static',
+          trainingDaysPerWeek: isFlexibleSchedule ? null : (typeof profile.trainingDaysPerWeek === 'number' ? profile.trainingDaysPerWeek : null),
+          sessionDurationMode: isAdaptiveTime ? 'adaptive' : 'static',
+          sessionLengthMinutes: typeof profile.sessionLengthMinutes === 'number' ? profile.sessionLengthMinutes : 60,
+        },
+        flexiblePreserved: isFlexibleSchedule ? 'yes_saved_as_flexible' : 'static_preserved',
+        adaptiveTimePreserved: isAdaptiveTime ? 'yes_saved_as_adaptive' : 'static_preserved',
+      })
+      
+      // [PHASE 5] [phase5-source-truth-final-verdict] - Task 5
+      const derivedRecoveryForVerdict = deriveRecoveryQualityFromOnboarding(profile.recovery)
+      console.log('[phase5-source-truth-final-verdict]', {
+        selectedSkillsCount: profile.selectedSkills?.length || 0,
+        scheduleMode: isFlexibleSchedule ? 'flexible' : 'static',
+        trainingDaysPerWeek: isFlexibleSchedule ? null : profile.trainingDaysPerWeek,
+        sessionDurationMode: isAdaptiveTime ? 'adaptive' : 'static',
+        sessionLengthMinutes: typeof profile.sessionLengthMinutes === 'number' ? profile.sessionLengthMinutes : 60,
+        rawRecovery: profile.recovery,
+        derivedRecoveryQuality: derivedRecoveryForVerdict,
+        normalizedRecovery: 'will_be_filled_by_normalizer',
+        sourceTruthSafeToAdvance: !!(
+          (profile.selectedSkills?.length || 0) > 0 &&
+          (isFlexibleSchedule ? true : typeof profile.trainingDaysPerWeek === 'number') &&
+          (derivedRecoveryForVerdict !== null || !profile.recovery)  // recovery is optional
+        ),
       })
       
       // Log canonical state after save for debugging

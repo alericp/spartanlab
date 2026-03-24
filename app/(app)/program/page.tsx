@@ -92,15 +92,37 @@ import { saveCanonicalProfile } from '@/lib/canonical-profile-service'
 // WITHOUT calling setState during render (which causes infinite loops)
 // ==========================================================================
 
-// Local fallback for display errors - keeps recovery local to /program
-function ProgramDisplayFallback({ onRetry }: { onRetry: () => void }) {
-  // [PHASE 9] Audit that fallback rendered instead of crash
-  console.log('[phase9-program-route-error-boundary-verdict]', {
+// [PHASE 10C TASK 1] Local fallback for display errors - now shows exact error
+function ProgramDisplayFallback({ 
+  onRetry,
+  errorName,
+  errorMessage,
+  componentHint,
+  programId,
+}: { 
+  onRetry: () => void
+  errorName?: string
+  errorMessage?: string
+  componentHint?: string
+  programId?: string
+}) {
+  // [PHASE 10C] Audit that fallback rendered with error details
+  console.log('[phase10c-display-fallback-exact-error-captured]', {
     displayCrashed: true,
     fallbackRenderedSafely: true,
-    routeRemainsMounted: true,
-    stateUpdateDuringRender: false,
-    verdict: 'ERROR_BOUNDARY_ISOLATED_CRASH_SUCCESSFULLY',
+    errorName: errorName || 'unknown',
+    errorMessage: errorMessage || 'unknown',
+    componentHint: componentHint || 'unknown',
+    programId: programId || 'unknown',
+    verdict: 'EXACT_ERROR_CAPTURED_IN_FALLBACK',
+  })
+  
+  console.log('[phase10c-display-fallback-error-props-rendered]', {
+    hasErrorName: !!errorName,
+    hasErrorMessage: !!errorMessage,
+    hasComponentHint: !!componentHint,
+    hasProgramId: !!programId,
+    verdict: 'ERROR_PROPS_PASSED_TO_FALLBACK',
   })
   
   return (
@@ -110,6 +132,24 @@ function ProgramDisplayFallback({ onRetry }: { onRetry: () => void }) {
       <p className="text-sm text-[#6A6A6A] mb-4">
         We're having trouble displaying your plan. Refreshing may help.
       </p>
+      {/* [PHASE 10C] Show exact error for debugging */}
+      {(errorName || errorMessage) && (
+        <div className="bg-[#1A1A1A] border border-[#3A3A3A] rounded p-3 mb-4 text-left text-xs font-mono">
+          <p className="text-red-400 break-words">
+            Error: {errorName || 'Unknown'}: {errorMessage || 'No message'}
+          </p>
+          {componentHint && (
+            <p className="text-[#6A6A6A] mt-1 break-words">
+              Component: {componentHint}
+            </p>
+          )}
+          {programId && (
+            <p className="text-[#6A6A6A] mt-1">
+              Program: {programId}
+            </p>
+          )}
+        </div>
+      )}
       <Button
         onClick={onRetry}
         className="bg-[#E63946] hover:bg-[#D62828]"
@@ -122,7 +162,7 @@ function ProgramDisplayFallback({ onRetry }: { onRetry: () => void }) {
 
 // TASK 1: Error boundary wrapper for AdaptiveProgramDisplay
 // [PHASE 9] Now uses true React ErrorBoundary - NO setState in render catch
-// [PHASE 10] Enhanced with exact error capture for debugging display crashes
+// [PHASE 10C] Enhanced with exact error capture and display in fallback
 function ProgramDisplayWrapper({ 
   program, 
   onDelete,
@@ -138,9 +178,20 @@ function ProgramDisplayWrapper({
   onRecoveryNeeded: () => void
   unifiedStaleness: UnifiedStalenessResult | null // [TASK 1] Unified staleness from page
 }) {
-  // [PHASE 10 TASK 1] Capture exact error with program context
+  // [PHASE 10C] State to capture error details for fallback display
+  const [capturedError, setCapturedError] = useState<{
+    name: string
+    message: string
+    componentHint: string
+  } | null>(null)
+  
+  // [PHASE 10C TASK 1] Capture exact error with program context
   const handleDisplayError = (error: Error, errorInfo: React.ErrorInfo) => {
-    console.error('[phase10-display-exact-crash-capture]', {
+    // Extract first meaningful component from stack
+    const stackLines = errorInfo.componentStack?.split('\n').filter(l => l.trim()) || []
+    const firstComponent = stackLines[0]?.trim() || 'unknown'
+    
+    console.error('[phase10c-display-exact-crash-capture]', {
       errorName: error.name,
       errorMessage: error.message,
       programId: program?.id,
@@ -151,21 +202,36 @@ function ProgramDisplayWrapper({
       hasSummaryTruth: !!(program as unknown as { summaryTruth?: object })?.summaryTruth,
       hasWeeklyRepresentation: !!(program as unknown as { weeklyRepresentation?: object })?.weeklyRepresentation,
       crashedBeforeSessionsRendered: !errorInfo.componentStack?.includes('AdaptiveSessionCard'),
+      firstComponentInStack: firstComponent,
       verdict: 'EXACT_DISPLAY_ERROR_CAPTURED',
     })
+    
+    // Store error details for fallback to display
+    setCapturedError({
+      name: error.name,
+      message: error.message,
+      componentHint: firstComponent,
+    })
   }
+  
+  // [PHASE 10C] Render fallback with captured error details
+  const renderFallback = () => (
+    <ProgramDisplayFallback 
+      onRetry={() => {
+        onRecoveryNeeded()
+        window.location.reload()
+      }}
+      errorName={capturedError?.name}
+      errorMessage={capturedError?.message}
+      componentHint={capturedError?.componentHint}
+      programId={program?.id}
+    />
+  )
   
   // [PHASE 9] Safe error handling via proper ErrorBoundary
   return (
     <ErrorBoundary
-      fallback={
-        <ProgramDisplayFallback 
-          onRetry={() => {
-            onRecoveryNeeded()
-            window.location.reload()
-          }}
-        />
-      }
+      fallback={renderFallback()}
       onError={handleDisplayError}
     >
       <AdaptiveProgramDisplay

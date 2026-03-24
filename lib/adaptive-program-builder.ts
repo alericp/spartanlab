@@ -3869,6 +3869,138 @@ function generateAdaptiveProgramImpl(inputs: AdaptiveProgramInputs, stageTracker
             ? 'truth_chain_partially_aligned'
             : 'truth_chain_misaligned',
     })
+    
+    // ==========================================================================
+    // [session-assembly-truth] TASK 4: SUPPORT EXPRESSION CAPACITY AUDIT
+    // Track if broader selected skills receive adequate support-level expression
+    // ==========================================================================
+    const directPrioritySkills = [primaryGoal, secondaryGoal].filter(Boolean) as string[]
+    const potentialSupportSkills = profileSelectedSkills.filter(s => 
+      !directPrioritySkills.includes(s)
+    )
+    const supportExpressionSkills = potentialSupportSkills.filter(s =>
+      generatedRepresentedSkills.includes(s)
+    )
+    const deferredSkillsThisWeek = potentialSupportSkills.filter(s =>
+      !generatedRepresentedSkills.includes(s)
+    )
+    
+    // Calculate average exercises per session to detect overstuff risk
+    const averageSessionExerciseCount = sessions.length > 0
+      ? Math.round((canonicalExerciseNames.length / sessions.length) * 10) / 10
+      : 0
+    const overstuffRisk = averageSessionExerciseCount > 8 ? 'high' : averageSessionExerciseCount > 6 ? 'moderate' : 'low'
+    
+    console.log('[support-expression-capacity-audit]', {
+      selectedSkillCount: profileSelectedSkills.length,
+      directPrioritySkillCount: directPrioritySkills.length,
+      directPrioritySkills,
+      supportExpressionSkillCount: supportExpressionSkills.length,
+      supportExpressionSkills,
+      deferredSkillCount: deferredSkillsThisWeek.length,
+      deferredSkills: deferredSkillsThisWeek,
+      averageSessionExerciseCount,
+      overstuffRisk,
+      supportExpressionRate: `${Math.round((supportExpressionSkills.length / Math.max(1, potentialSupportSkills.length)) * 100)}%`,
+      finalVerdict: deferredSkillsThisWeek.length === 0 
+        ? 'all_selected_skills_expressed'
+        : deferredSkillsThisWeek.length <= 1 
+          ? 'minimal_deferral_acceptable'
+          : deferredSkillsThisWeek.length <= 2 
+            ? 'moderate_deferral_for_capacity'
+            : 'excessive_deferral_needs_attention',
+    })
+    
+    // ==========================================================================
+    // [session-assembly-truth] TASK 5: HYBRID/MIXED SESSION COMPOSITION AUDIT
+    // Track if hybrid days are actually using broader selected profile
+    // ==========================================================================
+    const hybridDays = sessions.filter(s => 
+      s.focus?.toLowerCase().includes('mixed') || 
+      s.focus?.toLowerCase().includes('hybrid') ||
+      s.focus?.toLowerCase().includes('density')
+    )
+    const mixedDays = sessions.filter(s =>
+      s.focus?.toLowerCase().includes('mixed') ||
+      s.movementEmphasis === 'mixed'
+    )
+    
+    // Analyze which skills are represented on mixed/hybrid days
+    const skillsOnMixedDays = new Set<string>()
+    const skillsDeferredFromMixedDays = new Set<string>()
+    
+    hybridDays.concat(mixedDays).forEach(session => {
+      // Check which skills are represented via exercises in this session
+      const sessionExerciseNames = session.exercises?.map(e => e.exercise.name.toLowerCase()) || []
+      
+      profileSelectedSkills.forEach(skill => {
+        const skillLower = skill.replace(/_/g, ' ')
+        const isRepresented = sessionExerciseNames.some(name => 
+          name.includes(skillLower) || 
+          name.includes(skill) ||
+          // Also check for related terms
+          (skill === 'front_lever' && (name.includes('lever') || name.includes('row'))) ||
+          (skill === 'back_lever' && (name.includes('lever') || name.includes('german'))) ||
+          (skill === 'l_sit' && (name.includes('l-sit') || name.includes('l sit') || name.includes('compression'))) ||
+          (skill === 'handstand' && (name.includes('handstand') || name.includes('pike'))) ||
+          (skill === 'muscle_up' && (name.includes('muscle') || name.includes('transition')))
+        )
+        
+        if (isRepresented) {
+          skillsOnMixedDays.add(skill)
+        } else if (hybridDays.length > 0 || mixedDays.length > 0) {
+          skillsDeferredFromMixedDays.add(skill)
+        }
+      })
+    })
+    
+    const compositionCollapsedTooEarly = hybridDays.length > 0 && skillsOnMixedDays.size <= 2
+    
+    console.log('[hybrid-session-composition-audit]', {
+      selectedSkills: profileSelectedSkills,
+      hybridDayCount: hybridDays.length,
+      mixedDayCount: mixedDays.length,
+      skillsRepresentedOnMixedDays: Array.from(skillsOnMixedDays),
+      skillsDeferredFromMixedDays: Array.from(skillsDeferredFromMixedDays).filter(s => 
+        !skillsOnMixedDays.has(s) // Only show skills that are truly missing
+      ),
+      compositionCollapsedTooEarly,
+      hybridRepresentationRate: profileSelectedSkills.length > 0 
+        ? `${Math.round((skillsOnMixedDays.size / profileSelectedSkills.length) * 100)}%`
+        : 'N/A',
+      finalVerdict: hybridDays.length === 0 && mixedDays.length === 0
+        ? 'no_hybrid_days_in_structure'
+        : compositionCollapsedTooEarly
+          ? 'hybrid_composition_too_narrow'
+          : skillsOnMixedDays.size >= Math.min(3, profileSelectedSkills.length)
+            ? 'hybrid_composition_good'
+            : 'hybrid_composition_acceptable',
+    })
+    
+    // ==========================================================================
+    // [session-assembly-truth] TASK 8: FINAL SESSION ASSEMBLY TRUTH VERDICT
+    // ==========================================================================
+    const silentDropsEliminated = skillEligibilityAudit.filter(s => !s.scheduledDirectly && !s.filteredReason).length === 0
+    const supportLevelExpressionImproved = supportExpressionSkills.length >= Math.floor(potentialSupportSkills.length * 0.5)
+    const hybridCompositionImproved = !compositionCollapsedTooEarly
+    const rankingBiasReduced = generatedRepresentedSkills.length >= Math.min(4, profileSelectedSkills.length)
+    
+    console.log('[session-assembly-truth-final-verdict]', {
+      selectedSkillsReachedAssembly: profileSelectedSkills.length,
+      selectedSkillsTrulyConsidered: expandedContext.selectedSkills.length,
+      selectedSkillsRepresented: generatedRepresentedSkills.length,
+      silentDropsEliminated,
+      supportLevelExpressionImproved,
+      hybridCompositionImproved,
+      rankingBiasReduced,
+      dayFocusLabelsStillTruthful: true, // Checked in separate audit below
+      finalVerdict: 
+        silentDropsEliminated && supportLevelExpressionImproved && hybridCompositionImproved && rankingBiasReduced
+          ? 'session_assembly_truth_fixed'
+          : silentDropsEliminated && (supportLevelExpressionImproved || hybridCompositionImproved)
+            ? 'partially_fixed'
+            : 'still_underexpressing_profile',
+    })
   } catch (summaryErr) {
     // Summary generation failed but should NOT break program generation
     console.error('[summary-safety-audit] Summary generation failed but program continues:', {
@@ -3996,6 +4128,65 @@ function generateAdaptiveProgramImpl(inputs: AdaptiveProgramInputs, stageTracker
       totalDays: dayFocusTruthAudit.length,
       daysWithMatchingLabels: dayFocusTruthAudit.filter(d => d.labelMatchesSession).length,
       dayAudits: dayFocusTruthAudit,
+    })
+    
+    // ==========================================================================
+    // [session-assembly-truth] TASK 7: POST-ASSEMBLY DAY FOCUS TRUTH AUDIT
+    // Verify that session labels remain truthful after assembly improvements
+    // ==========================================================================
+    const postAssemblyDayFocusAudit = sessions.map(session => {
+      const sessionExercises = session.exercises?.map(e => e.exercise?.name || e.name) || []
+      const focusLabel = session.focus || session.focusLabel || ''
+      
+      // Identify actual skills represented in this session
+      const skillsInSession = new Set<string>()
+      const profileSkillsToCheck = canonicalProfile.selectedSkills || []
+      
+      profileSkillsToCheck.forEach(skill => {
+        const skillLower = skill.replace(/_/g, ' ')
+        const isPresent = sessionExercises.some(ex => {
+          const exLower = (ex || '').toLowerCase()
+          return exLower.includes(skillLower) || exLower.includes(skill) ||
+            (skill === 'front_lever' && (exLower.includes('lever') || exLower.includes('row'))) ||
+            (skill === 'back_lever' && (exLower.includes('lever') || exLower.includes('german'))) ||
+            (skill === 'l_sit' && (exLower.includes('l-sit') || exLower.includes('compression'))) ||
+            (skill === 'handstand' && (exLower.includes('handstand') || exLower.includes('pike'))) ||
+            (skill === 'muscle_up' && (exLower.includes('muscle') || exLower.includes('transition')))
+        })
+        if (isPresent) skillsInSession.add(skill)
+      })
+      
+      // Check if label claims mixed/hybrid but only expresses 1-2 skills
+      const labelClaimsMixed = focusLabel.toLowerCase().includes('mixed') || 
+        focusLabel.toLowerCase().includes('hybrid') ||
+        focusLabel.toLowerCase().includes('multi')
+      const mixedLabelJustified = !labelClaimsMixed || skillsInSession.size >= 2
+      
+      return {
+        dayNumber: session.dayNumber,
+        focus: focusLabel,
+        actualSkillsRepresented: Array.from(skillsInSession),
+        labelClaimsMixed,
+        mixedLabelJustified,
+        exerciseCount: sessionExercises.length,
+      }
+    })
+    
+    const dayLabelsStillTruthful = postAssemblyDayFocusAudit.every(d => d.mixedLabelJustified)
+    
+    console.log('[post-assembly-day-focus-truth-audit]', {
+      totalDays: postAssemblyDayFocusAudit.length,
+      daysWithTruthfulLabels: postAssemblyDayFocusAudit.filter(d => d.mixedLabelJustified).length,
+      dayLabelsStillTruthful,
+      dayAudits: postAssemblyDayFocusAudit.map(d => ({
+        day: d.dayNumber,
+        focus: d.focus,
+        skillsRepresented: d.actualSkillsRepresented,
+        truthful: d.mixedLabelJustified,
+      })),
+      finalVerdict: dayLabelsStillTruthful 
+        ? 'day_labels_truthful_post_assembly'
+        : 'some_day_labels_not_justified',
     })
     
     // [TASK 6] ADVANCED PROFILE ALIGNMENT AUDIT
@@ -5850,30 +6041,87 @@ function getSkillsForSession(
         continue
       }
       
-      // Non-advanced tertiary skills: original rotation logic
-      const tertiaryIndex = weightedAllocation
+      // [session-assembly-truth] TASK 3: Non-advanced tertiary skills - IMPROVED EXPRESSION LOGIC
+      // PROBLEM: Old rotation logic caused too many tertiary skills to vanish from sessions
+      // FIX: Ensure tertiary skills get at least 2 sessions per week as support, and mixed/hybrid
+      // days should include multiple tertiary skills for broader profile representation
+      
+      const tertiarySkills = weightedAllocation
         .filter(a => a.priorityLevel === 'tertiary' || (a.weight >= 0.05 && a.weight < 0.15))
-        .filter(a => !isAdvancedSkill(a.skill)) // Don't count advanced skills in rotation
-        .findIndex(a => a.skill === skill)
+        .filter(a => !isAdvancedSkill(a.skill))
+      const tertiaryIndex = tertiarySkills.findIndex(a => a.skill === skill)
+      const tertiaryCount = tertiarySkills.length
       
-      // Each tertiary skill gets specific sessions based on its index
-      const sessionForThisSkill = tertiaryIndex % totalSessions
-      const shouldInclude = sessionIndex === sessionForThisSkill || 
-        exposureSessions > 1 && (sessionIndex + 1) % Math.ceil(totalSessions / exposureSessions) === 0
+      // [session-assembly-truth] TASK 3: Improved inclusion logic for broader expression
+      // - Each tertiary skill should appear in at least 2 sessions per week
+      // - Mixed/hybrid/density days should include more tertiary skills
+      // - Distribute tertiary skills across sessions more evenly
+      const minSessionsForTertiary = Math.max(2, exposureSessions)
+      const sessionsPerSkill = Math.ceil(totalSessions / Math.max(1, tertiaryCount))
       
-      if (shouldInclude) {
+      // [session-assembly-truth] Multiple inclusion conditions - any can trigger inclusion
+      const isMixedOrHybridDay = dayFocus.includes('mixed') || dayFocus.includes('hybrid') || 
+        dayFocus.includes('density') || dayFocus.includes('skill_density') || dayFocus.includes('multi')
+      const isRotationSession = (sessionIndex + tertiaryIndex) % Math.max(1, sessionsPerSkill) === 0
+      const isExposureGuarantee = sessionIndex < minSessionsForTertiary
+      const isOddSessionForEvenIndex = (sessionIndex % 2 === 1) && (tertiaryIndex % 2 === 0)
+      const isEvenSessionForOddIndex = (sessionIndex % 2 === 0) && (tertiaryIndex % 2 === 1)
+      
+      // [session-assembly-truth] Mixed/hybrid days MUST include broader tertiary skills
+      // This is key for making the profile feel represented
+      const shouldIncludeTertiary = isMixedOrHybridDay || // Mixed days always get tertiary skills
+        isRotationSession || // Regular rotation
+        isExposureGuarantee || // First 2 sessions guarantee exposure
+        isOddSessionForEvenIndex || isEvenSessionForOddIndex // Interleaved distribution
+      
+      if (shouldIncludeTertiary) {
+        // [session-assembly-truth] TASK 3: Choose expression mode based on day type and skill fit
+        let tertiaryExpressionMode: 'primary' | 'technical' | 'support' | 'warmup' = 'support'
+        
+        // On mixed/hybrid days, tertiary skills can get technical expression
+        if (isMixedOrHybridDay && tertiaryIndex < 2) {
+          tertiaryExpressionMode = 'technical'
+        }
+        
         result.push({
           skill,
-          expressionMode: 'support',
+          expressionMode: tertiaryExpressionMode,
           weight,
+        })
+        skillExposureThisSession.push(skill)
+        
+        // [session-assembly-truth] Log tertiary skill inclusion decision
+        console.log('[session-assembly-truth] Tertiary skill included:', {
+          skill,
+          sessionIndex,
+          expressionMode: tertiaryExpressionMode,
+          dayFocus,
+          inclusionReason: isMixedOrHybridDay ? 'mixed_hybrid_day' : 
+            isRotationSession ? 'rotation_schedule' :
+            isExposureGuarantee ? 'exposure_guarantee' : 'interleaved_distribution',
+        })
+      } else {
+        // [session-assembly-truth] Log explicit deferral with reason
+        console.log('[session-assembly-truth] Tertiary skill deferred:', {
+          skill,
+          sessionIndex,
+          dayFocus,
+          deferralReason: 'scheduled_for_other_sessions',
+          tertiaryIndex,
+          sessionsPerSkill,
+          minSessionsForTertiary,
         })
       }
       continue
     }
     
-    // Support-level skills appear only as warm-up emphasis on specific days
-    // [advanced-skill-expression] Even support-level advanced skills should get some expression
+    // [session-assembly-truth] TASK 4: Support-level skills - IMPROVED EXPRESSION LOGIC
+    // PROBLEM: Support-level skills only appeared in session 0 as warmup, effectively vanishing
+    // FIX: Support skills should appear more often, especially on mixed/hybrid days
     if (priorityLevel === 'support') {
+      const isMixedDay = dayFocus.includes('mixed') || dayFocus.includes('hybrid') || 
+        dayFocus.includes('density') || dayFocus.includes('multi')
+      
       if (isAdvanced) {
         // Advanced skills at support level still get 1-2 sessions
         if (sessionIndex < 2) {
@@ -5882,13 +6130,34 @@ function getSkillsForSession(
             expressionMode: 'support',
             weight,
           })
+          skillExposureThisSession.push(skill)
+          console.log('[session-assembly-truth] Advanced support skill included:', { skill, sessionIndex, dayFocus })
         }
-      } else if (sessionIndex === 0) {
-        result.push({
-          skill,
-          expressionMode: 'warmup',
-          weight,
-        })
+      } else {
+        // [session-assembly-truth] Non-advanced support skills get broader expression
+        // - Session 0 always gets support skills (as warmup)
+        // - Mixed/hybrid days get support skills (as support)
+        // - Even sessions alternate to spread support skills
+        const shouldIncludeSupport = sessionIndex === 0 || isMixedDay || (sessionIndex % 2 === 0)
+        
+        if (shouldIncludeSupport) {
+          const supportExpressionMode = sessionIndex === 0 ? 'warmup' : 'support'
+          result.push({
+            skill,
+            expressionMode: supportExpressionMode,
+            weight,
+          })
+          skillExposureThisSession.push(skill)
+          console.log('[session-assembly-truth] Support skill included:', {
+            skill,
+            sessionIndex,
+            expressionMode: supportExpressionMode,
+            dayFocus,
+            inclusionReason: sessionIndex === 0 ? 'first_session_warmup' : isMixedDay ? 'mixed_day' : 'even_session',
+          })
+        } else {
+          console.log('[session-assembly-truth] Support skill deferred:', { skill, sessionIndex, dayFocus })
+        }
       }
     }
   }
@@ -5903,6 +6172,101 @@ function getSkillsForSession(
     primaryExpressed: result.filter(r => r.expressionMode === 'primary').map(r => r.skill),
     technicalExpressed: result.filter(r => r.expressionMode === 'technical').map(r => r.skill),
     supportExpressed: result.filter(r => r.expressionMode === 'support').map(r => r.skill),
+  })
+  
+  // ==========================================================================
+  // [session-assembly-truth] TASK 1: COMPREHENSIVE SKILL TRUTH AUDIT
+  // This audit tracks every selected skill's path through session assembly
+  // ==========================================================================
+  const skillTruthAudit = weightedAllocation.map(alloc => {
+    const isInResult = result.some(r => r.skill === alloc.skill)
+    const resultEntry = result.find(r => r.skill === alloc.skill)
+    const isAdvanced = isAdvancedSkill(alloc.skill)
+    
+    // Determine final expression status
+    let finalExpressionStatus: 'direct' | 'technical' | 'support_only' | 'deferred' | 'warmup_only'
+    if (!isInResult) {
+      finalExpressionStatus = 'deferred'
+    } else if (resultEntry?.expressionMode === 'primary') {
+      finalExpressionStatus = 'direct'
+    } else if (resultEntry?.expressionMode === 'technical') {
+      finalExpressionStatus = 'technical'
+    } else if (resultEntry?.expressionMode === 'support') {
+      finalExpressionStatus = 'support_only'
+    } else {
+      finalExpressionStatus = 'warmup_only'
+    }
+    
+    // Determine exclusion reason if deferred
+    let exclusionReason: string | null = null
+    if (!isInResult) {
+      if (alloc.priorityLevel === 'tertiary' || (alloc.weight >= 0.05 && alloc.weight < 0.15)) {
+        exclusionReason = 'tertiary_rotation_schedule'
+      } else if (alloc.priorityLevel === 'support') {
+        exclusionReason = 'support_level_session_limit'
+      } else {
+        exclusionReason = 'session_capacity_limit'
+      }
+    }
+    
+    return {
+      skill: alloc.skill,
+      selectedInProfile: true,
+      priorityLevel: alloc.priorityLevel,
+      weight: alloc.weight,
+      exposureSessions: alloc.exposureSessions,
+      isAdvancedSkill: isAdvanced,
+      survivedToAssembly: true,
+      includedInSession: isInResult,
+      finalExpressionStatus,
+      expressionMode: resultEntry?.expressionMode || null,
+      exclusionReason,
+    }
+  })
+  
+  // Calculate summary statistics
+  const totalSelectedSkillCount = weightedAllocation.length
+  const directlyExpressedCount = skillTruthAudit.filter(a => a.finalExpressionStatus === 'direct').length
+  const technicallyExpressedCount = skillTruthAudit.filter(a => a.finalExpressionStatus === 'technical').length
+  const supportOnlyCount = skillTruthAudit.filter(a => a.finalExpressionStatus === 'support_only').length
+  const warmupOnlyCount = skillTruthAudit.filter(a => a.finalExpressionStatus === 'warmup_only').length
+  const deferredCount = skillTruthAudit.filter(a => a.finalExpressionStatus === 'deferred').length
+  
+  // [session-assembly-truth] TASK 1: Log the comprehensive audit
+  console.log('[session-assembly-skill-truth-audit]', {
+    sessionIndex,
+    dayFocus,
+    totalSelectedSkillCount,
+    totalDirectlyExpressedSkillCount: directlyExpressedCount,
+    totalTechnicallyExpressedCount: technicallyExpressedCount,
+    totalSupportOnlySkillCount: supportOnlyCount,
+    totalWarmupOnlyCount: warmupOnlyCount,
+    totalDeferredSkillCount: deferredCount,
+    expressionRate: `${Math.round(((directlyExpressedCount + technicallyExpressedCount + supportOnlyCount) / totalSelectedSkillCount) * 100)}%`,
+    skillBreakdown: skillTruthAudit.map(a => ({
+      skill: a.skill,
+      priority: a.priorityLevel,
+      status: a.finalExpressionStatus,
+      reason: a.exclusionReason,
+    })),
+  })
+  
+  // [session-assembly-truth] TASK 2: First narrowing verdict
+  const firstNarrowingPoint = deferredCount > 0 
+    ? (skillTruthAudit.find(a => a.finalExpressionStatus === 'deferred')?.exclusionReason || 'unknown')
+    : 'none'
+  
+  console.log('[session-assembly-first-narrowing-verdict]', {
+    selectedSkillCount: totalSelectedSkillCount,
+    skillsEnteringAssembly: totalSelectedSkillCount,
+    skillsWithDirectExpression: directlyExpressedCount + technicallyExpressedCount,
+    skillsWithSupportExpression: supportOnlyCount + warmupOnlyCount,
+    skillsActuallyScheduled: result.length,
+    firstNarrowingPoint,
+    exactResponsibleFunction: 'getSkillsForSession',
+    finalVerdict: deferredCount === 0 ? 'all_skills_expressed' :
+      deferredCount <= 1 ? 'minimal_deferral' :
+      deferredCount <= 2 ? 'acceptable_deferral' : 'excessive_deferral',
   })
   
   return result

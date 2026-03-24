@@ -691,6 +691,66 @@ export function selectExercisesForSession(inputs: ExerciseSelectionInputs): Exer
     skillsExpressed: skillsExpressedLabel,
   });
   
+  // ==========================================================================
+  // [session-assembly-truth] TASK 6: EXERCISE RANKING BIAS AUDIT
+  // Detects if ranking crushes tertiary selected skills
+  // ==========================================================================
+  var selectedSkillsInSession = selectedSkills || [];
+  var topRankedSkillsFromExercises = [];
+  var droppedSelectedSkills = [];
+  var supportSlotsAvailable = main.filter(function(e) {
+    return e.selectionTrace && (
+      e.selectionTrace.sessionRole === 'strength_support' ||
+      e.selectionTrace.sessionRole === 'accessory' ||
+      e.selectionTrace.expressionMode === 'strength_support'
+    );
+  }).length;
+  var supportSlotsUsedForSelectedSkills = 0;
+  
+  // Identify which selected skills got exercises
+  for (var ri = 0; ri < main.length; ri++) {
+    var exTrace = main[ri].selectionTrace;
+    if (exTrace && exTrace.influencingSkills && exTrace.influencingSkills.length > 0) {
+      for (var rj = 0; rj < exTrace.influencingSkills.length; rj++) {
+        var influencingSkill = exTrace.influencingSkills[rj].skillId;
+        if (topRankedSkillsFromExercises.indexOf(influencingSkill) === -1) {
+          topRankedSkillsFromExercises.push(influencingSkill);
+        }
+        if (selectedSkillsInSession.indexOf(influencingSkill) !== -1 &&
+            (exTrace.sessionRole === 'strength_support' || exTrace.sessionRole === 'accessory')) {
+          supportSlotsUsedForSelectedSkills++;
+        }
+      }
+    }
+  }
+  
+  // Identify dropped selected skills
+  for (var rk = 0; rk < selectedSkillsInSession.length; rk++) {
+    var selSkill = selectedSkillsInSession[rk];
+    if (topRankedSkillsFromExercises.indexOf(selSkill) === -1) {
+      droppedSelectedSkills.push(selSkill);
+    }
+  }
+  
+  var rankingBiasDetected = droppedSelectedSkills.length > Math.ceil(selectedSkillsInSession.length / 2);
+  
+  console.log('[exercise-ranking-bias-audit]', {
+    dayFocus: day.focus,
+    selectedSkillCount: selectedSkillsInSession.length,
+    topRankedSkills: topRankedSkillsFromExercises,
+    droppedSelectedSkills: droppedSelectedSkills,
+    rankingBiasDetected: rankingBiasDetected,
+    supportSlotsAvailable: supportSlotsAvailable,
+    supportSlotsUsedForSelectedSkills: supportSlotsUsedForSelectedSkills,
+    finalVerdict: droppedSelectedSkills.length === 0
+      ? 'all_selected_skills_represented'
+      : droppedSelectedSkills.length <= 1
+        ? 'minor_skill_gap_acceptable'
+        : rankingBiasDetected
+          ? 'ranking_bias_crushing_tertiary_skills'
+          : 'moderate_skill_gap_for_capacity',
+  });
+  
   // BUILD-HOTFIX: balanced module structure and restored valid EOF closure
   return {
     warmup,
@@ -1552,9 +1612,31 @@ function selectMainExercises(
     score -= 15 // Strong penalty for high fatigue on recovery days
   }
   } else if (isMixedFocus) {
-  // Mixed days favor moderate fatigue exercises
+  // [session-assembly-truth] TASK 6: Mixed days favor moderate fatigue AND broader skill expression
+  // This is key to making hybrid profiles feel represented
   if (exercise.fatigueCost && exercise.fatigueCost <= 3) {
     score += 12 // Slightly increased from 10
+  }
+  
+  // [session-assembly-truth] TASK 6: Boost exercises that support ANY selected skill (not just primary)
+  // This reduces the ranking bias that crushes tertiary skills on mixed days
+  const supportsMixedDayVariety = sessionSkills.some(s => {
+    const skillLower = s.skill.toLowerCase()
+    const transfersToSkill = exercise.transferTo?.some(t => t.toLowerCase().includes(skillLower))
+    const nameMatchesSkill = exercise.id.toLowerCase().includes(skillLower) ||
+                              exercise.name.toLowerCase().includes(skillLower)
+    return transfersToSkill || nameMatchesSkill
+  })
+  
+  if (supportsMixedDayVariety) {
+    // Boost for exercises that support ANY selected skill on mixed days
+    // This helps tertiary skills get represented
+    score += 8
+    console.log('[session-assembly-truth] Mixed day variety boost:', {
+      exerciseId: exercise.id,
+      boost: 8,
+      reason: 'supports_selected_skill_on_mixed_day',
+    })
   }
   }
   

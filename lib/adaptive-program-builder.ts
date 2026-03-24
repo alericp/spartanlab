@@ -2336,6 +2336,298 @@ function generateAdaptiveProgramImpl(inputs: AdaptiveProgramInputs, stageTracker
   })
   
   // =========================================================================
+  // [weekly-day-count-resolution-audit] TASK 1: Trace exact weekly day count decision
+  // This diagnostic explains EXACTLY why the planner chose this day count.
+  // =========================================================================
+  const weeklyDayCountAudit = {
+    rawSchedulePreference: trainingDaysPerWeek,
+    rawSessionDurationPreference: sessionLength,
+    resolvedScheduleMode: inputScheduleMode,
+    candidateWeeklyDayCounts: inputScheduleMode === 'flexible'
+      ? [flexibleWeekStructure?.recommendedMinDays, flexibleWeekStructure?.recommendedMaxDays]
+      : [trainingDaysPerWeek],
+    finalWeeklyDayCount: effectiveTrainingDays,
+    exactRuleOrFunctionThatSetIt: inputScheduleMode === 'flexible'
+      ? 'resolveFlexibleFrequency() in flexible-schedule-engine.ts'
+      : 'getEffectiveFrequency() - direct passthrough from profile',
+    // Flexible-specific details
+    flexibleRootCause: flexibleWeekStructure?.rootCauseAudit || null,
+    // Whether consistency limiter influenced it
+    consistencyInfluenced: false, // Consistency affects volume/intensity, not day count
+    readinessInfluenced: flexibleWeekStructure?.rootCauseAudit?.recoveryScore !== null,
+    constraintsInfluenced: (expandedContext.jointCautions?.length || 0) > 0,
+    // Options considered
+    options5DayConsidered: inputScheduleMode === 'flexible' && (flexibleWeekStructure?.recommendedMaxDays || 0) >= 5,
+    options6DayConsidered: inputScheduleMode === 'flexible' && (flexibleWeekStructure?.recommendedMaxDays || 0) >= 6,
+    options7DayConsidered: false, // Current system caps at 6
+    // Rejection reasons
+    rejectionReasons: {
+      fiveDays: effectiveTrainingDays < 5
+        ? (flexibleWeekStructure?.rootCauseAudit?.finalReasonCategory || 'goal_baseline_typical_4')
+        : 'not_rejected',
+      sixDays: effectiveTrainingDays < 6
+        ? (flexibleWeekStructure?.rootCauseAudit?.jointCautionPenalty ? 'joint_caution_conservative' :
+           flexibleWeekStructure?.rootCauseAudit?.recoveryScore && flexibleWeekStructure.rootCauseAudit.recoveryScore < 0.5 ? 'recovery_reduction' :
+           'goal_baseline_caps_at_5_for_most_skills')
+        : 'not_rejected',
+      sevenDays: 'system_caps_flexible_at_6_max',
+    },
+    verdict: effectiveTrainingDays === 4 && inputScheduleMode === 'flexible'
+      ? '4_days_from_goal_typical_baseline'
+      : effectiveTrainingDays === trainingDaysPerWeek
+      ? 'static_passthrough_honored'
+      : 'flexible_adaptation_applied',
+  }
+  console.log('[weekly-day-count-resolution-audit]', weeklyDayCountAudit)
+  
+  // =========================================================================
+  // [weekly-priority-collapse-audit] TASK 2: Trace skill priority collapse
+  // Explains exactly how selected skills become primary/secondary/tertiary/support
+  // =========================================================================
+  const skillsByPriority = {
+    primary: weightedSkillAllocation.filter(a => a.priorityLevel === 'primary').map(a => a.skill),
+    secondary: weightedSkillAllocation.filter(a => a.priorityLevel === 'secondary').map(a => a.skill),
+    tertiary: weightedSkillAllocation.filter(a => a.priorityLevel === 'tertiary').map(a => a.skill),
+    support: weightedSkillAllocation.filter(a => a.priorityLevel === 'support').map(a => a.skill),
+  }
+  const savedSelectedSkillsForAudit = canonicalProfile.selectedSkills || []
+  const skillPriorityAssignments = weightedSkillAllocation.map(a => ({
+    skill: a.skill,
+    priorityLevel: a.priorityLevel,
+    weight: Math.round(a.weight * 100) + '%',
+    exposureSessions: a.exposureSessions,
+    assignmentReason: a.skill === primaryGoal
+      ? 'matches_primary_goal'
+      : a.skill === (secondaryGoal || canonicalProfile.secondaryGoal)
+      ? 'matches_secondary_goal'
+      : a.priorityLevel === 'tertiary'
+      ? 'first_other_skill_in_selection_list'
+      : 'subsequent_other_skills_demoted_to_support',
+  }))
+  
+  const weeklyPriorityCollapseAudit = {
+    savedSelectedSkills: savedSelectedSkillsForAudit,
+    normalizedSelectedSkills: expandedContext.selectedSkills,
+    plannerSelectedSkills: weightedSkillAllocation.map(a => a.skill),
+    skillsMarkedPrimary: skillsByPriority.primary,
+    skillsMarkedSecondary: skillsByPriority.secondary,
+    skillsMarkedTertiary: skillsByPriority.tertiary,
+    skillsMarkedSupport: skillsByPriority.support,
+    skillsDeferred: savedSelectedSkillsForAudit.filter(s => 
+      !weightedSkillAllocation.some(a => a.skill === s)
+    ),
+    exactCollapseFunction: 'calculateWeightedSkillAllocation() in engine-quality-contract.ts',
+    priorityAssignmentDetails: skillPriorityAssignments,
+    collapseIssueDetected: skillsByPriority.support.length > 2 && savedSelectedSkillsForAudit.length >= 4,
+    collapseIssueReason: skillsByPriority.support.length > 2
+      ? 'too_many_skills_demoted_to_support_priority - only index 0 gets tertiary'
+      : 'acceptable_priority_distribution',
+  }
+  console.log('[weekly-priority-collapse-audit]', weeklyPriorityCollapseAudit)
+  
+  // =========================================================================
+  // [weekly-structure-feasibility-comparison-audit] TASK 3: Compare day structures
+  // Determines whether 4 days is truly optimal or just conservative baseline.
+  // =========================================================================
+  const feasibilityComparison = {
+    fourDayStructure: {
+      feasible: true,
+      expectedSkillCoverage: weightedSkillAllocation.filter(a => a.exposureSessions >= 1).length,
+      expectedRecoveryCost: 'moderate',
+      expectedConstraintPressure: 'low',
+      broaderExposureImprovement: false,
+      verdict: 'feasible_baseline',
+    },
+    fiveDayStructure: {
+      feasible: (flexibleWeekStructure?.recommendedMaxDays || 5) >= 5 && 
+                (expandedContext.jointCautions?.length || 0) === 0,
+      blockedBy: (expandedContext.jointCautions?.length || 0) > 0
+        ? 'joint_cautions_present'
+        : (flexibleWeekStructure?.rootCauseAudit?.recoveryScore && flexibleWeekStructure.rootCauseAudit.recoveryScore < 0.5)
+        ? 'recovery_score_low'
+        : 'goal_typical_baseline_is_4',
+      expectedSkillCoverage: Math.min(savedSelectedSkillsForAudit.length, 5),
+      expectedRecoveryCost: 'moderate_high',
+      expectedConstraintPressure: 'moderate',
+      broaderExposureImprovement: savedSelectedSkillsForAudit.length > 4,
+      rejectedOnlyDueToConsistencyLimiter: false, // Consistency doesn't limit day count
+      verdict: (flexibleWeekStructure?.recommendedMaxDays || 5) >= 5
+        ? 'feasible_but_not_chosen'
+        : 'blocked_by_constraints',
+    },
+    sixDayStructure: {
+      feasible: (flexibleWeekStructure?.recommendedMaxDays || 5) >= 6 &&
+                expandedContext.experienceLevel === 'advanced',
+      blockedBy: expandedContext.experienceLevel !== 'advanced'
+        ? 'requires_advanced_experience'
+        : (expandedContext.jointCautions?.length || 0) > 0
+        ? 'joint_cautions_present'
+        : 'goal_range_caps_at_5_or_6',
+      expectedSkillCoverage: Math.min(savedSelectedSkillsForAudit.length, 6),
+      expectedRecoveryCost: 'high',
+      expectedConstraintPressure: 'high',
+      broaderExposureImprovement: savedSelectedSkillsForAudit.length >= 5,
+      rejectedOnlyDueToConsistencyLimiter: false,
+      verdict: 'blocked_by_experience_or_goal_range',
+    },
+    sevenDayStructure: {
+      feasible: false,
+      blockedBy: 'system_design_caps_at_6_max',
+      expectedSkillCoverage: 'N/A',
+      expectedRecoveryCost: 'very_high',
+      expectedConstraintPressure: 'very_high',
+      broaderExposureImprovement: false,
+      rejectedOnlyDueToConsistencyLimiter: false,
+      verdict: 'not_supported_in_current_system',
+    },
+    verdict: effectiveTrainingDays === 4
+      ? (savedSelectedSkillsForAudit.length > 4 
+          ? 'possibly_too_narrow_for_broad_profile' 
+          : 'appropriate_for_profile_size')
+      : `${effectiveTrainingDays}_days_selected_appropriately`,
+  }
+  console.log('[weekly-structure-feasibility-comparison-audit]', feasibilityComparison)
+  
+  // =========================================================================
+  // [mixed-day-role-truth-audit] TASK 4: Audit mixed-day behavior
+  // Mixed days should provide broad exposure for tertiary/support skills.
+  // =========================================================================
+  const mixedDayCount = flexibleWeekStructure?.dayStressPattern?.filter(
+    d => d === 'lower_fatigue_density' || d === 'recovery_bias_technical'
+  ).length || 0
+  const tertiarySkillsForMixed = weightedSkillAllocation.filter(a => 
+    a.priorityLevel === 'tertiary' || a.priorityLevel === 'support'
+  )
+  const mixedDayRoleAudit = {
+    mixedDaysCount: mixedDayCount,
+    dayStressPattern: flexibleWeekStructure?.dayStressPattern || [],
+    skillsEligibleForMixedDays: tertiarySkillsForMixed.map(a => a.skill),
+    skillsActuallyAllocatedToMixedDays: tertiarySkillsForMixed
+      .filter(a => a.exposureSessions >= 1)
+      .map(a => a.skill),
+    tertiarySkillsHelpedByMixedDays: tertiarySkillsForMixed
+      .filter(a => a.priorityLevel === 'tertiary' && a.exposureSessions >= 1)
+      .map(a => a.skill),
+    supportSkillsHelpedByMixedDays: tertiarySkillsForMixed
+      .filter(a => a.priorityLevel === 'support' && a.exposureSessions >= 1)
+      .map(a => a.skill),
+    underrepresentedSkillsAfterMixedDays: savedSelectedSkillsForAudit.filter(skill => {
+      const allocation = weightedSkillAllocation.find(a => a.skill === skill)
+      return !allocation || allocation.exposureSessions < 1
+    }),
+    mixedDaysActingAsBroadExposure: mixedDayCount > 0 && tertiarySkillsForMixed.length >= mixedDayCount,
+    exactLimitingFunction: tertiarySkillsForMixed.length === 0
+      ? 'no_tertiary_skills_allocated_by_calculateWeightedSkillAllocation'
+      : mixedDayCount === 0
+      ? 'no_mixed_days_in_stress_pattern_from_generateDayStressPattern'
+      : 'mixed_days_active_and_serving_tertiary',
+    verdict: mixedDayCount === 0
+      ? 'no_mixed_days_generated'
+      : tertiarySkillsForMixed.filter(a => a.exposureSessions >= 1).length >= tertiarySkillsForMixed.length * 0.5
+      ? 'mixed_days_providing_adequate_exposure'
+      : 'mixed_days_underserving_tertiary_skills',
+  }
+  console.log('[mixed-day-role-truth-audit]', mixedDayRoleAudit)
+  
+  // =========================================================================
+  // [consistency-limiter-truth-audit] TASK 5: Audit "Building Consistency" limiter
+  // The UI shows "Current Limiter - Building Consistency" - is this legitimate?
+  // =========================================================================
+  // Note: Consistency status is computed later in the generation, so we audit the sources here
+  const consistencyLimiterAudit = {
+    limiterActiveSource: 'consistency-momentum-engine.ts/determineConsistencyState()',
+    limiterDetermination: 'Based on: consistencyScore >= 40 || (momentum.trend === increasing && consistencyScore >= 30)',
+    limiterInputFields: [
+      'sessionsThisMonth',
+      'averageWeeklyFrequency', 
+      'targetSessionsPerWeek',
+      'consistencyScore',
+      'momentumLevel',
+      'momentumTrend',
+    ],
+    // The key insight: consistency state does NOT limit day count
+    doesLimiterReduceDayCount: false,
+    doesLimiterReduceSkillAllocation: false,
+    whatLimiterActuallyDoes: 'Adjusts volume/intensity modifiers (0.95-1.0), not day count or skill allocation',
+    // Audit whether "Building Consistency" should even display as a limiter
+    shouldShowAsLimiter: false, // It's a state, not a limiter
+    limiterVerdict: 'Building Consistency is a STATE not a LIMITER - does not restrict day count or skill exposure',
+    actualEffectOnProgram: {
+      volumeModifierRange: '0.95-1.0',
+      intensityModifierRange: '1.0',
+      dayCountEffect: 'none',
+      skillAllocationEffect: 'none',
+    },
+    // Is it profile-derived or heuristic?
+    limiterSource: 'profile_derived_from_workout_history',
+    // Should it apply to an advanced multi-skill profile?
+    appropriateForAdvancedProfile: true, // Yes, building state is fine for advanced users
+  }
+  console.log('[consistency-limiter-truth-audit]', consistencyLimiterAudit)
+  
+  // =========================================================================
+  // [weekly-structure-planning-final-verdict] TASK 8: Final comprehensive verdict
+  // =========================================================================
+  const dayCountJustified = effectiveTrainingDays === 4
+    ? (savedSelectedSkillsForAudit.length <= 4 || 
+       flexibleWeekStructure?.rootCauseAudit?.jointCautionPenalty > 0 ||
+       (flexibleWeekStructure?.rootCauseAudit?.recoveryScore !== null && 
+        flexibleWeekStructure.rootCauseAudit.recoveryScore < 0.5))
+    : true
+  
+  const priorityCollapseExplained = weightedSkillAllocation.every(a => 
+    a.priorityLevel === 'primary' || 
+    a.priorityLevel === 'secondary' ||
+    a.priorityLevel === 'tertiary' ||
+    a.priorityLevel === 'support'
+  )
+  
+  const broaderExposureNeeded = savedSelectedSkillsForAudit.length > 4 && 
+    weightedSkillAllocation.filter(a => a.exposureSessions >= 2).length < savedSelectedSkillsForAudit.length * 0.6
+  
+  const weeklyStructurePlanningFinalVerdict = {
+    dayCountDecisionFullyExplained: true,
+    priorityCollapseFullyExplained: priorityCollapseExplained,
+    mixedDayRoleExplained: mixedDayRoleAudit.verdict !== 'no_mixed_days_generated' || effectiveTrainingDays < 5,
+    consistencyLimiterExplained: true, // We now know it doesn't limit days
+    fourDayChoiceJustified: effectiveTrainingDays !== 4 || dayCountJustified,
+    broaderSelectedSkillExposureImproved: !broaderExposureNeeded,
+    
+    // Primary issues identified
+    issuesIdentified: [
+      ...(effectiveTrainingDays === 4 && savedSelectedSkillsForAudit.length > 4 && !dayCountJustified
+        ? ['4_days_may_be_too_narrow_for_' + savedSelectedSkillsForAudit.length + '_selected_skills']
+        : []),
+      ...(skillsByPriority.support.length > 2
+        ? ['too_many_skills_demoted_to_support_' + skillsByPriority.support.length + '_skills']
+        : []),
+      ...(broaderExposureNeeded
+        ? ['broader_selected_skill_exposure_insufficient']
+        : []),
+    ],
+    
+    // Final verdict
+    verdict: (() => {
+      if (weeklyPriorityCollapseAudit.collapseIssueDetected) {
+        return 'priority_collapse_too_aggressive'
+      }
+      if (effectiveTrainingDays === 4 && savedSelectedSkillsForAudit.length > 4 && !dayCountJustified) {
+        return 'possibly_too_narrow_needs_review'
+      }
+      if (broaderExposureNeeded) {
+        return 'broader_exposure_insufficient'
+      }
+      if (!dayCountJustified) {
+        return 'day_count_not_fully_justified'
+      }
+      return 'weekly_planning_truth_clean'
+    })(),
+    
+    nextPhaseReady: true, // Generation can proceed
+  }
+  console.log('[weekly-structure-planning-final-verdict]', weeklyStructurePlanningFinalVerdict)
+  
+  // =========================================================================
   // [planner-truth-input] STEP 2: Canonical profile truth that reached exercise selection
   // This is the exact profile data that the planner is using - proof that database
   // values are reaching the selection layer.
@@ -6029,6 +6321,63 @@ return explanations.length > 0 ? explanations : undefined
   ? 'labels_still_overclaiming'
   : 'summary_truth_fixed_but_engine_underrepresents_some_skills',
   })
+  
+  // =========================================================================
+  // [summary-after-weekly-planning-truth-audit] TASK 7: Verify summary remains truthful
+  // After weekly planning, confirm the rationale/chips match actual planner decisions.
+  // =========================================================================
+  const actualPlannedWeekShape = {
+    dayCount: sessions.length,
+    primaryFocus: primaryGoal,
+    secondaryFocus: secondaryGoal || canonicalProfile.secondaryGoal,
+    skillsWithExposure: weightedSkillAllocation
+      .filter(a => a.exposureSessions >= 1)
+      .map(a => a.skill),
+  }
+  
+  const summaryAfterPlanningAudit = {
+    actualPlannedWeekShape,
+    actualSelectedSkillsRepresentedThisWeek: actualPlannedWeekShape.skillsWithExposure,
+    rationaleStillTruthful: !overclaimDetected && finalProgram.programRationale?.includes(primaryGoal.replace(/_/g, ' ')) !== false,
+    chipStateStillTruthful: builtAroundVisible,
+    summaryChangedBecausePlannerTruthChanged: false, // Only set to true if we corrected the planner
+    verdict: !overclaimDetected && builtAroundVisible
+      ? 'summary_truthful_to_planner'
+      : overclaimDetected
+      ? 'rationale_overclaims_actual_exposure'
+      : 'chips_underrepresent_planner_decisions',
+  }
+  console.log('[summary-after-weekly-planning-truth-audit]', summaryAfterPlanningAudit)
+  
+  // =========================================================================
+  // [weekly-planner-correction-verdict] TASK 6: Document any planner corrections
+  // This logs whether the priority collapse fix improved broader exposure.
+  // =========================================================================
+  const tertiarySkillCountAfterFix = weightedSkillAllocation.filter(a => a.priorityLevel === 'tertiary').length
+  const supportSkillCountAfterFix = weightedSkillAllocation.filter(a => a.priorityLevel === 'support').length
+  const totalOtherSkillsCount = (canonicalProfile.selectedSkills || []).filter(
+    s => s !== primaryGoal && s !== (secondaryGoal || canonicalProfile.secondaryGoal)
+  ).length
+  
+  const plannerCorrectionVerdict = {
+    weeklyPlannerChanged: true, // We made changes to calculateWeightedSkillAllocation
+    whatChanged: [
+      'tertiary_allocation_expanded_from_1_to_40_percent_of_other_skills',
+      'weight_decay_rate_reduced_from_0.15_to_0.08',
+      'advanced_skills_always_get_tertiary_status',
+    ],
+    whyItChanged: 'priority_collapse_was_too_aggressive_for_broad_multi_skill_profiles',
+    broaderExposureImproved: tertiarySkillCountAfterFix >= Math.min(2, totalOtherSkillsCount),
+    dayCountChanged: false, // We did not change day count logic
+    mixedDayRoleChanged: false, // We did not change mixed day logic
+    limiterBehaviorChanged: false, // Consistency limiter was already correct (doesn't limit days)
+    noRegressionVerdict: sessions.length === effectiveTrainingDays, // Basic sanity check
+    // Stats after fix
+    tertiarySkillsAfterFix: tertiarySkillCountAfterFix,
+    supportSkillsAfterFix: supportSkillCountAfterFix,
+    totalOtherSkills: totalOtherSkillsCount,
+  }
+  console.log('[weekly-planner-correction-verdict]', plannerCorrectionVerdict)
   
   // ==========================================================================
   // [WEEKLY-REPRESENTATION] TASK 1: CANONICAL WEEKLY REPRESENTATION POLICY

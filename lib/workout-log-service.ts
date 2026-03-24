@@ -225,6 +225,8 @@ interface QuickLogInput {
  * 
  * FEEDBACK LOOP: This is the canonical entry point for workout logging.
  * All completed sessions should flow through here for adaptive decisions.
+ * 
+ * [PHASE 13] After logging, this triggers active-week mutation evaluation.
  */
 export function quickLogWorkout(input: QuickLogInput): WorkoutLog {
   // Demo workouts are never trusted for adaptive logic
@@ -240,7 +242,7 @@ export function quickLogWorkout(input: QuickLogInput): WorkoutLog {
     sourceRoute: input.sourceRoute || (isDemo ? 'demo' : 'workout_session'),
   })
   
-  return saveWorkoutLog({
+  const log = saveWorkoutLog({
     sessionName: input.sessionName,
     sessionType: input.sessionType,
     sessionDate: new Date().toISOString().split('T')[0],
@@ -257,6 +259,23 @@ export function quickLogWorkout(input: QuickLogInput): WorkoutLog {
     trusted,
     sourceRoute: input.sourceRoute || (isDemo ? 'demo' : 'workout_session'),
   })
+  
+  // [PHASE 13] Dispatch event for active-week mutation evaluation
+  // This allows the program display to react to workout completion
+  if (typeof window !== 'undefined' && trusted) {
+    window.dispatchEvent(new CustomEvent('spartanlab:workout-logged', {
+      detail: {
+        workoutId: log.id,
+        sessionName: input.sessionName,
+        programId: input.generatedWorkoutId?.split('_session_')[0] || null,
+        trusted,
+      }
+    }))
+    
+    console.log('[phase13] Dispatched workout-logged event for active-week mutation')
+  }
+  
+  return log
 }
 
 /**

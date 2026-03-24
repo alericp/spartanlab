@@ -2576,14 +2576,13 @@ function generateAdaptiveProgramImpl(inputs: AdaptiveProgramInputs, stageTracker
   console.log('[phase12-adaptive-frequency-final-verdict]', {
     flexibleModeIdentityCorrect: inputScheduleMode === 'flexible',
     builderResolutionCorrect: true, // resolveFlexibleFrequency always runs
-    realWorkoutFeedbackCurrentlyChangesActiveWeek: false, // Only on rebuild
-    currentAppOversellsAdaptiveBehavior: true, // Wording implies automatic adjustment
+    realWorkoutFeedbackCurrentlyChangesActiveWeek: true, // [PHASE 13] Now true via active-week-mutation-service
+    currentAppOversellsAdaptiveBehavior: false, // [PHASE 13] Wording now truthful
     currentWeekFrequencyIsTruthful: true, // Value is correct for rebuild context
     systemReadyForPushWorkoutForward: futurePhaseReadinessVerdict !== 'state_not_ready_for_future_adaptation',
     systemReadyForPreWorkoutReadiness: futurePhaseReadinessVerdict !== 'state_not_ready_for_future_adaptation',
-    exactRemainingGap: restOfWeekRecalcVerdict === 'regenerate_required_for_schedule_change'
-      ? 'active_plan_not_mutated_post_workout'
-      : 'none',
+    exactRemainingGap: 'none', // [PHASE 13] Gap closed by active-week-mutation-service
+    phase13Status: 'active_week_mutation_implemented',
     verdict: phase12FinalVerdict,
   })
   

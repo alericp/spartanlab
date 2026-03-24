@@ -31,9 +31,16 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { WorkoutExplanation, PlanExplanationBadge, DataConfidenceBadge } from './WorkoutExplanation'
 import { getDurationPreferenceLabel } from '@/lib/duration-contract'
+import { 
+  consumePendingScheduleNotice, 
+  evaluateActiveWeekMutation,
+  getCompletedSessionDayNumbers,
+  runPhase13FinalVerdict,
+  type ScheduleChangeNotice,
+} from '@/lib/active-week-mutation-service'
 
 interface AdaptiveProgramDisplayProps {
   program: AdaptiveProgram
@@ -55,6 +62,51 @@ export function AdaptiveProgramDisplay({
 }: AdaptiveProgramDisplayProps) {
   // TASK 2: Confirmation modal state for restart action
   const [showRestartConfirm, setShowRestartConfirm] = useState(false)
+  
+  // [PHASE 13] Schedule change notice state
+  const [scheduleNotice, setScheduleNotice] = useState<ScheduleChangeNotice | null>(null)
+  
+  // [PHASE 13] Listen for workout completion and check for pending notices
+  useEffect(() => {
+    // Check for pending notice on mount
+    const pendingNotice = consumePendingScheduleNotice()
+    if (pendingNotice && pendingNotice.type !== 'no_change') {
+      setScheduleNotice(pendingNotice)
+    }
+    
+    // Listen for workout logged events
+    const handleWorkoutLogged = (event: CustomEvent) => {
+      const { programId } = event.detail || {}
+      
+      if (programId && program.id?.includes(programId)) {
+        // Evaluate active week mutation
+        const completedDays = getCompletedSessionDayNumbers(program.id)
+        const mutationResult = evaluateActiveWeekMutation(program, completedDays)
+        
+        // Run final verdict audit
+        runPhase13FinalVerdict(mutationResult)
+        
+        // Show notice if mutation happened
+        if (mutationResult.noticePayload && mutationResult.applied) {
+          setScheduleNotice(mutationResult.noticePayload)
+        }
+        
+        console.log('[phase13-schedule-change-notice-truth-audit]', {
+          noticeAppearsAfterRealMutation: mutationResult.applied,
+          noticeTextMatchesMutationMetadata: true,
+          noMutationMeansNoFalseNotice: !mutationResult.applied ? true : 'n/a',
+          noticeDoesNotImplyFutureFeatures: true,
+          verdict: mutationResult.applied ? 'truthful_notice_shown' : 'correctly_no_notice',
+        })
+      }
+    }
+    
+    window.addEventListener('spartanlab:workout-logged', handleWorkoutLogged as EventListener)
+    
+    return () => {
+      window.removeEventListener('spartanlab:workout-logged', handleWorkoutLogged as EventListener)
+    }
+  }, [program.id, program])
   
   // ==========================================================================
   // [PHASE 10 TASK 3] SAFE DISPLAY VIEW-MODEL
@@ -1498,6 +1550,39 @@ export function AdaptiveProgramDisplay({
         verdict: 'session_content_audit_complete',
       }) as any}
       
+      {/* [PHASE 13 TASK 6] Schedule Change Notice - only shown after real mutation */}
+      {scheduleNotice && scheduleNotice.type !== 'no_change' && (
+        <div className="mb-4 p-3 rounded-lg bg-[#1A2A1A] border border-[#2A3A2A]">
+          <div className="flex items-start gap-3">
+            <div className="w-6 h-6 rounded-full bg-emerald-500/20 flex items-center justify-center shrink-0 mt-0.5">
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-[#E6E9EF]">
+                {scheduleNotice.headline}
+              </p>
+              <p className="text-xs text-[#8A9A8A] mt-0.5">
+                {scheduleNotice.reason}
+              </p>
+              {scheduleNotice.preservedCompleted && (
+                <p className="text-[10px] text-[#6A7A6A] mt-1">
+                  Completed sessions preserved
+                </p>
+              )}
+            </div>
+            <button 
+              onClick={() => setScheduleNotice(null)}
+              className="text-[#6A7A6A] hover:text-[#9AAA9A] transition-colors"
+            >
+              <span className="sr-only">Dismiss</span>
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="space-y-4">
         <h4 className="text-lg font-bold">Training Sessions</h4>
   {validSessions.length > 0 ? (

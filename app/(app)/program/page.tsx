@@ -76,8 +76,8 @@ const ProgramAdjustmentModal = dynamic(
 // [canonical-rebuild] Import type for adjustment rebuild requests
 import type { AdjustmentRebuildRequest, AdjustmentRebuildResult } from '@/components/programs/ProgramAdjustmentModal'
 // [canonical-rebuild] TASK 2: Import saveCanonicalProfile to persist inputs to canonical truth
-// [phase3-closeout] Import getCanonicalProfile for field-by-field drift audit
-import { saveCanonicalProfile, getCanonicalProfile } from '@/lib/canonical-profile-service'
+// NOTE: getCanonicalProfile is already imported above from the main canonical-profile-service import block
+import { saveCanonicalProfile } from '@/lib/canonical-profile-service'
 
 // TASK 1: Error boundary wrapper for AdaptiveProgramDisplay
 // [TASK 1] Now accepts unifiedStaleness to pass to display component
@@ -2119,28 +2119,9 @@ console.log('[post-rebuild-stale-clearance-audit]', {
 })
 
 // =========================================================================
-// [post-rebuild-active-program-rebind-audit] TASK 3: Verify rebind after rebuild
-// Confirms the UI and staleness both point to the newly saved program
-// =========================================================================
-const preRebuildProgramId = program?.id || 'none'
-const postRebuildProgramId = newProgram.id
-console.log('[post-rebuild-active-program-rebind-audit]', {
-  preRebuildProgramId,
-  postRebuildProgramId,
-  programIdActuallyChanged: preRebuildProgramId !== postRebuildProgramId,
-  postBuildProgramUsedByUI: newProgram.id, // setProgram(newProgram) called
-  postBuildProgramUsedByStaleness: newProgram.id, // evaluated against newProgram
-  bothPointToSameNewProgram: true, // same object used for both
-  changedFieldsAfterRebind: postBuildStaleness.changedFields,
-  bannerShouldRemainAfterRebind: postBuildStaleness.isStale,
-  rebindVerdict: postBuildStaleness.isStale 
-    ? 'rebind_successful_but_real_drift_remains'
-    : 'rebind_successful_banner_cleared',
-})
-
-// =========================================================================
 // [post-rebuild-rebind-truth-audit] TASK 4: Verify post-rebuild rebind truth
 // After rebuild succeeds, both UI and staleness must use the NEW program object
+// (Merged from previous duplicate [post-rebuild-active-program-rebind-audit])
 // =========================================================================
 const preRebuildProgramId = program?.id || 'none'
 const postRebuildProgramId = newProgram.id

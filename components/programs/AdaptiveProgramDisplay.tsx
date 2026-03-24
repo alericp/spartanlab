@@ -81,6 +81,31 @@ export function AdaptiveProgramDisplay({
     changedFields: [] as string[],
     recommendation: 'continue' as const,
   }
+  
+  // ==========================================================================
+  // [TASK 2] TRUTHFUL BANNER TITLE AND FIELD LIST FROM PARENT
+  // Use banner title and field list from parent staleness if available
+  // Falls back to computed values if not provided
+  // ==========================================================================
+  const bannerTitle = (unifiedStaleness as { bannerTitle?: string })?.bannerTitle || 'Minor settings changed'
+  const fieldListSummary = (unifiedStaleness as { fieldListSummary?: string })?.fieldListSummary || (
+    stalenessCheck.isStale && stalenessCheck.changedFields.length > 0
+      ? `Training settings have changed (${stalenessCheck.changedFields.slice(0, 2).join(', ')}). Consider regenerating.`
+      : 'Consider regenerating your program.'
+  )
+  
+  // Phase 3 status from parent (if computed)
+  const phase3Status = (unifiedStaleness as { phase3Status?: string })?.phase3Status || 'unknown'
+  const safeToMoveToPhase4 = (unifiedStaleness as { safeToMoveToPhase4?: boolean })?.safeToMoveToPhase4 ?? false
+  
+  console.log('[adaptive-display-banner-truth]', {
+    bannerTitle,
+    fieldListSummary,
+    phase3Status,
+    safeToMoveToPhase4,
+    isStale: stalenessCheck.isStale,
+    severity: unifiedStaleness?.severity,
+  })
   const recoveryColors: Record<string, string> = {
     HIGH: 'text-green-400 bg-green-400/10 border-green-400/20',
     MODERATE: 'text-yellow-400 bg-yellow-400/10 border-yellow-400/20',

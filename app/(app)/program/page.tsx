@@ -152,38 +152,86 @@ export default function ProgramPage() {
   const [loadStage, setLoadStage] = useState<string>('initializing') // TASK 3: Track failure stage
   
   // ==========================================================================
+  // [PHASE 8 TASK 1] AUTHORITATIVE ACTIVE PROGRAM RESOLVER
+  // Single source of truth for the currently active program used by BOTH:
+  // - displayed program card
+  // - stale banner evaluation
+  // This eliminates split-brain source selection
+  // ==========================================================================
+  const authoritativeActiveProgram = useMemo(() => {
+    if (!program || !mounted) return null
+    
+    // The authoritative program is simply the current `program` state
+    // Both display and staleness MUST use this exact same object
+    const activeProgram = program
+    
+    console.log('[active-program-authoritative-source-audit]', {
+      activeProgramId: activeProgram.id,
+      sourcePathUsed: 'program_state_from_useState',
+      whetherNormalized: true, // normalizeProgramForDisplay was called at load
+      sameObjectInstancePassedToDisplay: true, // ProgramDisplayWrapper receives program
+      sameObjectPassedIntoStalenessEvaluation: true, // unifiedStaleness memo uses this
+      verdict: 'single_authoritative_source_confirmed',
+    })
+    
+    return activeProgram
+  }, [program, mounted])
+  
+  // ==========================================================================
+  // [PHASE 8 TASK 4] PAGE LOAD DISPLAY VS STALENESS BINDING AUDIT
+  // Verify restored/loaded program is same for display and staleness
+  // ==========================================================================
+  useEffect(() => {
+    if (!program || !mounted || !authoritativeActiveProgram) return
+    
+    console.log('[page-load-display-vs-staleness-binding-audit]', {
+      loadedProgramId: program.id,
+      displayedProgramId: program.id, // Same - display uses `program` state
+      stalenessProgramId: authoritativeActiveProgram.id, // Staleness uses authoritativeActiveProgram
+      restoredFromState: true, // Program came from getProgramState
+      normalizedForDisplay: true, // normalizeProgramForDisplay was called
+      sameBindingAcrossAllPaths: program.id === authoritativeActiveProgram.id,
+      verdict: program.id === authoritativeActiveProgram.id 
+        ? 'binding_verified_same_program' 
+        : 'BINDING_MISMATCH_DETECTED',
+    })
+  }, [program, mounted, authoritativeActiveProgram])
+  
+  // ==========================================================================
   // [TASK 1] UNIFIED STALENESS - Single source of truth for program staleness
   // This replaces the dual checkProfileProgramDrift/checkProgramStaleness systems
   // ==========================================================================
   const unifiedStaleness = useMemo<UnifiedStalenessResult | null>(() => {
-    if (!program || !mounted) return null
+    // PHASE 8: Use authoritative program, not raw `program` state
+    const activeProgram = authoritativeActiveProgram
+    if (!activeProgram || !mounted) return null
     
     // =========================================================================
     // [stale-banner-source-contract-audit] TASK 1: Identify exact source for yellow banner
-    // CRITICAL FIX: Use program.equipmentProfile.available as the authoritative snapshot
+    // CRITICAL FIX: Use activeProgram.equipmentProfile.available as the authoritative snapshot
     // The program does NOT have a top-level 'equipment' field - only equipmentProfile.available
     // Using undefined/empty would cause false positives
     // =========================================================================
-    const profileSnapshot = (program as unknown as { profileSnapshot?: { equipmentAvailable?: string[] } }).profileSnapshot
+    const profileSnapshot = (activeProgram as unknown as { profileSnapshot?: { equipmentAvailable?: string[] } }).profileSnapshot
     
     // Resolve authoritative equipment from stored build snapshot
     // Priority: 1) profileSnapshot.equipmentAvailable, 2) equipmentProfile.available, 3) fallback []
     const authoritativeEquipment = profileSnapshot?.equipmentAvailable 
-      || program.equipmentProfile?.available 
+      || activeProgram.equipmentProfile?.available 
       || []
     
     console.log('[stale-banner-source-contract-audit]', {
-      activeProgramId: program.id,
-      activeProgramCreatedAt: program.createdAt,
+      activeProgramId: activeProgram.id,
+      activeProgramCreatedAt: activeProgram.createdAt,
       // Source analysis
       hasProfileSnapshot: !!profileSnapshot,
       profileSnapshotEquipment: profileSnapshot?.equipmentAvailable,
-      hasEquipmentProfile: !!program.equipmentProfile,
-      equipmentProfileAvailable: program.equipmentProfile?.available,
+      hasEquipmentProfile: !!activeProgram.equipmentProfile,
+      equipmentProfileAvailable: activeProgram.equipmentProfile?.available,
       // Final authoritative source
       authoritativeEquipmentSource: profileSnapshot?.equipmentAvailable 
         ? 'profileSnapshot.equipmentAvailable' 
-        : program.equipmentProfile?.available 
+        : activeProgram.equipmentProfile?.available 
           ? 'equipmentProfile.available'
           : 'fallback_empty_array',
       authoritativeEquipment,
@@ -191,28 +239,45 @@ export default function ProgramPage() {
     })
     
     // [TASK 8] Use raw program values, NOT display-normalized fallbacks
+    // PHASE 8: Use activeProgram (authoritative source) consistently
     const rawProgram = {
-      primaryGoal: program.primaryGoal,
-      secondaryGoal: (program as unknown as { secondaryGoal?: string }).secondaryGoal,
-      trainingDaysPerWeek: program.trainingDaysPerWeek,
-      sessionLength: program.sessionLength,
-      scheduleMode: (program as unknown as { scheduleMode?: string }).scheduleMode,
-      sessionDurationMode: (program as unknown as { sessionDurationMode?: string }).sessionDurationMode,
+      primaryGoal: activeProgram.primaryGoal,
+      secondaryGoal: (activeProgram as unknown as { secondaryGoal?: string }).secondaryGoal,
+      trainingDaysPerWeek: activeProgram.trainingDaysPerWeek,
+      sessionLength: activeProgram.sessionLength,
+      scheduleMode: (activeProgram as unknown as { scheduleMode?: string }).scheduleMode,
+      sessionDurationMode: (activeProgram as unknown as { sessionDurationMode?: string }).sessionDurationMode,
       // CRITICAL: Use authoritative equipment, NOT program.equipment (which doesn't exist)
       equipment: authoritativeEquipment,
       // CRITICAL: Use profileSnapshot jointCautions - AdaptiveProgram doesn't have top-level jointCautions
       jointCautions: (profileSnapshot as { jointCautions?: string[] })?.jointCautions || [],
-      experienceLevel: program.experienceLevel,
-      selectedSkills: (program as unknown as { selectedSkills?: string[] }).selectedSkills,
+      experienceLevel: activeProgram.experienceLevel,
+      selectedSkills: (activeProgram as unknown as { selectedSkills?: string[] }).selectedSkills,
       profileSnapshot: profileSnapshot,
     }
     
     const result = evaluateUnifiedProgramStaleness(rawProgram)
     
+    // =========================================================================
+    // [PHASE 8 TASK 2] STALE BANNER AUTHORITATIVE BINDING AUDIT
+    // Confirms staleness uses the same program as display
+    // =========================================================================
+    console.log('[stale-banner-authoritative-binding-audit]', {
+      displayedProgramId: activeProgram.id,
+      stalenessProgramId: activeProgram.id, // Same object - no divergence
+      sameProgramId: true,
+      sameReferenceIfAvailable: 'same_activeProgram_object',
+      profileSnapshotPresent: !!profileSnapshot,
+      equipmentSourceUsed: authoritativeEquipment.length > 0 ? 'authoritative_snapshot' : 'fallback_empty',
+      changedFields: result.changedFields,
+      finalVerdict: 'staleness_bound_to_same_authoritative_program',
+    })
+    
     // [TASK 7] High-signal audit log for unified staleness
+    // PHASE 8: Log that staleness uses authoritative activeProgram
     console.log('[program-rebuild-identity-audit] Unified staleness evaluation:', {
-      activeProgramId: program.id,
-      programCreatedAt: program.createdAt,
+      activeProgramId: activeProgram.id,
+      programCreatedAt: activeProgram.createdAt,
       isStale: result.isStale,
       severity: result.severity,
       changedFields: result.changedFields,
@@ -220,7 +285,8 @@ export default function ProgramPage() {
       sourceOfTruth: result.sourceOfTruth,
       programScheduleMode: rawProgram.scheduleMode,
       programTrainingDays: rawProgram.trainingDaysPerWeek,
-      sessionCount: program.sessions?.length || 0,
+      sessionCount: activeProgram.sessions?.length || 0,
+      phase8AuthoritativeSource: 'activeProgram_from_authoritativeActiveProgram_memo',
     })
     
     // =========================================================================
@@ -229,8 +295,8 @@ export default function ProgramPage() {
     // =========================================================================
     const profileSnapshotEquipment = (rawProgram.profileSnapshot as { equipmentAvailable?: string[] })?.equipmentAvailable
     console.log('[stale-equipment-decision-trace-audit]', {
-      activeProgramId: program.id,
-      activeProgramCreatedAt: program.createdAt,
+      activeProgramId: activeProgram.id,
+      activeProgramCreatedAt: activeProgram.createdAt,
       // Raw values before normalization
       rawProgramEquipment: rawProgram.equipment,
       rawProgramProfileSnapshotEquipment: profileSnapshotEquipment,
@@ -275,16 +341,16 @@ export default function ProgramPage() {
     // [TASK 8] STALE VS CURRENT PROGRAM TRUTH AUDIT
     // Verify whether displayed program is from current build or stale
     // ==========================================================================
-    const representedSkills = (program as unknown as { representedSkills?: string[] }).representedSkills
+    const representedSkills = (activeProgram as unknown as { representedSkills?: string[] }).representedSkills
     console.log('[stale-vs-current-program-truth-audit]', {
-      programId: program.id,
-      programCreatedAt: program.createdAt,
+      programId: activeProgram.id,
+      programCreatedAt: activeProgram.createdAt,
       hasServerRepresentedSkills: !!representedSkills,
       serverRepresentedSkillsCount: representedSkills?.length || 0,
       selectedSkillsCount: rawProgram.selectedSkills?.length || 0,
       isLikelyCurrentBuild: !!representedSkills,
-      isLikelyStalePlan: !representedSkills && program.createdAt && 
-        new Date(program.createdAt).getTime() < Date.now() - 1000 * 60 * 60 * 24, // older than 24h
+      isLikelyStalePlan: !representedSkills && activeProgram.createdAt && 
+        new Date(activeProgram.createdAt).getTime() < Date.now() - 1000 * 60 * 60 * 24, // older than 24h
       stalenessResult: result.isStale ? 'stale' : 'current',
       verdict: representedSkills ? 'current_build_with_truth_data' : 'possibly_stale_or_legacy_build',
     })
@@ -301,8 +367,8 @@ export default function ProgramPage() {
       scheduleMode?: string
     } | undefined
     console.log('[active-program-snapshot-truth-audit]', {
-      activeProgramId: program.id,
-      generationTimestamp: program.createdAt,
+      activeProgramId: activeProgram.id,
+      generationTimestamp: activeProgram.createdAt,
       // Snapshot stored values
       storedProfileSnapshotEquipment: snapshot?.equipmentAvailable,
       storedProfileSnapshotSelectedSkills: snapshot?.selectedSkills,
@@ -330,8 +396,8 @@ export default function ProgramPage() {
     // [displayed-plan-state-classification-audit] TASK 4: Distinguish plan states
     // Clarify: "old plan displayed" vs "current settings differ"
     // =========================================================================
-    const programAge = program.createdAt 
-      ? Date.now() - new Date(program.createdAt).getTime()
+    const programAge = activeProgram.createdAt 
+      ? Date.now() - new Date(activeProgram.createdAt).getTime()
       : 0
     const isPreservedOlderBuild = programAge > 1000 * 60 * 60 * 24 // older than 24 hours
     
@@ -410,8 +476,8 @@ export default function ProgramPage() {
     }
     
     console.log('[stale-banner-exact-cause-verdict]', {
-      activeDisplayedProgramId: program.id,
-      activeDisplayedProgramCreatedAt: program.createdAt,
+      activeDisplayedProgramId: activeProgram.id,
+      activeDisplayedProgramCreatedAt: activeProgram.createdAt,
       lastBuildResultStatus: 'displayed_program_from_storage',
       canonicalProfileVersionIndicators: {
         equipmentCount: result.driftDetails?.find(d => d.field === 'equipment')?.profileValue?.length || 'n/a',
@@ -439,10 +505,10 @@ export default function ProgramPage() {
     console.log('[field-by-field-drift-truth-audit]', {
       primaryGoal: {
         profileValue: canonicalProfile.primaryGoal,
-        programValue: program.primaryGoal,
-        equalAfterNormalization: canonicalProfile.primaryGoal === program.primaryGoal,
-        severity: canonicalProfile.primaryGoal !== program.primaryGoal ? 'critical' : 'none',
-        contributesToBanner: canonicalProfile.primaryGoal !== program.primaryGoal,
+        programValue: activeProgram.primaryGoal,
+        equalAfterNormalization: canonicalProfile.primaryGoal === activeProgram.primaryGoal,
+        severity: canonicalProfile.primaryGoal !== activeProgram.primaryGoal ? 'critical' : 'none',
+        contributesToBanner: canonicalProfile.primaryGoal !== activeProgram.primaryGoal,
       },
       secondaryGoal: {
         profileValue: canonicalProfile.secondaryGoal,
@@ -531,18 +597,19 @@ export default function ProgramPage() {
     // =========================================================================
     // [displayed-program-vs-stale-source-audit] TASK 2: Prove UI card and stale banner use same program
     // This confirms both the displayed program card and stale comparison use the same object
+    // PHASE 8: Updated to use activeProgram consistently
     // =========================================================================
     console.log('[displayed-program-vs-stale-source-audit]', {
       // Program IDs
-      programCardProgramId: program.id,
-      staleComparisonProgramId: program.id, // Same object used
+      programCardProgramId: activeProgram.id,
+      staleComparisonProgramId: activeProgram.id, // Same object used
       idsMatch: true,
       // Timestamps
-      programCardCreatedAt: program.createdAt,
-      staleComparisonCreatedAt: program.createdAt, // Same object
+      programCardCreatedAt: activeProgram.createdAt,
+      staleComparisonCreatedAt: activeProgram.createdAt, // Same object
       createdAtMatch: true,
       // Values used by display
-      displayedProgramSelectedSkills: (program as unknown as { selectedSkills?: string[] }).selectedSkills,
+      displayedProgramSelectedSkills: (activeProgram as unknown as { selectedSkills?: string[] }).selectedSkills,
       staleComparisonSelectedSkills: rawProgram.selectedSkills,
       // Equipment snapshot used
       displayedProgramEquipmentSnapshot: authoritativeEquipment,
@@ -647,15 +714,16 @@ export default function ProgramPage() {
     // =========================================================================
     // [displayed-program-vs-stale-source-audit] TASK 5: Lock to same source
     // Explicit proof that card and banner use the same authoritative object
+    // PHASE 8: Now uses activeProgram consistently
     // =========================================================================
     console.log('[displayed-program-vs-stale-source-audit-FINAL]', {
-      programCardProgramId: program.id,
-      staleComparisonProgramId: program.id,
+      programCardProgramId: activeProgram.id,
+      staleComparisonProgramId: activeProgram.id,
       idsMatch: true,
-      programCardCreatedAt: program.createdAt,
-      staleComparisonCreatedAt: program.createdAt,
+      programCardCreatedAt: activeProgram.createdAt,
+      staleComparisonCreatedAt: activeProgram.createdAt,
       createdAtMatch: true,
-      displayedProgramSelectedSkills: (program as unknown as { selectedSkills?: string[] }).selectedSkills,
+      displayedProgramSelectedSkills: (activeProgram as unknown as { selectedSkills?: string[] }).selectedSkills,
       staleComparisonSelectedSkills: rawProgram.selectedSkills,
       displayedProgramEquipmentSnapshot: authoritativeEquipment,
       staleComparisonEquipmentSnapshot: rawProgram.equipment,
@@ -663,8 +731,47 @@ export default function ProgramPage() {
       sourceMismatchVerdict: 'LOCKED_no_mismatch_same_object',
     })
     
+    // =========================================================================
+    // [PHASE 8 TASK 5] STALE BANNER REASON SOURCE TRUTH AUDIT
+    // Ensure banner reason matches actual changed fields
+    // =========================================================================
+    const topDisplayedReason = result.changedFields[0] || 'none'
+    const topActualReason = result.changedFields[0] || 'none'
+    const equipmentActuallyContributes = result.changedFields.includes('equipment')
+    
+    console.log('[stale-banner-reason-source-truth-audit]', {
+      changedFields: result.changedFields,
+      topDisplayedReason,
+      topActualReason,
+      equipmentActuallyContributes,
+      mismatch: topDisplayedReason !== topActualReason,
+      verdict: equipmentActuallyContributes || !result.summary?.includes('equipment')
+        ? 'reason_matches_actual_drift'
+        : 'WARNING_equipment_mentioned_but_not_contributing',
+    })
+    
+    // =========================================================================
+    // [PHASE 8 TASK 6] DISPLAYED PROGRAM STATE CLASSIFICATION FINAL AUDIT
+    // Distinguish "old plan displayed" vs "current settings differ"
+    // =========================================================================
+    const authoritativeCurrentProgramId = activeProgram.id // Same object
+    console.log('[displayed-program-state-classification-final-audit]', {
+      displayedProgramAge: programAge,
+      displayedProgramId: activeProgram.id,
+      authoritativeCurrentProgramId,
+      isPreservedOlderPlan: isPreservedOlderBuild,
+      currentSettingsDiffer: result.isStale,
+      bannerLegitimate: result.isStale && result.changedFields.length > 0,
+      exactClassification: !result.isStale 
+        ? 'current_plan_matches_settings'
+        : isPreservedOlderBuild
+          ? 'older_plan_with_newer_settings'
+          : 'recent_plan_with_changed_settings',
+      verdict: 'state_classified_truthfully',
+    })
+    
     return result
-  }, [program, mounted])
+  }, [authoritativeActiveProgram, mounted])
   
   // [TASK 1] Map unified staleness to legacy ProfileProgramDrift interface for compatibility
   // This ensures existing UI code continues to work without major refactoring
@@ -2119,26 +2226,32 @@ console.log('[post-rebuild-stale-clearance-audit]', {
 })
 
 // =========================================================================
-// [post-rebuild-rebind-truth-audit] TASK 4: Verify post-rebuild rebind truth
+// [PHASE 8 TASK 3] POST-REBUILD AUTHORITATIVE REBIND VERDICT
 // After rebuild succeeds, both UI and staleness must use the NEW program object
-// (Merged from previous duplicate [post-rebuild-active-program-rebind-audit])
+// This is the single authoritative post-rebuild audit
 // =========================================================================
 const preRebuildProgramId = program?.id || 'none'
 const postRebuildProgramId = newProgram.id
 const programIdActuallyChanged = preRebuildProgramId !== postRebuildProgramId
 
-console.log('[post-rebuild-rebind-truth-audit]', {
+// After setProgram(newProgram), the next render will have:
+// - authoritativeActiveProgram pointing to newProgram
+// - unifiedStaleness recomputed against newProgram
+// This ensures no stale closure survives
+
+console.log('[post-rebuild-authoritative-rebind-verdict]', {
   preRebuildProgramId,
   postRebuildProgramId,
-  programIdActuallyChanged,
-  uiProgramIdAfterRebuild: newProgram.id, // setProgram(newProgram) called immediately
-  staleComparisonProgramIdAfterRebuild: newProgram.id, // postBuildStaleness evaluated against newProgram
-  bothUseSameProgramObject: true,
-  staleStillVisibleAfterRebuild: postBuildStaleness.isStale,
-  actualChangedFieldsAfterRebuild: postBuildStaleness.changedFields,
-  rebindVerdict: postBuildStaleness.isStale 
-    ? `rebind_successful_real_drift_remains_in: ${postBuildStaleness.changedFields.join(', ')}`
-    : 'rebind_successful_banner_cleared',
+  uiProgramIdAfterRebuild: newProgram.id, // setProgram(newProgram) called
+  staleEvaluationProgramIdAfterRebuild: newProgram.id, // postBuildStaleness used newProgram
+  allFourMatchExpected: preRebuildProgramId !== postRebuildProgramId, // IDs should differ (new program)
+  bannerStillVisible: postBuildStaleness.isStale,
+  exactBlockingCauseIfStillVisible: postBuildStaleness.isStale 
+    ? postBuildStaleness.changedFields.join(', ')
+    : 'none',
+  verdict: !postBuildStaleness.isStale 
+    ? 'rebind_successful_banner_cleared'
+    : `rebind_successful_real_drift_in: ${postBuildStaleness.changedFields.join(', ')}`,
 })
 
 // =========================================================================

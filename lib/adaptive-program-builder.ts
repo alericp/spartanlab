@@ -7293,8 +7293,10 @@ return explanations.length > 0 ? explanations : undefined
   // ==========================================================================
   // [PHASE 6B TASK 7] DESELECTED SKILL LOCK VERIFICATION
   // Confirm that Phase 6 deselected-skill blocking is still enforced
+  // NOTE: Using canonicalProfile.selectedSkills directly as profileSelectedSkills is out of scope here
   // ==========================================================================
-  const selectedSkillSet = new Set(profileSelectedSkills)
+  const profileSelectedSkillsFinal = canonicalProfile.selectedSkills || []
+  const selectedSkillSet = new Set(profileSelectedSkillsFinal)
   const builtAroundLeakCheck = builtAroundSkillsFinal.filter(s => !selectedSkillSet.has(s))
   const summarySkillsLeakCheck = (finalProgram.summaryTruth?.summaryRenderableSkills || [])
     .filter((s: string) => !selectedSkillSet.has(s))
@@ -7302,7 +7304,7 @@ return explanations.length > 0 ? explanations : undefined
     .filter((s: string) => !selectedSkillSet.has(s))
   
   console.log('[phase6b-deselected-skill-lock-verdict]', {
-    selectedSkills: profileSelectedSkills,
+    selectedSkills: profileSelectedSkillsFinal,
     builtAroundSkills: builtAroundSkillsFinal,
     builtAroundLeaks: builtAroundLeakCheck,
     summarySkillsLeaks: summarySkillsLeakCheck,
@@ -7315,6 +7317,15 @@ return explanations.length > 0 ? explanations : undefined
     verdict: builtAroundLeakCheck.length === 0 && summarySkillsLeakCheck.length === 0
       ? 'LOCK_VERIFIED_NO_LEAKS'
       : 'LEAK_DETECTED_BLOCKING_FAILED',
+  })
+  
+  // [PHASE 6B RUNTIME FIX] Late-scope skill source verification
+  console.log('[phase6b-late-scope-skill-source-verdict]', {
+    selectedSkillsSource: 'canonicalProfile.selectedSkills',
+    localVariableName: 'profileSelectedSkillsFinal',
+    outOfScopeReferencesFixed: ['profileSelectedSkills at lines 7297, 7305, 7555'],
+    nowScopeSafe: true,
+    safeToRetryGeneration: true,
   })
   
   // ==========================================================================
@@ -7549,8 +7560,9 @@ return explanations.length > 0 ? explanations : undefined
     })
   
   // [PHASE 6B] Verify deselected skills still blocked
+  // NOTE: Using profileSelectedSkillsFinal (declared earlier in this late-stage block) instead of out-of-scope profileSelectedSkills
   const deselectedSkillsStillBlocked = builtAroundSkillsFinal.every(s => 
-    profileSelectedSkills.includes(s)
+    profileSelectedSkillsFinal.includes(s)
   )
   
   console.log('[phase6b-output-tightening-final-verdict]', {

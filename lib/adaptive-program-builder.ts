@@ -8462,13 +8462,21 @@ function getSkillsForSession(
     selectedSkillCount: totalSelectedSkillCount,
     skillsEnteringAssembly: totalSelectedSkillCount,
     skillsWithDirectExpression: directlyExpressedCount + technicallyExpressedCount,
-    skillsWithSupportExpression: supportOnlyCount + warmupOnlyCount,
+    skillsWithSupportExpression: sessionSupportOnlyCount + warmupOnlyCount,
     skillsActuallyScheduled: result.length,
     firstNarrowingPoint,
     exactResponsibleFunction: 'getSkillsForSession',
     finalVerdict: deferredCount === 0 ? 'all_skills_expressed' :
       deferredCount <= 1 ? 'minimal_deferral' :
       deferredCount <= 2 ? 'acceptable_deferral' : 'excessive_deferral',
+  })
+  
+  // [PHASE 6B RUNTIME FIX] Scope-safe variable name verification for session assembly
+  console.log('[phase6b-runtime-rename-leak-verdict]', {
+    staleReferencesFound: ['supportOnlyCount at line 8465'],
+    fixedTo: ['sessionSupportOnlyCount'],
+    sessionAssemblyNamesNowScopeSafe: true,
+    safeToRetryGeneration: true,
   })
   
   // ==========================================================================

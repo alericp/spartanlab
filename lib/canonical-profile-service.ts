@@ -2040,6 +2040,315 @@ export function hasValidCanonicalProfile(): boolean {
 }
 
 // =============================================================================
+// [PHASE 6] CANONICAL GENERATION ENTRY BUILDER
+// =============================================================================
+
+/**
+ * Result of building a canonical generation entry.
+ * Either returns valid entry or validation failure details.
+ */
+export interface CanonicalGenerationEntryResult {
+  success: boolean
+  entry: ValidatedGenerationEntry | null
+  error: {
+    code: 'profile_incomplete' | 'validation_failed' | 'composition_failed'
+    message: string
+    missingFields: string[]
+  } | null
+}
+
+/**
+ * Validated generation entry that guarantees all required fields are present.
+ * This is the SINGLE entry contract for all generation paths.
+ */
+export interface ValidatedGenerationEntry {
+  // Required fields - never undefined
+  primaryGoal: string
+  experienceLevel: 'beginner' | 'intermediate' | 'advanced'
+  trainingDaysPerWeek: number | 'flexible'
+  sessionLength: number
+  equipment: string[]
+  scheduleMode: 'static' | 'flexible'
+  sessionDurationMode: 'static' | 'adaptive'
+  selectedSkills: string[]
+  
+  // Optional fields
+  secondaryGoal?: string
+  jointCautions?: string[]
+  trainingPathType?: string
+  goalCategories?: string[]
+  selectedFlexibility?: string[]
+  regenerationMode?: string
+  regenerationReason?: string
+  
+  // Provenance for debugging
+  __entrySource: 'canonical_profile' | 'override_merge'
+  __composedAt: string
+  __fallbacksUsed: string[]
+}
+
+/**
+ * [PHASE 6 TASK 2] Build Canonical Generation Entry
+ * 
+ * This is the SINGLE function that all generation paths MUST use to build
+ * their entry object. It guarantees:
+ * 
+ * 1. experienceLevel is ALWAYS present (never undefined)
+ * 2. All required fields validated before return
+ * 3. Composition from canonical profile truth, not stale UI state
+ * 4. Explicit fallbacks with tracking for debugging
+ * 
+ * @param triggerSource - Which UI path triggered generation
+ * @param overrides - Optional field overrides from adjustment modal, etc.
+ */
+export function buildCanonicalGenerationEntry(
+  triggerSource: string,
+  overrides?: Partial<{
+    primaryGoal: string
+    secondaryGoal: string
+    experienceLevel: 'beginner' | 'intermediate' | 'advanced'
+    trainingDaysPerWeek: number | 'flexible'
+    sessionLength: number
+    scheduleMode: 'static' | 'flexible'
+    sessionDurationMode: 'static' | 'adaptive'
+    equipment: string[]
+    regenerationMode: string
+    regenerationReason: string
+  }>
+): CanonicalGenerationEntryResult {
+  const fallbacksUsed: string[] = []
+  const missingFields: string[] = []
+  
+  // STEP 1: Get canonical profile as truth source
+  let profile: CanonicalProgrammingProfile
+  try {
+    profile = getCanonicalProfile()
+  } catch (err) {
+    console.error('[canonical-generation-entry-audit] Failed to get canonical profile:', err)
+    return {
+      success: false,
+      entry: null,
+      error: {
+        code: 'composition_failed',
+        message: `Failed to get canonical profile: ${err instanceof Error ? err.message : 'Unknown error'}`,
+        missingFields: [],
+      },
+    }
+  }
+  
+  // STEP 2: Compose resolved values with explicit fallbacks
+  const resolvedPrimaryGoal = overrides?.primaryGoal || profile.primaryGoal || null
+  const resolvedSecondaryGoal = overrides?.secondaryGoal || profile.secondaryGoal || undefined
+  
+  // CRITICAL: experienceLevel fallback chain - NEVER return undefined
+  let resolvedExperienceLevel: 'beginner' | 'intermediate' | 'advanced' = 'intermediate'
+  if (overrides?.experienceLevel) {
+    resolvedExperienceLevel = overrides.experienceLevel
+  } else if (profile.experienceLevel) {
+    resolvedExperienceLevel = profile.experienceLevel
+  } else {
+    fallbacksUsed.push('experienceLevel')
+    // Default to 'intermediate' as safe middle ground
+    resolvedExperienceLevel = 'intermediate'
+  }
+  
+  // Schedule mode resolution
+  let resolvedScheduleMode: 'static' | 'flexible' = 'flexible'
+  if (overrides?.scheduleMode) {
+    resolvedScheduleMode = overrides.scheduleMode
+  } else if (profile.scheduleMode) {
+    resolvedScheduleMode = profile.scheduleMode
+  } else {
+    fallbacksUsed.push('scheduleMode')
+  }
+  
+  // Training days resolution
+  let resolvedTrainingDays: number | 'flexible' = 'flexible'
+  if (overrides?.trainingDaysPerWeek !== undefined) {
+    resolvedTrainingDays = overrides.trainingDaysPerWeek
+  } else if (resolvedScheduleMode === 'flexible') {
+    resolvedTrainingDays = 'flexible'
+  } else if (profile.trainingDaysPerWeek !== null && profile.trainingDaysPerWeek !== undefined) {
+    resolvedTrainingDays = profile.trainingDaysPerWeek
+  } else {
+    fallbacksUsed.push('trainingDaysPerWeek')
+    resolvedTrainingDays = 4
+  }
+  
+  // Session length resolution
+  let resolvedSessionLength: number = 60
+  if (overrides?.sessionLength !== undefined) {
+    resolvedSessionLength = overrides.sessionLength
+  } else if (profile.sessionLengthMinutes) {
+    resolvedSessionLength = profile.sessionLengthMinutes
+  } else {
+    fallbacksUsed.push('sessionLength')
+  }
+  
+  // Session duration mode resolution
+  let resolvedSessionDurationMode: 'static' | 'adaptive' = 'adaptive'
+  if (overrides?.sessionDurationMode) {
+    resolvedSessionDurationMode = overrides.sessionDurationMode
+  } else if (profile.sessionDurationMode) {
+    resolvedSessionDurationMode = profile.sessionDurationMode
+  } else {
+    fallbacksUsed.push('sessionDurationMode')
+  }
+  
+  // Equipment resolution - map canonical profile keys to builder keys
+  const equipmentMap: Record<string, string> = {
+    'pullup_bar': 'pull_bar',
+    'dip_bars': 'dip_bars',
+    'parallettes': 'parallettes',
+    'rings': 'rings',
+    'resistance_bands': 'bands',
+    'weights': 'weights',
+  }
+  
+  let resolvedEquipment: string[] = ['floor', 'wall']
+  if (overrides?.equipment && overrides.equipment.length > 0) {
+    resolvedEquipment = overrides.equipment
+  } else if (profile.equipmentAvailable && profile.equipmentAvailable.length > 0) {
+    for (const eq of profile.equipmentAvailable) {
+      const mapped = equipmentMap[eq] || eq
+      if (!resolvedEquipment.includes(mapped)) {
+        resolvedEquipment.push(mapped)
+      }
+    }
+  } else {
+    fallbacksUsed.push('equipment')
+    resolvedEquipment.push('pull_bar', 'dip_bars')
+  }
+  
+  // Selected skills resolution
+  const resolvedSelectedSkills = profile.selectedSkills || []
+  
+  // Joint cautions resolution
+  const resolvedJointCautions = profile.jointCautions || []
+  
+  // STEP 3: Validate required fields
+  if (!resolvedPrimaryGoal) {
+    missingFields.push('primaryGoal')
+  }
+  // experienceLevel is guaranteed by fallback above
+  // trainingDaysPerWeek is guaranteed by fallback above
+  // sessionLength is guaranteed by fallback above
+  // equipment is guaranteed by fallback above
+  
+  // STEP 4: Log audit
+  console.log('[canonical-generation-entry-audit]', {
+    triggerSource,
+    sourcePath: 'buildCanonicalGenerationEntry',
+    entryKeys: [
+      'primaryGoal', 'secondaryGoal', 'experienceLevel', 'trainingDaysPerWeek',
+      'sessionLength', 'scheduleMode', 'sessionDurationMode', 'equipment', 'selectedSkills',
+    ],
+    missingRequiredFields: missingFields,
+    finalExperienceLevel: resolvedExperienceLevel,
+    finalSelectedSkills: resolvedSelectedSkills.length,
+    fallbacksUsed,
+    overridesApplied: Object.keys(overrides || {}),
+    sourceTruthVersion: profile.onboardingComplete ? 'onboarding_complete' : 'partial_profile',
+  })
+  
+  // STEP 5: Fail if required fields missing
+  if (missingFields.length > 0) {
+    console.error('[generation-entry-validation-audit]', {
+      missingFields,
+      triggerSource,
+      generationBlocked: true,
+    })
+    return {
+      success: false,
+      entry: null,
+      error: {
+        code: 'validation_failed',
+        message: `Generation entry validation failed: missing ${missingFields.join(', ')}`,
+        missingFields,
+      },
+    }
+  }
+  
+  // STEP 6: Build validated entry
+  const entry: ValidatedGenerationEntry = {
+    primaryGoal: resolvedPrimaryGoal!,
+    experienceLevel: resolvedExperienceLevel,
+    trainingDaysPerWeek: resolvedTrainingDays,
+    sessionLength: resolvedSessionLength,
+    equipment: resolvedEquipment,
+    scheduleMode: resolvedScheduleMode,
+    sessionDurationMode: resolvedSessionDurationMode,
+    selectedSkills: resolvedSelectedSkills,
+    secondaryGoal: resolvedSecondaryGoal || undefined,
+    jointCautions: resolvedJointCautions,
+    trainingPathType: profile.trainingPathType || 'balanced',
+    goalCategories: profile.goalCategories || [],
+    selectedFlexibility: profile.selectedFlexibility || [],
+    regenerationMode: overrides?.regenerationMode,
+    regenerationReason: overrides?.regenerationReason,
+    __entrySource: Object.keys(overrides || {}).length > 0 ? 'override_merge' : 'canonical_profile',
+    __composedAt: new Date().toISOString(),
+    __fallbacksUsed: fallbacksUsed,
+  }
+  
+  // STEP 7: Experience level contract audit
+  console.log('[experience-level-contract-audit]', {
+    triggerSource,
+    upstreamValue: profile.experienceLevel,
+    overrideValue: overrides?.experienceLevel,
+    finalValueUsed: resolvedExperienceLevel,
+    fallbackUsed: fallbacksUsed.includes('experienceLevel'),
+    fallbackReason: fallbacksUsed.includes('experienceLevel') 
+      ? 'profile.experienceLevel was null/undefined' 
+      : null,
+  })
+  
+  return {
+    success: true,
+    entry,
+    error: null,
+  }
+}
+
+/**
+ * Convert ValidatedGenerationEntry to AdaptiveProgramInputs shape.
+ * This bridges the canonical entry to the builder's expected input type.
+ */
+export function entryToAdaptiveInputs(entry: ValidatedGenerationEntry): {
+  primaryGoal: string
+  secondaryGoal?: string
+  experienceLevel: 'beginner' | 'intermediate' | 'advanced'
+  trainingDaysPerWeek: number | 'flexible'
+  sessionLength: number
+  equipment: string[]
+  scheduleMode: 'static' | 'flexible'
+  sessionDurationMode: 'static' | 'adaptive'
+  selectedSkills: string[]
+  trainingPathType?: string
+  goalCategories?: string[]
+  selectedFlexibility?: string[]
+  regenerationMode?: string
+  regenerationReason?: string
+} {
+  return {
+    primaryGoal: entry.primaryGoal,
+    secondaryGoal: entry.secondaryGoal,
+    experienceLevel: entry.experienceLevel,
+    trainingDaysPerWeek: entry.trainingDaysPerWeek,
+    sessionLength: entry.sessionLength,
+    equipment: entry.equipment,
+    scheduleMode: entry.scheduleMode,
+    sessionDurationMode: entry.sessionDurationMode,
+    selectedSkills: entry.selectedSkills,
+    trainingPathType: entry.trainingPathType,
+    goalCategories: entry.goalCategories,
+    selectedFlexibility: entry.selectedFlexibility,
+    regenerationMode: entry.regenerationMode,
+    regenerationReason: entry.regenerationReason,
+  }
+}
+
+// =============================================================================
 // PROFILE COMPLETENESS / VERSION TRACKING
 // =============================================================================
 
@@ -3192,4 +3501,41 @@ export function verifyEngineFieldWiring(profile?: CanonicalProgrammingProfile): 
     consumedFieldGroups: consumed,
     unconsumedFieldGroups: unconsumed,
   }
+}
+
+// =============================================================================
+// [PHASE 6 TASK 7] FINAL VERDICT AUDIT
+// =============================================================================
+
+/**
+ * Final verdict for Phase 6: Generation Entry Truth
+ * Call this after generation completes to verify all paths used canonical entry
+ */
+export function phase6GenerationEntryFinalVerdict(results: {
+  onboardingGenerateSucceeded: boolean
+  modifyProgramGenerateSucceeded: boolean
+  rebuildGenerateSucceeded: boolean
+  experienceLevelUndefinedCrash: boolean
+  allPathsUsedCanonicalEntry: boolean
+  staleBannerShownIncorrectly: boolean
+}): boolean {
+  const verdict = 
+    results.onboardingGenerateSucceeded &&
+    results.modifyProgramGenerateSucceeded &&
+    results.rebuildGenerateSucceeded &&
+    !results.experienceLevelUndefinedCrash &&
+    results.allPathsUsedCanonicalEntry &&
+    !results.staleBannerShownIncorrectly
+  
+  console.log('[phase6-generation-entry-final-verdict]', {
+    onboardingGenerateSafe: results.onboardingGenerateSucceeded,
+    modifyProgramGenerateSafe: results.modifyProgramGenerateSucceeded,
+    rebuildGenerateSafe: results.rebuildGenerateSucceeded,
+    experienceLevelGuaranteed: !results.experienceLevelUndefinedCrash,
+    generationUsesSingleCanonicalEntry: results.allPathsUsedCanonicalEntry,
+    staleBannerSemanticsTruthfulAfterModify: !results.staleBannerShownIncorrectly,
+    safeToAdvanceToNextPhase: verdict,
+  })
+  
+  return verdict
 }

@@ -408,6 +408,46 @@ export function AdaptiveProgramDisplay({
               }),
             })
             
+            // [PRIORITY-COLLAPSE-FIX] TASK 8: Post-priority-collapse chip truth audit
+            // Verify chip states match the new priority model
+            const chipTruthAnalysis = program.selectedSkills.map((skill, idx) => {
+              const policy = weeklyRepresentation?.policies?.find(p => p.skill === skill)
+              const chipState = getChipState(skill)
+              const isLateIndexSkill = idx >= 4
+              const wouldHaveBeenOptionalInOldLogic = isLateIndexSkill && 
+                skill !== program.primaryGoal && skill !== program.secondaryGoal
+              
+              return {
+                skill,
+                originalIndex: idx,
+                chipState,
+                exposureVerdict: policy?.representationVerdict || 'unknown',
+                isLateIndexSkill,
+                wouldHaveBeenOptionalInOldLogic,
+                nowHasMeaningfulState: chipState !== 'selected_not_represented' || 
+                  policy?.representationVerdict === 'filtered_out_by_constraints',
+              }
+            })
+            
+            const lateIndexSkillsWithMeaningfulState = chipTruthAnalysis
+              .filter(c => c.isLateIndexSkill && c.nowHasMeaningfulState).length
+            const lateIndexSkillsTotal = chipTruthAnalysis.filter(c => c.isLateIndexSkill).length
+            
+            console.log('[post-priority-collapse-chip-truth-audit]', {
+              totalChips: chipTruthAnalysis.length,
+              lateIndexSkillsTotal,
+              lateIndexSkillsWithMeaningfulState,
+              chipStatesReflectFinalTruth: lateIndexSkillsTotal === 0 || 
+                lateIndexSkillsWithMeaningfulState >= Math.ceil(lateIndexSkillsTotal * 0.5),
+              perChipAnalysis: chipTruthAnalysis,
+              verdictDistribution: {
+                headline_priority: chipTruthAnalysis.filter(c => c.chipState === 'headline_priority').length,
+                represented_broader: chipTruthAnalysis.filter(c => c.chipState === 'represented_broader').length,
+                support_only: chipTruthAnalysis.filter(c => c.chipState === 'support_only').length,
+                selected_not_represented: chipTruthAnalysis.filter(c => c.chipState === 'selected_not_represented').length,
+              },
+            })
+            
             return (
               <div className="flex flex-wrap items-center gap-1">
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-[#1A1A1A] text-[#6A6A6A]">

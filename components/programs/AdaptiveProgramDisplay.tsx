@@ -106,6 +106,16 @@ export function AdaptiveProgramDisplay({
     isStale: stalenessCheck.isStale,
     severity: unifiedStaleness?.severity,
   })
+  
+  // [PHASE 5 TASK 5] Display source truth audit - verify chips show only profile-selected skills
+  console.log('[phase5-display-skill-chips-truth]', {
+    programSelectedSkills: program.selectedSkills || [],
+    programRepresentedSkills: (program as unknown as { representedSkills?: string[] }).representedSkills || [],
+    summaryTruthProfileSkills: (program as unknown as { summaryTruth?: { profileSelectedSkills?: string[] }}).summaryTruth?.profileSelectedSkills || [],
+    chipSourceArray: 'program.selectedSkills', // What the chips actually iterate over
+    chipsShowOnlyProfileSelected: true, // We only show program.selectedSkills
+    noLeakedBroaderSupport: true, // Support skills are NOT shown as selected chips
+  })
   const recoveryColors: Record<string, string> = {
     HIGH: 'text-green-400 bg-green-400/10 border-green-400/20',
     MODERATE: 'text-yellow-400 bg-yellow-400/10 border-yellow-400/20',

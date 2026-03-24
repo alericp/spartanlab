@@ -298,8 +298,14 @@ export function reconcileCanonicalProfile(): CanonicalProgrammingProfile {
   }
   
   // Helper: pick first non-empty array
+  // [PHASE 5 TASK 2] CRITICAL: Onboarding MUST win over stale athlete profile
+  // If onboarding explicitly has a non-empty array, use it regardless of athleteVal
   function pickArray(onboardingVal: unknown[] | null | undefined, athleteVal: unknown[] | null | undefined): string[] {
-    if (onboardingVal && Array.isArray(onboardingVal) && onboardingVal.length > 0) return onboardingVal as string[]
+    // [PHASE 5] If onboarding has an explicit array (even empty), that is the truth
+    // Only fall back to athlete if onboarding is truly null/undefined
+    if (onboardingVal !== null && onboardingVal !== undefined && Array.isArray(onboardingVal)) {
+      return onboardingVal as string[]
+    }
     if (athleteVal && Array.isArray(athleteVal) && athleteVal.length > 0) return athleteVal as string[]
     return []
   }
@@ -319,7 +325,28 @@ export function reconcileCanonicalProfile(): CanonicalProgrammingProfile {
     // Goals - prefer onboarding (more detailed)
     primaryGoal: pick(onboardingProfile?.primaryGoal, athleteProfile?.primaryGoal, null),
     secondaryGoal: pick(onboardingProfile?.secondaryGoal, (athleteProfile as unknown as { secondaryGoal?: string })?.secondaryGoal, null),
-    selectedSkills: pickArray(onboardingProfile?.selectedSkills, (athleteProfile as unknown as { selectedSkills?: string[] })?.selectedSkills),
+    selectedSkills: (() => {
+      // [PHASE 5 TASK 2] HARD LOCK: Onboarding selectedSkills wins if present
+      const onboardingSkills = onboardingProfile?.selectedSkills
+      const athleteSkills = (athleteProfile as unknown as { selectedSkills?: string[] })?.selectedSkills
+      
+      // If onboarding has explicitly set skills (even empty array), use them
+      if (onboardingSkills !== null && onboardingSkills !== undefined && Array.isArray(onboardingSkills)) {
+        // Log if we're overriding stale athlete skills
+        if (athleteSkills && athleteSkills.length > 0 && 
+            JSON.stringify(onboardingSkills.sort()) !== JSON.stringify(athleteSkills.sort())) {
+          console.log('[phase5-stale-skill-resurrection-prevented]', {
+            onboardingSkillsWin: true,
+            onboardingSkills: onboardingSkills,
+            staleAthleteSkillsIgnored: athleteSkills,
+            skillsDiffer: true,
+          })
+        }
+        return onboardingSkills
+      }
+      // Only fall back to athlete if onboarding truly has nothing
+      return athleteSkills || []
+    })(),
     selectedFlexibility: pickArray(onboardingProfile?.selectedFlexibility, null),
     selectedStrength: pickArray(onboardingProfile?.selectedStrength, null),
     goalCategory: pick(onboardingProfile?.goalCategory, null, null),
@@ -3501,6 +3528,213 @@ export function verifyEngineFieldWiring(profile?: CanonicalProgrammingProfile): 
     consumedFieldGroups: consumed,
     unconsumedFieldGroups: unconsumed,
   }
+}
+
+// =============================================================================
+// [PHASE 5 CLOSEOUT] SOURCE TRUTH PERSISTENCE CONTRACT
+// =============================================================================
+
+/**
+ * [PHASE 5 CLOSEOUT] Generation-critical source truth snapshot for auditing.
+ * This captures the exact state used for generation/prefill/display.
+ * Exported for use in program page and onboarding.
+ */
+export interface SourceTruthSnapshot {
+  primaryGoal: string | null
+  secondaryGoal: string | null
+  selectedSkills: string[]
+  scheduleMode: 'static' | 'flexible' | null
+  trainingDaysPerWeek: number | null
+  sessionDurationMode: 'static' | 'adaptive' | null
+  sessionLengthMinutes: number | null
+  equipmentAvailable: string[]
+  recoveryRaw: {
+    sleepQuality: string | null
+    energyLevel: string | null
+    stressLevel: string | null
+    recoveryConfidence: string | null
+  } | null
+  derivedRecoverySummary: string | null
+  experienceLevel: string | null
+  sourceObject: string
+  fallbacksApplied: string[]
+  fallbacksLegitimate: boolean
+}
+
+/**
+ * Get current canonical source truth snapshot for auditing.
+ * This is the single authoritative snapshot used by all generation paths.
+ */
+export function getSourceTruthSnapshot(sourceLabel: string): SourceTruthSnapshot {
+  const profile = getCanonicalProfile()
+  const fallbacksApplied: string[] = []
+  
+  // Track which fields needed fallbacks
+  if (!profile.primaryGoal) fallbacksApplied.push('primaryGoal')
+  if (!profile.experienceLevel) fallbacksApplied.push('experienceLevel')
+  if (!profile.scheduleMode) fallbacksApplied.push('scheduleMode')
+  if (!profile.sessionDurationMode) fallbacksApplied.push('sessionDurationMode')
+  if (!profile.sessionLengthMinutes) fallbacksApplied.push('sessionLengthMinutes')
+  if (!profile.equipmentAvailable || profile.equipmentAvailable.length === 0) fallbacksApplied.push('equipmentAvailable')
+  
+  return {
+    primaryGoal: profile.primaryGoal || null,
+    secondaryGoal: profile.secondaryGoal || null,
+    selectedSkills: profile.selectedSkills || [],
+    scheduleMode: profile.scheduleMode || null,
+    trainingDaysPerWeek: profile.trainingDaysPerWeek ?? null,
+    sessionDurationMode: profile.sessionDurationMode || null,
+    sessionLengthMinutes: profile.sessionLengthMinutes ?? null,
+    equipmentAvailable: profile.equipmentAvailable || [],
+    recoveryRaw: profile.recoveryRaw || null,
+    derivedRecoverySummary: profile.recoveryQuality || null,
+    experienceLevel: profile.experienceLevel || null,
+    sourceObject: sourceLabel,
+    fallbacksApplied,
+    fallbacksLegitimate: fallbacksApplied.length === 0 || profile.onboardingComplete !== true,
+  }
+}
+
+/**
+ * [TASK 1] Emit phase5 source truth audit for render/prefill/generate/rebuild paths.
+ */
+export function emitSourceTruthAudit(
+  auditType: 'render' | 'prefill' | 'generate' | 'rebuild',
+  snapshot: SourceTruthSnapshot
+): void {
+  const auditName = `[phase5-source-truth-${auditType}-audit]`
+  console.log(auditName, {
+    primaryGoal: snapshot.primaryGoal,
+    secondaryGoal: snapshot.secondaryGoal,
+    selectedSkills: snapshot.selectedSkills,
+    scheduleMode: snapshot.scheduleMode,
+    trainingDaysPerWeek: snapshot.trainingDaysPerWeek,
+    sessionDurationMode: snapshot.sessionDurationMode,
+    sessionLengthMinutes: snapshot.sessionLengthMinutes,
+    equipmentAvailable: snapshot.equipmentAvailable,
+    recoveryRaw: snapshot.recoveryRaw,
+    derivedRecoverySummary: snapshot.derivedRecoverySummary,
+    experienceLevel: snapshot.experienceLevel,
+    exactSourceObject: snapshot.sourceObject,
+    fallbacksApplied: snapshot.fallbacksApplied,
+    fallbacksLegitimate: snapshot.fallbacksLegitimate,
+  })
+}
+
+/**
+ * [TASK 2] Canonical precedence audit - verify onboarding wins over stale sources.
+ */
+export function auditCanonicalPrecedence(): {
+  staleResurrectionPrevented: boolean
+  deselectedSkillsCouldLeak: boolean
+  scheduleDurationRecoveryLocked: boolean
+} {
+  const onboarding = getOnboardingProfile()
+  const canonical = getCanonicalProfile()
+  
+  // Check if onboarding selectedSkills are respected
+  const onboardingSkills = onboarding?.selectedSkills || []
+  const canonicalSkills = canonical.selectedSkills || []
+  
+  // Skills match means no stale resurrection
+  const skillsMatch = JSON.stringify(onboardingSkills.sort()) === JSON.stringify(canonicalSkills.sort())
+  
+  // Check schedule/duration/recovery are from onboarding
+  const scheduleFromOnboarding = canonical.scheduleMode === onboarding?.scheduleMode || 
+    (!onboarding?.scheduleMode && canonical.scheduleMode !== null)
+  const durationFromOnboarding = canonical.sessionDurationMode === onboarding?.sessionDurationMode ||
+    (!onboarding?.sessionDurationMode && canonical.sessionDurationMode !== null)
+  
+  const result = {
+    staleResurrectionPrevented: skillsMatch,
+    deselectedSkillsCouldLeak: !skillsMatch,
+    scheduleDurationRecoveryLocked: scheduleFromOnboarding && durationFromOnboarding,
+  }
+  
+  console.log('[phase5-canonical-precedence-final-verdict]', result)
+  
+  return result
+}
+
+/**
+ * [TASK 9] Split-brain detector - identify disagreements between truth sources.
+ */
+export function detectSplitBrain(
+  displayedProgram: { 
+    primaryGoal?: string
+    selectedSkills?: string[]
+    scheduleMode?: string
+    profileSnapshot?: { selectedSkills?: string[] }
+  } | null
+): {
+  classification: 'no_split_brain' | 'stale_program_only' | 'stale_prefill_only' | 
+    'stale_snapshot_only' | 'canonical_not_propagated' | 'onboarding_not_propagated' | 
+    'display_truth_mismatch'
+  details: Record<string, unknown>
+} {
+  const canonical = getCanonicalProfile()
+  const onboarding = getOnboardingProfile()
+  
+  const canonicalSkills = (canonical.selectedSkills || []).slice().sort()
+  const onboardingSkills = (onboarding?.selectedSkills || []).slice().sort()
+  const displayedSkills = (displayedProgram?.selectedSkills || []).slice().sort()
+  const snapshotSkills = (displayedProgram?.profileSnapshot?.selectedSkills || []).slice().sort()
+  
+  const canonicalMatchesOnboarding = JSON.stringify(canonicalSkills) === JSON.stringify(onboardingSkills)
+  const displayedMatchesCanonical = JSON.stringify(displayedSkills) === JSON.stringify(canonicalSkills)
+  const snapshotMatchesCanonical = JSON.stringify(snapshotSkills) === JSON.stringify(canonicalSkills)
+  
+  let classification: ReturnType<typeof detectSplitBrain>['classification'] = 'no_split_brain'
+  
+  if (!canonicalMatchesOnboarding && onboardingSkills.length > 0) {
+    classification = 'onboarding_not_propagated'
+  } else if (!displayedMatchesCanonical && displayedSkills.length > 0) {
+    classification = 'stale_program_only'
+  } else if (!snapshotMatchesCanonical && snapshotSkills.length > 0) {
+    classification = 'stale_snapshot_only'
+  }
+  
+  const details = {
+    canonicalSkillCount: canonicalSkills.length,
+    onboardingSkillCount: onboardingSkills.length,
+    displayedSkillCount: displayedSkills.length,
+    snapshotSkillCount: snapshotSkills.length,
+    canonicalMatchesOnboarding,
+    displayedMatchesCanonical,
+    snapshotMatchesCanonical,
+    canonicalPrimaryGoal: canonical.primaryGoal,
+    displayedPrimaryGoal: displayedProgram?.primaryGoal,
+  }
+  
+  console.log('[phase5-split-brain-detector]', { classification, ...details })
+  
+  return { classification, details }
+}
+
+/**
+ * [TASK 10] Final Phase 5 closeout verdict.
+ */
+export function phase5SourceTruthPersistenceFinalVerdict(params: {
+  selectedSkillsPropagatedToCanonical: boolean
+  selectedSkillsPropagatedToPrefill: boolean
+  selectedSkillsPropagatedToEntry: boolean
+  selectedSkillsPropagatedToProgram: boolean
+  displayedChipsClean: boolean
+  primaryGoalHighlightMatches: boolean
+  flexibleAdaptiveRecoveryPersists: boolean
+  noStaleResurrection: boolean
+  rebuildUsesCurrentSettings: boolean
+  noUIRedesign: boolean
+}): boolean {
+  const allTrue = Object.values(params).every(v => v === true)
+  
+  console.log('[phase5-source-truth-persistence-final-verdict]', {
+    ...params,
+    safeToAdvance: allTrue,
+    timestamp: new Date().toISOString(),
+  })
+  
+  return allTrue
 }
 
 // =============================================================================

@@ -41,8 +41,17 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
     
-    // CANONICAL FIX: Fetch FULL profile from database including ALL benchmark-relevant fields
-    // This includes strength, skill, and flexibility benchmarks needed for proper hydration
+    // [PHASE 16H] SCHEMA DRIFT FIX: Query only columns that exist in athlete_profiles table
+    // Benchmark columns (pull_up_max, dip_max, etc.) were never added to DB schema.
+    // Benchmark data is stored in localStorage onboarding profile, not in DB.
+    console.log('[phase16h-settings-schema-drift-root-cause-audit]', {
+      issue: 'removed_nonexistent_benchmark_columns',
+      removedColumns: ['pull_up_max', 'dip_max', 'push_up_max', 'wall_hspu_reps', 'weighted_pull_up', 
+        'weighted_dip', 'all_time_pr_pull_up', 'all_time_pr_dip', 'front_lever', 'planche', 
+        'muscle_up', 'hspu', 'l_sit_hold', 'v_sit_hold', 'pancake', 'toe_touch', 'front_splits', 'side_splits'],
+      timestamp: new Date().toISOString(),
+    })
+    
     const profiles = await query(`
       SELECT 
         user_id as "userId",
@@ -54,45 +63,29 @@ export async function GET() {
         body_fat_percent as "bodyFatPercent",
         experience_level as "experienceLevel",
         training_days_per_week as "trainingDaysPerWeek",
-      COALESCE(schedule_mode, 'static') as "scheduleMode",
-      COALESCE(session_duration_mode, 'static') as "sessionDurationMode",
-      session_length_minutes as "sessionLengthMinutes",
-      primary_goal as "primaryGoal",
-      secondary_goal as "secondaryGoal",
-      goal_category as "goalCategory",
-      COALESCE(selected_skills, '[]'::jsonb) as "selectedSkills",
-      COALESCE(selected_flexibility, '[]'::jsonb) as "selectedFlexibility",
-      COALESCE(selected_strength, '[]'::jsonb) as "selectedStrength",
-      COALESCE(equipment_available, '[]'::jsonb) as "equipmentAvailable",
-      COALESCE(joint_cautions, '[]'::jsonb) as "jointCautions",
-      weakest_area as "weakestArea",
-      training_style as "trainingStyle",
-      onboarding_complete as "onboardingComplete",
-      -- STRENGTH BENCHMARKS
-      pull_up_max as "pullUpMax",
-      dip_max as "dipMax",
-      push_up_max as "pushUpMax",
-      wall_hspu_reps as "wallHSPUReps",
-      weighted_pull_up as "weightedPullUp",
-      weighted_dip as "weightedDip",
-      all_time_pr_pull_up as "allTimePRPullUp",
-      all_time_pr_dip as "allTimePRDip",
-      -- SKILL BENCHMARKS
-      front_lever as "frontLever",
-      planche as "planche",
-      muscle_up as "muscleUp",
-      hspu as "hspu",
-      l_sit_hold as "lSitHold",
-      v_sit_hold as "vSitHold",
-      -- FLEXIBILITY BENCHMARKS
-      pancake as "pancake",
-      toe_touch as "toeTouch",
-      front_splits as "frontSplits",
-      side_splits as "sideSplits"
-    FROM athlete_profiles
-    WHERE user_id = $1
-    LIMIT 1
-  `, [userId])
+        COALESCE(schedule_mode, 'static') as "scheduleMode",
+        COALESCE(session_duration_mode, 'static') as "sessionDurationMode",
+        session_length_minutes as "sessionLengthMinutes",
+        primary_goal as "primaryGoal",
+        secondary_goal as "secondaryGoal",
+        goal_category as "goalCategory",
+        COALESCE(selected_skills, '[]'::jsonb) as "selectedSkills",
+        COALESCE(selected_flexibility, '[]'::jsonb) as "selectedFlexibility",
+        COALESCE(selected_strength, '[]'::jsonb) as "selectedStrength",
+        COALESCE(equipment_available, '[]'::jsonb) as "equipmentAvailable",
+        COALESCE(joint_cautions, '[]'::jsonb) as "jointCautions",
+        weakest_area as "weakestArea",
+        training_style as "trainingStyle",
+        onboarding_complete as "onboardingComplete"
+      FROM athlete_profiles
+      WHERE user_id = $1
+      LIMIT 1
+    `, [userId])
+    
+    console.log('[phase16h-settings-column-resolution-verdict]', {
+      success: true,
+      profileFound: profiles && profiles.length > 0,
+    })
     
     if (!profiles || profiles.length === 0) {
       // TASK 4: Return stable response shape even when no profile exists
@@ -149,7 +142,7 @@ export async function PUT(request: Request) {
       fieldCount: Object.keys(updates).length,
     })
     
-    // CANONICAL FIX: Fetch FULL current profile for comparison including ALL benchmark fields
+    // [PHASE 16H] SCHEMA DRIFT FIX: Query only columns that exist in DB
     const currentProfiles = await query(`
       SELECT 
         user_id as "userId",
@@ -174,28 +167,7 @@ export async function PUT(request: Request) {
         COALESCE(joint_cautions, '[]'::jsonb) as "jointCautions",
         weakest_area as "weakestArea",
         training_style as "trainingStyle",
-        onboarding_complete as "onboardingComplete",
-        -- STRENGTH BENCHMARKS
-        pull_up_max as "pullUpMax",
-        dip_max as "dipMax",
-        push_up_max as "pushUpMax",
-        wall_hspu_reps as "wallHSPUReps",
-        weighted_pull_up as "weightedPullUp",
-        weighted_dip as "weightedDip",
-        all_time_pr_pull_up as "allTimePRPullUp",
-        all_time_pr_dip as "allTimePRDip",
-        -- SKILL BENCHMARKS
-        front_lever as "frontLever",
-        planche as "planche",
-        muscle_up as "muscleUp",
-        hspu as "hspu",
-        l_sit_hold as "lSitHold",
-        v_sit_hold as "vSitHold",
-        -- FLEXIBILITY BENCHMARKS
-        pancake as "pancake",
-        toe_touch as "toeTouch",
-        front_splits as "frontSplits",
-        side_splits as "sideSplits"
+        onboarding_complete as "onboardingComplete"
       FROM athlete_profiles
       WHERE user_id = $1
       LIMIT 1
@@ -215,13 +187,14 @@ export async function PUT(request: Request) {
     const updateValues: unknown[] = []
     let paramIndex = 1
     
-  // CANONICAL FIX: Expanded field mappings for full profile support including ALL benchmarks
+  // [PHASE 16H] SCHEMA DRIFT FIX: Field mappings only for columns that exist in DB
+  // Benchmark columns were removed - they don't exist in athlete_profiles table
   const fieldMappings: Record<string, string> = {
     bodyweight: 'bodyweight',
     experienceLevel: 'experience_level',
     trainingDaysPerWeek: 'training_days_per_week',
-    scheduleMode: 'schedule_mode',  // FLEXIBLE SCHEDULING support
-    sessionDurationMode: 'session_duration_mode',  // TASK 3: ADAPTIVE TIME support
+    scheduleMode: 'schedule_mode',
+    sessionDurationMode: 'session_duration_mode',
     sessionLengthMinutes: 'session_length_minutes',
     primaryGoal: 'primary_goal',
     secondaryGoal: 'secondary_goal',
@@ -233,27 +206,6 @@ export async function PUT(request: Request) {
     jointCautions: 'joint_cautions',
     weakestArea: 'weakest_area',
     trainingStyle: 'training_style',
-    // STRENGTH BENCHMARKS
-    pullUpMax: 'pull_up_max',
-    dipMax: 'dip_max',
-    pushUpMax: 'push_up_max',
-    wallHSPUReps: 'wall_hspu_reps',
-    weightedPullUp: 'weighted_pull_up',
-    weightedDip: 'weighted_dip',
-    allTimePRPullUp: 'all_time_pr_pull_up',
-    allTimePRDip: 'all_time_pr_dip',
-    // SKILL BENCHMARKS
-    frontLever: 'front_lever',
-    planche: 'planche',
-    muscleUp: 'muscle_up',
-    hspu: 'hspu',
-    lSitHold: 'l_sit_hold',
-    vSitHold: 'v_sit_hold',
-    // FLEXIBILITY BENCHMARKS
-    pancake: 'pancake',
-    toeTouch: 'toe_touch',
-    frontSplits: 'front_splits',
-    sideSplits: 'side_splits',
   }
     
     for (const [key, dbColumn] of Object.entries(fieldMappings)) {
@@ -289,7 +241,7 @@ export async function PUT(request: Request) {
       WHERE user_id = $${paramIndex}
     `, [...updateValues, userId])
     
-  // CANONICAL FIX: Fetch FULL updated profile including ALL benchmark fields
+  // [PHASE 16H] SCHEMA DRIFT FIX: Fetch updated profile with only existing columns
   const updatedProfiles = await query(`
     SELECT
       user_id as "userId",
@@ -301,9 +253,9 @@ export async function PUT(request: Request) {
       body_fat_percent as "bodyFatPercent",
       experience_level as "experienceLevel",
       training_days_per_week as "trainingDaysPerWeek",
-        COALESCE(schedule_mode, 'static') as "scheduleMode",
-        COALESCE(session_duration_mode, 'static') as "sessionDurationMode",
-        session_length_minutes as "sessionLengthMinutes",
+      COALESCE(schedule_mode, 'static') as "scheduleMode",
+      COALESCE(session_duration_mode, 'static') as "sessionDurationMode",
+      session_length_minutes as "sessionLengthMinutes",
       primary_goal as "primaryGoal",
       secondary_goal as "secondaryGoal",
       goal_category as "goalCategory",
@@ -314,28 +266,7 @@ export async function PUT(request: Request) {
       COALESCE(joint_cautions, '[]'::jsonb) as "jointCautions",
       weakest_area as "weakestArea",
       training_style as "trainingStyle",
-      onboarding_complete as "onboardingComplete",
-      -- STRENGTH BENCHMARKS
-      pull_up_max as "pullUpMax",
-      dip_max as "dipMax",
-      push_up_max as "pushUpMax",
-      wall_hspu_reps as "wallHSPUReps",
-      weighted_pull_up as "weightedPullUp",
-      weighted_dip as "weightedDip",
-      all_time_pr_pull_up as "allTimePRPullUp",
-      all_time_pr_dip as "allTimePRDip",
-      -- SKILL BENCHMARKS
-      front_lever as "frontLever",
-      planche as "planche",
-      muscle_up as "muscleUp",
-      hspu as "hspu",
-      l_sit_hold as "lSitHold",
-      v_sit_hold as "vSitHold",
-      -- FLEXIBILITY BENCHMARKS
-      pancake as "pancake",
-      toe_touch as "toeTouch",
-      front_splits as "frontSplits",
-      side_splits as "sideSplits"
+      onboarding_complete as "onboardingComplete"
     FROM athlete_profiles
     WHERE user_id = $1
     LIMIT 1

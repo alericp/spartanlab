@@ -8,9 +8,10 @@ export const metadata: Metadata = {
 }
 
 // Loading fallback for Suspense (useSearchParams requires Suspense boundary)
+// [PHASE 16H] Use 100dvh for true mobile viewport isolation
 function OnboardingLoading() {
   return (
-    <div className="min-h-screen bg-[#0F1115] flex items-center justify-center">
+    <div className="h-[100dvh] bg-[#0F1115] flex items-center justify-center overflow-hidden">
       <div className="w-8 h-8 border-2 border-[#C1121F] border-t-transparent rounded-full animate-spin" />
     </div>
   )

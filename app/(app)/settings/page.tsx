@@ -691,6 +691,52 @@ export default function SettingsPage() {
               overallVerdict: 'settings_visual_roundtrip_audited',
             })
             
+            // ==========================================================================
+            // [PHASE 15C] TASK 3: SETTINGS ROUND-TRIP TRUTH AUDITS
+            // Verify adaptive mode survives save/reload cycle
+            // ==========================================================================
+            console.log('[phase15c-settings-frequency-roundtrip-audit]', {
+              userSelectedMode: scheduleMode,
+              savedToProfile: result.profile.scheduleMode,
+              savedTrainingDays: result.profile.trainingDaysPerWeek,
+              modePreserved: scheduleMode === result.profile.scheduleMode,
+              flexibleCorrectlyStoredAsNull: scheduleMode === 'flexible' 
+                ? result.profile.trainingDaysPerWeek === null 
+                : true,
+              modeNotCollapsedToNumber: scheduleMode === 'flexible' 
+                ? result.profile.scheduleMode === 'flexible' 
+                : true,
+              verdict: scheduleMode === result.profile.scheduleMode 
+                ? 'frequency_mode_roundtrip_pass'
+                : 'frequency_mode_roundtrip_FAIL',
+            })
+            
+            console.log('[phase15c-settings-duration-roundtrip-audit]', {
+              userSelectedMode: sessionDurationMode,
+              savedToProfile: result.profile.sessionDurationMode,
+              savedSessionLength: result.profile.sessionLengthMinutes,
+              modePreserved: sessionDurationMode === result.profile.sessionDurationMode,
+              modeNotCollapsedToMinutes: sessionDurationMode === 'adaptive'
+                ? result.profile.sessionDurationMode === 'adaptive'
+                : true,
+              verdict: sessionDurationMode === result.profile.sessionDurationMode
+                ? 'duration_mode_roundtrip_pass'
+                : 'duration_mode_roundtrip_FAIL',
+            })
+            
+            console.log('[phase15c-selected-mode-preserved-final-verdict]', {
+              frequencyModeAtSave: scheduleMode,
+              frequencyModeAfterSave: result.profile.scheduleMode,
+              frequencyModePreserved: scheduleMode === result.profile.scheduleMode,
+              durationModeAtSave: sessionDurationMode,
+              durationModeAfterSave: result.profile.sessionDurationMode,
+              durationModePreserved: sessionDurationMode === result.profile.sessionDurationMode,
+              verdict: (scheduleMode === result.profile.scheduleMode && 
+                        sessionDurationMode === result.profile.sessionDurationMode)
+                ? 'all_modes_preserved'
+                : 'MODE_PRESERVATION_FAILURE',
+            })
+            
             // [PHASE 14A TASK 5] Recovery roundtrip audit in settings
             const hasRawRecovery = !!(result.profile.recoveryRaw && (
               result.profile.recoveryRaw.sleepQuality || 

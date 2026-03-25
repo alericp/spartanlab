@@ -13,7 +13,7 @@
  * 3. Show builder as secondary action for creating/regenerating
  */
 
-import { useState, useEffect, useCallback, useMemo, type ReactNode } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef, type ReactNode } from 'react'
 import { ErrorBoundary } from '@/components/shared/ErrorBoundary'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -54,6 +54,10 @@ import {
   createProfileSignature,
   updateFreshnessIdentity,
   invalidateStaleCaches,
+  // [PHASE 16S] Runtime session and truth-gating for stale banner suppression
+  generateRuntimeSessionId,
+  shouldRenderBuildFailureBanner,
+  normalizeHydratedBuildAttempt,
 } from '@/lib/program-state'
 
 // TASK 5: Lazy load heavy components to prevent SSR/hydration crashes
@@ -1408,6 +1412,28 @@ export default function ProgramPage() {
   const [generationError, setGenerationError] = useState<string | null>(null)
   const [lastBuildResult, setLastBuildResult] = useState<BuildAttemptResult | null>(null)
   
+  // ==========================================================================
+  // [PHASE 16S] Runtime session marker for attempt-truth gating
+  // ==========================================================================
+  const runtimeSessionIdRef = useRef<string>(generateRuntimeSessionId())
+  const currentAttemptStartedAtRef = useRef<string | null>(null)
+  const currentSessionHasStartedNewAttemptRef = useRef<boolean>(false)
+  
+  // [PHASE 16S] Runtime session audit on mount
+  useEffect(() => {
+    const existingStored = getLastBuildAttemptResult()
+    console.log('[phase16s-program-runtime-session-audit]', {
+      runtimeSessionId: runtimeSessionIdRef.current,
+      mountedAt: new Date().toISOString(),
+      pathname: typeof window !== 'undefined' ? window.location.pathname : 'unknown',
+      existingStoredBuildAttemptId: existingStored?.attemptId ?? null,
+      existingStoredAttemptedAt: existingStored?.attemptedAt ?? null,
+      existingStoredStatus: existingStored?.status ?? null,
+      existingStoredRuntimeSessionId: existingStored?.runtimeSessionId ?? null,
+      verdict: 'runtime_session_initialized',
+    })
+  }, [])
+  
   // Load last build result on mount - but clear stale failures if current program is newer
   useEffect(() => {
     const stored = getLastBuildAttemptResult()
@@ -1432,7 +1458,67 @@ export default function ProgramPage() {
           return // Don't set the stale failure
         }
       }
-      setLastBuildResult(stored)
+      
+      // [PHASE 16S] Normalize hydrated result and apply truth-gating
+      const normalizedStored = normalizeHydratedBuildAttempt(stored)
+      
+      // [PHASE 16S] Storage hydration truth audit
+      console.log('[phase16s-storage-hydration-truth-audit]', {
+        storedAttemptId: normalizedStored.attemptId,
+        storedRuntimeSessionId: normalizedStored.runtimeSessionId,
+        hydratedFromStorage: normalizedStored.hydratedFromStorage,
+        status: normalizedStored.status,
+        errorCode: normalizedStored.errorCode,
+        currentRuntimeSessionId: runtimeSessionIdRef.current,
+        verdict: 'hydration_complete',
+      })
+      
+      // [PHASE 16S] Check if this hydrated result should be rendered
+      const truthGate = shouldRenderBuildFailureBanner(
+        normalizedStored,
+        runtimeSessionIdRef.current,
+        currentSessionHasStartedNewAttemptRef.current,
+        currentAttemptStartedAtRef.current
+      )
+      
+      console.log('[phase16s-banner-truth-gate-audit]', {
+        storedAttemptId: normalizedStored.attemptId,
+        storedRuntimeSessionId: normalizedStored.runtimeSessionId,
+        currentRuntimeSessionId: runtimeSessionIdRef.current,
+        storedStatus: normalizedStored.status,
+        storedErrorCode: normalizedStored.errorCode,
+        hydratedFromStorage: normalizedStored.hydratedFromStorage,
+        currentSessionHasStartedNewAttempt: currentSessionHasStartedNewAttemptRef.current,
+        renderAllowed: truthGate.renderAllowed,
+        suppressionReason: truthGate.suppressionReason,
+        verdict: truthGate.renderAllowed ? 'render_allowed' : 'render_suppressed',
+      })
+      
+      // [PHASE 16S] Legacy generic banner suppression
+      if (normalizedStored.errorCode === 'unknown_generation_failure' && normalizedStored.hydratedFromStorage) {
+        const sessionMismatch = !normalizedStored.runtimeSessionId || 
+          normalizedStored.runtimeSessionId !== runtimeSessionIdRef.current
+        
+        console.log('[phase16s-legacy-generic-banner-suppression-audit]', {
+          storedAttemptId: normalizedStored.attemptId,
+          storedErrorCode: normalizedStored.errorCode,
+          storedRuntimeSessionId: normalizedStored.runtimeSessionId,
+          currentRuntimeSessionId: runtimeSessionIdRef.current,
+          wasSuppressed: sessionMismatch,
+          reason: sessionMismatch ? 'generic_unknown_from_prior_runtime' : 'matches_current_runtime',
+          verdict: sessionMismatch ? 'suppressed' : 'allowed',
+        })
+        
+        if (sessionMismatch) {
+          // Don't set the stale generic failure
+          return
+        }
+      }
+      
+      // Only set if truth gate allows
+      if (truthGate.renderAllowed) {
+        setLastBuildResult(normalizedStored)
+      }
       
       // [TASK 9] Stale-plan vs new-plan truth audit
       const rebuildSucceeded = stored.status === 'success'
@@ -1461,6 +1547,45 @@ export default function ProgramPage() {
     }
   }, [program])
   
+  // ==========================================================================
+  // [PHASE 16S] Truth-gated lastBuildResult for rendering
+  // This prevents stale banners from rendering when they don't belong to
+  // the current runtime session
+  // ==========================================================================
+  const truthGatedBuildResult = useMemo(() => {
+    if (!lastBuildResult) return null
+    
+    const truthGate = shouldRenderBuildFailureBanner(
+      lastBuildResult,
+      runtimeSessionIdRef.current,
+      currentSessionHasStartedNewAttemptRef.current,
+      currentAttemptStartedAtRef.current
+    )
+    
+    // Log truth-gate decision on each render
+    if (lastBuildResult.status !== 'success') {
+      console.log('[phase16s-banner-truth-gate-render-audit]', {
+        storedAttemptId: lastBuildResult.attemptId,
+        storedRuntimeSessionId: lastBuildResult.runtimeSessionId,
+        currentRuntimeSessionId: runtimeSessionIdRef.current,
+        storedStatus: lastBuildResult.status,
+        storedErrorCode: lastBuildResult.errorCode,
+        hydratedFromStorage: lastBuildResult.hydratedFromStorage,
+        currentSessionHasStartedNewAttempt: currentSessionHasStartedNewAttemptRef.current,
+        renderAllowed: truthGate.renderAllowed,
+        suppressionReason: truthGate.suppressionReason,
+        verdict: truthGate.renderAllowed ? 'banner_will_render' : 'banner_suppressed',
+      })
+    }
+    
+    // Return null if suppressed (don't render stale failure banner)
+    if (!truthGate.renderAllowed && lastBuildResult.status !== 'success') {
+      return null
+    }
+    
+    return lastBuildResult
+  }, [lastBuildResult])
+  
   // TASK 5: Handlers use dynamically imported modules
   // HARDENED: Full try/catch/finally to prevent stuck spinner state
   const handleGenerate = useCallback(async () => {
@@ -1479,6 +1604,42 @@ export default function ProgramPage() {
     console.log('[ProgramPage] handleGenerate: Starting generation', { source: 'builder' })
     setIsGenerating(true)
     setGenerationError(null) // Clear any previous error
+    
+    // ==========================================================================
+    // [PHASE 16S] Clear stale failure state at dispatch start
+    // ==========================================================================
+    const dispatchStartTime = new Date().toISOString()
+    const previousBannerAttemptId = lastBuildResult?.attemptId ?? null
+    const previousBannerRuntimeSessionId = lastBuildResult?.runtimeSessionId ?? null
+    const previousBannerStatus = lastBuildResult?.status ?? null
+    
+    // Mark that this session has started a new attempt
+    currentSessionHasStartedNewAttemptRef.current = true
+    currentAttemptStartedAtRef.current = dispatchStartTime
+    
+    // Clear visible stale failure state immediately
+    setLastBuildResult(null)
+    
+    console.log('[phase16s-active-banner-reset-audit]', {
+      flowName: 'main_generation',
+      previousBannerAttemptId,
+      previousBannerRuntimeSessionId,
+      previousBannerStatus,
+      clearedBeforeNewAttempt: true,
+      currentRuntimeSessionId: runtimeSessionIdRef.current,
+      verdict: 'stale_banner_cleared',
+    })
+    
+    console.log('[phase16s-dispatch-start-audit]', {
+      flowName: 'main_generation',
+      attemptId: 'pending', // Will be assigned in try block
+      runtimeSessionId: runtimeSessionIdRef.current,
+      dispatchStartedAt: dispatchStartTime,
+      existingBannerStatusBeforeStart: previousBannerStatus,
+      existingBannerAttemptIdBeforeStart: previousBannerAttemptId,
+      existingBannerRuntimeSessionIdBeforeStart: previousBannerRuntimeSessionId,
+      verdict: 'dispatch_starting',
+    })
     
     // [PHASE 5 TASK 1] Emit generate audit before building entry
     const generateSnapshot = getSourceTruthSnapshot('handleGenerate')
@@ -1530,6 +1691,19 @@ export default function ProgramPage() {
   // [program-build] STAGE 2: Generate program
   generationStage = 'generating'
   console.log('[program-build] STAGE 2: Calling generateAdaptiveProgram...')
+  
+  // [PHASE 16S] Dispatch verdict - marking actual builder call
+  const mainGenerationAttemptId = `attempt_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
+  console.log('[phase16s-generate-dispatch-verdict]', {
+    flowName: 'main_generation',
+    attemptId: mainGenerationAttemptId,
+    runtimeSessionId: runtimeSessionIdRef.current,
+    requestDispatched: true,
+    dispatchMethod: 'generateAdaptiveProgram',
+    dispatchTimestamp: new Date().toISOString(),
+    verdict: 'dispatch_executing',
+  })
+  
   // [PHASE 16N] FIX: Await the async builder - it returns Promise<AdaptiveProgram>
   const newProgram = await programModules.generateAdaptiveProgram(generationInputs)
   
@@ -1895,8 +2069,44 @@ export default function ProgramPage() {
         // [program-rebuild-truth] TASK 2: Create success result
         const profileSig = createProfileSignature(inputs)
         const successResult = createSuccessBuildResult(profileSig, null, newProgram.id)
-        setLastBuildResult(successResult)
-        saveLastBuildAttemptResult(successResult)
+        
+        // [PHASE 16S] Add runtime session metadata to success result
+        const successResultWithMetadata: BuildAttemptResult = {
+          ...successResult,
+          runtimeSessionId: runtimeSessionIdRef.current,
+          pageFlow: 'main_generation',
+          dispatchStartedAt: dispatchStartTime,
+          requestDispatched: true,
+          responseReceived: true,
+          hydratedFromStorage: false,
+        }
+        
+        // [PHASE 16S] Success truth verdict
+        console.log('[phase16s-success-truth-verdict]', {
+          attemptId: successResultWithMetadata.attemptId,
+          runtimeSessionId: runtimeSessionIdRef.current,
+          requestDispatched: true,
+          responseReceived: true,
+          savedAsCurrentTruth: true,
+          staleFailureSuppressed: !!previousBannerStatus && previousBannerStatus !== 'success',
+          verdict: 'success_saved_with_metadata',
+        })
+        
+        // [PHASE 16S] Generate response verdict
+        console.log('[phase16s-generate-response-verdict]', {
+          flowName: 'main_generation',
+          attemptId: successResultWithMetadata.attemptId,
+          runtimeSessionId: runtimeSessionIdRef.current,
+          responseReceived: true,
+          responseTimestamp: new Date().toISOString(),
+          finalStatus: 'success',
+          finalErrorCode: null,
+          finalSubCode: 'none',
+          verdict: 'response_received_success',
+        })
+        
+        setLastBuildResult(successResultWithMetadata)
+        saveLastBuildAttemptResult(successResultWithMetadata)
         setGenerationError(null) // Clear any previous error
         
         // [program-build] STAGE 8: Success envelope
@@ -2222,8 +2432,33 @@ export default function ProgramPage() {
             failureGoal,
           }
         )
-        setLastBuildResult(failedResult)
-        saveLastBuildAttemptResult(failedResult)
+        
+        // [PHASE 16S] Add runtime session metadata to failure result
+        const failedResultWithMetadata: BuildAttemptResult = {
+          ...failedResult,
+          runtimeSessionId: runtimeSessionIdRef.current,
+          pageFlow: 'main_generation',
+          dispatchStartedAt: dispatchStartTime,
+          requestDispatched: true,
+          responseReceived: true,
+          hydratedFromStorage: false,
+        }
+        
+        // [PHASE 16S] Generate response verdict for failure
+        console.log('[phase16s-generate-response-verdict]', {
+          flowName: 'main_generation',
+          attemptId: failedResultWithMetadata.attemptId,
+          runtimeSessionId: runtimeSessionIdRef.current,
+          responseReceived: true,
+          responseTimestamp: new Date().toISOString(),
+          finalStatus: failedResultWithMetadata.status,
+          finalErrorCode: errorCode,
+          finalSubCode: subCode,
+          verdict: 'response_received_failure',
+        })
+        
+        setLastBuildResult(failedResultWithMetadata)
+        saveLastBuildAttemptResult(failedResultWithMetadata)
         
         // [program-rebuild-truth] Use the user message from the contract
         setGenerationError(failedResult.userMessage)
@@ -2369,6 +2604,42 @@ export default function ProgramPage() {
     
     setIsGenerating(true)
     setGenerationError(null) // Clear any previous error
+    
+    // ==========================================================================
+    // [PHASE 16S] Clear stale failure state at dispatch start (regeneration)
+    // ==========================================================================
+    const regenDispatchStartTime = new Date().toISOString()
+    const regenPreviousBannerAttemptId = lastBuildResult?.attemptId ?? null
+    const regenPreviousBannerRuntimeSessionId = lastBuildResult?.runtimeSessionId ?? null
+    const regenPreviousBannerStatus = lastBuildResult?.status ?? null
+    
+    // Mark that this session has started a new attempt
+    currentSessionHasStartedNewAttemptRef.current = true
+    currentAttemptStartedAtRef.current = regenDispatchStartTime
+    
+    // Clear visible stale failure state immediately
+    setLastBuildResult(null)
+    
+    console.log('[phase16s-active-banner-reset-audit]', {
+      flowName: 'regeneration',
+      previousBannerAttemptId: regenPreviousBannerAttemptId,
+      previousBannerRuntimeSessionId: regenPreviousBannerRuntimeSessionId,
+      previousBannerStatus: regenPreviousBannerStatus,
+      clearedBeforeNewAttempt: true,
+      currentRuntimeSessionId: runtimeSessionIdRef.current,
+      verdict: 'stale_banner_cleared',
+    })
+    
+    console.log('[phase16s-dispatch-start-audit]', {
+      flowName: 'regeneration',
+      attemptId: 'pending',
+      runtimeSessionId: runtimeSessionIdRef.current,
+      dispatchStartedAt: regenDispatchStartTime,
+      existingBannerStatusBeforeStart: regenPreviousBannerStatus,
+      existingBannerAttemptIdBeforeStart: regenPreviousBannerAttemptId,
+      existingBannerRuntimeSessionIdBeforeStart: regenPreviousBannerRuntimeSessionId,
+      verdict: 'dispatch_starting',
+    })
     
     // [PHASE 5 TASK 1] Emit rebuild audit before generation
     const rebuildSnapshot = getSourceTruthSnapshot('handleRegenerate')
@@ -2537,6 +2808,19 @@ export default function ProgramPage() {
         // [program-build] REGEN STAGE 3: Generate new program with FRESH canonical input
         regenerateStage = 'generating'
         console.log('[program-build] REGEN STAGE 3: Calling generateAdaptiveProgram with fresh truth...')
+        
+        // [PHASE 16S] Dispatch verdict - marking actual builder call for regeneration
+        const regenAttemptId = `attempt_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
+        console.log('[phase16s-generate-dispatch-verdict]', {
+          flowName: 'regeneration',
+          attemptId: regenAttemptId,
+          runtimeSessionId: runtimeSessionIdRef.current,
+          requestDispatched: true,
+          dispatchMethod: 'generateAdaptiveProgram',
+          dispatchTimestamp: new Date().toISOString(),
+          verdict: 'dispatch_executing',
+        })
+        
         // [PHASE 16N] FIX: Await the async builder - it returns Promise<AdaptiveProgram>
         const newProgram = await programModules.generateAdaptiveProgram(freshRebuildInput)
         
@@ -2982,8 +3266,44 @@ export default function ProgramPage() {
         // [program-rebuild-truth] Create success result using freshRebuildInput signature
         const profileSig = createProfileSignature(freshRebuildInput)
         const successResult = createSuccessBuildResult(profileSig, program?.id || null, newProgram.id)
-        setLastBuildResult(successResult)
-        saveLastBuildAttemptResult(successResult)
+        
+        // [PHASE 16S] Add runtime session metadata to regeneration success result
+        const regenSuccessResultWithMetadata: BuildAttemptResult = {
+          ...successResult,
+          runtimeSessionId: runtimeSessionIdRef.current,
+          pageFlow: 'regeneration',
+          dispatchStartedAt: regenDispatchStartTime,
+          requestDispatched: true,
+          responseReceived: true,
+          hydratedFromStorage: false,
+        }
+        
+        // [PHASE 16S] Success truth verdict for regeneration
+        console.log('[phase16s-success-truth-verdict]', {
+          attemptId: regenSuccessResultWithMetadata.attemptId,
+          runtimeSessionId: runtimeSessionIdRef.current,
+          requestDispatched: true,
+          responseReceived: true,
+          savedAsCurrentTruth: true,
+          staleFailureSuppressed: !!regenPreviousBannerStatus && regenPreviousBannerStatus !== 'success',
+          verdict: 'success_saved_with_metadata',
+        })
+        
+        // [PHASE 16S] Generate response verdict for regeneration success
+        console.log('[phase16s-generate-response-verdict]', {
+          flowName: 'regeneration',
+          attemptId: regenSuccessResultWithMetadata.attemptId,
+          runtimeSessionId: runtimeSessionIdRef.current,
+          responseReceived: true,
+          responseTimestamp: new Date().toISOString(),
+          finalStatus: 'success',
+          finalErrorCode: null,
+          finalSubCode: 'none',
+          verdict: 'response_received_success',
+        })
+        
+        setLastBuildResult(regenSuccessResultWithMetadata)
+        saveLastBuildAttemptResult(regenSuccessResultWithMetadata)
         setGenerationError(null) // Clear any previous error
         
         // =========================================================================
@@ -3565,8 +3885,33 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
             failureGoal,
           }
         )
-        setLastBuildResult(failedResult)
-        saveLastBuildAttemptResult(failedResult)
+        
+        // [PHASE 16S] Add runtime session metadata to regeneration failure result
+        const regenFailedResultWithMetadata: BuildAttemptResult = {
+          ...failedResult,
+          runtimeSessionId: runtimeSessionIdRef.current,
+          pageFlow: 'regeneration',
+          dispatchStartedAt: regenDispatchStartTime,
+          requestDispatched: true,
+          responseReceived: true,
+          hydratedFromStorage: false,
+        }
+        
+        // [PHASE 16S] Generate response verdict for regeneration failure
+        console.log('[phase16s-generate-response-verdict]', {
+          flowName: 'regeneration',
+          attemptId: regenFailedResultWithMetadata.attemptId,
+          runtimeSessionId: runtimeSessionIdRef.current,
+          responseReceived: true,
+          responseTimestamp: new Date().toISOString(),
+          finalStatus: regenFailedResultWithMetadata.status,
+          finalErrorCode: errorCode,
+          finalSubCode: subCode,
+          verdict: 'response_received_failure',
+        })
+        
+        setLastBuildResult(regenFailedResultWithMetadata)
+        saveLastBuildAttemptResult(regenFailedResultWithMetadata)
         
         // [program-rebuild-truth] Use the user message from the contract
         setGenerationError(failedResult.userMessage)
@@ -3654,6 +3999,43 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
   
   // [canonical-rebuild] TASK B: Handle adjustment rebuilds that require full program regeneration
   const handleAdjustmentRebuild = useCallback(async (request: AdjustmentRebuildRequest): Promise<AdjustmentRebuildResult> => {
+    // ==========================================================================
+    // [PHASE 16S] Clear stale failure state at dispatch start (adjustment)
+    // ==========================================================================
+    const adjDispatchStartTime = new Date().toISOString()
+    const adjPreviousBannerAttemptId = lastBuildResult?.attemptId ?? null
+    const adjPreviousBannerRuntimeSessionId = lastBuildResult?.runtimeSessionId ?? null
+    const adjPreviousBannerStatus = lastBuildResult?.status ?? null
+    
+    // Mark that this session has started a new attempt
+    currentSessionHasStartedNewAttemptRef.current = true
+    currentAttemptStartedAtRef.current = adjDispatchStartTime
+    
+    // Clear visible stale failure state immediately
+    setLastBuildResult(null)
+    setGenerationError(null)
+    
+    console.log('[phase16s-active-banner-reset-audit]', {
+      flowName: 'adjustment_rebuild',
+      previousBannerAttemptId: adjPreviousBannerAttemptId,
+      previousBannerRuntimeSessionId: adjPreviousBannerRuntimeSessionId,
+      previousBannerStatus: adjPreviousBannerStatus,
+      clearedBeforeNewAttempt: true,
+      currentRuntimeSessionId: runtimeSessionIdRef.current,
+      verdict: 'stale_banner_cleared',
+    })
+    
+    console.log('[phase16s-dispatch-start-audit]', {
+      flowName: 'adjustment_rebuild',
+      attemptId: 'pending',
+      runtimeSessionId: runtimeSessionIdRef.current,
+      dispatchStartedAt: adjDispatchStartTime,
+      existingBannerStatusBeforeStart: adjPreviousBannerStatus,
+      existingBannerAttemptIdBeforeStart: adjPreviousBannerAttemptId,
+      existingBannerRuntimeSessionIdBeforeStart: adjPreviousBannerRuntimeSessionId,
+      verdict: 'dispatch_starting',
+    })
+    
     // [adjustment-sync] STEP 2: Log initial adjustment state
     const previousProgramId = program?.id || 'none'
     const previousGeneratedAt = program?.createdAt || 'unknown'
@@ -3723,6 +4105,19 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
     try {
       // [canonical-rebuild] STAGE 1: Generate new program with updated inputs
       console.log('[canonical-rebuild] STAGE 1: Generating with updated inputs...')
+      
+      // [PHASE 16S] Dispatch verdict - marking actual builder call for adjustment
+      const adjAttemptId = `attempt_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
+      console.log('[phase16s-generate-dispatch-verdict]', {
+        flowName: 'adjustment_rebuild',
+        attemptId: adjAttemptId,
+        runtimeSessionId: runtimeSessionIdRef.current,
+        requestDispatched: true,
+        dispatchMethod: 'generateAdaptiveProgram',
+        dispatchTimestamp: new Date().toISOString(),
+        verdict: 'dispatch_executing',
+      })
+      
       // [PHASE 16N] FIX: Await the async builder - it returns Promise<AdaptiveProgram>
       const newProgram = await programModules.generateAdaptiveProgram(updatedInputs)
       
@@ -3911,8 +4306,44 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
       
       // [canonical-rebuild] Record success
       const successResult = createSuccessBuildResult(profileSig, program?.id || null, newProgram.id)
-      setLastBuildResult(successResult)
-      saveLastBuildAttemptResult(successResult)
+      
+      // [PHASE 16S] Add runtime session metadata to adjustment success result
+      const adjSuccessResultWithMetadata: BuildAttemptResult = {
+        ...successResult,
+        runtimeSessionId: runtimeSessionIdRef.current,
+        pageFlow: 'adjustment_rebuild',
+        dispatchStartedAt: adjDispatchStartTime,
+        requestDispatched: true,
+        responseReceived: true,
+        hydratedFromStorage: false,
+      }
+      
+      // [PHASE 16S] Success truth verdict for adjustment
+      console.log('[phase16s-success-truth-verdict]', {
+        attemptId: adjSuccessResultWithMetadata.attemptId,
+        runtimeSessionId: runtimeSessionIdRef.current,
+        requestDispatched: true,
+        responseReceived: true,
+        savedAsCurrentTruth: true,
+        staleFailureSuppressed: !!adjPreviousBannerStatus && adjPreviousBannerStatus !== 'success',
+        verdict: 'success_saved_with_metadata',
+      })
+      
+      // [PHASE 16S] Generate response verdict for adjustment success
+      console.log('[phase16s-generate-response-verdict]', {
+        flowName: 'adjustment_rebuild',
+        attemptId: adjSuccessResultWithMetadata.attemptId,
+        runtimeSessionId: runtimeSessionIdRef.current,
+        responseReceived: true,
+        responseTimestamp: new Date().toISOString(),
+        finalStatus: 'success',
+        finalErrorCode: null,
+        finalSubCode: 'none',
+        verdict: 'response_received_success',
+      })
+      
+      setLastBuildResult(adjSuccessResultWithMetadata)
+      saveLastBuildAttemptResult(adjSuccessResultWithMetadata)
       
       // [adjustment-sync] STEP 4: Verify program identity actually changed
       const programIdChanged = newProgram.id !== previousProgramId
@@ -4168,7 +4599,8 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
         {showBuilder ? (
           <div className="space-y-6">
             {/* HARDENED: Generation error banner - recoverable state */}
-            {generationError && (
+            {/* [PHASE 16S] Use truth-gated result to prevent stale banner display */}
+            {generationError && truthGatedBuildResult && (
               <Card className="bg-amber-500/10 border-amber-500/30 p-4">
                 <div className="flex items-start gap-3">
                   <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
@@ -4176,35 +4608,35 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
                     <p className="text-sm text-amber-200">{generationError}</p>
                     {/* [program-rebuild-truth] ISSUE A/B: Show stage-specific failure info */}
                     <p className="text-xs text-amber-400/70 mt-1">
-                      {lastBuildResult?.preservedLastGoodProgram 
+                      {truthGatedBuildResult?.preservedLastGoodProgram 
                         ? 'Your previous plan is still available.'
                         : 'Your inputs are preserved. Try again when ready.'}
                     </p>
                     {/* TASK 1-D: Structured diagnostic display */}
-                    {lastBuildResult && lastBuildResult.status !== 'success' && (
+                    {truthGatedBuildResult && truthGatedBuildResult.status !== 'success' && (
                       <div className="mt-2 space-y-0.5">
                         {/* Line 1: Stage and Code */}
                         <p className="text-[10px] text-[#6A6A6A] font-mono">
-                          Stage: {lastBuildResult.stage} | Code: {lastBuildResult.errorCode || 'unknown'}
-                          {lastBuildResult.subCode !== 'none' && ` (${lastBuildResult.subCode})`}
+                          Stage: {truthGatedBuildResult.stage} | Code: {truthGatedBuildResult.errorCode || 'unknown'}
+                          {truthGatedBuildResult.subCode !== 'none' && ` (${truthGatedBuildResult.subCode})`}
                         </p>
                         {/* Line 2: Step, Middle, Day, Focus - only if any exist */}
-                        {(lastBuildResult.failureStep || lastBuildResult.failureDayNumber || lastBuildResult.failureFocus) && (
+                        {(truthGatedBuildResult.failureStep || truthGatedBuildResult.failureDayNumber || truthGatedBuildResult.failureFocus) && (
                           <p className="text-[10px] text-[#5A5A5A] font-mono">
-                            Step: {lastBuildResult.failureStep || 'none'}
-                            {lastBuildResult.failureMiddleStep && ` | Middle: ${lastBuildResult.failureMiddleStep}`}
-                            {lastBuildResult.failureDayNumber !== null && ` | Day: ${lastBuildResult.failureDayNumber}`}
-                            {lastBuildResult.failureFocus && ` | Focus: ${lastBuildResult.failureFocus}`}
+                            Step: {truthGatedBuildResult.failureStep || 'none'}
+                            {truthGatedBuildResult.failureMiddleStep && ` | Middle: ${truthGatedBuildResult.failureMiddleStep}`}
+                            {truthGatedBuildResult.failureDayNumber !== null && ` | Day: ${truthGatedBuildResult.failureDayNumber}`}
+                            {truthGatedBuildResult.failureFocus && ` | Focus: ${truthGatedBuildResult.failureFocus}`}
                           </p>
                         )}
                         {/* Line 3: Reason - only if exists */}
-                        {lastBuildResult.failureReason && (
+                        {truthGatedBuildResult.failureReason && (
                           <p className="text-[10px] text-[#5A5A5A] font-mono truncate max-w-full">
-                            Reason: {lastBuildResult.failureReason.slice(0, 100)}
+                            Reason: {truthGatedBuildResult.failureReason.slice(0, 100)}
                           </p>
                         )}
                         {/* TASK 1-E: Defensive fallback when no structured fields exist */}
-                        {!lastBuildResult.failureStep && !lastBuildResult.failureDayNumber && !lastBuildResult.failureReason && (
+                        {!truthGatedBuildResult.failureStep && !truthGatedBuildResult.failureDayNumber && !truthGatedBuildResult.failureReason && (
                           <p className="text-[10px] text-[#5A5A5A] font-mono">
                             Step: unavailable | Reason: unavailable
                           </p>
@@ -4217,6 +4649,16 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
                     size="sm"
                     className="text-amber-400 hover:text-amber-300 hover:bg-amber-500/20 h-7 px-2"
                     onClick={() => {
+                      // [PHASE 16S] Dismiss audit
+                      console.log('[phase16s-dismiss-cleared-banner-audit]', {
+                        clearedGenerationError: !!generationError,
+                        clearedLastBuildResult: !!lastBuildResult,
+                        clearedPersistedStorage: true,
+                        currentRuntimeSessionId: runtimeSessionIdRef.current,
+                        dismissedAttemptId: lastBuildResult?.attemptId ?? null,
+                        dismissedErrorCode: lastBuildResult?.errorCode ?? null,
+                        verdict: 'banner_dismissed',
+                      })
                       setGenerationError(null)
                       setLastBuildResult(null)
                       clearLastBuildAttemptResult()
@@ -4250,14 +4692,15 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
         ) : program && programModules.isRenderableProgram?.(program) ? (
           <div className="space-y-4">
             {/* [program-rebuild-truth] ISSUE B/C: Show rebuild failed warning if last build failed */}
-            {lastBuildResult?.status === 'preserved_last_good' && (
+            {/* [PHASE 16S] Use truth-gated result to prevent stale banner display */}
+            {truthGatedBuildResult?.status === 'preserved_last_good' && (
               <Card className="bg-red-500/10 border-red-500/30 p-4">
                 <div className="flex items-start gap-3">
                   <AlertTriangle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
                   <div className="flex-1">
                     <p className="text-sm text-red-200 font-medium">Last rebuild did not complete</p>
                     <p className="text-xs text-red-400/80 mt-1">
-                      {lastBuildResult.userMessage}
+                      {truthGatedBuildResult.userMessage}
                     </p>
   <p className="text-xs text-[#6A6A6A] mt-1">
   This is your previous plan. Your latest settings were not applied.
@@ -4266,26 +4709,26 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
   <div className="mt-2 space-y-0.5">
     {/* Line 1: Stage and Code */}
     <p className="text-[10px] text-[#5A5A5A] font-mono">
-      Stage: {lastBuildResult.stage} | Code: {lastBuildResult.errorCode || 'unknown'}
-      {lastBuildResult.subCode !== 'none' && ` (${lastBuildResult.subCode})`}
+      Stage: {truthGatedBuildResult.stage} | Code: {truthGatedBuildResult.errorCode || 'unknown'}
+      {truthGatedBuildResult.subCode !== 'none' && ` (${truthGatedBuildResult.subCode})`}
     </p>
     {/* Line 2: Step, Middle, Day, Focus - only if any exist */}
-    {(lastBuildResult.failureStep || lastBuildResult.failureDayNumber || lastBuildResult.failureFocus) && (
+    {(truthGatedBuildResult.failureStep || truthGatedBuildResult.failureDayNumber || truthGatedBuildResult.failureFocus) && (
       <p className="text-[10px] text-[#4A4A4A] font-mono">
-        Step: {lastBuildResult.failureStep || 'none'}
-        {lastBuildResult.failureMiddleStep && ` | Middle: ${lastBuildResult.failureMiddleStep}`}
-        {lastBuildResult.failureDayNumber !== null && ` | Day: ${lastBuildResult.failureDayNumber}`}
-        {lastBuildResult.failureFocus && ` | Focus: ${lastBuildResult.failureFocus}`}
+        Step: {truthGatedBuildResult.failureStep || 'none'}
+        {truthGatedBuildResult.failureMiddleStep && ` | Middle: ${truthGatedBuildResult.failureMiddleStep}`}
+        {truthGatedBuildResult.failureDayNumber !== null && ` | Day: ${truthGatedBuildResult.failureDayNumber}`}
+        {truthGatedBuildResult.failureFocus && ` | Focus: ${truthGatedBuildResult.failureFocus}`}
       </p>
     )}
     {/* Line 3: Reason - only if exists */}
-    {lastBuildResult.failureReason && (
+    {truthGatedBuildResult.failureReason && (
       <p className="text-[10px] text-[#4A4A4A] font-mono truncate max-w-full">
-        Reason: {lastBuildResult.failureReason.slice(0, 100)}
+        Reason: {truthGatedBuildResult.failureReason.slice(0, 100)}
       </p>
     )}
     {/* TASK 1-E: Defensive fallback when no structured fields exist */}
-    {!lastBuildResult.failureStep && !lastBuildResult.failureDayNumber && !lastBuildResult.failureReason && (
+    {!truthGatedBuildResult.failureStep && !truthGatedBuildResult.failureDayNumber && !truthGatedBuildResult.failureReason && (
       <p className="text-[10px] text-[#4A4A4A] font-mono">
         Step: unavailable | Reason: unavailable
       </p>
@@ -4304,6 +4747,16 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
                         variant="ghost"
                         className="text-red-400/70 hover:text-red-300 h-7 px-2 text-xs"
                         onClick={() => {
+                          // [PHASE 16S] Dismiss audit for preserved banner
+                          console.log('[phase16s-dismiss-cleared-banner-audit]', {
+                            clearedGenerationError: false,
+                            clearedLastBuildResult: !!lastBuildResult,
+                            clearedPersistedStorage: true,
+                            currentRuntimeSessionId: runtimeSessionIdRef.current,
+                            dismissedAttemptId: lastBuildResult?.attemptId ?? null,
+                            dismissedErrorCode: lastBuildResult?.errorCode ?? null,
+                            verdict: 'preserved_banner_dismissed',
+                          })
                           setLastBuildResult(null)
                           clearLastBuildAttemptResult()
                         }}
@@ -4317,7 +4770,8 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
             )}
             
             {/* [program-alignment] ISSUE B/C: Show stale program warning with last good plan note */}
-            {profileProgramDrift?.isProgramStale && lastBuildResult?.status !== 'preserved_last_good' && (
+            {/* [PHASE 16S] Use truth-gated result for stale condition */}
+            {profileProgramDrift?.isProgramStale && truthGatedBuildResult?.status !== 'preserved_last_good' && (
               <Card className="bg-amber-500/10 border-amber-500/30 p-4">
                 <div className="flex items-start gap-3">
                   <Info className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
@@ -4358,13 +4812,14 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
             
             {/* [program-rebuild-truth] ISSUE C/E: Show current build status chip */}
             {/* [program-truth-fix] TASK D: Only show "up to date" if NO drift exists */}
-            {lastBuildResult && lastBuildResult.status === 'success' && !profileProgramDrift?.isProgramStale && (
+            {/* [PHASE 16S] Use truth-gated result for success indicator */}
+            {truthGatedBuildResult && truthGatedBuildResult.status === 'success' && !profileProgramDrift?.isProgramStale && (
               <div className="flex items-center gap-2 text-xs text-green-500/80">
                 <div className="w-2 h-2 rounded-full bg-green-500" />
                 <span>Program up to date</span>
                 <span className="text-[#4A4A4A]">|</span>
                 <span className="text-[#6A6A6A]">
-                  Built {new Date(lastBuildResult.attemptedAt).toLocaleDateString()}
+                  Built {new Date(truthGatedBuildResult.attemptedAt).toLocaleDateString()}
                 </span>
               </div>
             )}

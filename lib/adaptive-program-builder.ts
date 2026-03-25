@@ -4039,6 +4039,17 @@ async function generateAdaptiveProgramImpl(
     ? onboardingProfile?.primaryOutcome 
     : 'mixed') as TrainingStyleMode
   
+  // [PHASE 16M] Pre-intent generation diagnostic
+  console.log('[phase16m-builder-pre-intent-generation-audit]', {
+    effectiveTrainingDays,
+    scheduleMode: normalizedProfile.scheduleMode,
+    sessionDurationMode: normalizedProfile.sessionDurationMode,
+    trainingStyleMode,
+    skillType,
+    structureDaysCount: structure.days.length,
+    isHighFrequency: effectiveTrainingDays > 5,
+  })
+  
   const sessionIntents = generateWeeklySessionIntents({
     skill: skillType,
     trainingStyle: trainingStyleMode,

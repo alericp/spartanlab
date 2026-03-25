@@ -1473,50 +1473,37 @@ export default function ProgramPage() {
         verdict: 'hydration_complete',
       })
       
-      // [PHASE 16S] Check if this hydrated result should be rendered
-      const truthGate = shouldRenderBuildFailureBanner(
-        normalizedStored,
-        runtimeSessionIdRef.current,
-        currentSessionHasStartedNewAttemptRef.current,
-        currentAttemptStartedAtRef.current
-      )
-      
-      console.log('[phase16s-banner-truth-gate-audit]', {
-        storedAttemptId: normalizedStored.attemptId,
-        storedRuntimeSessionId: normalizedStored.runtimeSessionId,
-        currentRuntimeSessionId: runtimeSessionIdRef.current,
-        storedStatus: normalizedStored.status,
-        storedErrorCode: normalizedStored.errorCode,
-        hydratedFromStorage: normalizedStored.hydratedFromStorage,
-        currentSessionHasStartedNewAttempt: currentSessionHasStartedNewAttemptRef.current,
-        renderAllowed: truthGate.renderAllowed,
-        suppressionReason: truthGate.suppressionReason,
-        verdict: truthGate.renderAllowed ? 'render_allowed' : 'render_suppressed',
-      })
-      
-      // [PHASE 16S] Legacy generic banner suppression
-      if (normalizedStored.errorCode === 'unknown_generation_failure' && normalizedStored.hydratedFromStorage) {
-        const sessionMismatch = !normalizedStored.runtimeSessionId || 
-          normalizedStored.runtimeSessionId !== runtimeSessionIdRef.current
-        
-        console.log('[phase16s-legacy-generic-banner-suppression-audit]', {
+      // ==========================================================================
+      // [PHASE 16T] STRICT: Do NOT set hydrated failure into active page state
+      // Hydrated failures from storage must NEVER auto-render as the active banner.
+      // Only SUCCESS results may be set from hydration. Failures require a fresh
+      // live attempt in the current runtime to create an active banner.
+      // ==========================================================================
+      if (normalizedStored.status !== 'success' && normalizedStored.hydratedFromStorage === true) {
+        console.log('[phase16t-hydrated-failure-initial-load-suppression-audit]', {
           storedAttemptId: normalizedStored.attemptId,
+          storedStatus: normalizedStored.status,
           storedErrorCode: normalizedStored.errorCode,
           storedRuntimeSessionId: normalizedStored.runtimeSessionId,
+          hydratedFromStorage: normalizedStored.hydratedFromStorage,
           currentRuntimeSessionId: runtimeSessionIdRef.current,
-          wasSuppressed: sessionMismatch,
-          reason: sessionMismatch ? 'generic_unknown_from_prior_runtime' : 'matches_current_runtime',
-          verdict: sessionMismatch ? 'suppressed' : 'allowed',
+          wasSuppressed: true,
+          reason: 'hydrated_failure_blocked_on_initial_load',
+          verdict: 'suppressed_hydrated_failure',
         })
-        
-        if (sessionMismatch) {
-          // Don't set the stale generic failure
-          return
-        }
+        // DO NOT set into active state - page starts clean without old failure banner
+        return
       }
       
-      // Only set if truth gate allows
-      if (truthGate.renderAllowed) {
+      // For success results, we can safely set them (they show "up to date" indicator, not error banner)
+      if (normalizedStored.status === 'success') {
+        console.log('[phase16t-hydrated-success-allowed-audit]', {
+          storedAttemptId: normalizedStored.attemptId,
+          storedStatus: normalizedStored.status,
+          hydratedFromStorage: normalizedStored.hydratedFromStorage,
+          currentRuntimeSessionId: runtimeSessionIdRef.current,
+          verdict: 'success_result_allowed',
+        })
         setLastBuildResult(normalizedStored)
       }
       
@@ -1548,12 +1535,31 @@ export default function ProgramPage() {
   }, [program])
   
   // ==========================================================================
-  // [PHASE 16S] Truth-gated lastBuildResult for rendering
+  // [PHASE 16S/16T] Truth-gated lastBuildResult for rendering
   // This prevents stale banners from rendering when they don't belong to
-  // the current runtime session
+  // the current runtime session.
+  // [PHASE 16T] HARDENED: Hydrated failures are ALWAYS blocked from rendering.
   // ==========================================================================
   const truthGatedBuildResult = useMemo(() => {
     if (!lastBuildResult) return null
+    
+    // [PHASE 16T] STRICT CHECK: Hydrated failures can NEVER render as active banner
+    // This is the primary defense - even if other checks fail, this blocks stale banners
+    const isHydratedFailure = lastBuildResult.hydratedFromStorage === true && 
+                              lastBuildResult.status !== 'success'
+    
+    if (isHydratedFailure) {
+      console.log('[phase16t-banner-render-source-audit]', {
+        generationErrorPresent: false, // checked at render time
+        activeBuildResultPresent: true,
+        activeBuildResultHydratedFromStorage: lastBuildResult.hydratedFromStorage,
+        activeBuildResultRuntimeSessionId: lastBuildResult.runtimeSessionId,
+        currentRuntimeSessionId: runtimeSessionIdRef.current,
+        renderAllowed: false,
+        verdict: 'hydrated_failure_blocked_from_render',
+      })
+      return null
+    }
     
     const truthGate = shouldRenderBuildFailureBanner(
       lastBuildResult,
@@ -1562,19 +1568,17 @@ export default function ProgramPage() {
       currentAttemptStartedAtRef.current
     )
     
-    // Log truth-gate decision on each render
+    // Log truth-gate decision on each render for failures
     if (lastBuildResult.status !== 'success') {
-      console.log('[phase16s-banner-truth-gate-render-audit]', {
-        storedAttemptId: lastBuildResult.attemptId,
-        storedRuntimeSessionId: lastBuildResult.runtimeSessionId,
+      console.log('[phase16t-banner-render-source-audit]', {
+        generationErrorPresent: false, // checked at render time
+        activeBuildResultPresent: true,
+        activeBuildResultHydratedFromStorage: lastBuildResult.hydratedFromStorage,
+        activeBuildResultRuntimeSessionId: lastBuildResult.runtimeSessionId,
         currentRuntimeSessionId: runtimeSessionIdRef.current,
-        storedStatus: lastBuildResult.status,
-        storedErrorCode: lastBuildResult.errorCode,
-        hydratedFromStorage: lastBuildResult.hydratedFromStorage,
-        currentSessionHasStartedNewAttempt: currentSessionHasStartedNewAttemptRef.current,
         renderAllowed: truthGate.renderAllowed,
         suppressionReason: truthGate.suppressionReason,
-        verdict: truthGate.renderAllowed ? 'banner_will_render' : 'banner_suppressed',
+        verdict: truthGate.renderAllowed ? 'live_failure_render_allowed' : 'failure_suppressed',
       })
     }
     
@@ -2455,6 +2459,18 @@ export default function ProgramPage() {
           finalErrorCode: errorCode,
           finalSubCode: subCode,
           verdict: 'response_received_failure',
+        })
+        
+        // [PHASE 16T] Live failure promotion audit - this is a FRESH failure from current runtime
+        console.log('[phase16t-live-failure-promotion-audit]', {
+          flowName: 'main_generation',
+          attemptId: failedResultWithMetadata.attemptId,
+          runtimeSessionId: runtimeSessionIdRef.current,
+          hydratedFromStorage: failedResultWithMetadata.hydratedFromStorage,
+          promotedToActiveBanner: true,
+          errorCode: errorCode,
+          subCode: subCode,
+          verdict: 'live_failure_promoted_to_active_banner',
         })
         
         setLastBuildResult(failedResultWithMetadata)
@@ -3910,6 +3926,18 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
           verdict: 'response_received_failure',
         })
         
+        // [PHASE 16T] Live failure promotion audit - this is a FRESH failure from current runtime
+        console.log('[phase16t-live-failure-promotion-audit]', {
+          flowName: 'regeneration',
+          attemptId: regenFailedResultWithMetadata.attemptId,
+          runtimeSessionId: runtimeSessionIdRef.current,
+          hydratedFromStorage: regenFailedResultWithMetadata.hydratedFromStorage,
+          promotedToActiveBanner: true,
+          errorCode: errorCode,
+          subCode: subCode,
+          verdict: 'live_failure_promoted_to_active_banner',
+        })
+        
         setLastBuildResult(regenFailedResultWithMetadata)
         saveLastBuildAttemptResult(regenFailedResultWithMetadata)
         
@@ -4599,8 +4627,16 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
         {showBuilder ? (
           <div className="space-y-6">
             {/* HARDENED: Generation error banner - recoverable state */}
-            {/* [PHASE 16S] Use truth-gated result to prevent stale banner display */}
-            {generationError && truthGatedBuildResult && (
+            {/* [PHASE 16S/16T] Use truth-gated result to prevent stale banner display */}
+            {/* [PHASE 16T] STRICT: Only render if ALL conditions pass:
+                - generationError exists (from current attempt)
+                - truthGatedBuildResult exists (passed truth-gate)
+                - NOT hydrated from storage (must be live from current runtime)
+                - runtimeSessionId matches current session */}
+            {generationError && 
+             truthGatedBuildResult && 
+             truthGatedBuildResult.hydratedFromStorage !== true &&
+             truthGatedBuildResult.runtimeSessionId === runtimeSessionIdRef.current && (
               <Card className="bg-amber-500/10 border-amber-500/30 p-4">
                 <div className="flex items-start gap-3">
                   <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
@@ -4668,7 +4704,7 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
                   </Button>
                 </div>
               </Card>
-            )}
+            ))}
             
             <AdaptiveProgramForm
               inputs={inputs}
@@ -4692,8 +4728,11 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
         ) : program && programModules.isRenderableProgram?.(program) ? (
           <div className="space-y-4">
             {/* [program-rebuild-truth] ISSUE B/C: Show rebuild failed warning if last build failed */}
-            {/* [PHASE 16S] Use truth-gated result to prevent stale banner display */}
-            {truthGatedBuildResult?.status === 'preserved_last_good' && (
+            {/* [PHASE 16S/16T] Use truth-gated result to prevent stale banner display */}
+            {/* [PHASE 16T] STRICT: Only render if NOT hydrated and matches current runtime */}
+            {truthGatedBuildResult?.status === 'preserved_last_good' && 
+             truthGatedBuildResult?.hydratedFromStorage !== true &&
+             truthGatedBuildResult?.runtimeSessionId === runtimeSessionIdRef.current && (
               <Card className="bg-red-500/10 border-red-500/30 p-4">
                 <div className="flex items-start gap-3">
                   <AlertTriangle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
@@ -4767,7 +4806,7 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
                   </div>
                 </div>
               </Card>
-            )}
+            ))}
             
             {/* [program-alignment] ISSUE B/C: Show stale program warning with last good plan note */}
             {/* [PHASE 16S] Use truth-gated result for stale condition */}

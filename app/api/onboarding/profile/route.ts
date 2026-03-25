@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
-import { getSession } from '@/lib/auth-service-server'
+import { getSession, getCurrentUserServer } from '@/lib/auth-service-server'
 import { query } from '@/lib/db'
+import { resolveCanonicalDbUserId } from '@/lib/subscription-service'
 
 export const dynamic = 'force-dynamic'
 
@@ -10,16 +11,58 @@ export const dynamic = 'force-dynamic'
  * This endpoint upserts the athlete profile to the real authenticated database.
  * After this completes, /api/settings can immediately read the real profile.
  * This is the key to ensuring onboarding truth == settings truth == dashboard truth.
+ * 
+ * [PHASE 16E] CRITICAL: Must resolve canonical DB user ID before athlete_profiles upsert
+ * - athlete_profiles.user_id REFERENCES users.id
+ * - users.id = `user_${clerkId}` format
+ * - Clerk auth returns raw clerkId, NOT the DB user ID
  */
 export async function POST(request: Request) {
   try {
-    const { userId } = await getSession()
+    const { userId: authUserId } = await getSession()
     
-    if (!userId) {
+    // [PHASE 16E] Audit: Log auth user ID
+    console.log('[phase16e-auth-user-id-audit]', {
+      authUserId: authUserId?.slice(0, 12) + '...',
+      timestamp: new Date().toISOString(),
+    })
+    
+    if (!authUserId) {
       return NextResponse.json({ 
         success: false, 
         error: 'Unauthorized' 
       }, { status: 401 })
+    }
+    
+    // [PHASE 16E] Resolve canonical DB user ID BEFORE any athlete_profiles write
+    // This ensures users row exists and returns the correct users.id
+    const currentUser = await getCurrentUserServer()
+    const { dbUserId, bootstrapped, error: userResolutionError } = await resolveCanonicalDbUserId(
+      authUserId,
+      currentUser?.email,
+      currentUser?.username
+    )
+    
+    // [PHASE 16E] Audit: DB user resolution result
+    console.log('[phase16e-db-user-resolution-audit]', {
+      authUserId: authUserId?.slice(0, 12) + '...',
+      dbUserId: dbUserId?.slice(0, 12) + '...',
+      bootstrapped,
+      resolutionError: userResolutionError,
+    })
+    
+    // [PHASE 16E] Hard fail if DB user resolution fails
+    if (!dbUserId) {
+      console.error('[phase16e-onboarding-profile-route-final-verdict]', {
+        success: false,
+        reason: 'db_user_resolution_failed',
+        error: userResolutionError,
+      })
+      return NextResponse.json({ 
+        success: false, 
+        error: 'Failed to resolve user identity',
+        detail: userResolutionError,
+      }, { status: 500 })
     }
     
     const profileData = await request.json()
@@ -115,7 +158,7 @@ export async function POST(request: Request) {
         training_style as "trainingStyle",
         onboarding_complete as "onboardingComplete"
     `, [
-      userId,
+      dbUserId, // [PHASE 16E] Use resolved DB user ID, NOT raw Clerk auth ID
       profileData.sex || null,
       profileData.experienceLevel || 'beginner',
       // ISSUE A FIX: For flexible users, trainingDaysPerWeek is null
@@ -146,9 +189,16 @@ export async function POST(request: Request) {
       parityVerdict: 'columns_values_match',
     })
     
+    // [PHASE 16E] Audit: athlete_profiles.user_id being written
+    console.log('[phase16e-athlete-profile-user-id-write-audit]', {
+      authUserId: authUserId?.slice(0, 12) + '...',
+      dbUserIdWritten: dbUserId?.slice(0, 12) + '...',
+      userBootstrapped: bootstrapped,
+    })
+    
     // TASK 6: Log what was actually saved
     console.log('[Onboarding API] TASK A FIX: Saved ALL profile fields:', {
-      userId,
+      dbUserId: dbUserId?.slice(0, 12) + '...',
       primaryGoal: profileData.primaryGoal,
       secondaryGoal: profileData.secondaryGoal,
       selectedSkillsCount: profileData.selectedSkills?.length || 0,
@@ -158,7 +208,12 @@ export async function POST(request: Request) {
     })
     
     if (!upsertResult || upsertResult.length === 0) {
-      console.error('[Onboarding API] Upsert returned no result for user:', userId)
+      console.error('[Onboarding API] Upsert returned no result for dbUserId:', dbUserId)
+      console.log('[phase16e-onboarding-profile-route-final-verdict]', {
+        success: false,
+        reason: 'upsert_returned_no_result',
+        dbUserId: dbUserId?.slice(0, 12) + '...',
+      })
       return NextResponse.json({ 
         success: false, 
         error: 'Failed to save profile' 
@@ -167,9 +222,18 @@ export async function POST(request: Request) {
     
     const savedProfile = upsertResult[0]
     
-    console.log('[Onboarding API] Profile upserted successfully for user:', userId, {
+    console.log('[Onboarding API] Profile upserted successfully for dbUserId:', dbUserId?.slice(0, 12) + '...', {
       scheduleMode: savedProfile.scheduleMode,
       onboardingComplete: savedProfile.onboardingComplete,
+    })
+    
+    // [PHASE 16E] Final success verdict
+    console.log('[phase16e-onboarding-profile-route-final-verdict]', {
+      success: true,
+      dbUserId: dbUserId?.slice(0, 12) + '...',
+      userBootstrapped: bootstrapped,
+      scheduleMode: savedProfile.scheduleMode,
+      sessionDurationMode: savedProfile.sessionDurationMode,
     })
     
     return NextResponse.json({

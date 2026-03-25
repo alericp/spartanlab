@@ -251,3 +251,117 @@ export async function ensureUserExists(
     return false
   }
 }
+
+// =============================================================================
+// [PHASE 16E] CANONICAL USER RESOLUTION
+// =============================================================================
+
+/**
+ * [PHASE 16E] Resolve canonical DB user ID from Clerk auth ID
+ * 
+ * This is the SINGLE canonical helper that:
+ * 1. Takes the authenticated Clerk user id
+ * 2. Ensures the matching row exists in users table
+ * 3. Returns the canonical DB user id (users.id)
+ * 
+ * CRITICAL: athlete_profiles.user_id REFERENCES users.id
+ * - users.id = `user_${clerkId}` (internal DB format)
+ * - clerk_id = raw Clerk ID
+ * 
+ * Always use this before writing to athlete_profiles or any table with user FK.
+ */
+export async function resolveCanonicalDbUserId(
+  clerkId: string,
+  email?: string,
+  username?: string
+): Promise<{ dbUserId: string | null; bootstrapped: boolean; error?: string }> {
+  // [PHASE 16E] Audit entry
+  console.log('[phase16e-db-user-resolution-audit]', {
+    clerkId: clerkId?.slice(0, 12) + '...',
+    hasEmail: !!email,
+    hasUsername: !!username,
+  })
+  
+  if (isPreviewMode()) {
+    // Preview mode: return synthetic ID
+    const syntheticId = `user_${clerkId}`
+    console.log('[phase16e-user-bootstrap-verdict]', {
+      mode: 'preview',
+      dbUserId: syntheticId,
+      bootstrapped: false,
+    })
+    return { dbUserId: syntheticId, bootstrapped: false }
+  }
+  
+  if (!(await isDatabaseAvailable())) {
+    console.error('[phase16e-user-bootstrap-verdict]', {
+      error: 'database_unavailable',
+    })
+    return { dbUserId: null, bootstrapped: false, error: 'database_unavailable' }
+  }
+
+  try {
+    // Step 1: Check if user already exists by clerk_id
+    const existing = await queryOne<{ id: string }>(
+      `SELECT id FROM users WHERE clerk_id = $1`,
+      [clerkId]
+    )
+    
+    if (existing?.id) {
+      console.log('[phase16e-user-bootstrap-verdict]', {
+        dbUserId: existing.id,
+        bootstrapped: false,
+        reason: 'existing_user_found',
+      })
+      return { dbUserId: existing.id, bootstrapped: false }
+    }
+    
+    // Step 2: User doesn't exist - create with canonical ID format
+    const canonicalDbId = `user_${clerkId}`
+    const resolvedEmail = email || `${clerkId}@placeholder.spartanlab`
+    const resolvedUsername = username || resolvedEmail.split('@')[0]
+    
+    await query(
+      `INSERT INTO users (id, clerk_id, email, username, subscription_plan, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, 'free', $5, $6)
+       ON CONFLICT (clerk_id) DO NOTHING`,
+      [
+        canonicalDbId,
+        clerkId,
+        resolvedEmail,
+        resolvedUsername,
+        new Date().toISOString(),
+        new Date().toISOString(),
+      ]
+    )
+    
+    // Step 3: Verify the user now exists and get actual ID
+    const created = await queryOne<{ id: string }>(
+      `SELECT id FROM users WHERE clerk_id = $1`,
+      [clerkId]
+    )
+    
+    if (created?.id) {
+      console.log('[phase16e-user-bootstrap-verdict]', {
+        dbUserId: created.id,
+        bootstrapped: true,
+        reason: 'user_created',
+      })
+      return { dbUserId: created.id, bootstrapped: true }
+    }
+    
+    // Fallback: race condition edge case - another request created first
+    console.error('[phase16e-user-bootstrap-verdict]', {
+      error: 'user_creation_failed_unexpectedly',
+      clerkId: clerkId?.slice(0, 12) + '...',
+    })
+    return { dbUserId: null, bootstrapped: false, error: 'user_creation_failed' }
+    
+  } catch (error) {
+    console.error('[phase16e-user-bootstrap-verdict]', {
+      error: 'exception',
+      message: error instanceof Error ? error.message : 'unknown',
+    })
+    return { dbUserId: null, bootstrapped: false, error: String(error) }
+  }
+}

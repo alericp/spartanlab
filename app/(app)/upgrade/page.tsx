@@ -25,7 +25,7 @@ import { trackUpgradeStarted, trackUpgradeCompleted } from '@/lib/analytics'
 import { PRICING, TRIAL } from '@/lib/billing/pricing'
 import { useAuth } from '@clerk/nextjs'
 import { toast } from 'sonner'
-import { useOwnerBootstrap } from '@/components/providers/OwnerBootstrapProvider'
+import { useOwnerBootstrap, auditOwnerFlow } from '@/components/providers/OwnerBootstrapProvider'
 import { useEntitlement } from '@/hooks/useEntitlement'
 
 const FREE_FEATURES = [
@@ -130,6 +130,18 @@ export default function UpgradePage() {
       verdict: isOwnerBypassActive 
         ? 'checkout_bypassed_for_owner' 
         : 'checkout_available',
+    })
+    
+    // [PHASE 14D TASK 4] Final checkout prevention verdict
+    auditOwnerFlow(ownerState, entitlement, 'upgrade-page')
+    
+    console.log('[phase14d-owner-checkout-prevention-final-verdict]', {
+      surface: 'upgrade-page',
+      isOwner: ownerState.isOwner,
+      simulationMode: ownerState.simulationMode,
+      checkoutPrevented: isOwnerBypassActive,
+      willShowOwnerBypassPage: isOwnerBypassActive,
+      willShowNormalUpgrade: !isOwnerBypassActive,
     })
   }, [ownerState, entitlement, isOwnerBypassActive, isPro])
 

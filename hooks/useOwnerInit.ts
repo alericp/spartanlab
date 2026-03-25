@@ -3,17 +3,27 @@
 /**
  * Owner Initialization Hook
  * 
+ * [PHASE 14D] LEGACY HOOK - DEPRECATED FOR UI COMPONENTS
+ * 
+ * This hook is now LEGACY. UI components should use:
+ * - useOwnerBootstrap() from @/components/providers/OwnerBootstrapProvider
+ * - useEntitlement() from @/hooks/useEntitlement
+ * 
+ * This hook remains available for backward compatibility but creates a SPLIT
+ * owner source that can cause drift. All critical UI surfaces have been migrated.
+ * 
+ * REMAINING USAGE: None (all migrated to canonical sources)
+ * 
+ * Old description:
  * Initializes the owner detection system by setting the current user's email
  * from Clerk auth. This enables owner detection throughout the app.
  * 
- * Usage: Call this hook in a high-level client component (like Navigation or layout wrapper)
- * 
- * CRITICAL: This hook is called unconditionally (React rules of hooks).
- * Error handling happens in the useEffect and property access, not around the hook call.
- * The component using this hook MUST be wrapped in an error boundary.
- * 
  * PREVIEW MODE: In v0 preview (vusercontent.net), Clerk fails due to domain restrictions.
  * In that case, we check NEXT_PUBLIC_OWNER_EMAIL to enable owner features for testing.
+ * 
+ * [PHASE 14D] Audit marker:
+ * [phase14d-owner-ui-caller-sweep-audit] - This hook is now LEGACY
+ * [phase14d-critical-owner-drift-sources-removed-verdict] - All UI callers migrated
  */
 
 import { useEffect, useState } from 'react'

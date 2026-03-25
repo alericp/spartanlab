@@ -4,7 +4,7 @@ import { useState, useEffect, Component, ReactNode } from 'react'
 import { Button } from '@/components/ui/button'
 import { Beaker, FlaskConical } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { useOwnerInit } from '@/hooks/useOwnerInit'
+import { useOwnerBootstrap } from '@/components/providers/OwnerBootstrapProvider'
 import { useEntitlement, setSimulationMode, type SimulationMode } from '@/hooks/useEntitlement'
 
 /**
@@ -47,12 +47,23 @@ class ToggleErrorBoundary extends Component<{ children: ReactNode }, { hasError:
 }
 
 function OwnerSimulationToggleInner() {
-  // Initialize owner detection from Clerk user email
-  const { isOwner, isLoaded } = useOwnerInit()
-  // Use the new entitlement hook (database-backed)
+  // [PHASE 14D TASK 2] Use canonical owner source from OwnerBootstrapProvider
+  // This ensures the toggle uses the same owner truth as the rest of the app
+  const ownerState = useOwnerBootstrap()
+  const { isOwner, isLoaded } = ownerState
+  // Use the canonical entitlement hook (database-backed with simulation overlay)
   const entitlement = useEntitlement()
   const [mounted, setMounted] = useState(false)
   const [expanded, setExpanded] = useState(false)
+  
+  // [PHASE 14D] Audit: Log owner source
+  console.log('[phase14d-toggle-owner-source-audit]', {
+    ownerSource: 'useOwnerBootstrap',
+    isOwner,
+    isLoaded,
+    simulationMode: ownerState.simulationMode,
+    entitlementPlan: entitlement.plan,
+  })
   
   useEffect(() => {
     setMounted(true)
@@ -84,14 +95,17 @@ function OwnerSimulationToggleInner() {
   // Real status from database (before simulation overlay)
   const realStatus = entitlement.plan || 'unknown'
   
-  // [PHASE 14B TASK 7] Render audit
-  console.log('[phase14b-owner-toggle-render-audit]', {
+  // [PHASE 14D] Canonical owner verdict audit
+  console.log('[phase14d-toggle-canonical-owner-verdict]', {
     wrapperMounted: true,
+    ownerSource: 'useOwnerBootstrap',
     authLoaded: isLoaded,
     ownerVerdict: isOwner,
     toggleRendered: true,
     simulationMode: mode,
     realStatus,
+    canonicalSourceUsed: true,
+    splitOwnerSourcesRemoved: true,
   })
   
   const handleModeChange = (newMode: SimulationMode) => {

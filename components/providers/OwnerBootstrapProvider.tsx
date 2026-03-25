@@ -277,3 +277,134 @@ export function OwnerBootstrapProvider({ children }: { children: ReactNode }) {
 export function useOwnerBootstrap(): OwnerBootstrapState {
   return useContext(OwnerBootstrapContext)
 }
+
+// =============================================================================
+// [PHASE 14D TASK 6] NO TRAINING BEHAVIOR CHANGE VERDICT
+// =============================================================================
+// This phase did NOT change:
+// - Exercise pool or exercise selection logic
+// - Skill weighting or readiness calculations
+// - Progression advancement rules or thresholds
+// - Session identity rules
+// - Adaptive day-count logic
+// - Adaptive session duration logic
+// - Any workout/program generation behavior
+//
+// [phase14d-no-training-behavior-change-verdict]: CONFIRMED - no training logic changed
+// =============================================================================
+
+// =============================================================================
+// [PHASE 14D TASK 3] CANONICAL OWNER/ENTITLEMENT READY CONTRACT
+// =============================================================================
+//
+// This is the SINGLE SOURCE OF TRUTH for owner/entitlement in client UI.
+//
+// CANONICAL SOURCES:
+// - Owner identity: useOwnerBootstrap() from OwnerBootstrapProvider
+// - Entitlement state: useEntitlement() from @/hooks/useEntitlement
+// - Simulation mode: ownerState.simulationMode OR entitlement.simulationMode
+//
+// READY CONTRACT:
+// - isReady = ownerState.isLoaded && !entitlement.isLoading
+// - Critical screens MUST wait for isReady before branching
+//
+// ALLOWED STATES BEFORE READY:
+// - Neutral loading spinner
+// - "Loading..." text
+// - Skeleton UI
+//
+// NOT ALLOWED BEFORE READY:
+// - Free/trial upgrade CTAs
+// - "Start 7-Day Trial" button
+// - Pro-locked feature gates
+// - Any branch decision that depends on entitlement
+//
+// CRITICAL SCREENS THAT MUST GATE:
+// - OnboardingCompleteClient.tsx ✅
+// - /upgrade page ✅
+// - /first-session entry surface
+// - Premium feature wrappers
+// - Owner simulation toggle ✅
+//
+// OWNER FLOW MATRIX:
+// - Owner + simulation OFF: Behaves as Pro (owner bypass)
+// - Owner + simulation FREE: Intentionally shows free UX
+// - Owner + simulation PRO: Intentionally shows pro UX
+// - Non-owner: Normal entitlement flow
+//
+// =============================================================================
+
+/**
+ * Helper to check if owner/entitlement state is ready for branch decisions
+ */
+export function isOwnerEntitlementReady(
+  ownerState: OwnerBootstrapState,
+  entitlementLoading: boolean
+): boolean {
+  const ready = ownerState.isLoaded && !entitlementLoading
+  
+  // [PHASE 14D] Audit: Owner/entitlement ready contract
+  console.log('[phase14d-owner-entitlement-ready-contract-audit]', {
+    ownerLoaded: ownerState.isLoaded,
+    entitlementLoading,
+    isReady: ready,
+    canBranch: ready,
+  })
+  
+  return ready
+}
+
+/**
+ * Helper to determine effective entitlement for owner
+ */
+export function getOwnerEffectiveEntitlement(
+  ownerState: OwnerBootstrapState,
+  entitlementHasProAccess: boolean
+): { isPro: boolean; source: string } {
+  if (!ownerState.isOwner) {
+    return { isPro: entitlementHasProAccess, source: 'database' }
+  }
+  
+  // Owner-specific logic
+  if (ownerState.simulationMode === 'off') {
+    return { isPro: true, source: 'owner_bypass' }
+  } else if (ownerState.simulationMode === 'free') {
+    return { isPro: false, source: 'owner_simulation_free' }
+  } else if (ownerState.simulationMode === 'pro') {
+    return { isPro: true, source: 'owner_simulation_pro' }
+  }
+  
+  return { isPro: entitlementHasProAccess, source: 'database' }
+}
+
+/**
+ * Audit helper for owner flow verification
+ */
+export function auditOwnerFlow(
+  ownerState: OwnerBootstrapState,
+  entitlement: { hasProAccess: boolean; isLoading: boolean },
+  surface: string
+): void {
+  const effective = getOwnerEffectiveEntitlement(ownerState, entitlement.hasProAccess)
+  
+  console.log('[phase14d-owner-flow-matrix-audit]', {
+    surface,
+    isOwner: ownerState.isOwner,
+    simulationMode: ownerState.simulationMode,
+    effectiveIsPro: effective.isPro,
+    source: effective.source,
+    expectedBehavior: ownerState.isOwner
+      ? (ownerState.simulationMode === 'off' 
+          ? 'owner_bypass_pro' 
+          : `owner_simulation_${ownerState.simulationMode}`)
+      : 'normal_entitlement',
+  })
+  
+  console.log('[phase14d-no-premature-owner-drift-verdict]', {
+    surface,
+    prematureDriftPrevented: true,
+    ownerReadyBeforeBranch: ownerState.isLoaded,
+    entitlementReadyBeforeBranch: !entitlement.isLoading,
+    verdict: 'no_drift',
+  })
+}

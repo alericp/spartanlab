@@ -29,7 +29,7 @@ import {
   STYLE_MODE_DEFINITIONS,
   type TrainingStyleMode,
 } from '@/lib/training-style-service'
-import { useOwnerInit } from '@/hooks/useOwnerInit'
+import { useOwnerBootstrap } from '@/components/providers/OwnerBootstrapProvider'
 import { PRICING, TRIAL } from '@/lib/billing/pricing'
 import { useEntitlement, setSimulationMode, type SimulationMode } from '@/hooks/useEntitlement'
 import { Beaker } from 'lucide-react'
@@ -210,7 +210,8 @@ function SubscriptionBillingCard() {
 // =============================================================================
 function OwnerInlineSimulationControl() {
   const entitlement = useEntitlement()
-  const { userEmail } = useOwnerInit()
+  // [PHASE 14D] Use canonical owner source
+  const { userEmail } = useOwnerBootstrap()
   const mode = entitlement?.simulationMode || 'off'
   const realStatus = entitlement?.plan || 'unknown'
   // Client-side can only access NEXT_PUBLIC_ prefixed env vars
@@ -298,8 +299,8 @@ function OwnerInlineSimulationControl() {
 }
 
 export default function SettingsPage() {
-  // Initialize owner detection from Clerk auth
-  const { isOwner } = useOwnerInit()
+  // [PHASE 14D] Use canonical owner source from OwnerBootstrapProvider
+  const { isOwner } = useOwnerBootstrap()
   const { toast } = useToast()
   
   const [profile, setProfile] = useState<AthleteProfile | null>(null)

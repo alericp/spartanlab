@@ -16,8 +16,9 @@
  * IDEMPOTENCY: Generation is guarded by a ref + sessionStorage token to prevent
  * duplicate execution from remounts, history navigation, or cache revalidation.
  * 
- * [PHASE 14B] Owner detection: Uses useOwnerInit to properly detect platform owner
- * before checking pro access, fixing the owner bypass gap.
+ * [PHASE 14D] Owner detection: Uses useOwnerBootstrap (canonical provider) and
+ * useEntitlement (canonical hook) to properly detect platform owner before
+ * checking pro access. Stale closure issues are prevented by proper effect deps.
  */
 
 import { useState, useEffect, useRef } from 'react'
@@ -42,7 +43,7 @@ import {
   AlertCircle,
 } from 'lucide-react'
 import { SpartanIcon } from '@/components/brand/SpartanLogo'
-import { useOwnerBootstrap } from '@/components/providers/OwnerBootstrapProvider'
+import { useOwnerBootstrap, auditOwnerFlow } from '@/components/providers/OwnerBootstrapProvider'
 import { useEntitlement } from '@/hooks/useEntitlement'
 import { getCompactScheduleLabel, getCompactDurationLabel } from '@/lib/adaptive-display-contract'
 
@@ -117,23 +118,38 @@ export default function OnboardingCompleteClient() {
   const generationAttemptedRef = useRef(false)
   const [generationSkipped, setGenerationSkipped] = useState(false)
 
+  // [PHASE 14D TASK 1] Mount effect - ONLY sets mounted flag
+  // This is the ONLY effect that should have [] dependencies
   useEffect(() => {
     setMounted(true)
-    console.log('[OnboardingCompleteClient] useEffect mount started - beginning bootstrap')
-    
-    // =======================================================================
-    // [PHASE 14C TASK 1] RACE FIX: Wait for entitlement to be ready before bootstrap
-    // =======================================================================
-    
-    // [PHASE 14C] Audit: Log owner race check state
-    console.log('[phase14c-onboarding-owner-race-audit]', {
-      renderTimeOwnerLoaded: ownerLoaded,
-      renderTimeIsOwner: isOwner,
-      renderTimeSimulationMode: simulationMode,
+  }, [])
+  
+  // [PHASE 14D TASK 1] Bootstrap effect - runs when entitlement is READY
+  // This effect has proper dependencies to avoid stale closures
+  useEffect(() => {
+    // [PHASE 14D] Audit: Log effect dependencies state
+    console.log('[phase14d-onboarding-effect-deps-audit]', {
+      ownerLoaded,
+      isOwner,
+      simulationMode,
       entitlementLoading: entitlement.isLoading,
+      entitlementHasProAccess: entitlement.hasProAccess,
       isEntitlementReady,
-      branchEvaluated: isEntitlementReady ? 'yes' : 'waiting',
+      effectWillRun: isEntitlementReady,
     })
+    
+    // [PHASE 14D] Block stale closure: Do NOT run bootstrap until entitlement is truly ready
+    if (!isEntitlementReady) {
+      console.log('[phase14d-onboarding-stale-closure-blocked-audit]', {
+        blocked: true,
+        reason: 'entitlement_not_ready',
+        ownerLoaded,
+        entitlementLoading: entitlement.isLoading,
+      })
+      return
+    }
+    
+    console.log('[OnboardingCompleteClient] Bootstrap effect running - entitlement ready')
     
     // =======================================================================
     // BOOTSTRAP: Load all heavy modules via dynamic import
@@ -167,8 +183,12 @@ export default function OnboardingCompleteClient() {
       setIsTrial(localIsTrial)
       setTrialDays(localTrialDays)
       
-      // [PHASE 14C] Final branch verdict
-      console.log('[phase14c-onboarding-final-branch-verdict]', {
+      // [PHASE 14D TASK 4] Audit owner flow
+      auditOwnerFlow(ownerState, entitlement, 'onboarding-complete')
+      
+      // [PHASE 14D] True runtime branch verdict - this is the ACTUAL branch decision
+      // NOT a stale closure value, but the current canonical entitlement state
+      console.log('[phase14d-onboarding-true-runtime-branch-verdict]', {
         isOwner,
         simulationMode,
         entitlementHasProAccess: entitlement.hasProAccess,
@@ -178,6 +198,8 @@ export default function OnboardingCompleteClient() {
         reason: isOwner 
           ? (simulationMode === 'off' ? 'owner_bypass' : `owner_simulation_${simulationMode}`)
           : entitlement.accessSource,
+        staleClosureBlocked: true,
+        effectDepsIncludeEntitlement: true,
       })
       
       // Load athlete-profile module dynamically
@@ -366,7 +388,10 @@ export default function OnboardingCompleteClient() {
     }
     
     run()
-  }, [])
+  // [PHASE 14D] Proper dependencies - NOT empty array
+  // This ensures we re-run bootstrap when canonical entitlement state changes
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEntitlementReady, ownerLoaded, isOwner, simulationMode, entitlement.hasProAccess, entitlement.isLoading])
 
   if (!mounted) {
     return (

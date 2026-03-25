@@ -405,7 +405,21 @@ export default function SettingsPage() {
     
     setSessionLength(data.sessionLengthMinutes?.toString() || '60')
     setPrimaryGoal(data.primaryGoal || 'none')
-    setEquipment(data.equipmentAvailable || [])
+    
+    // [PHASE 16A TASK 2] Equipment normalization - bench → bench_box
+    const rawEquipment = data.equipmentAvailable || []
+    const normalizedEquipment = rawEquipment.map((e: string) => 
+      e === 'bench' ? 'bench_box' : e
+    ).filter((e: string, i: number, arr: string[]) => arr.indexOf(e) === i)
+    setEquipment(normalizedEquipment)
+    
+    console.log('[phase16a-settings-benchbox-normalization-audit]', {
+      rawEquipment,
+      normalizedEquipment,
+      hadBenchAlias: rawEquipment.includes('bench'),
+      nowHasBenchBox: normalizedEquipment.includes('bench_box'),
+    })
+    
     setJointCautions(data.jointCautions || [])
     setWeakestArea(data.weakestArea || 'none')
     setTrainingStyle(data.trainingStyle || 'balanced_hybrid')

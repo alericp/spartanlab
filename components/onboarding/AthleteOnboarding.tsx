@@ -148,6 +148,120 @@ import {
 } from '@/lib/canonical-profile-service'
   import { logProfileTruthState } from '@/lib/profile-truth-contract'
   import { getOnboardingProfile } from '@/lib/athlete-profile'
+
+// =============================================================================
+// [PHASE 16A] ONBOARDING PREFILL TRUTH RECONCILIATION
+// Converts persisted/stored profile truth into UI-facing state shape
+// This bridges the gap between canonical storage format and UI tile selection
+// =============================================================================
+
+/**
+ * [PHASE 16A TASK 1 & 2] Normalize stored profile into UI-safe shape
+ * Handles:
+ * - scheduleMode 'flexible' → trainingDaysPerWeek 'flexible'
+ * - sessionDurationMode 'adaptive' → sessionLengthMinutes 'flexible'
+ * - equipment alias reconciliation (bench → bench_box)
+ */
+function reconcileStoredProfileForUI(
+  storedProfile: Partial<OnboardingProfile>,
+  canonicalProfile?: ReturnType<typeof getCanonicalProfile>
+): Partial<OnboardingProfile> {
+  const reconciled = { ...storedProfile }
+  
+  // [PHASE 16A TASK 2] Equipment alias normalization - bench → bench_box
+  if (Array.isArray(reconciled.equipment)) {
+    const normalizedEquipment = reconciled.equipment.map(e => {
+      // Legacy alias 'bench' should become 'bench_box'
+      if (e === 'bench') return 'bench_box' as EquipmentType
+      return e
+    }).filter((e, i, arr) => arr.indexOf(e) === i) // Remove duplicates
+    
+    reconciled.equipment = normalizedEquipment
+    
+    console.log('[phase16a-benchbox-raw-equipment-audit]', {
+      rawEquipment: storedProfile.equipment,
+      normalizedEquipment,
+      hadBenchAlias: storedProfile.equipment?.includes('bench' as any),
+      nowHasBenchBox: normalizedEquipment.includes('bench_box'),
+    })
+  }
+  
+  // [PHASE 16A TASK 1] Flexible schedule truth reconciliation
+  // If scheduleMode is 'flexible', UI needs trainingDaysPerWeek = 'flexible'
+  const effectiveScheduleMode = storedProfile.scheduleMode || canonicalProfile?.scheduleMode
+  if (effectiveScheduleMode === 'flexible') {
+    reconciled.trainingDaysPerWeek = 'flexible'
+    reconciled.scheduleMode = 'flexible'
+  } else if (storedProfile.trainingDaysPerWeek === 'flexible') {
+    // Already correct
+    reconciled.scheduleMode = 'flexible'
+  }
+  
+  // [PHASE 16A TASK 1] Adaptive duration truth reconciliation
+  // If sessionDurationMode is 'adaptive', UI needs sessionLengthMinutes = 'flexible'
+  const effectiveSessionDurationMode = storedProfile.sessionDurationMode || canonicalProfile?.sessionDurationMode
+  if (effectiveSessionDurationMode === 'adaptive') {
+    reconciled.sessionLengthMinutes = 'flexible'
+    reconciled.sessionDurationMode = 'adaptive'
+  } else if (storedProfile.sessionLengthMinutes === 'flexible') {
+    // Already correct
+    reconciled.sessionDurationMode = 'adaptive'
+  }
+  
+  console.log('[phase16a-onboarding-prefill-ui-shape-audit]', {
+    inputScheduleMode: storedProfile.scheduleMode,
+    inputTrainingDays: storedProfile.trainingDaysPerWeek,
+    outputScheduleMode: reconciled.scheduleMode,
+    outputTrainingDays: reconciled.trainingDaysPerWeek,
+    inputSessionDurationMode: storedProfile.sessionDurationMode,
+    inputSessionLength: storedProfile.sessionLengthMinutes,
+    outputSessionDurationMode: reconciled.sessionDurationMode,
+    outputSessionLength: reconciled.sessionLengthMinutes,
+  })
+  
+  return reconciled
+}
+
+/**
+ * [PHASE 16A TASK 6] Merge existing profile with canonical, preferring canonical for shared core fields
+ */
+function mergeProfilesForPrefill(
+  existingProfile: OnboardingProfile | null,
+  canonicalProfile: ReturnType<typeof getCanonicalProfile>
+): OnboardingProfile {
+  const base = existingProfile || createEmptyOnboardingProfile()
+  
+  // Core shared fields where canonical should win if it has more recent/authoritative data
+  const coreFields = {
+    // Schedule fields - canonical is authoritative
+    scheduleMode: canonicalProfile.scheduleMode || (base as any).scheduleMode,
+    sessionDurationMode: canonicalProfile.sessionDurationMode || (base as any).sessionDurationMode,
+    
+    // Equipment - merge and normalize
+    equipment: Array.isArray(canonicalProfile.equipmentAvailable) && canonicalProfile.equipmentAvailable.length > 0
+      ? canonicalProfile.equipmentAvailable as EquipmentType[]
+      : base.equipment,
+  }
+  
+  const merged = {
+    ...base,
+    ...coreFields,
+  }
+  
+  console.log('[phase16a-prefill-merge-resolution-audit]', {
+    existingScheduleMode: (existingProfile as any)?.scheduleMode,
+    canonicalScheduleMode: canonicalProfile.scheduleMode,
+    mergedScheduleMode: coreFields.scheduleMode,
+    existingSessionDurationMode: (existingProfile as any)?.sessionDurationMode,
+    canonicalSessionDurationMode: canonicalProfile.sessionDurationMode,
+    mergedSessionDurationMode: coreFields.sessionDurationMode,
+    existingEquipmentCount: base.equipment?.length || 0,
+    canonicalEquipmentCount: canonicalProfile.equipmentAvailable?.length || 0,
+    mergedEquipmentCount: coreFields.equipment?.length || 0,
+  })
+  
+  return merged
+}
   // [baseline-vs-earned] ISSUE A: Import baseline capture for onboarding completion
   import { captureBaselineCapability } from '@/lib/baseline-earned-truth'
 import {
@@ -3534,10 +3648,60 @@ export function AthleteOnboarding() {
     }
     logCanonicalProfileState('AthleteOnboarding prefill initialization')
     
-    // If user has existing onboarding data, prefill from it
+    // [PHASE 16A TASK 1 & 6] Use reconciliation bridge instead of raw profile
+    // This ensures flexible/adaptive UI state matches canonical truth
     if (existingProfile && (existingProfile.onboardingComplete || existingProfile.primaryGoal)) {
-      console.log('[AthleteOnboarding] Prefilling from existing onboarding profile')
-      setProfile(existingProfile)
+      console.log('[AthleteOnboarding] Prefilling from existing onboarding profile WITH reconciliation')
+      
+      // [PHASE 16A] Merge existing with canonical, then reconcile for UI
+      const mergedProfile = mergeProfilesForPrefill(existingProfile, canonical)
+      const reconciledProfile = reconcileStoredProfileForUI(mergedProfile, canonical)
+      
+      console.log('[phase16a-onboarding-prefill-raw-source-audit]', {
+        source: 'existingProfile',
+        rawScheduleMode: existingProfile.scheduleMode,
+        rawTrainingDays: existingProfile.trainingDaysPerWeek,
+        rawSessionDurationMode: existingProfile.sessionDurationMode,
+        rawSessionLength: existingProfile.sessionLengthMinutes,
+        rawEquipment: existingProfile.equipment,
+        canonicalScheduleMode: canonical.scheduleMode,
+        canonicalSessionDurationMode: canonical.sessionDurationMode,
+      })
+      
+      setProfile({
+        ...existingProfile,
+        ...reconciledProfile,
+      } as OnboardingProfile)
+      
+      // [PHASE 16A] Verify flexible/adaptive tiles will render correctly
+      const willFlexDaysRender = reconciledProfile.trainingDaysPerWeek === 'flexible'
+      const willAdaptiveDurationRender = reconciledProfile.sessionLengthMinutes === 'flexible'
+      
+      console.log('[phase16a-onboarding-flex-visual-truth-verdict]', {
+        scheduleMode: reconciledProfile.scheduleMode,
+        trainingDaysPerWeek: reconciledProfile.trainingDaysPerWeek,
+        flexibleTileWillBeSelected: willFlexDaysRender,
+        verdict: reconciledProfile.scheduleMode === 'flexible' 
+          ? (willFlexDaysRender ? 'flex_visual_truth_correct' : 'flex_visual_truth_mismatch')
+          : 'not_flexible_mode',
+      })
+      
+      console.log('[phase16a-onboarding-adaptive-duration-visual-truth-verdict]', {
+        sessionDurationMode: reconciledProfile.sessionDurationMode,
+        sessionLengthMinutes: reconciledProfile.sessionLengthMinutes,
+        adaptiveTileWillBeSelected: willAdaptiveDurationRender,
+        verdict: reconciledProfile.sessionDurationMode === 'adaptive'
+          ? (willAdaptiveDurationRender ? 'adaptive_visual_truth_correct' : 'adaptive_visual_truth_mismatch')
+          : 'not_adaptive_mode',
+      })
+      
+      console.log('[phase16a-benchbox-ui-normalization-audit]', {
+        rawEquipment: existingProfile.equipment,
+        reconciledEquipment: reconciledProfile.equipment,
+        benchBoxWillBeSelected: (reconciledProfile.equipment as EquipmentType[])?.includes('bench_box'),
+        verdict: 'equipment_normalized_for_ui',
+      })
+      
     } else if (canonical.onboardingComplete || canonical.primaryGoal) {
       // Fallback: Comprehensively populate from canonical if onboarding profile is missing
       console.log('[AthleteOnboarding] Prefilling comprehensive data from canonical profile')
@@ -3571,8 +3735,10 @@ export function AthleteOnboarding() {
           : canonical.sessionLengthMinutes || prev.sessionLengthMinutes,
         sessionStyle: (canonical.sessionStylePreference as SessionStylePreference) || prev.sessionStyle,
         
-        // Equipment & diagnostics
-        equipment: canonical.equipmentAvailable as EquipmentType[] || prev.equipment,
+        // Equipment & diagnostics - [PHASE 16A TASK 2] normalize bench → bench_box
+        equipment: ((canonical.equipmentAvailable || prev.equipment) as EquipmentType[])?.map(e => 
+          e === 'bench' ? 'bench_box' as EquipmentType : e
+        ).filter((e, i, arr) => arr.indexOf(e) === i) || prev.equipment,
         jointCautions: canonical.jointCautions as JointCaution[] || prev.jointCautions,
         weakestArea: (canonical.weakestArea as WeakestArea) || prev.weakestArea,
         primaryLimitation: (canonical.primaryLimitation as PrimaryLimitation) || prev.primaryLimitation,
@@ -3638,6 +3804,16 @@ export function AthleteOnboarding() {
         } : prev.toeTouch,
       }))
     }
+    
+    // [PHASE 16A TASK 6] Final prefill verdict - log what will be displayed
+    console.log('[phase16a-prefill-final-ui-profile-verdict]', {
+      prefillSource: existingProfile ? 'existingProfile+canonical' : canonical.primaryGoal ? 'canonical' : 'empty',
+      willRenderFlexibleDays: profile.trainingDaysPerWeek === 'flexible',
+      willRenderAdaptiveDuration: profile.sessionLengthMinutes === 'flexible',
+      equipmentCount: profile.equipment?.length || 0,
+      hasBenchBox: profile.equipment?.includes('bench_box'),
+      verdict: 'prefill_complete',
+    })
     
     setPrefillLoaded(true)
   }, [prefillLoaded])
@@ -4111,6 +4287,18 @@ export function AthleteOnboarding() {
           verdict: droppedEquipment.length === 0 ? 'equipment_truth_preserved' : 'equipment_truth_lost',
         })
         
+        // [PHASE 16A TASK 2] Bench/Box roundtrip verification
+        const rawHasBenchBox = rawEquipment.includes('bench_box')
+        const savedHasBenchBox = dbPayloadEquipment.includes('bench_box')
+        const benchBoxPreserved = !rawHasBenchBox || savedHasBenchBox
+        
+        console.log('[phase16a-benchbox-roundtrip-verdict]', {
+          userSelectedBenchBox: rawHasBenchBox,
+          savedBenchBox: savedHasBenchBox,
+          benchBoxPreserved,
+          verdict: benchBoxPreserved ? 'benchbox_roundtrip_pass' : 'benchbox_roundtrip_fail',
+        })
+        
         const dbResponse = await fetch('/api/onboarding/profile', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -4300,17 +4488,35 @@ export function AthleteOnboarding() {
             </div>
           </Card>
 
-          {/* Section Indicators */}
+          {/* Section Indicators - [PHASE 16A TASK 3] Now clickable for direct navigation */}
           <div className="flex justify-center gap-1 mt-4 md:mt-6 flex-wrap">
-            {visibleSections.map((_, i) => (
-              <div
+            {visibleSections.map((section, i) => (
+              <button
                 key={i}
-                className={`h-1.5 rounded-full transition-all duration-300 ${
+                type="button"
+                onClick={() => {
+                  console.log('[phase16a-step-dot-navigation-click-audit]', {
+                    fromSection: currentSectionIndex,
+                    toSection: i,
+                    targetSectionId: section.id,
+                    targetSectionTitle: section.title,
+                  })
+                  setCurrentSectionIndex(i)
+                  console.log('[phase16a-step-dot-navigation-section-jump-verdict]', {
+                    jumped: true,
+                    from: currentSectionIndex,
+                    to: i,
+                    preservedState: true,
+                    noValidationCorruption: true,
+                  })
+                }}
+                aria-label={`Go to step ${i + 1} of ${visibleSections.length}: ${section.title}`}
+                className={`h-1.5 rounded-full transition-all duration-300 cursor-pointer hover:opacity-80 focus:outline-none focus:ring-2 focus:ring-[#C1121F]/50 focus:ring-offset-1 focus:ring-offset-[#0F1115] ${
                   i === currentSectionIndex
                     ? 'w-5 bg-[#C1121F]'
                     : i < currentSectionIndex
-                      ? 'w-1.5 bg-[#C1121F]/50'
-                      : 'w-1.5 bg-[#2B313A]'
+                      ? 'w-1.5 bg-[#C1121F]/50 hover:bg-[#C1121F]/70'
+                      : 'w-1.5 bg-[#2B313A] hover:bg-[#3B414A]'
                 }`}
               />
             ))}

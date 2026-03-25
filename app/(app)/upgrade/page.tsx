@@ -21,12 +21,12 @@ import {
   Dumbbell,
 } from 'lucide-react'
 import { PREMIUM_FEATURES, type PremiumFeatureId } from '@/components/premium/PremiumFeature'
-import { hasProAccess, isInTrial, getTrialDaysRemaining } from '@/lib/feature-access'
 import { trackUpgradeStarted, trackUpgradeCompleted } from '@/lib/analytics'
 import { PRICING, TRIAL } from '@/lib/billing/pricing'
 import { useAuth } from '@clerk/nextjs'
 import { toast } from 'sonner'
 import { useOwnerBootstrap } from '@/components/providers/OwnerBootstrapProvider'
+import { useEntitlement } from '@/hooks/useEntitlement'
 
 const FREE_FEATURES = [
   'Workout generation & logging',
@@ -83,36 +83,55 @@ const VALUE_HIGHLIGHTS = [
 export default function UpgradePage() {
   const router = useRouter()
   const [mounted, setMounted] = useState(false)
-  const [isPro, setIsPro] = useState(false)
-  const [isTrial, setIsTrial] = useState(false)
-  const [trialDays, setTrialDays] = useState(0)
   const [isLoading, setIsLoading] = useState(false)
   
-  // [PHASE 14B TASK 4] Use owner bootstrap context for reliable owner detection
+  // [PHASE 14C TASK 2] Use canonical useEntitlement hook as single source of truth
+  const entitlement = useEntitlement()
   const ownerState = useOwnerBootstrap()
   const { isSignedIn, isLoaded: isAuthLoaded } = useAuth()
+  
+  // [PHASE 14C TASK 4] Derive state from canonical entitlement hook
+  const isPro = entitlement.hasProAccess
+  const isTrial = entitlement.isTrialing
+  const trialDays = 0 // Trial days would need API enhancement
   
   // Derive owner bypass: owner with simulation off = bypass checkout
   const isOwnerBypassActive = ownerState.isOwner && ownerState.simulationMode === 'off'
   // Derive if owner is intentionally simulating free state
   const isOwnerSimulatingFree = ownerState.isOwner && ownerState.simulationMode === 'free'
+  
+  // [PHASE 14C TASK 5] Gate: wait for entitlement to be ready
+  const isEntitlementReady = ownerState.isLoaded && !entitlement.isLoading
 
   useEffect(() => {
     setMounted(true)
-    setIsPro(hasProAccess())
-    setIsTrial(isInTrial())
-    setTrialDays(getTrialDaysRemaining())
     
-    // [PHASE 14B] Owner route access audit
-    console.log('[phase14b-owner-route-access-audit]', {
+    // [PHASE 14C] Owner route branch audit
+    console.log('[phase14c-owner-route-branch-audit]', {
       route: '/upgrade',
       ownerVerdict: ownerState.isOwner,
       simulationMode: ownerState.simulationMode,
-      ownerBypassActive: ownerState.isOwner && ownerState.simulationMode === 'off',
-      entitlementResult: hasProAccess() ? 'pro' : 'free',
-      checkoutOffered: !ownerState.isOwner || ownerState.simulationMode === 'free',
+      ownerBypassActive: isOwnerBypassActive,
+      entitlementHasProAccess: entitlement.hasProAccess,
+      entitlementAccessSource: entitlement.accessSource,
+      checkoutOffered: !isOwnerBypassActive && !isPro,
     })
-  }, [ownerState])
+    
+    // [PHASE 14C TASK 4] Checkout prevention audit
+    console.log('[phase14c-owner-checkout-prevention-verdict]', {
+      isOwner: ownerState.isOwner,
+      simulationMode: ownerState.simulationMode,
+      checkoutPrevented: isOwnerBypassActive,
+      reason: isOwnerBypassActive 
+        ? 'owner_bypass_active' 
+        : ownerState.isOwner && ownerState.simulationMode === 'free'
+          ? 'owner_intentionally_simulating_free'
+          : 'regular_user_or_pro',
+      verdict: isOwnerBypassActive 
+        ? 'checkout_bypassed_for_owner' 
+        : 'checkout_available',
+    })
+  }, [ownerState, entitlement, isOwnerBypassActive, isPro])
 
 const handleUpgrade = async () => {
     // Wait for auth to fully load before making any decisions

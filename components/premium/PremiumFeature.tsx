@@ -26,6 +26,7 @@ import {
   getTrialDaysRemaining,
   isOwnerAccount,
 } from '@/lib/feature-access'
+import { useEntitlement } from '@/hooks/useEntitlement'
 import { TRIAL } from '@/lib/billing/pricing'
 
 // =============================================================================
@@ -149,28 +150,31 @@ export const PREMIUM_FEATURES: Record<PremiumFeatureId, PremiumFeatureInfo> = {
 }
 
 // =============================================================================
-// HOOKS (using feature-access system)
+// HOOKS (using canonical useEntitlement system)
+// [PHASE 14C TASK 2] Migrated to use useEntitlement as single source of truth
 // =============================================================================
 
 /**
  * Hook to check if user has premium access
+ * [PHASE 14C] Now uses canonical useEntitlement hook
  */
 export function useIsPremium(): boolean {
-  // Uses the feature-access system which includes owner bypass
-  if (typeof window === 'undefined') return false
-  return hasProAccess()
+  const entitlement = useEntitlement()
+  return entitlement.hasProAccess
 }
 
 /**
  * Hook to check if current user is the platform owner
+ * [PHASE 14C] Now uses canonical useEntitlement hook
  */
 export function useIsOwner(): boolean {
-  if (typeof window === 'undefined') return false
-  return isOwnerAccount()
+  const entitlement = useEntitlement()
+  return entitlement.isOwner
 }
 
 /**
  * Hook to get current subscription info
+ * [PHASE 14C] Now uses canonical useEntitlement hook
  */
 export function useSubscriptionInfo(): {
   isPro: boolean
@@ -179,16 +183,14 @@ export function useSubscriptionInfo(): {
   trialDaysRemaining: number
   isOwner: boolean
 } {
-  if (typeof window === 'undefined') {
-    return { isPro: false, tier: 'free', isTrialing: false, trialDaysRemaining: 0, isOwner: false }
-  }
+  const entitlement = useEntitlement()
   
   return {
-    isPro: hasProAccess(),
-    tier: getCurrentTier(),
-    isTrialing: isInTrial(),
-    trialDaysRemaining: getTrialDaysRemaining(),
-    isOwner: isOwnerAccount(),
+    isPro: entitlement.hasProAccess,
+    tier: entitlement.plan,
+    isTrialing: entitlement.isTrialing,
+    trialDaysRemaining: 0, // Would need API enhancement for actual days
+    isOwner: entitlement.isOwner,
   }
 }
 

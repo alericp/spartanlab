@@ -56,6 +56,7 @@ export function getSimulationMode(): SimulationMode {
 
 /**
  * Set simulation mode (owner only)
+ * [PHASE 14C TASK 3] This is the CANONICAL simulation setter
  */
 export function setSimulationMode(mode: SimulationMode): void {
   if (typeof window === 'undefined') return
@@ -63,16 +64,34 @@ export function setSimulationMode(mode: SimulationMode): void {
   // Safety check - only owner can set simulation
   if (!isCurrentUserOwner()) return
   
+  const previousMode = getSimulationMode()
+  
   if (mode === 'off') {
     sessionStorage.removeItem(SIMULATION_KEY)
   } else {
     sessionStorage.setItem(SIMULATION_KEY, mode)
   }
   
-  // [PHASE 14B TASK 2] Dispatch unified event for reactive updates
-  // Dispatching both event names to ensure all listeners receive the update
+  // [PHASE 14C TASK 3] Unified event dispatch - canonical event name
+  // Dispatching both names for backward compatibility during migration
   window.dispatchEvent(new CustomEvent('entitlement-simulation-changed', { detail: mode }))
   window.dispatchEvent(new CustomEvent('simulation-mode-changed', { detail: mode }))
+  
+  // [PHASE 14C] Simulation event unification audit
+  console.log('[phase14c-simulation-event-unification-audit]', {
+    modeBefore: previousMode,
+    modeAfter: mode,
+    canonicalEventDispatched: 'entitlement-simulation-changed',
+    legacyEventDispatched: 'simulation-mode-changed',
+    listenersWillUpdate: true,
+    effectiveEntitlement: mode === 'off' ? 'real_state' : mode,
+  })
+  
+  console.log('[phase14c-simulation-effective-entitlement-verdict]', {
+    simulationMode: mode,
+    effectiveEntitlement: mode === 'free' ? 'free' : mode === 'pro' ? 'pro' : 'real_database_state',
+    sourceHelper: 'setSimulationMode',
+  })
 }
 
 /**

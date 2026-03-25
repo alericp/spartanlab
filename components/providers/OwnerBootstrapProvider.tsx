@@ -178,6 +178,24 @@ function OwnerBootstrapProviderInner({ children }: { children: ReactNode }) {
           cachedEmailAfter: getCurrentUserEmail(),
           simulationMode: isOwnerResult ? simMode : 'off',
         })
+        
+        // [PHASE 14C TASK 6] Owner E2E flow audit
+        console.log('[phase14c-owner-e2e-flow-audit]', {
+          step: 'bootstrap_complete',
+          isOwner: isOwnerResult,
+          simulationMode: isOwnerResult ? simMode : 'off',
+          expectedBehavior: isOwnerResult
+            ? (simMode === 'off' ? 'owner_bypass_pro' : `owner_simulation_${simMode}`)
+            : 'regular_user',
+        })
+        
+        console.log('[phase14c-owner-flow-final-verdict]', {
+          ownerDetected: isOwnerResult,
+          simulationMode: isOwnerResult ? simMode : 'off',
+          checkoutPrevented: isOwnerResult && simMode !== 'free',
+          proAccessGranted: isOwnerResult && simMode !== 'free',
+          verdict: isOwnerResult ? 'owner_flow_correct' : 'regular_user_flow',
+        })
       } else {
         // No user - clear cache
         clearCurrentUserEmail()

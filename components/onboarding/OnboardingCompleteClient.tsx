@@ -42,7 +42,8 @@ import {
   AlertCircle,
 } from 'lucide-react'
 import { SpartanIcon } from '@/components/brand/SpartanLogo'
-import { useOwnerInit } from '@/hooks/useOwnerInit'
+import { useOwnerBootstrap } from '@/components/providers/OwnerBootstrapProvider'
+import { useEntitlement } from '@/hooks/useEntitlement'
 import { getCompactScheduleLabel, getCompactDurationLabel } from '@/lib/adaptive-display-contract'
 
 // =============================================================================
@@ -101,10 +102,16 @@ export default function OnboardingCompleteClient() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [pricingData, setPricingData] = useState<{ pro: { displayWithPeriod: string } } | null>(null)
   
-  // [PHASE 14B TASK 3] Owner detection - must be called BEFORE checking pro access
-  // This initializes the owner email cache from Clerk auth
-  const { isOwner, isLoaded: ownerLoaded, userEmail } = useOwnerInit()
-  const [simulationMode, setSimulationMode] = useState<'off' | 'free' | 'pro'>('off')
+  // [PHASE 14C TASK 1] Use OwnerBootstrapProvider context for reliable owner detection
+  // This ensures owner state is available before making branch decisions
+  const ownerState = useOwnerBootstrap()
+  const { isOwner, isLoaded: ownerLoaded, userEmail, simulationMode } = ownerState
+  
+  // [PHASE 14C TASK 2] Use canonical useEntitlement hook as the single source of truth
+  const entitlement = useEntitlement()
+  
+  // [PHASE 14C TASK 1] Gate flag - only evaluate branches when both owner and entitlement are ready
+  const isEntitlementReady = ownerLoaded && !entitlement.isLoading
   
   // IDEMPOTENCY GUARD: Prevent duplicate generation from remounts/history/cache
   const generationAttemptedRef = useRef(false)
@@ -113,6 +120,20 @@ export default function OnboardingCompleteClient() {
   useEffect(() => {
     setMounted(true)
     console.log('[OnboardingCompleteClient] useEffect mount started - beginning bootstrap')
+    
+    // =======================================================================
+    // [PHASE 14C TASK 1] RACE FIX: Wait for entitlement to be ready before bootstrap
+    // =======================================================================
+    
+    // [PHASE 14C] Audit: Log owner race check state
+    console.log('[phase14c-onboarding-owner-race-audit]', {
+      renderTimeOwnerLoaded: ownerLoaded,
+      renderTimeIsOwner: isOwner,
+      renderTimeSimulationMode: simulationMode,
+      entitlementLoading: entitlement.isLoading,
+      isEntitlementReady,
+      branchEvaluated: isEntitlementReady ? 'yes' : 'waiting',
+    })
     
     // =======================================================================
     // BOOTSTRAP: Load all heavy modules via dynamic import
@@ -124,85 +145,40 @@ export default function OnboardingCompleteClient() {
       let localTrialDays = 0
       let loadedProfile: OnboardingProfile | null = null
       
-      // [PHASE 14B TASK 3] Check owner simulation mode first
-      let simMode: 'off' | 'free' | 'pro' = 'off'
-      try {
-        const simStored = sessionStorage.getItem('spartanlab_owner_sim')
-        if (simStored === 'free' || simStored === 'pro') {
-          simMode = simStored
-          setSimulationMode(simStored)
-        }
-      } catch {
-        // Ignore sessionStorage errors
-      }
+      // [PHASE 14C TASK 2] Use canonical entitlement hook as single source of truth
+      // Instead of calling hasProAccess() which can race, use the hook values directly
       
-      // [PHASE 14B] Owner branch audit
-      console.log('[phase14b-onboarding-owner-branch-audit]', {
-        isOwner,
+      // [PHASE 14C] Audit: Branch ready gate
+      console.log('[phase14c-onboarding-branch-ready-gate-audit]', {
         ownerLoaded,
-        userEmail,
-        simulationMode: simMode,
+        entitlementLoading: entitlement.isLoading,
+        isEntitlementReady,
+        gateStatus: isEntitlementReady ? 'passed' : 'waiting',
       })
       
-      // Load feature-access module dynamically
-      try {
-        console.log('[OnboardingCompleteClient] Loading feature-access module...')
-        const featureModule = await import('@/lib/feature-access')
-        
-        try {
-          // [PHASE 14B TASK 3] Owner detection is now initialized via useOwnerInit
-          // hasProAccess() will correctly return true for owner with simulation off
-          localIsPro = featureModule.hasProAccess()
-          
-          // [PHASE 14B] Override for owner:
-          // - simulation off = Pro (owner bypass)
-          // - simulation free = free UX intentionally
-          // - simulation pro = pro UX intentionally
-          if (isOwner) {
-            if (simMode === 'off') {
-              localIsPro = true // Owner bypass
-              console.log('[OnboardingCompleteClient] OWNER BYPASS: Treating as Pro (simulation off)')
-            } else if (simMode === 'free') {
-              localIsPro = false // Intentional free simulation
-              console.log('[OnboardingCompleteClient] OWNER SIMULATION: Showing Free state')
-            } else if (simMode === 'pro') {
-              localIsPro = true // Intentional pro simulation
-              console.log('[OnboardingCompleteClient] OWNER SIMULATION: Showing Pro state')
-            }
-          }
-          
-          setIsPro(localIsPro)
-          console.log('[OnboardingCompleteClient] hasProAccess succeeded:', localIsPro)
-        } catch (err) {
-          console.error('[OnboardingCompleteClient] hasProAccess failed, defaulting to false:', err)
-          setIsPro(false)
-        }
-        
-        try {
-          localIsTrial = featureModule.isInTrial()
-          setIsTrial(localIsTrial)
-          console.log('[OnboardingCompleteClient] isInTrial succeeded:', localIsTrial)
-        } catch (err) {
-          console.error('[OnboardingCompleteClient] isInTrial failed, defaulting to false:', err)
-          setIsTrial(false)
-        }
-        
-        try {
-          localTrialDays = featureModule.getTrialDaysRemaining()
-          setTrialDays(localTrialDays)
-          console.log('[OnboardingCompleteClient] getTrialDaysRemaining succeeded:', localTrialDays)
-        } catch (err) {
-          console.error('[OnboardingCompleteClient] getTrialDaysRemaining failed, defaulting to 0:', err)
-          setTrialDays(0)
-        }
-        
-        console.log('[OnboardingCompleteClient] feature-access module loaded successfully')
-      } catch (err) {
-        console.error('[OnboardingCompleteClient] Failed to load feature-access module:', err)
-        setIsPro(false)
-        setIsTrial(false)
-        setTrialDays(0)
-      }
+      // [PHASE 14C TASK 2] Get entitlement from canonical hook
+      // The useEntitlement hook already handles owner simulation overlay
+      localIsPro = entitlement.hasProAccess
+      localIsTrial = entitlement.isTrialing
+      localTrialDays = 0 // Trial days are not exposed via useEntitlement yet
+      
+      // Set state from canonical source
+      setIsPro(localIsPro)
+      setIsTrial(localIsTrial)
+      setTrialDays(localTrialDays)
+      
+      // [PHASE 14C] Final branch verdict
+      console.log('[phase14c-onboarding-final-branch-verdict]', {
+        isOwner,
+        simulationMode,
+        entitlementHasProAccess: entitlement.hasProAccess,
+        entitlementAccessSource: entitlement.accessSource,
+        finalIsPro: localIsPro,
+        branchWillBe: localIsPro ? 'pro-success' : 'free-preview',
+        reason: isOwner 
+          ? (simulationMode === 'off' ? 'owner_bypass' : `owner_simulation_${simulationMode}`)
+          : entitlement.accessSource,
+      })
       
       // Load athlete-profile module dynamically
       try {
@@ -444,6 +420,49 @@ export default function OnboardingCompleteClient() {
       setIsLoading(false)
     }
   }
+
+  // =======================================================================
+  // [PHASE 14C TASK 5] ENTITLEMENT READY GATE
+  // Prevent premature branch decisions before owner/entitlement state resolves
+  // =======================================================================
+  if (!isEntitlementReady) {
+    // [PHASE 14C] Audit: Log that we're gating
+    console.log('[phase14c-entitlement-ready-gate-audit]', {
+      gateActive: true,
+      ownerLoaded,
+      entitlementLoading: entitlement.isLoading,
+      preventedPrematureFreeRender: true,
+    })
+    
+    // Show neutral loading state - NOT the free preview
+    return (
+      <div className="min-h-screen bg-[#0F1115] flex items-center justify-center p-4">
+        <Card className="bg-[#1A1F26] border-[#2B313A] p-8 max-w-md w-full text-center">
+          <div className="animate-pulse mb-6">
+            <SpartanIcon size={56} className="mx-auto" />
+          </div>
+          <h2 className="text-xl font-bold text-[#E6E9EF] mb-2">
+            Loading...
+          </h2>
+          <div className="flex justify-center gap-1.5">
+            <div className="w-2 h-2 rounded-full bg-[#C1121F] animate-pulse" style={{ animationDelay: '0ms' }} />
+            <div className="w-2 h-2 rounded-full bg-[#C1121F] animate-pulse" style={{ animationDelay: '150ms' }} />
+            <div className="w-2 h-2 rounded-full bg-[#C1121F] animate-pulse" style={{ animationDelay: '300ms' }} />
+          </div>
+        </Card>
+      </div>
+    )
+  }
+  
+  // [PHASE 14C] Audit: Gate passed - no premature free branch
+  console.log('[phase14c-no-premature-free-branch-verdict]', {
+    gateStatus: 'passed',
+    ownerLoaded: true,
+    entitlementReady: true,
+    finalBranch: isPro ? 'pro' : 'free',
+    isOwner,
+    simulationMode,
+  })
 
   // Generating state
   if (step === 'generating') {

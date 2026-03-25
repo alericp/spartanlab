@@ -124,7 +124,7 @@ export default function OnboardingCompleteClient() {
   const [generationStartTime, setGenerationStartTime] = useState<number | null>(null)
   const [generationElapsed, setGenerationElapsed] = useState(0)
   const [isSlowGeneration, setIsSlowGeneration] = useState(false)
-  const [statusMessage, setStatusMessage] = useState('Analyzing your profile...')
+  // [PHASE 16C-HOTFIX] statusMessage state is declared at line 97 - removed duplicate here
   
   // [PHASE 16B TASK 1] Exact generation stage tracking
   const [generationStage, setGenerationStage] = useState<string>('idle')

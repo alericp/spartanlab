@@ -3,15 +3,21 @@
 /**
  * Onboarding Complete Client Component
  * 
- * CRITICAL: This component runs generateFirstProgram() on mount to create
+ * CRITICAL: This component runs first-program generation on mount to create
  * the user's program. Without this, the user has onboarding data but no
  * usable workout program.
  * 
+ * [PHASE 16G] SERVER-VISIBLE GENERATION:
+ * Generation now runs through /api/onboarding/generate-first-program for
+ * production observability. All stage progression is logged to Vercel logs.
+ * 
  * Flow:
  * 1. Show "generating" state
- * 2. Call generateFirstProgram() to create program from onboarding data
- * 3. Save program to canonical storage
- * 4. Route to first-session (which will now find a real program)
+ * 2. Build canonical payload from localStorage truth
+ * 3. Call server route to generate program (server-visible in logs)
+ * 4. Server returns generated program
+ * 5. Client persists to localStorage for immediate use
+ * 6. Route to first-session (which will now find a real program)
  * 
  * IDEMPOTENCY: Generation is guarded by a ref + sessionStorage token to prevent
  * duplicate execution from remounts, history navigation, or cache revalidation.
@@ -454,7 +460,9 @@ export default function OnboardingCompleteClient() {
       
       try {
         // =======================================================================
-        // DYNAMIC IMPORT: Load generation module at runtime
+        // [PHASE 16G] SERVER-VISIBLE GENERATION PATH
+        // Generation now runs through a dedicated server route for production
+        // observability. All stage progression is logged to Vercel logs.
         // =======================================================================
         trackStage('import_onboarding_service_start', genStartTime)
         console.log('[OnboardingCompleteClient] Loading onboarding-service module...')
@@ -462,61 +470,49 @@ export default function OnboardingCompleteClient() {
         completeStage('import_onboarding_service_done', genStartTime)
         console.log('[OnboardingCompleteClient] onboarding-service module loaded successfully')
         
-        // This saves the program to canonical storage (spartanlab_adaptive_programs)
-        // AND to backward-compatible storage (spartanlab_first_program)
-        trackStage('generateFirstProgram_enter', genStartTime)
+        trackStage('server_generation_start', genStartTime)
         
-        // [PHASE 16C TASK 7] Stage callback for real-time progress updates
+        // [PHASE 16G] Stage callback for client-side progress updates
         const handleStageChange = (stage: string) => {
-          console.log('[phase16c-client-stage-sync-verdict]', {
+          console.log('[phase16g-client-stage-sync-verdict]', {
             receivedStage: stage,
             elapsedMs: Date.now() - genStartTime,
           })
-          trackStage(`builder_${stage}`, genStartTime)
+          trackStage(`server_${stage}`, genStartTime)
           
-          // [PHASE 16C TASK 11] Update status message based on stage
+          // [PHASE 16G] Update status message based on stage
           const stageMessages: Record<string, string> = {
-            'init': 'Preparing your program...',
-            'input_resolution': 'Resolving your training preferences...',
-            'profile_validation': 'Validating your profile...',
-            'structure_selection': 'Selecting weekly structure...',
-            'skill_allocation': 'Allocating skills to sessions...',
-            'session_assembly': 'Building your training sessions...',
-            'session_construction': 'Constructing exercises...',
-            'post_processing': 'Finalizing program details...',
-            'validation_complete': 'Validating your program...',
+            'building_payload': 'Preparing your training data...',
+            'calling_server': 'Generating your program...',
+            'persisting_locally': 'Saving your program...',
           }
           if (stageMessages[stage]) {
             setStatusMessage(stageMessages[stage])
           }
         }
         
-        console.log('[phase16c-onboarding-await-generation-audit]', {
-          isAwaitingAsync: true,
-          hasStageCallback: true,
-          timestamp: new Date().toISOString(),
-        })
-        
-        // [PHASE 16F] Generation trigger audit
-        console.log('[phase16f-generation-trigger-audit]', {
-          stage: 'pre_generateFirstProgram_call',
+        console.log('[phase16g-server-generation-client-entry-audit]', {
+          usingServerPath: true,
           timestamp: new Date().toISOString(),
           elapsedMs: Date.now() - genStartTime,
         })
         
-        // [PHASE 16C] Now async - await the generation call
-        const result = await onboardingModule.generateFirstProgram(handleStageChange)
+        // [PHASE 16G] Call server-visible generation route
+        // This makes generation observable in Vercel logs
+        const result = await onboardingModule.generateFirstProgramViaServer(handleStageChange)
         
-        // [PHASE 16F] Generation returned
-        console.log('[phase16f-generation-trigger-audit]', {
-          stage: 'post_generateFirstProgram_call',
+        // [PHASE 16G] Server generation returned
+        console.log('[phase16g-server-generation-client-response-audit]', {
+          stage: 'server_generation_complete',
           timestamp: new Date().toISOString(),
           elapsedMs: Date.now() - genStartTime,
           resultSuccess: result?.success,
           resultHasProgram: !!result?.program,
           resultError: result?.error,
+          resultFailedStage: (result as any)?.failedStage,
+          serverTimings: (result as any)?.timings,
         })
-        completeStage('generateFirstProgram_done', genStartTime, {
+        completeStage('server_generation_done', genStartTime, {
           success: result.success,
           hasProgram: !!result.program,
           sessionCount: result.program?.sessions?.length || 0,
@@ -906,9 +902,13 @@ export default function OnboardingCompleteClient() {
 
   // Error state
   if (step === 'error') {
-    // [PHASE 16B] Parse stage from error message if it's a stall
-    const isStallError = errorMessage?.includes('stalled during')
-    const stalledStage = generationStageRef.current
+    // [PHASE 16G] Parse stage from error message or program result
+    const isStallError = errorMessage?.includes('stalled during') || errorMessage?.includes('timed out')
+    const isServerError = errorMessage?.includes('Server') || errorMessage?.includes('server')
+    const lastKnownStage = generationStageRef.current
+    // Get failed stage from programResult if available (from server response)
+    const serverFailedStage = (programResult as any)?.failedStage
+    const displayStage = serverFailedStage || lastKnownStage
     
     return (
       <div className="min-h-screen bg-[#0F1115] flex items-center justify-center p-4">
@@ -917,15 +917,15 @@ export default function OnboardingCompleteClient() {
             <AlertCircle className="w-8 h-8 text-amber-500" />
           </div>
           <h2 className="text-xl font-bold text-[#E6E9EF] mb-2">
-            {isStallError ? 'Generation Timeout' : 'Generation Issue'}
+            {isStallError ? 'Generation Timeout' : isServerError ? 'Server Error' : 'Generation Issue'}
           </h2>
           <p className="text-sm text-[#A4ACB8] mb-4">
             {errorMessage || 'There was an issue generating your program. You can try again or use a demo workout.'}
           </p>
-          {/* [PHASE 16B] Show diagnostic info for stalls */}
-          {isStallError && stalledStage && stalledStage !== 'idle' && (
+          {/* [PHASE 16G] Show server failed stage for diagnostics */}
+          {displayStage && displayStage !== 'idle' && (
             <p className="text-xs text-[#4A5568] mb-4 font-mono">
-              Last stage: {stalledStage}
+              Failed at: {displayStage}
             </p>
           )}
           <div className="space-y-3">
@@ -965,28 +965,22 @@ export default function OnboardingCompleteClient() {
                   const onboardingModule = await import('@/lib/onboarding-service')
                   completeStage('retry_import_done', retryStartTime)
                   
-                  trackStage('retry_generate_start', retryStartTime)
-                  // [PHASE 16C] Retry also uses async generation with callback
+                  trackStage('retry_server_generation_start', retryStartTime)
+                  // [PHASE 16G] Retry also uses server-visible generation path
                   const handleRetryStageChange = (stage: string) => {
-                    trackStage(`retry_builder_${stage}`, retryStartTime)
+                    trackStage(`retry_server_${stage}`, retryStartTime)
                     const stageMessages: Record<string, string> = {
-                      'init': 'Preparing your program...',
-                      'input_resolution': 'Resolving your training preferences...',
-                      'profile_validation': 'Validating your profile...',
-                      'structure_selection': 'Selecting weekly structure...',
-                      'skill_allocation': 'Allocating skills to sessions...',
-                      'session_assembly': 'Building your training sessions...',
-                      'session_construction': 'Constructing exercises...',
-                      'post_processing': 'Finalizing program details...',
-                      'validation_complete': 'Validating your program...',
+                      'building_payload': 'Preparing your training data...',
+                      'calling_server': 'Generating your program...',
+                      'persisting_locally': 'Saving your program...',
                     }
                     if (stageMessages[stage]) {
                       setStatusMessage(stageMessages[stage])
                     }
                   }
                   
-                  // [PHASE 16C] Await the async generation on retry
-                  const result = await onboardingModule.generateFirstProgram(handleRetryStageChange)
+                  // [PHASE 16G] Await server-visible generation on retry
+                  const result = await onboardingModule.generateFirstProgramViaServer(handleRetryStageChange)
                   completeStage('retry_generate_done', retryStartTime, { success: result.success })
                   setProgramResult(result)
                   

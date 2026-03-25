@@ -251,27 +251,43 @@ export default function OnboardingCompleteClient() {
   // [PHASE 14D TASK 1] Bootstrap effect - runs when entitlement is READY
   // This effect has proper dependencies to avoid stale closures
   useEffect(() => {
-    // [PHASE 14D] Audit: Log effect dependencies state
-    console.log('[phase14d-onboarding-effect-deps-audit]', {
+    // [PHASE 16I] Audit: Verify OwnerBootstrapProvider is mounted and providing live context
+    console.log('[phase16i-owner-bootstrap-context-live-audit]', {
       ownerLoaded,
       isOwner,
+      userEmail,
       simulationMode,
+      contextIsLive: ownerLoaded !== undefined, // If undefined, context is broken
+      timestamp: new Date().toISOString(),
+    })
+    
+    // [PHASE 16I] Audit: Pre-generation gate inputs
+    console.log('[phase16i-pre-generation-gate-input-audit]', {
+      ownerLoaded,
       entitlementLoading: entitlement.isLoading,
       entitlementHasProAccess: entitlement.hasProAccess,
       isEntitlementReady,
-      effectWillRun: isEntitlementReady,
+      gateWillRelease: isEntitlementReady,
     })
     
     // [PHASE 14D] Block stale closure: Do NOT run bootstrap until entitlement is truly ready
     if (!isEntitlementReady) {
-      console.log('[phase14d-onboarding-stale-closure-blocked-audit]', {
-        blocked: true,
-        reason: 'entitlement_not_ready',
+      console.log('[phase16i-pre-generation-gate-release-verdict]', {
+        released: false,
+        reason: ownerLoaded ? 'entitlement_still_loading' : 'owner_not_loaded',
         ownerLoaded,
         entitlementLoading: entitlement.isLoading,
       })
       return
     }
+    
+    // [PHASE 16I] Gate released - generation can proceed
+    console.log('[phase16i-pre-generation-gate-release-verdict]', {
+      released: true,
+      ownerLoaded,
+      entitlementReady: !entitlement.isLoading,
+      timestamp: new Date().toISOString(),
+    })
     
     console.log('[OnboardingCompleteClient] Bootstrap effect running - entitlement ready')
     
@@ -491,10 +507,14 @@ export default function OnboardingCompleteClient() {
           }
         }
         
-        console.log('[phase16g-server-generation-client-entry-audit]', {
-          usingServerPath: true,
+        // [PHASE 16I] Diagnostic: Confirm server route is being dispatched
+        console.log('[phase16i-generate-route-dispatch-verdict]', {
+          dispatching: true,
+          route: '/api/onboarding/generate-first-program',
           timestamp: new Date().toISOString(),
           elapsedMs: Date.now() - genStartTime,
+          gateReleased: true,
+          previousBlocker: 'ownerLoaded_was_false_without_provider',
         })
         
         // [PHASE 16G] Call server-visible generation route

@@ -1,22 +1,39 @@
 import { ClerkProvider } from '@clerk/nextjs'
 import { Toaster } from '@/components/ui/toaster'
+import { OwnerBootstrapProvider } from '@/components/providers/OwnerBootstrapProvider'
 
 /**
- * Onboarding Layout - Provides ClerkProvider for auth-aware onboarding pages
+ * Onboarding Layout - Provides ClerkProvider + OwnerBootstrapProvider for onboarding pages
  * 
- * Pages in /onboarding/* may use useAuth hooks and require ClerkProvider context.
- * Root layout is auth-free for public page prerendering, so this layout
- * provides the necessary Clerk context.
+ * [PHASE 16I] CRITICAL FIX:
+ * OnboardingCompleteClient uses useOwnerBootstrap() which requires OwnerBootstrapProvider.
+ * Without this provider, ownerLoaded stays false forever, isEntitlementReady never becomes true,
+ * and the pre-generation gate never releases - causing infinite loading.
+ * 
+ * Provider hierarchy:
+ * - ClerkProvider (auth context)
+ *   - OwnerBootstrapProvider (owner/entitlement bootstrap)
+ *     - children (onboarding pages)
+ *     - Toaster
  */
 export default function OnboardingLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
+  // [PHASE 16I] Diagnostic: Provider mount audit
+  console.log('[phase16i-onboarding-provider-mounted-audit]', {
+    ClerkProvider: true,
+    OwnerBootstrapProvider: true,
+    timestamp: new Date().toISOString(),
+  })
+  
   return (
     <ClerkProvider>
-      {children}
-      <Toaster />
+      <OwnerBootstrapProvider>
+        {children}
+        <Toaster />
+      </OwnerBootstrapProvider>
     </ClerkProvider>
   )
 }

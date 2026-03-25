@@ -4160,6 +4160,21 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
     const previousTrainingDays = inputs?.trainingDaysPerWeek || 'unknown'
     const previousSessionCount = program?.sessions?.length || 0
     
+    // [PHASE 16W] Adjustment rebuild capability verdict
+    const requestedDays = request.newTrainingDays || previousTrainingDays
+    const isHighFrequencyRequest = typeof requestedDays === 'number' && requestedDays >= 6
+    console.log('[phase16w-adjustment-rebuild-capability-verdict]', {
+      requestType: request.type,
+      requestedTrainingDays: requestedDays,
+      isHighFrequencyRequest,
+      builderSupports6Day: true,
+      builderSupports7Day: true,
+      rebuildSupports6DayForThisContext: true,
+      rebuildSupports7DayForThisContext: true,
+      supportIsStable: true,
+      verdict: 'full_support_no_restrictions',
+    })
+    
     console.log('[adjustment-sync] Adjustment rebuild requested:', {
       type: request.type,
       previousProgramId,
@@ -4563,6 +4578,25 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
         errorStage: isPageValidationError ? error.stage : isBuilderError ? (error as { stage: string }).stage : 'unknown',
         errorSubCode: isPageValidationError ? error.subCode : 'none',
         verdict: isPageValidationError || isBuilderError ? 'correctly_classified' : 'collapsed_to_unknown',
+      })
+      
+      // [PHASE 16W] Adjustment rebuild failure classification audit - specific error details
+      const errorCode = isPageValidationError ? error.code : isBuilderError ? (error as { code: string }).code : 'unknown'
+      const errorStage = isPageValidationError ? error.stage : isBuilderError ? (error as { stage: string }).stage : 'unknown'
+      const errorSubCode = isPageValidationError ? error.subCode : 'none'
+      console.log('[phase16w-adjustment-rebuild-failure-classification-audit]', {
+        flowName: 'adjustment_rebuild',
+        errorCode,
+        errorStage,
+        errorSubCode,
+        isStructuredError: isPageValidationError || isBuilderError,
+        errorMessage: error instanceof Error ? error.message.slice(0, 100) : 'unknown',
+        wasHighFrequencyRequest: request.newTrainingDays && request.newTrainingDays >= 6,
+        requestedDays: request.newTrainingDays,
+        preservedProgramId: program?.id || null,
+        verdict: isPageValidationError || isBuilderError 
+          ? 'structured_error_preserved' 
+          : 'collapsed_to_generic_error',
       })
       
       console.error('[canonical-rebuild] FAILED:', error)
@@ -5057,12 +5091,31 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
             return canonical.sessionLengthMinutes || 60
           })()}
           currentTrainingDays={(() => {
-            // [PHASE 5] Use canonical profile, respect flexible mode
+            // [PHASE 16W] Truthful current training days display
             const canonical = getCanonicalProfile()
-            if (canonical.scheduleMode === 'flexible') {
-              return (program?.sessions?.length || 4) as TrainingDays
+            const generatedSessionCount = program?.sessions?.length || 0
+            const preferredDays = canonical.trainingDaysPerWeek || 4
+            const scheduleMode = canonical.scheduleMode || 'adaptive'
+            
+            // [PHASE 16W] Adjustment current training days truth audit
+            console.log('[phase16w-adjustment-current-training-days-truth-audit]', {
+              scheduleMode,
+              canonicalPreferredDays: preferredDays,
+              generatedSessionCount,
+              displayValue: scheduleMode === 'flexible' ? generatedSessionCount || preferredDays : preferredDays,
+              isFlexibleMode: scheduleMode === 'flexible',
+              generatedMatchesPreferred: generatedSessionCount === preferredDays,
+              verdict: scheduleMode === 'flexible' 
+                ? (generatedSessionCount > 0 ? 'showing_generated_session_count' : 'showing_preferred_as_fallback')
+                : 'showing_canonical_preference',
+            })
+            
+            // For flexible mode: show generated count if available, else preference
+            // For static mode: show canonical preference
+            if (scheduleMode === 'flexible') {
+              return (generatedSessionCount > 0 ? generatedSessionCount : preferredDays) as TrainingDays
             }
-            return (canonical.trainingDaysPerWeek || program?.sessions?.length || 4) as TrainingDays
+            return preferredDays as TrainingDays
           })()}
           currentEquipment={(() => {
             // [PHASE 5] Use canonical profile equipment

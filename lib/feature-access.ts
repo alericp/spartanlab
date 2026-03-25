@@ -14,6 +14,43 @@ export { isCurrentUserOwner as isOwnerAccount } from './owner-access'
 export { checkOwnerByEmail } from './owner-access'
 
 // =============================================================================
+// [PHASE 14C TASK 7] LEGACY ENTITLEMENT CALLER AUDIT
+// =============================================================================
+// 
+// This file contains LEGACY entitlement helpers that are DEPRECATED for UI gating.
+// UI components should use useEntitlement() hook from @/hooks/useEntitlement.
+// 
+// LEGACY CALLER CLASSIFICATION:
+// 
+// hasProAccess():
+//   - lib/billing/subscription-status.ts: allowed (low-level helper)
+//   - components/workout/PostWorkoutSummary.tsx: allowed (non-critical UI)
+//   - components/upgrade/UpgradePromptCard.tsx: allowed (non-critical UI)
+//   - components/upgrade/SmartUpgradeTrigger.tsx: allowed (non-critical UI)
+//   - components/upgrade/ProInsightPreviewCard.tsx: allowed (non-critical UI)
+//   - components/dashboard/WelcomeBanner.tsx: allowed (non-critical UI)
+//   - components/upgrade/AdaptiveProgramUpgradeCard.tsx: allowed (non-critical UI)
+//   - components/dashboard/DailyReadinessCard.tsx: allowed (non-critical UI)
+//   - components/skills/detail/SkillDetailHeavySections.tsx: allowed (non-critical UI)
+//   - components/onboarding/OnboardingComplete.tsx: LEGACY (old component, not actively used)
+// 
+// getCurrentTier(): allowed low-level helper
+// isInTrial(): allowed low-level helper
+// getUISubscriptionStatus(): deprecated, use useEntitlement()
+// getSimulationMode(): use subscription-simulation.ts canonical version
+// isCurrentUserOwner(): allowed low-level helper
+// 
+// MIGRATED TO useEntitlement():
+//   - OnboardingCompleteClient.tsx ✅
+//   - UpgradePage.tsx ✅
+//   - PremiumFeature.tsx (hooks) ✅
+// 
+// VERDICT: UI-drift-causing callers have been migrated. Remaining callers are
+// non-critical UI components that show upgrade prompts - they don't affect
+// core owner bypass or paywall flow.
+// =============================================================================
+
+// =============================================================================
 // OWNER SIMULATION SUPPORT
 // =============================================================================
 
@@ -351,6 +388,10 @@ export function saveSubscription(subscription: SubscriptionInfo): void {
  * 
  * @deprecated Use useEntitlement() hook for client components, or checkProAccess() for server code.
  * This function reads from localStorage which may be stale. The database is the source of truth.
+ * 
+ * [PHASE 14C TASK 7] LEGACY ENTITLEMENT CALLER
+ * Classification: allowed-low-level-helper (for non-UI code)
+ * UI components should use useEntitlement() instead.
  * 
  * This function is kept for backward compatibility but should be migrated to useEntitlement().
  */

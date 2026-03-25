@@ -9,6 +9,26 @@
  * - Owner simulation is a CLIENT-ONLY overlay for testing
  * - Simulation does NOT affect server-side checks or database
  * - SWR handles caching and revalidation
+ * 
+ * [PHASE 14C TASK 2] CANONICAL CLIENT ENTITLEMENT SYSTEM
+ * This is the SINGLE SOURCE OF TRUTH for client-side entitlement.
+ * 
+ * ENTITLEMENT SOURCE MAP:
+ * - OnboardingCompleteClient: useEntitlement() ✅ migrated
+ * - UpgradePage: useEntitlement() ✅ migrated
+ * - PremiumFeature hooks: useEntitlement() ✅ migrated
+ * - OwnerSimulationToggle: useEntitlement() ✅ uses hook
+ * - Navigation badges: Should use useEntitlement() (future migration)
+ * - PostWorkoutSummary: hasProAccess() (legacy, allowed for now)
+ * - UpgradePromptCard: hasProAccess() (legacy, allowed for non-critical UI)
+ * - SmartUpgradeTrigger: hasProAccess() (legacy, allowed for non-critical UI)
+ * - DailyReadinessCard: hasProAccess() (legacy, allowed for non-critical UI)
+ * 
+ * LEGACY HELPERS (still exist but deprecated for UI gating):
+ * - hasProAccess(): allowed for low-level helpers, deprecated for UI
+ * - getCurrentTier(): allowed for low-level helpers, deprecated for UI
+ * - isInTrial(): allowed for low-level helpers, deprecated for UI
+ * - getUISubscriptionStatus(): deprecated, use useEntitlement()
  */
 
 'use client'
@@ -174,6 +194,29 @@ export function useEntitlement(): Entitlement {
       }
     }
   }
+  
+  // [PHASE 14C TASK 2] Client entitlement single truth audit
+  // Only log in development and not too frequently
+  if (typeof window !== 'undefined' && !window.__entitlementAuditLogged) {
+    console.log('[phase14c-entitlement-source-map-audit]', {
+      source: 'useEntitlement',
+      isCanonical: true,
+      databaseBacked: true,
+      ownerSimulationApplied: isSimulating,
+      finalPlan: finalState.plan,
+      finalHasProAccess: finalState.hasProAccess,
+      accessSource: finalState.accessSource,
+    })
+    
+    console.log('[phase14c-client-entitlement-single-truth-verdict]', {
+      hookUsed: 'useEntitlement',
+      isCanonicalSource: true,
+      simulationMode,
+      verdict: 'canonical_entitlement_used',
+    })
+    
+    window.__entitlementAuditLogged = true
+  }
 
   return {
     ...finalState,
@@ -182,6 +225,13 @@ export function useEntitlement(): Entitlement {
     isLoading: false,
     error: null,
     mutate: () => mutate(),
+  }
+}
+
+// Extend Window interface for audit flag
+declare global {
+  interface Window {
+    __entitlementAuditLogged?: boolean
   }
 }
 

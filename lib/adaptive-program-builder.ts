@@ -2069,6 +2069,59 @@ function generateAdaptiveProgramImpl(inputs: AdaptiveProgramInputs, stageTracker
     verdict: hasPullUpBarNormalized ? 'aligned' : 'underexpressed_due_to_equipment_false_negative',
   })
   
+  // ==========================================================================
+  // [PHASE 16A TASK 5] BUILDER ENTRY TRUTH VERIFICATION
+  // Verify Bench/Box, Flexible Schedule, Adaptive Duration survive into builder
+  // ==========================================================================
+  const hasBenchBox = equipmentArray.includes('bench_box')
+  const hasBenchLegacy = equipmentArray.includes('bench' as any)
+  const benchBoxTruthPreserved = hasBenchBox || hasBenchLegacy
+  
+  console.log('[phase16a-builder-entry-benchbox-truth-audit]', {
+    rawEquipment: equipmentArray.slice(0, 10),
+    hasBenchBox,
+    hasBenchLegacy,
+    benchBoxTruthPreserved,
+    verdict: benchBoxTruthPreserved 
+      ? 'benchbox_preserved_in_builder' 
+      : 'benchbox_not_selected_or_lost',
+  })
+  
+  console.log('[phase16a-builder-entry-flex-schedule-truth-audit]', {
+    canonicalScheduleMode: canonicalProfile.scheduleMode,
+    inputsScheduleMode: inputs.scheduleMode,
+    canonicalTrainingDays: canonicalProfile.trainingDaysPerWeek,
+    effectiveScheduleMode: canonicalProfile.scheduleMode || inputs.scheduleMode || 'static',
+    flexiblePreserved: canonicalProfile.scheduleMode === 'flexible' || inputs.scheduleMode === 'flexible',
+    verdict: (canonicalProfile.scheduleMode === 'flexible' || inputs.scheduleMode === 'flexible')
+      ? 'flexible_schedule_preserved_in_builder'
+      : 'static_schedule_or_not_selected',
+  })
+  
+  console.log('[phase16a-builder-entry-adaptive-duration-truth-audit]', {
+    canonicalSessionDurationMode: canonicalProfile.sessionDurationMode,
+    inputsSessionDurationMode: inputs.sessionDurationMode,
+    canonicalSessionLength: canonicalProfile.sessionLengthMinutes,
+    effectiveSessionDurationMode: canonicalProfile.sessionDurationMode || inputs.sessionDurationMode || 'static',
+    adaptivePreserved: canonicalProfile.sessionDurationMode === 'adaptive' || inputs.sessionDurationMode === 'adaptive',
+    verdict: (canonicalProfile.sessionDurationMode === 'adaptive' || inputs.sessionDurationMode === 'adaptive')
+      ? 'adaptive_duration_preserved_in_builder'
+      : 'static_duration_or_not_selected',
+  })
+  
+  // Final visual vs builder verdict
+  const isFlexScheduleInBuilder = canonicalProfile.scheduleMode === 'flexible' || inputs.scheduleMode === 'flexible'
+  const isAdaptiveDurationInBuilder = canonicalProfile.sessionDurationMode === 'adaptive' || inputs.sessionDurationMode === 'adaptive'
+  
+  console.log('[phase16a-visual-vs-builder-final-verdict]', {
+    benchBoxInBuilder: benchBoxTruthPreserved,
+    flexScheduleInBuilder: isFlexScheduleInBuilder,
+    adaptiveDurationInBuilder: isAdaptiveDurationInBuilder,
+    allThreeTruthsPreserved: benchBoxTruthPreserved && isFlexScheduleInBuilder && isAdaptiveDurationInBuilder,
+    verdict: 'builder_entry_truth_audited',
+    note: 'If all three are false, may indicate user never selected them OR persistence bug',
+  })
+  
   // ISSUE A: Stage tracking for diagnosable failures
   setStage('profile_validation')
   

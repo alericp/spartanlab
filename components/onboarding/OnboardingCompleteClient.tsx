@@ -117,12 +117,70 @@ export default function OnboardingCompleteClient() {
   // IDEMPOTENCY GUARD: Prevent duplicate generation from remounts/history/cache
   const generationAttemptedRef = useRef(false)
   const [generationSkipped, setGenerationSkipped] = useState(false)
+  
+  // [PHASE 16A TASK 4] Generation progress tracking
+  const [generationStartTime, setGenerationStartTime] = useState<number | null>(null)
+  const [generationElapsed, setGenerationElapsed] = useState(0)
+  const [isSlowGeneration, setIsSlowGeneration] = useState(false)
+  const [statusMessage, setStatusMessage] = useState('Analyzing your profile...')
+  
+  // Status messages for progress indication
+  const STATUS_MESSAGES = [
+    'Analyzing your profile...',
+    'Processing goals and equipment...',
+    'Building personalized exercises...',
+    'Optimizing weekly structure...',
+    'Finalizing your program...',
+  ]
+  
+  // Thresholds (in milliseconds)
+  const SLOW_THRESHOLD_MS = 8000 // 8 seconds
+  const VERY_SLOW_THRESHOLD_MS = 15000 // 15 seconds
 
   // [PHASE 14D TASK 1] Mount effect - ONLY sets mounted flag
   // This is the ONLY effect that should have [] dependencies
   useEffect(() => {
     setMounted(true)
   }, [])
+  
+  // [PHASE 16A TASK 4] Generation progress tracking effect
+  useEffect(() => {
+    if (step !== 'generating' || !generationStartTime) return
+    
+    const interval = setInterval(() => {
+      const elapsed = Date.now() - generationStartTime
+      setGenerationElapsed(elapsed)
+      
+      // Update status message based on elapsed time
+      const messageIndex = Math.min(
+        Math.floor(elapsed / 3000), // Change message every 3 seconds
+        STATUS_MESSAGES.length - 1
+      )
+      setStatusMessage(STATUS_MESSAGES[messageIndex])
+      
+      // Check for slow generation
+      if (elapsed >= SLOW_THRESHOLD_MS && !isSlowGeneration) {
+        setIsSlowGeneration(true)
+        console.log('[phase16a-generation-slow-threshold-audit]', {
+          elapsedMs: elapsed,
+          threshold: SLOW_THRESHOLD_MS,
+          triggered: true,
+        })
+      }
+      
+      // Log very slow generation
+      if (elapsed >= VERY_SLOW_THRESHOLD_MS) {
+        console.log('[phase16a-generation-timeout-ui-verdict]', {
+          elapsedMs: elapsed,
+          threshold: VERY_SLOW_THRESHOLD_MS,
+          showingSlowMessage: true,
+          userCanRetry: true,
+        })
+      }
+    }, 500)
+    
+    return () => clearInterval(interval)
+  }, [step, generationStartTime, isSlowGeneration])
   
   // [PHASE 14D TASK 1] Bootstrap effect - runs when entitlement is READY
   // This effect has proper dependencies to avoid stale closures
@@ -293,6 +351,17 @@ export default function OnboardingCompleteClient() {
       }
       
       console.log('[OnboardingCompleteClient] IDEMPOTENCY: Fresh generation starting')
+      
+      // [PHASE 16A TASK 4] Start generation timer
+      const genStartTime = Date.now()
+      setGenerationStartTime(genStartTime)
+      setIsSlowGeneration(false)
+      setStatusMessage(STATUS_MESSAGES[0])
+      
+      console.log('[phase16a-generation-start-audit]', {
+        startTime: genStartTime,
+        timestamp: new Date(genStartTime).toISOString(),
+      })
       
       // Small delay for UX
       await new Promise(resolve => setTimeout(resolve, 1000))
@@ -489,8 +558,11 @@ export default function OnboardingCompleteClient() {
     simulationMode,
   })
 
-  // Generating state
+  // [PHASE 16A TASK 4] Enhanced generating state with progress and slow-path handling
   if (step === 'generating') {
+    const elapsedSeconds = Math.floor(generationElapsed / 1000)
+    const isVerySlow = generationElapsed >= VERY_SLOW_THRESHOLD_MS
+    
     return (
       <div className="min-h-screen bg-[#0F1115] flex items-center justify-center p-4">
         <Card className="bg-[#1A1F26] border-[#2B313A] p-8 max-w-md w-full text-center">
@@ -501,15 +573,72 @@ export default function OnboardingCompleteClient() {
             Building Your Program
           </h2>
           <div className="space-y-1.5 mb-6">
-            <p className="text-sm text-[#A4ACB8]">
-              Analyzing your profile and generating personalized workouts...
+            {/* Dynamic status message */}
+            <p className="text-sm text-[#A4ACB8] transition-opacity duration-300">
+              {statusMessage}
             </p>
+            
+            {/* Slow generation warning */}
+            {isSlowGeneration && !isVerySlow && (
+              <p className="text-xs text-[#6B7280] mt-2">
+                Still working... This can take a bit longer when processing more data.
+              </p>
+            )}
+            
+            {/* Very slow / potential hang warning */}
+            {isVerySlow && (
+              <div className="mt-3 space-y-2">
+                <p className="text-xs text-amber-500">
+                  This is taking longer than usual ({elapsedSeconds}s).
+                </p>
+                <p className="text-xs text-[#6B7280]">
+                  If nothing happens soon, try refreshing the page.
+                </p>
+              </div>
+            )}
           </div>
+          
+          {/* Progress indicator */}
           <div className="flex justify-center gap-1.5">
             <div className="w-2 h-2 rounded-full bg-[#C1121F] animate-pulse" style={{ animationDelay: '0ms' }} />
             <div className="w-2 h-2 rounded-full bg-[#C1121F] animate-pulse" style={{ animationDelay: '150ms' }} />
             <div className="w-2 h-2 rounded-full bg-[#C1121F] animate-pulse" style={{ animationDelay: '300ms' }} />
           </div>
+          
+          {/* Show retry button for very slow generation */}
+          {isVerySlow && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="mt-4 border-[#2B313A] text-[#A4ACB8] hover:bg-[#2B313A] hover:text-[#E6E9EF]"
+              onClick={async () => {
+                console.log('[phase16a-generation-retry-safety-audit]', {
+                  retryRequested: true,
+                  elapsedBeforeRetry: generationElapsed,
+                  clearingIdempotencyGuards: true,
+                })
+                
+                // Reset state for retry
+                setGenerationStartTime(null)
+                setGenerationElapsed(0)
+                setIsSlowGeneration(false)
+                setStatusMessage(STATUS_MESSAGES[0])
+                generationAttemptedRef.current = false
+                
+                // Clear session storage guard
+                try {
+                  sessionStorage.removeItem(GENERATION_SESSION_KEY)
+                } catch {
+                  // Ignore
+                }
+                
+                // Force a page reload for clean retry
+                window.location.reload()
+              }}
+            >
+              Retry Generation
+            </Button>
+          )}
         </Card>
       </div>
     )

@@ -36,6 +36,33 @@ import { yieldToMainThread, createGenerationContext, assertNotAborted } from './
 // TYPES
 // =============================================================================
 
+/**
+ * [PHASE 16G] Server generation request payload
+ * Contains canonical truth that can be sent to the server route
+ */
+export interface ServerGenerationPayload {
+  programInputs: any // AdaptiveProgramInputs shape
+  onboardingProfile: any // OnboardingProfile shape
+}
+
+/**
+ * [PHASE 16G] Server generation response
+ */
+export interface ServerGenerationResult {
+  success: boolean
+  program?: any // AdaptiveProgram shape
+  error?: string
+  failedStage?: string
+  timings?: Record<string, number>
+  summary?: {
+    sessionCount: number
+    primaryGoal: string
+    secondaryGoal?: string
+    trainingDaysPerWeek: number
+    goalLabel: string
+  }
+}
+
 export interface FirstRunResult {
   success: boolean
   program: AdaptiveProgram | null
@@ -691,6 +718,260 @@ export async function generateFirstProgram(
       welcomeMessage: 'There was an issue generating your program.',
       error: String(error),
       failedStage: currentStage,
+      timings,
+    }
+  }
+}
+
+/**
+ * [PHASE 16G] Build the payload for server-side generation
+ * 
+ * This function extracts canonical truth from localStorage and builds
+ * the payload that can be sent to /api/onboarding/generate-first-program
+ * 
+ * CRITICAL: This is the ONLY client-side function that should build the
+ * server generation payload. It encapsulates all browser-only operations.
+ */
+export function buildServerGenerationPayload(): {
+  success: boolean
+  payload?: ServerGenerationPayload
+  error?: string
+} {
+  console.log('[phase16g-build-server-payload-start]', {
+    timestamp: new Date().toISOString(),
+    hasWindow: typeof window !== 'undefined',
+  })
+  
+  if (typeof window === 'undefined') {
+    return {
+      success: false,
+      error: 'Cannot build payload on server - requires browser context',
+    }
+  }
+  
+  try {
+    // Read profile from localStorage
+    const profile = getOnboardingProfile()
+    const onboardingCompleteFlag = isOnboardingComplete()
+    
+    console.log('[phase16g-build-server-payload-profile]', {
+      hasProfile: !!profile,
+      isOnboardingComplete: onboardingCompleteFlag,
+      profilePrimaryGoal: profile?.primaryGoal,
+      profileScheduleMode: profile?.scheduleMode,
+      selectedSkillsCount: profile?.selectedSkills?.length || 0,
+    })
+    
+    if (!profile || !onboardingCompleteFlag) {
+      return {
+        success: false,
+        error: 'Onboarding not complete',
+      }
+    }
+    
+    // Build canonical entry using the same path as client-side generation
+    const { buildCanonicalGenerationEntry, entryToAdaptiveInputs } = require('./canonical-profile-service')
+    
+    const entryResult = buildCanonicalGenerationEntry('buildServerGenerationPayload')
+    
+    if (!entryResult.success || !entryResult.entry) {
+      console.log('[phase16g-build-server-payload-entry-failed]', {
+        errorCode: entryResult.error?.code,
+        errorMessage: entryResult.error?.message,
+      })
+      return {
+        success: false,
+        error: entryResult.error?.message || 'Failed to build canonical entry',
+      }
+    }
+    
+    // Convert entry to program inputs
+    const programInputs = entryToAdaptiveInputs(entryResult.entry)
+    
+    console.log('[phase16g-build-server-payload-complete]', {
+      primaryGoal: programInputs.primaryGoal,
+      secondaryGoal: programInputs.secondaryGoal,
+      experienceLevel: programInputs.experienceLevel,
+      selectedSkillsCount: programInputs.selectedSkills?.length || 0,
+      scheduleMode: programInputs.scheduleMode,
+      trainingDaysPerWeek: programInputs.trainingDaysPerWeek,
+    })
+    
+    return {
+      success: true,
+      payload: {
+        programInputs,
+        onboardingProfile: profile,
+      },
+    }
+  } catch (error) {
+    console.error('[phase16g-build-server-payload-error]', error)
+    return {
+      success: false,
+      error: String(error),
+    }
+  }
+}
+
+/**
+ * [PHASE 16G] Call server-side generation and handle result
+ * 
+ * This function:
+ * 1. Builds the payload from client-side truth
+ * 2. Calls the server route
+ * 3. Persists the result to localStorage on success
+ * 4. Returns structured result
+ */
+export async function generateFirstProgramViaServer(
+  onStageChange?: (stage: string) => void
+): Promise<FirstRunResult> {
+  const startTime = Date.now()
+  const timings: Record<string, number> = {}
+  
+  console.log('[phase16g-server-generation-client-start]', {
+    timestamp: new Date().toISOString(),
+  })
+  
+  onStageChange?.('building_payload')
+  
+  // Build payload from client-side truth
+  const payloadResult = buildServerGenerationPayload()
+  timings['build_payload'] = Date.now() - startTime
+  
+  if (!payloadResult.success || !payloadResult.payload) {
+    console.log('[phase16g-server-generation-client-payload-failed]', {
+      error: payloadResult.error,
+    })
+    return {
+      success: false,
+      program: null,
+      calibration: null,
+      welcomeMessage: 'Failed to prepare program generation.',
+      error: payloadResult.error || 'Payload build failed',
+      failedStage: 'build_payload',
+      timings,
+    }
+  }
+  
+  onStageChange?.('calling_server')
+  
+  // Call server route with timeout
+  const FETCH_TIMEOUT_MS = 45000 // 45 second timeout
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
+  
+  try {
+    console.log('[phase16g-server-generation-client-fetch-start]', {
+      timestamp: new Date().toISOString(),
+    })
+    
+    const response = await fetch('/api/onboarding/generate-first-program', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payloadResult.payload),
+      signal: controller.signal,
+    })
+    
+    clearTimeout(timeoutId)
+    timings['server_call'] = Date.now() - startTime
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ error: 'Unknown error' }))
+      console.log('[phase16g-server-generation-client-response-error]', {
+        status: response.status,
+        error: errorData.error,
+        failedStage: errorData.failedStage,
+      })
+      return {
+        success: false,
+        program: null,
+        calibration: null,
+        welcomeMessage: 'Program generation failed on server.',
+        error: errorData.error || `Server error: ${response.status}`,
+        failedStage: errorData.failedStage || 'server_call',
+        timings: { ...timings, ...errorData.timings },
+      }
+    }
+    
+    const result: ServerGenerationResult = await response.json()
+    
+    console.log('[phase16g-server-generation-client-response-success]', {
+      success: result.success,
+      sessionCount: result.summary?.sessionCount || 0,
+      failedStage: result.failedStage,
+      serverTimings: result.timings,
+    })
+    
+    if (!result.success || !result.program) {
+      return {
+        success: false,
+        program: null,
+        calibration: null,
+        welcomeMessage: 'Program generation failed.',
+        error: result.error || 'Server returned failure',
+        failedStage: result.failedStage || 'server_generation',
+        timings: { ...timings, ...result.timings },
+      }
+    }
+    
+    onStageChange?.('persisting_locally')
+    
+    // Persist to localStorage for immediate use
+    if (typeof window !== 'undefined') {
+      try {
+        // Import and use saveAdaptiveProgram for canonical persistence
+        const { saveAdaptiveProgram } = await import('./adaptive-program-builder')
+        saveAdaptiveProgram(result.program)
+        
+        // Backward-compatible mirror
+        localStorage.setItem('spartanlab_first_program', JSON.stringify(result.program))
+        localStorage.setItem('spartanlab_onboarding_complete', 'true')
+        
+        console.log('[phase16g-server-generation-client-persisted]', {
+          sessionCount: result.program.sessions?.length || 0,
+        })
+      } catch (persistError) {
+        console.error('[phase16g-server-generation-client-persist-error]', persistError)
+        // Don't fail - program was generated successfully
+      }
+    }
+    
+    timings['persist_local'] = Date.now() - startTime
+    
+    // Get calibration for welcome message
+    const calibration = getAthleteCalibration()
+    const profile = getOnboardingProfile()
+    
+    return {
+      success: true,
+      program: result.program,
+      calibration,
+      welcomeMessage: profile 
+        ? getWelcomeMessage(profile, result.program.experienceLevel || 'intermediate')
+        : 'Welcome to SpartanLab!',
+      timings: { ...timings, ...result.timings },
+    }
+    
+  } catch (error) {
+    clearTimeout(timeoutId)
+    
+    const isTimeout = error instanceof Error && error.name === 'AbortError'
+    
+    console.log('[phase16g-server-generation-client-fetch-error]', {
+      error: String(error),
+      isTimeout,
+      elapsedMs: Date.now() - startTime,
+    })
+    
+    return {
+      success: false,
+      program: null,
+      calibration: null,
+      welcomeMessage: 'Program generation encountered an error.',
+      error: isTimeout 
+        ? 'Server generation timed out. Please try again.'
+        : String(error),
+      failedStage: isTimeout ? 'server_timeout' : 'server_fetch',
       timings,
     }
   }

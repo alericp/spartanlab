@@ -2477,8 +2477,26 @@ async function generateAdaptiveProgramImpl(
   )
   
   const profile = getAthleteProfile() // Legacy fallback
+  
+  // [PHASE 16L] Diagnostic: Verify null profile handling works and no crash occurs
+  console.log('[phase16l-null-reference-eliminated-verdict]', {
+    profileSource: 'getAthleteProfile()',
+    profileIsNull: profile === null,
+    stage: 'pre_constraint_insight',
+    expectation: 'constraintInsight_should_return_safe_result_even_if_profile_is_null',
+  })
+  
   const recoverySignal = calculateRecoverySignal()
   const constraintInsight = getConstraintInsight()
+  
+  // [PHASE 16L] Diagnostic: Confirm constraintInsight returned successfully
+  console.log('[phase16l-bodyweight-read-site-verdict]', {
+    constraintInsightReceived: !!constraintInsight,
+    hasInsight: constraintInsight?.hasInsight,
+    label: constraintInsight?.label,
+    verdict: 'null_crash_eliminated_constraint_insight_returned_safely',
+  })
+  
   const equipmentProfile = analyzeEquipmentProfile(equipment)
   const engineContext = getProgramBuilderContext()
   

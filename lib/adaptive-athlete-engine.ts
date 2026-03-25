@@ -598,6 +598,36 @@ function getReadinessExplanation(status: ReadinessStatus, confidence: number): s
 export function buildAthleteState(): AthleteState {
   // Gather all data
   const profile = getAthleteProfile()
+  
+  // [PHASE 16L] FIX: Handle null profile in server context
+  // Return a safe default state instead of crashing
+  if (!profile) {
+    return {
+      username: 'Athlete',
+      experienceLevel: 'intermediate',
+      primaryGoal: null,
+      primarySkill: null,
+      currentLevel: null,
+      targetLevel: null,
+      momentumScore: 0,
+      plateauStatus: 'insufficient_data',
+      strengthTrends: { pull: 'insufficient_data', push: 'insufficient_data' },
+      readinessStatus: null,
+      fatigueLevel: 'optimal',
+      consistencyScore: 0,
+      constraintFocus: { label: 'Insufficient Data', code: 'insufficient_data' },
+      strengthSupport: 'unknown',
+      state: {
+        hasData: false,
+        dataQuality: 'insufficient',
+        isOptimal: false,
+        needsDeload: false,
+        hasSkillData: false,
+        hasStrengthData: false,
+      },
+    }
+  }
+  
   const progressions = getSkillProgressions()
   const skillSessions = getSkillSessions()
   const strengthRecords = getStrengthRecords()

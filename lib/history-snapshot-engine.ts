@@ -139,7 +139,8 @@ export function getSkillHistorySnapshots(): SkillHistorySnapshot[] {
 
 export function getStrengthHistorySnapshots(): StrengthHistorySnapshot[] {
   const profile = getAthleteProfile()
-  const bodyweight = profile.bodyweight
+  // [PHASE 16L] FIX: Handle null profile in server context
+  const bodyweight = profile?.bodyweight ?? null
   
   const exercises: { id: ExerciseType; label: string }[] = [
     { id: 'weighted_pull_up', label: 'Weighted Pull-Up' },

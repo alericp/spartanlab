@@ -611,6 +611,164 @@ export function getDurationVolumeConfig(sessionMinutes: number): DurationVolumeC
 }
 
 // =============================================================================
+// [PHASE 15E] ADVANCED ATHLETE SESSION CALIBRATION
+// Advanced athletes can handle more intentional, richer session structure
+// without this being "clutter" - they have the work capacity and skill
+// =============================================================================
+
+export interface AdvancedAthleteCalibration {
+  sessionDensityMultiplier: number      // 1.0 = base, 1.2 = 20% more density allowed
+  mainWorkBonus: number                 // Additional main exercises for advanced athletes
+  supportWorkBonus: number              // Additional support exercises
+  accessorySlotBonus: number            // Additional accessory slots
+  mixedMethodFinisherAllowed: boolean   // Can include intelligent density/circuit finisher
+  primarySkillExpressionWeight: number  // Weight toward primary goal (higher = more visible)
+  secondarySkillExpressionWeight: number // Weight toward secondary goal
+  tertiarySkillMinExposure: number      // Minimum exposure for tertiary skills
+  carryoverThreshold: number            // Minimum carryover score for support exercises
+  sequencingStrictness: 'loose' | 'moderate' | 'strict' // How strict intra-session ordering is
+}
+
+export function getAdvancedAthleteCalibration(params: {
+  experienceLevel: 'beginner' | 'intermediate' | 'advanced' | 'elite'
+  sessionMinutes: number
+  recoveryLevel?: 'poor' | 'fair' | 'normal' | 'good'
+  selectedSkillsCount: number
+  hasAllStylesSelected?: boolean
+}): AdvancedAthleteCalibration {
+  const { experienceLevel, sessionMinutes, recoveryLevel = 'normal', selectedSkillsCount, hasAllStylesSelected } = params
+  
+  // Base calibration (conservative for beginners)
+  const baseCalibration: AdvancedAthleteCalibration = {
+    sessionDensityMultiplier: 1.0,
+    mainWorkBonus: 0,
+    supportWorkBonus: 0,
+    accessorySlotBonus: 0,
+    mixedMethodFinisherAllowed: false,
+    primarySkillExpressionWeight: 0.5,
+    secondarySkillExpressionWeight: 0.3,
+    tertiarySkillMinExposure: 0,
+    carryoverThreshold: 0.3,
+    sequencingStrictness: 'loose',
+  }
+  
+  // Recovery adjustment
+  const recoveryMultiplier = {
+    poor: 0.8,
+    fair: 0.9,
+    normal: 1.0,
+    good: 1.1,
+  }[recoveryLevel]
+  
+  // Experience-based calibration
+  if (experienceLevel === 'advanced' || experienceLevel === 'elite') {
+    // [PHASE 15E] Advanced athletes get richer session architecture
+    const isLongSession = sessionMinutes >= 60
+    const isExtendedSession = sessionMinutes >= 75
+    const hasMultipleSkills = selectedSkillsCount >= 3
+    
+    baseCalibration.sessionDensityMultiplier = isExtendedSession 
+      ? 1.25 * recoveryMultiplier 
+      : isLongSession 
+        ? 1.15 * recoveryMultiplier 
+        : 1.0 * recoveryMultiplier
+    
+    // Advanced athletes can handle more main work
+    baseCalibration.mainWorkBonus = isLongSession ? 1 : 0
+    
+    // Better support block density for advanced
+    baseCalibration.supportWorkBonus = isLongSession ? 1 : 0
+    
+    // More accessory slots for extended sessions
+    baseCalibration.accessorySlotBonus = isExtendedSession ? 1 : 0
+    
+    // Allow mixed-method finisher for advanced athletes with long sessions
+    baseCalibration.mixedMethodFinisherAllowed = isLongSession && hasAllStylesSelected !== false
+    
+    // Stronger primary/secondary expression for advanced athletes
+    baseCalibration.primarySkillExpressionWeight = 0.65
+    baseCalibration.secondarySkillExpressionWeight = 0.4
+    
+    // Tertiary skills get real exposure for multi-skill advanced athletes
+    baseCalibration.tertiarySkillMinExposure = hasMultipleSkills ? 1 : 0
+    
+    // Higher carryover threshold - don't use filler exercises
+    baseCalibration.carryoverThreshold = 0.5
+    
+    // Strict sequencing for quality work
+    baseCalibration.sequencingStrictness = 'strict'
+    
+    console.log('[phase15e-advanced-calibration-applied]', {
+      experienceLevel,
+      sessionMinutes,
+      recoveryLevel,
+      selectedSkillsCount,
+      calibration: baseCalibration,
+      isLongSession,
+      isExtendedSession,
+      hasMultipleSkills,
+    })
+  } else if (experienceLevel === 'intermediate') {
+    // Intermediate gets moderate upgrades
+    const isLongSession = sessionMinutes >= 60
+    
+    baseCalibration.sessionDensityMultiplier = isLongSession ? 1.1 * recoveryMultiplier : 1.0 * recoveryMultiplier
+    baseCalibration.mainWorkBonus = 0
+    baseCalibration.supportWorkBonus = isLongSession ? 1 : 0
+    baseCalibration.primarySkillExpressionWeight = 0.55
+    baseCalibration.secondarySkillExpressionWeight = 0.35
+    baseCalibration.carryoverThreshold = 0.4
+    baseCalibration.sequencingStrictness = 'moderate'
+  }
+  // Beginners use base calibration (conservative)
+  
+  return baseCalibration
+}
+
+/**
+ * [PHASE 15E] Get calibrated volume config that accounts for athlete level
+ * This is the main entry point for session construction
+ */
+export function getCalibratedVolumeConfig(params: {
+  sessionMinutes: number
+  experienceLevel: 'beginner' | 'intermediate' | 'advanced' | 'elite'
+  recoveryLevel?: 'poor' | 'fair' | 'normal' | 'good'
+  selectedSkillsCount: number
+  hasAllStylesSelected?: boolean
+}): DurationVolumeConfig & { calibration: AdvancedAthleteCalibration } {
+  const baseConfig = getDurationVolumeConfig(params.sessionMinutes)
+  const calibration = getAdvancedAthleteCalibration(params)
+  
+  // Apply calibration bonuses
+  const calibratedConfig: DurationVolumeConfig = {
+    ...baseConfig,
+    mainExerciseCount: {
+      min: baseConfig.mainExerciseCount.min,
+      max: baseConfig.mainExerciseCount.max + calibration.mainWorkBonus,
+    },
+    accessoryCount: {
+      min: baseConfig.accessoryCount.min,
+      max: baseConfig.accessoryCount.max + calibration.accessorySlotBonus + calibration.supportWorkBonus,
+    },
+  }
+  
+  console.log('[phase15e-calibrated-volume-config]', {
+    sessionMinutes: params.sessionMinutes,
+    experienceLevel: params.experienceLevel,
+    baseMainMax: baseConfig.mainExerciseCount.max,
+    calibratedMainMax: calibratedConfig.mainExerciseCount.max,
+    baseAccessoryMax: baseConfig.accessoryCount.max,
+    calibratedAccessoryMax: calibratedConfig.accessoryCount.max,
+    calibrationApplied: calibration,
+  })
+  
+  return {
+    ...calibratedConfig,
+    calibration,
+  }
+}
+
+// =============================================================================
 // EXERCISE COACHING METADATA CONTRACT (COACH LAYER)
 // =============================================================================
 

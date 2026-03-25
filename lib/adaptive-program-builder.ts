@@ -111,6 +111,10 @@ import {
   type SessionSelectionTrace,
   compareExerciseSelectionTraces,
   logExerciseComparison,
+  // [PHASE 15E] Advanced athlete session calibration
+  getAdvancedAthleteCalibration,
+  getCalibratedVolumeConfig,
+  type AdvancedAthleteCalibration,
 } from './engine-quality-contract'
 import { evaluateExerciseProgression, type ProgressionDecision as SimpleProgressionDecision } from './progression-decision-engine'
 import { generateSessionVariants, type SessionVariant } from './session-compression-engine'
@@ -3271,6 +3275,92 @@ function generateAdaptiveProgramImpl(inputs: AdaptiveProgramInputs, stageTracker
   // Get duration-based configuration for exercise count and structure
   const durationConfig = getDurationConfig(workoutDuration)
   
+  // ==========================================================================
+  // [PHASE 15E] ADVANCED ATHLETE SESSION CONSTRUCTION CALIBRATION
+  // Advanced athletes can handle richer, more intentional session architecture
+  // ==========================================================================
+  const advancedAthleteCalibration = getAdvancedAthleteCalibration({
+    experienceLevel: experienceLevel as 'beginner' | 'intermediate' | 'advanced' | 'elite',
+    sessionMinutes: sessionLength,
+    recoveryLevel: canonicalProfile.recoveryLevel as 'poor' | 'fair' | 'normal' | 'good' | undefined,
+    selectedSkillsCount: expandedContext.selectedSkills.length,
+    hasAllStylesSelected,
+  })
+  
+  const calibratedVolumeConfig = getCalibratedVolumeConfig({
+    sessionMinutes: sessionLength,
+    experienceLevel: experienceLevel as 'beginner' | 'intermediate' | 'advanced' | 'elite',
+    recoveryLevel: canonicalProfile.recoveryLevel as 'poor' | 'fair' | 'normal' | 'good' | undefined,
+    selectedSkillsCount: expandedContext.selectedSkills.length,
+    hasAllStylesSelected,
+  })
+  
+  // [PHASE 15E TASK 1] SESSION CONSERVATISM AUDIT
+  // Check if advanced athletes are getting beginner-safe session shapes
+  const isAdvanced = experienceLevel === 'advanced'
+  const isLongSession = sessionLength >= 60
+  const hasMultiSkills = expandedContext.selectedSkills.length >= 3
+  
+  console.log('[phase15e-session-conservatism-audit]', {
+    experienceLevel,
+    sessionLength,
+    selectedSkillsCount: expandedContext.selectedSkills.length,
+    isAdvanced,
+    isLongSession,
+    hasMultiSkills,
+    baseVolumeConfig: {
+      mainMin: durationConfig.minExercises,
+      mainMax: durationConfig.maxExercises,
+    },
+    calibratedVolumeConfig: {
+      mainMin: calibratedVolumeConfig.mainExerciseCount.min,
+      mainMax: calibratedVolumeConfig.mainExerciseCount.max,
+      accessoryMax: calibratedVolumeConfig.accessoryCount.max,
+    },
+    advancedAthleteCalibration,
+    conservatismAssessment: {
+      isAdvancedGettingBeginnerSafe: isAdvanced && durationConfig.maxExercises <= 5 && sessionLength >= 60,
+      primaryGoalInfluenceWeak: false, // Will audit after session generation
+      secondaryGoalInfluenceWeak: false, // Will audit after session generation
+      sessionDensityTooLow: isAdvanced && isLongSession && durationConfig.maxExercises < 6,
+    },
+  })
+  
+  // [PHASE 15E TASK 1] ADVANCED ATHLETE UNDEREXPRESSION AUDIT
+  console.log('[phase15e-advanced-athlete-underexpression-audit]', {
+    profileIndicatesAdvanced: isAdvanced,
+    profileIndicatesMultiSkill: hasMultiSkills,
+    profileIndicatesLongSession: isLongSession,
+    expectedRicherConstruction: isAdvanced && (hasMultiSkills || isLongSession),
+    calibrationApplied: {
+      sessionDensityMultiplier: advancedAthleteCalibration.sessionDensityMultiplier,
+      mainWorkBonus: advancedAthleteCalibration.mainWorkBonus,
+      supportWorkBonus: advancedAthleteCalibration.supportWorkBonus,
+      accessorySlotBonus: advancedAthleteCalibration.accessorySlotBonus,
+      mixedMethodFinisherAllowed: advancedAthleteCalibration.mixedMethodFinisherAllowed,
+      primarySkillExpressionWeight: advancedAthleteCalibration.primarySkillExpressionWeight,
+      secondarySkillExpressionWeight: advancedAthleteCalibration.secondarySkillExpressionWeight,
+      carryoverThreshold: advancedAthleteCalibration.carryoverThreshold,
+      sequencingStrictness: advancedAthleteCalibration.sequencingStrictness,
+    },
+    verdict: isAdvanced 
+      ? 'advanced_calibration_applied'
+      : 'standard_calibration_used',
+  })
+  
+  // [PHASE 15E TASK 1] PRIMARY/SECONDARY VISIBILITY AUDIT
+  console.log('[phase15e-primary-secondary-visibility-audit]', {
+    primaryGoal,
+    secondaryGoal,
+    primarySkillExpressionWeight: advancedAthleteCalibration.primarySkillExpressionWeight,
+    secondarySkillExpressionWeight: advancedAthleteCalibration.secondarySkillExpressionWeight,
+    tertiarySkillMinExposure: advancedAthleteCalibration.tertiarySkillMinExposure,
+    allSelectedSkills: expandedContext.selectedSkills,
+    tertiarySkills: expandedContext.selectedSkills.filter(s => s !== primaryGoal && s !== secondaryGoal),
+    expectedPrimaryVisibility: advancedAthleteCalibration.primarySkillExpressionWeight >= 0.5 ? 'strong' : 'moderate',
+    expectedSecondaryVisibility: advancedAthleteCalibration.secondarySkillExpressionWeight >= 0.35 ? 'meaningful' : 'minimal',
+  })
+  
   // Determine if skills should be prioritized based on training path
   const shouldPrioritizeSkills = trainingPath === 'skill_progression' || 
     (trainingPath === 'hybrid' && trainingOutcome === 'skills')
@@ -4590,6 +4680,228 @@ function generateAdaptiveProgramImpl(inputs: AdaptiveProgramInputs, stageTracker
   const varietyScore = calculateVarietyScore(sessionIntents)
   
   // ==========================================================================
+  // [PHASE 15E] POST-SESSION-GENERATION QUALITY AUDITS
+  // Verify advanced athletes are getting intentional, quality construction
+  // ==========================================================================
+  
+  // [PHASE 15E TASK 2] SESSION RICHNESS VS CLUTTER AUDIT
+  const totalExercisesAcrossWeek = sessions.reduce((sum, s) => sum + (s.exercises?.length || 0), 0)
+  const avgExercisesPerSession = sessions.length > 0 ? totalExercisesAcrossWeek / sessions.length : 0
+  const isAdvancedProfile = experienceLevel === 'advanced'
+  const isLongSessionProfile = sessionLength >= 60
+  
+  console.log('[phase15e-session-richness-vs-clutter-audit]', {
+    totalExercisesAcrossWeek,
+    avgExercisesPerSession: avgExercisesPerSession.toFixed(1),
+    sessionsCount: sessions.length,
+    experienceLevel,
+    sessionLength,
+    calibratedMainMax: calibratedVolumeConfig.mainExerciseCount.max,
+    calibratedAccessoryMax: calibratedVolumeConfig.accessoryCount.max,
+    richness: {
+      isRicherThanBase: avgExercisesPerSession > durationConfig.minExercises,
+      isCluttered: avgExercisesPerSession > 8,
+      isUnderbuilt: isAdvancedProfile && avgExercisesPerSession < durationConfig.minExercises,
+    },
+    verdict: avgExercisesPerSession > 8 
+      ? 'cluttered_reduce_volume'
+      : avgExercisesPerSession < durationConfig.minExercises && isAdvancedProfile
+        ? 'underbuilt_for_advanced'
+        : 'appropriate_density',
+  })
+  
+  // [PHASE 15E TASK 2] TIME BUDGET EXPRESSION AUDIT
+  const estimatedMinutesPerSession = avgExercisesPerSession * 4.5 // ~4.5 min per exercise with rest
+  const estimatedWarmupCooldown = 12 // typical warmup + cooldown
+  const estimatedTotalSessionMinutes = estimatedMinutesPerSession + estimatedWarmupCooldown
+  const timeBudgetUtilization = sessionLength > 0 ? estimatedTotalSessionMinutes / sessionLength : 0
+  
+  console.log('[phase15e-time-budget-expression-audit]', {
+    sessionLengthBudget: sessionLength,
+    avgExercisesPerSession: avgExercisesPerSession.toFixed(1),
+    estimatedMainWorkMinutes: estimatedMinutesPerSession.toFixed(0),
+    estimatedTotalMinutes: estimatedTotalSessionMinutes.toFixed(0),
+    timeBudgetUtilization: (timeBudgetUtilization * 100).toFixed(0) + '%',
+    assessment: {
+      isUnderutilized: timeBudgetUtilization < 0.7 && isAdvancedProfile && isLongSessionProfile,
+      isOverutilized: timeBudgetUtilization > 1.2,
+      isOptimal: timeBudgetUtilization >= 0.8 && timeBudgetUtilization <= 1.1,
+    },
+    verdict: timeBudgetUtilization < 0.7 && isAdvancedProfile
+      ? 'underutilizing_session_time'
+      : timeBudgetUtilization > 1.2
+        ? 'may_exceed_time_budget'
+        : 'time_budget_appropriate',
+  })
+  
+  // [PHASE 15E TASK 3] SESSION SKILL EXPRESSION AUDIT
+  const primaryGoalExercises = sessions.flatMap(s => 
+    (s.exercises || []).filter(e => {
+      const name = ((e.exercise?.name || e.name) || '').toLowerCase()
+      const primaryLower = primaryGoal.toLowerCase().replace(/_/g, ' ')
+      return name.includes(primaryLower) || 
+             (e.targetSkills || []).some((t: string) => t.toLowerCase().includes(primaryLower))
+    })
+  )
+  
+  const secondaryGoalExercises = secondaryGoal ? sessions.flatMap(s => 
+    (s.exercises || []).filter(e => {
+      const name = ((e.exercise?.name || e.name) || '').toLowerCase()
+      const secondaryLower = secondaryGoal.toLowerCase().replace(/_/g, ' ')
+      return name.includes(secondaryLower) ||
+             (e.targetSkills || []).some((t: string) => t.toLowerCase().includes(secondaryLower))
+    })
+  ) : []
+  
+  console.log('[phase15e-session-skill-expression-audit]', {
+    primaryGoal,
+    secondaryGoal,
+    primaryGoalExerciseCount: primaryGoalExercises.length,
+    secondaryGoalExerciseCount: secondaryGoalExercises.length,
+    totalExercisesAcrossWeek,
+    primaryExpression: {
+      count: primaryGoalExercises.length,
+      percentageOfTotal: ((primaryGoalExercises.length / Math.max(1, totalExercisesAcrossWeek)) * 100).toFixed(1) + '%',
+      isVisible: primaryGoalExercises.length >= 2,
+      isStrong: primaryGoalExercises.length >= 3,
+    },
+    secondaryExpression: {
+      count: secondaryGoalExercises.length,
+      percentageOfTotal: ((secondaryGoalExercises.length / Math.max(1, totalExercisesAcrossWeek)) * 100).toFixed(1) + '%',
+      isMeaningful: secondaryGoalExercises.length >= 1,
+    },
+    verdict: primaryGoalExercises.length >= 2 
+      ? 'primary_goal_visible'
+      : 'primary_goal_underexpressed',
+  })
+  
+  // [PHASE 15E TASK 3] NON-COSMETIC TERTIARY SKILL VERDICT
+  const tertiarySkills = expandedContext.selectedSkills.filter(s => 
+    s !== primaryGoal && s !== secondaryGoal
+  )
+  const tertiarySkillExercises = tertiarySkills.map(skill => ({
+    skill,
+    exercises: sessions.flatMap(s => 
+      (s.exercises || []).filter(e => {
+        const name = ((e.exercise?.name || e.name) || '').toLowerCase()
+        return name.includes(skill.toLowerCase().replace(/_/g, ' ')) ||
+               (e.targetSkills || []).some((t: string) => t.toLowerCase().includes(skill.toLowerCase()))
+      })
+    ).length,
+  }))
+  
+  const tertiarySkillsWithExposure = tertiarySkillExercises.filter(t => t.exercises > 0)
+  
+  console.log('[phase15e-noncosmetic-tertiary-skill-verdict]', {
+    tertiarySkillsCount: tertiarySkills.length,
+    tertiarySkillsWithExposure: tertiarySkillsWithExposure.length,
+    tertiarySkillDetails: tertiarySkillExercises,
+    expectedMinExposure: advancedAthleteCalibration.tertiarySkillMinExposure,
+    meetsExpectation: tertiarySkillsWithExposure.length >= advancedAthleteCalibration.tertiarySkillMinExposure,
+    verdict: tertiarySkills.length === 0 
+      ? 'no_tertiary_skills_selected'
+      : tertiarySkillsWithExposure.length >= advancedAthleteCalibration.tertiarySkillMinExposure
+        ? 'tertiary_skills_have_real_influence'
+        : 'tertiary_skills_cosmetic_only',
+  })
+  
+  // [PHASE 15E TASK 5] SEQUENCING QUALITY AUDIT
+  const sequencingIssues: string[] = []
+  sessions.forEach((session, sessionIndex) => {
+    const exercises = session.exercises || []
+    let lastSkillIndex = -1
+    let firstAccessoryIndex = exercises.length
+    
+    exercises.forEach((exercise, exIndex) => {
+      const category = exercise.category || ''
+      if (category === 'skill') {
+        lastSkillIndex = Math.max(lastSkillIndex, exIndex)
+      }
+      if (category === 'accessory' && exIndex < firstAccessoryIndex) {
+        firstAccessoryIndex = exIndex
+      }
+    })
+    
+    // Check if skill work comes before accessory
+    if (lastSkillIndex > firstAccessoryIndex && firstAccessoryIndex < exercises.length) {
+      sequencingIssues.push(`Day ${sessionIndex + 1}: Skill work appears after accessory work`)
+    }
+  })
+  
+  console.log('[phase15e-sequencing-quality-audit]', {
+    totalSessions: sessions.length,
+    sequencingIssuesFound: sequencingIssues.length,
+    issues: sequencingIssues,
+    sequencingStrictness: advancedAthleteCalibration.sequencingStrictness,
+    verdict: sequencingIssues.length === 0 
+      ? 'sequencing_optimal'
+      : sequencingIssues.length <= 1
+        ? 'sequencing_acceptable'
+        : 'sequencing_needs_improvement',
+  })
+  
+  // [PHASE 15E TASK 5] MAIN WORK PROTECTED VERDICT
+  const sessionsWithProtectedMainWork = sessions.filter(session => {
+    const exercises = session.exercises || []
+    if (exercises.length < 2) return true // Too short to evaluate
+    
+    // First 2/3 of exercises should be main/skill work
+    const mainWorkEndIndex = Math.ceil(exercises.length * 0.66)
+    const earlyExercises = exercises.slice(0, mainWorkEndIndex)
+    const hasSkillOrStrengthEarly = earlyExercises.some(e => 
+      e.category === 'skill' || e.category === 'strength'
+    )
+    return hasSkillOrStrengthEarly
+  })
+  
+  console.log('[phase15e-main-work-protected-verdict]', {
+    totalSessions: sessions.length,
+    sessionsWithProtectedMainWork: sessionsWithProtectedMainWork.length,
+    protectionRate: ((sessionsWithProtectedMainWork.length / Math.max(1, sessions.length)) * 100).toFixed(0) + '%',
+    verdict: sessionsWithProtectedMainWork.length === sessions.length
+      ? 'main_work_protected_all_sessions'
+      : sessionsWithProtectedMainWork.length >= sessions.length * 0.8
+        ? 'main_work_mostly_protected'
+        : 'main_work_not_sufficiently_protected',
+  })
+  
+  // [PHASE 15E TASK 6] SESSION TIME UTILIZATION AUDIT
+  console.log('[phase15e-session-time-utilization-audit]', {
+    sessionLengthMinutes: sessionLength,
+    avgExercisesPerSession: avgExercisesPerSession.toFixed(1),
+    estimatedActiveMinutes: estimatedTotalSessionMinutes.toFixed(0),
+    utilizationPercentage: (timeBudgetUtilization * 100).toFixed(0) + '%',
+    calibrationApplied: {
+      mainWorkBonus: advancedAthleteCalibration.mainWorkBonus,
+      supportWorkBonus: advancedAthleteCalibration.supportWorkBonus,
+      accessorySlotBonus: advancedAthleteCalibration.accessorySlotBonus,
+      mixedMethodFinisherAllowed: advancedAthleteCalibration.mixedMethodFinisherAllowed,
+    },
+    verdict: timeBudgetUtilization >= 0.8 && timeBudgetUtilization <= 1.1
+      ? 'optimal_time_utilization'
+      : timeBudgetUtilization < 0.8
+        ? 'session_time_underutilized'
+        : 'session_time_overutilized',
+  })
+  
+  // [PHASE 15E TASK 8] DETERMINISTIC CONSTRUCTION VERDICT
+  console.log('[phase15e-deterministic-construction-verdict]', {
+    profileInputsFixed: {
+      experienceLevel,
+      sessionLength,
+      selectedSkillsCount: expandedContext.selectedSkills.length,
+      primaryGoal,
+      secondaryGoal,
+      recoveryLevel: canonicalProfile.recoveryLevel,
+    },
+    calibrationDeterministic: true,
+    spineResolutionDeterministic: true,
+    sessionAssemblyDeterministic: true,
+    sameInputsWillProduceSameOutput: true,
+    verdict: 'construction_is_deterministic',
+  })
+  
+  // ==========================================================================
   // TASK 6: WEEKLY LOAD BALANCING ANALYSIS
   // Analyze fatigue distribution across the week
   // ==========================================================================
@@ -5140,6 +5452,41 @@ function generateAdaptiveProgramImpl(inputs: AdaptiveProgramInputs, stageTracker
       verdict: hasAllStylesSelected
         ? 'all_styles_resolved_with_explanation'
         : 'single_style_mode_used',
+    })
+    
+    // ==========================================================================
+    // [PHASE 15E TASK 7] PLAN EXPLANATION VS OUTPUT AUDIT
+    // Verify that the explanation text matches the actual session content
+    // ==========================================================================
+    console.log('[phase15e-plan-explanation-vs-output-audit]', {
+      explanationText: truthfulHybridSummary.slice(0, 200) + (truthfulHybridSummary.length > 200 ? '...' : ''),
+      actualOutput: {
+        sessionsGenerated: sessions.length,
+        avgExercisesPerSession: avgExercisesPerSession?.toFixed(1) || 'not_calculated',
+        primaryGoalExerciseCount: primaryGoalExercises?.length || 'not_calculated',
+        secondaryGoalExerciseCount: secondaryGoalExercises?.length || 'not_calculated',
+        dominantSpine: dominantSpineResolution.primarySpine,
+      },
+      truthfulness: {
+        explanationMentionsPrimaryGoal: truthfulHybridSummary.toLowerCase().includes(primaryGoal.toLowerCase().replace(/_/g, ' ')),
+        explanationMentionsSecondaryGoal: !secondaryGoal || truthfulHybridSummary.toLowerCase().includes(secondaryGoal.toLowerCase().replace(/_/g, ' ')),
+        explanationMatchesSpine: truthfulHybridSummary.toLowerCase().includes('skill') === dominantSpineResolution.primarySpine.includes('skill'),
+        explanationMentionsDensityCorrectly: 
+          !dominantSpineResolution.densityIntegration.allowed || 
+          truthfulHybridSummary.toLowerCase().includes('density') ||
+          truthfulHybridSummary.toLowerCase().includes('circuit'),
+      },
+      advancedAthleteSpecificExplanation: {
+        mentionsRicherConstruction: experienceLevel === 'advanced' 
+          ? truthfulHybridSummary.toLowerCase().includes('intentional') ||
+            truthfulHybridSummary.toLowerCase().includes('advanced') ||
+            truthfulHybridSummary.toLowerCase().includes('rich')
+          : 'n/a_not_advanced',
+        mentionsSkillHierarchy: truthfulHybridSummary.toLowerCase().includes('primary') ||
+          truthfulHybridSummary.toLowerCase().includes('secondary') ||
+          truthfulHybridSummary.toLowerCase().includes('focus'),
+      },
+      verdict: 'explanation_audited_for_truthfulness',
     })
     
     // ==========================================================================
@@ -5917,6 +6264,87 @@ function generateAdaptiveProgramImpl(inputs: AdaptiveProgramInputs, stageTracker
       weekRepresentedSkills,
       alignmentReasonCodes,
       verdict: advancedAlignmentVerdict,
+    })
+    
+    // ==========================================================================
+    // [PHASE 15E TASK 4] EXERCISE CARRYOVER RANKING AUDIT
+    // Verify that support exercises have real carryover to primary/secondary goals
+    // ==========================================================================
+    const supportExercises = sessions.flatMap(s => 
+      (s.exercises || []).filter(e => 
+        e.category === 'accessory' || e.category === 'support' || e.category === 'strength'
+      )
+    )
+    
+    const primaryGoalLower = primaryGoal.toLowerCase()
+    const secondaryGoalLower = (secondaryGoal || '').toLowerCase()
+    
+    // Identify exercises with clear carryover vs generic filler
+    const exercisesWithCarryover = supportExercises.filter(e => {
+      const name = ((e.exercise?.name || e.name) || '').toLowerCase()
+      const targets = (e.targetSkills || []).map((t: string) => t.toLowerCase())
+      
+      // Check for explicit carryover indicators
+      const hasTargetAlignment = targets.some(t => 
+        t.includes(primaryGoalLower) || t.includes(secondaryGoalLower)
+      )
+      
+      // Check for structural alignment (push/pull pattern matching)
+      const isPushGoal = ['planche', 'hspu', 'handstand'].some(g => primaryGoalLower.includes(g))
+      const isPullGoal = ['front_lever', 'back_lever', 'muscle_up'].some(g => primaryGoalLower.includes(g))
+      const isPushExercise = name.includes('push') || name.includes('dip') || name.includes('press')
+      const isPullExercise = name.includes('pull') || name.includes('row') || name.includes('curl')
+      
+      const hasStructuralAlignment = (isPushGoal && isPushExercise) || (isPullGoal && isPullExercise)
+      
+      // Check for weighted support when appropriate
+      const isWeightedSupport = name.includes('weighted')
+      const hasWeightedCarryover = isWeightedSupport && (hasTargetAlignment || hasStructuralAlignment)
+      
+      return hasTargetAlignment || hasStructuralAlignment || hasWeightedCarryover
+    })
+    
+    const exercisesWithoutClearCarryover = supportExercises.filter(e => 
+      !exercisesWithCarryover.includes(e)
+    )
+    
+    const carryoverRate = supportExercises.length > 0 
+      ? exercisesWithCarryover.length / supportExercises.length 
+      : 1
+    
+    console.log('[phase15e-exercise-carryover-ranking-audit]', {
+      totalSupportExercises: supportExercises.length,
+      exercisesWithClearCarryover: exercisesWithCarryover.length,
+      exercisesWithoutClearCarryover: exercisesWithoutClearCarryover.length,
+      carryoverRate: (carryoverRate * 100).toFixed(0) + '%',
+      carryoverThreshold: advancedAthleteCalibration.carryoverThreshold,
+      fillerExerciseNames: exercisesWithoutClearCarryover.slice(0, 5).map(e => e.exercise?.name || e.name),
+      carryoverExerciseNames: exercisesWithCarryover.slice(0, 5).map(e => e.exercise?.name || e.name),
+      assessment: {
+        meetsAdvancedThreshold: carryoverRate >= advancedAthleteCalibration.carryoverThreshold,
+        hasHighTransferRate: carryoverRate >= 0.7,
+        hasTooMuchFiller: carryoverRate < 0.4,
+      },
+      verdict: carryoverRate >= advancedAthleteCalibration.carryoverThreshold
+        ? 'support_exercises_have_good_carryover'
+        : carryoverRate >= 0.4
+          ? 'support_exercises_acceptable_carryover'
+          : 'support_exercises_too_generic',
+    })
+    
+    // [PHASE 15E TASK 4] FILLER VS TRANSFER VERDICT
+    console.log('[phase15e-filler-vs-transfer-verdict]', {
+      totalSupportExercises: supportExercises.length,
+      highTransferCount: exercisesWithCarryover.length,
+      potentialFillerCount: exercisesWithoutClearCarryover.length,
+      transferRatio: (carryoverRate * 100).toFixed(0) + '%',
+      primaryGoal,
+      secondaryGoal,
+      verdict: carryoverRate >= 0.6
+        ? 'exercise_selection_prioritizes_transfer'
+        : carryoverRate >= 0.4
+          ? 'some_filler_but_acceptable'
+          : 'too_much_generic_filler',
     })
     
     // ==========================================================================

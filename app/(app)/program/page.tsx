@@ -4704,7 +4704,7 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
                   </Button>
                 </div>
               </Card>
-            ))}
+            )}
             
             <AdaptiveProgramForm
               inputs={inputs}
@@ -4806,7 +4806,7 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
                   </div>
                 </div>
               </Card>
-            ))}
+            )}
             
             {/* [program-alignment] ISSUE B/C: Show stale program warning with last good plan note */}
             {/* [PHASE 16S] Use truth-gated result for stale condition */}

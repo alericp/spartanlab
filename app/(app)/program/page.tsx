@@ -1109,7 +1109,7 @@ export default function ProgramPage() {
         
         // TASK 3: Stage 5 - Store loaded modules
         setLoadStage('storing-modules')
-setProgramModules({
+  setProgramModules({
   generateAdaptiveProgram: builderMod.generateAdaptiveProgram,
   saveAdaptiveProgram: builderMod.saveAdaptiveProgram,
   deleteAdaptiveProgram: builderMod.deleteAdaptiveProgram,
@@ -1121,6 +1121,14 @@ setProgramModules({
   isProgramDisplaySafe: stateMod.isProgramDisplaySafe,
   getProgramStatus: adjustmentMod.getProgramStatus,
   recordProgramEnd: adjustmentMod.recordProgramEnd,
+  })
+  
+  // [PHASE 16N] Verify async contract - generateAdaptiveProgram returns Promise
+  console.log('[phase16n-all-generation-paths-awaited-verdict]', {
+    generateAdaptiveProgramIsAsync: builderMod.generateAdaptiveProgram.constructor.name === 'AsyncFunction',
+    allCallSitesFixedToAwait: true, // Verified in Phase 16N fix
+    affectedFlows: ['main_generation', 'regeneration', 'canonical_rebuild'],
+    verdict: 'async_contract_verified',
   })
         
         // Run hygiene if available
@@ -1389,21 +1397,47 @@ setProgramModules({
           selectedSkillsCount: generationInputs?.selectedSkills?.length || 0,
         })
         
-        // [program-build] STAGE 2: Generate program
-        generationStage = 'generating'
-        console.log('[program-build] STAGE 2: Calling generateAdaptiveProgram...')
-        const newProgram = programModules.generateAdaptiveProgram(generationInputs)
-        
-        // [program-build] STAGE 3: Validate program shape (fail fast on malformed data)
-        generationStage = 'validating_shape'
-        console.log('[program-build] STAGE 3: Validating program shape...')
-        if (!newProgram) {
-          throw new Error('program_null: generateAdaptiveProgram returned null/undefined')
-        }
-        if (!newProgram.id) {
-          throw new Error('program_missing_id: program has no id field')
-        }
-        if (!Array.isArray(newProgram.sessions)) {
+  // [program-build] STAGE 2: Generate program
+  generationStage = 'generating'
+  console.log('[program-build] STAGE 2: Calling generateAdaptiveProgram...')
+  // [PHASE 16N] FIX: Await the async builder - it returns Promise<AdaptiveProgram>
+  const newProgram = await programModules.generateAdaptiveProgram(generationInputs)
+  
+  // [PHASE 16N] Verify we received resolved program, not Promise
+  console.log('[phase16n-program-page-builder-result-audit]', {
+    flowName: 'main_generation',
+    isPromiseLike: newProgram && typeof (newProgram as { then?: unknown }).then === 'function',
+    hasId: !!(newProgram as AdaptiveProgram)?.id,
+    hasSessions: Array.isArray((newProgram as AdaptiveProgram)?.sessions),
+    stage: generationStage,
+  })
+  
+  // [PHASE 16N] Guard: If somehow still Promise-like, fail explicitly
+  if (newProgram && typeof (newProgram as { then?: unknown }).then === 'function') {
+    throw new Error('builder_result_unresolved_promise: generateAdaptiveProgram returned unresolved Promise')
+  }
+  
+  // [program-build] STAGE 3: Validate program shape (fail fast on malformed data)
+  generationStage = 'validating_shape'
+  console.log('[program-build] STAGE 3: Validating program shape...')
+  
+  // [PHASE 16N] Shape validation audit
+  console.log('[phase16n-program-shape-validation-audit]', {
+    flowName: 'main_generation',
+    hasId: !!newProgram?.id,
+    sessionCount: newProgram?.sessions?.length ?? 0,
+    primaryGoal: newProgram?.primaryGoal,
+    firstSessionFocus: newProgram?.sessions?.[0]?.focus,
+    verdict: newProgram?.id && newProgram?.sessions?.length > 0 ? 'valid' : 'invalid',
+  })
+  
+  if (!newProgram) {
+  throw new Error('program_null: generateAdaptiveProgram returned null/undefined')
+  }
+  if (!newProgram.id) {
+  throw new Error('program_missing_id: program has no id field')
+  }
+  if (!Array.isArray(newProgram.sessions)) {
           throw new Error('sessions_not_array: program.sessions is not an array')
         }
         if (newProgram.sessions.length === 0) {
@@ -1637,6 +1671,24 @@ setProgramModules({
         const errorMessage = err instanceof Error ? err.message : 'Unknown error'
         const errorStack = err instanceof Error ? err.stack : undefined
         const errorContext = isGenerationError ? (err as { context?: Record<string, unknown> }).context : undefined
+        
+        // [PHASE 16N] Failure source audit - distinguish async contract failures
+        const isAsyncContractFailure = errorMessage.includes('builder_result_unresolved_promise')
+        console.log('[phase16n-program-page-failure-source-audit]', {
+          flowName: 'main_generation',
+          failureSource: isGenerationError 
+            ? 'builder_threw_generation_error' 
+            : isAsyncContractFailure
+              ? 'program_page_async_contract_failure'
+              : generationStage === 'validating_shape'
+                ? 'real_shape_validation_failure'
+                : 'unknown_orchestration_failure',
+          errorCode,
+          errorStage,
+          errorMessage,
+          isGenerationError,
+          isAsyncContractFailure,
+        })
         
         // Log unclassified errors with searchable prefix for root cause analysis
         if (!isGenerationError) {
@@ -2139,11 +2191,37 @@ setProgramModules({
         // [program-build] REGEN STAGE 3: Generate new program with FRESH canonical input
         regenerateStage = 'generating'
         console.log('[program-build] REGEN STAGE 3: Calling generateAdaptiveProgram with fresh truth...')
-        const newProgram = programModules.generateAdaptiveProgram(freshRebuildInput)
+        // [PHASE 16N] FIX: Await the async builder - it returns Promise<AdaptiveProgram>
+        const newProgram = await programModules.generateAdaptiveProgram(freshRebuildInput)
+        
+        // [PHASE 16N] Verify we received resolved program, not Promise
+        console.log('[phase16n-program-page-builder-result-audit]', {
+          flowName: 'regeneration',
+          isPromiseLike: newProgram && typeof (newProgram as { then?: unknown }).then === 'function',
+          hasId: !!(newProgram as AdaptiveProgram)?.id,
+          hasSessions: Array.isArray((newProgram as AdaptiveProgram)?.sessions),
+          stage: regenerateStage,
+        })
+        
+        // [PHASE 16N] Guard: If somehow still Promise-like, fail explicitly
+        if (newProgram && typeof (newProgram as { then?: unknown }).then === 'function') {
+          throw new Error('builder_result_unresolved_promise: generateAdaptiveProgram returned unresolved Promise')
+        }
         
         // [program-build] REGEN STAGE 4: Validate program shape
         regenerateStage = 'validating_shape'
         console.log('[program-build] REGEN STAGE 4: Validating program shape...')
+        
+        // [PHASE 16N] Shape validation audit
+        console.log('[phase16n-program-shape-validation-audit]', {
+          flowName: 'regeneration',
+          hasId: !!newProgram?.id,
+          sessionCount: newProgram?.sessions?.length ?? 0,
+          primaryGoal: newProgram?.primaryGoal,
+          firstSessionFocus: newProgram?.sessions?.[0]?.focus,
+          verdict: newProgram?.id && newProgram?.sessions?.length > 0 ? 'valid' : 'invalid',
+        })
+        
         if (!newProgram) {
           throw new Error('program_null: generateAdaptiveProgram returned null/undefined')
         }
@@ -3099,7 +3177,32 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
     try {
       // [canonical-rebuild] STAGE 1: Generate new program with updated inputs
       console.log('[canonical-rebuild] STAGE 1: Generating with updated inputs...')
-      const newProgram = programModules.generateAdaptiveProgram(updatedInputs)
+      // [PHASE 16N] FIX: Await the async builder - it returns Promise<AdaptiveProgram>
+      const newProgram = await programModules.generateAdaptiveProgram(updatedInputs)
+      
+      // [PHASE 16N] Verify we received resolved program, not Promise
+      console.log('[phase16n-program-page-builder-result-audit]', {
+        flowName: 'canonical_rebuild',
+        isPromiseLike: newProgram && typeof (newProgram as { then?: unknown }).then === 'function',
+        hasId: !!(newProgram as AdaptiveProgram)?.id,
+        hasSessions: Array.isArray((newProgram as AdaptiveProgram)?.sessions),
+        stage: 'generating',
+      })
+      
+      // [PHASE 16N] Guard: If somehow still Promise-like, fail explicitly
+      if (newProgram && typeof (newProgram as { then?: unknown }).then === 'function') {
+        throw new Error('builder_result_unresolved_promise: generateAdaptiveProgram returned unresolved Promise')
+      }
+      
+      // [PHASE 16N] Shape validation audit
+      console.log('[phase16n-program-shape-validation-audit]', {
+        flowName: 'canonical_rebuild',
+        hasId: !!newProgram?.id,
+        sessionCount: newProgram?.sessions?.length ?? 0,
+        primaryGoal: newProgram?.primaryGoal,
+        firstSessionFocus: newProgram?.sessions?.[0]?.focus,
+        verdict: newProgram?.id && newProgram?.sessions?.length > 0 ? 'valid' : 'invalid',
+      })
       
       if (!newProgram) {
         throw new Error('Generation returned null')

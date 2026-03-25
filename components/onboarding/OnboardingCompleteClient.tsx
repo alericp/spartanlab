@@ -124,6 +124,10 @@ export default function OnboardingCompleteClient() {
   const [isSlowGeneration, setIsSlowGeneration] = useState(false)
   const [statusMessage, setStatusMessage] = useState('Analyzing your profile...')
   
+  // [PHASE 16B TASK 1] Exact generation stage tracking
+  const [generationStage, setGenerationStage] = useState<string>('idle')
+  const generationStageRef = useRef<string>('idle') // Ref for immediate access in timeouts
+  
   // Status messages for progress indication
   const STATUS_MESSAGES = [
     'Analyzing your profile...',
@@ -136,6 +140,31 @@ export default function OnboardingCompleteClient() {
   // Thresholds (in milliseconds)
   const SLOW_THRESHOLD_MS = 8000 // 8 seconds
   const VERY_SLOW_THRESHOLD_MS = 15000 // 15 seconds
+  const HARD_TIMEOUT_MS = 30000 // 30 seconds - [PHASE 16B TASK 5] Hard fail-safe
+  
+  // [PHASE 16B TASK 1] Stage tracking helper
+  const trackStage = (stage: string, startTime: number, extraData?: Record<string, any>) => {
+    const elapsed = Date.now() - startTime
+    setGenerationStage(stage)
+    generationStageRef.current = stage
+    
+    console.log('[phase16b-generation-stage-enter]', {
+      stage,
+      elapsedMs: elapsed,
+      timestamp: new Date().toISOString(),
+      ...extraData,
+    })
+  }
+  
+  const completeStage = (stage: string, startTime: number, extraData?: Record<string, any>) => {
+    const elapsed = Date.now() - startTime
+    console.log('[phase16b-generation-stage-complete]', {
+      stage,
+      elapsedMs: elapsed,
+      timestamp: new Date().toISOString(),
+      ...extraData,
+    })
+  }
 
   // [PHASE 14D TASK 1] Mount effect - ONLY sets mounted flag
   // This is the ONLY effect that should have [] dependencies
@@ -176,6 +205,26 @@ export default function OnboardingCompleteClient() {
           showingSlowMessage: true,
           userCanRetry: true,
         })
+      }
+      
+      // [PHASE 16B TASK 5] Hard fail-safe - force error state if generation stalls
+      if (elapsed >= HARD_TIMEOUT_MS) {
+        console.log('[phase16b-hard-timeout-trigger-audit]', {
+          elapsedMs: elapsed,
+          threshold: HARD_TIMEOUT_MS,
+          lastKnownStage: generationStageRef.current,
+          forcingErrorState: true,
+        })
+        
+        console.log('[phase16b-stalled-stage-final-verdict]', {
+          stalledAt: generationStageRef.current,
+          elapsedMs: elapsed,
+          verdict: 'generation_stalled_forcing_error',
+        })
+        
+        setErrorMessage(`Program generation stalled during "${generationStageRef.current}". Please retry.`)
+        setStep('error')
+        return // Stop the interval
       }
     }, 500)
     
@@ -358,28 +407,61 @@ export default function OnboardingCompleteClient() {
       setIsSlowGeneration(false)
       setStatusMessage(STATUS_MESSAGES[0])
       
+      // [PHASE 16B TASK 1] Track bootstrap complete stage
+      trackStage('bootstrap_complete', genStartTime, {
+        hasProfile: !!bootstrapData?.loadedProfile,
+        isPro: bootstrapData?.localIsPro,
+        selectedSkillsCount: bootstrapData?.loadedProfile?.selectedSkills?.length || 0,
+        scheduleMode: bootstrapData?.loadedProfile?.scheduleMode,
+        sessionDurationMode: bootstrapData?.loadedProfile?.sessionDurationMode,
+      })
+      
       console.log('[phase16a-generation-start-audit]', {
         startTime: genStartTime,
         timestamp: new Date(genStartTime).toISOString(),
       })
       
+      // [PHASE 16B TASK 2] Yield to browser before heavy sync work
+      // This ensures the loading UI paints before generation blocks the main thread
+      console.log('[phase16b-pre-generation-yield-audit]', {
+        yieldingBeforeGeneration: true,
+        timestamp: new Date().toISOString(),
+      })
+      await new Promise(resolve => requestAnimationFrame(() => setTimeout(resolve, 0)))
+      
       // Small delay for UX
-      await new Promise(resolve => setTimeout(resolve, 1000))
+      await new Promise(resolve => setTimeout(resolve, 500))
       
       try {
         // =======================================================================
         // DYNAMIC IMPORT: Load generation module at runtime
         // =======================================================================
+        trackStage('import_onboarding_service_start', genStartTime)
         console.log('[OnboardingCompleteClient] Loading onboarding-service module...')
         const onboardingModule = await import('@/lib/onboarding-service')
+        completeStage('import_onboarding_service_done', genStartTime)
         console.log('[OnboardingCompleteClient] onboarding-service module loaded successfully')
         
         // This saves the program to canonical storage (spartanlab_adaptive_programs)
         // AND to backward-compatible storage (spartanlab_first_program)
+        trackStage('generateFirstProgram_enter', genStartTime)
         const result = onboardingModule.generateFirstProgram()
+        completeStage('generateFirstProgram_done', genStartTime, {
+          success: result.success,
+          hasProgram: !!result.program,
+          sessionCount: result.program?.sessions?.length || 0,
+          error: result.error,
+        })
         setProgramResult(result)
         
         if (result.success && result.program) {
+          // [PHASE 16B TASK 6] Verification stage tracking
+          trackStage('program_verify_start', genStartTime)
+          console.log('[phase16b-post-save-verification-start-audit]', {
+            timestamp: new Date().toISOString(),
+            programSessionCount: result.program.sessions?.length || 0,
+          })
+          
           // VERIFICATION STEP: Confirm program is actually readable from canonical storage
           // This prevents routing to first-session if save didn't work
           const { getProgramState } = await import('@/lib/program-state')
@@ -387,10 +469,25 @@ export default function OnboardingCompleteClient() {
           
           if (!verificationState.hasUsableWorkoutProgram) {
             console.error('[OnboardingCompleteClient] Program saved but not readable from program-state')
+            console.log('[phase16b-post-save-verification-failure-verdict]', {
+              failedStage: 'program_verify',
+              hasUsableProgram: false,
+              elapsedMs: Date.now() - genStartTime,
+            })
             setErrorMessage('Program was created but could not be verified. Please try again.')
             setStep('error')
             return
           }
+          
+          completeStage('program_verify_done', genStartTime, {
+            hasUsableWorkoutProgram: verificationState.hasUsableWorkoutProgram,
+            sessionCount: verificationState.sessionCount,
+          })
+          console.log('[phase16b-post-save-verification-complete-audit]', {
+            verified: true,
+            sessionCount: verificationState.sessionCount,
+            elapsedMs: Date.now() - genStartTime,
+          })
           
           console.log('[OnboardingCompleteClient] Verification passed, program ready for dashboard')
           
@@ -429,6 +526,19 @@ export default function OnboardingCompleteClient() {
             console.error('[OnboardingCompleteClient] Failed to create program history:', err)
           })
           
+          // [PHASE 16B TASK 1] Final ready stage
+          trackStage('generation_ready', genStartTime, {
+            isPro: bootstrapData?.localIsPro,
+            sessionCount: verificationState.sessionCount,
+            totalElapsedMs: Date.now() - genStartTime,
+          })
+          
+          console.log('[phase16b-generation-last-known-stage-verdict]', {
+            finalStage: 'generation_ready',
+            success: true,
+            totalElapsedMs: Date.now() - genStartTime,
+          })
+          
           console.log('[OnboardingCompleteClient] SUCCESS: Setting step to ready', { 
             isPro: bootstrapData?.localIsPro, 
             isTrial: bootstrapData?.localIsTrial, 
@@ -437,11 +547,34 @@ export default function OnboardingCompleteClient() {
           })
           setStep('ready')
         } else {
+          // [PHASE 16B] Error stage tracking
+          trackStage('generation_error', genStartTime, {
+            error: result.error,
+            failedStage: (result as any).failedStage || 'unknown',
+          })
+          console.log('[phase16b-generation-last-known-stage-verdict]', {
+            finalStage: 'generation_error',
+            success: false,
+            error: result.error,
+            totalElapsedMs: Date.now() - genStartTime,
+          })
           console.error('[OnboardingCompleteClient] Generation failed:', result.error)
           setErrorMessage(result.error || 'Failed to generate program')
           setStep('error')
         }
       } catch (err) {
+        // [PHASE 16B] Exception stage tracking
+        trackStage('generation_error', genStartTime, {
+          exception: String(err),
+          lastKnownStage: generationStageRef.current,
+        })
+        console.log('[phase16b-generation-last-known-stage-verdict]', {
+          finalStage: 'generation_error',
+          success: false,
+          exception: String(err),
+          lastKnownStage: generationStageRef.current,
+          totalElapsedMs: Date.now() - genStartTime,
+        })
         console.error('[OnboardingCompleteClient] Exception during generation:', err)
         setErrorMessage(String(err))
         setStep('error')
@@ -558,10 +691,11 @@ export default function OnboardingCompleteClient() {
     simulationMode,
   })
 
-  // [PHASE 16A TASK 4] Enhanced generating state with progress and slow-path handling
+  // [PHASE 16A/16B] Enhanced generating state with progress, slow-path handling, and stage tracking
   if (step === 'generating') {
     const elapsedSeconds = Math.floor(generationElapsed / 1000)
     const isVerySlow = generationElapsed >= VERY_SLOW_THRESHOLD_MS
+    const isApproachingTimeout = generationElapsed >= HARD_TIMEOUT_MS * 0.8
     
     return (
       <div className="min-h-screen bg-[#0F1115] flex items-center justify-center p-4">
@@ -577,6 +711,13 @@ export default function OnboardingCompleteClient() {
             <p className="text-sm text-[#A4ACB8] transition-opacity duration-300">
               {statusMessage}
             </p>
+            
+            {/* [PHASE 16B] Show current stage in dev/slow scenarios */}
+            {isSlowGeneration && generationStage && generationStage !== 'idle' && (
+              <p className="text-xs text-[#4A5568] mt-1 font-mono">
+                Stage: {generationStage}
+              </p>
+            )}
             
             {/* Slow generation warning */}
             {isSlowGeneration && !isVerySlow && (
@@ -646,6 +787,10 @@ export default function OnboardingCompleteClient() {
 
   // Error state
   if (step === 'error') {
+    // [PHASE 16B] Parse stage from error message if it's a stall
+    const isStallError = errorMessage?.includes('stalled during')
+    const stalledStage = generationStageRef.current
+    
     return (
       <div className="min-h-screen bg-[#0F1115] flex items-center justify-center p-4">
         <Card className="bg-[#1A1F26] border-[#2B313A] p-8 max-w-md w-full text-center">
@@ -653,11 +798,17 @@ export default function OnboardingCompleteClient() {
             <AlertCircle className="w-8 h-8 text-amber-500" />
           </div>
           <h2 className="text-xl font-bold text-[#E6E9EF] mb-2">
-            Generation Issue
+            {isStallError ? 'Generation Timeout' : 'Generation Issue'}
           </h2>
-          <p className="text-sm text-[#A4ACB8] mb-6">
+          <p className="text-sm text-[#A4ACB8] mb-4">
             {errorMessage || 'There was an issue generating your program. You can try again or use a demo workout.'}
           </p>
+          {/* [PHASE 16B] Show diagnostic info for stalls */}
+          {isStallError && stalledStage && stalledStage !== 'idle' && (
+            <p className="text-xs text-[#4A5568] mb-4 font-mono">
+              Last stage: {stalledStage}
+            </p>
+          )}
           <div className="space-y-3">
             <Button 
               onClick={async () => {
@@ -665,6 +816,13 @@ export default function OnboardingCompleteClient() {
                 setStep('generating')
                 setErrorMessage(null)
                 setGenerationSkipped(false)
+                
+                // [PHASE 16B] Reset stage tracking for retry
+                setGenerationStage('idle')
+                generationStageRef.current = 'idle'
+                setGenerationStartTime(Date.now())
+                setGenerationElapsed(0)
+                setIsSlowGeneration(false)
                 
                 // CRITICAL: Clear idempotency guards for explicit retry
                 generationAttemptedRef.current = false
@@ -675,17 +833,31 @@ export default function OnboardingCompleteClient() {
                 }
                 
                 try {
+                  const retryStartTime = Date.now()
+                  
+                  // [PHASE 16B] Pre-generation yield for retry
+                  trackStage('retry_yield', retryStartTime)
+                  await new Promise(resolve => requestAnimationFrame(() => setTimeout(resolve, 0)))
+                  
                   // =======================================================================
                   // DYNAMIC IMPORT: Load generation module for retry
                   // =======================================================================
+                  trackStage('retry_import_start', retryStartTime)
                   const onboardingModule = await import('@/lib/onboarding-service')
+                  completeStage('retry_import_done', retryStartTime)
+                  
+                  trackStage('retry_generate_start', retryStartTime)
                   const result = onboardingModule.generateFirstProgram()
+                  completeStage('retry_generate_done', retryStartTime, { success: result.success })
                   setProgramResult(result)
+                  
                   if (result.success && result.program) {
                     // Verify program is readable
+                    trackStage('retry_verify_start', retryStartTime)
                     const { getProgramState } = await import('@/lib/program-state')
                     const verificationState = getProgramState()
                     if (verificationState.hasUsableWorkoutProgram) {
+                      completeStage('retry_verify_done', retryStartTime, { success: true })
                       // Set session token on successful retry
                       try {
                         sessionStorage.setItem(GENERATION_SESSION_KEY, JSON.stringify({
@@ -705,6 +877,7 @@ export default function OnboardingCompleteClient() {
                         console.error('[OnboardingCompleteClient] Retry analytics failed:', analyticsErr)
                       }
                       
+                      trackStage('retry_ready', retryStartTime)
                       setStep('ready')
                     } else {
                       setErrorMessage('Program was created but could not be verified.')

@@ -1501,11 +1501,25 @@ interface StageTracker {
 }
 
 export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): AdaptiveProgram {
+  // [PHASE 16B TASK 4] Track generation start time for loop guard timing
+  const builderStartTime = Date.now()
+  
   // ISSUE A: Track generation stage for precise error diagnosis (mutable for top-level catch)
   const stageTracker: StageTracker = { current: 'initializing' }
   
   console.log('[program-generate] Starting adaptive program generation')
   console.log('[program-generate] STAGE: initializing')
+  console.log('[phase16b-builder-entry-audit]', {
+    timestamp: new Date().toISOString(),
+    selectedSkillCount: inputs.selectedSkills?.length || 0,
+    experienceLevel: inputs.experienceLevel,
+    scheduleMode: inputs.scheduleMode,
+    trainingDaysPerWeek: inputs.trainingDaysPerWeek,
+    sessionLength: inputs.sessionLength,
+    equipmentCount: inputs.equipment?.length || 0,
+    primaryGoal: inputs.primaryGoal,
+    secondaryGoal: inputs.secondaryGoal,
+  })
   
   // ==========================================================================
   // [generation-entry-path-map-audit] TASK 1: Identify entry path for this generation
@@ -1554,8 +1568,26 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
   // TOP-LEVEL CLASSIFICATION WRAPPER: Ensure ALL errors are classified as GenerationError
   // This prevents plain Error escaping as unknown_generation_failure
   try {
-    return generateAdaptiveProgramImpl(inputs, stageTracker)
+    const result = generateAdaptiveProgramImpl(inputs, stageTracker)
+    
+    // [PHASE 16B TASK 4] Log successful completion timing
+    const builderElapsed = Date.now() - builderStartTime
+    console.log('[phase16b-builder-complete-audit]', {
+      elapsedMs: builderElapsed,
+      sessionsGenerated: result.sessions?.length || 0,
+      totalExercises: result.sessions?.reduce((sum, s) => sum + (s.exercises?.length || 0), 0) || 0,
+      success: true,
+    })
+    
+    return result
   } catch (err) {
+    // [PHASE 16B] Log builder failure timing
+    const builderElapsed = Date.now() - builderStartTime
+    console.log('[phase16b-builder-failure-audit]', {
+      elapsedMs: builderElapsed,
+      currentStage: stageTracker.current,
+      errorType: err instanceof Error ? err.name : 'unknown',
+    })
     // If already a GenerationError, rethrow unchanged
     if (err instanceof GenerationError) {
       throw err

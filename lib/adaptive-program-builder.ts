@@ -1501,13 +1501,30 @@ interface StageTracker {
   current: string
 }
 
+/**
+ * [PHASE 16J] Server generation context options
+ * When running in server context (e.g., /api/onboarding/generate-first-program),
+ * the canonical profile must be passed explicitly since localStorage is not available.
+ */
+export interface ServerGenerationOptions {
+  /**
+   * [PHASE 16J] Canonical profile override for server-side generation.
+   * When provided, builder uses this instead of calling getCanonicalProfile().
+   * This is REQUIRED for server routes where localStorage is unavailable.
+   */
+  canonicalProfileOverride?: ProfileSnapshot
+}
+
 export async function generateAdaptiveProgram(
   inputs: AdaptiveProgramInputs,
-  onStageChange?: (stage: string) => void
+  onStageChange?: (stage: string) => void,
+  serverOptions?: ServerGenerationOptions
 ): Promise<AdaptiveProgram> {
-  // [PHASE 16F] Builder entry diagnostic
-  console.log('[phase16f-builder-stage-audit]', {
+  // [PHASE 16J] Builder entry diagnostic with override awareness
+  console.log('[phase16j-builder-canonical-source-audit]', {
     stage: 'generateAdaptiveProgram_entry',
+    hasCanonicalOverride: !!serverOptions?.canonicalProfileOverride,
+    source: serverOptions?.canonicalProfileOverride ? 'override' : 'getCanonicalProfile',
     timestamp: new Date().toISOString(),
     inputPrimaryGoal: inputs.primaryGoal,
     inputSelectedSkillsCount: inputs.selectedSkills?.length || 0,
@@ -2052,21 +2069,58 @@ async function generateAdaptiveProgramImpl(
     entryContractVerdict: 'unified_contract_created',
   })
   
-  // Gather context - CANONICAL FIX: Use unified canonical profile
-  // CRITICAL: This is the ONLY source of truth for generation
+  // [PHASE 16J] CANONICAL PROFILE RESOLUTION
+  // For server routes: use canonicalProfileOverride (localStorage unavailable)
+  // For client routes: use getCanonicalProfile() (normal browser flow)
   let canonicalProfile: ProfileSnapshot
-  try {
-    canonicalProfile = getCanonicalProfile()
-    logCanonicalProfileState('generateAdaptiveProgram called')
-  } catch (err) {
-    console.error('[program-root-cause] getCanonicalProfile failed:', err)
-    throw new GenerationError(
-      'profile_validation_failed',
-      'initializing',
-      `getCanonicalProfile failed: ${err instanceof Error ? err.message : 'Unknown error'}`,
-      { helper: 'getCanonicalProfile' }
-    )
+  const usingOverride = !!serverOptions?.canonicalProfileOverride
+  
+  if (usingOverride) {
+    // [PHASE 16J] SERVER PATH: Use the override directly
+    canonicalProfile = serverOptions.canonicalProfileOverride!
+    console.log('[phase16j-builder-canonical-source-audit]', {
+      stage: 'canonical_profile_resolved',
+      source: 'override',
+      primaryGoal: canonicalProfile.primaryGoal,
+      onboardingComplete: canonicalProfile.onboardingComplete,
+      selectedSkillsCount: canonicalProfile.selectedSkills?.length || 0,
+      equipmentCount: canonicalProfile.equipment?.length || canonicalProfile.equipmentAvailable?.length || 0,
+    })
+  } else {
+    // [PHASE 16J] CLIENT PATH: Use normal getCanonicalProfile()
+    try {
+      canonicalProfile = getCanonicalProfile()
+      logCanonicalProfileState('generateAdaptiveProgram called')
+      console.log('[phase16j-builder-canonical-source-audit]', {
+        stage: 'canonical_profile_resolved',
+        source: 'getCanonicalProfile',
+        primaryGoal: canonicalProfile.primaryGoal,
+        onboardingComplete: canonicalProfile.onboardingComplete,
+      })
+    } catch (err) {
+      console.error('[program-root-cause] getCanonicalProfile failed:', err)
+      throw new GenerationError(
+        'profile_validation_failed',
+        'initializing',
+        `getCanonicalProfile failed: ${err instanceof Error ? err.message : 'Unknown error'}`,
+        { helper: 'getCanonicalProfile' }
+      )
+    }
   }
+  
+  // [PHASE 16J] Audit required fields before validation
+  console.log('[phase16j-builder-canonical-required-fields-audit]', {
+    source: usingOverride ? 'override' : 'getCanonicalProfile',
+    primaryGoal: canonicalProfile.primaryGoal,
+    onboardingComplete: canonicalProfile.onboardingComplete,
+    hasSelectedSkills: Array.isArray(canonicalProfile.selectedSkills) && canonicalProfile.selectedSkills.length > 0,
+    hasSelectedFlexibility: Array.isArray(canonicalProfile.selectedFlexibility) && canonicalProfile.selectedFlexibility.length > 0,
+    hasSelectedStrength: Array.isArray(canonicalProfile.selectedStrength) && canonicalProfile.selectedStrength.length > 0,
+    hasEquipment: (canonicalProfile.equipment?.length || 0) > 0 || (canonicalProfile.equipmentAvailable?.length || 0) > 0,
+    scheduleMode: canonicalProfile.scheduleMode,
+    trainingDaysPerWeek: canonicalProfile.trainingDaysPerWeek,
+    experienceLevel: canonicalProfile.experienceLevel,
+  })
   
   // TASK 6: Log schedule/duration truth consumption
   console.log('[program-generate] TASK 6: Schedule/Duration truth consumed:', {
@@ -2284,6 +2338,15 @@ async function generateAdaptiveProgramImpl(
   let profileValidation: ReturnType<typeof validateProfileForGeneration>
   try {
     profileValidation = validateProfileForGeneration(canonicalProfile)
+    
+    // [PHASE 16J] Validation source verdict - proves which profile was validated
+    console.log('[phase16j-builder-profile-validation-source-verdict]', {
+      source: usingOverride ? 'override' : 'getCanonicalProfile',
+      validationPassed: profileValidation.isValid,
+      missingFields: profileValidation.missingFields,
+      profilePrimaryGoal: canonicalProfile.primaryGoal,
+      profileOnboardingComplete: canonicalProfile.onboardingComplete,
+    })
   } catch (err) {
     console.error('[program-root-cause] validateProfileForGeneration failed:', err)
     throw new GenerationError(
@@ -2294,6 +2357,17 @@ async function generateAdaptiveProgramImpl(
     )
   }
   if (!profileValidation.isValid) {
+    // [PHASE 16J] Log validation failure with source info
+    console.error('[phase16j-builder-validation-failed]', {
+      source: usingOverride ? 'override' : 'getCanonicalProfile',
+      missingFields: profileValidation.missingFields,
+      profileSnapshot: {
+        primaryGoal: canonicalProfile.primaryGoal,
+        onboardingComplete: canonicalProfile.onboardingComplete,
+        selectedSkillsCount: canonicalProfile.selectedSkills?.length,
+        equipmentCount: canonicalProfile.equipment?.length || canonicalProfile.equipmentAvailable?.length,
+      },
+    })
     throw new GenerationError(
       'profile_validation_failed',
       stageTracker.current,

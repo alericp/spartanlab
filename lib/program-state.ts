@@ -171,6 +171,21 @@ export interface BuildAttemptResult {
   failureFocus: string | null
   /** Goal at time of failure */
   failureGoal: string | null
+  // ==========================================================================
+  // [PHASE 16S] Attempt-truth metadata for stale banner suppression
+  // ==========================================================================
+  /** Runtime session ID from the page mount that created this attempt */
+  runtimeSessionId?: string | null
+  /** Which page flow triggered this attempt */
+  pageFlow?: 'main_generation' | 'regeneration' | 'adjustment_rebuild' | 'unknown'
+  /** When the dispatch started (ISO string) */
+  dispatchStartedAt?: string | null
+  /** Whether the request was actually dispatched to the builder */
+  requestDispatched?: boolean
+  /** Whether a response was received from the builder */
+  responseReceived?: boolean
+  /** Whether this result was hydrated from storage (not live) */
+  hydratedFromStorage?: boolean
 }
 
 /**
@@ -178,6 +193,101 @@ export interface BuildAttemptResult {
  */
 function generateAttemptId(): string {
   return `attempt_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
+}
+
+/**
+ * Generate a unique runtime session ID for the page mount.
+ */
+export function generateRuntimeSessionId(): string {
+  return `session_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`
+}
+
+/**
+ * [PHASE 16S] Truth-gate for whether a stored failure banner should render.
+ * Returns whether render is allowed and the reason if suppressed.
+ */
+export function shouldRenderBuildFailureBanner(
+  storedResult: BuildAttemptResult | null,
+  currentRuntimeSessionId: string,
+  currentSessionHasStartedNewAttempt: boolean,
+  currentAttemptStartedAt: string | null
+): { renderAllowed: boolean; suppressionReason: string | null } {
+  // No result = nothing to render
+  if (!storedResult) {
+    return { renderAllowed: false, suppressionReason: 'no_stored_result' }
+  }
+  
+  // Success results are not failure banners
+  if (storedResult.status === 'success') {
+    return { renderAllowed: false, suppressionReason: 'not_a_failure' }
+  }
+  
+  const storedRuntimeSessionId = storedResult.runtimeSessionId
+  const hydratedFromStorage = storedResult.hydratedFromStorage === true
+  const isGenericUnknown = storedResult.errorCode === 'unknown_generation_failure'
+  
+  // RULE 1: If stored result belongs to current runtime session, allow render
+  if (storedRuntimeSessionId && storedRuntimeSessionId === currentRuntimeSessionId) {
+    return { renderAllowed: true, suppressionReason: null }
+  }
+  
+  // RULE 2: If no new attempt started yet in current session, allow hydrated result
+  // (user may need to see a recent failure from before refresh)
+  if (!currentSessionHasStartedNewAttempt && !isGenericUnknown) {
+    return { renderAllowed: true, suppressionReason: null }
+  }
+  
+  // RULE 3: Suppress generic unknown errors from prior runtimes
+  if (isGenericUnknown && hydratedFromStorage) {
+    if (!storedRuntimeSessionId || storedRuntimeSessionId !== currentRuntimeSessionId) {
+      return { 
+        renderAllowed: false, 
+        suppressionReason: 'generic_unknown_from_prior_runtime' 
+      }
+    }
+  }
+  
+  // RULE 4: If current session started a new attempt after stored result, suppress
+  if (currentSessionHasStartedNewAttempt && currentAttemptStartedAt) {
+    const storedAttemptTime = new Date(storedResult.attemptedAt).getTime()
+    const currentAttemptTime = new Date(currentAttemptStartedAt).getTime()
+    if (currentAttemptTime > storedAttemptTime) {
+      return { 
+        renderAllowed: false, 
+        suppressionReason: 'newer_attempt_started_in_session' 
+      }
+    }
+  }
+  
+  // RULE 5: If hydrated from storage with mismatched/missing runtime session, suppress
+  if (hydratedFromStorage && storedRuntimeSessionId && storedRuntimeSessionId !== currentRuntimeSessionId) {
+    return { 
+      renderAllowed: false, 
+      suppressionReason: 'hydrated_from_different_runtime' 
+    }
+  }
+  
+  // Default: allow (backward compatibility with old results without runtimeSessionId)
+  return { renderAllowed: true, suppressionReason: null }
+}
+
+/**
+ * [PHASE 16S] Normalize a hydrated build attempt result from storage.
+ * Marks it as hydrated and handles missing fields for backward compatibility.
+ */
+export function normalizeHydratedBuildAttempt(
+  stored: BuildAttemptResult
+): BuildAttemptResult {
+  return {
+    ...stored,
+    hydratedFromStorage: true,
+    // Preserve existing values or set safe defaults for missing fields
+    runtimeSessionId: stored.runtimeSessionId ?? null,
+    pageFlow: stored.pageFlow ?? 'unknown',
+    dispatchStartedAt: stored.dispatchStartedAt ?? null,
+    requestDispatched: stored.requestDispatched ?? false,
+    responseReceived: stored.responseReceived ?? false,
+  }
 }
 
 /**

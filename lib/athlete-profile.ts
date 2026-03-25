@@ -1713,16 +1713,43 @@ export function getOnboardingProfile(): OnboardingProfile | null {
   if (typeof window === 'undefined') return null
   
   const stored = localStorage.getItem(ONBOARDING_STORAGE_KEY)
+  
+  // [PHASE 16F] Log raw storage state
+  console.log('[phase16f-onboarding-profile-read-audit]', {
+    stage: 'localStorage_read',
+    hasStoredData: !!stored,
+    storedDataLength: stored?.length || 0,
+    storageKey: ONBOARDING_STORAGE_KEY,
+  })
+  
   if (!stored) return null
   
   try {
     const parsed = JSON.parse(stored)
+    
+    // [PHASE 16F] Log parsed state
+    console.log('[phase16f-onboarding-profile-read-audit]', {
+      stage: 'json_parsed',
+      parsedOnboardingComplete: parsed?.onboardingComplete,
+      parsedPrimaryGoal: parsed?.primaryGoal,
+      parsedScheduleMode: parsed?.scheduleMode,
+    })
+    
     // CRITICAL: Pass through normalization barrier - never return raw JSON.parse output
     const normalized = normalizeOnboardingProfile(parsed)
     if (!normalized) {
       console.warn('[AthleteProfile] getOnboardingProfile: normalization returned null, stored data unusable')
       return null
     }
+    
+    // [PHASE 16F] Log normalized state
+    console.log('[phase16f-onboarding-profile-read-audit]', {
+      stage: 'normalized',
+      normalizedOnboardingComplete: normalized?.onboardingComplete,
+      normalizedPrimaryGoal: normalized?.primaryGoal,
+      normalizedScheduleMode: normalized?.scheduleMode,
+    })
+    
     return normalized
   } catch (err) {
     console.error('[AthleteProfile] getOnboardingProfile: JSON.parse failed:', err)
@@ -1733,11 +1760,25 @@ export function getOnboardingProfile(): OnboardingProfile | null {
 export function isOnboardingComplete(): boolean {
   try {
     const profile = getOnboardingProfile()
+    
+    // [PHASE 16F] Diagnostic for onboarding complete check
+    console.log('[phase16f-onboarding-complete-check-audit]', {
+      hasProfile: !!profile,
+      onboardingCompleteField: profile?.onboardingComplete,
+      sex: profile?.sex,
+      trainingExperience: profile?.trainingExperience,
+      primaryGoal: profile?.primaryGoal,
+      trainingDaysPerWeek: profile?.trainingDaysPerWeek,
+      sessionLengthMinutes: profile?.sessionLengthMinutes,
+      equipmentIsArray: Array.isArray(profile?.equipment),
+      equipmentLength: profile?.equipment?.length || 0,
+    })
+    
     if (!profile) return false
     
     // Minimum requirements for a complete onboarding
     // CRITICAL: Use Array.isArray() before .length to prevent crash on legacy/malformed profiles
-    return (
+    const result = (
       profile.onboardingComplete === true ||
       (
         profile.sex !== null &&
@@ -1748,6 +1789,14 @@ export function isOnboardingComplete(): boolean {
         Array.isArray(profile.equipment) && profile.equipment.length > 0
       )
     )
+    
+    // [PHASE 16F] Log result
+    console.log('[phase16f-onboarding-complete-check-audit]', {
+      result,
+      reason: result ? 'complete' : 'incomplete_fields',
+    })
+    
+    return result
   } catch (err) {
     console.error('[AthleteProfile] isOnboardingComplete threw (defaulting to false):', err)
     return false

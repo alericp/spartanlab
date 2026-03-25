@@ -224,6 +224,15 @@ export default function OnboardingCompleteClient() {
           verdict: 'generation_stalled_forcing_error',
         })
         
+        // [PHASE 16F] Loading timeout verdict
+        console.log('[phase16f-loading-timeout-verdict]', {
+          timedOut: true,
+          lastKnownStage: generationStageRef.current,
+          elapsedMs: elapsed,
+          threshold: HARD_TIMEOUT_MS,
+          timestamp: new Date().toISOString(),
+        })
+        
         setErrorMessage(`Program generation stalled during "${generationStageRef.current}". Please retry.`)
         setStep('error')
         return // Stop the interval
@@ -403,6 +412,15 @@ export default function OnboardingCompleteClient() {
       
       console.log('[OnboardingCompleteClient] IDEMPOTENCY: Fresh generation starting')
       
+      // [PHASE 16F] Generation trigger start - this should be logged if we reach this point
+      console.log('[phase16f-generation-trigger-audit]', {
+        stage: 'generation_trigger_entry',
+        timestamp: new Date().toISOString(),
+        hasBootstrapData: !!bootstrapData,
+        bootstrapLocalIsPro: bootstrapData?.localIsPro,
+        bootstrapHasProfile: !!bootstrapData?.loadedProfile,
+      })
+      
       // [PHASE 16A TASK 4] Start generation timer
       const genStartTime = Date.now()
       setGenerationStartTime(genStartTime)
@@ -479,8 +497,25 @@ export default function OnboardingCompleteClient() {
           timestamp: new Date().toISOString(),
         })
         
+        // [PHASE 16F] Generation trigger audit
+        console.log('[phase16f-generation-trigger-audit]', {
+          stage: 'pre_generateFirstProgram_call',
+          timestamp: new Date().toISOString(),
+          elapsedMs: Date.now() - genStartTime,
+        })
+        
         // [PHASE 16C] Now async - await the generation call
         const result = await onboardingModule.generateFirstProgram(handleStageChange)
+        
+        // [PHASE 16F] Generation returned
+        console.log('[phase16f-generation-trigger-audit]', {
+          stage: 'post_generateFirstProgram_call',
+          timestamp: new Date().toISOString(),
+          elapsedMs: Date.now() - genStartTime,
+          resultSuccess: result?.success,
+          resultHasProgram: !!result?.program,
+          resultError: result?.error,
+        })
         completeStage('generateFirstProgram_done', genStartTime, {
           success: result.success,
           hasProgram: !!result.program,
@@ -580,6 +615,15 @@ export default function OnboardingCompleteClient() {
             sessionCount: verificationState.sessionCount,
             branch: bootstrapData?.localIsPro ? 'pro-success' : 'free-preview'
           })
+          
+          // [PHASE 16F] Final client state transition audit
+          console.log('[phase16f-onboarding-complete-client-state-audit]', {
+            previousStep: step,
+            newStep: 'ready',
+            totalElapsedMs: Date.now() - genStartTime,
+            verdict: 'success_state_transition',
+          })
+          
           setStep('ready')
         } else {
           // [PHASE 16B] Error stage tracking
@@ -594,6 +638,17 @@ export default function OnboardingCompleteClient() {
             totalElapsedMs: Date.now() - genStartTime,
           })
           console.error('[OnboardingCompleteClient] Generation failed:', result.error)
+          
+          // [PHASE 16F] Error state transition audit
+          console.log('[phase16f-onboarding-complete-client-state-audit]', {
+            previousStep: step,
+            newStep: 'error',
+            totalElapsedMs: Date.now() - genStartTime,
+            errorReason: result.error,
+            failedStage: (result as any).failedStage || 'unknown',
+            verdict: 'error_state_transition_from_result',
+          })
+          
           setErrorMessage(result.error || 'Failed to generate program')
           setStep('error')
         }
@@ -611,6 +666,25 @@ export default function OnboardingCompleteClient() {
           totalElapsedMs: Date.now() - genStartTime,
         })
         console.error('[OnboardingCompleteClient] Exception during generation:', err)
+        
+        // [PHASE 16F] Exception state transition audit
+        console.log('[phase16f-onboarding-complete-client-state-audit]', {
+          previousStep: step,
+          newStep: 'error',
+          totalElapsedMs: Date.now() - genStartTime,
+          exceptionMessage: String(err),
+          lastKnownStage: generationStageRef.current,
+          verdict: 'error_state_transition_from_exception',
+        })
+        
+        // [PHASE 16F] Final root cause verdict - exception path
+        console.log('[phase16f-final-root-cause-verdict]', {
+          rootCause: 'exception_during_generation',
+          exceptionMessage: String(err),
+          lastKnownStage: generationStageRef.current,
+          totalElapsedMs: Date.now() - genStartTime,
+        })
+        
         setErrorMessage(String(err))
         setStep('error')
       }

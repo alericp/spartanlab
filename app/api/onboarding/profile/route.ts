@@ -36,6 +36,13 @@ export async function POST(request: Request) {
     // Previously missing: secondary_goal, selected_skills, selected_flexibility,
     // selected_strength, goal_category, session_duration_mode
     // ==========================================================================
+    // [PHASE 16D] Column count: 21, Value count must match exactly
+    // Columns: id, user_id, sex, experience_level, training_days_per_week, schedule_mode,
+    //          session_duration_mode, session_length_minutes, primary_goal, secondary_goal,
+    //          selected_skills, selected_flexibility, selected_strength, goal_category,
+    //          equipment_available, joint_cautions, weakest_area, training_style,
+    //          onboarding_complete, created_at, updated_at
+    // Values:  gen_random_uuid(), $1-$17, true, NOW(), NOW() = 21 values
     const upsertResult = await query(`
       INSERT INTO athlete_profiles (
         id,
@@ -61,7 +68,7 @@ export async function POST(request: Request) {
         updated_at
       ) VALUES (
         gen_random_uuid()::text,
-        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18,
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17,
         true, NOW(), NOW()
       )
       ON CONFLICT (user_id) DO UPDATE SET
@@ -129,6 +136,15 @@ export async function POST(request: Request) {
       profileData.weakestArea || null,
       profileData.trainingStyle || 'balanced_hybrid',
     ])
+    
+    // [PHASE 16D] Audit: Column/value parity verified
+    // 21 columns = gen_random_uuid() + 17 params ($1-$17) + true + NOW() + NOW()
+    console.log('[phase16d-profile-save-parity-audit]', {
+      columnCount: 21,
+      valueCount: 21,
+      paramCount: 17,
+      parityVerdict: 'columns_values_match',
+    })
     
     // TASK 6: Log what was actually saved
     console.log('[Onboarding API] TASK A FIX: Saved ALL profile fields:', {

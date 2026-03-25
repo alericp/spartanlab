@@ -892,7 +892,27 @@ export default function OnboardingCompleteClient() {
                   completeStage('retry_import_done', retryStartTime)
                   
                   trackStage('retry_generate_start', retryStartTime)
-                  const result = onboardingModule.generateFirstProgram()
+                  // [PHASE 16C] Retry also uses async generation with callback
+                  const handleRetryStageChange = (stage: string) => {
+                    trackStage(`retry_builder_${stage}`, retryStartTime)
+                    const stageMessages: Record<string, string> = {
+                      'init': 'Preparing your program...',
+                      'input_resolution': 'Resolving your training preferences...',
+                      'profile_validation': 'Validating your profile...',
+                      'structure_selection': 'Selecting weekly structure...',
+                      'skill_allocation': 'Allocating skills to sessions...',
+                      'session_assembly': 'Building your training sessions...',
+                      'session_construction': 'Constructing exercises...',
+                      'post_processing': 'Finalizing program details...',
+                      'validation_complete': 'Validating your program...',
+                    }
+                    if (stageMessages[stage]) {
+                      setStatusMessage(stageMessages[stage])
+                    }
+                  }
+                  
+                  // [PHASE 16C] Await the async generation on retry
+                  const result = await onboardingModule.generateFirstProgram(handleRetryStageChange)
                   completeStage('retry_generate_done', retryStartTime, { success: result.success })
                   setProgramResult(result)
                   

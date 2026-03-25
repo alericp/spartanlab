@@ -161,6 +161,91 @@ export async function POST(request: Request) {
     markStage('truth_validation_done')
     
     // ==========================================================================
+    // [PHASE 16J] STAGE: Build canonical profile from server payload
+    // ==========================================================================
+    markStage('canonical_profile_construction_start')
+    
+    // [PHASE 16J] Construct canonical profile from route payload
+    // This is the FIX: builder cannot read from localStorage on server
+    // We must construct the canonical profile object and pass it explicitly
+    const canonicalProfileOverride = {
+      // [PHASE 16J] Required ProfileSnapshot fields
+      snapshotId: `server-gen-${Date.now()}`,
+      createdAt: new Date().toISOString(),
+      
+      // Identity
+      onboardingComplete: onboardingProfile.onboardingComplete ?? true,
+      
+      // Goals
+      primaryGoal: programInputs.primaryGoal,
+      secondaryGoal: programInputs.secondaryGoal || null,
+      goalCategory: onboardingProfile.goalCategory || programInputs.primaryGoal,
+      
+      // Training selections (CRITICAL: these were missing in stale profile)
+      selectedSkills: programInputs.selectedSkills || onboardingProfile.selectedSkills || [],
+      selectedFlexibility: programInputs.selectedFlexibility || onboardingProfile.selectedFlexibility || [],
+      selectedStrength: programInputs.selectedStrength || onboardingProfile.selectedStrength || [],
+      
+      // Equipment (CRITICAL: must be present for validation)
+      equipment: programInputs.equipment || onboardingProfile.equipmentAvailable || [],
+      equipmentAvailable: programInputs.equipment || onboardingProfile.equipmentAvailable || [],
+      
+      // Schedule truth
+      scheduleMode: programInputs.scheduleMode || onboardingProfile.scheduleMode || 'static',
+      sessionDurationMode: programInputs.sessionDurationMode || onboardingProfile.sessionDurationMode || 'static',
+      trainingDaysPerWeek: programInputs.trainingDaysPerWeek || onboardingProfile.trainingDaysPerWeek || 3,
+      sessionLengthMinutes: programInputs.sessionLength || onboardingProfile.sessionLengthMinutes || 45,
+      
+      // Profile data
+      experienceLevel: programInputs.experienceLevel || onboardingProfile.experienceLevel || 'intermediate',
+      bodyweight: programInputs.bodyweight || onboardingProfile.bodyweight,
+      sex: onboardingProfile.sex,
+      
+      // Optional fields
+      trainingStyle: onboardingProfile.trainingStyle,
+      jointCautions: onboardingProfile.jointCautions || [],
+      weakestArea: onboardingProfile.weakestArea,
+      
+      // Benchmark data (may be missing - that's OK)
+      benchmarks: onboardingProfile.benchmarks || {},
+      skillBenchmarks: onboardingProfile.skillBenchmarks || {},
+      flexibilityBenchmarks: onboardingProfile.flexibilityBenchmarks || {},
+      weightedBenchmarks: onboardingProfile.weightedBenchmarks || {},
+    }
+    
+    // [PHASE 16J] Server payload truth audit
+    console.log('[phase16j-server-payload-truth-audit]', {
+      fromPayload: {
+        primaryGoal: programInputs.primaryGoal,
+        secondaryGoal: programInputs.secondaryGoal,
+        selectedSkillsCount: programInputs.selectedSkills?.length || 0,
+        equipmentCount: programInputs.equipment?.length || 0,
+        scheduleMode: programInputs.scheduleMode,
+        trainingDaysPerWeek: programInputs.trainingDaysPerWeek,
+      },
+      fromOnboardingProfile: {
+        onboardingComplete: onboardingProfile.onboardingComplete,
+        equipmentAvailableCount: onboardingProfile.equipmentAvailable?.length || 0,
+        selectedSkillsCount: onboardingProfile.selectedSkills?.length || 0,
+      },
+    })
+    
+    // [PHASE 16J] Canonical profile built audit
+    console.log('[phase16j-server-canonical-profile-built-audit]', {
+      primaryGoal: canonicalProfileOverride.primaryGoal,
+      onboardingComplete: canonicalProfileOverride.onboardingComplete,
+      selectedSkillsCount: canonicalProfileOverride.selectedSkills.length,
+      selectedFlexibilityCount: canonicalProfileOverride.selectedFlexibility.length,
+      selectedStrengthCount: canonicalProfileOverride.selectedStrength.length,
+      equipmentCount: canonicalProfileOverride.equipment.length,
+      scheduleMode: canonicalProfileOverride.scheduleMode,
+      trainingDaysPerWeek: canonicalProfileOverride.trainingDaysPerWeek,
+      experienceLevel: canonicalProfileOverride.experienceLevel,
+    })
+    
+    markStage('canonical_profile_constructed')
+    
+    // ==========================================================================
     // STAGE: Dynamic import of generation service
     // ==========================================================================
     markStage('generation_service_import_start')
@@ -187,9 +272,22 @@ export async function POST(request: Request) {
       })
     }
     
+    // [PHASE 16J] Dispatch audit - confirm builder will receive override
+    console.log('[phase16j-builder-override-dispatch-audit]', {
+      dispatchingWithOverride: true,
+      overridePrimaryGoal: canonicalProfileOverride.primaryGoal,
+      overrideOnboardingComplete: canonicalProfileOverride.onboardingComplete,
+      overrideSelectedSkillsCount: canonicalProfileOverride.selectedSkills.length,
+      overrideEquipmentCount: canonicalProfileOverride.equipment.length,
+    })
+    
     let program
     try {
-      program = await generateAdaptiveProgram(programInputs, serverStageCallback)
+      // [PHASE 16J] Pass canonicalProfileOverride to builder
+      // This is the FIX: builder no longer calls getCanonicalProfile() which fails on server
+      program = await generateAdaptiveProgram(programInputs, serverStageCallback, {
+        canonicalProfileOverride,
+      })
     } catch (builderError) {
       console.log('[phase16g-server-generation-failure-verdict]', {
         failedStage: 'builder_execution',

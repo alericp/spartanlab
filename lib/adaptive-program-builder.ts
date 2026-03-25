@@ -1625,8 +1625,23 @@ export async function generateAdaptiveProgram(
       elapsedMs: Date.now() - builderStartTime,
     })
     
-    // [PHASE 16C] Now async with cooperative yielding
-    const result = await generateAdaptiveProgramImpl(inputs, stageTracker, genContext)
+  // [PHASE 16K] Scope resolution audit - serverOptions is in scope here
+  console.log('[phase16k-builder-scope-resolution-audit]', {
+    serverOptionsInScope: true,
+    hasCanonicalOverride: !!serverOptions?.canonicalProfileOverride,
+    passingToImpl: true,
+  })
+  
+  // [PHASE 16K] Canonical handoff audit
+  console.log('[phase16k-builder-canonical-handoff-audit]', {
+    handoffMethod: 'serverOptions_parameter',
+    overridePresent: !!serverOptions?.canonicalProfileOverride,
+    implWillResolve: 'from_serverOptions_or_getCanonicalProfile',
+  })
+  
+  // [PHASE 16C] Now async with cooperative yielding
+  // [PHASE 16K] FIX: Pass serverOptions to impl function
+  const result = await generateAdaptiveProgramImpl(inputs, stageTracker, genContext, serverOptions)
     
     // [PHASE 16F] Post-impl call diagnostic
     console.log('[phase16f-builder-stage-audit]', {
@@ -1834,13 +1849,19 @@ export async function generateAdaptiveProgram(
 }
 
 // Internal implementation - all generation logic moved here for top-level error classification
+// [PHASE 16K] Added serverOptions parameter to fix out-of-scope reference bug
 async function generateAdaptiveProgramImpl(
   inputs: AdaptiveProgramInputs,
   stageTracker: StageTracker,
-  genContext: GenerationContext
-// [PHASE 16F] Impl function entry diagnostic - placed outside function body for visibility
-// This line confirms we reached the function definition
+  genContext: GenerationContext,
+  serverOptions?: ServerGenerationOptions  // [PHASE 16K] FIX: Pass server options explicitly
 ): Promise<AdaptiveProgram> {
+  // [PHASE 16K] Impl function entry - serverOptions now in scope
+  console.log('[phase16k-impl-canonical-receipt-audit]', {
+    hasServerOptions: !!serverOptions,
+    hasCanonicalOverride: !!serverOptions?.canonicalProfileOverride,
+    timestamp: new Date().toISOString(),
+  })
   // [PHASE 16F] Impl function entry log
   console.log('[phase16f-builder-stage-audit]', {
     stage: 'impl_function_entry',
@@ -2072,6 +2093,13 @@ async function generateAdaptiveProgramImpl(
   // [PHASE 16J] CANONICAL PROFILE RESOLUTION
   // For server routes: use canonicalProfileOverride (localStorage unavailable)
   // For client routes: use getCanonicalProfile() (normal browser flow)
+  // [PHASE 16K] serverOptions is now properly in scope via function parameter
+  console.log('[phase16k-no-out-of-scope-reference-verdict]', {
+    serverOptionsInScope: serverOptions !== undefined || serverOptions === undefined, // proves variable exists
+    hasOverride: !!serverOptions?.canonicalProfileOverride,
+    verdict: 'serverOptions_legally_scoped',
+  })
+  
   let canonicalProfile: ProfileSnapshot
   const usingOverride = !!serverOptions?.canonicalProfileOverride
   

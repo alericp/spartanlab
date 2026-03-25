@@ -10,7 +10,7 @@ import { SpartanIcon } from '@/components/brand/SpartanLogo'
 import { useState, useEffect, Component, ReactNode } from 'react'
 import { cn } from '@/lib/utils'
 import { SubscriptionBadge, useEntitlement } from '@/components/billing/SubscriptionBadge'
-import { useOwnerInit } from '@/hooks/useOwnerInit'
+// [PHASE 14D] Removed useOwnerInit - OwnerBootstrapProvider now handles owner initialization
 
 // =============================================================================
 // NAVIGATION ERROR BOUNDARY
@@ -144,8 +144,8 @@ function NavigationInner() {
   const { userId, signOut, isLoaded } = useAuth()
   const entitlement = useEntitlement()
   
-  // Initialize owner detection from Clerk auth - this enables owner simulation throughout the app
-  useOwnerInit()
+  // [PHASE 14D] Owner detection is now handled by OwnerBootstrapProvider in the app layout
+  // No need for useOwnerInit() here - it's redundant and was a split owner source
 
   // Lock body scroll when mobile menu is open
   useEffect(() => {

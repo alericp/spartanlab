@@ -270,14 +270,68 @@ export function generateWeeklySessionIntents(config: VariationConfig): SessionIn
   const { skill, trainingStyle, primaryConstraint, experienceLevel, weeklyDays, existingIntents } = config
   const intents: SessionIntent[] = []
   
+  // [PHASE 16M] Input audit
+  console.log('[phase16m-session-distribution-input-audit]', {
+    skill,
+    trainingStyle,
+    experienceLevel,
+    weeklyDays,
+    existingIntentsCount: existingIntents.length,
+  })
+  
   // Get skill-specific movement families
   const skillFamilies = getSkillMovementFamilies(skill)
   
   // Determine base session distribution
   const distribution = getSessionDistribution(weeklyDays, trainingStyle, experienceLevel)
   
+  // [PHASE 16M] HARD INVARIANT CHECK: distribution length MUST match weeklyDays
+  // This prevents vague `.type` undefined crashes in buildSessionIntent
+  console.log('[phase16m-session-distribution-length-audit]', {
+    requestedWeeklyDays: weeklyDays,
+    actualDistributionLength: distribution.length,
+    match: distribution.length === weeklyDays,
+    distributionTypes: distribution.map(d => d.type),
+  })
+  
+  if (distribution.length !== weeklyDays) {
+    const error = new Error(
+      `[session_distribution_length_mismatch] Distribution length (${distribution.length}) does not match weeklyDays (${weeklyDays}). ` +
+      `trainingStyle=${trainingStyle}, experienceLevel=${experienceLevel}. ` +
+      `This is a builder contract violation - getSessionDistribution must return exactly weeklyDays entries.`
+    )
+    console.error('[phase16m-distribution-mismatch-fatal]', {
+      requestedWeeklyDays: weeklyDays,
+      actualDistributionLength: distribution.length,
+      trainingStyle,
+      experienceLevel,
+      skill,
+      verdict: 'session_distribution_length_mismatch',
+    })
+    throw error
+  }
+  
   for (let day = 1; day <= weeklyDays; day++) {
     const dayDistribution = distribution[day - 1]
+    
+    // [PHASE 16M] Entry guard - should never trigger if invariant above passes
+    if (!dayDistribution) {
+      const error = new Error(
+        `[missing_session_distribution_for_day] Day ${day} has no distribution entry. ` +
+        `weeklyDays=${weeklyDays}, distributionLength=${distribution.length}, ` +
+        `trainingStyle=${trainingStyle}, experienceLevel=${experienceLevel}`
+      )
+      console.error('[phase16m-missing-day-distribution-fatal]', {
+        dayNumber: day,
+        weeklyDays,
+        distributionLength: distribution.length,
+        trainingStyle,
+        experienceLevel,
+        skill,
+        verdict: 'missing_session_distribution_for_day',
+      })
+      throw error
+    }
     
     // Build intent with appropriate variation
     const intent = buildSessionIntent({
@@ -293,6 +347,15 @@ export function generateWeeklySessionIntents(config: VariationConfig): SessionIn
     
     intents.push(intent)
   }
+  
+  // [PHASE 16M] Final verdict - proves all intents were generated successfully
+  console.log('[phase16m-session-variety-final-verdict]', {
+    requestedWeeklyDays: weeklyDays,
+    generatedIntentsCount: intents.length,
+    allIntentsValid: intents.every(i => i.sessionType !== undefined),
+    sessionTypes: intents.map(i => i.sessionType),
+    verdict: intents.length === weeklyDays ? 'success' : 'mismatch',
+  })
   
   return intents
 }
@@ -366,13 +429,123 @@ function getSessionDistribution(
   }
   
   // 5-day distribution
-  return [
-    { type: 'skill_exposure', isPrimary: true, variant: 'A', supportVariant: 'primary' },
-    { type: 'strength_emphasis', isPrimary: true, variant: 'B', supportVariant: 'secondary' },
-    { type: 'technique_day', isPrimary: true, variant: 'A', supportVariant: 'primary' },
-    { type: 'support_volume', isPrimary: false, variant: 'C', supportVariant: 'tertiary' },
-    { type: 'density_day', isPrimary: false, variant: 'B', supportVariant: 'secondary' },
-  ]
+  if (days === 5) {
+    return [
+      { type: 'skill_exposure', isPrimary: true, variant: 'A', supportVariant: 'primary' },
+      { type: 'strength_emphasis', isPrimary: true, variant: 'B', supportVariant: 'secondary' },
+      { type: 'technique_day', isPrimary: true, variant: 'A', supportVariant: 'primary' },
+      { type: 'support_volume', isPrimary: false, variant: 'C', supportVariant: 'tertiary' },
+      { type: 'density_day', isPrimary: false, variant: 'B', supportVariant: 'secondary' },
+    ]
+  }
+  
+  // [PHASE 16M] 6-day distribution
+  // High-frequency requires intelligent management: skill exposure spaced for recovery,
+  // strength emphasis balanced with technique, joint support for tendon health
+  if (days === 6) {
+    console.log('[phase16m-session-distribution-6day-verdict]', {
+      days: 6,
+      style,
+      level,
+      verdict: 'using_6day_distribution',
+    })
+    
+    if (style === 'skill') {
+      return [
+        { type: 'skill_exposure', isPrimary: true, variant: 'A', supportVariant: 'primary' },
+        { type: 'technique_day', isPrimary: true, variant: 'B', supportVariant: 'secondary' },
+        { type: 'support_volume', isPrimary: false, variant: 'C', supportVariant: 'tertiary' },
+        { type: 'skill_exposure', isPrimary: true, variant: 'A', supportVariant: 'primary' }, // Repeated exposure
+        { type: 'density_day', isPrimary: false, variant: 'B', supportVariant: 'secondary' },
+        { type: 'joint_support_day', isPrimary: false, variant: 'C', supportVariant: 'tertiary' }, // Recovery-oriented
+      ]
+    }
+    if (style === 'strength') {
+      return [
+        { type: 'strength_emphasis', isPrimary: true, variant: 'A', supportVariant: 'primary' },
+        { type: 'skill_exposure', isPrimary: true, variant: 'B', supportVariant: 'secondary' },
+        { type: 'support_volume', isPrimary: false, variant: 'C', supportVariant: 'tertiary' },
+        { type: 'strength_emphasis', isPrimary: true, variant: 'A', supportVariant: 'primary' }, // Second strength day
+        { type: 'density_day', isPrimary: false, variant: 'B', supportVariant: 'secondary' },
+        { type: 'joint_support_day', isPrimary: false, variant: 'C', supportVariant: 'tertiary' },
+      ]
+    }
+    // Default mixed for 6-day
+    return [
+      { type: 'skill_exposure', isPrimary: true, variant: 'A', supportVariant: 'primary' },
+      { type: 'strength_emphasis', isPrimary: true, variant: 'B', supportVariant: 'secondary' },
+      { type: 'technique_day', isPrimary: true, variant: 'A', supportVariant: 'primary' },
+      { type: 'support_volume', isPrimary: false, variant: 'C', supportVariant: 'tertiary' },
+      { type: 'density_day', isPrimary: false, variant: 'B', supportVariant: 'secondary' },
+      { type: 'joint_support_day', isPrimary: false, variant: 'C', supportVariant: 'tertiary' },
+    ]
+  }
+  
+  // [PHASE 16M] 7-day distribution
+  // Maximum frequency with mandatory recovery-oriented day for intensity management
+  // Not 7 hard days - includes lower-stress sessions for sustainability
+  if (days === 7) {
+    console.log('[phase16m-session-distribution-7day-verdict]', {
+      days: 7,
+      style,
+      level,
+      verdict: 'using_7day_distribution',
+    })
+    
+    if (style === 'skill') {
+      return [
+        { type: 'skill_exposure', isPrimary: true, variant: 'A', supportVariant: 'primary' },
+        { type: 'technique_day', isPrimary: true, variant: 'B', supportVariant: 'secondary' },
+        { type: 'support_volume', isPrimary: false, variant: 'C', supportVariant: 'tertiary' },
+        { type: 'skill_exposure', isPrimary: true, variant: 'A', supportVariant: 'primary' }, // Second skill exposure
+        { type: 'density_day', isPrimary: false, variant: 'B', supportVariant: 'secondary' },
+        { type: 'joint_support_day', isPrimary: false, variant: 'C', supportVariant: 'tertiary' }, // Recovery
+        { type: 'mixed_capacity', isPrimary: false, variant: 'B', supportVariant: 'secondary' }, // Light balanced day
+      ]
+    }
+    if (style === 'strength') {
+      return [
+        { type: 'strength_emphasis', isPrimary: true, variant: 'A', supportVariant: 'primary' },
+        { type: 'skill_exposure', isPrimary: true, variant: 'B', supportVariant: 'secondary' },
+        { type: 'support_volume', isPrimary: false, variant: 'C', supportVariant: 'tertiary' },
+        { type: 'strength_emphasis', isPrimary: true, variant: 'A', supportVariant: 'primary' }, // Second strength
+        { type: 'technique_day', isPrimary: true, variant: 'B', supportVariant: 'secondary' },
+        { type: 'density_day', isPrimary: false, variant: 'C', supportVariant: 'tertiary' },
+        { type: 'joint_support_day', isPrimary: false, variant: 'B', supportVariant: 'secondary' }, // Recovery
+      ]
+    }
+    // Default mixed for 7-day
+    return [
+      { type: 'skill_exposure', isPrimary: true, variant: 'A', supportVariant: 'primary' },
+      { type: 'strength_emphasis', isPrimary: true, variant: 'B', supportVariant: 'secondary' },
+      { type: 'technique_day', isPrimary: true, variant: 'A', supportVariant: 'primary' },
+      { type: 'support_volume', isPrimary: false, variant: 'C', supportVariant: 'tertiary' },
+      { type: 'density_day', isPrimary: false, variant: 'B', supportVariant: 'secondary' },
+      { type: 'joint_support_day', isPrimary: false, variant: 'C', supportVariant: 'tertiary' },
+      { type: 'mixed_capacity', isPrimary: false, variant: 'A', supportVariant: 'primary' },
+    ]
+  }
+  
+  // [PHASE 16M] Fallback for unexpected days (1 or 8+)
+  // Returns a minimal safe array - but this should be rare
+  console.warn('[phase16m-session-distribution-unexpected-days]', {
+    days,
+    style,
+    level,
+    verdict: 'using_fallback_distribution',
+  })
+  
+  // Single day fallback
+  if (days === 1) {
+    return [
+      { type: 'skill_exposure', isPrimary: true, variant: 'A', supportVariant: 'primary' },
+    ]
+  }
+  
+  // For days > 7, cap at 7-day distribution and warn
+  // This prevents crashes while making the edge case visible
+  const cappedDays = Math.min(days, 7)
+  return getSessionDistribution(cappedDays, style, level)
 }
 
 interface IntentBuilderInput {
@@ -388,6 +561,33 @@ interface IntentBuilderInput {
 
 function buildSessionIntent(input: IntentBuilderInput): SessionIntent {
   const { dayNumber, skill, families, constraint, distribution, trainingStyle, experienceLevel, existingIntents } = input
+  
+  // [PHASE 16M] Entry guard - distribution must be defined
+  // This is the exact crash site for the `.type` undefined error
+  console.log('[phase16m-build-session-intent-entry-audit]', {
+    dayNumber,
+    skill,
+    trainingStyle,
+    experienceLevel,
+    distributionDefined: distribution !== undefined && distribution !== null,
+    distributionType: distribution?.type,
+  })
+  
+  if (!distribution) {
+    const error = new Error(
+      `[missing_session_distribution_for_day] buildSessionIntent received undefined distribution. ` +
+      `dayNumber=${dayNumber}, skill=${skill}, trainingStyle=${trainingStyle}, experienceLevel=${experienceLevel}. ` +
+      `This indicates getSessionDistribution did not return enough entries for the requested weeklyDays.`
+    )
+    console.error('[phase16m-build-intent-missing-distribution-fatal]', {
+      dayNumber,
+      skill,
+      trainingStyle,
+      experienceLevel,
+      verdict: 'missing_session_distribution_for_day',
+    })
+    throw error
+  }
   
   // Determine fatigue profile from session type
   const fatigueProfile = getFatigueProfileForSessionType(distribution.type)

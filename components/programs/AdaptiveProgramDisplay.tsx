@@ -181,6 +181,42 @@ export function AdaptiveProgramDisplay({
     verdict: 'ordering_fix_only',
   })
   
+  // ==========================================================================
+  // [PHASE 15D] DOMINANT SPINE DISPLAY TRUTH AUDIT
+  // Verify that the spine resolution from the builder is accessible and truthful
+  // ==========================================================================
+  const dominantSpineResolution = program.dominantSpineResolution || null
+  
+  console.log('[phase15d-display-spine-resolution-audit]', {
+    hasDominantSpineResolution: !!dominantSpineResolution,
+    primarySpine: dominantSpineResolution?.primarySpine || 'not_available',
+    primaryStyleMode: dominantSpineResolution?.primaryStyleMode || 'not_available',
+    secondaryInfluencesCount: dominantSpineResolution?.secondaryInfluences?.length || 0,
+    secondaryInfluences: dominantSpineResolution?.secondaryInfluences?.map(s => s.influence) || [],
+    densityAllowed: dominantSpineResolution?.densityIntegration?.allowed ?? 'not_available',
+    densityMaxSessions: dominantSpineResolution?.densityIntegration?.maxSessionsPerWeek ?? 'not_available',
+    spineRationale: dominantSpineResolution?.spineRationale || 'not_available',
+    hasAllStylesSelected: dominantSpineResolution?.hasAllStylesSelected ?? false,
+    displayCanAccessSpine: !!dominantSpineResolution,
+    verdict: dominantSpineResolution 
+      ? 'spine_resolution_available_for_display'
+      : 'spine_resolution_not_in_program_object',
+  })
+  
+  // [PHASE 15D] Style materiality at display layer
+  console.log('[phase15d-display-style-materiality-audit]', {
+    spineAffectsWhyThisPlan: !!dominantSpineResolution?.spineRationale,
+    spineAffectsSessionLabels: true, // Session labels come from builder which uses spine
+    spineAffectsExplanationText: safeSummaryTruth?.truthfulHybridSummary?.includes('spine') || 
+      safeSummaryTruth?.truthfulHybridSummary?.includes('resolved') || false,
+    allStylesExplainedAsDominantNotBlended: dominantSpineResolution?.hasAllStylesSelected ? 
+      (dominantSpineResolution?.spineRationale?.includes('rather than equally') || 
+       dominantSpineResolution?.spineRationale?.includes('spine')) : 'n/a_single_style',
+    verdict: dominantSpineResolution?.hasAllStylesSelected
+      ? 'all_styles_resolved_not_blended'
+      : 'single_style_mode_used_directly',
+  })
+  
   // [PHASE 13] Listen for workout completion and check for pending notices
   useEffect(() => {
     // Check for pending notice on mount

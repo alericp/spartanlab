@@ -294,6 +294,13 @@ export async function generateFirstProgram(
   }
   
   try {
+    // [PHASE 16F] Post-save chain map audit
+    console.log('[phase16f-post-save-chain-map-audit]', {
+      stage: 'generateFirstProgram_entry',
+      timestamp: new Date().toISOString(),
+      hasWindow: typeof window !== 'undefined',
+    })
+    
     markStage('production_safety')
     // PRODUCTION SAFETY: Mark canonical generation path
     markCanonicalPathUsed('program_generation')
@@ -302,9 +309,38 @@ export async function generateFirstProgram(
     resetProofLog()
     
     markStage('read_profile')
+    
+    // [PHASE 16F] Profile read diagnostic
+    console.log('[phase16f-generation-stage-audit]', {
+      stage: 'read_profile_start',
+      timestamp: new Date().toISOString(),
+    })
+    
     const profile = getOnboardingProfile()
     
-    if (!profile || !isOnboardingComplete()) {
+    // [PHASE 16F] Profile read result
+    const onboardingCompleteFlag = isOnboardingComplete()
+    console.log('[phase16f-generation-stage-audit]', {
+      stage: 'read_profile_done',
+      hasProfile: !!profile,
+      isOnboardingComplete: onboardingCompleteFlag,
+      profilePrimaryGoal: profile?.primaryGoal,
+      profileScheduleMode: profile?.scheduleMode,
+      profileSessionDurationMode: profile?.sessionDurationMode,
+      selectedSkillsCount: profile?.selectedSkills?.length || 0,
+      profileOnboardingCompleteField: profile?.onboardingComplete,
+      timestamp: new Date().toISOString(),
+    })
+    
+    if (!profile || !onboardingCompleteFlag) {
+      // [PHASE 16F] Log why we're failing here
+      console.log('[phase16f-final-root-cause-verdict]', {
+        rootCause: 'profile_or_onboarding_incomplete',
+        hasProfile: !!profile,
+        isOnboardingComplete: onboardingCompleteFlag,
+        profileOnboardingCompleteField: profile?.onboardingComplete,
+        timestamp: new Date().toISOString(),
+      })
       console.log('[OnboardingService] generateFirstProgram: onboarding not complete')
       return {
         success: false,
@@ -333,11 +369,34 @@ export async function generateFirstProgram(
     // as regenerate and modify-program, eliminating split-brain between entry types.
     
     markStage('canonical_entry_build_start')
+    
+    // [PHASE 16F] Canonical entry build start
+    console.log('[phase16f-generation-stage-audit]', {
+      stage: 'canonical_entry_build_start',
+      timestamp: new Date().toISOString(),
+    })
+    
     // Import canonical entry builder
     const { buildCanonicalGenerationEntry, entryToAdaptiveInputs } = require('./canonical-profile-service')
     
+    // [PHASE 16F] Import success
+    console.log('[phase16f-generation-stage-audit]', {
+      stage: 'canonical_entry_builder_imported',
+      timestamp: new Date().toISOString(),
+    })
+    
     // Build canonical entry - validates all required fields are present
     const entryResult = buildCanonicalGenerationEntry('generateFirstProgram')
+    
+    // [PHASE 16F] Entry build result
+    console.log('[phase16f-generation-stage-audit]', {
+      stage: 'canonical_entry_build_result',
+      success: entryResult.success,
+      hasEntry: !!entryResult.entry,
+      errorCode: entryResult.error?.code,
+      errorMessage: entryResult.error?.message,
+      timestamp: new Date().toISOString(),
+    })
     
     if (!entryResult.success) {
       console.error('[OnboardingService] Generation entry validation failed:', entryResult.error)
@@ -416,8 +475,28 @@ export async function generateFirstProgram(
     })
     
     markStage('adaptive_program_generate_start')
+    
+    // [PHASE 16F] Builder entry diagnostic
+    console.log('[phase16f-builder-entry-verdict]', {
+      stage: 'builder_call_start',
+      timestamp: new Date().toISOString(),
+      inputPrimaryGoal: programInputs.primaryGoal,
+      inputSelectedSkillsCount: programInputs.selectedSkills?.length || 0,
+      inputScheduleMode: programInputs.scheduleMode,
+      inputTrainingDaysPerWeek: programInputs.trainingDaysPerWeek,
+    })
+    
     // [PHASE 16C] Generate the program - NOW ASYNC with cooperative yielding
     const program = await generateAdaptiveProgram(programInputs, onStageChange)
+    
+    // [PHASE 16F] Builder exit diagnostic
+    console.log('[phase16f-builder-entry-verdict]', {
+      stage: 'builder_call_done',
+      timestamp: new Date().toISOString(),
+      programSessionCount: program?.sessions?.length || 0,
+      programPrimaryGoal: program?.primaryGoal,
+    })
+    
     markStage('adaptive_program_generate_done')
     
     // [PHASE 16C] Yield after heavy generation completes
@@ -524,8 +603,22 @@ export async function generateFirstProgram(
     // Save program to CANONICAL adaptive storage - this is the source of truth
     // that /program, first-session, and workout/session all read from
     if (typeof window !== 'undefined') {
+      // [PHASE 16F] Pre-save diagnostic
+      console.log('[phase16f-first-program-persist-audit]', {
+        stage: 'pre_save',
+        sessionCount: program.sessions.length,
+        timestamp: new Date().toISOString(),
+      })
+      
       // Primary: save to canonical adaptive programs storage
       saveAdaptiveProgram(program)
+      
+      // [PHASE 16F] Post-save diagnostic
+      console.log('[phase16f-first-program-persist-audit]', {
+        stage: 'post_save',
+        saved: true,
+        timestamp: new Date().toISOString(),
+      })
       
       markStage('mirror_save_start')
       // Secondary: backward-compatible mirror for legacy code paths
@@ -540,6 +633,14 @@ export async function generateFirstProgram(
     
     markStage('final_success')
     console.log('[OnboardingService] generateFirstProgram: success, sessions:', program.sessions.length)
+    
+    // [PHASE 16F] Final success verdict
+    console.log('[phase16f-final-root-cause-verdict]', {
+      rootCause: 'none_generation_succeeded',
+      totalElapsedMs: Date.now() - stageStart,
+      sessionCount: program.sessions.length,
+      timestamp: new Date().toISOString(),
+    })
     
     // ENGINE PROOF: Verify live path was followed
     const livePathProof = verifyLivePath()

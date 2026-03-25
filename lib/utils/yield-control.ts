@@ -26,9 +26,22 @@ export async function yieldToMainThread(label?: string): Promise<void> {
     console.log(`[phase16c-yield] Yielding: ${label}`)
   }
   
+  // [PHASE 16F] Log yield start
+  const yieldStart = Date.now()
+  
   // Use setTimeout(0) which schedules a macrotask
   // This ensures pending microtasks and render frames can execute
   await new Promise<void>(resolve => setTimeout(resolve, 0))
+  
+  // [PHASE 16F] Log yield complete
+  const yieldDuration = Date.now() - yieldStart
+  if (yieldDuration > 100) {
+    console.log('[phase16f-yield-slow-audit]', {
+      label,
+      durationMs: yieldDuration,
+      timestamp: new Date().toISOString(),
+    })
+  }
 }
 
 /**

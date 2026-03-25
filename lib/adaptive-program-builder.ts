@@ -1505,6 +1505,14 @@ export async function generateAdaptiveProgram(
   inputs: AdaptiveProgramInputs,
   onStageChange?: (stage: string) => void
 ): Promise<AdaptiveProgram> {
+  // [PHASE 16F] Builder entry diagnostic
+  console.log('[phase16f-builder-stage-audit]', {
+    stage: 'generateAdaptiveProgram_entry',
+    timestamp: new Date().toISOString(),
+    inputPrimaryGoal: inputs.primaryGoal,
+    inputSelectedSkillsCount: inputs.selectedSkills?.length || 0,
+  })
+  
   // [PHASE 16C] Cooperative async generation with stage callbacks
   console.log('[phase16c-builder-async-contract-audit]', {
     isAsync: true,
@@ -1593,8 +1601,23 @@ export async function generateAdaptiveProgram(
   // TOP-LEVEL CLASSIFICATION WRAPPER: Ensure ALL errors are classified as GenerationError
   // This prevents plain Error escaping as unknown_generation_failure
   try {
+    // [PHASE 16F] Pre-impl call diagnostic
+    console.log('[phase16f-builder-stage-audit]', {
+      stage: 'pre_impl_call',
+      timestamp: new Date().toISOString(),
+      elapsedMs: Date.now() - builderStartTime,
+    })
+    
     // [PHASE 16C] Now async with cooperative yielding
     const result = await generateAdaptiveProgramImpl(inputs, stageTracker, genContext)
+    
+    // [PHASE 16F] Post-impl call diagnostic
+    console.log('[phase16f-builder-stage-audit]', {
+      stage: 'post_impl_call',
+      timestamp: new Date().toISOString(),
+      elapsedMs: Date.now() - builderStartTime,
+      resultSessionCount: result?.sessions?.length || 0,
+    })
     
     // [PHASE 16B TASK 4] Log successful completion timing
     const builderElapsed = Date.now() - builderStartTime
@@ -1795,12 +1818,39 @@ export async function generateAdaptiveProgram(
 
 // Internal implementation - all generation logic moved here for top-level error classification
 async function generateAdaptiveProgramImpl(
-  inputs: AdaptiveProgramInputs, 
+  inputs: AdaptiveProgramInputs,
   stageTracker: StageTracker,
   genContext: GenerationContext
+// [PHASE 16F] Impl function entry diagnostic - placed outside function body for visibility
+// This line confirms we reached the function definition
 ): Promise<AdaptiveProgram> {
+  // [PHASE 16F] Impl function entry log
+  console.log('[phase16f-builder-stage-audit]', {
+    stage: 'impl_function_entry',
+    timestamp: new Date().toISOString(),
+    inputPrimaryGoal: inputs.primaryGoal,
+    inputSelectedSkillsCount: inputs.selectedSkills?.length || 0,
+  })
+  
+  // [PHASE 16F] Validate inputs are not undefined/null before proceeding
+  console.log('[phase16f-builder-stage-audit]', {
+    stage: 'impl_input_validation',
+    timestamp: new Date().toISOString(),
+    inputsIsObject: typeof inputs === 'object' && inputs !== null,
+    primaryGoalPresent: !!inputs?.primaryGoal,
+    experienceLevelPresent: !!inputs?.experienceLevel,
+    equipmentPresent: Array.isArray(inputs?.equipment),
+  })
+  
   // Helper to update stage safely with yield
   const setStage = async (stage: string) => {
+    // [PHASE 16F] Log stage entry
+    console.log('[phase16f-builder-stage-audit]', {
+      stage: `setStage_enter_${stage}`,
+      timestamp: new Date().toISOString(),
+      previousStage: stageTracker.current,
+    })
+    
     stageTracker.current = stage
     genContext.markStage(stage)
     console.log(`[program-generate] STAGE: ${stage}`)
@@ -1816,6 +1866,12 @@ async function generateAdaptiveProgramImpl(
       stage,
       elapsedMs: genContext.getElapsed(),
       stageElapsedMs: genContext.getStageElapsed(),
+    })
+    
+    // [PHASE 16F] Log stage complete
+    console.log('[phase16f-builder-stage-audit]', {
+      stage: `setStage_done_${stage}`,
+      timestamp: new Date().toISOString(),
     })
   }
   
@@ -1851,6 +1907,13 @@ async function generateAdaptiveProgramImpl(
     fallbacksUsed: composedInput.fallbacksUsed,
     overridesApplied: composedInput.overridesApplied,
     composedAt: composedInput.composedAt,
+  })
+  
+  // [PHASE 16F] After compose success
+  console.log('[phase16f-builder-stage-audit]', {
+    stage: 'post_compose_planner_input',
+    timestamp: new Date().toISOString(),
+    composeSucceeded: true,
   })
   
   // [equipment-truth] STEP 8: Log equipment at generation time for sync verification

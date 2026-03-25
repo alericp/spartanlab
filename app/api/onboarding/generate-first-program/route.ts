@@ -45,6 +45,15 @@ export async function POST(request: Request) {
     route: '/api/onboarding/generate-first-program',
   })
   
+  // [PHASE 16P] Runtime marker - confirms deployed code version
+  console.log('[phase16p-runtime-marker]', {
+    file: 'app/api/onboarding/generate-first-program/route.ts',
+    location: 'route_entry',
+    timestamp: new Date().toISOString(),
+    flowName: 'server_first_program_generation',
+    marker: 'PHASE_16P_RUNTIME_MARKER',
+  })
+  
   try {
     // ==========================================================================
     // STAGE: Authentication

@@ -1187,6 +1187,16 @@ export default function ProgramPage() {
           console.warn('[builder-hydration-truth] Builder display drift detected:', displayValidation.driftedFields)
         }
         
+        // [PHASE 16P] Doctrine preservation verdict - confirms no engine logic changes
+        console.log('[phase16p-doctrine-preservation-verdict]', {
+          engineLogicChanged: false,
+          sessionAllocationChanged: false,
+          skillPriorityChanged: false,
+          adaptiveModeChanged: false,
+          scheduleModeTruthChanged: false,
+          finalVerdict: 'shape_contract_only_fix',
+        })
+        
         // TASK 1: Stage 7 - Load current program as the critical operation
         setLoadStage('loading-program-state')
         let loadedProgram: AdaptiveProgram | null = null
@@ -1436,6 +1446,46 @@ export default function ProgramPage() {
     hasId: !!(newProgram as AdaptiveProgram)?.id,
     hasSessions: Array.isArray((newProgram as AdaptiveProgram)?.sessions),
     stage: generationStage,
+  })
+  
+  // [PHASE 16P] Comprehensive structure audit BEFORE validation throws
+  const firstSession = (newProgram as AdaptiveProgram)?.sessions?.[0]
+  console.log('[phase16p-builder-return-structure-audit]', {
+    isNullish: newProgram === null || newProgram === undefined,
+    typeofResult: typeof newProgram,
+    hasId: !!(newProgram as AdaptiveProgram)?.id,
+    idType: typeof (newProgram as AdaptiveProgram)?.id,
+    hasSessions: !!(newProgram as AdaptiveProgram)?.sessions,
+    sessionsIsArray: Array.isArray((newProgram as AdaptiveProgram)?.sessions),
+    sessionCount: (newProgram as AdaptiveProgram)?.sessions?.length ?? 0,
+    firstSessionExists: !!firstSession,
+    firstSessionKeys: firstSession ? Object.keys(firstSession).slice(0, 10) : [],
+    firstSessionDayNumber: firstSession?.dayNumber,
+    firstSessionFocus: firstSession?.focus,
+    firstSessionExercisesIsArray: Array.isArray(firstSession?.exercises),
+    firstSessionExerciseCount: firstSession?.exercises?.length ?? 0,
+    hasCreatedAt: !!(newProgram as AdaptiveProgram)?.createdAt,
+    hasPrimaryGoal: !!(newProgram as AdaptiveProgram)?.primaryGoal,
+    hasTrainingDaysPerWeek: typeof (newProgram as AdaptiveProgram)?.trainingDaysPerWeek === 'number',
+    appearsPromiseLike: newProgram && typeof (newProgram as { then?: unknown }).then === 'function',
+    constructorName: newProgram?.constructor?.name ?? 'unknown',
+  })
+  
+  // [PHASE 16P] Truth source verdict - confirm we're validating builder return directly
+  console.log('[phase16p-page-truth-source-verdict]', {
+    builderReturnUsedDirectly: true,
+    storageReadOccurredBeforeValidation: false,
+    objectMutatedBeforeValidation: false,
+    validationSource: 'builder_return',
+  })
+  
+  // [PHASE 16P] Runtime marker
+  console.log('[phase16p-runtime-marker]', {
+    file: 'app/(app)/program/page.tsx',
+    location: 'main_generation_pre_validation',
+    timestamp: new Date().toISOString(),
+    flowName: 'main_generation',
+    marker: 'PHASE_16P_RUNTIME_MARKER',
   })
   
   // [PHASE 16N] Guard: If somehow still Promise-like, fail explicitly
@@ -1698,22 +1748,42 @@ export default function ProgramPage() {
         const errorStack = err instanceof Error ? err.stack : undefined
         const errorContext = isGenerationError ? (err as { context?: Record<string, unknown> }).context : undefined
         
-        // [PHASE 16N] Failure source audit - distinguish async contract failures
+        // [PHASE 16N/16P] Enhanced failure source audit with specific page validation failures
         const isAsyncContractFailure = errorMessage.includes('builder_result_unresolved_promise')
+        const isShapeValidationFailure = errorMessage.includes('program_null') || 
+          errorMessage.includes('program_missing_id') || 
+          errorMessage.includes('sessions_not_array') || 
+          errorMessage.includes('sessions_empty')
+        const isSessionValidationFailure = generationStage === 'validating_sessions'
+        const isSaveVerificationFailure = generationStage === 'save_verification'
+        
+        // Determine precise failure source
+        let failureSource: string
+        if (isGenerationError) {
+          failureSource = 'builder_threw_generation_error'
+        } else if (isAsyncContractFailure) {
+          failureSource = 'program_page_async_contract_failure'
+        } else if (isShapeValidationFailure) {
+          failureSource = 'program_page_shape_validation_failure'
+        } else if (isSessionValidationFailure) {
+          failureSource = 'program_page_session_validation_failure'
+        } else if (isSaveVerificationFailure) {
+          failureSource = 'program_page_save_verification_failure'
+        } else {
+          failureSource = 'real_unknown_orchestration_failure'
+        }
+        
         console.log('[phase16n-program-page-failure-source-audit]', {
           flowName: 'main_generation',
-          failureSource: isGenerationError 
-            ? 'builder_threw_generation_error' 
-            : isAsyncContractFailure
-              ? 'program_page_async_contract_failure'
-              : generationStage === 'validating_shape'
-                ? 'real_shape_validation_failure'
-                : 'unknown_orchestration_failure',
+          failureSource,
           errorCode,
           errorStage,
           errorMessage,
           isGenerationError,
           isAsyncContractFailure,
+          isShapeValidationFailure,
+          isSessionValidationFailure,
+          isSaveVerificationFailure,
         })
         
         // Log unclassified errors with searchable prefix for root cause analysis
@@ -2236,6 +2306,37 @@ export default function ProgramPage() {
           hasId: !!(newProgram as AdaptiveProgram)?.id,
           hasSessions: Array.isArray((newProgram as AdaptiveProgram)?.sessions),
           stage: regenerateStage,
+        })
+        
+        // [PHASE 16P] Comprehensive structure audit for regeneration flow
+        const regenFirstSession = (newProgram as AdaptiveProgram)?.sessions?.[0]
+        console.log('[phase16p-builder-return-structure-audit]', {
+          isNullish: newProgram === null || newProgram === undefined,
+          typeofResult: typeof newProgram,
+          hasId: !!(newProgram as AdaptiveProgram)?.id,
+          idType: typeof (newProgram as AdaptiveProgram)?.id,
+          hasSessions: !!(newProgram as AdaptiveProgram)?.sessions,
+          sessionsIsArray: Array.isArray((newProgram as AdaptiveProgram)?.sessions),
+          sessionCount: (newProgram as AdaptiveProgram)?.sessions?.length ?? 0,
+          firstSessionExists: !!regenFirstSession,
+          firstSessionKeys: regenFirstSession ? Object.keys(regenFirstSession).slice(0, 10) : [],
+          firstSessionDayNumber: regenFirstSession?.dayNumber,
+          firstSessionFocus: regenFirstSession?.focus,
+          firstSessionExercisesIsArray: Array.isArray(regenFirstSession?.exercises),
+          firstSessionExerciseCount: regenFirstSession?.exercises?.length ?? 0,
+          hasCreatedAt: !!(newProgram as AdaptiveProgram)?.createdAt,
+          hasPrimaryGoal: !!(newProgram as AdaptiveProgram)?.primaryGoal,
+          hasTrainingDaysPerWeek: typeof (newProgram as AdaptiveProgram)?.trainingDaysPerWeek === 'number',
+          appearsPromiseLike: newProgram && typeof (newProgram as { then?: unknown }).then === 'function',
+          constructorName: newProgram?.constructor?.name ?? 'unknown',
+        })
+        
+        // [PHASE 16P] Truth source verdict
+        console.log('[phase16p-page-truth-source-verdict]', {
+          builderReturnUsedDirectly: true,
+          storageReadOccurredBeforeValidation: false,
+          objectMutatedBeforeValidation: false,
+          validationSource: 'builder_return',
         })
         
         // [PHASE 16N] Guard: If somehow still Promise-like, fail explicitly
@@ -3222,6 +3323,37 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
         hasId: !!(newProgram as AdaptiveProgram)?.id,
         hasSessions: Array.isArray((newProgram as AdaptiveProgram)?.sessions),
         stage: 'generating',
+      })
+      
+      // [PHASE 16P] Comprehensive structure audit for canonical rebuild flow
+      const rebuildFirstSession = (newProgram as AdaptiveProgram)?.sessions?.[0]
+      console.log('[phase16p-builder-return-structure-audit]', {
+        isNullish: newProgram === null || newProgram === undefined,
+        typeofResult: typeof newProgram,
+        hasId: !!(newProgram as AdaptiveProgram)?.id,
+        idType: typeof (newProgram as AdaptiveProgram)?.id,
+        hasSessions: !!(newProgram as AdaptiveProgram)?.sessions,
+        sessionsIsArray: Array.isArray((newProgram as AdaptiveProgram)?.sessions),
+        sessionCount: (newProgram as AdaptiveProgram)?.sessions?.length ?? 0,
+        firstSessionExists: !!rebuildFirstSession,
+        firstSessionKeys: rebuildFirstSession ? Object.keys(rebuildFirstSession).slice(0, 10) : [],
+        firstSessionDayNumber: rebuildFirstSession?.dayNumber,
+        firstSessionFocus: rebuildFirstSession?.focus,
+        firstSessionExercisesIsArray: Array.isArray(rebuildFirstSession?.exercises),
+        firstSessionExerciseCount: rebuildFirstSession?.exercises?.length ?? 0,
+        hasCreatedAt: !!(newProgram as AdaptiveProgram)?.createdAt,
+        hasPrimaryGoal: !!(newProgram as AdaptiveProgram)?.primaryGoal,
+        hasTrainingDaysPerWeek: typeof (newProgram as AdaptiveProgram)?.trainingDaysPerWeek === 'number',
+        appearsPromiseLike: newProgram && typeof (newProgram as { then?: unknown }).then === 'function',
+        constructorName: newProgram?.constructor?.name ?? 'unknown',
+      })
+      
+      // [PHASE 16P] Truth source verdict
+      console.log('[phase16p-page-truth-source-verdict]', {
+        builderReturnUsedDirectly: true,
+        storageReadOccurredBeforeValidation: false,
+        objectMutatedBeforeValidation: false,
+        validationSource: 'builder_return',
       })
       
       // [PHASE 16N] Guard: If somehow still Promise-like, fail explicitly

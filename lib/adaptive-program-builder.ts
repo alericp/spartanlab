@@ -1673,6 +1673,30 @@ export async function generateAdaptiveProgram(
       verdict: 'builder_completed_successfully',
     })
     
+    // [PHASE 16P] Final return contract audit - verify structure before returning to caller
+    const firstSession = result?.sessions?.[0]
+    console.log('[phase16p-builder-final-return-contract-audit]', {
+      hasId: !!result?.id,
+      sessionCount: result?.sessions?.length ?? 0,
+      sessionDayNumbers: result?.sessions?.map(s => s?.dayNumber).slice(0, 7),
+      sessionFocuses: result?.sessions?.map(s => s?.focus).slice(0, 7),
+      sessionsAllHaveExercisesArrays: result?.sessions?.every(s => Array.isArray(s?.exercises)) ?? false,
+      firstSessionExerciseCount: firstSession?.exercises?.length ?? 0,
+      hasCreatedAt: !!result?.createdAt,
+      hasPrimaryGoal: !!result?.primaryGoal,
+      hasTrainingDaysPerWeek: typeof result?.trainingDaysPerWeek === 'number',
+      finalReturnVerdict: result?.id && result?.sessions?.length > 0 ? 'valid_structure' : 'malformed_structure',
+    })
+    
+    // [PHASE 16P] Runtime marker - confirms this code path is deployed
+    console.log('[phase16p-runtime-marker]', {
+      file: 'lib/adaptive-program-builder.ts',
+      location: 'generateAdaptiveProgram_final_return',
+      timestamp: new Date().toISOString(),
+      flowName: 'builder_return',
+      marker: 'PHASE_16P_RUNTIME_MARKER',
+    })
+    
     return result
   } catch (err) {
     // [PHASE 16B] Log builder failure timing

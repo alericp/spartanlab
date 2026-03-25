@@ -114,6 +114,13 @@ export type BuildAttemptSubCode =
   | 'session_missing_day_number'
   | 'session_missing_focus'
   | 'session_exercises_not_array'
+  // [PHASE 16R] Additional page-owned failure subcodes
+  | 'storage_quota_exceeded'
+  | 'save_verification_id_mismatch'
+  | 'save_verification_session_mismatch'
+  | 'builder_result_unresolved_promise'
+  | 'generation_entry_failed'
+  | 'fresh_input_invalid'
   | 'none'
 
 /**
@@ -287,10 +294,34 @@ export function getErrorUserMessage(
       return 'A generated session was missing its focus.' + suffix
     case 'session_exercises_not_array':
       return 'A generated session had an invalid exercise list.' + suffix
+    // [PHASE 16R] Additional page-owned failure messages
+    case 'audit_blocked':
+      return 'The generated plan did not pass internal quality checks. Please try again.' + suffix
+    case 'storage_quota_exceeded':
+      return 'Your plan could not be saved because local storage is full. Clear older saved data and try again.' + suffix
+    case 'save_verification_id_mismatch':
+      return 'The saved plan did not match the newly generated plan. Please try again.' + suffix
+    case 'save_verification_session_mismatch':
+      return 'The saved plan structure did not match the generated plan. Please try again.' + suffix
+    case 'builder_result_unresolved_promise':
+      return 'The builder did not finish correctly. Please try again.' + suffix
+    case 'generation_entry_failed':
+      return 'Program generation could not start correctly. Please try again.' + suffix
+    case 'fresh_input_invalid':
+      return 'Required training inputs were incomplete. Please review your settings and try again.' + suffix
     default:
       // Fall through to error code handling
       break
   }
+  
+  // [PHASE 16R] Runtime marker for error mapping
+  console.log('[phase16r-runtime-marker]', {
+    file: 'lib/program-state.ts',
+    location: 'getErrorUserMessage',
+    errorCode,
+    subCode,
+    marker: 'PHASE_16R_RUNTIME_MARKER',
+  })
   
   // [PHASE 16Q] Runtime marker for error mapping
   console.log('[phase16q-runtime-marker]', {

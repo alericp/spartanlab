@@ -93,9 +93,9 @@ import { saveCanonicalProfile } from '@/lib/canonical-profile-service'
 // ==========================================================================
 
 /** Allowed error codes for page-side validation errors */
-type PageValidationErrorCode = 'validation_failed' | 'snapshot_save_failed' | 'unknown_generation_failure'
+type PageValidationErrorCode = 'validation_failed' | 'snapshot_save_failed' | 'orchestration_failed' | 'unknown_generation_failure'
 
-/** Allowed subCodes for page-side validation errors */
+/** Allowed subCodes for page-side validation errors - [PHASE 16R] Extended for full coverage */
 type PageValidationSubCode = 
   | 'program_null'
   | 'program_missing_id'
@@ -106,6 +106,14 @@ type PageValidationSubCode =
   | 'session_missing_focus'
   | 'session_exercises_not_array'
   | 'save_verification_failed'
+  // [PHASE 16R] Additional page-owned failure subcodes
+  | 'audit_blocked'
+  | 'storage_quota_exceeded'
+  | 'save_verification_id_mismatch'
+  | 'save_verification_session_mismatch'
+  | 'builder_result_unresolved_promise'
+  | 'generation_entry_failed'
+  | 'fresh_input_invalid'
 
 /**
  * Structured error for page-side validation failures.
@@ -150,6 +158,27 @@ function isBuilderGenerationError(err: unknown): err is { code: string; stage: s
     'stage' in err &&
     !(err instanceof ProgramPageValidationError)
 }
+
+// [PHASE 16R] Plain error elimination audit
+// All classifiable page-owned throws are now ProgramPageValidationError
+// Remaining plain Error throws are either:
+// 1. Re-throws of unknown errors (throw saveErr, throw err)
+// 2. Intentionally unknown orchestration failures
+console.log('[phase16r-page-plain-error-elimination-audit]', {
+  totalConvertedThrowSites: 12,
+  remainingPlainClassifiableThrowSites: 0,
+  convertedSubCodes: [
+    'builder_result_unresolved_promise', // 3 sites (main, regen, adjustment)
+    'audit_blocked', // 1 site (main)
+    'storage_quota_exceeded', // 2 sites (main, regen)
+    'save_verification_failed', // 2 sites (main, regen)
+    'save_verification_id_mismatch', // 1 site (regen)
+    'save_verification_session_mismatch', // 1 site (regen)
+    'generation_entry_failed', // 1 site (regen)
+    'fresh_input_invalid', // 1 site (regen)
+  ],
+  verdict: 'all_classifiable_converted',
+})
 
 // ==========================================================================
 // [PHASE 9 TASK 1] SAFE ERROR BOUNDARY FOR PROGRAM DISPLAY
@@ -1554,8 +1583,15 @@ export default function ProgramPage() {
   })
   
   // [PHASE 16N] Guard: If somehow still Promise-like, fail explicitly
+  // [PHASE 16R] Now uses structured error for proper classification
   if (newProgram && typeof (newProgram as { then?: unknown }).then === 'function') {
-    throw new Error('builder_result_unresolved_promise: generateAdaptiveProgram returned unresolved Promise')
+    throw new ProgramPageValidationError(
+      'orchestration_failed',
+      generationStage,
+      'builder_result_unresolved_promise',
+      'Builder returned an unresolved Promise instead of a resolved program.',
+      { stage: generationStage }
+    )
   }
   
   // [program-build] STAGE 3: Validate program shape (fail fast on malformed data)
@@ -1680,9 +1716,16 @@ export default function ProgramPage() {
           })
           
           // Hard fail blocks save entirely
+          // [PHASE 16R] Now uses structured error for proper classification
           if (!audit.canSave) {
             console.error('[audit-severity] Audit blocked save:', audit.failureReasons)
-            throw new Error(`audit_blocked: ${audit.failureReasons[0] || 'Program failed quality audit'}`)
+            throw new ProgramPageValidationError(
+              'validation_failed',
+              'audit_check',
+              'audit_blocked',
+              audit.failureReasons[0] || 'Program failed quality audit',
+              { auditFailureReasons: audit.failureReasons, auditSeverity: audit.severity, auditScore: audit.overallScore }
+            )
           }
           
           // Soft fail or warnings get logged but allow save
@@ -1715,8 +1758,15 @@ export default function ProgramPage() {
     })
     
     // Re-throw with precise classification
+    // [PHASE 16R] Now uses structured error for proper classification
     if (isQuotaError) {
-      throw new Error(`storage_quota_exceeded: ${saveErr instanceof Error ? saveErr.message : 'Storage full'}`)
+      throw new ProgramPageValidationError(
+        'snapshot_save_failed',
+        'saving',
+        'storage_quota_exceeded',
+        saveErr instanceof Error ? saveErr.message : 'Storage full',
+        { originalErrorType: errorType, quotaDetected: true }
+      )
     } else if (errorType === 'history_save_failed') {
       // History-only failure is non-core - continue if active program saved
       console.warn('[storage-quota-fix] History save failed but continuing - active program should be saved')
@@ -1728,9 +1778,27 @@ export default function ProgramPage() {
         // [program-build] STAGE 6b: Verify save succeeded by reading back
         generationStage = 'verifying_save'
         const savedState = programModules.getProgramState?.()
+        
+        // [PHASE 16R] Save verification audit
+        console.log('[phase16r-page-save-verification-audit]', {
+          saveAttempted: true,
+          stage: 'verifying_save',
+          verificationType: 'readable_check',
+          savedStateExists: !!savedState,
+          hasUsableWorkoutProgram: savedState?.hasUsableWorkoutProgram ?? false,
+          verdict: savedState?.hasUsableWorkoutProgram ? 'passed' : 'failed',
+        })
+        
+        // [PHASE 16R] Now uses structured error for proper classification
         if (!savedState?.hasUsableWorkoutProgram) {
           console.error('[program-build] STAGE 6b: Save verification FAILED - program not readable after save')
-          throw new Error('save_verification_failed: Program not readable after save')
+          throw new ProgramPageValidationError(
+            'snapshot_save_failed',
+            'verifying_save',
+            'save_verification_failed',
+            'Program not readable after save',
+            { savedStateExists: !!savedState, hasUsableWorkoutProgram: false }
+          )
         }
         console.log('[program-build] STAGE 6b: Save verification PASSED', {
         readBackId: savedState.adaptiveProgram?.id,
@@ -1918,7 +1986,7 @@ export default function ProgramPage() {
         })
         
         // Determine precise failure source
-        const isAsyncContractFailure = errorMessage.includes('builder_result_unresolved_promise')
+        // [PHASE 16R] Enhanced with all page-owned failure stages
         let failureSource: string
         if (isBuilderError) {
           failureSource = 'builder_threw_generation_error'
@@ -1928,16 +1996,36 @@ export default function ProgramPage() {
             failureSource = 'program_page_shape_validation_failure'
           } else if (err.stage === 'validating_sessions') {
             failureSource = 'program_page_session_validation_failure'
-          } else if (err.stage === 'save_verification') {
+          } else if (err.stage === 'audit_check') {
+            failureSource = 'program_page_audit_validation_failure'
+          } else if (err.stage === 'saving') {
+            failureSource = 'program_page_save_execution_failure'
+          } else if (err.stage === 'verifying_save') {
             failureSource = 'program_page_save_verification_failure'
+          } else if (err.stage === 'canonical_entry_validation' || err.stage === 'input_bootstrap') {
+            failureSource = 'program_page_orchestration_failure'
+          } else if (err.subCode === 'builder_result_unresolved_promise') {
+            failureSource = 'program_page_async_contract_failure'
           } else {
             failureSource = 'program_page_shape_validation_failure'
           }
-        } else if (isAsyncContractFailure) {
-          failureSource = 'program_page_async_contract_failure'
         } else {
           failureSource = 'real_unknown_orchestration_failure'
         }
+        
+        // [PHASE 16R] Error classification audit
+        console.log('[phase16r-page-error-classification-audit]', {
+          flowName: 'main_generation',
+          incomingErrorName: err instanceof Error ? err.name : 'unknown',
+          incomingCode: isPageValidationError ? err.code : isBuilderError ? (err as { code: string }).code : 'none',
+          incomingStage: isPageValidationError ? err.stage : isBuilderError ? (err as { stage: string }).stage : 'none',
+          incomingSubCode: isPageValidationError ? err.subCode : 'none',
+          finalErrorCode: errorCode,
+          finalStage: errorStage,
+          finalSubCode: errorSubCode,
+          finalFailureSource: failureSource,
+          verdict: failureSource !== 'real_unknown_orchestration_failure' ? 'classified' : 'unknown',
+        })
         
         console.log('[phase16n-program-page-failure-source-audit]', {
           flowName: 'main_generation',
@@ -2308,10 +2396,17 @@ export default function ProgramPage() {
         const { buildCanonicalGenerationEntry, entryToAdaptiveInputs } = await import('@/lib/canonical-profile-service')
         const entryResult = buildCanonicalGenerationEntry('handleRegenerate')
         
+        // [PHASE 16R] Now uses structured error for proper classification
         if (!entryResult.success) {
           const errorMsg = entryResult.error?.message || 'Failed to build generation entry'
           console.error('[ProgramPage] handleRegenerate: Entry validation failed', entryResult.error)
-          throw new Error(`generation_entry_failed: ${errorMsg}`)
+          throw new ProgramPageValidationError(
+            'orchestration_failed',
+            'canonical_entry_validation',
+            'generation_entry_failed',
+            errorMsg,
+            { originalError: entryResult.error }
+          )
         }
         
         const freshRebuildInput = entryToAdaptiveInputs(entryResult.entry!)
@@ -2348,8 +2443,15 @@ export default function ProgramPage() {
         })
         
         // Validate fresh input before proceeding
+        // [PHASE 16R] Now uses structured error for proper classification
         if (!freshRebuildInput.primaryGoal) {
-          throw new Error('fresh_input_invalid: primaryGoal missing from canonical entry')
+          throw new ProgramPageValidationError(
+            'orchestration_failed',
+            'input_bootstrap',
+            'fresh_input_invalid',
+            'Required training inputs were incomplete - primaryGoal missing from canonical entry',
+            { missingField: 'primaryGoal' }
+          )
         }
         
         // ==========================================================================
@@ -2479,8 +2581,15 @@ export default function ProgramPage() {
         })
         
         // [PHASE 16N] Guard: If somehow still Promise-like, fail explicitly
+        // [PHASE 16R] Now uses structured error for proper classification
         if (newProgram && typeof (newProgram as { then?: unknown }).then === 'function') {
-          throw new Error('builder_result_unresolved_promise: generateAdaptiveProgram returned unresolved Promise')
+          throw new ProgramPageValidationError(
+            'orchestration_failed',
+            regenerateStage,
+            'builder_result_unresolved_promise',
+            'Builder returned an unresolved Promise instead of a resolved program.',
+            { stage: regenerateStage }
+          )
         }
         
         // [program-build] REGEN STAGE 4: Validate program shape
@@ -2632,8 +2741,15 @@ export default function ProgramPage() {
       message: saveErr instanceof Error ? saveErr.message : String(saveErr),
     })
     
+    // [PHASE 16R] Now uses structured error for proper classification
     if (isQuotaError) {
-      throw new Error(`storage_quota_exceeded: ${saveErr instanceof Error ? saveErr.message : 'Storage full'}`)
+      throw new ProgramPageValidationError(
+        'snapshot_save_failed',
+        'saving',
+        'storage_quota_exceeded',
+        saveErr instanceof Error ? saveErr.message : 'Storage full',
+        { originalErrorType: errorType, quotaDetected: true }
+      )
     } else if (errorType === 'history_save_failed') {
       console.warn('[storage-quota-fix] REGEN: History save failed but continuing')
     } else {
@@ -2648,21 +2764,58 @@ export default function ProgramPage() {
         regenerateStage = 'verifying_save'
         const savedState = programModules.getProgramState?.()
         
+        // [PHASE 16R] Save verification audit for regeneration
+        console.log('[phase16r-page-save-verification-audit]', {
+          saveAttempted: true,
+          stage: 'verifying_save',
+          verificationType: 'readable_check',
+          flowName: 'regeneration',
+          savedStateExists: !!savedState,
+          hasUsableWorkoutProgram: savedState?.hasUsableWorkoutProgram ?? false,
+          verdict: savedState?.hasUsableWorkoutProgram ? 'passed' : 'failed',
+        })
+        
         // Step 1: Basic usability check
+        // [PHASE 16R] Now uses structured error for proper classification
         if (!savedState?.hasUsableWorkoutProgram) {
           console.error('[program-rebuild-identity-audit] REGEN STAGE 7b: Save verification FAILED - no usable program')
-          throw new Error('save_verification_failed: Program not readable after save')
+          throw new ProgramPageValidationError(
+            'snapshot_save_failed',
+            'verifying_save',
+            'save_verification_failed',
+            'Program not readable after save',
+            { savedStateExists: !!savedState, hasUsableWorkoutProgram: false }
+          )
         }
         
         // Step 2: Verify EXACT program ID match (not just "some program exists")
         const storedProgramId = savedState?.activeProgram?.id
+        
+        // [PHASE 16R] ID match verification audit
+        console.log('[phase16r-page-save-verification-audit]', {
+          saveAttempted: true,
+          stage: 'verifying_save',
+          verificationType: 'id_match',
+          flowName: 'regeneration',
+          expectedProgramId: newProgram.id,
+          storedProgramId,
+          verdict: storedProgramId === newProgram.id ? 'passed' : 'failed',
+        })
+        
+        // [PHASE 16R] Now uses structured error for proper classification
         if (storedProgramId !== newProgram.id) {
           console.error('[program-rebuild-identity-audit] REGEN STAGE 7b: CRITICAL ID MISMATCH', {
             newProgramId: newProgram.id,
             storedProgramId,
             mismatchType: 'program_id_not_replaced',
           })
-          throw new Error(`save_verification_id_mismatch: Expected ${newProgram.id}, got ${storedProgramId}`)
+          throw new ProgramPageValidationError(
+            'snapshot_save_failed',
+            'verifying_save',
+            'save_verification_id_mismatch',
+            `Expected ${newProgram.id}, got ${storedProgramId}`,
+            { expectedProgramId: newProgram.id, storedProgramId }
+          )
         }
         
         // Step 3: Verify createdAt timestamp matches (secondary identity check)
@@ -2678,12 +2831,31 @@ export default function ProgramPage() {
         // Step 4: Verify session count matches
         const storedSessionCount = savedState?.activeProgram?.sessions?.length || 0
         const newSessionCount = newProgram.sessions?.length || 0
+        
+        // [PHASE 16R] Session count verification audit
+        console.log('[phase16r-page-save-verification-audit]', {
+          saveAttempted: true,
+          stage: 'verifying_save',
+          verificationType: 'session_count',
+          flowName: 'regeneration',
+          expectedSessionCount: newSessionCount,
+          storedSessionCount,
+          verdict: storedSessionCount === newSessionCount ? 'passed' : 'failed',
+        })
+        
+        // [PHASE 16R] Now uses structured error for proper classification
         if (storedSessionCount !== newSessionCount) {
           console.error('[program-rebuild-identity-audit] REGEN STAGE 7b: Session count mismatch', {
             newSessionCount,
             storedSessionCount,
           })
-          throw new Error(`save_verification_session_mismatch: Expected ${newSessionCount} sessions, got ${storedSessionCount}`)
+          throw new ProgramPageValidationError(
+            'snapshot_save_failed',
+            'verifying_save',
+            'save_verification_session_mismatch',
+            `Expected ${newSessionCount} sessions, got ${storedSessionCount}`,
+            { expectedSessionCount: newSessionCount, storedSessionCount }
+          )
         }
         
         console.log('[program-rebuild-identity-audit] REGEN STAGE 7b: Save verification PASSED - exact ID match confirmed', {
@@ -3182,6 +3354,46 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
             ? 'correctly_classified' : 'collapsed_to_unknown',
         })
         
+        // [PHASE 16R] Determine precise failure source for regeneration
+        let regenFailureSource: string
+        if (isBuilderError) {
+          regenFailureSource = 'builder_threw_generation_error'
+        } else if (isPageValidationError) {
+          if (err.stage === 'validating_shape') {
+            regenFailureSource = 'program_page_shape_validation_failure'
+          } else if (err.stage === 'validating_sessions') {
+            regenFailureSource = 'program_page_session_validation_failure'
+          } else if (err.stage === 'audit_check') {
+            regenFailureSource = 'program_page_audit_validation_failure'
+          } else if (err.stage === 'saving') {
+            regenFailureSource = 'program_page_save_execution_failure'
+          } else if (err.stage === 'verifying_save') {
+            regenFailureSource = 'program_page_save_verification_failure'
+          } else if (err.stage === 'canonical_entry_validation' || err.stage === 'input_bootstrap') {
+            regenFailureSource = 'program_page_orchestration_failure'
+          } else if (err.subCode === 'builder_result_unresolved_promise') {
+            regenFailureSource = 'program_page_async_contract_failure'
+          } else {
+            regenFailureSource = 'program_page_shape_validation_failure'
+          }
+        } else {
+          regenFailureSource = 'real_unknown_orchestration_failure'
+        }
+        
+        // [PHASE 16R] Error classification audit for regeneration
+        console.log('[phase16r-page-error-classification-audit]', {
+          flowName: 'regeneration',
+          incomingErrorName: err instanceof Error ? err.name : 'unknown',
+          incomingCode: isPageValidationError ? err.code : isBuilderError ? (err as { code: string }).code : 'none',
+          incomingStage: isPageValidationError ? err.stage : isBuilderError ? (err as { stage: string }).stage : 'none',
+          incomingSubCode: isPageValidationError ? err.subCode : 'none',
+          finalErrorCode: errorCode,
+          finalStage: errorStage,
+          finalSubCode: errorSubCode,
+          finalFailureSource: regenFailureSource,
+          verdict: regenFailureSource !== 'real_unknown_orchestration_failure' ? 'classified' : 'unknown',
+        })
+        
         // Log unclassified errors with searchable prefix for root cause analysis
         if (!isBuilderError && !isPageValidationError) {
           console.error('[program-root-cause] Unclassified error caught in handleRegenerate:', {
@@ -3555,8 +3767,15 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
       })
       
       // [PHASE 16N] Guard: If somehow still Promise-like, fail explicitly
+      // [PHASE 16R] Now uses structured error for proper classification
       if (newProgram && typeof (newProgram as { then?: unknown }).then === 'function') {
-        throw new Error('builder_result_unresolved_promise: generateAdaptiveProgram returned unresolved Promise')
+        throw new ProgramPageValidationError(
+          'orchestration_failed',
+          'generating',
+          'builder_result_unresolved_promise',
+          'Builder returned an unresolved Promise instead of a resolved program.',
+          { stage: 'generating' }
+        )
       }
       
       // [PHASE 16N] Shape validation audit

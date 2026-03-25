@@ -564,6 +564,43 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
   return (
     <Card className="bg-[#2A2A2A] border-[#3A3A3A] overflow-hidden">
       {/* Header */}
+      {/* [PHASE 15F TASK 6] Read resolved session identity fields from final assembly */}
+      {(() => {
+        // [PHASE 15F] Read resolved identity fields - display reads FINAL truth, not template
+        const resolvedIdentity = (session as any).resolvedSessionIdentity
+        const resolvedNarrative = (session as any).resolvedNarrativeReason
+        const truthfulExplanation = (session as any).truthfulSessionExplanation
+        const sessionCoherence = (session as any).sessionCoherenceScore
+        const identityMatches = (session as any).identityMatchesContent
+        
+        // Use resolved identity if available, otherwise fall back to original focusLabel
+        const displayFocusLabel = resolvedIdentity || session.focusLabel
+        
+        // Log the display reading resolved truth fields
+        console.log('[phase15f-display-reading-resolved-session-truth-audit]', {
+          dayNumber: session.dayNumber,
+          hasResolvedIdentity: !!resolvedIdentity,
+          resolvedIdentity,
+          originalFocusLabel: session.focusLabel,
+          displayingLabel: displayFocusLabel,
+          hasResolvedNarrative: !!resolvedNarrative,
+          hasTruthfulExplanation: !!truthfulExplanation,
+          sessionCoherence,
+          identityMatches,
+        })
+        
+        console.log('[phase15f-ui-vs-builder-session-identity-audit]', {
+          dayNumber: session.dayNumber,
+          builderResolvedIdentity: resolvedIdentity,
+          uiDisplayingIdentity: displayFocusLabel,
+          identitiesMatch: resolvedIdentity === displayFocusLabel || !resolvedIdentity,
+          verdict: resolvedIdentity 
+            ? 'ui_reading_builder_resolved_identity'
+            : 'ui_using_fallback_focus_label',
+        })
+        
+        return null // This IIFE is just for logging
+      })()}
       <div
         className="p-4 cursor-pointer hover:bg-[#333333] transition-colors"
         onClick={() => setIsExpanded(!isExpanded)}
@@ -579,7 +616,10 @@ export function AdaptiveSessionCard({ session: rawSession, onExerciseReplace, on
                 </Badge>
               )}
             </div>
-            <p className="text-sm text-[#E63946]">{session.focusLabel}</p>
+            {/* [PHASE 15F] Display resolved identity if available, otherwise fall back to focusLabel */}
+            <p className="text-sm text-[#E63946]">
+              {(session as any).resolvedSessionIdentity || session.focusLabel}
+            </p>
             {/* [TASK 3 & 6] Use activeSessionView for header - ensures header matches body */}
             <div className="flex items-center gap-3 mt-2 text-xs text-[#6A6A6A]">
               <span className="flex items-center gap-1">

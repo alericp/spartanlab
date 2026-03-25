@@ -1531,7 +1531,12 @@ export async function generateAdaptiveProgram(
   })
   
   // [PHASE 16C] Cooperative async generation with stage callbacks
-  console.log('[phase16c-builder-async-contract-audit]', {
+  // [PHASE 16N] CRITICAL: This function returns Promise<AdaptiveProgram>
+  // Callers MUST await this function. Un-awaited calls receive Promise objects
+  // instead of resolved AdaptiveProgram, causing false shape validation failures.
+  console.log('[phase16n-builder-async-contract-audit]', {
+    returnTypeIntent: 'Promise<AdaptiveProgram>',
+    callerMustAwait: true,
     isAsync: true,
     hasStageCallback: !!onStageChange,
     timestamp: new Date().toISOString(),

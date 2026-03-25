@@ -406,6 +406,7 @@ import {
   type DayLoadProfile,
   type WeekLoadBalance,
 } from './engine-quality-contract'
+import { yieldToMainThread, createGenerationContext, assertNotAborted, type GenerationContext } from './utils/yield-control'
 
 // Re-export schedule types for consumers
 export type { ScheduleMode, DayStressLevel } from './flexible-schedule-engine'
@@ -1500,9 +1501,33 @@ interface StageTracker {
   current: string
 }
 
-export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): AdaptiveProgram {
+export async function generateAdaptiveProgram(
+  inputs: AdaptiveProgramInputs,
+  onStageChange?: (stage: string) => void
+): Promise<AdaptiveProgram> {
+  // [PHASE 16C] Cooperative async generation with stage callbacks
+  console.log('[phase16c-builder-async-contract-audit]', {
+    isAsync: true,
+    hasStageCallback: !!onStageChange,
+    timestamp: new Date().toISOString(),
+  })
+  
   // [PHASE 16B TASK 4] Track generation start time for loop guard timing
   const builderStartTime = Date.now()
+  
+  // [PHASE 16C TASK 6] Create generation context for budget/abort tracking
+  const genContext = createGenerationContext({
+    totalBudgetMs: 25000, // 25 second total budget
+    stageBudgets: {
+      input_resolution: 2000,
+      weekly_structure: 3000,
+      skill_allocation: 4000,
+      session_construction: 12000,
+      post_processing: 3000,
+      validation: 2000,
+    },
+    onStageChange,
+  })
   
   // ISSUE A: Track generation stage for precise error diagnosis (mutable for top-level catch)
   const stageTracker: StageTracker = { current: 'initializing' }
@@ -1568,7 +1593,8 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
   // TOP-LEVEL CLASSIFICATION WRAPPER: Ensure ALL errors are classified as GenerationError
   // This prevents plain Error escaping as unknown_generation_failure
   try {
-    const result = generateAdaptiveProgramImpl(inputs, stageTracker)
+    // [PHASE 16C] Now async with cooperative yielding
+    const result = await generateAdaptiveProgramImpl(inputs, stageTracker, genContext)
     
     // [PHASE 16B TASK 4] Log successful completion timing
     const builderElapsed = Date.now() - builderStartTime
@@ -1579,6 +1605,14 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
       success: true,
     })
     
+    // [PHASE 16C] Log cooperative generation success
+    console.log('[phase16c-builder-vs-save-vs-verify-verdict]', {
+      builderCompleted: true,
+      builderElapsedMs: builderElapsed,
+      stageFailed: false,
+      verdict: 'builder_completed_successfully',
+    })
+    
     return result
   } catch (err) {
     // [PHASE 16B] Log builder failure timing
@@ -1587,6 +1621,14 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
       elapsedMs: builderElapsed,
       currentStage: stageTracker.current,
       errorType: err instanceof Error ? err.name : 'unknown',
+    })
+    
+    // [PHASE 16C] Log where failure occurred
+    console.log('[phase16c-builder-vs-save-vs-verify-verdict]', {
+      builderCompleted: false,
+      builderElapsedMs: builderElapsed,
+      stageFailed: stageTracker.current,
+      verdict: 'builder_failed',
     })
     // If already a GenerationError, rethrow unchanged
     if (err instanceof GenerationError) {
@@ -1752,11 +1794,29 @@ export function generateAdaptiveProgram(inputs: AdaptiveProgramInputs): Adaptive
 }
 
 // Internal implementation - all generation logic moved here for top-level error classification
-function generateAdaptiveProgramImpl(inputs: AdaptiveProgramInputs, stageTracker: StageTracker): AdaptiveProgram {
-  // Helper to update stage safely
-  const setStage = (stage: string) => {
+async function generateAdaptiveProgramImpl(
+  inputs: AdaptiveProgramInputs, 
+  stageTracker: StageTracker,
+  genContext: GenerationContext
+): Promise<AdaptiveProgram> {
+  // Helper to update stage safely with yield
+  const setStage = async (stage: string) => {
     stageTracker.current = stage
+    genContext.markStage(stage)
     console.log(`[program-generate] STAGE: ${stage}`)
+    
+    // [PHASE 16C TASK 3] Yield between major stages
+    await yieldToMainThread(stage)
+    
+    // [PHASE 16C TASK 5] Check budget after each stage
+    genContext.checkBudget(stage)
+    assertNotAborted(genContext, stage)
+    
+    console.log('[phase16c-builder-yield-boundary-audit]', {
+      stage,
+      elapsedMs: genContext.getElapsed(),
+      stageElapsedMs: genContext.getStageElapsed(),
+    })
   }
   
   // ==========================================================================
@@ -2155,7 +2215,7 @@ function generateAdaptiveProgramImpl(inputs: AdaptiveProgramInputs, stageTracker
   })
   
   // ISSUE A: Stage tracking for diagnosable failures
-  setStage('profile_validation')
+  await setStage('profile_validation')
   
   // TASK 3 & 9: Validate profile before proceeding
   let profileValidation: ReturnType<typeof validateProfileForGeneration>
@@ -3693,7 +3753,7 @@ function generateAdaptiveProgramImpl(inputs: AdaptiveProgramInputs, stageTracker
   // TASK 2: Pass secondary goal flags so structure can adapt
   // TASK 3: Pass hybrid path and multi-skill flags for expanded structure awareness
   // ISSUE A: Stage tracking for structure selection
-  setStage('structure_selection')
+  await setStage('structure_selection')
   console.log('[program-generate] Selected skills passed to structure:', {
     selectedSkills: expandedContext.selectedSkills,
     secondaryGoal: secondaryGoal || canonicalProfile.secondaryGoal || null,
@@ -3890,7 +3950,7 @@ function generateAdaptiveProgramImpl(inputs: AdaptiveProgramInputs, stageTracker
   }
   
   // ISSUE A: Stage tracking for session assembly
-  setStage('session_assembly')
+  await setStage('session_assembly')
   
   // [session-assembly] Log structure received for assembly
   console.log('[session-assembly] Weekly structure received:', {
@@ -3936,9 +3996,27 @@ function generateAdaptiveProgramImpl(inputs: AdaptiveProgramInputs, stageTracker
     phase: 'pre_assembly',
   })
   
-  let sessions: AdaptiveSession[]
+  const sessions: AdaptiveSession[] = []
   try {
-    sessions = structure.days.map((day, index) => {
+    // [PHASE 16C TASK 4] Convert to async for loop with yields inside
+    for (let index = 0; index < structure.days.length; index++) {
+    const day = structure.days[index]
+    
+    // [PHASE 16C] Yield between sessions to let UI update
+    if (index > 0) {
+      await yieldToMainThread(`session_${index}_start`)
+      console.log('[phase16c-loop-yield-audit]', {
+        loop: 'session_construction',
+        iteration: index,
+        totalIterations: structure.days.length,
+        elapsedMs: genContext.getElapsed(),
+      })
+      
+      // Check budget periodically during session construction
+      genContext.checkBudget('session_construction')
+      assertNotAborted(genContext, `session_construction_${index}`)
+    }
+    
     // [session-assembly] Log each day's assembly start
     console.log('[session-assembly] Assembling day:', {
       dayNumber: day.dayNumber,
@@ -4319,11 +4397,11 @@ function generateAdaptiveProgramImpl(inputs: AdaptiveProgramInputs, stageTracker
       finalExerciseCount: exerciseCount,
     })
   
-    // BUILD-HOTFIX: repaired misplaced session-assembly error block
-    // Return assembled session from map callback
-    return session
-    
-    } catch (postSessionErr) {
+  // BUILD-HOTFIX: repaired misplaced session-assembly error block
+  // [PHASE 16C] Push to sessions array instead of return (converted from map to for loop)
+  sessions.push(session)
+  
+  } catch (postSessionErr) {
       // STEP C: Classify post-session failure
       const errorMessage = postSessionErr instanceof Error ? postSessionErr.message : String(postSessionErr)
       
@@ -4360,7 +4438,7 @@ function generateAdaptiveProgramImpl(inputs: AdaptiveProgramInputs, stageTracker
         `post_session_mutation_failed: step=${postSessionStep} day=${day.dayNumber} focus=${day.focus} goal=${primaryGoal} reason=${safeReason}`
       )
     }
-  })
+  } // [PHASE 16C] End of for loop (converted from map)
   } catch (err) {
     // Session assembly failed - log and rethrow with proper error info
     const errorMessage = err instanceof Error ? err.message : 'Unknown session assembly error'
@@ -4463,6 +4541,15 @@ function generateAdaptiveProgramImpl(inputs: AdaptiveProgramInputs, stageTracker
   
   // Canonical exercise names - computed once, used by all subsequent audits
   const canonicalExerciseNames = collectExerciseNamesFromSessions(sessions)
+  
+  // [PHASE 16C TASK 3] Yield and mark post-processing stage
+  await setStage('post_processing')
+  console.log('[phase16c-builder-phase-elapsed-audit]', {
+    stage: 'post_processing_start',
+    totalElapsedMs: genContext.getElapsed(),
+    sessionCount: sessions.length,
+    exerciseCount: canonicalExerciseNames.length,
+  })
   
   // ==========================================================================
   // [TASK 1] SESSION ASSEMBLY ROOT CAUSE AUDIT
@@ -6962,7 +7049,7 @@ function generateAdaptiveProgramImpl(inputs: AdaptiveProgramInputs, stageTracker
   }
   
   // ISSUE A: Stage tracking for validation complete
-  setStage('validation_complete')
+  await setStage('validation_complete')
   
   // ==========================================================================
   // TASK 2-A: Post-validation finalization zone step tracker

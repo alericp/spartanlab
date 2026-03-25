@@ -30,6 +30,7 @@ import {
   markCanonicalPathUsed,
   assertFlexibleModeIntact,
 } from './production-safety'
+import { yieldToMainThread, createGenerationContext, assertNotAborted } from './utils/yield-control'
 
 // =============================================================================
 // TYPES
@@ -267,7 +268,16 @@ function getWelcomeMessage(profile: OnboardingProfile, experienceLevel: Experien
  * Only call from /onboarding/complete/page.tsx.
  * All other code should use getProgramState() to read existing programs.
  */
-export function generateFirstProgram(): FirstRunResult {
+export async function generateFirstProgram(
+  onStageChange?: (stage: string) => void
+): Promise<FirstRunResult> {
+  // [PHASE 16C] Async cooperative generation with stage callbacks
+  console.log('[phase16c-generate-first-program-async-contract-audit]', {
+    isAsync: true,
+    hasStageCallback: !!onStageChange,
+    timestamp: new Date().toISOString(),
+  })
+  
   // [PHASE 16B TASK 3] Internal stage timing
   const timings: Record<string, number> = {}
   const stageStart = Date.now()
@@ -278,6 +288,9 @@ export function generateFirstProgram(): FirstRunResult {
     timings[currentStage] = now - stageStart
     currentStage = stage
     console.log(`[phase16b-first-program-internal-stage] ${stage} at ${now - stageStart}ms`)
+    
+    // [PHASE 16C] Notify client of stage changes
+    onStageChange?.(stage)
   }
   
   try {
@@ -386,6 +399,9 @@ export function generateFirstProgram(): FirstRunResult {
     
     markStage('entry_to_inputs_done')
     
+    // [PHASE 16C] Yield before heavy generation
+    await yieldToMainThread('pre_generation')
+    
     // [PHASE 16B TASK 7] Profile complexity preflight audit
     console.log('[phase16b-profile-complexity-preflight-audit]', {
       selectedSkillCount: programInputs.selectedSkills?.length || 0,
@@ -400,9 +416,12 @@ export function generateFirstProgram(): FirstRunResult {
     })
     
     markStage('adaptive_program_generate_start')
-    // Generate the program
-    const program = generateAdaptiveProgram(programInputs)
+    // [PHASE 16C] Generate the program - NOW ASYNC with cooperative yielding
+    const program = await generateAdaptiveProgram(programInputs, onStageChange)
     markStage('adaptive_program_generate_done')
+    
+    // [PHASE 16C] Yield after heavy generation completes
+    await yieldToMainThread('post_generation')
     
     console.log('[phase16b-session-construction-load-audit]', {
       sessionsGenerated: program.sessions?.length || 0,

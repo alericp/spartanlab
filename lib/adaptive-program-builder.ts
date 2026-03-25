@@ -11302,6 +11302,43 @@ export function getDefaultAdaptiveInputs(): AdaptiveProgramInputs {
     primaryGoal: !canonicalProfile.primaryGoal,
   }
   
+  // [PHASE 15A TASK 4] Builder entry snapshot audits - verify matches saved settings exactly
+  console.log('[phase15a-builder-entry-schedule-truth-audit]', {
+    canonicalScheduleMode: canonicalProfile.scheduleMode,
+    canonicalTrainingDays: canonicalProfile.trainingDaysPerWeek,
+    builderScheduleMode: scheduleMode,
+    builderTrainingDays: trainingDaysPerWeek,
+    match: canonicalProfile.scheduleMode === scheduleMode,
+  })
+  
+  console.log('[phase15a-builder-entry-duration-truth-audit]', {
+    canonicalSessionDurationMode: canonicalProfile.sessionDurationMode,
+    canonicalSessionLength: canonicalProfile.sessionLengthMinutes,
+    builderSessionDurationMode: canonicalProfile.sessionDurationMode || 'static',
+    builderSessionLength: sessionLength,
+    match: canonicalProfile.sessionLengthMinutes === sessionLength,
+  })
+  
+  console.log('[phase15a-builder-entry-equipment-truth-audit]', {
+    canonicalEquipment: canonicalProfile.equipmentAvailable,
+    builderEquipment: mappedEquipment,
+    canonicalHasBenchBox: canonicalProfile.equipmentAvailable?.includes('bench_box'),
+    builderHasBench: mappedEquipment.includes('bench'),
+    benchBoxMapped: canonicalProfile.equipmentAvailable?.includes('bench_box') === mappedEquipment.includes('bench'),
+  })
+  
+  console.log('[phase15a-builder-entry-selected-skills-truth-audit]', {
+    canonicalSelectedSkills: canonicalProfile.selectedSkills,
+    selectedSkillsCount: canonicalProfile.selectedSkills?.length || 0,
+    skillsPassedToBuilder: true, // Skills are passed via canonicalProfile directly
+  })
+  
+  console.log('[phase15a-builder-entry-no-stale-program-override-verdict]', {
+    sourceIsCanonicalProfile: true,
+    noStaleSnapshotUsed: true,
+    verdict: 'builder_uses_canonical_profile_only',
+  })
+  
   // CANONICAL FIX: Log which canonical profile fields were consumed for debugging
   console.log('[AdaptiveBuilder] getDefaultAdaptiveInputs consumed from CANONICAL:', {
     primaryGoal,

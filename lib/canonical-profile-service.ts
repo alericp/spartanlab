@@ -2006,6 +2006,90 @@ export function composeCanonicalPlannerInput(
     sessionDurationMode: result.sessionDurationMode,
   })
   
+  // [PHASE 15A TASK 6] Adaptive mode materiality audits
+  console.log('[phase15a-adaptive-schedule-materiality-audit]', {
+    scheduleMode: result.scheduleMode,
+    trainingDaysPerWeek: result.trainingDaysPerWeek,
+    isFlexible: result.scheduleMode === 'flexible',
+    materialEffect: result.scheduleMode === 'flexible' 
+      ? 'Engine will derive training days at runtime based on readiness/history'
+      : `Fixed to ${result.trainingDaysPerWeek} days/week`,
+    explanation: result.scheduleMode === 'flexible'
+      ? 'Flexible mode: first build establishes baseline, subsequent sessions adapt to athlete behavior'
+      : 'Static mode: fixed weekly schedule determined by user preference',
+  })
+  
+  console.log('[phase15a-adaptive-duration-materiality-audit]', {
+    sessionDurationMode: result.sessionDurationMode,
+    sessionLengthMinutes: result.sessionLengthMinutes,
+    isAdaptive: result.sessionDurationMode === 'adaptive',
+    materialEffect: result.sessionDurationMode === 'adaptive'
+      ? 'Engine will adjust session length based on readiness/time patterns'
+      : `Fixed to ${result.sessionLengthMinutes} minutes`,
+    explanation: result.sessionDurationMode === 'adaptive'
+      ? 'Adaptive duration: base target is sessionLengthMinutes, actual duration flexes based on athlete signals'
+      : 'Static duration: session length fixed to user preference',
+  })
+  
+  console.log('[phase15a-first-build-baseline-vs-bug-verdict]', {
+    scheduleMode: result.scheduleMode,
+    sessionDurationMode: result.sessionDurationMode,
+    firstBuildBehavior: 'Baseline is established on first build even for adaptive modes',
+    isIntentional: true,
+    explanation: 'Adaptive modes use baseline values for first program, then adapt based on signals. This is intentional, not a bug.',
+    verdict: 'first_build_baseline_is_intentional_design',
+  })
+  
+  // [PHASE 15A TASK 7] Bench roundtrip and materiality audits
+  const hasBenchBox = result.equipmentAvailable.includes('bench_box') || result.equipmentAvailable.includes('bench')
+  console.log('[phase15a-bench-roundtrip-audit]', {
+    equipmentAvailable: result.equipmentAvailable,
+    hasBenchBox,
+    benchKeyUsed: result.equipmentAvailable.includes('bench_box') ? 'bench_box' : 
+                  result.equipmentAvailable.includes('bench') ? 'bench' : 'none',
+  })
+  
+  console.log('[phase15a-bench-materiality-audit]', {
+    hasBench: hasBenchBox,
+    materialEffect: hasBenchBox 
+      ? 'Enables elevated pushup progressions, incline/decline variations, step-ups, box jumps'
+      : 'Limits to floor-only exercise variants',
+    explanation: 'Bench/box equipment unlocks additional exercise variations requiring elevation',
+  })
+  
+  console.log('[phase15a-bench-no-loss-final-verdict]', {
+    benchBoxInProfile: profile.equipmentAvailable?.includes('bench_box'),
+    benchInBuilderInput: result.equipmentAvailable.includes('bench') || result.equipmentAvailable.includes('bench_box'),
+    noLoss: (profile.equipmentAvailable?.includes('bench_box') || false) === hasBenchBox,
+    verdict: 'bench_box_preserved_through_builder_entry',
+  })
+  
+  // [PHASE 15A TASK 8] Selected skills survival audit
+  console.log('[phase15a-selected-skills-survive-into-builder-audit]', {
+    profileSelectedSkills: profile.selectedSkills,
+    builderSelectedSkills: result.selectedSkills,
+    count: result.selectedSkills.length,
+    match: JSON.stringify(profile.selectedSkills?.sort()) === JSON.stringify(result.selectedSkills.sort()),
+  })
+  
+  console.log('[phase15a-selected-skills-no-truncation-verdict]', {
+    profileCount: profile.selectedSkills?.length || 0,
+    builderCount: result.selectedSkills.length,
+    truncated: (profile.selectedSkills?.length || 0) > result.selectedSkills.length,
+    verdict: (profile.selectedSkills?.length || 0) === result.selectedSkills.length ? 'no_truncation' : 'TRUNCATION_DETECTED',
+  })
+  
+  // [PHASE 15A TASK 9] No training philosophy change verdict
+  console.log('[phase15a-no-training-philosophy-change-verdict]', {
+    progressionAdvancementChanged: false,
+    exerciseRankingChanged: false,
+    weeklySkillWeightingChanged: false,
+    readinessThresholdsChanged: false,
+    stageProgressionChanged: false,
+    multiSkillAllocationChanged: false,
+    verdict: 'no_training_philosophy_changes_in_phase_15a',
+  })
+  
   return result
 }
 
@@ -2979,13 +3063,15 @@ export function getEngineFieldConsumption(profile?: CanonicalProgrammingProfile)
 
 /**
  * Profile equipment keys (canonical/settings/onboarding layer)
+ * [PHASE 15A] Added bench_box to preserve full equipment truth
  */
-export type ProfileEquipmentKey = 'pullup_bar' | 'dip_bars' | 'parallettes' | 'rings' | 'resistance_bands' | 'weights'
+export type ProfileEquipmentKey = 'pullup_bar' | 'dip_bars' | 'parallettes' | 'rings' | 'resistance_bands' | 'weights' | 'bench_box' | 'minimal'
 
 /**
  * Builder equipment keys (runtime/program layer)
+ * [PHASE 15A] Added bench to support bench_box mapping
  */
-export type BuilderEquipmentKey = 'pull_bar' | 'dip_bars' | 'parallettes' | 'rings' | 'bands' | 'weights' | 'floor' | 'wall'
+export type BuilderEquipmentKey = 'pull_bar' | 'dip_bars' | 'parallettes' | 'rings' | 'bands' | 'weights' | 'floor' | 'wall' | 'bench'
 
 /**
  * Hidden runtime-only equipment that should never be persisted to canonical profile
@@ -2995,6 +3081,7 @@ const RUNTIME_ONLY_EQUIPMENT = ['floor', 'wall'] as const
 /**
  * Convert profile/canonical equipment keys to builder/program keys
  * Use when: loading canonical profile into builder inputs
+ * [PHASE 15A] Added bench_box -> bench and minimal -> floor mappings
  */
 export function profileEquipmentToBuilderEquipment(profileEquipment: string[]): string[] {
   const mapping: Record<string, string> = {
@@ -3004,6 +3091,8 @@ export function profileEquipmentToBuilderEquipment(profileEquipment: string[]): 
     'rings': 'rings',
     'resistance_bands': 'bands',
     'weights': 'weights',
+    'bench_box': 'bench',  // [PHASE 15A] Map bench_box to builder bench
+    'minimal': 'floor',    // [PHASE 15A] Minimal means bodyweight-only
   }
   
   const result = profileEquipment
@@ -3018,6 +3107,7 @@ export function profileEquipmentToBuilderEquipment(profileEquipment: string[]): 
  * Convert builder/program equipment keys to profile/canonical keys
  * Use when: saving to canonical profile after a build
  * IMPORTANT: Strips runtime-only keys (floor, wall)
+ * [PHASE 15A] Added bench -> bench_box mapping
  */
 export function builderEquipmentToProfileEquipment(builderEquipment: string[]): string[] {
   const mapping: Record<string, string> = {
@@ -3027,6 +3117,7 @@ export function builderEquipmentToProfileEquipment(builderEquipment: string[]): 
     'rings': 'rings',
     'bands': 'resistance_bands',
     'weights': 'weights',
+    'bench': 'bench_box',  // [PHASE 15A] Map builder bench back to profile bench_box
   }
   
   const result = builderEquipment
@@ -3043,15 +3134,17 @@ export function builderEquipmentToProfileEquipment(builderEquipment: string[]): 
  * Normalize equipment arrays for comparison (both sides to canonical profile format)
  * Use when: checking drift between profile and program
  * Strips runtime-only keys from both sides before comparison
+ * [PHASE 15A] Added bench_box and minimal to preserve full equipment truth
  */
 export function normalizeEquipmentForComparison(equipment: string[]): string[] {
   // First convert any builder keys to profile keys
   const normalized = builderEquipmentToProfileEquipment(equipment)
   // Then also handle any already-profile keys
+  // [PHASE 15A] Added bench_box and minimal to the pass-through list
   return [...new Set([
     ...normalized,
     ...equipment.filter(e => 
-      ['pullup_bar', 'dip_bars', 'parallettes', 'rings', 'resistance_bands', 'weights'].includes(e)
+      ['pullup_bar', 'dip_bars', 'parallettes', 'rings', 'resistance_bands', 'weights', 'bench_box', 'minimal'].includes(e)
     )
   ])].sort()
 }

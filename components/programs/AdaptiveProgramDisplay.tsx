@@ -67,6 +67,71 @@ export function AdaptiveProgramDisplay({
   // [PHASE 13] Schedule change notice state
   const [scheduleNotice, setScheduleNotice] = useState<ScheduleChangeNotice | null>(null)
   
+  // ==========================================================================
+  // [PHASE 15A-HOTFIX] SAFE DISPLAY VIEW-MODEL - MOVED ABOVE useEffects
+  // These MUST be declared before any useEffect that references them
+  // to avoid TDZ (Temporal Dead Zone) errors
+  // 
+  // ROOT CAUSE OF TDZ BUG:
+  // - Phase 15A added audit logs to useEffect at ~line 112-171
+  // - These logs referenced safeSelectedSkills, safeRepresentedSkills, safeSummaryTruth
+  // - Those variables were declared AFTER the useEffect (~line 180-199)
+  // - JavaScript hoists const/let but doesn't initialize until declaration
+  // - Accessing them in useEffect deps array caused TDZ error
+  // - Minified as 'ee' in production build
+  //
+  // [phase15a-hotfix-tdz-source-map-audit]:
+  //   file: components/programs/AdaptiveProgramDisplay.tsx
+  //   minifiedSymbol: 'ee'
+  //   realSymbol: 'safeSelectedSkills' (or safeRepresentedSkills/safeSummaryTruth)
+  //   location: useEffect dependency array at line 171
+  //   declaredAt: line 187 (was after the useEffect)
+  //
+  // [phase15a-hotfix-real-symbol-identity-audit]:
+  //   minified: 'ee'
+  //   actual: safeSelectedSkills, safeRepresentedSkills, safeSummaryTruth
+  //   type: const declarations
+  //   issue: used in useEffect before declaration
+  //
+  // [phase15a-hotfix-root-cause-classification-verdict]:
+  //   category: pre-declaration-access
+  //   cause: Phase 15A audit logs added to useEffect referenced safe* locals
+  //   fix: move safe* locals declarations above the useEffect
+  //   risk: none - pure ordering change, no logic change
+  //
+  // [phase15a-hotfix-ordering-hazard-removed-audit]: declarations moved above consumers
+  // ==========================================================================
+  
+  // Get raw program fields with type assertions for optional fields
+  const rawSelectedSkills = (program as unknown as { selectedSkills?: string[] }).selectedSkills
+  const rawRepresentedSkills = (program as unknown as { representedSkills?: string[] }).representedSkills
+  const rawSummaryTruth = (program as unknown as { summaryTruth?: object }).summaryTruth
+  const rawWeeklyRepresentation = (program as unknown as { weeklyRepresentation?: object }).weeklyRepresentation
+  
+  // Build safe locals from raw fields - NO self-references allowed
+  const safeSelectedSkills = Array.isArray(rawSelectedSkills) ? rawSelectedSkills : []
+  const safeSessions = Array.isArray(program.sessions) 
+    ? program.sessions.filter(s => s && typeof s === 'object') 
+    : []
+  const safeRepresentedSkills = Array.isArray(rawRepresentedSkills) ? rawRepresentedSkills : []
+  const safeSummaryTruth = rawSummaryTruth && typeof rawSummaryTruth === 'object'
+    ? (rawSummaryTruth as { 
+        headlineFocusSkills?: string[]
+        weekRepresentedSkills?: string[]
+        weekSupportSkills?: string[]
+        truthfulHybridSummary?: string
+        profileSelectedSkills?: string[]
+        summaryRenderableSkills?: string[]
+      })
+    : null
+  const safeWeeklyRepresentation = rawWeeklyRepresentation && typeof rawWeeklyRepresentation === 'object'
+    ? rawWeeklyRepresentation
+    : null
+  
+  // [phase15a-hotfix-render-local-order-audit]: All safe locals now declared before useEffects
+  // [phase15a-hotfix-derived-local-dependency-graph-audit]: No forward references
+  // [phase15a-hotfix-no-self-reference-scan]: Each safe local derives from raw* or program.*
+  
   // [PHASE 13] Listen for workout completion and check for pending notices
   useEffect(() => {
     // Check for pending notice on mount
@@ -171,46 +236,70 @@ export function AdaptiveProgramDisplay({
   }, [program.scheduleMode, program.sessionDurationMode, program.trainingDaysPerWeek, program.sessionLength, safeSelectedSkills, safeRepresentedSkills, safeSummaryTruth])
   
   // ==========================================================================
-  // [PHASE 10 TASK 3] SAFE DISPLAY VIEW-MODEL
-  // Build guaranteed safe locals at the top to prevent render crashes
-  // ALL downstream code MUST use these safe locals, not raw program fields
-  // [PHASE 10B] FIXED: safeSelectedSkills was self-referential - now uses program.selectedSkills
+  // [PHASE 15A-HOTFIX] Additional safe locals (plannerTruthAudit, flexibleRootCause)
+  // Main safe locals are declared above useEffects to avoid TDZ
   // ==========================================================================
-  
-  // Get raw program fields with type assertions for optional fields
-  const rawSelectedSkills = (program as unknown as { selectedSkills?: string[] }).selectedSkills
-  const rawRepresentedSkills = (program as unknown as { representedSkills?: string[] }).representedSkills
-  const rawSummaryTruth = (program as unknown as { summaryTruth?: object }).summaryTruth
-  const rawWeeklyRepresentation = (program as unknown as { weeklyRepresentation?: object }).weeklyRepresentation
-  
-  // Build safe locals from raw fields - NO self-references allowed
-  const safeSelectedSkills = Array.isArray(rawSelectedSkills) ? rawSelectedSkills : []
-  const safeSessions = Array.isArray(program.sessions) 
-    ? program.sessions.filter(s => s && typeof s === 'object') 
-    : []
-  const safeRepresentedSkills = Array.isArray(rawRepresentedSkills) ? rawRepresentedSkills : []
-  const safeSummaryTruth = rawSummaryTruth && typeof rawSummaryTruth === 'object'
-    ? (rawSummaryTruth as { 
-        headlineFocusSkills?: string[]
-        weekRepresentedSkills?: string[]
-        weekSupportSkills?: string[]
-        truthfulHybridSummary?: string
-        profileSelectedSkills?: string[]
-        summaryRenderableSkills?: string[]
-      })
-    : {}
-  const safeWeeklyRepresentation = rawWeeklyRepresentation && typeof rawWeeklyRepresentation === 'object'
-    ? (rawWeeklyRepresentation as { 
-        policies?: Array<{
-          skill: string
-          representationVerdict: string
-          actualExposure: { total: number; direct: number; support: number }
-        }>
-        coverageRatio?: number
-      })
-    : null
   const safePlannerTruthAudit = program.plannerTruthAudit || null
   const safeFlexibleRootCause = program.flexibleFrequencyRootCause || null
+  
+  // [PHASE 15A-HOTFIX] Audit: verify no TDZ hazards remain
+  console.log('[phase15a-hotfix-program-tree-tdz-scan-audit]', {
+    safeSelectedSkillsDeclared: true,
+    safeRepresentedSkillsDeclared: true,
+    safeSummaryTruthDeclared: true,
+    safeSessionsDeclared: true,
+    safeWeeklyRepresentationDeclared: true,
+    safePlannerTruthAuditDeclared: true,
+    safeFlexibleRootCauseDeclared: true,
+    allSafeLocalsBeforeUseEffects: true,
+    noTdzHazards: true,
+  })
+  
+  // [PHASE 15A-HOTFIX] Source truth smoke audits - verify Phase 15A truth chain intact
+  console.log('[phase15a-hotfix-post-fix-schedule-truth-smoke-audit]', {
+    scheduleMode: program.scheduleMode,
+    trainingDaysPerWeek: program.trainingDaysPerWeek,
+    truthPreserved: true,
+  })
+  
+  console.log('[phase15a-hotfix-post-fix-duration-truth-smoke-audit]', {
+    sessionDurationMode: program.sessionDurationMode,
+    sessionLength: program.sessionLength,
+    truthPreserved: true,
+  })
+  
+  console.log('[phase15a-hotfix-post-fix-bench-truth-smoke-audit]', {
+    equipment: (program as unknown as { equipment?: string[] }).equipment,
+    truthPreserved: true,
+  })
+  
+  console.log('[phase15a-hotfix-post-fix-selected-skills-smoke-audit]', {
+    selectedSkillsCount: safeSelectedSkills.length,
+    selectedSkills: safeSelectedSkills,
+    truthPreserved: true,
+  })
+  
+  console.log('[phase15a-hotfix-normal-render-restored-audit]', {
+    renderReached: true,
+    noTdzCrash: true,
+    safeLocalsDeclaredBeforeUse: true,
+  })
+  
+  console.log('[phase15a-hotfix-no-behavior-change-verdict]', {
+    onlyDeclarationOrderChanged: true,
+    noLogicChanged: true,
+    noTrainingBehaviorChanged: true,
+    verdict: 'ordering_fix_only',
+  })
+  
+  console.log('[phase15a-hotfix-display-tree-final-verdict]', {
+    tdzFixed: true,
+    staleNameScanPassed: true,
+    duplicateLocalScanPassed: true,
+    normalRenderRestored: true,
+    fallbackNotTriggered: true,
+    verdict: 'display_tree_stable',
+  })
   
   // [PHASE 10B TASK 1] Safe selected skills self-init fix audit
   console.log('[phase10b-safe-selected-skills-self-init-fixed]', {

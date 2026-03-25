@@ -224,51 +224,73 @@ export function shouldRenderBuildFailureBanner(
   
   const storedRuntimeSessionId = storedResult.runtimeSessionId
   const hydratedFromStorage = storedResult.hydratedFromStorage === true
-  const isGenericUnknown = storedResult.errorCode === 'unknown_generation_failure'
   
-  // RULE 1: If stored result belongs to current runtime session, allow render
+  // ==========================================================================
+  // [PHASE 16T] STRICT RULE: Block ALL hydrated failures by default
+  // A hydrated failure from storage must NEVER auto-render as the active banner
+  // unless there is explicit proof it belongs to a fresh current-runtime attempt.
+  // ==========================================================================
+  
+  // RULE 1: If hydrated from storage, ALWAYS suppress for failure results
+  // This is the core fix - old stored failures cannot become active banners on page load
+  if (hydratedFromStorage) {
+    // Check for missing runtime session ID
+    if (!storedRuntimeSessionId) {
+      return { 
+        renderAllowed: false, 
+        suppressionReason: 'hydrated_failure_missing_runtime' 
+      }
+    }
+    
+    // Check for runtime session mismatch (prior runtime)
+    if (storedRuntimeSessionId !== currentRuntimeSessionId) {
+      return { 
+        renderAllowed: false, 
+        suppressionReason: 'hydrated_failure_prior_runtime' 
+      }
+    }
+    
+    // Even if runtime matches (impossible for true hydrated result), still block
+    // because hydratedFromStorage=true means it came from localStorage, not live
+    return { 
+      renderAllowed: false, 
+      suppressionReason: 'hydrated_failure_not_live' 
+    }
+  }
+  
+  // RULE 2: For LIVE (non-hydrated) results only:
+  // Allow if it belongs to current runtime session
   if (storedRuntimeSessionId && storedRuntimeSessionId === currentRuntimeSessionId) {
     return { renderAllowed: true, suppressionReason: null }
   }
   
-  // RULE 2: If no new attempt started yet in current session, allow hydrated result
-  // (user may need to see a recent failure from before refresh)
-  if (!currentSessionHasStartedNewAttempt && !isGenericUnknown) {
-    return { renderAllowed: true, suppressionReason: null }
-  }
-  
-  // RULE 3: Suppress generic unknown errors from prior runtimes
-  if (isGenericUnknown && hydratedFromStorage) {
-    if (!storedRuntimeSessionId || storedRuntimeSessionId !== currentRuntimeSessionId) {
-      return { 
-        renderAllowed: false, 
-        suppressionReason: 'generic_unknown_from_prior_runtime' 
-      }
-    }
-  }
-  
-  // RULE 4: If current session started a new attempt after stored result, suppress
+  // RULE 3: For LIVE results: If current session started a new attempt, check timing
   if (currentSessionHasStartedNewAttempt && currentAttemptStartedAt) {
     const storedAttemptTime = new Date(storedResult.attemptedAt).getTime()
     const currentAttemptTime = new Date(currentAttemptStartedAt).getTime()
-    if (currentAttemptTime > storedAttemptTime) {
-      return { 
-        renderAllowed: false, 
-        suppressionReason: 'newer_attempt_started_in_session' 
-      }
+    
+    // Allow if this result is from after the current attempt started (it's the current result)
+    if (storedAttemptTime >= currentAttemptTime) {
+      return { renderAllowed: true, suppressionReason: null }
     }
-  }
-  
-  // RULE 5: If hydrated from storage with mismatched/missing runtime session, suppress
-  if (hydratedFromStorage && storedRuntimeSessionId && storedRuntimeSessionId !== currentRuntimeSessionId) {
+    
+    // Suppress if this result is older than the current attempt
     return { 
       renderAllowed: false, 
-      suppressionReason: 'hydrated_from_different_runtime' 
+      suppressionReason: 'hydrated_failure_superseded_by_new_attempt' 
     }
   }
   
-  // Default: allow (backward compatibility with old results without runtimeSessionId)
-  return { renderAllowed: true, suppressionReason: null }
+  // RULE 4: Block anything without a runtime session ID (legacy data)
+  if (!storedRuntimeSessionId) {
+    return { 
+      renderAllowed: false, 
+      suppressionReason: 'hydrated_failure_missing_runtime' 
+    }
+  }
+  
+  // Default: suppress unknown cases (fail closed, not open)
+  return { renderAllowed: false, suppressionReason: 'hydrated_failure_pre_dispatch' }
 }
 
 /**

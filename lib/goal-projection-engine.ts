@@ -205,6 +205,12 @@ function getConsistencyLevel(momentum: TrainingMomentum): 'high' | 'moderate' | 
 export function calculateGoalProjection(goalType: GoalType): GoalProjection {
   // Gather all inputs
   const profile = getAthleteProfile()
+  
+  // [PHASE 16L] FIX: Handle null profile in server context
+  if (!profile) {
+    return createNeedsDataProjection(goalType, null, 0)
+  }
+  
   const progressions = getSkillProgressions()
   const personalRecords = getPersonalRecords()
   const momentum = calculateTrainingMomentum()

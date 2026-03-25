@@ -773,6 +773,27 @@ export async function detectConstraints(
 ): Promise<GlobalConstraintResult> {
   // Gather all data
   const profile = getAthleteProfile()
+  
+  // [PHASE 16L] FIX: Handle null profile in server context
+  if (!profile) {
+    return {
+      primaryConstraint: 'none',
+      secondaryConstraint: null,
+      strongQualities: [],
+      scheduleStatus: { isOptimal: false, weeksConsistent: 0, recommendation: 'Insufficient data' },
+      fatigueStatus: { isFatigued: false, decision: 'TRAIN_AS_PLANNED', recommendation: 'No fatigue data' },
+      skillResults: {
+        front_lever: null,
+        back_lever: null,
+        planche: null,
+        hspu: null,
+        muscle_up: null,
+        l_sit: null,
+      },
+      recommendations: ['Complete profile setup'],
+    }
+  }
+  
   const logs = getWorkoutLogs()
   const fatigueDecision = getQuickFatigueDecision()
   const existingConstraints = analyzeConstraints()
@@ -897,6 +918,27 @@ export function detectConstraintsSync(): Omit<GlobalConstraintResult, 'skillResu
   skillResults: Record<SkillType, SkillConstraintResult | null>
 } {
   const profile = getAthleteProfile()
+  
+  // [PHASE 16L] FIX: Handle null profile in server context
+  if (!profile) {
+    return {
+      primaryConstraint: 'none',
+      secondaryConstraint: null,
+      strongQualities: [],
+      scheduleStatus: { isOptimal: false, weeksConsistent: 0, recommendation: 'Insufficient data' },
+      fatigueStatus: { isFatigued: false, decision: 'TRAIN_AS_PLANNED', recommendation: 'No fatigue data' },
+      skillResults: {
+        front_lever: null,
+        back_lever: null,
+        planche: null,
+        hspu: null,
+        muscle_up: null,
+        l_sit: null,
+      },
+      recommendations: ['Complete profile setup'],
+    }
+  }
+  
   const logs = getWorkoutLogs()
   const fatigueDecision = getQuickFatigueDecision()
   const existingConstraints = analyzeConstraints()

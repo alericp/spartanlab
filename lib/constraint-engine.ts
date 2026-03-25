@@ -64,10 +64,57 @@ const LABELS: Record<string, string> = {
 
 /**
  * Analyze all athlete data and determine the primary training constraint
+ * [PHASE 16L] Fixed null safety for server context where getAthleteProfile returns null
  */
 export function analyzeConstraints(): ConstraintResult {
   // Gather all data
   const profile = getAthleteProfile()
+  
+  // [PHASE 16L] FIX: Handle null profile (server context has no localStorage)
+  // Return early with insufficient_data result instead of crashing
+  if (!profile) {
+    console.log('[phase16l-bodyweight-null-root-cause-audit]', {
+      crash_site: 'analyzeConstraints',
+      profile_value: 'null',
+      reason: 'getAthleteProfile_returns_null_in_server_context',
+      fix: 'returning_insufficient_data_result',
+    })
+    return {
+      primaryConstraint: 'insufficient_data',
+      constraintLabel: 'Insufficient Data',
+      category: 'data',
+      confidence: 'low',
+      explanation: 'Profile data not available in this context.',
+      recommendations: ['Complete profile setup'],
+      skillSignals: {
+        weeklyDensity: 0,
+        sessionsThisWeek: 0,
+        cleanHoldRate: 0,
+        readinessStatus: null,
+        holdTrend: 'insufficient_data',
+        hasSkillData: false,
+      },
+      strengthSignals: {
+        pullRatio: null,
+        pushRatio: null,
+        hasStrengthData: false,
+      },
+      recoverySignals: {
+        needsDeload: false,
+        fatigueScore: 0,
+        hasRecoveryData: false,
+      },
+    }
+  }
+  
+  // [PHASE 16L] Profile source verdict - proves we're reading from non-null profile
+  console.log('[phase16l-profile-source-truth-audit]', {
+    source: 'getAthleteProfile',
+    profileExists: true,
+    hasBodyweight: profile.bodyweight !== null && profile.bodyweight !== undefined,
+    hasPrimaryGoal: !!profile.primaryGoal,
+  })
+  
   const bodyweight = profile.bodyweight
   const primaryGoal = profile.primaryGoal
   

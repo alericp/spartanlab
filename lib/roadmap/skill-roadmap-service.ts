@@ -560,6 +560,21 @@ export function determineRoadmapPosition(
 ): AthleteRoadmapPosition {
   const roadmap = SKILL_ROADMAPS[skillKey]
   const profile = getAthleteProfile()
+  
+  // [PHASE 16L] FIX: Handle null profile in server context
+  if (!profile) {
+    return {
+      phase: roadmap.phases[0],
+      phaseIndex: 0,
+      progressPercent: 0,
+      readinessScore: 0,
+      readinessLevel: 'not_ready' as const,
+      constraintsBlocking: [],
+      nextMilestone: null,
+      estimatedWeeksToNext: null,
+    }
+  }
+  
   const strengthRecords = getStrengthRecords()
   const skillProgressions = getSkillProgressions()
   

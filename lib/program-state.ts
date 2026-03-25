@@ -105,6 +105,15 @@ export type BuildAttemptSubCode =
   | 'equipment_adaptation_zeroed_session'
   | 'validation_zeroed_session'
   | 'mapping_zeroed_session'
+  // [PHASE 16Q] Page-side validation failure subcodes
+  | 'program_null'
+  | 'program_missing_id'
+  | 'sessions_not_array'
+  | 'sessions_empty'
+  | 'session_item_invalid'
+  | 'session_missing_day_number'
+  | 'session_missing_focus'
+  | 'session_exercises_not_array'
   | 'none'
 
 /**
@@ -261,10 +270,36 @@ export function getErrorUserMessage(
       return 'Session validation removed all exercises. Try different settings.' + suffix
     case 'mapping_zeroed_session':
       return 'Exercise mapping failed. Please try again or report this issue.' + suffix
+    // [PHASE 16Q] Page-side validation failure messages
+    case 'program_null':
+      return 'The program builder returned no plan. Please try again.' + suffix
+    case 'program_missing_id':
+      return 'The generated plan was incomplete and could not be saved.' + suffix
+    case 'sessions_not_array':
+      return 'The generated plan had an invalid session format.' + suffix
+    case 'sessions_empty':
+      return 'The generated plan did not contain any sessions.' + suffix
+    case 'session_item_invalid':
+      return 'One session in the generated plan was malformed.' + suffix
+    case 'session_missing_day_number':
+      return 'A generated session was missing its training day.' + suffix
+    case 'session_missing_focus':
+      return 'A generated session was missing its focus.' + suffix
+    case 'session_exercises_not_array':
+      return 'A generated session had an invalid exercise list.' + suffix
     default:
       // Fall through to error code handling
       break
   }
+  
+  // [PHASE 16Q] Runtime marker for error mapping
+  console.log('[phase16q-runtime-marker]', {
+    file: 'lib/program-state.ts',
+    location: 'getErrorUserMessage',
+    errorCode,
+    subCode,
+    marker: 'PHASE_16Q_RUNTIME_MARKER',
+  })
   
   switch (errorCode) {
     case 'profile_validation_failed':

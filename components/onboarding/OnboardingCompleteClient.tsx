@@ -93,6 +93,8 @@ export default function OnboardingCompleteClient() {
   const router = useRouter()
   const [mounted, setMounted] = useState(false)
   const [step, setStep] = useState<PageStep>('generating')
+  // [PHASE 16C TASK 11] Status message for slow generation visibility
+  const [statusMessage, setStatusMessage] = useState('Preparing your program...')
   const [isPro, setIsPro] = useState(false)
   const [isTrial, setIsTrial] = useState(false)
   const [trialDays, setTrialDays] = useState(0)
@@ -445,7 +447,40 @@ export default function OnboardingCompleteClient() {
         // This saves the program to canonical storage (spartanlab_adaptive_programs)
         // AND to backward-compatible storage (spartanlab_first_program)
         trackStage('generateFirstProgram_enter', genStartTime)
-        const result = onboardingModule.generateFirstProgram()
+        
+        // [PHASE 16C TASK 7] Stage callback for real-time progress updates
+        const handleStageChange = (stage: string) => {
+          console.log('[phase16c-client-stage-sync-verdict]', {
+            receivedStage: stage,
+            elapsedMs: Date.now() - genStartTime,
+          })
+          trackStage(`builder_${stage}`, genStartTime)
+          
+          // [PHASE 16C TASK 11] Update status message based on stage
+          const stageMessages: Record<string, string> = {
+            'init': 'Preparing your program...',
+            'input_resolution': 'Resolving your training preferences...',
+            'profile_validation': 'Validating your profile...',
+            'structure_selection': 'Selecting weekly structure...',
+            'skill_allocation': 'Allocating skills to sessions...',
+            'session_assembly': 'Building your training sessions...',
+            'session_construction': 'Constructing exercises...',
+            'post_processing': 'Finalizing program details...',
+            'validation_complete': 'Validating your program...',
+          }
+          if (stageMessages[stage]) {
+            setStatusMessage(stageMessages[stage])
+          }
+        }
+        
+        console.log('[phase16c-onboarding-await-generation-audit]', {
+          isAwaitingAsync: true,
+          hasStageCallback: true,
+          timestamp: new Date().toISOString(),
+        })
+        
+        // [PHASE 16C] Now async - await the generation call
+        const result = await onboardingModule.generateFirstProgram(handleStageChange)
         completeStage('generateFirstProgram_done', genStartTime, {
           success: result.success,
           hasProgram: !!result.program,
@@ -691,11 +726,21 @@ export default function OnboardingCompleteClient() {
     simulationMode,
   })
 
-  // [PHASE 16A/16B] Enhanced generating state with progress, slow-path handling, and stage tracking
+  // [PHASE 16A/16B/16C] Enhanced generating state with progress, slow-path handling, and stage tracking
+  // [PHASE 16C TASK 11] Now renderable due to cooperative async yielding in builder
   if (step === 'generating') {
     const elapsedSeconds = Math.floor(generationElapsed / 1000)
     const isVerySlow = generationElapsed >= VERY_SLOW_THRESHOLD_MS
     const isApproachingTimeout = generationElapsed >= HARD_TIMEOUT_MS * 0.8
+    
+    console.log('[phase16c-slow-ui-now-renderable-audit]', {
+      canRender: true,
+      elapsedMs: generationElapsed,
+      statusMessage,
+      generationStage,
+      isSlowGeneration,
+      isVerySlow,
+    })
     
     return (
       <div className="min-h-screen bg-[#0F1115] flex items-center justify-center p-4">
@@ -847,7 +892,27 @@ export default function OnboardingCompleteClient() {
                   completeStage('retry_import_done', retryStartTime)
                   
                   trackStage('retry_generate_start', retryStartTime)
-                  const result = onboardingModule.generateFirstProgram()
+                  // [PHASE 16C] Retry also uses async generation with callback
+                  const handleRetryStageChange = (stage: string) => {
+                    trackStage(`retry_builder_${stage}`, retryStartTime)
+                    const stageMessages: Record<string, string> = {
+                      'init': 'Preparing your program...',
+                      'input_resolution': 'Resolving your training preferences...',
+                      'profile_validation': 'Validating your profile...',
+                      'structure_selection': 'Selecting weekly structure...',
+                      'skill_allocation': 'Allocating skills to sessions...',
+                      'session_assembly': 'Building your training sessions...',
+                      'session_construction': 'Constructing exercises...',
+                      'post_processing': 'Finalizing program details...',
+                      'validation_complete': 'Validating your program...',
+                    }
+                    if (stageMessages[stage]) {
+                      setStatusMessage(stageMessages[stage])
+                    }
+                  }
+                  
+                  // [PHASE 16C] Await the async generation on retry
+                  const result = await onboardingModule.generateFirstProgram(handleRetryStageChange)
                   completeStage('retry_generate_done', retryStartTime, { success: result.success })
                   setProgramResult(result)
                   

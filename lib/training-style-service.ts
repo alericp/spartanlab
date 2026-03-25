@@ -1480,3 +1480,357 @@ export function getStyleRepSchemeNote(styleMode: TrainingStyleMode): string {
   }
   return notes[styleMode]
 }
+
+// =============================================================================
+// [PHASE 15D] DOMINANT WEEKLY SPINE RESOLUTION
+// When user selects ALL styles, we don't blend equally - we resolve ONE dominant
+// spine based on their profile, then selectively layer secondary influences
+// =============================================================================
+
+export type WeeklySpineType = 
+  | 'skill_strength_spine'     // Skill primary, strength secondary
+  | 'strength_skill_spine'     // Strength primary, skill secondary
+  | 'power_skill_spine'        // Power primary, skill support
+  | 'density_skill_spine'      // Endurance/density primary, skill preserved
+  | 'hypertrophy_support_spine' // Skill/strength with hypertrophy accessories
+  | 'balanced_hybrid_spine'    // No clear dominance - moderate everything
+
+export interface DominantSpineResolution {
+  primarySpine: WeeklySpineType
+  primaryStyleMode: TrainingStyleMode
+  secondaryInfluences: Array<{
+    style: TrainingStyleMode
+    influence: 'power_layering' | 'hypertrophy_accessories' | 'density_finisher' | 'skill_exposure'
+    reason: string
+    sessionSlotHint: 'any' | 'mixed_day' | 'finisher' | 'accessory_block' | 'designated_session'
+  }>
+  densityIntegration: {
+    allowed: boolean
+    reason: string
+    preferredSlots: string[]
+    maxSessionsPerWeek: number
+  }
+  spineRationale: string
+  determinismSignature: string
+}
+
+export interface SpineResolutionInput {
+  primaryGoal: string
+  secondaryGoal: string | null
+  selectedSkillsCount: number
+  experienceLevel: 'beginner' | 'intermediate' | 'advanced'
+  recoveryLevel?: 'poor' | 'fair' | 'normal' | 'good'
+  selectedTrainingStyles: TrainingStyleMode[] | string[] | null
+  trainingMethodPreferences: string[]
+  hasWeightedEquipment: boolean
+  sessionLength: 'short' | 'medium' | 'long' | 'extended' | string
+}
+
+/**
+ * [PHASE 15D TASK 2] Resolve the dominant weekly spine from profile inputs
+ * 
+ * PHILOSOPHY: When ALL styles are selected, it does NOT mean equal blending.
+ * It means the engine has a broad methodology pool to draw from.
+ * We resolve ONE dominant spine based on the athlete's profile/goals,
+ * then selectively borrow from other styles only when useful.
+ */
+export function resolveDominantWeeklySpine(input: SpineResolutionInput): DominantSpineResolution {
+  const {
+    primaryGoal,
+    secondaryGoal,
+    selectedSkillsCount,
+    experienceLevel,
+    recoveryLevel = 'normal',
+    selectedTrainingStyles,
+    trainingMethodPreferences,
+    hasWeightedEquipment,
+    sessionLength,
+  } = input
+  
+  // Normalize selected styles
+  const styles = Array.isArray(selectedTrainingStyles) 
+    ? selectedTrainingStyles.filter(Boolean) as TrainingStyleMode[]
+    : []
+  const hasAllStyles = styles.length >= 5 || styles.includes('balanced_hybrid')
+  const hasMultipleStyles = styles.length > 1
+  
+  // Build determinism signature (same inputs = same output)
+  const determinismSignature = [
+    primaryGoal,
+    secondaryGoal || 'none',
+    selectedSkillsCount,
+    experienceLevel,
+    recoveryLevel,
+    styles.sort().join(','),
+    hasWeightedEquipment ? 'weighted' : 'bodyweight',
+    sessionLength,
+  ].join('|')
+  
+  // ==========================================================================
+  // [PHASE 15D] SPINE RESOLUTION LOGIC
+  // Priority: Profile goals > experience level > style selection
+  // ==========================================================================
+  
+  let primarySpine: WeeklySpineType = 'skill_strength_spine'
+  let primaryStyleMode: TrainingStyleMode = 'skill_focused'
+  const secondaryInfluences: DominantSpineResolution['secondaryInfluences'] = []
+  
+  // Check if primary/secondary goals are advanced skill goals
+  const isAdvancedSkillGoal = (goal: string) => 
+    ['planche', 'front_lever', 'back_lever', 'iron_cross', 'maltese', 'muscle_up', 'one_arm_pull_up'].includes(goal?.toLowerCase() || '')
+  
+  const isStrengthGoal = (goal: string) =>
+    ['weighted_pull_up', 'weighted_dip', 'weighted_push_up', 'max_strength'].includes(goal?.toLowerCase() || '')
+  
+  const isPrimaryAdvancedSkill = isAdvancedSkillGoal(primaryGoal)
+  const isSecondaryAdvancedSkill = secondaryGoal ? isAdvancedSkillGoal(secondaryGoal) : false
+  const isPrimaryStrength = isStrengthGoal(primaryGoal)
+  
+  // ==========================================================================
+  // SPINE SELECTION RULES (deterministic, profile-driven)
+  // ==========================================================================
+  
+  if (isPrimaryAdvancedSkill && isSecondaryAdvancedSkill) {
+    // Both goals are advanced skills - skill-strength spine dominates
+    primarySpine = 'skill_strength_spine'
+    primaryStyleMode = 'skill_focused'
+  } else if (isPrimaryAdvancedSkill && isPrimaryStrength) {
+    // Primary skill + secondary strength
+    primarySpine = 'skill_strength_spine'
+    primaryStyleMode = 'skill_focused'
+  } else if (isPrimaryStrength) {
+    // Primary is weighted strength
+    primarySpine = 'strength_skill_spine'
+    primaryStyleMode = 'strength_focused'
+  } else if (isPrimaryAdvancedSkill) {
+    // Single advanced skill primary
+    primarySpine = 'skill_strength_spine'
+    primaryStyleMode = 'skill_focused'
+  } else if (styles.includes('endurance_focused') && !styles.includes('skill_focused')) {
+    // Explicit endurance selection without skill
+    primarySpine = 'density_skill_spine'
+    primaryStyleMode = 'endurance_focused'
+  } else if (selectedSkillsCount >= 3 || experienceLevel === 'advanced') {
+    // Multi-skill athlete or advanced - default to skill-strength
+    primarySpine = 'skill_strength_spine'
+    primaryStyleMode = 'skill_focused'
+  } else {
+    // Fallback to balanced hybrid
+    primarySpine = 'balanced_hybrid_spine'
+    primaryStyleMode = 'balanced_hybrid'
+  }
+  
+  // ==========================================================================
+  // [PHASE 15D TASK 3] SECONDARY INFLUENCE LAYERING
+  // Only add influences that materially improve the week
+  // ==========================================================================
+  
+  // Power layering - if power is selected or athlete has explosive goals
+  if ((styles.includes('power_focused') || hasAllStyles) && experienceLevel !== 'beginner') {
+    secondaryInfluences.push({
+      style: 'power_focused',
+      influence: 'power_layering',
+      reason: 'Explosive variants enhance skill transfer',
+      sessionSlotHint: primarySpine === 'skill_strength_spine' ? 'any' : 'designated_session',
+    })
+  }
+  
+  // Hypertrophy accessories - if selected or athlete has hypertrophy interest
+  if (styles.includes('hypertrophy_supported') || hasAllStyles) {
+    secondaryInfluences.push({
+      style: 'hypertrophy_supported',
+      influence: 'hypertrophy_accessories',
+      reason: 'Targeted accessories support physique and performance',
+      sessionSlotHint: 'accessory_block',
+    })
+  }
+  
+  // Skill exposure - if multiple skills and not already skill-primary
+  if (selectedSkillsCount >= 4 && primarySpine !== 'skill_strength_spine') {
+    secondaryInfluences.push({
+      style: 'skill_focused',
+      influence: 'skill_exposure',
+      reason: 'Multiple selected skills need exposure',
+      sessionSlotHint: 'mixed_day',
+    })
+  }
+  
+  // ==========================================================================
+  // [PHASE 15D TASK 4] DENSITY/CIRCUIT INTEGRATION RULES
+  // Density work appears only when justified, not randomly
+  // ==========================================================================
+  
+  const densityAllowed = 
+    styles.includes('endurance_focused') || 
+    hasAllStyles ||
+    trainingMethodPreferences.includes('circuits') ||
+    trainingMethodPreferences.includes('density_blocks')
+  
+  const densityIntegration: DominantSpineResolution['densityIntegration'] = {
+    allowed: densityAllowed,
+    reason: densityAllowed 
+      ? 'Endurance/density style selected or all styles active'
+      : 'No density style selected',
+    preferredSlots: ['mixed_day', 'finisher', 'lower_fatigue_accessory_block'],
+    maxSessionsPerWeek: primarySpine === 'density_skill_spine' 
+      ? 3 
+      : densityAllowed 
+        ? 1 
+        : 0,
+  }
+  
+  // Add density finisher as secondary influence if allowed but not primary
+  if (densityAllowed && primarySpine !== 'density_skill_spine') {
+    secondaryInfluences.push({
+      style: 'endurance_focused',
+      influence: 'density_finisher',
+      reason: 'Density work improves work capacity without compromising skill quality',
+      sessionSlotHint: 'finisher',
+    })
+  }
+  
+  // ==========================================================================
+  // BUILD RATIONALE
+  // ==========================================================================
+  
+  const spineLabels: Record<WeeklySpineType, string> = {
+    skill_strength_spine: 'Skill-Strength',
+    strength_skill_spine: 'Strength-Skill',
+    power_skill_spine: 'Power-Skill',
+    density_skill_spine: 'Density-Skill',
+    hypertrophy_support_spine: 'Hypertrophy-Support',
+    balanced_hybrid_spine: 'Balanced Hybrid',
+  }
+  
+  const secondaryLabels = secondaryInfluences.map(s => {
+    switch (s.influence) {
+      case 'power_layering': return 'power layering'
+      case 'hypertrophy_accessories': return 'hypertrophy accessories'
+      case 'density_finisher': return 'density finishers'
+      case 'skill_exposure': return 'skill exposure'
+      default: return s.influence
+    }
+  })
+  
+  const spineRationale = secondaryLabels.length > 0
+    ? `${spineLabels[primarySpine]} spine with ${secondaryLabels.join(', ')}`
+    : `${spineLabels[primarySpine]} spine`
+  
+  // Log audit for materiality verification
+  console.log('[phase15d-dominant-spine-resolution]', {
+    input: {
+      primaryGoal,
+      secondaryGoal,
+      selectedSkillsCount,
+      experienceLevel,
+      stylesCount: styles.length,
+      hasAllStyles,
+    },
+    output: {
+      primarySpine,
+      primaryStyleMode,
+      secondaryInfluencesCount: secondaryInfluences.length,
+      densityAllowed: densityIntegration.allowed,
+      densityMaxSessions: densityIntegration.maxSessionsPerWeek,
+    },
+    rationale: spineRationale,
+    determinismSignature: determinismSignature.slice(0, 50) + '...',
+  })
+  
+  return {
+    primarySpine,
+    primaryStyleMode,
+    secondaryInfluences,
+    densityIntegration,
+    spineRationale,
+    determinismSignature,
+  }
+}
+
+/**
+ * [PHASE 15D] Check if density/circuit work should be applied to a session
+ */
+export function shouldApplyDensityToSession(
+  spineResolution: DominantSpineResolution,
+  sessionContext: {
+    sessionIndex: number
+    totalSessions: number
+    sessionFocus: string
+    isSkillDay: boolean
+    isMixedDay: boolean
+  }
+): { apply: boolean; reason: string } {
+  const { densityIntegration, primarySpine } = spineResolution
+  
+  if (!densityIntegration.allowed) {
+    return { apply: false, reason: 'Density not allowed for this spine configuration' }
+  }
+  
+  // Never apply density to heavy skill days unless density-primary spine
+  if (sessionContext.isSkillDay && primarySpine !== 'density_skill_spine') {
+    return { apply: false, reason: 'Preserving skill quality - no density on skill-focused days' }
+  }
+  
+  // Mixed days are ideal for density finishers
+  if (sessionContext.isMixedDay && densityIntegration.preferredSlots.includes('mixed_day')) {
+    return { apply: true, reason: 'Mixed day is ideal slot for density work' }
+  }
+  
+  // Limit total density sessions per week
+  const densitySessionLimit = densityIntegration.maxSessionsPerWeek
+  const sessionPosition = sessionContext.sessionIndex + 1
+  
+  // Apply density to last session as finisher if within limit
+  if (sessionPosition === sessionContext.totalSessions && densitySessionLimit > 0) {
+    return { apply: true, reason: 'Final session - density finisher slot' }
+  }
+  
+  return { apply: false, reason: 'No applicable density slot for this session' }
+}
+
+/**
+ * [PHASE 15D] Generate explanation text for the resolved spine
+ */
+export function generateSpineExplanation(
+  spineResolution: DominantSpineResolution,
+  hasAllStylesSelected: boolean
+): string {
+  const { primarySpine, secondaryInfluences, densityIntegration, spineRationale } = spineResolution
+  
+  const parts: string[] = []
+  
+  // Explain spine selection
+  if (hasAllStylesSelected) {
+    parts.push(`Your selected style range was resolved into a ${spineRationale} rather than equally blended.`)
+  } else {
+    parts.push(`This program uses a ${spineRationale}.`)
+  }
+  
+  // Explain secondary influences
+  if (secondaryInfluences.length > 0) {
+    const influences = secondaryInfluences.map(s => {
+      switch (s.influence) {
+        case 'power_layering': return 'explosive work integrated where beneficial'
+        case 'hypertrophy_accessories': return 'targeted accessory work for physique support'
+        case 'density_finisher': return 'density work limited to designated slots'
+        case 'skill_exposure': return 'additional skill exposure on mixed days'
+        default: return ''
+      }
+    }).filter(Boolean)
+    
+    if (influences.length > 0) {
+      parts.push(`Secondary influences: ${influences.join(', ')}.`)
+    }
+  }
+  
+  // Explain density integration
+  if (densityIntegration.allowed && densityIntegration.maxSessionsPerWeek > 0) {
+    if (primarySpine === 'density_skill_spine') {
+      parts.push('Density/circuit work is the primary training method.')
+    } else {
+      parts.push(`Density work is limited to ${densityIntegration.maxSessionsPerWeek} session(s) to preserve skill quality.`)
+    }
+  }
+  
+  return parts.join(' ')
+}

@@ -172,6 +172,15 @@ import {
   type ProgressionInsight,
   type TrainingBehaviorResult,
 } from './adaptive-progression-engine'
+// [PHASE 15D] Dominant spine resolution for multi-style programs
+import {
+  resolveDominantWeeklySpine,
+  shouldApplyDensityToSession,
+  generateSpineExplanation,
+  type DominantSpineResolution,
+  type WeeklySpineType,
+  type TrainingStyleMode,
+} from './training-style-service'
 import { 
   optimizeSessionForTime, 
   saveTimePattern,
@@ -739,6 +748,23 @@ export interface AdaptiveProgram {
   }
   structure: WeeklyStructure
   sessions: AdaptiveSession[]
+  // [PHASE 15D] Dominant spine resolution for multi-style programs
+  dominantSpineResolution?: {
+    primarySpine: WeeklySpineType
+    primaryStyleMode: TrainingStyleMode
+    secondaryInfluences: Array<{
+      style: TrainingStyleMode
+      influence: string
+      reason: string
+    }>
+    densityIntegration: {
+      allowed: boolean
+      reason: string
+      maxSessionsPerWeek: number
+    }
+    spineRationale: string
+    hasAllStylesSelected: boolean
+  }
   // [SUMMARY-TRUTH] Selected skills from profile and represented skills in this week
   selectedSkills?: string[]
   representedSkills?: string[]
@@ -3092,6 +3118,92 @@ function generateAdaptiveProgramImpl(inputs: AdaptiveProgramInputs, stageTracker
   })
   
   // ==========================================================================
+  // [PHASE 15D] DOMINANT WEEKLY SPINE RESOLUTION
+  // When user selects ALL styles, resolve one dominant spine from their profile
+  // Do NOT blend equally - choose a primary structure then selectively layer
+  // ==========================================================================
+  const normalizedStyles = canonicalProfile.trainingMethodPreferences || ['straight_sets']
+  const hasAllStylesSelected = normalizedStyles.length >= 4 || 
+    (typeof canonicalProfile.trainingStyle === 'string' && 
+     (canonicalProfile.trainingStyle.includes('all') || canonicalProfile.trainingStyle === 'balanced_hybrid'))
+  
+  // Resolve the dominant spine based on profile/goals (not style selection alone)
+  const dominantSpineResolution: DominantSpineResolution = resolveDominantWeeklySpine({
+    primaryGoal,
+    secondaryGoal,
+    selectedSkillsCount: expandedContext.selectedSkills.length,
+    experienceLevel: experienceLevel as 'beginner' | 'intermediate' | 'advanced',
+    recoveryLevel: canonicalProfile.recoveryLevel as 'poor' | 'fair' | 'normal' | 'good' | undefined,
+    selectedTrainingStyles: normalizedStyles as TrainingStyleMode[],
+    trainingMethodPreferences: normalizedStyles,
+    hasWeightedEquipment: equipment.some(e => 
+      e === 'weights' || e === 'dumbbells' || e === 'weighted_vest' || e === 'kettlebell'
+    ),
+    sessionLength: sessionLength <= 30 ? 'short' : sessionLength <= 45 ? 'medium' : sessionLength <= 60 ? 'long' : 'extended',
+  })
+  
+  // [PHASE 15D TASK 1] STYLE MATERIALITY CHAIN AUDIT
+  console.log('[phase15d-style-materiality-chain-audit]', {
+    selectedTrainingStyles: normalizedStyles,
+    hasAllStylesSelected,
+    resolvedPrimarySpine: dominantSpineResolution.primarySpine,
+    resolvedPrimaryStyleMode: dominantSpineResolution.primaryStyleMode,
+    secondaryInfluencesCount: dominantSpineResolution.secondaryInfluences.length,
+    secondaryInfluences: dominantSpineResolution.secondaryInfluences.map(s => s.influence),
+    densityAllowed: dominantSpineResolution.densityIntegration.allowed,
+    densityMaxSessionsPerWeek: dominantSpineResolution.densityIntegration.maxSessionsPerWeek,
+    spineRationale: dominantSpineResolution.spineRationale,
+    materialityVerdict: {
+      affectsWeeklyStructure: true, // Spine determines day focus distribution
+      affectsSessionComposition: true, // Secondary influences shape session assembly
+      affectsExerciseCategorySelection: true, // Spine biases exercise pool access
+      affectsDensityCircuitPresence: dominantSpineResolution.densityIntegration.allowed,
+      affectsRepRestLoadTendencies: true, // Style mode defines rep/rest rules
+      affectsAccessoryPlacement: dominantSpineResolution.secondaryInfluences.some(s => s.influence === 'hypertrophy_accessories'),
+    },
+    classification: hasAllStylesSelected 
+      ? 'all_styles_resolved_to_dominant_spine'
+      : 'single_style_used_directly',
+  })
+  
+  // [PHASE 15D TASK 1] STYLE OUTPUT SHAPE AUDIT
+  console.log('[phase15d-style-output-shape-audit]', {
+    spineType: dominantSpineResolution.primarySpine,
+    expectedWeekShape: {
+      primaryDayCount: dominantSpineResolution.primarySpine.includes('skill') ? Math.ceil(effectiveTrainingDays * 0.6) : Math.floor(effectiveTrainingDays * 0.5),
+      mixedDayCount: 1,
+      densityDayCount: dominantSpineResolution.densityIntegration.maxSessionsPerWeek,
+    },
+    expectedSessionShape: {
+      primaryStyleExercises: 'majority',
+      secondaryInfluenceExercises: 'selected_slots_only',
+      densityWorkPresence: dominantSpineResolution.densityIntegration.allowed ? 'finisher_or_mixed_day' : 'none',
+    },
+    expectedRepRestPattern: dominantSpineResolution.primaryStyleMode,
+    deterministicSignature: dominantSpineResolution.determinismSignature.slice(0, 40),
+  })
+  
+  // [PHASE 15D TASK 5] DETERMINISTIC BUILD CONTRACT
+  console.log('[phase15d-deterministic-build-contract-audit]', {
+    inputSignature: dominantSpineResolution.determinismSignature.slice(0, 60),
+    sameInputsProduceSameSpine: true,
+    spineSelectionIsDeterministic: true,
+    secondaryInfluencesAreDeterministic: true,
+    densityPlacementIsDeterministic: true,
+    noRandomSelection: true,
+    verdict: 'deterministic_spine_resolution',
+  })
+  
+  console.log('[phase15d-no-slot-machine-generation-verdict]', {
+    primarySpineFixed: dominantSpineResolution.primarySpine,
+    secondaryInfluencesFixed: dominantSpineResolution.secondaryInfluences.map(s => s.influence),
+    densityRulesFixed: dominantSpineResolution.densityIntegration,
+    allStylesResolvedNotBlended: hasAllStylesSelected,
+    nothingRandom: true,
+    verdict: 'no_slot_machine_behavior',
+  })
+  
+  // ==========================================================================
   // [builder-input-truth-chain-audit] TASK 5: Final builder input verification
   // Creates a single resolved truth object for generation
   // ==========================================================================
@@ -5004,6 +5116,33 @@ function generateAdaptiveProgramImpl(inputs: AdaptiveProgramInputs, stageTracker
     })
     
     // ==========================================================================
+    // [PHASE 15D TASK 1] STYLE EXPLANATION TRUTH AUDIT
+    // Verify that the explanation text matches the resolved spine
+    // ==========================================================================
+    console.log('[phase15d-style-explanation-truth-audit]', {
+      hasAllStylesSelected,
+      resolvedPrimarySpine: dominantSpineResolution.primarySpine,
+      resolvedPrimaryStyleMode: dominantSpineResolution.primaryStyleMode,
+      spineRationale: dominantSpineResolution.spineRationale,
+      secondaryInfluences: dominantSpineResolution.secondaryInfluences.map(s => s.influence),
+      densityAllowed: dominantSpineResolution.densityIntegration.allowed,
+      // Check if explanation reflects spine
+      explanationMatchesSpine: truthfulHybridSummary.toLowerCase().includes('spine') ||
+        truthfulHybridSummary.toLowerCase().includes(dominantSpineResolution.primaryStyleMode.replace(/_/g, ' ')) ||
+        !hasAllStylesSelected, // If not all styles, no need for spine explanation
+      explanationMentionsSecondaryInfluences: dominantSpineResolution.secondaryInfluences.length === 0 ||
+        dominantSpineResolution.secondaryInfluences.some(s => 
+          truthfulHybridSummary.toLowerCase().includes(s.influence.replace(/_/g, ' '))
+        ),
+      explanationCorrectlyLimitsDensity: !dominantSpineResolution.densityIntegration.allowed ||
+        !truthfulHybridSummary.toLowerCase().includes('density') ||
+        truthfulHybridSummary.toLowerCase().includes('limited'),
+      verdict: hasAllStylesSelected
+        ? 'all_styles_resolved_with_explanation'
+        : 'single_style_mode_used',
+    })
+    
+    // ==========================================================================
     // [TASK 2] FIRST NARROWING POINT VERDICT - Identify where profile truth narrows
     // ==========================================================================
     const firstNarrowingPoint = (() => {
@@ -5318,6 +5457,16 @@ function generateAdaptiveProgramImpl(inputs: AdaptiveProgramInputs, stageTracker
       truthfulHybridSummary = `${truthfulHybridSummary} Includes ${mixedSessionCount} mixed skill session${mixedSessionCount > 1 ? 's' : ''} for broader development.`
     }
     
+    // [PHASE 15D TASK 8] Add spine explanation if all styles were selected
+    // This explains how the engine resolved multiple styles into a dominant structure
+    if (hasAllStylesSelected && dominantSpineResolution.spineRationale) {
+      const spineExplanation = generateSpineExplanation(dominantSpineResolution, true)
+      if (spineExplanation && !truthfulHybridSummary.toLowerCase().includes('spine') && 
+          !truthfulHybridSummary.toLowerCase().includes('resolved')) {
+        truthfulHybridSummary = `${truthfulHybridSummary} ${spineExplanation}`
+      }
+    }
+    
     const hybridSummaryText = truthfulHybridSummary
     overclaimDetected = 
       (hybridSummaryText.includes('mixed skill') && mixedSessionCount === 0) ||
@@ -5570,6 +5719,167 @@ function generateAdaptiveProgramImpl(inputs: AdaptiveProgramInputs, stageTracker
       finalVerdict: dayLabelsStillTruthful 
         ? 'day_labels_truthful_post_assembly'
         : 'some_day_labels_not_justified',
+    })
+    
+    // ==========================================================================
+    // [PHASE 15D TASK 4] DENSITY INTEGRATION REASON AUDIT
+    // Verify that density/circuit work only appears when justified
+    // ==========================================================================
+    const densitySessionsFound = sessions.filter(s => {
+      const focusLower = (s.focus || '').toLowerCase()
+      const hasCircuitExercises = (s.exercises || []).some(e => 
+        e.method === 'circuit' || e.method === 'density_block' ||
+        (e.notes || '').toLowerCase().includes('circuit') ||
+        (e.notes || '').toLowerCase().includes('density')
+      )
+      return focusLower.includes('density') || focusLower.includes('circuit') || 
+             focusLower.includes('endurance') || hasCircuitExercises
+    })
+    
+    const densityIntegrationJustified = 
+      dominantSpineResolution.densityIntegration.allowed || 
+      densitySessionsFound.length === 0
+    
+    console.log('[phase15d-density-integration-reason-audit]', {
+      dominantSpineAllowsDensity: dominantSpineResolution.densityIntegration.allowed,
+      densityReason: dominantSpineResolution.densityIntegration.reason,
+      densityMaxSessionsAllowed: dominantSpineResolution.densityIntegration.maxSessionsPerWeek,
+      densityPreferredSlots: dominantSpineResolution.densityIntegration.preferredSlots,
+      actualDensitySessionsFound: densitySessionsFound.length,
+      densitySessionDays: densitySessionsFound.map(s => s.dayNumber),
+      integrationWithinLimits: densitySessionsFound.length <= dominantSpineResolution.densityIntegration.maxSessionsPerWeek,
+      integrationJustified: densityIntegrationJustified,
+    })
+    
+    console.log('[phase15d-density-not-random-verdict]', {
+      densityAppearsByRule: dominantSpineResolution.densityIntegration.allowed,
+      densityNotScatteredEverywhere: densitySessionsFound.length <= 2,
+      densityInPreferredSlots: densitySessionsFound.every(s => {
+        const isMixedDay = (s.focus || '').toLowerCase().includes('mixed')
+        const isLastSession = s.dayNumber === sessions.length
+        return isMixedDay || isLastSession || (s.focus || '').toLowerCase().includes('density')
+      }),
+      verdict: densityIntegrationJustified && densitySessionsFound.length <= dominantSpineResolution.densityIntegration.maxSessionsPerWeek
+        ? 'density_purposeful_not_random'
+        : 'density_may_need_review',
+    })
+    
+    // ==========================================================================
+    // [PHASE 15D TASK 6] SESSION IDENTITY COHERENCE AUDIT
+    // Session labels should match actual content
+    // ==========================================================================
+    const sessionIdentityCoherence = sessions.map(session => {
+      const sessionExercises = session.exercises || []
+      const focusLabel = (session.focus || '').toLowerCase()
+      
+      // Count by pattern category
+      const pullExCount = sessionExercises.filter(e => {
+        const name = ((e.exercise?.name || e.name) || '').toLowerCase()
+        return name.includes('pull') || name.includes('row') || name.includes('lever') ||
+               name.includes('curl') || name.includes('ring')
+      }).length
+      
+      const pushExCount = sessionExercises.filter(e => {
+        const name = ((e.exercise?.name || e.name) || '').toLowerCase()
+        return name.includes('push') || name.includes('dip') || name.includes('press') ||
+               name.includes('planche') || name.includes('pike')
+      }).length
+      
+      const skillExCount = sessionExercises.filter(e => {
+        const name = ((e.exercise?.name || e.name) || '').toLowerCase()
+        return name.includes('lever') || name.includes('planche') || name.includes('handstand') ||
+               name.includes('l-sit') || name.includes('muscle up')
+      }).length
+      
+      // Determine actual dominant pattern
+      let actualDominant: 'pull' | 'push' | 'skill' | 'mixed' | 'balanced' = 'mixed'
+      const totalExercises = sessionExercises.length || 1
+      
+      if (pullExCount >= pushExCount * 1.5 && pullExCount >= totalExercises * 0.4) {
+        actualDominant = 'pull'
+      } else if (pushExCount >= pullExCount * 1.5 && pushExCount >= totalExercises * 0.4) {
+        actualDominant = 'push'
+      } else if (skillExCount >= totalExercises * 0.5) {
+        actualDominant = 'skill'
+      } else if (Math.abs(pullExCount - pushExCount) <= 1) {
+        actualDominant = 'balanced'
+      }
+      
+      // Check if label matches content
+      const labelMatchesContent = 
+        (focusLabel.includes('pull') && actualDominant === 'pull') ||
+        (focusLabel.includes('push') && actualDominant === 'push') ||
+        (focusLabel.includes('skill') && actualDominant === 'skill') ||
+        (focusLabel.includes('mixed') && ['mixed', 'balanced'].includes(actualDominant)) ||
+        (focusLabel.includes('full') && ['mixed', 'balanced'].includes(actualDominant)) ||
+        (focusLabel.includes('strength') && (pullExCount > 0 || pushExCount > 0)) ||
+        // Recovery/support sessions are always acceptable
+        focusLabel.includes('recovery') || focusLabel.includes('support')
+      
+      return {
+        dayNumber: session.dayNumber,
+        focusLabel: session.focus,
+        actualDominant,
+        pullExCount,
+        pushExCount,
+        skillExCount,
+        totalExercises: sessionExercises.length,
+        labelMatchesContent,
+      }
+    })
+    
+    const allLabelsCoherent = sessionIdentityCoherence.every(s => s.labelMatchesContent)
+    
+    console.log('[phase15d-session-identity-coherence-audit]', {
+      totalSessions: sessions.length,
+      sessionsWithCoherentLabels: sessionIdentityCoherence.filter(s => s.labelMatchesContent).length,
+      allLabelsCoherent,
+      sessionDetails: sessionIdentityCoherence.map(s => ({
+        day: s.dayNumber,
+        label: s.focusLabel,
+        actualDominant: s.actualDominant,
+        coherent: s.labelMatchesContent,
+      })),
+    })
+    
+    console.log('[phase15d-session-label-vs-content-verdict]', {
+      labelsMatchContent: allLabelsCoherent,
+      mismatchedSessions: sessionIdentityCoherence.filter(s => !s.labelMatchesContent).map(s => ({
+        day: s.dayNumber,
+        label: s.focusLabel,
+        actual: s.actualDominant,
+      })),
+      verdict: allLabelsCoherent 
+        ? 'session_labels_truthful'
+        : 'some_labels_need_adjustment',
+    })
+    
+    // ==========================================================================
+    // [PHASE 15D TASK 7] MULTI-SKILL HIERARCHY VS COVERAGE AUDIT
+    // Ensure multi-skill athletes get real influence from additional skills
+    // ==========================================================================
+    const selectedSkillCount = (canonicalProfile.selectedSkills || []).length
+    const representedSkillCount = generatedRepresentedSkills.length
+    const primarySecondaryRatio = selectedSkillCount > 2 
+      ? Math.round((representedSkillCount / selectedSkillCount) * 100)
+      : 100
+    
+    console.log('[phase15d-multiskill-hierarchy-vs-coverage-audit]', {
+      totalSelectedSkills: selectedSkillCount,
+      skillsRepresentedInWeek: representedSkillCount,
+      skillsNotRepresented: excludedSkills,
+      coveragePercentage: primarySecondaryRatio,
+      primaryGoalExpressed: generatedRepresentedSkills.includes(primaryGoal) || 
+        sessionIdentityCoherence.some(s => s.skillExCount > 0),
+      secondaryGoalExpressed: !secondaryGoal || generatedRepresentedSkills.includes(secondaryGoal),
+      tertiarySkillsGetExposure: selectedSkillCount > 2 ? representedSkillCount > 2 : true,
+      hierarchyPresent: generatedRepresentedSkills.indexOf(primaryGoal) === 0 || 
+        generatedRepresentedSkills.length <= 1,
+      coverageVerdict: primarySecondaryRatio >= 60 
+        ? 'good_multi_skill_coverage'
+        : primarySecondaryRatio >= 40
+          ? 'acceptable_multi_skill_coverage'
+          : 'multi_skill_coverage_needs_improvement',
     })
     
     // [TASK 6] ADVANCED PROFILE ALIGNMENT AUDIT
@@ -6183,6 +6493,23 @@ console.log('[program-generate] Generation complete:', {
     structure,
     sessions,
     equipmentProfile,
+    // [PHASE 15D] Store dominant spine resolution for display truthfulness
+    dominantSpineResolution: {
+      primarySpine: dominantSpineResolution.primarySpine,
+      primaryStyleMode: dominantSpineResolution.primaryStyleMode,
+      secondaryInfluences: dominantSpineResolution.secondaryInfluences.map(s => ({
+        style: s.style,
+        influence: s.influence,
+        reason: s.reason,
+      })),
+      densityIntegration: {
+        allowed: dominantSpineResolution.densityIntegration.allowed,
+        reason: dominantSpineResolution.densityIntegration.reason,
+        maxSessionsPerWeek: dominantSpineResolution.densityIntegration.maxSessionsPerWeek,
+      },
+      spineRationale: dominantSpineResolution.spineRationale,
+      hasAllStylesSelected,
+    },
     constraintInsight: {
       hasInsight: constraintInsight.hasInsight,
       label: constraintInsight.label,

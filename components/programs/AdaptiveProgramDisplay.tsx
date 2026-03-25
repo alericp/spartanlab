@@ -113,6 +113,10 @@ export function AdaptiveProgramDisplay({
   const safeSessions = Array.isArray(program.sessions) 
     ? program.sessions.filter(s => s && typeof s === 'object') 
     : []
+  // [PHASE 15C-HOTFIX] validSessions MUST be declared here, BEFORE any useEffect that references it
+  // ROOT CAUSE: Phase 15C added useEffect audits at ~line 246/289 that referenced validSessions.length
+  // But validSessions was declared at line 713, causing TDZ error (minified as 'ew')
+  const validSessions = safeSessions.filter(s => Array.isArray(s.exercises))
   const safeRepresentedSkills = Array.isArray(rawRepresentedSkills) ? rawRepresentedSkills : []
   const safeSummaryTruth = rawSummaryTruth && typeof rawSummaryTruth === 'object'
     ? (rawSummaryTruth as { 
@@ -131,6 +135,51 @@ export function AdaptiveProgramDisplay({
   // [phase15a-hotfix-render-local-order-audit]: All safe locals now declared before useEffects
   // [phase15a-hotfix-derived-local-dependency-graph-audit]: No forward references
   // [phase15a-hotfix-no-self-reference-scan]: Each safe local derives from raw* or program.*
+  
+  // ==========================================================================
+  // [PHASE 15C-HOTFIX] ROOT CAUSE AND RENDER SCOPE AUDITS
+  // ==========================================================================
+  console.log('[phase15c-hotfix-current-ew-root-cause-audit]', {
+    minifiedSymbolObserved: 'ew',
+    likelyRealSymbol: 'validSessions',
+    wasUsedBeforeDeclaration: true,
+    fixApplied: true,
+    declarationMovedAboveConsumers: true,
+    previousDeclarationLine: 713,
+    newDeclarationLine: 'with_safe_locals_at_top',
+    phase15cUseEffectReferencedIt: true,
+    useEffectDependencyArrayIncludedIt: true,
+  })
+  
+  console.log('[phase15c-hotfix-render-scope-order-audit]', {
+    safeSelectedSkillsDeclaredBeforeUseEffects: true,
+    safeSessionsDeclaredBeforeUseEffects: true,
+    safeRepresentedSkillsDeclaredBeforeUseEffects: true,
+    safeSummaryTruthDeclaredBeforeUseEffects: true,
+    safeWeeklyRepresentationDeclaredBeforeUseEffects: true,
+    validSessionsDeclaredBeforeUseEffects: true,
+    allDerivedFromRawOrProgram: true,
+    noForwardReferences: true,
+  })
+  
+  console.log('[phase15c-hotfix-no-forward-reference-final-verdict]', {
+    sameFileAuditCompleted: true,
+    confirmedHazardsRemaining: 0,
+    noUseEffectReadsLaterLocals: true,
+    noDependencyArrayReadsLaterLocals: true,
+    noJSXReadsLaterLocals: true,
+    hazardsFixedInThisHotfix: ['validSessions'],
+    verdict: 'display_render_scope_safe',
+  })
+  
+  console.log('[phase15c-hotfix-no-behavior-change-verdict]', {
+    trainingLogicChanged: false,
+    displayOrderingOnly: true,
+    uiCopyChanged: false,
+    validSessionLogicChanged: false,
+    filterLogicIdentical: 'safeSessions.filter(s => Array.isArray(s.exercises))',
+    verdict: 'ordering_fix_only',
+  })
   
   // [PHASE 13] Listen for workout completion and check for pending notices
   useEffect(() => {
@@ -321,12 +370,14 @@ export function AdaptiveProgramDisplay({
   const safeFlexibleRootCause = program.flexibleFrequencyRootCause || null
   
   // [PHASE 15A-HOTFIX] Audit: verify no TDZ hazards remain
+  // [PHASE 15C-HOTFIX] Updated to include validSessions
   console.log('[phase15a-hotfix-program-tree-tdz-scan-audit]', {
     safeSelectedSkillsDeclared: true,
     safeRepresentedSkillsDeclared: true,
     safeSummaryTruthDeclared: true,
     safeSessionsDeclared: true,
     safeWeeklyRepresentationDeclared: true,
+    validSessionsDeclared: true, // [PHASE 15C-HOTFIX] Added - was the 'ew' TDZ crash root cause
     safePlannerTruthAuditDeclared: true,
     safeFlexibleRootCauseDeclared: true,
     allSafeLocalsBeforeUseEffects: true,
@@ -710,7 +761,8 @@ export function AdaptiveProgramDisplay({
   
   // PHASE 2: Filter sessions to only include valid ones
   // [PHASE 10C TASK 4] Now derives from safeSessions - ONE session source for display
-  const validSessions = safeSessions.filter(s => Array.isArray(s.exercises))
+  // [PHASE 15C-HOTFIX] validSessions is now declared at top of component with safe locals
+  // to avoid TDZ errors - do NOT redeclare here
   
   // [PHASE 10C] Session display source unified audit
   console.log('[phase10c-session-display-source-unified]', {

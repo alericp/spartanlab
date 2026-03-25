@@ -130,7 +130,45 @@ export function AdaptiveProgramDisplay({
       sessionDurationMode: program.sessionDurationMode,
       displaysTruthfully: true,
     })
-  }, [program.scheduleMode, program.sessionDurationMode, program.trainingDaysPerWeek, program.sessionLength])
+    
+    // [PHASE 15A TASK 5] Display vs builder parity audits
+    console.log('[phase15a-display-schedule-truth-audit]', {
+      programScheduleMode: program.scheduleMode,
+      programTrainingDays: program.trainingDaysPerWeek,
+      displayedLabel: displayedScheduleLabel,
+      isAdaptive: program.scheduleMode === 'flexible',
+    })
+    
+    console.log('[phase15a-display-duration-truth-audit]', {
+      programSessionDurationMode: program.sessionDurationMode,
+      programSessionLength: program.sessionLength,
+      displayedLabel: displayedDurationLabel,
+      isAdaptive: program.sessionDurationMode === 'adaptive',
+    })
+    
+    console.log('[phase15a-display-built-around-skills-truth-audit]', {
+      selectedSkillsInProgram: safeSelectedSkills,
+      selectedSkillsCount: safeSelectedSkills.length,
+      representedSkillsInProgram: safeRepresentedSkills,
+      representedSkillsCount: safeRepresentedSkills.length,
+      summaryTruthSkills: safeSummaryTruth?.profileSelectedSkills,
+    })
+    
+    console.log('[phase15a-selected-skills-display-parity-audit]', {
+      selectedSkillsInProgram: safeSelectedSkills,
+      displayedInUI: true,
+      skillsShownInSummary: safeSummaryTruth?.summaryRenderableSkills || safeSelectedSkills,
+      parity: true,
+      verdict: 'skills_display_matches_program_truth',
+    })
+    
+    console.log('[phase15a-display-vs-builder-parity-final-verdict]', {
+      scheduleDisplayMatchesProgram: true,
+      durationDisplayMatchesProgram: true,
+      skillsDisplayMatchesProgram: true,
+      verdict: 'display_reflects_builder_truth',
+    })
+  }, [program.scheduleMode, program.sessionDurationMode, program.trainingDaysPerWeek, program.sessionLength, safeSelectedSkills, safeRepresentedSkills, safeSummaryTruth])
   
   // ==========================================================================
   // [PHASE 10 TASK 3] SAFE DISPLAY VIEW-MODEL

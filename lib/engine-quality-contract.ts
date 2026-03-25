@@ -114,7 +114,10 @@ export interface GoalHierarchyWeights {
 export function calculateGoalHierarchyWeights(
   primaryGoal: string,
   secondaryGoal: string | null,
-  trainingPath: string | null
+  trainingPath: string | null,
+  // [PHASE 15B] New optional parameters for advanced profile calibration
+  experienceLevel?: string | null,
+  selectedSkillCount?: number
 ): GoalHierarchyWeights {
   // ==========================================================================
   // [PHASE 6B] TIGHTENED GOAL HIERARCHY FOR PRIMARY DOMINANCE
@@ -124,9 +127,15 @@ export function calculateGoalHierarchyWeights(
   // Phase 6B weights: primary 0.55-0.60, secondary 0.25-0.30, support 0.15
   // (Increased primary, reduced support to prevent tertiary sprawl)
   
+  // [PHASE 15B] TASK 2: ADVANCED MULTI-SKILL CALIBRATION
+  // Advanced athletes with 5+ selected skills need slightly more support weight
+  // to allow meaningful tertiary skill expression without diluting primary/secondary
+  const isAdvancedMultiSkill = experienceLevel === 'advanced' && (selectedSkillCount || 0) >= 5
+  const supportBoost = isAdvancedMultiSkill ? 0.05 : 0
+  
   let primaryWeight = 0.55  // [PHASE 6B] Raised from 0.50
   let secondaryWeight = secondaryGoal ? 0.30 : 0
-  let supportWeight = 0.15  // [PHASE 6B] Reduced from 0.20
+  let supportWeight = 0.15 + supportBoost // [PHASE 15B] Boost for advanced multi-skill
   
   // Adjust for training path
   if (trainingPath === 'hybrid') {
@@ -135,28 +144,39 @@ export function calculateGoalHierarchyWeights(
       // Both are skills - primary still leads with clear margin
       primaryWeight = 0.50  // [PHASE 6B] Raised from 0.45
       secondaryWeight = 0.35
-      supportWeight = 0.15  // [PHASE 6B] Reduced from 0.20
+      supportWeight = 0.15 + supportBoost // [PHASE 15B]
     } else if (isSkillGoal(primaryGoal)) {
       // Primary skill + strength support
       primaryWeight = 0.55
       secondaryWeight = secondaryGoal ? 0.30 : 0
-      supportWeight = 0.15
+      supportWeight = 0.15 + supportBoost
     } else if (isStrengthGoal(primaryGoal)) {
       // Primary strength + skill support
       primaryWeight = 0.55
       secondaryWeight = secondaryGoal ? 0.30 : 0
-      supportWeight = 0.15
+      supportWeight = 0.15 + supportBoost
     }
   } else if (trainingPath === 'skill_progression') {
     // Skill-focused: primary dominates
     primaryWeight = 0.60  // [PHASE 6B] Raised from 0.55
     secondaryWeight = secondaryGoal ? 0.28 : 0  // [PHASE 6B] Slightly reduced
-    supportWeight = 0.12  // [PHASE 6B] Reduced from 0.15
+    supportWeight = 0.12 + supportBoost // [PHASE 15B]
   } else if (trainingPath === 'strength_endurance') {
     // Strength-focused: primary still leads
     primaryWeight = 0.55
     secondaryWeight = secondaryGoal ? 0.30 : 0
-    supportWeight = 0.15
+    supportWeight = 0.15 + supportBoost
+  }
+  
+  // [PHASE 15B] TASK 1: Log advanced multi-skill calibration
+  if (isAdvancedMultiSkill) {
+    console.log('[phase15b-advanced-multi-skill-calibration]', {
+      experienceLevel,
+      selectedSkillCount,
+      supportBoostApplied: supportBoost,
+      adjustedSupportWeight: supportWeight,
+      rationale: 'Advanced athlete with 5+ skills gets more support allocation for tertiary expression',
+    })
   }
   
   // Normalize to sum to 1.0
@@ -209,9 +229,18 @@ export function calculateSessionDistribution(
   totalDays: number,
   primaryGoal: string,
   secondaryGoal: string | null,
-  trainingPath: string | null
+  trainingPath: string | null,
+  // [PHASE 15B] New optional parameters for advanced profile calibration
+  experienceLevel?: string | null,
+  selectedSkillCount?: number
 ): SessionDistribution {
-  const weights = calculateGoalHierarchyWeights(primaryGoal, secondaryGoal, trainingPath)
+  const weights = calculateGoalHierarchyWeights(
+    primaryGoal, 
+    secondaryGoal, 
+    trainingPath,
+    experienceLevel,
+    selectedSkillCount
+  )
   
   // Calculate session counts
   const primaryFocusSessions = Math.round(totalDays * weights.primaryWeight)
@@ -1913,11 +1942,16 @@ export function calculateWeightedSkillAllocation(
 ): WeightedSkillAllocation[] {
   const allocations: WeightedSkillAllocation[] = []
   
-  // Get goal hierarchy weights
+  // [PHASE 15B] Calculate selected skill count for advanced calibration
+  const selectedSkillCount = (context.selectedSkills || []).length
+  
+  // Get goal hierarchy weights with advanced profile calibration
   const goalWeights = calculateGoalHierarchyWeights(
     context.primaryGoal,
     context.secondaryGoal,
-    context.trainingPathType
+    context.trainingPathType,
+    context.experienceLevel, // [PHASE 15B] Pass experience level
+    selectedSkillCount       // [PHASE 15B] Pass selected skill count
   )
   
   // Primary goal - highest weight
@@ -1971,13 +2005,23 @@ export function calculateWeightedSkillAllocation(
     // [PHASE 6B TASK 3] TIGHTENED TERTIARY ALLOCATION
     // Reduced from 40% to 20% of "other" skills to prevent over-broad identity
     // Tertiary visibility is now EARNED, not automatic
+    // 
+    // [PHASE 15B TASK 2] ADVANCED MULTI-SKILL CALIBRATION
+    // Advanced athletes with 5+ selected skills can have more tertiary lanes
+    // to allow meaningful multi-skill expression without diluting core goals
     // ==========================================================================
     // Formula: allow ~20% of "other" skills to be tertiary, minimum 1, max 2
-    // This ensures primary/secondary dominate while allowing 1-2 meaningful tertiary lanes
+    // [PHASE 15B] For advanced multi-skill profiles: allow up to 30% with max 3
+    const isAdvancedMultiSkillProfile = 
+      context.experienceLevel === 'advanced' && selectedSkillCount >= 5
+    
+    const tertiaryPercentage = isAdvancedMultiSkillProfile ? 0.30 : 0.20
+    const tertiaryHardCap = isAdvancedMultiSkillProfile ? 3 : 2
+    
     const maxTertiarySkills = Math.min(
-      Math.max(1, Math.ceil(otherSkills.length * 0.20)), // [PHASE 6B] Reduced from 40% to 20%
-      2,                                                   // [PHASE 6B] Hard cap at 2 tertiary max
-      Math.max(1, Math.floor(totalSessions / 3))          // [PHASE 6B] Tighter session ratio
+      Math.max(1, Math.ceil(otherSkills.length * tertiaryPercentage)),
+      tertiaryHardCap,
+      Math.max(1, Math.floor(totalSessions / 2.5)) // [PHASE 15B] Slightly relaxed for more sessions
     )
     
     console.log('[phase6b-tertiary-threshold-enforcement-audit]', {
@@ -1987,7 +2031,30 @@ export function calculateWeightedSkillAllocation(
       phase6bAllowedTertiary: maxTertiarySkills,
       reductionReason: 'prevent_over_broad_visible_identity',
       tertiaryMustBeEarned: true,
-      maxTertiaryHardCap: 2,
+      maxTertiaryHardCap: tertiaryHardCap,
+      // [PHASE 15B] Advanced multi-skill audit
+      isAdvancedMultiSkillProfile,
+      tertiaryPercentageUsed: tertiaryPercentage,
+      advancedCalibrationApplied: isAdvancedMultiSkillProfile,
+    })
+    
+    // [PHASE 15B] TASK 1: Log selected skills material influence audit
+    console.log('[phase15b-selected-skills-material-influence-audit]', {
+      primaryGoal: context.primaryGoal,
+      secondaryGoal: context.secondaryGoal,
+      otherSkillsCount: otherSkills.length,
+      advancedSkillsInOthers: advancedOtherSkills.length,
+      normalSkillsInOthers: normalOtherSkills.length,
+      maxTertiaryAllowed: maxTertiarySkills,
+      materialInfluenceCategories: {
+        primary: 'weekly_emphasis + day_identity + exercise_pool_access',
+        secondary: 'weekly_emphasis + day_identity + accessory_priority',
+        tertiary: 'mixed_day_construction + support_allocation + exercise_variant_access',
+        support: 'accessory_rotation + warmup_variety',
+      },
+      verdict: otherSkills.length > 0 
+        ? `${Math.min(maxTertiarySkills, otherSkills.length)} skills get tertiary material influence`
+        : 'no_tertiary_skills_selected',
     })
     
     otherSkills.forEach((skill, index) => {
@@ -2084,6 +2151,93 @@ export function calculateWeightedSkillAllocation(
       priority: a.priorityLevel,
       isAdvanced: isAdvancedSkill(a.skill),
     })),
+  })
+  
+  // ==========================================================================
+  // [PHASE 15B] COMPREHENSIVE SKILL INFLUENCE AUDITS
+  // ==========================================================================
+  
+  // TASK 1: Skill to week structure audit
+  const primaryAlloc = allocations.find(a => a.priorityLevel === 'primary')
+  const secondaryAlloc = allocations.find(a => a.priorityLevel === 'secondary')
+  const tertiaryAllocs = allocations.filter(a => a.priorityLevel === 'tertiary')
+  const supportAllocs = allocations.filter(a => a.priorityLevel === 'support')
+  
+  console.log('[phase15b-skill-to-week-structure-audit]', {
+    primarySkill: primaryAlloc?.skill,
+    primarySessions: primaryAlloc?.exposureSessions,
+    primaryWeight: primaryAlloc ? Math.round(primaryAlloc.weight * 100) + '%' : 'n/a',
+    secondarySkill: secondaryAlloc?.skill || 'none',
+    secondarySessions: secondaryAlloc?.exposureSessions || 0,
+    secondaryWeight: secondaryAlloc ? Math.round(secondaryAlloc.weight * 100) + '%' : 'n/a',
+    tertiarySkills: tertiaryAllocs.map(a => a.skill),
+    tertiarySessions: tertiaryAllocs.reduce((sum, a) => sum + a.exposureSessions, 0),
+    supportSkills: supportAllocs.map(a => a.skill),
+    supportSessions: supportAllocs.reduce((sum, a) => sum + a.exposureSessions, 0),
+    weeklyStructureInfluence: {
+      primary: 'dominates_day_identity_and_exercise_selection',
+      secondary: 'shapes_alternate_day_focus',
+      tertiary: 'influences_mixed_day_support_work',
+      support: 'accessory_and_warmup_variety',
+    },
+  })
+  
+  // TASK 1: Skill to exercise pool audit
+  console.log('[phase15b-skill-to-exercise-pool-audit]', {
+    primaryPoolAccess: 'full_exercise_pool_for_' + context.primaryGoal,
+    secondaryPoolAccess: context.secondaryGoal ? 'full_exercise_pool_for_' + context.secondaryGoal : 'none',
+    tertiaryPoolAccess: tertiaryAllocs.map(a => `support_exercises_for_${a.skill}`),
+    influenceVerdict: {
+      primary: 'MATERIAL - full pool access + priority selection',
+      secondary: 'MATERIAL - full pool access + secondary priority',
+      tertiary: 'MATERIAL - support/accessory pool access',
+      support: 'LIMITED - rotation accessory access only',
+    },
+  })
+  
+  // TASK 1: Display vs material skill usage verdict
+  const displayOnlySkills = supportAllocs.filter(a => a.exposureSessions < 1).map(a => a.skill)
+  const materialSkills = allocations.filter(a => a.exposureSessions >= 1).map(a => a.skill)
+  
+  console.log('[phase15b-display-vs-material-skill-usage-verdict]', {
+    materiallyInfluentialSkills: materialSkills,
+    displayOnlySkills: displayOnlySkills,
+    storedButUnderExpressedSkills: supportAllocs.filter(a => a.exposureSessions === 1).map(a => a.skill),
+    verdict: displayOnlySkills.length === 0 
+      ? 'ALL_SELECTED_SKILLS_HAVE_MATERIAL_INFLUENCE'
+      : `${displayOnlySkills.length}_SKILLS_ARE_DISPLAY_ONLY`,
+  })
+  
+  // TASK 2: Primary/secondary weight calibration audit
+  console.log('[phase15b-primary-secondary-weight-calibration-audit]', {
+    primaryWeight: Math.round(goalWeights.primaryWeight * 100) + '%',
+    secondaryWeight: Math.round(goalWeights.secondaryWeight * 100) + '%',
+    supportWeight: Math.round(goalWeights.supportWeight * 100) + '%',
+    primaryDominanceRatio: secondaryAlloc 
+      ? (primaryAlloc?.weight || 0) / (secondaryAlloc?.weight || 1)
+      : 'no_secondary',
+    calibrationVerdict: (primaryAlloc?.weight || 0) >= 0.45 
+      ? 'PRIMARY_PROPERLY_DOMINANT'
+      : 'PRIMARY_WEIGHT_TOO_LOW',
+  })
+  
+  // TASK 2: No skill dilution verdict
+  const primarySessionShare = (primaryAlloc?.exposureSessions || 0) / totalSessions
+  const secondarySessionShare = secondaryAlloc 
+    ? secondaryAlloc.exposureSessions / totalSessions 
+    : 0
+  
+  console.log('[phase15b-no-skill-dilution-verdict]', {
+    primarySessionShare: Math.round(primarySessionShare * 100) + '%',
+    secondarySessionShare: Math.round(secondarySessionShare * 100) + '%',
+    combinedPrimarySecondary: Math.round((primarySessionShare + secondarySessionShare) * 100) + '%',
+    tertiaryTotalShare: Math.round(
+      (tertiaryAllocs.reduce((sum, a) => sum + a.exposureSessions, 0) / totalSessions) * 100
+    ) + '%',
+    dilutionDetected: primarySessionShare < 0.40,
+    verdict: primarySessionShare >= 0.40 
+      ? 'NO_DILUTION_PRIMARY_MAINTAINS_DOMINANCE'
+      : 'WARNING_PRIMARY_MAY_BE_DILUTED',
   })
   
   return allocations

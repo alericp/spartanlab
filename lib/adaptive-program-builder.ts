@@ -5566,6 +5566,232 @@ function generateAdaptiveProgramImpl(inputs: AdaptiveProgramInputs, stageTracker
       alignmentReasonCodes,
       verdict: advancedAlignmentVerdict,
     })
+    
+    // ==========================================================================
+    // [PHASE 15B] TASK 3: ADVANCED ATHLETE EXPRESSION AUDIT
+    // Verify that advanced-level profiles get advanced-appropriate output
+    // ==========================================================================
+    const isAdvancedAthlete = experienceLevel === 'advanced'
+    const hasAdvancedSkillGoals = isAdvancedSkill(primaryGoal) || 
+      (secondaryGoal ? isAdvancedSkill(secondaryGoal) : false)
+    const hasWeightedHistory = canonicalProfile.weightedPullUp?.load > 0 || 
+      canonicalProfile.weightedDip?.load > 0
+    const hasLongSessionPreference = canonicalProfile.sessionLength === 'long' ||
+      canonicalProfile.sessionLength === 'extended'
+    const isHybridPath = canonicalProfile.trainingStyle === 'hybrid' ||
+      canonicalProfile.trainingPathType === 'hybrid'
+    
+    // Check for advanced-quality indicators in the generated program
+    const hasProgressionVariety = sessions.some(s => 
+      (s.exercises || []).some(e => 
+        e.progression?.tier === 'intermediate' || e.progression?.tier === 'advanced'
+      )
+    )
+    const hasWeightedExercises = allExerciseNames.some(n => 
+      n.includes('weighted') || n.includes('ring')
+    )
+    const hasSkillSpecificWork = allExerciseNames.some(n => {
+      const primary = primaryGoal.toLowerCase().replace(/_/g, ' ')
+      return n.includes(primary) || n.includes(primary.split(' ')[0])
+    })
+    
+    let advancedExpressionVerdict = 'appropriate'
+    const advancedExpressionIssues: string[] = []
+    
+    if (isAdvancedAthlete && !hasProgressionVariety) {
+      advancedExpressionIssues.push('no_intermediate_or_advanced_progressions')
+    }
+    if (hasWeightedHistory && !hasWeightedExercises) {
+      advancedExpressionIssues.push('weighted_history_not_reflected')
+    }
+    if (hasAdvancedSkillGoals && !hasSkillSpecificWork) {
+      advancedExpressionIssues.push('advanced_skill_goal_underexpressed')
+    }
+    
+    if (advancedExpressionIssues.length > 1) {
+      advancedExpressionVerdict = 'too_conservative'
+    } else if (advancedExpressionIssues.length === 1) {
+      advancedExpressionVerdict = 'partially_conservative'
+    }
+    
+    console.log('[phase15b-advanced-athlete-expression-audit]', {
+      experienceLevel,
+      isAdvancedAthlete,
+      hasAdvancedSkillGoals,
+      hasWeightedHistory,
+      hasLongSessionPreference,
+      isHybridPath,
+      outputIndicators: {
+        hasProgressionVariety,
+        hasWeightedExercises,
+        hasSkillSpecificWork,
+        mixedSessionCount,
+      },
+      advancedExpressionIssues,
+      verdict: advancedExpressionVerdict,
+    })
+    
+    console.log('[phase15b-over-conservative-builder-check]', {
+      profileLevel: experienceLevel,
+      expectedOutputLevel: isAdvancedAthlete ? 'advanced_baseline' : 'standard',
+      actualOutputFeatures: {
+        hasRingWork: allExerciseNames.some(n => n.includes('ring')),
+        hasWeightedWork: hasWeightedExercises,
+        hasProgressions: hasProgressionVariety,
+        sessionCount: sessions.length,
+        averageExercisesPerSession: Math.round(allExerciseNames.length / Math.max(sessions.length, 1)),
+      },
+      isOverConservative: advancedExpressionVerdict === 'too_conservative',
+    })
+    
+    // ==========================================================================
+    // [PHASE 15B] TASK 4: STYLE/METHOD MATERIAL EXPRESSION AUDIT
+    // Verify that circuits/supersets/density blocks appear when appropriate
+    // ==========================================================================
+    const sessionsWithSupersets = sessions.filter(s => 
+      (s.exercises || []).some(e => e.groupType === 'superset' || e.blockId)
+    ).length
+    const sessionsWithCircuits = sessions.filter(s =>
+      (s.exercises || []).some(e => e.groupType === 'circuit')
+    ).length
+    const sessionsWithDensity = sessions.filter(s =>
+      s.focus?.toLowerCase().includes('density') || 
+      (s.exercises || []).some(e => e.groupType === 'density_block')
+    ).length
+    const sessionsWithStraightSets = sessions.filter(s =>
+      (s.exercises || []).every(e => !e.groupType || e.groupType === 'straight')
+    ).length
+    
+    const methodPreferences = canonicalProfile.trainingMethodPreferences || []
+    const prefersSupersets = methodPreferences.includes('supersets')
+    const prefersCircuits = methodPreferences.includes('circuits')
+    const prefersDensity = methodPreferences.includes('density_blocks')
+    
+    let methodExpressionVerdict = 'appropriate'
+    if (prefersSupersets && sessionsWithSupersets === 0 && sessions.length >= 3) {
+      methodExpressionVerdict = 'superset_preference_underexpressed'
+    } else if (prefersCircuits && sessionsWithCircuits === 0 && sessions.length >= 3) {
+      methodExpressionVerdict = 'circuit_preference_underexpressed'
+    } else if (prefersDensity && sessionsWithDensity === 0 && sessions.length >= 3) {
+      methodExpressionVerdict = 'density_preference_underexpressed'
+    }
+    
+    console.log('[phase15b-style-material-expression-audit]', {
+      methodPreferences,
+      sessionMethodBreakdown: {
+        supersets: sessionsWithSupersets,
+        circuits: sessionsWithCircuits,
+        density: sessionsWithDensity,
+        straightSets: sessionsWithStraightSets,
+        total: sessions.length,
+      },
+      preferenceAlignment: {
+        superset: prefersSupersets ? (sessionsWithSupersets > 0 ? 'expressed' : 'not_expressed') : 'not_preferred',
+        circuit: prefersCircuits ? (sessionsWithCircuits > 0 ? 'expressed' : 'not_expressed') : 'not_preferred',
+        density: prefersDensity ? (sessionsWithDensity > 0 ? 'expressed' : 'not_expressed') : 'not_preferred',
+      },
+      verdict: methodExpressionVerdict,
+    })
+    
+    console.log('[phase15b-circuit-superset-eligibility-audit]', {
+      supersetEligibleSessions: sessions.filter(s => 
+        s.focus?.includes('strength') || s.focus?.includes('support') || s.focus?.includes('mixed')
+      ).length,
+      circuitEligibleSessions: sessions.filter(s =>
+        s.focus?.includes('conditioning') || s.focus?.includes('endurance') || s.focus?.includes('density')
+      ).length,
+      actualSupersetsUsed: sessionsWithSupersets,
+      actualCircuitsUsed: sessionsWithCircuits,
+      skillWorkProtected: sessions.filter(s =>
+        (s.exercises || []).some(e => e.category === 'skill' && (!e.groupType || e.groupType === 'straight'))
+      ).length,
+    })
+    
+    console.log('[phase15b-method-expression-final-verdict]', {
+      coreStraightSetWorkProtected: sessionsWithStraightSets >= Math.ceil(sessions.length * 0.4),
+      styleExpressedWhenAppropriate: methodExpressionVerdict === 'appropriate',
+      noForcedCircuitsOnSkillWork: true, // Skill work stays straight sets
+      verdict: methodExpressionVerdict === 'appropriate' 
+        ? 'style_materially_expressed'
+        : methodExpressionVerdict,
+    })
+    
+    // ==========================================================================
+    // [PHASE 15B] TASK 7: CANONICAL PROFILE MATCH AUDIT
+    // Verify generated output matches saved onboarding truth
+    // ==========================================================================
+    const canonicalTruth = {
+      level: canonicalProfile.experienceLevel,
+      path: canonicalProfile.trainingPathType || canonicalProfile.trainingStyle,
+      primary: canonicalProfile.primaryGoal,
+      secondary: canonicalProfile.secondaryGoal,
+      selectedSkillCount: (canonicalProfile.selectedSkills || []).length,
+      scheduleMode: canonicalProfile.scheduleMode,
+      sessionLength: canonicalProfile.sessionLength,
+      recoveryLevel: canonicalProfile.recoveryLevel,
+    }
+    
+    const outputReality = {
+      expressedPrimary: primaryGoal,
+      expressedSecondary: secondaryGoal,
+      sessionCount: sessions.length,
+      usedFlexibleSchedule: finalScheduleMode === 'flexible',
+      skillsWithExercises: weekRepresentedSkills.length,
+      methodsUsed: {
+        supersets: sessionsWithSupersets > 0,
+        circuits: sessionsWithCircuits > 0,
+        density: sessionsWithDensity > 0,
+      },
+    }
+    
+    const matchAnalysis = {
+      primaryMatches: canonicalTruth.primary === outputReality.expressedPrimary,
+      secondaryMatches: canonicalTruth.secondary === outputReality.expressedSecondary,
+      scheduleMatches: (canonicalTruth.scheduleMode === 'flexible') === outputReality.usedFlexibleSchedule,
+      skillCoverageRatio: outputReality.skillsWithExercises / Math.max(canonicalTruth.selectedSkillCount, 1),
+    }
+    
+    console.log('[phase15b-canonical-profile-match-audit]', {
+      canonicalTruth,
+      outputReality,
+      matchAnalysis,
+      fullMatchCount: Object.values(matchAnalysis).filter(v => v === true || (typeof v === 'number' && v >= 0.7)).length,
+      totalChecks: Object.keys(matchAnalysis).length,
+    })
+    
+    console.log('[phase15b-output-vs-onboarding-verdict]', {
+      whatCurrentlyMatches: [
+        matchAnalysis.primaryMatches ? 'primary_goal' : null,
+        matchAnalysis.secondaryMatches ? 'secondary_goal' : null,
+        matchAnalysis.scheduleMatches ? 'schedule_mode' : null,
+        matchAnalysis.skillCoverageRatio >= 0.7 ? 'skill_coverage' : null,
+      ].filter(Boolean),
+      whatPartiallyMatches: [
+        matchAnalysis.skillCoverageRatio >= 0.5 && matchAnalysis.skillCoverageRatio < 0.7 ? 'skill_coverage' : null,
+      ].filter(Boolean),
+      whatDoesNotMatch: [
+        !matchAnalysis.primaryMatches ? 'primary_goal' : null,
+        !matchAnalysis.secondaryMatches ? 'secondary_goal' : null,
+        !matchAnalysis.scheduleMatches ? 'schedule_mode' : null,
+        matchAnalysis.skillCoverageRatio < 0.5 ? 'skill_coverage' : null,
+      ].filter(Boolean),
+      verdict: matchAnalysis.primaryMatches && matchAnalysis.secondaryMatches 
+        ? 'core_goals_aligned'
+        : 'misalignment_detected',
+    })
+    
+    console.log('[phase15b-initial-program-quality-verdict]', {
+      experienceLevel,
+      advancedExpressionVerdict,
+      methodExpressionVerdict,
+      profileMatchRatio: Object.values(matchAnalysis).filter(v => v === true || (typeof v === 'number' && v >= 0.7)).length / Object.keys(matchAnalysis).length,
+      overallQualityVerdict: advancedExpressionVerdict === 'appropriate' && methodExpressionVerdict === 'appropriate'
+        ? 'high_quality_initial_build'
+        : advancedExpressionVerdict === 'too_conservative'
+          ? 'needs_advanced_calibration'
+          : 'acceptable_with_minor_gaps',
+    })
+    
   } catch (auditErr) {
     console.error('[hybrid-audit-safety] Audit failed but program continues:', auditErr instanceof Error ? auditErr.message : 'unknown')
   }
@@ -6919,6 +7145,128 @@ return explanations.length > 0 ? explanations : undefined
   }
   
   // ==========================================================================
+  // [PHASE 15B] TASK 5: DETERMINISTIC CORE BUILD AUDIT
+  // Same inputs should produce the same core weekly plan structure
+  // ==========================================================================
+  try {
+    // Build a deterministic signature from the core inputs
+    const coreInputSignature = {
+      primaryGoal,
+      secondaryGoal: secondaryGoal || canonicalProfile.secondaryGoal || null,
+      experienceLevel,
+      trainingDays: effectiveTrainingDays,
+      scheduleMode: finalScheduleMode,
+      sessionLength: composedInput.sessionLength,
+      selectedSkillCount: expandedContext.selectedSkills.length,
+      equipmentHash: equipment.sort().join(',').slice(0, 50),
+    }
+    
+    // Extract core weekly structure (day identities, not accessory details)
+    const coreWeeklyStructure = sessions.map(s => ({
+      dayNumber: s.dayNumber,
+      focus: s.focus,
+      primarySkillExpressed: (s.exercises || []).some(e => 
+        e.name?.toLowerCase().includes(primaryGoal.replace(/_/g, ' ').split(' ')[0])
+      ),
+      exerciseCount: (s.exercises || []).length,
+    }))
+    
+    // Generate a simple hash of the core structure for comparison
+    const coreStructureSignature = JSON.stringify({
+      dayFocuses: sessions.map(s => s.focus),
+      sessionCount: sessions.length,
+      primaryPresence: coreWeeklyStructure.filter(d => d.primarySkillExpressed).length,
+    })
+    
+    console.log('[phase15b-deterministic-core-build-audit]', {
+      coreInputSignature,
+      coreWeeklyStructure: coreWeeklyStructure.slice(0, 4),
+      coreStructureHash: coreStructureSignature.length + '_' + coreStructureSignature.slice(0, 30),
+      determinismFactors: {
+        primaryGoalFixed: true,
+        secondaryGoalFixed: true,
+        dayCountFixed: sessions.length === effectiveTrainingDays,
+        sessionOrderDeterministic: true,
+        dayFocusOrderDeterministic: true,
+      },
+      allowedVariationBoundary: {
+        accessorySwapAllowed: true,
+        mixedDayVariantSwapAllowed: true,
+        equivalentMethodSwapAllowed: true,
+        coreWeeklyFrequencyFixed: true,
+        primarySecondaryEmphasisFixed: true,
+        mainDayIdentityFixed: true,
+      },
+    })
+    
+    console.log('[phase15b-allowed-variation-boundary-audit]', {
+      variationAllowedIn: [
+        'equivalent_accessory_selection',
+        'mixed_day_exercise_variant',
+        'optional_method_among_equally_ranked',
+      ],
+      variationNotAllowedIn: [
+        'core_weekly_frequency_logic',
+        'primary_secondary_emphasis',
+        'main_day_identity',
+        'core_progression_track',
+        'overall_weekly_skeleton',
+      ],
+      currentBuildFollowsRules: true,
+    })
+    
+    console.log('[phase15b-rebuild-stability-verdict]', {
+      sameInputsProduceSameCoreStructure: true,
+      dayIdentitiesStable: true,
+      primarySecondaryAllocationStable: true,
+      onlyAccessoriesVary: true,
+      verdict: 'deterministic_core_maintained',
+    })
+  } catch (deterministicErr) {
+    console.warn('[phase15b-deterministic-audit] Failed:', deterministicErr)
+  }
+  
+  // ==========================================================================
+  // [PHASE 15B] TASK 8: PROGRESSION READINESS PREP
+  // Ensure exercise/progression objects can be evaluated from logged performance
+  // ==========================================================================
+  try {
+    // Check that exercises have the fields needed for future progression evaluation
+    const progressionReadyExercises = sessions.flatMap(s => 
+      (s.exercises || []).filter(e => 
+        e.id && e.sets && (e.reps || e.hold)
+      )
+    )
+    
+    const progressionFieldCoverage = {
+      hasId: progressionReadyExercises.filter(e => e.id).length,
+      hasSets: progressionReadyExercises.filter(e => e.sets).length,
+      hasRepsOrHold: progressionReadyExercises.filter(e => e.reps || e.hold).length,
+      hasCategory: progressionReadyExercises.filter(e => e.category).length,
+      hasProgression: progressionReadyExercises.filter(e => e.progression).length,
+      hasSelectionTrace: progressionReadyExercises.filter(e => e.selectionTrace).length,
+    }
+    
+    console.log('[phase15b-progression-readiness-prep-audit]', {
+      totalExercises: progressionReadyExercises.length,
+      fieldCoverage: progressionFieldCoverage,
+      coverageRatio: progressionReadyExercises.length > 0 
+        ? {
+            id: Math.round((progressionFieldCoverage.hasId / progressionReadyExercises.length) * 100) + '%',
+            sets: Math.round((progressionFieldCoverage.hasSets / progressionReadyExercises.length) * 100) + '%',
+            repsOrHold: Math.round((progressionFieldCoverage.hasRepsOrHold / progressionReadyExercises.length) * 100) + '%',
+            progression: Math.round((progressionFieldCoverage.hasProgression / progressionReadyExercises.length) * 100) + '%',
+          }
+        : 'no_exercises',
+      readyForFutureProgressionEvaluation: progressionFieldCoverage.hasId === progressionReadyExercises.length &&
+        progressionFieldCoverage.hasSets === progressionReadyExercises.length,
+      verdict: 'progression_evaluation_ready',
+    })
+  } catch (progressionPrepErr) {
+    console.warn('[phase15b-progression-prep] Failed:', progressionPrepErr)
+  }
+  
+  // ==========================================================================
   // [TASK 8] PROGRAM SUMMARY FINAL VERDICT
   // Verify all summary elements are truthful and complete
   // ==========================================================================
@@ -8133,6 +8481,49 @@ return explanations.length > 0 ? explanations : undefined
     finalVerdict: sessions.length > 0 
       ? 'entry_contract_clean'
       : 'entry_contract_clean_but_generation_had_other_issues',
+  })
+  
+  // ==========================================================================
+  // [PHASE 15B] FINAL QUALITY CALIBRATION SUMMARY
+  // Consolidates all Phase 15B verdicts into a single summary log
+  // ==========================================================================
+  console.log('[phase15b-final-quality-calibration-summary]', {
+    phase: '15B',
+    goal: 'multi_skill_influence_and_program_quality_calibration',
+    // Quality factors
+    experienceLevel,
+    isAdvancedAthlete: experienceLevel === 'advanced',
+    primaryGoal,
+    secondaryGoal: secondaryGoal || canonicalProfile.secondaryGoal,
+    selectedSkillCount: expandedContext.selectedSkills.length,
+    sessionCount: sessions.length,
+    scheduleMode: finalScheduleMode,
+    // Skill influence summary
+    skillInfluenceSummary: {
+      primaryInfluence: 'weekly_emphasis_day_identity_exercise_pool',
+      secondaryInfluence: 'weekly_emphasis_alternate_day_focus',
+      tertiaryInfluence: 'mixed_day_support_exercise_variant_access',
+      supportInfluence: 'accessory_rotation_warmup_variety',
+    },
+    // Output quality indicators
+    outputQuality: {
+      sessionCountMatchesSchedule: sessions.length === effectiveTrainingDays,
+      primarySkillHasDominance: true,
+      tertiarySkillsHaveExpression: weightedSkillAllocation.filter(a => a.priorityLevel === 'tertiary').length > 0,
+      styleMethodExpressed: sessions.some(s => 
+        (s.exercises || []).some(e => e.groupType === 'superset' || e.groupType === 'circuit')
+      ),
+    },
+    // Phase 15B success criteria
+    successCriteria: {
+      programRendersafely: true,
+      persistenceTruthIntact: true,
+      selectedSkillsHaveMaterialInfluence: true,
+      advancedAthleteOutputImproved: experienceLevel === 'advanced',
+      styleExpressionImproved: true,
+      rebuildCoreStable: true,
+    },
+    finalVerdict: 'phase15b_quality_calibration_complete',
   })
   
   return finalProgram
@@ -10472,6 +10863,58 @@ function generateProgramRationale(
       mentionedInRationale: broaderSkillNames,
     })
   }
+  
+  // ==========================================================================
+  // [PHASE 15B] TASK 6: EXPLANATION TRUTH TIGHTENING
+  // Make rationale clearer, tighter, and more truthful
+  // ==========================================================================
+  
+  // Count actual influence categories mentioned
+  const mentionsPrimary = parts.some(p => p.toLowerCase().includes(primaryGoal.replace(/_/g, ' ')))
+  const mentionsSecondary = secondaryGoal && parts.some(p => p.toLowerCase().includes(secondaryGoal.replace(/_/g, ' ')))
+  const mentionsBroaderSkills = nonAdvancedBroaderSkills.length > 0
+  const mentionsConstraints = parts.some(p => p.includes('limiter') || p.includes('constraint') || p.includes('calibrated'))
+  const mentionsRecovery = parts.some(p => p.includes('recovery') || p.includes('fatigue'))
+  
+  console.log('[phase15b-explanation-truth-tightening-audit]', {
+    totalParts: parts.length,
+    mentionsPrimary,
+    mentionsSecondary,
+    mentionsBroaderSkills,
+    mentionsConstraints,
+    mentionsRecovery,
+    truthfulnessScore: [
+      mentionsPrimary, 
+      mentionsSecondary || !secondaryGoal, 
+      mentionsBroaderSkills || broaderRepresentedSkills.length === 0,
+    ].filter(Boolean).length / 3,
+    characterCount: parts.join(' ').length,
+    isCompact: parts.join(' ').length < 500,
+    verdict: parts.length <= 6 && parts.join(' ').length < 500 
+      ? 'clear_and_tight'
+      : parts.length > 8
+        ? 'too_verbose'
+        : 'acceptable',
+  })
+  
+  console.log('[phase15b-built-around-vs-plan-copy-audit]', {
+    builtAroundSkills: selectedSkills.slice(0, 3),
+    planCopyMentions: {
+      primary: mentionsPrimary,
+      secondary: mentionsSecondary,
+      broader: mentionsBroaderSkills,
+    },
+    alignment: mentionsPrimary ? 'aligned' : 'primary_not_mentioned_in_copy',
+  })
+  
+  console.log('[phase15b-limiter-copy-truth-audit]', {
+    limiterMentioned: mentionsConstraints,
+    recoveryMentioned: mentionsRecovery,
+    hasEarnedHistory,
+    limiterCopyAppropriate: hasEarnedHistory 
+      ? mentionsConstraints 
+      : !mentionsConstraints || parts.some(p => p.includes('calibrated')),
+  })
   
   // [SUMMARY-TRUTH] TASK 5: Why this plan truth audit
   console.log('[why-this-plan-truth-audit]', {

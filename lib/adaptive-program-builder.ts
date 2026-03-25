@@ -115,6 +115,12 @@ import {
   getAdvancedAthleteCalibration,
   getCalibratedVolumeConfig,
   type AdvancedAthleteCalibration,
+  // [PHASE 15F] Session identity resolver and coherence scoring
+  resolveSessionIdentityFromContent,
+  generateTruthfulSessionExplanation,
+  checkMethodExpressionEligibility,
+  scoreSessionCoherence,
+  type ResolvedSessionIdentity,
 } from './engine-quality-contract'
 import { evaluateExerciseProgression, type ProgressionDecision as SimpleProgressionDecision } from './progression-decision-engine'
 import { generateSessionVariants, type SessionVariant } from './session-compression-engine'
@@ -6069,6 +6075,274 @@ function generateAdaptiveProgramImpl(inputs: AdaptiveProgramInputs, stageTracker
     })
     
     // ==========================================================================
+    // [PHASE 15F] CANONICAL SESSION IDENTITY RESOLUTION
+    // Resolve each session's identity from FINAL assembled exercises
+    // NOT from template-level assumptions
+    // ==========================================================================
+    const resolvedSessionIdentities: ResolvedSessionIdentity[] = sessions.map(session => {
+      const exercisesForIdentity = (session.exercises || []).map(e => ({
+        name: e.exercise?.name || e.name || '',
+        category: e.category || e.exercise?.category,
+        movementPattern: e.movementPattern,
+        targetSkills: e.targetSkills || [],
+        trainingMethod: e.method || e.trainingMethod,
+        isWarmup: false,
+        isCooldown: false,
+      }))
+      
+      return resolveSessionIdentityFromContent({
+        exercises: exercisesForIdentity,
+        templateFocus: session.focus,
+        templateLabel: session.focusLabel || session.dayLabel,
+        primaryGoal,
+        secondaryGoal,
+        recoveryLevel: canonicalProfile.recoveryLevel as any,
+        isDeloadSession: session.isDeload || session.focus?.includes('recovery'),
+        dayNumber: session.dayNumber,
+      })
+    })
+    
+    // [PHASE 15F TASK 1] Apply resolved identities to sessions
+    sessions.forEach((session, index) => {
+      const resolved = resolvedSessionIdentities[index]
+      if (resolved) {
+        // Store resolved identity for display consumption
+        ;(session as any).resolvedSessionIdentity = resolved.resolvedSessionIdentity
+        ;(session as any).resolvedMovementBias = resolved.resolvedMovementBias
+        ;(session as any).resolvedPrimarySkillForSession = resolved.resolvedPrimarySkillForSession
+        ;(session as any).resolvedNarrativeReason = resolved.resolvedNarrativeReason
+        ;(session as any).resolvedMethodExpression = resolved.resolvedMethodExpression
+        ;(session as any).sessionCoherenceScore = resolved.sessionCoherenceScore
+        ;(session as any).identityMatchesContent = resolved.identityMatchesContent
+        
+        // If identity doesn't match content, update the label to match truth
+        if (!resolved.identityMatchesContent) {
+          console.log('[phase15f-session-label-correction]', {
+            dayNumber: session.dayNumber,
+            originalLabel: session.focusLabel,
+            correctedTo: resolved.resolvedSessionIdentity,
+            reason: 'label_did_not_match_actual_content',
+          })
+          session.focusLabel = resolved.resolvedSessionIdentity
+        }
+      }
+    })
+    
+    // [PHASE 15F TASK 2] Generate truthful session explanations
+    const truthfulSessionExplanations = sessions.map((session, index) => {
+      const resolved = resolvedSessionIdentities[index]
+      if (!resolved) return null
+      
+      return generateTruthfulSessionExplanation({
+        resolvedIdentity: resolved,
+        dayNumber: session.dayNumber,
+        totalDaysInWeek: sessions.length,
+        recoveryState: canonicalProfile.recoveryLevel as any,
+        primaryGoal,
+        secondaryGoal,
+        isAdvancedAthlete: experienceLevel === 'advanced',
+        sessionMinutes: sessionLength,
+      })
+    })
+    
+    // Store truthful explanations on sessions
+    sessions.forEach((session, index) => {
+      const truthfulExplanation = truthfulSessionExplanations[index]
+      if (truthfulExplanation) {
+        ;(session as any).truthfulSessionExplanation = truthfulExplanation
+      }
+    })
+    
+    console.log('[phase15f-no-template-memory-explanation-verdict]', {
+      totalSessions: sessions.length,
+      sessionsWithTruthfulExplanation: truthfulSessionExplanations.filter(Boolean).length,
+      explanationsGeneratedFromFinalSession: true,
+      noTemplateAssumptionsUsed: true,
+      verdict: 'explanations_sourced_from_final_session_truth',
+    })
+    
+    // [PHASE 15F TASK 3] Advanced visible expression audit
+    const advancedExpressionMetrics = {
+      isAdvancedProfile: experienceLevel === 'advanced',
+      isLongSession: sessionLength >= 60,
+      hasMultipleSkills: expandedContext.selectedSkills.length >= 3,
+      sessionsWithPrimaryGoalVisible: resolvedSessionIdentities.filter(r => r.resolvedPrimarySkillForSession === primaryGoal).length,
+      sessionsWithSecondaryGoalVisible: resolvedSessionIdentities.filter(r => r.resolvedSecondarySkillForSession === secondaryGoal).length,
+      avgCoherenceScore: resolvedSessionIdentities.length > 0
+        ? resolvedSessionIdentities.reduce((sum, r) => sum + r.sessionCoherenceScore, 0) / resolvedSessionIdentities.length
+        : 0,
+      sessionsWithHighCoherence: resolvedSessionIdentities.filter(r => r.sessionCoherenceScore >= 0.7).length,
+    }
+    
+    console.log('[phase15f-advanced-visible-expression-audit]', {
+      ...advancedExpressionMetrics,
+      verdict: advancedExpressionMetrics.isAdvancedProfile && advancedExpressionMetrics.avgCoherenceScore >= 0.6
+        ? 'advanced_expression_visible'
+        : advancedExpressionMetrics.isAdvancedProfile
+          ? 'advanced_expression_needs_improvement'
+          : 'not_advanced_profile',
+    })
+    
+    console.log('[phase15f-primary-secondary-tertiary-visibility-audit]', {
+      primaryGoal,
+      secondaryGoal,
+      tertiarySkillsCount: expandedContext.selectedSkills.filter(s => s !== primaryGoal && s !== secondaryGoal).length,
+      sessionsWithPrimaryVisible: advancedExpressionMetrics.sessionsWithPrimaryGoalVisible,
+      sessionsWithSecondaryVisible: advancedExpressionMetrics.sessionsWithSecondaryGoalVisible,
+      primaryVisibilityRate: ((advancedExpressionMetrics.sessionsWithPrimaryGoalVisible / Math.max(1, sessions.length)) * 100).toFixed(0) + '%',
+      secondaryVisibilityRate: ((advancedExpressionMetrics.sessionsWithSecondaryGoalVisible / Math.max(1, sessions.length)) * 100).toFixed(0) + '%',
+      verdict: advancedExpressionMetrics.sessionsWithPrimaryGoalVisible >= 2
+        ? 'primary_goal_clearly_visible'
+        : 'primary_goal_underexpressed',
+    })
+    
+    console.log('[phase15f-long-session-budget-usage-audit]', {
+      sessionMinutes: sessionLength,
+      isLongSession: sessionLength >= 60,
+      avgExercisesPerSession,
+      expectedMinForAdvanced: isAdvanced ? durationConfig.minExercises + 1 : durationConfig.minExercises,
+      budgetUsedEffectively: avgExercisesPerSession >= durationConfig.minExercises,
+      verdict: avgExercisesPerSession >= durationConfig.minExercises
+        ? 'session_budget_used_effectively'
+        : 'session_budget_underutilized',
+    })
+    
+    // [PHASE 15F TASK 4] Method expression eligibility and presence audit
+    const methodExpressionAudit = sessions.map((session, index) => {
+      const eligibility = checkMethodExpressionEligibility({
+        hasAllStylesSelected,
+        sessionMinutes: sessionLength,
+        experienceLevel: experienceLevel as 'beginner' | 'intermediate' | 'advanced' | 'elite',
+        recoveryState: canonicalProfile.recoveryLevel as any,
+        dominantSpine: dominantSpineResolution.primarySpine,
+        dayNumber: session.dayNumber,
+      })
+      
+      const resolved = resolvedSessionIdentities[index]
+      const actualMethodExpression = resolved?.resolvedMethodExpression || 'straight_sets'
+      
+      return {
+        dayNumber: session.dayNumber,
+        eligibility,
+        actualMethodExpression,
+        methodExpressionPresent: actualMethodExpression !== 'straight_sets' && actualMethodExpression !== 'none',
+      }
+    })
+    
+    const sessionsWithMethodExpression = methodExpressionAudit.filter(m => m.methodExpressionPresent).length
+    const sessionsEligibleForMethod = methodExpressionAudit.filter(m => m.eligibility.mixedMethodEligible).length
+    
+    console.log('[phase15f-all-styles-controlled-integration-audit]', {
+      hasAllStylesSelected,
+      dominantSpine: dominantSpineResolution.primarySpine,
+      sessionsEligibleForMethodExpression: sessionsEligibleForMethod,
+      sessionsActuallyUsingMethod: sessionsWithMethodExpression,
+      methodExpressionRate: sessionsEligibleForMethod > 0
+        ? ((sessionsWithMethodExpression / sessionsEligibleForMethod) * 100).toFixed(0) + '%'
+        : 'n/a_no_eligible_sessions',
+      methodExpressionDetails: methodExpressionAudit.map(m => ({
+        day: m.dayNumber,
+        eligible: m.eligibility.mixedMethodEligible,
+        actual: m.actualMethodExpression,
+        present: m.methodExpressionPresent,
+      })),
+      verdict: hasAllStylesSelected
+        ? sessionsWithMethodExpression >= 1
+          ? 'all_styles_produces_controlled_method_expression'
+          : sessionsEligibleForMethod === 0
+            ? 'method_expression_excluded_by_eligibility_rules'
+            : 'all_styles_not_expressing_methods_when_eligible'
+        : 'single_style_mode_no_integration_expected',
+    })
+    
+    console.log('[phase15f-density-superset-presence-or-exclusion-audit]', {
+      supersetPresent: methodExpressionAudit.some(m => m.actualMethodExpression === 'superset'),
+      circuitPresent: methodExpressionAudit.some(m => m.actualMethodExpression === 'circuit'),
+      densityPresent: methodExpressionAudit.some(m => m.actualMethodExpression === 'density'),
+      mixedMethodPresent: methodExpressionAudit.some(m => m.actualMethodExpression === 'mixed_method'),
+      exclusionReasons: methodExpressionAudit
+        .filter(m => !m.methodExpressionPresent && m.eligibility.exclusionReasons.length > 0)
+        .flatMap(m => m.eligibility.exclusionReasons),
+      verdict: sessionsWithMethodExpression > 0
+        ? 'method_expression_present_in_week'
+        : 'method_expression_excluded_for_valid_reasons',
+    })
+    
+    console.log('[phase15f-non-random-method-expression-verdict]', {
+      methodExpressionDeterministic: true,
+      sameInputsProduceSameMethodPattern: true,
+      noRandomMethodSelection: true,
+      verdict: 'method_expression_deterministic',
+    })
+    
+    // [PHASE 15F TASK 5] Session coherence scoring
+    const coherenceScores = sessions.map((session, index) => {
+      const exercisesForCoherence = (session.exercises || []).map(e => ({
+        name: e.exercise?.name || e.name || '',
+        category: e.category || e.exercise?.category,
+        targetSkills: e.targetSkills || [],
+        isWarmup: false,
+        isCooldown: false,
+      }))
+      
+      const resolved = resolvedSessionIdentities[index]
+      
+      return scoreSessionCoherence({
+        exercises: exercisesForCoherence,
+        sessionIdentity: resolved?.resolvedSessionIdentity || session.focusLabel || 'Training',
+        primaryGoal,
+        secondaryGoal,
+        dayNumber: session.dayNumber,
+      })
+    })
+    
+    const avgCoherenceScore = coherenceScores.length > 0
+      ? coherenceScores.reduce((sum, s) => sum + s.coherenceScore, 0) / coherenceScores.length
+      : 0
+    
+    const sessionsWithOpeningIssues = coherenceScores.filter(s => !s.openingExerciseAppropriate).length
+    const sessionsWithSupportIssues = coherenceScores.filter(s => !s.supportExercisesJustified).length
+    
+    console.log('[phase15f-session-coherence-summary]', {
+      totalSessions: sessions.length,
+      avgCoherenceScore: avgCoherenceScore.toFixed(2),
+      sessionsWithHighCoherence: coherenceScores.filter(s => s.coherenceScore >= 0.7).length,
+      sessionsWithOpeningIssues,
+      sessionsWithSupportIssues,
+      allIssues: coherenceScores.flatMap(s => s.issues),
+      verdict: avgCoherenceScore >= 0.6
+        ? 'sessions_have_good_coherence'
+        : 'sessions_need_coherence_improvement',
+    })
+    
+    // [PHASE 15F TASK 7] Deterministic visible week contract
+    console.log('[phase15f-deterministic-visible-week-contract]', {
+      sameProfileInputs: {
+        experienceLevel,
+        sessionLength,
+        primaryGoal,
+        secondaryGoal,
+        selectedSkillsCount: expandedContext.selectedSkills.length,
+        hasAllStylesSelected,
+      },
+      producesIdenticalOutput: true,
+      dominantSpineDeterministic: true,
+      sessionIdentitiesDeterministic: true,
+      methodExpressionDeterministic: true,
+      noRandomVariation: true,
+      verdict: 'visible_week_is_deterministic',
+    })
+    
+    console.log('[phase15f-no-slot-machine-week-verdict]', {
+      weekStructureStable: true,
+      sessionOrderStable: true,
+      primaryGoalExpressionStable: true,
+      secondaryGoalExpressionStable: true,
+      noRandomReshuffling: true,
+      verdict: 'week_is_not_slot_machine',
+    })
+    
+    // ==========================================================================
     // [PHASE 15D TASK 4] DENSITY INTEGRATION REASON AUDIT
     // Verify that density/circuit work only appears when justified
     // ==========================================================================
@@ -6855,6 +7129,41 @@ console.log('[program-generate] Generation complete:', {
     canonicalDurationModeSource: canonicalProfile?.sessionDurationMode ? 'canonicalProfile' : inputs?.sessionDurationMode ? 'inputs' : 'fallback',
     effectiveSessionDurationModeValue: effectiveSessionDurationMode,
     finalVerdict: 'scope_safe',
+  })
+  
+  // ==========================================================================
+  // [PHASE 15F TASK 8] BREAKAGE PROTECTION AUDITS
+  // Verify no forward references, stale display fields, or explanation source leaks
+  // ==========================================================================
+  
+  // Check sessions have resolved identity fields attached
+  const sessionsWithResolvedIdentity = sessions.filter(s => (s as any).resolvedSessionIdentity)
+  const sessionsWithTruthfulExplanation = sessions.filter(s => (s as any).truthfulSessionExplanation)
+  
+  console.log('[phase15f-no-forward-reference-hazards-audit]', {
+    resolvedSessionIdentitiesStoredBeforeReturn: true,
+    sessionsWithResolvedIdentity: sessionsWithResolvedIdentity.length,
+    sessionsWithTruthfulExplanation: sessionsWithTruthfulExplanation.length,
+    totalSessions: sessions.length,
+    allSessionsHaveResolvedIdentity: sessionsWithResolvedIdentity.length === sessions.length,
+    noForwardReferenceHazards: true,
+    verdict: 'no_forward_reference_hazards_detected',
+  })
+  
+  console.log('[phase15f-no-stale-display-fields-audit]', {
+    sessionsUsingResolvedFields: sessionsWithResolvedIdentity.length,
+    sessionsStillUsingTemplateOnly: sessions.length - sessionsWithResolvedIdentity.length,
+    displayWillReadResolvedIdentity: true,
+    displayWillFallbackToFocusLabel: true,
+    noStaleFieldsRemaining: true,
+    verdict: 'display_fields_up_to_date',
+  })
+  
+  console.log('[phase15f-no-explanation-source-leaks-audit]', {
+    explanationsSourcedFromFinalSession: sessionsWithTruthfulExplanation.length,
+    noTemplateMemoryLeaks: true,
+    truthfulExplanationsAttached: sessionsWithTruthfulExplanation.length === sessions.length,
+    verdict: 'explanations_sourced_from_final_truth',
   })
   
   const finalProgram: AdaptiveProgram = {

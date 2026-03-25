@@ -100,17 +100,73 @@ export function WhyThisPlanBlock({ explanationMetadata, className = '' }: WhyThi
 
 // =============================================================================
 // WHY THIS SESSION BLOCK - Session/day-level explanation
+// [PHASE 15F] Updated to prefer truthful session explanation from final assembly
 // =============================================================================
 
 interface WhyThisSessionBlockProps {
   explanationMetadata?: ProgramExplanationMetadata
   dayNumber: number
   className?: string
+  // [PHASE 15F] Direct session-level truthful explanation from final assembly
+  truthfulSessionExplanation?: string
+  resolvedNarrativeReason?: string
 }
 
-export function WhyThisSessionBlock({ explanationMetadata, dayNumber, className = '' }: WhyThisSessionBlockProps) {
+export function WhyThisSessionBlock({ 
+  explanationMetadata, 
+  dayNumber, 
+  className = '',
+  truthfulSessionExplanation,
+  resolvedNarrativeReason,
+}: WhyThisSessionBlockProps) {
   const [isExpanded, setIsExpanded] = useState(false)
   
+  // [PHASE 15F TASK 2] Prefer truthful session explanation from final assembly
+  // This reads from final session truth, NOT template-level assumptions
+  if (truthfulSessionExplanation || resolvedNarrativeReason) {
+    const truthfulLines = [
+      truthfulSessionExplanation,
+      resolvedNarrativeReason,
+    ].filter(Boolean) as string[]
+    
+    console.log('[phase15f-why-block-uses-truthful-explanation]', {
+      dayNumber,
+      hasTruthfulExplanation: !!truthfulSessionExplanation,
+      hasResolvedNarrative: !!resolvedNarrativeReason,
+      usedFinalSessionTruth: true,
+    })
+    
+    return (
+      <div className={`p-3 bg-[#1A1A1A]/50 rounded-lg border border-[#2A2A2A]/50 ${className}`}>
+        <button
+          onClick={() => setIsExpanded(!isExpanded)}
+          className="w-full flex items-center justify-between text-left"
+        >
+          <div className="flex items-center gap-2">
+            <Lightbulb className="w-3.5 h-3.5 text-[#4F6D8A]" />
+            <span className="text-xs font-medium text-[#A5A5A5]">Why This Workout</span>
+          </div>
+          {isExpanded ? (
+            <ChevronUp className="w-3.5 h-3.5 text-[#6A6A6A]" />
+          ) : (
+            <ChevronDown className="w-3.5 h-3.5 text-[#6A6A6A]" />
+          )}
+        </button>
+        
+        {isExpanded && (
+          <div className="mt-2 space-y-1 pl-5">
+            {truthfulLines.map((line, idx) => (
+              <p key={idx} className="text-xs text-[#6A6A6A]">
+                {line}
+              </p>
+            ))}
+          </div>
+        )}
+      </div>
+    )
+  }
+  
+  // Fallback to metadata-based explanation if no truthful explanation available
   // Don't render if no explanation metadata available
   if (!explanationMetadata) {
     return null

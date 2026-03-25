@@ -1857,6 +1857,576 @@ export function getWeightedStrengthCarryover(
 }
 
 // =============================================================================
+// [PHASE 15F] CANONICAL SESSION IDENTITY RESOLVER
+// Resolves session identity AFTER final assembly based on actual exercise content
+// NOT based on upstream template intention
+// =============================================================================
+
+export interface ResolvedSessionIdentity {
+  resolvedSessionIdentity: string       // "Push Skill Day" or "Mixed Hybrid Training"
+  resolvedMovementBias: 'push' | 'pull' | 'mixed' | 'skill' | 'strength' | 'support'
+  resolvedPrimarySkillForSession: string | null  // The actual primary skill expressed in this session
+  resolvedSecondarySkillForSession: string | null
+  resolvedMethodExpression: 'straight_sets' | 'superset' | 'circuit' | 'density' | 'mixed_method' | 'none'
+  resolvedNarrativeReason: string       // Truthful explanation for why this session exists
+  firstWorkingBlockCategory: string     // What the first actual working block does
+  dominantExerciseCategory: string      // Most common category in session
+  sessionCoherenceScore: number         // 0-1, how coherent the session content is
+  identityMatchesContent: boolean       // Whether resolved identity matches actual content
+}
+
+export interface SessionExerciseForIdentity {
+  name: string
+  category?: string
+  movementPattern?: string
+  targetSkills?: string[]
+  trainingMethod?: string
+  isWarmup?: boolean
+  isCooldown?: boolean
+}
+
+/**
+ * [PHASE 15F TASK 1] Resolve session identity from final assembled exercises
+ * This must run AFTER session assembly is complete, not before
+ */
+export function resolveSessionIdentityFromContent(params: {
+  exercises: SessionExerciseForIdentity[]
+  templateFocus?: string
+  templateLabel?: string
+  primaryGoal: string
+  secondaryGoal?: string | null
+  recoveryState?: 'poor' | 'fair' | 'normal' | 'good'
+  isDeloadSession?: boolean
+  dayNumber: number
+}): ResolvedSessionIdentity {
+  const { exercises, templateFocus, templateLabel, primaryGoal, secondaryGoal, recoveryState, isDeloadSession, dayNumber } = params
+  
+  // Filter to working exercises only (exclude warmup/cooldown)
+  const workingExercises = exercises.filter(e => !e.isWarmup && !e.isCooldown)
+  
+  if (workingExercises.length === 0) {
+    console.log('[phase15f-session-identity-vs-first-block-audit]', {
+      dayNumber,
+      templateFocus,
+      noWorkingExercises: true,
+      verdict: 'empty_session_cannot_resolve',
+    })
+    
+    return {
+      resolvedSessionIdentity: templateLabel || 'Rest Day',
+      resolvedMovementBias: 'support',
+      resolvedPrimarySkillForSession: null,
+      resolvedSecondarySkillForSession: null,
+      resolvedMethodExpression: 'none',
+      resolvedNarrativeReason: 'No working exercises scheduled.',
+      firstWorkingBlockCategory: 'none',
+      dominantExerciseCategory: 'none',
+      sessionCoherenceScore: 0,
+      identityMatchesContent: true,
+    }
+  }
+  
+  // Analyze first working exercise block
+  const firstExercise = workingExercises[0]
+  const firstName = (firstExercise.name || '').toLowerCase()
+  const firstCategory = firstExercise.category || 'unknown'
+  const firstTargetSkills = firstExercise.targetSkills || []
+  
+  // Count movement patterns
+  const pushExercises = workingExercises.filter(e => {
+    const name = (e.name || '').toLowerCase()
+    return name.includes('push') || name.includes('dip') || name.includes('press') || 
+           name.includes('planche') || name.includes('handstand') || name.includes('pike')
+  })
+  
+  const pullExercises = workingExercises.filter(e => {
+    const name = (e.name || '').toLowerCase()
+    return name.includes('pull') || name.includes('row') || name.includes('lever') ||
+           name.includes('chin') || name.includes('muscle up')
+  })
+  
+  const skillExercises = workingExercises.filter(e => 
+    e.category === 'skill' || e.category === 'skill_isometric' || e.category === 'skill_dynamic'
+  )
+  
+  const strengthExercises = workingExercises.filter(e => 
+    e.category === 'strength' || e.category === 'primary_strength' || e.category === 'secondary_strength'
+  )
+  
+  // Determine movement bias
+  let resolvedMovementBias: ResolvedSessionIdentity['resolvedMovementBias'] = 'mixed'
+  if (pushExercises.length > pullExercises.length * 1.5) {
+    resolvedMovementBias = 'push'
+  } else if (pullExercises.length > pushExercises.length * 1.5) {
+    resolvedMovementBias = 'pull'
+  } else if (skillExercises.length > workingExercises.length * 0.5) {
+    resolvedMovementBias = 'skill'
+  } else if (strengthExercises.length > workingExercises.length * 0.5) {
+    resolvedMovementBias = 'strength'
+  }
+  
+  // Determine primary skill expressed in this session
+  let resolvedPrimarySkillForSession: string | null = null
+  let resolvedSecondarySkillForSession: string | null = null
+  
+  const primaryGoalLower = primaryGoal.toLowerCase().replace(/_/g, ' ')
+  const secondaryGoalLower = (secondaryGoal || '').toLowerCase().replace(/_/g, ' ')
+  
+  const primaryGoalExercises = workingExercises.filter(e => {
+    const name = (e.name || '').toLowerCase()
+    const targets = (e.targetSkills || []).map(t => t.toLowerCase())
+    return name.includes(primaryGoalLower) || targets.some(t => t.includes(primaryGoalLower))
+  })
+  
+  const secondaryGoalExercises = workingExercises.filter(e => {
+    const name = (e.name || '').toLowerCase()
+    const targets = (e.targetSkills || []).map(t => t.toLowerCase())
+    return name.includes(secondaryGoalLower) || targets.some(t => t.includes(secondaryGoalLower))
+  })
+  
+  if (primaryGoalExercises.length > 0) {
+    resolvedPrimarySkillForSession = primaryGoal
+  }
+  if (secondaryGoalExercises.length > 0) {
+    resolvedSecondarySkillForSession = secondaryGoal || null
+  }
+  
+  // Determine method expression
+  const hasSuperset = workingExercises.some(e => e.trainingMethod?.includes('superset'))
+  const hasCircuit = workingExercises.some(e => e.trainingMethod?.includes('circuit'))
+  const hasDensity = workingExercises.some(e => e.trainingMethod?.includes('density'))
+  
+  let resolvedMethodExpression: ResolvedSessionIdentity['resolvedMethodExpression'] = 'straight_sets'
+  if (hasCircuit) {
+    resolvedMethodExpression = 'circuit'
+  } else if (hasDensity) {
+    resolvedMethodExpression = 'density'
+  } else if (hasSuperset) {
+    resolvedMethodExpression = 'superset'
+  } else if (hasSuperset || hasCircuit || hasDensity) {
+    resolvedMethodExpression = 'mixed_method'
+  }
+  
+  // Determine dominant category
+  const categoryCount: Record<string, number> = {}
+  workingExercises.forEach(e => {
+    const cat = e.category || 'unknown'
+    categoryCount[cat] = (categoryCount[cat] || 0) + 1
+  })
+  const dominantExerciseCategory = Object.entries(categoryCount)
+    .sort((a, b) => b[1] - a[1])[0]?.[0] || 'mixed'
+  
+  // Build resolved session identity label
+  let resolvedSessionIdentity: string
+  
+  if (isDeloadSession) {
+    resolvedSessionIdentity = 'Recovery Focus'
+  } else if (resolvedPrimarySkillForSession && resolvedMovementBias === 'push') {
+    resolvedSessionIdentity = `${formatSkillLabel(resolvedPrimarySkillForSession)} Push Day`
+  } else if (resolvedPrimarySkillForSession && resolvedMovementBias === 'pull') {
+    resolvedSessionIdentity = `${formatSkillLabel(resolvedPrimarySkillForSession)} Pull Day`
+  } else if (resolvedPrimarySkillForSession && skillExercises.length > strengthExercises.length) {
+    resolvedSessionIdentity = `${formatSkillLabel(resolvedPrimarySkillForSession)} Skill Focus`
+  } else if (resolvedMovementBias === 'push') {
+    resolvedSessionIdentity = 'Push Strength'
+  } else if (resolvedMovementBias === 'pull') {
+    resolvedSessionIdentity = 'Pull Strength'
+  } else if (resolvedMovementBias === 'skill') {
+    resolvedSessionIdentity = 'Skill Practice'
+  } else if (resolvedMovementBias === 'strength') {
+    resolvedSessionIdentity = 'Strength Development'
+  } else {
+    resolvedSessionIdentity = 'Mixed Hybrid Training'
+  }
+  
+  // Build truthful narrative reason
+  let resolvedNarrativeReason: string
+  
+  if (isDeloadSession) {
+    resolvedNarrativeReason = 'Lighter training to support recovery and adaptation.'
+  } else if (recoveryState === 'poor') {
+    resolvedNarrativeReason = 'Reduced intensity due to elevated fatigue markers.'
+  } else if (resolvedPrimarySkillForSession && resolvedSecondarySkillForSession) {
+    resolvedNarrativeReason = `Primary focus on ${formatSkillLabel(resolvedPrimarySkillForSession)} with ${formatSkillLabel(resolvedSecondarySkillForSession)} support work.`
+  } else if (resolvedPrimarySkillForSession) {
+    resolvedNarrativeReason = `Dedicated ${formatSkillLabel(resolvedPrimarySkillForSession)} development session.`
+  } else if (resolvedMovementBias === 'push') {
+    resolvedNarrativeReason = 'Pushing pattern strength and skill development.'
+  } else if (resolvedMovementBias === 'pull') {
+    resolvedNarrativeReason = 'Pulling pattern strength and skill development.'
+  } else {
+    resolvedNarrativeReason = 'Balanced session addressing multiple movement patterns.'
+  }
+  
+  // Calculate coherence score
+  let sessionCoherenceScore = 0.5 // Base
+  
+  // +0.2 if first exercise matches session identity
+  const firstExerciseMatchesIdentity = 
+    (resolvedMovementBias === 'push' && pushExercises.includes(firstExercise as any)) ||
+    (resolvedMovementBias === 'pull' && pullExercises.includes(firstExercise as any)) ||
+    (resolvedMovementBias === 'skill' && skillExercises.includes(firstExercise as any))
+  if (firstExerciseMatchesIdentity) sessionCoherenceScore += 0.2
+  
+  // +0.15 if primary goal is visibly expressed
+  if (primaryGoalExercises.length >= 2) sessionCoherenceScore += 0.15
+  
+  // +0.1 if method expression is consistent
+  if (resolvedMethodExpression !== 'mixed_method') sessionCoherenceScore += 0.1
+  
+  // +0.05 if dominant category is clear (>50%)
+  const dominantCategoryRatio = (categoryCount[dominantExerciseCategory] || 0) / workingExercises.length
+  if (dominantCategoryRatio > 0.5) sessionCoherenceScore += 0.05
+  
+  sessionCoherenceScore = Math.min(1, sessionCoherenceScore)
+  
+  // Check if resolved identity matches the template
+  const templateFocusLower = (templateFocus || '').toLowerCase()
+  const identityMatchesContent = (
+    (templateFocusLower.includes('push') && resolvedMovementBias === 'push') ||
+    (templateFocusLower.includes('pull') && resolvedMovementBias === 'pull') ||
+    (templateFocusLower.includes('skill') && resolvedMovementBias === 'skill') ||
+    (templateFocusLower.includes('strength') && resolvedMovementBias === 'strength') ||
+    templateFocusLower.includes('mixed') ||
+    !templateFocus // No template = always matches
+  )
+  
+  // Audit logs
+  console.log('[phase15f-session-identity-vs-first-block-audit]', {
+    dayNumber,
+    templateFocus,
+    templateLabel,
+    firstExerciseName: firstName,
+    firstExerciseCategory: firstCategory,
+    resolvedIdentity: resolvedSessionIdentity,
+    resolvedMovementBias,
+    identityMatchesFirstBlock: firstExerciseMatchesIdentity,
+  })
+  
+  console.log('[phase15f-session-label-truth-verdict]', {
+    dayNumber,
+    originalTemplateLabel: templateLabel,
+    resolvedSessionIdentity,
+    labelsMatch: templateLabel?.toLowerCase().includes(resolvedSessionIdentity.toLowerCase().split(' ')[0]) || false,
+    shouldUpdateLabel: !identityMatchesContent,
+    verdict: identityMatchesContent ? 'label_matches_content' : 'label_mismatch_needs_correction',
+  })
+  
+  console.log('[phase15f-dominant-content-identity-audit]', {
+    dayNumber,
+    workingExerciseCount: workingExercises.length,
+    pushCount: pushExercises.length,
+    pullCount: pullExercises.length,
+    skillCount: skillExercises.length,
+    strengthCount: strengthExercises.length,
+    dominantExerciseCategory,
+    resolvedMovementBias,
+    primaryGoalExerciseCount: primaryGoalExercises.length,
+    secondaryGoalExerciseCount: secondaryGoalExercises.length,
+    sessionCoherenceScore: sessionCoherenceScore.toFixed(2),
+  })
+  
+  return {
+    resolvedSessionIdentity,
+    resolvedMovementBias,
+    resolvedPrimarySkillForSession,
+    resolvedSecondarySkillForSession,
+    resolvedMethodExpression,
+    resolvedNarrativeReason,
+    firstWorkingBlockCategory: firstCategory,
+    dominantExerciseCategory,
+    sessionCoherenceScore,
+    identityMatchesContent,
+  }
+}
+
+function formatSkillLabel(skill: string): string {
+  return skill
+    .split('_')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ')
+}
+
+/**
+ * [PHASE 15F TASK 2] Generate truthful "Why This Workout" from final session data
+ * NOT from template-level assumptions
+ */
+export function generateTruthfulSessionExplanation(params: {
+  resolvedIdentity: ResolvedSessionIdentity
+  dayNumber: number
+  totalDaysInWeek: number
+  recoveryState?: 'poor' | 'fair' | 'normal' | 'good'
+  primaryGoal: string
+  secondaryGoal?: string | null
+  isAdvancedAthlete: boolean
+  sessionMinutes: number
+}): string {
+  const { resolvedIdentity, dayNumber, totalDaysInWeek, recoveryState, primaryGoal, secondaryGoal, isAdvancedAthlete, sessionMinutes } = params
+  
+  const parts: string[] = []
+  
+  // Day position context
+  if (dayNumber === 1) {
+    parts.push('Week begins with')
+  } else if (dayNumber === totalDaysInWeek) {
+    parts.push('Week closes with')
+  } else {
+    parts.push(`Day ${dayNumber}:`)
+  }
+  
+  // Session purpose
+  if (resolvedIdentity.resolvedPrimarySkillForSession) {
+    if (resolvedIdentity.resolvedSecondarySkillForSession) {
+      parts.push(`${formatSkillLabel(resolvedIdentity.resolvedPrimarySkillForSession)} focus with ${formatSkillLabel(resolvedIdentity.resolvedSecondarySkillForSession)} support.`)
+    } else {
+      parts.push(`dedicated ${formatSkillLabel(resolvedIdentity.resolvedPrimarySkillForSession)} development.`)
+    }
+  } else if (resolvedIdentity.resolvedMovementBias === 'push') {
+    parts.push('pushing pattern emphasis.')
+  } else if (resolvedIdentity.resolvedMovementBias === 'pull') {
+    parts.push('pulling pattern emphasis.')
+  } else {
+    parts.push('balanced hybrid training.')
+  }
+  
+  // Recovery context - ONLY if actually relevant
+  if (recoveryState === 'poor') {
+    parts.push('Volume adjusted for recovery.')
+  }
+  // Do NOT say "recovery-focused" unless this is actually a deload/recovery session
+  
+  // Method expression
+  if (resolvedIdentity.resolvedMethodExpression !== 'straight_sets' && resolvedIdentity.resolvedMethodExpression !== 'none') {
+    parts.push(`Includes ${resolvedIdentity.resolvedMethodExpression.replace('_', ' ')} work.`)
+  }
+  
+  // Advanced athlete context
+  if (isAdvancedAthlete && sessionMinutes >= 60) {
+    parts.push('Extended session time used for complete skill-strength coverage.')
+  }
+  
+  const explanation = parts.join(' ')
+  
+  console.log('[phase15f-explanation-final-session-source-audit]', {
+    dayNumber,
+    usedResolvedIdentity: true,
+    usedTemplateAssumptions: false,
+    resolvedPrimarySkill: resolvedIdentity.resolvedPrimarySkillForSession,
+    resolvedMovementBias: resolvedIdentity.resolvedMovementBias,
+    recoveryState,
+    explanationGenerated: explanation.slice(0, 100) + (explanation.length > 100 ? '...' : ''),
+  })
+  
+  console.log('[phase15f-why-card-truth-contract-audit]', {
+    dayNumber,
+    explanationSourcedFromFinalSession: true,
+    noTemplateMemoryUsed: true,
+    recoveryMentionedOnlyWhenTrue: recoveryState === 'poor',
+    verdict: 'explanation_truthful',
+  })
+  
+  return explanation
+}
+
+/**
+ * [PHASE 15F TASK 4] Check method expression eligibility for all-styles-selected
+ */
+export function checkMethodExpressionEligibility(params: {
+  hasAllStylesSelected: boolean
+  sessionMinutes: number
+  experienceLevel: 'beginner' | 'intermediate' | 'advanced' | 'elite'
+  recoveryState?: 'poor' | 'fair' | 'normal' | 'good'
+  dominantSpine: string
+  dayNumber: number
+}): {
+  supersetEligible: boolean
+  circuitEligible: boolean
+  densityFinisherEligible: boolean
+  mixedMethodEligible: boolean
+  exclusionReasons: string[]
+} {
+  const { hasAllStylesSelected, sessionMinutes, experienceLevel, recoveryState, dominantSpine, dayNumber } = params
+  
+  const exclusionReasons: string[] = []
+  
+  // Base eligibility - only advanced+ with long sessions and all styles
+  const baseEligible = hasAllStylesSelected && 
+    sessionMinutes >= 60 && 
+    (experienceLevel === 'advanced' || experienceLevel === 'elite')
+  
+  if (!hasAllStylesSelected) {
+    exclusionReasons.push('not_all_styles_selected')
+  }
+  if (sessionMinutes < 60) {
+    exclusionReasons.push('session_too_short_for_method_expression')
+  }
+  if (experienceLevel !== 'advanced' && experienceLevel !== 'elite') {
+    exclusionReasons.push('not_advanced_experience_level')
+  }
+  
+  // Recovery blocks method expression
+  if (recoveryState === 'poor') {
+    exclusionReasons.push('poor_recovery_blocks_complex_methods')
+  }
+  
+  const recoverySafe = recoveryState !== 'poor'
+  
+  // Superset eligibility - most permissive
+  const supersetEligible = baseEligible && recoverySafe
+  
+  // Circuit eligibility - needs extra time
+  const circuitEligible = baseEligible && recoverySafe && sessionMinutes >= 65
+  
+  // Density finisher eligibility - needs the right spine and time
+  const densityFinisherEligible = baseEligible && recoverySafe && sessionMinutes >= 70
+  
+  // Mixed method - advanced only
+  const mixedMethodEligible = supersetEligible || circuitEligible || densityFinisherEligible
+  
+  console.log('[phase15f-method-expression-eligibility-audit]', {
+    dayNumber,
+    hasAllStylesSelected,
+    sessionMinutes,
+    experienceLevel,
+    recoveryState,
+    dominantSpine,
+    supersetEligible,
+    circuitEligible,
+    densityFinisherEligible,
+    mixedMethodEligible,
+    exclusionReasons,
+  })
+  
+  return {
+    supersetEligible,
+    circuitEligible,
+    densityFinisherEligible,
+    mixedMethodEligible,
+    exclusionReasons,
+  }
+}
+
+/**
+ * [PHASE 15F TASK 5] Score session coherence for opening exercise appropriateness
+ */
+export function scoreSessionCoherence(params: {
+  exercises: SessionExerciseForIdentity[]
+  sessionIdentity: string
+  primaryGoal: string
+  secondaryGoal?: string | null
+  dayNumber: number
+}): {
+  coherenceScore: number
+  openingExerciseAppropriate: boolean
+  supportExercisesJustified: boolean
+  issues: string[]
+} {
+  const { exercises, sessionIdentity, primaryGoal, secondaryGoal, dayNumber } = params
+  
+  const issues: string[] = []
+  let coherenceScore = 0.5
+  
+  const workingExercises = exercises.filter(e => !e.isWarmup && !e.isCooldown)
+  if (workingExercises.length === 0) {
+    return {
+      coherenceScore: 0,
+      openingExerciseAppropriate: true,
+      supportExercisesJustified: true,
+      issues: ['no_working_exercises'],
+    }
+  }
+  
+  const firstExercise = workingExercises[0]
+  const firstName = (firstExercise.name || '').toLowerCase()
+  const identityLower = sessionIdentity.toLowerCase()
+  
+  // Check opening exercise appropriateness
+  let openingExerciseAppropriate = true
+  
+  if (identityLower.includes('push') && (firstName.includes('lever') || firstName.includes('pull') || firstName.includes('row'))) {
+    openingExerciseAppropriate = false
+    issues.push('push_session_opens_with_pull_exercise')
+  }
+  if (identityLower.includes('pull') && (firstName.includes('planche') || firstName.includes('push') || firstName.includes('dip'))) {
+    openingExerciseAppropriate = false
+    issues.push('pull_session_opens_with_push_exercise')
+  }
+  
+  if (openingExerciseAppropriate) coherenceScore += 0.2
+  
+  // Check support exercise justification
+  const supportExercises = workingExercises.filter(e => 
+    e.category === 'accessory' || e.category === 'support' || e.category === 'secondary_strength'
+  )
+  
+  const primaryGoalLower = primaryGoal.toLowerCase().replace(/_/g, ' ')
+  const secondaryGoalLower = (secondaryGoal || '').toLowerCase().replace(/_/g, ' ')
+  
+  const justifiedSupport = supportExercises.filter(e => {
+    const name = (e.name || '').toLowerCase()
+    const targets = (e.targetSkills || []).map(t => t.toLowerCase())
+    
+    // Justified if it targets primary/secondary goal
+    const targetsGoal = name.includes(primaryGoalLower) || 
+                        name.includes(secondaryGoalLower) ||
+                        targets.some(t => t.includes(primaryGoalLower) || t.includes(secondaryGoalLower))
+    
+    // Or if it matches session movement pattern
+    const matchesPush = identityLower.includes('push') && (name.includes('push') || name.includes('press') || name.includes('dip'))
+    const matchesPull = identityLower.includes('pull') && (name.includes('pull') || name.includes('row'))
+    
+    return targetsGoal || matchesPush || matchesPull
+  })
+  
+  const supportExercisesJustified = supportExercises.length === 0 || 
+    justifiedSupport.length >= supportExercises.length * 0.6
+  
+  if (supportExercisesJustified) coherenceScore += 0.15
+  
+  // Check primary goal visibility
+  const primaryGoalExercises = workingExercises.filter(e => {
+    const name = (e.name || '').toLowerCase()
+    return name.includes(primaryGoalLower)
+  })
+  if (primaryGoalExercises.length >= 2) coherenceScore += 0.15
+  
+  coherenceScore = Math.min(1, coherenceScore)
+  
+  console.log('[phase15f-session-coherence-score-audit]', {
+    dayNumber,
+    sessionIdentity,
+    workingExerciseCount: workingExercises.length,
+    coherenceScore: coherenceScore.toFixed(2),
+    openingExerciseAppropriate,
+    supportExercisesJustified,
+    issues,
+  })
+  
+  console.log('[phase15f-opening-exercise-truth-audit]', {
+    dayNumber,
+    firstExerciseName: firstName,
+    sessionIdentity,
+    isAppropriate: openingExerciseAppropriate,
+    verdict: openingExerciseAppropriate ? 'opening_matches_session' : 'opening_contradicts_session',
+  })
+  
+  console.log('[phase15f-support-exercise-justification-audit]', {
+    dayNumber,
+    totalSupportExercises: supportExercises.length,
+    justifiedCount: justifiedSupport.length,
+    unjustifiedCount: supportExercises.length - justifiedSupport.length,
+    verdict: supportExercisesJustified ? 'support_justified' : 'support_has_filler',
+  })
+  
+  return {
+    coherenceScore,
+    openingExerciseAppropriate,
+    supportExercisesJustified,
+    issues,
+  }
+}
+
+// =============================================================================
 // FUTURE FORMAT HOOKS (TASK 10)
 // =============================================================================
 

@@ -1776,6 +1776,28 @@ export default function ProgramPage() {
   generationStage = 'validating_shape'
   console.log('[program-build] STAGE 3: Validating program shape...')
   
+  // [PHASE 16V] EXACT SHAPE SNAPSHOT - captures builder return BEFORE any validation throws
+  const firstSessionForSnapshot = (newProgram as AdaptiveProgram)?.sessions?.[0]
+  console.log('[phase16v-main-builder-shape-snapshot-audit]', {
+    flowName: 'main_generation',
+    hasProgram: newProgram !== null && newProgram !== undefined,
+    typeofProgram: typeof newProgram,
+    hasId: !!(newProgram as AdaptiveProgram)?.id,
+    idValue: (newProgram as AdaptiveProgram)?.id ?? null,
+    hasSessionsKey: 'sessions' in (newProgram || {}),
+    isSessionsArray: Array.isArray((newProgram as AdaptiveProgram)?.sessions),
+    sessionCount: (newProgram as AdaptiveProgram)?.sessions?.length ?? 0,
+    primaryGoal: (newProgram as AdaptiveProgram)?.primaryGoal ?? null,
+    secondaryGoal: (newProgram as AdaptiveProgram)?.secondaryGoal ?? null,
+    hasSchedule: !!(newProgram as AdaptiveProgram)?.scheduleMode,
+    topLevelKeys: newProgram ? Object.keys(newProgram).slice(0, 15) : [],
+    firstSessionKeys: firstSessionForSnapshot ? Object.keys(firstSessionForSnapshot).slice(0, 12) : [],
+    firstSessionFocus: firstSessionForSnapshot?.focus ?? null,
+    firstSessionDayNumber: firstSessionForSnapshot?.dayNumber ?? null,
+    firstSessionExerciseCount: firstSessionForSnapshot?.exercises?.length ?? 0,
+    verdict: (newProgram as AdaptiveProgram)?.id && Array.isArray((newProgram as AdaptiveProgram)?.sessions) && (newProgram as AdaptiveProgram)?.sessions?.length > 0 ? 'shape_valid' : 'shape_invalid',
+  })
+  
   // [PHASE 16N] Shape validation audit
   console.log('[phase16n-program-shape-validation-audit]', {
     flowName: 'main_generation',
@@ -2147,6 +2169,10 @@ export default function ProgramPage() {
         // [PHASE 16Q] Now distinguishes builder errors from page validation errors
         const isPageValidationError = isProgramPageValidationError(err)
         const isBuilderError = isBuilderGenerationError(err)
+        // [PHASE 16V] FIX: Define isGenerationError (either page or builder error)
+        const isGenerationError = isPageValidationError || isBuilderError
+        // [PHASE 16V] FIX: Define isAsyncContractFailure check
+        const isAsyncContractFailure = isPageValidationError && err.subCode === 'builder_result_unresolved_promise'
         
         // [PHASE 16Q] Preserve exact code/stage/subCode from structured errors
         let errorCode: GenerationErrorCode
@@ -2265,6 +2291,8 @@ export default function ProgramPage() {
         // [PHASE 16Q] Use already-extracted errorSubCode from structured errors
         // Only fall back to string matching if no structured subCode was found
         let subCode: BuildAttemptSubCode = errorSubCode
+        // [PHASE 16V] FIX: Define structuredSubCode for audit logging (capture before fallback matching)
+        const structuredSubCode: BuildAttemptSubCode = errorSubCode
         
         // If we already have a subCode from structured error, use it
         if (subCode !== 'none') {
@@ -2471,6 +2499,23 @@ export default function ProgramPage() {
           errorCode: errorCode,
           subCode: subCode,
           verdict: 'live_failure_promoted_to_active_banner',
+        })
+        
+        // [PHASE 16V] Live failure payload audit - exact payload before setLastBuildResult
+        console.log('[phase16v-live-failure-payload-audit]', {
+          flowName: 'main_generation',
+          code: failedResultWithMetadata.errorCode,
+          stage: failedResultWithMetadata.stage,
+          subCode: failedResultWithMetadata.subCode,
+          failureStep: failedResultWithMetadata.failureStep ?? null,
+          failureMiddleStep: failedResultWithMetadata.failureMiddleStep ?? null,
+          failureDayNumber: failedResultWithMetadata.failureDayNumber ?? null,
+          failureFocus: failedResultWithMetadata.failureFocus ?? null,
+          failureReason: failedResultWithMetadata.failureReason?.slice(0, 80) ?? null,
+          userMessage: failedResultWithMetadata.userMessage?.slice(0, 80) ?? null,
+          runtimeSessionId: failedResultWithMetadata.runtimeSessionId,
+          hydratedFromStorage: failedResultWithMetadata.hydratedFromStorage,
+          verdict: 'payload_ready_for_state',
         })
         
         setLastBuildResult(failedResultWithMetadata)
@@ -2895,6 +2940,28 @@ export default function ProgramPage() {
         // [program-build] REGEN STAGE 4: Validate program shape
         regenerateStage = 'validating_shape'
         console.log('[program-build] REGEN STAGE 4: Validating program shape...')
+        
+        // [PHASE 16V] EXACT SHAPE SNAPSHOT - captures builder return BEFORE any validation throws
+        const firstRegenSessionForSnapshot = (newProgram as AdaptiveProgram)?.sessions?.[0]
+        console.log('[phase16v-regen-builder-shape-snapshot-audit]', {
+          flowName: 'regeneration',
+          hasProgram: newProgram !== null && newProgram !== undefined,
+          typeofProgram: typeof newProgram,
+          hasId: !!(newProgram as AdaptiveProgram)?.id,
+          idValue: (newProgram as AdaptiveProgram)?.id ?? null,
+          hasSessionsKey: 'sessions' in (newProgram || {}),
+          isSessionsArray: Array.isArray((newProgram as AdaptiveProgram)?.sessions),
+          sessionCount: (newProgram as AdaptiveProgram)?.sessions?.length ?? 0,
+          primaryGoal: (newProgram as AdaptiveProgram)?.primaryGoal ?? null,
+          secondaryGoal: (newProgram as AdaptiveProgram)?.secondaryGoal ?? null,
+          hasSchedule: !!(newProgram as AdaptiveProgram)?.scheduleMode,
+          topLevelKeys: newProgram ? Object.keys(newProgram).slice(0, 15) : [],
+          firstSessionKeys: firstRegenSessionForSnapshot ? Object.keys(firstRegenSessionForSnapshot).slice(0, 12) : [],
+          firstSessionFocus: firstRegenSessionForSnapshot?.focus ?? null,
+          firstSessionDayNumber: firstRegenSessionForSnapshot?.dayNumber ?? null,
+          firstSessionExerciseCount: firstRegenSessionForSnapshot?.exercises?.length ?? 0,
+          verdict: (newProgram as AdaptiveProgram)?.id && Array.isArray((newProgram as AdaptiveProgram)?.sessions) && (newProgram as AdaptiveProgram)?.sessions?.length > 0 ? 'shape_valid' : 'shape_invalid',
+        })
         
         // [PHASE 16N] Shape validation audit
         console.log('[phase16n-program-shape-validation-audit]', {
@@ -3652,6 +3719,10 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
         // [PHASE 16Q] Now distinguishes page validation errors from builder errors
         const isPageValidationError = isProgramPageValidationError(err)
         const isBuilderError = isBuilderGenerationError(err)
+        // [PHASE 16V] FIX: Define isGenerationError (either page or builder error)
+        const isGenerationError = isPageValidationError || isBuilderError
+        // [PHASE 16V] FIX: Define isAsyncContractFailure check
+        const isAsyncContractFailure = isPageValidationError && err.subCode === 'builder_result_unresolved_promise'
         
         // [PHASE 16Q] Preserve exact code/stage/subCode from structured errors
         let errorCode: GenerationErrorCode
@@ -3742,6 +3813,8 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
         
         // [PHASE 16Q] Use already-extracted errorSubCode from structured errors
         let subCode: BuildAttemptSubCode = errorSubCode
+        // [PHASE 16V] FIX: Define structuredSubCode for audit logging (capture before fallback matching)
+        const structuredSubCode: BuildAttemptSubCode = errorSubCode
         
         // If we already have a subCode from structured error, use it
         if (subCode !== 'none') {
@@ -3936,6 +4009,23 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
           errorCode: errorCode,
           subCode: subCode,
           verdict: 'live_failure_promoted_to_active_banner',
+        })
+        
+        // [PHASE 16V] Live failure payload audit - exact payload before setLastBuildResult
+        console.log('[phase16v-live-failure-payload-audit]', {
+          flowName: 'regeneration',
+          code: regenFailedResultWithMetadata.errorCode,
+          stage: regenFailedResultWithMetadata.stage,
+          subCode: regenFailedResultWithMetadata.subCode,
+          failureStep: regenFailedResultWithMetadata.failureStep ?? null,
+          failureMiddleStep: regenFailedResultWithMetadata.failureMiddleStep ?? null,
+          failureDayNumber: regenFailedResultWithMetadata.failureDayNumber ?? null,
+          failureFocus: regenFailedResultWithMetadata.failureFocus ?? null,
+          failureReason: regenFailedResultWithMetadata.failureReason?.slice(0, 80) ?? null,
+          userMessage: regenFailedResultWithMetadata.userMessage?.slice(0, 80) ?? null,
+          runtimeSessionId: regenFailedResultWithMetadata.runtimeSessionId,
+          hydratedFromStorage: regenFailedResultWithMetadata.hydratedFromStorage,
+          verdict: 'payload_ready_for_state',
         })
         
         setLastBuildResult(regenFailedResultWithMetadata)
@@ -4633,6 +4723,29 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
                 - truthGatedBuildResult exists (passed truth-gate)
                 - NOT hydrated from storage (must be live from current runtime)
                 - runtimeSessionId matches current session */}
+            {/* [PHASE 16V] Amber banner truth audit - logged on every render attempt */}
+            {(() => {
+              const shouldRender = !!(generationError && 
+                truthGatedBuildResult && 
+                truthGatedBuildResult.hydratedFromStorage !== true &&
+                truthGatedBuildResult.runtimeSessionId === runtimeSessionIdRef.current)
+              
+              if (generationError || truthGatedBuildResult) {
+                console.log('[phase16v-amber-banner-truth-audit]', {
+                  generationError: generationError?.slice(0, 60) ?? null,
+                  truthGatedCode: truthGatedBuildResult?.errorCode ?? null,
+                  truthGatedStage: truthGatedBuildResult?.stage ?? null,
+                  truthGatedSubCode: truthGatedBuildResult?.subCode ?? null,
+                  truthGatedFailureStep: truthGatedBuildResult?.failureStep ?? null,
+                  truthGatedFailureReason: truthGatedBuildResult?.failureReason?.slice(0, 60) ?? null,
+                  hydratedFromStorage: truthGatedBuildResult?.hydratedFromStorage ?? null,
+                  runtimeSessionId: truthGatedBuildResult?.runtimeSessionId ?? null,
+                  currentRuntimeSessionId: runtimeSessionIdRef.current,
+                  renderVerdict: shouldRender ? 'will_render' : 'suppressed',
+                })
+              }
+              return null
+            })()}
             {generationError && 
              truthGatedBuildResult && 
              truthGatedBuildResult.hydratedFromStorage !== true &&

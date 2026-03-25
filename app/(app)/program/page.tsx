@@ -87,6 +87,71 @@ import type { AdjustmentRebuildRequest, AdjustmentRebuildResult } from '@/compon
 import { saveCanonicalProfile } from '@/lib/canonical-profile-service'
 
 // ==========================================================================
+// [PHASE 16Q] STRUCTURED PAGE VALIDATION ERROR
+// Provides exact error classification so page validation failures are NOT
+// collapsed into 'unknown_generation_failure' in catch blocks
+// ==========================================================================
+
+/** Allowed error codes for page-side validation errors */
+type PageValidationErrorCode = 'validation_failed' | 'snapshot_save_failed' | 'unknown_generation_failure'
+
+/** Allowed subCodes for page-side validation errors */
+type PageValidationSubCode = 
+  | 'program_null'
+  | 'program_missing_id'
+  | 'sessions_not_array'
+  | 'sessions_empty'
+  | 'session_item_invalid'
+  | 'session_missing_day_number'
+  | 'session_missing_focus'
+  | 'session_exercises_not_array'
+  | 'save_verification_failed'
+
+/**
+ * Structured error for page-side validation failures.
+ * This allows catch blocks to distinguish page validation errors from builder errors.
+ */
+class ProgramPageValidationError extends Error {
+  readonly code: PageValidationErrorCode
+  readonly stage: string
+  readonly subCode: PageValidationSubCode
+  readonly context?: Record<string, unknown>
+  
+  constructor(
+    code: PageValidationErrorCode,
+    stage: string,
+    subCode: PageValidationSubCode,
+    message: string,
+    context?: Record<string, unknown>
+  ) {
+    super(message)
+    this.name = 'ProgramPageValidationError'
+    this.code = code
+    this.stage = stage
+    this.subCode = subCode
+    this.context = context
+  }
+}
+
+/**
+ * Type guard to check if error is a ProgramPageValidationError
+ */
+function isProgramPageValidationError(err: unknown): err is ProgramPageValidationError {
+  return err instanceof ProgramPageValidationError
+}
+
+/**
+ * Type guard to check if error is a builder GenerationError
+ */
+function isBuilderGenerationError(err: unknown): err is { code: string; stage: string; context?: Record<string, unknown> } {
+  return err !== null && 
+    typeof err === 'object' && 
+    'code' in err && 
+    'stage' in err &&
+    !(err instanceof ProgramPageValidationError)
+}
+
+// ==========================================================================
 // [PHASE 9 TASK 1] SAFE ERROR BOUNDARY FOR PROGRAM DISPLAY
 // Uses React class component ErrorBoundary pattern to safely catch render errors
 // WITHOUT calling setState during render (which causes infinite loops)
@@ -1507,30 +1572,80 @@ export default function ProgramPage() {
     verdict: newProgram?.id && newProgram?.sessions?.length > 0 ? 'valid' : 'invalid',
   })
   
+  // [PHASE 16Q] Structured validation throws - preserved end-to-end
   if (!newProgram) {
-  throw new Error('program_null: generateAdaptiveProgram returned null/undefined')
+    throw new ProgramPageValidationError(
+      'validation_failed', 'validating_shape', 'program_null',
+      'generateAdaptiveProgram returned null/undefined'
+    )
   }
   if (!newProgram.id) {
-  throw new Error('program_missing_id: program has no id field')
+    throw new ProgramPageValidationError(
+      'validation_failed', 'validating_shape', 'program_missing_id',
+      'program has no id field'
+    )
   }
   if (!Array.isArray(newProgram.sessions)) {
-          throw new Error('sessions_not_array: program.sessions is not an array')
-        }
-        if (newProgram.sessions.length === 0) {
-          throw new Error('sessions_empty: program has zero sessions')
-        }
+    throw new ProgramPageValidationError(
+      'validation_failed', 'validating_shape', 'sessions_not_array',
+      'program.sessions is not an array'
+    )
+  }
+  if (newProgram.sessions.length === 0) {
+    throw new ProgramPageValidationError(
+      'validation_failed', 'validating_shape', 'sessions_empty',
+      'program has zero sessions'
+    )
+  }
         
-        // [program-build] STAGE 4: Validate session content
-        generationStage = 'validating_sessions'
-        console.log('[program-build] STAGE 4: Validating session content...')
-        const sessionStats = newProgram.sessions.map((s, idx) => ({
-          index: idx,
-          dayNumber: s?.dayNumber,
-          hasExercises: Array.isArray(s?.exercises),
-          exerciseCount: s?.exercises?.length || 0,
-          focus: s?.focus || 'unknown',
-        }))
-        console.log('[program-build] Session stats:', sessionStats)
+  // [program-build] STAGE 4: Validate session content
+  generationStage = 'validating_sessions'
+  console.log('[program-build] STAGE 4: Validating session content...')
+  
+  // [PHASE 16Q] Session-level validation with structured errors
+  const invalidSessions: Array<{ index: number; reason: string }> = []
+  for (let i = 0; i < newProgram.sessions.length; i++) {
+    const session = newProgram.sessions[i]
+    if (!session) {
+      invalidSessions.push({ index: i, reason: 'session_item_invalid' })
+      continue
+    }
+    if (typeof session.dayNumber !== 'number') {
+      invalidSessions.push({ index: i, reason: 'session_missing_day_number' })
+    }
+    if (!session.focus) {
+      invalidSessions.push({ index: i, reason: 'session_missing_focus' })
+    }
+    if (!Array.isArray(session.exercises)) {
+      invalidSessions.push({ index: i, reason: 'session_exercises_not_array' })
+    }
+  }
+  
+  console.log('[phase16q-page-session-shape-audit]', {
+    sessionCount: newProgram.sessions.length,
+    invalidIndexes: invalidSessions.map(s => s.index),
+    invalidReasons: invalidSessions.map(s => s.reason),
+    finalVerdict: invalidSessions.length === 0 ? 'all_valid' : 'has_invalid_sessions',
+  })
+  
+  // Throw on first invalid session with specific subCode
+  if (invalidSessions.length > 0) {
+    const first = invalidSessions[0]
+    throw new ProgramPageValidationError(
+      'validation_failed', 'validating_sessions', first.reason as PageValidationSubCode,
+      `Session ${first.index} failed: ${first.reason}`,
+      { invalidSessions }
+    )
+  }
+  
+  const sessionStats = newProgram.sessions.map((s, idx) => ({
+    index: idx,
+    dayNumber: s?.dayNumber,
+    hasExercises: Array.isArray(s?.exercises),
+    exerciseCount: s?.exercises?.length || 0,
+    focus: s?.focus || 'unknown',
+  }))
+  console.log('[program-build] Session stats:', sessionStats)
         
         const emptySessionIndices = sessionStats.filter(s => s.exerciseCount === 0).map(s => s.index)
         if (emptySessionIndices.length > 0) {
@@ -1739,36 +1854,87 @@ export default function ProgramPage() {
           finalVerdict: 'fully_fixed',
         })
       } catch (err) {
+        // [PHASE 16Q] Runtime marker for catch block
+        console.log('[phase16q-runtime-marker]', {
+          file: 'app/(app)/program/page.tsx',
+          location: 'main_generation_catch',
+          marker: 'PHASE_16Q_RUNTIME_MARKER',
+        })
+        
         // [program-rebuild-truth] FAILURE: Extract classified error code if available
-        // GenerationError from adaptive-program-builder provides stage + code
-        const isGenerationError = err && typeof err === 'object' && 'code' in err && 'stage' in err
-        const errorCode = (isGenerationError ? (err as { code: string }).code : 'unknown_generation_failure') as GenerationErrorCode
-        const errorStage = isGenerationError ? (err as { stage: string }).stage : generationStage
+        // [PHASE 16Q] Now distinguishes builder errors from page validation errors
+        const isPageValidationError = isProgramPageValidationError(err)
+        const isBuilderError = isBuilderGenerationError(err)
+        
+        // [PHASE 16Q] Preserve exact code/stage/subCode from structured errors
+        let errorCode: GenerationErrorCode
+        let errorStage: string
+        let errorSubCode: BuildAttemptSubCode = 'none'
+        
+        if (isPageValidationError) {
+          // Page validation error - preserve exact classification
+          errorCode = err.code as GenerationErrorCode
+          errorStage = err.stage
+          errorSubCode = err.subCode as BuildAttemptSubCode
+        } else if (isBuilderError) {
+          // Builder generation error - preserve its classification
+          errorCode = (err as { code: string }).code as GenerationErrorCode
+          errorStage = (err as { stage: string }).stage
+          const builderSubCode = (err as { context?: { subCode?: string } }).context?.subCode
+          if (builderSubCode) errorSubCode = builderSubCode as BuildAttemptSubCode
+        } else {
+          // True unknown error
+          errorCode = 'unknown_generation_failure'
+          errorStage = generationStage
+        }
+        
         const errorMessage = err instanceof Error ? err.message : 'Unknown error'
         const errorStack = err instanceof Error ? err.stack : undefined
-        const errorContext = isGenerationError ? (err as { context?: Record<string, unknown> }).context : undefined
+        const errorContext = isBuilderError ? (err as { context?: Record<string, unknown> }).context : 
+          isPageValidationError ? err.context : undefined
         
-        // [PHASE 16N/16P] Enhanced failure source audit with specific page validation failures
-        const isAsyncContractFailure = errorMessage.includes('builder_result_unresolved_promise')
-        const isShapeValidationFailure = errorMessage.includes('program_null') || 
-          errorMessage.includes('program_missing_id') || 
-          errorMessage.includes('sessions_not_array') || 
-          errorMessage.includes('sessions_empty')
-        const isSessionValidationFailure = generationStage === 'validating_sessions'
-        const isSaveVerificationFailure = generationStage === 'save_verification'
+        // [PHASE 16Q] Failure contract preservation audit
+        console.log('[phase16q-page-failure-contract-preservation-audit]', {
+          incomingCode: isPageValidationError ? err.code : isBuilderError ? (err as { code: string }).code : 'none',
+          incomingStage: isPageValidationError ? err.stage : isBuilderError ? (err as { stage: string }).stage : 'none',
+          incomingSubCode: isPageValidationError ? err.subCode : 'none',
+          finalCode: errorCode,
+          finalStage: errorStage,
+          finalSubCode: errorSubCode,
+          preservationVerdict: (isPageValidationError || isBuilderError) ? 'preserved' : 'unknown_fallback',
+        })
+        
+        // [PHASE 16Q] Flow classification verdict
+        console.log('[phase16q-main-flow-classification-verdict]', {
+          flowName: 'main_generation',
+          isPageValidationError,
+          isBuilderError,
+          errorCode,
+          errorStage,
+          errorSubCode,
+          collapsedToUnknown: errorCode === 'unknown_generation_failure' && !isPageValidationError && !isBuilderError,
+          verdict: errorCode !== 'unknown_generation_failure' || (!isPageValidationError && !isBuilderError) 
+            ? 'correctly_classified' : 'collapsed_to_unknown',
+        })
         
         // Determine precise failure source
+        const isAsyncContractFailure = errorMessage.includes('builder_result_unresolved_promise')
         let failureSource: string
-        if (isGenerationError) {
+        if (isBuilderError) {
           failureSource = 'builder_threw_generation_error'
+        } else if (isPageValidationError) {
+          // Use specific page failure source based on stage
+          if (err.stage === 'validating_shape') {
+            failureSource = 'program_page_shape_validation_failure'
+          } else if (err.stage === 'validating_sessions') {
+            failureSource = 'program_page_session_validation_failure'
+          } else if (err.stage === 'save_verification') {
+            failureSource = 'program_page_save_verification_failure'
+          } else {
+            failureSource = 'program_page_shape_validation_failure'
+          }
         } else if (isAsyncContractFailure) {
           failureSource = 'program_page_async_contract_failure'
-        } else if (isShapeValidationFailure) {
-          failureSource = 'program_page_shape_validation_failure'
-        } else if (isSessionValidationFailure) {
-          failureSource = 'program_page_session_validation_failure'
-        } else if (isSaveVerificationFailure) {
-          failureSource = 'program_page_save_verification_failure'
         } else {
           failureSource = 'real_unknown_orchestration_failure'
         }
@@ -1779,15 +1945,13 @@ export default function ProgramPage() {
           errorCode,
           errorStage,
           errorMessage,
-          isGenerationError,
+          isPageValidationError,
+          isBuilderError,
           isAsyncContractFailure,
-          isShapeValidationFailure,
-          isSessionValidationFailure,
-          isSaveVerificationFailure,
         })
         
         // Log unclassified errors with searchable prefix for root cause analysis
-        if (!isGenerationError) {
+        if (!isBuilderError && !isPageValidationError) {
           console.error('[program-root-cause] Unclassified error caught in handleGenerate:', {
             name: err instanceof Error ? err.name : 'UnknownError',
             message: errorMessage,
@@ -1796,38 +1960,13 @@ export default function ProgramPage() {
           })
         }
         
-        // [program-rebuild-truth] Determine sub-code for more specific messaging
-        // Read structured subCode from GenerationError context FIRST
-        const structuredSubCode = isGenerationError 
-          ? (err as { context?: Record<string, unknown> }).context?.subCode as string | undefined
-          : undefined
+        // [PHASE 16Q] Use already-extracted errorSubCode from structured errors
+        // Only fall back to string matching if no structured subCode was found
+        let subCode: BuildAttemptSubCode = errorSubCode
         
-        // Known BuildAttemptSubCode values from structured context
-        const knownSubCodes = [
-          'empty_structure_days', 'empty_final_session_array', 'session_count_mismatch',
-          'session_save_blocked', 'assembly_unknown_failure', 'empty_exercise_pool',
-          'session_validation_failed', 'normalization_failed', 'display_safety_failed',
-          'effective_selection_invalid', 'session_middle_helper_failed',
-          'session_variant_generation_failed', 'finisher_helper_failed',
-          'session_has_no_exercises', 'post_session_mutation_failed', 'post_session_integrity_invalid',
-          'session_generation_failed', 'exercise_selection_returned_null',
-          // High-frequency schedule failures (TASK 7)
-          'unsupported_high_frequency_structure', 'insufficient_templates_for_requested_days',
-          'recovery_distribution_conflict',
-          // Internal builder runtime errors (ERROR PROPAGATION FIX)
-          'internal_builder_reference_error', 'internal_builder_type_error',
-          // Session assembly root fix subcodes (SESSION ASSEMBLY ROOT FIX)
-          'no_valid_candidate_after_filtering', 'selected_candidate_invalidated_by_constraints',
-          'equipment_filtered_all_candidates', 'hybrid_structure_unresolvable',
-          'final_validation_failed', 'equipment_adaptation_zeroed_session',
-          'validation_zeroed_session', 'mapping_zeroed_session',
-        ]
-        
-        let subCode: BuildAttemptSubCode = 'none'
-        
-        // Prefer structured subCode if it's a known value
-        if (structuredSubCode && knownSubCodes.includes(structuredSubCode)) {
-          subCode = structuredSubCode as BuildAttemptSubCode
+        // If we already have a subCode from structured error, use it
+        if (subCode !== 'none') {
+          // Already set from structured error - no action needed
         } else {
           // Fall back to string matching
           // Internal builder runtime errors - check first (ERROR PROPAGATION FIX)
@@ -2358,21 +2497,71 @@ export default function ProgramPage() {
           verdict: newProgram?.id && newProgram?.sessions?.length > 0 ? 'valid' : 'invalid',
         })
         
+        // [PHASE 16Q] Structured validation throws for regeneration
         if (!newProgram) {
-          throw new Error('program_null: generateAdaptiveProgram returned null/undefined')
+          throw new ProgramPageValidationError(
+            'validation_failed', 'validating_shape', 'program_null',
+            'generateAdaptiveProgram returned null/undefined'
+          )
         }
         if (!newProgram.id) {
-          throw new Error('program_missing_id: program has no id field')
+          throw new ProgramPageValidationError(
+            'validation_failed', 'validating_shape', 'program_missing_id',
+            'program has no id field'
+          )
         }
         if (!Array.isArray(newProgram.sessions)) {
-          throw new Error('sessions_not_array: program.sessions is not an array')
+          throw new ProgramPageValidationError(
+            'validation_failed', 'validating_shape', 'sessions_not_array',
+            'program.sessions is not an array'
+          )
         }
         if (newProgram.sessions.length === 0) {
-          throw new Error('sessions_empty: program has zero sessions')
+          throw new ProgramPageValidationError(
+            'validation_failed', 'validating_shape', 'sessions_empty',
+            'program has zero sessions'
+          )
         }
         
         // [program-build] REGEN STAGE 5: Validate session content
         regenerateStage = 'validating_sessions'
+        
+        // [PHASE 16Q] Session-level validation for regeneration
+        const regenInvalidSessions: Array<{ index: number; reason: string }> = []
+        for (let i = 0; i < newProgram.sessions.length; i++) {
+          const session = newProgram.sessions[i]
+          if (!session) {
+            regenInvalidSessions.push({ index: i, reason: 'session_item_invalid' })
+            continue
+          }
+          if (typeof session.dayNumber !== 'number') {
+            regenInvalidSessions.push({ index: i, reason: 'session_missing_day_number' })
+          }
+          if (!session.focus) {
+            regenInvalidSessions.push({ index: i, reason: 'session_missing_focus' })
+          }
+          if (!Array.isArray(session.exercises)) {
+            regenInvalidSessions.push({ index: i, reason: 'session_exercises_not_array' })
+          }
+        }
+        
+        console.log('[phase16q-page-session-shape-audit]', {
+          flowName: 'regeneration',
+          sessionCount: newProgram.sessions.length,
+          invalidIndexes: regenInvalidSessions.map(s => s.index),
+          invalidReasons: regenInvalidSessions.map(s => s.reason),
+          finalVerdict: regenInvalidSessions.length === 0 ? 'all_valid' : 'has_invalid_sessions',
+        })
+        
+        if (regenInvalidSessions.length > 0) {
+          const first = regenInvalidSessions[0]
+          throw new ProgramPageValidationError(
+            'validation_failed', 'validating_sessions', first.reason as PageValidationSubCode,
+            `Session ${first.index} failed: ${first.reason}`,
+            { invalidSessions: regenInvalidSessions }
+          )
+        }
+        
         const sessionStats = newProgram.sessions.map((s, idx) => ({
           index: idx,
           exerciseCount: s?.exercises?.length || 0,
@@ -2944,16 +3133,57 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
           alignmentReasons,
         })
       } catch (err) {
+        // [PHASE 16Q] Runtime marker for regeneration catch
+        console.log('[phase16q-runtime-marker]', {
+          file: 'app/(app)/program/page.tsx',
+          location: 'regeneration_catch',
+          marker: 'PHASE_16Q_RUNTIME_MARKER',
+        })
+        
         // [program-rebuild-truth] REGEN FAILURE: Extract classified error
-        const isGenerationError = err && typeof err === 'object' && 'code' in err && 'stage' in err
-        const errorCode = (isGenerationError ? (err as { code: string }).code : 'unknown_generation_failure') as GenerationErrorCode
-        const errorStage = isGenerationError ? (err as { stage: string }).stage : regenerateStage
+        // [PHASE 16Q] Now distinguishes page validation errors from builder errors
+        const isPageValidationError = isProgramPageValidationError(err)
+        const isBuilderError = isBuilderGenerationError(err)
+        
+        // [PHASE 16Q] Preserve exact code/stage/subCode from structured errors
+        let errorCode: GenerationErrorCode
+        let errorStage: string
+        let errorSubCode: BuildAttemptSubCode = 'none'
+        
+        if (isPageValidationError) {
+          errorCode = err.code as GenerationErrorCode
+          errorStage = err.stage
+          errorSubCode = err.subCode as BuildAttemptSubCode
+        } else if (isBuilderError) {
+          errorCode = (err as { code: string }).code as GenerationErrorCode
+          errorStage = (err as { stage: string }).stage
+          const builderSubCode = (err as { context?: { subCode?: string } }).context?.subCode
+          if (builderSubCode) errorSubCode = builderSubCode as BuildAttemptSubCode
+        } else {
+          errorCode = 'unknown_generation_failure'
+          errorStage = regenerateStage
+        }
+        
         const errorMessage = err instanceof Error ? err.message : 'Unknown error'
         const errorStack = err instanceof Error ? err.stack : undefined
-        const errorContext = isGenerationError ? (err as { context?: Record<string, unknown> }).context : undefined
+        const errorContext = isBuilderError ? (err as { context?: Record<string, unknown> }).context :
+          isPageValidationError ? err.context : undefined
+        
+        // [PHASE 16Q] Flow classification verdict for regeneration
+        console.log('[phase16q-regenerate-flow-classification-verdict]', {
+          flowName: 'regeneration',
+          isPageValidationError,
+          isBuilderError,
+          errorCode,
+          errorStage,
+          errorSubCode,
+          collapsedToUnknown: errorCode === 'unknown_generation_failure' && !isPageValidationError && !isBuilderError,
+          verdict: errorCode !== 'unknown_generation_failure' || (!isPageValidationError && !isBuilderError)
+            ? 'correctly_classified' : 'collapsed_to_unknown',
+        })
         
         // Log unclassified errors with searchable prefix for root cause analysis
-        if (!isGenerationError) {
+        if (!isBuilderError && !isPageValidationError) {
           console.error('[program-root-cause] Unclassified error caught in handleRegenerate:', {
             name: err instanceof Error ? err.name : 'UnknownError',
             message: errorMessage,
@@ -2962,60 +3192,28 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
           })
         }
         
-        // [program-rebuild-truth] Determine sub-code
-        // Read structured subCode from GenerationError context FIRST
-        const structuredSubCode = isGenerationError 
-          ? (err as { context?: Record<string, unknown> }).context?.subCode as string | undefined
-          : undefined
+        // [PHASE 16Q] Use already-extracted errorSubCode from structured errors
+        let subCode: BuildAttemptSubCode = errorSubCode
         
-        // Known BuildAttemptSubCode values from structured context
-        const knownSubCodes = [
-          'empty_structure_days', 'empty_final_session_array', 'session_count_mismatch',
-          'session_save_blocked', 'assembly_unknown_failure', 'empty_exercise_pool',
-          'session_validation_failed', 'normalization_failed', 'display_safety_failed',
-          'effective_selection_invalid', 'session_middle_helper_failed',
-          'session_variant_generation_failed', 'finisher_helper_failed',
-          'session_has_no_exercises', 'post_session_mutation_failed', 'post_session_integrity_invalid',
-          'session_generation_failed', 'exercise_selection_returned_null',
-          // High-frequency schedule failures (TASK 7)
-          'unsupported_high_frequency_structure', 'insufficient_templates_for_requested_days',
-          'recovery_distribution_conflict',
-          // Internal builder runtime errors (ERROR PROPAGATION FIX)
-          'internal_builder_reference_error', 'internal_builder_type_error',
-          // Session assembly root fix subcodes (SESSION ASSEMBLY ROOT FIX)
-          'no_valid_candidate_after_filtering', 'selected_candidate_invalidated_by_constraints',
-          'equipment_filtered_all_candidates', 'hybrid_structure_unresolvable',
-          'final_validation_failed', 'equipment_adaptation_zeroed_session',
-          'validation_zeroed_session', 'mapping_zeroed_session',
-        ]
-        
-        let subCode: BuildAttemptSubCode = 'none'
-        
-        // Prefer structured subCode if it's a known value
-        if (structuredSubCode && knownSubCodes.includes(structuredSubCode)) {
-          subCode = structuredSubCode as BuildAttemptSubCode
+        // If we already have a subCode from structured error, use it
+        if (subCode !== 'none') {
+          // Already set from structured error
         } else {
-          // Fall back to string matching
-          // Internal builder runtime errors - check first (ERROR PROPAGATION FIX)
+          // Fall back to string matching for builder errors without structured subCode
           if (errorMessage.includes('internal_builder_reference_error') || errorMessage.includes('is not defined')) subCode = 'internal_builder_reference_error'
           else if (errorMessage.includes('internal_builder_type_error') || errorMessage.includes('Cannot read properties of')) subCode = 'internal_builder_type_error'
-          // Session assembly root fix subcodes - use new precise subcodes (not old mappings)
           else if (errorMessage.includes('equipment_adaptation_zeroed_session')) subCode = 'equipment_adaptation_zeroed_session'
           else if (errorMessage.includes('mapping_zeroed_session')) subCode = 'mapping_zeroed_session'
           else if (errorMessage.includes('validation_zeroed_session')) subCode = 'validation_zeroed_session'
-          // High-frequency schedule failures (TASK 7)
           else if (errorMessage.includes('unsupported_high_frequency_structure')) subCode = 'unsupported_high_frequency_structure' as BuildAttemptSubCode
           else if (errorMessage.includes('session_save_blocked')) subCode = 'session_save_blocked'
           else if (errorMessage.includes('empty_structure_days')) subCode = 'empty_structure_days'
-          else if (errorMessage.includes('empty_final_session_array') || errorMessage.includes('sessions_empty')) subCode = 'empty_final_session_array'
+          else if (errorMessage.includes('empty_final_session_array')) subCode = 'empty_final_session_array'
           else if (errorMessage.includes('session_count_mismatch')) subCode = 'session_count_mismatch'
-          // Full lifecycle failure
           else if (errorMessage.includes('session_generation_failed')) subCode = 'session_generation_failed'
           else if (errorMessage.includes('exercise_selection_returned_null')) subCode = 'exercise_selection_returned_null'
-          // Post-session failures
           else if (errorMessage.includes('post_session_mutation_failed')) subCode = 'post_session_mutation_failed'
           else if (errorMessage.includes('post_session_integrity_invalid')) subCode = 'post_session_integrity_invalid'
-          // Middle-helper failures
           else if (errorMessage.includes('effective_selection_invalid')) subCode = 'effective_selection_invalid'
           else if (errorMessage.includes('session_middle_helper_failed')) subCode = 'session_middle_helper_failed'
           else if (errorMessage.includes('session_variant_generation_failed')) subCode = 'session_variant_generation_failed'
@@ -3371,11 +3569,66 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
         verdict: newProgram?.id && newProgram?.sessions?.length > 0 ? 'valid' : 'invalid',
       })
       
+      // [PHASE 16Q] Structured validation throws for adjustment rebuild
       if (!newProgram) {
-        throw new Error('Generation returned null')
+        throw new ProgramPageValidationError(
+          'validation_failed', 'validating_shape', 'program_null',
+          'generateAdaptiveProgram returned null'
+        )
       }
-      if (!newProgram.id || !newProgram.sessions?.length) {
-        throw new Error('Generated program has invalid structure')
+      if (!newProgram.id) {
+        throw new ProgramPageValidationError(
+          'validation_failed', 'validating_shape', 'program_missing_id',
+          'program has no id field'
+        )
+      }
+      if (!Array.isArray(newProgram.sessions)) {
+        throw new ProgramPageValidationError(
+          'validation_failed', 'validating_shape', 'sessions_not_array',
+          'program.sessions is not an array'
+        )
+      }
+      if (newProgram.sessions.length === 0) {
+        throw new ProgramPageValidationError(
+          'validation_failed', 'validating_shape', 'sessions_empty',
+          'program has zero sessions'
+        )
+      }
+      
+      // [PHASE 16Q] Session-level validation for adjustment rebuild
+      const adjInvalidSessions: Array<{ index: number; reason: string }> = []
+      for (let i = 0; i < newProgram.sessions.length; i++) {
+        const session = newProgram.sessions[i]
+        if (!session) {
+          adjInvalidSessions.push({ index: i, reason: 'session_item_invalid' })
+          continue
+        }
+        if (typeof session.dayNumber !== 'number') {
+          adjInvalidSessions.push({ index: i, reason: 'session_missing_day_number' })
+        }
+        if (!session.focus) {
+          adjInvalidSessions.push({ index: i, reason: 'session_missing_focus' })
+        }
+        if (!Array.isArray(session.exercises)) {
+          adjInvalidSessions.push({ index: i, reason: 'session_exercises_not_array' })
+        }
+      }
+      
+      console.log('[phase16q-page-session-shape-audit]', {
+        flowName: 'adjustment_rebuild',
+        sessionCount: newProgram.sessions.length,
+        invalidIndexes: adjInvalidSessions.map(s => s.index),
+        invalidReasons: adjInvalidSessions.map(s => s.reason),
+        finalVerdict: adjInvalidSessions.length === 0 ? 'all_valid' : 'has_invalid_sessions',
+      })
+      
+      if (adjInvalidSessions.length > 0) {
+        const first = adjInvalidSessions[0]
+        throw new ProgramPageValidationError(
+          'validation_failed', 'validating_sessions', first.reason as PageValidationSubCode,
+          `Session ${first.index} failed: ${first.reason}`,
+          { invalidSessions: adjInvalidSessions }
+        )
       }
       
       // [canonical-rebuild] TASK F: Verify session count matches expected
@@ -3391,7 +3644,10 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
       // [canonical-rebuild] STAGE 4: Verify save
       const savedState = programModules.getProgramState()
       if (!savedState.adaptiveProgram || savedState.adaptiveProgram.id !== newProgram.id) {
-        throw new Error('Save verification failed - program IDs do not match')
+        throw new ProgramPageValidationError(
+          'snapshot_save_failed', 'save_verification', 'save_verification_failed',
+          'Save verification failed - program IDs do not match'
+        )
       }
       
       // [canonical-rebuild] STAGE 5: Update freshness identity
@@ -3520,6 +3776,27 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
       return { success: true, actualSessionCount: newProgram.sessions.length }
       
     } catch (error) {
+      // [PHASE 16Q] Runtime marker for adjustment catch
+      console.log('[phase16q-runtime-marker]', {
+        file: 'app/(app)/program/page.tsx',
+        location: 'adjustment_rebuild_catch',
+        marker: 'PHASE_16Q_RUNTIME_MARKER',
+      })
+      
+      // [PHASE 16Q] Classify error for adjustment rebuild
+      const isPageValidationError = isProgramPageValidationError(error)
+      const isBuilderError = isBuilderGenerationError(error)
+      
+      console.log('[phase16q-adjustment-flow-classification-verdict]', {
+        flowName: 'adjustment_rebuild',
+        isPageValidationError,
+        isBuilderError,
+        errorCode: isPageValidationError ? error.code : isBuilderError ? (error as { code: string }).code : 'unknown',
+        errorStage: isPageValidationError ? error.stage : isBuilderError ? (error as { stage: string }).stage : 'unknown',
+        errorSubCode: isPageValidationError ? error.subCode : 'none',
+        verdict: isPageValidationError || isBuilderError ? 'correctly_classified' : 'collapsed_to_unknown',
+      })
+      
       console.error('[canonical-rebuild] FAILED:', error)
       
       // [canonical-rebuild] TASK E: Preserve last good program
@@ -3527,9 +3804,31 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
         console.log('[canonical-rebuild] Last good program preserved:', program.id)
       }
       
+      // [PHASE 16Q] Extract user-facing message from structured errors
+      let errorMessage = 'Rebuild failed unexpectedly'
+      if (isPageValidationError) {
+        // Use subCode to get user message from program-state
+        const subCode = error.subCode as BuildAttemptSubCode
+        // Import getErrorUserMessage is not available here, use inline mapping
+        const subCodeMessages: Record<string, string> = {
+          'program_null': 'The program builder returned no plan. Please try again.',
+          'program_missing_id': 'The generated plan was incomplete and could not be saved.',
+          'sessions_not_array': 'The generated plan had an invalid session format.',
+          'sessions_empty': 'The generated plan did not contain any sessions.',
+          'session_item_invalid': 'One session in the generated plan was malformed.',
+          'session_missing_day_number': 'A generated session was missing its training day.',
+          'session_missing_focus': 'A generated session was missing its focus.',
+          'session_exercises_not_array': 'A generated session had an invalid exercise list.',
+          'save_verification_failed': 'The plan could not be verified after saving. Please try again.',
+        }
+        errorMessage = subCodeMessages[subCode] || error.message
+      } else if (error instanceof Error) {
+        errorMessage = error.message
+      }
+      
       return { 
         success: false, 
-        error: error instanceof Error ? error.message : 'Rebuild failed unexpectedly' 
+        error: errorMessage
       }
     }
   }, [inputs, program, programModules])

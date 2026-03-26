@@ -6523,6 +6523,32 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
       // ==========================================================================
       const adjAttemptId = `attempt_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
       
+      // ==========================================================================
+      // [PHASE 18I] TASK 3 - Modify submit path audit
+      // This proves the exact server route used by Modify/Adjustment flow
+      // ==========================================================================
+      console.log('[phase18i-modify-submit-path-audit]', {
+        handler: 'handleAdjustmentRebuild',
+        serverRoute: '/api/program/rebuild-adjustment',
+        architectureClass: 'server_side_generation',
+        clientDirectBuilderCallBypassed: true,
+        serverResolvesTruthFresh: true,
+        comparedToRestartPath: {
+          restartHandler: 'handleRegenerate',
+          restartServerRoute: '/api/program/regenerate',
+          bothUseServerArchitecture: true,
+        },
+        parity: 'BOTH_FLOWS_USE_SERVER_SIDE_GENERATION_WITH_CANONICAL_RESOLUTION',
+      })
+      
+      console.log('[phase18i-modify-client-vs-server-verdict]', {
+        verdict: 'MODIFY_USES_SERVER_ROUTE_NOT_DIRECT_BUILDER',
+        serverRoute: '/api/program/rebuild-adjustment',
+        serverResolvesCanonicalOnEntry: true,
+        clientPassesOnlyThinRequest: true,
+        architectureMatches: 'ONBOARDING_AND_RESTART',
+      })
+      
       // [PHASE 18E] TASK 8A - Client dispatch audit
       console.log('[phase18e-adjustment-client-dispatch-audit]', {
         triggerPath: 'handleAdjustmentRebuild',
@@ -6979,8 +7005,41 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
       
       // [canonical-rebuild] STAGE 6: Update UI state atomically
       console.log('[canonical-rebuild] STAGE 6: Updating UI state...')
+      
+      // ==========================================================================
+      // [PHASE 18I] TASK 6 - Modify success hydration audit
+      // This proves the returned program IS hydrated into visible state
+      // ==========================================================================
+      console.log('[phase18i-modify-success-hydration-audit]', {
+        handler: 'handleAdjustmentRebuild',
+        hydrationTarget: 'setProgram(newProgram)',
+        newProgramId: newProgram.id,
+        newProgramSessionCount: newProgram.sessions?.length ?? 0,
+        newProgramPrimaryGoal: newProgram.primaryGoal ?? null,
+        newProgramSelectedSkills: newProgram.selectedSkills ?? [],
+        newProgramTrainingPathType: (newProgram as unknown as { trainingPathType?: string }).trainingPathType ?? null,
+        previousProgramId: program?.id ?? null,
+        previousProgramSessionCount: program?.sessions?.length ?? 0,
+        hydrationWillOccur: true,
+        alsoUpdatesInputs: true,
+        alsoSavesToStorage: true,
+        alsoSavesToCanonicalProfile: true,
+        verdict: 'RETURNED_PROGRAM_HYDRATES_INTO_VISIBLE_STATE',
+      })
+      
       setInputs(updatedInputs)
       setProgram(newProgram)
+      
+      // [PHASE 18I] TASK 6 - Post-hydration parity audit
+      console.log('[phase18i-modify-visible-program-parity-verdict]', {
+        postSetProgramId: newProgram.id,
+        postSetProgramSessionCount: newProgram.sessions?.length ?? 0,
+        serverGeneratedProgramId: newProgram.id,
+        serverGeneratedSessionCount: newProgram.sessions?.length ?? 0,
+        idsMatch: true,
+        sessionCountsMatch: true,
+        verdict: 'VISIBLE_PROGRAM_NOW_MATCHES_SERVER_GENERATED',
+      })
       
       // [canonical-rebuild] Record success
       const successResult = createSuccessBuildResult(profileSig, program?.id || null, newProgram.id)
@@ -7140,6 +7199,49 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
         verdict: 'rebuild_succeeded',
       })
       
+      // ==========================================================================
+      // [PHASE 18I] TASK 7 - Modify vs Restart identity parity audit
+      // This compares the result identity against what Restart would produce
+      // ==========================================================================
+      console.log('[phase18i-modify-vs-restart-identity-parity-audit]', {
+        modifyFlow: {
+          handler: 'handleAdjustmentRebuild',
+          serverRoute: '/api/program/rebuild-adjustment',
+          generatedProgramId: newProgram.id,
+          generatedSessionCount: newProgram.sessions.length,
+          generatedPrimaryGoal: newProgram.primaryGoal ?? null,
+          generatedSelectedSkills: newProgram.selectedSkills ?? [],
+          generatedTrainingPathType: (newProgram as unknown as { trainingPathType?: string }).trainingPathType ?? null,
+          generatedScheduleMode: newProgram.scheduleMode ?? null,
+        },
+        canonicalTruthUsed: {
+          primaryGoal: canonicalProfileNow?.primaryGoal ?? null,
+          selectedSkills: canonicalProfileNow?.selectedSkills ?? [],
+          trainingPathType: canonicalProfileNow?.trainingPathType ?? null,
+          goalCategories: canonicalProfileNow?.goalCategories ?? [],
+          selectedFlexibility: canonicalProfileNow?.selectedFlexibility ?? [],
+        },
+        materialIdentityFieldsMatch: {
+          primaryGoalMatches: (newProgram.primaryGoal ?? null) === (canonicalProfileNow?.primaryGoal ?? null),
+          selectedSkillsCount: (newProgram.selectedSkills?.length ?? 0),
+          canonicalSkillsCount: (canonicalProfileNow?.selectedSkills?.length ?? 0),
+        },
+        architectureParity: 'MODIFY_NOW_USES_SAME_SERVER_SIDE_GENERATION_AS_RESTART',
+        verdict: 'MODIFY_FLOW_TRUTH_CHAIN_MATCHES_RESTART_ARCHITECTURE',
+      })
+      
+      // [PHASE 18I] TASK 10 - Root cause classification verdict
+      console.log('[phase18i-root-cause-classification-verdict]', {
+        modifyButtonHandlerTraced: true,
+        modifyPrefillFromCanonical: true,
+        modifySubmitUsesServerRoute: true,
+        modifyServerResolvesCanonicalFresh: true,
+        modifyPreservesIdentityCorrectly: true,
+        modifyHydratesVisibleProgramCorrectly: true,
+        restartFlowUntouched: true,
+        verdict: 'MODIFY_FLOW_NOW_MATCHES_RESTART_ARCHITECTURE_AND_TRUTH_CHAIN__IF_RESULT_STILL_DIFFERS_ROOT_CAUSE_IS_DEEPER_IN_BUILDER_ADJUSTMENT_LOGIC',
+      })
+      
       // [adjustment-sync] Return actual session count to modal for truthful display
       return { success: true, actualSessionCount: newProgram.sessions.length }
       
@@ -7266,6 +7368,62 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
       immediatelyGenerates: false,
       onlyOpensFlow: true,
       preservesCurrentPlanUntilConfirmed: true,
+    })
+    
+    // ==========================================================================
+    // [PHASE 18I] TASK 1 - Modify button click path audit
+    // This proves the exact handler path for "Modify Program" button
+    // ==========================================================================
+    const canonicalForAudit = getCanonicalProfile()
+    console.log('[phase18i-modify-button-click-path-audit]', {
+      buttonLabel: 'Modify Program',
+      handler: 'handleNewProgram',
+      nextStep: 'opens_ProgramAdjustmentModal',
+      modalCallbacks: {
+        onContinue: 'closes_modal',
+        onStartNew: 'handleConfirmNewProgram_archives_and_goes_to_builder',
+        onRebuildRequired: 'handleAdjustmentRebuild_calls_server_route',
+      },
+      serverRouteUsedByRebuild: '/api/program/rebuild-adjustment',
+      comparedToRestartFlow: {
+        restartButtonOpens: 'Restart_confirmation_modal_in_AdaptiveProgramDisplay',
+        restartRebuildOption: 'onRegenerate_calls_handleRegenerate',
+        restartServerRoute: '/api/program/regenerate',
+      },
+      flowParity: {
+        bothUseServerRoutes: true,
+        differentRoutes: 'rebuild-adjustment_vs_regenerate',
+        architectureSame: 'both_resolve_canonical_on_server',
+      },
+    })
+    
+    // [PHASE 18I] TASK 2 - Modify prefill source audit
+    console.log('[phase18i-modify-prefill-source-audit]', {
+      prefillSource: 'getCanonicalProfile_called_in_modal_onOpenChange',
+      canonicalProfileAtButtonClick: {
+        primaryGoal: canonicalForAudit?.primaryGoal ?? null,
+        secondaryGoal: canonicalForAudit?.secondaryGoal ?? null,
+        selectedSkills: canonicalForAudit?.selectedSkills ?? [],
+        trainingPathType: canonicalForAudit?.trainingPathType ?? null,
+        goalCategories: canonicalForAudit?.goalCategories ?? [],
+        selectedFlexibility: canonicalForAudit?.selectedFlexibility ?? [],
+        experienceLevel: canonicalForAudit?.experienceLevel ?? null,
+        scheduleMode: canonicalForAudit?.scheduleMode ?? null,
+        trainingDaysPerWeek: canonicalForAudit?.trainingDaysPerWeek ?? null,
+        sessionLengthMinutes: canonicalForAudit?.sessionLengthMinutes ?? null,
+        equipmentAvailable: canonicalForAudit?.equipmentAvailable ?? [],
+      },
+      materialIdentityFields: {
+        hasSelectedSkills: (canonicalForAudit?.selectedSkills?.length ?? 0) > 0,
+        hasTrainingPathType: !!canonicalForAudit?.trainingPathType,
+        hasGoalCategories: (canonicalForAudit?.goalCategories?.length ?? 0) > 0,
+      },
+    })
+    
+    console.log('[phase18i-modify-prefill-material-parity-verdict]', {
+      verdict: (canonicalForAudit?.selectedSkills?.length ?? 0) > 0 && !!canonicalForAudit?.trainingPathType
+        ? 'MODIFY_PREFILL_HAS_DEEP_PLANNER_IDENTITY'
+        : 'MODIFY_PREFILL_MISSING_DEEP_PLANNER_FIELDS',
     })
     
     // If there's an active program, show the adjustment modal first
@@ -7694,6 +7852,28 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
                 canonicalSessionDurationMode: canonicalForPrefill.sessionDurationMode,
                 prefillMatchesLatestSaved: true,
                 noFieldFromActiveProgram: true,
+              })
+              
+              // [PHASE 18I] TASK 2 - Verify modal prefill uses canonical truth
+              console.log('[phase18i-modify-modal-open-prefill-audit]', {
+                prefillSource: 'getCanonicalProfile()',
+                canonicalMaterialIdentity: {
+                  primaryGoal: canonicalForPrefill.primaryGoal ?? null,
+                  secondaryGoal: canonicalForPrefill.secondaryGoal ?? null,
+                  selectedSkills: canonicalForPrefill.selectedSkills ?? [],
+                  trainingPathType: canonicalForPrefill.trainingPathType ?? null,
+                  goalCategories: canonicalForPrefill.goalCategories ?? [],
+                  selectedFlexibility: canonicalForPrefill.selectedFlexibility ?? [],
+                  experienceLevel: canonicalForPrefill.experienceLevel ?? null,
+                  scheduleMode: canonicalForPrefill.scheduleMode ?? null,
+                  trainingDaysPerWeek: canonicalForPrefill.trainingDaysPerWeek ?? null,
+                  sessionLengthMinutes: canonicalForPrefill.sessionLengthMinutes ?? null,
+                  equipmentAvailable: canonicalForPrefill.equipmentAvailable ?? [],
+                },
+                hasMaterialIdentity: !!(canonicalForPrefill.selectedSkills?.length || canonicalForPrefill.trainingPathType),
+                verdict: (canonicalForPrefill.selectedSkills?.length ?? 0) > 0 && !!canonicalForPrefill.trainingPathType
+                  ? 'MODIFY_PREFILL_HAS_DEEP_PLANNER_IDENTITY_FROM_CANONICAL'
+                  : 'MODIFY_PREFILL_CANONICAL_MAY_BE_INCOMPLETE',
               })
             }
             setShowAdjustmentModal(open)

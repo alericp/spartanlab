@@ -1510,42 +1510,39 @@ export default function ProgramPage() {
       const canonicalIsNewer = canonicalCreatedAt > currentCreatedAt
       const sessionCountDiffers = (canonicalProgram.sessions?.length || 0) !== (currentProgram.sessions?.length || 0)
       
-      // [PHASE 17K] Log same-session write path audit
-      console.log('[phase17k-same-session-write-path-audit]', {
+      // [PHASE 17M] Program reconciliation decision audit - comprehensive pre-decision logging
+      console.log('[phase17m-program-reconciliation-decision-audit]', {
         trigger: triggerSource,
         canonicalProgramId: canonicalProgram.id,
         currentProgramId: currentProgram.id,
-        idDiffers,
         canonicalCreatedAt: canonicalProgram.createdAt,
         currentCreatedAt: currentProgram.createdAt,
-        canonicalIsNewer,
         canonicalSessionCount: canonicalProgram.sessions?.length || 0,
         currentSessionCount: currentProgram.sessions?.length || 0,
+        idDiffers,
+        canonicalIsNewer,
         sessionCountDiffers,
       })
       
-      // Decision: Replace current with canonical if ID differs or canonical is newer
-      const shouldReplace = idDiffers || canonicalIsNewer
+      // [PHASE 17M] STRENGTHENED Decision: Replace if ID differs, canonical is newer, OR session count differs
+      // This fixes stale 4-session program persisting when 6-session canonical exists
+      const shouldReplace = idDiffers || canonicalIsNewer || sessionCountDiffers
       
       if (shouldReplace) {
-        // [PHASE 17K] Stale hold point proof - this is where we catch same-session stale state
-        console.log('[phase17k-stale-hold-point-proof]', {
+        // [PHASE 17M] Program reconciliation replace - log the replacement with specific reason
+        console.log('[phase17m-program-reconciliation-replace]', {
           trigger: triggerSource,
-          staleHoldDetected: true,
-          staleProgramId: currentProgram.id,
-          staleSessionCount: currentProgram.sessions?.length || 0,
-          staleCreatedAt: currentProgram.createdAt,
-          canonicalProgramId: canonicalProgram.id,
-          canonicalSessionCount: canonicalProgram.sessions?.length || 0,
-          canonicalCreatedAt: canonicalProgram.createdAt,
-          verdict: 'STALE_SAME_SESSION_STATE_DETECTED',
-        })
-        
-        // [PHASE 17K] Post-save canonical recheck
-        console.log('[phase17k-post-save-canonical-recheck]', {
-          trigger: triggerSource,
-          decision: 'REPLACE_STALE_WITH_CANONICAL',
-          reason: idDiffers ? 'different_program_id' : 'canonical_is_newer',
+          reason: idDiffers
+            ? 'id_differs'
+            : canonicalIsNewer
+            ? 'canonical_is_newer'
+            : sessionCountDiffers
+            ? 'session_count_differs'
+            : 'unknown',
+          previousProgramId: currentProgram.id,
+          previousSessionCount: currentProgram.sessions?.length || 0,
+          nextProgramId: canonicalProgram.id,
+          nextSessionCount: canonicalProgram.sessions?.length || 0,
         })
         
         // Normalize and set the canonical program
@@ -1574,11 +1571,10 @@ export default function ProgramPage() {
           })
         }
       } else {
-        // [PHASE 17K] Kept current after same-session check
-        console.log('[phase17k-kept-current-after-same-session-check]', {
+        // [PHASE 17M] Program reconciliation keep - no material difference detected
+        console.log('[phase17m-program-reconciliation-keep]', {
           trigger: triggerSource,
-          decision: 'KEEP_CURRENT',
-          reason: 'canonical_matches_current_or_current_is_newer',
+          reason: 'no_material_difference_detected',
           currentProgramId: currentProgram.id,
           currentSessionCount: currentProgram.sessions?.length || 0,
         })

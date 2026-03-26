@@ -377,6 +377,19 @@ export default function ProgramPage() {
       verdict: 'single_authoritative_source_confirmed',
     })
     
+    // [PHASE 17I] Program surface source map audit - track exact data source
+    console.log('[phase17i-program-surface-source-map]', {
+      surface: 'program_page_authoritativeActiveProgram',
+      sourceType: 'useState_program',
+      sourceOrigin: 'getProgramState_localStorage',
+      programId: activeProgram.id,
+      createdAt: activeProgram.createdAt,
+      sessionCount: activeProgram.sessions?.length || 0,
+      scheduleMode: activeProgram.scheduleMode,
+      flexibleFrequencyRootCause: (activeProgram as unknown as { flexibleFrequencyRootCause?: { finalReasonCategory?: string } }).flexibleFrequencyRootCause?.finalReasonCategory || 'not_set',
+      selectedSkillsCount: (activeProgram as unknown as { selectedSkills?: string[] }).selectedSkills?.length || 0,
+    })
+    
     return activeProgram
   }, [program, mounted])
   

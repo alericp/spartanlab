@@ -102,6 +102,19 @@ export function AdaptiveProgramDisplay({
   // [phase15a-hotfix-ordering-hazard-removed-audit]: declarations moved above consumers
   // ==========================================================================
   
+  // [PHASE 17I] Program surface source map audit - AdaptiveProgramDisplay
+  console.log('[phase17i-program-surface-source-map]', {
+    surface: 'AdaptiveProgramDisplay_prop',
+    sourceType: 'prop_from_parent',
+    programId: program.id,
+    createdAt: program.createdAt,
+    sessionCount: program.sessions?.length || 0,
+    scheduleMode: program.scheduleMode,
+    flexibleFrequencyRootCause: (program as unknown as { flexibleFrequencyRootCause?: { finalReasonCategory?: string } }).flexibleFrequencyRootCause?.finalReasonCategory || 'not_set',
+    selectedSkillsCount: (program as unknown as { selectedSkills?: string[] }).selectedSkills?.length || 0,
+    representedSkillsCount: (program as unknown as { representedSkills?: string[] }).representedSkills?.length || 0,
+  })
+  
   // Get raw program fields with type assertions for optional fields
   const rawSelectedSkills = (program as unknown as { selectedSkills?: string[] }).selectedSkills
   const rawRepresentedSkills = (program as unknown as { representedSkills?: string[] }).representedSkills
@@ -926,6 +939,22 @@ export function AdaptiveProgramDisplay({
                   </span>
                   {/* [PHASE 7 TASK 2] Truthful frequency explanation - "adapted from feedback" ONLY when real feedback exists */}
                   {/* [PHASE 12 TASK 3] Clarified: adaptation happens at build time, not automatically */}
+                  {/* [PHASE 17I] Initial baseline label truth audit */}
+                  {(() => {
+                    console.log('[phase17i-initial-baseline-label-truth-audit]', {
+                      programId: program.id,
+                      hasFlexibleRootCause: !!program.flexibleFrequencyRootCause,
+                      finalReasonCategory: program.flexibleFrequencyRootCause?.finalReasonCategory || 'none',
+                      isLowHistoryDefault: program.flexibleFrequencyRootCause?.finalReasonCategory === 'low_history_default',
+                      displayedSessionCount: validSessions.length,
+                      labelShown: program.flexibleFrequencyRootCause?.finalReasonCategory === 'low_history_default' 
+                        ? '(initial baseline)' 
+                        : program.flexibleFrequencyRootCause?.isBaselineDefault 
+                        ? `(${program.primaryGoal} baseline)` 
+                        : 'other',
+                    })
+                    return null
+                  })()}
                   {program.flexibleFrequencyRootCause && (
                     <span className="text-[10px] text-[#5A5A5A] mt-0.5">
                       {program.flexibleFrequencyRootCause.isTrueAdaptive

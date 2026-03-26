@@ -287,6 +287,18 @@ export function getProgramSummary(overview: DashboardOverview): ProgramSummary {
     usingSource: hasProgram && adaptiveProgram ? 'adaptiveProgram' : latestProgram ? 'legacyProgram' : 'none',
   })
   
+  // [PHASE 17I] Program surface source map audit - dashboard
+  console.log('[phase17i-program-surface-source-map]', {
+    surface: 'dashboard_getProgramSummary',
+    sourceType: 'getProgramState_localStorage',
+    programId: adaptiveProgram?.id || 'none',
+    createdAt: adaptiveProgram?.createdAt || 'none',
+    sessionCount: adaptiveProgram?.sessions?.length || 0,
+    scheduleMode: adaptiveProgram?.scheduleMode || 'none',
+    flexibleFrequencyRootCause: (adaptiveProgram as unknown as { flexibleFrequencyRootCause?: { finalReasonCategory?: string } })?.flexibleFrequencyRootCause?.finalReasonCategory || 'not_set',
+    selectedSkillsCount: adaptiveProgram?.selectedSkills?.length || 0,
+  })
+  
   if (hasProgram && adaptiveProgram) {
     // TASK C FIX: Build weeklyStructure from actual stored program sessions
     const weeklyStructure = adaptiveProgram.sessions?.length 

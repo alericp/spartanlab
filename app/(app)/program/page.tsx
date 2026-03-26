@@ -1475,10 +1475,13 @@ export default function ProgramPage() {
   }, [])
   
   // ==========================================================================
-  // [PHASE 17J] PROGRAM PAGE RECONCILIATION EFFECT
+  // ==========================================================================
+  // [PHASE 17J+17K] PROGRAM PAGE RECONCILIATION EFFECT
   // Syncs in-memory program state with canonical saved program when:
-  // 1. Window/tab gains focus (user returns from another tab/page)
-  // 2. Page becomes visible after being hidden
+  // 1. Window/tab gains focus (user returns from another tab/page) [17J]
+  // 2. Page becomes visible after being hidden [17J]
+  // 3. Storage event fires (cross-tab localStorage changes) [17K]
+  // 4. Periodic check every 2 seconds (same-tab localStorage changes) [17K]
   // This ensures stale 4-session program doesn't persist when 6-session is saved
   // ==========================================================================
   useEffect(() => {
@@ -1486,10 +1489,11 @@ export default function ProgramPage() {
       return // Modules not loaded yet
     }
     
-    const reconcileWithCanonical = () => {
+    const reconcileWithCanonical = (triggerSource: string) => {
       const canonicalState = programModules.getProgramState?.()
       if (!canonicalState?.adaptiveProgram || !program) {
-        console.log('[phase17j-program-page-reconciliation-verdict]', {
+        console.log('[phase17k-same-session-reconciliation-verdict]', {
+          trigger: triggerSource,
           action: 'skip_reconciliation',
           reason: !canonicalState?.adaptiveProgram ? 'no_canonical_program' : 'no_current_program',
         })
@@ -1506,7 +1510,9 @@ export default function ProgramPage() {
       const canonicalIsNewer = canonicalCreatedAt > currentCreatedAt
       const sessionCountDiffers = (canonicalProgram.sessions?.length || 0) !== (currentProgram.sessions?.length || 0)
       
-      console.log('[phase17j-program-page-canonical-diff]', {
+      // [PHASE 17K] Log same-session write path audit
+      console.log('[phase17k-same-session-write-path-audit]', {
+        trigger: triggerSource,
         canonicalProgramId: canonicalProgram.id,
         currentProgramId: currentProgram.id,
         idDiffers,
@@ -1522,13 +1528,24 @@ export default function ProgramPage() {
       const shouldReplace = idDiffers || canonicalIsNewer
       
       if (shouldReplace) {
-        console.log('[phase17j-canonical-replacement-decision]', {
-          decision: 'REPLACE_STALE_WITH_CANONICAL',
-          reason: idDiffers ? 'different_program_id' : 'canonical_is_newer',
+        // [PHASE 17K] Stale hold point proof - this is where we catch same-session stale state
+        console.log('[phase17k-stale-hold-point-proof]', {
+          trigger: triggerSource,
+          staleHoldDetected: true,
           staleProgramId: currentProgram.id,
           staleSessionCount: currentProgram.sessions?.length || 0,
+          staleCreatedAt: currentProgram.createdAt,
           canonicalProgramId: canonicalProgram.id,
           canonicalSessionCount: canonicalProgram.sessions?.length || 0,
+          canonicalCreatedAt: canonicalProgram.createdAt,
+          verdict: 'STALE_SAME_SESSION_STATE_DETECTED',
+        })
+        
+        // [PHASE 17K] Post-save canonical recheck
+        console.log('[phase17k-post-save-canonical-recheck]', {
+          trigger: triggerSource,
+          decision: 'REPLACE_STALE_WITH_CANONICAL',
+          reason: idDiffers ? 'different_program_id' : 'canonical_is_newer',
         })
         
         // Normalize and set the canonical program
@@ -1536,16 +1553,30 @@ export default function ProgramPage() {
         if (normalizedCanonical) {
           setProgram(normalizedCanonical)
           
-          console.log('[phase17j-replaced-stale-page-memory]', {
+          // [PHASE 17K] Post-success program replacement
+          console.log('[phase17k-post-success-program-replacement]', {
+            trigger: triggerSource,
             previousProgramId: currentProgram.id,
             previousSessionCount: currentProgram.sessions?.length || 0,
             newProgramId: normalizedCanonical.id,
             newSessionCount: normalizedCanonical.sessions?.length || 0,
+            newFlexibleRootCause: (normalizedCanonical as unknown as { flexibleFrequencyRootCause?: { finalReasonCategory?: string } }).flexibleFrequencyRootCause?.finalReasonCategory || 'not_set',
             verdict: 'STALE_PROGRAM_REPLACED_WITH_CANONICAL',
+          })
+          
+          // [PHASE 17K] Program summary source audit after fix
+          console.log('[phase17k-program-summary-source-audit]', {
+            trigger: triggerSource,
+            newProgramId: normalizedCanonical.id,
+            newSessionCount: normalizedCanonical.sessions?.length || 0,
+            newSelectedSkillsCount: (normalizedCanonical as unknown as { selectedSkills?: string[] }).selectedSkills?.length || 0,
+            summaryNowDerivedFrom: 'reconciled_canonical_program',
           })
         }
       } else {
-        console.log('[phase17j-kept-current-memory-verdict]', {
+        // [PHASE 17K] Kept current after same-session check
+        console.log('[phase17k-kept-current-after-same-session-check]', {
+          trigger: triggerSource,
           decision: 'KEEP_CURRENT',
           reason: 'canonical_matches_current_or_current_is_newer',
           currentProgramId: currentProgram.id,
@@ -1554,34 +1585,46 @@ export default function ProgramPage() {
       }
     }
     
-    // Listen for visibility changes (tab becomes visible)
+    // Listen for visibility changes (tab becomes visible) [PHASE 17J]
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
-        console.log('[phase17j-program-state-lifecycle-audit]', {
-          event: 'visibilitychange_to_visible',
-          currentProgramId: program?.id || 'none',
-          action: 'triggering_reconciliation',
-        })
-        reconcileWithCanonical()
+        reconcileWithCanonical('visibilitychange_to_visible')
       }
     }
     
-    // Listen for window focus (user clicks back into tab)
+    // Listen for window focus (user clicks back into tab) [PHASE 17J]
     const handleFocus = () => {
-      console.log('[phase17j-program-state-lifecycle-audit]', {
-        event: 'window_focus',
-        currentProgramId: program?.id || 'none',
-        action: 'triggering_reconciliation',
-      })
-      reconcileWithCanonical()
+      reconcileWithCanonical('window_focus')
     }
+    
+    // [PHASE 17K] Listen for storage events (cross-tab localStorage changes)
+    const handleStorage = (event: StorageEvent) => {
+      // Check if the change is to the adaptive program key
+      if (event.key && (event.key.includes('adaptive') || event.key.includes('program'))) {
+        console.log('[phase17k-storage-event-detected]', {
+          key: event.key,
+          currentProgramId: program?.id || 'none',
+        })
+        reconcileWithCanonical('storage_event')
+      }
+    }
+    
+    // [PHASE 17K] Periodic reconciliation check for same-tab changes
+    // This catches cases where localStorage is updated in the same tab but
+    // no focus/visibility event fires (e.g., onboarding completion while on program page)
+    const intervalId = setInterval(() => {
+      reconcileWithCanonical('periodic_check')
+    }, 2000) // Check every 2 seconds
     
     document.addEventListener('visibilitychange', handleVisibilityChange)
     window.addEventListener('focus', handleFocus)
+    window.addEventListener('storage', handleStorage)
     
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange)
       window.removeEventListener('focus', handleFocus)
+      window.removeEventListener('storage', handleStorage)
+      clearInterval(intervalId)
     }
   }, [program, programModules.getProgramState, programModules.normalizeProgramForDisplay])
   

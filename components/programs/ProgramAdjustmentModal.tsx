@@ -68,6 +68,8 @@ interface ProgramAdjustmentModalProps {
   currentEquipment?: EquipmentType[]
   currentSessionMinutes?: number
   currentTrainingDays?: TrainingDays
+  // [PHASE 17P] Schedule mode from canonical profile - used to preserve flexible identity
+  currentScheduleMode?: 'static' | 'flexible' | 'adaptive'
 }
 
 type ModalView = 'intercept' | 'adjustments' | 'confirm'
@@ -126,6 +128,7 @@ export function ProgramAdjustmentModal({
   currentEquipment = [],
   currentSessionMinutes = 60,
   currentTrainingDays = 3,
+  currentScheduleMode = 'adaptive',
 }: ProgramAdjustmentModalProps) {
   const [view, setView] = useState<ModalView>('intercept')
   const [selectedCategory, setSelectedCategory] = useState<AdjustmentCategory | null>(null)
@@ -216,9 +219,31 @@ export function ProgramAdjustmentModal({
         
         let rebuildRequest: AdjustmentRebuildRequest
         if (selectedCategory === 'schedule') {
+          // [PHASE 17P] Flexible-preserving rebuild logic
+          // If user is flexible and hasn't explicitly changed the day count,
+          // dispatch undefined to preserve flexible identity
+          const isFlexibleUser = currentScheduleMode === 'flexible' || currentScheduleMode === 'adaptive'
+          const userChangedDayCount = trainingDays !== currentTrainingDays
+          const shouldPreserveFlexible = isFlexibleUser && !userChangedDayCount
+          
+          // [PHASE 17P] Adjustment prefill truth audit
+          console.log('[phase17p-adjustment-prefill-truth-audit]', {
+            scheduleMode: currentScheduleMode,
+            canonicalPreferredDays: currentTrainingDays,
+            generatedSessionCount: currentTrainingDays, // This is what was displayed
+            displayValueForModal: trainingDays,
+            userChangedDayCount,
+            isFlexibleUser,
+            shouldPreserveFlexible,
+            warning: isFlexibleUser
+              ? 'flexible_user_prefill_may_be_display_count_not_schedule_identity'
+              : 'static_user_prefill',
+          })
+          
           rebuildRequest = {
             type: 'training_days',
-            newTrainingDays: trainingDays,
+            // [PHASE 17P] Only send explicit day count if user is static OR explicitly changed days
+            newTrainingDays: shouldPreserveFlexible ? undefined : trainingDays,
           }
         } else {
           rebuildRequest = {

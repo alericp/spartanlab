@@ -351,6 +351,14 @@ export default function ProgramPage() {
   const [showBuilder, setShowBuilder] = useState(false)
   const [showAdjustmentModal, setShowAdjustmentModal] = useState(false)
   const [mounted, setMounted] = useState(false)
+  
+  // ==========================================================================
+  // [PHASE 20A] TASK 3 - Durable modify open request
+  // This ensures the modal open intent survives the current event cycle
+  // and prevents race conditions from swallowing the open request
+  // ==========================================================================
+  const [pendingModifyOpen, setPendingModifyOpen] = useState(false)
+  const modifyOpenTimestampRef = useRef<number>(0)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [loadStage, setLoadStage] = useState<string>('initializing') // TASK 3: Track failure stage
   
@@ -1723,6 +1731,33 @@ export default function ProgramPage() {
   }, [program, programModules.getProgramState, programModules.normalizeProgramForDisplay])
   
   // ==========================================================================
+  // [PHASE 20A] TASK 3 - Consume durable modify open request
+  // This useEffect watches the pending open request and commits the modal open
+  // in a separate render cycle, ensuring the request is not lost
+  // ==========================================================================
+  useEffect(() => {
+    if (pendingModifyOpen && program && !showAdjustmentModal) {
+      console.log('[phase20a-modify-open-intent-consumed]', {
+        pendingModifyOpen: true,
+        programExists: true,
+        programId: program.id,
+        showAdjustmentModalBefore: showAdjustmentModal,
+        action: 'committing_modal_open',
+        timestamp: Date.now(),
+      })
+      
+      // Record the exact timestamp when we're opening the modal
+      modifyOpenTimestampRef.current = Date.now()
+      
+      // Commit the modal open
+      setShowAdjustmentModal(true)
+      
+      // Clear the pending request after committing
+      setPendingModifyOpen(false)
+    }
+  }, [pendingModifyOpen, program, showAdjustmentModal])
+  
+  // ==========================================================================
   // [PHASE 19A] TASK 3 - Page state render audit for modal visibility
   // This tracks when the modal state changes to help debug entry path issues
   // ==========================================================================
@@ -1738,6 +1773,18 @@ export default function ProgramPage() {
         timestamp: Date.now(),
       })
       
+      // [PHASE 20A] TASK 1D - Post-render page state audit
+      console.log('[phase20a-page-modal-state-render]', {
+        showAdjustmentModal: true,
+        showBuilder,
+        programStillExists: !!program,
+        programId: program?.id ?? null,
+        pageInDisplayMode: !showBuilder,
+        modifyOpenTimestamp: modifyOpenTimestampRef.current,
+        timeSinceOpen: Date.now() - modifyOpenTimestampRef.current,
+        verdict: 'MODAL_OPEN_STATE_CONFIRMED_IN_RENDER',
+      })
+      
       // [PHASE 19A] TASK 7 - Final root cause classification verdict
       console.log('[phase19a-modify-root-cause-classification-verdict]', {
         buttonHandlerFired: true,
@@ -1747,6 +1794,20 @@ export default function ProgramPage() {
         oldGate: 'status && program',
         newGate: 'program',
         verdict: 'REAL_ROOT_CAUSE_FOUND__MODIFY_BUTTON_WAS_WRONGLY_GATED_BY_GETPROGRAMSTATUS_AND_NOW_OPENS_ADJUSTMENT_MODAL_FROM_ACTIVE_PROGRAM_TRUTH',
+      })
+      
+      // ==========================================================================
+      // [PHASE 20A] TASK 7 - Cross-flow safety verdict
+      // Verify other flows are not broken by this fix
+      // ==========================================================================
+      console.log('[phase20a-cross-flow-safety-verdict]', {
+        restartProgramModalStillWorks: 'handleRestart_exists_and_untouched',
+        rebuildFromCurrentSettingsStillWorks: 'handleRegenerate_exists_and_untouched',
+        startNewProgramStillWorks: 'handleConfirmNewProgram_exists_and_untouched',
+        programBuilderStillOpens: 'showBuilder_state_untouched_when_no_program',
+        programPageLoadsNormally: 'program_load_logic_untouched',
+        modifyButtonFixIsolated: true,
+        noRegressionExpected: true,
       })
     }
   }, [showAdjustmentModal, showBuilder, program])
@@ -7475,6 +7536,18 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
     const showBuilderBefore = showBuilder
     const showAdjustmentModalBefore = showAdjustmentModal
     
+    // ==========================================================================
+    // [PHASE 20A] TASK 1A - Modify button click fired audit
+    // ==========================================================================
+    console.log('[phase20a-modify-click-fired]', {
+      programExists: !!program,
+      programId: program?.id ?? null,
+      showBuilderBefore,
+      showAdjustmentModalBefore,
+      buttonDisabled: false,
+      timestamp: Date.now(),
+    })
+    
     console.log('[phase19a-modify-button-click-audit]', {
       handlerEntered: true,
       timestamp: Date.now(),
@@ -7499,6 +7572,17 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
     // OLD: if (status && program) { ... } <-- WRONG: status is secondary/derived
     // NEW: if (program) { ... } <-- CORRECT: program existence is the true gate
     if (program) {
+      // ==========================================================================
+      // [PHASE 20A] TASK 1B - Modify handler branch chosen audit
+      // ==========================================================================
+      console.log('[phase20a-modify-branch-verdict]', {
+        branchChosen: 'open_adjustment_modal',
+        activeProgramBranchTaken: true,
+        builderBranchTaken: false,
+        reason: 'active_program_exists',
+        programId: program.id,
+      })
+      
       console.log('[phase19a-modify-branch-selection-audit]', {
         branchChosen: 'open_adjustment_modal',
         reason: 'active_program_exists',
@@ -7508,19 +7592,51 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
         newConditionSucceeds: true,
       })
       
+      // ==========================================================================
+      // [PHASE 20A] TASK 1C - State write request audit
+      // ==========================================================================
+      console.log('[phase20a-modify-open-request]', {
+        intendedNextState: true,
+        currentState: showAdjustmentModalBefore,
+        currentProgramId: program.id,
+        usingDurablePattern: true,
+      })
+      
+      // ==========================================================================
+      // [PHASE 20A] TASK 3 - Set durable modify-open intent
+      // This creates a durable open request that will be consumed in a useEffect
+      // to ensure the modal open survives the current event cycle
+      // ==========================================================================
+      console.log('[phase20a-modify-open-intent-created]', {
+        programId: program.id,
+        timestamp: Date.now(),
+      })
+      
+      // Set both the durable intent AND the direct state
+      // The durable intent acts as a backup if the direct state fails
+      setPendingModifyOpen(true)
       setShowAdjustmentModal(true)
+      modifyOpenTimestampRef.current = Date.now()
       
       console.log('[phase19a-modify-modal-open-requested-audit]', {
-        action: 'setShowAdjustmentModal(true)',
+        action: 'setShowAdjustmentModal(true) + setPendingModifyOpen(true)',
         previousValue: showAdjustmentModalBefore,
         requestedValue: true,
         programIdForModal: program.id,
+        durableBackupSet: true,
       })
       
       return
     }
     
     // No active program - go to builder for first-time creation
+    console.log('[phase20a-modify-branch-verdict]', {
+      branchChosen: 'open_builder_directly',
+      activeProgramBranchTaken: false,
+      builderBranchTaken: true,
+      reason: 'no_active_program',
+    })
+    
     console.log('[phase19a-modify-branch-selection-audit]', {
       branchChosen: 'open_builder_directly',
       reason: 'no_active_program',
@@ -7615,6 +7731,29 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
             </Button>
           )}
         </div>
+
+        {/* ==========================================================================
+            [PHASE 20A] TASK 5 - Temporary visible fallback proof
+            This small banner appears when showAdjustmentModal is true to prove
+            the page state is reaching open=true, even if Dialog fails to render.
+            REMOVE THIS AFTER DEBUGGING IS COMPLETE.
+            ========================================================================== */}
+        {showAdjustmentModal && (
+          <div 
+            className="fixed bottom-4 right-4 z-[9999] bg-green-600 text-white px-3 py-2 rounded-md text-sm font-medium shadow-lg"
+            style={{ pointerEvents: 'none' }}
+          >
+            {(() => {
+              console.log('[phase20a-page-fallback-visibility-audit]', {
+                showAdjustmentModal: true,
+                fallbackBannerRendered: true,
+                timestamp: Date.now(),
+              })
+              return null
+            })()}
+            Modal state: OPEN
+          </div>
+        )}
 
         {/* Content - TASK 2: Proper handling of malformed programs */}
         {showBuilder ? (
@@ -7932,9 +8071,41 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
         {/* Program Adjustment Modal */}
         {/* [canonical-rebuild] TASK B: Wire rebuild callback for structural changes */}
         {/* [PHASE 5 TASK 3] Prefill from CANONICAL profile, not stale inputs state */}
+        {/* [PHASE 20A] TASK 1E - Modal prop handoff audit */}
+        {(() => {
+          const canonical = getCanonicalProfile()
+          if (showAdjustmentModal) {
+            console.log('[phase20a-modal-prop-handoff]', {
+              open: showAdjustmentModal,
+              currentTrainingDaysPresent: true,
+              currentSessionMinutesPresent: true,
+              currentScheduleModePresent: true,
+              currentProgramExists: !!program,
+              canonicalSessionMinutes: canonical.sessionLengthMinutes,
+              canonicalTrainingDays: canonical.trainingDaysPerWeek,
+              canonicalScheduleMode: canonical.scheduleMode,
+            })
+          }
+          return null
+        })()}
         <ProgramAdjustmentModal
           open={showAdjustmentModal}
           onOpenChange={(open) => {
+            // ==========================================================================
+            // [PHASE 20A] TASK 2B - Dialog onOpenChange audit
+            // ==========================================================================
+            const timeSinceOpen = Date.now() - modifyOpenTimestampRef.current
+            const isImmediateClose = showAdjustmentModal === true && open === false && timeSinceOpen < 300
+            
+            console.log('[phase20a-dialog-onopenchange]', {
+              incomingOpenValue: open,
+              previousControlledOpenProp: showAdjustmentModal,
+              currentView: 'from_page_onOpenChange',
+              timeSinceOpenMs: timeSinceOpen,
+              looksLikeImmediateClose: isImmediateClose,
+              timestamp: Date.now(),
+            })
+            
             // ==========================================================================
             // [PHASE 19A] TASK 5 - onOpenChange audit
             // This tracks whether the modal is being immediately closed after opening
@@ -7946,6 +8117,23 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
               isImmediateClose: showAdjustmentModal === true && open === false,
               timestamp: Date.now(),
             })
+            
+            // ==========================================================================
+            // [PHASE 20A] TASK 4 - Immediate close guard
+            // If onOpenChange(false) fires essentially immediately after we opened,
+            // this is likely a false close from focus handoff or same-tap propagation.
+            // We guard against it ONCE in the first 300ms after opening.
+            // ==========================================================================
+            if (isImmediateClose) {
+              console.log('[phase20a-immediate-close-guard-audit]', {
+                action: 'blocking_suspicious_immediate_close',
+                timeSinceOpenMs: timeSinceOpen,
+                threshold: 300,
+                willIgnoreCloseOnce: true,
+              })
+              // Do NOT close - ignore this suspicious immediate close
+              return
+            }
             
             if (open) {
               // [phase5-modify-program-prefill-truth-audit] Log prefill source

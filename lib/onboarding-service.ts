@@ -534,6 +534,16 @@ export async function generateFirstProgram(
       inputTrainingDaysPerWeek: programInputs.trainingDaysPerWeek,
     })
     
+    // ==========================================================================
+    // [PHASE 17T] TASK 2 - Onboarding mode parity diagnostic
+    // ==========================================================================
+    console.log('[phase17t-onboarding-generation-mode-entry-audit]', {
+      triggerPath: 'generateFirstProgram',
+      hasExplicitRegenerationMode: !!programInputs?.regenerationMode,
+      regenerationMode: programInputs?.regenerationMode ?? null,
+      regenerationReason: programInputs?.regenerationReason ?? null,
+    })
+    
     // [PHASE 16C] Generate the program - NOW ASYNC with cooperative yielding
     const program = await generateAdaptiveProgram(programInputs, onStageChange)
     

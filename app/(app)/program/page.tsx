@@ -3434,6 +3434,37 @@ export default function ProgramPage() {
         regenerateStage = 'generating'
         console.log('[program-build] REGEN STAGE 3: Calling generateAdaptiveProgram with fresh truth...')
         
+        // ==========================================================================
+        // [PHASE 17T] TASK 1 & 3 - Force explicit regenerationMode for rebuild path
+        // Without this, builder falls back to stateFlags.recommendedMode which can
+        // change behavior based on existing program/history context
+        // ==========================================================================
+        const rebuildBuilderInput = {
+          ...freshRebuildInput,
+          regenerationMode: 'fresh' as const,
+          regenerationReason: 'rebuild_from_current_settings',
+        }
+        
+        // [PHASE 17T] Mode entry diagnostic
+        console.log('[phase17t-rebuild-generation-mode-entry-audit]', {
+          triggerPath: 'handleRegenerate',
+          hasExplicitRegenerationMode: !!rebuildBuilderInput?.regenerationMode,
+          regenerationMode: rebuildBuilderInput?.regenerationMode ?? null,
+          regenerationReason: rebuildBuilderInput?.regenerationReason ?? null,
+          hasActiveProgramAtDispatch: !!program,
+          activeProgramId: program?.id ?? null,
+          activeProgramSessionCount: program?.sessions?.length ?? 0,
+        })
+        
+        // [PHASE 17T] Mode fix verdict
+        console.log('[phase17t-rebuild-mode-fix-verdict]', {
+          triggerPath: 'handleRegenerate',
+          oldBehavior: 'builder_mode_was_state_inferred_when_regenerationMode_missing',
+          newBehavior: 'builder_mode_forced_to_fresh_for_rebuild_from_current_settings',
+          finalRegenerationMode: rebuildBuilderInput.regenerationMode,
+          finalRegenerationReason: rebuildBuilderInput.regenerationReason,
+        })
+        
         // [PHASE 16S] Dispatch verdict - marking actual builder call for regeneration
         const regenAttemptId = `attempt_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
         console.log('[phase16s-generate-dispatch-verdict]', {
@@ -3447,7 +3478,8 @@ export default function ProgramPage() {
         })
         
         // [PHASE 16N] FIX: Await the async builder - it returns Promise<AdaptiveProgram>
-        const newProgram = await programModules.generateAdaptiveProgram(freshRebuildInput)
+        // [PHASE 17T] Now uses rebuildBuilderInput with explicit regenerationMode
+        const newProgram = await programModules.generateAdaptiveProgram(rebuildBuilderInput)
         
         // [PHASE 16N] Verify we received resolved program, not Promise
         console.log('[phase16n-program-page-builder-result-audit]', {
@@ -3487,6 +3519,20 @@ export default function ProgramPage() {
           storageReadOccurredBeforeValidation: false,
           objectMutatedBeforeValidation: false,
           validationSource: 'builder_return',
+        })
+        
+        // ==========================================================================
+        // [PHASE 17T] TASK 5 - Rebuild postfix result audit
+        // ==========================================================================
+        console.log('[phase17t-rebuild-postfix-result-audit]', {
+          triggerPath: 'handleRegenerate',
+          finalRegenerationModeUsed: rebuildBuilderInput.regenerationMode,
+          finalRegenerationReasonUsed: rebuildBuilderInput.regenerationReason,
+          outputProgramId: (newProgram as AdaptiveProgram)?.id ?? null,
+          outputSessionCount: (newProgram as AdaptiveProgram)?.sessions?.length ?? 0,
+          outputPrimaryGoal: (newProgram as AdaptiveProgram)?.primaryGoal ?? null,
+          outputScheduleMode: (newProgram as AdaptiveProgram)?.scheduleMode ?? null,
+          outputTrainingDaysPerWeek: (newProgram as AdaptiveProgram)?.trainingDaysPerWeek ?? null,
         })
         
         // [PHASE 16N] Guard: If somehow still Promise-like, fail explicitly
@@ -5145,6 +5191,36 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
         isHighFrequency: (request.newTrainingDays || 0) >= 6,
       })
       
+      // ==========================================================================
+      // [PHASE 17T] TASK 4 - Force explicit regenerationMode for adjustment rebuild path
+      // Without this, builder falls back to stateFlags.recommendedMode
+      // ==========================================================================
+      const adjustmentBuilderInput = {
+        ...updatedInputs,
+        regenerationMode: 'fresh' as const,
+        regenerationReason: 'adjustment_full_rebuild',
+      }
+      
+      // [PHASE 17T] Mode entry diagnostic for adjustment
+      console.log('[phase17t-rebuild-generation-mode-entry-audit]', {
+        triggerPath: 'handleAdjustmentRebuild',
+        hasExplicitRegenerationMode: !!adjustmentBuilderInput?.regenerationMode,
+        regenerationMode: adjustmentBuilderInput?.regenerationMode ?? null,
+        regenerationReason: adjustmentBuilderInput?.regenerationReason ?? null,
+        hasActiveProgramAtDispatch: !!program,
+        activeProgramId: program?.id ?? null,
+        activeProgramSessionCount: program?.sessions?.length ?? 0,
+      })
+      
+      // [PHASE 17T] Mode fix verdict for adjustment
+      console.log('[phase17t-rebuild-mode-fix-verdict]', {
+        triggerPath: 'handleAdjustmentRebuild',
+        oldBehavior: 'builder_mode_was_state_inferred_when_regenerationMode_missing',
+        newBehavior: 'builder_mode_forced_to_fresh_for_adjustment_full_rebuild',
+        finalRegenerationMode: adjustmentBuilderInput.regenerationMode,
+        finalRegenerationReason: adjustmentBuilderInput.regenerationReason,
+      })
+      
       // [PHASE 16S] Dispatch verdict - marking actual builder call for adjustment
       const adjAttemptId = `attempt_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
       console.log('[phase16s-generate-dispatch-verdict]', {
@@ -5158,7 +5234,8 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
       })
       
       // [PHASE 16N] FIX: Await the async builder - it returns Promise<AdaptiveProgram>
-      const newProgram = await programModules.generateAdaptiveProgram(updatedInputs)
+      // [PHASE 17T] Now uses adjustmentBuilderInput with explicit regenerationMode
+      const newProgram = await programModules.generateAdaptiveProgram(adjustmentBuilderInput)
       
       // [PHASE 17A] Builder returned - check dispatch stage success
       console.log('[phase17a-adjustment-stage-success]', { 
@@ -5483,6 +5560,20 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
         verdict: overrides.length === 0
           ? 'ENTRY_TRUTH_ALIGNED_NO_OVERRIDES'
           : 'ENTRY_TRUTH_NARROWED_BY_OVERRIDES',
+      })
+      
+      // ==========================================================================
+      // [PHASE 17T] TASK 5 - Adjustment rebuild postfix result audit
+      // ==========================================================================
+      console.log('[phase17t-rebuild-postfix-result-audit]', {
+        triggerPath: 'handleAdjustmentRebuild',
+        finalRegenerationModeUsed: adjustmentBuilderInput.regenerationMode,
+        finalRegenerationReasonUsed: adjustmentBuilderInput.regenerationReason,
+        outputProgramId: newProgram?.id ?? null,
+        outputSessionCount: newProgram?.sessions?.length ?? 0,
+        outputPrimaryGoal: newProgram?.primaryGoal ?? null,
+        outputScheduleMode: newProgram?.scheduleMode ?? null,
+        outputTrainingDaysPerWeek: newProgram?.trainingDaysPerWeek ?? null,
       })
       
       setLastBuildResult(adjSuccessResultWithMetadata)

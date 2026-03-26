@@ -4196,10 +4196,22 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
     
     // [canonical-rebuild] TASK A: Build updated canonical entry based on adjustment
     // [PHASE 6 TASK 2] Use canonical entry builder instead of just spreading inputs
-    const { CanonicalProfileService } = await import('@/lib/canonical-profile-service')
+    // [PHASE 17A] FIX: Import named functions - CanonicalProfileService object does NOT exist
+    const { 
+      buildCanonicalGenerationEntry, 
+      entryToAdaptiveInputs 
+    } = await import('@/lib/canonical-profile-service')
+    
+    // [PHASE 17A] Import shape verification audit
+    console.log('[phase17a-adjustment-import-shape-audit]', {
+      buildCanonicalGenerationEntryIsFunction: typeof buildCanonicalGenerationEntry === 'function',
+      entryToAdaptiveInputsIsFunction: typeof entryToAdaptiveInputs === 'function',
+      importShape: 'named_functions',
+      verdict: typeof buildCanonicalGenerationEntry === 'function' ? 'import_resolved' : 'IMPORT_FAILED',
+    })
     
     // Build canonical entry with overrides for the requested changes
-    const overrides: Record<string, any> = {}
+    const overrides: Record<string, unknown> = {}
     if (request.type === 'training_days' && request.newTrainingDays) {
       overrides.trainingDaysPerWeek = request.newTrainingDays
     }
@@ -4210,20 +4222,62 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
       overrides.equipment = request.newEquipment
     }
     
-    const entryResult = CanonicalProfileService.buildCanonicalGenerationEntry(
+    // [PHASE 17A] Canonical entry build stage audit
+    console.log('[phase17a-adjustment-stage-enter]', {
+      stage: 'build_canonical_entry',
+      requestType: request.type,
+      overridesApplied: Object.keys(overrides),
+      requestedTrainingDays: request.newTrainingDays || null,
+    })
+    
+    const entryResult = buildCanonicalGenerationEntry(
       'handleAdjustmentRebuild',
       overrides
     )
     
+    // [PHASE 17A] Canonical entry audit
+    console.log('[phase17a-adjustment-canonical-entry-audit]', {
+      entryValid: entryResult.success,
+      entryPrimaryGoal: entryResult.entry?.primaryGoal || null,
+      entryTrainingDays: entryResult.entry?.trainingDaysPerWeek || null,
+      entryScheduleMode: entryResult.entry?.scheduleMode || null,
+      errorMessage: entryResult.error?.message || null,
+      verdict: entryResult.success ? 'entry_built' : 'entry_failed',
+    })
+    
     if (!entryResult.success) {
       console.error('[canonical-rebuild] Entry validation failed', entryResult.error)
+      console.log('[phase17a-adjustment-stage-failure]', {
+        stage: 'build_canonical_entry',
+        errorName: entryResult.error?.name || 'unknown',
+        errorMessage: entryResult.error?.message || 'unknown',
+        requestedTrainingDays: request.newTrainingDays || null,
+      })
       return { 
         success: false, 
-        error: entryResult.error?.message || 'Failed to build generation entry' 
+        error: `Canonical entry build failed: ${entryResult.error?.message || 'Unknown error'}` 
       }
     }
     
-    const updatedInputs = CanonicalProfileService.entryToAdaptiveInputs(entryResult.entry!)
+    console.log('[phase17a-adjustment-stage-success]', { stage: 'build_canonical_entry' })
+    
+    // [PHASE 17A] Input conversion stage
+    console.log('[phase17a-adjustment-stage-enter]', { stage: 'convert_to_adaptive_inputs' })
+    
+    const updatedInputs = entryToAdaptiveInputs(entryResult.entry!)
+    
+    // [PHASE 17A] Input conversion audit
+    console.log('[phase17a-adjustment-input-conversion-audit]', {
+      inputsTrainingDays: updatedInputs.trainingDaysPerWeek,
+      inputsPrimaryGoal: updatedInputs.primaryGoal,
+      inputsSecondaryGoal: updatedInputs.secondaryGoal || null,
+      inputsSessionLength: updatedInputs.sessionLength,
+      inputsScheduleMode: updatedInputs.scheduleMode,
+      inputsEquipmentCount: updatedInputs.equipment?.length || 0,
+      verdict: 'inputs_converted',
+    })
+    
+    console.log('[phase17a-adjustment-stage-success]', { stage: 'convert_to_adaptive_inputs' })
     
     console.log('[canonical-rebuild] Built canonical entry with overrides:', {
       type: request.type,
@@ -4239,6 +4293,14 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
       // [canonical-rebuild] STAGE 1: Generate new program with updated inputs
       console.log('[canonical-rebuild] STAGE 1: Generating with updated inputs...')
       
+      // [PHASE 17A] Dispatch stage audit
+      console.log('[phase17a-adjustment-stage-enter]', { 
+        stage: 'dispatch_builder',
+        requestedTrainingDays: request.newTrainingDays,
+        inputsTrainingDays: updatedInputs.trainingDaysPerWeek,
+        isHighFrequency: (request.newTrainingDays || 0) >= 6,
+      })
+      
       // [PHASE 16S] Dispatch verdict - marking actual builder call for adjustment
       const adjAttemptId = `attempt_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
       console.log('[phase16s-generate-dispatch-verdict]', {
@@ -4253,6 +4315,17 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
       
       // [PHASE 16N] FIX: Await the async builder - it returns Promise<AdaptiveProgram>
       const newProgram = await programModules.generateAdaptiveProgram(updatedInputs)
+      
+      // [PHASE 17A] Builder returned - check dispatch stage success
+      console.log('[phase17a-adjustment-stage-success]', { 
+        stage: 'dispatch_builder',
+        builderReturned: newProgram !== undefined,
+        programId: (newProgram as AdaptiveProgram)?.id || null,
+        sessionCount: (newProgram as AdaptiveProgram)?.sessions?.length || 0,
+      })
+      
+      // [PHASE 17A] Enter validation stage
+      console.log('[phase17a-adjustment-stage-enter]', { stage: 'validate_builder_result' })
       
       // [PHASE 16N] Verify we received resolved program, not Promise
       console.log('[phase16n-program-page-builder-result-audit]', {
@@ -4378,11 +4451,21 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
         )
       }
       
+      // [PHASE 17A] Validation stage success
+      console.log('[phase17a-adjustment-stage-success]', { 
+        stage: 'validate_builder_result',
+        sessionCount: newProgram.sessions.length,
+        requestedTrainingDays: request.newTrainingDays,
+      })
+      
       // [canonical-rebuild] TASK F: Verify session count matches expected
       console.log('[canonical-rebuild] STAGE 2: Verifying program structure...', {
         expectedDays: request.newTrainingDays,
         actualSessions: newProgram.sessions.length,
       })
+      
+      // [PHASE 17A] Enter save stage
+      console.log('[phase17a-adjustment-stage-enter]', { stage: 'save_program' })
       
       // [canonical-rebuild] STAGE 3: Save to canonical storage
       console.log('[canonical-rebuild] STAGE 3: Saving to canonical storage...')
@@ -4391,11 +4474,23 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
       // [canonical-rebuild] STAGE 4: Verify save
       const savedState = programModules.getProgramState()
       if (!savedState.adaptiveProgram || savedState.adaptiveProgram.id !== newProgram.id) {
+        console.log('[phase17a-adjustment-stage-failure]', { 
+          stage: 'save_program',
+          reason: 'save_verification_failed',
+          expectedId: newProgram.id,
+          actualId: savedState.adaptiveProgram?.id || null,
+        })
         throw new ProgramPageValidationError(
           'snapshot_save_failed', 'save_verification', 'save_verification_failed',
           'Save verification failed - program IDs do not match'
         )
       }
+      
+      // [PHASE 17A] Save stage success
+      console.log('[phase17a-adjustment-stage-success]', { 
+        stage: 'save_program',
+        savedProgramId: newProgram.id,
+      })
       
       // [canonical-rebuild] STAGE 5: Update freshness identity
       console.log('[canonical-rebuild] STAGE 5: Updating freshness identity...')
@@ -4555,10 +4650,40 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
       console.log('[program-rebuild-truth] Canonical profile updated: YES')
       console.log('[program-rebuild-truth] === END PROOF ===')
       
+      // [PHASE 17A] Final dispatch verdict - rebuild completed all stages
+      console.log('[phase17a-adjustment-dispatch-stage-audit]', {
+        allStagesCompleted: true,
+        requestedTrainingDays: request.newTrainingDays,
+        actualSessionCount: newProgram.sessions.length,
+        programId: newProgram.id,
+        isHighFrequencyRequest: (request.newTrainingDays || 0) >= 6,
+        verdict: 'rebuild_succeeded',
+      })
+      
       // [adjustment-sync] Return actual session count to modal for truthful display
       return { success: true, actualSessionCount: newProgram.sessions.length }
       
     } catch (error) {
+      // [PHASE 17A] Stage failure audit - captures exact failure point
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      const errorName = error instanceof Error ? error.name : 'UnknownError'
+      const errorStack = error instanceof Error ? error.stack?.slice(0, 300) : null
+      
+      console.log('[phase17a-adjustment-stage-failure]', {
+        stage: 'catch_block',
+        errorName,
+        errorMessage: errorMessage.slice(0, 150),
+        errorStack,
+        isBuilderSide: errorMessage.includes('builder') || errorMessage.includes('generate'),
+        isValidationSide: errorMessage.includes('validation') || errorMessage.includes('shape'),
+        isSaveSide: errorMessage.includes('save') || errorMessage.includes('verification'),
+        isImportSide: errorMessage.includes('undefined') || errorMessage.includes('import'),
+        requestedTrainingDays: request.newTrainingDays || null,
+        currentProgramSessionCount: program?.sessions?.length || null,
+        scheduleMode: inputs?.scheduleMode || null,
+        isHighFrequencyRequest: (request.newTrainingDays || 0) >= 6,
+      })
+      
       // [PHASE 16Q] Runtime marker for adjustment catch
       console.log('[phase16q-runtime-marker]', {
         file: 'app/(app)/program/page.tsx',

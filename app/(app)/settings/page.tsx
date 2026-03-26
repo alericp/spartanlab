@@ -24,6 +24,7 @@ import {
   type EquipmentType,
   WEAKEST_AREA_LABELS,
   type WeakestArea,
+  getOnboardingProfile,
 } from '@/lib/athlete-profile'
 import { 
   STYLE_MODE_DEFINITIONS,
@@ -384,9 +385,10 @@ export default function SettingsPage() {
     
     setProfile(data as AthleteProfile)
     
-    // [PHASE 17D] Bodyweight truth chain fix
-    // ISSUE: Onboarding collects weightRange (e.g. '160_180') not numeric bodyweight
-    // FIX: Derive midpoint from weightRange if no exact bodyweight exists
+    // [PHASE 17E] Bodyweight truth chain fix
+    // ROOT CAUSE: API returns database bodyweight (often null), but NOT weightRange
+    // weightRange is ONLY stored in localStorage onboarding profile
+    // FIX: Check localStorage onboarding profile for weightRange when API doesn't have it
     const weightRangeMidpoints: Record<string, number> = {
       'under_140': 130,
       '140_160': 150,
@@ -396,7 +398,11 @@ export default function SettingsPage() {
       'over_220': 235,
     }
     
-    // Determine best available bodyweight source
+    // [PHASE 17E] Get weightRange from localStorage onboarding profile (not in database)
+    const onboardingProfile = getOnboardingProfile()
+    const localStorageWeightRange = onboardingProfile?.weightRange || null
+    
+    // Determine best available bodyweight source with proper priority
     let resolvedBodyweight: number | null = null
     let bodyweightSource = 'none'
     
@@ -404,31 +410,31 @@ export default function SettingsPage() {
       // Exact numeric bodyweight from database - highest priority
       resolvedBodyweight = data.bodyweight
       bodyweightSource = 'database_exact'
-    } else if (data.weightRange && weightRangeMidpoints[data.weightRange]) {
-      // Derive from onboarding weightRange - fallback
-      resolvedBodyweight = weightRangeMidpoints[data.weightRange]
-      bodyweightSource = 'derived_from_weightRange'
+    } else if (localStorageWeightRange && weightRangeMidpoints[localStorageWeightRange]) {
+      // [PHASE 17E] FIX: Derive from localStorage onboarding weightRange
+      resolvedBodyweight = weightRangeMidpoints[localStorageWeightRange]
+      bodyweightSource = 'derived_from_localStorage_weightRange'
     }
     
-    // [PHASE 17D] Bodyweight truth audit
-    console.log('[phase17d-bodyweight-settings-hydration-source-audit]', {
-      databaseBodyweight: data.bodyweight,
-      databaseBodyweightType: typeof data.bodyweight,
-      onboardingWeightRange: data.weightRange || null,
-      derivedMidpoint: data.weightRange ? weightRangeMidpoints[data.weightRange] || null : null,
+    // [PHASE 17E] Bodyweight source contract audit - shows exact truth chain
+    console.log('[phase17e-bodyweight-source-contract-audit]', {
+      apiBodyweight: data.bodyweight,
+      apiBodyweightType: typeof data.bodyweight,
+      apiWeightRange: data.weightRange || 'NOT_IN_API_RESPONSE',
+      localStorageWeightRange: localStorageWeightRange || 'missing',
+      derivedMidpoint: localStorageWeightRange ? weightRangeMidpoints[localStorageWeightRange] || null : null,
       resolvedBodyweight,
       bodyweightSource,
       willDisplayValue: resolvedBodyweight?.toString() || '',
+      rootCause: 'weightRange_only_in_localStorage_not_database',
     })
     
-    // [PHASE 17D] Onboarding bodyweight contract audit
-    console.log('[phase17d-onboarding-bodyweight-contract-audit]', {
-      onboardingStoresExactNumeric: false,
-      onboardingStoresWeightRange: !!data.weightRange,
-      weightRangeValue: data.weightRange || 'missing',
-      verdict: data.weightRange 
-        ? 'onboarding_range_only_no_exact_bodyweight' 
-        : 'onboarding_bodyweight_missing',
+    // [PHASE 17E] Settings bodyweight read audit
+    console.log('[phase17e-settings-bodyweight-read-audit]', {
+      readFromAPI: typeof data.bodyweight === 'number' && data.bodyweight > 0,
+      readFromLocalStorageDerived: bodyweightSource === 'derived_from_localStorage_weightRange',
+      finalValue: resolvedBodyweight,
+      verdict: resolvedBodyweight !== null ? 'bodyweight_resolved' : 'bodyweight_missing',
     })
     
     setBodyweight(resolvedBodyweight?.toString() || '')
@@ -557,15 +563,18 @@ export default function SettingsPage() {
       // The API will store NULL for trainingDaysPerWeek when scheduleMode='flexible'
       console.log('[Settings] Preparing save payload, scheduleMode:', scheduleMode)
       
-      // [PHASE 17C] Bodyweight save payload audit
+      // [PHASE 17E] Bodyweight save payload audit - track exact write operation
       const parsedBodyweight = bodyweight ? parseFloat(bodyweight) : null
-      console.log('[phase17c-bodyweight-settings-save-payload-audit]', {
+      console.log('[phase17e-settings-bodyweight-write-audit]', {
         rawInputValue: bodyweight,
         rawInputType: typeof bodyweight,
         parsedValue: parsedBodyweight,
         willSendToAPI: parsedBodyweight,
         isNull: parsedBodyweight === null,
         isNaN: Number.isNaN(parsedBodyweight),
+        verdict: parsedBodyweight !== null && !Number.isNaN(parsedBodyweight) 
+          ? 'bodyweight_will_save' 
+          : 'bodyweight_will_be_null',
       })
       
       const updates = {

@@ -153,6 +153,42 @@ export function ProgramAdjustmentModal({
   }, [currentSessionMinutes, currentTrainingDays])
   
   // ==========================================================================
+  // [PHASE 19A] TASK 4 - Modal prop audit
+  // This tracks whether the modal receives the correct `open` prop
+  // ==========================================================================
+  useEffect(() => {
+    console.log('[phase19a-adjustment-modal-prop-audit]', {
+      open,
+      view,
+      selectedCategory,
+      isRebuilding,
+      rebuildError,
+      currentTrainingDays,
+      currentSessionMinutes,
+      currentScheduleMode,
+      timestamp: Date.now(),
+    })
+    
+    if (open) {
+      console.log('[phase19a-adjustment-modal-view-audit]', {
+        modalRendering: true,
+        open,
+        currentView: view,
+        selectedCategory,
+        isRebuilding,
+        rebuildError,
+        prefillValues: {
+          trainingDays,
+          sessionMinutes,
+          currentTrainingDaysFromProps: currentTrainingDays,
+          currentSessionMinutesFromProps: currentSessionMinutes,
+        },
+        verdict: 'MODAL_IS_OPEN_AND_RENDERING',
+      })
+    }
+  }, [open, view, selectedCategory, isRebuilding, rebuildError, currentTrainingDays, currentSessionMinutes, currentScheduleMode, trainingDays, sessionMinutes])
+  
+  // ==========================================================================
   // [PHASE 16W] TRUTHFUL SCHEDULE CAPABILITY - No hardcoded Beta labels
   // The builder fully supports 6 and 7 day schedules via buildSixDayStructure
   // and buildSevenDayStructure. Beta labels are removed since support is real.

@@ -3539,6 +3539,95 @@ export default function ProgramPage() {
           finalRegenerationReason: rebuildBuilderInput.regenerationReason,
         })
         
+        // ==========================================================================
+        // [PHASE 17V] TASK 2 - Build explicit canonical override for handleRegenerate
+        // This prevents builder from re-reading weaker stale canonical profile
+        // ==========================================================================
+        const canonicalProfileNow = getCanonicalProfile()
+        const effectiveScheduleMode = inputs?.scheduleMode || freshRebuildInput?.scheduleMode || canonicalProfileNow?.scheduleMode
+        
+        const rebuildCanonicalOverride = {
+          ...canonicalProfileNow,
+          // [PHASE 17V] Material identity fields - prefer current inputs truth
+          primaryGoal: inputs?.primaryGoal || freshRebuildInput?.primaryGoal || canonicalProfileNow?.primaryGoal,
+          secondaryGoal: inputs?.secondaryGoal ?? freshRebuildInput?.secondaryGoal ?? canonicalProfileNow?.secondaryGoal,
+          selectedSkills: (inputs?.selectedSkills?.length ?? 0) > 0 
+            ? inputs.selectedSkills 
+            : (freshRebuildInput?.selectedSkills?.length ?? 0) > 0 
+            ? freshRebuildInput.selectedSkills 
+            : canonicalProfileNow?.selectedSkills,
+          scheduleMode: effectiveScheduleMode,
+          // [PHASE 17V] Flexible null semantics - if flexible, force null trainingDaysPerWeek
+          trainingDaysPerWeek: effectiveScheduleMode === 'flexible' 
+            ? null 
+            : (inputs?.trainingDaysPerWeek ?? freshRebuildInput?.trainingDaysPerWeek ?? canonicalProfileNow?.trainingDaysPerWeek),
+          sessionDurationMode: inputs?.sessionDurationMode || freshRebuildInput?.sessionDurationMode || canonicalProfileNow?.sessionDurationMode,
+          sessionLengthMinutes: inputs?.sessionLength ?? freshRebuildInput?.sessionLength ?? canonicalProfileNow?.sessionLengthMinutes,
+          equipmentAvailable: (inputs?.equipment?.length ?? 0) > 0 
+            ? inputs.equipment 
+            : (freshRebuildInput?.equipment?.length ?? 0) > 0 
+            ? freshRebuildInput.equipment 
+            : canonicalProfileNow?.equipmentAvailable,
+          trainingPathType: inputs?.trainingPathType || freshRebuildInput?.trainingPathType || canonicalProfileNow?.trainingPathType,
+        }
+        
+        // [PHASE 17V] TASK 6A - Rebuild canonical override audit
+        console.log('[phase17v-rebuild-canonical-override-audit]', {
+          triggerPath: 'handleRegenerate',
+          canonicalBaseline: {
+            primaryGoal: canonicalProfileNow?.primaryGoal ?? null,
+            secondaryGoal: canonicalProfileNow?.secondaryGoal ?? null,
+            selectedSkills: canonicalProfileNow?.selectedSkills ?? [],
+            scheduleMode: canonicalProfileNow?.scheduleMode ?? null,
+            trainingDaysPerWeek: canonicalProfileNow?.trainingDaysPerWeek ?? null,
+            sessionDurationMode: canonicalProfileNow?.sessionDurationMode ?? null,
+            sessionLengthMinutes: canonicalProfileNow?.sessionLengthMinutes ?? null,
+            equipmentAvailable: canonicalProfileNow?.equipmentAvailable ?? [],
+            trainingPathType: canonicalProfileNow?.trainingPathType ?? null,
+          },
+          currentInputsTruth: {
+            primaryGoal: inputs?.primaryGoal ?? null,
+            secondaryGoal: inputs?.secondaryGoal ?? null,
+            selectedSkills: inputs?.selectedSkills ?? [],
+            scheduleMode: inputs?.scheduleMode ?? null,
+            trainingDaysPerWeek: inputs?.trainingDaysPerWeek ?? null,
+            sessionDurationMode: inputs?.sessionDurationMode ?? null,
+            sessionLength: inputs?.sessionLength ?? null,
+            equipment: inputs?.equipment ?? [],
+            trainingPathType: inputs?.trainingPathType ?? null,
+          },
+          freshRebuildInputTruth: {
+            primaryGoal: freshRebuildInput?.primaryGoal ?? null,
+            secondaryGoal: freshRebuildInput?.secondaryGoal ?? null,
+            selectedSkills: freshRebuildInput?.selectedSkills ?? [],
+            scheduleMode: freshRebuildInput?.scheduleMode ?? null,
+            trainingDaysPerWeek: freshRebuildInput?.trainingDaysPerWeek ?? null,
+            sessionDurationMode: freshRebuildInput?.sessionDurationMode ?? null,
+            sessionLength: freshRebuildInput?.sessionLength ?? null,
+            equipment: freshRebuildInput?.equipment ?? [],
+            trainingPathType: freshRebuildInput?.trainingPathType ?? null,
+          },
+          finalCanonicalOverride: {
+            primaryGoal: rebuildCanonicalOverride?.primaryGoal ?? null,
+            secondaryGoal: rebuildCanonicalOverride?.secondaryGoal ?? null,
+            selectedSkills: rebuildCanonicalOverride?.selectedSkills ?? [],
+            scheduleMode: rebuildCanonicalOverride?.scheduleMode ?? null,
+            trainingDaysPerWeek: rebuildCanonicalOverride?.trainingDaysPerWeek ?? null,
+            sessionDurationMode: rebuildCanonicalOverride?.sessionDurationMode ?? null,
+            sessionLengthMinutes: rebuildCanonicalOverride?.sessionLengthMinutes ?? null,
+            equipmentAvailable: rebuildCanonicalOverride?.equipmentAvailable ?? [],
+            trainingPathType: rebuildCanonicalOverride?.trainingPathType ?? null,
+          },
+        })
+        
+        // [PHASE 17V] TASK 7 - Root cause verdict
+        console.log('[phase17v-root-cause-verdict]', {
+          triggerPath: 'handleRegenerate',
+          rootCauseTheory: 'builder_reads_canonicalProfile_heavily_and_can_ignore_stronger_inputs_if_no_canonical_override_is_passed',
+          fixApplied: 'explicit_canonicalProfileOverride_now_passed_to_generateAdaptiveProgram',
+          expectedBehavior: 'rebuild_should_now_follow_same_stronger_truth_class_in_builder_as_onboarding',
+        })
+        
         // [PHASE 16S] Dispatch verdict - marking actual builder call for regeneration
         const regenAttemptId = `attempt_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
         console.log('[phase16s-generate-dispatch-verdict]', {
@@ -3553,7 +3642,26 @@ export default function ProgramPage() {
         
         // [PHASE 16N] FIX: Await the async builder - it returns Promise<AdaptiveProgram>
         // [PHASE 17T] Now uses rebuildBuilderInput with explicit regenerationMode
-        const newProgram = await programModules.generateAdaptiveProgram(rebuildBuilderInput)
+        // [PHASE 17V] TASK 3 - Pass explicit canonicalProfileOverride to prevent builder from re-reading weaker canonical
+        const newProgram = await programModules.generateAdaptiveProgram(
+          rebuildBuilderInput,
+          undefined,
+          { canonicalProfileOverride: rebuildCanonicalOverride }
+        )
+        
+        // ==========================================================================
+        // [PHASE 17V] TASK 6B - Rebuild postfix verdict
+        // ==========================================================================
+        console.log('[phase17v-rebuild-postfix-verdict]', {
+          triggerPath: 'handleRegenerate',
+          finalProgramId: (newProgram as AdaptiveProgram)?.id ?? null,
+          finalProgramSessionCount: (newProgram as AdaptiveProgram)?.sessions?.length ?? 0,
+          finalProgramPrimaryGoal: (newProgram as AdaptiveProgram)?.primaryGoal ?? null,
+          finalProgramScheduleMode: (newProgram as AdaptiveProgram)?.scheduleMode ?? null,
+          finalProgramTrainingPathType: (newProgram as Record<string, unknown>)?.trainingPathType ?? null,
+          finalProgramSelectedSkills: (newProgram as AdaptiveProgram)?.selectedSkills ?? [],
+          verdict: 'rebuild_used_explicit_canonical_override_path',
+        })
         
         // [PHASE 16N] Verify we received resolved program, not Promise
         console.log('[phase16n-program-page-builder-result-audit]', {
@@ -5385,6 +5493,114 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
         finalRegenerationReason: adjustmentBuilderInput.regenerationReason,
       })
       
+      // ==========================================================================
+      // [PHASE 17V] TASK 4 - Build explicit canonical override for handleAdjustmentRebuild
+      // This prevents builder from re-reading weaker stale canonical profile
+      // ==========================================================================
+      const adjCanonicalProfileNow = getCanonicalProfile()
+      
+      // Determine effective schedule mode based on request type
+      const adjEffectiveScheduleMode = request.type === 'training_days'
+        ? updatedInputs?.scheduleMode
+        : (inputs?.scheduleMode || updatedInputs?.scheduleMode || adjCanonicalProfileNow?.scheduleMode)
+      
+      const adjustmentCanonicalOverride = {
+        ...adjCanonicalProfileNow,
+        // [PHASE 17V] Material identity fields - preserve current inputs, but let explicit request win
+        primaryGoal: inputs?.primaryGoal || updatedInputs?.primaryGoal || adjCanonicalProfileNow?.primaryGoal,
+        secondaryGoal: inputs?.secondaryGoal ?? updatedInputs?.secondaryGoal ?? adjCanonicalProfileNow?.secondaryGoal,
+        // selectedSkills always preserves from inputs (never the explicit request target)
+        selectedSkills: (inputs?.selectedSkills?.length ?? 0) > 0 
+          ? inputs.selectedSkills 
+          : (updatedInputs?.selectedSkills?.length ?? 0) > 0 
+          ? updatedInputs.selectedSkills 
+          : adjCanonicalProfileNow?.selectedSkills,
+        // trainingPathType always preserves from inputs
+        trainingPathType: inputs?.trainingPathType || updatedInputs?.trainingPathType || adjCanonicalProfileNow?.trainingPathType,
+        // scheduleMode - let request win if training_days, else preserve
+        scheduleMode: adjEffectiveScheduleMode,
+        // trainingDaysPerWeek - flexible null semantics, let request win if training_days
+        trainingDaysPerWeek: adjEffectiveScheduleMode === 'flexible'
+          ? null
+          : request.type === 'training_days'
+          ? updatedInputs?.trainingDaysPerWeek
+          : (inputs?.trainingDaysPerWeek ?? updatedInputs?.trainingDaysPerWeek ?? adjCanonicalProfileNow?.trainingDaysPerWeek),
+        // sessionDurationMode - let request win if session_time
+        sessionDurationMode: request.type === 'session_time'
+          ? updatedInputs?.sessionDurationMode
+          : (inputs?.sessionDurationMode || updatedInputs?.sessionDurationMode || adjCanonicalProfileNow?.sessionDurationMode),
+        // sessionLengthMinutes - let request win if session_time
+        sessionLengthMinutes: request.type === 'session_time'
+          ? updatedInputs?.sessionLength
+          : (inputs?.sessionLength ?? updatedInputs?.sessionLength ?? adjCanonicalProfileNow?.sessionLengthMinutes),
+        // equipmentAvailable - let request win if equipment
+        equipmentAvailable: request.type === 'equipment'
+          ? ((updatedInputs?.equipment?.length ?? 0) > 0 ? updatedInputs.equipment : adjCanonicalProfileNow?.equipmentAvailable)
+          : ((inputs?.equipment?.length ?? 0) > 0 
+            ? inputs.equipment 
+            : (updatedInputs?.equipment?.length ?? 0) > 0 
+            ? updatedInputs.equipment 
+            : adjCanonicalProfileNow?.equipmentAvailable),
+      }
+      
+      // [PHASE 17V] TASK 6C - Adjustment canonical override audit
+      console.log('[phase17v-adjustment-canonical-override-audit]', {
+        triggerPath: 'handleAdjustmentRebuild',
+        requestType: request.type,
+        canonicalBaseline: {
+          primaryGoal: adjCanonicalProfileNow?.primaryGoal ?? null,
+          secondaryGoal: adjCanonicalProfileNow?.secondaryGoal ?? null,
+          selectedSkills: adjCanonicalProfileNow?.selectedSkills ?? [],
+          scheduleMode: adjCanonicalProfileNow?.scheduleMode ?? null,
+          trainingDaysPerWeek: adjCanonicalProfileNow?.trainingDaysPerWeek ?? null,
+          sessionDurationMode: adjCanonicalProfileNow?.sessionDurationMode ?? null,
+          sessionLengthMinutes: adjCanonicalProfileNow?.sessionLengthMinutes ?? null,
+          equipmentAvailable: adjCanonicalProfileNow?.equipmentAvailable ?? [],
+          trainingPathType: adjCanonicalProfileNow?.trainingPathType ?? null,
+        },
+        currentInputsTruth: {
+          primaryGoal: inputs?.primaryGoal ?? null,
+          secondaryGoal: inputs?.secondaryGoal ?? null,
+          selectedSkills: inputs?.selectedSkills ?? [],
+          scheduleMode: inputs?.scheduleMode ?? null,
+          trainingDaysPerWeek: inputs?.trainingDaysPerWeek ?? null,
+          sessionDurationMode: inputs?.sessionDurationMode ?? null,
+          sessionLength: inputs?.sessionLength ?? null,
+          equipment: inputs?.equipment ?? [],
+          trainingPathType: inputs?.trainingPathType ?? null,
+        },
+        updatedInputsTruth: {
+          primaryGoal: updatedInputs?.primaryGoal ?? null,
+          secondaryGoal: updatedInputs?.secondaryGoal ?? null,
+          selectedSkills: updatedInputs?.selectedSkills ?? [],
+          scheduleMode: updatedInputs?.scheduleMode ?? null,
+          trainingDaysPerWeek: updatedInputs?.trainingDaysPerWeek ?? null,
+          sessionDurationMode: updatedInputs?.sessionDurationMode ?? null,
+          sessionLength: updatedInputs?.sessionLength ?? null,
+          equipment: updatedInputs?.equipment ?? [],
+          trainingPathType: updatedInputs?.trainingPathType ?? null,
+        },
+        finalCanonicalOverride: {
+          primaryGoal: adjustmentCanonicalOverride?.primaryGoal ?? null,
+          secondaryGoal: adjustmentCanonicalOverride?.secondaryGoal ?? null,
+          selectedSkills: adjustmentCanonicalOverride?.selectedSkills ?? [],
+          scheduleMode: adjustmentCanonicalOverride?.scheduleMode ?? null,
+          trainingDaysPerWeek: adjustmentCanonicalOverride?.trainingDaysPerWeek ?? null,
+          sessionDurationMode: adjustmentCanonicalOverride?.sessionDurationMode ?? null,
+          sessionLengthMinutes: adjustmentCanonicalOverride?.sessionLengthMinutes ?? null,
+          equipmentAvailable: adjustmentCanonicalOverride?.equipmentAvailable ?? [],
+          trainingPathType: adjustmentCanonicalOverride?.trainingPathType ?? null,
+        },
+      })
+      
+      // [PHASE 17V] TASK 7 - Root cause verdict for adjustment
+      console.log('[phase17v-root-cause-verdict]', {
+        triggerPath: 'handleAdjustmentRebuild',
+        rootCauseTheory: 'builder_reads_canonicalProfile_heavily_and_can_ignore_stronger_inputs_if_no_canonical_override_is_passed',
+        fixApplied: 'explicit_canonicalProfileOverride_now_passed_to_generateAdaptiveProgram',
+        expectedBehavior: 'rebuild_should_now_follow_same_stronger_truth_class_in_builder_as_onboarding',
+      })
+      
       // [PHASE 16S] Dispatch verdict - marking actual builder call for adjustment
       const adjAttemptId = `attempt_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
       console.log('[phase16s-generate-dispatch-verdict]', {
@@ -5399,7 +5615,12 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
       
       // [PHASE 16N] FIX: Await the async builder - it returns Promise<AdaptiveProgram>
       // [PHASE 17T] Now uses adjustmentBuilderInput with explicit regenerationMode
-      const newProgram = await programModules.generateAdaptiveProgram(adjustmentBuilderInput)
+      // [PHASE 17V] TASK 5 - Pass explicit canonicalProfileOverride to prevent builder from re-reading weaker canonical
+      const newProgram = await programModules.generateAdaptiveProgram(
+        adjustmentBuilderInput,
+        undefined,
+        { canonicalProfileOverride: adjustmentCanonicalOverride }
+      )
       
       // [PHASE 17A] Builder returned - check dispatch stage success
       console.log('[phase17a-adjustment-stage-success]', { 
@@ -5407,6 +5628,21 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
         builderReturned: newProgram !== undefined,
         programId: (newProgram as AdaptiveProgram)?.id || null,
         sessionCount: (newProgram as AdaptiveProgram)?.sessions?.length || 0,
+      })
+      
+      // ==========================================================================
+      // [PHASE 17V] TASK 6D - Adjustment postfix verdict
+      // ==========================================================================
+      console.log('[phase17v-adjustment-postfix-verdict]', {
+        triggerPath: 'handleAdjustmentRebuild',
+        requestType: request.type,
+        finalProgramId: (newProgram as AdaptiveProgram)?.id ?? null,
+        finalProgramSessionCount: (newProgram as AdaptiveProgram)?.sessions?.length ?? 0,
+        finalProgramPrimaryGoal: (newProgram as AdaptiveProgram)?.primaryGoal ?? null,
+        finalProgramScheduleMode: (newProgram as AdaptiveProgram)?.scheduleMode ?? null,
+        finalProgramTrainingPathType: (newProgram as Record<string, unknown>)?.trainingPathType ?? null,
+        finalProgramSelectedSkills: (newProgram as AdaptiveProgram)?.selectedSkills ?? [],
+        verdict: 'adjustment_rebuild_used_explicit_canonical_override_path',
       })
       
       // [PHASE 17A] Enter validation stage

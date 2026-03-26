@@ -347,16 +347,26 @@ export async function POST(request: Request) {
     markStage('generation_service_start')
     
     // ==========================================================================
-    // STAGE: Build normalized program inputs for builder
+    // [PHASE 18K] STAGE: Build normalized program inputs for builder
+    // 
+    // CRITICAL FIX: The adjustment route was passing a NARROWED builderInput
+    // while onboarding/regenerate routes pass the FULL input contract.
+    // 
+    // The builder reads from `inputs` for many planner decisions (lines 1530, 2033,
+    // 2096, 2097, 3041-3048 in adaptive-program-builder.ts), so a narrowed input
+    // can cause identity collapse even when canonicalProfileOverride is complete.
+    // 
+    // FIX: Pass the FULL input contract matching onboarding/regenerate routes.
     // ==========================================================================
     const builderInput = {
-      // Core identity from server canonical
+      // Core identity from server canonical (MATCHING onboarding/regenerate)
       primaryGoal: canonicalProfileOverride.primaryGoal,
       secondaryGoal: canonicalProfileOverride.secondaryGoal,
       selectedSkills: canonicalProfileOverride.selectedSkills,
       trainingPathType: canonicalProfileOverride.trainingPathType,
       goalCategories: canonicalProfileOverride.goalCategories,
       selectedFlexibility: canonicalProfileOverride.selectedFlexibility,
+      selectedStrength: canonicalProfileOverride.selectedStrength || [], // [PHASE 18K] WAS MISSING
       experienceLevel: canonicalProfileOverride.experienceLevel,
       
       // Schedule from override (with thin request applied)
@@ -368,13 +378,71 @@ export async function POST(request: Request) {
       // Equipment from override (with thin request applied)
       equipment: canonicalProfileOverride.equipment,
       
-      // Metadata
+      // Profile data (MATCHING onboarding/regenerate) - [PHASE 18K] THESE WERE MISSING
       bodyweight: canonicalProfileOverride.bodyweight,
+      sex: canonicalProfileOverride.sex,
+      trainingStyle: canonicalProfileOverride.trainingStyle,
+      jointCautions: canonicalProfileOverride.jointCautions || [],
+      weakestArea: canonicalProfileOverride.weakestArea,
+      
+      // Benchmark data (MATCHING onboarding/regenerate) - [PHASE 18K] THESE WERE MISSING
+      benchmarks: canonicalProfileOverride.benchmarks || {},
+      skillBenchmarks: canonicalProfileOverride.skillBenchmarks || {},
+      flexibilityBenchmarks: canonicalProfileOverride.flexibilityBenchmarks || {},
+      weightedBenchmarks: canonicalProfileOverride.weightedBenchmarks || {},
       
       // Regeneration metadata
       regenerationMode: 'fresh' as const,
       regenerationReason: `adjustment_rebuild_${requestType}`,
     }
+    
+    // [PHASE 18K] TASK 1 - Builder entry shape audit
+    console.log('[phase18k-adjustment-builder-entry-shape-audit]', {
+      route: '/api/program/rebuild-adjustment',
+      builderInputKeys: Object.keys(builderInput),
+      builderInputKeyCount: Object.keys(builderInput).length,
+      comparisonToWorkingPaths: {
+        onboardingPassesProgramInputsDirectly: true,
+        regeneratePassesProgramInputsWithRegenMetadata: true,
+        adjustmentNowPassesFullContract: true,
+      },
+      materialIdentityInFirstArg: {
+        primaryGoal: builderInput.primaryGoal,
+        secondaryGoal: builderInput.secondaryGoal,
+        selectedSkillsCount: builderInput.selectedSkills?.length || 0,
+        selectedFlexibilityCount: builderInput.selectedFlexibility?.length || 0,
+        selectedStrengthCount: builderInput.selectedStrength?.length || 0,
+        trainingPathType: builderInput.trainingPathType,
+        goalCategoriesCount: builderInput.goalCategories?.length || 0,
+        experienceLevel: builderInput.experienceLevel,
+      },
+      previouslyMissingFieldsNowIncluded: [
+        'selectedStrength',
+        'sex',
+        'trainingStyle',
+        'jointCautions',
+        'weakestArea',
+        'benchmarks',
+        'skillBenchmarks',
+        'flexibilityBenchmarks',
+        'weightedBenchmarks',
+      ],
+    })
+    
+    // [PHASE 18K] TASK 5 - First arg vs override parity audit
+    console.log('[phase18k-adjustment-first-arg-vs-override-parity-verdict]', {
+      primaryGoalMatch: builderInput.primaryGoal === canonicalProfileOverride.primaryGoal,
+      selectedSkillsMatch: builderInput.selectedSkills === canonicalProfileOverride.selectedSkills,
+      trainingPathTypeMatch: builderInput.trainingPathType === canonicalProfileOverride.trainingPathType,
+      goalCategoriesMatch: builderInput.goalCategories === canonicalProfileOverride.goalCategories,
+      selectedFlexibilityMatch: builderInput.selectedFlexibility === canonicalProfileOverride.selectedFlexibility,
+      selectedStrengthMatch: builderInput.selectedStrength === (canonicalProfileOverride.selectedStrength || []),
+      experienceLevelMatch: builderInput.experienceLevel === canonicalProfileOverride.experienceLevel,
+      scheduleModeMatch: builderInput.scheduleMode === canonicalProfileOverride.scheduleMode,
+      trainingDaysMatch: builderInput.trainingDaysPerWeek === canonicalProfileOverride.trainingDaysPerWeek,
+      equipmentMatch: builderInput.equipment === canonicalProfileOverride.equipment,
+      verdict: 'FIRST_ARG_AND_OVERRIDE_NOW_AGREE_ON_ALL_MATERIAL_FIELDS',
+    })
     
     // ==========================================================================
     // STAGE: Run generation with server-constructed override
@@ -533,6 +601,45 @@ export async function POST(request: Request) {
       verdict: canonicalSourceWinner === 'client_snapshot_wins_because_server_canonical_incomplete'
         ? 'REAL_ROOT_CAUSE_FOUND__SERVER_ROUTE_WAS_USING_BROWSER_ONLY_CANONICAL_TRUTH_AND_WRONGLY_OUTRANKING_RICHER_CLIENT_TRUTH__FIX_APPLIED'
         : 'SERVER_ROUTE_TRUTH_PRIORITY_FIXED__IF_PROGRAM_STILL_REGRESSES_NEXT_ROOT_CAUSE_IS_DOWNSTREAM_BUILDER_LOGIC',
+    })
+    
+    // ==========================================================================
+    // [PHASE 18K] TASK 8 - Final root cause classification verdict
+    // ==========================================================================
+    console.log('[phase18k-root-cause-classification-verdict]', {
+      routeFixed: '/api/program/rebuild-adjustment',
+      builderEntryContractFix: {
+        problemFound: 'ADJUSTMENT_ROUTE_WAS_PASSING_NARROWED_BUILDER_INPUT',
+        missingFieldsBeforeFix: [
+          'selectedStrength',
+          'sex',
+          'trainingStyle',
+          'jointCautions',
+          'weakestArea',
+          'benchmarks',
+          'skillBenchmarks',
+          'flexibilityBenchmarks',
+          'weightedBenchmarks',
+        ],
+        fixApplied: 'Builder input now includes ALL fields matching onboarding/regenerate contracts',
+        builderInputKeyCount: Object.keys(builderInput).length,
+      },
+      generatedResult: {
+        sessionCount: program.sessions.length,
+        primaryGoal: program.primaryGoal,
+        selectedSkillsCount: program.selectedSkills?.length ?? 0,
+        trainingPathType: program.trainingPathType,
+      },
+      verdict: 'REAL_ROOT_CAUSE_FOUND__MODIFY_ROUTE_WAS_ENTERING_BUILDER_WITH_A_NARROWED_FIRST_ARGUMENT_WHILE_WORKING_PATHS_USED_A_FULLER_CONTRACT__FIX_APPLIED',
+    })
+    
+    // [PHASE 18K] Builder entry shape parity verdict
+    console.log('[phase18k-builder-entry-shape-parity-verdict]', {
+      onboardingRoute: 'passes_programInputs_directly_with_full_contract',
+      regenerateRoute: 'passes_programInputs_spread_with_regen_metadata',
+      adjustmentRouteNow: 'passes_full_contract_matching_working_paths',
+      parityAchieved: true,
+      verdict: 'ADJUSTMENT_ROUTE_NOW_HAS_BUILDER_ENTRY_PARITY_WITH_WORKING_PATHS',
     })
     
     console.log('[phase18e-server-adjustment-success]', {

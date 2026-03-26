@@ -4798,6 +4798,28 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
   // [canonical-rebuild] TASK B: Handle adjustment rebuilds that require full program regeneration
   const handleAdjustmentRebuild = useCallback(async (request: AdjustmentRebuildRequest): Promise<AdjustmentRebuildResult> => {
     // ==========================================================================
+    // [PHASE 17R] TASK 2 - Program page callback receive audit
+    // ==========================================================================
+    console.log('[phase17r-program-page-adjustment-receive-audit]', {
+      receivedPayload: {
+        requestType: request.type,
+        newTrainingDays: request.newTrainingDays ?? null,
+        newSessionMinutes: request.newSessionMinutes ?? null,
+        newEquipment: request.newEquipment ?? null,
+      },
+      currentVisibleProgramId: program?.id ?? null,
+      currentVisibleSessionCount: program?.sessions?.length ?? 0,
+    })
+    
+    // [PHASE 17R] Branch audit - adjustment flow is always "full rebuild"
+    console.log('[phase17r-program-page-adjustment-branch-audit]', {
+      isSmallAdjustmentFlow: false, // Modal adjustments always trigger full rebuild
+      isFullRebuildFlow: true,
+      isStartNewProgramFlow: false,
+      branchReason: 'adjustment_modal_always_triggers_full_rebuild',
+    })
+    
+    // ==========================================================================
     // [PHASE 16S] Clear stale failure state at dispatch start (adjustment)
     // ==========================================================================
     const adjDispatchStartTime = new Date().toISOString()
@@ -4967,6 +4989,47 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
         sessionLength: updatedInputs.sessionLength,
         equipment: updatedInputs.equipment?.length,
       },
+    })
+    
+    // ==========================================================================
+    // [PHASE 17R] TASK 3 - Generation entry request truth audit
+    // ==========================================================================
+    console.log('[phase17r-generation-entry-request-truth-audit]', {
+      finalRequestShape: {
+        trainingDaysPerWeek: updatedInputs.trainingDaysPerWeek,
+        sessionLength: updatedInputs.sessionLength,
+        scheduleMode: updatedInputs.scheduleMode,
+        primaryGoal: updatedInputs.primaryGoal,
+        secondaryGoal: updatedInputs.secondaryGoal || null,
+        equipmentCount: updatedInputs.equipment?.length || 0,
+      },
+      effectiveScheduleMode: updatedInputs.scheduleMode ?? null,
+      effectiveTrainingDays: updatedInputs.trainingDaysPerWeek ?? null,
+      effectiveSelectedSkills: updatedInputs.selectedSkills ?? null,
+      effectiveSelectedStyles: updatedInputs.selectedStyles ?? null,
+      effectiveTargetSessionDuration: updatedInputs.sessionLength ?? null,
+    })
+    
+    // [PHASE 17R] Request transform verdict - compare original request to final inputs
+    console.log('[phase17r-request-transform-verdict]', {
+      originalInput: {
+        requestType: request.type,
+        requestedTrainingDays: request.newTrainingDays ?? null,
+        requestedSessionMinutes: request.newSessionMinutes ?? null,
+      },
+      transformedRequest: {
+        trainingDaysPerWeek: updatedInputs.trainingDaysPerWeek,
+        sessionLength: updatedInputs.sessionLength,
+        scheduleMode: updatedInputs.scheduleMode,
+      },
+      overridesApplied: Object.keys(overrides),
+      flexiblePreservingRequestDetected: request.type === 'training_days' && request.newTrainingDays === undefined,
+      potentialMismatch: 
+        request.type === 'training_days' && 
+        request.newTrainingDays === undefined && 
+        typeof updatedInputs.trainingDaysPerWeek === 'number'
+          ? 'FLEXIBLE_REQUEST_BUT_STATIC_DAYS_IN_FINAL_INPUT'
+          : 'NO_MISMATCH_DETECTED',
     })
     
     try {

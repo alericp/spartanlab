@@ -290,6 +290,36 @@ export function reconcileCanonicalProfile(): CanonicalProgrammingProfile {
     onboardingComplete: onboardingProfile?.onboardingComplete ?? athleteProfile?.onboardingComplete,
   })
   
+  // [PHASE 17E] Comprehensive source audit - track exact values from each source
+  console.log('[phase17e-canonical-profile-source-audit]', {
+    onboardingProfileExists: !!onboardingProfile,
+    athleteProfileExists: !!athleteProfile,
+    // Bodyweight sources
+    onboardingWeightRange: onboardingProfile?.weightRange || null,
+    onboardingBodyweight: (onboardingProfile as unknown as { bodyweight?: number })?.bodyweight || null,
+    athleteBodyweight: athleteProfile?.bodyweight || null,
+    // Schedule sources
+    onboardingScheduleMode: onboardingProfile?.scheduleMode || null,
+    athleteScheduleMode: athleteProfile?.scheduleMode || null,
+    onboardingTrainingDays: onboardingProfile?.trainingDaysPerWeek || null,
+    athleteTrainingDays: athleteProfile?.trainingDaysPerWeek || null,
+    // Skills sources
+    onboardingSelectedSkills: onboardingProfile?.selectedSkills || [],
+    athleteSelectedSkills: (athleteProfile as unknown as { selectedSkills?: string[] })?.selectedSkills || [],
+    // Goals sources
+    onboardingPrimaryGoal: onboardingProfile?.primaryGoal || null,
+    athletePrimaryGoal: athleteProfile?.primaryGoal || null,
+    // Style sources  
+    onboardingTrainingStyle: onboardingProfile?.trainingStyle || null,
+    athleteTrainingStyle: athleteProfile?.trainingStyle || null,
+    // Experience sources
+    onboardingExperience: onboardingProfile?.trainingExperience || null,
+    athleteExperience: athleteProfile?.experienceLevel || null,
+    // Equipment sources
+    onboardingEquipment: onboardingProfile?.equipment || [],
+    athleteEquipment: athleteProfile?.equipmentAvailable || [],
+  })
+  
   // Helper: pick first non-null/non-empty value from sources
   function pick<T>(onboardingVal: T | null | undefined, athleteVal: T | null | undefined, fallback: T): T {
     if (onboardingVal !== null && onboardingVal !== undefined) return onboardingVal
@@ -527,6 +557,20 @@ export function reconcileCanonicalProfile(): CanonicalProgrammingProfile {
         finalCanonicalBodyweight: finalBw,
         sourceUsed,
       })
+      
+      // [PHASE 17E] Canonical bodyweight resolution audit - detailed truth chain
+      console.log('[phase17e-canonical-bodyweight-resolution-audit]', {
+        athleteProfileRawValue: athleteProfile?.bodyweight,
+        athleteProfileUsed: athleteBw !== null,
+        onboardingProfileRawValue: (onboardingProfile as unknown as { bodyweight?: number })?.bodyweight,
+        onboardingProfileUsed: onboardingBw !== null,
+        onboardingWeightRange: onboardingProfile?.weightRange || null,
+        weightRangeDerivedValue: derivedBw,
+        weightRangeDerivedUsed: derivedBw !== null && athleteBw === null && onboardingBw === null,
+        finalValue: finalBw,
+        sourceUsed,
+        verdict: finalBw !== null ? `resolved_from_${sourceUsed}` : 'no_bodyweight_available',
+      })
       return finalBw
     })(),
     height: pick(
@@ -614,6 +658,22 @@ export function reconcileCanonicalProfile(): CanonicalProgrammingProfile {
       primaryGoalSource: onboardingProfile?.primaryGoal ? 'onboarding' :
         athleteProfile?.primaryGoal ? 'athlete' : 'null',
     },
+  })
+  
+  // [PHASE 17E] Style resolution canonical audit - track style truth chain
+  console.log('[phase17e-style-resolution-canonical-audit]', {
+    onboardingTrainingStyle: onboardingProfile?.trainingStyle || null,
+    athleteTrainingStyle: athleteProfile?.trainingStyle || null,
+    canonicalTrainingStyle: canonical.trainingStyle,
+    onboardingTrainingPathType: onboardingProfile?.trainingPathType || null,
+    canonicalTrainingPathType: canonical.trainingPathType,
+    styleSource: onboardingProfile?.trainingStyle ? 'onboarding' 
+      : athleteProfile?.trainingStyle ? 'athlete' 
+      : 'null',
+    pathTypeSource: onboardingProfile?.trainingPathType ? 'onboarding' : 'null',
+    verdict: canonical.trainingStyle 
+      ? `style_resolved_to_${canonical.trainingStyle}`
+      : 'no_style_set',
     // Stale override detection
     staleOverrideDetected: {
       // Check if older athlete profile overrode newer onboarding
@@ -2334,6 +2394,37 @@ export function buildCanonicalGenerationEntry(
     }
   }
   
+  // [PHASE 17E] Generation entrypoint registry audit - track which path is calling
+  const isOnboardingPath = triggerSource === 'handleGenerate' || triggerSource.includes('onboarding')
+  const isRebuildPath = triggerSource === 'handleRegenerate' || triggerSource.includes('Rebuild') || triggerSource.includes('restart') || triggerSource.includes('Adjustment')
+  console.log('[phase17e-generation-entrypoint-registry-audit]', {
+    triggerSource,
+    isOnboardingPath,
+    isRebuildPath,
+    usesCanonicalProfile: true,
+    canonicalProfileUserId: profile.userId,
+    canonicalOnboardingComplete: profile.onboardingComplete,
+    overridesProvided: Object.keys(overrides || {}),
+  })
+  
+  // [PHASE 17E] Entrypoint canonical source audit - capture exact values entering generation
+  console.log('[phase17e-entrypoint-canonical-source-audit]', {
+    triggerSource,
+    canonicalScheduleMode: profile.scheduleMode,
+    canonicalTrainingDays: profile.trainingDaysPerWeek,
+    canonicalSessionDurationMode: profile.sessionDurationMode,
+    canonicalPrimaryGoal: profile.primaryGoal,
+    canonicalSecondaryGoal: profile.secondaryGoal,
+    canonicalSelectedSkills: profile.selectedSkills || [],
+    canonicalSelectedSkillsCount: profile.selectedSkills?.length || 0,
+    canonicalTrainingStyle: profile.trainingStyle,
+    canonicalEquipment: profile.equipmentAvailable || [],
+    canonicalEquipmentCount: profile.equipmentAvailable?.length || 0,
+    canonicalExperienceLevel: profile.experienceLevel,
+    canonicalWeightRange: profile.weightRange,
+    canonicalBodyweight: profile.bodyweight,
+  })
+  
   // STEP 2: Compose resolved values with explicit fallbacks
   const resolvedPrimaryGoal = overrides?.primaryGoal || profile.primaryGoal || null
   const resolvedSecondaryGoal = overrides?.secondaryGoal || profile.secondaryGoal || undefined
@@ -2552,7 +2643,7 @@ export function entryToAdaptiveInputs(entry: ValidatedGenerationEntry): {
   regenerationMode?: string
   regenerationReason?: string
 } {
-  return {
+  const result = {
     primaryGoal: entry.primaryGoal,
     secondaryGoal: entry.secondaryGoal,
     experienceLevel: entry.experienceLevel,
@@ -2568,6 +2659,27 @@ export function entryToAdaptiveInputs(entry: ValidatedGenerationEntry): {
     regenerationMode: entry.regenerationMode,
     regenerationReason: entry.regenerationReason,
   }
+  
+  // [PHASE 17E] Builder dispatch shape audit - exact inputs going to builder
+  console.log('[phase17e-builder-dispatch-shape-audit]', {
+    primaryGoal: result.primaryGoal,
+    secondaryGoal: result.secondaryGoal || null,
+    experienceLevel: result.experienceLevel,
+    trainingDaysPerWeek: result.trainingDaysPerWeek,
+    scheduleMode: result.scheduleMode,
+    sessionDurationMode: result.sessionDurationMode,
+    sessionLength: result.sessionLength,
+    selectedSkillsCount: result.selectedSkills?.length || 0,
+    selectedSkills: result.selectedSkills || [],
+    equipmentCount: result.equipment?.length || 0,
+    equipment: result.equipment || [],
+    trainingPathType: result.trainingPathType || null,
+    isFlexibleSchedule: result.scheduleMode === 'flexible',
+    isAdaptiveSession: result.sessionDurationMode === 'adaptive',
+    regenerationMode: result.regenerationMode || null,
+  })
+  
+  return result
 }
 
 // =============================================================================

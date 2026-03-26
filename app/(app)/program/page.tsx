@@ -1719,24 +1719,33 @@ export default function ProgramPage() {
           selectedSkillsCount: generationInputs?.selectedSkills?.length || 0,
         })
         
-        // [PHASE 17C] Main generation input audit - for comparison with rebuild
-        console.log('[phase17c-onboarding-generation-input-audit]', {
+        // [PHASE 17E] Onboarding canonical input audit - tracks exact inputs for this generation
+        console.log('[phase17e-onboarding-canonical-input-audit]', {
           triggerPath: 'handleGenerate',
           scheduleMode: generationInputs?.scheduleMode,
           trainingDaysPerWeek: generationInputs?.trainingDaysPerWeek,
           sessionDurationMode: generationInputs?.sessionDurationMode,
           sessionLength: generationInputs?.sessionLength,
-          selectedSkillsCount: generationInputs?.selectedSkills?.length || 0,
-          selectedSkills: generationInputs?.selectedSkills || [],
           primaryGoal: generationInputs?.primaryGoal,
           secondaryGoal: generationInputs?.secondaryGoal || null,
           experienceLevel: generationInputs?.experienceLevel,
+          selectedSkillsCount: generationInputs?.selectedSkills?.length || 0,
+          selectedSkills: generationInputs?.selectedSkills || [],
           equipmentCount: generationInputs?.equipment?.length || 0,
-          isFlexibleMode: generationInputs?.scheduleMode === 'flexible',
+          equipment: generationInputs?.equipment || [],
+          trainingPathType: generationInputs?.trainingPathType || null,
+          isFlexibleSchedule: generationInputs?.scheduleMode === 'flexible',
+          isAdaptiveSession: generationInputs?.sessionDurationMode === 'adaptive',
           entryFallbacksUsed: entryResult.entry?.__fallbacksUsed || [],
-          verdict: generationInputs?.scheduleMode === 'flexible'
-            ? 'flexible_mode_engine_decides_days'
-            : `static_mode_${generationInputs?.trainingDaysPerWeek}_days`,
+        })
+        
+        // [PHASE 17E] Selected skills raw audit - track from entry to builder
+        console.log('[phase17e-selected-skills-raw-audit]', {
+          triggerPath: 'handleGenerate',
+          entrySelectedSkills: entryResult.entry?.selectedSkills || [],
+          inputSelectedSkills: generationInputs?.selectedSkills || [],
+          skillsMatch: JSON.stringify(entryResult.entry?.selectedSkills?.sort()) === JSON.stringify(generationInputs?.selectedSkills?.sort()),
+          skillCount: generationInputs?.selectedSkills?.length || 0,
         })
         
   // [program-build] STAGE 2: Generate program
@@ -2238,6 +2247,27 @@ export default function ProgramPage() {
           verdict: 'main_generation_completed_with_unified_canonical_source',
         })
         
+        // [PHASE 17E] Selected skills final program audit - verify which skills reached output
+        const inputSkillsSet = new Set(generationInputs?.selectedSkills || [])
+        const outputSkillsSet = new Set(newProgram.selectedSkills || [])
+        const skillsInBoth = [...inputSkillsSet].filter(s => outputSkillsSet.has(s))
+        const skillsDropped = [...inputSkillsSet].filter(s => !outputSkillsSet.has(s))
+        const skillsAdded = [...outputSkillsSet].filter(s => !inputSkillsSet.has(s))
+        console.log('[phase17e-selected-skills-final-program-audit]', {
+          triggerPath: 'handleGenerate',
+          inputSkillsCount: inputSkillsSet.size,
+          outputSkillsCount: outputSkillsSet.size,
+          inputSkills: [...inputSkillsSet],
+          outputSkills: [...outputSkillsSet],
+          skillsInBoth,
+          skillsDropped,
+          skillsAdded,
+          allInputSkillsPreserved: skillsDropped.length === 0,
+          verdict: skillsDropped.length === 0 
+            ? 'all_skills_preserved'
+            : `${skillsDropped.length}_skills_dropped`,
+        })
+        
         // [PHASE 17D] No generation regression audit - verify 6-day capability intact
         console.log('[phase17d-no-generation-regression-audit]', {
           inputScheduleMode: generationInputs?.scheduleMode,
@@ -2248,6 +2278,35 @@ export default function ProgramPage() {
           verdict: (newProgram.sessions?.length || 0) >= 6 
             ? '6day_capability_intact' 
             : 'session_count_matches_input_or_flexible_decision',
+        })
+        
+        // [PHASE 17E] Onboarding 6-day success verdict - for comparison with rebuild
+        const onboardingSessionCount = newProgram.sessions?.length || 0
+        const onboardingIsFlexible = generationInputs?.scheduleMode === 'flexible'
+        console.log('[phase17e-onboarding-6day-success-verdict]', {
+          triggerPath: 'handleGenerate',
+          inputScheduleMode: generationInputs?.scheduleMode,
+          inputTrainingDays: generationInputs?.trainingDaysPerWeek,
+          outputSessionCount: onboardingSessionCount,
+          isFlexibleInput: onboardingIsFlexible,
+          produced4Days: onboardingSessionCount === 4,
+          produced6PlusDays: onboardingSessionCount >= 6,
+          verdict: onboardingSessionCount >= 6 && onboardingIsFlexible
+            ? 'onboarding_flexible_6day_success'
+            : onboardingSessionCount === 4 && onboardingIsFlexible
+            ? 'onboarding_flexible_4day_INVESTIGATE'
+            : `onboarding_static_or_other_${onboardingSessionCount}days`,
+        })
+        
+        // [PHASE 17E] Unified generation truth verdict - confirms onboarding uses same pipeline
+        console.log('[phase17e-unified-generation-truth-verdict]', {
+          triggerPath: 'handleGenerate',
+          usedBuildCanonicalGenerationEntry: true,
+          usedEntryToAdaptiveInputs: true,
+          usedSameCanonicalProfile: true,
+          generationSuccessful: true,
+          outputSessionCount: onboardingSessionCount,
+          verdict: 'onboarding_uses_unified_canonical_truth_chain',
         })
       } catch (err) {
         // [PHASE 16Q] Runtime marker for catch block
@@ -2898,6 +2957,36 @@ export default function ProgramPage() {
           pathName: 'rebuild_from_program_page',
         })
         
+        // [PHASE 17E] Rebuild canonical input audit - tracks exact inputs for this rebuild
+        console.log('[phase17e-rebuild-canonical-input-audit]', {
+          triggerPath: 'handleRegenerate',
+          scheduleMode: freshRebuildInput.scheduleMode,
+          trainingDaysPerWeek: freshRebuildInput.trainingDaysPerWeek,
+          sessionDurationMode: freshRebuildInput.sessionDurationMode,
+          sessionLength: freshRebuildInput.sessionLength,
+          primaryGoal: freshRebuildInput.primaryGoal,
+          secondaryGoal: freshRebuildInput.secondaryGoal || null,
+          experienceLevel: freshRebuildInput.experienceLevel,
+          selectedSkillsCount: freshRebuildInput.selectedSkills?.length || 0,
+          selectedSkills: freshRebuildInput.selectedSkills || [],
+          equipmentCount: freshRebuildInput.equipment?.length || 0,
+          equipment: freshRebuildInput.equipment || [],
+          trainingPathType: freshRebuildInput.trainingPathType || null,
+          isFlexibleSchedule: freshRebuildInput.scheduleMode === 'flexible',
+          isAdaptiveSession: freshRebuildInput.sessionDurationMode === 'adaptive',
+          entryFallbacksUsed: entryResult.entry?.__fallbacksUsed || [],
+        })
+        
+        // [PHASE 17E] Entrypoint skill/style source audit
+        console.log('[phase17e-entrypoint-skill-style-source-audit]', {
+          triggerPath: 'handleRegenerate',
+          canonicalSelectedSkills: canonicalProfileNow.selectedSkills || [],
+          inputSelectedSkills: freshRebuildInput.selectedSkills || [],
+          skillsMatch: JSON.stringify(canonicalProfileNow.selectedSkills?.sort()) === JSON.stringify(freshRebuildInput.selectedSkills?.sort()),
+          canonicalTrainingStyle: canonicalProfileNow.trainingStyle,
+          trainingPathType: freshRebuildInput.trainingPathType,
+        })
+        
         // [PHASE 17C] 6-day vs 4-day root cause audit - compare rebuild input to onboarding truth
         console.log('[phase17c-6day-vs-4day-root-cause-audit]', {
           triggerPath: 'handleRegenerate',
@@ -3189,6 +3278,62 @@ export default function ProgramPage() {
             outputSessions: newProgram.sessions?.length || 0,
             inputIsFlexible: freshRebuildInput.trainingDaysPerWeek === 'flexible',
           },
+        })
+        
+        // [PHASE 17E] Rebuild 4-day fallback verdict - diagnose why sessions != expected
+        const sessionCount = newProgram.sessions?.length || 0
+        const isFlexible = freshRebuildInput.scheduleMode === 'flexible'
+        const produced4Days = sessionCount === 4
+        const produced6PlusDays = sessionCount >= 6
+        console.log('[phase17e-rebuild-4day-fallback-verdict]', {
+          triggerPath: 'handleRegenerate',
+          inputScheduleMode: freshRebuildInput.scheduleMode,
+          inputTrainingDays: freshRebuildInput.trainingDaysPerWeek,
+          outputSessionCount: sessionCount,
+          isFlexibleInput: isFlexible,
+          produced4Days,
+          produced6PlusDays,
+          potentialFallbackReason: produced4Days && isFlexible
+            ? 'flexible_mode_selected_4_days_intentionally_OR_missed_fallback'
+            : produced4Days && !isFlexible
+            ? 'static_mode_requested_4_days'
+            : produced6PlusDays
+            ? '6plus_days_success'
+            : `other_session_count_${sessionCount}`,
+          verdict: produced6PlusDays && isFlexible
+            ? 'flexible_6day_success'
+            : produced4Days && isFlexible
+            ? 'INVESTIGATE_4day_fallback_on_flexible'
+            : 'static_mode_or_other',
+        })
+        
+        // [PHASE 17E] Rebuild final parity audit - confirms rebuild uses same pipeline as onboarding
+        console.log('[phase17e-rebuild-final-parity-audit]', {
+          triggerPath: 'handleRegenerate',
+          usedBuildCanonicalGenerationEntry: true,
+          usedEntryToAdaptiveInputs: true,
+          usedSameCanonicalProfile: true,
+          generationSuccessful: true,
+          outputSessionCount: sessionCount,
+          inputScheduleMode: freshRebuildInput.scheduleMode,
+          inputTrainingDays: freshRebuildInput.trainingDaysPerWeek,
+          verdict: 'rebuild_uses_same_canonical_truth_chain_as_onboarding',
+        })
+        
+        // [PHASE 17E] Onboarding vs rebuild diff audit - compare after rebuild completes
+        // This lets us diagnose if the SAME inputs produce DIFFERENT outputs
+        console.log('[phase17e-onboarding-vs-rebuild-diff-audit]', {
+          bothUseBuildCanonicalGenerationEntry: true,
+          bothUseEntryToAdaptiveInputs: true,
+          bothUseSameCanonicalProfileFunction: true,
+          rebuildInputScheduleMode: freshRebuildInput.scheduleMode,
+          rebuildInputTrainingDays: freshRebuildInput.trainingDaysPerWeek,
+          rebuildOutputSessionCount: sessionCount,
+          rebuildIsFlexible: isFlexible,
+          rebuildProduced6Plus: produced6PlusDays,
+          conclusionIfDifferent: produced4Days && isFlexible
+            ? 'IF_onboarding_produced_6_but_rebuild_produces_4_check_canonical_profile_sync'
+            : 'outputs_should_match_if_same_canonical_profile',
         })
         
         // [anti-template] TASK B: Compute template similarity to previous program

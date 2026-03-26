@@ -440,6 +440,27 @@ export async function generateFirstProgram(
     
     markStage('canonical_entry_build_done')
     
+    // ==========================================================================
+    // [PHASE 17S] TASK 1 - Onboarding entry truth audit
+    // ==========================================================================
+    console.log('[phase17s-onboarding-entry-truth-audit]', {
+      sourceLayer: 'onboarding_generation_path',
+      generationTrigger: 'onboarding_completion',
+      rawTruthUsedForEntry: {
+        primaryGoal: entryResult.entry?.primaryGoal || null,
+        secondaryGoal: entryResult.entry?.secondaryGoal || null,
+        scheduleMode: entryResult.entry?.scheduleMode || null,
+        trainingDaysPerWeek: entryResult.entry?.trainingDaysPerWeek || null,
+        sessionDurationMode: entryResult.entry?.sessionDurationMode || null,
+        sessionLength: entryResult.entry?.sessionLength || null,
+        selectedSkills: entryResult.entry?.selectedSkills || [],
+        trainingPathType: entryResult.entry?.trainingPathType || null,
+        equipment: entryResult.entry?.equipment || [],
+      },
+      entryBuilderUsed: 'buildCanonicalGenerationEntry',
+      overridesApplied: null, // Onboarding does NOT use overrides
+    })
+    
     // [generation-entry-path-audit] Log entry for onboarding generation
     console.log('[generation-entry-path-audit]', {
       triggerSource: 'generateFirstProgram',

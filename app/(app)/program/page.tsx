@@ -1939,6 +1939,29 @@ export default function ProgramPage() {
     
     // [PHASE 6 TASK 1] Build canonical generation entry - single contract for all paths
     const { buildCanonicalGenerationEntry, entryToAdaptiveInputs } = await import('@/lib/canonical-profile-service')
+    
+    // ==========================================================================
+    // [PHASE 17S] TASK 1 - Onboarding generation entry source truth audit
+    // ==========================================================================
+    console.log('[phase17s-onboarding-entry-truth-audit]', {
+      sourceLayer: 'onboarding_generation_path',
+      generationTrigger: 'onboarding_completion',
+      rawTruthUsedForEntry: {
+        inputs_primaryGoal: inputs?.primaryGoal ?? null,
+        inputs_secondaryGoal: inputs?.secondaryGoal ?? null,
+        inputs_scheduleMode: inputs?.scheduleMode ?? null,
+        inputs_trainingDaysPerWeek: inputs?.trainingDaysPerWeek ?? null,
+        inputs_sessionDurationMode: inputs?.sessionDurationMode ?? null,
+        inputs_sessionLength: inputs?.sessionLength ?? null,
+        inputs_selectedSkills: inputs?.selectedSkills ?? [],
+        inputs_selectedStyles: inputs?.selectedStyles ?? null,
+        inputs_trainingPathType: inputs?.trainingPathType ?? null,
+        inputs_equipment: inputs?.equipment ?? [],
+      },
+      entryBuilderUsed: 'buildCanonicalGenerationEntry',
+      entryBuilderOverrides: 'none',
+    })
+    
     const entryResult = buildCanonicalGenerationEntry('handleGenerate')
     
     if (!entryResult.success) {
@@ -4932,6 +4955,35 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
       requestedTrainingDays: request.newTrainingDays || null,
     })
     
+    // ==========================================================================
+    // [PHASE 17S] TASK 2 - Rebuild generation entry source truth audit
+    // ==========================================================================
+    console.log('[phase17s-rebuild-entry-source-audit]', {
+      sourceLayer: 'program_rebuild_path',
+      generationTrigger: 'adjustment_rebuild',
+      thinRequest: {
+        requestType: request.type,
+        newTrainingDays: request.newTrainingDays ?? null,
+        newSessionMinutes: request.newSessionMinutes ?? null,
+        newEquipment: request.newEquipment ?? null,
+      },
+      canonicalInputsAvailableAtRebuildTime: {
+        visibleProgramId: program?.id ?? null,
+        visibleProgramSessionCount: program?.sessions?.length ?? 0,
+        visibleProgramPrimaryGoal: program?.primaryGoal ?? null,
+        visibleProgramScheduleMode: program?.scheduleMode ?? null,
+        visibleProgramTrainingDaysPerWeek: program?.trainingDaysPerWeek ?? null,
+        visibleProgramSelectedSkills: program?.selectedSkills ?? null,
+        currentInputsPrimaryGoal: inputs?.primaryGoal ?? null,
+        currentInputsSecondaryGoal: inputs?.secondaryGoal ?? null,
+        currentInputsScheduleMode: inputs?.scheduleMode ?? null,
+        currentInputsTrainingDaysPerWeek: inputs?.trainingDaysPerWeek ?? null,
+        currentInputsSelectedSkills: inputs?.selectedSkills ?? null,
+        currentInputsTrainingPathType: inputs?.trainingPathType ?? null,
+      },
+      overridesAboutToApply: overrides,
+    })
+    
     const entryResult = buildCanonicalGenerationEntry(
       'handleAdjustmentRebuild',
       overrides
@@ -4962,6 +5014,27 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
     }
     
     console.log('[phase17a-adjustment-stage-success]', { stage: 'build_canonical_entry' })
+    
+    // ==========================================================================
+    // [PHASE 17S] TASK 2 - Rebuild entry result audit
+    // ==========================================================================
+    console.log('[phase17s-rebuild-entry-result-audit]', {
+      entryValid: entryResult.success,
+      rebuiltEntry: entryResult.entry
+        ? {
+            primaryGoal: entryResult.entry.primaryGoal,
+            secondaryGoal: entryResult.entry.secondaryGoal ?? null,
+            scheduleMode: entryResult.entry.scheduleMode,
+            trainingDaysPerWeek: entryResult.entry.trainingDaysPerWeek,
+            sessionDurationMode: entryResult.entry.sessionDurationMode,
+            sessionLength: entryResult.entry.sessionLength,
+            selectedSkills: entryResult.entry.selectedSkills ?? [],
+            trainingPathType: entryResult.entry.trainingPathType ?? null,
+            equipment: entryResult.entry.equipment ?? [],
+          }
+        : null,
+      errorMessage: entryResult.error?.message ?? null,
+    })
     
     // [PHASE 17A] Input conversion stage
     console.log('[phase17a-adjustment-stage-enter]', { stage: 'convert_to_adaptive_inputs' })
@@ -5031,6 +5104,34 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
           ? 'FLEXIBLE_REQUEST_BUT_STATIC_DAYS_IN_FINAL_INPUT'
           : 'NO_MISMATCH_DETECTED',
     })
+    
+    // ==========================================================================
+    // [PHASE 17S] TASK 3 - Entry parity verdict
+    // ==========================================================================
+    console.log('[phase17s-entry-parity-verdict]', {
+      parityCheckFields: {
+        primaryGoal: true,
+        scheduleMode: true,
+        trainingDaysPerWeek: true,
+        selectedSkills: true,
+        trainingPathType: true,
+        equipment: true,
+        sessionDurationMode: true,
+      },
+      rebuildEntryPrimaryGoal: entryResult.entry?.primaryGoal ?? null,
+      rebuildEntryScheduleMode: entryResult.entry?.scheduleMode ?? null,
+      rebuildEntryTrainingDaysPerWeek: entryResult.entry?.trainingDaysPerWeek ?? null,
+      rebuildEntrySelectedSkillsLength: entryResult.entry?.selectedSkills?.length ?? 0,
+      rebuildEntryTrainingPathType: entryResult.entry?.trainingPathType ?? null,
+      rebuildEntryEquipmentLength: entryResult.entry?.equipment?.length ?? 0,
+      rebuildEntrySessionDurationMode: entryResult.entry?.sessionDurationMode ?? null,
+      likelyDivergenceReason: Object.keys(overrides).length > 0
+        ? 'rebuild_applies_overrides_that_may_narrow_entry'
+        : 'onboarding_and_rebuild_both_use_unmodified_canonical_profile',
+      verdict: 'pending_runtime_comparison_with_onboarding_entry',
+    })
+    
+    // [PHASE 17R] Request transform verdict - compare original request to final inputs
     
     try {
       // [canonical-rebuild] STAGE 1: Generate new program with updated inputs
@@ -5366,6 +5467,22 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
         finalErrorCode: null,
         finalSubCode: 'none',
         verdict: 'response_received_success',
+      })
+      
+      // ==========================================================================
+      // [PHASE 17S] TASK 5 - Rebuild entry postfix verdict
+      // ==========================================================================
+      console.log('[phase17s-rebuild-entry-postfix-verdict]', {
+        rebuildNowUsesSameTruthClassAsOnboarding: 'pending_comparison_at_runtime',
+        selectedSkillsPreserved: (updatedInputs.selectedSkills?.length ?? 0) > 0,
+        scheduleModePreserved: !!updatedInputs.scheduleMode,
+        trainingPathTypePreserved: !!updatedInputs.trainingPathType,
+        sessionDurationModePreserved: !!updatedInputs.sessionDurationMode,
+        finalProgramSessionCount: newProgram.sessions?.length ?? 0,
+        overridesWereApplied: Object.keys(overrides).length > 0,
+        verdict: overrides.length === 0
+          ? 'ENTRY_TRUTH_ALIGNED_NO_OVERRIDES'
+          : 'ENTRY_TRUTH_NARROWED_BY_OVERRIDES',
       })
       
       setLastBuildResult(adjSuccessResultWithMetadata)

@@ -12910,48 +12910,102 @@ export function getLatestAdaptiveProgram(): AdaptiveProgram | null {
       new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
     )
     const latestByTime = allSorted[0]
-    const isLatestByTime = !latestByTime || selectedProgram.id === latestByTime.id
-    const isLatestBySessions = !latestByTime || (selectedProgram.sessions?.length || 0) >= (latestByTime.sessions?.length || 0)
     
-    // Check if canonical key has older program than history
-    const canonicalIsStale = latestByTime && 
+    // ==========================================================================
+    // [PHASE 17O] TASK 2 - Define material-difference check
+    // ==========================================================================
+    const selectedSessionCount = selectedProgram?.sessions?.length || 0
+    const latestSessionCount = latestByTime?.sessions?.length || 0
+    
+    const selectedCreatedAtMs = selectedProgram?.createdAt
+      ? new Date(selectedProgram.createdAt).getTime()
+      : 0
+    
+    const latestCreatedAtMs = latestByTime?.createdAt
+      ? new Date(latestByTime.createdAt).getTime()
+      : 0
+    
+    const sameId = !!selectedProgram && !!latestByTime && selectedProgram.id === latestByTime.id
+    const sameCreatedAt = selectedCreatedAtMs > 0 && selectedCreatedAtMs === latestCreatedAtMs
+    const sessionCountDiffers = selectedSessionCount !== latestSessionCount
+    const latestIsNewerByTime = latestCreatedAtMs > selectedCreatedAtMs
+    
+    // [PHASE 17O] TASK 3 - Stronger stale-canonical verdict
+    // Canonical is materially stale if history is newer by time OR differs by session count
+    const canonicalIsMateriallyStale =
+      !!latestByTime &&
       selectionSource === 'canonical_active_key' &&
-      new Date(selectedProgram.createdAt).getTime() < new Date(latestByTime.createdAt).getTime()
+      (latestIsNewerByTime || sessionCountDiffers)
     
+    // [PHASE 17O] TASK 4 - High-signal diagnostics
+    console.log('[phase17o-canonical-selection-truth-audit]', {
+      totalPrograms: allPrograms.length,
+      selectionSource,
+      selectedProgramId: selectedProgram?.id || 'none',
+      selectedCreatedAt: selectedProgram?.createdAt || 'none',
+      selectedSessionCount,
+      latestByTimeId: latestByTime?.id || 'none',
+      latestByTimeCreatedAt: latestByTime?.createdAt || 'none',
+      latestByTimeSessionCount: latestSessionCount,
+      sameId,
+      sameCreatedAt,
+      latestIsNewerByTime,
+      sessionCountDiffers,
+      canonicalIsMateriallyStale,
+    })
+    
+    // [PHASE 17O] TASK 5 - Updated verdict log
+    const isLatestByTime = !latestByTime || selectedProgram.id === latestByTime.id
     console.log('[phase17l-canonical-selection-verdict]', {
       totalPrograms: allPrograms.length,
       selectedProgramId: selectedProgram.id,
-      selectedSessionCount: selectedProgram.sessions?.length || 0,
+      selectedSessionCount,
       selectedCreatedAt: selectedProgram.createdAt,
       latestInHistoryId: latestByTime?.id || 'none',
       latestInHistoryCreatedAt: latestByTime?.createdAt || 'none',
-      latestInHistorySessionCount: latestByTime?.sessions?.length || 0,
+      latestInHistorySessionCount: latestSessionCount,
       selectionSource,
       isLatestByTime,
-      isLatestBySessions,
-      canonicalIsStale,
-      verdict: canonicalIsStale ? 'WRONG_SELECTION_CANONICAL_IS_STALE' : isLatestByTime ? 'CORRECT_SELECTION' : 'WRONG_SELECTION',
+      sessionCountDiffers,
+      canonicalIsMateriallyStale,
+      verdict: canonicalIsMateriallyStale 
+        ? 'WRONG_SELECTION_CANONICAL_IS_MATERIALLY_STALE' 
+        : isLatestByTime 
+        ? 'CORRECT_SELECTION' 
+        : 'WRONG_SELECTION',
     })
     
-    // [PHASE 17L] TASK 3 - FIX: If canonical is stale, return latest from history instead
-    if (canonicalIsStale && latestByTime) {
-      console.log('[phase17l-canonical-selection-fix]', {
-        action: 'OVERRIDING_STALE_CANONICAL',
-        staleCanonicalId: selectedProgram.id,
-        staleCanonicalSessionCount: selectedProgram.sessions?.length || 0,
-        correctProgramId: latestByTime.id,
-        correctSessionCount: latestByTime.sessions?.length || 0,
+    // [PHASE 17O] TASK 3 - FIX: If canonical is materially stale, return latest from history
+    if (canonicalIsMateriallyStale && latestByTime) {
+      console.log('[phase17o-canonical-selection-override]', {
+        reason: latestIsNewerByTime
+          ? 'history_newer_by_time'
+          : sessionCountDiffers
+          ? 'history_differs_by_session_count'
+          : 'unknown',
+        staleCanonicalId: selectedProgram?.id || 'none',
+        staleCanonicalCreatedAt: selectedProgram?.createdAt || 'none',
+        staleCanonicalSessionCount: selectedSessionCount,
+        replacementId: latestByTime?.id || 'none',
+        replacementCreatedAt: latestByTime?.createdAt || 'none',
+        replacementSessionCount: latestSessionCount,
       })
       
-      // Also update the canonical key to the correct program
+      // Update the canonical key to the correct program
       try {
         localStorage.setItem(CANONICAL_ACTIVE_KEY, JSON.stringify(latestByTime))
-        console.log('[phase17l-canonical-selection-fix] Canonical key updated to latest program')
+        console.log('[phase17o-canonical-selection-override] Canonical key updated to latest program')
       } catch (err) {
-        console.warn('[phase17l-canonical-selection-fix] Failed to update canonical key:', err)
+        console.warn('[phase17o-canonical-selection-override] Failed to update canonical key:', err)
       }
       
       return latestByTime
+    } else {
+      console.log('[phase17o-canonical-selection-keep]', {
+        reason: 'canonical_not_materially_stale',
+        selectedProgramId: selectedProgram?.id || 'none',
+        selectedSessionCount,
+      })
     }
   }
   

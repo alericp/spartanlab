@@ -124,6 +124,44 @@ export async function POST(request: Request) {
     markStage('request_parsed')
     
     // ==========================================================================
+    // [PHASE 18J] TASK 3 - Regenerate route truth source audit
+    // 
+    // NOTE: This route is SAFER than rebuild-adjustment because it does NOT
+    // call getCanonicalProfile() on the server. Instead, it uses client-passed
+    // canonicalProfile and programInputs directly.
+    // 
+    // The client builds these from getCanonicalProfile() in the browser where
+    // localStorage IS available, so the truth is richer.
+    // ==========================================================================
+    const clientHasMaterialIdentity = !!(
+      (canonicalProfile?.primaryGoal || programInputs?.primaryGoal) && 
+      ((canonicalProfile?.selectedSkills?.length > 0 || programInputs?.selectedSkills?.length > 0) || 
+       (canonicalProfile?.trainingPathType || programInputs?.trainingPathType))
+    )
+    
+    console.log('[phase18j-regenerate-route-truth-source-audit]', {
+      routeTrustModel: 'client_passed_canonical_and_inputs',
+      doesNotCallServerGetCanonicalProfile: true,
+      clientCanonicalProfile: {
+        primaryGoal: canonicalProfile?.primaryGoal ?? null,
+        selectedSkills: canonicalProfile?.selectedSkills ?? [],
+        trainingPathType: canonicalProfile?.trainingPathType ?? null,
+        experienceLevel: canonicalProfile?.experienceLevel ?? null,
+      },
+      programInputs: {
+        primaryGoal: programInputs?.primaryGoal ?? null,
+        selectedSkills: programInputs?.selectedSkills ?? [],
+        trainingPathType: programInputs?.trainingPathType ?? null,
+        experienceLevel: programInputs?.experienceLevel ?? null,
+      },
+      clientHasMaterialIdentity,
+      verdict: clientHasMaterialIdentity
+        ? 'REGENERATE_ROUTE_USES_CLIENT_TRUTH_WITH_MATERIAL_IDENTITY'
+        : 'REGENERATE_ROUTE_CLIENT_TRUTH_MAY_BE_INCOMPLETE',
+      comparisonToAdjustmentRoute: 'rebuild-adjustment calls getCanonicalProfile() on server which returns empty localStorage data; this route uses client-passed data which is richer',
+    })
+    
+    // ==========================================================================
     // [PHASE 18D] STAGE: Build canonical profile override on SERVER
     // This is the KEY architectural fix - construct override on server, not client
     // Mirrors exactly what the working onboarding route does

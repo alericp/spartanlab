@@ -3475,6 +3475,65 @@ export default function ProgramPage() {
         })
         
         // ==========================================================================
+        // [PHASE 18B] TASK 1 - Deep planner identity source audit
+        // This captures all deep identity fields the builder actually consumes
+        // ==========================================================================
+        console.log('[phase18b-regenerate-deep-planner-source-audit]', {
+          triggerPath: 'handleRegenerate',
+          currentInputsTruth: {
+            primaryGoal: inputs?.primaryGoal ?? null,
+            secondaryGoal: inputs?.secondaryGoal ?? null,
+            scheduleMode: inputs?.scheduleMode ?? null,
+            trainingDaysPerWeek: inputs?.trainingDaysPerWeek ?? null,
+            sessionDurationMode: inputs?.sessionDurationMode ?? null,
+            sessionLength: inputs?.sessionLength ?? null,
+            selectedSkills: inputs?.selectedSkills ?? [],
+            trainingPathType: inputs?.trainingPathType ?? null,
+            equipment: inputs?.equipment ?? [],
+            goalCategories: inputs?.goalCategories ?? [],
+            selectedFlexibility: inputs?.selectedFlexibility ?? [],
+            experienceLevel: inputs?.experienceLevel ?? null,
+            selectedStyles: inputs?.selectedStyles ?? [],
+          },
+          freshRebuildInputTruth: {
+            primaryGoal: freshRebuildInput?.primaryGoal ?? null,
+            secondaryGoal: freshRebuildInput?.secondaryGoal ?? null,
+            scheduleMode: freshRebuildInput?.scheduleMode ?? null,
+            trainingDaysPerWeek: freshRebuildInput?.trainingDaysPerWeek ?? null,
+            sessionDurationMode: freshRebuildInput?.sessionDurationMode ?? null,
+            sessionLength: freshRebuildInput?.sessionLength ?? null,
+            selectedSkills: freshRebuildInput?.selectedSkills ?? [],
+            trainingPathType: freshRebuildInput?.trainingPathType ?? null,
+            equipment: freshRebuildInput?.equipment ?? [],
+            goalCategories: freshRebuildInput?.goalCategories ?? [],
+            selectedFlexibility: freshRebuildInput?.selectedFlexibility ?? [],
+            experienceLevel: freshRebuildInput?.experienceLevel ?? null,
+            selectedStyles: freshRebuildInput?.selectedStyles ?? [],
+          },
+          canonicalBaselineTruth: {
+            primaryGoal: canonicalProfileNow?.primaryGoal ?? null,
+            secondaryGoal: canonicalProfileNow?.secondaryGoal ?? null,
+            scheduleMode: canonicalProfileNow?.scheduleMode ?? null,
+            trainingDaysPerWeek: canonicalProfileNow?.trainingDaysPerWeek ?? null,
+            sessionDurationMode: canonicalProfileNow?.sessionDurationMode ?? null,
+            sessionLengthMinutes: canonicalProfileNow?.sessionLengthMinutes ?? null,
+            selectedSkills: canonicalProfileNow?.selectedSkills ?? [],
+            trainingPathType: canonicalProfileNow?.trainingPathType ?? null,
+            equipmentAvailable: canonicalProfileNow?.equipmentAvailable ?? [],
+            goalCategories: canonicalProfileNow?.goalCategories ?? [],
+            selectedFlexibility: canonicalProfileNow?.selectedFlexibility ?? [],
+            experienceLevel: canonicalProfileNow?.experienceLevel ?? null,
+            selectedStyles: canonicalProfileNow?.selectedStyles ?? [],
+          },
+          fieldsStillAtRiskIfNotExplicitlyMerged: [
+            'goalCategories',
+            'selectedFlexibility',
+            'experienceLevel',
+          ],
+          verdict: 'deep_planner_identity_fields_must_be_explicitly_merged_in_handleRegenerate',
+        })
+        
+        // ==========================================================================
         // [PHASE 18A] TASK 1 - Root priority inversion audit
         // This captures whether stale canonical-entry-derived values would win
         // ==========================================================================
@@ -3530,9 +3589,10 @@ export default function ProgramPage() {
         })
         
         // ==========================================================================
-        // [PHASE 18A] TASK 2 - Create stronger regenerate truth object with CORRECTED priority
+        // [PHASE 18A/18B] TASK 2 - Create stronger regenerate truth object with CORRECTED priority
         // Priority: inputs > freshRebuildInput > canonicalProfileNow
         // This ensures current settings truth wins over stale canonical-entry-derived values
+        // [PHASE 18B] TASK 2 - Expanded to include ALL deep planner identity fields
         // ==========================================================================
         const strongestRegenerateTruth = {
           primaryGoal:
@@ -3586,12 +3646,34 @@ export default function ProgramPage() {
               : (canonicalProfileNow?.equipmentAvailable?.length ?? 0) > 0
               ? canonicalProfileNow.equipmentAvailable
               : [],
+          // [PHASE 18B] TASK 2 - Deep planner identity fields
+          goalCategories:
+            (inputs?.goalCategories?.length ?? 0) > 0
+              ? inputs.goalCategories
+              : (freshRebuildInput?.goalCategories?.length ?? 0) > 0
+              ? freshRebuildInput.goalCategories
+              : (canonicalProfileNow?.goalCategories?.length ?? 0) > 0
+              ? canonicalProfileNow.goalCategories
+              : [],
+          selectedFlexibility:
+            (inputs?.selectedFlexibility?.length ?? 0) > 0
+              ? inputs.selectedFlexibility
+              : (freshRebuildInput?.selectedFlexibility?.length ?? 0) > 0
+              ? freshRebuildInput.selectedFlexibility
+              : (canonicalProfileNow?.selectedFlexibility?.length ?? 0) > 0
+              ? canonicalProfileNow.selectedFlexibility
+              : [],
+          experienceLevel:
+            inputs?.experienceLevel ||
+            freshRebuildInput?.experienceLevel ||
+            canonicalProfileNow?.experienceLevel ||
+            null,
         }
         
         // ==========================================================================
-        // [PHASE 18A] TASK 3 - Post-fix audit after strongestRegenerateTruth is created
+        // [PHASE 18B] TASK 3 - Post-expansion audit after strongestRegenerateTruth is created
         // ==========================================================================
-        console.log('[phase18a-regenerate-strongest-truth-postfix-audit]', {
+        console.log('[phase18b-regenerate-deep-planner-strongest-truth-audit]', {
           triggerPath: 'handleRegenerate',
           strongestRegenerateTruth: {
             primaryGoal: strongestRegenerateTruth?.primaryGoal ?? null,
@@ -3603,9 +3685,11 @@ export default function ProgramPage() {
             selectedSkills: strongestRegenerateTruth?.selectedSkills ?? [],
             trainingPathType: strongestRegenerateTruth?.trainingPathType ?? null,
             equipment: strongestRegenerateTruth?.equipment ?? [],
+            goalCategories: strongestRegenerateTruth?.goalCategories ?? [],
+            selectedFlexibility: strongestRegenerateTruth?.selectedFlexibility ?? [],
+            experienceLevel: strongestRegenerateTruth?.experienceLevel ?? null,
           },
-          finalPriorityOrder: 'inputs > freshRebuildInput > canonicalProfileNow',
-          verdict: 'handleRegenerate_material_truth_now_prefers_current_settings_first',
+          verdict: 'handleRegenerate_now_has_full_deep_planner_identity_truth_object',
         })
         
         // ==========================================================================
@@ -3617,7 +3701,7 @@ export default function ProgramPage() {
         // This prevents stale Program-page `inputs` from winning by default
         const rebuildBuilderInput = {
           ...freshRebuildInput,
-          // [PHASE 17Y] Material identity fields - use strongestRegenerateTruth
+          // [PHASE 17Y/18B] Material identity fields - use strongestRegenerateTruth
           primaryGoal: strongestRegenerateTruth.primaryGoal,
           secondaryGoal: strongestRegenerateTruth.secondaryGoal,
           scheduleMode: strongestRegenerateTruth.scheduleMode,
@@ -3628,6 +3712,10 @@ export default function ProgramPage() {
           selectedStyles: (inputs?.selectedStyles?.length ?? 0) > 0 ? inputs.selectedStyles : freshRebuildInput?.selectedStyles,
           trainingPathType: strongestRegenerateTruth.trainingPathType,
           equipment: strongestRegenerateTruth.equipment,
+          // [PHASE 18B] TASK 4 - Deep planner identity fields
+          goalCategories: strongestRegenerateTruth.goalCategories,
+          selectedFlexibility: strongestRegenerateTruth.selectedFlexibility,
+          experienceLevel: strongestRegenerateTruth.experienceLevel,
           // [PHASE 17T] Explicit regeneration mode
           regenerationMode: 'fresh' as const,
           regenerationReason: 'rebuild_from_current_settings',
@@ -3722,7 +3810,7 @@ export default function ProgramPage() {
         // [PHASE 17Y] TASK 4 - Use strongestRegenerateTruth for canonical override
         const rebuildCanonicalOverride = {
           ...canonicalProfileNow,
-          // [PHASE 17Y] Material identity fields - use strongestRegenerateTruth
+          // [PHASE 17Y/18B] Material identity fields - use strongestRegenerateTruth
           primaryGoal: strongestRegenerateTruth.primaryGoal,
           secondaryGoal: strongestRegenerateTruth.secondaryGoal,
           selectedSkills: strongestRegenerateTruth.selectedSkills,
@@ -3735,6 +3823,10 @@ export default function ProgramPage() {
           sessionLengthMinutes: strongestRegenerateTruth.sessionLength,
           equipmentAvailable: strongestRegenerateTruth.equipment,
           trainingPathType: strongestRegenerateTruth.trainingPathType,
+          // [PHASE 18B] TASK 5 - Deep planner identity fields
+          goalCategories: strongestRegenerateTruth.goalCategories,
+          selectedFlexibility: strongestRegenerateTruth.selectedFlexibility,
+          experienceLevel: strongestRegenerateTruth.experienceLevel,
         }
         
         // [PHASE 17V] TASK 6A - Rebuild canonical override audit
@@ -3888,6 +3980,56 @@ export default function ProgramPage() {
               (rebuildBuilderInput?.scheduleMode ?? null) === (rebuildCanonicalOverride?.scheduleMode ?? null),
           },
           verdict: 'builder_input_and_canonical_override_now_share_same_current-settings-first_truth',
+        })
+        
+        // ==========================================================================
+        // [PHASE 18B] TASK 6 - Deep planner handoff parity verdict
+        // ==========================================================================
+        console.log('[phase18b-regenerate-deep-planner-handoff-parity-verdict]', {
+          triggerPath: 'handleRegenerate',
+          finalBuilderInput: {
+            primaryGoal: rebuildBuilderInput?.primaryGoal ?? null,
+            secondaryGoal: rebuildBuilderInput?.secondaryGoal ?? null,
+            scheduleMode: rebuildBuilderInput?.scheduleMode ?? null,
+            trainingDaysPerWeek: rebuildBuilderInput?.trainingDaysPerWeek ?? null,
+            sessionDurationMode: rebuildBuilderInput?.sessionDurationMode ?? null,
+            sessionLength: rebuildBuilderInput?.sessionLength ?? null,
+            selectedSkills: rebuildBuilderInput?.selectedSkills ?? [],
+            trainingPathType: rebuildBuilderInput?.trainingPathType ?? null,
+            equipment: rebuildBuilderInput?.equipment ?? [],
+            goalCategories: rebuildBuilderInput?.goalCategories ?? [],
+            selectedFlexibility: rebuildBuilderInput?.selectedFlexibility ?? [],
+            experienceLevel: rebuildBuilderInput?.experienceLevel ?? null,
+            regenerationMode: rebuildBuilderInput?.regenerationMode ?? null,
+            regenerationReason: rebuildBuilderInput?.regenerationReason ?? null,
+          },
+          finalCanonicalOverride: {
+            primaryGoal: rebuildCanonicalOverride?.primaryGoal ?? null,
+            secondaryGoal: rebuildCanonicalOverride?.secondaryGoal ?? null,
+            scheduleMode: rebuildCanonicalOverride?.scheduleMode ?? null,
+            trainingDaysPerWeek: rebuildCanonicalOverride?.trainingDaysPerWeek ?? null,
+            sessionDurationMode: rebuildCanonicalOverride?.sessionDurationMode ?? null,
+            sessionLengthMinutes: rebuildCanonicalOverride?.sessionLengthMinutes ?? null,
+            selectedSkills: rebuildCanonicalOverride?.selectedSkills ?? [],
+            trainingPathType: rebuildCanonicalOverride?.trainingPathType ?? null,
+            equipmentAvailable: rebuildCanonicalOverride?.equipmentAvailable ?? [],
+            goalCategories: rebuildCanonicalOverride?.goalCategories ?? [],
+            selectedFlexibility: rebuildCanonicalOverride?.selectedFlexibility ?? [],
+            experienceLevel: rebuildCanonicalOverride?.experienceLevel ?? null,
+          },
+          parityChecks: {
+            selectedSkillsAligned:
+              JSON.stringify(rebuildBuilderInput?.selectedSkills ?? []) === JSON.stringify(rebuildCanonicalOverride?.selectedSkills ?? []),
+            goalCategoriesAligned:
+              JSON.stringify(rebuildBuilderInput?.goalCategories ?? []) === JSON.stringify(rebuildCanonicalOverride?.goalCategories ?? []),
+            selectedFlexibilityAligned:
+              JSON.stringify(rebuildBuilderInput?.selectedFlexibility ?? []) === JSON.stringify(rebuildCanonicalOverride?.selectedFlexibility ?? []),
+            trainingPathTypeAligned:
+              (rebuildBuilderInput?.trainingPathType ?? null) === (rebuildCanonicalOverride?.trainingPathType ?? null),
+            experienceLevelAligned:
+              (rebuildBuilderInput?.experienceLevel ?? null) === (rebuildCanonicalOverride?.experienceLevel ?? null),
+          },
+          verdict: 'handleRegenerate_now_enters_builder_with_full_deep_planner_identity_parity',
         })
         
         // [PHASE 16S] Dispatch verdict - marking actual builder call for regeneration

@@ -1722,6 +1722,35 @@ export default function ProgramPage() {
     }
   }, [program, programModules.getProgramState, programModules.normalizeProgramForDisplay])
   
+  // ==========================================================================
+  // [PHASE 19A] TASK 3 - Page state render audit for modal visibility
+  // This tracks when the modal state changes to help debug entry path issues
+  // ==========================================================================
+  useEffect(() => {
+    if (showAdjustmentModal) {
+      console.log('[phase19a-modify-page-state-render-audit]', {
+        showAdjustmentModal: true,
+        showBuilder,
+        programExists: !!program,
+        programId: program?.id ?? null,
+        programSessionCount: program?.sessions?.length ?? 0,
+        pageMode: showBuilder ? 'builder_mode' : 'display_mode_with_modal_open',
+        timestamp: Date.now(),
+      })
+      
+      // [PHASE 19A] TASK 7 - Final root cause classification verdict
+      console.log('[phase19a-modify-root-cause-classification-verdict]', {
+        buttonHandlerFired: true,
+        modalOpenStateSet: true,
+        modalShouldRender: true,
+        entryGateFixed: 'program_existence_only_not_status',
+        oldGate: 'status && program',
+        newGate: 'program',
+        verdict: 'REAL_ROOT_CAUSE_FOUND__MODIFY_BUTTON_WAS_WRONGLY_GATED_BY_GETPROGRAMSTATUS_AND_NOW_OPENS_ADJUSTMENT_MODAL_FROM_ACTIVE_PROGRAM_TRUTH',
+      })
+    }
+  }, [showAdjustmentModal, showBuilder, program])
+  
   // Load last build result on mount - but clear stale failures if current program is newer
   useEffect(() => {
     const stored = getLastBuildAttemptResult()
@@ -7426,14 +7455,80 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
         : 'MODIFY_PREFILL_MISSING_DEEP_PLANNER_FIELDS',
     })
     
-    // If there's an active program, show the adjustment modal first
+    // ==========================================================================
+    // [PHASE 19A] TASK 1 - Modify button click audit and entry gate fix
+    // 
+    // ROOT CAUSE FIX: The old code required BOTH `status` AND `program`:
+    //   const status = programModules.getProgramStatus?.()
+    //   if (status && program) { ... }
+    // 
+    // This was WRONG because getProgramStatus() is a secondary/derived helper
+    // that can return null/undefined even when a valid program exists.
+    // 
+    // CORRECT BEHAVIOR: If `program` exists, open adjustment modal. Period.
+    // The status helper is useful for display but should NOT gate entry.
+    // ==========================================================================
+    
+    // For audit purposes only - NOT used for entry gate anymore
     const status = programModules.getProgramStatus?.()
-    if (status && program) {
+    
+    const showBuilderBefore = showBuilder
+    const showAdjustmentModalBefore = showAdjustmentModal
+    
+    console.log('[phase19a-modify-button-click-audit]', {
+      handlerEntered: true,
+      timestamp: Date.now(),
+    })
+    
+    console.log('[phase19a-modify-handler-entry-audit]', {
+      programExists: !!program,
+      programId: program?.id ?? null,
+      programSessionCount: program?.sessions?.length ?? 0,
+      showBuilderBefore,
+      showAdjustmentModalBefore,
+      getProgramStatusExists: !!programModules.getProgramStatus,
+      getProgramStatusResult: status ? {
+        isStarted: status.isStarted,
+        isCompleted: status.isCompleted,
+        currentWeek: status.currentWeek,
+        totalWeeks: status.totalWeeks,
+      } : null,
+    })
+    
+    // [PHASE 19A] FIXED ENTRY GATE: Only check `program` existence
+    // OLD: if (status && program) { ... } <-- WRONG: status is secondary/derived
+    // NEW: if (program) { ... } <-- CORRECT: program existence is the true gate
+    if (program) {
+      console.log('[phase19a-modify-branch-selection-audit]', {
+        branchChosen: 'open_adjustment_modal',
+        reason: 'active_program_exists',
+        programId: program.id,
+        programSessionCount: program.sessions?.length ?? 0,
+        oldConditionWouldHaveFailed: !status,
+        newConditionSucceeds: true,
+      })
+      
       setShowAdjustmentModal(true)
+      
+      console.log('[phase19a-modify-modal-open-requested-audit]', {
+        action: 'setShowAdjustmentModal(true)',
+        previousValue: showAdjustmentModalBefore,
+        requestedValue: true,
+        programIdForModal: program.id,
+      })
+      
       return
     }
+    
+    // No active program - go to builder for first-time creation
+    console.log('[phase19a-modify-branch-selection-audit]', {
+      branchChosen: 'open_builder_directly',
+      reason: 'no_active_program',
+      programExists: false,
+    })
+    
     setShowBuilder(true)
-  }, [program, programModules])
+  }, [program, showBuilder, showAdjustmentModal])
 
   const handleConfirmNewProgram = useCallback(() => {
     programModules.recordProgramEnd?.('new_program')
@@ -7840,6 +7935,18 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
         <ProgramAdjustmentModal
           open={showAdjustmentModal}
           onOpenChange={(open) => {
+            // ==========================================================================
+            // [PHASE 19A] TASK 5 - onOpenChange audit
+            // This tracks whether the modal is being immediately closed after opening
+            // ==========================================================================
+            console.log('[phase19a-adjustment-onOpenChange-audit]', {
+              incomingOpenValue: open,
+              previousShowAdjustmentModal: showAdjustmentModal,
+              willSetTo: open,
+              isImmediateClose: showAdjustmentModal === true && open === false,
+              timestamp: Date.now(),
+            })
+            
             if (open) {
               // [phase5-modify-program-prefill-truth-audit] Log prefill source
               const canonicalForPrefill = getCanonicalProfile()

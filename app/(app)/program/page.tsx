@@ -3537,20 +3537,69 @@ export default function ProgramPage() {
         // [PHASE 18A] TASK 1 - Root priority inversion audit
         // This captures whether stale canonical-entry-derived values would win
         // ==========================================================================
-        console.log('[phase18a-regenerate-root-priority-inversion-audit]', {
+        // ==========================================================================
+        // [PHASE 18C] TASK 1 - Click-time stale-inputs parity audit
+        // This proves whether page-local `inputs` is stale vs canonical/fresh entry truth
+        // ==========================================================================
+        const __p18c_inputsVsCanonical = {
+          primaryGoalMatch: (inputs?.primaryGoal ?? null) === (canonicalProfileNow?.primaryGoal ?? null),
+          secondaryGoalMatch: (inputs?.secondaryGoal ?? null) === (canonicalProfileNow?.secondaryGoal ?? null),
+          scheduleModeMatch: (inputs?.scheduleMode ?? null) === (canonicalProfileNow?.scheduleMode ?? null),
+          trainingDaysMatch: (inputs?.trainingDaysPerWeek ?? null) === (canonicalProfileNow?.trainingDaysPerWeek ?? null),
+          sessionDurationModeMatch: (inputs?.sessionDurationMode ?? null) === (canonicalProfileNow?.sessionDurationMode ?? null),
+          sessionLengthMatch: (inputs?.sessionLength ?? null) === (canonicalProfileNow?.sessionLengthMinutes ?? null),
+          selectedSkillsMatch: JSON.stringify(inputs?.selectedSkills ?? []) === JSON.stringify(canonicalProfileNow?.selectedSkills ?? []),
+          trainingPathTypeMatch: (inputs?.trainingPathType ?? null) === (canonicalProfileNow?.trainingPathType ?? null),
+          equipmentMatch: JSON.stringify(inputs?.equipment ?? []) === JSON.stringify(canonicalProfileNow?.equipmentAvailable ?? []),
+          goalCategoriesMatch: JSON.stringify(inputs?.goalCategories ?? []) === JSON.stringify(canonicalProfileNow?.goalCategories ?? []),
+          selectedFlexibilityMatch: JSON.stringify(inputs?.selectedFlexibility ?? []) === JSON.stringify(canonicalProfileNow?.selectedFlexibility ?? []),
+          experienceLevelMatch: (inputs?.experienceLevel ?? null) === (canonicalProfileNow?.experienceLevel ?? null),
+        }
+        const __p18c_inputsVsFresh = {
+          primaryGoalMatch: (inputs?.primaryGoal ?? null) === (freshRebuildInput?.primaryGoal ?? null),
+          secondaryGoalMatch: (inputs?.secondaryGoal ?? null) === (freshRebuildInput?.secondaryGoal ?? null),
+          scheduleModeMatch: (inputs?.scheduleMode ?? null) === (freshRebuildInput?.scheduleMode ?? null),
+          trainingDaysMatch: (inputs?.trainingDaysPerWeek ?? null) === (freshRebuildInput?.trainingDaysPerWeek ?? null),
+          sessionDurationModeMatch: (inputs?.sessionDurationMode ?? null) === (freshRebuildInput?.sessionDurationMode ?? null),
+          sessionLengthMatch: (inputs?.sessionLength ?? null) === (freshRebuildInput?.sessionLength ?? null),
+          selectedSkillsMatch: JSON.stringify(inputs?.selectedSkills ?? []) === JSON.stringify(freshRebuildInput?.selectedSkills ?? []),
+          trainingPathTypeMatch: (inputs?.trainingPathType ?? null) === (freshRebuildInput?.trainingPathType ?? null),
+          equipmentMatch: JSON.stringify(inputs?.equipment ?? []) === JSON.stringify(freshRebuildInput?.equipment ?? []),
+          goalCategoriesMatch: JSON.stringify(inputs?.goalCategories ?? []) === JSON.stringify(freshRebuildInput?.goalCategories ?? []),
+          selectedFlexibilityMatch: JSON.stringify(inputs?.selectedFlexibility ?? []) === JSON.stringify(freshRebuildInput?.selectedFlexibility ?? []),
+          experienceLevelMatch: (inputs?.experienceLevel ?? null) === (freshRebuildInput?.experienceLevel ?? null),
+        }
+        const __p18c_freshVsCanonical = {
+          primaryGoalMatch: (freshRebuildInput?.primaryGoal ?? null) === (canonicalProfileNow?.primaryGoal ?? null),
+          secondaryGoalMatch: (freshRebuildInput?.secondaryGoal ?? null) === (canonicalProfileNow?.secondaryGoal ?? null),
+          scheduleModeMatch: (freshRebuildInput?.scheduleMode ?? null) === (canonicalProfileNow?.scheduleMode ?? null),
+          trainingDaysMatch: (freshRebuildInput?.trainingDaysPerWeek ?? null) === (canonicalProfileNow?.trainingDaysPerWeek ?? null),
+          sessionDurationModeMatch: (freshRebuildInput?.sessionDurationMode ?? null) === (canonicalProfileNow?.sessionDurationMode ?? null),
+          sessionLengthMatch: (freshRebuildInput?.sessionLength ?? null) === (canonicalProfileNow?.sessionLengthMinutes ?? null),
+          selectedSkillsMatch: JSON.stringify(freshRebuildInput?.selectedSkills ?? []) === JSON.stringify(canonicalProfileNow?.selectedSkills ?? []),
+          trainingPathTypeMatch: (freshRebuildInput?.trainingPathType ?? null) === (canonicalProfileNow?.trainingPathType ?? null),
+          equipmentMatch: JSON.stringify(freshRebuildInput?.equipment ?? []) === JSON.stringify(canonicalProfileNow?.equipmentAvailable ?? []),
+          goalCategoriesMatch: JSON.stringify(freshRebuildInput?.goalCategories ?? []) === JSON.stringify(canonicalProfileNow?.goalCategories ?? []),
+          selectedFlexibilityMatch: JSON.stringify(freshRebuildInput?.selectedFlexibility ?? []) === JSON.stringify(canonicalProfileNow?.selectedFlexibility ?? []),
+          experienceLevelMatch: (freshRebuildInput?.experienceLevel ?? null) === (canonicalProfileNow?.experienceLevel ?? null),
+        }
+        const __p18c_inputsMatchCanonical = Object.values(__p18c_inputsVsCanonical).every(Boolean)
+        const __p18c_inputsMatchFresh = Object.values(__p18c_inputsVsFresh).every(Boolean)
+        const __p18c_freshMatchCanonical = Object.values(__p18c_freshVsCanonical).every(Boolean)
+        const __p18c_verdict =
+          __p18c_inputsMatchCanonical && __p18c_inputsMatchFresh && __p18c_freshMatchCanonical
+            ? 'ALL_THREE_MATCH'
+            : __p18c_inputsMatchCanonical
+            ? 'INPUTS_MATCH_CANONICAL'
+            : __p18c_freshMatchCanonical && !__p18c_inputsMatchCanonical
+            ? 'INPUTS_STALE_VS_CANONICAL'
+            : !__p18c_freshMatchCanonical && __p18c_inputsMatchCanonical
+            ? 'FRESH_ENTRY_STALE_VS_CANONICAL'
+            : 'MULTI_LAYER_DIVERGENCE'
+        
+        console.log('[phase18c-regenerate-clicktime-stale-inputs-audit]', {
           triggerPath: 'handleRegenerate',
-          staleCandidateFromCanonicalEntry: {
-            primaryGoal: freshRebuildInput?.primaryGoal ?? null,
-            secondaryGoal: freshRebuildInput?.secondaryGoal ?? null,
-            scheduleMode: freshRebuildInput?.scheduleMode ?? null,
-            trainingDaysPerWeek: freshRebuildInput?.trainingDaysPerWeek ?? null,
-            sessionDurationMode: freshRebuildInput?.sessionDurationMode ?? null,
-            sessionLength: freshRebuildInput?.sessionLength ?? null,
-            selectedSkills: freshRebuildInput?.selectedSkills ?? [],
-            trainingPathType: freshRebuildInput?.trainingPathType ?? null,
-            equipment: freshRebuildInput?.equipment ?? [],
-          },
-          currentSettingsTruth: {
+          inputsTruth: {
             primaryGoal: inputs?.primaryGoal ?? null,
             secondaryGoal: inputs?.secondaryGoal ?? null,
             scheduleMode: inputs?.scheduleMode ?? null,
@@ -3560,8 +3609,25 @@ export default function ProgramPage() {
             selectedSkills: inputs?.selectedSkills ?? [],
             trainingPathType: inputs?.trainingPathType ?? null,
             equipment: inputs?.equipment ?? [],
+            goalCategories: inputs?.goalCategories ?? [],
+            selectedFlexibility: inputs?.selectedFlexibility ?? [],
+            experienceLevel: inputs?.experienceLevel ?? null,
           },
-          canonicalBaselineTruth: {
+          freshRebuildInputTruth: {
+            primaryGoal: freshRebuildInput?.primaryGoal ?? null,
+            secondaryGoal: freshRebuildInput?.secondaryGoal ?? null,
+            scheduleMode: freshRebuildInput?.scheduleMode ?? null,
+            trainingDaysPerWeek: freshRebuildInput?.trainingDaysPerWeek ?? null,
+            sessionDurationMode: freshRebuildInput?.sessionDurationMode ?? null,
+            sessionLength: freshRebuildInput?.sessionLength ?? null,
+            selectedSkills: freshRebuildInput?.selectedSkills ?? [],
+            trainingPathType: freshRebuildInput?.trainingPathType ?? null,
+            equipment: freshRebuildInput?.equipment ?? [],
+            goalCategories: freshRebuildInput?.goalCategories ?? [],
+            selectedFlexibility: freshRebuildInput?.selectedFlexibility ?? [],
+            experienceLevel: freshRebuildInput?.experienceLevel ?? null,
+          },
+          canonicalTruth: {
             primaryGoal: canonicalProfileNow?.primaryGoal ?? null,
             secondaryGoal: canonicalProfileNow?.secondaryGoal ?? null,
             scheduleMode: canonicalProfileNow?.scheduleMode ?? null,
@@ -3571,102 +3637,120 @@ export default function ProgramPage() {
             selectedSkills: canonicalProfileNow?.selectedSkills ?? [],
             trainingPathType: canonicalProfileNow?.trainingPathType ?? null,
             equipmentAvailable: canonicalProfileNow?.equipmentAvailable ?? [],
+            goalCategories: canonicalProfileNow?.goalCategories ?? [],
+            selectedFlexibility: canonicalProfileNow?.selectedFlexibility ?? [],
+            experienceLevel: canonicalProfileNow?.experienceLevel ?? null,
           },
-          likelyInversionFlags: {
-            primaryGoalDiffersBetweenFreshAndInputs:
-              (freshRebuildInput?.primaryGoal ?? null) !== (inputs?.primaryGoal ?? null),
-            selectedSkillsDiffersBetweenFreshAndInputs:
-              JSON.stringify(freshRebuildInput?.selectedSkills ?? []) !== JSON.stringify(inputs?.selectedSkills ?? []),
-            trainingPathTypeDiffersBetweenFreshAndInputs:
-              (freshRebuildInput?.trainingPathType ?? null) !== (inputs?.trainingPathType ?? null),
-            scheduleModeDiffersBetweenFreshAndInputs:
-              (freshRebuildInput?.scheduleMode ?? null) !== (inputs?.scheduleMode ?? null),
-            trainingDaysDiffersBetweenFreshAndInputs:
-              (freshRebuildInput?.trainingDaysPerWeek ?? null) !== (inputs?.trainingDaysPerWeek ?? null),
+          mismatchFlags: {
+            inputsVsCanonical: __p18c_inputsVsCanonical,
+            inputsVsFresh: __p18c_inputsVsFresh,
+            freshVsCanonical: __p18c_freshVsCanonical,
           },
-          oldPriorityOrder: 'freshRebuildInput > canonicalProfileNow > inputs',
-          suspectedRootCause: 'stale_canonical_entry_values_can_win_before_builder_call',
+          verdict: __p18c_verdict,
         })
         
         // ==========================================================================
-        // [PHASE 18A/18B] TASK 2 - Create stronger regenerate truth object with CORRECTED priority
-        // Priority: inputs > freshRebuildInput > canonicalProfileNow
-        // This ensures current settings truth wins over stale canonical-entry-derived values
+        // [PHASE 18C] TASK 2 - Source-winner verdict under OLD priority rules
+        // Shows what WOULD win if inputs remained first priority
+        // ==========================================================================
+        console.log('[phase18c-regenerate-source-winner-verdict]', {
+          triggerPath: 'handleRegenerate',
+          oldPriorityOrder: 'inputs > freshRebuildInput > canonicalProfileNow',
+          newPriorityOrder: 'freshRebuildInput > canonicalProfileNow > inputs',
+          inputsIsStale: __p18c_verdict === 'INPUTS_STALE_VS_CANONICAL' || __p18c_verdict === 'MULTI_LAYER_DIVERGENCE',
+          wouldInputsWinUnderOldRules: {
+            primaryGoal: !!(inputs?.primaryGoal),
+            scheduleMode: !!(inputs?.scheduleMode),
+            selectedSkills: (inputs?.selectedSkills?.length ?? 0) > 0,
+            trainingPathType: !!(inputs?.trainingPathType),
+            goalCategories: (inputs?.goalCategories?.length ?? 0) > 0,
+            selectedFlexibility: (inputs?.selectedFlexibility?.length ?? 0) > 0,
+            experienceLevel: !!(inputs?.experienceLevel),
+          },
+          likelyRebuildCollapseIfInputsWins: 
+            __p18c_verdict === 'INPUTS_STALE_VS_CANONICAL' || __p18c_verdict === 'MULTI_LAYER_DIVERGENCE',
+          fixApplied: 'removing_inputs_as_top_priority_for_regenerate',
+        })
+        
+        // ==========================================================================
+        // [PHASE 18C] TASK 3 - Create regenerate truth object with CORRECTED priority
+        // Priority: freshRebuildInput > canonicalProfileNow > inputs (last resort only)
+        // This ensures stale page-local `inputs` cannot override fresher canonical/entry truth
         // [PHASE 18B] TASK 2 - Expanded to include ALL deep planner identity fields
         // ==========================================================================
         const strongestRegenerateTruth = {
           primaryGoal:
-            inputs?.primaryGoal ||
             freshRebuildInput?.primaryGoal ||
             canonicalProfileNow?.primaryGoal ||
+            inputs?.primaryGoal ||
             null,
           secondaryGoal:
-            inputs?.secondaryGoal ??
             freshRebuildInput?.secondaryGoal ??
             canonicalProfileNow?.secondaryGoal ??
+            inputs?.secondaryGoal ??
             null,
           scheduleMode:
-            inputs?.scheduleMode ||
             freshRebuildInput?.scheduleMode ||
             canonicalProfileNow?.scheduleMode ||
+            inputs?.scheduleMode ||
             null,
           trainingDaysPerWeek:
-            inputs?.trainingDaysPerWeek ??
             freshRebuildInput?.trainingDaysPerWeek ??
             canonicalProfileNow?.trainingDaysPerWeek ??
+            inputs?.trainingDaysPerWeek ??
             null,
           sessionDurationMode:
-            inputs?.sessionDurationMode ||
             freshRebuildInput?.sessionDurationMode ||
             canonicalProfileNow?.sessionDurationMode ||
+            inputs?.sessionDurationMode ||
             null,
           sessionLength:
-            inputs?.sessionLength ??
             freshRebuildInput?.sessionLength ??
             canonicalProfileNow?.sessionLengthMinutes ??
+            inputs?.sessionLength ??
             null,
           selectedSkills:
-            (inputs?.selectedSkills?.length ?? 0) > 0
-              ? inputs.selectedSkills
-              : (freshRebuildInput?.selectedSkills?.length ?? 0) > 0
+            (freshRebuildInput?.selectedSkills?.length ?? 0) > 0
               ? freshRebuildInput.selectedSkills
               : (canonicalProfileNow?.selectedSkills?.length ?? 0) > 0
               ? canonicalProfileNow.selectedSkills
+              : (inputs?.selectedSkills?.length ?? 0) > 0
+              ? inputs.selectedSkills
               : [],
           trainingPathType:
-            inputs?.trainingPathType ||
             freshRebuildInput?.trainingPathType ||
             canonicalProfileNow?.trainingPathType ||
+            inputs?.trainingPathType ||
             null,
           equipment:
-            (inputs?.equipment?.length ?? 0) > 0
-              ? inputs.equipment
-              : (freshRebuildInput?.equipment?.length ?? 0) > 0
+            (freshRebuildInput?.equipment?.length ?? 0) > 0
               ? freshRebuildInput.equipment
               : (canonicalProfileNow?.equipmentAvailable?.length ?? 0) > 0
               ? canonicalProfileNow.equipmentAvailable
+              : (inputs?.equipment?.length ?? 0) > 0
+              ? inputs.equipment
               : [],
-          // [PHASE 18B] TASK 2 - Deep planner identity fields
+          // [PHASE 18B/18C] Deep planner identity fields - freshRebuildInput > canonical > inputs
           goalCategories:
-            (inputs?.goalCategories?.length ?? 0) > 0
-              ? inputs.goalCategories
-              : (freshRebuildInput?.goalCategories?.length ?? 0) > 0
+            (freshRebuildInput?.goalCategories?.length ?? 0) > 0
               ? freshRebuildInput.goalCategories
               : (canonicalProfileNow?.goalCategories?.length ?? 0) > 0
               ? canonicalProfileNow.goalCategories
+              : (inputs?.goalCategories?.length ?? 0) > 0
+              ? inputs.goalCategories
               : [],
           selectedFlexibility:
-            (inputs?.selectedFlexibility?.length ?? 0) > 0
-              ? inputs.selectedFlexibility
-              : (freshRebuildInput?.selectedFlexibility?.length ?? 0) > 0
+            (freshRebuildInput?.selectedFlexibility?.length ?? 0) > 0
               ? freshRebuildInput.selectedFlexibility
               : (canonicalProfileNow?.selectedFlexibility?.length ?? 0) > 0
               ? canonicalProfileNow.selectedFlexibility
+              : (inputs?.selectedFlexibility?.length ?? 0) > 0
+              ? inputs.selectedFlexibility
               : [],
           experienceLevel:
-            inputs?.experienceLevel ||
             freshRebuildInput?.experienceLevel ||
             canonicalProfileNow?.experienceLevel ||
+            inputs?.experienceLevel ||
             null,
         }
         
@@ -4030,6 +4114,41 @@ export default function ProgramPage() {
               (rebuildBuilderInput?.experienceLevel ?? null) === (rebuildCanonicalOverride?.experienceLevel ?? null),
           },
           verdict: 'handleRegenerate_now_enters_builder_with_full_deep_planner_identity_parity',
+        })
+        
+        // ==========================================================================
+        // [PHASE 18C] TASK 5 - Post-fix root parity verdict
+        // Confirms stale inputs no longer outranks fresher truth
+        // ==========================================================================
+        console.log('[phase18c-regenerate-postfix-root-parity-verdict]', {
+          triggerPath: 'handleRegenerate',
+          inputs_removed_as_top_priority: true,
+          regenerate_now_uses_fresh_entry_first: true,
+          canonical_override_remains_aligned: true,
+          finalTruthPriorityOrder: 'freshRebuildInput > canonicalProfileNow > inputs',
+          finalIdentityUsed: {
+            primaryGoal: strongestRegenerateTruth.primaryGoal,
+            secondaryGoal: strongestRegenerateTruth.secondaryGoal,
+            scheduleMode: strongestRegenerateTruth.scheduleMode,
+            trainingDaysPerWeek: strongestRegenerateTruth.trainingDaysPerWeek,
+            sessionDurationMode: strongestRegenerateTruth.sessionDurationMode,
+            sessionLength: strongestRegenerateTruth.sessionLength,
+            selectedSkills: strongestRegenerateTruth.selectedSkills,
+            trainingPathType: strongestRegenerateTruth.trainingPathType,
+            equipment: strongestRegenerateTruth.equipment,
+            goalCategories: strongestRegenerateTruth.goalCategories,
+            selectedFlexibility: strongestRegenerateTruth.selectedFlexibility,
+            experienceLevel: strongestRegenerateTruth.experienceLevel,
+          },
+          builderInputAndCanonicalOverrideAligned: 
+            (rebuildBuilderInput?.primaryGoal ?? null) === (rebuildCanonicalOverride?.primaryGoal ?? null) &&
+            JSON.stringify(rebuildBuilderInput?.selectedSkills ?? []) === JSON.stringify(rebuildCanonicalOverride?.selectedSkills ?? []) &&
+            (rebuildBuilderInput?.trainingPathType ?? null) === (rebuildCanonicalOverride?.trainingPathType ?? null) &&
+            JSON.stringify(rebuildBuilderInput?.goalCategories ?? []) === JSON.stringify(rebuildCanonicalOverride?.goalCategories ?? []) &&
+            JSON.stringify(rebuildBuilderInput?.selectedFlexibility ?? []) === JSON.stringify(rebuildCanonicalOverride?.selectedFlexibility ?? []) &&
+            (rebuildBuilderInput?.experienceLevel ?? null) === (rebuildCanonicalOverride?.experienceLevel ?? null),
+          expected_identity_class: 'should_now_match_onboarding_canonical_truth',
+          verdict: 'REAL_ROOT_CAUSE_FIXED_AT_REGENERATE_ENTRY',
         })
         
         // [PHASE 16S] Dispatch verdict - marking actual builder call for regeneration

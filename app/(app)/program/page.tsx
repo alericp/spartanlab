@@ -5622,6 +5622,24 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
   // [canonical-rebuild] TASK B: Handle adjustment rebuilds that require full program regeneration
   const handleAdjustmentRebuild = useCallback(async (request: AdjustmentRebuildRequest): Promise<AdjustmentRebuildResult> => {
     // ==========================================================================
+    // [PHASE 18E] TASK 1 - UI flow path classification audit
+    // This proves which UI path leads to this handler
+    // ==========================================================================
+    console.log('[phase18e-ui-flow-path-classification-audit]', {
+      triggerPath: 'handleAdjustmentRebuild',
+      uiFlowsLeadingHere: [
+        'ProgramAdjustmentModal → onRebuildRequired',
+        'Restart Program modal → Make Small Adjustments → Training Days/Equipment → Apply',
+      ],
+      uiFlowsNOTLeadingHere: [
+        'Stale banner Rebuild From Current Settings → handleRegenerate',
+        'ProgramDisplayWrapper onRegenerate → handleRegenerate',
+      ],
+      previousPhaseProblem: 'Phases_18A_through_18D_patched_handleRegenerate_but_tested_UI_was_using_handleAdjustmentRebuild',
+      thisPhaseCorrects: 'Now_fixing_the_actual_tested_modal_rebuild_path',
+    })
+    
+    // ==========================================================================
     // [PHASE 17R] TASK 2 - Program page callback receive audit
     // ==========================================================================
     console.log('[phase17r-program-page-adjustment-receive-audit]', {
@@ -6262,26 +6280,84 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
             : 'MATERIAL_IDENTITY_MISMATCH_STILL_PRESENT',
       })
       
-      // [PHASE 16S] Dispatch verdict - marking actual builder call for adjustment
+      // ==========================================================================
+      // [PHASE 18E] TASK 5 - Replace direct client builder call with server route dispatch
+      // This mirrors the working onboarding architecture where generation happens server-side
+      // The Restart Program modal "Rebuild From Current Settings" flows through THIS path
+      // ==========================================================================
       const adjAttemptId = `attempt_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
+      
+      // [PHASE 18E] TASK 8A - Client dispatch audit
+      console.log('[phase18e-adjustment-client-dispatch-audit]', {
+        triggerPath: 'handleAdjustmentRebuild',
+        requestType: request.type,
+        explicitOverrideRequested: {
+          newTrainingDays: request.newTrainingDays ?? null,
+          newSessionMinutes: request.newSessionMinutes ?? null,
+          newEquipment: request.newEquipment ?? null,
+        },
+        currentProgramId: program?.id ?? null,
+        directBuilderCallBypassed: true,
+        dispatchTargetRoute: '/api/program/rebuild-adjustment',
+        verdict: 'direct_client_builder_execution_being_bypassed',
+      })
+      
       console.log('[phase16s-generate-dispatch-verdict]', {
         flowName: 'adjustment_rebuild',
         attemptId: adjAttemptId,
         runtimeSessionId: runtimeSessionIdRef.current,
         requestDispatched: true,
-        dispatchMethod: 'generateAdaptiveProgram',
+        dispatchMethod: 'server_route_/api/program/rebuild-adjustment',
         dispatchTimestamp: new Date().toISOString(),
-        verdict: 'dispatch_executing',
+        verdict: 'dispatch_executing_via_server',
       })
       
-      // [PHASE 16N] FIX: Await the async builder - it returns Promise<AdaptiveProgram>
-      // [PHASE 17T] Now uses adjustmentBuilderInput with explicit regenerationMode
-      // [PHASE 17V] TASK 5 - Pass explicit canonicalProfileOverride to prevent builder from re-reading weaker canonical
-      const newProgram = await programModules.generateAdaptiveProgram(
-        adjustmentBuilderInput,
-        undefined,
-        { canonicalProfileOverride: adjustmentCanonicalOverride }
-      )
+      // [PHASE 18E] Dispatch to server adjustment rebuild route instead of direct builder call
+      const serverResponse = await fetch('/api/program/rebuild-adjustment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          requestType: request.type,
+          newTrainingDays: request.newTrainingDays,
+          newSessionMinutes: request.newSessionMinutes,
+          newEquipment: request.newEquipment,
+          currentProgramId: program?.id ?? null,
+          // Pass client canonical as LOW-trust fallback, server will resolve its own
+          clientCanonicalSnapshot: adjustmentCanonicalOverride,
+        }),
+      })
+      
+      const serverResult = await serverResponse.json()
+      
+      if (!serverResponse.ok || !serverResult.success) {
+        console.log('[phase18e-adjustment-server-error]', {
+          status: serverResponse.status,
+          error: serverResult.error,
+          failedStage: serverResult.failedStage,
+        })
+        throw new ProgramPageValidationError(
+          'orchestration_failed',
+          'generating',
+          'server_adjustment_rebuild_failed',
+          serverResult.error || 'Server adjustment rebuild failed',
+          { serverResult }
+        )
+      }
+      
+      // [PHASE 18E] TASK 8D - Client result audit
+      console.log('[phase18e-adjustment-client-result-audit]', {
+        triggerPath: 'handleAdjustmentRebuild',
+        requestType: request.type,
+        resultReceivedFromServer: true,
+        sessionCount: serverResult.program?.sessions?.length ?? 0,
+        primaryGoal: serverResult.program?.primaryGoal ?? null,
+        trainingPathType: serverResult.program?.trainingPathType ?? null,
+        selectedSkillsSummary: serverResult.program?.selectedSkills?.slice(0, 5) ?? [],
+        saveFlowWillContinue: true,
+        verdict: 'client_received_server_generated_adjustment_program',
+      })
+      
+      const newProgram = serverResult.program as AdaptiveProgram
       
       // [PHASE 17A] Builder returned - check dispatch stage success
       console.log('[phase17a-adjustment-stage-success]', { 

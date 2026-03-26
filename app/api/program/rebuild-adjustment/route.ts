@@ -137,8 +137,35 @@ export async function POST(request: Request) {
     // This is what the onboarding route does - it doesn't trust client-passed state
     const serverCanonicalProfile = await getCanonicalProfile()
     
-    // [PHASE 18E] Audit showing server-resolved vs client-passed
-    console.log('[phase18e-adjustment-server-vs-client-truth-audit]', {
+    // ==========================================================================
+    // [PHASE 18J] CRITICAL FIX: Server canonical validity check
+    // 
+    // ROOT CAUSE FOUND: getCanonicalProfile() calls browser-only localStorage functions:
+    // - getOnboardingProfile() returns null when typeof window === 'undefined'
+    // - getAthleteProfile() returns null when !isBrowser()
+    // 
+    // On the server, BOTH return null, so reconcileCanonicalProfile() returns a
+    // TRUTHY object with only fallback defaults (experienceLevel: 'beginner', etc.)
+    // 
+    // This truthy-but-incomplete object was WRONGLY outranking the richer client snapshot!
+    // 
+    // FIX: Check if server canonical has MATERIAL identity (real user data, not fallbacks)
+    // If server canonical is incomplete, prefer the richer client snapshot instead.
+    // ==========================================================================
+    
+    // [PHASE 18J] Material validity check - does server canonical have real user data?
+    const serverHasMaterialIdentity = !!(
+      serverCanonicalProfile?.primaryGoal && 
+      (serverCanonicalProfile?.selectedSkills?.length > 0 || serverCanonicalProfile?.trainingPathType)
+    )
+    
+    const clientHasMaterialIdentity = !!(
+      clientCanonicalSnapshot?.primaryGoal && 
+      (clientCanonicalSnapshot?.selectedSkills?.length > 0 || clientCanonicalSnapshot?.trainingPathType)
+    )
+    
+    // [PHASE 18J] Audit showing server-resolved vs client-passed with validity verdicts
+    console.log('[phase18j-server-canonical-validity-audit]', {
       serverResolvedCanonical: {
         primaryGoal: serverCanonicalProfile?.primaryGoal ?? null,
         secondaryGoal: serverCanonicalProfile?.secondaryGoal ?? null,
@@ -163,11 +190,58 @@ export async function POST(request: Request) {
         goalCategories: clientCanonicalSnapshot?.goalCategories ?? [],
         selectedFlexibility: clientCanonicalSnapshot?.selectedFlexibility ?? [],
       },
-      trustOrder: 'server_resolved_canonical > client_passed_as_fallback_only',
+      validityChecks: {
+        serverHasMaterialIdentity,
+        clientHasMaterialIdentity,
+      },
     })
     
-    // Use server-resolved canonical as primary, client as fallback
-    const canonicalBase = serverCanonicalProfile || clientCanonicalSnapshot || {}
+    // [PHASE 18J] CRITICAL: Choose canonical base with material validity gating
+    // DO NOT blindly trust server canonical just because it's truthy
+    // Server canonical is built from browser-only localStorage which is EMPTY on server!
+    let canonicalBase: typeof serverCanonicalProfile
+    let canonicalSourceWinner: string
+    
+    if (serverHasMaterialIdentity) {
+      // Server canonical has real user data - use it
+      canonicalBase = serverCanonicalProfile
+      canonicalSourceWinner = 'server_canonical_valid_wins'
+    } else if (clientHasMaterialIdentity) {
+      // Server canonical is incomplete, but client has real data - use client
+      canonicalBase = clientCanonicalSnapshot
+      canonicalSourceWinner = 'client_snapshot_wins_because_server_canonical_incomplete'
+    } else {
+      // Both incomplete - use whatever we have, but warn
+      canonicalBase = clientCanonicalSnapshot || serverCanonicalProfile || {}
+      canonicalSourceWinner = 'both_incomplete_using_best_available'
+      console.warn('[phase18j-canonical-degraded-truth-warning]', {
+        warning: 'Neither server canonical nor client snapshot has material identity',
+        serverHasMaterialIdentity,
+        clientHasMaterialIdentity,
+        usingSource: canonicalBase === clientCanonicalSnapshot ? 'client' : 'server',
+      })
+    }
+    
+    console.log('[phase18j-canonical-base-selection-audit]', {
+      canonicalSourceWinner,
+      selectedBase: {
+        primaryGoal: canonicalBase?.primaryGoal ?? null,
+        selectedSkills: canonicalBase?.selectedSkills ?? [],
+        trainingPathType: canonicalBase?.trainingPathType ?? null,
+        experienceLevel: canonicalBase?.experienceLevel ?? null,
+      },
+    })
+    
+    console.log('[phase18j-server-canonical-material-validity-verdict]', {
+      serverCanonicalTruthy: !!serverCanonicalProfile,
+      serverHasMaterialIdentity,
+      clientHasMaterialIdentity,
+      verdict: serverHasMaterialIdentity 
+        ? 'SERVER_CANONICAL_VALID_FOR_ROUTE_TRUTH'
+        : clientHasMaterialIdentity
+          ? 'SERVER_CANONICAL_INCOMPLETE__CLIENT_SNAPSHOT_USED'
+          : 'BOTH_SOURCES_INCOMPLETE__DEGRADED_TRUTH',
+    })
     
     markStage('server_canonical_resolved')
     
@@ -440,6 +514,25 @@ export async function POST(request: Request) {
       noUnintendedNarrowing: true,
       materialIdentityIntact: !!(canonicalProfileOverride.selectedSkills?.length) && !!canonicalProfileOverride.trainingPathType,
       verdict: 'THIN_REQUEST_TRANSFORM_CORRECT__NO_IDENTITY_DRIFT',
+    })
+    
+    // ==========================================================================
+    // [PHASE 18J] TASK 9 - Final root cause classification verdict
+    // ==========================================================================
+    console.log('[phase18j-root-cause-classification-verdict]', {
+      routeFixed: '/api/program/rebuild-adjustment',
+      rootCauseFound: 'SERVER_GETCANONICALPROFILE_WAS_BROWSER_ONLY',
+      rootCauseExplanation: 'getCanonicalProfile() depends on localStorage-based getOnboardingProfile() and getAthleteProfile() which both return null on server',
+      fixApplied: 'Material validity check now gates canonical base selection - incomplete server canonical does not outrank richer client snapshot',
+      canonicalSourceUsed: canonicalSourceWinner,
+      resultingMaterialIdentity: {
+        primaryGoal: canonicalProfileOverride.primaryGoal,
+        selectedSkillsCount: canonicalProfileOverride.selectedSkills?.length ?? 0,
+        trainingPathType: canonicalProfileOverride.trainingPathType,
+      },
+      verdict: canonicalSourceWinner === 'client_snapshot_wins_because_server_canonical_incomplete'
+        ? 'REAL_ROOT_CAUSE_FOUND__SERVER_ROUTE_WAS_USING_BROWSER_ONLY_CANONICAL_TRUTH_AND_WRONGLY_OUTRANKING_RICHER_CLIENT_TRUTH__FIX_APPLIED'
+        : 'SERVER_ROUTE_TRUTH_PRIORITY_FIXED__IF_PROGRAM_STILL_REGRESSES_NEXT_ROOT_CAUSE_IS_DOWNSTREAM_BUILDER_LOGIC',
     })
     
     console.log('[phase18e-server-adjustment-success]', {

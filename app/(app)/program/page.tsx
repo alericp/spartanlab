@@ -4665,19 +4665,20 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
       
     } catch (error) {
       // [PHASE 17A] Stage failure audit - captures exact failure point
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      // [PHASE 17B] FIX: Renamed to rawErrorMessage to avoid collision with userFacingErrorMessage below
+      const rawErrorMessage = error instanceof Error ? error.message : 'Unknown error'
       const errorName = error instanceof Error ? error.name : 'UnknownError'
       const errorStack = error instanceof Error ? error.stack?.slice(0, 300) : null
       
       console.log('[phase17a-adjustment-stage-failure]', {
         stage: 'catch_block',
         errorName,
-        errorMessage: errorMessage.slice(0, 150),
+        errorMessage: rawErrorMessage.slice(0, 150),
         errorStack,
-        isBuilderSide: errorMessage.includes('builder') || errorMessage.includes('generate'),
-        isValidationSide: errorMessage.includes('validation') || errorMessage.includes('shape'),
-        isSaveSide: errorMessage.includes('save') || errorMessage.includes('verification'),
-        isImportSide: errorMessage.includes('undefined') || errorMessage.includes('import'),
+        isBuilderSide: rawErrorMessage.includes('builder') || rawErrorMessage.includes('generate'),
+        isValidationSide: rawErrorMessage.includes('validation') || rawErrorMessage.includes('shape'),
+        isSaveSide: rawErrorMessage.includes('save') || rawErrorMessage.includes('verification'),
+        isImportSide: rawErrorMessage.includes('undefined') || rawErrorMessage.includes('import'),
         requestedTrainingDays: request.newTrainingDays || null,
         currentProgramSessionCount: program?.sessions?.length || null,
         scheduleMode: inputs?.scheduleMode || null,
@@ -4715,7 +4716,7 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
         errorStage,
         errorSubCode,
         isStructuredError: isPageValidationError || isBuilderError,
-        errorMessage: error instanceof Error ? error.message.slice(0, 100) : 'unknown',
+        rawErrorMessage: rawErrorMessage.slice(0, 100),
         wasHighFrequencyRequest: request.newTrainingDays && request.newTrainingDays >= 6,
         requestedDays: request.newTrainingDays,
         preservedProgramId: program?.id || null,
@@ -4732,7 +4733,8 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
       }
       
       // [PHASE 16Q] Extract user-facing message from structured errors
-      let errorMessage = 'Rebuild failed unexpectedly'
+      // [PHASE 17B] FIX: Renamed to userFacingErrorMessage to avoid collision with rawErrorMessage above
+      let userFacingErrorMessage = 'Rebuild failed unexpectedly'
       if (isPageValidationError) {
         // Use subCode to get user message from program-state
         const subCode = error.subCode as BuildAttemptSubCode
@@ -4748,14 +4750,23 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
           'session_exercises_not_array': 'A generated session had an invalid exercise list.',
           'save_verification_failed': 'The plan could not be verified after saving. Please try again.',
         }
-        errorMessage = subCodeMessages[subCode] || error.message
+        userFacingErrorMessage = subCodeMessages[subCode] || rawErrorMessage
       } else if (error instanceof Error) {
-        errorMessage = error.message
+        userFacingErrorMessage = rawErrorMessage
       }
+      
+      // [PHASE 17B] Compile-safety diagnostic - verify variable scope is clean
+      console.log('[phase17b-adjustment-catch-variable-scope-audit]', {
+        rawErrorMessageExists: typeof rawErrorMessage === 'string',
+        userFacingErrorMessageExists: typeof userFacingErrorMessage === 'string',
+        usedStructuredMapping: isPageValidationError,
+        finalReturnedError: userFacingErrorMessage.slice(0, 80),
+        finalSubCode: isPageValidationError ? error.subCode : 'none',
+      })
       
       return { 
         success: false, 
-        error: errorMessage
+        error: userFacingErrorMessage
       }
     }
   }, [inputs, program, programModules])

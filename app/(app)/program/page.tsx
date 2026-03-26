@@ -1500,8 +1500,106 @@ export default function ProgramPage() {
         return
       }
       
+      // ==========================================================================
+      // [PHASE 17N] RAW STORAGE TRUTH SNAPSHOT - Read directly from localStorage
+      // This proves whether getProgramState() matches raw storage truth
+      // ==========================================================================
+      let rawCanonicalId: string | null = null
+      let rawCanonicalCreatedAt: string | null = null
+      let rawCanonicalSessionCount = 0
+      let rawHistoryLatestId: string | null = null
+      let rawHistoryLatestCreatedAt: string | null = null
+      let rawHistoryLatestSessionCount = 0
+      let rawHistoryCount = 0
+      
+      try {
+        const rawCanonical = localStorage.getItem('spartanlab_active_program')
+        if (rawCanonical) {
+          const parsed = JSON.parse(rawCanonical)
+          rawCanonicalId = parsed?.id || null
+          rawCanonicalCreatedAt = parsed?.createdAt || null
+          rawCanonicalSessionCount = parsed?.sessions?.length || 0
+        }
+      } catch (err) {
+        console.warn('[phase17n] Failed to parse raw canonical:', err)
+      }
+      
+      try {
+        const rawHistory = localStorage.getItem('spartanlab_adaptive_programs')
+        if (rawHistory) {
+          const parsed = JSON.parse(rawHistory)
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            rawHistoryCount = parsed.length
+            // Sort by createdAt descending to get true latest
+            const sorted = [...parsed].sort((a, b) => 
+              new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
+            )
+            const latest = sorted[0]
+            rawHistoryLatestId = latest?.id || null
+            rawHistoryLatestCreatedAt = latest?.createdAt || null
+            rawHistoryLatestSessionCount = latest?.sessions?.length || 0
+          }
+        }
+      } catch (err) {
+        console.warn('[phase17n] Failed to parse raw history:', err)
+      }
+      
       const canonicalProgram = canonicalState.adaptiveProgram
       const currentProgram = program
+      
+      // [PHASE 17N] TASK 2 - Raw storage truth snapshot log
+      console.log('[phase17n-program-page-canonical-read-truth]', {
+        trigger: triggerSource,
+        
+        inMemoryProgramId: program?.id || 'none',
+        inMemoryProgramCreatedAt: program?.createdAt || 'none',
+        inMemoryProgramSessionCount: program?.sessions?.length || 0,
+        
+        getProgramStateProgramId: canonicalState?.adaptiveProgram?.id || 'none',
+        getProgramStateCreatedAt: canonicalState?.adaptiveProgram?.createdAt || 'none',
+        getProgramStateSessionCount: canonicalState?.adaptiveProgram?.sessions?.length || 0,
+        
+        rawCanonicalId,
+        rawCanonicalCreatedAt,
+        rawCanonicalSessionCount,
+        
+        rawHistoryLatestId,
+        rawHistoryLatestCreatedAt,
+        rawHistoryLatestSessionCount,
+        rawHistoryCount,
+      })
+      
+      // [PHASE 17N] TASK 3 - Source divergence verdict log
+      console.log('[phase17n-program-page-source-divergence-verdict]', {
+        trigger: triggerSource,
+        
+        inMemoryVsProgramStateIdMatch:
+          (program?.id || null) === (canonicalState?.adaptiveProgram?.id || null),
+        
+        inMemoryVsProgramStateSessionMatch:
+          (program?.sessions?.length || 0) === (canonicalState?.adaptiveProgram?.sessions?.length || 0),
+        
+        programStateVsRawCanonicalIdMatch:
+          (canonicalState?.adaptiveProgram?.id || null) === (rawCanonicalId || null),
+        
+        programStateVsRawCanonicalSessionMatch:
+          (canonicalState?.adaptiveProgram?.sessions?.length || 0) === (rawCanonicalSessionCount || 0),
+        
+        rawCanonicalVsHistoryLatestIdMatch:
+          (rawCanonicalId || null) === (rawHistoryLatestId || null),
+        
+        rawCanonicalVsHistoryLatestSessionMatch:
+          (rawCanonicalSessionCount || 0) === (rawHistoryLatestSessionCount || 0),
+        
+        likelyFailureLayer:
+          (canonicalState?.adaptiveProgram?.sessions?.length || 0) !== (rawCanonicalSessionCount || 0)
+            ? 'program_state_read_layer'
+            : (rawCanonicalSessionCount || 0) !== (rawHistoryLatestSessionCount || 0)
+            ? 'canonical_storage_is_stale_vs_history'
+            : (program?.sessions?.length || 0) !== (canonicalState?.adaptiveProgram?.sessions?.length || 0)
+            ? 'program_page_in_memory_state_is_stale'
+            : 'no_divergence_detected_in_this_snapshot',
+      })
       
       // Compare by ID and createdAt to detect if canonical is different/newer
       const idDiffers = canonicalProgram.id !== currentProgram.id
@@ -2241,6 +2339,18 @@ export default function ProgramPage() {
         console.log('[program-build] STAGE 6b: Save verification PASSED', {
         readBackId: savedState.adaptiveProgram?.id,
         matchesNew: savedState.adaptiveProgram?.id === newProgram.id,
+        })
+        
+        // [PHASE 17N] TASK 4 - Post-onboarding save confirmation log
+        console.log('[phase17n-onboarding-save-postwrite-truth]', {
+          savedProgramId: newProgram.id,
+          savedProgramCreatedAt: newProgram.createdAt,
+          savedProgramSessionCount: newProgram.sessions?.length || 0,
+          verifiedProgramStateId: savedState?.adaptiveProgram?.id || 'none',
+          verifiedProgramStateCreatedAt: savedState?.adaptiveProgram?.createdAt || 'none',
+          verifiedProgramStateSessionCount: savedState?.adaptiveProgram?.sessions?.length || 0,
+          sameId: (savedState?.adaptiveProgram?.id || null) === (newProgram.id || null),
+          sameSessionCount: (savedState?.adaptiveProgram?.sessions?.length || 0) === (newProgram.sessions?.length || 0),
         })
         
         // [freshness-sync] STAGE 6c: Update freshness identity and invalidate stale caches

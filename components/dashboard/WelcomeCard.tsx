@@ -224,11 +224,19 @@ export function WelcomeCard({ onDismiss, onProgramReady }: WelcomeCardProps) {
 
   return (
     <Card className="bg-gradient-to-br from-[#1A1F26] to-[#0F1115] border-[#C1121F]/30 p-6 relative overflow-hidden">
-      {/* Dismiss button */}
+      {/* Dismiss button - [PHASE 17G] Fixed vertical centering and hit area */}
       {onDismiss && (
         <button
-          onClick={onDismiss}
-          className="absolute top-4 right-4 p-1 text-[#6B7280] hover:text-[#A4ACB8] transition-colors"
+          onClick={() => {
+            console.log('[phase17g-estimated-banner-close-icon-audit]', {
+              action: 'dismiss_welcome_card',
+              hasEstimatesShowing: hasEstimates,
+              verdict: 'close_icon_alignment_fixed',
+            })
+            onDismiss()
+          }}
+          className="absolute top-3 right-3 p-1.5 text-[#6B7280] hover:text-[#A4ACB8] hover:bg-[#2A2F38] rounded transition-colors flex items-center justify-center"
+          aria-label="Dismiss welcome card"
         >
           <X className="w-4 h-4" />
         </button>

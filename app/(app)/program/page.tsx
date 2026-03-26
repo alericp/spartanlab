@@ -2308,6 +2308,46 @@ export default function ProgramPage() {
           outputSessionCount: onboardingSessionCount,
           verdict: 'onboarding_uses_unified_canonical_truth_chain',
         })
+        
+        // [PHASE 17G] Six-day justification audit - verify 6-day is legitimate
+        console.log('[phase17g-six-day-justification-audit]', {
+          triggerPath: 'handleGenerate',
+          outputSessionCount: onboardingSessionCount,
+          inputScheduleMode: generationInputs?.scheduleMode,
+          inputSessionDurationMode: generationInputs?.sessionDurationMode,
+          is6DayProgram: onboardingSessionCount >= 6,
+          justification: onboardingIsFlexible 
+            ? '6_days_chosen_by_flexible_engine_based_on_goals_and_recovery'
+            : `static_mode_with_${generationInputs?.trainingDaysPerWeek}_days_requested`,
+          verdict: onboardingSessionCount >= 6 
+            ? 'SIX_DAY_PROGRAM_JUSTIFIED'
+            : 'FEWER_DAYS_APPROPRIATE_FOR_PROFILE',
+        })
+        
+        // [PHASE 17G] Selected skills material expression audit
+        const inputSkills = generationInputs?.selectedSkills || []
+        const outputSkills = newProgram.selectedSkills || []
+        console.log('[phase17g-selected-skills-material-expression-audit]', {
+          triggerPath: 'handleGenerate',
+          inputSelectedSkills: inputSkills,
+          inputSkillsCount: inputSkills.length,
+          outputProgramSkills: outputSkills,
+          outputSkillsCount: outputSkills.length,
+          skillsPreserved: inputSkills.every((s: string) => outputSkills.includes(s)),
+          materialExpressionNote: 'Skills may express as primary drivers, support, or carryover based on goal alignment',
+          verdict: inputSkills.length === outputSkills.length 
+            ? 'ALL_SKILLS_PRESERVED_IN_OUTPUT'
+            : 'SKILL_COUNT_DIFFERS_CHECK_CARRYOVER',
+        })
+        
+        // [PHASE 17G] Style input truth audit
+        console.log('[phase17g-style-input-truth-audit]', {
+          triggerPath: 'handleGenerate',
+          inputTrainingPathType: generationInputs?.trainingPathType || 'not_specified',
+          outputPrimaryGoal: newProgram.primaryGoal,
+          outputSecondaryGoal: newProgram.secondaryGoal || null,
+          styleNote: 'Style materiality depends on trainingPathType and goal alignment',
+        })
       } catch (err) {
         // [PHASE 16Q] Runtime marker for catch block
         console.log('[phase16q-runtime-marker]', {

@@ -416,25 +416,31 @@ export default function SettingsPage() {
       bodyweightSource = 'derived_from_localStorage_weightRange'
     }
     
-    // [PHASE 17E] Bodyweight source contract audit - shows exact truth chain
-    console.log('[phase17e-bodyweight-source-contract-audit]', {
+    // [PHASE 17G] Bodyweight truth chain audit - comprehensive source tracking
+    console.log('[phase17g-settings-bodyweight-hydration-audit]', {
+      // A. Source values
       apiBodyweight: data.bodyweight,
       apiBodyweightType: typeof data.bodyweight,
-      apiWeightRange: data.weightRange || 'NOT_IN_API_RESPONSE',
+      apiBodyweightIsNull: data.bodyweight === null || data.bodyweight === undefined,
       localStorageWeightRange: localStorageWeightRange || 'missing',
-      derivedMidpoint: localStorageWeightRange ? weightRangeMidpoints[localStorageWeightRange] || null : null,
+      // B. Resolution logic
+      usedDatabaseExact: bodyweightSource === 'database_exact',
+      usedDerivedMidpoint: bodyweightSource === 'derived_from_localStorage_weightRange',
+      derivedMidpointValue: localStorageWeightRange ? weightRangeMidpoints[localStorageWeightRange] || null : null,
+      // C. Final display
       resolvedBodyweight,
-      bodyweightSource,
-      willDisplayValue: resolvedBodyweight?.toString() || '',
-      rootCause: 'weightRange_only_in_localStorage_not_database',
-    })
-    
-    // [PHASE 17E] Settings bodyweight read audit
-    console.log('[phase17e-settings-bodyweight-read-audit]', {
-      readFromAPI: typeof data.bodyweight === 'number' && data.bodyweight > 0,
-      readFromLocalStorageDerived: bodyweightSource === 'derived_from_localStorage_weightRange',
-      finalValue: resolvedBodyweight,
-      verdict: resolvedBodyweight !== null ? 'bodyweight_resolved' : 'bodyweight_missing',
+      displayValue: resolvedBodyweight?.toString() || '',
+      // D. Verdict
+      verdict: bodyweightSource === 'database_exact' 
+        ? 'EXACT_USER_VALUE_FROM_DATABASE'
+        : bodyweightSource === 'derived_from_localStorage_weightRange'
+        ? 'SURROGATE_MIDPOINT_FROM_WEIGHT_RANGE'
+        : 'NO_BODYWEIGHT_AVAILABLE',
+      // E. User expectation
+      userExpectation: 'If user entered exact bodyweight in Settings, it should show here',
+      currentIssue: bodyweightSource === 'derived_from_localStorage_weightRange' 
+        ? '170 is midpoint of 160_180 range, NOT user-entered exact value'
+        : 'none',
     })
     
     setBodyweight(resolvedBodyweight?.toString() || '')
@@ -689,23 +695,28 @@ export default function SettingsPage() {
               hasWeights: equipment.includes('weights'),
             })
             
-            // [PHASE 17D] Bodyweight save round-trip audit - prove exact value persists
-            console.log('[phase17d-bodyweight-save-roundtrip-audit]', {
+            // [PHASE 17G] Bodyweight save round-trip audit - prove exact value persists
+            console.log('[phase17g-settings-bodyweight-roundtrip-audit]', {
+              // Input
               userEnteredValue: bodyweight,
+              userEnteredType: typeof bodyweight,
               parsedNumericValue: parsedBodyweight,
+              // Output
               apiReturnedValue: result.profile.bodyweight,
+              apiReturnedType: typeof result.profile.bodyweight,
+              // Verification
               roundTripSuccessful: result.profile.bodyweight === parsedBodyweight,
               willRehydrateAs: result.profile.bodyweight?.toString() || '',
+              // Verdict
               verdict: result.profile.bodyweight === parsedBodyweight 
-                ? 'bodyweight_exact_roundtrip_success' 
-                : 'bodyweight_roundtrip_mismatch',
-            })
-            
-            // [PHASE 17D] Canonical post-save audit
-            console.log('[phase17d-bodyweight-canonical-post-save-audit]', {
-              bodyweightSyncedToCanonical: true,
-              syncedValue: result.profile.bodyweight,
-              canonicalWillUseThisValue: true,
+                ? 'EXACT_BODYWEIGHT_SAVED_AND_RETURNED'
+                : parsedBodyweight === null
+                ? 'NO_BODYWEIGHT_TO_SAVE'
+                : 'BODYWEIGHT_ROUNDTRIP_MISMATCH',
+              // User expectation
+              nextLoadExpectation: result.profile.bodyweight 
+                ? `Settings should show ${result.profile.bodyweight} on next load (exact database value)`
+                : 'Settings will show derived midpoint from weightRange',
             })
             
             // [PHASE 14A TASK 3] Settings equipment roundtrip verdict

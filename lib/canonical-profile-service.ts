@@ -558,18 +558,29 @@ export function reconcileCanonicalProfile(): CanonicalProgrammingProfile {
         sourceUsed,
       })
       
-      // [PHASE 17E] Canonical bodyweight resolution audit - detailed truth chain
-      console.log('[phase17e-canonical-bodyweight-resolution-audit]', {
-        athleteProfileRawValue: athleteProfile?.bodyweight,
-        athleteProfileUsed: athleteBw !== null,
-        onboardingProfileRawValue: (onboardingProfile as unknown as { bodyweight?: number })?.bodyweight,
-        onboardingProfileUsed: onboardingBw !== null,
+      // [PHASE 17G] Canonical bodyweight source audit - comprehensive truth chain
+      console.log('[phase17g-canonical-bodyweight-source-audit]', {
+        // A. All available sources
+        athleteProfileBodyweight: athleteProfile?.bodyweight,
+        athleteProfileBodyweightType: typeof athleteProfile?.bodyweight,
         onboardingWeightRange: onboardingProfile?.weightRange || null,
-        weightRangeDerivedValue: derivedBw,
-        weightRangeDerivedUsed: derivedBw !== null && athleteBw === null && onboardingBw === null,
-        finalValue: finalBw,
+        // B. Resolution
+        athleteExactUsed: athleteBw !== null,
+        derivedFromRangeUsed: derivedBw !== null && athleteBw === null,
+        derivedMidpointValue: derivedBw,
+        // C. Final canonical value
+        finalCanonicalBodyweight: finalBw,
         sourceUsed,
-        verdict: finalBw !== null ? `resolved_from_${sourceUsed}` : 'no_bodyweight_available',
+        // D. Verdict
+        verdict: athleteBw !== null 
+          ? 'USING_EXACT_DATABASE_BODYWEIGHT'
+          : derivedBw !== null 
+          ? 'USING_DERIVED_MIDPOINT_FROM_WEIGHT_RANGE'
+          : 'NO_BODYWEIGHT_AVAILABLE',
+        // E. User expectation
+        issueIfDerived: sourceUsed === 'derived_from_weightRange'
+          ? 'User may expect exact value, but none saved in database yet'
+          : 'none',
       })
       return finalBw
     })(),
@@ -2668,23 +2679,31 @@ export function entryToAdaptiveInputs(entry: ValidatedGenerationEntry): {
     regenerationReason: entry.regenerationReason,
   }
   
-  // [PHASE 17E] Builder dispatch shape audit - exact inputs going to builder
-  console.log('[phase17e-builder-dispatch-shape-audit]', {
+  // [PHASE 17G] Generation entry path audit - comprehensive input tracking
+  console.log('[phase17g-generation-entry-path-audit]', {
+    // A. Core goals
     primaryGoal: result.primaryGoal,
     secondaryGoal: result.secondaryGoal || null,
-    experienceLevel: result.experienceLevel,
-    trainingDaysPerWeek: result.trainingDaysPerWeek,
+    // B. Schedule & session
     scheduleMode: result.scheduleMode,
+    trainingDaysPerWeek: result.trainingDaysPerWeek,
     sessionDurationMode: result.sessionDurationMode,
     sessionLength: result.sessionLength,
+    // C. Skills
     selectedSkillsCount: result.selectedSkills?.length || 0,
     selectedSkills: result.selectedSkills || [],
+    // D. Equipment & experience
     equipmentCount: result.equipment?.length || 0,
     equipment: result.equipment || [],
+    experienceLevel: result.experienceLevel,
+    // E. Style/path
     trainingPathType: result.trainingPathType || null,
+    // F. Mode flags
     isFlexibleSchedule: result.scheduleMode === 'flexible',
     isAdaptiveSession: result.sessionDurationMode === 'adaptive',
     regenerationMode: result.regenerationMode || null,
+    // G. Parity check
+    verdict: 'inputs_ready_for_builder',
   })
   
   return result

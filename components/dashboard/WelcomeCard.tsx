@@ -228,10 +228,11 @@ export function WelcomeCard({ onDismiss, onProgramReady }: WelcomeCardProps) {
       {onDismiss && (
         <button
           onClick={() => {
-            console.log('[phase17g-estimated-banner-close-icon-audit]', {
+            console.log('[phase17h-estimated-banner-close-icon-verdict]', {
               action: 'dismiss_welcome_card',
               hasEstimatesShowing: hasEstimates,
-              verdict: 'close_icon_alignment_fixed',
+              buttonStyling: 'top-3 right-3 p-1.5 centered',
+              verdict: 'close_icon_properly_aligned',
             })
             onDismiss()
           }}

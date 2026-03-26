@@ -3475,63 +3475,138 @@ export default function ProgramPage() {
         })
         
         // ==========================================================================
-        // [PHASE 17Y] TASK 2 - Create stronger regenerate truth object
-        // Priority: freshRebuildInput > canonicalProfileNow > inputs (last fallback)
-        // This prevents stale Program-page `inputs` from overriding stronger truth
+        // [PHASE 18A] TASK 1 - Root priority inversion audit
+        // This captures whether stale canonical-entry-derived values would win
+        // ==========================================================================
+        console.log('[phase18a-regenerate-root-priority-inversion-audit]', {
+          triggerPath: 'handleRegenerate',
+          staleCandidateFromCanonicalEntry: {
+            primaryGoal: freshRebuildInput?.primaryGoal ?? null,
+            secondaryGoal: freshRebuildInput?.secondaryGoal ?? null,
+            scheduleMode: freshRebuildInput?.scheduleMode ?? null,
+            trainingDaysPerWeek: freshRebuildInput?.trainingDaysPerWeek ?? null,
+            sessionDurationMode: freshRebuildInput?.sessionDurationMode ?? null,
+            sessionLength: freshRebuildInput?.sessionLength ?? null,
+            selectedSkills: freshRebuildInput?.selectedSkills ?? [],
+            trainingPathType: freshRebuildInput?.trainingPathType ?? null,
+            equipment: freshRebuildInput?.equipment ?? [],
+          },
+          currentSettingsTruth: {
+            primaryGoal: inputs?.primaryGoal ?? null,
+            secondaryGoal: inputs?.secondaryGoal ?? null,
+            scheduleMode: inputs?.scheduleMode ?? null,
+            trainingDaysPerWeek: inputs?.trainingDaysPerWeek ?? null,
+            sessionDurationMode: inputs?.sessionDurationMode ?? null,
+            sessionLength: inputs?.sessionLength ?? null,
+            selectedSkills: inputs?.selectedSkills ?? [],
+            trainingPathType: inputs?.trainingPathType ?? null,
+            equipment: inputs?.equipment ?? [],
+          },
+          canonicalBaselineTruth: {
+            primaryGoal: canonicalProfileNow?.primaryGoal ?? null,
+            secondaryGoal: canonicalProfileNow?.secondaryGoal ?? null,
+            scheduleMode: canonicalProfileNow?.scheduleMode ?? null,
+            trainingDaysPerWeek: canonicalProfileNow?.trainingDaysPerWeek ?? null,
+            sessionDurationMode: canonicalProfileNow?.sessionDurationMode ?? null,
+            sessionLengthMinutes: canonicalProfileNow?.sessionLengthMinutes ?? null,
+            selectedSkills: canonicalProfileNow?.selectedSkills ?? [],
+            trainingPathType: canonicalProfileNow?.trainingPathType ?? null,
+            equipmentAvailable: canonicalProfileNow?.equipmentAvailable ?? [],
+          },
+          likelyInversionFlags: {
+            primaryGoalDiffersBetweenFreshAndInputs:
+              (freshRebuildInput?.primaryGoal ?? null) !== (inputs?.primaryGoal ?? null),
+            selectedSkillsDiffersBetweenFreshAndInputs:
+              JSON.stringify(freshRebuildInput?.selectedSkills ?? []) !== JSON.stringify(inputs?.selectedSkills ?? []),
+            trainingPathTypeDiffersBetweenFreshAndInputs:
+              (freshRebuildInput?.trainingPathType ?? null) !== (inputs?.trainingPathType ?? null),
+            scheduleModeDiffersBetweenFreshAndInputs:
+              (freshRebuildInput?.scheduleMode ?? null) !== (inputs?.scheduleMode ?? null),
+            trainingDaysDiffersBetweenFreshAndInputs:
+              (freshRebuildInput?.trainingDaysPerWeek ?? null) !== (inputs?.trainingDaysPerWeek ?? null),
+          },
+          oldPriorityOrder: 'freshRebuildInput > canonicalProfileNow > inputs',
+          suspectedRootCause: 'stale_canonical_entry_values_can_win_before_builder_call',
+        })
+        
+        // ==========================================================================
+        // [PHASE 18A] TASK 2 - Create stronger regenerate truth object with CORRECTED priority
+        // Priority: inputs > freshRebuildInput > canonicalProfileNow
+        // This ensures current settings truth wins over stale canonical-entry-derived values
         // ==========================================================================
         const strongestRegenerateTruth = {
           primaryGoal:
+            inputs?.primaryGoal ||
             freshRebuildInput?.primaryGoal ||
             canonicalProfileNow?.primaryGoal ||
-            inputs?.primaryGoal ||
             null,
           secondaryGoal:
+            inputs?.secondaryGoal ??
             freshRebuildInput?.secondaryGoal ??
             canonicalProfileNow?.secondaryGoal ??
-            inputs?.secondaryGoal ??
             null,
           scheduleMode:
+            inputs?.scheduleMode ||
             freshRebuildInput?.scheduleMode ||
             canonicalProfileNow?.scheduleMode ||
-            inputs?.scheduleMode ||
             null,
           trainingDaysPerWeek:
+            inputs?.trainingDaysPerWeek ??
             freshRebuildInput?.trainingDaysPerWeek ??
             canonicalProfileNow?.trainingDaysPerWeek ??
-            inputs?.trainingDaysPerWeek ??
             null,
           sessionDurationMode:
+            inputs?.sessionDurationMode ||
             freshRebuildInput?.sessionDurationMode ||
             canonicalProfileNow?.sessionDurationMode ||
-            inputs?.sessionDurationMode ||
             null,
           sessionLength:
+            inputs?.sessionLength ??
             freshRebuildInput?.sessionLength ??
             canonicalProfileNow?.sessionLengthMinutes ??
-            inputs?.sessionLength ??
             null,
           selectedSkills:
-            (freshRebuildInput?.selectedSkills?.length ?? 0) > 0
+            (inputs?.selectedSkills?.length ?? 0) > 0
+              ? inputs.selectedSkills
+              : (freshRebuildInput?.selectedSkills?.length ?? 0) > 0
               ? freshRebuildInput.selectedSkills
               : (canonicalProfileNow?.selectedSkills?.length ?? 0) > 0
               ? canonicalProfileNow.selectedSkills
-              : (inputs?.selectedSkills?.length ?? 0) > 0
-              ? inputs.selectedSkills
               : [],
           trainingPathType:
+            inputs?.trainingPathType ||
             freshRebuildInput?.trainingPathType ||
             canonicalProfileNow?.trainingPathType ||
-            inputs?.trainingPathType ||
             null,
           equipment:
-            (freshRebuildInput?.equipment?.length ?? 0) > 0
+            (inputs?.equipment?.length ?? 0) > 0
+              ? inputs.equipment
+              : (freshRebuildInput?.equipment?.length ?? 0) > 0
               ? freshRebuildInput.equipment
               : (canonicalProfileNow?.equipmentAvailable?.length ?? 0) > 0
               ? canonicalProfileNow.equipmentAvailable
-              : (inputs?.equipment?.length ?? 0) > 0
-              ? inputs.equipment
               : [],
         }
+        
+        // ==========================================================================
+        // [PHASE 18A] TASK 3 - Post-fix audit after strongestRegenerateTruth is created
+        // ==========================================================================
+        console.log('[phase18a-regenerate-strongest-truth-postfix-audit]', {
+          triggerPath: 'handleRegenerate',
+          strongestRegenerateTruth: {
+            primaryGoal: strongestRegenerateTruth?.primaryGoal ?? null,
+            secondaryGoal: strongestRegenerateTruth?.secondaryGoal ?? null,
+            scheduleMode: strongestRegenerateTruth?.scheduleMode ?? null,
+            trainingDaysPerWeek: strongestRegenerateTruth?.trainingDaysPerWeek ?? null,
+            sessionDurationMode: strongestRegenerateTruth?.sessionDurationMode ?? null,
+            sessionLength: strongestRegenerateTruth?.sessionLength ?? null,
+            selectedSkills: strongestRegenerateTruth?.selectedSkills ?? [],
+            trainingPathType: strongestRegenerateTruth?.trainingPathType ?? null,
+            equipment: strongestRegenerateTruth?.equipment ?? [],
+          },
+          finalPriorityOrder: 'inputs > freshRebuildInput > canonicalProfileNow',
+          verdict: 'handleRegenerate_material_truth_now_prefers_current_settings_first',
+        })
         
         // ==========================================================================
         // [PHASE 17T] TASK 1 & 3 - Force explicit regenerationMode for rebuild path
@@ -3771,6 +3846,48 @@ export default function ProgramPage() {
             })
               ? 'REGENERATE_BUILDER_AND_OVERRIDE_ALIGNED'
               : 'REGENERATE_MATERIAL_TRUTH_MISMATCH_STILL_PRESENT',
+        })
+        
+        // ==========================================================================
+        // [PHASE 18A] TASK 6 - Builder handoff parity verdict
+        // ==========================================================================
+        console.log('[phase18a-regenerate-builder-handoff-parity-verdict]', {
+          triggerPath: 'handleRegenerate',
+          finalBuilderInput: {
+            primaryGoal: rebuildBuilderInput?.primaryGoal ?? null,
+            secondaryGoal: rebuildBuilderInput?.secondaryGoal ?? null,
+            scheduleMode: rebuildBuilderInput?.scheduleMode ?? null,
+            trainingDaysPerWeek: rebuildBuilderInput?.trainingDaysPerWeek ?? null,
+            sessionDurationMode: rebuildBuilderInput?.sessionDurationMode ?? null,
+            sessionLength: rebuildBuilderInput?.sessionLength ?? null,
+            selectedSkills: rebuildBuilderInput?.selectedSkills ?? [],
+            trainingPathType: rebuildBuilderInput?.trainingPathType ?? null,
+            equipment: rebuildBuilderInput?.equipment ?? [],
+            regenerationMode: rebuildBuilderInput?.regenerationMode ?? null,
+            regenerationReason: rebuildBuilderInput?.regenerationReason ?? null,
+          },
+          finalCanonicalOverride: {
+            primaryGoal: rebuildCanonicalOverride?.primaryGoal ?? null,
+            secondaryGoal: rebuildCanonicalOverride?.secondaryGoal ?? null,
+            scheduleMode: rebuildCanonicalOverride?.scheduleMode ?? null,
+            trainingDaysPerWeek: rebuildCanonicalOverride?.trainingDaysPerWeek ?? null,
+            sessionDurationMode: rebuildCanonicalOverride?.sessionDurationMode ?? null,
+            sessionLengthMinutes: rebuildCanonicalOverride?.sessionLengthMinutes ?? null,
+            selectedSkills: rebuildCanonicalOverride?.selectedSkills ?? [],
+            trainingPathType: rebuildCanonicalOverride?.trainingPathType ?? null,
+            equipmentAvailable: rebuildCanonicalOverride?.equipmentAvailable ?? [],
+          },
+          parityChecks: {
+            primaryGoalAligned:
+              (rebuildBuilderInput?.primaryGoal ?? null) === (rebuildCanonicalOverride?.primaryGoal ?? null),
+            selectedSkillsAligned:
+              JSON.stringify(rebuildBuilderInput?.selectedSkills ?? []) === JSON.stringify(rebuildCanonicalOverride?.selectedSkills ?? []),
+            trainingPathTypeAligned:
+              (rebuildBuilderInput?.trainingPathType ?? null) === (rebuildCanonicalOverride?.trainingPathType ?? null),
+            scheduleModeAligned:
+              (rebuildBuilderInput?.scheduleMode ?? null) === (rebuildCanonicalOverride?.scheduleMode ?? null),
+          },
+          verdict: 'builder_input_and_canonical_override_now_share_same_current-settings-first_truth',
         })
         
         // [PHASE 16S] Dispatch verdict - marking actual builder call for regeneration

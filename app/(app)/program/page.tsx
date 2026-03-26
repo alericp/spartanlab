@@ -1474,6 +1474,117 @@ export default function ProgramPage() {
     })
   }, [])
   
+  // ==========================================================================
+  // [PHASE 17J] PROGRAM PAGE RECONCILIATION EFFECT
+  // Syncs in-memory program state with canonical saved program when:
+  // 1. Window/tab gains focus (user returns from another tab/page)
+  // 2. Page becomes visible after being hidden
+  // This ensures stale 4-session program doesn't persist when 6-session is saved
+  // ==========================================================================
+  useEffect(() => {
+    if (!programModules.getProgramState || !programModules.normalizeProgramForDisplay) {
+      return // Modules not loaded yet
+    }
+    
+    const reconcileWithCanonical = () => {
+      const canonicalState = programModules.getProgramState?.()
+      if (!canonicalState?.adaptiveProgram || !program) {
+        console.log('[phase17j-program-page-reconciliation-verdict]', {
+          action: 'skip_reconciliation',
+          reason: !canonicalState?.adaptiveProgram ? 'no_canonical_program' : 'no_current_program',
+        })
+        return
+      }
+      
+      const canonicalProgram = canonicalState.adaptiveProgram
+      const currentProgram = program
+      
+      // Compare by ID and createdAt to detect if canonical is different/newer
+      const idDiffers = canonicalProgram.id !== currentProgram.id
+      const canonicalCreatedAt = new Date(canonicalProgram.createdAt).getTime()
+      const currentCreatedAt = new Date(currentProgram.createdAt).getTime()
+      const canonicalIsNewer = canonicalCreatedAt > currentCreatedAt
+      const sessionCountDiffers = (canonicalProgram.sessions?.length || 0) !== (currentProgram.sessions?.length || 0)
+      
+      console.log('[phase17j-program-page-canonical-diff]', {
+        canonicalProgramId: canonicalProgram.id,
+        currentProgramId: currentProgram.id,
+        idDiffers,
+        canonicalCreatedAt: canonicalProgram.createdAt,
+        currentCreatedAt: currentProgram.createdAt,
+        canonicalIsNewer,
+        canonicalSessionCount: canonicalProgram.sessions?.length || 0,
+        currentSessionCount: currentProgram.sessions?.length || 0,
+        sessionCountDiffers,
+      })
+      
+      // Decision: Replace current with canonical if ID differs or canonical is newer
+      const shouldReplace = idDiffers || canonicalIsNewer
+      
+      if (shouldReplace) {
+        console.log('[phase17j-canonical-replacement-decision]', {
+          decision: 'REPLACE_STALE_WITH_CANONICAL',
+          reason: idDiffers ? 'different_program_id' : 'canonical_is_newer',
+          staleProgramId: currentProgram.id,
+          staleSessionCount: currentProgram.sessions?.length || 0,
+          canonicalProgramId: canonicalProgram.id,
+          canonicalSessionCount: canonicalProgram.sessions?.length || 0,
+        })
+        
+        // Normalize and set the canonical program
+        const normalizedCanonical = programModules.normalizeProgramForDisplay?.(canonicalProgram)
+        if (normalizedCanonical) {
+          setProgram(normalizedCanonical)
+          
+          console.log('[phase17j-replaced-stale-page-memory]', {
+            previousProgramId: currentProgram.id,
+            previousSessionCount: currentProgram.sessions?.length || 0,
+            newProgramId: normalizedCanonical.id,
+            newSessionCount: normalizedCanonical.sessions?.length || 0,
+            verdict: 'STALE_PROGRAM_REPLACED_WITH_CANONICAL',
+          })
+        }
+      } else {
+        console.log('[phase17j-kept-current-memory-verdict]', {
+          decision: 'KEEP_CURRENT',
+          reason: 'canonical_matches_current_or_current_is_newer',
+          currentProgramId: currentProgram.id,
+          currentSessionCount: currentProgram.sessions?.length || 0,
+        })
+      }
+    }
+    
+    // Listen for visibility changes (tab becomes visible)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        console.log('[phase17j-program-state-lifecycle-audit]', {
+          event: 'visibilitychange_to_visible',
+          currentProgramId: program?.id || 'none',
+          action: 'triggering_reconciliation',
+        })
+        reconcileWithCanonical()
+      }
+    }
+    
+    // Listen for window focus (user clicks back into tab)
+    const handleFocus = () => {
+      console.log('[phase17j-program-state-lifecycle-audit]', {
+        event: 'window_focus',
+        currentProgramId: program?.id || 'none',
+        action: 'triggering_reconciliation',
+      })
+      reconcileWithCanonical()
+    }
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    window.addEventListener('focus', handleFocus)
+    
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      window.removeEventListener('focus', handleFocus)
+    }
+  }, [program, programModules.getProgramState, programModules.normalizeProgramForDisplay])
+  
   // Load last build result on mount - but clear stale failures if current program is newer
   useEffect(() => {
     const stored = getLastBuildAttemptResult()

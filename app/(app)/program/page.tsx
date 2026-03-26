@@ -5193,18 +5193,73 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
     hiddenRuntimeEquipmentStripped: (updatedInputs.equipment || []).filter(e => e === 'floor' || e === 'wall'),
   })
   
+  // [PHASE 17P] Detect flexible-preserving rebuild
+  // If request.type === 'training_days' BUT newTrainingDays is undefined/null,
+  // this is a flexible-preserving rebuild - do NOT force static mode
+  const canonicalProfileNow = getCanonicalProfile()
+  const flexiblePreservingRebuild = 
+    request.type === 'training_days' &&
+    (request.newTrainingDays === undefined || request.newTrainingDays === null) &&
+    (canonicalProfileNow?.scheduleMode === 'flexible' || canonicalProfileNow?.scheduleMode === 'adaptive')
+  
+  // [PHASE 17P] Flexible rebuild request truth log
+  console.log('[phase17p-flexible-rebuild-request-truth]', {
+    requestType: request.type,
+    requestedTrainingDays:
+      typeof request.newTrainingDays === 'number' ? request.newTrainingDays : null,
+    canonicalScheduleMode: canonicalProfileNow?.scheduleMode || 'unknown',
+    preservingFlexibleIdentity: flexiblePreservingRebuild,
+  })
+  
+  // [PHASE 17P] Determine what schedule mode to persist
+  let persistedScheduleMode: 'static' | 'flexible' | undefined = undefined
+  let persistedTrainingDays: number | undefined = updatedInputs.trainingDaysPerWeek ?? undefined
+  
+  if (request.type === 'training_days') {
+    if (flexiblePreservingRebuild) {
+      // Preserve flexible identity - do NOT set static
+      persistedScheduleMode = 'flexible'
+      persistedTrainingDays = undefined // Don't persist a fixed day count
+    } else {
+      // User explicitly chose a day count - set static
+      persistedScheduleMode = 'static'
+    }
+  }
+  
+  // [PHASE 17P] Canonical writeback schedule truth log
+  console.log('[phase17p-canonical-writeback-schedule-truth]', {
+    requestType: request.type,
+    requestedTrainingDays:
+      typeof request.newTrainingDays === 'number' ? request.newTrainingDays : null,
+    canonicalScheduleModeBefore: canonicalProfileNow?.scheduleMode || 'unknown',
+    persistedScheduleMode: persistedScheduleMode || 'unchanged',
+    persistedTrainingDays: persistedTrainingDays ?? null,
+    flexiblePreservingRebuild,
+  })
+  
   saveCanonicalProfile({
-    trainingDaysPerWeek: updatedInputs.trainingDaysPerWeek ?? undefined,
+    trainingDaysPerWeek: persistedTrainingDays,
     sessionLengthMinutes: updatedInputs.sessionLength ?? undefined,
-    // For schedule mode, if user selects a specific day count, they've made a choice
-    scheduleMode: request.type === 'training_days' ? 'static' : undefined,
+    scheduleMode: persistedScheduleMode,
     equipmentAvailable: canonicalEquipment,
   })
+  
+  // [PHASE 17P] Rebuild input schedule verdict
+  console.log('[phase17p-rebuild-input-schedule-verdict]', {
+    requestType: request.type,
+    finalInputScheduleMode: persistedScheduleMode || canonicalProfileNow?.scheduleMode || 'unknown',
+    finalInputTrainingDays: persistedTrainingDays ?? null,
+    verdict: persistedScheduleMode === 'flexible' || flexiblePreservingRebuild
+      ? 'FLEXIBLE_IDENTITY_PRESERVED'
+      : 'STATIC_DAY_COUNT_APPLIED',
+  })
+  
   console.log('[canonical-rebuild] STAGE 5b: Canonical profile updated with new settings', {
-    trainingDaysPerWeek: updatedInputs.trainingDaysPerWeek,
+    trainingDaysPerWeek: persistedTrainingDays,
     sessionLength: updatedInputs.sessionLength,
     equipmentCount: canonicalEquipment.length,
     canonicalEquipment,
+    scheduleMode: persistedScheduleMode,
   })
       
       // [canonical-rebuild] STAGE 6: Update UI state atomically
@@ -5937,6 +5992,12 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
             // [PHASE 5] Use canonical profile equipment
             const canonical = getCanonicalProfile()
             return canonical.equipmentAvailable || []
+          })()}
+          // [PHASE 17P] Pass canonical schedule mode to preserve flexible identity
+          currentScheduleMode={(() => {
+            const canonical = getCanonicalProfile()
+            const mode = canonical.scheduleMode || 'adaptive'
+            return mode === 'static' ? 'static' : 'flexible'
           })()}
         />
       </div>

@@ -416,31 +416,35 @@ export default function SettingsPage() {
       bodyweightSource = 'derived_from_localStorage_weightRange'
     }
     
-    // [PHASE 17G] Bodyweight truth chain audit - comprehensive source tracking
-    console.log('[phase17g-settings-bodyweight-hydration-audit]', {
-      // A. Source values
-      apiBodyweight: data.bodyweight,
-      apiBodyweightType: typeof data.bodyweight,
-      apiBodyweightIsNull: data.bodyweight === null || data.bodyweight === undefined,
+    // [PHASE 17H] Bodyweight source matrix audit - comprehensive truth chain
+    console.log('[phase17h-bodyweight-source-matrix-audit]', {
+      // A. All source values
+      databaseBodyweight: data.bodyweight,
+      databaseBodyweightType: typeof data.bodyweight,
+      databaseBodyweightIsNull: data.bodyweight === null || data.bodyweight === undefined,
       localStorageWeightRange: localStorageWeightRange || 'missing',
-      // B. Resolution logic
-      usedDatabaseExact: bodyweightSource === 'database_exact',
-      usedDerivedMidpoint: bodyweightSource === 'derived_from_localStorage_weightRange',
       derivedMidpointValue: localStorageWeightRange ? weightRangeMidpoints[localStorageWeightRange] || null : null,
-      // C. Final display
+      // B. Priority resolution
+      usedSource: bodyweightSource,
+      priorityOrder: '1. database_exact > 2. derived_from_weightRange > 3. none',
+      // C. Final resolved
       resolvedBodyweight,
       displayValue: resolvedBodyweight?.toString() || '',
-      // D. Verdict
+    })
+    
+    // [PHASE 17H] Bodyweight exact vs surrogate verdict
+    console.log('[phase17h-bodyweight-exact-vs-surrogate-verdict]', {
+      isExactUserValue: bodyweightSource === 'database_exact',
+      isSurrogateMidpoint: bodyweightSource === 'derived_from_localStorage_weightRange',
+      surrogateSource: localStorageWeightRange,
       verdict: bodyweightSource === 'database_exact' 
-        ? 'EXACT_USER_VALUE_FROM_DATABASE'
+        ? 'DISPLAYING_EXACT_USER_SAVED_VALUE'
         : bodyweightSource === 'derived_from_localStorage_weightRange'
-        ? 'SURROGATE_MIDPOINT_FROM_WEIGHT_RANGE'
+        ? `DISPLAYING_SURROGATE_MIDPOINT_${resolvedBodyweight}_FROM_${localStorageWeightRange}`
         : 'NO_BODYWEIGHT_AVAILABLE',
-      // E. User expectation
-      userExpectation: 'If user entered exact bodyweight in Settings, it should show here',
-      currentIssue: bodyweightSource === 'derived_from_localStorage_weightRange' 
-        ? '170 is midpoint of 160_180 range, NOT user-entered exact value'
-        : 'none',
+      userAction: bodyweightSource !== 'database_exact'
+        ? 'User can enter exact bodyweight in Settings and save to persist it to database'
+        : 'Exact value already saved',
     })
     
     setBodyweight(resolvedBodyweight?.toString() || '')

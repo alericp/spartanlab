@@ -3027,6 +3027,32 @@ export default function ProgramPage() {
           trainingPathType: freshRebuildInput.trainingPathType,
         })
         
+        // [PHASE 17H] Path parity canonical audit - verify rebuild uses same source as onboarding
+        console.log('[phase17h-path-parity-canonical-audit]', {
+          triggerPath: 'handleRegenerate',
+          usedBuildCanonicalGenerationEntry: true,
+          usedGetCanonicalProfile: true,
+          canonicalProfileSource: 'reconcileCanonicalProfile',
+          canonicalBodyweight: canonicalProfileNow.bodyweight,
+          canonicalScheduleMode: canonicalProfileNow.scheduleMode,
+          canonicalTrainingDays: canonicalProfileNow.trainingDaysPerWeek,
+          canonicalSelectedSkills: canonicalProfileNow.selectedSkills || [],
+          canonicalPrimaryGoal: canonicalProfileNow.primaryGoal,
+        })
+        
+        // [PHASE 17H] Path parity input audit - compare rebuild input shape
+        console.log('[phase17h-path-parity-input-audit]', {
+          triggerPath: 'handleRegenerate',
+          inputScheduleMode: freshRebuildInput.scheduleMode,
+          inputTrainingDays: freshRebuildInput.trainingDaysPerWeek,
+          inputSessionDurationMode: freshRebuildInput.sessionDurationMode,
+          inputPrimaryGoal: freshRebuildInput.primaryGoal,
+          inputSelectedSkillsCount: freshRebuildInput.selectedSkills?.length || 0,
+          inputEquipmentCount: freshRebuildInput.equipment?.length || 0,
+          isFlexibleMode: freshRebuildInput.scheduleMode === 'flexible',
+          isAdaptiveSession: freshRebuildInput.sessionDurationMode === 'adaptive',
+        })
+        
         // [PHASE 17C] 6-day vs 4-day root cause audit - compare rebuild input to onboarding truth
         console.log('[phase17c-6day-vs-4day-root-cause-audit]', {
           triggerPath: 'handleRegenerate',
@@ -3374,6 +3400,46 @@ export default function ProgramPage() {
           conclusionIfDifferent: produced4Days && isFlexible
             ? 'IF_onboarding_produced_6_but_rebuild_produces_4_check_canonical_profile_sync'
             : 'outputs_should_match_if_same_canonical_profile',
+        })
+        
+        // [PHASE 17H] Path parity builder result audit - track session count and root cause
+        const builderRootCause = newProgram.flexibleFrequencyRootCause
+        console.log('[phase17h-path-parity-builder-result-audit]', {
+          triggerPath: 'handleRegenerate',
+          outputSessionCount: sessionCount,
+          outputScheduleMode: newProgram.scheduleMode,
+          outputPrimaryGoal: newProgram.primaryGoal,
+          flexibleFrequencyRootCause: builderRootCause?.finalReasonCategory || 'not_flexible',
+          isBaselineDefault: builderRootCause?.isBaselineDefault || false,
+          isTrueAdaptive: builderRootCause?.isTrueAdaptive || false,
+          isModifierBasedAdjustment: builderRootCause?.isModifierBasedAdjustment || false,
+        })
+        
+        // [PHASE 17H] Path parity frequency root cause audit
+        console.log('[phase17h-path-parity-frequency-root-cause-audit]', {
+          triggerPath: 'handleRegenerate',
+          sessionCount,
+          isFlexibleMode: isFlexible,
+          rootCauseCategory: builderRootCause?.finalReasonCategory || 'static_or_unknown',
+          isInitialBaseline: builderRootCause?.finalReasonCategory === 'low_history_default' || builderRootCause?.isBaselineDefault,
+          verdict: builderRootCause?.finalReasonCategory === 'low_history_default'
+            ? 'USING_LOW_HISTORY_DEFAULT_BASELINE'
+            : builderRootCause?.isTrueAdaptive
+            ? 'USING_TRUE_ADAPTIVE_ADJUSTMENT'
+            : builderRootCause?.isModifierBasedAdjustment
+            ? 'USING_MODIFIER_BASED_ADJUSTMENT'
+            : 'UNKNOWN_ROOT_CAUSE',
+        })
+        
+        // [PHASE 17H] Path divergence final verdict
+        console.log('[phase17h-path-divergence-final-verdict]', {
+          triggerPath: 'handleRegenerate',
+          inputsUsedSameCanonicalChain: true,
+          outputSessionCount: sessionCount,
+          if4SessionsOnFlexible: produced4Days && isFlexible
+            ? 'INVESTIGATE: flexible mode produced 4 sessions - check low_history_default branch'
+            : 'NOT_APPLICABLE',
+          rootCauseExplanation: builderRootCause?.finalReasonCategory || 'check_builder_output',
         })
         
         // [anti-template] TASK B: Compute template similarity to previous program

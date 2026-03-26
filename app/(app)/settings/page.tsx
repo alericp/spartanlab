@@ -384,22 +384,54 @@ export default function SettingsPage() {
     
     setProfile(data as AthleteProfile)
     
-    // [PHASE 17C] Bodyweight settings hydration audit
+    // [PHASE 17D] Bodyweight truth chain fix
     // ISSUE: Onboarding collects weightRange (e.g. '160_180') not numeric bodyweight
-    // Settings page has separate bodyweight input that saves to DB
-    // If user never set bodyweight in settings, it will be null
-    console.log('[phase17c-bodyweight-settings-hydration-audit]', {
-      rawValueFromSource: data.bodyweight,
-      rawValueType: typeof data.bodyweight,
-      isNull: data.bodyweight === null,
-      isUndefined: data.bodyweight === undefined,
-      isNumber: typeof data.bodyweight === 'number',
-      hydratedDisplayValue: data.bodyweight?.toString() || '',
-      sourceType: 'applyProfileToState',
-      rootCauseNote: 'Onboarding collects weightRange not numeric bodyweight - user must set exact value in settings',
+    // FIX: Derive midpoint from weightRange if no exact bodyweight exists
+    const weightRangeMidpoints: Record<string, number> = {
+      'under_140': 130,
+      '140_160': 150,
+      '160_180': 170,
+      '180_200': 190,
+      '200_220': 210,
+      'over_220': 235,
+    }
+    
+    // Determine best available bodyweight source
+    let resolvedBodyweight: number | null = null
+    let bodyweightSource = 'none'
+    
+    if (typeof data.bodyweight === 'number' && data.bodyweight > 0) {
+      // Exact numeric bodyweight from database - highest priority
+      resolvedBodyweight = data.bodyweight
+      bodyweightSource = 'database_exact'
+    } else if (data.weightRange && weightRangeMidpoints[data.weightRange]) {
+      // Derive from onboarding weightRange - fallback
+      resolvedBodyweight = weightRangeMidpoints[data.weightRange]
+      bodyweightSource = 'derived_from_weightRange'
+    }
+    
+    // [PHASE 17D] Bodyweight truth audit
+    console.log('[phase17d-bodyweight-settings-hydration-source-audit]', {
+      databaseBodyweight: data.bodyweight,
+      databaseBodyweightType: typeof data.bodyweight,
+      onboardingWeightRange: data.weightRange || null,
+      derivedMidpoint: data.weightRange ? weightRangeMidpoints[data.weightRange] || null : null,
+      resolvedBodyweight,
+      bodyweightSource,
+      willDisplayValue: resolvedBodyweight?.toString() || '',
     })
     
-    setBodyweight(data.bodyweight?.toString() || '')
+    // [PHASE 17D] Onboarding bodyweight contract audit
+    console.log('[phase17d-onboarding-bodyweight-contract-audit]', {
+      onboardingStoresExactNumeric: false,
+      onboardingStoresWeightRange: !!data.weightRange,
+      weightRangeValue: data.weightRange || 'missing',
+      verdict: data.weightRange 
+        ? 'onboarding_range_only_no_exact_bodyweight' 
+        : 'onboarding_bodyweight_missing',
+    })
+    
+    setBodyweight(resolvedBodyweight?.toString() || '')
     setExperienceLevel(data.experienceLevel || 'beginner')
     
     // TASK 3: Handle flexible schedule mode correctly - do NOT show "4 days" for flexible users
@@ -648,16 +680,23 @@ export default function SettingsPage() {
               hasWeights: equipment.includes('weights'),
             })
             
-            // [PHASE 17C] Settings truth final verdict audit
-            console.log('[phase17c-settings-truth-final-verdict-audit]', {
-              bodyweightSent: parsedBodyweight,
-              bodyweightReturned: result.profile.bodyweight,
+            // [PHASE 17D] Bodyweight save round-trip audit - prove exact value persists
+            console.log('[phase17d-bodyweight-save-roundtrip-audit]', {
+              userEnteredValue: bodyweight,
+              parsedNumericValue: parsedBodyweight,
+              apiReturnedValue: result.profile.bodyweight,
+              roundTripSuccessful: result.profile.bodyweight === parsedBodyweight,
+              willRehydrateAs: result.profile.bodyweight?.toString() || '',
+              verdict: result.profile.bodyweight === parsedBodyweight 
+                ? 'bodyweight_exact_roundtrip_success' 
+                : 'bodyweight_roundtrip_mismatch',
+            })
+            
+            // [PHASE 17D] Canonical post-save audit
+            console.log('[phase17d-bodyweight-canonical-post-save-audit]', {
               bodyweightSyncedToCanonical: true,
-              scheduleModeReturned: result.profile.scheduleMode,
-              trainingDaysReturned: result.profile.trainingDaysPerWeek,
-              sessionDurationModeReturned: result.profile.sessionDurationMode,
-              allFieldsRoundTripped: true,
-              verdict: result.profile.bodyweight === parsedBodyweight ? 'bodyweight_preserved' : 'bodyweight_mismatch',
+              syncedValue: result.profile.bodyweight,
+              canonicalWillUseThisValue: true,
             })
             
             // [PHASE 14A TASK 3] Settings equipment roundtrip verdict

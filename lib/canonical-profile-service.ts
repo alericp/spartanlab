@@ -492,16 +492,40 @@ export function reconcileCanonicalProfile(): CanonicalProgrammingProfile {
     sideSplitsRangeIntent: onboardingProfile?.sideSplits?.rangeIntent ?? null,
     
     // Physical Stats
-    // [PHASE 17C] Bodyweight canonical profile audit
+    // [PHASE 17D] Bodyweight canonical profile - derive from weightRange if no exact value
     bodyweight: (() => {
-      const onboardingBw = typeof onboardingProfile?.bodyweight === 'number' ? onboardingProfile.bodyweight : null
-      const athleteBw = athleteProfile?.bodyweight
-      const finalBw = pick(onboardingBw, athleteBw, null)
-      console.log('[phase17c-bodyweight-canonical-profile-audit]', {
-        onboardingBodyweight: onboardingBw,
+      // Midpoint derivation for weightRange
+      const weightRangeMidpoints: Record<string, number> = {
+        'under_140': 130,
+        '140_160': 150,
+        '160_180': 170,
+        '180_200': 190,
+        '200_220': 210,
+        'over_220': 235,
+      }
+      
+      // Priority: exact database value > exact onboarding value > derived from weightRange
+      const athleteBw = typeof athleteProfile?.bodyweight === 'number' && athleteProfile.bodyweight > 0 
+        ? athleteProfile.bodyweight : null
+      const onboardingBw = typeof onboardingProfile?.bodyweight === 'number' && onboardingProfile.bodyweight > 0
+        ? onboardingProfile.bodyweight : null
+      const derivedBw = onboardingProfile?.weightRange 
+        ? weightRangeMidpoints[onboardingProfile.weightRange] || null 
+        : null
+      
+      const finalBw = athleteBw ?? onboardingBw ?? derivedBw ?? null
+      const sourceUsed = athleteBw !== null ? 'athlete_exact' 
+        : onboardingBw !== null ? 'onboarding_exact'
+        : derivedBw !== null ? 'derived_from_weightRange'
+        : 'null'
+      
+      console.log('[phase17d-bodyweight-canonical-merge-audit]', {
         athleteProfileBodyweight: athleteBw,
+        onboardingBodyweight: onboardingBw,
+        onboardingWeightRange: onboardingProfile?.weightRange || null,
+        derivedFromRange: derivedBw,
         finalCanonicalBodyweight: finalBw,
-        sourceUsed: onboardingBw !== null ? 'onboarding' : athleteBw !== null && athleteBw !== undefined ? 'athlete' : 'null',
+        sourceUsed,
       })
       return finalBw
     })(),

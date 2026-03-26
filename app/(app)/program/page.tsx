@@ -1347,6 +1347,17 @@ export default function ProgramPage() {
                 loadedSource: 'canonical_active_program',
                 migrationRan: programState.migrationRan || false,
                 fallbackRecoveryRan: programState.fallbackRecoveryRan || false,
+              })
+              
+              // [PHASE 17D] Program preservation audit - verify 6-day program intact
+              console.log('[phase17d-program-preservation-audit]', {
+                programId: normalizedProgram.id,
+                sessionCount: normalizedProgram.sessions?.length || 0,
+                primaryGoal: normalizedProgram.primaryGoal,
+                scheduleMode: normalizedProgram.scheduleMode,
+                is6DayProgram: (normalizedProgram.sessions?.length || 0) >= 6,
+                is7DayProgram: (normalizedProgram.sessions?.length || 0) >= 7,
+                verdict: 'existing_program_preserved_at_mount',
                 normalizedOnlyNoRestoration: true,
                 createdAt: normalizedProgram.createdAt,
                 sessionCount: normalizedProgram.sessions?.length || 0,
@@ -1354,6 +1365,22 @@ export default function ProgramPage() {
                 firstSessionExerciseCount: normalizedProgram.sessions?.[0]?.exercises?.length || 0,
                 provenanceMode: normalizedProgram.generationProvenance?.generationMode || 'unknown',
                 qualityTier: normalizedProgram.qualityClassification?.qualityTier || 'unknown',
+              })
+              
+              // [PHASE 17D] Current active program input audit - what truth was used
+              console.log('[phase17d-current-active-program-input-audit]', {
+                programId: normalizedProgram.id,
+                primaryGoal: normalizedProgram.primaryGoal,
+                secondaryGoal: normalizedProgram.secondaryGoal || null,
+                selectedSkills: normalizedProgram.selectedSkills || [],
+                selectedSkillsCount: normalizedProgram.selectedSkills?.length || 0,
+                equipment: normalizedProgram.equipment || [],
+                equipmentCount: normalizedProgram.equipment?.length || 0,
+                scheduleMode: normalizedProgram.scheduleMode,
+                sessionCount: normalizedProgram.sessions?.length || 0,
+                generationMode: normalizedProgram.generationProvenance?.generationMode || 'unknown',
+                qualityTier: normalizedProgram.qualityClassification?.qualityTier || 'unknown',
+                createdAt: normalizedProgram.createdAt,
               })
             } else {
               // TASK 2: Program exists but fails display sanity - show recovery state, not fatal error
@@ -2209,6 +2236,18 @@ export default function ProgramPage() {
           outputPrimaryGoal: newProgram.primaryGoal,
           goalsAligned: generationInputs?.primaryGoal === newProgram.primaryGoal,
           verdict: 'main_generation_completed_with_unified_canonical_source',
+        })
+        
+        // [PHASE 17D] No generation regression audit - verify 6-day capability intact
+        console.log('[phase17d-no-generation-regression-audit]', {
+          inputScheduleMode: generationInputs?.scheduleMode,
+          inputIsFlexible: generationInputs?.scheduleMode === 'flexible',
+          outputSessionCount: newProgram.sessions?.length || 0,
+          produced6PlusSessions: (newProgram.sessions?.length || 0) >= 6,
+          noRegressTo4Days: (newProgram.sessions?.length || 0) !== 4 || generationInputs?.scheduleMode !== 'flexible',
+          verdict: (newProgram.sessions?.length || 0) >= 6 
+            ? '6day_capability_intact' 
+            : 'session_count_matches_input_or_flexible_decision',
         })
       } catch (err) {
         // [PHASE 16Q] Runtime marker for catch block

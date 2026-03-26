@@ -1692,6 +1692,26 @@ export default function ProgramPage() {
           selectedSkillsCount: generationInputs?.selectedSkills?.length || 0,
         })
         
+        // [PHASE 17C] Main generation input audit - for comparison with rebuild
+        console.log('[phase17c-onboarding-generation-input-audit]', {
+          triggerPath: 'handleGenerate',
+          scheduleMode: generationInputs?.scheduleMode,
+          trainingDaysPerWeek: generationInputs?.trainingDaysPerWeek,
+          sessionDurationMode: generationInputs?.sessionDurationMode,
+          sessionLength: generationInputs?.sessionLength,
+          selectedSkillsCount: generationInputs?.selectedSkills?.length || 0,
+          selectedSkills: generationInputs?.selectedSkills || [],
+          primaryGoal: generationInputs?.primaryGoal,
+          secondaryGoal: generationInputs?.secondaryGoal || null,
+          experienceLevel: generationInputs?.experienceLevel,
+          equipmentCount: generationInputs?.equipment?.length || 0,
+          isFlexibleMode: generationInputs?.scheduleMode === 'flexible',
+          entryFallbacksUsed: entryResult.entry?.__fallbacksUsed || [],
+          verdict: generationInputs?.scheduleMode === 'flexible'
+            ? 'flexible_mode_engine_decides_days'
+            : `static_mode_${generationInputs?.trainingDaysPerWeek}_days`,
+        })
+        
   // [program-build] STAGE 2: Generate program
   generationStage = 'generating'
   console.log('[program-build] STAGE 2: Calling generateAdaptiveProgram...')
@@ -1902,6 +1922,25 @@ export default function ProgramPage() {
           sessionDurationMode: newProgram.sessionDurationMode,
           structureName: newProgram.structure?.structureName || 'unknown',
           createdAt: newProgram.createdAt,
+        })
+        
+        // [PHASE 17C] Program reflection audit - verify output reflects input truth
+        console.log('[phase17c-program-reflection-audit]', {
+          flowName: 'main_generation',
+          inputPrimaryGoal: generationInputs?.primaryGoal,
+          inputSecondaryGoal: generationInputs?.secondaryGoal || null,
+          inputSelectedSkills: generationInputs?.selectedSkills || [],
+          inputEquipmentCount: generationInputs?.equipment?.length || 0,
+          inputScheduleMode: generationInputs?.scheduleMode,
+          inputTrainingDays: generationInputs?.trainingDaysPerWeek,
+          outputPrimaryGoal: newProgram.primaryGoal,
+          outputSecondaryGoal: newProgram.secondaryGoal || null,
+          outputSelectedSkills: newProgram.selectedSkills || [],
+          outputEquipment: newProgram.equipment || [],
+          outputSessionCount: newProgram.sessions?.length || 0,
+          outputScheduleMode: newProgram.scheduleMode,
+          goalsMatch: generationInputs?.primaryGoal === newProgram.primaryGoal,
+          sessionCountReasonable: (newProgram.sessions?.length || 0) >= 2,
         })
         
         // [planner-truth-audit] STAGE 5b: Check audit result before saving
@@ -2156,6 +2195,20 @@ export default function ProgramPage() {
           generatorAccepts7: true,
           visiblePlanStillStale: false,
           finalVerdict: 'fully_fixed',
+        })
+        
+        // [PHASE 17C] Main generation final verdict audit
+        console.log('[phase17c-main-generation-final-verdict-audit]', {
+          inputScheduleMode: generationInputs?.scheduleMode,
+          inputTrainingDays: generationInputs?.trainingDaysPerWeek,
+          outputSessionCount: newProgram.sessions?.length || 0,
+          outputScheduleMode: newProgram.scheduleMode,
+          inputSelectedSkillsCount: generationInputs?.selectedSkills?.length || 0,
+          outputSelectedSkillsCount: newProgram.selectedSkills?.length || 0,
+          inputPrimaryGoal: generationInputs?.primaryGoal,
+          outputPrimaryGoal: newProgram.primaryGoal,
+          goalsAligned: generationInputs?.primaryGoal === newProgram.primaryGoal,
+          verdict: 'main_generation_completed_with_unified_canonical_source',
         })
       } catch (err) {
         // [PHASE 16Q] Runtime marker for catch block
@@ -2806,6 +2859,27 @@ export default function ProgramPage() {
           pathName: 'rebuild_from_program_page',
         })
         
+        // [PHASE 17C] 6-day vs 4-day root cause audit - compare rebuild input to onboarding truth
+        console.log('[phase17c-6day-vs-4day-root-cause-audit]', {
+          triggerPath: 'handleRegenerate',
+          rebuildScheduleMode: freshRebuildInput.scheduleMode,
+          rebuildTrainingDays: freshRebuildInput.trainingDaysPerWeek,
+          rebuildSessionDurationMode: freshRebuildInput.sessionDurationMode,
+          canonicalScheduleMode: canonicalProfileNow.scheduleMode,
+          canonicalTrainingDays: canonicalProfileNow.trainingDaysPerWeek,
+          canonicalSessionDurationMode: canonicalProfileNow.sessionDurationMode,
+          selectedSkillsCount: freshRebuildInput.selectedSkills?.length || 0,
+          selectedSkills: freshRebuildInput.selectedSkills || [],
+          primaryGoal: freshRebuildInput.primaryGoal,
+          secondaryGoal: freshRebuildInput.secondaryGoal || null,
+          isFlexibleMode: freshRebuildInput.scheduleMode === 'flexible',
+          isHighFrequency: typeof freshRebuildInput.trainingDaysPerWeek === 'number' && freshRebuildInput.trainingDaysPerWeek >= 6,
+          entryFallbacksUsed: entryResult.entry?.__fallbacksUsed || [],
+          verdict: freshRebuildInput.scheduleMode === 'flexible' 
+            ? 'flexible_mode_engine_decides_days' 
+            : `static_mode_${freshRebuildInput.trainingDaysPerWeek}_days`,
+        })
+        
         // [program-build] REGEN STAGE 1: Pre-regeneration diagnostics
         regenerateStage = 'pre_regen_diagnostics'
         console.log('[program-build] REGEN STAGE 1: Pre-regeneration diagnostics', {
@@ -3052,6 +3126,30 @@ export default function ProgramPage() {
           primaryGoal: newProgram.primaryGoal,
           sessionCount: newProgram.sessions?.length || 0,
           totalExerciseCount: newProgram.sessions?.reduce((sum, s) => sum + (s.exercises?.length || 0), 0) || 0,
+        })
+        
+        // [PHASE 17C] Rebuild program reflection audit - verify output reflects input truth
+        console.log('[phase17c-rebuild-program-reflection-audit]', {
+          flowName: 'regeneration',
+          inputPrimaryGoal: freshRebuildInput.primaryGoal,
+          inputSecondaryGoal: freshRebuildInput.secondaryGoal || null,
+          inputSelectedSkills: freshRebuildInput.selectedSkills || [],
+          inputEquipmentCount: freshRebuildInput.equipment?.length || 0,
+          inputScheduleMode: freshRebuildInput.scheduleMode,
+          inputTrainingDays: freshRebuildInput.trainingDaysPerWeek,
+          outputPrimaryGoal: newProgram.primaryGoal,
+          outputSecondaryGoal: newProgram.secondaryGoal || null,
+          outputSelectedSkills: newProgram.selectedSkills || [],
+          outputEquipment: newProgram.equipment || [],
+          outputSessionCount: newProgram.sessions?.length || 0,
+          outputScheduleMode: newProgram.scheduleMode,
+          goalsMatch: freshRebuildInput.primaryGoal === newProgram.primaryGoal,
+          sessionCountReasonable: (newProgram.sessions?.length || 0) >= 2,
+          inputDaysVsOutputSessions: {
+            inputDays: freshRebuildInput.trainingDaysPerWeek,
+            outputSessions: newProgram.sessions?.length || 0,
+            inputIsFlexible: freshRebuildInput.trainingDaysPerWeek === 'flexible',
+          },
         })
         
         // [anti-template] TASK B: Compute template similarity to previous program
@@ -3370,6 +3468,25 @@ export default function ProgramPage() {
           savedAsCurrentTruth: true,
           staleFailureSuppressed: !!regenPreviousBannerStatus && regenPreviousBannerStatus !== 'success',
           verdict: 'success_saved_with_metadata',
+        })
+        
+        // [PHASE 17C] Rebuild final verdict audit - verify paths are unified
+        console.log('[phase17c-rebuild-final-verdict-audit]', {
+          inputScheduleMode: freshRebuildInput.scheduleMode,
+          inputTrainingDays: freshRebuildInput.trainingDaysPerWeek,
+          outputSessionCount: newProgram.sessions?.length || 0,
+          outputScheduleMode: newProgram.scheduleMode,
+          inputSelectedSkillsCount: freshRebuildInput.selectedSkills?.length || 0,
+          outputSelectedSkillsCount: newProgram.selectedSkills?.length || 0,
+          inputPrimaryGoal: freshRebuildInput.primaryGoal,
+          outputPrimaryGoal: newProgram.primaryGoal,
+          goalsAligned: freshRebuildInput.primaryGoal === newProgram.primaryGoal,
+          sessionCountAlignedWithInput: freshRebuildInput.scheduleMode === 'flexible' 
+            ? 'flexible_mode_engine_decided' 
+            : (typeof freshRebuildInput.trainingDaysPerWeek === 'number' 
+              ? Math.abs((newProgram.sessions?.length || 0) - freshRebuildInput.trainingDaysPerWeek) <= 1
+              : true),
+          verdict: 'rebuild_completed_with_unified_canonical_source',
         })
         
         // [PHASE 16S] Generate response verdict for regeneration success

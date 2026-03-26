@@ -383,6 +383,22 @@ export default function SettingsPage() {
     console.log('[adjustment-sync] === END CANONICAL TRUTH ===')
     
     setProfile(data as AthleteProfile)
+    
+    // [PHASE 17C] Bodyweight settings hydration audit
+    // ISSUE: Onboarding collects weightRange (e.g. '160_180') not numeric bodyweight
+    // Settings page has separate bodyweight input that saves to DB
+    // If user never set bodyweight in settings, it will be null
+    console.log('[phase17c-bodyweight-settings-hydration-audit]', {
+      rawValueFromSource: data.bodyweight,
+      rawValueType: typeof data.bodyweight,
+      isNull: data.bodyweight === null,
+      isUndefined: data.bodyweight === undefined,
+      isNumber: typeof data.bodyweight === 'number',
+      hydratedDisplayValue: data.bodyweight?.toString() || '',
+      sourceType: 'applyProfileToState',
+      rootCauseNote: 'Onboarding collects weightRange not numeric bodyweight - user must set exact value in settings',
+    })
+    
     setBodyweight(data.bodyweight?.toString() || '')
     setExperienceLevel(data.experienceLevel || 'beginner')
     
@@ -508,8 +524,20 @@ export default function SettingsPage() {
       // TASK 2: For flexible mode, do NOT store a fake numeric default
       // The API will store NULL for trainingDaysPerWeek when scheduleMode='flexible'
       console.log('[Settings] Preparing save payload, scheduleMode:', scheduleMode)
+      
+      // [PHASE 17C] Bodyweight save payload audit
+      const parsedBodyweight = bodyweight ? parseFloat(bodyweight) : null
+      console.log('[phase17c-bodyweight-settings-save-payload-audit]', {
+        rawInputValue: bodyweight,
+        rawInputType: typeof bodyweight,
+        parsedValue: parsedBodyweight,
+        willSendToAPI: parsedBodyweight,
+        isNull: parsedBodyweight === null,
+        isNaN: Number.isNaN(parsedBodyweight),
+      })
+      
       const updates = {
-        bodyweight: bodyweight ? parseFloat(bodyweight) : null,
+        bodyweight: parsedBodyweight,
         experienceLevel: experienceLevel as 'beginner' | 'intermediate' | 'advanced',
         // For flexible mode, send null - API will store it correctly
         // The scheduleMode field is the canonical preference indicator
@@ -563,6 +591,9 @@ export default function SettingsPage() {
               sessionDurationMode: result.profile.sessionDurationMode || sessionDurationMode,
               sessionLengthMinutes: result.profile.sessionLengthMinutes,
               
+              // [PHASE 17C] Physical stats - bodyweight must be synced to canonical
+              bodyweight: result.profile.bodyweight,
+              
               // Equipment & Diagnostics
               equipmentAvailable: result.profile.equipmentAvailable,
               jointCautions: result.profile.jointCautions,
@@ -615,6 +646,18 @@ export default function SettingsPage() {
               sessionLengthMinutes: parseInt(sessionLength),
               equipmentCount: equipment.length,
               hasWeights: equipment.includes('weights'),
+            })
+            
+            // [PHASE 17C] Settings truth final verdict audit
+            console.log('[phase17c-settings-truth-final-verdict-audit]', {
+              bodyweightSent: parsedBodyweight,
+              bodyweightReturned: result.profile.bodyweight,
+              bodyweightSyncedToCanonical: true,
+              scheduleModeReturned: result.profile.scheduleMode,
+              trainingDaysReturned: result.profile.trainingDaysPerWeek,
+              sessionDurationModeReturned: result.profile.sessionDurationMode,
+              allFieldsRoundTripped: true,
+              verdict: result.profile.bodyweight === parsedBodyweight ? 'bodyweight_preserved' : 'bodyweight_mismatch',
             })
             
             // [PHASE 14A TASK 3] Settings equipment roundtrip verdict

@@ -492,11 +492,19 @@ export function reconcileCanonicalProfile(): CanonicalProgrammingProfile {
     sideSplitsRangeIntent: onboardingProfile?.sideSplits?.rangeIntent ?? null,
     
     // Physical Stats
-    bodyweight: pick(
-      typeof onboardingProfile?.bodyweight === 'number' ? onboardingProfile.bodyweight : null,
-      athleteProfile?.bodyweight,
-      null
-    ),
+    // [PHASE 17C] Bodyweight canonical profile audit
+    bodyweight: (() => {
+      const onboardingBw = typeof onboardingProfile?.bodyweight === 'number' ? onboardingProfile.bodyweight : null
+      const athleteBw = athleteProfile?.bodyweight
+      const finalBw = pick(onboardingBw, athleteBw, null)
+      console.log('[phase17c-bodyweight-canonical-profile-audit]', {
+        onboardingBodyweight: onboardingBw,
+        athleteProfileBodyweight: athleteBw,
+        finalCanonicalBodyweight: finalBw,
+        sourceUsed: onboardingBw !== null ? 'onboarding' : athleteBw !== null && athleteBw !== undefined ? 'athlete' : 'null',
+      })
+      return finalBw
+    })(),
     height: pick(
       typeof onboardingProfile?.height === 'number' ? onboardingProfile.height : null,
       athleteProfile?.height,
@@ -2415,6 +2423,30 @@ export function buildCanonicalGenerationEntry(
     fallbacksUsed,
     overridesApplied: Object.keys(overrides || {}),
     sourceTruthVersion: profile.onboardingComplete ? 'onboarding_complete' : 'partial_profile',
+  })
+  
+  // [PHASE 17C] Generation path comparison audit - tracks exact input for all triggers
+  const isOnboardingPath = triggerSource === 'handleGenerate' || triggerSource.includes('onboarding')
+  const isRebuildPath = triggerSource === 'handleRegenerate' || triggerSource.includes('Rebuild') || triggerSource.includes('restart')
+  console.log('[phase17c-generation-path-input-audit]', {
+    triggerSource,
+    isOnboardingPath,
+    isRebuildPath,
+    primaryGoal: resolvedPrimaryGoal,
+    secondaryGoal: resolvedSecondaryGoal || null,
+    scheduleMode: resolvedScheduleMode,
+    trainingDaysPerWeek: resolvedTrainingDays,
+    sessionLength: resolvedSessionLength,
+    sessionDurationMode: resolvedSessionDurationMode,
+    experienceLevel: resolvedExperienceLevel,
+    equipmentCount: resolvedEquipment.length,
+    selectedSkillsCount: resolvedSelectedSkills.length,
+    selectedSkills: resolvedSelectedSkills,
+    fallbacksUsed,
+    bodyweight: profile.bodyweight,
+    profileScheduleMode: profile.scheduleMode,
+    profileTrainingDays: profile.trainingDaysPerWeek,
+    profileOnboardingComplete: profile.onboardingComplete,
   })
   
   // STEP 5: Fail if required fields missing

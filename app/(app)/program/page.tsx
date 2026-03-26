@@ -4151,26 +4151,76 @@ export default function ProgramPage() {
           verdict: 'REAL_ROOT_CAUSE_FIXED_AT_REGENERATE_ENTRY',
         })
         
-        // [PHASE 16S] Dispatch verdict - marking actual builder call for regeneration
+        // ==========================================================================
+        // [PHASE 18D] TASK 4 - Replace direct client builder call with server route dispatch
+        // This mirrors the working onboarding architecture where generation happens server-side
+        // ==========================================================================
         const regenAttemptId = `attempt_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
+        
+        // [PHASE 18D] TASK 6A - Client dispatch audit
+        console.log('[phase18d-regenerate-client-dispatch-audit]', {
+          triggerPath: 'handleRegenerate',
+          currentProgramId: program?.id ?? null,
+          directBuilderCallBypassed: true,
+          dispatchingToServerRoute: true,
+          requestPayloadShape: {
+            hasCanonicalProfile: !!rebuildCanonicalOverride,
+            hasProgramInputs: !!rebuildBuilderInput,
+            regenerationReason: 'rebuild_from_current_settings',
+          },
+          verdict: 'dispatching_to_server_regenerate_contract',
+        })
+        
         console.log('[phase16s-generate-dispatch-verdict]', {
           flowName: 'regeneration',
           attemptId: regenAttemptId,
           runtimeSessionId: runtimeSessionIdRef.current,
           requestDispatched: true,
-          dispatchMethod: 'generateAdaptiveProgram',
+          dispatchMethod: 'server_route_/api/program/regenerate',
           dispatchTimestamp: new Date().toISOString(),
-          verdict: 'dispatch_executing',
+          verdict: 'dispatch_executing_via_server',
         })
         
-        // [PHASE 16N] FIX: Await the async builder - it returns Promise<AdaptiveProgram>
-        // [PHASE 17T] Now uses rebuildBuilderInput with explicit regenerationMode
-        // [PHASE 17V] TASK 3 - Pass explicit canonicalProfileOverride to prevent builder from re-reading weaker canonical
-        const newProgram = await programModules.generateAdaptiveProgram(
-          rebuildBuilderInput,
-          undefined,
-          { canonicalProfileOverride: rebuildCanonicalOverride }
-        )
+        // [PHASE 18D] Dispatch to server regenerate route instead of direct builder call
+        const serverResponse = await fetch('/api/program/regenerate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            canonicalProfile: rebuildCanonicalOverride,
+            programInputs: rebuildBuilderInput,
+            regenerationReason: 'rebuild_from_current_settings',
+            currentProgramId: program?.id ?? null,
+          }),
+        })
+        
+        const serverResult = await serverResponse.json()
+        
+        if (!serverResponse.ok || !serverResult.success) {
+          console.log('[phase18d-regenerate-server-error]', {
+            status: serverResponse.status,
+            error: serverResult.error,
+            failedStage: serverResult.failedStage,
+          })
+          throw new ProgramPageValidationError(
+            'orchestration_failed',
+            regenerateStage,
+            'server_regenerate_failed',
+            serverResult.error || 'Server regenerate failed',
+            { serverResult }
+          )
+        }
+        
+        // [PHASE 18D] TASK 6D - Client result audit
+        console.log('[phase18d-regenerate-client-result-audit]', {
+          triggerPath: 'handleRegenerate',
+          resultReceivedFromServer: true,
+          sessionCount: serverResult.program?.sessions?.length ?? 0,
+          primaryGoal: serverResult.program?.primaryGoal ?? null,
+          saveFlowWillContinue: true,
+          verdict: 'client_received_server_generated_program',
+        })
+        
+        const newProgram = serverResult.program as AdaptiveProgram
         
         // ==========================================================================
         // [PHASE 17V] TASK 6B - Rebuild postfix verdict

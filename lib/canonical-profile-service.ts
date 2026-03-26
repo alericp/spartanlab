@@ -2395,17 +2395,21 @@ export function buildCanonicalGenerationEntry(
   }
   
   // [PHASE 17E] Generation entrypoint registry audit - track which path is calling
-  const isOnboardingPath = triggerSource === 'handleGenerate' || triggerSource.includes('onboarding')
-  const isRebuildPath = triggerSource === 'handleRegenerate' || triggerSource.includes('Rebuild') || triggerSource.includes('restart') || triggerSource.includes('Adjustment')
-  console.log('[phase17e-generation-entrypoint-registry-audit]', {
-    triggerSource,
-    isOnboardingPath,
-    isRebuildPath,
-    usesCanonicalProfile: true,
-    canonicalProfileUserId: profile.userId,
-    canonicalOnboardingComplete: profile.onboardingComplete,
-    overridesProvided: Object.keys(overrides || {}),
-  })
+  {
+    // Isolated block scope to prevent variable collision
+    const __p17e_safeTrigger = typeof triggerSource === 'string' ? triggerSource : String(triggerSource || 'unknown')
+    const __p17e_isOnboarding = __p17e_safeTrigger === 'handleGenerate' || __p17e_safeTrigger.includes('onboarding')
+    const __p17e_isRebuild = __p17e_safeTrigger === 'handleRegenerate' || __p17e_safeTrigger.includes('Rebuild') || __p17e_safeTrigger.includes('restart') || __p17e_safeTrigger.includes('Adjustment')
+    console.log('[phase17e-generation-entrypoint-registry-audit]', {
+      triggerSource,
+      isOnboardingPath: __p17e_isOnboarding,
+      isRebuildPath: __p17e_isRebuild,
+      usesCanonicalProfile: true,
+      canonicalProfileUserId: profile.userId,
+      canonicalOnboardingComplete: profile.onboardingComplete,
+      overridesProvided: Object.keys(overrides || {}),
+    })
+  }
   
   // [PHASE 17E] Entrypoint canonical source audit - capture exact values entering generation
   console.log('[phase17e-entrypoint-canonical-source-audit]', {
@@ -2541,28 +2545,32 @@ export function buildCanonicalGenerationEntry(
   })
   
   // [PHASE 17C] Generation path comparison audit - tracks exact input for all triggers
-  const isOnboardingPath = triggerSource === 'handleGenerate' || triggerSource.includes('onboarding')
-  const isRebuildPath = triggerSource === 'handleRegenerate' || triggerSource.includes('Rebuild') || triggerSource.includes('restart')
-  console.log('[phase17c-generation-path-input-audit]', {
-    triggerSource,
-    isOnboardingPath,
-    isRebuildPath,
-    primaryGoal: resolvedPrimaryGoal,
-    secondaryGoal: resolvedSecondaryGoal || null,
-    scheduleMode: resolvedScheduleMode,
-    trainingDaysPerWeek: resolvedTrainingDays,
-    sessionLength: resolvedSessionLength,
-    sessionDurationMode: resolvedSessionDurationMode,
-    experienceLevel: resolvedExperienceLevel,
-    equipmentCount: resolvedEquipment.length,
-    selectedSkillsCount: resolvedSelectedSkills.length,
-    selectedSkills: resolvedSelectedSkills,
-    fallbacksUsed,
-    bodyweight: profile.bodyweight,
-    profileScheduleMode: profile.scheduleMode,
-    profileTrainingDays: profile.trainingDaysPerWeek,
-    profileOnboardingComplete: profile.onboardingComplete,
-  })
+  {
+    // Isolated block scope to prevent variable collision
+    const __p17c_safeTrigger = typeof triggerSource === 'string' ? triggerSource : String(triggerSource || 'unknown')
+    const __p17c_isOnboarding = __p17c_safeTrigger === 'handleGenerate' || __p17c_safeTrigger.includes('onboarding')
+    const __p17c_isRebuild = __p17c_safeTrigger === 'handleRegenerate' || __p17c_safeTrigger.includes('Rebuild') || __p17c_safeTrigger.includes('restart')
+    console.log('[phase17c-generation-path-input-audit]', {
+      triggerSource,
+      isOnboardingPath: __p17c_isOnboarding,
+      isRebuildPath: __p17c_isRebuild,
+      primaryGoal: resolvedPrimaryGoal,
+      secondaryGoal: resolvedSecondaryGoal || null,
+      scheduleMode: resolvedScheduleMode,
+      trainingDaysPerWeek: resolvedTrainingDays,
+      sessionLength: resolvedSessionLength,
+      sessionDurationMode: resolvedSessionDurationMode,
+      experienceLevel: resolvedExperienceLevel,
+      equipmentCount: resolvedEquipment.length,
+      selectedSkillsCount: resolvedSelectedSkills.length,
+      selectedSkills: resolvedSelectedSkills,
+      fallbacksUsed,
+      bodyweight: profile.bodyweight,
+      profileScheduleMode: profile.scheduleMode,
+      profileTrainingDays: profile.trainingDaysPerWeek,
+      profileOnboardingComplete: profile.onboardingComplete,
+    })
+  }
   
   // STEP 5: Fail if required fields missing
   if (missingFields.length > 0) {

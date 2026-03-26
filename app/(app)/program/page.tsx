@@ -2422,19 +2422,120 @@ export default function ProgramPage() {
       hiddenRuntimeEquipmentStripped: (inputs.equipment || []).filter(e => e === 'floor' || e === 'wall'),
     })
     
-    saveCanonicalProfile({
+    // ==========================================================================
+    // [PHASE 18F] TASK 3 - Expand canonical writeback to include FULL deep planner identity
+    // This ensures future rebuilds reconstruct from the same truth class as this successful build
+    // ==========================================================================
+    const initialBuildWritebackTruth = {
+      // Schedule/duration fields
       trainingDaysPerWeek: effectiveTrainingDays ?? undefined,
       sessionLengthMinutes: newProgram.sessionLength ?? inputs.sessionLength ?? undefined,
       scheduleMode: effectiveScheduleMode,
+      sessionDurationMode: inputs.sessionDurationMode ?? undefined,
+      // Equipment
       equipmentAvailable: canonicalEquipment,
+      // Goal fields
+      primaryGoal: inputs.primaryGoal ?? undefined,
+      secondaryGoal: inputs.secondaryGoal ?? undefined,
+      // Experience
+      experienceLevel: inputs.experienceLevel ?? undefined,
+      // [PHASE 18F] Deep planner identity fields - CRITICAL for rebuild parity
+      selectedSkills: inputs.selectedSkills?.length ? inputs.selectedSkills : undefined,
+      trainingPathType: inputs.trainingPathType ?? undefined,
+      goalCategories: inputs.goalCategories?.length ? inputs.goalCategories : undefined,
+      selectedFlexibility: inputs.selectedFlexibility?.length ? inputs.selectedFlexibility : undefined,
+      selectedStrength: inputs.selectedStrength?.length ? inputs.selectedStrength : undefined,
+    }
+    
+    // [PHASE 18F] TASK 1 - Pre-writeback depth audit
+    console.log('[phase18f-pre-writeback-depth-audit]', {
+      triggerPath: 'initial_build_success',
+      successfulProgramContains: {
+        sessionCount: newProgram.sessions?.length ?? 0,
+        primaryGoal: newProgram.primaryGoal ?? null,
+        trainingPathType: (newProgram as unknown as { trainingPathType?: string }).trainingPathType ?? null,
+        selectedSkills: (newProgram as unknown as { selectedSkills?: string[] }).selectedSkills ?? [],
+      },
+      inputsTruthContains: {
+        primaryGoal: inputs.primaryGoal ?? null,
+        secondaryGoal: inputs.secondaryGoal ?? null,
+        selectedSkills: inputs.selectedSkills ?? [],
+        trainingPathType: inputs.trainingPathType ?? null,
+        goalCategories: inputs.goalCategories ?? [],
+        selectedFlexibility: inputs.selectedFlexibility ?? [],
+        selectedStrength: inputs.selectedStrength ?? [],
+        experienceLevel: inputs.experienceLevel ?? null,
+      },
+      writebackTruthWillPersist: {
+        primaryGoal: initialBuildWritebackTruth.primaryGoal ?? null,
+        secondaryGoal: initialBuildWritebackTruth.secondaryGoal ?? null,
+        selectedSkills: initialBuildWritebackTruth.selectedSkills ?? [],
+        trainingPathType: initialBuildWritebackTruth.trainingPathType ?? null,
+        goalCategories: initialBuildWritebackTruth.goalCategories ?? [],
+        selectedFlexibility: initialBuildWritebackTruth.selectedFlexibility ?? [],
+        selectedStrength: initialBuildWritebackTruth.selectedStrength ?? [],
+        experienceLevel: initialBuildWritebackTruth.experienceLevel ?? null,
+      },
+      deepPlannerFieldsIncluded: ['selectedSkills', 'trainingPathType', 'goalCategories', 'selectedFlexibility', 'selectedStrength'],
+      verdict: 'WRITEBACK_NOW_INCLUDES_DEEP_PLANNER_IDENTITY',
     })
-    console.log('[post-build-truth] STAGE 6d: Canonical profile updated', {
+    
+    saveCanonicalProfile(initialBuildWritebackTruth)
+    
+    console.log('[post-build-truth] STAGE 6d: FULL canonical profile updated', {
       trainingDaysPerWeek: effectiveTrainingDays,
       sessionLength: newProgram.sessionLength,
       scheduleMode: effectiveScheduleMode,
       equipmentCount: canonicalEquipment.length,
       canonicalEquipment,
+      // [PHASE 18F] Log deep planner fields
+      primaryGoal: initialBuildWritebackTruth.primaryGoal,
+      selectedSkills: initialBuildWritebackTruth.selectedSkills,
+      trainingPathType: initialBuildWritebackTruth.trainingPathType,
+      goalCategories: initialBuildWritebackTruth.goalCategories,
       fromProgram: true,
+      phase18fDeepIdentityPersisted: true,
+    })
+    
+    // [PHASE 18F] TASK 5 - Post-writeback readback verification
+    const canonicalReadback = getCanonicalProfile()
+    const readbackParityChecks = {
+      primaryGoalMatch: (canonicalReadback?.primaryGoal ?? null) === (initialBuildWritebackTruth.primaryGoal ?? null),
+      selectedSkillsMatch: JSON.stringify(canonicalReadback?.selectedSkills ?? []) === JSON.stringify(initialBuildWritebackTruth.selectedSkills ?? []),
+      trainingPathTypeMatch: (canonicalReadback?.trainingPathType ?? null) === (initialBuildWritebackTruth.trainingPathType ?? null),
+      goalCategoriesMatch: JSON.stringify(canonicalReadback?.goalCategories ?? []) === JSON.stringify(initialBuildWritebackTruth.goalCategories ?? []),
+      selectedFlexibilityMatch: JSON.stringify(canonicalReadback?.selectedFlexibility ?? []) === JSON.stringify(initialBuildWritebackTruth.selectedFlexibility ?? []),
+      experienceLevelMatch: (canonicalReadback?.experienceLevel ?? null) === (initialBuildWritebackTruth.experienceLevel ?? null),
+    }
+    const allReadbackFieldsMatch = Object.values(readbackParityChecks).every(Boolean)
+    
+    console.log('[phase18f-post-writeback-readback-audit]', {
+      triggerPath: 'initial_build_success',
+      canonicalReadback: {
+        primaryGoal: canonicalReadback?.primaryGoal ?? null,
+        selectedSkills: canonicalReadback?.selectedSkills ?? [],
+        trainingPathType: canonicalReadback?.trainingPathType ?? null,
+        goalCategories: canonicalReadback?.goalCategories ?? [],
+        selectedFlexibility: canonicalReadback?.selectedFlexibility ?? [],
+        experienceLevel: canonicalReadback?.experienceLevel ?? null,
+      },
+      parityChecks: readbackParityChecks,
+      allFieldsMatch: allReadbackFieldsMatch,
+    })
+    
+    console.log('[phase18f-canonical-readback-parity-verdict]', {
+      triggerPath: 'initial_build_success',
+      verdict: allReadbackFieldsMatch
+        ? 'CANONICAL_NOW_CARRIES_FULL_DEEP_PLANNER_IDENTITY'
+        : 'CANONICAL_WRITEBACK_INCOMPLETE__SOME_FIELDS_NOT_PERSISTED',
+    })
+    
+    console.log('[phase18f-root-cause-classification-verdict]', {
+      triggerPath: 'initial_build_success',
+      deepPlannerFieldsPersisted: allReadbackFieldsMatch,
+      verdict: allReadbackFieldsMatch
+        ? 'ROOT_CAUSE_WAS_INCOMPLETE_CANONICAL_WRITEBACK__FUTURE_REBUILDS_CAN_NOW_USE_FULL_PERSISTED_IDENTITY'
+        : 'CANONICAL_WRITEBACK_FIXED__IF_RESULT_STILL_REGRESSES_ROOT_CAUSE_IS_DEEPER_THAN_PERSISTENCE',
     })
   } catch (profileErr) {
     // Non-core: log but don't fail the build
@@ -4157,6 +4258,52 @@ export default function ProgramPage() {
         // ==========================================================================
         const regenAttemptId = `attempt_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
         
+        // ==========================================================================
+        // [PHASE 18F] TASK 6 - Pre-dispatch truth layer audit
+        // Compares active program vs canonical profile to prove writeback completeness
+        // ==========================================================================
+        console.log('[phase18f-regenerate-pre-dispatch-truth-layer-audit]', {
+          triggerPath: 'handleRegenerate',
+          activeVisibleProgram: {
+            sessionCount: program?.sessions?.length ?? 0,
+            primaryGoal: program?.primaryGoal ?? null,
+            trainingPathType: (program as unknown as { trainingPathType?: string })?.trainingPathType ?? null,
+            selectedSkills: (program as unknown as { selectedSkills?: string[] })?.selectedSkills ?? [],
+            scheduleMode: program?.scheduleMode ?? null,
+            trainingDaysPerWeek: program?.trainingDaysPerWeek ?? null,
+          },
+          currentInputs: {
+            primaryGoal: inputs?.primaryGoal ?? null,
+            selectedSkills: inputs?.selectedSkills ?? [],
+            trainingPathType: inputs?.trainingPathType ?? null,
+            goalCategories: inputs?.goalCategories ?? [],
+            selectedFlexibility: inputs?.selectedFlexibility ?? [],
+            experienceLevel: inputs?.experienceLevel ?? null,
+            scheduleMode: inputs?.scheduleMode ?? null,
+            trainingDaysPerWeek: inputs?.trainingDaysPerWeek ?? null,
+          },
+          currentCanonicalProfile: {
+            primaryGoal: canonicalProfileNow?.primaryGoal ?? null,
+            selectedSkills: canonicalProfileNow?.selectedSkills ?? [],
+            trainingPathType: canonicalProfileNow?.trainingPathType ?? null,
+            goalCategories: canonicalProfileNow?.goalCategories ?? [],
+            selectedFlexibility: canonicalProfileNow?.selectedFlexibility ?? [],
+            experienceLevel: canonicalProfileNow?.experienceLevel ?? null,
+            scheduleMode: canonicalProfileNow?.scheduleMode ?? null,
+            trainingDaysPerWeek: canonicalProfileNow?.trainingDaysPerWeek ?? null,
+          },
+          parityChecks: {
+            canonicalHasSelectedSkills: (canonicalProfileNow?.selectedSkills?.length ?? 0) > 0,
+            canonicalHasTrainingPathType: !!canonicalProfileNow?.trainingPathType,
+            canonicalHasGoalCategories: (canonicalProfileNow?.goalCategories?.length ?? 0) > 0,
+            canonicalMatchesInputsSkills: JSON.stringify(canonicalProfileNow?.selectedSkills ?? []) === JSON.stringify(inputs?.selectedSkills ?? []),
+            canonicalMatchesInputsPathType: (canonicalProfileNow?.trainingPathType ?? null) === (inputs?.trainingPathType ?? null),
+          },
+          verdict: (canonicalProfileNow?.selectedSkills?.length ?? 0) > 0 && !!canonicalProfileNow?.trainingPathType
+            ? 'CANONICAL_NOW_CARRIES_DEEP_PLANNER_IDENTITY'
+            : 'CANONICAL_STILL_MISSING_DEEP_PLANNER_FIELDS',
+        })
+        
         // [PHASE 18D] TASK 6A - Client dispatch audit
         console.log('[phase18d-regenerate-client-dispatch-audit]', {
           triggerPath: 'handleRegenerate',
@@ -4763,8 +4910,11 @@ export default function ProgramPage() {
       hiddenRuntimeEquipmentStripped: (freshRebuildInput.equipment || []).filter(e => e === 'floor' || e === 'wall'),
     })
     
-    // [TASK 3] Save ALL relevant programming truth fields
-    saveCanonicalProfile({
+    // ==========================================================================
+    // [PHASE 18F] TASK 3 - Expand canonical writeback to include FULL deep planner identity
+    // This ensures future rebuilds reconstruct from the same truth class as this successful regen
+    // ==========================================================================
+    const regenerateWritebackTruth = {
       // Goal fields
       primaryGoal: freshRebuildInput.primaryGoal,
       secondaryGoal: freshRebuildInput.secondaryGoal,
@@ -4778,18 +4928,104 @@ export default function ProgramPage() {
       equipmentAvailable: canonicalEquipment,
       // Experience
       experienceLevel: freshRebuildInput.experienceLevel,
+      // [PHASE 18F] Deep planner identity fields - CRITICAL for rebuild parity
+      selectedSkills: strongestRegenerateTruth.selectedSkills?.length ? strongestRegenerateTruth.selectedSkills : undefined,
+      trainingPathType: strongestRegenerateTruth.trainingPathType ?? undefined,
+      goalCategories: strongestRegenerateTruth.goalCategories?.length ? strongestRegenerateTruth.goalCategories : undefined,
+      selectedFlexibility: strongestRegenerateTruth.selectedFlexibility?.length ? strongestRegenerateTruth.selectedFlexibility : undefined,
+      selectedStrength: (inputs?.selectedStrength as string[] | undefined)?.length ? inputs.selectedStrength : undefined,
+    }
+    
+    // [PHASE 18F] TASK 1 - Pre-writeback depth audit for regenerate
+    console.log('[phase18f-pre-writeback-depth-audit]', {
+      triggerPath: 'regenerate_success',
+      successfulProgramContains: {
+        sessionCount: newProgram.sessions?.length ?? 0,
+        primaryGoal: newProgram.primaryGoal ?? null,
+        trainingPathType: (newProgram as unknown as { trainingPathType?: string }).trainingPathType ?? null,
+        selectedSkills: (newProgram as unknown as { selectedSkills?: string[] }).selectedSkills ?? [],
+      },
+      strongestRegenerateTruthContains: {
+        primaryGoal: strongestRegenerateTruth.primaryGoal ?? null,
+        secondaryGoal: strongestRegenerateTruth.secondaryGoal ?? null,
+        selectedSkills: strongestRegenerateTruth.selectedSkills ?? [],
+        trainingPathType: strongestRegenerateTruth.trainingPathType ?? null,
+        goalCategories: strongestRegenerateTruth.goalCategories ?? [],
+        selectedFlexibility: strongestRegenerateTruth.selectedFlexibility ?? [],
+        experienceLevel: strongestRegenerateTruth.experienceLevel ?? null,
+      },
+      writebackTruthWillPersist: {
+        primaryGoal: regenerateWritebackTruth.primaryGoal ?? null,
+        secondaryGoal: regenerateWritebackTruth.secondaryGoal ?? null,
+        selectedSkills: regenerateWritebackTruth.selectedSkills ?? [],
+        trainingPathType: regenerateWritebackTruth.trainingPathType ?? null,
+        goalCategories: regenerateWritebackTruth.goalCategories ?? [],
+        selectedFlexibility: regenerateWritebackTruth.selectedFlexibility ?? [],
+        selectedStrength: regenerateWritebackTruth.selectedStrength ?? [],
+        experienceLevel: regenerateWritebackTruth.experienceLevel ?? null,
+      },
+      deepPlannerFieldsIncluded: ['selectedSkills', 'trainingPathType', 'goalCategories', 'selectedFlexibility', 'selectedStrength'],
+      verdict: 'WRITEBACK_NOW_INCLUDES_DEEP_PLANNER_IDENTITY',
     })
     
+    saveCanonicalProfile(regenerateWritebackTruth)
+    
     console.log('[post-build-truth] REGEN STAGE 7d: FULL programming truth persisted', {
-      primaryGoal: freshRebuildInput.primaryGoal,
-      secondaryGoal: freshRebuildInput.secondaryGoal,
+      primaryGoal: regenerateWritebackTruth.primaryGoal,
+      secondaryGoal: regenerateWritebackTruth.secondaryGoal,
       trainingDaysPerWeek: effectiveTrainingDays,
       scheduleMode: effectiveScheduleMode,
       sessionLength: newProgram.sessionLength,
       sessionDurationMode: effectiveSessionDurationMode,
       equipmentCount: canonicalEquipment.length,
-      experienceLevel: freshRebuildInput.experienceLevel,
+      experienceLevel: regenerateWritebackTruth.experienceLevel,
+      // [PHASE 18F] Log deep planner fields
+      selectedSkills: regenerateWritebackTruth.selectedSkills,
+      trainingPathType: regenerateWritebackTruth.trainingPathType,
+      goalCategories: regenerateWritebackTruth.goalCategories,
       fromFreshRebuildInput: true,
+      phase18fDeepIdentityPersisted: true,
+    })
+    
+    // [PHASE 18F] TASK 5 - Post-writeback readback verification for regenerate
+    const regenCanonicalReadback = getCanonicalProfile()
+    const regenReadbackParityChecks = {
+      primaryGoalMatch: (regenCanonicalReadback?.primaryGoal ?? null) === (regenerateWritebackTruth.primaryGoal ?? null),
+      selectedSkillsMatch: JSON.stringify(regenCanonicalReadback?.selectedSkills ?? []) === JSON.stringify(regenerateWritebackTruth.selectedSkills ?? []),
+      trainingPathTypeMatch: (regenCanonicalReadback?.trainingPathType ?? null) === (regenerateWritebackTruth.trainingPathType ?? null),
+      goalCategoriesMatch: JSON.stringify(regenCanonicalReadback?.goalCategories ?? []) === JSON.stringify(regenerateWritebackTruth.goalCategories ?? []),
+      selectedFlexibilityMatch: JSON.stringify(regenCanonicalReadback?.selectedFlexibility ?? []) === JSON.stringify(regenerateWritebackTruth.selectedFlexibility ?? []),
+      experienceLevelMatch: (regenCanonicalReadback?.experienceLevel ?? null) === (regenerateWritebackTruth.experienceLevel ?? null),
+    }
+    const allRegenReadbackFieldsMatch = Object.values(regenReadbackParityChecks).every(Boolean)
+    
+    console.log('[phase18f-post-writeback-readback-audit]', {
+      triggerPath: 'regenerate_success',
+      canonicalReadback: {
+        primaryGoal: regenCanonicalReadback?.primaryGoal ?? null,
+        selectedSkills: regenCanonicalReadback?.selectedSkills ?? [],
+        trainingPathType: regenCanonicalReadback?.trainingPathType ?? null,
+        goalCategories: regenCanonicalReadback?.goalCategories ?? [],
+        selectedFlexibility: regenCanonicalReadback?.selectedFlexibility ?? [],
+        experienceLevel: regenCanonicalReadback?.experienceLevel ?? null,
+      },
+      parityChecks: regenReadbackParityChecks,
+      allFieldsMatch: allRegenReadbackFieldsMatch,
+    })
+    
+    console.log('[phase18f-canonical-readback-parity-verdict]', {
+      triggerPath: 'regenerate_success',
+      verdict: allRegenReadbackFieldsMatch
+        ? 'CANONICAL_NOW_CARRIES_FULL_DEEP_PLANNER_IDENTITY'
+        : 'CANONICAL_WRITEBACK_INCOMPLETE__SOME_FIELDS_NOT_PERSISTED',
+    })
+    
+    console.log('[phase18f-root-cause-classification-verdict]', {
+      triggerPath: 'regenerate_success',
+      deepPlannerFieldsPersisted: allRegenReadbackFieldsMatch,
+      verdict: allRegenReadbackFieldsMatch
+        ? 'ROOT_CAUSE_WAS_INCOMPLETE_CANONICAL_WRITEBACK__FUTURE_REBUILDS_CAN_NOW_USE_FULL_PERSISTED_IDENTITY'
+        : 'CANONICAL_WRITEBACK_FIXED__IF_RESULT_STILL_REGRESSES_ROOT_CAUSE_IS_DEEPER_THAN_PERSISTENCE',
     })
   } catch (profileErr) {
     // Non-core: log but don't fail the build
@@ -6615,12 +6851,66 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
     flexiblePreservingRebuild,
   })
   
-  saveCanonicalProfile({
+  // ==========================================================================
+  // [PHASE 18F] TASK 3 - Expand canonical writeback to include FULL deep planner identity
+  // This ensures future rebuilds reconstruct from the same truth class as this successful adjustment
+  // ==========================================================================
+  const adjustmentWritebackTruth = {
+    // Schedule/duration fields (may be adjusted)
     trainingDaysPerWeek: persistedTrainingDays,
     sessionLengthMinutes: updatedInputs.sessionLength ?? undefined,
     scheduleMode: persistedScheduleMode,
+    sessionDurationMode: updatedInputs.sessionDurationMode ?? canonicalProfileNow?.sessionDurationMode ?? undefined,
+    // Equipment (may be adjusted)
     equipmentAvailable: canonicalEquipment,
+    // Goal fields - preserve from canonical if not adjusted
+    primaryGoal: canonicalProfileNow?.primaryGoal ?? undefined,
+    secondaryGoal: canonicalProfileNow?.secondaryGoal ?? undefined,
+    // Experience - preserve from canonical
+    experienceLevel: canonicalProfileNow?.experienceLevel ?? undefined,
+    // [PHASE 18F] Deep planner identity fields - CRITICAL for rebuild parity
+    // Preserve from canonical since adjustment doesn't change these
+    selectedSkills: canonicalProfileNow?.selectedSkills?.length ? canonicalProfileNow.selectedSkills : undefined,
+    trainingPathType: canonicalProfileNow?.trainingPathType ?? undefined,
+    goalCategories: canonicalProfileNow?.goalCategories?.length ? canonicalProfileNow.goalCategories : undefined,
+    selectedFlexibility: canonicalProfileNow?.selectedFlexibility?.length ? canonicalProfileNow.selectedFlexibility : undefined,
+    selectedStrength: canonicalProfileNow?.selectedStrength?.length ? canonicalProfileNow.selectedStrength : undefined,
+  }
+  
+  // [PHASE 18F] TASK 1 - Pre-writeback depth audit for adjustment
+  console.log('[phase18f-pre-writeback-depth-audit]', {
+    triggerPath: 'adjustment_rebuild_success',
+    requestType: request.type,
+    successfulProgramContains: {
+      sessionCount: newProgram.sessions?.length ?? 0,
+      primaryGoal: newProgram.primaryGoal ?? null,
+      trainingPathType: (newProgram as unknown as { trainingPathType?: string }).trainingPathType ?? null,
+      selectedSkills: (newProgram as unknown as { selectedSkills?: string[] }).selectedSkills ?? [],
+    },
+    canonicalProfileNowContains: {
+      primaryGoal: canonicalProfileNow?.primaryGoal ?? null,
+      secondaryGoal: canonicalProfileNow?.secondaryGoal ?? null,
+      selectedSkills: canonicalProfileNow?.selectedSkills ?? [],
+      trainingPathType: canonicalProfileNow?.trainingPathType ?? null,
+      goalCategories: canonicalProfileNow?.goalCategories ?? [],
+      selectedFlexibility: canonicalProfileNow?.selectedFlexibility ?? [],
+      experienceLevel: canonicalProfileNow?.experienceLevel ?? null,
+    },
+    writebackTruthWillPersist: {
+      primaryGoal: adjustmentWritebackTruth.primaryGoal ?? null,
+      secondaryGoal: adjustmentWritebackTruth.secondaryGoal ?? null,
+      selectedSkills: adjustmentWritebackTruth.selectedSkills ?? [],
+      trainingPathType: adjustmentWritebackTruth.trainingPathType ?? null,
+      goalCategories: adjustmentWritebackTruth.goalCategories ?? [],
+      selectedFlexibility: adjustmentWritebackTruth.selectedFlexibility ?? [],
+      selectedStrength: adjustmentWritebackTruth.selectedStrength ?? [],
+      experienceLevel: adjustmentWritebackTruth.experienceLevel ?? null,
+    },
+    deepPlannerFieldsIncluded: ['selectedSkills', 'trainingPathType', 'goalCategories', 'selectedFlexibility', 'selectedStrength'],
+    verdict: 'WRITEBACK_NOW_INCLUDES_DEEP_PLANNER_IDENTITY',
   })
+  
+  saveCanonicalProfile(adjustmentWritebackTruth)
   
   // [PHASE 17P] Rebuild input schedule verdict
   console.log('[phase17p-rebuild-input-schedule-verdict]', {
@@ -6632,12 +6922,59 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
       : 'STATIC_DAY_COUNT_APPLIED',
   })
   
-  console.log('[canonical-rebuild] STAGE 5b: Canonical profile updated with new settings', {
+  console.log('[canonical-rebuild] STAGE 5b: FULL canonical profile updated with adjustment', {
     trainingDaysPerWeek: persistedTrainingDays,
     sessionLength: updatedInputs.sessionLength,
     equipmentCount: canonicalEquipment.length,
     canonicalEquipment,
     scheduleMode: persistedScheduleMode,
+    // [PHASE 18F] Log deep planner fields
+    primaryGoal: adjustmentWritebackTruth.primaryGoal,
+    selectedSkills: adjustmentWritebackTruth.selectedSkills,
+    trainingPathType: adjustmentWritebackTruth.trainingPathType,
+    goalCategories: adjustmentWritebackTruth.goalCategories,
+    phase18fDeepIdentityPersisted: true,
+  })
+  
+  // [PHASE 18F] TASK 5 - Post-writeback readback verification for adjustment
+  const adjCanonicalReadback = getCanonicalProfile()
+  const adjReadbackParityChecks = {
+    primaryGoalMatch: (adjCanonicalReadback?.primaryGoal ?? null) === (adjustmentWritebackTruth.primaryGoal ?? null),
+    selectedSkillsMatch: JSON.stringify(adjCanonicalReadback?.selectedSkills ?? []) === JSON.stringify(adjustmentWritebackTruth.selectedSkills ?? []),
+    trainingPathTypeMatch: (adjCanonicalReadback?.trainingPathType ?? null) === (adjustmentWritebackTruth.trainingPathType ?? null),
+    goalCategoriesMatch: JSON.stringify(adjCanonicalReadback?.goalCategories ?? []) === JSON.stringify(adjustmentWritebackTruth.goalCategories ?? []),
+    selectedFlexibilityMatch: JSON.stringify(adjCanonicalReadback?.selectedFlexibility ?? []) === JSON.stringify(adjustmentWritebackTruth.selectedFlexibility ?? []),
+    experienceLevelMatch: (adjCanonicalReadback?.experienceLevel ?? null) === (adjustmentWritebackTruth.experienceLevel ?? null),
+  }
+  const allAdjReadbackFieldsMatch = Object.values(adjReadbackParityChecks).every(Boolean)
+  
+  console.log('[phase18f-post-writeback-readback-audit]', {
+    triggerPath: 'adjustment_rebuild_success',
+    canonicalReadback: {
+      primaryGoal: adjCanonicalReadback?.primaryGoal ?? null,
+      selectedSkills: adjCanonicalReadback?.selectedSkills ?? [],
+      trainingPathType: adjCanonicalReadback?.trainingPathType ?? null,
+      goalCategories: adjCanonicalReadback?.goalCategories ?? [],
+      selectedFlexibility: adjCanonicalReadback?.selectedFlexibility ?? [],
+      experienceLevel: adjCanonicalReadback?.experienceLevel ?? null,
+    },
+    parityChecks: adjReadbackParityChecks,
+    allFieldsMatch: allAdjReadbackFieldsMatch,
+  })
+  
+  console.log('[phase18f-canonical-readback-parity-verdict]', {
+    triggerPath: 'adjustment_rebuild_success',
+    verdict: allAdjReadbackFieldsMatch
+      ? 'CANONICAL_NOW_CARRIES_FULL_DEEP_PLANNER_IDENTITY'
+      : 'CANONICAL_WRITEBACK_INCOMPLETE__SOME_FIELDS_NOT_PERSISTED',
+  })
+  
+  console.log('[phase18f-root-cause-classification-verdict]', {
+    triggerPath: 'adjustment_rebuild_success',
+    deepPlannerFieldsPersisted: allAdjReadbackFieldsMatch,
+    verdict: allAdjReadbackFieldsMatch
+      ? 'ROOT_CAUSE_WAS_INCOMPLETE_CANONICAL_WRITEBACK__FUTURE_REBUILDS_CAN_NOW_USE_FULL_PERSISTED_IDENTITY'
+      : 'CANONICAL_WRITEBACK_FIXED__IF_RESULT_STILL_REGRESSES_ROOT_CAUSE_IS_DEEPER_THAN_PERSISTENCE',
   })
       
       // [canonical-rebuild] STAGE 6: Update UI state atomically

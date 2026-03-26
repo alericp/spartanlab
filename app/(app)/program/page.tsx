@@ -3543,7 +3543,8 @@ export default function ProgramPage() {
         // [PHASE 17V] TASK 2 - Build explicit canonical override for handleRegenerate
         // This prevents builder from re-reading weaker stale canonical profile
         // ==========================================================================
-        const canonicalProfileNow = getCanonicalProfile()
+        // [PHASE 17W] Reuse earlier canonicalProfileNow from handleRegenerate scope.
+        // Do not redeclare here or Turbopack build will fail with duplicate identifier.
         const effectiveScheduleMode = inputs?.scheduleMode || freshRebuildInput?.scheduleMode || canonicalProfileNow?.scheduleMode
         
         const rebuildCanonicalOverride = {

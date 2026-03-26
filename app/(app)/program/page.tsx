@@ -5962,29 +5962,55 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
             return canonical.sessionLengthMinutes || 60
           })()}
           currentTrainingDays={(() => {
-            // [PHASE 16W] Truthful current training days display
+            // [PHASE 17Q] Truthful current training days display - use SAVED program truth first
             const canonical = getCanonicalProfile()
-            const generatedSessionCount = program?.sessions?.length || 0
+            const savedState = programModules.getProgramState?.()
+            const savedProgram = savedState?.adaptiveProgram ?? null
+            const visibleProgram = program ?? null
+            
+            const savedSessionCount = savedProgram?.sessions?.length || 0
+            const visibleSessionCount = visibleProgram?.sessions?.length || 0
+            
             const preferredDays = canonical.trainingDaysPerWeek || 4
             const scheduleMode = canonical.scheduleMode || 'adaptive'
             
-            // [PHASE 16W] Adjustment current training days truth audit
-            console.log('[phase16w-adjustment-current-training-days-truth-audit]', {
-              scheduleMode,
+            // [PHASE 17Q] Use freshest saved program truth first, fallback to visible, then canonical
+            const truthfulGeneratedSessionCount =
+              savedSessionCount > 0
+                ? savedSessionCount
+                : visibleSessionCount > 0
+                ? visibleSessionCount
+                : 0
+            
+            // [PHASE 17Q] Adjustment prefill source truth audit
+            console.log('[phase17q-adjustment-prefill-source-truth-audit]', {
+              canonicalScheduleMode: scheduleMode,
               canonicalPreferredDays: preferredDays,
-              generatedSessionCount,
-              displayValue: scheduleMode === 'flexible' ? generatedSessionCount || preferredDays : preferredDays,
-              isFlexibleMode: scheduleMode === 'flexible',
-              generatedMatchesPreferred: generatedSessionCount === preferredDays,
-              verdict: scheduleMode === 'flexible' 
-                ? (generatedSessionCount > 0 ? 'showing_generated_session_count' : 'showing_preferred_as_fallback')
-                : 'showing_canonical_preference',
+              
+              savedProgramId: savedProgram?.id || null,
+              savedSessionCount,
+              
+              visibleProgramId: visibleProgram?.id || null,
+              visibleSessionCount,
+              
+              truthfulGeneratedSessionCount,
+              sourceUsed:
+                savedSessionCount > 0
+                  ? 'saved_program'
+                  : visibleSessionCount > 0
+                  ? 'visible_program_fallback'
+                  : 'canonical_preference_fallback',
+              
+              finalDisplayValue:
+                scheduleMode === 'flexible'
+                  ? (truthfulGeneratedSessionCount > 0 ? truthfulGeneratedSessionCount : preferredDays)
+                  : preferredDays,
             })
             
-            // For flexible mode: show generated count if available, else preference
+            // For flexible mode: show truthful generated count if available, else preference
             // For static mode: show canonical preference
             if (scheduleMode === 'flexible') {
-              return (generatedSessionCount > 0 ? generatedSessionCount : preferredDays) as TrainingDays
+              return (truthfulGeneratedSessionCount > 0 ? truthfulGeneratedSessionCount : preferredDays) as TrainingDays
             }
             return preferredDays as TrainingDays
           })()}

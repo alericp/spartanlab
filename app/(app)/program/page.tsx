@@ -5382,10 +5382,13 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
       // except for the field explicitly being changed by the request
       const adjustmentBuilderInput = {
         ...updatedInputs,
-        // [PHASE 17U] Material identity fields - prefer current inputs truth EXCEPT for requested field
-        primaryGoal: inputs?.primaryGoal || updatedInputs?.primaryGoal,
-        secondaryGoal: inputs?.secondaryGoal ?? updatedInputs?.secondaryGoal,
-        // For schedule-related fields, only preserve from inputs if request is NOT training_days
+        // [PHASE 17X] TASK 4 - Use strongestMaterialIdentityTruth for 4 material identity fields
+        // This prevents stale Program-page `inputs` from overriding stronger canonical truth
+        primaryGoal: strongestMaterialIdentityTruth.primaryGoal,
+        secondaryGoal: strongestMaterialIdentityTruth.secondaryGoal,
+        selectedSkills: strongestMaterialIdentityTruth.selectedSkills,
+        trainingPathType: strongestMaterialIdentityTruth.trainingPathType,
+        // [PHASE 17U] For schedule-related fields, only preserve from inputs if request is NOT training_days
         scheduleMode: request.type === 'training_days' 
           ? updatedInputs?.scheduleMode 
           : (inputs?.scheduleMode || updatedInputs?.scheduleMode),
@@ -5399,10 +5402,8 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
         sessionLength: request.type === 'session_time'
           ? updatedInputs?.sessionLength
           : (inputs?.sessionLength ?? updatedInputs?.sessionLength),
-        // These fields are never the explicit request target, always prefer inputs
-        selectedSkills: (inputs?.selectedSkills?.length ?? 0) > 0 ? inputs.selectedSkills : updatedInputs?.selectedSkills,
+        // selectedStyles still prefers inputs as fallback (not part of 4 material identity fields)
         selectedStyles: (inputs?.selectedStyles?.length ?? 0) > 0 ? inputs.selectedStyles : updatedInputs?.selectedStyles,
-        trainingPathType: inputs?.trainingPathType || updatedInputs?.trainingPathType,
         // For equipment, only preserve from inputs if request is NOT equipment
         equipment: request.type === 'equipment'
           ? updatedInputs?.equipment
@@ -5500,6 +5501,63 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
       // ==========================================================================
       const adjCanonicalProfileNow = getCanonicalProfile()
       
+      // ==========================================================================
+      // [PHASE 17X] TASK 1 - Material identity source audit
+      // ==========================================================================
+      console.log('[phase17x-adjustment-material-identity-source-audit]', {
+        triggerPath: 'handleAdjustmentRebuild',
+        requestType: request.type,
+        visibleInputsTruth: {
+          primaryGoal: inputs?.primaryGoal ?? null,
+          secondaryGoal: inputs?.secondaryGoal ?? null,
+          selectedSkills: inputs?.selectedSkills ?? [],
+          trainingPathType: inputs?.trainingPathType ?? null,
+        },
+        updatedInputsTruth: {
+          primaryGoal: updatedInputs?.primaryGoal ?? null,
+          secondaryGoal: updatedInputs?.secondaryGoal ?? null,
+          selectedSkills: updatedInputs?.selectedSkills ?? [],
+          trainingPathType: updatedInputs?.trainingPathType ?? null,
+        },
+        canonicalBaselineTruth: {
+          primaryGoal: adjCanonicalProfileNow?.primaryGoal ?? null,
+          secondaryGoal: adjCanonicalProfileNow?.secondaryGoal ?? null,
+          selectedSkills: adjCanonicalProfileNow?.selectedSkills ?? [],
+          trainingPathType: adjCanonicalProfileNow?.trainingPathType ?? null,
+        },
+      })
+      
+      // ==========================================================================
+      // [PHASE 17X] TASK 2 - Define stronger material-identity source
+      // Priority: updatedInputs > adjCanonicalProfileNow > inputs (last fallback)
+      // This prevents stale Program-page `inputs` from overriding stronger truth
+      // ==========================================================================
+      const strongestMaterialIdentityTruth = {
+        primaryGoal:
+          updatedInputs?.primaryGoal ||
+          adjCanonicalProfileNow?.primaryGoal ||
+          inputs?.primaryGoal ||
+          null,
+        secondaryGoal:
+          updatedInputs?.secondaryGoal ??
+          adjCanonicalProfileNow?.secondaryGoal ??
+          inputs?.secondaryGoal ??
+          null,
+        selectedSkills:
+          (updatedInputs?.selectedSkills?.length ?? 0) > 0
+            ? updatedInputs!.selectedSkills
+            : (adjCanonicalProfileNow?.selectedSkills?.length ?? 0) > 0
+            ? adjCanonicalProfileNow.selectedSkills
+            : (inputs?.selectedSkills?.length ?? 0) > 0
+            ? inputs.selectedSkills
+            : [],
+        trainingPathType:
+          updatedInputs?.trainingPathType ||
+          adjCanonicalProfileNow?.trainingPathType ||
+          inputs?.trainingPathType ||
+          null,
+      }
+      
       // Determine effective schedule mode based on request type
       const adjEffectiveScheduleMode = request.type === 'training_days'
         ? updatedInputs?.scheduleMode
@@ -5507,17 +5565,12 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
       
       const adjustmentCanonicalOverride = {
         ...adjCanonicalProfileNow,
-        // [PHASE 17V] Material identity fields - preserve current inputs, but let explicit request win
-        primaryGoal: inputs?.primaryGoal || updatedInputs?.primaryGoal || adjCanonicalProfileNow?.primaryGoal,
-        secondaryGoal: inputs?.secondaryGoal ?? updatedInputs?.secondaryGoal ?? adjCanonicalProfileNow?.secondaryGoal,
-        // selectedSkills always preserves from inputs (never the explicit request target)
-        selectedSkills: (inputs?.selectedSkills?.length ?? 0) > 0 
-          ? inputs.selectedSkills 
-          : (updatedInputs?.selectedSkills?.length ?? 0) > 0 
-          ? updatedInputs.selectedSkills 
-          : adjCanonicalProfileNow?.selectedSkills,
-        // trainingPathType always preserves from inputs
-        trainingPathType: inputs?.trainingPathType || updatedInputs?.trainingPathType || adjCanonicalProfileNow?.trainingPathType,
+        // [PHASE 17X] TASK 3 - Use strongestMaterialIdentityTruth for 4 material identity fields
+        // This prevents stale Program-page `inputs` from overriding stronger canonical truth
+        primaryGoal: strongestMaterialIdentityTruth.primaryGoal,
+        secondaryGoal: strongestMaterialIdentityTruth.secondaryGoal,
+        selectedSkills: strongestMaterialIdentityTruth.selectedSkills,
+        trainingPathType: strongestMaterialIdentityTruth.trainingPathType,
         // scheduleMode - let request win if training_days, else preserve
         scheduleMode: adjEffectiveScheduleMode,
         // trainingDaysPerWeek - flexible null semantics, let request win if training_days
@@ -5600,6 +5653,41 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
         rootCauseTheory: 'builder_reads_canonicalProfile_heavily_and_can_ignore_stronger_inputs_if_no_canonical_override_is_passed',
         fixApplied: 'explicit_canonicalProfileOverride_now_passed_to_generateAdaptiveProgram',
         expectedBehavior: 'rebuild_should_now_follow_same_stronger_truth_class_in_builder_as_onboarding',
+      })
+      
+      // ==========================================================================
+      // [PHASE 17X] TASK 5 - Material identity parity verdict
+      // ==========================================================================
+      console.log('[phase17x-adjustment-material-identity-parity-verdict]', {
+        triggerPath: 'handleAdjustmentRebuild',
+        requestType: request.type,
+        strongestMaterialIdentityTruth,
+        finalAdjustmentBuilderMaterialIdentity: {
+          primaryGoal: adjustmentBuilderInput?.primaryGoal ?? null,
+          secondaryGoal: adjustmentBuilderInput?.secondaryGoal ?? null,
+          selectedSkills: adjustmentBuilderInput?.selectedSkills ?? [],
+          trainingPathType: adjustmentBuilderInput?.trainingPathType ?? null,
+        },
+        finalAdjustmentCanonicalOverrideMaterialIdentity: {
+          primaryGoal: adjustmentCanonicalOverride?.primaryGoal ?? null,
+          secondaryGoal: adjustmentCanonicalOverride?.secondaryGoal ?? null,
+          selectedSkills: adjustmentCanonicalOverride?.selectedSkills ?? [],
+          trainingPathType: adjustmentCanonicalOverride?.trainingPathType ?? null,
+        },
+        verdict:
+          JSON.stringify({
+            primaryGoal: adjustmentBuilderInput?.primaryGoal ?? null,
+            secondaryGoal: adjustmentBuilderInput?.secondaryGoal ?? null,
+            selectedSkills: adjustmentBuilderInput?.selectedSkills ?? [],
+            trainingPathType: adjustmentBuilderInput?.trainingPathType ?? null,
+          }) === JSON.stringify({
+            primaryGoal: adjustmentCanonicalOverride?.primaryGoal ?? null,
+            secondaryGoal: adjustmentCanonicalOverride?.secondaryGoal ?? null,
+            selectedSkills: adjustmentCanonicalOverride?.selectedSkills ?? [],
+            trainingPathType: adjustmentCanonicalOverride?.trainingPathType ?? null,
+          })
+            ? 'BUILDER_AND_OVERRIDE_MATERIAL_IDENTITY_ALIGNED'
+            : 'MATERIAL_IDENTITY_MISMATCH_STILL_PRESENT',
       })
       
       // [PHASE 16S] Dispatch verdict - marking actual builder call for adjustment

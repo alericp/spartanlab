@@ -252,6 +252,32 @@ export function ProgramAdjustmentModal({
           }
         }
         
+        // [PHASE 17R] TASK 1 - Modal submit payload truth audit
+        console.log('[phase17r-modal-submit-truth-audit]', {
+          flowIntent: {
+            continueCurrentProgramSelected: false,
+            makeSmallAdjustmentsSelected: true, // This is the adjustment flow
+            startNewProgramSelected: false,
+          },
+          outgoingPayload: {
+            requestType: rebuildRequest.type,
+            newTrainingDays: rebuildRequest.newTrainingDays ?? null,
+            newEquipment: rebuildRequest.type === 'equipment' ? rebuildRequest.newEquipment : null,
+          },
+          modalState: {
+            selectedCategory,
+            trainingDays,
+            currentTrainingDays,
+            currentScheduleMode,
+            isFlexibleUser,
+            userChangedDayCount,
+            shouldPreserveFlexible,
+          },
+          verdict: shouldPreserveFlexible
+            ? 'FLEXIBLE_PRESERVING_REQUEST_SENT'
+            : 'EXPLICIT_DAY_COUNT_REQUEST_SENT',
+        })
+        
         // [PHASE 16W] Schedule rebuild request audit
         console.log('[phase16w-schedule-rebuild-request-audit]', {
           category: selectedCategory,

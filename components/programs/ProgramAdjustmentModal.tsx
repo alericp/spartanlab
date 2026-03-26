@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import {
@@ -153,6 +153,32 @@ export function ProgramAdjustmentModal({
   }, [currentSessionMinutes, currentTrainingDays])
   
   // ==========================================================================
+  // [PHASE 20A] TASK 2A - Track open prop changes
+  // ==========================================================================
+  const prevOpenRef = useRef(open)
+  const openTimestampRef = useRef<number>(0)
+  
+  useEffect(() => {
+    const prevOpen = prevOpenRef.current
+    
+    // [PHASE 20A] TASK 2A - Every time prop `open` changes
+    console.log('[phase20a-modal-open-prop-change]', {
+      previousOpen: prevOpen,
+      currentOpen: open,
+      changedFrom: prevOpen ? 'open' : 'closed',
+      changedTo: open ? 'open' : 'closed',
+      timestamp: Date.now(),
+    })
+    
+    if (open && !prevOpen) {
+      // Just opened - record timestamp
+      openTimestampRef.current = Date.now()
+    }
+    
+    prevOpenRef.current = open
+  }, [open])
+  
+  // ==========================================================================
   // [PHASE 19A] TASK 4 - Modal prop audit
   // This tracks whether the modal receives the correct `open` prop
   // ==========================================================================
@@ -170,6 +196,19 @@ export function ProgramAdjustmentModal({
     })
     
     if (open) {
+      // ==========================================================================
+      // [PHASE 20A] TASK 2C - Modal content visible render attempt
+      // ==========================================================================
+      console.log('[phase20a-modal-visible-render-attempt]', {
+        open: true,
+        currentView: view,
+        selectedCategory,
+        isRebuilding,
+        rebuildError,
+        dialogContentAboutToMount: true,
+        timestamp: Date.now(),
+      })
+      
       console.log('[phase19a-adjustment-modal-view-audit]', {
         modalRendering: true,
         open,
@@ -184,6 +223,17 @@ export function ProgramAdjustmentModal({
           currentSessionMinutesFromProps: currentSessionMinutes,
         },
         verdict: 'MODAL_IS_OPEN_AND_RENDERING',
+      })
+      
+      // ==========================================================================
+      // [PHASE 20A] TASK 2D - Root cause classification verdict
+      // ==========================================================================
+      console.log('[phase20a-modify-root-cause-verdict]', {
+        clickReachedHandler: true,
+        handlerRanAndStateSet: true,
+        renderSawOpenTrue: true,
+        dialogOpenAndRendering: true,
+        verdict: 'OPEN_TRUE_AND_MODAL_RENDERED',
       })
     }
   }, [open, view, selectedCategory, isRebuilding, rebuildError, currentTrainingDays, currentSessionMinutes, currentScheduleMode, trainingDays, sessionMinutes])

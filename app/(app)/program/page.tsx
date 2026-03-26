@@ -3439,11 +3439,85 @@ export default function ProgramPage() {
         // Without this, builder falls back to stateFlags.recommendedMode which can
         // change behavior based on existing program/history context
         // ==========================================================================
+        // [PHASE 17U] TASK 3 - Merge in stronger current `inputs` truth for material identity fields
+        // "Rebuild From Current Settings" should prefer current inputs truth over converted canonical payload
         const rebuildBuilderInput = {
           ...freshRebuildInput,
+          // [PHASE 17U] Material identity fields - prefer current inputs truth when available
+          primaryGoal: inputs?.primaryGoal || freshRebuildInput?.primaryGoal,
+          secondaryGoal: inputs?.secondaryGoal ?? freshRebuildInput?.secondaryGoal,
+          scheduleMode: inputs?.scheduleMode || freshRebuildInput?.scheduleMode,
+          trainingDaysPerWeek: inputs?.trainingDaysPerWeek ?? freshRebuildInput?.trainingDaysPerWeek,
+          sessionDurationMode: inputs?.sessionDurationMode || freshRebuildInput?.sessionDurationMode,
+          sessionLength: inputs?.sessionLength ?? freshRebuildInput?.sessionLength,
+          selectedSkills: (inputs?.selectedSkills?.length ?? 0) > 0 ? inputs.selectedSkills : freshRebuildInput?.selectedSkills,
+          selectedStyles: (inputs?.selectedStyles?.length ?? 0) > 0 ? inputs.selectedStyles : freshRebuildInput?.selectedStyles,
+          trainingPathType: inputs?.trainingPathType || freshRebuildInput?.trainingPathType,
+          equipment: (inputs?.equipment?.length ?? 0) > 0 ? inputs.equipment : freshRebuildInput?.equipment,
+          // [PHASE 17T] Explicit regeneration mode
           regenerationMode: 'fresh' as const,
           regenerationReason: 'rebuild_from_current_settings',
         }
+        
+        // ==========================================================================
+        // [PHASE 17U] TASK 5A - Rebuild material truth merge audit
+        // ==========================================================================
+        console.log('[phase17u-rebuild-material-truth-merge-audit]', {
+          triggerPath: 'handleRegenerate',
+          currentInputsTruth: {
+            primaryGoal: inputs?.primaryGoal ?? null,
+            secondaryGoal: inputs?.secondaryGoal ?? null,
+            scheduleMode: inputs?.scheduleMode ?? null,
+            trainingDaysPerWeek: inputs?.trainingDaysPerWeek ?? null,
+            sessionDurationMode: inputs?.sessionDurationMode ?? null,
+            sessionLength: inputs?.sessionLength ?? null,
+            selectedSkills: inputs?.selectedSkills ?? [],
+            selectedStyles: inputs?.selectedStyles ?? [],
+            trainingPathType: inputs?.trainingPathType ?? null,
+            equipment: inputs?.equipment ?? [],
+          },
+          preMergeRebuildInput: {
+            primaryGoal: freshRebuildInput?.primaryGoal ?? null,
+            secondaryGoal: freshRebuildInput?.secondaryGoal ?? null,
+            scheduleMode: freshRebuildInput?.scheduleMode ?? null,
+            trainingDaysPerWeek: freshRebuildInput?.trainingDaysPerWeek ?? null,
+            sessionDurationMode: freshRebuildInput?.sessionDurationMode ?? null,
+            sessionLength: freshRebuildInput?.sessionLength ?? null,
+            selectedSkills: freshRebuildInput?.selectedSkills ?? [],
+            selectedStyles: freshRebuildInput?.selectedStyles ?? [],
+            trainingPathType: freshRebuildInput?.trainingPathType ?? null,
+            equipment: freshRebuildInput?.equipment ?? [],
+          },
+          finalBuilderInput: {
+            primaryGoal: rebuildBuilderInput?.primaryGoal ?? null,
+            secondaryGoal: rebuildBuilderInput?.secondaryGoal ?? null,
+            scheduleMode: rebuildBuilderInput?.scheduleMode ?? null,
+            trainingDaysPerWeek: rebuildBuilderInput?.trainingDaysPerWeek ?? null,
+            sessionDurationMode: rebuildBuilderInput?.sessionDurationMode ?? null,
+            sessionLength: rebuildBuilderInput?.sessionLength ?? null,
+            selectedSkills: rebuildBuilderInput?.selectedSkills ?? [],
+            selectedStyles: rebuildBuilderInput?.selectedStyles ?? [],
+            trainingPathType: rebuildBuilderInput?.trainingPathType ?? null,
+            equipment: rebuildBuilderInput?.equipment ?? [],
+            regenerationMode: rebuildBuilderInput?.regenerationMode ?? null,
+            regenerationReason: rebuildBuilderInput?.regenerationReason ?? null,
+          },
+        })
+        
+        // ==========================================================================
+        // [PHASE 17U] TASK 6A - Rebuild prebuilder parity verdict
+        // ==========================================================================
+        console.log('[phase17u-rebuild-prebuilder-parity-verdict]', {
+          triggerPath: 'handleRegenerate',
+          preservedPrimaryGoalFromInputs: rebuildBuilderInput?.primaryGoal === (inputs?.primaryGoal ?? rebuildBuilderInput?.primaryGoal),
+          preservedScheduleModeFromInputs: rebuildBuilderInput?.scheduleMode === (inputs?.scheduleMode ?? rebuildBuilderInput?.scheduleMode),
+          preservedTrainingDaysFromInputs: rebuildBuilderInput?.trainingDaysPerWeek === (inputs?.trainingDaysPerWeek ?? rebuildBuilderInput?.trainingDaysPerWeek),
+          preservedSelectedSkillsFromInputs:
+            JSON.stringify(rebuildBuilderInput?.selectedSkills ?? []) === JSON.stringify(inputs?.selectedSkills ?? rebuildBuilderInput?.selectedSkills ?? []),
+          preservedTrainingPathTypeFromInputs:
+            rebuildBuilderInput?.trainingPathType === (inputs?.trainingPathType ?? rebuildBuilderInput?.trainingPathType),
+          verdict: 'final_rebuild_input_now_prefers_current_settings_truth',
+        })
         
         // [PHASE 17T] Mode entry diagnostic
         console.log('[phase17t-rebuild-generation-mode-entry-audit]', {
@@ -5195,11 +5269,101 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
       // [PHASE 17T] TASK 4 - Force explicit regenerationMode for adjustment rebuild path
       // Without this, builder falls back to stateFlags.recommendedMode
       // ==========================================================================
+      // [PHASE 17U] TASK 4 - Preserve material identity fields from current inputs,
+      // except for the field explicitly being changed by the request
       const adjustmentBuilderInput = {
         ...updatedInputs,
+        // [PHASE 17U] Material identity fields - prefer current inputs truth EXCEPT for requested field
+        primaryGoal: inputs?.primaryGoal || updatedInputs?.primaryGoal,
+        secondaryGoal: inputs?.secondaryGoal ?? updatedInputs?.secondaryGoal,
+        // For schedule-related fields, only preserve from inputs if request is NOT training_days
+        scheduleMode: request.type === 'training_days' 
+          ? updatedInputs?.scheduleMode 
+          : (inputs?.scheduleMode || updatedInputs?.scheduleMode),
+        trainingDaysPerWeek: request.type === 'training_days'
+          ? updatedInputs?.trainingDaysPerWeek
+          : (inputs?.trainingDaysPerWeek ?? updatedInputs?.trainingDaysPerWeek),
+        // For session-related fields, only preserve from inputs if request is NOT session_time
+        sessionDurationMode: request.type === 'session_time'
+          ? updatedInputs?.sessionDurationMode
+          : (inputs?.sessionDurationMode || updatedInputs?.sessionDurationMode),
+        sessionLength: request.type === 'session_time'
+          ? updatedInputs?.sessionLength
+          : (inputs?.sessionLength ?? updatedInputs?.sessionLength),
+        // These fields are never the explicit request target, always prefer inputs
+        selectedSkills: (inputs?.selectedSkills?.length ?? 0) > 0 ? inputs.selectedSkills : updatedInputs?.selectedSkills,
+        selectedStyles: (inputs?.selectedStyles?.length ?? 0) > 0 ? inputs.selectedStyles : updatedInputs?.selectedStyles,
+        trainingPathType: inputs?.trainingPathType || updatedInputs?.trainingPathType,
+        // For equipment, only preserve from inputs if request is NOT equipment
+        equipment: request.type === 'equipment'
+          ? updatedInputs?.equipment
+          : ((inputs?.equipment?.length ?? 0) > 0 ? inputs.equipment : updatedInputs?.equipment),
+        // [PHASE 17T] Explicit regeneration mode
         regenerationMode: 'fresh' as const,
         regenerationReason: 'adjustment_full_rebuild',
       }
+      
+      // ==========================================================================
+      // [PHASE 17U] TASK 5B - Adjustment material truth merge audit
+      // ==========================================================================
+      console.log('[phase17u-adjustment-material-truth-merge-audit]', {
+        triggerPath: 'handleAdjustmentRebuild',
+        requestType: request.type,
+        currentInputsTruth: {
+          primaryGoal: inputs?.primaryGoal ?? null,
+          secondaryGoal: inputs?.secondaryGoal ?? null,
+          scheduleMode: inputs?.scheduleMode ?? null,
+          trainingDaysPerWeek: inputs?.trainingDaysPerWeek ?? null,
+          sessionDurationMode: inputs?.sessionDurationMode ?? null,
+          sessionLength: inputs?.sessionLength ?? null,
+          selectedSkills: inputs?.selectedSkills ?? [],
+          selectedStyles: inputs?.selectedStyles ?? [],
+          trainingPathType: inputs?.trainingPathType ?? null,
+          equipment: inputs?.equipment ?? [],
+        },
+        preMergeAdjustmentInput: {
+          primaryGoal: updatedInputs?.primaryGoal ?? null,
+          secondaryGoal: updatedInputs?.secondaryGoal ?? null,
+          scheduleMode: updatedInputs?.scheduleMode ?? null,
+          trainingDaysPerWeek: updatedInputs?.trainingDaysPerWeek ?? null,
+          sessionDurationMode: updatedInputs?.sessionDurationMode ?? null,
+          sessionLength: updatedInputs?.sessionLength ?? null,
+          selectedSkills: updatedInputs?.selectedSkills ?? [],
+          selectedStyles: updatedInputs?.selectedStyles ?? [],
+          trainingPathType: updatedInputs?.trainingPathType ?? null,
+          equipment: updatedInputs?.equipment ?? [],
+        },
+        finalBuilderInput: {
+          primaryGoal: adjustmentBuilderInput?.primaryGoal ?? null,
+          secondaryGoal: adjustmentBuilderInput?.secondaryGoal ?? null,
+          scheduleMode: adjustmentBuilderInput?.scheduleMode ?? null,
+          trainingDaysPerWeek: adjustmentBuilderInput?.trainingDaysPerWeek ?? null,
+          sessionDurationMode: adjustmentBuilderInput?.sessionDurationMode ?? null,
+          sessionLength: adjustmentBuilderInput?.sessionLength ?? null,
+          selectedSkills: adjustmentBuilderInput?.selectedSkills ?? [],
+          selectedStyles: adjustmentBuilderInput?.selectedStyles ?? [],
+          trainingPathType: adjustmentBuilderInput?.trainingPathType ?? null,
+          equipment: adjustmentBuilderInput?.equipment ?? [],
+          regenerationMode: adjustmentBuilderInput?.regenerationMode ?? null,
+          regenerationReason: adjustmentBuilderInput?.regenerationReason ?? null,
+        },
+      })
+      
+      // ==========================================================================
+      // [PHASE 17U] TASK 6B - Adjustment prebuilder parity verdict
+      // ==========================================================================
+      console.log('[phase17u-adjustment-prebuilder-parity-verdict]', {
+        triggerPath: 'handleAdjustmentRebuild',
+        requestType: request.type,
+        explicitRequestedFieldAllowedToWin: request.type,
+        preservedPrimaryGoalFromInputs: adjustmentBuilderInput?.primaryGoal === (inputs?.primaryGoal ?? adjustmentBuilderInput?.primaryGoal),
+        preservedScheduleModeFromInputs: adjustmentBuilderInput?.scheduleMode === (inputs?.scheduleMode ?? adjustmentBuilderInput?.scheduleMode),
+        preservedSelectedSkillsFromInputs:
+          JSON.stringify(adjustmentBuilderInput?.selectedSkills ?? []) === JSON.stringify(inputs?.selectedSkills ?? adjustmentBuilderInput?.selectedSkills ?? []),
+        preservedTrainingPathTypeFromInputs:
+          adjustmentBuilderInput?.trainingPathType === (inputs?.trainingPathType ?? adjustmentBuilderInput?.trainingPathType),
+        verdict: 'final_adjustment_input_preserves_current_settings_truth_except_requested_field',
+      })
       
       // [PHASE 17T] Mode entry diagnostic for adjustment
       console.log('[phase17t-rebuild-generation-mode-entry-audit]', {

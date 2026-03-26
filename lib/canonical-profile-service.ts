@@ -2383,6 +2383,12 @@ export function buildCanonicalGenerationEntry(
     equipment: string[]
     regenerationMode: string
     regenerationReason: string
+    // [PHASE 17Z] TASK 4 - Expand overrides to support all material identity fields
+    // These were previously NOT overridable, causing root identity drift between onboarding and rebuild
+    selectedSkills: string[]
+    trainingPathType: string
+    goalCategories: string[]
+    selectedFlexibility: string[]
   }>
 ): CanonicalGenerationEntryResult {
   const fallbacksUsed: string[] = []
@@ -2404,6 +2410,52 @@ export function buildCanonicalGenerationEntry(
       },
     }
   }
+  
+  // ==========================================================================
+  // [PHASE 17Z] TASK 1 - Root material identity snapshot
+  // This captures the exact canonical truth BEFORE any override resolution
+  // ==========================================================================
+  console.log('[phase17z-canonical-root-material-identity-audit]', {
+    triggerSource,
+    canonicalProfileTruth: {
+      primaryGoal: profile.primaryGoal ?? null,
+      secondaryGoal: profile.secondaryGoal ?? null,
+      selectedSkills: profile.selectedSkills ?? [],
+      selectedSkillsCount: profile.selectedSkills?.length ?? 0,
+      trainingPathType: profile.trainingPathType ?? null,
+      goalCategories: profile.goalCategories ?? [],
+      selectedFlexibility: profile.selectedFlexibility ?? [],
+      scheduleMode: profile.scheduleMode ?? null,
+      trainingDaysPerWeek: profile.trainingDaysPerWeek ?? null,
+      sessionDurationMode: profile.sessionDurationMode ?? null,
+      sessionLengthMinutes: profile.sessionLengthMinutes ?? null,
+      equipmentAvailable: profile.equipmentAvailable ?? [],
+      onboardingComplete: profile.onboardingComplete ?? null,
+    },
+    incomingOverrides: {
+      primaryGoal: overrides?.primaryGoal ?? null,
+      secondaryGoal: overrides?.secondaryGoal ?? null,
+      experienceLevel: overrides?.experienceLevel ?? null,
+      trainingDaysPerWeek: overrides?.trainingDaysPerWeek ?? null,
+      sessionLength: overrides?.sessionLength ?? null,
+      scheduleMode: overrides?.scheduleMode ?? null,
+      sessionDurationMode: overrides?.sessionDurationMode ?? null,
+      equipment: overrides?.equipment ?? [],
+      regenerationMode: overrides?.regenerationMode ?? null,
+      regenerationReason: overrides?.regenerationReason ?? null,
+      // [PHASE 17Z] New override fields
+      selectedSkills: overrides?.selectedSkills ?? null,
+      trainingPathType: overrides?.trainingPathType ?? null,
+      goalCategories: overrides?.goalCategories ?? null,
+      selectedFlexibility: overrides?.selectedFlexibility ?? null,
+    },
+    importantRealityCheck: {
+      selectedSkillsOverrideSupported: true,  // [PHASE 17Z] Now supported
+      trainingPathTypeOverrideSupported: true,  // [PHASE 17Z] Now supported
+      goalCategoriesOverrideSupported: true,  // [PHASE 17Z] Now supported
+      selectedFlexibilityOverrideSupported: true,  // [PHASE 17Z] Now supported
+    },
+  })
   
   // [PHASE 17E] Generation entrypoint registry audit - track which path is calling
   {
@@ -2524,8 +2576,26 @@ export function buildCanonicalGenerationEntry(
     resolvedEquipment.push('pull_bar', 'dip_bars')
   }
   
-  // Selected skills resolution
-  const resolvedSelectedSkills = profile.selectedSkills || []
+  // [PHASE 17Z] TASK 4 - Selected skills resolution with override support
+  // Use "provided even if empty array" semantics - if override explicitly provides [], that wins
+  const resolvedSelectedSkills = overrides?.selectedSkills !== undefined 
+    ? overrides.selectedSkills 
+    : (profile.selectedSkills || [])
+  
+  // [PHASE 17Z] TASK 4 - trainingPathType resolution with override support
+  const resolvedTrainingPathType = overrides?.trainingPathType !== undefined
+    ? overrides.trainingPathType
+    : (profile.trainingPathType || 'balanced')
+  
+  // [PHASE 17Z] TASK 4 - goalCategories resolution with override support
+  const resolvedGoalCategories = overrides?.goalCategories !== undefined
+    ? overrides.goalCategories
+    : (profile.goalCategories || [])
+  
+  // [PHASE 17Z] TASK 4 - selectedFlexibility resolution with override support
+  const resolvedSelectedFlexibility = overrides?.selectedFlexibility !== undefined
+    ? overrides.selectedFlexibility
+    : (profile.selectedFlexibility || [])
   
   // Joint cautions resolution
   const resolvedJointCautions = profile.jointCautions || []
@@ -2613,15 +2683,92 @@ export function buildCanonicalGenerationEntry(
     selectedSkills: resolvedSelectedSkills,
     secondaryGoal: resolvedSecondaryGoal || undefined,
     jointCautions: resolvedJointCautions,
-    trainingPathType: profile.trainingPathType || 'balanced',
-    goalCategories: profile.goalCategories || [],
-    selectedFlexibility: profile.selectedFlexibility || [],
+    // [PHASE 17Z] Now uses resolved values that support overrides
+    trainingPathType: resolvedTrainingPathType,
+    goalCategories: resolvedGoalCategories,
+    selectedFlexibility: resolvedSelectedFlexibility,
     regenerationMode: overrides?.regenerationMode,
     regenerationReason: overrides?.regenerationReason,
     __entrySource: Object.keys(overrides || {}).length > 0 ? 'override_merge' : 'canonical_profile',
     __composedAt: new Date().toISOString(),
     __fallbacksUsed: fallbacksUsed,
   }
+  
+  // ==========================================================================
+  // [PHASE 17Z] TASK 2 - Final entry parity snapshot
+  // ==========================================================================
+  console.log('[phase17z-canonical-entry-final-material-identity-audit]', {
+    triggerSource,
+    finalEntryTruth: {
+      primaryGoal: entry.primaryGoal ?? null,
+      secondaryGoal: entry.secondaryGoal ?? null,
+      selectedSkills: entry.selectedSkills ?? [],
+      selectedSkillsCount: entry.selectedSkills?.length ?? 0,
+      trainingPathType: entry.trainingPathType ?? null,
+      goalCategories: entry.goalCategories ?? [],
+      selectedFlexibility: entry.selectedFlexibility ?? [],
+      scheduleMode: entry.scheduleMode ?? null,
+      trainingDaysPerWeek: entry.trainingDaysPerWeek ?? null,
+      sessionDurationMode: entry.sessionDurationMode ?? null,
+      sessionLength: entry.sessionLength ?? null,
+      equipment: entry.equipment ?? [],
+      regenerationMode: entry.regenerationMode ?? null,
+      regenerationReason: entry.regenerationReason ?? null,
+    },
+    fallbacksUsed,
+    entrySource: entry.__entrySource,
+  })
+  
+  // ==========================================================================
+  // [PHASE 17Z] TASK 3 - Root cause verdict for override limitations
+  // ==========================================================================
+  const rootFieldDriftFlags = {
+    selectedSkillsDrift:
+      JSON.stringify(entry.selectedSkills ?? []) !== JSON.stringify(profile.selectedSkills ?? []),
+    trainingPathTypeDrift:
+      (entry.trainingPathType ?? null) !== (profile.trainingPathType ?? null),
+    goalCategoriesDrift:
+      JSON.stringify(entry.goalCategories ?? []) !== JSON.stringify(profile.goalCategories ?? []),
+    selectedFlexibilityDrift:
+      JSON.stringify(entry.selectedFlexibility ?? []) !== JSON.stringify(profile.selectedFlexibility ?? []),
+  }
+  
+  console.log('[phase17z-canonical-entry-root-cause-verdict]', {
+    triggerSource,
+    rootFieldDriftFlags,
+    overrideLimitations: {
+      selectedSkillsOverrideSupported: true,  // [PHASE 17Z] Now supported
+      trainingPathTypeOverrideSupported: true,  // [PHASE 17Z] Now supported
+      goalCategoriesOverrideSupported: true,  // [PHASE 17Z] Now supported
+      selectedFlexibilityOverrideSupported: true,  // [PHASE 17Z] Now supported
+    },
+    verdict:
+      rootFieldDriftFlags.selectedSkillsDrift ||
+      rootFieldDriftFlags.trainingPathTypeDrift ||
+      rootFieldDriftFlags.goalCategoriesDrift ||
+      rootFieldDriftFlags.selectedFlexibilityDrift
+        ? 'OVERRIDE_APPLIED_ENTRY_DIFFERS_FROM_PROFILE'
+        : 'NO_ROOT_IDENTITY_DRIFT_VISIBLE_IN_CANONICAL_ENTRY_PATH',
+  })
+  
+  // ==========================================================================
+  // [PHASE 17Z] TASK 7 - Final safety verdict
+  // ==========================================================================
+  console.log('[phase17z-root-identity-parity-final-verdict]', {
+    triggerSource,
+    entryPrimaryGoal: entry.primaryGoal ?? null,
+    entrySecondaryGoal: entry.secondaryGoal ?? null,
+    entrySelectedSkills: entry.selectedSkills ?? [],
+    entryTrainingPathType: entry.trainingPathType ?? null,
+    entryGoalCategories: entry.goalCategories ?? [],
+    entrySelectedFlexibility: entry.selectedFlexibility ?? [],
+    entryScheduleMode: entry.scheduleMode ?? null,
+    entryTrainingDaysPerWeek: entry.trainingDaysPerWeek ?? null,
+    entrySessionDurationMode: entry.sessionDurationMode ?? null,
+    entrySessionLength: entry.sessionLength ?? null,
+    entryEquipment: entry.equipment ?? [],
+    verdict: 'CANONICAL_ENTRY_NOW_CARRIES_FULL_MATERIAL_IDENTITY_TRUTH',
+  })
   
   // STEP 7: Experience level contract audit
   console.log('[experience-level-contract-audit]', {

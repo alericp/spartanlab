@@ -12859,26 +12859,103 @@ export function getSavedAdaptivePrograms(): AdaptiveProgram[] {
 export function getLatestAdaptiveProgram(): AdaptiveProgram | null {
   if (!isBrowser()) return null
   
+  // [PHASE 17L] TASK 1 - Trace all stored programs
+  const allPrograms = getSavedAdaptivePrograms()
+  console.log('[phase17l-all-programs-in-storage]', {
+    count: allPrograms.length,
+    programs: allPrograms.map(p => ({
+      id: p.id,
+      createdAt: p.createdAt,
+      sessionCount: p.sessions?.length || 0,
+    })),
+  })
+  
   // [storage-quota-fix] Priority 1: Check canonical active key first
+  let selectedProgram: AdaptiveProgram | null = null
+  let selectionSource = 'none'
+  
   try {
     const canonical = localStorage.getItem(CANONICAL_ACTIVE_KEY)
     if (canonical) {
       const parsed = JSON.parse(canonical)
       if (parsed && parsed.id && parsed.sessions) {
-        return parsed
+        selectedProgram = parsed
+        selectionSource = 'canonical_active_key'
       }
     }
   } catch (err) {
     console.warn('[storage-quota-fix] Failed to read canonical active program:', err)
   }
   
-  // Priority 2: Fall back to history array
-  const programs = getSavedAdaptivePrograms()
-  if (programs.length === 0) return null
+  // Priority 2: Fall back to history array if canonical is missing
+  if (!selectedProgram && allPrograms.length > 0) {
+    selectedProgram = allPrograms.sort((a, b) =>
+      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    )[0]
+    selectionSource = 'history_array_sorted'
+  }
   
-  return programs.sort((a, b) => 
-    new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-  )[0]
+  // [PHASE 17L] TASK 2 - Identify selected program
+  if (selectedProgram) {
+    console.log('[phase17l-selected-program]', {
+      selectedId: selectedProgram.id,
+      selectedCreatedAt: selectedProgram.createdAt,
+      selectedSessionCount: selectedProgram.sessions?.length || 0,
+      selectionSource,
+    })
+    
+    // [PHASE 17L] TASK 6 - Final verdict log
+    // Check if selected is truly the latest by time
+    const allSorted = allPrograms.sort((a, b) =>
+      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    )
+    const latestByTime = allSorted[0]
+    const isLatestByTime = !latestByTime || selectedProgram.id === latestByTime.id
+    const isLatestBySessions = !latestByTime || (selectedProgram.sessions?.length || 0) >= (latestByTime.sessions?.length || 0)
+    
+    // Check if canonical key has older program than history
+    const canonicalIsStale = latestByTime && 
+      selectionSource === 'canonical_active_key' &&
+      new Date(selectedProgram.createdAt).getTime() < new Date(latestByTime.createdAt).getTime()
+    
+    console.log('[phase17l-canonical-selection-verdict]', {
+      totalPrograms: allPrograms.length,
+      selectedProgramId: selectedProgram.id,
+      selectedSessionCount: selectedProgram.sessions?.length || 0,
+      selectedCreatedAt: selectedProgram.createdAt,
+      latestInHistoryId: latestByTime?.id || 'none',
+      latestInHistoryCreatedAt: latestByTime?.createdAt || 'none',
+      latestInHistorySessionCount: latestByTime?.sessions?.length || 0,
+      selectionSource,
+      isLatestByTime,
+      isLatestBySessions,
+      canonicalIsStale,
+      verdict: canonicalIsStale ? 'WRONG_SELECTION_CANONICAL_IS_STALE' : isLatestByTime ? 'CORRECT_SELECTION' : 'WRONG_SELECTION',
+    })
+    
+    // [PHASE 17L] TASK 3 - FIX: If canonical is stale, return latest from history instead
+    if (canonicalIsStale && latestByTime) {
+      console.log('[phase17l-canonical-selection-fix]', {
+        action: 'OVERRIDING_STALE_CANONICAL',
+        staleCanonicalId: selectedProgram.id,
+        staleCanonicalSessionCount: selectedProgram.sessions?.length || 0,
+        correctProgramId: latestByTime.id,
+        correctSessionCount: latestByTime.sessions?.length || 0,
+      })
+      
+      // Also update the canonical key to the correct program
+      try {
+        localStorage.setItem(CANONICAL_ACTIVE_KEY, JSON.stringify(latestByTime))
+        console.log('[phase17l-canonical-selection-fix] Canonical key updated to latest program')
+      } catch (err) {
+        console.warn('[phase17l-canonical-selection-fix] Failed to update canonical key:', err)
+      }
+      
+      return latestByTime
+    }
+  }
+  
+  return selectedProgram
 }
 
 export function deleteAdaptiveProgram(id: string): boolean {

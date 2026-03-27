@@ -5589,6 +5589,27 @@ async function generateAdaptiveProgramImpl(
   try {
     const profileSelectedSkills = canonicalProfile.selectedSkills || []
     
+    // ==========================================================================
+    // [PHASE 24K] CRITICAL: selectedSkills trace at summary generation
+    // This is the key audit point for identity leak diagnosis
+    // ==========================================================================
+    console.log('[phase24k-builder-selectedSkills-at-summary-generation]', {
+      canonicalProfileSelectedSkills: canonicalProfile.selectedSkills || [],
+      canonicalProfileSelectedSkillsCount: (canonicalProfile.selectedSkills || []).length,
+      profileSelectedSkillsLocal: profileSelectedSkills,
+      profileSelectedSkillsLocalCount: profileSelectedSkills.length,
+      containsBackLever: profileSelectedSkills.includes('back_lever'),
+      containsDragonFlag: profileSelectedSkills.includes('dragon_flag'),
+      containsPlanche: profileSelectedSkills.includes('planche'),
+      containsFrontLever: profileSelectedSkills.includes('front_lever'),
+      canonicalProfileSource: 'canonicalProfile resolved at builder entry',
+      primaryGoal,
+      secondaryGoal,
+      verdict: (profileSelectedSkills.includes('back_lever') || profileSelectedSkills.includes('dragon_flag'))
+        ? 'STALE_SKILLS_IN_PROFILE_SELECTED_SKILLS'
+        : 'PROFILE_SELECTED_SKILLS_CLEAN',
+    })
+    
     // Use canonical exercise names from earlier safe collection (TASK 2)
     // This eliminates duplicate declarations and scope errors
     const allExerciseNames = canonicalExerciseNames

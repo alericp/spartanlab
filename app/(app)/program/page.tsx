@@ -353,19 +353,10 @@ export default function ProgramPage() {
   const [mounted, setMounted] = useState(false)
   
   // ==========================================================================
-  // [PHASE 20B] TASK 1 - Deterministic two-stage mount/open flow
-  // 
-  // Architecture:
-  // 1. renderAdjustmentModal controls WHETHER the modal is mounted in DOM
-  // 2. showAdjustmentModal controls the Dialog's controlled open state
-  // 3. modifyModalOpenedAtRef tracks when we intentionally opened for close-guard
-  // 
-  // Flow: click -> mount first -> then open -> close -> timeout -> unmount
-  // This prevents Radix Dialog issues from same-cycle mount/open/close races
+  // [PHASE 21A] Simple controlled dialog pattern for Modify modal
+  // showAdjustmentModal is the ONLY source of truth for modal open state
+  // No two-stage mount, no RAF delay, no close guards - just like Restart works
   // ==========================================================================
-  const [renderAdjustmentModal, setRenderAdjustmentModal] = useState(false)
-  const modifyModalOpenedAtRef = useRef<number>(0)
-  const closeGuardBlockedOnceRef = useRef<boolean>(false)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [loadStage, setLoadStage] = useState<string>('initializing') // TASK 3: Track failure stage
   
@@ -1737,82 +1728,18 @@ export default function ProgramPage() {
     }
   }, [program, programModules.getProgramState, programModules.normalizeProgramForDisplay])
   
-  // ==========================================================================
-  // [PHASE 20B] TASK 1 - Two-stage mount/open commit
-  // When renderAdjustmentModal becomes true, we schedule the actual open
-  // in a requestAnimationFrame to ensure DOM mount is committed first
-  // ==========================================================================
-  useEffect(() => {
-    if (renderAdjustmentModal && !showAdjustmentModal && program) {
-      // Use requestAnimationFrame to ensure mount is committed before opening
-      const rafId = requestAnimationFrame(() => {
-        console.log('[phase20b-modify-open-committed]', {
-          renderAdjustmentModal: true,
-          showAdjustmentModalBefore: false,
-          action: 'committing_open_after_mount',
-          timestamp: Date.now(),
-        })
-        
-        modifyModalOpenedAtRef.current = Date.now()
-        closeGuardBlockedOnceRef.current = false // Reset the one-time guard
-        setShowAdjustmentModal(true)
-      })
-      
-      return () => cancelAnimationFrame(rafId)
-    }
-  }, [renderAdjustmentModal, showAdjustmentModal, program])
+
   
   // ==========================================================================
-  // [PHASE 19A] TASK 3 - Page state render audit for modal visibility
-  // This tracks when the modal state changes to help debug entry path issues
+  // [PHASE 21A] Simple modal prop audit - no complex state machine
   // ==========================================================================
   useEffect(() => {
     if (showAdjustmentModal) {
-      console.log('[phase19a-modify-page-state-render-audit]', {
-        showAdjustmentModal: true,
+      console.log('[phase21a-program-adjustment-modal-prop]', {
+        open: showAdjustmentModal,
         showBuilder,
         programExists: !!program,
         programId: program?.id ?? null,
-        programSessionCount: program?.sessions?.length ?? 0,
-        pageMode: showBuilder ? 'builder_mode' : 'display_mode_with_modal_open',
-        timestamp: Date.now(),
-      })
-      
-      // [PHASE 20A] TASK 1D - Post-render page state audit
-      console.log('[phase20a-page-modal-state-render]', {
-        showAdjustmentModal: true,
-        showBuilder,
-        programStillExists: !!program,
-        programId: program?.id ?? null,
-        pageInDisplayMode: !showBuilder,
-        modifyOpenTimestamp: modifyModalOpenedAtRef.current,
-        timeSinceOpen: Date.now() - modifyModalOpenedAtRef.current,
-        verdict: 'MODAL_OPEN_STATE_CONFIRMED_IN_RENDER',
-      })
-      
-      // [PHASE 19A] TASK 7 - Final root cause classification verdict
-      console.log('[phase19a-modify-root-cause-classification-verdict]', {
-        buttonHandlerFired: true,
-        modalOpenStateSet: true,
-        modalShouldRender: true,
-        entryGateFixed: 'program_existence_only_not_status',
-        oldGate: 'status && program',
-        newGate: 'program',
-        verdict: 'REAL_ROOT_CAUSE_FOUND__MODIFY_BUTTON_WAS_WRONGLY_GATED_BY_GETPROGRAMSTATUS_AND_NOW_OPENS_ADJUSTMENT_MODAL_FROM_ACTIVE_PROGRAM_TRUTH',
-      })
-      
-      // ==========================================================================
-      // [PHASE 20A] TASK 7 - Cross-flow safety verdict
-      // Verify other flows are not broken by this fix
-      // ==========================================================================
-      console.log('[phase20a-cross-flow-safety-verdict]', {
-        restartProgramModalStillWorks: 'handleRestart_exists_and_untouched',
-        rebuildFromCurrentSettingsStillWorks: 'handleRegenerate_exists_and_untouched',
-        startNewProgramStillWorks: 'handleConfirmNewProgram_exists_and_untouched',
-        programBuilderStillOpens: 'showBuilder_state_untouched_when_no_program',
-        programPageLoadsNormally: 'program_load_logic_untouched',
-        modifyButtonFixIsolated: true,
-        noRegressionExpected: true,
       })
     }
   }, [showAdjustmentModal, showBuilder, program])
@@ -7451,202 +7378,55 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
   // Legacy delete handler for backwards compatibility
   const handleDelete = handleRestart
 
-  const handleNewProgram = useCallback((event?: React.MouseEvent<HTMLButtonElement> | React.PointerEvent<HTMLButtonElement>) => {
+  const handleNewProgram = useCallback((event?: React.MouseEvent<HTMLButtonElement>) => {
     // ==========================================================================
-    // [PHASE 20B] TASK 2 - Event-safe modal entry
-    // Prevent event bubbling that could cause same-tap close issues
+    // [PHASE 21A] Simple, deterministic modal entry - like Restart pattern
+    // Only use `program` existence as the gate. No two-stage, no RAF, no guards.
     // ==========================================================================
     if (event) {
       event.preventDefault()
-      event.stopPropagation()
     }
-    // ==========================================================================
-    // [TASK 1] PROGRAM ACTION TRUTH AUDIT
-    // This handler opens the adjustment modal or builder - it does NOT regenerate
-    // ==========================================================================
-    console.log('[program-action-truth-audit]', {
-      visibleLabel: 'Modify Program',
-      handlerCalled: 'handleNewProgram',
-      pathCategory: 'open_adjustment_modal',
-      immediatelyGenerates: false,
-      onlyOpensFlow: true,
-      preservesCurrentPlanUntilConfirmed: true,
-    })
-    
-    // ==========================================================================
-    // [PHASE 18I] TASK 1 - Modify button click path audit
-    // This proves the exact handler path for "Modify Program" button
-    // ==========================================================================
-    const canonicalForAudit = getCanonicalProfile()
-    console.log('[phase18i-modify-button-click-path-audit]', {
-      buttonLabel: 'Modify Program',
-      handler: 'handleNewProgram',
-      nextStep: 'opens_ProgramAdjustmentModal',
-      modalCallbacks: {
-        onContinue: 'closes_modal',
-        onStartNew: 'handleConfirmNewProgram_archives_and_goes_to_builder',
-        onRebuildRequired: 'handleAdjustmentRebuild_calls_server_route',
-      },
-      serverRouteUsedByRebuild: '/api/program/rebuild-adjustment',
-      comparedToRestartFlow: {
-        restartButtonOpens: 'Restart_confirmation_modal_in_AdaptiveProgramDisplay',
-        restartRebuildOption: 'onRegenerate_calls_handleRegenerate',
-        restartServerRoute: '/api/program/regenerate',
-      },
-      flowParity: {
-        bothUseServerRoutes: true,
-        differentRoutes: 'rebuild-adjustment_vs_regenerate',
-        architectureSame: 'both_resolve_canonical_on_server',
-      },
-    })
-    
-    // [PHASE 18I] TASK 2 - Modify prefill source audit
-    console.log('[phase18i-modify-prefill-source-audit]', {
-      prefillSource: 'getCanonicalProfile_called_in_modal_onOpenChange',
-      canonicalProfileAtButtonClick: {
-        primaryGoal: canonicalForAudit?.primaryGoal ?? null,
-        secondaryGoal: canonicalForAudit?.secondaryGoal ?? null,
-        selectedSkills: canonicalForAudit?.selectedSkills ?? [],
-        trainingPathType: canonicalForAudit?.trainingPathType ?? null,
-        goalCategories: canonicalForAudit?.goalCategories ?? [],
-        selectedFlexibility: canonicalForAudit?.selectedFlexibility ?? [],
-        experienceLevel: canonicalForAudit?.experienceLevel ?? null,
-        scheduleMode: canonicalForAudit?.scheduleMode ?? null,
-        trainingDaysPerWeek: canonicalForAudit?.trainingDaysPerWeek ?? null,
-        sessionLengthMinutes: canonicalForAudit?.sessionLengthMinutes ?? null,
-        equipmentAvailable: canonicalForAudit?.equipmentAvailable ?? [],
-      },
-      materialIdentityFields: {
-        hasSelectedSkills: (canonicalForAudit?.selectedSkills?.length ?? 0) > 0,
-        hasTrainingPathType: !!canonicalForAudit?.trainingPathType,
-        hasGoalCategories: (canonicalForAudit?.goalCategories?.length ?? 0) > 0,
-      },
-    })
-    
-    console.log('[phase18i-modify-prefill-material-parity-verdict]', {
-      verdict: (canonicalForAudit?.selectedSkills?.length ?? 0) > 0 && !!canonicalForAudit?.trainingPathType
-        ? 'MODIFY_PREFILL_HAS_DEEP_PLANNER_IDENTITY'
-        : 'MODIFY_PREFILL_MISSING_DEEP_PLANNER_FIELDS',
-    })
-    
-    // ==========================================================================
-    // [PHASE 19A] TASK 1 - Modify button click audit and entry gate fix
-    // 
-    // ROOT CAUSE FIX: The old code required BOTH `status` AND `program`:
-    //   const status = programModules.getProgramStatus?.()
-    //   if (status && program) { ... }
-    // 
-    // This was WRONG because getProgramStatus() is a secondary/derived helper
-    // that can return null/undefined even when a valid program exists.
-    // 
-    // CORRECT BEHAVIOR: If `program` exists, open adjustment modal. Period.
-    // The status helper is useful for display but should NOT gate entry.
-    // ==========================================================================
-    
-    // For audit purposes only - NOT used for entry gate anymore
-    const status = programModules.getProgramStatus?.()
     
     const showBuilderBefore = showBuilder
     const showAdjustmentModalBefore = showAdjustmentModal
     
-    // ==========================================================================
-    // [PHASE 20A] TASK 1A - Modify button click fired audit
-    // ==========================================================================
-    console.log('[phase20a-modify-click-fired]', {
+    // [PHASE 21A] Diagnostic 1: Click entry
+    console.log('[phase21a-modify-click-entry]', {
       programExists: !!program,
       programId: program?.id ?? null,
       showBuilderBefore,
       showAdjustmentModalBefore,
-      buttonDisabled: false,
-      timestamp: Date.now(),
     })
     
-    console.log('[phase19a-modify-button-click-audit]', {
-      handlerEntered: true,
-      timestamp: Date.now(),
-    })
-    
-    console.log('[phase19a-modify-handler-entry-audit]', {
-      programExists: !!program,
-      programId: program?.id ?? null,
-      programSessionCount: program?.sessions?.length ?? 0,
-      showBuilderBefore,
-      showAdjustmentModalBefore,
-      getProgramStatusExists: !!programModules.getProgramStatus,
-      getProgramStatusResult: status ? {
-        isStarted: status.isStarted,
-        isCompleted: status.isCompleted,
-        currentWeek: status.currentWeek,
-        totalWeeks: status.totalWeeks,
-      } : null,
-    })
-    
-    // [PHASE 19A] FIXED ENTRY GATE: Only check `program` existence
-    // OLD: if (status && program) { ... } <-- WRONG: status is secondary/derived
-    // NEW: if (program) { ... } <-- CORRECT: program existence is the true gate
     if (program) {
-      // ==========================================================================
-      // [PHASE 20A] TASK 1B - Modify handler branch chosen audit
-      // ==========================================================================
-      console.log('[phase20a-modify-branch-verdict]', {
-        branchChosen: 'open_adjustment_modal',
-        activeProgramBranchTaken: true,
-        builderBranchTaken: false,
-        reason: 'active_program_exists',
+      // [PHASE 21A] Diagnostic 2: Branch verdict
+      console.log('[phase21a-modify-branch-verdict]', {
+        branch: 'open_adjustment_modal',
         programId: program.id,
       })
       
-      console.log('[phase19a-modify-branch-selection-audit]', {
-        branchChosen: 'open_adjustment_modal',
-        reason: 'active_program_exists',
-        programId: program.id,
-        programSessionCount: program.sessions?.length ?? 0,
-        oldConditionWouldHaveFailed: !status,
-        newConditionSucceeds: true,
-      })
-      
-      // ==========================================================================
-      // [PHASE 20B] TASK 1 - Two-stage mount/open request
-      // First mount the modal, then in a rAF callback, open it
-      // ==========================================================================
-      console.log('[phase20b-modify-mount-request]', {
-        programExists: true,
-        programId: program.id,
-        renderAdjustmentModalBefore: renderAdjustmentModal,
-        showAdjustmentModalBefore,
-        action: 'setting_renderAdjustmentModal_true',
+      // [PHASE 21A] Diagnostic 3: Direct state set - no staging
+      console.log('[phase21a-modify-open-state-set]', {
+        action: 'setShowAdjustmentModal(true)',
         timestamp: Date.now(),
       })
       
-      // Stage 1: Mount the modal component first
-      setRenderAdjustmentModal(true)
-      // Stage 2 happens in the useEffect that watches renderAdjustmentModal
-      
+      setShowAdjustmentModal(true)
       return
     }
     
     // No active program - go to builder for first-time creation
-    console.log('[phase20a-modify-branch-verdict]', {
-      branchChosen: 'open_builder_directly',
-      activeProgramBranchTaken: false,
-      builderBranchTaken: true,
+    console.log('[phase21a-modify-branch-verdict]', {
+      branch: 'open_builder_directly',
       reason: 'no_active_program',
-    })
-    
-    console.log('[phase19a-modify-branch-selection-audit]', {
-      branchChosen: 'open_builder_directly',
-      reason: 'no_active_program',
-      programExists: false,
     })
     
     setShowBuilder(true)
-  }, [program, showBuilder, showAdjustmentModal, renderAdjustmentModal])
+  }, [program, showBuilder, showAdjustmentModal])
 
   const handleConfirmNewProgram = useCallback(() => {
     programModules.recordProgramEnd?.('new_program')
-    // Close then unmount after timeout
     setShowAdjustmentModal(false)
-    setTimeout(() => setRenderAdjustmentModal(false), 150)
     setShowBuilder(true)
   }, [programModules])
 
@@ -7718,14 +7498,10 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
           </div>
           
           {/* [TASK 2] Clear action semantics - Opens adjustment modal to review/edit before rebuild */}
-          {/* [PHASE 20B] TASK 3 - Hardened button with onPointerDown to prevent same-tap close */}
+          {/* [PHASE 21A] Simple button - just onClick, no pointer interception needed */}
           {program && !showBuilder && (
             <Button
               onClick={handleNewProgram}
-              onPointerDown={(e) => {
-                // Stop propagation before click to prevent parent/touch-close interference
-                e.stopPropagation()
-              }}
               variant="outline"
               className="border-[#3A3A3A] hover:bg-[#2A2A2A]"
             >
@@ -8051,67 +7827,11 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
         {/* Program Adjustment Modal */}
         {/* [canonical-rebuild] TASK B: Wire rebuild callback for structural changes */}
         {/* [PHASE 5 TASK 3] Prefill from CANONICAL profile, not stale inputs state */}
-        {/* [PHASE 20B] TASK 4 - Conditional mount: only render when renderAdjustmentModal is true */}
-        {renderAdjustmentModal && (
-          <ProgramAdjustmentModal
-            open={showAdjustmentModal}
-            onOpenChange={(open) => {
-              // ==========================================================================
-              // [PHASE 20B] TASK 5 - Strict close/open rules with intentional close handling
-              // ==========================================================================
-              const timeSinceOpen = Date.now() - modifyModalOpenedAtRef.current
-              const isImmediateClose = showAdjustmentModal === true && open === false && timeSinceOpen < 350
-              const alreadyBlockedOnce = closeGuardBlockedOnceRef.current
-              
-              if (open) {
-                // [phase5-modify-program-prefill-truth-audit] Log prefill source
-                const canonicalForPrefill = getCanonicalProfile()
-                console.log('[phase5-modify-program-prefill-truth-audit]', {
-                  prefillSource: 'canonical_profile',
-                  canonicalSessionLength: canonicalForPrefill.sessionLengthMinutes,
-                  canonicalTrainingDays: canonicalForPrefill.trainingDaysPerWeek,
-                  canonicalEquipment: canonicalForPrefill.equipmentAvailable,
-                  canonicalScheduleMode: canonicalForPrefill.scheduleMode,
-                  canonicalSessionDurationMode: canonicalForPrefill.sessionDurationMode,
-                  prefillMatchesLatestSaved: true,
-                  noFieldFromActiveProgram: true,
-                })
-                setShowAdjustmentModal(true)
-                return
-              }
-              
-              // Handle close request
-              // ==========================================================================
-              // [PHASE 20B] TASK 5 - Close guard with one-time block
-              // ==========================================================================
-              if (isImmediateClose && !alreadyBlockedOnce) {
-                console.log('[phase20b-page-close-guard-verdict]', {
-                  action: 'blocking_suspicious_immediate_close_once',
-                  timeSinceOpenMs: timeSinceOpen,
-                  threshold: 350,
-                  alreadyBlockedOnce: false,
-                  verdict: 'BLOCKED_FIRST_IMMEDIATE_CLOSE',
-                })
-                closeGuardBlockedOnceRef.current = true
-                return // Ignore this suspicious immediate close ONCE
-              }
-              
-              // Legitimate close - accept it
-              console.log('[phase20b-page-intentional-close]', {
-                timeSinceOpenMs: timeSinceOpen,
-                wasImmediate: isImmediateClose,
-                alreadyBlockedOnce,
-                action: 'accepting_close_and_scheduling_unmount',
-              })
-              
-              setShowAdjustmentModal(false)
-              // Unmount after close animation completes
-              setTimeout(() => setRenderAdjustmentModal(false), 150)
-            }}
-          onContinue={() => {
-            setShowAdjustmentModal(false)
-            setTimeout(() => setRenderAdjustmentModal(false), 150)
-          }}
+        {/* [PHASE 21A] Simple controlled dialog - always mounted, open controlled by showAdjustmentModal */}
+        <ProgramAdjustmentModal
+          open={showAdjustmentModal}
+          onOpenChange={setShowAdjustmentModal}
+          onContinue={() => setShowAdjustmentModal(false)}
           onStartNew={handleConfirmNewProgram}
           onRebuildRequired={handleAdjustmentRebuild}
           currentSessionMinutes={(() => {
@@ -8183,8 +7903,7 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
             const mode = canonical.scheduleMode || 'adaptive'
             return mode === 'static' ? 'static' : 'flexible'
           })()}
-          />
-        )}
+        />
       </div>
     </div>
   )

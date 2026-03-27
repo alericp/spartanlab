@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import {
@@ -153,105 +153,19 @@ export function ProgramAdjustmentModal({
   }, [currentSessionMinutes, currentTrainingDays])
   
   // ==========================================================================
-  // [PHASE 20B] TASK 6 - Track open prop changes and guard against first false close
-  // ==========================================================================
-  const prevOpenRef = useRef(open)
-  const openedAtRef = useRef<number>(0)
-  const outsideGuardBlockedOnceRef = useRef<boolean>(false)
-  
-  useEffect(() => {
-    const prevOpen = prevOpenRef.current
-    
-    // [PHASE 20B] Every time prop `open` changes
-    console.log('[phase20b-modal-open-prop-change]', {
-      previousOpen: prevOpen,
-      currentOpen: open,
-      changedFrom: prevOpen ? 'open' : 'closed',
-      changedTo: open ? 'open' : 'closed',
-      timestamp: Date.now(),
-    })
-    
-    if (open && !prevOpen) {
-      // Just opened - record timestamp and reset guard
-      openedAtRef.current = Date.now()
-      outsideGuardBlockedOnceRef.current = false
-    }
-    
-    prevOpenRef.current = open
-  }, [open])
-  
-  // [PHASE 20B] TASK 6 - Outside interaction guard handlers
-  const handlePointerDownOutside = (e: Event) => {
-    const timeSinceOpen = Date.now() - openedAtRef.current
-    const isTooSoon = timeSinceOpen < 350
-    const alreadyBlocked = outsideGuardBlockedOnceRef.current
-    
-    if (isTooSoon && !alreadyBlocked) {
-      console.log('[phase20b-modal-outside-interaction-guard]', {
-        event: 'onPointerDownOutside',
-        timeSinceOpenMs: timeSinceOpen,
-        threshold: 350,
-        action: 'blocking_first_outside_interaction',
-        verdict: 'BLOCKED_IMMEDIATE_OUTSIDE_CLICK',
-      })
-      outsideGuardBlockedOnceRef.current = true
-      e.preventDefault()
-      return
-    }
-  }
-  
-  const handleInteractOutside = (e: Event) => {
-    const timeSinceOpen = Date.now() - openedAtRef.current
-    const isTooSoon = timeSinceOpen < 350
-    const alreadyBlocked = outsideGuardBlockedOnceRef.current
-    
-    if (isTooSoon && !alreadyBlocked) {
-      console.log('[phase20b-modal-outside-interaction-guard]', {
-        event: 'onInteractOutside',
-        timeSinceOpenMs: timeSinceOpen,
-        threshold: 350,
-        action: 'blocking_first_outside_interaction',
-        verdict: 'BLOCKED_IMMEDIATE_OUTSIDE_INTERACTION',
-      })
-      outsideGuardBlockedOnceRef.current = true
-      e.preventDefault()
-      return
-    }
-  }
-  
-  // ==========================================================================
-  // [PHASE 19A] TASK 4 - Modal prop audit
-  // This tracks whether the modal receives the correct `open` prop
+  // [PHASE 21A] Simple controlled dialog - no timing guards, no refs
+  // Just standard Radix Dialog behavior like Restart modal uses
   // ==========================================================================
   useEffect(() => {
-    console.log('[phase19a-adjustment-modal-prop-audit]', {
-      open,
-      view,
-      selectedCategory,
-      isRebuilding,
-      rebuildError,
-      currentTrainingDays,
-      currentSessionMinutes,
-      currentScheduleMode,
-      timestamp: Date.now(),
-    })
-    
     if (open) {
-      // ==========================================================================
-      // [PHASE 20B] TASK 8 - Modal visible frame verdict
-      // This fires when open=true and modal content is actually rendering
-      // ==========================================================================
-      console.log('[phase20b-modal-visible-frame-verdict]', {
-        open: true,
-        currentView: view,
+      console.log('[phase21a-adjustment-modal-render]', {
+        open,
+        view,
         selectedCategory,
         isRebuilding,
-        openedAtTimestamp: openedAtRef.current,
-        timeSinceOpen: Date.now() - openedAtRef.current,
-        verdict: 'MODAL_CONTENT_VISIBLY_RENDERING',
       })
     }
-  }, [open, view, selectedCategory, isRebuilding, rebuildError, currentTrainingDays, currentSessionMinutes, currentScheduleMode, trainingDays, sessionMinutes])
+  }, [open, view, selectedCategory, isRebuilding])
   
   // ==========================================================================
   // [PHASE 16W] TRUTHFUL SCHEDULE CAPABILITY - No hardcoded Beta labels
@@ -984,13 +898,15 @@ export function ProgramAdjustmentModal({
   )
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      {/* [PHASE 20B] TASK 6 - Added outside interaction guards and high z-index for mobile visibility */}
-      <DialogContent 
-        className="bg-[#1A1F26] border-[#2B313A] max-w-md z-[100]"
-        onPointerDownOutside={handlePointerDownOutside}
-        onInteractOutside={handleInteractOutside}
-      >
+    <Dialog open={open} onOpenChange={(nextOpen) => {
+      console.log('[phase21a-adjustment-modal-open-change]', {
+        nextOpen,
+        currentView: view,
+      })
+      onOpenChange(nextOpen)
+    }}>
+      {/* [PHASE 21A] Simple controlled dialog - standard Radix behavior */}
+      <DialogContent className="bg-[#1A1F26] border-[#2B313A] max-w-md z-[100]">
         <DialogHeader>
           <div className="flex items-center gap-2">
             {(view !== 'intercept') && (

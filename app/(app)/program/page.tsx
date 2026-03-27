@@ -6669,9 +6669,17 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
     })
     
     // Build canonical entry with overrides for the requested changes
+    // [PHASE 24O] CRITICAL FIX: Explicit numeric day-count override must also flip scheduleMode to static
     const overrides: Record<string, unknown> = {}
     if (request.type === 'training_days' && request.newTrainingDays) {
       overrides.trainingDaysPerWeek = request.newTrainingDays
+      // [PHASE 24O] Numeric day selection implies static schedule mode
+      overrides.scheduleMode = 'static'
+      console.log('[phase24o-adjustment-static-mode-fix]', {
+        requestedDays: request.newTrainingDays,
+        forcedScheduleMode: 'static',
+        verdict: 'EXPLICIT_NUMERIC_DAY_COUNT_FLIPS_TO_STATIC',
+      })
     }
     if (request.type === 'session_time' && request.newSessionMinutes) {
       overrides.sessionLength = request.newSessionMinutes

@@ -2700,8 +2700,30 @@ async function generateAdaptiveProgramImpl(
       'ROOT_CAUSE_FIXED_BUILDER_NO_LONGER_USES_STALE_LEGACY_IDENTITY' :
       'ROOT_CAUSE_FIXED_BUILDER_NO_LONGER_USES_STALE_LEGACY_IDENTITY',
   })
-  // [PHASE 15C] PRIORITY: Use canonical profile's scheduleMode first, then inputs, then fallback normalization
-  const inputScheduleMode = canonicalProfile.scheduleMode || inputs.scheduleMode || normalizeScheduleMode(trainingDaysPerWeek)
+  // ==========================================================================
+  // [PHASE 24O] CRITICAL FIX: Fresh inputs.scheduleMode must take precedence over stale canonical
+  // If inputs explicitly provide static mode with numeric days, that is the user's current intent
+  // Do NOT let old canonical flexible mode override explicit current generation inputs
+  // ==========================================================================
+  const hasExplicitStaticInputs = inputs.scheduleMode === 'static' || 
+    (typeof inputs.trainingDaysPerWeek === 'number' && inputs.trainingDaysPerWeek >= 2 && inputs.trainingDaysPerWeek <= 7)
+  
+  // [PHASE 24O] Inputs-first precedence when inputs have explicit static intent
+  const inputScheduleMode = hasExplicitStaticInputs && inputs.scheduleMode
+    ? inputs.scheduleMode  // Fresh explicit input takes precedence
+    : (canonicalProfile.scheduleMode || inputs.scheduleMode || normalizeScheduleMode(trainingDaysPerWeek))
+  
+  console.log('[phase24o-schedule-mode-precedence-fix]', {
+    canonicalProfileScheduleMode: canonicalProfile.scheduleMode,
+    inputsScheduleMode: inputs.scheduleMode,
+    inputsTrainingDaysPerWeek: inputs.trainingDaysPerWeek,
+    hasExplicitStaticInputs,
+    resolvedInputScheduleMode: inputScheduleMode,
+    verdict: hasExplicitStaticInputs && canonicalProfile.scheduleMode === 'flexible' && inputs.scheduleMode === 'static'
+      ? 'INPUTS_STATIC_OVERRIDE_CANONICAL_FLEXIBLE'
+      : 'STANDARD_PRECEDENCE',
+  })
+  
   console.log('[schedule-mode] Detected mode:', inputScheduleMode)
   
   // ==========================================================================

@@ -2065,15 +2065,49 @@ export function composeCanonicalPlannerInput(
     return fallbackValue
   }
   
+  // ==========================================================================
+  // [PHASE 24O] CRITICAL FIX: Explicit numeric day-count override must flip to static mode
+  // If builder explicitly provides a numeric trainingDaysPerWeek, that is a static schedule override
+  // Do NOT preserve flexible mode when user explicitly selects a numeric day count
+  // ==========================================================================
+  const hasExplicitNumericDayOverride = typeof builderOverrides?.trainingDaysPerWeek === 'number'
+  const explicitScheduleModeOverride = hasExplicitNumericDayOverride && !builderOverrides?.scheduleMode
+    ? 'static' as const  // [PHASE 24O] Numeric day selection implies static mode
+    : builderOverrides?.scheduleMode
+  
+  // [PHASE 24O] Determine effective scheduleMode - explicit overrides take precedence
+  const effectiveScheduleMode = resolve(
+    'scheduleMode', 
+    profile.scheduleMode, 
+    explicitScheduleModeOverride, 
+    'static'
+  )
+  
+  // [PHASE 24O] trainingDaysPerWeek resolution - only use 'flexible' if scheduleMode is truly flexible AFTER override resolution
+  const effectiveTrainingDaysPerWeek = effectiveScheduleMode === 'flexible' && !hasExplicitNumericDayOverride
+    ? 'flexible' as const
+    : resolve('trainingDaysPerWeek', profile.trainingDaysPerWeek, builderOverrides?.trainingDaysPerWeek, 4)
+  
+  console.log('[phase24o-schedule-override-resolution]', {
+    profileScheduleMode: profile.scheduleMode,
+    builderScheduleModeOverride: builderOverrides?.scheduleMode,
+    builderTrainingDaysOverride: builderOverrides?.trainingDaysPerWeek,
+    hasExplicitNumericDayOverride,
+    explicitScheduleModeOverride,
+    effectiveScheduleMode,
+    effectiveTrainingDaysPerWeek,
+    verdict: hasExplicitNumericDayOverride && profile.scheduleMode === 'flexible'
+      ? 'EXPLICIT_NUMERIC_OVERRIDE_FLIPPED_TO_STATIC'
+      : 'STANDARD_RESOLUTION',
+  })
+  
   const result: ComposedPlannerInput = {
     primaryGoal: resolve('primaryGoal', profile.primaryGoal, builderOverrides?.primaryGoal, 'planche'),
     secondaryGoal: resolve('secondaryGoal', profile.secondaryGoal, builderOverrides?.secondaryGoal, null),
     experienceLevel: resolve('experienceLevel', profile.experienceLevel, builderOverrides?.experienceLevel, 'intermediate'),
-    scheduleMode: resolve('scheduleMode', profile.scheduleMode, builderOverrides?.scheduleMode, 'static'),
+    scheduleMode: effectiveScheduleMode,
     sessionDurationMode: resolve('sessionDurationMode', profile.sessionDurationMode, builderOverrides?.sessionDurationMode, 'static'),
-    trainingDaysPerWeek: profile.scheduleMode === 'flexible' 
-      ? 'flexible' 
-      : resolve('trainingDaysPerWeek', profile.trainingDaysPerWeek, builderOverrides?.trainingDaysPerWeek, 4),
+    trainingDaysPerWeek: effectiveTrainingDaysPerWeek,
     sessionLengthMinutes: resolve('sessionLengthMinutes', profile.sessionLengthMinutes, builderOverrides?.sessionLength, 60),
     selectedSkills: profile.selectedSkills || [],
     equipmentAvailable: builderOverrides?.equipment || profile.equipmentAvailable || [],

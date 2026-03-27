@@ -8148,12 +8148,16 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
 
   const handleConfirmNewProgram = useCallback(async () => {
     // ==========================================================================
-    // [PHASE 23B] ROOT-CAUSE FIX: Modify entry must hydrate from VISIBLE ACTIVE PROGRAM
-    // Priority: visible program truth > current inputs > canonical > defaults
-    // This stops stale canonical/default truth from overriding the visible program
+    // [PHASE 24E] ROOT-CAUSE FIX: Modify entry must use FRESHEST PROGRAM TRUTH
+    // Priority: freshest program (canonical saved OR visible) > canonical profile > inputs > defaults
+    // This stops stale in-memory program from winning when canonical saved is fresher
     // ==========================================================================
     
     const canonical = getCanonicalProfile()
+    
+    // [PHASE 24E] TASK 1 - Get canonical saved program for freshness comparison
+    const canonicalSavedState = programModules.getProgramState?.()
+    const canonicalSavedProgram = canonicalSavedState?.adaptiveProgram
     
     // Extract visible program snapshot for comparison
     const visibleProgramSnapshot = program?.profileSnapshot as {
@@ -8171,7 +8175,136 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
       selectedFlexibility?: string[]
     } | undefined
     
-    // [PHASE 23B] TASK D - Audit all candidate truth sources
+    // ==========================================================================
+    // [PHASE 24E] TASK 1 - TRACE ALL 4 SOURCE CANDIDATES SIDE-BY-SIDE
+    // ==========================================================================
+    console.log('[phase24e-modify-source-candidates-freshness-audit]', {
+      inMemoryProgram: program ? {
+        id: program.id,
+        createdAt: program.createdAt,
+        sessionsLength: program.sessions?.length ?? 0,
+        primaryGoal: program.primaryGoal,
+        scheduleMode: program.scheduleMode,
+        selectedSkillsLength: program.selectedSkills?.length ?? 0,
+        trainingPathType: (program as { trainingPathType?: string }).trainingPathType,
+      } : null,
+      visibleProgramSnapshot: visibleProgramSnapshot ? {
+        primaryGoal: visibleProgramSnapshot.primaryGoal,
+        secondaryGoal: visibleProgramSnapshot.secondaryGoal,
+        scheduleMode: visibleProgramSnapshot.scheduleMode,
+        trainingDaysPerWeek: visibleProgramSnapshot.trainingDaysPerWeek,
+        sessionDurationMode: visibleProgramSnapshot.sessionDurationMode,
+        sessionLengthMinutes: visibleProgramSnapshot.sessionLengthMinutes,
+        selectedSkillsLength: visibleProgramSnapshot.selectedSkills?.length ?? 0,
+        trainingPathType: visibleProgramSnapshot.trainingPathType,
+        goalCategoriesLength: visibleProgramSnapshot.goalCategories?.length ?? 0,
+        selectedFlexibilityLength: visibleProgramSnapshot.selectedFlexibility?.length ?? 0,
+        experienceLevel: visibleProgramSnapshot.experienceLevel,
+        equipmentLength: visibleProgramSnapshot.equipmentAvailable?.length ?? 0,
+      } : null,
+      canonicalSavedProgram: canonicalSavedProgram ? {
+        id: canonicalSavedProgram.id,
+        createdAt: canonicalSavedProgram.createdAt,
+        sessionsLength: canonicalSavedProgram.sessions?.length ?? 0,
+        primaryGoal: canonicalSavedProgram.primaryGoal,
+        scheduleMode: canonicalSavedProgram.scheduleMode,
+        selectedSkillsLength: canonicalSavedProgram.selectedSkills?.length ?? 0,
+        trainingPathType: (canonicalSavedProgram as { trainingPathType?: string }).trainingPathType,
+      } : null,
+      canonicalProfile: {
+        primaryGoal: canonical.primaryGoal,
+        secondaryGoal: canonical.secondaryGoal,
+        scheduleMode: canonical.scheduleMode,
+        trainingDaysPerWeek: canonical.trainingDaysPerWeek,
+        sessionDurationMode: canonical.sessionDurationMode,
+        sessionLengthMinutes: canonical.sessionLengthMinutes,
+        selectedSkillsLength: canonical.selectedSkills?.length ?? 0,
+        trainingPathType: canonical.trainingPathType,
+        goalCategoriesLength: canonical.goalCategories?.length ?? 0,
+        selectedFlexibilityLength: canonical.selectedFlexibility?.length ?? 0,
+        experienceLevel: canonical.experienceLevel,
+        equipmentLength: canonical.equipmentAvailable?.length ?? 0,
+        onboardingComplete: canonical.onboardingComplete,
+      },
+      verdict: canonicalSavedProgram && (!program || 
+        canonicalSavedProgram.id !== program.id || 
+        (canonicalSavedProgram.sessions?.length ?? 0) !== (program.sessions?.length ?? 0) ||
+        new Date(canonicalSavedProgram.createdAt || 0) > new Date(program.createdAt || 0))
+        ? 'CANONICAL_SAVED_PROGRAM_APPEARS_FRESHEST'
+        : program
+        ? 'VISIBLE_PROGRAM_APPEARS_FRESHEST'
+        : canonical.primaryGoal
+        ? 'CANONICAL_PROFILE_APPEARS_FRESHEST'
+        : 'NO_CLEAR_WINNER',
+    })
+    
+    // ==========================================================================
+    // [PHASE 24E] TASK 2 - EXPLICIT "FRESHEST PROGRAM TRUTH" DECISION
+    // ==========================================================================
+    const inMemoryProgramId = program?.id || null
+    const canonicalSavedProgramId = canonicalSavedProgram?.id || null
+    const inMemorySessionCount = program?.sessions?.length ?? 0
+    const canonicalSavedSessionCount = canonicalSavedProgram?.sessions?.length ?? 0
+    const idDiffers = inMemoryProgramId !== canonicalSavedProgramId && !!inMemoryProgramId && !!canonicalSavedProgramId
+    const sessionCountDiffers = inMemorySessionCount !== canonicalSavedSessionCount
+    const canonicalIsNewer = canonicalSavedProgram?.createdAt && program?.createdAt 
+      ? new Date(canonicalSavedProgram.createdAt) > new Date(program.createdAt)
+      : false
+    
+    // Determine the freshest program truth winner
+    type FreshestWinner = 'canonical_saved_program' | 'visible_program' | 'canonical_profile' | 'inputs' | 'hard_defaults'
+    let freshestProgramWinner: FreshestWinner
+    let freshestProgramTruth: typeof program | typeof canonicalSavedProgram | null = null
+    let freshestWinnerReason: string
+    
+    if (canonicalSavedProgram && (
+      !program ||  // No in-memory program
+      idDiffers ||  // IDs differ
+      sessionCountDiffers ||  // Session counts differ (canonical may be stronger)
+      canonicalIsNewer  // Canonical is newer by timestamp
+    )) {
+      // Canonical saved program materially outranks in-memory program
+      freshestProgramWinner = 'canonical_saved_program'
+      freshestProgramTruth = canonicalSavedProgram
+      freshestWinnerReason = !program 
+        ? 'no_in_memory_program' 
+        : idDiffers 
+        ? 'ids_differ' 
+        : sessionCountDiffers 
+        ? 'session_counts_differ'
+        : 'canonical_is_newer'
+    } else if (program) {
+      // In-memory program is valid and not outranked
+      freshestProgramWinner = 'visible_program'
+      freshestProgramTruth = program
+      freshestWinnerReason = 'in_memory_program_is_current'
+    } else if (canonical.primaryGoal && canonical.onboardingComplete) {
+      freshestProgramWinner = 'canonical_profile'
+      freshestProgramTruth = null
+      freshestWinnerReason = 'no_program_using_canonical_profile'
+    } else if (inputs) {
+      freshestProgramWinner = 'inputs'
+      freshestProgramTruth = null
+      freshestWinnerReason = 'no_program_no_canonical_using_inputs'
+    } else {
+      freshestProgramWinner = 'hard_defaults'
+      freshestProgramTruth = null
+      freshestWinnerReason = 'no_truth_sources_available'
+    }
+    
+    console.log('[phase24e-modify-freshest-program-source-verdict]', {
+      inMemoryProgramId,
+      canonicalSavedProgramId,
+      inMemorySessionCount,
+      canonicalSavedSessionCount,
+      idDiffers,
+      sessionCountDiffers,
+      canonicalIsNewer,
+      winner: freshestProgramWinner,
+      reason: freshestWinnerReason,
+    })
+    
+    // [PHASE 23B] TASK D - Audit all candidate truth sources (preserved)
     console.log('[phase23b-modify-entry-source-candidate-audit]', {
       visibleProgramTruth: program ? {
         programId: program.id,
@@ -8221,22 +8354,36 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
     })
     
     // ==========================================================================
-    // [PHASE 23B] TASK C - Use visible program as PRIMARY truth source when it exists
+    // [PHASE 24E] TASK 3 - Use FRESHEST PROGRAM TRUTH as source winner
     // ==========================================================================
     let freshInputs: AdaptiveProgramInputs
-    let sourceWinner: 'visible_program_truth' | 'inputs_fallback' | 'canonical_fallback' | 'hard_default_fallback'
+    let sourceWinner: 'visible_program_truth' | 'canonical_saved_program_truth' | 'inputs_fallback' | 'canonical_fallback' | 'hard_default_fallback'
     
-    if (program && (visibleProgramSnapshot || program.primaryGoal)) {
-      // VISIBLE PROGRAM EXISTS - use it as the authoritative truth source
+    if (freshestProgramWinner === 'canonical_saved_program' && freshestProgramTruth) {
+      // CANONICAL SAVED PROGRAM WON - use it instead of stale in-memory program
+      freshInputs = buildModifyEntryInputsFromVisibleProgram(freshestProgramTruth, inputs, canonical)
+      sourceWinner = 'canonical_saved_program_truth'
+      
+      console.log('[phase23b-modify-entry-source-winner-verdict]', {
+        winner: sourceWinner,
+        reason: freshestWinnerReason,
+        programId: freshestProgramTruth.id,
+        programSessionCount: freshestProgramTruth.sessions?.length ?? 0,
+        usedProfileSnapshot: !!(freshestProgramTruth as typeof program)?.profileSnapshot,
+        phase24eNote: 'CANONICAL_SAVED_PROGRAM_OUTRANKED_STALE_IN_MEMORY',
+      })
+    } else if (freshestProgramWinner === 'visible_program' && program && (visibleProgramSnapshot || program.primaryGoal)) {
+      // VISIBLE PROGRAM EXISTS AND IS CURRENT - use it as the authoritative truth source
       freshInputs = buildModifyEntryInputsFromVisibleProgram(program, inputs, canonical)
       sourceWinner = 'visible_program_truth'
       
       console.log('[phase23b-modify-entry-source-winner-verdict]', {
         winner: sourceWinner,
-        reason: 'visible_active_program_exists_and_has_identity',
+        reason: 'visible_active_program_exists_and_is_current',
         programId: program.id,
         programSessionCount: program.sessions?.length ?? 0,
         usedProfileSnapshot: !!visibleProgramSnapshot,
+        phase24eNote: 'IN_MEMORY_PROGRAM_IS_CURRENT_NO_CANONICAL_OUTRANK',
       })
     } else if (canonical.primaryGoal && canonical.onboardingComplete) {
       // No visible program but canonical has truth - use canonical fallback
@@ -8311,6 +8458,65 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
       })
     }
     
+    // ==========================================================================
+    // [PHASE 24E] TASK 4 - FRESHEST WINNER PARITY VERDICT
+    // ==========================================================================
+    if (freshestProgramTruth) {
+      const winnerPrimaryGoal = freshestProgramTruth.primaryGoal
+      const winnerScheduleMode = freshestProgramTruth.scheduleMode
+      const winnerSelectedSkills = freshestProgramTruth.selectedSkills || []
+      const winnerTrainingPathType = (freshestProgramTruth as { trainingPathType?: string }).trainingPathType
+      const winnerTrainingDays = (freshestProgramTruth as { trainingDaysPerWeek?: number }).trainingDaysPerWeek
+      const winnerExperienceLevel = (freshestProgramTruth as { experienceLevel?: string }).experienceLevel
+      const winnerEquipment = freshestProgramTruth.equipment || []
+      
+      const freshestWinnerParityCheck = {
+        primaryGoalMatch: freshInputs.primaryGoal === winnerPrimaryGoal,
+        scheduleModeMatch: freshInputs.scheduleMode === winnerScheduleMode,
+        selectedSkillsMatch: JSON.stringify((freshInputs.selectedSkills || []).sort()) === JSON.stringify(winnerSelectedSkills.sort()),
+        trainingPathTypeMatch: freshInputs.trainingPathType === winnerTrainingPathType,
+        trainingDaysMatch: freshInputs.trainingDaysPerWeek === winnerTrainingDays,
+        experienceLevelMatch: freshInputs.experienceLevel === winnerExperienceLevel,
+        equipmentMatch: JSON.stringify((freshInputs.equipment || []).sort()) === JSON.stringify(winnerEquipment.sort()),
+      }
+      const allMatchFreshestWinner = Object.values(freshestWinnerParityCheck).every(v => v === true)
+      
+      console.log('[phase24e-modify-freshest-winner-parity-verdict]', {
+        freshestProgramWinner,
+        parityCheck: freshestWinnerParityCheck,
+        allFieldsMatch: allMatchFreshestWinner,
+        verdict: allMatchFreshestWinner 
+          ? 'FRESH_INPUTS_MATCH_FRESHEST_WINNER'
+          : 'FRESH_INPUTS_DRIFT_FROM_FRESHEST_WINNER',
+      })
+    }
+    
+    // ==========================================================================
+    // [PHASE 24E] TASK 6 - FINAL ROOT-CAUSE VERDICT
+    // ==========================================================================
+    const staleInMemoryWasWinning = freshestProgramWinner === 'canonical_saved_program' && !!program
+    const canonicalAlreadyMatchedVisible = freshestProgramWinner === 'visible_program' && 
+      canonicalSavedProgram && program &&
+      canonicalSavedProgram.id === program.id && 
+      (canonicalSavedProgram.sessions?.length ?? 0) === (program.sessions?.length ?? 0)
+    
+    console.log('[phase24e-modify-root-cause-verdict]', {
+      staleInMemoryWasWinning,
+      canonicalAlreadyMatchedVisible,
+      inMemoryProgramId,
+      canonicalSavedProgramId,
+      inMemorySessionCount,
+      canonicalSavedSessionCount,
+      freshestProgramWinner,
+      verdict: staleInMemoryWasWinning
+        ? 'STALE_IN_MEMORY_PROGRAM_WAS_WINNING'
+        : canonicalAlreadyMatchedVisible
+        ? 'CANONICAL_SAVED_PROGRAM_ALREADY_MATCHED_VISIBLE_PROGRAM'
+        : freshestProgramTruth
+        ? 'NO_PROGRAM_LEVEL_DIVERGENCE_FOUND'
+        : 'DEEPER_LAYER_STILL_REMAINING',
+    })
+    
     // [PHASE 23B] TASK D - Log final payload before opening builder
     console.log('[phase23b-modify-entry-open-verdict]', {
       sourceWinner,
@@ -8331,6 +8537,9 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
       },
       visibleProgramId: program?.id ?? null,
       visibleProgramSessionCount: program?.sessions?.length ?? 0,
+      phase24eFreshestWinner: freshestProgramWinner,
+      phase24eFreshestProgramId: freshestProgramTruth?.id ?? null,
+      phase24eFreshestSessionCount: freshestProgramTruth?.sessions?.length ?? 0,
     })
     
     // ==========================================================================

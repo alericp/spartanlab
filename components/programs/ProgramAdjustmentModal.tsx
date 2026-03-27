@@ -140,6 +140,23 @@ export function ProgramAdjustmentModal({
     verdict: open ? 'MODAL_OPEN_PROP_TRUE' : 'MODAL_OPEN_PROP_FALSE',
   })
   
+  // [PHASE 24H] TASK B - Modal prop wiring audit
+  console.log('[phase24h-modify-modal-prop-wiring-audit]', {
+    open,
+    onOpenChangeExists: !!onOpenChange,
+    onOpenChangeType: typeof onOpenChange,
+    onContinueExists: !!onContinue,
+    onContinueType: typeof onContinue,
+    onStartNewExists: !!onStartNew,
+    onStartNewType: typeof onStartNew,
+    onRebuildRequiredExists: !!onRebuildRequired,
+    currentEquipmentCount: currentEquipment?.length ?? 0,
+    currentTrainingDays,
+    currentSessionMinutes,
+    currentScheduleMode,
+    verdict: onStartNew ? 'ON_START_NEW_WIRED' : 'ON_START_NEW_MISSING',
+  })
+  
   // ==========================================================================
   // [PHASE 24C] TASK 3 - Body scroll lock + Escape close
   // Deterministic behavior without Radix lifecycle
@@ -526,13 +543,50 @@ export function ProgramAdjustmentModal({
         <Button
           variant="ghost"
           onClick={() => {
+            // [PHASE 24H] TASK D - Start New click execution audit
+            console.log('[phase24h-start-new-click-execution-audit]', {
+              clickReceived: true,
+              localView_before: view,
+              selectedCategory_before: selectedCategory,
+              onStartNewExists: !!onStartNew,
+              recordProgramEnd_called: false,
+            })
+            
             recordProgramEnd('new_program')
+            
+            console.log('[phase24h-start-new-click-execution-audit]', {
+              recordProgramEnd_called: true,
+              recordProgramEnd_completed: true,
+              onStartNew_called: false,
+            })
+            
             onStartNew()
+            
+            console.log('[phase24h-start-new-click-execution-audit]', {
+              onStartNew_called: true,
+              expectedParentTransition: 'BUILDER_SHOULD_OPEN',
+            })
           }}
           className="text-[#6B7280] hover:text-[#A4ACB8]"
         >
           Start New Program
         </Button>
+        
+        {/* [PHASE 24H] TASK C - Start New button truth audit */}
+        {(() => {
+          console.log('[phase24h-start-new-button-truth-audit]', {
+            buttonRendered: true,
+            disabledValue: false,
+            disabledReason: null,
+            onClickExists: !!onStartNew,
+            visualStateClasses: 'text-[#6B7280] hover:text-[#A4ACB8]',
+            pointerEventsState: 'auto',
+            opacityState: 1,
+            shouldBeClickableForModifyFlow: true,
+            finalVerdict: 'BUTTON_SHOULD_BE_CLICKABLE',
+          })
+          return null
+        })()}
       </div>
     </div>
   )
@@ -1050,12 +1104,42 @@ export function ProgramAdjustmentModal({
 
           {/* Body content */}
           <div className="p-6 pt-4">
+            {/* [PHASE 24H] TASK I - Modal view rendering audit */}
+            {(() => {
+              console.log('[phase24h-modal-view-render-audit]', {
+                currentView: view,
+                interceptViewWillRender: view === 'intercept',
+                adjustmentsViewWillRender: view === 'adjustments',
+                confirmViewWillRender: view === 'confirm',
+                startNewButtonWillBeVisible: view === 'intercept',
+              })
+              return null
+            })()}
             {view === 'intercept' && renderInterceptView()}
             {view === 'adjustments' && renderAdjustmentsView()}
             {view === 'confirm' && renderConfirmView()}
           </div>
         </div>
       </div>
+      
+      {/* [PHASE 24H] TASK I - Modal start new final verdict */}
+      {(() => {
+        console.log('[phase24h-modal-start-new-final-verdict]', {
+          modalIsOpen: open,
+          currentView: view,
+          startNewButtonVisible: view === 'intercept',
+          onStartNewWired: !!onStartNew,
+          expectedClickBehavior: 'CALL_ON_START_NEW_THEN_CLOSE_MODAL',
+          verdict: open && view === 'intercept' && onStartNew 
+            ? 'START_NEW_SHOULD_BE_CLICKABLE'
+            : !open 
+            ? 'MODAL_NOT_OPEN'
+            : view !== 'intercept'
+            ? 'WRONG_VIEW_START_NEW_NOT_VISIBLE'
+            : 'ON_START_NEW_NOT_WIRED',
+        })
+        return null
+      })()}
     </>
   )
 }

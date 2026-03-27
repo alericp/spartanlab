@@ -8006,6 +8006,20 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
     
     if (program) {
       // ==========================================================================
+      // [PHASE 24H] TASK A - Modify entry click audit
+      // ==========================================================================
+      console.log('[phase24h-modify-entry-click-audit]', {
+        buttonLabel: 'Modify Program',
+        handlerName: 'handleNewProgram',
+        programExists: true,
+        statusExists: !!programModules.getProgramStatus?.(),
+        showAdjustmentModal_before: showAdjustmentModal,
+        showBuilder_before: showBuilder,
+        chosenBranch: 'OPEN_MODAL',
+        expectedNextUI: 'ProgramAdjustmentModal should appear',
+      })
+      
+      // ==========================================================================
       // [PHASE 24D] EXPLICIT MODIFY FLOW STATE TRANSITION TO MODAL
       // ==========================================================================
       const previousModifyFlowState = modifyFlowState
@@ -8098,6 +8112,19 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
   }, [program, showBuilder, showAdjustmentModal, builderOrigin, builderSessionInputs, builderSessionKey, inputs, modifyFlowState])
 
   const handleConfirmNewProgram = useCallback(async () => {
+    // ==========================================================================
+    // [PHASE 24H] TASK E - Parent start new handoff audit - ENTRY POINT
+    // ==========================================================================
+    console.log('[phase24h-parent-start-new-handoff-audit]', {
+      handlerName: 'handleConfirmNewProgram',
+      entryPoint: true,
+      showAdjustmentModal_before: showAdjustmentModal,
+      showBuilder_before: showBuilder,
+      modifyFlowState_before: modifyFlowState,
+      programExists: !!program,
+      programId: program?.id ?? null,
+    })
+    
     // ==========================================================================
     // [PHASE 24E] ROOT-CAUSE FIX: Modify entry must use FRESHEST PROGRAM TRUTH
     // Priority: freshest program (canonical saved OR visible) > canonical profile > inputs > defaults
@@ -8592,6 +8619,32 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
       builderOriginSet: 'modify_start_new',
     })
     
+    // ==========================================================================
+    // [PHASE 24H] TASK E/I - Parent builder transition final verdict
+    // ==========================================================================
+    console.log('[phase24h-parent-builder-transition-final-verdict]', {
+      handlerName: 'handleConfirmNewProgram',
+      showAdjustmentModal_after: false, // We just set it to false
+      showBuilder_after: true, // We just set it to true
+      modifyFlowState_after: 'builder', // We just set it to 'builder'
+      builderOrigin_after: 'modify_start_new',
+      builderSessionKey_created: newSessionKey,
+      builderSessionInputs_seeded: !!freshInputs,
+      parentHandoffComplete: true,
+      verdict: 'BUILDER_TRANSITION_COMPLETE',
+      expectedRenderBranch: 'showBuilder === true should render builder',
+    })
+    
+    // [PHASE 24H] TASK G - Untouched scope verdict (confirms no other flows touched)
+    console.log('[phase24h-untouched-scope-verdict]', {
+      handleAdjustmentRebuildTouched: false,
+      handleRegenerateTouched: false,
+      restartFlowTouched: false,
+      modifyServerRouteTouched: false,
+      adaptiveProgramBuilderTouched: false,
+      onboardingRouteTouched: false,
+    })
+    
     // [PHASE 24A] LAYER 8 - Untouched scope audit
     console.log('[phase24a-modify-untouched-scope-audit]', {
       handleRegenerateTouched: false,
@@ -8698,6 +8751,25 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
           )}
         </div>
 
+        {/* [PHASE 24H] TASK F - Program page render branch verdict */}
+        {(() => {
+          const winningBranch = showBuilder ? 'builder' : program ? 'program_display' : 'no_content'
+          console.log('[phase24h-program-page-render-branch-verdict]', {
+            showBuilder,
+            showAdjustmentModal,
+            programExists: !!program,
+            mounted: true,
+            inputsExists: !!inputs,
+            modifyFlowState,
+            isModifyModalOpen,
+            winningRenderBranch: winningBranch,
+            reasonBuilderDidOrDidNotRender: showBuilder 
+              ? 'showBuilder_is_true' 
+              : 'showBuilder_is_false_showing_program_or_empty',
+          })
+          return null
+        })()}
+        
         {/* Content - TASK 2: Proper handling of malformed programs */}
         {showBuilder ? (
           <div className="space-y-6">

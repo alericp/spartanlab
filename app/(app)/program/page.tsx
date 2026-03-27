@@ -353,6 +353,13 @@ export default function ProgramPage() {
   const [mounted, setMounted] = useState(false)
   
   // ==========================================================================
+  // [PHASE 22A] TASK 2 - Explicit builder origin state
+  // Tracks whether the currently open builder session was entered from Modify flow
+  // This determines which submit handler to use (generic vs modify-specific)
+  // ==========================================================================
+  const [builderOrigin, setBuilderOrigin] = useState<'default' | 'modify_start_new'>('default')
+  
+  // ==========================================================================
   // [PHASE 21A] Simple controlled dialog pattern for Modify modal
   // showAdjustmentModal is the ONLY source of truth for modal open state
   // No two-stage mount, no RAF delay, no close guards - just like Restart works
@@ -1918,6 +1925,23 @@ export default function ProgramPage() {
     console.log('[ProgramPage] handleGenerate: Starting generation', { source: 'builder' })
     
     // ==========================================================================
+    // [PHASE 22A] TASK 8 - Context audit for generic handleGenerate
+    // Detects if this handler is wrongly being used for modify context
+    // ==========================================================================
+    const isWrongHandlerForModify = builderOrigin === 'modify_start_new'
+    console.log('[phase22a-generic-handleGenerate-context-audit]', {
+      builderOrigin,
+      programExists: !!program,
+      showBuilder,
+      calledWhileModifyOrigin: isWrongHandlerForModify,
+      verdict: isWrongHandlerForModify ? 'WRONG_HANDLER_FOR_MODIFY_CONTEXT' : 'OK_DEFAULT_CONTEXT',
+    })
+    
+    if (isWrongHandlerForModify) {
+      console.error('[PHASE 22A] WARNING: Generic handleGenerate called but builderOrigin is modify_start_new. This should use handleGenerateFromModifyBuilder instead.')
+    }
+    
+    // ==========================================================================
     // [PHASE 21B] TASK 1 - Modify final submit execution path audit
     // ==========================================================================
     console.log('[phase21b-modify-root-submit-handler-verdict]', {
@@ -3260,6 +3284,190 @@ export default function ProgramPage() {
       }
     }, 500)
   }, [inputs, programModules])
+
+  // ==========================================================================
+  // [PHASE 22A] TASK 3 - Dedicated Modify Submit Handler
+  // This handler uses the CURRENT builder-visible inputs directly instead of
+  // rebuilding from canonical. Used when builderOrigin === 'modify_start_new'
+  // ==========================================================================
+  const handleGenerateFromModifyBuilder = useCallback(async () => {
+    // TASK 5: Pre-dispatch audit - log exact current inputs
+    console.log('[phase22a-modify-submit-current-inputs-audit]', {
+      primaryGoal: inputs?.primaryGoal,
+      secondaryGoal: inputs?.secondaryGoal,
+      scheduleMode: inputs?.scheduleMode,
+      trainingDaysPerWeek: inputs?.trainingDaysPerWeek,
+      sessionDurationMode: inputs?.sessionDurationMode,
+      sessionLength: inputs?.sessionLength,
+      selectedSkills: inputs?.selectedSkills,
+      trainingPathType: inputs?.trainingPathType,
+      goalCategories: inputs?.goalCategories,
+      selectedFlexibility: inputs?.selectedFlexibility,
+      experienceLevel: inputs?.experienceLevel,
+      equipment: inputs?.equipment,
+      builderOrigin,
+    })
+    
+    // Validate prerequisites
+    if (!inputs) {
+      console.error('[ProgramPage] handleGenerateFromModifyBuilder: Missing inputs')
+      setGenerationError('Missing program inputs. Please refresh the page.')
+      return
+    }
+    if (!programModules.generateAdaptiveProgram || !programModules.saveAdaptiveProgram) {
+      console.error('[ProgramPage] handleGenerateFromModifyBuilder: Modules not loaded')
+      setGenerationError('Program builder is still loading. Please wait a moment.')
+      return
+    }
+    
+    // TASK 5: Dispatch verdict - prove we're using current inputs directly
+    console.log('[phase22a-modify-submit-dispatch-verdict]', {
+      dispatchPath: 'modify_builder_current_inputs',
+      builderOrigin,
+      usesCurrentInputsDirectly: true,
+      usesCanonicalRecompositionAtSubmit: false,
+      inputsSummary: {
+        primaryGoal: inputs.primaryGoal,
+        scheduleMode: inputs.scheduleMode,
+        trainingDaysPerWeek: inputs.trainingDaysPerWeek,
+        selectedSkillsCount: inputs.selectedSkills?.length ?? 0,
+        experienceLevel: inputs.experienceLevel,
+        equipmentCount: inputs.equipment?.length ?? 0,
+      },
+      expectedIdentity: inputs.scheduleMode === 'flexible' ? '6_session_flexible' : 'static_based_on_days',
+    })
+    
+    setIsGenerating(true)
+    setGenerationError(null)
+    
+    // Clear stale failure state
+    currentSessionHasStartedNewAttemptRef.current = true
+    currentAttemptStartedAtRef.current = new Date().toISOString()
+    setLastBuildResult(null)
+    
+    try {
+      // Use current builder inputs DIRECTLY - NO canonical recomposition
+      const generationInputs = inputs
+      
+      console.log('[phase22a-modify-builder-generation-start]', {
+        inputsSource: 'current_builder_visible_state',
+        primaryGoal: generationInputs.primaryGoal,
+        secondaryGoal: generationInputs.secondaryGoal,
+        scheduleMode: generationInputs.scheduleMode,
+        trainingDaysPerWeek: generationInputs.trainingDaysPerWeek,
+        sessionDurationMode: generationInputs.sessionDurationMode,
+        sessionLength: generationInputs.sessionLength,
+        selectedSkillsCount: generationInputs.selectedSkills?.length ?? 0,
+        equipmentCount: generationInputs.equipment?.length ?? 0,
+      })
+      
+      // Generate program using current builder inputs
+      const newProgram = await programModules.generateAdaptiveProgram(generationInputs)
+      
+      // TASK 9: Success hydration audit
+      console.log('[phase22a-modify-submit-success-hydration-audit]', {
+        returnedProgramId: newProgram.id,
+        returnedPrimaryGoal: newProgram.primaryGoal,
+        returnedScheduleMode: newProgram.scheduleMode,
+        returnedSessionCount: newProgram.sessions?.length ?? 0,
+        returnedSelectedSkillsCount: newProgram.selectedSkills?.length ?? 0,
+        inputPrimaryGoal: generationInputs.primaryGoal,
+        inputScheduleMode: generationInputs.scheduleMode,
+        inputSelectedSkillsCount: generationInputs.selectedSkills?.length ?? 0,
+      })
+      
+      // Save the program
+      await programModules.saveAdaptiveProgram(newProgram)
+      
+      // Update canonical profile to match what was just generated
+      const { updateCanonicalProfile } = await import('@/lib/canonical-profile-service')
+      updateCanonicalProfile({
+        primaryGoal: generationInputs.primaryGoal,
+        secondaryGoal: generationInputs.secondaryGoal,
+        trainingDaysPerWeek: generationInputs.trainingDaysPerWeek,
+        scheduleMode: generationInputs.scheduleMode,
+        sessionDurationMode: generationInputs.sessionDurationMode,
+        sessionLengthMinutes: generationInputs.sessionLength,
+        selectedSkills: generationInputs.selectedSkills,
+        trainingPathType: generationInputs.trainingPathType,
+        experienceLevel: generationInputs.experienceLevel,
+        equipmentAvailable: generationInputs.equipment,
+        goalCategories: generationInputs.goalCategories,
+        selectedFlexibility: generationInputs.selectedFlexibility,
+      })
+      
+      // Hydrate UI
+      setProgram(newProgram)
+      setShowBuilder(false)
+      
+      // TASK 9: Final parity verdict
+      console.log('[phase22a-modify-vs-visible-program-parity-verdict]', {
+        visibleProgramId: newProgram.id,
+        visibleSessionCount: newProgram.sessions?.length ?? 0,
+        visiblePrimaryGoal: newProgram.primaryGoal,
+        visibleScheduleMode: newProgram.scheduleMode,
+        inputWasFlexible: generationInputs.scheduleMode === 'flexible',
+        outputHas6PlusSessions: (newProgram.sessions?.length ?? 0) >= 6,
+        verdict: (newProgram.sessions?.length ?? 0) >= 6 && generationInputs.scheduleMode === 'flexible'
+          ? 'REAL_PROGRESS_MODIFY_SUBMIT_NOW_USES_BUILDER_TRUTH'
+          : (newProgram.sessions?.length ?? 0) === 4 && generationInputs.scheduleMode === 'flexible'
+          ? 'NO_REAL_PROGRESS_OUTPUT_STILL_COLLAPSED_AFTER_CORRECT_SUBMIT'
+          : 'STATIC_MODE_OR_OTHER_SESSION_COUNT',
+      })
+      
+      // TASK 7: Reset builder origin after successful save/hydration
+      console.log('[phase22a-builder-origin-reset-audit]', {
+        resetTrigger: 'successful_modify_generation_complete',
+        resetOccurredAfterHydration: true,
+        previousOrigin: builderOrigin,
+        newOrigin: 'default',
+        visibleProgramSessionCount: newProgram.sessions?.length ?? 0,
+      })
+      setBuilderOrigin('default')
+      
+      // Build success result for consistency
+      const successResult = {
+        status: 'success' as const,
+        attemptId: `modify_${Date.now()}`,
+        runtimeSessionId: runtimeSessionIdRef.current,
+        timestamp: new Date().toISOString(),
+      }
+      setLastBuildResult({
+        ...successResult,
+        stage: 'complete',
+        errorCode: null,
+        subCode: 'none',
+        userMessage: 'Program generated successfully',
+        devMessage: 'Modify builder generation completed',
+        failureStep: null,
+        failureMiddleStep: null,
+        failureDayNumber: null,
+        failureFocus: null,
+        hydratedFromStorage: false,
+      })
+      
+      // TASK 10: Final root cause verdict
+      console.log('[phase22a-final-root-cause-verdict]', {
+        modifySubmitUsedBuilderInputs: true,
+        modifySubmitDidNotUseCanonicalRecomposition: true,
+        outputSessionCount: newProgram.sessions?.length ?? 0,
+        outputPrimaryGoal: newProgram.primaryGoal,
+        inputScheduleMode: generationInputs.scheduleMode,
+        verdict: (newProgram.sessions?.length ?? 0) >= 6 && generationInputs.scheduleMode === 'flexible'
+          ? 'REAL_ROOT_CAUSE_FIXED_MODIFY_SUBMIT_WAS_DISCARDING_BUILDER_STATE'
+          : 'MODIFY_SUBMIT_NOW_USES_BUILDER_STATE_BUT_OUTPUT_STILL_COLLAPSES_DEEPER_BUILDER_OR_RECONCILIATION_BUG_REMAINS',
+      })
+      
+    } catch (error) {
+      console.error('[ProgramPage] handleGenerateFromModifyBuilder: Error', error)
+      setGenerationError(error instanceof Error ? error.message : 'Generation failed')
+      
+      // Reset origin on failure too
+      setBuilderOrigin('default')
+    } finally {
+      setIsGenerating(false)
+    }
+  }, [inputs, programModules, builderOrigin])
 
   // TASK 4: Restart Program - archives current program and returns to builder
   const handleRestart = useCallback(() => {
@@ -7583,14 +7791,28 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
     
     programModules.recordProgramEnd?.('new_program')
     setShowAdjustmentModal(false)
+    
+    // ==========================================================================
+    // [PHASE 22A] TASK 2 - Set builder origin to modify_start_new
+    // This tells the submit handler to use builder-visible inputs directly
+    // ==========================================================================
+    console.log('[phase22a-builder-origin-transition-audit]', {
+      previousOrigin: builderOrigin,
+      nextOrigin: 'modify_start_new',
+      trigger: 'handleConfirmNewProgram',
+      builderOpening: true,
+      programExists: !!program,
+    })
+    setBuilderOrigin('modify_start_new')
     setShowBuilder(true)
     
     console.log('[phase21b-modify-branch-verdict]', {
       branch: 'start_new_program_from_modal',
       builderOpened: true,
       inputsRehydrated: canonical.primaryGoal && canonical.onboardingComplete,
+      builderOriginSet: 'modify_start_new',
     })
-  }, [programModules, inputs])
+  }, [programModules, inputs, builderOrigin, program])
 
   // TASK 3: Show error state for module load failure with stage info
   if (loadError) {
@@ -7779,20 +8001,47 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
               </Card>
             )}
             
-            <AdaptiveProgramForm
-              inputs={inputs}
-              onInputChange={setInputs}
-              onGenerate={handleGenerate}
-              isGenerating={isGenerating}
-              constraintLabel={constraintLabel}
-            />
+            {/* [PHASE 22A] TASK 6 - Wire correct handler based on builder origin */}
+            {(() => {
+              const selectedHandler = builderOrigin === 'modify_start_new' 
+                ? handleGenerateFromModifyBuilder 
+                : handleGenerate
+              
+              console.log('[phase22a-builder-submit-handler-selected-audit]', {
+                builderOrigin,
+                selectedHandler: builderOrigin === 'modify_start_new' ? 'handleGenerateFromModifyBuilder' : 'handleGenerate',
+                programExists: !!program,
+                showBuilder,
+                modifySpecificPathActive: builderOrigin === 'modify_start_new',
+              })
+              
+              return (
+                <AdaptiveProgramForm
+                  inputs={inputs}
+                  onInputChange={setInputs}
+                  onGenerate={selectedHandler}
+                  isGenerating={isGenerating}
+                  constraintLabel={constraintLabel}
+                />
+              )
+            })()}
             
             {/* Cancel button if there's an existing program */}
+            {/* [PHASE 22A] TASK 7 - Reset builder origin on cancel */}
             {program && (
               <Button
                 variant="outline"
                 className="w-full border-[#3A3A3A]"
-                onClick={() => setShowBuilder(false)}
+                onClick={() => {
+                  console.log('[phase22a-builder-origin-reset-audit]', {
+                    resetTrigger: 'cancel_button_clicked',
+                    resetOccurredAfterHydration: false,
+                    previousOrigin: builderOrigin,
+                    newOrigin: 'default',
+                  })
+                  setBuilderOrigin('default')
+                  setShowBuilder(false)
+                }}
               >
                 Cancel
               </Button>

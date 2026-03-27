@@ -1916,6 +1916,28 @@ export default function ProgramPage() {
     }
     
     console.log('[ProgramPage] handleGenerate: Starting generation', { source: 'builder' })
+    
+    // ==========================================================================
+    // [PHASE 21B] TASK 1 - Modify final submit execution path audit
+    // ==========================================================================
+    console.log('[phase21b-modify-root-submit-handler-verdict]', {
+      handler: 'handleGenerate',
+      serverRoute: '/api/program/generate (implicit via generateAdaptiveProgram)',
+      inputsUsed: {
+        primaryGoal: inputs?.primaryGoal,
+        secondaryGoal: inputs?.secondaryGoal,
+        scheduleMode: inputs?.scheduleMode,
+        trainingDaysPerWeek: inputs?.trainingDaysPerWeek,
+        sessionDurationMode: inputs?.sessionDurationMode,
+        sessionLength: inputs?.sessionLength,
+        selectedSkills: inputs?.selectedSkills,
+        trainingPathType: inputs?.trainingPathType,
+        experienceLevel: inputs?.experienceLevel,
+        equipmentCount: inputs?.equipment?.length ?? 0,
+      },
+      verdict: 'GENERIC_HANDLEGENERATE_PATH_USED',
+    })
+    
     setIsGenerating(true)
     setGenerationError(null) // Clear any previous error
     
@@ -2581,6 +2603,30 @@ export default function ProgramPage() {
           directSessionRatio: newProgram.qualityClassification?.directSelectionRatio || 0,
           templateSimilarity: newProgram.templateSimilarity?.overallSimilarityScore || 'not_computed',
           appearsStale: newProgram.templateSimilarity?.appearsStale || false,
+        })
+        
+        // ==========================================================================
+        // [PHASE 21B] TASK 6 - Post-submit hydration audit
+        // ==========================================================================
+        console.log('[phase21b-modify-root-server-result-audit]', {
+          newProgramId: newProgram.id,
+          sessionCount: newProgram.sessions?.length ?? 0,
+          scheduleMode: newProgram.scheduleMode,
+          primaryGoal: (newProgram as unknown as { profileSnapshot?: { primaryGoal?: string } }).profileSnapshot?.primaryGoal ?? 'unknown',
+          secondaryGoal: (newProgram as unknown as { profileSnapshot?: { secondaryGoal?: string } }).profileSnapshot?.secondaryGoal ?? 'unknown',
+          experienceLevel: (newProgram as unknown as { profileSnapshot?: { experienceLevel?: string } }).profileSnapshot?.experienceLevel ?? 'unknown',
+          selectedSkillsCount: (newProgram as unknown as { profileSnapshot?: { selectedSkills?: string[] } }).profileSnapshot?.selectedSkills?.length ?? 0,
+        })
+        
+        console.log('[phase21b-modify-root-visible-hydration-audit]', {
+          action: 'setProgram(newProgram)',
+          newProgramId: newProgram.id,
+          sessionCount: newProgram.sessions?.length ?? 0,
+          verdict: newProgram.sessions?.length >= 6 
+            ? 'STRONG_6_SESSION_PROGRAM_HYDRATED'
+            : newProgram.sessions?.length === 4 
+              ? 'WEAK_4_SESSION_HYBRID_HYDRATED'
+              : `SESSION_COUNT_${newProgram.sessions?.length ?? 0}`,
         })
         
         setProgram(newProgram)
@@ -7398,11 +7444,36 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
       showAdjustmentModalBefore,
     })
     
+    // [PHASE 21B] TASK 1 - Modify root click entry with inputs snapshot
+    console.log('[phase21b-modify-root-click-entry]', {
+      programExists: !!program,
+      programId: program?.id ?? null,
+      currentInputs: inputs ? {
+        primaryGoal: inputs.primaryGoal,
+        scheduleMode: inputs.scheduleMode,
+        trainingDaysPerWeek: inputs.trainingDaysPerWeek,
+        selectedSkillsCount: inputs.selectedSkills?.length ?? 0,
+        experienceLevel: inputs.experienceLevel,
+      } : null,
+      currentProgramSessionCount: program?.sessions?.length ?? 0,
+    })
+    
     if (program) {
       // [PHASE 21A] Diagnostic 2: Branch verdict
       console.log('[phase21a-modify-branch-verdict]', {
         branch: 'open_adjustment_modal',
         programId: program.id,
+      })
+      
+      // [PHASE 21B] TASK 1 - Modify root open branch with flow options
+      console.log('[phase21b-modify-root-open-branch]', {
+        modalOpened: true,
+        modalOptions: [
+          'Continue Current Program - closes modal',
+          'Make Small Adjustments - handleAdjustmentRebuild path',
+          'Start New Program - handleConfirmNewProgram then handleGenerate path',
+        ],
+        currentProgramSessionCount: program.sessions?.length ?? 0,
       })
       
       // [PHASE 21A] Diagnostic 3: Direct state set - no staging
@@ -7424,11 +7495,102 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
     setShowBuilder(true)
   }, [program, showBuilder, showAdjustmentModal])
 
-  const handleConfirmNewProgram = useCallback(() => {
+  const handleConfirmNewProgram = useCallback(async () => {
+    // ==========================================================================
+    // [PHASE 21B] TASK 3/4 - Modify entry MUST rehydrate inputs from canonical profile
+    // This is the ROOT CAUSE FIX: When entering modify flow via "Start New Program",
+    // we must use fresh canonical truth, not stale page-local inputs.
+    // ==========================================================================
+    
+    const inputsBefore = inputs ? {
+      primaryGoal: inputs.primaryGoal,
+      secondaryGoal: inputs.secondaryGoal,
+      scheduleMode: inputs.scheduleMode,
+      trainingDaysPerWeek: inputs.trainingDaysPerWeek,
+      sessionDurationMode: inputs.sessionDurationMode,
+      sessionLength: inputs.sessionLength,
+      selectedSkills: inputs.selectedSkills,
+      trainingPathType: inputs.trainingPathType,
+      experienceLevel: inputs.experienceLevel,
+      equipmentCount: inputs.equipment?.length ?? 0,
+    } : null
+    
+    console.log('[phase21b-modify-root-inputs-before-open-audit]', {
+      inputsExist: !!inputs,
+      inputsBefore,
+      source: 'handleConfirmNewProgram_entry',
+    })
+    
+    // Rehydrate inputs from canonical profile before opening builder
+    const canonical = getCanonicalProfile()
+    
+    console.log('[phase21b-modify-root-canonical-vs-inputs-parity]', {
+      canonical: {
+        primaryGoal: canonical.primaryGoal,
+        secondaryGoal: canonical.secondaryGoal,
+        scheduleMode: canonical.scheduleMode,
+        trainingDaysPerWeek: canonical.trainingDaysPerWeek,
+        sessionDurationMode: canonical.sessionDurationMode,
+        sessionLengthMinutes: canonical.sessionLengthMinutes,
+        selectedSkills: canonical.selectedSkills,
+        trainingPathType: canonical.trainingPathType,
+        experienceLevel: canonical.experienceLevel,
+        equipmentCount: canonical.equipmentAvailable?.length ?? 0,
+      },
+      inputsBefore,
+      wouldUseStalePage: !canonical.primaryGoal,
+      verdict: canonical.primaryGoal 
+        ? 'CANONICAL_HAS_TRUTH_WILL_REHYDRATE'
+        : 'CANONICAL_INCOMPLETE_WILL_USE_PAGE_INPUTS',
+    })
+    
+    // If canonical has complete truth, build fresh inputs from it
+    if (canonical.primaryGoal && canonical.onboardingComplete) {
+      const { buildCanonicalGenerationEntry, entryToAdaptiveInputs } = await import('@/lib/canonical-profile-service')
+      const entryResult = buildCanonicalGenerationEntry('handleConfirmNewProgram_modify')
+      
+      if (entryResult.success && entryResult.entry) {
+        const freshInputs = entryToAdaptiveInputs(entryResult.entry)
+        
+        console.log('[phase21b-modify-root-inputs-after-open-audit]', {
+          rehydrated: true,
+          freshInputs: {
+            primaryGoal: freshInputs.primaryGoal,
+            secondaryGoal: freshInputs.secondaryGoal,
+            scheduleMode: freshInputs.scheduleMode,
+            trainingDaysPerWeek: freshInputs.trainingDaysPerWeek,
+            sessionDurationMode: freshInputs.sessionDurationMode,
+            sessionLength: freshInputs.sessionLength,
+            selectedSkills: freshInputs.selectedSkills,
+            trainingPathType: freshInputs.trainingPathType,
+            experienceLevel: freshInputs.experienceLevel,
+            equipmentCount: freshInputs.equipment?.length ?? 0,
+          },
+          source: 'canonical_profile_via_buildCanonicalGenerationEntry',
+          verdict: 'MODIFY_INPUTS_REHYDRATED_FROM_CANONICAL',
+        })
+        
+        setInputs(freshInputs)
+      } else {
+        console.log('[phase21b-modify-root-inputs-after-open-audit]', {
+          rehydrated: false,
+          error: entryResult.error?.message ?? 'entry_build_failed',
+          fallback: 'using_existing_page_inputs',
+          verdict: 'MODIFY_INPUTS_FALLBACK_TO_PAGE_LOCAL',
+        })
+      }
+    }
+    
     programModules.recordProgramEnd?.('new_program')
     setShowAdjustmentModal(false)
     setShowBuilder(true)
-  }, [programModules])
+    
+    console.log('[phase21b-modify-branch-verdict]', {
+      branch: 'start_new_program_from_modal',
+      builderOpened: true,
+      inputsRehydrated: canonical.primaryGoal && canonical.onboardingComplete,
+    })
+  }, [programModules, inputs])
 
   // TASK 3: Show error state for module load failure with stage info
   if (loadError) {

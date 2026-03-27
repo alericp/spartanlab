@@ -309,6 +309,29 @@ export async function POST(request: Request) {
       finalOverrideHasTrainingStyle: !!canonicalProfileOverride.trainingStyle,
     })
     
+    // ==========================================================================
+    // [PHASE 24J] TASK 1 - CRITICAL selectedSkills TRACE
+    // Root-cause audit for identity drift between builder inputs and override
+    // ==========================================================================
+    console.log('[phase24j-modify-server-selectedSkills-trace]', {
+      builderInputsSelectedSkills: builderInputs.selectedSkills ?? [],
+      builderInputsSelectedSkillsCount: builderInputs.selectedSkills?.length ?? 0,
+      canonicalBaseSelectedSkills: canonicalBase?.selectedSkills ?? [],
+      canonicalBaseSelectedSkillsCount: canonicalBase?.selectedSkills?.length ?? 0,
+      finalOverrideSelectedSkills: canonicalProfileOverride.selectedSkills ?? [],
+      finalOverrideSelectedSkillsCount: canonicalProfileOverride.selectedSkills?.length ?? 0,
+      builderInputsMatchesOverride: JSON.stringify(builderInputs.selectedSkills?.sort()) === JSON.stringify(canonicalProfileOverride.selectedSkills?.sort()),
+      builderHasBackLever: builderInputs.selectedSkills?.includes('back_lever') ?? false,
+      builderHasDragonFlag: builderInputs.selectedSkills?.includes('dragon_flag') ?? false,
+      overrideHasBackLever: canonicalProfileOverride.selectedSkills?.includes('back_lever') ?? false,
+      overrideHasDragonFlag: canonicalProfileOverride.selectedSkills?.includes('dragon_flag') ?? false,
+      canonicalBaseHasBackLever: canonicalBase?.selectedSkills?.includes('back_lever') ?? false,
+      canonicalBaseDragonFlag: canonicalBase?.selectedSkills?.includes('dragon_flag') ?? false,
+      verdict: (builderInputs.selectedSkills?.length ?? 0) === (canonicalProfileOverride.selectedSkills?.length ?? 0)
+        ? 'SELECTED_SKILLS_COUNT_MATCH'
+        : 'SELECTED_SKILLS_COUNT_MISMATCH',
+    })
+    
     // [PHASE 24F] TASK 3 - Builder handoff parity verdict
     const hasAllMaterialFields = !!(
       canonicalProfileOverride.primaryGoal &&

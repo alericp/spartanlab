@@ -427,6 +427,145 @@ export default function ProgramPage() {
   }, [program, mounted, authoritativeActiveProgram])
   
   // ==========================================================================
+  // [PHASE 23B] TASK 1 - Helper to build AdaptiveProgramInputs from visible program
+  // Priority: program.profileSnapshot > program top-level > inputs fallback > canonical
+  // ==========================================================================
+  const buildModifyEntryInputsFromVisibleProgram = useCallback((
+    visibleProgram: AdaptiveProgram,
+    currentInputs: AdaptiveProgramInputs | null,
+    canonicalFallback: ReturnType<typeof getCanonicalProfile>
+  ): AdaptiveProgramInputs => {
+    // Extract profileSnapshot with proper typing
+    const snapshot = visibleProgram.profileSnapshot as {
+      primaryGoal?: string
+      secondaryGoal?: string | null
+      experienceLevel?: string
+      trainingDaysPerWeek?: number | 'flexible'
+      sessionLengthMinutes?: number
+      scheduleMode?: string
+      sessionDurationMode?: string
+      selectedSkills?: string[]
+      trainingPathType?: string
+      goalCategories?: string[]
+      selectedFlexibility?: string[]
+      equipmentAvailable?: string[]
+    } | undefined
+    
+    // Build inputs with strict priority: snapshot > program > inputs > canonical > default
+    const result: AdaptiveProgramInputs = {
+      // Primary Goal: snapshot > program > inputs > canonical
+      primaryGoal: (
+        snapshot?.primaryGoal ||
+        visibleProgram.primaryGoal ||
+        currentInputs?.primaryGoal ||
+        canonicalFallback.primaryGoal ||
+        'general_fitness'
+      ) as PrimaryGoal,
+      
+      // Secondary Goal: snapshot > program > inputs > canonical
+      secondaryGoal: (
+        snapshot?.secondaryGoal ??
+        visibleProgram.secondaryGoal ??
+        currentInputs?.secondaryGoal ??
+        canonicalFallback.secondaryGoal ??
+        undefined
+      ) as PrimaryGoal | undefined,
+      
+      // Experience Level: snapshot > program > inputs > canonical
+      experienceLevel: (
+        snapshot?.experienceLevel ||
+        (visibleProgram as { experienceLevel?: string }).experienceLevel ||
+        currentInputs?.experienceLevel ||
+        canonicalFallback.experienceLevel ||
+        'intermediate'
+      ) as ExperienceLevel,
+      
+      // Training Days: snapshot > program > inputs > canonical
+      trainingDaysPerWeek: (
+        snapshot?.trainingDaysPerWeek ??
+        (visibleProgram as { trainingDaysPerWeek?: number | 'flexible' }).trainingDaysPerWeek ??
+        currentInputs?.trainingDaysPerWeek ??
+        canonicalFallback.trainingDaysPerWeek ??
+        4
+      ) as TrainingDays | 'flexible',
+      
+      // Session Length: snapshot.sessionLengthMinutes > program > inputs > canonical
+      sessionLength: (
+        snapshot?.sessionLengthMinutes ??
+        (visibleProgram as { sessionLengthMinutes?: number }).sessionLengthMinutes ??
+        currentInputs?.sessionLength ??
+        canonicalFallback.sessionLengthMinutes ??
+        60
+      ) as SessionLength,
+      
+      // Schedule Mode: snapshot > program > inputs > canonical
+      scheduleMode: (
+        snapshot?.scheduleMode ||
+        visibleProgram.scheduleMode ||
+        currentInputs?.scheduleMode ||
+        canonicalFallback.scheduleMode ||
+        'static'
+      ) as ScheduleMode,
+      
+      // Session Duration Mode: snapshot > program > inputs > canonical
+      sessionDurationMode: (
+        snapshot?.sessionDurationMode ||
+        (visibleProgram as { sessionDurationMode?: string }).sessionDurationMode ||
+        currentInputs?.sessionDurationMode ||
+        canonicalFallback.sessionDurationMode ||
+        'standard'
+      ) as 'standard' | 'adaptive',
+      
+      // Selected Skills: snapshot > program > inputs > canonical (arrays need special handling)
+      selectedSkills: (
+        (snapshot?.selectedSkills && snapshot.selectedSkills.length > 0) ? snapshot.selectedSkills :
+        (visibleProgram.selectedSkills && visibleProgram.selectedSkills.length > 0) ? visibleProgram.selectedSkills :
+        (currentInputs?.selectedSkills && currentInputs.selectedSkills.length > 0) ? currentInputs.selectedSkills :
+        (canonicalFallback.selectedSkills && canonicalFallback.selectedSkills.length > 0) ? canonicalFallback.selectedSkills :
+        []
+      ),
+      
+      // Training Path Type: snapshot > program > inputs > canonical
+      trainingPathType: (
+        snapshot?.trainingPathType ||
+        (visibleProgram as { trainingPathType?: string }).trainingPathType ||
+        currentInputs?.trainingPathType ||
+        canonicalFallback.trainingPathType ||
+        'hybrid'
+      ) as 'skill_first' | 'hybrid' | 'balanced',
+      
+      // Goal Categories: snapshot > program > inputs > canonical
+      goalCategories: (
+        (snapshot?.goalCategories && snapshot.goalCategories.length > 0) ? snapshot.goalCategories :
+        ((visibleProgram as { goalCategories?: string[] }).goalCategories?.length ?? 0) > 0 ? (visibleProgram as { goalCategories?: string[] }).goalCategories :
+        (currentInputs?.goalCategories && currentInputs.goalCategories.length > 0) ? currentInputs.goalCategories :
+        (canonicalFallback.goalCategories && canonicalFallback.goalCategories.length > 0) ? canonicalFallback.goalCategories :
+        []
+      ),
+      
+      // Selected Flexibility: snapshot > program > inputs > canonical
+      selectedFlexibility: (
+        (snapshot?.selectedFlexibility && snapshot.selectedFlexibility.length > 0) ? snapshot.selectedFlexibility :
+        ((visibleProgram as { selectedFlexibility?: string[] }).selectedFlexibility?.length ?? 0) > 0 ? (visibleProgram as { selectedFlexibility?: string[] }).selectedFlexibility :
+        (currentInputs?.selectedFlexibility && currentInputs.selectedFlexibility.length > 0) ? currentInputs.selectedFlexibility :
+        (canonicalFallback.selectedFlexibility && canonicalFallback.selectedFlexibility.length > 0) ? canonicalFallback.selectedFlexibility :
+        []
+      ),
+      
+      // Equipment: snapshot.equipmentAvailable > program.equipment > inputs > canonical
+      equipment: (
+        (snapshot?.equipmentAvailable && snapshot.equipmentAvailable.length > 0) ? snapshot.equipmentAvailable :
+        (visibleProgram.equipment && visibleProgram.equipment.length > 0) ? visibleProgram.equipment :
+        (currentInputs?.equipment && currentInputs.equipment.length > 0) ? currentInputs.equipment :
+        (canonicalFallback.equipmentAvailable && canonicalFallback.equipmentAvailable.length > 0) ? canonicalFallback.equipmentAvailable :
+        []
+      ) as EquipmentType[],
+    }
+    
+    return result
+  }, [])
+  
+  // ==========================================================================
   // [TASK 1] UNIFIED STALENESS - Single source of truth for program staleness
   // This replaces the dual checkProfileProgramDrift/checkProgramStaleness systems
   // ==========================================================================
@@ -7814,97 +7953,198 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
 
   const handleConfirmNewProgram = useCallback(async () => {
     // ==========================================================================
-    // [PHASE 21B] TASK 3/4 - Modify entry MUST rehydrate inputs from canonical profile
-    // This is the ROOT CAUSE FIX: When entering modify flow via "Start New Program",
-    // we must use fresh canonical truth, not stale page-local inputs.
+    // [PHASE 23B] ROOT-CAUSE FIX: Modify entry must hydrate from VISIBLE ACTIVE PROGRAM
+    // Priority: visible program truth > current inputs > canonical > defaults
+    // This stops stale canonical/default truth from overriding the visible program
     // ==========================================================================
     
-    const inputsBefore = inputs ? {
-      primaryGoal: inputs.primaryGoal,
-      secondaryGoal: inputs.secondaryGoal,
-      scheduleMode: inputs.scheduleMode,
-      trainingDaysPerWeek: inputs.trainingDaysPerWeek,
-      sessionDurationMode: inputs.sessionDurationMode,
-      sessionLength: inputs.sessionLength,
-      selectedSkills: inputs.selectedSkills,
-      trainingPathType: inputs.trainingPathType,
-      experienceLevel: inputs.experienceLevel,
-      equipmentCount: inputs.equipment?.length ?? 0,
-    } : null
-    
-    console.log('[phase21b-modify-root-inputs-before-open-audit]', {
-      inputsExist: !!inputs,
-      inputsBefore,
-      source: 'handleConfirmNewProgram_entry',
-    })
-    
-    // Rehydrate inputs from canonical profile before opening builder
     const canonical = getCanonicalProfile()
     
-    console.log('[phase21b-modify-root-canonical-vs-inputs-parity]', {
-      canonical: {
+    // Extract visible program snapshot for comparison
+    const visibleProgramSnapshot = program?.profileSnapshot as {
+      primaryGoal?: string
+      secondaryGoal?: string | null
+      selectedSkills?: string[]
+      trainingPathType?: string
+      scheduleMode?: string
+      trainingDaysPerWeek?: number | 'flexible'
+      sessionDurationMode?: string
+      sessionLengthMinutes?: number
+      experienceLevel?: string
+      equipmentAvailable?: string[]
+      goalCategories?: string[]
+      selectedFlexibility?: string[]
+    } | undefined
+    
+    // [PHASE 23B] TASK D - Audit all candidate truth sources
+    console.log('[phase23b-modify-entry-source-candidate-audit]', {
+      visibleProgramTruth: program ? {
+        programId: program.id,
+        hasProfileSnapshot: !!visibleProgramSnapshot,
+        primaryGoal: visibleProgramSnapshot?.primaryGoal || program.primaryGoal,
+        secondaryGoal: visibleProgramSnapshot?.secondaryGoal || program.secondaryGoal,
+        scheduleMode: visibleProgramSnapshot?.scheduleMode || program.scheduleMode,
+        trainingDaysPerWeek: visibleProgramSnapshot?.trainingDaysPerWeek || (program as { trainingDaysPerWeek?: number }).trainingDaysPerWeek,
+        sessionDurationMode: visibleProgramSnapshot?.sessionDurationMode || (program as { sessionDurationMode?: string }).sessionDurationMode,
+        sessionLengthMinutes: visibleProgramSnapshot?.sessionLengthMinutes || (program as { sessionLengthMinutes?: number }).sessionLengthMinutes,
+        selectedSkills: visibleProgramSnapshot?.selectedSkills || program.selectedSkills,
+        selectedSkillsCount: (visibleProgramSnapshot?.selectedSkills || program.selectedSkills)?.length ?? 0,
+        trainingPathType: visibleProgramSnapshot?.trainingPathType || (program as { trainingPathType?: string }).trainingPathType,
+        goalCategoriesCount: visibleProgramSnapshot?.goalCategories?.length ?? 0,
+        selectedFlexibilityCount: visibleProgramSnapshot?.selectedFlexibility?.length ?? 0,
+        experienceLevel: visibleProgramSnapshot?.experienceLevel || (program as { experienceLevel?: string }).experienceLevel,
+        equipmentCount: (visibleProgramSnapshot?.equipmentAvailable || program.equipment)?.length ?? 0,
+      } : null,
+      currentInputsTruth: inputs ? {
+        primaryGoal: inputs.primaryGoal,
+        secondaryGoal: inputs.secondaryGoal,
+        scheduleMode: inputs.scheduleMode,
+        trainingDaysPerWeek: inputs.trainingDaysPerWeek,
+        sessionDurationMode: inputs.sessionDurationMode,
+        sessionLength: inputs.sessionLength,
+        selectedSkillsCount: inputs.selectedSkills?.length ?? 0,
+        trainingPathType: inputs.trainingPathType,
+        goalCategoriesCount: inputs.goalCategories?.length ?? 0,
+        selectedFlexibilityCount: inputs.selectedFlexibility?.length ?? 0,
+        experienceLevel: inputs.experienceLevel,
+        equipmentCount: inputs.equipment?.length ?? 0,
+      } : null,
+      canonicalTruth: {
         primaryGoal: canonical.primaryGoal,
         secondaryGoal: canonical.secondaryGoal,
         scheduleMode: canonical.scheduleMode,
         trainingDaysPerWeek: canonical.trainingDaysPerWeek,
         sessionDurationMode: canonical.sessionDurationMode,
         sessionLengthMinutes: canonical.sessionLengthMinutes,
-        selectedSkills: canonical.selectedSkills,
+        selectedSkillsCount: canonical.selectedSkills?.length ?? 0,
         trainingPathType: canonical.trainingPathType,
+        goalCategoriesCount: canonical.goalCategories?.length ?? 0,
+        selectedFlexibilityCount: canonical.selectedFlexibility?.length ?? 0,
         experienceLevel: canonical.experienceLevel,
         equipmentCount: canonical.equipmentAvailable?.length ?? 0,
       },
-      inputsBefore,
-      wouldUseStalePage: !canonical.primaryGoal,
-      verdict: canonical.primaryGoal 
-        ? 'CANONICAL_HAS_TRUTH_WILL_REHYDRATE'
-        : 'CANONICAL_INCOMPLETE_WILL_USE_PAGE_INPUTS',
     })
     
-    // If canonical has complete truth, build fresh inputs from it
-    if (canonical.primaryGoal && canonical.onboardingComplete) {
+    // ==========================================================================
+    // [PHASE 23B] TASK C - Use visible program as PRIMARY truth source when it exists
+    // ==========================================================================
+    let freshInputs: AdaptiveProgramInputs
+    let sourceWinner: 'visible_program_truth' | 'inputs_fallback' | 'canonical_fallback' | 'hard_default_fallback'
+    
+    if (program && (visibleProgramSnapshot || program.primaryGoal)) {
+      // VISIBLE PROGRAM EXISTS - use it as the authoritative truth source
+      freshInputs = buildModifyEntryInputsFromVisibleProgram(program, inputs, canonical)
+      sourceWinner = 'visible_program_truth'
+      
+      console.log('[phase23b-modify-entry-source-winner-verdict]', {
+        winner: sourceWinner,
+        reason: 'visible_active_program_exists_and_has_identity',
+        programId: program.id,
+        programSessionCount: program.sessions?.length ?? 0,
+        usedProfileSnapshot: !!visibleProgramSnapshot,
+      })
+    } else if (canonical.primaryGoal && canonical.onboardingComplete) {
+      // No visible program but canonical has truth - use canonical fallback
       const { buildCanonicalGenerationEntry, entryToAdaptiveInputs } = await import('@/lib/canonical-profile-service')
       const entryResult = buildCanonicalGenerationEntry('handleConfirmNewProgram_modify')
       
       if (entryResult.success && entryResult.entry) {
-        const freshInputs = entryToAdaptiveInputs(entryResult.entry)
-        
-        console.log('[phase21b-modify-root-inputs-after-open-audit]', {
-          rehydrated: true,
-          freshInputs: {
-            primaryGoal: freshInputs.primaryGoal,
-            secondaryGoal: freshInputs.secondaryGoal,
-            scheduleMode: freshInputs.scheduleMode,
-            trainingDaysPerWeek: freshInputs.trainingDaysPerWeek,
-            sessionDurationMode: freshInputs.sessionDurationMode,
-            sessionLength: freshInputs.sessionLength,
-            selectedSkills: freshInputs.selectedSkills,
-            trainingPathType: freshInputs.trainingPathType,
-            experienceLevel: freshInputs.experienceLevel,
-            equipmentCount: freshInputs.equipment?.length ?? 0,
-          },
-          source: 'canonical_profile_via_buildCanonicalGenerationEntry',
-          verdict: 'MODIFY_INPUTS_REHYDRATED_FROM_CANONICAL',
-        })
-        
-        setInputs(freshInputs)
+        freshInputs = entryToAdaptiveInputs(entryResult.entry)
+        sourceWinner = 'canonical_fallback'
+      } else if (inputs) {
+        freshInputs = inputs
+        sourceWinner = 'inputs_fallback'
       } else {
-        console.log('[phase21b-modify-root-inputs-after-open-audit]', {
-          rehydrated: false,
-          error: entryResult.error?.message ?? 'entry_build_failed',
-          fallback: 'using_existing_page_inputs',
-          verdict: 'MODIFY_INPUTS_FALLBACK_TO_PAGE_LOCAL',
-        })
+        // Last resort - use defaults
+        const { getDefaultAdaptiveInputs } = await import('@/lib/adaptive-program-builder')
+        freshInputs = getDefaultAdaptiveInputs()
+        sourceWinner = 'hard_default_fallback'
       }
+      
+      console.log('[phase23b-modify-entry-source-winner-verdict]', {
+        winner: sourceWinner,
+        reason: 'no_visible_program_used_canonical_or_fallback',
+        canonicalEntryBuildSuccess: entryResult.success,
+      })
+    } else if (inputs) {
+      freshInputs = inputs
+      sourceWinner = 'inputs_fallback'
+      
+      console.log('[phase23b-modify-entry-source-winner-verdict]', {
+        winner: sourceWinner,
+        reason: 'no_program_no_canonical_using_existing_inputs',
+      })
+    } else {
+      // Last resort
+      const { getDefaultAdaptiveInputs } = await import('@/lib/adaptive-program-builder')
+      freshInputs = getDefaultAdaptiveInputs()
+      sourceWinner = 'hard_default_fallback'
+      
+      console.log('[phase23b-modify-entry-source-winner-verdict]', {
+        winner: sourceWinner,
+        reason: 'no_truth_sources_available_using_hard_defaults',
+      })
     }
+    
+    // [PHASE 23B] TASK D - Parity verdict comparing final inputs vs visible program
+    if (program) {
+      const visiblePrimaryGoal = visibleProgramSnapshot?.primaryGoal || program.primaryGoal
+      const visibleScheduleMode = visibleProgramSnapshot?.scheduleMode || program.scheduleMode
+      const visibleSelectedSkills = visibleProgramSnapshot?.selectedSkills || program.selectedSkills || []
+      const visibleTrainingPathType = visibleProgramSnapshot?.trainingPathType || (program as { trainingPathType?: string }).trainingPathType
+      const visibleTrainingDays = visibleProgramSnapshot?.trainingDaysPerWeek || (program as { trainingDaysPerWeek?: number }).trainingDaysPerWeek
+      const visibleExperienceLevel = visibleProgramSnapshot?.experienceLevel || (program as { experienceLevel?: string }).experienceLevel
+      const visibleEquipment = visibleProgramSnapshot?.equipmentAvailable || program.equipment || []
+      
+      const parityCheck = {
+        primaryGoalMatch: freshInputs.primaryGoal === visiblePrimaryGoal,
+        scheduleModeMatch: freshInputs.scheduleMode === visibleScheduleMode,
+        selectedSkillsMatch: JSON.stringify((freshInputs.selectedSkills || []).sort()) === JSON.stringify(visibleSelectedSkills.sort()),
+        trainingPathTypeMatch: freshInputs.trainingPathType === visibleTrainingPathType,
+        trainingDaysMatch: freshInputs.trainingDaysPerWeek === visibleTrainingDays,
+        experienceLevelMatch: freshInputs.experienceLevel === visibleExperienceLevel,
+        equipmentMatch: JSON.stringify((freshInputs.equipment || []).sort()) === JSON.stringify(visibleEquipment.sort()),
+      }
+      const allMatch = Object.values(parityCheck).every(v => v === true)
+      
+      console.log('[phase23b-modify-entry-parity-verdict]', {
+        parityCheck,
+        allFieldsMatch: allMatch,
+        verdict: allMatch 
+          ? 'MODIFY_ENTRY_MATCHES_VISIBLE_PROGRAM'
+          : 'MODIFY_ENTRY_DRIFT_FROM_VISIBLE_PROGRAM',
+      })
+    }
+    
+    // [PHASE 23B] TASK D - Log final payload before opening builder
+    console.log('[phase23b-modify-entry-open-verdict]', {
+      sourceWinner,
+      finalInputs: {
+        primaryGoal: freshInputs.primaryGoal,
+        secondaryGoal: freshInputs.secondaryGoal,
+        scheduleMode: freshInputs.scheduleMode,
+        trainingDaysPerWeek: freshInputs.trainingDaysPerWeek,
+        sessionDurationMode: freshInputs.sessionDurationMode,
+        sessionLength: freshInputs.sessionLength,
+        selectedSkillsCount: freshInputs.selectedSkills?.length ?? 0,
+        selectedSkillsFirst3: (freshInputs.selectedSkills || []).slice(0, 3),
+        trainingPathType: freshInputs.trainingPathType,
+        goalCategoriesCount: freshInputs.goalCategories?.length ?? 0,
+        selectedFlexibilityCount: freshInputs.selectedFlexibility?.length ?? 0,
+        experienceLevel: freshInputs.experienceLevel,
+        equipmentCount: freshInputs.equipment?.length ?? 0,
+      },
+      visibleProgramId: program?.id ?? null,
+      visibleProgramSessionCount: program?.sessions?.length ?? 0,
+    })
+    
+    // Apply fresh inputs to state
+    setInputs(freshInputs)
     
     programModules.recordProgramEnd?.('new_program')
     setShowAdjustmentModal(false)
     
-    // ==========================================================================
-    // [PHASE 22A] TASK 2 - Set builder origin to modify_start_new
-    // This tells the submit handler to use builder-visible inputs directly
-    // ==========================================================================
+    // [PHASE 22A] Set builder origin for modify-specific submit handler
     console.log('[phase22a-builder-origin-transition-audit]', {
       previousOrigin: builderOrigin,
       nextOrigin: 'modify_start_new',
@@ -7915,13 +8155,13 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
     setBuilderOrigin('modify_start_new')
     setShowBuilder(true)
     
-    console.log('[phase21b-modify-branch-verdict]', {
+    console.log('[phase23b-modify-branch-verdict]', {
       branch: 'start_new_program_from_modal',
       builderOpened: true,
-      inputsRehydrated: canonical.primaryGoal && canonical.onboardingComplete,
+      sourceWinner,
       builderOriginSet: 'modify_start_new',
     })
-  }, [programModules, inputs, builderOrigin, program])
+  }, [programModules, inputs, builderOrigin, program, buildModifyEntryInputsFromVisibleProgram])
 
   // TASK 3: Show error state for module load failure with stage info
   if (loadError) {

@@ -3518,12 +3518,13 @@ export default function ProgramPage() {
         : 'MODIFY_SUBMIT_USING_AMBIENT_INPUTS_NO_SESSION',
     })
     
-    // [PHASE 22B] TASK 1 - Pre-fix architecture audit
-    console.log('[phase22b-modify-pre-fix-architecture-audit]', {
+    // [PHASE 24M] Unified architecture audit - Modify now uses same path as Onboarding/Restart
+    console.log('[phase24m-modify-unified-architecture-audit]', {
       handler: 'handleGenerateFromModifyBuilder',
-      currentDispatchMethod: 'server_route_dispatch',
-      usesDirectClientBuilderCall: false,
-      usesFetchToServerRoute: true,
+      currentDispatchMethod: 'canonical_entry_direct_generation',  // [PHASE 24M]
+      usesDirectClientBuilderCall: true,  // [PHASE 24M] Now uses direct call
+      usesFetchToServerRoute: false,  // [PHASE 24M] No longer uses server route
+      usesBuildCanonicalGenerationEntry: true,  // [PHASE 24M] Uses canonical entry builder
       builderOrigin,
       inputsSnapshot: effectiveInputs ? {
         primaryGoal: effectiveInputs.primaryGoal,
@@ -3537,7 +3538,7 @@ export default function ProgramPage() {
         experienceLevel: effectiveInputs.experienceLevel,
         equipmentCount: effectiveInputs.equipment?.length ?? 0,
       } : null,
-      verdict: 'SERVER_ROUTE_DISPATCH_ACTIVE',
+      verdict: 'UNIFIED_CANONICAL_PATH_ACTIVE',
     })
     
     // Validate prerequisites
@@ -3611,96 +3612,110 @@ export default function ProgramPage() {
       })
       
       // ==========================================================================
-      // [PHASE 24F] Dispatch to server route with NEW payload format
-      // Server resolves truth and builds override - client no longer authoritative
+      // [PHASE 24M] UNIFIED CANONICAL PATH - Modify now uses same logic as Restart/Onboarding
+      // Instead of separate server route, use buildCanonicalGenerationEntry with builder overrides
+      // This unifies the generation engine across all rebuild-capable paths
       // ==========================================================================
-      console.log('[phase24f-modify-server-dispatch-start]', {
-        route: '/api/program/generate-from-modify-builder',
-        dispatchMethod: 'fetch',
-        architectureClass: 'server_resolves_truth',
-        clientSendsBuilderInputsOnly: true,
+      console.log('[phase24m-modify-unified-canonical-path-start]', {
+        architectureClass: 'canonical_entry_with_overrides',
+        dispatchMethod: 'generateAdaptiveProgram_direct',
+        usesServerRoute: false,
+        usesBuildCanonicalGenerationEntry: true,
+        unifiedWithOnboardingAndRestart: true,
       })
       
-      const response = await fetch('/api/program/generate-from-modify-builder', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          // Builder-editable fields only
-          builderInputs: effectiveInputs,
-          // Current program ID for potential saved program resolution
-          currentProgramId: program?.id ?? null,
-          // Client canonical snapshot as FALLBACK only (server may prefer its own resolution)
-          clientCanonicalSnapshot,
-          // Context metadata
-          modifyContext: {
-            builderOrigin,
-            builderSessionKey,
-            builderSessionSource,
-            timestamp: new Date().toISOString(),
-          },
-        }),
+      // [PHASE 24M] Import canonical entry builder and generation engine
+      const { buildCanonicalGenerationEntry, entryToAdaptiveInputs } = await import('@/lib/canonical-profile-service')
+      
+      // [PHASE 24M] Build canonical entry with builder inputs as overrides
+      // This ensures Modify uses EXACTLY the same truth resolution as handleGenerate/handleRegenerate
+      const entryResult = buildCanonicalGenerationEntry('handleGenerateFromModifyBuilder', {
+        primaryGoal: effectiveInputs.primaryGoal,
+        secondaryGoal: effectiveInputs.secondaryGoal,
+        experienceLevel: effectiveInputs.experienceLevel,
+        trainingDaysPerWeek: effectiveInputs.trainingDaysPerWeek,
+        sessionLength: effectiveInputs.sessionLength,
+        scheduleMode: effectiveInputs.scheduleMode,
+        sessionDurationMode: effectiveInputs.sessionDurationMode,
+        equipment: effectiveInputs.equipment,
+        selectedSkills: effectiveInputs.selectedSkills,
+        trainingPathType: effectiveInputs.trainingPathType,
+        goalCategories: effectiveInputs.goalCategories,
+        selectedFlexibility: effectiveInputs.selectedFlexibility,
       })
       
-      const result = await response.json()
-      
-      // [PHASE 24F] TASK 4 - Client response verdict
-      console.log('[phase24f-modify-client-response-verdict]', {
-        success: result.success,
-        programId: result.program?.id ?? null,
-        sessionCount: result.program?.sessions?.length ?? 0,
-        primaryGoal: result.program?.primaryGoal ?? null,
-        scheduleMode: result.program?.scheduleMode ?? null,
-        selectedSkillsCount: result.program?.selectedSkills?.length ?? 0,
-        trainingPathType: result.program?.trainingPathType ?? null,
-        error: result.error ?? null,
-        failedStage: result.failedStage ?? null,
-        canonicalSourceWinner: result.diagnostics?.canonicalSourceWinner ?? null,
-        usedServerBuiltOverride: result.diagnostics?.usedServerBuiltOverride ?? null,
-      })
-      
-      // ==========================================================================
-      // [PHASE 24J] TASK 1 - CRITICAL: Returned program selectedSkills trace
-      // Root-cause audit for identity drift in returned program
-      // ==========================================================================
-      if (result.program) {
-        console.log('[phase24j-modify-returned-program-selectedSkills-trace]', {
-          returnedProgramSelectedSkills: result.program.selectedSkills ?? [],
-          returnedProgramSelectedSkillsCount: result.program.selectedSkills?.length ?? 0,
-          returnedHasBackLever: result.program.selectedSkills?.includes('back_lever') ?? false,
-          returnedHasDragonFlag: result.program.selectedSkills?.includes('dragon_flag') ?? false,
-          inputSelectedSkillsCount: effectiveInputs.selectedSkills?.length ?? 0,
-          inputHasBackLever: effectiveInputs.selectedSkills?.includes('back_lever') ?? false,
-          inputHasDragonFlag: effectiveInputs.selectedSkills?.includes('dragon_flag') ?? false,
-          verdict: (result.program.selectedSkills?.length ?? 0) === (effectiveInputs.selectedSkills?.length ?? 0)
-            ? 'RETURNED_PROGRAM_SELECTED_SKILLS_MATCH_INPUTS'
-            : 'RETURNED_PROGRAM_SELECTED_SKILLS_DIFFER_FROM_INPUTS',
-        })
+      if (!entryResult.success) {
+        const errorMsg = entryResult.error?.message || 'Failed to build generation entry'
+        console.error('[ProgramPage] handleGenerateFromModifyBuilder: Entry validation failed', entryResult.error)
+        throw new Error(errorMsg)
       }
       
-      if (!result.success || !result.program) {
-        throw new Error(result.error || 'Server generation failed')
+      // [PHASE 24M] Convert canonical entry to inputs shape - same as handleGenerate/handleRegenerate
+      const generationInputs = entryToAdaptiveInputs(entryResult.entry!)
+      
+      console.log('[phase24m-modify-unified-entry-audit]', {
+        entrySuccess: true,
+        entrySource: entryResult.entry?.__entrySource,
+        entryFallbacksUsed: entryResult.entry?.__fallbacksUsed || [],
+        generationInputsPrimaryGoal: generationInputs.primaryGoal,
+        generationInputsSecondaryGoal: generationInputs.secondaryGoal,
+        generationInputsScheduleMode: generationInputs.scheduleMode,
+        generationInputsSelectedSkillsCount: generationInputs.selectedSkills?.length ?? 0,
+        generationInputsSelectedSkills: generationInputs.selectedSkills ?? [],
+        selectedSkillsHasBackLever: generationInputs.selectedSkills?.includes('back_lever') ?? false,
+        selectedSkillsHasDragonFlag: generationInputs.selectedSkills?.includes('dragon_flag') ?? false,
+        verdict: 'UNIFIED_WITH_CANONICAL_PATH',
+      })
+      
+      // [PHASE 24M] Call generateAdaptiveProgram directly - SAME as handleGenerate/handleRegenerate
+      if (!programModules.generateAdaptiveProgram) {
+        throw new Error('Program builder module not loaded')
       }
       
-      const newProgram = result.program
+      const newProgram = await programModules.generateAdaptiveProgram(generationInputs)
+      
+      // [PHASE 24M] Validate program shape - same as handleGenerate
+      if (!newProgram) {
+        throw new Error('generateAdaptiveProgram returned null/undefined')
+      }
+      if (!newProgram.id) {
+        throw new Error('program has no id field')
+      }
+      if (!Array.isArray(newProgram.sessions) || newProgram.sessions.length === 0) {
+        throw new Error('program has no valid sessions')
+      }
+      
+      console.log('[phase24m-modify-unified-generation-result]', {
+        programId: newProgram.id,
+        sessionCount: newProgram.sessions?.length ?? 0,
+        primaryGoal: newProgram.primaryGoal,
+        secondaryGoal: newProgram.secondaryGoal,
+        scheduleMode: newProgram.scheduleMode,
+        selectedSkillsCount: newProgram.selectedSkills?.length ?? 0,
+        selectedSkillsHasBackLever: newProgram.selectedSkills?.includes('back_lever') ?? false,
+        selectedSkillsHasDragonFlag: newProgram.selectedSkills?.includes('dragon_flag') ?? false,
+        verdict: 'GENERATED_VIA_UNIFIED_CANONICAL_PATH',
+      })
       
       // Save the program
       await programModules.saveAdaptiveProgram(newProgram)
       
       // Update canonical profile to match what was just generated
+      // [PHASE 24M] Use generationInputs (after canonical resolution) for consistency
       const { updateCanonicalProfile } = await import('@/lib/canonical-profile-service')
       updateCanonicalProfile({
-        primaryGoal: effectiveInputs.primaryGoal,
-        secondaryGoal: effectiveInputs.secondaryGoal,
-        trainingDaysPerWeek: effectiveInputs.trainingDaysPerWeek,
-        scheduleMode: effectiveInputs.scheduleMode,
-        sessionDurationMode: effectiveInputs.sessionDurationMode,
-        sessionLengthMinutes: effectiveInputs.sessionLength,
-        selectedSkills: effectiveInputs.selectedSkills,
-        trainingPathType: effectiveInputs.trainingPathType,
-        experienceLevel: effectiveInputs.experienceLevel,
-        equipmentAvailable: effectiveInputs.equipment,
-        goalCategories: effectiveInputs.goalCategories,
-        selectedFlexibility: effectiveInputs.selectedFlexibility,
+        primaryGoal: generationInputs.primaryGoal,
+        secondaryGoal: generationInputs.secondaryGoal,
+        trainingDaysPerWeek: generationInputs.trainingDaysPerWeek,
+        scheduleMode: generationInputs.scheduleMode,
+        sessionDurationMode: generationInputs.sessionDurationMode,
+        sessionLengthMinutes: generationInputs.sessionLength,
+        selectedSkills: generationInputs.selectedSkills,
+        trainingPathType: generationInputs.trainingPathType,
+        experienceLevel: generationInputs.experienceLevel,
+        equipmentAvailable: generationInputs.equipment,
+        goalCategories: generationInputs.goalCategories,
+        selectedFlexibility: generationInputs.selectedFlexibility,
       })
       
       // [PHASE 24F] TASK 5 - Post-save parity audit
@@ -3732,21 +3747,23 @@ export default function ProgramPage() {
           : 'SESSION_COUNT_SAME_AS_VISIBLE',
       })
       
-      // [PHASE 22B] TASK 6 - Success final parity verdict
-      console.log('[phase22b-modify-success-final-parity-verdict]', {
-        inputPrimaryGoal: effectiveInputs.primaryGoal,
-        inputScheduleMode: effectiveInputs.scheduleMode,
-        inputSelectedSkillsCount: effectiveInputs.selectedSkills?.length ?? 0,
+      // [PHASE 24M] Success final parity verdict - unified path
+      console.log('[phase24m-modify-success-final-parity-verdict]', {
+        inputPrimaryGoal: generationInputs.primaryGoal,
+        inputScheduleMode: generationInputs.scheduleMode,
+        inputSelectedSkillsCount: generationInputs.selectedSkills?.length ?? 0,
         outputPrimaryGoal: newProgram.primaryGoal,
         outputScheduleMode: newProgram.scheduleMode,
         outputSessionCount: newProgram.sessions?.length ?? 0,
-        inputWasFlexible: effectiveInputs.scheduleMode === 'flexible',
+        outputSelectedSkillsCount: newProgram.selectedSkills?.length ?? 0,
+        inputWasFlexible: generationInputs.scheduleMode === 'flexible',
         outputHas6PlusSessions: (newProgram.sessions?.length ?? 0) >= 6,
+        unifiedPathUsed: true,
       })
       
       // Reset builder origin after successful save/hydration
-      console.log('[phase22b-builder-origin-reset-audit]', {
-        resetTrigger: 'successful_modify_server_generation_complete',
+      console.log('[phase24m-builder-origin-reset-audit]', {
+        resetTrigger: 'successful_modify_unified_canonical_generation_complete',
         resetOccurredAfterHydration: true,
         previousOrigin: builderOrigin,
         newOrigin: 'default',
@@ -3757,7 +3774,7 @@ export default function ProgramPage() {
       // Build success result for consistency
       const successResult = {
         status: 'success' as const,
-        attemptId: `modify_server_${Date.now()}`,
+        attemptId: `modify_unified_${Date.now()}`,
         runtimeSessionId: runtimeSessionIdRef.current,
         timestamp: new Date().toISOString(),
       }
@@ -3767,7 +3784,7 @@ export default function ProgramPage() {
         errorCode: null,
         subCode: 'none',
         userMessage: 'Program generated successfully',
-        devMessage: 'Modify builder server generation completed',
+        devMessage: 'Modify builder unified canonical generation completed',  // [PHASE 24M]
         failureStep: null,
         failureMiddleStep: null,
         failureDayNumber: null,
@@ -3775,25 +3792,25 @@ export default function ProgramPage() {
         hydratedFromStorage: false,
       })
       
-      // [PHASE 22B/24A] TASK 7 - Final root cause verdict
+      // [PHASE 24M] Final unified architecture verdict
       const sessionCount = newProgram.sessions?.length ?? 0
-      const inputWasFlexible = effectiveInputs.scheduleMode === 'flexible'
+      const inputWasFlexible = generationInputs.scheduleMode === 'flexible'
       
-      console.log('[phase22b-final-root-cause-verdict]', {
-        modifyUsesServerRoute: true,
-        modifyNoLongerCallsClientBuilderDirectly: true,
-        canonicalProfileOverrideWasPassed: true,
+      console.log('[phase24m-unified-architecture-final-verdict]', {
+        modifyUsesServerRoute: false,  // [PHASE 24M] No longer uses server route
+        modifyUsesCanonicalEntryBuilder: true,  // [PHASE 24M] Uses buildCanonicalGenerationEntry
+        modifyCallsGenerateAdaptiveProgramDirectly: true,  // [PHASE 24M] Direct call like handleGenerate
+        unifiedWithOnboardingAndRestart: true,
         overrideBuiltFromSessionInputs: !!builderSessionInputs,
         builderSessionKey,
-        architectureMatchesOnboarding: true,
         outputSessionCount: sessionCount,
         outputPrimaryGoal: newProgram.primaryGoal,
-        inputScheduleMode: effectiveInputs.scheduleMode,
-        verdict: sessionCount >= 6 && inputWasFlexible
-          ? 'REAL_ROOT_CAUSE_FIXED_MODIFY_NOW_MATCHES_ONBOARDING_ARCHITECTURE'
-          : sessionCount === 4 && inputWasFlexible
-            ? 'MODIFY_PATH_ARCHITECTURE_FIXED_BUT_BUILDER_INTERNAL_COLLAPSE_REMAINS'
-            : 'STATIC_MODE_OR_OTHER_SESSION_COUNT_CHECK_INPUTS',
+        outputSelectedSkillsCount: newProgram.selectedSkills?.length ?? 0,
+        inputScheduleMode: generationInputs.scheduleMode,
+        inputSelectedSkillsCount: generationInputs.selectedSkills?.length ?? 0,
+        selectedSkillsHasBackLever: newProgram.selectedSkills?.includes('back_lever') ?? false,
+        selectedSkillsHasDragonFlag: newProgram.selectedSkills?.includes('dragon_flag') ?? false,
+        verdict: 'MODIFY_NOW_USES_SAME_CANONICAL_PATH_AS_ONBOARDING_AND_RESTART',
       })
       
     } catch (error) {

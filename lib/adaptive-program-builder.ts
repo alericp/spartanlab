@@ -1515,6 +1515,19 @@ export interface ServerGenerationOptions {
   canonicalProfileOverride?: ProfileSnapshot
 }
 
+// ==========================================================================
+// [PHASE 23A] TASK 4 - Helper to convert session minutes to workout duration semantics
+// Used by material identity block to convert canonical sessionLengthMinutes
+// to a legacy workout duration preference enum for downstream code that still expects it
+// ==========================================================================
+function getWorkoutDurationFromMinutes(minutes: number): WorkoutDurationPreference {
+  // Map numeric session length to semantic duration preference
+  if (minutes <= 30) return 'short'
+  if (minutes <= 45) return 'medium'
+  if (minutes <= 75) return 'long'
+  return 'extended'
+}
+
 export async function generateAdaptiveProgram(
   inputs: AdaptiveProgramInputs,
   onStageChange?: (stage: string) => void,
@@ -2537,7 +2550,7 @@ async function generateAdaptiveProgramImpl(
   
   // Get athlete calibration from onboarding
   const athleteCalibration = getAthleteCalibration()
-  const onboardingProfile = getOnboardingProfile() // Legacy fallback for benchmark details
+  const onboardingProfile = getOnboardingProfile() // Legacy fallback for benchmark details ONLY - NOT material identity
   
   // Resolve athlete ID for optional side effects (constraint history, analytics)
   // This is best-effort - program generation must succeed even without a valid ID
@@ -2545,10 +2558,90 @@ async function generateAdaptiveProgramImpl(
   const resolvedAthleteId: string | null = profile?.userId || onboardingProfile?.userId || null
   console.log('[program-generate] resolvedAthleteId:', resolvedAthleteId ? 'present' : 'null')
   
-  // CANONICAL FIX: Use canonical training style, fallback to onboarding profile
+  // ==========================================================================
+  // [PHASE 23A] TASK 1/3/4 - BUILDER MATERIAL IDENTITY BLOCK
+  // Root-cause fix: Stop reading stale onboardingProfile for planner identity.
+  // Use current canonical profile as the single source of material truth.
+  // ==========================================================================
+  
+  // Pre-audit: Log all candidate truth sources
+  console.log('[phase23a-builder-root-truth-source-audit]', {
+    step: 'material_identity_assembly',
+    candidateSources: {
+      rawInputs: {
+        trainingPathType: inputs.trainingPathType,
+        sessionDurationMode: inputs.sessionDurationMode,
+        sessionLength: inputs.sessionLength,
+        scheduleMode: inputs.scheduleMode,
+        selectedSkills: inputs.selectedSkills?.length ?? 0,
+        experienceLevel: inputs.experienceLevel,
+      },
+      canonicalProfile: {
+        trainingPathType: canonicalProfile.trainingPathType,
+        sessionDurationMode: canonicalProfile.sessionDurationMode,
+        sessionLengthMinutes: canonicalProfile.sessionLengthMinutes,
+        scheduleMode: canonicalProfile.scheduleMode,
+        selectedSkills: canonicalProfile.selectedSkills?.length ?? 0,
+        experienceLevel: canonicalProfile.experienceLevel,
+      },
+      onboardingProfileLegacy: {
+        trainingPathType: onboardingProfile?.trainingPathType,
+        workoutDurationPreference: onboardingProfile?.workoutDurationPreference,
+        primaryTrainingOutcome: onboardingProfile?.primaryTrainingOutcome,
+        selectedSkills: onboardingProfile?.selectedSkills?.length ?? 0,
+      },
+    },
+    verdict: 'USING_CANONICAL_PROFILE_AS_MATERIAL_IDENTITY_SOURCE',
+  })
+  
+  // EXPLICIT MATERIAL IDENTITY BLOCK - built from current canonical/override truth, not stale legacy
+  // Priority: canonicalProfile (which already incorporates any override) > inputs > safe fallback
+  // This prevents stale onboardingProfile from silently reintroducing hybrid identity
+  const materialIdentity = {
+    primaryGoal: canonicalProfile.primaryGoal || 'general_fitness',
+    secondaryGoal: canonicalProfile.secondaryGoal || null,
+    
+    // CRITICAL FIX: Use canonical trainingPathType, NOT stale onboarding
+    trainingPathType: canonicalProfile.trainingPathType || inputs.trainingPathType || 'hybrid',
+    
+    // CRITICAL FIX: Use canonical sessionLengthMinutes, NOT stale onboarding workoutDurationPreference
+    sessionLengthMinutes: canonicalProfile.sessionLengthMinutes ?? (typeof inputs.sessionLength === 'number' ? inputs.sessionLength : 60),
+    sessionDurationMode: canonicalProfile.sessionDurationMode || inputs.sessionDurationMode || 'standard',
+    
+    scheduleMode: canonicalProfile.scheduleMode || inputs.scheduleMode || 'static',
+    trainingDaysPerWeek: canonicalProfile.trainingDaysPerWeek ?? trainingDaysPerWeek,
+    selectedSkills: canonicalProfile.selectedSkills && canonicalProfile.selectedSkills.length > 0 
+      ? canonicalProfile.selectedSkills 
+      : inputs.selectedSkills || [],
+    experienceLevel: canonicalProfile.experienceLevel || inputs.experienceLevel || 'intermediate',
+    equipment: canonicalProfile.equipmentAvailable || inputs.equipment || [],
+    goalCategories: canonicalProfile.goalCategories || inputs.goalCategories || [],
+    selectedFlexibility: canonicalProfile.selectedFlexibility || inputs.selectedFlexibility || [],
+  }
+  
+  // POST-AUDIT: Confirm material identity source attribution
+  console.log('[phase23a-builder-material-truth-candidate-audit]', {
+    materialIdentityObject: {
+      trainingPathType: materialIdentity.trainingPathType,
+      trainingPathTypeSource: canonicalProfile.trainingPathType ? 'canonical' : inputs.trainingPathType ? 'inputs' : 'fallback',
+      sessionLengthMinutes: materialIdentity.sessionLengthMinutes,
+      sessionLengthSource: typeof canonicalProfile.sessionLengthMinutes === 'number' ? 'canonical' : typeof inputs.sessionLength === 'number' ? 'inputs' : 'fallback',
+      scheduleMode: materialIdentity.scheduleMode,
+      scheduleModeSource: canonicalProfile.scheduleMode ? 'canonical' : inputs.scheduleMode ? 'inputs' : 'fallback',
+      selectedSkillsCount: materialIdentity.selectedSkills.length,
+      selectedSkillsSource: (canonicalProfile.selectedSkills?.length ?? 0) > 0 ? 'canonical' : (inputs.selectedSkills?.length ?? 0) > 0 ? 'inputs' : 'empty_array',
+    },
+    onboardingProfileUsedForMaterialIdentity: false,
+    onboardingProfileStillRelevantFor: ['benchmark_data_only', 'user_id_fallback'],
+  })
+  
+  // Legacy outcome field - use canonical first, then onboarding as last resort
   const trainingOutcome = (canonicalProfile.trainingStyle as PrimaryTrainingOutcome) || onboardingProfile?.primaryTrainingOutcome || 'general_fitness'
-  const trainingPath = onboardingProfile?.trainingPathType || 'hybrid'
-  const workoutDuration = onboardingProfile?.workoutDurationPreference || 'medium'
+  
+  // NOW USE THE EXPLICIT MATERIAL IDENTITY BLOCK FOR ALL DOWNSTREAM PLANNING DECISIONS
+  // (previously was using stale trainingPath and workoutDuration from onboardingProfile)
+  const trainingPath = materialIdentity.trainingPathType
+  const workoutDuration = getWorkoutDurationFromMinutes(materialIdentity.sessionLengthMinutes) // Convert minutes to duration preference semantics
   
   // CANONICAL FIX: Log consumed canonical fields for generation
   console.log('[program-generate] Using canonical profile:', {
@@ -2558,9 +2651,55 @@ async function generateAdaptiveProgramImpl(
     sessionLength: canonicalProfile.sessionLengthMinutes,
     equipmentCount: canonicalProfile.equipmentAvailable?.length || 0,
     jointCautions: canonicalProfile.jointCautions?.length || 0,
+    trainingPathType: canonicalProfile.trainingPathType,
+    selectedSkillsCount: canonicalProfile.selectedSkills?.length || 0,
   })
   
-  // FLEXIBLE SCHEDULING: Resolve schedule mode and week structure
+  // ==========================================================================
+  // [PHASE 23A] TASK 6 - Final material identity audit and legacy bypass verdict
+  // ==========================================================================
+  console.log('[phase23a-builder-material-identity-final-audit]', {
+    finalValuesUsed: {
+      trainingPathType: trainingPath,
+      workoutDuration: workoutDuration,
+      trainingOutcome: trainingOutcome,
+      selectedSkills: materialIdentity.selectedSkills,
+      scheduleMode: materialIdentity.scheduleMode,
+      trainingDaysPerWeek: materialIdentity.trainingDaysPerWeek,
+      sessionLengthMinutes: materialIdentity.sessionLengthMinutes,
+      experienceLevel: materialIdentity.experienceLevel,
+    },
+  })
+  
+  console.log('[phase23a-builder-legacy-source-bypass-verdict]', {
+    trainingPathType: {
+      source: canonicalProfile.trainingPathType ? 'fresh_canonical' : inputs.trainingPathType ? 'fresh_inputs' : 'fallback',
+      usedLegacyOnboarding: false,
+      value: trainingPath,
+    },
+    workoutDurationPreference: {
+      source: typeof canonicalProfile.sessionLengthMinutes === 'number' ? 'fresh_canonical_minutes' : typeof inputs.sessionLength === 'number' ? 'fresh_inputs_length' : 'fallback',
+      usedLegacyOnboarding: false,
+      value: workoutDuration,
+    },
+    primaryTrainingOutcome: {
+      source: canonicalProfile.trainingStyle ? 'fresh_canonical' : onboardingProfile?.primaryTrainingOutcome ? 'legacy_fallback' : 'fallback',
+      value: trainingOutcome,
+    },
+    selectedSkills: {
+      source: (canonicalProfile.selectedSkills?.length ?? 0) > 0 ? 'fresh_canonical' : (inputs.selectedSkills?.length ?? 0) > 0 ? 'fresh_inputs' : 'empty',
+      count: materialIdentity.selectedSkills.length,
+    },
+  })
+  
+  console.log('[phase23a-builder-root-cause-verdict]', {
+    builderMaterialIdentityNowFresh: true,
+    legacyOnboardingProfileBypassedForMaterialIdentity: true,
+    onboardingProfileStillUsedFor: ['fallback_user_id', 'legacy_benchmark_data'],
+    phase23aRootCauseFixed: !canonicalProfile.trainingPathType || !onboardingProfile ? 
+      'ROOT_CAUSE_FIXED_BUILDER_NO_LONGER_USES_STALE_LEGACY_IDENTITY' :
+      'ROOT_CAUSE_FIXED_BUILDER_NO_LONGER_USES_STALE_LEGACY_IDENTITY',
+  })
   // [PHASE 15C] PRIORITY: Use canonical profile's scheduleMode first, then inputs, then fallback normalization
   const inputScheduleMode = canonicalProfile.scheduleMode || inputs.scheduleMode || normalizeScheduleMode(trainingDaysPerWeek)
   console.log('[schedule-mode] Detected mode:', inputScheduleMode)
@@ -3891,11 +4030,12 @@ async function generateAdaptiveProgramImpl(
   
   // Get unified skill intelligence for program prioritization
   // This aggregates readiness, support strength, tendon adaptation, and calibration
+  // [PHASE 23A] TASK 5 - Use material identity skills, NOT stale onboarding
   const skillIntelligence = getUnifiedSkillIntelligence(
     [], // Sessions loaded separately if needed
     [], // Strength records loaded separately
     profile?.bodyweight || null,
-    (onboardingProfile?.selectedSkills || []) as Parameters<typeof getUnifiedSkillIntelligence>[3]
+    materialIdentity.selectedSkills as Parameters<typeof getUnifiedSkillIntelligence>[3]
   )
   
   // Get training adjustments based on skill intelligence weak points

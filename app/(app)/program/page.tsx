@@ -3562,124 +3562,54 @@ export default function ProgramPage() {
     
     try {
       // ==========================================================================
-      // [PHASE 22B] TASK 4 - Build canonicalProfileOverride from current modify builder truth
-      // Use current canonical as BASE for non-builder fields, but OVERRIDE all
-      // material planning identity fields from current visible inputs.
+      // [PHASE 24F] TASK 2 - Send THIN payload to server
+      // Server now resolves canonical truth itself, client only sends builder inputs
       // ==========================================================================
-      const canonicalBase = getCanonicalProfile()
+      const clientCanonicalSnapshot = getCanonicalProfile()
       
-      const canonicalProfileOverride = {
-        // Required ProfileSnapshot fields
-        snapshotId: `modify-builder-${Date.now()}`,
-        createdAt: new Date().toISOString(),
-        onboardingComplete: canonicalBase.onboardingComplete ?? true,
-        
-        // MATERIAL IDENTITY FIELDS - override from effective session inputs (these are what matter for planning)
-        primaryGoal: effectiveInputs.primaryGoal,
-        secondaryGoal: effectiveInputs.secondaryGoal ?? null,
-        goalCategory: effectiveInputs.primaryGoal,
-        selectedSkills: effectiveInputs.selectedSkills ?? [],
-        selectedFlexibility: effectiveInputs.selectedFlexibility ?? [],
-        selectedStrength: effectiveInputs.selectedStrength ?? [],
-        goalCategories: effectiveInputs.goalCategories ?? [],
-        trainingPathType: effectiveInputs.trainingPathType,
-        experienceLevel: effectiveInputs.experienceLevel,
-        
-        // Schedule fields - override from effective session inputs
-        scheduleMode: effectiveInputs.scheduleMode,
-        sessionDurationMode: effectiveInputs.sessionDurationMode,
-        trainingDaysPerWeek: effectiveInputs.trainingDaysPerWeek,
-        sessionLengthMinutes: effectiveInputs.sessionLength,
-        
-        // Equipment - override from effective session inputs
-        equipment: effectiveInputs.equipment ?? [],
-        equipmentAvailable: effectiveInputs.equipment ?? [],
-        
-        // NON-BUILDER FIELDS - preserve from canonical base
-        bodyweight: canonicalBase.bodyweight,
-        sex: canonicalBase.sex,
-        trainingStyle: canonicalBase.trainingStyle,
-        jointCautions: canonicalBase.jointCautions ?? [],
-        weakestArea: canonicalBase.weakestArea,
-        
-        // Benchmark data - preserve from canonical base
-        benchmarks: canonicalBase.benchmarks ?? {},
-        skillBenchmarks: canonicalBase.skillBenchmarks ?? {},
-        flexibilityBenchmarks: canonicalBase.flexibilityBenchmarks ?? {},
-        weightedBenchmarks: canonicalBase.weightedBenchmarks ?? {},
-      }
-      
-      // [PHASE 22B] TASK 4 - Canonical override construction audit
-      console.log('[phase22b-modify-canonical-override-construction-audit]', {
-        effectiveInputs: {
-          primaryGoal: effectiveInputs.primaryGoal,
-          secondaryGoal: effectiveInputs.secondaryGoal,
-          scheduleMode: effectiveInputs.scheduleMode,
-          trainingDaysPerWeek: effectiveInputs.trainingDaysPerWeek,
-          sessionDurationMode: effectiveInputs.sessionDurationMode,
-          sessionLength: effectiveInputs.sessionLength,
-          selectedSkillsCount: effectiveInputs.selectedSkills?.length ?? 0,
-          trainingPathType: effectiveInputs.trainingPathType,
-          experienceLevel: effectiveInputs.experienceLevel,
-          equipmentCount: effectiveInputs.equipment?.length ?? 0,
-        },
-        canonicalBase: {
-          primaryGoal: canonicalBase.primaryGoal,
-          scheduleMode: canonicalBase.scheduleMode,
-          trainingDaysPerWeek: canonicalBase.trainingDaysPerWeek,
-          selectedSkillsCount: canonicalBase.selectedSkills?.length ?? 0,
-        },
-        finalOverride: {
-          primaryGoal: canonicalProfileOverride.primaryGoal,
-          secondaryGoal: canonicalProfileOverride.secondaryGoal,
-          scheduleMode: canonicalProfileOverride.scheduleMode,
-          trainingDaysPerWeek: canonicalProfileOverride.trainingDaysPerWeek,
-          sessionLengthMinutes: canonicalProfileOverride.sessionLengthMinutes,
-          selectedSkillsCount: canonicalProfileOverride.selectedSkills?.length ?? 0,
-          trainingPathType: canonicalProfileOverride.trainingPathType,
-          experienceLevel: canonicalProfileOverride.experienceLevel,
-          equipmentCount: canonicalProfileOverride.equipmentAvailable?.length ?? 0,
-        },
-        currentInputsWonAllMaterialFields: true,
+      // [PHASE 24F] TASK 4 - Client dispatch payload audit
+      console.log('[phase24f-modify-client-dispatch-payload-audit]', {
+        route: '/api/program/generate-from-modify-builder',
+        builderOrigin,
+        builderSessionKey,
+        builderSessionSource,
+        currentProgramId: program?.id ?? null,
+        builderInputsPrimaryGoal: effectiveInputs.primaryGoal,
+        builderInputsScheduleMode: effectiveInputs.scheduleMode,
+        builderInputsTrainingDaysPerWeek: effectiveInputs.trainingDaysPerWeek,
+        builderInputsSelectedSkillsCount: effectiveInputs.selectedSkills?.length ?? 0,
+        builderInputsTrainingPathType: effectiveInputs.trainingPathType,
+        builderInputsGoalCategoriesCount: effectiveInputs.goalCategories?.length ?? 0,
+        builderInputsSelectedFlexibilityCount: effectiveInputs.selectedFlexibility?.length ?? 0,
+        builderInputsExperienceLevel: effectiveInputs.experienceLevel,
+        builderInputsEquipmentCount: effectiveInputs.equipment?.length ?? 0,
+        clientCanonicalSnapshotPrimaryGoal: clientCanonicalSnapshot.primaryGoal,
+        clientCanonicalSnapshotScheduleMode: clientCanonicalSnapshot.scheduleMode,
+        clientCanonicalSnapshotSelectedSkillsCount: clientCanonicalSnapshot.selectedSkills?.length ?? 0,
       })
       
       // ==========================================================================
-      // [PHASE 22B] TASK 5 - Parity check before dispatch
+      // [PHASE 24F] Dispatch to server route with NEW payload format
+      // Server resolves truth and builds override - client no longer authoritative
       // ==========================================================================
-      const parityCheck = {
-        primaryGoalMatch: effectiveInputs.primaryGoal === canonicalProfileOverride.primaryGoal,
-        scheduleModeMatch: effectiveInputs.scheduleMode === canonicalProfileOverride.scheduleMode,
-        trainingDaysMatch: effectiveInputs.trainingDaysPerWeek === canonicalProfileOverride.trainingDaysPerWeek,
-        sessionLengthMatch: effectiveInputs.sessionLength === canonicalProfileOverride.sessionLengthMinutes,
-        selectedSkillsMatch: (effectiveInputs.selectedSkills?.length ?? 0) === (canonicalProfileOverride.selectedSkills?.length ?? 0),
-        experienceLevelMatch: effectiveInputs.experienceLevel === canonicalProfileOverride.experienceLevel,
-        trainingPathTypeMatch: effectiveInputs.trainingPathType === canonicalProfileOverride.trainingPathType,
-      }
-      const allFieldsMatch = Object.values(parityCheck).every(v => v === true)
-      
-      console.log('[phase22b-modify-client-server-payload-parity-audit]', {
-        parityCheck,
-        allFieldsMatch,
-        verdict: allFieldsMatch 
-          ? 'MODIFY_SERVER_PAYLOAD_HAS_FULL_CURRENT_INPUT_PARITY'
-          : 'MODIFY_SERVER_PAYLOAD_STILL_DRIFTED',
-      })
-      
-      // ==========================================================================
-      // [PHASE 22B] TASK 3 - Dispatch to server route instead of direct client call
-      // ==========================================================================
-      console.log('[phase22b-modify-server-dispatch-start]', {
+      console.log('[phase24f-modify-server-dispatch-start]', {
         route: '/api/program/generate-from-modify-builder',
         dispatchMethod: 'fetch',
-        architectureMirrorsOnboarding: true,
+        architectureClass: 'server_resolves_truth',
+        clientSendsBuilderInputsOnly: true,
       })
       
       const response = await fetch('/api/program/generate-from-modify-builder', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          // Builder-editable fields only
           builderInputs: effectiveInputs,
-          canonicalProfileOverride,
+          // Current program ID for potential saved program resolution
+          currentProgramId: program?.id ?? null,
+          // Client canonical snapshot as FALLBACK only (server may prefer its own resolution)
+          clientCanonicalSnapshot,
+          // Context metadata
           modifyContext: {
             builderOrigin,
             builderSessionKey,
@@ -3691,15 +3621,19 @@ export default function ProgramPage() {
       
       const result = await response.json()
       
-      // [PHASE 22B] TASK 6 - Client response audit
-      console.log('[phase22b-modify-client-response-audit]', {
+      // [PHASE 24F] TASK 4 - Client response verdict
+      console.log('[phase24f-modify-client-response-verdict]', {
         success: result.success,
-        hasProgram: !!result.program,
+        programId: result.program?.id ?? null,
         sessionCount: result.program?.sessions?.length ?? 0,
         primaryGoal: result.program?.primaryGoal ?? null,
         scheduleMode: result.program?.scheduleMode ?? null,
+        selectedSkillsCount: result.program?.selectedSkills?.length ?? 0,
+        trainingPathType: result.program?.trainingPathType ?? null,
         error: result.error ?? null,
         failedStage: result.failedStage ?? null,
+        canonicalSourceWinner: result.diagnostics?.canonicalSourceWinner ?? null,
+        usedServerBuiltOverride: result.diagnostics?.usedServerBuiltOverride ?? null,
       })
       
       if (!result.success || !result.program) {
@@ -3728,6 +3662,9 @@ export default function ProgramPage() {
         selectedFlexibility: effectiveInputs.selectedFlexibility,
       })
       
+      // [PHASE 24F] TASK 5 - Post-save parity audit
+      const visibleSessionCountBeforeSet = program?.sessions?.length ?? 0
+      
       // Hydrate UI
       setProgram(newProgram)
       setShowBuilder(false)
@@ -3739,6 +3676,20 @@ export default function ProgramPage() {
       setBuilderSessionInputs(null)
       setBuilderSessionKey('initial')
       setBuilderSessionSource(null)
+      
+      // [PHASE 24F] TASK 5 - Post-save visible parity audit
+      console.log('[phase24f-modify-postsave-visible-parity-audit]', {
+        returnedProgramId: newProgram.id,
+        visibleProgramIdAfterSet: newProgram.id,
+        returnedSessionCount: newProgram.sessions?.length ?? 0,
+        visibleSessionCountBeforeSet,
+        builderOriginBeforeReset: builderOrigin,
+        builderSessionInputsCleared: true,
+        modifyFlowStateReset: true,
+        verdict: (newProgram.sessions?.length ?? 0) !== visibleSessionCountBeforeSet
+          ? 'SESSION_COUNT_CHANGED_FROM_VISIBLE'
+          : 'SESSION_COUNT_SAME_AS_VISIBLE',
+      })
       
       // [PHASE 22B] TASK 6 - Success final parity verdict
       console.log('[phase22b-modify-success-final-parity-verdict]', {

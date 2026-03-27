@@ -1,26 +1,27 @@
 import { NextResponse } from 'next/server'
 import { getSession, getCurrentUserServer } from '@/lib/auth-service-server'
 import { resolveCanonicalDbUserId } from '@/lib/subscription-service'
+import { getCanonicalProfile } from '@/lib/canonical-profile-service'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30 // Allow up to 30 seconds for generation
 
 /**
- * [PHASE 22B] Server-Side Modify Builder Generation Route
+ * [PHASE 24F] Server-Side Modify Builder Generation Route
  * 
- * This endpoint mirrors the working onboarding/regenerate generation architecture:
- * 1. Receives builderInputs and canonicalProfileOverride from client
- * 2. Does NOT re-resolve canonical truth on server (client already built the override)
- * 3. Calls generateAdaptiveProgram with the client-passed override
- * 4. Returns the generated program
+ * This endpoint NOW mirrors the working onboarding/rebuild-adjustment architecture:
+ * 1. Receives builderInputs (editable fields) + clientCanonicalSnapshot (fallback) from client
+ * 2. Resolves canonical truth on SERVER (does NOT trust client-built override)
+ * 3. Constructs server-side canonicalProfileOverride by:
+ *    - Using strongest server truth as BASE
+ *    - Merging ONLY builder-editable fields from builderInputs on top
+ * 4. Calls generateAdaptiveProgram with the server-built override
+ * 5. Returns the generated program
  * 
- * This fixes the architectural divergence where modify builder submit was using
- * direct client builder call while onboarding used server-side orchestration.
- * 
- * KEY DIFFERENCE from rebuild-adjustment route:
- * - rebuild-adjustment re-resolves canonical on server
- * - this route TRUSTS client-passed canonicalProfileOverride because modify builder
- *   has already shown user the correct values and user is submitting from that state
+ * KEY ARCHITECTURAL FIX from Phase 24F:
+ * - REMOVED: Trusting client-passed canonicalProfileOverride as authoritative
+ * - ADDED: Server resolves freshest truth and builds override itself
+ * - This matches how rebuild-adjustment and onboarding work
  */
 
 interface StageTimings {
@@ -36,16 +37,17 @@ export async function POST(request: Request) {
     const elapsed = Date.now() - routeStartTime
     timings[currentStage] = elapsed
     currentStage = stage
-    console.log(`[phase22b-modify-server-stage] ${stage} at ${elapsed}ms`)
+    console.log(`[phase24f-modify-server-stage] ${stage} at ${elapsed}ms`)
   }
   
-  // [PHASE 22B] Route entry audit
-  console.log('[phase22b-modify-server-route-entry-audit]', {
+  // [PHASE 24F] Route entry audit - this now mirrors onboarding truth class
+  console.log('[phase24f-modify-server-route-entry-audit]', {
     timestamp: new Date().toISOString(),
     route: '/api/program/generate-from-modify-builder',
-    architectureClass: 'server_side_generation',
+    architectureClass: 'server_side_truth_construction',
     mirrorsOnboardingPattern: true,
-    clientTrustModel: 'trusts_client_canonical_override_from_modify_builder',
+    mirrorsRebuildAdjustmentPattern: true,
+    clientTrustModel: 'server_resolves_truth_client_sends_builder_inputs_only',
   })
   
   try {
@@ -56,7 +58,7 @@ export async function POST(request: Request) {
     const { userId: authUserId } = await getSession()
     
     if (!authUserId) {
-      console.log('[phase22b-modify-server-route-error-audit]', {
+      console.log('[phase24f-modify-server-route-error-audit]', {
         failedStage: 'auth',
         reason: 'unauthorized',
         elapsedMs: Date.now() - routeStartTime,
@@ -83,7 +85,7 @@ export async function POST(request: Request) {
     )
     
     if (!dbUserId) {
-      console.log('[phase22b-modify-server-route-error-audit]', {
+      console.log('[phase24f-modify-server-route-error-audit]', {
         failedStage: 'db_user_resolution',
         reason: userResolutionError,
         elapsedMs: Date.now() - routeStartTime,
@@ -100,19 +102,25 @@ export async function POST(request: Request) {
     
     // ==========================================================================
     // STAGE: Parse request body
+    // [PHASE 24F] Now expects builderInputs + clientCanonicalSnapshot, NOT canonicalProfileOverride
     // ==========================================================================
     markStage('parse_request_start')
     const body = await request.json()
     const { 
       builderInputs,
-      canonicalProfileOverride,
+      currentProgramId,
+      clientCanonicalSnapshot,
       modifyContext,
+      // Legacy support - if client still sends this, we'll use it as fallback only
+      canonicalProfileOverride: legacyCanonicalOverride,
     } = body
     
-    // [PHASE 22B] Payload audit
-    console.log('[phase22b-modify-server-route-payload-audit]', {
+    // [PHASE 24F] Payload audit
+    console.log('[phase24f-modify-server-route-payload-audit]', {
       hasBuilderInputs: !!builderInputs,
-      hasCanonicalProfileOverride: !!canonicalProfileOverride,
+      hasCurrentProgramId: !!currentProgramId,
+      hasClientCanonicalSnapshot: !!clientCanonicalSnapshot,
+      hasLegacyCanonicalOverride: !!legacyCanonicalOverride,
       hasModifyContext: !!modifyContext,
       builderInputsSummary: builderInputs ? {
         primaryGoal: builderInputs.primaryGoal,
@@ -126,36 +134,201 @@ export async function POST(request: Request) {
         experienceLevel: builderInputs.experienceLevel,
         equipmentCount: builderInputs.equipment?.length ?? 0,
       } : null,
-      canonicalOverrideSummary: canonicalProfileOverride ? {
-        primaryGoal: canonicalProfileOverride.primaryGoal,
-        secondaryGoal: canonicalProfileOverride.secondaryGoal,
-        scheduleMode: canonicalProfileOverride.scheduleMode,
-        trainingDaysPerWeek: canonicalProfileOverride.trainingDaysPerWeek,
-        sessionLengthMinutes: canonicalProfileOverride.sessionLengthMinutes,
-        selectedSkillsCount: canonicalProfileOverride.selectedSkills?.length ?? 0,
-        trainingPathType: canonicalProfileOverride.trainingPathType,
-        experienceLevel: canonicalProfileOverride.experienceLevel,
-        equipmentCount: canonicalProfileOverride.equipmentAvailable?.length ?? 0,
+      clientSnapshotSummary: clientCanonicalSnapshot ? {
+        primaryGoal: clientCanonicalSnapshot.primaryGoal,
+        scheduleMode: clientCanonicalSnapshot.scheduleMode,
+        selectedSkillsCount: clientCanonicalSnapshot.selectedSkills?.length ?? 0,
       } : null,
     })
     
-    if (!builderInputs || !canonicalProfileOverride) {
-      console.log('[phase22b-modify-server-route-error-audit]', {
+    if (!builderInputs) {
+      console.log('[phase24f-modify-server-route-error-audit]', {
         failedStage: 'parse_request',
-        reason: 'missing_inputs_or_override',
+        reason: 'missing_builder_inputs',
         hasBuilderInputs: !!builderInputs,
-        hasCanonicalProfileOverride: !!canonicalProfileOverride,
         elapsedMs: Date.now() - routeStartTime,
       })
       return NextResponse.json({
         success: false,
-        error: 'Missing builder inputs or canonical profile override',
+        error: 'Missing builder inputs',
         failedStage: 'parse_request',
         timings,
       }, { status: 400 })
     }
     
     markStage('request_parsed')
+    
+    // ==========================================================================
+    // [PHASE 24F] STAGE: Resolve canonical truth on SERVER
+    // This mirrors the rebuild-adjustment route pattern
+    // ==========================================================================
+    markStage('server_canonical_resolution_start')
+    
+    const serverCanonicalProfile = await getCanonicalProfile()
+    
+    // Use client snapshot or legacy override as fallback source
+    const clientFallbackSource = clientCanonicalSnapshot || legacyCanonicalOverride || {}
+    
+    // [PHASE 24F] Material validity check - does server canonical have real user data?
+    const serverHasMaterialIdentity = !!(
+      serverCanonicalProfile?.primaryGoal && 
+      (serverCanonicalProfile?.selectedSkills?.length > 0 || serverCanonicalProfile?.trainingPathType)
+    )
+    
+    const clientHasMaterialIdentity = !!(
+      clientFallbackSource?.primaryGoal && 
+      (clientFallbackSource?.selectedSkills?.length > 0 || clientFallbackSource?.trainingPathType)
+    )
+    
+    // [PHASE 24F] TASK 3 - Source candidates audit
+    console.log('[phase24f-modify-server-source-candidates-audit]', {
+      hasSavedProgramTruth: false, // TODO: Could resolve from DB if needed
+      savedProgramId: currentProgramId ?? null,
+      savedProgramCreatedAt: null,
+      savedProgramSessionCount: null,
+      serverCanonicalPrimaryGoal: serverCanonicalProfile?.primaryGoal ?? null,
+      serverCanonicalScheduleMode: serverCanonicalProfile?.scheduleMode ?? null,
+      serverCanonicalSelectedSkillsCount: serverCanonicalProfile?.selectedSkills?.length ?? 0,
+      clientCanonicalPrimaryGoal: clientFallbackSource?.primaryGoal ?? null,
+      clientCanonicalScheduleMode: clientFallbackSource?.scheduleMode ?? null,
+      clientCanonicalSelectedSkillsCount: clientFallbackSource?.selectedSkills?.length ?? 0,
+      serverCanonicalHasMaterialIdentity: serverHasMaterialIdentity,
+      clientCanonicalHasMaterialIdentity: clientHasMaterialIdentity,
+    })
+    
+    // [PHASE 24F] Choose canonical base with material validity gating
+    // Same pattern as rebuild-adjustment route
+    let canonicalBase: typeof serverCanonicalProfile
+    let canonicalSourceWinner: 'server_canonical_truth' | 'client_canonical_fallback' | 'hard_defaults_fallback'
+    let winnerReason: string
+    
+    if (serverHasMaterialIdentity) {
+      canonicalBase = serverCanonicalProfile
+      canonicalSourceWinner = 'server_canonical_truth'
+      winnerReason = 'server_canonical_has_material_identity'
+    } else if (clientHasMaterialIdentity) {
+      canonicalBase = clientFallbackSource
+      canonicalSourceWinner = 'client_canonical_fallback'
+      winnerReason = 'server_canonical_incomplete_client_has_material_identity'
+    } else {
+      canonicalBase = clientFallbackSource || serverCanonicalProfile || {}
+      canonicalSourceWinner = 'hard_defaults_fallback'
+      winnerReason = 'both_sources_incomplete_using_best_available'
+      console.warn('[phase24f-canonical-degraded-truth-warning]', {
+        warning: 'Neither server canonical nor client snapshot has material identity',
+        serverHasMaterialIdentity,
+        clientHasMaterialIdentity,
+      })
+    }
+    
+    // [PHASE 24F] TASK 3 - Source winner verdict
+    console.log('[phase24f-modify-server-source-winner-verdict]', {
+      winner: canonicalSourceWinner,
+      reason: winnerReason,
+      currentProgramId: currentProgramId ?? null,
+      winnerPrimaryGoal: canonicalBase?.primaryGoal ?? null,
+      winnerScheduleMode: canonicalBase?.scheduleMode ?? null,
+      winnerTrainingDaysPerWeek: canonicalBase?.trainingDaysPerWeek ?? null,
+      winnerSelectedSkillsCount: canonicalBase?.selectedSkills?.length ?? 0,
+      winnerTrainingPathType: canonicalBase?.trainingPathType ?? null,
+      winnerExperienceLevel: canonicalBase?.experienceLevel ?? null,
+    })
+    
+    markStage('server_canonical_resolved')
+    
+    // ==========================================================================
+    // [PHASE 24F] STAGE: Build canonical profile override on SERVER
+    // Use canonicalBase for NON-BUILDER fields, builderInputs for BUILDER-EDITABLE fields
+    // ==========================================================================
+    markStage('canonical_profile_construction_start')
+    
+    const canonicalProfileOverride = {
+      // Required ProfileSnapshot fields
+      snapshotId: `server-modify-${Date.now()}`,
+      createdAt: new Date().toISOString(),
+      onboardingComplete: canonicalBase.onboardingComplete ?? true,
+      
+      // ==========================================================================
+      // BUILDER-EDITABLE FIELDS - override from builderInputs
+      // These are the fields the user can change in the modify builder UI
+      // ==========================================================================
+      primaryGoal: builderInputs.primaryGoal,
+      secondaryGoal: builderInputs.secondaryGoal ?? null,
+      goalCategory: builderInputs.primaryGoal,
+      selectedSkills: builderInputs.selectedSkills ?? [],
+      selectedFlexibility: builderInputs.selectedFlexibility ?? [],
+      goalCategories: builderInputs.goalCategories ?? [],
+      trainingPathType: builderInputs.trainingPathType,
+      experienceLevel: builderInputs.experienceLevel,
+      
+      // Schedule fields from builder
+      scheduleMode: builderInputs.scheduleMode,
+      sessionDurationMode: builderInputs.sessionDurationMode,
+      trainingDaysPerWeek: builderInputs.trainingDaysPerWeek,
+      sessionLengthMinutes: builderInputs.sessionLength,
+      
+      // Equipment from builder
+      equipment: builderInputs.equipment ?? [],
+      equipmentAvailable: builderInputs.equipment ?? [],
+      
+      // ==========================================================================
+      // NON-BUILDER FIELDS - preserve from server canonical base
+      // These are athlete profile fields the builder doesn't edit
+      // ==========================================================================
+      selectedStrength: canonicalBase.selectedStrength ?? [],
+      bodyweight: canonicalBase.bodyweight,
+      sex: canonicalBase.sex,
+      trainingStyle: canonicalBase.trainingStyle,
+      jointCautions: canonicalBase.jointCautions ?? [],
+      weakestArea: canonicalBase.weakestArea,
+      
+      // Benchmark data - preserve from canonical base
+      benchmarks: canonicalBase.benchmarks ?? {},
+      skillBenchmarks: canonicalBase.skillBenchmarks ?? {},
+      flexibilityBenchmarks: canonicalBase.flexibilityBenchmarks ?? {},
+      weightedBenchmarks: canonicalBase.weightedBenchmarks ?? {},
+    }
+    
+    // [PHASE 24F] TASK 3 - Final override audit
+    console.log('[phase24f-modify-server-final-override-audit]', {
+      finalOverridePrimaryGoal: canonicalProfileOverride.primaryGoal,
+      finalOverrideSecondaryGoal: canonicalProfileOverride.secondaryGoal,
+      finalOverrideScheduleMode: canonicalProfileOverride.scheduleMode,
+      finalOverrideTrainingDaysPerWeek: canonicalProfileOverride.trainingDaysPerWeek,
+      finalOverrideSessionLengthMinutes: canonicalProfileOverride.sessionLengthMinutes,
+      finalOverrideSelectedSkillsCount: canonicalProfileOverride.selectedSkills?.length ?? 0,
+      finalOverrideTrainingPathType: canonicalProfileOverride.trainingPathType,
+      finalOverrideGoalCategoriesCount: canonicalProfileOverride.goalCategories?.length ?? 0,
+      finalOverrideSelectedFlexibilityCount: canonicalProfileOverride.selectedFlexibility?.length ?? 0,
+      finalOverrideExperienceLevel: canonicalProfileOverride.experienceLevel,
+      finalOverrideEquipmentCount: canonicalProfileOverride.equipmentAvailable?.length ?? 0,
+      finalOverrideHasBenchmarks: Object.keys(canonicalProfileOverride.benchmarks ?? {}).length > 0,
+      finalOverrideHasSkillBenchmarks: Object.keys(canonicalProfileOverride.skillBenchmarks ?? {}).length > 0,
+      finalOverrideHasWeightedBenchmarks: Object.keys(canonicalProfileOverride.weightedBenchmarks ?? {}).length > 0,
+      finalOverrideHasBodyweight: !!canonicalProfileOverride.bodyweight,
+      finalOverrideHasTrainingStyle: !!canonicalProfileOverride.trainingStyle,
+    })
+    
+    // [PHASE 24F] TASK 3 - Builder handoff parity verdict
+    const hasAllMaterialFields = !!(
+      canonicalProfileOverride.primaryGoal &&
+      canonicalProfileOverride.scheduleMode &&
+      canonicalProfileOverride.trainingDaysPerWeek &&
+      canonicalProfileOverride.experienceLevel
+    )
+    
+    console.log('[phase24f-modify-server-builder-handoff-parity-verdict]', {
+      hasAllMaterialFields,
+      hasPrimaryGoal: !!canonicalProfileOverride.primaryGoal,
+      hasScheduleMode: !!canonicalProfileOverride.scheduleMode,
+      hasTrainingDays: !!canonicalProfileOverride.trainingDaysPerWeek,
+      hasExperienceLevel: !!canonicalProfileOverride.experienceLevel,
+      hasSelectedSkills: (canonicalProfileOverride.selectedSkills?.length ?? 0) > 0,
+      hasTrainingPathType: !!canonicalProfileOverride.trainingPathType,
+      verdict: hasAllMaterialFields ? 'OVERRIDE_HAS_ALL_MATERIAL_FIELDS' : 'OVERRIDE_MISSING_MATERIAL_FIELDS',
+    })
+    
+    markStage('canonical_profile_constructed')
     
     // ==========================================================================
     // STAGE: Dynamic import of generation service
@@ -167,14 +340,12 @@ export async function POST(request: Request) {
     markStage('generation_service_start')
     
     // ==========================================================================
-    // [PHASE 22B] STAGE: Run generation with client-passed override
-    // This mirrors exactly what the working onboarding/regenerate routes do
+    // [PHASE 24F] STAGE: Run generation with SERVER-BUILT override
     // ==========================================================================
     markStage('builder_entry')
     
-    // [PHASE 22B] Builder dispatch audit
-    console.log('[phase22b-modify-server-route-builder-dispatch-audit]', {
-      dispatchMethod: 'generateAdaptiveProgram_with_canonicalProfileOverride',
+    console.log('[phase24f-modify-server-route-builder-dispatch-audit]', {
+      dispatchMethod: 'generateAdaptiveProgram_with_server_built_override',
       builderInputKeys: Object.keys(builderInputs),
       overrideKeys: Object.keys(canonicalProfileOverride),
       materialIdentity: {
@@ -185,21 +356,20 @@ export async function POST(request: Request) {
         inputSelectedSkillsCount: builderInputs.selectedSkills?.length ?? 0,
         overrideSelectedSkillsCount: canonicalProfileOverride.selectedSkills?.length ?? 0,
       },
+      architectureNote: 'SERVER_BUILT_OVERRIDE_NOT_CLIENT_TRUSTED',
     })
     
     const serverStageCallback = (stage: string) => {
-      console.log(`[phase22b-modify-builder-stage] ${stage} at ${Date.now() - routeStartTime}ms`)
+      console.log(`[phase24f-modify-builder-stage] ${stage} at ${Date.now() - routeStartTime}ms`)
     }
     
     let program
     try {
-      // [PHASE 22B] Pass client-built canonicalProfileOverride to builder
-      // This ensures builder uses modify-builder truth, not stale localStorage canonical
       program = await generateAdaptiveProgram(builderInputs, serverStageCallback, {
         canonicalProfileOverride,
       })
     } catch (builderError) {
-      console.log('[phase22b-modify-server-route-error-audit]', {
+      console.log('[phase24f-modify-server-route-error-audit]', {
         failedStage: 'builder_execution',
         reason: String(builderError),
         elapsedMs: Date.now() - routeStartTime,
@@ -220,7 +390,7 @@ export async function POST(request: Request) {
     markStage('validation_start')
     
     if (!program || !Array.isArray(program.sessions) || program.sessions.length === 0) {
-      console.log('[phase22b-modify-server-route-error-audit]', {
+      console.log('[phase24f-modify-server-route-error-audit]', {
         failedStage: 'validation',
         reason: 'program_invalid_or_empty',
         elapsedMs: Date.now() - routeStartTime,
@@ -235,8 +405,8 @@ export async function POST(request: Request) {
     
     markStage('validation_done')
     
-    // [PHASE 22B] Result audit
-    console.log('[phase22b-modify-server-route-result-audit]', {
+    // [PHASE 24F] Result audit
+    console.log('[phase24f-modify-server-route-result-audit]', {
       success: true,
       sessionCount: program.sessions.length,
       primaryGoal: program.primaryGoal,
@@ -246,10 +416,12 @@ export async function POST(request: Request) {
       selectedSkillsSummary: program.selectedSkills?.slice(0, 5) || [],
       inputWasFlexible: builderInputs.scheduleMode === 'flexible',
       outputHas6PlusSessions: program.sessions.length >= 6,
+      serverTruthClassUsed: true,
+      canonicalSourceWinner,
       verdict: program.sessions.length >= 6 && builderInputs.scheduleMode === 'flexible'
         ? 'STRONG_6_SESSION_FLEXIBLE_IDENTITY_PRODUCED'
         : program.sessions.length === 4 && builderInputs.scheduleMode === 'flexible'
-          ? 'WEAK_4_SESSION_COLLAPSE_DESPITE_CORRECT_ARCHITECTURE'
+          ? 'WEAK_4_SESSION_COLLAPSE_DESPITE_SERVER_TRUTH_CLASS'
           : 'STATIC_MODE_OR_OTHER_SESSION_COUNT',
     })
     
@@ -261,12 +433,13 @@ export async function POST(request: Request) {
     const totalElapsed = Date.now() - routeStartTime
     timings[currentStage] = totalElapsed
     
-    console.log('[phase22b-modify-server-success]', {
+    console.log('[phase24f-modify-server-success]', {
       success: true,
       totalElapsedMs: totalElapsed,
       sessionCount: program.sessions.length,
       primaryGoal: program.primaryGoal,
       dbUserId: dbUserId?.slice(0, 12) + '...',
+      canonicalSourceWinner,
     })
     
     return NextResponse.json({
@@ -278,7 +451,8 @@ export async function POST(request: Request) {
         primaryGoal: program.primaryGoal,
         secondaryGoal: program.secondaryGoal,
         scheduleMode: program.scheduleMode,
-        usedCanonicalProfileOverride: true,
+        usedServerBuiltOverride: true,
+        canonicalSourceWinner,
       },
     })
     
@@ -286,7 +460,7 @@ export async function POST(request: Request) {
     const totalElapsed = Date.now() - routeStartTime
     timings[currentStage] = totalElapsed
     
-    console.log('[phase22b-modify-server-route-error-audit]', {
+    console.log('[phase24f-modify-server-route-error-audit]', {
       failedStage: currentStage,
       reason: String(error),
       totalElapsedMs: totalElapsed,

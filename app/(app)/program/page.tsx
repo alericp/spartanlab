@@ -79,10 +79,7 @@ const AdaptiveProgramDisplay = dynamic(
   }
 )
 
-const ProgramAdjustmentModal = dynamic(
-  () => import('@/components/programs/ProgramAdjustmentModal').then(mod => ({ default: mod.ProgramAdjustmentModal })),
-  { ssr: false }
-)
+import { ProgramAdjustmentModal } from '@/components/programs/ProgramAdjustmentModal'
 
 // [canonical-rebuild] Import type for adjustment rebuild requests
 import type { AdjustmentRebuildRequest, AdjustmentRebuildResult } from '@/components/programs/ProgramAdjustmentModal'
@@ -344,6 +341,18 @@ function ProgramDisplayWrapper({
 }
 
 export default function ProgramPage() {
+  // ==========================================================================
+  // [PHASE 24B] TASK 4 - Dynamic import was converted to static import
+  // The ProgramAdjustmentModal is now imported statically instead of dynamically,
+  // ensuring it is available immediately without ssr: false blocking
+  // ==========================================================================
+  console.log('[phase24b-static-import-verdict]', {
+    modalImportMethod: 'static_import',
+    previousMethod: 'dynamic_import_with_ssr_false',
+    reason: 'dynamic_import_can_delay_availability_blocking_click_handlers',
+    verdict: 'STATIC_IMPORT_ACTIVE_MODAL_AVAILABLE_IMMEDIATELY',
+  })
+  
   const [inputs, setInputs] = useState<AdaptiveProgramInputs | null>(null)
   const [program, setProgram] = useState<AdaptiveProgram | null>(null)
   const [isGenerating, setIsGenerating] = useState(false)
@@ -7931,9 +7940,17 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
 
   const handleNewProgram = useCallback((event?: React.MouseEvent<HTMLButtonElement>) => {
     // ==========================================================================
-    // [PHASE 21A] Simple, deterministic modal entry - like Restart pattern
-    // Only use `program` existence as the gate. No two-stage, no RAF, no guards.
+    // [PHASE 24B] TASK 1 - TRACE EXACT VISIBLE MODIFY BUTTON CHAIN
+    // Instrument every step end-to-end to find where visibility breaks
     // ==========================================================================
+    
+    // [PHASE 24B] Step A - Click fired
+    console.log('[phase24b-modify-click-fired]', {
+      clickEvent: !!event,
+      timestamp: Date.now(),
+      verdict: 'CLICK_FIRED_CONFIRMED',
+    })
+    
     if (event) {
       event.preventDefault()
     }
@@ -7941,7 +7958,22 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
     const showBuilderBefore = showBuilder
     const showAdjustmentModalBefore = showAdjustmentModal
     
-    // [PHASE 24A] LAYER 1 - Click chain audit
+    // [PHASE 24B] Step B - Handler entered
+    console.log('[phase24b-modify-handler-entered]', {
+      handlerName: 'handleNewProgram',
+      timestamp: Date.now(),
+      verdict: 'HANDLER_ENTERED_CONFIRMED',
+    })
+    
+    // [PHASE 24B] Step C - Branch selected
+    console.log('[phase24b-modify-branch-selected]', {
+      programExists: !!program,
+      programId: program?.id ?? null,
+      branch: program ? 'OPEN_MODAL' : 'OPEN_BUILDER_DIRECTLY',
+      verdict: program ? 'MODAL_BRANCH_SELECTED' : 'BUILDER_BRANCH_SELECTED',
+    })
+    
+    // [PHASE 24A] LAYER 1 - Click chain audit (preserved from before)
     console.log('[phase24a-modify-click-chain-audit]', {
       clickFired: true,
       programExists: !!program,
@@ -7994,6 +8026,17 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
           'Start New Program - handleConfirmNewProgram then handleGenerate path',
         ],
         currentProgramSessionCount: program.sessions?.length ?? 0,
+      })
+      
+      // [PHASE 24B] Step D - open state requested
+      console.log('[phase24b-modify-open-state-requested]', {
+        action: 'setShowAdjustmentModal(true)',
+        timestamp: Date.now(),
+        stateBeforeChange: {
+          showAdjustmentModalBefore,
+          showBuilderBefore,
+        },
+        verdict: 'STATE_CHANGE_TRIGGERED',
       })
       
       // [PHASE 21A] Diagnostic 3: Direct state set - no staging
@@ -8752,6 +8795,21 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
         )}
 
         {/* Program Adjustment Modal */}
+        {/* [PHASE 24B] Step E - Page render audit - prove page re-renders with new state */}
+        {(() => {
+          console.log('[phase24b-page-render-open-prop-audit]', {
+            showAdjustmentModal,
+            showBuilder,
+            programExists: !!program,
+            builderOrigin,
+            timestamp: Date.now(),
+            verdict: showAdjustmentModal 
+              ? 'PAGE_RENDERING_WITH_MODAL_OPEN_TRUE'
+              : 'PAGE_RENDERING_WITH_MODAL_OPEN_FALSE',
+          })
+          return null
+        })()}
+        
         {/* [canonical-rebuild] TASK B: Wire rebuild callback for structural changes */}
         {/* [PHASE 5 TASK 3] Prefill from CANONICAL profile, not stale inputs state */}
         {/* [PHASE 21A] Simple controlled dialog - always mounted, open controlled by showAdjustmentModal */}
@@ -8827,10 +8885,33 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
           // [PHASE 17P] Pass canonical schedule mode to preserve flexible identity
           currentScheduleMode={(() => {
             const canonical = getCanonicalProfile()
-            const mode = canonical.scheduleMode || 'adaptive'
-            return mode === 'static' ? 'static' : 'flexible'
+            return (canonical.scheduleMode as 'static' | 'flexible' | 'adaptive') || 'adaptive'
           })()}
         />
+        
+        {/* [PHASE 24B] Final visible verdict - prove whether modal is accessible in render tree */}
+        {(() => {
+          const isModalInRenderTree = true  // It's always mounted in JSX
+          const isModalOpenPropTrue = showAdjustmentModal
+          const isPageStable = !showBuilder
+          
+          const verdict = isModalOpenPropTrue && isPageStable 
+            ? 'CASE_A_MODAL_SHOULD_BE_VISIBLE'
+            : isModalOpenPropTrue && showBuilder
+            ? 'CASE_C_MODAL_OPEN_BUT_BUILDER_SHOWING'
+            : 'CASE_B_MODAL_OPEN_FALSE_OR_PAGE_UNSTABLE'
+          
+          console.log('[phase24b-modify-final-visible-verdict]', {
+            isModalInRenderTree,
+            isModalOpenPropTrue,
+            isPageStable,
+            showBuilder,
+            showAdjustmentModal,
+            verdict,
+          })
+          
+          return null
+        })()}
       </div>
     </div>
   )

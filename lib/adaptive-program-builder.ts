@@ -7701,6 +7701,27 @@ console.log('[program-generate] Generation complete:', {
     verdict: 'explanations_sourced_from_final_truth',
   })
   
+  // ==========================================================================
+  // [PHASE 24J] TASK 1 - CRITICAL: Final program selectedSkills source trace
+  // This audit proves what selectedSkills will be stored on the program
+  // ==========================================================================
+  console.log('[phase24j-builder-final-program-selectedSkills-trace]', {
+    canonicalProfileSelectedSkills: canonicalProfile.selectedSkills || [],
+    canonicalProfileSelectedSkillsCount: canonicalProfile.selectedSkills?.length ?? 0,
+    inputsSelectedSkills: inputs.selectedSkills || [],
+    inputsSelectedSkillsCount: inputs.selectedSkills?.length ?? 0,
+    profileSelectedSkillsCanonical: profileSelectedSkills || [],
+    profileSelectedSkillsCanonicalCount: profileSelectedSkills?.length ?? 0,
+    canonicalHasBackLever: canonicalProfile.selectedSkills?.includes('back_lever') ?? false,
+    canonicalHasDragonFlag: canonicalProfile.selectedSkills?.includes('dragon_flag') ?? false,
+    inputsHasBackLever: inputs.selectedSkills?.includes('back_lever') ?? false,
+    inputsHasDragonFlag: inputs.selectedSkills?.includes('dragon_flag') ?? false,
+    willUseSource: 'canonicalProfile.selectedSkills',
+    verdict: canonicalProfile.selectedSkills?.length === inputs.selectedSkills?.length
+      ? 'CANONICAL_AND_INPUTS_SELECTED_SKILLS_COUNT_MATCH'
+      : 'CANONICAL_AND_INPUTS_SELECTED_SKILLS_COUNT_MISMATCH',
+  })
+  
   const finalProgram: AdaptiveProgram = {
     id: `adaptive-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
     createdAt: new Date().toISOString(),

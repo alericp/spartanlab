@@ -3589,6 +3589,28 @@ export default function ProgramPage() {
       })
       
       // ==========================================================================
+      // [PHASE 24J] TASK 1 - CRITICAL selectedSkills trace at client dispatch
+      // Root-cause audit for identity drift
+      // ==========================================================================
+      console.log('[phase24j-modify-client-selectedSkills-dispatch-trace]', {
+        builderSessionInputsSelectedSkills: builderSessionInputs?.selectedSkills ?? [],
+        builderSessionInputsSelectedSkillsCount: builderSessionInputs?.selectedSkills?.length ?? 0,
+        effectiveInputsSelectedSkills: effectiveInputs.selectedSkills ?? [],
+        effectiveInputsSelectedSkillsCount: effectiveInputs.selectedSkills?.length ?? 0,
+        clientCanonicalSelectedSkills: clientCanonicalSnapshot.selectedSkills ?? [],
+        clientCanonicalSelectedSkillsCount: clientCanonicalSnapshot.selectedSkills?.length ?? 0,
+        builderSessionHasBackLever: builderSessionInputs?.selectedSkills?.includes('back_lever') ?? false,
+        builderSessionHasDragonFlag: builderSessionInputs?.selectedSkills?.includes('dragon_flag') ?? false,
+        effectiveHasBackLever: effectiveInputs.selectedSkills?.includes('back_lever') ?? false,
+        effectiveHasDragonFlag: effectiveInputs.selectedSkills?.includes('dragon_flag') ?? false,
+        clientCanonicalHasBackLever: clientCanonicalSnapshot.selectedSkills?.includes('back_lever') ?? false,
+        clientCanonicalHasDragonFlag: clientCanonicalSnapshot.selectedSkills?.includes('dragon_flag') ?? false,
+        verdict: (effectiveInputs.selectedSkills?.length ?? 0) === (builderSessionInputs?.selectedSkills?.length ?? 0)
+          ? 'EFFECTIVE_MATCHES_SESSION_INPUTS'
+          : 'EFFECTIVE_DIFFERS_FROM_SESSION_INPUTS',
+      })
+      
+      // ==========================================================================
       // [PHASE 24F] Dispatch to server route with NEW payload format
       // Server resolves truth and builds override - client no longer authoritative
       // ==========================================================================
@@ -3635,6 +3657,25 @@ export default function ProgramPage() {
         canonicalSourceWinner: result.diagnostics?.canonicalSourceWinner ?? null,
         usedServerBuiltOverride: result.diagnostics?.usedServerBuiltOverride ?? null,
       })
+      
+      // ==========================================================================
+      // [PHASE 24J] TASK 1 - CRITICAL: Returned program selectedSkills trace
+      // Root-cause audit for identity drift in returned program
+      // ==========================================================================
+      if (result.program) {
+        console.log('[phase24j-modify-returned-program-selectedSkills-trace]', {
+          returnedProgramSelectedSkills: result.program.selectedSkills ?? [],
+          returnedProgramSelectedSkillsCount: result.program.selectedSkills?.length ?? 0,
+          returnedHasBackLever: result.program.selectedSkills?.includes('back_lever') ?? false,
+          returnedHasDragonFlag: result.program.selectedSkills?.includes('dragon_flag') ?? false,
+          inputSelectedSkillsCount: effectiveInputs.selectedSkills?.length ?? 0,
+          inputHasBackLever: effectiveInputs.selectedSkills?.includes('back_lever') ?? false,
+          inputHasDragonFlag: effectiveInputs.selectedSkills?.includes('dragon_flag') ?? false,
+          verdict: (result.program.selectedSkills?.length ?? 0) === (effectiveInputs.selectedSkills?.length ?? 0)
+            ? 'RETURNED_PROGRAM_SELECTED_SKILLS_MATCH_INPUTS'
+            : 'RETURNED_PROGRAM_SELECTED_SKILLS_DIFFER_FROM_INPUTS',
+        })
+      }
       
       if (!result.success || !result.program) {
         throw new Error(result.error || 'Server generation failed')
@@ -8473,6 +8514,25 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
       canonicalProfileEquipment: canonicalEquipment,
       includesPullBar,
       includesBands,
+    })
+    
+    // ==========================================================================
+    // [PHASE 24J] TASK 1 - CRITICAL: Builder seed selectedSkills trace
+    // Root-cause audit for identity drift at builder session creation
+    // ==========================================================================
+    console.log('[phase24j-modify-startnew-selectedSkills-seed-trace]', {
+      freshInputsSelectedSkills: freshInputs.selectedSkills ?? [],
+      freshInputsSelectedSkillsCount: freshInputs.selectedSkills?.length ?? 0,
+      canonicalProfileSelectedSkills: canonical.selectedSkills ?? [],
+      canonicalProfileSelectedSkillsCount: canonical.selectedSkills?.length ?? 0,
+      freshInputsHasBackLever: freshInputs.selectedSkills?.includes('back_lever') ?? false,
+      freshInputsHasDragonFlag: freshInputs.selectedSkills?.includes('dragon_flag') ?? false,
+      canonicalHasBackLever: canonical.selectedSkills?.includes('back_lever') ?? false,
+      canonicalHasDragonFlag: canonical.selectedSkills?.includes('dragon_flag') ?? false,
+      sourceWinner,
+      verdict: (freshInputs.selectedSkills?.length ?? 0) === (canonical.selectedSkills?.length ?? 0)
+        ? 'FRESH_INPUTS_MATCH_CANONICAL_SELECTED_SKILLS_COUNT'
+        : 'FRESH_INPUTS_DIFFER_FROM_CANONICAL_SELECTED_SKILLS_COUNT',
     })
     
     // ==========================================================================

@@ -2108,9 +2108,20 @@ export default function ProgramPage() {
   
   // TASK 5: Handlers use dynamically imported modules
   // HARDENED: Full try/catch/finally to prevent stuck spinner state
-  const handleGenerate = useCallback(async () => {
+  // ==========================================================================
+  // [PHASE 24N] UNIFIED CANONICAL HANDLER - Single entry point for ALL builder submits
+  // This handler now accepts optional inputOverrides for Modify flow convergence
+  // Both onboarding and modify flows now use this same handler
+  // ==========================================================================
+  const handleGenerate = useCallback(async (inputOverrides?: Partial<AdaptiveBuilderInputs>) => {
+    // [PHASE 24N] Determine effective inputs - use overrides if provided (modify flow), else page inputs
+    const effectiveInputs = inputOverrides 
+      ? { ...inputs, ...inputOverrides } as AdaptiveBuilderInputs
+      : inputs
+    const isModifyFlow = !!inputOverrides
+    
     // ISSUE A FIX: Validate prerequisites before starting generation
-    if (!inputs) {
+    if (!effectiveInputs) {
       console.error('[ProgramPage] handleGenerate: Missing inputs - cannot generate')
       setGenerationError('Missing program inputs. Please refresh the page.')
       return
@@ -2121,44 +2132,43 @@ export default function ProgramPage() {
       return
     }
     
-    console.log('[ProgramPage] handleGenerate: Starting generation', { source: 'builder' })
-    
-    // ==========================================================================
-    // [PHASE 22A] TASK 8 - Context audit for generic handleGenerate
-    // Detects if this handler is wrongly being used for modify context
-    // ==========================================================================
-    const isWrongHandlerForModify = builderOrigin === 'modify_start_new'
-    console.log('[phase22a-generic-handleGenerate-context-audit]', {
-      builderOrigin,
-      programExists: !!program,
-      showBuilder,
-      calledWhileModifyOrigin: isWrongHandlerForModify,
-      verdict: isWrongHandlerForModify ? 'WRONG_HANDLER_FOR_MODIFY_CONTEXT' : 'OK_DEFAULT_CONTEXT',
+    console.log('[ProgramPage] handleGenerate: Starting generation', { 
+      source: isModifyFlow ? 'modify_builder_unified' : 'builder',
+      isModifyFlow,
+      hasInputOverrides: !!inputOverrides,
     })
     
-    if (isWrongHandlerForModify) {
-      console.error('[PHASE 22A] WARNING: Generic handleGenerate called but builderOrigin is modify_start_new. This should use handleGenerateFromModifyBuilder instead.')
-    }
+    // ==========================================================================
+    // [PHASE 24N] Unified handler context audit - replaces old modify divergence check
+    // ==========================================================================
+    console.log('[phase24n-unified-handleGenerate-context-audit]', {
+      builderOrigin,
+      isModifyFlow,
+      hasInputOverrides: !!inputOverrides,
+      programExists: !!program,
+      showBuilder,
+      verdict: 'UNIFIED_CANONICAL_PATH_ACTIVE',
+    })
     
     // ==========================================================================
-    // [PHASE 21B] TASK 1 - Modify final submit execution path audit
+    // [PHASE 24N] Unified submit execution path audit
     // ==========================================================================
-    console.log('[phase21b-modify-root-submit-handler-verdict]', {
-      handler: 'handleGenerate',
-      serverRoute: '/api/program/generate (implicit via generateAdaptiveProgram)',
+    console.log('[phase24n-unified-submit-handler-verdict]', {
+      handler: 'handleGenerate_unified',
+      isModifyFlow,
       inputsUsed: {
-        primaryGoal: inputs?.primaryGoal,
-        secondaryGoal: inputs?.secondaryGoal,
-        scheduleMode: inputs?.scheduleMode,
-        trainingDaysPerWeek: inputs?.trainingDaysPerWeek,
-        sessionDurationMode: inputs?.sessionDurationMode,
-        sessionLength: inputs?.sessionLength,
-        selectedSkills: inputs?.selectedSkills,
-        trainingPathType: inputs?.trainingPathType,
-        experienceLevel: inputs?.experienceLevel,
-        equipmentCount: inputs?.equipment?.length ?? 0,
+        primaryGoal: effectiveInputs?.primaryGoal,
+        secondaryGoal: effectiveInputs?.secondaryGoal,
+        scheduleMode: effectiveInputs?.scheduleMode,
+        trainingDaysPerWeek: effectiveInputs?.trainingDaysPerWeek,
+        sessionDurationMode: effectiveInputs?.sessionDurationMode,
+        sessionLength: effectiveInputs?.sessionLength,
+        selectedSkills: effectiveInputs?.selectedSkills,
+        trainingPathType: effectiveInputs?.trainingPathType,
+        experienceLevel: effectiveInputs?.experienceLevel,
+        equipmentCount: effectiveInputs?.equipment?.length ?? 0,
       },
-      verdict: 'GENERIC_HANDLEGENERATE_PATH_USED',
+      verdict: isModifyFlow ? 'MODIFY_FLOW_VIA_UNIFIED_HANDLER' : 'ONBOARDING_FLOW_VIA_UNIFIED_HANDLER',
     })
     
     setIsGenerating(true)
@@ -2208,28 +2218,48 @@ export default function ProgramPage() {
     const { buildCanonicalGenerationEntry, entryToAdaptiveInputs } = await import('@/lib/canonical-profile-service')
     
     // ==========================================================================
-    // [PHASE 17S] TASK 1 - Onboarding generation entry source truth audit
+    // [PHASE 24N] Unified generation entry source truth audit
     // ==========================================================================
-    console.log('[phase17s-onboarding-entry-truth-audit]', {
-      sourceLayer: 'onboarding_generation_path',
-      generationTrigger: 'onboarding_completion',
+    console.log('[phase24n-unified-entry-truth-audit]', {
+      sourceLayer: isModifyFlow ? 'modify_unified_path' : 'onboarding_generation_path',
+      generationTrigger: isModifyFlow ? 'modify_builder_submit' : 'onboarding_completion',
+      isModifyFlow,
       rawTruthUsedForEntry: {
-        inputs_primaryGoal: inputs?.primaryGoal ?? null,
-        inputs_secondaryGoal: inputs?.secondaryGoal ?? null,
-        inputs_scheduleMode: inputs?.scheduleMode ?? null,
-        inputs_trainingDaysPerWeek: inputs?.trainingDaysPerWeek ?? null,
-        inputs_sessionDurationMode: inputs?.sessionDurationMode ?? null,
-        inputs_sessionLength: inputs?.sessionLength ?? null,
-        inputs_selectedSkills: inputs?.selectedSkills ?? [],
-        inputs_selectedStyles: inputs?.selectedStyles ?? null,
-        inputs_trainingPathType: inputs?.trainingPathType ?? null,
-        inputs_equipment: inputs?.equipment ?? [],
+        inputs_primaryGoal: effectiveInputs?.primaryGoal ?? null,
+        inputs_secondaryGoal: effectiveInputs?.secondaryGoal ?? null,
+        inputs_scheduleMode: effectiveInputs?.scheduleMode ?? null,
+        inputs_trainingDaysPerWeek: effectiveInputs?.trainingDaysPerWeek ?? null,
+        inputs_sessionDurationMode: effectiveInputs?.sessionDurationMode ?? null,
+        inputs_sessionLength: effectiveInputs?.sessionLength ?? null,
+        inputs_selectedSkills: effectiveInputs?.selectedSkills ?? [],
+        inputs_selectedStyles: effectiveInputs?.selectedStyles ?? null,
+        inputs_trainingPathType: effectiveInputs?.trainingPathType ?? null,
+        inputs_equipment: effectiveInputs?.equipment ?? [],
       },
       entryBuilderUsed: 'buildCanonicalGenerationEntry',
-      entryBuilderOverrides: 'none',
+      entryBuilderOverrides: isModifyFlow ? 'from_modify_inputs' : 'none',
     })
     
-    const entryResult = buildCanonicalGenerationEntry('handleGenerate')
+    // [PHASE 24N] Build canonical entry with overrides when in modify flow
+    const entryOverrides = isModifyFlow ? {
+      primaryGoal: effectiveInputs.primaryGoal,
+      secondaryGoal: effectiveInputs.secondaryGoal,
+      experienceLevel: effectiveInputs.experienceLevel,
+      trainingDaysPerWeek: effectiveInputs.trainingDaysPerWeek,
+      sessionLength: effectiveInputs.sessionLength,
+      scheduleMode: effectiveInputs.scheduleMode,
+      sessionDurationMode: effectiveInputs.sessionDurationMode,
+      equipment: effectiveInputs.equipment,
+      selectedSkills: effectiveInputs.selectedSkills,
+      trainingPathType: effectiveInputs.trainingPathType,
+      goalCategories: effectiveInputs.goalCategories,
+      selectedFlexibility: effectiveInputs.selectedFlexibility,
+    } : undefined
+    
+    const entryResult = buildCanonicalGenerationEntry(
+      isModifyFlow ? 'handleGenerate_modifyFlow' : 'handleGenerate',
+      entryOverrides
+    )
     
     if (!entryResult.success) {
       const errorMsg = entryResult.error?.message || 'Failed to build generation entry'
@@ -2855,8 +2885,22 @@ export default function ProgramPage() {
         setProgram(newProgram)
         setShowBuilder(false)
         
+        // [PHASE 24N] Reset builder origin after successful generation
+        // This ensures modify flow state is cleaned up after success
+        if (isModifyFlow) {
+          console.log('[phase24n-unified-builder-origin-reset]', {
+            previousOrigin: builderOrigin,
+            newOrigin: 'default',
+            trigger: 'successful_unified_generation_complete',
+          })
+          setBuilderOrigin('default')
+          setBuilderSessionInputs(null)
+          setBuilderSessionKey(null)
+          setBuilderSessionSource(null)
+        }
+        
         // [program-rebuild-truth] TASK 2: Create success result
-        const profileSig = createProfileSignature(inputs)
+        const profileSig = createProfileSignature(effectiveInputs)
         const successResult = createSuccessBuildResult(profileSig, null, newProgram.id)
         
         // [PHASE 16S] Add runtime session metadata to success result
@@ -3482,14 +3526,14 @@ export default function ProgramPage() {
         })
       }
     }, 500)
-  }, [inputs, programModules])
+  }, [inputs, programModules, builderOrigin])
 
   // ==========================================================================
-  // [PHASE 22B] Dedicated Modify Submit Handler - SERVER ROUTE ARCHITECTURE
-  // This handler uses the SAME server-side generation architecture as onboarding.
-  // It builds a canonicalProfileOverride from current builder inputs and dispatches
-  // to /api/program/generate-from-modify-builder instead of calling builder directly.
+  // [PHASE 24N] DEPRECATED - This handler is no longer used
+  // Modify flow now routes through the unified handleGenerate with inputOverrides
+  // Keeping temporarily for reference but this code path is dead
   // ==========================================================================
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const handleGenerateFromModifyBuilder = useCallback(async () => {
     // ==========================================================================
     // [PHASE 24A] LAYER 6 - Use dedicated builder session inputs for submit
@@ -9062,26 +9106,31 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
               </Card>
             )}
             
-            {/* [PHASE 22A/24A] Wire correct handler and session inputs based on builder origin */}
+            {/* [PHASE 24N] UNIFIED BUILDER SUBMIT - Both flows now use handleGenerate */}
             {(() => {
-              const selectedHandler = builderOrigin === 'modify_start_new' 
-                ? handleGenerateFromModifyBuilder 
-                : handleGenerate
-              
-              // [PHASE 24A] LAYER 4 - Use dedicated session inputs for modify flow
-              // This prevents ambient page-local inputs from polluting the builder session
-              const effectiveBuilderInputs = (builderOrigin === 'modify_start_new' && builderSessionInputs)
+              // [PHASE 24N] Determine inputs based on builder origin
+              const isModifyFlow = builderOrigin === 'modify_start_new'
+              const effectiveBuilderInputs = (isModifyFlow && builderSessionInputs)
                 ? builderSessionInputs
                 : inputs
               
-              const usingSessionTruth = builderOrigin === 'modify_start_new' && !!builderSessionInputs
+              // [PHASE 24N] Create unified submit handler that passes correct inputs
+              // This eliminates the separate handler branch - both paths now use handleGenerate
+              const unifiedSubmitHandler = () => {
+                if (isModifyFlow && builderSessionInputs) {
+                  // Modify flow: pass session inputs as overrides to unified handleGenerate
+                  handleGenerate(builderSessionInputs)
+                } else {
+                  // Onboarding/default flow: use page inputs (no overrides)
+                  handleGenerate()
+                }
+              }
               
-              console.log('[phase24a-modify-builder-render-source-audit]', {
+              console.log('[phase24n-unified-builder-render-audit]', {
                 builderOrigin,
+                isModifyFlow,
                 builderSessionKey,
-                builderSessionSource,
                 builderSessionInputsExists: !!builderSessionInputs,
-                usingSessionTruth,
                 effectiveInputsSummary: effectiveBuilderInputs ? {
                   primaryGoal: effectiveBuilderInputs.primaryGoal,
                   scheduleMode: effectiveBuilderInputs.scheduleMode,
@@ -9090,40 +9139,19 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
                   sessionLength: effectiveBuilderInputs.sessionLength,
                   selectedSkillsCount: effectiveBuilderInputs.selectedSkills?.length ?? 0,
                   trainingPathType: effectiveBuilderInputs.trainingPathType,
-                  goalCategoriesCount: effectiveBuilderInputs.goalCategories?.length ?? 0,
-                  selectedFlexibilityCount: effectiveBuilderInputs.selectedFlexibility?.length ?? 0,
                   experienceLevel: effectiveBuilderInputs.experienceLevel,
                   equipmentCount: effectiveBuilderInputs.equipment?.length ?? 0,
                 } : null,
-                verdict: usingSessionTruth 
-                  ? 'BUILDER_RENDER_USING_MODIFY_SESSION_TRUTH'
-                  : 'BUILDER_RENDER_USING_AMBIENT_INPUTS',
-              })
-              
-              console.log('[phase22a-builder-submit-handler-selected-audit]', {
-                builderOrigin,
-                selectedHandler: builderOrigin === 'modify_start_new' ? 'handleGenerateFromModifyBuilder' : 'handleGenerate',
-                programExists: !!program,
-                showBuilder,
-                modifySpecificPathActive: builderOrigin === 'modify_start_new',
-              })
-              
-              // [PHASE 24A] LAYER 5 - Key forces clean remount when modify session changes
-              console.log('[phase24a-modify-builder-remount-audit]', {
-                currentKey: builderSessionKey,
-                builderOrigin,
-                keyTriggersRemount: builderOrigin === 'modify_start_new',
-                reason: builderOrigin === 'modify_start_new' 
-                  ? 'modify_session_uses_dedicated_key_for_clean_state'
-                  : 'default_builder_uses_stable_key',
+                submitHandler: 'handleGenerate_unified',
+                verdict: 'UNIFIED_SUBMIT_PATH_ACTIVE',
               })
               
               return (
                 <AdaptiveProgramForm
-                  key={builderOrigin === 'modify_start_new' ? builderSessionKey : 'default-builder'}
+                  key={isModifyFlow ? builderSessionKey : 'default-builder'}
                   inputs={effectiveBuilderInputs}
-                  onInputChange={builderOrigin === 'modify_start_new' ? setBuilderSessionInputs : setInputs}
-                  onGenerate={selectedHandler}
+                  onInputChange={isModifyFlow ? setBuilderSessionInputs : setInputs}
+                  onGenerate={unifiedSubmitHandler}
                   isGenerating={isGenerating}
                   constraintLabel={constraintLabel}
                 />

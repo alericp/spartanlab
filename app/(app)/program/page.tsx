@@ -447,6 +447,21 @@ export default function ProgramPage() {
   }, [program, mounted, authoritativeActiveProgram])
   
   // ==========================================================================
+  // [PHASE 24C] TASK 6 - Page-side open state truth audit
+  // Prove whether page state says modal should be visible
+  // ==========================================================================
+  useEffect(() => {
+    console.log('[phase24c-page-open-state-truth-audit]', {
+      showAdjustmentModal,
+      showBuilder,
+      programExists: !!program,
+      verdict: showAdjustmentModal
+        ? 'PAGE_STATE_SAYS_MODAL_SHOULD_BE_VISIBLE'
+        : 'PAGE_STATE_SAYS_MODAL_SHOULD_BE_CLOSED',
+    })
+  }, [showAdjustmentModal, showBuilder, program])
+  
+  // ==========================================================================
   // [PHASE 23B] TASK 1 - Helper to build AdaptiveProgramInputs from visible program
   // Priority: program.profileSnapshot > program top-level > inputs fallback > canonical
   // ==========================================================================
@@ -8026,6 +8041,15 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
           'Start New Program - handleConfirmNewProgram then handleGenerate path',
         ],
         currentProgramSessionCount: program.sessions?.length ?? 0,
+      })
+      
+      // [PHASE 24C] TASK 6 - Page-side modify open request audit
+      console.log('[phase24c-page-modify-open-request-audit]', {
+        button: 'Modify Program',
+        programExists: !!program,
+        showAdjustmentModalBefore,
+        action: 'setShowAdjustmentModal(true)',
+        verdict: 'OPEN_REQUEST_DISPATCHED',
       })
       
       // [PHASE 24B] Step D - open state requested

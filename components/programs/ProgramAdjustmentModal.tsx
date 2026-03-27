@@ -1,15 +1,8 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
 import {
   Select,
   SelectContent,
@@ -30,6 +23,7 @@ import {
   AlertCircle,
   ArrowLeft,
   Shield,
+  X,
 } from 'lucide-react'
 import type { TrainingDays } from '@/lib/program-service'
 import type { EquipmentType } from '@/lib/adaptive-exercise-pool'
@@ -145,6 +139,45 @@ export function ProgramAdjustmentModal({
     currentTrainingDays,
     verdict: open ? 'MODAL_OPEN_PROP_TRUE' : 'MODAL_OPEN_PROP_FALSE',
   })
+  
+  // ==========================================================================
+  // [PHASE 24C] TASK 3 - Body scroll lock + Escape close
+  // Deterministic behavior without Radix lifecycle
+  // ==========================================================================
+  useEffect(() => {
+    if (!open) return
+    
+    // Capture and lock body scroll
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    
+    console.log('[phase24c-inline-modal-open-state-audit]', {
+      open,
+      scrollLocked: true,
+      previousOverflow,
+      verdict: 'INLINE_MODAL_OPEN_TRUE',
+    })
+    
+    // Escape key handler
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        console.log('[phase24c-inline-modal-escape-close-audit]', {
+          action: 'escape_close',
+          verdict: 'INLINE_MODAL_CLOSE_REQUESTED',
+        })
+        onOpenChange(false)
+      }
+    }
+    
+    document.addEventListener('keydown', handleEscape)
+    
+    // Cleanup
+    return () => {
+      document.body.style.overflow = previousOverflow
+      document.removeEventListener('keydown', handleEscape)
+    }
+  }, [open, onOpenChange])
+  
   const [view, setView] = useState<ModalView>('intercept')
   const [selectedCategory, setSelectedCategory] = useState<AdjustmentCategory | null>(null)
   const [adjustmentResult, setAdjustmentResult] = useState<AdjustmentResult | null>(null)
@@ -912,89 +945,117 @@ export function ProgramAdjustmentModal({
     </div>
   )
 
+  // ==========================================================================
+  // [PHASE 24C] TASK 2, 4, 5 - DETERMINISTIC INLINE FIXED MODAL
+  // No portal, no Radix lifecycle, direct render when open === true
+  // ==========================================================================
+  
+  // [PHASE 24C] Render audit - log every render
+  console.log('[phase24c-inline-modal-render-audit]', {
+    open,
+    currentView: view,
+    renderMode: 'inline_fixed_modal',
+    usesPortal: false,
+    usesRadixDialogShell: false,
+    verdict: open ? 'VISIBLE_INLINE_MODAL_RENDERED' : 'INLINE_MODAL_NOT_RENDERED',
+  })
+  
+  // If not open, render nothing
+  if (!open) {
+    return null
+  }
+  
+  // Handle overlay click to close
+  const handleOverlayClick = () => {
+    console.log('[phase24c-inline-modal-overlay-close-audit]', {
+      action: 'overlay_click_close',
+      currentView: view,
+      verdict: 'INLINE_MODAL_CLOSE_REQUESTED',
+    })
+    onOpenChange(false)
+  }
+  
+  // Stop propagation on modal content to prevent overlay close
+  const handleContentClick = (e: React.MouseEvent) => {
+    e.stopPropagation()
+  }
+  
   return (
     <>
-      {/* [PHASE 24B] Step G - Modal renders when open is true */}
-      {open && (
-        <div
-          data-testid="phase24b-modal-render-marker"
-          suppressHydrationWarning={true}
-          style={{ display: 'none' }}
-        >
-          phase24b_modal_rendered
-        </div>
-      )}
+      {/* Fixed fullscreen overlay */}
+      <div
+        className="fixed inset-0 z-[120] bg-black/70 backdrop-blur-sm"
+        onClick={handleOverlayClick}
+        data-testid="phase24c-modal-overlay"
+      />
       
-      <Dialog open={open} onOpenChange={(nextOpen) => {
-        // [PHASE 24B] Step I - open change fired
-        console.log('[phase24b-modal-open-change-audit]', {
-          nextOpen,
-          previousOpen: open,
-          currentView: view,
-          verdict: nextOpen ? 'DIALOG_OPEN_CHANGED_TO_TRUE' : 'DIALOG_OPEN_CHANGED_TO_FALSE',
-        })
-        console.log('[phase21a-adjustment-modal-open-change]', {
-          nextOpen,
-          currentView: view,
-        })
-        onOpenChange(nextOpen)
-      }}>
-        {/* [PHASE 21A] Simple controlled dialog - standard Radix behavior */}
-        {/* [PHASE 24B] Step H - DialogContent renders when open */}
-        <DialogContent 
-          className="bg-[#1A1F26] border-[#2B313A] max-w-md z-[100]"
-          onOpenAutoFocus={() => {
-            console.log('[phase24b-modal-dialog-content-mounted]', {
-              openState: open,
-              verdict: 'DIALOG_CONTENT_MOUNTED',
-            })
-          }}
+      {/* Centering wrapper */}
+      <div
+        className="fixed inset-0 z-[121] flex items-center justify-center p-4"
+        onClick={handleOverlayClick}
+        data-testid="phase24c-modal-centering-wrapper"
+      >
+        {/* Modal card/content container */}
+        <div
+          className="max-w-md w-full rounded-xl border border-[#2B313A] bg-[#1A1F26] shadow-2xl"
+          onClick={handleContentClick}
+          data-testid="phase24c-modal-content"
         >
-        <DialogHeader>
-          <div className="flex items-center gap-2">
-            {(view !== 'intercept') && (
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={handleBack}
-                className="w-8 h-8 -ml-2"
-              >
-                <ArrowLeft className="w-4 h-4" />
-              </Button>
-            )}
-            <DialogTitle className="text-[#E6E9EF]">
-              {view === 'intercept' && interceptMessage.title}
-              {view === 'adjustments' && (selectedCategory 
-                ? ADJUSTMENT_OPTIONS.find(o => o.category === selectedCategory)?.label 
-                : 'Quick Adjustments')}
-              {view === 'confirm' && 'Confirmation'}
-            </DialogTitle>
+          {/* Header */}
+          <div className="flex items-center justify-between p-6 pb-0">
+            <div className="flex items-center gap-2">
+              {(view !== 'intercept') && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={handleBack}
+                  className="w-8 h-8 -ml-2"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                </Button>
+              )}
+              <div>
+                <h2 className="text-lg font-semibold text-[#E6E9EF]">
+                  {view === 'intercept' && interceptMessage.title}
+                  {view === 'adjustments' && (selectedCategory 
+                    ? ADJUSTMENT_OPTIONS.find(o => o.category === selectedCategory)?.label 
+                    : 'Quick Adjustments')}
+                  {view === 'confirm' && 'Confirmation'}
+                </h2>
+                {view === 'intercept' && (
+                  <p className="text-sm text-[#6B7280]">
+                    Your progress matters
+                  </p>
+                )}
+              </div>
+            </div>
+            
+            {/* [PHASE 24C] TASK 8 - Explicit close button */}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => {
+                console.log('[phase24c-inline-modal-close-button-audit]', {
+                  action: 'close_button_click',
+                  currentView: view,
+                  verdict: 'INLINE_MODAL_CLOSE_REQUESTED',
+                })
+                onOpenChange(false)
+              }}
+              className="w-8 h-8 text-[#6B7280] hover:text-[#E6E9EF]"
+            >
+              <X className="w-4 h-4" />
+            </Button>
           </div>
-          {view === 'intercept' && (
-            <DialogDescription className="text-[#6B7280]">
-              Your progress matters
-            </DialogDescription>
-          )}
-        </DialogHeader>
 
-        <div className="pt-2">
-          {view === 'intercept' && renderInterceptView()}
-          {view === 'adjustments' && renderAdjustmentsView()}
-          {view === 'confirm' && renderConfirmView()}
+          {/* Body content */}
+          <div className="p-6 pt-4">
+            {view === 'intercept' && renderInterceptView()}
+            {view === 'adjustments' && renderAdjustmentsView()}
+            {view === 'confirm' && renderConfirmView()}
+          </div>
         </div>
-        </DialogContent>
-      </Dialog>
-      
-      {/* [PHASE 24B] Step E - Page render audit - prove render happened after state change */}
-      {open && (
-        <div
-          data-testid="phase24b-final-render-marker"
-          suppressHydrationWarning={true}
-          style={{ display: 'none' }}
-        >
-          final_render_check
-        </div>
-      )}
+      </div>
     </>
   )
 }

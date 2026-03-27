@@ -50,6 +50,23 @@ export function AdaptiveProgramForm({
     key: K,
     value: AdaptiveProgramInputs[K]
   ) => {
+    // [PHASE 24O] CRITICAL FIX: When user selects a numeric trainingDaysPerWeek,
+    // automatically flip scheduleMode to 'static' to ensure the selection registers
+    // This prevents flexible schedule identity from overriding explicit day selection
+    if (key === 'trainingDaysPerWeek' && typeof value === 'number') {
+      console.log('[phase24o-builder-form-static-mode-fix]', {
+        selectedDays: value,
+        previousScheduleMode: inputs.scheduleMode,
+        newScheduleMode: 'static',
+        verdict: 'NUMERIC_DAY_SELECTION_FLIPS_TO_STATIC',
+      })
+      onInputChange({ 
+        ...inputs, 
+        trainingDaysPerWeek: value as TrainingDays,
+        scheduleMode: 'static', // [PHASE 24O] Explicit numeric selection = static mode
+      })
+      return
+    }
     onInputChange({ ...inputs, [key]: value })
   }
 

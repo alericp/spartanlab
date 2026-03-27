@@ -7725,20 +7725,23 @@ console.log('[program-generate] Generation complete:', {
   // ==========================================================================
   // [PHASE 24J] TASK 1 - CRITICAL: Final program selectedSkills source trace
   // This audit proves what selectedSkills will be stored on the program
+  // NOTE: Using canonicalProfile.selectedSkills directly (profileSelectedSkills is out of scope here)
   // ==========================================================================
+  const finalProgramSelectedSkills = canonicalProfile.selectedSkills || []
   console.log('[phase24j-builder-final-program-selectedSkills-trace]', {
-    canonicalProfileSelectedSkills: canonicalProfile.selectedSkills || [],
-    canonicalProfileSelectedSkillsCount: canonicalProfile.selectedSkills?.length ?? 0,
+    canonicalProfileSelectedSkills: finalProgramSelectedSkills,
+    canonicalProfileSelectedSkillsCount: finalProgramSelectedSkills.length,
     inputsSelectedSkills: inputs.selectedSkills || [],
     inputsSelectedSkillsCount: inputs.selectedSkills?.length ?? 0,
-    profileSelectedSkillsCanonical: profileSelectedSkills || [],
-    profileSelectedSkillsCanonicalCount: profileSelectedSkills?.length ?? 0,
-    canonicalHasBackLever: canonicalProfile.selectedSkills?.includes('back_lever') ?? false,
-    canonicalHasDragonFlag: canonicalProfile.selectedSkills?.includes('dragon_flag') ?? false,
+    // FIXED: Using finalProgramSelectedSkills instead of out-of-scope profileSelectedSkills
+    finalProgramSelectedSkillsValue: finalProgramSelectedSkills,
+    finalProgramSelectedSkillsCount: finalProgramSelectedSkills.length,
+    canonicalHasBackLever: finalProgramSelectedSkills.includes('back_lever'),
+    canonicalHasDragonFlag: finalProgramSelectedSkills.includes('dragon_flag'),
     inputsHasBackLever: inputs.selectedSkills?.includes('back_lever') ?? false,
     inputsHasDragonFlag: inputs.selectedSkills?.includes('dragon_flag') ?? false,
     willUseSource: 'canonicalProfile.selectedSkills',
-    verdict: canonicalProfile.selectedSkills?.length === inputs.selectedSkills?.length
+    verdict: finalProgramSelectedSkills.length === (inputs.selectedSkills?.length ?? 0)
       ? 'CANONICAL_AND_INPUTS_SELECTED_SKILLS_COUNT_MATCH'
       : 'CANONICAL_AND_INPUTS_SELECTED_SKILLS_COUNT_MISMATCH',
   })

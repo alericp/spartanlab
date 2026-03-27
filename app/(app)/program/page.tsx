@@ -380,9 +380,34 @@ export default function ProgramPage() {
   const [builderSessionSource, setBuilderSessionSource] = useState<'default_inputs' | 'modify_visible_program' | null>(null)
   
   // ==========================================================================
-  // [PHASE 21A] Simple controlled dialog pattern for Modify modal
-  // showAdjustmentModal is the ONLY source of truth for modal open state
-  // No two-stage mount, no RAF delay, no close guards - just like Restart works
+  // [PHASE 24D] EXPLICIT MODIFY FLOW STATE MACHINE
+  // This is the PRIMARY source of truth for the Modify UI path
+  // - 'idle': normal program view, no modify interaction active
+  // - 'modal': modify modal is open
+  // - 'builder': modify builder is open (came from modal "Start New Program")
+  // ==========================================================================
+  type ModifyFlowState = 'idle' | 'modal' | 'builder'
+  const [modifyFlowState, setModifyFlowState] = useState<ModifyFlowState>('idle')
+  
+  // Derived modal open state from the state machine
+  const isModifyModalOpen = modifyFlowState === 'modal'
+  
+  // [PHASE 24D] Page render truth audit
+  console.log('[phase24d-modify-page-render-truth]', {
+    modifyFlowState,
+    derivedModalOpen: isModifyModalOpen,
+    showBuilder,
+    programExists: !!program,
+    verdict: isModifyModalOpen 
+      ? 'MODAL_SHOULD_BE_VISIBLE'
+      : modifyFlowState === 'builder' || showBuilder
+      ? 'BUILDER_SHOULD_BE_VISIBLE'
+      : 'IDLE_PROGRAM_VIEW',
+  })
+  
+  // ==========================================================================
+  // [PHASE 21A] Legacy modal state - now DERIVED from modifyFlowState for compatibility
+  // showAdjustmentModal kept temporarily for any dependent code
   // ==========================================================================
   const [loadError, setLoadError] = useState<string | null>(null)
   const [loadStage, setLoadStage] = useState<string>('initializing') // TASK 3: Track failure stage
@@ -3706,6 +3731,9 @@ export default function ProgramPage() {
       // Hydrate UI
       setProgram(newProgram)
       setShowBuilder(false)
+      
+      // [PHASE 24D] Reset modifyFlowState to idle after successful generation
+      setModifyFlowState('idle')
       
       // [PHASE 24A] Clear builder session state after successful generation
       setBuilderSessionInputs(null)
@@ -8026,6 +8054,34 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
     })
     
     if (program) {
+      // ==========================================================================
+      // [PHASE 24D] EXPLICIT MODIFY FLOW STATE TRANSITION TO MODAL
+      // ==========================================================================
+      const previousModifyFlowState = modifyFlowState
+      
+      console.log('[phase24d-modify-click-root-entry]', {
+        programExists: true,
+        programId: program.id,
+        currentModifyFlowState: previousModifyFlowState,
+        showBuilder,
+        showAdjustmentModal,
+        verdict: 'TRANSITIONING_TO_MODAL',
+      })
+      
+      console.log('[phase24d-modify-state-transition-to-modal]', {
+        previousModifyFlowState,
+        nextModifyFlowState: 'modal',
+        programId: program.id,
+        showBuilderBefore: showBuilder,
+        verdict: 'MODIFY_FLOW_STATE_SET_TO_MODAL',
+      })
+      
+      // Set the explicit state machine to modal
+      setModifyFlowState('modal')
+      
+      // Also set legacy boolean for any dependent code
+      setShowAdjustmentModal(true)
+      
       // [PHASE 21A] Diagnostic 2: Branch verdict
       console.log('[phase21a-modify-branch-verdict]', {
         branch: 'open_adjustment_modal',
@@ -8088,7 +8144,7 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
     })
     
     setShowBuilder(true)
-  }, [program, showBuilder, showAdjustmentModal, builderOrigin, builderSessionInputs, builderSessionKey, inputs])
+  }, [program, showBuilder, showAdjustmentModal, builderOrigin, builderSessionInputs, builderSessionKey, inputs, modifyFlowState])
 
   const handleConfirmNewProgram = useCallback(async () => {
     // ==========================================================================
@@ -8317,6 +8373,25 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
     setInputs(freshInputs)
     
     programModules.recordProgramEnd?.('new_program')
+    
+    // ==========================================================================
+    // [PHASE 24D] EXPLICIT MODAL-TO-BUILDER TRANSITION
+    // ==========================================================================
+    const previousModifyFlowState = modifyFlowState
+    
+    console.log('[phase24d-modify-modal-start-new-request]', {
+      previousModifyFlowState,
+      nextModifyFlowState: 'builder',
+      builderOriginBefore: builderOrigin,
+      builderOriginAfter: 'modify_start_new',
+      builderSessionKey: newSessionKey,
+      verdict: 'TRANSITIONING_FROM_MODAL_TO_BUILDER',
+    })
+    
+    // Transition the explicit state machine from modal to builder
+    setModifyFlowState('builder')
+    
+    // Also update legacy modal boolean for compatibility
     setShowAdjustmentModal(false)
     
     // [PHASE 22A] Set builder origin for modify-specific submit handler
@@ -8330,6 +8405,15 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
     })
     setBuilderOrigin('modify_start_new')
     setShowBuilder(true)
+    
+    console.log('[phase24d-modify-builder-handoff-verdict]', {
+      modifyFlowState: 'builder',
+      showBuilder: true,
+      builderOrigin: 'modify_start_new',
+      builderSessionInputsExists: true,
+      builderSessionSource: 'modify_visible_program',
+      verdict: 'BUILDER_HANDOFF_COMPLETE',
+    })
     
     console.log('[phase23b-modify-branch-verdict]', {
       branch: 'start_new_program_from_modal',
@@ -8348,7 +8432,7 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
       builderDoctrineTouched: false,
       verdict: 'UNTOUCHED_FLOWS_PRESERVED',
     })
-  }, [programModules, inputs, builderOrigin, program, buildModifyEntryInputsFromVisibleProgram, builderSessionKey])
+  }, [programModules, inputs, builderOrigin, program, buildModifyEntryInputsFromVisibleProgram, builderSessionKey, modifyFlowState])
 
   // TASK 3: Show error state for module load failure with stage info
   if (loadError) {
@@ -8385,8 +8469,21 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
     )
   }
 
+  // [PHASE 24D] Enable diagnostic strip only in development/preview
+  const showDiagnosticStrip = process.env.NODE_ENV === 'development' || process.env.NEXT_PUBLIC_VERCEL_ENV === 'preview'
+  
   return (
     <div className="min-h-screen bg-[#0A0A0A] text-white">
+      {/* [PHASE 24D] TASK 7 - Temporary diagnostic strip for modify flow state */}
+      {showDiagnosticStrip && (
+        <div className="fixed bottom-0 left-0 right-0 z-[200] bg-black/90 border-t border-[#3A3A3A] px-4 py-1 text-xs font-mono text-[#6A6A6A]">
+          <span className="mr-4">modifyFlow: <span className={modifyFlowState === 'modal' ? 'text-green-400' : modifyFlowState === 'builder' ? 'text-blue-400' : 'text-gray-400'}>{modifyFlowState}</span></span>
+          <span className="mr-4">showBuilder: <span className={showBuilder ? 'text-blue-400' : 'text-gray-400'}>{String(showBuilder)}</span></span>
+          <span className="mr-4">program: <span className={program ? 'text-green-400' : 'text-gray-400'}>{program ? 'yes' : 'no'}</span></span>
+          <span>modalOpen: <span className={isModifyModalOpen ? 'text-green-400' : 'text-gray-400'}>{String(isModifyModalOpen)}</span></span>
+        </div>
+      )}
+      
       <div className="max-w-4xl mx-auto p-4 sm:p-6">
         {/* Header - Context-aware based on whether program exists */}
         <div className="flex items-center justify-between mb-6">
@@ -8623,6 +8720,7 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
                   setBuilderSessionInputs(null)
                   setBuilderSessionKey('initial')
                   setBuilderSessionSource(null)
+                  setModifyFlowState('idle')
                   setShowBuilder(false)
                 }}
               >
@@ -8838,9 +8936,29 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
         {/* [PHASE 5 TASK 3] Prefill from CANONICAL profile, not stale inputs state */}
         {/* [PHASE 21A] Simple controlled dialog - always mounted, open controlled by showAdjustmentModal */}
         <ProgramAdjustmentModal
-          open={showAdjustmentModal}
-          onOpenChange={setShowAdjustmentModal}
-          onContinue={() => setShowAdjustmentModal(false)}
+          open={isModifyModalOpen}
+          onOpenChange={(nextOpen) => {
+            // [PHASE 24D] Handle modal close through state machine
+            console.log('[phase24d-modify-modal-close-request]', {
+              previousModifyFlowState: modifyFlowState,
+              nextModifyFlowState: nextOpen ? 'modal' : 'idle',
+              source: 'onOpenChange',
+            })
+            if (!nextOpen) {
+              setModifyFlowState('idle')
+              setShowAdjustmentModal(false)
+            }
+          }}
+          onContinue={() => {
+            // [PHASE 24D] "Continue Current Program" closes modal and returns to idle
+            console.log('[phase24d-modify-modal-close-request]', {
+              previousModifyFlowState: modifyFlowState,
+              nextModifyFlowState: 'idle',
+              source: 'continue_current_program',
+            })
+            setModifyFlowState('idle')
+            setShowAdjustmentModal(false)
+          }}
           onStartNew={handleConfirmNewProgram}
           onRebuildRequired={handleAdjustmentRebuild}
           currentSessionMinutes={(() => {

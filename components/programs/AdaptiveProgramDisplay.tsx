@@ -195,6 +195,49 @@ export function AdaptiveProgramDisplay({
   })
   
   // ==========================================================================
+  // [PHASE 24K] TASK 8 - MIXED-LAYER CONTRADICTION DIAGNOSTIC
+  // Final render-time audit to prove selectedSkills source alignment
+  // ==========================================================================
+  const renderPrimaryGoal = program.primaryGoal
+  const renderSecondaryGoal = program.secondaryGoal
+  const renderSelectedSkills = safeSelectedSkills
+  const summaryTextRaw = safeSummaryTruth?.truthfulHybridSummary || program.programRationale || ''
+  
+  console.log('[phase24k-mixed-layer-contradiction-diagnostic]', {
+    renderPrimaryGoal,
+    renderSecondaryGoal,
+    renderSelectedSkills,
+    renderSelectedSkillsCount: renderSelectedSkills.length,
+    summaryTruthProfileSelectedSkills: safeSummaryTruth?.profileSelectedSkills || [],
+    summaryTruthSummaryRenderableSkills: safeSummaryTruth?.summaryRenderableSkills || [],
+    summaryTruthWeekRepresentedSkills: safeSummaryTruth?.weekRepresentedSkills || [],
+    summaryTruthWeekSupportSkills: safeSummaryTruth?.weekSupportSkills || [],
+    summaryTextSample: summaryTextRaw.slice(0, 200),
+    // Boolean verdicts for instant diagnosis
+    selectedSkillsContainBackLever: renderSelectedSkills.includes('back_lever'),
+    selectedSkillsContainDragonFlag: renderSelectedSkills.includes('dragon_flag'),
+    summaryTextMentionsBackLever: summaryTextRaw.toLowerCase().includes('back lever'),
+    summaryTextMentionsDragonFlag: summaryTextRaw.toLowerCase().includes('dragon flag'),
+    profileSnapshotMatchesProgramSelectedSkills: 
+      JSON.stringify((safeSummaryTruth?.profileSelectedSkills || []).sort()) === 
+      JSON.stringify(renderSelectedSkills.sort()),
+    // Final verdicts
+    renderIsUsingStaleSnapshot: (
+      safeSummaryTruth?.profileSelectedSkills?.includes('back_lever') ||
+      safeSummaryTruth?.profileSelectedSkills?.includes('dragon_flag')
+    ) && !renderSelectedSkills.includes('back_lever') && !renderSelectedSkills.includes('dragon_flag'),
+    identityLeakDetected: (
+      summaryTextRaw.toLowerCase().includes('back lever') ||
+      summaryTextRaw.toLowerCase().includes('dragon flag')
+    ) && !renderSelectedSkills.includes('back_lever') && !renderSelectedSkills.includes('dragon_flag'),
+    verdict: (
+      !renderSelectedSkills.includes('back_lever') && 
+      !renderSelectedSkills.includes('dragon_flag') &&
+      (summaryTextRaw.toLowerCase().includes('back lever') || summaryTextRaw.toLowerCase().includes('dragon flag'))
+    ) ? 'IDENTITY_LEAK_CONFIRMED' : 'NO_IDENTITY_LEAK_DETECTED',
+  })
+  
+  // ==========================================================================
   // [PHASE 15D] DOMINANT SPINE DISPLAY TRUTH AUDIT
   // Verify that the spine resolution from the builder is accessible and truthful
   // ==========================================================================

@@ -8422,14 +8422,50 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
         sourceWinner = 'canonical_start_new_truth'
         canonicalEntrySuccess = true
         
+        // ==========================================================================
+        // [PHASE 24K] FIX: NORMALIZE selectedSkills TO MATCH PRIMARY + SECONDARY ONLY
+        // ROOT CAUSE: Canonical profile's selectedSkills contains ALL original onboarding 
+        // selections (back_lever, dragon_flag, etc.), but "Start New Program" should 
+        // only use the current primary + secondary goals as the active skill identity.
+        // This prevents stale skills from appearing in "Built around" and summaries.
+        // ==========================================================================
+        const originalSelectedSkills = freshInputs.selectedSkills || []
+        const normalizedSelectedSkills = [freshInputs.primaryGoal]
+        if (freshInputs.secondaryGoal && freshInputs.secondaryGoal !== freshInputs.primaryGoal) {
+          normalizedSelectedSkills.push(freshInputs.secondaryGoal)
+        }
+        
+        console.log('[phase24k-modify-startnew-selectedSkills-normalization]', {
+          originalSelectedSkills,
+          originalCount: originalSelectedSkills.length,
+          normalizedSelectedSkills,
+          normalizedCount: normalizedSelectedSkills.length,
+          primaryGoal: freshInputs.primaryGoal,
+          secondaryGoal: freshInputs.secondaryGoal,
+          droppedSkills: originalSelectedSkills.filter((s: string) => !normalizedSelectedSkills.includes(s)),
+          droppedBackLever: originalSelectedSkills.includes('back_lever') && !normalizedSelectedSkills.includes('back_lever'),
+          droppedDragonFlag: originalSelectedSkills.includes('dragon_flag') && !normalizedSelectedSkills.includes('dragon_flag'),
+          verdict: originalSelectedSkills.length !== normalizedSelectedSkills.length
+            ? 'SELECTED_SKILLS_NORMALIZED_TO_GOALS'
+            : 'SELECTED_SKILLS_ALREADY_MATCHED_GOALS',
+        })
+        
+        // Apply the normalized selectedSkills
+        freshInputs = {
+          ...freshInputs,
+          selectedSkills: normalizedSelectedSkills,
+        }
+        
         console.log('[phase24g-modify-startnew-source-winner-verdict]', {
           sourceWinner,
           canonicalEntrySuccess: true,
           visibleProgramWasExcludedFromPrimarySeed: true,
           canonicalSavedProgramWasExcludedFromPrimarySeed: true,
+          selectedSkillsNormalized: true,
           builderSessionInputs: {
             primaryGoal: freshInputs.primaryGoal,
             selectedSkillsCount: freshInputs.selectedSkills?.length ?? 0,
+            selectedSkills: freshInputs.selectedSkills,
             scheduleMode: freshInputs.scheduleMode,
             trainingDaysPerWeek: freshInputs.trainingDaysPerWeek,
             sessionDurationMode: freshInputs.sessionDurationMode,
@@ -8448,18 +8484,37 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
           sourceWinner = 'hard_default_fallback'
         }
         
+        // [PHASE 24K] Also normalize fallback path selectedSkills
+        const fallbackOriginal = freshInputs.selectedSkills || []
+        const fallbackNormalized = [freshInputs.primaryGoal]
+        if (freshInputs.secondaryGoal && freshInputs.secondaryGoal !== freshInputs.primaryGoal) {
+          fallbackNormalized.push(freshInputs.secondaryGoal)
+        }
+        freshInputs = { ...freshInputs, selectedSkills: fallbackNormalized }
+        
         console.log('[phase24g-modify-startnew-source-winner-verdict]', {
           sourceWinner,
           canonicalEntrySuccess: false,
           canonicalEntryError: entryResult.error,
           visibleProgramWasExcludedFromPrimarySeed: true,
           canonicalSavedProgramWasExcludedFromPrimarySeed: true,
+          selectedSkillsNormalized: true,
+          originalSkillsCount: fallbackOriginal.length,
+          normalizedSkillsCount: fallbackNormalized.length,
         })
       }
     } else if (inputs) {
       // No canonical profile - use inputs as fallback
       freshInputs = inputs
       sourceWinner = 'inputs_fallback'
+      
+      // [PHASE 24K] Also normalize this fallback path
+      const fallbackOriginal2 = freshInputs.selectedSkills || []
+      const fallbackNormalized2 = [freshInputs.primaryGoal]
+      if (freshInputs.secondaryGoal && freshInputs.secondaryGoal !== freshInputs.primaryGoal) {
+        fallbackNormalized2.push(freshInputs.secondaryGoal)
+      }
+      freshInputs = { ...freshInputs, selectedSkills: fallbackNormalized2 }
       
       console.log('[phase24g-modify-startnew-source-winner-verdict]', {
         sourceWinner,
@@ -8474,12 +8529,21 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
       freshInputs = getDefaultAdaptiveInputs()
       sourceWinner = 'hard_default_fallback'
       
+      // [PHASE 24K] Also normalize hard default path
+      const fallbackOriginal3 = freshInputs.selectedSkills || []
+      const fallbackNormalized3 = [freshInputs.primaryGoal]
+      if (freshInputs.secondaryGoal && freshInputs.secondaryGoal !== freshInputs.primaryGoal) {
+        fallbackNormalized3.push(freshInputs.secondaryGoal)
+      }
+      freshInputs = { ...freshInputs, selectedSkills: fallbackNormalized3 }
+      
       console.log('[phase24g-modify-startnew-source-winner-verdict]', {
         sourceWinner,
         canonicalEntrySuccess: false,
         reason: 'no_truth_sources_using_defaults',
         visibleProgramWasExcludedFromPrimarySeed: true,
         canonicalSavedProgramWasExcludedFromPrimarySeed: true,
+        selectedSkillsNormalized: true,
       })
     }
     

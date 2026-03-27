@@ -141,6 +141,25 @@ export async function POST(request: Request) {
       } : null,
     })
     
+    // ==========================================================================
+    // [PHASE 24K] CRITICAL: Full selectedSkills array at server route entry
+    // This is the earliest server-side audit point
+    // ==========================================================================
+    console.log('[phase24k-server-route-entry-full-selectedSkills-trace]', {
+      builderInputsSelectedSkillsFull: builderInputs?.selectedSkills ?? [],
+      builderInputsSelectedSkillsCount: builderInputs?.selectedSkills?.length ?? 0,
+      builderInputsHasBackLever: builderInputs?.selectedSkills?.includes('back_lever') ?? false,
+      builderInputsHasDragonFlag: builderInputs?.selectedSkills?.includes('dragon_flag') ?? false,
+      builderInputsHasPlanche: builderInputs?.selectedSkills?.includes('planche') ?? false,
+      builderInputsHasFrontLever: builderInputs?.selectedSkills?.includes('front_lever') ?? false,
+      clientSnapshotSelectedSkillsFull: clientCanonicalSnapshot?.selectedSkills ?? [],
+      clientSnapshotHasBackLever: clientCanonicalSnapshot?.selectedSkills?.includes('back_lever') ?? false,
+      clientSnapshotHasDragonFlag: clientCanonicalSnapshot?.selectedSkills?.includes('dragon_flag') ?? false,
+      verdict: (builderInputs?.selectedSkills?.includes('back_lever') || builderInputs?.selectedSkills?.includes('dragon_flag'))
+        ? 'BUILDER_INPUTS_CONTAIN_STALE_SKILLS'
+        : 'BUILDER_INPUTS_CLEAN',
+    })
+    
     if (!builderInputs) {
       console.log('[phase24f-modify-server-route-error-audit]', {
         failedStage: 'parse_request',

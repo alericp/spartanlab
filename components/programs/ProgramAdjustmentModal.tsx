@@ -127,9 +127,24 @@ export function ProgramAdjustmentModal({
   onRebuildRequired,
   currentEquipment = [],
   currentSessionMinutes = 60,
-  currentTrainingDays = 3,
+  currentTrainingDays = 4,
   currentScheduleMode = 'adaptive',
 }: ProgramAdjustmentModalProps) {
+  // ==========================================================================
+  // [PHASE 24B] TASK 2 - PROVE MODAL COMPONENT RENDERS AND RECEIVES PROPS
+  // ==========================================================================
+  
+  // [PHASE 24B] Step F - Modal receives open prop
+  console.log('[phase24b-modal-props-received]', {
+    open,
+    componentName: 'ProgramAdjustmentModal',
+    onOpenChangeExists: !!onOpenChange,
+    onContinueExists: !!onContinue,
+    onStartNewExists: !!onStartNew,
+    currentSessionMinutes,
+    currentTrainingDays,
+    verdict: open ? 'MODAL_OPEN_PROP_TRUE' : 'MODAL_OPEN_PROP_FALSE',
+  })
   const [view, setView] = useState<ModalView>('intercept')
   const [selectedCategory, setSelectedCategory] = useState<AdjustmentCategory | null>(null)
   const [adjustmentResult, setAdjustmentResult] = useState<AdjustmentResult | null>(null)
@@ -898,15 +913,43 @@ export function ProgramAdjustmentModal({
   )
 
   return (
-    <Dialog open={open} onOpenChange={(nextOpen) => {
-      console.log('[phase21a-adjustment-modal-open-change]', {
-        nextOpen,
-        currentView: view,
-      })
-      onOpenChange(nextOpen)
-    }}>
-      {/* [PHASE 21A] Simple controlled dialog - standard Radix behavior */}
-      <DialogContent className="bg-[#1A1F26] border-[#2B313A] max-w-md z-[100]">
+    <>
+      {/* [PHASE 24B] Step G - Modal renders when open is true */}
+      {open && (
+        <div
+          data-testid="phase24b-modal-render-marker"
+          suppressHydrationWarning={true}
+          style={{ display: 'none' }}
+        >
+          phase24b_modal_rendered
+        </div>
+      )}
+      
+      <Dialog open={open} onOpenChange={(nextOpen) => {
+        // [PHASE 24B] Step I - open change fired
+        console.log('[phase24b-modal-open-change-audit]', {
+          nextOpen,
+          previousOpen: open,
+          currentView: view,
+          verdict: nextOpen ? 'DIALOG_OPEN_CHANGED_TO_TRUE' : 'DIALOG_OPEN_CHANGED_TO_FALSE',
+        })
+        console.log('[phase21a-adjustment-modal-open-change]', {
+          nextOpen,
+          currentView: view,
+        })
+        onOpenChange(nextOpen)
+      }}>
+        {/* [PHASE 21A] Simple controlled dialog - standard Radix behavior */}
+        {/* [PHASE 24B] Step H - DialogContent renders when open */}
+        <DialogContent 
+          className="bg-[#1A1F26] border-[#2B313A] max-w-md z-[100]"
+          onOpenAutoFocus={() => {
+            console.log('[phase24b-modal-dialog-content-mounted]', {
+              openState: open,
+              verdict: 'DIALOG_CONTENT_MOUNTED',
+            })
+          }}
+        >
         <DialogHeader>
           <div className="flex items-center gap-2">
             {(view !== 'intercept') && (
@@ -939,7 +982,19 @@ export function ProgramAdjustmentModal({
           {view === 'adjustments' && renderAdjustmentsView()}
           {view === 'confirm' && renderConfirmView()}
         </div>
-      </DialogContent>
-    </Dialog>
+        </DialogContent>
+      </Dialog>
+      
+      {/* [PHASE 24B] Step E - Page render audit - prove render happened after state change */}
+      {open && (
+        <div
+          data-testid="phase24b-final-render-marker"
+          suppressHydrationWarning={true}
+          style={{ display: 'none' }}
+        >
+          final_render_check
+        </div>
+      )}
+    </>
   )
 }

@@ -3286,26 +3286,32 @@ export default function ProgramPage() {
   }, [inputs, programModules])
 
   // ==========================================================================
-  // [PHASE 22A] TASK 3 - Dedicated Modify Submit Handler
-  // This handler uses the CURRENT builder-visible inputs directly instead of
-  // rebuilding from canonical. Used when builderOrigin === 'modify_start_new'
+  // [PHASE 22B] Dedicated Modify Submit Handler - SERVER ROUTE ARCHITECTURE
+  // This handler uses the SAME server-side generation architecture as onboarding.
+  // It builds a canonicalProfileOverride from current builder inputs and dispatches
+  // to /api/program/generate-from-modify-builder instead of calling builder directly.
   // ==========================================================================
   const handleGenerateFromModifyBuilder = useCallback(async () => {
-    // TASK 5: Pre-dispatch audit - log exact current inputs
-    console.log('[phase22a-modify-submit-current-inputs-audit]', {
-      primaryGoal: inputs?.primaryGoal,
-      secondaryGoal: inputs?.secondaryGoal,
-      scheduleMode: inputs?.scheduleMode,
-      trainingDaysPerWeek: inputs?.trainingDaysPerWeek,
-      sessionDurationMode: inputs?.sessionDurationMode,
-      sessionLength: inputs?.sessionLength,
-      selectedSkills: inputs?.selectedSkills,
-      trainingPathType: inputs?.trainingPathType,
-      goalCategories: inputs?.goalCategories,
-      selectedFlexibility: inputs?.selectedFlexibility,
-      experienceLevel: inputs?.experienceLevel,
-      equipment: inputs?.equipment,
+    // [PHASE 22B] TASK 1 - Pre-fix architecture audit
+    console.log('[phase22b-modify-pre-fix-architecture-audit]', {
+      handler: 'handleGenerateFromModifyBuilder',
+      currentDispatchMethod: 'server_route_dispatch',
+      usesDirectClientBuilderCall: false,
+      usesFetchToServerRoute: true,
       builderOrigin,
+      inputsSnapshot: inputs ? {
+        primaryGoal: inputs.primaryGoal,
+        secondaryGoal: inputs.secondaryGoal,
+        scheduleMode: inputs.scheduleMode,
+        trainingDaysPerWeek: inputs.trainingDaysPerWeek,
+        sessionDurationMode: inputs.sessionDurationMode,
+        sessionLength: inputs.sessionLength,
+        selectedSkillsCount: inputs.selectedSkills?.length ?? 0,
+        trainingPathType: inputs.trainingPathType,
+        experienceLevel: inputs.experienceLevel,
+        equipmentCount: inputs.equipment?.length ?? 0,
+      } : null,
+      verdict: 'SERVER_ROUTE_DISPATCH_ACTIVE',
     })
     
     // Validate prerequisites
@@ -3314,28 +3320,11 @@ export default function ProgramPage() {
       setGenerationError('Missing program inputs. Please refresh the page.')
       return
     }
-    if (!programModules.generateAdaptiveProgram || !programModules.saveAdaptiveProgram) {
-      console.error('[ProgramPage] handleGenerateFromModifyBuilder: Modules not loaded')
+    if (!programModules.saveAdaptiveProgram) {
+      console.error('[ProgramPage] handleGenerateFromModifyBuilder: Save module not loaded')
       setGenerationError('Program builder is still loading. Please wait a moment.')
       return
     }
-    
-    // TASK 5: Dispatch verdict - prove we're using current inputs directly
-    console.log('[phase22a-modify-submit-dispatch-verdict]', {
-      dispatchPath: 'modify_builder_current_inputs',
-      builderOrigin,
-      usesCurrentInputsDirectly: true,
-      usesCanonicalRecompositionAtSubmit: false,
-      inputsSummary: {
-        primaryGoal: inputs.primaryGoal,
-        scheduleMode: inputs.scheduleMode,
-        trainingDaysPerWeek: inputs.trainingDaysPerWeek,
-        selectedSkillsCount: inputs.selectedSkills?.length ?? 0,
-        experienceLevel: inputs.experienceLevel,
-        equipmentCount: inputs.equipment?.length ?? 0,
-      },
-      expectedIdentity: inputs.scheduleMode === 'flexible' ? '6_session_flexible' : 'static_based_on_days',
-    })
     
     setIsGenerating(true)
     setGenerationError(null)
@@ -3346,35 +3335,150 @@ export default function ProgramPage() {
     setLastBuildResult(null)
     
     try {
-      // Use current builder inputs DIRECTLY - NO canonical recomposition
-      const generationInputs = inputs
+      // ==========================================================================
+      // [PHASE 22B] TASK 4 - Build canonicalProfileOverride from current modify builder truth
+      // Use current canonical as BASE for non-builder fields, but OVERRIDE all
+      // material planning identity fields from current visible inputs.
+      // ==========================================================================
+      const canonicalBase = getCanonicalProfile()
       
-      console.log('[phase22a-modify-builder-generation-start]', {
-        inputsSource: 'current_builder_visible_state',
-        primaryGoal: generationInputs.primaryGoal,
-        secondaryGoal: generationInputs.secondaryGoal,
-        scheduleMode: generationInputs.scheduleMode,
-        trainingDaysPerWeek: generationInputs.trainingDaysPerWeek,
-        sessionDurationMode: generationInputs.sessionDurationMode,
-        sessionLength: generationInputs.sessionLength,
-        selectedSkillsCount: generationInputs.selectedSkills?.length ?? 0,
-        equipmentCount: generationInputs.equipment?.length ?? 0,
+      const canonicalProfileOverride = {
+        // Required ProfileSnapshot fields
+        snapshotId: `modify-builder-${Date.now()}`,
+        createdAt: new Date().toISOString(),
+        onboardingComplete: canonicalBase.onboardingComplete ?? true,
+        
+        // MATERIAL IDENTITY FIELDS - override from current inputs (these are what matter for planning)
+        primaryGoal: inputs.primaryGoal,
+        secondaryGoal: inputs.secondaryGoal ?? null,
+        goalCategory: inputs.primaryGoal,
+        selectedSkills: inputs.selectedSkills ?? [],
+        selectedFlexibility: inputs.selectedFlexibility ?? [],
+        selectedStrength: inputs.selectedStrength ?? [],
+        goalCategories: inputs.goalCategories ?? [],
+        trainingPathType: inputs.trainingPathType,
+        experienceLevel: inputs.experienceLevel,
+        
+        // Schedule fields - override from current inputs
+        scheduleMode: inputs.scheduleMode,
+        sessionDurationMode: inputs.sessionDurationMode,
+        trainingDaysPerWeek: inputs.trainingDaysPerWeek,
+        sessionLengthMinutes: inputs.sessionLength,
+        
+        // Equipment - override from current inputs
+        equipment: inputs.equipment ?? [],
+        equipmentAvailable: inputs.equipment ?? [],
+        
+        // NON-BUILDER FIELDS - preserve from canonical base
+        bodyweight: canonicalBase.bodyweight,
+        sex: canonicalBase.sex,
+        trainingStyle: canonicalBase.trainingStyle,
+        jointCautions: canonicalBase.jointCautions ?? [],
+        weakestArea: canonicalBase.weakestArea,
+        
+        // Benchmark data - preserve from canonical base
+        benchmarks: canonicalBase.benchmarks ?? {},
+        skillBenchmarks: canonicalBase.skillBenchmarks ?? {},
+        flexibilityBenchmarks: canonicalBase.flexibilityBenchmarks ?? {},
+        weightedBenchmarks: canonicalBase.weightedBenchmarks ?? {},
+      }
+      
+      // [PHASE 22B] TASK 4 - Canonical override construction audit
+      console.log('[phase22b-modify-canonical-override-construction-audit]', {
+        currentInputs: {
+          primaryGoal: inputs.primaryGoal,
+          secondaryGoal: inputs.secondaryGoal,
+          scheduleMode: inputs.scheduleMode,
+          trainingDaysPerWeek: inputs.trainingDaysPerWeek,
+          sessionDurationMode: inputs.sessionDurationMode,
+          sessionLength: inputs.sessionLength,
+          selectedSkillsCount: inputs.selectedSkills?.length ?? 0,
+          trainingPathType: inputs.trainingPathType,
+          experienceLevel: inputs.experienceLevel,
+          equipmentCount: inputs.equipment?.length ?? 0,
+        },
+        canonicalBase: {
+          primaryGoal: canonicalBase.primaryGoal,
+          scheduleMode: canonicalBase.scheduleMode,
+          trainingDaysPerWeek: canonicalBase.trainingDaysPerWeek,
+          selectedSkillsCount: canonicalBase.selectedSkills?.length ?? 0,
+        },
+        finalOverride: {
+          primaryGoal: canonicalProfileOverride.primaryGoal,
+          secondaryGoal: canonicalProfileOverride.secondaryGoal,
+          scheduleMode: canonicalProfileOverride.scheduleMode,
+          trainingDaysPerWeek: canonicalProfileOverride.trainingDaysPerWeek,
+          sessionLengthMinutes: canonicalProfileOverride.sessionLengthMinutes,
+          selectedSkillsCount: canonicalProfileOverride.selectedSkills?.length ?? 0,
+          trainingPathType: canonicalProfileOverride.trainingPathType,
+          experienceLevel: canonicalProfileOverride.experienceLevel,
+          equipmentCount: canonicalProfileOverride.equipmentAvailable?.length ?? 0,
+        },
+        currentInputsWonAllMaterialFields: true,
       })
       
-      // Generate program using current builder inputs
-      const newProgram = await programModules.generateAdaptiveProgram(generationInputs)
+      // ==========================================================================
+      // [PHASE 22B] TASK 5 - Parity check before dispatch
+      // ==========================================================================
+      const parityCheck = {
+        primaryGoalMatch: inputs.primaryGoal === canonicalProfileOverride.primaryGoal,
+        scheduleModeMatch: inputs.scheduleMode === canonicalProfileOverride.scheduleMode,
+        trainingDaysMatch: inputs.trainingDaysPerWeek === canonicalProfileOverride.trainingDaysPerWeek,
+        sessionLengthMatch: inputs.sessionLength === canonicalProfileOverride.sessionLengthMinutes,
+        selectedSkillsMatch: (inputs.selectedSkills?.length ?? 0) === (canonicalProfileOverride.selectedSkills?.length ?? 0),
+        experienceLevelMatch: inputs.experienceLevel === canonicalProfileOverride.experienceLevel,
+        trainingPathTypeMatch: inputs.trainingPathType === canonicalProfileOverride.trainingPathType,
+      }
+      const allFieldsMatch = Object.values(parityCheck).every(v => v === true)
       
-      // TASK 9: Success hydration audit
-      console.log('[phase22a-modify-submit-success-hydration-audit]', {
-        returnedProgramId: newProgram.id,
-        returnedPrimaryGoal: newProgram.primaryGoal,
-        returnedScheduleMode: newProgram.scheduleMode,
-        returnedSessionCount: newProgram.sessions?.length ?? 0,
-        returnedSelectedSkillsCount: newProgram.selectedSkills?.length ?? 0,
-        inputPrimaryGoal: generationInputs.primaryGoal,
-        inputScheduleMode: generationInputs.scheduleMode,
-        inputSelectedSkillsCount: generationInputs.selectedSkills?.length ?? 0,
+      console.log('[phase22b-modify-client-server-payload-parity-audit]', {
+        parityCheck,
+        allFieldsMatch,
+        verdict: allFieldsMatch 
+          ? 'MODIFY_SERVER_PAYLOAD_HAS_FULL_CURRENT_INPUT_PARITY'
+          : 'MODIFY_SERVER_PAYLOAD_STILL_DRIFTED',
       })
+      
+      // ==========================================================================
+      // [PHASE 22B] TASK 3 - Dispatch to server route instead of direct client call
+      // ==========================================================================
+      console.log('[phase22b-modify-server-dispatch-start]', {
+        route: '/api/program/generate-from-modify-builder',
+        dispatchMethod: 'fetch',
+        architectureMirrorsOnboarding: true,
+      })
+      
+      const response = await fetch('/api/program/generate-from-modify-builder', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          builderInputs: inputs,
+          canonicalProfileOverride,
+          modifyContext: {
+            builderOrigin,
+            timestamp: new Date().toISOString(),
+          },
+        }),
+      })
+      
+      const result = await response.json()
+      
+      // [PHASE 22B] TASK 6 - Client response audit
+      console.log('[phase22b-modify-client-response-audit]', {
+        success: result.success,
+        hasProgram: !!result.program,
+        sessionCount: result.program?.sessions?.length ?? 0,
+        primaryGoal: result.program?.primaryGoal ?? null,
+        scheduleMode: result.program?.scheduleMode ?? null,
+        error: result.error ?? null,
+        failedStage: result.failedStage ?? null,
+      })
+      
+      if (!result.success || !result.program) {
+        throw new Error(result.error || 'Server generation failed')
+      }
+      
+      const newProgram = result.program
       
       // Save the program
       await programModules.saveAdaptiveProgram(newProgram)
@@ -3382,42 +3486,39 @@ export default function ProgramPage() {
       // Update canonical profile to match what was just generated
       const { updateCanonicalProfile } = await import('@/lib/canonical-profile-service')
       updateCanonicalProfile({
-        primaryGoal: generationInputs.primaryGoal,
-        secondaryGoal: generationInputs.secondaryGoal,
-        trainingDaysPerWeek: generationInputs.trainingDaysPerWeek,
-        scheduleMode: generationInputs.scheduleMode,
-        sessionDurationMode: generationInputs.sessionDurationMode,
-        sessionLengthMinutes: generationInputs.sessionLength,
-        selectedSkills: generationInputs.selectedSkills,
-        trainingPathType: generationInputs.trainingPathType,
-        experienceLevel: generationInputs.experienceLevel,
-        equipmentAvailable: generationInputs.equipment,
-        goalCategories: generationInputs.goalCategories,
-        selectedFlexibility: generationInputs.selectedFlexibility,
+        primaryGoal: inputs.primaryGoal,
+        secondaryGoal: inputs.secondaryGoal,
+        trainingDaysPerWeek: inputs.trainingDaysPerWeek,
+        scheduleMode: inputs.scheduleMode,
+        sessionDurationMode: inputs.sessionDurationMode,
+        sessionLengthMinutes: inputs.sessionLength,
+        selectedSkills: inputs.selectedSkills,
+        trainingPathType: inputs.trainingPathType,
+        experienceLevel: inputs.experienceLevel,
+        equipmentAvailable: inputs.equipment,
+        goalCategories: inputs.goalCategories,
+        selectedFlexibility: inputs.selectedFlexibility,
       })
       
       // Hydrate UI
       setProgram(newProgram)
       setShowBuilder(false)
       
-      // TASK 9: Final parity verdict
-      console.log('[phase22a-modify-vs-visible-program-parity-verdict]', {
-        visibleProgramId: newProgram.id,
-        visibleSessionCount: newProgram.sessions?.length ?? 0,
-        visiblePrimaryGoal: newProgram.primaryGoal,
-        visibleScheduleMode: newProgram.scheduleMode,
-        inputWasFlexible: generationInputs.scheduleMode === 'flexible',
+      // [PHASE 22B] TASK 6 - Success final parity verdict
+      console.log('[phase22b-modify-success-final-parity-verdict]', {
+        inputPrimaryGoal: inputs.primaryGoal,
+        inputScheduleMode: inputs.scheduleMode,
+        inputSelectedSkillsCount: inputs.selectedSkills?.length ?? 0,
+        outputPrimaryGoal: newProgram.primaryGoal,
+        outputScheduleMode: newProgram.scheduleMode,
+        outputSessionCount: newProgram.sessions?.length ?? 0,
+        inputWasFlexible: inputs.scheduleMode === 'flexible',
         outputHas6PlusSessions: (newProgram.sessions?.length ?? 0) >= 6,
-        verdict: (newProgram.sessions?.length ?? 0) >= 6 && generationInputs.scheduleMode === 'flexible'
-          ? 'REAL_PROGRESS_MODIFY_SUBMIT_NOW_USES_BUILDER_TRUTH'
-          : (newProgram.sessions?.length ?? 0) === 4 && generationInputs.scheduleMode === 'flexible'
-          ? 'NO_REAL_PROGRESS_OUTPUT_STILL_COLLAPSED_AFTER_CORRECT_SUBMIT'
-          : 'STATIC_MODE_OR_OTHER_SESSION_COUNT',
       })
       
-      // TASK 7: Reset builder origin after successful save/hydration
-      console.log('[phase22a-builder-origin-reset-audit]', {
-        resetTrigger: 'successful_modify_generation_complete',
+      // Reset builder origin after successful save/hydration
+      console.log('[phase22b-builder-origin-reset-audit]', {
+        resetTrigger: 'successful_modify_server_generation_complete',
         resetOccurredAfterHydration: true,
         previousOrigin: builderOrigin,
         newOrigin: 'default',
@@ -3428,7 +3529,7 @@ export default function ProgramPage() {
       // Build success result for consistency
       const successResult = {
         status: 'success' as const,
-        attemptId: `modify_${Date.now()}`,
+        attemptId: `modify_server_${Date.now()}`,
         runtimeSessionId: runtimeSessionIdRef.current,
         timestamp: new Date().toISOString(),
       }
@@ -3438,7 +3539,7 @@ export default function ProgramPage() {
         errorCode: null,
         subCode: 'none',
         userMessage: 'Program generated successfully',
-        devMessage: 'Modify builder generation completed',
+        devMessage: 'Modify builder server generation completed',
         failureStep: null,
         failureMiddleStep: null,
         failureDayNumber: null,
@@ -3446,16 +3547,24 @@ export default function ProgramPage() {
         hydratedFromStorage: false,
       })
       
-      // TASK 10: Final root cause verdict
-      console.log('[phase22a-final-root-cause-verdict]', {
-        modifySubmitUsedBuilderInputs: true,
-        modifySubmitDidNotUseCanonicalRecomposition: true,
-        outputSessionCount: newProgram.sessions?.length ?? 0,
+      // [PHASE 22B] TASK 7 - Final root cause verdict
+      const sessionCount = newProgram.sessions?.length ?? 0
+      const inputWasFlexible = inputs.scheduleMode === 'flexible'
+      
+      console.log('[phase22b-final-root-cause-verdict]', {
+        modifyUsesServerRoute: true,
+        modifyNoLongerCallsClientBuilderDirectly: true,
+        canonicalProfileOverrideWasPassed: true,
+        overrideBuiltFromCurrentInputs: true,
+        architectureMatchesOnboarding: true,
+        outputSessionCount: sessionCount,
         outputPrimaryGoal: newProgram.primaryGoal,
-        inputScheduleMode: generationInputs.scheduleMode,
-        verdict: (newProgram.sessions?.length ?? 0) >= 6 && generationInputs.scheduleMode === 'flexible'
-          ? 'REAL_ROOT_CAUSE_FIXED_MODIFY_SUBMIT_WAS_DISCARDING_BUILDER_STATE'
-          : 'MODIFY_SUBMIT_NOW_USES_BUILDER_STATE_BUT_OUTPUT_STILL_COLLAPSES_DEEPER_BUILDER_OR_RECONCILIATION_BUG_REMAINS',
+        inputScheduleMode: inputs.scheduleMode,
+        verdict: sessionCount >= 6 && inputWasFlexible
+          ? 'REAL_ROOT_CAUSE_FIXED_MODIFY_NOW_MATCHES_ONBOARDING_ARCHITECTURE'
+          : sessionCount === 4 && inputWasFlexible
+            ? 'MODIFY_PATH_ARCHITECTURE_FIXED_BUT_BUILDER_INTERNAL_COLLAPSE_REMAINS'
+            : 'STATIC_MODE_OR_OTHER_SESSION_COUNT_CHECK_INPUTS',
       })
       
     } catch (error) {

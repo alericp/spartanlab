@@ -360,6 +360,17 @@ export default function ProgramPage() {
   const [builderOrigin, setBuilderOrigin] = useState<'default' | 'modify_start_new'>('default')
   
   // ==========================================================================
+  // [PHASE 24A] DEDICATED BUILDER SESSION STATE
+  // These state variables create a deterministic builder session that cannot
+  // be polluted by ambient page-local inputs. When Modify opens the builder,
+  // it seeds builderSessionInputs from visible program truth, and the builder
+  // render/submit MUST use this session payload instead of ambient inputs.
+  // ==========================================================================
+  const [builderSessionInputs, setBuilderSessionInputs] = useState<AdaptiveProgramInputs | null>(null)
+  const [builderSessionKey, setBuilderSessionKey] = useState<string>('initial')
+  const [builderSessionSource, setBuilderSessionSource] = useState<'default_inputs' | 'modify_visible_program' | null>(null)
+  
+  // ==========================================================================
   // [PHASE 21A] Simple controlled dialog pattern for Modify modal
   // showAdjustmentModal is the ONLY source of truth for modal open state
   // No two-stage mount, no RAF delay, no close guards - just like Restart works
@@ -3431,6 +3442,33 @@ export default function ProgramPage() {
   // to /api/program/generate-from-modify-builder instead of calling builder directly.
   // ==========================================================================
   const handleGenerateFromModifyBuilder = useCallback(async () => {
+    // ==========================================================================
+    // [PHASE 24A] LAYER 6 - Use dedicated builder session inputs for submit
+    // This ensures submit uses the same truth as render, not ambient inputs
+    // ==========================================================================
+    const effectiveInputs = builderSessionInputs ?? inputs
+    
+    // [PHASE 24A] Submit parity audit - verify render and submit use same truth
+    console.log('[phase24a-modify-render-submit-parity-audit]', {
+      builderSessionInputsExists: !!builderSessionInputs,
+      ambientInputsExists: !!inputs,
+      usingBuilderSessionInputs: !!builderSessionInputs,
+      builderSessionKey,
+      builderSessionSource,
+      effectiveInputsSummary: effectiveInputs ? {
+        primaryGoal: effectiveInputs.primaryGoal,
+        scheduleMode: effectiveInputs.scheduleMode,
+        trainingDaysPerWeek: effectiveInputs.trainingDaysPerWeek,
+        selectedSkillsCount: effectiveInputs.selectedSkills?.length ?? 0,
+        trainingPathType: effectiveInputs.trainingPathType,
+        sessionLength: effectiveInputs.sessionLength,
+        experienceLevel: effectiveInputs.experienceLevel,
+      } : null,
+      verdict: builderSessionInputs 
+        ? 'MODIFY_RENDER_AND_SUBMIT_USE_SAME_SESSION_TRUTH'
+        : 'MODIFY_SUBMIT_USING_AMBIENT_INPUTS_NO_SESSION',
+    })
+    
     // [PHASE 22B] TASK 1 - Pre-fix architecture audit
     console.log('[phase22b-modify-pre-fix-architecture-audit]', {
       handler: 'handleGenerateFromModifyBuilder',
@@ -3438,23 +3476,23 @@ export default function ProgramPage() {
       usesDirectClientBuilderCall: false,
       usesFetchToServerRoute: true,
       builderOrigin,
-      inputsSnapshot: inputs ? {
-        primaryGoal: inputs.primaryGoal,
-        secondaryGoal: inputs.secondaryGoal,
-        scheduleMode: inputs.scheduleMode,
-        trainingDaysPerWeek: inputs.trainingDaysPerWeek,
-        sessionDurationMode: inputs.sessionDurationMode,
-        sessionLength: inputs.sessionLength,
-        selectedSkillsCount: inputs.selectedSkills?.length ?? 0,
-        trainingPathType: inputs.trainingPathType,
-        experienceLevel: inputs.experienceLevel,
-        equipmentCount: inputs.equipment?.length ?? 0,
+      inputsSnapshot: effectiveInputs ? {
+        primaryGoal: effectiveInputs.primaryGoal,
+        secondaryGoal: effectiveInputs.secondaryGoal,
+        scheduleMode: effectiveInputs.scheduleMode,
+        trainingDaysPerWeek: effectiveInputs.trainingDaysPerWeek,
+        sessionDurationMode: effectiveInputs.sessionDurationMode,
+        sessionLength: effectiveInputs.sessionLength,
+        selectedSkillsCount: effectiveInputs.selectedSkills?.length ?? 0,
+        trainingPathType: effectiveInputs.trainingPathType,
+        experienceLevel: effectiveInputs.experienceLevel,
+        equipmentCount: effectiveInputs.equipment?.length ?? 0,
       } : null,
       verdict: 'SERVER_ROUTE_DISPATCH_ACTIVE',
     })
     
     // Validate prerequisites
-    if (!inputs) {
+    if (!effectiveInputs) {
       console.error('[ProgramPage] handleGenerateFromModifyBuilder: Missing inputs')
       setGenerationError('Missing program inputs. Please refresh the page.')
       return
@@ -3487,26 +3525,26 @@ export default function ProgramPage() {
         createdAt: new Date().toISOString(),
         onboardingComplete: canonicalBase.onboardingComplete ?? true,
         
-        // MATERIAL IDENTITY FIELDS - override from current inputs (these are what matter for planning)
-        primaryGoal: inputs.primaryGoal,
-        secondaryGoal: inputs.secondaryGoal ?? null,
-        goalCategory: inputs.primaryGoal,
-        selectedSkills: inputs.selectedSkills ?? [],
-        selectedFlexibility: inputs.selectedFlexibility ?? [],
-        selectedStrength: inputs.selectedStrength ?? [],
-        goalCategories: inputs.goalCategories ?? [],
-        trainingPathType: inputs.trainingPathType,
-        experienceLevel: inputs.experienceLevel,
+        // MATERIAL IDENTITY FIELDS - override from effective session inputs (these are what matter for planning)
+        primaryGoal: effectiveInputs.primaryGoal,
+        secondaryGoal: effectiveInputs.secondaryGoal ?? null,
+        goalCategory: effectiveInputs.primaryGoal,
+        selectedSkills: effectiveInputs.selectedSkills ?? [],
+        selectedFlexibility: effectiveInputs.selectedFlexibility ?? [],
+        selectedStrength: effectiveInputs.selectedStrength ?? [],
+        goalCategories: effectiveInputs.goalCategories ?? [],
+        trainingPathType: effectiveInputs.trainingPathType,
+        experienceLevel: effectiveInputs.experienceLevel,
         
-        // Schedule fields - override from current inputs
-        scheduleMode: inputs.scheduleMode,
-        sessionDurationMode: inputs.sessionDurationMode,
-        trainingDaysPerWeek: inputs.trainingDaysPerWeek,
-        sessionLengthMinutes: inputs.sessionLength,
+        // Schedule fields - override from effective session inputs
+        scheduleMode: effectiveInputs.scheduleMode,
+        sessionDurationMode: effectiveInputs.sessionDurationMode,
+        trainingDaysPerWeek: effectiveInputs.trainingDaysPerWeek,
+        sessionLengthMinutes: effectiveInputs.sessionLength,
         
-        // Equipment - override from current inputs
-        equipment: inputs.equipment ?? [],
-        equipmentAvailable: inputs.equipment ?? [],
+        // Equipment - override from effective session inputs
+        equipment: effectiveInputs.equipment ?? [],
+        equipmentAvailable: effectiveInputs.equipment ?? [],
         
         // NON-BUILDER FIELDS - preserve from canonical base
         bodyweight: canonicalBase.bodyweight,
@@ -3524,17 +3562,17 @@ export default function ProgramPage() {
       
       // [PHASE 22B] TASK 4 - Canonical override construction audit
       console.log('[phase22b-modify-canonical-override-construction-audit]', {
-        currentInputs: {
-          primaryGoal: inputs.primaryGoal,
-          secondaryGoal: inputs.secondaryGoal,
-          scheduleMode: inputs.scheduleMode,
-          trainingDaysPerWeek: inputs.trainingDaysPerWeek,
-          sessionDurationMode: inputs.sessionDurationMode,
-          sessionLength: inputs.sessionLength,
-          selectedSkillsCount: inputs.selectedSkills?.length ?? 0,
-          trainingPathType: inputs.trainingPathType,
-          experienceLevel: inputs.experienceLevel,
-          equipmentCount: inputs.equipment?.length ?? 0,
+        effectiveInputs: {
+          primaryGoal: effectiveInputs.primaryGoal,
+          secondaryGoal: effectiveInputs.secondaryGoal,
+          scheduleMode: effectiveInputs.scheduleMode,
+          trainingDaysPerWeek: effectiveInputs.trainingDaysPerWeek,
+          sessionDurationMode: effectiveInputs.sessionDurationMode,
+          sessionLength: effectiveInputs.sessionLength,
+          selectedSkillsCount: effectiveInputs.selectedSkills?.length ?? 0,
+          trainingPathType: effectiveInputs.trainingPathType,
+          experienceLevel: effectiveInputs.experienceLevel,
+          equipmentCount: effectiveInputs.equipment?.length ?? 0,
         },
         canonicalBase: {
           primaryGoal: canonicalBase.primaryGoal,
@@ -3560,13 +3598,13 @@ export default function ProgramPage() {
       // [PHASE 22B] TASK 5 - Parity check before dispatch
       // ==========================================================================
       const parityCheck = {
-        primaryGoalMatch: inputs.primaryGoal === canonicalProfileOverride.primaryGoal,
-        scheduleModeMatch: inputs.scheduleMode === canonicalProfileOverride.scheduleMode,
-        trainingDaysMatch: inputs.trainingDaysPerWeek === canonicalProfileOverride.trainingDaysPerWeek,
-        sessionLengthMatch: inputs.sessionLength === canonicalProfileOverride.sessionLengthMinutes,
-        selectedSkillsMatch: (inputs.selectedSkills?.length ?? 0) === (canonicalProfileOverride.selectedSkills?.length ?? 0),
-        experienceLevelMatch: inputs.experienceLevel === canonicalProfileOverride.experienceLevel,
-        trainingPathTypeMatch: inputs.trainingPathType === canonicalProfileOverride.trainingPathType,
+        primaryGoalMatch: effectiveInputs.primaryGoal === canonicalProfileOverride.primaryGoal,
+        scheduleModeMatch: effectiveInputs.scheduleMode === canonicalProfileOverride.scheduleMode,
+        trainingDaysMatch: effectiveInputs.trainingDaysPerWeek === canonicalProfileOverride.trainingDaysPerWeek,
+        sessionLengthMatch: effectiveInputs.sessionLength === canonicalProfileOverride.sessionLengthMinutes,
+        selectedSkillsMatch: (effectiveInputs.selectedSkills?.length ?? 0) === (canonicalProfileOverride.selectedSkills?.length ?? 0),
+        experienceLevelMatch: effectiveInputs.experienceLevel === canonicalProfileOverride.experienceLevel,
+        trainingPathTypeMatch: effectiveInputs.trainingPathType === canonicalProfileOverride.trainingPathType,
       }
       const allFieldsMatch = Object.values(parityCheck).every(v => v === true)
       
@@ -3591,10 +3629,12 @@ export default function ProgramPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          builderInputs: inputs,
+          builderInputs: effectiveInputs,
           canonicalProfileOverride,
           modifyContext: {
             builderOrigin,
+            builderSessionKey,
+            builderSessionSource,
             timestamp: new Date().toISOString(),
           },
         }),
@@ -3625,33 +3665,38 @@ export default function ProgramPage() {
       // Update canonical profile to match what was just generated
       const { updateCanonicalProfile } = await import('@/lib/canonical-profile-service')
       updateCanonicalProfile({
-        primaryGoal: inputs.primaryGoal,
-        secondaryGoal: inputs.secondaryGoal,
-        trainingDaysPerWeek: inputs.trainingDaysPerWeek,
-        scheduleMode: inputs.scheduleMode,
-        sessionDurationMode: inputs.sessionDurationMode,
-        sessionLengthMinutes: inputs.sessionLength,
-        selectedSkills: inputs.selectedSkills,
-        trainingPathType: inputs.trainingPathType,
-        experienceLevel: inputs.experienceLevel,
-        equipmentAvailable: inputs.equipment,
-        goalCategories: inputs.goalCategories,
-        selectedFlexibility: inputs.selectedFlexibility,
+        primaryGoal: effectiveInputs.primaryGoal,
+        secondaryGoal: effectiveInputs.secondaryGoal,
+        trainingDaysPerWeek: effectiveInputs.trainingDaysPerWeek,
+        scheduleMode: effectiveInputs.scheduleMode,
+        sessionDurationMode: effectiveInputs.sessionDurationMode,
+        sessionLengthMinutes: effectiveInputs.sessionLength,
+        selectedSkills: effectiveInputs.selectedSkills,
+        trainingPathType: effectiveInputs.trainingPathType,
+        experienceLevel: effectiveInputs.experienceLevel,
+        equipmentAvailable: effectiveInputs.equipment,
+        goalCategories: effectiveInputs.goalCategories,
+        selectedFlexibility: effectiveInputs.selectedFlexibility,
       })
       
       // Hydrate UI
       setProgram(newProgram)
       setShowBuilder(false)
       
+      // [PHASE 24A] Clear builder session state after successful generation
+      setBuilderSessionInputs(null)
+      setBuilderSessionKey('initial')
+      setBuilderSessionSource(null)
+      
       // [PHASE 22B] TASK 6 - Success final parity verdict
       console.log('[phase22b-modify-success-final-parity-verdict]', {
-        inputPrimaryGoal: inputs.primaryGoal,
-        inputScheduleMode: inputs.scheduleMode,
-        inputSelectedSkillsCount: inputs.selectedSkills?.length ?? 0,
+        inputPrimaryGoal: effectiveInputs.primaryGoal,
+        inputScheduleMode: effectiveInputs.scheduleMode,
+        inputSelectedSkillsCount: effectiveInputs.selectedSkills?.length ?? 0,
         outputPrimaryGoal: newProgram.primaryGoal,
         outputScheduleMode: newProgram.scheduleMode,
         outputSessionCount: newProgram.sessions?.length ?? 0,
-        inputWasFlexible: inputs.scheduleMode === 'flexible',
+        inputWasFlexible: effectiveInputs.scheduleMode === 'flexible',
         outputHas6PlusSessions: (newProgram.sessions?.length ?? 0) >= 6,
       })
       
@@ -3686,19 +3731,20 @@ export default function ProgramPage() {
         hydratedFromStorage: false,
       })
       
-      // [PHASE 22B] TASK 7 - Final root cause verdict
+      // [PHASE 22B/24A] TASK 7 - Final root cause verdict
       const sessionCount = newProgram.sessions?.length ?? 0
-      const inputWasFlexible = inputs.scheduleMode === 'flexible'
+      const inputWasFlexible = effectiveInputs.scheduleMode === 'flexible'
       
       console.log('[phase22b-final-root-cause-verdict]', {
         modifyUsesServerRoute: true,
         modifyNoLongerCallsClientBuilderDirectly: true,
         canonicalProfileOverrideWasPassed: true,
-        overrideBuiltFromCurrentInputs: true,
+        overrideBuiltFromSessionInputs: !!builderSessionInputs,
+        builderSessionKey,
         architectureMatchesOnboarding: true,
         outputSessionCount: sessionCount,
         outputPrimaryGoal: newProgram.primaryGoal,
-        inputScheduleMode: inputs.scheduleMode,
+        inputScheduleMode: effectiveInputs.scheduleMode,
         verdict: sessionCount >= 6 && inputWasFlexible
           ? 'REAL_ROOT_CAUSE_FIXED_MODIFY_NOW_MATCHES_ONBOARDING_ARCHITECTURE'
           : sessionCount === 4 && inputWasFlexible
@@ -3710,12 +3756,15 @@ export default function ProgramPage() {
       console.error('[ProgramPage] handleGenerateFromModifyBuilder: Error', error)
       setGenerationError(error instanceof Error ? error.message : 'Generation failed')
       
-      // Reset origin on failure too
+      // Reset origin and session on failure too
       setBuilderOrigin('default')
+      setBuilderSessionInputs(null)
+      setBuilderSessionKey('initial')
+      setBuilderSessionSource(null)
     } finally {
       setIsGenerating(false)
     }
-  }, [inputs, programModules, builderOrigin])
+  }, [inputs, programModules, builderOrigin, builderSessionInputs, builderSessionKey, builderSessionSource])
 
   // TASK 4: Restart Program - archives current program and returns to builder
   const handleRestart = useCallback(() => {
@@ -7892,6 +7941,21 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
     const showBuilderBefore = showBuilder
     const showAdjustmentModalBefore = showAdjustmentModal
     
+    // [PHASE 24A] LAYER 1 - Click chain audit
+    console.log('[phase24a-modify-click-chain-audit]', {
+      clickFired: true,
+      programExists: !!program,
+      programId: program?.id ?? null,
+      showBuilderBefore,
+      showAdjustmentModalBefore,
+      builderOriginBefore: builderOrigin,
+      builderSessionInputsExistBefore: !!builderSessionInputs,
+      builderSessionKeyBefore: builderSessionKey,
+      verdict: program 
+        ? 'MODIFY_CLICK_CHAIN_WILL_OPEN_MODAL'
+        : 'MODIFY_CLICK_CHAIN_WILL_OPEN_BUILDER_DIRECTLY',
+    })
+    
     // [PHASE 21A] Diagnostic 1: Click entry
     console.log('[phase21a-modify-click-entry]', {
       programExists: !!program,
@@ -7948,8 +8012,16 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
       reason: 'no_active_program',
     })
     
+    // [PHASE 24A] First tap classification - this is direct builder open, not modal
+    console.log('[phase24a-modify-first-tap-classification-audit]', {
+      classification: 'direct_builder_open_no_program',
+      modalInvolved: false,
+      builderSessionCreated: false,
+      reason: 'no_active_program_so_builder_opens_directly',
+    })
+    
     setShowBuilder(true)
-  }, [program, showBuilder, showAdjustmentModal])
+  }, [program, showBuilder, showAdjustmentModal, builderOrigin, builderSessionInputs, builderSessionKey, inputs])
 
   const handleConfirmNewProgram = useCallback(async () => {
     // ==========================================================================
@@ -8138,7 +8210,43 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
       visibleProgramSessionCount: program?.sessions?.length ?? 0,
     })
     
-    // Apply fresh inputs to state
+    // ==========================================================================
+    // [PHASE 24A] LAYER 3 - Seed the dedicated builder session BEFORE opening
+    // This creates a deterministic, non-racy source of truth for the builder
+    // ==========================================================================
+    const newSessionKey = `modify_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+    
+    console.log('[phase24a-modify-builder-session-created-audit]', {
+      previousSessionKey: builderSessionKey,
+      newSessionKey,
+      sessionInputsCreated: true,
+      sourceWinner,
+      freshInputsSummary: {
+        primaryGoal: freshInputs.primaryGoal,
+        scheduleMode: freshInputs.scheduleMode,
+        trainingDaysPerWeek: freshInputs.trainingDaysPerWeek,
+        selectedSkillsCount: freshInputs.selectedSkills?.length ?? 0,
+        trainingPathType: freshInputs.trainingPathType,
+        sessionLength: freshInputs.sessionLength,
+        experienceLevel: freshInputs.experienceLevel,
+        equipmentCount: freshInputs.equipment?.length ?? 0,
+      },
+    })
+    
+    // Set the dedicated builder session payload FIRST
+    setBuilderSessionInputs(freshInputs)
+    setBuilderSessionKey(newSessionKey)
+    setBuilderSessionSource('modify_visible_program')
+    
+    console.log('[phase24a-modify-builder-session-source-verdict]', {
+      source: 'modify_visible_program',
+      sessionKey: newSessionKey,
+      builderWillUseSessionPayload: true,
+      builderWillNotUseAmbientInputs: true,
+      verdict: 'BUILDER_SESSION_LOCKED_TO_MODIFY_TRUTH',
+    })
+    
+    // Also sync to ambient inputs for page consistency (secondary, not builder authority)
     setInputs(freshInputs)
     
     programModules.recordProgramEnd?.('new_program')
@@ -8151,6 +8259,7 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
       trigger: 'handleConfirmNewProgram',
       builderOpening: true,
       programExists: !!program,
+      builderSessionKey: newSessionKey,
     })
     setBuilderOrigin('modify_start_new')
     setShowBuilder(true)
@@ -8161,7 +8270,18 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
       sourceWinner,
       builderOriginSet: 'modify_start_new',
     })
-  }, [programModules, inputs, builderOrigin, program, buildModifyEntryInputsFromVisibleProgram])
+    
+    // [PHASE 24A] LAYER 8 - Untouched scope audit
+    console.log('[phase24a-modify-untouched-scope-audit]', {
+      handleRegenerateTouched: false,
+      handleRestartTouched: false,
+      handleAdjustmentRebuildTouched: false,
+      serverRoutesTouched: false,
+      onboardingGenerationTouched: false,
+      builderDoctrineTouched: false,
+      verdict: 'UNTOUCHED_FLOWS_PRESERVED',
+    })
+  }, [programModules, inputs, builderOrigin, program, buildModifyEntryInputsFromVisibleProgram, builderSessionKey])
 
   // TASK 3: Show error state for module load failure with stage info
   if (loadError) {
@@ -8350,11 +8470,43 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
               </Card>
             )}
             
-            {/* [PHASE 22A] TASK 6 - Wire correct handler based on builder origin */}
+            {/* [PHASE 22A/24A] Wire correct handler and session inputs based on builder origin */}
             {(() => {
               const selectedHandler = builderOrigin === 'modify_start_new' 
                 ? handleGenerateFromModifyBuilder 
                 : handleGenerate
+              
+              // [PHASE 24A] LAYER 4 - Use dedicated session inputs for modify flow
+              // This prevents ambient page-local inputs from polluting the builder session
+              const effectiveBuilderInputs = (builderOrigin === 'modify_start_new' && builderSessionInputs)
+                ? builderSessionInputs
+                : inputs
+              
+              const usingSessionTruth = builderOrigin === 'modify_start_new' && !!builderSessionInputs
+              
+              console.log('[phase24a-modify-builder-render-source-audit]', {
+                builderOrigin,
+                builderSessionKey,
+                builderSessionSource,
+                builderSessionInputsExists: !!builderSessionInputs,
+                usingSessionTruth,
+                effectiveInputsSummary: effectiveBuilderInputs ? {
+                  primaryGoal: effectiveBuilderInputs.primaryGoal,
+                  scheduleMode: effectiveBuilderInputs.scheduleMode,
+                  trainingDaysPerWeek: effectiveBuilderInputs.trainingDaysPerWeek,
+                  sessionDurationMode: effectiveBuilderInputs.sessionDurationMode,
+                  sessionLength: effectiveBuilderInputs.sessionLength,
+                  selectedSkillsCount: effectiveBuilderInputs.selectedSkills?.length ?? 0,
+                  trainingPathType: effectiveBuilderInputs.trainingPathType,
+                  goalCategoriesCount: effectiveBuilderInputs.goalCategories?.length ?? 0,
+                  selectedFlexibilityCount: effectiveBuilderInputs.selectedFlexibility?.length ?? 0,
+                  experienceLevel: effectiveBuilderInputs.experienceLevel,
+                  equipmentCount: effectiveBuilderInputs.equipment?.length ?? 0,
+                } : null,
+                verdict: usingSessionTruth 
+                  ? 'BUILDER_RENDER_USING_MODIFY_SESSION_TRUTH'
+                  : 'BUILDER_RENDER_USING_AMBIENT_INPUTS',
+              })
               
               console.log('[phase22a-builder-submit-handler-selected-audit]', {
                 builderOrigin,
@@ -8364,10 +8516,21 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
                 modifySpecificPathActive: builderOrigin === 'modify_start_new',
               })
               
+              // [PHASE 24A] LAYER 5 - Key forces clean remount when modify session changes
+              console.log('[phase24a-modify-builder-remount-audit]', {
+                currentKey: builderSessionKey,
+                builderOrigin,
+                keyTriggersRemount: builderOrigin === 'modify_start_new',
+                reason: builderOrigin === 'modify_start_new' 
+                  ? 'modify_session_uses_dedicated_key_for_clean_state'
+                  : 'default_builder_uses_stable_key',
+              })
+              
               return (
                 <AdaptiveProgramForm
-                  inputs={inputs}
-                  onInputChange={setInputs}
+                  key={builderOrigin === 'modify_start_new' ? builderSessionKey : 'default-builder'}
+                  inputs={effectiveBuilderInputs}
+                  onInputChange={builderOrigin === 'modify_start_new' ? setBuilderSessionInputs : setInputs}
                   onGenerate={selectedHandler}
                   isGenerating={isGenerating}
                   constraintLabel={constraintLabel}
@@ -8376,7 +8539,7 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
             })()}
             
             {/* Cancel button if there's an existing program */}
-            {/* [PHASE 22A] TASK 7 - Reset builder origin on cancel */}
+            {/* [PHASE 22A/24A] Reset builder origin and session on cancel */}
             {program && (
               <Button
                 variant="outline"
@@ -8387,8 +8550,12 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
                     resetOccurredAfterHydration: false,
                     previousOrigin: builderOrigin,
                     newOrigin: 'default',
+                    builderSessionCleared: true,
                   })
                   setBuilderOrigin('default')
+                  setBuilderSessionInputs(null)
+                  setBuilderSessionKey('initial')
+                  setBuilderSessionSource(null)
                   setShowBuilder(false)
                 }}
               >

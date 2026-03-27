@@ -674,7 +674,17 @@ export function AdaptiveProgramDisplay({
   type SharedChipState = 'headline_priority' | 'represented_broader' | 'support_only' | 'selected_not_represented'
   
   const getSharedChipState = (skill: string): SharedChipState => {
-    // First check weekly representation policies if available (more accurate)
+    // ==========================================================================
+    // [PHASE 24P] CRITICAL FIX: Check headline identity FIRST, before weeklyRepresentation
+    // Primary and secondary goals are always headline_priority regardless of week-level expression
+    // This prevents secondary goals from being downgraded by stricter representation thresholds
+    // ==========================================================================
+    const isHeadlineIdentity = sharedHeadlineSkills.includes(skill)
+    if (isHeadlineIdentity) {
+      return 'headline_priority'
+    }
+    
+    // For non-headline skills, check weekly representation policies if available
     if (safeWeeklyRepresentation?.policies) {
       const policy = safeWeeklyRepresentation.policies.find(p => p.skill === skill)
       if (policy) {
@@ -693,8 +703,7 @@ export function AdaptiveProgramDisplay({
       }
     }
     
-    // Fallback to summary truth based logic
-    if (sharedHeadlineSkills.includes(skill)) return 'headline_priority'
+    // Fallback to summary truth based logic for non-headline skills
     if (sharedRepresentedSkills.includes(skill)) return 'represented_broader'
     if (sharedWeekSupportSkills.includes(skill)) return 'support_only'
     return 'selected_not_represented'
@@ -726,6 +735,29 @@ export function AdaptiveProgramDisplay({
     availableBeforeBuiltAroundSection: true,
     availableBeforePhase7Audits: true,
     verdict: 'CHIP_TRUTH_HOISTED_TO_TRUE_SHARED_SCOPE',
+  })
+  
+  // ==========================================================================
+  // [PHASE 24P] Headline identity chip inclusion audit
+  // Verifies that primary/secondary goals are always included in Built around chips
+  // ==========================================================================
+  const primaryInChips = sharedStrictRepresentedSkillsForChips.includes(program.primaryGoal)
+  const secondaryInChips = program.secondaryGoal 
+    ? sharedStrictRepresentedSkillsForChips.includes(program.secondaryGoal)
+    : null
+  console.log('[phase24p-headline-identity-chip-inclusion-audit]', {
+    primaryGoal: program.primaryGoal,
+    secondaryGoal: program.secondaryGoal,
+    sharedHeadlineSkills,
+    sharedStrictRepresentedSkillsForChips,
+    primaryInChips,
+    secondaryInChips,
+    primaryChipState: getSharedChipState(program.primaryGoal),
+    secondaryChipState: program.secondaryGoal ? getSharedChipState(program.secondaryGoal) : null,
+    headlineIdentityPrioritized: primaryInChips && (program.secondaryGoal ? secondaryInChips : true),
+    verdict: primaryInChips && (program.secondaryGoal ? secondaryInChips : true)
+      ? 'HEADLINE_IDENTITY_CORRECTLY_INCLUDED_IN_CHIPS'
+      : 'HEADLINE_IDENTITY_MISSING_FROM_CHIPS_BUG',
   })
   
   // [PHASE 10F TASK 5] Single source final verdict

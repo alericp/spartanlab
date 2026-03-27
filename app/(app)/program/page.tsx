@@ -8113,6 +8113,13 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
 
   const handleConfirmNewProgram = useCallback(async () => {
     // ==========================================================================
+    // [PHASE 24I] FAIL-SAFE: Wrap entire handler in try/catch with stage tracking
+    // This ensures no silent failures make the Start New button appear dead
+    // ==========================================================================
+    let stage: 'entry' | 'canonical_truth_selection' | 'canonical_entry_build' | 'fallback_input_selection' | 'session_key_creation' | 'session_seed_write' | 'transition_to_builder' | 'render_handoff_complete' = 'entry'
+    
+    try {
+    // ==========================================================================
     // [PHASE 24H] TASK E - Parent start new handoff audit - ENTRY POINT
     // ==========================================================================
     console.log('[phase24h-parent-start-new-handoff-audit]', {
@@ -8124,6 +8131,8 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
       programExists: !!program,
       programId: program?.id ?? null,
     })
+    
+    stage = 'canonical_truth_selection'
     
     // ==========================================================================
     // [PHASE 24E] ROOT-CAUSE FIX: Modify entry must use FRESHEST PROGRAM TRUTH
@@ -8359,6 +8368,8 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
     let sourceWinner: 'canonical_start_new_truth' | 'inputs_fallback' | 'hard_default_fallback'
     let canonicalEntrySuccess = false
     
+    stage = 'canonical_entry_build'
+    
     // ALWAYS try canonical/onboarding truth FIRST for Start New
     // This is the key fix: visible program / canonical saved program are NOT primary sources
     if (canonical.primaryGoal && canonical.onboardingComplete) {
@@ -8430,6 +8441,14 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
         canonicalSavedProgramWasExcludedFromPrimarySeed: true,
       })
     }
+    
+    stage = 'session_key_creation'
+    
+    // ==========================================================================
+    // [PHASE 24I] FIX: Create newSessionKey IMMEDIATELY after freshInputs is determined
+    // This MUST happen BEFORE any log that references newSessionKey to avoid TDZ error
+    // ==========================================================================
+    const newSessionKey = `modify_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
     
     // [PHASE 24G] TASK 3 - Builder seed audit
     const canonicalEquipment = canonical.equipmentAvailable || []
@@ -8532,9 +8551,8 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
     // ==========================================================================
     // [PHASE 24A] LAYER 3 - Seed the dedicated builder session BEFORE opening
     // This creates a deterministic, non-racy source of truth for the builder
+    // NOTE: newSessionKey was already created earlier (after freshInputs) to avoid TDZ
     // ==========================================================================
-    const newSessionKey = `modify_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
-    
     console.log('[phase24a-modify-builder-session-created-audit]', {
       previousSessionKey: builderSessionKey,
       newSessionKey,
@@ -8551,6 +8569,8 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
         equipmentCount: freshInputs.equipment?.length ?? 0,
       },
     })
+    
+    stage = 'session_seed_write'
     
     // Set the dedicated builder session payload FIRST
     setBuilderSessionInputs(freshInputs)
@@ -8585,6 +8605,8 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
       verdict: 'TRANSITIONING_FROM_MODAL_TO_BUILDER',
     })
     
+    stage = 'transition_to_builder'
+    
     // Transition the explicit state machine from modal to builder
     setModifyFlowState('builder')
     
@@ -8602,6 +8624,8 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
     })
     setBuilderOrigin('modify_start_new')
     setShowBuilder(true)
+    
+    stage = 'render_handoff_complete'
     
     console.log('[phase24d-modify-builder-handoff-verdict]', {
       modifyFlowState: 'builder',
@@ -8655,7 +8679,28 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
       builderDoctrineTouched: false,
       verdict: 'UNTOUCHED_FLOWS_PRESERVED',
     })
-  }, [programModules, inputs, builderOrigin, program, buildModifyEntryInputsFromVisibleProgram, builderSessionKey, modifyFlowState])
+    
+    } catch (error) {
+      // ==========================================================================
+      // [PHASE 24I] FAIL-SAFE: Log exact stage and error, keep user in recoverable state
+      // ==========================================================================
+      console.error('[phase24i-start-new-handler-error]', {
+        stage,
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        programId: program?.id ?? null,
+        showAdjustmentModal,
+        showBuilder,
+        modifyFlowState,
+        verdict: 'START_NEW_HANDLER_FAILED',
+      })
+      
+      // Keep modal open so user can retry or choose different option
+      // Do NOT partially transition state - leave in clean modal state
+      setShowAdjustmentModal(true)
+      setModifyFlowState('modal')
+    }
+  }, [programModules, inputs, builderOrigin, program, buildModifyEntryInputsFromVisibleProgram, builderSessionKey, modifyFlowState, showAdjustmentModal, showBuilder])
 
   // TASK 3: Show error state for module load failure with stage info
   if (loadError) {

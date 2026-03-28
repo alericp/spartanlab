@@ -2597,6 +2597,31 @@ async function generateAdaptiveProgramImpl(
   // EXPLICIT MATERIAL IDENTITY BLOCK - built from current canonical/override truth, not stale legacy
   // Priority: canonicalProfile (which already incorporates any override) > inputs > safe fallback
   // This prevents stale onboardingProfile from silently reintroducing hybrid identity
+  // ==========================================================================
+  // [PHASE 25W] TDZ FIX: These declarations MUST come BEFORE materialIdentity
+  // Previously these were declared at lines 2710-2720 but referenced in materialIdentity
+  // which caused "Cannot access before initialization" TDZ error
+  // ==========================================================================
+  const hasExplicitNumericDays = typeof inputs.trainingDaysPerWeek === 'number' && 
+    inputs.trainingDaysPerWeek >= 2 && inputs.trainingDaysPerWeek <= 7
+  const hasExplicitStaticInputs = inputs.scheduleMode === 'static' || hasExplicitNumericDays
+  
+  // [PHASE 24Q/25W] Force static mode when numeric days are explicitly selected
+  const inputScheduleMode = hasExplicitNumericDays
+    ? 'static' as const
+    : (hasExplicitStaticInputs && inputs.scheduleMode === 'static')
+      ? 'static' as const
+      : (canonicalProfile.scheduleMode || inputs.scheduleMode || normalizeScheduleMode(trainingDaysPerWeek))
+  
+  console.log('[phase25w-tdz-profile-validation]', {
+    hasExplicitNumericDays,
+    hasExplicitStaticInputs,
+    inputScheduleMode,
+    inputsTrainingDaysPerWeek: inputs.trainingDaysPerWeek,
+    canonicalScheduleMode: canonicalProfile.scheduleMode,
+    verdict: 'TDZ_FIX_DECLARATIONS_NOW_BEFORE_MATERIAL_IDENTITY',
+  })
+  
   const materialIdentity = {
     primaryGoal: canonicalProfile.primaryGoal || 'general_fitness',
     secondaryGoal: canonicalProfile.secondaryGoal || null,
@@ -2702,22 +2727,11 @@ async function generateAdaptiveProgramImpl(
       'ROOT_CAUSE_FIXED_BUILDER_NO_LONGER_USES_STALE_LEGACY_IDENTITY' :
       'ROOT_CAUSE_FIXED_BUILDER_NO_LONGER_USES_STALE_LEGACY_IDENTITY',
   })
-  // ==========================================================================
-  // [PHASE 24O/24Q] CRITICAL FIX: Explicit numeric day selection FORCES static mode
-  // If inputs contain a numeric trainingDaysPerWeek (2-7), that is explicit static intent
-  // Do NOT let old canonical flexible mode OR missing inputs.scheduleMode override this
-  // ==========================================================================
-  const hasExplicitNumericDays = typeof inputs.trainingDaysPerWeek === 'number' && 
-    inputs.trainingDaysPerWeek >= 2 && inputs.trainingDaysPerWeek <= 7
-  const hasExplicitStaticInputs = inputs.scheduleMode === 'static' || hasExplicitNumericDays
   
-  // [PHASE 24Q] Force static mode when numeric days are explicitly selected
-  // This prevents stale flexible canonical profile from overriding explicit day selection
-  const inputScheduleMode = hasExplicitNumericDays
-    ? 'static' as const  // [PHASE 24Q] Numeric day selection = static mode, period
-    : (hasExplicitStaticInputs && inputs.scheduleMode === 'static')
-      ? 'static' as const  // Explicit static mode set
-      : (canonicalProfile.scheduleMode || inputs.scheduleMode || normalizeScheduleMode(trainingDaysPerWeek))
+  // ==========================================================================
+  // [PHASE 25W] Note: hasExplicitNumericDays, hasExplicitStaticInputs, and inputScheduleMode
+  // are now declared BEFORE materialIdentity (around line 2600) to fix TDZ error
+  // ==========================================================================
   
   console.log('[phase24q-schedule-mode-force-static-fix]', {
     canonicalProfileScheduleMode: canonicalProfile.scheduleMode,

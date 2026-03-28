@@ -40,6 +40,9 @@ import {
   auditCanonicalPrecedence,
   detectSplitBrain,
   phase5SourceTruthPersistenceFinalVerdict,
+  // [PHASE 25] Static imports for canonicalModifyLauncher - required for SSR/prerender safety
+  buildCanonicalGenerationEntry,
+  entryToAdaptiveInputs,
 } from '@/lib/canonical-profile-service'
 // [program-rebuild-truth] Import rebuild result contract for truthful error handling
 // [freshness-sync] TASK 1 & 2: Import freshness identity management for cross-surface consistency
@@ -8208,7 +8211,9 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
       verdict: 'CANONICAL_MODIFY_SUBMIT_PATH_USED',
     })
     
-  }, [program, programModules, builderOrigin, getCanonicalProfile, buildCanonicalGenerationEntry, entryToAdaptiveInputs])
+  }, [program, programModules, builderOrigin])
+  // [PHASE 25] Note: buildCanonicalGenerationEntry and entryToAdaptiveInputs are now static module imports,
+  // not component-level dependencies. getCanonicalProfile is also a static import.
 
   // ==========================================================================
   // [PHASE 25] LEGACY MODIFY ENTRY - DEPRECATED

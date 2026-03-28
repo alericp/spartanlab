@@ -2542,19 +2542,39 @@ export function buildCanonicalGenerationEntry(
     resolvedExperienceLevel = 'intermediate'
   }
   
-  // Schedule mode resolution
-  let resolvedScheduleMode: 'static' | 'flexible' = 'flexible'
-  if (overrides?.scheduleMode) {
+  // ==========================================================================
+  // [PHASE 24Q] CRITICAL FIX: Explicit numeric day-count override must flip to static mode
+  // If overrides contain a numeric trainingDaysPerWeek, that is explicit static intent
+  // Do NOT let profile.scheduleMode='flexible' override explicit numeric day selection
+  // ==========================================================================
+  const hasExplicitNumericDayOverride = typeof overrides?.trainingDaysPerWeek === 'number' &&
+    overrides.trainingDaysPerWeek >= 2 && overrides.trainingDaysPerWeek <= 7
+  
+  // Schedule mode resolution - numeric day selection forces static mode
+  let resolvedScheduleMode: 'static' | 'flexible' = 'static'  // [PHASE 24Q] Changed default
+  if (hasExplicitNumericDayOverride) {
+    // [PHASE 24Q] Numeric day selection = static mode, regardless of profile or explicit override
+    resolvedScheduleMode = 'static'
+    console.log('[phase24q-entry-builder-force-static]', {
+      numericDaysProvided: overrides?.trainingDaysPerWeek,
+      profileScheduleMode: profile.scheduleMode,
+      verdict: 'NUMERIC_DAYS_FORCED_STATIC_MODE',
+    })
+  } else if (overrides?.scheduleMode) {
     resolvedScheduleMode = overrides.scheduleMode
   } else if (profile.scheduleMode) {
     resolvedScheduleMode = profile.scheduleMode
   } else {
     fallbacksUsed.push('scheduleMode')
+    resolvedScheduleMode = 'static'  // [PHASE 24Q] Changed default from 'flexible'
   }
   
-  // Training days resolution
-  let resolvedTrainingDays: number | 'flexible' = 'flexible'
-  if (overrides?.trainingDaysPerWeek !== undefined) {
+  // Training days resolution - explicit numeric override takes precedence
+  let resolvedTrainingDays: number | 'flexible' = 4  // [PHASE 24Q] Changed default
+  if (hasExplicitNumericDayOverride) {
+    // [PHASE 24Q] Explicit numeric override wins unconditionally
+    resolvedTrainingDays = overrides!.trainingDaysPerWeek as number
+  } else if (overrides?.trainingDaysPerWeek !== undefined) {
     resolvedTrainingDays = overrides.trainingDaysPerWeek
   } else if (resolvedScheduleMode === 'flexible') {
     resolvedTrainingDays = 'flexible'

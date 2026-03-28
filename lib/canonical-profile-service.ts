@@ -540,6 +540,44 @@ export function reconcileCanonicalProfile(): CanonicalProgrammingProfile {
         verdict: verdictReason,
       })
       
+      // ==========================================================================
+      // [PHASE 28H] CANONICAL SCHEDULE SOURCE WINNER LOG
+      // Proves exactly which source won and detects if static was dropped
+      // ==========================================================================
+      console.log('[phase28h-canonical-schedule-source-winner]', {
+        onboardingScheduleMode: onboardingProfile?.scheduleMode ?? null,
+        onboardingTrainingDays: onboardingProfile?.trainingDaysPerWeek ?? null,
+        athleteScheduleMode: athleteProfile?.scheduleMode ?? null,
+        athleteTrainingDays: athleteProfile?.trainingDaysPerWeek ?? null,
+        canonicalAfterResolution: { scheduleMode: resolvedScheduleMode, trainingDaysPerWeek: resolvedTrainingDays },
+        winnerSource,
+        winnerReason: verdictReason,
+        // BUG DETECTION
+        verdict: (() => {
+          // Detect if athlete had static 6 but we resolved to something else
+          if (athleteExplicitStatic && athleteProfile?.trainingDaysPerWeek === 6) {
+            if (resolvedScheduleMode === 'static' && resolvedTrainingDays === 6) {
+              return 'ATHLETE_STATIC_6_WINS'
+            } else {
+              return 'BUG_ATHLETE_STATIC_6_WAS_DROPPED'
+            }
+          }
+          // Detect if onboarding had static 6 but we resolved to something else
+          if (onboardingExplicitStatic && onboardingProfile?.trainingDaysPerWeek === 6) {
+            if (resolvedScheduleMode === 'static' && resolvedTrainingDays === 6) {
+              return 'ONBOARD_STATIC_6_WINS'
+            } else {
+              return 'BUG_ONBOARD_STATIC_6_WAS_DROPPED'
+            }
+          }
+          // No static 6 existed anywhere
+          if (resolvedScheduleMode === 'flexible') {
+            return 'FLEXIBLE_WON_BECAUSE_NO_EXPLICIT_STATIC'
+          }
+          return `CANON_RETAINED_STATIC_${resolvedTrainingDays}`
+        })(),
+      })
+      
       return {
         scheduleMode: resolvedScheduleMode,
         trainingDaysPerWeek: resolvedTrainingDays,

@@ -2171,6 +2171,26 @@ export default function ProgramPage() {
       verdict: isModifyFlow ? 'MODIFY_FLOW_VIA_UNIFIED_HANDLER' : 'ONBOARDING_FLOW_VIA_UNIFIED_HANDLER',
     })
     
+    // ==========================================================================
+    // [PHASE 24S] CRITICAL SCHEDULE TRUTH SUBMIT AUDIT
+    // This log proves whether 6-day static intent actually reached submit
+    // If scheduleMode is still 'flexible', the user did NOT change the Training Days selector
+    // ==========================================================================
+    const scheduleSubmitTruth = {
+      scheduleMode: effectiveInputs?.scheduleMode,
+      trainingDaysPerWeek: effectiveInputs?.trainingDaysPerWeek,
+      isFlexible: effectiveInputs?.scheduleMode === 'flexible' || effectiveInputs?.trainingDaysPerWeek === 'flexible',
+      isStatic: effectiveInputs?.scheduleMode === 'static' && typeof effectiveInputs?.trainingDaysPerWeek === 'number',
+      staticDayCount: typeof effectiveInputs?.trainingDaysPerWeek === 'number' ? effectiveInputs.trainingDaysPerWeek : null,
+    }
+    console.log('[phase24s-schedule-truth-submit-audit]', {
+      ...scheduleSubmitTruth,
+      verdict: scheduleSubmitTruth.isStatic 
+        ? `STATIC_${scheduleSubmitTruth.staticDayCount}_DAYS_SUBMITTED`
+        : 'FLEXIBLE_SCHEDULE_SUBMITTED_USER_DID_NOT_CHANGE_TRAINING_DAYS',
+      userMustChangeTrainingDaysSelector: scheduleSubmitTruth.isFlexible,
+    })
+    
     setIsGenerating(true)
     setGenerationError(null) // Clear any previous error
     

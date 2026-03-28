@@ -18,13 +18,14 @@
 // This allows us to verify the live app is running the expected code version
 // ==========================================================================
 export const PHASE27C_BUILD_IDENTITY = {
-  buildIdentityName: 'PHASE28B_VISIBLE_SCHEDULE_TRUTH_BAR',
-  buildIdentityVersion: '2024-PHASE28B-v1',
-  buildTimestamp: '2024-01-PHASE28B',
-  modifyBuilderVariant: 'EXPECTED_PHASE28B_CANONICAL_MODIFY',
-  scheduleSelectorVariant: 'EXPECTED_PHASE28B_EXPLICIT_CHOICE_TRACKING',
-  submitSnapshotVariant: 'EXPECTED_PHASE28B_AMBER_WARNING_STYLE',
-  auditPanelVariant: 'PHASE28B_VISIBLE_TRUTH_BAR',
+  buildIdentityName: 'PHASE28DE_CANONICAL_SCHEDULE_FIX',
+  buildIdentityVersion: '2024-PHASE28DE-v1',
+  buildTimestamp: '2024-01-PHASE28DE',
+  modifyBuilderVariant: 'EXPECTED_PHASE28DE_CANONICAL_MODIFY',
+  scheduleSelectorVariant: 'EXPECTED_PHASE28DE_ATHLETE_PRECEDENCE',
+  submitSnapshotVariant: 'EXPECTED_PHASE28DE_AMBER_WARNING_STYLE',
+  auditPanelVariant: 'PHASE28DE_VISIBLE_TRUTH_BAR_WITH_LIVE_SEED',
+  scheduleResolutionFix: 'ATHLETE_STATIC_BEATS_ONBOARDING_FLEXIBLE',
 } as const
 
 import { useState, useEffect, useCallback, useMemo, useRef, type ReactNode } from 'react'
@@ -8632,6 +8633,47 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
     
     // Also sync to ambient inputs for consistency
     setInputs(freshInputs)
+    
+    // ==========================================================================
+    // [PHASE 28E] SEED SCHEDULE TRUTH AUDIT FOR LIVE MODIFY PATH
+    // This makes the visible SCHEDULE TRUTH NOW panel render in the live flow
+    // ==========================================================================
+    const onboardingForAudit = programModules.getOnboardingProfile?.() || null
+    const athleteForAudit = programModules.getAthleteProfile?.() || null
+    
+    setScheduleTruthAudit({
+      // Source values
+      onboardingScheduleMode: onboardingForAudit?.scheduleMode || null,
+      onboardingTrainingDays: typeof onboardingForAudit?.trainingDaysPerWeek === 'number' 
+        ? onboardingForAudit.trainingDaysPerWeek : null,
+      athleteScheduleMode: athleteForAudit?.scheduleMode || null,
+      athleteTrainingDays: typeof athleteForAudit?.trainingDaysPerWeek === 'number'
+        ? athleteForAudit.trainingDaysPerWeek : null,
+      // Canonical resolved
+      canonicalScheduleMode: canonicalProfileNow.scheduleMode,
+      canonicalTrainingDaysPerWeek: canonicalProfileNow.trainingDaysPerWeek,
+      // Builder prefill (what form opens with)
+      prefillScheduleMode: freshInputs.scheduleMode,
+      prefillTrainingDays: freshInputs.scheduleMode === 'static' 
+        ? (freshInputs.trainingDaysPerWeek as number) : null,
+      // History
+      lastGeneratedScheduleMode: program?.scheduleMode || null,
+      lastGeneratedTrainingDays: (program as { trainingDaysPerWeek?: number })?.trainingDaysPerWeek || null,
+      lastReconciliationDecision: null,
+    })
+    
+    console.log('[phase28e-live-modify-audit-state-seeded]', {
+      canonicalScheduleMode: canonicalProfileNow.scheduleMode,
+      canonicalTrainingDaysPerWeek: canonicalProfileNow.trainingDaysPerWeek,
+      prefillScheduleMode: freshInputs.scheduleMode,
+      prefillTrainingDays: freshInputs.trainingDaysPerWeek,
+      onboardingScheduleMode: onboardingForAudit?.scheduleMode || null,
+      athleteScheduleMode: athleteForAudit?.scheduleMode || null,
+      auditPanelWillRender: true,
+      verdict: freshInputs.scheduleMode === 'static' 
+        ? `LIVE_MODIFY_AUDIT_SEEDED_STATIC_${freshInputs.trainingDaysPerWeek}`
+        : 'LIVE_MODIFY_AUDIT_SEEDED_FLEXIBLE',
+    })
     
     // Record program end if there is an active program
     if (program) {

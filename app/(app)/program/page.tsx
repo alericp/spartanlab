@@ -1945,6 +1945,58 @@ export default function ProgramPage() {
             : 'KEEPING_CURRENT_NO_CHANGE_NEEDED',
       })
       
+      // ==========================================================================
+      // [PHASE 26F] VERIFIED ZIP RECONCILIATION OVERWRITE FIX - DECISION AUDIT
+      // This explicitly logs why replacement did or did not happen
+      // Key rule: sessionCountDiffers alone must NEVER replace a newer program
+      // ==========================================================================
+      const timestampsComparable = !!(canonicalCreatedAt && currentCreatedAt)
+      const canonicalShouldWin = canonicalIsNewer && timestampsComparable
+      const currentShouldWin = currentIsNewer && timestampsComparable
+      const sessionCountWouldHaveTriggeredOldBug = sessionCountDiffers && !canonicalIsNewer
+      
+      console.log('[phase26f-verified-zip-reconciliation-overwrite-fix]', {
+        trigger: triggerSource,
+        canonicalProgramId: canonicalProgram.id,
+        currentProgramId: currentProgram.id,
+        canonicalCreatedAt: canonicalProgram.createdAt,
+        currentCreatedAt: currentProgram.createdAt,
+        canonicalSessionCount: canonicalProgram.sessions?.length || 0,
+        currentSessionCount: currentProgram.sessions?.length || 0,
+        canonicalScheduleMode: (canonicalProgram as unknown as { scheduleMode?: string }).scheduleMode,
+        currentScheduleMode: (currentProgram as unknown as { scheduleMode?: string }).scheduleMode,
+        idDiffers,
+        canonicalIsNewer,
+        currentIsNewer,
+        sessionCountDiffers,
+        timestampsComparable,
+        canonicalShouldWin,
+        currentShouldWin,
+        sessionCountWouldHaveTriggeredOldBug,
+        shouldReplace,
+        replacementBlockedReason: !shouldReplace
+          ? (currentIsNewer
+              ? 'current_program_is_newer'
+              : sessionCountWouldHaveTriggeredOldBug
+                ? 'session_count_differs_but_canonical_is_older_phase26f_protected'
+                : 'no_material_difference')
+          : null,
+        replacementReason: shouldReplace
+          ? (canonicalIsNewer
+              ? 'canonical_program_is_newer'
+              : 'id_differs_and_current_not_newer')
+          : null,
+        verdict: shouldReplace
+          ? 'CANONICAL_REPLACES_CURRENT_NEWER'
+          : currentIsNewer
+            ? 'CURRENT_PROTECTED_AS_NEWER'
+            : sessionCountWouldHaveTriggeredOldBug
+              ? 'PHASE26F_BLOCKED_OLD_BUG_SESSION_COUNT_OVERWRITE'
+              : idDiffers
+                ? 'SAME_PROGRAM_NO_REPLACE'
+                : 'NO_CHANGE_NEEDED',
+      })
+      
       if (shouldReplace) {
         // [PHASE 17M] Program reconciliation replace - log the replacement with specific reason
         console.log('[phase17m-program-reconciliation-replace]', {

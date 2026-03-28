@@ -28,11 +28,12 @@ import { DURATION_PREFERENCE_LABELS, type SessionDurationMinutes } from '@/lib/d
 // This allows us to verify which version of the form is rendering
 // ==========================================================================
 const PHASE27C_FORM_BUILD_IDENTITY = {
-  formBuildIdentityName: 'PHASE27C_ADAPTIVE_PROGRAM_FORM',
-  formBuildIdentityVersion: '2024-PHASE27C-v1',
+  formBuildIdentityName: 'PHASE28A_ADAPTIVE_PROGRAM_FORM',
+  formBuildIdentityVersion: '2024-PHASE28A-v1',
   hasExplicitChoiceTracking: true,
   hasAmberWarningStyle: true,
-  scheduleSelectorVariant: 'PHASE27C_WITH_EXPLICIT_CHOICE',
+  scheduleSelectorVariant: 'PHASE28A_WITH_EXPLICIT_CHOICE',
+  hasScheduleTruthDebugPanel: true,
 } as const
 
 // [PHASE 27B] Explicit schedule choice tracking for current builder session
@@ -42,12 +43,23 @@ interface ExplicitScheduleChoice {
   trainingDaysPerWeek: TrainingDays | 'flexible'
 }
 
+// [PHASE 28A] Debug audit info for schedule truth panel
+interface ScheduleTruthAuditInfo {
+  canonicalScheduleMode: 'static' | 'flexible' | string | null
+  canonicalTrainingDaysPerWeek: number | null
+  lastGeneratedScheduleMode?: string | null
+  lastGeneratedTrainingDays?: number | null
+  lastReconciliationDecision?: 'kept' | 'replaced' | 'no-op' | null
+}
+
 interface AdaptiveProgramFormProps {
   inputs: AdaptiveProgramInputs
   onInputChange: (inputs: AdaptiveProgramInputs) => void
   onGenerate: () => void
   isGenerating?: boolean
   constraintLabel?: string
+  // [PHASE 28A] Optional debug audit info
+  scheduleTruthAudit?: ScheduleTruthAuditInfo | null
 }
 
 const EQUIPMENT_OPTIONS: { id: EquipmentType; label: string; hint?: string }[] = [
@@ -65,6 +77,7 @@ export function AdaptiveProgramForm({
   onGenerate,
   isGenerating = false,
   constraintLabel,
+  scheduleTruthAudit,
 }: AdaptiveProgramFormProps) {
   // ==========================================================================
   // [PHASE 27B] EXPLICIT SCHEDULE CHOICE TRACKING
@@ -451,9 +464,99 @@ export function AdaptiveProgramForm({
            ========================================================================== */}
         <div className="pt-2 border-t border-[#3A3A3A] mt-2">
           <div className="text-[10px] text-[#4A4A4A] font-mono text-center">
-            Builder Variant: PHASE27C_CANONICAL_MODIFY_CONVERGENCE_PROBE
+            Builder Variant: PHASE28A_CANONICAL_SCHEDULE_TRUTH_AUDIT
           </div>
         </div>
+        
+        {/* ==========================================================================
+           [PHASE 28A] SCHEDULE TRUTH AUDIT DEBUG PANEL
+           Shows canonical vs builder vs form selection truth for forensic debugging
+           ========================================================================== */}
+        {scheduleTruthAudit && (
+          <details className="mt-3 pt-3 border-t border-[#3A3A3A]">
+            <summary className="text-[10px] text-[#6A6A6A] font-mono cursor-pointer hover:text-[#888]">
+              Schedule Truth Audit (Debug)
+            </summary>
+            <div className="mt-2 p-2 bg-[#1A1A1A] rounded text-[10px] font-mono space-y-1">
+              <div className="flex justify-between">
+                <span className="text-[#888]">Canonical saved:</span>
+                <span className={scheduleTruthAudit.canonicalScheduleMode === 'flexible' 
+                  ? 'text-emerald-400' 
+                  : 'text-blue-400'}>
+                  {scheduleTruthAudit.canonicalScheduleMode === 'flexible' 
+                    ? 'Flexible' 
+                    : `Fixed ${scheduleTruthAudit.canonicalTrainingDaysPerWeek} days/week`}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-[#888]">Builder prefill:</span>
+                <span className={inputs.scheduleMode === 'flexible' 
+                  ? 'text-emerald-400' 
+                  : 'text-blue-400'}>
+                  {inputs.scheduleMode === 'flexible' 
+                    ? 'Flexible' 
+                    : `Fixed ${inputs.trainingDaysPerWeek} days/week`}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-[#888]">Current selection:</span>
+                <span className={inputs.scheduleMode === 'flexible' 
+                  ? 'text-emerald-400' 
+                  : 'text-blue-400'}>
+                  {inputs.scheduleMode === 'flexible' 
+                    ? 'Flexible' 
+                    : `Fixed ${inputs.trainingDaysPerWeek} days/week`}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-[#888]">Submit will send:</span>
+                <span className={inputs.scheduleMode === 'flexible' 
+                  ? 'text-emerald-400 font-bold' 
+                  : 'text-blue-400 font-bold'}>
+                  {inputs.scheduleMode === 'flexible' 
+                    ? 'Flexible' 
+                    : `Fixed ${inputs.trainingDaysPerWeek} days/week`}
+                </span>
+              </div>
+              {scheduleTruthAudit.lastGeneratedScheduleMode && (
+                <div className="flex justify-between">
+                  <span className="text-[#888]">Last generated:</span>
+                  <span className={scheduleTruthAudit.lastGeneratedScheduleMode === 'flexible' 
+                    ? 'text-emerald-400' 
+                    : 'text-blue-400'}>
+                    {scheduleTruthAudit.lastGeneratedScheduleMode === 'flexible' 
+                      ? 'Flexible' 
+                      : `Fixed ${scheduleTruthAudit.lastGeneratedTrainingDays} days/week`}
+                  </span>
+                </div>
+              )}
+              {scheduleTruthAudit.lastReconciliationDecision && (
+                <div className="flex justify-between">
+                  <span className="text-[#888]">Last reconciliation:</span>
+                  <span className={
+                    scheduleTruthAudit.lastReconciliationDecision === 'kept' ? 'text-green-400' :
+                    scheduleTruthAudit.lastReconciliationDecision === 'replaced' ? 'text-red-400' :
+                    'text-[#888]'
+                  }>
+                    {scheduleTruthAudit.lastReconciliationDecision}
+                  </span>
+                </div>
+              )}
+              {/* Verdict */}
+              <div className="pt-1 border-t border-[#2A2A2A] mt-1">
+                <span className={
+                  scheduleTruthAudit.canonicalScheduleMode !== inputs.scheduleMode
+                    ? 'text-amber-400'
+                    : 'text-green-400'
+                }>
+                  {scheduleTruthAudit.canonicalScheduleMode !== inputs.scheduleMode
+                    ? 'MISMATCH: Canonical differs from current selection'
+                    : 'MATCH: Selection matches canonical'}
+                </span>
+              </div>
+            </div>
+          </details>
+        )}
       </div>
     </Card>
   )

@@ -875,6 +875,39 @@ export default function SettingsPage() {
               verdict: (hasRawRecovery || hasDerivedRecovery) ? 'recovery_roundtrip_pass' : 'recovery_roundtrip_missing',
             })
             
+            // ==========================================================================
+            // [PHASE 28A] SETTINGS_SAVE_ROUND_TRIP AUDIT
+            // Proves whether static 6-day or flexible preference survives the save
+            // ==========================================================================
+            const phase28aSettingsVerdict = scheduleMode === result.profile.scheduleMode
+              ? (scheduleMode === 'static' && parseInt(trainingDays || '3') === 6
+                  ? 'SETTINGS_SAVE_PRESERVED_STATIC_6'
+                  : scheduleMode === 'flexible'
+                    ? 'SETTINGS_SAVE_PRESERVED_FLEXIBLE'
+                    : `SETTINGS_SAVE_PRESERVED_STATIC_${result.profile.trainingDaysPerWeek}`)
+              : (result.profile.scheduleMode === 'flexible'
+                  ? 'SETTINGS_SAVE_MASKED_TO_FLEXIBLE'
+                  : 'SETTINGS_SAVE_MASKED_TO_OTHER')
+            
+            console.log('[phase28a-canonical-schedule-truth-audit]', {
+              checkpoint: 'SETTINGS_SAVE_ROUND_TRIP',
+              // User selected values
+              userSelectedScheduleMode: scheduleMode,
+              userSelectedTrainingDays: scheduleMode === 'flexible' ? null : parseInt(trainingDays || '3'),
+              // Payload sent to API
+              payloadScheduleMode: updates.scheduleMode,
+              payloadTrainingDays: updates.trainingDaysPerWeek,
+              // Saved profile returned
+              savedScheduleMode: result.profile.scheduleMode,
+              savedTrainingDays: result.profile.trainingDaysPerWeek,
+              // Canonical profile after save
+              canonicalScheduleModeAfter: result.profile.scheduleMode,
+              canonicalTrainingDaysAfter: result.profile.trainingDaysPerWeek,
+              // Verdict
+              verdict: phase28aSettingsVerdict,
+              masked: scheduleMode !== result.profile.scheduleMode,
+            })
+            
             logCanonicalProfileState('After settings save')
             setProfile(result.profile)
             // Re-apply profile to UI state to ensure consistency

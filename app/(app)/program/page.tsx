@@ -18,12 +18,13 @@
 // This allows us to verify the live app is running the expected code version
 // ==========================================================================
 export const PHASE27C_BUILD_IDENTITY = {
-  buildIdentityName: 'PHASE27C_CANONICAL_MODIFY_CONVERGENCE_PROBE',
-  buildIdentityVersion: '2024-PHASE27C-v1',
-  buildTimestamp: '2024-01-PHASE27C',
-  modifyBuilderVariant: 'EXPECTED_PHASE27C_CANONICAL_MODIFY',
-  scheduleSelectorVariant: 'EXPECTED_PHASE27C_EXPLICIT_CHOICE_TRACKING',
-  submitSnapshotVariant: 'EXPECTED_PHASE27C_AMBER_WARNING_STYLE',
+  buildIdentityName: 'PHASE28A_CANONICAL_SCHEDULE_TRUTH_AUDIT',
+  buildIdentityVersion: '2024-PHASE28A-v1',
+  buildTimestamp: '2024-01-PHASE28A',
+  modifyBuilderVariant: 'EXPECTED_PHASE28A_CANONICAL_MODIFY',
+  scheduleSelectorVariant: 'EXPECTED_PHASE28A_EXPLICIT_CHOICE_TRACKING',
+  submitSnapshotVariant: 'EXPECTED_PHASE28A_AMBER_WARNING_STYLE',
+  auditPanelVariant: 'PHASE28A_SCHEDULE_TRUTH_DEBUG_PANEL',
 } as const
 
 import { useState, useEffect, useCallback, useMemo, useRef, type ReactNode } from 'react'
@@ -404,6 +405,18 @@ export default function ProgramPage() {
   const [builderSessionInputs, setBuilderSessionInputs] = useState<AdaptiveProgramInputs | null>(null)
   const [builderSessionKey, setBuilderSessionKey] = useState<string>('initial')
   const [builderSessionSource, setBuilderSessionSource] = useState<'default_inputs' | 'modify_visible_program' | null>(null)
+  
+  // ==========================================================================
+  // [PHASE 28A] SCHEDULE TRUTH AUDIT STATE
+  // Tracks canonical vs builder truth for the debug panel
+  // ==========================================================================
+  const [scheduleTruthAudit, setScheduleTruthAudit] = useState<{
+    canonicalScheduleMode: 'static' | 'flexible' | string | null
+    canonicalTrainingDaysPerWeek: number | null
+    lastGeneratedScheduleMode?: string | null
+    lastGeneratedTrainingDays?: number | null
+    lastReconciliationDecision?: 'kept' | 'replaced' | 'no-op' | null
+  } | null>(null)
   
   // ==========================================================================
   // [PHASE 25Y] PROVE THE EXACT SUBMIT TRUTH - State change tracking
@@ -2062,6 +2075,25 @@ export default function ProgramPage() {
             summaryNowDerivedFrom: 'reconciled_canonical_program',
           })
         }
+        // ==========================================================================
+        // [PHASE 28A] RECONCILIATION_RECHECK AUDIT - REPLACED
+        // ==========================================================================
+        console.log('[phase28a-canonical-schedule-truth-audit]', {
+          checkpoint: 'RECONCILIATION_RECHECK',
+          // Current in-memory program
+          currentProgramScheduleMode: (currentProgram as unknown as { scheduleMode?: string }).scheduleMode,
+          currentProgramTrainingDays: (currentProgram as unknown as { trainingDaysPerWeek?: number }).trainingDaysPerWeek,
+          // Canonical values
+          canonicalProgramScheduleMode: (canonicalProgram as unknown as { scheduleMode?: string }).scheduleMode,
+          canonicalProgramTrainingDays: (canonicalProgram as unknown as { trainingDaysPerWeek?: number }).trainingDaysPerWeek,
+          // Decision
+          replacementDecision: 'replaced',
+          replacementReason: canonicalIsNewer ? 'canonical_is_newer' : idDiffers ? 'id_differs' : 'unknown',
+          // Verdict
+          verdict: (canonicalProgram as unknown as { scheduleMode?: string }).scheduleMode === 'flexible'
+            ? 'RECONCILIATION_REPLACED_WITH_FLEXIBLE'
+            : `RECONCILIATION_REPLACED_WITH_STATIC_${(canonicalProgram as unknown as { trainingDaysPerWeek?: number }).trainingDaysPerWeek}`,
+        })
       } else {
         // [PHASE 17M/26E] Program reconciliation keep - current program is valid/newer
         console.log('[phase17m-program-reconciliation-keep]', {
@@ -2073,6 +2105,27 @@ export default function ProgramPage() {
           currentSessionCount: currentProgram.sessions?.length || 0,
           currentScheduleMode: (currentProgram as unknown as { scheduleMode?: string }).scheduleMode,
           currentTrainingDays: (currentProgram as unknown as { trainingDaysPerWeek?: number }).trainingDaysPerWeek,
+        })
+        
+        // ==========================================================================
+        // [PHASE 28A] RECONCILIATION_RECHECK AUDIT - KEPT
+        // ==========================================================================
+        console.log('[phase28a-canonical-schedule-truth-audit]', {
+          checkpoint: 'RECONCILIATION_RECHECK',
+          // Current in-memory program
+          currentProgramScheduleMode: (currentProgram as unknown as { scheduleMode?: string }).scheduleMode,
+          currentProgramTrainingDays: (currentProgram as unknown as { trainingDaysPerWeek?: number }).trainingDaysPerWeek,
+          // Canonical values
+          canonicalProgramScheduleMode: (canonicalProgram as unknown as { scheduleMode?: string }).scheduleMode,
+          canonicalProgramTrainingDays: (canonicalProgram as unknown as { trainingDaysPerWeek?: number }).trainingDaysPerWeek,
+          // Decision
+          replacementDecision: 'kept',
+          replacementReason: currentIsNewer ? 'current_is_newer' : 'no_material_difference',
+          // Verdict
+          verdict: (currentProgram as unknown as { scheduleMode?: string }).scheduleMode === 'static' &&
+            (currentProgram as unknown as { trainingDaysPerWeek?: number }).trainingDaysPerWeek === 6
+            ? 'RECONCILIATION_KEPT_NEWER_STATIC_6'
+            : 'RECONCILIATION_NO_EFFECT',
         })
       }
     }
@@ -8136,6 +8189,33 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
       setInputs(updatedInputs)
       setProgram(newProgram)
       
+      // ==========================================================================
+      // [PHASE 28A] POST_GENERATION_CANONICAL_UPDATE AUDIT
+      // Proves whether the generated program schedule matches what we expect
+      // ==========================================================================
+      const phase28aCanonicalAfter = programModules.reconcileCanonicalProfile?.() || null
+      console.log('[phase28a-canonical-schedule-truth-audit]', {
+        checkpoint: 'POST_GENERATION_CANONICAL_UPDATE',
+        // New program schedule
+        newProgramScheduleMode: newProgram.scheduleMode,
+        newProgramTrainingDays: (newProgram as { trainingDaysPerWeek?: number }).trainingDaysPerWeek,
+        // Canonical before (we need to get this from snapshot)
+        canonicalScheduleModeBefore: canonical?.scheduleMode || 'unknown',
+        canonicalTrainingDaysBefore: canonical?.trainingDaysPerWeek || 'unknown',
+        // Canonical after update
+        canonicalScheduleModeAfter: phase28aCanonicalAfter?.scheduleMode || 'unknown',
+        canonicalTrainingDaysAfter: phase28aCanonicalAfter?.trainingDaysPerWeek || 'unknown',
+        // Did new program update canonical?
+        newProgramChangedCanonical: phase28aCanonicalAfter?.scheduleMode !== canonical?.scheduleMode ||
+          phase28aCanonicalAfter?.trainingDaysPerWeek !== canonical?.trainingDaysPerWeek,
+        // Verdict
+        verdict: newProgram.scheduleMode === 'static' && (newProgram as { trainingDaysPerWeek?: number }).trainingDaysPerWeek === 6
+          ? 'NEW_PROGRAM_UPDATED_CANONICAL_TO_STATIC_6'
+          : newProgram.scheduleMode === 'flexible'
+            ? 'NEW_PROGRAM_LEFT_CANONICAL_FLEXIBLE'
+            : `NEW_PROGRAM_IS_STATIC_${(newProgram as { trainingDaysPerWeek?: number }).trainingDaysPerWeek}_DAYS`,
+      })
+      
       // [PHASE 18I] TASK 6 - Post-hydration parity audit
       console.log('[phase18i-modify-visible-program-parity-verdict]', {
         postSetProgramId: newProgram.id,
@@ -9388,6 +9468,86 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
     })
     
     // ==========================================================================
+    // [PHASE 28A] CANONICAL SCHEDULE TRUTH AUDIT - CHECKPOINT 1: MODIFY_OPEN_CANONICAL_READ
+    // This is the definitive audit that proves where schedule truth comes from
+    // ==========================================================================
+    const onboardingProfileForAudit = programModules.getOnboardingProfile?.() || null
+    const athleteProfileForAudit = programModules.getAthleteProfile?.() || null
+    
+    const phase28aCanonicalVerdict = canonical.scheduleMode === 'flexible'
+      ? 'CANONICAL_IS_FLEXIBLE'
+      : canonical.scheduleMode === 'static' && canonical.trainingDaysPerWeek === 6
+        ? 'CANONICAL_IS_STATIC_6'
+        : canonical.scheduleMode === 'static'
+          ? `CANONICAL_IS_STATIC_${canonical.trainingDaysPerWeek}`
+          : 'CANONICAL_UNKNOWN'
+    
+    const phase28aScheduleModeSource = onboardingProfileForAudit?.scheduleMode
+      ? 'onboarding'
+      : athleteProfileForAudit?.scheduleMode
+        ? 'athlete'
+        : 'inferred'
+    
+    const phase28aTrainingDaysSource = onboardingProfileForAudit?.trainingDaysPerWeek !== undefined
+      ? 'onboarding'
+      : athleteProfileForAudit?.trainingDaysPerWeek !== undefined
+        ? 'athlete'
+        : 'fallback'
+    
+    console.log('[phase28a-canonical-schedule-truth-audit]', {
+      checkpoint: 'MODIFY_OPEN_CANONICAL_READ',
+      // Onboarding source
+      onboardingScheduleMode: onboardingProfileForAudit?.scheduleMode || null,
+      onboardingTrainingDaysPerWeek: onboardingProfileForAudit?.trainingDaysPerWeek || null,
+      // Athlete source
+      athleteScheduleMode: athleteProfileForAudit?.scheduleMode || null,
+      athleteTrainingDaysPerWeek: athleteProfileForAudit?.trainingDaysPerWeek || null,
+      // Final canonical values
+      canonicalScheduleMode: canonical.scheduleMode,
+      canonicalTrainingDaysPerWeek: canonical.trainingDaysPerWeek,
+      // Source determination
+      scheduleModeSource: phase28aScheduleModeSource,
+      trainingDaysSource: phase28aTrainingDaysSource,
+      // Was it inferred or explicit?
+      scheduleWasInferred: phase28aScheduleModeSource === 'inferred',
+      // Verdicts
+      verdict: phase28aCanonicalVerdict,
+      sourceConflict: onboardingProfileForAudit?.scheduleMode !== undefined &&
+        athleteProfileForAudit?.scheduleMode !== undefined &&
+        onboardingProfileForAudit.scheduleMode !== athleteProfileForAudit.scheduleMode,
+    })
+    
+    // ==========================================================================
+    // [PHASE 28A] CHECKPOINT 2: MODIFY_PREFILL_ENTRY_BUILT
+    // Proves whether builder prefill matches canonical or diverges
+    // ==========================================================================
+    const phase28aPrefillVerdict = freshInputs.scheduleMode === canonical.scheduleMode &&
+      (freshInputs.scheduleMode === 'flexible' || freshInputs.trainingDaysPerWeek === canonical.trainingDaysPerWeek)
+      ? 'PREFILL_MATCHES_CANONICAL'
+      : freshInputs.scheduleMode === 'flexible' && canonical.scheduleMode === 'static'
+        ? 'PREFILL_COLLAPSED_TO_FLEXIBLE'
+        : freshInputs.scheduleMode === 'static' && canonical.scheduleMode === 'flexible'
+          ? 'PREFILL_COLLAPSED_TO_STATIC'
+          : 'PREFILL_DIFFERS_FROM_CANONICAL'
+    
+    console.log('[phase28a-canonical-schedule-truth-audit]', {
+      checkpoint: 'MODIFY_PREFILL_ENTRY_BUILT',
+      // Canonical values used
+      canonicalScheduleMode: canonical.scheduleMode,
+      canonicalTrainingDaysPerWeek: canonical.trainingDaysPerWeek,
+      // Builder session inputs created
+      builderSessionScheduleMode: freshInputs.scheduleMode,
+      builderSessionTrainingDays: freshInputs.trainingDaysPerWeek,
+      // Page-level inputs at open (for comparison)
+      pageInputsScheduleMode: inputs?.scheduleMode || null,
+      pageInputsTrainingDays: inputs?.trainingDaysPerWeek || null,
+      // Verdict
+      verdict: phase28aPrefillVerdict,
+      sourceWinner,
+      canonicalEntrySuccess,
+    })
+    
+    // ==========================================================================
     // [PHASE 27C] MODIFY BUILDER OPENED - BUILD IDENTITY CONVERGENCE PROBE
     // This log proves the live app is running the expected code version
     // ==========================================================================
@@ -9408,6 +9568,17 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
     
     // Also sync to ambient inputs for page consistency (secondary, not builder authority)
     setInputs(freshInputs)
+    
+    // ==========================================================================
+    // [PHASE 28A] SET SCHEDULE TRUTH AUDIT STATE FOR DEBUG PANEL
+    // ==========================================================================
+    setScheduleTruthAudit({
+      canonicalScheduleMode: canonical.scheduleMode,
+      canonicalTrainingDaysPerWeek: canonical.trainingDaysPerWeek,
+      lastGeneratedScheduleMode: program?.scheduleMode || null,
+      lastGeneratedTrainingDays: (program as { trainingDaysPerWeek?: number })?.trainingDaysPerWeek || null,
+      lastReconciliationDecision: null,
+    })
     
     programModules.recordProgramEnd?.('new_program')
     
@@ -9936,6 +10107,7 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
                   onGenerate={unifiedSubmitHandler}
                   isGenerating={isGenerating}
                   constraintLabel={constraintLabel}
+                  scheduleTruthAudit={scheduleTruthAudit}
                 />
               )
             })()}

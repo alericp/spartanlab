@@ -383,6 +383,25 @@ export default function ProgramPage() {
   const [builderSessionSource, setBuilderSessionSource] = useState<'default_inputs' | 'modify_visible_program' | null>(null)
   
   // ==========================================================================
+  // [PHASE 25Y] PROVE THE EXACT SUBMIT TRUTH - State change tracking
+  // This useEffect fires ONLY when builderSessionInputs actually changes
+  // ==========================================================================
+  useEffect(() => {
+    if (builderSessionInputs) {
+      console.log('[phase25y-prove-submit-truth-before-any-more-patches]', {
+        stage: 'BUILDERSESSIONINPUTS_STATE_CHANGED',
+        scheduleMode: builderSessionInputs.scheduleMode,
+        trainingDaysPerWeek: builderSessionInputs.trainingDaysPerWeek,
+        sessionDurationMode: builderSessionInputs.sessionDurationMode,
+        primaryGoal: builderSessionInputs.primaryGoal,
+        verdict: builderSessionInputs.scheduleMode === 'static'
+          ? `SESSION_STATE_IS_STATIC_${builderSessionInputs.trainingDaysPerWeek}_DAYS`
+          : 'SESSION_STATE_IS_FLEXIBLE',
+      })
+    }
+  }, [builderSessionInputs])
+  
+  // ==========================================================================
   // [PHASE 24D] EXPLICIT MODIFY FLOW STATE MACHINE
   // This is the PRIMARY source of truth for the Modify UI path
   // - 'idle': normal program view, no modify interaction active
@@ -2938,6 +2957,26 @@ export default function ProgramPage() {
             : newProgram.sessions?.length === 4 
               ? 'WEAK_4_SESSION_HYBRID_HYDRATED'
               : `SESSION_COUNT_${newProgram.sessions?.length ?? 0}`,
+        })
+        
+        // ==========================================================================
+        // [PHASE 25Y] PROVE THE EXACT SUBMIT TRUTH - FINAL PROGRAM AUDIT
+        // This captures the FINAL schedule fields in the newly generated program
+        // ==========================================================================
+        const finalProgramScheduleMode = (newProgram as unknown as { scheduleMode?: string }).scheduleMode
+        const finalProgramTrainingDays = (newProgram as unknown as { trainingDaysPerWeek?: number | string }).trainingDaysPerWeek
+        const finalProgramSessionCount = newProgram.sessions?.length ?? 0
+        
+        console.log('[phase25y-prove-submit-truth-before-any-more-patches]', {
+          stage: 'FINAL_PROGRAM_SAVED',
+          finalProgramScheduleMode,
+          finalProgramTrainingDays,
+          finalProgramSessionCount,
+          effectiveInputsScheduleModeUsed: effectiveInputs?.scheduleMode,
+          effectiveInputsTrainingDaysUsed: effectiveInputs?.trainingDaysPerWeek,
+          verdict: finalProgramScheduleMode === 'static'
+            ? `FINAL_PROGRAM_IS_STATIC_${finalProgramTrainingDays}_DAYS_WITH_${finalProgramSessionCount}_SESSIONS`
+            : `FINAL_PROGRAM_IS_FLEXIBLE_WITH_${finalProgramSessionCount}_SESSIONS`,
         })
         
         setProgram(newProgram)

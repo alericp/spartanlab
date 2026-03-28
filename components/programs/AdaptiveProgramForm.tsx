@@ -28,15 +28,17 @@ import { DURATION_PREFERENCE_LABELS, type SessionDurationMinutes } from '@/lib/d
 // This allows us to verify which version of the form is rendering
 // ==========================================================================
 const PHASE27C_FORM_BUILD_IDENTITY = {
-  formBuildIdentityName: 'PHASE28DE_ADAPTIVE_PROGRAM_FORM',
-  formBuildIdentityVersion: '2024-PHASE28DE-v1',
+  formBuildIdentityName: 'PHASE28GHI_ADAPTIVE_PROGRAM_FORM',
+  formBuildIdentityVersion: '2024-PHASE28GHI-v1',
   hasExplicitChoiceTracking: true,
   hasAmberWarningStyle: true,
-  scheduleSelectorVariant: 'PHASE28DE_WITH_VISIBLE_TRUTH_BAR',
+  scheduleSelectorVariant: 'PHASE28GHI_WITH_VISIBLE_TRUTH_BAR',
   hasScheduleTruthDebugPanel: true,
   hasVisibleTruthBar: true,
   hasLiveModifyAuditSeeding: true,
   scheduleResolutionFix: 'ATHLETE_STATIC_BEATS_ONBOARDING_FLEXIBLE',
+  hasSourceNullWarning: true,
+  forensicPhase: 'PHASE28GHI',
 } as const
 
 // [PHASE 27B] Explicit schedule choice tracking for current builder session
@@ -617,10 +619,25 @@ export function AdaptiveProgramForm({
               })()}
             </div>
             
+            {/* [PHASE 28J] Source null warning - both sources have null scheduleMode */}
+            {scheduleTruthAudit.onboardingScheduleMode === null && 
+             scheduleTruthAudit.athleteScheduleMode === null && (
+              <div className="mt-2 p-2 bg-red-500/20 border border-red-500/40 rounded">
+                <div className="text-[10px] text-red-400 font-semibold">
+                  BOTH SOURCES ARE NULL
+                </div>
+                <div className="text-[9px] text-red-400/80 mt-1">
+                  Neither onboarding nor athlete profile has a saved scheduleMode.
+                  This is why canonical falls back to flexible.
+                  Fix: Settings save must persist scheduleMode to athlete profile.
+                </div>
+              </div>
+            )}
+            
             {/* Build variant chip */}
             <div className="mt-2 pt-2 border-t border-[#2A2A2A]">
               <div className="text-[9px] text-[#4A4A4A] font-mono text-center">
-                Builder: PHASE28B_VISIBLE_TRUTH_BAR
+                Builder: PHASE28GHI_TRUTH_CHAIN_FORENSIC
               </div>
             </div>
           </div>

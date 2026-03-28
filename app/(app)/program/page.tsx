@@ -18,14 +18,15 @@
 // This allows us to verify the live app is running the expected code version
 // ==========================================================================
 export const PHASE27C_BUILD_IDENTITY = {
-  buildIdentityName: 'PHASE28DE_CANONICAL_SCHEDULE_FIX',
-  buildIdentityVersion: '2024-PHASE28DE-v1',
-  buildTimestamp: '2024-01-PHASE28DE',
-  modifyBuilderVariant: 'EXPECTED_PHASE28DE_CANONICAL_MODIFY',
-  scheduleSelectorVariant: 'EXPECTED_PHASE28DE_ATHLETE_PRECEDENCE',
-  submitSnapshotVariant: 'EXPECTED_PHASE28DE_AMBER_WARNING_STYLE',
-  auditPanelVariant: 'PHASE28DE_VISIBLE_TRUTH_BAR_WITH_LIVE_SEED',
+  buildIdentityName: 'PHASE28GHI_TRUTH_CHAIN_FORENSIC',
+  buildIdentityVersion: '2024-PHASE28GHI-v1',
+  buildTimestamp: '2024-01-PHASE28GHI',
+  modifyBuilderVariant: 'EXPECTED_PHASE28GHI_CANONICAL_MODIFY',
+  scheduleSelectorVariant: 'EXPECTED_PHASE28GHI_ATHLETE_PRECEDENCE',
+  submitSnapshotVariant: 'EXPECTED_PHASE28GHI_AMBER_WARNING_STYLE',
+  auditPanelVariant: 'PHASE28GHI_VISIBLE_TRUTH_BAR_WITH_FORENSIC_LOGS',
   scheduleResolutionFix: 'ATHLETE_STATIC_BEATS_ONBOARDING_FLEXIBLE',
+  forensicLogs: ['phase28g-settings-schedule-save-truth', 'phase28g-post-save-readback', 'phase28h-canonical-schedule-source-winner', 'phase28i-program-page-canonical-read'],
 } as const
 
 import { useState, useEffect, useCallback, useMemo, useRef, type ReactNode } from 'react'
@@ -8592,6 +8593,29 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
         experienceLevel: canonicalProfileNow.experienceLevel,
       },
       verdict: 'CANONICAL_MODIFY_PREFILL_USED',
+    })
+    
+    // ==========================================================================
+    // [PHASE 28I] PROGRAM PAGE CANONICAL READ LOG
+    // Proves exactly what canonical returned BEFORE the builder opens
+    // ==========================================================================
+    console.log('[phase28i-program-page-canonical-read]', {
+      canonicalScheduleModeAtPageRead: canonicalProfileNow.scheduleMode,
+      canonicalTrainingDaysAtPageRead: canonicalProfileNow.trainingDaysPerWeek,
+      currentProgramScheduleMode: program?.scheduleMode || null,
+      currentProgramTrainingDays: (program as { trainingDaysPerWeek?: number })?.trainingDaysPerWeek || null,
+      // Compare program vs canonical
+      verdict: (() => {
+        const canonIsStatic6 = canonicalProfileNow.scheduleMode === 'static' && canonicalProfileNow.trainingDaysPerWeek === 6
+        const canonIsFlexible = canonicalProfileNow.scheduleMode === 'flexible'
+        const canonIsNull = canonicalProfileNow.scheduleMode === null || canonicalProfileNow.scheduleMode === undefined
+        
+        if (canonIsStatic6) return 'PAGE_READ_STATIC_6'
+        if (canonIsFlexible) return 'PAGE_READ_FLEXIBLE'
+        if (canonIsNull) return 'PAGE_READ_NULL_COLLAPSE'
+        return `PAGE_READ_STATIC_${canonicalProfileNow.trainingDaysPerWeek}`
+      })(),
+      programAndCanonMatch: program?.scheduleMode === canonicalProfileNow.scheduleMode,
     })
     
     // ==========================================================================

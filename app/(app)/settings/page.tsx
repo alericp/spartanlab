@@ -40,7 +40,7 @@ import {
   saveAthleteProfile,
   type AthleteProfile,
 } from '@/lib/data-service'
-import { saveCanonicalProfile, logCanonicalProfileState } from '@/lib/canonical-profile-service'
+import { saveCanonicalProfile, logCanonicalProfileState, getCanonicalProfile } from '@/lib/canonical-profile-service'
 import { DURATION_PREFERENCE_LABELS, type SessionDurationMinutes, logDurationTruth } from '@/lib/duration-contract'
 import { logProfileTruthState, diagnoseProfileData } from '@/lib/profile-truth-contract'
 import { getActiveProgram, clearActiveProgram } from '@/lib/program-service'
@@ -594,15 +594,39 @@ export default function SettingsPage() {
           : 'bodyweight_will_be_null',
       })
       
+      // ==========================================================================
+      // [PHASE 28G] SETTINGS SCHEDULE SAVE TRUTH FORENSIC
+      // Proves exactly what schedule values are being sent to API
+      // ==========================================================================
+      const payloadScheduleMode = scheduleMode
+      const payloadTrainingDays = scheduleMode === 'flexible' 
+        ? null 
+        : parseInt(trainingDays || '3')
+      
+      console.log('[phase28g-settings-schedule-save-truth]', {
+        localStateScheduleMode: scheduleMode,
+        localStateTrainingDaysPerWeek: trainingDays,
+        payloadScheduleMode,
+        payloadTrainingDaysPerWeek: payloadTrainingDays,
+        isFlexiblePayload: payloadScheduleMode === 'flexible',
+        isStaticPayload: payloadScheduleMode === 'static',
+        timestamp: new Date().toISOString(),
+        verdict: payloadScheduleMode === 'static' && payloadTrainingDays === 6
+          ? 'SETTINGS_PAYLOAD_STATIC_6'
+          : payloadScheduleMode === 'static'
+            ? `SETTINGS_PAYLOAD_STATIC_${payloadTrainingDays}`
+            : payloadScheduleMode === 'flexible'
+              ? 'SETTINGS_PAYLOAD_FLEXIBLE'
+              : 'SETTINGS_PAYLOAD_INVALID',
+      })
+      
       const updates = {
         bodyweight: parsedBodyweight,
         experienceLevel: experienceLevel as 'beginner' | 'intermediate' | 'advanced',
         // For flexible mode, send null - API will store it correctly
         // The scheduleMode field is the canonical preference indicator
-        trainingDaysPerWeek: scheduleMode === 'flexible' 
-          ? null  // TASK 2: NULL = truly flexible, engine derives at runtime
-          : parseInt(trainingDays || '3'),
-        scheduleMode: scheduleMode,
+        trainingDaysPerWeek: payloadTrainingDays,
+        scheduleMode: payloadScheduleMode,
         // TASK 3D: Preserve sessionDurationMode - 'adaptive' means engine adapts session length
         sessionDurationMode: sessionDurationMode,
         sessionLengthMinutes: parseInt(sessionLength) as 30 | 45 | 60 | 90,
@@ -704,6 +728,44 @@ export default function SettingsPage() {
               sessionLengthMinutes: parseInt(sessionLength),
               equipmentCount: equipment.length,
               hasWeights: equipment.includes('weights'),
+            })
+            
+            // ==========================================================================
+            // [PHASE 28G] POST-SAVE READBACK FORENSIC
+            // Immediately read back from all storage layers to verify what persisted
+            // ==========================================================================
+            const athleteReadback = getAthleteProfile()
+            const onboardingReadback = getOnboardingProfile()
+            const canonicalReadback = getCanonicalProfile()
+            
+            console.log('[phase28g-post-save-readback]', {
+              // What we tried to save
+              intendedScheduleMode: payloadScheduleMode,
+              intendedTrainingDays: payloadTrainingDays,
+              // What API returned
+              apiReturnedScheduleMode: result.profile.scheduleMode,
+              apiReturnedTrainingDays: result.profile.trainingDaysPerWeek,
+              // What each storage layer now has
+              athleteReadScheduleMode: athleteReadback?.scheduleMode || null,
+              athleteReadTrainingDays: athleteReadback?.trainingDaysPerWeek || null,
+              onboardingReadScheduleMode: onboardingReadback?.scheduleMode || null,
+              onboardingReadTrainingDays: onboardingReadback?.trainingDaysPerWeek || null,
+              canonicalReadScheduleMode: canonicalReadback?.scheduleMode || null,
+              canonicalReadTrainingDays: canonicalReadback?.trainingDaysPerWeek || null,
+              timestamp: new Date().toISOString(),
+              // Verdict
+              verdict: (() => {
+                const intended = payloadScheduleMode === 'static' && payloadTrainingDays === 6
+                const athleteHas = athleteReadback?.scheduleMode === 'static' && athleteReadback?.trainingDaysPerWeek === 6
+                const onboardHas = onboardingReadback?.scheduleMode === 'static' && (onboardingReadback?.trainingDaysPerWeek as unknown) === 6
+                const canonHas = canonicalReadback?.scheduleMode === 'static' && canonicalReadback?.trainingDaysPerWeek === 6
+                
+                if (intended && athleteHas && canonHas) return 'READBACK_STATIC_6_PRESENT'
+                if (intended && athleteHas && !canonHas) return 'ATHLETE_HAS_STATIC_6_CANON_LOST_IT'
+                if (intended && !athleteHas && !canonHas) return 'STATIC_6_NOT_PERSISTED_ANYWHERE'
+                if (!intended) return payloadScheduleMode === 'flexible' ? 'INTENDED_FLEXIBLE' : 'INTENDED_STATIC_OTHER'
+                return 'UNKNOWN_STATE'
+              })(),
             })
             
             // [PHASE 17G] Bodyweight save round-trip audit - prove exact value persists

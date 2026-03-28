@@ -3077,6 +3077,26 @@ export default function ProgramPage() {
               : 'PHASE26_FLEXIBLE_PATH_PRESERVED',
         })
         
+        // ==========================================================================
+        // [PHASE 26C] POST-REF-FIX FORENSIC ROOT CAUSE - FINAL VERDICT
+        // This captures whether the Phase 26C fix (user input priority over canonical)
+        // successfully preserved the user's static 6-day selection end-to-end
+        // ==========================================================================
+        console.log('[phase26c-post-ref-fix-forensic-root-cause]', {
+          stage: 'FINAL_PROGRAM_SAVED',
+          handleGenerateScheduleMode: effectiveInputs?.scheduleMode,
+          handleGenerateTrainingDaysPerWeek: effectiveInputs?.trainingDaysPerWeek,
+          finalProgramSavedScheduleMode: finalProgramScheduleMode,
+          finalProgramSavedTrainingDaysPerWeek: finalProgramTrainingDays,
+          finalProgramSessionCount,
+          phase26CInputPriorityFixApplied: true,
+          verdict: truthPreservedEndToEnd
+            ? `PHASE26C_SUCCESS_USER_SELECTION_PRESERVED_${effectiveInputs?.trainingDaysPerWeek}_DAYS`
+            : truthLostInEngine
+              ? 'PHASE26C_INVESTIGATE_REMAINING_DOWNSTREAM_REWRITE'
+              : 'PHASE26C_FLEXIBLE_PATH_NO_OVERRIDE_NEEDED',
+        })
+        
         setProgram(newProgram)
         setShowBuilder(false)
         

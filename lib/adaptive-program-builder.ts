@@ -2606,12 +2606,39 @@ async function generateAdaptiveProgramImpl(
     inputs.trainingDaysPerWeek >= 2 && inputs.trainingDaysPerWeek <= 7
   const hasExplicitStaticInputs = inputs.scheduleMode === 'static' || hasExplicitNumericDays
   
-  // [PHASE 24Q/25W] Force static mode when numeric days are explicitly selected
+  // ==========================================================================
+  // [PHASE 26C] CRITICAL FIX: User's explicit input selection MUST take precedence
+  // Previously: canonicalProfile.scheduleMode || inputs.scheduleMode (canonical wins!)
+  // Fixed: inputs.scheduleMode || canonicalProfile.scheduleMode (user selection wins!)
+  // This is the ROOT CAUSE of "6-day selection ignored" - the user's static selection
+  // was being overwritten by the canonical profile's flexible mode
+  // ==========================================================================
   const inputScheduleMode = hasExplicitNumericDays
     ? 'static' as const
     : (hasExplicitStaticInputs && inputs.scheduleMode === 'static')
       ? 'static' as const
-      : (canonicalProfile.scheduleMode || inputs.scheduleMode || normalizeScheduleMode(trainingDaysPerWeek))
+      : inputs.scheduleMode === 'static'
+        ? 'static' as const  // [PHASE 26C] User explicitly chose static - respect it!
+        : inputs.scheduleMode === 'flexible'
+          ? 'flexible' as const  // [PHASE 26C] User explicitly chose flexible - respect it!
+          : (canonicalProfile.scheduleMode || normalizeScheduleMode(trainingDaysPerWeek))  // Only use canonical as fallback
+  
+  console.log('[phase26c-post-ref-fix-forensic-root-cause]', {
+    stage: 'INPUT_SCHEDULE_MODE_RESOLUTION',
+    hasExplicitNumericDays,
+    hasExplicitStaticInputs,
+    inputsScheduleMode: inputs.scheduleMode,
+    inputsTrainingDaysPerWeek: inputs.trainingDaysPerWeek,
+    canonicalScheduleMode: canonicalProfile.scheduleMode,
+    resolvedInputScheduleMode: inputScheduleMode,
+    verdict: inputs.scheduleMode === 'static' && canonicalProfile.scheduleMode === 'flexible'
+      ? 'PHASE26C_FIX_USER_STATIC_NOW_WINS_OVER_CANONICAL_FLEXIBLE'
+      : hasExplicitNumericDays
+        ? 'NUMERIC_DAYS_FORCED_STATIC'
+        : inputs.scheduleMode
+          ? `USER_EXPLICIT_${inputs.scheduleMode.toUpperCase()}_USED`
+          : 'CANONICAL_FALLBACK_USED',
+  })
   
   console.log('[phase25w-tdz-profile-validation]', {
     hasExplicitNumericDays,
@@ -2654,7 +2681,8 @@ async function generateAdaptiveProgramImpl(
       sessionLengthMinutes: materialIdentity.sessionLengthMinutes,
       sessionLengthSource: typeof canonicalProfile.sessionLengthMinutes === 'number' ? 'canonical' : typeof inputs.sessionLength === 'number' ? 'inputs' : 'fallback',
       scheduleMode: materialIdentity.scheduleMode,
-      scheduleModeSource: canonicalProfile.scheduleMode ? 'canonical' : inputs.scheduleMode ? 'inputs' : 'fallback',
+      // [PHASE 26C] Fixed source attribution - user input now takes precedence
+      scheduleModeSource: inputs.scheduleMode ? 'inputs_explicit' : canonicalProfile.scheduleMode ? 'canonical_fallback' : 'normalized_fallback',
       selectedSkillsCount: materialIdentity.selectedSkills.length,
       selectedSkillsSource: (canonicalProfile.selectedSkills?.length ?? 0) > 0 ? 'canonical' : (inputs.selectedSkills?.length ?? 0) > 0 ? 'inputs' : 'empty_array',
     },

@@ -1,5 +1,6 @@
 'use client'
 
+import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -19,8 +20,15 @@ import {
 } from '@/lib/program-service'
 import type { AdaptiveProgramInputs } from '@/lib/adaptive-program-builder'
 import type { EquipmentType } from '@/lib/adaptive-exercise-pool'
-import { Sparkles, Info } from 'lucide-react'
+import { Sparkles, Info, CheckCircle2 } from 'lucide-react'
 import { DURATION_PREFERENCE_LABELS, type SessionDurationMinutes } from '@/lib/duration-contract'
+
+// [PHASE 27B] Explicit schedule choice tracking for current builder session
+interface ExplicitScheduleChoice {
+  madeAt: string
+  scheduleMode: 'static' | 'flexible'
+  trainingDaysPerWeek: TrainingDays | 'flexible'
+}
 
 interface AdaptiveProgramFormProps {
   inputs: AdaptiveProgramInputs
@@ -46,6 +54,24 @@ export function AdaptiveProgramForm({
   isGenerating = false,
   constraintLabel,
 }: AdaptiveProgramFormProps) {
+  // ==========================================================================
+  // [PHASE 27B] EXPLICIT SCHEDULE CHOICE TRACKING
+  // Tracks whether user explicitly interacted with Training Days/Week selector
+  // This prevents confusion about whether a static/flexible choice was made
+  // ==========================================================================
+  const [explicitScheduleChoice, setExplicitScheduleChoice] = useState<ExplicitScheduleChoice | null>(null)
+  
+  // Reset explicit choice tracking when inputs change externally (new builder session)
+  const inputsKey = `${inputs.scheduleMode}-${inputs.trainingDaysPerWeek}`
+  useEffect(() => {
+    // Only reset if this is a new builder session (inputs changed from outside)
+    console.log('[phase27b-explicit-choice-tracker]', {
+      event: 'INPUTS_CHANGED_EXTERNALLY',
+      inputsKey,
+      currentExplicitChoice: explicitScheduleChoice,
+    })
+  }, [inputsKey]) // eslint-disable-line react-hooks/exhaustive-deps
+  
   const updateInput = <K extends keyof AdaptiveProgramInputs>(
     key: K,
     value: AdaptiveProgramInputs[K]
@@ -123,11 +149,21 @@ export function AdaptiveProgramForm({
                 ? 'flexible' 
                 : String(inputs.trainingDaysPerWeek)}
               onValueChange={(v) => {
+                const timestamp = new Date().toISOString()
                 if (v === 'flexible') {
-                  console.log('[phase26h-schedule-selector]', {
-                    action: 'USER_SELECTED_FLEXIBLE',
+                  // [PHASE 27B] Record explicit flexible choice
+                  const choice: ExplicitScheduleChoice = {
+                    madeAt: timestamp,
+                    scheduleMode: 'flexible',
+                    trainingDaysPerWeek: 'flexible',
+                  }
+                  setExplicitScheduleChoice(choice)
+                  console.log('[phase27b-explicit-schedule-choice]', {
+                    action: 'USER_EXPLICITLY_SELECTED_FLEXIBLE',
+                    choice,
                     previousScheduleMode: inputs.scheduleMode,
                     previousTrainingDays: inputs.trainingDaysPerWeek,
+                    verdict: 'EXPLICIT_FLEXIBLE_CHOICE_RECORDED',
                   })
                   onInputChange({
                     ...inputs,
@@ -136,12 +172,20 @@ export function AdaptiveProgramForm({
                   })
                 } else {
                   const numDays = Number(v) as TrainingDays
-                  console.log('[phase26h-schedule-selector]', {
-                    action: 'USER_SELECTED_FIXED_DAYS',
+                  // [PHASE 27B] Record explicit static choice
+                  const choice: ExplicitScheduleChoice = {
+                    madeAt: timestamp,
+                    scheduleMode: 'static',
+                    trainingDaysPerWeek: numDays,
+                  }
+                  setExplicitScheduleChoice(choice)
+                  console.log('[phase27b-explicit-schedule-choice]', {
+                    action: 'USER_EXPLICITLY_SELECTED_FIXED_DAYS',
+                    choice,
                     selectedDays: numDays,
                     previousScheduleMode: inputs.scheduleMode,
                     previousTrainingDays: inputs.trainingDaysPerWeek,
-                    verdict: `STATIC_${numDays}_DAYS_SELECTED`,
+                    verdict: `EXPLICIT_STATIC_${numDays}_DAYS_CHOICE_RECORDED`,
                   })
                   onInputChange({
                     ...inputs,
@@ -169,15 +213,18 @@ export function AdaptiveProgramForm({
                 <SelectItem value="7">7 days/week</SelectItem>
               </SelectContent>
             </Select>
-            {/* [PHASE 26H] Visual confirmation of selected schedule mode */}
-            <div className={`text-xs ${
+            {/* [PHASE 27A] HIGH-CLARITY STATE BAR - impossible to miss */}
+            <div className={`mt-2 px-3 py-2 rounded-md text-sm font-medium flex items-center gap-2 ${
               inputs.scheduleMode === 'static' 
-                ? 'text-blue-400' 
-                : 'text-emerald-400'
+                ? 'bg-blue-500/20 text-blue-400 border border-blue-500/40' 
+                : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
             }`}>
+              <div className={`w-2.5 h-2.5 rounded-full ${
+                inputs.scheduleMode === 'static' ? 'bg-blue-400' : 'bg-emerald-400 animate-pulse'
+              }`} />
               {inputs.scheduleMode === 'static' 
-                ? `Selected: Fixed ${inputs.trainingDaysPerWeek} days/week`
-                : 'Selected: Adaptive frequency (varies by week)'}
+                ? `FIXED: ${inputs.trainingDaysPerWeek} days/week`
+                : 'ADAPTIVE: frequency varies by week'}
             </div>
           </div>
         </div>
@@ -277,41 +324,74 @@ export function AdaptiveProgramForm({
         </div>
 
         {/* ==========================================================================
-           [PHASE 26H] SUBMIT-TIME TRUTH BADGE
-           Shows exactly what schedule mode will be submitted when clicking Build
-           This makes it unmistakably clear if static 6 or flexible is being submitted
+           [PHASE 27A/27B] PRE-SUBMIT TRUTH SNAPSHOT WITH EXPLICIT CHOICE TRACKING
+           Shows EXACTLY what will be submitted - impossible to misread
+           Also shows whether user made an explicit choice this session
            ========================================================================== */}
-        <div className="bg-[#1A1A1A] border border-[#3A3A3A] rounded-lg p-3 space-y-2">
-          <div className="text-xs text-[#6A6A6A] uppercase tracking-wider">Program will be built with:</div>
-          <div className="flex flex-wrap gap-2">
-            <div className={`px-3 py-1.5 rounded-md text-sm font-medium ${
-              inputs.scheduleMode === 'static' 
-                ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' 
-                : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-            }`}>
-              {inputs.scheduleMode === 'static' 
-                ? `Fixed: ${inputs.trainingDaysPerWeek} days/week`
-                : 'Adaptive Frequency'}
+        <div className={`rounded-lg p-4 space-y-3 border-2 ${
+          inputs.scheduleMode === 'static'
+            ? 'bg-blue-500/10 border-blue-500/40'
+            : 'bg-emerald-500/10 border-emerald-500/40'
+        }`}>
+          <div className="text-xs text-[#A5A5A5] uppercase tracking-wider font-medium">
+            Submitting Program With:
+          </div>
+          
+          {/* Schedule Mode - Primary Focus */}
+          <div className={`px-4 py-3 rounded-md text-base font-bold flex items-center gap-3 ${
+            inputs.scheduleMode === 'static' 
+              ? 'bg-blue-500/30 text-blue-300 border border-blue-400/50' 
+              : 'bg-emerald-500/30 text-emerald-300 border border-emerald-400/50'
+          }`}>
+            <div className={`w-3 h-3 rounded-full ${
+              inputs.scheduleMode === 'static' ? 'bg-blue-400' : 'bg-emerald-400 animate-pulse'
+            }`} />
+            {inputs.scheduleMode === 'static' 
+              ? `Submitting: Fixed ${inputs.trainingDaysPerWeek} days/week`
+              : 'Submitting: Adaptive frequency'}
+          </div>
+          
+          {/* [PHASE 27B] Explicit Choice Confirmation */}
+          {explicitScheduleChoice ? (
+            <div className="flex items-center gap-2 text-xs">
+              <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+              <span className="text-emerald-400 font-medium">
+                Explicit choice this session: {explicitScheduleChoice.scheduleMode === 'static' 
+                  ? `Fixed ${explicitScheduleChoice.trainingDaysPerWeek} days/week`
+                  : 'Adaptive frequency'}
+              </span>
             </div>
+          ) : (
+            <div className="text-xs text-amber-400/80 bg-amber-500/10 px-3 py-2 rounded border border-amber-500/30">
+              Currently using your saved schedule preference. To change, select a different option in Training Days/Week above.
+            </div>
+          )}
+          
+          {/* Secondary Details */}
+          <div className="flex flex-wrap gap-2">
             <div className="px-3 py-1.5 rounded-md text-sm font-medium bg-[#2A2A2A] text-[#A5A5A5] border border-[#3A3A3A]">
               {inputs.sessionDurationMode === 'adaptive'
                 ? `~${inputs.sessionLength}min adaptive`
                 : `${inputs.sessionLength}min sessions`}
             </div>
             <div className="px-3 py-1.5 rounded-md text-sm font-medium bg-[#2A2A2A] text-[#A5A5A5] border border-[#3A3A3A]">
-              {inputs.primaryGoal}
+              {GOAL_LABELS[inputs.primaryGoal] || inputs.primaryGoal}
             </div>
           </div>
-          {/* [PHASE 26H] Debug log to verify what will be submitted */}
+          
+          {/* [PHASE 27A/27B] Forensic log on every render */}
           {(() => {
-            console.log('[phase26h-submit-time-truth-badge]', {
+            console.log('[phase27a-submit-snapshot]', {
               scheduleMode: inputs.scheduleMode,
               trainingDaysPerWeek: inputs.trainingDaysPerWeek,
               sessionDurationMode: inputs.sessionDurationMode,
+              sessionLength: inputs.sessionLength,
               primaryGoal: inputs.primaryGoal,
+              explicitChoiceMade: !!explicitScheduleChoice,
+              explicitChoiceDetails: explicitScheduleChoice,
               verdict: inputs.scheduleMode === 'static' 
-                ? `BADGE_SHOWS_STATIC_${inputs.trainingDaysPerWeek}_DAYS`
-                : 'BADGE_SHOWS_ADAPTIVE',
+                ? `SNAPSHOT_SHOWS_STATIC_${inputs.trainingDaysPerWeek}_DAYS`
+                : 'SNAPSHOT_SHOWS_ADAPTIVE',
             })
             return null
           })()}

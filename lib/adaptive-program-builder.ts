@@ -7645,6 +7645,24 @@ console.log('[program-generate] Generation complete:', {
   const finalScheduleMode = inputScheduleMode
   
   // ==========================================================================
+  // [PHASE 26D] POST-GENERATION SAVE/HYDRATION FORENSIC - BUILDER RETURN AUDIT
+  // This captures what the builder will return for scheduleMode
+  // If this is static but display shows Adaptive, the bug is AFTER builder return
+  // ==========================================================================
+  console.log('[phase26d-post-generation-save-hydration-forensic]', {
+    stage: 'BUILDER_FINAL_SCHEDULE_MODE_ASSIGNMENT',
+    inputScheduleMode,
+    finalScheduleMode,
+    effectiveTrainingDays,
+    inputsScheduleMode: inputs.scheduleMode,
+    inputsTrainingDaysPerWeek: inputs.trainingDaysPerWeek,
+    canonicalScheduleMode: canonicalProfile.scheduleMode,
+    verdict: finalScheduleMode === 'static'
+      ? `BUILDER_WILL_RETURN_STATIC_${effectiveTrainingDays}_DAYS`
+      : 'BUILDER_WILL_RETURN_FLEXIBLE',
+  })
+  
+  // ==========================================================================
   // [PHASE 15C] TASK 2: MODE VS OUTPUT SEPARATION AUDIT
   // Verify selectedMode and resolvedOutput are kept distinct
   // ==========================================================================

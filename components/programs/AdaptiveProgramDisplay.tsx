@@ -115,6 +115,25 @@ export function AdaptiveProgramDisplay({
     representedSkillsCount: (program as unknown as { representedSkills?: string[] }).representedSkills?.length || 0,
   })
   
+  // ==========================================================================
+  // [PHASE 26D] POST-GENERATION SAVE/HYDRATION FORENSIC - DISPLAY RENDER AUDIT
+  // This captures EXACTLY what the display component receives after generation
+  // If this shows flexible when user selected 6, the bug is BEFORE display
+  // ==========================================================================
+  const trainingDaysPerWeek = (program as unknown as { trainingDaysPerWeek?: number | string }).trainingDaysPerWeek
+  console.log('[phase26d-post-generation-save-hydration-forensic]', {
+    stage: 'DISPLAY_COMPONENT_RENDER',
+    displayProgramId: program.id,
+    displayScheduleMode: program.scheduleMode,
+    displayTrainingDaysPerWeek: trainingDaysPerWeek,
+    displaySessionsCount: program.sessions?.length || 0,
+    displayedScheduleLabel: program.scheduleMode === 'flexible' ? 'Adaptive' : `${trainingDaysPerWeek} days/week`,
+    programCreatedAt: program.createdAt,
+    verdict: program.scheduleMode === 'static'
+      ? `DISPLAY_RECEIVED_STATIC_${trainingDaysPerWeek}_DAYS`
+      : 'DISPLAY_RECEIVED_FLEXIBLE_SO_SHOWS_ADAPTIVE',
+  })
+  
   // Get raw program fields with type assertions for optional fields
   const rawSelectedSkills = (program as unknown as { selectedSkills?: string[] }).selectedSkills
   const rawRepresentedSkills = (program as unknown as { representedSkills?: string[] }).representedSkills

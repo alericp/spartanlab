@@ -18,15 +18,16 @@
 // This allows us to verify the live app is running the expected code version
 // ==========================================================================
 export const PHASE27C_BUILD_IDENTITY = {
-  buildIdentityName: 'PHASE28KL_SCHEDULE_TRUTH_ROOT_CAUSE_FIX',
-  buildIdentityVersion: '2024-PHASE28KL-v1',
-  buildTimestamp: '2024-01-PHASE28KL',
-  modifyBuilderVariant: 'EXPECTED_PHASE28KL_CANONICAL_MODIFY',
-  scheduleSelectorVariant: 'EXPECTED_PHASE28KL_ATHLETE_PRECEDENCE',
-  submitSnapshotVariant: 'EXPECTED_PHASE28KL_AMBER_WARNING_STYLE',
-  auditPanelVariant: 'PHASE28KL_VISIBLE_TRUTH_BAR_WITH_RAW_STORAGE',
+  buildIdentityName: 'PHASE29A_BASELINE_VS_ADAPTIVE_SEPARATION',
+  buildIdentityVersion: '2024-PHASE29A-v1',
+  buildTimestamp: '2024-01-PHASE29A',
+  modifyBuilderVariant: 'EXPECTED_PHASE29A_CANONICAL_MODIFY',
+  scheduleSelectorVariant: 'EXPECTED_PHASE29A_BASELINE_SCHEDULE_IDENTITY',
+  submitSnapshotVariant: 'EXPECTED_PHASE29A_BASELINE_AND_ADAPTIVE_SHOWN',
+  auditPanelVariant: 'PHASE29A_VISIBLE_TRUTH_BAR_WITH_ADAPTIVE_WORKLOAD',
   scheduleResolutionFix: 'ATHLETE_STATIC_BEATS_ONBOARDING_FLEXIBLE',
-  forensicLogs: ['phase28k-settings-save-source-of-truth', 'phase28k-settings-post-save-readback', 'phase28l-canonical-schedule-source-winner', 'phase28l-program-read-before-modify-open'],
+  baselineAdaptiveSeparation: true,
+  forensicLogs: ['phase29a-settings-schedule-contract-save', 'phase29a-canonical-schedule-contract-resolution', 'phase29a-modify-open-baseline-truth', 'phase29a-builder-baseline-vs-adaptive-contract'],
 } as const
 
 import { useState, useEffect, useCallback, useMemo, useRef, type ReactNode } from 'react'
@@ -421,6 +422,8 @@ export default function ProgramPage() {
     onboardingTrainingDays?: number | null
     athleteScheduleMode?: 'static' | 'flexible' | string | null
     athleteTrainingDays?: number | null
+    // [PHASE 29A] Adaptive workload enabled (separate from schedule baseline)
+    adaptiveWorkloadEnabled?: boolean | null
     // Canonical resolved
     canonicalScheduleMode: 'static' | 'flexible' | string | null
     canonicalTrainingDaysPerWeek: number | null
@@ -8711,6 +8714,8 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
       athleteScheduleMode: athleteForAudit?.scheduleMode || null,
       athleteTrainingDays: typeof athleteForAudit?.trainingDaysPerWeek === 'number'
         ? athleteForAudit.trainingDaysPerWeek : null,
+      // [PHASE 29A] Adaptive workload enabled (separate from schedule baseline)
+      adaptiveWorkloadEnabled: (canonicalProfileNow as { adaptiveWorkloadEnabled?: boolean }).adaptiveWorkloadEnabled ?? true,
       // Canonical resolved
       canonicalScheduleMode: canonicalProfileNow.scheduleMode,
       canonicalTrainingDaysPerWeek: canonicalProfileNow.trainingDaysPerWeek,
@@ -8735,6 +8740,37 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
       verdict: freshInputs.scheduleMode === 'static' 
         ? `LIVE_MODIFY_AUDIT_SEEDED_STATIC_${freshInputs.trainingDaysPerWeek}`
         : 'LIVE_MODIFY_AUDIT_SEEDED_FLEXIBLE',
+    })
+    
+    // ==========================================================================
+    // [PHASE 29A] MODIFY OPEN BASELINE TRUTH LOG
+    // Proves the builder opened with correct baseline schedule identity
+    // Adaptive workload is shown SEPARATELY from schedule baseline
+    // ==========================================================================
+    const adaptiveWorkloadResolved = (canonicalProfileNow as { adaptiveWorkloadEnabled?: boolean }).adaptiveWorkloadEnabled ?? true
+    console.log('[phase29a-modify-open-baseline-truth]', {
+      // Baseline schedule identity
+      baselineScheduleMode: canonicalProfileNow.scheduleMode,
+      baselineTrainingDays: canonicalProfileNow.trainingDaysPerWeek,
+      // Adaptive workload (SEPARATE from schedule)
+      adaptiveWorkloadEnabled: adaptiveWorkloadResolved,
+      // Prefill values
+      prefillScheduleMode: freshInputs.scheduleMode,
+      prefillTrainingDays: freshInputs.trainingDaysPerWeek,
+      // Verdict
+      verdict: (() => {
+        const isStatic6 = canonicalProfileNow.scheduleMode === 'static' && canonicalProfileNow.trainingDaysPerWeek === 6
+        if (isStatic6 && adaptiveWorkloadResolved) {
+          return 'STATIC_6_BASELINE_WITH_ADAPTIVE_WORKLOAD_OPENED'
+        }
+        if (isStatic6 && !adaptiveWorkloadResolved) {
+          return 'STATIC_6_BASELINE_NO_ADAPTATION_OPENED'
+        }
+        if (canonicalProfileNow.scheduleMode === 'flexible') {
+          return 'FLEXIBLE_BASELINE_OPENED'
+        }
+        return `STATIC_${canonicalProfileNow.trainingDaysPerWeek}_BASELINE_OPENED`
+      })(),
     })
     
     // Record program end if there is an active program

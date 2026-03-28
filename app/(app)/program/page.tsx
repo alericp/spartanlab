@@ -13,6 +13,19 @@
  * 3. Show builder as secondary action for creating/regenerating
  */
 
+// ==========================================================================
+// [PHASE 27C] BUILD IDENTITY STAMP - CANONICAL MODIFY CONVERGENCE PROBE
+// This allows us to verify the live app is running the expected code version
+// ==========================================================================
+export const PHASE27C_BUILD_IDENTITY = {
+  buildIdentityName: 'PHASE27C_CANONICAL_MODIFY_CONVERGENCE_PROBE',
+  buildIdentityVersion: '2024-PHASE27C-v1',
+  buildTimestamp: '2024-01-PHASE27C',
+  modifyBuilderVariant: 'EXPECTED_PHASE27C_CANONICAL_MODIFY',
+  scheduleSelectorVariant: 'EXPECTED_PHASE27C_EXPLICIT_CHOICE_TRACKING',
+  submitSnapshotVariant: 'EXPECTED_PHASE27C_AMBER_WARNING_STYLE',
+} as const
+
 import { useState, useEffect, useCallback, useMemo, useRef, type ReactNode } from 'react'
 import { ErrorBoundary } from '@/components/shared/ErrorBoundary'
 import { Card } from '@/components/ui/card'
@@ -354,6 +367,16 @@ export default function ProgramPage() {
     previousMethod: 'dynamic_import_with_ssr_false',
     reason: 'dynamic_import_can_delay_availability_blocking_click_handlers',
     verdict: 'STATIC_IMPORT_ACTIVE_MODAL_AVAILABLE_IMMEDIATELY',
+  })
+  
+  // ==========================================================================
+  // [PHASE 27C] BUILD IDENTITY LOG ON PAGE MOUNT
+  // This proves the live app is running the expected code version
+  // ==========================================================================
+  console.log('[phase27c-build-identity-page-mount]', {
+    ...PHASE27C_BUILD_IDENTITY,
+    event: 'PROGRAM_PAGE_MOUNTED',
+    verdict: 'PHASE27C_CODE_RUNNING_IF_YOU_SEE_THIS',
   })
   
   const [inputs, setInputs] = useState<AdaptiveProgramInputs | null>(null)
@@ -9364,6 +9387,25 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
         : 'BUILDER_OPENED_WITH_FLEXIBLE',
     })
     
+    // ==========================================================================
+    // [PHASE 27C] MODIFY BUILDER OPENED - BUILD IDENTITY CONVERGENCE PROBE
+    // This log proves the live app is running the expected code version
+    // ==========================================================================
+    console.log('[phase27c-build-identity-modify-opened]', {
+      ...PHASE27C_BUILD_IDENTITY,
+      event: 'MODIFY_BUILDER_OPENED',
+      modifyEntryPath: 'CANONICAL_PHASE27C_LAUNCHER',
+      usesLegacyModifyHandler: false,
+      canonicalProfileScheduleMode: canonicalProfile?.scheduleMode || 'unknown',
+      canonicalProfileTrainingDays: canonicalProfile?.trainingDaysPerWeek || 'unknown',
+      builderPrefillScheduleMode: freshInputs.scheduleMode,
+      builderPrefillTrainingDays: freshInputs.trainingDaysPerWeek,
+      verdict: 'VISIBLE_MODIFY_BUTTON_IS_CANONICAL',
+      prefillVerdict: freshInputs.scheduleMode === 'static'
+        ? `PREFILL_IS_STATIC_${freshInputs.trainingDaysPerWeek}_DAYS`
+        : 'PREFILL_IS_FLEXIBLE',
+    })
+    
     // Also sync to ambient inputs for page consistency (secondary, not builder authority)
     setInputs(freshInputs)
     
@@ -9729,6 +9771,24 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
                 // [PHASE 26] Read CURRENT state from ref, not stale closure
                 const currentBuilderSessionInputs = builderSessionInputsRef.current
                 const hasCurrentSessionInputs = !!currentBuilderSessionInputs
+                
+                // ==========================================================================
+                // [PHASE 27C] BUILD ADAPTIVE PROGRAM CLICKED - BUILD IDENTITY LOG
+                // This proves the expected code version is handling the click
+                // ==========================================================================
+                console.log('[phase27c-build-identity-click-time]', {
+                  ...PHASE27C_BUILD_IDENTITY,
+                  event: 'BUILD_ADAPTIVE_PROGRAM_CLICKED',
+                  clickTimeRefScheduleMode: currentBuilderSessionInputs?.scheduleMode,
+                  clickTimeRefTrainingDays: currentBuilderSessionInputs?.trainingDaysPerWeek,
+                  hasBuilderSessionInputs: hasCurrentSessionInputs,
+                  builderOrigin,
+                  verdict: hasCurrentSessionInputs
+                    ? (currentBuilderSessionInputs?.scheduleMode === 'static'
+                        ? `CLICK_TIME_STATIC_${currentBuilderSessionInputs?.trainingDaysPerWeek}_DAYS`
+                        : 'CLICK_TIME_FLEXIBLE')
+                    : 'CLICK_TIME_NO_BUILDER_SESSION',
+                })
                 
                 // ==========================================================================
                 // [PHASE 26B] SAME-FRAME RACE REF SYNC - CLICK TIME AUDIT

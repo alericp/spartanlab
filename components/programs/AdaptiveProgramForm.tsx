@@ -28,12 +28,13 @@ import { DURATION_PREFERENCE_LABELS, type SessionDurationMinutes } from '@/lib/d
 // This allows us to verify which version of the form is rendering
 // ==========================================================================
 const PHASE27C_FORM_BUILD_IDENTITY = {
-  formBuildIdentityName: 'PHASE28A_ADAPTIVE_PROGRAM_FORM',
-  formBuildIdentityVersion: '2024-PHASE28A-v1',
+  formBuildIdentityName: 'PHASE28B_ADAPTIVE_PROGRAM_FORM',
+  formBuildIdentityVersion: '2024-PHASE28B-v1',
   hasExplicitChoiceTracking: true,
   hasAmberWarningStyle: true,
-  scheduleSelectorVariant: 'PHASE28A_WITH_EXPLICIT_CHOICE',
+  scheduleSelectorVariant: 'PHASE28B_WITH_VISIBLE_TRUTH_BAR',
   hasScheduleTruthDebugPanel: true,
+  hasVisibleTruthBar: true,
 } as const
 
 // [PHASE 27B] Explicit schedule choice tracking for current builder session
@@ -43,10 +44,20 @@ interface ExplicitScheduleChoice {
   trainingDaysPerWeek: TrainingDays | 'flexible'
 }
 
-// [PHASE 28A] Debug audit info for schedule truth panel
+// [PHASE 28B] Expanded debug audit info for VISIBLE schedule truth panel
 interface ScheduleTruthAuditInfo {
+  // Source values
+  onboardingScheduleMode?: 'static' | 'flexible' | string | null
+  onboardingTrainingDays?: number | null
+  athleteScheduleMode?: 'static' | 'flexible' | string | null
+  athleteTrainingDays?: number | null
+  // Canonical resolved
   canonicalScheduleMode: 'static' | 'flexible' | string | null
   canonicalTrainingDaysPerWeek: number | null
+  // Builder prefill (what form opened with)
+  prefillScheduleMode?: 'static' | 'flexible' | string | null
+  prefillTrainingDays?: number | null
+  // Generation history
   lastGeneratedScheduleMode?: string | null
   lastGeneratedTrainingDays?: number | null
   lastReconciliationDecision?: 'kept' | 'replaced' | 'no-op' | null
@@ -459,103 +470,145 @@ export function AdaptiveProgramForm({
         </p>
         
         {/* ==========================================================================
-           [PHASE 27C] DEBUG CHIP - BUILDER VARIANT IDENTITY
-           This small chip allows instant verification that the expected code is running
-           ========================================================================== */}
-        <div className="pt-2 border-t border-[#3A3A3A] mt-2">
-          <div className="text-[10px] text-[#4A4A4A] font-mono text-center">
-            Builder Variant: PHASE28A_CANONICAL_SCHEDULE_TRUTH_AUDIT
-          </div>
-        </div>
-        
-        {/* ==========================================================================
-           [PHASE 28A] SCHEDULE TRUTH AUDIT DEBUG PANEL
-           Shows canonical vs builder vs form selection truth for forensic debugging
+           [PHASE 28B] SCHEDULE TRUTH NOW - PERMANENT VISIBLE DEBUG BAR
+           This is ALWAYS visible and shows exactly where schedule truth comes from
            ========================================================================== */}
         {scheduleTruthAudit && (
-          <details className="mt-3 pt-3 border-t border-[#3A3A3A]">
-            <summary className="text-[10px] text-[#6A6A6A] font-mono cursor-pointer hover:text-[#888]">
-              Schedule Truth Audit (Debug)
-            </summary>
-            <div className="mt-2 p-2 bg-[#1A1A1A] rounded text-[10px] font-mono space-y-1">
-              <div className="flex justify-between">
-                <span className="text-[#888]">Canonical saved:</span>
-                <span className={scheduleTruthAudit.canonicalScheduleMode === 'flexible' 
-                  ? 'text-emerald-400' 
-                  : 'text-blue-400'}>
+          <div className="mt-4 p-3 bg-[#1A1A1A] border border-[#3A3A3A] rounded-lg">
+            <div className="text-[11px] text-[#A5A5A5] font-semibold uppercase tracking-wider mb-3 pb-2 border-b border-[#2A2A2A]">
+              SCHEDULE TRUTH NOW
+            </div>
+            
+            {/* Source rows with badges */}
+            <div className="space-y-2 text-[11px] font-mono">
+              {/* Onboarding source */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="px-1.5 py-0.5 bg-purple-500/20 text-purple-400 rounded text-[9px] font-bold">ONBOARD</span>
+                  <span className="text-[#666]">scheduleMode:</span>
+                </div>
+                <span className={scheduleTruthAudit.onboardingScheduleMode === 'static' ? 'text-blue-400' : scheduleTruthAudit.onboardingScheduleMode === 'flexible' ? 'text-emerald-400' : 'text-[#555]'}>
+                  {scheduleTruthAudit.onboardingScheduleMode || 'null'}
+                  {scheduleTruthAudit.onboardingScheduleMode === 'static' && scheduleTruthAudit.onboardingTrainingDays ? ` (${scheduleTruthAudit.onboardingTrainingDays}d)` : ''}
+                </span>
+              </div>
+              
+              {/* Athlete/settings source */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="px-1.5 py-0.5 bg-orange-500/20 text-orange-400 rounded text-[9px] font-bold">ATHLETE</span>
+                  <span className="text-[#666]">scheduleMode:</span>
+                </div>
+                <span className={scheduleTruthAudit.athleteScheduleMode === 'static' ? 'text-blue-400' : scheduleTruthAudit.athleteScheduleMode === 'flexible' ? 'text-emerald-400' : 'text-[#555]'}>
+                  {scheduleTruthAudit.athleteScheduleMode || 'null'}
+                  {scheduleTruthAudit.athleteScheduleMode === 'static' && scheduleTruthAudit.athleteTrainingDays ? ` (${scheduleTruthAudit.athleteTrainingDays}d)` : ''}
+                </span>
+              </div>
+              
+              {/* Canonical resolved - highlighted */}
+              <div className="flex items-center justify-between py-1 px-2 -mx-2 bg-[#252525] rounded">
+                <div className="flex items-center gap-2">
+                  <span className="px-1.5 py-0.5 bg-cyan-500/30 text-cyan-400 rounded text-[9px] font-bold">CANON</span>
+                  <span className="text-[#888] font-semibold">resolved:</span>
+                </div>
+                <span className={`font-bold ${scheduleTruthAudit.canonicalScheduleMode === 'static' ? 'text-blue-400' : 'text-emerald-400'}`}>
                   {scheduleTruthAudit.canonicalScheduleMode === 'flexible' 
-                    ? 'Flexible' 
-                    : `Fixed ${scheduleTruthAudit.canonicalTrainingDaysPerWeek} days/week`}
+                    ? 'FLEXIBLE' 
+                    : `STATIC ${scheduleTruthAudit.canonicalTrainingDaysPerWeek}d/wk`}
                 </span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-[#888]">Builder prefill:</span>
-                <span className={inputs.scheduleMode === 'flexible' 
-                  ? 'text-emerald-400' 
-                  : 'text-blue-400'}>
-                  {inputs.scheduleMode === 'flexible' 
-                    ? 'Flexible' 
-                    : `Fixed ${inputs.trainingDaysPerWeek} days/week`}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-[#888]">Current selection:</span>
-                <span className={inputs.scheduleMode === 'flexible' 
-                  ? 'text-emerald-400' 
-                  : 'text-blue-400'}>
-                  {inputs.scheduleMode === 'flexible' 
-                    ? 'Flexible' 
-                    : `Fixed ${inputs.trainingDaysPerWeek} days/week`}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-[#888]">Submit will send:</span>
-                <span className={inputs.scheduleMode === 'flexible' 
-                  ? 'text-emerald-400 font-bold' 
-                  : 'text-blue-400 font-bold'}>
-                  {inputs.scheduleMode === 'flexible' 
-                    ? 'Flexible' 
-                    : `Fixed ${inputs.trainingDaysPerWeek} days/week`}
-                </span>
-              </div>
-              {scheduleTruthAudit.lastGeneratedScheduleMode && (
-                <div className="flex justify-between">
-                  <span className="text-[#888]">Last generated:</span>
-                  <span className={scheduleTruthAudit.lastGeneratedScheduleMode === 'flexible' 
-                    ? 'text-emerald-400' 
-                    : 'text-blue-400'}>
-                    {scheduleTruthAudit.lastGeneratedScheduleMode === 'flexible' 
-                      ? 'Flexible' 
-                      : `Fixed ${scheduleTruthAudit.lastGeneratedTrainingDays} days/week`}
-                  </span>
+              
+              {/* Prefill */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="px-1.5 py-0.5 bg-yellow-500/20 text-yellow-400 rounded text-[9px] font-bold">PREFILL</span>
+                  <span className="text-[#666]">builder opened:</span>
                 </div>
-              )}
-              {scheduleTruthAudit.lastReconciliationDecision && (
-                <div className="flex justify-between">
-                  <span className="text-[#888]">Last reconciliation:</span>
-                  <span className={
-                    scheduleTruthAudit.lastReconciliationDecision === 'kept' ? 'text-green-400' :
-                    scheduleTruthAudit.lastReconciliationDecision === 'replaced' ? 'text-red-400' :
-                    'text-[#888]'
-                  }>
-                    {scheduleTruthAudit.lastReconciliationDecision}
-                  </span>
+                <span className={scheduleTruthAudit.prefillScheduleMode === 'static' ? 'text-blue-400' : 'text-emerald-400'}>
+                  {scheduleTruthAudit.prefillScheduleMode === 'flexible' 
+                    ? 'flexible' 
+                    : `static ${scheduleTruthAudit.prefillTrainingDays}d`}
+                </span>
+              </div>
+              
+              {/* Current form selection */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="px-1.5 py-0.5 bg-green-500/20 text-green-400 rounded text-[9px] font-bold">FORM</span>
+                  <span className="text-[#666]">current:</span>
                 </div>
-              )}
-              {/* Verdict */}
-              <div className="pt-1 border-t border-[#2A2A2A] mt-1">
-                <span className={
-                  scheduleTruthAudit.canonicalScheduleMode !== inputs.scheduleMode
-                    ? 'text-amber-400'
-                    : 'text-green-400'
-                }>
-                  {scheduleTruthAudit.canonicalScheduleMode !== inputs.scheduleMode
-                    ? 'MISMATCH: Canonical differs from current selection'
-                    : 'MATCH: Selection matches canonical'}
+                <span className={inputs.scheduleMode === 'static' ? 'text-blue-400' : 'text-emerald-400'}>
+                  {inputs.scheduleMode === 'flexible' 
+                    ? 'flexible' 
+                    : `static ${inputs.trainingDaysPerWeek}d`}
+                </span>
+              </div>
+              
+              {/* Submit will send - highlighted */}
+              <div className="flex items-center justify-between py-1 px-2 -mx-2 bg-[#252525] rounded">
+                <div className="flex items-center gap-2">
+                  <span className="px-1.5 py-0.5 bg-red-500/30 text-red-400 rounded text-[9px] font-bold">SUBMIT</span>
+                  <span className="text-[#888] font-semibold">will send:</span>
+                </div>
+                <span className={`font-bold ${inputs.scheduleMode === 'static' ? 'text-blue-400' : 'text-emerald-400'}`}>
+                  {inputs.scheduleMode === 'flexible' 
+                    ? 'FLEXIBLE' 
+                    : `STATIC ${inputs.trainingDaysPerWeek}d/wk`}
                 </span>
               </div>
             </div>
-          </details>
+            
+            {/* Large verdict line */}
+            <div className="mt-3 pt-3 border-t border-[#2A2A2A]">
+              <div className="text-[10px] text-[#666] mb-1">Canonical Verdict:</div>
+              {(() => {
+                // Determine verdict
+                const canonicalIsFlexible = scheduleTruthAudit.canonicalScheduleMode === 'flexible'
+                const canonicalIsStatic6 = scheduleTruthAudit.canonicalScheduleMode === 'static' && scheduleTruthAudit.canonicalTrainingDaysPerWeek === 6
+                const prefillMatchesCanonical = scheduleTruthAudit.prefillScheduleMode === scheduleTruthAudit.canonicalScheduleMode
+                const formMatchesPrefill = inputs.scheduleMode === scheduleTruthAudit.prefillScheduleMode
+                const sourceConflict = scheduleTruthAudit.onboardingScheduleMode !== null && 
+                  scheduleTruthAudit.athleteScheduleMode !== null && 
+                  scheduleTruthAudit.onboardingScheduleMode !== scheduleTruthAudit.athleteScheduleMode
+                
+                let verdict = ''
+                let color = ''
+                
+                if (sourceConflict) {
+                  verdict = 'CANONICAL_SOURCE_CONFLICT'
+                  color = 'text-red-400'
+                } else if (!prefillMatchesCanonical) {
+                  verdict = 'PREFILL_DOES_NOT_MATCH_CANONICAL'
+                  color = 'text-red-400'
+                } else if (!formMatchesPrefill) {
+                  verdict = 'FORM_DOES_NOT_MATCH_PREFILL'
+                  color = 'text-amber-400'
+                } else if (canonicalIsStatic6) {
+                  verdict = 'CANONICAL_CURRENTLY_STATIC_6'
+                  color = 'text-blue-400'
+                } else if (canonicalIsFlexible) {
+                  verdict = 'CANONICAL_CURRENTLY_FLEXIBLE'
+                  color = 'text-emerald-400'
+                } else {
+                  verdict = `CANONICAL_STATIC_${scheduleTruthAudit.canonicalTrainingDaysPerWeek}`
+                  color = 'text-blue-400'
+                }
+                
+                return (
+                  <div className={`text-sm font-bold ${color}`}>
+                    {verdict}
+                  </div>
+                )
+              })()}
+            </div>
+            
+            {/* Build variant chip */}
+            <div className="mt-2 pt-2 border-t border-[#2A2A2A]">
+              <div className="text-[9px] text-[#4A4A4A] font-mono text-center">
+                Builder: PHASE28B_VISIBLE_TRUTH_BAR
+              </div>
+            </div>
+          </div>
         )}
       </div>
     </Card>

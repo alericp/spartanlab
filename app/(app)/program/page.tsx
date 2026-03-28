@@ -18,13 +18,13 @@
 // This allows us to verify the live app is running the expected code version
 // ==========================================================================
 export const PHASE27C_BUILD_IDENTITY = {
-  buildIdentityName: 'PHASE28A_CANONICAL_SCHEDULE_TRUTH_AUDIT',
-  buildIdentityVersion: '2024-PHASE28A-v1',
-  buildTimestamp: '2024-01-PHASE28A',
-  modifyBuilderVariant: 'EXPECTED_PHASE28A_CANONICAL_MODIFY',
-  scheduleSelectorVariant: 'EXPECTED_PHASE28A_EXPLICIT_CHOICE_TRACKING',
-  submitSnapshotVariant: 'EXPECTED_PHASE28A_AMBER_WARNING_STYLE',
-  auditPanelVariant: 'PHASE28A_SCHEDULE_TRUTH_DEBUG_PANEL',
+  buildIdentityName: 'PHASE28B_VISIBLE_SCHEDULE_TRUTH_BAR',
+  buildIdentityVersion: '2024-PHASE28B-v1',
+  buildTimestamp: '2024-01-PHASE28B',
+  modifyBuilderVariant: 'EXPECTED_PHASE28B_CANONICAL_MODIFY',
+  scheduleSelectorVariant: 'EXPECTED_PHASE28B_EXPLICIT_CHOICE_TRACKING',
+  submitSnapshotVariant: 'EXPECTED_PHASE28B_AMBER_WARNING_STYLE',
+  auditPanelVariant: 'PHASE28B_VISIBLE_TRUTH_BAR',
 } as const
 
 import { useState, useEffect, useCallback, useMemo, useRef, type ReactNode } from 'react'
@@ -411,8 +411,18 @@ export default function ProgramPage() {
   // Tracks canonical vs builder truth for the debug panel
   // ==========================================================================
   const [scheduleTruthAudit, setScheduleTruthAudit] = useState<{
+    // Source values
+    onboardingScheduleMode?: 'static' | 'flexible' | string | null
+    onboardingTrainingDays?: number | null
+    athleteScheduleMode?: 'static' | 'flexible' | string | null
+    athleteTrainingDays?: number | null
+    // Canonical resolved
     canonicalScheduleMode: 'static' | 'flexible' | string | null
     canonicalTrainingDaysPerWeek: number | null
+    // Builder prefill
+    prefillScheduleMode?: 'static' | 'flexible' | string | null
+    prefillTrainingDays?: number | null
+    // History
     lastGeneratedScheduleMode?: string | null
     lastGeneratedTrainingDays?: number | null
     lastReconciliationDecision?: 'kept' | 'replaced' | 'no-op' | null
@@ -9570,11 +9580,25 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
     setInputs(freshInputs)
     
     // ==========================================================================
-    // [PHASE 28A] SET SCHEDULE TRUTH AUDIT STATE FOR DEBUG PANEL
+    // [PHASE 28B] SET SCHEDULE TRUTH AUDIT STATE FOR VISIBLE DEBUG PANEL
+    // Includes all source values for complete truth chain visibility
     // ==========================================================================
     setScheduleTruthAudit({
+      // Source values
+      onboardingScheduleMode: onboardingProfileForAudit?.scheduleMode || null,
+      onboardingTrainingDays: typeof onboardingProfileForAudit?.trainingDaysPerWeek === 'number' 
+        ? onboardingProfileForAudit.trainingDaysPerWeek : null,
+      athleteScheduleMode: athleteProfileForAudit?.scheduleMode || null,
+      athleteTrainingDays: typeof athleteProfileForAudit?.trainingDaysPerWeek === 'number'
+        ? athleteProfileForAudit.trainingDaysPerWeek : null,
+      // Canonical resolved
       canonicalScheduleMode: canonical.scheduleMode,
       canonicalTrainingDaysPerWeek: canonical.trainingDaysPerWeek,
+      // Builder prefill (what form opens with)
+      prefillScheduleMode: freshInputs.scheduleMode,
+      prefillTrainingDays: freshInputs.scheduleMode === 'static' 
+        ? (freshInputs.trainingDaysPerWeek as number) : null,
+      // History
       lastGeneratedScheduleMode: program?.scheduleMode || null,
       lastGeneratedTrainingDays: (program as { trainingDaysPerWeek?: number })?.trainingDaysPerWeek || null,
       lastReconciliationDecision: null,

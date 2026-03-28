@@ -2731,6 +2731,26 @@ async function generateAdaptiveProgramImpl(
         : 'STANDARD_PRECEDENCE',
   })
   
+  // ==========================================================================
+  // [PHASE 25U] 6-DAY SCHEDULE TRUTH AUDIT
+  // This log proves the exact schedule mode being used for generation
+  // After PHASE 25U fix, inputScheduleMode should propagate to all downstream consumers
+  // ==========================================================================
+  console.log('[phase25u-6day-truth-audit]', {
+    canonicalProfileScheduleMode: canonicalProfile.scheduleMode,
+    inputsScheduleMode: inputs.scheduleMode,
+    inputsTrainingDaysPerWeek: inputs.trainingDaysPerWeek,
+    computedInputScheduleMode: inputScheduleMode,
+    hasExplicitNumericDays,
+    willUseStaticMode: inputScheduleMode === 'static',
+    effectiveTrainingDays: hasExplicitNumericDays ? inputs.trainingDaysPerWeek : trainingDaysPerWeek,
+    verdict: hasExplicitNumericDays && canonicalProfile.scheduleMode === 'flexible'
+      ? 'PHASE25U_FIX_APPLIED_STATIC_' + inputs.trainingDaysPerWeek + '_DAYS_OVERRIDING_FLEXIBLE'
+      : inputScheduleMode === 'static' 
+        ? 'STATIC_MODE_PRESERVED' 
+        : 'FLEXIBLE_MODE_PRESERVED',
+  })
+  
   console.log('[schedule-mode] Detected mode:', inputScheduleMode)
   
   // ==========================================================================
@@ -3203,14 +3223,16 @@ async function generateAdaptiveProgramImpl(
   // ==========================================================================
   
   // Build expanded athlete context for weighted allocation
+  // [PHASE 25U] CRITICAL FIX: Use inputScheduleMode (which respects explicit numeric day selection)
+  // instead of canonicalProfile.scheduleMode (which may still be 'flexible' from saved profile)
   const expandedContext: ExpandedAthleteContext = {
     primaryGoal,
     secondaryGoal: secondaryGoal || canonicalProfile.secondaryGoal || null,
     selectedSkills: canonicalProfile.selectedSkills || inputs.selectedSkills || [],
     goalCategories: canonicalProfile.goalCategories || inputs.goalCategories || [],
     trainingPathType: (canonicalProfile.trainingPathType || 'hybrid') as 'hybrid' | 'skill_progression' | 'strength_endurance' | 'balanced',
-    scheduleMode: (canonicalProfile.scheduleMode || 'static') as 'static' | 'flexible',
-    trainingDaysPerWeek: canonicalProfile.trainingDaysPerWeek,
+    scheduleMode: inputScheduleMode as 'static' | 'flexible',  // [PHASE 25U] Use computed inputScheduleMode, not canonicalProfile
+    trainingDaysPerWeek: hasExplicitNumericDays ? inputs.trainingDaysPerWeek : canonicalProfile.trainingDaysPerWeek,  // [PHASE 25U] Use explicit selection if present
     sessionDurationMode: (canonicalProfile.sessionDurationMode || 'static') as 'static' | 'adaptive',
     sessionLengthMinutes: canonicalProfile.sessionLengthMinutes || sessionLength,
     selectedFlexibility: canonicalProfile.selectedFlexibility || inputs.selectedFlexibility || [],
@@ -3742,11 +3764,13 @@ async function generateAdaptiveProgramImpl(
   // [builder-input-truth-chain-audit] TASK 5: Final builder input verification
   // Creates a single resolved truth object for generation
   // ==========================================================================
+  // [PHASE 25U] CRITICAL FIX: Use inputScheduleMode (which respects explicit numeric day selection)
+  // instead of canonicalProfile.scheduleMode (which may still be 'flexible' from saved profile)
   const latestProfileForGeneration = {
     selectedSkills: expandedContext.selectedSkills,
     equipment: equipment,
     trainingDaysPerWeek: effectiveTrainingDays,
-    scheduleMode: canonicalProfile.scheduleMode || 'static',
+    scheduleMode: inputScheduleMode,  // [PHASE 25U] Use computed inputScheduleMode, not canonicalProfile
     sessionDurationMode: expandedContext.sessionDurationMode,
     sessionLengthMinutes: sessionLength,
     trainingStyle: trainingPath,

@@ -2113,12 +2113,31 @@ export default function ProgramPage() {
   // This handler now accepts optional inputOverrides for Modify flow convergence
   // Both onboarding and modify flows now use this same handler
   // ==========================================================================
-  const handleGenerate = useCallback(async (inputOverrides?: Partial<AdaptiveBuilderInputs>) => {
-    // [PHASE 24N] Determine effective inputs - use overrides if provided (modify flow), else page inputs
-    const effectiveInputs = inputOverrides 
-      ? { ...inputs, ...inputOverrides } as AdaptiveBuilderInputs
-      : inputs
+  const handleGenerate = useCallback(async (inputOverrides?: Partial<AdaptiveBuilderInputs> | AdaptiveProgramInputs) => {
+    // ==========================================================================
+    // [PHASE 24T] CRITICAL FIX: Use inputOverrides directly when it's a full object
+    // Previously this merged {...inputs, ...inputOverrides} which caused stale `inputs`
+    // from the closure to override user's selections from builderSessionInputs.
+    // Now we detect if inputOverrides is a complete inputs object and use it directly.
+    // ==========================================================================
+    const isFullInputsObject = inputOverrides && 'primaryGoal' in inputOverrides && 'scheduleMode' in inputOverrides
+    const effectiveInputs = isFullInputsObject
+      ? inputOverrides as AdaptiveBuilderInputs  // [PHASE 24T] Use directly, don't merge with stale inputs
+      : inputOverrides 
+        ? { ...inputs, ...inputOverrides } as AdaptiveBuilderInputs  // Partial override case
+        : inputs  // No overrides, use page inputs
     const isModifyFlow = !!inputOverrides
+    
+    console.log('[phase24t-inputs-merge-fix-audit]', {
+      hasInputOverrides: !!inputOverrides,
+      isFullInputsObject,
+      inputOverridesScheduleMode: inputOverrides && 'scheduleMode' in inputOverrides ? (inputOverrides as AdaptiveProgramInputs).scheduleMode : 'N/A',
+      inputOverridesTrainingDays: inputOverrides && 'trainingDaysPerWeek' in inputOverrides ? (inputOverrides as AdaptiveProgramInputs).trainingDaysPerWeek : 'N/A',
+      pageInputsScheduleMode: inputs?.scheduleMode,
+      effectiveInputsScheduleMode: effectiveInputs?.scheduleMode,
+      effectiveInputsTrainingDays: effectiveInputs?.trainingDaysPerWeek,
+      verdict: isFullInputsObject ? 'FULL_OBJECT_USED_DIRECTLY_NO_STALE_MERGE' : 'PARTIAL_OR_NO_OVERRIDE',
+    })
     
     // ISSUE A FIX: Validate prerequisites before starting generation
     if (!effectiveInputs) {

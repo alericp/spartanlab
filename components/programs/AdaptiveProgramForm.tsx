@@ -158,17 +158,26 @@ export function AdaptiveProgramForm({
                 } else {
                   // User chose a specific day count - this triggers static mode
                   const numDays = Number(v) as TrainingDays
-                  console.log('[phase24r-schedule-mode-switch]', {
-                    from: inputs.scheduleMode,
-                    to: 'static',
-                    selectedDays: numDays,
-                    verdict: 'USER_CHOSE_FIXED_DAYS',
-                  })
-                  onInputChange({
+                  const newInputs = {
                     ...inputs,
                     trainingDaysPerWeek: numDays,
-                    scheduleMode: 'static',
+                    scheduleMode: 'static' as const,
+                  }
+                  console.log('[phase24t-schedule-selector-state-audit]', {
+                    action: 'USER_SELECTED_FIXED_DAYS',
+                    previousScheduleMode: inputs.scheduleMode,
+                    previousTrainingDays: inputs.trainingDaysPerWeek,
+                    newScheduleMode: newInputs.scheduleMode,
+                    newTrainingDays: newInputs.trainingDaysPerWeek,
+                    fullNewInputsSnapshot: {
+                      scheduleMode: newInputs.scheduleMode,
+                      trainingDaysPerWeek: newInputs.trainingDaysPerWeek,
+                      sessionDurationMode: newInputs.sessionDurationMode,
+                      primaryGoal: newInputs.primaryGoal,
+                    },
+                    verdict: 'STATIC_' + numDays + '_DAYS_SENT_TO_ONINPUTCHANGE',
                   })
+                  onInputChange(newInputs)
                 }
               }}
             >

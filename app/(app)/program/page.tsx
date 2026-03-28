@@ -8081,7 +8081,151 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
   // Legacy delete handler for backwards compatibility
   const handleDelete = handleRestart
 
-  const handleNewProgram = useCallback((event?: React.MouseEvent<HTMLButtonElement>) => {
+  // ==========================================================================
+  // [PHASE 25] CANONICAL MODIFY LAUNCHER
+  // This is the NEW LIVE ENTRY for the Modify Program button.
+  // It bypasses the legacy modal/builder flow and directly opens the builder
+  // with canonical truth prefill, using the same submit path as Restart/Onboarding.
+  // 
+  // NAMING CONVENTION:
+  // - canonicalModifyLauncher: This handler
+  // - legacyModifyEntry: The old handleNewProgram -> modal -> builder chain
+  // - phase25_canonical_modify_replacement: Phase tag for this work
+  // ==========================================================================
+  const handleOpenCanonicalModifyLauncher = useCallback(async () => {
+    console.log('[phase25-canonical-modify-replacement]', {
+      action: 'CANONICAL_MODIFY_LAUNCHER_ENTERED',
+      programExists: !!program,
+      programId: program?.id ?? null,
+      timestamp: new Date().toISOString(),
+      verdict: 'MODIFY_BUTTON_ROUTED_TO_CANONICAL_MODIFY_LAUNCHER',
+    })
+    
+    // ==========================================================================
+    // [PHASE 25] TASK 1: Get canonical truth for prefill
+    // Uses the same canonical entry builder as Restart/Onboarding
+    // ==========================================================================
+    const canonicalProfileNow = getCanonicalProfile()
+    
+    console.log('[phase25-canonical-modify-replacement]', {
+      action: 'CANONICAL_TRUTH_FETCHED',
+      canonicalTruth: {
+        primaryGoal: canonicalProfileNow.primaryGoal,
+        secondaryGoal: canonicalProfileNow.secondaryGoal,
+        scheduleMode: canonicalProfileNow.scheduleMode,
+        trainingDaysPerWeek: canonicalProfileNow.trainingDaysPerWeek,
+        sessionDurationMode: canonicalProfileNow.sessionDurationMode,
+        sessionLengthMinutes: canonicalProfileNow.sessionLengthMinutes,
+        selectedSkills: canonicalProfileNow.selectedSkills?.slice(0, 5),
+        experienceLevel: canonicalProfileNow.experienceLevel,
+      },
+      verdict: 'CANONICAL_MODIFY_PREFILL_USED',
+    })
+    
+    // ==========================================================================
+    // [PHASE 25] TASK 2: Build fresh inputs using canonical entry builder
+    // This is the SAME path used by Restart/Onboarding
+    // ==========================================================================
+    const entryResult = buildCanonicalGenerationEntry(canonicalProfileNow, {
+      scheduleMode: canonicalProfileNow.scheduleMode ?? undefined,
+      trainingDaysPerWeek: canonicalProfileNow.trainingDaysPerWeek ?? undefined,
+      sessionDurationMode: canonicalProfileNow.sessionDurationMode ?? undefined,
+      sessionLengthMinutes: canonicalProfileNow.sessionLengthMinutes ?? undefined,
+    })
+    
+    const freshInputs = entryToAdaptiveInputs(entryResult.entry)
+    
+    console.log('[phase25-canonical-modify-replacement]', {
+      action: 'CANONICAL_INPUTS_BUILT',
+      inputsBuilt: {
+        primaryGoal: freshInputs.primaryGoal,
+        secondaryGoal: freshInputs.secondaryGoal,
+        scheduleMode: freshInputs.scheduleMode,
+        trainingDaysPerWeek: freshInputs.trainingDaysPerWeek,
+        sessionDurationMode: freshInputs.sessionDurationMode,
+        sessionLength: freshInputs.sessionLength,
+        selectedSkillsCount: freshInputs.selectedSkills?.length ?? 0,
+      },
+      verdict: 'CANONICAL_INPUTS_READY_FOR_BUILDER',
+    })
+    
+    // ==========================================================================
+    // [PHASE 25] TASK 3: Create new builder session with canonical prefill
+    // ==========================================================================
+    const newSessionKey = `canonical_modify_${Date.now()}`
+    
+    setBuilderSessionInputs(freshInputs)
+    setBuilderSessionKey(newSessionKey)
+    setBuilderSessionSource('modify_visible_program') // Reuse existing source type
+    
+    // Also sync to ambient inputs for consistency
+    setInputs(freshInputs)
+    
+    // Record program end if there is an active program
+    if (program) {
+      programModules.recordProgramEnd?.('new_program')
+    }
+    
+    // ==========================================================================
+    // [PHASE 25] TASK 4: Set builder origin to 'default' NOT 'modify_start_new'
+    // This ensures the submit path uses the standard handleGenerate flow
+    // instead of any legacy modify-specific branching
+    // ==========================================================================
+    console.log('[phase25-canonical-modify-replacement]', {
+      action: 'BUILDER_ORIGIN_SET',
+      previousOrigin: builderOrigin,
+      newOrigin: 'default',  // NOT 'modify_start_new' - this is the key change
+      verdict: 'LEGACY_MODIFY_ENTRY_BYPASSED',
+    })
+    
+    setBuilderOrigin('default')  // [PHASE 25] Use 'default' to bypass legacy isModifyFlow branching
+    
+    // ==========================================================================
+    // [PHASE 25] TASK 5: Transition to builder directly (skip modal)
+    // ==========================================================================
+    setModifyFlowState('builder')
+    setShowAdjustmentModal(false)
+    setShowBuilder(true)
+    
+    console.log('[phase25-canonical-modify-replacement]', {
+      action: 'BUILDER_OPENED',
+      modifyFlowState: 'builder',
+      showBuilder: true,
+      builderOrigin: 'default',
+      builderSessionKey: newSessionKey,
+      builderSessionInputsExists: true,
+      verdict: 'CANONICAL_MODIFY_LAUNCHER_COMPLETE',
+    })
+    
+    // ==========================================================================
+    // [PHASE 25] TASK 6: Final verdict for submit path confirmation
+    // ==========================================================================
+    console.log('[phase25-canonical-modify-replacement]', {
+      action: 'SUBMIT_PATH_VERDICT',
+      submitWillUse: 'STANDARD_HANDLEGENERATE_NOT_LEGACY_MODIFY',
+      isModifyFlowWillBe: false,  // Because builderOrigin is 'default'
+      downstreamPath: 'SAME_AS_RESTART_ONBOARDING',
+      verdict: 'CANONICAL_MODIFY_SUBMIT_PATH_USED',
+    })
+    
+  }, [program, programModules, builderOrigin, getCanonicalProfile, buildCanonicalGenerationEntry, entryToAdaptiveInputs])
+
+  // ==========================================================================
+  // [PHASE 25] LEGACY MODIFY ENTRY - DEPRECATED
+  // This handler is kept for reference but should NOT be called from live UI.
+  // The visible "Modify Program" button now uses handleOpenCanonicalModifyLauncher.
+  // ==========================================================================
+  const handleNewProgram_legacyModifyEntry = useCallback((event?: React.MouseEvent<HTMLButtonElement>) => {
+    // ==========================================================================
+    // [PHASE 25] DEPRECATED - This handler should NOT be called from live UI
+    // The visible "Modify Program" button now uses handleOpenCanonicalModifyLauncher
+    // via the new handleNewProgram wrapper.
+    // ==========================================================================
+    console.warn('[phase25-canonical-modify-replacement] LEGACY_MODIFY_ENTRY_INVOKED - This should not happen in normal flow', {
+      timestamp: new Date().toISOString(),
+      verdict: 'LEGACY_MODIFY_ENTRY_WAS_CALLED_UNEXPECTEDLY',
+    })
+    
     // ==========================================================================
     // [PHASE 24B] TASK 1 - TRACE EXACT VISIBLE MODIFY BUTTON CHAIN
     // Instrument every step end-to-end to find where visibility breaks
@@ -8259,6 +8403,30 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
     
     setShowBuilder(true)
   }, [program, showBuilder, showAdjustmentModal, builderOrigin, builderSessionInputs, builderSessionKey, inputs, modifyFlowState])
+
+  // ==========================================================================
+  // [PHASE 25] NEW LIVE MODIFY ENTRY - Routes to Canonical Modify Launcher
+  // This is the handler called by the visible "Modify Program" button.
+  // It replaces the legacy modal flow with a direct canonical builder entry.
+  // ==========================================================================
+  const handleNewProgram = useCallback((event?: React.MouseEvent<HTMLButtonElement>) => {
+    if (event) {
+      event.preventDefault()
+    }
+    
+    console.log('[phase25-canonical-modify-replacement]', {
+      action: 'MODIFY_BUTTON_CLICKED',
+      programExists: !!program,
+      programId: program?.id ?? null,
+      routingTo: 'handleOpenCanonicalModifyLauncher',
+      legacyFlowBypassed: 'handleNewProgram_legacyModifyEntry',
+      verdict: 'LEGACY_MODIFY_ENTRY_NOT_USED',
+    })
+    
+    // [PHASE 25] Route directly to canonical launcher - no modal, no legacy branching
+    handleOpenCanonicalModifyLauncher()
+    
+  }, [program, handleOpenCanonicalModifyLauncher])
 
   const handleConfirmNewProgram = useCallback(async () => {
     // ==========================================================================
@@ -9153,19 +9321,38 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
               </Card>
             )}
             
-            {/* [PHASE 24N] UNIFIED BUILDER SUBMIT - Both flows now use handleGenerate */}
+            {/* [PHASE 24N/25] UNIFIED BUILDER SUBMIT - All flows now use handleGenerate */}
             {(() => {
-              // [PHASE 24N] Determine inputs based on builder origin
-              const isModifyFlow = builderOrigin === 'modify_start_new'
-              const effectiveBuilderInputs = (isModifyFlow && builderSessionInputs)
+              // ==========================================================================
+              // [PHASE 25] UPDATED: Check for builderSessionInputs regardless of origin
+              // The canonical modify launcher sets builderOrigin='default' but still uses
+              // builderSessionInputs for the prefilled values the user may have edited.
+              // ==========================================================================
+              const isLegacyModifyFlow = builderOrigin === 'modify_start_new'
+              const hasBuilderSessionInputs = !!builderSessionInputs
+              
+              // [PHASE 25] Use session inputs if they exist (from either canonical or legacy modify)
+              const effectiveBuilderInputs = hasBuilderSessionInputs
                 ? builderSessionInputs
                 : inputs
               
-              // [PHASE 24N] Create unified submit handler that passes correct inputs
-              // This eliminates the separate handler branch - both paths now use handleGenerate
+              // [PHASE 25] Create unified submit handler that passes correct inputs
+              // Both canonical modify and legacy modify paths converge here
               const unifiedSubmitHandler = () => {
-                if (isModifyFlow && builderSessionInputs) {
-                  // Modify flow: pass session inputs as overrides to unified handleGenerate
+                console.log('[phase25-canonical-modify-replacement]', {
+                  action: 'UNIFIED_SUBMIT_FIRED',
+                  isLegacyModifyFlow,
+                  hasBuilderSessionInputs,
+                  builderOrigin,
+                  effectiveInputsScheduleMode: effectiveBuilderInputs?.scheduleMode,
+                  effectiveInputsTrainingDays: effectiveBuilderInputs?.trainingDaysPerWeek,
+                  verdict: hasBuilderSessionInputs 
+                    ? 'USING_BUILDER_SESSION_INPUTS' 
+                    : 'USING_PAGE_INPUTS',
+                })
+                
+                if (hasBuilderSessionInputs) {
+                  // [PHASE 25] Either canonical or legacy modify: pass session inputs
                   handleGenerate(builderSessionInputs)
                 } else {
                   // Onboarding/default flow: use page inputs (no overrides)
@@ -9173,11 +9360,11 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
                 }
               }
               
-              console.log('[phase24n-unified-builder-render-audit]', {
+              console.log('[phase25-unified-builder-render-audit]', {
                 builderOrigin,
-                isModifyFlow,
+                isLegacyModifyFlow,
+                hasBuilderSessionInputs,
                 builderSessionKey,
-                builderSessionInputsExists: !!builderSessionInputs,
                 effectiveInputsSummary: effectiveBuilderInputs ? {
                   primaryGoal: effectiveBuilderInputs.primaryGoal,
                   scheduleMode: effectiveBuilderInputs.scheduleMode,
@@ -9190,14 +9377,17 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
                   equipmentCount: effectiveBuilderInputs.equipment?.length ?? 0,
                 } : null,
                 submitHandler: 'handleGenerate_unified',
-                verdict: 'UNIFIED_SUBMIT_PATH_ACTIVE',
+                submitPath: hasBuilderSessionInputs 
+                  ? 'CANONICAL_MODIFY_OR_LEGACY_MODIFY_PATH' 
+                  : 'ONBOARDING_PATH',
+                verdict: 'PHASE25_UNIFIED_SUBMIT_PATH_ACTIVE',
               })
               
               return (
                 <AdaptiveProgramForm
-                  key={isModifyFlow ? builderSessionKey : 'default-builder'}
+                  key={hasBuilderSessionInputs ? builderSessionKey : 'default-builder'}
                   inputs={effectiveBuilderInputs}
-                  onInputChange={isModifyFlow ? setBuilderSessionInputs : setInputs}
+                  onInputChange={hasBuilderSessionInputs ? setBuilderSessionInputs : setInputs}
                   onGenerate={unifiedSubmitHandler}
                   isGenerating={isGenerating}
                   constraintLabel={constraintLabel}

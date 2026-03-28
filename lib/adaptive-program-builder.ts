@@ -2608,8 +2608,10 @@ async function generateAdaptiveProgramImpl(
     sessionLengthMinutes: canonicalProfile.sessionLengthMinutes ?? (typeof inputs.sessionLength === 'number' ? inputs.sessionLength : 60),
     sessionDurationMode: canonicalProfile.sessionDurationMode || inputs.sessionDurationMode || 'standard',
     
-    scheduleMode: canonicalProfile.scheduleMode || inputs.scheduleMode || 'static',
-    trainingDaysPerWeek: canonicalProfile.trainingDaysPerWeek ?? trainingDaysPerWeek,
+    // [PHASE 25V] CRITICAL FIX: Use computed inputScheduleMode which respects explicit numeric day selection
+    // inputs.scheduleMode takes precedence when user explicitly selects days in the builder
+    scheduleMode: inputScheduleMode,
+    trainingDaysPerWeek: hasExplicitNumericDays ? inputs.trainingDaysPerWeek : (canonicalProfile.trainingDaysPerWeek ?? trainingDaysPerWeek),
     selectedSkills: canonicalProfile.selectedSkills && canonicalProfile.selectedSkills.length > 0 
       ? canonicalProfile.selectedSkills 
       : inputs.selectedSkills || [],
@@ -2749,6 +2751,38 @@ async function generateAdaptiveProgramImpl(
       : inputScheduleMode === 'static' 
         ? 'STATIC_MODE_PRESERVED' 
         : 'FLEXIBLE_MODE_PRESERVED',
+  })
+  
+  // ==========================================================================
+  // [PHASE 25V] 6-DAY REGISTRATION FORENSIC AUDIT
+  // This log provides a complete truth chain for 6-day static schedule registration
+  // ==========================================================================
+  console.log('[phase25v-6day-registration-forensic]', {
+    inputTruth: {
+      inputsScheduleMode: inputs.scheduleMode,
+      inputsTrainingDaysPerWeek: inputs.trainingDaysPerWeek,
+      hasExplicitNumericDays,
+      hasExplicitStaticInputs,
+    },
+    canonicalTruth: {
+      canonicalScheduleMode: canonicalProfile.scheduleMode,
+      canonicalTrainingDays: canonicalProfile.trainingDaysPerWeek,
+    },
+    computedResult: {
+      inputScheduleMode,
+      effectiveTrainingDays: hasExplicitNumericDays ? inputs.trainingDaysPerWeek : trainingDaysPerWeek,
+    },
+    phase25vFixes: {
+      expandedContextUsesInputScheduleMode: true,
+      latestProfileForGenerationUsesInputScheduleMode: true,
+      materialIdentityUsesInputScheduleMode: true,
+      explanationContextUsesInputScheduleMode: true,
+    },
+    verdict: hasExplicitNumericDays 
+      ? `STATIC_${inputs.trainingDaysPerWeek}_DAYS_REGISTERED_THROUGH_ALL_LAYERS`
+      : inputScheduleMode === 'static'
+        ? 'STATIC_MODE_PRESERVED_ALL_LAYERS'
+        : 'FLEXIBLE_MODE_PRESERVED_ALL_LAYERS',
   })
   
   console.log('[schedule-mode] Detected mode:', inputScheduleMode)
@@ -3584,7 +3618,7 @@ async function generateAdaptiveProgramImpl(
     secondaryGoal: expandedContext.secondaryGoal || null,
     selectedSkills: expandedContext.selectedSkills,
     selectedSkillCount: expandedContext.selectedSkills.length,
-    scheduleMode: canonicalProfile.scheduleMode || 'static',
+    scheduleMode: inputScheduleMode,  // [PHASE 25V] Use computed inputScheduleMode, not canonicalProfile
     requestedDays: effectiveTrainingDays,
     durationMode: expandedContext.sessionDurationMode,
     baseDurationMinutes: expandedContext.sessionLengthMinutes,

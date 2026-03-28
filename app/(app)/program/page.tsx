@@ -3097,6 +3097,25 @@ export default function ProgramPage() {
               : 'PHASE26C_FLEXIBLE_PATH_NO_OVERRIDE_NEEDED',
         })
         
+        // ==========================================================================
+        // [PHASE 26D] POST-GENERATION SAVE/HYDRATION FORENSIC - SETPROGRAM AUDIT
+        // This captures the EXACT object being set into React state
+        // Compare this with what AdaptiveProgramDisplay receives
+        // ==========================================================================
+        console.log('[phase26d-post-generation-save-hydration-forensic]', {
+          stage: 'SETPROGRAM_CALLED',
+          programId: newProgram.id,
+          programScheduleMode: finalProgramScheduleMode,
+          programTrainingDaysPerWeek: finalProgramTrainingDays,
+          programSessionCount: finalProgramSessionCount,
+          programCreatedAt: newProgram.createdAt,
+          inputsScheduleMode: effectiveInputs?.scheduleMode,
+          inputsTrainingDaysPerWeek: effectiveInputs?.trainingDaysPerWeek,
+          verdict: finalProgramScheduleMode === 'static'
+            ? `SETPROGRAM_RECEIVES_STATIC_${finalProgramTrainingDays}_DAYS`
+            : 'SETPROGRAM_RECEIVES_FLEXIBLE',
+        })
+        
         setProgram(newProgram)
         setShowBuilder(false)
         

@@ -177,6 +177,18 @@ export function AdaptiveProgramForm({
                     },
                     verdict: 'STATIC_' + numDays + '_DAYS_SENT_TO_ONINPUTCHANGE',
                   })
+                  // ==========================================================================
+                  // [PHASE 25X] LIVE SUBMIT TRUTH VS SELECTOR STATE
+                  // This log captures the exact moment user selects a fixed day count
+                  // ==========================================================================
+                  console.log('[phase25x-live-submit-truth-vs-selector-state]', {
+                    stage: 'SELECTOR_ONCHANGE',
+                    selectedValue: v,
+                    numDays,
+                    newInputsScheduleMode: newInputs.scheduleMode,
+                    newInputsTrainingDaysPerWeek: newInputs.trainingDaysPerWeek,
+                    verdict: 'USER_SELECTED_STATIC_' + numDays + '_CALLING_ONINPUTCHANGE',
+                  })
                   onInputChange(newInputs)
                 }
               }}

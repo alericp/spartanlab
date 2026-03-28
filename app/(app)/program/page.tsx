@@ -2142,6 +2142,22 @@ export default function ProgramPage() {
       verdict: isFullInputsObject ? 'FULL_OBJECT_USED_DIRECTLY_NO_STALE_MERGE' : 'PARTIAL_OR_NO_OVERRIDE',
     })
     
+    // ==========================================================================
+    // [PHASE 25X] LIVE SUBMIT TRUTH VS SELECTOR STATE - handleGenerate entry
+    // This is the CRITICAL audit point - what does handleGenerate actually receive?
+    // ==========================================================================
+    console.log('[phase25x-live-submit-truth-vs-selector-state]', {
+      stage: 'HANDLEGENERATE_ENTRY',
+      isFullInputsObject,
+      effectiveInputsScheduleMode: effectiveInputs?.scheduleMode,
+      effectiveInputsTrainingDaysPerWeek: effectiveInputs?.trainingDaysPerWeek,
+      effectiveInputsSessionDurationMode: effectiveInputs?.sessionDurationMode,
+      effectiveInputsPrimaryGoal: effectiveInputs?.primaryGoal,
+      verdict: effectiveInputs?.scheduleMode === 'static' 
+        ? `HANDLEGENERATE_RECEIVED_STATIC_${effectiveInputs?.trainingDaysPerWeek}_DAYS`
+        : 'HANDLEGENERATE_RECEIVED_FLEXIBLE',
+    })
+    
     // ISSUE A FIX: Validate prerequisites before starting generation
     if (!effectiveInputs) {
       console.error('[ProgramPage] handleGenerate: Missing inputs - cannot generate')
@@ -9344,6 +9360,27 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
               // [PHASE 25] Create unified submit handler that passes correct inputs
               // Both canonical modify and legacy modify paths converge here
               const unifiedSubmitHandler = () => {
+                // ==========================================================================
+                // [PHASE 25X] LIVE SUBMIT TRUTH VS SELECTOR STATE - CRITICAL AUDIT
+                // This captures the EXACT state at the moment Build Adaptive Program is clicked
+                // ==========================================================================
+                console.log('[phase25x-live-submit-truth-vs-selector-state]', {
+                  stage: 'BUILD_ADAPTIVE_PROGRAM_CLICKED',
+                  hasBuilderSessionInputs,
+                  builderSessionInputsScheduleMode: builderSessionInputs?.scheduleMode,
+                  builderSessionInputsTrainingDays: builderSessionInputs?.trainingDaysPerWeek,
+                  pageInputsScheduleMode: inputs?.scheduleMode,
+                  pageInputsTrainingDays: inputs?.trainingDaysPerWeek,
+                  effectiveInputsScheduleMode: effectiveBuilderInputs?.scheduleMode,
+                  effectiveInputsTrainingDays: effectiveBuilderInputs?.trainingDaysPerWeek,
+                  willPassToHandleGenerate: hasBuilderSessionInputs ? 'builderSessionInputs' : 'no_overrides',
+                  verdict: hasBuilderSessionInputs 
+                    ? (builderSessionInputs?.scheduleMode === 'static' 
+                        ? `SUBMIT_CONFIRMED_STATIC_${builderSessionInputs?.trainingDaysPerWeek}_DAYS`
+                        : 'SUBMIT_USING_FLEXIBLE_FROM_SESSION')
+                    : 'SUBMIT_USING_PAGE_INPUTS',
+                })
+                
                 console.log('[phase25-canonical-modify-replacement]', {
                   action: 'UNIFIED_SUBMIT_FIRED',
                   isLegacyModifyFlow,
@@ -9364,6 +9401,25 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
                   handleGenerate()
                 }
               }
+              
+              // ==========================================================================
+              // [PHASE 25X] LIVE SUBMIT TRUTH VS SELECTOR STATE - BUILDER INITIAL STATE
+              // This captures the state when the builder FIRST RENDERS (before user edits)
+              // ==========================================================================
+              console.log('[phase25x-live-submit-truth-vs-selector-state]', {
+                stage: 'BUILDER_INITIAL_RENDER',
+                hasBuilderSessionInputs,
+                builderSessionInputsScheduleMode: builderSessionInputs?.scheduleMode,
+                builderSessionInputsTrainingDays: builderSessionInputs?.trainingDaysPerWeek,
+                effectiveInputsScheduleMode: effectiveBuilderInputs?.scheduleMode,
+                effectiveInputsTrainingDays: effectiveBuilderInputs?.trainingDaysPerWeek,
+                selectorWillShowValue: effectiveBuilderInputs?.scheduleMode === 'flexible' || effectiveBuilderInputs?.trainingDaysPerWeek === 'flexible' 
+                  ? 'flexible' 
+                  : String(effectiveBuilderInputs?.trainingDaysPerWeek),
+                verdict: effectiveBuilderInputs?.scheduleMode === 'flexible' 
+                  ? 'PREFILL_IS_FLEXIBLE_USER_MUST_CHANGE_TO_STATIC'
+                  : `PREFILL_IS_STATIC_${effectiveBuilderInputs?.trainingDaysPerWeek}_DAYS`,
+              })
               
               console.log('[phase25-unified-builder-render-audit]', {
                 builderOrigin,

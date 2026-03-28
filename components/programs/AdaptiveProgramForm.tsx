@@ -28,17 +28,18 @@ import { DURATION_PREFERENCE_LABELS, type SessionDurationMinutes } from '@/lib/d
 // This allows us to verify which version of the form is rendering
 // ==========================================================================
 const PHASE27C_FORM_BUILD_IDENTITY = {
-  formBuildIdentityName: 'PHASE28GHI_ADAPTIVE_PROGRAM_FORM',
-  formBuildIdentityVersion: '2024-PHASE28GHI-v1',
+  formBuildIdentityName: 'PHASE28KL_ADAPTIVE_PROGRAM_FORM',
+  formBuildIdentityVersion: '2024-PHASE28KL-v1',
   hasExplicitChoiceTracking: true,
   hasAmberWarningStyle: true,
-  scheduleSelectorVariant: 'PHASE28GHI_WITH_VISIBLE_TRUTH_BAR',
+  scheduleSelectorVariant: 'PHASE28KL_WITH_VISIBLE_TRUTH_BAR',
   hasScheduleTruthDebugPanel: true,
   hasVisibleTruthBar: true,
   hasLiveModifyAuditSeeding: true,
   scheduleResolutionFix: 'ATHLETE_STATIC_BEATS_ONBOARDING_FLEXIBLE',
   hasSourceNullWarning: true,
-  forensicPhase: 'PHASE28GHI',
+  hasRawStorageVerification: true,
+  forensicPhase: 'PHASE28KL',
 } as const
 
 // [PHASE 27B] Explicit schedule choice tracking for current builder session
@@ -619,6 +620,29 @@ export function AdaptiveProgramForm({
               })()}
             </div>
             
+            {/* [PHASE 28L] Form vs Canonical match verdict */}
+            <div className="mt-2 pt-2 border-t border-[#2A2A2A]">
+              <div className="text-[10px] text-[#666] mb-1">Form Match Verdict:</div>
+              {(() => {
+                const formIsStatic6 = inputs.scheduleMode === 'static' && inputs.trainingDaysPerWeek === 6
+                const canonIsStatic6 = scheduleTruthAudit.canonicalScheduleMode === 'static' && scheduleTruthAudit.canonicalTrainingDaysPerWeek === 6
+                const formMatchesCanon = inputs.scheduleMode === scheduleTruthAudit.canonicalScheduleMode
+                const formIsFlexible = inputs.scheduleMode === 'flexible'
+                const canonIsFlexible = scheduleTruthAudit.canonicalScheduleMode === 'flexible'
+                
+                if (formIsStatic6 && canonIsStatic6) {
+                  return <div className="text-xs font-bold text-blue-400">FORM_MATCHES_CANONICAL_STATIC_6</div>
+                }
+                if (formMatchesCanon && formIsFlexible && canonIsFlexible) {
+                  return <div className="text-xs font-bold text-emerald-400">FORM_IS_FLEXIBLE_BECAUSE_CANONICAL_IS_FLEXIBLE</div>
+                }
+                if (!formMatchesCanon) {
+                  return <div className="text-xs font-bold text-amber-400">FORM_DOES_NOT_MATCH_CANONICAL</div>
+                }
+                return <div className="text-xs font-bold text-[#888]">FORM_MATCHES_CANONICAL_{inputs.scheduleMode?.toUpperCase()}</div>
+              })()}
+            </div>
+            
             {/* [PHASE 28J] Source null warning - both sources have null scheduleMode */}
             {scheduleTruthAudit.onboardingScheduleMode === null && 
              scheduleTruthAudit.athleteScheduleMode === null && (
@@ -637,7 +661,7 @@ export function AdaptiveProgramForm({
             {/* Build variant chip */}
             <div className="mt-2 pt-2 border-t border-[#2A2A2A]">
               <div className="text-[9px] text-[#4A4A4A] font-mono text-center">
-                Builder: PHASE28GHI_TRUTH_CHAIN_FORENSIC
+                Builder: PHASE28KL_ROOT_CAUSE_FIX
               </div>
             </div>
           </div>

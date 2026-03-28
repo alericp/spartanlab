@@ -541,10 +541,10 @@ export function reconcileCanonicalProfile(): CanonicalProgrammingProfile {
       })
       
       // ==========================================================================
-      // [PHASE 28H] CANONICAL SCHEDULE SOURCE WINNER LOG
+      // [PHASE 28L] CANONICAL SCHEDULE SOURCE WINNER LOG
       // Proves exactly which source won and detects if static was dropped
       // ==========================================================================
-      console.log('[phase28h-canonical-schedule-source-winner]', {
+      console.log('[phase28l-canonical-schedule-source-winner]', {
         onboardingScheduleMode: onboardingProfile?.scheduleMode ?? null,
         onboardingTrainingDays: onboardingProfile?.trainingDaysPerWeek ?? null,
         athleteScheduleMode: athleteProfile?.scheduleMode ?? null,

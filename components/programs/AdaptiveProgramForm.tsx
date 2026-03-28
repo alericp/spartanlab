@@ -115,50 +115,19 @@ export function AdaptiveProgramForm({
             </Select>
           </div>
 
-          {/* Experience Level */}
-          <div className="space-y-2">
-            <label className="text-sm text-[#A5A5A5]">Experience Level</label>
-            <Select
-              value={inputs.experienceLevel}
-              onValueChange={(v) => updateInput('experienceLevel', v as ExperienceLevel)}
-            >
-              <SelectTrigger className="bg-[#1A1A1A] border-[#3A3A3A]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent className="bg-[#2A2A2A] border-[#3A3A3A]">
-                <SelectItem value="beginner">Beginner</SelectItem>
-                <SelectItem value="intermediate">Intermediate</SelectItem>
-                <SelectItem value="advanced">Advanced</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Training Days - Supports both flexible and static modes */}
-          {/* [PHASE 24R] CRITICAL FIX: Allow flexible users to switch to fixed days */}
+          {/* Training Days/Week - PHASE 26H: Re-added after accidental removal */}
           <div className="space-y-2">
             <label className="text-sm text-[#A5A5A5]">Training Days/Week</label>
-            {/* [PHASE 24R] Always show the numeric selector - flexible users can now switch to fixed */}
             <Select
               value={inputs.scheduleMode === 'flexible' || inputs.trainingDaysPerWeek === 'flexible' 
                 ? 'flexible' 
                 : String(inputs.trainingDaysPerWeek)}
               onValueChange={(v) => {
                 if (v === 'flexible') {
-                  // User chose to keep/switch to flexible mode
-                  console.log('[phase24r-schedule-mode-switch]', {
-                    from: inputs.scheduleMode,
-                    to: 'flexible',
-                    verdict: 'USER_CHOSE_FLEXIBLE',
-                  })
-                  // ==========================================================================
-                  // [PHASE 25Z] Track when user explicitly selects flexible
-                  // ==========================================================================
-                  console.log('[phase25z-6day-registration-final-truth-chain]', {
-                    stage: 'SELECTOR_ONCHANGE',
-                    selectedValue: v,
-                    newInputsScheduleMode: 'flexible',
-                    newInputsTrainingDaysPerWeek: 'flexible',
-                    verdict: 'USER_EXPLICITLY_CHOSE_FLEXIBLE',
+                  console.log('[phase26h-schedule-selector]', {
+                    action: 'USER_SELECTED_FLEXIBLE',
+                    previousScheduleMode: inputs.scheduleMode,
+                    previousTrainingDays: inputs.trainingDaysPerWeek,
                   })
                   onInputChange({
                     ...inputs,
@@ -166,51 +135,19 @@ export function AdaptiveProgramForm({
                     scheduleMode: 'flexible',
                   })
                 } else {
-                  // User chose a specific day count - this triggers static mode
                   const numDays = Number(v) as TrainingDays
-                  const newInputs = {
-                    ...inputs,
-                    trainingDaysPerWeek: numDays,
-                    scheduleMode: 'static' as const,
-                  }
-                  console.log('[phase24t-schedule-selector-state-audit]', {
+                  console.log('[phase26h-schedule-selector]', {
                     action: 'USER_SELECTED_FIXED_DAYS',
+                    selectedDays: numDays,
                     previousScheduleMode: inputs.scheduleMode,
                     previousTrainingDays: inputs.trainingDaysPerWeek,
-                    newScheduleMode: newInputs.scheduleMode,
-                    newTrainingDays: newInputs.trainingDaysPerWeek,
-                    fullNewInputsSnapshot: {
-                      scheduleMode: newInputs.scheduleMode,
-                      trainingDaysPerWeek: newInputs.trainingDaysPerWeek,
-                      sessionDurationMode: newInputs.sessionDurationMode,
-                      primaryGoal: newInputs.primaryGoal,
-                    },
-                    verdict: 'STATIC_' + numDays + '_DAYS_SENT_TO_ONINPUTCHANGE',
+                    verdict: `STATIC_${numDays}_DAYS_SELECTED`,
                   })
-                  // ==========================================================================
-                  // [PHASE 25X] LIVE SUBMIT TRUTH VS SELECTOR STATE
-                  // This log captures the exact moment user selects a fixed day count
-                  // ==========================================================================
-                  console.log('[phase25x-live-submit-truth-vs-selector-state]', {
-                    stage: 'SELECTOR_ONCHANGE',
-                    selectedValue: v,
-                    numDays,
-                    newInputsScheduleMode: newInputs.scheduleMode,
-                    newInputsTrainingDaysPerWeek: newInputs.trainingDaysPerWeek,
-                    verdict: 'USER_SELECTED_STATIC_' + numDays + '_CALLING_ONINPUTCHANGE',
+                  onInputChange({
+                    ...inputs,
+                    trainingDaysPerWeek: numDays,
+                    scheduleMode: 'static',
                   })
-                  // ==========================================================================
-                  // [PHASE 25Z] 6-DAY REGISTRATION FINAL TRUTH CHAIN
-                  // ==========================================================================
-                  console.log('[phase25z-6day-registration-final-truth-chain]', {
-                    stage: 'SELECTOR_ONCHANGE',
-                    selectedValue: v,
-                    numDays,
-                    newInputsScheduleMode: newInputs.scheduleMode,
-                    newInputsTrainingDaysPerWeek: newInputs.trainingDaysPerWeek,
-                    verdict: `USER_SELECTED_STATIC_${numDays}_DAYS`,
-                  })
-                  onInputChange(newInputs)
                 }
               }}
             >
@@ -232,15 +169,21 @@ export function AdaptiveProgramForm({
                 <SelectItem value="7">7 days/week</SelectItem>
               </SelectContent>
             </Select>
-            <p className="text-xs text-[#6A6A6A]">
-              {inputs.scheduleMode === 'flexible' || inputs.trainingDaysPerWeek === 'flexible'
-                ? 'Frequency adapts to your recovery - or choose fixed days above'
-                : 'Fixed schedule - select Flexible above to adapt weekly'}
-            </p>
+            {/* [PHASE 26H] Visual confirmation of selected schedule mode */}
+            <div className={`text-xs ${
+              inputs.scheduleMode === 'static' 
+                ? 'text-blue-400' 
+                : 'text-emerald-400'
+            }`}>
+              {inputs.scheduleMode === 'static' 
+                ? `Selected: Fixed ${inputs.trainingDaysPerWeek} days/week`
+                : 'Selected: Adaptive frequency (varies by week)'}
+            </div>
           </div>
+        </div>
 
-          {/* Session Length - ISSUE B FIX: Preserve duration mode + baseline separately */}
-          <div className="space-y-2">
+        {/* Session Length - ISSUE B FIX: Preserve duration mode + baseline separately */}
+        <div className="space-y-2">
             <label className="text-sm text-[#A5A5A5]">Target Session Duration</label>
             {inputs.sessionDurationMode === 'adaptive' ? (
               // ISSUE B FIX: Adaptive duration user - show adaptive state with baseline selector
@@ -288,12 +231,11 @@ export function AdaptiveProgramForm({
                 </SelectContent>
               </Select>
             )}
-            <p className="text-xs text-[#6A6A6A]">
-              {inputs.sessionDurationMode === 'adaptive' 
-                ? 'Adaptive mode - sessions expand/contract based on day intensity'
-                : 'Pre-filled from your profile. Actual sessions may vary based on day focus.'}
-            </p>
-          </div>
+          <p className="text-xs text-[#6A6A6A]">
+            {inputs.sessionDurationMode === 'adaptive' 
+              ? 'Adaptive mode - sessions expand/contract based on day intensity'
+              : 'Pre-filled from your profile. Actual sessions may vary based on day focus.'}
+          </p>
         </div>
 
         {/* Equipment Selection */}
@@ -332,6 +274,47 @@ export function AdaptiveProgramForm({
               No loadable equipment selected — weighted exercises will use bodyweight prescriptions. Add "Weights (for loading)" for automatic weight targets.
             </p>
           )}
+        </div>
+
+        {/* ==========================================================================
+           [PHASE 26H] SUBMIT-TIME TRUTH BADGE
+           Shows exactly what schedule mode will be submitted when clicking Build
+           This makes it unmistakably clear if static 6 or flexible is being submitted
+           ========================================================================== */}
+        <div className="bg-[#1A1A1A] border border-[#3A3A3A] rounded-lg p-3 space-y-2">
+          <div className="text-xs text-[#6A6A6A] uppercase tracking-wider">Program will be built with:</div>
+          <div className="flex flex-wrap gap-2">
+            <div className={`px-3 py-1.5 rounded-md text-sm font-medium ${
+              inputs.scheduleMode === 'static' 
+                ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' 
+                : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+            }`}>
+              {inputs.scheduleMode === 'static' 
+                ? `Fixed: ${inputs.trainingDaysPerWeek} days/week`
+                : 'Adaptive Frequency'}
+            </div>
+            <div className="px-3 py-1.5 rounded-md text-sm font-medium bg-[#2A2A2A] text-[#A5A5A5] border border-[#3A3A3A]">
+              {inputs.sessionDurationMode === 'adaptive'
+                ? `~${inputs.sessionLength}min adaptive`
+                : `${inputs.sessionLength}min sessions`}
+            </div>
+            <div className="px-3 py-1.5 rounded-md text-sm font-medium bg-[#2A2A2A] text-[#A5A5A5] border border-[#3A3A3A]">
+              {inputs.primaryGoal}
+            </div>
+          </div>
+          {/* [PHASE 26H] Debug log to verify what will be submitted */}
+          {(() => {
+            console.log('[phase26h-submit-time-truth-badge]', {
+              scheduleMode: inputs.scheduleMode,
+              trainingDaysPerWeek: inputs.trainingDaysPerWeek,
+              sessionDurationMode: inputs.sessionDurationMode,
+              primaryGoal: inputs.primaryGoal,
+              verdict: inputs.scheduleMode === 'static' 
+                ? `BADGE_SHOWS_STATIC_${inputs.trainingDaysPerWeek}_DAYS`
+                : 'BADGE_SHOWS_ADAPTIVE',
+            })
+            return null
+          })()}
         </div>
 
         {/* Generate Button */}

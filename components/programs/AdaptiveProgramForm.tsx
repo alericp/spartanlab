@@ -28,18 +28,19 @@ import { DURATION_PREFERENCE_LABELS, type SessionDurationMinutes } from '@/lib/d
 // This allows us to verify which version of the form is rendering
 // ==========================================================================
 const PHASE27C_FORM_BUILD_IDENTITY = {
-  formBuildIdentityName: 'PHASE28KL_ADAPTIVE_PROGRAM_FORM',
-  formBuildIdentityVersion: '2024-PHASE28KL-v1',
+  formBuildIdentityName: 'PHASE29A_ADAPTIVE_PROGRAM_FORM',
+  formBuildIdentityVersion: '2024-PHASE29A-v1',
   hasExplicitChoiceTracking: true,
   hasAmberWarningStyle: true,
-  scheduleSelectorVariant: 'PHASE28KL_WITH_VISIBLE_TRUTH_BAR',
+  scheduleSelectorVariant: 'PHASE29A_BASELINE_VS_ADAPTIVE_SEPARATED',
   hasScheduleTruthDebugPanel: true,
   hasVisibleTruthBar: true,
   hasLiveModifyAuditSeeding: true,
   scheduleResolutionFix: 'ATHLETE_STATIC_BEATS_ONBOARDING_FLEXIBLE',
   hasSourceNullWarning: true,
   hasRawStorageVerification: true,
-  forensicPhase: 'PHASE28KL',
+  hasBaselineAdaptiveSeparation: true,
+  forensicPhase: 'PHASE29A',
 } as const
 
 // [PHASE 27B] Explicit schedule choice tracking for current builder session
@@ -50,12 +51,15 @@ interface ExplicitScheduleChoice {
 }
 
 // [PHASE 28B] Expanded debug audit info for VISIBLE schedule truth panel
+// [PHASE 29A] Now includes adaptiveWorkloadEnabled to show separation
 interface ScheduleTruthAuditInfo {
   // Source values
   onboardingScheduleMode?: 'static' | 'flexible' | string | null
   onboardingTrainingDays?: number | null
   athleteScheduleMode?: 'static' | 'flexible' | string | null
   athleteTrainingDays?: number | null
+  // [PHASE 29A] Adaptive workload enabled (separate from schedule)
+  adaptiveWorkloadEnabled?: boolean | null
   // Canonical resolved
   canonicalScheduleMode: 'static' | 'flexible' | string | null
   canonicalTrainingDaysPerWeek: number | null
@@ -413,18 +417,25 @@ export function AdaptiveProgramForm({
             Submitting Program With:
           </div>
           
-          {/* Schedule Mode - Primary Focus */}
-          <div className={`px-4 py-3 rounded-md text-base font-bold flex items-center gap-3 ${
+          {/* [PHASE 29A] Schedule Mode - Shows baseline + adaptive workload status */}
+          <div className={`px-4 py-3 rounded-md flex flex-col gap-1 ${
             inputs.scheduleMode === 'static' 
               ? 'bg-blue-500/30 text-blue-300 border border-blue-400/50' 
               : 'bg-emerald-500/30 text-emerald-300 border border-emerald-400/50'
           }`}>
-            <div className={`w-3 h-3 rounded-full ${
-              inputs.scheduleMode === 'static' ? 'bg-blue-400' : 'bg-emerald-400 animate-pulse'
-            }`} />
-            {inputs.scheduleMode === 'static' 
-              ? `Submitting: Fixed ${inputs.trainingDaysPerWeek} days/week`
-              : 'Submitting: Adaptive frequency'}
+            <div className="flex items-center gap-3 text-base font-bold">
+              <div className={`w-3 h-3 rounded-full ${
+                inputs.scheduleMode === 'static' ? 'bg-blue-400' : 'bg-emerald-400 animate-pulse'
+              }`} />
+              {inputs.scheduleMode === 'static' 
+                ? `Baseline: Fixed ${inputs.trainingDaysPerWeek} days/week`
+                : 'Baseline: Flexible frequency'}
+            </div>
+            {/* [PHASE 29A] Show adaptive workload status separately */}
+            <div className="flex items-center gap-2 text-xs text-purple-400 pl-6">
+              <div className="w-2 h-2 rounded-full bg-purple-400" />
+              Adaptive workload: enabled
+            </div>
           </div>
           
           {/* [PHASE 27B] Explicit Choice Confirmation */}
@@ -455,6 +466,33 @@ export function AdaptiveProgramForm({
             </div>
           </div>
           
+          {/* [PHASE 29A] Submit contract log - shows baseline vs adaptive separation */}
+          {(() => {
+            // Determine adaptive workload status from audit or default to true
+            const adaptiveWorkload = scheduleTruthAudit?.adaptiveWorkloadEnabled ?? true
+            console.log('[phase29a-modify-submit-contract]', {
+              // Baseline schedule identity (what will be submitted)
+              baselineScheduleMode: inputs.scheduleMode,
+              baselineTrainingDaysPerWeek: inputs.trainingDaysPerWeek,
+              // Adaptive workload (separate concept!)
+              adaptiveWorkloadEnabled: adaptiveWorkload,
+              // Session config
+              sessionDurationMode: inputs.sessionDurationMode,
+              sessionLength: inputs.sessionLength,
+              primaryGoal: inputs.primaryGoal,
+              // Verdict
+              verdict: (() => {
+                if (inputs.scheduleMode === 'static' && adaptiveWorkload) {
+                  return `SUBMITTING_STATIC_${inputs.trainingDaysPerWeek}_BASELINE_WITH_ADAPTIVE_WORKLOAD`
+                }
+                if (inputs.scheduleMode === 'static' && !adaptiveWorkload) {
+                  return `SUBMITTING_STATIC_${inputs.trainingDaysPerWeek}_BASELINE_NO_ADAPTATION`
+                }
+                return 'SUBMITTING_FLEXIBLE_BASELINE'
+              })(),
+            })
+            return null
+          })()}
           {/* [PHASE 27A/27B] Forensic log on every render */}
           {(() => {
             console.log('[phase27a-submit-snapshot]', {
@@ -527,12 +565,23 @@ export function AdaptiveProgramForm({
               <div className="flex items-center justify-between py-1 px-2 -mx-2 bg-[#252525] rounded">
                 <div className="flex items-center gap-2">
                   <span className="px-1.5 py-0.5 bg-cyan-500/30 text-cyan-400 rounded text-[9px] font-bold">CANON</span>
-                  <span className="text-[#888] font-semibold">resolved:</span>
+                  <span className="text-[#888] font-semibold">baseline:</span>
                 </div>
                 <span className={`font-bold ${scheduleTruthAudit.canonicalScheduleMode === 'static' ? 'text-blue-400' : 'text-emerald-400'}`}>
                   {scheduleTruthAudit.canonicalScheduleMode === 'flexible' 
                     ? 'FLEXIBLE' 
                     : `STATIC ${scheduleTruthAudit.canonicalTrainingDaysPerWeek}d/wk`}
+                </span>
+              </div>
+              
+              {/* [PHASE 29A] Adaptive workload enabled - SEPARATE from schedule */}
+              <div className="flex items-center justify-between py-1 px-2 -mx-2 bg-[#1A1A1A] rounded border border-[#333]">
+                <div className="flex items-center gap-2">
+                  <span className="px-1.5 py-0.5 bg-purple-500/30 text-purple-400 rounded text-[9px] font-bold">ADAPT</span>
+                  <span className="text-[#888] font-semibold">workload:</span>
+                </div>
+                <span className={`font-bold ${scheduleTruthAudit.adaptiveWorkloadEnabled ? 'text-purple-400' : 'text-gray-400'}`}>
+                  {scheduleTruthAudit.adaptiveWorkloadEnabled ? 'ENABLED' : 'DISABLED'}
                 </span>
               </div>
               

@@ -1112,14 +1112,18 @@ export function AdaptiveProgramDisplay({
                   )}
                 </div>
               ) : (
-                // STATIC USER: [PHASE 28F] Show "Adaptive program • baseline X days/week"
-                // Distinguishes adaptive behavior from baseline frequency truth
+                // STATIC USER: [PHASE 29A] Show baseline schedule + adaptive workload status
+                // Distinguishes baseline schedule identity from adaptive workload behavior
                 <div className="flex flex-col">
                   <div className="flex items-center gap-1.5">
                     <span className="text-sm font-medium">Baseline {program.trainingDaysPerWeek} days/week</span>
                   </div>
                   <span className="text-xs text-[#6A6A6A]">
                     {validSessions.length} sessions this week
+                  </span>
+                  {/* [PHASE 29A] Show adaptive workload status for static baseline users */}
+                  <span className="text-[10px] text-purple-400/80 mt-0.5">
+                    workload adapts to recovery
                   </span>
                 </div>
               )}

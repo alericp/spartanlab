@@ -154,6 +154,40 @@ export const TRAINING_METHOD_FEASIBILITY: Record<TrainingMethodPreference, {
 // CANONICAL PROGRAMMING PROFILE TYPE
 // =============================================================================
 
+// =============================================================================
+// [PHASE 29A] SCHEDULE IDENTITY CONTRACT
+// =============================================================================
+// 
+// CRITICAL DISTINCTION - Do NOT conflate these two concepts:
+//
+// 1. BASELINE SCHEDULE IDENTITY (scheduleMode + trainingDaysPerWeek)
+//    - What the athlete's plan is fundamentally built around
+//    - Examples: "6 days/week baseline" or "flexible/auto-derived"
+//    - This is the STARTING POINT for program structure
+//
+// 2. ADAPTIVE WORKLOAD BEHAVIOR (adaptiveWorkloadEnabled)
+//    - Whether the engine adapts training stress within that baseline
+//    - Adapts: exercise count, sets, reps, holds, RPE, density, exercise selection
+//    - Does NOT immediately collapse frequency (6→4) just because enabled
+//
+// VALID COMBINATIONS:
+// - baselineScheduleMode='static', trainingDaysPerWeek=6, adaptiveWorkloadEnabled=false
+//   → Strict 6-day program, no workload adaptation
+// - baselineScheduleMode='static', trainingDaysPerWeek=6, adaptiveWorkloadEnabled=true
+//   → 6-day baseline with workload adaptation (sets, reps, intensity adjust)
+// - baselineScheduleMode='flexible', trainingDaysPerWeek=null, adaptiveWorkloadEnabled=true
+//   → Fully flexible frequency, engine derives everything
+//
+// FREQUENCY REDUCTION PRIORITY (only after workload adaptation exhausted):
+// 1. Exercise amount reduction
+// 2. Exercise selection simplification
+// 3. Set/rep reduction
+// 4. Intensity (RPE) reduction
+// 5. Session compression (density)
+// 6. ONLY THEN: Weekly day reduction (6→5→4) with explicit evidence
+//
+// =============================================================================
+
 /**
  * The canonical profile contract for all fields that influence program generation.
  * This is the SINGLE authoritative type used by generation, settings, and metrics.
@@ -182,8 +216,12 @@ export interface CanonicalProgrammingProfile {
   
   // Training Preferences
   experienceLevel: 'beginner' | 'intermediate' | 'advanced'
-  trainingDaysPerWeek: number | null  // null = flexible
-  scheduleMode: 'static' | 'flexible'
+  trainingDaysPerWeek: number | null  // null = flexible baseline
+  scheduleMode: 'static' | 'flexible'  // BASELINE schedule identity (not workload behavior)
+  // [PHASE 29A] Adaptive workload is SEPARATE from schedule identity
+  // A user can have scheduleMode='static' + trainingDaysPerWeek=6 + adaptiveWorkloadEnabled=true
+  // This means: "I train 6 days/week, but let the engine adapt sets/reps/intensity"
+  adaptiveWorkloadEnabled: boolean  // Whether engine adapts workload within baseline schedule
   sessionDurationMode: 'static' | 'adaptive'  // TASK 1A: Distinguishes fixed vs adaptive time preference
   sessionLengthMinutes: number  // Target duration bucket (30/45/60/90) even for adaptive mode
   sessionStylePreference: string | null  // 'longer_complete' | 'shorter_focused' | etc.
@@ -578,9 +616,59 @@ export function reconcileCanonicalProfile(): CanonicalProgrammingProfile {
         })(),
       })
       
+      // ==========================================================================
+      // [PHASE 29A] ADAPTIVE WORKLOAD RESOLUTION
+      // Separate from schedule identity - determines if engine adapts workload
+      // Default: true for all users (adaptive workload is the normal behavior)
+      // Users can opt out by explicitly setting adaptiveWorkloadEnabled=false
+      // ==========================================================================
+      const onboardingAdaptive = (onboardingProfile as { adaptiveWorkloadEnabled?: boolean })?.adaptiveWorkloadEnabled
+      const athleteAdaptive = (athleteProfile as { adaptiveWorkloadEnabled?: boolean })?.adaptiveWorkloadEnabled
+      
+      // If either source explicitly sets it, use that value
+      // Otherwise default to true (adaptive workload is standard)
+      let resolvedAdaptiveWorkload = true
+      if (athleteAdaptive !== undefined && athleteAdaptive !== null) {
+        resolvedAdaptiveWorkload = athleteAdaptive
+      } else if (onboardingAdaptive !== undefined && onboardingAdaptive !== null) {
+        resolvedAdaptiveWorkload = onboardingAdaptive
+      }
+      // If neither has it, default to true (adaptive workload enabled by default)
+      
+      // [PHASE 29A] Log the schedule contract resolution
+      console.log('[phase29a-canonical-schedule-contract-resolution]', {
+        // Raw source values
+        onboardingScheduleMode: onboardingProfile?.scheduleMode ?? null,
+        onboardingTrainingDays: onboardingProfile?.trainingDaysPerWeek ?? null,
+        onboardingAdaptiveWorkload: onboardingAdaptive ?? null,
+        athleteScheduleMode: athleteProfile?.scheduleMode ?? null,
+        athleteTrainingDays: athleteProfile?.trainingDaysPerWeek ?? null,
+        athleteAdaptiveWorkload: athleteAdaptive ?? null,
+        // Resolved values
+        baselineScheduleModeResolved: resolvedScheduleMode,
+        baselineTrainingDaysResolved: resolvedTrainingDays,
+        adaptiveWorkloadEnabledResolved: resolvedAdaptiveWorkload,
+        // Legacy mapping (what old code would have interpreted)
+        legacyMappedScheduleMode: resolvedScheduleMode,
+        // Verdict
+        verdict: (() => {
+          if (resolvedScheduleMode === 'static' && resolvedTrainingDays && resolvedAdaptiveWorkload) {
+            return 'STATIC_BASELINE_WITH_ADAPTIVE_WORKLOAD_PRESERVED'
+          }
+          if (resolvedScheduleMode === 'flexible' && resolvedAdaptiveWorkload) {
+            return 'FLEXIBLE_BASELINE_RETAINED'
+          }
+          if (resolvedScheduleMode === 'static' && !resolvedAdaptiveWorkload) {
+            return 'LEGACY_STATIC_RETAINED'
+          }
+          return 'UNKNOWN_SCHEDULE_CONTRACT_STATE'
+        })(),
+      })
+      
       return {
         scheduleMode: resolvedScheduleMode,
         trainingDaysPerWeek: resolvedTrainingDays,
+        adaptiveWorkloadEnabled: resolvedAdaptiveWorkload,
       }
     })(),
     // ISSUE A/B FIX: Read explicit sessionDurationMode field (now in OnboardingProfile type)

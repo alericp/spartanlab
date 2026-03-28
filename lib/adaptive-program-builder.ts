@@ -590,8 +590,16 @@ export interface AdaptiveProgramInputs {
   sessionLength: SessionLength
   equipment: EquipmentType[]
   todaySessionMinutes?: number // Override for today's available time
-  // Flexible scheduling support
-  scheduleMode?: ScheduleMode  // 'static' or 'flexible'
+  // ==========================================================================
+  // [PHASE 29A] SCHEDULE IDENTITY vs ADAPTIVE WORKLOAD CONTRACT
+  // These two fields are SEPARATE concepts - do not conflate them:
+  // - scheduleMode: BASELINE schedule identity ('static' = fixed days, 'flexible' = auto-derived)
+  // - adaptiveWorkloadEnabled: Whether engine adapts workload (sets, reps, intensity) within that baseline
+  // A user can have scheduleMode='static' + trainingDaysPerWeek=6 + adaptiveWorkloadEnabled=true
+  // This means: "I train 6 days/week baseline, but let engine adapt my workload"
+  // ==========================================================================
+  scheduleMode?: ScheduleMode  // 'static' or 'flexible' - BASELINE schedule identity
+  adaptiveWorkloadEnabled?: boolean  // Whether engine adapts workload within baseline
   // TASK 7: Pass selected skills for multi-goal generation awareness
   selectedSkills?: string[]
   // STATE CONTRACT: Generation mode for fresh vs regenerate distinction
@@ -2097,6 +2105,13 @@ async function generateAdaptiveProgramImpl(
   // [canonical-builder-entry-contract-audit] TASK 2: Create unified entry contract
   // This is the SINGLE source of truth for all generation entry fields
   // ==========================================================================
+  // [PHASE 29A] Determine baseline schedule from inputs - DO NOT collapse static to flexible
+  const inputScheduleModeRaw = inputs.scheduleMode
+  const inputTrainingDaysRaw = trainingDaysPerWeek
+  const isExplicitStaticBaseline = inputScheduleModeRaw === 'static' && typeof inputTrainingDaysRaw === 'number'
+  // Default adaptiveWorkloadEnabled to true if not explicitly set
+  const inputAdaptiveWorkload = inputs.adaptiveWorkloadEnabled !== undefined ? inputs.adaptiveWorkloadEnabled : true
+  
   const canonicalBuilderEntry = {
     primaryGoal: primaryGoal,
     secondaryGoal: secondaryGoal || null,
@@ -2104,11 +2119,48 @@ async function generateAdaptiveProgramImpl(
     trainingDaysPerWeek: trainingDaysPerWeek,
     sessionLength: sessionLength || 60,
     equipment: Array.isArray(equipment) ? equipment : [],
-    scheduleMode: inputs.scheduleMode || 'flexible',
+    // [PHASE 29A] Preserve baseline schedule mode - do NOT default to 'flexible'
+    scheduleMode: inputs.scheduleMode || (typeof trainingDaysPerWeek === 'number' ? 'static' : 'flexible'),
+    adaptiveWorkloadEnabled: inputAdaptiveWorkload,
     sessionDurationMode: inputs.sessionDurationMode || 'adaptive',
     selectedSkills: inputs.selectedSkills || [],
     trainingPathType: inputs.trainingPathType || 'balanced',
   }
+  
+  // ==========================================================================
+  // [PHASE 29A] BUILDER BASELINE VS ADAPTIVE CONTRACT LOG
+  // Proves builder starts from baseline schedule identity, not generic flexible
+  // ==========================================================================
+  console.log('[phase29a-builder-baseline-vs-adaptive-contract]', {
+    // Input values
+    inputScheduleMode: inputScheduleModeRaw ?? null,
+    inputTrainingDaysPerWeek: inputTrainingDaysRaw,
+    inputAdaptiveWorkloadEnabled: inputAdaptiveWorkload,
+    // What builder will use
+    builderScheduleMode: canonicalBuilderEntry.scheduleMode,
+    builderTrainingDays: canonicalBuilderEntry.trainingDaysPerWeek,
+    builderAdaptiveWorkload: canonicalBuilderEntry.adaptiveWorkloadEnabled,
+    // Analysis
+    isExplicitStaticBaseline,
+    builderStartingFrequency: typeof canonicalBuilderEntry.trainingDaysPerWeek === 'number' 
+      ? canonicalBuilderEntry.trainingDaysPerWeek 
+      : 'flexible',
+    // Collapse detection
+    collapseDetected: isExplicitStaticBaseline && canonicalBuilderEntry.scheduleMode === 'flexible',
+    // Verdict
+    verdict: (() => {
+      if (isExplicitStaticBaseline && canonicalBuilderEntry.scheduleMode === 'static') {
+        return `BUILDER_STARTED_FROM_STATIC_${canonicalBuilderEntry.trainingDaysPerWeek}_BASELINE`
+      }
+      if (isExplicitStaticBaseline && canonicalBuilderEntry.scheduleMode === 'flexible') {
+        return 'BUG_STATIC_BASELINE_COLLAPSED_TO_FLEXIBLE'
+      }
+      if (canonicalBuilderEntry.scheduleMode === 'flexible') {
+        return 'BUILDER_STARTED_FROM_FLEXIBLE_BASELINE'
+      }
+      return 'BUILDER_BASELINE_DETERMINED'
+    })(),
+  })
   
   console.log('[canonical-builder-entry-contract-audit]', {
     contractExists: true,
@@ -2120,6 +2172,7 @@ async function generateAdaptiveProgramImpl(
       sessionLength: !!canonicalBuilderEntry.sessionLength,
       equipment: canonicalBuilderEntry.equipment.length,
       scheduleMode: !!canonicalBuilderEntry.scheduleMode,
+      adaptiveWorkloadEnabled: canonicalBuilderEntry.adaptiveWorkloadEnabled,
       sessionDurationMode: !!canonicalBuilderEntry.sessionDurationMode,
       selectedSkills: canonicalBuilderEntry.selectedSkills.length,
     },
@@ -2127,6 +2180,7 @@ async function generateAdaptiveProgramImpl(
     equipmentCount: canonicalBuilderEntry.equipment.length,
     experienceLevel: canonicalBuilderEntry.experienceLevel,
     scheduleMode: canonicalBuilderEntry.scheduleMode,
+    adaptiveWorkloadEnabled: canonicalBuilderEntry.adaptiveWorkloadEnabled,
     sessionDurationMode: canonicalBuilderEntry.sessionDurationMode,
     sessionLengthMinutes: canonicalBuilderEntry.sessionLength,
     entryContractVerdict: 'unified_contract_created',

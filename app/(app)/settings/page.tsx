@@ -318,6 +318,10 @@ export default function SettingsPage() {
   const [experienceLevel, setExperienceLevel] = useState('beginner')
   const [scheduleMode, setScheduleMode] = useState<'static' | 'flexible'>('static')
   const [trainingDays, setTrainingDays] = useState('3')
+  // [PHASE 29A] Adaptive workload is SEPARATE from schedule identity
+  // A user can have scheduleMode='static' + adaptiveWorkloadEnabled=true
+  // This means: "I train 6 days/week baseline, but let engine adapt my workload"
+  const [adaptiveWorkloadEnabled, setAdaptiveWorkloadEnabled] = useState(true)
   // TASK 3: Add sessionDurationMode state - 'static' = fixed duration, 'adaptive' = engine adapts
   const [sessionDurationMode, setSessionDurationMode] = useState<'static' | 'adaptive'>('static')
   const [sessionLength, setSessionLength] = useState('60')
@@ -629,13 +633,42 @@ export default function SettingsPage() {
               : 'SETTINGS_PAYLOAD_UNEXPECTED',
       })
       
+      // ==========================================================================
+      // [PHASE 29A] SETTINGS SCHEDULE CONTRACT SAVE LOG
+      // Proves the correct separation between baseline schedule and adaptive workload
+      // ==========================================================================
+      console.log('[phase29a-settings-schedule-contract-save]', {
+        // Baseline schedule identity
+        baselineScheduleMode: payloadScheduleMode,
+        baselineTrainingDaysPerWeek: payloadTrainingDays,
+        // Adaptive workload behavior (separate concept!)
+        adaptiveWorkloadEnabled: adaptiveWorkloadEnabled,
+        // Legacy fields for compatibility
+        legacyScheduleMode: payloadScheduleMode,
+        legacyTrainingDaysPerWeek: payloadTrainingDays,
+        // Verdict
+        verdict: (() => {
+          if (payloadScheduleMode === 'static' && payloadTrainingDays && adaptiveWorkloadEnabled) {
+            return `STATIC_${payloadTrainingDays}_BASELINE_WITH_ADAPTIVE_WORKLOAD`
+          }
+          if (payloadScheduleMode === 'static' && payloadTrainingDays && !adaptiveWorkloadEnabled) {
+            return `STATIC_${payloadTrainingDays}_BASELINE_NO_ADAPTATION`
+          }
+          if (payloadScheduleMode === 'flexible' && adaptiveWorkloadEnabled) {
+            return 'FLEXIBLE_BASELINE_WITH_ADAPTIVE_WORKLOAD'
+          }
+          return 'UNKNOWN_SCHEDULE_CONTRACT'
+        })(),
+      })
+      
       const updates = {
         bodyweight: parsedBodyweight,
         experienceLevel: experienceLevel as 'beginner' | 'intermediate' | 'advanced',
-        // For flexible mode, send null - API will store it correctly
-        // The scheduleMode field is the canonical preference indicator
+        // [PHASE 29A] BASELINE SCHEDULE IDENTITY - these define the training structure
         trainingDaysPerWeek: payloadTrainingDays,
         scheduleMode: payloadScheduleMode,
+        // [PHASE 29A] ADAPTIVE WORKLOAD BEHAVIOR - separate from schedule identity
+        adaptiveWorkloadEnabled: adaptiveWorkloadEnabled,
         // TASK 3D: Preserve sessionDurationMode - 'adaptive' means engine adapts session length
         sessionDurationMode: sessionDurationMode,
         sessionLengthMinutes: parseInt(sessionLength) as 30 | 45 | 60 | 90,
@@ -678,6 +711,8 @@ export default function SettingsPage() {
               experienceLevel: result.profile.experienceLevel,
               trainingDaysPerWeek: result.profile.trainingDaysPerWeek,
               scheduleMode: result.profile.scheduleMode,
+              // [PHASE 29A] Adaptive workload is SEPARATE from schedule identity
+              adaptiveWorkloadEnabled: adaptiveWorkloadEnabled,
               // TASK 3D: Preserve sessionDurationMode for canonical profile
               sessionDurationMode: result.profile.sessionDurationMode || sessionDurationMode,
               sessionLengthMinutes: result.profile.sessionLengthMinutes,

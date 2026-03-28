@@ -407,16 +407,51 @@ export default function ProgramPage() {
   // handler always reads the latest user selections, not the stale render-time value.
   // ==========================================================================
   const builderSessionInputsRef = useRef<AdaptiveProgramInputs | null>(null)
-  useEffect(() => {
-    builderSessionInputsRef.current = builderSessionInputs
-    console.log('[phase26-6day-truth-chain-forced-verdict]', {
-      stage: 'REF_UPDATED_WITH_CURRENT_STATE',
-      scheduleMode: builderSessionInputs?.scheduleMode,
-      trainingDaysPerWeek: builderSessionInputs?.trainingDaysPerWeek,
-      verdict: builderSessionInputs?.scheduleMode === 'static'
-        ? `REF_NOW_HAS_STATIC_${builderSessionInputs?.trainingDaysPerWeek}_DAYS`
-        : 'REF_NOW_HAS_FLEXIBLE',
+  
+  // ==========================================================================
+  // [PHASE 26B] CRITICAL FIX: Synchronous ref + state update wrapper
+  // The useEffect-only ref sync has a same-frame race condition:
+  // 1. User selects 6 days → setBuilderSessionInputs(newInputs) queues state update
+  // 2. useEffect runs AFTER render commit
+  // 3. If user clicks Build before effect runs, ref still has old value
+  // 
+  // FIX: Update ref SYNCHRONOUSLY in the same event tick as state update
+  // This wrapper ensures ref.current is ALWAYS current at click time
+  // ==========================================================================
+  const setBuilderSessionInputsAndRef = useCallback((nextInputs: AdaptiveProgramInputs | null) => {
+    // [PHASE 26B] Synchronously update ref FIRST, before React state update
+    builderSessionInputsRef.current = nextInputs
+    
+    console.log('[phase26b-same-frame-race-ref-sync]', {
+      stage: 'SYNCHRONOUS_REF_AND_STATE_UPDATE',
+      scheduleMode: nextInputs?.scheduleMode,
+      trainingDaysPerWeek: nextInputs?.trainingDaysPerWeek,
+      refUpdatedSynchronously: true,
+      verdict: nextInputs?.scheduleMode === 'static'
+        ? `REF_IMMEDIATELY_HAS_STATIC_${nextInputs?.trainingDaysPerWeek}_DAYS`
+        : nextInputs === null
+          ? 'REF_CLEARED'
+          : 'REF_IMMEDIATELY_HAS_FLEXIBLE',
     })
+    
+    // Then update React state (will trigger re-render)
+    setBuilderSessionInputs(nextInputs)
+  }, [])
+  
+  // Keep the useEffect as a backup sync (for initial hydration and edge cases)
+  useEffect(() => {
+    // Only sync if ref is out of date (shouldn't happen with the wrapper, but safety net)
+    if (builderSessionInputsRef.current !== builderSessionInputs) {
+      builderSessionInputsRef.current = builderSessionInputs
+      console.log('[phase26-6day-truth-chain-forced-verdict]', {
+        stage: 'REF_BACKUP_SYNC_IN_EFFECT',
+        scheduleMode: builderSessionInputs?.scheduleMode,
+        trainingDaysPerWeek: builderSessionInputs?.trainingDaysPerWeek,
+        verdict: builderSessionInputs?.scheduleMode === 'static'
+          ? `REF_NOW_HAS_STATIC_${builderSessionInputs?.trainingDaysPerWeek}_DAYS`
+          : 'REF_NOW_HAS_FLEXIBLE',
+      })
+    }
   }, [builderSessionInputs])
   
   // ==========================================================================
@@ -3054,7 +3089,7 @@ export default function ProgramPage() {
             trigger: 'successful_unified_generation_complete',
           })
           setBuilderOrigin('default')
-          setBuilderSessionInputs(null)
+          setBuilderSessionInputsAndRef(null)
           setBuilderSessionKey(null)
           setBuilderSessionSource(null)
         }
@@ -3932,8 +3967,8 @@ export default function ProgramPage() {
       // [PHASE 24D] Reset modifyFlowState to idle after successful generation
       setModifyFlowState('idle')
       
-      // [PHASE 24A] Clear builder session state after successful generation
-      setBuilderSessionInputs(null)
+      // [PHASE 24A/26B] Clear builder session state after successful generation
+      setBuilderSessionInputsAndRef(null)
       setBuilderSessionKey('initial')
       setBuilderSessionSource(null)
       
@@ -4021,9 +4056,9 @@ export default function ProgramPage() {
       console.error('[ProgramPage] handleGenerateFromModifyBuilder: Error', error)
       setGenerationError(error instanceof Error ? error.message : 'Generation failed')
       
-      // Reset origin and session on failure too
+      // [PHASE 26B] Reset origin and session on failure too
       setBuilderOrigin('default')
-      setBuilderSessionInputs(null)
+      setBuilderSessionInputsAndRef(null)
       setBuilderSessionKey('initial')
       setBuilderSessionSource(null)
     } finally {
@@ -8272,10 +8307,11 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
     
     // ==========================================================================
     // [PHASE 25] TASK 3: Create new builder session with canonical prefill
+    // [PHASE 26B] Use synchronous wrapper to avoid same-frame race
     // ==========================================================================
     const newSessionKey = `canonical_modify_${Date.now()}`
     
-    setBuilderSessionInputs(freshInputs)
+    setBuilderSessionInputsAndRef(freshInputs)
     setBuilderSessionKey(newSessionKey)
     setBuilderSessionSource('modify_visible_program') // Reuse existing source type
     
@@ -9095,8 +9131,9 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
     
     stage = 'session_seed_write'
     
-    // Set the dedicated builder session payload FIRST
-    setBuilderSessionInputs(freshInputs)
+    // [PHASE 26B] Set the dedicated builder session payload FIRST
+    // Use synchronous wrapper to avoid same-frame race
+    setBuilderSessionInputsAndRef(freshInputs)
     setBuilderSessionKey(newSessionKey)
     // [PHASE 24G] Use canonical source label for Start New
     setBuilderSessionSource(canonicalEntrySuccess ? 'modify_canonical_start_new' : 'modify_fallback')
@@ -9476,6 +9513,29 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
                 const hasCurrentSessionInputs = !!currentBuilderSessionInputs
                 
                 // ==========================================================================
+                // [PHASE 26B] SAME-FRAME RACE REF SYNC - CLICK TIME AUDIT
+                // This detects if the old race condition would have occurred
+                // With the Phase 26B fix, ref should ALWAYS match the latest user selection
+                // ==========================================================================
+                const wouldHaveRaced = builderSessionInputs?.scheduleMode !== currentBuilderSessionInputs?.scheduleMode ||
+                  builderSessionInputs?.trainingDaysPerWeek !== currentBuilderSessionInputs?.trainingDaysPerWeek
+                
+                console.log('[phase26b-same-frame-race-ref-sync]', {
+                  stage: 'CLICK_TIME_REF_VS_STATE_AUDIT',
+                  closureBuilderSessionScheduleMode: builderSessionInputs?.scheduleMode,
+                  closureBuilderSessionTrainingDays: builderSessionInputs?.trainingDaysPerWeek,
+                  refScheduleMode: currentBuilderSessionInputs?.scheduleMode,
+                  refTrainingDays: currentBuilderSessionInputs?.trainingDaysPerWeek,
+                  clickUsesRefValue: true,
+                  wouldHaveRacedWithOldCode: wouldHaveRaced,
+                  verdict: !hasCurrentSessionInputs
+                    ? 'NO_BUILDER_SESSION_INPUTS'
+                    : currentBuilderSessionInputs?.scheduleMode === 'static'
+                      ? `STATIC_${currentBuilderSessionInputs?.trainingDaysPerWeek}_PRESENT_AT_CLICK`
+                      : 'REF_HAS_FLEXIBLE_AT_CLICK',
+                })
+                
+                // ==========================================================================
                 // [PHASE 26] 6-DAY TRUTH CHAIN FORCED VERDICT - CRITICAL AUDIT
                 // This captures the EXACT state at the moment Build Adaptive Program is clicked
                 // using the REF which has the CURRENT value, not the stale closure value
@@ -9486,8 +9546,7 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
                   staleClosureTrainingDays: builderSessionInputs?.trainingDaysPerWeek,
                   currentRefScheduleMode: currentBuilderSessionInputs?.scheduleMode,
                   currentRefTrainingDays: currentBuilderSessionInputs?.trainingDaysPerWeek,
-                  staleDiffersFromCurrent: builderSessionInputs?.scheduleMode !== currentBuilderSessionInputs?.scheduleMode ||
-                    builderSessionInputs?.trainingDaysPerWeek !== currentBuilderSessionInputs?.trainingDaysPerWeek,
+                  staleDiffersFromCurrent: wouldHaveRaced,
                   verdict: hasCurrentSessionInputs
                     ? (currentBuilderSessionInputs?.scheduleMode === 'static'
                         ? `SUBMIT_USING_REF_STATIC_${currentBuilderSessionInputs?.trainingDaysPerWeek}_DAYS`
@@ -9577,7 +9636,7 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
                 <AdaptiveProgramForm
                   key={hasBuilderSessionInputs ? builderSessionKey : 'default-builder'}
                   inputs={effectiveBuilderInputs}
-                  onInputChange={hasBuilderSessionInputs ? setBuilderSessionInputs : setInputs}
+                  onInputChange={hasBuilderSessionInputs ? setBuilderSessionInputsAndRef : setInputs}
                   onGenerate={unifiedSubmitHandler}
                   isGenerating={isGenerating}
                   constraintLabel={constraintLabel}
@@ -9600,7 +9659,7 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
                     builderSessionCleared: true,
                   })
                   setBuilderOrigin('default')
-                  setBuilderSessionInputs(null)
+                  setBuilderSessionInputsAndRef(null)
                   setBuilderSessionKey('initial')
                   setBuilderSessionSource(null)
                   setModifyFlowState('idle')

@@ -134,6 +134,27 @@ export function AdaptiveProgramDisplay({
       : 'DISPLAY_RECEIVED_FLEXIBLE_SO_SHOWS_ADAPTIVE',
   })
   
+  // ==========================================================================
+  // [PHASE 27A] PROGRAM_RENDERED_ON_CARD - forensic chain step 7
+  // Records EXACTLY what the display component renders
+  // ==========================================================================
+  const displayedScheduleLabelText = program.scheduleMode === 'flexible' 
+    ? 'Adaptive' 
+    : `${trainingDaysPerWeek} days/week`
+  
+  console.log('[phase27a-modify-forensic-chain]', {
+    step: 'PROGRAM_RENDERED_ON_CARD',
+    programId: program.id,
+    scheduleMode: program.scheduleMode,
+    trainingDaysPerWeek: trainingDaysPerWeek,
+    sessionCount: program.sessions?.length || 0,
+    displayedLabelText: displayedScheduleLabelText,
+    programCreatedAt: program.createdAt,
+    verdict: program.scheduleMode === 'static'
+      ? `CARD_SHOWS_STATIC_${trainingDaysPerWeek}_DAYS`
+      : 'CARD_SHOWS_ADAPTIVE',
+  })
+  
   // Get raw program fields with type assertions for optional fields
   const rawSelectedSkills = (program as unknown as { selectedSkills?: string[] }).selectedSkills
   const rawRepresentedSkills = (program as unknown as { representedSkills?: string[] }).representedSkills

@@ -2389,6 +2389,24 @@ export default function ProgramPage() {
       userMustChangeTrainingDaysSelector: scheduleSubmitTruth.isFlexible,
     })
     
+    // ==========================================================================
+    // [PHASE 27A] HANDLEGENERATE_RECEIVED - forensic chain step 4
+    // Records the EXACT effectiveInputs received by handleGenerate
+    // ==========================================================================
+    console.log('[phase27a-modify-forensic-chain]', {
+      step: 'HANDLEGENERATE_RECEIVED',
+      effectiveScheduleMode: effectiveInputs?.scheduleMode,
+      effectiveTrainingDaysPerWeek: effectiveInputs?.trainingDaysPerWeek,
+      effectiveSessionDurationMode: effectiveInputs?.sessionDurationMode,
+      effectivePrimaryGoal: effectiveInputs?.primaryGoal,
+      inputOverridesProvided: !!inputOverrides,
+      inputOverridesScheduleMode: (inputOverrides as AdaptiveProgramInputs)?.scheduleMode,
+      inputOverridesTrainingDays: (inputOverrides as AdaptiveProgramInputs)?.trainingDaysPerWeek,
+      verdict: effectiveInputs?.scheduleMode === 'static'
+        ? `HANDLEGENERATE_RECEIVED_STATIC_${effectiveInputs?.trainingDaysPerWeek}_DAYS`
+        : 'HANDLEGENERATE_RECEIVED_FLEXIBLE',
+    })
+    
     setIsGenerating(true)
     setGenerationError(null) // Clear any previous error
     
@@ -3202,6 +3220,63 @@ export default function ProgramPage() {
           verdict: finalProgramScheduleMode === 'static'
             ? `SETPROGRAM_RECEIVES_STATIC_${finalProgramTrainingDays}_DAYS`
             : 'SETPROGRAM_RECEIVES_FLEXIBLE',
+        })
+        
+        // ==========================================================================
+        // [PHASE 27A] FINAL_PROGRAM_RETURNED & PROGRAM_SET_IN_STATE - forensic chain step 5-6
+        // Records what the builder returned and what gets set into React state
+        // ==========================================================================
+        console.log('[phase27a-modify-forensic-chain]', {
+          step: 'FINAL_PROGRAM_RETURNED',
+          returnedProgramId: newProgram.id,
+          returnedScheduleMode: finalProgramScheduleMode,
+          returnedTrainingDaysPerWeek: finalProgramTrainingDays,
+          returnedSessionCount: finalProgramSessionCount,
+          inputsScheduleMode: effectiveInputs?.scheduleMode,
+          inputsTrainingDaysPerWeek: effectiveInputs?.trainingDaysPerWeek,
+          truthPreserved: handleGenerateReceivedStatic 
+            ? finalProgramScheduleMode === 'static' 
+            : true,
+          verdict: finalProgramScheduleMode === 'static'
+            ? `BUILDER_RETURNED_STATIC_${finalProgramTrainingDays}_DAYS`
+            : 'BUILDER_RETURNED_FLEXIBLE',
+        })
+        
+        console.log('[phase27a-modify-forensic-chain]', {
+          step: 'PROGRAM_SET_IN_STATE',
+          programId: newProgram.id,
+          scheduleMode: finalProgramScheduleMode,
+          trainingDaysPerWeek: finalProgramTrainingDays,
+          sessionCount: finalProgramSessionCount,
+          verdict: finalProgramScheduleMode === 'static'
+            ? `STATE_RECEIVES_STATIC_${finalProgramTrainingDays}_DAYS`
+            : 'STATE_RECEIVES_FLEXIBLE',
+        })
+        
+        // ==========================================================================
+        // [PHASE 27A] CONSOLIDATED FINAL VERDICT
+        // Determines the single verdict from the entire chain
+        // ==========================================================================
+        const phase27aInputWasStatic = effectiveInputs?.scheduleMode === 'static'
+        const phase27aBuilderReturnedStatic = finalProgramScheduleMode === 'static'
+        
+        let phase27aVerdict = 'VERDICT_E_STATIC_6_SURVIVED_END_TO_END'
+        if (!phase27aInputWasStatic) {
+          phase27aVerdict = 'VERDICT_A_MODIFY_RUN_NEVER_LEFT_FLEXIBLE'
+        } else if (phase27aInputWasStatic && !phase27aBuilderReturnedStatic) {
+          phase27aVerdict = 'VERDICT_C_HANDLEGENERATE_RECEIVED_STATIC_BUT_BUILDER_RETURNED_FLEXIBLE'
+        } else if (phase27aInputWasStatic && phase27aBuilderReturnedStatic) {
+          phase27aVerdict = `VERDICT_E_STATIC_${finalProgramTrainingDays}_SURVIVED_END_TO_END`
+        }
+        
+        console.log('[phase27a-modify-forensic-chain]', {
+          step: 'CONSOLIDATED_FINAL_VERDICT',
+          inputScheduleMode: effectiveInputs?.scheduleMode,
+          inputTrainingDays: effectiveInputs?.trainingDaysPerWeek,
+          builderReturnedScheduleMode: finalProgramScheduleMode,
+          builderReturnedTrainingDays: finalProgramTrainingDays,
+          sessionCount: finalProgramSessionCount,
+          verdict: phase27aVerdict,
         })
         
         setProgram(newProgram)
@@ -9273,6 +9348,22 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
       verdict: 'BUILDER_SESSION_LOCKED_TO_MODIFY_TRUTH',
     })
     
+    // ==========================================================================
+    // [PHASE 27A] MODIFY_BUILDER_OPENED - forensic chain step 1
+    // Records the exact initial state when the modify builder opens
+    // ==========================================================================
+    console.log('[phase27a-modify-forensic-chain]', {
+      step: 'MODIFY_BUILDER_OPENED',
+      canonicalScheduleMode: canonicalProfile?.scheduleMode || 'unknown',
+      canonicalTrainingDaysPerWeek: canonicalProfile?.trainingDaysPerWeek || 'unknown',
+      initialBuilderSessionScheduleMode: freshInputs.scheduleMode,
+      initialBuilderSessionTrainingDays: freshInputs.trainingDaysPerWeek,
+      builderSessionKey: newSessionKey,
+      verdict: freshInputs.scheduleMode === 'static'
+        ? `BUILDER_OPENED_WITH_STATIC_${freshInputs.trainingDaysPerWeek}_DAYS`
+        : 'BUILDER_OPENED_WITH_FLEXIBLE',
+    })
+    
     // Also sync to ambient inputs for page consistency (secondary, not builder authority)
     setInputs(freshInputs)
     
@@ -9706,6 +9797,24 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
                   verdict: hasCurrentSessionInputs 
                     ? 'USING_BUILDER_SESSION_INPUTS_FROM_REF' 
                     : 'USING_PAGE_INPUTS',
+                })
+                
+                // ==========================================================================
+                // [PHASE 27A] MODIFY_SUBMIT_SNAPSHOT - forensic chain step 3
+                // Records the EXACT builderSessionInputsRef.current at click time
+                // ==========================================================================
+                console.log('[phase27a-modify-forensic-chain]', {
+                  step: 'MODIFY_SUBMIT_SNAPSHOT',
+                  refScheduleMode: currentBuilderSessionInputs?.scheduleMode,
+                  refTrainingDaysPerWeek: currentBuilderSessionInputs?.trainingDaysPerWeek,
+                  refSessionDurationMode: currentBuilderSessionInputs?.sessionDurationMode,
+                  refPrimaryGoal: currentBuilderSessionInputs?.primaryGoal,
+                  hasBuilderSessionInputs: hasCurrentSessionInputs,
+                  verdict: hasCurrentSessionInputs
+                    ? (currentBuilderSessionInputs?.scheduleMode === 'static'
+                        ? `SUBMIT_SNAPSHOT_STATIC_${currentBuilderSessionInputs?.trainingDaysPerWeek}_DAYS`
+                        : 'SUBMIT_SNAPSHOT_FLEXIBLE')
+                    : 'NO_BUILDER_SESSION_USING_PAGE_INPUTS',
                 })
                 
                 if (hasCurrentSessionInputs) {

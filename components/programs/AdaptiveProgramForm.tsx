@@ -134,43 +134,66 @@ export function AdaptiveProgramForm({
           </div>
 
           {/* Training Days - Supports both flexible and static modes */}
+          {/* [PHASE 24R] CRITICAL FIX: Allow flexible users to switch to fixed days */}
           <div className="space-y-2">
             <label className="text-sm text-[#A5A5A5]">Training Days/Week</label>
-            {inputs.trainingDaysPerWeek === 'flexible' || inputs.scheduleMode === 'flexible' ? (
-              // FLEXIBLE USER: Show adaptive state, not a forced numeric picker
-              <div className="bg-[#1A1A1A] border border-[#3A3A3A] rounded-md px-3 py-2">
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                  <span className="text-sm font-medium">Flexible / Adaptive</span>
-                </div>
-                {/* [PHASE 12 TASK 3] Truthful wording - calculation at build time */}
-                <p className="text-xs text-[#6A6A6A] mt-1">
-                  Weekly frequency calculated from recovery and training history
-                </p>
-              </div>
-            ) : (
-              // STATIC USER: Show numeric day selector as before
-              <Select
-                value={String(inputs.trainingDaysPerWeek)}
-                onValueChange={(v) => updateInput('trainingDaysPerWeek', Number(v) as TrainingDays)}
-              >
-                <SelectTrigger className="bg-[#1A1A1A] border-[#3A3A3A]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="bg-[#2A2A2A] border-[#3A3A3A]">
-                  <SelectItem value="2">2 days/week</SelectItem>
-                  <SelectItem value="3">3 days/week</SelectItem>
-                  <SelectItem value="4">4 days/week</SelectItem>
-                  <SelectItem value="5">5 days/week</SelectItem>
-                  <SelectItem value="6">6 days/week</SelectItem>
-                  <SelectItem value="7">7 days/week</SelectItem>
-                </SelectContent>
-              </Select>
-            )}
+            {/* [PHASE 24R] Always show the numeric selector - flexible users can now switch to fixed */}
+            <Select
+              value={inputs.scheduleMode === 'flexible' || inputs.trainingDaysPerWeek === 'flexible' 
+                ? 'flexible' 
+                : String(inputs.trainingDaysPerWeek)}
+              onValueChange={(v) => {
+                if (v === 'flexible') {
+                  // User chose to keep/switch to flexible mode
+                  console.log('[phase24r-schedule-mode-switch]', {
+                    from: inputs.scheduleMode,
+                    to: 'flexible',
+                    verdict: 'USER_CHOSE_FLEXIBLE',
+                  })
+                  onInputChange({
+                    ...inputs,
+                    trainingDaysPerWeek: 'flexible',
+                    scheduleMode: 'flexible',
+                  })
+                } else {
+                  // User chose a specific day count - this triggers static mode
+                  const numDays = Number(v) as TrainingDays
+                  console.log('[phase24r-schedule-mode-switch]', {
+                    from: inputs.scheduleMode,
+                    to: 'static',
+                    selectedDays: numDays,
+                    verdict: 'USER_CHOSE_FIXED_DAYS',
+                  })
+                  onInputChange({
+                    ...inputs,
+                    trainingDaysPerWeek: numDays,
+                    scheduleMode: 'static',
+                  })
+                }
+              }}
+            >
+              <SelectTrigger className="bg-[#1A1A1A] border-[#3A3A3A]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent className="bg-[#2A2A2A] border-[#3A3A3A]">
+                <SelectItem value="flexible">
+                  <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 rounded-full bg-emerald-500" />
+                    <span>Flexible / Adaptive</span>
+                  </div>
+                </SelectItem>
+                <SelectItem value="2">2 days/week</SelectItem>
+                <SelectItem value="3">3 days/week</SelectItem>
+                <SelectItem value="4">4 days/week</SelectItem>
+                <SelectItem value="5">5 days/week</SelectItem>
+                <SelectItem value="6">6 days/week</SelectItem>
+                <SelectItem value="7">7 days/week</SelectItem>
+              </SelectContent>
+            </Select>
             <p className="text-xs text-[#6A6A6A]">
-              {inputs.trainingDaysPerWeek === 'flexible' || inputs.scheduleMode === 'flexible'
-                ? 'Your schedule adapts weekly - change in Settings if needed'
-                : 'Pre-filled from your profile settings'}
+              {inputs.scheduleMode === 'flexible' || inputs.trainingDaysPerWeek === 'flexible'
+                ? 'Frequency adapts to your recovery - or choose fixed days above'
+                : 'Fixed schedule - select Flexible above to adapt weekly'}
             </p>
           </div>
 

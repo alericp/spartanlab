@@ -1909,25 +1909,57 @@ export default function ProgramPage() {
         sessionCountDiffers,
       })
       
-      // [PHASE 17M] STRENGTHENED Decision: Replace if ID differs, canonical is newer, OR session count differs
-      // This fixes stale 4-session program persisting when 6-session canonical exists
-      const shouldReplace = idDiffers || canonicalIsNewer || sessionCountDiffers
+      // ==========================================================================
+      // [PHASE 26E] CRITICAL FIX: Only replace in-memory program if canonical is NEWER
+      // Previously: shouldReplace = idDiffers || canonicalIsNewer || sessionCountDiffers
+      // This was WRONG because it would replace a just-generated program with an older
+      // canonical program if session counts differed (e.g., user selected 6 days but
+      // canonical storage still had the old 4-session flexible program)
+      // 
+      // FIX: Only replace if canonical is actually NEWER. If IDs differ but current is
+      // newer (just generated), keep the current program.
+      // ==========================================================================
+      const currentIsNewer = currentCreatedAt > canonicalCreatedAt
+      const shouldReplace = canonicalIsNewer || (idDiffers && !currentIsNewer)
+      
+      console.log('[phase26e-canonical-modify-post-generation-overwrite-proof]', {
+        stage: 'RECONCILIATION_DECISION',
+        trigger: triggerSource,
+        canonicalProgramId: canonicalProgram.id,
+        canonicalCreatedAt: canonicalProgram.createdAt,
+        canonicalScheduleMode: (canonicalProgram as unknown as { scheduleMode?: string }).scheduleMode,
+        canonicalTrainingDays: (canonicalProgram as unknown as { trainingDaysPerWeek?: number }).trainingDaysPerWeek,
+        currentProgramId: currentProgram.id,
+        currentCreatedAt: currentProgram.createdAt,
+        currentScheduleMode: (currentProgram as unknown as { scheduleMode?: string }).scheduleMode,
+        currentTrainingDays: (currentProgram as unknown as { trainingDaysPerWeek?: number }).trainingDaysPerWeek,
+        idDiffers,
+        canonicalIsNewer,
+        currentIsNewer,
+        sessionCountDiffers,
+        shouldReplace,
+        verdict: shouldReplace
+          ? 'WILL_REPLACE_WITH_CANONICAL'
+          : currentIsNewer
+            ? 'KEEPING_CURRENT_PROGRAM_ITS_NEWER'
+            : 'KEEPING_CURRENT_NO_CHANGE_NEEDED',
+      })
       
       if (shouldReplace) {
         // [PHASE 17M] Program reconciliation replace - log the replacement with specific reason
         console.log('[phase17m-program-reconciliation-replace]', {
           trigger: triggerSource,
-          reason: idDiffers
-            ? 'id_differs'
-            : canonicalIsNewer
+          reason: canonicalIsNewer
             ? 'canonical_is_newer'
-            : sessionCountDiffers
-            ? 'session_count_differs'
+            : idDiffers
+            ? 'id_differs_and_current_not_newer'
             : 'unknown',
           previousProgramId: currentProgram.id,
           previousSessionCount: currentProgram.sessions?.length || 0,
+          previousScheduleMode: (currentProgram as unknown as { scheduleMode?: string }).scheduleMode,
           nextProgramId: canonicalProgram.id,
           nextSessionCount: canonicalProgram.sessions?.length || 0,
+          nextScheduleMode: (canonicalProgram as unknown as { scheduleMode?: string }).scheduleMode,
         })
         
         // Normalize and set the canonical program
@@ -1956,12 +1988,16 @@ export default function ProgramPage() {
           })
         }
       } else {
-        // [PHASE 17M] Program reconciliation keep - no material difference detected
+        // [PHASE 17M/26E] Program reconciliation keep - current program is valid/newer
         console.log('[phase17m-program-reconciliation-keep]', {
           trigger: triggerSource,
-          reason: 'no_material_difference_detected',
+          reason: currentIsNewer
+            ? 'current_program_is_newer_than_canonical'
+            : 'no_material_difference_detected',
           currentProgramId: currentProgram.id,
           currentSessionCount: currentProgram.sessions?.length || 0,
+          currentScheduleMode: (currentProgram as unknown as { scheduleMode?: string }).scheduleMode,
+          currentTrainingDays: (currentProgram as unknown as { trainingDaysPerWeek?: number }).trainingDaysPerWeek,
         })
       }
     }

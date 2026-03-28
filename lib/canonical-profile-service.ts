@@ -405,12 +405,62 @@ export function reconcileCanonicalProfile(): CanonicalProgrammingProfile {
       null  // TASK 1B: null = no fallback, validation catches
     ),
     // ISSUE A/B FIX: Read explicit scheduleMode field (now in OnboardingProfile type)
-    scheduleMode: pick(
-      onboardingProfile?.scheduleMode, 
-      athleteProfile?.scheduleMode, 
-      // ISSUE D FIX: Infer from trainingDaysPerWeek if scheduleMode not set
-      onboardingProfile?.trainingDaysPerWeek === 'flexible' ? 'flexible' : 'static'
-    ),
+    scheduleMode: (() => {
+      const resolvedMode = pick(
+        onboardingProfile?.scheduleMode, 
+        athleteProfile?.scheduleMode, 
+        // ISSUE D FIX: Infer from trainingDaysPerWeek if scheduleMode not set
+        onboardingProfile?.trainingDaysPerWeek === 'flexible' ? 'flexible' : 'static'
+      )
+      
+      // ==========================================================================
+      // [PHASE 28B] CANONICAL SOURCE WINNER LOG
+      // Proves exactly which source won for scheduleMode
+      // ==========================================================================
+      const scheduleModeWinner = onboardingProfile?.scheduleMode !== undefined && onboardingProfile?.scheduleMode !== null
+        ? 'onboarding'
+        : athleteProfile?.scheduleMode !== undefined && athleteProfile?.scheduleMode !== null
+          ? 'athlete'
+          : 'fallback'
+      
+      const trainingDaysWinner = (onboardingProfile?.scheduleMode !== 'flexible' && typeof onboardingProfile?.trainingDaysPerWeek === 'number')
+        ? 'onboarding'
+        : (athleteProfile?.scheduleMode !== 'flexible' && typeof athleteProfile?.trainingDaysPerWeek === 'number')
+          ? 'athlete'
+          : 'fallback'
+      
+      const resolvedTrainingDays = pick(
+        onboardingProfile?.scheduleMode === 'flexible' ? null : 
+          typeof onboardingProfile?.trainingDaysPerWeek === 'number' ? onboardingProfile.trainingDaysPerWeek : null,
+        athleteProfile?.scheduleMode === 'flexible' ? null : athleteProfile?.trainingDaysPerWeek,
+        null
+      )
+      
+      const verdict = scheduleModeWinner === 'onboarding'
+        ? (resolvedMode === 'flexible' ? 'ONBOARDING_WON_FLEXIBLE' : `ONBOARDING_WON_STATIC_${resolvedTrainingDays}`)
+        : scheduleModeWinner === 'athlete'
+          ? (resolvedMode === 'flexible' ? 'ATHLETE_WON_FLEXIBLE' : `ATHLETE_WON_STATIC_${resolvedTrainingDays}`)
+          : 'FALLBACK_WON'
+      
+      console.log('[phase28b-canonical-source-winner]', {
+        // Source values
+        onboardingScheduleMode: onboardingProfile?.scheduleMode ?? null,
+        onboardingTrainingDaysPerWeek: onboardingProfile?.trainingDaysPerWeek ?? null,
+        athleteScheduleMode: athleteProfile?.scheduleMode ?? null,
+        athleteTrainingDaysPerWeek: athleteProfile?.trainingDaysPerWeek ?? null,
+        // Resolved values
+        canonicalResolvedScheduleMode: resolvedMode,
+        canonicalResolvedTrainingDaysPerWeek: resolvedTrainingDays,
+        // Winner determination
+        scheduleModeWinnerSource: scheduleModeWinner,
+        trainingDaysWinnerSource: trainingDaysWinner,
+        // Verdict
+        verdict,
+        mixedSources: scheduleModeWinner !== trainingDaysWinner && trainingDaysWinner !== 'fallback',
+      })
+      
+      return resolvedMode
+    })(),
     // ISSUE A/B FIX: Read explicit sessionDurationMode field (now in OnboardingProfile type)
     // TASK 1A: Session duration mode - 'static' = fixed duration, 'adaptive' = engine adapts based on recovery
     sessionDurationMode: pick(

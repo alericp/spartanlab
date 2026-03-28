@@ -326,6 +326,13 @@ export default function SettingsPage() {
     message: string
     affectedSystems: string[]
   } | null>(null)
+  
+  // [PHASE 28B] Visible confirmation of saved schedule result
+  const [lastSavedScheduleResult, setLastSavedScheduleResult] = useState<{
+    scheduleMode: 'static' | 'flexible' | string | null
+    trainingDays: number | null
+    savedAt: string
+  } | null>(null)
 
   useEffect(() => {
     setMounted(true)
@@ -910,6 +917,13 @@ export default function SettingsPage() {
             
             logCanonicalProfileState('After settings save')
             setProfile(result.profile)
+            
+            // [PHASE 28B] Set visible confirmation of saved schedule result
+            setLastSavedScheduleResult({
+              scheduleMode: result.profile.scheduleMode,
+              trainingDays: result.profile.trainingDaysPerWeek,
+              savedAt: new Date().toISOString(),
+            })
             // Re-apply profile to UI state to ensure consistency
             applyProfileToState(result.profile)
           }
@@ -1208,6 +1222,24 @@ export default function SettingsPage() {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+          )}
+          
+          {/* [PHASE 28B] VISIBLE CONFIRMATION OF SAVED SCHEDULE RESULT */}
+          {lastSavedScheduleResult && (
+            <div className={`p-2 rounded-md text-xs font-mono flex items-center justify-between ${
+              lastSavedScheduleResult.scheduleMode === 'static'
+                ? 'bg-blue-500/20 border border-blue-500/40 text-blue-400'
+                : 'bg-emerald-500/20 border border-emerald-500/40 text-emerald-400'
+            }`}>
+              <span>
+                Saved: {lastSavedScheduleResult.scheduleMode === 'flexible' 
+                  ? 'Flexible / Adaptive' 
+                  : `Fixed ${lastSavedScheduleResult.trainingDays} days/week`}
+              </span>
+              <span className="text-[10px] opacity-70">
+                {new Date(lastSavedScheduleResult.savedAt).toLocaleTimeString()}
+              </span>
             </div>
           )}
           

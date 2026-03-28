@@ -634,6 +634,29 @@ export default function SettingsPage() {
       })
       
       // ==========================================================================
+      // [PHASE 29B] SETTINGS SAVE PAYLOAD TRUTH - Task 1
+      // Proves exact values being sent to API at save time
+      // ==========================================================================
+      console.log('[phase29b-settings-save-payload-truth]', {
+        // Local UI state
+        localScheduleMode: scheduleMode,
+        localTrainingDays: trainingDays,
+        localAdaptiveWorkloadEnabled: adaptiveWorkloadEnabled,
+        // Payload that will be sent
+        payloadScheduleMode,
+        payloadTrainingDaysPerWeek: payloadTrainingDays,
+        payloadAdaptiveWorkloadEnabled: adaptiveWorkloadEnabled,
+        // Verdict
+        verdict: payloadScheduleMode === 'static' && payloadTrainingDays === 6
+          ? 'SETTINGS_PAYLOAD_STATIC_6'
+          : payloadScheduleMode === 'static'
+            ? `SETTINGS_PAYLOAD_STATIC_${payloadTrainingDays}`
+            : payloadScheduleMode === 'flexible'
+              ? 'SETTINGS_PAYLOAD_FLEXIBLE'
+              : 'SETTINGS_PAYLOAD_INVALID',
+      })
+      
+      // ==========================================================================
       // [PHASE 29A] SETTINGS SCHEDULE CONTRACT SAVE LOG
       // Proves the correct separation between baseline schedule and adaptive workload
       // ==========================================================================
@@ -830,6 +853,45 @@ export default function SettingsPage() {
                 if (intended && apiHas && rawHas && athleteHas && !canonHas) return 'ATHLETE_STATIC_6_LOST_IN_CANONICAL'
                 if (!intended) return payloadScheduleMode === 'flexible' ? 'INTENDED_FLEXIBLE' : 'INTENDED_STATIC_OTHER'
                 return 'BOTH_SOURCES_NULL_AFTER_SAVE'
+              })(),
+            })
+            
+            // ==========================================================================
+            // [PHASE 29B] SETTINGS POST SAVE READBACK - Task 2
+            // Proves what was actually saved and what all sources now show
+            // ==========================================================================
+            console.log('[phase29b-settings-post-save-readback]', {
+              // What we sent
+              'sent.scheduleMode': payloadScheduleMode,
+              'sent.trainingDays': payloadTrainingDays,
+              'sent.adaptiveWorkload': adaptiveWorkloadEnabled,
+              // What API returned
+              'api.scheduleMode': result.profile.scheduleMode,
+              'api.trainingDays': result.profile.trainingDaysPerWeek,
+              // What localStorage athlete now shows
+              'athlete.scheduleMode': athleteReadback?.scheduleMode ?? null,
+              'athlete.trainingDays': athleteReadback?.trainingDaysPerWeek ?? null,
+              // What onboarding shows (should NOT have been changed)
+              'onboarding.scheduleMode': onboardingReadback?.scheduleMode ?? null,
+              'onboarding.trainingDays': onboardingReadback?.trainingDaysPerWeek ?? null,
+              // What canonical resolution returns
+              'canonical.scheduleMode': canonicalReadback?.scheduleMode ?? null,
+              'canonical.trainingDays': canonicalReadback?.trainingDaysPerWeek ?? null,
+              // Raw localStorage verification
+              'raw.scheduleMode': rawAthleteScheduleMode,
+              'raw.trainingDays': rawAthleteTrainingDays,
+              // Verdict chain
+              verdict: (() => {
+                const apiStatic6 = result.profile.scheduleMode === 'static' && result.profile.trainingDaysPerWeek === 6
+                const athleteStatic6 = athleteReadback?.scheduleMode === 'static' && athleteReadback?.trainingDaysPerWeek === 6
+                const canonStatic6 = canonicalReadback?.scheduleMode === 'static' && canonicalReadback?.trainingDaysPerWeek === 6
+                
+                if (apiStatic6 && athleteStatic6 && canonStatic6) return 'CANON_STATIC_6_PRESENT'
+                if (apiStatic6 && athleteStatic6 && !canonStatic6) return 'BUG_STATIC_6_LOST_IN_CANONICAL'
+                if (apiStatic6 && !athleteStatic6) return 'BUG_STATIC_6_NOT_PERSISTED_TO_LOCALSTORAGE'
+                if (!apiStatic6 && payloadScheduleMode === 'static') return 'BUG_SAVE_DID_NOT_PERSIST_STATIC_6'
+                if (payloadScheduleMode === 'flexible') return 'INTENDED_FLEXIBLE_SAVED'
+                return 'BUG_ATHLETE_AND_CANON_STILL_FLEXIBLE'
               })(),
             })
             

@@ -115,6 +115,32 @@ export function AdaptiveProgramForm({
       inputsKey,
       currentExplicitChoice: explicitScheduleChoice,
     })
+    
+    // ==========================================================================
+    // [PHASE 29B] FORM INITIAL STATE VS PREFILL - Task 5
+    // Proves form state matches prefill values
+    // ==========================================================================
+    console.log('[phase29b-form-initial-state-vs-prefill]', {
+      // Prefill (from scheduleTruthAudit)
+      'prefill.scheduleMode': scheduleTruthAudit?.prefillScheduleMode ?? null,
+      'prefill.trainingDays': scheduleTruthAudit?.prefillTrainingDays ?? null,
+      // Form initial state (what form is showing)
+      'form.scheduleMode': inputs.scheduleMode,
+      'form.trainingDays': inputs.trainingDaysPerWeek,
+      'form.adaptiveWorkload': scheduleTruthAudit?.adaptiveWorkloadEnabled ?? true,
+      // Match detection
+      scheduleModeMatches: scheduleTruthAudit?.prefillScheduleMode === inputs.scheduleMode,
+      trainingDaysMatches: scheduleTruthAudit?.prefillTrainingDays == inputs.trainingDaysPerWeek,
+      // Verdict
+      verdict: (() => {
+        const prefillStatic6 = scheduleTruthAudit?.prefillScheduleMode === 'static' && scheduleTruthAudit?.prefillTrainingDays === 6
+        const formStatic6 = inputs.scheduleMode === 'static' && inputs.trainingDaysPerWeek === 6
+        if (prefillStatic6 && formStatic6) return 'FORM_MATCHES_PREFILL_STATIC_6'
+        if (prefillStatic6 && !formStatic6) return 'BUG_FORM_REWROTE_PREFILL'
+        if (!prefillStatic6 && inputs.scheduleMode === 'flexible') return 'FORM_MATCHES_PREFILL_FLEXIBLE'
+        return 'FORM_STATE_SET'
+      })(),
+    })
   }, [inputsKey]) // eslint-disable-line react-hooks/exhaustive-deps
   
   const updateInput = <K extends keyof AdaptiveProgramInputs>(

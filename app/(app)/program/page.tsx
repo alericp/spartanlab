@@ -8743,6 +8743,49 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
     })
     
     // ==========================================================================
+    // [PHASE 29B] PROGRAM READ BEFORE MODIFY OPEN - Task 4
+    // Proves canonical profile values BEFORE builder opens
+    // ==========================================================================
+    console.log('[phase29b-program-read-before-modify-open]', {
+      // Canonical values
+      'canonical.scheduleMode': canonicalProfileNow.scheduleMode,
+      'canonical.trainingDays': canonicalProfileNow.trainingDaysPerWeek,
+      'canonical.adaptiveWorkload': (canonicalProfileNow as { adaptiveWorkloadEnabled?: boolean }).adaptiveWorkloadEnabled ?? true,
+      // Verdict
+      verdict: canonicalProfileNow.scheduleMode === 'static' && canonicalProfileNow.trainingDaysPerWeek === 6
+        ? 'CANONICAL_STATIC_6_PRESENT'
+        : canonicalProfileNow.scheduleMode === 'static'
+          ? `CANONICAL_STATIC_${canonicalProfileNow.trainingDaysPerWeek}_PRESENT`
+          : 'CANONICAL_FLEXIBLE_PRESENT',
+    })
+    
+    // ==========================================================================
+    // [PHASE 29B] MODIFY PREFILL CONTRACT - Task 4
+    // Proves prefill values match canonical exactly
+    // ==========================================================================
+    console.log('[phase29b-modify-prefill-contract]', {
+      // Canonical (source)
+      'canonical.scheduleMode': canonicalProfileNow.scheduleMode,
+      'canonical.trainingDays': canonicalProfileNow.trainingDaysPerWeek,
+      // Prefill (what builder will open with)
+      'prefill.scheduleMode': freshInputs.scheduleMode,
+      'prefill.trainingDays': freshInputs.trainingDaysPerWeek,
+      'prefill.adaptiveWorkload': freshInputs.adaptiveWorkloadEnabled ?? true,
+      // Match detection
+      scheduleModeMatches: canonicalProfileNow.scheduleMode === freshInputs.scheduleMode,
+      trainingDaysMatches: canonicalProfileNow.trainingDaysPerWeek === freshInputs.trainingDaysPerWeek,
+      // Verdict
+      verdict: (() => {
+        const canonIsStatic6 = canonicalProfileNow.scheduleMode === 'static' && canonicalProfileNow.trainingDaysPerWeek === 6
+        const prefillIsStatic6 = freshInputs.scheduleMode === 'static' && freshInputs.trainingDaysPerWeek === 6
+        if (canonIsStatic6 && prefillIsStatic6) return 'MODIFY_OPEN_PREFILLED_STATIC_6'
+        if (canonIsStatic6 && !prefillIsStatic6) return 'BUG_PREFILL_COLLAPSED_STATIC_TO_FLEXIBLE'
+        if (!canonIsStatic6 && freshInputs.scheduleMode === 'flexible') return 'MODIFY_OPEN_PREFILLED_FLEXIBLE'
+        return 'MODIFY_OPEN_PREFILLED_OTHER'
+      })(),
+    })
+    
+    // ==========================================================================
     // [PHASE 29A] MODIFY OPEN BASELINE TRUTH LOG
     // Proves the builder opened with correct baseline schedule identity
     // Adaptive workload is shown SEPARATELY from schedule baseline

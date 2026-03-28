@@ -1038,9 +1038,30 @@ export function AdaptiveProgramDisplay({
           <div className="flex items-center gap-2">
             <Calendar className="w-4 h-4 text-[#E63946]" />
             <div>
-              <p className="text-xs text-[#6A6A6A]">
-                {program.scheduleMode === 'flexible' ? 'Schedule' : 'Days/Week'}
-              </p>
+              {/* [PHASE 28F] Display Schedule Contract - distinguish adaptive behavior from baseline frequency */}
+              <p className="text-xs text-[#6A6A6A]">Schedule</p>
+              {(() => {
+                // [PHASE 28F] Log display contract
+                const baselineFrequency = program.trainingDaysPerWeek
+                const isFlexible = program.scheduleMode === 'flexible'
+                const displayLabel = isFlexible 
+                  ? 'Adaptive program'
+                  : `Adaptive program • baseline ${baselineFrequency} days/week`
+                const displaySubLabel = isFlexible
+                  ? `${validSessions.length} sessions this week`
+                  : `${validSessions.length} sessions this week`
+                
+                console.log('[phase28f-display-schedule-contract]', {
+                  programScheduleMode: program.scheduleMode,
+                  programTrainingDaysPerWeek: baselineFrequency,
+                  displayLabel,
+                  displaySubLabel,
+                  verdict: isFlexible 
+                    ? 'DISPLAY_SHOWS_TRUE_FLEXIBLE'
+                    : `DISPLAY_SHOWS_BASELINE_FIXED_${baselineFrequency}`,
+                })
+                return null
+              })()}
               {program.scheduleMode === 'flexible' ? (
                 // ISSUE D FIX: Clear distinction between saved adaptive preference and current week resolution
                 // [PHASE 8] Show truthful reason for current frequency
@@ -1050,7 +1071,7 @@ export function AdaptiveProgramDisplay({
                   </div>
                   <span className="text-xs text-[#6A6A6A]">
                     {/* TASK 4: Use validSessions.length as canonical truth - never stale summary values */}
-                    {validSessions.length} sessions this week
+                    weekly frequency auto-adjusts • {validSessions.length} sessions
                   </span>
                   {/* [PHASE 7 TASK 2] Truthful frequency explanation - "adapted from feedback" ONLY when real feedback exists */}
                   {/* [PHASE 12 TASK 3] Clarified: adaptation happens at build time, not automatically */}
@@ -1091,11 +1112,16 @@ export function AdaptiveProgramDisplay({
                   )}
                 </div>
               ) : (
-                // STATIC USER: Show actual session count from generated program - this is canonical
-                // TASK 4: Previously used program.trainingDaysPerWeek which could be stale
-                <p className="text-sm font-medium">
-                  {validSessions.length} days
-                </p>
+                // STATIC USER: [PHASE 28F] Show "Adaptive program • baseline X days/week"
+                // Distinguishes adaptive behavior from baseline frequency truth
+                <div className="flex flex-col">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-sm font-medium">Baseline {program.trainingDaysPerWeek} days/week</span>
+                  </div>
+                  <span className="text-xs text-[#6A6A6A]">
+                    {validSessions.length} sessions this week
+                  </span>
+                </div>
               )}
             </div>
           </div>

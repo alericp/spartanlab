@@ -28,13 +28,15 @@ import { DURATION_PREFERENCE_LABELS, type SessionDurationMinutes } from '@/lib/d
 // This allows us to verify which version of the form is rendering
 // ==========================================================================
 const PHASE27C_FORM_BUILD_IDENTITY = {
-  formBuildIdentityName: 'PHASE28B_ADAPTIVE_PROGRAM_FORM',
-  formBuildIdentityVersion: '2024-PHASE28B-v1',
+  formBuildIdentityName: 'PHASE28DE_ADAPTIVE_PROGRAM_FORM',
+  formBuildIdentityVersion: '2024-PHASE28DE-v1',
   hasExplicitChoiceTracking: true,
   hasAmberWarningStyle: true,
-  scheduleSelectorVariant: 'PHASE28B_WITH_VISIBLE_TRUTH_BAR',
+  scheduleSelectorVariant: 'PHASE28DE_WITH_VISIBLE_TRUTH_BAR',
   hasScheduleTruthDebugPanel: true,
   hasVisibleTruthBar: true,
+  hasLiveModifyAuditSeeding: true,
+  scheduleResolutionFix: 'ATHLETE_STATIC_BEATS_ONBOARDING_FLEXIBLE',
 } as const
 
 // [PHASE 27B] Explicit schedule choice tracking for current builder session
@@ -141,25 +143,38 @@ export function AdaptiveProgramForm({
   }
 
   // ==========================================================================
-  // [PHASE 27C] FORM RENDER IDENTITY LOG
-  // This proves the live form is the expected Phase 27C version
+  // [PHASE 28E.5] PREFILL LOCK LOG - Form Render
+  // Proves whether form inputs match what canonical/prefill intended
   // ==========================================================================
   const selectorValue = inputs.scheduleMode === 'flexible' || inputs.trainingDaysPerWeek === 'flexible' 
     ? 'flexible' 
     : String(inputs.trainingDaysPerWeek)
   const selectorOptionsPresent = ['flexible', '2', '3', '4', '5', '6', '7'] // Expected options
   
-  console.log('[phase27c-build-identity-form-render]', {
-    ...PHASE27C_FORM_BUILD_IDENTITY,
-    event: 'FORM_RENDERED',
-    currentSelectorValue: selectorValue,
-    currentScheduleMode: inputs.scheduleMode,
-    currentTrainingDaysPerWeek: inputs.trainingDaysPerWeek,
-    selectorIncludesFlexibleAndNumeric: true,
-    selectorOptionsPresent,
-    submitSnapshotVariant: 'PHASE27C_AMBER_WARNING_EXPLICIT_CHOICE',
-    explicitChoiceTrackingEnabled: true,
-    verdict: 'LIVE_UI_MATCHES_LOCAL_EXPECTED_VARIANT',
+  // Check if prefill matches what form is rendering
+  const prefillMatchesForm = scheduleTruthAudit 
+    ? scheduleTruthAudit.prefillScheduleMode === inputs.scheduleMode
+    : true // No audit = assume match
+  
+  console.log('[phase28e5-live-modify-prefill-lock]', {
+    checkpoint: 'FORM_RENDER',
+    // Builder session inputs (what should be used)
+    builderSessionScheduleMode: inputs.scheduleMode,
+    builderSessionTrainingDays: inputs.trainingDaysPerWeek,
+    // Selector rendered value
+    selectorRenderedValue: selectorValue,
+    // Audit info if available
+    auditPrefillScheduleMode: scheduleTruthAudit?.prefillScheduleMode ?? null,
+    auditPrefillTrainingDays: scheduleTruthAudit?.prefillTrainingDays ?? null,
+    auditCanonicalScheduleMode: scheduleTruthAudit?.canonicalScheduleMode ?? null,
+    // Explicit choice present
+    explicitChoicePresent: inputs.scheduleMode !== undefined,
+    // Verdicts
+    prefillMatchesForm,
+    verdict: prefillMatchesForm 
+      ? 'PREFILL_LOCK_MATCH' 
+      : 'PREFILL_MASKED_AFTER_OPEN',
+    formBuildIdentity: PHASE27C_FORM_BUILD_IDENTITY.formBuildIdentityName,
   })
   
   return (

@@ -398,68 +398,152 @@ export function reconcileCanonicalProfile(): CanonicalProgrammingProfile {
       athleteProfile?.experienceLevel,
       'beginner'  // Safe default only for new users, not override
     ),
-    trainingDaysPerWeek: pick(
-      onboardingProfile?.scheduleMode === 'flexible' ? null : 
-        typeof onboardingProfile?.trainingDaysPerWeek === 'number' ? onboardingProfile.trainingDaysPerWeek : null,
-      athleteProfile?.scheduleMode === 'flexible' ? null : athleteProfile?.trainingDaysPerWeek,
-      null  // TASK 1B: null = no fallback, validation catches
-    ),
-    // ISSUE A/B FIX: Read explicit scheduleMode field (now in OnboardingProfile type)
-    scheduleMode: (() => {
-      const resolvedMode = pick(
-        onboardingProfile?.scheduleMode, 
-        athleteProfile?.scheduleMode, 
-        // ISSUE D FIX: Infer from trainingDaysPerWeek if scheduleMode not set
-        onboardingProfile?.trainingDaysPerWeek === 'flexible' ? 'flexible' : 'static'
-      )
+    // ==========================================================================
+    // [PHASE 28D] UNIFIED SCHEDULE RESOLUTION - FIX CANONICAL PRECEDENCE
+    // Athlete/settings explicit static schedule BEATS stale onboarding flexible
+    // This ensures Settings changes are properly respected
+    // ==========================================================================
+    ...(() => {
+      // Step 1: Determine what each source has explicitly
+      const onboardingExplicitFlexible = onboardingProfile?.scheduleMode === 'flexible'
+      const onboardingExplicitStatic = onboardingProfile?.scheduleMode === 'static' && 
+        typeof onboardingProfile?.trainingDaysPerWeek === 'number'
+      const onboardingHasExplicit = onboardingExplicitFlexible || onboardingExplicitStatic
       
-      // ==========================================================================
-      // [PHASE 28B] CANONICAL SOURCE WINNER LOG
-      // Proves exactly which source won for scheduleMode
-      // ==========================================================================
-      const scheduleModeWinner = onboardingProfile?.scheduleMode !== undefined && onboardingProfile?.scheduleMode !== null
-        ? 'onboarding'
-        : athleteProfile?.scheduleMode !== undefined && athleteProfile?.scheduleMode !== null
-          ? 'athlete'
-          : 'fallback'
+      const athleteExplicitFlexible = athleteProfile?.scheduleMode === 'flexible'
+      const athleteExplicitStatic = athleteProfile?.scheduleMode === 'static' && 
+        typeof athleteProfile?.trainingDaysPerWeek === 'number'
+      const athleteHasExplicit = athleteExplicitFlexible || athleteExplicitStatic
       
-      const trainingDaysWinner = (onboardingProfile?.scheduleMode !== 'flexible' && typeof onboardingProfile?.trainingDaysPerWeek === 'number')
-        ? 'onboarding'
-        : (athleteProfile?.scheduleMode !== 'flexible' && typeof athleteProfile?.trainingDaysPerWeek === 'number')
-          ? 'athlete'
-          : 'fallback'
+      // Step 2: Check for timestamp-aware precedence
+      // Look for updatedAt, savedAt, lastModified fields
+      const onboardingTimestamp = (onboardingProfile as { updatedAt?: string; savedAt?: string; lastModified?: string })?.updatedAt ||
+        (onboardingProfile as { savedAt?: string })?.savedAt ||
+        (onboardingProfile as { lastModified?: string })?.lastModified || null
+      const athleteTimestamp = (athleteProfile as { updatedAt?: string; savedAt?: string; lastModified?: string })?.updatedAt ||
+        (athleteProfile as { savedAt?: string })?.savedAt ||
+        (athleteProfile as { lastModified?: string })?.lastModified || null
       
-      const resolvedTrainingDays = pick(
-        onboardingProfile?.scheduleMode === 'flexible' ? null : 
-          typeof onboardingProfile?.trainingDaysPerWeek === 'number' ? onboardingProfile.trainingDaysPerWeek : null,
-        athleteProfile?.scheduleMode === 'flexible' ? null : athleteProfile?.trainingDaysPerWeek,
-        null
-      )
+      const timestampsAvailable = !!(onboardingTimestamp && athleteTimestamp)
+      let athleteIsNewer = false
+      if (timestampsAvailable) {
+        const onboardingDate = new Date(onboardingTimestamp).getTime()
+        const athleteDate = new Date(athleteTimestamp).getTime()
+        athleteIsNewer = athleteDate > onboardingDate
+      }
       
-      const verdict = scheduleModeWinner === 'onboarding'
-        ? (resolvedMode === 'flexible' ? 'ONBOARDING_WON_FLEXIBLE' : `ONBOARDING_WON_STATIC_${resolvedTrainingDays}`)
-        : scheduleModeWinner === 'athlete'
-          ? (resolvedMode === 'flexible' ? 'ATHLETE_WON_FLEXIBLE' : `ATHLETE_WON_STATIC_${resolvedTrainingDays}`)
-          : 'FALLBACK_WON'
+      // Step 3: Apply smart precedence rules for schedule fields
+      // CRITICAL: Athlete/settings explicit static beats stale onboarding flexible
+      let winnerSource: 'onboarding' | 'athlete' | 'fallback' = 'fallback'
+      let resolvedScheduleMode: 'static' | 'flexible' = 'flexible'
+      let resolvedTrainingDays: number | null = null
+      let verdictReason = ''
       
-      console.log('[phase28b-canonical-source-winner]', {
+      if (timestampsAvailable && athleteIsNewer && athleteHasExplicit) {
+        // Timestamp says athlete is newer and has explicit value - athlete wins
+        winnerSource = 'athlete'
+        if (athleteExplicitStatic) {
+          resolvedScheduleMode = 'static'
+          resolvedTrainingDays = athleteProfile!.trainingDaysPerWeek as number
+          verdictReason = 'ATHLETE_STATIC_OVERRIDES_STALE_ONBOARDING_FLEXIBLE'
+        } else {
+          resolvedScheduleMode = 'flexible'
+          resolvedTrainingDays = null
+          verdictReason = 'ATHLETE_FLEXIBLE_RETAINED'
+        }
+      } else if (timestampsAvailable && !athleteIsNewer && onboardingHasExplicit) {
+        // Timestamp says onboarding is newer and has explicit value - onboarding wins
+        winnerSource = 'onboarding'
+        if (onboardingExplicitStatic) {
+          resolvedScheduleMode = 'static'
+          resolvedTrainingDays = onboardingProfile!.trainingDaysPerWeek as number
+          verdictReason = 'ONBOARDING_STATIC_RETAINED'
+        } else {
+          resolvedScheduleMode = 'flexible'
+          resolvedTrainingDays = null
+          verdictReason = 'ONBOARDING_FLEXIBLE_RETAINED'
+        }
+      } else if (!timestampsAvailable) {
+        // No timestamps - use smart fallback precedence
+        // RULE: Athlete explicit static beats onboarding flexible
+        if (athleteExplicitStatic && onboardingExplicitFlexible) {
+          // Settings has explicit static, onboarding has flexible - ATHLETE WINS
+          winnerSource = 'athlete'
+          resolvedScheduleMode = 'static'
+          resolvedTrainingDays = athleteProfile!.trainingDaysPerWeek as number
+          verdictReason = 'ATHLETE_STATIC_OVERRIDES_STALE_ONBOARDING_FLEXIBLE'
+        } else if (athleteExplicitStatic && !onboardingHasExplicit) {
+          // Only athlete has explicit static - athlete wins
+          winnerSource = 'athlete'
+          resolvedScheduleMode = 'static'
+          resolvedTrainingDays = athleteProfile!.trainingDaysPerWeek as number
+          verdictReason = 'ATHLETE_STATIC_RETAINED'
+        } else if (onboardingExplicitStatic && !athleteHasExplicit) {
+          // Only onboarding has explicit static - onboarding wins
+          winnerSource = 'onboarding'
+          resolvedScheduleMode = 'static'
+          resolvedTrainingDays = onboardingProfile!.trainingDaysPerWeek as number
+          verdictReason = 'ONBOARDING_STATIC_RETAINED'
+        } else if (athleteExplicitFlexible && onboardingExplicitStatic) {
+          // Athlete chose flexible after onboarding set static - respect athlete choice
+          winnerSource = 'athlete'
+          resolvedScheduleMode = 'flexible'
+          resolvedTrainingDays = null
+          verdictReason = 'ATHLETE_FLEXIBLE_OVERRIDES_STALE_ONBOARDING_STATIC'
+        } else if (onboardingExplicitFlexible && !athleteHasExplicit) {
+          // Only onboarding has explicit - use it
+          winnerSource = 'onboarding'
+          resolvedScheduleMode = 'flexible'
+          resolvedTrainingDays = null
+          verdictReason = 'ONBOARDING_FLEXIBLE_RETAINED'
+        } else if (athleteExplicitFlexible && !onboardingHasExplicit) {
+          // Only athlete has explicit - use it
+          winnerSource = 'athlete'
+          resolvedScheduleMode = 'flexible'
+          resolvedTrainingDays = null
+          verdictReason = 'ATHLETE_FLEXIBLE_RETAINED'
+        } else {
+          // Neither has explicit schedule - fallback
+          winnerSource = 'fallback'
+          resolvedScheduleMode = 'flexible'
+          resolvedTrainingDays = null
+          verdictReason = 'FALLBACK_USED'
+        }
+      } else {
+        // Edge case - timestamps exist but winner source didn't match above
+        winnerSource = 'fallback'
+        resolvedScheduleMode = 'flexible'
+        resolvedTrainingDays = null
+        verdictReason = 'FALLBACK_USED'
+      }
+      
+      // Step 4: Log the resolution with full forensics
+      console.log('[phase28d-canonical-schedule-resolution]', {
         // Source values
         onboardingScheduleMode: onboardingProfile?.scheduleMode ?? null,
-        onboardingTrainingDaysPerWeek: onboardingProfile?.trainingDaysPerWeek ?? null,
+        onboardingTrainingDays: onboardingProfile?.trainingDaysPerWeek ?? null,
         athleteScheduleMode: athleteProfile?.scheduleMode ?? null,
-        athleteTrainingDaysPerWeek: athleteProfile?.trainingDaysPerWeek ?? null,
-        // Resolved values
-        canonicalResolvedScheduleMode: resolvedMode,
-        canonicalResolvedTrainingDaysPerWeek: resolvedTrainingDays,
-        // Winner determination
-        scheduleModeWinnerSource: scheduleModeWinner,
-        trainingDaysWinnerSource: trainingDaysWinner,
+        athleteTrainingDays: athleteProfile?.trainingDaysPerWeek ?? null,
+        // Explicit flags
+        onboardingExplicitFlexible,
+        onboardingExplicitStatic,
+        athleteExplicitFlexible,
+        athleteExplicitStatic,
+        // Timestamp info
+        timestampsUsed: timestampsAvailable,
+        athleteIsNewer: timestampsAvailable ? athleteIsNewer : null,
+        // Resolution
+        winnerSource,
+        resolvedScheduleMode,
+        resolvedTrainingDaysPerWeek: resolvedTrainingDays,
         // Verdict
-        verdict,
-        mixedSources: scheduleModeWinner !== trainingDaysWinner && trainingDaysWinner !== 'fallback',
+        verdict: verdictReason,
       })
       
-      return resolvedMode
+      return {
+        scheduleMode: resolvedScheduleMode,
+        trainingDaysPerWeek: resolvedTrainingDays,
+      }
     })(),
     // ISSUE A/B FIX: Read explicit sessionDurationMode field (now in OnboardingProfile type)
     // TASK 1A: Session duration mode - 'static' = fixed duration, 'adaptive' = engine adapts based on recovery

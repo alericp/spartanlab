@@ -402,6 +402,24 @@ export default function ProgramPage() {
   }, [builderSessionInputs])
   
   // ==========================================================================
+  // [PHASE 26] CRITICAL FIX: Use a ref to always have the CURRENT builderSessionInputs
+  // The IIFE closure in the render captures stale state. This ref ensures the submit
+  // handler always reads the latest user selections, not the stale render-time value.
+  // ==========================================================================
+  const builderSessionInputsRef = useRef<AdaptiveProgramInputs | null>(null)
+  useEffect(() => {
+    builderSessionInputsRef.current = builderSessionInputs
+    console.log('[phase26-6day-truth-chain-forced-verdict]', {
+      stage: 'REF_UPDATED_WITH_CURRENT_STATE',
+      scheduleMode: builderSessionInputs?.scheduleMode,
+      trainingDaysPerWeek: builderSessionInputs?.trainingDaysPerWeek,
+      verdict: builderSessionInputs?.scheduleMode === 'static'
+        ? `REF_NOW_HAS_STATIC_${builderSessionInputs?.trainingDaysPerWeek}_DAYS`
+        : 'REF_NOW_HAS_FLEXIBLE',
+    })
+  }, [builderSessionInputs])
+  
+  // ==========================================================================
   // [PHASE 24D] EXPLICIT MODIFY FLOW STATE MACHINE
   // This is the PRIMARY source of truth for the Modify UI path
   // - 'idle': normal program view, no modify interaction active
@@ -3003,6 +3021,25 @@ export default function ProgramPage() {
               : handleGenerateReceivedStatic === false && !finalProgramIsStatic
                 ? 'FLEXIBLE_PRESERVED_END_TO_END'
                 : 'UNKNOWN_STATE_COMBINATION',
+        })
+        
+        // ==========================================================================
+        // [PHASE 26] 6-DAY TRUTH CHAIN FORCED VERDICT - FINAL END-TO-END AUDIT
+        // This is the definitive proof that the ref-based fix works
+        // ==========================================================================
+        console.log('[phase26-6day-truth-chain-forced-verdict]', {
+          stage: 'FINAL_PROGRAM_SAVED',
+          handleGenerateScheduleMode: effectiveInputs?.scheduleMode,
+          handleGenerateTrainingDaysPerWeek: effectiveInputs?.trainingDaysPerWeek,
+          finalProgramSavedScheduleMode: finalProgramScheduleMode,
+          finalProgramSavedTrainingDaysPerWeek: finalProgramTrainingDays,
+          finalProgramSessionCount,
+          phase26RefFixApplied: true,
+          verdict: truthPreservedEndToEnd
+            ? `PHASE26_SUCCESS_STATIC_${effectiveInputs?.trainingDaysPerWeek}_DAYS_END_TO_END`
+            : truthLostInEngine
+              ? 'PHASE26_FAILED_ENGINE_STILL_REWRITING'
+              : 'PHASE26_FLEXIBLE_PATH_PRESERVED',
         })
         
         setProgram(newProgram)
@@ -9415,33 +9452,60 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
               // builderSessionInputs for the prefilled values the user may have edited.
               // ==========================================================================
               const isLegacyModifyFlow = builderOrigin === 'modify_start_new'
+              // [PHASE 26] Check BOTH state and ref - state for React rendering, ref for submit
               const hasBuilderSessionInputs = !!builderSessionInputs
               
-              // [PHASE 25] Use session inputs if they exist (from either canonical or legacy modify)
+              // [PHASE 25/26] Use session inputs if they exist (from either canonical or legacy modify)
+              // Note: For rendering, we use the state (builderSessionInputs) so React rerenders properly
+              // For submit, we use the ref (builderSessionInputsRef.current) to avoid stale closures
               const effectiveBuilderInputs = hasBuilderSessionInputs
                 ? builderSessionInputs
                 : inputs
               
               // [PHASE 25] Create unified submit handler that passes correct inputs
               // Both canonical modify and legacy modify paths converge here
+              // ==========================================================================
+              // [PHASE 26] CRITICAL FIX: Read from REF at click time, not stale closure
+              // The IIFE captures `builderSessionInputs` at render time, but the user may
+              // change the selector AFTER render. Using the ref ensures we get the CURRENT
+              // value at the moment the button is clicked.
+              // ==========================================================================
               const unifiedSubmitHandler = () => {
+                // [PHASE 26] Read CURRENT state from ref, not stale closure
+                const currentBuilderSessionInputs = builderSessionInputsRef.current
+                const hasCurrentSessionInputs = !!currentBuilderSessionInputs
+                
                 // ==========================================================================
-                // [PHASE 25X] LIVE SUBMIT TRUTH VS SELECTOR STATE - CRITICAL AUDIT
+                // [PHASE 26] 6-DAY TRUTH CHAIN FORCED VERDICT - CRITICAL AUDIT
                 // This captures the EXACT state at the moment Build Adaptive Program is clicked
+                // using the REF which has the CURRENT value, not the stale closure value
                 // ==========================================================================
+                console.log('[phase26-6day-truth-chain-forced-verdict]', {
+                  stage: 'BUILD_ADAPTIVE_PROGRAM_CLICKED',
+                  staleClosureScheduleMode: builderSessionInputs?.scheduleMode,
+                  staleClosureTrainingDays: builderSessionInputs?.trainingDaysPerWeek,
+                  currentRefScheduleMode: currentBuilderSessionInputs?.scheduleMode,
+                  currentRefTrainingDays: currentBuilderSessionInputs?.trainingDaysPerWeek,
+                  staleDiffersFromCurrent: builderSessionInputs?.scheduleMode !== currentBuilderSessionInputs?.scheduleMode ||
+                    builderSessionInputs?.trainingDaysPerWeek !== currentBuilderSessionInputs?.trainingDaysPerWeek,
+                  verdict: hasCurrentSessionInputs
+                    ? (currentBuilderSessionInputs?.scheduleMode === 'static'
+                        ? `SUBMIT_USING_REF_STATIC_${currentBuilderSessionInputs?.trainingDaysPerWeek}_DAYS`
+                        : 'SUBMIT_USING_REF_FLEXIBLE')
+                    : 'SUBMIT_USING_PAGE_INPUTS',
+                })
+                
                 console.log('[phase25x-live-submit-truth-vs-selector-state]', {
                   stage: 'BUILD_ADAPTIVE_PROGRAM_CLICKED',
-                  hasBuilderSessionInputs,
-                  builderSessionInputsScheduleMode: builderSessionInputs?.scheduleMode,
-                  builderSessionInputsTrainingDays: builderSessionInputs?.trainingDaysPerWeek,
+                  hasBuilderSessionInputs: hasCurrentSessionInputs,
+                  builderSessionInputsScheduleMode: currentBuilderSessionInputs?.scheduleMode,
+                  builderSessionInputsTrainingDays: currentBuilderSessionInputs?.trainingDaysPerWeek,
                   pageInputsScheduleMode: inputs?.scheduleMode,
                   pageInputsTrainingDays: inputs?.trainingDaysPerWeek,
-                  effectiveInputsScheduleMode: effectiveBuilderInputs?.scheduleMode,
-                  effectiveInputsTrainingDays: effectiveBuilderInputs?.trainingDaysPerWeek,
-                  willPassToHandleGenerate: hasBuilderSessionInputs ? 'builderSessionInputs' : 'no_overrides',
-                  verdict: hasBuilderSessionInputs 
-                    ? (builderSessionInputs?.scheduleMode === 'static' 
-                        ? `SUBMIT_CONFIRMED_STATIC_${builderSessionInputs?.trainingDaysPerWeek}_DAYS`
+                  willPassToHandleGenerate: hasCurrentSessionInputs ? 'builderSessionInputsRef.current' : 'no_overrides',
+                  verdict: hasCurrentSessionInputs 
+                    ? (currentBuilderSessionInputs?.scheduleMode === 'static' 
+                        ? `SUBMIT_CONFIRMED_STATIC_${currentBuilderSessionInputs?.trainingDaysPerWeek}_DAYS`
                         : 'SUBMIT_USING_FLEXIBLE_FROM_SESSION')
                     : 'SUBMIT_USING_PAGE_INPUTS',
                 })
@@ -9449,18 +9513,18 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
                 console.log('[phase25-canonical-modify-replacement]', {
                   action: 'UNIFIED_SUBMIT_FIRED',
                   isLegacyModifyFlow,
-                  hasBuilderSessionInputs,
+                  hasBuilderSessionInputs: hasCurrentSessionInputs,
                   builderOrigin,
-                  effectiveInputsScheduleMode: effectiveBuilderInputs?.scheduleMode,
-                  effectiveInputsTrainingDays: effectiveBuilderInputs?.trainingDaysPerWeek,
-                  verdict: hasBuilderSessionInputs 
-                    ? 'USING_BUILDER_SESSION_INPUTS' 
+                  effectiveInputsScheduleMode: currentBuilderSessionInputs?.scheduleMode,
+                  effectiveInputsTrainingDays: currentBuilderSessionInputs?.trainingDaysPerWeek,
+                  verdict: hasCurrentSessionInputs 
+                    ? 'USING_BUILDER_SESSION_INPUTS_FROM_REF' 
                     : 'USING_PAGE_INPUTS',
                 })
                 
-                if (hasBuilderSessionInputs) {
-                  // [PHASE 25] Either canonical or legacy modify: pass session inputs
-                  handleGenerate(builderSessionInputs)
+                if (hasCurrentSessionInputs) {
+                  // [PHASE 26] Use ref.current which has the CURRENT user selections
+                  handleGenerate(currentBuilderSessionInputs)
                 } else {
                   // Onboarding/default flow: use page inputs (no overrides)
                   handleGenerate()

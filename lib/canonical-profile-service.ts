@@ -579,6 +579,45 @@ export function reconcileCanonicalProfile(): CanonicalProgrammingProfile {
       })
       
       // ==========================================================================
+      // [PHASE 29B] CANONICAL SCHEDULE WINNER LOG - Task 3
+      // Proves exactly which source won and detects if static 6 was dropped
+      // ==========================================================================
+      console.log('[phase29b-canonical-schedule-winner]', {
+        // Raw source values
+        'onboarding.scheduleMode': onboardingProfile?.scheduleMode ?? null,
+        'onboarding.trainingDays': onboardingProfile?.trainingDaysPerWeek ?? null,
+        'athlete.scheduleMode': athleteProfile?.scheduleMode ?? null,
+        'athlete.trainingDays': athleteProfile?.trainingDaysPerWeek ?? null,
+        // Explicit flags
+        athleteExplicitStatic,
+        onboardingExplicitFlexible,
+        // Timestamps (if available)
+        timestampsAvailable,
+        athleteIsNewer: timestampsAvailable ? athleteIsNewer : null,
+        // Resolution result
+        winnerSource,
+        'resolved.scheduleMode': resolvedScheduleMode,
+        'resolved.trainingDays': resolvedTrainingDays,
+        'resolved.adaptiveWorkload': resolvedAdaptiveWorkload,
+        // Verdict
+        verdict: (() => {
+          if (athleteExplicitStatic && athleteProfile?.trainingDaysPerWeek === 6) {
+            if (resolvedScheduleMode === 'static' && resolvedTrainingDays === 6) {
+              return 'ATHLETE_STATIC_6_WINS'
+            }
+            return 'BUG_ATHLETE_STATIC_6_DROPPED'
+          }
+          if (onboardingExplicitFlexible && resolvedScheduleMode === 'flexible') {
+            return 'ONBOARDING_FLEXIBLE_WINS_WITH_VALID_REASON'
+          }
+          if (resolvedScheduleMode === 'flexible' && athleteProfile?.scheduleMode === 'flexible') {
+            return 'ATHLETE_FLEXIBLE_RETAINED'
+          }
+          return winnerSource === 'athlete' ? 'ATHLETE_WINS' : 'ONBOARDING_WINS'
+        })(),
+      })
+      
+      // ==========================================================================
       // [PHASE 28L] CANONICAL SCHEDULE SOURCE WINNER LOG
       // Proves exactly which source won and detects if static was dropped
       // ==========================================================================

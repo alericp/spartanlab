@@ -150,6 +150,16 @@ export function AdaptiveProgramForm({
                     to: 'flexible',
                     verdict: 'USER_CHOSE_FLEXIBLE',
                   })
+                  // ==========================================================================
+                  // [PHASE 25Z] Track when user explicitly selects flexible
+                  // ==========================================================================
+                  console.log('[phase25z-6day-registration-final-truth-chain]', {
+                    stage: 'SELECTOR_ONCHANGE',
+                    selectedValue: v,
+                    newInputsScheduleMode: 'flexible',
+                    newInputsTrainingDaysPerWeek: 'flexible',
+                    verdict: 'USER_EXPLICITLY_CHOSE_FLEXIBLE',
+                  })
                   onInputChange({
                     ...inputs,
                     trainingDaysPerWeek: 'flexible',
@@ -188,6 +198,17 @@ export function AdaptiveProgramForm({
                     newInputsScheduleMode: newInputs.scheduleMode,
                     newInputsTrainingDaysPerWeek: newInputs.trainingDaysPerWeek,
                     verdict: 'USER_SELECTED_STATIC_' + numDays + '_CALLING_ONINPUTCHANGE',
+                  })
+                  // ==========================================================================
+                  // [PHASE 25Z] 6-DAY REGISTRATION FINAL TRUTH CHAIN
+                  // ==========================================================================
+                  console.log('[phase25z-6day-registration-final-truth-chain]', {
+                    stage: 'SELECTOR_ONCHANGE',
+                    selectedValue: v,
+                    numDays,
+                    newInputsScheduleMode: newInputs.scheduleMode,
+                    newInputsTrainingDaysPerWeek: newInputs.trainingDaysPerWeek,
+                    verdict: `USER_SELECTED_STATIC_${numDays}_DAYS`,
                   })
                   onInputChange(newInputs)
                 }

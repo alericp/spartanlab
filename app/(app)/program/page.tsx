@@ -2979,6 +2979,32 @@ export default function ProgramPage() {
             : `FINAL_PROGRAM_IS_FLEXIBLE_WITH_${finalProgramSessionCount}_SESSIONS`,
         })
         
+        // ==========================================================================
+        // [PHASE 25Z] 6-DAY REGISTRATION FINAL TRUTH CHAIN - END-TO-END VERDICT
+        // This is the definitive audit of whether static 6 survived the full chain
+        // ==========================================================================
+        const handleGenerateReceivedStatic = effectiveInputs?.scheduleMode === 'static'
+        const finalProgramIsStatic = finalProgramScheduleMode === 'static'
+        const truthPreservedEndToEnd = handleGenerateReceivedStatic && finalProgramIsStatic
+        const truthLostInEngine = handleGenerateReceivedStatic && !finalProgramIsStatic
+        
+        console.log('[phase25z-6day-registration-final-truth-chain]', {
+          handleGenerateScheduleMode: effectiveInputs?.scheduleMode,
+          handleGenerateTrainingDaysPerWeek: effectiveInputs?.trainingDaysPerWeek,
+          finalProgramSavedScheduleMode: finalProgramScheduleMode,
+          finalProgramSavedTrainingDaysPerWeek: finalProgramTrainingDays,
+          finalProgramSessionCount,
+          truthPreservedEndToEnd,
+          truthLostInEngine,
+          verdict: truthPreservedEndToEnd
+            ? `STATIC_${effectiveInputs?.trainingDaysPerWeek}_SURVIVED_END_TO_END`
+            : truthLostInEngine
+              ? 'ENGINE_REWROTE_STATIC_TO_FLEXIBLE'
+              : handleGenerateReceivedStatic === false && !finalProgramIsStatic
+                ? 'FLEXIBLE_PRESERVED_END_TO_END'
+                : 'UNKNOWN_STATE_COMBINATION',
+        })
+        
         setProgram(newProgram)
         setShowBuilder(false)
         

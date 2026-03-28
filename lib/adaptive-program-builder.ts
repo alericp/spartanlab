@@ -2701,27 +2701,34 @@ async function generateAdaptiveProgramImpl(
       'ROOT_CAUSE_FIXED_BUILDER_NO_LONGER_USES_STALE_LEGACY_IDENTITY',
   })
   // ==========================================================================
-  // [PHASE 24O] CRITICAL FIX: Fresh inputs.scheduleMode must take precedence over stale canonical
-  // If inputs explicitly provide static mode with numeric days, that is the user's current intent
-  // Do NOT let old canonical flexible mode override explicit current generation inputs
+  // [PHASE 24O/24Q] CRITICAL FIX: Explicit numeric day selection FORCES static mode
+  // If inputs contain a numeric trainingDaysPerWeek (2-7), that is explicit static intent
+  // Do NOT let old canonical flexible mode OR missing inputs.scheduleMode override this
   // ==========================================================================
-  const hasExplicitStaticInputs = inputs.scheduleMode === 'static' || 
-    (typeof inputs.trainingDaysPerWeek === 'number' && inputs.trainingDaysPerWeek >= 2 && inputs.trainingDaysPerWeek <= 7)
+  const hasExplicitNumericDays = typeof inputs.trainingDaysPerWeek === 'number' && 
+    inputs.trainingDaysPerWeek >= 2 && inputs.trainingDaysPerWeek <= 7
+  const hasExplicitStaticInputs = inputs.scheduleMode === 'static' || hasExplicitNumericDays
   
-  // [PHASE 24O] Inputs-first precedence when inputs have explicit static intent
-  const inputScheduleMode = hasExplicitStaticInputs && inputs.scheduleMode
-    ? inputs.scheduleMode  // Fresh explicit input takes precedence
-    : (canonicalProfile.scheduleMode || inputs.scheduleMode || normalizeScheduleMode(trainingDaysPerWeek))
+  // [PHASE 24Q] Force static mode when numeric days are explicitly selected
+  // This prevents stale flexible canonical profile from overriding explicit day selection
+  const inputScheduleMode = hasExplicitNumericDays
+    ? 'static' as const  // [PHASE 24Q] Numeric day selection = static mode, period
+    : (hasExplicitStaticInputs && inputs.scheduleMode === 'static')
+      ? 'static' as const  // Explicit static mode set
+      : (canonicalProfile.scheduleMode || inputs.scheduleMode || normalizeScheduleMode(trainingDaysPerWeek))
   
-  console.log('[phase24o-schedule-mode-precedence-fix]', {
+  console.log('[phase24q-schedule-mode-force-static-fix]', {
     canonicalProfileScheduleMode: canonicalProfile.scheduleMode,
     inputsScheduleMode: inputs.scheduleMode,
     inputsTrainingDaysPerWeek: inputs.trainingDaysPerWeek,
+    hasExplicitNumericDays,
     hasExplicitStaticInputs,
     resolvedInputScheduleMode: inputScheduleMode,
-    verdict: hasExplicitStaticInputs && canonicalProfile.scheduleMode === 'flexible' && inputs.scheduleMode === 'static'
-      ? 'INPUTS_STATIC_OVERRIDE_CANONICAL_FLEXIBLE'
-      : 'STANDARD_PRECEDENCE',
+    verdict: hasExplicitNumericDays && canonicalProfile.scheduleMode === 'flexible'
+      ? 'NUMERIC_DAYS_FORCED_STATIC_MODE'
+      : hasExplicitStaticInputs && canonicalProfile.scheduleMode === 'flexible' && inputs.scheduleMode === 'static'
+        ? 'EXPLICIT_STATIC_OVERRIDE_CANONICAL_FLEXIBLE'
+        : 'STANDARD_PRECEDENCE',
   })
   
   console.log('[schedule-mode] Detected mode:', inputScheduleMode)

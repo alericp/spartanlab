@@ -18,15 +18,15 @@
 // This allows us to verify the live app is running the expected code version
 // ==========================================================================
 export const PHASE27C_BUILD_IDENTITY = {
-  buildIdentityName: 'PHASE28GHI_TRUTH_CHAIN_FORENSIC',
-  buildIdentityVersion: '2024-PHASE28GHI-v1',
-  buildTimestamp: '2024-01-PHASE28GHI',
-  modifyBuilderVariant: 'EXPECTED_PHASE28GHI_CANONICAL_MODIFY',
-  scheduleSelectorVariant: 'EXPECTED_PHASE28GHI_ATHLETE_PRECEDENCE',
-  submitSnapshotVariant: 'EXPECTED_PHASE28GHI_AMBER_WARNING_STYLE',
-  auditPanelVariant: 'PHASE28GHI_VISIBLE_TRUTH_BAR_WITH_FORENSIC_LOGS',
+  buildIdentityName: 'PHASE28KL_SCHEDULE_TRUTH_ROOT_CAUSE_FIX',
+  buildIdentityVersion: '2024-PHASE28KL-v1',
+  buildTimestamp: '2024-01-PHASE28KL',
+  modifyBuilderVariant: 'EXPECTED_PHASE28KL_CANONICAL_MODIFY',
+  scheduleSelectorVariant: 'EXPECTED_PHASE28KL_ATHLETE_PRECEDENCE',
+  submitSnapshotVariant: 'EXPECTED_PHASE28KL_AMBER_WARNING_STYLE',
+  auditPanelVariant: 'PHASE28KL_VISIBLE_TRUTH_BAR_WITH_RAW_STORAGE',
   scheduleResolutionFix: 'ATHLETE_STATIC_BEATS_ONBOARDING_FLEXIBLE',
-  forensicLogs: ['phase28g-settings-schedule-save-truth', 'phase28g-post-save-readback', 'phase28h-canonical-schedule-source-winner', 'phase28i-program-page-canonical-read'],
+  forensicLogs: ['phase28k-settings-save-source-of-truth', 'phase28k-settings-post-save-readback', 'phase28l-canonical-schedule-source-winner', 'phase28l-program-read-before-modify-open'],
 } as const
 
 import { useState, useEffect, useCallback, useMemo, useRef, type ReactNode } from 'react'
@@ -39,6 +39,9 @@ import Link from 'next/link'
 // TASK 5: Lightweight type imports only - actual modules loaded dynamically
 import type { AdaptiveProgramInputs, AdaptiveProgram, GenerationErrorCode, TemplateSimilarityResult } from '@/lib/adaptive-program-builder'
 import type { TrainingDays } from '@/lib/program-service'
+// [PHASE 28KL] Direct imports for athlete/onboarding profile readback during modify-open forensics
+import { getAthleteProfile as getAthleteProfileDirect } from '@/lib/data-service'
+import { getOnboardingProfile as getOnboardingProfileDirect } from '@/lib/athlete-profile'
 // [profile-truth-sync] ISSUE A: Import drift detection for settings/program alignment
 // [equipment-truth-fix] TASK C: Import equipment normalizer for canonical saves
 // [TASK 1] Import unified staleness evaluator - THE ONLY source of staleness truth
@@ -8596,26 +8599,38 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
     })
     
     // ==========================================================================
-    // [PHASE 28I] PROGRAM PAGE CANONICAL READ LOG
-    // Proves exactly what canonical returned BEFORE the builder opens
+    // [PHASE 28L] PROGRAM READ BEFORE MODIFY OPEN - FORENSIC LOG
+    // Proves exactly what all sources contain BEFORE builder opens
     // ==========================================================================
-    console.log('[phase28i-program-page-canonical-read]', {
-      canonicalScheduleModeAtPageRead: canonicalProfileNow.scheduleMode,
-      canonicalTrainingDaysAtPageRead: canonicalProfileNow.trainingDaysPerWeek,
+    const athleteSourceNow = getAthleteProfileDirect()
+    const onboardingSourceNow = getOnboardingProfileDirect()
+    
+    console.log('[phase28l-program-read-before-modify-open]', {
+      // In-memory program state
       currentProgramScheduleMode: program?.scheduleMode || null,
       currentProgramTrainingDays: (program as { trainingDaysPerWeek?: number })?.trainingDaysPerWeek || null,
-      // Compare program vs canonical
+      // Latest athlete source (from localStorage)
+      athleteScheduleMode: athleteSourceNow?.scheduleMode ?? null,
+      athleteTrainingDays: athleteSourceNow?.trainingDaysPerWeek ?? null,
+      // Latest onboarding source
+      onboardingScheduleMode: onboardingSourceNow?.scheduleMode ?? null,
+      onboardingTrainingDays: onboardingSourceNow?.trainingDaysPerWeek ?? null,
+      // Canonical resolved
+      canonicalScheduleMode: canonicalProfileNow.scheduleMode,
+      canonicalTrainingDays: canonicalProfileNow.trainingDaysPerWeek,
+      // Verdict
       verdict: (() => {
+        const athleteIsStatic6 = athleteSourceNow?.scheduleMode === 'static' && athleteSourceNow?.trainingDaysPerWeek === 6
         const canonIsStatic6 = canonicalProfileNow.scheduleMode === 'static' && canonicalProfileNow.trainingDaysPerWeek === 6
         const canonIsFlexible = canonicalProfileNow.scheduleMode === 'flexible'
-        const canonIsNull = canonicalProfileNow.scheduleMode === null || canonicalProfileNow.scheduleMode === undefined
+        const bothNull = !athleteSourceNow?.scheduleMode && !onboardingSourceNow?.scheduleMode
         
-        if (canonIsStatic6) return 'PAGE_READ_STATIC_6'
-        if (canonIsFlexible) return 'PAGE_READ_FLEXIBLE'
-        if (canonIsNull) return 'PAGE_READ_NULL_COLLAPSE'
-        return `PAGE_READ_STATIC_${canonicalProfileNow.trainingDaysPerWeek}`
+        if (athleteIsStatic6 && canonIsStatic6) return 'ATHLETE_AND_CANON_STATIC_6'
+        if (athleteIsStatic6 && !canonIsStatic6) return 'ATHLETE_STATIC_BUT_CANON_FLEXIBLE'
+        if (bothNull) return 'BOTH_NULL_AT_MODIFY_OPEN'
+        if (canonIsFlexible) return 'CANON_FLEXIBLE_NO_STATIC_SOURCE'
+        return `CANON_${canonicalProfileNow.scheduleMode}_${canonicalProfileNow.trainingDaysPerWeek}`
       })(),
-      programAndCanonMatch: program?.scheduleMode === canonicalProfileNow.scheduleMode,
     })
     
     // ==========================================================================
@@ -8630,6 +8645,29 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
     })
     
     const freshInputs = entryToAdaptiveInputs(entryResult.entry)
+    
+    // ==========================================================================
+    // [PHASE 28L] BUILDER PREFILL VERIFICATION - proves prefill matches canonical
+    // ==========================================================================
+    console.log('[phase28l-builder-prefill-verification]', {
+      // Canonical source
+      canonicalScheduleMode: canonicalProfileNow.scheduleMode,
+      canonicalTrainingDays: canonicalProfileNow.trainingDaysPerWeek,
+      // Prefill result
+      prefillScheduleMode: freshInputs.scheduleMode,
+      prefillTrainingDays: freshInputs.trainingDaysPerWeek,
+      // Match check
+      prefillMatchesCanonical: freshInputs.scheduleMode === canonicalProfileNow.scheduleMode,
+      // Verdict
+      verdict: (() => {
+        const canonIsStatic6 = canonicalProfileNow.scheduleMode === 'static' && canonicalProfileNow.trainingDaysPerWeek === 6
+        const prefillIsStatic6 = freshInputs.scheduleMode === 'static' && freshInputs.trainingDaysPerWeek === 6
+        if (canonIsStatic6 && prefillIsStatic6) return 'MODIFY_OPEN_PREFILLED_STATIC_6'
+        if (canonIsStatic6 && !prefillIsStatic6) return 'BUG_CANON_STATIC_6_BUT_PREFILL_NOT'
+        if (freshInputs.scheduleMode === 'flexible') return 'MODIFY_OPEN_PREFILLED_FLEXIBLE'
+        return `MODIFY_OPEN_PREFILLED_STATIC_${freshInputs.trainingDaysPerWeek}`
+      })(),
+    })
     
     console.log('[phase25-canonical-modify-replacement]', {
       action: 'CANONICAL_INPUTS_BUILT',
@@ -8662,8 +8700,8 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
     // [PHASE 28E] SEED SCHEDULE TRUTH AUDIT FOR LIVE MODIFY PATH
     // This makes the visible SCHEDULE TRUTH NOW panel render in the live flow
     // ==========================================================================
-    const onboardingForAudit = programModules.getOnboardingProfile?.() || null
-    const athleteForAudit = programModules.getAthleteProfile?.() || null
+    const onboardingForAudit = getOnboardingProfileDirect()
+    const athleteForAudit = getAthleteProfileDirect()
     
     setScheduleTruthAudit({
       // Source values
@@ -9547,8 +9585,8 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
     // [PHASE 28A] CANONICAL SCHEDULE TRUTH AUDIT - CHECKPOINT 1: MODIFY_OPEN_CANONICAL_READ
     // This is the definitive audit that proves where schedule truth comes from
     // ==========================================================================
-    const onboardingProfileForAudit = programModules.getOnboardingProfile?.() || null
-    const athleteProfileForAudit = programModules.getAthleteProfile?.() || null
+    const onboardingProfileForAudit = getOnboardingProfileDirect()
+    const athleteProfileForAudit = getAthleteProfileDirect()
     
     const phase28aCanonicalVerdict = canonical.scheduleMode === 'flexible'
       ? 'CANONICAL_IS_FLEXIBLE'

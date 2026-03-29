@@ -395,6 +395,14 @@ export default function ProgramPage() {
   const [mounted, setMounted] = useState(false)
   
   // ==========================================================================
+  // [PHASE 31F] STABLE COMPONENT INSTANCE ID
+  // This proves whether clicking Modify causes an instance replacement (remount)
+  // ==========================================================================
+  const programPageInstanceIdRef = useRef(
+    `program_instance_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+  )
+  
+  // ==========================================================================
   // [PHASE 22A] TASK 2 - Explicit builder origin state
   // Tracks whether the currently open builder session was entered from Modify flow
   // This determines which submit handler to use (generic vs modify-specific)
@@ -512,37 +520,61 @@ export default function ProgramPage() {
       return false
     }
     
-    // 2. Write synchronous ref authority FIRST (immediate access)
+    // 2. Capture pre-commit state for diagnostics
+    const hadEntryStateBefore = modifyBuilderEntry !== null
+    const hadRefBefore = modifyBuilderEntryRef.current !== null
+    
+    // 3. Write synchronous ref authority FIRST (immediate access)
     modifyBuilderEntryRef.current = entry
     
-    // 3. Commit React state - THIS IS THE ONLY STATE MUTATION
+    // 4. Commit React state - THIS IS THE ONLY STATE MUTATION
     setModifyBuilderEntry(entry)
     
-    // 4. Emit authoritative log
-    console.log('[phase31e-atomic-entry-commit-requested]', {
+    // 5. Emit authoritative log with instance ID
+    console.log('[phase31f-entry-commit-requested-final]', {
+      instanceId: programPageInstanceIdRef.current,
       refHasEntry: !!modifyBuilderEntryRef.current,
       stateSetterCalled: true,
+      hadEntryStateBefore,
+      hadRefBefore,
       sessionKey: entry?.sessionKey ?? null,
       hasInputs: !!entry?.inputs,
+      modifyFlowState: modifyFlowState ?? null,
+      showBuilder: !!showBuilder,
       scheduleMode: entry?.inputs?.scheduleMode ?? null,
       trainingDaysPerWeek: entry?.inputs?.trainingDaysPerWeek ?? null,
       verdict: 'ATOMIC_ENTRY_COMMIT_REQUESTED',
+    })
+    
+    // 6. Queue microtask to check timing after commit
+    queueMicrotask(() => {
+      console.log('[phase31f-post-commit-microtask-final]', {
+        instanceId: programPageInstanceIdRef.current,
+        refHasEntry: !!modifyBuilderEntryRef.current,
+        stateHasEntryReadableFromClosure: !!modifyBuilderEntry,
+        note: 'closure state may be stale; this log is only for timing correlation',
+        verdict: 'POST_COMMIT_MICROTASK_REACHED',
+      })
     })
     
     return true
   }, [])
   
   // ==========================================================================
-  // [PHASE 31C] DECLARE-BEFORE-USE VERIFICATION EFFECT
-  // This proves the page mounted past the risky TDZ area
+  // [PHASE 31F] INSTANCE MOUNT/UNMOUNT TRACKER
+  // This proves whether clicking Modify causes a component remount
   // ==========================================================================
   useEffect(() => {
-    console.log('[phase31c-declare-before-use-safe-final]', {
-      hasModifyFlowState: typeof modifyFlowState !== 'undefined',
-      hasModifyBuilderEntryState: typeof modifyBuilderEntry !== 'undefined',
-      hasModifyClickAuditState: typeof modifyClickAudit !== 'undefined',
-      verdict: 'PROGRAM_DECLARE_BEFORE_USE_ZONE_SAFE',
+    console.log('[phase31f-program-instance-mounted-final]', {
+      instanceId: programPageInstanceIdRef.current,
+      verdict: 'PROGRAM_INSTANCE_MOUNTED',
     })
+    return () => {
+      console.log('[phase31f-program-instance-unmounted-final]', {
+        instanceId: programPageInstanceIdRef.current,
+        verdict: 'PROGRAM_INSTANCE_UNMOUNTED',
+      })
+    }
   }, [])
   
   // ==========================================================================
@@ -558,9 +590,10 @@ export default function ProgramPage() {
     // Only promote if entry exists with inputs AND we're not already in builder mode
     if (modifyBuilderEntry && modifyBuilderEntry.inputs && modifyFlowState !== 'builder') {
       // ==========================================================================
-      // [PHASE 31E] ENTRY STATE OBSERVED - This is the key proof point
+      // [PHASE 31F] ENTRY STATE OBSERVED - This is the key proof point
       // ==========================================================================
-      console.log('[phase31e-entry-state-observed-final]', {
+      console.log('[phase31f-entry-state-observed-final]', {
+        instanceId: programPageInstanceIdRef.current,
         hasEntryState: !!modifyBuilderEntry,
         hasEntryInputs: !!modifyBuilderEntry?.inputs,
         entrySessionKey: modifyBuilderEntry?.sessionKey ?? null,
@@ -632,26 +665,61 @@ export default function ProgramPage() {
   }, [modifyBuilderEntry, modifyFlowState, showBuilder]) // Include all read dependencies
   
   // ==========================================================================
-  // [PHASE 31E] TRUE COMMITTED-STATE OBSERVATION EFFECT
-  // This effect proves whether the entry state truly committed after the launcher returned.
+  // [PHASE 31F] TRUE STATE-SURVIVAL EFFECT
+  // This effect proves whether the entry state truly survived into committed render.
   // It ONLY observes - no mutations allowed here.
   // ==========================================================================
   useEffect(() => {
-    // Only log when there's actual modify activity (ref was written)
-    if (modifyBuilderEntryRef.current) {
-      console.log('[phase31e-entry-state-observation-effect]', {
-        refHasEntry: !!modifyBuilderEntryRef.current,
-        stateHasEntry: !!modifyBuilderEntry,
-        hasEntryInputs: !!modifyBuilderEntry?.inputs,
-        entrySessionKey: modifyBuilderEntry?.sessionKey ?? null,
+    // Always log when state changes to detect survival/loss
+    const hasRefEntry = !!modifyBuilderEntryRef.current
+    const hasStateEntry = !!modifyBuilderEntry
+    const hasStateInputs = !!modifyBuilderEntry?.inputs
+    
+    // Determine verdict based on ref vs state status
+    let verdict: string
+    if (hasStateEntry && hasStateInputs) {
+      verdict = 'ENTRY_STATE_SURVIVED'
+    } else if (hasRefEntry && !hasStateEntry) {
+      verdict = 'ENTRY_STATE_MISSING_REF_PRESENT'
+    } else if (!hasRefEntry && !hasStateEntry) {
+      verdict = 'ENTRY_STATE_MISSING_REF_MISSING'
+    } else {
+      verdict = 'ENTRY_STATE_PARTIAL'
+    }
+    
+    console.log('[phase31f-entry-state-survival-final]', {
+      instanceId: programPageInstanceIdRef.current,
+      hasModifyBuilderEntryState: hasStateEntry,
+      hasModifyBuilderEntryInputs: hasStateInputs,
+      hasRefEntry,
+      modifyFlowState: modifyFlowState ?? null,
+      showBuilder: !!showBuilder,
+      verdict,
+    })
+  }, [modifyBuilderEntry, modifyFlowState, showBuilder])
+  
+  // ==========================================================================
+  // [PHASE 31F] CLOBBER WINDOW DETECTOR
+  // Detects if entry ref exists but state was clobbered
+  // ==========================================================================
+  useEffect(() => {
+    const launcherEntered = modifyClickAudit.canonicalLauncherEntered
+    const refHasEntry = !!modifyBuilderEntryRef.current
+    const stateHasEntry = !!modifyBuilderEntry
+    
+    // Only log when we're in the suspicious clobber window
+    if (launcherEntered && refHasEntry && !stateHasEntry) {
+      console.log('[phase31f-clobber-window-final]', {
+        instanceId: programPageInstanceIdRef.current,
+        launcherEntered,
+        refHasEntry,
+        stateHasEntry,
         modifyFlowState: modifyFlowState ?? null,
         showBuilder: !!showBuilder,
-        verdict: modifyBuilderEntry?.inputs
-          ? 'ENTRY_STATE_COMMITTED'
-          : 'ENTRY_STATE_NOT_YET_COMMITTED',
+        verdict: 'CLOBBER_WINDOW_ACTIVE',
       })
     }
-  }, [modifyBuilderEntry, modifyFlowState, showBuilder])
+  }, [modifyBuilderEntry, modifyFlowState, showBuilder, modifyClickAudit.canonicalLauncherEntered])
   
   // ==========================================================================
   // [PHASE 31B] TRANSITION STATE CLASSIFICATION EFFECT
@@ -2025,30 +2093,36 @@ export default function ProgramPage() {
             if (displayCheck.safe) {
               loadedProgram = normalizedProgram
               setProgram(normalizedProgram)
-              // [PHASE 31D] ATOMIC ENTRY AUTHORITY GUARD
+              // [PHASE 31F] INIT GUARD A - ATOMIC ENTRY AUTHORITY
               // PRIMARY: modifyBuilderEntryRef (synchronous) or modifyBuilderEntry state
-              // SECONDARY: atomicEntryCommitRequested, lock, flow-based checks
+              // SECONDARY: launcher entered flag, lock, flow-based checks
               const hasModifyBuilderEntryRef = modifyBuilderEntryRef.current !== null
               const hasModifyBuilderEntry = modifyBuilderEntry !== null
               const isModifyLockActive = modifyBuilderLockRef.current
               const isModifyFlowBuilder = modifyFlowState === 'builder'
               const hasLiveBuilderEntry = builderSessionInputsRef.current !== null
+              const launcherEntered = modifyClickAudit.canonicalLauncherEntered
               // PRIMARY: ref or state entry exists = active Modify transition
-              const isActiveModifyTransition = hasModifyBuilderEntryRef || hasModifyBuilderEntry || atomicEntryCommitRequested || isModifyLockActive || (isModifyFlowBuilder && hasLiveBuilderEntry)
+              const isActiveModifyTransition = hasModifyBuilderEntryRef || hasModifyBuilderEntry || launcherEntered || isModifyLockActive || (isModifyFlowBuilder && hasLiveBuilderEntry)
               
-              console.log('[phase31d-init-showBuilder-guard-final]', {
+              // Determine what action this guard would take
+              const wouldWriteFalse = !isActiveModifyTransition
+              
+              console.log('[phase31f-init-guard-a-entered-final]', {
+                instanceId: programPageInstanceIdRef.current,
                 source: 'init_program_exists_displayable',
-                hasModifyBuilderEntryRef,
-                hasModifyBuilderEntry,
-                atomicEntryCommitRequested,
+                hasRefEntry: hasModifyBuilderEntryRef,
+                hasStateEntry: hasModifyBuilderEntry,
+                launcherEntered,
                 modifyFlowState: modifyFlowState ?? null,
-                modifyBuilderLock: isModifyLockActive,
-                builderSessionInputsRefPresent: hasLiveBuilderEntry,
+                showBuilder: !!showBuilder,
                 isActiveModifyTransition,
-                writeAllowed: !isActiveModifyTransition,
+                wouldWriteFalse,
                 verdict: isActiveModifyTransition
-                  ? 'SHOWBUILDER_FALSE_WRITE_BLOCKED_DURING_MODIFY'
-                  : 'SHOWBUILDER_FALSE_WRITE_ALLOWED',
+                  ? 'INIT_FALSE_WRITE_BLOCKED'
+                  : wouldWriteFalse
+                    ? 'INIT_FALSE_WRITE_ALLOWED'
+                    : 'INIT_NO_WRITE',
               })
               if (!isActiveModifyTransition) {
                 setShowBuilder(false)
@@ -2102,27 +2176,33 @@ export default function ProgramPage() {
               setLoadStage(`program-malformed:${displayCheck.reason || 'unknown'}`)
               // Keep program reference so we can show "Program Needs Refresh" state
               setProgram(normalizedProgram)
-              // [PHASE 31D] ATOMIC ENTRY AUTHORITY GUARD
+              // [PHASE 31F] INIT GUARD B - ATOMIC ENTRY AUTHORITY
               const hasModifyBuilderEntryRef = modifyBuilderEntryRef.current !== null
               const hasModifyBuilderEntry = modifyBuilderEntry !== null
               const isModifyLockActive = modifyBuilderLockRef.current
               const isModifyFlowBuilder = modifyFlowState === 'builder'
               const hasLiveBuilderEntry = builderSessionInputsRef.current !== null
-              const isActiveModifyTransition = hasModifyBuilderEntryRef || hasModifyBuilderEntry || atomicEntryCommitRequested || isModifyLockActive || (isModifyFlowBuilder && hasLiveBuilderEntry)
+              const launcherEntered = modifyClickAudit.canonicalLauncherEntered
+              const isActiveModifyTransition = hasModifyBuilderEntryRef || hasModifyBuilderEntry || launcherEntered || isModifyLockActive || (isModifyFlowBuilder && hasLiveBuilderEntry)
               
-              console.log('[phase31d-init-showBuilder-guard-final]', {
+              // Determine what action this guard would take
+              const wouldWriteFalse = !isActiveModifyTransition
+              
+              console.log('[phase31f-init-guard-b-entered-final]', {
+                instanceId: programPageInstanceIdRef.current,
                 source: 'init_program_malformed_recovery',
-                hasModifyBuilderEntryRef,
-                hasModifyBuilderEntry,
-                atomicEntryCommitRequested,
+                hasRefEntry: hasModifyBuilderEntryRef,
+                hasStateEntry: hasModifyBuilderEntry,
+                launcherEntered,
                 modifyFlowState: modifyFlowState ?? null,
-                modifyBuilderLock: isModifyLockActive,
-                builderSessionInputsRefPresent: hasLiveBuilderEntry,
+                showBuilder: !!showBuilder,
                 isActiveModifyTransition,
-                writeAllowed: !isActiveModifyTransition,
+                wouldWriteFalse,
                 verdict: isActiveModifyTransition
-                  ? 'SHOWBUILDER_FALSE_WRITE_BLOCKED_DURING_MODIFY'
-                  : 'SHOWBUILDER_FALSE_WRITE_ALLOWED',
+                  ? 'INIT_FALSE_WRITE_BLOCKED'
+                  : wouldWriteFalse
+                    ? 'INIT_FALSE_WRITE_ALLOWED'
+                    : 'INIT_NO_WRITE',
               })
               if (!isActiveModifyTransition) {
                 setShowBuilder(false) // Don't auto-show builder, show recovery state instead
@@ -10707,6 +10787,37 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
   // ==========================================================================
   
   // ==========================================================================
+  // [PHASE 31F] RENDER INSTANCE AUTHORITY EFFECT
+  // Logs the render authority state with instance ID for correlation
+  // ==========================================================================
+  useEffect(() => {
+    // Log render authority state when any relevant value changes
+    const hasStateEntry = !!modifyBuilderEntry
+    const hasRefEntry = !!modifyBuilderEntryRef.current
+    
+    let verdict: string
+    if (shouldRenderModifyBuilder) {
+      verdict = 'RENDER_AUTHORITY_GRANTED'
+    } else if (hasStateEntry) {
+      verdict = 'RENDER_AUTHORITY_HAS_STATE_ENTRY'
+    } else if (hasRefEntry) {
+      verdict = 'RENDER_AUTHORITY_REF_ONLY'
+    } else {
+      verdict = 'RENDER_AUTHORITY_NO_ENTRY'
+    }
+    
+    console.log('[phase31f-render-instance-authority-final]', {
+      instanceId: programPageInstanceIdRef.current,
+      hasStateEntry,
+      hasRefEntry,
+      shouldRenderModifyBuilder,
+      modifyFlowState: modifyFlowState ?? null,
+      showBuilder: !!showBuilder,
+      verdict,
+    })
+  }, [modifyBuilderEntry, modifyFlowState, showBuilder, shouldRenderModifyBuilder])
+  
+  // ==========================================================================
   // [PHASE 31A] EFFECT: Log render authority when modify state changes
   // This proves the single-pipeline contract is working
   // ==========================================================================
@@ -10891,26 +11002,27 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
         </div>
         
         {/* ==========================================================================
-            [PHASE 31E] TRUE ATOMIC LAUNCHER AUDIT STRIP
-            Shows the 2-stage atomic contract: click -> launcher(entry only) -> state observed -> promotion -> render
+            [PHASE 31F] COMMIT SURVIVAL INSTANCE LOCK AUDIT STRIP
+            Shows the commit survival chain and detects instance remount vs state clobber
             Only shown when program exists and builder is not shown
             ========================================================================== */}
         {program && !shouldRenderModifyBuilder && (
           <div className="mt-4 p-3 bg-zinc-900/80 border border-zinc-700 rounded-lg text-xs font-mono">
-            <div className="text-zinc-400 mb-2 font-semibold">PHASE31E TRUE ATOMIC AUDIT</div>
+            <div className="text-zinc-400 mb-2 font-semibold">PHASE31F COMMIT SURVIVAL AUDIT</div>
             <div className="grid grid-cols-2 gap-1 text-zinc-500">
-              {/* True atomic 2-stage contract chain */}
+              {/* Commit survival contract chain */}
               <div>1. Click fired: <span className={modifyClickAudit.clickFiredAt ? 'text-green-400' : 'text-zinc-600'}>{modifyClickAudit.clickFiredAt ? 'YES' : 'no'}</span></div>
               <div>2. Launcher entered: <span className={modifyClickAudit.canonicalLauncherEntered ? 'text-green-400' : 'text-zinc-600'}>{modifyClickAudit.canonicalLauncherEntered ? 'YES' : 'no'}</span></div>
               <div>3. Entry commit requested: <span className={modifyBuilderEntryRef.current ? 'text-green-400' : 'text-red-400'}>{modifyBuilderEntryRef.current ? 'YES' : 'NO'}</span></div>
-              <div>4. Entry state observed: <span className={modifyBuilderEntry ? 'text-green-400' : 'text-red-400'}>{modifyBuilderEntry ? 'YES' : 'NO'}</span></div>
+              <div>4. Entry state survived: <span className={modifyBuilderEntry ? 'text-green-400' : 'text-red-400'}>{modifyBuilderEntry ? 'YES' : 'NO'}</span></div>
               <div>5. Promotion dispatched: <span className={modifyFlowState === 'builder' && modifyBuilderEntry ? 'text-green-400' : 'text-zinc-600'}>{modifyFlowState === 'builder' && modifyBuilderEntry ? 'YES' : 'no'}</span></div>
               <div>6. Render granted: <span className={shouldRenderModifyBuilder ? 'text-green-400' : 'text-red-400'}>{shouldRenderModifyBuilder ? 'YES' : 'NO'}</span></div>
+              <div className="col-span-2 text-zinc-400">Instance: {programPageInstanceIdRef.current?.slice(-12) ?? 'unknown'}</div>
               {modifyClickAudit.failureStage && (
                 <div className="col-span-2 text-red-400">Error: {modifyClickAudit.failureStage} - {modifyClickAudit.failureMessage?.slice(0, 50)}</div>
               )}
             </div>
-            {/* [PHASE 31E] True atomic verdict */}
+            {/* [PHASE 31F] Commit survival verdict */}
             <div className="mt-2 pt-2 border-t border-zinc-700 text-zinc-300">
               Verdict: <span className={
                 shouldRenderModifyBuilder ? 'text-green-400' :
@@ -10924,11 +11036,11 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
                  modifyClickAudit.failureStage ? 'MODIFY_FAILED_BEFORE_ENTRY_COMMIT' :
                  !modifyClickAudit.clickFiredAt ? 'MODIFY_WAITING_FOR_CLICK' :
                  !modifyClickAudit.canonicalLauncherEntered ? 'MODIFY_FAILED_LAUNCHER_NOT_ENTERED' :
-                 !modifyBuilderEntryRef.current ? 'MODIFY_ENTRY_COMMIT_REQUESTED_WAITING_FOR_STATE' :
-                 !modifyBuilderEntry ? 'MODIFY_FAILED_ENTRY_NOT_OBSERVED' :
-                 (modifyBuilderEntry && modifyFlowState !== 'builder') ? 'MODIFY_ENTRY_STATE_OBSERVED_WAITING_FOR_PROMOTION' :
+                 !modifyBuilderEntryRef.current ? 'MODIFY_COMMIT_REQUESTED_WAITING_FOR_STATE' :
+                 !modifyBuilderEntry ? 'MODIFY_FAILED_STATE_CLOBBERED_AFTER_COMMIT' :
+                 (modifyBuilderEntry && modifyFlowState !== 'builder') ? 'MODIFY_STATE_SURVIVED_WAITING_FOR_PROMOTION' :
                  (modifyBuilderEntry && modifyFlowState === 'builder' && !shouldRenderModifyBuilder) ? 'MODIFY_PROMOTION_DISPATCHED_WAITING_FOR_RENDER' :
-                 'MODIFY_FAILED_RENDER_AUTHORITY_NOT_ACTIVE'}
+                 'MODIFY_FAILED_ENTRY_NEVER_COMMITTED'}
               </span>
             </div>
           </div>

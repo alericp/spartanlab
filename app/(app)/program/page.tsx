@@ -460,6 +460,43 @@ export default function ProgramPage() {
   const [modifyBuilderEntry, setModifyBuilderEntry] = useState<ModifyBuilderEntry | null>(null)
   
   // ==========================================================================
+  // [PHASE 31C] MODIFY CLICK AUDIT STATE - MOVED HERE TO PREVENT TDZ ERRORS
+  // This MUST be declared BEFORE any effect that references it in body or dependency array
+  // ==========================================================================
+  const [modifyClickAudit, setModifyClickAudit] = useState<{
+    clickFiredAt: string | null
+    handleNewProgramEntered: boolean
+    canonicalLauncherEntered: boolean
+    reachedPreBuilderTransition: boolean
+    setShowBuilderRequested: boolean
+    showBuilderRenderSeen: boolean
+    failureStage: string | null
+    failureMessage: string | null
+  }>({
+    clickFiredAt: null,
+    handleNewProgramEntered: false,
+    canonicalLauncherEntered: false,
+    reachedPreBuilderTransition: false,
+    setShowBuilderRequested: false,
+    showBuilderRenderSeen: false,
+    failureStage: null,
+    failureMessage: null,
+  })
+  
+  // ==========================================================================
+  // [PHASE 31C] DECLARE-BEFORE-USE VERIFICATION EFFECT
+  // This proves the page mounted past the risky TDZ area
+  // ==========================================================================
+  useEffect(() => {
+    console.log('[phase31c-declare-before-use-safe-final]', {
+      hasModifyFlowState: typeof modifyFlowState !== 'undefined',
+      hasModifyBuilderEntryState: typeof modifyBuilderEntry !== 'undefined',
+      hasModifyClickAuditState: typeof modifyClickAudit !== 'undefined',
+      verdict: 'PROGRAM_DECLARE_BEFORE_USE_ZONE_SAFE',
+    })
+  }, [])
+  
+  // ==========================================================================
   // [PHASE 31A] ENTRY PROMOTION EFFECT - THE ONLY PLACE WHERE MODIFY ENTERS BUILDER MODE
   // This is the SINGLE authoritative promotion path for Modify flow.
   // The launcher commits the entry, then THIS effect promotes to builder mode.
@@ -2066,28 +2103,9 @@ export default function ProgramPage() {
   const [lastBuildResult, setLastBuildResult] = useState<BuildAttemptResult | null>(null)
   
   // ==========================================================================
-  // [PHASE 30G] MODIFY CLICK-TO-BUILDER AUDIT STATE
-  // Local diagnostic state to track the full click chain on-screen
+  // [PHASE 31C] NOTE: modifyClickAudit was moved to the top of the component
+  // to prevent TDZ errors. See PHASE 31C declaration zone above.
   // ==========================================================================
-  const [modifyClickAudit, setModifyClickAudit] = useState<{
-    clickFiredAt: string | null
-    handleNewProgramEntered: boolean
-    canonicalLauncherEntered: boolean
-    reachedPreBuilderTransition: boolean
-    setShowBuilderRequested: boolean
-    showBuilderRenderSeen: boolean
-    failureStage: string | null
-    failureMessage: string | null
-  }>({
-    clickFiredAt: null,
-    handleNewProgramEntered: false,
-    canonicalLauncherEntered: false,
-    reachedPreBuilderTransition: false,
-    setShowBuilderRequested: false,
-    showBuilderRenderSeen: false,
-    failureStage: null,
-    failureMessage: null,
-  })
   
   // ==========================================================================
   // [PHASE 16S] Runtime session marker for attempt-truth gating

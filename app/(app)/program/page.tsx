@@ -475,6 +475,13 @@ export default function ProgramPage() {
   const modifyBuilderEntryRef = useRef<ModifyBuilderEntry | null>(null)
   
   // ==========================================================================
+  // [PHASE 31G] MODIFY ENTRY RECOVERY ATTEMPT REF
+  // Tracks whether we've already attempted recovery for a specific sessionKey.
+  // Prevents infinite recovery loops.
+  // ==========================================================================
+  const modifyEntryRecoveryAttemptedRef = useRef<string | null>(null)
+  
+  // ==========================================================================
   // [PHASE 31D] ATOMIC ENTRY COMMIT FLAG
   // Tracks whether an atomic entry commit has been requested (setter called)
   // ==========================================================================
@@ -720,6 +727,107 @@ export default function ProgramPage() {
       })
     }
   }, [modifyBuilderEntry, modifyFlowState, showBuilder, modifyClickAudit.canonicalLauncherEntered])
+  
+  // ==========================================================================
+  // [PHASE 31G] MODIFY ENTRY SURVIVAL GUARD
+  // If launcher entered and ref entry survived but React state is missing in the SAME instance,
+  // restore state from ref exactly once for that sessionKey.
+  // ==========================================================================
+  useEffect(() => {
+    const refEntry = modifyBuilderEntryRef.current
+    const refSessionKey = refEntry?.sessionKey ?? null
+    const launcherEntered = modifyClickAudit.canonicalLauncherEntered
+    const stateMissing = !modifyBuilderEntry
+    const refPresent = !!refEntry
+    const alreadyAttemptedThisSession = modifyEntryRecoveryAttemptedRef.current === refSessionKey
+    
+    // Recovery condition: ALL must be true
+    const shouldRecover = 
+      launcherEntered === true &&
+      refPresent === true &&
+      stateMissing === true &&
+      !!refEntry?.inputs &&
+      modifyFlowState !== 'builder' &&
+      refSessionKey !== null &&
+      alreadyAttemptedThisSession === false
+    
+    if (shouldRecover && refEntry) {
+      // Mark recovery as attempted for this session BEFORE calling setter
+      modifyEntryRecoveryAttemptedRef.current = refSessionKey
+      
+      // Log before restore
+      console.log('[phase31g-entry-survival-guard-before-restore-final]', {
+        instanceId: programPageInstanceIdRef.current,
+        launcherEntered,
+        refPresent,
+        statePresent: !!modifyBuilderEntry,
+        modifyFlowState: modifyFlowState ?? null,
+        showBuilder: !!showBuilder,
+        refSessionKey,
+        alreadyAttemptedThisSession,
+        verdict: 'STATE_RECOVERY_FROM_REF_REQUESTED',
+      })
+      
+      // Restore state from ref
+      setModifyBuilderEntry(refEntry)
+      
+      // Log after setter called
+      console.log('[phase31g-entry-survival-guard-after-restore-call-final]', {
+        instanceId: programPageInstanceIdRef.current,
+        refSessionKey,
+        verdict: 'STATE_RECOVERY_SETTER_CALLED',
+      })
+    } else if (launcherEntered && refPresent && stateMissing) {
+      // Log blocked condition for diagnostics
+      let reason: string
+      if (alreadyAttemptedThisSession) {
+        reason = 'ALREADY_ATTEMPTED_THIS_SESSION'
+      } else if (modifyFlowState === 'builder') {
+        reason = 'FLOW_ALREADY_BUILDER'
+      } else if (!refEntry?.inputs) {
+        reason = 'REF_MISSING_INPUTS'
+      } else {
+        reason = 'RECOVERY_CONDITION_NOT_MET'
+      }
+      
+      console.log('[phase31g-entry-survival-guard-blocked-final]', {
+        instanceId: programPageInstanceIdRef.current,
+        launcherEntered,
+        refPresent,
+        statePresent: !!modifyBuilderEntry,
+        modifyFlowState: modifyFlowState ?? null,
+        showBuilder: !!showBuilder,
+        refSessionKey,
+        alreadyAttemptedThisSession,
+        reason,
+        verdict: 'STATE_RECOVERY_BLOCKED',
+      })
+    }
+  }, [modifyBuilderEntry, modifyFlowState, showBuilder, modifyClickAudit.canonicalLauncherEntered])
+  
+  // ==========================================================================
+  // [PHASE 31G] POST-RECOVERY STATE OBSERVATION EFFECT
+  // Observes whether recovery worked after an attempt was made
+  // ==========================================================================
+  useEffect(() => {
+    // Only log when a recovery was attempted
+    if (modifyEntryRecoveryAttemptedRef.current !== null) {
+      const hasStateEntry = !!modifyBuilderEntry
+      const hasStateInputs = !!modifyBuilderEntry?.inputs
+      
+      console.log('[phase31g-post-recovery-state-observation-final]', {
+        instanceId: programPageInstanceIdRef.current,
+        recoverySessionKey: modifyEntryRecoveryAttemptedRef.current,
+        hasStateEntry,
+        hasStateInputs,
+        modifyFlowState: modifyFlowState ?? null,
+        showBuilder: !!showBuilder,
+        verdict: hasStateEntry && hasStateInputs
+          ? 'RECOVERY_SUCCEEDED_STATE_OBSERVED'
+          : 'RECOVERY_STILL_MISSING_STATE',
+      })
+    }
+  }, [modifyBuilderEntry, modifyFlowState, showBuilder])
   
   // ==========================================================================
   // [PHASE 31B] TRANSITION STATE CLASSIFICATION EFFECT
@@ -11002,13 +11110,13 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
         </div>
         
         {/* ==========================================================================
-            [PHASE 31F] COMMIT SURVIVAL INSTANCE LOCK AUDIT STRIP
-            Shows the commit survival chain and detects instance remount vs state clobber
+            [PHASE 31G] ENTRY SURVIVAL GUARD AUDIT STRIP
+            Shows the commit survival chain with recovery state tracking
             Only shown when program exists and builder is not shown
             ========================================================================== */}
         {program && !shouldRenderModifyBuilder && (
           <div className="mt-4 p-3 bg-zinc-900/80 border border-zinc-700 rounded-lg text-xs font-mono">
-            <div className="text-zinc-400 mb-2 font-semibold">PHASE31F COMMIT SURVIVAL AUDIT</div>
+            <div className="text-zinc-400 mb-2 font-semibold">PHASE31G ENTRY SURVIVAL AUDIT</div>
             <div className="grid grid-cols-2 gap-1 text-zinc-500">
               {/* Commit survival contract chain */}
               <div>1. Click fired: <span className={modifyClickAudit.clickFiredAt ? 'text-green-400' : 'text-zinc-600'}>{modifyClickAudit.clickFiredAt ? 'YES' : 'no'}</span></div>
@@ -11018,17 +11126,20 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
               <div>5. Promotion dispatched: <span className={modifyFlowState === 'builder' && modifyBuilderEntry ? 'text-green-400' : 'text-zinc-600'}>{modifyFlowState === 'builder' && modifyBuilderEntry ? 'YES' : 'no'}</span></div>
               <div>6. Render granted: <span className={shouldRenderModifyBuilder ? 'text-green-400' : 'text-red-400'}>{shouldRenderModifyBuilder ? 'YES' : 'NO'}</span></div>
               <div className="col-span-2 text-zinc-400">Instance: {programPageInstanceIdRef.current?.slice(-12) ?? 'unknown'}</div>
+              <div className="col-span-2 text-zinc-400">Recovery: {modifyEntryRecoveryAttemptedRef.current ? `attempted (${modifyEntryRecoveryAttemptedRef.current.slice(-8)})` : 'not attempted'}</div>
               {modifyClickAudit.failureStage && (
                 <div className="col-span-2 text-red-400">Error: {modifyClickAudit.failureStage} - {modifyClickAudit.failureMessage?.slice(0, 50)}</div>
               )}
             </div>
-            {/* [PHASE 31F] Commit survival verdict */}
+            {/* [PHASE 31G] Entry survival verdict with recovery states */}
             <div className="mt-2 pt-2 border-t border-zinc-700 text-zinc-300">
               Verdict: <span className={
                 shouldRenderModifyBuilder ? 'text-green-400' :
                 modifyClickAudit.failureStage ? 'text-red-400' :
+                (modifyBuilderEntry && modifyEntryRecoveryAttemptedRef.current && modifyFlowState !== 'builder') ? 'text-cyan-400' :
                 (modifyBuilderEntry && modifyFlowState !== 'builder') ? 'text-yellow-400' :
-                modifyBuilderEntryRef.current && !modifyBuilderEntry ? 'text-orange-400' :
+                (modifyBuilderEntryRef.current && !modifyBuilderEntry && modifyEntryRecoveryAttemptedRef.current) ? 'text-red-400' :
+                (modifyBuilderEntryRef.current && !modifyBuilderEntry && !modifyEntryRecoveryAttemptedRef.current) ? 'text-orange-400' :
                 modifyClickAudit.canonicalLauncherEntered ? 'text-blue-400' :
                 'text-zinc-500'
               }>
@@ -11037,7 +11148,9 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
                  !modifyClickAudit.clickFiredAt ? 'MODIFY_WAITING_FOR_CLICK' :
                  !modifyClickAudit.canonicalLauncherEntered ? 'MODIFY_FAILED_LAUNCHER_NOT_ENTERED' :
                  !modifyBuilderEntryRef.current ? 'MODIFY_COMMIT_REQUESTED_WAITING_FOR_STATE' :
-                 !modifyBuilderEntry ? 'MODIFY_FAILED_STATE_CLOBBERED_AFTER_COMMIT' :
+                 (modifyBuilderEntryRef.current && !modifyBuilderEntry && !modifyEntryRecoveryAttemptedRef.current) ? 'MODIFY_STATE_RECOVERY_REQUESTED' :
+                 (modifyBuilderEntryRef.current && !modifyBuilderEntry && modifyEntryRecoveryAttemptedRef.current) ? 'MODIFY_FAILED_STATE_CLOBBERED_AFTER_COMMIT' :
+                 (modifyBuilderEntry && modifyEntryRecoveryAttemptedRef.current && modifyFlowState !== 'builder') ? 'MODIFY_STATE_RECOVERY_SUCCEEDED' :
                  (modifyBuilderEntry && modifyFlowState !== 'builder') ? 'MODIFY_STATE_SURVIVED_WAITING_FOR_PROMOTION' :
                  (modifyBuilderEntry && modifyFlowState === 'builder' && !shouldRenderModifyBuilder) ? 'MODIFY_PROMOTION_DISPATCHED_WAITING_FOR_RENDER' :
                  'MODIFY_FAILED_ENTRY_NEVER_COMMITTED'}

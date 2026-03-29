@@ -123,6 +123,22 @@ export function AdaptiveProgramDisplay({
   const trainingDaysPerWeek = (program as unknown as { trainingDaysPerWeek?: number | string }).trainingDaysPerWeek
   
   // ==========================================================================
+  // [PHASE 30C] DISPLAY SCHEDULE FINAL
+  // THE DEFINITIVE LOG proving what display component received
+  // ==========================================================================
+  console.log('[phase30c-display-schedule-final]', {
+    program_scheduleMode: program?.scheduleMode ?? null,
+    program_trainingDaysPerWeek: trainingDaysPerWeek ?? null,
+    program_adaptiveWorkloadEnabled: (program as { adaptiveWorkloadEnabled?: boolean })?.adaptiveWorkloadEnabled ?? null,
+    verdict:
+      program?.scheduleMode === 'static' && trainingDaysPerWeek === 6
+        ? 'DISPLAY_STATIC_6'
+        : program?.scheduleMode === 'flexible'
+        ? 'DISPLAY_FLEXIBLE'
+        : `DISPLAY_${program?.scheduleMode}_${trainingDaysPerWeek}`,
+  })
+  
+  // ==========================================================================
   // [PHASE 30B] DISPLAY SCHEDULE FINAL
   // THE DEFINITIVE LOG proving what display component received
   // ==========================================================================

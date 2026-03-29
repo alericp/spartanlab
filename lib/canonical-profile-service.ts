@@ -697,6 +697,28 @@ export function reconcileCanonicalProfile(): CanonicalProgrammingProfile {
       })
       
       // ==========================================================================
+      // [PHASE 30C] CANONICAL RESOLUTION FINAL
+      // THE DEFINITIVE LOG proving canonical schedule resolution with verdicts
+      // ==========================================================================
+      console.log('[phase30c-canonical-resolution-final]', {
+        onboarding_scheduleMode: onboardingProfile?.scheduleMode ?? null,
+        onboarding_trainingDaysPerWeek: onboardingProfile?.trainingDaysPerWeek ?? null,
+        onboarding_adaptiveWorkloadEnabled: (onboardingProfile as { adaptiveWorkloadEnabled?: boolean })?.adaptiveWorkloadEnabled ?? null,
+        athlete_scheduleMode: athleteProfile?.scheduleMode ?? null,
+        athlete_trainingDaysPerWeek: athleteProfile?.trainingDaysPerWeek ?? null,
+        athlete_adaptiveWorkloadEnabled: (athleteProfile as { adaptiveWorkloadEnabled?: boolean })?.adaptiveWorkloadEnabled ?? null,
+        resolved_scheduleMode: resolvedScheduleMode,
+        resolved_trainingDaysPerWeek: resolvedTrainingDays,
+        resolved_adaptiveWorkloadEnabled: resolvedAdaptiveWorkload,
+        verdict:
+          resolvedScheduleMode === 'static' && resolvedTrainingDays === 6
+            ? 'CANONICAL_STATIC_6'
+            : resolvedScheduleMode === 'flexible'
+            ? 'CANONICAL_FLEXIBLE'
+            : `CANONICAL_${resolvedScheduleMode}_${resolvedTrainingDays}`,
+      })
+      
+      // ==========================================================================
       // [PHASE 30B] CANONICAL SCHEDULE RESOLUTION FINAL
       // THE DEFINITIVE LOG proving canonical schedule resolution with verdicts
       // ==========================================================================

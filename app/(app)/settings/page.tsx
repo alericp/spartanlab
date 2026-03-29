@@ -613,6 +613,26 @@ export default function SettingsPage() {
         : parseInt(trainingDays || '3')
       
       // ==========================================================================
+      // [PHASE 30C] SETTINGS SAVE PAYLOAD FINAL
+      // THE DEFINITIVE LOG proving what schedule values are being persisted
+      // ==========================================================================
+      console.log('[phase30c-settings-save-payload-final]', {
+        ui_scheduleMode: scheduleMode,
+        ui_trainingDaysRaw: trainingDays,
+        ui_trainingDaysParsed: scheduleMode === 'static' ? parseInt(trainingDays || '0', 10) : null,
+        ui_adaptiveWorkloadEnabled: adaptiveWorkloadEnabled,
+        payload_scheduleMode: payloadScheduleMode,
+        payload_trainingDaysPerWeek: payloadTrainingDays,
+        payload_adaptiveWorkloadEnabled: adaptiveWorkloadEnabled,
+        verdict:
+          payloadScheduleMode === 'static' && payloadTrainingDays === 6
+            ? 'SETTINGS_PAYLOAD_STATIC_6'
+            : payloadScheduleMode === 'flexible'
+            ? 'SETTINGS_PAYLOAD_FLEXIBLE'
+            : `SETTINGS_PAYLOAD_STATIC_${payloadTrainingDays}`,
+      })
+      
+      // ==========================================================================
       // [PHASE 30A] SETTINGS SAVE AUTHORITATIVE PAYLOAD
       // THE DEFINITIVE LOG proving what schedule values are being persisted
       // ==========================================================================
@@ -1433,9 +1453,21 @@ export default function SettingsPage() {
                 const nextScheduleMode = v as 'static' | 'flexible'
                 const nextTrainingDaysPerWeek = nextScheduleMode === 'static' ? parseInt(trainingDays || '3', 10) : null
                 // ==========================================================================
-                // [PHASE 30B] SETTINGS UI SELECTION AUTHORITATIVE
-                // Proves exactly what schedule values the UI is now showing
+                // [PHASE 30C] SETTINGS UI SELECTION FINAL
+                // THE DEFINITIVE LOG proving UI state change
                 // ==========================================================================
+                console.log('[phase30c-settings-ui-selection-final]', {
+                  next_scheduleMode: nextScheduleMode,
+                  next_trainingDaysPerWeek: nextTrainingDaysPerWeek,
+                  next_adaptiveWorkloadEnabled: adaptiveWorkloadEnabled,
+                  verdict:
+                    nextScheduleMode === 'static' && nextTrainingDaysPerWeek === 6
+                      ? 'SETTINGS_UI_STATIC_6'
+                      : nextScheduleMode === 'flexible'
+                      ? 'SETTINGS_UI_FLEXIBLE'
+                      : `SETTINGS_UI_STATIC_${nextTrainingDaysPerWeek}`,
+                })
+                // [PHASE 30B] SETTINGS UI SELECTION AUTHORITATIVE
                 console.log('[phase30b-settings-ui-selection-authoritative]', {
                   next_scheduleMode: nextScheduleMode,
                   next_trainingDaysPerWeek: nextTrainingDaysPerWeek,
@@ -1479,9 +1511,21 @@ export default function SettingsPage() {
               <Select value={trainingDays} onValueChange={(v) => {
                 const nextTrainingDaysPerWeek = parseInt(v, 10)
                 // ==========================================================================
-                // [PHASE 30B] SETTINGS UI DAYS SELECTION AUTHORITATIVE
-                // Proves exactly what training days the UI is now showing
+                // [PHASE 30C] SETTINGS UI SELECTION FINAL (days change)
+                // THE DEFINITIVE LOG proving UI state change
                 // ==========================================================================
+                console.log('[phase30c-settings-ui-selection-final]', {
+                  next_scheduleMode: scheduleMode,
+                  next_trainingDaysPerWeek: nextTrainingDaysPerWeek,
+                  next_adaptiveWorkloadEnabled: adaptiveWorkloadEnabled,
+                  verdict:
+                    scheduleMode === 'static' && nextTrainingDaysPerWeek === 6
+                      ? 'SETTINGS_UI_STATIC_6'
+                      : scheduleMode === 'flexible'
+                      ? 'SETTINGS_UI_FLEXIBLE'
+                      : `SETTINGS_UI_STATIC_${nextTrainingDaysPerWeek}`,
+                })
+                // [PHASE 30B] SETTINGS UI DAYS SELECTION AUTHORITATIVE
                 console.log('[phase30b-settings-ui-selection-authoritative]', {
                   next_scheduleMode: scheduleMode,
                   next_trainingDaysPerWeek: nextTrainingDaysPerWeek,

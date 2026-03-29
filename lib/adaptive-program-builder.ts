@@ -2715,10 +2715,30 @@ async function generateAdaptiveProgramImpl(
   })
   
   // ==========================================================================
-  // [PHASE 30A] BUILDER FINAL SCHEDULE CONTRACT - AUTHORITATIVE
+  // [PHASE 30B] BUILDER SCHEDULE CONTRACT FINAL
   // THE DEFINITIVE LOG proving builder honors input schedule
   // ==========================================================================
   const finalTrainingDays = hasExplicitNumericDays ? inputs.trainingDaysPerWeek : (canonicalProfile.trainingDaysPerWeek ?? trainingDaysPerWeek)
+  console.log('[phase30b-builder-schedule-contract-final]', {
+    input_scheduleMode: inputs.scheduleMode ?? null,
+    input_trainingDaysPerWeek: inputs.trainingDaysPerWeek ?? null,
+    input_adaptiveWorkloadEnabled: (inputs as { adaptiveWorkloadEnabled?: boolean })?.adaptiveWorkloadEnabled ?? null,
+    canonical_scheduleMode: canonicalProfile?.scheduleMode ?? null,
+    canonical_trainingDaysPerWeek: canonicalProfile?.trainingDaysPerWeek ?? null,
+    final_scheduleMode: inputScheduleMode,
+    final_trainingDaysPerWeek: finalTrainingDays,
+    verdict:
+      inputScheduleMode === 'static' && finalTrainingDays === 6
+        ? 'BUILDER_STATIC_6'
+        : inputScheduleMode === 'flexible'
+        ? 'BUILDER_FLEXIBLE'
+        : `BUILDER_STATIC_${finalTrainingDays}`,
+  })
+  
+  // ==========================================================================
+  // [PHASE 30A] BUILDER FINAL SCHEDULE CONTRACT - AUTHORITATIVE
+  // THE DEFINITIVE LOG proving builder honors input schedule
+  // ==========================================================================
   console.log('[phase30a-builder-final-schedule-contract]', {
     input_scheduleMode: inputs.scheduleMode ?? null,
     input_trainingDaysPerWeek: inputs.trainingDaysPerWeek ?? null,

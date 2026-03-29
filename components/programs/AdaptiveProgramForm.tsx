@@ -172,6 +172,22 @@ export function AdaptiveProgramForm({
           ? 'FORM_OPENED_FLEXIBLE'
           : `FORM_OPENED_STATIC_${inputs.trainingDaysPerWeek}`,
     })
+    
+    // ==========================================================================
+    // [PHASE 30B] FORM OPEN FINAL
+    // THE DEFINITIVE LOG proving form received correct initial values
+    // ==========================================================================
+    console.log('[phase30b-form-open-final]', {
+      inputs_scheduleMode: inputs.scheduleMode,
+      inputs_trainingDaysPerWeek: inputs.trainingDaysPerWeek,
+      inputs_adaptiveWorkloadEnabled: (inputs as { adaptiveWorkloadEnabled?: boolean })?.adaptiveWorkloadEnabled ?? null,
+      verdict:
+        inputs.scheduleMode === 'static' && inputs.trainingDaysPerWeek === 6
+          ? 'FORM_STATIC_6'
+          : inputs.scheduleMode === 'flexible'
+          ? 'FORM_FLEXIBLE'
+          : `FORM_STATIC_${inputs.trainingDaysPerWeek}`,
+    })
   }, [inputsKey]) // eslint-disable-line react-hooks/exhaustive-deps
   
   const updateInput = <K extends keyof AdaptiveProgramInputs>(

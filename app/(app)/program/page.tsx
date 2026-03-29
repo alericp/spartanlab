@@ -8598,6 +8598,24 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
     // Uses the same canonical entry builder as Restart/Onboarding
     // ==========================================================================
     const canonicalProfileNow = getCanonicalProfile()
+    const athleteProfileForPre = getAthleteProfileDirect()
+    
+    // ==========================================================================
+    // [PHASE 30B] PROGRAM BEFORE MODIFY OPEN - AUTHORITATIVE
+    // THE DEFINITIVE LOG proving what canonical and athlete contain before builder opens
+    // ==========================================================================
+    console.log('[phase30b-program-before-modify-open]', {
+      athlete_scheduleMode: athleteProfileForPre?.scheduleMode ?? null,
+      athlete_trainingDaysPerWeek: athleteProfileForPre?.trainingDaysPerWeek ?? null,
+      canonical_scheduleMode: canonicalProfileNow?.scheduleMode ?? null,
+      canonical_trainingDaysPerWeek: canonicalProfileNow?.trainingDaysPerWeek ?? null,
+      verdict:
+        canonicalProfileNow?.scheduleMode === 'static' && canonicalProfileNow?.trainingDaysPerWeek === 6
+          ? 'PROGRAM_READ_STATIC_6'
+          : canonicalProfileNow?.scheduleMode === 'flexible'
+          ? 'PROGRAM_READ_FLEXIBLE'
+          : `PROGRAM_READ_STATIC_${canonicalProfileNow?.trainingDaysPerWeek}`,
+    })
     
     // ==========================================================================
     // [PHASE 30A] PROGRAM READ BEFORE MODIFY OPEN - AUTHORITATIVE
@@ -8699,6 +8717,22 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
         if (freshInputs.scheduleMode === 'flexible') return 'FLEXIBLE_PREFILL_BUILT'
         return `STATIC_${freshInputs.trainingDaysPerWeek}_PREFILL_BUILT`
       })(),
+    })
+    
+    // ==========================================================================
+    // [PHASE 30B] MODIFY PREFILL FINAL
+    // THE DEFINITIVE LOG proving prefill was constructed correctly from canonical
+    // ==========================================================================
+    console.log('[phase30b-modify-prefill-final]', {
+      prefill_scheduleMode: freshInputs.scheduleMode,
+      prefill_trainingDaysPerWeek: freshInputs.trainingDaysPerWeek,
+      prefill_adaptiveWorkloadEnabled: (freshInputs as { adaptiveWorkloadEnabled?: boolean })?.adaptiveWorkloadEnabled ?? null,
+      verdict:
+        freshInputs.scheduleMode === 'static' && freshInputs.trainingDaysPerWeek === 6
+          ? 'MODIFY_PREFILL_STATIC_6'
+          : freshInputs.scheduleMode === 'flexible'
+          ? 'MODIFY_PREFILL_FLEXIBLE'
+          : `MODIFY_PREFILL_STATIC_${freshInputs.trainingDaysPerWeek}`,
     })
     
     // ==========================================================================

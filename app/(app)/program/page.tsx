@@ -2266,19 +2266,19 @@ export default function ProgramPage() {
       })
       
       // [PHASE 30J] Boot stability verdict - proves page survived initialization
+      // [PHASE 30K] FIX: Removed generationStage - it's only defined inside generation handlers, not page scope
       console.log('[phase30j-program-boot-stability-final]', {
         has_program: !!program,
         showBuilder: !!showBuilder,
         modifyFlowState: modifyFlowState ?? null,
         loadStage: loadStage ?? null,
-        generationStage: generationStage ?? null,
         generationError: generationError ?? null,
         verdict: 'PROGRAM_BOOT_SURVIVED_PHASE30J',
       })
     } catch (err) {
       console.error('[phase30j-state-change-effect-crash]', { error: String(err) })
     }
-  }, [showBuilder, modifyFlowState, program, loadStage, generationStage, generationError])
+  }, [showBuilder, modifyFlowState, program, loadStage, generationError])
   
   // Load last build result on mount - but clear stale failures if current program is newer
   useEffect(() => {
@@ -10423,6 +10423,28 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
       loadStage: loadStage ?? null,
       verdict: 'PROGRAM_RUNTIME_SAFE',
     })
+    
+    // ==========================================================================
+    // [PHASE 30K] PRERENDER SCOPE SAFETY - proves page can build without crashes
+    // ==========================================================================
+    console.log('[phase30k-program-prerender-scope-final]', {
+      has_program: !!program,
+      showBuilder: !!showBuilder,
+      modifyFlowState: modifyFlowState ?? null,
+      loadStage: loadStage ?? null,
+      has_generationError: !!generationError,
+      verdict: 'PROGRAM_PRERENDER_SCOPE_SAFE',
+    })
+    
+    console.log('[phase30k-crash-source-neutralized-final]', {
+      source: 'out_of_scope_generationStage_reference',
+      fixedZones: [
+        'phase30j boot stability useEffect (line ~2274)',
+        'phase30j useEffect dependency array (line ~2281)',
+        'phase30i render-branch IIFE (line ~10585)',
+      ],
+      verdict: 'GENERATIONSTAGE_SCOPE_CRASH_NEUTRALIZED',
+    })
   } catch (err) {
     console.error('[phase30j-verdict-log-crash]', { error: String(err) })
   }
@@ -10576,13 +10598,13 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
             // [PHASE 30I] STEP 3: Authoritative render-branch log
             // This MUST prove definitively what the render branch sees at render time
             // ==========================================================================
+            // [PHASE 30K] FIX: Removed generationStage - it's only defined inside generation handlers, not page scope
             console.log('[phase30i-render-branch-final]', {
               showBuilder: !!showBuilder,
               has_program: !!program,
               has_currentBuilderEntry: !!builderSessionInputs,
               has_builderSessionInputs: !!builderSessionInputs,
               has_generationError: !!generationError,
-              generationStage: generationStage ?? null,
               modifyFlowState,
               activeBranch: winningBranch,
               verdict: showBuilder

@@ -632,6 +632,36 @@ export default function ProgramPage() {
   }, [program, mounted, authoritativeActiveProgram])
   
   // ==========================================================================
+  // [PHASE 30Q] PRERENDER SAFE MOUNT LOG - proves page initialized without TDZ crash
+  // This runs in useEffect (after render) so it's safe from prerender issues
+  // ==========================================================================
+  useEffect(() => {
+    console.log('[phase30q-prerender-safe-final]', {
+      page: '/program',
+      mounted: true,
+      programExists: !!program,
+      verdict: 'PROGRAM_PAGE_PRERENDER_SAFE',
+    })
+  }, []) // Run once on mount only
+  
+  // ==========================================================================
+  // [PHASE 30Q] MODIFY RENDER AUTHORITY EFFECT - safe logging when authority changes
+  // ==========================================================================
+  useEffect(() => {
+    if (showBuilder || modifyBuilderLockRef.current) {
+      console.log('[phase30q-builder-authority-safe]', {
+        showBuilder: !!showBuilder,
+        modifyBuilderLock: !!modifyBuilderLockRef.current,
+        builderSessionInputsRefPresent: !!builderSessionInputsRef.current,
+        modifyFlowState: modifyFlowState ?? null,
+        verdict: (showBuilder || (modifyBuilderLockRef.current && builderSessionInputsRef.current))
+          ? 'MODIFY_RENDER_AUTHORITY_ACTIVE'
+          : 'MODIFY_RENDER_AUTHORITY_INACTIVE',
+      })
+    }
+  }, [showBuilder, modifyFlowState])
+  
+  // ==========================================================================
   // [PHASE 24C] TASK 6 - Page-side open state truth audit
   // Prove whether page state says modal should be visible
   // ==========================================================================
@@ -10615,93 +10645,9 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
   )
   
   // ==========================================================================
-  // [PHASE 30J] RUNTIME SAFETY VERDICT - proves page reached render without crash
+  // [PHASE 30Q] STABILIZATION - Removed unsafe render-time diagnostic blocks
+  // All render-time logging moved to effect-based or handler-based locations
   // ==========================================================================
-  try {
-    // ==========================================================================
-    // [PHASE 30P] RENDER AUTHORITY SNAPSHOT - THE AUTHORITATIVE RENDER DECISION
-    // This uses the single-authority contract to determine the render branch
-    // ==========================================================================
-    const winningBranch = shouldRenderModifyBuilder ? 'builder' : program ? 'program_display' : 'no_content'
-    console.log('[phase30p-render-authority-final]', {
-      showBuilder: !!showBuilder,
-      modifyFlowState: modifyFlowState ?? null,
-      modifyBuilderLock: !!modifyBuilderLockRef?.current,
-      builderSessionInputsStatePresent: !!builderSessionInputs,
-      builderSessionInputsRefPresent: !!builderSessionInputsRef.current,
-      shouldRenderModifyBuilder,
-      winningBranch,
-      verdict: shouldRenderModifyBuilder
-        ? 'MODIFY_RENDER_AUTHORITY_ACTIVE'
-        : (modifyBuilderLockRef?.current && !builderSessionInputsRef.current)
-        ? 'MODIFY_RENDER_BLOCKED_ENTRY_MISSING'
-        : modifyBuilderLockRef?.current
-        ? 'MODIFY_RENDER_BLOCKED_SHOWBUILDER_FALSE_ONLY'
-        : (modifyFlowState === 'builder' && !shouldRenderModifyBuilder)
-        ? 'MODIFY_RENDER_BLOCKED_BY_PROGRAM_BRANCH'
-        : 'RENDER_NORMAL_PROGRAM_DISPLAY',
-    })
-    
-    // ==========================================================================
-    // [PHASE 30M] RENDER-GATE SNAPSHOT - THE AUTHORITATIVE STATE AT RENDER TIME
-    // This is the DEFINITIVE proof of what the render branch sees
-    // ==========================================================================
-    console.log('[phase30m-render-gate-snapshot-final]', {
-      showBuilder: !!showBuilder,
-      showBuilderRaw: showBuilder,
-      modifyBuilderLock: !!modifyBuilderLockRef?.current,
-      modifyClickFired: !!modifyClickAudit?.clickFiredAt,
-      launcherEntered: !!modifyClickAudit?.canonicalLauncherEntered,
-      preBuilderReached: !!modifyClickAudit?.reachedPreBuilderTransition,
-      setShowBuilderRequested: !!modifyClickAudit?.setShowBuilderRequested,
-      builderSessionInputsPresent: !!builderSessionInputs,
-      builderSessionInputsRefPresent: !!builderSessionInputsRef.current,
-      generationErrorPresent: !!generationError,
-      hasProgram: !!program,
-      modifyFlowState: modifyFlowState ?? null,
-      loadStage: loadStage ?? null,
-      // The actual branch that will render (using new authority)
-      activeBranchCandidate: shouldRenderModifyBuilder ? 'builder' : program ? 'program_display' : 'no_content',
-      verdict: shouldRenderModifyBuilder
-        ? 'RENDER_WILL_SHOW_BUILDER'
-        : modifyClickAudit?.setShowBuilderRequested
-        ? 'RENDER_BLOCKED_SHOWBUILDER_STILL_FALSE'
-        : 'RENDER_NORMAL_PROGRAM_DISPLAY',
-    })
-    
-    console.log('[phase30j-runtime-safety-verdict-final]', {
-      has_program: !!program,
-      showBuilder: !!showBuilder,
-      has_builderSessionInputs: !!builderSessionInputs,
-      modifyFlowState: modifyFlowState ?? null,
-      loadStage: loadStage ?? null,
-      verdict: 'PROGRAM_RUNTIME_SAFE',
-    })
-    
-    // ==========================================================================
-    // [PHASE 30K] PRERENDER SCOPE SAFETY - proves page can build without crashes
-    // ==========================================================================
-    console.log('[phase30k-program-prerender-scope-final]', {
-      has_program: !!program,
-      showBuilder: !!showBuilder,
-      modifyFlowState: modifyFlowState ?? null,
-      loadStage: loadStage ?? null,
-      has_generationError: !!generationError,
-      verdict: 'PROGRAM_PRERENDER_SCOPE_SAFE',
-    })
-    
-    console.log('[phase30k-crash-source-neutralized-final]', {
-      source: 'out_of_scope_generationStage_reference',
-      fixedZones: [
-        'phase30j boot stability useEffect (line ~2274)',
-        'phase30j useEffect dependency array (line ~2281)',
-        'phase30i render-branch IIFE (line ~10585)',
-      ],
-      verdict: 'GENERATIONSTAGE_SCOPE_CRASH_NEUTRALIZED',
-    })
-  } catch (err) {
-    console.error('[phase30j-verdict-log-crash]', { error: String(err) })
-  }
   
   // TASK 3: Show error state for module load failure with stage info
   if (loadError) {
@@ -10843,162 +10789,12 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
           </div>
         )}
 
-        {/* [PHASE 24H] TASK F - Program page render branch verdict */}
-        {/* [PHASE 30G] STEP 5: Prove the render branch actually changes */}
-        {/* [PHASE 30I] RENDER BRANCH LOCK - Authoritative render branch decision log */}
-        {/* [PHASE 30J] SAFETY: Wrapped in try/catch to prevent diagnostic crash */}
-        {/* [PHASE 30N] Updated to use shouldRenderModifyBuilder authority */}
-        {(() => {
-          try {
-            const winningBranch = shouldRenderModifyBuilder ? 'builder' : program ? 'program_display' : 'no_content'
-            
-            // ==========================================================================
-            // [PHASE 30I] STEP 3: Authoritative render-branch log
-            // This MUST prove definitively what the render branch sees at render time
-            // ==========================================================================
-            // [PHASE 30K] FIX: Removed generationStage - it's only defined inside generation handlers, not page scope
-            // [PHASE 30N] Updated to use shouldRenderModifyBuilder authority
-            console.log('[phase30i-render-branch-final]', {
-              showBuilder: !!showBuilder,
-              shouldRenderModifyBuilder,
-              has_program: !!program,
-              has_builderSessionInputsState: !!builderSessionInputs,
-              has_builderSessionInputsRef: !!builderSessionInputsRef.current,
-              modifyBuilderLock: !!modifyBuilderLockRef.current,
-              has_generationError: !!generationError,
-              modifyFlowState,
-              activeBranch: winningBranch,
-              verdict: shouldRenderModifyBuilder
-                ? 'RENDER_BRANCH_BUILDER'
-                : program
-                ? 'RENDER_BRANCH_PROGRAM'
-                : 'RENDER_BRANCH_OTHER',
-            })
-            
-            // [PHASE 30G] Update audit state when builder render is seen
-            // [PHASE 30N] Updated to use shouldRenderModifyBuilder authority
-            if (shouldRenderModifyBuilder && modifyClickAudit?.setShowBuilderRequested && !modifyClickAudit?.showBuilderRenderSeen) {
-              // Note: We can't call setModifyClickAudit in render, so we log it
-              console.log('[phase30g-builder-render-branch-final]', {
-                verdict: 'BUILDER_RENDER_BRANCH_ACTIVE',
-                showBuilder,
-                shouldRenderModifyBuilder,
-                modifyFlowState,
-                programExists: !!program,
-                generationError: generationError ?? null,
-              })
-            } else if (!shouldRenderModifyBuilder && modifyClickAudit?.setShowBuilderRequested) {
-              console.log('[phase30g-builder-render-branch-final]', {
-                verdict: 'BUILDER_RENDER_BRANCH_NOT_ACTIVE',
-                showBuilder,
-                shouldRenderModifyBuilder,
-                modifyBuilderLock: !!modifyBuilderLockRef.current,
-                builderSessionInputsRef: !!builderSessionInputsRef.current,
-                modifyFlowState,
-                programExists: !!program,
-                generationError: generationError ?? null,
-                renderWinner: winningBranch,
-              })
-            }
-            
-            // ==========================================================================
-            // [PHASE 30L] RENDER BRANCH LOCK VERDICT
-            // [PHASE 30N] Updated to use shouldRenderModifyBuilder authority
-            // ==========================================================================
-            const modifyLockActive = modifyBuilderLockRef.current
-            const builderEntryPresent = !!builderSessionInputsRef.current
-            console.log('[phase30l-render-branch-lock-final]', {
-              showBuilder: !!showBuilder,
-              shouldRenderModifyBuilder,
-              modifyBuilderLock: modifyLockActive,
-              builderEntryPresent,
-              setShowBuilderRequested: !!modifyClickAudit?.setShowBuilderRequested,
-              hasProgram: !!program,
-              activeBranch: winningBranch,
-              verdict:
-                shouldRenderModifyBuilder
-                  ? 'MODIFY_RENDERED_BUILDER'
-                  : modifyLockActive && !builderEntryPresent
-                  ? 'MODIFY_LOCK_ACTIVE_BUT_ENTRY_MISSING'
-                  : modifyLockActive
-                  ? 'MODIFY_LOCK_ACTIVE_BUT_RENDER_FAILED'
-                  : 'MODIFY_NOT_IN_LOCKED_BUILDER_STATE',
-            })
-            
-            console.log('[phase24h-program-page-render-branch-verdict]', {
-              showBuilder,
-              showAdjustmentModal,
-              programExists: !!program,
-              mounted: true,
-              inputsExists: !!inputs,
-              modifyFlowState,
-              isModifyModalOpen,
-              winningRenderBranch: winningBranch,
-              reasonBuilderDidOrDidNotRender: showBuilder 
-                ? 'showBuilder_is_true' 
-                : 'showBuilder_is_false_showing_program_or_empty',
-            })
-          } catch (err) {
-            console.error('[phase30j-render-diagnostic-crash]', {
-              error: err instanceof Error ? err.message : String(err),
-              verdict: 'RENDER_DIAGNOSTIC_SAFELY_CAUGHT',
-            })
-          }
-          return null
-        })()}
-        
         {/* Content - TASK 2: Proper handling of malformed programs */}
         {/* [PHASE 30N] Use single-authority shouldRenderModifyBuilder instead of just showBuilder */}
         {shouldRenderModifyBuilder ? (
           <div className="space-y-6">
-            {/* [PHASE 30I] STEP 3: Builder render mounted log - proves builder branch executed */}
-            {/* [PHASE 30J] SAFETY: Wrapped in try/catch to prevent diagnostic crash */}
-            {/* [PHASE 30N] Updated to use shouldRenderModifyBuilder authority */}
-            {(() => {
-              try {
-                console.log('[phase30i-builder-render-mounted-final]', {
-                  showBuilder: !!showBuilder,
-                  shouldRenderModifyBuilder,
-                  modifyBuilderLock: !!modifyBuilderLockRef.current,
-                  has_builderSessionInputsState: !!builderSessionInputs,
-                  has_builderSessionInputsRef: !!builderSessionInputsRef.current,
-                  verdict: 'BUILDER_RENDER_MOUNTED',
-                })
-              } catch (err) {
-                console.error('[phase30j-builder-diagnostic-crash]', { error: String(err) })
-              }
-              return null
-            })()}
             {/* HARDENED: Generation error banner - recoverable state */}
             {/* [PHASE 16S/16T] Use truth-gated result to prevent stale banner display */}
-            {/* [PHASE 16T] STRICT: Only render if ALL conditions pass:
-                - generationError exists (from current attempt)
-                - truthGatedBuildResult exists (passed truth-gate)
-                - NOT hydrated from storage (must be live from current runtime)
-                - runtimeSessionId matches current session */}
-            {/* [PHASE 16V] Amber banner truth audit - logged on every render attempt */}
-            {(() => {
-              const shouldRender = !!(generationError && 
-                truthGatedBuildResult && 
-                truthGatedBuildResult.hydratedFromStorage !== true &&
-                truthGatedBuildResult.runtimeSessionId === runtimeSessionIdRef.current)
-              
-              if (generationError || truthGatedBuildResult) {
-                console.log('[phase16v-amber-banner-truth-audit]', {
-                  generationError: generationError?.slice(0, 60) ?? null,
-                  truthGatedCode: truthGatedBuildResult?.errorCode ?? null,
-                  truthGatedStage: truthGatedBuildResult?.stage ?? null,
-                  truthGatedSubCode: truthGatedBuildResult?.subCode ?? null,
-                  truthGatedFailureStep: truthGatedBuildResult?.failureStep ?? null,
-                  truthGatedFailureReason: truthGatedBuildResult?.failureReason?.slice(0, 60) ?? null,
-                  hydratedFromStorage: truthGatedBuildResult?.hydratedFromStorage ?? null,
-                  runtimeSessionId: truthGatedBuildResult?.runtimeSessionId ?? null,
-                  currentRuntimeSessionId: runtimeSessionIdRef.current,
-                  renderVerdict: shouldRender ? 'will_render' : 'suppressed',
-                })
-              }
-              return null
-            })()}
             {generationError && 
              truthGatedBuildResult && 
              truthGatedBuildResult.hydratedFromStorage !== true &&
@@ -11315,26 +11111,6 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
           </div>
         ) : program && programModules.isRenderableProgram?.(program) ? (
           <div className="space-y-4">
-            {/* [PHASE 30I] STEP 3: Program render mounted log - proves program branch executed */}
-            {/* [PHASE 30J] SAFETY: Wrapped in try/catch to prevent diagnostic crash */}
-            {/* [PHASE 30N] Updated to use shouldRenderModifyBuilder authority */}
-            {(() => {
-              try {
-                console.log('[phase30i-program-render-mounted-final]', {
-                  showBuilder: !!showBuilder,
-                  shouldRenderModifyBuilder,
-                  modifyBuilderLock: !!modifyBuilderLockRef.current,
-                  builderSessionInputsRef: !!builderSessionInputsRef.current,
-                  has_program: !!program,
-                  verdict: shouldRenderModifyBuilder
-                    ? 'PROGRAM_BRANCH_WRONGLY_WON_WHILE_BUILDER_AUTHORITY_TRUE'
-                    : 'PROGRAM_BRANCH_EXPECTED',
-                })
-              } catch (err) {
-                console.error('[phase30j-program-diagnostic-crash]', { error: String(err) })
-              }
-              return null
-            })()}
             {/* [program-rebuild-truth] ISSUE B/C: Show rebuild failed warning if last build failed */}
             {/* [PHASE 16S/16T] Use truth-gated result to prevent stale banner display */}
             {/* [PHASE 16T] STRICT: Only render if NOT hydrated and matches current runtime */}
@@ -11522,21 +11298,6 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
         )}
 
         {/* Program Adjustment Modal */}
-        {/* [PHASE 24B] Step E - Page render audit - prove page re-renders with new state */}
-        {(() => {
-          console.log('[phase24b-page-render-open-prop-audit]', {
-            showAdjustmentModal,
-            showBuilder,
-            programExists: !!program,
-            builderOrigin,
-            timestamp: Date.now(),
-            verdict: showAdjustmentModal 
-              ? 'PAGE_RENDERING_WITH_MODAL_OPEN_TRUE'
-              : 'PAGE_RENDERING_WITH_MODAL_OPEN_FALSE',
-          })
-          return null
-        })()}
-        
         {/* [canonical-rebuild] TASK B: Wire rebuild callback for structural changes */}
         {/* [PHASE 5 TASK 3] Prefill from CANONICAL profile, not stale inputs state */}
         {/* [PHASE 21A] Simple controlled dialog - always mounted, open controlled by showAdjustmentModal */}
@@ -11635,30 +11396,6 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
             return (canonical.scheduleMode as 'static' | 'flexible' | 'adaptive') || 'adaptive'
           })()}
         />
-        
-        {/* [PHASE 24B] Final visible verdict - prove whether modal is accessible in render tree */}
-        {(() => {
-          const isModalInRenderTree = true  // It's always mounted in JSX
-          const isModalOpenPropTrue = showAdjustmentModal
-          const isPageStable = !showBuilder
-          
-          const verdict = isModalOpenPropTrue && isPageStable 
-            ? 'CASE_A_MODAL_SHOULD_BE_VISIBLE'
-            : isModalOpenPropTrue && showBuilder
-            ? 'CASE_C_MODAL_OPEN_BUT_BUILDER_SHOWING'
-            : 'CASE_B_MODAL_OPEN_FALSE_OR_PAGE_UNSTABLE'
-          
-          console.log('[phase24b-modify-final-visible-verdict]', {
-            isModalInRenderTree,
-            isModalOpenPropTrue,
-            isPageStable,
-            showBuilder,
-            showAdjustmentModal,
-            verdict,
-          })
-          
-          return null
-        })()}
       </div>
     </div>
   )

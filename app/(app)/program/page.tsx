@@ -1807,6 +1807,30 @@ export default function ProgramPage() {
   const [lastBuildResult, setLastBuildResult] = useState<BuildAttemptResult | null>(null)
   
   // ==========================================================================
+  // [PHASE 30G] MODIFY CLICK-TO-BUILDER AUDIT STATE
+  // Local diagnostic state to track the full click chain on-screen
+  // ==========================================================================
+  const [modifyClickAudit, setModifyClickAudit] = useState<{
+    clickFiredAt: string | null
+    handleNewProgramEntered: boolean
+    canonicalLauncherEntered: boolean
+    reachedPreBuilderTransition: boolean
+    setShowBuilderRequested: boolean
+    showBuilderRenderSeen: boolean
+    failureStage: string | null
+    failureMessage: string | null
+  }>({
+    clickFiredAt: null,
+    handleNewProgramEntered: false,
+    canonicalLauncherEntered: false,
+    reachedPreBuilderTransition: false,
+    setShowBuilderRequested: false,
+    showBuilderRenderSeen: false,
+    failureStage: null,
+    failureMessage: null,
+  })
+  
+  // ==========================================================================
   // [PHASE 16S] Runtime session marker for attempt-truth gating
   // ==========================================================================
   const runtimeSessionIdRef = useRef<string>(generateRuntimeSessionId())
@@ -8594,7 +8618,22 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
     try {
       // ==========================================================================
       // [PHASE 30F] STAGE: entry
+      // [PHASE 30G] STEP 3: Prove the canonical launcher is actually entered
       // ==========================================================================
+      setModifyClickAudit(prev => ({
+        ...prev,
+        canonicalLauncherEntered: true,
+        failureStage: null,
+        failureMessage: null,
+      }))
+      
+      console.log('[phase30g-modify-launcher-entered]', {
+        verdict: 'CANONICAL_LAUNCHER_ENTERED',
+        showBuilder_before: showBuilder,
+        modifyFlowState_before: modifyFlowState,
+        timestamp: new Date().toISOString(),
+      })
+      
       console.log('[phase30f-modify-open-entry]', {
         stage: 'entry',
         programExists: !!program,
@@ -9130,7 +9169,20 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
     
     // ==========================================================================
     // [PHASE 30F] PRE-BUILDER TRANSITION LOG
+    // [PHASE 30G] STEP 4: Prove the launcher reaches pre-builder transition
     // ==========================================================================
+    setModifyClickAudit(prev => ({
+      ...prev,
+      reachedPreBuilderTransition: true,
+    }))
+    
+    console.log('[phase30g-modify-pre-builder-handoff]', {
+      verdict: 'PRE_BUILDER_HANDOFF_REACHED',
+      builderSessionKey: newSessionKey ?? null,
+      showBuilder_before_set: showBuilder,
+      modifyFlowState_before_set: modifyFlowState,
+    })
+    
     console.log('[phase30f-modify-open-pre-builder-transition]', {
       stage: 'transition_to_builder',
       builderSessionKey: newSessionKey,
@@ -9139,6 +9191,12 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
       willSetModifyFlowState: 'builder',
       verdict: 'READY_TO_OPEN_BUILDER',
     })
+    
+    // [PHASE 30G] Mark setShowBuilder as requested BEFORE the actual call
+    setModifyClickAudit(prev => ({
+      ...prev,
+      setShowBuilderRequested: true,
+    }))
     
     setModifyFlowState('builder')
     setShowAdjustmentModal(false)
@@ -9182,12 +9240,21 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
     } catch (error) {
       // ==========================================================================
       // [PHASE 30F] FAIL-SAFE CATCH BLOCK
+      // [PHASE 30G] Update audit state with failure details
       // Controlled error handling with user-visible feedback
       // ==========================================================================
+      const errorMsg = error instanceof Error ? error.message : String(error)
+      
+      setModifyClickAudit(prev => ({
+        ...prev,
+        failureStage: stage,
+        failureMessage: errorMsg.slice(0, 100),
+      }))
+      
       console.error('[phase30f-modify-open-failed]', {
         stage,
         errorName: error instanceof Error ? error.name : 'unknown',
-        errorMessage: error instanceof Error ? error.message : String(error),
+        errorMessage: errorMsg,
         stack: error instanceof Error ? error.stack : null,
         verdict: `MODIFY_OPEN_FAILED_AT_${stage}`,
       })
@@ -9205,7 +9272,7 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
         verdict: 'MODIFY_OPEN_ERROR_VISIBLE',
       })
     }
-  }, [program, programModules, builderOrigin])
+  }, [program, programModules, builderOrigin, showBuilder, modifyFlowState])
   // [PHASE 25] Note: buildCanonicalGenerationEntry and entryToAdaptiveInputs are now static module imports,
   // not component-level dependencies. getCanonicalProfile is also a static import.
 
@@ -9413,6 +9480,30 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
       event.preventDefault()
     }
     
+    // ==========================================================================
+    // [PHASE 30G] STEP 2: Prove the button click fires BEFORE anything else
+    // ==========================================================================
+    const clickTimestamp = new Date().toISOString()
+    setModifyClickAudit(prev => ({
+      ...prev,
+      clickFiredAt: clickTimestamp,
+      handleNewProgramEntered: true,
+      canonicalLauncherEntered: false,
+      reachedPreBuilderTransition: false,
+      setShowBuilderRequested: false,
+      showBuilderRenderSeen: false,
+      failureStage: null,
+      failureMessage: null,
+    }))
+    
+    console.log('[phase30g-modify-click-root]', {
+      verdict: 'MODIFY_BUTTON_CLICK_FIRED',
+      programExists: !!program,
+      showBuilder_before: showBuilder,
+      modifyFlowState_before: modifyFlowState,
+      timestamp: clickTimestamp,
+    })
+    
     console.log('[phase25-canonical-modify-replacement]', {
       action: 'MODIFY_BUTTON_CLICKED',
       programExists: !!program,
@@ -9425,7 +9516,7 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
     // [PHASE 25] Route directly to canonical launcher - no modal, no legacy branching
     handleOpenCanonicalModifyLauncher()
     
-  }, [program, handleOpenCanonicalModifyLauncher])
+  }, [program, handleOpenCanonicalModifyLauncher, showBuilder, modifyFlowState])
 
   const handleConfirmNewProgram = useCallback(async () => {
     // ==========================================================================
@@ -10335,10 +10426,76 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
             </Button>
           )}
         </div>
+        
+        {/* ==========================================================================
+            [PHASE 30G] STEP 2/7: ON-SCREEN DEBUG STRIP
+            Visible diagnostic strip showing the modify click chain status
+            Only shown when program exists and builder is not shown
+            ========================================================================== */}
+        {program && !showBuilder && (
+          <div className="mt-4 p-3 bg-zinc-900/80 border border-zinc-700 rounded-lg text-xs font-mono">
+            <div className="text-zinc-400 mb-2 font-semibold">PHASE30G MODIFY CLICK AUDIT</div>
+            <div className="grid grid-cols-2 gap-1 text-zinc-500">
+              <div>Click fired: <span className={modifyClickAudit.clickFiredAt ? 'text-green-400' : 'text-zinc-600'}>{modifyClickAudit.clickFiredAt ? 'YES' : 'no'}</span></div>
+              <div>Handler entered: <span className={modifyClickAudit.handleNewProgramEntered ? 'text-green-400' : 'text-zinc-600'}>{modifyClickAudit.handleNewProgramEntered ? 'YES' : 'no'}</span></div>
+              <div>Launcher entered: <span className={modifyClickAudit.canonicalLauncherEntered ? 'text-green-400' : 'text-zinc-600'}>{modifyClickAudit.canonicalLauncherEntered ? 'YES' : 'no'}</span></div>
+              <div>Pre-builder reached: <span className={modifyClickAudit.reachedPreBuilderTransition ? 'text-green-400' : 'text-zinc-600'}>{modifyClickAudit.reachedPreBuilderTransition ? 'YES' : 'no'}</span></div>
+              <div>setShowBuilder requested: <span className={modifyClickAudit.setShowBuilderRequested ? 'text-green-400' : 'text-zinc-600'}>{modifyClickAudit.setShowBuilderRequested ? 'YES' : 'no'}</span></div>
+              <div>Builder render seen: <span className={showBuilder ? 'text-green-400' : 'text-zinc-600'}>{showBuilder ? 'YES' : 'no'}</span></div>
+              {modifyClickAudit.failureStage && (
+                <div className="col-span-2 text-red-400">Failure: {modifyClickAudit.failureStage} - {modifyClickAudit.failureMessage?.slice(0, 50)}</div>
+              )}
+            </div>
+            {/* [PHASE 30G] STEP 7: Authoritative verdict line */}
+            <div className="mt-2 pt-2 border-t border-zinc-700 text-zinc-300">
+              Verdict: <span className={
+                showBuilder ? 'text-green-400' :
+                modifyClickAudit.failureStage ? 'text-red-400' :
+                modifyClickAudit.setShowBuilderRequested ? 'text-yellow-400' :
+                modifyClickAudit.reachedPreBuilderTransition ? 'text-blue-400' :
+                modifyClickAudit.canonicalLauncherEntered ? 'text-blue-400' :
+                modifyClickAudit.handleNewProgramEntered ? 'text-blue-400' :
+                'text-zinc-500'
+              }>
+                {showBuilder ? 'MODIFY_RENDERED_BUILDER' :
+                 modifyClickAudit.failureStage ? `MODIFY_FAILED_AT_${modifyClickAudit.failureStage}` :
+                 modifyClickAudit.setShowBuilderRequested ? `MODIFY_REQUESTED_BUILDER_BUT_RENDER_BRANCH_STAYED_${program ? 'program_display' : 'no_content'}` :
+                 modifyClickAudit.reachedPreBuilderTransition ? 'MODIFY_REACHED_PRE_BUILDER' :
+                 modifyClickAudit.canonicalLauncherEntered ? 'MODIFY_LAUNCHER_ENTERED_ONLY' :
+                 modifyClickAudit.handleNewProgramEntered ? 'MODIFY_HANDLER_ENTERED_ONLY' :
+                 modifyClickAudit.clickFiredAt ? 'MODIFY_CLICK_FIRED_ONLY' :
+                 'MODIFY_CLICK_NOT_FIRED'}
+              </span>
+            </div>
+          </div>
+        )}
 
         {/* [PHASE 24H] TASK F - Program page render branch verdict */}
+        {/* [PHASE 30G] STEP 5: Prove the render branch actually changes */}
         {(() => {
           const winningBranch = showBuilder ? 'builder' : program ? 'program_display' : 'no_content'
+          
+          // [PHASE 30G] Update audit state when builder render is seen
+          if (showBuilder && modifyClickAudit.setShowBuilderRequested && !modifyClickAudit.showBuilderRenderSeen) {
+            // Note: We can't call setModifyClickAudit in render, so we log it
+            console.log('[phase30g-builder-render-branch-final]', {
+              verdict: 'BUILDER_RENDER_BRANCH_ACTIVE',
+              showBuilder,
+              modifyFlowState,
+              programExists: !!program,
+              generationError: generationError ?? null,
+            })
+          } else if (!showBuilder && modifyClickAudit.setShowBuilderRequested) {
+            console.log('[phase30g-builder-render-branch-final]', {
+              verdict: 'BUILDER_RENDER_BRANCH_NOT_ACTIVE',
+              showBuilder,
+              modifyFlowState,
+              programExists: !!program,
+              generationError: generationError ?? null,
+              renderWinner: winningBranch,
+            })
+          }
+          
           console.log('[phase24h-program-page-render-branch-verdict]', {
             showBuilder,
             showAdjustmentModal,

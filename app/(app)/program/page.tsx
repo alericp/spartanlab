@@ -1704,7 +1704,20 @@ export default function ProgramPage() {
             if (displayCheck.safe) {
               loadedProgram = normalizedProgram
               setProgram(normalizedProgram)
-              setShowBuilder(false)
+              // [PHASE 30I] GUARD: Only reset showBuilder to false if this is the initial mount
+              // Do NOT override if user has already clicked Modify and set showBuilder to true
+              // Note: This uses the functional updater to check current state
+              setShowBuilder(prev => {
+                if (prev === true) {
+                  console.log('[phase30i-init-showBuilder-guard]', {
+                    verdict: 'INIT_SKIPPED_SHOWBUILDER_RESET_USER_ACTION_IN_PROGRESS',
+                    currentValue: prev,
+                    wouldHaveSetTo: false,
+                  })
+                  return true // Keep it true, don't override
+                }
+                return false // Normal init behavior
+              })
               setLoadStage('program-ready')
               
               // [TASK 7] MOUNT DIAGNOSTIC - Comprehensive audit log
@@ -1754,7 +1767,17 @@ export default function ProgramPage() {
               setLoadStage(`program-malformed:${displayCheck.reason || 'unknown'}`)
               // Keep program reference so we can show "Program Needs Refresh" state
               setProgram(normalizedProgram)
-              setShowBuilder(false) // Don't auto-show builder, show recovery state instead
+              // [PHASE 30I] GUARD: Only reset showBuilder if user hasn't already clicked Modify
+              setShowBuilder(prev => {
+                if (prev === true) {
+                  console.log('[phase30i-init-showBuilder-guard-malformed]', {
+                    verdict: 'INIT_SKIPPED_SHOWBUILDER_RESET_USER_ACTION_IN_PROGRESS',
+                    currentValue: prev,
+                  })
+                  return true
+                }
+                return false // Don't auto-show builder, show recovery state instead
+              })
             }
           } else {
             // No usable program - show builder
@@ -2243,6 +2266,20 @@ export default function ProgramPage() {
       })
     }
   }, [showAdjustmentModal, showBuilder, program])
+  
+  // ==========================================================================
+  // [PHASE 30I] STEP 4: Track showBuilder state changes
+  // This effect proves whether showBuilder is being set and then reset
+  // ==========================================================================
+  useEffect(() => {
+    console.log('[phase30i-showBuilder-state-changed]', {
+      showBuilder,
+      modifyFlowState,
+      programExists: !!program,
+      timestamp: new Date().toISOString(),
+      verdict: showBuilder ? 'SHOWBUILDER_IS_NOW_TRUE' : 'SHOWBUILDER_IS_NOW_FALSE',
+    })
+  }, [showBuilder, modifyFlowState, program])
   
   // Load last build result on mount - but clear stale failures if current program is newer
   useEffect(() => {
@@ -9229,6 +9266,13 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
     setShowAdjustmentModal(false)
     setShowBuilder(true)
     
+    // [PHASE 30I] Confirm setShowBuilder(true) was called
+    console.log('[phase30i-setShowBuilder-called]', {
+      calledWith: true,
+      verdict: 'SETSHOWBUILDER_TRUE_EXECUTED',
+      note: 'State update queued. React will batch and re-render.',
+    })
+    
     // ==========================================================================
     // [PHASE 30F] STAGE: complete
     // ==========================================================================
@@ -9501,8 +9545,9 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
   // [PHASE 25] NEW LIVE MODIFY ENTRY - Routes to Canonical Modify Launcher
   // This is the handler called by the visible "Modify Program" button.
   // It replaces the legacy modal flow with a direct canonical builder entry.
+  // [PHASE 30I] Made async and awaits the launcher to ensure state updates complete
   // ==========================================================================
-  const handleNewProgram = useCallback((event?: React.MouseEvent<HTMLButtonElement>) => {
+  const handleNewProgram = useCallback(async (event?: React.MouseEvent<HTMLButtonElement>) => {
     if (event) {
       event.preventDefault()
     }
@@ -9541,7 +9586,14 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
     })
     
     // [PHASE 25] Route directly to canonical launcher - no modal, no legacy branching
-    handleOpenCanonicalModifyLauncher()
+    // [PHASE 30I] FIX: Await the launcher to ensure state updates are complete before returning
+    await handleOpenCanonicalModifyLauncher()
+    
+    // [PHASE 30I] Post-launcher state verification
+    console.log('[phase30i-post-launcher-state-check]', {
+      verdict: 'LAUNCHER_COMPLETED',
+      note: 'State updates should now be batched and ready for render',
+    })
     
   }, [program, handleOpenCanonicalModifyLauncher, showBuilder, modifyFlowState])
 
@@ -10499,8 +10551,29 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
 
         {/* [PHASE 24H] TASK F - Program page render branch verdict */}
         {/* [PHASE 30G] STEP 5: Prove the render branch actually changes */}
+        {/* [PHASE 30I] RENDER BRANCH LOCK - Authoritative render branch decision log */}
         {(() => {
           const winningBranch = showBuilder ? 'builder' : program ? 'program_display' : 'no_content'
+          
+          // ==========================================================================
+          // [PHASE 30I] STEP 3: Authoritative render-branch log
+          // This MUST prove definitively what the render branch sees at render time
+          // ==========================================================================
+          console.log('[phase30i-render-branch-final]', {
+            showBuilder: !!showBuilder,
+            has_program: !!program,
+            has_currentBuilderEntry: !!builderSessionInputs,
+            has_builderSessionInputs: !!builderSessionInputs,
+            has_generationError: !!generationError,
+            generationStage: generationStage ?? null,
+            modifyFlowState,
+            activeBranch: winningBranch,
+            verdict: showBuilder
+              ? 'RENDER_BRANCH_BUILDER'
+              : program
+              ? 'RENDER_BRANCH_PROGRAM'
+              : 'RENDER_BRANCH_OTHER',
+          })
           
           // [PHASE 30G] Update audit state when builder render is seen
           if (showBuilder && modifyClickAudit.setShowBuilderRequested && !modifyClickAudit.showBuilderRenderSeen) {
@@ -10542,6 +10615,16 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
         {/* Content - TASK 2: Proper handling of malformed programs */}
         {showBuilder ? (
           <div className="space-y-6">
+            {/* [PHASE 30I] STEP 3: Builder render mounted log - proves builder branch executed */}
+            {(() => {
+              console.log('[phase30i-builder-render-mounted-final]', {
+                showBuilder: !!showBuilder,
+                has_currentBuilderEntry: !!builderSessionInputs,
+                has_builderSessionInputs: !!builderSessionInputs,
+                verdict: 'BUILDER_RENDER_MOUNTED',
+              })
+              return null
+            })()}
             {/* HARDENED: Generation error banner - recoverable state */}
             {/* [PHASE 16S/16T] Use truth-gated result to prevent stale banner display */}
             {/* [PHASE 16T] STRICT: Only render if ALL conditions pass:
@@ -10873,6 +10956,17 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
           </div>
         ) : program && programModules.isRenderableProgram?.(program) ? (
           <div className="space-y-4">
+            {/* [PHASE 30I] STEP 3: Program render mounted log - proves program branch executed */}
+            {(() => {
+              console.log('[phase30i-program-render-mounted-final]', {
+                showBuilder: !!showBuilder,
+                has_program: !!program,
+                verdict: showBuilder
+                  ? 'PROGRAM_BRANCH_WRONGLY_WON_WHILE_SHOWBUILDER_TRUE'
+                  : 'PROGRAM_BRANCH_EXPECTED',
+              })
+              return null
+            })()}
             {/* [program-rebuild-truth] ISSUE B/C: Show rebuild failed warning if last build failed */}
             {/* [PHASE 16S/16T] Use truth-gated result to prevent stale banner display */}
             {/* [PHASE 16T] STRICT: Only render if NOT hydrated and matches current runtime */}

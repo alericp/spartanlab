@@ -2694,6 +2694,26 @@ async function generateAdaptiveProgramImpl(
           : 'CANONICAL_FALLBACK_USED',
   })
   
+  // ==========================================================================
+  // [PHASE 29D] BUILDER BASELINE CONTRACT - proves builder honors input schedule
+  // ==========================================================================
+  console.log('[phase29d-builder-baseline-contract]', {
+    inputScheduleMode: inputs.scheduleMode,
+    inputTrainingDays: inputs.trainingDaysPerWeek,
+    canonicalScheduleMode: canonicalProfile.scheduleMode,
+    canonicalTrainingDays: canonicalProfile.trainingDaysPerWeek,
+    finalScheduleMode: inputScheduleMode,
+    finalTrainingDays: hasExplicitNumericDays ? inputs.trainingDaysPerWeek : (canonicalProfile.trainingDaysPerWeek ?? trainingDaysPerWeek),
+    verdict: (() => {
+      const inputStatic6 = inputs.scheduleMode === 'static' && inputs.trainingDaysPerWeek === 6
+      const finalStatic6 = inputScheduleMode === 'static' && (hasExplicitNumericDays ? inputs.trainingDaysPerWeek === 6 : canonicalProfile.trainingDaysPerWeek === 6)
+      if (inputStatic6 && finalStatic6) return 'STATIC_6_PRESERVED_IN_BUILDER'
+      if (inputStatic6 && !finalStatic6) return 'BUG_STATIC_6_LOST_IN_BUILDER'
+      if (inputs.scheduleMode === 'flexible' && inputScheduleMode === 'flexible') return 'FLEXIBLE_PRESERVED_IN_BUILDER'
+      return `${inputScheduleMode.toUpperCase()}_RESOLVED`
+    })(),
+  })
+  
   console.log('[phase25w-tdz-profile-validation]', {
     hasExplicitNumericDays,
     hasExplicitStaticInputs,

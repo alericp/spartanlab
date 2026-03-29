@@ -555,7 +555,26 @@ export function reconcileCanonicalProfile(): CanonicalProgrammingProfile {
         verdictReason = 'FALLBACK_USED'
       }
       
+      // ==========================================================================
+      // [PHASE 29A] ADAPTIVE WORKLOAD RESOLUTION - MUST BE COMPUTED BEFORE ANY LOGS
+      // [PHASE 29C] MOVED ABOVE LOGS TO FIX TDZ BUG - resolvedAdaptiveWorkload was
+      // referenced in logs before being declared, causing boot crash
+      // ==========================================================================
+      const onboardingAdaptive = (onboardingProfile as { adaptiveWorkloadEnabled?: boolean })?.adaptiveWorkloadEnabled
+      const athleteAdaptive = (athleteProfile as { adaptiveWorkloadEnabled?: boolean })?.adaptiveWorkloadEnabled
+      
+      // If either source explicitly sets it, use that value
+      // Otherwise default to true (adaptive workload is standard)
+      let resolvedAdaptiveWorkload = true
+      if (athleteAdaptive !== undefined && athleteAdaptive !== null) {
+        resolvedAdaptiveWorkload = athleteAdaptive
+      } else if (onboardingAdaptive !== undefined && onboardingAdaptive !== null) {
+        resolvedAdaptiveWorkload = onboardingAdaptive
+      }
+      // If neither has it, default to true (adaptive workload enabled by default)
+      
       // Step 4: Log the resolution with full forensics
+      // [PHASE 29C] All variables are now declared above - safe to log
       console.log('[phase28d-canonical-schedule-resolution]', {
         // Source values
         onboardingScheduleMode: onboardingProfile?.scheduleMode ?? null,
@@ -656,23 +675,46 @@ export function reconcileCanonicalProfile(): CanonicalProgrammingProfile {
       })
       
       // ==========================================================================
-      // [PHASE 29A] ADAPTIVE WORKLOAD RESOLUTION
-      // Separate from schedule identity - determines if engine adapts workload
-      // Default: true for all users (adaptive workload is the normal behavior)
-      // Users can opt out by explicitly setting adaptiveWorkloadEnabled=false
+      // [PHASE 29C] CANONICAL SCHEDULE BOOT SAFETY LOG
+      // Proves all schedule variables are computed and boot is safe
+      // This log happens AFTER all variables are declared - guaranteed safe
       // ==========================================================================
-      const onboardingAdaptive = (onboardingProfile as { adaptiveWorkloadEnabled?: boolean })?.adaptiveWorkloadEnabled
-      const athleteAdaptive = (athleteProfile as { adaptiveWorkloadEnabled?: boolean })?.adaptiveWorkloadEnabled
+      console.log('[phase29c-canonical-schedule-boot-safety]', {
+        'onboarding.scheduleMode': onboardingProfile?.scheduleMode ?? null,
+        'athlete.scheduleMode': athleteProfile?.scheduleMode ?? null,
+        'resolved.scheduleMode': resolvedScheduleMode,
+        'resolved.trainingDays': resolvedTrainingDays,
+        'resolved.adaptiveWorkload': resolvedAdaptiveWorkload,
+        verdict: (() => {
+          if (resolvedScheduleMode === 'static' && resolvedTrainingDays === 6) {
+            return 'CANONICAL_BOOT_SAFE_STATIC_6'
+          }
+          if (resolvedScheduleMode === 'flexible') {
+            return 'CANONICAL_BOOT_SAFE_FLEXIBLE'
+          }
+          return 'CANONICAL_BOOT_SAFE'
+        })(),
+      })
       
-      // If either source explicitly sets it, use that value
-      // Otherwise default to true (adaptive workload is standard)
-      let resolvedAdaptiveWorkload = true
-      if (athleteAdaptive !== undefined && athleteAdaptive !== null) {
-        resolvedAdaptiveWorkload = athleteAdaptive
-      } else if (onboardingAdaptive !== undefined && onboardingAdaptive !== null) {
-        resolvedAdaptiveWorkload = onboardingAdaptive
-      }
-      // If neither has it, default to true (adaptive workload enabled by default)
+      // ==========================================================================
+      // [PHASE 29D] CANONICAL RESOLUTION FINAL - THE DEFINITIVE SCHEDULE ANSWER
+      // This is what ALL downstream consumers (modify, prefill, form, builder) MUST use
+      // ==========================================================================
+      console.log('[phase29d-canonical-resolution-final]', {
+        onboardingScheduleMode: onboardingProfile?.scheduleMode ?? null,
+        onboardingTrainingDays: onboardingProfile?.trainingDaysPerWeek ?? null,
+        athleteScheduleMode: athleteProfile?.scheduleMode ?? null,
+        athleteTrainingDays: athleteProfile?.trainingDaysPerWeek ?? null,
+        resolvedScheduleMode,
+        resolvedTrainingDays,
+        resolvedAdaptiveWorkload,
+        precedenceWinner: winnerSource,
+        verdict: resolvedScheduleMode === 'static' && resolvedTrainingDays === 6
+          ? 'STATIC_6_RESOLVED'
+          : resolvedScheduleMode === 'static'
+            ? `STATIC_${resolvedTrainingDays}_RESOLVED`
+            : 'FLEXIBLE_RESOLVED',
+      })
       
       // [PHASE 29A] Log the schedule contract resolution
       console.log('[phase29a-canonical-schedule-contract-resolution]', {

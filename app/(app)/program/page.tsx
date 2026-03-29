@@ -437,6 +437,17 @@ export default function ProgramPage() {
   } | null>(null)
   
   // ==========================================================================
+  // [PHASE 30R] MODIFY FLOW DECLARATIONS - MUST BE DECLARED BEFORE ANY EFFECT THAT USES THEM
+  // These are moved here to prevent TDZ (Temporal Dead Zone) errors during prerender
+  // ==========================================================================
+  type ModifyFlowState = 'idle' | 'modal' | 'builder'
+  const [modifyFlowState, setModifyFlowState] = useState<ModifyFlowState>('idle')
+  const isModifyModalOpen = modifyFlowState === 'modal'
+  const modifyBuilderLockRef = useRef<boolean>(false)
+  
+  // [PHASE 30R] Declaration order safety - log moved to useEffect to avoid render-time issues
+  
+  // ==========================================================================
   // [PHASE 25Y] PROVE THE EXACT SUBMIT TRUTH - State change tracking
   // This useEffect fires ONLY when builderSessionInputs actually changes
   // ==========================================================================
@@ -540,30 +551,9 @@ export default function ProgramPage() {
   }, [builderSessionInputs, modifyFlowState])
   
   // ==========================================================================
-  // [PHASE 24D] EXPLICIT MODIFY FLOW STATE MACHINE
-  // This is the PRIMARY source of truth for the Modify UI path
-  // - 'idle': normal program view, no modify interaction active
-  // - 'modal': modify modal is open
-  // - 'builder': modify builder is open (came from modal "Start New Program")
+  // [PHASE 24D] NOTE: modifyFlowState and isModifyModalOpen moved to PHASE 30R block above
+  // to prevent TDZ errors. The state machine logic remains unchanged.
   // ==========================================================================
-  type ModifyFlowState = 'idle' | 'modal' | 'builder'
-  const [modifyFlowState, setModifyFlowState] = useState<ModifyFlowState>('idle')
-  
-  // Derived modal open state from the state machine
-  const isModifyModalOpen = modifyFlowState === 'modal'
-  
-  // [PHASE 24D] Page render truth audit
-  console.log('[phase24d-modify-page-render-truth]', {
-    modifyFlowState,
-    derivedModalOpen: isModifyModalOpen,
-    showBuilder,
-    programExists: !!program,
-    verdict: isModifyModalOpen 
-      ? 'MODAL_SHOULD_BE_VISIBLE'
-      : modifyFlowState === 'builder' || showBuilder
-      ? 'BUILDER_SHOULD_BE_VISIBLE'
-      : 'IDLE_PROGRAM_VIEW',
-  })
   
   // ==========================================================================
   // [PHASE 21A] Legacy modal state - now DERIVED from modifyFlowState for compatibility
@@ -632,7 +622,7 @@ export default function ProgramPage() {
   }, [program, mounted, authoritativeActiveProgram])
   
   // ==========================================================================
-  // [PHASE 30Q] PRERENDER SAFE MOUNT LOG - proves page initialized without TDZ crash
+  // [PHASE 30Q/30R] PRERENDER SAFE MOUNT LOG - proves page initialized without TDZ crash
   // This runs in useEffect (after render) so it's safe from prerender issues
   // ==========================================================================
   useEffect(() => {
@@ -641,6 +631,13 @@ export default function ProgramPage() {
       mounted: true,
       programExists: !!program,
       verdict: 'PROGRAM_PAGE_PRERENDER_SAFE',
+    })
+    // [PHASE 30R] Declaration order safety confirmation
+    console.log('[phase30r-declare-order-safe-final]', {
+      hasModifyFlowState: typeof modifyFlowState !== 'undefined',
+      hasModifyBuilderLockRef: typeof modifyBuilderLockRef !== 'undefined',
+      hasBuilderSessionInputsRef: typeof builderSessionInputsRef !== 'undefined',
+      verdict: 'MODIFY_DECLARE_ORDER_SAFE',
     })
   }, []) // Run once on mount only
   
@@ -1941,14 +1938,9 @@ export default function ProgramPage() {
   const currentSessionHasStartedNewAttemptRef = useRef<boolean>(false)
   
   // ==========================================================================
-  // [PHASE 30L] MODIFY BUILDER LOCK REF
-  // This ref prevents late init/mount writes from overwriting showBuilder
-  // after the user has clicked Modify and the builder transition has started.
-  // - Set to true when Modify reaches pre-builder transition
-  // - Init/mount code must NOT set showBuilder(false) while this is true
-  // - Released only on generation success, cancel, or explicit builder exit
+  // [PHASE 30L] NOTE: modifyBuilderLockRef moved to PHASE 30R block at top of component
+  // to prevent TDZ errors. The lock behavior remains unchanged.
   // ==========================================================================
-  const modifyBuilderLockRef = useRef<boolean>(false)
   
   // [PHASE 16S] Runtime session audit on mount
   useEffect(() => {

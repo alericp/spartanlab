@@ -612,6 +612,26 @@ export default function SettingsPage() {
         ? null 
         : parseInt(trainingDays || '3')
       
+      // ==========================================================================
+      // [PHASE 30A] SETTINGS SAVE AUTHORITATIVE PAYLOAD
+      // THE DEFINITIVE LOG proving what schedule values are being persisted
+      // ==========================================================================
+      console.log('[phase30a-settings-save-authoritative-payload]', {
+        ui_scheduleMode: scheduleMode,
+        ui_trainingDaysRaw: trainingDays,
+        ui_trainingDaysParsed: scheduleMode === 'static' ? parseInt(trainingDays || '0', 10) : null,
+        ui_adaptiveWorkloadEnabled: adaptiveWorkloadEnabled,
+        payload_scheduleMode: payloadScheduleMode,
+        payload_trainingDaysPerWeek: payloadTrainingDays,
+        payload_adaptiveWorkloadEnabled: adaptiveWorkloadEnabled,
+        verdict:
+          payloadScheduleMode === 'static' && payloadTrainingDays === 6
+            ? 'SETTINGS_PAYLOAD_STATIC_6'
+            : payloadScheduleMode === 'flexible'
+            ? 'SETTINGS_PAYLOAD_FLEXIBLE'
+            : `SETTINGS_PAYLOAD_STATIC_${payloadTrainingDays}`,
+      })
+      
       console.log('[phase28k-settings-save-source-of-truth]', {
         // Local state at click time
         localScheduleMode: scheduleMode,
@@ -807,7 +827,8 @@ export default function SettingsPage() {
             const canonicalReadback = getCanonicalProfile()
             
             // Also read raw localStorage to verify what was actually written
-            const rawAthleteStorage = localStorage.getItem('spartanlab_athlete_profile')
+            // [PHASE 30A FIX] Correct key is 'spartanlab_profile', NOT 'spartanlab_athlete_profile'
+            const rawAthleteStorage = localStorage.getItem('spartanlab_profile')
             let rawAthleteScheduleMode = null
             let rawAthleteTrainingDays = null
             try {
@@ -893,6 +914,27 @@ export default function SettingsPage() {
                 if (payloadScheduleMode === 'flexible') return 'INTENDED_FLEXIBLE_SAVED'
                 return 'BUG_ATHLETE_AND_CANON_STILL_FLEXIBLE'
               })(),
+            })
+            
+            // ==========================================================================
+            // [PHASE 30A] SETTINGS POST SAVE READBACK AUTHORITATIVE
+            // THE DEFINITIVE LOG proving what ALL sources show after save
+            // ==========================================================================
+            console.log('[phase30a-settings-post-save-readback-authoritative]', {
+              athlete_scheduleMode: athleteReadback?.scheduleMode ?? null,
+              athlete_trainingDaysPerWeek: athleteReadback?.trainingDaysPerWeek ?? null,
+              onboarding_scheduleMode: onboardingReadback?.scheduleMode ?? null,
+              onboarding_trainingDaysPerWeek: onboardingReadback?.trainingDaysPerWeek ?? null,
+              canonical_scheduleMode: canonicalReadback?.scheduleMode ?? null,
+              canonical_trainingDaysPerWeek: canonicalReadback?.trainingDaysPerWeek ?? null,
+              api_returned_scheduleMode: result.profile.scheduleMode,
+              api_returned_trainingDaysPerWeek: result.profile.trainingDaysPerWeek,
+              verdict:
+                canonicalReadback?.scheduleMode === 'static' && canonicalReadback?.trainingDaysPerWeek === 6
+                  ? 'POST_SAVE_CANONICAL_STATIC_6'
+                  : canonicalReadback?.scheduleMode === 'flexible'
+                  ? 'POST_SAVE_CANONICAL_STILL_FLEXIBLE'
+                  : `POST_SAVE_CANONICAL_STATIC_${canonicalReadback?.trainingDaysPerWeek}`,
             })
             
             // [PHASE 17G] Bodyweight save round-trip audit - prove exact value persists

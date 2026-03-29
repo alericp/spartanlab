@@ -121,6 +121,23 @@ export function AdaptiveProgramDisplay({
   // If this shows flexible when user selected 6, the bug is BEFORE display
   // ==========================================================================
   const trainingDaysPerWeek = (program as unknown as { trainingDaysPerWeek?: number | string }).trainingDaysPerWeek
+  
+  // ==========================================================================
+  // [PHASE 30A] DISPLAY CONTRACT FINAL - AUTHORITATIVE
+  // THE DEFINITIVE LOG proving what display component received
+  // ==========================================================================
+  console.log('[phase30a-display-contract-final]', {
+    program_scheduleMode: program?.scheduleMode ?? null,
+    program_trainingDaysPerWeek: trainingDaysPerWeek ?? null,
+    program_adaptiveWorkloadEnabled: (program as { adaptiveWorkloadEnabled?: boolean })?.adaptiveWorkloadEnabled ?? null,
+    verdict:
+      program?.scheduleMode === 'static' && trainingDaysPerWeek === 6
+        ? 'DISPLAY_STATIC_6'
+        : program?.scheduleMode === 'flexible'
+        ? 'DISPLAY_FLEXIBLE'
+        : `DISPLAY_STATIC_${trainingDaysPerWeek}`,
+  })
+  
   console.log('[phase26d-post-generation-save-hydration-forensic]', {
     stage: 'DISPLAY_COMPONENT_RENDER',
     displayProgramId: program.id,

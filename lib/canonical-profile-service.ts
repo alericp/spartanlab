@@ -697,6 +697,29 @@ export function reconcileCanonicalProfile(): CanonicalProgrammingProfile {
       })
       
       // ==========================================================================
+      // [PHASE 30A] CANONICAL FINAL SCHEDULE RESOLUTION - AUTHORITATIVE
+      // THE DEFINITIVE LOG proving canonical schedule resolution
+      // ==========================================================================
+      console.log('[phase30a-canonical-final-schedule-resolution]', {
+        onboarding_scheduleMode: onboardingProfile?.scheduleMode ?? null,
+        onboarding_trainingDaysPerWeek: onboardingProfile?.trainingDaysPerWeek ?? null,
+        athlete_scheduleMode: athleteProfile?.scheduleMode ?? null,
+        athlete_trainingDaysPerWeek: athleteProfile?.trainingDaysPerWeek ?? null,
+        athlete_adaptiveWorkloadEnabled: (athleteProfile as { adaptiveWorkloadEnabled?: boolean })?.adaptiveWorkloadEnabled ?? null,
+        resolved_scheduleMode: resolvedScheduleMode,
+        resolved_trainingDaysPerWeek: resolvedTrainingDays,
+        resolved_adaptiveWorkloadEnabled: resolvedAdaptiveWorkload,
+        precedenceWinner: winnerSource,
+        precedenceReason: verdictReason,
+        verdict:
+          resolvedScheduleMode === 'static' && resolvedTrainingDays === 6
+            ? 'CANONICAL_RESOLVED_STATIC_6'
+            : resolvedScheduleMode === 'flexible'
+            ? 'CANONICAL_RESOLVED_FLEXIBLE'
+            : `CANONICAL_RESOLVED_STATIC_${resolvedTrainingDays}`,
+      })
+      
+      // ==========================================================================
       // [PHASE 29D] CANONICAL RESOLUTION FINAL - THE DEFINITIVE SCHEDULE ANSWER
       // This is what ALL downstream consumers (modify, prefill, form, builder) MUST use
       // ==========================================================================

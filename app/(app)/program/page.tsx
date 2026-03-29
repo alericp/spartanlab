@@ -459,6 +459,53 @@ export default function ProgramPage() {
   }
   const [modifyBuilderEntry, setModifyBuilderEntry] = useState<ModifyBuilderEntry | null>(null)
   
+  // ==========================================================================
+  // [PHASE 30T] ENTRY PROMOTION EFFECT - THE ONLY PLACE WHERE MODIFY ENTERS BUILDER MODE
+  // This effect watches for a valid modifyBuilderEntry and promotes to builder mode.
+  // The launcher MUST NOT directly set modifyFlowState('builder') or showBuilder(true).
+  // ==========================================================================
+  useEffect(() => {
+    // Only promote if entry exists with inputs AND we're not already in builder mode
+    if (modifyBuilderEntry && modifyBuilderEntry.inputs && modifyFlowState !== 'builder') {
+      console.log('[phase30t-modify-entry-promotion-final]', {
+        hasEntry: !!modifyBuilderEntry,
+        hasInputs: !!modifyBuilderEntry?.inputs,
+        modifyFlowState_before: modifyFlowState ?? null,
+        showBuilder_before: !!showBuilder,
+        verdict: 'ENTRY_PROMOTED_TO_BUILDER',
+      })
+      
+      // Acquire lock FIRST
+      modifyBuilderLockRef.current = true
+      
+      // Promote to builder mode
+      setModifyFlowState('builder')
+      setShowAdjustmentModal(false)
+      setShowBuilder(true)
+    }
+  }, [modifyBuilderEntry]) // Only watch the entry object
+  
+  // ==========================================================================
+  // [PHASE 30T] HALF-TRANSITION CORRECTION EFFECT
+  // If modifyFlowState is 'builder' but no entry exists, this is an illegal state.
+  // Immediately demote back to safe idle state.
+  // ==========================================================================
+  useEffect(() => {
+    if (modifyFlowState === 'builder' && modifyBuilderEntry === null) {
+      console.log('[phase30t-half-transition-corrected-final]', {
+        modifyFlowState: modifyFlowState ?? null,
+        hasEntry: !!modifyBuilderEntry,
+        showBuilder: !!showBuilder,
+        verdict: 'HALF_TRANSITION_CORRECTED',
+      })
+      
+      // Reset to safe state
+      modifyBuilderLockRef.current = false
+      setModifyFlowState('idle')
+      setShowBuilder(false)
+    }
+  }, [modifyFlowState, modifyBuilderEntry, showBuilder])
+  
   // [PHASE 30R] Declaration order safety - log moved to useEffect to avoid render-time issues
   
   // ==========================================================================
@@ -9498,76 +9545,31 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
     }))
     
     // ==========================================================================
-    // [PHASE 30L] ACQUIRE MODIFY BUILDER LOCK
-    // This MUST happen BEFORE setShowBuilder(true) to prevent late init writes
-    // from racing and overwriting the builder state
+    // [PHASE 30T] ENTRY COMMITTED - STOP HERE
+    // The launcher MUST NOT directly set modifyFlowState('builder') or showBuilder(true).
+    // The PHASE 30T entry promotion effect will handle builder mode transition.
+    // This ensures no half-transition state is possible.
     // ==========================================================================
-    modifyBuilderLockRef.current = true
-    console.log('[phase30l-modify-builder-lock-acquired]', {
-      modifyBuilderLock: true,
-      stage: 'transition_to_builder',
-      verdict: 'MODIFY_BUILDER_LOCK_ACQUIRED',
+    console.log('[phase30t-modify-entry-commit-final]', {
+      hasEntry: true,
+      hasInputs: !!modifyEntry?.inputs,
+      sessionKey: modifyEntry?.sessionKey ?? null,
+      verdict: 'MODIFY_ENTRY_COMMITTED',
     })
     
-    // [PHASE 30N] LOCK ACQUIRED WITH ENTRY PRESENT - Proves single authority is active
-    console.log('[phase30n-modify-lock-acquired-final]', {
-      modifyBuilderLock: !!modifyBuilderLockRef.current,
-      builderSessionInputsRefPresent: !!builderSessionInputsRef.current,
-      shouldRenderModifyBuilder_willBe: !!(modifyBuilderLockRef.current && builderSessionInputsRef.current),
-      verdict: 'MODIFY_LOCK_ACTIVE',
-    })
-    
-    setModifyFlowState('builder')
-    setShowAdjustmentModal(false)
-    setShowBuilder(true)
-    
-    // [PHASE 30I] Confirm setShowBuilder(true) was called
-    console.log('[phase30i-setShowBuilder-called]', {
-      calledWith: true,
-      verdict: 'SETSHOWBUILDER_TRUE_EXECUTED',
-      note: 'State update queued. React will batch and re-render.',
-    })
-    
-    // [PHASE 30M] CRITICAL: Track that we DEFINITELY reached this line
-    console.log('[phase30m-setShowBuilder-confirmed]', {
-      verdict: 'SETSHOWBUILDER_TRUE_LINE_REACHED',
-      modifyBuilderLock: modifyBuilderLockRef.current,
-      note: 'If this log appears but builder does not render, React batching or another effect is resetting showBuilder',
-    })
+    // NOTE: Lock acquisition, setModifyFlowState('builder'), setShowBuilder(true) 
+    // are now handled by the PHASE 30T entry promotion effect watching modifyBuilderEntry
     
     // ==========================================================================
-    // [PHASE 30F] STAGE: complete
+    // [PHASE 30T] LAUNCHER COMPLETE - Entry committed, effect will promote
     // ==========================================================================
     stage = 'complete'
     
-    // ==========================================================================
-    // [PHASE 30F] MODIFY OPEN COMPLETE LOG
-    // ==========================================================================
     console.log('[phase30f-modify-open-complete]', {
       stage: 'complete',
       builderSessionKey: newSessionKey,
-      verdict: 'MODIFY_OPEN_COMPLETED',
-    })
-    
-    console.log('[phase25-canonical-modify-replacement]', {
-      action: 'BUILDER_OPENED',
-      modifyFlowState: 'builder',
-      showBuilder: true,
-      builderOrigin: 'default',
-      builderSessionKey: newSessionKey,
-      builderSessionInputsExists: true,
-      verdict: 'CANONICAL_MODIFY_LAUNCHER_COMPLETE',
-    })
-    
-    // ==========================================================================
-    // [PHASE 25] TASK 6: Final verdict for submit path confirmation
-    // ==========================================================================
-    console.log('[phase25-canonical-modify-replacement]', {
-      action: 'SUBMIT_PATH_VERDICT',
-      submitWillUse: 'STANDARD_HANDLEGENERATE_NOT_LEGACY_MODIFY',
-      isModifyFlowWillBe: false,  // Because builderOrigin is 'default'
-      downstreamPath: 'SAME_AS_RESTART_ONBOARDING',
-      verdict: 'CANONICAL_MODIFY_SUBMIT_PATH_USED',
+      entryCommitted: !!modifyEntry,
+      verdict: 'MODIFY_LAUNCHER_COMPLETE_WAITING_FOR_EFFECT_PROMOTION',
     })
     
     } catch (error) {
@@ -10821,19 +10823,19 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
         </div>
         
         {/* ==========================================================================
-            [PHASE 30S] MODIFY TRANSITION AUDIT STRIP
-            Shows the single authority entry contract status
+            [PHASE 30T] ENTRY-DRIVEN MODIFY AUDIT STRIP
+            Shows the entry-first contract: entry commit -> effect promotion -> render
             Only shown when program exists and builder is not shown
             ========================================================================== */}
         {program && !shouldRenderModifyBuilder && (
           <div className="mt-4 p-3 bg-zinc-900/80 border border-zinc-700 rounded-lg text-xs font-mono">
-            <div className="text-zinc-400 mb-2 font-semibold">PHASE30S SINGLE AUTHORITY AUDIT</div>
+            <div className="text-zinc-400 mb-2 font-semibold">PHASE30T ENTRY-DRIVEN AUDIT</div>
             <div className="grid grid-cols-2 gap-1 text-zinc-500">
-              {/* Single authority chain */}
+              {/* Entry-driven contract chain */}
               <div>1. Click fired: <span className={modifyClickAudit.clickFiredAt ? 'text-green-400' : 'text-zinc-600'}>{modifyClickAudit.clickFiredAt ? 'YES' : 'no'}</span></div>
               <div>2. Launcher entered: <span className={modifyClickAudit.canonicalLauncherEntered ? 'text-green-400' : 'text-zinc-600'}>{modifyClickAudit.canonicalLauncherEntered ? 'YES' : 'no'}</span></div>
               <div>3. Entry committed: <span className={modifyBuilderEntry ? 'text-green-400' : 'text-red-400'}>{modifyBuilderEntry ? 'YES' : 'NO'}</span></div>
-              <div>4. Entry has inputs: <span className={modifyBuilderEntry?.inputs ? 'text-green-400' : 'text-red-400'}>{modifyBuilderEntry?.inputs ? 'YES' : 'NO'}</span></div>
+              <div>4. Effect promoted: <span className={modifyFlowState === 'builder' && modifyBuilderEntry ? 'text-green-400' : 'text-zinc-600'}>{modifyFlowState === 'builder' && modifyBuilderEntry ? 'YES' : 'no'}</span></div>
               <div>5. modifyFlowState: <span className={modifyFlowState === 'builder' ? 'text-blue-400' : 'text-zinc-600'}>{modifyFlowState}</span></div>
               <div>6. Render authority: <span className={shouldRenderModifyBuilder ? 'text-green-400' : 'text-red-400'}>{shouldRenderModifyBuilder ? 'YES' : 'NO'}</span></div>
               {/* Legacy state for debugging */}
@@ -10843,12 +10845,12 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
                 <div className="col-span-2 text-red-400">Error: {modifyClickAudit.failureStage} - {modifyClickAudit.failureMessage?.slice(0, 50)}</div>
               )}
             </div>
-            {/* [PHASE 30S] Single authority verdict */}
+            {/* [PHASE 30T] Entry-driven verdict */}
             <div className="mt-2 pt-2 border-t border-zinc-700 text-zinc-300">
               Verdict: <span className={
                 shouldRenderModifyBuilder ? 'text-green-400' :
                 modifyClickAudit.failureStage ? 'text-red-400' :
-                (modifyFlowState === 'builder' && !modifyBuilderEntry) ? 'text-red-400' :
+                (modifyBuilderEntry && modifyFlowState !== 'builder') ? 'text-yellow-400' :
                 modifyClickAudit.canonicalLauncherEntered ? 'text-blue-400' :
                 'text-zinc-500'
               }>
@@ -10856,8 +10858,8 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
                  modifyClickAudit.failureStage ? `MODIFY_FAILED_AT_${modifyClickAudit.failureStage}` :
                  !modifyClickAudit.clickFiredAt ? 'MODIFY_WAITING_FOR_CLICK' :
                  !modifyClickAudit.canonicalLauncherEntered ? 'MODIFY_FAILED_LAUNCHER_NOT_ENTERED' :
-                 (modifyFlowState === 'builder' && !modifyBuilderEntry) ? 'HALF_TRANSITION_DETECTED' :
-                 !modifyBuilderEntry ? 'MODIFY_FAILED_ENTRY_NOT_COMMITTED' :
+                 !modifyBuilderEntry ? 'MODIFY_WAITING_FOR_ENTRY_COMMIT' :
+                 (modifyBuilderEntry && modifyFlowState !== 'builder') ? 'MODIFY_WAITING_FOR_EFFECT_PROMOTION' :
                  !modifyBuilderEntry?.inputs ? 'MODIFY_FAILED_ENTRY_HAS_NO_INPUTS' :
                  'MODIFY_FAILED_RENDER_AUTHORITY_NOT_ACTIVE'}
               </span>

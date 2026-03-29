@@ -487,6 +487,42 @@ export default function ProgramPage() {
   }, [modifyBuilderEntry, modifyFlowState, showBuilder]) // Include all read dependencies
   
   // ==========================================================================
+  // [PHASE 31B] ENTRY COMMIT SURVIVAL EFFECT - KEY PROOF POINT
+  // This effect observes whether modifyBuilderEntry actually survives into committed render.
+  // This is the definitive proof that the launcher's setModifyBuilderEntry call worked.
+  // ==========================================================================
+  useEffect(() => {
+    console.log('[phase31b-entry-commit-survival-final]', {
+      hasModifyBuilderEntry: !!modifyBuilderEntry,
+      sessionKey: modifyBuilderEntry?.sessionKey ?? null,
+      hasInputs: !!modifyBuilderEntry?.inputs,
+      modifyFlowState: modifyFlowState ?? null,
+      showBuilder: !!showBuilder,
+      verdict: modifyBuilderEntry?.inputs
+        ? 'ENTRY_SURVIVED_COMMITTED_RENDER'
+        : 'ENTRY_NOT_PRESENT_IN_COMMITTED_RENDER',
+    })
+  }, [modifyBuilderEntry, modifyFlowState, showBuilder])
+  
+  // ==========================================================================
+  // [PHASE 31B] TRANSITION STATE CLASSIFICATION EFFECT
+  // Distinguishes between "entry not committed yet" vs "illegal builder without entry"
+  // ==========================================================================
+  useEffect(() => {
+    console.log('[phase31b-transition-state-classification-final]', {
+      launcherEntered: modifyClickAudit.canonicalLauncherEntered,
+      hasEntry: !!modifyBuilderEntry,
+      modifyFlowState: modifyFlowState ?? null,
+      verdict:
+        modifyClickAudit.canonicalLauncherEntered && !modifyBuilderEntry && modifyFlowState === 'idle'
+          ? 'ENTRY_NOT_COMMITTED_YET'
+          : modifyFlowState === 'builder' && !modifyBuilderEntry
+          ? 'ILLEGAL_BUILDER_WITHOUT_ENTRY'
+          : 'TRANSITION_STATE_OK',
+    })
+  }, [modifyClickAudit.canonicalLauncherEntered, modifyBuilderEntry, modifyFlowState])
+  
+  // ==========================================================================
   // [PHASE 31A] HALF-TRANSITION GUARD EFFECT
   // Detects and corrects illegal states where modifyFlowState='builder' without entry.
   // This should NEVER happen if the pipeline is working correctly.
@@ -1842,18 +1878,38 @@ export default function ProgramPage() {
               setProgram(normalizedProgram)
               // [PHASE 30I] GUARD: Only reset showBuilder to false if this is the initial mount
               // Do NOT override if user has already clicked Modify and set showBuilder to true
-              // [PHASE 31A] SINGLE PIPELINE GUARD: Check modifyBuilderEntry as PRIMARY authority
-              // The modifyBuilderEntry is THE single source of truth for active Modify transitions.
+              // [PHASE 31B] ENTRY COMMIT SURVIVAL LOCK: Also check if launcher has entered
+              // If canonicalLauncherEntered is true, entry commit is in progress - DO NOT CLOBBER
               const hasModifyBuilderEntry = modifyBuilderEntry !== null
               const isModifyLockActive = modifyBuilderLockRef.current
               const isModifyFlowBuilder = modifyFlowState === 'builder'
               const hasLiveBuilderEntry = builderSessionInputsRef.current !== null
-              // PRIMARY: modifyBuilderEntry exists = active Modify transition
+              const launcherHasEntered = modifyClickAudit.canonicalLauncherEntered
+              // PRIMARY: launcher has entered OR modifyBuilderEntry exists = active Modify transition
               // SECONDARY: lock/flow/ref-based checks for compatibility
-              const isActiveModifyTransition = hasModifyBuilderEntry || isModifyLockActive || (isModifyFlowBuilder && hasLiveBuilderEntry)
+              const isActiveModifyTransition = launcherHasEntered || hasModifyBuilderEntry || isModifyLockActive || (isModifyFlowBuilder && hasLiveBuilderEntry)
+              
+              // [PHASE 31B] Detect and log potential entry clobber
+              if (launcherHasEntered && !hasModifyBuilderEntry) {
+                console.log('[phase31b-entry-clobber-candidate-final]', {
+                  source: 'init_program_exists_displayable',
+                  hasModifyBuilderEntry_before: hasModifyBuilderEntry,
+                  modifyFlowState_before: modifyFlowState ?? null,
+                  showBuilder_before: !!showBuilder,
+                  action: 'setShowBuilder(false) attempted',
+                  verdict: 'ENTRY_COMMIT_SURVIVAL_RISK_DETECTED',
+                })
+                console.log('[phase31b-pre-promotion-reset-blocked-final]', {
+                  canonicalLauncherEntered: launcherHasEntered,
+                  hasModifyBuilderEntry: hasModifyBuilderEntry,
+                  modifyFlowState: modifyFlowState ?? null,
+                  verdict: 'PRE_PROMOTION_RESET_BLOCKED',
+                })
+              }
               
               console.log('[phase31a-init-showBuilder-guard-final]', {
                 source: 'init_program_exists_displayable',
+                launcherHasEntered,
                 hasModifyBuilderEntry,
                 modifyFlowState: modifyFlowState ?? null,
                 modifyBuilderLock: isModifyLockActive,
@@ -1916,15 +1972,35 @@ export default function ProgramPage() {
               setLoadStage(`program-malformed:${displayCheck.reason || 'unknown'}`)
               // Keep program reference so we can show "Program Needs Refresh" state
               setProgram(normalizedProgram)
-              // [PHASE 31A] SINGLE PIPELINE GUARD: Check modifyBuilderEntry as PRIMARY authority
+              // [PHASE 31B] ENTRY COMMIT SURVIVAL LOCK: Also check if launcher has entered
               const hasModifyBuilderEntry = modifyBuilderEntry !== null
               const isModifyLockActive = modifyBuilderLockRef.current
               const isModifyFlowBuilder = modifyFlowState === 'builder'
               const hasLiveBuilderEntry = builderSessionInputsRef.current !== null
-              const isActiveModifyTransition = hasModifyBuilderEntry || isModifyLockActive || (isModifyFlowBuilder && hasLiveBuilderEntry)
+              const launcherHasEntered = modifyClickAudit.canonicalLauncherEntered
+              const isActiveModifyTransition = launcherHasEntered || hasModifyBuilderEntry || isModifyLockActive || (isModifyFlowBuilder && hasLiveBuilderEntry)
+              
+              // [PHASE 31B] Detect and log potential entry clobber
+              if (launcherHasEntered && !hasModifyBuilderEntry) {
+                console.log('[phase31b-entry-clobber-candidate-final]', {
+                  source: 'init_program_malformed_recovery',
+                  hasModifyBuilderEntry_before: hasModifyBuilderEntry,
+                  modifyFlowState_before: modifyFlowState ?? null,
+                  showBuilder_before: !!showBuilder,
+                  action: 'setShowBuilder(false) attempted',
+                  verdict: 'ENTRY_COMMIT_SURVIVAL_RISK_DETECTED',
+                })
+                console.log('[phase31b-pre-promotion-reset-blocked-final]', {
+                  canonicalLauncherEntered: launcherHasEntered,
+                  hasModifyBuilderEntry: hasModifyBuilderEntry,
+                  modifyFlowState: modifyFlowState ?? null,
+                  verdict: 'PRE_PROMOTION_RESET_BLOCKED',
+                })
+              }
               
               console.log('[phase31a-init-showBuilder-guard-final]', {
                 source: 'init_program_malformed_recovery',
+                launcherHasEntered,
                 hasModifyBuilderEntry,
                 modifyFlowState: modifyFlowState ?? null,
                 modifyBuilderLock: isModifyLockActive,
@@ -9330,10 +9406,32 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
       inputs: freshInputs,
     }
     
+    // ==========================================================================
+    // [PHASE 31B] BEFORE SET MODIFY ENTRY LOG
+    // This proves the setter line is about to run with valid data
+    // ==========================================================================
+    console.log('[phase31b-before-set-modify-entry]', {
+      sessionKey: modifyEntry?.sessionKey ?? null,
+      hasInputs: !!modifyEntry?.inputs,
+      scheduleMode: modifyEntry?.inputs?.scheduleMode ?? null,
+      trainingDaysPerWeek: modifyEntry?.inputs?.trainingDaysPerWeek ?? null,
+      verdict: modifyEntry?.inputs ? 'ABOUT_TO_SET_MODIFY_ENTRY' : 'MODIFY_ENTRY_OBJECT_INVALID',
+    })
+    
     // Commit the entry FIRST - this is the ONLY action that starts the Modify transition
     setModifyBuilderEntry(modifyEntry)
     
-    // [PHASE 31A] Authoritative entry commit log
+    // ==========================================================================
+    // [PHASE 31B] AFTER SET MODIFY ENTRY LOG
+    // This proves the setter line ran - does NOT prove state committed
+    // ==========================================================================
+    console.log('[phase31b-after-set-modify-entry-call]', {
+      sessionKey: modifyEntry?.sessionKey ?? null,
+      hasInputs: !!modifyEntry?.inputs,
+      verdict: 'SET_MODIFY_ENTRY_CALLED',
+    })
+    
+    // [PHASE 31A] Authoritative entry commit log (kept for compatibility)
     console.log('[phase31a-launcher-entry-commit-final]', {
       sessionKey: modifyEntry?.sessionKey ?? null,
       hasInputs: !!modifyEntry?.inputs,
@@ -10789,6 +10887,20 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
   }, [shouldRenderModifyBuilder, scheduleTruthAudit])
   
   // ==========================================================================
+  // [PHASE 31B] SCHEDULE TRUTH DEFERRED LOG
+  // Honest note that schedule truth issues are separate from entry survival
+  // ==========================================================================
+  useEffect(() => {
+    if (modifyClickAudit.canonicalLauncherEntered && !modifyBuilderEntry && scheduleTruthAudit) {
+      console.log('[phase31b-schedule-truth-deferred-final]', {
+        canonicalScheduleMode: scheduleTruthAudit?.canonicalScheduleMode ?? null,
+        canonicalTrainingDaysPerWeek: scheduleTruthAudit?.canonicalTrainingDaysPerWeek ?? null,
+        verdict: 'SCHEDULE_TRUTH_DEFERRED_UNTIL_ENTRY_SURVIVAL_IS_FIXED',
+      })
+    }
+  }, [modifyClickAudit.canonicalLauncherEntered, modifyBuilderEntry, scheduleTruthAudit])
+  
+  // ==========================================================================
   // [PHASE 31A] LEGACY - Preserved for reference but superceded by above
   // ==========================================================================
   useEffect(() => {
@@ -10937,8 +11049,9 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
                  modifyClickAudit.failureStage ? `MODIFY_FAILED_BEFORE_ENTRY_COMMIT` :
                  !modifyClickAudit.clickFiredAt ? 'MODIFY_WAITING_FOR_CLICK' :
                  !modifyClickAudit.canonicalLauncherEntered ? 'MODIFY_FAILED_LAUNCHER_NOT_ENTERED' :
-                 !modifyBuilderEntry ? 'MODIFY_ENTRY_COMMITTED_WAITING_FOR_PROMOTION' :
-                 (modifyBuilderEntry && modifyFlowState !== 'builder') ? 'MODIFY_PROMOTION_DONE_WAITING_FOR_RENDER' :
+                 !modifyBuilderEntry ? 'MODIFY_FAILED_ENTRY_NOT_COMMITTED' :
+                 (modifyBuilderEntry && modifyFlowState !== 'builder') ? 'MODIFY_ENTRY_COMMITTED_WAITING_FOR_PROMOTION' :
+                 (modifyBuilderEntry && modifyFlowState === 'builder' && !shouldRenderModifyBuilder) ? 'MODIFY_PROMOTION_DONE_WAITING_FOR_RENDER' :
                  'MODIFY_FAILED_RENDER_AUTHORITY_NOT_ACTIVE'}
               </span>
             </div>

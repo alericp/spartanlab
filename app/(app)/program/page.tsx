@@ -460,6 +460,19 @@ export default function ProgramPage() {
   const [modifyBuilderEntry, setModifyBuilderEntry] = useState<ModifyBuilderEntry | null>(null)
   
   // ==========================================================================
+  // [PHASE 31D] MODIFY BUILDER ENTRY REF - SYNCHRONOUS AUTHORITY
+  // This ref provides synchronous access to the entry during the commit/promotion window.
+  // It is written BEFORE the state setter to provide immediate authority.
+  // ==========================================================================
+  const modifyBuilderEntryRef = useRef<ModifyBuilderEntry | null>(null)
+  
+  // ==========================================================================
+  // [PHASE 31D] ATOMIC ENTRY COMMIT FLAG
+  // Tracks whether an atomic entry commit has been requested (setter called)
+  // ==========================================================================
+  const [atomicEntryCommitRequested, setAtomicEntryCommitRequested] = useState(false)
+  
+  // ==========================================================================
   // [PHASE 31C] MODIFY CLICK AUDIT STATE - MOVED HERE TO PREVENT TDZ ERRORS
   // This MUST be declared BEFORE any effect that references it in body or dependency array
   // ==========================================================================
@@ -484,6 +497,51 @@ export default function ProgramPage() {
   })
   
   // ==========================================================================
+  // [PHASE 31D] ATOMIC ENTRY COMMIT HELPER
+  // This helper commits the entry ATOMICALLY - ref first, then state.
+  // It does ONLY entry commit, NO other transition side effects.
+  // ==========================================================================
+  const commitModifyEntryAtomically = useCallback((entry: ModifyBuilderEntry) => {
+    // 1. Verify entry exists and has inputs
+    if (!entry || !entry.inputs) {
+      console.log('[phase31d-atomic-entry-commit-invalid]', {
+        hasEntry: !!entry,
+        hasInputs: !!entry?.inputs,
+        verdict: 'ATOMIC_ENTRY_COMMIT_REJECTED_INVALID',
+      })
+      return false
+    }
+    
+    // 2. Write synchronous ref authority FIRST
+    modifyBuilderEntryRef.current = entry
+    
+    // 3. Commit React state
+    setModifyBuilderEntry(entry)
+    
+    // 4. Mark commit as requested
+    setAtomicEntryCommitRequested(true)
+    
+    // 5. Update modifyClickAudit to reflect entry commit request
+    setModifyClickAudit(prev => ({
+      ...prev,
+      reachedPreBuilderTransition: true,
+    }))
+    
+    // 6. Emit authoritative log
+    console.log('[phase31d-atomic-entry-commit-requested]', {
+      refHasEntry: !!modifyBuilderEntryRef.current,
+      stateSetterCalled: true,
+      sessionKey: entry?.sessionKey ?? null,
+      hasInputs: !!entry?.inputs,
+      scheduleMode: entry?.inputs?.scheduleMode ?? null,
+      trainingDaysPerWeek: entry?.inputs?.trainingDaysPerWeek ?? null,
+      verdict: 'ATOMIC_ENTRY_COMMIT_REQUESTED',
+    })
+    
+    return true
+  }, [])
+  
+  // ==========================================================================
   // [PHASE 31C] DECLARE-BEFORE-USE VERIFICATION EFFECT
   // This proves the page mounted past the risky TDZ area
   // ==========================================================================
@@ -497,29 +555,55 @@ export default function ProgramPage() {
   }, [])
   
   // ==========================================================================
-  // [PHASE 31A] ENTRY PROMOTION EFFECT - THE ONLY PLACE WHERE MODIFY ENTERS BUILDER MODE
+  // [PHASE 31D] ENTRY PROMOTION EFFECT - THE ONLY PLACE WHERE MODIFY ENTERS BUILDER MODE
   // This is the SINGLE authoritative promotion path for Modify flow.
   // The launcher commits the entry, then THIS effect promotes to builder mode.
+  // This effect ALSO seeds legacy compatibility state from the committed entry.
   // ==========================================================================
   useEffect(() => {
     // Only promote if entry exists with inputs AND we're not already in builder mode
     if (modifyBuilderEntry && modifyBuilderEntry.inputs && modifyFlowState !== 'builder') {
-      console.log('[phase31a-entry-promotion-effect-final]', {
-        hasEntry: !!modifyBuilderEntry,
+      // [PHASE 31D] Log entry state observed BEFORE promotion
+      console.log('[phase31d-entry-state-observed-final]', {
+        stateHasEntry: !!modifyBuilderEntry,
+        refHasEntry: !!modifyBuilderEntryRef.current,
         hasInputs: !!modifyBuilderEntry?.inputs,
         modifyFlowState_before: modifyFlowState ?? null,
-        showBuilder_before: !!showBuilder,
-        willPromote: true,
-        verdict: 'ENTRY_PROMOTION_EFFECT_ACTIVE',
+        verdict: 'ENTRY_STATE_OBSERVED_FOR_PROMOTION',
       })
       
       // Acquire lock FIRST
       modifyBuilderLockRef.current = true
       
+      // ==========================================================================
+      // [PHASE 31D] SEED LEGACY COMPATIBILITY STATE FROM COMMITTED ENTRY
+      // This MUST happen during promotion so the render authority has the data it needs
+      // ==========================================================================
+      setBuilderSessionInputsAndRef(modifyBuilderEntry.inputs)
+      setBuilderSessionKey(modifyBuilderEntry.sessionKey)
+      setBuilderSessionSource(modifyBuilderEntry.source)
+      setInputs(modifyBuilderEntry.inputs)
+      setBuilderOrigin('default')
+      
       // Promote to builder mode - THIS IS THE ONLY PLACE THIS HAPPENS FOR MODIFY
       setModifyFlowState('builder')
       setShowAdjustmentModal(false)
       setShowBuilder(true)
+      
+      // Update audit state
+      setModifyClickAudit(prev => ({
+        ...prev,
+        setShowBuilderRequested: true,
+      }))
+      
+      // [PHASE 31D] Log promotion complete
+      console.log('[phase31d-promotion-complete-final]', {
+        stateHasEntry: !!modifyBuilderEntry,
+        refHasEntry: !!modifyBuilderEntryRef.current,
+        modifyFlowState_after: 'builder',
+        showBuilder_after: true,
+        verdict: 'ENTRY_PROMOTED_TO_BUILDER',
+      })
     }
   }, [modifyBuilderEntry, modifyFlowState, showBuilder]) // Include all read dependencies
   
@@ -1913,41 +1997,22 @@ export default function ProgramPage() {
             if (displayCheck.safe) {
               loadedProgram = normalizedProgram
               setProgram(normalizedProgram)
-              // [PHASE 30I] GUARD: Only reset showBuilder to false if this is the initial mount
-              // Do NOT override if user has already clicked Modify and set showBuilder to true
-              // [PHASE 31B] ENTRY COMMIT SURVIVAL LOCK: Also check if launcher has entered
-              // If canonicalLauncherEntered is true, entry commit is in progress - DO NOT CLOBBER
+              // [PHASE 31D] ATOMIC ENTRY AUTHORITY GUARD
+              // PRIMARY: modifyBuilderEntryRef (synchronous) or modifyBuilderEntry state
+              // SECONDARY: atomicEntryCommitRequested, lock, flow-based checks
+              const hasModifyBuilderEntryRef = modifyBuilderEntryRef.current !== null
               const hasModifyBuilderEntry = modifyBuilderEntry !== null
               const isModifyLockActive = modifyBuilderLockRef.current
               const isModifyFlowBuilder = modifyFlowState === 'builder'
               const hasLiveBuilderEntry = builderSessionInputsRef.current !== null
-              const launcherHasEntered = modifyClickAudit.canonicalLauncherEntered
-              // PRIMARY: launcher has entered OR modifyBuilderEntry exists = active Modify transition
-              // SECONDARY: lock/flow/ref-based checks for compatibility
-              const isActiveModifyTransition = launcherHasEntered || hasModifyBuilderEntry || isModifyLockActive || (isModifyFlowBuilder && hasLiveBuilderEntry)
+              // PRIMARY: ref or state entry exists = active Modify transition
+              const isActiveModifyTransition = hasModifyBuilderEntryRef || hasModifyBuilderEntry || atomicEntryCommitRequested || isModifyLockActive || (isModifyFlowBuilder && hasLiveBuilderEntry)
               
-              // [PHASE 31B] Detect and log potential entry clobber
-              if (launcherHasEntered && !hasModifyBuilderEntry) {
-                console.log('[phase31b-entry-clobber-candidate-final]', {
-                  source: 'init_program_exists_displayable',
-                  hasModifyBuilderEntry_before: hasModifyBuilderEntry,
-                  modifyFlowState_before: modifyFlowState ?? null,
-                  showBuilder_before: !!showBuilder,
-                  action: 'setShowBuilder(false) attempted',
-                  verdict: 'ENTRY_COMMIT_SURVIVAL_RISK_DETECTED',
-                })
-                console.log('[phase31b-pre-promotion-reset-blocked-final]', {
-                  canonicalLauncherEntered: launcherHasEntered,
-                  hasModifyBuilderEntry: hasModifyBuilderEntry,
-                  modifyFlowState: modifyFlowState ?? null,
-                  verdict: 'PRE_PROMOTION_RESET_BLOCKED',
-                })
-              }
-              
-              console.log('[phase31a-init-showBuilder-guard-final]', {
+              console.log('[phase31d-init-showBuilder-guard-final]', {
                 source: 'init_program_exists_displayable',
-                launcherHasEntered,
+                hasModifyBuilderEntryRef,
                 hasModifyBuilderEntry,
+                atomicEntryCommitRequested,
                 modifyFlowState: modifyFlowState ?? null,
                 modifyBuilderLock: isModifyLockActive,
                 builderSessionInputsRefPresent: hasLiveBuilderEntry,
@@ -2009,36 +2074,19 @@ export default function ProgramPage() {
               setLoadStage(`program-malformed:${displayCheck.reason || 'unknown'}`)
               // Keep program reference so we can show "Program Needs Refresh" state
               setProgram(normalizedProgram)
-              // [PHASE 31B] ENTRY COMMIT SURVIVAL LOCK: Also check if launcher has entered
+              // [PHASE 31D] ATOMIC ENTRY AUTHORITY GUARD
+              const hasModifyBuilderEntryRef = modifyBuilderEntryRef.current !== null
               const hasModifyBuilderEntry = modifyBuilderEntry !== null
               const isModifyLockActive = modifyBuilderLockRef.current
               const isModifyFlowBuilder = modifyFlowState === 'builder'
               const hasLiveBuilderEntry = builderSessionInputsRef.current !== null
-              const launcherHasEntered = modifyClickAudit.canonicalLauncherEntered
-              const isActiveModifyTransition = launcherHasEntered || hasModifyBuilderEntry || isModifyLockActive || (isModifyFlowBuilder && hasLiveBuilderEntry)
+              const isActiveModifyTransition = hasModifyBuilderEntryRef || hasModifyBuilderEntry || atomicEntryCommitRequested || isModifyLockActive || (isModifyFlowBuilder && hasLiveBuilderEntry)
               
-              // [PHASE 31B] Detect and log potential entry clobber
-              if (launcherHasEntered && !hasModifyBuilderEntry) {
-                console.log('[phase31b-entry-clobber-candidate-final]', {
-                  source: 'init_program_malformed_recovery',
-                  hasModifyBuilderEntry_before: hasModifyBuilderEntry,
-                  modifyFlowState_before: modifyFlowState ?? null,
-                  showBuilder_before: !!showBuilder,
-                  action: 'setShowBuilder(false) attempted',
-                  verdict: 'ENTRY_COMMIT_SURVIVAL_RISK_DETECTED',
-                })
-                console.log('[phase31b-pre-promotion-reset-blocked-final]', {
-                  canonicalLauncherEntered: launcherHasEntered,
-                  hasModifyBuilderEntry: hasModifyBuilderEntry,
-                  modifyFlowState: modifyFlowState ?? null,
-                  verdict: 'PRE_PROMOTION_RESET_BLOCKED',
-                })
-              }
-              
-              console.log('[phase31a-init-showBuilder-guard-final]', {
+              console.log('[phase31d-init-showBuilder-guard-final]', {
                 source: 'init_program_malformed_recovery',
-                launcherHasEntered,
+                hasModifyBuilderEntryRef,
                 hasModifyBuilderEntry,
+                atomicEntryCommitRequested,
                 modifyFlowState: modifyFlowState ?? null,
                 modifyBuilderLock: isModifyLockActive,
                 builderSessionInputsRefPresent: hasLiveBuilderEntry,
@@ -9425,93 +9473,32 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
     }
     
     // ==========================================================================
-    // [PHASE 31B] BEFORE SET MODIFY ENTRY LOG
-    // This proves the setter line is about to run with valid data
+    // [PHASE 31D] BEFORE ATOMIC ENTRY COMMIT LOG
+    // This proves we're about to commit with valid data
     // ==========================================================================
-    console.log('[phase31b-before-set-modify-entry]', {
-      sessionKey: modifyEntry?.sessionKey ?? null,
+    console.log('[phase31d-before-atomic-entry-commit]', {
+      hasEntryObject: !!modifyEntry,
       hasInputs: !!modifyEntry?.inputs,
       scheduleMode: modifyEntry?.inputs?.scheduleMode ?? null,
       trainingDaysPerWeek: modifyEntry?.inputs?.trainingDaysPerWeek ?? null,
-      verdict: modifyEntry?.inputs ? 'ABOUT_TO_SET_MODIFY_ENTRY' : 'MODIFY_ENTRY_OBJECT_INVALID',
-    })
-    
-    // Commit the entry FIRST - this is the ONLY action that starts the Modify transition
-    setModifyBuilderEntry(modifyEntry)
-    
-    // ==========================================================================
-    // [PHASE 31B] AFTER SET MODIFY ENTRY LOG
-    // This proves the setter line ran - does NOT prove state committed
-    // ==========================================================================
-    console.log('[phase31b-after-set-modify-entry-call]', {
-      sessionKey: modifyEntry?.sessionKey ?? null,
-      hasInputs: !!modifyEntry?.inputs,
-      verdict: 'SET_MODIFY_ENTRY_CALLED',
-    })
-    
-    // [PHASE 31A] Authoritative entry commit log (kept for compatibility)
-    console.log('[phase31a-launcher-entry-commit-final]', {
-      sessionKey: modifyEntry?.sessionKey ?? null,
-      hasInputs: !!modifyEntry?.inputs,
-      scheduleMode: modifyEntry?.inputs?.scheduleMode ?? null,
-      trainingDaysPerWeek: modifyEntry?.inputs?.trainingDaysPerWeek ?? null,
-      verdict: modifyEntry?.inputs
-        ? 'LAUNCHER_COMMITTED_ENTRY_ONLY'
-        : 'LAUNCHER_FAILED_TO_COMMIT_ENTRY',
+      verdict: modifyEntry?.inputs ? 'ABOUT_TO_COMMIT_ATOMIC_ENTRY' : 'ATOMIC_ENTRY_INVALID',
     })
     
     // ==========================================================================
-    // [PHASE 30F] PRE-SESSION SEED LOG
+    // [PHASE 31D] ATOMIC ENTRY COMMIT - THE ONLY ACTION LAUNCHER PERFORMS
+    // After this, the launcher RETURNS EARLY. All other work is done by
+    // the promotion effect that watches for the committed entry.
     // ==========================================================================
-    console.log('[phase30f-modify-open-pre-session-seed]', {
-      stage: 'seed_builder_session',
-      freshInputs_scheduleMode: freshInputs?.scheduleMode ?? null,
-      freshInputs_trainingDaysPerWeek: freshInputs?.trainingDaysPerWeek ?? null,
-      freshInputs_adaptiveWorkloadEnabled: (freshInputs as { adaptiveWorkloadEnabled?: boolean })?.adaptiveWorkloadEnabled ?? null,
-      verdict: 'READY_TO_SEED_BUILDER_SESSION',
-    })
+    const commitSuccess = commitModifyEntryAtomically(modifyEntry)
     
-    // Legacy session state sync (for compatibility with existing code)
-    setBuilderSessionInputsAndRef(freshInputs)
-    setBuilderSessionKey(newSessionKey)
-    setBuilderSessionSource('modify_visible_program')
-    
-    // Also sync to ambient inputs for consistency
-    setInputs(freshInputs)
+    if (!commitSuccess) {
+      throw new Error('Atomic entry commit failed - entry was invalid')
+    }
     
     // ==========================================================================
-    // [PHASE 30N] ENTRY SEEDED LOG - Proves builder entry data is now present
-    // This MUST fire AFTER setBuilderSessionInputsAndRef so the ref is populated
+    // [PHASE 31D] SEED SCHEDULE TRUTH AUDIT (diagnostic only, not transition state)
+    // This is kept in launcher since it's diagnostic data for the audit panel
     // ==========================================================================
-    console.log('[phase30n-modify-entry-seeded-final]', {
-      builderSessionInputsRefPresent: !!builderSessionInputsRef.current,
-      builderSessionInputsRefScheduleMode: builderSessionInputsRef.current?.scheduleMode ?? null,
-      builderSessionInputsRefTrainingDays: builderSessionInputsRef.current?.trainingDaysPerWeek ?? null,
-      modifyBuilderEntryPresent: !!modifyEntry,
-      verdict: builderSessionInputsRef.current ? 'MODIFY_ENTRY_SEEDED' : 'MODIFY_ENTRY_NOT_SEEDED',
-    })
-    
-    // ==========================================================================
-    // [PHASE 30P] ENTRY SEED AUTHORITY - Proves authoritative entry is now live
-    // This entry must NOT be clobbered by backup sync or legacy false-writes
-    // ==========================================================================
-    console.log('[phase30p-entry-seed-authority-final]', {
-      builderSessionInputsStatePresent: !!builderSessionInputs,
-      builderSessionInputsRefPresent: !!builderSessionInputsRef.current,
-      modifyBuilderEntryPresent: !!modifyEntry,
-      modifyFlowState_target: 'builder',
-      modifyBuilderLock: !!modifyBuilderLockRef.current,
-      verdict: modifyEntry
-        ? 'ENTRY_SEED_AUTHORITY_ACTIVE'
-        : 'ENTRY_SEED_AUTHORITY_MISSING',
-    })
-    
-    // ==========================================================================
-    // [PHASE 28E] SEED SCHEDULE TRUTH AUDIT FOR LIVE MODIFY PATH
-    // This makes the visible SCHEDULE TRUTH NOW panel render in the live flow
-    // [PHASE 30F] STAGE: seed_schedule_truth_audit
-    // ==========================================================================
-    stage = 'seed_schedule_truth_audit'
     const onboardingForAudit = getOnboardingProfileDirect()
     const athleteForAudit = getAthleteProfileDirect()
     
@@ -9538,178 +9525,29 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
       lastReconciliationDecision: null,
     })
     
-    console.log('[phase28e-live-modify-audit-state-seeded]', {
-      canonicalScheduleMode: canonicalProfileNow.scheduleMode,
-      canonicalTrainingDaysPerWeek: canonicalProfileNow.trainingDaysPerWeek,
-      prefillScheduleMode: freshInputs.scheduleMode,
-      prefillTrainingDays: freshInputs.trainingDaysPerWeek,
-      onboardingScheduleMode: onboardingForAudit?.scheduleMode || null,
-      athleteScheduleMode: athleteForAudit?.scheduleMode || null,
-      auditPanelWillRender: true,
-      verdict: freshInputs.scheduleMode === 'static' 
-        ? `LIVE_MODIFY_AUDIT_SEEDED_STATIC_${freshInputs.trainingDaysPerWeek}`
-        : 'LIVE_MODIFY_AUDIT_SEEDED_FLEXIBLE',
-    })
-    
-    // ==========================================================================
-    // [PHASE 29B] PROGRAM READ BEFORE MODIFY OPEN - Task 4
-    // Proves canonical profile values BEFORE builder opens
-    // ==========================================================================
-    console.log('[phase29b-program-read-before-modify-open]', {
-      // Canonical values
-      'canonical.scheduleMode': canonicalProfileNow.scheduleMode,
-      'canonical.trainingDays': canonicalProfileNow.trainingDaysPerWeek,
-      'canonical.adaptiveWorkload': (canonicalProfileNow as { adaptiveWorkloadEnabled?: boolean }).adaptiveWorkloadEnabled ?? true,
-      // Verdict
-      verdict: canonicalProfileNow.scheduleMode === 'static' && canonicalProfileNow.trainingDaysPerWeek === 6
-        ? 'CANONICAL_STATIC_6_PRESENT'
-        : canonicalProfileNow.scheduleMode === 'static'
-          ? `CANONICAL_STATIC_${canonicalProfileNow.trainingDaysPerWeek}_PRESENT`
-          : 'CANONICAL_FLEXIBLE_PRESENT',
-    })
-    
-    // ==========================================================================
-    // [PHASE 29B] MODIFY PREFILL CONTRACT - Task 4
-    // Proves prefill values match canonical exactly
-    // ==========================================================================
-    console.log('[phase29b-modify-prefill-contract]', {
-      // Canonical (source)
-      'canonical.scheduleMode': canonicalProfileNow.scheduleMode,
-      'canonical.trainingDays': canonicalProfileNow.trainingDaysPerWeek,
-      // Prefill (what builder will open with)
-      'prefill.scheduleMode': freshInputs.scheduleMode,
-      'prefill.trainingDays': freshInputs.trainingDaysPerWeek,
-      'prefill.adaptiveWorkload': freshInputs.adaptiveWorkloadEnabled ?? true,
-      // Match detection
-      scheduleModeMatches: canonicalProfileNow.scheduleMode === freshInputs.scheduleMode,
-      trainingDaysMatches: canonicalProfileNow.trainingDaysPerWeek === freshInputs.trainingDaysPerWeek,
-      // Verdict
-      verdict: (() => {
-        const canonIsStatic6 = canonicalProfileNow.scheduleMode === 'static' && canonicalProfileNow.trainingDaysPerWeek === 6
-        const prefillIsStatic6 = freshInputs.scheduleMode === 'static' && freshInputs.trainingDaysPerWeek === 6
-        if (canonIsStatic6 && prefillIsStatic6) return 'MODIFY_OPEN_PREFILLED_STATIC_6'
-        if (canonIsStatic6 && !prefillIsStatic6) return 'BUG_PREFILL_COLLAPSED_STATIC_TO_FLEXIBLE'
-        if (!canonIsStatic6 && freshInputs.scheduleMode === 'flexible') return 'MODIFY_OPEN_PREFILLED_FLEXIBLE'
-        return 'MODIFY_OPEN_PREFILLED_OTHER'
-      })(),
-    })
-    
-    // ==========================================================================
-    // [PHASE 29A] MODIFY OPEN BASELINE TRUTH LOG
-    // Proves the builder opened with correct baseline schedule identity
-    // Adaptive workload is shown SEPARATELY from schedule baseline
-    // ==========================================================================
-    const adaptiveWorkloadResolved = (canonicalProfileNow as { adaptiveWorkloadEnabled?: boolean }).adaptiveWorkloadEnabled ?? true
-    console.log('[phase29a-modify-open-baseline-truth]', {
-      // Baseline schedule identity
-      baselineScheduleMode: canonicalProfileNow.scheduleMode,
-      baselineTrainingDays: canonicalProfileNow.trainingDaysPerWeek,
-      // Adaptive workload (SEPARATE from schedule)
-      adaptiveWorkloadEnabled: adaptiveWorkloadResolved,
-      // Prefill values
-      prefillScheduleMode: freshInputs.scheduleMode,
-      prefillTrainingDays: freshInputs.trainingDaysPerWeek,
-      // Verdict
-      verdict: (() => {
-        const isStatic6 = canonicalProfileNow.scheduleMode === 'static' && canonicalProfileNow.trainingDaysPerWeek === 6
-        if (isStatic6 && adaptiveWorkloadResolved) {
-          return 'STATIC_6_BASELINE_WITH_ADAPTIVE_WORKLOAD_OPENED'
-        }
-        if (isStatic6 && !adaptiveWorkloadResolved) {
-          return 'STATIC_6_BASELINE_NO_ADAPTATION_OPENED'
-        }
-        if (canonicalProfileNow.scheduleMode === 'flexible') {
-          return 'FLEXIBLE_BASELINE_OPENED'
-        }
-        return `STATIC_${canonicalProfileNow.trainingDaysPerWeek}_BASELINE_OPENED`
-      })(),
-    })
-    
     // Record program end if there is an active program
     if (program) {
       programModules.recordProgramEnd?.('new_program')
     }
     
     // ==========================================================================
-    // [PHASE 25] TASK 4: Set builder origin to 'default' NOT 'modify_start_new'
-    // This ensures the submit path uses the standard handleGenerate flow
-    // instead of any legacy modify-specific branching
-    // [PHASE 30F] STAGE: set_builder_origin
-    // ==========================================================================
-    stage = 'set_builder_origin'
-    console.log('[phase25-canonical-modify-replacement]', {
-      action: 'BUILDER_ORIGIN_SET',
-      previousOrigin: builderOrigin,
-      newOrigin: 'default',  // NOT 'modify_start_new' - this is the key change
-      verdict: 'LEGACY_MODIFY_ENTRY_BYPASSED',
-    })
-    
-    setBuilderOrigin('default')  // [PHASE 25] Use 'default' to bypass legacy isModifyFlow branching
-    
-    // ==========================================================================
-    // [PHASE 25] TASK 5: Transition to builder directly (skip modal)
-    // [PHASE 30F] STAGE: transition_to_builder
-    // ==========================================================================
-    stage = 'transition_to_builder'
-    
-    // ==========================================================================
-    // [PHASE 30F] PRE-BUILDER TRANSITION LOG
-    // [PHASE 30G] STEP 4: Prove the launcher reaches pre-builder transition
-    // ==========================================================================
-    setModifyClickAudit(prev => ({
-      ...prev,
-      reachedPreBuilderTransition: true,
-    }))
-    
-    console.log('[phase30g-modify-pre-builder-handoff]', {
-      verdict: 'PRE_BUILDER_HANDOFF_REACHED',
-      builderSessionKey: newSessionKey ?? null,
-      showBuilder_before_set: showBuilder,
-      modifyFlowState_before_set: modifyFlowState,
-    })
-    
-    console.log('[phase30f-modify-open-pre-builder-transition]', {
-      stage: 'transition_to_builder',
-      builderSessionKey: newSessionKey,
-      builderOriginTarget: 'default',
-      willSetShowBuilder: true,
-      willSetModifyFlowState: 'builder',
-      verdict: 'READY_TO_OPEN_BUILDER',
-    })
-    
-    // [PHASE 30G] Mark setShowBuilder as requested BEFORE the actual call
-    setModifyClickAudit(prev => ({
-      ...prev,
-      setShowBuilderRequested: true,
-    }))
-    
-    // ==========================================================================
-    // [PHASE 30T] ENTRY COMMITTED - STOP HERE
-    // The launcher MUST NOT directly set modifyFlowState('builder') or showBuilder(true).
-    // The PHASE 30T entry promotion effect will handle builder mode transition.
-    // This ensures no half-transition state is possible.
-    // ==========================================================================
-    console.log('[phase30t-modify-entry-commit-final]', {
-      hasEntry: true,
-      hasInputs: !!modifyEntry?.inputs,
-      sessionKey: modifyEntry?.sessionKey ?? null,
-      verdict: 'MODIFY_ENTRY_COMMITTED',
-    })
-    
-    // NOTE: Lock acquisition, setModifyFlowState('builder'), setShowBuilder(true) 
-    // are now handled by the PHASE 30T entry promotion effect watching modifyBuilderEntry
-    
-    // ==========================================================================
-    // [PHASE 30T] LAUNCHER COMPLETE - Entry committed, effect will promote
+    // [PHASE 31D] LAUNCHER COMPLETE - RETURN EARLY
+    // Entry is committed. The promotion effect will handle everything else:
+    // - seeding legacy compatibility state
+    // - setting builderOrigin
+    // - setting modifyFlowState('builder')
+    // - setting showBuilder(true)
     // ==========================================================================
     stage = 'complete'
     
-    console.log('[phase30f-modify-open-complete]', {
+    console.log('[phase31d-launcher-complete-final]', {
       stage: 'complete',
-      builderSessionKey: newSessionKey,
-      entryCommitted: !!modifyEntry,
-      verdict: 'MODIFY_LAUNCHER_COMPLETE_WAITING_FOR_EFFECT_PROMOTION',
+      atomicEntryCommitted: true,
+      sessionKey: modifyEntry?.sessionKey ?? null,
+      verdict: 'LAUNCHER_COMPLETE_WAITING_FOR_PROMOTION_EFFECT',
     })
+    
+    // RETURN EARLY - launcher work is done, promotion effect takes over
     
     } catch (error) {
       // ==========================================================================
@@ -11035,41 +10873,43 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
         </div>
         
         {/* ==========================================================================
-            [PHASE 31A] SINGLE PIPELINE MODIFY AUDIT STRIP
-            Shows the single-pipeline contract: click -> launcher -> entry commit -> effect promotion -> render
+            [PHASE 31D] ATOMIC ENTRY COMMIT AUDIT STRIP
+            Shows the atomic commit contract: click -> launcher -> atomic commit -> state observed -> promotion -> render
             Only shown when program exists and builder is not shown
             ========================================================================== */}
         {program && !shouldRenderModifyBuilder && (
           <div className="mt-4 p-3 bg-zinc-900/80 border border-zinc-700 rounded-lg text-xs font-mono">
-            <div className="text-zinc-400 mb-2 font-semibold">PHASE31A SINGLE PIPELINE AUDIT</div>
+            <div className="text-zinc-400 mb-2 font-semibold">PHASE31D ATOMIC ENTRY AUDIT</div>
             <div className="grid grid-cols-2 gap-1 text-zinc-500">
-              {/* Single pipeline contract chain */}
+              {/* Atomic entry commit contract chain */}
               <div>1. Click fired: <span className={modifyClickAudit.clickFiredAt ? 'text-green-400' : 'text-zinc-600'}>{modifyClickAudit.clickFiredAt ? 'YES' : 'no'}</span></div>
               <div>2. Launcher entered: <span className={modifyClickAudit.canonicalLauncherEntered ? 'text-green-400' : 'text-zinc-600'}>{modifyClickAudit.canonicalLauncherEntered ? 'YES' : 'no'}</span></div>
-              <div>3. Entry committed: <span className={modifyBuilderEntry ? 'text-green-400' : 'text-red-400'}>{modifyBuilderEntry ? 'YES' : 'NO'}</span></div>
-              <div>4. Effect promoted: <span className={modifyFlowState === 'builder' && modifyBuilderEntry ? 'text-green-400' : 'text-zinc-600'}>{modifyFlowState === 'builder' && modifyBuilderEntry ? 'YES' : 'no'}</span></div>
-              <div>5. Render granted: <span className={shouldRenderModifyBuilder ? 'text-green-400' : 'text-red-400'}>{shouldRenderModifyBuilder ? 'YES' : 'NO'}</span></div>
-              <div>modifyFlowState: <span className={modifyFlowState === 'builder' ? 'text-blue-400' : 'text-zinc-600'}>{modifyFlowState}</span></div>
+              <div>3. Atomic commit requested: <span className={atomicEntryCommitRequested ? 'text-green-400' : 'text-red-400'}>{atomicEntryCommitRequested ? 'YES' : 'NO'}</span></div>
+              <div>4. Entry state observed: <span className={modifyBuilderEntry ? 'text-green-400' : 'text-red-400'}>{modifyBuilderEntry ? 'YES' : 'NO'}</span></div>
+              <div>5. Promotion completed: <span className={modifyFlowState === 'builder' && modifyBuilderEntry ? 'text-green-400' : 'text-zinc-600'}>{modifyFlowState === 'builder' && modifyBuilderEntry ? 'YES' : 'no'}</span></div>
+              <div>6. Render granted: <span className={shouldRenderModifyBuilder ? 'text-green-400' : 'text-red-400'}>{shouldRenderModifyBuilder ? 'YES' : 'NO'}</span></div>
               {modifyClickAudit.failureStage && (
                 <div className="col-span-2 text-red-400">Error: {modifyClickAudit.failureStage} - {modifyClickAudit.failureMessage?.slice(0, 50)}</div>
               )}
             </div>
-            {/* [PHASE 31A] Single pipeline verdict */}
+            {/* [PHASE 31D] Atomic entry commit verdict */}
             <div className="mt-2 pt-2 border-t border-zinc-700 text-zinc-300">
               Verdict: <span className={
                 shouldRenderModifyBuilder ? 'text-green-400' :
                 modifyClickAudit.failureStage ? 'text-red-400' :
                 (modifyBuilderEntry && modifyFlowState !== 'builder') ? 'text-yellow-400' :
+                atomicEntryCommitRequested && !modifyBuilderEntry ? 'text-orange-400' :
                 modifyClickAudit.canonicalLauncherEntered ? 'text-blue-400' :
                 'text-zinc-500'
               }>
                 {shouldRenderModifyBuilder ? 'MODIFY_RENDER_GRANTED' :
-                 modifyClickAudit.failureStage ? `MODIFY_FAILED_BEFORE_ENTRY_COMMIT` :
+                 modifyClickAudit.failureStage ? 'MODIFY_FAILED_BEFORE_ENTRY_COMMIT' :
                  !modifyClickAudit.clickFiredAt ? 'MODIFY_WAITING_FOR_CLICK' :
-                 !modifyClickAudit.canonicalLauncherEntered ? 'MODIFY_FAILED_LAUNCHER_NOT_ENTERED' :
-                 !modifyBuilderEntry ? 'MODIFY_FAILED_ENTRY_NOT_COMMITTED' :
-                 (modifyBuilderEntry && modifyFlowState !== 'builder') ? 'MODIFY_ENTRY_COMMITTED_WAITING_FOR_PROMOTION' :
-                 (modifyBuilderEntry && modifyFlowState === 'builder' && !shouldRenderModifyBuilder) ? 'MODIFY_PROMOTION_DONE_WAITING_FOR_RENDER' :
+                 !modifyClickAudit.canonicalLauncherEntered ? 'MODIFY_LAUNCHER_ENTERED_BUT_ENTRY_NOT_REQUESTED' :
+                 !atomicEntryCommitRequested ? 'MODIFY_FAILED_ENTRY_NOT_REQUESTED' :
+                 !modifyBuilderEntry ? 'MODIFY_ENTRY_COMMIT_REQUESTED_WAITING_FOR_STATE' :
+                 (modifyBuilderEntry && modifyFlowState !== 'builder') ? 'MODIFY_ENTRY_STATE_OBSERVED_WAITING_FOR_PROMOTION' :
+                 (modifyBuilderEntry && modifyFlowState === 'builder' && !shouldRenderModifyBuilder) ? 'MODIFY_PROMOTED_WAITING_FOR_RENDER' :
                  'MODIFY_FAILED_RENDER_AUTHORITY_NOT_ACTIVE'}
               </span>
             </div>

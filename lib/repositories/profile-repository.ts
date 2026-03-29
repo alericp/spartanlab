@@ -95,6 +95,22 @@ const previewProfileRepository: ProfileRepository = {
       createdAt: baseProfile.createdAt,
       updatedAt: new Date().toISOString(),
     }
+    
+    // ==========================================================================
+    // [PHASE 30B] ATHLETE PROFILE SAVE FINAL
+    // THE DEFINITIVE LOG proving what schedule values are being saved to localStorage
+    // ==========================================================================
+    console.log('[phase30b-athlete-profile-save-final]', {
+      saved_scheduleMode: (updated as { scheduleMode?: string }).scheduleMode ?? null,
+      saved_trainingDaysPerWeek: updated.trainingDaysPerWeek ?? null,
+      saved_adaptiveWorkloadEnabled: (updated as { adaptiveWorkloadEnabled?: boolean }).adaptiveWorkloadEnabled ?? null,
+      verdict:
+        (updated as { scheduleMode?: string }).scheduleMode === 'static' && updated.trainingDaysPerWeek === 6
+          ? 'ATHLETE_PROFILE_SAVED_STATIC_6'
+          : (updated as { scheduleMode?: string }).scheduleMode === 'flexible'
+          ? 'ATHLETE_PROFILE_SAVED_FLEXIBLE'
+          : `ATHLETE_PROFILE_SAVED_${(updated as { scheduleMode?: string }).scheduleMode}_${updated.trainingDaysPerWeek}`,
+    })
 
     localStorage.setItem(STORAGE_KEY, JSON.stringify(updated))
     return updated

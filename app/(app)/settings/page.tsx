@@ -632,6 +632,25 @@ export default function SettingsPage() {
             : `SETTINGS_PAYLOAD_STATIC_${payloadTrainingDays}`,
       })
       
+      // ==========================================================================
+      // [PHASE 30B] SETTINGS SAVE AUTHORITATIVE
+      // THE DEFINITIVE LOG proving what schedule values are being persisted
+      // ==========================================================================
+      console.log('[phase30b-settings-save-authoritative]', {
+        ui_scheduleMode: scheduleMode,
+        ui_trainingDaysPerWeek: scheduleMode === 'static' ? parseInt(trainingDays || '0', 10) : null,
+        ui_adaptiveWorkloadEnabled: adaptiveWorkloadEnabled,
+        payload_scheduleMode: payloadScheduleMode,
+        payload_trainingDaysPerWeek: payloadTrainingDays,
+        payload_adaptiveWorkloadEnabled: adaptiveWorkloadEnabled,
+        verdict:
+          payloadScheduleMode === 'static' && payloadTrainingDays === 6
+            ? 'SETTINGS_PAYLOAD_STATIC_6'
+            : payloadScheduleMode === 'flexible'
+            ? 'SETTINGS_PAYLOAD_FLEXIBLE'
+            : `SETTINGS_PAYLOAD_STATIC_${payloadTrainingDays}`,
+      })
+      
       console.log('[phase28k-settings-save-source-of-truth]', {
         // Local state at click time
         localScheduleMode: scheduleMode,
@@ -1410,7 +1429,26 @@ export default function SettingsPage() {
             {/* [adjustment-sync] TASK 2: Always show current value in collapsed state */}
             <Select 
               value={scheduleMode} 
-              onValueChange={(v) => setScheduleMode(v as 'static' | 'flexible')}
+              onValueChange={(v) => {
+                const nextScheduleMode = v as 'static' | 'flexible'
+                const nextTrainingDaysPerWeek = nextScheduleMode === 'static' ? parseInt(trainingDays || '3', 10) : null
+                // ==========================================================================
+                // [PHASE 30B] SETTINGS UI SELECTION AUTHORITATIVE
+                // Proves exactly what schedule values the UI is now showing
+                // ==========================================================================
+                console.log('[phase30b-settings-ui-selection-authoritative]', {
+                  next_scheduleMode: nextScheduleMode,
+                  next_trainingDaysPerWeek: nextTrainingDaysPerWeek,
+                  next_adaptiveWorkloadEnabled: adaptiveWorkloadEnabled,
+                  verdict:
+                    nextScheduleMode === 'static' && nextTrainingDaysPerWeek === 6
+                      ? 'SETTINGS_UI_NOW_STATIC_6'
+                      : nextScheduleMode === 'flexible'
+                      ? 'SETTINGS_UI_NOW_FLEXIBLE'
+                      : `SETTINGS_UI_NOW_STATIC_${nextTrainingDaysPerWeek}`,
+                })
+                setScheduleMode(nextScheduleMode)
+              }}
             >
               <SelectTrigger className="bg-[#1A1A1A] border-[#3A3A3A] text-[#F5F5F5]">
                 <SelectValue>
@@ -1438,7 +1476,25 @@ export default function SettingsPage() {
             <div className="space-y-2">
               <Label className="text-[#F5F5F5]">Training Days Per Week</Label>
               {/* [adjustment-sync] TASK 2: Always show current value in collapsed state */}
-              <Select value={trainingDays} onValueChange={setTrainingDays}>
+              <Select value={trainingDays} onValueChange={(v) => {
+                const nextTrainingDaysPerWeek = parseInt(v, 10)
+                // ==========================================================================
+                // [PHASE 30B] SETTINGS UI DAYS SELECTION AUTHORITATIVE
+                // Proves exactly what training days the UI is now showing
+                // ==========================================================================
+                console.log('[phase30b-settings-ui-selection-authoritative]', {
+                  next_scheduleMode: scheduleMode,
+                  next_trainingDaysPerWeek: nextTrainingDaysPerWeek,
+                  next_adaptiveWorkloadEnabled: adaptiveWorkloadEnabled,
+                  verdict:
+                    scheduleMode === 'static' && nextTrainingDaysPerWeek === 6
+                      ? 'SETTINGS_UI_NOW_STATIC_6'
+                      : scheduleMode === 'flexible'
+                      ? 'SETTINGS_UI_NOW_FLEXIBLE'
+                      : `SETTINGS_UI_NOW_STATIC_${nextTrainingDaysPerWeek}`,
+                })
+                setTrainingDays(v)
+              }}>
                 <SelectTrigger className="bg-[#1A1A1A] border-[#3A3A3A] text-[#F5F5F5]">
                   <SelectValue>
                     {trainingDays ? `${trainingDays} days` : 'Select days'}

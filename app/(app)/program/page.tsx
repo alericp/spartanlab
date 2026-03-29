@@ -9362,6 +9362,13 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
       note: 'State update queued. React will batch and re-render.',
     })
     
+    // [PHASE 30M] CRITICAL: Track that we DEFINITELY reached this line
+    console.log('[phase30m-setShowBuilder-confirmed]', {
+      verdict: 'SETSHOWBUILDER_TRUE_LINE_REACHED',
+      modifyBuilderLock: modifyBuilderLockRef.current,
+      note: 'If this log appears but builder does not render, React batching or another effect is resetting showBuilder',
+    })
+    
     // ==========================================================================
     // [PHASE 30F] STAGE: complete
     // ==========================================================================
@@ -10505,6 +10512,32 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
   // [PHASE 30J] RUNTIME SAFETY VERDICT - proves page reached render without crash
   // ==========================================================================
   try {
+    // ==========================================================================
+    // [PHASE 30M] RENDER-GATE SNAPSHOT - THE AUTHORITATIVE STATE AT RENDER TIME
+    // This is the DEFINITIVE proof of what the render branch sees
+    // ==========================================================================
+    console.log('[phase30m-render-gate-snapshot-final]', {
+      showBuilder: !!showBuilder,
+      showBuilderRaw: showBuilder,
+      modifyBuilderLock: !!modifyBuilderLockRef?.current,
+      modifyClickFired: !!modifyClickAudit?.clickFiredAt,
+      launcherEntered: !!modifyClickAudit?.canonicalLauncherEntered,
+      preBuilderReached: !!modifyClickAudit?.reachedPreBuilderTransition,
+      setShowBuilderRequested: !!modifyClickAudit?.setShowBuilderRequested,
+      builderSessionInputsPresent: !!builderSessionInputs,
+      generationErrorPresent: !!generationError,
+      hasProgram: !!program,
+      modifyFlowState: modifyFlowState ?? null,
+      loadStage: loadStage ?? null,
+      // The actual branch that will render
+      activeBranchCandidate: showBuilder ? 'builder' : program ? 'program_display' : 'no_content',
+      verdict: showBuilder
+        ? 'RENDER_WILL_SHOW_BUILDER'
+        : modifyClickAudit?.setShowBuilderRequested
+        ? 'RENDER_BLOCKED_SHOWBUILDER_STILL_FALSE'
+        : 'RENDER_NORMAL_PROGRAM_DISPLAY',
+    })
+    
     console.log('[phase30j-runtime-safety-verdict-final]', {
       has_program: !!program,
       showBuilder: !!showBuilder,
@@ -10637,10 +10670,11 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
             [PHASE 30G] STEP 2/7: ON-SCREEN DEBUG STRIP
             Visible diagnostic strip showing the modify click chain status
             Only shown when program exists and builder is not shown
+            [PHASE 30M] Extended to show render-gate state
             ========================================================================== */}
         {program && !showBuilder && (
           <div className="mt-4 p-3 bg-zinc-900/80 border border-zinc-700 rounded-lg text-xs font-mono">
-            <div className="text-zinc-400 mb-2 font-semibold">PHASE30G MODIFY CLICK AUDIT</div>
+            <div className="text-zinc-400 mb-2 font-semibold">PHASE30M RENDER-GATE AUDIT</div>
             <div className="grid grid-cols-2 gap-1 text-zinc-500">
               <div>Click fired: <span className={modifyClickAudit.clickFiredAt ? 'text-green-400' : 'text-zinc-600'}>{modifyClickAudit.clickFiredAt ? 'YES' : 'no'}</span></div>
               <div>Handler entered: <span className={modifyClickAudit.handleNewProgramEntered ? 'text-green-400' : 'text-zinc-600'}>{modifyClickAudit.handleNewProgramEntered ? 'YES' : 'no'}</span></div>
@@ -10648,29 +10682,37 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
               <div>Pre-builder reached: <span className={modifyClickAudit.reachedPreBuilderTransition ? 'text-green-400' : 'text-zinc-600'}>{modifyClickAudit.reachedPreBuilderTransition ? 'YES' : 'no'}</span></div>
               <div>setShowBuilder requested: <span className={modifyClickAudit.setShowBuilderRequested ? 'text-green-400' : 'text-zinc-600'}>{modifyClickAudit.setShowBuilderRequested ? 'YES' : 'no'}</span></div>
               <div>Builder render seen: <span className={showBuilder ? 'text-green-400' : 'text-zinc-600'}>{showBuilder ? 'YES' : 'no'}</span></div>
+              {/* [PHASE 30M] Additional render-gate state */}
+              <div>showBuilder state: <span className={showBuilder ? 'text-green-400' : 'text-red-400'}>{String(showBuilder)}</span></div>
+              <div>modifyBuilderLock: <span className={modifyBuilderLockRef.current ? 'text-green-400' : 'text-zinc-600'}>{String(modifyBuilderLockRef.current)}</span></div>
+              <div>builderSessionInputs: <span className={builderSessionInputs ? 'text-green-400' : 'text-zinc-600'}>{builderSessionInputs ? 'present' : 'null'}</span></div>
+              <div>modifyFlowState: <span className={modifyFlowState === 'builder' ? 'text-blue-400' : 'text-zinc-600'}>{modifyFlowState}</span></div>
               {modifyClickAudit.failureStage && (
                 <div className="col-span-2 text-red-400">Failure: {modifyClickAudit.failureStage} - {modifyClickAudit.failureMessage?.slice(0, 50)}</div>
               )}
             </div>
-            {/* [PHASE 30G] STEP 7: Authoritative verdict line */}
+            {/* [PHASE 30M] STEP 7: Authoritative render-gate verdict line */}
             <div className="mt-2 pt-2 border-t border-zinc-700 text-zinc-300">
-              Verdict: <span className={
+              Render-Gate Verdict: <span className={
                 showBuilder ? 'text-green-400' :
                 modifyClickAudit.failureStage ? 'text-red-400' :
-                modifyClickAudit.setShowBuilderRequested ? 'text-yellow-400' :
+                (modifyClickAudit.setShowBuilderRequested && !showBuilder) ? 'text-red-400' :
                 modifyClickAudit.reachedPreBuilderTransition ? 'text-blue-400' :
                 modifyClickAudit.canonicalLauncherEntered ? 'text-blue-400' :
                 modifyClickAudit.handleNewProgramEntered ? 'text-blue-400' :
                 'text-zinc-500'
               }>
-                {showBuilder ? 'MODIFY_RENDERED_BUILDER' :
-                 modifyClickAudit.failureStage ? `MODIFY_FAILED_AT_${modifyClickAudit.failureStage}` :
-                 modifyClickAudit.setShowBuilderRequested ? `MODIFY_REQUESTED_BUILDER_BUT_RENDER_BRANCH_STAYED_${program ? 'program_display' : 'no_content'}` :
-                 modifyClickAudit.reachedPreBuilderTransition ? 'MODIFY_REACHED_PRE_BUILDER' :
-                 modifyClickAudit.canonicalLauncherEntered ? 'MODIFY_LAUNCHER_ENTERED_ONLY' :
-                 modifyClickAudit.handleNewProgramEntered ? 'MODIFY_HANDLER_ENTERED_ONLY' :
-                 modifyClickAudit.clickFiredAt ? 'MODIFY_CLICK_FIRED_ONLY' :
-                 'MODIFY_CLICK_NOT_FIRED'}
+                {showBuilder ? 'BUILDER_RENDERED' :
+                 modifyClickAudit.failureStage ? `FAILED_AT_${modifyClickAudit.failureStage}` :
+                 (modifyClickAudit.setShowBuilderRequested && !showBuilder && modifyFlowState === 'builder') 
+                   ? 'RENDER_GATE_BLOCKED_showBuilder_FALSE_BUT_modifyFlowState_BUILDER'
+                   : (modifyClickAudit.setShowBuilderRequested && !showBuilder)
+                   ? 'RENDER_GATE_BLOCKED_showBuilder_FALSE'
+                   : modifyClickAudit.reachedPreBuilderTransition ? 'PRE_BUILDER_OK' :
+                   modifyClickAudit.canonicalLauncherEntered ? 'LAUNCHER_ENTERED' :
+                   modifyClickAudit.handleNewProgramEntered ? 'HANDLER_ENTERED' :
+                   modifyClickAudit.clickFiredAt ? 'CLICK_FIRED' :
+                   'WAITING_FOR_CLICK'}
               </span>
             </div>
           </div>

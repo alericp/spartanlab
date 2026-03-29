@@ -8828,9 +8828,35 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
     
     // ==========================================================================
     // [PHASE 30F] STAGE: convert_entry_to_inputs
+    // [PHASE 30H] CONVERSION SOURCE LOCK - prove what inputs are available
     // ==========================================================================
     stage = 'convert_entry_to_inputs'
+    
+    // ==========================================================================
+    // [PHASE 30H] CONVERSION INPUT LOG - prove we have valid entry before conversion
+    // Note: `program` is available in launcher scope, `visibleProgram` is render-scope only
+    // ==========================================================================
+    console.log('[phase30h-modify-conversion-input-final]', {
+      has_entryResult_entry: !!entryResult.entry,
+      has_canonical: !!canonicalProfileNow,
+      has_currentProgram: !!program,
+      entry_primaryGoal: entryResult.entry?.primaryGoal ?? null,
+      entry_scheduleMode: entryResult.entry?.scheduleMode ?? null,
+      entry_trainingDaysPerWeek: entryResult.entry?.trainingDaysPerWeek ?? null,
+      verdict: 'CONVERSION_INPUT_CAPTURED',
+    })
+    
     const freshInputs = entryToAdaptiveInputs(entryResult.entry)
+    
+    // ==========================================================================
+    // [PHASE 30H] CONVERSION OUTPUT LOG - prove conversion succeeded
+    // ==========================================================================
+    console.log('[phase30h-modify-conversion-output-final]', {
+      output_scheduleMode: freshInputs?.scheduleMode ?? null,
+      output_trainingDaysPerWeek: freshInputs?.trainingDaysPerWeek ?? null,
+      output_adaptiveWorkloadEnabled: (freshInputs as { adaptiveWorkloadEnabled?: boolean })?.adaptiveWorkloadEnabled ?? null,
+      verdict: freshInputs ? 'CONVERSION_OUTPUT_OK' : 'CONVERSION_OUTPUT_FAILED',
+    })
     
     // ==========================================================================
     // [PHASE 30F] INPUT CONVERSION LOG
@@ -8872,18 +8898,19 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
     // ==========================================================================
     // [PHASE 30E] MODIFY OPEN SOURCE LOCK
     // THE DEFINITIVE LOG proving modify prefill was built from canonical truth
+    // [PHASE 30H] FIX: Use `program` (available in launcher scope) NOT `visibleProgram` (render-scope only)
     // ==========================================================================
     console.log('[phase30e-modify-open-source-lock]', {
       canonical_scheduleMode: canonicalProfileNow?.scheduleMode ?? null,
       canonical_trainingDaysPerWeek: canonicalProfileNow?.trainingDaysPerWeek ?? null,
-      program_scheduleMode: visibleProgram?.scheduleMode ?? null,
-      program_trainingDaysPerWeek: visibleProgram?.trainingDaysPerWeek ?? null,
+      program_scheduleMode: program?.scheduleMode ?? null,
+      program_trainingDaysPerWeek: (program as { trainingDaysPerWeek?: number })?.trainingDaysPerWeek ?? null,
       chosen_prefill_scheduleMode: freshInputs?.scheduleMode ?? null,
       chosen_prefill_trainingDaysPerWeek: freshInputs?.trainingDaysPerWeek ?? null,
       sourceWinner:
         canonicalProfileNow?.scheduleMode
           ? 'CANONICAL_PROFILE'
-          : visibleProgram?.scheduleMode
+          : program?.scheduleMode
           ? 'ACTIVE_PROGRAM_FALLBACK'
           : 'DEFAULT_FALLBACK',
       verdict:

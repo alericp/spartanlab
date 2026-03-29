@@ -2714,6 +2714,27 @@ async function generateAdaptiveProgramImpl(
     })(),
   })
   
+  // ==========================================================================
+  // [PHASE 30A] BUILDER FINAL SCHEDULE CONTRACT - AUTHORITATIVE
+  // THE DEFINITIVE LOG proving builder honors input schedule
+  // ==========================================================================
+  const finalTrainingDays = hasExplicitNumericDays ? inputs.trainingDaysPerWeek : (canonicalProfile.trainingDaysPerWeek ?? trainingDaysPerWeek)
+  console.log('[phase30a-builder-final-schedule-contract]', {
+    input_scheduleMode: inputs.scheduleMode ?? null,
+    input_trainingDaysPerWeek: inputs.trainingDaysPerWeek ?? null,
+    input_adaptiveWorkloadEnabled: (inputs as { adaptiveWorkloadEnabled?: boolean })?.adaptiveWorkloadEnabled ?? null,
+    canonical_scheduleMode: canonicalProfile?.scheduleMode ?? null,
+    canonical_trainingDaysPerWeek: canonicalProfile?.trainingDaysPerWeek ?? null,
+    final_scheduleMode: inputScheduleMode,
+    final_trainingDaysPerWeek: finalTrainingDays,
+    verdict:
+      inputScheduleMode === 'static' && finalTrainingDays === 6
+        ? 'BUILDER_FINAL_STATIC_6'
+        : inputScheduleMode === 'flexible'
+        ? 'BUILDER_FINAL_FLEXIBLE'
+        : `BUILDER_FINAL_STATIC_${finalTrainingDays}`,
+  })
+  
   console.log('[phase25w-tdz-profile-validation]', {
     hasExplicitNumericDays,
     hasExplicitStaticInputs,

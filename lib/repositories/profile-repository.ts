@@ -97,6 +97,22 @@ const previewProfileRepository: ProfileRepository = {
     }
     
     // ==========================================================================
+    // [PHASE 30C] ATHLETE PROFILE FINAL
+    // THE DEFINITIVE LOG proving what schedule values are being saved to localStorage
+    // ==========================================================================
+    console.log('[phase30c-athlete-profile-final]', {
+      saved_scheduleMode: (updated as { scheduleMode?: string }).scheduleMode ?? null,
+      saved_trainingDaysPerWeek: updated.trainingDaysPerWeek ?? null,
+      saved_adaptiveWorkloadEnabled: (updated as { adaptiveWorkloadEnabled?: boolean }).adaptiveWorkloadEnabled ?? null,
+      verdict:
+        (updated as { scheduleMode?: string }).scheduleMode === 'static' && updated.trainingDaysPerWeek === 6
+          ? 'ATHLETE_STATIC_6'
+          : (updated as { scheduleMode?: string }).scheduleMode === 'flexible'
+          ? 'ATHLETE_FLEXIBLE'
+          : `ATHLETE_${(updated as { scheduleMode?: string }).scheduleMode}_${updated.trainingDaysPerWeek}`,
+    })
+    
+    // ==========================================================================
     // [PHASE 30B] ATHLETE PROFILE SAVE FINAL
     // THE DEFINITIVE LOG proving what schedule values are being saved to localStorage
     // ==========================================================================

@@ -477,7 +477,20 @@ export function reconcileCanonicalProfile(): CanonicalProgrammingProfile {
       let resolvedTrainingDays: number | null = null
       let verdictReason = ''
       
-      if (timestampsAvailable && athleteIsNewer && athleteHasExplicit) {
+      // ==========================================================================
+      // [PHASE 30E] BEHAVIOR FIX: Athlete explicit static ALWAYS beats onboarding flexible
+      // regardless of timestamps. This is the core product contract:
+      // - User explicitly chose static 6 in Settings
+      // - That choice should NEVER be overridden by stale onboarding flexible
+      // - Only a NEWER explicit athlete choice (flexible) can override it
+      // ==========================================================================
+      if (athleteExplicitStatic) {
+        // PHASE 30E: Athlete has explicit static - this ALWAYS wins over onboarding flexible
+        winnerSource = 'athlete'
+        resolvedScheduleMode = 'static'
+        resolvedTrainingDays = athleteProfile!.trainingDaysPerWeek as number
+        verdictReason = 'PHASE30E_ATHLETE_STATIC_WINS'
+      } else if (timestampsAvailable && athleteIsNewer && athleteHasExplicit) {
         // Timestamp says athlete is newer and has explicit value - athlete wins
         winnerSource = 'athlete'
         if (athleteExplicitStatic) {
@@ -491,6 +504,7 @@ export function reconcileCanonicalProfile(): CanonicalProgrammingProfile {
         }
       } else if (timestampsAvailable && !athleteIsNewer && onboardingHasExplicit) {
         // Timestamp says onboarding is newer and has explicit value - onboarding wins
+        // BUT ONLY if athlete doesn't have explicit static (checked above)
         winnerSource = 'onboarding'
         if (onboardingExplicitStatic) {
           resolvedScheduleMode = 'static'
@@ -694,6 +708,27 @@ export function reconcileCanonicalProfile(): CanonicalProgrammingProfile {
           }
           return 'CANONICAL_BOOT_SAFE'
         })(),
+      })
+      
+      // ==========================================================================
+      // [PHASE 30E] CANONICAL MODIFY AUTHORITATIVE
+      // THE DEFINITIVE LOG proving canonical resolves athlete static correctly
+      // ==========================================================================
+      console.log('[phase30e-canonical-modify-authoritative]', {
+        athlete_scheduleMode: athleteProfile?.scheduleMode ?? null,
+        athlete_trainingDaysPerWeek: athleteProfile?.trainingDaysPerWeek ?? null,
+        onboarding_scheduleMode: onboardingProfile?.scheduleMode ?? null,
+        onboarding_trainingDaysPerWeek: onboardingProfile?.trainingDaysPerWeek ?? null,
+        resolved_scheduleMode: resolvedScheduleMode,
+        resolved_trainingDaysPerWeek: resolvedTrainingDays,
+        resolved_adaptiveWorkloadEnabled: resolvedAdaptiveWorkload,
+        verdictReason,
+        verdict:
+          resolvedScheduleMode === 'static' && resolvedTrainingDays === 6
+            ? 'CANONICAL_FOR_MODIFY_STATIC_6'
+            : resolvedScheduleMode === 'flexible'
+            ? 'CANONICAL_FOR_MODIFY_FLEXIBLE'
+            : `CANONICAL_FOR_MODIFY_${resolvedScheduleMode}_${resolvedTrainingDays}`,
       })
       
       // ==========================================================================

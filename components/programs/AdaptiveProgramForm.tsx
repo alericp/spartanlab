@@ -190,6 +190,22 @@ export function AdaptiveProgramForm({
     })
     
     // ==========================================================================
+    // [PHASE 30E] FORM OPEN SOURCE LOCK
+    // THE DEFINITIVE LOG proving form preserves static 6 from prefill
+    // ==========================================================================
+    console.log('[phase30e-form-open-source-lock]', {
+      inputs_scheduleMode: inputs.scheduleMode ?? null,
+      inputs_trainingDaysPerWeek: inputs.trainingDaysPerWeek ?? null,
+      inputs_adaptiveWorkloadEnabled: (inputs as { adaptiveWorkloadEnabled?: boolean })?.adaptiveWorkloadEnabled ?? null,
+      verdict:
+        inputs.scheduleMode === 'static' && inputs.trainingDaysPerWeek === 6
+          ? 'FORM_OPEN_STATIC_6'
+          : inputs.scheduleMode === 'flexible'
+          ? 'FORM_OPEN_FLEXIBLE'
+          : `FORM_OPEN_${inputs.scheduleMode}_${inputs.trainingDaysPerWeek}`,
+    })
+    
+    // ==========================================================================
     // [PHASE 30C] FORM OPEN FINAL
     // THE DEFINITIVE LOG proving form received correct initial values
     // ==========================================================================

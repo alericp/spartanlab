@@ -8754,6 +8754,31 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
     })
     
     // ==========================================================================
+    // [PHASE 30E] MODIFY OPEN SOURCE LOCK
+    // THE DEFINITIVE LOG proving modify prefill was built from canonical truth
+    // ==========================================================================
+    console.log('[phase30e-modify-open-source-lock]', {
+      canonical_scheduleMode: canonicalProfileNow?.scheduleMode ?? null,
+      canonical_trainingDaysPerWeek: canonicalProfileNow?.trainingDaysPerWeek ?? null,
+      program_scheduleMode: visibleProgram?.scheduleMode ?? null,
+      program_trainingDaysPerWeek: visibleProgram?.trainingDaysPerWeek ?? null,
+      chosen_prefill_scheduleMode: freshInputs?.scheduleMode ?? null,
+      chosen_prefill_trainingDaysPerWeek: freshInputs?.trainingDaysPerWeek ?? null,
+      sourceWinner:
+        canonicalProfileNow?.scheduleMode
+          ? 'CANONICAL_PROFILE'
+          : visibleProgram?.scheduleMode
+          ? 'ACTIVE_PROGRAM_FALLBACK'
+          : 'DEFAULT_FALLBACK',
+      verdict:
+        freshInputs?.scheduleMode === 'static' && freshInputs?.trainingDaysPerWeek === 6
+          ? 'MODIFY_PREFILL_LOCKED_STATIC_6'
+          : freshInputs?.scheduleMode === 'flexible'
+          ? 'MODIFY_PREFILL_LOCKED_FLEXIBLE'
+          : `MODIFY_PREFILL_LOCKED_${freshInputs?.scheduleMode}_${freshInputs?.trainingDaysPerWeek}`,
+    })
+    
+    // ==========================================================================
     // [PHASE 30D] MODIFY PREFILL FINAL - AUTHORITATIVE BEHAVIOR FIX LOG
     // THE DEFINITIVE LOG proving prefill was constructed correctly from canonical
     // ==========================================================================

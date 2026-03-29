@@ -9163,6 +9163,17 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
     setInputs(freshInputs)
     
     // ==========================================================================
+    // [PHASE 30N] ENTRY SEEDED LOG - Proves builder entry data is now present
+    // This MUST fire AFTER setBuilderSessionInputsAndRef so the ref is populated
+    // ==========================================================================
+    console.log('[phase30n-modify-entry-seeded-final]', {
+      builderSessionInputsRefPresent: !!builderSessionInputsRef.current,
+      builderSessionInputsRefScheduleMode: builderSessionInputsRef.current?.scheduleMode ?? null,
+      builderSessionInputsRefTrainingDays: builderSessionInputsRef.current?.trainingDaysPerWeek ?? null,
+      verdict: builderSessionInputsRef.current ? 'MODIFY_ENTRY_SEEDED' : 'MODIFY_ENTRY_NOT_SEEDED',
+    })
+    
+    // ==========================================================================
     // [PHASE 28E] SEED SCHEDULE TRUTH AUDIT FOR LIVE MODIFY PATH
     // This makes the visible SCHEDULE TRUTH NOW panel render in the live flow
     // [PHASE 30F] STAGE: seed_schedule_truth_audit
@@ -9349,6 +9360,14 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
       modifyBuilderLock: true,
       stage: 'transition_to_builder',
       verdict: 'MODIFY_BUILDER_LOCK_ACQUIRED',
+    })
+    
+    // [PHASE 30N] LOCK ACQUIRED WITH ENTRY PRESENT - Proves single authority is active
+    console.log('[phase30n-modify-lock-acquired-final]', {
+      modifyBuilderLock: !!modifyBuilderLockRef.current,
+      builderSessionInputsRefPresent: !!builderSessionInputsRef.current,
+      shouldRenderModifyBuilder_willBe: !!(modifyBuilderLockRef.current && builderSessionInputsRef.current),
+      verdict: 'MODIFY_LOCK_ACTIVE',
     })
     
     setModifyFlowState('builder')
@@ -10509,9 +10528,43 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
   }, [programModules, inputs, builderOrigin, program, buildModifyEntryInputsFromVisibleProgram, builderSessionKey, modifyFlowState, showAdjustmentModal, showBuilder])
 
   // ==========================================================================
+  // [PHASE 30N] SINGLE AUTHORITY RENDER CONTRACT
+  // This is the ONE authoritative boolean that determines if Modify builder renders
+  // It considers: showBuilder state, modifyBuilderLock ref, builderSessionInputs ref
+  // The builder renders if ANY of these conditions indicate active modify transition:
+  // 1. showBuilder is true (normal path)
+  // 2. modifyBuilderLockRef is true AND builderSessionInputsRef has data (ref-based fallback)
+  // ==========================================================================
+  const shouldRenderModifyBuilder = showBuilder || (
+    modifyBuilderLockRef.current && 
+    builderSessionInputsRef.current !== null
+  )
+  
+  // ==========================================================================
   // [PHASE 30J] RUNTIME SAFETY VERDICT - proves page reached render without crash
   // ==========================================================================
   try {
+    // ==========================================================================
+    // [PHASE 30N] RENDER AUTHORITY SNAPSHOT - THE AUTHORITATIVE RENDER DECISION
+    // This uses the single-authority contract to determine the render branch
+    // ==========================================================================
+    console.log('[phase30n-render-authority-final]', {
+      showBuilder: !!showBuilder,
+      modifyFlowState: modifyFlowState ?? null,
+      builderSessionInputsState: !!builderSessionInputs,
+      builderSessionInputsRef: !!builderSessionInputsRef.current,
+      modifyBuilderLock: !!modifyBuilderLockRef?.current,
+      shouldRenderModifyBuilder,
+      winningBranch: shouldRenderModifyBuilder ? 'builder' : program ? 'program_display' : 'no_content',
+      verdict: shouldRenderModifyBuilder
+        ? 'MODIFY_RENDER_AUTHORITY_ACTIVE'
+        : modifyBuilderLockRef?.current
+        ? 'MODIFY_RENDER_BLOCKED_ENTRY_MISSING'
+        : modifyClickAudit?.setShowBuilderRequested
+        ? 'MODIFY_RENDER_BLOCKED_SHOWBUILDER_FALSE'
+        : 'RENDER_NORMAL_PROGRAM_DISPLAY',
+    })
+    
     // ==========================================================================
     // [PHASE 30M] RENDER-GATE SNAPSHOT - THE AUTHORITATIVE STATE AT RENDER TIME
     // This is the DEFINITIVE proof of what the render branch sees
@@ -10525,13 +10578,14 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
       preBuilderReached: !!modifyClickAudit?.reachedPreBuilderTransition,
       setShowBuilderRequested: !!modifyClickAudit?.setShowBuilderRequested,
       builderSessionInputsPresent: !!builderSessionInputs,
+      builderSessionInputsRefPresent: !!builderSessionInputsRef.current,
       generationErrorPresent: !!generationError,
       hasProgram: !!program,
       modifyFlowState: modifyFlowState ?? null,
       loadStage: loadStage ?? null,
-      // The actual branch that will render
-      activeBranchCandidate: showBuilder ? 'builder' : program ? 'program_display' : 'no_content',
-      verdict: showBuilder
+      // The actual branch that will render (using new authority)
+      activeBranchCandidate: shouldRenderModifyBuilder ? 'builder' : program ? 'program_display' : 'no_content',
+      verdict: shouldRenderModifyBuilder
         ? 'RENDER_WILL_SHOW_BUILDER'
         : modifyClickAudit?.setShowBuilderRequested
         ? 'RENDER_BLOCKED_SHOWBUILDER_STILL_FALSE'
@@ -10671,8 +10725,9 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
             Visible diagnostic strip showing the modify click chain status
             Only shown when program exists and builder is not shown
             [PHASE 30M] Extended to show render-gate state
+            [PHASE 30N] Updated to use shouldRenderModifyBuilder authority
             ========================================================================== */}
-        {program && !showBuilder && (
+        {program && !shouldRenderModifyBuilder && (
           <div className="mt-4 p-3 bg-zinc-900/80 border border-zinc-700 rounded-lg text-xs font-mono">
             <div className="text-zinc-400 mb-2 font-semibold">PHASE30M RENDER-GATE AUDIT</div>
             <div className="grid grid-cols-2 gap-1 text-zinc-500">
@@ -10681,36 +10736,35 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
               <div>Launcher entered: <span className={modifyClickAudit.canonicalLauncherEntered ? 'text-green-400' : 'text-zinc-600'}>{modifyClickAudit.canonicalLauncherEntered ? 'YES' : 'no'}</span></div>
               <div>Pre-builder reached: <span className={modifyClickAudit.reachedPreBuilderTransition ? 'text-green-400' : 'text-zinc-600'}>{modifyClickAudit.reachedPreBuilderTransition ? 'YES' : 'no'}</span></div>
               <div>setShowBuilder requested: <span className={modifyClickAudit.setShowBuilderRequested ? 'text-green-400' : 'text-zinc-600'}>{modifyClickAudit.setShowBuilderRequested ? 'YES' : 'no'}</span></div>
-              <div>Builder render seen: <span className={showBuilder ? 'text-green-400' : 'text-zinc-600'}>{showBuilder ? 'YES' : 'no'}</span></div>
-              {/* [PHASE 30M] Additional render-gate state */}
+              <div>Builder render authority: <span className={shouldRenderModifyBuilder ? 'text-green-400' : 'text-zinc-600'}>{shouldRenderModifyBuilder ? 'YES' : 'no'}</span></div>
+              {/* [PHASE 30N] Single authority render-gate state */}
               <div>showBuilder state: <span className={showBuilder ? 'text-green-400' : 'text-red-400'}>{String(showBuilder)}</span></div>
               <div>modifyBuilderLock: <span className={modifyBuilderLockRef.current ? 'text-green-400' : 'text-zinc-600'}>{String(modifyBuilderLockRef.current)}</span></div>
-              <div>builderSessionInputs: <span className={builderSessionInputs ? 'text-green-400' : 'text-zinc-600'}>{builderSessionInputs ? 'present' : 'null'}</span></div>
+              <div>builderSessionInputsRef: <span className={builderSessionInputsRef.current ? 'text-green-400' : 'text-zinc-600'}>{builderSessionInputsRef.current ? 'present' : 'null'}</span></div>
+              <div>shouldRenderModifyBuilder: <span className={shouldRenderModifyBuilder ? 'text-green-400' : 'text-red-400'}>{String(shouldRenderModifyBuilder)}</span></div>
               <div>modifyFlowState: <span className={modifyFlowState === 'builder' ? 'text-blue-400' : 'text-zinc-600'}>{modifyFlowState}</span></div>
               {modifyClickAudit.failureStage && (
                 <div className="col-span-2 text-red-400">Failure: {modifyClickAudit.failureStage} - {modifyClickAudit.failureMessage?.slice(0, 50)}</div>
               )}
             </div>
-            {/* [PHASE 30M] STEP 7: Authoritative render-gate verdict line */}
+            {/* [PHASE 30N] STEP 7: Authoritative single-authority verdict line */}
             <div className="mt-2 pt-2 border-t border-zinc-700 text-zinc-300">
-              Render-Gate Verdict: <span className={
-                showBuilder ? 'text-green-400' :
+              Render Authority: <span className={
+                shouldRenderModifyBuilder ? 'text-green-400' :
                 modifyClickAudit.failureStage ? 'text-red-400' :
-                (modifyClickAudit.setShowBuilderRequested && !showBuilder) ? 'text-red-400' :
+                (modifyBuilderLockRef.current && !builderSessionInputsRef.current) ? 'text-red-400' :
                 modifyClickAudit.reachedPreBuilderTransition ? 'text-blue-400' :
                 modifyClickAudit.canonicalLauncherEntered ? 'text-blue-400' :
-                modifyClickAudit.handleNewProgramEntered ? 'text-blue-400' :
                 'text-zinc-500'
               }>
-                {showBuilder ? 'BUILDER_RENDERED' :
+                {shouldRenderModifyBuilder ? 'MODIFY_RENDERED_BUILDER' :
                  modifyClickAudit.failureStage ? `FAILED_AT_${modifyClickAudit.failureStage}` :
-                 (modifyClickAudit.setShowBuilderRequested && !showBuilder && modifyFlowState === 'builder') 
-                   ? 'RENDER_GATE_BLOCKED_showBuilder_FALSE_BUT_modifyFlowState_BUILDER'
+                 (modifyBuilderLockRef.current && !builderSessionInputsRef.current)
+                   ? 'MODIFY_RENDER_BLOCKED_ENTRY_MISSING'
                    : (modifyClickAudit.setShowBuilderRequested && !showBuilder)
-                   ? 'RENDER_GATE_BLOCKED_showBuilder_FALSE'
+                   ? 'MODIFY_RENDER_BLOCKED_SHOWBUILDER_FALSE'
                    : modifyClickAudit.reachedPreBuilderTransition ? 'PRE_BUILDER_OK' :
                    modifyClickAudit.canonicalLauncherEntered ? 'LAUNCHER_ENTERED' :
-                   modifyClickAudit.handleNewProgramEntered ? 'HANDLER_ENTERED' :
                    modifyClickAudit.clickFiredAt ? 'CLICK_FIRED' :
                    'WAITING_FOR_CLICK'}
               </span>
@@ -10722,24 +10776,28 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
         {/* [PHASE 30G] STEP 5: Prove the render branch actually changes */}
         {/* [PHASE 30I] RENDER BRANCH LOCK - Authoritative render branch decision log */}
         {/* [PHASE 30J] SAFETY: Wrapped in try/catch to prevent diagnostic crash */}
+        {/* [PHASE 30N] Updated to use shouldRenderModifyBuilder authority */}
         {(() => {
           try {
-            const winningBranch = showBuilder ? 'builder' : program ? 'program_display' : 'no_content'
+            const winningBranch = shouldRenderModifyBuilder ? 'builder' : program ? 'program_display' : 'no_content'
             
             // ==========================================================================
             // [PHASE 30I] STEP 3: Authoritative render-branch log
             // This MUST prove definitively what the render branch sees at render time
             // ==========================================================================
             // [PHASE 30K] FIX: Removed generationStage - it's only defined inside generation handlers, not page scope
+            // [PHASE 30N] Updated to use shouldRenderModifyBuilder authority
             console.log('[phase30i-render-branch-final]', {
               showBuilder: !!showBuilder,
+              shouldRenderModifyBuilder,
               has_program: !!program,
-              has_currentBuilderEntry: !!builderSessionInputs,
-              has_builderSessionInputs: !!builderSessionInputs,
+              has_builderSessionInputsState: !!builderSessionInputs,
+              has_builderSessionInputsRef: !!builderSessionInputsRef.current,
+              modifyBuilderLock: !!modifyBuilderLockRef.current,
               has_generationError: !!generationError,
               modifyFlowState,
               activeBranch: winningBranch,
-              verdict: showBuilder
+              verdict: shouldRenderModifyBuilder
                 ? 'RENDER_BRANCH_BUILDER'
                 : program
                 ? 'RENDER_BRANCH_PROGRAM'
@@ -10747,19 +10805,24 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
             })
             
             // [PHASE 30G] Update audit state when builder render is seen
-            if (showBuilder && modifyClickAudit?.setShowBuilderRequested && !modifyClickAudit?.showBuilderRenderSeen) {
+            // [PHASE 30N] Updated to use shouldRenderModifyBuilder authority
+            if (shouldRenderModifyBuilder && modifyClickAudit?.setShowBuilderRequested && !modifyClickAudit?.showBuilderRenderSeen) {
               // Note: We can't call setModifyClickAudit in render, so we log it
               console.log('[phase30g-builder-render-branch-final]', {
                 verdict: 'BUILDER_RENDER_BRANCH_ACTIVE',
                 showBuilder,
+                shouldRenderModifyBuilder,
                 modifyFlowState,
                 programExists: !!program,
                 generationError: generationError ?? null,
               })
-            } else if (!showBuilder && modifyClickAudit?.setShowBuilderRequested) {
+            } else if (!shouldRenderModifyBuilder && modifyClickAudit?.setShowBuilderRequested) {
               console.log('[phase30g-builder-render-branch-final]', {
                 verdict: 'BUILDER_RENDER_BRANCH_NOT_ACTIVE',
                 showBuilder,
+                shouldRenderModifyBuilder,
+                modifyBuilderLock: !!modifyBuilderLockRef.current,
+                builderSessionInputsRef: !!builderSessionInputsRef.current,
                 modifyFlowState,
                 programExists: !!program,
                 generationError: generationError ?? null,
@@ -10769,20 +10832,25 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
             
             // ==========================================================================
             // [PHASE 30L] RENDER BRANCH LOCK VERDICT
-            // Distinguishes modify lock states from normal render states
+            // [PHASE 30N] Updated to use shouldRenderModifyBuilder authority
             // ==========================================================================
             const modifyLockActive = modifyBuilderLockRef.current
+            const builderEntryPresent = !!builderSessionInputsRef.current
             console.log('[phase30l-render-branch-lock-final]', {
               showBuilder: !!showBuilder,
+              shouldRenderModifyBuilder,
               modifyBuilderLock: modifyLockActive,
+              builderEntryPresent,
               setShowBuilderRequested: !!modifyClickAudit?.setShowBuilderRequested,
               hasProgram: !!program,
               activeBranch: winningBranch,
               verdict:
-                showBuilder
+                shouldRenderModifyBuilder
                   ? 'MODIFY_RENDERED_BUILDER'
-                  : modifyLockActive && modifyClickAudit?.setShowBuilderRequested
-                  ? 'MODIFY_LOCK_ACTIVE_BUT_PROGRAM_BRANCH_WON'
+                  : modifyLockActive && !builderEntryPresent
+                  ? 'MODIFY_LOCK_ACTIVE_BUT_ENTRY_MISSING'
+                  : modifyLockActive
+                  ? 'MODIFY_LOCK_ACTIVE_BUT_RENDER_FAILED'
                   : 'MODIFY_NOT_IN_LOCKED_BUILDER_STATE',
             })
             
@@ -10809,16 +10877,20 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
         })()}
         
         {/* Content - TASK 2: Proper handling of malformed programs */}
-        {showBuilder ? (
+        {/* [PHASE 30N] Use single-authority shouldRenderModifyBuilder instead of just showBuilder */}
+        {shouldRenderModifyBuilder ? (
           <div className="space-y-6">
             {/* [PHASE 30I] STEP 3: Builder render mounted log - proves builder branch executed */}
             {/* [PHASE 30J] SAFETY: Wrapped in try/catch to prevent diagnostic crash */}
+            {/* [PHASE 30N] Updated to use shouldRenderModifyBuilder authority */}
             {(() => {
               try {
                 console.log('[phase30i-builder-render-mounted-final]', {
                   showBuilder: !!showBuilder,
-                  has_currentBuilderEntry: !!builderSessionInputs,
-                  has_builderSessionInputs: !!builderSessionInputs,
+                  shouldRenderModifyBuilder,
+                  modifyBuilderLock: !!modifyBuilderLockRef.current,
+                  has_builderSessionInputsState: !!builderSessionInputs,
+                  has_builderSessionInputsRef: !!builderSessionInputsRef.current,
                   verdict: 'BUILDER_RENDER_MOUNTED',
                 })
               } catch (err) {
@@ -11169,13 +11241,17 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
           <div className="space-y-4">
             {/* [PHASE 30I] STEP 3: Program render mounted log - proves program branch executed */}
             {/* [PHASE 30J] SAFETY: Wrapped in try/catch to prevent diagnostic crash */}
+            {/* [PHASE 30N] Updated to use shouldRenderModifyBuilder authority */}
             {(() => {
               try {
                 console.log('[phase30i-program-render-mounted-final]', {
                   showBuilder: !!showBuilder,
+                  shouldRenderModifyBuilder,
+                  modifyBuilderLock: !!modifyBuilderLockRef.current,
+                  builderSessionInputsRef: !!builderSessionInputsRef.current,
                   has_program: !!program,
-                  verdict: showBuilder
-                    ? 'PROGRAM_BRANCH_WRONGLY_WON_WHILE_SHOWBUILDER_TRUE'
+                  verdict: shouldRenderModifyBuilder
+                    ? 'PROGRAM_BRANCH_WRONGLY_WON_WHILE_BUILDER_AUTHORITY_TRUE'
                     : 'PROGRAM_BRANCH_EXPECTED',
                 })
               } catch (err) {

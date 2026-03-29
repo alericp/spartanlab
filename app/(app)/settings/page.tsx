@@ -613,6 +613,25 @@ export default function SettingsPage() {
         : parseInt(trainingDays || '3')
       
       // ==========================================================================
+      // [PHASE 30D] SETTINGS SAVE FINAL - AUTHORITATIVE BEHAVIOR FIX LOG
+      // THE DEFINITIVE LOG proving what schedule values are being persisted
+      // ==========================================================================
+      console.log('[phase30d-settings-save-final]', {
+        local_scheduleMode: scheduleMode,
+        local_trainingDays: trainingDays,
+        local_adaptiveWorkloadEnabled: adaptiveWorkloadEnabled,
+        payload_scheduleMode: payloadScheduleMode,
+        payload_trainingDaysPerWeek: payloadTrainingDays,
+        payload_adaptiveWorkloadEnabled: adaptiveWorkloadEnabled,
+        verdict:
+          payloadScheduleMode === 'static' && payloadTrainingDays === 6
+            ? 'SETTINGS_PAYLOAD_STATIC_6'
+            : payloadScheduleMode === 'flexible'
+            ? 'SETTINGS_PAYLOAD_FLEXIBLE'
+            : `SETTINGS_PAYLOAD_STATIC_${payloadTrainingDays}`,
+      })
+      
+      // ==========================================================================
       // [PHASE 30C] SETTINGS SAVE PAYLOAD FINAL
       // THE DEFINITIVE LOG proving what schedule values are being persisted
       // ==========================================================================

@@ -8585,6 +8585,24 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
   // - phase25_canonical_modify_replacement: Phase tag for this work
   // ==========================================================================
   const handleOpenCanonicalModifyLauncher = useCallback(async () => {
+    // ==========================================================================
+    // [PHASE 30F] FAIL-SAFE WRAPPER
+    // Track stage for authoritative failure logging
+    // ==========================================================================
+    let stage: 'entry' | 'read_canonical' | 'read_athlete' | 'read_onboarding' | 'build_entry' | 'convert_entry_to_inputs' | 'seed_builder_session' | 'seed_schedule_truth_audit' | 'set_builder_origin' | 'transition_to_builder' | 'complete' = 'entry'
+    
+    try {
+      // ==========================================================================
+      // [PHASE 30F] STAGE: entry
+      // ==========================================================================
+      console.log('[phase30f-modify-open-entry]', {
+        stage: 'entry',
+        programExists: !!program,
+        programId: program?.id ?? null,
+        timestamp: new Date().toISOString(),
+        verdict: 'MODIFY_OPEN_STARTED',
+      })
+    
     console.log('[phase25-canonical-modify-replacement]', {
       action: 'CANONICAL_MODIFY_LAUNCHER_ENTERED',
       programExists: !!program,
@@ -8596,8 +8614,26 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
     // ==========================================================================
     // [PHASE 25] TASK 1: Get canonical truth for prefill
     // Uses the same canonical entry builder as Restart/Onboarding
+    // [PHASE 30F] STAGE: read_canonical
     // ==========================================================================
+    stage = 'read_canonical'
     const canonicalProfileNow = getCanonicalProfile()
+    
+    // ==========================================================================
+    // [PHASE 30F] CANONICAL READ LOG
+    // ==========================================================================
+    console.log('[phase30f-modify-open-canonical-read]', {
+      stage: 'read_canonical',
+      canonical_scheduleMode: canonicalProfileNow?.scheduleMode ?? null,
+      canonical_trainingDaysPerWeek: canonicalProfileNow?.trainingDaysPerWeek ?? null,
+      canonical_adaptiveWorkloadEnabled: (canonicalProfileNow as { adaptiveWorkloadEnabled?: boolean })?.adaptiveWorkloadEnabled ?? null,
+      verdict: canonicalProfileNow ? 'CANONICAL_READ_OK' : 'CANONICAL_READ_NULLISH',
+    })
+    
+    // ==========================================================================
+    // [PHASE 30F] STAGE: read_athlete
+    // ==========================================================================
+    stage = 'read_athlete'
     const athleteProfileForPre = getAthleteProfileDirect()
     
     // ==========================================================================
@@ -8722,7 +8758,9 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
     // This is the SAME path used by Restart/Onboarding
     // [PHASE 29D] FIX: First parameter must be trigger source STRING, not object!
     // Previous bug: passed canonicalProfileNow (object) as triggerSource (string)
+    // [PHASE 30F] STAGE: build_entry
     // ==========================================================================
+    stage = 'build_entry'
     const entryResult = buildCanonicalGenerationEntry('modify_program', {
       // [PHASE 29D] Pass explicit schedule values from canonical to ensure they're used
       scheduleMode: canonicalProfileNow.scheduleMode,
@@ -8731,7 +8769,46 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
       sessionLength: canonicalProfileNow.sessionLengthMinutes ?? undefined,
     })
     
+    // ==========================================================================
+    // [PHASE 30F] ENTRY BUILD LOG
+    // ==========================================================================
+    console.log('[phase30f-modify-open-entry-build]', {
+      stage: 'build_entry',
+      success: !!entryResult?.success,
+      hasEntry: !!entryResult?.entry,
+      errorMessage: entryResult?.error?.message ?? null,
+      verdict: entryResult?.success && entryResult?.entry
+        ? 'ENTRY_BUILD_OK'
+        : 'ENTRY_BUILD_FAILED',
+    })
+    
+    // [PHASE 30F] Controlled failure if entry build fails
+    if (!entryResult.success || !entryResult.entry) {
+      throw new Error(`Entry build failed: ${entryResult.error?.message ?? 'Unknown error'}`)
+    }
+    
+    // ==========================================================================
+    // [PHASE 30F] STAGE: convert_entry_to_inputs
+    // ==========================================================================
+    stage = 'convert_entry_to_inputs'
     const freshInputs = entryToAdaptiveInputs(entryResult.entry)
+    
+    // ==========================================================================
+    // [PHASE 30F] INPUT CONVERSION LOG
+    // ==========================================================================
+    console.log('[phase30f-modify-open-input-conversion]', {
+      stage: 'convert_entry_to_inputs',
+      inputs_scheduleMode: freshInputs?.scheduleMode ?? null,
+      inputs_trainingDaysPerWeek: freshInputs?.trainingDaysPerWeek ?? null,
+      inputs_adaptiveWorkloadEnabled: (freshInputs as { adaptiveWorkloadEnabled?: boolean })?.adaptiveWorkloadEnabled ?? null,
+      hasPrimaryGoal: !!freshInputs?.primaryGoal,
+      verdict: freshInputs ? 'INPUT_CONVERSION_OK' : 'INPUT_CONVERSION_FAILED',
+    })
+    
+    // [PHASE 30F] Controlled failure if input conversion fails
+    if (!freshInputs) {
+      throw new Error('Input conversion returned null/undefined')
+    }
     
     // ==========================================================================
     // [PHASE 29D] MODIFY PREFILL BUILT - proves prefill was constructed correctly
@@ -8882,8 +8959,21 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
     // ==========================================================================
     // [PHASE 25] TASK 3: Create new builder session with canonical prefill
     // [PHASE 26B] Use synchronous wrapper to avoid same-frame race
+    // [PHASE 30F] STAGE: seed_builder_session
     // ==========================================================================
+    stage = 'seed_builder_session'
     const newSessionKey = `canonical_modify_${Date.now()}`
+    
+    // ==========================================================================
+    // [PHASE 30F] PRE-SESSION SEED LOG
+    // ==========================================================================
+    console.log('[phase30f-modify-open-pre-session-seed]', {
+      stage: 'seed_builder_session',
+      freshInputs_scheduleMode: freshInputs?.scheduleMode ?? null,
+      freshInputs_trainingDaysPerWeek: freshInputs?.trainingDaysPerWeek ?? null,
+      freshInputs_adaptiveWorkloadEnabled: (freshInputs as { adaptiveWorkloadEnabled?: boolean })?.adaptiveWorkloadEnabled ?? null,
+      verdict: 'READY_TO_SEED_BUILDER_SESSION',
+    })
     
     setBuilderSessionInputsAndRef(freshInputs)
     setBuilderSessionKey(newSessionKey)
@@ -8895,7 +8985,9 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
     // ==========================================================================
     // [PHASE 28E] SEED SCHEDULE TRUTH AUDIT FOR LIVE MODIFY PATH
     // This makes the visible SCHEDULE TRUTH NOW panel render in the live flow
+    // [PHASE 30F] STAGE: seed_schedule_truth_audit
     // ==========================================================================
+    stage = 'seed_schedule_truth_audit'
     const onboardingForAudit = getOnboardingProfileDirect()
     const athleteForAudit = getAthleteProfileDirect()
     
@@ -9018,7 +9110,9 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
     // [PHASE 25] TASK 4: Set builder origin to 'default' NOT 'modify_start_new'
     // This ensures the submit path uses the standard handleGenerate flow
     // instead of any legacy modify-specific branching
+    // [PHASE 30F] STAGE: set_builder_origin
     // ==========================================================================
+    stage = 'set_builder_origin'
     console.log('[phase25-canonical-modify-replacement]', {
       action: 'BUILDER_ORIGIN_SET',
       previousOrigin: builderOrigin,
@@ -9030,10 +9124,39 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
     
     // ==========================================================================
     // [PHASE 25] TASK 5: Transition to builder directly (skip modal)
+    // [PHASE 30F] STAGE: transition_to_builder
     // ==========================================================================
+    stage = 'transition_to_builder'
+    
+    // ==========================================================================
+    // [PHASE 30F] PRE-BUILDER TRANSITION LOG
+    // ==========================================================================
+    console.log('[phase30f-modify-open-pre-builder-transition]', {
+      stage: 'transition_to_builder',
+      builderSessionKey: newSessionKey,
+      builderOriginTarget: 'default',
+      willSetShowBuilder: true,
+      willSetModifyFlowState: 'builder',
+      verdict: 'READY_TO_OPEN_BUILDER',
+    })
+    
     setModifyFlowState('builder')
     setShowAdjustmentModal(false)
     setShowBuilder(true)
+    
+    // ==========================================================================
+    // [PHASE 30F] STAGE: complete
+    // ==========================================================================
+    stage = 'complete'
+    
+    // ==========================================================================
+    // [PHASE 30F] MODIFY OPEN COMPLETE LOG
+    // ==========================================================================
+    console.log('[phase30f-modify-open-complete]', {
+      stage: 'complete',
+      builderSessionKey: newSessionKey,
+      verdict: 'MODIFY_OPEN_COMPLETED',
+    })
     
     console.log('[phase25-canonical-modify-replacement]', {
       action: 'BUILDER_OPENED',
@@ -9056,6 +9179,32 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
       verdict: 'CANONICAL_MODIFY_SUBMIT_PATH_USED',
     })
     
+    } catch (error) {
+      // ==========================================================================
+      // [PHASE 30F] FAIL-SAFE CATCH BLOCK
+      // Controlled error handling with user-visible feedback
+      // ==========================================================================
+      console.error('[phase30f-modify-open-failed]', {
+        stage,
+        errorName: error instanceof Error ? error.name : 'unknown',
+        errorMessage: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : null,
+        verdict: `MODIFY_OPEN_FAILED_AT_${stage}`,
+      })
+      
+      // ==========================================================================
+      // [PHASE 30F] SET USER-VISIBLE ERROR
+      // Use existing error surface to inform user of failure
+      // ==========================================================================
+      const errorMessage = 'Unable to open Modify Program. A setup error occurred before the builder could load.'
+      setGenerationError(errorMessage)
+      
+      console.log('[phase30f-modify-open-error-surfaced]', {
+        stage,
+        visibleMessage: errorMessage,
+        verdict: 'MODIFY_OPEN_ERROR_VISIBLE',
+      })
+    }
   }, [program, programModules, builderOrigin])
   // [PHASE 25] Note: buildCanonicalGenerationEntry and entryToAdaptiveInputs are now static module imports,
   // not component-level dependencies. getCanonicalProfile is also a static import.

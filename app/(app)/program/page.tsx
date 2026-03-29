@@ -1059,6 +1059,19 @@ export default function ProgramPage() {
     // Shows each field's comparison result explicitly
     // =========================================================================
     const canonicalProfile = getCanonicalProfile()
+    
+    // =========================================================================
+    // [PHASE 29C] PROGRAM CANONICAL READ SURVIVED
+    // Proves canonical resolution completed without TDZ/boot crash
+    // =========================================================================
+    console.log('[phase29c-program-canonical-read-survived]', {
+      pageLoadStage: 'evaluateUnifiedProgramStaleness',
+      canonicalScheduleMode: canonicalProfile.scheduleMode,
+      canonicalTrainingDays: canonicalProfile.trainingDaysPerWeek,
+      canonicalAdaptiveWorkload: (canonicalProfile as { adaptiveWorkloadEnabled?: boolean }).adaptiveWorkloadEnabled ?? true,
+      verdict: 'PROGRAM_BOOT_SURVIVED_CANONICAL_READ',
+    })
+    
     console.log('[field-by-field-drift-truth-audit]', {
       primaryGoal: {
         profileValue: canonicalProfile.primaryGoal,
@@ -8639,15 +8652,38 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
     // ==========================================================================
     // [PHASE 25] TASK 2: Build fresh inputs using canonical entry builder
     // This is the SAME path used by Restart/Onboarding
+    // [PHASE 29D] FIX: First parameter must be trigger source STRING, not object!
+    // Previous bug: passed canonicalProfileNow (object) as triggerSource (string)
     // ==========================================================================
-    const entryResult = buildCanonicalGenerationEntry(canonicalProfileNow, {
-      scheduleMode: canonicalProfileNow.scheduleMode ?? undefined,
+    const entryResult = buildCanonicalGenerationEntry('modify_program', {
+      // [PHASE 29D] Pass explicit schedule values from canonical to ensure they're used
+      scheduleMode: canonicalProfileNow.scheduleMode,
       trainingDaysPerWeek: canonicalProfileNow.trainingDaysPerWeek ?? undefined,
       sessionDurationMode: canonicalProfileNow.sessionDurationMode ?? undefined,
-      sessionLengthMinutes: canonicalProfileNow.sessionLengthMinutes ?? undefined,
+      sessionLength: canonicalProfileNow.sessionLengthMinutes ?? undefined,
     })
     
     const freshInputs = entryToAdaptiveInputs(entryResult.entry)
+    
+    // ==========================================================================
+    // [PHASE 29D] MODIFY PREFILL BUILT - proves prefill was constructed correctly
+    // ==========================================================================
+    console.log('[phase29d-modify-prefill-built]', {
+      canonicalScheduleMode: canonicalProfileNow.scheduleMode,
+      canonicalTrainingDays: canonicalProfileNow.trainingDaysPerWeek,
+      prefillScheduleMode: freshInputs.scheduleMode,
+      prefillTrainingDays: freshInputs.trainingDaysPerWeek,
+      entrySuccess: entryResult.success,
+      verdict: (() => {
+        if (!entryResult.success) return 'ENTRY_BUILD_FAILED'
+        const canonStatic6 = canonicalProfileNow.scheduleMode === 'static' && canonicalProfileNow.trainingDaysPerWeek === 6
+        const prefillStatic6 = freshInputs.scheduleMode === 'static' && freshInputs.trainingDaysPerWeek === 6
+        if (canonStatic6 && prefillStatic6) return 'STATIC_6_PRESERVED_IN_PREFILL'
+        if (canonStatic6 && !prefillStatic6) return 'BUG_STATIC_6_LOST_IN_PREFILL'
+        if (freshInputs.scheduleMode === 'flexible') return 'FLEXIBLE_PREFILL_BUILT'
+        return `STATIC_${freshInputs.trainingDaysPerWeek}_PREFILL_BUILT`
+      })(),
+    })
     
     // ==========================================================================
     // [PHASE 28L] BUILDER PREFILL VERIFICATION - proves prefill matches canonical

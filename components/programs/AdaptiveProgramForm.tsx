@@ -141,6 +141,19 @@ export function AdaptiveProgramForm({
         return 'FORM_STATE_SET'
       })(),
     })
+    
+    // ==========================================================================
+    // [PHASE 29D] FORM INITIAL STATE - proves form received correct initial values
+    // ==========================================================================
+    console.log('[phase29d-form-initial-state]', {
+      initialScheduleMode: inputs.scheduleMode,
+      initialTrainingDays: inputs.trainingDaysPerWeek,
+      verdict: inputs.scheduleMode === 'static' && inputs.trainingDaysPerWeek === 6
+        ? 'STATIC_6_FORM_OPENED'
+        : inputs.scheduleMode === 'static'
+          ? `STATIC_${inputs.trainingDaysPerWeek}_FORM_OPENED`
+          : 'FLEXIBLE_FORM_OPENED',
+    })
   }, [inputsKey]) // eslint-disable-line react-hooks/exhaustive-deps
   
   const updateInput = <K extends keyof AdaptiveProgramInputs>(
@@ -717,6 +730,21 @@ export function AdaptiveProgramForm({
                 return <div className="text-xs font-bold text-[#888]">FORM_MATCHES_CANONICAL_{inputs.scheduleMode?.toUpperCase()}</div>
               })()}
             </div>
+            
+            {/* [PHASE 29D] Final display log */}
+            {(() => {
+              console.log('[phase29d-display-final]', {
+                displayedScheduleMode: inputs.scheduleMode,
+                displayedTrainingDays: inputs.trainingDaysPerWeek,
+                adaptiveWorkloadEnabled: scheduleTruthAudit.adaptiveWorkloadEnabled,
+                verdict: inputs.scheduleMode === 'static' && inputs.trainingDaysPerWeek === 6
+                  ? 'DISPLAYING_STATIC_6'
+                  : inputs.scheduleMode === 'static'
+                    ? `DISPLAYING_STATIC_${inputs.trainingDaysPerWeek}`
+                    : 'DISPLAYING_FLEXIBLE',
+              })
+              return null
+            })()}
             
             {/* [PHASE 28J] Source null warning - both sources have null scheduleMode */}
             {scheduleTruthAudit.onboardingScheduleMode === null && 

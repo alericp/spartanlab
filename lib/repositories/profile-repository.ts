@@ -97,6 +97,24 @@ const previewProfileRepository: ProfileRepository = {
     }
     
     // ==========================================================================
+    // [PHASE 30E] ATHLETE PROFILE STORAGE FINAL
+    // THE DEFINITIVE LOG proving what schedule values are being stored
+    // ==========================================================================
+    console.log('[phase30e-athlete-profile-storage-final]', {
+      incoming_scheduleMode: (data as { scheduleMode?: string })?.scheduleMode ?? null,
+      incoming_trainingDaysPerWeek: (data as { trainingDaysPerWeek?: number })?.trainingDaysPerWeek ?? null,
+      final_scheduleMode: (updated as { scheduleMode?: string })?.scheduleMode ?? null,
+      final_trainingDaysPerWeek: updated.trainingDaysPerWeek ?? null,
+      final_adaptiveWorkloadEnabled: (updated as { adaptiveWorkloadEnabled?: boolean })?.adaptiveWorkloadEnabled ?? null,
+      verdict:
+        (updated as { scheduleMode?: string })?.scheduleMode === 'static' && updated.trainingDaysPerWeek === 6
+          ? 'ATHLETE_STORAGE_STATIC_6'
+          : (updated as { scheduleMode?: string })?.scheduleMode === 'flexible'
+          ? 'ATHLETE_STORAGE_FLEXIBLE'
+          : `ATHLETE_STORAGE_${(updated as { scheduleMode?: string })?.scheduleMode}_${updated.trainingDaysPerWeek}`,
+    })
+    
+    // ==========================================================================
     // [PHASE 30D] ATHLETE PROFILE FINAL - AUTHORITATIVE BEHAVIOR FIX LOG
     // THE DEFINITIVE LOG proving what schedule values are being saved to localStorage
     // ==========================================================================

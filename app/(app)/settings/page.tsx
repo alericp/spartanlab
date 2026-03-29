@@ -936,6 +936,28 @@ export default function SettingsPage() {
             })
             
             // ==========================================================================
+            // [PHASE 30E] SETTINGS POST SAVE AUTHORITATIVE
+            // THE DEFINITIVE LOG proving what was saved and confirming canonical is correct
+            // ==========================================================================
+            console.log('[phase30e-settings-post-save-authoritative]', {
+              saved_scheduleMode: result?.profile?.scheduleMode ?? null,
+              saved_trainingDaysPerWeek: result?.profile?.trainingDaysPerWeek ?? null,
+              saved_adaptiveWorkloadEnabled: adaptiveWorkloadEnabled,
+              ui_scheduleMode_after_save: scheduleMode,
+              ui_trainingDays_after_save: trainingDays,
+              canonical_scheduleMode: canonicalReadback?.scheduleMode ?? null,
+              canonical_trainingDays: canonicalReadback?.trainingDaysPerWeek ?? null,
+              verdict:
+                result?.profile?.scheduleMode === 'static' && result?.profile?.trainingDaysPerWeek === 6
+                  ? (canonicalReadback?.scheduleMode === 'static' && canonicalReadback?.trainingDaysPerWeek === 6
+                      ? 'SETTINGS_SAVE_CONFIRMED_STATIC_6'
+                      : 'SETTINGS_SAVE_STATIC_6_BUT_CANONICAL_WRONG')
+                  : result?.profile?.scheduleMode === 'flexible'
+                  ? 'SETTINGS_SAVE_CONFIRMED_FLEXIBLE'
+                  : `SETTINGS_SAVE_CONFIRMED_${result?.profile?.scheduleMode}_${result?.profile?.trainingDaysPerWeek}`,
+            })
+            
+            // ==========================================================================
             // [PHASE 29B] SETTINGS POST SAVE READBACK - Task 2
             // Proves what was actually saved and what all sources now show
             // ==========================================================================

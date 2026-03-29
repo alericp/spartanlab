@@ -493,9 +493,40 @@ export default function ProgramPage() {
   }, [])
   
   // Keep the useEffect as a backup sync (for initial hydration and edge cases)
+  // [PHASE 30P] CRITICAL: This effect must NOT overwrite a live Modify entry with stale/null state
   useEffect(() => {
     // Only sync if ref is out of date (shouldn't happen with the wrapper, but safety net)
     if (builderSessionInputsRef.current !== builderSessionInputs) {
+      // ==========================================================================
+      // [PHASE 30P] STALE BACKUP SYNC GUARD
+      // During an active Modify transition, the ref may hold fresh entry data
+      // while the React state is still null/stale. Do NOT overwrite in that case.
+      // ==========================================================================
+      const isModifyTransitionActive = modifyBuilderLockRef.current || modifyFlowState === 'builder'
+      const refHasLiveEntry = builderSessionInputsRef.current !== null
+      const stateIsNullOrStale = builderSessionInputs === null
+      const wouldClobberLiveEntry = isModifyTransitionActive && refHasLiveEntry && stateIsNullOrStale
+      
+      console.log('[phase30p-ref-backup-sync-final]', {
+        builderSessionInputsStatePresent: !!builderSessionInputs,
+        builderSessionInputsRefPresent_before: !!builderSessionInputsRef.current,
+        modifyFlowState: modifyFlowState ?? null,
+        modifyBuilderLock: !!modifyBuilderLockRef.current,
+        isModifyTransitionActive,
+        wouldClobberLiveEntry,
+        writeBlocked: wouldClobberLiveEntry,
+        verdict: wouldClobberLiveEntry
+          ? 'REF_BACKUP_SYNC_BLOCKED_STALE_NULL_DURING_MODIFY'
+          : builderSessionInputsRef.current === builderSessionInputs
+          ? 'REF_BACKUP_SYNC_SKIPPED_ALREADY_MATCHED'
+          : 'REF_BACKUP_SYNC_ALLOWED',
+      })
+      
+      // Block the sync if it would clobber a live Modify entry
+      if (wouldClobberLiveEntry) {
+        return // Do NOT overwrite the ref
+      }
+      
       builderSessionInputsRef.current = builderSessionInputs
       console.log('[phase26-6day-truth-chain-forced-verdict]', {
         stage: 'REF_BACKUP_SYNC_IN_EFFECT',
@@ -506,7 +537,7 @@ export default function ProgramPage() {
           : 'REF_NOW_HAS_FLEXIBLE',
       })
     }
-  }, [builderSessionInputs])
+  }, [builderSessionInputs, modifyFlowState])
   
   // ==========================================================================
   // [PHASE 24D] EXPLICIT MODIFY FLOW STATE MACHINE
@@ -1707,17 +1738,24 @@ export default function ProgramPage() {
               // [PHASE 30I] GUARD: Only reset showBuilder to false if this is the initial mount
               // Do NOT override if user has already clicked Modify and set showBuilder to true
               // [PHASE 30L] LOCK-AWARE GUARD: Check modifyBuilderLockRef before overwriting
+              // [PHASE 30P] ENHANCED: Also check modifyFlowState and builderSessionInputsRef
               const isModifyLockActive = modifyBuilderLockRef.current
-              console.log('[phase30l-init-showBuilder-false-guard]', {
-                branch: 'program_ready',
-                attemptedWrite: false,
+              const isModifyFlowBuilder = modifyFlowState === 'builder'
+              const hasLiveBuilderEntry = builderSessionInputsRef.current !== null
+              const isActiveModifyTransition = isModifyLockActive || (isModifyFlowBuilder && hasLiveBuilderEntry)
+              
+              console.log('[phase30p-showBuilder-false-write-final]', {
+                source: 'init_program_ready',
+                modifyFlowState: modifyFlowState ?? null,
                 modifyBuilderLock: isModifyLockActive,
-                writeAllowed: !isModifyLockActive,
-                verdict: isModifyLockActive
-                  ? 'INIT_FALSE_WRITE_BLOCKED_BY_MODIFY_LOCK'
-                  : 'INIT_FALSE_WRITE_ALLOWED',
+                builderSessionInputsRefPresent: hasLiveBuilderEntry,
+                isActiveModifyTransition,
+                writeAllowed: !isActiveModifyTransition,
+                verdict: isActiveModifyTransition
+                  ? 'SHOWBUILDER_FALSE_WRITE_BLOCKED_DURING_MODIFY'
+                  : 'SHOWBUILDER_FALSE_WRITE_ALLOWED',
               })
-              if (!isModifyLockActive) {
+              if (!isActiveModifyTransition) {
                 setShowBuilder(false)
               }
               setLoadStage('program-ready')
@@ -1770,17 +1808,24 @@ export default function ProgramPage() {
               // Keep program reference so we can show "Program Needs Refresh" state
               setProgram(normalizedProgram)
               // [PHASE 30L] LOCK-AWARE GUARD: Check modifyBuilderLockRef before overwriting
+              // [PHASE 30P] ENHANCED: Also check modifyFlowState and builderSessionInputsRef
               const isModifyLockActive = modifyBuilderLockRef.current
-              console.log('[phase30l-init-showBuilder-false-guard]', {
-                branch: 'program_malformed_recovery',
-                attemptedWrite: false,
+              const isModifyFlowBuilder = modifyFlowState === 'builder'
+              const hasLiveBuilderEntry = builderSessionInputsRef.current !== null
+              const isActiveModifyTransition = isModifyLockActive || (isModifyFlowBuilder && hasLiveBuilderEntry)
+              
+              console.log('[phase30p-showBuilder-false-write-final]', {
+                source: 'init_program_malformed_recovery',
+                modifyFlowState: modifyFlowState ?? null,
                 modifyBuilderLock: isModifyLockActive,
-                writeAllowed: !isModifyLockActive,
-                verdict: isModifyLockActive
-                  ? 'INIT_FALSE_WRITE_BLOCKED_BY_MODIFY_LOCK'
-                  : 'INIT_FALSE_WRITE_ALLOWED',
+                builderSessionInputsRefPresent: hasLiveBuilderEntry,
+                isActiveModifyTransition,
+                writeAllowed: !isActiveModifyTransition,
+                verdict: isActiveModifyTransition
+                  ? 'SHOWBUILDER_FALSE_WRITE_BLOCKED_DURING_MODIFY'
+                  : 'SHOWBUILDER_FALSE_WRITE_ALLOWED',
               })
-              if (!isModifyLockActive) {
+              if (!isActiveModifyTransition) {
                 setShowBuilder(false) // Don't auto-show builder, show recovery state instead
               }
             }
@@ -3497,12 +3542,17 @@ export default function ProgramPage() {
         setProgram(newProgram)
         
         // [PHASE 30L] RELEASE MODIFY BUILDER LOCK - generation completed successfully
+        // [PHASE 30P] ENHANCED: Add full state logging for lock release
         if (modifyBuilderLockRef.current) {
-          modifyBuilderLockRef.current = false
-          console.log('[phase30l-modify-builder-lock-released]', {
-            trigger: 'generation_success',
-            verdict: 'MODIFY_BUILDER_LOCK_RELEASED',
+          console.log('[phase30p-lock-release-final]', {
+            source: 'generation_success',
+            showBuilder: !!showBuilder,
+            modifyFlowState: modifyFlowState ?? null,
+            builderSessionInputsRefPresent: !!builderSessionInputsRef.current,
+            releaseAllowed: true,
+            verdict: 'MODIFY_LOCK_RELEASE_ALLOWED',
           })
+          modifyBuilderLockRef.current = false
         }
         
         setShowBuilder(false)
@@ -4391,12 +4441,17 @@ export default function ProgramPage() {
       setProgram(newProgram)
       
       // [PHASE 30L] RELEASE MODIFY BUILDER LOCK - generation completed successfully
+      // [PHASE 30P] ENHANCED: Add full state logging for lock release
       if (modifyBuilderLockRef.current) {
-        modifyBuilderLockRef.current = false
-        console.log('[phase30l-modify-builder-lock-released]', {
-          trigger: 'generation_success',
-          verdict: 'MODIFY_BUILDER_LOCK_RELEASED',
+        console.log('[phase30p-lock-release-final]', {
+          source: 'generation_success_legacy',
+          showBuilder: !!showBuilder,
+          modifyFlowState: modifyFlowState ?? null,
+          builderSessionInputsRefPresent: !!builderSessionInputsRef.current,
+          releaseAllowed: true,
+          verdict: 'MODIFY_LOCK_RELEASE_ALLOWED',
         })
+        modifyBuilderLockRef.current = false
       }
       
       setShowBuilder(false)
@@ -6377,12 +6432,17 @@ export default function ProgramPage() {
         setProgram(newProgram)
         
         // [PHASE 30L] RELEASE MODIFY BUILDER LOCK - regeneration completed successfully
+        // [PHASE 30P] ENHANCED: Add full state logging for lock release
         if (modifyBuilderLockRef.current) {
-          modifyBuilderLockRef.current = false
-          console.log('[phase30l-modify-builder-lock-released]', {
-            trigger: 'regeneration_success',
-            verdict: 'MODIFY_BUILDER_LOCK_RELEASED',
+          console.log('[phase30p-lock-release-final]', {
+            source: 'regeneration_success',
+            showBuilder: !!showBuilder,
+            modifyFlowState: modifyFlowState ?? null,
+            builderSessionInputsRefPresent: !!builderSessionInputsRef.current,
+            releaseAllowed: true,
+            verdict: 'MODIFY_LOCK_RELEASE_ALLOWED',
           })
+          modifyBuilderLockRef.current = false
         }
         
         setShowBuilder(false)
@@ -9174,6 +9234,20 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
     })
     
     // ==========================================================================
+    // [PHASE 30P] ENTRY SEED AUTHORITY - Proves authoritative entry is now live
+    // This entry must NOT be clobbered by backup sync or legacy false-writes
+    // ==========================================================================
+    console.log('[phase30p-entry-seed-authority-final]', {
+      builderSessionInputsStatePresent: !!builderSessionInputs,
+      builderSessionInputsRefPresent: !!builderSessionInputsRef.current,
+      modifyFlowState_target: 'builder',
+      modifyBuilderLock: !!modifyBuilderLockRef.current,
+      verdict: builderSessionInputsRef.current
+        ? 'ENTRY_SEED_AUTHORITY_ACTIVE'
+        : 'ENTRY_SEED_AUTHORITY_MISSING',
+    })
+    
+    // ==========================================================================
     // [PHASE 28E] SEED SCHEDULE TRUTH AUDIT FOR LIVE MODIFY PATH
     // This makes the visible SCHEDULE TRUTH NOW panel render in the live flow
     // [PHASE 30F] STAGE: seed_schedule_truth_audit
@@ -10545,23 +10619,26 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
   // ==========================================================================
   try {
     // ==========================================================================
-    // [PHASE 30N] RENDER AUTHORITY SNAPSHOT - THE AUTHORITATIVE RENDER DECISION
+    // [PHASE 30P] RENDER AUTHORITY SNAPSHOT - THE AUTHORITATIVE RENDER DECISION
     // This uses the single-authority contract to determine the render branch
     // ==========================================================================
-    console.log('[phase30n-render-authority-final]', {
+    const winningBranch = shouldRenderModifyBuilder ? 'builder' : program ? 'program_display' : 'no_content'
+    console.log('[phase30p-render-authority-final]', {
       showBuilder: !!showBuilder,
       modifyFlowState: modifyFlowState ?? null,
-      builderSessionInputsState: !!builderSessionInputs,
-      builderSessionInputsRef: !!builderSessionInputsRef.current,
       modifyBuilderLock: !!modifyBuilderLockRef?.current,
+      builderSessionInputsStatePresent: !!builderSessionInputs,
+      builderSessionInputsRefPresent: !!builderSessionInputsRef.current,
       shouldRenderModifyBuilder,
-      winningBranch: shouldRenderModifyBuilder ? 'builder' : program ? 'program_display' : 'no_content',
+      winningBranch,
       verdict: shouldRenderModifyBuilder
         ? 'MODIFY_RENDER_AUTHORITY_ACTIVE'
-        : modifyBuilderLockRef?.current
+        : (modifyBuilderLockRef?.current && !builderSessionInputsRef.current)
         ? 'MODIFY_RENDER_BLOCKED_ENTRY_MISSING'
-        : modifyClickAudit?.setShowBuilderRequested
-        ? 'MODIFY_RENDER_BLOCKED_SHOWBUILDER_FALSE'
+        : modifyBuilderLockRef?.current
+        ? 'MODIFY_RENDER_BLOCKED_SHOWBUILDER_FALSE_ONLY'
+        : (modifyFlowState === 'builder' && !shouldRenderModifyBuilder)
+        ? 'MODIFY_RENDER_BLOCKED_BY_PROGRAM_BRANCH'
         : 'RENDER_NORMAL_PROGRAM_DISPLAY',
     })
     
@@ -10721,52 +10798,46 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
         </div>
         
         {/* ==========================================================================
-            [PHASE 30G] STEP 2/7: ON-SCREEN DEBUG STRIP
-            Visible diagnostic strip showing the modify click chain status
+            [PHASE 30P] MODIFY TRANSITION AUDIT STRIP
+            Shows the full transition chain with earliest-failure verdict
             Only shown when program exists and builder is not shown
-            [PHASE 30M] Extended to show render-gate state
-            [PHASE 30N] Updated to use shouldRenderModifyBuilder authority
             ========================================================================== */}
         {program && !shouldRenderModifyBuilder && (
           <div className="mt-4 p-3 bg-zinc-900/80 border border-zinc-700 rounded-lg text-xs font-mono">
-            <div className="text-zinc-400 mb-2 font-semibold">PHASE30M RENDER-GATE AUDIT</div>
+            <div className="text-zinc-400 mb-2 font-semibold">PHASE30P MODIFY TRANSITION AUDIT</div>
             <div className="grid grid-cols-2 gap-1 text-zinc-500">
-              <div>Click fired: <span className={modifyClickAudit.clickFiredAt ? 'text-green-400' : 'text-zinc-600'}>{modifyClickAudit.clickFiredAt ? 'YES' : 'no'}</span></div>
-              <div>Handler entered: <span className={modifyClickAudit.handleNewProgramEntered ? 'text-green-400' : 'text-zinc-600'}>{modifyClickAudit.handleNewProgramEntered ? 'YES' : 'no'}</span></div>
-              <div>Launcher entered: <span className={modifyClickAudit.canonicalLauncherEntered ? 'text-green-400' : 'text-zinc-600'}>{modifyClickAudit.canonicalLauncherEntered ? 'YES' : 'no'}</span></div>
-              <div>Pre-builder reached: <span className={modifyClickAudit.reachedPreBuilderTransition ? 'text-green-400' : 'text-zinc-600'}>{modifyClickAudit.reachedPreBuilderTransition ? 'YES' : 'no'}</span></div>
-              <div>setShowBuilder requested: <span className={modifyClickAudit.setShowBuilderRequested ? 'text-green-400' : 'text-zinc-600'}>{modifyClickAudit.setShowBuilderRequested ? 'YES' : 'no'}</span></div>
-              <div>Builder render authority: <span className={shouldRenderModifyBuilder ? 'text-green-400' : 'text-zinc-600'}>{shouldRenderModifyBuilder ? 'YES' : 'no'}</span></div>
-              {/* [PHASE 30N] Single authority render-gate state */}
-              <div>showBuilder state: <span className={showBuilder ? 'text-green-400' : 'text-red-400'}>{String(showBuilder)}</span></div>
-              <div>modifyBuilderLock: <span className={modifyBuilderLockRef.current ? 'text-green-400' : 'text-zinc-600'}>{String(modifyBuilderLockRef.current)}</span></div>
-              <div>builderSessionInputsRef: <span className={builderSessionInputsRef.current ? 'text-green-400' : 'text-zinc-600'}>{builderSessionInputsRef.current ? 'present' : 'null'}</span></div>
-              <div>shouldRenderModifyBuilder: <span className={shouldRenderModifyBuilder ? 'text-green-400' : 'text-red-400'}>{String(shouldRenderModifyBuilder)}</span></div>
+              {/* Transition chain */}
+              <div>1. Click fired: <span className={modifyClickAudit.clickFiredAt ? 'text-green-400' : 'text-zinc-600'}>{modifyClickAudit.clickFiredAt ? 'YES' : 'no'}</span></div>
+              <div>2. Launcher entered: <span className={modifyClickAudit.canonicalLauncherEntered ? 'text-green-400' : 'text-zinc-600'}>{modifyClickAudit.canonicalLauncherEntered ? 'YES' : 'no'}</span></div>
+              <div>3. Entry seeded (ref): <span className={builderSessionInputsRef.current ? 'text-green-400' : 'text-red-400'}>{builderSessionInputsRef.current ? 'YES' : 'NO'}</span></div>
+              <div>4. Lock active: <span className={modifyBuilderLockRef.current ? 'text-green-400' : 'text-red-400'}>{modifyBuilderLockRef.current ? 'YES' : 'NO'}</span></div>
+              <div>5. showBuilder state: <span className={showBuilder ? 'text-green-400' : 'text-yellow-400'}>{String(showBuilder)}</span></div>
+              <div>6. Render authority: <span className={shouldRenderModifyBuilder ? 'text-green-400' : 'text-red-400'}>{shouldRenderModifyBuilder ? 'YES' : 'NO'}</span></div>
+              {/* Additional state */}
               <div>modifyFlowState: <span className={modifyFlowState === 'builder' ? 'text-blue-400' : 'text-zinc-600'}>{modifyFlowState}</span></div>
+              <div>builderSessionInputs state: <span className={builderSessionInputs ? 'text-green-400' : 'text-zinc-600'}>{builderSessionInputs ? 'present' : 'null'}</span></div>
               {modifyClickAudit.failureStage && (
-                <div className="col-span-2 text-red-400">Failure: {modifyClickAudit.failureStage} - {modifyClickAudit.failureMessage?.slice(0, 50)}</div>
+                <div className="col-span-2 text-red-400">Error: {modifyClickAudit.failureStage} - {modifyClickAudit.failureMessage?.slice(0, 50)}</div>
               )}
             </div>
-            {/* [PHASE 30N] STEP 7: Authoritative single-authority verdict line */}
+            {/* [PHASE 30P] Earliest failure verdict */}
             <div className="mt-2 pt-2 border-t border-zinc-700 text-zinc-300">
-              Render Authority: <span className={
+              Verdict: <span className={
                 shouldRenderModifyBuilder ? 'text-green-400' :
                 modifyClickAudit.failureStage ? 'text-red-400' :
-                (modifyBuilderLockRef.current && !builderSessionInputsRef.current) ? 'text-red-400' :
-                modifyClickAudit.reachedPreBuilderTransition ? 'text-blue-400' :
+                (modifyClickAudit.canonicalLauncherEntered && !builderSessionInputsRef.current) ? 'text-red-400' :
+                (modifyBuilderLockRef.current && !shouldRenderModifyBuilder) ? 'text-red-400' :
                 modifyClickAudit.canonicalLauncherEntered ? 'text-blue-400' :
                 'text-zinc-500'
               }>
                 {shouldRenderModifyBuilder ? 'MODIFY_RENDERED_BUILDER' :
-                 modifyClickAudit.failureStage ? `FAILED_AT_${modifyClickAudit.failureStage}` :
-                 (modifyBuilderLockRef.current && !builderSessionInputsRef.current)
-                   ? 'MODIFY_RENDER_BLOCKED_ENTRY_MISSING'
-                   : (modifyClickAudit.setShowBuilderRequested && !showBuilder)
-                   ? 'MODIFY_RENDER_BLOCKED_SHOWBUILDER_FALSE'
-                   : modifyClickAudit.reachedPreBuilderTransition ? 'PRE_BUILDER_OK' :
-                   modifyClickAudit.canonicalLauncherEntered ? 'LAUNCHER_ENTERED' :
-                   modifyClickAudit.clickFiredAt ? 'CLICK_FIRED' :
-                   'WAITING_FOR_CLICK'}
+                 modifyClickAudit.failureStage ? `MODIFY_FAILED_AT_${modifyClickAudit.failureStage}` :
+                 !modifyClickAudit.clickFiredAt ? 'MODIFY_WAITING_FOR_CLICK' :
+                 !modifyClickAudit.canonicalLauncherEntered ? 'MODIFY_FAILED_LAUNCHER_NOT_ENTERED' :
+                 !builderSessionInputsRef.current ? 'MODIFY_FAILED_ENTRY_NOT_SEEDED' :
+                 !modifyBuilderLockRef.current ? 'MODIFY_FAILED_LOCK_RELEASED_TOO_EARLY' :
+                 (modifyFlowState === 'builder' && !showBuilder && !shouldRenderModifyBuilder) ? 'MODIFY_FAILED_REF_WAS_CLOBBERED' :
+                 'MODIFY_FAILED_PROGRAM_BRANCH_WON'}
               </span>
             </div>
           </div>
@@ -11222,12 +11293,17 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
                   setModifyFlowState('idle')
                   
                   // [PHASE 30L] RELEASE MODIFY BUILDER LOCK - user cancelled
+                  // [PHASE 30P] ENHANCED: Add full state logging for lock release
                   if (modifyBuilderLockRef.current) {
-                    modifyBuilderLockRef.current = false
-                    console.log('[phase30l-modify-builder-lock-released]', {
-                      trigger: 'cancel',
-                      verdict: 'MODIFY_BUILDER_LOCK_RELEASED',
+                    console.log('[phase30p-lock-release-final]', {
+                      source: 'cancel',
+                      showBuilder: !!showBuilder,
+                      modifyFlowState: modifyFlowState ?? null,
+                      builderSessionInputsRefPresent: !!builderSessionInputsRef.current,
+                      releaseAllowed: true,
+                      verdict: 'MODIFY_LOCK_RELEASE_ALLOWED',
                     })
+                    modifyBuilderLockRef.current = false
                   }
                   
                   setShowBuilder(false)

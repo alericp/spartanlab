@@ -1706,9 +1706,20 @@ export default function ProgramPage() {
               setProgram(normalizedProgram)
               // [PHASE 30I] GUARD: Only reset showBuilder to false if this is the initial mount
               // Do NOT override if user has already clicked Modify and set showBuilder to true
-              // Note: This uses the functional updater to check current state
-              // [PHASE 30J] SAFETY: Simplified guard - just set to false, the logging was potentially unsafe
-              setShowBuilder(false)
+              // [PHASE 30L] LOCK-AWARE GUARD: Check modifyBuilderLockRef before overwriting
+              const isModifyLockActive = modifyBuilderLockRef.current
+              console.log('[phase30l-init-showBuilder-false-guard]', {
+                branch: 'program_ready',
+                attemptedWrite: false,
+                modifyBuilderLock: isModifyLockActive,
+                writeAllowed: !isModifyLockActive,
+                verdict: isModifyLockActive
+                  ? 'INIT_FALSE_WRITE_BLOCKED_BY_MODIFY_LOCK'
+                  : 'INIT_FALSE_WRITE_ALLOWED',
+              })
+              if (!isModifyLockActive) {
+                setShowBuilder(false)
+              }
               setLoadStage('program-ready')
               
               // [TASK 7] MOUNT DIAGNOSTIC - Comprehensive audit log
@@ -1758,9 +1769,20 @@ export default function ProgramPage() {
               setLoadStage(`program-malformed:${displayCheck.reason || 'unknown'}`)
               // Keep program reference so we can show "Program Needs Refresh" state
               setProgram(normalizedProgram)
-              // [PHASE 30I] GUARD: Only reset showBuilder if user hasn't already clicked Modify
-              // [PHASE 30J] SAFETY: Simplified guard - just set to false, the logging was potentially unsafe
-              setShowBuilder(false) // Don't auto-show builder, show recovery state instead
+              // [PHASE 30L] LOCK-AWARE GUARD: Check modifyBuilderLockRef before overwriting
+              const isModifyLockActive = modifyBuilderLockRef.current
+              console.log('[phase30l-init-showBuilder-false-guard]', {
+                branch: 'program_malformed_recovery',
+                attemptedWrite: false,
+                modifyBuilderLock: isModifyLockActive,
+                writeAllowed: !isModifyLockActive,
+                verdict: isModifyLockActive
+                  ? 'INIT_FALSE_WRITE_BLOCKED_BY_MODIFY_LOCK'
+                  : 'INIT_FALSE_WRITE_ALLOWED',
+              })
+              if (!isModifyLockActive) {
+                setShowBuilder(false) // Don't auto-show builder, show recovery state instead
+              }
             }
           } else {
             // No usable program - show builder
@@ -1842,6 +1864,16 @@ export default function ProgramPage() {
   const runtimeSessionIdRef = useRef<string>(generateRuntimeSessionId())
   const currentAttemptStartedAtRef = useRef<string | null>(null)
   const currentSessionHasStartedNewAttemptRef = useRef<boolean>(false)
+  
+  // ==========================================================================
+  // [PHASE 30L] MODIFY BUILDER LOCK REF
+  // This ref prevents late init/mount writes from overwriting showBuilder
+  // after the user has clicked Modify and the builder transition has started.
+  // - Set to true when Modify reaches pre-builder transition
+  // - Init/mount code must NOT set showBuilder(false) while this is true
+  // - Released only on generation success, cancel, or explicit builder exit
+  // ==========================================================================
+  const modifyBuilderLockRef = useRef<boolean>(false)
   
   // [PHASE 16S] Runtime session audit on mount
   useEffect(() => {
@@ -2263,6 +2295,22 @@ export default function ProgramPage() {
         programExists: !!program,
         timestamp: new Date().toISOString(),
         verdict: showBuilder ? 'SHOWBUILDER_IS_NOW_TRUE' : 'SHOWBUILDER_IS_NOW_FALSE',
+      })
+      
+      // [PHASE 30L] AUTHORITATIVE STATE WINNER LOG
+      // This proves whether showBuilder survived or was overwritten while lock was active
+      const modifyLockActive = modifyBuilderLockRef.current
+      console.log('[phase30l-showBuilder-authoritative-state]', {
+        showBuilder,
+        modifyBuilderLock: modifyLockActive,
+        modifyFlowState,
+        loadStage,
+        programExists: !!program,
+        verdict: showBuilder
+          ? 'SHOWBUILDER_TRUE_SURVIVED'
+          : modifyLockActive
+          ? 'SHOWBUILDER_FALSE_WHILE_MODIFY_LOCK_ACTIVE'
+          : 'SHOWBUILDER_FALSE_NORMAL',
       })
       
       // [PHASE 30J] Boot stability verdict - proves page survived initialization
@@ -3447,6 +3495,16 @@ export default function ProgramPage() {
         })
         
         setProgram(newProgram)
+        
+        // [PHASE 30L] RELEASE MODIFY BUILDER LOCK - generation completed successfully
+        if (modifyBuilderLockRef.current) {
+          modifyBuilderLockRef.current = false
+          console.log('[phase30l-modify-builder-lock-released]', {
+            trigger: 'generation_success',
+            verdict: 'MODIFY_BUILDER_LOCK_RELEASED',
+          })
+        }
+        
         setShowBuilder(false)
         
         // [PHASE 24N] Reset builder origin after successful generation
@@ -4331,6 +4389,16 @@ export default function ProgramPage() {
       
       // Hydrate UI
       setProgram(newProgram)
+      
+      // [PHASE 30L] RELEASE MODIFY BUILDER LOCK - generation completed successfully
+      if (modifyBuilderLockRef.current) {
+        modifyBuilderLockRef.current = false
+        console.log('[phase30l-modify-builder-lock-released]', {
+          trigger: 'generation_success',
+          verdict: 'MODIFY_BUILDER_LOCK_RELEASED',
+        })
+      }
+      
       setShowBuilder(false)
       
       // [PHASE 24D] Reset modifyFlowState to idle after successful generation
@@ -6307,6 +6375,16 @@ export default function ProgramPage() {
         })
         
         setProgram(newProgram)
+        
+        // [PHASE 30L] RELEASE MODIFY BUILDER LOCK - regeneration completed successfully
+        if (modifyBuilderLockRef.current) {
+          modifyBuilderLockRef.current = false
+          console.log('[phase30l-modify-builder-lock-released]', {
+            trigger: 'regeneration_success',
+            verdict: 'MODIFY_BUILDER_LOCK_RELEASED',
+          })
+        }
+        
         setShowBuilder(false)
         
         // [program-rebuild-truth] Create success result using freshRebuildInput signature
@@ -9261,6 +9339,18 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
       setShowBuilderRequested: true,
     }))
     
+    // ==========================================================================
+    // [PHASE 30L] ACQUIRE MODIFY BUILDER LOCK
+    // This MUST happen BEFORE setShowBuilder(true) to prevent late init writes
+    // from racing and overwriting the builder state
+    // ==========================================================================
+    modifyBuilderLockRef.current = true
+    console.log('[phase30l-modify-builder-lock-acquired]', {
+      modifyBuilderLock: true,
+      stage: 'transition_to_builder',
+      verdict: 'MODIFY_BUILDER_LOCK_ACQUIRED',
+    })
+    
     setModifyFlowState('builder')
     setShowAdjustmentModal(false)
     setShowBuilder(true)
@@ -10635,6 +10725,25 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
               })
             }
             
+            // ==========================================================================
+            // [PHASE 30L] RENDER BRANCH LOCK VERDICT
+            // Distinguishes modify lock states from normal render states
+            // ==========================================================================
+            const modifyLockActive = modifyBuilderLockRef.current
+            console.log('[phase30l-render-branch-lock-final]', {
+              showBuilder: !!showBuilder,
+              modifyBuilderLock: modifyLockActive,
+              setShowBuilderRequested: !!modifyClickAudit?.setShowBuilderRequested,
+              hasProgram: !!program,
+              activeBranch: winningBranch,
+              verdict:
+                showBuilder
+                  ? 'MODIFY_RENDERED_BUILDER'
+                  : modifyLockActive && modifyClickAudit?.setShowBuilderRequested
+                  ? 'MODIFY_LOCK_ACTIVE_BUT_PROGRAM_BRANCH_WON'
+                  : 'MODIFY_NOT_IN_LOCKED_BUILDER_STATE',
+            })
+            
             console.log('[phase24h-program-page-render-branch-verdict]', {
               showBuilder,
               showAdjustmentModal,
@@ -10997,6 +11106,16 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
                   setBuilderSessionKey('initial')
                   setBuilderSessionSource(null)
                   setModifyFlowState('idle')
+                  
+                  // [PHASE 30L] RELEASE MODIFY BUILDER LOCK - user cancelled
+                  if (modifyBuilderLockRef.current) {
+                    modifyBuilderLockRef.current = false
+                    console.log('[phase30l-modify-builder-lock-released]', {
+                      trigger: 'cancel',
+                      verdict: 'MODIFY_BUILDER_LOCK_RELEASED',
+                    })
+                  }
+                  
                   setShowBuilder(false)
                 }}
               >

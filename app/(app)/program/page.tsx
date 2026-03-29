@@ -9179,6 +9179,32 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
       verdict: 'CANONICAL_MODIFY_SUBMIT_PATH_USED',
     })
     
+    } catch (error) {
+      // ==========================================================================
+      // [PHASE 30F] FAIL-SAFE CATCH BLOCK
+      // Controlled error handling with user-visible feedback
+      // ==========================================================================
+      console.error('[phase30f-modify-open-failed]', {
+        stage,
+        errorName: error instanceof Error ? error.name : 'unknown',
+        errorMessage: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : null,
+        verdict: `MODIFY_OPEN_FAILED_AT_${stage}`,
+      })
+      
+      // ==========================================================================
+      // [PHASE 30F] SET USER-VISIBLE ERROR
+      // Use existing error surface to inform user of failure
+      // ==========================================================================
+      const errorMessage = 'Unable to open Modify Program. A setup error occurred before the builder could load.'
+      setGenerationError(errorMessage)
+      
+      console.log('[phase30f-modify-open-error-surfaced]', {
+        stage,
+        visibleMessage: errorMessage,
+        verdict: 'MODIFY_OPEN_ERROR_VISIBLE',
+      })
+    }
   }, [program, programModules, builderOrigin])
   // [PHASE 25] Note: buildCanonicalGenerationEntry and entryToAdaptiveInputs are now static module imports,
   // not component-level dependencies. getCanonicalProfile is also a static import.

@@ -9133,8 +9133,21 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
       inputs: freshInputs,
     }
     
+    // [v0] DEBUG: Log right before commit
+    console.log('[v0] launcher-pre-commit', {
+      sessionKey: newSessionKey,
+      hasInputs: !!modifyEntry.inputs,
+      scheduleMode: modifyEntry.inputs?.scheduleMode,
+    })
+    
     // Commit entry (logs [modify-final-launch-commit] internally)
     const commitSuccess = commitModifyEntryAtomically(modifyEntry)
+    
+    // [v0] DEBUG: Log right after commit
+    console.log('[v0] launcher-post-commit', {
+      commitSuccess,
+      refNow: !!modifyBuilderEntryRef.current,
+    })
     
     if (!commitSuccess) {
       throw new Error('Atomic entry commit failed - entry was invalid')
@@ -10353,9 +10366,10 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
               {/* Single-authority commit chain */}
               <div>1. Click fired: <span className={modifyClickAudit.clickFiredAt ? 'text-green-400' : 'text-zinc-600'}>{modifyClickAudit.clickFiredAt ? 'YES' : 'no'}</span></div>
               <div>2. Launcher entered: <span className={modifyClickAudit.canonicalLauncherEntered ? 'text-green-400' : 'text-zinc-600'}>{modifyClickAudit.canonicalLauncherEntered ? 'YES' : 'no'}</span></div>
-              <div>3. Entry committed: <span className={modifyBuilderEntry ? 'text-green-400' : 'text-zinc-600'}>{modifyBuilderEntry ? 'YES' : 'no'}</span></div>
-              <div>4. Flow state: <span className={modifyFlowState === 'builder' ? 'text-green-400' : 'text-zinc-600'}>{modifyFlowState}</span></div>
-              <div>5. Render granted: <span className={shouldRenderModifyBuilder ? 'text-green-400' : 'text-red-400'}>{shouldRenderModifyBuilder ? 'YES' : 'NO'}</span></div>
+              <div>3. Ref present: <span className={modifyBuilderEntryRef.current ? 'text-green-400' : 'text-zinc-600'}>{modifyBuilderEntryRef.current ? 'YES' : 'no'}</span></div>
+              <div>4. State entry: <span className={modifyBuilderEntry ? 'text-green-400' : 'text-zinc-600'}>{modifyBuilderEntry ? 'YES' : 'no'}</span></div>
+              <div>5. Flow state: <span className={modifyFlowState === 'builder' ? 'text-green-400' : 'text-zinc-600'}>{modifyFlowState}</span></div>
+              <div>6. Render granted: <span className={shouldRenderModifyBuilder ? 'text-green-400' : 'text-red-400'}>{shouldRenderModifyBuilder ? 'YES' : 'NO'}</span></div>
               {modifyClickAudit.failureStage && (
                 <div className="col-span-2 text-red-400">Error: {modifyClickAudit.failureStage} - {modifyClickAudit.failureMessage?.slice(0, 50)}</div>
               )}

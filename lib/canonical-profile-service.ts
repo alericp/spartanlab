@@ -587,294 +587,32 @@ export function reconcileCanonicalProfile(): CanonicalProgrammingProfile {
       }
       // If neither has it, default to true (adaptive workload enabled by default)
       
-      // Step 4: Log the resolution with full forensics
-      // [PHASE 29C] All variables are now declared above - safe to log
-      console.log('[phase28d-canonical-schedule-resolution]', {
-        // Source values
-        onboardingScheduleMode: onboardingProfile?.scheduleMode ?? null,
-        onboardingTrainingDays: onboardingProfile?.trainingDaysPerWeek ?? null,
-        athleteScheduleMode: athleteProfile?.scheduleMode ?? null,
-        athleteTrainingDays: athleteProfile?.trainingDaysPerWeek ?? null,
-        // Explicit flags
-        onboardingExplicitFlexible,
-        onboardingExplicitStatic,
-        athleteExplicitFlexible,
-        athleteExplicitStatic,
-        // Timestamp info
-        timestampsUsed: timestampsAvailable,
-        athleteIsNewer: timestampsAvailable ? athleteIsNewer : null,
-        // Resolution
-        winnerSource,
-        resolvedScheduleMode,
-        resolvedTrainingDaysPerWeek: resolvedTrainingDays,
-        // Verdict
-        verdict: verdictReason,
-      })
-      
       // ==========================================================================
-      // [PHASE 29B] CANONICAL SCHEDULE WINNER LOG - Task 3
-      // Proves exactly which source won and detects if static 6 was dropped
+      // [schedule-final-real-sources] THE SINGLE AUTHORITATIVE LOG
+      // Proves exactly what each source contains and what canonical resolved to
       // ==========================================================================
-      console.log('[phase29b-canonical-schedule-winner]', {
-        // Raw source values
-        'onboarding.scheduleMode': onboardingProfile?.scheduleMode ?? null,
-        'onboarding.trainingDays': onboardingProfile?.trainingDaysPerWeek ?? null,
-        'athlete.scheduleMode': athleteProfile?.scheduleMode ?? null,
-        'athlete.trainingDays': athleteProfile?.trainingDaysPerWeek ?? null,
-        // Explicit flags
-        athleteExplicitStatic,
-        onboardingExplicitFlexible,
-        // Timestamps (if available)
-        timestampsAvailable,
-        athleteIsNewer: timestampsAvailable ? athleteIsNewer : null,
-        // Resolution result
-        winnerSource,
-        'resolved.scheduleMode': resolvedScheduleMode,
-        'resolved.trainingDays': resolvedTrainingDays,
-        'resolved.adaptiveWorkload': resolvedAdaptiveWorkload,
-        // Verdict
-        verdict: (() => {
-          if (athleteExplicitStatic && athleteProfile?.trainingDaysPerWeek === 6) {
-            if (resolvedScheduleMode === 'static' && resolvedTrainingDays === 6) {
-              return 'ATHLETE_STATIC_6_WINS'
-            }
-            return 'BUG_ATHLETE_STATIC_6_DROPPED'
-          }
-          if (onboardingExplicitFlexible && resolvedScheduleMode === 'flexible') {
-            return 'ONBOARDING_FLEXIBLE_WINS_WITH_VALID_REASON'
-          }
-          if (resolvedScheduleMode === 'flexible' && athleteProfile?.scheduleMode === 'flexible') {
-            return 'ATHLETE_FLEXIBLE_RETAINED'
-          }
-          return winnerSource === 'athlete' ? 'ATHLETE_WINS' : 'ONBOARDING_WINS'
-        })(),
-      })
-      
-      // ==========================================================================
-      // [PHASE 28L] CANONICAL SCHEDULE SOURCE WINNER LOG
-      // Proves exactly which source won and detects if static was dropped
-      // ==========================================================================
-      console.log('[phase28l-canonical-schedule-source-winner]', {
-        onboardingScheduleMode: onboardingProfile?.scheduleMode ?? null,
-        onboardingTrainingDays: onboardingProfile?.trainingDaysPerWeek ?? null,
-        athleteScheduleMode: athleteProfile?.scheduleMode ?? null,
-        athleteTrainingDays: athleteProfile?.trainingDaysPerWeek ?? null,
-        canonicalAfterResolution: { scheduleMode: resolvedScheduleMode, trainingDaysPerWeek: resolvedTrainingDays },
-        winnerSource,
-        winnerReason: verdictReason,
-        // BUG DETECTION
-        verdict: (() => {
-          // Detect if athlete had static 6 but we resolved to something else
-          if (athleteExplicitStatic && athleteProfile?.trainingDaysPerWeek === 6) {
-            if (resolvedScheduleMode === 'static' && resolvedTrainingDays === 6) {
-              return 'ATHLETE_STATIC_6_WINS'
-            } else {
-              return 'BUG_ATHLETE_STATIC_6_WAS_DROPPED'
-            }
-          }
-          // Detect if onboarding had static 6 but we resolved to something else
-          if (onboardingExplicitStatic && onboardingProfile?.trainingDaysPerWeek === 6) {
-            if (resolvedScheduleMode === 'static' && resolvedTrainingDays === 6) {
-              return 'ONBOARD_STATIC_6_WINS'
-            } else {
-              return 'BUG_ONBOARD_STATIC_6_WAS_DROPPED'
-            }
-          }
-          // No static 6 existed anywhere
-          if (resolvedScheduleMode === 'flexible') {
-            return 'FLEXIBLE_WON_BECAUSE_NO_EXPLICIT_STATIC'
-          }
-          return `CANON_RETAINED_STATIC_${resolvedTrainingDays}`
-        })(),
-      })
-      
-      // ==========================================================================
-      // [PHASE 29C] CANONICAL SCHEDULE BOOT SAFETY LOG
-      // Proves all schedule variables are computed and boot is safe
-      // This log happens AFTER all variables are declared - guaranteed safe
-      // ==========================================================================
-      console.log('[phase29c-canonical-schedule-boot-safety]', {
-        'onboarding.scheduleMode': onboardingProfile?.scheduleMode ?? null,
-        'athlete.scheduleMode': athleteProfile?.scheduleMode ?? null,
-        'resolved.scheduleMode': resolvedScheduleMode,
-        'resolved.trainingDays': resolvedTrainingDays,
-        'resolved.adaptiveWorkload': resolvedAdaptiveWorkload,
-        verdict: (() => {
-          if (resolvedScheduleMode === 'static' && resolvedTrainingDays === 6) {
-            return 'CANONICAL_BOOT_SAFE_STATIC_6'
-          }
-          if (resolvedScheduleMode === 'flexible') {
-            return 'CANONICAL_BOOT_SAFE_FLEXIBLE'
-          }
-          return 'CANONICAL_BOOT_SAFE'
-        })(),
-      })
-      
-      // ==========================================================================
-      // [PHASE 30E] CANONICAL MODIFY AUTHORITATIVE
-      // THE DEFINITIVE LOG proving canonical resolves athlete static correctly
-      // ==========================================================================
-      console.log('[phase30e-canonical-modify-authoritative]', {
-        athlete_scheduleMode: athleteProfile?.scheduleMode ?? null,
-        athlete_trainingDaysPerWeek: athleteProfile?.trainingDaysPerWeek ?? null,
-        onboarding_scheduleMode: onboardingProfile?.scheduleMode ?? null,
-        onboarding_trainingDaysPerWeek: onboardingProfile?.trainingDaysPerWeek ?? null,
-        resolved_scheduleMode: resolvedScheduleMode,
-        resolved_trainingDaysPerWeek: resolvedTrainingDays,
-        resolved_adaptiveWorkloadEnabled: resolvedAdaptiveWorkload,
-        verdictReason,
-        verdict:
-          resolvedScheduleMode === 'static' && resolvedTrainingDays === 6
-            ? 'CANONICAL_FOR_MODIFY_STATIC_6'
-            : resolvedScheduleMode === 'flexible'
-            ? 'CANONICAL_FOR_MODIFY_FLEXIBLE'
-            : `CANONICAL_FOR_MODIFY_${resolvedScheduleMode}_${resolvedTrainingDays}`,
-      })
-      
-      // ==========================================================================
-      // [PHASE 30D] CANONICAL FINAL - AUTHORITATIVE BEHAVIOR FIX LOG
-      // THE DEFINITIVE LOG proving canonical schedule resolution with verdicts
-      // ==========================================================================
-      console.log('[phase30d-canonical-final]', {
-        onboarding_scheduleMode: onboardingProfile?.scheduleMode ?? null,
-        onboarding_trainingDaysPerWeek: onboardingProfile?.trainingDaysPerWeek ?? null,
-        athlete_scheduleMode: athleteProfile?.scheduleMode ?? null,
-        athlete_trainingDaysPerWeek: athleteProfile?.trainingDaysPerWeek ?? null,
-        athlete_adaptiveWorkloadEnabled: (athleteProfile as { adaptiveWorkloadEnabled?: boolean })?.adaptiveWorkloadEnabled ?? null,
-        resolved_scheduleMode: resolvedScheduleMode,
-        resolved_trainingDaysPerWeek: resolvedTrainingDays,
-        resolved_adaptiveWorkloadEnabled: resolvedAdaptiveWorkload,
-        verdict:
-          resolvedScheduleMode === 'static' && resolvedTrainingDays === 6
-            ? 'CANONICAL_STATIC_6'
-            : resolvedScheduleMode === 'flexible'
-            ? 'CANONICAL_FLEXIBLE'
-            : `CANONICAL_${resolvedScheduleMode}_${resolvedTrainingDays}`,
-      })
-      
-      // ==========================================================================
-      // [PHASE 30C] CANONICAL RESOLUTION FINAL
-      // THE DEFINITIVE LOG proving canonical schedule resolution with verdicts
-      // ==========================================================================
-      console.log('[phase30c-canonical-resolution-final]', {
-        onboarding_scheduleMode: onboardingProfile?.scheduleMode ?? null,
-        onboarding_trainingDaysPerWeek: onboardingProfile?.trainingDaysPerWeek ?? null,
-        onboarding_adaptiveWorkloadEnabled: (onboardingProfile as { adaptiveWorkloadEnabled?: boolean })?.adaptiveWorkloadEnabled ?? null,
-        athlete_scheduleMode: athleteProfile?.scheduleMode ?? null,
-        athlete_trainingDaysPerWeek: athleteProfile?.trainingDaysPerWeek ?? null,
-        athlete_adaptiveWorkloadEnabled: (athleteProfile as { adaptiveWorkloadEnabled?: boolean })?.adaptiveWorkloadEnabled ?? null,
-        resolved_scheduleMode: resolvedScheduleMode,
-        resolved_trainingDaysPerWeek: resolvedTrainingDays,
-        resolved_adaptiveWorkloadEnabled: resolvedAdaptiveWorkload,
-        verdict:
-          resolvedScheduleMode === 'static' && resolvedTrainingDays === 6
-            ? 'CANONICAL_STATIC_6'
-            : resolvedScheduleMode === 'flexible'
-            ? 'CANONICAL_FLEXIBLE'
-            : `CANONICAL_${resolvedScheduleMode}_${resolvedTrainingDays}`,
-      })
-      
-      // ==========================================================================
-      // [PHASE 30B] CANONICAL SCHEDULE RESOLUTION FINAL
-      // THE DEFINITIVE LOG proving canonical schedule resolution with verdicts
-      // ==========================================================================
-      console.log('[phase30b-canonical-schedule-resolution-final]', {
-        onboarding_scheduleMode: onboardingProfile?.scheduleMode ?? null,
-        onboarding_trainingDaysPerWeek: onboardingProfile?.trainingDaysPerWeek ?? null,
-        athlete_scheduleMode: athleteProfile?.scheduleMode ?? null,
-        athlete_trainingDaysPerWeek: athleteProfile?.trainingDaysPerWeek ?? null,
-        athlete_adaptiveWorkloadEnabled: (athleteProfile as { adaptiveWorkloadEnabled?: boolean })?.adaptiveWorkloadEnabled ?? null,
-        resolved_scheduleMode: resolvedScheduleMode,
-        resolved_trainingDaysPerWeek: resolvedTrainingDays,
-        resolved_adaptiveWorkloadEnabled: resolvedAdaptiveWorkload,
-        verdict:
-          resolvedScheduleMode === 'static' && resolvedTrainingDays === 6
-            ? 'CANONICAL_STATIC_6'
-            : resolvedScheduleMode === 'flexible'
-            ? 'CANONICAL_FLEXIBLE'
-            : `CANONICAL_STATIC_${resolvedTrainingDays}`,
-      })
-      
-      // ==========================================================================
-      // [PHASE 30A] CANONICAL FINAL SCHEDULE RESOLUTION - AUTHORITATIVE
-      // THE DEFINITIVE LOG proving canonical schedule resolution
-      // ==========================================================================
-      console.log('[phase30a-canonical-final-schedule-resolution]', {
-        onboarding_scheduleMode: onboardingProfile?.scheduleMode ?? null,
-        onboarding_trainingDaysPerWeek: onboardingProfile?.trainingDaysPerWeek ?? null,
-        athlete_scheduleMode: athleteProfile?.scheduleMode ?? null,
-        athlete_trainingDaysPerWeek: athleteProfile?.trainingDaysPerWeek ?? null,
-        athlete_adaptiveWorkloadEnabled: (athleteProfile as { adaptiveWorkloadEnabled?: boolean })?.adaptiveWorkloadEnabled ?? null,
-        resolved_scheduleMode: resolvedScheduleMode,
-        resolved_trainingDaysPerWeek: resolvedTrainingDays,
-        resolved_adaptiveWorkloadEnabled: resolvedAdaptiveWorkload,
-        precedenceWinner: winnerSource,
-        precedenceReason: verdictReason,
-        verdict:
-          resolvedScheduleMode === 'static' && resolvedTrainingDays === 6
-            ? 'CANONICAL_RESOLVED_STATIC_6'
-            : resolvedScheduleMode === 'flexible'
-            ? 'CANONICAL_RESOLVED_FLEXIBLE'
-            : `CANONICAL_RESOLVED_STATIC_${resolvedTrainingDays}`,
-      })
-      
-      // ==========================================================================
-      // [PHASE 29D] CANONICAL RESOLUTION FINAL - THE DEFINITIVE SCHEDULE ANSWER
-      // This is what ALL downstream consumers (modify, prefill, form, builder) MUST use
-      // ==========================================================================
-      console.log('[phase29d-canonical-resolution-final]', {
-        onboardingScheduleMode: onboardingProfile?.scheduleMode ?? null,
-        onboardingTrainingDays: onboardingProfile?.trainingDaysPerWeek ?? null,
-        athleteScheduleMode: athleteProfile?.scheduleMode ?? null,
-        athleteTrainingDays: athleteProfile?.trainingDaysPerWeek ?? null,
-        resolvedScheduleMode,
-        resolvedTrainingDays,
-        resolvedAdaptiveWorkload,
-        precedenceWinner: winnerSource,
-        verdict: resolvedScheduleMode === 'static' && resolvedTrainingDays === 6
-          ? 'STATIC_6_RESOLVED'
-          : resolvedScheduleMode === 'static'
-            ? `STATIC_${resolvedTrainingDays}_RESOLVED`
-            : 'FLEXIBLE_RESOLVED',
-      })
-      
-      // [PHASE 29A] Log the schedule contract resolution
-      console.log('[phase29a-canonical-schedule-contract-resolution]', {
-        // Raw source values
-        onboardingScheduleMode: onboardingProfile?.scheduleMode ?? null,
-        onboardingTrainingDays: onboardingProfile?.trainingDaysPerWeek ?? null,
-        onboardingAdaptiveWorkload: onboardingAdaptive ?? null,
-        athleteScheduleMode: athleteProfile?.scheduleMode ?? null,
-        athleteTrainingDays: athleteProfile?.trainingDaysPerWeek ?? null,
-        athleteAdaptiveWorkload: athleteAdaptive ?? null,
-        // Resolved values
-        baselineScheduleModeResolved: resolvedScheduleMode,
-        baselineTrainingDaysResolved: resolvedTrainingDays,
-        adaptiveWorkloadEnabledResolved: resolvedAdaptiveWorkload,
-        // Legacy mapping (what old code would have interpreted)
-        legacyMappedScheduleMode: resolvedScheduleMode,
-        // Verdict
-        verdict: (() => {
-          if (resolvedScheduleMode === 'static' && resolvedTrainingDays && resolvedAdaptiveWorkload) {
-            return 'STATIC_BASELINE_WITH_ADAPTIVE_WORKLOAD_PRESERVED'
-          }
-          if (resolvedScheduleMode === 'flexible' && resolvedAdaptiveWorkload) {
-            return 'FLEXIBLE_BASELINE_RETAINED'
-          }
-          if (resolvedScheduleMode === 'static' && !resolvedAdaptiveWorkload) {
-            return 'LEGACY_STATIC_RETAINED'
-          }
-          return 'UNKNOWN_SCHEDULE_CONTRACT_STATE'
-        })(),
-      })
-      
-      // [schedule-final-real-sources] Concise log proving canonical resolution
       console.log('[schedule-final-real-sources]', {
-        onboarding: onboardingProfile?.scheduleMode ?? null,
-        athlete: athleteProfile?.scheduleMode ?? null,
-        canonical: resolvedScheduleMode,
-        days: resolvedTrainingDays,
+        onboarding: {
+          scheduleMode: onboardingProfile?.scheduleMode ?? null,
+          trainingDaysPerWeek: onboardingProfile?.trainingDaysPerWeek ?? null,
+        },
+        athlete: {
+          scheduleMode: athleteProfile?.scheduleMode ?? null,
+          trainingDaysPerWeek: athleteProfile?.trainingDaysPerWeek ?? null,
+        },
+        resolved: {
+          scheduleMode: resolvedScheduleMode,
+          trainingDaysPerWeek: resolvedTrainingDays,
+          adaptiveWorkloadEnabled: resolvedAdaptiveWorkload,
+        },
         winner: winnerSource,
+        reason: verdictReason,
+        verdict:
+          resolvedScheduleMode === 'static' && resolvedTrainingDays === 6
+            ? 'STATIC_6'
+            : resolvedScheduleMode === 'flexible'
+            ? 'FLEXIBLE'
+            : `STATIC_${resolvedTrainingDays}`,
       })
       
       return {

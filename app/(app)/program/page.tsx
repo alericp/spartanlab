@@ -18,12 +18,17 @@
 // This allows us to verify the live app is running the expected code version
 // ==========================================================================
 export const PHASE27C_BUILD_IDENTITY = {
-  buildIdentityName: 'TRY_BLOCK_INDENTATION_FIX',
-  buildIdentityVersion: '2024-INDENT-FIX-v1',
+  buildIdentityName: 'FIVE_STEP_CORRIDOR_TRACE',
+  buildIdentityVersion: '2024-CORRIDOR-v1',
   buildTimestamp: new Date().toISOString(),
-  rootCauseFix: 'LAUNCHER_CODE_WAS_OUTSIDE_TRY_BLOCK_DUE_TO_INDENTATION_ERROR',
-  modifyBuilderVariant: 'SINGLE_STATE_AUTHORITY',
-  modifyPipeline: 'CANONICAL_LAUNCHER_WITH_PROPER_TRY_CATCH',
+  modifyPipeline: 'CANONICAL_LAUNCHER_WITH_5_STEP_TRACE',
+  traceSteps: [
+    'modify-step-1-launcher-enter',
+    'modify-step-2-entry-build-result',
+    'modify-step-3-input-conversion-result',
+    'modify-step-4-before-commit',
+    'modify-step-5-state-observed',
+  ],
 } as const
 
 import { useState, useEffect, useCallback, useMemo, useRef, type ReactNode } from 'react'
@@ -545,18 +550,9 @@ export default function ProgramPage() {
   // 4. Promotes to builder mode
   // ==========================================================================
   useEffect(() => {
-    // Debug: Log every time this effect runs
-    console.log('[v0] promotion-effect-check', {
-      hasEntry: !!modifyBuilderEntry,
-      hasInputs: !!modifyBuilderEntry?.inputs,
-      flowState: modifyFlowState,
-      willPromote: !!(modifyBuilderEntry && modifyBuilderEntry.inputs && modifyFlowState !== 'builder'),
-    })
-    
     // Only promote if entry exists with inputs AND we're not already in builder mode
     if (modifyBuilderEntry && modifyBuilderEntry.inputs && modifyFlowState !== 'builder') {
-      // Concise log when promotion happens
-      console.log('[modify-promotion]', {
+      console.log('[modify-promotion-firing]', {
         sessionKey: modifyBuilderEntry.sessionKey,
         scheduleMode: modifyBuilderEntry.inputs.scheduleMode,
       })
@@ -653,23 +649,16 @@ export default function ProgramPage() {
   // [PHASE 30R] Declaration order safety - log moved to useEffect to avoid render-time issues
   
   // ==========================================================================
-  // [PHASE 25Y] PROVE THE EXACT SUBMIT TRUTH - State change tracking
-  // This useEffect fires ONLY when builderSessionInputs actually changes
+  // STEP 5: STATE OBSERVATION - Fires when modifyBuilderEntry actually changes
   // ==========================================================================
   useEffect(() => {
-    if (builderSessionInputs) {
-      console.log('[phase25y-prove-submit-truth-before-any-more-patches]', {
-        stage: 'BUILDERSESSIONINPUTS_STATE_CHANGED',
-        scheduleMode: builderSessionInputs.scheduleMode,
-        trainingDaysPerWeek: builderSessionInputs.trainingDaysPerWeek,
-        sessionDurationMode: builderSessionInputs.sessionDurationMode,
-        primaryGoal: builderSessionInputs.primaryGoal,
-        verdict: builderSessionInputs.scheduleMode === 'static'
-          ? `SESSION_STATE_IS_STATIC_${builderSessionInputs.trainingDaysPerWeek}_DAYS`
-          : 'SESSION_STATE_IS_FLEXIBLE',
-      })
-    }
-  }, [builderSessionInputs])
+    console.log('[modify-step-5-state-observed]', {
+      hasEntry: modifyBuilderEntry !== null,
+      sessionKey: modifyBuilderEntry?.sessionKey ?? null,
+      scheduleMode: modifyBuilderEntry?.inputs?.scheduleMode ?? null,
+      trainingDaysPerWeek: modifyBuilderEntry?.inputs?.trainingDaysPerWeek ?? null,
+    })
+  }, [modifyBuilderEntry])
   
   // ==========================================================================
   // [PHASE 26] CRITICAL FIX: Use a ref to always have the CURRENT builderSessionInputs
@@ -9018,18 +9007,16 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
     
     try {
       // ==========================================================================
-      // [PHASE 30F] STAGE: entry
-      // [PHASE 30G] STEP 3: Prove the canonical launcher is actually entered
+      // STEP 1: LAUNCHER ENTRY
       // ==========================================================================
+      console.log('[modify-step-1-launcher-enter]', { programId: program?.id ?? null })
+      
       setModifyClickAudit(prev => ({
         ...prev,
         canonicalLauncherEntered: true,
         failureStage: null,
         failureMessage: null,
       }))
-      
-      // Minimal launcher log - just confirms entry
-      console.log('[modify-launcher-entered]', { programId: program?.id ?? null })
     
       // ==========================================================================
       // [PHASE 25] TASK 1: Get canonical truth for prefill
@@ -9064,7 +9051,17 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
         sessionLength: canonicalProfileNow.sessionLengthMinutes ?? undefined,
       })
       
-      // Controlled failure if entry build fails
+      // ==========================================================================
+      // STEP 2: ENTRY BUILD RESULT
+      // ==========================================================================
+      console.log('[modify-step-2-entry-build-result]', {
+        success: entryResult.success,
+        hasEntry: !!entryResult.entry,
+        error: entryResult.error?.message ?? null,
+        inputScheduleMode: canonicalProfileNow.scheduleMode,
+        inputTrainingDays: canonicalProfileNow.trainingDaysPerWeek,
+      })
+      
       if (!entryResult.success || !entryResult.entry) {
         throw new Error(`Entry build failed: ${entryResult.error?.message ?? 'Unknown error'}`)
       }
@@ -9072,7 +9069,16 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
       stage = 'convert_entry_to_inputs'
       const freshInputs = entryToAdaptiveInputs(entryResult.entry)
       
-      // [PHASE 30F] Controlled failure if input conversion fails
+      // ==========================================================================
+      // STEP 3: INPUT CONVERSION RESULT
+      // ==========================================================================
+      console.log('[modify-step-3-input-conversion-result]', {
+        hasFreshInputs: !!freshInputs,
+        scheduleMode: freshInputs?.scheduleMode ?? null,
+        trainingDaysPerWeek: freshInputs?.trainingDaysPerWeek ?? null,
+        skillsCount: freshInputs?.selectedSkills?.length ?? 0,
+      })
+      
       if (!freshInputs) {
         throw new Error('Input conversion returned null/undefined')
       }
@@ -9086,10 +9092,18 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
         inputs: freshInputs,
       }
       
-      // Commit entry
-      console.log('[v0] launcher-about-to-commit', { sessionKey: newSessionKey, hasInputs: !!modifyEntry.inputs })
+      // ==========================================================================
+      // STEP 4: BEFORE COMMIT
+      // ==========================================================================
+      console.log('[modify-step-4-before-commit]', {
+        sessionKey: newSessionKey,
+        source: modifyEntry.source,
+        hasInputs: !!modifyEntry.inputs,
+        scheduleMode: modifyEntry.inputs?.scheduleMode,
+        trainingDaysPerWeek: modifyEntry.inputs?.trainingDaysPerWeek,
+      })
+      
       const commitSuccess = commitModifyEntryAtomically(modifyEntry)
-      console.log('[v0] launcher-commit-result', { commitSuccess })
       
       if (!commitSuccess) {
         throw new Error('Atomic entry commit failed - entry was invalid')

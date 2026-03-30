@@ -545,6 +545,14 @@ export default function ProgramPage() {
   // 4. Promotes to builder mode
   // ==========================================================================
   useEffect(() => {
+    // Debug: Log every time this effect runs
+    console.log('[v0] promotion-effect-check', {
+      hasEntry: !!modifyBuilderEntry,
+      hasInputs: !!modifyBuilderEntry?.inputs,
+      flowState: modifyFlowState,
+      willPromote: !!(modifyBuilderEntry && modifyBuilderEntry.inputs && modifyFlowState !== 'builder'),
+    })
+    
     // Only promote if entry exists with inputs AND we're not already in builder mode
     if (modifyBuilderEntry && modifyBuilderEntry.inputs && modifyFlowState !== 'builder') {
       // Concise log when promotion happens
@@ -9078,8 +9086,10 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
         inputs: freshInputs,
       }
       
-      // Commit entry (logs [modify-final-launch-commit] internally)
+      // Commit entry
+      console.log('[v0] launcher-about-to-commit', { sessionKey: newSessionKey, hasInputs: !!modifyEntry.inputs })
       const commitSuccess = commitModifyEntryAtomically(modifyEntry)
+      console.log('[v0] launcher-commit-result', { commitSuccess })
       
       if (!commitSuccess) {
         throw new Error('Atomic entry commit failed - entry was invalid')

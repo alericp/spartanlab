@@ -406,6 +406,20 @@ export async function generateFirstProgram(
     // Import canonical entry builder
     const { buildCanonicalGenerationEntry, entryToAdaptiveInputs } = require('./canonical-profile-service')
     
+    // ==========================================================================
+    // [UNIFIED PROGRAM TRUTH CONTRACT] This is the ONBOARDING_BUILD flow
+    // - Creates first program
+    // - No archive needed
+    // - Uses fresh canonical truth with NO overrides
+    // ==========================================================================
+    console.log('[program-truth-contract-onboarding]', {
+      flowIntent: 'onboarding_build',
+      isFirstProgram: true,
+      willArchiveOldProgram: false,
+      usesCanonicalTruthOnly: true,
+      noOverrides: true,
+    })
+    
     // [PHASE 16F] Import success
     console.log('[phase16f-generation-stage-audit]', {
       stage: 'canonical_entry_builder_imported',

@@ -59,6 +59,16 @@ export interface FlexibleFrequencyInput {
   sessionMinutes?: number
   trainingStyle?: string
   weekNumber?: number
+  trainingDaysPerWeek?: number | 'flexible'  // For audit purposes
+  
+  // ==========================================================================
+  // [ADAPTIVE BASELINE FIX] Content/Complexity Demand Fields
+  // These enable richer baseline when onboarding truth justifies it
+  // ==========================================================================
+  selectedSkills?: string[]           // All skills selected by user
+  secondaryGoals?: string[]           // Additional goals beyond primary
+  sessionDurationMode?: 'fixed' | 'adaptive'  // Adaptive duration = more flexibility
+  trainingStyles?: string[]           // Multiple training preferences
 }
 
 // =============================================================================
@@ -80,6 +90,7 @@ export type FlexibleFrequencyReasonCategory =
   | 'static_contamination'         // Flexible mode but static value leaked through
   | 'fallback_frequency'           // Could not resolve, used emergency fallback
   | 'experience_modifier_applied'  // Adjusted based on experience level
+  | 'complexity_demand_elevation'  // [ADAPTIVE BASELINE FIX] Elevated due to broad content demand
 
 /**
  * [TASK 1] Root-cause audit for flexible frequency resolution.
@@ -103,6 +114,13 @@ export interface FlexibleFrequencyRootCauseAudit {
   jointCautionPenalty: number
   recoveryScore: number | null
   recentWorkoutCount: number | null
+  
+  // [ADAPTIVE BASELINE FIX] Content complexity scoring
+  complexityScore: number | null        // 0-10 scale
+  complexityElevation: number           // How many days elevated due to complexity
+  selectedSkillsCount: number
+  hasPushAndPullSkills: boolean
+  hasAdaptiveSessionDuration: boolean
   
   // Resolution trace
   preAdjustmentFrequency: number
@@ -193,6 +211,131 @@ const EXPERIENCE_MODIFIERS: Record<ExperienceLevel, { freqMod: number; canGoHigh
 const HIGH_TENDON_GOALS: PrimaryGoal[] = ['planche', 'front_lever', 'back_lever', 'muscle_up']
 
 // =============================================================================
+// [ADAPTIVE BASELINE FIX] CONTENT COMPLEXITY SCORER
+// Determines whether onboarding breadth justifies richer baseline frequency
+// =============================================================================
+
+// Skill family classification for push/pull breadth detection
+const PUSH_SKILLS = ['planche', 'handstand', 'weighted_dip', 'push_up_progressions']
+const PULL_SKILLS = ['front_lever', 'back_lever', 'muscle_up', 'weighted_pull', 'pull_up_progressions']
+const CORE_SKILLS = ['l_sit', 'dragon_flag', 'ab_wheel']
+const FLEXIBILITY_SKILLS = ['flexibility', 'mobility', 'pike', 'pancake', 'bridge']
+
+/**
+ * [ADAPTIVE BASELINE FIX] Calculate content complexity score
+ * 
+ * This score determines how much weekly structure is required to express
+ * the user's stated onboarding truth well.
+ * 
+ * Score ranges:
+ * - 0-3: Simple (4 sessions baseline)
+ * - 4-6: Moderate (5 sessions baseline)  
+ * - 7-10: Complex (6 sessions baseline)
+ * 
+ * Does NOT automatically force 6 days - produces justified baseline band.
+ */
+export interface ContentComplexityResult {
+  score: number              // 0-10 scale
+  baselineElevation: number  // 0, 1, or 2 (days to add to goal typical)
+  hasPushAndPull: boolean
+  hasMultipleFamilies: boolean
+  skillsCount: number
+  rationale: string
+}
+
+export function calculateContentComplexity(input: FlexibleFrequencyInput): ContentComplexityResult {
+  let score = 0
+  const rationale: string[] = []
+  
+  const skills = input.selectedSkills || []
+  const skillsCount = skills.length
+  
+  // Factor 1: Number of selected skills (0-3 points)
+  if (skillsCount >= 5) {
+    score += 3
+    rationale.push(`5+ skills selected (+3)`)
+  } else if (skillsCount >= 3) {
+    score += 2
+    rationale.push(`3-4 skills selected (+2)`)
+  } else if (skillsCount >= 2) {
+    score += 1
+    rationale.push(`2 skills selected (+1)`)
+  }
+  
+  // Factor 2: Push + Pull family breadth (0-2 points)
+  const hasPush = skills.some(s => PUSH_SKILLS.includes(s.toLowerCase()))
+  const hasPull = skills.some(s => PULL_SKILLS.includes(s.toLowerCase()))
+  const hasCore = skills.some(s => CORE_SKILLS.includes(s.toLowerCase()))
+  const hasFlexibility = skills.some(s => FLEXIBILITY_SKILLS.includes(s.toLowerCase()))
+  
+  const hasPushAndPull = hasPush && hasPull
+  const familyCount = [hasPush, hasPull, hasCore, hasFlexibility].filter(Boolean).length
+  
+  if (hasPushAndPull) {
+    score += 2
+    rationale.push(`Push + Pull families (+2)`)
+  }
+  if (familyCount >= 3) {
+    score += 1
+    rationale.push(`3+ movement families (+1)`)
+  }
+  
+  // Factor 3: Experience level (0-2 points)
+  if (input.experienceLevel === 'advanced') {
+    score += 2
+    rationale.push(`Advanced athlete (+2)`)
+  } else if (input.experienceLevel === 'intermediate') {
+    score += 1
+    rationale.push(`Intermediate athlete (+1)`)
+  }
+  
+  // Factor 4: Adaptive session duration (0-1 point)
+  // Adaptive duration means more flexibility to express content
+  if (input.sessionDurationMode === 'adaptive') {
+    score += 1
+    rationale.push(`Adaptive session duration (+1)`)
+  }
+  
+  // Factor 5: Multiple training styles (0-1 point)
+  const trainingStyles = input.trainingStyles || []
+  if (trainingStyles.length >= 2) {
+    score += 1
+    rationale.push(`Multiple training styles (+1)`)
+  }
+  
+  // Cap score at 10
+  score = Math.min(10, score)
+  
+  // Calculate baseline elevation based on score bands
+  let baselineElevation = 0
+  if (score >= 7) {
+    baselineElevation = 2  // High complexity: +2 days
+  } else if (score >= 4) {
+    baselineElevation = 1  // Moderate complexity: +1 day
+  }
+  
+  console.log('[complexity-score]', {
+    score,
+    baselineElevation,
+    skillsCount,
+    hasPushAndPull,
+    familyCount,
+    experienceLevel: input.experienceLevel,
+    sessionDurationMode: input.sessionDurationMode,
+    rationale: rationale.join(' | '),
+  })
+  
+  return {
+    score,
+    baselineElevation,
+    hasPushAndPull,
+    hasMultipleFamilies: familyCount >= 2,
+    skillsCount,
+    rationale: rationale.join(' | '),
+  }
+}
+
+// =============================================================================
 // CORE FREQUENCY RESOLVER
 // =============================================================================
 
@@ -235,6 +378,28 @@ export function resolveFlexibleFrequency(input: FlexibleFrequencyInput): Flexibl
   
   if (expMod.freqMod !== 0) {
     reasonCategory = 'experience_modifier_applied'
+  }
+  
+  // ==========================================================================
+  // [ADAPTIVE BASELINE FIX] CONTENT COMPLEXITY ELEVATION
+  // Broad onboarding demands can justify richer baseline BEFORE any penalties
+  // ==========================================================================
+  const complexityResult = calculateContentComplexity(input)
+  let complexityElevation = 0
+  
+  if (complexityResult.baselineElevation > 0) {
+    const beforeComplexity = typicalDays
+    complexityElevation = complexityResult.baselineElevation
+    typicalDays = Math.min(6, typicalDays + complexityElevation)
+    maxDays = Math.min(6, Math.max(maxDays, typicalDays + 1))
+    modificationSteps.push(`Complexity elevation: +${complexityElevation} (score: ${complexityResult.score}) (${beforeComplexity} -> ${typicalDays})`)
+    reasonCategory = 'complexity_demand_elevation'
+    console.log('[flex-frequency] Complexity elevation applied:', {
+      score: complexityResult.score,
+      elevation: complexityElevation,
+      newTypical: typicalDays,
+      rationale: complexityResult.rationale,
+    })
   }
   
   // [TASK 1] Track joint caution penalty
@@ -338,7 +503,7 @@ export function resolveFlexibleFrequency(input: FlexibleFrequencyInput): Flexibl
   const rootCauseAudit: FlexibleFrequencyRootCauseAudit = {
     canonicalScheduleMode: input.scheduleMode,
     canonicalTrainingDaysPerWeek: input.trainingDaysPerWeek ?? null,
-    canonicalSessionDurationMode: 'adaptive', // flexible always implies adaptive duration
+    canonicalSessionDurationMode: input.sessionDurationMode || 'adaptive',
     requestedScheduleMode: input.scheduleMode,
     requestedTrainingDaysPerWeek: input.trainingDaysPerWeek ?? null,
     goalRangeMin: goalRange.min,
@@ -348,6 +513,12 @@ export function resolveFlexibleFrequency(input: FlexibleFrequencyInput): Flexibl
     jointCautionPenalty,
     recoveryScore,
     recentWorkoutCount: input.recentWorkoutCount ?? null,
+    // [ADAPTIVE BASELINE FIX] Content complexity fields
+    complexityScore: complexityResult.score,
+    complexityElevation,
+    selectedSkillsCount: complexityResult.skillsCount,
+    hasPushAndPullSkills: complexityResult.hasPushAndPull,
+    hasAdaptiveSessionDuration: input.sessionDurationMode === 'adaptive',
     preAdjustmentFrequency: preModificationTypical,
     postAdjustmentFrequency: typicalDays,
     finalFrequency: currentFrequency,

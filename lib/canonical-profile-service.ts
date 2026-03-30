@@ -610,40 +610,28 @@ export function reconcileCanonicalProfile(): CanonicalProgrammingProfile {
       // If neither has it, default to true (adaptive workload enabled by default)
       
       // ==========================================================================
-      // [schedule-final-real-sources] THE SINGLE AUTHORITATIVE LOG
-      // Proves exactly what each source contains and what canonical resolved to
+      // [PHASE 32A] CANONICAL SCHEDULE RESOLUTION - AUTHORITATIVE SUMMARY
+      // Single concise log showing exact winner and contract verification
       // ==========================================================================
-      // [PHASE 31A] Enhanced logging with implicit static detection
-      // ==========================================================================
-      console.log('[phase31a-schedule-final-real-sources]', {
-        onboarding: {
-          scheduleMode: onboardingProfile?.scheduleMode ?? null,
-          trainingDaysPerWeek: onboardingProfile?.trainingDaysPerWeek ?? null,
-          hasValidNumericDays: onboardingHasValidNumericDays,
-          explicitOrImplicitStatic: onboardingExplicitStatic,
-          explicitFlexible: onboardingExplicitFlexible,
-        },
-        athlete: {
-          scheduleMode: athleteProfile?.scheduleMode ?? null,
-          trainingDaysPerWeek: athleteProfile?.trainingDaysPerWeek ?? null,
-          hasValidNumericDays: athleteHasValidNumericDays,
-          explicitOrImplicitStatic: athleteExplicitStatic,
-          explicitFlexible: athleteExplicitFlexible,
-        },
-        resolved: {
-          scheduleMode: resolvedScheduleMode,
-          trainingDaysPerWeek: resolvedTrainingDays,
-          adaptiveWorkloadEnabled: resolvedAdaptiveWorkload,
-        },
+      console.log('[phase32a-canonical-schedule-contract]', {
         winner: winnerSource,
         reason: verdictReason,
-        verdict:
-          resolvedScheduleMode === 'static' && resolvedTrainingDays === 6
-            ? 'STATIC_6'
-            : resolvedScheduleMode === 'flexible'
+        result: { mode: resolvedScheduleMode, days: resolvedTrainingDays },
+        athlete: { 
+          mode: athleteProfile?.scheduleMode ?? null, 
+          days: athleteProfile?.trainingDaysPerWeek ?? null,
+          static: athleteExplicitStatic,
+        },
+        onboarding: { 
+          mode: onboardingProfile?.scheduleMode ?? null, 
+          days: onboardingProfile?.trainingDaysPerWeek ?? null,
+          static: onboardingExplicitStatic,
+        },
+        verdict: resolvedScheduleMode === 'static' && resolvedTrainingDays === 6
+          ? 'STATIC_6'
+          : resolvedScheduleMode === 'flexible'
             ? 'FLEXIBLE'
             : `STATIC_${resolvedTrainingDays}`,
-        phase31aFix: 'implicit_static_detection_enabled',
       })
       
       return {

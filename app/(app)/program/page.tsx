@@ -18,16 +18,17 @@
 // This allows us to verify the live app is running the expected code version
 // ==========================================================================
 export const PHASE27C_BUILD_IDENTITY = {
-  buildIdentityName: 'CORRIDOR_HARDENING_WITH_UI_TRUTH',
-  buildIdentityVersion: '2024-CORRIDOR-HARDENED-v1',
+  buildIdentityName: 'PROMOTION_CORRIDOR_FINALIZATION',
+  buildIdentityVersion: '2024-7STEP-PROMOTION-v1',
   buildTimestamp: new Date().toISOString(),
-  modifyPipeline: 'CANONICAL_5_STEP_WITH_UI_AUDIT',
+  modifyPipeline: 'CANONICAL_7_STEP_WITH_2_PHASE_PROMOTION',
   features: [
-    'Full 5-step audit state tracking',
-    'Per-step success/failure/error fields',
-    'UI-visible failure messages (no console-only truth)',
-    'Granular verdicts per failure stage',
-    'Step 5 observation via useEffect on modifyBuilderEntry',
+    'Full 7-step audit tracking (5 launcher + promotion + render)',
+    '2-phase promotion: core (blocking) + truth panel (non-blocking)',
+    'Try/catch wrapped promotion with explicit failure capture',
+    'Step 7 render granted tracking via useEffect',
+    'Truth panel seeding cannot block builder opening',
+    'Per-step success/failure/error UI display',
   ],
 } as const
 
@@ -493,8 +494,9 @@ export default function ProgramPage() {
   // This MUST be declared BEFORE any effect that references it in body or dependency array
   // ==========================================================================
   // ==========================================================================
-  // [CORRIDOR-AUDIT] 5-STEP MODIFY PIPELINE TRACKING
+  // [CORRIDOR-AUDIT] 7-STEP MODIFY PIPELINE TRACKING
   // Tracks exact progress through the canonical Modify open corridor
+  // Steps 1-5: Launcher corridor, Step 6: Promotion, Step 7: Render
   // ==========================================================================
   const [modifyClickAudit, setModifyClickAudit] = useState<{
     clickFiredAt: string | null
@@ -516,8 +518,14 @@ export default function ProgramPage() {
     // Step 5: State observed
     step5StateObserved: boolean
     step5ObservedSessionKey: string | null
+    // Step 6: Promotion
+    step6PromotionStarted: boolean
+    step6PromotionCoreSucceeded: boolean
+    step6PromotionError: string | null
+    // Step 7: Render granted (computed, but tracked for UI)
+    step7RenderGranted: boolean
     // Summary
-    lastSuccessfulStep: 0 | 1 | 2 | 3 | 4 | 5
+    lastSuccessfulStep: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7
     failureStage: string | null
     failureMessage: string | null
     // Legacy compat (for render checks)
@@ -537,6 +545,10 @@ export default function ProgramPage() {
     step4CommitError: null,
     step5StateObserved: false,
     step5ObservedSessionKey: null,
+    step6PromotionStarted: false,
+    step6PromotionCoreSucceeded: false,
+    step6PromotionError: null,
+    step7RenderGranted: false,
     lastSuccessfulStep: 0,
     failureStage: null,
     failureMessage: null,
@@ -572,87 +584,136 @@ export default function ProgramPage() {
   // [ROOT-CAUSE-FIX] Removed mount/unmount tracker - no longer needed for diagnostics
   
   // ==========================================================================
-  // [PHASE 31E] ENTRY PROMOTION EFFECT - THE ONLY PLACE WHERE MODIFY ENTERS BUILDER MODE
-  // This is the SINGLE authoritative promotion path for Modify flow.
-  // The launcher commits ONLY the entry, then THIS effect:
-  // 1. Observes the committed entry state
-  // 2. Seeds all legacy compatibility state
-  // 3. Seeds schedule truth audit
-  // 4. Promotes to builder mode
+  // STEP 6: CORE PROMOTION EFFECT - THE ONLY PLACE WHERE MODIFY ENTERS BUILDER MODE
+  // PHASE 1: Core builder promotion (MUST complete for builder to open)
+  // PHASE 2: Truth panel seeding (non-blocking, runs in separate effect)
   // ==========================================================================
   useEffect(() => {
     // Only promote if entry exists with inputs AND we're not already in builder mode
     if (modifyBuilderEntry && modifyBuilderEntry.inputs && modifyFlowState !== 'builder') {
-      console.log('[modify-promotion-firing]', {
-        sessionKey: modifyBuilderEntry.sessionKey,
-        scheduleMode: modifyBuilderEntry.inputs.scheduleMode,
-      })
       
-      // Mark that atomic entry was committed (for audit strip)
-      setAtomicEntryCommitRequested(true)
-      
-      // Acquire lock FIRST
-      modifyBuilderLockRef.current = true
-      
-      // ==========================================================================
-      // [PHASE 31E] SEED LEGACY COMPATIBILITY STATE FROM COMMITTED ENTRY
-      // ==========================================================================
-      setBuilderSessionInputsAndRef(modifyBuilderEntry.inputs)
-      setBuilderSessionKey(modifyBuilderEntry.sessionKey)
-      setBuilderSessionSource(modifyBuilderEntry.source)
-      setInputs(modifyBuilderEntry.inputs)
-      setBuilderOrigin('default')
-      
-      // ==========================================================================
-      // [FINAL] SEED SCHEDULE TRUTH AUDIT WITH REAL SOURCE VALUES
-      // Read actual onboarding/athlete profiles to show truthful source values
-      // ==========================================================================
-      const entryInputs = modifyBuilderEntry.inputs
-      const realOnboarding = getOnboardingProfileDirect()
-      const realAthlete = getAthleteProfileDirect()
-      
-      setScheduleTruthAudit({
-        // Real source values - NOT placeholder nulls
-        onboardingScheduleMode: realOnboarding?.scheduleMode ?? 'unread',
-        onboardingTrainingDays: typeof realOnboarding?.trainingDaysPerWeek === 'number' 
-          ? realOnboarding.trainingDaysPerWeek : null,
-        athleteScheduleMode: realAthlete?.scheduleMode ?? 'unread',
-        athleteTrainingDays: typeof realAthlete?.trainingDaysPerWeek === 'number'
-          ? realAthlete.trainingDaysPerWeek : null,
-        adaptiveWorkloadEnabled: (entryInputs as { adaptiveWorkloadEnabled?: boolean }).adaptiveWorkloadEnabled ?? true,
-        canonicalScheduleMode: entryInputs.scheduleMode,
-        canonicalTrainingDaysPerWeek: entryInputs.trainingDaysPerWeek,
-        prefillScheduleMode: entryInputs.scheduleMode,
-        prefillTrainingDays: entryInputs.scheduleMode === 'static' 
-          ? (entryInputs.trainingDaysPerWeek as number) : null,
-        lastGeneratedScheduleMode: null,
-        lastGeneratedTrainingDays: null,
-        lastReconciliationDecision: null,
-      })
-      
-      // [modify-final-promotion] Concise log
-      console.log('[modify-final-promotion]', {
-        sessionKey: modifyBuilderEntry.sessionKey,
-        scheduleMode: entryInputs.scheduleMode,
-        trainingDays: entryInputs.trainingDaysPerWeek,
-        onboardingSource: realOnboarding?.scheduleMode ?? 'unread',
-        athleteSource: realAthlete?.scheduleMode ?? 'unread',
-      })
-      
-      // ==========================================================================
-      // [PHASE 31E] PROMOTE TO BUILDER MODE
-      // ==========================================================================
-      setModifyFlowState('builder')
-      setShowAdjustmentModal(false)
-      setShowBuilder(true)
-      
-      // Update audit state
+      // Mark promotion started
       setModifyClickAudit(prev => ({
         ...prev,
-        setShowBuilderRequested: true,
+        step6PromotionStarted: true,
+        step6PromotionError: null,
       }))
+      
+      try {
+        console.log('[modify-step-6-promotion-starting]', {
+          sessionKey: modifyBuilderEntry.sessionKey,
+          scheduleMode: modifyBuilderEntry.inputs.scheduleMode,
+        })
+        
+        // ==========================================================================
+        // PHASE 1A: Pre-promotion validation
+        // ==========================================================================
+        const validationErrors: string[] = []
+        if (!modifyBuilderEntry.sessionKey) validationErrors.push('sessionKey missing')
+        if (!modifyBuilderEntry.source) validationErrors.push('source missing')
+        if (!modifyBuilderEntry.inputs) validationErrors.push('inputs missing')
+        if (!modifyBuilderEntry.inputs?.scheduleMode) validationErrors.push('scheduleMode missing')
+        
+        if (validationErrors.length > 0) {
+          const errorMsg = `Promotion validation failed: ${validationErrors.join(', ')}`
+          setModifyClickAudit(prev => ({
+            ...prev,
+            step6PromotionCoreSucceeded: false,
+            step6PromotionError: errorMsg,
+            failureStage: 'promotion_validation',
+            failureMessage: errorMsg,
+          }))
+          console.error('[modify-step-6-promotion-validation-failed]', errorMsg)
+          return
+        }
+        
+        // ==========================================================================
+        // PHASE 1B: Seed legacy compatibility state (required for builder form)
+        // ==========================================================================
+        setAtomicEntryCommitRequested(true)
+        modifyBuilderLockRef.current = true
+        
+        setBuilderSessionInputsAndRef(modifyBuilderEntry.inputs)
+        setBuilderSessionKey(modifyBuilderEntry.sessionKey)
+        setBuilderSessionSource(modifyBuilderEntry.source)
+        setInputs(modifyBuilderEntry.inputs)
+        setBuilderOrigin('default')
+        
+        // ==========================================================================
+        // PHASE 1C: PROMOTE TO BUILDER MODE (CRITICAL)
+        // ==========================================================================
+        setModifyFlowState('builder')
+        setShowAdjustmentModal(false)
+        setShowBuilder(true)
+        
+        // Mark core promotion succeeded
+        setModifyClickAudit(prev => ({
+          ...prev,
+          step6PromotionCoreSucceeded: true,
+          lastSuccessfulStep: 6,
+        }))
+        
+        console.log('[modify-step-6-promotion-succeeded]', {
+          sessionKey: modifyBuilderEntry.sessionKey,
+          scheduleMode: modifyBuilderEntry.inputs.scheduleMode,
+          trainingDays: modifyBuilderEntry.inputs.trainingDaysPerWeek,
+        })
+        
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : 'Unknown promotion error'
+        console.error('[modify-step-6-promotion-error]', errorMsg)
+        setModifyClickAudit(prev => ({
+          ...prev,
+          step6PromotionCoreSucceeded: false,
+          step6PromotionError: errorMsg,
+          failureStage: 'promotion_core',
+          failureMessage: errorMsg,
+        }))
+        // Do NOT reset modifyBuilderEntry here - leave evidence for debugging
+      }
     }
-  }, [modifyBuilderEntry, modifyFlowState]) // ROOT-CAUSE-FIX: Removed showBuilder - it's an OUTPUT not INPUT
+  }, [modifyBuilderEntry, modifyFlowState])
+  
+  // ==========================================================================
+  // PHASE 2: NON-BLOCKING TRUTH PANEL SEEDING
+  // Runs AFTER builder mode is already granted - failure cannot block builder
+  // ==========================================================================
+  useEffect(() => {
+    if (modifyFlowState === 'builder' && modifyBuilderEntry && modifyBuilderEntry.inputs) {
+      try {
+        const entryInputs = modifyBuilderEntry.inputs
+        const realOnboarding = getOnboardingProfileDirect()
+        const realAthlete = getAthleteProfileDirect()
+        
+        setScheduleTruthAudit({
+          onboardingScheduleMode: realOnboarding?.scheduleMode ?? 'unread',
+          onboardingTrainingDays: typeof realOnboarding?.trainingDaysPerWeek === 'number' 
+            ? realOnboarding.trainingDaysPerWeek : null,
+          athleteScheduleMode: realAthlete?.scheduleMode ?? 'unread',
+          athleteTrainingDays: typeof realAthlete?.trainingDaysPerWeek === 'number'
+            ? realAthlete.trainingDaysPerWeek : null,
+          adaptiveWorkloadEnabled: (entryInputs as { adaptiveWorkloadEnabled?: boolean }).adaptiveWorkloadEnabled ?? true,
+          canonicalScheduleMode: entryInputs.scheduleMode,
+          canonicalTrainingDaysPerWeek: entryInputs.trainingDaysPerWeek,
+          prefillScheduleMode: entryInputs.scheduleMode,
+          prefillTrainingDays: entryInputs.scheduleMode === 'static' 
+            ? (entryInputs.trainingDaysPerWeek as number) : null,
+          lastGeneratedScheduleMode: null,
+          lastGeneratedTrainingDays: null,
+          lastReconciliationDecision: null,
+        })
+        
+        console.log('[modify-truth-panel-seeded]', {
+          onboarding: realOnboarding?.scheduleMode ?? 'unread',
+          athlete: realAthlete?.scheduleMode ?? 'unread',
+          canonical: entryInputs.scheduleMode,
+        })
+      } catch (error) {
+        // Truth panel failure is NON-BLOCKING - builder stays open
+        console.error('[modify-truth-panel-seed-error]', error)
+      }
+    }
+  }, [modifyFlowState, modifyBuilderEntry])
   
   // ==========================================================================
   // [ROOT-CAUSE-FIX] HALF-TRANSITION GUARD - STATE ONLY AUTHORITY
@@ -697,10 +758,40 @@ export default function ProgramPage() {
         ...prev,
         step5StateObserved: true,
         step5ObservedSessionKey: modifyBuilderEntry.sessionKey,
-        lastSuccessfulStep: 5,
+        lastSuccessfulStep: prev.lastSuccessfulStep < 5 ? 5 : prev.lastSuccessfulStep,
       }))
     }
   }, [modifyBuilderEntry])
+  
+  // ==========================================================================
+  // STEP 7: RENDER GRANTED TRACKING
+  // Tracks when shouldRenderModifyBuilder becomes true
+  // ==========================================================================
+  useEffect(() => {
+    const renderGranted = modifyBuilderEntry !== null && 
+                          modifyBuilderEntry.inputs !== null && 
+                          modifyFlowState === 'builder'
+    
+    if (renderGranted) {
+      console.log('[modify-step-7-render-granted]', {
+        sessionKey: modifyBuilderEntry?.sessionKey,
+        flowState: modifyFlowState,
+      })
+      setModifyClickAudit(prev => ({
+        ...prev,
+        step7RenderGranted: true,
+        lastSuccessfulStep: 7,
+        failureStage: null,
+        failureMessage: null,
+      }))
+    } else if (modifyBuilderEntry !== null && modifyFlowState !== 'builder') {
+      // State observed but not yet promoted - update audit to reflect this
+      setModifyClickAudit(prev => ({
+        ...prev,
+        step7RenderGranted: false,
+      }))
+    }
+  }, [modifyBuilderEntry, modifyFlowState])
   
   // ==========================================================================
   // [PHASE 26] CRITICAL FIX: Use a ref to always have the CURRENT builderSessionInputs
@@ -9454,7 +9545,7 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
       event.preventDefault()
     }
     
-    // Reset ALL audit state for this click - clean slate for the 5-step corridor
+    // Reset ALL audit state for this click - clean slate for the 7-step corridor
     const clickTimestamp = new Date().toISOString()
     setModifyClickAudit({
       clickFiredAt: clickTimestamp,
@@ -9471,6 +9562,10 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
       step4CommitError: null,
       step5StateObserved: false,
       step5ObservedSessionKey: null,
+      step6PromotionStarted: false,
+      step6PromotionCoreSucceeded: false,
+      step6PromotionError: null,
+      step7RenderGranted: false,
       lastSuccessfulStep: 0,
       failureStage: null,
       failureMessage: null,
@@ -10500,39 +10595,67 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
                 </span>
                 <span>Step 5: State observed</span>
                 {modifyClickAudit.step5ObservedSessionKey && (
-                  <span className="text-green-400 ml-2">{modifyClickAudit.step5ObservedSessionKey.slice(0, 20)}...</span>
+                  <span className="text-green-400 ml-2 text-[10px]">{modifyClickAudit.step5ObservedSessionKey.slice(0, 15)}...</span>
                 )}
               </div>
               
+              {/* Step 6: Promotion */}
+              <div className="flex items-center gap-2">
+                <span className={
+                  modifyClickAudit.step6PromotionCoreSucceeded ? 'text-green-400' :
+                  modifyClickAudit.step6PromotionError ? 'text-red-400' :
+                  modifyClickAudit.step6PromotionStarted ? 'text-yellow-400' :
+                  'text-zinc-600'
+                }>
+                  {modifyClickAudit.step6PromotionCoreSucceeded ? '✓' :
+                   modifyClickAudit.step6PromotionError ? '✗' :
+                   modifyClickAudit.step6PromotionStarted ? '◐' : '○'}
+                </span>
+                <span>Step 6: Promotion</span>
+                {modifyClickAudit.step6PromotionError && (
+                  <span className="text-red-400 ml-2 text-[10px]">{modifyClickAudit.step6PromotionError.slice(0, 30)}</span>
+                )}
+              </div>
+              
+              {/* Step 7: Render Granted */}
+              <div className="flex items-center gap-2">
+                <span className={modifyClickAudit.step7RenderGranted ? 'text-green-400' : 'text-zinc-600'}>
+                  {modifyClickAudit.step7RenderGranted ? '✓' : '○'}
+                </span>
+                <span>Step 7: Render granted</span>
+              </div>
+              
               {/* Flow State & Render */}
-              <div className="flex items-center gap-2 mt-2 pt-2 border-t border-zinc-700">
+              <div className="flex items-center gap-2 mt-2 pt-2 border-t border-zinc-700 text-[10px]">
                 <span>Flow: <span className={modifyFlowState === 'builder' ? 'text-green-400' : 'text-zinc-400'}>{modifyFlowState}</span></span>
-                <span className="mx-2">|</span>
+                <span className="mx-1">|</span>
                 <span>Render: <span className={shouldRenderModifyBuilder ? 'text-green-400' : 'text-red-400'}>{shouldRenderModifyBuilder ? 'YES' : 'NO'}</span></span>
-                <span className="mx-2">|</span>
-                <span>Last OK: <span className="text-blue-400">{modifyClickAudit.lastSuccessfulStep}</span></span>
+                <span className="mx-1">|</span>
+                <span>Last: <span className="text-blue-400">{modifyClickAudit.lastSuccessfulStep}/7</span></span>
               </div>
             </div>
             
             {/* Verdict */}
             <div className="mt-2 pt-2 border-t border-zinc-700 text-zinc-300">
               Verdict: <span className={
-                shouldRenderModifyBuilder ? 'text-green-400' :
+                modifyClickAudit.step7RenderGranted ? 'text-green-400' :
                 modifyClickAudit.failureStage ? 'text-red-400' :
-                modifyClickAudit.step5StateObserved && modifyFlowState !== 'builder' ? 'text-yellow-400' :
-                modifyClickAudit.step4CommitSucceeded && !modifyClickAudit.step5StateObserved ? 'text-yellow-400' :
+                modifyClickAudit.step6PromotionCoreSucceeded && !modifyClickAudit.step7RenderGranted ? 'text-yellow-400' :
+                modifyClickAudit.step5StateObserved && !modifyClickAudit.step6PromotionStarted ? 'text-yellow-400' :
                 'text-zinc-500'
               }>
                 {(() => {
-                  if (shouldRenderModifyBuilder) return 'RENDER_GRANTED'
+                  if (modifyClickAudit.step7RenderGranted) return 'MODIFY_PIPELINE_READY'
                   if (modifyClickAudit.failureStage) return `FAILED_AT_${modifyClickAudit.failureStage.toUpperCase()}`
-                  if (modifyClickAudit.step5StateObserved && modifyFlowState !== 'builder') return 'STATE_OBSERVED_WAITING_PROMOTION'
-                  if (modifyClickAudit.step4CommitSucceeded && !modifyClickAudit.step5StateObserved) return 'COMMIT_NOT_YET_OBSERVED'
+                  if (modifyClickAudit.step6PromotionCoreSucceeded && !modifyClickAudit.step7RenderGranted) return 'PROMOTION_OK_RENDER_PENDING'
+                  if (modifyClickAudit.step6PromotionStarted && !modifyClickAudit.step6PromotionCoreSucceeded) return 'PROMOTION_IN_PROGRESS'
+                  if (modifyClickAudit.step5StateObserved && !modifyClickAudit.step6PromotionStarted) return 'STATE_OBSERVED_AWAITING_PROMOTION'
+                  if (modifyClickAudit.step4CommitSucceeded && !modifyClickAudit.step5StateObserved) return 'COMMIT_OK_STATE_PENDING'
                   if (modifyClickAudit.step4CommitAttempted && !modifyClickAudit.step4CommitSucceeded) return 'COMMIT_FAILED'
                   if (modifyClickAudit.step3InputConversionStarted && !modifyClickAudit.step3InputConversionSucceeded) return 'INPUT_CONVERSION_FAILED'
                   if (modifyClickAudit.step2EntryBuildStarted && !modifyClickAudit.step2EntryBuildSucceeded) return 'ENTRY_BUILD_FAILED'
                   if (modifyClickAudit.step1LauncherEntered) return 'LAUNCHER_IN_PROGRESS'
-                  if (modifyClickAudit.clickFiredAt) return 'CLICK_FIRED_AWAITING_LAUNCHER'
+                  if (modifyClickAudit.clickFiredAt) return 'CLICK_FIRED'
                   return 'IDLE'
                 })()}
               </span>

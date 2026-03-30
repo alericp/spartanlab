@@ -18,16 +18,16 @@
 // This allows us to verify the live app is running the expected code version
 // ==========================================================================
 export const PHASE27C_BUILD_IDENTITY = {
-  buildIdentityName: 'FIVE_STEP_CORRIDOR_TRACE',
-  buildIdentityVersion: '2024-CORRIDOR-v1',
+  buildIdentityName: 'CORRIDOR_HARDENING_WITH_UI_TRUTH',
+  buildIdentityVersion: '2024-CORRIDOR-HARDENED-v1',
   buildTimestamp: new Date().toISOString(),
-  modifyPipeline: 'CANONICAL_LAUNCHER_WITH_5_STEP_TRACE',
-  traceSteps: [
-    'modify-step-1-launcher-enter',
-    'modify-step-2-entry-build-result',
-    'modify-step-3-input-conversion-result',
-    'modify-step-4-before-commit',
-    'modify-step-5-state-observed',
+  modifyPipeline: 'CANONICAL_5_STEP_WITH_UI_AUDIT',
+  features: [
+    'Full 5-step audit state tracking',
+    'Per-step success/failure/error fields',
+    'UI-visible failure messages (no console-only truth)',
+    'Granular verdicts per failure stage',
+    'Step 5 observation via useEffect on modifyBuilderEntry',
   ],
 } as const
 
@@ -492,24 +492,55 @@ export default function ProgramPage() {
   // [PHASE 31C] MODIFY CLICK AUDIT STATE - MOVED HERE TO PREVENT TDZ ERRORS
   // This MUST be declared BEFORE any effect that references it in body or dependency array
   // ==========================================================================
+  // ==========================================================================
+  // [CORRIDOR-AUDIT] 5-STEP MODIFY PIPELINE TRACKING
+  // Tracks exact progress through the canonical Modify open corridor
+  // ==========================================================================
   const [modifyClickAudit, setModifyClickAudit] = useState<{
     clickFiredAt: string | null
-    handleNewProgramEntered: boolean
-    canonicalLauncherEntered: boolean
-    reachedPreBuilderTransition: boolean
-    setShowBuilderRequested: boolean
-    showBuilderRenderSeen: boolean
+    // Step 1: Launcher entry
+    step1LauncherEntered: boolean
+    // Step 2: Entry build
+    step2EntryBuildStarted: boolean
+    step2EntryBuildSucceeded: boolean
+    step2EntryBuildError: string | null
+    // Step 3: Input conversion
+    step3InputConversionStarted: boolean
+    step3InputConversionSucceeded: boolean
+    step3InputConversionError: string | null
+    // Step 4: Commit
+    step4PreCommitValidated: boolean
+    step4CommitAttempted: boolean
+    step4CommitSucceeded: boolean
+    step4CommitError: string | null
+    // Step 5: State observed
+    step5StateObserved: boolean
+    step5ObservedSessionKey: string | null
+    // Summary
+    lastSuccessfulStep: 0 | 1 | 2 | 3 | 4 | 5
     failureStage: string | null
     failureMessage: string | null
+    // Legacy compat (for render checks)
+    canonicalLauncherEntered: boolean
   }>({
     clickFiredAt: null,
-    handleNewProgramEntered: false,
-    canonicalLauncherEntered: false,
-    reachedPreBuilderTransition: false,
-    setShowBuilderRequested: false,
-    showBuilderRenderSeen: false,
+    step1LauncherEntered: false,
+    step2EntryBuildStarted: false,
+    step2EntryBuildSucceeded: false,
+    step2EntryBuildError: null,
+    step3InputConversionStarted: false,
+    step3InputConversionSucceeded: false,
+    step3InputConversionError: null,
+    step4PreCommitValidated: false,
+    step4CommitAttempted: false,
+    step4CommitSucceeded: false,
+    step4CommitError: null,
+    step5StateObserved: false,
+    step5ObservedSessionKey: null,
+    lastSuccessfulStep: 0,
     failureStage: null,
     failureMessage: null,
+    canonicalLauncherEntered: false,
   })
   
   // ==========================================================================
@@ -650,14 +681,25 @@ export default function ProgramPage() {
   
   // ==========================================================================
   // STEP 5: STATE OBSERVATION - Fires when modifyBuilderEntry actually changes
+  // Updates audit state to prove state was observed by React
   // ==========================================================================
   useEffect(() => {
-    console.log('[modify-step-5-state-observed]', {
-      hasEntry: modifyBuilderEntry !== null,
-      sessionKey: modifyBuilderEntry?.sessionKey ?? null,
-      scheduleMode: modifyBuilderEntry?.inputs?.scheduleMode ?? null,
-      trainingDaysPerWeek: modifyBuilderEntry?.inputs?.trainingDaysPerWeek ?? null,
-    })
+    if (modifyBuilderEntry !== null) {
+      console.log('[modify-step-5-state-observed]', {
+        hasEntry: true,
+        sessionKey: modifyBuilderEntry.sessionKey,
+        scheduleMode: modifyBuilderEntry.inputs?.scheduleMode ?? null,
+        trainingDaysPerWeek: modifyBuilderEntry.inputs?.trainingDaysPerWeek ?? null,
+      })
+      
+      // Update audit to prove step 5 completed
+      setModifyClickAudit(prev => ({
+        ...prev,
+        step5StateObserved: true,
+        step5ObservedSessionKey: modifyBuilderEntry.sessionKey,
+        lastSuccessfulStep: 5,
+      }))
+    }
   }, [modifyBuilderEntry])
   
   // ==========================================================================
@@ -9013,37 +9055,32 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
       
       setModifyClickAudit(prev => ({
         ...prev,
+        step1LauncherEntered: true,
         canonicalLauncherEntered: true,
+        lastSuccessfulStep: 1,
         failureStage: null,
         failureMessage: null,
       }))
     
       // ==========================================================================
-      // [PHASE 25] TASK 1: Get canonical truth for prefill
-      // Uses the same canonical entry builder as Restart/Onboarding
-      // [PHASE 30F] STAGE: read_canonical
+      // STEP 2: BUILD ENTRY
       // ==========================================================================
-      stage = 'read_canonical'
-      const canonicalProfileNow = getCanonicalProfile()
+      stage = 'build_entry'
       
-      stage = 'read_athlete'
+      // Mark step 2 started
+      setModifyClickAudit(prev => ({ ...prev, step2EntryBuildStarted: true }))
+      
+      const canonicalProfileNow = getCanonicalProfile()
       const athleteSourceNow = getAthleteProfileDirect()
       const onboardingSourceNow = getOnboardingProfileDirect()
       
-      // Single concise log for modify open schedule truth
-      console.log('[modify-open-schedule-truth]', {
+      console.log('[modify-step-2-sources]', {
         canonical: canonicalProfileNow?.scheduleMode ?? null,
         canonicalDays: canonicalProfileNow?.trainingDaysPerWeek ?? null,
         athlete: athleteSourceNow?.scheduleMode ?? null,
         onboarding: onboardingSourceNow?.scheduleMode ?? null,
       })
       
-      // ==========================================================================
-      // [PHASE 25] TASK 2: Build fresh inputs using canonical entry builder
-      // This is the SAME path used by Restart/Onboarding
-      // [PHASE 30F] STAGE: build_entry
-      // ==========================================================================
-      stage = 'build_entry'
       const entryResult = buildCanonicalGenerationEntry('modify_program', {
         scheduleMode: canonicalProfileNow.scheduleMode,
         trainingDaysPerWeek: canonicalProfileNow.trainingDaysPerWeek ?? undefined,
@@ -9051,27 +9088,40 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
         sessionLength: canonicalProfileNow.sessionLengthMinutes ?? undefined,
       })
       
-      // ==========================================================================
-      // STEP 2: ENTRY BUILD RESULT
-      // ==========================================================================
       console.log('[modify-step-2-entry-build-result]', {
         success: entryResult.success,
         hasEntry: !!entryResult.entry,
         error: entryResult.error?.message ?? null,
-        inputScheduleMode: canonicalProfileNow.scheduleMode,
-        inputTrainingDays: canonicalProfileNow.trainingDaysPerWeek,
       })
       
       if (!entryResult.success || !entryResult.entry) {
-        throw new Error(`Entry build failed: ${entryResult.error?.message ?? 'Unknown error'}`)
+        const errorMsg = `Entry build failed: ${entryResult.error?.message ?? 'Unknown error'}`
+        setModifyClickAudit(prev => ({
+          ...prev,
+          step2EntryBuildSucceeded: false,
+          step2EntryBuildError: errorMsg,
+          failureStage: 'build_entry',
+          failureMessage: errorMsg,
+        }))
+        throw new Error(errorMsg)
       }
       
-      stage = 'convert_entry_to_inputs'
-      const freshInputs = entryToAdaptiveInputs(entryResult.entry)
+      // Step 2 succeeded
+      setModifyClickAudit(prev => ({
+        ...prev,
+        step2EntryBuildSucceeded: true,
+        lastSuccessfulStep: 2,
+      }))
       
       // ==========================================================================
-      // STEP 3: INPUT CONVERSION RESULT
+      // STEP 3: CONVERT ENTRY TO INPUTS
       // ==========================================================================
+      stage = 'convert_entry_to_inputs'
+      
+      setModifyClickAudit(prev => ({ ...prev, step3InputConversionStarted: true }))
+      
+      const freshInputs = entryToAdaptiveInputs(entryResult.entry)
+      
       console.log('[modify-step-3-input-conversion-result]', {
         hasFreshInputs: !!freshInputs,
         scheduleMode: freshInputs?.scheduleMode ?? null,
@@ -9080,10 +9130,27 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
       })
       
       if (!freshInputs) {
-        throw new Error('Input conversion returned null/undefined')
+        const errorMsg = 'Input conversion returned null/undefined'
+        setModifyClickAudit(prev => ({
+          ...prev,
+          step3InputConversionSucceeded: false,
+          step3InputConversionError: errorMsg,
+          failureStage: 'convert_inputs',
+          failureMessage: errorMsg,
+        }))
+        throw new Error(errorMsg)
       }
       
-      // Create and commit the entry atomically
+      // Step 3 succeeded
+      setModifyClickAudit(prev => ({
+        ...prev,
+        step3InputConversionSucceeded: true,
+        lastSuccessfulStep: 3,
+      }))
+      
+      // ==========================================================================
+      // STEP 4: VALIDATE AND COMMIT
+      // ==========================================================================
       stage = 'seed_builder_session'
       const newSessionKey = `canonical_modify_${Date.now()}`
       const modifyEntry: ModifyBuilderEntry = {
@@ -9092,9 +9159,30 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
         inputs: freshInputs,
       }
       
-      // ==========================================================================
-      // STEP 4: BEFORE COMMIT
-      // ==========================================================================
+      // Pre-commit validation
+      const validationErrors: string[] = []
+      if (!modifyEntry.sessionKey) validationErrors.push('sessionKey missing')
+      if (!modifyEntry.source) validationErrors.push('source missing')
+      if (!modifyEntry.inputs) validationErrors.push('inputs missing')
+      if (!modifyEntry.inputs?.scheduleMode) validationErrors.push('scheduleMode missing')
+      
+      if (validationErrors.length > 0) {
+        const errorMsg = `Pre-commit validation failed: ${validationErrors.join(', ')}`
+        setModifyClickAudit(prev => ({
+          ...prev,
+          step4PreCommitValidated: false,
+          failureStage: 'pre_commit_validation',
+          failureMessage: errorMsg,
+        }))
+        throw new Error(errorMsg)
+      }
+      
+      setModifyClickAudit(prev => ({
+        ...prev,
+        step4PreCommitValidated: true,
+        step4CommitAttempted: true,
+      }))
+      
       console.log('[modify-step-4-before-commit]', {
         sessionKey: newSessionKey,
         source: modifyEntry.source,
@@ -9105,12 +9193,30 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
       
       const commitSuccess = commitModifyEntryAtomically(modifyEntry)
       
+      console.log('[modify-step-4-commit-result]', { commitSuccess })
+      
       if (!commitSuccess) {
-        throw new Error('Atomic entry commit failed - entry was invalid')
+        const errorMsg = 'commitModifyEntryAtomically returned false'
+        setModifyClickAudit(prev => ({
+          ...prev,
+          step4CommitSucceeded: false,
+          step4CommitError: errorMsg,
+          failureStage: 'commit_returned_false',
+          failureMessage: errorMsg,
+        }))
+        throw new Error(errorMsg)
       }
       
+      // Step 4 succeeded - entry is now committed to React state
+      // Step 5 (state observation) will be set by the useEffect watching modifyBuilderEntry
+      setModifyClickAudit(prev => ({
+        ...prev,
+        step4CommitSucceeded: true,
+        lastSuccessfulStep: 4,
+      }))
+      
       // ==========================================================================
-      // [ROOT-CAUSE-FIX] LAUNCHER COMPLETE - RETURN IMMEDIATELY
+      // LAUNCHER COMPLETE - RETURN IMMEDIATELY
       // Entry is committed. The promotion effect handles everything else.
       // ==========================================================================
       stage = 'complete'
@@ -9348,19 +9454,28 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
       event.preventDefault()
     }
     
-    // Reset audit state for this click
+    // Reset ALL audit state for this click - clean slate for the 5-step corridor
     const clickTimestamp = new Date().toISOString()
-    setModifyClickAudit(prev => ({
-      ...prev,
+    setModifyClickAudit({
       clickFiredAt: clickTimestamp,
-      handleNewProgramEntered: true,
-      canonicalLauncherEntered: false,
-      reachedPreBuilderTransition: false,
-      setShowBuilderRequested: false,
-      showBuilderRenderSeen: false,
+      step1LauncherEntered: false,
+      step2EntryBuildStarted: false,
+      step2EntryBuildSucceeded: false,
+      step2EntryBuildError: null,
+      step3InputConversionStarted: false,
+      step3InputConversionSucceeded: false,
+      step3InputConversionError: null,
+      step4PreCommitValidated: false,
+      step4CommitAttempted: false,
+      step4CommitSucceeded: false,
+      step4CommitError: null,
+      step5StateObserved: false,
+      step5ObservedSessionKey: null,
+      lastSuccessfulStep: 0,
       failureStage: null,
       failureMessage: null,
-    }))
+      canonicalLauncherEntered: false,
+    })
     
     // Route directly to canonical launcher
     await handleOpenCanonicalModifyLauncher()
@@ -10309,36 +10424,126 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
         </div>
         
         {/* ==========================================================================
-            MODIFY AUDIT STRIP - Canonical chain status
-            Only shown when program exists and builder is not shown
+            MODIFY AUDIT STRIP - 5-Step Corridor Status
+            Shows exact progress through the canonical Modify pipeline
             ========================================================================== */}
         {program && !shouldRenderModifyBuilder && (
           <div className="mt-4 p-3 bg-zinc-900/80 border border-zinc-700 rounded-lg text-xs font-mono">
-            <div className="text-zinc-400 mb-2 font-semibold">MODIFY PIPELINE</div>
-            <div className="grid grid-cols-2 gap-1 text-zinc-500">
-              <div>1. Click fired: <span className={modifyClickAudit.clickFiredAt ? 'text-green-400' : 'text-zinc-600'}>{modifyClickAudit.clickFiredAt ? 'YES' : 'no'}</span></div>
-              <div>2. Launcher entered: <span className={modifyClickAudit.canonicalLauncherEntered ? 'text-green-400' : 'text-zinc-600'}>{modifyClickAudit.canonicalLauncherEntered ? 'YES' : 'no'}</span></div>
-              <div>3. Entry committed: <span className={modifyBuilderEntry ? 'text-green-400' : 'text-zinc-600'}>{modifyBuilderEntry ? 'YES' : 'no'}</span></div>
-              <div>4. Flow state: <span className={modifyFlowState === 'builder' ? 'text-green-400' : 'text-zinc-600'}>{modifyFlowState}</span></div>
-              <div>5. Render granted: <span className={shouldRenderModifyBuilder ? 'text-green-400' : 'text-red-400'}>{shouldRenderModifyBuilder ? 'YES' : 'NO'}</span></div>
-              {modifyClickAudit.failureStage && (
-                <div className="col-span-2 text-red-400">Failed at: {modifyClickAudit.failureStage}</div>
-              )}
+            <div className="text-zinc-400 mb-2 font-semibold">MODIFY PIPELINE (5-Step Corridor)</div>
+            <div className="space-y-1 text-zinc-500">
+              {/* Step 1: Launcher Entry */}
+              <div className="flex items-center gap-2">
+                <span className={modifyClickAudit.step1LauncherEntered ? 'text-green-400' : 'text-zinc-600'}>
+                  {modifyClickAudit.step1LauncherEntered ? '✓' : '○'}
+                </span>
+                <span>Step 1: Launcher entered</span>
+              </div>
+              
+              {/* Step 2: Entry Build */}
+              <div className="flex items-center gap-2">
+                <span className={
+                  modifyClickAudit.step2EntryBuildSucceeded ? 'text-green-400' :
+                  modifyClickAudit.step2EntryBuildError ? 'text-red-400' :
+                  modifyClickAudit.step2EntryBuildStarted ? 'text-yellow-400' :
+                  'text-zinc-600'
+                }>
+                  {modifyClickAudit.step2EntryBuildSucceeded ? '✓' :
+                   modifyClickAudit.step2EntryBuildError ? '✗' :
+                   modifyClickAudit.step2EntryBuildStarted ? '◐' : '○'}
+                </span>
+                <span>Step 2: Entry built</span>
+                {modifyClickAudit.step2EntryBuildError && (
+                  <span className="text-red-400 ml-2">{modifyClickAudit.step2EntryBuildError.slice(0, 40)}</span>
+                )}
+              </div>
+              
+              {/* Step 3: Input Conversion */}
+              <div className="flex items-center gap-2">
+                <span className={
+                  modifyClickAudit.step3InputConversionSucceeded ? 'text-green-400' :
+                  modifyClickAudit.step3InputConversionError ? 'text-red-400' :
+                  modifyClickAudit.step3InputConversionStarted ? 'text-yellow-400' :
+                  'text-zinc-600'
+                }>
+                  {modifyClickAudit.step3InputConversionSucceeded ? '✓' :
+                   modifyClickAudit.step3InputConversionError ? '✗' :
+                   modifyClickAudit.step3InputConversionStarted ? '◐' : '○'}
+                </span>
+                <span>Step 3: Inputs converted</span>
+                {modifyClickAudit.step3InputConversionError && (
+                  <span className="text-red-400 ml-2">{modifyClickAudit.step3InputConversionError.slice(0, 40)}</span>
+                )}
+              </div>
+              
+              {/* Step 4: Commit */}
+              <div className="flex items-center gap-2">
+                <span className={
+                  modifyClickAudit.step4CommitSucceeded ? 'text-green-400' :
+                  modifyClickAudit.step4CommitError ? 'text-red-400' :
+                  modifyClickAudit.step4CommitAttempted ? 'text-yellow-400' :
+                  'text-zinc-600'
+                }>
+                  {modifyClickAudit.step4CommitSucceeded ? '✓' :
+                   modifyClickAudit.step4CommitError ? '✗' :
+                   modifyClickAudit.step4CommitAttempted ? '◐' : '○'}
+                </span>
+                <span>Step 4: Commit attempted</span>
+                {modifyClickAudit.step4CommitError && (
+                  <span className="text-red-400 ml-2">{modifyClickAudit.step4CommitError.slice(0, 40)}</span>
+                )}
+              </div>
+              
+              {/* Step 5: State Observed */}
+              <div className="flex items-center gap-2">
+                <span className={modifyClickAudit.step5StateObserved ? 'text-green-400' : 'text-zinc-600'}>
+                  {modifyClickAudit.step5StateObserved ? '✓' : '○'}
+                </span>
+                <span>Step 5: State observed</span>
+                {modifyClickAudit.step5ObservedSessionKey && (
+                  <span className="text-green-400 ml-2">{modifyClickAudit.step5ObservedSessionKey.slice(0, 20)}...</span>
+                )}
+              </div>
+              
+              {/* Flow State & Render */}
+              <div className="flex items-center gap-2 mt-2 pt-2 border-t border-zinc-700">
+                <span>Flow: <span className={modifyFlowState === 'builder' ? 'text-green-400' : 'text-zinc-400'}>{modifyFlowState}</span></span>
+                <span className="mx-2">|</span>
+                <span>Render: <span className={shouldRenderModifyBuilder ? 'text-green-400' : 'text-red-400'}>{shouldRenderModifyBuilder ? 'YES' : 'NO'}</span></span>
+                <span className="mx-2">|</span>
+                <span>Last OK: <span className="text-blue-400">{modifyClickAudit.lastSuccessfulStep}</span></span>
+              </div>
             </div>
+            
+            {/* Verdict */}
             <div className="mt-2 pt-2 border-t border-zinc-700 text-zinc-300">
               Verdict: <span className={
                 shouldRenderModifyBuilder ? 'text-green-400' :
                 modifyClickAudit.failureStage ? 'text-red-400' :
-                modifyBuilderEntry ? 'text-yellow-400' :
+                modifyClickAudit.step5StateObserved && modifyFlowState !== 'builder' ? 'text-yellow-400' :
+                modifyClickAudit.step4CommitSucceeded && !modifyClickAudit.step5StateObserved ? 'text-yellow-400' :
                 'text-zinc-500'
               }>
-                {shouldRenderModifyBuilder ? 'RENDER_GRANTED' :
-                 modifyClickAudit.failureStage ? `FAILED_AT_${modifyClickAudit.failureStage.toUpperCase()}` :
-                 modifyBuilderEntry && modifyFlowState !== 'builder' ? 'WAITING_FOR_PROMOTION' :
-                 modifyClickAudit.canonicalLauncherEntered ? 'WAITING_FOR_ENTRY' :
-                 'IDLE'}
+                {(() => {
+                  if (shouldRenderModifyBuilder) return 'RENDER_GRANTED'
+                  if (modifyClickAudit.failureStage) return `FAILED_AT_${modifyClickAudit.failureStage.toUpperCase()}`
+                  if (modifyClickAudit.step5StateObserved && modifyFlowState !== 'builder') return 'STATE_OBSERVED_WAITING_PROMOTION'
+                  if (modifyClickAudit.step4CommitSucceeded && !modifyClickAudit.step5StateObserved) return 'COMMIT_NOT_YET_OBSERVED'
+                  if (modifyClickAudit.step4CommitAttempted && !modifyClickAudit.step4CommitSucceeded) return 'COMMIT_FAILED'
+                  if (modifyClickAudit.step3InputConversionStarted && !modifyClickAudit.step3InputConversionSucceeded) return 'INPUT_CONVERSION_FAILED'
+                  if (modifyClickAudit.step2EntryBuildStarted && !modifyClickAudit.step2EntryBuildSucceeded) return 'ENTRY_BUILD_FAILED'
+                  if (modifyClickAudit.step1LauncherEntered) return 'LAUNCHER_IN_PROGRESS'
+                  if (modifyClickAudit.clickFiredAt) return 'CLICK_FIRED_AWAITING_LAUNCHER'
+                  return 'IDLE'
+                })()}
               </span>
             </div>
+            
+            {/* Failure message if present */}
+            {modifyClickAudit.failureMessage && (
+              <div className="mt-2 p-2 bg-red-900/30 border border-red-700 rounded text-red-400">
+                {modifyClickAudit.failureMessage}
+              </div>
+            )}
           </div>
         )}
 

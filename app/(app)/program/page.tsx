@@ -1,3 +1,6 @@
+// REDEPLOY_TRIGGER_v1
+// No-op change to force Vercel rebuild. Do not remove.
+
 'use client'
 
 /**

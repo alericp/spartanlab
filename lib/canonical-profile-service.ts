@@ -1055,6 +1055,134 @@ export function validateProfileForGeneration(profile: CanonicalProgrammingProfil
 }
 
 // =============================================================================
+// [PHASE 32B] SCHEDULE TRUTH REPAIR
+// =============================================================================
+
+/**
+ * Diagnoses and optionally repairs stale schedule truth in persisted stores.
+ * 
+ * ROOT CAUSE: User may have selected static 6-day schedule, but:
+ * 1. Onboarding profile still has old 'flexible' value
+ * 2. Athlete profile has scheduleMode undefined but valid trainingDaysPerWeek
+ * 3. Both stores are out of sync
+ * 
+ * This function:
+ * 1. Reads all schedule sources
+ * 2. Determines the authoritative truth
+ * 3. Optionally repairs stale sources to match the authoritative truth
+ * 
+ * SAFETY: Only repairs when there's clear evidence of user intent.
+ * Does NOT randomly convert flexible users to static.
+ */
+export function diagnoseAndRepairScheduleTruth(options: { 
+  autoRepair?: boolean,
+  forceStaticDays?: number 
+} = {}): {
+  diagnosis: {
+    onboarding: { scheduleMode: string | null, trainingDaysPerWeek: number | null }
+    athlete: { scheduleMode: string | null, trainingDaysPerWeek: number | null }
+    canonical: { scheduleMode: string | null, trainingDaysPerWeek: number | null }
+    staleSources: string[]
+    authoritativeTruth: { scheduleMode: 'static' | 'flexible', trainingDaysPerWeek: number | null }
+    repairNeeded: boolean
+    repairReason: string
+  }
+  repaired: boolean
+  repairedSources: string[]
+} {
+  const onboarding = getOnboardingProfile()
+  const athlete = getAthleteProfile()
+  const canonical = getCanonicalProfile()
+  
+  const staleSources: string[] = []
+  let repairNeeded = false
+  let repairReason = 'NONE'
+  let repairedSources: string[] = []
+  
+  // Determine authoritative truth based on canonical resolution
+  const authoritativeTruth = {
+    scheduleMode: canonical.scheduleMode as 'static' | 'flexible',
+    trainingDaysPerWeek: canonical.trainingDaysPerWeek,
+  }
+  
+  // Check if onboarding is stale (differs from canonical)
+  if (onboarding?.scheduleMode !== canonical.scheduleMode) {
+    staleSources.push('onboarding')
+    repairNeeded = true
+    repairReason = 'ONBOARDING_DIFFERS_FROM_CANONICAL'
+  }
+  
+  // Check if athlete is stale (differs from canonical)
+  if (athlete?.scheduleMode !== canonical.scheduleMode) {
+    staleSources.push('athlete')
+    repairNeeded = true
+    repairReason = repairReason === 'NONE' 
+      ? 'ATHLETE_DIFFERS_FROM_CANONICAL' 
+      : 'BOTH_DIFFER_FROM_CANONICAL'
+  }
+  
+  // Handle forceStaticDays override (for settings save repair)
+  if (options.forceStaticDays !== undefined && options.forceStaticDays >= 2 && options.forceStaticDays <= 7) {
+    authoritativeTruth.scheduleMode = 'static'
+    authoritativeTruth.trainingDaysPerWeek = options.forceStaticDays
+    repairNeeded = true
+    repairReason = 'FORCED_STATIC_REPAIR'
+  }
+  
+  // Perform repair if requested
+  if (options.autoRepair && repairNeeded) {
+    // Repair onboarding profile
+    if (onboarding && staleSources.includes('onboarding')) {
+      const repairedOnboarding = {
+        ...onboarding,
+        scheduleMode: authoritativeTruth.scheduleMode,
+        trainingDaysPerWeek: authoritativeTruth.trainingDaysPerWeek,
+      }
+      saveOnboardingProfile(repairedOnboarding as OnboardingProfile)
+      repairedSources.push('onboarding')
+    }
+    
+    // Repair athlete profile
+    if (athlete && staleSources.includes('athlete')) {
+      saveAthleteProfile({
+        scheduleMode: authoritativeTruth.scheduleMode,
+        trainingDaysPerWeek: authoritativeTruth.trainingDaysPerWeek,
+      } as Partial<AthleteProfile>)
+      repairedSources.push('athlete')
+    }
+    
+    console.log('[phase32b-schedule-repair]', {
+      authoritativeTruth,
+      repairedSources,
+      repairReason,
+    })
+  }
+  
+  return {
+    diagnosis: {
+      onboarding: {
+        scheduleMode: onboarding?.scheduleMode ?? null,
+        trainingDaysPerWeek: onboarding?.trainingDaysPerWeek ?? null,
+      },
+      athlete: {
+        scheduleMode: athlete?.scheduleMode ?? null,
+        trainingDaysPerWeek: athlete?.trainingDaysPerWeek ?? null,
+      },
+      canonical: {
+        scheduleMode: canonical.scheduleMode ?? null,
+        trainingDaysPerWeek: canonical.trainingDaysPerWeek ?? null,
+      },
+      staleSources,
+      authoritativeTruth,
+      repairNeeded,
+      repairReason,
+    },
+    repaired: repairedSources.length > 0,
+    repairedSources,
+  }
+}
+
+// =============================================================================
 // CANONICAL READ/WRITE FUNCTIONS
 // =============================================================================
 

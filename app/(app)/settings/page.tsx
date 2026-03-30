@@ -45,7 +45,7 @@ import {
   saveAthleteProfile,
   type AthleteProfile,
 } from '@/lib/data-service'
-import { saveCanonicalProfile, logCanonicalProfileState, getCanonicalProfile } from '@/lib/canonical-profile-service'
+import { saveCanonicalProfile, logCanonicalProfileState, getCanonicalProfile, diagnoseAndRepairScheduleTruth } from '@/lib/canonical-profile-service'
 import { DURATION_PREFERENCE_LABELS, type SessionDurationMinutes, logDurationTruth } from '@/lib/duration-contract'
 import { logProfileTruthState, diagnoseProfileData } from '@/lib/profile-truth-contract'
 import { getActiveProgram, clearActiveProgram } from '@/lib/program-service'
@@ -1096,6 +1096,31 @@ export default function SettingsPage() {
               masked: scheduleMode !== result.profile.scheduleMode,
               verdict: scheduleMode === result.profile.scheduleMode ? 'no_mask' : 'MASK_DETECTED',
             })
+            
+            // ==========================================================================
+            // [PHASE 32B] SCHEDULE TRUTH REPAIR
+            // If canonical still doesn't match intended save, force repair stale sources
+            // ==========================================================================
+            const intendedStaticNow = payloadScheduleMode === 'static'
+            const canonicalStaticNow = canonicalReadback?.scheduleMode === 'static'
+            const scheduleMismatch = intendedStaticNow !== canonicalStaticNow
+            
+            if (scheduleMismatch && intendedStaticNow && payloadTrainingDays) {
+              console.log('[phase32b-schedule-repair-triggered]', {
+                reason: 'CANONICAL_DOESNT_MATCH_INTENDED_SAVE',
+                intendedMode: payloadScheduleMode,
+                intendedDays: payloadTrainingDays,
+                canonicalMode: canonicalReadback?.scheduleMode,
+              })
+              
+              // Force repair all stores to match intended save
+              const repairResult = diagnoseAndRepairScheduleTruth({
+                autoRepair: true,
+                forceStaticDays: payloadTrainingDays,
+              })
+              
+              console.log('[phase32b-schedule-repair-result]', repairResult)
+            }
             
             console.log('[phase15a-no-default-mask-duration-verdict]', {
               sessionDurationModeAtSave: sessionDurationMode,

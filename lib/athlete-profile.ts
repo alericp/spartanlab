@@ -1666,10 +1666,40 @@ function normalizeOnboardingProfile(raw: unknown): OnboardingProfile | null {
     
   // Section 8: Training Schedule
   trainingDaysPerWeek: safeNumber(data.trainingDaysPerWeek) as TrainingDaysPerWeek | null,
-  // ISSUE A/B FIX: Parse explicit scheduleMode from persisted data
-  scheduleMode: data.scheduleMode === 'flexible' ? 'flexible' 
-    : data.scheduleMode === 'static' ? 'static' 
-    : data.trainingDaysPerWeek === 'flexible' ? 'flexible' : undefined,
+  // ==========================================================================
+  // [PHASE 31A] ROOT-CAUSE FIX: Schedule mode normalization
+  // 
+  // PREVIOUS BUG: When scheduleMode was null/undefined but trainingDaysPerWeek
+  // was a valid number (e.g., 6), scheduleMode normalized to `undefined`.
+  // This caused canonical resolution to fail: athleteExplicitStatic check
+  // requires scheduleMode === 'static', which undefined !== 'static'.
+  //
+  // FIX: If scheduleMode is not explicitly set BUT trainingDaysPerWeek IS a
+  // valid number, default to 'static'. This reflects the correct user intent:
+  // "I selected a specific number of days" = static schedule.
+  //
+  // PRECEDENCE:
+  // 1. Explicit 'flexible' → 'flexible'
+  // 2. Explicit 'static' → 'static'
+  // 3. trainingDaysPerWeek === 'flexible' (legacy string format) → 'flexible'
+  // 4. trainingDaysPerWeek is a valid number → 'static' (FIXED)
+  // 5. Otherwise → undefined (truly unknown)
+  // ==========================================================================
+  scheduleMode: (() => {
+    // 1. Explicit 'flexible'
+    if (data.scheduleMode === 'flexible') return 'flexible'
+    // 2. Explicit 'static'
+    if (data.scheduleMode === 'static') return 'static'
+    // 3. Legacy string format 'flexible'
+    if (data.trainingDaysPerWeek === 'flexible') return 'flexible'
+    // 4. [PHASE 31A] Valid numeric trainingDaysPerWeek implies static
+    const numericDays = safeNumber(data.trainingDaysPerWeek)
+    if (typeof numericDays === 'number' && numericDays >= 2 && numericDays <= 7) {
+      return 'static'
+    }
+    // 5. Truly unknown
+    return undefined
+  })(),
   sessionLengthMinutes: safeNumber(data.sessionLengthMinutes) as SessionLengthPreference | null,
   // ISSUE A/B FIX: Parse explicit sessionDurationMode from persisted data
   sessionDurationMode: data.sessionDurationMode === 'adaptive' ? 'adaptive'

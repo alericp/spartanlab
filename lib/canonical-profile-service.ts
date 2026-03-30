@@ -442,15 +442,37 @@ export function reconcileCanonicalProfile(): CanonicalProgrammingProfile {
     // This ensures Settings changes are properly respected
     // ==========================================================================
     ...(() => {
-      // Step 1: Determine what each source has explicitly
+      // ==========================================================================
+      // [PHASE 31A] ROOT-CAUSE FIX: Schedule resolution with implicit static
+      //
+      // PREVIOUS BUG: If scheduleMode was null/undefined but trainingDaysPerWeek
+      // was a valid number (e.g., 6), the "explicitStatic" check would fail because
+      // it required scheduleMode === 'static'. This caused valid static schedules
+      // to be treated as "no explicit value" and fall through to flexible.
+      //
+      // FIX: Treat a valid numeric trainingDaysPerWeek (2-7) as IMPLICIT static,
+      // even if scheduleMode is not explicitly set. This reflects user intent:
+      // "I selected 6 days/week" = static schedule, regardless of scheduleMode field.
+      //
+      // ==========================================================================
+      
+      // Step 1: Determine what each source has explicitly (or implicitly via valid day count)
       const onboardingExplicitFlexible = onboardingProfile?.scheduleMode === 'flexible'
-      const onboardingExplicitStatic = onboardingProfile?.scheduleMode === 'static' && 
-        typeof onboardingProfile?.trainingDaysPerWeek === 'number'
+      // [PHASE 31A] Check for explicit OR implicit static (valid numeric days implies static)
+      const onboardingHasValidNumericDays = typeof onboardingProfile?.trainingDaysPerWeek === 'number' && 
+        onboardingProfile.trainingDaysPerWeek >= 2 && onboardingProfile.trainingDaysPerWeek <= 7
+      const onboardingExplicitStatic = (onboardingProfile?.scheduleMode === 'static' && onboardingHasValidNumericDays) ||
+        // [PHASE 31A] IMPLICIT STATIC: scheduleMode not set but valid numeric days exist
+        (onboardingProfile?.scheduleMode !== 'flexible' && onboardingHasValidNumericDays)
       const onboardingHasExplicit = onboardingExplicitFlexible || onboardingExplicitStatic
       
       const athleteExplicitFlexible = athleteProfile?.scheduleMode === 'flexible'
-      const athleteExplicitStatic = athleteProfile?.scheduleMode === 'static' && 
-        typeof athleteProfile?.trainingDaysPerWeek === 'number'
+      // [PHASE 31A] Check for explicit OR implicit static (valid numeric days implies static)
+      const athleteHasValidNumericDays = typeof athleteProfile?.trainingDaysPerWeek === 'number' && 
+        athleteProfile.trainingDaysPerWeek >= 2 && athleteProfile.trainingDaysPerWeek <= 7
+      const athleteExplicitStatic = (athleteProfile?.scheduleMode === 'static' && athleteHasValidNumericDays) ||
+        // [PHASE 31A] IMPLICIT STATIC: scheduleMode not set but valid numeric days exist
+        (athleteProfile?.scheduleMode !== 'flexible' && athleteHasValidNumericDays)
       const athleteHasExplicit = athleteExplicitFlexible || athleteExplicitStatic
       
       // Step 2: Check for timestamp-aware precedence
@@ -591,14 +613,22 @@ export function reconcileCanonicalProfile(): CanonicalProgrammingProfile {
       // [schedule-final-real-sources] THE SINGLE AUTHORITATIVE LOG
       // Proves exactly what each source contains and what canonical resolved to
       // ==========================================================================
-      console.log('[schedule-final-real-sources]', {
+      // [PHASE 31A] Enhanced logging with implicit static detection
+      // ==========================================================================
+      console.log('[phase31a-schedule-final-real-sources]', {
         onboarding: {
           scheduleMode: onboardingProfile?.scheduleMode ?? null,
           trainingDaysPerWeek: onboardingProfile?.trainingDaysPerWeek ?? null,
+          hasValidNumericDays: onboardingHasValidNumericDays,
+          explicitOrImplicitStatic: onboardingExplicitStatic,
+          explicitFlexible: onboardingExplicitFlexible,
         },
         athlete: {
           scheduleMode: athleteProfile?.scheduleMode ?? null,
           trainingDaysPerWeek: athleteProfile?.trainingDaysPerWeek ?? null,
+          hasValidNumericDays: athleteHasValidNumericDays,
+          explicitOrImplicitStatic: athleteExplicitStatic,
+          explicitFlexible: athleteExplicitFlexible,
         },
         resolved: {
           scheduleMode: resolvedScheduleMode,
@@ -613,6 +643,7 @@ export function reconcileCanonicalProfile(): CanonicalProgrammingProfile {
             : resolvedScheduleMode === 'flexible'
             ? 'FLEXIBLE'
             : `STATIC_${resolvedTrainingDays}`,
+        phase31aFix: 'implicit_static_detection_enabled',
       })
       
       return {

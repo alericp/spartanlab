@@ -18,16 +18,16 @@
 // This allows us to verify the live app is running the expected code version
 // ==========================================================================
 export const PHASE27C_BUILD_IDENTITY = {
-  buildIdentityName: 'ROOT_CAUSE_FIX_SCHEDULE_AND_MODIFY',
-  buildIdentityVersion: '2024-ROOT-CAUSE-FIX-v1',
-  buildTimestamp: '2024-01-ROOT-CAUSE-FIX',
-  modifyBuilderVariant: 'SINGLE_ENTRY_REF_AUTHORITY',
-  scheduleSelectorVariant: 'TRAINING_DAYS_SYNCED_TO_ONBOARDING',
+  buildIdentityName: 'FINAL_SIMPLIFICATION',
+  buildIdentityVersion: '2024-FINAL-v1',
+  buildTimestamp: '2024-FINAL',
+  modifyBuilderVariant: 'SINGLE_ENTRY_AUTHORITY_NO_FALLBACK',
+  scheduleSelectorVariant: 'REAL_SOURCE_VALUES_NOT_PLACEHOLDER',
   submitSnapshotVariant: 'EXPECTED_BASELINE_AND_ADAPTIVE_SHOWN',
-  auditPanelVariant: 'VISIBLE_TRUTH_BAR_WITH_ADAPTIVE_WORKLOAD',
-  scheduleResolutionFix: 'TRAINING_DAYS_NOW_SYNCED_TO_BOTH_STORES',
+  auditPanelVariant: 'HONEST_TRUTH_BAR',
+  scheduleResolutionFix: 'TRAINING_DAYS_SYNCED_TO_BOTH_STORES',
   baselineAdaptiveSeparation: true,
-  forensicLogs: ['schedule-root-persisted-truth', 'schedule-root-canonical-resolution', 'modify-root-launch-commit', 'modify-root-promotion', 'modify-root-render-authority'],
+  forensicLogs: ['modify-final-launch-commit', 'modify-final-promotion', 'modify-final-render-authority', 'schedule-final-real-sources'],
 } as const
 
 import { useState, useEffect, useCallback, useMemo, useRef, type ReactNode } from 'react'
@@ -512,38 +512,26 @@ export default function ProgramPage() {
   })
   
   // ==========================================================================
-  // [PHASE 31E] TRUE ATOMIC ENTRY COMMIT HELPER
-  // This helper commits ONLY the entry - ref first, then state.
-  // NO OTHER STATE MUTATIONS. The commit flag is set separately below.
+  // [FINAL] ATOMIC ENTRY COMMIT HELPER
+  // Commits the entry: ref first (synchronous), then state.
+  // NO OTHER STATE MUTATIONS here.
   // ==========================================================================
   const commitModifyEntryAtomically = useCallback((entry: ModifyBuilderEntry) => {
-    // 1. Verify entry exists and has inputs
     if (!entry || !entry.inputs) {
-      console.log('[phase31e-atomic-entry-commit-invalid]', {
-        hasEntry: !!entry,
-        hasInputs: !!entry?.inputs,
-        verdict: 'ATOMIC_ENTRY_COMMIT_REJECTED_INVALID',
-      })
       return false
     }
     
-    // 2. Capture pre-commit state for diagnostics
-    const hadEntryStateBefore = modifyBuilderEntry !== null
-    const hadRefBefore = modifyBuilderEntryRef.current !== null
-    
-    // 3. Write synchronous ref authority FIRST (immediate access)
+    // Write synchronous ref authority FIRST (immediate access)
     modifyBuilderEntryRef.current = entry
     
-    // 4. Commit React state - THIS IS THE ONLY STATE MUTATION
+    // Commit React state
     setModifyBuilderEntry(entry)
     
-    // 5. [modify-root-launch-commit] Concise authoritative log when launcher commits entry
-    console.log('[modify-root-launch-commit]', {
-      sessionKey: entry?.sessionKey ?? null,
-      scheduleMode: entry?.inputs?.scheduleMode ?? null,
-      trainingDaysPerWeek: entry?.inputs?.trainingDaysPerWeek ?? null,
-      refWritten: !!modifyBuilderEntryRef.current,
-      verdict: 'ATOMIC_ENTRY_COMMITTED',
+    // [modify-final-launch-commit] Concise log
+    console.log('[modify-final-launch-commit]', {
+      sessionKey: entry.sessionKey,
+      scheduleMode: entry.inputs.scheduleMode,
+      trainingDays: entry.inputs.trainingDaysPerWeek,
     })
     
     return true
@@ -587,14 +575,21 @@ export default function ProgramPage() {
       setBuilderOrigin('default')
       
       // ==========================================================================
-      // [PHASE 31E] SEED SCHEDULE TRUTH AUDIT (moved from launcher)
+      // [FINAL] SEED SCHEDULE TRUTH AUDIT WITH REAL SOURCE VALUES
+      // Read actual onboarding/athlete profiles to show truthful source values
       // ==========================================================================
       const entryInputs = modifyBuilderEntry.inputs
+      const realOnboarding = getOnboardingProfileDirect()
+      const realAthlete = getAthleteProfileDirect()
+      
       setScheduleTruthAudit({
-        onboardingScheduleMode: null, // Will be filled by canonical profile if needed
-        onboardingTrainingDays: null,
-        athleteScheduleMode: null,
-        athleteTrainingDays: null,
+        // Real source values - NOT placeholder nulls
+        onboardingScheduleMode: realOnboarding?.scheduleMode ?? 'unread',
+        onboardingTrainingDays: typeof realOnboarding?.trainingDaysPerWeek === 'number' 
+          ? realOnboarding.trainingDaysPerWeek : null,
+        athleteScheduleMode: realAthlete?.scheduleMode ?? 'unread',
+        athleteTrainingDays: typeof realAthlete?.trainingDaysPerWeek === 'number'
+          ? realAthlete.trainingDaysPerWeek : null,
         adaptiveWorkloadEnabled: (entryInputs as { adaptiveWorkloadEnabled?: boolean }).adaptiveWorkloadEnabled ?? true,
         canonicalScheduleMode: entryInputs.scheduleMode,
         canonicalTrainingDaysPerWeek: entryInputs.trainingDaysPerWeek,
@@ -604,6 +599,15 @@ export default function ProgramPage() {
         lastGeneratedScheduleMode: null,
         lastGeneratedTrainingDays: null,
         lastReconciliationDecision: null,
+      })
+      
+      // [modify-final-promotion] Concise log
+      console.log('[modify-final-promotion]', {
+        sessionKey: modifyBuilderEntry.sessionKey,
+        scheduleMode: entryInputs.scheduleMode,
+        trainingDays: entryInputs.trainingDaysPerWeek,
+        onboardingSource: realOnboarding?.scheduleMode ?? 'unread',
+        athleteSource: realAthlete?.scheduleMode ?? 'unread',
       })
       
       // ==========================================================================
@@ -660,48 +664,23 @@ export default function ProgramPage() {
   // The [modify-root-render-authority] log in the half-transition guard provides sufficient diagnostics
   
   // ==========================================================================
-  // [ROOT-CAUSE-FIX] HALF-TRANSITION GUARD - NOW CHECKS REF AUTHORITY
-  // The ref is written synchronously BEFORE the state setter. If the ref has
-  // a valid entry, we're in an active modify session and must NOT reset.
+  // [FINAL] HALF-TRANSITION GUARD - CHECKS REF AUTHORITY
   // Only reset if BOTH ref AND state are null while modifyFlowState='builder'.
   // ==========================================================================
   useEffect(() => {
-    // Check BOTH ref and state - ref is synchronous authority during commit window
     const hasRefEntry = modifyBuilderEntryRef.current !== null
     const hasStateEntry = modifyBuilderEntry !== null
     const hasAnyEntry = hasRefEntry || hasStateEntry
-    
-    // Only consider it a half-transition if NEITHER ref nor state has an entry
     const isHalfTransition = modifyFlowState === 'builder' && !hasAnyEntry
-    const isEntryWaitingForPromotion = hasAnyEntry && modifyFlowState !== 'builder'
     
-    console.log('[modify-root-render-authority]', {
-      modifyFlowState,
-      hasRefEntry,
-      hasStateEntry,
-      hasAnyEntry,
-      showBuilder,
-      verdict:
-        isHalfTransition
-          ? 'ILLEGAL_BUILDER_WITHOUT_ANY_ENTRY'
-          : isEntryWaitingForPromotion
-          ? 'ENTRY_PRESENT_WAITING_FOR_PROMOTION'
-          : hasAnyEntry && modifyFlowState === 'builder'
-          ? 'MODIFY_ACTIVE_VALID'
-          : 'IDLE_STATE_VALID',
+    // [modify-final-render-authority] Concise log
+    console.log('[modify-final-render-authority]', {
+      flow: modifyFlowState,
+      hasEntry: hasAnyEntry,
+      verdict: isHalfTransition ? 'RESET_NEEDED' : hasAnyEntry && modifyFlowState === 'builder' ? 'ACTIVE' : 'IDLE',
     })
     
-    // Auto-correct half-transition states ONLY if both ref and state are null
     if (isHalfTransition) {
-      console.log('[modify-root-half-transition-corrected]', {
-        modifyFlowState: modifyFlowState ?? null,
-        hasRefEntry,
-        hasStateEntry,
-        showBuilder: !!showBuilder,
-        verdict: 'HALF_TRANSITION_CORRECTED_BOTH_NULL',
-      })
-      
-      // Reset to safe state
       modifyBuilderLockRef.current = false
       setModifyFlowState('idle')
       setShowBuilder(false)
@@ -10698,146 +10677,18 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
   }, [programModules, inputs, builderOrigin, program, buildModifyEntryInputsFromVisibleProgram, builderSessionKey, modifyFlowState, showAdjustmentModal, showBuilder])
 
   // ==========================================================================
-  // [PHASE 31A] SINGLE RENDER AUTHORITY FOR MODIFY BUILDER
+  // [FINAL] SINGLE RENDER AUTHORITY FOR MODIFY BUILDER
   // This is the ONE authoritative boolean that determines if Modify builder renders.
-  // PRIMARY AUTHORITY: modifyBuilderEntry exists with inputs AND modifyFlowState is 'builder'
-  // This ensures: entry committed -> effect promoted -> render authority granted
+  // Entry must exist with inputs AND flow state must be 'builder' (after promotion).
+  // showBuilder is NO LONGER a render authority for Modify.
   // ==========================================================================
   const shouldRenderModifyBuilder = (
-    // Primary: Entry object exists with inputs AND flow state is builder (after promotion)
     modifyBuilderEntry !== null &&
     modifyBuilderEntry.inputs !== null &&
     modifyFlowState === 'builder'
-  ) || (
-    // Legacy fallback: showBuilder + ref-based entry (for compatibility with non-Modify paths)
-    showBuilder && builderSessionInputsRef.current !== null
   )
   
-  // ==========================================================================
-  // [PHASE 31A] STABILIZATION - Removed unsafe render-time diagnostic blocks
-  // All render-time logging moved to effect-based or handler-based locations
-  // ==========================================================================
-  
-  // ==========================================================================
-  // [PHASE 31F] RENDER INSTANCE AUTHORITY EFFECT
-  // Logs the render authority state with instance ID for correlation
-  // ==========================================================================
-  useEffect(() => {
-    // Log render authority state when any relevant value changes
-    const hasStateEntry = !!modifyBuilderEntry
-    const hasRefEntry = !!modifyBuilderEntryRef.current
-    
-    let verdict: string
-    if (shouldRenderModifyBuilder) {
-      verdict = 'RENDER_AUTHORITY_GRANTED'
-    } else if (hasStateEntry) {
-      verdict = 'RENDER_AUTHORITY_HAS_STATE_ENTRY'
-    } else if (hasRefEntry) {
-      verdict = 'RENDER_AUTHORITY_REF_ONLY'
-    } else {
-      verdict = 'RENDER_AUTHORITY_NO_ENTRY'
-    }
-    
-    console.log('[phase31f-render-instance-authority-final]', {
-      instanceId: programPageInstanceIdRef.current,
-      hasStateEntry,
-      hasRefEntry,
-      shouldRenderModifyBuilder,
-      modifyFlowState: modifyFlowState ?? null,
-      showBuilder: !!showBuilder,
-      verdict,
-    })
-  }, [modifyBuilderEntry, modifyFlowState, showBuilder, shouldRenderModifyBuilder])
-  
-  // ==========================================================================
-  // [PHASE 31A] EFFECT: Log render authority when modify state changes
-  // This proves the single-pipeline contract is working
-  // ==========================================================================
-  useEffect(() => {
-    if (modifyFlowState === 'builder' || modifyBuilderEntry !== null) {
-      // [PHASE 31A] Log modify entry authority
-      console.log('[phase31a-modify-entry-authority-final]', {
-        hasModifyBuilderEntry: !!modifyBuilderEntry,
-        hasInputs: !!modifyBuilderEntry?.inputs,
-        showBuilder,
-        modifyFlowState,
-        builderSessionInputsStatePresent: !!builderSessionInputs,
-        builderSessionInputsRefPresent: !!builderSessionInputsRef.current,
-        verdict: modifyBuilderEntry?.inputs
-          ? 'MODIFY_ENTRY_IS_ONLY_LIVE_AUTHORITY'
-          : 'MODIFY_ENTRY_MISSING',
-      })
-      
-      // [PHASE 31A] Log render authority
-      console.log('[phase31a-render-authority-final]', {
-        hasEntry: !!modifyBuilderEntry,
-        hasInputs: !!modifyBuilderEntry?.inputs,
-        modifyFlowState,
-        showBuilder,
-        shouldRenderModifyBuilder,
-        verdict: shouldRenderModifyBuilder
-          ? 'RENDER_AUTHORITY_GRANTED'
-          : 'RENDER_AUTHORITY_NOT_GRANTED',
-      })
-    }
-  }, [modifyFlowState, modifyBuilderEntry, showBuilder, shouldRenderModifyBuilder, builderSessionInputs])
-  
-  // ==========================================================================
-  // [PHASE 31A] POST-PIPELINE SCHEDULE TRUTH LOG
-  // After pipeline is stable (render authority granted), report schedule truth honestly
-  // ==========================================================================
-  useEffect(() => {
-    if (shouldRenderModifyBuilder && scheduleTruthAudit) {
-      console.log('[phase31a-post-pipeline-schedule-truth-final]', {
-        onboarding_scheduleMode: scheduleTruthAudit?.onboardingScheduleMode ?? null,
-        athlete_scheduleMode: scheduleTruthAudit?.athleteScheduleMode ?? null,
-        canonical_scheduleMode: scheduleTruthAudit?.canonicalScheduleMode ?? null,
-        canonical_trainingDaysPerWeek: scheduleTruthAudit?.canonicalTrainingDaysPerWeek ?? null,
-        verdict:
-          scheduleTruthAudit?.canonicalScheduleMode === 'static' && scheduleTruthAudit?.canonicalTrainingDaysPerWeek === 6
-            ? 'PIPELINE_STABLE_CANONICAL_STATIC_6'
-            : scheduleTruthAudit?.canonicalScheduleMode === 'flexible'
-            ? 'PIPELINE_STABLE_CANONICAL_FLEXIBLE'
-            : 'PIPELINE_STABLE_CANONICAL_OTHER',
-      })
-    }
-  }, [shouldRenderModifyBuilder, scheduleTruthAudit])
-  
-  // ==========================================================================
-  // [PHASE 31B] SCHEDULE TRUTH DEFERRED LOG
-  // Honest note that schedule truth issues are separate from entry survival
-  // ==========================================================================
-  useEffect(() => {
-    if (modifyClickAudit.canonicalLauncherEntered && !modifyBuilderEntry && scheduleTruthAudit) {
-      console.log('[phase31b-schedule-truth-deferred-final]', {
-        canonicalScheduleMode: scheduleTruthAudit?.canonicalScheduleMode ?? null,
-        canonicalTrainingDaysPerWeek: scheduleTruthAudit?.canonicalTrainingDaysPerWeek ?? null,
-        verdict: 'SCHEDULE_TRUTH_DEFERRED_UNTIL_ENTRY_SURVIVAL_IS_FIXED',
-      })
-    }
-  }, [modifyClickAudit.canonicalLauncherEntered, modifyBuilderEntry, scheduleTruthAudit])
-  
-  // ==========================================================================
-  // [PHASE 31A] LEGACY - Preserved for reference but superceded by above
-  // ==========================================================================
-  useEffect(() => {
-    if (modifyFlowState === 'builder' || modifyBuilderEntry !== null) {
-      console.log('[phase30s-render-authority-final]', {
-        modifyFlowState: modifyFlowState ?? null,
-        hasModifyEntry: !!modifyBuilderEntry,
-        hasModifyEntryInputs: !!modifyBuilderEntry?.inputs,
-        showBuilder: !!showBuilder,
-        lockActive: !!modifyBuilderLockRef.current,
-        shouldRenderModifyBuilder,
-        verdict:
-          modifyFlowState === 'builder' && modifyBuilderEntry?.inputs
-            ? 'MODIFY_RENDER_AUTHORITY_ACTIVE'
-            : modifyFlowState === 'builder' && !modifyBuilderEntry
-            ? 'HALF_TRANSITION_DETECTED_NO_ENTRY'
-            : 'MODIFY_RENDER_AUTHORITY_INACTIVE',
-      })
-    }
-  }, [modifyFlowState, modifyBuilderEntry, showBuilder, shouldRenderModifyBuilder])
+  // [FINAL] Removed verbose phase31/30 diagnostic effects - replaced by concise logs in guards
   
   // TASK 3: Show error state for module load failure with stage info
   if (loadError) {
@@ -10955,29 +10806,19 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
                 <div className="col-span-2 text-red-400">Error: {modifyClickAudit.failureStage} - {modifyClickAudit.failureMessage?.slice(0, 50)}</div>
               )}
             </div>
-            {/* [PHASE 31G] Entry survival verdict with recovery states */}
+            {/* [FINAL] Simplified verdict */}
             <div className="mt-2 pt-2 border-t border-zinc-700 text-zinc-300">
               Verdict: <span className={
                 shouldRenderModifyBuilder ? 'text-green-400' :
                 modifyClickAudit.failureStage ? 'text-red-400' :
-                (modifyBuilderEntry && modifyEntryRecoveryAttemptedRef.current && modifyFlowState !== 'builder') ? 'text-cyan-400' :
-                (modifyBuilderEntry && modifyFlowState !== 'builder') ? 'text-yellow-400' :
-                (modifyBuilderEntryRef.current && !modifyBuilderEntry && modifyEntryRecoveryAttemptedRef.current) ? 'text-red-400' :
-                (modifyBuilderEntryRef.current && !modifyBuilderEntry && !modifyEntryRecoveryAttemptedRef.current) ? 'text-orange-400' :
-                modifyClickAudit.canonicalLauncherEntered ? 'text-blue-400' :
+                modifyBuilderEntry ? 'text-yellow-400' :
                 'text-zinc-500'
               }>
-                {shouldRenderModifyBuilder ? 'MODIFY_RENDER_GRANTED' :
-                 modifyClickAudit.failureStage ? 'MODIFY_FAILED_BEFORE_ENTRY_COMMIT' :
-                 !modifyClickAudit.clickFiredAt ? 'MODIFY_WAITING_FOR_CLICK' :
-                 !modifyClickAudit.canonicalLauncherEntered ? 'MODIFY_FAILED_LAUNCHER_NOT_ENTERED' :
-                 !modifyBuilderEntryRef.current ? 'MODIFY_COMMIT_REQUESTED_WAITING_FOR_STATE' :
-                 (modifyBuilderEntryRef.current && !modifyBuilderEntry && !modifyEntryRecoveryAttemptedRef.current) ? 'MODIFY_STATE_RECOVERY_REQUESTED' :
-                 (modifyBuilderEntryRef.current && !modifyBuilderEntry && modifyEntryRecoveryAttemptedRef.current) ? 'MODIFY_FAILED_STATE_CLOBBERED_AFTER_COMMIT' :
-                 (modifyBuilderEntry && modifyEntryRecoveryAttemptedRef.current && modifyFlowState !== 'builder') ? 'MODIFY_STATE_RECOVERY_SUCCEEDED' :
-                 (modifyBuilderEntry && modifyFlowState !== 'builder') ? 'MODIFY_STATE_SURVIVED_WAITING_FOR_PROMOTION' :
-                 (modifyBuilderEntry && modifyFlowState === 'builder' && !shouldRenderModifyBuilder) ? 'MODIFY_PROMOTION_DISPATCHED_WAITING_FOR_RENDER' :
-                 'MODIFY_FAILED_ENTRY_NEVER_COMMITTED'}
+                {shouldRenderModifyBuilder ? 'RENDER_GRANTED' :
+                 modifyClickAudit.failureStage ? 'FAILED' :
+                 modifyBuilderEntry && modifyFlowState !== 'builder' ? 'WAITING_FOR_PROMOTION' :
+                 modifyClickAudit.canonicalLauncherEntered ? 'WAITING_FOR_STATE' :
+                 'IDLE'}
               </span>
             </div>
           </div>

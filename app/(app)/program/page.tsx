@@ -808,11 +808,18 @@ export default function ProgramPage() {
   }, [modifyBuilderEntry, modifyFlowState])
   
   // ==========================================================================
-  // [SCHEDULE INTELLIGENCE] Populate audit when program exists (non-builder view)
-  // This provides schedule truth visibility when NOT in modify builder mode
+  // [SCHEDULE INTELLIGENCE] Populate audit when program exists
+  // NOTE: This effect runs on program/modifyFlowState change, NOT shouldRenderModifyBuilder
+  // The shouldRenderModifyBuilder const is declared ~9000 lines later, so referencing
+  // it in this effect's dependency array would cause a TDZ (Temporal Dead Zone) error.
+  // Instead, we use modifyFlowState !== 'builder' which is equivalent and already available.
   // ==========================================================================
   useEffect(() => {
-    if (program && !shouldRenderModifyBuilder) {
+    // Only populate audit when NOT in modify builder mode
+    // Use modifyFlowState check instead of shouldRenderModifyBuilder to avoid TDZ
+    const isInBuilderMode = modifyFlowState === 'builder'
+    
+    if (program && !isInBuilderMode) {
       try {
         const canonical = getCanonicalProfile()
         const actualSessions = program?.sessions?.length ?? 0
@@ -850,7 +857,7 @@ export default function ProgramPage() {
         console.error('[schedule-intelligence-audit-error]', err)
       }
     }
-  }, [program, shouldRenderModifyBuilder])
+  }, [program, modifyFlowState])
   
   // ==========================================================================
   // [PHASE 26] CRITICAL FIX: Use a ref to always have the CURRENT builderSessionInputs

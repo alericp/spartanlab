@@ -868,6 +868,21 @@ export function reconcileCanonicalProfile(): CanonicalProgrammingProfile {
         })(),
       })
       
+      // [schedule-root-canonical-resolution] Concise log proving canonical resolution inputs/outputs
+      console.log('[schedule-root-canonical-resolution]', {
+        onboarding_scheduleMode: onboardingProfile?.scheduleMode ?? null,
+        onboarding_trainingDaysPerWeek: onboardingProfile?.trainingDaysPerWeek ?? null,
+        athlete_scheduleMode: athleteProfile?.scheduleMode ?? null,
+        athlete_trainingDaysPerWeek: athleteProfile?.trainingDaysPerWeek ?? null,
+        canonical_scheduleMode: resolvedScheduleMode,
+        canonical_trainingDaysPerWeek: resolvedTrainingDays,
+        canonical_adaptiveWorkloadEnabled: resolvedAdaptiveWorkload,
+        winnerSource,
+        verdict: resolvedScheduleMode === 'static' && resolvedTrainingDays
+          ? `CANONICAL_STATIC_${resolvedTrainingDays}`
+          : 'CANONICAL_FLEXIBLE',
+      })
+      
       return {
         scheduleMode: resolvedScheduleMode,
         trainingDaysPerWeek: resolvedTrainingDays,
@@ -1402,6 +1417,10 @@ export function saveCanonicalProfile(updates: Partial<CanonicalProgrammingProfil
     if (updates.goalCategory !== undefined) onboardingUpdates.goalCategory = updates.goalCategory
     // ISSUE A/B FIX: Sync scheduleMode to onboarding profile (now properly typed)
     if (updates.scheduleMode !== undefined) onboardingUpdates.scheduleMode = updates.scheduleMode
+    // [ROOT-CAUSE-FIX] CRITICAL: trainingDaysPerWeek MUST sync to onboarding profile
+    // Previously this was MISSING, causing canonical resolution to fallback to flexible
+    // when onboarding.trainingDaysPerWeek was null but athlete.trainingDaysPerWeek was set
+    if (updates.trainingDaysPerWeek !== undefined) onboardingUpdates.trainingDaysPerWeek = updates.trainingDaysPerWeek
     // ISSUE A/B FIX: Sync sessionDurationMode to onboarding profile (now properly typed)
     if (updates.sessionDurationMode !== undefined) {
       onboardingUpdates.sessionDurationMode = updates.sessionDurationMode
@@ -1519,10 +1538,18 @@ export function saveCanonicalProfile(updates: Partial<CanonicalProgrammingProfil
     
     saveOnboardingProfile(onboardingUpdates as OnboardingProfile)
     
-    // DEV LOGGING: Confirm save
-    if (process.env.NODE_ENV !== 'production') {
-      console.log('[CanonicalProfile] Saved updates to onboarding profile:', Object.keys(updates).length, 'fields')
-    }
+    // [schedule-root-persisted-truth] Concise log proving final persisted schedule truth
+    console.log('[schedule-root-persisted-truth]', {
+      athlete_scheduleMode: athleteUpdates.scheduleMode ?? 'unchanged',
+      athlete_trainingDaysPerWeek: athleteUpdates.trainingDaysPerWeek ?? 'unchanged',
+      onboarding_scheduleMode: onboardingUpdates.scheduleMode ?? 'unchanged',
+      onboarding_trainingDaysPerWeek: onboardingUpdates.trainingDaysPerWeek ?? 'unchanged',
+      verdict: updates.scheduleMode === 'static' && typeof updates.trainingDaysPerWeek === 'number'
+        ? `PERSISTED_STATIC_${updates.trainingDaysPerWeek}_TO_BOTH_STORES`
+        : updates.scheduleMode === 'flexible'
+          ? 'PERSISTED_FLEXIBLE_TO_BOTH_STORES'
+          : 'PARTIAL_OR_NO_SCHEDULE_UPDATE',
+    })
   }
 }
 

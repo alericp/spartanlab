@@ -2832,6 +2832,95 @@ export function logProgramTruthContract(
 }
 
 // =============================================================================
+// [ADAPTIVE BASELINE FIX] SHARED BASELINE FREQUENCY CONTRACT
+// =============================================================================
+
+/**
+ * Shared baseline frequency contract used by all three flows:
+ * - onboarding_build
+ * - modify_existing  
+ * - restart_full_rebuild
+ * 
+ * This contract clearly separates:
+ * 1. scheduleIdentity - 'static' | 'flexible' (user choice)
+ * 2. baselineRecommendedSessionCount - engine recommendation (may be 4, 5, or 6)
+ * 3. currentAdaptiveWeekSessionCount - may change with adaptation
+ * 4. activeProgramSessionCount - sessions in current snapshot
+ * 5. baselineFrequencyReason - why the baseline was chosen
+ */
+export interface BaselineFrequencyContract {
+  scheduleIdentity: 'static' | 'flexible'
+  baselineRecommendedSessionCount: number
+  currentAdaptiveWeekSessionCount: number | null
+  activeProgramSessionCount: number | null
+  baselineFrequencyReason: string
+  flowIntent: 'onboarding_build' | 'modify_existing' | 'restart_full_rebuild'
+  complexityScore: number | null
+  complexityElevated: boolean
+  protections: {
+    recoveryReduced: boolean
+    jointCautionReduced: boolean
+    lowExperienceReduced: boolean
+  }
+}
+
+/**
+ * Build the shared baseline frequency contract.
+ * All three flows MUST use this to ensure parity.
+ */
+export function buildBaselineFrequencyContract(
+  flowIntent: 'onboarding_build' | 'modify_existing' | 'restart_full_rebuild',
+  flexibleWeekStructure: {
+    currentWeekFrequency: number
+    rootCauseAudit?: {
+      complexityScore?: number | null
+      complexityElevation?: number
+      jointCautionPenalty?: number
+      recoveryScore?: number | null
+      finalReasonCategory?: string
+    }
+  } | null,
+  activeProgram: { sessions?: unknown[] } | null
+): BaselineFrequencyContract {
+  const profile = getCanonicalProfile()
+  const scheduleIdentity = profile.scheduleMode || 'flexible'
+  
+  const audit = flexibleWeekStructure?.rootCauseAudit
+  const complexityScore = audit?.complexityScore ?? null
+  const complexityElevated = (audit?.complexityElevation ?? 0) > 0
+  
+  const baselineRecommendedSessionCount = scheduleIdentity === 'flexible'
+    ? (flexibleWeekStructure?.currentWeekFrequency ?? 4)
+    : (typeof profile.trainingDaysPerWeek === 'number' ? profile.trainingDaysPerWeek : 4)
+  
+  console.log('[baseline-frequency-contract]', {
+    flowIntent,
+    scheduleIdentity,
+    baselineRecommendedSessionCount,
+    complexityScore,
+    complexityElevated,
+    activeProgramSessions: activeProgram?.sessions?.length ?? null,
+    reason: audit?.finalReasonCategory ?? 'unknown',
+  })
+  
+  return {
+    scheduleIdentity,
+    baselineRecommendedSessionCount,
+    currentAdaptiveWeekSessionCount: flexibleWeekStructure?.currentWeekFrequency ?? null,
+    activeProgramSessionCount: activeProgram?.sessions?.length ?? null,
+    baselineFrequencyReason: audit?.finalReasonCategory ?? 'unknown',
+    flowIntent,
+    complexityScore,
+    complexityElevated,
+    protections: {
+      recoveryReduced: (audit?.recoveryScore ?? 1) < 0.7,
+      jointCautionReduced: (audit?.jointCautionPenalty ?? 0) > 0,
+      lowExperienceReduced: profile.experienceLevel === 'beginner',
+    },
+  }
+}
+
+// =============================================================================
 // [PHASE 6] CANONICAL GENERATION ENTRY BUILDER
 // =============================================================================
 

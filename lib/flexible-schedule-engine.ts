@@ -216,10 +216,31 @@ const HIGH_TENDON_GOALS: PrimaryGoal[] = ['planche', 'front_lever', 'back_lever'
 // =============================================================================
 
 // Skill family classification for push/pull breadth detection
-const PUSH_SKILLS = ['planche', 'handstand', 'weighted_dip', 'push_up_progressions']
-const PULL_SKILLS = ['front_lever', 'back_lever', 'muscle_up', 'weighted_pull', 'pull_up_progressions']
-const CORE_SKILLS = ['l_sit', 'dragon_flag', 'ab_wheel']
-const FLEXIBILITY_SKILLS = ['flexibility', 'mobility', 'pike', 'pancake', 'bridge']
+// MUST match actual SkillGoal values from athlete-profile.ts
+const PUSH_SKILLS = [
+  'planche',           // Push skill
+  'planche_push_up',   // Push skill
+  'handstand',         // Push (vertical)
+  'handstand_pushup',  // Push skill
+  'one_arm_push_up',   // Push skill
+  'iron_cross',        // Push/pull hybrid but primarily push
+]
+const PULL_SKILLS = [
+  'front_lever',       // Pull skill
+  'back_lever',        // Pull skill (horizontal pull plane)
+  'muscle_up',         // Pull + push hybrid
+  'one_arm_pull_up',   // Pull skill
+]
+const CORE_SKILLS = [
+  'l_sit',             // Core skill
+  'v_sit',             // Core skill
+  'i_sit',             // Core skill
+  'dragon_flag',       // Core skill
+]
+const FLEXIBILITY_SKILLS = [
+  'pancake',           // Flexibility goal
+  // Note: front_splits, side_splits, toe_touch are FlexibilityGoals not SkillGoals
+]
 
 /**
  * [ADAPTIVE BASELINE FIX] Calculate content complexity score
@@ -250,6 +271,14 @@ export function calculateContentComplexity(input: FlexibleFrequencyInput): Conte
   const skills = input.selectedSkills || []
   const skillsCount = skills.length
   
+  // [DEBUG] Log incoming skills for verification
+  console.log('[v0] complexity-input-skills:', {
+    skillsReceived: skills,
+    skillsCount,
+    experienceLevel: input.experienceLevel,
+    sessionDurationMode: input.sessionDurationMode,
+  })
+  
   // Factor 1: Number of selected skills (0-3 points)
   if (skillsCount >= 5) {
     score += 3
@@ -263,10 +292,11 @@ export function calculateContentComplexity(input: FlexibleFrequencyInput): Conte
   }
   
   // Factor 2: Push + Pull family breadth (0-2 points)
-  const hasPush = skills.some(s => PUSH_SKILLS.includes(s.toLowerCase()))
-  const hasPull = skills.some(s => PULL_SKILLS.includes(s.toLowerCase()))
-  const hasCore = skills.some(s => CORE_SKILLS.includes(s.toLowerCase()))
-  const hasFlexibility = skills.some(s => FLEXIBILITY_SKILLS.includes(s.toLowerCase()))
+  // Skills are already in correct snake_case format (e.g., 'front_lever')
+  const hasPush = skills.some(s => PUSH_SKILLS.includes(s))
+  const hasPull = skills.some(s => PULL_SKILLS.includes(s))
+  const hasCore = skills.some(s => CORE_SKILLS.includes(s))
+  const hasFlexibility = skills.some(s => FLEXIBILITY_SKILLS.includes(s))
   
   const hasPushAndPull = hasPush && hasPull
   const familyCount = [hasPush, hasPull, hasCore, hasFlexibility].filter(Boolean).length
@@ -306,13 +336,21 @@ export function calculateContentComplexity(input: FlexibleFrequencyInput): Conte
   // Cap score at 10
   score = Math.min(10, score)
   
-  // Calculate baseline elevation based on score bands
+  // ==========================================================================
+  // [ADAPTIVE BASELINE FIX] Calculate baseline elevation based on score bands
+  // 
+  // Thresholds are intentionally accessible:
+  // - Score 5+: +2 days (6 sessions) - Broad/demanding athlete
+  // - Score 3+: +1 day (5 sessions) - Moderate complexity
+  // - Score 0-2: No elevation (4 sessions) - Simple/focused athlete
+  // ==========================================================================
   let baselineElevation = 0
-  if (score >= 7) {
-    baselineElevation = 2  // High complexity: +2 days
-  } else if (score >= 4) {
-    baselineElevation = 1  // Moderate complexity: +1 day
+  if (score >= 5) {
+    baselineElevation = 2  // Broad/demanding athlete: +2 days (e.g., 4→6)
+  } else if (score >= 3) {
+    baselineElevation = 1  // Moderate complexity: +1 day (e.g., 4→5)
   }
+  // Score 0-2: No elevation - simple/focused athlete stays at goal typical
   
   console.log('[complexity-score]', {
     score,

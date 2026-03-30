@@ -8,6 +8,59 @@
  * This is the SINGLE SOURCE OF TRUTH for athlete programming profile.
  * All generation, regeneration, settings, and metric updates MUST use this.
  * 
+ * =============================================================================
+ * [UNIFIED PROGRAM TRUTH CONTRACT] - Added for Onboarding/Modify/Restart Unification
+ * =============================================================================
+ * 
+ * ALL THREE FLOWS MUST USE THE SAME AUTHORITY CHAIN:
+ * 
+ * 1. USER TRUTH SOURCE:
+ *    - getCanonicalProfile() is the ONLY truth source
+ *    - Reconciles: onboarding profile + athlete profile + precedence rules
+ *    - Schedule identity comes from saved user choices, not snapshot/generated data
+ * 
+ * 2. GENERATION ENTRY BUILDER:
+ *    - buildCanonicalGenerationEntry(triggerSource, overrides?) is the ONLY entry builder
+ *    - All flows call this with their triggerSource for tracking
+ *    - Overrides are for editable fields in Modify builder, NOT for truth override
+ * 
+ * 3. INPUT CONVERTER:
+ *    - entryToAdaptiveInputs() converts validated entry to generation inputs
+ *    - This is shared by all flows
+ * 
+ * 4. GENERATOR:
+ *    - generateAdaptiveProgram() is the ONLY generator
+ *    - All flows call this with the same input format
+ * 
+ * FLOW INTENT DIFFERENCES (INTENTIONAL):
+ * 
+ * - ONBOARDING_BUILD:
+ *   - triggerSource: 'generateFirstProgram'
+ *   - Creates first program
+ *   - No archive needed
+ *   - No overrides
+ * 
+ * - MODIFY_EXISTING:
+ *   - triggerSource: 'modify_program', 'handleGenerateFromModifyBuilder'
+ *   - Refines current program
+ *   - Preserves week continuity unless rebuilt
+ *   - May have schedule/duration overrides from builder UI
+ * 
+ * - RESTART_FULL_REBUILD:
+ *   - triggerSource: 'handleConfirmNewProgram_startNew'
+ *   - Archives old program to history
+ *   - Resets to week 1
+ *   - No overrides - uses fresh canonical truth
+ * 
+ * SCHEDULE IDENTITY vs GENERATED BASELINE:
+ * - Schedule identity (static vs flexible) is a USER TRUTH field
+ * - Generated baseline session count is an ENGINE RECOMMENDATION
+ * - These must NOT be conflated
+ * - A flexible user can have a 6-session generated program
+ * - A static 6-day user always has 6 sessions by identity
+ * 
+ * =============================================================================
+ * 
  * REGRESSION PREVENTION RULES:
  * 1. DO NOT import getAthleteProfile/saveAthleteProfile from data-service directly for generation
  * 2. DO NOT import getOnboardingProfile/saveOnboardingProfile from athlete-profile directly for generation
@@ -2707,6 +2760,78 @@ export function hasValidCanonicalProfile(): boolean {
 }
 
 // =============================================================================
+// [UNIFIED PROGRAM TRUTH CONTRACT] FLOW INTENT TYPE
+// =============================================================================
+
+/**
+ * Flow intent explicitly declares which generation path is being used.
+ * This makes the three flows' differences trackable and auditable.
+ */
+export type ProgramFlowIntent = 
+  | 'onboarding_build'      // First program creation after onboarding
+  | 'modify_existing'       // Refining current program (preserves continuity)
+  | 'restart_full_rebuild'  // Archives old program, resets to week 1
+
+/**
+ * Maps triggerSource strings to flow intent for tracking.
+ * This allows existing code to continue using triggerSource while
+ * we track the actual flow intent.
+ */
+export function resolveFlowIntent(triggerSource: string): ProgramFlowIntent {
+  const source = triggerSource.toLowerCase()
+  
+  // Onboarding build triggers
+  if (source.includes('generatefirstprogram') || source.includes('onboarding')) {
+    return 'onboarding_build'
+  }
+  
+  // Restart/new program triggers
+  if (source.includes('startnew') || source.includes('confirmnewprogram') || source.includes('restart')) {
+    return 'restart_full_rebuild'
+  }
+  
+  // Everything else is modify (modify_program, handleGenerateFromModifyBuilder, etc.)
+  return 'modify_existing'
+}
+
+/**
+ * Logs the unified program truth contract state.
+ * Call this at generation entry to audit the exact truth being used.
+ */
+export function logProgramTruthContract(
+  triggerSource: string,
+  entry: ValidatedGenerationEntry | null,
+  options?: {
+    activeWeek?: number
+    willArchive?: boolean
+    willResetWeek?: boolean
+  }
+): void {
+  const flowIntent = resolveFlowIntent(triggerSource)
+  const canonical = getCanonicalProfile()
+  
+  console.log('[program-truth-contract]', {
+    flowIntent,
+    triggerSource,
+    canonicalScheduleIdentity: {
+      scheduleMode: canonical.scheduleMode,
+      trainingDaysPerWeek: canonical.trainingDaysPerWeek,
+    },
+    entryScheduleIdentity: entry ? {
+      scheduleMode: entry.scheduleMode,
+      trainingDaysPerWeek: entry.trainingDaysPerWeek,
+    } : null,
+    programContinuity: {
+      activeWeek: options?.activeWeek ?? null,
+      willArchive: options?.willArchive ?? (flowIntent === 'restart_full_rebuild'),
+      willResetWeek: options?.willResetWeek ?? (flowIntent !== 'modify_existing'),
+    },
+    entryValid: !!entry,
+    timestamp: new Date().toISOString(),
+  })
+}
+
+// =============================================================================
 // [PHASE 6] CANONICAL GENERATION ENTRY BUILDER
 // =============================================================================
 
@@ -2810,11 +2935,28 @@ export function buildCanonicalGenerationEntry(
   }
   
   // ==========================================================================
+  // [UNIFIED PROGRAM TRUTH CONTRACT] Flow intent resolution
+  // ==========================================================================
+  const flowIntent = resolveFlowIntent(triggerSource)
+  
+  console.log('[program-truth-contract-entry]', {
+    triggerSource,
+    flowIntent,
+    canonicalScheduleIdentity: {
+      scheduleMode: profile.scheduleMode,
+      trainingDaysPerWeek: profile.trainingDaysPerWeek,
+    },
+    hasOverrides: !!overrides && Object.keys(overrides).length > 0,
+    overrideFields: overrides ? Object.keys(overrides) : [],
+  })
+  
+  // ==========================================================================
   // [PHASE 17Z] TASK 1 - Root material identity snapshot
   // This captures the exact canonical truth BEFORE any override resolution
   // ==========================================================================
   console.log('[phase17z-canonical-root-material-identity-audit]', {
     triggerSource,
+    flowIntent, // Added flow intent
     canonicalProfileTruth: {
       primaryGoal: profile.primaryGoal ?? null,
       secondaryGoal: profile.secondaryGoal ?? null,

@@ -9288,6 +9288,10 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
       
       // ==========================================================================
       // STEP 4: VALIDATE AND COMMIT
+      // [UNIFIED PROGRAM TRUTH CONTRACT] This is the MODIFY_EXISTING flow
+      // - Preserves current program continuity
+      // - Does NOT archive old program
+      // - Uses canonical truth with builder overrides
       // ==========================================================================
       stage = 'seed_builder_session'
       const newSessionKey = `canonical_modify_${Date.now()}`
@@ -9295,6 +9299,8 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
         sessionKey: newSessionKey,
         source: 'modify_visible_program',
         inputs: freshInputs,
+        // [UNIFIED] Track flow intent
+        __flowIntent: 'modify_existing' as const,
       }
       
       // Pre-commit validation
@@ -9891,9 +9897,22 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
     
     // ==========================================================================
     // [PHASE 24G] TASK 2 - NEW SOURCE-WINNER CONTRACT FOR START NEW
+    // [UNIFIED PROGRAM TRUTH CONTRACT] This is the RESTART_FULL_REBUILD flow
+    // - Archives old program to history
+    // - Resets to week 1
+    // - Uses fresh canonical truth (no stale snapshot override)
     // Priority: canonical/onboarding truth FIRST > inputs fallback > hard defaults
     // EXPLICITLY EXCLUDE visible program and canonical saved program from primary seeding
     // ==========================================================================
+    
+    console.log('[program-truth-contract-restart]', {
+      flowIntent: 'restart_full_rebuild',
+      willArchiveOldProgram: true,
+      willResetToWeek1: true,
+      usesCanonicalTruthOnly: true,
+      excludesStaleSnapshot: true,
+    })
+    
     let freshInputs: AdaptiveProgramInputs
     let sourceWinner: 'canonical_start_new_truth' | 'inputs_fallback' | 'hard_default_fallback'
     let canonicalEntrySuccess = false

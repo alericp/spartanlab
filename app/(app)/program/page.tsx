@@ -21,17 +21,18 @@
 // This allows us to verify the live app is running the expected code version
 // ==========================================================================
 export const PHASE27C_BUILD_IDENTITY = {
-  buildIdentityName: 'PROMOTION_CORRIDOR_FINALIZATION',
-  buildIdentityVersion: '2024-7STEP-PROMOTION-v1',
+  buildIdentityName: 'SCHEDULE_INTELLIGENCE_PHASE',
+  buildIdentityVersion: '2024-SCHEDULE-INTELLIGENCE-v1',
   buildTimestamp: new Date().toISOString(),
   modifyPipeline: 'CANONICAL_7_STEP_WITH_2_PHASE_PROMOTION',
+  currentPhase: 'SCHEDULE_INTELLIGENCE_AUDIT',
+  retiredPhases: ['MODIFY_PIPELINE_CORRIDOR'],
   features: [
-    'Full 7-step audit tracking (5 launcher + promotion + render)',
-    '2-phase promotion: core (blocking) + truth panel (non-blocking)',
-    'Try/catch wrapped promotion with explicit failure capture',
-    'Step 7 render granted tracking via useEffect',
-    'Truth panel seeding cannot block builder opening',
-    'Per-step success/failure/error UI display',
+    'Schedule Intelligence Audit panel (replaced Modify Pipeline panel)',
+    'Complexity scoring for flexible baseline elevation',
+    'Shared schedule contract for onboarding/modify/restart',
+    'Holistic adaptation priority codified',
+    'Flexible users can start at 5-6 sessions when justified',
   ],
 } as const
 
@@ -805,6 +806,51 @@ export default function ProgramPage() {
       }))
     }
   }, [modifyBuilderEntry, modifyFlowState])
+  
+  // ==========================================================================
+  // [SCHEDULE INTELLIGENCE] Populate audit when program exists (non-builder view)
+  // This provides schedule truth visibility when NOT in modify builder mode
+  // ==========================================================================
+  useEffect(() => {
+    if (program && !shouldRenderModifyBuilder) {
+      try {
+        const canonical = getCanonicalProfile()
+        const actualSessions = program?.sessions?.length ?? 0
+        
+        // Compute complexity tier from session count and canonical data
+        const isFlexible = canonical.scheduleMode === 'flexible'
+        const skillsCount = canonical.selectedSkills?.length ?? 0
+        
+        // Simple complexity estimation based on visible program
+        let estimatedComplexity = 0
+        if (skillsCount >= 5) estimatedComplexity += 3
+        else if (skillsCount >= 3) estimatedComplexity += 2
+        else if (skillsCount >= 2) estimatedComplexity += 1
+        if (canonical.experienceLevel === 'advanced') estimatedComplexity += 2
+        else if (canonical.experienceLevel === 'intermediate') estimatedComplexity += 1
+        
+        // Estimate what baseline SHOULD be based on complexity
+        let estimatedBaseline = 4
+        if (estimatedComplexity >= 5) estimatedBaseline = 6
+        else if (estimatedComplexity >= 3) estimatedBaseline = 5
+        
+        const complexityElevated = estimatedBaseline > 4
+        
+        setScheduleTruthAudit(prev => ({
+          ...prev,
+          canonicalScheduleMode: canonical.scheduleMode,
+          canonicalTrainingDaysPerWeek: isFlexible ? null : (typeof canonical.trainingDaysPerWeek === 'number' ? canonical.trainingDaysPerWeek : null),
+          complexityScore: estimatedComplexity,
+          complexityElevated,
+          baselineRecommendedSessionCount: isFlexible ? estimatedBaseline : (typeof canonical.trainingDaysPerWeek === 'number' ? canonical.trainingDaysPerWeek : 4),
+          activeProgramSessionCount: actualSessions,
+          baselineFrequencyReason: complexityElevated ? 'complexity_demand_elevation' : 'goal_typical_baseline',
+        }))
+      } catch (err) {
+        console.error('[schedule-intelligence-audit-error]', err)
+      }
+    }
+  }, [program, shouldRenderModifyBuilder])
   
   // ==========================================================================
   // [PHASE 26] CRITICAL FIX: Use a ref to always have the CURRENT builderSessionInputs
@@ -10593,154 +10639,107 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
         </div>
         
         {/* ==========================================================================
-            MODIFY AUDIT STRIP - 5-Step Corridor Status
-            Shows exact progress through the canonical Modify pipeline
+            SCHEDULE INTELLIGENCE AUDIT - Current Phase Active Display
+            Retired: Modify Pipeline corridor (completed)
+            Now showing: Schedule intelligence truth for flexible baseline resolution
             ========================================================================== */}
         {program && !shouldRenderModifyBuilder && (
           <div className="mt-4 p-3 bg-zinc-900/80 border border-zinc-700 rounded-lg text-xs font-mono">
-            <div className="text-zinc-400 mb-2 font-semibold">MODIFY PIPELINE (5-Step Corridor)</div>
-            <div className="space-y-1 text-zinc-500">
-              {/* Step 1: Launcher Entry */}
-              <div className="flex items-center gap-2">
-                <span className={modifyClickAudit.step1LauncherEntered ? 'text-green-400' : 'text-zinc-600'}>
-                  {modifyClickAudit.step1LauncherEntered ? '✓' : '○'}
+            <div className="text-zinc-400 mb-2 font-semibold">SCHEDULE INTELLIGENCE AUDIT</div>
+            <div className="space-y-1.5 text-zinc-500">
+              {/* Row 1: Schedule Identity */}
+              <div className="flex items-center justify-between">
+                <span>Schedule Identity:</span>
+                <span className={scheduleTruthAudit?.canonicalScheduleMode === 'flexible' ? 'text-cyan-400' : 'text-purple-400'}>
+                  {scheduleTruthAudit?.canonicalScheduleMode === 'flexible' ? 'FLEXIBLE' : 'STATIC'}
                 </span>
-                <span>Step 1: Launcher entered</span>
               </div>
               
-              {/* Step 2: Entry Build */}
-              <div className="flex items-center gap-2">
+              {/* Row 2: Canonical Days Preference */}
+              <div className="flex items-center justify-between">
+                <span>Canonical Days Pref:</span>
+                <span className="text-zinc-300">
+                  {scheduleTruthAudit?.canonicalScheduleMode === 'flexible' 
+                    ? 'adaptive' 
+                    : (scheduleTruthAudit?.canonicalTrainingDaysPerWeek ?? '?')}
+                </span>
+              </div>
+              
+              {/* Row 3: Complexity Score & Tier */}
+              <div className="flex items-center justify-between">
+                <span>Complexity:</span>
                 <span className={
-                  modifyClickAudit.step2EntryBuildSucceeded ? 'text-green-400' :
-                  modifyClickAudit.step2EntryBuildError ? 'text-red-400' :
-                  modifyClickAudit.step2EntryBuildStarted ? 'text-yellow-400' :
-                  'text-zinc-600'
+                  (scheduleTruthAudit?.complexityScore ?? 0) >= 5 ? 'text-orange-400' :
+                  (scheduleTruthAudit?.complexityScore ?? 0) >= 3 ? 'text-yellow-400' :
+                  'text-zinc-400'
                 }>
-                  {modifyClickAudit.step2EntryBuildSucceeded ? '✓' :
-                   modifyClickAudit.step2EntryBuildError ? '✗' :
-                   modifyClickAudit.step2EntryBuildStarted ? '◐' : '○'}
+                  {scheduleTruthAudit?.complexityScore ?? 0}/10 ({
+                    (scheduleTruthAudit?.complexityScore ?? 0) >= 5 ? 'HIGH' :
+                    (scheduleTruthAudit?.complexityScore ?? 0) >= 3 ? 'MEDIUM' : 'LOW'
+                  })
                 </span>
-                <span>Step 2: Entry built</span>
-                {modifyClickAudit.step2EntryBuildError && (
-                  <span className="text-red-400 ml-2">{modifyClickAudit.step2EntryBuildError.slice(0, 40)}</span>
-                )}
               </div>
               
-              {/* Step 3: Input Conversion */}
-              <div className="flex items-center gap-2">
+              {/* Row 4: Starting Frequency Recommendation */}
+              <div className="flex items-center justify-between">
+                <span>Baseline Recommendation:</span>
                 <span className={
-                  modifyClickAudit.step3InputConversionSucceeded ? 'text-green-400' :
-                  modifyClickAudit.step3InputConversionError ? 'text-red-400' :
-                  modifyClickAudit.step3InputConversionStarted ? 'text-yellow-400' :
-                  'text-zinc-600'
+                  (scheduleTruthAudit?.baselineRecommendedSessionCount ?? 4) >= 6 ? 'text-green-400' :
+                  (scheduleTruthAudit?.baselineRecommendedSessionCount ?? 4) >= 5 ? 'text-cyan-400' :
+                  'text-zinc-300'
                 }>
-                  {modifyClickAudit.step3InputConversionSucceeded ? '✓' :
-                   modifyClickAudit.step3InputConversionError ? '✗' :
-                   modifyClickAudit.step3InputConversionStarted ? '◐' : '○'}
+                  {scheduleTruthAudit?.baselineRecommendedSessionCount ?? '?'} sessions
                 </span>
-                <span>Step 3: Inputs converted</span>
-                {modifyClickAudit.step3InputConversionError && (
-                  <span className="text-red-400 ml-2">{modifyClickAudit.step3InputConversionError.slice(0, 40)}</span>
-                )}
               </div>
               
-              {/* Step 4: Commit */}
-              <div className="flex items-center gap-2">
-                <span className={
-                  modifyClickAudit.step4CommitSucceeded ? 'text-green-400' :
-                  modifyClickAudit.step4CommitError ? 'text-red-400' :
-                  modifyClickAudit.step4CommitAttempted ? 'text-yellow-400' :
-                  'text-zinc-600'
-                }>
-                  {modifyClickAudit.step4CommitSucceeded ? '✓' :
-                   modifyClickAudit.step4CommitError ? '✗' :
-                   modifyClickAudit.step4CommitAttempted ? '◐' : '○'}
+              {/* Row 5: Current Program Sessions */}
+              <div className="flex items-center justify-between">
+                <span>Current Program:</span>
+                <span className="text-zinc-300">
+                  {program?.sessions?.length ?? 0} sessions
                 </span>
-                <span>Step 4: Commit attempted</span>
-                {modifyClickAudit.step4CommitError && (
-                  <span className="text-red-400 ml-2">{modifyClickAudit.step4CommitError.slice(0, 40)}</span>
-                )}
               </div>
               
-              {/* Step 5: State Observed */}
-              <div className="flex items-center gap-2">
-                <span className={modifyClickAudit.step5StateObserved ? 'text-green-400' : 'text-zinc-600'}>
-                  {modifyClickAudit.step5StateObserved ? '✓' : '○'}
+              {/* Row 6: Complexity Elevated */}
+              <div className="flex items-center justify-between">
+                <span>Complexity Elevated:</span>
+                <span className={scheduleTruthAudit?.complexityElevated ? 'text-green-400' : 'text-zinc-500'}>
+                  {scheduleTruthAudit?.complexityElevated ? 'YES' : 'NO'}
                 </span>
-                <span>Step 5: State observed</span>
-                {modifyClickAudit.step5ObservedSessionKey && (
-                  <span className="text-green-400 ml-2 text-[10px]">{modifyClickAudit.step5ObservedSessionKey.slice(0, 15)}...</span>
-                )}
               </div>
               
-              {/* Step 6: Promotion */}
-              <div className="flex items-center gap-2">
-                <span className={
-                  modifyClickAudit.step6PromotionCoreSucceeded ? 'text-green-400' :
-                  modifyClickAudit.step6PromotionError ? 'text-red-400' :
-                  modifyClickAudit.step6PromotionStarted ? 'text-yellow-400' :
-                  'text-zinc-600'
-                }>
-                  {modifyClickAudit.step6PromotionCoreSucceeded ? '✓' :
-                   modifyClickAudit.step6PromotionError ? '✗' :
-                   modifyClickAudit.step6PromotionStarted ? '◐' : '○'}
+              {/* Row 7: Baseline Reason */}
+              <div className="flex items-center justify-between">
+                <span>Reason:</span>
+                <span className="text-zinc-400 text-[10px]">
+                  {scheduleTruthAudit?.baselineFrequencyReason?.replace(/_/g, ' ') || 'unknown'}
                 </span>
-                <span>Step 6: Promotion</span>
-                {modifyClickAudit.step6PromotionError && (
-                  <span className="text-red-400 ml-2 text-[10px]">{modifyClickAudit.step6PromotionError.slice(0, 30)}</span>
-                )}
-              </div>
-              
-              {/* Step 7: Render Granted */}
-              <div className="flex items-center gap-2">
-                <span className={modifyClickAudit.step7RenderGranted ? 'text-green-400' : 'text-zinc-600'}>
-                  {modifyClickAudit.step7RenderGranted ? '✓' : '○'}
-                </span>
-                <span>Step 7: Render granted</span>
-              </div>
-              
-              {/* Flow State & Render */}
-              <div className="flex items-center gap-2 mt-2 pt-2 border-t border-zinc-700 text-[10px]">
-                <span>Flow: <span className={modifyFlowState === 'builder' ? 'text-green-400' : 'text-zinc-400'}>{modifyFlowState}</span></span>
-                <span className="mx-1">|</span>
-                <span>Render: <span className={shouldRenderModifyBuilder ? 'text-green-400' : 'text-red-400'}>{shouldRenderModifyBuilder ? 'YES' : 'NO'}</span></span>
-                <span className="mx-1">|</span>
-                <span>Last: <span className="text-blue-400">{modifyClickAudit.lastSuccessfulStep}/7</span></span>
               </div>
             </div>
             
-            {/* Verdict */}
-            <div className="mt-2 pt-2 border-t border-zinc-700 text-zinc-300">
-              Verdict: <span className={
-                modifyClickAudit.step7RenderGranted ? 'text-green-400' :
-                modifyClickAudit.failureStage ? 'text-red-400' :
-                modifyClickAudit.step6PromotionCoreSucceeded && !modifyClickAudit.step7RenderGranted ? 'text-yellow-400' :
-                modifyClickAudit.step5StateObserved && !modifyClickAudit.step6PromotionStarted ? 'text-yellow-400' :
-                'text-zinc-500'
-              }>
-                {(() => {
-                  if (modifyClickAudit.step7RenderGranted) return 'MODIFY_PIPELINE_READY'
-                  if (modifyClickAudit.failureStage) return `FAILED_AT_${modifyClickAudit.failureStage.toUpperCase()}`
-                  if (modifyClickAudit.step6PromotionCoreSucceeded && !modifyClickAudit.step7RenderGranted) return 'PROMOTION_OK_RENDER_PENDING'
-                  if (modifyClickAudit.step6PromotionStarted && !modifyClickAudit.step6PromotionCoreSucceeded) return 'PROMOTION_IN_PROGRESS'
-                  if (modifyClickAudit.step5StateObserved && !modifyClickAudit.step6PromotionStarted) return 'STATE_OBSERVED_AWAITING_PROMOTION'
-                  if (modifyClickAudit.step4CommitSucceeded && !modifyClickAudit.step5StateObserved) return 'COMMIT_OK_STATE_PENDING'
-                  if (modifyClickAudit.step4CommitAttempted && !modifyClickAudit.step4CommitSucceeded) return 'COMMIT_FAILED'
-                  if (modifyClickAudit.step3InputConversionStarted && !modifyClickAudit.step3InputConversionSucceeded) return 'INPUT_CONVERSION_FAILED'
-                  if (modifyClickAudit.step2EntryBuildStarted && !modifyClickAudit.step2EntryBuildSucceeded) return 'ENTRY_BUILD_FAILED'
-                  if (modifyClickAudit.step1LauncherEntered) return 'LAUNCHER_IN_PROGRESS'
-                  if (modifyClickAudit.clickFiredAt) return 'CLICK_FIRED'
-                  return 'IDLE'
-                })()}
-              </span>
-            </div>
-            
-            {/* Failure message if present */}
-            {modifyClickAudit.failureMessage && (
-              <div className="mt-2 p-2 bg-red-900/30 border border-red-700 rounded text-red-400">
-                {modifyClickAudit.failureMessage}
+            {/* Alignment Verdict */}
+            <div className="mt-2 pt-2 border-t border-zinc-700">
+              <div className="flex items-center justify-between">
+                <span className="text-zinc-400">Verdict:</span>
+                <span className={(() => {
+                  const recommended = scheduleTruthAudit?.baselineRecommendedSessionCount ?? 4
+                  const actual = program?.sessions?.length ?? 0
+                  if (actual === 0) return 'text-zinc-500'
+                  if (actual === recommended) return 'text-green-400'
+                  if (actual < recommended) return 'text-yellow-400'
+                  return 'text-cyan-400'
+                })()}>
+                  {(() => {
+                    const recommended = scheduleTruthAudit?.baselineRecommendedSessionCount ?? 4
+                    const actual = program?.sessions?.length ?? 0
+                    if (actual === 0) return 'NO_PROGRAM'
+                    if (actual === recommended) return 'ALIGNED'
+                    if (actual < recommended) return 'UNDEREXPRESSED_BASELINE'
+                    return 'OVEREXPRESSED_BASELINE'
+                  })()}
+                </span>
               </div>
-            )}
+            </div>
           </div>
         )}
 

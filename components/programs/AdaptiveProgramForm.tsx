@@ -809,22 +809,9 @@ export function AdaptiveProgramForm({
               })()}
             </div>
             
-            {/* [PHASE 29D] Final display log */}
-            {(() => {
-              console.log('[phase29d-display-final]', {
-                displayedScheduleMode: inputs.scheduleMode,
-                displayedTrainingDays: inputs.trainingDaysPerWeek,
-                adaptiveWorkloadEnabled: scheduleTruthAudit.adaptiveWorkloadEnabled,
-                verdict: inputs.scheduleMode === 'static' && inputs.trainingDaysPerWeek === 6
-                  ? 'DISPLAYING_STATIC_6'
-                  : inputs.scheduleMode === 'static'
-                    ? `DISPLAYING_STATIC_${inputs.trainingDaysPerWeek}`
-                    : 'DISPLAYING_FLEXIBLE',
-              })
-              return null
-            })()}
+            {/* [FINAL] Removed verbose render-time display log */}
             
-            {/* [PHASE 28J] Source null warning - both sources have null scheduleMode */}
+            {/* [FINAL] Source warning - only show if BOTH sources were actually READ and are truly null */}
             {scheduleTruthAudit.onboardingScheduleMode === null && 
              scheduleTruthAudit.athleteScheduleMode === null && (
               <div className="mt-2 p-2 bg-red-500/20 border border-red-500/40 rounded">
@@ -838,11 +825,23 @@ export function AdaptiveProgramForm({
                 </div>
               </div>
             )}
+            {/* Show 'unread' message when sources weren't actually read yet */}
+            {(scheduleTruthAudit.onboardingScheduleMode === 'unread' || 
+              scheduleTruthAudit.athleteScheduleMode === 'unread') && (
+              <div className="mt-2 p-2 bg-yellow-500/20 border border-yellow-500/40 rounded">
+                <div className="text-[10px] text-yellow-400 font-semibold">
+                  SOURCE VALUES PENDING
+                </div>
+                <div className="text-[9px] text-yellow-400/80 mt-1">
+                  Profile sources not yet read. Values may update.
+                </div>
+              </div>
+            )}
             
             {/* Build variant chip */}
             <div className="mt-2 pt-2 border-t border-[#2A2A2A]">
               <div className="text-[9px] text-[#4A4A4A] font-mono text-center">
-                Builder: PHASE28KL_ROOT_CAUSE_FIX
+                Builder: FINAL_SIMPLIFICATION
               </div>
             </div>
           </div>

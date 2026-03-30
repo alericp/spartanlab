@@ -868,19 +868,13 @@ export function reconcileCanonicalProfile(): CanonicalProgrammingProfile {
         })(),
       })
       
-      // [schedule-root-canonical-resolution] Concise log proving canonical resolution inputs/outputs
-      console.log('[schedule-root-canonical-resolution]', {
-        onboarding_scheduleMode: onboardingProfile?.scheduleMode ?? null,
-        onboarding_trainingDaysPerWeek: onboardingProfile?.trainingDaysPerWeek ?? null,
-        athlete_scheduleMode: athleteProfile?.scheduleMode ?? null,
-        athlete_trainingDaysPerWeek: athleteProfile?.trainingDaysPerWeek ?? null,
-        canonical_scheduleMode: resolvedScheduleMode,
-        canonical_trainingDaysPerWeek: resolvedTrainingDays,
-        canonical_adaptiveWorkloadEnabled: resolvedAdaptiveWorkload,
-        winnerSource,
-        verdict: resolvedScheduleMode === 'static' && resolvedTrainingDays
-          ? `CANONICAL_STATIC_${resolvedTrainingDays}`
-          : 'CANONICAL_FLEXIBLE',
+      // [schedule-final-real-sources] Concise log proving canonical resolution
+      console.log('[schedule-final-real-sources]', {
+        onboarding: onboardingProfile?.scheduleMode ?? null,
+        athlete: athleteProfile?.scheduleMode ?? null,
+        canonical: resolvedScheduleMode,
+        days: resolvedTrainingDays,
+        winner: winnerSource,
       })
       
       return {
@@ -1538,18 +1532,13 @@ export function saveCanonicalProfile(updates: Partial<CanonicalProgrammingProfil
     
     saveOnboardingProfile(onboardingUpdates as OnboardingProfile)
     
-    // [schedule-root-persisted-truth] Concise log proving final persisted schedule truth
-    console.log('[schedule-root-persisted-truth]', {
-      athlete_scheduleMode: athleteUpdates.scheduleMode ?? 'unchanged',
-      athlete_trainingDaysPerWeek: athleteUpdates.trainingDaysPerWeek ?? 'unchanged',
-      onboarding_scheduleMode: onboardingUpdates.scheduleMode ?? 'unchanged',
-      onboarding_trainingDaysPerWeek: onboardingUpdates.trainingDaysPerWeek ?? 'unchanged',
-      verdict: updates.scheduleMode === 'static' && typeof updates.trainingDaysPerWeek === 'number'
-        ? `PERSISTED_STATIC_${updates.trainingDaysPerWeek}_TO_BOTH_STORES`
-        : updates.scheduleMode === 'flexible'
-          ? 'PERSISTED_FLEXIBLE_TO_BOTH_STORES'
-          : 'PARTIAL_OR_NO_SCHEDULE_UPDATE',
-    })
+    // [schedule-final-persisted] Concise save confirmation
+    if (updates.scheduleMode !== undefined || updates.trainingDaysPerWeek !== undefined) {
+      console.log('[schedule-final-persisted]', {
+        mode: updates.scheduleMode ?? 'unchanged',
+        days: updates.trainingDaysPerWeek ?? 'unchanged',
+      })
+    }
   }
 }
 

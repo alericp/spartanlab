@@ -3823,6 +3823,7 @@ export default function ProgramPage() {
         }
         
         // [PHASE 30S] Clear the authoritative entry - generation succeeded
+        modifyBuilderEntryRef.current = null
         setModifyBuilderEntry(null)
         setShowBuilder(false)
         
@@ -4725,6 +4726,7 @@ export default function ProgramPage() {
       }
       
       // [PHASE 30S] Clear the authoritative entry - generation succeeded
+      modifyBuilderEntryRef.current = null
       setModifyBuilderEntry(null)
       setShowBuilder(false)
       
@@ -6719,6 +6721,7 @@ export default function ProgramPage() {
         }
         
         // [PHASE 30S] Clear the authoritative entry - generation succeeded
+        modifyBuilderEntryRef.current = null
         setModifyBuilderEntry(null)
         setShowBuilder(false)
         
@@ -9100,28 +9103,8 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
         failureMessage: null,
       }))
       
-      console.log('[phase30g-modify-launcher-entered]', {
-        verdict: 'CANONICAL_LAUNCHER_ENTERED',
-        showBuilder_before: showBuilder,
-        modifyFlowState_before: modifyFlowState,
-        timestamp: new Date().toISOString(),
-      })
-      
-      console.log('[phase30f-modify-open-entry]', {
-        stage: 'entry',
-        programExists: !!program,
-        programId: program?.id ?? null,
-        timestamp: new Date().toISOString(),
-        verdict: 'MODIFY_OPEN_STARTED',
-      })
-    
-    console.log('[phase25-canonical-modify-replacement]', {
-      action: 'CANONICAL_MODIFY_LAUNCHER_ENTERED',
-      programExists: !!program,
-      programId: program?.id ?? null,
-      timestamp: new Date().toISOString(),
-      verdict: 'MODIFY_BUTTON_ROUTED_TO_CANONICAL_MODIFY_LAUNCHER',
-    })
+      // Minimal launcher log - just confirms entry
+      console.log('[modify-launcher-entered]', { programId: program?.id ?? null })
     
     // ==========================================================================
     // [PHASE 25] TASK 1: Get canonical truth for prefill
@@ -9131,129 +9114,21 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
     stage = 'read_canonical'
     const canonicalProfileNow = getCanonicalProfile()
     
-    // ==========================================================================
-    // [PHASE 30F] CANONICAL READ LOG
-    // ==========================================================================
-    console.log('[phase30f-modify-open-canonical-read]', {
-      stage: 'read_canonical',
-      canonical_scheduleMode: canonicalProfileNow?.scheduleMode ?? null,
-      canonical_trainingDaysPerWeek: canonicalProfileNow?.trainingDaysPerWeek ?? null,
-      canonical_adaptiveWorkloadEnabled: (canonicalProfileNow as { adaptiveWorkloadEnabled?: boolean })?.adaptiveWorkloadEnabled ?? null,
-      verdict: canonicalProfileNow ? 'CANONICAL_READ_OK' : 'CANONICAL_READ_NULLISH',
-    })
-    
-    // ==========================================================================
-    // [PHASE 30F] STAGE: read_athlete
-    // ==========================================================================
     stage = 'read_athlete'
     const athleteProfileForPre = getAthleteProfileDirect()
-    
-    // ==========================================================================
-    // [PHASE 30D] PROGRAM BEFORE MODIFY OPEN - AUTHORITATIVE BEHAVIOR FIX LOG
-    // THE DEFINITIVE LOG proving what canonical and athlete contain before builder opens
-    // ==========================================================================
-    console.log('[phase30d-program-before-modify-open]', {
-      athlete_scheduleMode: athleteProfileForPre?.scheduleMode ?? null,
-      athlete_trainingDaysPerWeek: athleteProfileForPre?.trainingDaysPerWeek ?? null,
-      canonical_scheduleMode: canonicalProfileNow?.scheduleMode ?? null,
-      canonical_trainingDaysPerWeek: canonicalProfileNow?.trainingDaysPerWeek ?? null,
-      verdict:
-        canonicalProfileNow?.scheduleMode === 'static' && canonicalProfileNow?.trainingDaysPerWeek === 6
-          ? 'PROGRAM_READ_STATIC_6'
-          : canonicalProfileNow?.scheduleMode === 'flexible'
-          ? 'PROGRAM_READ_FLEXIBLE'
-          : `PROGRAM_READ_${canonicalProfileNow?.scheduleMode}_${canonicalProfileNow?.trainingDaysPerWeek}`,
-    })
-    
-    // ==========================================================================
-    // [PHASE 30C] PROGRAM BEFORE MODIFY OPEN FINAL
-    // THE DEFINITIVE LOG proving what canonical and athlete contain before builder opens
-    // ==========================================================================
-    console.log('[phase30c-program-before-modify-open-final]', {
-      athlete_scheduleMode: athleteProfileForPre?.scheduleMode ?? null,
-      athlete_trainingDaysPerWeek: athleteProfileForPre?.trainingDaysPerWeek ?? null,
-      canonical_scheduleMode: canonicalProfileNow?.scheduleMode ?? null,
-      canonical_trainingDaysPerWeek: canonicalProfileNow?.trainingDaysPerWeek ?? null,
-      verdict:
-        canonicalProfileNow?.scheduleMode === 'static' && canonicalProfileNow?.trainingDaysPerWeek === 6
-          ? 'PROGRAM_READ_STATIC_6'
-          : canonicalProfileNow?.scheduleMode === 'flexible'
-          ? 'PROGRAM_READ_FLEXIBLE'
-          : `PROGRAM_READ_${canonicalProfileNow?.scheduleMode}_${canonicalProfileNow?.trainingDaysPerWeek}`,
-    })
-    
-    // ==========================================================================
-    // [PHASE 30B] PROGRAM BEFORE MODIFY OPEN - AUTHORITATIVE
-    // THE DEFINITIVE LOG proving what canonical and athlete contain before builder opens
-    // ==========================================================================
-    console.log('[phase30b-program-before-modify-open]', {
-      athlete_scheduleMode: athleteProfileForPre?.scheduleMode ?? null,
-      athlete_trainingDaysPerWeek: athleteProfileForPre?.trainingDaysPerWeek ?? null,
-      canonical_scheduleMode: canonicalProfileNow?.scheduleMode ?? null,
-      canonical_trainingDaysPerWeek: canonicalProfileNow?.trainingDaysPerWeek ?? null,
-      verdict:
-        canonicalProfileNow?.scheduleMode === 'static' && canonicalProfileNow?.trainingDaysPerWeek === 6
-          ? 'PROGRAM_READ_STATIC_6'
-          : canonicalProfileNow?.scheduleMode === 'flexible'
-          ? 'PROGRAM_READ_FLEXIBLE'
-          : `PROGRAM_READ_STATIC_${canonicalProfileNow?.trainingDaysPerWeek}`,
-    })
-    
-    // ==========================================================================
-    // [PHASE 30A] PROGRAM READ BEFORE MODIFY OPEN - AUTHORITATIVE
-    // THE DEFINITIVE LOG proving what canonical contains before builder opens
-    // ==========================================================================
-    console.log('[phase30a-program-read-before-modify-open]', {
-      canonical_scheduleMode: canonicalProfileNow?.scheduleMode ?? null,
-      canonical_trainingDaysPerWeek: canonicalProfileNow?.trainingDaysPerWeek ?? null,
-      canonical_adaptiveWorkloadEnabled: (canonicalProfileNow as { adaptiveWorkloadEnabled?: boolean })?.adaptiveWorkloadEnabled ?? null,
-      verdict:
-        canonicalProfileNow?.scheduleMode === 'static' && canonicalProfileNow?.trainingDaysPerWeek === 6
-          ? 'PROGRAM_READ_CANONICAL_STATIC_6'
-          : canonicalProfileNow?.scheduleMode === 'flexible'
-          ? 'PROGRAM_READ_CANONICAL_FLEXIBLE'
-          : `PROGRAM_READ_CANONICAL_STATIC_${canonicalProfileNow?.trainingDaysPerWeek}`,
-    })
-    
-    console.log('[phase25-canonical-modify-replacement]', {
-      action: 'CANONICAL_TRUTH_FETCHED',
-      canonicalTruth: {
-        primaryGoal: canonicalProfileNow.primaryGoal,
-        secondaryGoal: canonicalProfileNow.secondaryGoal,
-        scheduleMode: canonicalProfileNow.scheduleMode,
-        trainingDaysPerWeek: canonicalProfileNow.trainingDaysPerWeek,
-        sessionDurationMode: canonicalProfileNow.sessionDurationMode,
-        sessionLengthMinutes: canonicalProfileNow.sessionLengthMinutes,
-        selectedSkills: canonicalProfileNow.selectedSkills?.slice(0, 5),
-        experienceLevel: canonicalProfileNow.experienceLevel,
-      },
-      verdict: 'CANONICAL_MODIFY_PREFILL_USED',
-    })
-    
-    // ==========================================================================
-    // [PHASE 28L] PROGRAM READ BEFORE MODIFY OPEN - FORENSIC LOG
-    // Proves exactly what all sources contain BEFORE builder opens
-    // ==========================================================================
     const athleteSourceNow = getAthleteProfileDirect()
     const onboardingSourceNow = getOnboardingProfileDirect()
     
-    console.log('[phase28l-program-read-before-modify-open]', {
-      // In-memory program state
-      currentProgramScheduleMode: program?.scheduleMode || null,
-      currentProgramTrainingDays: (program as { trainingDaysPerWeek?: number })?.trainingDaysPerWeek || null,
-      // Latest athlete source (from localStorage)
-      athleteScheduleMode: athleteSourceNow?.scheduleMode ?? null,
-      athleteTrainingDays: athleteSourceNow?.trainingDaysPerWeek ?? null,
-      // Latest onboarding source
-      onboardingScheduleMode: onboardingSourceNow?.scheduleMode ?? null,
-      onboardingTrainingDays: onboardingSourceNow?.trainingDaysPerWeek ?? null,
-      // Canonical resolved
-      canonicalScheduleMode: canonicalProfileNow.scheduleMode,
-      canonicalTrainingDays: canonicalProfileNow.trainingDaysPerWeek,
+    // Single concise log for modify open schedule truth
+    console.log('[modify-open-schedule-truth]', {
+      canonical: canonicalProfileNow?.scheduleMode ?? null,
+      canonicalDays: canonicalProfileNow?.trainingDaysPerWeek ?? null,
+      athlete: athleteSourceNow?.scheduleMode ?? null,
+      onboarding: onboardingSourceNow?.scheduleMode ?? null,
       // Verdict
       verdict: (() => {
         const athleteIsStatic6 = athleteSourceNow?.scheduleMode === 'static' && athleteSourceNow?.trainingDaysPerWeek === 6
-        const canonIsStatic6 = canonicalProfileNow.scheduleMode === 'static' && canonicalProfileNow.trainingDaysPerWeek === 6
+        const canonIsStatic6 = canonicalProfileNow?.scheduleMode === 'static' && canonicalProfileNow?.trainingDaysPerWeek === 6
         const canonIsFlexible = canonicalProfileNow.scheduleMode === 'flexible'
         const bothNull = !athleteSourceNow?.scheduleMode && !onboardingSourceNow?.scheduleMode
         
@@ -9281,258 +9156,29 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
       sessionLength: canonicalProfileNow.sessionLengthMinutes ?? undefined,
     })
     
-    // ==========================================================================
-    // [PHASE 30F] ENTRY BUILD LOG
-    // ==========================================================================
-    console.log('[phase30f-modify-open-entry-build]', {
-      stage: 'build_entry',
-      success: !!entryResult?.success,
-      hasEntry: !!entryResult?.entry,
-      errorMessage: entryResult?.error?.message ?? null,
-      verdict: entryResult?.success && entryResult?.entry
-        ? 'ENTRY_BUILD_OK'
-        : 'ENTRY_BUILD_FAILED',
-    })
-    
-    // [PHASE 30F] Controlled failure if entry build fails
+    // Controlled failure if entry build fails
     if (!entryResult.success || !entryResult.entry) {
       throw new Error(`Entry build failed: ${entryResult.error?.message ?? 'Unknown error'}`)
     }
     
-    // ==========================================================================
-    // [PHASE 30F] STAGE: convert_entry_to_inputs
-    // [PHASE 30H] CONVERSION SOURCE LOCK - prove what inputs are available
-    // ==========================================================================
     stage = 'convert_entry_to_inputs'
-    
-    // ==========================================================================
-    // [PHASE 30H] CONVERSION INPUT LOG - prove we have valid entry before conversion
-    // Note: `program` is available in launcher scope, `visibleProgram` is render-scope only
-    // ==========================================================================
-    console.log('[phase30h-modify-conversion-input-final]', {
-      has_entryResult_entry: !!entryResult.entry,
-      has_canonical: !!canonicalProfileNow,
-      has_currentProgram: !!program,
-      entry_primaryGoal: entryResult.entry?.primaryGoal ?? null,
-      entry_scheduleMode: entryResult.entry?.scheduleMode ?? null,
-      entry_trainingDaysPerWeek: entryResult.entry?.trainingDaysPerWeek ?? null,
-      verdict: 'CONVERSION_INPUT_CAPTURED',
-    })
-    
     const freshInputs = entryToAdaptiveInputs(entryResult.entry)
-    
-    // ==========================================================================
-    // [PHASE 30H] CONVERSION OUTPUT LOG - prove conversion succeeded
-    // ==========================================================================
-    console.log('[phase30h-modify-conversion-output-final]', {
-      output_scheduleMode: freshInputs?.scheduleMode ?? null,
-      output_trainingDaysPerWeek: freshInputs?.trainingDaysPerWeek ?? null,
-      output_adaptiveWorkloadEnabled: (freshInputs as { adaptiveWorkloadEnabled?: boolean })?.adaptiveWorkloadEnabled ?? null,
-      verdict: freshInputs ? 'CONVERSION_OUTPUT_OK' : 'CONVERSION_OUTPUT_FAILED',
-    })
-    
-    // ==========================================================================
-    // [PHASE 30F] INPUT CONVERSION LOG
-    // ==========================================================================
-    console.log('[phase30f-modify-open-input-conversion]', {
-      stage: 'convert_entry_to_inputs',
-      inputs_scheduleMode: freshInputs?.scheduleMode ?? null,
-      inputs_trainingDaysPerWeek: freshInputs?.trainingDaysPerWeek ?? null,
-      inputs_adaptiveWorkloadEnabled: (freshInputs as { adaptiveWorkloadEnabled?: boolean })?.adaptiveWorkloadEnabled ?? null,
-      hasPrimaryGoal: !!freshInputs?.primaryGoal,
-      verdict: freshInputs ? 'INPUT_CONVERSION_OK' : 'INPUT_CONVERSION_FAILED',
-    })
     
     // [PHASE 30F] Controlled failure if input conversion fails
     if (!freshInputs) {
       throw new Error('Input conversion returned null/undefined')
     }
     
-    // ==========================================================================
-    // [PHASE 29D] MODIFY PREFILL BUILT - proves prefill was constructed correctly
-    // ==========================================================================
-    console.log('[phase29d-modify-prefill-built]', {
-      canonicalScheduleMode: canonicalProfileNow.scheduleMode,
-      canonicalTrainingDays: canonicalProfileNow.trainingDaysPerWeek,
-      prefillScheduleMode: freshInputs.scheduleMode,
-      prefillTrainingDays: freshInputs.trainingDaysPerWeek,
-      entrySuccess: entryResult.success,
-      verdict: (() => {
-        if (!entryResult.success) return 'ENTRY_BUILD_FAILED'
-        const canonStatic6 = canonicalProfileNow.scheduleMode === 'static' && canonicalProfileNow.trainingDaysPerWeek === 6
-        const prefillStatic6 = freshInputs.scheduleMode === 'static' && freshInputs.trainingDaysPerWeek === 6
-        if (canonStatic6 && prefillStatic6) return 'STATIC_6_PRESERVED_IN_PREFILL'
-        if (canonStatic6 && !prefillStatic6) return 'BUG_STATIC_6_LOST_IN_PREFILL'
-        if (freshInputs.scheduleMode === 'flexible') return 'FLEXIBLE_PREFILL_BUILT'
-        return `STATIC_${freshInputs.trainingDaysPerWeek}_PREFILL_BUILT`
-      })(),
-    })
-    
-    // ==========================================================================
-    // [PHASE 30E] MODIFY OPEN SOURCE LOCK
-    // THE DEFINITIVE LOG proving modify prefill was built from canonical truth
-    // [PHASE 30H] FIX: Use `program` (available in launcher scope) NOT `visibleProgram` (render-scope only)
-    // ==========================================================================
-    console.log('[phase30e-modify-open-source-lock]', {
-      canonical_scheduleMode: canonicalProfileNow?.scheduleMode ?? null,
-      canonical_trainingDaysPerWeek: canonicalProfileNow?.trainingDaysPerWeek ?? null,
-      program_scheduleMode: program?.scheduleMode ?? null,
-      program_trainingDaysPerWeek: (program as { trainingDaysPerWeek?: number })?.trainingDaysPerWeek ?? null,
-      chosen_prefill_scheduleMode: freshInputs?.scheduleMode ?? null,
-      chosen_prefill_trainingDaysPerWeek: freshInputs?.trainingDaysPerWeek ?? null,
-      sourceWinner:
-        canonicalProfileNow?.scheduleMode
-          ? 'CANONICAL_PROFILE'
-          : program?.scheduleMode
-          ? 'ACTIVE_PROGRAM_FALLBACK'
-          : 'DEFAULT_FALLBACK',
-      verdict:
-        freshInputs?.scheduleMode === 'static' && freshInputs?.trainingDaysPerWeek === 6
-          ? 'MODIFY_PREFILL_LOCKED_STATIC_6'
-          : freshInputs?.scheduleMode === 'flexible'
-          ? 'MODIFY_PREFILL_LOCKED_FLEXIBLE'
-          : `MODIFY_PREFILL_LOCKED_${freshInputs?.scheduleMode}_${freshInputs?.trainingDaysPerWeek}`,
-    })
-    
-    // ==========================================================================
-    // [PHASE 30D] MODIFY PREFILL FINAL - AUTHORITATIVE BEHAVIOR FIX LOG
-    // THE DEFINITIVE LOG proving prefill was constructed correctly from canonical
-    // ==========================================================================
-    console.log('[phase30d-modify-prefill-final]', {
-      prefill_scheduleMode: freshInputs.scheduleMode ?? null,
-      prefill_trainingDaysPerWeek: freshInputs.trainingDaysPerWeek ?? null,
-      prefill_adaptiveWorkloadEnabled: (freshInputs as { adaptiveWorkloadEnabled?: boolean })?.adaptiveWorkloadEnabled ?? null,
-      verdict:
-        freshInputs.scheduleMode === 'static' && freshInputs.trainingDaysPerWeek === 6
-          ? 'MODIFY_PREFILL_STATIC_6'
-          : freshInputs.scheduleMode === 'flexible'
-          ? 'MODIFY_PREFILL_FLEXIBLE'
-          : `MODIFY_PREFILL_${freshInputs.scheduleMode}_${freshInputs.trainingDaysPerWeek}`,
-    })
-    
-    // ==========================================================================
-    // [PHASE 30C] MODIFY PREFILL FINAL
-    // THE DEFINITIVE LOG proving prefill was constructed correctly from canonical
-    // ==========================================================================
-    console.log('[phase30c-modify-prefill-final]', {
-      prefill_scheduleMode: freshInputs.scheduleMode ?? null,
-      prefill_trainingDaysPerWeek: freshInputs.trainingDaysPerWeek ?? null,
-      prefill_adaptiveWorkloadEnabled: (freshInputs as { adaptiveWorkloadEnabled?: boolean })?.adaptiveWorkloadEnabled ?? null,
-      verdict:
-        freshInputs.scheduleMode === 'static' && freshInputs.trainingDaysPerWeek === 6
-          ? 'MODIFY_PREFILL_STATIC_6'
-          : freshInputs.scheduleMode === 'flexible'
-          ? 'MODIFY_PREFILL_FLEXIBLE'
-          : `MODIFY_PREFILL_${freshInputs.scheduleMode}_${freshInputs.trainingDaysPerWeek}`,
-    })
-    
-    // ==========================================================================
-    // [PHASE 30B] MODIFY PREFILL FINAL
-    // THE DEFINITIVE LOG proving prefill was constructed correctly from canonical
-    // ==========================================================================
-    console.log('[phase30b-modify-prefill-final]', {
-      prefill_scheduleMode: freshInputs.scheduleMode,
-      prefill_trainingDaysPerWeek: freshInputs.trainingDaysPerWeek,
-      prefill_adaptiveWorkloadEnabled: (freshInputs as { adaptiveWorkloadEnabled?: boolean })?.adaptiveWorkloadEnabled ?? null,
-      verdict:
-        freshInputs.scheduleMode === 'static' && freshInputs.trainingDaysPerWeek === 6
-          ? 'MODIFY_PREFILL_STATIC_6'
-          : freshInputs.scheduleMode === 'flexible'
-          ? 'MODIFY_PREFILL_FLEXIBLE'
-          : `MODIFY_PREFILL_STATIC_${freshInputs.trainingDaysPerWeek}`,
-    })
-    
-    // ==========================================================================
-    // [PHASE 28L] BUILDER PREFILL VERIFICATION - proves prefill matches canonical
-    // ==========================================================================
-    console.log('[phase28l-builder-prefill-verification]', {
-      // Canonical source
-      canonicalScheduleMode: canonicalProfileNow.scheduleMode,
-      canonicalTrainingDays: canonicalProfileNow.trainingDaysPerWeek,
-      // Prefill result
-      prefillScheduleMode: freshInputs.scheduleMode,
-      prefillTrainingDays: freshInputs.trainingDaysPerWeek,
-      // Match check
-      prefillMatchesCanonical: freshInputs.scheduleMode === canonicalProfileNow.scheduleMode,
-      // Verdict
-      verdict: (() => {
-        const canonIsStatic6 = canonicalProfileNow.scheduleMode === 'static' && canonicalProfileNow.trainingDaysPerWeek === 6
-        const prefillIsStatic6 = freshInputs.scheduleMode === 'static' && freshInputs.trainingDaysPerWeek === 6
-        if (canonIsStatic6 && prefillIsStatic6) return 'MODIFY_OPEN_PREFILLED_STATIC_6'
-        if (canonIsStatic6 && !prefillIsStatic6) return 'BUG_CANON_STATIC_6_BUT_PREFILL_NOT'
-        if (freshInputs.scheduleMode === 'flexible') return 'MODIFY_OPEN_PREFILLED_FLEXIBLE'
-        return `MODIFY_OPEN_PREFILLED_STATIC_${freshInputs.trainingDaysPerWeek}`
-      })(),
-    })
-    
-    // ==========================================================================
-    // [PHASE 30A] MODIFY PREFILL BUILT AUTHORITATIVE
-    // THE DEFINITIVE LOG proving prefill was constructed correctly from canonical
-    // ==========================================================================
-    console.log('[phase30a-modify-prefill-built-authoritative]', {
-      prefill_scheduleMode: freshInputs.scheduleMode,
-      prefill_trainingDaysPerWeek: freshInputs.trainingDaysPerWeek,
-      prefill_adaptiveWorkloadEnabled: (freshInputs as { adaptiveWorkloadEnabled?: boolean })?.adaptiveWorkloadEnabled ?? null,
-      verdict:
-        freshInputs.scheduleMode === 'static' && freshInputs.trainingDaysPerWeek === 6
-          ? 'MODIFY_PREFILL_STATIC_6'
-          : freshInputs.scheduleMode === 'flexible'
-          ? 'MODIFY_PREFILL_FLEXIBLE'
-          : `MODIFY_PREFILL_STATIC_${freshInputs.trainingDaysPerWeek}`,
-    })
-    
-    console.log('[phase25-canonical-modify-replacement]', {
-      action: 'CANONICAL_INPUTS_BUILT',
-      inputsBuilt: {
-        primaryGoal: freshInputs.primaryGoal,
-        secondaryGoal: freshInputs.secondaryGoal,
-        scheduleMode: freshInputs.scheduleMode,
-        trainingDaysPerWeek: freshInputs.trainingDaysPerWeek,
-        sessionDurationMode: freshInputs.sessionDurationMode,
-        sessionLength: freshInputs.sessionLength,
-        selectedSkillsCount: freshInputs.selectedSkills?.length ?? 0,
-      },
-      verdict: 'CANONICAL_INPUTS_READY_FOR_BUILDER',
-    })
-    
-    // ==========================================================================
-    // [PHASE 25] TASK 3: Create new builder session with canonical prefill
-    // [PHASE 26B] Use synchronous wrapper to avoid same-frame race
-    // [PHASE 30F] STAGE: seed_builder_session
-    // [PHASE 30S] CRITICAL: Commit ONE authoritative entry object FIRST
-    // ==========================================================================
+    // Create and commit the entry atomically
     stage = 'seed_builder_session'
     const newSessionKey = `canonical_modify_${Date.now()}`
-    
-    // ==========================================================================
-    // [PHASE 30S] COMMIT ONE AUTHORITATIVE MODIFY ENTRY OBJECT
-    // This MUST happen BEFORE any builder transition state changes.
-    // The entry object is THE single source of truth for Modify builder render.
-    // ==========================================================================
     const modifyEntry: ModifyBuilderEntry = {
       sessionKey: newSessionKey,
       source: 'modify_visible_program',
       inputs: freshInputs,
     }
     
-    // ==========================================================================
-    // [PHASE 31E] BEFORE ATOMIC ENTRY COMMIT LOG
-    // This proves we're about to commit with valid data
-    // ==========================================================================
-    console.log('[phase31e-before-atomic-entry-commit]', {
-      hasEntryObject: !!modifyEntry,
-      hasInputs: !!modifyEntry?.inputs,
-      scheduleMode: modifyEntry?.inputs?.scheduleMode ?? null,
-      trainingDaysPerWeek: modifyEntry?.inputs?.trainingDaysPerWeek ?? null,
-      verdict: modifyEntry?.inputs ? 'ABOUT_TO_COMMIT_ATOMIC_ENTRY' : 'ATOMIC_ENTRY_INVALID',
-    })
-    
-    // ==========================================================================
-    // [PHASE 31E] TRUE ATOMIC ENTRY COMMIT - NOTHING ELSE AFTER THIS
-    // The launcher MUST return immediately after this call.
-    // ALL other work (scheduleTruthAudit, recordProgramEnd, legacy state seeding)
-    // is moved to the promotion effect.
-    // ==========================================================================
+    // Commit entry (logs [modify-final-launch-commit] internally)
     const commitSuccess = commitModifyEntryAtomically(modifyEntry)
     
     if (!commitSuccess) {
@@ -10681,10 +10327,14 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
   // This is the ONE authoritative boolean that determines if Modify builder renders.
   // Entry must exist with inputs AND flow state must be 'builder' (after promotion).
   // showBuilder is NO LONGER a render authority for Modify.
+  // ROOT-CAUSE-FIX: Check ref as a fallback for state to handle React batching delays.
   // ==========================================================================
+  const refEntry = modifyBuilderEntryRef.current
+  const stateEntry = modifyBuilderEntry
+  const effectiveEntry = stateEntry ?? refEntry
   const shouldRenderModifyBuilder = (
-    modifyBuilderEntry !== null &&
-    modifyBuilderEntry.inputs !== null &&
+    effectiveEntry !== null &&
+    effectiveEntry.inputs !== null &&
     modifyFlowState === 'builder'
   )
   
@@ -10791,17 +10441,15 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
             ========================================================================== */}
         {program && !shouldRenderModifyBuilder && (
           <div className="mt-4 p-3 bg-zinc-900/80 border border-zinc-700 rounded-lg text-xs font-mono">
-            <div className="text-zinc-400 mb-2 font-semibold">PHASE31G ENTRY SURVIVAL AUDIT</div>
+            <div className="text-zinc-400 mb-2 font-semibold">MODIFY ENTRY AUDIT</div>
             <div className="grid grid-cols-2 gap-1 text-zinc-500">
               {/* Commit survival contract chain */}
               <div>1. Click fired: <span className={modifyClickAudit.clickFiredAt ? 'text-green-400' : 'text-zinc-600'}>{modifyClickAudit.clickFiredAt ? 'YES' : 'no'}</span></div>
               <div>2. Launcher entered: <span className={modifyClickAudit.canonicalLauncherEntered ? 'text-green-400' : 'text-zinc-600'}>{modifyClickAudit.canonicalLauncherEntered ? 'YES' : 'no'}</span></div>
-              <div>3. Entry commit requested: <span className={modifyBuilderEntryRef.current ? 'text-green-400' : 'text-red-400'}>{modifyBuilderEntryRef.current ? 'YES' : 'NO'}</span></div>
-              <div>4. Entry state survived: <span className={modifyBuilderEntry ? 'text-green-400' : 'text-red-400'}>{modifyBuilderEntry ? 'YES' : 'NO'}</span></div>
-              <div>5. Promotion dispatched: <span className={modifyFlowState === 'builder' && modifyBuilderEntry ? 'text-green-400' : 'text-zinc-600'}>{modifyFlowState === 'builder' && modifyBuilderEntry ? 'YES' : 'no'}</span></div>
+              <div>3. Ref entry: <span className={refEntry ? 'text-green-400' : 'text-red-400'}>{refEntry ? 'YES' : 'NO'}</span></div>
+              <div>4. State entry: <span className={stateEntry ? 'text-green-400' : 'text-yellow-400'}>{stateEntry ? 'YES' : 'pending'}</span></div>
+              <div>5. Flow state: <span className={modifyFlowState === 'builder' ? 'text-green-400' : 'text-zinc-600'}>{modifyFlowState}</span></div>
               <div>6. Render granted: <span className={shouldRenderModifyBuilder ? 'text-green-400' : 'text-red-400'}>{shouldRenderModifyBuilder ? 'YES' : 'NO'}</span></div>
-              <div className="col-span-2 text-zinc-400">Instance: {programPageInstanceIdRef.current?.slice(-12) ?? 'unknown'}</div>
-              <div className="col-span-2 text-zinc-400">Recovery: {modifyEntryRecoveryAttemptedRef.current ? `attempted (${modifyEntryRecoveryAttemptedRef.current.slice(-8)})` : 'not attempted'}</div>
               {modifyClickAudit.failureStage && (
                 <div className="col-span-2 text-red-400">Error: {modifyClickAudit.failureStage} - {modifyClickAudit.failureMessage?.slice(0, 50)}</div>
               )}
@@ -10811,12 +10459,12 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
               Verdict: <span className={
                 shouldRenderModifyBuilder ? 'text-green-400' :
                 modifyClickAudit.failureStage ? 'text-red-400' :
-                modifyBuilderEntry ? 'text-yellow-400' :
+                effectiveEntry ? 'text-yellow-400' :
                 'text-zinc-500'
               }>
                 {shouldRenderModifyBuilder ? 'RENDER_GRANTED' :
                  modifyClickAudit.failureStage ? 'FAILED' :
-                 modifyBuilderEntry && modifyFlowState !== 'builder' ? 'WAITING_FOR_PROMOTION' :
+                 effectiveEntry && modifyFlowState !== 'builder' ? 'WAITING_FOR_PROMOTION' :
                  modifyClickAudit.canonicalLauncherEntered ? 'WAITING_FOR_STATE' :
                  'IDLE'}
               </span>
@@ -11139,6 +10787,7 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
                   }
                   
                   // [PHASE 30S] Clear the authoritative entry - user cancelled
+                  modifyBuilderEntryRef.current = null
                   setModifyBuilderEntry(null)
                   setShowBuilder(false)
                 }}

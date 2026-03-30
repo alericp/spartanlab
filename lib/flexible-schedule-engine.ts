@@ -20,6 +20,42 @@
  * - Stress must be varied across days
  * - High tendon/skill sessions must be controlled
  * - Recovery-managed consistency, not unrestricted frequency
+ * 
+ * =============================================================================
+ * SCHEDULE INTELLIGENCE CONTRACT
+ * =============================================================================
+ * 
+ * This engine is the SINGLE AUTHORITATIVE source for flexible frequency resolution.
+ * All three flows MUST use this shared contract:
+ * - Onboarding Build: Initial program from collected truth
+ * - Modify Refinement: Ongoing program adjustment (preserves week progression)
+ * - Restart Full Rebuild: Complete rebuild (archives old, resets to week 1)
+ * 
+ * KEY CONCEPTS (do NOT confuse):
+ * 1. Schedule Identity: 'static' | 'flexible' - User's chosen mode
+ * 2. Starting Frequency Recommendation: Intelligent initial session count (4-6)
+ * 3. Generated Session Count: Actual sessions in current program week
+ * 4. Future Adaptation: How plan may expand/contract based on real data
+ * 
+ * TRUTH: A user CAN be flexible AND still deserve a 5 or 6 session initial week.
+ * Flexible does NOT mean "default 4 forever."
+ * 
+ * =============================================================================
+ * HOLISTIC ADAPTATION PRIORITY
+ * =============================================================================
+ * 
+ * When adapting to user struggle/feedback, the engine MUST prefer adjustments
+ * in this order BEFORE reducing weekly frequency:
+ * 
+ * 1. Exercise count / selection refinement
+ * 2. Set/rep/hold prescription adjustment
+ * 3. Intensity / RPE / density / method adjustment
+ * 4. Progression difficulty regression or advancement
+ * 5. Recovery emphasis changes / spacing changes
+ * 6. Weekly frequency contraction/expansion (ONLY when evidence justifies)
+ * 
+ * Do NOT make frequency the first/only adjustment lever.
+ * Holistic workload architecture should adapt before session count changes.
  */
 
 import type { 
@@ -70,6 +106,27 @@ export interface FlexibleFrequencyInput {
   sessionDurationMode?: 'fixed' | 'adaptive'  // Adaptive duration = more flexibility
   trainingStyles?: string[]           // Multiple training preferences
 }
+
+// =============================================================================
+// HOLISTIC ADAPTATION PRIORITY (Code Reference)
+// =============================================================================
+
+/**
+ * When a user struggles, prefer these adjustments BEFORE frequency reduction.
+ * This constant codifies the adaptation priority to prevent weak day-count-only changes.
+ */
+export const HOLISTIC_ADAPTATION_PRIORITY = [
+  'exercise_count_reduction',         // 1. Reduce total exercises per session
+  'exercise_selection_simplification', // 2. Choose simpler movement variants
+  'set_rep_hold_reduction',           // 3. Lower volume prescription
+  'intensity_rpe_reduction',          // 4. Lower intensity targets
+  'density_method_adjustment',        // 5. Less demanding methods/supersets
+  'progression_regression',           // 6. Step back to earlier progression
+  'recovery_spacing_adjustment',      // 7. More rest between hard sessions
+  'frequency_reduction',              // 8. ONLY reduce days when evidence strong
+] as const
+
+export type AdaptationPriority = typeof HOLISTIC_ADAPTATION_PRIORITY[number]
 
 // =============================================================================
 // [TASK 1] FLEXIBLE FREQUENCY ROOT-CAUSE CLASSIFICATION
@@ -270,14 +327,6 @@ export function calculateContentComplexity(input: FlexibleFrequencyInput): Conte
   
   const skills = input.selectedSkills || []
   const skillsCount = skills.length
-  
-  // [DEBUG] Log incoming skills for verification
-  console.log('[v0] complexity-input-skills:', {
-    skillsReceived: skills,
-    skillsCount,
-    experienceLevel: input.experienceLevel,
-    sessionDurationMode: input.sessionDurationMode,
-  })
   
   // Factor 1: Number of selected skills (0-3 points)
   if (skillsCount >= 5) {

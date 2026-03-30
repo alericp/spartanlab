@@ -623,7 +623,7 @@ export default function ProgramPage() {
         setShowBuilderRequested: true,
       }))
     }
-  }, [modifyBuilderEntry, modifyFlowState, showBuilder]) // Include all read dependencies
+  }, [modifyBuilderEntry, modifyFlowState]) // ROOT-CAUSE-FIX: Removed showBuilder - it's an OUTPUT not INPUT
   
   // [ROOT-CAUSE-FIX] Removed verbose state-survival and clobber-window effects
   // The half-transition guard now checks both ref AND state, eliminating false resets
@@ -658,7 +658,7 @@ export default function ProgramPage() {
         verdict: 'STATE_RECOVERED_FROM_REF',
       })
     }
-  }, [modifyBuilderEntry, modifyFlowState, showBuilder, modifyClickAudit.canonicalLauncherEntered])
+  }, [modifyBuilderEntry, modifyFlowState, modifyClickAudit.canonicalLauncherEntered]) // ROOT-CAUSE-FIX: Removed showBuilder - not a trigger condition
   
   // [ROOT-CAUSE-FIX] Removed verbose post-recovery and transition classification effects
   // The [modify-root-render-authority] log in the half-transition guard provides sufficient diagnostics
@@ -685,7 +685,7 @@ export default function ProgramPage() {
       setModifyFlowState('idle')
       setShowBuilder(false)
     }
-  }, [modifyFlowState, modifyBuilderEntry, showBuilder])
+  }, [modifyFlowState, modifyBuilderEntry]) // ROOT-CAUSE-FIX: Removed showBuilder - it's an OUTPUT not INPUT
   
   // [PHASE 30R] Declaration order safety - log moved to useEffect to avoid render-time issues
   
@@ -2016,25 +2016,7 @@ export default function ProgramPage() {
               // PRIMARY: ref or state entry exists = active Modify transition
               const isActiveModifyTransition = hasModifyBuilderEntryRef || hasModifyBuilderEntry || launcherEntered || isModifyLockActive || (isModifyFlowBuilder && hasLiveBuilderEntry)
               
-              // Determine what action this guard would take
-              const wouldWriteFalse = !isActiveModifyTransition
-              
-              console.log('[phase31f-init-guard-a-entered-final]', {
-                instanceId: programPageInstanceIdRef.current,
-                source: 'init_program_exists_displayable',
-                hasRefEntry: hasModifyBuilderEntryRef,
-                hasStateEntry: hasModifyBuilderEntry,
-                launcherEntered,
-                modifyFlowState: modifyFlowState ?? null,
-                showBuilder: !!showBuilder,
-                isActiveModifyTransition,
-                wouldWriteFalse,
-                verdict: isActiveModifyTransition
-                  ? 'INIT_FALSE_WRITE_BLOCKED'
-                  : wouldWriteFalse
-                    ? 'INIT_FALSE_WRITE_ALLOWED'
-                    : 'INIT_NO_WRITE',
-              })
+              // ROOT-CAUSE-FIX: Only set showBuilder(false) if no active modify transition
               if (!isActiveModifyTransition) {
                 setShowBuilder(false)
               }
@@ -2087,7 +2069,7 @@ export default function ProgramPage() {
               setLoadStage(`program-malformed:${displayCheck.reason || 'unknown'}`)
               // Keep program reference so we can show "Program Needs Refresh" state
               setProgram(normalizedProgram)
-              // [PHASE 31F] INIT GUARD B - ATOMIC ENTRY AUTHORITY
+              // ROOT-CAUSE-FIX: Check for active modify transition before resetting showBuilder
               const hasModifyBuilderEntryRef = modifyBuilderEntryRef.current !== null
               const hasModifyBuilderEntry = modifyBuilderEntry !== null
               const isModifyLockActive = modifyBuilderLockRef.current
@@ -2095,28 +2077,8 @@ export default function ProgramPage() {
               const hasLiveBuilderEntry = builderSessionInputsRef.current !== null
               const launcherEntered = modifyClickAudit.canonicalLauncherEntered
               const isActiveModifyTransition = hasModifyBuilderEntryRef || hasModifyBuilderEntry || launcherEntered || isModifyLockActive || (isModifyFlowBuilder && hasLiveBuilderEntry)
-              
-              // Determine what action this guard would take
-              const wouldWriteFalse = !isActiveModifyTransition
-              
-              console.log('[phase31f-init-guard-b-entered-final]', {
-                instanceId: programPageInstanceIdRef.current,
-                source: 'init_program_malformed_recovery',
-                hasRefEntry: hasModifyBuilderEntryRef,
-                hasStateEntry: hasModifyBuilderEntry,
-                launcherEntered,
-                modifyFlowState: modifyFlowState ?? null,
-                showBuilder: !!showBuilder,
-                isActiveModifyTransition,
-                wouldWriteFalse,
-                verdict: isActiveModifyTransition
-                  ? 'INIT_FALSE_WRITE_BLOCKED'
-                  : wouldWriteFalse
-                    ? 'INIT_FALSE_WRITE_ALLOWED'
-                    : 'INIT_NO_WRITE',
-              })
               if (!isActiveModifyTransition) {
-                setShowBuilder(false) // Don't auto-show builder, show recovery state instead
+                setShowBuilder(false)
               }
             }
           } else {
@@ -9191,25 +9153,11 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
     // The promotion effect handles everything else.
     // ==========================================================================
     stage = 'complete'
-    
-    console.log('[phase31e-launcher-complete-final]', {
-      stage: 'complete',
-      atomicEntryCommitted: true,
-      sessionKey: modifyEntry?.sessionKey ?? null,
-      verdict: 'LAUNCHER_COMPLETE_ENTRY_ONLY_WAITING_FOR_PROMOTION',
-    })
-    
-    // ==========================================================================
-    // [PHASE 31E] HARD STOP - NO MORE WORK IN THIS CALLBACK
-    // ==========================================================================
+    // Launcher complete - entry committed, waiting for promotion effect
     return
     
     } catch (error) {
-      // ==========================================================================
-      // [PHASE 30F] FAIL-SAFE CATCH BLOCK
-      // [PHASE 30G] Update audit state with failure details
-      // Controlled error handling with user-visible feedback
-      // ==========================================================================
+      // Error handling with user-visible feedback
       const errorMsg = error instanceof Error ? error.message : String(error)
       
       setModifyClickAudit(prev => ({
@@ -9218,32 +9166,10 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
         failureMessage: errorMsg.slice(0, 100),
       }))
       
-      console.error('[phase30f-modify-open-failed]', {
-        stage,
-        errorName: error instanceof Error ? error.name : 'unknown',
-        errorMessage: errorMsg,
-        stack: error instanceof Error ? error.stack : null,
-        verdict: `MODIFY_OPEN_FAILED_AT_${stage}`,
-      })
+      console.error('[modify-open-failed]', { stage, error: errorMsg })
       
-      // [PHASE 30S] Log entry commit failure with exact reason
-      console.log('[phase30s-modify-entry-commit-failed-final]', {
-        reason: `${stage}: ${errorMsg.slice(0, 60)}`,
-        verdict: 'MODIFY_ENTRY_COMMIT_FAILED',
-      })
-      
-      // ==========================================================================
-      // [PHASE 30F] SET USER-VISIBLE ERROR
-      // Use existing error surface to inform user of failure
-      // ==========================================================================
       const errorMessage = 'Unable to open Modify Program. A setup error occurred before the builder could load.'
       setGenerationError(errorMessage)
-      
-      console.log('[phase30f-modify-open-error-surfaced]', {
-        stage,
-        visibleMessage: errorMessage,
-        verdict: 'MODIFY_OPEN_ERROR_VISIBLE',
-      })
     }
   }, [program, programModules, builderOrigin, showBuilder, modifyFlowState])
   // [PHASE 25] Note: buildCanonicalGenerationEntry and entryToAdaptiveInputs are now static module imports,
@@ -9462,9 +9388,7 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
       event.preventDefault()
     }
     
-    // ==========================================================================
-    // [PHASE 30G] STEP 2: Prove the button click fires BEFORE anything else
-    // ==========================================================================
+    // Reset audit state for this click
     const clickTimestamp = new Date().toISOString()
     setModifyClickAudit(prev => ({
       ...prev,
@@ -9478,32 +9402,8 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
       failureMessage: null,
     }))
     
-    console.log('[phase30g-modify-click-root]', {
-      verdict: 'MODIFY_BUTTON_CLICK_FIRED',
-      programExists: !!program,
-      showBuilder_before: showBuilder,
-      modifyFlowState_before: modifyFlowState,
-      timestamp: clickTimestamp,
-    })
-    
-    console.log('[phase25-canonical-modify-replacement]', {
-      action: 'MODIFY_BUTTON_CLICKED',
-      programExists: !!program,
-      programId: program?.id ?? null,
-      routingTo: 'handleOpenCanonicalModifyLauncher',
-      legacyFlowBypassed: 'handleNewProgram_legacyModifyEntry',
-      verdict: 'LEGACY_MODIFY_ENTRY_NOT_USED',
-    })
-    
-    // [PHASE 25] Route directly to canonical launcher - no modal, no legacy branching
-    // [PHASE 30I] FIX: Await the launcher to ensure state updates are complete before returning
+    // Route directly to canonical launcher
     await handleOpenCanonicalModifyLauncher()
-    
-    // [PHASE 30I] Post-launcher state verification
-    console.log('[phase30i-post-launcher-state-check]', {
-      verdict: 'LAUNCHER_COMPLETED',
-      note: 'State updates should now be batched and ready for render',
-    })
     
   }, [program, handleOpenCanonicalModifyLauncher, showBuilder, modifyFlowState])
 

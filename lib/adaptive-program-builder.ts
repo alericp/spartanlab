@@ -13949,9 +13949,13 @@ export function getDefaultAdaptiveInputs(): AdaptiveProgramInputs {
   else if (profileSessionLength === 75) sessionLength = 75 // Legacy support - normalize to 90 in display
   else if (profileSessionLength === 90) sessionLength = 90 as SessionLength // Cast to handle type constraint
   
-  // FLEXIBLE SCHEDULE FIX: Preserve schedule identity from canonical profile
-  // Do NOT collapse flexible users into a fake fixed numeric value
-  const isFlexibleUser = canonicalProfile.scheduleMode === 'flexible' || canonicalProfile.trainingDaysPerWeek === null
+  // ==========================================================================
+  // [PHASE 32A] SCHEDULE IDENTITY FIX: Use explicit scheduleMode, NOT inferred from null days
+  // PREVIOUS BUG: Treating trainingDaysPerWeek === null as "flexible" was WRONG.
+  // A user with scheduleMode='static' but no days yet is NOT flexible.
+  // The only truthful flexible signal is scheduleMode === 'flexible'.
+  // ==========================================================================
+  const isFlexibleUser = canonicalProfile.scheduleMode === 'flexible'
   const scheduleMode: ScheduleMode = isFlexibleUser ? 'flexible' : 'static'
   
   // For flexible users: trainingDaysPerWeek = 'flexible' (identity)

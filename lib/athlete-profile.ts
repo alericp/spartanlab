@@ -1530,7 +1530,12 @@ export function saveOnboardingProfile(profile: OnboardingProfile): void {
       verdict: 'full_replace_confirmed',
     })
     
-    localStorage.setItem(ONBOARDING_STORAGE_KEY, JSON.stringify(profile))
+    // [PHASE 32A] Add updatedAt for timestamp-based canonical resolution precedence
+    const profileWithTimestamp = {
+      ...profile,
+      updatedAt: new Date().toISOString(),
+    }
+    localStorage.setItem(ONBOARDING_STORAGE_KEY, JSON.stringify(profileWithTimestamp))
   }
 }
 

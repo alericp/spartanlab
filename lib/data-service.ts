@@ -189,13 +189,15 @@ export function saveAthleteProfile(profile: Partial<AthleteProfile>): AthletePro
     createdAt: new Date().toISOString(),
   }
   
-  const updated: AthleteProfile = {
+  const updated: AthleteProfile & { updatedAt: string } = {
     ...baseProfile,
     ...profile,
     // Preserve identity fields from existing profile, or use new safe defaults
     id: baseProfile.id,
     userId: baseProfile.userId,
     createdAt: baseProfile.createdAt,
+    // [PHASE 32A] Add updatedAt for timestamp-based canonical resolution precedence
+    updatedAt: new Date().toISOString(),
   }
   
   localStorage.setItem(STORAGE_KEYS.profile, JSON.stringify(updated))

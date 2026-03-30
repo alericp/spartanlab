@@ -11278,10 +11278,11 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
             const canonical = getCanonicalProfile()
             return canonical.equipmentAvailable || []
           })()}
-          // [PHASE 17P] Pass canonical schedule mode to preserve flexible identity
+          // [PHASE 32A] Pass canonical schedule mode - default to 'static' not 'adaptive'
+          // 'adaptive' as fallback was WRONG - undefined scheduleMode should mean static, not flexible
           currentScheduleMode={(() => {
             const canonical = getCanonicalProfile()
-            return (canonical.scheduleMode as 'static' | 'flexible' | 'adaptive') || 'adaptive'
+            return (canonical.scheduleMode as 'static' | 'flexible' | 'adaptive') || 'static'
           })()}
         />
       </div>

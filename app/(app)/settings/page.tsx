@@ -936,25 +936,46 @@ export default function SettingsPage() {
             })
             
             // ==========================================================================
-            // [PHASE 30E] SETTINGS POST SAVE AUTHORITATIVE
-            // THE DEFINITIVE LOG proving what was saved and confirming canonical is correct
+            // [PHASE 32A] CANONICAL SCHEDULE PERSISTENCE CONTRACT VERIFICATION
+            // Verifies that the save round-trip preserves the intended schedule truth
             // ==========================================================================
-            console.log('[phase30e-settings-post-save-authoritative]', {
-              saved_scheduleMode: result?.profile?.scheduleMode ?? null,
-              saved_trainingDaysPerWeek: result?.profile?.trainingDaysPerWeek ?? null,
-              saved_adaptiveWorkloadEnabled: adaptiveWorkloadEnabled,
-              ui_scheduleMode_after_save: scheduleMode,
-              ui_trainingDays_after_save: trainingDays,
-              canonical_scheduleMode: canonicalReadback?.scheduleMode ?? null,
-              canonical_trainingDays: canonicalReadback?.trainingDaysPerWeek ?? null,
-              verdict:
-                result?.profile?.scheduleMode === 'static' && result?.profile?.trainingDaysPerWeek === 6
-                  ? (canonicalReadback?.scheduleMode === 'static' && canonicalReadback?.trainingDaysPerWeek === 6
-                      ? 'SETTINGS_SAVE_CONFIRMED_STATIC_6'
-                      : 'SETTINGS_SAVE_STATIC_6_BUT_CANONICAL_WRONG')
-                  : result?.profile?.scheduleMode === 'flexible'
-                  ? 'SETTINGS_SAVE_CONFIRMED_FLEXIBLE'
-                  : `SETTINGS_SAVE_CONFIRMED_${result?.profile?.scheduleMode}_${result?.profile?.trainingDaysPerWeek}`,
+            const intendedStatic6 = payloadScheduleMode === 'static' && payloadTrainingDays === 6
+            const canonicalStatic6 = canonicalReadback?.scheduleMode === 'static' && canonicalReadback?.trainingDaysPerWeek === 6
+            const athleteStatic6 = athleteReadback?.scheduleMode === 'static' && athleteReadback?.trainingDaysPerWeek === 6
+            const onboardingStatic6 = onboardingReadback?.scheduleMode === 'static' && onboardingReadback?.trainingDaysPerWeek === 6
+            
+            console.log('[phase32a-schedule-persistence-contract-verification]', {
+              // Intent
+              intended: { scheduleMode: payloadScheduleMode, trainingDays: payloadTrainingDays },
+              // All sources after save
+              athlete: { 
+                scheduleMode: athleteReadback?.scheduleMode ?? null, 
+                trainingDays: athleteReadback?.trainingDaysPerWeek ?? null,
+                updatedAt: (athleteReadback as { updatedAt?: string })?.updatedAt ?? 'none',
+              },
+              onboarding: { 
+                scheduleMode: onboardingReadback?.scheduleMode ?? null, 
+                trainingDays: onboardingReadback?.trainingDaysPerWeek ?? null,
+                updatedAt: (onboardingReadback as { updatedAt?: string })?.updatedAt ?? 'none',
+              },
+              canonical: { 
+                scheduleMode: canonicalReadback?.scheduleMode ?? null, 
+                trainingDays: canonicalReadback?.trainingDaysPerWeek ?? null,
+              },
+              // Contract verification
+              contractVerdict: (() => {
+                if (intendedStatic6) {
+                  if (canonicalStatic6) return 'STATIC_6_CONTRACT_HONORED'
+                  if (!athleteStatic6) return 'STATIC_6_NOT_SAVED_TO_ATHLETE'
+                  if (!onboardingStatic6) return 'STATIC_6_NOT_SAVED_TO_ONBOARDING'
+                  return 'STATIC_6_LOST_IN_CANONICAL_RESOLUTION'
+                }
+                if (payloadScheduleMode === 'flexible') {
+                  if (canonicalReadback?.scheduleMode === 'flexible') return 'FLEXIBLE_CONTRACT_HONORED'
+                  return 'FLEXIBLE_CONTRACT_VIOLATED'
+                }
+                return `STATIC_${payloadTrainingDays}_CONTRACT_CHECK`
+              })(),
             })
             
             // ==========================================================================
@@ -972,7 +993,7 @@ export default function SettingsPage() {
               // What localStorage athlete now shows
               'athlete.scheduleMode': athleteReadback?.scheduleMode ?? null,
               'athlete.trainingDays': athleteReadback?.trainingDaysPerWeek ?? null,
-              // What onboarding shows (should NOT have been changed)
+              // What onboarding shows (SHOULD be synced via saveCanonicalProfile)
               'onboarding.scheduleMode': onboardingReadback?.scheduleMode ?? null,
               'onboarding.trainingDays': onboardingReadback?.trainingDaysPerWeek ?? null,
               // What canonical resolution returns

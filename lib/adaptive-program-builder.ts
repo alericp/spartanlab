@@ -3071,6 +3071,14 @@ async function generateAdaptiveProgramImpl(
       trainingStyle: (profile as AthleteProfile & { trainingStyle?: string })?.trainingStyle,
       // Feed real workout data into frequency resolution
       recentWorkoutCount: trainingFeedback.totalSessionsLast7Days,
+      // ==========================================================================
+      // [ADAPTIVE BASELINE FIX] Pass content complexity fields
+      // These enable richer baseline when onboarding truth justifies it
+      // ==========================================================================
+      selectedSkills: canonicalProfile.selectedSkills || [],
+      secondaryGoals: (canonicalProfile as unknown as { secondaryGoals?: string[] })?.secondaryGoals || [],
+      sessionDurationMode: canonicalProfile.sessionDurationMode as 'fixed' | 'adaptive' | undefined,
+      trainingStyles: (canonicalProfile as unknown as { trainingStyles?: string[] })?.trainingStyles || [],
     })
     
     // Apply feedback-based weekly adaptation if we have enough data
@@ -3106,6 +3114,26 @@ async function generateAdaptiveProgramImpl(
     }
     
     effectiveTrainingDays = flexibleWeekStructure.currentWeekFrequency as TrainingDays
+    
+    // ==========================================================================
+    // [ADAPTIVE BASELINE FIX] BASELINE RESOLUTION AUDIT
+    // Shows why this flexible user resolved to their baseline session count
+    // ==========================================================================
+    const audit = flexibleWeekStructure.rootCauseAudit
+    console.log('[adaptive-baseline-audit]', {
+      scheduleIdentity: 'flexible',
+      baselineSessionCount: effectiveTrainingDays,
+      goalTypicalBaseline: audit?.goalTypical || 4,
+      complexityScore: audit?.complexityScore || 0,
+      complexityElevation: audit?.complexityElevation || 0,
+      selectedSkillsCount: audit?.selectedSkillsCount || 0,
+      hasPushAndPullSkills: audit?.hasPushAndPullSkills || false,
+      reasonCategory: audit?.finalReasonCategory || 'unknown',
+      verdict: (audit?.complexityElevation || 0) > 0 
+        ? 'ELEVATED_DUE_TO_COMPLEXITY' 
+        : 'USING_GOAL_BASELINE',
+    })
+    
     console.log('[flex-frequency] Resolved week:', {
       frequency: effectiveTrainingDays,
       range: `${flexibleWeekStructure.recommendedMinDays}-${flexibleWeekStructure.recommendedMaxDays}`,

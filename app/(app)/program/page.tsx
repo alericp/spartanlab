@@ -18,16 +18,17 @@
 // This allows us to verify the live app is running the expected code version
 // ==========================================================================
 export const PHASE27C_BUILD_IDENTITY = {
-  buildIdentityName: 'FINAL_SIMPLIFICATION',
-  buildIdentityVersion: '2024-FINAL-v1',
-  buildTimestamp: '2024-FINAL',
-  modifyBuilderVariant: 'SINGLE_ENTRY_AUTHORITY_NO_FALLBACK',
+  buildIdentityName: 'ROOT_CAUSE_FIX',
+  buildIdentityVersion: '2024-ROOT-CAUSE-v1',
+  buildTimestamp: '2024-ROOT-CAUSE',
+  modifyBuilderVariant: 'SINGLE_STATE_AUTHORITY_NO_REF_FALLBACK',
   scheduleSelectorVariant: 'REAL_SOURCE_VALUES_NOT_PLACEHOLDER',
   submitSnapshotVariant: 'EXPECTED_BASELINE_AND_ADAPTIVE_SHOWN',
   auditPanelVariant: 'HONEST_TRUTH_BAR',
   scheduleResolutionFix: 'TRAINING_DAYS_SYNCED_TO_BOTH_STORES',
   baselineAdaptiveSeparation: true,
-  forensicLogs: ['modify-final-launch-commit', 'modify-final-promotion', 'modify-final-render-authority', 'schedule-final-real-sources'],
+  modifyPipeline: 'SINGLE_CANONICAL_LAUNCHER_MODAL_REDIRECTED',
+  forensicLogs: ['modify-final-launch-commit', 'modify-final-promotion', 'modify-final-render-authority'],
 } as const
 
 import { useState, useEffect, useCallback, useMemo, useRef, type ReactNode } from 'react'
@@ -512,19 +513,19 @@ export default function ProgramPage() {
   })
   
   // ==========================================================================
-  // [FINAL] ATOMIC ENTRY COMMIT HELPER
-  // Commits the entry: ref first (synchronous), then state.
-  // NO OTHER STATE MUTATIONS here.
+  // [ROOT-CAUSE-FIX] ATOMIC ENTRY COMMIT HELPER
+  // Commits the entry to React state - the ONLY authority.
+  // Ref is written for cleanup purposes only, NOT for runtime authority.
   // ==========================================================================
   const commitModifyEntryAtomically = useCallback((entry: ModifyBuilderEntry) => {
     if (!entry || !entry.inputs) {
       return false
     }
     
-    // Write synchronous ref authority FIRST (immediate access)
+    // Write ref for cleanup tracking only (NOT runtime authority)
     modifyBuilderEntryRef.current = entry
     
-    // Commit React state
+    // Commit React state - THE ONLY AUTHORITY
     setModifyBuilderEntry(entry)
     
     // [modify-final-launch-commit] Concise log
@@ -625,59 +626,20 @@ export default function ProgramPage() {
     }
   }, [modifyBuilderEntry, modifyFlowState]) // ROOT-CAUSE-FIX: Removed showBuilder - it's an OUTPUT not INPUT
   
-  // [ROOT-CAUSE-FIX] Removed verbose state-survival and clobber-window effects
-  // The half-transition guard now checks both ref AND state, eliminating false resets
-  
   // ==========================================================================
-  // [ROOT-CAUSE-FIX] BACKUP RECOVERY GUARD
-  // If ref entry survived but React state is missing, restore from ref (once per session).
-  // This is a safety net - the primary fix is in the half-transition guard checking refs.
+  // [ROOT-CAUSE-FIX] HALF-TRANSITION GUARD - STATE ONLY AUTHORITY
+  // Only reset if state entry is null while modifyFlowState='builder'.
+  // NO ref fallback - state is the ONLY authority.
   // ==========================================================================
   useEffect(() => {
-    const refEntry = modifyBuilderEntryRef.current
-    const refSessionKey = refEntry?.sessionKey ?? null
-    const launcherEntered = modifyClickAudit.canonicalLauncherEntered
-    const stateMissing = !modifyBuilderEntry
-    const refPresent = !!refEntry
-    const alreadyAttemptedThisSession = modifyEntryRecoveryAttemptedRef.current === refSessionKey
-    
-    const shouldRecover = 
-      launcherEntered === true &&
-      refPresent === true &&
-      stateMissing === true &&
-      !!refEntry?.inputs &&
-      modifyFlowState !== 'builder' &&
-      refSessionKey !== null &&
-      alreadyAttemptedThisSession === false
-    
-    if (shouldRecover && refEntry) {
-      modifyEntryRecoveryAttemptedRef.current = refSessionKey
-      setModifyBuilderEntry(refEntry)
-      console.log('[modify-root-recovery-triggered]', {
-        sessionKey: refSessionKey,
-        verdict: 'STATE_RECOVERED_FROM_REF',
-      })
-    }
-  }, [modifyBuilderEntry, modifyFlowState, modifyClickAudit.canonicalLauncherEntered]) // ROOT-CAUSE-FIX: Removed showBuilder - not a trigger condition
-  
-  // [ROOT-CAUSE-FIX] Removed verbose post-recovery and transition classification effects
-  // The [modify-root-render-authority] log in the half-transition guard provides sufficient diagnostics
-  
-  // ==========================================================================
-  // [FINAL] HALF-TRANSITION GUARD - CHECKS REF AUTHORITY
-  // Only reset if BOTH ref AND state are null while modifyFlowState='builder'.
-  // ==========================================================================
-  useEffect(() => {
-    const hasRefEntry = modifyBuilderEntryRef.current !== null
-    const hasStateEntry = modifyBuilderEntry !== null
-    const hasAnyEntry = hasRefEntry || hasStateEntry
-    const isHalfTransition = modifyFlowState === 'builder' && !hasAnyEntry
+    const hasEntry = modifyBuilderEntry !== null
+    const isHalfTransition = modifyFlowState === 'builder' && !hasEntry
     
     // [modify-final-render-authority] Concise log
     console.log('[modify-final-render-authority]', {
       flow: modifyFlowState,
-      hasEntry: hasAnyEntry,
-      verdict: isHalfTransition ? 'RESET_NEEDED' : hasAnyEntry && modifyFlowState === 'builder' ? 'ACTIVE' : 'IDLE',
+      hasEntry,
+      verdict: isHalfTransition ? 'RESET_NEEDED' : hasEntry && modifyFlowState === 'builder' ? 'ACTIVE' : 'IDLE',
     })
     
     if (isHalfTransition) {
@@ -685,7 +647,7 @@ export default function ProgramPage() {
       setModifyFlowState('idle')
       setShowBuilder(false)
     }
-  }, [modifyFlowState, modifyBuilderEntry]) // ROOT-CAUSE-FIX: Removed showBuilder - it's an OUTPUT not INPUT
+  }, [modifyFlowState, modifyBuilderEntry])
   
   // [PHASE 30R] Declaration order safety - log moved to useEffect to avoid render-time issues
   
@@ -9407,19 +9369,36 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
     
   }, [program, handleOpenCanonicalModifyLauncher, showBuilder, modifyFlowState])
 
+  // ==========================================================================
+  // [ROOT-CAUSE-FIX] handleConfirmNewProgram - ROUTES TO CANONICAL LAUNCHER
+  // This is called from the modal's "Start New" button.
+  // It MUST use the same single-authority pipeline as the visible "Modify" button.
+  // ==========================================================================
   const handleConfirmNewProgram = useCallback(async () => {
-    // ==========================================================================
-    // [PHASE 24I] FAIL-SAFE: Wrap entire handler in try/catch with stage tracking
-    // This ensures no silent failures make the Start New button appear dead
-    // ==========================================================================
+    try {
+      // Close modal first
+      setShowAdjustmentModal(false)
+      
+      // Route through canonical launcher (single authority)
+      await handleOpenCanonicalModifyLauncher()
+    } catch (error) {
+      console.error('[handleConfirmNewProgram-error]', { error: error instanceof Error ? error.message : String(error) })
+      // Re-open modal on error so user can retry
+      setShowAdjustmentModal(true)
+    }
+  }, [handleOpenCanonicalModifyLauncher])
+
+  // ==========================================================================
+  // [ROOT-CAUSE-FIX] LEGACY handleConfirmNewProgram_old - PRESERVED BUT UNUSED
+  // This is the old parallel state writer that caused modify failures.
+  // Kept for reference only - NOT CALLED.
+  // ==========================================================================
+  const handleConfirmNewProgram_old_UNUSED = useCallback(async () => {
     let stage: 'entry' | 'canonical_truth_selection' | 'canonical_entry_build' | 'fallback_input_selection' | 'session_key_creation' | 'session_seed_write' | 'transition_to_builder' | 'render_handoff_complete' = 'entry'
     
     try {
-    // ==========================================================================
-    // [PHASE 24H] TASK E - Parent start new handoff audit - ENTRY POINT
-    // ==========================================================================
     console.log('[phase24h-parent-start-new-handoff-audit]', {
-      handlerName: 'handleConfirmNewProgram',
+      handlerName: 'handleConfirmNewProgram_old_UNUSED',
       entryPoint: true,
       showAdjustmentModal_before: showAdjustmentModal,
       showBuilder_before: showBuilder,
@@ -10223,18 +10202,15 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
   }, [programModules, inputs, builderOrigin, program, buildModifyEntryInputsFromVisibleProgram, builderSessionKey, modifyFlowState, showAdjustmentModal, showBuilder])
 
   // ==========================================================================
-  // [FINAL] SINGLE RENDER AUTHORITY FOR MODIFY BUILDER
+  // [ROOT-CAUSE-FIX] SINGLE RENDER AUTHORITY FOR MODIFY BUILDER
   // This is the ONE authoritative boolean that determines if Modify builder renders.
   // Entry must exist with inputs AND flow state must be 'builder' (after promotion).
   // showBuilder is NO LONGER a render authority for Modify.
-  // ROOT-CAUSE-FIX: Check ref as a fallback for state to handle React batching delays.
+  // modifyBuilderEntry STATE is the ONLY authority - NO ref fallback.
   // ==========================================================================
-  const refEntry = modifyBuilderEntryRef.current
-  const stateEntry = modifyBuilderEntry
-  const effectiveEntry = stateEntry ?? refEntry
   const shouldRenderModifyBuilder = (
-    effectiveEntry !== null &&
-    effectiveEntry.inputs !== null &&
+    modifyBuilderEntry !== null &&
+    modifyBuilderEntry.inputs !== null &&
     modifyFlowState === 'builder'
   )
   
@@ -10335,37 +10311,36 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
         </div>
         
         {/* ==========================================================================
-            [PHASE 31G] ENTRY SURVIVAL GUARD AUDIT STRIP
-            Shows the commit survival chain with recovery state tracking
+            [ROOT-CAUSE-FIX] MODIFY AUDIT STRIP - SINGLE AUTHORITY ONLY
+            Shows the simplified commit chain - state is the ONLY authority.
             Only shown when program exists and builder is not shown
             ========================================================================== */}
         {program && !shouldRenderModifyBuilder && (
           <div className="mt-4 p-3 bg-zinc-900/80 border border-zinc-700 rounded-lg text-xs font-mono">
-            <div className="text-zinc-400 mb-2 font-semibold">MODIFY ENTRY AUDIT</div>
+            <div className="text-zinc-400 mb-2 font-semibold">MODIFY PIPELINE</div>
             <div className="grid grid-cols-2 gap-1 text-zinc-500">
-              {/* Commit survival contract chain */}
+              {/* Single-authority commit chain */}
               <div>1. Click fired: <span className={modifyClickAudit.clickFiredAt ? 'text-green-400' : 'text-zinc-600'}>{modifyClickAudit.clickFiredAt ? 'YES' : 'no'}</span></div>
               <div>2. Launcher entered: <span className={modifyClickAudit.canonicalLauncherEntered ? 'text-green-400' : 'text-zinc-600'}>{modifyClickAudit.canonicalLauncherEntered ? 'YES' : 'no'}</span></div>
-              <div>3. Ref entry: <span className={refEntry ? 'text-green-400' : 'text-red-400'}>{refEntry ? 'YES' : 'NO'}</span></div>
-              <div>4. State entry: <span className={stateEntry ? 'text-green-400' : 'text-yellow-400'}>{stateEntry ? 'YES' : 'pending'}</span></div>
-              <div>5. Flow state: <span className={modifyFlowState === 'builder' ? 'text-green-400' : 'text-zinc-600'}>{modifyFlowState}</span></div>
-              <div>6. Render granted: <span className={shouldRenderModifyBuilder ? 'text-green-400' : 'text-red-400'}>{shouldRenderModifyBuilder ? 'YES' : 'NO'}</span></div>
+              <div>3. Entry committed: <span className={modifyBuilderEntry ? 'text-green-400' : 'text-zinc-600'}>{modifyBuilderEntry ? 'YES' : 'no'}</span></div>
+              <div>4. Flow state: <span className={modifyFlowState === 'builder' ? 'text-green-400' : 'text-zinc-600'}>{modifyFlowState}</span></div>
+              <div>5. Render granted: <span className={shouldRenderModifyBuilder ? 'text-green-400' : 'text-red-400'}>{shouldRenderModifyBuilder ? 'YES' : 'NO'}</span></div>
               {modifyClickAudit.failureStage && (
                 <div className="col-span-2 text-red-400">Error: {modifyClickAudit.failureStage} - {modifyClickAudit.failureMessage?.slice(0, 50)}</div>
               )}
             </div>
-            {/* [FINAL] Simplified verdict */}
+            {/* Simplified verdict */}
             <div className="mt-2 pt-2 border-t border-zinc-700 text-zinc-300">
               Verdict: <span className={
                 shouldRenderModifyBuilder ? 'text-green-400' :
                 modifyClickAudit.failureStage ? 'text-red-400' :
-                effectiveEntry ? 'text-yellow-400' :
+                modifyBuilderEntry ? 'text-yellow-400' :
                 'text-zinc-500'
               }>
                 {shouldRenderModifyBuilder ? 'RENDER_GRANTED' :
                  modifyClickAudit.failureStage ? 'FAILED' :
-                 effectiveEntry && modifyFlowState !== 'builder' ? 'WAITING_FOR_PROMOTION' :
-                 modifyClickAudit.canonicalLauncherEntered ? 'WAITING_FOR_STATE' :
+                 modifyBuilderEntry && modifyFlowState !== 'builder' ? 'WAITING_FOR_PROMOTION' :
+                 modifyClickAudit.canonicalLauncherEntered ? 'WAITING_FOR_ENTRY' :
                  'IDLE'}
               </span>
             </div>

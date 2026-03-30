@@ -519,14 +519,28 @@ export default function ProgramPage() {
   // ==========================================================================
   const commitModifyEntryAtomically = useCallback((entry: ModifyBuilderEntry) => {
     if (!entry || !entry.inputs) {
+      console.log('[v0] commitModifyEntryAtomically: INVALID ENTRY', { entry: !!entry, inputs: !!entry?.inputs })
       return false
     }
     
     // Write ref for cleanup tracking only (NOT runtime authority)
     modifyBuilderEntryRef.current = entry
     
+    // [v0] DEBUG: Log current state BEFORE commit
+    console.log('[v0] commitModifyEntryAtomically: ABOUT TO SET STATE', {
+      sessionKey: entry.sessionKey,
+      hasInputs: !!entry.inputs,
+      scheduleMode: entry.inputs.scheduleMode,
+    })
+    
     // Commit React state - THE ONLY AUTHORITY
     setModifyBuilderEntry(entry)
+    
+    // [v0] DEBUG: Log AFTER setModifyBuilderEntry call
+    console.log('[v0] commitModifyEntryAtomically: STATE SET CALLED', {
+      sessionKey: entry.sessionKey,
+      refNow: !!modifyBuilderEntryRef.current,
+    })
     
     // [modify-final-launch-commit] Concise log
     console.log('[modify-final-launch-commit]', {
@@ -550,6 +564,14 @@ export default function ProgramPage() {
   // 4. Promotes to builder mode
   // ==========================================================================
   useEffect(() => {
+    // [v0] DEBUG: Always log when this effect runs to track state
+    console.log('[v0] promotion-effect-run', {
+      hasEntry: !!modifyBuilderEntry,
+      hasInputs: !!modifyBuilderEntry?.inputs,
+      flowState: modifyFlowState,
+      willPromote: !!(modifyBuilderEntry && modifyBuilderEntry.inputs && modifyFlowState !== 'builder'),
+    })
+    
     // Only promote if entry exists with inputs AND we're not already in builder mode
     if (modifyBuilderEntry && modifyBuilderEntry.inputs && modifyFlowState !== 'builder') {
       // [modify-root-promotion] Concise log when committing -> builder promotion happens
@@ -648,6 +670,15 @@ export default function ProgramPage() {
       setShowBuilder(false)
     }
   }, [modifyFlowState, modifyBuilderEntry])
+  
+  // [v0] DEBUG: Observe modifyBuilderEntry state changes
+  useEffect(() => {
+    console.log('[v0] modifyBuilderEntry-state-changed', {
+      hasEntry: !!modifyBuilderEntry,
+      sessionKey: modifyBuilderEntry?.sessionKey ?? null,
+      hasInputs: !!modifyBuilderEntry?.inputs,
+    })
+  }, [modifyBuilderEntry])
   
   // [PHASE 30R] Declaration order safety - log moved to useEffect to avoid render-time issues
   

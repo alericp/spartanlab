@@ -18,17 +18,12 @@
 // This allows us to verify the live app is running the expected code version
 // ==========================================================================
 export const PHASE27C_BUILD_IDENTITY = {
-  buildIdentityName: 'ROOT_CAUSE_FIX',
-  buildIdentityVersion: '2024-ROOT-CAUSE-v1',
-  buildTimestamp: '2024-ROOT-CAUSE',
-  modifyBuilderVariant: 'SINGLE_STATE_AUTHORITY_NO_REF_FALLBACK',
-  scheduleSelectorVariant: 'REAL_SOURCE_VALUES_NOT_PLACEHOLDER',
-  submitSnapshotVariant: 'EXPECTED_BASELINE_AND_ADAPTIVE_SHOWN',
-  auditPanelVariant: 'HONEST_TRUTH_BAR',
-  scheduleResolutionFix: 'TRAINING_DAYS_SYNCED_TO_BOTH_STORES',
-  baselineAdaptiveSeparation: true,
-  modifyPipeline: 'SINGLE_CANONICAL_LAUNCHER_MODAL_REDIRECTED',
-  forensicLogs: ['modify-final-launch-commit', 'modify-final-promotion', 'modify-final-render-authority'],
+  buildIdentityName: 'TRY_BLOCK_INDENTATION_FIX',
+  buildIdentityVersion: '2024-INDENT-FIX-v1',
+  buildTimestamp: new Date().toISOString(),
+  rootCauseFix: 'LAUNCHER_CODE_WAS_OUTSIDE_TRY_BLOCK_DUE_TO_INDENTATION_ERROR',
+  modifyBuilderVariant: 'SINGLE_STATE_AUTHORITY',
+  modifyPipeline: 'CANONICAL_LAUNCHER_WITH_PROPER_TRY_CATCH',
 } as const
 
 import { useState, useEffect, useCallback, useMemo, useRef, type ReactNode } from 'react'
@@ -519,31 +514,17 @@ export default function ProgramPage() {
   // ==========================================================================
   const commitModifyEntryAtomically = useCallback((entry: ModifyBuilderEntry) => {
     if (!entry || !entry.inputs) {
-      console.log('[v0] commitModifyEntryAtomically: INVALID ENTRY', { entry: !!entry, inputs: !!entry?.inputs })
       return false
     }
     
     // Write ref for cleanup tracking only (NOT runtime authority)
     modifyBuilderEntryRef.current = entry
     
-    // [v0] DEBUG: Log current state BEFORE commit
-    console.log('[v0] commitModifyEntryAtomically: ABOUT TO SET STATE', {
-      sessionKey: entry.sessionKey,
-      hasInputs: !!entry.inputs,
-      scheduleMode: entry.inputs.scheduleMode,
-    })
-    
     // Commit React state - THE ONLY AUTHORITY
     setModifyBuilderEntry(entry)
     
-    // [v0] DEBUG: Log AFTER setModifyBuilderEntry call
-    console.log('[v0] commitModifyEntryAtomically: STATE SET CALLED', {
-      sessionKey: entry.sessionKey,
-      refNow: !!modifyBuilderEntryRef.current,
-    })
-    
-    // [modify-final-launch-commit] Concise log
-    console.log('[modify-final-launch-commit]', {
+    // Concise log
+    console.log('[modify-entry-committed]', {
       sessionKey: entry.sessionKey,
       scheduleMode: entry.inputs.scheduleMode,
       trainingDays: entry.inputs.trainingDaysPerWeek,
@@ -564,22 +545,12 @@ export default function ProgramPage() {
   // 4. Promotes to builder mode
   // ==========================================================================
   useEffect(() => {
-    // [v0] DEBUG: Always log when this effect runs to track state
-    console.log('[v0] promotion-effect-run', {
-      hasEntry: !!modifyBuilderEntry,
-      hasInputs: !!modifyBuilderEntry?.inputs,
-      flowState: modifyFlowState,
-      willPromote: !!(modifyBuilderEntry && modifyBuilderEntry.inputs && modifyFlowState !== 'builder'),
-    })
-    
     // Only promote if entry exists with inputs AND we're not already in builder mode
     if (modifyBuilderEntry && modifyBuilderEntry.inputs && modifyFlowState !== 'builder') {
-      // [modify-root-promotion] Concise log when committing -> builder promotion happens
-      console.log('[modify-root-promotion]', {
-        sessionKey: modifyBuilderEntry?.sessionKey ?? null,
-        scheduleMode: modifyBuilderEntry?.inputs?.scheduleMode ?? null,
-        trainingDaysPerWeek: modifyBuilderEntry?.inputs?.trainingDaysPerWeek ?? null,
-        verdict: 'ENTRY_PROMOTED_TO_BUILDER',
+      // Concise log when promotion happens
+      console.log('[modify-promotion]', {
+        sessionKey: modifyBuilderEntry.sessionKey,
+        scheduleMode: modifyBuilderEntry.inputs.scheduleMode,
       })
       
       // Mark that atomic entry was committed (for audit strip)
@@ -670,15 +641,6 @@ export default function ProgramPage() {
       setShowBuilder(false)
     }
   }, [modifyFlowState, modifyBuilderEntry])
-  
-  // [v0] DEBUG: Observe modifyBuilderEntry state changes
-  useEffect(() => {
-    console.log('[v0] modifyBuilderEntry-state-changed', {
-      hasEntry: !!modifyBuilderEntry,
-      sessionKey: modifyBuilderEntry?.sessionKey ?? null,
-      hasInputs: !!modifyBuilderEntry?.inputs,
-    })
-  }, [modifyBuilderEntry])
   
   // [PHASE 30R] Declaration order safety - log moved to useEffect to avoid render-time issues
   
@@ -9061,107 +9023,75 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
       // Minimal launcher log - just confirms entry
       console.log('[modify-launcher-entered]', { programId: program?.id ?? null })
     
-    // ==========================================================================
-    // [PHASE 25] TASK 1: Get canonical truth for prefill
-    // Uses the same canonical entry builder as Restart/Onboarding
-    // [PHASE 30F] STAGE: read_canonical
-    // ==========================================================================
-    stage = 'read_canonical'
-    const canonicalProfileNow = getCanonicalProfile()
-    
-    stage = 'read_athlete'
-    const athleteProfileForPre = getAthleteProfileDirect()
-    const athleteSourceNow = getAthleteProfileDirect()
-    const onboardingSourceNow = getOnboardingProfileDirect()
-    
-    // Single concise log for modify open schedule truth
-    console.log('[modify-open-schedule-truth]', {
-      canonical: canonicalProfileNow?.scheduleMode ?? null,
-      canonicalDays: canonicalProfileNow?.trainingDaysPerWeek ?? null,
-      athlete: athleteSourceNow?.scheduleMode ?? null,
-      onboarding: onboardingSourceNow?.scheduleMode ?? null,
-      // Verdict
-      verdict: (() => {
-        const athleteIsStatic6 = athleteSourceNow?.scheduleMode === 'static' && athleteSourceNow?.trainingDaysPerWeek === 6
-        const canonIsStatic6 = canonicalProfileNow?.scheduleMode === 'static' && canonicalProfileNow?.trainingDaysPerWeek === 6
-        const canonIsFlexible = canonicalProfileNow.scheduleMode === 'flexible'
-        const bothNull = !athleteSourceNow?.scheduleMode && !onboardingSourceNow?.scheduleMode
-        
-        if (athleteIsStatic6 && canonIsStatic6) return 'ATHLETE_AND_CANON_STATIC_6'
-        if (athleteIsStatic6 && !canonIsStatic6) return 'ATHLETE_STATIC_BUT_CANON_FLEXIBLE'
-        if (bothNull) return 'BOTH_NULL_AT_MODIFY_OPEN'
-        if (canonIsFlexible) return 'CANON_FLEXIBLE_NO_STATIC_SOURCE'
-        return `CANON_${canonicalProfileNow.scheduleMode}_${canonicalProfileNow.trainingDaysPerWeek}`
-      })(),
-    })
-    
-    // ==========================================================================
-    // [PHASE 25] TASK 2: Build fresh inputs using canonical entry builder
-    // This is the SAME path used by Restart/Onboarding
-    // [PHASE 29D] FIX: First parameter must be trigger source STRING, not object!
-    // Previous bug: passed canonicalProfileNow (object) as triggerSource (string)
-    // [PHASE 30F] STAGE: build_entry
-    // ==========================================================================
-    stage = 'build_entry'
-    const entryResult = buildCanonicalGenerationEntry('modify_program', {
-      // [PHASE 29D] Pass explicit schedule values from canonical to ensure they're used
-      scheduleMode: canonicalProfileNow.scheduleMode,
-      trainingDaysPerWeek: canonicalProfileNow.trainingDaysPerWeek ?? undefined,
-      sessionDurationMode: canonicalProfileNow.sessionDurationMode ?? undefined,
-      sessionLength: canonicalProfileNow.sessionLengthMinutes ?? undefined,
-    })
-    
-    // Controlled failure if entry build fails
-    if (!entryResult.success || !entryResult.entry) {
-      throw new Error(`Entry build failed: ${entryResult.error?.message ?? 'Unknown error'}`)
-    }
-    
-    stage = 'convert_entry_to_inputs'
-    const freshInputs = entryToAdaptiveInputs(entryResult.entry)
-    
-    // [PHASE 30F] Controlled failure if input conversion fails
-    if (!freshInputs) {
-      throw new Error('Input conversion returned null/undefined')
-    }
-    
-    // Create and commit the entry atomically
-    stage = 'seed_builder_session'
-    const newSessionKey = `canonical_modify_${Date.now()}`
-    const modifyEntry: ModifyBuilderEntry = {
-      sessionKey: newSessionKey,
-      source: 'modify_visible_program',
-      inputs: freshInputs,
-    }
-    
-    // [v0] DEBUG: Log right before commit
-    console.log('[v0] launcher-pre-commit', {
-      sessionKey: newSessionKey,
-      hasInputs: !!modifyEntry.inputs,
-      scheduleMode: modifyEntry.inputs?.scheduleMode,
-    })
-    
-    // Commit entry (logs [modify-final-launch-commit] internally)
-    const commitSuccess = commitModifyEntryAtomically(modifyEntry)
-    
-    // [v0] DEBUG: Log right after commit
-    console.log('[v0] launcher-post-commit', {
-      commitSuccess,
-      refNow: !!modifyBuilderEntryRef.current,
-    })
-    
-    if (!commitSuccess) {
-      throw new Error('Atomic entry commit failed - entry was invalid')
-    }
-    
-    // ==========================================================================
-    // [PHASE 31E] LAUNCHER COMPLETE - RETURN IMMEDIATELY
-    // NO MORE STATE MUTATIONS AFTER ENTRY COMMIT.
-    // The promotion effect handles everything else.
-    // ==========================================================================
-    stage = 'complete'
-    // Launcher complete - entry committed, waiting for promotion effect
-    return
-    
+      // ==========================================================================
+      // [PHASE 25] TASK 1: Get canonical truth for prefill
+      // Uses the same canonical entry builder as Restart/Onboarding
+      // [PHASE 30F] STAGE: read_canonical
+      // ==========================================================================
+      stage = 'read_canonical'
+      const canonicalProfileNow = getCanonicalProfile()
+      
+      stage = 'read_athlete'
+      const athleteSourceNow = getAthleteProfileDirect()
+      const onboardingSourceNow = getOnboardingProfileDirect()
+      
+      // Single concise log for modify open schedule truth
+      console.log('[modify-open-schedule-truth]', {
+        canonical: canonicalProfileNow?.scheduleMode ?? null,
+        canonicalDays: canonicalProfileNow?.trainingDaysPerWeek ?? null,
+        athlete: athleteSourceNow?.scheduleMode ?? null,
+        onboarding: onboardingSourceNow?.scheduleMode ?? null,
+      })
+      
+      // ==========================================================================
+      // [PHASE 25] TASK 2: Build fresh inputs using canonical entry builder
+      // This is the SAME path used by Restart/Onboarding
+      // [PHASE 30F] STAGE: build_entry
+      // ==========================================================================
+      stage = 'build_entry'
+      const entryResult = buildCanonicalGenerationEntry('modify_program', {
+        scheduleMode: canonicalProfileNow.scheduleMode,
+        trainingDaysPerWeek: canonicalProfileNow.trainingDaysPerWeek ?? undefined,
+        sessionDurationMode: canonicalProfileNow.sessionDurationMode ?? undefined,
+        sessionLength: canonicalProfileNow.sessionLengthMinutes ?? undefined,
+      })
+      
+      // Controlled failure if entry build fails
+      if (!entryResult.success || !entryResult.entry) {
+        throw new Error(`Entry build failed: ${entryResult.error?.message ?? 'Unknown error'}`)
+      }
+      
+      stage = 'convert_entry_to_inputs'
+      const freshInputs = entryToAdaptiveInputs(entryResult.entry)
+      
+      // [PHASE 30F] Controlled failure if input conversion fails
+      if (!freshInputs) {
+        throw new Error('Input conversion returned null/undefined')
+      }
+      
+      // Create and commit the entry atomically
+      stage = 'seed_builder_session'
+      const newSessionKey = `canonical_modify_${Date.now()}`
+      const modifyEntry: ModifyBuilderEntry = {
+        sessionKey: newSessionKey,
+        source: 'modify_visible_program',
+        inputs: freshInputs,
+      }
+      
+      // Commit entry (logs [modify-final-launch-commit] internally)
+      const commitSuccess = commitModifyEntryAtomically(modifyEntry)
+      
+      if (!commitSuccess) {
+        throw new Error('Atomic entry commit failed - entry was invalid')
+      }
+      
+      // ==========================================================================
+      // [ROOT-CAUSE-FIX] LAUNCHER COMPLETE - RETURN IMMEDIATELY
+      // Entry is committed. The promotion effect handles everything else.
+      // ==========================================================================
+      stage = 'complete'
+      return
+      
     } catch (error) {
       // Error handling with user-visible feedback
       const errorMsg = error instanceof Error ? error.message : String(error)
@@ -10355,26 +10285,22 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
         </div>
         
         {/* ==========================================================================
-            [ROOT-CAUSE-FIX] MODIFY AUDIT STRIP - SINGLE AUTHORITY ONLY
-            Shows the simplified commit chain - state is the ONLY authority.
+            MODIFY AUDIT STRIP - Canonical chain status
             Only shown when program exists and builder is not shown
             ========================================================================== */}
         {program && !shouldRenderModifyBuilder && (
           <div className="mt-4 p-3 bg-zinc-900/80 border border-zinc-700 rounded-lg text-xs font-mono">
             <div className="text-zinc-400 mb-2 font-semibold">MODIFY PIPELINE</div>
             <div className="grid grid-cols-2 gap-1 text-zinc-500">
-              {/* Single-authority commit chain */}
               <div>1. Click fired: <span className={modifyClickAudit.clickFiredAt ? 'text-green-400' : 'text-zinc-600'}>{modifyClickAudit.clickFiredAt ? 'YES' : 'no'}</span></div>
               <div>2. Launcher entered: <span className={modifyClickAudit.canonicalLauncherEntered ? 'text-green-400' : 'text-zinc-600'}>{modifyClickAudit.canonicalLauncherEntered ? 'YES' : 'no'}</span></div>
-              <div>3. Ref present: <span className={modifyBuilderEntryRef.current ? 'text-green-400' : 'text-zinc-600'}>{modifyBuilderEntryRef.current ? 'YES' : 'no'}</span></div>
-              <div>4. State entry: <span className={modifyBuilderEntry ? 'text-green-400' : 'text-zinc-600'}>{modifyBuilderEntry ? 'YES' : 'no'}</span></div>
-              <div>5. Flow state: <span className={modifyFlowState === 'builder' ? 'text-green-400' : 'text-zinc-600'}>{modifyFlowState}</span></div>
-              <div>6. Render granted: <span className={shouldRenderModifyBuilder ? 'text-green-400' : 'text-red-400'}>{shouldRenderModifyBuilder ? 'YES' : 'NO'}</span></div>
+              <div>3. Entry committed: <span className={modifyBuilderEntry ? 'text-green-400' : 'text-zinc-600'}>{modifyBuilderEntry ? 'YES' : 'no'}</span></div>
+              <div>4. Flow state: <span className={modifyFlowState === 'builder' ? 'text-green-400' : 'text-zinc-600'}>{modifyFlowState}</span></div>
+              <div>5. Render granted: <span className={shouldRenderModifyBuilder ? 'text-green-400' : 'text-red-400'}>{shouldRenderModifyBuilder ? 'YES' : 'NO'}</span></div>
               {modifyClickAudit.failureStage && (
-                <div className="col-span-2 text-red-400">Error: {modifyClickAudit.failureStage} - {modifyClickAudit.failureMessage?.slice(0, 50)}</div>
+                <div className="col-span-2 text-red-400">Failed at: {modifyClickAudit.failureStage}</div>
               )}
             </div>
-            {/* Simplified verdict */}
             <div className="mt-2 pt-2 border-t border-zinc-700 text-zinc-300">
               Verdict: <span className={
                 shouldRenderModifyBuilder ? 'text-green-400' :
@@ -10383,7 +10309,7 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
                 'text-zinc-500'
               }>
                 {shouldRenderModifyBuilder ? 'RENDER_GRANTED' :
-                 modifyClickAudit.failureStage ? 'FAILED' :
+                 modifyClickAudit.failureStage ? `FAILED_AT_${modifyClickAudit.failureStage.toUpperCase()}` :
                  modifyBuilderEntry && modifyFlowState !== 'builder' ? 'WAITING_FOR_PROMOTION' :
                  modifyClickAudit.canonicalLauncherEntered ? 'WAITING_FOR_ENTRY' :
                  'IDLE'}

@@ -68,7 +68,10 @@ export function generateProgramReasonSummary(
   
   // Build base context from program
   const goal = program.primaryGoal?.replace(/_/g, ' ') || 'skill progression'
-  const days = program.trainingDaysPerWeek || 4
+  // [ADAPTIVE BASELINE FIX] Use actual session count for flexible users, not fallback 4
+  const days = program.trainingDaysPerWeek === 'flexible' 
+    ? (program.sessions?.length || 4)  // Use actual generated session count
+    : (program.trainingDaysPerWeek || 4)
   const sessionMins = typeof program.sessionLength === 'number'
     ? program.sessionLength
     : parseInt(String(program.sessionLength)) || 60
@@ -177,7 +180,10 @@ function buildScheduleChangeReason(
   sessionMins: number,
   previousProgram: ProgramHistory | null | undefined
 ): string {
-  const oldDays = previousProgram?.trainingDaysPerWeek || 4
+  // [ADAPTIVE BASELINE FIX] Handle flexible schedule comparison
+  const oldDays = previousProgram?.trainingDaysPerWeek === 'flexible'
+    ? (previousProgram?.sessions?.length || days)  // Compare against actual session count
+    : (previousProgram?.trainingDaysPerWeek || 4)
   const oldSession = previousProgram?.sessionLengthMinutes || 60
   
   if (days !== oldDays && sessionMins !== oldSession) {
@@ -350,7 +356,10 @@ export function buildAthleteInputsSnapshot(
     weightUnit: profile?.weightUnit || 'kg',
     // Note: fallback values here are for snapshot display, not generation truth
     experienceLevel: program.experienceLevel || 'intermediate',
-    trainingDaysPerWeek: program.trainingDaysPerWeek || 4,  // Snapshot display only
+    // [ADAPTIVE BASELINE FIX] Use actual sessions for flexible, not fallback 4
+    trainingDaysPerWeek: program.trainingDaysPerWeek === 'flexible'
+      ? (program.sessions?.length || 4)
+      : (program.trainingDaysPerWeek || 4),  // Snapshot display only
     sessionLengthMinutes,
     equipmentAvailable: program.equipmentProfile?.available || [],
     jointCautions: profile?.jointCautions || [],
@@ -432,7 +441,10 @@ export function buildProgramStructureSnapshot(
   // Note: daysPerWeek || 4 and || 60 are ONLY for snapshot display, not generation truth
   return {
     programName: program.goalLabel || `${program.primaryGoal || 'General'} Program`,
-    daysPerWeek: program.trainingDaysPerWeek || 4,  // Snapshot display fallback only
+    // [ADAPTIVE BASELINE FIX] Use actual session count for flexible users
+    daysPerWeek: program.trainingDaysPerWeek === 'flexible'
+      ? sessions.length
+      : (program.trainingDaysPerWeek || 4),  // Snapshot display fallback only
     sessionLengthMinutes: typeof program.sessionLength === 'number' 
       ? program.sessionLength 
       : parseInt(String(program.sessionLength)) || 60,  // Snapshot display fallback only

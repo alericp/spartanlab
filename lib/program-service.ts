@@ -401,13 +401,19 @@ if (['planche', 'front_lever', 'back_lever', 'muscle_up', 'handstand_pushup', 'i
   }
   
   // REGRESSION GUARD: Use canonical profile values, avoid silent fallbacks
-  // trainingDaysPerWeek fallback to 4 only if profile field is genuinely missing
+  // trainingDaysPerWeek: preserve 'flexible' semantic, don't collapse to 4
   // sessionLength fallback to 45 only if profile field is genuinely missing
+  
+  // [ADAPTIVE BASELINE FIX] Do NOT convert flexible to 4 here - preserve the semantic
+  const resolvedDays = profile.trainingDaysPerWeek === 'flexible' 
+    ? 'flexible' as const
+    : (profile.trainingDaysPerWeek as TrainingDays) || 4
+  
   return {
     primaryGoal,
     experienceLevel: profile.experienceLevel,
     // Note: These fallbacks are for legacy compatibility - new users go through canonical flow
-    trainingDaysPerWeek: (profile.trainingDaysPerWeek as TrainingDays) || 4,
+    trainingDaysPerWeek: resolvedDays as TrainingDays,  // May be 'flexible' or numeric
     secondaryEmphasis: 'none',
     sessionLength: profile.sessionLengthMinutes as SessionLength || 45,
   }

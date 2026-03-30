@@ -449,6 +449,14 @@ export default function ProgramPage() {
     lastGeneratedScheduleMode?: string | null
     lastGeneratedTrainingDays?: number | null
     lastReconciliationDecision?: 'kept' | 'replaced' | 'no-op' | null
+    // ==========================================================================
+    // [ADAPTIVE BASELINE FIX] Baseline frequency contract fields
+    // ==========================================================================
+    baselineRecommendedSessionCount?: number | null
+    complexityScore?: number | null
+    complexityElevated?: boolean
+    activeProgramSessionCount?: number | null
+    baselineFrequencyReason?: string | null
   } | null>(null)
   
   // ==========================================================================
@@ -11293,8 +11301,11 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
             const savedSessionCount = savedProgram?.sessions?.length || 0
             const visibleSessionCount = visibleProgram?.sessions?.length || 0
             
-            const preferredDays = canonical.trainingDaysPerWeek || 4
-            const scheduleMode = canonical.scheduleMode || 'adaptive'
+            // [ADAPTIVE BASELINE FIX] Do NOT collapse flexible to 4 here
+            const scheduleMode = canonical.scheduleMode || 'flexible'
+            const preferredDays = scheduleMode === 'flexible'
+              ? 'flexible'  // Keep semantic, don't collapse to 4
+              : (canonical.trainingDaysPerWeek || 4)
             
             // [PHASE 17Q] Use freshest saved program truth first, fallback to visible, then canonical
             const truthfulGeneratedSessionCount =
@@ -11329,12 +11340,14 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
                   : preferredDays,
             })
             
-            // For flexible mode: show truthful generated count if available, else preference
+            // For flexible mode: show truthful generated count if available
             // For static mode: show canonical preference
             if (scheduleMode === 'flexible') {
-              return (truthfulGeneratedSessionCount > 0 ? truthfulGeneratedSessionCount : preferredDays) as TrainingDays
+              // [ADAPTIVE BASELINE FIX] Use actual generated count, don't fallback to 4
+              return (truthfulGeneratedSessionCount > 0 ? truthfulGeneratedSessionCount : 4) as TrainingDays
             }
-            return preferredDays as TrainingDays
+            // Static mode: use the actual preference (already a number, not 'flexible')
+            return (typeof preferredDays === 'number' ? preferredDays : 4) as TrainingDays
           })()}
           currentEquipment={(() => {
             // [PHASE 5] Use canonical profile equipment

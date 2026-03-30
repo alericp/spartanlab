@@ -18,16 +18,16 @@
 // This allows us to verify the live app is running the expected code version
 // ==========================================================================
 export const PHASE27C_BUILD_IDENTITY = {
-  buildIdentityName: 'PHASE29A_BASELINE_VS_ADAPTIVE_SEPARATION',
-  buildIdentityVersion: '2024-PHASE29A-v1',
-  buildTimestamp: '2024-01-PHASE29A',
-  modifyBuilderVariant: 'EXPECTED_PHASE29A_CANONICAL_MODIFY',
-  scheduleSelectorVariant: 'EXPECTED_PHASE29A_BASELINE_SCHEDULE_IDENTITY',
-  submitSnapshotVariant: 'EXPECTED_PHASE29A_BASELINE_AND_ADAPTIVE_SHOWN',
-  auditPanelVariant: 'PHASE29A_VISIBLE_TRUTH_BAR_WITH_ADAPTIVE_WORKLOAD',
-  scheduleResolutionFix: 'ATHLETE_STATIC_BEATS_ONBOARDING_FLEXIBLE',
+  buildIdentityName: 'ROOT_CAUSE_FIX_SCHEDULE_AND_MODIFY',
+  buildIdentityVersion: '2024-ROOT-CAUSE-FIX-v1',
+  buildTimestamp: '2024-01-ROOT-CAUSE-FIX',
+  modifyBuilderVariant: 'SINGLE_ENTRY_REF_AUTHORITY',
+  scheduleSelectorVariant: 'TRAINING_DAYS_SYNCED_TO_ONBOARDING',
+  submitSnapshotVariant: 'EXPECTED_BASELINE_AND_ADAPTIVE_SHOWN',
+  auditPanelVariant: 'VISIBLE_TRUTH_BAR_WITH_ADAPTIVE_WORKLOAD',
+  scheduleResolutionFix: 'TRAINING_DAYS_NOW_SYNCED_TO_BOTH_STORES',
   baselineAdaptiveSeparation: true,
-  forensicLogs: ['phase29a-settings-schedule-contract-save', 'phase29a-canonical-schedule-contract-resolution', 'phase29a-modify-open-baseline-truth', 'phase29a-builder-baseline-vs-adaptive-contract'],
+  forensicLogs: ['schedule-root-persisted-truth', 'schedule-root-canonical-resolution', 'modify-root-launch-commit', 'modify-root-promotion', 'modify-root-render-authority'],
 } as const
 
 import { useState, useEffect, useCallback, useMemo, useRef, type ReactNode } from 'react'
@@ -537,52 +537,19 @@ export default function ProgramPage() {
     // 4. Commit React state - THIS IS THE ONLY STATE MUTATION
     setModifyBuilderEntry(entry)
     
-    // 5. Emit authoritative log with instance ID
-    console.log('[phase31f-entry-commit-requested-final]', {
-      instanceId: programPageInstanceIdRef.current,
-      refHasEntry: !!modifyBuilderEntryRef.current,
-      stateSetterCalled: true,
-      hadEntryStateBefore,
-      hadRefBefore,
+    // 5. [modify-root-launch-commit] Concise authoritative log when launcher commits entry
+    console.log('[modify-root-launch-commit]', {
       sessionKey: entry?.sessionKey ?? null,
-      hasInputs: !!entry?.inputs,
-      modifyFlowState: modifyFlowState ?? null,
-      showBuilder: !!showBuilder,
       scheduleMode: entry?.inputs?.scheduleMode ?? null,
       trainingDaysPerWeek: entry?.inputs?.trainingDaysPerWeek ?? null,
-      verdict: 'ATOMIC_ENTRY_COMMIT_REQUESTED',
-    })
-    
-    // 6. Queue microtask to check timing after commit
-    queueMicrotask(() => {
-      console.log('[phase31f-post-commit-microtask-final]', {
-        instanceId: programPageInstanceIdRef.current,
-        refHasEntry: !!modifyBuilderEntryRef.current,
-        stateHasEntryReadableFromClosure: !!modifyBuilderEntry,
-        note: 'closure state may be stale; this log is only for timing correlation',
-        verdict: 'POST_COMMIT_MICROTASK_REACHED',
-      })
+      refWritten: !!modifyBuilderEntryRef.current,
+      verdict: 'ATOMIC_ENTRY_COMMITTED',
     })
     
     return true
   }, [])
   
-  // ==========================================================================
-  // [PHASE 31F] INSTANCE MOUNT/UNMOUNT TRACKER
-  // This proves whether clicking Modify causes a component remount
-  // ==========================================================================
-  useEffect(() => {
-    console.log('[phase31f-program-instance-mounted-final]', {
-      instanceId: programPageInstanceIdRef.current,
-      verdict: 'PROGRAM_INSTANCE_MOUNTED',
-    })
-    return () => {
-      console.log('[phase31f-program-instance-unmounted-final]', {
-        instanceId: programPageInstanceIdRef.current,
-        verdict: 'PROGRAM_INSTANCE_UNMOUNTED',
-      })
-    }
-  }, [])
+  // [ROOT-CAUSE-FIX] Removed mount/unmount tracker - no longer needed for diagnostics
   
   // ==========================================================================
   // [PHASE 31E] ENTRY PROMOTION EFFECT - THE ONLY PLACE WHERE MODIFY ENTERS BUILDER MODE
@@ -596,17 +563,12 @@ export default function ProgramPage() {
   useEffect(() => {
     // Only promote if entry exists with inputs AND we're not already in builder mode
     if (modifyBuilderEntry && modifyBuilderEntry.inputs && modifyFlowState !== 'builder') {
-      // ==========================================================================
-      // [PHASE 31F] ENTRY STATE OBSERVED - This is the key proof point
-      // ==========================================================================
-      console.log('[phase31f-entry-state-observed-final]', {
-        instanceId: programPageInstanceIdRef.current,
-        hasEntryState: !!modifyBuilderEntry,
-        hasEntryInputs: !!modifyBuilderEntry?.inputs,
-        entrySessionKey: modifyBuilderEntry?.sessionKey ?? null,
-        modifyFlowState: modifyFlowState ?? null,
-        showBuilder: !!showBuilder,
-        verdict: 'ENTRY_STATE_OBSERVED',
+      // [modify-root-promotion] Concise log when committing -> builder promotion happens
+      console.log('[modify-root-promotion]', {
+        sessionKey: modifyBuilderEntry?.sessionKey ?? null,
+        scheduleMode: modifyBuilderEntry?.inputs?.scheduleMode ?? null,
+        trainingDaysPerWeek: modifyBuilderEntry?.inputs?.trainingDaysPerWeek ?? null,
+        verdict: 'ENTRY_PROMOTED_TO_BUILDER',
       })
       
       // Mark that atomic entry was committed (for audit strip)
@@ -656,82 +618,16 @@ export default function ProgramPage() {
         ...prev,
         setShowBuilderRequested: true,
       }))
-      
-      // ==========================================================================
-      // [PHASE 31E] PROMOTION DISPATCHED LOG
-      // ==========================================================================
-      console.log('[phase31e-promotion-dispatched-final]', {
-        hasEntryState: !!modifyBuilderEntry,
-        hasEntryInputs: !!modifyBuilderEntry?.inputs,
-        sessionKey: modifyBuilderEntry?.sessionKey ?? null,
-        modifyFlowState_target: 'builder',
-        showBuilder_target: true,
-        verdict: 'PROMOTION_DISPATCHED_FROM_COMMITTED_ENTRY',
-      })
     }
   }, [modifyBuilderEntry, modifyFlowState, showBuilder]) // Include all read dependencies
   
-  // ==========================================================================
-  // [PHASE 31F] TRUE STATE-SURVIVAL EFFECT
-  // This effect proves whether the entry state truly survived into committed render.
-  // It ONLY observes - no mutations allowed here.
-  // ==========================================================================
-  useEffect(() => {
-    // Always log when state changes to detect survival/loss
-    const hasRefEntry = !!modifyBuilderEntryRef.current
-    const hasStateEntry = !!modifyBuilderEntry
-    const hasStateInputs = !!modifyBuilderEntry?.inputs
-    
-    // Determine verdict based on ref vs state status
-    let verdict: string
-    if (hasStateEntry && hasStateInputs) {
-      verdict = 'ENTRY_STATE_SURVIVED'
-    } else if (hasRefEntry && !hasStateEntry) {
-      verdict = 'ENTRY_STATE_MISSING_REF_PRESENT'
-    } else if (!hasRefEntry && !hasStateEntry) {
-      verdict = 'ENTRY_STATE_MISSING_REF_MISSING'
-    } else {
-      verdict = 'ENTRY_STATE_PARTIAL'
-    }
-    
-    console.log('[phase31f-entry-state-survival-final]', {
-      instanceId: programPageInstanceIdRef.current,
-      hasModifyBuilderEntryState: hasStateEntry,
-      hasModifyBuilderEntryInputs: hasStateInputs,
-      hasRefEntry,
-      modifyFlowState: modifyFlowState ?? null,
-      showBuilder: !!showBuilder,
-      verdict,
-    })
-  }, [modifyBuilderEntry, modifyFlowState, showBuilder])
+  // [ROOT-CAUSE-FIX] Removed verbose state-survival and clobber-window effects
+  // The half-transition guard now checks both ref AND state, eliminating false resets
   
   // ==========================================================================
-  // [PHASE 31F] CLOBBER WINDOW DETECTOR
-  // Detects if entry ref exists but state was clobbered
-  // ==========================================================================
-  useEffect(() => {
-    const launcherEntered = modifyClickAudit.canonicalLauncherEntered
-    const refHasEntry = !!modifyBuilderEntryRef.current
-    const stateHasEntry = !!modifyBuilderEntry
-    
-    // Only log when we're in the suspicious clobber window
-    if (launcherEntered && refHasEntry && !stateHasEntry) {
-      console.log('[phase31f-clobber-window-final]', {
-        instanceId: programPageInstanceIdRef.current,
-        launcherEntered,
-        refHasEntry,
-        stateHasEntry,
-        modifyFlowState: modifyFlowState ?? null,
-        showBuilder: !!showBuilder,
-        verdict: 'CLOBBER_WINDOW_ACTIVE',
-      })
-    }
-  }, [modifyBuilderEntry, modifyFlowState, showBuilder, modifyClickAudit.canonicalLauncherEntered])
-  
-  // ==========================================================================
-  // [PHASE 31G] MODIFY ENTRY SURVIVAL GUARD
-  // If launcher entered and ref entry survived but React state is missing in the SAME instance,
-  // restore state from ref exactly once for that sessionKey.
+  // [ROOT-CAUSE-FIX] BACKUP RECOVERY GUARD
+  // If ref entry survived but React state is missing, restore from ref (once per session).
+  // This is a safety net - the primary fix is in the half-transition guard checking refs.
   // ==========================================================================
   useEffect(() => {
     const refEntry = modifyBuilderEntryRef.current
@@ -741,7 +637,6 @@ export default function ProgramPage() {
     const refPresent = !!refEntry
     const alreadyAttemptedThisSession = modifyEntryRecoveryAttemptedRef.current === refSessionKey
     
-    // Recovery condition: ALL must be true
     const shouldRecover = 
       launcherEntered === true &&
       refPresent === true &&
@@ -752,129 +647,58 @@ export default function ProgramPage() {
       alreadyAttemptedThisSession === false
     
     if (shouldRecover && refEntry) {
-      // Mark recovery as attempted for this session BEFORE calling setter
       modifyEntryRecoveryAttemptedRef.current = refSessionKey
-      
-      // Log before restore
-      console.log('[phase31g-entry-survival-guard-before-restore-final]', {
-        instanceId: programPageInstanceIdRef.current,
-        launcherEntered,
-        refPresent,
-        statePresent: !!modifyBuilderEntry,
-        modifyFlowState: modifyFlowState ?? null,
-        showBuilder: !!showBuilder,
-        refSessionKey,
-        alreadyAttemptedThisSession,
-        verdict: 'STATE_RECOVERY_FROM_REF_REQUESTED',
-      })
-      
-      // Restore state from ref
       setModifyBuilderEntry(refEntry)
-      
-      // Log after setter called
-      console.log('[phase31g-entry-survival-guard-after-restore-call-final]', {
-        instanceId: programPageInstanceIdRef.current,
-        refSessionKey,
-        verdict: 'STATE_RECOVERY_SETTER_CALLED',
-      })
-    } else if (launcherEntered && refPresent && stateMissing) {
-      // Log blocked condition for diagnostics
-      let reason: string
-      if (alreadyAttemptedThisSession) {
-        reason = 'ALREADY_ATTEMPTED_THIS_SESSION'
-      } else if (modifyFlowState === 'builder') {
-        reason = 'FLOW_ALREADY_BUILDER'
-      } else if (!refEntry?.inputs) {
-        reason = 'REF_MISSING_INPUTS'
-      } else {
-        reason = 'RECOVERY_CONDITION_NOT_MET'
-      }
-      
-      console.log('[phase31g-entry-survival-guard-blocked-final]', {
-        instanceId: programPageInstanceIdRef.current,
-        launcherEntered,
-        refPresent,
-        statePresent: !!modifyBuilderEntry,
-        modifyFlowState: modifyFlowState ?? null,
-        showBuilder: !!showBuilder,
-        refSessionKey,
-        alreadyAttemptedThisSession,
-        reason,
-        verdict: 'STATE_RECOVERY_BLOCKED',
+      console.log('[modify-root-recovery-triggered]', {
+        sessionKey: refSessionKey,
+        verdict: 'STATE_RECOVERED_FROM_REF',
       })
     }
   }, [modifyBuilderEntry, modifyFlowState, showBuilder, modifyClickAudit.canonicalLauncherEntered])
   
-  // ==========================================================================
-  // [PHASE 31G] POST-RECOVERY STATE OBSERVATION EFFECT
-  // Observes whether recovery worked after an attempt was made
-  // ==========================================================================
-  useEffect(() => {
-    // Only log when a recovery was attempted
-    if (modifyEntryRecoveryAttemptedRef.current !== null) {
-      const hasStateEntry = !!modifyBuilderEntry
-      const hasStateInputs = !!modifyBuilderEntry?.inputs
-      
-      console.log('[phase31g-post-recovery-state-observation-final]', {
-        instanceId: programPageInstanceIdRef.current,
-        recoverySessionKey: modifyEntryRecoveryAttemptedRef.current,
-        hasStateEntry,
-        hasStateInputs,
-        modifyFlowState: modifyFlowState ?? null,
-        showBuilder: !!showBuilder,
-        verdict: hasStateEntry && hasStateInputs
-          ? 'RECOVERY_SUCCEEDED_STATE_OBSERVED'
-          : 'RECOVERY_STILL_MISSING_STATE',
-      })
-    }
-  }, [modifyBuilderEntry, modifyFlowState, showBuilder])
+  // [ROOT-CAUSE-FIX] Removed verbose post-recovery and transition classification effects
+  // The [modify-root-render-authority] log in the half-transition guard provides sufficient diagnostics
   
   // ==========================================================================
-  // [PHASE 31B] TRANSITION STATE CLASSIFICATION EFFECT
-  // Distinguishes between "entry not committed yet" vs "illegal builder without entry"
+  // [ROOT-CAUSE-FIX] HALF-TRANSITION GUARD - NOW CHECKS REF AUTHORITY
+  // The ref is written synchronously BEFORE the state setter. If the ref has
+  // a valid entry, we're in an active modify session and must NOT reset.
+  // Only reset if BOTH ref AND state are null while modifyFlowState='builder'.
   // ==========================================================================
   useEffect(() => {
-    console.log('[phase31b-transition-state-classification-final]', {
-      launcherEntered: modifyClickAudit.canonicalLauncherEntered,
-      hasEntry: !!modifyBuilderEntry,
-      modifyFlowState: modifyFlowState ?? null,
-      verdict:
-        modifyClickAudit.canonicalLauncherEntered && !modifyBuilderEntry && modifyFlowState === 'idle'
-          ? 'ENTRY_NOT_COMMITTED_YET'
-          : modifyFlowState === 'builder' && !modifyBuilderEntry
-          ? 'ILLEGAL_BUILDER_WITHOUT_ENTRY'
-          : 'TRANSITION_STATE_OK',
-    })
-  }, [modifyClickAudit.canonicalLauncherEntered, modifyBuilderEntry, modifyFlowState])
-  
-  // ==========================================================================
-  // [PHASE 31A] HALF-TRANSITION GUARD EFFECT
-  // Detects and corrects illegal states where modifyFlowState='builder' without entry.
-  // This should NEVER happen if the pipeline is working correctly.
-  // ==========================================================================
-  useEffect(() => {
-    const isHalfTransition = modifyFlowState === 'builder' && modifyBuilderEntry === null
-    const isEntryWaitingForPromotion = modifyBuilderEntry !== null && modifyFlowState !== 'builder'
+    // Check BOTH ref and state - ref is synchronous authority during commit window
+    const hasRefEntry = modifyBuilderEntryRef.current !== null
+    const hasStateEntry = modifyBuilderEntry !== null
+    const hasAnyEntry = hasRefEntry || hasStateEntry
     
-    console.log('[phase31a-half-transition-guard-final]', {
+    // Only consider it a half-transition if NEITHER ref nor state has an entry
+    const isHalfTransition = modifyFlowState === 'builder' && !hasAnyEntry
+    const isEntryWaitingForPromotion = hasAnyEntry && modifyFlowState !== 'builder'
+    
+    console.log('[modify-root-render-authority]', {
       modifyFlowState,
-      hasEntry: !!modifyBuilderEntry,
+      hasRefEntry,
+      hasStateEntry,
+      hasAnyEntry,
       showBuilder,
       verdict:
         isHalfTransition
-          ? 'ILLEGAL_BUILDER_WITHOUT_ENTRY_DETECTED'
+          ? 'ILLEGAL_BUILDER_WITHOUT_ANY_ENTRY'
           : isEntryWaitingForPromotion
           ? 'ENTRY_PRESENT_WAITING_FOR_PROMOTION'
-          : 'TRANSITION_STATE_VALID',
+          : hasAnyEntry && modifyFlowState === 'builder'
+          ? 'MODIFY_ACTIVE_VALID'
+          : 'IDLE_STATE_VALID',
     })
     
-    // Auto-correct half-transition states
+    // Auto-correct half-transition states ONLY if both ref and state are null
     if (isHalfTransition) {
-      console.log('[phase31a-half-transition-corrected]', {
+      console.log('[modify-root-half-transition-corrected]', {
         modifyFlowState: modifyFlowState ?? null,
-        hasEntry: !!modifyBuilderEntry,
+        hasRefEntry,
+        hasStateEntry,
         showBuilder: !!showBuilder,
-        verdict: 'HALF_TRANSITION_CORRECTED',
+        verdict: 'HALF_TRANSITION_CORRECTED_BOTH_NULL',
       })
       
       // Reset to safe state

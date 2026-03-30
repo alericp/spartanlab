@@ -68,6 +68,8 @@ import {
   // [PHASE 25] Static imports for canonicalModifyLauncher - required for SSR/prerender safety
   buildCanonicalGenerationEntry,
   entryToAdaptiveInputs,
+  // [PHASE 32B] Import for stale schedule detection
+  getCanonicalProfile,
 } from '@/lib/canonical-profile-service'
 // [program-rebuild-truth] Import rebuild result contract for truthful error handling
 // [freshness-sync] TASK 1 & 2: Import freshness identity management for cross-surface consistency
@@ -1057,13 +1059,26 @@ export default function ProgramPage() {
         'intermediate'
       ) as ExperienceLevel,
       
-      // Training Days: snapshot > program > inputs > canonical
+      // ==========================================================================
+      // [PHASE 32B] SCHEDULE IDENTITY DISPLAY PRECEDENCE FIX
+      // For schedule identity fields, CANONICAL TRUTH wins over stale snapshot.
+      // Snapshot/program may have been generated with old settings.
+      // User's current canonical profile is the authoritative schedule identity.
+      // ==========================================================================
+      
+      // Training Days: CANONICAL > inputs > snapshot > program > default
+      // [PHASE 32B] Canonical wins for schedule identity - prevents stale snapshot masking
       trainingDaysPerWeek: (
-        snapshot?.trainingDaysPerWeek ??
-        (visibleProgram as { trainingDaysPerWeek?: number | 'flexible' }).trainingDaysPerWeek ??
-        currentInputs?.trainingDaysPerWeek ??
-        canonicalFallback.trainingDaysPerWeek ??
-        4
+        // Canonical is authoritative for schedule identity
+        (canonicalFallback.scheduleMode === 'static' && typeof canonicalFallback.trainingDaysPerWeek === 'number')
+          ? canonicalFallback.trainingDaysPerWeek
+          : canonicalFallback.scheduleMode === 'flexible'
+            ? (canonicalFallback.trainingDaysPerWeek ?? 'flexible')
+            // Fallback to other sources only if canonical has no explicit schedule
+            : currentInputs?.trainingDaysPerWeek ??
+              snapshot?.trainingDaysPerWeek ??
+              (visibleProgram as { trainingDaysPerWeek?: number | 'flexible' }).trainingDaysPerWeek ??
+              4
       ) as TrainingDays | 'flexible',
       
       // Session Length: snapshot.sessionLengthMinutes > program > inputs > canonical
@@ -1075,13 +1090,17 @@ export default function ProgramPage() {
         60
       ) as SessionLength,
       
-      // Schedule Mode: snapshot > program > inputs > canonical
+      // Schedule Mode: CANONICAL > inputs > snapshot > program > default
+      // [PHASE 32B] Canonical wins for schedule identity - prevents stale snapshot masking
       scheduleMode: (
-        snapshot?.scheduleMode ||
-        visibleProgram.scheduleMode ||
-        currentInputs?.scheduleMode ||
-        canonicalFallback.scheduleMode ||
-        'static'
+        // Canonical is authoritative for schedule identity
+        canonicalFallback.scheduleMode === 'static' ? 'static'
+        : canonicalFallback.scheduleMode === 'flexible' ? 'flexible'
+        // Fallback to other sources only if canonical has no explicit schedule
+        : currentInputs?.scheduleMode ||
+          snapshot?.scheduleMode ||
+          visibleProgram.scheduleMode ||
+          'static'
       ) as ScheduleMode,
       
       // Session Duration Mode: snapshot > program > inputs > canonical
@@ -1202,6 +1221,31 @@ export default function ProgramPage() {
     }
     
     const result = evaluateUnifiedProgramStaleness(rawProgram)
+    
+    // =========================================================================
+    // [PHASE 32B] STALE SNAPSHOT SCHEDULE DETECTION
+    // Detects when program snapshot scheduleMode differs from canonical truth
+    // =========================================================================
+    const canonical = getCanonicalProfile()
+    const snapshotScheduleMode = (profileSnapshot as { scheduleMode?: string })?.scheduleMode
+    const snapshotTrainingDays = (profileSnapshot as { trainingDaysPerWeek?: number })?.trainingDaysPerWeek
+    const canonicalScheduleMode = canonical.scheduleMode
+    const canonicalTrainingDays = canonical.trainingDaysPerWeek
+    
+    const scheduleSnapshotStale = (
+      (canonicalScheduleMode === 'static' && snapshotScheduleMode !== 'static') ||
+      (canonicalScheduleMode === 'flexible' && snapshotScheduleMode !== 'flexible') ||
+      (canonicalScheduleMode === 'static' && canonicalTrainingDays !== snapshotTrainingDays)
+    )
+    
+    // [PHASE 32B] AUTHORITATIVE TRUTH SUMMARY
+    // Single concise log showing: winner source, resolved schedule, display alignment
+    console.log('[phase32b-schedule-truth-summary]', {
+      canonical: { mode: canonicalScheduleMode, days: canonicalTrainingDays },
+      snapshot: { mode: snapshotScheduleMode, days: snapshotTrainingDays },
+      snapshotStale: scheduleSnapshotStale,
+      displayUsing: scheduleSnapshotStale ? 'CANONICAL_TRUTH' : 'SNAPSHOT_MATCHES_CANONICAL',
+    })
     
     // =========================================================================
     // [PHASE 8 TASK 2] STALE BANNER AUTHORITATIVE BINDING AUDIT

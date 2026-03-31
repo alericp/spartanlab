@@ -21,19 +21,20 @@
 // This allows us to verify the live app is running the expected code version
 // ==========================================================================
 export const PHASE27C_BUILD_IDENTITY = {
-  buildIdentityName: 'SCHEDULE_INTELLIGENCE_UNIFIED',
-  buildIdentityVersion: '2024-SCHEDULE-INTELLIGENCE-v2',
+  buildIdentityName: 'SCHEDULE_INTELLIGENCE_REGEN_READY',
+  buildIdentityVersion: '2024-SCHEDULE-INTELLIGENCE-v3',
   buildTimestamp: new Date().toISOString(),
   modifyPipeline: 'CANONICAL_7_STEP_WITH_2_PHASE_PROMOTION',
-  currentPhase: 'SCHEDULE_INTELLIGENCE_UNIFIED',
+  currentPhase: 'SCHEDULE_INTELLIGENCE_WITH_REGEN_ACTION',
   retiredPhases: ['MODIFY_PIPELINE_CORRIDOR', 'WEAK_LOCAL_COMPLEXITY_ESTIMATE'],
   features: [
     'Unified computeScheduleIntelligence() resolver for all surfaces',
     'Authoritative complexity scoring from flexible-schedule-engine',
-    'REQUIRES_REGEN verdict when program is significantly stale',
-    'Onboarding/Modify/Restart all use same schedule contract',
+    'REQUIRES_REGEN verdict with actionable regenerate button',
+    'Regeneration path uses same shared schedule contract',
     'Flexible users can start at 5-6 sessions when justified by complexity',
     'Honest display of current vs recommended session counts',
+    'One-click regeneration from audit panel when stale',
   ],
 } as const
 
@@ -10737,17 +10738,30 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
                 </span>
               </div>
               
-              {/* Regeneration hint if needed */}
+              {/* Regeneration action when REQUIRES_REGEN */}
               {(() => {
                 const recommended = scheduleTruthAudit?.baselineRecommendedSessionCount ?? 4
                 const actual = program?.sessions?.length ?? 0
                 const diff = recommended - actual
-                if (actual > 0 && diff >= 1) {
+                if (actual > 0 && diff >= 2) {
+                  return (
+                    <div className="mt-2 pt-2 border-t border-zinc-700/50">
+                      <div className="text-[10px] text-zinc-500 mb-2">
+                        Current program was generated before schedule intelligence update.
+                      </div>
+                      <button
+                        onClick={handleNewProgram}
+                        className="text-[10px] px-2 py-1 bg-cyan-600/20 hover:bg-cyan-600/30 text-cyan-400 rounded border border-cyan-600/40 transition-colors"
+                      >
+                        Regenerate to {recommended} sessions
+                      </button>
+                    </div>
+                  )
+                }
+                if (actual > 0 && diff === 1) {
                   return (
                     <div className="mt-2 text-[10px] text-zinc-500">
-                      {diff >= 2 
-                        ? 'Program generated before current baseline recommendation. Use Modify Program to regenerate.'
-                        : 'Program slightly under current recommendation. Optional regeneration.'}
+                      Optional: Regenerate to add 1 more session.
                     </div>
                   )
                 }

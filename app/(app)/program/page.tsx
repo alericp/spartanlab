@@ -503,6 +503,96 @@ export default function ProgramPage() {
   const [regenTruthAudit, setRegenTruthAudit] = useState<RegenTruthAudit | null>(null)
   
   // ==========================================================================
+  // [MAIN-GEN TRUTH CORRIDOR] Comprehensive trace for the MAIN generation path
+  // Tracks exactly where target sessions become incorrect during Build Adaptive Program
+  // This is PARALLEL to the regen trace - covers fresh builds, not regeneration
+  // ==========================================================================
+  type MainGenTruthVerdict = 
+    | 'MAIN_PENDING'
+    | 'MAIN_REQUEST_CAPTURED'
+    | 'MAIN_TARGET_LOST_BEFORE_BUILDER'
+    | 'MAIN_TARGET_LOST_IN_ENTRY'
+    | 'MAIN_TARGET_LOST_IN_RESOLUTION'
+    | 'MAIN_TARGET_LOST_IN_STRUCTURE_BUILD'
+    | 'MAIN_TARGET_LOST_DURING_SAVE'
+    | 'MAIN_TARGET_LOST_DURING_SET_PROGRAM'
+    | 'MAIN_TARGET_LOST_DURING_REHYDRATION'
+    | 'MAIN_TARGET_LOST_BY_POST_BUILD_OVERWRITE'
+    | 'MAIN_FULL_SUCCESS_6'
+    | 'MAIN_FULL_SUCCESS_MATCHED_EXPECTED'
+    | 'MAIN_TRACE_INCOMPLETE'
+    | 'MAIN_ERROR'
+  
+  interface MainGenTruthAudit {
+    // Step 1: Click source
+    attemptId: string | null
+    trigger: 'build_adaptive_program'
+    startedAt: string | null
+    existingVisibleProgramIdBeforeClick: string | null
+    existingVisibleProgramSessionsBeforeClick: number | null
+    existingGeneratedDateBeforeClick: string | null
+    scheduleStatusRecommendedCountBeforeClick: number | null
+    scheduleStatusTypeBeforeClick: string | null
+    canonicalScheduleModeBeforeClick: string | null
+    canonicalTrainingDaysPerWeekBeforeClick: number | null
+    selectedSkillsCountBeforeClick: number | null
+    goalCategoriesCountBeforeClick: number | null
+    experienceLevelBeforeClick: string | null
+    sessionDurationModeBeforeClick: string | null
+    // Step 2: Builder form input
+    submittedScheduleMode: string | null
+    submittedTrainingDaysPerWeek: number | null
+    submittedSessionDurationMode: string | null
+    submittedPrimaryGoal: string | null
+    submittedSecondaryGoal: string | null
+    submittedSelectedSkillsCount: number | null
+    submittedGoalCategoriesCount: number | null
+    submittedExperienceLevel: string | null
+    submittedTrainingPathType: string | null
+    // Step 3: Canonical entry result
+    entryScheduleMode: string | null
+    entryTrainingDaysPerWeek: number | null
+    entrySelectedSkillsCount: number | null
+    entryExperienceLevel: string | null
+    entryFallbacksUsed: string[] | null
+    // Step 4: Resolution result
+    complexityScore: number | null
+    complexityElevationApplied: number | null
+    targetSessionCountFromResolution: number | null
+    resolvedScheduleIdentity: string | null
+    resolvedFinalReasonCategory: string | null
+    // Step 5: Structure result
+    builtStructureSessionCount: number | null
+    builtStructureDayCount: number | null
+    generatedProgramIdBeforeSave: string | null
+    // Step 6: Save result
+    savedProgramId: string | null
+    savedProgramSessionCount: number | null
+    savedProgramTrainingDaysPerWeek: number | null
+    localStorageProgramIdAfterSave: string | null
+    localStorageProgramSessionsAfterSave: number | null
+    // Step 7: setProgram result
+    setProgramTargetId: string | null
+    setProgramTargetSessionCount: number | null
+    // Step 8: Post-commit display
+    displayedProgramIdAfterCommit: string | null
+    displayedProgramSessionCountAfterCommit: number | null
+    newGeneratedDateAfterCommit: string | null
+    // Step 9: Rehydration readback
+    rehydratedProgramId: string | null
+    rehydratedProgramSessionCount: number | null
+    overwriteDetected: boolean
+    overwriteSource: string | null
+    // Final
+    expectedSessionCount: number | null
+    finalVerdict: MainGenTruthVerdict
+    failedStage: string | null
+    errorMessage: string | null
+  }
+  
+  const [mainGenTruthAudit, setMainGenTruthAudit] = useState<MainGenTruthAudit | null>(null)
+  
+  // ==========================================================================
   // [SCHEDULE TRUTH STATE] Backing data for the top "Schedule Status" panel
   // This is the ONLY schedule truth state that feeds a production-visible UI element.
   // The Schedule Status panel uses this to display: Type, Complexity, Current, Recommended.
@@ -1009,6 +1099,144 @@ export default function ProgramPage() {
     sessionStorage.setItem('regenTruthAudit', JSON.stringify(finalAudit))
     setRegenTruthAudit(finalAudit)
   }, [program])
+  
+  // ==========================================================================
+  // [MAIN-GEN-TRUTH step-8+9-display-and-rehydration] Capture display state after main generation
+  // This effect detects if the displayed program differs from what was saved
+  // ==========================================================================
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    
+    const storedMainGenRaw = sessionStorage.getItem('mainGenTruthAudit')
+    if (!storedMainGenRaw) return
+    
+    const storedMainGen = JSON.parse(storedMainGenRaw) as MainGenTruthAudit
+    
+    // Only run once we have a savedProgramId to compare against
+    if (!storedMainGen.savedProgramId) return
+    
+    const displayedSessions = program?.sessions?.length ?? 0
+    const displayedProgramId = program?.id ?? null
+    const displayedCreatedAt = program?.createdAt ?? null
+    const savedSessions = storedMainGen.savedProgramSessionCount ?? 0
+    const savedProgramId = storedMainGen.savedProgramId
+    const expectedTarget = storedMainGen.expectedSessionCount ?? 0
+    
+    // Also read current localStorage to detect rehydration source
+    let currentLocalStorageSessions: number | null = null
+    let currentLocalStorageId: string | null = null
+    try {
+      const rawStored = localStorage.getItem('spartanlab_active_program')
+      if (rawStored) {
+        const parsed = JSON.parse(rawStored)
+        currentLocalStorageSessions = parsed?.sessions?.length ?? null
+        currentLocalStorageId = parsed?.id ?? null
+      }
+    } catch (e) {
+      // Ignore parse errors
+    }
+    
+    let displayVerdict: MainGenTruthVerdict = storedMainGen.finalVerdict
+    let displayFailedStage = storedMainGen.failedStage
+    let overwriteDetected = false
+    let overwriteSource: string | null = null
+    
+    // Check for various failure modes
+    const builtSessions = storedMainGen.builtStructureSessionCount ?? 0
+    const resolvedSessions = storedMainGen.targetSessionCountFromResolution ?? 0
+    
+    if (displayedSessions >= expectedTarget && displayedProgramId === savedProgramId) {
+      // Success - displayed what we expected
+      displayVerdict = expectedTarget === 6 ? 'MAIN_FULL_SUCCESS_6' : 'MAIN_FULL_SUCCESS_MATCHED_EXPECTED'
+      displayFailedStage = null
+    } else if (displayedProgramId !== savedProgramId) {
+      // Different program is displayed than what we saved!
+      overwriteDetected = true
+      overwriteSource = 'program_id_mismatch'
+      displayVerdict = 'MAIN_TARGET_LOST_BY_POST_BUILD_OVERWRITE'
+      displayFailedStage = 'rehydration'
+    } else if (displayedSessions !== savedSessions) {
+      // Same program ID but different session count - something mutated it
+      overwriteDetected = true
+      overwriteSource = 'session_count_mismatch_same_id'
+      displayVerdict = 'MAIN_TARGET_LOST_BY_POST_BUILD_OVERWRITE'
+      displayFailedStage = 'rehydration'
+    } else if (displayedSessions < expectedTarget) {
+      // Sessions match saved but still below expected - determine where loss occurred
+      if (resolvedSessions < expectedTarget) {
+        displayVerdict = 'MAIN_TARGET_LOST_IN_RESOLUTION'
+        displayFailedStage = 'resolution'
+      } else if (builtSessions < expectedTarget) {
+        displayVerdict = 'MAIN_TARGET_LOST_IN_STRUCTURE_BUILD'
+        displayFailedStage = 'structure_build'
+      } else if (savedSessions < expectedTarget) {
+        displayVerdict = 'MAIN_TARGET_LOST_DURING_SAVE'
+        displayFailedStage = 'save'
+      }
+    }
+    
+    console.log('[MAIN-GEN-TRUTH step-8-display-result]', {
+      expectedTarget,
+      savedProgramId,
+      savedProgramSessions: savedSessions,
+      displayedProgramId,
+      displayedProgramSessions: displayedSessions,
+      displayedCreatedAt,
+      previousCreatedAt: storedMainGen.existingGeneratedDateBeforeClick,
+      currentLocalStorageId,
+      currentLocalStorageSessions,
+      overwriteDetected,
+      overwriteSource,
+      verdict: displayVerdict,
+    })
+    
+    const finalMainGenAudit: MainGenTruthAudit = {
+      ...storedMainGen,
+      displayedProgramIdAfterCommit: displayedProgramId,
+      displayedProgramSessionCountAfterCommit: displayedSessions,
+      newGeneratedDateAfterCommit: displayedCreatedAt,
+      rehydratedProgramId: currentLocalStorageId,
+      rehydratedProgramSessionCount: currentLocalStorageSessions,
+      overwriteDetected,
+      overwriteSource,
+      finalVerdict: displayVerdict,
+      failedStage: displayFailedStage,
+    }
+    
+    sessionStorage.setItem('mainGenTruthAudit', JSON.stringify(finalMainGenAudit))
+    setMainGenTruthAudit(finalMainGenAudit)
+  }, [program])
+  
+  // ==========================================================================
+  // [POST-BUILD OVERWRITE PATHS MAP] - Auditing paths that can replace visible program
+  // after main generation success
+  //
+  // INTENDED WINNER AFTER MAIN GENERATION SUCCESS:
+  //   The `newProgram` object returned by generateAdaptiveProgram, passed to setProgram()
+  //
+  // ALLOWED READBACK PATHS:
+  //   1. setProgram(newProgram) - React state update, should display newProgram
+  //   2. localStorage 'spartanlab_active_program' - persisted copy for rehydration
+  //   3. programStateService activeProgram - canonical program state
+  //
+  // SUSPICIOUS OVERWRITE PATHS (sources of potential regression):
+  //   1. localStorage readback on page load (hydration effect)
+  //      - If stale, could overwrite freshly generated program
+  //      - CHECK: useEffect that reads localStorage and calls setProgram
+  //   2. programStateService reconciliation
+  //      - If reconciliation runs after setProgram, could replace with older state
+  //      - CHECK: any effect that calls setProgram with programStateService data
+  //   3. getCanonicalProfile() readback
+  //      - Not directly an overwrite, but could influence next generation
+  //   4. builderSessionInputs stale closure
+  //      - Fixed by Phase 26B ref sync, but verify ref is used everywhere
+  //   5. modifyFlowState or builderOrigin resets that trigger reconciliation
+  //      - CHECK: setModifyFlowState or setBuilderOrigin calls that also setProgram
+  //
+  // DETECTION: The main generation trace compares:
+  //   - savedProgramId vs displayedProgramIdAfterCommit vs rehydratedProgramId
+  //   - If these differ, an overwrite occurred
+  // ==========================================================================
   
   // ==========================================================================
   // [PHASE 26] CRITICAL FIX: Use a ref to always have the CURRENT builderSessionInputs
@@ -3355,6 +3583,43 @@ export default function ProgramPage() {
       entryOverrides
     )
     
+    // ==========================================================================
+    // [MAIN-GEN-TRUTH step-3] Update main generation trace with canonical entry info
+    // This captures what the entry builder actually produced
+    // ==========================================================================
+    if (typeof window !== 'undefined' && !isModifyFlow && entryResult.success) {
+      const storedMainGenRaw = sessionStorage.getItem('mainGenTruthAudit')
+      if (storedMainGenRaw) {
+        const storedMainGen = JSON.parse(storedMainGenRaw) as MainGenTruthAudit
+        const entry = entryResult.entry!
+        
+        const updatedMainGen: MainGenTruthAudit = {
+          ...storedMainGen,
+          // Step 3: Canonical entry result
+          entryScheduleMode: entry.scheduleMode ?? null,
+          entryTrainingDaysPerWeek: entry.trainingDaysPerWeek ?? null,
+          entrySelectedSkillsCount: entry.selectedSkills?.length ?? null,
+          entryExperienceLevel: entry.experienceLevel ?? null,
+          entryFallbacksUsed: entry.fallbacksUsed ?? null,
+        }
+        
+        console.log('[MAIN-GEN-TRUTH step-3-canonical-entry]', {
+          attemptId: storedMainGen.attemptId,
+          entryScheduleMode: entry.scheduleMode,
+          entryTrainingDaysPerWeek: entry.trainingDaysPerWeek,
+          entrySelectedSkillsCount: entry.selectedSkills?.length ?? 0,
+          entryExperienceLevel: entry.experienceLevel,
+          // Compare to submitted
+          submittedScheduleMode: storedMainGen.submittedScheduleMode,
+          submittedTrainingDays: storedMainGen.submittedTrainingDaysPerWeek,
+          matchesSubmitted: entry.scheduleMode === storedMainGen.submittedScheduleMode,
+        })
+        
+        sessionStorage.setItem('mainGenTruthAudit', JSON.stringify(updatedMainGen))
+        setMainGenTruthAudit(updatedMainGen)
+      }
+    }
+    
     if (!entryResult.success) {
       const errorMsg = entryResult.error?.message || 'Failed to build generation entry'
       console.error('[ProgramPage] handleGenerate: Entry validation failed', entryResult.error)
@@ -4136,6 +4401,91 @@ export default function ProgramPage() {
           sessionCount: finalProgramSessionCount,
           verdict: phase27aVerdict,
         })
+        
+        // ==========================================================================
+        // [MAIN-GEN-TRUTH step-5+6+7] Update main generation trace with save/setProgram info
+        // This is the CRITICAL audit point - what are we actually saving/displaying?
+        // ==========================================================================
+        if (typeof window !== 'undefined' && !isModifyFlow) {
+          const storedMainGenRaw = sessionStorage.getItem('mainGenTruthAudit')
+          if (storedMainGenRaw) {
+            const storedMainGen = JSON.parse(storedMainGenRaw) as MainGenTruthAudit
+            
+            // Get localStorage state immediately after generation
+            let localStorageId: string | null = null
+            let localStorageSessions: number | null = null
+            try {
+              const rawStored = localStorage.getItem('spartanlab_active_program')
+              if (rawStored) {
+                const parsed = JSON.parse(rawStored)
+                localStorageId = parsed?.id ?? null
+                localStorageSessions = parsed?.sessions?.length ?? null
+              }
+            } catch (e) {
+              // Ignore
+            }
+            
+            const expectedSessions = storedMainGen.expectedSessionCount ?? 6
+            const actualBuiltSessions = newProgram.sessions?.length ?? 0
+            
+            // Determine early verdict
+            let earlyVerdict: MainGenTruthVerdict = 'MAIN_PENDING'
+            let earlyFailedStage: string | null = null
+            
+            if (actualBuiltSessions >= expectedSessions) {
+              earlyVerdict = expectedSessions === 6 ? 'MAIN_FULL_SUCCESS_6' : 'MAIN_FULL_SUCCESS_MATCHED_EXPECTED'
+            } else {
+              // Target was lost somewhere - determine where based on saved vs built
+              earlyVerdict = 'MAIN_TARGET_LOST_IN_STRUCTURE_BUILD'
+              earlyFailedStage = 'structure_build'
+            }
+            
+            const updatedMainGen: MainGenTruthAudit = {
+              ...storedMainGen,
+              // Step 5: Structure result
+              builtStructureSessionCount: actualBuiltSessions,
+              builtStructureDayCount: newProgram.daysPerWeek ?? (newProgram as unknown as { trainingDaysPerWeek?: number }).trainingDaysPerWeek ?? null,
+              generatedProgramIdBeforeSave: newProgram.id,
+              // Step 6: Save result (save happens before setProgram)
+              savedProgramId: newProgram.id,
+              savedProgramSessionCount: actualBuiltSessions,
+              savedProgramTrainingDaysPerWeek: (newProgram as unknown as { trainingDaysPerWeek?: number }).trainingDaysPerWeek ?? null,
+              localStorageProgramIdAfterSave: localStorageId,
+              localStorageProgramSessionsAfterSave: localStorageSessions,
+              // Step 7: setProgram target
+              setProgramTargetId: newProgram.id,
+              setProgramTargetSessionCount: actualBuiltSessions,
+              // Update verdict
+              finalVerdict: earlyVerdict,
+              failedStage: earlyFailedStage,
+            }
+            
+            console.log('[MAIN-GEN-TRUTH step-5-structure-result]', {
+              attemptId: storedMainGen.attemptId,
+              expectedSessions,
+              actualBuiltSessions,
+              builtProgramId: newProgram.id,
+              verdict: earlyVerdict,
+            })
+            
+            console.log('[MAIN-GEN-TRUTH step-6-save-result]', {
+              attemptId: storedMainGen.attemptId,
+              savedProgramId: newProgram.id,
+              savedSessions: actualBuiltSessions,
+              localStorageId,
+              localStorageSessions,
+            })
+            
+            console.log('[MAIN-GEN-TRUTH step-7-setProgram-target]', {
+              attemptId: storedMainGen.attemptId,
+              setProgramTargetId: newProgram.id,
+              setProgramTargetSessions: actualBuiltSessions,
+            })
+            
+            sessionStorage.setItem('mainGenTruthAudit', JSON.stringify(updatedMainGen))
+            setMainGenTruthAudit(updatedMainGen)
+          }
+        }
         
         setProgram(newProgram)
         
@@ -11258,6 +11608,108 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
             </div>
           )
         })()}
+        
+        {/* ==========================================================================
+            [MAIN-GEN-TRUTH] Main generation diagnostic - mismatch-only display
+            This box appears ONLY when:
+            - A fresh main generation attempt has occurred in this runtime
+            - AND the final verdict is NOT a success
+            The top "Schedule Status" panel remains the ONLY always-visible truth surface.
+            ========================================================================== */}
+        {(() => {
+          const shouldShowMainGenAudit = mainGenTruthAudit 
+            && mainGenTruthAudit.savedProgramId 
+            && !shouldRenderModifyBuilder
+            // CRITICAL: Hide on success - no diagnostic needed
+            && mainGenTruthAudit.finalVerdict !== 'MAIN_FULL_SUCCESS_6'
+            && mainGenTruthAudit.finalVerdict !== 'MAIN_FULL_SUCCESS_MATCHED_EXPECTED'
+            // Also hide if still pending/capturing
+            && mainGenTruthAudit.finalVerdict !== 'MAIN_PENDING'
+            && mainGenTruthAudit.finalVerdict !== 'MAIN_REQUEST_CAPTURED'
+          
+          if (!shouldShowMainGenAudit) return null
+          
+          return (
+            <div className="mt-3 p-3 bg-blue-900/30 border border-blue-800/50 rounded-lg text-xs font-mono">
+              <div className="text-blue-400 mb-2">Main Build Diagnostic (mismatch detected)</div>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-zinc-400">
+                <span>Expected:</span>
+                <span className="text-zinc-300">{mainGenTruthAudit.expectedSessionCount}</span>
+                
+                <span>Submitted:</span>
+                <span className={
+                  mainGenTruthAudit.submittedScheduleMode === 'flexible' ? 'text-cyan-400' : 'text-purple-400'
+                }>
+                  {mainGenTruthAudit.submittedScheduleMode === 'flexible' 
+                    ? 'Flexible' 
+                    : `Static ${mainGenTruthAudit.submittedTrainingDaysPerWeek}d`}
+                </span>
+                
+                <span>Entry:</span>
+                <span className={
+                  mainGenTruthAudit.entryScheduleMode === mainGenTruthAudit.submittedScheduleMode ? 'text-green-400' : 'text-red-400'
+                }>
+                  {mainGenTruthAudit.entryScheduleMode === 'flexible' 
+                    ? 'Flexible' 
+                    : `Static ${mainGenTruthAudit.entryTrainingDaysPerWeek}d`}
+                </span>
+                
+                <span>Resolved:</span>
+                <span className={
+                  (mainGenTruthAudit.targetSessionCountFromResolution ?? 0) >= (mainGenTruthAudit.expectedSessionCount ?? 0) ? 'text-green-400' : 'text-red-400'
+                }>
+                  {mainGenTruthAudit.targetSessionCountFromResolution ?? '?'}
+                </span>
+                
+                <span>Built:</span>
+                <span className={
+                  (mainGenTruthAudit.builtStructureSessionCount ?? 0) >= (mainGenTruthAudit.expectedSessionCount ?? 0) ? 'text-green-400' : 'text-red-400'
+                }>
+                  {mainGenTruthAudit.builtStructureSessionCount ?? '?'}
+                </span>
+                
+                <span>Saved:</span>
+                <span className={
+                  (mainGenTruthAudit.savedProgramSessionCount ?? 0) >= (mainGenTruthAudit.expectedSessionCount ?? 0) ? 'text-green-400' : 'text-red-400'
+                }>
+                  {mainGenTruthAudit.savedProgramSessionCount ?? '?'}
+                </span>
+                
+                <span>Displayed:</span>
+                <span className={
+                  (mainGenTruthAudit.displayedProgramSessionCountAfterCommit ?? 0) >= (mainGenTruthAudit.expectedSessionCount ?? 0) ? 'text-green-400' : 'text-red-400'
+                }>
+                  {mainGenTruthAudit.displayedProgramSessionCountAfterCommit ?? '?'}
+                </span>
+                
+                <span>Rehydrated:</span>
+                <span className={
+                  (mainGenTruthAudit.rehydratedProgramSessionCount ?? 0) >= (mainGenTruthAudit.expectedSessionCount ?? 0) ? 'text-green-400' : 'text-red-400'
+                }>
+                  {mainGenTruthAudit.rehydratedProgramSessionCount ?? '?'}
+                </span>
+                
+                <span>Verdict:</span>
+                <span className="text-red-400">{mainGenTruthAudit.finalVerdict}</span>
+              </div>
+              {mainGenTruthAudit.failedStage && (
+                <div className="mt-2 pt-2 border-t border-blue-800/50 text-red-400/70">
+                  Failed at: {mainGenTruthAudit.failedStage}
+                </div>
+              )}
+              {/* Program ID comparison to prove it's truly new */}
+              <div className="mt-2 pt-2 border-t border-blue-800/30 text-[10px]">
+                <div className="text-zinc-500">Previous ID: <span className="text-zinc-400">{mainGenTruthAudit.existingVisibleProgramIdBeforeClick?.slice(-8) ?? 'none'}</span></div>
+                <div className="text-zinc-500">New ID: <span className="text-zinc-400">{mainGenTruthAudit.savedProgramId?.slice(-8) ?? 'none'}</span></div>
+                <div className="text-zinc-500">ID Changed: <span className={
+                  mainGenTruthAudit.existingVisibleProgramIdBeforeClick !== mainGenTruthAudit.savedProgramId ? 'text-green-400' : 'text-amber-400'
+                }>
+                  {mainGenTruthAudit.existingVisibleProgramIdBeforeClick !== mainGenTruthAudit.savedProgramId ? 'Yes (new program)' : 'No (same program)'}
+                </span></div>
+              </div>
+            </div>
+          )
+        })()}
 
         {/* Content - TASK 2: Proper handling of malformed programs */}
         {/* [PHASE 30N] Use single-authority shouldRenderModifyBuilder instead of just showBuilder */}
@@ -11368,6 +11820,91 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
                 // [PHASE 26] Read CURRENT state from ref, not stale closure
                 const currentBuilderSessionInputs = builderSessionInputsRef.current
                 const hasCurrentSessionInputs = !!currentBuilderSessionInputs
+                
+                // ==========================================================================
+                // [MAIN-GEN-TRUTH step-1] Capture pre-click state for main generation trace
+                // ==========================================================================
+                const mainGenAttemptId = `maingen-${Date.now()}`
+                const expectedSessionsForFlexible = scheduleTruthAudit?.recommendedSessionsPerWeek ?? 6
+                
+                const mainGenClickAudit: MainGenTruthAudit = {
+                  // Step 1: Click source
+                  attemptId: mainGenAttemptId,
+                  trigger: 'build_adaptive_program',
+                  startedAt: new Date().toISOString(),
+                  existingVisibleProgramIdBeforeClick: program?.id ?? null,
+                  existingVisibleProgramSessionsBeforeClick: program?.sessions?.length ?? null,
+                  existingGeneratedDateBeforeClick: program?.createdAt ?? null,
+                  scheduleStatusRecommendedCountBeforeClick: scheduleTruthAudit?.recommendedSessionsPerWeek ?? null,
+                  scheduleStatusTypeBeforeClick: scheduleTruthAudit?.canonicalScheduleMode ?? null,
+                  canonicalScheduleModeBeforeClick: scheduleTruthAudit?.canonicalScheduleMode ?? null,
+                  canonicalTrainingDaysPerWeekBeforeClick: scheduleTruthAudit?.canonicalTrainingDaysPerWeek ?? null,
+                  selectedSkillsCountBeforeClick: currentBuilderSessionInputs?.selectedSkills?.length ?? inputs?.selectedSkills?.length ?? null,
+                  goalCategoriesCountBeforeClick: currentBuilderSessionInputs?.selectedGoalCategories?.length ?? inputs?.selectedGoalCategories?.length ?? null,
+                  experienceLevelBeforeClick: currentBuilderSessionInputs?.experienceLevel ?? inputs?.experienceLevel ?? null,
+                  sessionDurationModeBeforeClick: currentBuilderSessionInputs?.sessionDurationMode ?? inputs?.sessionDurationMode ?? null,
+                  // Step 2: Form input - will be filled from what goes to handleGenerate
+                  submittedScheduleMode: hasCurrentSessionInputs ? currentBuilderSessionInputs?.scheduleMode ?? null : inputs?.scheduleMode ?? null,
+                  submittedTrainingDaysPerWeek: hasCurrentSessionInputs ? currentBuilderSessionInputs?.trainingDaysPerWeek ?? null : inputs?.trainingDaysPerWeek ?? null,
+                  submittedSessionDurationMode: hasCurrentSessionInputs ? currentBuilderSessionInputs?.sessionDurationMode ?? null : inputs?.sessionDurationMode ?? null,
+                  submittedPrimaryGoal: hasCurrentSessionInputs ? currentBuilderSessionInputs?.primaryGoal ?? null : inputs?.primaryGoal ?? null,
+                  submittedSecondaryGoal: hasCurrentSessionInputs ? currentBuilderSessionInputs?.secondaryGoal ?? null : inputs?.secondaryGoal ?? null,
+                  submittedSelectedSkillsCount: hasCurrentSessionInputs ? currentBuilderSessionInputs?.selectedSkills?.length ?? null : inputs?.selectedSkills?.length ?? null,
+                  submittedGoalCategoriesCount: hasCurrentSessionInputs ? currentBuilderSessionInputs?.selectedGoalCategories?.length ?? null : inputs?.selectedGoalCategories?.length ?? null,
+                  submittedExperienceLevel: hasCurrentSessionInputs ? currentBuilderSessionInputs?.experienceLevel ?? null : inputs?.experienceLevel ?? null,
+                  submittedTrainingPathType: hasCurrentSessionInputs ? currentBuilderSessionInputs?.trainingPathType ?? null : inputs?.trainingPathType ?? null,
+                  // Remaining steps filled later
+                  entryScheduleMode: null,
+                  entryTrainingDaysPerWeek: null,
+                  entrySelectedSkillsCount: null,
+                  entryExperienceLevel: null,
+                  entryFallbacksUsed: null,
+                  complexityScore: null,
+                  complexityElevationApplied: null,
+                  targetSessionCountFromResolution: null,
+                  resolvedScheduleIdentity: null,
+                  resolvedFinalReasonCategory: null,
+                  builtStructureSessionCount: null,
+                  builtStructureDayCount: null,
+                  generatedProgramIdBeforeSave: null,
+                  savedProgramId: null,
+                  savedProgramSessionCount: null,
+                  savedProgramTrainingDaysPerWeek: null,
+                  localStorageProgramIdAfterSave: null,
+                  localStorageProgramSessionsAfterSave: null,
+                  setProgramTargetId: null,
+                  setProgramTargetSessionCount: null,
+                  displayedProgramIdAfterCommit: null,
+                  displayedProgramSessionCountAfterCommit: null,
+                  newGeneratedDateAfterCommit: null,
+                  rehydratedProgramId: null,
+                  rehydratedProgramSessionCount: null,
+                  overwriteDetected: false,
+                  overwriteSource: null,
+                  expectedSessionCount: scheduleTruthAudit?.canonicalScheduleMode === 'flexible' ? expectedSessionsForFlexible : (scheduleTruthAudit?.canonicalTrainingDaysPerWeek ?? null),
+                  finalVerdict: 'MAIN_REQUEST_CAPTURED',
+                  failedStage: null,
+                  errorMessage: null,
+                }
+                
+                console.log('[MAIN-GEN-TRUTH step-1-click-source]', {
+                  attemptId: mainGenAttemptId,
+                  existingProgramId: program?.id,
+                  existingProgramSessions: program?.sessions?.length,
+                  scheduleStatusRecommended: scheduleTruthAudit?.recommendedSessionsPerWeek,
+                  scheduleStatusType: scheduleTruthAudit?.canonicalScheduleMode,
+                  submittedScheduleMode: mainGenClickAudit.submittedScheduleMode,
+                  submittedTrainingDays: mainGenClickAudit.submittedTrainingDaysPerWeek,
+                  expectedSessionCount: mainGenClickAudit.expectedSessionCount,
+                  verdict: 'MAIN_REQUEST_CAPTURED',
+                })
+                
+                setMainGenTruthAudit(mainGenClickAudit)
+                
+                // Store in sessionStorage for builder to read
+                if (typeof window !== 'undefined') {
+                  sessionStorage.setItem('mainGenTruthAudit', JSON.stringify(mainGenClickAudit))
+                }
                 
                 // ==========================================================================
                 // [PHASE 27C] BUILD ADAPTIVE PROGRAM CLICKED - BUILD IDENTITY LOG

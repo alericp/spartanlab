@@ -21,20 +21,23 @@
 // This allows us to verify the live app is running the expected code version
 // ==========================================================================
 export const PHASE27C_BUILD_IDENTITY = {
-  buildIdentityName: 'SCHEDULE_INTELLIGENCE_REGEN_READY',
-  buildIdentityVersion: '2024-SCHEDULE-INTELLIGENCE-v3',
+  buildIdentityName: 'SCHEDULE_INTELLIGENCE_PRODUCTIZED',
+  buildIdentityVersion: '2024-SCHEDULE-INTELLIGENCE-v4',
   buildTimestamp: new Date().toISOString(),
   modifyPipeline: 'CANONICAL_7_STEP_WITH_2_PHASE_PROMOTION',
-  currentPhase: 'SCHEDULE_INTELLIGENCE_WITH_REGEN_ACTION',
-  retiredPhases: ['MODIFY_PIPELINE_CORRIDOR', 'WEAK_LOCAL_COMPLEXITY_ESTIMATE'],
+  currentPhase: 'SCHEDULE_INTELLIGENCE_PRODUCTION_READY',
+  retiredPhases: [
+    'MODIFY_PIPELINE_CORRIDOR',
+    'WEAK_LOCAL_COMPLEXITY_ESTIMATE',
+    'DEBUG_AUDIT_PANEL_STYLING',
+  ],
   features: [
-    'Unified computeScheduleIntelligence() resolver for all surfaces',
-    'Authoritative complexity scoring from flexible-schedule-engine',
-    'REQUIRES_REGEN verdict with actionable regenerate button',
-    'Regeneration path uses same shared schedule contract',
-    'Flexible users can start at 5-6 sessions when justified by complexity',
-    'Honest display of current vs recommended session counts',
-    'One-click regeneration from audit panel when stale',
+    'Product-grade Schedule Status panel (single source of truth)',
+    'Clean 2x2 grid display: Type, Complexity, Current, Recommended',
+    'Contextual regeneration CTA with flexible/static awareness',
+    'Unified schedule-intelligence contract across all flows',
+    'Flexible users can start at 5-6 sessions when justified',
+    'Post-regen landing displays correct aligned state',
   ],
 } as const
 
@@ -10633,141 +10636,107 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
         </div>
         
         {/* ==========================================================================
-            SCHEDULE INTELLIGENCE AUDIT - Current Phase Active Display
-            Retired: Modify Pipeline corridor (completed)
-            Now showing: Schedule intelligence truth for flexible baseline resolution
+            SCHEDULE INTELLIGENCE - Product-grade single source of truth
+            Shows schedule alignment status and regeneration action when needed
             ========================================================================== */}
         {program && !shouldRenderModifyBuilder && (
-          <div className="mt-4 p-3 bg-zinc-900/80 border border-zinc-700 rounded-lg text-xs font-mono">
-            <div className="text-zinc-400 mb-2 font-semibold">SCHEDULE INTELLIGENCE AUDIT</div>
-            <div className="space-y-1.5 text-zinc-500">
-              {/* Row 1: Schedule Identity */}
-              <div className="flex items-center justify-between">
-                <span>Schedule Identity:</span>
+          <div className="mt-4 p-4 bg-zinc-900/60 border border-zinc-800 rounded-xl text-sm">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-zinc-300 font-medium">Schedule Status</span>
+              <span className={(() => {
+                const recommended = scheduleTruthAudit?.baselineRecommendedSessionCount ?? 4
+                const actual = program?.sessions?.length ?? 0
+                if (actual === recommended) return 'text-green-400 text-xs px-2 py-0.5 bg-green-400/10 rounded-full'
+                if (actual < recommended && (recommended - actual) >= 2) return 'text-amber-400 text-xs px-2 py-0.5 bg-amber-400/10 rounded-full'
+                if (actual < recommended) return 'text-yellow-400 text-xs px-2 py-0.5 bg-yellow-400/10 rounded-full'
+                return 'text-zinc-400 text-xs px-2 py-0.5 bg-zinc-400/10 rounded-full'
+              })()}>
+                {(() => {
+                  const recommended = scheduleTruthAudit?.baselineRecommendedSessionCount ?? 4
+                  const actual = program?.sessions?.length ?? 0
+                  if (actual === recommended) return 'Aligned'
+                  if (actual < recommended && (recommended - actual) >= 2) return 'Update Available'
+                  if (actual < recommended) return 'Slightly Under'
+                  return 'Over Baseline'
+                })()}
+              </span>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-zinc-400">
+              {/* Schedule Type */}
+              <div className="flex justify-between">
+                <span className="text-zinc-500">Type</span>
                 <span className={scheduleTruthAudit?.canonicalScheduleMode === 'flexible' ? 'text-cyan-400' : 'text-purple-400'}>
-                  {scheduleTruthAudit?.canonicalScheduleMode === 'flexible' ? 'FLEXIBLE' : 'STATIC'}
+                  {scheduleTruthAudit?.canonicalScheduleMode === 'flexible' ? 'Flexible' : 'Static'}
                 </span>
               </div>
               
-              {/* Row 2: Canonical Days Preference */}
-              <div className="flex items-center justify-between">
-                <span>Canonical Days Pref:</span>
-                <span className="text-zinc-300">
-                  {scheduleTruthAudit?.canonicalScheduleMode === 'flexible' 
-                    ? 'adaptive' 
-                    : (scheduleTruthAudit?.canonicalTrainingDaysPerWeek ?? '?')}
-                </span>
-              </div>
-              
-              {/* Row 3: Complexity Score & Tier */}
-              <div className="flex items-center justify-between">
-                <span>Complexity:</span>
+              {/* Complexity */}
+              <div className="flex justify-between">
+                <span className="text-zinc-500">Complexity</span>
                 <span className={
                   (scheduleTruthAudit?.complexityScore ?? 0) >= 5 ? 'text-orange-400' :
                   (scheduleTruthAudit?.complexityScore ?? 0) >= 3 ? 'text-yellow-400' :
-                  'text-zinc-400'
+                  'text-zinc-300'
                 }>
-                  {scheduleTruthAudit?.complexityScore ?? 0}/10 ({
-                    (scheduleTruthAudit?.complexityScore ?? 0) >= 5 ? 'HIGH' :
-                    (scheduleTruthAudit?.complexityScore ?? 0) >= 3 ? 'MEDIUM' : 'LOW'
-                  })
+                  {(scheduleTruthAudit?.complexityScore ?? 0) >= 5 ? 'High' :
+                   (scheduleTruthAudit?.complexityScore ?? 0) >= 3 ? 'Medium' : 'Low'}
                 </span>
               </div>
               
-              {/* Row 4: Starting Frequency Recommendation */}
-              <div className="flex items-center justify-between">
-                <span>Baseline Recommendation:</span>
+              {/* Current Sessions */}
+              <div className="flex justify-between">
+                <span className="text-zinc-500">Current</span>
+                <span className="text-zinc-300">{program?.sessions?.length ?? 0} sessions</span>
+              </div>
+              
+              {/* Recommended Sessions */}
+              <div className="flex justify-between">
+                <span className="text-zinc-500">Recommended</span>
                 <span className={
                   (scheduleTruthAudit?.baselineRecommendedSessionCount ?? 4) >= 6 ? 'text-green-400' :
                   (scheduleTruthAudit?.baselineRecommendedSessionCount ?? 4) >= 5 ? 'text-cyan-400' :
                   'text-zinc-300'
                 }>
-                  {scheduleTruthAudit?.baselineRecommendedSessionCount ?? '?'} sessions
-                </span>
-              </div>
-              
-              {/* Row 5: Current Program Sessions */}
-              <div className="flex items-center justify-between">
-                <span>Current Program:</span>
-                <span className="text-zinc-300">
-                  {program?.sessions?.length ?? 0} sessions
-                </span>
-              </div>
-              
-              {/* Row 6: Complexity Elevated */}
-              <div className="flex items-center justify-between">
-                <span>Complexity Elevated:</span>
-                <span className={scheduleTruthAudit?.complexityElevated ? 'text-green-400' : 'text-zinc-500'}>
-                  {scheduleTruthAudit?.complexityElevated ? 'YES' : 'NO'}
-                </span>
-              </div>
-              
-              {/* Row 7: Baseline Reason */}
-              <div className="flex items-center justify-between">
-                <span>Reason:</span>
-                <span className="text-zinc-400 text-[10px]">
-                  {scheduleTruthAudit?.baselineFrequencyReason?.replace(/_/g, ' ') || 'unknown'}
+                  {scheduleTruthAudit?.baselineRecommendedSessionCount ?? 4} sessions
                 </span>
               </div>
             </div>
             
-            {/* Alignment Verdict */}
-            <div className="mt-2 pt-2 border-t border-zinc-700">
-              <div className="flex items-center justify-between">
-                <span className="text-zinc-400">Verdict:</span>
-                <span className={(() => {
-                  const recommended = scheduleTruthAudit?.baselineRecommendedSessionCount ?? 4
-                  const actual = program?.sessions?.length ?? 0
-                  if (actual === 0) return 'text-zinc-500'
-                  if (actual === recommended) return 'text-green-400'
-                  // REQUIRES_REGEN if diff >= 2
-                  if (actual < recommended && (recommended - actual) >= 2) return 'text-red-400'
-                  if (actual < recommended) return 'text-yellow-400'
-                  return 'text-cyan-400'
-                })()}>
-                  {(() => {
-                    const recommended = scheduleTruthAudit?.baselineRecommendedSessionCount ?? 4
-                    const actual = program?.sessions?.length ?? 0
-                    if (actual === 0) return 'NO_PROGRAM'
-                    if (actual === recommended) return 'ALIGNED'
-                    // REQUIRES_REGEN if diff >= 2, else UNDEREXPRESSED_BASELINE
-                    if (actual < recommended && (recommended - actual) >= 2) return 'REQUIRES_REGEN'
-                    if (actual < recommended) return 'UNDEREXPRESSED_BASELINE'
-                    return 'OVEREXPRESSED_BASELINE'
-                  })()}
-                </span>
-              </div>
+            {/* Regeneration CTA when significantly under baseline */}
+            {(() => {
+              const recommended = scheduleTruthAudit?.baselineRecommendedSessionCount ?? 4
+              const actual = program?.sessions?.length ?? 0
+              const diff = recommended - actual
+              const isFlexible = scheduleTruthAudit?.canonicalScheduleMode === 'flexible'
               
-              {/* Regeneration action when REQUIRES_REGEN */}
-              {(() => {
-                const recommended = scheduleTruthAudit?.baselineRecommendedSessionCount ?? 4
-                const actual = program?.sessions?.length ?? 0
-                const diff = recommended - actual
-                if (actual > 0 && diff >= 2) {
-                  return (
-                    <div className="mt-2 pt-2 border-t border-zinc-700/50">
-                      <div className="text-[10px] text-zinc-500 mb-2">
-                        Current program was generated before schedule intelligence update.
-                      </div>
-                      <button
-                        onClick={handleNewProgram}
-                        className="text-[10px] px-2 py-1 bg-cyan-600/20 hover:bg-cyan-600/30 text-cyan-400 rounded border border-cyan-600/40 transition-colors"
-                      >
-                        Regenerate to {recommended} sessions
-                      </button>
-                    </div>
-                  )
-                }
-                if (actual > 0 && diff === 1) {
-                  return (
-                    <div className="mt-2 text-[10px] text-zinc-500">
-                      Optional: Regenerate to add 1 more session.
-                    </div>
-                  )
-                }
-                return null
-              })()}
-            </div>
+              if (actual > 0 && diff >= 2) {
+                return (
+                  <div className="mt-4 pt-3 border-t border-zinc-800">
+                    <p className="text-zinc-500 text-xs mb-3">
+                      Your training complexity supports a {recommended}-session {isFlexible ? 'flexible' : 'static'} baseline. 
+                      Regenerate to unlock your full potential.
+                    </p>
+                    <button
+                      onClick={handleNewProgram}
+                      className="w-full text-sm py-2 bg-cyan-600/20 hover:bg-cyan-600/30 text-cyan-400 rounded-lg border border-cyan-600/30 transition-colors font-medium"
+                    >
+                      Regenerate Program ({recommended} sessions)
+                    </button>
+                  </div>
+                )
+              }
+              if (actual > 0 && diff === 1) {
+                return (
+                  <div className="mt-3 pt-2 border-t border-zinc-800/50">
+                    <p className="text-zinc-600 text-xs">
+                      Optional: You could add 1 more session to match your recommended baseline.
+                    </p>
+                  </div>
+                )
+              }
+              return null
+            })()}
           </div>
         )}
 

@@ -3181,17 +3181,28 @@ async function generateAdaptiveProgramImpl(
           : 'NO_REGEN_CONTEXT',
     })
     
-    // Update stored audit with builder resolution
+    // Update stored audit with builder resolution - comprehensive trace fields
     if (storedAudit && typeof globalThis !== 'undefined' && 'sessionStorage' in globalThis) {
       const updatedAudit = {
         ...storedAudit,
+        // Step 2: Generation input
+        builderInputScheduleMode: inputScheduleMode,
+        builderInputTrainingDaysPerWeek: trainingDaysPerWeek ?? null,
+        builderInputSelectedSkillsCount: canonicalProfile.selectedSkills?.length ?? 0,
+        builderInputExperienceLevel: experienceLevel,
+        builderInputPrimaryGoal: primaryGoal,
+        // Step 3: Resolution result
+        complexityScore: audit?.complexityScore ?? null,
+        complexityElevationApplied: audit?.complexityElevation ?? null,
+        targetSessionCountFromResolution: effectiveTrainingDays,
         builderResolvedSessions: effectiveTrainingDays,
+        // Update verdict if lost in resolution
         finalVerdict: requestedTarget === effectiveTrainingDays 
           ? 'REQUEST_CAPTURED'
           : effectiveTrainingDays < (requestedTarget ?? 0)
-            ? 'TARGET_LOST_BEFORE_STRUCTURE'
+            ? 'TARGET_LOST_IN_RESOLUTION'
             : storedAudit.finalVerdict,
-        failedStage: effectiveTrainingDays < (requestedTarget ?? 0) ? 'flex_resolution' : null,
+        failedStage: effectiveTrainingDays < (requestedTarget ?? 0) ? 'resolution' : null,
       }
       ;(globalThis as unknown as { sessionStorage: Storage }).sessionStorage.setItem('regenTruthAudit', JSON.stringify(updatedAudit))
     }
@@ -8167,10 +8178,12 @@ console.log('[program-generate] Generation complete:', {
     builderResolvedSessions: builderResolvedStep4,
     builtStructureSessions: sessions.length,
     sessionFocusesSummary: sessions.slice(0, 3).map(s => s.focus).join(', ') + (sessions.length > 3 ? '...' : ''),
+    structureMatchedResolution: sessions.length === builderResolvedStep4,
+    structureMatchedTarget: sessions.length === requestedTargetStep4,
     verdict: requestedTargetStep4 === sessions.length
       ? 'STRUCTURE_MATCHED_TARGET'
       : requestedTargetStep4 !== null && sessions.length < requestedTargetStep4
-        ? 'STRUCTURE_BUILT_4_WHEN_TARGET_6'
+        ? 'TARGET_LOST_IN_STRUCTURE_BUILD'
         : 'NO_REGEN_CONTEXT',
   })
   
@@ -8182,7 +8195,7 @@ console.log('[program-generate] Generation complete:', {
       finalVerdict: requestedTargetStep4 === sessions.length
         ? storedAuditStep4.finalVerdict
         : sessions.length < (requestedTargetStep4 ?? 0)
-          ? 'STRUCTURE_BUILT_4_WHEN_TARGET_6'
+          ? 'TARGET_LOST_IN_STRUCTURE_BUILD'
           : storedAuditStep4.finalVerdict,
       failedStage: sessions.length < (requestedTargetStep4 ?? 0) ? 'structure_build' : storedAuditStep4.failedStage,
     }

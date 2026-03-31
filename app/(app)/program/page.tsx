@@ -437,32 +437,64 @@ export default function ProgramPage() {
   const [builderSessionSource, setBuilderSessionSource] = useState<'default_inputs' | 'modify_visible_program' | null>(null)
   
   // ==========================================================================
-  // [POST-REGEN TRUTH CORRIDOR] Single-purpose audit for the regen flow
+  // [POST-REGEN TRUTH CORRIDOR] Comprehensive trace for the regen flow
   // Tracks exactly where target 6 becomes 4 during regeneration
   // ==========================================================================
   type RegenTruthVerdict = 
     | 'PENDING'
     | 'REQUEST_CAPTURED'
-    | 'TARGET_LOST_BEFORE_STRUCTURE'
-    | 'STRUCTURE_BUILT_4_WHEN_TARGET_6'
-    | 'SAVED_4_AFTER_STRUCTURE_6'
-    | 'DISPLAYED_4_AFTER_SAVE_6'
+    | 'TARGET_LOST_BEFORE_BUILDER'
+    | 'TARGET_LOST_IN_RESOLUTION'
+    | 'TARGET_LOST_IN_STRUCTURE_BUILD'
+    | 'TARGET_LOST_DURING_SAVE'
+    | 'TARGET_LOST_DURING_SET_PROGRAM'
+    | 'TARGET_LOST_DURING_REHYDRATION'
+    | 'TARGET_LOST_BY_POST_REGEN_OVERWRITE'
     | 'FULL_REGEN_SUCCESS_6'
+    | 'TRACE_INCOMPLETE'
     | 'ERROR'
   
   interface RegenTruthAudit {
+    // Step 1: Click source
     attemptId: string | null
     startedAt: string | null
+    existingVisibleProgramId: string | null
+    existingVisibleProgramSessionCount: number | null
+    scheduleStatusRecommendedCount: number | null
     requestedTargetSessions: number | null
     canonicalScheduleMode: string | null
     canonicalTrainingDaysPerWeek: number | null
-    scheduleIntelligenceRecommendedSessions: number | null
+    canonicalSelectedSkillsCount: number | null
+    canonicalExperienceLevel: string | null
+    // Step 2: Generation input  
+    builderInputScheduleMode: string | null
+    builderInputTrainingDaysPerWeek: number | null
+    builderInputSelectedSkillsCount: number | null
+    builderInputExperienceLevel: string | null
+    builderInputPrimaryGoal: string | null
+    // Step 3: Resolution result
+    complexityScore: number | null
+    complexityElevationApplied: number | null
+    targetSessionCountFromResolution: number | null
     builderResolvedSessions: number | null
+    // Step 4: Structure result
     builtStructureSessions: number | null
-    savedProgramSessions: number | null
-    displayedProgramSessions: number | null
+    // Step 5: Save result
     savedProgramId: string | null
+    savedProgramSessions: number | null
+    localStorageSessionCountAfterSave: number | null
+    // Step 6: setProgram result
+    setProgramTargetId: string | null
+    setProgramTargetSessions: number | null
+    // Step 7: Post-commit display
     displayedProgramId: string | null
+    displayedProgramSessions: number | null
+    // Step 8: Rehydration readback
+    rehydratedProgramId: string | null
+    rehydratedProgramSessions: number | null
+    overwriteDetected: boolean
+    overwriteSource: string | null
+    // Final
     finalVerdict: RegenTruthVerdict
     failedStage: string | null
     errorMessage: string | null
@@ -888,8 +920,9 @@ export default function ProgramPage() {
   }, [program, modifyFlowState])
   
   // ==========================================================================
-  // [REGEN-TRUTH step-6-display-result] Capture display state after regeneration
-  // This effect runs after setProgram commits the new program to state
+  // [REGEN-TRUTH step-6+7-display-and-rehydration] Capture display state after regeneration
+  // This effect detects if the displayed program differs from what was saved,
+  // indicating a potential rehydration overwrite
   // ==========================================================================
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -897,7 +930,7 @@ export default function ProgramPage() {
     const storedAuditStep6Raw = sessionStorage.getItem('regenTruthAudit')
     if (!storedAuditStep6Raw) return
     
-    const storedAuditStep6 = JSON.parse(storedAuditStep6Raw)
+    const storedAuditStep6 = JSON.parse(storedAuditStep6Raw) as RegenTruthAudit
     
     // Only run once we have a savedProgramId to compare against
     if (!storedAuditStep6.savedProgramId) return
@@ -908,38 +941,73 @@ export default function ProgramPage() {
     const savedProgramId = storedAuditStep6.savedProgramId
     const requestedTarget = storedAuditStep6.requestedTargetSessions ?? 0
     
-    // Check if this is the same program we just saved
-    if (displayedProgramId === savedProgramId) {
-      let displayVerdict = storedAuditStep6.finalVerdict
-      let displayFailedStage = storedAuditStep6.failedStage
-      
-      if (displayedSessions === requestedTarget) {
-        displayVerdict = 'FULL_REGEN_SUCCESS_6'
-        displayFailedStage = null
-      } else if (displayedSessions < savedSessions) {
-        displayVerdict = 'DISPLAYED_4_AFTER_SAVE_6'
-        displayFailedStage = 'display'
+    // Also read current localStorage to detect rehydration source
+    let currentLocalStorageSessions: number | null = null
+    let currentLocalStorageId: string | null = null
+    try {
+      const rawStored = localStorage.getItem('spartanlab_active_program')
+      if (rawStored) {
+        const parsed = JSON.parse(rawStored)
+        currentLocalStorageSessions = parsed?.sessions?.length ?? null
+        currentLocalStorageId = parsed?.id ?? null
       }
-      
-      console.log('[REGEN-TRUTH step-6-display-result]', {
-        savedProgramId,
-        displayedProgramId,
-        savedProgramSessions: savedSessions,
-        displayedProgramSessions: displayedSessions,
-        verdict: displayVerdict,
-      })
-      
-      const finalAudit = {
-        ...storedAuditStep6,
-        displayedProgramSessions: displayedSessions,
-        displayedProgramId,
-        finalVerdict: displayVerdict,
-        failedStage: displayFailedStage,
-      }
-      
-      sessionStorage.setItem('regenTruthAudit', JSON.stringify(finalAudit))
-      setRegenTruthAudit(finalAudit)
+    } catch (e) {
+      // Ignore parse errors
     }
+    
+    let displayVerdict: RegenTruthVerdict = storedAuditStep6.finalVerdict
+    let displayFailedStage = storedAuditStep6.failedStage
+    let overwriteDetected = false
+    let overwriteSource: string | null = null
+    
+    // Check for various failure modes
+    if (displayedSessions === requestedTarget && displayedProgramId === savedProgramId) {
+      displayVerdict = 'FULL_REGEN_SUCCESS_6'
+      displayFailedStage = null
+    } else if (displayedProgramId !== savedProgramId) {
+      // Different program is displayed than what we saved!
+      overwriteDetected = true
+      overwriteSource = 'program_id_mismatch'
+      displayVerdict = 'TARGET_LOST_BY_POST_REGEN_OVERWRITE'
+      displayFailedStage = 'rehydration'
+    } else if (displayedSessions !== savedSessions) {
+      // Same program ID but different session count - something mutated it
+      overwriteDetected = true
+      overwriteSource = 'session_count_mismatch_same_id'
+      displayVerdict = 'TARGET_LOST_BY_POST_REGEN_OVERWRITE'
+      displayFailedStage = 'rehydration'
+    } else if (displayedSessions < requestedTarget) {
+      // Sessions match but still below target - the builder produced fewer
+      // Keep the verdict from earlier stages
+    }
+    
+    console.log('[REGEN-TRUTH step-6-display-result]', {
+      requestedTarget,
+      savedProgramId,
+      savedProgramSessions: savedSessions,
+      displayedProgramId,
+      displayedProgramSessions: displayedSessions,
+      currentLocalStorageId,
+      currentLocalStorageSessions,
+      overwriteDetected,
+      overwriteSource,
+      verdict: displayVerdict,
+    })
+    
+    const finalAudit: RegenTruthAudit = {
+      ...storedAuditStep6,
+      displayedProgramSessions: displayedSessions,
+      displayedProgramId,
+      rehydratedProgramId: currentLocalStorageId,
+      rehydratedProgramSessions: currentLocalStorageSessions,
+      overwriteDetected,
+      overwriteSource,
+      finalVerdict: displayVerdict,
+      failedStage: displayFailedStage,
+    }
+    
+    sessionStorage.setItem('regenTruthAudit', JSON.stringify(finalAudit))
+    setRegenTruthAudit(finalAudit)
   }, [program])
   
   // ==========================================================================
@@ -2448,6 +2516,32 @@ export default function ProgramPage() {
   // 3. Storage event fires (cross-tab localStorage changes) [17K]
   // 4. Periodic check every 2 seconds (same-tab localStorage changes) [17K]
   // This ensures stale 4-session program doesn't persist when 6-session is saved
+  //
+  // ==========================================================================
+  // [REGEN-TRUTH OVERWRITE PATH COMMENT MAP]
+  // ==========================================================================
+  // OVERWRITE PATH AUDIT:
+  // 
+  // INTENDED WINNER AFTER REGEN:
+  //   - The setProgram(newProgram) call at line ~7023 (regeneration success path)
+  //   - This sets the freshly built program directly from generateAdaptiveProgram
+  //
+  // ALLOWED REHYDRATION PATHS:
+  //   - reconcileWithCanonical() at line ~2525 - BUT only if canonical is NEWER
+  //   - The PHASE 26E fix ensures shouldReplace = canonicalIsNewer || (idDiffers && !currentIsNewer)
+  //   - This SHOULD protect a just-generated program from being replaced by older localStorage
+  //
+  // POTENTIAL OVERWRITE RISK PATHS:
+  //   - Line 2282: setProgram(normalizedProgram) in mount effect - runs on page load
+  //   - Line 2347: setProgram(normalizedProgram) in malformed program branch
+  //   - Line 2698: setProgram(normalizedCanonical) in reconciliation effect
+  //   - Line 2866: periodic_check triggers reconcileWithCanonical every 2 seconds
+  //
+  // RISK: If localStorage write in saveAdaptiveProgram() is slow/async and the
+  // periodic_check fires BEFORE localStorage is updated, it could read the OLD
+  // program from localStorage and replace the fresh in-memory program.
+  //
+  // KEY PROTECTION: createdAt timestamp comparison at line ~2600
   // ==========================================================================
   useEffect(() => {
     if (!programModules.getProgramState || !programModules.normalizeProgramForDisplay) {
@@ -6943,44 +7037,76 @@ export default function ProgramPage() {
         
         // ==========================================================================
         // [REGEN-TRUTH step-5-save-result] Capture save result before setProgram
+        // Also verify what's actually in localStorage immediately after save
         // ==========================================================================
         const storedAuditStep5 = typeof window !== 'undefined' 
           ? JSON.parse(sessionStorage.getItem('regenTruthAudit') || 'null')
           : null
+        
+        // CRITICAL: Read back localStorage to prove what was actually saved
+        let localStorageSessionCount: number | null = null
+        let localStorageProgramId: string | null = null
+        if (typeof window !== 'undefined') {
+          try {
+            const rawStored = localStorage.getItem('spartanlab_active_program')
+            if (rawStored) {
+              const parsed = JSON.parse(rawStored)
+              localStorageSessionCount = parsed?.sessions?.length ?? null
+              localStorageProgramId = parsed?.id ?? null
+            }
+          } catch (e) {
+            console.warn('[REGEN-TRUTH step-5] Failed to read localStorage:', e)
+          }
+        }
         
         if (storedAuditStep5) {
           const builtStructure = storedAuditStep5.builtStructureSessions ?? 0
           const savedSessions = newProgram.sessions?.length ?? 0
           const requestedTarget = storedAuditStep5.requestedTargetSessions ?? 0
           
-          console.log('[REGEN-TRUTH step-5-save-result]', {
-            builtStructureSessions: builtStructure,
-            newProgramSessions: savedSessions,
-            savedProgramSessions: savedSessions,
-            savedProgramId: newProgram.id,
-            verdict: savedSessions === requestedTarget
-              ? 'SAVE_MATCHED_BUILD'
-              : savedSessions < requestedTarget
-                ? 'SAVED_4_AFTER_STRUCTURE_6'
-                : 'SAVE_EXCEEDED_TARGET',
-          })
-          
-          // Determine final verdict at save time
-          let saveVerdict = storedAuditStep5.finalVerdict
+          // Determine verdict based on where the collapse happened
+          let saveVerdict: RegenTruthVerdict = storedAuditStep5.finalVerdict
           let saveFailedStage = storedAuditStep5.failedStage
           
           if (savedSessions === requestedTarget) {
             saveVerdict = 'FULL_REGEN_SUCCESS_6'
             saveFailedStage = null
-          } else if (savedSessions < requestedTarget && builtStructure >= requestedTarget) {
-            saveVerdict = 'SAVED_4_AFTER_STRUCTURE_6'
-            saveFailedStage = 'save'
+          } else if (savedSessions < requestedTarget) {
+            // Check where it collapsed
+            const resolvedSessions = storedAuditStep5.builderResolvedSessions ?? 0
+            if (resolvedSessions < requestedTarget) {
+              saveVerdict = 'TARGET_LOST_IN_RESOLUTION'
+              saveFailedStage = 'resolution'
+            } else if (builtStructure < requestedTarget) {
+              saveVerdict = 'TARGET_LOST_IN_STRUCTURE_BUILD'
+              saveFailedStage = 'structure_build'
+            } else if (localStorageSessionCount !== null && localStorageSessionCount < requestedTarget) {
+              saveVerdict = 'TARGET_LOST_DURING_SAVE'
+              saveFailedStage = 'save'
+            }
           }
           
-          const updatedAudit = {
+          console.log('[REGEN-TRUTH step-5-save-result]', {
+            requestedTarget,
+            builtStructureSessions: builtStructure,
+            newProgramSessions: savedSessions,
+            savedProgramId: newProgram.id,
+            localStorageVerification: {
+              programId: localStorageProgramId,
+              sessionCount: localStorageSessionCount,
+              matchesNewProgram: localStorageProgramId === newProgram.id,
+              sessionCountMatch: localStorageSessionCount === savedSessions,
+            },
+            verdict: saveVerdict,
+          })
+          
+          const updatedAudit: RegenTruthAudit = {
             ...storedAuditStep5,
             savedProgramSessions: savedSessions,
             savedProgramId: newProgram.id,
+            localStorageSessionCountAfterSave: localStorageSessionCount,
+            setProgramTargetId: newProgram.id,
+            setProgramTargetSessions: savedSessions,
             finalVerdict: saveVerdict,
             failedStage: saveFailedStage,
           }
@@ -10906,33 +11032,64 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
                     <button
                       onClick={() => {
                         // ==========================================================================
-                        // [REGEN-TRUTH step-1-click-source] Capture pre-click truth
+                        // [REGEN-TRUTH step-1-click-source] Capture comprehensive pre-click truth
                         // ==========================================================================
                         const attemptId = `regen-${Date.now()}`
-                        const clickSourceAudit = {
+                        const clickSourceAudit: RegenTruthAudit = {
+                          // Step 1: Click source
                           attemptId,
                           startedAt: new Date().toISOString(),
+                          existingVisibleProgramId: program?.id ?? null,
+                          existingVisibleProgramSessionCount: actual,
+                          scheduleStatusRecommendedCount: recommended,
                           requestedTargetSessions: recommended,
                           canonicalScheduleMode: scheduleTruthAudit?.canonicalScheduleMode ?? null,
                           canonicalTrainingDaysPerWeek: scheduleTruthAudit?.canonicalTrainingDaysPerWeek ?? null,
-                          scheduleIntelligenceRecommendedSessions: recommended,
+                          canonicalSelectedSkillsCount: null, // Will be filled by builder
+                          canonicalExperienceLevel: null,
+                          // Step 2: Generation input (filled later)
+                          builderInputScheduleMode: null,
+                          builderInputTrainingDaysPerWeek: null,
+                          builderInputSelectedSkillsCount: null,
+                          builderInputExperienceLevel: null,
+                          builderInputPrimaryGoal: null,
+                          // Step 3: Resolution (filled later)
+                          complexityScore: scheduleTruthAudit?.complexityScore ?? null,
+                          complexityElevationApplied: null,
+                          targetSessionCountFromResolution: null,
                           builderResolvedSessions: null,
+                          // Step 4: Structure (filled later)
                           builtStructureSessions: null,
-                          savedProgramSessions: null,
-                          displayedProgramSessions: actual,
+                          // Step 5: Save (filled later)
                           savedProgramId: null,
-                          displayedProgramId: program?.id ?? null,
-                          finalVerdict: 'REQUEST_CAPTURED' as const,
+                          savedProgramSessions: null,
+                          localStorageSessionCountAfterSave: null,
+                          // Step 6: setProgram (filled later)
+                          setProgramTargetId: null,
+                          setProgramTargetSessions: null,
+                          // Step 7: Display (filled later)
+                          displayedProgramId: null,
+                          displayedProgramSessions: null,
+                          // Step 8: Rehydration (filled later)
+                          rehydratedProgramId: null,
+                          rehydratedProgramSessions: null,
+                          overwriteDetected: false,
+                          overwriteSource: null,
+                          // Final
+                          finalVerdict: 'REQUEST_CAPTURED',
                           failedStage: null,
                           errorMessage: null,
                         }
                         
                         console.log('[REGEN-TRUTH step-1-click-source]', {
-                          recommendedSessionsFromUI: recommended,
+                          attemptId,
+                          existingVisibleProgramId: program?.id,
+                          existingVisibleProgramSessionCount: actual,
+                          scheduleStatusRecommendedCount: recommended,
+                          requestedTargetSessions: recommended,
                           canonicalScheduleMode: scheduleTruthAudit?.canonicalScheduleMode,
                           canonicalTrainingDaysPerWeek: scheduleTruthAudit?.canonicalTrainingDaysPerWeek,
-                          visibleProgramIdBefore: program?.id,
-                          visibleProgramSessionsBefore: actual,
+                          complexityScoreFromUI: scheduleTruthAudit?.complexityScore,
                           verdict: 'REQUEST_CAPTURED',
                         })
                         
@@ -10963,6 +11120,84 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
               }
               return null
             })()}
+          </div>
+        )}
+        
+        {/* ==========================================================================
+           [REGEN-TRUTH TRACE BOX] Temporary diagnostic panel for tracing 6->4 collapse
+           Only shows when a regen attempt has occurred and the final verdict is NOT success
+           ========================================================================== */}
+        {regenTruthAudit && regenTruthAudit.finalVerdict !== 'FULL_REGEN_SUCCESS_6' && regenTruthAudit.finalVerdict !== 'PENDING' && regenTruthAudit.finalVerdict !== 'REQUEST_CAPTURED' && (
+          <div className="bg-amber-950/30 border border-amber-700/40 rounded-lg p-3 mb-4">
+            <div className="text-amber-400 text-xs font-semibold mb-2">Regen Trace (Temporary)</div>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs font-mono">
+              <div className="text-zinc-500">Requested:</div>
+              <div className={
+                regenTruthAudit.requestedTargetSessions === 6 ? 'text-green-400' : 'text-zinc-300'
+              }>{regenTruthAudit.requestedTargetSessions ?? '-'}</div>
+              
+              <div className="text-zinc-500">Resolved:</div>
+              <div className={
+                regenTruthAudit.builderResolvedSessions === regenTruthAudit.requestedTargetSessions 
+                  ? 'text-green-400' 
+                  : (regenTruthAudit.builderResolvedSessions ?? 0) < (regenTruthAudit.requestedTargetSessions ?? 0)
+                    ? 'text-red-400'
+                    : 'text-zinc-300'
+              }>{regenTruthAudit.builderResolvedSessions ?? '-'}</div>
+              
+              <div className="text-zinc-500">Built:</div>
+              <div className={
+                regenTruthAudit.builtStructureSessions === regenTruthAudit.requestedTargetSessions 
+                  ? 'text-green-400' 
+                  : (regenTruthAudit.builtStructureSessions ?? 0) < (regenTruthAudit.requestedTargetSessions ?? 0)
+                    ? 'text-red-400'
+                    : 'text-zinc-300'
+              }>{regenTruthAudit.builtStructureSessions ?? '-'}</div>
+              
+              <div className="text-zinc-500">Saved:</div>
+              <div className={
+                regenTruthAudit.savedProgramSessions === regenTruthAudit.requestedTargetSessions 
+                  ? 'text-green-400' 
+                  : (regenTruthAudit.savedProgramSessions ?? 0) < (regenTruthAudit.requestedTargetSessions ?? 0)
+                    ? 'text-red-400'
+                    : 'text-zinc-300'
+              }>{regenTruthAudit.savedProgramSessions ?? '-'}</div>
+              
+              <div className="text-zinc-500">Displayed:</div>
+              <div className={
+                regenTruthAudit.displayedProgramSessions === regenTruthAudit.requestedTargetSessions 
+                  ? 'text-green-400' 
+                  : (regenTruthAudit.displayedProgramSessions ?? 0) < (regenTruthAudit.requestedTargetSessions ?? 0)
+                    ? 'text-red-400'
+                    : 'text-zinc-300'
+              }>{regenTruthAudit.displayedProgramSessions ?? '-'}</div>
+              
+              <div className="text-zinc-500">Rehydrated:</div>
+              <div className={
+                regenTruthAudit.rehydratedProgramSessions === regenTruthAudit.requestedTargetSessions 
+                  ? 'text-green-400' 
+                  : (regenTruthAudit.rehydratedProgramSessions ?? 0) < (regenTruthAudit.requestedTargetSessions ?? 0)
+                    ? 'text-red-400'
+                    : 'text-zinc-300'
+              }>{regenTruthAudit.rehydratedProgramSessions ?? '-'}</div>
+              
+              <div className="text-zinc-500">Overwrite:</div>
+              <div className={regenTruthAudit.overwriteDetected ? 'text-red-400' : 'text-green-400'}>
+                {regenTruthAudit.overwriteDetected ? `Yes (${regenTruthAudit.overwriteSource})` : 'No'}
+              </div>
+            </div>
+            
+            <div className="mt-2 pt-2 border-t border-amber-800/50">
+              <div className="text-zinc-500 text-xs">Verdict:</div>
+              <div className={`text-xs font-semibold ${
+                regenTruthAudit.finalVerdict === 'FULL_REGEN_SUCCESS_6' ? 'text-green-400' :
+                regenTruthAudit.finalVerdict.includes('TARGET_LOST') ? 'text-red-400' :
+                'text-amber-400'
+              }`}>
+                {regenTruthAudit.finalVerdict}
+                {regenTruthAudit.failedStage && ` @ ${regenTruthAudit.failedStage}`}
+              </div>
+            </div>
           </div>
         )}
         

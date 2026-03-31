@@ -435,6 +435,40 @@ export default function ProgramPage() {
   const [builderSessionSource, setBuilderSessionSource] = useState<'default_inputs' | 'modify_visible_program' | null>(null)
   
   // ==========================================================================
+  // [POST-REGEN TRUTH CORRIDOR] Single-purpose audit for the regen flow
+  // Tracks exactly where target 6 becomes 4 during regeneration
+  // ==========================================================================
+  type RegenTruthVerdict = 
+    | 'PENDING'
+    | 'REQUEST_CAPTURED'
+    | 'TARGET_LOST_BEFORE_STRUCTURE'
+    | 'STRUCTURE_BUILT_4_WHEN_TARGET_6'
+    | 'SAVED_4_AFTER_STRUCTURE_6'
+    | 'DISPLAYED_4_AFTER_SAVE_6'
+    | 'FULL_REGEN_SUCCESS_6'
+    | 'ERROR'
+  
+  interface RegenTruthAudit {
+    attemptId: string | null
+    startedAt: string | null
+    requestedTargetSessions: number | null
+    canonicalScheduleMode: string | null
+    canonicalTrainingDaysPerWeek: number | null
+    scheduleIntelligenceRecommendedSessions: number | null
+    builderResolvedSessions: number | null
+    builtStructureSessions: number | null
+    savedProgramSessions: number | null
+    displayedProgramSessions: number | null
+    savedProgramId: string | null
+    displayedProgramId: string | null
+    finalVerdict: RegenTruthVerdict
+    failedStage: string | null
+    errorMessage: string | null
+  }
+  
+  const [regenTruthAudit, setRegenTruthAudit] = useState<RegenTruthAudit | null>(null)
+  
+  // ==========================================================================
   // [PHASE 28A] SCHEDULE TRUTH AUDIT STATE
   // Tracks canonical vs builder truth for the debug panel
   // ==========================================================================
@@ -848,6 +882,61 @@ export default function ProgramPage() {
       }
     }
   }, [program, modifyFlowState])
+  
+  // ==========================================================================
+  // [REGEN-TRUTH step-6-display-result] Capture display state after regeneration
+  // This effect runs after setProgram commits the new program to state
+  // ==========================================================================
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    
+    const storedAuditStep6Raw = sessionStorage.getItem('regenTruthAudit')
+    if (!storedAuditStep6Raw) return
+    
+    const storedAuditStep6 = JSON.parse(storedAuditStep6Raw)
+    
+    // Only run once we have a savedProgramId to compare against
+    if (!storedAuditStep6.savedProgramId) return
+    
+    const displayedSessions = program?.sessions?.length ?? 0
+    const displayedProgramId = program?.id ?? null
+    const savedSessions = storedAuditStep6.savedProgramSessions ?? 0
+    const savedProgramId = storedAuditStep6.savedProgramId
+    const requestedTarget = storedAuditStep6.requestedTargetSessions ?? 0
+    
+    // Check if this is the same program we just saved
+    if (displayedProgramId === savedProgramId) {
+      let displayVerdict = storedAuditStep6.finalVerdict
+      let displayFailedStage = storedAuditStep6.failedStage
+      
+      if (displayedSessions === requestedTarget) {
+        displayVerdict = 'FULL_REGEN_SUCCESS_6'
+        displayFailedStage = null
+      } else if (displayedSessions < savedSessions) {
+        displayVerdict = 'DISPLAYED_4_AFTER_SAVE_6'
+        displayFailedStage = 'display'
+      }
+      
+      console.log('[REGEN-TRUTH step-6-display-result]', {
+        savedProgramId,
+        displayedProgramId,
+        savedProgramSessions: savedSessions,
+        displayedProgramSessions: displayedSessions,
+        verdict: displayVerdict,
+      })
+      
+      const finalAudit = {
+        ...storedAuditStep6,
+        displayedProgramSessions: displayedSessions,
+        displayedProgramId,
+        finalVerdict: displayVerdict,
+        failedStage: displayFailedStage,
+      }
+      
+      sessionStorage.setItem('regenTruthAudit', JSON.stringify(finalAudit))
+      setRegenTruthAudit(finalAudit)
+    }
+  }, [program])
   
   // ==========================================================================
   // [PHASE 26] CRITICAL FIX: Use a ref to always have the CURRENT builderSessionInputs
@@ -6848,6 +6937,53 @@ export default function ProgramPage() {
           storedEqualsNew: true,
         })
         
+        // ==========================================================================
+        // [REGEN-TRUTH step-5-save-result] Capture save result before setProgram
+        // ==========================================================================
+        const storedAuditStep5 = typeof window !== 'undefined' 
+          ? JSON.parse(sessionStorage.getItem('regenTruthAudit') || 'null')
+          : null
+        
+        if (storedAuditStep5) {
+          const builtStructure = storedAuditStep5.builtStructureSessions ?? 0
+          const savedSessions = newProgram.sessions?.length ?? 0
+          const requestedTarget = storedAuditStep5.requestedTargetSessions ?? 0
+          
+          console.log('[REGEN-TRUTH step-5-save-result]', {
+            builtStructureSessions: builtStructure,
+            newProgramSessions: savedSessions,
+            savedProgramSessions: savedSessions,
+            savedProgramId: newProgram.id,
+            verdict: savedSessions === requestedTarget
+              ? 'SAVE_MATCHED_BUILD'
+              : savedSessions < requestedTarget
+                ? 'SAVED_4_AFTER_STRUCTURE_6'
+                : 'SAVE_EXCEEDED_TARGET',
+          })
+          
+          // Determine final verdict at save time
+          let saveVerdict = storedAuditStep5.finalVerdict
+          let saveFailedStage = storedAuditStep5.failedStage
+          
+          if (savedSessions === requestedTarget) {
+            saveVerdict = 'FULL_REGEN_SUCCESS_6'
+            saveFailedStage = null
+          } else if (savedSessions < requestedTarget && builtStructure >= requestedTarget) {
+            saveVerdict = 'SAVED_4_AFTER_STRUCTURE_6'
+            saveFailedStage = 'save'
+          }
+          
+          const updatedAudit = {
+            ...storedAuditStep5,
+            savedProgramSessions: savedSessions,
+            savedProgramId: newProgram.id,
+            finalVerdict: saveVerdict,
+            failedStage: saveFailedStage,
+          }
+          sessionStorage.setItem('regenTruthAudit', JSON.stringify(updatedAudit))
+          setRegenTruthAudit(updatedAudit)
+        }
+        
         setProgram(newProgram)
         
         // [PHASE 30L] RELEASE MODIFY BUILDER LOCK - regeneration completed successfully
@@ -9318,6 +9454,45 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
         skillsCount: freshInputs?.selectedSkills?.length ?? 0,
       })
       
+      // ==========================================================================
+      // [REGEN-TRUTH step-2-generation-input] Capture exact inputs fed into generation
+      // ==========================================================================
+      const storedAudit = typeof window !== 'undefined' 
+        ? JSON.parse(sessionStorage.getItem('regenTruthAudit') || 'null')
+        : null
+      
+      if (storedAudit) {
+        const requestedTarget = storedAudit.requestedTargetSessions
+        const inputScheduleMode = freshInputs?.scheduleMode ?? 'unknown'
+        const inputTrainingDays = freshInputs?.trainingDaysPerWeek
+        const hasExplicitOverride = typeof inputTrainingDays === 'number'
+        
+        console.log('[REGEN-TRUTH step-2-generation-input]', {
+          scheduleModePassed: inputScheduleMode,
+          trainingDaysPerWeekPassed: inputTrainingDays,
+          adaptiveWorkloadEnabledPassed: freshInputs?.adaptiveWorkloadEnabled ?? null,
+          sessionDurationModePassed: freshInputs?.sessionDurationMode ?? null,
+          selectedSkillsCount: freshInputs?.selectedSkills?.length ?? 0,
+          primaryGoal: freshInputs?.primaryGoal ?? null,
+          secondaryGoal: freshInputs?.secondaryGoal ?? null,
+          requestedTargetSessions: requestedTarget,
+          hasExplicitSessionOverride: hasExplicitOverride,
+          verdict: inputScheduleMode === 'flexible' && !hasExplicitOverride
+            ? 'FLEXIBLE_NO_EXPLICIT_TARGET_PASSED'
+            : hasExplicitOverride
+              ? `EXPLICIT_TARGET_${inputTrainingDays}`
+              : 'STATIC_OR_UNKNOWN',
+        })
+        
+        // Update audit with generation input info
+        const updatedAudit = {
+          ...storedAudit,
+          canonicalScheduleMode: inputScheduleMode,
+          canonicalTrainingDaysPerWeek: inputTrainingDays ?? null,
+        }
+        sessionStorage.setItem('regenTruthAudit', JSON.stringify(updatedAudit))
+      }
+      
       if (!freshInputs) {
         const errorMsg = 'Input conversion returned null/undefined'
         setModifyClickAudit(prev => ({
@@ -10718,7 +10893,47 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
                       Regenerate to unlock your full potential.
                     </p>
                     <button
-                      onClick={handleNewProgram}
+                      onClick={() => {
+                        // ==========================================================================
+                        // [REGEN-TRUTH step-1-click-source] Capture pre-click truth
+                        // ==========================================================================
+                        const attemptId = `regen-${Date.now()}`
+                        const clickSourceAudit = {
+                          attemptId,
+                          startedAt: new Date().toISOString(),
+                          requestedTargetSessions: recommended,
+                          canonicalScheduleMode: scheduleTruthAudit?.canonicalScheduleMode ?? null,
+                          canonicalTrainingDaysPerWeek: scheduleTruthAudit?.canonicalTrainingDaysPerWeek ?? null,
+                          scheduleIntelligenceRecommendedSessions: recommended,
+                          builderResolvedSessions: null,
+                          builtStructureSessions: null,
+                          savedProgramSessions: null,
+                          displayedProgramSessions: actual,
+                          savedProgramId: null,
+                          displayedProgramId: program?.id ?? null,
+                          finalVerdict: 'REQUEST_CAPTURED' as const,
+                          failedStage: null,
+                          errorMessage: null,
+                        }
+                        
+                        console.log('[REGEN-TRUTH step-1-click-source]', {
+                          recommendedSessionsFromUI: recommended,
+                          canonicalScheduleMode: scheduleTruthAudit?.canonicalScheduleMode,
+                          canonicalTrainingDaysPerWeek: scheduleTruthAudit?.canonicalTrainingDaysPerWeek,
+                          visibleProgramIdBefore: program?.id,
+                          visibleProgramSessionsBefore: actual,
+                          verdict: 'REQUEST_CAPTURED',
+                        })
+                        
+                        setRegenTruthAudit(clickSourceAudit)
+                        
+                        // Store in sessionStorage for builder to read
+                        if (typeof window !== 'undefined') {
+                          sessionStorage.setItem('regenTruthAudit', JSON.stringify(clickSourceAudit))
+                        }
+                        
+                        handleNewProgram()
+                      }}
                       className="w-full text-sm py-2 bg-cyan-600/20 hover:bg-cyan-600/30 text-cyan-400 rounded-lg border border-cyan-600/30 transition-colors font-medium"
                     >
                       Regenerate Program ({recommended} sessions)
@@ -10737,6 +10952,54 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
               }
               return null
             })()}
+          </div>
+        )}
+        
+        {/* ==========================================================================
+            [REGEN-TRUTH] Post-regen verdict box - only shows after regen attempt
+            Small, read-only, production-safe diagnostic
+            ========================================================================== */}
+        {regenTruthAudit && regenTruthAudit.savedProgramId && !shouldRenderModifyBuilder && (
+          <div className="mt-3 p-3 bg-zinc-900/40 border border-zinc-800/50 rounded-lg text-xs font-mono">
+            <div className="text-zinc-500 mb-2">Regen Corridor Audit</div>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-zinc-400">
+              <span>Requested:</span>
+              <span className="text-zinc-300">{regenTruthAudit.requestedTargetSessions}</span>
+              
+              <span>Resolved:</span>
+              <span className={regenTruthAudit.builderResolvedSessions === regenTruthAudit.requestedTargetSessions ? 'text-green-400' : 'text-red-400'}>
+                {regenTruthAudit.builderResolvedSessions ?? '?'}
+              </span>
+              
+              <span>Built:</span>
+              <span className={regenTruthAudit.builtStructureSessions === regenTruthAudit.requestedTargetSessions ? 'text-green-400' : 'text-red-400'}>
+                {regenTruthAudit.builtStructureSessions ?? '?'}
+              </span>
+              
+              <span>Saved:</span>
+              <span className={regenTruthAudit.savedProgramSessions === regenTruthAudit.requestedTargetSessions ? 'text-green-400' : 'text-red-400'}>
+                {regenTruthAudit.savedProgramSessions ?? '?'}
+              </span>
+              
+              <span>Displayed:</span>
+              <span className={regenTruthAudit.displayedProgramSessions === regenTruthAudit.requestedTargetSessions ? 'text-green-400' : 'text-red-400'}>
+                {regenTruthAudit.displayedProgramSessions ?? '?'}
+              </span>
+              
+              <span>Verdict:</span>
+              <span className={
+                regenTruthAudit.finalVerdict === 'FULL_REGEN_SUCCESS_6' ? 'text-green-400' :
+                regenTruthAudit.finalVerdict === 'PENDING' || regenTruthAudit.finalVerdict === 'REQUEST_CAPTURED' ? 'text-yellow-400' :
+                'text-red-400'
+              }>
+                {regenTruthAudit.finalVerdict}
+              </span>
+            </div>
+            {regenTruthAudit.failedStage && (
+              <div className="mt-2 pt-2 border-t border-zinc-800/50 text-red-400/70">
+                Failed at: {regenTruthAudit.failedStage}
+              </div>
+            )}
           </div>
         )}
 

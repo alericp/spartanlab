@@ -3218,6 +3218,36 @@ async function generateAdaptiveProgramImpl(
           const storedMainGen = JSON.parse(storedMainGenRaw)
           const expectedSessions = storedMainGen.expectedSessionCount ?? 6
           
+          // Build human-readable reduction reason from rootCauseAudit
+          let reductionReasonHuman: string | null = null
+          const reasons: string[] = []
+          
+          if (audit) {
+            if (audit.jointCautionPenalty > 0) {
+              reasons.push(`Joint caution penalty (-${audit.jointCautionPenalty})`)
+            }
+            if (audit.recoveryScore !== null && audit.recoveryScore < 0.5) {
+              reasons.push(`Poor recovery score (${(audit.recoveryScore * 100).toFixed(0)}%)`)
+            }
+            if ((audit.recentWorkoutCount ?? 0) > 5) {
+              reasons.push(`High recent workload (${audit.recentWorkoutCount} sessions in 7d)`)
+            }
+            if (effectiveTrainingDays < expectedSessions && reasons.length === 0) {
+              // No modifiers but still reduced - check complexity
+              if ((audit.complexityScore ?? 0) < 5) {
+                reasons.push(`Complexity score below threshold (${audit.complexityScore}/10)`)
+              } else {
+                reasons.push(`Goal baseline (${audit.goalTypical}) lower than expected`)
+              }
+            }
+          }
+          
+          if (reasons.length > 0) {
+            reductionReasonHuman = reasons.join('; ')
+          } else if (effectiveTrainingDays >= expectedSessions) {
+            reductionReasonHuman = 'No reduction - baseline met'
+          }
+          
           const updatedMainGen = {
             ...storedMainGen,
             // Step 4: Resolution result
@@ -3226,6 +3256,12 @@ async function generateAdaptiveProgramImpl(
             targetSessionCountFromResolution: effectiveTrainingDays,
             resolvedScheduleIdentity: inputScheduleMode === 'flexible' ? 'flexible' : `static_${effectiveTrainingDays}`,
             resolvedFinalReasonCategory: audit?.finalReasonCategory ?? 'unknown',
+            // Human-readable reduction reason
+            reductionReasonHuman,
+            jointCautionPenalty: audit?.jointCautionPenalty ?? null,
+            recoveryPenalty: audit?.recoveryScore !== null && audit?.recoveryScore < 0.5 ? 1 : 0,
+            recentWorkloadPenalty: (audit?.recentWorkoutCount ?? 0) > 5 ? 1 : 0,
+            modificationSteps: audit?.modificationSteps ?? null,
             // Update verdict if target lost in resolution
             finalVerdict: effectiveTrainingDays >= expectedSessions
               ? storedMainGen.finalVerdict
@@ -3241,6 +3277,9 @@ async function generateAdaptiveProgramImpl(
             complexityElevation: audit?.complexityElevation ?? 0,
             scheduleMode: inputScheduleMode,
             matchesExpected: effectiveTrainingDays >= expectedSessions,
+            reductionReasonHuman,
+            jointCautionPenalty: audit?.jointCautionPenalty ?? 0,
+            recentWorkoutCount: audit?.recentWorkoutCount ?? 0,
           })
           
           ;(globalThis as unknown as { sessionStorage: Storage }).sessionStorage.setItem('mainGenTruthAudit', JSON.stringify(updatedMainGen))
@@ -3267,6 +3306,56 @@ async function generateAdaptiveProgramImpl(
       verdict: (baselineAudit?.complexityElevation || 0) > 0 
         ? 'ELEVATED_DUE_TO_COMPLEXITY' 
         : 'USING_GOAL_BASELINE',
+    })
+    
+    // ==========================================================================
+    // [USER-CASE DIAGNOSTIC] Specific verdict for high-complexity flexible users
+    // This answers: should THIS user's case stay at 6 baseline or be reduced?
+    // ==========================================================================
+    const isHighComplexity = (baselineAudit?.complexityScore || 0) >= 5
+    const isAdvanced = experienceLevel === 'advanced'
+    const hasBroadSkills = baselineAudit?.hasPushAndPullSkills || false
+    const baselineShouldBe6 = isHighComplexity && (baselineAudit?.complexityElevation || 0) > 0
+    const actuallyGot6 = effectiveTrainingDays >= 6
+    
+    // Determine specific reduction reasons
+    const reductionReasons: string[] = []
+    if ((baselineAudit?.jointCautionPenalty || 0) > 0) {
+      reductionReasons.push(`joint_caution_penalty_${baselineAudit?.jointCautionPenalty}`)
+    }
+    if ((baselineAudit?.recoveryScore ?? 1) < 0.5) {
+      reductionReasons.push(`poor_recovery_${((baselineAudit?.recoveryScore || 0) * 100).toFixed(0)}pct`)
+    }
+    if ((baselineAudit?.recentWorkoutCount ?? 0) > 5) {
+      reductionReasons.push(`high_workload_${baselineAudit?.recentWorkoutCount}_sessions`)
+    }
+    
+    let userCaseVerdict: string
+    if (baselineShouldBe6 && actuallyGot6) {
+      userCaseVerdict = 'THIS_USER_CASE_SHOULD_STAY_6_BASELINE'
+    } else if (baselineShouldBe6 && !actuallyGot6) {
+      userCaseVerdict = `THIS_USER_CASE_REDUCED_TO_${effectiveTrainingDays}_BY_REAL_MODIFIER`
+    } else if (!isHighComplexity) {
+      userCaseVerdict = `THIS_USER_CASE_COMPLEXITY_BELOW_THRESHOLD_${baselineAudit?.complexityScore || 0}`
+    } else {
+      userCaseVerdict = `THIS_USER_CASE_BASELINE_${effectiveTrainingDays}_NO_ELEVATION`
+    }
+    
+    console.log('[USER-CASE-DIAGNOSTIC]', {
+      isFlexible: inputScheduleMode === 'flexible',
+      isAdvanced,
+      isHighComplexity,
+      complexityScore: baselineAudit?.complexityScore || 0,
+      complexityElevation: baselineAudit?.complexityElevation || 0,
+      hasBroadSkills,
+      selectedSkillsCount: baselineAudit?.selectedSkillsCount || 0,
+      sessionDurationMode: canonicalProfile.sessionDurationMode,
+      baselineShouldBe6,
+      actuallyGot: effectiveTrainingDays,
+      reductionReasons: reductionReasons.length > 0 ? reductionReasons : ['none'],
+      finalReasonCategory: baselineAudit?.finalReasonCategory,
+      modificationSteps: baselineAudit?.modificationSteps || [],
+      verdict: userCaseVerdict,
     })
     
     console.log('[flex-frequency] Resolved week:', {

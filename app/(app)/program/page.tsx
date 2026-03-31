@@ -588,6 +588,13 @@ export default function ProgramPage() {
     finalVerdict: MainGenTruthVerdict
     failedStage: string | null
     errorMessage: string | null
+    // Human-readable reduction reason from flexible resolution
+    reductionReasonHuman: string | null
+    // Detailed modifier breakdown
+    jointCautionPenalty: number | null
+    recoveryPenalty: number | null
+    recentWorkloadPenalty: number | null
+    modificationSteps: string[] | null
   }
   
   const [mainGenTruthAudit, setMainGenTruthAudit] = useState<MainGenTruthAudit | null>(null)
@@ -11352,9 +11359,11 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
                 <span className="text-zinc-300">{program?.sessions?.length ?? 0} sessions</span>
               </div>
               
-              {/* Recommended Sessions */}
+              {/* Baseline Sessions - clarified terminology for flexible users */}
               <div className="flex justify-between">
-                <span className="text-zinc-500">Recommended</span>
+                <span className="text-zinc-500">
+                  {scheduleTruthAudit?.canonicalScheduleMode === 'flexible' ? 'Baseline' : 'Recommended'}
+                </span>
                 <span className={
                   (scheduleTruthAudit?.baselineRecommendedSessionCount ?? 4) >= 6 ? 'text-green-400' :
                   (scheduleTruthAudit?.baselineRecommendedSessionCount ?? 4) >= 5 ? 'text-cyan-400' :
@@ -11364,6 +11373,18 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
                 </span>
               </div>
             </div>
+            
+            {/* Clarification note for flexible users when current differs from baseline */}
+            {scheduleTruthAudit?.canonicalScheduleMode === 'flexible' && 
+             (program?.sessions?.length ?? 0) > 0 &&
+             (program?.sessions?.length ?? 0) < (scheduleTruthAudit?.baselineRecommendedSessionCount ?? 4) && (
+              <div className="mt-2 pt-2 border-t border-zinc-800/50">
+                <p className="text-zinc-600 text-[10px]">
+                  Flexible schedules adapt based on recovery, recent workload, and joint health. 
+                  Your current week may differ from the complexity baseline.
+                </p>
+              </div>
+            )}
             
             {/* Regeneration CTA when significantly under baseline */}
             {(() => {
@@ -11697,6 +11718,21 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
                   Failed at: {mainGenTruthAudit.failedStage}
                 </div>
               )}
+              {/* Human-readable reduction reason - the KEY diagnostic */}
+              {mainGenTruthAudit.reductionReasonHuman && (
+                <div className="mt-2 pt-2 border-t border-blue-800/50">
+                  <div className="text-zinc-500 text-[10px] mb-1">Why reduced:</div>
+                  <div className="text-amber-400 text-xs">{mainGenTruthAudit.reductionReasonHuman}</div>
+                </div>
+              )}
+              {/* Modifier details if available */}
+              {(mainGenTruthAudit.jointCautionPenalty || mainGenTruthAudit.recoveryPenalty || mainGenTruthAudit.recentWorkloadPenalty) && (
+                <div className="mt-2 pt-2 border-t border-blue-800/30 text-[10px] text-zinc-500 grid grid-cols-3 gap-1">
+                  <span>Joint: {mainGenTruthAudit.jointCautionPenalty ? `-${mainGenTruthAudit.jointCautionPenalty}` : '0'}</span>
+                  <span>Recovery: {mainGenTruthAudit.recoveryPenalty ? '-1' : '0'}</span>
+                  <span>Workload: {mainGenTruthAudit.recentWorkloadPenalty ? '-1' : '0'}</span>
+                </div>
+              )}
               {/* Program ID comparison to prove it's truly new */}
               <div className="mt-2 pt-2 border-t border-blue-800/30 text-[10px]">
                 <div className="text-zinc-500">Previous ID: <span className="text-zinc-400">{mainGenTruthAudit.existingVisibleProgramIdBeforeClick?.slice(-8) ?? 'none'}</span></div>
@@ -11885,6 +11921,11 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
                   finalVerdict: 'MAIN_REQUEST_CAPTURED',
                   failedStage: null,
                   errorMessage: null,
+                  reductionReasonHuman: null,
+                  jointCautionPenalty: null,
+                  recoveryPenalty: null,
+                  recentWorkloadPenalty: null,
+                  modificationSteps: null,
                 }
                 
                 console.log('[MAIN-GEN-TRUTH step-1-click-source]', {

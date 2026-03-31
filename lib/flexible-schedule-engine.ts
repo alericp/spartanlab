@@ -543,6 +543,23 @@ export function resolveFlexibleFrequency(input: FlexibleFrequencyInput): Flexibl
   // Ensure typical is within bounds
   const currentFrequency = Math.max(minDays, Math.min(maxDays, typicalDays))
   
+  // ==========================================================================
+  // [HARD CONTRACT] CANONICAL BASELINE ENFORCEMENT
+  // This is the FINAL session count that will be used by the builder.
+  // If complexity elevation occurred, this MUST reflect it.
+  // ==========================================================================
+  console.log('[v0] [HARD-CONTRACT] Canonical baseline enforcement:', {
+    targetSessionCount: currentFrequency,
+    complexityScore: complexityResult.score,
+    complexityElevation,
+    preComplexityTypical: goalTypicalBaseline,
+    postComplexityTypical: typicalDays,
+    finalBoundedFrequency: currentFrequency,
+    verdict: complexityElevation > 0 
+      ? `ELEVATED_TO_${currentFrequency}_SESSIONS` 
+      : `BASELINE_${currentFrequency}_SESSIONS`,
+  })
+  
   // [TASK 1] Determine if this was truly adaptive or just baseline
   const isBaselineDefault = currentFrequency === goalTypicalBaseline && modificationSteps.length <= 1
   const wasModifiedFromBaseline = currentFrequency !== goalTypicalBaseline || modificationSteps.length > 1

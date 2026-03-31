@@ -3062,6 +3062,34 @@ async function generateAdaptiveProgramImpl(
   })
     
   if (inputScheduleMode === 'flexible') {
+    // ==========================================================================
+    // [HARD CONTRACT] PRE-RESOLUTION COMPLEXITY AUDIT
+    // Log exactly what complexity inputs reach resolveFlexibleFrequency
+    // This determines the baseline session count for flexible users
+    // ==========================================================================
+    const complexityInputs = {
+      selectedSkills: canonicalProfile.selectedSkills || [],
+      secondaryGoals: (canonicalProfile as unknown as { secondaryGoals?: string[] })?.secondaryGoals || [],
+      sessionDurationMode: canonicalProfile.sessionDurationMode,
+      trainingStyles: (canonicalProfile as unknown as { trainingStyles?: string[] })?.trainingStyles || [],
+      experienceLevel,
+    }
+    console.log('[v0] [HARD-CONTRACT] Pre-resolution complexity audit:', {
+      selectedSkillsCount: complexityInputs.selectedSkills.length,
+      selectedSkills: complexityInputs.selectedSkills,
+      experienceLevel: complexityInputs.experienceLevel,
+      sessionDurationMode: complexityInputs.sessionDurationMode,
+      trainingStylesCount: complexityInputs.trainingStyles.length,
+      // Estimate expected score based on complexity formula
+      estimatedScoreComponents: {
+        skillsPoints: complexityInputs.selectedSkills.length >= 5 ? 3 : complexityInputs.selectedSkills.length >= 3 ? 2 : complexityInputs.selectedSkills.length >= 2 ? 1 : 0,
+        expPoints: complexityInputs.experienceLevel === 'advanced' ? 2 : complexityInputs.experienceLevel === 'intermediate' ? 1 : 0,
+        durationPoints: complexityInputs.sessionDurationMode === 'adaptive' ? 1 : 0,
+        stylesPoints: complexityInputs.trainingStyles.length >= 2 ? 1 : 0,
+      },
+      expectedBaseline: 'see_complexity_calculation_output',
+    })
+    
     flexibleWeekStructure = resolveFlexibleFrequency({
       scheduleMode: 'flexible',
       primaryGoal,
@@ -3114,6 +3142,17 @@ async function generateAdaptiveProgramImpl(
     }
     
     effectiveTrainingDays = flexibleWeekStructure.currentWeekFrequency as TrainingDays
+    
+    // ==========================================================================
+    // [HARD CONTRACT] BUILDER RECEIVES CANONICAL BASELINE
+    // The builder MUST use this value. No fallback to 4 after this point.
+    // ==========================================================================
+    console.log('[v0] [HARD-CONTRACT] Builder using sessions:', {
+      builderSessionCount: effectiveTrainingDays,
+      sourceFunction: 'resolveFlexibleFrequency',
+      complexityElevation: flexibleWeekStructure.rootCauseAudit?.complexityElevation || 0,
+      verdict: `BUILDER_WILL_CREATE_${effectiveTrainingDays}_SESSIONS`,
+    })
     
     // ==========================================================================
     // [ADAPTIVE BASELINE FIX] BASELINE RESOLUTION AUDIT
@@ -8054,6 +8093,21 @@ console.log('[program-generate] Generation complete:', {
     verdict: finalProgramSelectedSkills.length === (inputs.selectedSkills?.length ?? 0)
       ? 'CANONICAL_AND_INPUTS_SELECTED_SKILLS_COUNT_MATCH'
       : 'CANONICAL_AND_INPUTS_SELECTED_SKILLS_COUNT_MISMATCH',
+  })
+  
+  // ==========================================================================
+  // [HARD CONTRACT] FINAL PROGRAM SESSION COUNT VERIFICATION
+  // This is the LAST checkpoint before the program is returned.
+  // The session count MUST match the canonical baseline.
+  // ==========================================================================
+  console.log('[v0] [HARD-CONTRACT] Saved program sessions:', {
+    sessionCount: sessions.length,
+    trainingDaysPerWeek: effectiveTrainingDays,
+    scheduleMode: inputScheduleMode,
+    generatedFrom: 'canonical_baseline',
+    verdict: sessions.length === effectiveTrainingDays 
+      ? `SUCCESS_${sessions.length}_SESSIONS_CREATED` 
+      : `MISMATCH_SESSIONS=${sessions.length}_DAYS=${effectiveTrainingDays}`,
   })
   
   const finalProgram: AdaptiveProgram = {

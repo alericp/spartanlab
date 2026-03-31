@@ -21,23 +21,25 @@
 // This allows us to verify the live app is running the expected code version
 // ==========================================================================
 export const PHASE27C_BUILD_IDENTITY = {
-  buildIdentityName: 'SCHEDULE_INTELLIGENCE_PRODUCTIZED',
-  buildIdentityVersion: '2024-SCHEDULE-INTELLIGENCE-v4',
+  buildIdentityName: 'SINGLE_PRODUCTION_TRUTH_PANEL',
+  buildIdentityVersion: '2024-SCHEDULE-TRUTH-CONSOLIDATION-v1',
   buildTimestamp: new Date().toISOString(),
   modifyPipeline: 'CANONICAL_7_STEP_WITH_2_PHASE_PROMOTION',
-  currentPhase: 'SCHEDULE_INTELLIGENCE_PRODUCTION_READY',
+  currentPhase: 'SINGLE_TRUTH_SURFACE_LOCKED',
   retiredPhases: [
     'MODIFY_PIPELINE_CORRIDOR',
     'WEAK_LOCAL_COMPLEXITY_ESTIMATE',
     'DEBUG_AUDIT_PANEL_STYLING',
+    'ALWAYS_VISIBLE_REGEN_AUDIT_BOX',
+    'SCHEDULE_TRUTH_NOW_LEGACY_BLOCK',
   ],
   features: [
-    'Product-grade Schedule Status panel (single source of truth)',
+    'Schedule Status is THE ONLY always-visible production schedule truth surface',
     'Clean 2x2 grid display: Type, Complexity, Current, Recommended',
     'Contextual regeneration CTA with flexible/static awareness',
+    'Post-regen diagnostic box now only shows on actual mismatch (not success)',
+    'Legacy competing panels fully retired from production rendering',
     'Unified schedule-intelligence contract across all flows',
-    'Flexible users can start at 5-6 sessions when justified',
-    'Post-regen landing displays correct aligned state',
   ],
 } as const
 
@@ -469,8 +471,10 @@ export default function ProgramPage() {
   const [regenTruthAudit, setRegenTruthAudit] = useState<RegenTruthAudit | null>(null)
   
   // ==========================================================================
-  // [PHASE 28A] SCHEDULE TRUTH AUDIT STATE
-  // Tracks canonical vs builder truth for the debug panel
+  // [SCHEDULE TRUTH STATE] Backing data for the top "Schedule Status" panel
+  // This is the ONLY schedule truth state that feeds a production-visible UI element.
+  // The Schedule Status panel uses this to display: Type, Complexity, Current, Recommended.
+  // Legacy debug panels that competed with this have been retired.
   // ==========================================================================
   const [scheduleTruthAudit, setScheduleTruthAudit] = useState<{
     // Source values
@@ -10811,8 +10815,15 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
         </div>
         
         {/* ==========================================================================
-            SCHEDULE INTELLIGENCE - Product-grade single source of truth
-            Shows schedule alignment status and regeneration action when needed
+            SCHEDULE STATUS - THE ONLY ALWAYS-VISIBLE PRODUCTION SCHEDULE TRUTH SURFACE
+            
+            This panel is the single authoritative schedule display for users.
+            - Shows Type (Flexible/Static), Complexity, Current sessions, Recommended sessions
+            - Shows alignment status badge (Aligned / Update Available / Slightly Under)
+            - Shows regeneration CTA when current < recommended by meaningful gap
+            
+            Legacy competing panels (e.g. "SCHEDULE TRUTH NOW") have been retired.
+            The post-regen diagnostic box only shows when there's an actual mismatch.
             ========================================================================== */}
         {program && !shouldRenderModifyBuilder && (
           <div className="mt-4 p-4 bg-zinc-900/60 border border-zinc-800 rounded-xl text-sm">
@@ -10956,52 +10967,62 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
         )}
         
         {/* ==========================================================================
-            [REGEN-TRUTH] Post-regen verdict box - only shows after regen attempt
-            Small, read-only, production-safe diagnostic
+            [REGEN-TRUTH] Post-regen diagnostic - RETIRED FROM ALWAYS-VISIBLE PRODUCTION
+            This box is now hidden when regen succeeded (FULL_REGEN_SUCCESS) and the page
+            is in normal aligned state. It only shows if there was a real mismatch to diagnose.
+            The top "Schedule Status" panel is the ONLY always-visible production truth surface.
             ========================================================================== */}
-        {regenTruthAudit && regenTruthAudit.savedProgramId && !shouldRenderModifyBuilder && (
-          <div className="mt-3 p-3 bg-zinc-900/40 border border-zinc-800/50 rounded-lg text-xs font-mono">
-            <div className="text-zinc-500 mb-2">Regen Corridor Audit</div>
-            <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-zinc-400">
-              <span>Requested:</span>
-              <span className="text-zinc-300">{regenTruthAudit.requestedTargetSessions}</span>
-              
-              <span>Resolved:</span>
-              <span className={regenTruthAudit.builderResolvedSessions === regenTruthAudit.requestedTargetSessions ? 'text-green-400' : 'text-red-400'}>
-                {regenTruthAudit.builderResolvedSessions ?? '?'}
-              </span>
-              
-              <span>Built:</span>
-              <span className={regenTruthAudit.builtStructureSessions === regenTruthAudit.requestedTargetSessions ? 'text-green-400' : 'text-red-400'}>
-                {regenTruthAudit.builtStructureSessions ?? '?'}
-              </span>
-              
-              <span>Saved:</span>
-              <span className={regenTruthAudit.savedProgramSessions === regenTruthAudit.requestedTargetSessions ? 'text-green-400' : 'text-red-400'}>
-                {regenTruthAudit.savedProgramSessions ?? '?'}
-              </span>
-              
-              <span>Displayed:</span>
-              <span className={regenTruthAudit.displayedProgramSessions === regenTruthAudit.requestedTargetSessions ? 'text-green-400' : 'text-red-400'}>
-                {regenTruthAudit.displayedProgramSessions ?? '?'}
-              </span>
-              
-              <span>Verdict:</span>
-              <span className={
-                regenTruthAudit.finalVerdict === 'FULL_REGEN_SUCCESS_6' ? 'text-green-400' :
-                regenTruthAudit.finalVerdict === 'PENDING' || regenTruthAudit.finalVerdict === 'REQUEST_CAPTURED' ? 'text-yellow-400' :
-                'text-red-400'
-              }>
-                {regenTruthAudit.finalVerdict}
-              </span>
-            </div>
-            {regenTruthAudit.failedStage && (
-              <div className="mt-2 pt-2 border-t border-zinc-800/50 text-red-400/70">
-                Failed at: {regenTruthAudit.failedStage}
+        {(() => {
+          // Hardened visibility: only show if there's a real mismatch worth diagnosing
+          const shouldShowRegenAudit = regenTruthAudit 
+            && regenTruthAudit.savedProgramId 
+            && !shouldRenderModifyBuilder
+            // CRITICAL: Hide when regen succeeded - no diagnostic needed for success
+            && regenTruthAudit.finalVerdict !== 'FULL_REGEN_SUCCESS_6'
+            // Also hide if still pending/capturing - wait for completion
+            && regenTruthAudit.finalVerdict !== 'PENDING'
+            && regenTruthAudit.finalVerdict !== 'REQUEST_CAPTURED'
+          
+          if (!shouldShowRegenAudit) return null
+          
+          return (
+            <div className="mt-3 p-3 bg-zinc-900/40 border border-zinc-800/50 rounded-lg text-xs font-mono">
+              <div className="text-zinc-500 mb-2">Regen Diagnostic (mismatch detected)</div>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-zinc-400">
+                <span>Requested:</span>
+                <span className="text-zinc-300">{regenTruthAudit.requestedTargetSessions}</span>
+                
+                <span>Resolved:</span>
+                <span className={regenTruthAudit.builderResolvedSessions === regenTruthAudit.requestedTargetSessions ? 'text-green-400' : 'text-red-400'}>
+                  {regenTruthAudit.builderResolvedSessions ?? '?'}
+                </span>
+                
+                <span>Built:</span>
+                <span className={regenTruthAudit.builtStructureSessions === regenTruthAudit.requestedTargetSessions ? 'text-green-400' : 'text-red-400'}>
+                  {regenTruthAudit.builtStructureSessions ?? '?'}
+                </span>
+                
+                <span>Saved:</span>
+                <span className={regenTruthAudit.savedProgramSessions === regenTruthAudit.requestedTargetSessions ? 'text-green-400' : 'text-red-400'}>
+                  {regenTruthAudit.savedProgramSessions ?? '?'}
+                </span>
+                
+                <span>Displayed:</span>
+                <span className={regenTruthAudit.displayedProgramSessions === regenTruthAudit.requestedTargetSessions ? 'text-green-400' : 'text-red-400'}>
+                  {regenTruthAudit.displayedProgramSessions ?? '?'}
+                </span>
+                
+                <span>Verdict:</span>
+                <span className="text-red-400">{regenTruthAudit.finalVerdict}</span>
               </div>
-            )}
-          </div>
-        )}
+              {regenTruthAudit.failedStage && (
+                <div className="mt-2 pt-2 border-t border-zinc-800/50 text-red-400/70">
+                  Failed at: {regenTruthAudit.failedStage}
+                </div>
+              )}
+            </div>
+          )
+        })()}
 
         {/* Content - TASK 2: Proper handling of malformed programs */}
         {/* [PHASE 30N] Use single-authority shouldRenderModifyBuilder instead of just showBuilder */}

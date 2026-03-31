@@ -21,18 +21,19 @@
 // This allows us to verify the live app is running the expected code version
 // ==========================================================================
 export const PHASE27C_BUILD_IDENTITY = {
-  buildIdentityName: 'SCHEDULE_INTELLIGENCE_PHASE',
-  buildIdentityVersion: '2024-SCHEDULE-INTELLIGENCE-v1',
+  buildIdentityName: 'SCHEDULE_INTELLIGENCE_UNIFIED',
+  buildIdentityVersion: '2024-SCHEDULE-INTELLIGENCE-v2',
   buildTimestamp: new Date().toISOString(),
   modifyPipeline: 'CANONICAL_7_STEP_WITH_2_PHASE_PROMOTION',
-  currentPhase: 'SCHEDULE_INTELLIGENCE_AUDIT',
-  retiredPhases: ['MODIFY_PIPELINE_CORRIDOR'],
+  currentPhase: 'SCHEDULE_INTELLIGENCE_UNIFIED',
+  retiredPhases: ['MODIFY_PIPELINE_CORRIDOR', 'WEAK_LOCAL_COMPLEXITY_ESTIMATE'],
   features: [
-    'Schedule Intelligence Audit panel (replaced Modify Pipeline panel)',
-    'Complexity scoring for flexible baseline elevation',
-    'Shared schedule contract for onboarding/modify/restart',
-    'Holistic adaptation priority codified',
-    'Flexible users can start at 5-6 sessions when justified',
+    'Unified computeScheduleIntelligence() resolver for all surfaces',
+    'Authoritative complexity scoring from flexible-schedule-engine',
+    'REQUIRES_REGEN verdict when program is significantly stale',
+    'Onboarding/Modify/Restart all use same schedule contract',
+    'Flexible users can start at 5-6 sessions when justified by complexity',
+    'Honest display of current vs recommended session counts',
   ],
 } as const
 
@@ -69,8 +70,9 @@ import {
   // [PHASE 25] Static imports for canonicalModifyLauncher - required for SSR/prerender safety
   buildCanonicalGenerationEntry,
   entryToAdaptiveInputs,
-  // [PHASE 32B] Import for stale schedule detection
-  getCanonicalProfile,
+  // [SCHEDULE INTELLIGENCE] Unified resolver for audit display
+  computeScheduleIntelligence,
+  type ScheduleIntelligenceResult,
 } from '@/lib/canonical-profile-service'
 // [program-rebuild-truth] Import rebuild result contract for truthful error handling
 // [freshness-sync] TASK 1 & 2: Import freshness identity management for cross-surface consistency
@@ -808,50 +810,34 @@ export default function ProgramPage() {
   }, [modifyBuilderEntry, modifyFlowState])
   
   // ==========================================================================
-  // [SCHEDULE INTELLIGENCE] Populate audit when program exists
-  // NOTE: This effect runs on program/modifyFlowState change, NOT shouldRenderModifyBuilder
+  // [SCHEDULE INTELLIGENCE] Populate audit using SHARED authoritative resolver
+  // 
+  // IMPORTANT: This effect uses computeScheduleIntelligence() from canonical-profile-service
+  // which mirrors the AUTHORITATIVE complexity calculation from flexible-schedule-engine.
+  // This ensures the audit displays the SAME truth used by onboarding/modify/restart flows.
+  // 
+  // NOTE: This effect runs on program/modifyFlowState change, NOT shouldRenderModifyBuilder.
   // The shouldRenderModifyBuilder const is declared ~9000 lines later, so referencing
   // it in this effect's dependency array would cause a TDZ (Temporal Dead Zone) error.
-  // Instead, we use modifyFlowState !== 'builder' which is equivalent and already available.
   // ==========================================================================
   useEffect(() => {
     // Only populate audit when NOT in modify builder mode
-    // Use modifyFlowState check instead of shouldRenderModifyBuilder to avoid TDZ
     const isInBuilderMode = modifyFlowState === 'builder'
     
     if (program && !isInBuilderMode) {
       try {
-        const canonical = getCanonicalProfile()
-        const actualSessions = program?.sessions?.length ?? 0
-        
-        // Compute complexity tier from session count and canonical data
-        const isFlexible = canonical.scheduleMode === 'flexible'
-        const skillsCount = canonical.selectedSkills?.length ?? 0
-        
-        // Simple complexity estimation based on visible program
-        let estimatedComplexity = 0
-        if (skillsCount >= 5) estimatedComplexity += 3
-        else if (skillsCount >= 3) estimatedComplexity += 2
-        else if (skillsCount >= 2) estimatedComplexity += 1
-        if (canonical.experienceLevel === 'advanced') estimatedComplexity += 2
-        else if (canonical.experienceLevel === 'intermediate') estimatedComplexity += 1
-        
-        // Estimate what baseline SHOULD be based on complexity
-        let estimatedBaseline = 4
-        if (estimatedComplexity >= 5) estimatedBaseline = 6
-        else if (estimatedComplexity >= 3) estimatedBaseline = 5
-        
-        const complexityElevated = estimatedBaseline > 4
+        // Use the SHARED schedule intelligence resolver - not a weak local estimate
+        const intelligence = computeScheduleIntelligence(program)
         
         setScheduleTruthAudit(prev => ({
           ...prev,
-          canonicalScheduleMode: canonical.scheduleMode,
-          canonicalTrainingDaysPerWeek: isFlexible ? null : (typeof canonical.trainingDaysPerWeek === 'number' ? canonical.trainingDaysPerWeek : null),
-          complexityScore: estimatedComplexity,
-          complexityElevated,
-          baselineRecommendedSessionCount: isFlexible ? estimatedBaseline : (typeof canonical.trainingDaysPerWeek === 'number' ? canonical.trainingDaysPerWeek : 4),
-          activeProgramSessionCount: actualSessions,
-          baselineFrequencyReason: complexityElevated ? 'complexity_demand_elevation' : 'goal_typical_baseline',
+          canonicalScheduleMode: intelligence.scheduleIdentity,
+          canonicalTrainingDaysPerWeek: intelligence.canonicalTrainingDaysPerWeek,
+          complexityScore: intelligence.complexityScore,
+          complexityElevated: intelligence.complexityTier !== 'low',
+          baselineRecommendedSessionCount: intelligence.baselineRecommendedSessionCount,
+          activeProgramSessionCount: intelligence.currentProgramSessionCount,
+          baselineFrequencyReason: intelligence.baselineFrequencyReason,
         }))
       } catch (err) {
         console.error('[schedule-intelligence-audit-error]', err)
@@ -10733,6 +10719,8 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
                   const actual = program?.sessions?.length ?? 0
                   if (actual === 0) return 'text-zinc-500'
                   if (actual === recommended) return 'text-green-400'
+                  // REQUIRES_REGEN if diff >= 2
+                  if (actual < recommended && (recommended - actual) >= 2) return 'text-red-400'
                   if (actual < recommended) return 'text-yellow-400'
                   return 'text-cyan-400'
                 })()}>
@@ -10741,11 +10729,30 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
                     const actual = program?.sessions?.length ?? 0
                     if (actual === 0) return 'NO_PROGRAM'
                     if (actual === recommended) return 'ALIGNED'
+                    // REQUIRES_REGEN if diff >= 2, else UNDEREXPRESSED_BASELINE
+                    if (actual < recommended && (recommended - actual) >= 2) return 'REQUIRES_REGEN'
                     if (actual < recommended) return 'UNDEREXPRESSED_BASELINE'
                     return 'OVEREXPRESSED_BASELINE'
                   })()}
                 </span>
               </div>
+              
+              {/* Regeneration hint if needed */}
+              {(() => {
+                const recommended = scheduleTruthAudit?.baselineRecommendedSessionCount ?? 4
+                const actual = program?.sessions?.length ?? 0
+                const diff = recommended - actual
+                if (actual > 0 && diff >= 1) {
+                  return (
+                    <div className="mt-2 text-[10px] text-zinc-500">
+                      {diff >= 2 
+                        ? 'Program generated before current baseline recommendation. Use Modify Program to regenerate.'
+                        : 'Program slightly under current recommendation. Optional regeneration.'}
+                    </div>
+                  )
+                }
+                return null
+              })()}
             </div>
           </div>
         )}

@@ -294,8 +294,10 @@ export async function POST(request: Request) {
     try {
       // [PHASE 16J] Pass canonicalProfileOverride to builder
       // This is the FIX: builder no longer calls getCanonicalProfile() which fails on server
+      // [FLOW-PARITY-FIX] Explicitly mark as fresh baseline build for consistent contract
       program = await generateAdaptiveProgram(programInputs, serverStageCallback, {
         canonicalProfileOverride,
+        isFreshBaselineBuild: true,  // [FLOW-PARITY-FIX] Onboarding is always a fresh baseline
       })
     } catch (builderError) {
       console.log('[phase16g-server-generation-failure-verdict]', {

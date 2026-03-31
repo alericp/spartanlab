@@ -1521,6 +1521,14 @@ export interface ServerGenerationOptions {
    * This is REQUIRED for server routes where localStorage is unavailable.
    */
   canonicalProfileOverride?: ProfileSnapshot
+  
+  /**
+   * [FLOW-PARITY-FIX] When true, indicates this is a fresh baseline build
+   * (like onboarding) and should NOT apply recentWorkoutCount penalties.
+   * This ensures MAIN BUILD, ONBOARDING, and RESTART use the same baseline
+   * contract instead of treating fresh builds as adaptive recalculations.
+   */
+  isFreshBaselineBuild?: boolean
 }
 
 // ==========================================================================
@@ -1549,6 +1557,33 @@ export async function generateAdaptiveProgram(
     timestamp: new Date().toISOString(),
     inputPrimaryGoal: inputs.primaryGoal,
     inputSelectedSkillsCount: inputs.selectedSkills?.length || 0,
+  })
+  
+  // ==========================================================================
+  // [FLOW-PARITY-AUDIT] Unified entry audit for comparing MAIN BUILD vs ONBOARDING vs REGENERATE
+  // This log can be filtered to compare flows side-by-side
+  // ==========================================================================
+  const triggerSource = serverOptions?.canonicalProfileOverride 
+    ? 'server_route' 
+    : 'client_direct'
+  const flowType = serverOptions?.isFreshBaselineBuild 
+    ? 'fresh_baseline' 
+    : 'adaptive_with_modifiers'
+  
+  console.log('[flow-parity-audit][builder-entry]', {
+    triggerSource,
+    flowType,
+    isFreshBaselineBuild: serverOptions?.isFreshBaselineBuild ?? false,
+    hasCanonicalOverride: !!serverOptions?.canonicalProfileOverride,
+    scheduleMode: inputs.scheduleMode,
+    trainingDaysPerWeek: inputs.trainingDaysPerWeek,
+    sessionDurationMode: inputs.sessionDurationMode,
+    selectedSkillsCount: inputs.selectedSkills?.length ?? 0,
+    experienceLevel: inputs.experienceLevel,
+    primaryGoal: inputs.primaryGoal,
+    secondaryGoal: inputs.secondaryGoal ?? null,
+    equipmentCount: inputs.equipment?.length ?? 0,
+    verdict: `${flowType.toUpperCase()}_VIA_${triggerSource.toUpperCase()}`,
   })
   
   // [PHASE 16C] Cooperative async generation with stage callbacks
@@ -3090,6 +3125,25 @@ async function generateAdaptiveProgramImpl(
       expectedBaseline: 'see_complexity_calculation_output',
     })
     
+    // ==========================================================================
+    // [FLOW-PARITY-FIX] FRESH BASELINE BUILD DETECTION
+    // For fresh main builds (like onboarding), we should NOT apply recentWorkoutCount
+    // penalty. This ensures MAIN BUILD uses the same baseline contract as ONBOARDING.
+    // ==========================================================================
+    const isFreshBaselineBuild = serverOptions?.isFreshBaselineBuild ?? false
+    const effectiveRecentWorkoutCount = isFreshBaselineBuild 
+      ? 0  // Skip penalty for fresh baseline builds
+      : trainingFeedback.totalSessionsLast7Days
+    
+    console.log('[flow-parity-audit][resolution-input]', {
+      isFreshBaselineBuild,
+      actualRecentWorkoutCount: trainingFeedback.totalSessionsLast7Days,
+      effectiveRecentWorkoutCount,
+      verdict: isFreshBaselineBuild 
+        ? 'FRESH_BASELINE_BUILD_SKIPPING_RECENT_WORKOUT_PENALTY'
+        : 'ADAPTIVE_BUILD_USING_FULL_WORKOUT_HISTORY',
+    })
+    
     flexibleWeekStructure = resolveFlexibleFrequency({
       scheduleMode: 'flexible',
       primaryGoal,
@@ -3097,8 +3151,8 @@ async function generateAdaptiveProgramImpl(
       jointCautions: profile?.jointCautions,
       recoveryProfile: profile?.recoveryProfile,
       trainingStyle: (profile as AthleteProfile & { trainingStyle?: string })?.trainingStyle,
-      // Feed real workout data into frequency resolution
-      recentWorkoutCount: trainingFeedback.totalSessionsLast7Days,
+      // [FLOW-PARITY-FIX] Feed workout data ONLY for adaptive builds, not fresh baseline
+      recentWorkoutCount: effectiveRecentWorkoutCount,
       // ==========================================================================
       // [ADAPTIVE BASELINE FIX] Pass content complexity fields
       // These enable richer baseline when onboarding truth justifies it
@@ -3342,6 +3396,13 @@ async function generateAdaptiveProgramImpl(
     }
     
     console.log('[USER-CASE-DIAGNOSTIC]', {
+      // Flow parity info
+      isFreshBaselineBuild,
+      flowType: isFreshBaselineBuild ? 'fresh_baseline' : 'adaptive_with_modifiers',
+      effectiveRecentWorkoutCount,
+      actualRecentWorkoutCount: trainingFeedback.totalSessionsLast7Days,
+      recentWorkoutPenaltySkipped: isFreshBaselineBuild && trainingFeedback.totalSessionsLast7Days > 0,
+      // User case info
       isFlexible: inputScheduleMode === 'flexible',
       isAdvanced,
       isHighComplexity,

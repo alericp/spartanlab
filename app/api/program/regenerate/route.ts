@@ -272,8 +272,11 @@ export async function POST(request: Request) {
     try {
       // [PHASE 18D] Pass server-constructed canonicalProfileOverride
       // This mirrors exactly what the working onboarding route does
+      // [FLOW-PARITY-FIX] Pass isFreshBaselineBuild: true to skip recentWorkoutCount penalty
+      // Regenerate is conceptually a fresh baseline rebuild, not an adaptive recalculation
       program = await generateAdaptiveProgram(builderInput, serverStageCallback, {
         canonicalProfileOverride,
+        isFreshBaselineBuild: true,  // [FLOW-PARITY-FIX] Use baseline contract like onboarding
       })
     } catch (builderError) {
       console.log('[phase18d-server-regenerate-failure]', {

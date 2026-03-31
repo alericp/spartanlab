@@ -3711,8 +3711,29 @@ export default function ProgramPage() {
     verdict: 'dispatch_executing',
   })
   
+  // ==========================================================================
+  // [FLOW-PARITY-FIX] FRESH MAIN BUILD: Pass isFreshBaselineBuild flag
+  // This ensures main builds use the same baseline contract as onboarding,
+  // without applying recentWorkoutCount penalties that reduce the session count.
+  // For modify flow, we still apply adaptive modifiers since that's intentional.
+  // ==========================================================================
+  const isFreshMainBuild = !isModifyFlow
+  console.log('[flow-parity-audit][main-build-dispatch]', {
+    isFreshMainBuild,
+    isModifyFlow,
+    scheduleModeAtDispatch: generationInputs?.scheduleMode,
+    verdict: isFreshMainBuild 
+      ? 'FRESH_MAIN_BUILD_USING_BASELINE_CONTRACT'
+      : 'MODIFY_FLOW_USING_ADAPTIVE_CONTRACT',
+  })
+  
   // [PHASE 16N] FIX: Await the async builder - it returns Promise<AdaptiveProgram>
-  const newProgram = await programModules.generateAdaptiveProgram(generationInputs)
+  // [FLOW-PARITY-FIX] Pass isFreshBaselineBuild: true for fresh main builds
+  const newProgram = await programModules.generateAdaptiveProgram(
+    generationInputs,
+    undefined,  // onStageChange callback
+    { isFreshBaselineBuild: isFreshMainBuild }  // serverOptions
+  )
   
   // [PHASE 16N] Verify we received resolved program, not Promise
   console.log('[phase16n-program-page-builder-result-audit]', {

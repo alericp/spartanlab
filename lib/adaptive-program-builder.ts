@@ -3200,17 +3200,17 @@ async function generateAdaptiveProgramImpl(
     // [ADAPTIVE BASELINE FIX] BASELINE RESOLUTION AUDIT
     // Shows why this flexible user resolved to their baseline session count
     // ==========================================================================
-    const audit = flexibleWeekStructure.rootCauseAudit
+    const baselineAudit = flexibleWeekStructure.rootCauseAudit
     console.log('[adaptive-baseline-audit]', {
       scheduleIdentity: 'flexible',
       baselineSessionCount: effectiveTrainingDays,
-      goalTypicalBaseline: audit?.goalTypical || 4,
-      complexityScore: audit?.complexityScore || 0,
-      complexityElevation: audit?.complexityElevation || 0,
-      selectedSkillsCount: audit?.selectedSkillsCount || 0,
-      hasPushAndPullSkills: audit?.hasPushAndPullSkills || false,
-      reasonCategory: audit?.finalReasonCategory || 'unknown',
-      verdict: (audit?.complexityElevation || 0) > 0 
+      goalTypicalBaseline: baselineAudit?.goalTypical || 4,
+      complexityScore: baselineAudit?.complexityScore || 0,
+      complexityElevation: baselineAudit?.complexityElevation || 0,
+      selectedSkillsCount: baselineAudit?.selectedSkillsCount || 0,
+      hasPushAndPullSkills: baselineAudit?.hasPushAndPullSkills || false,
+      reasonCategory: baselineAudit?.finalReasonCategory || 'unknown',
+      verdict: (baselineAudit?.complexityElevation || 0) > 0 
         ? 'ELEVATED_DUE_TO_COMPLEXITY' 
         : 'USING_GOAL_BASELINE',
     })

@@ -3155,6 +3155,48 @@ async function generateAdaptiveProgramImpl(
     })
     
     // ==========================================================================
+    // [REGEN-TRUTH step-3-flex-resolution] Capture flexible resolution result
+    // ==========================================================================
+    const audit = flexibleWeekStructure.rootCauseAudit
+    const storedAuditRaw = typeof globalThis !== 'undefined' && 'sessionStorage' in globalThis
+      ? (globalThis as unknown as { sessionStorage?: Storage }).sessionStorage?.getItem('regenTruthAudit')
+      : null
+    const storedAudit = storedAuditRaw ? JSON.parse(storedAuditRaw) : null
+    const requestedTarget = storedAudit?.requestedTargetSessions ?? null
+    
+    console.log('[REGEN-TRUTH step-3-flex-resolution]', {
+      requestedTargetSessions: requestedTarget,
+      complexityScore: audit?.complexityScore || 0,
+      complexityElevation: audit?.complexityElevation || 0,
+      resolvedCurrentWeekFrequency: effectiveTrainingDays,
+      recommendedMinDays: flexibleWeekStructure.recommendedMinDays,
+      recommendedMaxDays: flexibleWeekStructure.recommendedMaxDays,
+      finalReasonCategory: audit?.complexityElevation && audit.complexityElevation > 0 
+        ? 'complexity_elevation' 
+        : 'goal_baseline',
+      verdict: requestedTarget === effectiveTrainingDays 
+        ? 'TARGET_MATCHES_RESOLUTION'
+        : requestedTarget !== null && effectiveTrainingDays < requestedTarget
+          ? 'TARGET_LOST_BEFORE_STRUCTURE'
+          : 'NO_REGEN_CONTEXT',
+    })
+    
+    // Update stored audit with builder resolution
+    if (storedAudit && typeof globalThis !== 'undefined' && 'sessionStorage' in globalThis) {
+      const updatedAudit = {
+        ...storedAudit,
+        builderResolvedSessions: effectiveTrainingDays,
+        finalVerdict: requestedTarget === effectiveTrainingDays 
+          ? 'REQUEST_CAPTURED'
+          : effectiveTrainingDays < (requestedTarget ?? 0)
+            ? 'TARGET_LOST_BEFORE_STRUCTURE'
+            : storedAudit.finalVerdict,
+        failedStage: effectiveTrainingDays < (requestedTarget ?? 0) ? 'flex_resolution' : null,
+      }
+      ;(globalThis as unknown as { sessionStorage: Storage }).sessionStorage.setItem('regenTruthAudit', JSON.stringify(updatedAudit))
+    }
+    
+    // ==========================================================================
     // [ADAPTIVE BASELINE FIX] BASELINE RESOLUTION AUDIT
     // Shows why this flexible user resolved to their baseline session count
     // ==========================================================================
@@ -8109,6 +8151,43 @@ console.log('[program-generate] Generation complete:', {
       ? `SUCCESS_${sessions.length}_SESSIONS_CREATED` 
       : `MISMATCH_SESSIONS=${sessions.length}_DAYS=${effectiveTrainingDays}`,
   })
+  
+  // ==========================================================================
+  // [REGEN-TRUTH step-4-structure-built] Capture structure count before final program
+  // ==========================================================================
+  const storedAuditStep4Raw = typeof globalThis !== 'undefined' && 'sessionStorage' in globalThis
+    ? (globalThis as unknown as { sessionStorage?: Storage }).sessionStorage?.getItem('regenTruthAudit')
+    : null
+  const storedAuditStep4 = storedAuditStep4Raw ? JSON.parse(storedAuditStep4Raw) : null
+  const requestedTargetStep4 = storedAuditStep4?.requestedTargetSessions ?? null
+  const builderResolvedStep4 = storedAuditStep4?.builderResolvedSessions ?? effectiveTrainingDays
+  
+  console.log('[REGEN-TRUTH step-4-structure-built]', {
+    requestedTargetSessions: requestedTargetStep4,
+    builderResolvedSessions: builderResolvedStep4,
+    builtStructureSessions: sessions.length,
+    sessionFocusesSummary: sessions.slice(0, 3).map(s => s.focus).join(', ') + (sessions.length > 3 ? '...' : ''),
+    verdict: requestedTargetStep4 === sessions.length
+      ? 'STRUCTURE_MATCHED_TARGET'
+      : requestedTargetStep4 !== null && sessions.length < requestedTargetStep4
+        ? 'STRUCTURE_BUILT_4_WHEN_TARGET_6'
+        : 'NO_REGEN_CONTEXT',
+  })
+  
+  // Update stored audit with structure count
+  if (storedAuditStep4 && typeof globalThis !== 'undefined' && 'sessionStorage' in globalThis) {
+    const updatedAudit = {
+      ...storedAuditStep4,
+      builtStructureSessions: sessions.length,
+      finalVerdict: requestedTargetStep4 === sessions.length
+        ? storedAuditStep4.finalVerdict
+        : sessions.length < (requestedTargetStep4 ?? 0)
+          ? 'STRUCTURE_BUILT_4_WHEN_TARGET_6'
+          : storedAuditStep4.finalVerdict,
+      failedStage: sessions.length < (requestedTargetStep4 ?? 0) ? 'structure_build' : storedAuditStep4.failedStage,
+    }
+    ;(globalThis as unknown as { sessionStorage: Storage }).sessionStorage.setItem('regenTruthAudit', JSON.stringify(updatedAudit))
+  }
   
   const finalProgram: AdaptiveProgram = {
     id: `adaptive-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,

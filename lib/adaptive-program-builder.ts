@@ -3208,6 +3208,49 @@ async function generateAdaptiveProgramImpl(
     }
     
     // ==========================================================================
+    // [MAIN-GEN-TRUTH step-4] Update main generation trace with resolution info
+    // This is PARALLEL to the regen trace - captures same resolution point for fresh builds
+    // ==========================================================================
+    if (typeof globalThis !== 'undefined' && 'sessionStorage' in globalThis) {
+      const storedMainGenRaw = (globalThis as unknown as { sessionStorage: Storage }).sessionStorage.getItem('mainGenTruthAudit')
+      if (storedMainGenRaw) {
+        try {
+          const storedMainGen = JSON.parse(storedMainGenRaw)
+          const expectedSessions = storedMainGen.expectedSessionCount ?? 6
+          
+          const updatedMainGen = {
+            ...storedMainGen,
+            // Step 4: Resolution result
+            complexityScore: audit?.complexityScore ?? null,
+            complexityElevationApplied: audit?.complexityElevation ?? null,
+            targetSessionCountFromResolution: effectiveTrainingDays,
+            resolvedScheduleIdentity: inputScheduleMode === 'flexible' ? 'flexible' : `static_${effectiveTrainingDays}`,
+            resolvedFinalReasonCategory: audit?.finalReasonCategory ?? 'unknown',
+            // Update verdict if target lost in resolution
+            finalVerdict: effectiveTrainingDays >= expectedSessions
+              ? storedMainGen.finalVerdict
+              : 'MAIN_TARGET_LOST_IN_RESOLUTION',
+            failedStage: effectiveTrainingDays < expectedSessions ? 'resolution' : storedMainGen.failedStage,
+          }
+          
+          console.log('[MAIN-GEN-TRUTH step-4-resolution-result]', {
+            attemptId: storedMainGen.attemptId,
+            expectedSessions,
+            resolvedSessions: effectiveTrainingDays,
+            complexityScore: audit?.complexityScore ?? 0,
+            complexityElevation: audit?.complexityElevation ?? 0,
+            scheduleMode: inputScheduleMode,
+            matchesExpected: effectiveTrainingDays >= expectedSessions,
+          })
+          
+          ;(globalThis as unknown as { sessionStorage: Storage }).sessionStorage.setItem('mainGenTruthAudit', JSON.stringify(updatedMainGen))
+        } catch (e) {
+          // Ignore parse errors
+        }
+      }
+    }
+    
+    // ==========================================================================
     // [ADAPTIVE BASELINE FIX] BASELINE RESOLUTION AUDIT
     // Shows why this flexible user resolved to their baseline session count
     // ==========================================================================

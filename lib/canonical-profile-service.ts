@@ -2921,6 +2921,175 @@ export function buildBaselineFrequencyContract(
 }
 
 // =============================================================================
+// [SCHEDULE INTELLIGENCE] Unified resolver for program page audit & display
+// =============================================================================
+
+/**
+ * Display verdict for schedule intelligence alignment.
+ */
+export type ScheduleDisplayVerdict = 
+  | 'ALIGNED'                // Current program matches recommendation
+  | 'UNDEREXPRESSED_BASELINE' // Current program has fewer sessions than recommended
+  | 'OVEREXPRESSED_BASELINE'  // Current program has more sessions than recommended
+  | 'REQUIRES_REGEN'         // Program is significantly stale, regeneration suggested
+  | 'STATIC_MATCH'           // Static schedule matches explicit preference
+  | 'FLEXIBLE_MATCH'         // Flexible schedule matches current recommendation
+  | 'NO_PROGRAM'             // No program exists yet
+
+/**
+ * Unified schedule intelligence result for all surfaces.
+ * This is the SINGLE source of truth for schedule intelligence across:
+ * - Program page audit
+ * - Program card display
+ * - Onboarding/Modify/Restart flows
+ */
+export interface ScheduleIntelligenceResult {
+  scheduleIdentity: 'static' | 'flexible'
+  canonicalTrainingDaysPerWeek: number | null
+  adaptiveWorkloadEnabled: boolean
+  complexityScore: number
+  complexityTier: 'low' | 'medium' | 'high'
+  baselineRecommendedSessionCount: number
+  baselineFrequencyReason: string
+  currentProgramSessionCount: number
+  regenerationNeeded: boolean
+  displayVerdict: ScheduleDisplayVerdict
+  shortReason: string
+}
+
+/**
+ * Compute unified schedule intelligence from canonical profile and current program.
+ * 
+ * This resolver uses the AUTHORITATIVE complexity calculation from flexible-schedule-engine
+ * and provides a single truth for all display surfaces.
+ * 
+ * @param currentProgram - The current visible program (may be null if none)
+ */
+export function computeScheduleIntelligence(
+  currentProgram: { sessions?: unknown[] } | null
+): ScheduleIntelligenceResult {
+  const profile = getCanonicalProfile()
+  const scheduleIdentity = (profile.scheduleMode || 'flexible') as 'static' | 'flexible'
+  const currentProgramSessionCount = currentProgram?.sessions?.length ?? 0
+  
+  // For static users, use explicit preference
+  if (scheduleIdentity === 'static') {
+    const staticDays = typeof profile.trainingDaysPerWeek === 'number' 
+      ? profile.trainingDaysPerWeek 
+      : 4
+    
+    const isAligned = currentProgramSessionCount === staticDays
+    
+    return {
+      scheduleIdentity,
+      canonicalTrainingDaysPerWeek: staticDays,
+      adaptiveWorkloadEnabled: false,
+      complexityScore: 0,
+      complexityTier: 'low',
+      baselineRecommendedSessionCount: staticDays,
+      baselineFrequencyReason: 'static_user_preference',
+      currentProgramSessionCount,
+      regenerationNeeded: currentProgramSessionCount > 0 && !isAligned,
+      displayVerdict: currentProgramSessionCount === 0 ? 'NO_PROGRAM' : (isAligned ? 'STATIC_MATCH' : 'REQUIRES_REGEN'),
+      shortReason: isAligned ? `Static ${staticDays} days` : `Static mismatch: have ${currentProgramSessionCount}, want ${staticDays}`,
+    }
+  }
+  
+  // For flexible users, calculate complexity-based recommendation
+  // This mirrors the logic in flexible-schedule-engine.calculateContentComplexity
+  const skills = profile.selectedSkills || []
+  const skillsCount = skills.length
+  
+  // Define skill families (must match flexible-schedule-engine.ts)
+  const PUSH_SKILLS = ['planche', 'planche_push_up', 'handstand', 'handstand_pushup', 'one_arm_push_up', 'iron_cross']
+  const PULL_SKILLS = ['front_lever', 'back_lever', 'muscle_up', 'one_arm_pull_up']
+  const CORE_SKILLS = ['l_sit', 'v_sit', 'i_sit', 'dragon_flag']
+  const FLEXIBILITY_SKILLS = ['pancake']
+  
+  let score = 0
+  
+  // Factor 1: Number of selected skills (0-3 points)
+  if (skillsCount >= 5) score += 3
+  else if (skillsCount >= 3) score += 2
+  else if (skillsCount >= 2) score += 1
+  
+  // Factor 2: Push + Pull family breadth (0-2 points)
+  const hasPush = skills.some(s => PUSH_SKILLS.includes(s))
+  const hasPull = skills.some(s => PULL_SKILLS.includes(s))
+  const hasCore = skills.some(s => CORE_SKILLS.includes(s))
+  const hasFlexibility = skills.some(s => FLEXIBILITY_SKILLS.includes(s))
+  const hasPushAndPull = hasPush && hasPull
+  const familyCount = [hasPush, hasPull, hasCore, hasFlexibility].filter(Boolean).length
+  
+  if (hasPushAndPull) score += 2
+  if (familyCount >= 3) score += 1
+  
+  // Factor 3: Experience level (0-2 points)
+  if (profile.experienceLevel === 'advanced') score += 2
+  else if (profile.experienceLevel === 'intermediate') score += 1
+  
+  // Factor 4: Adaptive session duration (0-1 point)
+  if (profile.sessionDurationMode === 'adaptive') score += 1
+  
+  // Factor 5: Multiple training styles (0-1 point)
+  const trainingStyles = profile.trainingStyles || []
+  if (trainingStyles.length >= 2) score += 1
+  
+  // Cap score at 10
+  score = Math.min(10, score)
+  
+  // Determine complexity tier and baseline recommendation
+  let complexityTier: 'low' | 'medium' | 'high'
+  let baselineRecommendedSessionCount: number
+  
+  if (score >= 5) {
+    complexityTier = 'high'
+    baselineRecommendedSessionCount = 6
+  } else if (score >= 3) {
+    complexityTier = 'medium'
+    baselineRecommendedSessionCount = 5
+  } else {
+    complexityTier = 'low'
+    baselineRecommendedSessionCount = 4
+  }
+  
+  // Determine verdict
+  let displayVerdict: ScheduleDisplayVerdict
+  let shortReason: string
+  let regenerationNeeded = false
+  
+  if (currentProgramSessionCount === 0) {
+    displayVerdict = 'NO_PROGRAM'
+    shortReason = 'No program generated yet'
+  } else if (currentProgramSessionCount === baselineRecommendedSessionCount) {
+    displayVerdict = 'ALIGNED'
+    shortReason = `Aligned: ${currentProgramSessionCount} sessions (${complexityTier} complexity)`
+  } else if (currentProgramSessionCount < baselineRecommendedSessionCount) {
+    const diff = baselineRecommendedSessionCount - currentProgramSessionCount
+    displayVerdict = diff >= 2 ? 'REQUIRES_REGEN' : 'UNDEREXPRESSED_BASELINE'
+    regenerationNeeded = diff >= 2
+    shortReason = `Have ${currentProgramSessionCount}, recommend ${baselineRecommendedSessionCount} (${complexityTier} complexity)`
+  } else {
+    displayVerdict = 'OVEREXPRESSED_BASELINE'
+    shortReason = `Have ${currentProgramSessionCount}, recommend ${baselineRecommendedSessionCount} (${complexityTier} complexity)`
+  }
+  
+  return {
+    scheduleIdentity,
+    canonicalTrainingDaysPerWeek: null, // Flexible users don't have fixed days
+    adaptiveWorkloadEnabled: true,
+    complexityScore: score,
+    complexityTier,
+    baselineRecommendedSessionCount,
+    baselineFrequencyReason: `complexity_${complexityTier}`,
+    currentProgramSessionCount,
+    regenerationNeeded,
+    displayVerdict,
+    shortReason,
+  }
+}
+
+// =============================================================================
 // [PHASE 6] CANONICAL GENERATION ENTRY BUILDER
 // =============================================================================
 

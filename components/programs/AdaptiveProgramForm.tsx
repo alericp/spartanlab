@@ -80,6 +80,8 @@ interface AdaptiveProgramFormProps {
   constraintLabel?: string
   // [PHASE 28A] Optional debug audit info
   scheduleTruthAudit?: ScheduleTruthAuditInfo | null
+  // Beta notice for modify flow
+  showBetaNotice?: boolean
 }
 
 const EQUIPMENT_OPTIONS: { id: EquipmentType; label: string; hint?: string }[] = [
@@ -98,6 +100,7 @@ export function AdaptiveProgramForm({
   isGenerating = false,
   constraintLabel,
   scheduleTruthAudit,
+  showBetaNotice = false,
 }: AdaptiveProgramFormProps) {
   // ==========================================================================
   // [PHASE 27B] EXPLICIT SCHEDULE CHOICE TRACKING
@@ -304,6 +307,13 @@ export function AdaptiveProgramForm({
   return (
     <Card className="bg-[#2A2A2A] border-[#3A3A3A] p-6">
       <div className="space-y-6">
+        {/* Beta notice for modify flow */}
+        {showBetaNotice && (
+          <p className="text-xs text-[#8A7A5A] leading-relaxed">
+            Beta: Refining an existing program is still being improved. For the most reliable full rebuild, use Restart Program.
+          </p>
+        )}
+        
         {/* Constraint Insight Banner */}
         {/* [limiter-truth] ISSUE B/D: Hide banner for low-history / calibration states */}
         {constraintLabel && 

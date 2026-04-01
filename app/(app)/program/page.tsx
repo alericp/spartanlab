@@ -11603,7 +11603,7 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
               className="border-[#3A3A3A] hover:bg-[#2A2A2A]"
             >
               <Plus className="w-4 h-4 mr-2" />
-              Modify Program
+              Modify Program (Beta)
             </Button>
           )}
         </div>
@@ -12503,6 +12503,7 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
                   isGenerating={isGenerating}
                   constraintLabel={constraintLabel}
                   scheduleTruthAudit={scheduleTruthAudit}
+                  showBetaNotice={isLegacyModifyFlow}
                 />
               )
             })()}

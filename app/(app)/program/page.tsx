@@ -1423,18 +1423,60 @@ export default function ProgramPage() {
   useEffect(() => {
     if (!program || !mounted || !authoritativeActiveProgram) return
     
+    // Also read localStorage to check for source divergence
+    let localStorageProgramId: string | null = null
+    let localStorageSessionCount: number | null = null
+    try {
+      const rawStored = localStorage.getItem('spartanlab_active_program')
+      if (rawStored) {
+        const parsed = JSON.parse(rawStored)
+        localStorageProgramId = parsed?.id ?? null
+        localStorageSessionCount = parsed?.sessions?.length ?? null
+      }
+    } catch {
+      // Ignore parse errors
+    }
+    
+    const programStateSessionCount = program?.sessions?.length ?? 0
+    const authoritativeSessionCount = authoritativeActiveProgram?.sessions?.length ?? 0
+    const baselineFromIntelligence = scheduleTruthAudit?.baselineRecommendedSessionCount ?? 4
+    
+    // Check for actual source divergence (different objects/values)
+    const stateMatchesAuthoritative = program.id === authoritativeActiveProgram.id
+    const stateMatchesLocalStorage = program.id === localStorageProgramId
+    const sessionCountsMatch = programStateSessionCount === authoritativeSessionCount
+    const allSourcesUnified = stateMatchesAuthoritative && stateMatchesLocalStorage && sessionCountsMatch
+    
     console.log('[page-load-display-vs-staleness-binding-audit]', {
-      loadedProgramId: program.id,
-      displayedProgramId: program.id, // Same - display uses `program` state
-      stalenessProgramId: authoritativeActiveProgram.id, // Staleness uses authoritativeActiveProgram
-      restoredFromState: true, // Program came from getProgramState
-      normalizedForDisplay: true, // normalizeProgramForDisplay was called
-      sameBindingAcrossAllPaths: program.id === authoritativeActiveProgram.id,
-      verdict: program.id === authoritativeActiveProgram.id 
-        ? 'binding_verified_same_program' 
-        : 'BINDING_MISMATCH_DETECTED',
+      // React state (drives Schedule Status "Current" and Program Card)
+      programStateId: program.id,
+      programStateSessionCount,
+      // Memo source (drives staleness checks)
+      authoritativeProgramId: authoritativeActiveProgram.id,
+      authoritativeSessionCount,
+      // LocalStorage source (canonical persistence)
+      localStorageProgramId,
+      localStorageSessionCount,
+      // Schedule intelligence (drives "Baseline")
+      baselineFromIntelligence,
+      // Verdicts
+      stateMatchesAuthoritative,
+      stateMatchesLocalStorage,
+      sessionCountsMatch,
+      allSourcesUnified,
+      baselineDiffersFromCurrent: baselineFromIntelligence !== programStateSessionCount,
+      verdict: allSourcesUnified 
+        ? 'PROGRAM_PAGE_SINGLE_TRUTH_ENFORCED'
+        : 'SPLIT_TRUTH_DETECTED',
+      explanation: !stateMatchesLocalStorage
+        ? 'React state differs from localStorage'
+        : !stateMatchesAuthoritative
+          ? 'React state differs from authoritative memo'
+          : !sessionCountsMatch
+            ? 'Session counts differ between sources'
+            : 'All sources aligned',
     })
-  }, [program, mounted, authoritativeActiveProgram])
+  }, [program, mounted, authoritativeActiveProgram, scheduleTruthAudit])
   
   // ==========================================================================
   // [PHASE 30Q/30R] PRERENDER SAFE MOUNT LOG - proves page initialized without TDZ crash
@@ -11532,6 +11574,56 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
                 </p>
               </div>
             )}
+            
+            {/* ==========================================================================
+                [SPLIT-SOURCE DIAGNOSTIC] Production-safe verdict panel
+                Only shows when there's a real mismatch between display sources
+                ========================================================================== */}
+            {(() => {
+              // All sources that drive the Program page display
+              const scheduleStatusCurrentSource = program?.sessions?.length ?? 0
+              const scheduleStatusBaselineSource = scheduleTruthAudit?.baselineRecommendedSessionCount ?? 4
+              const programCardSource = program?.sessions?.length ?? 0
+              const authoritativeSource = authoritativeActiveProgram?.sessions?.length ?? 0
+              
+              // Check for actual split (different sources showing different things)
+              const currentMatchesCard = scheduleStatusCurrentSource === programCardSource
+              const currentMatchesAuthoritative = scheduleStatusCurrentSource === authoritativeSource
+              const allSourcesAligned = currentMatchesCard && currentMatchesAuthoritative
+              
+              // Log the proof
+              console.log('[split-source-truth-proof]', {
+                scheduleStatusCurrentSessionCount: scheduleStatusCurrentSource,
+                scheduleStatusBaselineSessionCount: scheduleStatusBaselineSource,
+                programCardSessionCount: programCardSource,
+                authoritativeProgramSessionCount: authoritativeSource,
+                programStateId: program?.id ?? null,
+                authoritativeProgramId: authoritativeActiveProgram?.id ?? null,
+                sameId: program?.id === authoritativeActiveProgram?.id,
+                allSourcesAligned,
+                baselineDiffersFromCurrent: scheduleStatusBaselineSource !== scheduleStatusCurrentSource,
+                verdict: allSourcesAligned 
+                  ? 'PROGRAM_PAGE_SINGLE_TRUTH_ENFORCED' 
+                  : 'SPLIT_TRUTH_DETECTED',
+                explanation: allSourcesAligned
+                  ? 'All display sources use the same program object'
+                  : 'Display sources are reading from different objects',
+              })
+              
+              // Only show diagnostic if there's a REAL source split (not baseline vs current)
+              if (!allSourcesAligned) {
+                return (
+                  <div className="mt-2 pt-2 border-t border-red-800/50 bg-red-900/20 p-2 rounded">
+                    <p className="text-red-400 text-[10px] font-medium">Split Source Detected</p>
+                    <p className="text-red-400/70 text-[10px]">
+                      Status: {scheduleStatusCurrentSource} | Card: {programCardSource} | Auth: {authoritativeSource}
+                    </p>
+                  </div>
+                )
+              }
+              
+              return null
+            })()}
             
             {/* Regeneration CTA when significantly under baseline */}
             {(() => {

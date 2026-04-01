@@ -42,6 +42,7 @@ export type TriggerSource =
   | 'onboarding'
   | 'main_build'
   | 'regenerate'
+  | 'rebuild'    // [ROOT-CAUSE-FIX] Added for "Rebuild From Current Settings" semantic clarity
   | 'modify'
   | 'restart'
   | 'unknown'

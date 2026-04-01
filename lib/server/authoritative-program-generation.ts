@@ -349,6 +349,85 @@ export async function executeAuthoritativeGeneration(
     markStage('truth_extraction_done')
     
     // ==========================================================================
+    // STAGE: Attach Generation Truth Snapshot
+    // This persists the actual canonical truth used at generation time
+    // ==========================================================================
+    markStage('truth_snapshot_attachment')
+    
+    const canonicalProfileTyped = canonicalProfileOverride as CanonicalProgrammingProfile
+    
+    program.generationTruthSnapshot = {
+      // Generation metadata
+      generatedAt: new Date().toISOString(),
+      generationIntent: request.generationIntent,
+      triggerSource: request.triggerSource,
+      isFreshBaselineBuild: request.isFreshBaselineBuild,
+      
+      // HIGH-PRIORITY: Training method preferences
+      trainingMethodPreferences: canonicalProfileTyped.trainingMethodPreferences || [],
+      sessionStylePreference: canonicalProfileTyped.sessionStylePreference || null,
+      
+      // HIGH-PRIORITY: Joint cautions
+      jointCautions: canonicalProfileTyped.jointCautions || [],
+      
+      // HIGH-PRIORITY: Flexibility goals
+      selectedFlexibility: canonicalProfileTyped.selectedFlexibility || [],
+      
+      // HIGH-PRIORITY: Weighted strength truth
+      weightedStrengthSnapshot: {
+        hasWeightedPullUp: !!(canonicalProfileTyped.weightedPullUp?.oneRepMax || canonicalProfileTyped.weightedPullUp?.addedWeight),
+        hasWeightedDip: !!(canonicalProfileTyped.weightedDip?.oneRepMax || canonicalProfileTyped.weightedDip?.addedWeight),
+        pullUp1RM: canonicalProfileTyped.weightedPullUp?.oneRepMax || null,
+        dip1RM: canonicalProfileTyped.weightedDip?.oneRepMax || null,
+        bodyweight: canonicalProfileTyped.bodyweight || null,
+        loadingEligible: !!(canonicalProfileTyped.weightedPullUp || canonicalProfileTyped.weightedDip),
+        dataSource: canonicalProfileTyped.weightedPullUp?.oneRepMax || canonicalProfileTyped.weightedDip?.oneRepMax 
+          ? 'current_benchmark' 
+          : canonicalProfileTyped.weightedPullUp || canonicalProfileTyped.weightedDip 
+            ? 'onboarding' 
+            : 'none',
+      },
+      
+      // MEDIUM-PRIORITY: Recovery and readiness
+      recoveryQuality: canonicalProfileTyped.recoveryQuality || null,
+      primaryLimitation: canonicalProfileTyped.primaryLimitation || null,
+      weakestArea: canonicalProfileTyped.weakestArea || null,
+      
+      // MEDIUM-PRIORITY: Skill benchmarks
+      skillBenchmarksUsed: {
+        plancheProgression: canonicalProfileTyped.plancheProgression || null,
+        frontLeverProgression: canonicalProfileTyped.frontLeverProgression || null,
+        backLeverProgression: canonicalProfileTyped.backLeverProgression || null,
+        handstandProgression: canonicalProfileTyped.handstandProgression || null,
+        muscleUpProgression: canonicalProfileTyped.muscleUpProgression || null,
+      },
+      
+      // Identity fields
+      primaryGoal: canonicalProfileTyped.primaryGoal || null,
+      secondaryGoal: canonicalProfileTyped.secondaryGoal || null,
+      selectedSkills: canonicalProfileTyped.selectedSkills || [],
+      selectedStrength: canonicalProfileTyped.selectedStrength || [],
+      experienceLevel: canonicalProfileTyped.experienceLevel || null,
+      scheduleMode: canonicalProfileTyped.scheduleMode || null,
+      trainingDaysPerWeek: canonicalProfileTyped.trainingDaysPerWeek || null,
+      sessionDurationMode: canonicalProfileTyped.sessionDurationMode || null,
+      sessionLengthMinutes: canonicalProfileTyped.sessionLengthMinutes || null,
+      equipment: canonicalProfileTyped.equipment || canonicalProfileTyped.equipmentAvailable || [],
+    }
+    
+    console.log('[authoritative-generation-truth-snapshot-attached]', {
+      generationIntent: request.generationIntent,
+      trainingMethodPreferences: program.generationTruthSnapshot.trainingMethodPreferences,
+      jointCautionsCount: program.generationTruthSnapshot.jointCautions.length,
+      selectedFlexibilityCount: program.generationTruthSnapshot.selectedFlexibility.length,
+      hasWeightedStrength: program.generationTruthSnapshot.weightedStrengthSnapshot.loadingEligible,
+      verdict: 'GENERATION_TRUTH_SNAPSHOT_PERSISTED',
+    })
+    
+    markStage('truth_snapshot_attached')
+
+    
+    // ==========================================================================
     // STAGE: Validate generated program
     // ==========================================================================
     markStage('validation_start')

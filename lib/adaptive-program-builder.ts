@@ -460,6 +460,66 @@ interface SessionCandidateValidation {
   primaryEmphasisSatisfied: boolean
   minimumExercisesMet: boolean
 }
+// =============================================================================
+// [AI-TRUTH-PERSISTENCE] GENERATION TRUTH SNAPSHOT TYPE
+// High-value fields persisted from canonical profile at generation time
+// =============================================================================
+
+export interface GenerationTruthSnapshot {
+  // Generation metadata
+  generatedAt: string
+  generationIntent: string  // 'onboarding_first_build' | 'fresh_main_build' | etc.
+  triggerSource: string     // 'onboarding' | 'main_build' | 'regenerate' | etc.
+  isFreshBaselineBuild: boolean
+  
+  // HIGH-PRIORITY: Training method preferences (most underexpressed field from audit)
+  trainingMethodPreferences: string[]  // ['straight_sets', 'supersets', 'circuits', 'density_blocks', etc.]
+  sessionStylePreference: string | null
+  
+  // HIGH-PRIORITY: Joint cautions (affects exercise filtering and risk management)
+  jointCautions: string[]
+  
+  // HIGH-PRIORITY: Flexibility goals (affects cooldown/mobility)
+  selectedFlexibility: string[]
+  
+  // HIGH-PRIORITY: Weighted strength truth (affects loading prescriptions)
+  weightedStrengthSnapshot: {
+    hasWeightedPullUp: boolean
+    hasWeightedDip: boolean
+    pullUp1RM: number | null        // kg or lbs
+    dip1RM: number | null
+    bodyweight: number | null
+    loadingEligible: boolean
+    dataSource: 'current_benchmark' | 'onboarding' | 'inferred' | 'none'
+  }
+  
+  // MEDIUM-PRIORITY: Recovery and readiness context
+  recoveryQuality: string | null    // 'poor' | 'moderate' | 'good' | 'excellent'
+  primaryLimitation: string | null
+  weakestArea: string | null
+  
+  // MEDIUM-PRIORITY: Skill benchmarks for progression
+  skillBenchmarksUsed: {
+    plancheProgression: string | null
+    frontLeverProgression: string | null
+    backLeverProgression: string | null
+    handstandProgression: string | null
+    muscleUpProgression: string | null
+  }
+  
+  // Identity fields (for completeness)
+  primaryGoal: string | null
+  secondaryGoal: string | null
+  selectedSkills: string[]
+  selectedStrength: string[]
+  experienceLevel: string | null
+  scheduleMode: string | null
+  trainingDaysPerWeek: number | null
+  sessionDurationMode: string | null
+  sessionLengthMinutes: number | null
+  equipment: string[]
+}
+
 
 function validateSessionCandidate(
   exercises: Array<{ exercise?: { name?: string; requiredEquipment?: string[] }; sets?: number; repsOrTime?: string }> | null | undefined,
@@ -1256,6 +1316,14 @@ exerciseExplanations?: {
     generatedAt: string
     triggerSource: 'onboarding' | 'main_build' | 'regenerate' | 'modify' | 'restart' | 'unknown'
   }
+  // ==========================================================================
+  // [AI-TRUTH-PERSISTENCE] Generation Truth Snapshot
+  // Persists the actual canonical truth used at generation time so that:
+  // 1. Programs retain their generation context across save/read/restart/rebuild
+  // 2. Truth fields that shape generation are preserved on the program
+  // 3. Future rebuilds can rehydrate authoritative truth without profile drift
+  // ==========================================================================
+  generationTruthSnapshot?: GenerationTruthSnapshot
 }
 
 // =============================================================================

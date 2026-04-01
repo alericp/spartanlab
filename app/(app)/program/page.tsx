@@ -5343,13 +5343,13 @@ export default function ProgramPage() {
         : 'MODIFY_SUBMIT_USING_AMBIENT_INPUTS_NO_SESSION',
     })
     
-    // [PHASE 24M] Unified architecture audit - Modify now uses same path as Onboarding/Restart
-    console.log('[phase24m-modify-unified-architecture-audit]', {
+    // [MODIFY-SUBMIT-FIX] Architecture audit - Modify routes through /api/program/regenerate
+    console.log('[modify-submit-architecture-audit]', {
       handler: 'handleGenerateFromModifyBuilder',
-      currentDispatchMethod: 'canonical_entry_direct_generation',  // [PHASE 24M]
-      usesDirectClientBuilderCall: true,  // [PHASE 24M] Now uses direct call
-      usesFetchToServerRoute: false,  // [PHASE 24M] No longer uses server route
-      usesBuildCanonicalGenerationEntry: true,  // [PHASE 24M] Uses canonical entry builder
+      dispatchMethod: '/api/program/regenerate',
+      usesServerRoute: true,
+      sameRouteAsHandleRegenerate: true,
+      passesIsFreshBaselineBuild: true,
       builderOrigin,
       inputsSnapshot: effectiveInputs ? {
         primaryGoal: effectiveInputs.primaryGoal,
@@ -5363,7 +5363,7 @@ export default function ProgramPage() {
         experienceLevel: effectiveInputs.experienceLevel,
         equipmentCount: effectiveInputs.equipment?.length ?? 0,
       } : null,
-      verdict: 'UNIFIED_CANONICAL_PATH_ACTIVE',
+      verdict: 'MODIFY_AUTHORITATIVE_SERVER_ROUTE_ACTIVE',
     })
     
     // Validate prerequisites
@@ -12329,8 +12329,38 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
                     : 'NO_BUILDER_SESSION_USING_PAGE_INPUTS',
                 })
                 
-                if (hasCurrentSessionInputs) {
-                  // [PHASE 26] Use ref.current which has the CURRENT user selections
+                // ==========================================================================
+                // [MODIFY-SUBMIT-FIX] HARD-SEPARATE MAIN BUILD VS MODIFY BUILD AT SUBMIT TIME
+                // This is the critical routing decision - modify-origin MUST go through the
+                // authoritative modify handler, NOT through handleGenerate.
+                // ==========================================================================
+                const isAuthoritativeModifySubmit = isLegacyModifyFlow && hasCurrentSessionInputs
+                const chosenSubmitHandler = isAuthoritativeModifySubmit 
+                  ? 'handleGenerateFromModifyBuilder' 
+                  : 'handleGenerate'
+                const chosenRouteClass = isAuthoritativeModifySubmit
+                  ? 'modify_authoritative_rebuild'
+                  : 'main_generation'
+                
+                console.log('[modify-submit-owner-proof]', {
+                  builderOrigin,
+                  modifyFlowState: isLegacyModifyFlow ? 'modify_start_new' : 'default',
+                  hasBuilderSessionInputsRef: hasCurrentSessionInputs,
+                  hasModifyBuilderEntryRef: !!modifyBuilderEntryRef?.current,
+                  isAuthoritativeModifySubmit,
+                  chosenSubmitHandler,
+                  chosenRouteClass,
+                  verdict: isAuthoritativeModifySubmit 
+                    ? 'MODIFY_ROUTED_TO_AUTHORITATIVE_HANDLER'
+                    : 'MAIN_GENERATION_PATH',
+                })
+                
+                if (isAuthoritativeModifySubmit) {
+                  // [MODIFY-SUBMIT-FIX] Route modify-origin submissions ONLY through the
+                  // dedicated authoritative modify handler which uses the server regenerate route
+                  handleGenerateFromModifyBuilder()
+                } else if (hasCurrentSessionInputs) {
+                  // Non-modify builder session (shouldn't happen normally, but handle it)
                   handleGenerate(currentBuilderSessionInputs)
                 } else {
                   // Onboarding/default flow: use page inputs (no overrides)
@@ -12357,7 +12387,7 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
                   : `PREFILL_IS_STATIC_${effectiveBuilderInputs?.trainingDaysPerWeek}_DAYS`,
               })
               
-              console.log('[phase25-unified-builder-render-audit]', {
+              console.log('[modify-submit-fix-builder-render-audit]', {
                 builderOrigin,
                 isLegacyModifyFlow,
                 hasBuilderSessionInputs,
@@ -12373,11 +12403,11 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
                   experienceLevel: effectiveBuilderInputs.experienceLevel,
                   equipmentCount: effectiveBuilderInputs.equipment?.length ?? 0,
                 } : null,
-                submitHandler: 'handleGenerate_unified',
-                submitPath: hasBuilderSessionInputs 
-                  ? 'CANONICAL_MODIFY_OR_LEGACY_MODIFY_PATH' 
-                  : 'ONBOARDING_PATH',
-                verdict: 'PHASE25_UNIFIED_SUBMIT_PATH_ACTIVE',
+                submitHandler: isLegacyModifyFlow ? 'handleGenerateFromModifyBuilder' : 'handleGenerate',
+                submitRouteClass: isLegacyModifyFlow ? 'modify_authoritative_rebuild' : 'main_generation',
+                verdict: isLegacyModifyFlow 
+                  ? 'MODIFY_WILL_ROUTE_TO_AUTHORITATIVE_HANDLER'
+                  : 'MAIN_GENERATION_PATH',
               })
               
               return (

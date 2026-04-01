@@ -3909,7 +3909,7 @@ export default function ProgramPage() {
         
   // [program-build] STAGE 2: Generate program
   generationStage = 'generating'
-  console.log('[program-build] STAGE 2: Calling generateAdaptiveProgram...')
+  console.log('[program-build] STAGE 2: Calling authoritative server generation...')
   
   // [PHASE 16S] Dispatch verdict - marking actual builder call
   const mainGenerationAttemptId = `attempt_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
@@ -3918,34 +3918,83 @@ export default function ProgramPage() {
     attemptId: mainGenerationAttemptId,
     runtimeSessionId: runtimeSessionIdRef.current,
     requestDispatched: true,
-    dispatchMethod: 'generateAdaptiveProgram',
+    dispatchMethod: '/api/program/generate-fresh',
     dispatchTimestamp: new Date().toISOString(),
-    verdict: 'dispatch_executing',
+    verdict: 'dispatch_via_authoritative_server_route',
   })
   
   // ==========================================================================
-  // [FLOW-PARITY-FIX] FRESH MAIN BUILD: Pass isFreshBaselineBuild flag
-  // This ensures main builds use the same baseline contract as onboarding,
-  // without applying recentWorkoutCount penalties that reduce the session count.
-  // For modify flow, we still apply adaptive modifiers since that's intentional.
+  // [AUTHORITATIVE-GENERATION-OWNER] FRESH MAIN BUILD via Server Route
+  // ALL generation now routes through the single authoritative server pipeline.
+  // This ensures consistent truth normalization, builder contract, and 
+  // truth explanation attachment across all flows.
   // ==========================================================================
   const isFreshMainBuild = !isModifyFlow
-  console.log('[flow-parity-audit][main-build-dispatch]', {
+  console.log('[authoritative-generation-dispatch]', {
     isFreshMainBuild,
     isModifyFlow,
     scheduleModeAtDispatch: generationInputs?.scheduleMode,
-    verdict: isFreshMainBuild 
-      ? 'FRESH_MAIN_BUILD_USING_BASELINE_CONTRACT'
-      : 'MODIFY_FLOW_USING_ADAPTIVE_CONTRACT',
+    route: '/api/program/generate-fresh',
+    verdict: 'ROUTING_TO_AUTHORITATIVE_SERVER_GENERATION',
   })
   
-  // [PHASE 16N] FIX: Await the async builder - it returns Promise<AdaptiveProgram>
-  // [FLOW-PARITY-FIX] Pass isFreshBaselineBuild: true for fresh main builds
-  const newProgram = await programModules.generateAdaptiveProgram(
-    generationInputs,
-    undefined,  // onStageChange callback
-    { isFreshBaselineBuild: isFreshMainBuild }  // serverOptions
-  )
+  // Build canonical profile from entry result for server route
+  const canonicalProfile = {
+    primaryGoal: entryResult.entry?.primaryGoal,
+    secondaryGoal: entryResult.entry?.secondaryGoal,
+    scheduleMode: entryResult.entry?.scheduleMode,
+    sessionDurationMode: entryResult.entry?.sessionDurationMode,
+    trainingDaysPerWeek: entryResult.entry?.trainingDaysPerWeek,
+    sessionLengthMinutes: entryResult.entry?.sessionLength,
+    selectedSkills: entryResult.entry?.selectedSkills || [],
+    selectedFlexibility: entryResult.entry?.selectedFlexibility || [],
+    selectedStrength: entryResult.entry?.selectedStrength || [],
+    goalCategories: entryResult.entry?.goalCategories || [],
+    trainingPathType: entryResult.entry?.trainingPathType,
+    experienceLevel: entryResult.entry?.experienceLevel,
+    equipment: entryResult.entry?.equipment || [],
+    equipmentAvailable: entryResult.entry?.equipment || [],
+    bodyweight: entryResult.entry?.bodyweight,
+    sex: entryResult.entry?.sex,
+    onboardingComplete: true,
+  }
+  
+  // Call authoritative server route instead of direct builder
+  const serverResponse = await fetch('/api/program/generate-fresh', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      canonicalProfile,
+      builderInputs: generationInputs,
+      existingProgramId: program?.id,
+    }),
+  })
+  
+  const serverResult = await serverResponse.json()
+  
+  if (!serverResponse.ok || !serverResult.success) {
+    console.error('[authoritative-generation-server-error]', {
+      status: serverResponse.status,
+      error: serverResult.error,
+      failedStage: serverResult.failedStage,
+    })
+    throw new ProgramPageValidationError(
+      'orchestration_failed',
+      generationStage,
+      'server_generation_failed',
+      serverResult.error || 'Server generation failed',
+      { failedStage: serverResult.failedStage }
+    )
+  }
+  
+  // Extract program from server result
+  const newProgram = serverResult.program as AdaptiveProgram
+  
+  console.log('[authoritative-generation-server-success]', {
+    parityVerdict: serverResult.parityVerdict?.verdict,
+    sessionCount: serverResult.summary?.sessionCount,
+    primaryGoal: serverResult.summary?.primaryGoal,
+  })
   
   // [PHASE 16N] Verify we received resolved program, not Promise
   console.log('[phase16n-program-page-builder-result-audit]', {

@@ -2,78 +2,56 @@ import { NextResponse } from 'next/server'
 import { getSession, getCurrentUserServer } from '@/lib/auth-service-server'
 import { resolveCanonicalDbUserId } from '@/lib/subscription-service'
 import { getCanonicalProfile } from '@/lib/canonical-profile-service'
-import { attachTruthExplanation, extractProgramTruth, logMaterialInputPresence } from '@/lib/program-truth-extractor'
+import { executeAuthoritativeGeneration, logGenerationParityTable, type AuthoritativeGenerationRequest } from '@/lib/server/authoritative-program-generation'
 
 export const dynamic = 'force-dynamic'
-export const maxDuration = 30 // Allow up to 30 seconds for generation
+export const maxDuration = 30
 
 /**
- * [PHASE 18E] Server-Side Adjustment Rebuild Route
+ * ==========================================================================
+ * REBUILD ADJUSTMENT ROUTE - THIN ADAPTER
+ * ==========================================================================
  * 
- * This endpoint mirrors the working onboarding generation architecture:
- * 1. Receives THIN adjustment request from client (not full client-built object)
- * 2. Resolves canonical truth on SERVER (not trusting client state)
- * 3. Constructs server-side canonicalProfileOverride
- * 4. Calls generateAdaptiveProgram with the override
- * 5. Returns the generated program
+ * This route is now a THIN ADAPTER to the authoritative generation service.
+ * It only:
+ * 1. Validates the request
+ * 2. Resolves authentication
+ * 3. Resolves canonical profile (server + client fallback)
+ * 4. Applies thin adjustments to canonical profile
+ * 5. Maps request to AuthoritativeGenerationRequest
+ * 6. Calls executeAuthoritativeGeneration
+ * 7. Returns the result
  * 
- * This fixes the architectural divergence where the adjustment modal rebuild
- * was using client-side builder orchestration while onboarding used server-side.
+ * ALL generation logic lives in lib/server/authoritative-program-generation.ts
+ * ==========================================================================
  */
-
-interface StageTimings {
-  [key: string]: number
-}
 
 export async function POST(request: Request) {
   const routeStartTime = Date.now()
-  const timings: StageTimings = {}
-  let currentStage = 'route_entry'
   
-  const markStage = (stage: string) => {
-    const elapsed = Date.now() - routeStartTime
-    timings[currentStage] = elapsed
-    currentStage = stage
-    console.log(`[phase18e-server-adjustment-stage] ${stage} at ${elapsed}ms`)
-  }
-  
-  // [PHASE 18E] Route entry audit - proves this is the same architecture as onboarding
-  console.log('[phase18e-adjustment-modal-dispatch-proof]', {
+  console.log('[rebuild-adjustment-route-thin-adapter-entry]', {
     timestamp: new Date().toISOString(),
     route: '/api/program/rebuild-adjustment',
-    architectureClass: 'server_side_generation',
-    mirrorsOnboardingRoute: true,
-    previousProblem: 'restart_modal_rebuild_used_handleAdjustmentRebuild_which_was_direct_client_builder_call',
-    fixApplied: 'adjustment_modal_now_dispatches_to_server_route',
+    adapterType: 'thin_adapter_to_authoritative_service',
   })
   
   try {
     // ==========================================================================
-    // STAGE: Authentication
+    // STEP 1: Authentication
     // ==========================================================================
-    markStage('auth_start')
     const { userId: authUserId } = await getSession()
     
     if (!authUserId) {
-      console.log('[phase18e-server-adjustment-failure]', {
-        failedStage: 'auth',
-        reason: 'unauthorized',
-        elapsedMs: Date.now() - routeStartTime,
-      })
       return NextResponse.json({
         success: false,
         error: 'Unauthorized',
         failedStage: 'auth',
-        timings,
       }, { status: 401 })
     }
     
-    markStage('auth_verified')
-    
     // ==========================================================================
-    // STAGE: Resolve canonical DB user ID
+    // STEP 2: Resolve DB User ID
     // ==========================================================================
-    markStage('db_user_resolution_start')
     const currentUser = await getCurrentUserServer()
     const { dbUserId, error: userResolutionError } = await resolveCanonicalDbUserId(
       authUserId,
@@ -82,25 +60,16 @@ export async function POST(request: Request) {
     )
     
     if (!dbUserId) {
-      console.log('[phase18e-server-adjustment-failure]', {
-        failedStage: 'db_user_resolution',
-        reason: userResolutionError,
-        elapsedMs: Date.now() - routeStartTime,
-      })
       return NextResponse.json({
         success: false,
         error: 'Failed to resolve user identity',
         failedStage: 'db_user_resolution',
-        timings,
       }, { status: 500 })
     }
     
-    markStage('db_user_resolved')
-    
     // ==========================================================================
-    // STAGE: Parse THIN request body (not trusting full client-built objects)
+    // STEP 3: Parse Request Body
     // ==========================================================================
-    markStage('parse_request_start')
     const body = await request.json()
     const { 
       requestType,
@@ -108,53 +77,23 @@ export async function POST(request: Request) {
       newSessionMinutes,
       newEquipment,
       currentProgramId,
-      // Client may pass its view of canonical, but we don't trust it as primary source
       clientCanonicalSnapshot,
     } = body
     
     if (!requestType) {
-      console.log('[phase18e-server-adjustment-failure]', {
-        failedStage: 'parse_request',
-        reason: 'missing_request_type',
-        elapsedMs: Date.now() - routeStartTime,
-      })
       return NextResponse.json({
         success: false,
         error: 'Missing adjustment request type',
         failedStage: 'parse_request',
-        timings,
       }, { status: 400 })
     }
     
-    markStage('request_parsed')
-    
     // ==========================================================================
-    // [PHASE 18E] STAGE: Resolve canonical truth on SERVER
-    // This is the KEY architectural fix - resolve truth on server, not client
+    // STEP 4: Resolve Canonical Profile with Material Validity Check
+    // Server canonical may be incomplete, so we check for material identity
     // ==========================================================================
-    markStage('server_canonical_resolution_start')
-    
-    // [PHASE 18E] Server resolves canonical profile fresh
-    // This is what the onboarding route does - it doesn't trust client-passed state
     const serverCanonicalProfile = await getCanonicalProfile()
     
-    // ==========================================================================
-    // [PHASE 18J] CRITICAL FIX: Server canonical validity check
-    // 
-    // ROOT CAUSE FOUND: getCanonicalProfile() calls browser-only localStorage functions:
-    // - getOnboardingProfile() returns null when typeof window === 'undefined'
-    // - getAthleteProfile() returns null when !isBrowser()
-    // 
-    // On the server, BOTH return null, so reconcileCanonicalProfile() returns a
-    // TRUTHY object with only fallback defaults (experienceLevel: 'beginner', etc.)
-    // 
-    // This truthy-but-incomplete object was WRONGLY outranking the richer client snapshot!
-    // 
-    // FIX: Check if server canonical has MATERIAL identity (real user data, not fallbacks)
-    // If server canonical is incomplete, prefer the richer client snapshot instead.
-    // ==========================================================================
-    
-    // [PHASE 18J] Material validity check - does server canonical have real user data?
     const serverHasMaterialIdentity = !!(
       serverCanonicalProfile?.primaryGoal && 
       (serverCanonicalProfile?.selectedSkills?.length > 0 || serverCanonicalProfile?.trainingPathType)
@@ -165,114 +104,36 @@ export async function POST(request: Request) {
       (clientCanonicalSnapshot?.selectedSkills?.length > 0 || clientCanonicalSnapshot?.trainingPathType)
     )
     
-    // [PHASE 18J] Audit showing server-resolved vs client-passed with validity verdicts
-    console.log('[phase18j-server-canonical-validity-audit]', {
-      serverResolvedCanonical: {
-        primaryGoal: serverCanonicalProfile?.primaryGoal ?? null,
-        secondaryGoal: serverCanonicalProfile?.secondaryGoal ?? null,
-        scheduleMode: serverCanonicalProfile?.scheduleMode ?? null,
-        trainingDaysPerWeek: serverCanonicalProfile?.trainingDaysPerWeek ?? null,
-        sessionLengthMinutes: serverCanonicalProfile?.sessionLengthMinutes ?? null,
-        selectedSkills: serverCanonicalProfile?.selectedSkills ?? [],
-        trainingPathType: serverCanonicalProfile?.trainingPathType ?? null,
-        experienceLevel: serverCanonicalProfile?.experienceLevel ?? null,
-        goalCategories: serverCanonicalProfile?.goalCategories ?? [],
-        selectedFlexibility: serverCanonicalProfile?.selectedFlexibility ?? [],
-      },
-      clientPassedCanonical: {
-        primaryGoal: clientCanonicalSnapshot?.primaryGoal ?? null,
-        secondaryGoal: clientCanonicalSnapshot?.secondaryGoal ?? null,
-        scheduleMode: clientCanonicalSnapshot?.scheduleMode ?? null,
-        trainingDaysPerWeek: clientCanonicalSnapshot?.trainingDaysPerWeek ?? null,
-        sessionLengthMinutes: clientCanonicalSnapshot?.sessionLengthMinutes ?? null,
-        selectedSkills: clientCanonicalSnapshot?.selectedSkills ?? [],
-        trainingPathType: clientCanonicalSnapshot?.trainingPathType ?? null,
-        experienceLevel: clientCanonicalSnapshot?.experienceLevel ?? null,
-        goalCategories: clientCanonicalSnapshot?.goalCategories ?? [],
-        selectedFlexibility: clientCanonicalSnapshot?.selectedFlexibility ?? [],
-      },
-      validityChecks: {
-        serverHasMaterialIdentity,
-        clientHasMaterialIdentity,
-      },
-    })
-    
-    // [PHASE 18J] CRITICAL: Choose canonical base with material validity gating
-    // DO NOT blindly trust server canonical just because it's truthy
-    // Server canonical is built from browser-only localStorage which is EMPTY on server!
+    // Choose the canonical base with the best material identity
     let canonicalBase: typeof serverCanonicalProfile
-    let canonicalSourceWinner: string
-    
     if (serverHasMaterialIdentity) {
-      // Server canonical has real user data - use it
       canonicalBase = serverCanonicalProfile
-      canonicalSourceWinner = 'server_canonical_valid_wins'
     } else if (clientHasMaterialIdentity) {
-      // Server canonical is incomplete, but client has real data - use client
       canonicalBase = clientCanonicalSnapshot
-      canonicalSourceWinner = 'client_snapshot_wins_because_server_canonical_incomplete'
     } else {
-      // Both incomplete - use whatever we have, but warn
       canonicalBase = clientCanonicalSnapshot || serverCanonicalProfile || {}
-      canonicalSourceWinner = 'both_incomplete_using_best_available'
-      console.warn('[phase18j-canonical-degraded-truth-warning]', {
-        warning: 'Neither server canonical nor client snapshot has material identity',
-        serverHasMaterialIdentity,
-        clientHasMaterialIdentity,
-        usingSource: canonicalBase === clientCanonicalSnapshot ? 'client' : 'server',
-      })
     }
     
-    console.log('[phase18j-canonical-base-selection-audit]', {
-      canonicalSourceWinner,
-      selectedBase: {
-        primaryGoal: canonicalBase?.primaryGoal ?? null,
-        selectedSkills: canonicalBase?.selectedSkills ?? [],
-        trainingPathType: canonicalBase?.trainingPathType ?? null,
-        experienceLevel: canonicalBase?.experienceLevel ?? null,
-      },
-    })
-    
-    console.log('[phase18j-server-canonical-material-validity-verdict]', {
-      serverCanonicalTruthy: !!serverCanonicalProfile,
+    console.log('[rebuild-adjustment-canonical-resolution]', {
       serverHasMaterialIdentity,
       clientHasMaterialIdentity,
-      verdict: serverHasMaterialIdentity 
-        ? 'SERVER_CANONICAL_VALID_FOR_ROUTE_TRUTH'
-        : clientHasMaterialIdentity
-          ? 'SERVER_CANONICAL_INCOMPLETE__CLIENT_SNAPSHOT_USED'
-          : 'BOTH_SOURCES_INCOMPLETE__DEGRADED_TRUTH',
+      canonicalBaseSource: serverHasMaterialIdentity ? 'server' : clientHasMaterialIdentity ? 'client' : 'best_available',
+      primaryGoal: canonicalBase?.primaryGoal,
     })
     
-    markStage('server_canonical_resolved')
-    
     // ==========================================================================
-    // [PHASE 18E] STAGE: Build canonical profile override on SERVER
-    // Apply ONLY the thin request override to server-resolved canonical
+    // STEP 5: Build Canonical Profile with Thin Adjustments Applied
     // ==========================================================================
-    markStage('canonical_profile_construction_start')
-    
-    // [PHASE 18E] Server-constructed canonicalProfileOverride
-    // Key principle: only override what the thin request explicitly changed
-    const canonicalProfileOverride = {
-      // [PHASE 18E] Required ProfileSnapshot fields
-      snapshotId: `server-adj-${Date.now()}`,
-      createdAt: new Date().toISOString(),
-      
-      // Identity - preserve from server canonical
+    const canonicalProfile = {
       onboardingComplete: canonicalBase.onboardingComplete ?? true,
-      
-      // Goals - PRESERVE from server canonical (not from stale client)
       primaryGoal: canonicalBase.primaryGoal,
       secondaryGoal: canonicalBase.secondaryGoal ?? null,
       goalCategory: canonicalBase.goalCategory || canonicalBase.primaryGoal,
-      
-      // Training selections (CRITICAL: these must come from server canonical)
       selectedSkills: canonicalBase.selectedSkills || [],
       selectedFlexibility: canonicalBase.selectedFlexibility || [],
       selectedStrength: canonicalBase.selectedStrength || [],
       goalCategories: canonicalBase.goalCategories || [],
-      
+      trainingPathType: canonicalBase.trainingPathType || 'hybrid',
       // Equipment - only override if request type is equipment
       equipment: requestType === 'equipment' && newEquipment 
         ? newEquipment 
@@ -280,438 +141,136 @@ export async function POST(request: Request) {
       equipmentAvailable: requestType === 'equipment' && newEquipment 
         ? newEquipment 
         : canonicalBase.equipmentAvailable || canonicalBase.equipment || [],
-      
-      // Schedule truth - only override trainingDaysPerWeek if request type is training_days
-      scheduleMode: canonicalBase.scheduleMode || 'static',
-      sessionDurationMode: canonicalBase.sessionDurationMode || 'static',
+      scheduleMode: canonicalBase.scheduleMode || 'flexible',
+      sessionDurationMode: canonicalBase.sessionDurationMode || 'adaptive',
+      // Schedule - only override if request type matches
       trainingDaysPerWeek: requestType === 'training_days' && newTrainingDays !== undefined
         ? newTrainingDays
-        : canonicalBase.trainingDaysPerWeek ?? 3,
+        : canonicalBase.trainingDaysPerWeek ?? 4,
       sessionLengthMinutes: requestType === 'session_time' && newSessionMinutes !== undefined
         ? newSessionMinutes
         : canonicalBase.sessionLengthMinutes ?? 45,
-      
-      // Profile data - preserve from server canonical
       experienceLevel: canonicalBase.experienceLevel || 'intermediate',
-      trainingPathType: canonicalBase.trainingPathType || 'hybrid',
       bodyweight: canonicalBase.bodyweight,
       sex: canonicalBase.sex,
-      
-      // Optional fields
       trainingStyle: canonicalBase.trainingStyle,
       jointCautions: canonicalBase.jointCautions || [],
       weakestArea: canonicalBase.weakestArea,
-      
-      // Benchmark data
       benchmarks: canonicalBase.benchmarks || {},
       skillBenchmarks: canonicalBase.skillBenchmarks || {},
       flexibilityBenchmarks: canonicalBase.flexibilityBenchmarks || {},
       weightedBenchmarks: canonicalBase.weightedBenchmarks || {},
+      trainingMethodPreferences: canonicalBase.trainingMethodPreferences,
+      sessionStylePreference: canonicalBase.sessionStylePreference,
+      plancheProgression: canonicalBase.plancheProgression,
+      frontLeverProgression: canonicalBase.frontLeverProgression,
+      backLeverProgression: canonicalBase.backLeverProgression,
+      muscleUpProgression: canonicalBase.muscleUpProgression,
+      handstandProgression: canonicalBase.handstandProgression,
+      weightedPullUp: canonicalBase.weightedPullUp,
+      weightedDip: canonicalBase.weightedDip,
     }
     
-    // [PHASE 18E] TASK 8B - Server truth audit
-    console.log('[phase18e-adjustment-server-truth-audit]', {
-      triggerPath: 'server_adjustment_rebuild_route',
-      requestType,
-      thinRequestReceived: {
-        newTrainingDays: newTrainingDays ?? null,
-        newSessionMinutes: newSessionMinutes ?? null,
-        newEquipment: newEquipment ?? null,
-      },
-      finalCanonicalOverrideFields: {
-        primaryGoal: canonicalProfileOverride.primaryGoal,
-        secondaryGoal: canonicalProfileOverride.secondaryGoal,
-        scheduleMode: canonicalProfileOverride.scheduleMode,
-        trainingDaysPerWeek: canonicalProfileOverride.trainingDaysPerWeek,
-        sessionDurationMode: canonicalProfileOverride.sessionDurationMode,
-        sessionLengthMinutes: canonicalProfileOverride.sessionLengthMinutes,
-        selectedSkills: canonicalProfileOverride.selectedSkills,
-        trainingPathType: canonicalProfileOverride.trainingPathType,
-        equipment: canonicalProfileOverride.equipment,
-        goalCategories: canonicalProfileOverride.goalCategories,
-        selectedFlexibility: canonicalProfileOverride.selectedFlexibility,
-        experienceLevel: canonicalProfileOverride.experienceLevel,
-      },
-      canonicalOverrideWasBuilt: true,
-      verdict: 'server_adjustment_truth_resolved',
-    })
-    
-    markStage('canonical_profile_constructed')
+    // ==========================================================================
+    // STEP 6: Build Builder Inputs from Canonical Profile
+    // ==========================================================================
+    const builderInputs = {
+      primaryGoal: canonicalProfile.primaryGoal,
+      secondaryGoal: canonicalProfile.secondaryGoal,
+      selectedSkills: canonicalProfile.selectedSkills,
+      trainingPathType: canonicalProfile.trainingPathType,
+      goalCategories: canonicalProfile.goalCategories,
+      selectedFlexibility: canonicalProfile.selectedFlexibility,
+      selectedStrength: canonicalProfile.selectedStrength,
+      experienceLevel: canonicalProfile.experienceLevel,
+      scheduleMode: canonicalProfile.scheduleMode,
+      trainingDaysPerWeek: canonicalProfile.trainingDaysPerWeek,
+      sessionDurationMode: canonicalProfile.sessionDurationMode,
+      sessionLength: canonicalProfile.sessionLengthMinutes,
+      equipment: canonicalProfile.equipment,
+      bodyweight: canonicalProfile.bodyweight,
+      sex: canonicalProfile.sex,
+      trainingStyle: canonicalProfile.trainingStyle,
+      jointCautions: canonicalProfile.jointCautions,
+      weakestArea: canonicalProfile.weakestArea,
+      benchmarks: canonicalProfile.benchmarks,
+      skillBenchmarks: canonicalProfile.skillBenchmarks,
+      flexibilityBenchmarks: canonicalProfile.flexibilityBenchmarks,
+      weightedBenchmarks: canonicalProfile.weightedBenchmarks,
+    }
     
     // ==========================================================================
-    // STAGE: Dynamic import of generation service
+    // STEP 7: Build Authoritative Generation Request
     // ==========================================================================
-    markStage('generation_service_import_start')
-    
-    const { generateAdaptiveProgram } = await import('@/lib/adaptive-program-builder')
-    
-    markStage('generation_service_start')
-    
-    // ==========================================================================
-    // [PHASE 18K] STAGE: Build normalized program inputs for builder
-    // 
-    // CRITICAL FIX: The adjustment route was passing a NARROWED builderInput
-    // while onboarding/regenerate routes pass the FULL input contract.
-    // 
-    // The builder reads from `inputs` for many planner decisions (lines 1530, 2033,
-    // 2096, 2097, 3041-3048 in adaptive-program-builder.ts), so a narrowed input
-    // can cause identity collapse even when canonicalProfileOverride is complete.
-    // 
-    // FIX: Pass the FULL input contract matching onboarding/regenerate routes.
-    // ==========================================================================
-    const builderInput = {
-      // Core identity from server canonical (MATCHING onboarding/regenerate)
-      primaryGoal: canonicalProfileOverride.primaryGoal,
-      secondaryGoal: canonicalProfileOverride.secondaryGoal,
-      selectedSkills: canonicalProfileOverride.selectedSkills,
-      trainingPathType: canonicalProfileOverride.trainingPathType,
-      goalCategories: canonicalProfileOverride.goalCategories,
-      selectedFlexibility: canonicalProfileOverride.selectedFlexibility,
-      selectedStrength: canonicalProfileOverride.selectedStrength || [], // [PHASE 18K] WAS MISSING
-      experienceLevel: canonicalProfileOverride.experienceLevel,
-      
-      // Schedule from override (with thin request applied)
-      scheduleMode: canonicalProfileOverride.scheduleMode,
-      trainingDaysPerWeek: canonicalProfileOverride.trainingDaysPerWeek,
-      sessionDurationMode: canonicalProfileOverride.sessionDurationMode,
-      sessionLength: canonicalProfileOverride.sessionLengthMinutes,
-      
-      // Equipment from override (with thin request applied)
-      equipment: canonicalProfileOverride.equipment,
-      
-      // Profile data (MATCHING onboarding/regenerate) - [PHASE 18K] THESE WERE MISSING
-      bodyweight: canonicalProfileOverride.bodyweight,
-      sex: canonicalProfileOverride.sex,
-      trainingStyle: canonicalProfileOverride.trainingStyle,
-      jointCautions: canonicalProfileOverride.jointCautions || [],
-      weakestArea: canonicalProfileOverride.weakestArea,
-      
-      // Benchmark data (MATCHING onboarding/regenerate) - [PHASE 18K] THESE WERE MISSING
-      benchmarks: canonicalProfileOverride.benchmarks || {},
-      skillBenchmarks: canonicalProfileOverride.skillBenchmarks || {},
-      flexibilityBenchmarks: canonicalProfileOverride.flexibilityBenchmarks || {},
-      weightedBenchmarks: canonicalProfileOverride.weightedBenchmarks || {},
-      
-      // Regeneration metadata
-      regenerationMode: 'fresh' as const,
+    const generationRequest: AuthoritativeGenerationRequest = {
+      dbUserId,
+      generationIntent: 'rebuild_current',
+      triggerSource: 'modify',
+      canonicalProfile,
+      builderInputs,
+      existingProgramId: currentProgramId,
+      isFreshBaselineBuild: false,  // Rebuild is NOT a fresh baseline
+      preserveHistory: true,
+      archiveCurrentProgram: false,
       regenerationReason: `adjustment_rebuild_${requestType}`,
     }
     
-    // [PHASE 18K] TASK 1 - Builder entry shape audit
-    console.log('[phase18k-adjustment-builder-entry-shape-audit]', {
-      route: '/api/program/rebuild-adjustment',
-      builderInputKeys: Object.keys(builderInput),
-      builderInputKeyCount: Object.keys(builderInput).length,
-      comparisonToWorkingPaths: {
-        onboardingPassesProgramInputsDirectly: true,
-        regeneratePassesProgramInputsWithRegenMetadata: true,
-        adjustmentNowPassesFullContract: true,
-      },
-      materialIdentityInFirstArg: {
-        primaryGoal: builderInput.primaryGoal,
-        secondaryGoal: builderInput.secondaryGoal,
-        selectedSkillsCount: builderInput.selectedSkills?.length || 0,
-        selectedFlexibilityCount: builderInput.selectedFlexibility?.length || 0,
-        selectedStrengthCount: builderInput.selectedStrength?.length || 0,
-        trainingPathType: builderInput.trainingPathType,
-        goalCategoriesCount: builderInput.goalCategories?.length || 0,
-        experienceLevel: builderInput.experienceLevel,
-      },
-      previouslyMissingFieldsNowIncluded: [
-        'selectedStrength',
-        'sex',
-        'trainingStyle',
-        'jointCautions',
-        'weakestArea',
-        'benchmarks',
-        'skillBenchmarks',
-        'flexibilityBenchmarks',
-        'weightedBenchmarks',
-      ],
-    })
-    
-    // [PHASE 18K] TASK 5 - First arg vs override parity audit
-    console.log('[phase18k-adjustment-first-arg-vs-override-parity-verdict]', {
-      primaryGoalMatch: builderInput.primaryGoal === canonicalProfileOverride.primaryGoal,
-      selectedSkillsMatch: builderInput.selectedSkills === canonicalProfileOverride.selectedSkills,
-      trainingPathTypeMatch: builderInput.trainingPathType === canonicalProfileOverride.trainingPathType,
-      goalCategoriesMatch: builderInput.goalCategories === canonicalProfileOverride.goalCategories,
-      selectedFlexibilityMatch: builderInput.selectedFlexibility === canonicalProfileOverride.selectedFlexibility,
-      selectedStrengthMatch: builderInput.selectedStrength === (canonicalProfileOverride.selectedStrength || []),
-      experienceLevelMatch: builderInput.experienceLevel === canonicalProfileOverride.experienceLevel,
-      scheduleModeMatch: builderInput.scheduleMode === canonicalProfileOverride.scheduleMode,
-      trainingDaysMatch: builderInput.trainingDaysPerWeek === canonicalProfileOverride.trainingDaysPerWeek,
-      equipmentMatch: builderInput.equipment === canonicalProfileOverride.equipment,
-      verdict: 'FIRST_ARG_AND_OVERRIDE_NOW_AGREE_ON_ALL_MATERIAL_FIELDS',
-    })
-    
-    // ==========================================================================
-    // STAGE: Run generation with server-constructed override
-    // ==========================================================================
-    markStage('builder_entry')
-    
-    const serverStageCallback = (stage: string) => {
-      console.log(`[phase18e-server-adjustment-builder-stage] ${stage} at ${Date.now() - routeStartTime}ms`)
-    }
-    
-    let program
-    try {
-      // [PHASE 18E] Pass server-constructed canonicalProfileOverride
-      // This mirrors exactly what the working onboarding route does
-      program = await generateAdaptiveProgram(builderInput, serverStageCallback, {
-        canonicalProfileOverride,
-      })
-    } catch (builderError) {
-      console.log('[phase18e-server-adjustment-failure]', {
-        failedStage: 'builder_execution',
-        reason: String(builderError),
-        elapsedMs: Date.now() - routeStartTime,
-      })
-      return NextResponse.json({
-        success: false,
-        error: `Builder failed: ${String(builderError)}`,
-        failedStage: 'builder_execution',
-        timings,
-      }, { status: 500 })
-    }
-    
-    markStage('builder_done')
-    
-    // ==========================================================================
-    // [AI-TRUTH-ALIGNMENT] STAGE: Extract and attach truth explanation
-    // ==========================================================================
-    markStage('truth_extraction_start')
-    
-    // Extract truth from the inputs used
-    const truthExtraction = extractProgramTruth(canonicalProfileOverride, builderInput, 'modify')
-    logMaterialInputPresence(truthExtraction.truthContext.materialInputPresence)
-    
-    // Attach truth explanation to the program
-    program = attachTruthExplanation(program, canonicalProfileOverride, 'modify')
-    
-    console.log('[ai-truth-alignment-rebuild-adjustment]', {
-      triggerSource: 'modify',
+    console.log('[rebuild-adjustment-route-dispatching-to-authoritative-service]', {
+      generationIntent: generationRequest.generationIntent,
+      triggerSource: generationRequest.triggerSource,
       requestType,
-      truthExtractionVerdict: truthExtraction.truthContext.verdict,
-      presentCount: truthExtraction.truthContext.presentCount,
-      defaultedCount: truthExtraction.truthContext.defaultedCount,
-      missingCount: truthExtraction.truthContext.missingCount,
-      explanationQuality: program.truthExplanation?.explanationQualityVerdict || 'unknown',
-      hiddenFactorCount: program.truthExplanation?.hiddenTruthNotSurfaced?.length || 0,
-    })
-    
-    markStage('truth_extraction_done')
-    
-    // ==========================================================================
-    // STAGE: Validate generated program
-    // ==========================================================================
-    markStage('validation_start')
-    
-    if (!program || !Array.isArray(program.sessions) || program.sessions.length === 0) {
-      console.log('[phase18e-server-adjustment-failure]', {
-        failedStage: 'validation',
-        reason: 'program_invalid_or_empty',
-        elapsedMs: Date.now() - routeStartTime,
-      })
-      return NextResponse.json({
-        success: false,
-        error: 'Generated program is invalid or has no sessions',
-        failedStage: 'validation',
-        timings,
-      }, { status: 500 })
-    }
-    
-    markStage('validation_done')
-    
-    // [PHASE 18E] TASK 8C - Server result audit
-    console.log('[phase18e-adjustment-server-result-audit]', {
-      triggerPath: 'server_adjustment_rebuild_route',
-      requestType,
-      sessionCount: program.sessions.length,
-      primaryGoal: program.primaryGoal,
-      scheduleMode: program.scheduleMode,
-      trainingPathType: program.trainingPathType || 'unknown',
-      selectedSkillsSummary: program.selectedSkills?.slice(0, 5) || [],
-      verdict: 'server_adjustment_rebuild_completed',
+      isFreshBaselineBuild: generationRequest.isFreshBaselineBuild,
+      primaryGoal: canonicalProfile.primaryGoal,
+      selectedSkillsCount: canonicalProfile.selectedSkills?.length || 0,
     })
     
     // ==========================================================================
-    // STAGE: Success
+    // STEP 8: Call Authoritative Generation Service
     // ==========================================================================
-    markStage('route_success')
+    const result = await executeAuthoritativeGeneration(generationRequest)
     
+    // Log parity table for verification
+    logGenerationParityTable()
+    
+    // ==========================================================================
+    // STEP 9: Return Result
+    // ==========================================================================
     const totalElapsed = Date.now() - routeStartTime
-    timings[currentStage] = totalElapsed
     
-    // [PHASE 18E] Architecture parity verdict
-    console.log('[phase18e-adjustment-onboarding-architecture-parity-verdict]', {
-      oldDirectClientBuilderGenerationRemovedFromAdjustment: true,
-      adjustmentModalDispatchesThroughServerRoute: true,
-      serverRouteResolvesCanonicalOnServer: true,
-      serverRouteConstructsCanonicalProfileOverride: true,
-      serverRoutePassesOverrideToBuilder: true,
-      adjustmentModalNowInSameArchitecturalClassAsOnboarding: true,
-      verdict: 'ADJUSTMENT_MODAL_ARCHITECTURE_PARITY_ACHIEVED',
-    })
-    
-    // ==========================================================================
-    // [PHASE 18I] TASK 4 - Modify vs Restart architecture parity audit
-    // This proves both flows use the same architectural class
-    // ==========================================================================
-    console.log('[phase18i-modify-server-dispatch-audit]', {
-      route: '/api/program/rebuild-adjustment',
-      requestType,
-      serverResolvedCanonicalFresh: true,
-      serverConstructedOverride: true,
-      serverCalledGenerateAdaptiveProgram: true,
-      serverReturnedGeneratedProgram: true,
-      architectureClass: 'SERVER_SIDE_GENERATION',
-    })
-    
-    console.log('[phase18i-modify-server-result-audit]', {
-      generatedSessionCount: program.sessions.length,
-      generatedPrimaryGoal: program.primaryGoal,
-      generatedSelectedSkills: program.selectedSkills || [],
-      generatedTrainingPathType: program.trainingPathType || 'unknown',
-      generatedScheduleMode: program.scheduleMode,
-      comparedToRestartArchitecture: {
-        restartRoute: '/api/program/regenerate',
-        restartAlsoUsesServerGeneration: true,
-        restartAlsoResolvesCanonical: true,
-        restartAlsoConstructsOverride: true,
-      },
-      architectureParity: 'MODIFY_AND_RESTART_USE_SAME_ARCHITECTURAL_CLASS',
-    })
-    
-    console.log('[phase18i-modify-material-preservation-audit]', {
-      thinRequestApplied: {
-        newTrainingDays: requestType === 'training_days' ? newTrainingDays : 'unchanged',
-        newSessionMinutes: requestType === 'session_time' ? newSessionMinutes : 'unchanged',
-        newEquipment: requestType === 'equipment' ? 'changed' : 'unchanged',
-      },
-      preservedFromServerCanonical: {
-        primaryGoal: canonicalProfileOverride.primaryGoal,
-        secondaryGoal: canonicalProfileOverride.secondaryGoal,
-        selectedSkills: canonicalProfileOverride.selectedSkills,
-        trainingPathType: canonicalProfileOverride.trainingPathType,
-        goalCategories: canonicalProfileOverride.goalCategories,
-        selectedFlexibility: canonicalProfileOverride.selectedFlexibility,
-        experienceLevel: canonicalProfileOverride.experienceLevel,
-      },
-      verdict: 'ONLY_REQUESTED_FIELD_CHANGED__IDENTITY_PRESERVED',
-    })
-    
-    console.log('[phase18i-modify-request-transform-verdict]', {
-      requestType,
-      thinRequestOnlyChangesOneField: true,
-      allOtherFieldsFromServerCanonical: true,
-      noUnintendedNarrowing: true,
-      materialIdentityIntact: !!(canonicalProfileOverride.selectedSkills?.length) && !!canonicalProfileOverride.trainingPathType,
-      verdict: 'THIN_REQUEST_TRANSFORM_CORRECT__NO_IDENTITY_DRIFT',
-    })
-    
-    // ==========================================================================
-    // [PHASE 18J] TASK 9 - Final root cause classification verdict
-    // ==========================================================================
-    console.log('[phase18j-root-cause-classification-verdict]', {
-      routeFixed: '/api/program/rebuild-adjustment',
-      rootCauseFound: 'SERVER_GETCANONICALPROFILE_WAS_BROWSER_ONLY',
-      rootCauseExplanation: 'getCanonicalProfile() depends on localStorage-based getOnboardingProfile() and getAthleteProfile() which both return null on server',
-      fixApplied: 'Material validity check now gates canonical base selection - incomplete server canonical does not outrank richer client snapshot',
-      canonicalSourceUsed: canonicalSourceWinner,
-      resultingMaterialIdentity: {
-        primaryGoal: canonicalProfileOverride.primaryGoal,
-        selectedSkillsCount: canonicalProfileOverride.selectedSkills?.length ?? 0,
-        trainingPathType: canonicalProfileOverride.trainingPathType,
-      },
-      verdict: canonicalSourceWinner === 'client_snapshot_wins_because_server_canonical_incomplete'
-        ? 'REAL_ROOT_CAUSE_FOUND__SERVER_ROUTE_WAS_USING_BROWSER_ONLY_CANONICAL_TRUTH_AND_WRONGLY_OUTRANKING_RICHER_CLIENT_TRUTH__FIX_APPLIED'
-        : 'SERVER_ROUTE_TRUTH_PRIORITY_FIXED__IF_PROGRAM_STILL_REGRESSES_NEXT_ROOT_CAUSE_IS_DOWNSTREAM_BUILDER_LOGIC',
-    })
-    
-    // ==========================================================================
-    // [PHASE 18K] TASK 8 - Final root cause classification verdict
-    // ==========================================================================
-    console.log('[phase18k-root-cause-classification-verdict]', {
-      routeFixed: '/api/program/rebuild-adjustment',
-      builderEntryContractFix: {
-        problemFound: 'ADJUSTMENT_ROUTE_WAS_PASSING_NARROWED_BUILDER_INPUT',
-        missingFieldsBeforeFix: [
-          'selectedStrength',
-          'sex',
-          'trainingStyle',
-          'jointCautions',
-          'weakestArea',
-          'benchmarks',
-          'skillBenchmarks',
-          'flexibilityBenchmarks',
-          'weightedBenchmarks',
-        ],
-        fixApplied: 'Builder input now includes ALL fields matching onboarding/regenerate contracts',
-        builderInputKeyCount: Object.keys(builderInput).length,
-      },
-      generatedResult: {
-        sessionCount: program.sessions.length,
-        primaryGoal: program.primaryGoal,
-        selectedSkillsCount: program.selectedSkills?.length ?? 0,
-        trainingPathType: program.trainingPathType,
-      },
-      verdict: 'REAL_ROOT_CAUSE_FOUND__MODIFY_ROUTE_WAS_ENTERING_BUILDER_WITH_A_NARROWED_FIRST_ARGUMENT_WHILE_WORKING_PATHS_USED_A_FULLER_CONTRACT__FIX_APPLIED',
-    })
-    
-    // [PHASE 18K] Builder entry shape parity verdict
-    console.log('[phase18k-builder-entry-shape-parity-verdict]', {
-      onboardingRoute: 'passes_programInputs_directly_with_full_contract',
-      regenerateRoute: 'passes_programInputs_spread_with_regen_metadata',
-      adjustmentRouteNow: 'passes_full_contract_matching_working_paths',
-      parityAchieved: true,
-      verdict: 'ADJUSTMENT_ROUTE_NOW_HAS_BUILDER_ENTRY_PARITY_WITH_WORKING_PATHS',
-    })
-    
-    console.log('[phase18e-server-adjustment-success]', {
-      success: true,
+    console.log('[rebuild-adjustment-route-thin-adapter-complete]', {
+      success: result.success,
       totalElapsedMs: totalElapsed,
-      requestType,
-      sessionCount: program.sessions.length,
-      primaryGoal: program.primaryGoal,
-      secondaryGoal: program.secondaryGoal,
-      dbUserId: dbUserId?.slice(0, 12) + '...',
-      currentProgramId,
+      sessionCount: result.summary?.sessionCount,
+      parityVerdict: result.parityVerdict.verdict,
     })
+    
+    if (!result.success) {
+      return NextResponse.json({
+        success: false,
+        error: result.error,
+        failedStage: result.failedStage,
+        timings: result.timings,
+      }, { status: 500 })
+    }
     
     return NextResponse.json({
       success: true,
-      program,
-      actualSessionCount: program.sessions.length,
-      timings,
-      summary: {
-        sessionCount: program.sessions.length,
-        primaryGoal: program.primaryGoal,
-        secondaryGoal: program.secondaryGoal,
-        trainingDaysPerWeek: program.trainingDaysPerWeek,
-        scheduleMode: program.scheduleMode,
-        goalLabel: program.goalLabel,
-        selectedSkills: program.selectedSkills,
-        trainingPathType: program.trainingPathType,
-      },
+      program: result.program,
+      timings: result.timings,
+      summary: result.summary,
+      parityVerdict: result.parityVerdict,
     })
     
   } catch (error) {
-    const totalElapsed = Date.now() - routeStartTime
-    timings[currentStage] = totalElapsed
-    
-    console.log('[phase18e-server-adjustment-failure]', {
-      failedStage: currentStage,
-      reason: String(error),
-      totalElapsedMs: totalElapsed,
-      timings,
+    console.log('[rebuild-adjustment-route-thin-adapter-error]', {
+      error: String(error),
+      totalElapsedMs: Date.now() - routeStartTime,
     })
     
     return NextResponse.json({
       success: false,
       error: String(error),
-      failedStage: currentStage,
-      timings,
+      failedStage: 'route_error',
     }, { status: 500 })
   }
 }

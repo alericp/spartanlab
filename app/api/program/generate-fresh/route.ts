@@ -8,10 +8,13 @@ export const maxDuration = 30
 
 /**
  * ==========================================================================
- * REGENERATE ROUTE - THIN ADAPTER
+ * GENERATE FRESH (MAIN BUILD) ROUTE - THIN ADAPTER
  * ==========================================================================
  * 
- * This route is now a THIN ADAPTER to the authoritative generation service.
+ * This route handles fresh main builder generation (NOT modify, NOT regenerate).
+ * It is used by page.tsx handleGenerate for new builds.
+ * 
+ * This route is a THIN ADAPTER to the authoritative generation service.
  * It only:
  * 1. Validates the request
  * 2. Resolves authentication
@@ -26,9 +29,9 @@ export const maxDuration = 30
 export async function POST(request: Request) {
   const routeStartTime = Date.now()
   
-  console.log('[regenerate-route-thin-adapter-entry]', {
+  console.log('[generate-fresh-route-thin-adapter-entry]', {
     timestamp: new Date().toISOString(),
-    route: '/api/program/regenerate',
+    route: '/api/program/generate-fresh',
     adapterType: 'thin_adapter_to_authoritative_service',
   })
   
@@ -70,16 +73,24 @@ export async function POST(request: Request) {
     const body = await request.json()
     const { 
       canonicalProfile,
-      programInputs,
-      regenerationReason,
-      currentProgramId,
+      builderInputs,
+      existingProgramId,
     } = body
     
-    if (!canonicalProfile || !programInputs) {
+    if (!canonicalProfile || !builderInputs) {
       return NextResponse.json({
         success: false,
-        error: 'Missing canonical profile or program inputs',
+        error: 'Missing canonical profile or builder inputs',
         failedStage: 'parse_request',
+      }, { status: 400 })
+    }
+    
+    // Basic validation
+    if (!builderInputs.primaryGoal) {
+      return NextResponse.json({
+        success: false,
+        error: 'Primary goal is required',
+        failedStage: 'validation',
       }, { status: 400 })
     }
     
@@ -88,23 +99,23 @@ export async function POST(request: Request) {
     // ==========================================================================
     const generationRequest: AuthoritativeGenerationRequest = {
       dbUserId,
-      generationIntent: 'regenerate',
-      triggerSource: 'regenerate',
+      generationIntent: 'fresh_main_build',
+      triggerSource: 'main_build',
       canonicalProfile,
-      builderInputs: programInputs,
-      existingProgramId: currentProgramId,
-      isFreshBaselineBuild: true,  // Regenerate is a fresh baseline rebuild
-      preserveHistory: true,
+      builderInputs,
+      existingProgramId,
+      isFreshBaselineBuild: true,  // Fresh main build uses baseline contract
+      preserveHistory: false,
       archiveCurrentProgram: false,
-      regenerationReason: regenerationReason || 'rebuild_from_current_settings',
     }
     
-    console.log('[regenerate-route-dispatching-to-authoritative-service]', {
+    console.log('[generate-fresh-route-dispatching-to-authoritative-service]', {
       generationIntent: generationRequest.generationIntent,
       triggerSource: generationRequest.triggerSource,
       isFreshBaselineBuild: generationRequest.isFreshBaselineBuild,
       primaryGoal: canonicalProfile?.primaryGoal,
       selectedSkillsCount: canonicalProfile?.selectedSkills?.length || 0,
+      scheduleMode: canonicalProfile?.scheduleMode,
     })
     
     // ==========================================================================
@@ -120,7 +131,7 @@ export async function POST(request: Request) {
     // ==========================================================================
     const totalElapsed = Date.now() - routeStartTime
     
-    console.log('[regenerate-route-thin-adapter-complete]', {
+    console.log('[generate-fresh-route-thin-adapter-complete]', {
       success: result.success,
       totalElapsedMs: totalElapsed,
       sessionCount: result.summary?.sessionCount,
@@ -145,7 +156,7 @@ export async function POST(request: Request) {
     })
     
   } catch (error) {
-    console.log('[regenerate-route-thin-adapter-error]', {
+    console.log('[generate-fresh-route-thin-adapter-error]', {
       error: String(error),
       totalElapsedMs: Date.now() - routeStartTime,
     })

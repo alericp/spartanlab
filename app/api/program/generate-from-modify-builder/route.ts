@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getSession, getCurrentUserServer } from '@/lib/auth-service-server'
 import { resolveCanonicalDbUserId } from '@/lib/subscription-service'
 import { getCanonicalProfile } from '@/lib/canonical-profile-service'
+import { attachTruthExplanation, extractProgramTruth, logMaterialInputPresence } from '@/lib/program-truth-extractor'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30 // Allow up to 30 seconds for generation
@@ -425,6 +426,30 @@ export async function POST(request: Request) {
     }
     
     markStage('builder_done')
+    
+    // ==========================================================================
+    // [AI-TRUTH-ALIGNMENT] STAGE: Extract and attach truth explanation
+    // ==========================================================================
+    markStage('truth_extraction_start')
+    
+    // Extract truth from the inputs used
+    const truthExtraction = extractProgramTruth(canonicalProfileOverride, builderInputs, 'modify')
+    logMaterialInputPresence(truthExtraction.truthContext.materialInputPresence)
+    
+    // Attach truth explanation to the program
+    program = attachTruthExplanation(program, canonicalProfileOverride, 'modify')
+    
+    console.log('[ai-truth-alignment-generate-from-modify-builder]', {
+      triggerSource: 'modify',
+      truthExtractionVerdict: truthExtraction.truthContext.verdict,
+      presentCount: truthExtraction.truthContext.presentCount,
+      defaultedCount: truthExtraction.truthContext.defaultedCount,
+      missingCount: truthExtraction.truthContext.missingCount,
+      explanationQuality: program.truthExplanation?.explanationQualityVerdict || 'unknown',
+      hiddenFactorCount: program.truthExplanation?.hiddenTruthNotSurfaced?.length || 0,
+    })
+    
+    markStage('truth_extraction_done')
     
     // ==========================================================================
     // STAGE: Validate generated program

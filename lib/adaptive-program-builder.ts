@@ -1199,6 +1199,63 @@ exerciseExplanations?: {
   // Tracks confidence tier based on how the program was assembled
   // ==========================================================================
   qualityClassification?: QualityClassification
+  // ==========================================================================
+  // [AI-TRUTH-ALIGNMENT] Truth Explanation Object
+  // Normalized explanation of why the program looks the way it does.
+  // Captures what user truth was read, how it was used, and what was hidden.
+  // ==========================================================================
+  truthExplanation?: {
+    // Identity
+    identityPrimary: string | null
+    identitySecondary: string | null
+    identityLabel: string
+    // Skills
+    selectedSkillsUsed: string[]
+    representedSkillsInWeek: string[]
+    underexpressedSkills: string[]
+    // Schedule
+    scheduleModeUsed: 'static' | 'flexible'
+    baselineSessions: number
+    currentSessions: number
+    frequencyWasAdapted: boolean
+    frequencyAdaptationReason: string | null
+    // Duration
+    durationModeUsed: 'static' | 'adaptive'
+    durationTargetUsed: number
+    // Experience & Equipment
+    experienceLevelUsed: string
+    equipmentUsed: string[]
+    weightedLoadingUsed: boolean
+    // Flexibility
+    flexibilityGoalsUsed: string[]
+    flexibilityIntegrated: boolean
+    // Training Path
+    trainingPathUsed: string | null
+    goalCategoriesUsed: string[]
+    // Style
+    trainingMethodsUsed: string[]
+    sessionStyleUsed: string | null
+    // Diagnostics considered
+    jointCautionsConsidered: string[]
+    weakPointAddressed: string | null
+    limiterAddressed: string | null
+    recoveryLevelUsed: string | null
+    // Explanation quality
+    explanationFactors: Array<{
+      factor: string
+      label: string
+      wasUsed: boolean
+      isVisible: boolean
+      importance: 'high' | 'medium' | 'low'
+    }>
+    hiddenTruthNotSurfaced: string[]
+    // Summary
+    truthfulSummary: string
+    explanationQualityVerdict: 'EXPLANATION_STRONG' | 'EXPLANATION_THIN' | 'GENERATION_MAY_BE_RIGHT_BUT_PROOF_IS_WEAK' | 'USER_TRUTH_NOT_SUFFICIENTLY_SURFACED'
+    // Generation context
+    generatedAt: string
+    triggerSource: 'onboarding' | 'main_build' | 'regenerate' | 'modify' | 'restart' | 'unknown'
+  }
 }
 
 // =============================================================================

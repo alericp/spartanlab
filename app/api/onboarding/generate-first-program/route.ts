@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getSession, getCurrentUserServer } from '@/lib/auth-service-server'
 import { resolveCanonicalDbUserId } from '@/lib/subscription-service'
 import { query } from '@/lib/db'
+import { attachTruthExplanation, extractProgramTruth, logMaterialInputPresence } from '@/lib/program-truth-extractor'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30 // Allow up to 30 seconds for generation
@@ -319,6 +320,30 @@ export async function POST(request: Request) {
       sessionCount: program?.sessions?.length || 0,
       primaryGoal: program?.primaryGoal,
     })
+    
+    // ==========================================================================
+    // [AI-TRUTH-ALIGNMENT] STAGE: Extract and attach truth explanation
+    // ==========================================================================
+    markStage('truth_extraction_start')
+    
+    // Extract truth from the inputs used - canonicalProfileOverride is the profile here
+    const truthExtraction = extractProgramTruth(canonicalProfileOverride, programInputs, 'onboarding')
+    logMaterialInputPresence(truthExtraction.truthContext.materialInputPresence)
+    
+    // Attach truth explanation to the program
+    program = attachTruthExplanation(program, canonicalProfileOverride, 'onboarding')
+    
+    console.log('[ai-truth-alignment-onboarding-first-program]', {
+      triggerSource: 'onboarding',
+      truthExtractionVerdict: truthExtraction.truthContext.verdict,
+      presentCount: truthExtraction.truthContext.presentCount,
+      defaultedCount: truthExtraction.truthContext.defaultedCount,
+      missingCount: truthExtraction.truthContext.missingCount,
+      explanationQuality: program.truthExplanation?.explanationQualityVerdict || 'unknown',
+      hiddenFactorCount: program.truthExplanation?.hiddenTruthNotSurfaced?.length || 0,
+    })
+    
+    markStage('truth_extraction_done')
     
     // ==========================================================================
     // STAGE: Validate generated program

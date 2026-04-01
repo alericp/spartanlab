@@ -11590,6 +11590,11 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
                     ? 'Your personalized adaptive training plan' 
                     : 'Constraint-aware, time-adaptive training'}
                 </p>
+                {showBuilder && (
+                  <p className="text-sm text-neutral-400 mt-1">
+                    Beta: Refining an existing program is still being improved. For the most reliable full rebuild, use Restart Program.
+                  </p>
+                )}
               </div>
             </div>
           </div>

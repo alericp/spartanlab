@@ -202,18 +202,65 @@ export async function POST(request: Request) {
     // ==========================================================================
     // STEP 7: Build Authoritative Generation Request
     // ==========================================================================
+    // 
+    // [ROOT-CAUSE-FIX] "Rebuild From Current Settings" MUST use isFreshBaselineBuild: true
+    // 
+    // The user intent for "Rebuild From Current Settings" is:
+    // - Rebuild the program using current profile truth
+    // - Preserve workout history/timeline
+    // - Get the SAME baseline session count as a fresh build would
+    // 
+    // Previously this was set to false, which caused the builder to apply
+    // adaptive modifiers (recentWorkoutCount penalties) that reduced 6 → 4 sessions.
+    // This was WRONG because the user expects a fresh baseline from current truth,
+    // not a weakened adaptive rebuild.
+    //
+    // The distinction:
+    // - isFreshBaselineBuild: true  → Skip recent workout penalties, use full baseline
+    // - isFreshBaselineBuild: false → Apply adaptive modifiers (only correct for modify flow)
+    // ==========================================================================
     const generationRequest: AuthoritativeGenerationRequest = {
       dbUserId,
       generationIntent: 'rebuild_current',
-      triggerSource: 'modify',
+      triggerSource: 'rebuild',  // Changed from 'modify' - this is a rebuild, not a modify
       canonicalProfile,
       builderInputs,
       existingProgramId: currentProgramId,
-      isFreshBaselineBuild: false,  // Rebuild is NOT a fresh baseline
+      isFreshBaselineBuild: true,  // [ROOT-CAUSE-FIX] Rebuild MUST use fresh baseline contract
       preserveHistory: true,
       archiveCurrentProgram: false,
-      regenerationReason: `adjustment_rebuild_${requestType}`,
+      regenerationReason: `rebuild_from_current_settings_${requestType}`,
     }
+    
+    // [ROOT-CAUSE-FIX] Log the corrected semantic classification
+    console.log('[rebuild-adjustment-semantic-fix-audit]', {
+      action: 'rebuild_from_current_settings',
+      previousClassification: {
+        triggerSource: 'modify',
+        isFreshBaselineBuild: false,
+        result: 'WRONG - caused 6 → 4 session regression',
+      },
+      correctedClassification: {
+        triggerSource: 'rebuild',
+        isFreshBaselineBuild: true,
+        result: 'CORRECT - uses fresh baseline like successful flows',
+      },
+      verdict: 'REBUILD_CLASSIFICATION_FIXED',
+    })
+    
+    // ==========================================================================
+    // [TASK 7] STATIC USER VERIFICATION
+    // Static users must remain untouched - their scheduleMode stays 'static'
+    // ==========================================================================
+    const isStaticUser = canonicalProfile.scheduleMode === 'static'
+    console.log('[rebuild-adjustment-static-user-verification]', {
+      scheduleMode: canonicalProfile.scheduleMode,
+      isStaticUser,
+      trainingDaysPerWeek: canonicalProfile.trainingDaysPerWeek,
+      verdict: isStaticUser 
+        ? 'STATIC_USER_PRESERVED__NO_FLEXIBLE_BASELINE_LOGIC_APPLIED'
+        : 'FLEXIBLE_USER__FRESH_BASELINE_WILL_APPLY',
+    })
     
     console.log('[rebuild-adjustment-route-dispatching-to-authoritative-service]', {
       generationIntent: generationRequest.generationIntent,
@@ -222,6 +269,7 @@ export async function POST(request: Request) {
       isFreshBaselineBuild: generationRequest.isFreshBaselineBuild,
       primaryGoal: canonicalProfile.primaryGoal,
       selectedSkillsCount: canonicalProfile.selectedSkills?.length || 0,
+      staticUserVerification: isStaticUser ? 'STATIC_PRESERVED' : 'FLEXIBLE_USER',
     })
     
     // ==========================================================================

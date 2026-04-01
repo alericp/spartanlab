@@ -9837,13 +9837,41 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
       setInputs(updatedInputs)
       setProgram(newProgram)
       
+      // ==========================================================================
+      // [ROOT-CAUSE-FIX] Rebuild From Current Settings Verdict
+      // This is the final diagnostic proving the fix worked
+      // ==========================================================================
+      console.log('[root-cause-fix-rebuild-verdict]', {
+        action: 'rebuild_from_current_settings',
+        previousRoot: {
+          route: '/api/program/rebuild-adjustment',
+          triggerSource: 'modify',
+          isFreshBaselineBuild: false,
+          symptom: 'Session count dropped from 6 → 4 after rebuild',
+        },
+        fixApplied: {
+          route: '/api/program/rebuild-adjustment',
+          triggerSource: 'rebuild',
+          isFreshBaselineBuild: true,
+          expected: 'Session count stays at baseline (e.g., 6)',
+        },
+        actualResult: {
+          sessionCount: newProgram.sessions?.length ?? 0,
+          primaryGoal: newProgram.primaryGoal,
+          scheduleMode: newProgram.scheduleMode,
+        },
+        verdict: newProgram.sessions?.length >= 6 
+          ? 'REBUILD_CLASSIFICATION_FIXED__BASELINE_PRESERVED'
+          : 'SESSION_COUNT_STILL_BELOW_6__CHECK_IF_REAL_REDUCTION_REASON_EXISTS',
+      })
+      
       // [POST-BUILD AUTHORITATIVE LOCK] Set single winner for adjustment/onboarding flow
       authoritativeSavedProgramRef.current = {
         programId: newProgram.id,
         savedAt: Date.now(),
         sessionCount: newProgram.sessions?.length ?? 0,
         createdAt: newProgram.createdAt || new Date().toISOString(),
-        flowSource: 'onboarding',
+        flowSource: 'rebuild_from_current_settings',  // [ROOT-CAUSE-FIX] More accurate flow source
         lockExpiresAt: Date.now() + 5000,
       }
       console.log('[post-build-auth-lock] Authoritative winner locked (adjustment/onboarding flow)', {

@@ -98,6 +98,14 @@ import {
   shouldRenderBuildFailureBanner,
   normalizeHydratedBuildAttempt,
 } from '@/lib/program-state'
+// [AI-TRUTH-AUDIT] Import truth audit functions for field-by-field usage analysis
+import {
+  logTruthFieldAudit,
+  logProgramTruthExplanation,
+  logExplanationGapAudit,
+  buildProgramTruthExplanation,
+  type ProgramTruthExplanation,
+} from '@/lib/ai-truth-audit'
 
 // TASK 5: Lazy load heavy components to prevent SSR/hydration crashes
 import dynamic from 'next/dynamic'
@@ -2742,6 +2750,27 @@ export default function ProgramPage() {
                 qualityTier: normalizedProgram.qualityClassification?.qualityTier || 'unknown',
                 createdAt: normalizedProgram.createdAt,
               })
+              
+              // [AI-TRUTH-AUDIT] Run comprehensive truth audit on program load
+              // This logs field-by-field usage, explanation gaps, and truth flow analysis
+              try {
+                const canonicalProfile = getCanonicalProfile()
+                // Log field-by-field truth audit (dev only)
+                logTruthFieldAudit()
+                // Log program truth explanation with gap analysis
+                const truthExplanation = logProgramTruthExplanation(normalizedProgram, canonicalProfile)
+                logExplanationGapAudit(normalizedProgram, canonicalProfile)
+                // Summary log for quick reference
+                console.log('[AI-TRUTH-AUDIT] ========== SUMMARY VERDICT ==========', {
+                  explanationQuality: truthExplanation.explanationQualityVerdict,
+                  hiddenTruthCount: truthExplanation.hiddenTruthNotSurfaced.length,
+                  underexpressedSkillCount: truthExplanation.underexpressedSkills.length,
+                  frequencyWasAdapted: truthExplanation.frequencyWasAdapted,
+                  weightedLoadingUsed: truthExplanation.weightedLoadingUsed,
+                })
+              } catch (auditError) {
+                console.warn('[AI-TRUTH-AUDIT] Audit failed (non-blocking):', auditError)
+              }
             } else {
               // TASK 2: Program exists but fails display sanity - show recovery state, not fatal error
               setLoadStage(`program-malformed:${displayCheck.reason || 'unknown'}`)
@@ -11590,6 +11619,11 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
                     ? 'Your personalized adaptive training plan' 
                     : 'Constraint-aware, time-adaptive training'}
                 </p>
+                {showBuilder && (
+                  <p className="text-sm text-neutral-400 mt-1">
+                    Beta: Refining an existing program is still being improved. For the most reliable full rebuild, use Restart Program.
+                  </p>
+                )}
               </div>
             </div>
           </div>

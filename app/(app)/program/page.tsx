@@ -419,6 +419,19 @@ export default function ProgramPage() {
   )
   
   // ==========================================================================
+  // [POST-REGEN AUTHORITATIVE LOCK] Prevents reconciliation from overwriting
+  // a just-saved program. After successful save + setProgram, this ref holds
+  // the authoritative program ID and timestamp. Reconciliation must respect
+  // this lock and NOT replace the program with any older/different program.
+  // ==========================================================================
+  const authoritativeSavedProgramRef = useRef<{
+    programId: string
+    savedAt: number
+    sessionCount: number
+    lockExpiresAt: number  // Lock expires after a short window (e.g., 5 seconds)
+  } | null>(null)
+  
+  // ==========================================================================
   // [PHASE 22A] TASK 2 - Explicit builder origin state
   // Tracks whether the currently open builder session was entered from Modify flow
   // This determines which submit handler to use (generic vs modify-specific)
@@ -1089,6 +1102,29 @@ export default function ProgramPage() {
       overwriteDetected,
       overwriteSource,
       verdict: displayVerdict,
+    })
+    
+    // ==========================================================================
+    // [POST-REGEN AUTHORITATIVE VERDICT] Final verdict for this fix
+    // ==========================================================================
+    const authLock = authoritativeSavedProgramRef.current
+    const overwriteBlocked = authLock && program?.id === authLock.programId
+    console.log('[post-regen-authoritative-verdict]', {
+      savedProgramId,
+      committedProgramId: authLock?.programId ?? null,
+      displayedProgramId,
+      rehydratedProgramId: currentLocalStorageId,
+      overwriteBlocked,
+      winningSource: overwriteDetected 
+        ? (overwriteSource ?? 'unknown') 
+        : (overwriteBlocked ? 'authoritative_lock' : 'fresh_save'),
+      losingSource: overwriteDetected ? 'fresh_save' : null,
+      displayedSessionCount: displayedSessions,
+      verdict: overwriteDetected
+        ? 'POST_REGEN_OVERWRITE_STILL_PRESENT'
+        : overwriteBlocked
+          ? 'POST_REGEN_REHYDRATION_DOWNGRADE_BLOCKED'
+          : 'POST_REGEN_ACTIVE_PROGRAM_LOCKED',
     })
     
     const finalAudit: RegenTruthAudit = {
@@ -2784,6 +2820,39 @@ export default function ProgramPage() {
     }
     
     const reconcileWithCanonical = (triggerSource: string) => {
+      // ==========================================================================
+      // [POST-REGEN AUTHORITATIVE LOCK] Check if a recently-saved program is locked
+      // If the current in-memory program matches the authoritative lock, BLOCK any
+      // reconciliation attempt that would replace it with a different program.
+      // This prevents the just-saved 6-session program from being overwritten.
+      // ==========================================================================
+      const authLock = authoritativeSavedProgramRef.current
+      const now = Date.now()
+      
+      if (authLock && now < authLock.lockExpiresAt && program?.id === authLock.programId) {
+        // Current program matches the authoritative lock - block any overwrite
+        console.log('[post-regen-auth-lock] RECONCILIATION BLOCKED - authoritative program locked', {
+          trigger: triggerSource,
+          lockedProgramId: authLock.programId,
+          lockedSessionCount: authLock.sessionCount,
+          currentProgramId: program?.id,
+          currentSessionCount: program?.sessions?.length ?? 0,
+          lockExpiresIn: authLock.lockExpiresAt - now,
+          verdict: 'POST_REGEN_ACTIVE_PROGRAM_LOCKED',
+        })
+        return
+      }
+      
+      // Clear expired lock
+      if (authLock && now >= authLock.lockExpiresAt) {
+        console.log('[post-regen-auth-lock] Lock expired, clearing', {
+          trigger: triggerSource,
+          lockedProgramId: authLock.programId,
+          expiredAt: authLock.lockExpiresAt,
+        })
+        authoritativeSavedProgramRef.current = null
+      }
+      
       const canonicalState = programModules.getProgramState?.()
       if (!canonicalState?.adaptiveProgram || !program) {
         console.log('[phase17k-same-session-reconciliation-verdict]', {
@@ -4517,6 +4586,24 @@ export default function ProgramPage() {
         
         setProgram(newProgram)
         
+        // ==========================================================================
+        // [POST-REGEN AUTHORITATIVE LOCK] Lock this program as authoritative
+        // This prevents reconciliation from overwriting it for 5 seconds
+        // ==========================================================================
+        const actualBuiltSessionsForLock = newProgram.sessions?.length ?? 0
+        authoritativeSavedProgramRef.current = {
+          programId: newProgram.id,
+          savedAt: Date.now(),
+          sessionCount: actualBuiltSessionsForLock,
+          lockExpiresAt: Date.now() + 5000,  // 5 second lock
+        }
+        console.log('[post-regen-auth-lock] Authoritative program locked', {
+          programId: newProgram.id,
+          sessionCount: actualBuiltSessionsForLock,
+          lockExpiresAt: authoritativeSavedProgramRef.current.lockExpiresAt,
+          verdict: 'POST_REGEN_ACTIVE_PROGRAM_LOCKED',
+        })
+        
         // [PHASE 30L] RELEASE MODIFY BUILDER LOCK - generation completed successfully
         // [PHASE 30P] ENHANCED: Add full state logging for lock release
         // [PHASE 30S] Clear the authoritative entry object on success
@@ -5419,6 +5506,19 @@ export default function ProgramPage() {
       
       // Hydrate UI
       setProgram(newProgram)
+      
+      // [POST-REGEN AUTHORITATIVE LOCK] Lock this program as authoritative
+      authoritativeSavedProgramRef.current = {
+        programId: newProgram.id,
+        savedAt: Date.now(),
+        sessionCount: newProgram.sessions?.length ?? 0,
+        lockExpiresAt: Date.now() + 5000,
+      }
+      console.log('[post-regen-auth-lock] Authoritative program locked (modify flow)', {
+        programId: newProgram.id,
+        sessionCount: newProgram.sessions?.length ?? 0,
+        verdict: 'POST_REGEN_ACTIVE_PROGRAM_LOCKED',
+      })
       
       // [PHASE 30L] RELEASE MODIFY BUILDER LOCK - generation completed successfully
       // [PHASE 30P] ENHANCED: Add full state logging for lock release
@@ -7494,6 +7594,19 @@ export default function ProgramPage() {
         
         setProgram(newProgram)
         
+        // [POST-REGEN AUTHORITATIVE LOCK] Lock this program as authoritative
+        authoritativeSavedProgramRef.current = {
+          programId: newProgram.id,
+          savedAt: Date.now(),
+          sessionCount: newProgram.sessions?.length ?? 0,
+          lockExpiresAt: Date.now() + 5000,
+        }
+        console.log('[post-regen-auth-lock] Authoritative program locked (regen flow)', {
+          programId: newProgram.id,
+          sessionCount: newProgram.sessions?.length ?? 0,
+          verdict: 'POST_REGEN_ACTIVE_PROGRAM_LOCKED',
+        })
+        
         // [PHASE 30L] RELEASE MODIFY BUILDER LOCK - regeneration completed successfully
         // [PHASE 30P] ENHANCED: Add full state logging for lock release
         // [PHASE 30S] Clear the authoritative entry object on success
@@ -9484,6 +9597,19 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
       
       setInputs(updatedInputs)
       setProgram(newProgram)
+      
+      // [POST-REGEN AUTHORITATIVE LOCK] Lock this program as authoritative
+      authoritativeSavedProgramRef.current = {
+        programId: newProgram.id,
+        savedAt: Date.now(),
+        sessionCount: newProgram.sessions?.length ?? 0,
+        lockExpiresAt: Date.now() + 5000,
+      }
+      console.log('[post-regen-auth-lock] Authoritative program locked (adjustment flow)', {
+        programId: newProgram.id,
+        sessionCount: newProgram.sessions?.length ?? 0,
+        verdict: 'POST_REGEN_ACTIVE_PROGRAM_LOCKED',
+      })
       
       // ==========================================================================
       // [PHASE 28A] POST_GENERATION_CANONICAL_UPDATE AUDIT

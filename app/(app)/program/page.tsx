@@ -424,11 +424,32 @@ export default function ProgramPage() {
   // the authoritative program ID and timestamp. Reconciliation must respect
   // this lock and NOT replace the program with any older/different program.
   // ==========================================================================
+  // ==========================================================================
+  // [POST-BUILD AUTHORITATIVE WINNER LOCK]
+  // This lock enforces the SINGLE WINNER CONTRACT for post-build program ownership.
+  // 
+  // RULE: After a successful regenerate/modify/main build, the returned program
+  // becomes the AUTHORITATIVE WINNER and cannot be replaced by reconciliation
+  // until the lock expires (5 seconds).
+  //
+  // The lock captures:
+  //   - programId: The ID of the authoritative winner
+  //   - sessionCount: Session count for verification
+  //   - createdAt: Program creation timestamp
+  //   - flowSource: Which build flow set the lock
+  //   - savedAt: When the lock was set
+  //   - lockExpiresAt: When reconciliation may resume
+  //
+  // CRITICAL: Reconciliation must check lock FIRST, before any other logic.
+  // During lock window, NO replacement is allowed regardless of closure state.
+  // ==========================================================================
   const authoritativeSavedProgramRef = useRef<{
     programId: string
     savedAt: number
     sessionCount: number
-    lockExpiresAt: number  // Lock expires after a short window (e.g., 5 seconds)
+    createdAt: string
+    flowSource: 'main_generation' | 'regenerate' | 'modify' | 'onboarding'
+    lockExpiresAt: number  // Lock expires after 5 seconds
   } | null>(null)
   
   // ==========================================================================
@@ -2863,33 +2884,49 @@ export default function ProgramPage() {
     
     const reconcileWithCanonical = (triggerSource: string) => {
       // ==========================================================================
-      // [POST-REGEN AUTHORITATIVE LOCK] Check if a recently-saved program is locked
-      // If the current in-memory program matches the authoritative lock, BLOCK any
-      // reconciliation attempt that would replace it with a different program.
-      // This prevents the just-saved 6-session program from being overwritten.
+      // [POST-BUILD AUTHORITATIVE LOCK] SINGLE WINNER CONTRACT
+      // 
+      // RULE: After a successful regenerate/modify/main build, the returned newProgram
+      // is the AUTHORITATIVE PAGE WINNER if:
+      //   1. It was just returned from the active build call
+      //   2. It was successfully saved (lock was set)
+      //   3. Its program ID and session count are captured in the lock
+      //   4. The lock has not expired
+      //
+      // During the lock window, NO reconciliation may replace the program, regardless
+      // of what the closure's `program` state shows. This prevents race conditions
+      // where React state hasn't propagated yet but reconciliation fires.
+      //
+      // CRITICAL FIX: We do NOT check `program?.id === authLock.programId` because
+      // the `program` in this closure may be STALE (the old 4-session program)
+      // when this check runs. The lock itself is the authority during the window.
       // ==========================================================================
       const authLock = authoritativeSavedProgramRef.current
       const now = Date.now()
       
-      if (authLock && now < authLock.lockExpiresAt && program?.id === authLock.programId) {
-        // Current program matches the authoritative lock - block any overwrite
-        console.log('[post-regen-auth-lock] RECONCILIATION BLOCKED - authoritative program locked', {
+      // HARD BLOCK: If lock is active, block ALL reconciliation replacement attempts
+      // Do NOT check program?.id - it may be stale due to React async state updates
+      if (authLock && now < authLock.lockExpiresAt) {
+        console.log('[post-build-auth-lock] RECONCILIATION BLOCKED - authoritative winner locked', {
           trigger: triggerSource,
           lockedProgramId: authLock.programId,
           lockedSessionCount: authLock.sessionCount,
-          currentProgramId: program?.id,
-          currentSessionCount: program?.sessions?.length ?? 0,
+          lockedFlowSource: authLock.flowSource,
+          lockedSavedAt: authLock.savedAt,
+          closureProgramId: program?.id ?? 'null',
+          closureSessionCount: program?.sessions?.length ?? 0,
           lockExpiresIn: authLock.lockExpiresAt - now,
-          verdict: 'POST_REGEN_ACTIVE_PROGRAM_LOCKED',
+          verdict: 'POST_BUILD_WINNER_PROTECTED_LOCK_ACTIVE',
         })
         return
       }
       
       // Clear expired lock
       if (authLock && now >= authLock.lockExpiresAt) {
-        console.log('[post-regen-auth-lock] Lock expired, clearing', {
+        console.log('[post-build-auth-lock] Lock expired, clearing', {
           trigger: triggerSource,
           lockedProgramId: authLock.programId,
+          lockedSessionCount: authLock.sessionCount,
           expiredAt: authLock.lockExpiresAt,
         })
         authoritativeSavedProgramRef.current = null
@@ -3113,6 +3150,41 @@ export default function ProgramPage() {
               : idDiffers
                 ? 'SAME_PROGRAM_NO_REPLACE'
                 : 'NO_CHANGE_NEEDED',
+      })
+      
+      // ==========================================================================
+      // [POST-BUILD WINNER DECISION] Compact high-signal diagnostic for replacement
+      // This makes the overwrite path undeniable - one log per decision
+      // ==========================================================================
+      const authLockSnapshot = authoritativeSavedProgramRef.current
+      const lockActive = authLockSnapshot && Date.now() < authLockSnapshot.lockExpiresAt
+      console.log('[post-build-winner-decision]', {
+        triggerSource,
+        currentVisibleProgramId: currentProgram.id,
+        currentVisibleSessionCount: currentProgram.sessions?.length ?? 0,
+        lockedProgramId: authLockSnapshot?.programId ?? null,
+        lockedSessionCount: authLockSnapshot?.sessionCount ?? null,
+        candidateProgramId: canonicalProgram.id,
+        candidateSessionCount: canonicalProgram.sessions?.length ?? 0,
+        candidateCreatedAt: canonicalProgram.createdAt,
+        currentCreatedAt: currentProgram.createdAt,
+        lockActive,
+        candidateIsNewer: canonicalIsNewer,
+        replaceAllowed: shouldReplace,
+        replaceBlockedReason: !shouldReplace
+          ? (lockActive
+              ? 'POST_BUILD_LOCK_ACTIVE'
+              : currentIsNewer
+                ? 'CURRENT_IS_NEWER'
+                : sessionCountWouldHaveTriggeredOldBug
+                  ? 'SESSION_COUNT_ONLY_NO_OVERWRITE'
+                  : 'NO_MATERIAL_DIFFERENCE')
+          : null,
+        finalWinner: shouldReplace
+          ? 'CANONICAL_CANDIDATE'
+          : lockActive
+            ? 'LOCKED_POST_BUILD_PROGRAM'
+            : 'CURRENT_VISIBLE_PROGRAM',
       })
       
       if (shouldReplace) {
@@ -4629,19 +4701,22 @@ export default function ProgramPage() {
         setProgram(newProgram)
         
         // ==========================================================================
-        // [POST-REGEN AUTHORITATIVE LOCK] Lock this program as authoritative
-        // This prevents reconciliation from overwriting it for 5 seconds
+        // [POST-BUILD AUTHORITATIVE LOCK] Set single winner for main_generation
+        // This prevents reconciliation from overwriting for 5 seconds
         // ==========================================================================
         const actualBuiltSessionsForLock = newProgram.sessions?.length ?? 0
         authoritativeSavedProgramRef.current = {
           programId: newProgram.id,
           savedAt: Date.now(),
           sessionCount: actualBuiltSessionsForLock,
+          createdAt: newProgram.createdAt || new Date().toISOString(),
+          flowSource: 'main_generation',
           lockExpiresAt: Date.now() + 5000,  // 5 second lock
         }
-        console.log('[post-regen-auth-lock] Authoritative program locked', {
+        console.log('[post-build-auth-lock] Authoritative winner locked', {
           programId: newProgram.id,
           sessionCount: actualBuiltSessionsForLock,
+          flowSource: 'main_generation',
           lockExpiresAt: authoritativeSavedProgramRef.current.lockExpiresAt,
           verdict: 'POST_REGEN_ACTIVE_PROGRAM_LOCKED',
         })
@@ -5565,17 +5640,20 @@ export default function ProgramPage() {
       // Hydrate UI
       setProgram(newProgram)
       
-      // [POST-REGEN AUTHORITATIVE LOCK] Lock this program as authoritative
+      // [POST-BUILD AUTHORITATIVE LOCK] Set single winner for modify flow
       authoritativeSavedProgramRef.current = {
         programId: newProgram.id,
         savedAt: Date.now(),
         sessionCount: newProgram.sessions?.length ?? 0,
+        createdAt: newProgram.createdAt || new Date().toISOString(),
+        flowSource: 'modify',
         lockExpiresAt: Date.now() + 5000,
       }
-      console.log('[post-regen-auth-lock] Authoritative program locked (modify flow)', {
+      console.log('[post-build-auth-lock] Authoritative winner locked (modify flow)', {
         programId: newProgram.id,
         sessionCount: newProgram.sessions?.length ?? 0,
-        verdict: 'POST_REGEN_ACTIVE_PROGRAM_LOCKED',
+        flowSource: 'modify',
+        verdict: 'POST_BUILD_WINNER_LOCKED',
       })
       
       // [PHASE 30L] RELEASE MODIFY BUILDER LOCK - generation completed successfully
@@ -7674,17 +7752,20 @@ export default function ProgramPage() {
         
         setProgram(newProgram)
         
-        // [POST-REGEN AUTHORITATIVE LOCK] Lock this program as authoritative
+        // [POST-BUILD AUTHORITATIVE LOCK] Set single winner for regenerate flow
         authoritativeSavedProgramRef.current = {
           programId: newProgram.id,
           savedAt: Date.now(),
           sessionCount: newProgram.sessions?.length ?? 0,
+          createdAt: newProgram.createdAt || new Date().toISOString(),
+          flowSource: 'regenerate',
           lockExpiresAt: Date.now() + 5000,
         }
-        console.log('[post-regen-auth-lock] Authoritative program locked (regen flow)', {
+        console.log('[post-build-auth-lock] Authoritative winner locked (regenerate flow)', {
           programId: newProgram.id,
           sessionCount: newProgram.sessions?.length ?? 0,
-          verdict: 'POST_REGEN_ACTIVE_PROGRAM_LOCKED',
+          flowSource: 'regenerate',
+          verdict: 'POST_BUILD_WINNER_LOCKED',
         })
         
         // [PHASE 30L] RELEASE MODIFY BUILDER LOCK - regeneration completed successfully
@@ -9678,17 +9759,20 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
       setInputs(updatedInputs)
       setProgram(newProgram)
       
-      // [POST-REGEN AUTHORITATIVE LOCK] Lock this program as authoritative
+      // [POST-BUILD AUTHORITATIVE LOCK] Set single winner for adjustment/onboarding flow
       authoritativeSavedProgramRef.current = {
         programId: newProgram.id,
         savedAt: Date.now(),
         sessionCount: newProgram.sessions?.length ?? 0,
+        createdAt: newProgram.createdAt || new Date().toISOString(),
+        flowSource: 'onboarding',
         lockExpiresAt: Date.now() + 5000,
       }
-      console.log('[post-regen-auth-lock] Authoritative program locked (adjustment flow)', {
+      console.log('[post-build-auth-lock] Authoritative winner locked (adjustment/onboarding flow)', {
         programId: newProgram.id,
         sessionCount: newProgram.sessions?.length ?? 0,
-        verdict: 'POST_REGEN_ACTIVE_PROGRAM_LOCKED',
+        flowSource: 'onboarding',
+        verdict: 'POST_BUILD_WINNER_LOCKED',
       })
       
       // ==========================================================================

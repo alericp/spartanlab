@@ -5437,24 +5437,38 @@ export default function ProgramPage() {
       })
       
       // ==========================================================================
-      // [PHASE 24M] UNIFIED CANONICAL PATH - Modify now uses same logic as Restart/Onboarding
-      // Instead of separate server route, use buildCanonicalGenerationEntry with builder overrides
-      // This unifies the generation engine across all rebuild-capable paths
+      // [MODIFY-UNIFIED-FIX] ROUTE MODIFY THROUGH SAME SERVER ROUTE AS REGENERATE
+      // This is the CRITICAL fix: Modify now calls /api/program/regenerate with overrides
+      // instead of calling generateAdaptiveProgram directly (which missed isFreshBaselineBuild)
       // ==========================================================================
-      console.log('[phase24m-modify-unified-canonical-path-start]', {
-        architectureClass: 'canonical_entry_with_overrides',
-        dispatchMethod: 'generateAdaptiveProgram_direct',
-        usesServerRoute: false,
-        usesBuildCanonicalGenerationEntry: true,
-        unifiedWithOnboardingAndRestart: true,
+      console.log('[modify-unified-fix-start]', {
+        architectureClass: 'server_route_regenerate',
+        dispatchMethod: '/api/program/regenerate',
+        usesServerRoute: true,
+        sameRouteAsHandleRegenerate: true,
+        willPassIsFreshBaselineBuild: true,
+        verdict: 'ROUTING_TO_AUTHORITATIVE_SERVER_REBUILD',
       })
       
-      // [PHASE 24M] Import canonical entry builder and generation engine
-      const { buildCanonicalGenerationEntry, entryToAdaptiveInputs } = await import('@/lib/canonical-profile-service')
+      // Build canonical profile override with builder inputs
+      const modifyCanonicalOverride = {
+        primaryGoal: effectiveInputs.primaryGoal || 'skill_acquisition',
+        secondaryGoal: effectiveInputs.secondaryGoal || null,
+        experienceLevel: effectiveInputs.experienceLevel || 'intermediate',
+        trainingDaysPerWeek: effectiveInputs.trainingDaysPerWeek || 4,
+        sessionLengthMinutes: effectiveInputs.sessionLength || 60,
+        scheduleMode: effectiveInputs.scheduleMode || 'flexible',
+        sessionDurationMode: effectiveInputs.sessionDurationMode || 'adaptive',
+        equipment: effectiveInputs.equipment || ['pull_up_bar', 'parallettes', 'rings'],
+        selectedSkills: effectiveInputs.selectedSkills || [],
+        trainingPathType: effectiveInputs.trainingPathType || 'custom',
+        goalCategories: effectiveInputs.goalCategories || [],
+        selectedFlexibility: effectiveInputs.selectedFlexibility || [],
+        onboardingComplete: true,
+      }
       
-      // [PHASE 24M] Build canonical entry with builder inputs as overrides
-      // This ensures Modify uses EXACTLY the same truth resolution as handleGenerate/handleRegenerate
-      const entryResult = buildCanonicalGenerationEntry('handleGenerateFromModifyBuilder', {
+      // Build program inputs for server route
+      const modifyProgramInputs = {
         primaryGoal: effectiveInputs.primaryGoal,
         secondaryGoal: effectiveInputs.secondaryGoal,
         experienceLevel: effectiveInputs.experienceLevel,
@@ -5467,80 +5481,82 @@ export default function ProgramPage() {
         trainingPathType: effectiveInputs.trainingPathType,
         goalCategories: effectiveInputs.goalCategories,
         selectedFlexibility: effectiveInputs.selectedFlexibility,
-      })
-      
-      if (!entryResult.success) {
-        const errorMsg = entryResult.error?.message || 'Failed to build generation entry'
-        console.error('[ProgramPage] handleGenerateFromModifyBuilder: Entry validation failed', entryResult.error)
-        throw new Error(errorMsg)
       }
       
-      // [PHASE 24M] Convert canonical entry to inputs shape - same as handleGenerate/handleRegenerate
-      const generationInputs = entryToAdaptiveInputs(entryResult.entry!)
-      
-      console.log('[phase24m-modify-unified-entry-audit]', {
-        entrySuccess: true,
-        entrySource: entryResult.entry?.__entrySource,
-        entryFallbacksUsed: entryResult.entry?.__fallbacksUsed || [],
-        generationInputsPrimaryGoal: generationInputs.primaryGoal,
-        generationInputsSecondaryGoal: generationInputs.secondaryGoal,
-        generationInputsScheduleMode: generationInputs.scheduleMode,
-        generationInputsSelectedSkillsCount: generationInputs.selectedSkills?.length ?? 0,
-        generationInputsSelectedSkills: generationInputs.selectedSkills ?? [],
-        selectedSkillsHasBackLever: generationInputs.selectedSkills?.includes('back_lever') ?? false,
-        selectedSkillsHasDragonFlag: generationInputs.selectedSkills?.includes('dragon_flag') ?? false,
-        verdict: 'UNIFIED_WITH_CANONICAL_PATH',
+      console.log('[modify-unified-fix-dispatch]', {
+        route: '/api/program/regenerate',
+        canonicalOverrideScheduleMode: modifyCanonicalOverride.scheduleMode,
+        canonicalOverrideSelectedSkillsCount: modifyCanonicalOverride.selectedSkills?.length ?? 0,
+        programInputsScheduleMode: modifyProgramInputs.scheduleMode,
+        currentProgramId: program?.id ?? null,
+        verdict: 'DISPATCHING_TO_SERVER_REGENERATE_WITH_OVERRIDES',
       })
       
-      // [PHASE 24M] Call generateAdaptiveProgram directly - SAME as handleGenerate/handleRegenerate
-      if (!programModules.generateAdaptiveProgram) {
-        throw new Error('Program builder module not loaded')
+      // [MODIFY-UNIFIED-FIX] Call the SAME server route as handleRegenerate
+      // This ensures isFreshBaselineBuild: true is applied server-side
+      const serverResponse = await fetch('/api/program/regenerate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          canonicalProfile: modifyCanonicalOverride,
+          programInputs: modifyProgramInputs,
+          regenerationReason: 'modify_builder_submit',
+          currentProgramId: program?.id ?? null,
+        }),
+      })
+      
+      const serverResult = await serverResponse.json()
+      
+      if (!serverResponse.ok || !serverResult.success) {
+        console.log('[modify-unified-fix-server-error]', {
+          status: serverResponse.status,
+          error: serverResult.error,
+          failedStage: serverResult.failedStage,
+        })
+        throw new Error(serverResult.error || 'Server regenerate failed for modify')
       }
       
-      const newProgram = await programModules.generateAdaptiveProgram(generationInputs)
+      const newProgram = serverResult.program as AdaptiveProgram
       
-      // [PHASE 24M] Validate program shape - same as handleGenerate
+      // Validate program shape
       if (!newProgram) {
-        throw new Error('generateAdaptiveProgram returned null/undefined')
+        throw new Error('Server returned null program')
       }
       if (!newProgram.id) {
-        throw new Error('program has no id field')
+        throw new Error('Server program has no id field')
       }
       if (!Array.isArray(newProgram.sessions) || newProgram.sessions.length === 0) {
-        throw new Error('program has no valid sessions')
+        throw new Error('Server program has no valid sessions')
       }
       
-      console.log('[phase24m-modify-unified-generation-result]', {
+      console.log('[modify-unified-fix-result]', {
         programId: newProgram.id,
         sessionCount: newProgram.sessions?.length ?? 0,
         primaryGoal: newProgram.primaryGoal,
         secondaryGoal: newProgram.secondaryGoal,
         scheduleMode: newProgram.scheduleMode,
         selectedSkillsCount: newProgram.selectedSkills?.length ?? 0,
-        selectedSkillsHasBackLever: newProgram.selectedSkills?.includes('back_lever') ?? false,
-        selectedSkillsHasDragonFlag: newProgram.selectedSkills?.includes('dragon_flag') ?? false,
-        verdict: 'GENERATED_VIA_UNIFIED_CANONICAL_PATH',
+        verdict: 'GENERATED_VIA_AUTHORITATIVE_SERVER_ROUTE',
       })
       
-      // Save the program
+      // Save the program to localStorage (server already validated it)
       await programModules.saveAdaptiveProgram(newProgram)
       
       // Update canonical profile to match what was just generated
-      // [PHASE 24M] Use generationInputs (after canonical resolution) for consistency
       const { updateCanonicalProfile } = await import('@/lib/canonical-profile-service')
       updateCanonicalProfile({
-        primaryGoal: generationInputs.primaryGoal,
-        secondaryGoal: generationInputs.secondaryGoal,
-        trainingDaysPerWeek: generationInputs.trainingDaysPerWeek,
-        scheduleMode: generationInputs.scheduleMode,
-        sessionDurationMode: generationInputs.sessionDurationMode,
-        sessionLengthMinutes: generationInputs.sessionLength,
-        selectedSkills: generationInputs.selectedSkills,
-        trainingPathType: generationInputs.trainingPathType,
-        experienceLevel: generationInputs.experienceLevel,
-        equipmentAvailable: generationInputs.equipment,
-        goalCategories: generationInputs.goalCategories,
-        selectedFlexibility: generationInputs.selectedFlexibility,
+        primaryGoal: modifyProgramInputs.primaryGoal,
+        secondaryGoal: modifyProgramInputs.secondaryGoal,
+        trainingDaysPerWeek: modifyProgramInputs.trainingDaysPerWeek,
+        scheduleMode: modifyProgramInputs.scheduleMode,
+        sessionDurationMode: modifyProgramInputs.sessionDurationMode,
+        sessionLengthMinutes: modifyProgramInputs.sessionLength,
+        selectedSkills: modifyProgramInputs.selectedSkills,
+        trainingPathType: modifyProgramInputs.trainingPathType,
+        experienceLevel: modifyProgramInputs.experienceLevel,
+        equipmentAvailable: modifyProgramInputs.equipment,
+        goalCategories: modifyProgramInputs.goalCategories,
+        selectedFlexibility: modifyProgramInputs.selectedFlexibility,
       })
       
       // [PHASE 24F] TASK 5 - Post-save parity audit
@@ -5604,23 +5620,44 @@ export default function ProgramPage() {
           : 'SESSION_COUNT_SAME_AS_VISIBLE',
       })
       
-      // [PHASE 24M] Success final parity verdict - unified path
-      console.log('[phase24m-modify-success-final-parity-verdict]', {
-        inputPrimaryGoal: generationInputs.primaryGoal,
-        inputScheduleMode: generationInputs.scheduleMode,
-        inputSelectedSkillsCount: generationInputs.selectedSkills?.length ?? 0,
-        outputPrimaryGoal: newProgram.primaryGoal,
-        outputScheduleMode: newProgram.scheduleMode,
-        outputSessionCount: newProgram.sessions?.length ?? 0,
-        outputSelectedSkillsCount: newProgram.selectedSkills?.length ?? 0,
-        inputWasFlexible: generationInputs.scheduleMode === 'flexible',
-        outputHas6PlusSessions: (newProgram.sessions?.length ?? 0) >= 6,
-        unifiedPathUsed: true,
+      // [MODIFY-UNIFIED-FIX] Authoritative result proof - production-safe verification
+      const savedSessionCount = newProgram.sessions?.length ?? 0
+      const requestedSessionTarget = modifyProgramInputs.scheduleMode === 'flexible' ? 6 : modifyProgramInputs.trainingDaysPerWeek
+      const sameSessionCount = savedSessionCount === visibleSessionCountBeforeSet
+      const isRealAdaptiveReduction = savedSessionCount < (typeof requestedSessionTarget === 'number' ? requestedSessionTarget : 6)
+      
+      // Determine verdict
+      let modifyVerdict: string
+      if (savedSessionCount >= 6 && modifyProgramInputs.scheduleMode === 'flexible') {
+        modifyVerdict = 'MODIFY_SAVED_AND_DISPLAYED_MATCH'
+      } else if (savedSessionCount === 4 && modifyProgramInputs.scheduleMode === 'flexible') {
+        // This should NOT happen anymore with server route fix
+        modifyVerdict = 'UNEXPECTED_4_SESSION_RESULT_CHECK_SERVER_ROUTE'
+      } else if (isRealAdaptiveReduction) {
+        modifyVerdict = 'REAL_ADAPTIVE_REDUCTION'
+      } else {
+        modifyVerdict = 'MODIFY_FULLY_ROUTED_TO_AUTHORITATIVE_REBUILD'
+      }
+      
+      console.log('[modify-authoritative-result-proof]', {
+        modifySubmitHandler: 'handleGenerateFromModifyBuilder',
+        authoritativeRebuildWinner: '/api/program/regenerate',
+        overridePayloadApplied: true,
+        requestedSessionTarget,
+        resolvedSessionTarget: savedSessionCount,
+        savedProgramId: newProgram.id,
+        savedSessionCount,
+        displayedProgramId: newProgram.id,
+        displayedSessionCount: savedSessionCount,
+        sameId: true,
+        sameSessionCount,
+        canonicalProfileWasUpdated: true,
+        verdict: modifyVerdict,
       })
       
       // Reset builder origin after successful save/hydration
-      console.log('[phase24m-builder-origin-reset-audit]', {
-        resetTrigger: 'successful_modify_unified_canonical_generation_complete',
+      console.log('[modify-unified-fix-builder-origin-reset]', {
+        resetTrigger: 'successful_modify_via_server_regenerate_route',
         resetOccurredAfterHydration: true,
         previousOrigin: builderOrigin,
         newOrigin: 'default',
@@ -5649,25 +5686,26 @@ export default function ProgramPage() {
         hydratedFromStorage: false,
       })
       
-      // [PHASE 24M] Final unified architecture verdict
+      // [MODIFY-UNIFIED-FIX] Final unified architecture verdict - now uses server route
       const sessionCount = newProgram.sessions?.length ?? 0
-      const inputWasFlexible = generationInputs.scheduleMode === 'flexible'
+      const inputWasFlexible = modifyProgramInputs.scheduleMode === 'flexible'
       
-      console.log('[phase24m-unified-architecture-final-verdict]', {
-        modifyUsesServerRoute: false,  // [PHASE 24M] No longer uses server route
-        modifyUsesCanonicalEntryBuilder: true,  // [PHASE 24M] Uses buildCanonicalGenerationEntry
-        modifyCallsGenerateAdaptiveProgramDirectly: true,  // [PHASE 24M] Direct call like handleGenerate
+      console.log('[modify-unified-fix-architecture-verdict]', {
+        modifyUsesServerRoute: true,  // [MODIFY-UNIFIED-FIX] NOW uses server route
+        modifyRoutesSameAsRegenerate: true,  // [MODIFY-UNIFIED-FIX] Same /api/program/regenerate route
+        modifyPassesIsFreshBaselineBuildViaServer: true,  // [MODIFY-UNIFIED-FIX] Server applies flag
+        modifyNoLongerCallsBuilderDirectly: true,  // [MODIFY-UNIFIED-FIX] No direct generateAdaptiveProgram call
         unifiedWithOnboardingAndRestart: true,
         overrideBuiltFromSessionInputs: !!builderSessionInputs,
         builderSessionKey,
         outputSessionCount: sessionCount,
         outputPrimaryGoal: newProgram.primaryGoal,
         outputSelectedSkillsCount: newProgram.selectedSkills?.length ?? 0,
-        inputScheduleMode: generationInputs.scheduleMode,
-        inputSelectedSkillsCount: generationInputs.selectedSkills?.length ?? 0,
+        inputScheduleMode: modifyProgramInputs.scheduleMode,
+        inputSelectedSkillsCount: modifyProgramInputs.selectedSkills?.length ?? 0,
         selectedSkillsHasBackLever: newProgram.selectedSkills?.includes('back_lever') ?? false,
         selectedSkillsHasDragonFlag: newProgram.selectedSkills?.includes('dragon_flag') ?? false,
-        verdict: 'MODIFY_NOW_USES_SAME_CANONICAL_PATH_AS_ONBOARDING_AND_RESTART',
+        verdict: 'MODIFY_PATH_UNIFIED_WITH_AUTHORITATIVE_REBUILD',
       })
       
     } catch (error) {

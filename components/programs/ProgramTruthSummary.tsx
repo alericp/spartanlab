@@ -164,6 +164,20 @@ interface TruthExplanation {
       supportAllocationBias: string
       methodPackagingBias: string
     }
+    // [PHASE 1 AI-TRUTH-ESCALATION] Additional architecture truth fields
+    flexibilityIntegration?: {
+      hasFlexibilityGoals: boolean
+      integrationMode: 'dedicated_block' | 'warmup_integrated' | 'cooldown_integrated' | 'none'
+      flexibilityTimeReserved: number
+    }
+    methodPackaging?: {
+      preferredMethods: string[]
+      actualMethodsApplied: string[]
+      packagingDecision: string
+      rationale: string
+    }
+    visibleDifferenceScore?: number
+    templateEscapeRequired?: boolean
   } | null
   // [SESSION-ARCHITECTURE-MATERIALIZATION] Skill materialization verdict
   materializationVerdict?: {

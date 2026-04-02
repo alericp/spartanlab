@@ -96,6 +96,38 @@ export interface SessionArchitectureTruthContract {
   // Explanation hooks for UI
   explanationHooks: ExplanationHooks
   
+  // ==========================================================================
+  // [PHASE 1 AI-TRUTH-ESCALATION] NEW FIELDS FOR BROADER TRUTH EXPRESSION
+  // ==========================================================================
+  
+  // Flexibility integration - determines where flexibility work lives
+  flexibilityIntegration: {
+    hasFlexibilityGoals: boolean
+    selectedFlexibility: string[]
+    integrationMode: 'dedicated_block' | 'warmup_integrated' | 'cooldown_integrated' | 'none'
+    affectedSessions: number[]  // Which session indices should include flexibility
+    flexibilityTimeReserved: number  // Minutes reserved for flexibility per session
+  }
+  
+  // Method packaging - determines session structure beyond just labels
+  methodPackaging: {
+    preferredMethods: string[]
+    actualMethodsApplied: string[]
+    methodsLimitedBySkillQuality: string[]
+    packagingDecision: 'straight_sets' | 'supersets_allowed' | 'circuits_allowed' | 'density_allowed'
+    rationale: string
+  }
+  
+  // Visible difference enforcement - prevents generic templates
+  visibleDifferenceTargets: {
+    templateEscapeRequired: boolean
+    minDistinctSessionRoles: number
+    minNonPrimarySkillExpression: number
+    requiredMethodVariety: boolean
+    requiredFlexibilityIntegration: boolean
+    differenceFromBaselineScore: number  // 0-100, higher = more personalized
+  }
+  
   // Generation context
   generationContext: {
     effectiveTrainingDays: number
@@ -115,6 +147,10 @@ export interface SessionArchitectureTruthContract {
     currentWorkingCapCount: number
     historicalCeilingBlockedCount: number
     doctrineInfluenceLevel: 'none' | 'minimal' | 'moderate' | 'strong'
+    // [PHASE 1 AI-TRUTH-ESCALATION] Additional audit fields
+    flexibilityIntegrated: boolean
+    methodsAppliedCount: number
+    visibleDifferenceScore: number
   }
 }
 
@@ -309,6 +345,78 @@ export function buildSessionArchitectureTruthContract(
     'MINIMAL_TRUTH_FALLBACK'
   
   // ==========================================================================
+  // [PHASE 1 AI-TRUTH-ESCALATION] STEP 9: Build flexibility integration
+  // ==========================================================================
+  const hasFlexibilityGoals = (input.selectedFlexibility?.length || 0) > 0
+  const flexibilityIntegration: SessionArchitectureTruthContract['flexibilityIntegration'] = {
+    hasFlexibilityGoals,
+    selectedFlexibility: input.selectedFlexibility || [],
+    integrationMode: hasFlexibilityGoals 
+      ? (effectiveTrainingDays >= 5 ? 'dedicated_block' : 'cooldown_integrated')
+      : 'none',
+    affectedSessions: hasFlexibilityGoals 
+      ? Array.from({ length: Math.min(3, effectiveTrainingDays) }, (_, i) => i)
+      : [],
+    flexibilityTimeReserved: hasFlexibilityGoals ? (effectiveTrainingDays >= 5 ? 10 : 5) : 0,
+  }
+  
+  // ==========================================================================
+  // [PHASE 1 AI-TRUTH-ESCALATION] STEP 10: Build method packaging decision
+  // ==========================================================================
+  const preferredMethods = trainingMethodPreferences?.map(p => p.name || p.id) || ['straight_sets']
+  const methodsLimitedBySkillQuality = preferredMethods.filter(m => 
+    m === 'circuits' || m === 'density_blocks'
+  )
+  
+  // Determine actual applicable methods based on skill quality protection
+  const primaryIsAdvancedSkill = ['planche', 'front_lever', 'back_lever', 'iron_cross', 'maltese', 'victorian']
+    .some(s => primaryGoal?.toLowerCase().includes(s))
+  
+  const actualMethodsApplied = primaryIsAdvancedSkill
+    ? preferredMethods.filter(m => m !== 'circuits') // Protect skill quality
+    : preferredMethods
+  
+  const methodPackaging: SessionArchitectureTruthContract['methodPackaging'] = {
+    preferredMethods,
+    actualMethodsApplied,
+    methodsLimitedBySkillQuality: primaryIsAdvancedSkill ? methodsLimitedBySkillQuality : [],
+    packagingDecision: actualMethodsApplied.includes('density_blocks') ? 'density_allowed'
+      : actualMethodsApplied.includes('circuits') ? 'circuits_allowed'
+      : actualMethodsApplied.includes('supersets') ? 'supersets_allowed'
+      : 'straight_sets',
+    rationale: primaryIsAdvancedSkill 
+      ? 'Skill quality protection limits high-fatigue methods for advanced skills'
+      : preferredMethods.length > 1 
+        ? `User-selected methods applied: ${actualMethodsApplied.join(', ')}`
+        : 'Default straight sets',
+  }
+  
+  // ==========================================================================
+  // [PHASE 1 AI-TRUTH-ESCALATION] STEP 11: Build visible difference targets
+  // ==========================================================================
+  const baselineDifferenceScore = 0
+  let differenceScore = baselineDifferenceScore
+  
+  // Score increases based on personalization factors
+  if (supportRotationSkills.length >= 1) differenceScore += 15
+  if (supportRotationSkills.length >= 2) differenceScore += 10
+  if (hasFlexibilityGoals) differenceScore += 15
+  if (actualMethodsApplied.length > 1) differenceScore += 10
+  if (Object.keys(currentWorkingSkillCaps).length > 0) differenceScore += 15
+  if (doctrineArchitectureBias.sessionRoleBias !== 'primary_dominant') differenceScore += 10
+  if (secondaryAnchorSkills.length >= 1) differenceScore += 10
+  if (complexity === 'high') differenceScore += 15
+  
+  const visibleDifferenceTargets: SessionArchitectureTruthContract['visibleDifferenceTargets'] = {
+    templateEscapeRequired: structuralGuards.requireVisibleDifferenceFromPrimaryOnlyTemplate,
+    minDistinctSessionRoles: complexity === 'high' ? 3 : complexity === 'moderate' ? 2 : 1,
+    minNonPrimarySkillExpression: Math.min(supportRotationSkills.length + secondaryAnchorSkills.length, 3),
+    requiredMethodVariety: actualMethodsApplied.length > 1,
+    requiredFlexibilityIntegration: hasFlexibilityGoals,
+    differenceFromBaselineScore: Math.min(100, differenceScore),
+  }
+  
+  // ==========================================================================
   // BUILD FINAL CONTRACT
   // ==========================================================================
   const contract: SessionArchitectureTruthContract = {
@@ -330,6 +438,11 @@ export function buildSessionArchitectureTruthContract(
     structuralGuards,
     explanationHooks,
     
+    // [PHASE 1 AI-TRUTH-ESCALATION] New fields
+    flexibilityIntegration,
+    methodPackaging,
+    visibleDifferenceTargets,
+    
     generationContext: {
       effectiveTrainingDays,
       scheduleMode,
@@ -347,6 +460,10 @@ export function buildSessionArchitectureTruthContract(
       currentWorkingCapCount: Object.keys(currentWorkingSkillCaps).length,
       historicalCeilingBlockedCount,
       doctrineInfluenceLevel: doctrineRuntimeContract?.explanationDoctrine?.doctrineInfluenceLevel || 'none',
+      // [PHASE 1 AI-TRUTH-ESCALATION] Additional audit fields
+      flexibilityIntegrated: hasFlexibilityGoals,
+      methodsAppliedCount: actualMethodsApplied.length,
+      visibleDifferenceScore: differenceScore,
     },
   }
   
@@ -364,6 +481,19 @@ export function buildSessionArchitectureTruthContract(
     requireVisibleDifference: structuralGuards.requireVisibleDifferenceFromPrimaryOnlyTemplate,
     weeklyMinimums,
     doctrineArchitectureBias: doctrineArchitectureBias.sessionRoleBias,
+    // [PHASE 1 AI-TRUTH-ESCALATION] Additional audit fields
+    flexibilityIntegration: {
+      hasGoals: flexibilityIntegration.hasFlexibilityGoals,
+      mode: flexibilityIntegration.integrationMode,
+      timeReserved: flexibilityIntegration.flexibilityTimeReserved,
+    },
+    methodPackaging: {
+      preferred: preferredMethods,
+      applied: actualMethodsApplied,
+      decision: methodPackaging.packagingDecision,
+    },
+    visibleDifferenceScore: differenceScore,
+    templateEscapeRequired: visibleDifferenceTargets.templateEscapeRequired,
     verdict: 'SESSION_ARCHITECTURE_TRUTH_READY',
   })
   

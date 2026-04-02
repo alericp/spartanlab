@@ -12942,6 +12942,57 @@ return explanations.length > 0 ? explanations : undefined
   })
   
   // ==========================================================================
+  // [PHASE 1 AI-TRUTH-ESCALATION] TASK G: VISIBLE DIFFERENCE VALIDATION
+  // Validates that the generated week is materially different from a baseline template
+  // when the athlete truth justifies differentiation.
+  // ==========================================================================
+  const visibleDifferenceTargets = sessionArchitectureTruth?.visibleDifferenceTargets
+  const templateEscapeRequired = visibleDifferenceTargets?.templateEscapeRequired ?? false
+  const differenceScore = visibleDifferenceTargets?.differenceFromBaselineScore ?? 0
+  
+  // Calculate actual differentiation achieved
+  const distinctSessionRoles = new Set(sessions.map(s => s.focus || 'generic')).size
+  const nonPrimarySkillsExpressed = skillsWithDedicatedSupport.length + skillsRotational.length
+  const methodVarietyAchieved = sessionArchitectureTruth?.methodPackaging?.actualMethodsApplied?.length > 1
+  const flexibilityIntegrated = sessionArchitectureTruth?.flexibilityIntegration?.hasFlexibilityGoals ?? false
+  
+  // Compute actual difference score
+  let actualDifferenceScore = 0
+  if (distinctSessionRoles >= 2) actualDifferenceScore += 15
+  if (distinctSessionRoles >= 3) actualDifferenceScore += 10
+  if (nonPrimarySkillsExpressed >= 1) actualDifferenceScore += 15
+  if (nonPrimarySkillsExpressed >= 2) actualDifferenceScore += 10
+  if (methodVarietyAchieved) actualDifferenceScore += 15
+  if (flexibilityIntegrated) actualDifferenceScore += 10
+  if (Object.keys(currentWorkingCaps).length > 0) actualDifferenceScore += 10
+  if (doctrineActivelyChangedArchitecture) actualDifferenceScore += 15
+  
+  const differenceValidation = {
+    templateEscapeRequired,
+    targetDifferenceScore: differenceScore,
+    actualDifferenceScore,
+    meetsTarget: actualDifferenceScore >= differenceScore * 0.7, // Allow 30% margin
+    validation: {
+      distinctSessionRoles: { target: visibleDifferenceTargets?.minDistinctSessionRoles || 1, actual: distinctSessionRoles },
+      nonPrimarySkillExpression: { target: visibleDifferenceTargets?.minNonPrimarySkillExpression || 0, actual: nonPrimarySkillsExpressed },
+      methodVariety: { required: visibleDifferenceTargets?.requiredMethodVariety || false, achieved: methodVarietyAchieved },
+      flexibilityIntegration: { required: visibleDifferenceTargets?.requiredFlexibilityIntegration || false, achieved: flexibilityIntegrated },
+    },
+    verdict: !templateEscapeRequired 
+      ? 'TEMPLATE_ESCAPE_NOT_REQUIRED'
+      : actualDifferenceScore >= differenceScore * 0.7
+        ? 'VISIBLE_DIFFERENCE_ACHIEVED'
+        : 'VISIBLE_DIFFERENCE_BELOW_TARGET',
+  }
+  
+  console.log('[AI-TRUTH-VISIBLE-DIFFERENCE-VALIDATION]', {
+    ...differenceValidation,
+    escalationActive: true,
+    athleteTruthJustifiesDifferentiation: templateEscapeRequired,
+    generatedWeekMeetsDifferentiationTarget: differenceValidation.meetsTarget,
+  })
+  
+  // ==========================================================================
   // [TASK 8] ALLEXERCISENAMES ROOT FIX FINAL VERDICT
   // Confirms the scope bug is fixed and audit code is crash-proof
   // ==========================================================================
@@ -15004,14 +15055,26 @@ function generateAdaptiveSession(
     // ==========================================================================
     // [PHASE 7A TASK 8] DURATION-SENSITIVE STYLE TRUTH AUDIT
     // Log how style may differ for short vs full sessions
+    // [PHASE 1 AI-TRUTH-ESCALATION] Now uses sessionArchitectureTruth.methodPackaging as authoritative source
     // ==========================================================================
-    const fullSessionStyle = trainingMethodPreferences?.includes('supersets') ? 'supersets' :
-                             trainingMethodPreferences?.includes('circuits') ? 'circuits' :
-                             'straight_sets'
+    
+    // Use architecture truth method packaging if available, otherwise fallback to preferences
+    const architectureMethodDecision = sessionArchitectureTruth?.methodPackaging?.packagingDecision
+    const architectureAppliedMethods = sessionArchitectureTruth?.methodPackaging?.actualMethodsApplied || []
+    
+    const fullSessionStyle = architectureMethodDecision 
+      ? (architectureMethodDecision === 'supersets_allowed' ? 'supersets' :
+         architectureMethodDecision === 'circuits_allowed' ? 'circuits' :
+         architectureMethodDecision === 'density_allowed' ? 'density_blocks' :
+         'straight_sets')
+      : (trainingMethodPreferences?.includes('supersets') ? 'supersets' :
+         trainingMethodPreferences?.includes('circuits') ? 'circuits' :
+         'straight_sets')
+    
     // Short sessions may prefer density methods for efficiency
-    const shortSessionStyle = (sessionMinutesResolved <= 30 && trainingMethodPreferences?.includes('density_blocks'))
+    const shortSessionStyle = (sessionMinutesResolved <= 30 && (architectureAppliedMethods.includes('density_blocks') || trainingMethodPreferences?.includes('density_blocks')))
       ? 'density_blocks'
-      : (sessionMinutesResolved <= 30 && trainingMethodPreferences?.includes('supersets'))
+      : (sessionMinutesResolved <= 30 && (architectureAppliedMethods.includes('supersets') || trainingMethodPreferences?.includes('supersets')))
         ? 'supersets'
         : fullSessionStyle
     

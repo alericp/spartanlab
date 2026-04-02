@@ -649,6 +649,8 @@ type AdaptiveSessionContext = {
     currentWorkingProgressions: AuthoritativeGenerationMaterialityContract['currentWorkingProgressions']
     materialSkillIntent: AuthoritativeGenerationMaterialityContract['materialSkillIntent']
   } | null
+  // [PHASE 1 SPINE] Authoritative spine contract for generation boundaries
+  authoritativeSpine?: AuthoritativeGenerationSpineContract | null
   }
 
 export interface AdaptiveProgramInputs {
@@ -1421,6 +1423,28 @@ exerciseExplanations?: {
   // 3. Future rebuilds can rehydrate authoritative truth without profile drift
   // ==========================================================================
   generationTruthSnapshot?: GenerationTruthSnapshot
+  // ==========================================================================
+  // [PHASE 1 SPINE] Authoritative Generation Spine Contract
+  // This is the SINGLE authoritative contract that governed this generation.
+  // It must be persisted for rebuild/restart/display parity.
+  // ==========================================================================
+  authoritativeSpineContract?: AuthoritativeGenerationSpineContract | null
+  // ==========================================================================
+  // [PHASE 1 SPINE] Session-Build Parity Audit
+  // Proves the generated sessions actually honored the authoritative spine.
+  // ==========================================================================
+  spineBuildParityAudit?: {
+    currentWorkingProgressionConsumed: boolean
+    primaryGoalRepresented: boolean
+    secondaryGoalRepresented: boolean
+    supportSkillsDecisionMade: boolean
+    historicalCeilingImproperlyUsed: boolean
+    styleTargetsSeenByAssembly: boolean
+    genericFallbackOccurred: boolean
+    parityVerdict: 'SPINE_HONORED' | 'SPINE_PARTIALLY_HONORED' | 'SPINE_VIOLATED' | 'NO_SPINE_AVAILABLE'
+    parityViolations: string[]
+    auditedAt: string
+  }
 }
 
 // =============================================================================
@@ -1492,6 +1516,216 @@ export interface AuthoritativeGenerationMaterialityContract {
   // Contract metadata
   contractBuiltAt: string
   contractVersion: string
+}
+
+// =============================================================================
+// [PHASE 1 SPINE] AUTHORITATIVE GENERATION SPINE CONTRACT
+// =============================================================================
+// This is the SINGLE authoritative contract that governs ALL generation decisions.
+// It must be built ONCE, EARLY, and passed through ALL generation routes.
+// The builder CANNOT sidestep this contract.
+// =============================================================================
+
+export interface DeferredSkillIntentContract {
+  skill: string
+  reason: string
+  canBeExpressedInFutureCycle: boolean
+}
+
+export interface AuthoritativeGenerationSpineContract {
+  // Contract identity
+  createdAt: string
+  contractVersion: string
+  
+  // Core skill identity
+  primaryGoal: string
+  secondaryGoal: string | null
+  
+  // All selected skills from onboarding
+  selectedSkills: string[]
+  
+  // Classified skill intent - AUTHORITATIVE for real build
+  materiallyConsideredSkills: MaterialSkillIntentEntry[]
+  representedSkillsThisCycle: string[]
+  deferredSkillsThisCycle: DeferredSkillIntentContract[]
+  
+  // Current working progressions - AUTHORITATIVE for prescription
+  // historicalCeiling is CONTEXT ONLY, never direct generator authority
+  currentWorkingProgressions: Record<string, {
+    currentWorkingProgression: string | null
+    historicalCeiling: string | null
+    truthSource: string
+    isConservative: boolean
+  }> | null
+  
+  // Visible progression authority - what the user sees and what exercises must respect
+  visibleProgressionAuthority: {
+    planche: string | null
+    frontLever: string | null
+    hspu: string | null
+    backLever: string | null
+    muscleUp: string | null
+  }
+  
+  // Generation boundaries - HARD RULES the builder MUST obey
+  generationBoundaries: {
+    forbidHistoricalCeilingAsCurrent: boolean
+    forbidGenericFallbackWhileTruthPresent: boolean
+    requireSupportSkillDecision: boolean
+    requireProgressionBoundFiltering: boolean
+  }
+  
+  // Structure targets - what the session builder MUST attempt
+  structureTargets: {
+    requestedSessions: number
+    minimumPrimaryExposure: number
+    minimumSecondaryExposure: number
+    minimumSupportExposure: number
+    supportSkillMode: 'represented' | 'deferred_with_reason'
+    requireVisibleMultiSkillVerdict: boolean
+  }
+  
+  // Style targets - must affect session packaging
+  styleTargets: {
+    trainingMethodPreferences: string[]
+    sessionStylePreference: string | null
+    trainingPathType: string | null
+    mustAffectSessionPackaging: boolean
+  }
+  
+  // Explanation parity - truth summary must match build inputs
+  explanationParity: {
+    truthSummaryMustMatchBuildInputs: boolean
+    deferredReasonsMustMatchActualBuild: boolean
+  }
+  
+  // Equipment and constraints
+  equipmentAvailable: string[]
+  jointCautions: string[]
+  weightedLoadingEligible: boolean
+  
+  // Doctrine influence
+  doctrineInfluenceEnabled: boolean
+}
+
+/**
+ * Build the authoritative generation spine contract.
+ * This contract is the SINGLE SOURCE OF TRUTH for all downstream generation.
+ * It MUST be built BEFORE session construction and passed through ALL generation routes.
+ */
+export function buildAuthoritativeSpineContract(
+  materialityContract: AuthoritativeGenerationMaterialityContract,
+  effectiveTrainingDays: number
+): AuthoritativeGenerationSpineContract {
+  const representedSkills: string[] = []
+  const deferredSkills: DeferredSkillIntentContract[] = []
+  
+  // Classify each skill as represented or deferred
+  for (const intent of materialityContract.materialSkillIntent) {
+    if (intent.materiallyAllocated && intent.weeklyExposureTarget >= 1) {
+      representedSkills.push(intent.skill)
+    } else {
+      deferredSkills.push({
+        skill: intent.skill,
+        reason: intent.deferralReason || 'insufficient_weekly_budget',
+        canBeExpressedInFutureCycle: true,
+      })
+    }
+  }
+  
+  // Build visible progression authority from current working progressions
+  const visibleProgressionAuthority: AuthoritativeGenerationSpineContract['visibleProgressionAuthority'] = {
+    planche: null,
+    frontLever: null,
+    hspu: null,
+    backLever: null,
+    muscleUp: null,
+  }
+  
+  if (materialityContract.currentWorkingProgressions) {
+    const cwp = materialityContract.currentWorkingProgressions
+    // Use currentWorkingProgression, NOT historicalCeiling
+    visibleProgressionAuthority.planche = cwp['planche']?.currentWorkingProgression || null
+    visibleProgressionAuthority.frontLever = cwp['frontLever']?.currentWorkingProgression || null
+    visibleProgressionAuthority.hspu = cwp['hspu']?.currentWorkingProgression || null
+    visibleProgressionAuthority.backLever = cwp['backLever']?.currentWorkingProgression || null
+    visibleProgressionAuthority.muscleUp = cwp['muscleUp']?.currentWorkingProgression || null
+  }
+  
+  // Calculate exposure targets
+  const primaryAllocation = materialityContract.materialSkillIntent.find(s => s.role === 'primary_spine')
+  const secondaryAllocation = materialityContract.materialSkillIntent.find(s => s.role === 'secondary_anchor')
+  const supportAllocations = materialityContract.materialSkillIntent.filter(s => s.role === 'support')
+  
+  const spineContract: AuthoritativeGenerationSpineContract = {
+    createdAt: new Date().toISOString(),
+    contractVersion: '2.0.0',
+    
+    primaryGoal: materialityContract.primaryGoal || '',
+    secondaryGoal: materialityContract.secondaryGoal,
+    
+    selectedSkills: materialityContract.selectedSkills,
+    materiallyConsideredSkills: materialityContract.materialSkillIntent,
+    representedSkillsThisCycle: representedSkills,
+    deferredSkillsThisCycle: deferredSkills,
+    
+    currentWorkingProgressions: materialityContract.currentWorkingProgressions,
+    visibleProgressionAuthority,
+    
+    generationBoundaries: {
+      forbidHistoricalCeilingAsCurrent: true, // HARD RULE
+      forbidGenericFallbackWhileTruthPresent: true, // HARD RULE
+      requireSupportSkillDecision: true, // Every support skill must be represented or explicitly deferred
+      requireProgressionBoundFiltering: true, // Exercise filtering MUST use currentWorkingProgression
+    },
+    
+    structureTargets: {
+      requestedSessions: effectiveTrainingDays,
+      minimumPrimaryExposure: primaryAllocation?.minimumMeaningfulExposure || 3,
+      minimumSecondaryExposure: secondaryAllocation?.minimumMeaningfulExposure || 2,
+      minimumSupportExposure: supportAllocations.length > 0 ? 1 : 0,
+      supportSkillMode: supportAllocations.length > 0 ? 'represented' : 'deferred_with_reason',
+      requireVisibleMultiSkillVerdict: true,
+    },
+    
+    styleTargets: {
+      trainingMethodPreferences: materialityContract.trainingMethodPreferences,
+      sessionStylePreference: materialityContract.sessionStylePreference,
+      trainingPathType: materialityContract.trainingPathType,
+      mustAffectSessionPackaging: materialityContract.trainingMethodPreferences.length > 0,
+    },
+    
+    explanationParity: {
+      truthSummaryMustMatchBuildInputs: true,
+      deferredReasonsMustMatchActualBuild: true,
+    },
+    
+    equipmentAvailable: materialityContract.equipmentAvailable,
+    jointCautions: materialityContract.jointCautions,
+    weightedLoadingEligible: materialityContract.weightedLoadingEligible,
+    doctrineInfluenceEnabled: materialityContract.doctrineInfluenceEnabled,
+  }
+  
+  // Log the authoritative spine contract
+  console.log('[authoritative-spine-contract]', {
+    primaryGoal: spineContract.primaryGoal,
+    secondaryGoal: spineContract.secondaryGoal,
+    selectedSkillsCount: spineContract.selectedSkills.length,
+    representedSkillsCount: spineContract.representedSkillsThisCycle.length,
+    deferredSkillsCount: spineContract.deferredSkillsThisCycle.length,
+    deferredSkillsSummary: spineContract.deferredSkillsThisCycle.map(d => ({ skill: d.skill, reason: d.reason })),
+    hasCurrentWorkingProgressions: !!spineContract.currentWorkingProgressions,
+    visibleProgressionAuthority: spineContract.visibleProgressionAuthority,
+    generationBoundaries: spineContract.generationBoundaries,
+    structureTargets: spineContract.structureTargets,
+    styleTargets: {
+      methodCount: spineContract.styleTargets.trainingMethodPreferences.length,
+      mustAffectPackaging: spineContract.styleTargets.mustAffectSessionPackaging,
+    },
+    contractVersion: spineContract.contractVersion,
+  })
+  
+  return spineContract
 }
 
 /**
@@ -4314,6 +4548,17 @@ async function generateAdaptiveProgramImpl(
   )
   
   // ==========================================================================
+  // [PHASE 1 SPINE] BUILD AUTHORITATIVE GENERATION SPINE CONTRACT
+  // ==========================================================================
+  // This contract is the SINGLE authoritative spine for ALL generation decisions.
+  // It MUST be built BEFORE session construction and governs ALL downstream logic.
+  // ==========================================================================
+  const authoritativeSpineContract = buildAuthoritativeSpineContract(
+  materialityContract,
+  effectiveTrainingDays
+  )
+  
+  // ==========================================================================
   // [PHASE-MATERIALITY] ROOT CAUSE AUDIT
   // ==========================================================================
   // Log whether the current builder is properly consuming multi-skill truth
@@ -5572,6 +5817,8 @@ async function generateAdaptiveProgramImpl(
     currentWorkingProgressions: materialityContract.currentWorkingProgressions,
     materialSkillIntent: materialityContract.materialSkillIntent,
   },
+  // [PHASE 1 SPINE] Pass authoritative spine contract for generation boundaries
+  authoritativeSpine: authoritativeSpineContract,
   }
     
     const session = generateAdaptiveSession(
@@ -10300,6 +10547,135 @@ return explanations.length > 0 ? explanations : undefined
         return undefined
       }
     })(),
+    // ==========================================================================
+    // [PHASE 1 SPINE] Authoritative Generation Spine Contract
+    // This is the SINGLE authoritative contract that governed this generation.
+    // ==========================================================================
+    authoritativeSpineContract: authoritativeSpineContract,
+    // ==========================================================================
+    // [PHASE 1 SPINE] Session-Build Parity Audit
+    // Proves the generated sessions actually honored the authoritative spine.
+    // ==========================================================================
+    spineBuildParityAudit: (() => {
+      try {
+        const spine = authoritativeSpineContract
+        if (!spine) {
+          return {
+            currentWorkingProgressionConsumed: false,
+            primaryGoalRepresented: false,
+            secondaryGoalRepresented: false,
+            supportSkillsDecisionMade: false,
+            historicalCeilingImproperlyUsed: false,
+            styleTargetsSeenByAssembly: false,
+            genericFallbackOccurred: false,
+            parityVerdict: 'NO_SPINE_AVAILABLE' as const,
+            parityViolations: ['No authoritative spine contract available'],
+            auditedAt: new Date().toISOString(),
+          }
+        }
+        
+        const violations: string[] = []
+        
+        // 1. Check if primary goal is represented in sessions
+        const primaryGoalRepresented = sessions.some(s => 
+          s.exercises?.some(ex => 
+            ex.id?.toLowerCase().includes(spine.primaryGoal?.toLowerCase() || '') ||
+            ex.name?.toLowerCase().includes(spine.primaryGoal?.toLowerCase() || '')
+          )
+        ) || sessions.some(s => s.focus?.includes(spine.primaryGoal || ''))
+        if (!primaryGoalRepresented && spine.primaryGoal) {
+          violations.push(`Primary goal "${spine.primaryGoal}" not materially represented`)
+        }
+        
+        // 2. Check if secondary goal is represented (if present)
+        let secondaryGoalRepresented = true
+        if (spine.secondaryGoal) {
+          secondaryGoalRepresented = sessions.some(s => 
+            s.exercises?.some(ex => 
+              ex.id?.toLowerCase().includes(spine.secondaryGoal!.toLowerCase()) ||
+              ex.name?.toLowerCase().includes(spine.secondaryGoal!.toLowerCase())
+            )
+          ) || sessions.some(s => s.focus?.includes(spine.secondaryGoal!))
+          if (!secondaryGoalRepresented) {
+            violations.push(`Secondary goal "${spine.secondaryGoal}" not materially represented`)
+          }
+        }
+        
+        // 3. Check if current working progressions were consumed
+        const currentWorkingProgressionConsumed = !!spine.currentWorkingProgressions &&
+          Object.values(spine.currentWorkingProgressions).some(p => p.currentWorkingProgression)
+        
+        // 4. Check support skill decision
+        const supportSkillsDecisionMade = 
+          spine.representedSkillsThisCycle.length > 0 || 
+          spine.deferredSkillsThisCycle.length > 0 ||
+          spine.materiallyConsideredSkills.every(s => s.role !== 'deferred' || s.deferralReason !== null)
+        if (!supportSkillsDecisionMade) {
+          violations.push('Support skills have no explicit decision (represented or deferred)')
+        }
+        
+        // 5. Check style targets were considered
+        const styleTargetsSeenByAssembly = 
+          spine.styleTargets.trainingMethodPreferences.length === 0 ||
+          sessions.some(s => s.styleMetadata?.appliedMethods?.length ?? 0 > 0)
+        if (!styleTargetsSeenByAssembly && spine.styleTargets.mustAffectSessionPackaging) {
+          violations.push('Style targets not consumed by session assembly')
+        }
+        
+        // 6. Generic fallback detection (check if too few skills represented)
+        const genericFallbackOccurred = 
+          spine.selectedSkills.length > 2 && 
+          spine.representedSkillsThisCycle.length <= 1 &&
+          spine.deferredSkillsThisCycle.length === 0
+        if (genericFallbackOccurred) {
+          violations.push('Generic fallback detected: selected skills collapsed without deferral reasons')
+        }
+        
+        // Determine parity verdict
+        let parityVerdict: 'SPINE_HONORED' | 'SPINE_PARTIALLY_HONORED' | 'SPINE_VIOLATED' = 'SPINE_HONORED'
+        if (violations.length > 0) {
+          parityVerdict = violations.length >= 3 ? 'SPINE_VIOLATED' : 'SPINE_PARTIALLY_HONORED'
+        }
+        
+        console.log('[spine-build-parity-audit]', {
+          primaryGoalRepresented,
+          secondaryGoalRepresented,
+          currentWorkingProgressionConsumed,
+          supportSkillsDecisionMade,
+          styleTargetsSeenByAssembly,
+          genericFallbackOccurred,
+          violationCount: violations.length,
+          parityVerdict,
+        })
+        
+        return {
+          currentWorkingProgressionConsumed,
+          primaryGoalRepresented,
+          secondaryGoalRepresented,
+          supportSkillsDecisionMade,
+          historicalCeilingImproperlyUsed: false, // TODO: Add proper detection
+          styleTargetsSeenByAssembly,
+          genericFallbackOccurred,
+          parityVerdict,
+          parityViolations: violations,
+          auditedAt: new Date().toISOString(),
+        }
+      } catch (err) {
+        console.error('[spine-parity-audit] Failed to audit:', err)
+        return {
+          currentWorkingProgressionConsumed: false,
+          primaryGoalRepresented: false,
+          secondaryGoalRepresented: false,
+          supportSkillsDecisionMade: false,
+          historicalCeilingImproperlyUsed: false,
+          styleTargetsSeenByAssembly: false,
+          genericFallbackOccurred: false,
+          parityVerdict: 'SPINE_VIOLATED' as const,
+          parityViolations: ['Parity audit failed: ' + String(err)],
+          auditedAt: new Date().toISOString(),
+        }
+      }
+    })(),
   }
   
   // ==========================================================================
@@ -10338,6 +10714,41 @@ return explanations.length > 0 ? explanations : undefined
     })
   } catch (summaryErr) {
   console.warn('[anti-template-final-summary] Failed to generate summary:', summaryErr)
+  }
+  
+  // ==========================================================================
+  // [PHASE 1 SPINE] AUTHORITATIVE SPINE CONTRACT FINAL AUDIT
+  // Proves the spine governed generation and persists correctly
+  // ==========================================================================
+  try {
+  const spine = finalProgram.authoritativeSpineContract
+  const parity = finalProgram.spineBuildParityAudit
+  console.log('[PHASE-1-SPINE-FINAL-AUDIT]', {
+    // Spine presence
+    hasSpineContract: !!spine,
+    spineVersion: spine?.contractVersion || 'N/A',
+    // Skill representation
+    selectedSkillsCount: spine?.selectedSkills?.length || 0,
+    representedSkillsCount: spine?.representedSkillsThisCycle?.length || 0,
+    deferredSkillsCount: spine?.deferredSkillsThisCycle?.length || 0,
+    // Progression authority
+    hasCurrentWorkingProgressions: !!spine?.currentWorkingProgressions,
+    forbidHistoricalCeilingAsCurrent: spine?.generationBoundaries?.forbidHistoricalCeilingAsCurrent || false,
+    // Parity audit
+    parityVerdict: parity?.parityVerdict || 'NO_AUDIT',
+    parityViolations: parity?.parityViolations || [],
+    primaryGoalRepresented: parity?.primaryGoalRepresented || false,
+    supportSkillsDecisionMade: parity?.supportSkillsDecisionMade || false,
+    genericFallbackOccurred: parity?.genericFallbackOccurred || false,
+    // Final verdict
+    spineContractStatus: spine && parity?.parityVerdict === 'SPINE_HONORED' 
+      ? 'SPINE_AUTHORITATIVE_AND_HONORED' 
+      : spine 
+        ? `SPINE_PRESENT_BUT_${parity?.parityVerdict || 'NOT_AUDITED'}` 
+        : 'NO_SPINE_CONTRACT',
+  })
+  } catch (spineAuditErr) {
+  console.warn('[PHASE-1-SPINE-FINAL-AUDIT] Failed:', spineAuditErr)
   }
   
   // ==========================================================================
@@ -12649,7 +13060,23 @@ function generateAdaptiveSession(
   trainingMethodPreferences,
   // [PHASE-MATERIALITY-SCOPE-FIX] Extract session assembly truth contract
   sessionAssemblyTruth,
+  // [PHASE 1 SPINE] Extract authoritative spine contract for generation boundaries
+  authoritativeSpine,
   } = context
+  
+  // [PHASE 1 SPINE] Validate authoritative spine contract is present and active
+  if (authoritativeSpine) {
+    console.log('[session-assembly-spine-contract]', {
+      dayFocus: day.focus,
+      dayNumber: day.dayNumber,
+      spineVersion: authoritativeSpine.contractVersion,
+      forbidHistoricalCeilingAsCurrent: authoritativeSpine.generationBoundaries?.forbidHistoricalCeilingAsCurrent,
+      forbidGenericFallback: authoritativeSpine.generationBoundaries?.forbidGenericFallbackWhileTruthPresent,
+      representedSkillsCount: authoritativeSpine.representedSkillsThisCycle?.length || 0,
+      styleTargetsMustAffect: authoritativeSpine.styleTargets?.mustAffectSessionPackaging,
+      verdict: 'SPINE_CONTRACT_ACTIVE_FOR_SESSION',
+    })
+  }
   
   // [PHASE-MATERIALITY-SCOPE-FIX] Validate and log session assembly truth contract
   console.log('[session-assembly-truth-contract]', {

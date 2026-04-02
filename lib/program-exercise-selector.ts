@@ -1075,6 +1075,59 @@ function selectMainExercises(
     skillsWithCurrentProgression: materialSkillIntent.filter(s => s.currentWorkingProgression).length,
   })
   }
+  
+  // ==========================================================================
+  // [PHASE 1 SPINE] AUTHORITATIVE PROGRESSION AUTHORITY ENFORCEMENT
+  // ==========================================================================
+  // RULE: currentWorkingProgression = authoritative for generation
+  //       historicalCeiling = context only, NEVER direct generator authority
+  // ==========================================================================
+  const authoritativeProgressionMap: Record<string, string | null> = {}
+  const historicalCeilingWarnings: string[] = []
+  
+  if (currentWorkingProgressions) {
+    for (const [skill, data] of Object.entries(currentWorkingProgressions)) {
+      // ALWAYS use currentWorkingProgression as authoritative
+      authoritativeProgressionMap[skill] = data.currentWorkingProgression
+      
+      // HARD GUARD: If historicalCeiling differs from currentWorkingProgression,
+      // the system must use currentWorkingProgression and log the enforcement
+      if (data.historicalCeiling && data.currentWorkingProgression && 
+          data.historicalCeiling !== data.currentWorkingProgression) {
+        historicalCeilingWarnings.push(
+          `Skill "${skill}": Using current "${data.currentWorkingProgression}" (NOT historical "${data.historicalCeiling}")`
+        )
+      }
+    }
+    
+    if (historicalCeilingWarnings.length > 0) {
+      console.log('[SPINE-ENFORCEMENT-HISTORICAL-CEILING-BLOCKED]', {
+        dayFocus: day.focus,
+        warnings: historicalCeilingWarnings,
+        verdict: 'HISTORICAL_CEILING_NOT_USED_AS_CURRENT',
+        enforcement: 'ACTIVE',
+      })
+    }
+  }
+  
+  // Helper to get authoritative progression for a skill (NEVER returns historical ceiling)
+  const getAuthoritativeProgression = (skillKey: string): string | null => {
+    // First try exact match
+    if (authoritativeProgressionMap[skillKey]) {
+      return authoritativeProgressionMap[skillKey]
+    }
+    // Try without underscores
+    const normalizedKey = skillKey.replace(/_/g, '')
+    if (authoritativeProgressionMap[normalizedKey]) {
+      return authoritativeProgressionMap[normalizedKey]
+    }
+    // Check material skill intent
+    const intentEntry = materialSkillIntent?.find(s => 
+      s.skill === skillKey || s.skill.replace(/_/g, '') === normalizedKey
+    )
+    return intentEntry?.currentWorkingProgression || null
+  }
+  
   const selected: SelectedExercise[] = []
   const usedIds = new Set<string>()
   

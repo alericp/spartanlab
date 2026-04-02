@@ -657,6 +657,12 @@ export function buildProgramTruthExplanation(
       program.skillStrengthProfile?.weightedDip
     ),
     
+    // [PHASE 6] Output quality materiality - proves how well profile shapes actual sessions
+    outputQualityReport: computeOutputQualityMateriality(
+      program,
+      program.experienceLevel || profile?.experienceLevel || 'intermediate'
+    ),
+    
     explanationFactors,
     hiddenTruthNotSurfaced,
     
@@ -832,6 +838,181 @@ function computeMethodMateriality(
     selectedButNotApplied,
     nonApplicationReasons,
     verdict,
+    explanationForUser,
+  }
+}
+
+// =============================================================================
+// [PHASE 6] OUTPUT QUALITY MATERIALITY HELPERS
+// =============================================================================
+
+interface OutputQualityReport {
+  sessionRoleDifferentiation: {
+    distinctRolesCount: number
+    totalSessions: number
+    rolesUsed: string[]
+    verdict: 'WELL_DIFFERENTIATED' | 'PARTIALLY_DIFFERENTIATED' | 'GENERIC'
+  }
+  exerciseComplexity: {
+    averageExercisesPerSession: number
+    skillExercisesCount: number
+    strengthExercisesCount: number
+    accessoryExercisesCount: number
+    advancedProgressionsUsed: string[]
+    verdict: 'ADVANCED_EXPRESSION' | 'MODERATE_EXPRESSION' | 'BASIC_EXPRESSION'
+  }
+  loadingQuality: {
+    hasWeightedExercises: boolean
+    weightedExerciseCount: number
+    hasHoldTargets: boolean
+    hasRepProgressions: boolean
+    verdict: 'STRONG_LOADING' | 'MODERATE_LOADING' | 'BASIC_LOADING'
+  }
+  overallVerdict: 'STRONGLY_EXPRESSED' | 'PARTIALLY_EXPRESSED' | 'UNDEREXPRESSED'
+  explanationForUser: string
+}
+
+/**
+ * Compute how well the athlete's profile is expressed in the actual output.
+ * This evaluates session differentiation, exercise complexity, and loading quality.
+ */
+function computeOutputQualityMateriality(
+  program: AdaptiveProgram,
+  experienceLevel: string
+): OutputQualityReport {
+  const sessions = program.sessions || []
+  
+  // 1. Analyze session role differentiation
+  const sessionRoles = new Set<string>()
+  for (const session of sessions) {
+    const role = (session as { sessionIntent?: { sessionType?: string } }).sessionIntent?.sessionType
+      || session.focus 
+      || 'mixed'
+    sessionRoles.add(role)
+  }
+  
+  const distinctRolesCount = sessionRoles.size
+  const totalSessions = sessions.length
+  const roleVerdict = distinctRolesCount >= Math.ceil(totalSessions * 0.5)
+    ? 'WELL_DIFFERENTIATED'
+    : distinctRolesCount >= 2
+      ? 'PARTIALLY_DIFFERENTIATED'
+      : 'GENERIC'
+  
+  // 2. Analyze exercise complexity
+  let totalExercises = 0
+  let skillExercises = 0
+  let strengthExercises = 0
+  let accessoryExercises = 0
+  const advancedProgressions = new Set<string>()
+  
+  for (const session of sessions) {
+    const exercises = session.exercises || []
+    totalExercises += exercises.length
+    
+    for (const ex of exercises) {
+      const category = (ex as { category?: string }).category || ''
+      const name = ex.name?.toLowerCase() || ''
+      
+      if (category === 'skill' || name.includes('planche') || name.includes('lever') || name.includes('hspu')) {
+        skillExercises++
+        // Detect advanced progressions
+        if (name.includes('straddle') || name.includes('full') || name.includes('advanced')) {
+          advancedProgressions.add(ex.name || '')
+        }
+      } else if (category === 'strength' || name.includes('pull') || name.includes('dip') || name.includes('row')) {
+        strengthExercises++
+      } else {
+        accessoryExercises++
+      }
+    }
+  }
+  
+  const avgExercises = totalSessions > 0 ? totalExercises / totalSessions : 0
+  const isAdvanced = experienceLevel === 'advanced'
+  const exerciseVerdict = isAdvanced 
+    ? (avgExercises >= 6 && advancedProgressions.size > 0 ? 'ADVANCED_EXPRESSION' 
+       : avgExercises >= 5 ? 'MODERATE_EXPRESSION' 
+       : 'BASIC_EXPRESSION')
+    : (avgExercises >= 5 ? 'ADVANCED_EXPRESSION' 
+       : avgExercises >= 4 ? 'MODERATE_EXPRESSION' 
+       : 'BASIC_EXPRESSION')
+  
+  // 3. Analyze loading quality
+  let weightedExerciseCount = 0
+  let hasHoldTargets = false
+  let hasRepProgressions = false
+  
+  for (const session of sessions) {
+    const exercises = session.exercises || []
+    for (const ex of exercises) {
+      const prescription = (ex as { prescription?: { weightedLoad?: number; holdDuration?: number; reps?: number | string } }).prescription
+      if (prescription?.weightedLoad && prescription.weightedLoad > 0) {
+        weightedExerciseCount++
+      }
+      if (prescription?.holdDuration && prescription.holdDuration > 0) {
+        hasHoldTargets = true
+      }
+      if (prescription?.reps && prescription.reps.toString().includes('-')) {
+        hasRepProgressions = true
+      }
+    }
+  }
+  
+  const hasWeightedExercises = weightedExerciseCount > 0 || program.weightedStrengthPrescription?.hasWeightedData
+  const loadingVerdict = hasWeightedExercises && (hasHoldTargets || hasRepProgressions)
+    ? 'STRONG_LOADING'
+    : hasHoldTargets || hasRepProgressions
+      ? 'MODERATE_LOADING'
+      : 'BASIC_LOADING'
+  
+  // 4. Overall verdict
+  const verdictScores = {
+    sessionRole: roleVerdict === 'WELL_DIFFERENTIATED' ? 2 : roleVerdict === 'PARTIALLY_DIFFERENTIATED' ? 1 : 0,
+    exercise: exerciseVerdict === 'ADVANCED_EXPRESSION' ? 2 : exerciseVerdict === 'MODERATE_EXPRESSION' ? 1 : 0,
+    loading: loadingVerdict === 'STRONG_LOADING' ? 2 : loadingVerdict === 'MODERATE_LOADING' ? 1 : 0,
+  }
+  const totalScore = verdictScores.sessionRole + verdictScores.exercise + verdictScores.loading
+  
+  const overallVerdict = totalScore >= 5 
+    ? 'STRONGLY_EXPRESSED' 
+    : totalScore >= 3 
+      ? 'PARTIALLY_EXPRESSED' 
+      : 'UNDEREXPRESSED'
+  
+  // 5. Build explanation for user
+  let explanationForUser = ''
+  if (overallVerdict === 'STRONGLY_EXPRESSED') {
+    explanationForUser = `Your ${experienceLevel} profile is well-expressed: ${distinctRolesCount} distinct session types, ${avgExercises.toFixed(1)} exercises/session, ${advancedProgressions.size > 0 ? `advanced progressions (${Array.from(advancedProgressions).slice(0, 2).join(', ')})` : 'appropriate complexity'}.`
+  } else if (overallVerdict === 'PARTIALLY_EXPRESSED') {
+    explanationForUser = `Your profile shapes the program with ${distinctRolesCount} session types and ${avgExercises.toFixed(1)} exercises/session. ${isAdvanced ? 'Some advanced elements are included.' : ''}`
+  } else {
+    explanationForUser = `Sessions use foundational structure appropriate for recovery or joint protection considerations.`
+  }
+  
+  return {
+    sessionRoleDifferentiation: {
+      distinctRolesCount,
+      totalSessions,
+      rolesUsed: Array.from(sessionRoles),
+      verdict: roleVerdict,
+    },
+    exerciseComplexity: {
+      averageExercisesPerSession: avgExercises,
+      skillExercisesCount: skillExercises,
+      strengthExercisesCount: strengthExercises,
+      accessoryExercisesCount: accessoryExercises,
+      advancedProgressionsUsed: Array.from(advancedProgressions),
+      verdict: exerciseVerdict,
+    },
+    loadingQuality: {
+      hasWeightedExercises: hasWeightedExercises || false,
+      weightedExerciseCount,
+      hasHoldTargets,
+      hasRepProgressions,
+      verdict: loadingVerdict,
+    },
+    overallVerdict,
     explanationForUser,
   }
 }

@@ -101,6 +101,9 @@ const MATERIAL_FIELDS = [
   'weightedPullUp',
   'weightedDip',
   'recoveryQuality',
+  // [AI-TRUTH-PERSISTENCE] High-priority generation fields
+  'trainingMethodPreferences',
+  'sessionStylePreference',
 ] as const
 
 // =============================================================================
@@ -133,6 +136,9 @@ const DEFAULTS: Record<string, unknown> = {
   weightedPullUp: null,
   weightedDip: null,
   recoveryQuality: 'moderate',
+  // [AI-TRUTH-PERSISTENCE] Method preferences defaults
+  trainingMethodPreferences: [],
+  sessionStylePreference: null,
 }
 
 // =============================================================================
@@ -362,6 +368,9 @@ function buildProfileSnapshot(
     recoveryQuality: profile.recoveryQuality,
     sex: profile.sex,
     bodyweight: profile.bodyweight,
+    // [AI-TRUTH-PERSISTENCE] High-priority method preferences
+    trainingMethodPreferences: profile.trainingMethodPreferences,
+    sessionStylePreference: profile.sessionStylePreference,
   }
 }
 

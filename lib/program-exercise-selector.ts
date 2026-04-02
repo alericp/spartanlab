@@ -337,6 +337,20 @@ interface ExerciseSelectionInputs {
   expressionMode: 'primary' | 'technical' | 'support' | 'warmup'
   weight: number
   }>
+  // [PHASE-MATERIALITY] Current working progressions for authoritative prescription
+  currentWorkingProgressions?: Record<string, {
+  currentWorkingProgression: string | null
+  historicalCeiling: string | null
+  truthSource: string
+  isConservative: boolean
+  }> | null
+  // [PHASE-MATERIALITY] Material skill intent from contract
+  materialSkillIntent?: Array<{
+  skill: string
+  role: 'primary_spine' | 'secondary_anchor' | 'support' | 'deferred'
+  currentWorkingProgression: string | null
+  historicalCeiling: string | null
+  }>
   }
 
 // =============================================================================
@@ -364,11 +378,15 @@ export function selectExercisesForSession(inputs: ExerciseSelectionInputs): Exer
     rangeTrainingMode,
     prerequisiteContext: inputContext,
     jointCautions,
-    // WEIGHTED LOAD PR: Extract weighted benchmarks for load prescription
-    weightedBenchmarks,
-    // SKILL EXPRESSION FIX: Extract skill allocation for session expression
-    selectedSkills,
-    skillsForSession,
+  // WEIGHTED LOAD PR: Extract weighted benchmarks for load prescription
+  weightedBenchmarks,
+  // SKILL EXPRESSION FIX: Extract skill allocation for session expression
+  selectedSkills,
+  skillsForSession,
+  // [PHASE-MATERIALITY] Extract current working progressions
+  currentWorkingProgressions,
+  // [PHASE-MATERIALITY] Extract material skill intent
+  materialSkillIntent,
   } = inputs
   
   // SKILL EXPRESSION FIX: Log skill allocation for this session
@@ -472,7 +490,9 @@ export function selectExercisesForSession(inputs: ExerciseSelectionInputs): Exer
   selectedSkills,    // Full selected skills list for reference
   equipment,         // Equipment for doctrine lookups
   weightedBenchmarks, // TASK 1-B: Weighted benchmark data for load prescription
-  jointCautions      // [PHASE 4 HOTFIX] Joint cautions for doctrine scoring
+  jointCautions,     // [PHASE 4 HOTFIX] Joint cautions for doctrine scoring
+  currentWorkingProgressions, // [PHASE-MATERIALITY] Current working progressions
+  materialSkillIntent // [PHASE-MATERIALITY] Material skill intent
   )
   
   // [session-assembly] ISSUE C: Validate main exercises before proceeding
@@ -992,16 +1012,69 @@ function selectMainExercises(
   weightedDip?: { current?: WeightedBenchmark; pr?: WeightedPRBenchmark }
   },
   // [PHASE 4 HOTFIX] Thread jointCautions for doctrine context
-  jointCautions?: string[]
+  jointCautions?: string[],
+  // [PHASE-MATERIALITY] TASK 3: Current working progressions for authoritative prescription
+  currentWorkingProgressions?: Record<string, {
+  currentWorkingProgression: string | null
+  historicalCeiling: string | null
+  truthSource: string
+  isConservative: boolean
+  }> | null,
+  // [PHASE-MATERIALITY] Material skill intent from contract
+  materialSkillIntent?: Array<{
+  skill: string
+  role: 'primary_spine' | 'secondary_anchor' | 'support' | 'deferred'
+  currentWorkingProgression: string | null
+  historicalCeiling: string | null
+  }>
   ): SelectedExercise[] {
   // [selection-contract] TASK 1-F: Verify weighted benchmarks threading
   console.log('[selection-contract]', {
+  dayFocus: day.focus,
+  primaryGoal,
+  hasWeightedBenchmarks: !!weightedBenchmarks,
+  hasPullUpBenchmark: !!weightedBenchmarks?.weightedPullUp?.current,
+  hasDipBenchmark: !!weightedBenchmarks?.weightedDip?.current,
+  })
+  
+  // ==========================================================================
+  // [PHASE-MATERIALITY] TASK 3: LOG CURRENT WORKING PROGRESSIONS VS HISTORICAL
+  // ==========================================================================
+  if (currentWorkingProgressions) {
+  const progressionAudit: Array<{skill: string, current: string | null, historical: string | null, isConservative: boolean}> = []
+  for (const [skill, data] of Object.entries(currentWorkingProgressions)) {
+    if (data.currentWorkingProgression || data.historicalCeiling) {
+    progressionAudit.push({
+      skill,
+      current: data.currentWorkingProgression,
+      historical: data.historicalCeiling,
+      isConservative: data.isConservative,
+    })
+    }
+  }
+  if (progressionAudit.length > 0) {
+    console.log('[phase-materiality-current-progression-audit]', {
     dayFocus: day.focus,
     primaryGoal,
-    hasWeightedBenchmarks: !!weightedBenchmarks,
-    hasPullUpBenchmark: !!weightedBenchmarks?.weightedPullUp?.current,
-    hasDipBenchmark: !!weightedBenchmarks?.weightedDip?.current,
+    progressionData: progressionAudit,
+    verdict: progressionAudit.some(p => p.isConservative) 
+      ? 'CONSERVATIVE_PROGRESSIONS_ACTIVE' 
+      : 'PROGRESSIONS_AT_HISTORICAL_CEILING',
+    })
+  }
+  }
+  
+  // [PHASE-MATERIALITY] TASK 2: Log material skill intent for this session
+  if (materialSkillIntent && materialSkillIntent.length > 0) {
+  console.log('[phase-materiality-skill-allocation]', {
+    dayFocus: day.focus,
+    primarySkill: materialSkillIntent.find(s => s.role === 'primary_spine')?.skill || primaryGoal,
+    secondarySkill: materialSkillIntent.find(s => s.role === 'secondary_anchor')?.skill || null,
+    supportSkills: materialSkillIntent.filter(s => s.role === 'support').map(s => s.skill),
+    deferredSkills: materialSkillIntent.filter(s => s.role === 'deferred').map(s => s.skill),
+    skillsWithCurrentProgression: materialSkillIntent.filter(s => s.currentWorkingProgression).length,
   })
+  }
   const selected: SelectedExercise[] = []
   const usedIds = new Set<string>()
   
@@ -1707,10 +1780,107 @@ function selectMainExercises(
   
   return score
   }
+
+/**
+ * [PHASE-MATERIALITY] TASK 4: Enhanced exercise scoring with progression truth
+ * This applies additional scoring adjustments based on:
+ * 1. Current working progression compatibility
+ * 2. Material skill role fit (primary/secondary/support/deferred)
+ * 3. Doctrine influence when available
+ */
+function applyMaterialityScoreAdjustments(
+  exercise: Exercise,
+  baseScore: number,
+  materialSkillIntent: Array<{
+  skill: string
+  role: 'primary_spine' | 'secondary_anchor' | 'support' | 'deferred'
+  currentWorkingProgression: string | null
+  historicalCeiling: string | null
+  }> | undefined,
+  currentWorkingProgressions: Record<string, {
+  currentWorkingProgression: string | null
+  historicalCeiling: string | null
+  truthSource: string
+  isConservative: boolean
+  }> | null | undefined,
+  primaryGoal: string
+): { adjustedScore: number; adjustmentReason: string | null } {
+  let adjustedScore = baseScore
+  let adjustmentReason: string | null = null
+  
+  if (!materialSkillIntent || materialSkillIntent.length === 0) {
+  return { adjustedScore, adjustmentReason }
+  }
+  
+  // Check if exercise aligns with material skill intent
+  const exerciseSkillMatch = materialSkillIntent.find(intent => {
+  const skillLower = intent.skill.toLowerCase().replace(/_/g, '')
+  const exerciseIdLower = exercise.id.toLowerCase()
+  const exerciseNameLower = exercise.name.toLowerCase()
+  return exerciseIdLower.includes(skillLower) || 
+       exerciseNameLower.includes(skillLower) ||
+       exercise.transferTo?.some(t => t.toLowerCase().includes(skillLower))
+  })
+  
+  if (exerciseSkillMatch) {
+  // Apply role-based scoring
+  switch (exerciseSkillMatch.role) {
+    case 'primary_spine':
+    adjustedScore += 15 // Strong boost for primary spine exercises
+    adjustmentReason = 'primary_spine_alignment'
+    break
+    case 'secondary_anchor':
+    adjustedScore += 10 // Solid boost for secondary anchor
+    adjustmentReason = 'secondary_anchor_alignment'
+    break
+    case 'support':
+    adjustedScore += 5 // Modest boost for support skills
+    adjustmentReason = 'support_skill_alignment'
+    break
+    case 'deferred':
+    adjustedScore -= 5 // Slight penalty for deferred skills (don't clutter session)
+    adjustmentReason = 'deferred_skill_deprioritized'
+    break
+  }
+  
+  // [PHASE-MATERIALITY] TASK 3: Progression compatibility check
+  // If we have current working progression, prefer exercises that match that level
+  if (exerciseSkillMatch.currentWorkingProgression && currentWorkingProgressions) {
+    const progressionKey = exerciseSkillMatch.skill.replace(/_/g, '')
+    const progressionData = currentWorkingProgressions[progressionKey] || 
+                          currentWorkingProgressions[exerciseSkillMatch.skill]
+    
+    if (progressionData && progressionData.isConservative) {
+    // User is working conservatively - slightly favor lower progression variants
+    const exerciseDifficulty = exercise.difficulty
+    if (exerciseDifficulty === 'beginner' || exerciseDifficulty === 'intermediate') {
+      adjustedScore += 3
+      adjustmentReason = (adjustmentReason || '') + '+conservative_progression_fit'
+    } else if (exerciseDifficulty === 'advanced') {
+      adjustedScore -= 2 // Slight penalty for advanced when being conservative
+      adjustmentReason = (adjustmentReason || '') + '+conservative_downgrades_advanced'
+    }
+    
+    console.log('[phase-materiality-exercise-ranking]', {
+      exerciseId: exercise.id,
+      skill: exerciseSkillMatch.skill,
+      role: exerciseSkillMatch.role,
+      currentProgression: progressionData.currentWorkingProgression,
+      historicalCeiling: progressionData.historicalCeiling,
+      isConservative: progressionData.isConservative,
+      exerciseDifficulty,
+      scoreAdjustment: adjustedScore - baseScore,
+    })
+    }
+  }
+  }
+  
+  return { adjustedScore, adjustmentReason }
+  }
   
   /**
-   * Get exercises that support a specific skill via doctrine mappings.
-   * [selection-compression-fix] ISSUE F: Prefer doctrine-backed support.
+  * Get exercises that support a specific skill via doctrine mappings.
+  * [selection-compression-fix] ISSUE F: Prefer doctrine-backed support.
    */
   function getDoctrineBackedExercisesForSkill(
     skill: string,

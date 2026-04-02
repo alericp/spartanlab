@@ -2737,19 +2737,49 @@ export function calculateWeightedSkillAllocation(
     // [PHASE 15B TASK 2] ADVANCED MULTI-SKILL CALIBRATION
     // Advanced athletes with 5+ selected skills can have more tertiary lanes
     // to allow meaningful multi-skill expression without diluting core goals
+    //
+    // [PHASE 1 AI-TRUTH-ESCALATION] TASK B: PREVENT NARROW PRIMARY/SECONDARY COLLAPSE
+    // Broader profiles with high session counts deserve more tertiary expression.
+    // The goal is NOT to equalize all skills, but to prevent premature demotion.
     // ==========================================================================
     // Formula: allow ~20% of "other" skills to be tertiary, minimum 1, max 2
     // [PHASE 15B] For advanced multi-skill profiles: allow up to 30% with max 3
+    // [PHASE 1 AI-TRUTH-ESCALATION] For intermediate+ with 5+ days: allow up to 40% with max 4
     const isAdvancedMultiSkillProfile = 
       context.experienceLevel === 'advanced' && selectedSkillCount >= 5
     
-    const tertiaryPercentage = isAdvancedMultiSkillProfile ? 0.30 : 0.20
-    const tertiaryHardCap = isAdvancedMultiSkillProfile ? 3 : 2
+    // [PHASE 1 AI-TRUTH-ESCALATION] Expanded profile detection for broader expression
+    const isIntermediateHighFrequencyProfile = 
+      (context.experienceLevel === 'intermediate' || context.experienceLevel === 'advanced') &&
+      selectedSkillCount >= 4 &&
+      totalSessions >= 5
+    
+    const isBroadExpressionJustified = 
+      isAdvancedMultiSkillProfile || 
+      (isIntermediateHighFrequencyProfile && otherSkills.length >= 3)
+    
+    // [PHASE 1 AI-TRUTH-ESCALATION] Tiered tertiary allocation based on profile complexity
+    const tertiaryPercentage = isBroadExpressionJustified 
+      ? 0.45  // Broader profiles: up to 45% of other skills get tertiary
+      : isAdvancedMultiSkillProfile 
+        ? 0.35  // Advanced multi-skill: 35%
+        : isIntermediateHighFrequencyProfile 
+          ? 0.30  // Intermediate high-frequency: 30%
+          : 0.20  // Default: 20%
+    
+    // [PHASE 1 AI-TRUTH-ESCALATION] Tiered hard cap based on session availability
+    const tertiaryHardCap = isBroadExpressionJustified 
+      ? Math.min(5, Math.floor(totalSessions * 0.6))  // Up to 5 or 60% of sessions
+      : isAdvancedMultiSkillProfile 
+        ? 4
+        : isIntermediateHighFrequencyProfile 
+          ? 3
+          : 2
     
     const maxTertiarySkills = Math.min(
       Math.max(1, Math.ceil(otherSkills.length * tertiaryPercentage)),
       tertiaryHardCap,
-      Math.max(1, Math.floor(totalSessions / 2.5)) // [PHASE 15B] Slightly relaxed for more sessions
+      Math.max(1, Math.floor(totalSessions / 2)) // [PHASE 1] More generous session-based cap
     )
     
     console.log('[phase6b-tertiary-threshold-enforcement-audit]', {
@@ -2764,6 +2794,10 @@ export function calculateWeightedSkillAllocation(
       isAdvancedMultiSkillProfile,
       tertiaryPercentageUsed: tertiaryPercentage,
       advancedCalibrationApplied: isAdvancedMultiSkillProfile,
+      // [PHASE 1 AI-TRUTH-ESCALATION] Broader expression audit
+      isIntermediateHighFrequencyProfile,
+      isBroadExpressionJustified,
+      escalationApplied: isBroadExpressionJustified || isIntermediateHighFrequencyProfile,
     })
     
     // [PHASE 15B] TASK 1: Log selected skills material influence audit

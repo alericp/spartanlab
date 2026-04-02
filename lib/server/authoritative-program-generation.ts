@@ -534,6 +534,38 @@ export async function executeAuthoritativeGeneration(
       verdict: 'CURRENT_PROGRESSION_TRUTH_CONTRACT_FIXED',
     })
     
+    // [PHASE 1 AI-TRUTH-ESCALATION] Elevate session architecture truth to program
+    // This allows UI to access multi-skill expression, flexibility integration, and method packaging decisions
+    if (program.sessionArchitectureTruth) {
+      program.architectureTruthSnapshot = {
+        primarySpineSkills: program.sessionArchitectureTruth.primarySpineSkills || [],
+        secondaryAnchorSkills: program.sessionArchitectureTruth.secondaryAnchorSkills || [],
+        supportRotationSkills: program.sessionArchitectureTruth.supportRotationSkills || [],
+        deferredSkillsWithReasons: (program.sessionArchitectureTruth.deferredSkills || []).map((d: { skill: string; reason: string; details?: string }) => ({
+          skill: d.skill,
+          reason: d.reason,
+          details: d.details || '',
+        })),
+        flexibilityIntegration: program.sessionArchitectureTruth.flexibilityIntegration || {
+          hasFlexibilityGoals: false,
+          selectedFlexibility: [],
+          integrationMode: 'none',
+          affectedSessions: [],
+          flexibilityTimeReserved: 0,
+        },
+        methodPackaging: program.sessionArchitectureTruth.methodPackaging || {
+          preferredMethods: ['straight_sets'],
+          actualMethodsApplied: ['straight_sets'],
+          methodsLimitedBySkillQuality: [],
+          packagingDecision: 'straight_sets',
+          rationale: 'default',
+        },
+        visibleDifferenceScore: program.sessionArchitectureTruth.visibleDifferenceTargets?.differenceFromBaselineScore || 0,
+        templateEscapeRequired: program.sessionArchitectureTruth.visibleDifferenceTargets?.templateEscapeRequired || false,
+        doctrineInfluenceLevel: program.sessionArchitectureTruth.audit?.doctrineInfluenceLevel || 'none',
+      }
+    }
+    
     console.log('[authoritative-generation-truth-snapshot-attached]', {
       generationIntent: request.generationIntent,
       trainingMethodPreferences: program.generationTruthSnapshot.trainingMethodPreferences,
@@ -545,6 +577,10 @@ export async function executeAuthoritativeGeneration(
       selectedFlexibilityElevated: program.selectedFlexibility?.length || 0, // [FLEXIBILITY-TRUTH-CONTRACT] Verify elevation
       skillStrengthProfileElevated: !!program.skillStrengthProfile, // [SKILL-STRENGTH-TRUTH-CONTRACT] Verify elevation
       hasWeightedStrength: program.generationTruthSnapshot.weightedStrengthSnapshot.loadingEligible,
+      // [PHASE 1 AI-TRUTH-ESCALATION] Additional audit
+      architectureTruthElevated: !!program.architectureTruthSnapshot,
+      visibleDifferenceScore: program.architectureTruthSnapshot?.visibleDifferenceScore || 0,
+      supportSkillsCount: program.architectureTruthSnapshot?.supportRotationSkills?.length || 0,
       verdict: 'GENERATION_TRUTH_SNAPSHOT_PERSISTED',
     })
     

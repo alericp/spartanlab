@@ -637,6 +637,26 @@ export function buildProgramTruthExplanation(
     limiterAddressed: profile?.primaryLimitation || null,
     recoveryLevelUsed: program.recoveryLevel || profile?.recoveryQuality || null,
     
+    // [SKILL-STRENGTH-TRUTH-CONTRACT] Prefer program.skillStrengthProfile (durable) over snapshot/profile
+    // This ensures saved programs retain the exact skill/strength truth used to generate them
+    skillStrengthProfile: program.skillStrengthProfile || {
+      plancheProgression: program.generationTruthSnapshot?.plancheProgression || profile?.plancheProgression || null,
+      frontLeverProgression: program.generationTruthSnapshot?.frontLeverProgression || profile?.frontLeverProgression || null,
+      hspuCapability: program.generationTruthSnapshot?.hspuProgression || profile?.hspu || null,
+      weightedPullUp: program.generationTruthSnapshot?.weightedPullUp || profile?.weightedPullUp || null,
+      weightedDip: program.generationTruthSnapshot?.weightedDip || profile?.weightedDip || null,
+      pullUpCapacity: profile?.pullUps || null,
+      dipCapacity: profile?.dips || null,
+      wallHspuCapacity: profile?.wallHSPU || null,
+      experienceLevel: program.experienceLevel || profile?.experienceLevel || 'intermediate',
+    },
+    skillStrengthMateriallyApplied: !!(
+      program.skillStrengthProfile?.plancheProgression ||
+      program.skillStrengthProfile?.frontLeverProgression ||
+      program.skillStrengthProfile?.weightedPullUp ||
+      program.skillStrengthProfile?.weightedDip
+    ),
+    
     explanationFactors,
     hiddenTruthNotSurfaced,
     

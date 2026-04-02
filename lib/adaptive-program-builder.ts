@@ -873,6 +873,24 @@ export interface AdaptiveProgram {
   // CRITICAL: User's selected flexibility targets (e.g., hip_flexor, hamstring, shoulder).
   // These affect cooldown/mobility content and must survive save/read/rebuild/restart.
   selectedFlexibility?: string[]
+  // [SKILL-STRENGTH-TRUTH-CONTRACT] Skill and strength profile - elevated from snapshot for durable access
+  // CRITICAL: User's current skill progressions and weighted strength benchmarks.
+  // These determine exercise selection, progression level, and loading. Must survive save/read/rebuild/restart.
+  skillStrengthProfile?: {
+    // Skill progressions (determines which exercise variations are used)
+    plancheProgression?: string | null
+    frontLeverProgression?: string | null
+    hspuCapability?: string | null
+    // Weighted strength benchmarks (determines loading prescriptions)
+    weightedPullUp?: number | null // kg added
+    weightedDip?: number | null // kg added
+    // Bodyweight capacities (determines rep ranges and intensity)
+    pullUpCapacity?: number | null // max reps
+    dipCapacity?: number | null // max reps
+    wallHspuCapacity?: number | null // max reps
+    // Athlete level (determines overall difficulty scaling)
+    experienceLevel?: string | null
+  }
   constraintInsight: {
     hasInsight: boolean
     label: string

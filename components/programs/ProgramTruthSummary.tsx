@@ -132,6 +132,9 @@ export function ProgramTruthSummary({ truthExplanation, className }: ProgramTrut
     // [FLEXIBILITY-TRUTH-CONTRACT] Flexibility goals
     flexibilityGoalsUsed,
     flexibilityIntegrated,
+    // [SKILL-STRENGTH-TRUTH-CONTRACT] Skill and strength profile
+    skillStrengthProfile,
+    skillStrengthMateriallyApplied,
   } = truthExplanation
   
   // Determine overall status
@@ -279,6 +282,35 @@ export function ProgramTruthSummary({ truthExplanation, className }: ProgramTrut
       value: moreCount > 0 ? `${flexTargets} +${moreCount}` : flexTargets,
       type: flexibilityIntegrated ? 'success' : 'info',
     })
+  }
+  
+  // [SKILL-STRENGTH-TRUTH-CONTRACT] Add skill/strength profile key decision
+  if (skillStrengthProfile && skillStrengthMateriallyApplied) {
+    const strengthParts: string[] = []
+    
+    // Add skill progressions if present
+    if (skillStrengthProfile.plancheProgression) {
+      strengthParts.push(`Planche: ${skillStrengthProfile.plancheProgression.replace(/_/g, ' ')}`)
+    }
+    if (skillStrengthProfile.frontLeverProgression) {
+      strengthParts.push(`FL: ${skillStrengthProfile.frontLeverProgression.replace(/_/g, ' ')}`)
+    }
+    
+    // Add weighted strength if present
+    if (skillStrengthProfile.weightedPullUp && skillStrengthProfile.weightedPullUp > 0) {
+      strengthParts.push(`Pull +${skillStrengthProfile.weightedPullUp}kg`)
+    }
+    if (skillStrengthProfile.weightedDip && skillStrengthProfile.weightedDip > 0) {
+      strengthParts.push(`Dip +${skillStrengthProfile.weightedDip}kg`)
+    }
+    
+    if (strengthParts.length > 0) {
+      keyDecisions.push({
+        label: 'Current Ability',
+        value: strengthParts.slice(0, 2).join(' | '),
+        type: 'success',
+      })
+    }
   }
   
   return (

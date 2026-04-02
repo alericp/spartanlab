@@ -3467,15 +3467,109 @@ function selectCooldownLegacy(minutes: number): SelectedExercise[] {
   return selected;
 }
 
-function selectByLevel(exercises: Exercise[], level: ExperienceLevel): Exercise | undefined {
-  var sorted = exercises.slice().sort(function(a, b) { return a.neuralDemand - b.neuralDemand; });
+// =============================================================================
+// [PHASE 9] PROGRESSION-AWARE EXERCISE SELECTION
+// Current ability MUST outrank historical/identity level for exercise selection
+// =============================================================================
+
+/**
+ * Maps canonical progression values to max allowed difficulty levels
+ * This ensures exercises match CURRENT ability, not historical/identity level
+ */
+const PROGRESSION_TO_MAX_DIFFICULTY: Record<string, DifficultyLevel[]> = {
+  // Planche progressions - current ability determines ceiling
+  'none': ['beginner'],
+  'lean': ['beginner', 'intermediate'],
+  'tuck': ['beginner', 'intermediate'],
+  'tuck_planche': ['beginner', 'intermediate'],
+  'advanced_tuck': ['beginner', 'intermediate', 'advanced'],
+  'adv_tuck_planche': ['beginner', 'intermediate', 'advanced'],
+  'straddle': ['beginner', 'intermediate', 'advanced', 'elite'],
+  'straddle_planche': ['beginner', 'intermediate', 'advanced', 'elite'],
+  'half_lay': ['beginner', 'intermediate', 'advanced', 'elite'],
+  'full': ['beginner', 'intermediate', 'advanced', 'elite'],
+  'full_planche': ['beginner', 'intermediate', 'advanced', 'elite'],
+  
+  // Front lever progressions
+  'tuck_fl': ['beginner', 'intermediate'],
+  'tuck_front_lever': ['beginner', 'intermediate'],
+  'advanced_tuck_fl': ['beginner', 'intermediate', 'advanced'],
+  'adv_tuck_fl': ['beginner', 'intermediate', 'advanced'],
+  'straddle_fl': ['beginner', 'intermediate', 'advanced', 'elite'],
+  'straddle_front_lever': ['beginner', 'intermediate', 'advanced', 'elite'],
+  'half_lay_fl': ['beginner', 'intermediate', 'advanced', 'elite'],
+  'full_front_lever': ['beginner', 'intermediate', 'advanced', 'elite'],
+}
+
+/**
+ * Filter exercises to only those appropriate for the current progression level
+ * [PHASE 9] Current ability beats historical/identity level
+ */
+function filterByCurrentProgression(
+  exercises: Exercise[],
+  currentProgression: string | null | undefined,
+  skillId: string
+): Exercise[] {
+  if (!currentProgression || currentProgression === 'unknown') {
+    // No current progression data - fall back to intermediate max
+    console.log('[phase9-progression-filter] No current progression, using intermediate max', { skillId })
+    return exercises.filter(e => 
+      e.difficultyLevel === 'beginner' || e.difficultyLevel === 'intermediate'
+    )
+  }
+  
+  const allowedDifficulties = PROGRESSION_TO_MAX_DIFFICULTY[currentProgression.toLowerCase()] || 
+    ['beginner', 'intermediate'] // Conservative default
+  
+  const filtered = exercises.filter(e => allowedDifficulties.includes(e.difficultyLevel))
+  
+  console.log('[phase9-progression-filter]', {
+    skillId,
+    currentProgression,
+    allowedDifficulties,
+    totalCandidates: exercises.length,
+    filteredCandidates: filtered.length,
+    filteredOut: exercises.filter(e => !allowedDifficulties.includes(e.difficultyLevel)).map(e => e.id),
+  })
+  
+  // If filtering removed all options, allow at least intermediate
+  if (filtered.length === 0) {
+    console.log('[phase9-progression-filter] Filter too aggressive, allowing intermediate', { skillId })
+    return exercises.filter(e => 
+      e.difficultyLevel === 'beginner' || e.difficultyLevel === 'intermediate'
+    )
+  }
+  
+  return filtered
+}
+
+/**
+ * [PHASE 9] Select exercise by CURRENT progression level, not broad experience
+ * Current ability outranks historical training age / experience level
+ */
+function selectByLevel(exercises: Exercise[], level: ExperienceLevel, currentProgression?: string | null): Exercise | undefined {
+  // [PHASE 9] If we have current progression, filter first by current ability
+  let filteredExercises = exercises
+  if (currentProgression && currentProgression !== 'unknown' && currentProgression !== 'none') {
+    // Determine skill from exercise pool
+    const skillIds = exercises.flatMap(e => e.transferTo || [])
+    const primarySkill = skillIds[0] || 'unknown'
+    filteredExercises = filterByCurrentProgression(exercises, currentProgression, primarySkill)
+  }
+  
+  // Sort by neural demand (lower = easier)
+  const sorted = filteredExercises.slice().sort((a, b) => a.neuralDemand - b.neuralDemand)
+  
+  // [PHASE 9] Experience level now affects WHICH exercise within the filtered pool
+  // Not which tier of exercise is allowed - that's determined by current progression
   if (level === 'beginner') {
-    return sorted[0];
+    return sorted[0]
   }
   if (level === 'intermediate') {
-    return sorted[Math.floor(sorted.length / 2)];
+    return sorted[Math.floor(sorted.length / 2)]
   }
-  return sorted[sorted.length - 1];
+  // Advanced users get highest within their current progression tier
+  return sorted[sorted.length - 1]
 }
 
 function adjustSetsForLevel(defaultSets: number, level: ExperienceLevel): number {

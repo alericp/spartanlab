@@ -135,6 +135,8 @@ export function ProgramTruthSummary({ truthExplanation, className }: ProgramTrut
     // [SKILL-STRENGTH-TRUTH-CONTRACT] Skill and strength profile
     skillStrengthProfile,
     skillStrengthMateriallyApplied,
+    // [PHASE 6] Output quality materiality
+    outputQualityReport,
   } = truthExplanation
   
   // Determine overall status
@@ -313,6 +315,31 @@ export function ProgramTruthSummary({ truthExplanation, className }: ProgramTrut
     }
   }
   
+  // [PHASE 6] Add output quality key decision
+  if (outputQualityReport) {
+    const { sessionRoleDifferentiation, exerciseComplexity, overallVerdict } = outputQualityReport
+    
+    // Session differentiation badge
+    if (sessionRoleDifferentiation.distinctRolesCount > 1) {
+      keyDecisions.push({
+        label: 'Session Variety',
+        value: `${sessionRoleDifferentiation.distinctRolesCount} distinct types`,
+        type: sessionRoleDifferentiation.verdict === 'WELL_DIFFERENTIATED' ? 'success' : 'info',
+      })
+    }
+    
+    // Exercise quality badge for advanced athletes
+    if (exerciseComplexity.advancedProgressionsUsed.length > 0) {
+      keyDecisions.push({
+        label: 'Progressions',
+        value: exerciseComplexity.advancedProgressionsUsed.slice(0, 2).map(p => 
+          p.split(' ').slice(0, 2).join(' ')
+        ).join(', '),
+        type: 'success',
+      })
+    }
+  }
+  
   return (
     <Card className={cn('bg-[#2A2A2A] border-[#3A3A3A]', className)}>
       <CardHeader className="pb-3">
@@ -436,6 +463,70 @@ export function ProgramTruthSummary({ truthExplanation, className }: ProgramTrut
                       </span>
                     )
                   })}
+                </div>
+              </div>
+            )}
+            
+            {/* [PHASE 6] Output Quality Materiality */}
+            {outputQualityReport && (
+              <div className="space-y-2">
+                <h4 className="text-xs font-medium text-[#8A8A8A] uppercase tracking-wide">
+                  Program Expression Quality
+                </h4>
+                <div className="text-xs bg-[#1E1E1E] rounded p-2.5 space-y-2">
+                  {/* User-facing explanation */}
+                  <p className="text-[#E8E4D9]">
+                    {outputQualityReport.explanationForUser}
+                  </p>
+                  
+                  {/* Quality metrics */}
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    <span className={cn(
+                      'text-xs px-2 py-0.5 rounded',
+                      outputQualityReport.sessionRoleDifferentiation.verdict === 'WELL_DIFFERENTIATED' 
+                        ? 'bg-green-500/10 text-green-400'
+                        : outputQualityReport.sessionRoleDifferentiation.verdict === 'PARTIALLY_DIFFERENTIATED'
+                          ? 'bg-blue-500/10 text-blue-400'
+                          : 'bg-[#2A2A2A] text-[#6A6A6A]'
+                    )}>
+                      {outputQualityReport.sessionRoleDifferentiation.distinctRolesCount} session types
+                    </span>
+                    <span className={cn(
+                      'text-xs px-2 py-0.5 rounded',
+                      outputQualityReport.exerciseComplexity.verdict === 'ADVANCED_EXPRESSION'
+                        ? 'bg-green-500/10 text-green-400'
+                        : outputQualityReport.exerciseComplexity.verdict === 'MODERATE_EXPRESSION'
+                          ? 'bg-blue-500/10 text-blue-400'
+                          : 'bg-[#2A2A2A] text-[#6A6A6A]'
+                    )}>
+                      {outputQualityReport.exerciseComplexity.averageExercisesPerSession.toFixed(1)} exercises/session
+                    </span>
+                    {outputQualityReport.loadingQuality.hasWeightedExercises && (
+                      <span className="text-xs bg-green-500/10 text-green-400 px-2 py-0.5 rounded">
+                        Weighted loading
+                      </span>
+                    )}
+                    {outputQualityReport.loadingQuality.hasHoldTargets && (
+                      <span className="text-xs bg-purple-500/10 text-purple-400 px-2 py-0.5 rounded">
+                        Hold targets
+                      </span>
+                    )}
+                  </div>
+                  
+                  {/* Overall verdict */}
+                  <div className="pt-1 text-[#6A6A6A] text-xs flex items-center gap-1.5">
+                    <span>Overall:</span>
+                    <span className={cn(
+                      'font-medium',
+                      outputQualityReport.overallVerdict === 'STRONGLY_EXPRESSED' && 'text-green-400',
+                      outputQualityReport.overallVerdict === 'PARTIALLY_EXPRESSED' && 'text-blue-400',
+                      outputQualityReport.overallVerdict === 'UNDEREXPRESSED' && 'text-amber-400'
+                    )}>
+                      {outputQualityReport.overallVerdict === 'STRONGLY_EXPRESSED' && 'Profile well-expressed'}
+                      {outputQualityReport.overallVerdict === 'PARTIALLY_EXPRESSED' && 'Profile partially expressed'}
+                      {outputQualityReport.overallVerdict === 'UNDEREXPRESSED' && 'Foundational structure'}
+                    </span>
+                  </div>
                 </div>
               </div>
             )}

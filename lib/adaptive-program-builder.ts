@@ -853,6 +853,9 @@ export interface AdaptiveProgram {
   // [AI-TRUTH-PERSISTENCE] Joint cautions - elevated from snapshot for durable access
   // CRITICAL: Affects exercise filtering for safety. User needs to know exercises were adapted.
   jointCautions?: string[]
+  // [SESSION-STYLE-TRUTH] Session style preference - elevated from snapshot for durable access
+  // User's preference for longer_complete vs shorter_focused sessions. Affects session architecture.
+  sessionStylePreference?: string | null
   constraintInsight: {
     hasInsight: boolean
     label: string

@@ -428,6 +428,11 @@ export async function executeAuthoritativeGeneration(
     // survive save/read/rebuild/restart and are accessible without digging into snapshot
     program.trainingMethodPreferences = canonicalProfileTyped.trainingMethodPreferences || ['straight_sets']
     
+    // [FLEXIBILITY-TRUTH-CONTRACT] Elevate selectedFlexibility to first-class program field
+    // This ensures user's flexibility targets (e.g., hip_flexor, hamstring, shoulder)
+    // survive save/read/rebuild/restart and are accessible without digging into snapshot
+    program.selectedFlexibility = canonicalProfileTyped.selectedFlexibility || []
+    
     console.log('[authoritative-generation-truth-snapshot-attached]', {
       generationIntent: request.generationIntent,
       trainingMethodPreferences: program.generationTruthSnapshot.trainingMethodPreferences,
@@ -436,6 +441,7 @@ export async function executeAuthoritativeGeneration(
       jointCautionsElevated: program.jointCautions.length, // [AI-TRUTH-PERSISTENCE] Verify elevation
       sessionStylePreferenceElevated: program.sessionStylePreference, // [SESSION-STYLE-TRUTH] Verify elevation
       selectedFlexibilityCount: program.generationTruthSnapshot.selectedFlexibility.length,
+      selectedFlexibilityElevated: program.selectedFlexibility?.length || 0, // [FLEXIBILITY-TRUTH-CONTRACT] Verify elevation
       hasWeightedStrength: program.generationTruthSnapshot.weightedStrengthSnapshot.loadingEligible,
       verdict: 'GENERATION_TRUTH_SNAPSHOT_PERSISTED',
     })

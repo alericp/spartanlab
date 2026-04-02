@@ -604,8 +604,10 @@ export function buildProgramTruthExplanation(
     equipmentUsed: program.equipmentProfile?.available || profile?.equipmentAvailable || [],
     weightedLoadingUsed: program.weightedStrengthPrescription?.hasWeightedData || false,
     
-    flexibilityGoalsUsed: profile?.selectedFlexibility || [],
-    flexibilityIntegrated: (profile?.selectedFlexibility?.length || 0) > 0,
+    // [FLEXIBILITY-TRUTH-CONTRACT] Prefer program.selectedFlexibility (durable) over profile (ephemeral)
+    // This ensures saved programs retain their generation-time flexibility goals
+    flexibilityGoalsUsed: program.selectedFlexibility || program.generationTruthSnapshot?.selectedFlexibility || profile?.selectedFlexibility || [],
+    flexibilityIntegrated: (program.selectedFlexibility?.length || program.generationTruthSnapshot?.selectedFlexibility?.length || profile?.selectedFlexibility?.length || 0) > 0,
     
     trainingPathUsed: program.trainingPathType || profile?.trainingPathType || null,
     goalCategoriesUsed: program.goalCategories || profile?.goalCategories || [],

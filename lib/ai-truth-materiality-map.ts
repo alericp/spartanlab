@@ -266,16 +266,16 @@ export const TRUTH_MATERIALITY_MAP: FieldMaterialityRecord[] = [
   {
     fieldName: 'selectedFlexibility',
     canonicalSourcePresent: true,
-    savedOnProgram: false,
+    savedOnProgram: true, // [FLEXIBILITY-TRUTH-CONTRACT] Now elevated to first-class field
     savedInGenerationTruthSnapshot: true,
-    restoredOnRead: false,
+    restoredOnRead: true, // [FLEXIBILITY-TRUTH-CONTRACT] Now survives save/read cycle
     usedByGenerator: true,
     materiallyAffectsOutput: true,
-    surfacedInUI: false,
-    verdict: 'YELLOW',
-    reason: 'Affects cooldown/mobility content. Only saved in snapshot, not on program. Not shown in UI.',
-    nearestFileOrFunction: 'engine-quality-contract.ts: planFlexibilityInsertions()',
-    nextFixPriority: 'medium',
+    surfacedInUI: true, // [FLEXIBILITY-TRUTH-CONTRACT] Now shown in ProgramTruthSummary
+    verdict: 'GREEN', // [FLEXIBILITY-TRUTH-CONTRACT] Fully authoritative, durable, and materially generative
+    reason: 'Affects cooldown/mobility content via planFlexibilityInsertions(). Now durably persisted on program and shown in UI.',
+    nearestFileOrFunction: 'authoritative-program-generation.ts: program.selectedFlexibility, engine-quality-contract.ts: planFlexibilityInsertions()',
+    nextFixPriority: 'done', // [FLEXIBILITY-TRUTH-CONTRACT] Completed
   },
   
   // ==========================================================================

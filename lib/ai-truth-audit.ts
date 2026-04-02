@@ -499,6 +499,18 @@ export interface ProgramTruthExplanation {
   }>
   hiddenTruthNotSurfaced: string[]
   
+  // [DOCTRINE RUNTIME CONTRACT] Doctrine influence data
+  doctrineInfluence?: {
+    available: boolean
+    source: 'db_live' | 'fallback_none'
+    influenceLevel: 'none' | 'minimal' | 'moderate' | 'strong'
+    headlineReasons: string[]
+    userVisibleSummary: string[]
+    methodsInfluenced: boolean
+    progressionInfluenced: boolean
+    prescriptionInfluenced: boolean
+  } | null
+  
   // Summary
   truthfulSummary: string
   explanationQualityVerdict: 'EXPLANATION_STRONG' | 'EXPLANATION_THIN' | 'GENERATION_MAY_BE_RIGHT_BUT_PROOF_IS_WEAK' | 'USER_TRUTH_NOT_SUFFICIENTLY_SURFACED'
@@ -855,6 +867,49 @@ export function buildProgramTruthExplanation(
     // [PHASE 7] Visible difference verdict - for use when comparing before/after rebuild
     // This is populated by the calling code when a previousProgram is available
     visibleDifferenceReport: null as ProgramDiffReport | null,
+    
+    // [DOCTRINE RUNTIME CONTRACT] Extract doctrine influence data from the program
+    doctrineInfluence: (() => {
+      const docContract = (program as { doctrineRuntimeContract?: {
+        available: boolean
+        source: 'db_live' | 'fallback_none'
+        explanationDoctrine: {
+          doctrineInfluenceLevel: 'none' | 'minimal' | 'moderate' | 'strong'
+          headlineReasons: string[]
+          userVisibleSummary: string[]
+        }
+        methodDoctrine: {
+          preferredMethods: string[]
+          blockedMethods: string[]
+        }
+        progressionDoctrine: {
+          globalConservativeBias: boolean
+          globalAssistedBias: boolean
+        }
+        prescriptionDoctrine: {
+          intensityBias: string | null
+          holdBias: string | null
+        }
+      }}).doctrineRuntimeContract
+      
+      if (!docContract || !docContract.available) {
+        return null
+      }
+      
+      return {
+        available: docContract.available,
+        source: docContract.source,
+        influenceLevel: docContract.explanationDoctrine.doctrineInfluenceLevel,
+        headlineReasons: docContract.explanationDoctrine.headlineReasons || [],
+        userVisibleSummary: docContract.explanationDoctrine.userVisibleSummary || [],
+        methodsInfluenced: (docContract.methodDoctrine.preferredMethods.length > 0 || 
+                           docContract.methodDoctrine.blockedMethods.length > 0),
+        progressionInfluenced: (docContract.progressionDoctrine.globalConservativeBias || 
+                               docContract.progressionDoctrine.globalAssistedBias),
+        prescriptionInfluenced: !!(docContract.prescriptionDoctrine.intensityBias || 
+                                  docContract.prescriptionDoctrine.holdBias),
+      }
+    })(),
     
     explanationFactors,
     hiddenTruthNotSurfaced,

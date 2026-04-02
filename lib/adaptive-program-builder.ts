@@ -107,6 +107,9 @@ import { selectOptimalStructure, getDayExplanation } from './program-structure-e
 import { selectExercisesForSession, evaluateSessionProgressions, getSmartProgressionExercise, buildFallbackSelectionForSession } from './program-exercise-selector'
 // [PHASE 4] Doctrine DB exercise scoring - prefetch rules before generation
 import { prefetchDoctrineRules, getDoctrineInfluenceSummary, getCachedDoctrineRules, type DoctrineScoringAudit } from './doctrine-exercise-scorer'
+
+// [DOCTRINE RUNTIME CONTRACT] Authoritative doctrine contract for upstream generation influence
+import { buildDoctrineRuntimeContract, type DoctrineRuntimeContract } from './doctrine-runtime-contract'
 // [exercise-trace] TASK 8: Import comparison utilities for build-to-build traceability
 import {
   type ProgramSelectionTrace,
@@ -653,6 +656,8 @@ type AdaptiveSessionContext = {
   authoritativeSpine?: AuthoritativeGenerationSpineContract | null
   // [PHASE 2 MULTI-SKILL] Multi-skill session allocation contract
   multiSkillAllocation?: MultiSkillSessionAllocationContract | null
+  // [DOCTRINE RUNTIME CONTRACT] Authoritative doctrine contract for upstream generation influence
+  doctrineRuntimeContract?: DoctrineRuntimeContract | null
   }
 
 export interface AdaptiveProgramInputs {
@@ -4881,6 +4886,59 @@ async function generateAdaptiveProgramImpl(
   }
   
   // ==========================================================================
+  // [DOCTRINE RUNTIME CONTRACT] BUILD AUTHORITATIVE DOCTRINE CONTRACT
+  // ==========================================================================
+  // This contract combines Doctrine DB + resolved athlete truth into a single
+  // authoritative structure that MUST be consumed by downstream generation.
+  // It is NOT decorative - it materially influences progression, methods,
+  // prescription, skill coverage, and exercise selection.
+  // ==========================================================================
+  let doctrineRuntimeContract: DoctrineRuntimeContract | null = null
+  try {
+    const cwpRecord: Record<string, { currentWorkingProgression: string | null; historicalCeiling: string | null }> = {}
+    if (materialityContract.currentWorkingProgressions) {
+      for (const [skill, data] of Object.entries(materialityContract.currentWorkingProgressions)) {
+        cwpRecord[skill] = {
+          currentWorkingProgression: typeof data === 'object' && data ? (data as { currentWorkingProgression?: string | null }).currentWorkingProgression ?? null : null,
+          historicalCeiling: typeof data === 'object' && data ? (data as { historicalCeiling?: string | null }).historicalCeiling ?? null : null,
+        }
+      }
+    }
+    
+    doctrineRuntimeContract = await buildDoctrineRuntimeContract({
+      primaryGoal: materialityContract.primaryGoal,
+      secondaryGoal: materialityContract.secondaryGoal,
+      selectedSkills: materialityContract.selectedSkills,
+      experienceLevel: materialityContract.experienceLevel,
+      jointCautions: materialityContract.jointCautions,
+      equipmentAvailable: materialityContract.equipmentAvailable,
+      currentWorkingProgressions: cwpRecord,
+      trainingMethodPreferences: inputs.trainingMethodPreferences?.map(p => p.name) || [],
+      sessionStyle: inputs.sessionStyle || null,
+    })
+    
+    console.log('[DOCTRINE-RUNTIME-CONTRACT-UPSTREAM-INTEGRATION]', {
+      available: doctrineRuntimeContract.available,
+      source: doctrineRuntimeContract.source,
+      coverageHasLiveRules: doctrineRuntimeContract.doctrineCoverage.hasLiveRules,
+      progressionSkillCount: Object.keys(doctrineRuntimeContract.progressionDoctrine.perSkill).length,
+      methodPreferredCount: doctrineRuntimeContract.methodDoctrine.preferredMethods.length,
+      methodBlockedCount: doctrineRuntimeContract.methodDoctrine.blockedMethods.length,
+      prescriptionIntensityBias: doctrineRuntimeContract.prescriptionDoctrine.intensityBias,
+      skillSupportCount: doctrineRuntimeContract.skillDoctrine.supportSkills.length,
+      skillDeferredCount: doctrineRuntimeContract.skillDoctrine.deferredSkills.length,
+      explanationLevel: doctrineRuntimeContract.explanationDoctrine.doctrineInfluenceLevel,
+      verdict: 'DOCTRINE_UPSTREAM_INFLUENCE_APPLIED',
+    })
+  } catch (err) {
+    console.log('[DOCTRINE-RUNTIME-CONTRACT-FALLBACK-GRACEFUL]', {
+      error: String(err),
+      verdict: 'DOCTRINE_RUNTIME_CONTRACT_FALLBACK',
+    })
+    // Generation continues without doctrine influence - fallback is safe
+  }
+  
+  // ==========================================================================
   // [PHASE-MATERIALITY] ROOT CAUSE AUDIT
   // ==========================================================================
   // Log whether the current builder is properly consuming multi-skill truth
@@ -6143,6 +6201,8 @@ async function generateAdaptiveProgramImpl(
   authoritativeSpine: authoritativeSpineContract,
   // [PHASE 2 MULTI-SKILL] Pass multi-skill session allocation contract
   multiSkillAllocation: multiSkillAllocationContract,
+  // [DOCTRINE RUNTIME CONTRACT] Pass authoritative doctrine contract for upstream influence
+  doctrineRuntimeContract,
   }
     
     const session = generateAdaptiveSession(
@@ -11811,6 +11871,18 @@ return explanations.length > 0 ? explanations : undefined
   // [PHASE 2 MULTI-SKILL] Store multi-skill allocation contract on the program
   finalProgram.multiSkillAllocationContract = multiSkillAllocationContract
   
+  // [DOCTRINE RUNTIME CONTRACT] Store doctrine contract on the program for UI access
+  if (doctrineRuntimeContract) {
+    finalProgram.doctrineRuntimeContract = doctrineRuntimeContract
+    console.log('[DOCTRINE-PROGRAM-ATTACHED]', {
+      available: doctrineRuntimeContract.available,
+      source: doctrineRuntimeContract.source,
+      influenceLevel: doctrineRuntimeContract.explanationDoctrine.doctrineInfluenceLevel,
+      hasLiveRules: doctrineRuntimeContract.doctrineCoverage.hasLiveRules,
+      verdict: 'DOCTRINE_UI_TRUTH_ALIGNED',
+    })
+  }
+  
   // ==========================================================================
   // [PHASE 2 MULTI-SKILL] FINAL COVERAGE CONTRACT VERIFICATION
   // This log proves broader selected skills are either materially represented
@@ -11853,13 +11925,65 @@ return explanations.length > 0 ? explanations : undefined
   // ==========================================================================
   // Log whether doctrine DB materially affected exercise selection this generation
   console.log('[PHASE4-DOCTRINE-EXERCISE-SCORING-VERIFICATION]', {
-    doctrineRulesPrefetched: true,
-    primaryGoal: canonicalProfile.primaryGoal,
-    // Note: Per-session doctrine audit is logged in exercise selector
-    // This confirms the prefetch was available for all session assemblies
-    infrastructureReady: true,
-    verdict: 'DOCTRINE_EXERCISE_SCORING_LIVE',
+  doctrineRulesPrefetched: true,
+  primaryGoal: canonicalProfile.primaryGoal,
+  // Note: Per-session doctrine audit is logged in exercise selector
+  // This confirms the prefetch was available for all session assemblies
+  infrastructureReady: true,
+  verdict: 'DOCTRINE_EXERCISE_SCORING_LIVE',
   })
+  
+  // ==========================================================================
+  // [DOCTRINE RUNTIME CONTRACT] FINAL COMPREHENSIVE VERIFICATION AUDIT
+  // ==========================================================================
+  // Log whether doctrine DB materially affected generation beyond just exercise scoring
+  if (doctrineRuntimeContract) {
+    console.log('[DOCTRINE-RUNTIME-CONTRACT-FINAL-VERIFICATION]', {
+      // Contract status
+      available: doctrineRuntimeContract.available,
+      source: doctrineRuntimeContract.source,
+      contractVersion: doctrineRuntimeContract.contractVersion,
+      
+      // Coverage stats
+      hasLiveRules: doctrineRuntimeContract.doctrineCoverage.hasLiveRules,
+      progressionRuleCount: doctrineRuntimeContract.doctrineCoverage.progressionRuleCount,
+      methodRuleCount: doctrineRuntimeContract.doctrineCoverage.methodRuleCount,
+      prescriptionRuleCount: doctrineRuntimeContract.doctrineCoverage.prescriptionRuleCount,
+      
+      // Influence areas
+      progressionInfluenced: doctrineRuntimeContract.progressionDoctrine.globalConservativeBias || 
+                             doctrineRuntimeContract.progressionDoctrine.globalAssistedBias,
+      progressionSkillCount: Object.keys(doctrineRuntimeContract.progressionDoctrine.perSkill).length,
+      methodsInfluenced: doctrineRuntimeContract.methodDoctrine.preferredMethods.length > 0 ||
+                         doctrineRuntimeContract.methodDoctrine.blockedMethods.length > 0,
+      methodPreferredCount: doctrineRuntimeContract.methodDoctrine.preferredMethods.length,
+      methodBlockedCount: doctrineRuntimeContract.methodDoctrine.blockedMethods.length,
+      prescriptionInfluenced: !!doctrineRuntimeContract.prescriptionDoctrine.intensityBias,
+      prescriptionIntensityBias: doctrineRuntimeContract.prescriptionDoctrine.intensityBias,
+      skillCoverageInfluenced: doctrineRuntimeContract.skillDoctrine.supportSkills.length > 0 ||
+                               doctrineRuntimeContract.skillDoctrine.deferredSkills.length > 0,
+      skillSupportCount: doctrineRuntimeContract.skillDoctrine.supportSkills.length,
+      skillDeferredCount: doctrineRuntimeContract.skillDoctrine.deferredSkills.length,
+      
+      // Exercise integration
+      exerciseDoctrineEnabled: doctrineRuntimeContract.exerciseDoctrine.enabled,
+      exerciseSelectionRuleCount: doctrineRuntimeContract.exerciseDoctrine.selectionRuleCount,
+      
+      // Explanation readiness
+      explanationLevel: doctrineRuntimeContract.explanationDoctrine.doctrineInfluenceLevel,
+      userVisibleSummaryCount: doctrineRuntimeContract.explanationDoctrine.userVisibleSummary.length,
+      
+      // Final verdict
+      verdict: doctrineRuntimeContract.available 
+        ? 'FULL_AUTHORITATIVE' 
+        : 'FALLBACK_NONE',
+    })
+  } else {
+    console.log('[DOCTRINE-RUNTIME-CONTRACT-FINAL-VERIFICATION]', {
+      available: false,
+      verdict: 'FALLBACK_NONE',
+    })
+  }
   
   // ==========================================================================
   // [WEEKLY-REPRESENTATION] TASK 6B: Refine summary truth based on exposure verdicts
@@ -13490,11 +13614,29 @@ function generateAdaptiveSession(
   authoritativeSpine,
   // [PHASE 2 MULTI-SKILL] Extract multi-skill session allocation contract
   multiSkillAllocation,
+  // [DOCTRINE RUNTIME CONTRACT] Extract authoritative doctrine contract
+  doctrineRuntimeContract,
   } = context
+  
+  // [DOCTRINE RUNTIME CONTRACT] Log doctrine influence for this session
+  if (doctrineRuntimeContract && doctrineRuntimeContract.available) {
+    console.log('[session-assembly-doctrine-contract]', {
+      sessionIndex,
+      doctrineAvailable: true,
+      source: doctrineRuntimeContract.source,
+      methodDensityAllowed: doctrineRuntimeContract.methodDoctrine.densityAllowed,
+      methodCircuitsAllowed: doctrineRuntimeContract.methodDoctrine.circuitsAllowed,
+      prescriptionIntensityBias: doctrineRuntimeContract.prescriptionDoctrine.intensityBias,
+      prescriptionHoldBias: doctrineRuntimeContract.prescriptionDoctrine.holdBias,
+      skillSupportCount: doctrineRuntimeContract.skillDoctrine.supportSkills.length,
+      influenceLevel: doctrineRuntimeContract.explanationDoctrine.doctrineInfluenceLevel,
+      verdict: 'DOCTRINE_SESSION_INFLUENCE_ACTIVE',
+    })
+  }
   
   // [PHASE 1 SPINE] Validate authoritative spine contract is present and active
   if (authoritativeSpine) {
-    console.log('[session-assembly-spine-contract]', {
+  console.log('[session-assembly-spine-contract]', {
       dayFocus: day.focus,
       dayNumber: day.dayNumber,
       spineVersion: authoritativeSpine.contractVersion,

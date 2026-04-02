@@ -869,6 +869,10 @@ export interface AdaptiveProgram {
     exerciseCountAdjustment: number // positive = added, negative = reduced
     accessoryInclusionAdjusted: boolean
   }
+  // [FLEXIBILITY-TRUTH-CONTRACT] Selected flexibility goals - elevated from snapshot for durable access
+  // CRITICAL: User's selected flexibility targets (e.g., hip_flexor, hamstring, shoulder).
+  // These affect cooldown/mobility content and must survive save/read/rebuild/restart.
+  selectedFlexibility?: string[]
   constraintInsight: {
     hasInsight: boolean
     label: string

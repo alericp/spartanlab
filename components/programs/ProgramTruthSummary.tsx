@@ -129,6 +129,9 @@ export function ProgramTruthSummary({ truthExplanation, className }: ProgramTrut
     // [SESSION-STYLE-MATERIALITY] Session style materiality
     sessionStyleMateriallyApplied,
     sessionStyleAdjustmentReason,
+    // [FLEXIBILITY-TRUTH-CONTRACT] Flexibility goals
+    flexibilityGoalsUsed,
+    flexibilityIntegrated,
   } = truthExplanation
   
   // Determine overall status
@@ -261,6 +264,20 @@ export function ProgramTruthSummary({ truthExplanation, className }: ProgramTrut
       label: 'Training Style',
       value: styleValue,
       type: styleType,
+    })
+  }
+  
+  // [FLEXIBILITY-TRUTH-CONTRACT] Add flexibility goals key decision
+  if (flexibilityGoalsUsed && flexibilityGoalsUsed.length > 0) {
+    const flexTargets = flexibilityGoalsUsed.slice(0, 2).map((f: string) => 
+      f.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())
+    ).join(', ')
+    const moreCount = flexibilityGoalsUsed.length > 2 ? flexibilityGoalsUsed.length - 2 : 0
+    
+    keyDecisions.push({
+      label: 'Flexibility Focus',
+      value: moreCount > 0 ? `${flexTargets} +${moreCount}` : flexTargets,
+      type: flexibilityIntegrated ? 'success' : 'info',
     })
   }
   

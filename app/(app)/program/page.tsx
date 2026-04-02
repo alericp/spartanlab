@@ -106,6 +106,12 @@ import {
   buildProgramTruthExplanation,
   type ProgramTruthExplanation,
 } from '@/lib/ai-truth-audit'
+// [AI-TRUTH-MATERIALITY] Import materiality map for dev-only verification
+import {
+  getMaterialitySummary,
+  analyzePersonalAlignment,
+  logMaterialityAudit,
+} from '@/lib/ai-truth-materiality-map'
 
 // TASK 5: Lazy load heavy components to prevent SSR/hydration crashes
 import dynamic from 'next/dynamic'
@@ -11658,6 +11664,24 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
   // [PHASE 24D] Enable diagnostic strip only in development/preview
   const showDiagnosticStrip = process.env.NODE_ENV === 'development' || process.env.NEXT_PUBLIC_VERCEL_ENV === 'preview'
   
+  // [AI-TRUTH-MATERIALITY] Log materiality audit on mount (dev only)
+  // This provides compact verification of which fields are GREEN/YELLOW/RED
+  const materialitySummary = showDiagnosticStrip ? getMaterialitySummary() : null
+  const personalAlignment = showDiagnosticStrip ? analyzePersonalAlignment() : null
+  
+  // Log once on initial render for debugging
+  if (showDiagnosticStrip && program && !isLoading) {
+    // Use console.log for dev debugging - will be removed in production
+    console.log('[AI-TRUTH-MATERIALITY-MAP]', {
+      greenCount: materialitySummary?.greenCount,
+      yellowCount: materialitySummary?.yellowCount,
+      redCount: materialitySummary?.redCount,
+      highPriorityFixes: materialitySummary?.highPriorityFixes,
+      alignmentVerdict: personalAlignment?.alignmentVerdict,
+      topUnderexpressedField: materialitySummary?.topUnderexpressedField,
+    })
+  }
+  
   return (
     <div className="min-h-screen bg-[#0A0A0A] text-white">
       {/* [PHASE 24D] TASK 7 - Temporary diagnostic strip for modify flow state */}
@@ -11666,7 +11690,24 @@ console.log('[phase3-real-closeout-verdict-POST-REBUILD]', {
           <span className="mr-4">modifyFlow: <span className={modifyFlowState === 'modal' ? 'text-green-400' : modifyFlowState === 'builder' ? 'text-blue-400' : 'text-gray-400'}>{modifyFlowState}</span></span>
           <span className="mr-4">showBuilder: <span className={showBuilder ? 'text-blue-400' : 'text-gray-400'}>{String(showBuilder)}</span></span>
           <span className="mr-4">program: <span className={program ? 'text-green-400' : 'text-gray-400'}>{program ? 'yes' : 'no'}</span></span>
-          <span>modalOpen: <span className={isModifyModalOpen ? 'text-green-400' : 'text-gray-400'}>{String(isModifyModalOpen)}</span></span>
+          <span className="mr-4">modalOpen: <span className={isModifyModalOpen ? 'text-green-400' : 'text-gray-400'}>{String(isModifyModalOpen)}</span></span>
+          {/* [AI-TRUTH-MATERIALITY] Compact verdict display */}
+          {materialitySummary && (
+            <span className="ml-4 border-l border-[#3A3A3A] pl-4">
+              truth: <span className="text-green-400">{materialitySummary.greenCount}G</span>
+              <span className="text-yellow-400 ml-1">{materialitySummary.yellowCount}Y</span>
+              <span className="text-red-400 ml-1">{materialitySummary.redCount}R</span>
+              {personalAlignment && (
+                <span className={`ml-2 ${
+                  personalAlignment.alignmentVerdict === 'FULLY_ALIGNED' ? 'text-green-400' :
+                  personalAlignment.alignmentVerdict === 'MOSTLY_ALIGNED' ? 'text-yellow-400' :
+                  'text-orange-400'
+                }`}>
+                  {personalAlignment.alignmentVerdict.replace('_', ' ')}
+                </span>
+              )}
+            </span>
+          )}
         </div>
       )}
       

@@ -148,6 +148,23 @@ interface TruthExplanation {
     progressionInfluenced: boolean
     prescriptionInfluenced: boolean
   } | null
+  // [SESSION ARCHITECTURE TRUTH] Architecture and materiality truth
+  sessionArchitectureTruth?: {
+    sourceVerdict: 'FULL_TRUTH_AVAILABLE' | 'PARTIAL_TRUTH_AVAILABLE' | 'MINIMAL_TRUTH_FALLBACK'
+    complexity: 'low' | 'moderate' | 'high'
+    primarySpineSkills: string[]
+    secondaryAnchorSkills: string[]
+    supportRotationSkills: string[]
+    deferredSkills: Array<{ skill: string; reason: string; details: string }>
+    currentWorkingCapsCount: number
+    historicalCeilingBlockedCount: number
+    weeklyMaterialityVerdict: 'TOO_CLOSE_TO_FOUNDATIONAL_DEFAULT' | 'ACCEPTABLY_DIFFERENT' | 'STRONGLY_PERSONALIZED'
+    doctrineArchitectureBias: {
+      sessionRoleBias: string
+      supportAllocationBias: string
+      methodPackagingBias: string
+    }
+  } | null
 }
 
 interface ProgramTruthSummaryProps {
@@ -202,6 +219,8 @@ export function ProgramTruthSummary({ truthExplanation, className }: ProgramTrut
   skillStrengthProfile,
   // [DOCTRINE RUNTIME CONTRACT] Doctrine influence data
   doctrineInfluence,
+  // [SESSION ARCHITECTURE TRUTH] Architecture and materiality truth
+  sessionArchitectureTruth,
     skillStrengthMateriallyApplied,
     // [CURRENT-PROGRESSION-TRUTH-CONTRACT] Current working progressions
     currentWorkingProgressions,
@@ -326,11 +345,34 @@ export function ProgramTruthSummary({ truthExplanation, className }: ProgramTrut
       : doctrineInfluence.influenceLevel === 'moderate'
         ? 'Moderate'
         : 'Light'
+  keyDecisions.push({
+  label: 'Training Science',
+  value: `${influenceLabel} doctrine influence`,
+  type: 'success',
+  })
+  }
+  
+  // [SESSION ARCHITECTURE TRUTH] Add architecture verdict key decision
+  if (sessionArchitectureTruth) {
+    const verdictLabel = sessionArchitectureTruth.weeklyMaterialityVerdict === 'STRONGLY_PERSONALIZED'
+      ? 'Personalized'
+      : sessionArchitectureTruth.weeklyMaterialityVerdict === 'ACCEPTABLY_DIFFERENT'
+        ? 'Tailored'
+        : 'Standard'
     keyDecisions.push({
-      label: 'Training Science',
-      value: `${influenceLabel} doctrine influence`,
-      type: 'success',
+      label: 'Program Style',
+      value: verdictLabel,
+      type: sessionArchitectureTruth.weeklyMaterialityVerdict === 'STRONGLY_PERSONALIZED' ? 'success' : 'info',
     })
+    
+    // Show current working progression if historical ceiling was blocked
+    if (sessionArchitectureTruth.historicalCeilingBlockedCount > 0) {
+      keyDecisions.push({
+        label: 'Progression',
+        value: 'Conservative start',
+        type: 'warning',
+      })
+    }
   }
   
   // [SESSION-STYLE-MATERIALITY] Add session style preference key decision with materiality
@@ -747,6 +789,104 @@ export function ProgramTruthSummary({ truthExplanation, className }: ProgramTrut
                       </span>
                     )}
                   </div>
+                </div>
+              </div>
+            )}
+            
+            {/* [SESSION ARCHITECTURE TRUTH] Program Architecture Section */}
+            {sessionArchitectureTruth && (
+              <div className="space-y-2">
+                <h4 className="text-xs font-medium text-[#8A8A8A] uppercase tracking-wide">
+                  Program Architecture
+                </h4>
+                <div className="text-xs bg-[#1E1E1E] rounded p-2.5 space-y-2">
+                  {/* Architecture verdict badge */}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className={cn(
+                      'text-xs px-2 py-0.5 rounded font-medium',
+                      sessionArchitectureTruth.weeklyMaterialityVerdict === 'STRONGLY_PERSONALIZED' && 'bg-green-500/10 text-green-400',
+                      sessionArchitectureTruth.weeklyMaterialityVerdict === 'ACCEPTABLY_DIFFERENT' && 'bg-blue-500/10 text-blue-400',
+                      sessionArchitectureTruth.weeklyMaterialityVerdict === 'TOO_CLOSE_TO_FOUNDATIONAL_DEFAULT' && 'bg-amber-500/10 text-amber-400'
+                    )}>
+                      {sessionArchitectureTruth.weeklyMaterialityVerdict === 'STRONGLY_PERSONALIZED' 
+                        ? 'Strongly personalized' 
+                        : sessionArchitectureTruth.weeklyMaterialityVerdict === 'ACCEPTABLY_DIFFERENT'
+                          ? 'Tailored program'
+                          : 'Standard template'}
+                    </span>
+                    <span className={cn(
+                      'text-xs px-2 py-0.5 rounded',
+                      sessionArchitectureTruth.complexity === 'high' && 'bg-purple-500/10 text-purple-400',
+                      sessionArchitectureTruth.complexity === 'moderate' && 'bg-blue-500/10 text-blue-400',
+                      sessionArchitectureTruth.complexity === 'low' && 'bg-[#2A2A2A] text-[#6A6A6A]'
+                    )}>
+                      {sessionArchitectureTruth.complexity} complexity
+                    </span>
+                  </div>
+                  
+                  {/* Skill classification */}
+                  <div className="space-y-1.5 pt-1">
+                    {sessionArchitectureTruth.primarySpineSkills.length > 0 && (
+                      <div className="flex items-start gap-2">
+                        <span className="text-[#6A6A6A] min-w-[70px]">Primary:</span>
+                        <span className="text-[#E8E4D9]">
+                          {sessionArchitectureTruth.primarySpineSkills.map(s => s.replace(/_/g, ' ')).join(', ')}
+                        </span>
+                      </div>
+                    )}
+                    {sessionArchitectureTruth.secondaryAnchorSkills.length > 0 && (
+                      <div className="flex items-start gap-2">
+                        <span className="text-[#6A6A6A] min-w-[70px]">Secondary:</span>
+                        <span className="text-[#E8E4D9]">
+                          {sessionArchitectureTruth.secondaryAnchorSkills.map(s => s.replace(/_/g, ' ')).join(', ')}
+                        </span>
+                      </div>
+                    )}
+                    {sessionArchitectureTruth.supportRotationSkills.length > 0 && (
+                      <div className="flex items-start gap-2">
+                        <span className="text-[#6A6A6A] min-w-[70px]">Support:</span>
+                        <span className="text-green-400">
+                          {sessionArchitectureTruth.supportRotationSkills.map(s => s.replace(/_/g, ' ')).join(', ')}
+                        </span>
+                      </div>
+                    )}
+                    {sessionArchitectureTruth.deferredSkills.length > 0 && (
+                      <div className="flex items-start gap-2">
+                        <span className="text-[#6A6A6A] min-w-[70px]">Deferred:</span>
+                        <span className="text-amber-400">
+                          {sessionArchitectureTruth.deferredSkills.map(d => d.skill.replace(/_/g, ' ')).join(', ')}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* Current working progression note */}
+                  {sessionArchitectureTruth.historicalCeilingBlockedCount > 0 && (
+                    <div className="pt-1 text-xs text-amber-400/80 flex items-start gap-1.5">
+                      <span className="shrink-0">⚠</span>
+                      <span>
+                        Programming from your current ability level, not historical peak
+                        ({sessionArchitectureTruth.historicalCeilingBlockedCount} skill{sessionArchitectureTruth.historicalCeilingBlockedCount > 1 ? 's' : ''} adjusted)
+                      </span>
+                    </div>
+                  )}
+                  
+                  {/* Doctrine architecture bias */}
+                  {sessionArchitectureTruth.doctrineArchitectureBias && (
+                    <div className="flex flex-wrap gap-1.5 pt-1">
+                      <span className={cn(
+                        'text-xs px-2 py-0.5 rounded',
+                        sessionArchitectureTruth.doctrineArchitectureBias.supportAllocationBias === 'generous' 
+                          ? 'bg-green-500/10 text-green-400'
+                          : 'bg-[#2A2A2A] text-[#6A6A6A]'
+                      )}>
+                        {sessionArchitectureTruth.doctrineArchitectureBias.supportAllocationBias} support
+                      </span>
+                      <span className="text-xs bg-[#2A2A2A] text-[#6A6A6A] px-2 py-0.5 rounded">
+                        {sessionArchitectureTruth.doctrineArchitectureBias.sessionRoleBias.replace(/_/g, ' ')}
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
             )}

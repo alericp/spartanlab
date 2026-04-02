@@ -573,9 +573,33 @@ export function buildProgramTruthExplanation(
     }
   }
   
-  // Calculate underexpressed skills
-  const selectedSkills = program.selectedSkills || profile?.selectedSkills || []
-  const representedSkills = program.representedSkills || []
+  // ==========================================================================
+  // [PHASE 1 SPINE] PREFER AUTHORITATIVE SPINE CONTRACT IF PRESENT
+  // ==========================================================================
+  // If the program has a saved authoritative spine contract, prefer it over
+  // recomputing from disparate fields. This ensures display parity with build.
+  // ==========================================================================
+  const spineContract = (program as { authoritativeSpineContract?: {
+    representedSkillsThisCycle?: string[]
+    deferredSkillsThisCycle?: Array<{ skill: string; reason: string }>
+    materiallyConsideredSkills?: Array<{ skill: string; role: string; deferralReason: string | null }>
+  } | null }).authoritativeSpineContract
+  
+  if (spineContract) {
+    console.log('[ai-truth-audit] Using authoritative spine contract for truth explanation', {
+      representedSkillsCount: spineContract.representedSkillsThisCycle?.length || 0,
+      deferredSkillsCount: spineContract.deferredSkillsThisCycle?.length || 0,
+    })
+  }
+  
+  // Calculate underexpressed skills - prefer spine contract data if available
+  const selectedSkills = spineContract?.materiallyConsideredSkills?.map(s => s.skill) 
+    || program.selectedSkills 
+    || profile?.selectedSkills 
+    || []
+  const representedSkills = spineContract?.representedSkillsThisCycle 
+    || program.representedSkills 
+    || []
   const underexpressedSkills = selectedSkills.filter(s => !representedSkills.includes(s))
   
   // [PHASE 2 MULTI-SKILL] Build broader skill coverage contract from weeklyRepresentation

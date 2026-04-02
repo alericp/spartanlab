@@ -234,16 +234,16 @@ export const TRUTH_MATERIALITY_MAP: FieldMaterialityRecord[] = [
   {
     fieldName: 'trainingMethodPreferences',
     canonicalSourcePresent: true,
-    savedOnProgram: true,
+    savedOnProgram: true, // [METHOD-TRUTH-CONTRACT] Now a first-class field on AdaptiveProgram
     savedInGenerationTruthSnapshot: true,
-    restoredOnRead: true,
+    restoredOnRead: true, // [METHOD-TRUTH-CONTRACT] Now survives save/read cycle as first-class field
     usedByGenerator: true,
     materiallyAffectsOutput: true,
     surfacedInUI: true, // [PHASE 2] Now surfaced in ProgramTruthSummary
-    verdict: 'GREEN', // [PHASE 2] Upgraded - now fully connected and explained
-    reason: 'Supersets/circuits/density affects session structure. Applied via applySessionStylePreferences() and explained in ProgramTruthSummary.',
-    nearestFileOrFunction: 'adaptive-program-builder.ts: applySessionStylePreferences(), ai-truth-audit.ts: aggregateActualAppliedMethods()',
-    nextFixPriority: 'done', // [PHASE 2] Completed
+    verdict: 'GREEN', // [METHOD-TRUTH-CONTRACT] Fully authoritative, durable, and materially generative
+    reason: 'Supersets/circuits/density affects session structure. Now elevated to first-class program field, applied via applySessionStylePreferences() and explained in ProgramTruthSummary.',
+    nearestFileOrFunction: 'authoritative-program-generation.ts: program.trainingMethodPreferences, adaptive-program-builder.ts: applySessionStylePreferences(), ai-truth-audit.ts: aggregateActualAppliedMethods()',
+    nextFixPriority: 'done', // [METHOD-TRUTH-CONTRACT] Completed
   },
   {
     fieldName: 'sessionStylePreference',

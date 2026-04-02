@@ -610,14 +610,20 @@ export function buildProgramTruthExplanation(
     trainingPathUsed: program.trainingPathType || profile?.trainingPathType || null,
     goalCategoriesUsed: program.goalCategories || profile?.goalCategories || [],
     
-    trainingMethodsUsed: profile?.trainingMethodPreferences || [],
+    // [METHOD-TRUTH-CONTRACT] Prefer program.trainingMethodPreferences (durable) over profile (ephemeral)
+    // This ensures saved programs retain their generation-time training method preferences
+    trainingMethodsUsed: program.trainingMethodPreferences || program.generationTruthSnapshot?.trainingMethodPreferences || profile?.trainingMethodPreferences || [],
     // [SESSION-STYLE-TRUTH] Prefer program.sessionStylePreference (durable) over profile (ephemeral)
     // This ensures saved programs retain their generation-time session style preference
     sessionStyleUsed: program.sessionStylePreference || program.generationTruthSnapshot?.sessionStylePreference || profile?.sessionStylePreference || null,
     
     // [PHASE 2] Actual applied methods from session structures
     methodPreferencesApplied: aggregateActualAppliedMethods(program),
-    methodPreferencesMateriality: computeMethodMateriality(program, profile?.trainingMethodPreferences || []),
+    // [METHOD-TRUTH-CONTRACT] Use program-first truth for materiality computation
+    methodPreferencesMateriality: computeMethodMateriality(
+      program, 
+      program.trainingMethodPreferences || program.generationTruthSnapshot?.trainingMethodPreferences || profile?.trainingMethodPreferences || []
+    ),
     
     // [AI-TRUTH-PERSISTENCE] Prefer program.jointCautions (durable) over profile (ephemeral)
     // This ensures saved programs retain their generation-time joint cautions

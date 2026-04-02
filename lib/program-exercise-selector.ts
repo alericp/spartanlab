@@ -166,6 +166,13 @@ import {
 // [DOCTRINE RUNTIME CONTRACT] Import for upstream doctrine influence
 import { type DoctrineRuntimeContract } from './doctrine-runtime-contract'
 
+// [SESSION ARCHITECTURE TRUTH] Import for progression enforcement
+import { 
+  filterByCaptedProgression, 
+  type SessionArchitectureTruthContract,
+  type CurrentWorkingSkillCap 
+} from './session-architecture-truth'
+
 import {
   // Runtime exports
   getSkillPrescriptionRules,

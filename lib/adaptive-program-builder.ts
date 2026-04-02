@@ -110,6 +110,14 @@ import { prefetchDoctrineRules, getDoctrineInfluenceSummary, getCachedDoctrineRu
 
 // [DOCTRINE RUNTIME CONTRACT] Authoritative doctrine contract for upstream generation influence
 import { buildDoctrineRuntimeContract, type DoctrineRuntimeContract } from './doctrine-runtime-contract'
+
+// [SESSION ARCHITECTURE TRUTH] Authoritative contract for generation enforcement
+import { 
+  buildSessionArchitectureTruthContract, 
+  filterByCaptedProgression,
+  validateWeeklyMateriality,
+  type SessionArchitectureTruthContract 
+} from './session-architecture-truth'
 // [exercise-trace] TASK 8: Import comparison utilities for build-to-build traceability
 import {
   type ProgramSelectionTrace,
@@ -658,6 +666,8 @@ type AdaptiveSessionContext = {
   multiSkillAllocation?: MultiSkillSessionAllocationContract | null
   // [DOCTRINE RUNTIME CONTRACT] Authoritative doctrine contract for upstream generation influence
   doctrineRuntimeContract?: DoctrineRuntimeContract | null
+  // [SESSION ARCHITECTURE TRUTH] Authoritative contract for generation enforcement
+  sessionArchitectureTruth?: SessionArchitectureTruthContract | null
   }
 
 export interface AdaptiveProgramInputs {
@@ -1451,6 +1461,62 @@ exerciseExplanations?: {
     parityVerdict: 'SPINE_HONORED' | 'SPINE_PARTIALLY_HONORED' | 'SPINE_VIOLATED' | 'NO_SPINE_AVAILABLE'
     parityViolations: string[]
     auditedAt: string
+  }
+  // ==========================================================================
+  // [SESSION ARCHITECTURE TRUTH] Comprehensive session architecture contract
+  // Persists the authoritative skill classification and progression decisions
+  // ==========================================================================
+  sessionArchitectureTruth?: {
+    sourceVerdict: 'FULL_TRUTH_AVAILABLE' | 'PARTIAL_TRUTH_AVAILABLE' | 'MINIMAL_TRUTH_FALLBACK'
+    builtFromTruth: boolean
+    generationContext: {
+      complexity: 'low' | 'moderate' | 'high'
+      primaryGoal: string
+      secondaryGoal: string | null
+      totalSelectedSkills: number
+      trainingDaysPerWeek: number
+    }
+    primarySpineSkills: string[]
+    secondaryAnchorSkills: string[]
+    supportRotationSkills: string[]
+    deferredSkills: Array<{
+      skill: string
+      reason: string
+      details: string
+    }>
+    weeklyMinimums: {
+      primarySpineMinSets: number
+      secondaryAnchorMinSets: number
+      supportRotationMinSets: number
+    }
+    structuralGuards: {
+      forbidHistoricalCeilingProgressions: boolean
+      forbidPrimaryGoalCollapse: boolean
+    }
+    audit: {
+      currentWorkingCapCount: number
+      historicalCeilingBlockedCount: number
+    }
+    doctrineArchitectureBias: {
+      sessionRoleBias: string
+      supportAllocationBias: string
+      methodPackagingBias: string
+    }
+    generatedAt: string
+  }
+  // ==========================================================================
+  // [WEEKLY MATERIALITY] Verdict on weekly program materiality vs defaults
+  // ==========================================================================
+  weeklyMaterialityVerdict?: {
+    verdict: 'TOO_CLOSE_TO_FOUNDATIONAL_DEFAULT' | 'ACCEPTABLY_DIFFERENT' | 'STRONGLY_PERSONALIZED'
+    metrics: {
+      skillClassificationUniqueness: number
+      progressionDifferentiation: number
+      structuralPersonalization: number
+      overallMaterialityScore: number
+    }
+    needsRefinement: boolean
+    refinementSuggestions: string[]
   }
 }
 
@@ -4939,6 +5005,86 @@ async function generateAdaptiveProgramImpl(
   }
   
   // ==========================================================================
+  // [SESSION ARCHITECTURE TRUTH] BUILD AUTHORITATIVE SESSION ARCHITECTURE CONTRACT
+  // ==========================================================================
+  // This contract is GENERATION-FIRST, not UI-first. It MUST be consumed by:
+  // - Weekly session allocation
+  // - Session role assignment  
+  // - Support skill rotation placement
+  // - Exercise selection filtering (blocks historical ceiling)
+  // - Method packaging decisions
+  // ==========================================================================
+  let sessionArchitectureTruth: SessionArchitectureTruthContract | null = null
+  try {
+    const cwpForArchitecture: Record<string, {
+      currentWorkingProgression: string | null
+      historicalCeiling: string | null
+      truthSource: string
+      isConservative: boolean
+    }> = {}
+    
+    if (materialityContract.currentWorkingProgressions) {
+      for (const [skill, data] of Object.entries(materialityContract.currentWorkingProgressions)) {
+        cwpForArchitecture[skill] = {
+          currentWorkingProgression: typeof data === 'object' && data ? 
+            (data as { currentWorkingProgression?: string | null }).currentWorkingProgression ?? null : null,
+          historicalCeiling: typeof data === 'object' && data ? 
+            (data as { historicalCeiling?: string | null }).historicalCeiling ?? null : null,
+          truthSource: typeof data === 'object' && data ? 
+            (data as { truthSource?: string }).truthSource ?? 'unknown' : 'unknown',
+          isConservative: typeof data === 'object' && data ? 
+            (data as { isConservative?: boolean }).isConservative ?? false : false,
+        }
+      }
+    }
+    
+    sessionArchitectureTruth = buildSessionArchitectureTruthContract({
+      materialityContract,
+      doctrineRuntimeContract,
+      currentWorkingProgressions: cwpForArchitecture,
+      trainingMethodPreferences: inputs.trainingMethodPreferences || null,
+      sessionStylePreference: inputs.sessionStyle || null,
+      scheduleMode: inputScheduleMode,
+      effectiveTrainingDays,
+      primaryGoal: canonicalProfile.primaryGoal,
+      secondaryGoal: canonicalProfile.secondaryGoal || null,
+      selectedSkills: selectedSkillsFromProfile,
+      selectedFlexibility: expandedContext.selectedFlexibility,
+      experienceLevel: String(canonicalProfile.experienceLevel),
+      jointCautions: expandedContext.jointCautions,
+      multiSkillAllocation: multiSkillAllocationContract ? {
+        representedSkills: multiSkillAllocationContract.representedSkills,
+        supportExpressedSkills: multiSkillAllocationContract.supportExpressedSkills,
+        supportRotationalSkills: multiSkillAllocationContract.supportRotationalSkills,
+        deferredSkills: multiSkillAllocationContract.deferredSkills.map(d => ({
+          skill: d.skill,
+          reason: d.reason,
+        })),
+      } : null,
+    })
+    
+    console.log('[SESSION-ARCHITECTURE-TRUTH-INTEGRATED]', {
+      sourceVerdict: sessionArchitectureTruth.sourceVerdict,
+      complexity: sessionArchitectureTruth.generationContext.complexity,
+      primarySpineCount: sessionArchitectureTruth.primarySpineSkills.length,
+      secondaryAnchorCount: sessionArchitectureTruth.secondaryAnchorSkills.length,
+      supportRotationCount: sessionArchitectureTruth.supportRotationSkills.length,
+      deferredCount: sessionArchitectureTruth.deferredSkills.length,
+      forbidHistoricalCeiling: sessionArchitectureTruth.structuralGuards.forbidHistoricalCeilingProgressions,
+      requireVisibleDifference: sessionArchitectureTruth.structuralGuards.requireVisibleDifferenceFromPrimaryOnlyTemplate,
+      sessionRoleBias: sessionArchitectureTruth.doctrineArchitectureBias.sessionRoleBias,
+      supportAllocationBias: sessionArchitectureTruth.doctrineArchitectureBias.supportAllocationBias,
+      weeklyMinimums: sessionArchitectureTruth.weeklyMinimums,
+      verdict: 'SESSION_ARCHITECTURE_TRUTH_READY_FOR_GENERATION',
+    })
+  } catch (err) {
+    console.log('[SESSION-ARCHITECTURE-TRUTH-FALLBACK]', {
+      error: String(err),
+      verdict: 'SESSION_ARCHITECTURE_TRUTH_FALLBACK',
+    })
+  }
+  
+  // ==========================================================================
   // [PHASE-MATERIALITY] ROOT CAUSE AUDIT
   // ==========================================================================
   // Log whether the current builder is properly consuming multi-skill truth
@@ -6203,6 +6349,8 @@ async function generateAdaptiveProgramImpl(
   multiSkillAllocation: multiSkillAllocationContract,
   // [DOCTRINE RUNTIME CONTRACT] Pass authoritative doctrine contract for upstream influence
   doctrineRuntimeContract,
+  // [SESSION ARCHITECTURE TRUTH] Pass authoritative session architecture contract
+  sessionArchitectureTruth,
   }
     
     const session = generateAdaptiveSession(
@@ -11873,13 +12021,44 @@ return explanations.length > 0 ? explanations : undefined
   
   // [DOCTRINE RUNTIME CONTRACT] Store doctrine contract on the program for UI access
   if (doctrineRuntimeContract) {
-    finalProgram.doctrineRuntimeContract = doctrineRuntimeContract
-    console.log('[DOCTRINE-PROGRAM-ATTACHED]', {
-      available: doctrineRuntimeContract.available,
-      source: doctrineRuntimeContract.source,
-      influenceLevel: doctrineRuntimeContract.explanationDoctrine.doctrineInfluenceLevel,
-      hasLiveRules: doctrineRuntimeContract.doctrineCoverage.hasLiveRules,
-      verdict: 'DOCTRINE_UI_TRUTH_ALIGNED',
+  finalProgram.doctrineRuntimeContract = doctrineRuntimeContract
+  console.log('[DOCTRINE-PROGRAM-ATTACHED]', {
+  available: doctrineRuntimeContract.available,
+  source: doctrineRuntimeContract.source,
+  influenceLevel: doctrineRuntimeContract.explanationDoctrine.doctrineInfluenceLevel,
+  hasLiveRules: doctrineRuntimeContract.doctrineCoverage.hasLiveRules,
+  verdict: 'DOCTRINE_UI_TRUTH_ALIGNED',
+  })
+  }
+  
+  // [SESSION ARCHITECTURE TRUTH] Store architecture truth on the program for UI access
+  if (sessionArchitectureTruth) {
+    finalProgram.sessionArchitectureTruth = sessionArchitectureTruth
+    
+    // Run weekly materiality validation
+    const sessionsForValidation = finalProgram.weeks?.[0]?.days?.map(d => ({
+      exercises: d.exercises || [],
+      dayType: d.dayType,
+      focus: d.focus,
+    })) || []
+    
+    const materialityValidation = validateWeeklyMateriality(sessionsForValidation, sessionArchitectureTruth)
+    
+    finalProgram.weeklyMaterialityVerdict = {
+      verdict: materialityValidation.verdict,
+      metrics: materialityValidation.metrics,
+      needsRefinement: materialityValidation.needsRefinement,
+      refinementSuggestions: materialityValidation.refinementSuggestions,
+    }
+    
+    console.log('[SESSION-ARCHITECTURE-TRUTH-PROGRAM-ATTACHED]', {
+      sourceVerdict: sessionArchitectureTruth.sourceVerdict,
+      complexity: sessionArchitectureTruth.generationContext.complexity,
+      weeklyMaterialityVerdict: materialityValidation.verdict,
+      needsRefinement: materialityValidation.needsRefinement,
+      metrics: materialityValidation.metrics,
+      refinementSuggestions: materialityValidation.refinementSuggestions,
+      verdict: 'SESSION_ARCHITECTURE_UI_TRUTH_ALIGNED',
     })
   }
   
@@ -11979,9 +12158,63 @@ return explanations.length > 0 ? explanations : undefined
         : 'FALLBACK_NONE',
     })
   } else {
-    console.log('[DOCTRINE-RUNTIME-CONTRACT-FINAL-VERIFICATION]', {
+  console.log('[DOCTRINE-RUNTIME-CONTRACT-FINAL-VERIFICATION]', {
+  available: false,
+  verdict: 'FALLBACK_NONE',
+  })
+  }
+  
+  // ==========================================================================
+  // [SESSION ARCHITECTURE TRUTH] FINAL COMPREHENSIVE VERIFICATION AUDIT
+  // ==========================================================================
+  // Log whether session architecture truth materially affected generation
+  if (sessionArchitectureTruth) {
+    const weeklyVerdict = finalProgram.weeklyMaterialityVerdict
+    console.log('[SESSION-ARCHITECTURE-TRUTH-FINAL-VERIFICATION]', {
+      // Contract status
+      sourceVerdict: sessionArchitectureTruth.sourceVerdict,
+      complexity: sessionArchitectureTruth.generationContext.complexity,
+      builtFromTruth: sessionArchitectureTruth.builtFromTruth,
+      
+      // Skill classification
+      primarySpineCount: sessionArchitectureTruth.primarySpineSkills.length,
+      secondaryAnchorCount: sessionArchitectureTruth.secondaryAnchorSkills.length,
+      supportRotationCount: sessionArchitectureTruth.supportRotationSkills.length,
+      deferredCount: sessionArchitectureTruth.deferredSkills.length,
+      
+      // Progression enforcement
+      currentWorkingCapsCount: sessionArchitectureTruth.audit.currentWorkingCapCount,
+      historicalCeilingBlockedCount: sessionArchitectureTruth.audit.historicalCeilingBlockedCount,
+      forbidHistoricalCeiling: sessionArchitectureTruth.structuralGuards.forbidHistoricalCeilingProgressions,
+      
+      // Doctrine architecture bias
+      sessionRoleBias: sessionArchitectureTruth.doctrineArchitectureBias.sessionRoleBias,
+      supportAllocationBias: sessionArchitectureTruth.doctrineArchitectureBias.supportAllocationBias,
+      methodPackagingBias: sessionArchitectureTruth.doctrineArchitectureBias.methodPackagingBias,
+      
+      // Weekly minimums
+      weeklyMinimums: sessionArchitectureTruth.weeklyMinimums,
+      
+      // Weekly materiality verdict
+      weeklyMaterialityVerdict: weeklyVerdict?.verdict || 'NOT_VALIDATED',
+      weeklyMaterialityMetrics: weeklyVerdict?.metrics || null,
+      needsRefinement: weeklyVerdict?.needsRefinement || false,
+      
+      // Final verdicts
+      multiSkillCoverageVerdict: sessionArchitectureTruth.supportRotationSkills.length > 0 
+        ? 'STRONG_MULTI_SKILL' 
+        : sessionArchitectureTruth.secondaryAnchorSkills.length > 0 
+          ? 'PARTIAL_MULTI_SKILL' 
+          : 'PRIMARY_ONLY_COLLAPSE',
+      currentProgressionSafetyVerdict: sessionArchitectureTruth.structuralGuards.forbidHistoricalCeilingProgressions 
+        ? 'CURRENT_WORKING_ENFORCED' 
+        : 'HISTORICAL_CEILING_ALLOWED',
+      verdict: 'SESSION_ARCHITECTURE_GENERATION_COMPLETE',
+    })
+  } else {
+    console.log('[SESSION-ARCHITECTURE-TRUTH-FINAL-VERIFICATION]', {
       available: false,
-      verdict: 'FALLBACK_NONE',
+      verdict: 'SESSION_ARCHITECTURE_FALLBACK',
     })
   }
   
@@ -13616,6 +13849,8 @@ function generateAdaptiveSession(
   multiSkillAllocation,
   // [DOCTRINE RUNTIME CONTRACT] Extract authoritative doctrine contract
   doctrineRuntimeContract,
+  // [SESSION ARCHITECTURE TRUTH] Extract authoritative session architecture contract
+  sessionArchitectureTruth,
   } = context
   
   // [DOCTRINE RUNTIME CONTRACT] Log doctrine influence for this session
@@ -13631,6 +13866,22 @@ function generateAdaptiveSession(
       skillSupportCount: doctrineRuntimeContract.skillDoctrine.supportSkills.length,
       influenceLevel: doctrineRuntimeContract.explanationDoctrine.doctrineInfluenceLevel,
       verdict: 'DOCTRINE_SESSION_INFLUENCE_ACTIVE',
+    })
+  }
+  
+  // [SESSION ARCHITECTURE TRUTH] Log architecture truth for this session
+  if (sessionArchitectureTruth) {
+    console.log('[session-assembly-architecture-truth]', {
+      sessionIndex,
+      dayFocus: day.focus,
+      sourceVerdict: sessionArchitectureTruth.sourceVerdict,
+      primarySpineSkills: sessionArchitectureTruth.primarySpineSkills,
+      supportRotationSkills: sessionArchitectureTruth.supportRotationSkills,
+      forbidHistoricalCeiling: sessionArchitectureTruth.structuralGuards.forbidHistoricalCeilingProgressions,
+      sessionRoleBias: sessionArchitectureTruth.doctrineArchitectureBias.sessionRoleBias,
+      methodPackagingBias: sessionArchitectureTruth.doctrineArchitectureBias.methodPackagingBias,
+      currentWorkingCapsCount: Object.keys(sessionArchitectureTruth.currentWorkingSkillCaps).length,
+      verdict: 'ARCHITECTURE_TRUTH_SESSION_ENFORCEMENT_ACTIVE',
     })
   }
   

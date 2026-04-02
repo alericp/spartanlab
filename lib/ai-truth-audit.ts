@@ -511,6 +511,24 @@ export interface ProgramTruthExplanation {
     prescriptionInfluenced: boolean
   } | null
   
+  // [SESSION ARCHITECTURE TRUTH] Architecture and materiality truth
+  sessionArchitectureTruth?: {
+    sourceVerdict: 'FULL_TRUTH_AVAILABLE' | 'PARTIAL_TRUTH_AVAILABLE' | 'MINIMAL_TRUTH_FALLBACK'
+    complexity: 'low' | 'moderate' | 'high'
+    primarySpineSkills: string[]
+    secondaryAnchorSkills: string[]
+    supportRotationSkills: string[]
+    deferredSkills: Array<{ skill: string; reason: string; details: string }>
+    currentWorkingCapsCount: number
+    historicalCeilingBlockedCount: number
+    weeklyMaterialityVerdict: 'TOO_CLOSE_TO_FOUNDATIONAL_DEFAULT' | 'ACCEPTABLY_DIFFERENT' | 'STRONGLY_PERSONALIZED'
+    doctrineArchitectureBias: {
+      sessionRoleBias: string
+      supportAllocationBias: string
+      methodPackagingBias: string
+    }
+  } | null
+  
   // Summary
   truthfulSummary: string
   explanationQualityVerdict: 'EXPLANATION_STRONG' | 'EXPLANATION_THIN' | 'GENERATION_MAY_BE_RIGHT_BUT_PROOF_IS_WEAK' | 'USER_TRUTH_NOT_SUFFICIENTLY_SURFACED'
@@ -908,16 +926,65 @@ export function buildProgramTruthExplanation(
                                docContract.progressionDoctrine.globalAssistedBias),
         prescriptionInfluenced: !!(docContract.prescriptionDoctrine.intensityBias || 
                                   docContract.prescriptionDoctrine.holdBias),
-      }
-    })(),
-    
-    explanationFactors,
-    hiddenTruthNotSurfaced,
-    
-    truthfulSummary: summaryParts.join(' | '),
-    explanationQualityVerdict,
   }
-}
+  })(),
+  
+  // [SESSION ARCHITECTURE TRUTH] Extract session architecture truth from the program
+  sessionArchitectureTruth: (() => {
+    const archContract = (program as { 
+      sessionArchitectureTruth?: {
+        sourceVerdict: 'FULL_TRUTH_AVAILABLE' | 'PARTIAL_TRUTH_AVAILABLE' | 'MINIMAL_TRUTH_FALLBACK'
+        generationContext: { complexity: 'low' | 'moderate' | 'high' }
+        primarySpineSkills: string[]
+        secondaryAnchorSkills: string[]
+        supportRotationSkills: string[]
+        deferredSkills: Array<{ skill: string; reason: string; details: string }>
+        audit: { 
+          currentWorkingCapCount: number
+          historicalCeilingBlockedCount: number 
+        }
+        doctrineArchitectureBias: {
+          sessionRoleBias: string
+          supportAllocationBias: string
+          methodPackagingBias: string
+        }
+      }
+      weeklyMaterialityVerdict?: {
+        verdict: 'TOO_CLOSE_TO_FOUNDATIONAL_DEFAULT' | 'ACCEPTABLY_DIFFERENT' | 'STRONGLY_PERSONALIZED'
+      }
+    }).sessionArchitectureTruth
+    
+    const materialityVerdict = (program as { weeklyMaterialityVerdict?: { verdict: string }}).weeklyMaterialityVerdict
+    
+    if (!archContract) {
+      return null
+    }
+    
+    return {
+      sourceVerdict: archContract.sourceVerdict,
+      complexity: archContract.generationContext.complexity,
+      primarySpineSkills: archContract.primarySpineSkills || [],
+      secondaryAnchorSkills: archContract.secondaryAnchorSkills || [],
+      supportRotationSkills: archContract.supportRotationSkills || [],
+      deferredSkills: archContract.deferredSkills || [],
+      currentWorkingCapsCount: archContract.audit?.currentWorkingCapCount || 0,
+      historicalCeilingBlockedCount: archContract.audit?.historicalCeilingBlockedCount || 0,
+      weeklyMaterialityVerdict: (materialityVerdict?.verdict || 'ACCEPTABLY_DIFFERENT') as 'TOO_CLOSE_TO_FOUNDATIONAL_DEFAULT' | 'ACCEPTABLY_DIFFERENT' | 'STRONGLY_PERSONALIZED',
+      doctrineArchitectureBias: archContract.doctrineArchitectureBias || {
+        sessionRoleBias: 'primary_dominant',
+        supportAllocationBias: 'moderate',
+        methodPackagingBias: 'straight_sets_protected',
+      },
+    }
+  })(),
+  
+  explanationFactors,
+  hiddenTruthNotSurfaced,
+  
+  truthfulSummary: summaryParts.join(' | '),
+  explanationQualityVerdict,
+  }
+  }
 
 // =============================================================================
 // [PHASE 2] METHOD PREFERENCES MATERIALITY HELPERS

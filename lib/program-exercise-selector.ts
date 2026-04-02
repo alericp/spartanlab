@@ -2875,6 +2875,148 @@ function applyMaterialityScoreAdjustments(
   }
   
   // ==========================================================================
+  // [SESSION-ARCHITECTURE-MATERIALIZATION] SUPPORT SKILL ENFORCEMENT
+  // Ensure support skills from architecture truth materially affect the session
+  // when there is room and it's justified by recovery/time constraints
+  // ==========================================================================
+  const supportSkillsAllocatedForSession = skillsForSession?.filter(s => s.expressionMode === 'support') || []
+  const currentlyMaterializedSkills = new Set(
+    selected
+      .filter(s => s.selectionContext?.influencingSkills?.length)
+      .flatMap(s => s.selectionContext?.influencingSkills?.map(i => i.skillId) || [])
+  )
+  const unmaterializedSupportSkills = supportSkillsAllocatedForSession
+    .filter(s => !currentlyMaterializedSkills.has(s.skill))
+  
+  // Calculate how much room we have for support skill insertion
+  const roomForSupportSkills = Math.max(0, maxExercises - selected.length - 1) // Leave 1 for core
+  const shouldInsertSupportSkills = 
+    unmaterializedSupportSkills.length > 0 && 
+    roomForSupportSkills > 0 &&
+    !mustDowngradeToSupport
+  
+  if (shouldInsertSupportSkills) {
+    console.log('[SESSION-ARCHITECTURE-MATERIALIZATION] Attempting support skill insertion:', {
+      unmaterializedSupportSkills: unmaterializedSupportSkills.map(s => s.skill),
+      roomAvailable: roomForSupportSkills,
+      currentExerciseCount: selected.length,
+      maxExercises,
+    })
+    
+    for (const supportAlloc of unmaterializedSupportSkills.slice(0, roomForSupportSkills)) {
+      if (selected.length >= maxExercises - 1) break
+      
+      // Get doctrine support for this skill
+      const supportMapping = getSupportMapping(supportAlloc.skill as SkillCarryover)
+      let supportExercise: Exercise | undefined
+      let supportReason = ''
+      
+      // Priority 1: Doctrine-backed accessory support
+      if (supportMapping) {
+        for (const exId of supportMapping.accessorySupportExercises) {
+          if (usedIds.has(exId)) continue
+          supportExercise = [...availableAccessory, ...availableStrength].find(e => e.id === exId)
+          if (supportExercise && canAddMore(supportExercise, 'standalone')) {
+            supportReason = `Support for ${supportMapping.displayName}`
+            break
+          }
+        }
+        
+        // Priority 2: Limiter-based support
+        if (!supportExercise && supportMapping.commonLimiters.length > 0) {
+          for (const limiter of supportMapping.commonLimiters.slice(0, 2)) {
+            if (supportExercise) break
+            for (const exId of limiter.exerciseIds) {
+              if (usedIds.has(exId)) continue
+              supportExercise = [...availableAccessory, ...availableStrength, ...availableCore].find(e => e.id === exId)
+              if (supportExercise && canAddMore(supportExercise, 'standalone')) {
+                supportReason = `${limiter.description} (${supportMapping.displayName} prereq)`
+                break
+              }
+            }
+          }
+        }
+      }
+      
+      // Priority 3: Transfer-based fallback
+      if (!supportExercise) {
+        supportExercise = [...availableAccessory, ...availableStrength]
+          .find(e => 
+            !usedIds.has(e.id) && 
+            e.transferTo?.some(t => t.toLowerCase().includes(supportAlloc.skill.toLowerCase().replace(/_/g, ''))) &&
+            canAddMore(e, 'standalone')
+          )
+        if (supportExercise) {
+          supportReason = `Support work for ${supportAlloc.skill}`
+        }
+      }
+      
+      // Add the support exercise with explicit tracing
+      if (supportExercise) {
+        const added = addExercise(
+          supportExercise, 
+          supportReason, 
+          undefined, 
+          undefined, 
+          undefined, 
+          'standalone',
+          {
+            primarySelectionReason: 'support_skill_materialization',
+            sessionRole: 'support_volume',
+            expressionMode: 'support',
+            influencingSkills: [{ 
+              skillId: supportAlloc.skill, 
+              influence: 'selected', 
+              expressionMode: 'support' 
+            }],
+            candidatePoolSize: (supportMapping?.accessorySupportExercises?.length || 0) + 
+              (supportMapping?.commonLimiters?.reduce((acc, l) => acc + l.exerciseIds.length, 0) || 0),
+          }
+        )
+        
+        if (added) {
+          console.log('[SESSION-ARCHITECTURE-MATERIALIZATION] Support skill materialized:', {
+            skill: supportAlloc.skill,
+            exerciseId: supportExercise.id,
+            exerciseName: supportExercise.name,
+            reason: supportReason,
+          })
+        }
+      } else {
+        console.log('[SESSION-ARCHITECTURE-MATERIALIZATION] Support skill could not be materialized:', {
+          skill: supportAlloc.skill,
+          searchedDoctrine: !!supportMapping,
+          reason: 'no_viable_exercise_found',
+        })
+      }
+    }
+  }
+  
+  // Log support materialization summary
+  if (supportSkillsAllocatedForSession.length > 0) {
+    const finalMaterializedSupport = selected
+      .filter(s => 
+        s.selectionContext?.primarySelectionReason === 'support_skill_materialization' ||
+        supportSkillsAllocatedForSession.some(alloc => 
+          s.selectionContext?.influencingSkills?.some(i => i.skillId === alloc.skill)
+        )
+      )
+      .map(s => s.selectionContext?.influencingSkills?.[0]?.skillId)
+      .filter(Boolean)
+    
+    console.log('[SESSION-ARCHITECTURE-MATERIALIZATION-SUMMARY]', {
+      supportSkillsAllocated: supportSkillsAllocatedForSession.map(s => s.skill),
+      supportSkillsMaterialized: [...new Set(finalMaterializedSupport)],
+      supportSkillsDropped: unmaterializedSupportSkills
+        .filter(s => !finalMaterializedSupport.includes(s.skill))
+        .map(s => s.skill),
+      materializationRate: supportSkillsAllocatedForSession.length > 0
+        ? `${Math.round((finalMaterializedSupport.length / supportSkillsAllocatedForSession.length) * 100)}%`
+        : 'N/A',
+    })
+  }
+  
+  // ==========================================================================
   // TASK 1-B/C: Constraint-safe fallback for empty sessions
   // If we reach here with no exercises AND were supposed to downgrade, build support session
   // ==========================================================================
@@ -3211,8 +3353,118 @@ function applyMaterialityScoreAdjustments(
     })
   }
   
-  // Sort by neural demand (highest first)
-  return deduplicatedSelected.sort((a, b) => b.exercise.neuralDemand - a.exercise.neuralDemand)
+  // ==========================================================================
+  // [SESSION-ARCHITECTURE-MATERIALIZATION] AUTHORITATIVE TRACE AUDIT
+  // This audit tracks whether broader skill truth actually materialized into exercises
+  // ==========================================================================
+  const finalExercises = deduplicatedSelected.sort((a, b) => b.exercise.neuralDemand - a.exercise.neuralDemand)
+  
+  // Classify each final exercise by its skill source
+  const exerciseSkillClassification = finalExercises.map(ex => {
+    const skillMatch = ex.selectionContext?.influencingSkills?.[0]
+    const primarySkillFromSession = skillsForSession?.find(s => s.expressionMode === 'primary')
+    const secondarySkillFromSession = skillsForSession?.find(s => s.expressionMode === 'technical')
+    const supportSkillsFromSession = skillsForSession?.filter(s => s.expressionMode === 'support') || []
+    
+    let skillSource: 'primary_spine' | 'secondary_anchor' | 'support_rotation' | 'generic_fallback' | 'doctrine_driven' = 'generic_fallback'
+    let matchedSkill: string | null = null
+    
+    // Check exercise transfer tags and context to classify
+    const exerciseTransfers = ex.exercise.transferTo || []
+    
+    if (skillMatch && skillMatch.influence === 'primary') {
+      skillSource = 'primary_spine'
+      matchedSkill = skillMatch.skillId
+    } else if (skillMatch && skillMatch.influence === 'secondary') {
+      skillSource = 'secondary_anchor'
+      matchedSkill = skillMatch.skillId
+    } else if (primarySkillFromSession && exerciseTransfers.some(t => 
+      t.toLowerCase().includes(primarySkillFromSession.skill.toLowerCase().replace(/_/g, ''))
+    )) {
+      skillSource = 'primary_spine'
+      matchedSkill = primarySkillFromSession.skill
+    } else if (secondarySkillFromSession && exerciseTransfers.some(t => 
+      t.toLowerCase().includes(secondarySkillFromSession.skill.toLowerCase().replace(/_/g, ''))
+    )) {
+      skillSource = 'secondary_anchor'
+      matchedSkill = secondarySkillFromSession.skill
+    } else if (supportSkillsFromSession.some(s => exerciseTransfers.some(t => 
+      t.toLowerCase().includes(s.skill.toLowerCase().replace(/_/g, ''))
+    ))) {
+      skillSource = 'support_rotation'
+      matchedSkill = supportSkillsFromSession.find(s => exerciseTransfers.some(t => 
+        t.toLowerCase().includes(s.skill.toLowerCase().replace(/_/g, ''))
+      ))?.skill || null
+    } else if (ex.selectionContext?.doctrineSource) {
+      skillSource = 'doctrine_driven'
+    }
+    
+    return {
+      exerciseId: ex.exercise.id,
+      exerciseName: ex.exercise.name,
+      skillSource,
+      matchedSkill,
+      transferTo: exerciseTransfers.slice(0, 3),
+    }
+  })
+  
+  // Calculate materialization metrics
+  const primarySpineExercises = exerciseSkillClassification.filter(c => c.skillSource === 'primary_spine')
+  const secondaryAnchorExercises = exerciseSkillClassification.filter(c => c.skillSource === 'secondary_anchor')
+  const supportRotationExercises = exerciseSkillClassification.filter(c => c.skillSource === 'support_rotation')
+  const doctrineDrivenExercises = exerciseSkillClassification.filter(c => c.skillSource === 'doctrine_driven')
+  const genericFallbackExercises = exerciseSkillClassification.filter(c => c.skillSource === 'generic_fallback')
+  
+  // Calculate skill coverage
+  const allocatedSkillsCount = skillsForSession?.length || 0
+  const supportSkillsAllocated = skillsForSession?.filter(s => s.expressionMode === 'support').map(s => s.skill) || []
+  const supportSkillsMaterialized = [...new Set(supportRotationExercises.map(c => c.matchedSkill).filter(Boolean))]
+  const supportSkillsDropped = supportSkillsAllocated.filter(s => !supportSkillsMaterialized.includes(s))
+  
+  // Determine verdict
+  let materializationVerdict: 'PASS' | 'WARN' | 'FAIL' = 'PASS'
+  const issues: string[] = []
+  
+  if (allocatedSkillsCount > 2 && supportRotationExercises.length === 0 && supportSkillsAllocated.length > 0) {
+    materializationVerdict = 'WARN'
+    issues.push('Support skills allocated but not materialized in exercises')
+  }
+  if (genericFallbackExercises.length > finalExercises.length * 0.6) {
+    materializationVerdict = materializationVerdict === 'WARN' ? 'FAIL' : 'WARN'
+    issues.push('Over 60% of exercises are generic fallbacks')
+  }
+  if (supportSkillsDropped.length > 0 && allocatedSkillsCount > 3) {
+    issues.push(`Support skills dropped before final selection: ${supportSkillsDropped.join(', ')}`)
+  }
+  
+  console.log('[SESSION-ARCHITECTURE-MATERIALIZATION-AUDIT]', {
+    dayFocus: day.focus,
+    primaryGoal,
+    // Skill allocation truth
+    allocatedSkillsCount,
+    primarySkillAllocated: skillsForSession?.find(s => s.expressionMode === 'primary')?.skill || null,
+    secondarySkillAllocated: skillsForSession?.find(s => s.expressionMode === 'technical')?.skill || null,
+    supportSkillsAllocated,
+    // Materialization results
+    totalExercises: finalExercises.length,
+    primarySpineExercises: primarySpineExercises.length,
+    secondaryAnchorExercises: secondaryAnchorExercises.length,
+    supportRotationExercises: supportRotationExercises.length,
+    doctrineDrivenExercises: doctrineDrivenExercises.length,
+    genericFallbackExercises: genericFallbackExercises.length,
+    // Support skill tracking
+    supportSkillsMaterialized,
+    supportSkillsDropped,
+    // Progression enforcement
+    currentWorkingProgressionsApplied: Object.keys(authoritativeProgressionMap).length,
+    historicalCeilingBlocked: historicalCeilingWarnings.length,
+    // Verdict
+    materializationVerdict,
+    issues,
+    exerciseBreakdown: exerciseSkillClassification.map(c => `${c.exerciseName}[${c.skillSource}:${c.matchedSkill || 'none'}]`),
+  })
+  
+  return finalExercises
 }
 
 /**

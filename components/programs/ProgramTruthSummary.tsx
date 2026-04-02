@@ -165,6 +165,22 @@ interface TruthExplanation {
       methodPackagingBias: string
     }
   } | null
+  // [SESSION-ARCHITECTURE-MATERIALIZATION] Skill materialization verdict
+  materializationVerdict?: {
+    verdict: 'PASS' | 'WARN' | 'FAIL'
+    issues: string[]
+    skillCoverage: {
+      selected: number
+      expressed: number
+      dropped: string[]
+    }
+    exerciseClassification: {
+      total: number
+      genericFallback: number
+      doctrineDriven: number
+      genericRatio: number
+    }
+  } | null
 }
 
 interface ProgramTruthSummaryProps {
@@ -221,6 +237,8 @@ export function ProgramTruthSummary({ truthExplanation, className }: ProgramTrut
   doctrineInfluence,
   // [SESSION ARCHITECTURE TRUTH] Architecture and materiality truth
   sessionArchitectureTruth,
+  // [SESSION-ARCHITECTURE-MATERIALIZATION] Skill materialization verdict
+  materializationVerdict,
     skillStrengthMateriallyApplied,
     // [CURRENT-PROGRESSION-TRUTH-CONTRACT] Current working progressions
     currentWorkingProgressions,
@@ -885,6 +903,60 @@ export function ProgramTruthSummary({ truthExplanation, className }: ProgramTrut
                       <span className="text-xs bg-[#2A2A2A] text-[#6A6A6A] px-2 py-0.5 rounded">
                         {sessionArchitectureTruth.doctrineArchitectureBias.sessionRoleBias.replace(/_/g, ' ')}
                       </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+            
+            {/* [SESSION-ARCHITECTURE-MATERIALIZATION] Skill Materialization Section */}
+            {materializationVerdict && (
+              <div className="space-y-2">
+                <h4 className="text-xs font-medium text-[#8A8A8A] uppercase tracking-wide">
+                  Skill Expression
+                </h4>
+                <div className="text-xs bg-[#1E1E1E] rounded p-2.5 space-y-2">
+                  {/* Verdict badge */}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className={cn(
+                      'text-xs px-2 py-0.5 rounded font-medium',
+                      materializationVerdict.verdict === 'PASS' && 'bg-green-500/10 text-green-400',
+                      materializationVerdict.verdict === 'WARN' && 'bg-amber-500/10 text-amber-400',
+                      materializationVerdict.verdict === 'FAIL' && 'bg-red-500/10 text-red-400'
+                    )}>
+                      {materializationVerdict.verdict === 'PASS'
+                        ? 'Skills well expressed'
+                        : materializationVerdict.verdict === 'WARN'
+                          ? 'Some skills underexpressed'
+                          : 'Skill expression weak'}
+                    </span>
+                    <span className="text-xs bg-[#2A2A2A] text-[#6A6A6A] px-2 py-0.5 rounded">
+                      {materializationVerdict.skillCoverage.expressed}/{materializationVerdict.skillCoverage.selected} skills expressed
+                    </span>
+                  </div>
+                  
+                  {/* Dropped skills */}
+                  {materializationVerdict.skillCoverage.dropped.length > 0 && (
+                    <div className="flex items-start gap-2 pt-1">
+                      <span className="text-amber-400 text-xs">Reduced focus:</span>
+                      <span className="text-[#E8E4D9] text-xs">
+                        {materializationVerdict.skillCoverage.dropped.map(s => s.replace(/_/g, ' ')).join(', ')}
+                      </span>
+                    </div>
+                  )}
+                  
+                  {/* Exercise classification */}
+                  {materializationVerdict.exerciseClassification.genericRatio > 0.3 && (
+                    <div className="text-xs text-[#6A6A6A] pt-1">
+                      {Math.round(100 - materializationVerdict.exerciseClassification.genericRatio * 100)}% of exercises directly support your goals
+                    </div>
+                  )}
+                  
+                  {/* Issues */}
+                  {materializationVerdict.issues.length > 0 && (
+                    <div className="pt-1 text-xs text-amber-400/80 flex items-start gap-1.5">
+                      <span className="shrink-0">⚠</span>
+                      <span>{materializationVerdict.issues[0]}</span>
                     </div>
                   )}
                 </div>

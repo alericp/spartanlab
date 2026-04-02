@@ -395,6 +395,8 @@ export function attachTruthExplanation(
       ...explanation,
       generatedAt: new Date().toISOString(),
       triggerSource,
+      // [SESSION-ARCHITECTURE-MATERIALIZATION] Include materialization verdict if available
+      materializationVerdict: program.materializationVerdict || null,
     },
   }
 }

@@ -1431,6 +1431,22 @@ exerciseExplanations?: {
     // Generation context
     generatedAt: string
     triggerSource: 'onboarding' | 'main_build' | 'regenerate' | 'modify' | 'restart' | 'unknown'
+    // [SESSION-ARCHITECTURE-MATERIALIZATION] Skill materialization verdict
+    materializationVerdict?: {
+      verdict: 'PASS' | 'WARN' | 'FAIL'
+      issues: string[]
+      skillCoverage: {
+        selected: number
+        expressed: number
+        dropped: string[]
+      }
+      exerciseClassification: {
+        total: number
+        genericFallback: number
+        doctrineDriven: number
+        genericRatio: number
+      }
+    } | null
   }
   // ==========================================================================
   // [AI-TRUTH-PERSISTENCE] Generation Truth Snapshot
@@ -1517,6 +1533,25 @@ exerciseExplanations?: {
     }
     needsRefinement: boolean
     refinementSuggestions: string[]
+  }
+  // ==========================================================================
+  // [SESSION-ARCHITECTURE-MATERIALIZATION] Verdict on skill materialization
+  // Tracks whether selected skills actually made it into exercises
+  // ==========================================================================
+  materializationVerdict?: {
+    verdict: 'PASS' | 'WARN' | 'FAIL'
+    issues: string[]
+    skillCoverage: {
+      selected: number
+      expressed: number
+      dropped: string[]
+    }
+    exerciseClassification: {
+      total: number
+      genericFallback: number
+      doctrineDriven: number
+      genericRatio: number
+    }
   }
 }
 
@@ -12216,6 +12251,174 @@ return explanations.length > 0 ? explanations : undefined
       available: false,
       verdict: 'SESSION_ARCHITECTURE_FALLBACK',
     })
+  }
+  
+  // ==========================================================================
+  // [SESSION-ARCHITECTURE-MATERIALIZATION] PHASE A: WEEKLY ROLLUP AUDIT
+  // Comprehensive audit comparing selected skills to what actually materialized
+  // ==========================================================================
+  const sessionsForAudit = finalProgram.weeks?.[0]?.days || []
+  const selectedSkillsFromProfile = canonicalProfile.selectedSkills || [primaryGoal]
+  const architectureSkillsCount = sessionArchitectureTruth 
+    ? sessionArchitectureTruth.primarySpineSkills.length + 
+      sessionArchitectureTruth.secondaryAnchorSkills.length + 
+      sessionArchitectureTruth.supportRotationSkills.length
+    : 1
+  
+  // Count actual skill touches per session for detailed breakdown
+  const perSessionSkillAudit = sessionsForAudit.map((day, idx) => {
+    const exercises = day.exercises || []
+    const skillTouches = new Map<string, number>()
+    let genericFallbackCount = 0
+    let doctrineDrivenCount = 0
+    
+    for (const ex of exercises) {
+      const exIdLower = ex.id?.toLowerCase() || ''
+      let matchedSkill = false
+      
+      // Check each selected skill
+      for (const skill of selectedSkillsFromProfile) {
+        const skillKey = skill.toLowerCase().replace(/_/g, '')
+        if (exIdLower.includes(skillKey)) {
+          skillTouches.set(skill, (skillTouches.get(skill) || 0) + 1)
+          matchedSkill = true
+          break
+        }
+      }
+      
+      // Check transfer targets
+      if (!matchedSkill && ex.exercise?.transferTo) {
+        for (const transfer of ex.exercise.transferTo) {
+          const transferLower = transfer.toLowerCase().replace(/_/g, '')
+          for (const skill of selectedSkillsFromProfile) {
+            const skillKey = skill.toLowerCase().replace(/_/g, '')
+            if (transferLower.includes(skillKey)) {
+              skillTouches.set(skill, (skillTouches.get(skill) || 0) + 1)
+              matchedSkill = true
+              break
+            }
+          }
+          if (matchedSkill) break
+        }
+      }
+      
+      // Track source type
+      if (!matchedSkill) {
+        genericFallbackCount++
+      }
+      // Check selection context if available
+      if (ex.selectionContext?.doctrineSource) {
+        doctrineDrivenCount++
+      }
+    }
+    
+    return {
+      sessionIndex: idx,
+      dayType: day.dayType || 'unknown',
+      focus: day.focus || 'unknown',
+      totalExercises: exercises.length,
+      skillTouches: Object.fromEntries(skillTouches),
+      skillsExpressed: [...skillTouches.keys()],
+      genericFallbackCount,
+      doctrineDrivenCount,
+    }
+  })
+  
+  // Calculate totals
+  const totalSkillTouches = new Map<string, number>()
+  let totalGenericFallback = 0
+  let totalDoctrineDriven = 0
+  
+  for (const session of perSessionSkillAudit) {
+    for (const [skill, count] of Object.entries(session.skillTouches)) {
+      totalSkillTouches.set(skill, (totalSkillTouches.get(skill) || 0) + count)
+    }
+    totalGenericFallback += session.genericFallbackCount
+    totalDoctrineDriven += session.doctrineDrivenCount
+  }
+  
+  const actuallyExpressedSkills = [...totalSkillTouches.keys()]
+  const selectedButNeverExpressed = selectedSkillsFromProfile.filter(s => !actuallyExpressedSkills.includes(s))
+  const totalExercisesInWeek = perSessionSkillAudit.reduce((sum, s) => sum + s.totalExercises, 0)
+  const genericFallbackRatio = totalExercisesInWeek > 0 
+    ? totalGenericFallback / totalExercisesInWeek 
+    : 0
+  
+  // Determine final verdict
+  let materializationVerdict: 'PASS' | 'WARN' | 'FAIL'
+  const materializationIssues: string[] = []
+  
+  if (selectedButNeverExpressed.length > 0 && selectedSkillsFromProfile.length > 2) {
+    materializationVerdict = 'WARN'
+    materializationIssues.push(`Selected skills never expressed: ${selectedButNeverExpressed.join(', ')}`)
+  } else if (genericFallbackRatio > 0.6) {
+    materializationVerdict = 'WARN'
+    materializationIssues.push(`Generic fallback ratio too high: ${Math.round(genericFallbackRatio * 100)}%`)
+  } else if (actuallyExpressedSkills.length < Math.min(selectedSkillsFromProfile.length, 3)) {
+    materializationVerdict = 'WARN'
+    materializationIssues.push('Too few skills materially expressed in week')
+  } else {
+    materializationVerdict = 'PASS'
+  }
+  
+  // Downgrade to FAIL if multiple issues
+  if (materializationIssues.length >= 2) {
+    materializationVerdict = 'FAIL'
+  }
+  
+  console.log('[SESSION-ARCHITECTURE-MATERIALIZATION-WEEKLY-ROLLUP]', {
+    // Comparison totals
+    totalSelectedSkills: selectedSkillsFromProfile.length,
+    architectureContractSkillsCount: architectureSkillsCount,
+    actuallyExpressedSkills: actuallyExpressedSkills.length,
+    selectedButNeverExpressed,
+    
+    // Per-skill breakdown
+    skillTouchesPerSkill: Object.fromEntries(totalSkillTouches),
+    
+    // Exercise classification
+    totalExercisesInWeek,
+    totalGenericFallback,
+    totalDoctrineDriven,
+    genericFallbackRatio: `${Math.round(genericFallbackRatio * 100)}%`,
+    
+    // Per-session breakdown
+    perSessionSkillSummary: perSessionSkillAudit.map(s => ({
+      session: s.sessionIndex,
+      dayType: s.dayType,
+      skills: s.skillsExpressed,
+      generic: s.genericFallbackCount,
+    })),
+    
+    // Verdict
+    materializationVerdict,
+    materializationIssues,
+    
+    // Support skill specific tracking
+    supportSkillsInContract: sessionArchitectureTruth?.supportRotationSkills || [],
+    supportSkillsExpressed: sessionArchitectureTruth?.supportRotationSkills.filter(s => 
+      actuallyExpressedSkills.includes(s)
+    ) || [],
+    supportSkillsDropped: sessionArchitectureTruth?.supportRotationSkills.filter(s => 
+      !actuallyExpressedSkills.includes(s)
+    ) || [],
+  })
+  
+  // Store materialization verdict on program for UI access
+  finalProgram.materializationVerdict = {
+    verdict: materializationVerdict,
+    issues: materializationIssues,
+    skillCoverage: {
+      selected: selectedSkillsFromProfile.length,
+      expressed: actuallyExpressedSkills.length,
+      dropped: selectedButNeverExpressed,
+    },
+    exerciseClassification: {
+      total: totalExercisesInWeek,
+      genericFallback: totalGenericFallback,
+      doctrineDriven: totalDoctrineDriven,
+      genericRatio: genericFallbackRatio,
+    },
   }
   
   // ==========================================================================

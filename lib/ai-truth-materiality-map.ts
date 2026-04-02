@@ -284,16 +284,16 @@ export const TRUTH_MATERIALITY_MAP: FieldMaterialityRecord[] = [
   {
     fieldName: 'jointCautions',
     canonicalSourcePresent: true,
-    savedOnProgram: false,
+    savedOnProgram: true, // [AI-TRUTH-PERSISTENCE] Now elevated to first-class field
     savedInGenerationTruthSnapshot: true,
-    restoredOnRead: false,
+    restoredOnRead: true, // [AI-TRUTH-PERSISTENCE] Now survives save/read cycle
     usedByGenerator: true,
     materiallyAffectsOutput: true,
-    surfacedInUI: false,
-    verdict: 'YELLOW',
-    reason: 'CRITICAL: Filters exercises for safety. User doesnt know exercises were adapted. Only in snapshot.',
-    nearestFileOrFunction: 'exercise-database-resolver.ts: hasJointConflict()',
-    nextFixPriority: 'high',
+    surfacedInUI: true, // [AI-TRUTH-PERSISTENCE] Now shown in ProgramTruthSummary
+    verdict: 'GREEN', // [AI-TRUTH-PERSISTENCE] Upgraded - fully durable and surfaced
+    reason: 'CRITICAL: Filters exercises for safety. Now durably persisted and shown in UI.',
+    nearestFileOrFunction: 'authoritative-program-generation.ts: program.jointCautions, exercise-database-resolver.ts: hasJointConflict()',
+    nextFixPriority: 'done', // [AI-TRUTH-PERSISTENCE] Completed
   },
   
   // ==========================================================================

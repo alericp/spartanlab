@@ -663,6 +663,10 @@ export function buildProgramTruthExplanation(
       program.experienceLevel || profile?.experienceLevel || 'intermediate'
     ),
     
+    // [PHASE 7] Visible difference verdict - for use when comparing before/after rebuild
+    // This is populated by the calling code when a previousProgram is available
+    visibleDifferenceReport: null as ProgramDiffReport | null,
+    
     explanationFactors,
     hiddenTruthNotSurfaced,
     
@@ -1159,4 +1163,224 @@ export function logExplanationGapAudit(
   console.log('[AI-TRUTH-AUDIT] Top 5 truths currently visible:', currentlyVisible)
   console.log('[AI-TRUTH-AUDIT] Top 5 truths currently invisible but important:', invisibleButImportant)
   console.log('[AI-TRUTH-AUDIT] Verdict:', explanation.explanationQualityVerdict)
+}
+
+// =============================================================================
+// [PHASE 7] VISIBLE PROGRAM DIFFERENCE ANALYSIS
+// =============================================================================
+
+export type VisibleDifferenceVerdict = 
+  | 'NO_MEANINGFUL_CHANGE_SAME_INPUT_SAME_OUTPUT'
+  | 'INTERNAL_CHANGE_ONLY_NOT_VISIBLE'
+  | 'DISPLAY_HID_REAL_CHANGE'
+  | 'STALE_PROGRAM_RENDERED'
+  | 'PARTIAL_REUSE_SUPPRESSED_FRESH_OUTPUT'
+  | 'TRUE_MEANINGFUL_CHANGE_VISIBLE'
+  | 'NO_PREVIOUS_PROGRAM'
+
+export interface ProgramDiffReport {
+  verdict: VisibleDifferenceVerdict
+  
+  // Macro level
+  programIdChanged: boolean
+  createdAtChanged: boolean
+  goalChanged: boolean
+  scheduleChanged: boolean
+  
+  // Session level
+  sessionCountChanged: boolean
+  sessionCountBefore: number
+  sessionCountAfter: number
+  sessionTitlesChanged: number // count of changed titles
+  sessionFocusChanged: number // count of changed focus areas
+  
+  // Exercise level
+  exercisesAdded: number
+  exercisesRemoved: number
+  exercisesModified: number
+  
+  // Prescription level
+  prescriptionsModified: number
+  
+  // Summary
+  totalVisibleChanges: number
+  userFacingExplanation: string
+}
+
+/**
+ * Compare two programs to determine if meaningful visible differences exist.
+ * This helps prove whether the builder is correctly producing different output
+ * or whether display compression is hiding real changes.
+ */
+export function getProgramVisibleDifferenceVerdict(
+  previousProgram: AdaptiveProgram | null,
+  nextProgram: AdaptiveProgram
+): ProgramDiffReport {
+  // No previous program - this is a first build
+  if (!previousProgram) {
+    return {
+      verdict: 'NO_PREVIOUS_PROGRAM',
+      programIdChanged: true,
+      createdAtChanged: true,
+      goalChanged: false,
+      scheduleChanged: false,
+      sessionCountChanged: false,
+      sessionCountBefore: 0,
+      sessionCountAfter: nextProgram.sessions?.length || 0,
+      sessionTitlesChanged: 0,
+      sessionFocusChanged: 0,
+      exercisesAdded: 0,
+      exercisesRemoved: 0,
+      exercisesModified: 0,
+      prescriptionsModified: 0,
+      totalVisibleChanges: 0,
+      userFacingExplanation: 'This is your first program.',
+    }
+  }
+  
+  const prevSessions = previousProgram.sessions || []
+  const nextSessions = nextProgram.sessions || []
+  
+  // Macro comparisons
+  const programIdChanged = previousProgram.id !== nextProgram.id
+  const createdAtChanged = previousProgram.createdAt !== nextProgram.createdAt
+  const goalChanged = previousProgram.primaryGoal !== nextProgram.primaryGoal ||
+                      previousProgram.secondaryGoal !== nextProgram.secondaryGoal
+  const scheduleChanged = previousProgram.scheduleMode !== nextProgram.scheduleMode ||
+                          previousProgram.currentWeekFrequency !== nextProgram.currentWeekFrequency
+  
+  // Session level
+  const sessionCountBefore = prevSessions.length
+  const sessionCountAfter = nextSessions.length
+  const sessionCountChanged = sessionCountBefore !== sessionCountAfter
+  
+  // Compare session titles and focus
+  let sessionTitlesChanged = 0
+  let sessionFocusChanged = 0
+  const minSessions = Math.min(sessionCountBefore, sessionCountAfter)
+  
+  for (let i = 0; i < minSessions; i++) {
+    const prev = prevSessions[i]
+    const next = nextSessions[i]
+    
+    if (prev.title !== next.title || prev.name !== next.name) {
+      sessionTitlesChanged++
+    }
+    if (prev.focus !== next.focus) {
+      sessionFocusChanged++
+    }
+  }
+  
+  // Exercise level comparison
+  let exercisesAdded = 0
+  let exercisesRemoved = 0
+  let exercisesModified = 0
+  let prescriptionsModified = 0
+  
+  // Build exercise name sets for comparison
+  const prevExerciseNames = new Set<string>()
+  const nextExerciseNames = new Set<string>()
+  const prevExerciseMap = new Map<string, unknown>()
+  const nextExerciseMap = new Map<string, unknown>()
+  
+  for (const session of prevSessions) {
+    for (const ex of (session.exercises || [])) {
+      const key = `${session.dayOfWeek || session.dayNumber}-${ex.name}`
+      prevExerciseNames.add(key)
+      prevExerciseMap.set(key, ex)
+    }
+  }
+  
+  for (const session of nextSessions) {
+    for (const ex of (session.exercises || [])) {
+      const key = `${session.dayOfWeek || session.dayNumber}-${ex.name}`
+      nextExerciseNames.add(key)
+      nextExerciseMap.set(key, ex)
+    }
+  }
+  
+  // Count added/removed exercises
+  for (const name of nextExerciseNames) {
+    if (!prevExerciseNames.has(name)) {
+      exercisesAdded++
+    }
+  }
+  for (const name of prevExerciseNames) {
+    if (!nextExerciseNames.has(name)) {
+      exercisesRemoved++
+    }
+  }
+  
+  // Count modified exercises (same name but different prescription)
+  for (const name of nextExerciseNames) {
+    if (prevExerciseNames.has(name)) {
+      const prevEx = prevExerciseMap.get(name) as { sets?: number; reps?: number | string } | undefined
+      const nextEx = nextExerciseMap.get(name) as { sets?: number; reps?: number | string } | undefined
+      
+      if (prevEx && nextEx) {
+        if (prevEx.sets !== nextEx.sets || 
+            JSON.stringify(prevEx.reps) !== JSON.stringify(nextEx.reps)) {
+          exercisesModified++
+          prescriptionsModified++
+        }
+      }
+    }
+  }
+  
+  // Calculate total visible changes
+  const totalVisibleChanges = 
+    (sessionCountChanged ? 10 : 0) +
+    sessionTitlesChanged * 3 +
+    sessionFocusChanged * 2 +
+    exercisesAdded * 2 +
+    exercisesRemoved * 2 +
+    exercisesModified +
+    prescriptionsModified
+  
+  // Determine verdict
+  let verdict: VisibleDifferenceVerdict
+  let userFacingExplanation: string
+  
+  if (totalVisibleChanges === 0) {
+    // Check if IDs are different (meaning generation ran but produced same output)
+    if (programIdChanged) {
+      verdict = 'NO_MEANINGFUL_CHANGE_SAME_INPUT_SAME_OUTPUT'
+      userFacingExplanation = 'Your saved inputs resolved to the same optimal structure, so your plan stayed largely unchanged. This is expected when your profile and goals remain the same.'
+    } else {
+      verdict = 'STALE_PROGRAM_RENDERED'
+      userFacingExplanation = 'The same program is still being displayed.'
+    }
+  } else if (totalVisibleChanges < 5) {
+    verdict = 'INTERNAL_CHANGE_ONLY_NOT_VISIBLE'
+    userFacingExplanation = `Minor adjustments made: ${prescriptionsModified > 0 ? `${prescriptionsModified} prescription${prescriptionsModified > 1 ? 's' : ''} refined` : 'internal optimizations applied'}.`
+  } else if (totalVisibleChanges < 15) {
+    verdict = 'TRUE_MEANINGFUL_CHANGE_VISIBLE'
+    const changes: string[] = []
+    if (sessionCountChanged) changes.push(`${sessionCountAfter} sessions (was ${sessionCountBefore})`)
+    if (exercisesAdded > 0) changes.push(`${exercisesAdded} exercise${exercisesAdded > 1 ? 's' : ''} added`)
+    if (exercisesRemoved > 0) changes.push(`${exercisesRemoved} exercise${exercisesRemoved > 1 ? 's' : ''} updated`)
+    userFacingExplanation = `Program updated: ${changes.join(', ') || 'structure refined'}.`
+  } else {
+    verdict = 'TRUE_MEANINGFUL_CHANGE_VISIBLE'
+    userFacingExplanation = `Significant restructuring: ${sessionCountAfter} sessions with ${exercisesAdded + exercisesRemoved} exercise changes.`
+  }
+  
+  return {
+    verdict,
+    programIdChanged,
+    createdAtChanged,
+    goalChanged,
+    scheduleChanged,
+    sessionCountChanged,
+    sessionCountBefore,
+    sessionCountAfter,
+    sessionTitlesChanged,
+    sessionFocusChanged,
+    exercisesAdded,
+    exercisesRemoved,
+    exercisesModified,
+    prescriptionsModified,
+    totalVisibleChanges,
+    userFacingExplanation,
+  }
 }

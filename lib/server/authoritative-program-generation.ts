@@ -433,6 +433,21 @@ export async function executeAuthoritativeGeneration(
     // survive save/read/rebuild/restart and are accessible without digging into snapshot
     program.selectedFlexibility = canonicalProfileTyped.selectedFlexibility || []
     
+    // [SKILL-STRENGTH-TRUTH-CONTRACT] Elevate skill and strength profile to first-class program field
+    // This ensures user's current abilities shape exercise selection and loading
+    // survive save/read/rebuild/restart and are accessible without digging into snapshot
+    program.skillStrengthProfile = {
+      plancheProgression: canonicalProfileTyped.plancheProgression || null,
+      frontLeverProgression: canonicalProfileTyped.frontLeverProgression || null,
+      hspuCapability: canonicalProfileTyped.hspuProgression || canonicalProfileTyped.hspu || null,
+      weightedPullUp: canonicalProfileTyped.weightedPullUp || null,
+      weightedDip: canonicalProfileTyped.weightedDip || null,
+      pullUpCapacity: canonicalProfileTyped.pullUpCapacity || canonicalProfileTyped.pullUps || null,
+      dipCapacity: canonicalProfileTyped.dipCapacity || canonicalProfileTyped.dips || null,
+      wallHspuCapacity: canonicalProfileTyped.wallHspuCapacity || canonicalProfileTyped.wallHSPU || null,
+      experienceLevel: canonicalProfileTyped.experienceLevel || 'intermediate',
+    }
+    
     console.log('[authoritative-generation-truth-snapshot-attached]', {
       generationIntent: request.generationIntent,
       trainingMethodPreferences: program.generationTruthSnapshot.trainingMethodPreferences,
@@ -442,6 +457,7 @@ export async function executeAuthoritativeGeneration(
       sessionStylePreferenceElevated: program.sessionStylePreference, // [SESSION-STYLE-TRUTH] Verify elevation
       selectedFlexibilityCount: program.generationTruthSnapshot.selectedFlexibility.length,
       selectedFlexibilityElevated: program.selectedFlexibility?.length || 0, // [FLEXIBILITY-TRUTH-CONTRACT] Verify elevation
+      skillStrengthProfileElevated: !!program.skillStrengthProfile, // [SKILL-STRENGTH-TRUTH-CONTRACT] Verify elevation
       hasWeightedStrength: program.generationTruthSnapshot.weightedStrengthSnapshot.loadingEligible,
       verdict: 'GENERATION_TRUTH_SNAPSHOT_PERSISTED',
     })

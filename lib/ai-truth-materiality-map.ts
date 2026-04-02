@@ -302,30 +302,30 @@ export const TRUTH_MATERIALITY_MAP: FieldMaterialityRecord[] = [
   {
     fieldName: 'weightedPullUp',
     canonicalSourcePresent: true,
-    savedOnProgram: false,
+    savedOnProgram: true, // [SKILL-STRENGTH-TRUTH-CONTRACT] Now in program.skillStrengthProfile
     savedInGenerationTruthSnapshot: true,
-    restoredOnRead: false,
+    restoredOnRead: true, // [SKILL-STRENGTH-TRUTH-CONTRACT] Now survives save/read cycle
     usedByGenerator: true,
     materiallyAffectsOutput: true,
-    surfacedInUI: false,
-    verdict: 'YELLOW',
-    reason: 'Drives weighted load prescription. Only in snapshot. User doesnt see it influenced loading.',
-    nearestFileOrFunction: 'adaptive-program-builder.ts: resolveWeightedLoading()',
-    nextFixPriority: 'high',
+    surfacedInUI: true, // [SKILL-STRENGTH-TRUTH-CONTRACT] Now shown in ProgramTruthSummary
+    verdict: 'GREEN', // [SKILL-STRENGTH-TRUTH-CONTRACT] Fully authoritative, durable, and surfaced
+    reason: 'Drives weighted load prescription. Now durably persisted in skillStrengthProfile and shown in UI.',
+    nearestFileOrFunction: 'authoritative-program-generation.ts: program.skillStrengthProfile, adaptive-program-builder.ts: resolveWeightedLoading()',
+    nextFixPriority: 'done', // [SKILL-STRENGTH-TRUTH-CONTRACT] Completed
   },
   {
     fieldName: 'weightedDip',
     canonicalSourcePresent: true,
-    savedOnProgram: false,
+    savedOnProgram: true, // [SKILL-STRENGTH-TRUTH-CONTRACT] Now in program.skillStrengthProfile
     savedInGenerationTruthSnapshot: true,
-    restoredOnRead: false,
+    restoredOnRead: true, // [SKILL-STRENGTH-TRUTH-CONTRACT] Now survives save/read cycle
     usedByGenerator: true,
     materiallyAffectsOutput: true,
-    surfacedInUI: false,
-    verdict: 'YELLOW',
-    reason: 'Drives weighted load prescription. Only in snapshot. User doesnt see it influenced loading.',
-    nearestFileOrFunction: 'adaptive-program-builder.ts: resolveWeightedLoading()',
-    nextFixPriority: 'high',
+    surfacedInUI: true, // [SKILL-STRENGTH-TRUTH-CONTRACT] Now shown in ProgramTruthSummary
+    verdict: 'GREEN', // [SKILL-STRENGTH-TRUTH-CONTRACT] Fully authoritative, durable, and surfaced
+    reason: 'Drives weighted load prescription. Now durably persisted in skillStrengthProfile and shown in UI.',
+    nearestFileOrFunction: 'authoritative-program-generation.ts: program.skillStrengthProfile, adaptive-program-builder.ts: resolveWeightedLoading()',
+    nextFixPriority: 'done', // [SKILL-STRENGTH-TRUTH-CONTRACT] Completed
   },
   
   // ==========================================================================
@@ -334,30 +334,30 @@ export const TRUTH_MATERIALITY_MAP: FieldMaterialityRecord[] = [
   {
     fieldName: 'plancheProgression',
     canonicalSourcePresent: true,
-    savedOnProgram: false,
+    savedOnProgram: true, // [SKILL-STRENGTH-TRUTH-CONTRACT] Now in program.skillStrengthProfile
     savedInGenerationTruthSnapshot: true,
-    restoredOnRead: false,
+    restoredOnRead: true, // [SKILL-STRENGTH-TRUTH-CONTRACT] Now survives save/read cycle
     usedByGenerator: true,
     materiallyAffectsOutput: true,
-    surfacedInUI: false,
-    verdict: 'YELLOW',
-    reason: 'Determines planche exercise variation. Only in snapshot. User doesnt know their level shaped exercises.',
-    nearestFileOrFunction: 'adaptive-program-builder.ts: resolveSkillProgression()',
-    nextFixPriority: 'medium',
+    surfacedInUI: true, // [SKILL-STRENGTH-TRUTH-CONTRACT] Now shown in ProgramTruthSummary
+    verdict: 'GREEN', // [SKILL-STRENGTH-TRUTH-CONTRACT] Fully authoritative, durable, and surfaced
+    reason: 'Determines planche exercise variation. Now durably persisted in skillStrengthProfile and shown in UI.',
+    nearestFileOrFunction: 'authoritative-program-generation.ts: program.skillStrengthProfile, adaptive-program-builder.ts: resolveSkillProgression()',
+    nextFixPriority: 'done', // [SKILL-STRENGTH-TRUTH-CONTRACT] Completed
   },
   {
     fieldName: 'frontLeverProgression',
     canonicalSourcePresent: true,
-    savedOnProgram: false,
+    savedOnProgram: true, // [SKILL-STRENGTH-TRUTH-CONTRACT] Now in program.skillStrengthProfile
     savedInGenerationTruthSnapshot: true,
-    restoredOnRead: false,
+    restoredOnRead: true, // [SKILL-STRENGTH-TRUTH-CONTRACT] Now survives save/read cycle
     usedByGenerator: true,
     materiallyAffectsOutput: true,
-    surfacedInUI: false,
-    verdict: 'YELLOW',
-    reason: 'Determines front lever exercise variation. Only in snapshot.',
-    nearestFileOrFunction: 'adaptive-program-builder.ts: resolveSkillProgression()',
-    nextFixPriority: 'medium',
+    surfacedInUI: true, // [SKILL-STRENGTH-TRUTH-CONTRACT] Now shown in ProgramTruthSummary
+    verdict: 'GREEN', // [SKILL-STRENGTH-TRUTH-CONTRACT] Fully authoritative, durable, and surfaced
+    reason: 'Determines front lever exercise variation. Now durably persisted in skillStrengthProfile and shown in UI.',
+    nearestFileOrFunction: 'authoritative-program-generation.ts: program.skillStrengthProfile, adaptive-program-builder.ts: resolveSkillProgression()',
+    nextFixPriority: 'done', // [SKILL-STRENGTH-TRUTH-CONTRACT] Completed
   },
   
   // ==========================================================================

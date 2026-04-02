@@ -51,6 +51,50 @@ export type TruthLossPoint =
   | 'LOST_AT_PROGRAM_PAGE_DISPLAY'
   | 'PRESENT_BUT_NOT_EXPLAINED'
 
+// =============================================================================
+// [PHASE 2] METHOD PREFERENCES MATERIALITY TYPES
+// =============================================================================
+
+export interface MethodApplicationSummary {
+  // What methods were actually applied across all sessions
+  actuallyApplied: string[]
+  // Per-session breakdown of what was applied
+  perSessionMethods: Array<{
+    dayNumber: number
+    dayFocus: string
+    appliedMethods: string[]
+    hasSuperset: boolean
+    hasCircuit: boolean
+    hasDensity: boolean
+    structureDescription: string
+  }>
+  // Aggregate counts
+  sessionsWithSupersets: number
+  sessionsWithCircuits: number
+  sessionsWithDensity: number
+  sessionsWithOnlyStraightSets: number
+  // Expression summary
+  expressionSummary: string
+}
+
+export interface MethodMaterialityReport {
+  // What the user selected
+  userSelectedMethods: string[]
+  // What was actually applied
+  appliedMethods: string[]
+  // What was selected but NOT applied
+  selectedButNotApplied: string[]
+  // Reasons for non-application
+  nonApplicationReasons: Array<{
+    method: string
+    reason: string
+  }>
+  // Materiality verdict
+  verdict: 'FULLY_EXPRESSED' | 'MOSTLY_EXPRESSED' | 'LIGHTLY_EXPRESSED' | 'NOT_EXPRESSED' | 'NO_PREFERENCES'
+  // User-facing explanation of how preferences shaped the program
+  explanationForUser: string
+}
+
 export interface TruthFieldAudit {
   fieldName: string
   existsInCanonicalProfile: boolean
@@ -406,6 +450,10 @@ export interface ProgramTruthExplanation {
   trainingMethodsUsed: string[]
   sessionStyleUsed: string | null
   
+  // [PHASE 2] Actual method application from session structures
+  methodPreferencesApplied: MethodApplicationSummary
+  methodPreferencesMateriality: MethodMaterialityReport
+  
   // Diagnostics considered
   jointCautionsConsidered: string[]
   weakPointAddressed: string | null
@@ -565,6 +613,10 @@ export function buildProgramTruthExplanation(
     trainingMethodsUsed: profile?.trainingMethodPreferences || [],
     sessionStyleUsed: profile?.sessionStylePreference || null,
     
+    // [PHASE 2] Actual applied methods from session structures
+    methodPreferencesApplied: aggregateActualAppliedMethods(program),
+    methodPreferencesMateriality: computeMethodMateriality(program, profile?.trainingMethodPreferences || []),
+    
     jointCautionsConsidered: profile?.jointCautions || [],
     weakPointAddressed: program.weakPointDetection?.primaryFocus || null,
     limiterAddressed: profile?.primaryLimitation || null,
@@ -575,6 +627,177 @@ export function buildProgramTruthExplanation(
     
     truthfulSummary: summaryParts.join(' | '),
     explanationQualityVerdict,
+  }
+}
+
+// =============================================================================
+// [PHASE 2] METHOD PREFERENCES MATERIALITY HELPERS
+// =============================================================================
+
+/**
+ * Aggregate actually applied methods from all session styleMetadata.
+ * This tells us what methods were REALLY used in the generated program.
+ */
+function aggregateActualAppliedMethods(program: AdaptiveProgram): MethodApplicationSummary {
+  const sessions = program.sessions || []
+  const allAppliedMethods = new Set<string>()
+  const perSessionMethods: MethodApplicationSummary['perSessionMethods'] = []
+  
+  let sessionsWithSupersets = 0
+  let sessionsWithCircuits = 0
+  let sessionsWithDensity = 0
+  let sessionsWithOnlyStraightSets = 0
+  
+  for (const session of sessions) {
+    const styleMetadata = (session as { styleMetadata?: {
+      primaryStyle?: string
+      hasSupersetsApplied?: boolean
+      hasCircuitsApplied?: boolean
+      hasDensityApplied?: boolean
+      structureDescription?: string
+      appliedMethods?: string[]
+    }}).styleMetadata
+    
+    const appliedMethods = styleMetadata?.appliedMethods || []
+    const hasSuperset = styleMetadata?.hasSupersetsApplied || appliedMethods.includes('supersets')
+    const hasCircuit = styleMetadata?.hasCircuitsApplied || appliedMethods.includes('circuits')
+    const hasDensity = styleMetadata?.hasDensityApplied || appliedMethods.includes('density_blocks')
+    
+    // Track per-session
+    perSessionMethods.push({
+      dayNumber: session.dayNumber,
+      dayFocus: session.focus || 'mixed',
+      appliedMethods,
+      hasSuperset,
+      hasCircuit,
+      hasDensity,
+      structureDescription: styleMetadata?.structureDescription || 'Standard structure',
+    })
+    
+    // Add to global set
+    for (const method of appliedMethods) {
+      allAppliedMethods.add(method)
+    }
+    
+    // Count session types
+    if (hasSuperset) sessionsWithSupersets++
+    if (hasCircuit) sessionsWithCircuits++
+    if (hasDensity) sessionsWithDensity++
+    if (!hasSuperset && !hasCircuit && !hasDensity) sessionsWithOnlyStraightSets++
+  }
+  
+  // Build expression summary
+  const summaryParts: string[] = []
+  if (sessionsWithSupersets > 0) {
+    summaryParts.push(`supersets in ${sessionsWithSupersets} session${sessionsWithSupersets > 1 ? 's' : ''}`)
+  }
+  if (sessionsWithCircuits > 0) {
+    summaryParts.push(`circuits in ${sessionsWithCircuits} session${sessionsWithCircuits > 1 ? 's' : ''}`)
+  }
+  if (sessionsWithDensity > 0) {
+    summaryParts.push(`density blocks in ${sessionsWithDensity} session${sessionsWithDensity > 1 ? 's' : ''}`)
+  }
+  
+  const expressionSummary = summaryParts.length > 0
+    ? `Your training style preferences were applied: ${summaryParts.join(', ')}.`
+    : 'Sessions use focused straight-set structure for optimal skill development.'
+  
+  return {
+    actuallyApplied: Array.from(allAppliedMethods),
+    perSessionMethods,
+    sessionsWithSupersets,
+    sessionsWithCircuits,
+    sessionsWithDensity,
+    sessionsWithOnlyStraightSets,
+    expressionSummary,
+  }
+}
+
+/**
+ * Compute how well user's method preferences were materialized in the program.
+ */
+function computeMethodMateriality(
+  program: AdaptiveProgram,
+  userSelectedMethods: string[]
+): MethodMaterialityReport {
+  const applicationSummary = aggregateActualAppliedMethods(program)
+  const appliedMethods = applicationSummary.actuallyApplied
+  
+  // Handle no preferences case
+  if (!userSelectedMethods || userSelectedMethods.length === 0) {
+    return {
+      userSelectedMethods: [],
+      appliedMethods,
+      selectedButNotApplied: [],
+      nonApplicationReasons: [],
+      verdict: 'NO_PREFERENCES',
+      explanationForUser: 'No specific training method preferences were selected. Sessions use standard coaching structure.',
+    }
+  }
+  
+  // Find what was selected but not applied
+  const selectedButNotApplied = userSelectedMethods.filter(
+    method => !appliedMethods.includes(method) && method !== 'straight_sets'
+  )
+  
+  // Build reasons for non-application
+  const nonApplicationReasons: MethodMaterialityReport['nonApplicationReasons'] = []
+  for (const method of selectedButNotApplied) {
+    let reason = 'Method not suitable for session composition'
+    if (method === 'circuits') {
+      reason = 'Circuits require 3+ compatible exercises; skill-focused sessions prioritize quality'
+    } else if (method === 'density_blocks') {
+      reason = 'Density blocks best suited for conditioning segments'
+    } else if (method === 'supersets') {
+      reason = 'Supersets require compatible exercise pairs; high-skill work protected'
+    }
+    nonApplicationReasons.push({ method, reason })
+  }
+  
+  // Calculate verdict
+  const totalSelected = userSelectedMethods.filter(m => m !== 'straight_sets').length
+  const totalApplied = appliedMethods.filter(m => m !== 'straight_sets').length
+  const matchedCount = userSelectedMethods.filter(m => appliedMethods.includes(m) && m !== 'straight_sets').length
+  
+  let verdict: MethodMaterialityReport['verdict']
+  if (totalSelected === 0) {
+    verdict = 'NO_PREFERENCES'
+  } else if (matchedCount === totalSelected) {
+    verdict = 'FULLY_EXPRESSED'
+  } else if (matchedCount >= totalSelected * 0.5) {
+    verdict = 'MOSTLY_EXPRESSED'
+  } else if (totalApplied > 0) {
+    verdict = 'LIGHTLY_EXPRESSED'
+  } else {
+    verdict = 'NOT_EXPRESSED'
+  }
+  
+  // Build user-facing explanation
+  let explanationForUser: string
+  switch (verdict) {
+    case 'FULLY_EXPRESSED':
+      explanationForUser = `Your selected training methods (${userSelectedMethods.filter(m => m !== 'straight_sets').map(m => m.replace(/_/g, ' ')).join(', ')}) were fully integrated into your program.`
+      break
+    case 'MOSTLY_EXPRESSED':
+      explanationForUser = `Most of your training style preferences were applied. ${applicationSummary.expressionSummary}`
+      break
+    case 'LIGHTLY_EXPRESSED':
+      explanationForUser = `Your training style preferences were selectively applied where appropriate. ${selectedButNotApplied.length > 0 ? `Some methods (${selectedButNotApplied.join(', ')}) were limited to protect skill quality.` : ''}`
+      break
+    case 'NOT_EXPRESSED':
+      explanationForUser = `Your selected methods weren't applied this week because advanced skill work requires focused straight-set training. Future conditioning or accessory phases may use your preferred methods.`
+      break
+    default:
+      explanationForUser = 'Sessions use standard coaching structure.'
+  }
+  
+  return {
+    userSelectedMethods,
+    appliedMethods,
+    selectedButNotApplied,
+    nonApplicationReasons,
+    verdict,
+    explanationForUser,
   }
 }
 

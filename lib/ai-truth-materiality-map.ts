@@ -239,11 +239,11 @@ export const TRUTH_MATERIALITY_MAP: FieldMaterialityRecord[] = [
     restoredOnRead: true,
     usedByGenerator: true,
     materiallyAffectsOutput: true,
-    surfacedInUI: false,
-    verdict: 'YELLOW',
-    reason: 'Supersets/circuits/density affects session structure. Used in applySessionStylePreferences() but NOT explained.',
-    nearestFileOrFunction: 'adaptive-program-builder.ts: applySessionStylePreferences()',
-    nextFixPriority: 'high',
+    surfacedInUI: true, // [PHASE 2] Now surfaced in ProgramTruthSummary
+    verdict: 'GREEN', // [PHASE 2] Upgraded - now fully connected and explained
+    reason: 'Supersets/circuits/density affects session structure. Applied via applySessionStylePreferences() and explained in ProgramTruthSummary.',
+    nearestFileOrFunction: 'adaptive-program-builder.ts: applySessionStylePreferences(), ai-truth-audit.ts: aggregateActualAppliedMethods()',
+    nextFixPriority: 'done', // [PHASE 2] Completed
   },
   {
     fieldName: 'sessionStylePreference',

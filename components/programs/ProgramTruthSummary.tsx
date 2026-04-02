@@ -14,6 +14,36 @@ import { cn } from '@/lib/utils'
  * This surfaces the AI decision-making process in a user-friendly way.
  */
 
+interface MethodApplicationSummary {
+  actuallyApplied: string[]
+  perSessionMethods: Array<{
+    dayNumber: number
+    dayFocus: string
+    appliedMethods: string[]
+    hasSuperset: boolean
+    hasCircuit: boolean
+    hasDensity: boolean
+    structureDescription: string
+  }>
+  sessionsWithSupersets: number
+  sessionsWithCircuits: number
+  sessionsWithDensity: number
+  sessionsWithOnlyStraightSets: number
+  expressionSummary: string
+}
+
+interface MethodMaterialityReport {
+  userSelectedMethods: string[]
+  appliedMethods: string[]
+  selectedButNotApplied: string[]
+  nonApplicationReasons: Array<{
+    method: string
+    reason: string
+  }>
+  verdict: 'FULLY_EXPRESSED' | 'MOSTLY_EXPRESSED' | 'LIGHTLY_EXPRESSED' | 'NOT_EXPRESSED' | 'NO_PREFERENCES'
+  explanationForUser: string
+}
+
 interface TruthExplanation {
   identityPrimary: string | null
   identitySecondary: string | null
@@ -37,6 +67,9 @@ interface TruthExplanation {
   goalCategoriesUsed: string[]
   trainingMethodsUsed: string[]
   sessionStyleUsed: string | null
+  // [PHASE 2] Method preferences materiality
+  methodPreferencesApplied?: MethodApplicationSummary
+  methodPreferencesMateriality?: MethodMaterialityReport
   jointCautionsConsidered: string[]
   weakPointAddressed: string | null
   limiterAddressed: string | null
@@ -88,6 +121,9 @@ export function ProgramTruthSummary({ truthExplanation, className }: ProgramTrut
     explanationFactors,
     hiddenTruthNotSurfaced,
     explanationQualityVerdict,
+    // [PHASE 2] Method preferences materiality
+    methodPreferencesApplied,
+    methodPreferencesMateriality,
   } = truthExplanation
   
   // Determine overall status
@@ -170,6 +206,35 @@ export function ProgramTruthSummary({ truthExplanation, className }: ProgramTrut
       label: 'Weak Point Focus',
       value: weakPointAddressed.replace(/_/g, ' '),
       type: 'info',
+    })
+  }
+  
+  // [PHASE 2] Add training style methods key decision
+  if (methodPreferencesMateriality && methodPreferencesMateriality.verdict !== 'NO_PREFERENCES') {
+    const appliedCount = methodPreferencesApplied?.actuallyApplied?.filter(m => m !== 'straight_sets').length || 0
+    const selectedCount = methodPreferencesMateriality.userSelectedMethods?.filter(m => m !== 'straight_sets').length || 0
+    
+    let styleValue = ''
+    let styleType: 'info' | 'success' | 'warning' = 'info'
+    
+    if (methodPreferencesMateriality.verdict === 'FULLY_EXPRESSED') {
+      styleValue = `${appliedCount} method${appliedCount > 1 ? 's' : ''} applied`
+      styleType = 'success'
+    } else if (methodPreferencesMateriality.verdict === 'MOSTLY_EXPRESSED') {
+      styleValue = `${appliedCount}/${selectedCount} methods used`
+      styleType = 'success'
+    } else if (methodPreferencesMateriality.verdict === 'LIGHTLY_EXPRESSED') {
+      styleValue = `${appliedCount}/${selectedCount} methods used`
+      styleType = 'info'
+    } else {
+      styleValue = 'Skill-focused training'
+      styleType = 'info'
+    }
+    
+    keyDecisions.push({
+      label: 'Training Style',
+      value: styleValue,
+      type: styleType,
     })
   }
   
@@ -296,6 +361,57 @@ export function ProgramTruthSummary({ truthExplanation, className }: ProgramTrut
                       </span>
                     )
                   })}
+                </div>
+              </div>
+            )}
+            
+            {/* [PHASE 2] Training Style Methods */}
+            {methodPreferencesMateriality && methodPreferencesMateriality.verdict !== 'NO_PREFERENCES' && (
+              <div className="space-y-2">
+                <h4 className="text-xs font-medium text-[#8A8A8A] uppercase tracking-wide">
+                  Training Style Expression
+                </h4>
+                <div className="text-xs bg-[#1E1E1E] rounded p-2.5 space-y-2">
+                  {/* User-facing explanation */}
+                  <p className="text-[#E8E4D9]">
+                    {methodPreferencesMateriality.explanationForUser}
+                  </p>
+                  
+                  {/* Per-session breakdown if methods were applied */}
+                  {methodPreferencesApplied && (methodPreferencesApplied.sessionsWithSupersets > 0 || 
+                    methodPreferencesApplied.sessionsWithCircuits > 0 || 
+                    methodPreferencesApplied.sessionsWithDensity > 0) && (
+                    <div className="flex flex-wrap gap-1.5 pt-1">
+                      {methodPreferencesApplied.sessionsWithSupersets > 0 && (
+                        <span className="text-xs bg-blue-500/10 text-blue-400 px-2 py-0.5 rounded">
+                          Supersets: {methodPreferencesApplied.sessionsWithSupersets} session{methodPreferencesApplied.sessionsWithSupersets > 1 ? 's' : ''}
+                        </span>
+                      )}
+                      {methodPreferencesApplied.sessionsWithCircuits > 0 && (
+                        <span className="text-xs bg-purple-500/10 text-purple-400 px-2 py-0.5 rounded">
+                          Circuits: {methodPreferencesApplied.sessionsWithCircuits} session{methodPreferencesApplied.sessionsWithCircuits > 1 ? 's' : ''}
+                        </span>
+                      )}
+                      {methodPreferencesApplied.sessionsWithDensity > 0 && (
+                        <span className="text-xs bg-amber-500/10 text-amber-400 px-2 py-0.5 rounded">
+                          Density: {methodPreferencesApplied.sessionsWithDensity} session{methodPreferencesApplied.sessionsWithDensity > 1 ? 's' : ''}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                  
+                  {/* Methods not applied with reasons */}
+                  {methodPreferencesMateriality.selectedButNotApplied.length > 0 && (
+                    <div className="pt-1 text-[#6A6A6A] text-xs">
+                      <span className="text-amber-400/70">Limited:</span>{' '}
+                      {methodPreferencesMateriality.nonApplicationReasons.map((r, i) => (
+                        <span key={r.method}>
+                          {r.method.replace(/_/g, ' ')}{i < methodPreferencesMateriality.nonApplicationReasons.length - 1 ? ', ' : ''}
+                        </span>
+                      ))}
+                      <span className="text-[#5A5A5A]"> (skill quality priority)</span>
+                    </div>
+                  )}
                 </div>
               </div>
             )}

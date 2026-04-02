@@ -2107,10 +2107,14 @@ export function applySessionStylePreferences(input: SessionStyleInput): SessionS
   // ==========================================================================
   // STRENGTH WORK: Check for superset opportunities with antagonist pairing
   // [PHASE 11] Enhanced to be more willing to create supersets when preferred
+  // [PHASE 2] Further enhanced to express user method preferences more visibly
   // ==========================================================================
   const strengthNotUsed = strengthExercises.filter(e => !usedExerciseIds.has(e.id))
   const supersetsPreferred = methodPreferences.indexOf('supersets') !== -1 && 
     (methodPreferences.indexOf('supersets') < methodPreferences.indexOf('circuits') || !methodPreferences.includes('circuits'))
+  
+  // [PHASE 2] Be more aggressive with supersets when user explicitly selected them
+  const userExplicitlyWantsSupersets = methodPreferences.includes('supersets')
   
   if (feasibleMethods.includes('supersets') && strengthNotUsed.length >= 2) {
     // Try to pair antagonist movements first
@@ -2127,8 +2131,10 @@ export function applySessionStylePreferences(input: SessionStyleInput): SessionS
       const pull = pullStrength[i]
       const push = pushStrength[i]
       
-      // Don't superset high neural demand
-      if ((pull.neuralDemand || 2) >= 4 || (push.neuralDemand || 2) >= 4) {
+      // [PHASE 2] Be more lenient with neural demand when user wants supersets
+      // Only skip truly high-risk combinations (neuralDemand >= 5)
+      const neuralThreshold = userExplicitlyWantsSupersets ? 5 : 4
+      if ((pull.neuralDemand || 2) >= neuralThreshold || (push.neuralDemand || 2) >= neuralThreshold) {
         continue
       }
       
@@ -2163,14 +2169,18 @@ export function applySessionStylePreferences(input: SessionStyleInput): SessionS
       }
     }
     
-    // [PHASE 11] If supersets preferred but no antagonist pairs, try non-competing pairs
+    // [PHASE 11 + PHASE 2] If supersets preferred, try non-competing pairs more aggressively
     const remainingStrength = strengthNotUsed.filter(e => !usedExerciseIds.has(e.id))
-    if (supersetsPreferred && remainingStrength.length >= 2 && !appliedMethods.includes('supersets')) {
+    if ((supersetsPreferred || userExplicitlyWantsSupersets) && remainingStrength.length >= 2) {
       // Pair non-competing strength exercises (different movement patterns)
       const grouped: Array<{ e1: typeof remainingStrength[0], e2: typeof remainingStrength[0] }> = []
       const usedForPairing = new Set<string>()
       
-      for (let i = 0; i < remainingStrength.length; i++) {
+      // [PHASE 2] Try to create more pairs when user wants supersets
+      const maxPairs = userExplicitlyWantsSupersets ? 2 : 1
+      let pairsCreated = 0
+      
+      for (let i = 0; i < remainingStrength.length && pairsCreated < maxPairs; i++) {
         if (usedForPairing.has(remainingStrength[i].id)) continue
         for (let j = i + 1; j < remainingStrength.length; j++) {
           if (usedForPairing.has(remainingStrength[j].id)) continue
@@ -2178,11 +2188,13 @@ export function applySessionStylePreferences(input: SessionStyleInput): SessionS
           const e2 = remainingStrength[j]
           // Non-competing if different movement patterns
           if (e1.movementPattern !== e2.movementPattern) {
-            // Also avoid pairing high neural demand
-            if ((e1.neuralDemand || 2) < 4 && (e2.neuralDemand || 2) < 4) {
+            // [PHASE 2] More lenient neural demand check for user preference
+            const neuralThreshold = userExplicitlyWantsSupersets ? 5 : 4
+            if ((e1.neuralDemand || 2) < neuralThreshold && (e2.neuralDemand || 2) < neuralThreshold) {
               grouped.push({ e1, e2 })
               usedForPairing.add(e1.id)
               usedForPairing.add(e2.id)
+              pairsCreated++
               break
             }
           }
@@ -2298,8 +2310,14 @@ export function applySessionStylePreferences(input: SessionStyleInput): SessionS
   // Re-calculate what's left after supersets
   const accessoryStillNotUsed = accessoryNotUsed.filter(e => !usedExerciseIds.has(e.id))
   
+  // [PHASE 2] Check if user explicitly wants circuits or density
+  const userExplicitlyWantsCircuits = methodPreferences.includes('circuits')
+  const userExplicitlyWantsDensity = methodPreferences.includes('density_blocks')
+  
   // Try circuits if preferred and we have enough exercises
-  if (feasibleMethods.includes('circuits') && accessoryStillNotUsed.length >= 3) {
+  // [PHASE 2] Lower threshold from 3 to 2 when user explicitly selected circuits
+  const circuitThreshold = userExplicitlyWantsCircuits ? 2 : 3
+  if (feasibleMethods.includes('circuits') && accessoryStillNotUsed.length >= circuitThreshold) {
     const circuitExercises = accessoryStillNotUsed.slice(0, Math.min(4, accessoryStillNotUsed.length))
     
     for (const e of circuitExercises) {
@@ -2325,8 +2343,9 @@ export function applySessionStylePreferences(input: SessionStyleInput): SessionS
     }
   }
   // Try density blocks (only if circuits not used)
-  else if (feasibleMethods.includes('density_blocks') && accessoryStillNotUsed.length >= 2) {
-    const densityExercises = accessoryStillNotUsed.slice(0, Math.min(3, accessoryStillNotUsed.length))
+  // [PHASE 2] Also try density when user explicitly selected it even with smaller exercise pools
+  else if (feasibleMethods.includes('density_blocks') && (accessoryStillNotUsed.length >= 2 || userExplicitlyWantsDensity)) {
+    const densityExercises = accessoryStillNotUsed.slice(0, Math.min(3, Math.max(2, accessoryStillNotUsed.length)))
     
     for (const e of densityExercises) {
       usedExerciseIds.add(e.id)

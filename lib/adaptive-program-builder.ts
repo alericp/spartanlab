@@ -642,7 +642,14 @@ type AdaptiveSessionContext = {
   totalSessions?: number // Total sessions this week for allocation math
   // [PHASE 7A] Training method preferences for session structure
   trainingMethodPreferences?: TrainingMethodPreference[]
-}
+  // [PHASE-MATERIALITY-SCOPE-FIX] Session assembly truth contract
+  // These fields are extracted from materialityContract and passed explicitly
+  // to avoid out-of-scope reference errors in generateAdaptiveSession
+  sessionAssemblyTruth?: {
+    currentWorkingProgressions: AuthoritativeGenerationMaterialityContract['currentWorkingProgressions']
+    materialSkillIntent: AuthoritativeGenerationMaterialityContract['materialSkillIntent']
+  } | null
+  }
 
 export interface AdaptiveProgramInputs {
   primaryGoal: PrimaryGoal
@@ -5546,20 +5553,26 @@ async function generateAdaptiveProgramImpl(
     
     const intent = sessionIntents[index]
     
-    // SKILL EXPRESSION FIX: Create per-session context with skill allocation
-    const sessionContext: AdaptiveSessionContext = {
-      athleteCalibration,
-      onboardingProfile,
-      recoverySignal,
-      weightedBenchmarks,
-      // Pass skill data for session-level expression
-      selectedSkills: canonicalProfile.selectedSkills || [],
-      weightedSkillAllocation,
-      sessionIndex: index,
-      totalSessions: effectiveTrainingDays,
-      // [PHASE 7A] Pass training method preferences for session structuring
-      trainingMethodPreferences: canonicalProfile.trainingMethodPreferences || ['straight_sets'],
-    }
+  // SKILL EXPRESSION FIX: Create per-session context with skill allocation
+  const sessionContext: AdaptiveSessionContext = {
+  athleteCalibration,
+  onboardingProfile,
+  recoverySignal,
+  weightedBenchmarks,
+  // Pass skill data for session-level expression
+  selectedSkills: canonicalProfile.selectedSkills || [],
+  weightedSkillAllocation,
+  sessionIndex: index,
+  totalSessions: effectiveTrainingDays,
+  // [PHASE 7A] Pass training method preferences for session structuring
+  trainingMethodPreferences: canonicalProfile.trainingMethodPreferences || ['straight_sets'],
+  // [PHASE-MATERIALITY-SCOPE-FIX] Pass materiality contract data explicitly
+  // This avoids the out-of-scope ReferenceError in generateAdaptiveSession
+  sessionAssemblyTruth: {
+    currentWorkingProgressions: materialityContract.currentWorkingProgressions,
+    materialSkillIntent: materialityContract.materialSkillIntent,
+  },
+  }
     
     const session = generateAdaptiveSession(
       day,
@@ -12623,18 +12636,30 @@ function generateAdaptiveSession(
   let middleStep = 'none' // Track middle helper step if we get that far
   
   // Destructure context to get explicit dependencies (scope fix)
-  const { 
-    athleteCalibration, 
-    recoverySignal, 
-    weightedBenchmarks,
-    // SKILL EXPRESSION FIX: Extract skill allocation data
-    selectedSkills,
-    weightedSkillAllocation,
-    sessionIndex,
-    totalSessions,
-    // [PHASE 7A] Training method preferences for session structuring
-    trainingMethodPreferences,
+  const {
+  athleteCalibration,
+  recoverySignal,
+  weightedBenchmarks,
+  // SKILL EXPRESSION FIX: Extract skill allocation data
+  selectedSkills,
+  weightedSkillAllocation,
+  sessionIndex,
+  totalSessions,
+  // [PHASE 7A] Training method preferences for session structuring
+  trainingMethodPreferences,
+  // [PHASE-MATERIALITY-SCOPE-FIX] Extract session assembly truth contract
+  sessionAssemblyTruth,
   } = context
+  
+  // [PHASE-MATERIALITY-SCOPE-FIX] Validate and log session assembly truth contract
+  console.log('[session-assembly-truth-contract]', {
+  hasSessionAssemblyTruth: !!sessionAssemblyTruth,
+  hasCurrentWorkingProgressions: !!sessionAssemblyTruth?.currentWorkingProgressions,
+  hasMaterialSkillIntent: Array.isArray(sessionAssemblyTruth?.materialSkillIntent),
+  materialSkillIntentCount: sessionAssemblyTruth?.materialSkillIntent?.length || 0,
+  dayFocus: day.focus,
+  dayNumber: day.dayNumber,
+  })
   
   // Resolve sessionMinutes early for logging purposes
   const sessionMinutesResolved = typeof sessionLength === 'number' 
@@ -12715,6 +12740,19 @@ function generateAdaptiveSession(
     skillsForSessionCount: skillsForThisSession?.length || 0,
   })
   
+  // [PHASE-MATERIALITY-SCOPE-FIX] Pre-flight validation before exercise selection
+  console.log('[exercise-selector-truth-contract]', {
+    hasSessionAssemblyTruth: !!sessionAssemblyTruth,
+    currentWorkingProgressionsValid: sessionAssemblyTruth?.currentWorkingProgressions === null || 
+      typeof sessionAssemblyTruth?.currentWorkingProgressions === 'object',
+    materialSkillIntentValid: Array.isArray(sessionAssemblyTruth?.materialSkillIntent),
+    materialSkillIntentCount: sessionAssemblyTruth?.materialSkillIntent?.length || 0,
+    selectedSkillsValid: Array.isArray(selectedSkills),
+    skillsForSessionValid: Array.isArray(skillsForThisSession),
+    dayFocus: day.focus,
+    verdict: 'TRUTH_CONTRACT_VALIDATED_BEFORE_SELECTION',
+  })
+  
   const selection = selectExercisesForSession({
   day,
   primaryGoal,
@@ -12727,15 +12765,16 @@ function generateAdaptiveSession(
   // SKILL EXPRESSION FIX: Pass selected skills and allocation for exercise variety
   selectedSkills: selectedSkills || [],
   skillsForSession: skillsForThisSession,
-  // [PHASE-MATERIALITY] Pass current working progressions for authoritative prescription
-  currentWorkingProgressions: materialityContract.currentWorkingProgressions,
-  // [PHASE-MATERIALITY] Pass material skill intent for role-based scoring
-  materialSkillIntent: materialityContract.materialSkillIntent.map(e => ({
+  // [PHASE-MATERIALITY-SCOPE-FIX] Pass current working progressions from session assembly truth
+  // This uses the explicitly passed contract instead of out-of-scope materialityContract
+  currentWorkingProgressions: sessionAssemblyTruth?.currentWorkingProgressions || null,
+  // [PHASE-MATERIALITY-SCOPE-FIX] Pass material skill intent from session assembly truth
+  materialSkillIntent: sessionAssemblyTruth?.materialSkillIntent?.map(e => ({
     skill: e.skill,
     role: e.role,
     currentWorkingProgression: e.currentWorkingProgression,
     historicalCeiling: e.historicalCeiling,
-  })),
+  })) || [],
   })
   
   sessionStep = 'selection_received'

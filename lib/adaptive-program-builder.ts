@@ -5507,6 +5507,150 @@ async function generateAdaptiveProgramImpl(
     }
     
     // =========================================================================
+    // [PHASE 8] STEP D2: Apply superset grouping if trainingMethodPreferences includes 'supersets'
+    // This materially changes exercise packaging based on user's style preferences
+    // =========================================================================
+    const methodPrefsForGrouping = canonicalProfile.trainingMethodPreferences || []
+    const shouldApplySupersets = methodPrefsForGrouping.includes('supersets')
+    const isSkillPrimarySession = session.focus?.toLowerCase().includes('skill') || 
+      session.exercises?.some(e => e.category === 'skill' && e.selectionReason?.includes('primary'))
+    
+    if (shouldApplySupersets && session.exercises && session.exercises.length >= 4) {
+      // Find accessory/support exercises that can be safely supersetted
+      // Never superset primary skill work or heavy strength work
+      const supersetCandidates = session.exercises.filter(ex => 
+        ex.category !== 'skill' && 
+        !ex.selectionReason?.includes('primary') &&
+        !ex.name?.toLowerCase().includes('weighted') &&
+        !ex.name?.toLowerCase().includes('heavy')
+      )
+      
+      // Group into pairs for supersets (max 2 superset pairs per session)
+      if (supersetCandidates.length >= 2) {
+        const pairsToCreate = Math.min(2, Math.floor(supersetCandidates.length / 2))
+        let pairsCreated = 0
+        
+        for (let i = 0; i < supersetCandidates.length - 1 && pairsCreated < pairsToCreate; i += 2) {
+          const ex1 = supersetCandidates[i]
+          const ex2 = supersetCandidates[i + 1]
+          
+          // Check they're not the same movement pattern (push+pull is ideal)
+          const isPush1 = ex1.name?.toLowerCase().includes('push') || ex1.name?.toLowerCase().includes('dip') || ex1.name?.toLowerCase().includes('press')
+          const isPull1 = ex1.name?.toLowerCase().includes('pull') || ex1.name?.toLowerCase().includes('row') || ex1.name?.toLowerCase().includes('curl')
+          const isPush2 = ex2.name?.toLowerCase().includes('push') || ex2.name?.toLowerCase().includes('dip') || ex2.name?.toLowerCase().includes('press')
+          const isPull2 = ex2.name?.toLowerCase().includes('pull') || ex2.name?.toLowerCase().includes('row') || ex2.name?.toLowerCase().includes('curl')
+          
+          // Prefer push+pull pairing, but allow any non-conflicting pair
+          const isGoodPair = (isPush1 && isPull2) || (isPull1 && isPush2) || (!isPush1 && !isPush2) || (!isPull1 && !isPull2)
+          
+          if (isGoodPair || pairsCreated === 0) {
+            const blockId = `superset_${session.dayNumber}_${pairsCreated + 1}`
+            
+            // Find and update in the main exercise array
+            const idx1 = session.exercises.findIndex(e => e.id === ex1.id)
+            const idx2 = session.exercises.findIndex(e => e.id === ex2.id)
+            
+            if (idx1 !== -1 && idx2 !== -1) {
+              session.exercises[idx1].blockId = blockId
+              session.exercises[idx1].method = 'superset'
+              session.exercises[idx1].methodLabel = `Superset A${pairsCreated + 1}`
+              
+              session.exercises[idx2].blockId = blockId
+              session.exercises[idx2].method = 'superset'
+              session.exercises[idx2].methodLabel = `Superset B${pairsCreated + 1}`
+              
+              pairsCreated++
+            }
+          }
+        }
+        
+        if (pairsCreated > 0) {
+          console.log('[AI-TRUTH-OUTPUT] Supersets applied:', {
+            dayNumber: session.dayNumber,
+            pairsCreated,
+            reason: 'trainingMethodPreferences includes supersets',
+            candidateCount: supersetCandidates.length,
+          })
+          
+          // Add adaptation note
+          session.adaptationNotes = session.adaptationNotes || []
+          session.adaptationNotes.push(`${pairsCreated} superset pair${pairsCreated > 1 ? 's' : ''} applied to accessory work`)
+          
+          // Build styledGroups for UI rendering
+          type StyledGroup = {
+            id: string
+            groupType: 'straight' | 'superset' | 'circuit' | 'density_block' | 'cluster'
+            exercises: Array<{
+              id: string
+              name: string
+              prefix?: string
+              trainingMethod: string
+              methodRationale: string
+            }>
+            instruction: string
+            restProtocol: string
+          }
+          const supersetGroups: StyledGroup[] = []
+          
+          // Find all exercises with blockId and group them
+          const blockMap = new Map<string, typeof session.exercises>()
+          for (const ex of session.exercises || []) {
+            if (ex.blockId && ex.method === 'superset') {
+              const existing = blockMap.get(ex.blockId) || []
+              existing.push(ex)
+              blockMap.set(ex.blockId, existing)
+            }
+          }
+          
+          for (const [blockId, exercises] of blockMap) {
+            supersetGroups.push({
+              id: blockId,
+              groupType: 'superset',
+              exercises: exercises.map((ex, idx) => ({
+                id: ex.id,
+                name: ex.name,
+                prefix: String.fromCharCode(65 + idx), // A, B, C...
+                trainingMethod: 'superset',
+                methodRationale: 'Paired for time-efficiency without compromising quality',
+              })),
+              instruction: 'Alternate between exercises with minimal rest between. Full rest after completing both.',
+              restProtocol: '0-15s between exercises, 90-120s after pair',
+            })
+          }
+          
+          // Build non-superset exercises as straight groups
+          const straightExercises = session.exercises.filter(ex => !ex.blockId || ex.method !== 'superset')
+          const straightGroups: StyledGroup[] = straightExercises.map(ex => ({
+            id: `straight_${ex.id}`,
+            groupType: 'straight' as const,
+            exercises: [{
+              id: ex.id,
+              name: ex.name,
+              prefix: undefined,
+              trainingMethod: 'straight_sets',
+              methodRationale: ex.selectionReason || 'Standard execution',
+            }],
+            instruction: 'Complete all sets before moving on',
+            restProtocol: ex.category === 'skill' ? '120-180s' : '60-90s',
+          }))
+          
+          // Initialize or update styleMetadata
+          session.styleMetadata = session.styleMetadata || {
+            primaryStyle: 'supersets',
+            hasSupersetsApplied: true,
+            hasCircuitsApplied: false,
+            hasDensityApplied: false,
+            structureDescription: `${pairsCreated} superset pair${pairsCreated > 1 ? 's' : ''} on accessory work`,
+            appliedMethods: ['supersets', 'straight_sets'],
+            rejectedMethods: [],
+            styledGroups: [...supersetGroups, ...straightGroups],
+          }
+        }
+      }
+    }
+    postSessionStep = 'superset_grouping_applied'
+    
+    // =========================================================================
     // STEP E: Post-mutation core integrity check
     // =========================================================================
     postSessionStep = 'final_session_validating'

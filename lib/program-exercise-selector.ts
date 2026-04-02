@@ -147,6 +147,21 @@ import {
   getAllSupportExercisesFor,
   ADVANCED_SKILL_SUPPORT_PATTERNS,
 } from './doctrine/skill-support-mappings'
+// [PHASE 4] Doctrine DB exercise scoring integration
+import {
+  scoreExercisesWithDoctrine,
+  applyDoctrineScoringToRankedCandidates,
+  getDoctrineInfluenceSummary,
+  // Synchronous scoring with pre-cached rules
+  prefetchDoctrineRules,
+  getCachedDoctrineRules,
+  scoreExercisesWithDoctrineSync,
+  applyDoctrineScoringSyncAndSort,
+  type DoctrineScoreContext,
+  type DoctrineScoreResult,
+  type DoctrineScoringAudit,
+  type CachedDoctrineRules,
+} from './doctrine-exercise-scorer'
 import {
   // Runtime exports
   getSkillPrescriptionRules,
@@ -312,17 +327,17 @@ interface ExerciseSelectionInputs {
   jointCautions?: string[]
   // WEIGHTED LOAD PR: Weighted exercise benchmarks for load prescription
   weightedBenchmarks?: {
-    weightedPullUp?: { current?: WeightedBenchmark; pr?: WeightedPRBenchmark }
-    weightedDip?: { current?: WeightedBenchmark; pr?: WeightedPRBenchmark }
+  weightedPullUp?: { current?: WeightedBenchmark; pr?: WeightedPRBenchmark }
+  weightedDip?: { current?: WeightedBenchmark; pr?: WeightedPRBenchmark }
   }
   // SKILL EXPRESSION FIX: Selected skills and per-session allocation
   selectedSkills?: string[]
   skillsForSession?: Array<{
-    skill: string
-    expressionMode: 'primary' | 'technical' | 'support' | 'warmup'
-    weight: number
+  skill: string
+  expressionMode: 'primary' | 'technical' | 'support' | 'warmup'
+  weight: number
   }>
-}
+  }
 
 // =============================================================================
 // MAIN SELECTION FUNCTION
@@ -1719,6 +1734,93 @@ function selectMainExercises(
     return results
   }
   
+  // ==========================================================================
+  // [PHASE 4] DOCTRINE DB EXERCISE SCORING INTEGRATION
+  // ==========================================================================
+  // This layer applies doctrine DB rules to re-rank already-valid candidates.
+  // It cannot resurrect excluded exercises or bypass safety gates.
+  // Uses pre-cached rules for synchronous scoring during selection.
+  // ==========================================================================
+  
+  // Track doctrine scoring audit for this session
+  let sessionDoctrineAudit: DoctrineScoringAudit | null = null
+  
+  // Get cached doctrine rules (prefetched at start of generation)
+  const cachedDoctrineRules = getCachedDoctrineRules()
+  
+  // Build doctrine context for this session
+  // Note: secondaryGoal is derived from skillsForSession if available
+  const secondarySkillFromSession = skillsForSession?.find(s => 
+    s.expressionMode === 'technical' || s.expressionMode === 'support'
+  )?.skill
+  
+  const doctrineContext: DoctrineScoreContext = {
+    primaryGoal,
+    secondaryGoal: secondarySkillFromSession || null,
+    selectedSkills: selectedSkills || [primaryGoal],
+    experienceLevel,
+    jointCautions: jointCautions || [],
+    equipment: equipment || [],
+    sessionFocus: day.focus,
+    hasWeightedEquipment: hasLoadableEquipment(equipment),
+  }
+  
+  /**
+   * Apply doctrine scoring synchronously to candidate pool.
+   * Returns re-sorted candidates with doctrine adjustments.
+   * [PHASE 4] Bounded doctrine integration - scoring layer only.
+   */
+  function applyDoctrineToPool<T extends { exercise: Exercise; score: number }>(
+    candidates: T[],
+    sessionFocus: string
+  ): T[] {
+    if (!cachedDoctrineRules) {
+      // No cached rules, return base sorted
+      return [...candidates].sort((a, b) => b.score - a.score)
+    }
+    
+    // Update context for this specific pool
+    const poolContext: DoctrineScoreContext = {
+      ...doctrineContext,
+      sessionFocus,
+    }
+    
+    // Apply doctrine scoring synchronously
+    const { sorted, audit } = applyDoctrineScoringSyncAndSort(
+      candidates,
+      poolContext,
+      cachedDoctrineRules
+    )
+    
+    // Accumulate audit results
+    if (audit.doctrineApplied && !sessionDoctrineAudit) {
+      sessionDoctrineAudit = audit
+    } else if (audit.doctrineApplied && sessionDoctrineAudit) {
+      // Merge audit results
+      sessionDoctrineAudit.candidatesAffected += audit.candidatesAffected
+      sessionDoctrineAudit.rulesMatched.selectionRules += audit.rulesMatched.selectionRules
+      sessionDoctrineAudit.rulesMatched.contraindicationRules += audit.rulesMatched.contraindicationRules
+      sessionDoctrineAudit.rulesMatched.carryoverRules += audit.rulesMatched.carryoverRules
+      if (audit.topCandidateChanged) sessionDoctrineAudit.topCandidateChanged = true
+      if (audit.top3Changed) sessionDoctrineAudit.top3Changed = true
+    }
+    
+    // Log if doctrine made a material change
+    if (audit.doctrineApplied && (audit.topCandidateChanged || audit.top3Changed)) {
+      console.log('[PHASE4-DOCTRINE-LIVE-INTEGRATION]', {
+        sessionFocus,
+        primaryGoal,
+        candidatesAffected: audit.candidatesAffected,
+        topCandidateChanged: audit.topCandidateChanged,
+        preDoctrineWinner: audit.preDoctrineTop3[0],
+        postDoctrineWinner: audit.postDoctrineTop3[0],
+        verdict: 'DOCTRINE_EXERCISE_SCORING_LIVE',
+      })
+    }
+    
+    return sorted
+  }
+  
   // [weighted-truth] TASK A: Use canonical loadable equipment check
   const hasWeightedEquipment = hasLoadableEquipment(equipment)
   
@@ -1864,11 +1966,13 @@ function selectMainExercises(
       const skillCandidates = [...availableSkills, ...goalExercises.filter(e => e.category === 'skill')]
         .filter(e => e.transferTo?.some(t => t.toLowerCase().includes(primarySkillAlloc.skill.toLowerCase())))
       
-      // Score and rank candidates
-      const scoredCandidates = skillCandidates.map(e => ({
+      // Score and rank candidates, then apply doctrine scoring
+      // [PHASE 4] Doctrine integration - applies DB-backed scoring modifiers
+      const baseScoredCandidates = skillCandidates.map(e => ({
         exercise: e,
         score: scoreExerciseForSession(e, sessionSkillsToExpress, day.focus, hasWeightedEquipment)
-      })).sort((a, b) => b.score - a.score)
+      }))
+      const scoredCandidates = applyDoctrineToPool(baseScoredCandidates, day.focus)
       
       const primarySkill = scoredCandidates[0]?.exercise || selectByLevel(goalExercises.filter(e => e.category === 'skill'), experienceLevel)
       
@@ -1896,10 +2000,12 @@ function selectMainExercises(
         .filter(e => e.transferTo?.some(t => t.toLowerCase().includes(technicalSkillAlloc.skill.toLowerCase())))
         .filter(e => !usedIds.has(e.id))
       
-      const scoredTech = techSkillCandidates.map(e => ({
+      // [PHASE 4] Doctrine integration for technical skill
+      const baseScoredTech = techSkillCandidates.map(e => ({
         exercise: e,
         score: scoreExerciseForSession(e, sessionSkillsToExpress, day.focus, hasWeightedEquipment)
-      })).sort((a, b) => b.score - a.score)
+      }))
+      const scoredTech = applyDoctrineToPool(baseScoredTech, day.focus)
       
       if (scoredTech[0]) {
         addExercise(scoredTech[0].exercise, `Technical work for ${technicalSkillAlloc.skill}`, undefined, undefined, 'Moderate intensity', 'standalone', {

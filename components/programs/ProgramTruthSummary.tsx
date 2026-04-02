@@ -132,6 +132,8 @@ export function ProgramTruthSummary({ truthExplanation, className }: ProgramTrut
     // [FLEXIBILITY-TRUTH-CONTRACT] Flexibility goals
     flexibilityGoalsUsed,
     flexibilityIntegrated,
+    // [PHASE 7] Training path type
+    trainingPathUsed,
     // [SKILL-STRENGTH-TRUTH-CONTRACT] Skill and strength profile
     skillStrengthProfile,
     skillStrengthMateriallyApplied,
@@ -166,6 +168,21 @@ export function ProgramTruthSummary({ truthExplanation, className }: ProgramTrut
     keyDecisions.push({
       label: 'Secondary Focus',
       value: formatGoal(identitySecondary) || '',
+      type: 'info',
+    })
+  }
+  
+  // [PHASE 7] Add training path type key decision - shows hybrid/skill/strength identity
+  if (trainingPathUsed && trainingPathUsed !== 'balanced') {
+    const pathLabels: Record<string, string> = {
+      'skill_progression': 'Skill-Focused',
+      'strength_endurance': 'Strength-Focused', 
+      'hybrid': 'Hybrid Training',
+      'mobility_focused': 'Mobility-Focused',
+    }
+    keyDecisions.push({
+      label: 'Training Path',
+      value: pathLabels[trainingPathUsed] || trainingPathUsed.replace(/_/g, ' '),
       type: 'info',
     })
   }

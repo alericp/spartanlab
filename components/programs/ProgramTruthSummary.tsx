@@ -137,6 +137,17 @@ interface TruthExplanation {
     anyHistoricalCeiling: boolean
   } | null
   progressionTruthNote?: string | null
+  // [DOCTRINE RUNTIME CONTRACT] Doctrine influence data
+  doctrineInfluence?: {
+    available: boolean
+    source: 'db_live' | 'fallback_none'
+    influenceLevel: 'none' | 'minimal' | 'moderate' | 'strong'
+    headlineReasons: string[]
+    userVisibleSummary: string[]
+    methodsInfluenced: boolean
+    progressionInfluenced: boolean
+    prescriptionInfluenced: boolean
+  } | null
 }
 
 interface ProgramTruthSummaryProps {
@@ -187,8 +198,10 @@ export function ProgramTruthSummary({ truthExplanation, className }: ProgramTrut
     flexibilityIntegrated,
     // [PHASE 7] Training path type
     trainingPathUsed,
-    // [SKILL-STRENGTH-TRUTH-CONTRACT] Skill and strength profile
-    skillStrengthProfile,
+  // [SKILL-STRENGTH-TRUTH-CONTRACT] Skill and strength profile
+  skillStrengthProfile,
+  // [DOCTRINE RUNTIME CONTRACT] Doctrine influence data
+  doctrineInfluence,
     skillStrengthMateriallyApplied,
     // [CURRENT-PROGRESSION-TRUTH-CONTRACT] Current working progressions
     currentWorkingProgressions,
@@ -299,10 +312,24 @@ export function ProgramTruthSummary({ truthExplanation, className }: ProgramTrut
   }
   
   if (weakPointAddressed) {
+  keyDecisions.push({
+  label: 'Weak Point Focus',
+  value: weakPointAddressed.replace(/_/g, ' '),
+  type: 'info',
+  })
+  }
+  
+  // [DOCTRINE RUNTIME CONTRACT] Add doctrine influence key decision
+  if (doctrineInfluence && doctrineInfluence.available && doctrineInfluence.influenceLevel !== 'none') {
+    const influenceLabel = doctrineInfluence.influenceLevel === 'strong' 
+      ? 'Strong' 
+      : doctrineInfluence.influenceLevel === 'moderate'
+        ? 'Moderate'
+        : 'Light'
     keyDecisions.push({
-      label: 'Weak Point Focus',
-      value: weakPointAddressed.replace(/_/g, ' '),
-      type: 'info',
+      label: 'Training Science',
+      value: `${influenceLabel} doctrine influence`,
+      type: 'success',
     })
   }
   
@@ -668,6 +695,59 @@ export function ProgramTruthSummary({ truthExplanation, className }: ProgramTrut
                     })}
                   </div>
                 )}
+              </div>
+            )}
+            
+            {/* [DOCTRINE RUNTIME CONTRACT] Doctrine Influence Section */}
+            {doctrineInfluence && doctrineInfluence.available && doctrineInfluence.influenceLevel !== 'none' && (
+              <div className="space-y-2">
+                <h4 className="text-xs font-medium text-[#8A8A8A] uppercase tracking-wide">
+                  Training Science Applied
+                </h4>
+                <div className="text-xs bg-[#1E1E1E] rounded p-2.5 space-y-2">
+                  {/* Influence level badge */}
+                  <div className="flex items-center gap-2">
+                    <span className={cn(
+                      'text-xs px-2 py-0.5 rounded font-medium',
+                      doctrineInfluence.influenceLevel === 'strong' && 'bg-green-500/10 text-green-400',
+                      doctrineInfluence.influenceLevel === 'moderate' && 'bg-blue-500/10 text-blue-400',
+                      doctrineInfluence.influenceLevel === 'minimal' && 'bg-purple-500/10 text-purple-400'
+                    )}>
+                      {doctrineInfluence.influenceLevel === 'strong' ? 'Strong' : 
+                       doctrineInfluence.influenceLevel === 'moderate' ? 'Moderate' : 'Light'} doctrine influence
+                    </span>
+                  </div>
+                  
+                  {/* User visible summary */}
+                  {doctrineInfluence.userVisibleSummary && doctrineInfluence.userVisibleSummary.length > 0 && (
+                    <div className="space-y-1 pt-1">
+                      {doctrineInfluence.userVisibleSummary.map((summary, idx) => (
+                        <p key={idx} className="text-[#9A9A9A]">
+                          {summary}
+                        </p>
+                      ))}
+                    </div>
+                  )}
+                  
+                  {/* Specific influences */}
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    {doctrineInfluence.progressionInfluenced && (
+                      <span className="text-xs bg-green-500/10 text-green-400 px-2 py-0.5 rounded">
+                        Progression pacing
+                      </span>
+                    )}
+                    {doctrineInfluence.methodsInfluenced && (
+                      <span className="text-xs bg-blue-500/10 text-blue-400 px-2 py-0.5 rounded">
+                        Method selection
+                      </span>
+                    )}
+                    {doctrineInfluence.prescriptionInfluenced && (
+                      <span className="text-xs bg-purple-500/10 text-purple-400 px-2 py-0.5 rounded">
+                        Prescription style
+                      </span>
+                    )}
+                  </div>
+                </div>
               </div>
             )}
             

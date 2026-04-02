@@ -162,6 +162,10 @@ import {
   type DoctrineScoringAudit,
   type CachedDoctrineRules,
 } from './doctrine-exercise-scorer'
+
+// [DOCTRINE RUNTIME CONTRACT] Import for upstream doctrine influence
+import { type DoctrineRuntimeContract } from './doctrine-runtime-contract'
+
 import {
   // Runtime exports
   getSkillPrescriptionRules,

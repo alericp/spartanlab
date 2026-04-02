@@ -124,6 +124,8 @@ export function ProgramTruthSummary({ truthExplanation, className }: ProgramTrut
     // [PHASE 2] Method preferences materiality
     methodPreferencesApplied,
     methodPreferencesMateriality,
+    // [SESSION-STYLE-TRUTH] Session style preference
+    sessionStyleUsed,
   } = truthExplanation
   
   // Determine overall status
@@ -205,6 +207,20 @@ export function ProgramTruthSummary({ truthExplanation, className }: ProgramTrut
     keyDecisions.push({
       label: 'Weak Point Focus',
       value: weakPointAddressed.replace(/_/g, ' '),
+      type: 'info',
+    })
+  }
+  
+  // [SESSION-STYLE-TRUTH] Add session style preference key decision
+  if (sessionStyleUsed) {
+    const styleLabel = sessionStyleUsed === 'longer_complete' 
+      ? 'Complete Sessions' 
+      : sessionStyleUsed === 'shorter_focused' 
+        ? 'Focused Sessions' 
+        : sessionStyleUsed.replace(/_/g, ' ')
+    keyDecisions.push({
+      label: 'Session Style',
+      value: styleLabel,
       type: 'info',
     })
   }

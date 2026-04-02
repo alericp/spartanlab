@@ -248,16 +248,16 @@ export const TRUTH_MATERIALITY_MAP: FieldMaterialityRecord[] = [
   {
     fieldName: 'sessionStylePreference',
     canonicalSourcePresent: true,
-    savedOnProgram: false,
+    savedOnProgram: true, // [SESSION-STYLE-TRUTH] Now elevated to first-class field
     savedInGenerationTruthSnapshot: true,
-    restoredOnRead: false,
+    restoredOnRead: true, // [SESSION-STYLE-TRUTH] Now survives save/read cycle
     usedByGenerator: true,
     materiallyAffectsOutput: true,
-    surfacedInUI: false,
-    verdict: 'YELLOW',
-    reason: 'longer_complete vs shorter_focused affects structure. Saved in snapshot but not on main program.',
-    nearestFileOrFunction: 'adaptive-program-builder.ts: resolveSessionStyle()',
-    nextFixPriority: 'medium',
+    surfacedInUI: true, // [SESSION-STYLE-TRUTH] Now shown in ProgramTruthSummary
+    verdict: 'GREEN', // [SESSION-STYLE-TRUTH] Upgraded - fully durable and surfaced
+    reason: 'longer_complete vs shorter_focused affects structure. Now durably persisted and explained in UI.',
+    nearestFileOrFunction: 'authoritative-program-generation.ts: program.sessionStylePreference, adaptive-program-builder.ts',
+    nextFixPriority: 'done', // [SESSION-STYLE-TRUTH] Completed
   },
   
   // ==========================================================================

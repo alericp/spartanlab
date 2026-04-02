@@ -251,13 +251,13 @@ export const TRUTH_MATERIALITY_MAP: FieldMaterialityRecord[] = [
     savedOnProgram: true, // [SESSION-STYLE-TRUTH] Now elevated to first-class field
     savedInGenerationTruthSnapshot: true,
     restoredOnRead: true, // [SESSION-STYLE-TRUTH] Now survives save/read cycle
-    usedByGenerator: true,
-    materiallyAffectsOutput: true,
-    surfacedInUI: true, // [SESSION-STYLE-TRUTH] Now shown in ProgramTruthSummary
-    verdict: 'GREEN', // [SESSION-STYLE-TRUTH] Upgraded - fully durable and surfaced
-    reason: 'longer_complete vs shorter_focused affects structure. Now durably persisted and explained in UI.',
-    nearestFileOrFunction: 'authoritative-program-generation.ts: program.sessionStylePreference, adaptive-program-builder.ts',
-    nextFixPriority: 'done', // [SESSION-STYLE-TRUTH] Completed
+    usedByGenerator: true, // [SESSION-STYLE-MATERIALITY] Now materially adjusts session construction
+    materiallyAffectsOutput: true, // [SESSION-STYLE-MATERIALITY] Now affects exercise counts, accessories
+    surfacedInUI: true, // [SESSION-STYLE-MATERIALITY] Shows materiality status in ProgramTruthSummary
+    verdict: 'GREEN', // [SESSION-STYLE-MATERIALITY] Fully authoritative, durable, and materially generative
+    reason: 'longer_complete vs shorter_focused materially adjusts session construction via applySessionStyleToDurationConfig(). Affects exercise counts and accessory inclusion.',
+    nearestFileOrFunction: 'adaptive-program-builder.ts: applySessionStyleToDurationConfig(), authoritative-program-generation.ts: program.sessionStylePreference',
+    nextFixPriority: 'done', // [SESSION-STYLE-MATERIALITY] Completed
   },
   
   // ==========================================================================

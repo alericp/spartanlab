@@ -126,6 +126,9 @@ export function ProgramTruthSummary({ truthExplanation, className }: ProgramTrut
     methodPreferencesMateriality,
     // [SESSION-STYLE-TRUTH] Session style preference
     sessionStyleUsed,
+    // [SESSION-STYLE-MATERIALITY] Session style materiality
+    sessionStyleMateriallyApplied,
+    sessionStyleAdjustmentReason,
   } = truthExplanation
   
   // Determine overall status
@@ -211,17 +214,24 @@ export function ProgramTruthSummary({ truthExplanation, className }: ProgramTrut
     })
   }
   
-  // [SESSION-STYLE-TRUTH] Add session style preference key decision
+  // [SESSION-STYLE-MATERIALITY] Add session style preference key decision with materiality
   if (sessionStyleUsed) {
     const styleLabel = sessionStyleUsed === 'longer_complete' 
       ? 'Complete Sessions' 
       : sessionStyleUsed === 'shorter_focused' 
         ? 'Focused Sessions' 
         : sessionStyleUsed.replace(/_/g, ' ')
+    
+    // Show materiality status if style was materially applied
+    const styleValue = sessionStyleMateriallyApplied 
+      ? styleLabel // Show as success if materially applied
+      : styleLabel
+    const styleType: 'info' | 'success' | 'warning' = sessionStyleMateriallyApplied ? 'success' : 'info'
+    
     keyDecisions.push({
       label: 'Session Style',
-      value: styleLabel,
-      type: 'info',
+      value: styleValue,
+      type: styleType,
     })
   }
   

@@ -616,6 +616,9 @@ export function buildProgramTruthExplanation(
     // [SESSION-STYLE-TRUTH] Prefer program.sessionStylePreference (durable) over profile (ephemeral)
     // This ensures saved programs retain their generation-time session style preference
     sessionStyleUsed: program.sessionStylePreference || program.generationTruthSnapshot?.sessionStylePreference || profile?.sessionStylePreference || null,
+    // [SESSION-STYLE-MATERIALITY] Track whether style materially affected construction
+    sessionStyleMateriallyApplied: program.sessionStyleMateriality?.styleMateriallyApplied || false,
+    sessionStyleAdjustmentReason: program.sessionStyleMateriality?.adjustmentReason || null,
     
     // [PHASE 2] Actual applied methods from session structures
     methodPreferencesApplied: aggregateActualAppliedMethods(program),

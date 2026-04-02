@@ -860,6 +860,15 @@ export interface AdaptiveProgram {
   // CRITICAL: User's selected training styles (supersets, circuits, density_blocks, straight_sets).
   // These materially affect session structure and must survive save/read/rebuild/restart.
   trainingMethodPreferences?: string[]
+  // [SESSION-STYLE-MATERIALITY] Track how session style materially affected generation
+  // This persists evidence that the user's style preference shaped session construction
+  sessionStyleMateriality?: {
+    styleRequested: string | null
+    styleMateriallyApplied: boolean
+    adjustmentReason: string | null
+    exerciseCountAdjustment: number // positive = added, negative = reduced
+    accessoryInclusionAdjusted: boolean
+  }
   constraintInsight: {
     hasInsight: boolean
     label: string
@@ -1305,6 +1314,9 @@ exerciseExplanations?: {
     // Style
     trainingMethodsUsed: string[]
     sessionStyleUsed: string | null
+    // [SESSION-STYLE-MATERIALITY] Track how session style materially affected construction
+    sessionStyleMateriallyApplied: boolean
+    sessionStyleAdjustmentReason: string | null
     // Diagnostics considered
     jointCautionsConsidered: string[]
     weakPointAddressed: string | null
@@ -1602,6 +1614,66 @@ function getDurationConfig(duration: WorkoutDurationPreference): DurationConfig 
         restModifier: 1.0,
       }
   }
+}
+
+// =============================================================================
+// [SESSION-STYLE-MATERIALITY] Apply session style preference to duration config
+// This materially affects how sessions are constructed based on user's preference
+// =============================================================================
+
+/**
+ * Adjusts duration config based on user's session style preference.
+ * 
+ * longer_complete: Fuller sessions with more accessories, broader coverage
+ * shorter_focused: Tighter sessions with narrower focus, fewer accessories
+ * 
+ * This ensures the user's style preference materially shapes session construction,
+ * not just explanation text.
+ */
+function applySessionStyleToDurationConfig(
+  baseConfig: DurationConfig,
+  sessionStylePreference: string | null,
+  sessionLengthMinutes: number
+): { adjustedConfig: DurationConfig; styleAdjustmentApplied: string | null; styleAdjustmentReason: string | null } {
+  // Default: no adjustment if no preference
+  if (!sessionStylePreference) {
+    return { adjustedConfig: baseConfig, styleAdjustmentApplied: null, styleAdjustmentReason: null }
+  }
+  
+  if (sessionStylePreference === 'longer_complete') {
+    // Fuller sessions: increase exercise ceiling, always include accessories
+    const adjustedConfig = {
+      ...baseConfig,
+      maxExercises: Math.min(baseConfig.maxExercises + 1, 10), // Allow 1 more exercise
+      minExercises: Math.max(baseConfig.minExercises, 5), // Ensure minimum 5 exercises
+      includeAccessories: true, // Always include accessories for complete sessions
+      skillBlockReduction: Math.max(baseConfig.skillBlockReduction - 0.1, 0), // Less skill block reduction
+    }
+    return { 
+      adjustedConfig, 
+      styleAdjustmentApplied: 'longer_complete',
+      styleAdjustmentReason: 'Session density increased for complete coverage'
+    }
+  }
+  
+  if (sessionStylePreference === 'shorter_focused') {
+    // Focused sessions: reduce breadth, prioritize main work
+    const adjustedConfig = {
+      ...baseConfig,
+      maxExercises: Math.max(baseConfig.maxExercises - 1, 4), // Reduce by 1 exercise
+      includeAccessories: sessionLengthMinutes >= 45, // Only include accessories if 45+ minutes
+      skillBlockReduction: Math.min(baseConfig.skillBlockReduction + 0.15, 0.7), // More skill block reduction
+      useSupersetsOrDensity: sessionLengthMinutes < 45, // Use density methods for shorter focused sessions
+    }
+    return { 
+      adjustedConfig, 
+      styleAdjustmentApplied: 'shorter_focused',
+      styleAdjustmentReason: 'Session breadth reduced for focused training'
+    }
+  }
+  
+  // Unknown style: return base config unchanged
+  return { adjustedConfig: baseConfig, styleAdjustmentApplied: null, styleAdjustmentReason: null }
 }
 
 // =============================================================================
@@ -3905,6 +3977,9 @@ async function generateAdaptiveProgramImpl(
     jointCautions: canonicalProfile.jointCautions || [],
     recoveryLevel: recoverySignal.level || null,
     experienceLevel: canonicalProfile.experienceLevel || 'intermediate',
+    // [SESSION-STYLE-MATERIALITY] Add sessionStylePreference to expanded context
+    // This enables session construction to materially adapt density/accessories/breadth
+    sessionStylePreference: canonicalProfile.sessionStylePreference || null,
   }
   
   // TASK 2: Calculate weighted skill allocation
@@ -4487,7 +4562,28 @@ async function generateAdaptiveProgramImpl(
   })
   
   // Get duration-based configuration for exercise count and structure
-  const durationConfig = getDurationConfig(workoutDuration)
+  const baseDurationConfig = getDurationConfig(workoutDuration)
+  
+  // [SESSION-STYLE-MATERIALITY] Apply session style preference to adjust duration config
+  // This materially affects exercise counts, accessory inclusion, and session breadth
+  const { adjustedConfig: durationConfig, styleAdjustmentApplied, styleAdjustmentReason } = applySessionStyleToDurationConfig(
+    baseDurationConfig,
+    expandedContext.sessionStylePreference,
+    sessionLength
+  )
+  
+  if (styleAdjustmentApplied) {
+    console.log('[AI-TRUTH-SESSION-STYLE] Material style adjustment applied:', {
+      requestedStyle: expandedContext.sessionStylePreference,
+      styleApplied: styleAdjustmentApplied,
+      adjustmentReason: styleAdjustmentReason,
+      baseMaxExercises: baseDurationConfig.maxExercises,
+      adjustedMaxExercises: durationConfig.maxExercises,
+      baseIncludeAccessories: baseDurationConfig.includeAccessories,
+      adjustedIncludeAccessories: durationConfig.includeAccessories,
+      sessionLengthMinutes: sessionLength,
+    })
+  }
   
   // ==========================================================================
   // [PHASE 15E] ADVANCED ATHLETE SESSION CONSTRUCTION CALIBRATION
@@ -8624,6 +8720,18 @@ console.log('[program-generate] Generation complete:', {
     },
     recoveryLevel: recoverySignal.level,
     programRationale,
+    // [SESSION-STYLE-MATERIALITY] Store how session style materially affected generation
+    sessionStyleMateriality: {
+      styleRequested: expandedContext.sessionStylePreference,
+      styleMateriallyApplied: !!styleAdjustmentApplied,
+      adjustmentReason: styleAdjustmentReason,
+      exerciseCountAdjustment: styleAdjustmentApplied 
+        ? (durationConfig.maxExercises - baseDurationConfig.maxExercises) 
+        : 0,
+      accessoryInclusionAdjusted: styleAdjustmentApplied 
+        ? (durationConfig.includeAccessories !== baseDurationConfig.includeAccessories)
+        : false,
+    },
     // [SUMMARY-TRUTH] Store enhanced summary truth data for display
     summaryTruth: {
       profileSelectedSkills: profileSelectedSkillsCanonical,

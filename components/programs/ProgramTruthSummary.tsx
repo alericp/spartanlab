@@ -137,6 +137,8 @@ export function ProgramTruthSummary({ truthExplanation, className }: ProgramTrut
     skillStrengthMateriallyApplied,
     // [PHASE 6] Output quality materiality
     outputQualityReport,
+    // [PHASE 7] Visible difference verdict
+    visibleDifferenceReport,
   } = truthExplanation
   
   // Determine overall status
@@ -407,6 +409,22 @@ export function ProgramTruthSummary({ truthExplanation, className }: ProgramTrut
                   : `${underexpressedSkills.length} skills have limited direct work this week`
                 }
               </span>
+            </div>
+          )}
+          
+          {/* [PHASE 7] Visible difference notice - when rebuild produces same structure */}
+          {visibleDifferenceReport && visibleDifferenceReport.verdict === 'NO_MEANINGFUL_CHANGE_SAME_INPUT_SAME_OUTPUT' && (
+            <div className="text-xs text-blue-400/80 flex items-start gap-1.5 bg-blue-500/5 rounded px-2 py-1.5 -mx-2">
+              <Info className="w-3 h-3 mt-0.5 flex-shrink-0" />
+              <span>{visibleDifferenceReport.userFacingExplanation}</span>
+            </div>
+          )}
+          
+          {/* [PHASE 7] Minor changes notice */}
+          {visibleDifferenceReport && visibleDifferenceReport.verdict === 'INTERNAL_CHANGE_ONLY_NOT_VISIBLE' && (
+            <div className="text-xs text-[#8A8A8A] flex items-start gap-1.5">
+              <Info className="w-3 h-3 mt-0.5 flex-shrink-0" />
+              <span>{visibleDifferenceReport.userFacingExplanation}</span>
             </div>
           )}
         </div>

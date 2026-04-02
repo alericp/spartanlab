@@ -455,6 +455,7 @@ export function selectExercisesForSession(inputs: ExerciseSelectionInputs): Exer
   
   // [exercise-expression] ISSUE A: Pass skillsForSession to enable multi-skill expression
   // TASK 1-B: Pass weightedBenchmarks to fix ReferenceError in selectMainExercises
+  // [PHASE 4 HOTFIX] Pass jointCautions for doctrine context
   const main = selectMainExercises(
   day,
   primaryGoal,
@@ -470,7 +471,8 @@ export function selectExercisesForSession(inputs: ExerciseSelectionInputs): Exer
   skillsForSession,  // TASK 2: Skill allocations for expression-aware selection
   selectedSkills,    // Full selected skills list for reference
   equipment,         // Equipment for doctrine lookups
-  weightedBenchmarks // TASK 1-B: Weighted benchmark data for load prescription
+  weightedBenchmarks, // TASK 1-B: Weighted benchmark data for load prescription
+  jointCautions      // [PHASE 4 HOTFIX] Joint cautions for doctrine scoring
   )
   
   // [session-assembly] ISSUE C: Validate main exercises before proceeding
@@ -986,9 +988,11 @@ function selectMainExercises(
   equipment?: EquipmentType[],
   // TASK 1-A: Thread weightedBenchmarks explicitly to fix ReferenceError
   weightedBenchmarks?: {
-    weightedPullUp?: { current?: WeightedBenchmark; pr?: WeightedPRBenchmark }
-    weightedDip?: { current?: WeightedBenchmark; pr?: WeightedPRBenchmark }
-  }
+  weightedPullUp?: { current?: WeightedBenchmark; pr?: WeightedPRBenchmark }
+  weightedDip?: { current?: WeightedBenchmark; pr?: WeightedPRBenchmark }
+  },
+  // [PHASE 4 HOTFIX] Thread jointCautions for doctrine context
+  jointCautions?: string[]
   ): SelectedExercise[] {
   // [selection-contract] TASK 1-F: Verify weighted benchmarks threading
   console.log('[selection-contract]', {
@@ -1742,6 +1746,20 @@ function selectMainExercises(
   // Uses pre-cached rules for synchronous scoring during selection.
   // ==========================================================================
   
+  // [PHASE 4 HOTFIX] DEFENSIVE NORMALIZATION - prevent undefined reference errors
+  const normalizedJointCautions: string[] = Array.isArray(jointCautions) ? jointCautions : []
+  const normalizedEquipment: EquipmentType[] = Array.isArray(equipment) ? equipment : []
+  const normalizedSelectedSkills: string[] = Array.isArray(selectedSkills) ? selectedSkills : [primaryGoal]
+  
+  // Lightweight runtime guardrail log
+  console.log('[PHASE4-SELECTION-GUARDRAIL]', {
+    focus: day.focus,
+    primaryGoal,
+    jointCautionsCount: normalizedJointCautions.length,
+    selectedSkillsCount: normalizedSelectedSkills.length,
+    doctrineRulesCached: !!getCachedDoctrineRules(),
+  })
+  
   // Track doctrine scoring audit for this session
   let sessionDoctrineAudit: DoctrineScoringAudit | null = null
   
@@ -1754,71 +1772,89 @@ function selectMainExercises(
     s.expressionMode === 'technical' || s.expressionMode === 'support'
   )?.skill
   
+  // [PHASE 4 HOTFIX] Use normalized values only - never raw possibly-undefined
   const doctrineContext: DoctrineScoreContext = {
     primaryGoal,
     secondaryGoal: secondarySkillFromSession || null,
-    selectedSkills: selectedSkills || [primaryGoal],
+    selectedSkills: normalizedSelectedSkills,
     experienceLevel,
-    jointCautions: jointCautions || [],
-    equipment: equipment || [],
+    jointCautions: normalizedJointCautions,
+    equipment: normalizedEquipment as string[],
     sessionFocus: day.focus,
-    hasWeightedEquipment: hasLoadableEquipment(equipment),
+    hasWeightedEquipment: hasLoadableEquipment(normalizedEquipment),
   }
   
   /**
    * Apply doctrine scoring synchronously to candidate pool.
    * Returns re-sorted candidates with doctrine adjustments.
    * [PHASE 4] Bounded doctrine integration - scoring layer only.
+   * [PHASE 4 HOTFIX] Fully guarded with try/catch - doctrine CANNOT crash generation.
    */
   function applyDoctrineToPool<T extends { exercise: Exercise; score: number }>(
     candidates: T[],
     sessionFocus: string
   ): T[] {
+    // Always have a fallback sorted list
+    const baseSorted = [...candidates].sort((a, b) => b.score - a.score)
+    
     if (!cachedDoctrineRules) {
       // No cached rules, return base sorted
-      return [...candidates].sort((a, b) => b.score - a.score)
+      return baseSorted
     }
     
-    // Update context for this specific pool
-    const poolContext: DoctrineScoreContext = {
-      ...doctrineContext,
-      sessionFocus,
-    }
-    
-    // Apply doctrine scoring synchronously
-    const { sorted, audit } = applyDoctrineScoringSyncAndSort(
-      candidates,
-      poolContext,
-      cachedDoctrineRules
-    )
-    
-    // Accumulate audit results
-    if (audit.doctrineApplied && !sessionDoctrineAudit) {
-      sessionDoctrineAudit = audit
-    } else if (audit.doctrineApplied && sessionDoctrineAudit) {
-      // Merge audit results
-      sessionDoctrineAudit.candidatesAffected += audit.candidatesAffected
-      sessionDoctrineAudit.rulesMatched.selectionRules += audit.rulesMatched.selectionRules
-      sessionDoctrineAudit.rulesMatched.contraindicationRules += audit.rulesMatched.contraindicationRules
-      sessionDoctrineAudit.rulesMatched.carryoverRules += audit.rulesMatched.carryoverRules
-      if (audit.topCandidateChanged) sessionDoctrineAudit.topCandidateChanged = true
-      if (audit.top3Changed) sessionDoctrineAudit.top3Changed = true
-    }
-    
-    // Log if doctrine made a material change
-    if (audit.doctrineApplied && (audit.topCandidateChanged || audit.top3Changed)) {
-      console.log('[PHASE4-DOCTRINE-LIVE-INTEGRATION]', {
+    // [PHASE 4 HOTFIX] Wrap doctrine scoring in try/catch - never crash generation
+    try {
+      // Update context for this specific pool
+      const poolContext: DoctrineScoreContext = {
+        ...doctrineContext,
+        sessionFocus,
+      }
+      
+      // Apply doctrine scoring synchronously
+      const { sorted, audit } = applyDoctrineScoringSyncAndSort(
+        candidates,
+        poolContext,
+        cachedDoctrineRules
+      )
+      
+      // Accumulate audit results
+      if (audit.doctrineApplied && !sessionDoctrineAudit) {
+        sessionDoctrineAudit = audit
+      } else if (audit.doctrineApplied && sessionDoctrineAudit) {
+        // Merge audit results
+        sessionDoctrineAudit.candidatesAffected += audit.candidatesAffected
+        sessionDoctrineAudit.rulesMatched.selectionRules += audit.rulesMatched.selectionRules
+        sessionDoctrineAudit.rulesMatched.contraindicationRules += audit.rulesMatched.contraindicationRules
+        sessionDoctrineAudit.rulesMatched.carryoverRules += audit.rulesMatched.carryoverRules
+        if (audit.topCandidateChanged) sessionDoctrineAudit.topCandidateChanged = true
+        if (audit.top3Changed) sessionDoctrineAudit.top3Changed = true
+      }
+      
+      // Log if doctrine made a material change
+      if (audit.doctrineApplied && (audit.topCandidateChanged || audit.top3Changed)) {
+        console.log('[PHASE4-DOCTRINE-LIVE-INTEGRATION]', {
+          sessionFocus,
+          primaryGoal,
+          candidatesAffected: audit.candidatesAffected,
+          topCandidateChanged: audit.topCandidateChanged,
+          preDoctrineWinner: audit.preDoctrineTop3[0],
+          postDoctrineWinner: audit.postDoctrineTop3[0],
+          verdict: 'DOCTRINE_EXERCISE_SCORING_LIVE',
+        })
+      }
+      
+      return sorted
+    } catch (error) {
+      // [PHASE 4 HOTFIX] Doctrine scoring failed - gracefully fall back to base ranking
+      console.log('[PHASE4-DOCTRINE-FALLBACK]', {
+        doctrineApplied: false,
+        fallbackReason: 'phase4_scoring_error',
+        errorMessage: String(error),
         sessionFocus,
         primaryGoal,
-        candidatesAffected: audit.candidatesAffected,
-        topCandidateChanged: audit.topCandidateChanged,
-        preDoctrineWinner: audit.preDoctrineTop3[0],
-        postDoctrineWinner: audit.postDoctrineTop3[0],
-        verdict: 'DOCTRINE_EXERCISE_SCORING_LIVE',
       })
+      return baseSorted
     }
-    
-    return sorted
   }
   
   // [weighted-truth] TASK A: Use canonical loadable equipment check

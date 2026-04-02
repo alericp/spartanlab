@@ -160,7 +160,7 @@ export interface ProgramBuilderInfluenceRecommendation {
   sessionStructureBias: string // 'full_body' | 'split' | 'skill_focused' etc.
   supportExerciseEmphasis: number // 0-1, how much to include support work
   progressionConservatism: number // 0-1, how conservative to be with progression
-  volum eScaling: number // 0.8-1.2, multiply recommended volume
+  volumeScaling: number // 0.8-1.2, multiply recommended volume
   recoveryEmphasis: number // 0-1, how much recovery/deload to include
   explanation: string
 }

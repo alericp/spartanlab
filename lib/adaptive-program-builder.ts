@@ -856,6 +856,10 @@ export interface AdaptiveProgram {
   // [SESSION-STYLE-TRUTH] Session style preference - elevated from snapshot for durable access
   // User's preference for longer_complete vs shorter_focused sessions. Affects session architecture.
   sessionStylePreference?: string | null
+  // [METHOD-TRUTH-CONTRACT] Training method preferences - elevated from snapshot for durable access
+  // CRITICAL: User's selected training styles (supersets, circuits, density_blocks, straight_sets).
+  // These materially affect session structure and must survive save/read/rebuild/restart.
+  trainingMethodPreferences?: string[]
   constraintInsight: {
     hasInsight: boolean
     label: string

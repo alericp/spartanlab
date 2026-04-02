@@ -423,9 +423,15 @@ export async function executeAuthoritativeGeneration(
     // This ensures user's session style preference survives save/read/rebuild/restart
     program.sessionStylePreference = canonicalProfileTyped.sessionStylePreference || null
     
+    // [METHOD-TRUTH-CONTRACT] Elevate trainingMethodPreferences to first-class program field
+    // This ensures user's training style preferences (supersets, circuits, density, straight_sets)
+    // survive save/read/rebuild/restart and are accessible without digging into snapshot
+    program.trainingMethodPreferences = canonicalProfileTyped.trainingMethodPreferences || ['straight_sets']
+    
     console.log('[authoritative-generation-truth-snapshot-attached]', {
       generationIntent: request.generationIntent,
       trainingMethodPreferences: program.generationTruthSnapshot.trainingMethodPreferences,
+      trainingMethodPreferencesElevated: program.trainingMethodPreferences, // [METHOD-TRUTH-CONTRACT] Verify elevation
       jointCautionsCount: program.generationTruthSnapshot.jointCautions.length,
       jointCautionsElevated: program.jointCautions.length, // [AI-TRUTH-PERSISTENCE] Verify elevation
       sessionStylePreferenceElevated: program.sessionStylePreference, // [SESSION-STYLE-TRUTH] Verify elevation

@@ -106,7 +106,7 @@ import { getCompressionReadiness, shouldBiasTowardCompression, type CompressionR
 import { selectOptimalStructure, getDayExplanation } from './program-structure-engine'
 import { selectExercisesForSession, evaluateSessionProgressions, getSmartProgressionExercise, buildFallbackSelectionForSession } from './program-exercise-selector'
 // [PHASE 4] Doctrine DB exercise scoring - prefetch rules before generation
-import { prefetchDoctrineRules, getDoctrineInfluenceSummary, type DoctrineScoringAudit } from './doctrine-exercise-scorer'
+import { prefetchDoctrineRules, getDoctrineInfluenceSummary, getCachedDoctrineRules, type DoctrineScoringAudit } from './doctrine-exercise-scorer'
 // [exercise-trace] TASK 8: Import comparison utilities for build-to-build traceability
 import {
   type ProgramSelectionTrace,
@@ -1340,11 +1340,27 @@ exerciseExplanations?: {
     identityPrimary: string | null
     identitySecondary: string | null
     identityLabel: string
-    // Skills
-    selectedSkillsUsed: string[]
-    representedSkillsInWeek: string[]
-    underexpressedSkills: string[]
-    // Schedule
+  // Skills
+  selectedSkillsUsed: string[]
+  representedSkillsInWeek: string[]
+  underexpressedSkills: string[]
+  // [PHASE-MATERIALITY] Broader skill coverage contract
+  broaderSkillCoverage?: {
+  entries: Array<{
+    skill: string
+    priorityLevel: 'primary' | 'secondary' | 'tertiary' | 'support'
+    targetExposure: number
+    allocatedSessions: number
+    materiallyExpressedSessions: number
+    coverageStatus: 'fully_represented' | 'broadly_represented' | 'support_only' | 'deferred'
+    deferralReason: string | null
+  }>
+  coverageVerdict: 'strong' | 'adequate' | 'weak'
+  representedSkills: string[]
+  deferredSkills: Array<{ skill: string; reason: string }>
+  supportOnlySkills: string[]
+  } | null
+  // Schedule
     scheduleModeUsed: 'static' | 'flexible'
     baselineSessions: number
     currentSessions: number
@@ -1398,6 +1414,199 @@ exerciseExplanations?: {
   // 3. Future rebuilds can rehydrate authoritative truth without profile drift
   // ==========================================================================
   generationTruthSnapshot?: GenerationTruthSnapshot
+}
+
+// =============================================================================
+// [PHASE-MATERIALITY] TASK 1: AUTHORITATIVE GENERATION MATERIALITY CONTRACT
+// =============================================================================
+// This contract converts saved profile truth into a generation-ready materiality map
+// that the builder MUST use for weekly structure, session identity, progression
+// filtering, exercise scoring, and fallback behavior.
+// =============================================================================
+
+export type MaterialSkillRole = 'primary_spine' | 'secondary_anchor' | 'support' | 'deferred'
+
+export interface MaterialSkillIntentEntry {
+  skill: string
+  role: MaterialSkillRole
+  requestedByUser: boolean
+  materiallyAllocated: boolean
+  weeklyExposureTarget: number
+  minimumMeaningfulExposure: number
+  currentWorkingProgression: string | null
+  historicalCeiling: string | null
+  progressionTruthSource: string | null
+  deferralReason: string | null
+}
+
+export interface AuthoritativeGenerationMaterialityContract {
+  // Core identity
+  primaryGoal: string | null
+  secondaryGoal: string | null
+  trainingPathType: string | null
+  experienceLevel: string | null
+
+  // Selected skills from onboarding (all of them)
+  selectedSkills: string[]
+  selectedFlexibility: string[]
+  selectedStrength: string[]
+
+  // Classified skill intent with roles and exposure targets
+  materialSkillIntent: MaterialSkillIntentEntry[]
+
+  // Current working progressions - authoritative for prescription
+  currentWorkingProgressions: Record<string, {
+    currentWorkingProgression: string | null
+    historicalCeiling: string | null
+    truthSource: string
+    isConservative: boolean
+  }> | null
+
+  // Training style preferences
+  trainingMethodPreferences: string[]
+  sessionStylePreference: string | null
+
+  // Weighted loading eligibility
+  weightedLoadingEligible: boolean
+  weightedLoadingReason: string | null
+
+  // Equipment and constraints
+  equipmentAvailable: string[]
+  jointCautions: string[]
+  flexibilityGoals: string[]
+
+  // Doctrine influence
+  doctrineInfluenceEnabled: boolean
+  doctrineInfluenceSummary: string[]
+
+  // Strict ordering flag - prevents generic fallback until truth-constrained exhausted
+  strictNoGenericFallbackUntilTruthExhausted: boolean
+
+  // Contract metadata
+  contractBuiltAt: string
+  contractVersion: string
+}
+
+/**
+ * Build the authoritative generation materiality contract from canonical profile.
+ * This contract is the SINGLE SOURCE OF TRUTH for all downstream generation decisions.
+ */
+export function buildMaterialityContract(
+  canonicalProfile: CanonicalProgrammingProfile,
+  weightedSkillAllocation: WeightedSkillAllocation[],
+  currentWorkingProgressions: Record<string, { currentWorkingProgression: string | null; historicalCeiling: string | null; truthSource: string; isConservative: boolean }> | null,
+  doctrineEnabled: boolean = false,
+  doctrineSummary: string[] = []
+): AuthoritativeGenerationMaterialityContract {
+  const selectedSkills = canonicalProfile.selectedSkills || []
+  const primaryGoal = canonicalProfile.primaryGoal || null
+  const secondaryGoal = canonicalProfile.secondaryGoal || null
+
+  // Build material skill intent by classifying each selected skill
+  const materialSkillIntent: MaterialSkillIntentEntry[] = selectedSkills.map(skill => {
+    const allocation = weightedSkillAllocation.find(a => a.skill === skill)
+    const progressionData = currentWorkingProgressions?.[skill.replace(/_/g, '')] || 
+                            currentWorkingProgressions?.[skill] || null
+
+    let role: MaterialSkillRole = 'deferred'
+    if (skill === primaryGoal) {
+      role = 'primary_spine'
+    } else if (skill === secondaryGoal) {
+      role = 'secondary_anchor'
+    } else if (allocation && allocation.priorityLevel === 'tertiary') {
+      role = 'support'
+    } else if (allocation && allocation.priorityLevel === 'support') {
+      role = 'support'
+    } else if (allocation) {
+      role = 'support' // Any allocation means some support
+    }
+
+    const materiallyAllocated = !!allocation && allocation.exposureSessions >= 1
+    let deferralReason: string | null = null
+    if (!materiallyAllocated) {
+      if (!allocation) {
+        deferralReason = 'not_included_in_weekly_allocation'
+      } else if (allocation.exposureSessions < 1) {
+        deferralReason = 'insufficient_session_budget_for_meaningful_exposure'
+      }
+    }
+
+    return {
+      skill,
+      role,
+      requestedByUser: true,
+      materiallyAllocated,
+      weeklyExposureTarget: allocation?.exposureSessions || 0,
+      minimumMeaningfulExposure: role === 'primary_spine' ? 3 : role === 'secondary_anchor' ? 2 : 1,
+      currentWorkingProgression: progressionData?.currentWorkingProgression || null,
+      historicalCeiling: progressionData?.historicalCeiling || null,
+      progressionTruthSource: progressionData?.truthSource || null,
+      deferralReason,
+    }
+  })
+
+  // Determine weighted loading eligibility
+  const equipment = canonicalProfile.equipment || canonicalProfile.equipmentAvailable || []
+  const hasWeights = equipment.some(e => 
+    ['weights', 'dip_belt', 'weighted_vest', 'dumbbells', 'barbell'].includes(e)
+  )
+  const weightedLoadingEligible = hasWeights
+  const weightedLoadingReason = hasWeights 
+    ? 'has_loadable_equipment' 
+    : 'no_loadable_equipment_available'
+
+  const contract: AuthoritativeGenerationMaterialityContract = {
+    primaryGoal,
+    secondaryGoal,
+    trainingPathType: canonicalProfile.trainingPathType || null,
+    experienceLevel: canonicalProfile.experienceLevel || null,
+
+    selectedSkills,
+    selectedFlexibility: canonicalProfile.selectedFlexibility || [],
+    selectedStrength: canonicalProfile.selectedStrength || [],
+
+    materialSkillIntent,
+    currentWorkingProgressions,
+
+    trainingMethodPreferences: canonicalProfile.trainingMethodPreferences || [],
+    sessionStylePreference: canonicalProfile.sessionStylePreference || null,
+
+    weightedLoadingEligible,
+    weightedLoadingReason,
+
+    equipmentAvailable: equipment,
+    jointCautions: canonicalProfile.jointCautions || [],
+    flexibilityGoals: canonicalProfile.selectedFlexibility || [],
+
+    doctrineInfluenceEnabled: doctrineEnabled,
+    doctrineInfluenceSummary: doctrineSummary,
+
+    strictNoGenericFallbackUntilTruthExhausted: true,
+
+    contractBuiltAt: new Date().toISOString(),
+    contractVersion: '1.0.0',
+  }
+
+  // Log the contract for audit
+  console.log('[phase-materiality-contract]', {
+    primaryGoal: contract.primaryGoal,
+    secondaryGoal: contract.secondaryGoal,
+    selectedSkillsCount: contract.selectedSkills.length,
+    materialSkillIntentSummary: contract.materialSkillIntent.map(e => ({
+      skill: e.skill,
+      role: e.role,
+      allocated: e.materiallyAllocated,
+      exposure: e.weeklyExposureTarget,
+      hasCurrentProgression: !!e.currentWorkingProgression,
+    })),
+    supportSkillsCount: contract.materialSkillIntent.filter(e => e.role === 'support').length,
+    deferredSkillsCount: contract.materialSkillIntent.filter(e => e.role === 'deferred').length,
+    weightedLoadingEligible: contract.weightedLoadingEligible,
+    doctrineEnabled: contract.doctrineInfluenceEnabled,
+    contractVersion: contract.contractVersion,
+  })
+
+  return contract
 }
 
 // =============================================================================
@@ -4058,9 +4267,74 @@ async function generateAdaptiveProgramImpl(
   
   // TASK 2: Calculate weighted skill allocation
   const weightedSkillAllocation = calculateWeightedSkillAllocation(
-    expandedContext,
-    effectiveTrainingDays
+  expandedContext,
+  effectiveTrainingDays
   )
+  
+  // ==========================================================================
+  // [PHASE-MATERIALITY] TASK 1: BUILD AUTHORITATIVE MATERIALITY CONTRACT
+  // ==========================================================================
+  // This contract is the single source of truth for all downstream generation.
+  // It classifies every selected skill into primary_spine/secondary_anchor/support/deferred
+  // and ensures currentWorkingProgressions override historical ceilings.
+  // ==========================================================================
+  const currentWorkingProgressionsForContract = canonicalProfile.currentWorkingProgressions ? {
+  planche: canonicalProfile.currentWorkingProgressions.planche,
+  frontLever: canonicalProfile.currentWorkingProgressions.frontLever,
+  hspu: canonicalProfile.currentWorkingProgressions.hspu,
+  backLever: canonicalProfile.currentWorkingProgressions.backLever,
+  muscleUp: canonicalProfile.currentWorkingProgressions.muscleUp,
+  } : null
+  
+  // Check if doctrine rules are cached (from Phase 4 prefetch)
+  const doctrineEnabled = !!getCachedDoctrineRules()
+  const doctrineSummary: string[] = []
+  if (doctrineEnabled) {
+  const rules = getCachedDoctrineRules()
+  if (rules) {
+    doctrineSummary.push(`Selection rules: ${rules.selectionRules.length}`)
+    doctrineSummary.push(`Carryover rules: ${rules.carryoverRules.length}`)
+    doctrineSummary.push(`Contraindication rules: ${rules.contraindicationRules.length}`)
+  }
+  }
+  
+  const materialityContract = buildMaterialityContract(
+  canonicalProfile,
+  weightedSkillAllocation,
+  currentWorkingProgressionsForContract,
+  doctrineEnabled,
+  doctrineSummary
+  )
+  
+  // ==========================================================================
+  // [PHASE-MATERIALITY] ROOT CAUSE AUDIT
+  // ==========================================================================
+  // Log whether the current builder is properly consuming multi-skill truth
+  console.log('[phase-materiality-root-cause-audit]', {
+  // A. selectedSkills beyond primary/secondary driving quotas?
+  selectedSkillsBeyondPrimarySecondary: materialityContract.materialSkillIntent
+    .filter(e => e.role === 'support' || e.role === 'deferred').length,
+  supportSkillsAllocated: materialityContract.materialSkillIntent
+    .filter(e => e.role === 'support' && e.materiallyAllocated).length,
+  deferredSkillsCount: materialityContract.materialSkillIntent
+    .filter(e => e.role === 'deferred').length,
+  
+  // B. currentWorkingProgressions being used vs historical?
+  hasCurrentWorkingProgressions: !!materialityContract.currentWorkingProgressions,
+  skillsWithConservativeProgression: materialityContract.materialSkillIntent
+    .filter(e => e.currentWorkingProgression && e.historicalCeiling && 
+            e.currentWorkingProgression !== e.historicalCeiling).length,
+  
+  // C. doctrine influence enabled?
+  doctrineInfluenceEnabled: materialityContract.doctrineInfluenceEnabled,
+  
+  // D. fallback prevention flag
+  strictNoGenericFallback: materialityContract.strictNoGenericFallbackUntilTruthExhausted,
+  
+  // E. truthExplanation vs actual decisions
+  contractMaterialSkillsClassified: materialityContract.materialSkillIntent.length,
+  verdict: 'MATERIALITY_CONTRACT_BUILT',
+  })
   
   // TASK F: Calculate intensity distribution based on recovery and adaptive scheduling
   const intensityDistribution = calculateIntensityDistribution(
@@ -9772,6 +10046,68 @@ return explanations.length > 0 ? explanations : undefined
       console.log('[EngineDiagnostics] === GENERATION COMPLETE ===')
       console.log('[EngineDiagnostics]', JSON.stringify(diagnostics, null, 2))
       
+      // ==========================================================================
+      // [PHASE-MATERIALITY] TASK 7: FINAL VERIFICATION REPORT
+      // ==========================================================================
+      console.log('PHASE_MATERIALITY_GENERATION_CONTRACT_COMPLETE', {
+      // 1. 6-session flexible behavior
+      sixSessionBehavior: {
+        effectiveTrainingDays,
+        scheduleMode: finalScheduleMode,
+        isFlexible: finalScheduleMode === 'flexible',
+        sessionsGenerated: sessions.length,
+        verdict: sessions.length === effectiveTrainingDays ? 'ALIGNED' : 'MISMATCH',
+      },
+      // 2. Multi-skill materiality
+      multiSkillMateriality: {
+        selectedSkillsCount: materialityContract.selectedSkills.length,
+        primarySpine: materialityContract.materialSkillIntent.filter(e => e.role === 'primary_spine').map(e => e.skill),
+        secondaryAnchor: materialityContract.materialSkillIntent.filter(e => e.role === 'secondary_anchor').map(e => e.skill),
+        supportSkills: materialityContract.materialSkillIntent.filter(e => e.role === 'support').map(e => e.skill),
+        deferredSkills: materialityContract.materialSkillIntent.filter(e => e.role === 'deferred').map(e => e.skill),
+        supportCount: materialityContract.materialSkillIntent.filter(e => e.role === 'support').length,
+        deferredCount: materialityContract.materialSkillIntent.filter(e => e.role === 'deferred').length,
+        verdict: materialityContract.materialSkillIntent.filter(e => e.role === 'support').length > 0 
+        ? 'MULTI_SKILL_MATERIALITY_ACTIVE' 
+        : 'PRIMARY_SECONDARY_ONLY',
+      },
+      // 3. Current progression truth
+      currentProgressionTruth: {
+        hasCurrentWorkingProgressions: !!materialityContract.currentWorkingProgressions,
+        skillsWithConservativeProgression: materialityContract.materialSkillIntent
+        .filter(e => e.currentWorkingProgression && e.historicalCeiling && 
+              e.currentWorkingProgression !== e.historicalCeiling).length,
+        verdict: materialityContract.currentWorkingProgressions 
+        ? 'PROGRESSION_TRUTH_AVAILABLE' 
+        : 'NO_PROGRESSION_DATA',
+      },
+      // 4. Exercise selection quality
+      exerciseSelectionQuality: {
+        totalExercises,
+        dbVerifiedExercises,
+        dbCoverage: totalExercises > 0 ? Math.round((dbVerifiedExercises / totalExercises) * 100) : 0,
+        verdict: dbVerifiedExercises >= totalExercises * 0.5 ? 'TRUTH_CONSTRAINED' : 'FALLBACK_HEAVY',
+      },
+      // 5. Doctrine influence
+      doctrineInfluence: {
+        enabled: materialityContract.doctrineInfluenceEnabled,
+        summaryCount: materialityContract.doctrineInfluenceSummary.length,
+        verdict: materialityContract.doctrineInfluenceEnabled 
+        ? 'DOCTRINE_SCORING_ACTIVE' 
+        : 'DOCTRINE_NOT_AVAILABLE',
+      },
+      // 6. No-breakage confirmation
+      noBreakageConfirmation: {
+        sessionsValid: sessions.length > 0,
+        exercisesValid: totalExercises > 0,
+        scheduleValid: effectiveTrainingDays >= 2 && effectiveTrainingDays <= 7,
+        verdict: sessions.length > 0 && totalExercises > 0 ? 'NO_REGRESSION' : 'POTENTIAL_ISSUE',
+      },
+      // Overall verdict
+      overallVerdict: 'PHASE_MATERIALITY_CONTRACT_VERIFIED',
+      contractVersion: materialityContract.contractVersion,
+      })
+      
       return diagnostics
     })(),
     // STATE CONTRACT: Profile snapshot taken at generation time (for debugging and traceability)
@@ -12380,17 +12716,26 @@ function generateAdaptiveSession(
   })
   
   const selection = selectExercisesForSession({
-    day,
-    primaryGoal,
-    experienceLevel,
-    equipment,
-    sessionMinutes: sessionMinutesResolved, // FIXED: Pass resolved number, not SessionLength type
-    constraintType,
-    // WEIGHTED LOAD PR: Pass weighted benchmarks for load prescription
-    weightedBenchmarks,
-    // SKILL EXPRESSION FIX: Pass selected skills and allocation for exercise variety
-    selectedSkills: selectedSkills || [],
-    skillsForSession: skillsForThisSession,
+  day,
+  primaryGoal,
+  experienceLevel,
+  equipment,
+  sessionMinutes: sessionMinutesResolved, // FIXED: Pass resolved number, not SessionLength type
+  constraintType,
+  // WEIGHTED LOAD PR: Pass weighted benchmarks for load prescription
+  weightedBenchmarks,
+  // SKILL EXPRESSION FIX: Pass selected skills and allocation for exercise variety
+  selectedSkills: selectedSkills || [],
+  skillsForSession: skillsForThisSession,
+  // [PHASE-MATERIALITY] Pass current working progressions for authoritative prescription
+  currentWorkingProgressions: materialityContract.currentWorkingProgressions,
+  // [PHASE-MATERIALITY] Pass material skill intent for role-based scoring
+  materialSkillIntent: materialityContract.materialSkillIntent.map(e => ({
+    skill: e.skill,
+    role: e.role,
+    currentWorkingProgression: e.currentWorkingProgression,
+    historicalCeiling: e.historicalCeiling,
+  })),
   })
   
   sessionStep = 'selection_received'

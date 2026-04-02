@@ -891,6 +891,34 @@ export interface AdaptiveProgram {
     // Athlete level (determines overall difficulty scaling)
     experienceLevel?: string | null
   }
+  // [CURRENT-PROGRESSION-TRUTH-CONTRACT] Current working progressions vs historical ceiling
+  // This is the AUTHORITATIVE source for exercise selection and display - separates current from historical
+  currentWorkingProgressions?: {
+    planche: {
+      currentWorkingProgression: string | null
+      historicalCeiling: string | null
+      truthSource: string
+      truthNote: string | null
+      isConservative: boolean
+    }
+    frontLever: {
+      currentWorkingProgression: string | null
+      historicalCeiling: string | null
+      truthSource: string
+      truthNote: string | null
+      isConservative: boolean
+    }
+    hspu: {
+      currentWorkingProgression: string | null
+      historicalCeiling: string | null
+      truthSource: string
+      truthNote: string | null
+      isConservative: boolean
+    }
+    resolvedAt: string
+    anyConservativeStart: boolean
+    anyHistoricalCeiling: boolean
+  }
   constraintInsight: {
     hasInsight: boolean
     label: string

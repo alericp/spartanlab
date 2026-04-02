@@ -25,6 +25,7 @@
 import { generateAdaptiveProgram, type AdaptiveProgram, type AdaptiveProgramInputs } from '@/lib/adaptive-program-builder'
 import { attachTruthExplanation, extractProgramTruth, logMaterialInputPresence } from '@/lib/program-truth-extractor'
 import type { CanonicalProgrammingProfile } from '@/lib/canonical-profile-service'
+import { calibrateAthleteProfile, resolveCurrentWorkingProgressions, type CurrentWorkingProgressionsContract } from '@/lib/athlete-calibration'
 
 // ==========================================================================
 // TYPES: Generation Intent and Request Contract
@@ -141,11 +142,20 @@ function createStageTracker(startTime: number) {
 function buildCanonicalProfileOverride(
   canonicalProfile: CanonicalProgrammingProfile,
   builderInputs: Partial<AdaptiveProgramInputs>,
-  generationIntent: GenerationIntent
+  generationIntent: GenerationIntent,
+  resolvedProgressions?: {
+    planche: { currentWorkingProgression: string | null }
+    frontLever: { currentWorkingProgression: string | null }
+    hspu: { currentWorkingProgression: string | null }
+  } | null
 ): Record<string, unknown> {
   /**
    * This is the SINGLE place where canonical profile override is constructed.
    * All flows use this exact same logic.
+   * 
+   * [CURRENT-PROGRESSION-TRUTH-CONTRACT] If resolvedProgressions is provided,
+   * use the resolved current working progressions instead of raw canonical ones.
+   * This ensures the builder uses conservative/reacquisition-safe progressions.
    */
   
   const override: Record<string, unknown> = {
@@ -193,9 +203,13 @@ function buildCanonicalProfileOverride(
     trainingMethodPreferences: canonicalProfile.trainingMethodPreferences,
     sessionStylePreference: canonicalProfile.sessionStylePreference,
     
-    // Progression data
-    plancheProgression: canonicalProfile.plancheProgression,
-    frontLeverProgression: canonicalProfile.frontLeverProgression,
+    // [CURRENT-PROGRESSION-TRUTH-CONTRACT] Progression data
+    // Use resolved progressions if available, otherwise fall back to canonical
+    // This ensures the builder uses conservative/reacquisition-safe progressions
+    plancheProgression: resolvedProgressions?.planche?.currentWorkingProgression ?? canonicalProfile.plancheProgression,
+    frontLeverProgression: resolvedProgressions?.frontLever?.currentWorkingProgression ?? canonicalProfile.frontLeverProgression,
+    hspuProgression: resolvedProgressions?.hspu?.currentWorkingProgression ?? canonicalProfile.hspuProgression,
+    // These don't have calibration-based resolution yet, use canonical directly
     backLeverProgression: canonicalProfile.backLeverProgression,
     muscleUpProgression: canonicalProfile.muscleUpProgression,
     handstandProgression: canonicalProfile.handstandProgression,
@@ -245,6 +259,28 @@ export async function executeAuthoritativeGeneration(
   
   try {
     // ==========================================================================
+    // [CURRENT-PROGRESSION-TRUTH-CONTRACT] STAGE: Resolve current working progressions
+    // This must happen BEFORE building the canonical override
+    // ==========================================================================
+    markStage('progression_resolution_start')
+    
+    const athleteCalibration = calibrateAthleteProfile(request.canonicalProfile)
+    const resolvedProgressions = resolveCurrentWorkingProgressions(request.canonicalProfile, athleteCalibration)
+    
+    console.log('[authoritative-generation-progression-resolution]', {
+      generationIntent: request.generationIntent,
+      plancheCanonical: request.canonicalProfile.plancheProgression,
+      plancheResolved: resolvedProgressions.planche.currentWorkingProgression,
+      plancheSource: resolvedProgressions.planche.truthSource,
+      frontLeverCanonical: request.canonicalProfile.frontLeverProgression,
+      frontLeverResolved: resolvedProgressions.frontLever.currentWorkingProgression,
+      frontLeverSource: resolvedProgressions.frontLever.truthSource,
+      anyConservativeStart: resolvedProgressions.anyConservativeStart,
+    })
+    
+    markStage('progression_resolution_done')
+    
+    // ==========================================================================
     // STAGE: Build canonical profile override
     // ==========================================================================
     markStage('canonical_override_construction')
@@ -252,7 +288,8 @@ export async function executeAuthoritativeGeneration(
     const canonicalProfileOverride = buildCanonicalProfileOverride(
       request.canonicalProfile,
       request.builderInputs,
-      request.generationIntent
+      request.generationIntent,
+      resolvedProgressions // Pass resolved progressions to use in override
     )
     
     markStage('canonical_override_constructed')
@@ -433,13 +470,20 @@ export async function executeAuthoritativeGeneration(
     // survive save/read/rebuild/restart and are accessible without digging into snapshot
     program.selectedFlexibility = canonicalProfileTyped.selectedFlexibility || []
     
+    // [CURRENT-PROGRESSION-TRUTH-CONTRACT] Use the resolvedProgressions from earlier in the flow
+    // (resolved before building canonicalProfileOverride, so builder gets conservative progressions)
+    // Re-reference using the same variable name for clarity
+    const currentWorkingProgressions = resolvedProgressions
+    
     // [SKILL-STRENGTH-TRUTH-CONTRACT] Elevate skill and strength profile to first-class program field
-    // This ensures user's current abilities shape exercise selection and loading
-    // survive save/read/rebuild/restart and are accessible without digging into snapshot
+    // NOW USES CURRENT WORKING PROGRESSIONS instead of raw canonical progressions
+    // This ensures displayed progressions match actual current ability, not historical ceiling
     program.skillStrengthProfile = {
-      plancheProgression: canonicalProfileTyped.plancheProgression || null,
-      frontLeverProgression: canonicalProfileTyped.frontLeverProgression || null,
-      hspuCapability: canonicalProfileTyped.hspuProgression || canonicalProfileTyped.hspu || null,
+      // Use resolved current working progressions (respects conservative/reacquisition)
+      plancheProgression: currentWorkingProgressions.planche.currentWorkingProgression || null,
+      frontLeverProgression: currentWorkingProgressions.frontLever.currentWorkingProgression || null,
+      hspuCapability: currentWorkingProgressions.hspu.currentWorkingProgression || null,
+      // Weighted strength benchmarks unchanged
       weightedPullUp: canonicalProfileTyped.weightedPullUp || null,
       weightedDip: canonicalProfileTyped.weightedDip || null,
       pullUpCapacity: canonicalProfileTyped.pullUpCapacity || canonicalProfileTyped.pullUps || null,
@@ -447,6 +491,48 @@ export async function executeAuthoritativeGeneration(
       wallHspuCapacity: canonicalProfileTyped.wallHspuCapacity || canonicalProfileTyped.wallHSPU || null,
       experienceLevel: canonicalProfileTyped.experienceLevel || 'intermediate',
     }
+    
+    // [CURRENT-PROGRESSION-TRUTH-CONTRACT] Persist full progression truth contract
+    program.currentWorkingProgressions = {
+      planche: {
+        currentWorkingProgression: currentWorkingProgressions.planche.currentWorkingProgression,
+        historicalCeiling: currentWorkingProgressions.planche.historicalCeiling,
+        truthSource: currentWorkingProgressions.planche.truthSource,
+        truthNote: currentWorkingProgressions.planche.truthNote,
+        isConservative: currentWorkingProgressions.planche.isConservative,
+      },
+      frontLever: {
+        currentWorkingProgression: currentWorkingProgressions.frontLever.currentWorkingProgression,
+        historicalCeiling: currentWorkingProgressions.frontLever.historicalCeiling,
+        truthSource: currentWorkingProgressions.frontLever.truthSource,
+        truthNote: currentWorkingProgressions.frontLever.truthNote,
+        isConservative: currentWorkingProgressions.frontLever.isConservative,
+      },
+      hspu: {
+        currentWorkingProgression: currentWorkingProgressions.hspu.currentWorkingProgression,
+        historicalCeiling: currentWorkingProgressions.hspu.historicalCeiling,
+        truthSource: currentWorkingProgressions.hspu.truthSource,
+        truthNote: currentWorkingProgressions.hspu.truthNote,
+        isConservative: currentWorkingProgressions.hspu.isConservative,
+      },
+      resolvedAt: currentWorkingProgressions.resolvedAt,
+      anyConservativeStart: currentWorkingProgressions.anyConservativeStart,
+      anyHistoricalCeiling: currentWorkingProgressions.anyHistoricalCeiling,
+    }
+    
+    console.log('[CURRENT_PROGRESSION_TRUTH_CONTRACT_FIXED]', {
+      plancheCanonical: canonicalProfileTyped.plancheProgression,
+      plancheCurrent: currentWorkingProgressions.planche.currentWorkingProgression,
+      plancheHistorical: currentWorkingProgressions.planche.historicalCeiling,
+      plancheSource: currentWorkingProgressions.planche.truthSource,
+      frontLeverCanonical: canonicalProfileTyped.frontLeverProgression,
+      frontLeverCurrent: currentWorkingProgressions.frontLever.currentWorkingProgression,
+      frontLeverHistorical: currentWorkingProgressions.frontLever.historicalCeiling,
+      frontLeverSource: currentWorkingProgressions.frontLever.truthSource,
+      anyConservativeStart: currentWorkingProgressions.anyConservativeStart,
+      anyHistoricalCeiling: currentWorkingProgressions.anyHistoricalCeiling,
+      verdict: 'CURRENT_PROGRESSION_TRUTH_CONTRACT_FIXED',
+    })
     
     console.log('[authoritative-generation-truth-snapshot-attached]', {
       generationIntent: request.generationIntent,

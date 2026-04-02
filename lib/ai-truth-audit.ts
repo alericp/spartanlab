@@ -657,6 +657,13 @@ export function buildProgramTruthExplanation(
       program.skillStrengthProfile?.weightedDip
     ),
     
+    // [CURRENT-PROGRESSION-TRUTH-CONTRACT] Include current working progressions contract
+    // This shows the user their true current ability vs historical ceiling
+    currentWorkingProgressions: program.currentWorkingProgressions || null,
+    progressionTruthNote: program.currentWorkingProgressions?.anyConservativeStart
+      ? 'Current progression is set conservatively based on training recency and skill state.'
+      : null,
+    
     // [PHASE 6] Output quality materiality - proves how well profile shapes actual sessions
     outputQualityReport: computeOutputQualityMateriality(
       program,

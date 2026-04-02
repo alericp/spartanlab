@@ -86,6 +86,33 @@ interface TruthExplanation {
   explanationQualityVerdict: string
   generatedAt?: string
   triggerSource?: string
+  // [CURRENT-PROGRESSION-TRUTH-CONTRACT] Current working progressions vs historical ceiling
+  currentWorkingProgressions?: {
+    planche: {
+      currentWorkingProgression: string | null
+      historicalCeiling: string | null
+      truthSource: string
+      truthNote: string | null
+      isConservative: boolean
+    }
+    frontLever: {
+      currentWorkingProgression: string | null
+      historicalCeiling: string | null
+      truthSource: string
+      truthNote: string | null
+      isConservative: boolean
+    }
+    hspu: {
+      currentWorkingProgression: string | null
+      historicalCeiling: string | null
+      truthSource: string
+      truthNote: string | null
+      isConservative: boolean
+    }
+    anyConservativeStart: boolean
+    anyHistoricalCeiling: boolean
+  } | null
+  progressionTruthNote?: string | null
 }
 
 interface ProgramTruthSummaryProps {
@@ -137,6 +164,9 @@ export function ProgramTruthSummary({ truthExplanation, className }: ProgramTrut
     // [SKILL-STRENGTH-TRUTH-CONTRACT] Skill and strength profile
     skillStrengthProfile,
     skillStrengthMateriallyApplied,
+    // [CURRENT-PROGRESSION-TRUTH-CONTRACT] Current working progressions
+    currentWorkingProgressions,
+    progressionTruthNote,
     // [PHASE 6] Output quality materiality
     outputQualityReport,
     // [PHASE 7] Visible difference verdict
@@ -305,16 +335,23 @@ export function ProgramTruthSummary({ truthExplanation, className }: ProgramTrut
     })
   }
   
-  // [SKILL-STRENGTH-TRUTH-CONTRACT] Add skill/strength profile key decision
+  // [CURRENT-PROGRESSION-TRUTH-CONTRACT] Add skill/strength profile key decision
+  // Now uses currentWorkingProgressions for accurate current ability display
   if (skillStrengthProfile && skillStrengthMateriallyApplied) {
     const strengthParts: string[] = []
+    const isConservative = currentWorkingProgressions?.anyConservativeStart ?? false
     
-    // Add skill progressions if present
+    // Add skill progressions if present (these now reflect CURRENT working level, not historical)
     if (skillStrengthProfile.plancheProgression) {
-      strengthParts.push(`Planche: ${skillStrengthProfile.plancheProgression.replace(/_/g, ' ')}`)
+      const plancheLabel = skillStrengthProfile.plancheProgression.replace(/_/g, ' ')
+      // Show conservative indicator if applicable
+      const conservativeIndicator = currentWorkingProgressions?.planche?.isConservative ? ' *' : ''
+      strengthParts.push(`Planche: ${plancheLabel}${conservativeIndicator}`)
     }
     if (skillStrengthProfile.frontLeverProgression) {
-      strengthParts.push(`FL: ${skillStrengthProfile.frontLeverProgression.replace(/_/g, ' ')}`)
+      const flLabel = skillStrengthProfile.frontLeverProgression.replace(/_/g, ' ')
+      const conservativeIndicator = currentWorkingProgressions?.frontLever?.isConservative ? ' *' : ''
+      strengthParts.push(`FL: ${flLabel}${conservativeIndicator}`)
     }
     
     // Add weighted strength if present
@@ -327,10 +364,19 @@ export function ProgramTruthSummary({ truthExplanation, className }: ProgramTrut
     
     if (strengthParts.length > 0) {
       keyDecisions.push({
-        label: 'Current Ability',
+        label: isConservative ? 'Current Ability *' : 'Current Ability',
         value: strengthParts.slice(0, 2).join(' | '),
         type: 'success',
       })
+      
+      // Add conservative start note if applicable
+      if (isConservative && progressionTruthNote) {
+        keyDecisions.push({
+          label: 'Note',
+          value: progressionTruthNote,
+          type: 'info',
+        })
+      }
     }
   }
   

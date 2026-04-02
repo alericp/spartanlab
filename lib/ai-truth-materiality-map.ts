@@ -241,9 +241,9 @@ export const TRUTH_MATERIALITY_MAP: FieldMaterialityRecord[] = [
     materiallyAffectsOutput: true,
     surfacedInUI: true, // [PHASE 2] Now surfaced in ProgramTruthSummary
     verdict: 'GREEN', // [METHOD-TRUTH-CONTRACT] Fully authoritative, durable, and materially generative
-    reason: 'Supersets/circuits/density affects session structure. Now elevated to first-class program field, applied via applySessionStylePreferences() and explained in ProgramTruthSummary.',
-    nearestFileOrFunction: 'authoritative-program-generation.ts: program.trainingMethodPreferences, adaptive-program-builder.ts: applySessionStylePreferences(), ai-truth-audit.ts: aggregateActualAppliedMethods()',
-    nextFixPriority: 'done', // [METHOD-TRUTH-CONTRACT] Completed
+    reason: '[PHASE 8] Supersets now materially applied to accessory exercises when selected. Up to 2 superset pairs per session on non-skill work. Explained in ProgramTruthSummary and applied via session assembly step D2.',
+    nearestFileOrFunction: 'adaptive-program-builder.ts: STEP D2 superset grouping, authoritative-program-generation.ts: program.trainingMethodPreferences, ai-truth-audit.ts: aggregateActualAppliedMethods()',
+    nextFixPriority: 'done', // [PHASE 8] Superset application now material
   },
   {
     fieldName: 'sessionStylePreference',

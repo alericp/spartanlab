@@ -340,10 +340,10 @@ export const TRUTH_MATERIALITY_MAP: FieldMaterialityRecord[] = [
     usedByGenerator: true,
     materiallyAffectsOutput: true,
     surfacedInUI: true, // [SKILL-STRENGTH-TRUTH-CONTRACT] Now shown in ProgramTruthSummary
-    verdict: 'GREEN', // [SKILL-STRENGTH-TRUTH-CONTRACT] Fully authoritative, durable, and surfaced
-    reason: 'Determines planche exercise variation. Now durably persisted in skillStrengthProfile and shown in UI.',
-    nearestFileOrFunction: 'authoritative-program-generation.ts: program.skillStrengthProfile, adaptive-program-builder.ts: resolveSkillProgression()',
-    nextFixPriority: 'done', // [SKILL-STRENGTH-TRUTH-CONTRACT] Completed
+    verdict: 'GREEN', // [PHASE 9] Current progression now outranks experience level for exercise selection
+    reason: '[PHASE 9] Current progression now limits exercise pool via filterByCurrentProgression(). Advanced user at tuck level will NOT get straddle exercises. Experience level only selects WITHIN current tier.',
+    nearestFileOrFunction: 'program-exercise-selector.ts: filterByCurrentProgression(), selectByLevel()',
+    nextFixPriority: 'done', // [PHASE 9] Current vs history fix completed
   },
   {
     fieldName: 'frontLeverProgression',
@@ -354,9 +354,9 @@ export const TRUTH_MATERIALITY_MAP: FieldMaterialityRecord[] = [
     usedByGenerator: true,
     materiallyAffectsOutput: true,
     surfacedInUI: true, // [SKILL-STRENGTH-TRUTH-CONTRACT] Now shown in ProgramTruthSummary
-    verdict: 'GREEN', // [SKILL-STRENGTH-TRUTH-CONTRACT] Fully authoritative, durable, and surfaced
-    reason: 'Determines front lever exercise variation. Now durably persisted in skillStrengthProfile and shown in UI.',
-    nearestFileOrFunction: 'authoritative-program-generation.ts: program.skillStrengthProfile, adaptive-program-builder.ts: resolveSkillProgression()',
+    verdict: 'GREEN', // [PHASE 9] Current progression now outranks experience level
+    reason: '[PHASE 9] Current progression now limits exercise pool via filterByCurrentProgression(). Experience level only selects WITHIN current tier.',
+    nearestFileOrFunction: 'program-exercise-selector.ts: filterByCurrentProgression(), selectByLevel()',
     nextFixPriority: 'done', // [SKILL-STRENGTH-TRUTH-CONTRACT] Completed
   },
   

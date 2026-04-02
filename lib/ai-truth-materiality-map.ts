@@ -87,11 +87,11 @@ export const TRUTH_MATERIALITY_MAP: FieldMaterialityRecord[] = [
     restoredOnRead: true,
     usedByGenerator: true,
     materiallyAffectsOutput: true,
-    surfacedInUI: false,
-    verdict: 'YELLOW',
-    reason: 'Used in generation but NOT shown in ProgramTruthSummary. User cannot see secondary goal impact.',
+    surfacedInUI: true, // [PHASE 7] Now shown as "Secondary Focus" in ProgramTruthSummary
+    verdict: 'GREEN', // [PHASE 7] Fully surfaced in key decisions
+    reason: 'Used in generation and shown as "Secondary Focus" key decision in ProgramTruthSummary.',
     nearestFileOrFunction: 'ProgramTruthSummary.tsx: identitySecondary',
-    nextFixPriority: 'medium',
+    nextFixPriority: 'done', // [PHASE 7] Completed
   },
   {
     fieldName: 'selectedSkills',
@@ -129,11 +129,11 @@ export const TRUTH_MATERIALITY_MAP: FieldMaterialityRecord[] = [
     restoredOnRead: true,
     usedByGenerator: true,
     materiallyAffectsOutput: true,
-    surfacedInUI: false,
-    verdict: 'YELLOW',
-    reason: 'skill_progression vs strength_endurance vs hybrid affects structure but hidden.',
-    nearestFileOrFunction: 'adaptive-program-builder.ts: trainingPathType handling',
-    nextFixPriority: 'low',
+    surfacedInUI: true, // [PHASE 7] Now shown as "Training Path" in ProgramTruthSummary
+    verdict: 'GREEN', // [PHASE 7] Fully surfaced in key decisions
+    reason: 'skill_progression vs strength_endurance vs hybrid affects structure. Now shown as "Training Path" key decision.',
+    nearestFileOrFunction: 'ProgramTruthSummary.tsx: trainingPathUsed',
+    nextFixPriority: 'done', // [PHASE 7] Completed
   },
   
   // ==========================================================================
@@ -207,11 +207,11 @@ export const TRUTH_MATERIALITY_MAP: FieldMaterialityRecord[] = [
     restoredOnRead: true,
     usedByGenerator: true,
     materiallyAffectsOutput: true,
-    surfacedInUI: false,
-    verdict: 'YELLOW',
-    reason: 'Affects volume, progression rate, complexity. NOT displayed in truth summary.',
-    nearestFileOrFunction: 'adaptive-program-builder.ts: experienceLevelAdjustment()',
-    nextFixPriority: 'medium',
+    surfacedInUI: true, // [PHASE 7] Already shown as "Experience Level" key decision
+    verdict: 'GREEN', // [PHASE 7] Fully surfaced - was already displayed
+    reason: 'Affects volume, progression rate, complexity. Shown as "Experience Level" key decision.',
+    nearestFileOrFunction: 'ProgramTruthSummary.tsx: experienceLevelUsed',
+    nextFixPriority: 'done', // [PHASE 7] Completed
   },
   {
     fieldName: 'equipment',

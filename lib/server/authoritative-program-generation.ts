@@ -415,10 +415,15 @@ export async function executeAuthoritativeGeneration(
       equipment: canonicalProfileTyped.equipment || canonicalProfileTyped.equipmentAvailable || [],
     }
     
+    // [AI-TRUTH-PERSISTENCE] Elevate jointCautions to first-class program field
+    // This ensures joint safety truth is durably accessible without digging into snapshot
+    program.jointCautions = canonicalProfileTyped.jointCautions || []
+    
     console.log('[authoritative-generation-truth-snapshot-attached]', {
       generationIntent: request.generationIntent,
       trainingMethodPreferences: program.generationTruthSnapshot.trainingMethodPreferences,
       jointCautionsCount: program.generationTruthSnapshot.jointCautions.length,
+      jointCautionsElevated: program.jointCautions.length, // [AI-TRUTH-PERSISTENCE] Verify elevation
       selectedFlexibilityCount: program.generationTruthSnapshot.selectedFlexibility.length,
       hasWeightedStrength: program.generationTruthSnapshot.weightedStrengthSnapshot.loadingEligible,
       verdict: 'GENERATION_TRUTH_SNAPSHOT_PERSISTED',

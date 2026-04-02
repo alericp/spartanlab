@@ -850,6 +850,9 @@ export interface AdaptiveProgram {
   goalCategories?: string[]
   trainingPathType?: string
   equipmentProfile: EquipmentProfile
+  // [AI-TRUTH-PERSISTENCE] Joint cautions - elevated from snapshot for durable access
+  // CRITICAL: Affects exercise filtering for safety. User needs to know exercises were adapted.
+  jointCautions?: string[]
   constraintInsight: {
     hasInsight: boolean
     label: string

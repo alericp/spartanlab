@@ -617,7 +617,9 @@ export function buildProgramTruthExplanation(
     methodPreferencesApplied: aggregateActualAppliedMethods(program),
     methodPreferencesMateriality: computeMethodMateriality(program, profile?.trainingMethodPreferences || []),
     
-    jointCautionsConsidered: profile?.jointCautions || [],
+    // [AI-TRUTH-PERSISTENCE] Prefer program.jointCautions (durable) over profile (ephemeral)
+    // This ensures saved programs retain their generation-time joint cautions
+    jointCautionsConsidered: program.jointCautions || program.generationTruthSnapshot?.jointCautions || profile?.jointCautions || [],
     weakPointAddressed: program.weakPointDetection?.primaryFocus || null,
     limiterAddressed: profile?.primaryLimitation || null,
     recoveryLevelUsed: program.recoveryLevel || profile?.recoveryQuality || null,

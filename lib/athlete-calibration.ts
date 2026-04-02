@@ -1393,3 +1393,325 @@ export function hasAnyTendonAdaptation(calibration: AthleteCalibration): boolean
     level === 'high'
   )
 }
+
+// =============================================================================
+// [CURRENT-PROGRESSION-TRUTH-CONTRACT] CURRENT WORKING PROGRESSIONS RESOLVER
+// =============================================================================
+// This resolver produces the AUTHORITATIVE current working progression for each
+// skill, separating it from historical ceiling. It respects conservative start
+// and reacquisition logic to ensure displayed/saved progressions match reality.
+
+export type ProgressionTruthSource = 
+  | 'current_direct'           // Current level verified, no adjustment needed
+  | 'conservative_reacquisition' // Historical ceiling exists, conservative current used
+  | 'assisted_current_override'  // Assisted work, downgraded to safe working level
+  | 'historical_fallback'       // Only historical data available
+  | 'unknown_fallback'          // No data, using safe default
+
+export interface SkillProgressionTruth {
+  currentWorkingProgression: string | null
+  historicalCeiling: string | null
+  truthSource: ProgressionTruthSource
+  truthNote: string | null
+  isConservative: boolean
+  isAssisted: boolean
+  hasHistoricalCeiling: boolean
+}
+
+export interface CurrentWorkingProgressionsContract {
+  planche: SkillProgressionTruth
+  frontLever: SkillProgressionTruth
+  hspu: SkillProgressionTruth
+  resolvedAt: string
+  anyConservativeStart: boolean
+  anyAssistedWork: boolean
+  anyHistoricalCeiling: boolean
+}
+
+// Progression tiers ordered from lowest to highest for comparison
+const PROGRESSION_TIER_ORDER: Record<string, number> = {
+  'none': 0,
+  'unknown': 0,
+  // Planche progressions
+  'planche_lean': 1,
+  'frog_stand': 2,
+  'tuck_planche': 3,
+  'tuck': 3,
+  'advanced_tuck': 4,
+  'advanced_tuck_planche': 4,
+  'straddle_planche': 5,
+  'straddle': 5,
+  'half_lay': 6,
+  'half_lay_planche': 6,
+  'full_planche': 7,
+  'full': 7,
+  // Front lever progressions
+  'tuck_front_lever': 3,
+  'advanced_tuck_front_lever': 4,
+  'straddle_front_lever': 5,
+  'half_lay_front_lever': 6,
+  'full_front_lever': 7,
+  // HSPU progressions
+  'pike_pushup': 1,
+  'elevated_pike': 2,
+  'wall_hspu': 3,
+  'eccentric_hspu': 4,
+  'full_hspu': 5,
+  'deficit_hspu': 6,
+}
+
+function getProgressionTier(progression: string | null | undefined): number {
+  if (!progression) return 0
+  return PROGRESSION_TIER_ORDER[progression.toLowerCase()] ?? 0
+}
+
+/**
+ * Get a conservative downgrade for a progression when reacquisition is needed.
+ * This returns a safer starting point for athletes returning from breaks.
+ */
+function getConservativeDowngrade(progression: string | null | undefined, skill: string): string | null {
+  if (!progression) return null
+  
+  const tier = getProgressionTier(progression)
+  if (tier <= 2) return progression // Already at foundation level
+  
+  // Downgrade by 1-2 tiers based on how advanced the progression is
+  const downgradeTiers = tier >= 5 ? 2 : 1
+  const targetTier = Math.max(1, tier - downgradeTiers)
+  
+  // Find the progression at target tier for this skill
+  if (skill === 'planche') {
+    if (targetTier <= 1) return 'planche_lean'
+    if (targetTier === 2) return 'frog_stand'
+    if (targetTier === 3) return 'tuck_planche'
+    if (targetTier === 4) return 'advanced_tuck_planche'
+    return 'straddle_planche'
+  }
+  
+  if (skill === 'front_lever' || skill === 'frontLever') {
+    if (targetTier <= 2) return 'tuck_front_lever'
+    if (targetTier === 3) return 'tuck_front_lever'
+    if (targetTier === 4) return 'advanced_tuck_front_lever'
+    return 'straddle_front_lever'
+  }
+  
+  if (skill === 'hspu') {
+    if (targetTier <= 1) return 'pike_pushup'
+    if (targetTier === 2) return 'elevated_pike'
+    if (targetTier === 3) return 'wall_hspu'
+    if (targetTier === 4) return 'eccentric_hspu'
+    return 'full_hspu'
+  }
+  
+  return progression
+}
+
+/**
+ * Resolve a single skill's current working progression from calibration.
+ */
+function resolveSkillProgression(
+  canonicalProgression: string | null | undefined,
+  calibrationEntry: SkillCalibrationEntry | null | undefined,
+  skillKey: string
+): SkillProgressionTruth {
+  // Case 1: No calibration entry - use canonical if available
+  if (!calibrationEntry) {
+    if (!canonicalProgression || canonicalProgression === 'unknown' || canonicalProgression === 'none') {
+      return {
+        currentWorkingProgression: null,
+        historicalCeiling: null,
+        truthSource: 'unknown_fallback',
+        truthNote: 'No skill data available',
+        isConservative: false,
+        isAssisted: false,
+        hasHistoricalCeiling: false,
+      }
+    }
+    
+    return {
+      currentWorkingProgression: canonicalProgression,
+      historicalCeiling: null,
+      truthSource: 'current_direct',
+      truthNote: 'Direct from profile (no calibration)',
+      isConservative: false,
+      isAssisted: false,
+      hasHistoricalCeiling: false,
+    }
+  }
+  
+  // Case 2: Have calibration entry - use its logic
+  const {
+    currentLevel,
+    isAssisted,
+    useConservativeStart,
+    hasHistoricalCeiling,
+    highestLevelEverReached,
+    trainingRecency,
+  } = calibrationEntry
+  
+  // Determine historical ceiling (use highest ever reached if different from current)
+  const historicalCeiling = hasHistoricalCeiling ? highestLevelEverReached : null
+  
+  // Case 2a: Assisted work - downgrade to reflect actual unassisted ability
+  if (isAssisted) {
+    const downgraded = getConservativeDowngrade(currentLevel, skillKey)
+    return {
+      currentWorkingProgression: downgraded,
+      historicalCeiling,
+      truthSource: 'assisted_current_override',
+      truthNote: `Assisted at ${currentLevel}, working at ${downgraded} unassisted equivalent`,
+      isConservative: true,
+      isAssisted: true,
+      hasHistoricalCeiling,
+    }
+  }
+  
+  // Case 2b: Conservative start needed (break, historical ceiling)
+  if (useConservativeStart && hasHistoricalCeiling) {
+    // User was stronger before but is coming back - be conservative
+    const downgraded = getConservativeDowngrade(currentLevel, skillKey)
+    const recencyNote = trainingRecency === 'extended_break' || trainingRecency === 'long_break'
+      ? ` (returning from ${trainingRecency.replace('_', ' ')})`
+      : ''
+    return {
+      currentWorkingProgression: downgraded,
+      historicalCeiling,
+      truthSource: 'conservative_reacquisition',
+      truthNote: `Was at ${highestLevelEverReached}, starting conservatively at ${downgraded}${recencyNote}`,
+      isConservative: true,
+      isAssisted: false,
+      hasHistoricalCeiling: true,
+    }
+  }
+  
+  // Case 2c: Conservative start due to recency alone
+  if (useConservativeStart && (trainingRecency === 'extended_break' || trainingRecency === 'long_break')) {
+    const downgraded = getConservativeDowngrade(currentLevel, skillKey)
+    return {
+      currentWorkingProgression: downgraded,
+      historicalCeiling,
+      truthSource: 'conservative_reacquisition',
+      truthNote: `Returning from ${trainingRecency.replace('_', ' ')}, starting at ${downgraded}`,
+      isConservative: true,
+      isAssisted: false,
+      hasHistoricalCeiling,
+    }
+  }
+  
+  // Case 2d: Current level is valid, no downgrade needed
+  if (currentLevel && currentLevel !== 'none' && currentLevel !== 'unknown') {
+    return {
+      currentWorkingProgression: currentLevel,
+      historicalCeiling,
+      truthSource: 'current_direct',
+      truthNote: hasHistoricalCeiling 
+        ? `Current ${currentLevel}, was at ${highestLevelEverReached}` 
+        : null,
+      isConservative: false,
+      isAssisted: false,
+      hasHistoricalCeiling,
+    }
+  }
+  
+  // Case 2e: Only historical data available
+  if (hasHistoricalCeiling && highestLevelEverReached) {
+    const downgraded = getConservativeDowngrade(highestLevelEverReached, skillKey)
+    return {
+      currentWorkingProgression: downgraded,
+      historicalCeiling: highestLevelEverReached,
+      truthSource: 'historical_fallback',
+      truthNote: `No current level, was at ${highestLevelEverReached}, starting at ${downgraded}`,
+      isConservative: true,
+      isAssisted: false,
+      hasHistoricalCeiling: true,
+    }
+  }
+  
+  // Fallback
+  return {
+    currentWorkingProgression: null,
+    historicalCeiling: null,
+    truthSource: 'unknown_fallback',
+    truthNote: 'Insufficient skill data',
+    isConservative: false,
+    isAssisted: false,
+    hasHistoricalCeiling: false,
+  }
+}
+
+/**
+ * [CURRENT-PROGRESSION-TRUTH-CONTRACT] Main resolver function.
+ * 
+ * Resolves the authoritative CURRENT WORKING PROGRESSIONS for all tracked skills,
+ * separating them from historical ceilings and applying conservative/reacquisition logic.
+ * 
+ * This is the SINGLE SOURCE OF TRUTH for:
+ * - Exercise selection difficulty filtering
+ * - Program display progression labels
+ * - "Why This Plan" progression explanations
+ * - skillStrengthProfile saved on program
+ */
+export function resolveCurrentWorkingProgressions(
+  canonicalProfile: {
+    plancheProgression?: string | null
+    frontLeverProgression?: string | null
+    hspuProgression?: string | null
+    hspu?: string | null
+  } | null | undefined,
+  calibration: AthleteCalibration | null | undefined
+): CurrentWorkingProgressionsContract {
+  const skillCalibration = calibration?.skillCalibration ?? null
+  
+  const planche = resolveSkillProgression(
+    canonicalProfile?.plancheProgression,
+    skillCalibration?.planche,
+    'planche'
+  )
+  
+  const frontLever = resolveSkillProgression(
+    canonicalProfile?.frontLeverProgression,
+    skillCalibration?.front_lever,
+    'front_lever'
+  )
+  
+  const hspu = resolveSkillProgression(
+    canonicalProfile?.hspuProgression ?? canonicalProfile?.hspu,
+    skillCalibration?.hspu,
+    'hspu'
+  )
+  
+  const anyConservativeStart = planche.isConservative || frontLever.isConservative || hspu.isConservative
+  const anyAssistedWork = planche.isAssisted || frontLever.isAssisted || hspu.isAssisted
+  const anyHistoricalCeiling = planche.hasHistoricalCeiling || frontLever.hasHistoricalCeiling || hspu.hasHistoricalCeiling
+  
+  console.log('[CURRENT_PROGRESSION_TRUTH_CONTRACT_RESOLVED]', {
+    planche: {
+      current: planche.currentWorkingProgression,
+      historical: planche.historicalCeiling,
+      source: planche.truthSource,
+    },
+    frontLever: {
+      current: frontLever.currentWorkingProgression,
+      historical: frontLever.historicalCeiling,
+      source: frontLever.truthSource,
+    },
+    hspu: {
+      current: hspu.currentWorkingProgression,
+      historical: hspu.historicalCeiling,
+      source: hspu.truthSource,
+    },
+    anyConservativeStart,
+    anyAssistedWork,
+    anyHistoricalCeiling,
+  })
+  
+  return {
+    planche,
+    frontLever,
+    hspu,
+    resolvedAt: new Date().toISOString(),
+    anyConservativeStart,
+    anyAssistedWork,
+    anyHistoricalCeiling,
+  }
+}

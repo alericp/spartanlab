@@ -403,6 +403,29 @@ export const TRUTH_FIELD_REGISTRY: TruthFieldAudit[] = [
 ]
 
 // =============================================================================
+// BROADER SKILL COVERAGE CONTRACT
+// [PHASE 2 MULTI-SKILL] Structured coverage with deferral reasons
+// =============================================================================
+
+export interface SkillCoverageEntry {
+  skill: string
+  priorityLevel: 'primary' | 'secondary' | 'tertiary' | 'support'
+  targetExposure: number
+  allocatedSessions: number
+  materiallyExpressedSessions: number
+  coverageStatus: 'fully_represented' | 'broadly_represented' | 'support_only' | 'deferred'
+  deferralReason: string | null
+}
+
+export interface BroaderSkillCoverageContract {
+  entries: SkillCoverageEntry[]
+  coverageVerdict: 'strong' | 'adequate' | 'weak'
+  representedSkills: string[]
+  deferredSkills: Array<{ skill: string; reason: string }>
+  supportOnlySkills: string[]
+}
+
+// =============================================================================
 // PROGRAM TRUTH EXPLANATION OBJECT
 // =============================================================================
 
@@ -421,6 +444,9 @@ export interface ProgramTruthExplanation {
   selectedSkillsUsed: string[]
   representedSkillsInWeek: string[]
   underexpressedSkills: string[]
+  
+  // [PHASE 2 MULTI-SKILL] Broader skill coverage contract
+  broaderSkillCoverage: BroaderSkillCoverageContract | null
   
   // Schedule
   scheduleModeUsed: 'static' | 'flexible'
@@ -552,6 +578,117 @@ export function buildProgramTruthExplanation(
   const representedSkills = program.representedSkills || []
   const underexpressedSkills = selectedSkills.filter(s => !representedSkills.includes(s))
   
+  // [PHASE 2 MULTI-SKILL] Build broader skill coverage contract from weeklyRepresentation
+  let broaderSkillCoverage: BroaderSkillCoverageContract | null = null
+  const weeklyRep = (program as { weeklyRepresentation?: {
+    policies: Array<{
+      skill: string
+      selectedRank: 'headline' | 'secondary' | 'tertiary' | 'optional'
+      targetExposure: number
+      actualExposure: { direct: number; technical: number; support: number; warmupOnly: number; total: number }
+      representationVerdict: string
+      narrowingPoint: string | null
+    }>
+    coverageRatio: number
+    verdictCounts: {
+      headline_represented: number
+      broadly_represented: number
+      support_only: number
+      selected_but_underexpressed: number
+      filtered_out_by_constraints: number
+    }
+  }}).weeklyRepresentation
+  
+  if (weeklyRep?.policies) {
+    const entries: SkillCoverageEntry[] = weeklyRep.policies.map(p => {
+      // Map selectedRank to priorityLevel
+      const priorityLevel = p.selectedRank === 'headline' ? 'primary' as const
+        : p.selectedRank === 'secondary' ? 'secondary' as const
+        : p.selectedRank === 'tertiary' ? 'tertiary' as const
+        : 'support' as const
+      
+      // Map representationVerdict to coverageStatus
+      let coverageStatus: SkillCoverageEntry['coverageStatus']
+      let deferralReason: string | null = null
+      
+      if (p.representationVerdict === 'headline_represented') {
+        coverageStatus = 'fully_represented'
+      } else if (p.representationVerdict === 'broadly_represented') {
+        coverageStatus = 'broadly_represented'
+      } else if (p.representationVerdict === 'support_only') {
+        coverageStatus = 'support_only'
+        deferralReason = 'Limited to support role due to primary goal emphasis'
+      } else if (p.representationVerdict === 'selected_but_underexpressed') {
+        coverageStatus = 'deferred'
+        deferralReason = p.narrowingPoint === 'equipment_constraint' 
+          ? 'Equipment limitations'
+          : p.narrowingPoint === 'insufficient_main_slot_allocation'
+            ? 'Reduced to protect primary goal emphasis'
+            : p.narrowingPoint === 'below_minimum_exposure_target'
+              ? 'Weekly session count limits broader coverage'
+              : 'Primary goal dominance this cycle'
+      } else if (p.representationVerdict === 'filtered_out_by_constraints') {
+        coverageStatus = 'deferred'
+        deferralReason = 'Filtered out by equipment or progression constraints'
+      } else {
+        coverageStatus = 'deferred'
+        deferralReason = 'Scheduling constraints'
+      }
+      
+      return {
+        skill: p.skill,
+        priorityLevel,
+        targetExposure: p.targetExposure,
+        allocatedSessions: p.targetExposure,
+        materiallyExpressedSessions: p.actualExposure.direct + p.actualExposure.technical,
+        coverageStatus,
+        deferralReason,
+      }
+    })
+    
+    // Categorize skills
+    const representedSkillsFromContract = entries
+      .filter(e => e.coverageStatus === 'fully_represented' || e.coverageStatus === 'broadly_represented')
+      .map(e => e.skill)
+    
+    const deferredSkillsFromContract = entries
+      .filter(e => e.coverageStatus === 'deferred')
+      .map(e => ({ skill: e.skill, reason: e.deferralReason || 'Scheduling constraints' }))
+    
+    const supportOnlySkillsFromContract = entries
+      .filter(e => e.coverageStatus === 'support_only')
+      .map(e => e.skill)
+    
+    // Determine overall verdict
+    const totalSelected = entries.length
+    const materiallyRepresented = entries.filter(e => 
+      e.coverageStatus === 'fully_represented' || e.coverageStatus === 'broadly_represented'
+    ).length
+    const coverageRatioComputed = totalSelected > 0 ? materiallyRepresented / totalSelected : 0
+    
+    const coverageVerdict = coverageRatioComputed >= 0.7 ? 'strong'
+      : coverageRatioComputed >= 0.5 ? 'adequate'
+      : 'weak'
+    
+    broaderSkillCoverage = {
+      entries,
+      coverageVerdict,
+      representedSkills: representedSkillsFromContract,
+      deferredSkills: deferredSkillsFromContract,
+      supportOnlySkills: supportOnlySkillsFromContract,
+    }
+    
+    console.log('[PHASE2-MULTI-SKILL-COVERAGE-CONTRACT]', {
+      totalSelectedSkills: totalSelected,
+      materiallyRepresentedCount: materiallyRepresented,
+      supportOnlyCount: supportOnlySkillsFromContract.length,
+      deferredCount: deferredSkillsFromContract.length,
+      coverageRatio: coverageRatioComputed,
+      coverageVerdict,
+      verdict: 'MULTI_SKILL_COVERAGE_CONTRACT_BUILT',
+    })
+  }
+  
   // Determine explanation quality
   const highImportanceHidden = explanationFactors.filter(f => f.importance === 'high' && f.wasUsed && !f.isVisible).length
   const totalHidden = hiddenTruthNotSurfaced.length
@@ -590,6 +727,9 @@ export function buildProgramTruthExplanation(
     selectedSkillsUsed: selectedSkills,
     representedSkillsInWeek: representedSkills,
     underexpressedSkills,
+    
+    // [PHASE 2 MULTI-SKILL] Broader skill coverage contract
+    broaderSkillCoverage,
     
     scheduleModeUsed: program.scheduleMode || 'flexible',
     baselineSessions: program.trainingDaysPerWeek || 4,
@@ -656,6 +796,13 @@ export function buildProgramTruthExplanation(
       program.skillStrengthProfile?.weightedPullUp ||
       program.skillStrengthProfile?.weightedDip
     ),
+    
+    // [CURRENT-PROGRESSION-TRUTH-CONTRACT] Include current working progressions contract
+    // This shows the user their true current ability vs historical ceiling
+    currentWorkingProgressions: program.currentWorkingProgressions || null,
+    progressionTruthNote: program.currentWorkingProgressions?.anyConservativeStart
+      ? 'Current progression is set conservatively based on training recency and skill state.'
+      : null,
     
     // [PHASE 6] Output quality materiality - proves how well profile shapes actual sessions
     outputQualityReport: computeOutputQualityMateriality(

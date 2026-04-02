@@ -44,6 +44,25 @@ interface MethodMaterialityReport {
   explanationForUser: string
 }
 
+// [PHASE 2 MULTI-SKILL] Broader skill coverage contract types
+interface SkillCoverageEntry {
+  skill: string
+  priorityLevel: 'primary' | 'secondary' | 'tertiary' | 'support'
+  targetExposure: number
+  allocatedSessions: number
+  materiallyExpressedSessions: number
+  coverageStatus: 'fully_represented' | 'broadly_represented' | 'support_only' | 'deferred'
+  deferralReason: string | null
+}
+
+interface BroaderSkillCoverageContract {
+  entries: SkillCoverageEntry[]
+  coverageVerdict: 'strong' | 'adequate' | 'weak'
+  representedSkills: string[]
+  deferredSkills: Array<{ skill: string; reason: string }>
+  supportOnlySkills: string[]
+}
+
 interface TruthExplanation {
   identityPrimary: string | null
   identitySecondary: string | null
@@ -51,6 +70,8 @@ interface TruthExplanation {
   selectedSkillsUsed: string[]
   representedSkillsInWeek: string[]
   underexpressedSkills: string[]
+  // [PHASE 2 MULTI-SKILL] Broader skill coverage contract
+  broaderSkillCoverage?: BroaderSkillCoverageContract | null
   scheduleModeUsed: 'static' | 'flexible'
   baselineSessions: number
   currentSessions: number
@@ -86,6 +107,33 @@ interface TruthExplanation {
   explanationQualityVerdict: string
   generatedAt?: string
   triggerSource?: string
+  // [CURRENT-PROGRESSION-TRUTH-CONTRACT] Current working progressions vs historical ceiling
+  currentWorkingProgressions?: {
+    planche: {
+      currentWorkingProgression: string | null
+      historicalCeiling: string | null
+      truthSource: string
+      truthNote: string | null
+      isConservative: boolean
+    }
+    frontLever: {
+      currentWorkingProgression: string | null
+      historicalCeiling: string | null
+      truthSource: string
+      truthNote: string | null
+      isConservative: boolean
+    }
+    hspu: {
+      currentWorkingProgression: string | null
+      historicalCeiling: string | null
+      truthSource: string
+      truthNote: string | null
+      isConservative: boolean
+    }
+    anyConservativeStart: boolean
+    anyHistoricalCeiling: boolean
+  } | null
+  progressionTruthNote?: string | null
 }
 
 interface ProgramTruthSummaryProps {
@@ -106,6 +154,8 @@ export function ProgramTruthSummary({ truthExplanation, className }: ProgramTrut
     selectedSkillsUsed,
     representedSkillsInWeek,
     underexpressedSkills,
+    // [PHASE 2 MULTI-SKILL] Broader skill coverage contract
+    broaderSkillCoverage,
     scheduleModeUsed,
     baselineSessions,
     currentSessions,
@@ -137,6 +187,9 @@ export function ProgramTruthSummary({ truthExplanation, className }: ProgramTrut
     // [SKILL-STRENGTH-TRUTH-CONTRACT] Skill and strength profile
     skillStrengthProfile,
     skillStrengthMateriallyApplied,
+    // [CURRENT-PROGRESSION-TRUTH-CONTRACT] Current working progressions
+    currentWorkingProgressions,
+    progressionTruthNote,
     // [PHASE 6] Output quality materiality
     outputQualityReport,
     // [PHASE 7] Visible difference verdict
@@ -188,10 +241,19 @@ export function ProgramTruthSummary({ truthExplanation, className }: ProgramTrut
   }
   
   if (selectedSkillsUsed.length > 0) {
+    // [PHASE 2 MULTI-SKILL] Use richer coverage data when available
+    const representedCount = broaderSkillCoverage?.representedSkills.length || representedSkillsInWeek.length
+    const totalSelected = selectedSkillsUsed.length
+    const skillsDisplay = selectedSkillsUsed.slice(0, 3).map(s => s.replace(/_/g, ' ')).join(', ')
+    const hasMore = totalSelected > 3
+    const deferredCount = broaderSkillCoverage?.deferredSkills.length || underexpressedSkills.length
+    
     keyDecisions.push({
       label: 'Skills Targeted',
-      value: selectedSkillsUsed.slice(0, 3).map(s => s.replace(/_/g, ' ')).join(', '),
-      type: 'success',
+      value: deferredCount > 0 
+        ? `${skillsDisplay}${hasMore ? ` (+${totalSelected - 3} more)` : ''} (${deferredCount} reduced)`
+        : `${skillsDisplay}${hasMore ? ` (+${totalSelected - 3} more)` : ''}`,
+      type: deferredCount > 0 ? 'warning' : 'success',
     })
   }
   
@@ -305,16 +367,23 @@ export function ProgramTruthSummary({ truthExplanation, className }: ProgramTrut
     })
   }
   
-  // [SKILL-STRENGTH-TRUTH-CONTRACT] Add skill/strength profile key decision
+  // [CURRENT-PROGRESSION-TRUTH-CONTRACT] Add skill/strength profile key decision
+  // Now uses currentWorkingProgressions for accurate current ability display
   if (skillStrengthProfile && skillStrengthMateriallyApplied) {
     const strengthParts: string[] = []
+    const isConservative = currentWorkingProgressions?.anyConservativeStart ?? false
     
-    // Add skill progressions if present
+    // Add skill progressions if present (these now reflect CURRENT working level, not historical)
     if (skillStrengthProfile.plancheProgression) {
-      strengthParts.push(`Planche: ${skillStrengthProfile.plancheProgression.replace(/_/g, ' ')}`)
+      const plancheLabel = skillStrengthProfile.plancheProgression.replace(/_/g, ' ')
+      // Show conservative indicator if applicable
+      const conservativeIndicator = currentWorkingProgressions?.planche?.isConservative ? ' *' : ''
+      strengthParts.push(`Planche: ${plancheLabel}${conservativeIndicator}`)
     }
     if (skillStrengthProfile.frontLeverProgression) {
-      strengthParts.push(`FL: ${skillStrengthProfile.frontLeverProgression.replace(/_/g, ' ')}`)
+      const flLabel = skillStrengthProfile.frontLeverProgression.replace(/_/g, ' ')
+      const conservativeIndicator = currentWorkingProgressions?.frontLever?.isConservative ? ' *' : ''
+      strengthParts.push(`FL: ${flLabel}${conservativeIndicator}`)
     }
     
     // Add weighted strength if present
@@ -327,10 +396,19 @@ export function ProgramTruthSummary({ truthExplanation, className }: ProgramTrut
     
     if (strengthParts.length > 0) {
       keyDecisions.push({
-        label: 'Current Ability',
+        label: isConservative ? 'Current Ability *' : 'Current Ability',
         value: strengthParts.slice(0, 2).join(' | '),
         type: 'success',
       })
+      
+      // Add conservative start note if applicable
+      if (isConservative && progressionTruthNote) {
+        keyDecisions.push({
+          label: 'Note',
+          value: progressionTruthNote,
+          type: 'info',
+        })
+      }
     }
   }
   
@@ -474,31 +552,91 @@ export function ProgramTruthSummary({ truthExplanation, className }: ProgramTrut
               </div>
             </div>
             
-            {/* Skills coverage */}
+            {/* Skills coverage - [PHASE 2 MULTI-SKILL] Enhanced with deferred reasons */}
             {selectedSkillsUsed.length > 0 && (
               <div className="space-y-2">
                 <h4 className="text-xs font-medium text-[#8A8A8A] uppercase tracking-wide">
                   Skill Coverage
                 </h4>
-                <div className="flex flex-wrap gap-1.5">
-                  {selectedSkillsUsed.map((skill) => {
-                    const isRepresented = representedSkillsInWeek.includes(skill)
-                    return (
-                      <span
-                        key={skill}
-                        className={cn(
-                          'text-xs px-2 py-0.5 rounded',
-                          isRepresented
-                            ? 'bg-green-500/10 text-green-400'
-                            : 'bg-amber-500/10 text-amber-400'
-                        )}
-                      >
-                        {skill.replace(/_/g, ' ')}
-                        {!isRepresented && ' (limited)'}
-                      </span>
-                    )
-                  })}
-                </div>
+                {broaderSkillCoverage ? (
+                  // Use richer contract data when available
+                  <>
+                    <div className="flex flex-wrap gap-1.5">
+                      {broaderSkillCoverage.entries.map((entry) => {
+                        const statusColor = 
+                          entry.coverageStatus === 'fully_represented' ? 'bg-green-500/10 text-green-400'
+                          : entry.coverageStatus === 'broadly_represented' ? 'bg-blue-500/10 text-blue-400'
+                          : entry.coverageStatus === 'support_only' ? 'bg-purple-500/10 text-purple-400'
+                          : 'bg-amber-500/10 text-amber-400'
+                        
+                        const label = 
+                          entry.coverageStatus === 'fully_represented' ? ''
+                          : entry.coverageStatus === 'broadly_represented' ? ''
+                          : entry.coverageStatus === 'support_only' ? ' (support)'
+                          : ' (reduced)'
+                        
+                        return (
+                          <span
+                            key={entry.skill}
+                            className={cn('text-xs px-2 py-0.5 rounded', statusColor)}
+                          >
+                            {entry.skill.replace(/_/g, ' ')}{label}
+                          </span>
+                        )
+                      })}
+                    </div>
+                    
+                    {/* Deferred skills with reasons */}
+                    {broaderSkillCoverage.deferredSkills.length > 0 && (
+                      <div className="text-xs text-[#6A6A6A] pt-1 space-y-1">
+                        <p className="font-medium text-[#8A8A8A]">Reduced this cycle:</p>
+                        {broaderSkillCoverage.deferredSkills.map(({ skill, reason }) => (
+                          <p key={skill} className="pl-2">
+                            {skill.replace(/_/g, ' ')}: {reason}
+                          </p>
+                        ))}
+                      </div>
+                    )}
+                    
+                    {/* Coverage verdict */}
+                    {broaderSkillCoverage.coverageVerdict && (
+                      <div className="text-xs pt-1 flex items-center gap-1.5">
+                        <span className="text-[#6A6A6A]">Coverage:</span>
+                        <span className={cn(
+                          'font-medium',
+                          broaderSkillCoverage.coverageVerdict === 'strong' && 'text-green-400',
+                          broaderSkillCoverage.coverageVerdict === 'adequate' && 'text-blue-400',
+                          broaderSkillCoverage.coverageVerdict === 'weak' && 'text-amber-400'
+                        )}>
+                          {broaderSkillCoverage.coverageVerdict === 'strong' && 'Strong multi-skill coverage'}
+                          {broaderSkillCoverage.coverageVerdict === 'adequate' && 'Adequate coverage'}
+                          {broaderSkillCoverage.coverageVerdict === 'weak' && 'Focused on primary goals'}
+                        </span>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  // Fallback to basic display
+                  <div className="flex flex-wrap gap-1.5">
+                    {selectedSkillsUsed.map((skill) => {
+                      const isRepresented = representedSkillsInWeek.includes(skill)
+                      return (
+                        <span
+                          key={skill}
+                          className={cn(
+                            'text-xs px-2 py-0.5 rounded',
+                            isRepresented
+                              ? 'bg-green-500/10 text-green-400'
+                              : 'bg-amber-500/10 text-amber-400'
+                          )}
+                        >
+                          {skill.replace(/_/g, ' ')}
+                          {!isRepresented && ' (limited)'}
+                        </span>
+                      )
+                    })}
+                  </div>
+                )}
               </div>
             )}
             

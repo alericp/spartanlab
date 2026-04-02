@@ -12762,6 +12762,186 @@ return explanations.length > 0 ? explanations : undefined
   })
   
   // ==========================================================================
+  // [AI-TRUTH-WEEKLY-EXPRESSION-AUDIT] TASK 7: STRICT DIAGNOSTIC VERIFICATION
+  // This audit answers the 10 questions required for Phase 1 verification
+  // ==========================================================================
+  const selectedSkillsInProfile = canonicalProfile.selectedSkills || [primaryGoal]
+  const architectureSkillsDirectExpressed = sessionArchitectureTruth?.primarySpineSkills || [primaryGoal]
+  const architectureSkillsDedicatedSupport = sessionArchitectureTruth?.secondaryAnchorSkills || []
+  const architectureSkillsSupportRotation = sessionArchitectureTruth?.supportRotationSkills || []
+  const architectureSkillsDeferred = sessionArchitectureTruth?.deferredSkills || []
+  
+  // Count actual skill touches across all sessions
+  const weeklySkillTouches = new Map<string, { direct: number; technical: number; support: number }>()
+  for (const skill of selectedSkillsInProfile) {
+    weeklySkillTouches.set(skill, { direct: 0, technical: 0, support: 0 })
+  }
+  
+  // Analyze each session for skill expression
+  for (const session of sessions) {
+    const sessionExercises = session.exercises || []
+    for (const exercise of sessionExercises) {
+      const exerciseIdLower = exercise.id?.toLowerCase() || ''
+      const exerciseNameLower = exercise.name?.toLowerCase() || ''
+      const transfers = exercise.exercise?.transferTo || []
+      
+      for (const skill of selectedSkillsInProfile) {
+        const skillLower = skill.toLowerCase().replace(/_/g, '')
+        const matches = 
+          exerciseIdLower.includes(skillLower) ||
+          exerciseNameLower.includes(skillLower) ||
+          transfers.some(t => t.toLowerCase().includes(skillLower))
+        
+        if (matches) {
+          const current = weeklySkillTouches.get(skill) || { direct: 0, technical: 0, support: 0 }
+          // Classify based on exercise context
+          if (exerciseIdLower.includes(skillLower)) {
+            current.direct++
+          } else if (transfers.some(t => t.toLowerCase().includes(skillLower))) {
+            current.support++
+          } else {
+            current.technical++
+          }
+          weeklySkillTouches.set(skill, current)
+        }
+      }
+    }
+  }
+  
+  // Determine which skills were granted which type of expression
+  const skillsWithDirectExpression = selectedSkillsInProfile.filter(s => 
+    (weeklySkillTouches.get(s)?.direct || 0) >= 2
+  )
+  const skillsWithDedicatedSupport = selectedSkillsInProfile.filter(s => 
+    (weeklySkillTouches.get(s)?.support || 0) >= 2 && !skillsWithDirectExpression.includes(s)
+  )
+  const skillsRotational = selectedSkillsInProfile.filter(s => {
+    const touches = weeklySkillTouches.get(s)
+    const total = (touches?.direct || 0) + (touches?.technical || 0) + (touches?.support || 0)
+    return total >= 1 && !skillsWithDirectExpression.includes(s) && !skillsWithDedicatedSupport.includes(s)
+  })
+  const skillsDeferred = selectedSkillsInProfile.filter(s => {
+    const touches = weeklySkillTouches.get(s)
+    const total = (touches?.direct || 0) + (touches?.technical || 0) + (touches?.support || 0)
+    return total === 0
+  })
+  
+  // Per-session skill assignment audit
+  const sessionSkillAssignment = sessions.map((session, idx) => {
+    const exercises = session.exercises || []
+    const skillsInSession: string[] = []
+    
+    for (const skill of selectedSkillsInProfile) {
+      const skillLower = skill.toLowerCase().replace(/_/g, '')
+      const hasSkillExercise = exercises.some(e => 
+        e.id?.toLowerCase().includes(skillLower) ||
+        e.name?.toLowerCase().includes(skillLower) ||
+        (e.exercise?.transferTo || []).some(t => t.toLowerCase().includes(skillLower))
+      )
+      if (hasSkillExercise) skillsInSession.push(skill)
+    }
+    
+    return {
+      sessionIndex: idx,
+      dayFocus: session.focus,
+      skillsExpressed: skillsInSession,
+      skillCount: skillsInSession.length,
+    }
+  })
+  
+  // Progression enforcement audit
+  const currentWorkingCaps = sessionArchitectureTruth?.currentWorkingSkillCaps || {}
+  const progressionCeilingBlocked = Object.entries(currentWorkingCaps)
+    .filter(([_, cap]) => cap.blockedProgressionFamilies.length > 0)
+    .map(([skill, cap]) => ({
+      skill,
+      currentWorking: cap.currentWorkingProgression,
+      historicalCeiling: cap.historicalCeiling,
+      blocked: cap.blockedProgressionFamilies,
+    }))
+  
+  // Doctrine architecture effects
+  const doctrineArchitectureEffects = sessionArchitectureTruth?.doctrineArchitectureBias
+  const doctrineActivelyChangedArchitecture = 
+    doctrineArchitectureEffects?.sessionRoleBias !== 'primary_dominant' ||
+    doctrineArchitectureEffects?.supportAllocationBias !== 'minimal' ||
+    doctrineArchitectureEffects?.methodPackagingBias !== 'straight_sets_protected'
+  
+  // Final verdicts
+  const weekMateriallyDifferent = 
+    skillsWithDirectExpression.length >= 2 ||
+    (skillsWithDirectExpression.length >= 1 && skillsWithDedicatedSupport.length >= 1) ||
+    skillsRotational.length >= 2
+  
+  const explanationOverstatesGeneration = 
+    (architectureSkillsSupportRotation.length > skillsRotational.length + skillsWithDedicatedSupport.length) ||
+    (selectedSkillsInProfile.length > skillsWithDirectExpression.length + skillsWithDedicatedSupport.length + skillsRotational.length + 1)
+  
+  console.log('[AI-TRUTH-WEEKLY-EXPRESSION-AUDIT]', {
+    // Question 1: How many selected skills existed in profile truth?
+    selectedSkillsInProfile: selectedSkillsInProfile.length,
+    profileSkills: selectedSkillsInProfile,
+    
+    // Question 2: How many were granted direct expression?
+    directExpressionCount: skillsWithDirectExpression.length,
+    directExpressionSkills: skillsWithDirectExpression,
+    
+    // Question 3: How many were granted dedicated support?
+    dedicatedSupportCount: skillsWithDedicatedSupport.length,
+    dedicatedSupportSkills: skillsWithDedicatedSupport,
+    
+    // Question 4: How many were rotational?
+    rotationalCount: skillsRotational.length,
+    rotationalSkills: skillsRotational,
+    
+    // Question 5: How many were deferred?
+    deferredCount: skillsDeferred.length,
+    deferredSkills: skillsDeferred,
+    deferredReasons: architectureSkillsDeferred.map(d => ({ skill: d.skill, reason: d.reason })),
+    
+    // Question 6: Which sessions were assigned to each non-primary skill?
+    sessionSkillAssignment: sessionSkillAssignment.map(s => ({
+      session: s.sessionIndex,
+      focus: s.dayFocus,
+      skills: s.skillsExpressed,
+    })),
+    
+    // Question 7: Which progression ceilings were blocked by current-working truth?
+    progressionCeilingBlocked,
+    
+    // Question 8: Which doctrine rules materially changed week architecture?
+    doctrineArchitectureChanges: {
+      sessionRoleBias: doctrineArchitectureEffects?.sessionRoleBias || 'primary_dominant',
+      supportAllocationBias: doctrineArchitectureEffects?.supportAllocationBias || 'minimal',
+      methodPackagingBias: doctrineArchitectureEffects?.methodPackagingBias || 'straight_sets_protected',
+      activelyChangedArchitecture: doctrineActivelyChangedArchitecture,
+    },
+    
+    // Question 9: Whether final visible week is materially different from primary/secondary-only baseline
+    weekMateriallyDifferent,
+    weekMaterialityVerdict: weekMateriallyDifferent 
+      ? 'MATERIALLY_DIFFERENTIATED'
+      : 'NEAR_PRIMARY_SECONDARY_BASELINE',
+    
+    // Question 10: Whether any explanatory UI text is overstating the actual generated week
+    explanationOverstatesGeneration,
+    explanationTruthfulness: explanationOverstatesGeneration
+      ? 'EXPLANATION_OVERSTATES_WEEK'
+      : 'EXPLANATION_MATCHES_GENERATION',
+    
+    // Overall phase 1 verdict
+    phase1Verdict: {
+      multiSkillExpressionAchieved: skillsWithDirectExpression.length + skillsWithDedicatedSupport.length >= 2,
+      currentWorkingProgressionEnforced: Object.keys(currentWorkingCaps).length > 0,
+      doctrineInfluenceActive: doctrineActivelyChangedArchitecture,
+      supportSkillsMaterialized: skillsWithDedicatedSupport.length + skillsRotational.length,
+      finalVerdict: weekMateriallyDifferent && !explanationOverstatesGeneration
+        ? 'AI_TRUTH_ARCHITECTURE_COMPLETE'
+        : 'AI_TRUTH_ARCHITECTURE_PARTIAL',
+    },
+  })
+  
+  // ==========================================================================
   // [TASK 8] ALLEXERCISENAMES ROOT FIX FINAL VERDICT
   // Confirms the scope bug is fixed and audit code is crash-proof
   // ==========================================================================
@@ -13430,7 +13610,9 @@ function getSkillsForSession(
   totalSessions: number,
   dayFocus: string,
   // [PHASE 2 MULTI-SKILL] Optional multi-skill allocation contract for authoritative skill representation
-  multiSkillAllocation?: MultiSkillSessionAllocationContract | null
+  multiSkillAllocation?: MultiSkillSessionAllocationContract | null,
+  // [PHASE 1 AI-TRUTH-ARCHITECTURE] Session architecture truth for authoritative skill classification
+  sessionArchitectureTruth?: SessionArchitectureTruthContract | null
 ): SessionSkillAllocation[] {
   if (!weightedAllocation || weightedAllocation.length === 0) {
     return []
@@ -13814,6 +13996,166 @@ function getSkillsForSession(
     })
   }
   
+  // ==========================================================================
+  // [PHASE 1 AI-TRUTH-ARCHITECTURE] SESSION ARCHITECTURE TRUTH ENFORCEMENT
+  // This is the AUTHORITATIVE source for support rotation skills.
+  // The sessionArchitectureTruth has already classified skills into:
+  // - primarySpineSkills: MUST be in primary expression
+  // - secondaryAnchorSkills: MUST get secondary/technical expression
+  // - supportRotationSkills: MUST get material support expression when scheduled
+  // - deferredSkills: explicitly NOT expressed this cycle
+  // ==========================================================================
+  if (sessionArchitectureTruth) {
+    const alreadyIncludedForArchitecture = new Set(result.map(r => r.skill))
+    const isMixedOrHybridDay = dayFocus.includes('mixed') || dayFocus.includes('hybrid') || 
+      dayFocus.includes('density') || dayFocus.includes('skill_density') || dayFocus.includes('multi')
+    
+    // =======================================================================
+    // ENFORCE PRIMARY SPINE SKILLS - They MUST have primary expression
+    // =======================================================================
+    for (const primarySkill of sessionArchitectureTruth.primarySpineSkills) {
+      const existingEntry = result.find(r => r.skill === primarySkill)
+      if (existingEntry && existingEntry.expressionMode !== 'primary') {
+        // Upgrade to primary expression
+        existingEntry.expressionMode = 'primary'
+        console.log('[AI-TRUTH-ARCHITECTURE-ENFORCEMENT] Primary spine skill upgraded:', {
+          skill: primarySkill,
+          sessionIndex,
+          previousMode: 'non-primary',
+          newMode: 'primary',
+          reason: 'architecture_truth_primary_spine_enforcement',
+        })
+      }
+    }
+    
+    // =======================================================================
+    // ENFORCE SECONDARY ANCHOR SKILLS - They MUST get technical/secondary expression
+    // =======================================================================
+    for (const secondarySkill of sessionArchitectureTruth.secondaryAnchorSkills) {
+      if (!alreadyIncludedForArchitecture.has(secondarySkill)) {
+        // Secondary anchors should appear in most sessions (at least 60%)
+        const shouldIncludeSecondary = sessionIndex < Math.ceil(totalSessions * 0.7) ||
+          isMixedOrHybridDay || (sessionIndex % 2 === 0)
+        
+        if (shouldIncludeSecondary) {
+          result.push({
+            skill: secondarySkill,
+            expressionMode: 'technical',
+            weight: 0.15,
+          })
+          alreadyIncludedForArchitecture.add(secondarySkill)
+          console.log('[AI-TRUTH-ARCHITECTURE-ENFORCEMENT] Secondary anchor skill added:', {
+            skill: secondarySkill,
+            sessionIndex,
+            expressionMode: 'technical',
+            reason: 'architecture_truth_secondary_anchor_enforcement',
+          })
+        }
+      } else {
+        // Ensure existing secondary anchor has at least technical expression
+        const existingEntry = result.find(r => r.skill === secondarySkill)
+        if (existingEntry && existingEntry.expressionMode === 'warmup') {
+          existingEntry.expressionMode = 'technical'
+          console.log('[AI-TRUTH-ARCHITECTURE-ENFORCEMENT] Secondary anchor upgraded from warmup:', {
+            skill: secondarySkill,
+            sessionIndex,
+          })
+        }
+      }
+    }
+    
+    // =======================================================================
+    // ENFORCE SUPPORT ROTATION SKILLS - They MUST materially affect sessions
+    // This is the KEY fix: support rotation skills are not just metadata
+    // =======================================================================
+    const supportRotationSkills = sessionArchitectureTruth.supportRotationSkills || []
+    const supportMinimums = sessionArchitectureTruth.weeklyMinimums?.minSupportTouches || 1
+    
+    // Calculate which support skills should appear in THIS session
+    // Distribute support skills more evenly across sessions
+    for (let i = 0; i < supportRotationSkills.length; i++) {
+      const supportSkill = supportRotationSkills[i]
+      if (alreadyIncludedForArchitecture.has(supportSkill)) continue
+      
+      // Calculate session assignment for this support skill
+      // Each support skill should appear in at least supportMinimums sessions
+      const supportInterval = Math.max(1, Math.floor(totalSessions / Math.max(supportMinimums, 2)))
+      const skillOffset = i % supportInterval
+      const shouldIncludeInThisSession = 
+        (sessionIndex + skillOffset) % supportInterval === 0 ||
+        isMixedOrHybridDay ||
+        sessionIndex < supportMinimums
+      
+      if (shouldIncludeInThisSession) {
+        // Determine expression mode for support skill
+        // On mixed days, support skills can get technical expression
+        const supportExpressionMode = isMixedOrHybridDay && i < 2 ? 'technical' : 'support'
+        
+        result.push({
+          skill: supportSkill,
+          expressionMode: supportExpressionMode,
+          weight: 0.08,
+        })
+        alreadyIncludedForArchitecture.add(supportSkill)
+        
+        console.log('[AI-TRUTH-ARCHITECTURE-ENFORCEMENT] Support rotation skill MATERIALIZED:', {
+          skill: supportSkill,
+          sessionIndex,
+          expressionMode: supportExpressionMode,
+          isMixedDay: isMixedOrHybridDay,
+          reason: 'architecture_truth_support_rotation_enforcement',
+          supportIndex: i,
+          totalSupportSkills: supportRotationSkills.length,
+        })
+      }
+    }
+    
+    // =======================================================================
+    // DEFERRED SKILLS GUARD - Ensure deferred skills are NOT leaking through
+    // =======================================================================
+    const deferredSkillIds = new Set(sessionArchitectureTruth.deferredSkills.map(d => d.skill))
+    const leakedDeferredSkills = result.filter(r => deferredSkillIds.has(r.skill))
+    if (leakedDeferredSkills.length > 0) {
+      console.log('[AI-TRUTH-ARCHITECTURE-ENFORCEMENT] WARNING: Deferred skills leaked into session:', {
+        sessionIndex,
+        leakedSkills: leakedDeferredSkills.map(r => r.skill),
+        deferralReasons: sessionArchitectureTruth.deferredSkills
+          .filter(d => leakedDeferredSkills.some(l => l.skill === d.skill))
+          .map(d => ({ skill: d.skill, reason: d.reason, details: d.details })),
+      })
+      // Remove leaked deferred skills
+      for (const leaked of leakedDeferredSkills) {
+        const idx = result.findIndex(r => r.skill === leaked.skill)
+        if (idx !== -1) {
+          result.splice(idx, 1)
+          console.log('[AI-TRUTH-ARCHITECTURE-ENFORCEMENT] Removed leaked deferred skill:', {
+            skill: leaked.skill,
+            sessionIndex,
+          })
+        }
+      }
+    }
+    
+    // Log architecture truth enforcement summary
+    console.log('[AI-TRUTH-ARCHITECTURE-ENFORCEMENT-SUMMARY]', {
+      sessionIndex,
+      dayFocus,
+      isMixedOrHybridDay,
+      architectureTruthActive: true,
+      primarySpineSkillsCount: sessionArchitectureTruth.primarySpineSkills.length,
+      secondaryAnchorSkillsCount: sessionArchitectureTruth.secondaryAnchorSkills.length,
+      supportRotationSkillsCount: supportRotationSkills.length,
+      deferredSkillsCount: sessionArchitectureTruth.deferredSkills.length,
+      skillsInThisSession: result.map(r => `${r.skill}(${r.expressionMode})`),
+      supportSkillsMaterialized: result.filter(r => 
+        supportRotationSkills.includes(r.skill)
+      ).map(r => r.skill),
+      verdict: result.length > 2 
+        ? 'MULTI_SKILL_EXPRESSION_ACHIEVED'
+        : 'PRIMARY_SECONDARY_ONLY',
+    })
+  }
+  
   // [selected-skill-exposure] TASK 7: Log session skill allocation summary
   console.log('[selected-skill-exposure] Session allocation summary:', {
     sessionIndex,
@@ -14160,12 +14502,14 @@ function generateAdaptiveSession(
   // SKILL EXPRESSION FIX: Determine which skills should be expressed in this session
   // based on weighted allocation and session index
   // [PHASE 2 MULTI-SKILL] Pass multi-skill allocation contract for authoritative skill enforcement
+  // [PHASE 1 AI-TRUTH-ARCHITECTURE] Pass sessionArchitectureTruth for authoritative skill classification
   const skillsForThisSession = getSkillsForSession(
   weightedSkillAllocation || [],
   sessionIndex || 0,
   totalSessions || 1,
   day.focus,
-  multiSkillAllocation
+  multiSkillAllocation,
+  sessionArchitectureTruth // [PHASE 1 AI-TRUTH-ARCHITECTURE] Authoritative skill classification
   )
   
   sessionStep = 'skills_for_session_resolved'

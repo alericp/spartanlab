@@ -1139,6 +1139,160 @@ function selectMainExercises(
     return intentEntry?.currentWorkingProgression || null
   }
   
+  // ==========================================================================
+  // [PHASE 1 AI-TRUTH-ARCHITECTURE] TASK 4: PROGRESSION-BASED EXERCISE FILTERING
+  // This filter ensures exercises above the current working progression are blocked
+  // unless they are explicitly safe bridge/prep variants.
+  // ==========================================================================
+  
+  // Define progression level ordering for common progressions
+  const PROGRESSION_LEVEL_ORDER: Record<string, string[]> = {
+    // Planche progression
+    planche: ['tuck', 'adv_tuck', 'straddle', 'half_lay', 'full'],
+    // Front lever progression
+    front_lever: ['tuck', 'adv_tuck', 'straddle', 'half_lay', 'full'],
+    // Back lever progression
+    back_lever: ['tuck', 'adv_tuck', 'straddle', 'half_lay', 'full'],
+    // HSPU progression
+    hspu: ['pike', 'elevated_pike', 'wall', 'freestanding'],
+    // Muscle up progression
+    muscle_up: ['transition_negative', 'transition_band', 'kipping', 'strict'],
+    // L-sit progression
+    l_sit: ['tuck', 'one_leg', 'full'],
+    // V-sit progression
+    v_sit: ['tuck', 'straddle', 'full'],
+    // Manna progression
+    manna: ['l_sit', 'elevated_l', 'low_manna', 'full'],
+  }
+  
+  // Track blocked exercises for audit
+  const progressionBlockedExercises: Array<{
+    exerciseId: string
+    skill: string
+    exerciseLevel: string
+    currentWorkingLevel: string
+    reason: string
+  }> = []
+  
+  /**
+   * Check if an exercise is within the user's current working progression level.
+   * Returns true if the exercise should be ALLOWED, false if it should be BLOCKED.
+   */
+  const isExerciseWithinCurrentProgression = (
+    exercise: Exercise,
+    skillKey: string
+  ): { allowed: boolean; reason: string; exerciseLevel?: string } => {
+    const currentProgression = getAuthoritativeProgression(skillKey)
+    if (!currentProgression) {
+      // No progression data - allow by default
+      return { allowed: true, reason: 'no_progression_data' }
+    }
+    
+    // Normalize skill key for lookup
+    const normalizedSkill = skillKey.toLowerCase().replace(/_/g, '')
+    const progressionLadder = PROGRESSION_LEVEL_ORDER[normalizedSkill]
+    
+    if (!progressionLadder) {
+      // No defined ladder for this skill - allow by default
+      return { allowed: true, reason: 'no_ladder_defined' }
+    }
+    
+    // Find current level index
+    const currentLevelIndex = progressionLadder.findIndex(level => 
+      currentProgression.toLowerCase().includes(level)
+    )
+    
+    if (currentLevelIndex === -1) {
+      // Can't determine current level - allow by default
+      return { allowed: true, reason: 'current_level_not_in_ladder' }
+    }
+    
+    // Check exercise level from ID or name
+    const exerciseIdLower = exercise.id.toLowerCase()
+    const exerciseNameLower = exercise.name.toLowerCase()
+    
+    let exerciseLevelIndex = -1
+    let exerciseLevel = 'unknown'
+    
+    for (let i = 0; i < progressionLadder.length; i++) {
+      const level = progressionLadder[i]
+      if (exerciseIdLower.includes(level) || exerciseNameLower.includes(level.replace(/_/g, ' '))) {
+        exerciseLevelIndex = i
+        exerciseLevel = level
+        break
+      }
+    }
+    
+    if (exerciseLevelIndex === -1) {
+      // Exercise doesn't have a clear progression level (might be prep/accessory)
+      return { allowed: true, reason: 'no_progression_level_detected', exerciseLevel: 'accessory' }
+    }
+    
+    // Core check: Is the exercise level beyond current working level?
+    // Allow current level and one level above (for progression opportunities)
+    const maxAllowedIndex = currentLevelIndex + 1
+    
+    if (exerciseLevelIndex > maxAllowedIndex) {
+      // Exercise is too advanced for current working level
+      progressionBlockedExercises.push({
+        exerciseId: exercise.id,
+        skill: skillKey,
+        exerciseLevel,
+        currentWorkingLevel: currentProgression,
+        reason: `Exercise level "${exerciseLevel}" exceeds current working level "${currentProgression}" by more than 1 step`,
+      })
+      
+      return {
+        allowed: false,
+        reason: `blocked_by_progression_cap`,
+        exerciseLevel,
+      }
+    }
+    
+    return {
+      allowed: true,
+      reason: exerciseLevelIndex === currentLevelIndex ? 'matches_current_level' : 'within_safe_bridge',
+      exerciseLevel,
+    }
+  }
+  
+  /**
+   * Filter an exercise pool to remove exercises above the user's current working progression.
+   * [PHASE 1 AI-TRUTH-ARCHITECTURE] This is the key enforcement point.
+   */
+  const filterByCurrentProgression = <T extends { exercise: Exercise }>(
+    candidates: T[],
+    skillKey: string
+  ): { filtered: T[]; blocked: T[]; audit: { skill: string; before: number; after: number; blockedCount: number } } => {
+    const blocked: T[] = []
+    const filtered = candidates.filter(c => {
+      const check = isExerciseWithinCurrentProgression(c.exercise, skillKey)
+      if (!check.allowed) {
+        blocked.push(c)
+        return false
+      }
+      return true
+    })
+    
+    const audit = {
+      skill: skillKey,
+      before: candidates.length,
+      after: filtered.length,
+      blockedCount: blocked.length,
+    }
+    
+    if (blocked.length > 0) {
+      console.log('[AI-TRUTH-ARCHITECTURE-PROGRESSION-FILTER]', {
+        ...audit,
+        blockedExercises: blocked.slice(0, 5).map(b => b.exercise.id),
+        currentWorkingProgression: getAuthoritativeProgression(skillKey),
+        verdict: 'EXERCISES_BLOCKED_BY_CURRENT_PROGRESSION',
+      })
+    }
+    
+    return { filtered, blocked, audit }
+  }
+  
   const selected: SelectedExercise[] = []
   const usedIds = new Set<string>()
   
@@ -2236,13 +2390,32 @@ function applyMaterialityScoreAdjustments(
       const skillCandidates = [...availableSkills, ...goalExercises.filter(e => e.category === 'skill')]
         .filter(e => e.transferTo?.some(t => t.toLowerCase().includes(primarySkillAlloc.skill.toLowerCase())))
       
-      // Score and rank candidates, then apply doctrine scoring
-      // [PHASE 4] Doctrine integration - applies DB-backed scoring modifiers
+      // [PHASE 1 AI-TRUTH-ARCHITECTURE] TASK 4: Apply progression-based filtering FIRST
+      // This ensures exercises above current working level are blocked before scoring
       const baseScoredCandidates = skillCandidates.map(e => ({
         exercise: e,
         score: scoreExerciseForSession(e, sessionSkillsToExpress, day.focus, hasWeightedEquipment)
       }))
-      const scoredCandidates = applyDoctrineToPool(baseScoredCandidates, day.focus)
+      
+      // Apply progression filter to remove exercises above current working level
+      const { filtered: progressionFilteredCandidates, audit: progressionAudit } = 
+        filterByCurrentProgression(baseScoredCandidates, primarySkillAlloc.skill)
+      
+      // Score and rank candidates, then apply doctrine scoring
+      // [PHASE 4] Doctrine integration - applies DB-backed scoring modifiers
+      const scoredCandidates = applyDoctrineToPool(progressionFilteredCandidates, day.focus)
+      
+      // Log progression enforcement for primary skill
+      if (progressionAudit.blockedCount > 0) {
+        console.log('[AI-TRUTH-ARCHITECTURE-PRIMARY-SKILL-PROGRESSION]', {
+          skill: primarySkillAlloc.skill,
+          currentWorkingProgression: getAuthoritativeProgression(primarySkillAlloc.skill),
+          candidatesBeforeFilter: progressionAudit.before,
+          candidatesAfterFilter: progressionAudit.after,
+          blockedCount: progressionAudit.blockedCount,
+          verdict: 'CURRENT_WORKING_PROGRESSION_ENFORCED',
+        })
+      }
       
       const primarySkill = scoredCandidates[0]?.exercise || selectByLevel(goalExercises.filter(e => e.category === 'skill'), experienceLevel)
       

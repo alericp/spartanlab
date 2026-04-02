@@ -423,7 +423,10 @@ export interface BroaderSkillCoverageContract {
   representedSkills: string[]
   deferredSkills: Array<{ skill: string; reason: string }>
   supportOnlySkills: string[]
-}
+  // [PHASE 2 MULTI-SKILL] Support skill breakdown from allocation contract
+  supportExpressedSkills?: string[]
+  supportRotationalSkills?: string[]
+  }
 
 // =============================================================================
 // PROGRAM TRUTH EXPLANATION OBJECT
@@ -694,21 +697,36 @@ export function buildProgramTruthExplanation(
       : coverageRatioComputed >= 0.5 ? 'adequate'
       : 'weak'
     
+    // [PHASE 2 MULTI-SKILL] Extract support skill data from multiSkillAllocationContract if available
+    const multiSkillContract = (program as { multiSkillAllocationContract?: {
+      supportExpressedSkills: string[]
+      supportRotationalSkills: string[]
+      deferredSkills: Array<{ skill: string; reasonCode: string; reasonLabel: string }>
+    }}).multiSkillAllocationContract
+    
     broaderSkillCoverage = {
       entries,
       coverageVerdict,
       representedSkills: representedSkillsFromContract,
-      deferredSkills: deferredSkillsFromContract,
+      deferredSkills: multiSkillContract 
+        ? multiSkillContract.deferredSkills.map(d => ({ skill: d.skill, reason: d.reasonLabel }))
+        : deferredSkillsFromContract,
       supportOnlySkills: supportOnlySkillsFromContract,
+      // [PHASE 2 MULTI-SKILL] Include support skill breakdown from allocation contract
+      supportExpressedSkills: multiSkillContract?.supportExpressedSkills || [],
+      supportRotationalSkills: multiSkillContract?.supportRotationalSkills || [],
     }
     
     console.log('[PHASE2-MULTI-SKILL-COVERAGE-CONTRACT]', {
       totalSelectedSkills: totalSelected,
       materiallyRepresentedCount: materiallyRepresented,
       supportOnlyCount: supportOnlySkillsFromContract.length,
+      supportExpressedCount: broaderSkillCoverage.supportExpressedSkills?.length || 0,
+      supportRotationalCount: broaderSkillCoverage.supportRotationalSkills?.length || 0,
       deferredCount: deferredSkillsFromContract.length,
       coverageRatio: coverageRatioComputed,
       coverageVerdict,
+      hasMultiSkillContract: !!multiSkillContract,
       verdict: 'MULTI_SKILL_COVERAGE_CONTRACT_BUILT',
     })
   }

@@ -651,6 +651,8 @@ type AdaptiveSessionContext = {
   } | null
   // [PHASE 1 SPINE] Authoritative spine contract for generation boundaries
   authoritativeSpine?: AuthoritativeGenerationSpineContract | null
+  // [PHASE 2 MULTI-SKILL] Multi-skill session allocation contract
+  multiSkillAllocation?: MultiSkillSessionAllocationContract | null
   }
 
 export interface AdaptiveProgramInputs {
@@ -1457,6 +1459,47 @@ exerciseExplanations?: {
 
 export type MaterialSkillRole = 'primary_spine' | 'secondary_anchor' | 'support' | 'deferred'
 
+// [PHASE 2 MULTI-SKILL] Representation mode for how a skill is expressed in the program
+export type SkillRepresentationMode = 
+  | 'direct_block'      // Full focused session blocks (primary/secondary skills)
+  | 'support_expressed' // Explicit support work in multiple sessions
+  | 'support_rotational' // Rotated through sessions for maintenance
+  | 'carryover_only'    // Expressed via carryover exercises (no direct blocks)
+  | 'deferred'          // Explicitly deferred this cycle with reason
+
+// [PHASE 2 MULTI-SKILL] Controlled deferral reason codes
+export type DeferralReasonCode =
+  | 'insufficient_weekly_budget_for_direct_exposure'
+  | 'primary_goal_dominance_required'
+  | 'secondary_goal_anchor_priority'
+  | 'current_working_progression_too_low_for_direct_specialization'
+  | 'joint_safety_priority'
+  | 'recovery_budget_priority'
+  | 'integrated_as_support_carryover'
+  | 'rotated_out_this_cycle'
+  | 'equipment_constraint'
+  | 'not_ready_for_direct_progression_block'
+  | 'session_count_insufficient'
+  | 'not_included_in_weekly_allocation'
+  | 'scheduling_constraints'
+
+// Map deferral reason codes to user-friendly labels
+export const DEFERRAL_REASON_LABELS: Record<DeferralReasonCode, string> = {
+  'insufficient_weekly_budget_for_direct_exposure': 'Limited weekly time budget',
+  'primary_goal_dominance_required': 'Primary goal takes priority',
+  'secondary_goal_anchor_priority': 'Secondary goal takes priority',
+  'current_working_progression_too_low_for_direct_specialization': 'Building foundational strength first',
+  'joint_safety_priority': 'Joint safety considerations',
+  'recovery_budget_priority': 'Recovery budget prioritized',
+  'integrated_as_support_carryover': 'Included via supporting exercises',
+  'rotated_out_this_cycle': 'Rotated out for this training cycle',
+  'equipment_constraint': 'Equipment not available',
+  'not_ready_for_direct_progression_block': 'Building prerequisites first',
+  'session_count_insufficient': 'Not enough sessions this week',
+  'not_included_in_weekly_allocation': 'Deprioritized this cycle',
+  'scheduling_constraints': 'Scheduling constraints',
+}
+
 export interface MaterialSkillIntentEntry {
   skill: string
   role: MaterialSkillRole
@@ -1468,6 +1511,12 @@ export interface MaterialSkillIntentEntry {
   historicalCeiling: string | null
   progressionTruthSource: string | null
   deferralReason: string | null
+  // [PHASE 2 MULTI-SKILL] New fields for authoritative session allocation
+  representationMode: SkillRepresentationMode
+  deferralReasonCode: DeferralReasonCode | null
+  allocatedSessions: number
+  supportReason: string | null
+  constrainedBy: string[]
 }
 
 export interface AuthoritativeGenerationMaterialityContract {
@@ -1726,13 +1775,212 @@ export function buildAuthoritativeSpineContract(
   })
   
   return spineContract
+  }
+
+// =============================================================================
+// [PHASE 2 MULTI-SKILL] AUTHORITATIVE MULTI-SKILL SESSION ALLOCATION CONTRACT
+// =============================================================================
+// This contract sits between the spine truth and actual session generation.
+// It forces every selected skill into one of: primary_spine, secondary_anchor,
+// support_expressed, support_rotational, or deferred_with_reason.
+// Session assembly MUST consume this contract - it is not decorative.
+// =============================================================================
+
+export interface MultiSkillSessionAllocationEntry {
+  skill: string
+  selectedByUser: boolean
+  role: MaterialSkillRole
+  representationMode: SkillRepresentationMode
+  weeklyExposureTarget: number
+  minimumMeaningfulDose: number
+  allocatedSessions: number
+  materiallyExpressed: boolean
+  deferReasonCode: DeferralReasonCode | null
+  deferReasonLabel: string | null
+  supportReason: string | null
+  constrainedBy: string[]
+  currentWorkingProgression: string | null
+  historicalCeiling: string | null
+}
+
+export interface MultiSkillSessionAllocationContract {
+  entries: MultiSkillSessionAllocationEntry[]
+  representedSkills: string[]
+  supportExpressedSkills: string[]
+  supportRotationalSkills: string[]
+  deferredSkills: Array<{ skill: string; reasonCode: DeferralReasonCode; reasonLabel: string }>
+  coverageVerdict: 'strong' | 'adequate' | 'narrow'
+  totalSelectedSkills: number
+  totalMateriallyExpressed: number
+  generatedAt: string
+  contractVersion: string
 }
 
 /**
- * Build the authoritative generation materiality contract from canonical profile.
- * This contract is the SINGLE SOURCE OF TRUTH for all downstream generation decisions.
+ * Build the authoritative multi-skill session allocation contract.
+ * This contract forces every selected skill to be classified and drives session assembly.
  */
-export function buildMaterialityContract(
+export function buildAuthoritativeMultiSkillAllocationContract(
+  materialSkillIntent: MaterialSkillIntentEntry[],
+  effectiveTrainingDays: number,
+  jointCautions: string[],
+  equipmentAvailable: string[]
+): MultiSkillSessionAllocationContract {
+  const entries: MultiSkillSessionAllocationEntry[] = []
+  const representedSkills: string[] = []
+  const supportExpressedSkills: string[] = []
+  const supportRotationalSkills: string[] = []
+  const deferredSkills: Array<{ skill: string; reasonCode: DeferralReasonCode; reasonLabel: string }> = []
+  
+  for (const intent of materialSkillIntent) {
+    // Determine representation mode based on role and allocation
+    let representationMode: SkillRepresentationMode = 'deferred'
+    let deferReasonCode: DeferralReasonCode | null = null
+    let deferReasonLabel: string | null = null
+    let supportReason: string | null = null
+    const constrainedBy: string[] = []
+    
+    // Calculate allocated sessions based on exposure target and training days
+    const allocatedSessions = Math.min(
+      intent.weeklyExposureTarget,
+      effectiveTrainingDays
+    )
+    const materiallyExpressed = allocatedSessions >= 1
+    
+    // Check for constraints
+    if (jointCautions.length > 0) {
+      const skillLower = intent.skill.toLowerCase()
+      const hasJointConflict = jointCautions.some(j => {
+        const cautionLower = j.toLowerCase()
+        if (cautionLower.includes('shoulder') && (skillLower.includes('planche') || skillLower.includes('hspu'))) return true
+        if (cautionLower.includes('elbow') && (skillLower.includes('planche') || skillLower.includes('lever'))) return true
+        if (cautionLower.includes('wrist') && skillLower.includes('handstand')) return true
+        return false
+      })
+      if (hasJointConflict) {
+        constrainedBy.push('joint_caution')
+      }
+    }
+    
+    // Classify based on role
+    if (intent.role === 'primary_spine') {
+      representationMode = 'direct_block'
+      representedSkills.push(intent.skill)
+    } else if (intent.role === 'secondary_anchor') {
+      representationMode = 'direct_block'
+      representedSkills.push(intent.skill)
+    } else if (intent.role === 'support') {
+      // Support skills can be expressed or rotational based on session budget
+      if (materiallyExpressed && allocatedSessions >= 2) {
+        representationMode = 'support_expressed'
+        supportExpressedSkills.push(intent.skill)
+        supportReason = 'dedicated_support_work_scheduled'
+      } else if (materiallyExpressed && allocatedSessions >= 1) {
+        representationMode = 'support_rotational'
+        supportRotationalSkills.push(intent.skill)
+        supportReason = 'rotated_through_sessions_for_maintenance'
+      } else {
+        // Not enough budget - becomes carryover or deferred
+        if (effectiveTrainingDays >= 4) {
+          representationMode = 'carryover_only'
+          supportExpressedSkills.push(intent.skill)
+          supportReason = 'expressed_via_carryover_exercises'
+        } else {
+          representationMode = 'deferred'
+          deferReasonCode = 'session_count_insufficient'
+          deferReasonLabel = DEFERRAL_REASON_LABELS[deferReasonCode]
+          deferredSkills.push({ skill: intent.skill, reasonCode: deferReasonCode, reasonLabel: deferReasonLabel })
+        }
+      }
+    } else if (intent.role === 'deferred') {
+      representationMode = 'deferred'
+      // Use the existing deferral reason or determine one
+      if (intent.deferralReason) {
+        // Map string reasons to codes
+        if (intent.deferralReason.includes('budget') || intent.deferralReason.includes('allocation')) {
+          deferReasonCode = 'insufficient_weekly_budget_for_direct_exposure'
+        } else if (intent.deferralReason.includes('primary')) {
+          deferReasonCode = 'primary_goal_dominance_required'
+        } else if (intent.deferralReason.includes('recovery')) {
+          deferReasonCode = 'recovery_budget_priority'
+        } else {
+          deferReasonCode = 'scheduling_constraints'
+        }
+      } else {
+        deferReasonCode = 'insufficient_weekly_budget_for_direct_exposure'
+      }
+      deferReasonLabel = DEFERRAL_REASON_LABELS[deferReasonCode]
+      deferredSkills.push({ skill: intent.skill, reasonCode: deferReasonCode, reasonLabel: deferReasonLabel })
+    }
+    
+    entries.push({
+      skill: intent.skill,
+      selectedByUser: intent.requestedByUser,
+      role: intent.role,
+      representationMode,
+      weeklyExposureTarget: intent.weeklyExposureTarget,
+      minimumMeaningfulDose: intent.minimumMeaningfulExposure,
+      allocatedSessions,
+      materiallyExpressed,
+      deferReasonCode,
+      deferReasonLabel,
+      supportReason,
+      constrainedBy,
+      currentWorkingProgression: intent.currentWorkingProgression,
+      historicalCeiling: intent.historicalCeiling,
+    })
+  }
+  
+  // Calculate coverage verdict
+  const totalSelected = entries.filter(e => e.selectedByUser).length
+  const totalMateriallyExpressed = representedSkills.length + supportExpressedSkills.length + supportRotationalSkills.length
+  const coverageRatio = totalSelected > 0 ? totalMateriallyExpressed / totalSelected : 1
+  
+  let coverageVerdict: 'strong' | 'adequate' | 'narrow' = 'narrow'
+  if (coverageRatio >= 0.8) {
+    coverageVerdict = 'strong'
+  } else if (coverageRatio >= 0.5) {
+    coverageVerdict = 'adequate'
+  }
+  
+  const contract: MultiSkillSessionAllocationContract = {
+    entries,
+    representedSkills,
+    supportExpressedSkills,
+    supportRotationalSkills,
+    deferredSkills,
+    coverageVerdict,
+    totalSelectedSkills: totalSelected,
+    totalMateriallyExpressed,
+    generatedAt: new Date().toISOString(),
+    contractVersion: '2.0.0',
+  }
+  
+  console.log('[PHASE2-MULTI-SKILL-ALLOCATION-CONTRACT]', {
+    totalSelectedSkills: totalSelected,
+    totalMateriallyExpressed,
+    representedCount: representedSkills.length,
+    supportExpressedCount: supportExpressedSkills.length,
+    supportRotationalCount: supportRotationalSkills.length,
+    deferredCount: deferredSkills.length,
+    coverageVerdict,
+    entrySummary: entries.map(e => ({
+      skill: e.skill,
+      role: e.role,
+      mode: e.representationMode,
+      allocated: e.allocatedSessions,
+      deferred: e.deferReasonCode,
+    })),
+  })
+  
+  return contract
+}
+  
+  /**
+  * Build the authoritative generation materiality contract from canonical profile.
+  * This contract is the SINGLE SOURCE OF TRUTH for all downstream generation decisions.
+  */
+  export function buildMaterialityContract(
   canonicalProfile: CanonicalProgrammingProfile,
   weightedSkillAllocation: WeightedSkillAllocation[],
   currentWorkingProgressions: Record<string, { currentWorkingProgression: string | null; historicalCeiling: string | null; truthSource: string; isConservative: boolean }> | null,
@@ -1764,12 +2012,40 @@ export function buildMaterialityContract(
 
     const materiallyAllocated = !!allocation && allocation.exposureSessions >= 1
     let deferralReason: string | null = null
+    let deferralReasonCode: DeferralReasonCode | null = null
     if (!materiallyAllocated) {
       if (!allocation) {
         deferralReason = 'not_included_in_weekly_allocation'
+        deferralReasonCode = 'not_included_in_weekly_allocation'
       } else if (allocation.exposureSessions < 1) {
         deferralReason = 'insufficient_session_budget_for_meaningful_exposure'
+        deferralReasonCode = 'insufficient_weekly_budget_for_direct_exposure'
       }
+    }
+    
+    // [PHASE 2 MULTI-SKILL] Determine representation mode
+    let representationMode: SkillRepresentationMode = 'deferred'
+    let supportReason: string | null = null
+    const constrainedBy: string[] = []
+    const allocatedSessions = allocation?.exposureSessions || 0
+    
+    if (role === 'primary_spine') {
+      representationMode = 'direct_block'
+    } else if (role === 'secondary_anchor') {
+      representationMode = 'direct_block'
+    } else if (role === 'support') {
+      if (materiallyAllocated && allocatedSessions >= 2) {
+        representationMode = 'support_expressed'
+        supportReason = 'dedicated_support_work_scheduled'
+      } else if (materiallyAllocated && allocatedSessions >= 1) {
+        representationMode = 'support_rotational'
+        supportReason = 'rotated_through_sessions_for_maintenance'
+      } else {
+        representationMode = 'carryover_only'
+        supportReason = 'expressed_via_carryover_exercises'
+      }
+    } else if (role === 'deferred') {
+      representationMode = 'deferred'
     }
 
     return {
@@ -1783,6 +2059,12 @@ export function buildMaterialityContract(
       historicalCeiling: progressionData?.historicalCeiling || null,
       progressionTruthSource: progressionData?.truthSource || null,
       deferralReason,
+      // [PHASE 2 MULTI-SKILL] New fields
+      representationMode,
+      deferralReasonCode,
+      allocatedSessions,
+      supportReason,
+      constrainedBy,
     }
   })
 
@@ -4559,6 +4841,46 @@ async function generateAdaptiveProgramImpl(
   )
   
   // ==========================================================================
+  // [PHASE 2 MULTI-SKILL] BUILD AUTHORITATIVE MULTI-SKILL SESSION ALLOCATION CONTRACT
+  // ==========================================================================
+  // This contract sits between the spine truth and actual session generation.
+  // It forces every selected skill into a classification that session assembly MUST respect.
+  // ==========================================================================
+  const multiSkillAllocationContract = buildAuthoritativeMultiSkillAllocationContract(
+  materialityContract.materialSkillIntent,
+  effectiveTrainingDays,
+  materialityContract.jointCautions,
+  materialityContract.equipmentAvailable
+  )
+  
+  // ==========================================================================
+  // [PHASE 2 MULTI-SKILL] AUDIT: Verify no selected skill vanished without classification
+  // ==========================================================================
+  const selectedSkillsFromProfile = materialityContract.selectedSkills
+  const classifiedSkills = new Set(multiSkillAllocationContract.entries.map(e => e.skill))
+  const vanishedSkills = selectedSkillsFromProfile.filter(s => !classifiedSkills.has(s))
+  
+  if (vanishedSkills.length > 0) {
+    console.error('[PHASE2-MULTI-SKILL-AUDIT-FAILURE] Selected skills vanished without classification:', {
+      selectedSkills: selectedSkillsFromProfile,
+      classifiedSkills: Array.from(classifiedSkills),
+      vanishedSkills,
+      verdict: 'AUDIT_FAILURE_SKILLS_VANISHED',
+    })
+  } else {
+    console.log('[PHASE2-MULTI-SKILL-AUDIT-PASS]', {
+      totalSelectedSkills: selectedSkillsFromProfile.length,
+      totalClassifiedSkills: classifiedSkills.size,
+      representedCount: multiSkillAllocationContract.representedSkills.length,
+      supportExpressedCount: multiSkillAllocationContract.supportExpressedSkills.length,
+      supportRotationalCount: multiSkillAllocationContract.supportRotationalSkills.length,
+      deferredCount: multiSkillAllocationContract.deferredSkills.length,
+      allSkillsAccountedFor: true,
+      verdict: 'AUDIT_PASS_ALL_SKILLS_CLASSIFIED',
+    })
+  }
+  
+  // ==========================================================================
   // [PHASE-MATERIALITY] ROOT CAUSE AUDIT
   // ==========================================================================
   // Log whether the current builder is properly consuming multi-skill truth
@@ -5814,11 +6136,13 @@ async function generateAdaptiveProgramImpl(
   // [PHASE-MATERIALITY-SCOPE-FIX] Pass materiality contract data explicitly
   // This avoids the out-of-scope ReferenceError in generateAdaptiveSession
   sessionAssemblyTruth: {
-    currentWorkingProgressions: materialityContract.currentWorkingProgressions,
-    materialSkillIntent: materialityContract.materialSkillIntent,
+  currentWorkingProgressions: materialityContract.currentWorkingProgressions,
+  materialSkillIntent: materialityContract.materialSkillIntent,
   },
   // [PHASE 1 SPINE] Pass authoritative spine contract for generation boundaries
   authoritativeSpine: authoritativeSpineContract,
+  // [PHASE 2 MULTI-SKILL] Pass multi-skill session allocation contract
+  multiSkillAllocation: multiSkillAllocationContract,
   }
     
     const session = generateAdaptiveSession(
@@ -11479,10 +11803,13 @@ return explanations.length > 0 ? explanations : undefined
   
   // Store weekly representation data on the program for display use
   finalProgram.weeklyRepresentation = {
-    policies: weeklyRepresentationPolicy,
-    coverageRatio,
-    verdictCounts,
+  policies: weeklyRepresentationPolicy,
+  coverageRatio,
+  verdictCounts,
   }
+  
+  // [PHASE 2 MULTI-SKILL] Store multi-skill allocation contract on the program
+  finalProgram.multiSkillAllocationContract = multiSkillAllocationContract
   
   // ==========================================================================
   // [PHASE 2 MULTI-SKILL] FINAL COVERAGE CONTRACT VERIFICATION
@@ -12541,7 +12868,9 @@ function getSkillsForSession(
   weightedAllocation: WeightedSkillAllocation[],
   sessionIndex: number,
   totalSessions: number,
-  dayFocus: string
+  dayFocus: string,
+  // [PHASE 2 MULTI-SKILL] Optional multi-skill allocation contract for authoritative skill representation
+  multiSkillAllocation?: MultiSkillSessionAllocationContract | null
 ): SessionSkillAllocation[] {
   if (!weightedAllocation || weightedAllocation.length === 0) {
     return []
@@ -12555,6 +12884,26 @@ function getSkillsForSession(
   // TASK 4: Calculate session type based on position in week
   // This creates variety across sessions - not every session is max effort
   const sessionType = getSessionTypeForPosition(sessionIndex, totalSessions)
+  
+  // [PHASE 2 MULTI-SKILL] Build a lookup of representation modes from the contract
+  const representationModeMap = new Map<string, { mode: SkillRepresentationMode; allocatedSessions: number }>()
+  if (multiSkillAllocation) {
+    for (const entry of multiSkillAllocation.entries) {
+      representationModeMap.set(entry.skill, {
+        mode: entry.representationMode,
+        allocatedSessions: entry.allocatedSessions,
+      })
+    }
+    console.log('[PHASE2-SESSION-SKILL-ALLOCATION]', {
+      sessionIndex,
+      totalSessions,
+      dayFocus,
+      representedSkillsFromContract: multiSkillAllocation.representedSkills,
+      supportExpressedSkills: multiSkillAllocation.supportExpressedSkills,
+      supportRotationalSkills: multiSkillAllocation.supportRotationalSkills,
+      deferredCount: multiSkillAllocation.deferredSkills.length,
+    })
+  }
   
   // [selection-compression-fix] TASK 2: Track which skills get expression this session
   // to ensure weekly exposure guarantees are met
@@ -12828,6 +13177,83 @@ function getSkillsForSession(
     }
   }
   
+  // ==========================================================================
+  // [PHASE 2 MULTI-SKILL] SUPPORT SKILL ENFORCEMENT FROM ALLOCATION CONTRACT
+  // ==========================================================================
+  // Ensure support_expressed and support_rotational skills from the contract
+  // are actually included in sessions. This enforces the contract is not decorative.
+  // ==========================================================================
+  if (multiSkillAllocation) {
+    const alreadyIncluded = new Set(result.map(r => r.skill))
+    
+    // Check support_expressed skills - they MUST appear in enough sessions
+    for (const supportSkill of multiSkillAllocation.supportExpressedSkills) {
+      if (!alreadyIncluded.has(supportSkill)) {
+        const entry = multiSkillAllocation.entries.find(e => e.skill === supportSkill)
+        if (entry && entry.allocatedSessions > 0) {
+          // Determine if this session should include this support skill
+          // Based on allocated sessions distributed across the week
+          const sessionsPerSkill = Math.ceil(totalSessions / entry.allocatedSessions)
+          const shouldIncludeHere = sessionIndex % sessionsPerSkill === 0 || sessionIndex < entry.allocatedSessions
+          
+          if (shouldIncludeHere) {
+            result.push({
+              skill: supportSkill,
+              expressionMode: 'support',
+              weight: 0.1, // Support weight
+            })
+            console.log('[PHASE2-MULTI-SKILL-ENFORCEMENT] Support expressed skill added:', {
+              skill: supportSkill,
+              sessionIndex,
+              reason: 'contract_enforcement_support_expressed',
+            })
+          }
+        }
+      }
+    }
+    
+    // Check support_rotational skills - they rotate through sessions
+    for (const rotationalSkill of multiSkillAllocation.supportRotationalSkills) {
+      if (!alreadyIncluded.has(rotationalSkill)) {
+        const entry = multiSkillAllocation.entries.find(e => e.skill === rotationalSkill)
+        if (entry && entry.allocatedSessions > 0) {
+          // Rotational skills appear in different sessions based on skill index
+          const rotationalIndex = multiSkillAllocation.supportRotationalSkills.indexOf(rotationalSkill)
+          const totalRotational = multiSkillAllocation.supportRotationalSkills.length
+          const sessionSlot = (sessionIndex + rotationalIndex) % Math.max(1, totalRotational)
+          const shouldRotateHere = sessionSlot === 0 && sessionIndex < totalSessions
+          
+          if (shouldRotateHere || sessionIndex < entry.allocatedSessions) {
+            result.push({
+              skill: rotationalSkill,
+              expressionMode: 'support',
+              weight: 0.05, // Rotational support weight
+            })
+            console.log('[PHASE2-MULTI-SKILL-ENFORCEMENT] Support rotational skill added:', {
+              skill: rotationalSkill,
+              sessionIndex,
+              rotationalIndex,
+              reason: 'contract_enforcement_support_rotational',
+            })
+          }
+        }
+      }
+    }
+    
+    // Log contract enforcement summary
+    console.log('[PHASE2-MULTI-SKILL-ENFORCEMENT-SUMMARY]', {
+      sessionIndex,
+      skillsBeforeEnforcement: alreadyIncluded.size,
+      skillsAfterEnforcement: result.length,
+      supportExpressedEnforced: result.filter(r => 
+        multiSkillAllocation.supportExpressedSkills.includes(r.skill) && !alreadyIncluded.has(r.skill)
+      ).map(r => r.skill),
+      supportRotationalEnforced: result.filter(r => 
+        multiSkillAllocation.supportRotationalSkills.includes(r.skill) && !alreadyIncluded.has(r.skill)
+      ).map(r => r.skill),
+    })
+  }
+  
   // [selected-skill-exposure] TASK 7: Log session skill allocation summary
   console.log('[selected-skill-exposure] Session allocation summary:', {
     sessionIndex,
@@ -13062,6 +13488,8 @@ function generateAdaptiveSession(
   sessionAssemblyTruth,
   // [PHASE 1 SPINE] Extract authoritative spine contract for generation boundaries
   authoritativeSpine,
+  // [PHASE 2 MULTI-SKILL] Extract multi-skill session allocation contract
+  multiSkillAllocation,
   } = context
   
   // [PHASE 1 SPINE] Validate authoritative spine contract is present and active
@@ -13135,11 +13563,13 @@ function generateAdaptiveSession(
   
   // SKILL EXPRESSION FIX: Determine which skills should be expressed in this session
   // based on weighted allocation and session index
+  // [PHASE 2 MULTI-SKILL] Pass multi-skill allocation contract for authoritative skill enforcement
   const skillsForThisSession = getSkillsForSession(
-    weightedSkillAllocation || [],
-    sessionIndex || 0,
-    totalSessions || 1,
-    day.focus
+  weightedSkillAllocation || [],
+  sessionIndex || 0,
+  totalSessions || 1,
+  day.focus,
+  multiSkillAllocation
   )
   
   sessionStep = 'skills_for_session_resolved'

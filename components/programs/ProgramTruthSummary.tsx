@@ -61,6 +61,9 @@ interface BroaderSkillCoverageContract {
   representedSkills: string[]
   deferredSkills: Array<{ skill: string; reason: string }>
   supportOnlySkills: string[]
+  // [PHASE 2 MULTI-SKILL] New fields from allocation contract
+  supportExpressedSkills?: string[]
+  supportRotationalSkills?: string[]
 }
 
 interface TruthExplanation {
@@ -585,6 +588,34 @@ export function ProgramTruthSummary({ truthExplanation, className }: ProgramTrut
                         )
                       })}
                     </div>
+                    
+                    {/* Support expressed skills - explicit support work scheduled */}
+                    {broaderSkillCoverage.supportExpressedSkills && broaderSkillCoverage.supportExpressedSkills.length > 0 && (
+                      <div className="text-xs text-[#6A6A6A] pt-1 space-y-1">
+                        <p className="font-medium text-[#8A8A8A]">Support work included:</p>
+                        <div className="flex flex-wrap gap-1 pl-2">
+                          {broaderSkillCoverage.supportExpressedSkills.map((skill) => (
+                            <span key={skill} className="text-purple-400">
+                              {skill.replace(/_/g, ' ')}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Support rotational skills - rotated through sessions */}
+                    {broaderSkillCoverage.supportRotationalSkills && broaderSkillCoverage.supportRotationalSkills.length > 0 && (
+                      <div className="text-xs text-[#6A6A6A] pt-1 space-y-1">
+                        <p className="font-medium text-[#8A8A8A]">Maintenance rotation:</p>
+                        <div className="flex flex-wrap gap-1 pl-2">
+                          {broaderSkillCoverage.supportRotationalSkills.map((skill) => (
+                            <span key={skill} className="text-blue-300">
+                              {skill.replace(/_/g, ' ')}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                     
                     {/* Deferred skills with reasons */}
                     {broaderSkillCoverage.deferredSkills.length > 0 && (

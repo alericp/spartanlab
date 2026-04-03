@@ -52,6 +52,8 @@
 
 import type { PrimaryGoal, ExperienceLevel, TrainingDays, SessionLength } from './program-service'
 import type { EquipmentType } from './adaptive-exercise-pool'
+// [LIVE-EXECUTION-TRUTH] Import band types for execution truth contract
+import type { ResistanceBandColor } from './band-progression-engine'
 import type { RecoveryLevel } from './recovery-engine'
 import type { WeeklyStructure, DayStructure } from './program-structure-engine'
 import type { ExerciseSelection, SelectedExercise } from './program-exercise-selector'
@@ -847,6 +849,34 @@ export interface AdaptiveExercise {
     skillSupportTargets: string[]    // Skills this exercise supports
     loadDecisionSummary: string      // "Weighted (+35 lb)" or "Bodyweight today"
     restLabel?: string               // "90-120s" or "2-3 min"
+  }
+  // [LIVE-EXECUTION-TRUTH] Authoritative runtime execution contract
+  // This replaces heuristic-based band/progression detection in the live workout runner
+  executionTruth?: {
+    // Skill identity
+    sourceSkill: string | null
+    // Progression authority - currentWorking is the authoritative level, not historical
+    currentWorkingProgression: string | null
+    historicalCeiling: string | null
+    usesConservativeStart: boolean
+    // Assisted execution contract
+    assistedRecommended: boolean      // Current working level suggests assisted
+    assistedAllowed: boolean          // Exercise supports assisted variants
+    bandRecommended: boolean          // Band assistance specifically recommended
+    recommendedBandColor: ResistanceBandColor | null
+    bandSelectable: boolean           // User can select a band for this exercise
+    // Fallback/downgrade options
+    fallbackEasierExerciseId: string | null
+    fallbackEasierExerciseName: string | null
+    fallbackEasierBandColor: ResistanceBandColor | null
+    // Adaptive downgrade triggers
+    downgradeTrigger: {
+      highRpeThreshold: number        // RPE above this suggests downgrade (e.g., 9)
+      missedTargetThreshold: number   // % below target that triggers downgrade (e.g., 0.5 = 50%)
+      allowAutoAdjust: boolean        // Can system auto-apply the downgrade
+    } | null
+    // Explanation for coaching display
+    explanationNote: string | null
   }
 }
 
@@ -17599,6 +17629,8 @@ function mapToAdaptiveExercises(
     restSeconds: s.restSeconds,
     // [coach-layer] TASK 2: Build coaching metadata from selection trace
     coachingMeta: buildExerciseCoachingMetaFromSelection(s, primaryGoal),
+    // [LIVE-EXECUTION-TRUTH] Pass through execution truth contract from selection
+    executionTruth: s.executionTruth,
     }
   }).filter((e): e is AdaptiveExercise => e !== null)
 }

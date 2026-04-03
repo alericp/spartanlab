@@ -3,6 +3,8 @@
 
 import type { PrimaryGoal, ExperienceLevel, SessionLength } from './program-service'
 import type { DayFocus, DayStructure } from './program-structure-engine'
+// [LIVE-EXECUTION-TRUTH] Band types for execution truth contract
+import type { ResistanceBandColor } from './band-progression-engine'
 import {
   type Exercise,
   type EquipmentType,
@@ -291,6 +293,28 @@ export interface SelectedExercise {
                  'fallback_after_validation' | null
   // [exercise-trace] TASK 2: Full selection traceability
   selectionTrace?: ExerciseSelectionTrace
+  // [LIVE-EXECUTION-TRUTH] Authoritative runtime execution contract
+  // This replaces heuristic-based band/progression detection in the live workout runner
+  executionTruth?: {
+    sourceSkill: string | null
+    currentWorkingProgression: string | null
+    historicalCeiling: string | null
+    usesConservativeStart: boolean
+    assistedRecommended: boolean
+    assistedAllowed: boolean
+    bandRecommended: boolean
+    recommendedBandColor: ResistanceBandColor | null
+    bandSelectable: boolean
+    fallbackEasierExerciseId: string | null
+    fallbackEasierExerciseName: string | null
+    fallbackEasierBandColor: ResistanceBandColor | null
+    downgradeTrigger: {
+      highRpeThreshold: number
+      missedTargetThreshold: number
+      allowAutoAdjust: boolean
+    } | null
+    explanationNote: string | null
+  }
 }
 
 // =============================================================================
@@ -1858,6 +1882,11 @@ function selectMainExercises(
     // [exercise-trace] TASK 7: Log the trace
     logExerciseTrace(selectionTrace)
 
+    // [LIVE-EXECUTION-TRUTH] Build the authoritative execution truth contract
+    // Use the first influencing skill as the matched skill for progression data
+    const matchedSkillForExecution = traceContext?.influencingSkills?.[0]?.skillId || finalExercise.primarySkill || null
+    const executionTruth = buildExecutionTruth(finalExercise, currentWorkingProgressions, matchedSkillForExecution)
+    
     selected.push({
       exercise: finalExercise,
       sets: finalSets ?? adjustSetsForLevel(finalExercise.defaultSets, experienceLevel),
@@ -1881,6 +1910,8 @@ function selectMainExercises(
     noLoadReason,
     // [exercise-trace] TASK 2: Attach the trace
     selectionTrace,
+    // [LIVE-EXECUTION-TRUTH] Attach execution truth for live workout runner
+    executionTruth,
     })
     return true
   }
@@ -4051,6 +4082,146 @@ function applyMaterialityScoreAdjustments(
   })
   
   return finalExercises
+}
+
+// =============================================================================
+// [LIVE-EXECUTION-TRUTH] Helper to build authoritative execution truth contract
+// =============================================================================
+
+/**
+ * Build the executionTruth contract for an exercise.
+ * This replaces heuristic-based band/progression detection in the live workout runner.
+ */
+function buildExecutionTruth(
+  exercise: Exercise,
+  currentWorkingProgressions: Record<string, {
+    currentWorkingProgression: string | null
+    historicalCeiling: string | null
+    truthSource: string
+    isConservative: boolean
+  }> | null | undefined,
+  matchedSkill: string | null,
+): SelectedExercise['executionTruth'] {
+  // Determine skill binding
+  const sourceSkill = matchedSkill || exercise.primarySkill || null
+  
+  // Get current working progression data if available
+  const progressionData = sourceSkill && currentWorkingProgressions 
+    ? currentWorkingProgressions[sourceSkill] 
+    : null
+  
+  const currentWorkingProgression = progressionData?.currentWorkingProgression || null
+  const historicalCeiling = progressionData?.historicalCeiling || null
+  const usesConservativeStart = progressionData?.isConservative ?? false
+  
+  // Determine if this exercise is assisted or supports assistance
+  const exerciseNameLower = exercise.name.toLowerCase()
+  const exerciseIdLower = exercise.id.toLowerCase()
+  
+  // Check if exercise name/id contains assisted indicators
+  const isAssistedExercise = 
+    exerciseNameLower.includes('assisted') ||
+    exerciseNameLower.includes('band') ||
+    exerciseIdLower.includes('assisted') ||
+    exerciseIdLower.includes('band_')
+  
+  // Check if this is a skill that commonly uses band assistance
+  const bandSupportedSkills = ['front_lever', 'back_lever', 'planche', 'muscle_up', 'pull_up', 'dip']
+  const skillSupportsBands = sourceSkill 
+    ? bandSupportedSkills.some(s => sourceSkill.toLowerCase().includes(s))
+    : bandSupportedSkills.some(s => exerciseIdLower.includes(s))
+  
+  // Assisted is recommended if: 
+  // 1. It's explicitly an assisted exercise, OR
+  // 2. Using conservative start and skill supports bands
+  const assistedRecommended = isAssistedExercise || (usesConservativeStart && skillSupportsBands)
+  const assistedAllowed = skillSupportsBands || isAssistedExercise
+  
+  // Band recommendation logic
+  const bandRecommended = assistedRecommended || isAssistedExercise
+  const bandSelectable = assistedAllowed || isAssistedExercise
+  
+  // Try to infer recommended band color from exercise notes or name
+  let recommendedBandColor: ResistanceBandColor | null = null
+  const noteOrName = (exercise.notes || '') + ' ' + exercise.name
+  const noteLower = noteOrName.toLowerCase()
+  const bandColors: ResistanceBandColor[] = ['yellow', 'red', 'black', 'purple', 'green', 'blue']
+  for (const color of bandColors) {
+    if (noteLower.includes(color)) {
+      recommendedBandColor = color
+      break
+    }
+  }
+  
+  // Conservative start defaults to heavier assistance
+  if (bandRecommended && !recommendedBandColor && usesConservativeStart) {
+    recommendedBandColor = 'purple' // Default to heavier band for conservative starts
+  }
+  
+  // Find fallback easier progression from progression ladders
+  let fallbackEasierExerciseId: string | null = null
+  let fallbackEasierExerciseName: string | null = null
+  let fallbackEasierBandColor: ResistanceBandColor | null = null
+  
+  // Get easier progression if available
+  const easierProgression = getProgressionDown(exercise.id)
+  if (easierProgression) {
+    fallbackEasierExerciseId = easierProgression.id
+    fallbackEasierExerciseName = easierProgression.name
+    
+    // If easier progression is band-assisted, suggest heavier band
+    if (easierProgression.name.toLowerCase().includes('band') || 
+        easierProgression.id.toLowerCase().includes('band')) {
+      fallbackEasierBandColor = recommendedBandColor 
+        ? getNextHeavierBand(recommendedBandColor) 
+        : 'purple'
+    }
+  }
+  
+  // Downgrade trigger thresholds
+  const downgradeTrigger = skillSupportsBands || isAssistedExercise ? {
+    highRpeThreshold: 9, // RPE 9+ suggests too hard
+    missedTargetThreshold: 0.5, // Achieving <50% of target suggests too hard
+    allowAutoAdjust: false, // Require user confirmation by default
+  } : null
+  
+  // Build explanation note
+  let explanationNote: string | null = null
+  if (usesConservativeStart && historicalCeiling && currentWorkingProgression !== historicalCeiling) {
+    explanationNote = `Starting conservatively below historical ceiling (${historicalCeiling}). Build quality reps before progressing.`
+  } else if (bandRecommended && recommendedBandColor) {
+    explanationNote = `Band assistance recommended (${recommendedBandColor}) for quality execution.`
+  }
+  
+  return {
+    sourceSkill,
+    currentWorkingProgression,
+    historicalCeiling,
+    usesConservativeStart,
+    assistedRecommended,
+    assistedAllowed,
+    bandRecommended,
+    recommendedBandColor,
+    bandSelectable,
+    fallbackEasierExerciseId,
+    fallbackEasierExerciseName,
+    fallbackEasierBandColor,
+    downgradeTrigger,
+    explanationNote,
+  }
+}
+
+/**
+ * Get the next heavier resistance band color.
+ * Order from lightest to heaviest: yellow → red → black → purple → green → blue
+ */
+function getNextHeavierBand(currentBand: ResistanceBandColor): ResistanceBandColor {
+  const bandOrder: ResistanceBandColor[] = ['yellow', 'red', 'black', 'purple', 'green', 'blue']
+  const currentIndex = bandOrder.indexOf(currentBand)
+  if (currentIndex === -1 || currentIndex >= bandOrder.length - 1) {
+    return 'blue' // Already heaviest or not found
+  }
+  return bandOrder[currentIndex + 1]
 }
 
 /**

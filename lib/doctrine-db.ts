@@ -139,12 +139,18 @@ export interface DoctrineCoverageSummary {
 // =============================================================================
 
 async function doctrineTablesExist(): Promise<boolean> {
-  if (!isDatabaseAvailable()) {
+  // [PHASE 1 FIX] isDatabaseAvailable is async - must await
+  const dbAvailable = await isDatabaseAvailable()
+  if (!dbAvailable) {
     return false
   }
   
   try {
-    const sql = getSqlClient()
+    // [PHASE 1 FIX] getSqlClient is async - must await
+    const sql = await getSqlClient()
+    if (!sql) {
+      return false
+    }
     const result = await sql`
       SELECT EXISTS (
         SELECT FROM information_schema.tables 
@@ -164,7 +170,9 @@ async function doctrineTablesExist(): Promise<boolean> {
 // =============================================================================
 
 export async function getDoctrineSources(): Promise<DoctrineSource[]> {
-  if (!isDatabaseAvailable()) {
+  // [PHASE 1 FIX] isDatabaseAvailable is async - must await
+  const dbAvailable = await isDatabaseAvailable()
+  if (!dbAvailable) {
     return []
   }
   
@@ -174,7 +182,9 @@ export async function getDoctrineSources(): Promise<DoctrineSource[]> {
   }
   
   try {
-    const sql = getSqlClient()
+    // [PHASE 1 FIX] getSqlClient is async - must await
+    const sql = await getSqlClient()
+    if (!sql) return []
     const rows = await sql`
       SELECT 
         id,
@@ -206,7 +216,9 @@ export async function getDoctrinePrinciples(filters?: {
   doctrineFamily?: string
   levelScope?: string
 }): Promise<DoctrinePrinciple[]> {
-  if (!isDatabaseAvailable()) {
+  // [PHASE 1 FIX] isDatabaseAvailable is async - must await
+  const dbAvailable = await isDatabaseAvailable()
+  if (!dbAvailable) {
     return []
   }
   
@@ -216,7 +228,9 @@ export async function getDoctrinePrinciples(filters?: {
   }
   
   try {
-    const sql = getSqlClient()
+    // [PHASE 1 FIX] getSqlClient is async - must await
+    const sql = await getSqlClient()
+    if (!sql) return []
     let query = sql`
       SELECT 
         id,
@@ -266,7 +280,9 @@ export async function getProgressionRules(filters?: {
   skillKey?: string
   currentLevelKey?: string
 }): Promise<ProgressionRule[]> {
-  if (!isDatabaseAvailable()) {
+  // [PHASE 1 FIX] isDatabaseAvailable is async - must await
+  const dbAvailable = await isDatabaseAvailable()
+  if (!dbAvailable) {
     return []
   }
   
@@ -276,7 +292,9 @@ export async function getProgressionRules(filters?: {
   }
   
   try {
-    const sql = getSqlClient()
+    // [PHASE 1 FIX] getSqlClient is async - must await
+    const sql = await getSqlClient()
+    if (!sql) return []
     const rows = await sql`
       SELECT 
         id,
@@ -318,7 +336,9 @@ export async function getExerciseSelectionRules(filters?: {
   skillKey?: string
   exerciseKey?: string
 }): Promise<ExerciseSelectionRule[]> {
-  if (!isDatabaseAvailable()) {
+  // [PHASE 1 FIX] isDatabaseAvailable is async - must await
+  const dbAvailable = await isDatabaseAvailable()
+  if (!dbAvailable) {
     return []
   }
   
@@ -328,7 +348,9 @@ export async function getExerciseSelectionRules(filters?: {
   }
   
   try {
-    const sql = getSqlClient()
+    // [PHASE 1 FIX] getSqlClient is async - must await
+    const sql = await getSqlClient()
+    if (!sql) return []
     const rows = await sql`
       SELECT 
         id,
@@ -369,7 +391,9 @@ export async function getExerciseSelectionRules(filters?: {
 }
 
 export async function getContraindicationRules(exerciseKey?: string): Promise<ContraindicationRule[]> {
-  if (!isDatabaseAvailable()) {
+  // [PHASE 1 FIX] isDatabaseAvailable is async - must await
+  const dbAvailable = await isDatabaseAvailable()
+  if (!dbAvailable) {
     return []
   }
   
@@ -379,7 +403,9 @@ export async function getContraindicationRules(exerciseKey?: string): Promise<Co
   }
   
   try {
-    const sql = getSqlClient()
+    // [PHASE 1 FIX] getSqlClient is async - must await
+    const sql = await getSqlClient()
+    if (!sql) return []
     const rows = await sql`
       SELECT 
         id,
@@ -407,7 +433,9 @@ export async function getContraindicationRules(exerciseKey?: string): Promise<Co
 }
 
 export async function getMethodRules(methodKey?: string): Promise<MethodRule[]> {
-  if (!isDatabaseAvailable()) {
+  // [PHASE 1 FIX] isDatabaseAvailable is async - must await
+  const dbAvailable = await isDatabaseAvailable()
+  if (!dbAvailable) {
     return []
   }
   
@@ -417,7 +445,9 @@ export async function getMethodRules(methodKey?: string): Promise<MethodRule[]> 
   }
   
   try {
-    const sql = getSqlClient()
+    // [PHASE 1 FIX] getSqlClient is async - must await
+    const sql = await getSqlClient()
+    if (!sql) return []
     const rows = await sql`
       SELECT 
         id,
@@ -450,7 +480,9 @@ export async function getPrescriptionRules(filters?: {
   levelScope?: string
   goalScope?: string
 }): Promise<PrescriptionRule[]> {
-  if (!isDatabaseAvailable()) {
+  // [PHASE 1 FIX] isDatabaseAvailable is async - must await
+  const dbAvailable = await isDatabaseAvailable()
+  if (!dbAvailable) {
     return []
   }
   
@@ -460,7 +492,9 @@ export async function getPrescriptionRules(filters?: {
   }
   
   try {
-    const sql = getSqlClient()
+    // [PHASE 1 FIX] getSqlClient is async - must await
+    const sql = await getSqlClient()
+    if (!sql) return []
     const rows = await sql`
       SELECT 
         id,
@@ -494,7 +528,9 @@ export async function getPrescriptionRules(filters?: {
 }
 
 export async function getCarryoverRules(targetSkillKey?: string): Promise<CarryoverRule[]> {
-  if (!isDatabaseAvailable()) {
+  // [PHASE 1 FIX] isDatabaseAvailable is async - must await
+  const dbAvailable = await isDatabaseAvailable()
+  if (!dbAvailable) {
     return []
   }
   
@@ -504,7 +540,9 @@ export async function getCarryoverRules(targetSkillKey?: string): Promise<Carryo
   }
   
   try {
-    const sql = getSqlClient()
+    // [PHASE 1 FIX] getSqlClient is async - must await
+    const sql = await getSqlClient()
+    if (!sql) return []
     const rows = await sql`
       SELECT 
         id,
@@ -551,7 +589,9 @@ export async function getDoctrineCoverageSummary(): Promise<DoctrineCoverageSumm
     totalRulesCount: 0,
   }
   
-  if (!isDatabaseAvailable()) {
+  // [PHASE 1 FIX] isDatabaseAvailable is async - must await
+  const dbAvailable = await isDatabaseAvailable()
+  if (!dbAvailable) {
     return defaultSummary
   }
   
@@ -561,7 +601,9 @@ export async function getDoctrineCoverageSummary(): Promise<DoctrineCoverageSumm
   }
   
   try {
-    const sql = getSqlClient()
+    // [PHASE 1 FIX] getSqlClient is async - must await
+    const sql = await getSqlClient()
+    if (!sql) return defaultSummary
     
     // Get counts from all tables
     const [

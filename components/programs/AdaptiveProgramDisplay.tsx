@@ -43,6 +43,7 @@ import {
 } from '@/lib/active-week-mutation-service'
 import { runAdaptiveDisplayParityAudit } from '@/lib/adaptive-display-contract'
 import { ProgramTruthSummary } from './ProgramTruthSummary'
+import { ProgramErrorBoundary } from '@/components/system/ProgramErrorBoundary'
 
 interface AdaptiveProgramDisplayProps {
   program: AdaptiveProgram
@@ -1888,10 +1889,13 @@ export function AdaptiveProgramDisplay({
       </Card>
 
       {/* [AI-TRUTH-ALIGNMENT] Why This Plan - Truth Explanation Summary */}
-      <ProgramTruthSummary 
-        truthExplanation={program.truthExplanation} 
-        selectedSkillTrace={program.selectedSkillTrace}
-      />
+      {/* [UI CONTRACT ALIGNMENT] Wrapped in ErrorBoundary to catch undefined crashes */}
+      <ProgramErrorBoundary fallbackMessage="Unable to display program explanation. Your program data is safe.">
+        <ProgramTruthSummary 
+          truthExplanation={program.truthExplanation} 
+          selectedSkillTrace={program.selectedSkillTrace}
+        />
+      </ProgramErrorBoundary>
 
       {/* Sessions - PHASE 2: Uses safe validSessions array */}
       {/* [PHASE 8 TASK 5] Frequency explanation truth audit */}

@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
+import { getSafeSkillTrace } from '@/lib/safe-access'
 
 /**
  * PROGRAM TRUTH SUMMARY COMPONENT
@@ -1058,133 +1059,141 @@ export function ProgramTruthSummary({ truthExplanation, selectedSkillTrace, clas
             )}
             
             {/* [PHASE 1] Selected Skill Trace - Shows exact skill disposition */}
-            {/* Show for any program with selectedSkillTrace to prove skill tracking works */}
-            {selectedSkillTrace && selectedSkillTrace.sourceSkillCount >= 1 && (
-              <div className="space-y-2">
-                <h4 className="text-xs font-medium text-[#8A8A8A] uppercase tracking-wide">
-                  Skill Expression This Cycle ({selectedSkillTrace.sourceSkillCount} selected)
-                </h4>
-                <div className="text-xs bg-[#1E1E1E] rounded p-2.5 space-y-2">
-                  {/* Direct expression */}
-                  {selectedSkillTrace.finalWeekExpression.directlyRepresentedSkills.length > 0 && (
-                    <div className="flex items-start gap-2">
-                      <span className="text-[#6A6A6A] shrink-0">Direct:</span>
-                      <div className="flex flex-wrap gap-1">
-                        {selectedSkillTrace.finalWeekExpression.directlyRepresentedSkills.map((skill) => (
-                          <Badge key={skill} variant="outline" className="bg-green-500/10 text-green-400 border-green-500/30 text-xs">
-                            {skill.replace(/_/g, ' ')}
-                          </Badge>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  
-                  {/* Support expression */}
-                  {selectedSkillTrace.finalWeekExpression.supportExpressedSkills.length > 0 && (
-                    <div className="flex items-start gap-2">
-                      <span className="text-[#6A6A6A] shrink-0">Support:</span>
-                      <div className="flex flex-wrap gap-1">
-                        {selectedSkillTrace.finalWeekExpression.supportExpressedSkills.map((skill) => (
-                          <Badge key={skill} variant="outline" className="bg-blue-500/10 text-blue-400 border-blue-500/30 text-xs">
-                            {skill.replace(/_/g, ' ')}
-                          </Badge>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  
-                  {/* Rotational expression */}
-                  {selectedSkillTrace.finalWeekExpression.rotationalSkills.length > 0 && (
-                    <div className="flex items-start gap-2">
-                      <span className="text-[#6A6A6A] shrink-0">Rotational:</span>
-                      <div className="flex flex-wrap gap-1">
-                        {selectedSkillTrace.finalWeekExpression.rotationalSkills.map((skill) => (
-                          <Badge key={skill} variant="outline" className="bg-purple-500/10 text-purple-400 border-purple-500/30 text-xs">
-                            {skill.replace(/_/g, ' ')}
-                          </Badge>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  
-                  {/* Deferred skills with detailed reasons */}
-                  {selectedSkillTrace.finalWeekExpression.deferredSkills.length > 0 && (
-                    <div className="flex items-start gap-2">
-                      <span className="text-[#6A6A6A] shrink-0">Deferred:</span>
-                      <div className="space-y-1">
-                        {selectedSkillTrace.finalWeekExpression.deferredSkills.map(({ skill, reasonLabel }) => (
-                          <div key={skill} className="flex items-center gap-1">
-                            <Badge variant="outline" className="bg-amber-500/10 text-amber-400 border-amber-500/30 text-xs">
+            {/* [UI CONTRACT ALIGNMENT] Use safe accessor to prevent undefined crashes */}
+            {(() => {
+              // Safe access: get normalized skill trace with all fields guaranteed
+              const safeTrace = selectedSkillTrace ? getSafeSkillTrace(selectedSkillTrace) : null
+              if (!safeTrace || safeTrace.sourceSkillCount < 1) return null
+              
+              const weekExpr = safeTrace.finalWeekExpression
+              
+              return (
+                <div className="space-y-2">
+                  <h4 className="text-xs font-medium text-[#8A8A8A] uppercase tracking-wide">
+                    Skill Expression This Cycle ({safeTrace.sourceSkillCount} selected)
+                  </h4>
+                  <div className="text-xs bg-[#1E1E1E] rounded p-2.5 space-y-2">
+                    {/* Direct expression */}
+                    {weekExpr.directlyRepresentedSkills.length > 0 && (
+                      <div className="flex items-start gap-2">
+                        <span className="text-[#6A6A6A] shrink-0">Direct:</span>
+                        <div className="flex flex-wrap gap-1">
+                          {weekExpr.directlyRepresentedSkills.map((skill) => (
+                            <Badge key={skill} variant="outline" className="bg-green-500/10 text-green-400 border-green-500/30 text-xs">
                               {skill.replace(/_/g, ' ')}
                             </Badge>
-                            <span className="text-[#5A5A5A] italic">{reasonLabel}</span>
-                          </div>
-                        ))}
+                          ))}
+                        </div>
                       </div>
-                    </div>
-                  )}
-                  
-                  {/* Coverage summary */}
-                  <div className="flex items-center gap-2 pt-1.5 border-t border-[#2A2A2A] mt-2">
-                    <span className={cn(
-                      'text-xs font-medium',
-                      selectedSkillTrace.finalWeekExpression.coverageVerdict === 'strong' && 'text-green-400',
-                      selectedSkillTrace.finalWeekExpression.coverageVerdict === 'adequate' && 'text-blue-400',
-                      selectedSkillTrace.finalWeekExpression.coverageVerdict === 'weak' && 'text-amber-400'
-                    )}>
-                      {selectedSkillTrace.finalWeekExpression.coverageVerdict === 'strong' && 'Strong coverage'}
-                      {selectedSkillTrace.finalWeekExpression.coverageVerdict === 'adequate' && 'Adequate coverage'}
-                      {selectedSkillTrace.finalWeekExpression.coverageVerdict === 'weak' && 'Focused coverage'}
-                    </span>
-                    <span className="text-[#5A5A5A] text-xs">
-                      ({Math.round(selectedSkillTrace.finalWeekExpression.coverageRatio * 100)}% of {selectedSkillTrace.sourceSkillCount} skills expressed)
-                    </span>
-                  </div>
-                  
-                  {/* Multi-skill explanation when narrowed */}
-                  {selectedSkillTrace.sourceSkillCount > selectedSkillTrace.finalWeekExpression.directlyRepresentedSkills.length + selectedSkillTrace.finalWeekExpression.supportExpressedSkills.length && (
-                    <p className="text-[#5A5A5A] text-xs italic pt-1">
-                      This cycle prioritizes {selectedSkillTrace.primarySpineCount + selectedSkillTrace.secondaryAnchorCount} skills directly while preserving {selectedSkillTrace.tertiaryCount + selectedSkillTrace.supportCount} others as support/rotational based on recovery, schedule budget, and current readiness.
-                    </p>
-                  )}
-                  
-                  {/* [PHASE 1] Current Working Progression Truth */}
-                  {selectedSkillTrace.skillTraces && selectedSkillTrace.skillTraces.some(t => t.currentWorkingProgression || t.historicalCeiling) && (
-                    <div className="pt-2 mt-2 border-t border-[#2A2A2A]">
-                      <div className="text-[#6A6A6A] text-xs mb-1.5">Current Working Levels:</div>
-                      <div className="space-y-1">
-                        {selectedSkillTrace.skillTraces
-                          .filter(t => t.currentWorkingProgression || t.historicalCeiling)
-                          .slice(0, 4) // Show top 4 skills
-                          .map(trace => (
-                            <div key={trace.skill} className="flex items-center gap-2 text-xs">
-                              <span className="text-[#8A8A8A] capitalize">{trace.skill.replace(/_/g, ' ')}:</span>
-                              {trace.currentWorkingProgression ? (
-                                <span className="text-[#A4ACB8]">
-                                  {trace.currentWorkingProgression.replace(/_/g, ' ')}
-                                  {trace.isConservative && (
-                                    <span className="text-[#5A5A5A] ml-1">(conservative)</span>
-                                  )}
-                                </span>
-                              ) : trace.historicalCeiling ? (
-                                <span className="text-[#5A5A5A] italic">
-                                  Historical: {trace.historicalCeiling.replace(/_/g, ' ')}
-                                </span>
-                              ) : null}
-                              {trace.historicalCeiling && trace.currentWorkingProgression && 
-                               trace.historicalCeiling !== trace.currentWorkingProgression && (
-                                <span className="text-[#4A4A4A] text-[10px]">
-                                  (ceiling: {trace.historicalCeiling.replace(/_/g, ' ')})
-                                </span>
-                              )}
+                    )}
+                    
+                    {/* Support expression */}
+                    {weekExpr.supportExpressedSkills.length > 0 && (
+                      <div className="flex items-start gap-2">
+                        <span className="text-[#6A6A6A] shrink-0">Support:</span>
+                        <div className="flex flex-wrap gap-1">
+                          {weekExpr.supportExpressedSkills.map((skill) => (
+                            <Badge key={skill} variant="outline" className="bg-blue-500/10 text-blue-400 border-blue-500/30 text-xs">
+                              {skill.replace(/_/g, ' ')}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Rotational expression */}
+                    {weekExpr.rotationalSkills.length > 0 && (
+                      <div className="flex items-start gap-2">
+                        <span className="text-[#6A6A6A] shrink-0">Rotational:</span>
+                        <div className="flex flex-wrap gap-1">
+                          {weekExpr.rotationalSkills.map((skill) => (
+                            <Badge key={skill} variant="outline" className="bg-purple-500/10 text-purple-400 border-purple-500/30 text-xs">
+                              {skill.replace(/_/g, ' ')}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Deferred skills with detailed reasons */}
+                    {weekExpr.deferredSkills.length > 0 && (
+                      <div className="flex items-start gap-2">
+                        <span className="text-[#6A6A6A] shrink-0">Deferred:</span>
+                        <div className="space-y-1">
+                          {weekExpr.deferredSkills.map(({ skill, reasonLabel }) => (
+                            <div key={skill} className="flex items-center gap-1">
+                              <Badge variant="outline" className="bg-amber-500/10 text-amber-400 border-amber-500/30 text-xs">
+                                {skill.replace(/_/g, ' ')}
+                              </Badge>
+                              <span className="text-[#5A5A5A] italic">{reasonLabel || 'deferred'}</span>
                             </div>
                           ))}
+                        </div>
                       </div>
+                    )}
+                    
+                    {/* Coverage summary */}
+                    <div className="flex items-center gap-2 pt-1.5 border-t border-[#2A2A2A] mt-2">
+                      <span className={cn(
+                        'text-xs font-medium',
+                        weekExpr.coverageVerdict === 'strong' && 'text-green-400',
+                        weekExpr.coverageVerdict === 'adequate' && 'text-blue-400',
+                        weekExpr.coverageVerdict === 'weak' && 'text-amber-400'
+                      )}>
+                        {weekExpr.coverageVerdict === 'strong' && 'Strong coverage'}
+                        {weekExpr.coverageVerdict === 'adequate' && 'Adequate coverage'}
+                        {weekExpr.coverageVerdict === 'weak' && 'Focused coverage'}
+                      </span>
+                      <span className="text-[#5A5A5A] text-xs">
+                        ({Math.round(weekExpr.coverageRatio * 100)}% of {safeTrace.sourceSkillCount} skills expressed)
+                      </span>
                     </div>
-                  )}
+                    
+                    {/* Multi-skill explanation when narrowed */}
+                    {safeTrace.sourceSkillCount > weekExpr.directlyRepresentedSkills.length + weekExpr.supportExpressedSkills.length && (
+                      <p className="text-[#5A5A5A] text-xs italic pt-1">
+                        This cycle prioritizes {safeTrace.primarySpineCount + safeTrace.secondaryAnchorCount} skills directly while preserving {safeTrace.tertiaryCount + safeTrace.supportCount} others as support/rotational based on recovery, schedule budget, and current readiness.
+                      </p>
+                    )}
+                    
+                    {/* [PHASE 1] Current Working Progression Truth */}
+                    {safeTrace.skillTraces && safeTrace.skillTraces.length > 0 && safeTrace.skillTraces.some((t: Record<string, unknown>) => t.currentWorkingProgression || t.historicalCeiling) && (
+                      <div className="pt-2 mt-2 border-t border-[#2A2A2A]">
+                        <div className="text-[#6A6A6A] text-xs mb-1.5">Current Working Levels:</div>
+                        <div className="space-y-1">
+                          {(safeTrace.skillTraces as Array<{skill?: string; currentWorkingProgression?: string; historicalCeiling?: string; isConservative?: boolean}>)
+                            .filter(t => t.currentWorkingProgression || t.historicalCeiling)
+                            .slice(0, 4) // Show top 4 skills
+                            .map((trace, idx) => (
+                              <div key={trace.skill || idx} className="flex items-center gap-2 text-xs">
+                                <span className="text-[#8A8A8A] capitalize">{(trace.skill || '').replace(/_/g, ' ')}:</span>
+                                {trace.currentWorkingProgression ? (
+                                  <span className="text-[#A4ACB8]">
+                                    {trace.currentWorkingProgression.replace(/_/g, ' ')}
+                                    {trace.isConservative && (
+                                      <span className="text-[#5A5A5A] ml-1">(conservative)</span>
+                                    )}
+                                  </span>
+                                ) : trace.historicalCeiling ? (
+                                  <span className="text-[#5A5A5A] italic">
+                                    Historical: {trace.historicalCeiling.replace(/_/g, ' ')}
+                                  </span>
+                                ) : null}
+                                {trace.historicalCeiling && trace.currentWorkingProgression && 
+                                 trace.historicalCeiling !== trace.currentWorkingProgression && (
+                                  <span className="text-[#4A4A4A] text-[10px]">
+                                    (ceiling: {trace.historicalCeiling.replace(/_/g, ' ')})
+                                  </span>
+                                )}
+                              </div>
+                            ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
-            )}
+              )
+            })()}
             
             {/* [DOCTRINE RUNTIME CONTRACT] Doctrine Influence Section */}
             {doctrineInfluence && doctrineInfluence.available && doctrineInfluence.influenceLevel !== 'none' && (

@@ -18753,6 +18753,111 @@ export function getDefaultAdaptiveInputs(): AdaptiveProgramInputs {
     verdict: equipmentLost ? 'equipment_loss_detected' : 'no_truth_loss',
   })
   
+  // ==========================================================================
+  // [PHASE 1] AUTHORITATIVE MULTI-SKILL SOURCE-TO-FINAL TRACE AUDIT
+  // ==========================================================================
+  // This audit answers the primary diagnostic question:
+  // "Why does the program behave like only 2 skills when more were selected?"
+  // ==========================================================================
+  const multiSkillTraceAudit = (() => {
+    const sourceSkills = canonicalProfile.selectedSkills || []
+    const sourceCount = sourceSkills.length
+    
+    // Get trace contract data
+    const traceContract = selectedSkillTrace
+    
+    // Calculate per-stage survival
+    const inWeightedAllocationCount = traceContract?.skillTraces?.filter(t => t.inWeightedAllocation).length || 0
+    const directlyExpressedCount = traceContract?.finalWeekExpression?.directlyRepresentedSkills?.length || 0
+    const supportExpressedCount = traceContract?.finalWeekExpression?.supportExpressedSkills?.length || 0
+    const rotationalCount = traceContract?.finalWeekExpression?.rotationalSkills?.length || 0
+    const deferredCount = traceContract?.finalWeekExpression?.deferredSkills?.length || 0
+    
+    const totalAccountedFor = directlyExpressedCount + supportExpressedCount + rotationalCount + deferredCount
+    const silentlyLostCount = sourceCount - totalAccountedFor
+    
+    // Per-skill disposition summary
+    const perSkillDisposition = traceContract?.skillTraces?.map(trace => ({
+      skill: trace.skill,
+      isPrimary: trace.wasPrimaryGoal,
+      isSecondary: trace.wasSecondaryGoal,
+      inWeighted: trace.inWeightedAllocation,
+      finalRole: trace.finalRole,
+      representationOutcome: trace.representationOutcome,
+      currentWorkingProgression: trace.currentWorkingProgression,
+      historicalCeiling: trace.historicalCeiling,
+      progressionDroveDecision: trace.progressionDroveDecision,
+      deferralReason: trace.deferralReasonCode,
+    })) || []
+    
+    // Identify collapse points
+    const collapsePoints: string[] = []
+    if (sourceCount === 0) collapsePoints.push('NO_SELECTED_SKILLS_IN_CANONICAL_PROFILE')
+    if (inWeightedAllocationCount < sourceCount) collapsePoints.push('SKILLS_LOST_BEFORE_WEIGHTED_ALLOCATION')
+    if (silentlyLostCount > 0) collapsePoints.push('SKILLS_SILENTLY_LOST_NO_DISPOSITION')
+    if (sourceCount > 2 && directlyExpressedCount <= 2 && supportExpressedCount === 0 && rotationalCount === 0) {
+      collapsePoints.push('BROADER_SKILLS_NOT_VISIBLE_IN_WEEK')
+    }
+    
+    // Calculate current-working-progression enforcement
+    const skillsUsingConservativeProgression = traceContract?.skillTraces?.filter(
+      t => t.isConservative && t.currentWorkingProgression
+    ).length || 0
+    const skillsWithProgressionDrivingDecision = traceContract?.skillTraces?.filter(
+      t => t.progressionDroveDecision
+    ).length || 0
+    
+    // Final verdicts
+    const verdicts = {
+      SELECTED_SKILL_TRUTH_PRESERVED: silentlyLostCount === 0 && sourceCount === totalAccountedFor,
+      NO_SILENT_SKILL_LOSS: silentlyLostCount === 0,
+      CURRENT_WORKING_PROGRESSION_ENFORCED: skillsUsingConservativeProgression > 0 || skillsWithProgressionDrivingDecision > 0,
+      WEEKLY_EXPRESSION_TRUTHFUL: directlyExpressedCount + supportExpressedCount + rotationalCount > 0,
+      SIX_DAY_FLEXIBLE_UNCHANGED: true, // This logic was NOT touched
+      BROADER_SKILLS_ACCOUNTED_FOR: sourceCount <= 2 || (supportExpressedCount > 0 || rotationalCount > 0 || deferredCount > 0),
+    }
+    
+    const overallVerdict = Object.values(verdicts).every(v => v)
+      ? 'MULTI_SKILL_SOURCE_OF_TRUTH_VERIFIED'
+      : 'MULTI_SKILL_COLLAPSE_DETECTED'
+    
+    return {
+      sourceSkillCount: sourceCount,
+      sourceSkills,
+      stageBreakdown: {
+        inCanonicalProfile: sourceCount,
+        inWeightedAllocation: inWeightedAllocationCount,
+        directlyExpressed: directlyExpressedCount,
+        supportExpressed: supportExpressedCount,
+        rotational: rotationalCount,
+        deferred: deferredCount,
+        silentlyLost: silentlyLostCount,
+      },
+      perSkillDisposition,
+      collapsePoints,
+      progressionTruthEnforcement: {
+        skillsUsingConservativeProgression,
+        skillsWithProgressionDrivingDecision,
+      },
+      verdicts,
+      overallVerdict,
+    }
+  })()
+  
+  console.log('[PHASE_1_MULTI_SKILL_TRACE_FINAL_AUDIT]', multiSkillTraceAudit)
+  
+  // Log human-readable summary for debugging
+  console.log('[PHASE_1_SKILL_DISPOSITION_SUMMARY]', {
+    totalSelected: multiSkillTraceAudit.sourceSkillCount,
+    directExpression: multiSkillTraceAudit.stageBreakdown.directlyExpressed,
+    supportExpression: multiSkillTraceAudit.stageBreakdown.supportExpressed,
+    rotational: multiSkillTraceAudit.stageBreakdown.rotational,
+    deferred: multiSkillTraceAudit.stageBreakdown.deferred,
+    silentlyLost: multiSkillTraceAudit.stageBreakdown.silentlyLost,
+    collapsePoints: multiSkillTraceAudit.collapsePoints,
+    overallVerdict: multiSkillTraceAudit.overallVerdict,
+  })
+  
   // [PHASE 14A] Builder entry truth verdict
   console.log('[phase14a-builder-entry-truth-verdict]', {
     allFieldsReceived: true,

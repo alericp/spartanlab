@@ -3311,7 +3311,149 @@ function applyMaterialityScoreAdjustments(
   // ==========================================================================
   const supportSkillsExpressed: string[] = []
   const supportSkillsDeferred: Array<{ skill: string; reason: string }> = []
+  const tertiarySkillsExpressed: string[] = []
+  const tertiarySkillsDeferred: Array<{ skill: string; reason: string }> = []
   
+  // ==========================================================================
+  // [VISIBLE-WEEK-EXPRESSION-FIX] TERTIARY SKILL EXERCISE INJECTION
+  // ==========================================================================
+  // Tertiary skills now receive their own exercise injection, not just support work.
+  // This makes broader selected skills materially affect the generated program.
+  // ==========================================================================
+  if (materialSkillIntent && materialSkillIntent.length > 0 && selected.length < maxExercises) {
+    // Find tertiary skills that need expression (these have higher priority than support)
+    const tertiarySkillsFromIntent = materialSkillIntent.filter(s => s.role === 'tertiary')
+    
+    if (tertiarySkillsFromIntent.length > 0) {
+      console.log('[VISIBLE-WEEK-EXPRESSION-FIX] Tertiary skill injection starting:', {
+        dayFocus: day.focus,
+        tertiarySkillCount: tertiarySkillsFromIntent.length,
+        tertiarySkills: tertiarySkillsFromIntent.map(s => s.skill),
+        slotsRemaining: maxExercises - selected.length,
+      })
+      
+      // Calculate how many tertiary slots we can allocate (max 2 per session for visibility)
+      const maxTertiarySlots = Math.min(2, maxExercises - selected.length)
+      let tertiarySlotsUsed = 0
+      
+      for (const tertiaryEntry of tertiarySkillsFromIntent) {
+        if (tertiarySlotsUsed >= maxTertiarySlots) {
+          tertiarySkillsDeferred.push({
+            skill: tertiaryEntry.skill,
+            reason: 'session_slot_limit_reached',
+          })
+          continue
+        }
+        
+        // Find exercises that transfer to this tertiary skill
+        const tertiarySkillLower = tertiaryEntry.skill.toLowerCase().replace(/_/g, '')
+        
+        // Search in all pools for exercises matching tertiary skill
+        const tertiaryCandidates = [
+          ...availableSkills.filter(e => 
+            e.transferTo?.some(t => t.toLowerCase().includes(tertiarySkillLower)) ||
+            e.id.toLowerCase().includes(tertiarySkillLower) ||
+            e.name.toLowerCase().includes(tertiarySkillLower) ||
+            e.primarySkills?.some(p => p.toLowerCase().includes(tertiarySkillLower))
+          ),
+          ...availableStrength.filter(e =>
+            e.transferTo?.some(t => t.toLowerCase().includes(tertiarySkillLower)) ||
+            e.id.toLowerCase().includes(tertiarySkillLower) ||
+            e.primarySkills?.some(p => p.toLowerCase().includes(tertiarySkillLower))
+          ),
+          ...availableAccessory.filter(e =>
+            e.transferTo?.some(t => t.toLowerCase().includes(tertiarySkillLower))
+          ),
+        ].filter(e => !usedIds.has(e.id))
+        
+        // Also try doctrine-backed tertiary exercises
+        const doctrineBacked = getDoctrineBackedExercisesForSkill(tertiaryEntry.skill, [
+          ...availableSkills, ...availableStrength, ...availableAccessory
+        ]).filter(d => !usedIds.has(d.exercise.id))
+        
+        // Prefer doctrine-backed, then transfer-based
+        let selectedTertiaryExercise: Exercise | null = null
+        let selectionSource = 'none'
+        
+        if (doctrineBacked.length > 0) {
+          selectedTertiaryExercise = doctrineBacked[0].exercise
+          selectionSource = doctrineBacked[0].doctrineSource
+        } else if (tertiaryCandidates.length > 0) {
+          // Sort by carryover and primary skill match
+          const sorted = tertiaryCandidates.sort((a, b) => {
+            // Prioritize exercises with primary skill match
+            const aHasPrimary = a.primarySkills?.some(p => p.toLowerCase().includes(tertiarySkillLower)) ? 1 : 0
+            const bHasPrimary = b.primarySkills?.some(p => p.toLowerCase().includes(tertiarySkillLower)) ? 1 : 0
+            if (aHasPrimary !== bHasPrimary) return bHasPrimary - aHasPrimary
+            
+            const carryoverDiff = (b.carryover || 0) - (a.carryover || 0)
+            if (carryoverDiff !== 0) return carryoverDiff
+            return (a.fatigueCost || 3) - (b.fatigueCost || 3)
+          })
+          selectedTertiaryExercise = sorted[0]
+          selectionSource = `transfer-to:${tertiaryEntry.skill}`
+        }
+        
+        if (selectedTertiaryExercise) {
+          const added = addExercise(
+            selectedTertiaryExercise,
+            `[Tertiary Skill] ${tertiaryEntry.skill.replace(/_/g, ' ')} development`,
+            undefined, undefined, undefined, 'standalone',
+            {
+              primarySelectionReason: 'selected_skill_tertiary',
+              sessionRole: 'skill',  // Tertiary gets skill role, not accessory
+              expressionMode: 'skill_technical',  // Technical expression for visibility
+              influencingSkills: [{
+                skillId: tertiaryEntry.skill,
+                influence: 'selected',
+                expressionMode: 'technical',
+              }],
+              doctrineSource: selectionSource.includes('skill-support-mapping') 
+                ? { type: 'skill_doctrine', ruleId: selectionSource } as DoctrineSourceTrace
+                : null,
+            }
+          )
+          
+          if (added) {
+            tertiarySlotsUsed++
+            tertiarySkillsExpressed.push(tertiaryEntry.skill)
+            console.log('[VISIBLE-WEEK-EXPRESSION-FIX] Tertiary skill exercise ADDED:', {
+              skill: tertiaryEntry.skill,
+              exerciseId: selectedTertiaryExercise.id,
+              exerciseName: selectedTertiaryExercise.name,
+              selectionSource,
+              currentWorkingProgression: tertiaryEntry.currentWorkingProgression,
+            })
+          } else {
+            tertiarySkillsDeferred.push({
+              skill: tertiaryEntry.skill,
+              reason: 'exercise_add_failed_load_limits',
+            })
+          }
+        } else {
+          tertiarySkillsDeferred.push({
+            skill: tertiaryEntry.skill,
+            reason: 'no_viable_exercises_found',
+          })
+          console.log('[VISIBLE-WEEK-EXPRESSION-FIX] Tertiary skill exercise NOT FOUND:', {
+            skill: tertiaryEntry.skill,
+            candidatesSearched: tertiaryCandidates.length + doctrineBacked.length,
+          })
+        }
+      }
+      
+      console.log('[VISIBLE-WEEK-EXPRESSION-FIX] Tertiary skill injection complete:', {
+        tertiarySkillsExpressed,
+        tertiarySkillsDeferred,
+        slotsUsed: tertiarySlotsUsed,
+        remainingSlots: maxExercises - selected.length,
+      })
+    }
+  }
+  
+  // ==========================================================================
+  // [AI_TRUTH_GENERATION_MATERIALITY_PHASE_1] SUPPORT SKILL EXERCISE INJECTION (after tertiary)
+  // ==========================================================================
   if (materialSkillIntent && materialSkillIntent.length > 0 && selected.length < maxExercises) {
     // Find support skills that need expression
     const supportSkillsFromIntent = materialSkillIntent.filter(s => s.role === 'support')

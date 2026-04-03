@@ -1527,6 +1527,32 @@ exerciseExplanations?: {
   // ==========================================================================
   authoritativeMultiSkillIntentContract?: AuthoritativeMultiSkillIntentContract | null
   // ==========================================================================
+  // [VISIBLE-WEEK-EXPRESSION-FIX] Visible Week Skill Expression Contract
+  // Authoritative contract for visible week skill expression.
+  // Forces broader selected-skill truth to materially influence the actual week.
+  // ==========================================================================
+  visibleWeekExpressionContract?: AuthoritativeVisibleWeekSkillExpressionContract | null
+  // ==========================================================================
+  // [VISIBLE-WEEK-EXPRESSION-FIX] Durable Diagnostic Audit
+  // Tracks skill expression throughout the generation pipeline for debugging.
+  // ==========================================================================
+  visibleWeekSkillExpressionAudit?: {
+    selectedSkillsCount: number
+    primarySkill: string
+    secondarySkill: string | null
+    visibleWeekSkillCount: number
+    skillsWithDirectBlocks: string[]
+    skillsWithTechnicalSlots: string[]
+    skillsWithSupportBlocks: string[]
+    skillsWithMixedDayPresence: string[]
+    skillsCarryoverOnly: string[]
+    deferredSkills: string[]
+    skillsLostAfterWeightedAllocation: string[]
+    skillsLostAfterSessionAssembly: string[]
+    skillsLostAfterExerciseSelection: string[]
+    finalVerdict: 'VISIBLE_WEEK_EXPRESSION_STRONG' | 'VISIBLE_WEEK_EXPRESSION_ADEQUATE' | 'VISIBLE_WEEK_EXPRESSION_NARROW'
+  }
+  // ==========================================================================
   // [WEEKLY MATERIALITY] Verdict on weekly program materiality vs defaults
   // ==========================================================================
   weeklyMaterialityVerdict?: {
@@ -1569,11 +1595,14 @@ exerciseExplanations?: {
 // filtering, exercise scoring, and fallback behavior.
 // =============================================================================
 
-export type MaterialSkillRole = 'primary_spine' | 'secondary_anchor' | 'support' | 'deferred'
+// [VISIBLE-WEEK-EXPRESSION-FIX] Added 'tertiary' role for visible week skill expression
+export type MaterialSkillRole = 'primary_spine' | 'secondary_anchor' | 'tertiary' | 'support' | 'deferred'
 
 // [PHASE 2 MULTI-SKILL] Representation mode for how a skill is expressed in the program
+// [VISIBLE-WEEK-EXPRESSION-FIX] Added 'technical_slot' for tertiary skill visible expression
 export type SkillRepresentationMode = 
   | 'direct_block'      // Full focused session blocks (primary/secondary skills)
+  | 'technical_slot'    // Technical slot work in sessions (tertiary skills with visibility)
   | 'support_expressed' // Explicit support work in multiple sessions
   | 'support_rotational' // Rotated through sessions for maintenance
   | 'carryover_only'    // Expressed via carryover exercises (no direct blocks)
@@ -1988,6 +2017,256 @@ export interface AuthoritativeMultiSkillIntentContract {
   }
 }
 
+// =============================================================================
+// [VISIBLE-WEEK-EXPRESSION-FIX] AUTHORITATIVE VISIBLE WEEK SKILL EXPRESSION CONTRACT
+// =============================================================================
+// This contract is the authoritative bridge between truth contracts and actual week assembly.
+// It forces broader selected-skill truth to materially influence the weekly program
+// when justified by complexity, selected skill count, and 6-session flexible baseline.
+// =============================================================================
+
+export type VisibleWeekExpressionMode = 
+  | 'direct_block'        // Full session blocks dedicated to this skill
+  | 'technical_slot'      // Visible technical work slot in sessions
+  | 'support_block'       // Dedicated support/accessory block
+  | 'mixed_day_presence'  // Visible presence in mixed-skill days
+  | 'carryover_only'      // Only via carryover exercises (invisible)
+  | 'deferred'            // Explicitly deferred this cycle
+
+export interface SkillExpressionPlan {
+  skill: string
+  expressionMode: VisibleWeekExpressionMode
+  targetSessions: number
+  actualSessionsPlanned: number
+  isProgressionLimited: boolean
+  isRecoveryLimited: boolean
+  isScheduleLimited: boolean
+  isDoctrineInfluenced: boolean
+  isEquipmentLimited: boolean
+  expressionReason: string
+}
+
+export interface AuthoritativeVisibleWeekSkillExpressionContract {
+  // Contract metadata
+  contractVersion: string
+  builtAt: string
+  
+  // Skill classifications
+  selectedSkills: string[]
+  primarySkill: string
+  secondarySkill: string | null
+  tertiarySkills: string[]
+  supportSkills: string[]
+  deferredSkills: string[]
+  
+  // Expression classifications
+  materiallyExpressedPrimarySkills: string[]  // Primary + secondary
+  materiallyExpressedTertiarySkills: string[] // Tertiary with visible week expression
+  materiallyExpressedSupportSkills: string[]  // Support with carryover expression
+  
+  // Visible week skill counts
+  visibleWeekSkillCount: number               // Skills with actual week-level visibility
+  minimumVisibleExpressionCount: number       // Calculated floor based on profile
+  
+  // Per-skill expression plan
+  skillExpressionPlan: SkillExpressionPlan[]
+  
+  // Audit trail
+  audit: {
+    selectedSkillsCount: number
+    primaryExpressedCount: number
+    tertiaryExpressedCount: number
+    supportExpressedCount: number
+    deferredCount: number
+    visibleExpressionFloorMet: boolean
+    expressionFloorShortfall: number
+    verdict: 'VISIBLE_WEEK_EXPRESSION_STRONG' | 'VISIBLE_WEEK_EXPRESSION_ADEQUATE' | 'VISIBLE_WEEK_EXPRESSION_NARROW'
+  }
+}
+
+/**
+ * [VISIBLE-WEEK-EXPRESSION-FIX] Build the authoritative visible week skill expression contract.
+ * This contract enforces broader selected-skill truth to materially influence the actual week.
+ */
+export function buildVisibleWeekSkillExpressionContract(
+  materialSkillIntent: MaterialSkillIntentEntry[],
+  multiSkillAllocation: MultiSkillSessionAllocationContract,
+  effectiveTrainingDays: number,
+  experienceLevel: string,
+  primaryGoal: string,
+  secondaryGoal: string | null
+): AuthoritativeVisibleWeekSkillExpressionContract {
+  const selectedSkills = materialSkillIntent.map(s => s.skill)
+  
+  // Classify skills
+  const tertiarySkills: string[] = []
+  const supportSkills: string[] = []
+  const deferredSkills: string[] = []
+  const materiallyExpressedPrimarySkills: string[] = []
+  const materiallyExpressedTertiarySkills: string[] = []
+  const materiallyExpressedSupportSkills: string[] = []
+  const skillExpressionPlan: SkillExpressionPlan[] = []
+  
+  for (const intent of materialSkillIntent) {
+    const allocationEntry = multiSkillAllocation.entries.find(e => e.skill === intent.skill)
+    const representationMode = allocationEntry?.representationMode || 'deferred'
+    
+    let expressionMode: VisibleWeekExpressionMode = 'deferred'
+    let isProgressionLimited = false
+    let isRecoveryLimited = false
+    let isScheduleLimited = false
+    let isDoctrineInfluenced = false
+    let isEquipmentLimited = (allocationEntry?.constrainedBy || []).includes('equipment_constraint')
+    let expressionReason = ''
+    
+    if (intent.role === 'primary_spine') {
+      expressionMode = 'direct_block'
+      materiallyExpressedPrimarySkills.push(intent.skill)
+      expressionReason = 'Primary skill receives full weekly emphasis'
+    } else if (intent.role === 'secondary_anchor') {
+      expressionMode = 'direct_block'
+      materiallyExpressedPrimarySkills.push(intent.skill)
+      expressionReason = 'Secondary skill receives anchor sessions'
+    } else if (intent.role === 'tertiary') {
+      tertiarySkills.push(intent.skill)
+      
+      // Determine tertiary expression mode based on allocation
+      if (representationMode === 'technical_slot') {
+        expressionMode = 'technical_slot'
+        materiallyExpressedTertiarySkills.push(intent.skill)
+        expressionReason = 'Tertiary skill receives visible technical slots'
+      } else if (representationMode === 'support_expressed') {
+        expressionMode = 'mixed_day_presence'
+        materiallyExpressedTertiarySkills.push(intent.skill)
+        expressionReason = 'Tertiary skill has visible mixed-day presence'
+      } else if (representationMode === 'support_rotational') {
+        expressionMode = 'support_block'
+        materiallyExpressedSupportSkills.push(intent.skill)
+        expressionReason = 'Tertiary skill receives support rotation'
+      } else {
+        expressionMode = 'carryover_only'
+        materiallyExpressedSupportSkills.push(intent.skill)
+        expressionReason = 'Tertiary skill expressed via carryover'
+      }
+    } else if (intent.role === 'support') {
+      supportSkills.push(intent.skill)
+      
+      if (representationMode === 'support_expressed') {
+        expressionMode = 'support_block'
+        materiallyExpressedSupportSkills.push(intent.skill)
+        expressionReason = 'Support skill receives dedicated accessory slots'
+      } else if (representationMode === 'support_rotational') {
+        expressionMode = 'carryover_only'
+        materiallyExpressedSupportSkills.push(intent.skill)
+        expressionReason = 'Support skill expressed via rotational carryover'
+      } else {
+        expressionMode = 'carryover_only'
+        expressionReason = 'Support skill expressed via exercise carryover'
+      }
+    } else {
+      deferredSkills.push(intent.skill)
+      expressionMode = 'deferred'
+      
+      // Determine deferral reason
+      if (allocationEntry?.deferReasonCode?.includes('progression')) {
+        isProgressionLimited = true
+        expressionReason = 'Deferred: progression level too low for direct work'
+      } else if (allocationEntry?.deferReasonCode?.includes('recovery')) {
+        isRecoveryLimited = true
+        expressionReason = 'Deferred: recovery budget insufficient'
+      } else if (allocationEntry?.deferReasonCode?.includes('session')) {
+        isScheduleLimited = true
+        expressionReason = 'Deferred: insufficient session budget'
+      } else {
+        expressionReason = 'Deferred: scheduling constraints'
+      }
+    }
+    
+    skillExpressionPlan.push({
+      skill: intent.skill,
+      expressionMode,
+      targetSessions: intent.weeklyExposureTarget,
+      actualSessionsPlanned: allocationEntry?.allocatedSessions || 0,
+      isProgressionLimited,
+      isRecoveryLimited,
+      isScheduleLimited,
+      isDoctrineInfluenced,
+      isEquipmentLimited,
+      expressionReason,
+    })
+  }
+  
+  // Calculate visible week skill count (skills with actual week-level visibility)
+  const visibleWeekSkillCount = 
+    materiallyExpressedPrimarySkills.length + 
+    materiallyExpressedTertiarySkills.length
+  
+  // Calculate minimum visible expression floor based on profile
+  const isAdvancedProfile = experienceLevel === 'advanced'
+  const isIntermediateHighFrequency = 
+    (experienceLevel === 'intermediate' || experienceLevel === 'advanced') &&
+    selectedSkills.length >= 4 &&
+    effectiveTrainingDays >= 5
+  
+  let minimumVisibleExpressionCount = 2  // Primary + Secondary minimum
+  if (isAdvancedProfile && selectedSkills.length >= 5) {
+    minimumVisibleExpressionCount = Math.min(4, Math.ceil(selectedSkills.length * 0.5))
+  } else if (isIntermediateHighFrequency) {
+    minimumVisibleExpressionCount = Math.min(3, Math.ceil(selectedSkills.length * 0.4))
+  }
+  
+  // Audit
+  const visibleExpressionFloorMet = visibleWeekSkillCount >= minimumVisibleExpressionCount
+  const expressionFloorShortfall = Math.max(0, minimumVisibleExpressionCount - visibleWeekSkillCount)
+  
+  let verdict: AuthoritativeVisibleWeekSkillExpressionContract['audit']['verdict'] = 'VISIBLE_WEEK_EXPRESSION_NARROW'
+  if (visibleWeekSkillCount >= selectedSkills.length * 0.6) {
+    verdict = 'VISIBLE_WEEK_EXPRESSION_STRONG'
+  } else if (visibleWeekSkillCount >= minimumVisibleExpressionCount) {
+    verdict = 'VISIBLE_WEEK_EXPRESSION_ADEQUATE'
+  }
+  
+  const contract: AuthoritativeVisibleWeekSkillExpressionContract = {
+    contractVersion: '1.0.0',
+    builtAt: new Date().toISOString(),
+    selectedSkills,
+    primarySkill: primaryGoal,
+    secondarySkill: secondaryGoal,
+    tertiarySkills,
+    supportSkills,
+    deferredSkills,
+    materiallyExpressedPrimarySkills,
+    materiallyExpressedTertiarySkills,
+    materiallyExpressedSupportSkills,
+    visibleWeekSkillCount,
+    minimumVisibleExpressionCount,
+    skillExpressionPlan,
+    audit: {
+      selectedSkillsCount: selectedSkills.length,
+      primaryExpressedCount: materiallyExpressedPrimarySkills.length,
+      tertiaryExpressedCount: materiallyExpressedTertiarySkills.length,
+      supportExpressedCount: materiallyExpressedSupportSkills.length,
+      deferredCount: deferredSkills.length,
+      visibleExpressionFloorMet,
+      expressionFloorShortfall,
+      verdict,
+    },
+  }
+  
+  console.log('[VISIBLE-WEEK-EXPRESSION-CONTRACT-BUILT]', {
+    selectedSkillsCount: selectedSkills.length,
+    visibleWeekSkillCount,
+    minimumVisibleExpressionCount,
+    primaryExpressed: materiallyExpressedPrimarySkills,
+    tertiaryExpressed: materiallyExpressedTertiarySkills,
+    supportExpressed: materiallyExpressedSupportSkills,
+    deferred: deferredSkills,
+    verdict,
+  })
+  
+  return contract
+}
+
 /**
  * Build the authoritative multi-skill session allocation contract.
  * This contract forces every selected skill to be classified and drives session assembly.
@@ -2041,6 +2320,24 @@ export function buildAuthoritativeMultiSkillAllocationContract(
     } else if (intent.role === 'secondary_anchor') {
       representationMode = 'direct_block'
       representedSkills.push(intent.skill)
+    } else if (intent.role === 'tertiary') {
+      // ==========================================================================
+      // [VISIBLE-WEEK-EXPRESSION-FIX] Tertiary skills get visible week expression
+      // They receive technical_slot representation for week-level visibility
+      // ==========================================================================
+      if (materiallyExpressed && allocatedSessions >= 2) {
+        representationMode = 'technical_slot'
+        representedSkills.push(intent.skill) // Tertiary with good allocation counts as represented
+        supportReason = 'technical_skill_work_scheduled'
+      } else if (materiallyExpressed && allocatedSessions >= 1) {
+        representationMode = 'support_expressed'
+        supportExpressedSkills.push(intent.skill)
+        supportReason = 'visible_support_work_scheduled'
+      } else {
+        representationMode = 'support_rotational'
+        supportRotationalSkills.push(intent.skill)
+        supportReason = 'rotated_through_sessions'
+      }
     } else if (intent.role === 'support') {
       // Support skills can be expressed or rotational based on session budget
       if (materiallyExpressed && allocatedSessions >= 2) {
@@ -2346,13 +2643,21 @@ export function buildAuthoritativeMultiSkillIntentContract(
     const progressionData = currentWorkingProgressions?.[skill.replace(/_/g, '')] || 
                             currentWorkingProgressions?.[skill] || null
 
+    // ==========================================================================
+    // [VISIBLE-WEEK-EXPRESSION-FIX] Preserve tertiary distinction for week-level visibility
+    // ==========================================================================
+    // Previously: tertiary and support both mapped to 'support' role, losing week identity
+    // Fix: tertiary skills get their own role for stronger session architecture influence
+    // ==========================================================================
     let role: MaterialSkillRole = 'deferred'
     if (skill === primaryGoal) {
       role = 'primary_spine'
     } else if (skill === secondaryGoal) {
       role = 'secondary_anchor'
     } else if (allocation && allocation.priorityLevel === 'tertiary') {
-      role = 'support'
+      // [VISIBLE-WEEK-EXPRESSION-FIX] Tertiary skills now get 'tertiary' role instead of 'support'
+      // This allows them to receive technical slots and visible week expression
+      role = 'tertiary'
     } else if (allocation && allocation.priorityLevel === 'support') {
       role = 'support'
     } else if (allocation) {
@@ -2382,6 +2687,19 @@ export function buildAuthoritativeMultiSkillIntentContract(
       representationMode = 'direct_block'
     } else if (role === 'secondary_anchor') {
       representationMode = 'direct_block'
+    } else if (role === 'tertiary') {
+      // [VISIBLE-WEEK-EXPRESSION-FIX] Tertiary skills get visible week expression
+      // They receive technical_slot representation, not just support work
+      if (materiallyAllocated && allocatedSessions >= 2) {
+        representationMode = 'technical_slot'
+        supportReason = 'technical_skill_work_scheduled'
+      } else if (materiallyAllocated && allocatedSessions >= 1) {
+        representationMode = 'support_expressed'
+        supportReason = 'visible_support_work_scheduled'
+      } else {
+        representationMode = 'support_rotational'
+        supportReason = 'rotated_through_sessions'
+      }
     } else if (role === 'support') {
       if (materiallyAllocated && allocatedSessions >= 2) {
         representationMode = 'support_expressed'
@@ -5228,6 +5546,21 @@ async function generateAdaptiveProgramImpl(
       verdict: 'AUDIT_PASS_ALL_SKILLS_CLASSIFIED',
     })
   }
+  
+  // ==========================================================================
+  // [VISIBLE-WEEK-EXPRESSION-FIX] BUILD AUTHORITATIVE VISIBLE WEEK SKILL EXPRESSION CONTRACT
+  // ==========================================================================
+  // This contract is the authoritative bridge between truth contracts and actual week assembly.
+  // It forces broader selected-skill truth to materially influence the weekly program.
+  // ==========================================================================
+  const visibleWeekExpressionContract = buildVisibleWeekSkillExpressionContract(
+    materialityContract.materialSkillIntent,
+    multiSkillAllocationContract,
+    effectiveTrainingDays,
+    String(materialityContract.experienceLevel || 'intermediate'),
+    materialityContract.primaryGoal || '',
+    materialityContract.secondaryGoal || null
+  )
   
   // ==========================================================================
   // [DOCTRINE RUNTIME CONTRACT] BUILD AUTHORITATIVE DOCTRINE CONTRACT
@@ -12337,6 +12670,46 @@ return explanations.length > 0 ? explanations : undefined
   // [PHASE 2 MULTI-SKILL] Store multi-skill allocation contract on the program
   finalProgram.multiSkillAllocationContract = multiSkillAllocationContract
   
+  // [VISIBLE-WEEK-EXPRESSION-FIX] Store visible week expression contract on the program
+  // This is the authoritative contract for visible week skill expression
+  finalProgram.visibleWeekExpressionContract = visibleWeekExpressionContract
+  
+  // [VISIBLE-WEEK-EXPRESSION-FIX] Store durable diagnostic audit on the program
+  finalProgram.visibleWeekSkillExpressionAudit = {
+    selectedSkillsCount: visibleWeekExpressionContract.selectedSkills.length,
+    primarySkill: visibleWeekExpressionContract.primarySkill,
+    secondarySkill: visibleWeekExpressionContract.secondarySkill,
+    visibleWeekSkillCount: visibleWeekExpressionContract.visibleWeekSkillCount,
+    skillsWithDirectBlocks: visibleWeekExpressionContract.materiallyExpressedPrimarySkills,
+    skillsWithTechnicalSlots: visibleWeekExpressionContract.materiallyExpressedTertiarySkills.filter(
+      s => visibleWeekExpressionContract.skillExpressionPlan.find(p => p.skill === s)?.expressionMode === 'technical_slot'
+    ),
+    skillsWithSupportBlocks: visibleWeekExpressionContract.skillExpressionPlan
+      .filter(p => p.expressionMode === 'support_block')
+      .map(p => p.skill),
+    skillsWithMixedDayPresence: visibleWeekExpressionContract.skillExpressionPlan
+      .filter(p => p.expressionMode === 'mixed_day_presence')
+      .map(p => p.skill),
+    skillsCarryoverOnly: visibleWeekExpressionContract.skillExpressionPlan
+      .filter(p => p.expressionMode === 'carryover_only')
+      .map(p => p.skill),
+    deferredSkills: visibleWeekExpressionContract.deferredSkills,
+    skillsLostAfterWeightedAllocation: [],  // Tracked by multi-skill audit
+    skillsLostAfterSessionAssembly: [],     // Tracked via session logging
+    skillsLostAfterExerciseSelection: [],   // Tracked via exercise selector
+    finalVerdict: visibleWeekExpressionContract.audit.verdict,
+  }
+  
+  console.log('[VISIBLE-WEEK-EXPRESSION-AUDIT-SAVED]', {
+    selectedSkillsCount: finalProgram.visibleWeekSkillExpressionAudit.selectedSkillsCount,
+    visibleWeekSkillCount: finalProgram.visibleWeekSkillExpressionAudit.visibleWeekSkillCount,
+    skillsWithDirectBlocks: finalProgram.visibleWeekSkillExpressionAudit.skillsWithDirectBlocks,
+    skillsWithTechnicalSlots: finalProgram.visibleWeekSkillExpressionAudit.skillsWithTechnicalSlots,
+    skillsCarryoverOnly: finalProgram.visibleWeekSkillExpressionAudit.skillsCarryoverOnly,
+    deferredSkills: finalProgram.visibleWeekSkillExpressionAudit.deferredSkills,
+    finalVerdict: finalProgram.visibleWeekSkillExpressionAudit.finalVerdict,
+  })
+  
   // [CHECKLIST 1 OF 5] Store authoritative multi-skill intent contract on the program
   // This is the SINGLE AUTHORITATIVE SOURCE for skill truth in UI and rebuild paths
   finalProgram.authoritativeMultiSkillIntentContract = authoritativeMultiSkillIntentContract
@@ -14221,18 +14594,27 @@ function getSkillsForSession(
         isOddSessionForEvenIndex || isEvenSessionForOddIndex // Interleaved distribution
       
       if (shouldIncludeTertiary) {
-        // [session-assembly-truth] TASK 3: Choose expression mode based on day type and skill fit
-        let tertiaryExpressionMode: 'primary' | 'technical' | 'support' | 'warmup' = 'support'
+        // ==========================================================================
+        // [VISIBLE-WEEK-EXPRESSION-FIX] Tertiary skills now default to 'technical' expression
+        // Previously: default was 'support', making tertiary skills invisible in week structure
+        // Fix: default is now 'technical' unless session context explicitly downgrades
+        // ==========================================================================
+        let tertiaryExpressionMode: 'primary' | 'technical' | 'support' | 'warmup' = 'technical'
         
-        // On mixed/hybrid days, tertiary skills can get technical expression
-        // [PRIORITY-COLLAPSE-FIX] TASK 5: Also allow technical expression on non-mixed days
-        // if this is one of the first inclusions for this skill
-        if (isMixedOrHybridDay && tertiaryIndex < 2) {
+        // [VISIBLE-WEEK-EXPRESSION-FIX] Check contract representation mode for authoritative guidance
+        const contractEntry = representationModeMap.get(skill)
+        const isTechnicalSlotSkill = contractEntry?.mode === 'technical_slot'
+        const isSupportExpressedSkill = contractEntry?.mode === 'support_expressed'
+        
+        // [VISIBLE-WEEK-EXPRESSION-FIX] Technical expression conditions (now the default)
+        // Technical slot skills and well-allocated tertiary skills get visible expression
+        if (isTechnicalSlotSkill || isMixedOrHybridDay || isExposureGuarantee || tertiaryIndex < 3) {
           tertiaryExpressionMode = 'technical'
-        } else if (isExposureGuarantee && sessionIndex === 0) {
-          // First session can give technical expression to broad selected skills
-          tertiaryExpressionMode = 'technical'
+        } else if (isSupportExpressedSkill) {
+          // Support-expressed skills from contract get support expression
+          tertiaryExpressionMode = 'support'
         }
+        // Else: default remains 'technical' for visible week expression
         
         result.push({
           skill,

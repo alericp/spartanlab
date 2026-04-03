@@ -229,6 +229,20 @@ interface TruthExplanation {
       skillsNarrowedReason: string | null
     }
   } | null
+  // [VISIBLE-WEEK-EXPRESSION-FIX] Visible week skill expression audit
+  visibleWeekSkillExpressionAudit?: {
+    selectedSkillsCount: number
+    primarySkill: string
+    secondarySkill: string | null
+    visibleWeekSkillCount: number
+    skillsWithDirectBlocks: string[]
+    skillsWithTechnicalSlots: string[]
+    skillsWithSupportBlocks: string[]
+    skillsWithMixedDayPresence: string[]
+    skillsCarryoverOnly: string[]
+    deferredSkills: string[]
+    finalVerdict: 'VISIBLE_WEEK_EXPRESSION_STRONG' | 'VISIBLE_WEEK_EXPRESSION_ADEQUATE' | 'VISIBLE_WEEK_EXPRESSION_NARROW'
+  } | null
 }
 
 interface ProgramTruthSummaryProps {
@@ -780,6 +794,86 @@ export function ProgramTruthSummary({ truthExplanation, className }: ProgramTrut
                       {truthExplanation.authoritativeMultiSkillIntentContract.auditTrail.skillsNarrowedReason && (
                         <div className="text-[#5A5A5A] pl-2 italic">
                           Note: {truthExplanation.authoritativeMultiSkillIntentContract.auditTrail.skillsNarrowedReason.replace(/_/g, ' ')}
+                        </div>
+                      )}
+                      
+                      {/* [VISIBLE-WEEK-EXPRESSION-FIX] Visible Week Skill Expression section */}
+                      {truthExplanation.visibleWeekSkillExpressionAudit && (
+                        <div className="mt-3 pt-3 border-t border-[#2A2A2A]">
+                          <p className="font-medium text-[#9A9A9A] mb-2">Visible Week Skill Expression</p>
+                          
+                          {/* Skills with direct blocks (primary + secondary) */}
+                          {truthExplanation.visibleWeekSkillExpressionAudit.skillsWithDirectBlocks.length > 0 && (
+                            <div className="text-xs mb-2">
+                              <span className="text-[#6A6A6A]">Direct blocks: </span>
+                              <div className="flex flex-wrap gap-1 mt-1">
+                                {truthExplanation.visibleWeekSkillExpressionAudit.skillsWithDirectBlocks.map((skill) => (
+                                  <Badge key={skill} variant="outline" className="bg-green-500/10 text-green-400 border-green-500/30">
+                                    {skill.replace(/_/g, ' ')}
+                                  </Badge>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          
+                          {/* Skills with technical slots (tertiary with visibility) */}
+                          {truthExplanation.visibleWeekSkillExpressionAudit.skillsWithTechnicalSlots.length > 0 && (
+                            <div className="text-xs mb-2">
+                              <span className="text-[#6A6A6A]">Technical slots: </span>
+                              <div className="flex flex-wrap gap-1 mt-1">
+                                {truthExplanation.visibleWeekSkillExpressionAudit.skillsWithTechnicalSlots.map((skill) => (
+                                  <Badge key={skill} variant="outline" className="bg-blue-500/10 text-blue-400 border-blue-500/30">
+                                    {skill.replace(/_/g, ' ')}
+                                  </Badge>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          
+                          {/* Skills with mixed day presence */}
+                          {truthExplanation.visibleWeekSkillExpressionAudit.skillsWithMixedDayPresence.length > 0 && (
+                            <div className="text-xs mb-2">
+                              <span className="text-[#6A6A6A]">Mixed day presence: </span>
+                              <div className="flex flex-wrap gap-1 mt-1">
+                                {truthExplanation.visibleWeekSkillExpressionAudit.skillsWithMixedDayPresence.map((skill) => (
+                                  <Badge key={skill} variant="outline" className="bg-purple-500/10 text-purple-400 border-purple-500/30">
+                                    {skill.replace(/_/g, ' ')}
+                                  </Badge>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          
+                          {/* Skills carryover only */}
+                          {truthExplanation.visibleWeekSkillExpressionAudit.skillsCarryoverOnly.length > 0 && (
+                            <div className="text-xs mb-2">
+                              <span className="text-[#6A6A6A]">Carryover only: </span>
+                              <div className="flex flex-wrap gap-1 mt-1">
+                                {truthExplanation.visibleWeekSkillExpressionAudit.skillsCarryoverOnly.map((skill) => (
+                                  <Badge key={skill} variant="outline" className="bg-amber-500/10 text-amber-400 border-amber-500/30">
+                                    {skill.replace(/_/g, ' ')}
+                                  </Badge>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          
+                          {/* Visible week expression verdict */}
+                          <div className="flex items-center gap-2 mt-2 pt-2 border-t border-[#2A2A2A]">
+                            <span className={cn(
+                              'text-xs font-medium',
+                              truthExplanation.visibleWeekSkillExpressionAudit.finalVerdict === 'VISIBLE_WEEK_EXPRESSION_STRONG' && 'text-green-400',
+                              truthExplanation.visibleWeekSkillExpressionAudit.finalVerdict === 'VISIBLE_WEEK_EXPRESSION_ADEQUATE' && 'text-blue-400',
+                              truthExplanation.visibleWeekSkillExpressionAudit.finalVerdict === 'VISIBLE_WEEK_EXPRESSION_NARROW' && 'text-amber-400'
+                            )}>
+                              {truthExplanation.visibleWeekSkillExpressionAudit.finalVerdict === 'VISIBLE_WEEK_EXPRESSION_STRONG' && 'Strong visible expression'}
+                              {truthExplanation.visibleWeekSkillExpressionAudit.finalVerdict === 'VISIBLE_WEEK_EXPRESSION_ADEQUATE' && 'Adequate visible expression'}
+                              {truthExplanation.visibleWeekSkillExpressionAudit.finalVerdict === 'VISIBLE_WEEK_EXPRESSION_NARROW' && 'Focused visible expression'}
+                            </span>
+                            <span className="text-[#5A5A5A] text-xs">
+                              ({truthExplanation.visibleWeekSkillExpressionAudit.visibleWeekSkillCount}/{truthExplanation.visibleWeekSkillExpressionAudit.selectedSkillsCount} visible)
+                            </span>
+                          </div>
                         </div>
                       )}
                     </div>

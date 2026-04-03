@@ -1888,7 +1888,10 @@ export function AdaptiveProgramDisplay({
       </Card>
 
       {/* [AI-TRUTH-ALIGNMENT] Why This Plan - Truth Explanation Summary */}
-      <ProgramTruthSummary truthExplanation={program.truthExplanation} />
+      <ProgramTruthSummary 
+        truthExplanation={program.truthExplanation} 
+        selectedSkillTrace={program.selectedSkillTrace}
+      />
 
       {/* Sessions - PHASE 2: Uses safe validSessions array */}
       {/* [PHASE 8 TASK 5] Frequency explanation truth audit */}

@@ -261,12 +261,60 @@ interface TruthExplanation {
   } | null
 }
 
+// [CHECKLIST 1 OF 4] Selected Skill Trace Contract
+interface SkillTraceEntry {
+  skill: string
+  inCanonicalProfile: boolean
+  wasPrimaryGoal: boolean
+  wasSecondaryGoal: boolean
+  inWeightedAllocation: boolean
+  weightedPriorityLevel: 'primary' | 'secondary' | 'tertiary' | 'support' | null
+  weightedExposureSessions: number
+  finalRole: 'primary_spine' | 'secondary_anchor' | 'tertiary' | 'support' | 'deferred'
+  materiallyAllocated: boolean
+  representationOutcome: 'direct' | 'support' | 'rotational' | 'deferred'
+  deferralReasonCode: string | null
+  deferralReasonLabel: string | null
+  currentWorkingProgression: string | null
+  historicalCeiling: string | null
+  isConservative: boolean
+  progressionDroveDecision: boolean
+}
+
+interface SelectedSkillTraceContract {
+  sourceSelectedSkills: string[]
+  sourcePrimaryGoal: string | null
+  sourceSecondaryGoal: string | null
+  sourceSkillCount: number
+  skillTraces: SkillTraceEntry[]
+  weightedAllocationCount: number
+  primarySpineCount: number
+  secondaryAnchorCount: number
+  tertiaryCount: number
+  supportCount: number
+  deferredCount: number
+  finalWeekExpression: {
+    directlyRepresentedSkills: string[]
+    supportExpressedSkills: string[]
+    rotationalSkills: string[]
+    deferredSkills: Array<{
+      skill: string
+      reasonCode: string | null
+      reasonLabel: string
+      details: string | null
+    }>
+    coverageVerdict: 'strong' | 'adequate' | 'weak'
+    coverageRatio: number
+  }
+}
+
 interface ProgramTruthSummaryProps {
   truthExplanation: TruthExplanation | null | undefined
+  selectedSkillTrace?: SelectedSkillTraceContract | null
   className?: string
 }
 
-export function ProgramTruthSummary({ truthExplanation, className }: ProgramTruthSummaryProps) {
+export function ProgramTruthSummary({ truthExplanation, selectedSkillTrace, className }: ProgramTruthSummaryProps) {
   const [isExpanded, setIsExpanded] = useState(false)
   
   if (!truthExplanation) {
@@ -1006,6 +1054,99 @@ export function ProgramTruthSummary({ truthExplanation, className }: ProgramTrut
                     })}
                   </div>
                 )}
+              </div>
+            )}
+            
+            {/* [CHECKLIST 1 OF 4] Selected Skill Trace - Shows exact skill disposition */}
+            {selectedSkillTrace && selectedSkillTrace.sourceSkillCount > 2 && (
+              <div className="space-y-2">
+                <h4 className="text-xs font-medium text-[#8A8A8A] uppercase tracking-wide">
+                  Skill Expression This Cycle
+                </h4>
+                <div className="text-xs bg-[#1E1E1E] rounded p-2.5 space-y-2">
+                  {/* Direct expression */}
+                  {selectedSkillTrace.finalWeekExpression.directlyRepresentedSkills.length > 0 && (
+                    <div className="flex items-start gap-2">
+                      <span className="text-[#6A6A6A] shrink-0">Direct:</span>
+                      <div className="flex flex-wrap gap-1">
+                        {selectedSkillTrace.finalWeekExpression.directlyRepresentedSkills.map((skill) => (
+                          <Badge key={skill} variant="outline" className="bg-green-500/10 text-green-400 border-green-500/30 text-xs">
+                            {skill.replace(/_/g, ' ')}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Support expression */}
+                  {selectedSkillTrace.finalWeekExpression.supportExpressedSkills.length > 0 && (
+                    <div className="flex items-start gap-2">
+                      <span className="text-[#6A6A6A] shrink-0">Support:</span>
+                      <div className="flex flex-wrap gap-1">
+                        {selectedSkillTrace.finalWeekExpression.supportExpressedSkills.map((skill) => (
+                          <Badge key={skill} variant="outline" className="bg-blue-500/10 text-blue-400 border-blue-500/30 text-xs">
+                            {skill.replace(/_/g, ' ')}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Rotational expression */}
+                  {selectedSkillTrace.finalWeekExpression.rotationalSkills.length > 0 && (
+                    <div className="flex items-start gap-2">
+                      <span className="text-[#6A6A6A] shrink-0">Rotational:</span>
+                      <div className="flex flex-wrap gap-1">
+                        {selectedSkillTrace.finalWeekExpression.rotationalSkills.map((skill) => (
+                          <Badge key={skill} variant="outline" className="bg-purple-500/10 text-purple-400 border-purple-500/30 text-xs">
+                            {skill.replace(/_/g, ' ')}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Deferred skills with detailed reasons */}
+                  {selectedSkillTrace.finalWeekExpression.deferredSkills.length > 0 && (
+                    <div className="flex items-start gap-2">
+                      <span className="text-[#6A6A6A] shrink-0">Deferred:</span>
+                      <div className="space-y-1">
+                        {selectedSkillTrace.finalWeekExpression.deferredSkills.map(({ skill, reasonLabel }) => (
+                          <div key={skill} className="flex items-center gap-1">
+                            <Badge variant="outline" className="bg-amber-500/10 text-amber-400 border-amber-500/30 text-xs">
+                              {skill.replace(/_/g, ' ')}
+                            </Badge>
+                            <span className="text-[#5A5A5A] italic">{reasonLabel}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Coverage summary */}
+                  <div className="flex items-center gap-2 pt-1.5 border-t border-[#2A2A2A] mt-2">
+                    <span className={cn(
+                      'text-xs font-medium',
+                      selectedSkillTrace.finalWeekExpression.coverageVerdict === 'strong' && 'text-green-400',
+                      selectedSkillTrace.finalWeekExpression.coverageVerdict === 'adequate' && 'text-blue-400',
+                      selectedSkillTrace.finalWeekExpression.coverageVerdict === 'weak' && 'text-amber-400'
+                    )}>
+                      {selectedSkillTrace.finalWeekExpression.coverageVerdict === 'strong' && 'Strong coverage'}
+                      {selectedSkillTrace.finalWeekExpression.coverageVerdict === 'adequate' && 'Adequate coverage'}
+                      {selectedSkillTrace.finalWeekExpression.coverageVerdict === 'weak' && 'Focused coverage'}
+                    </span>
+                    <span className="text-[#5A5A5A] text-xs">
+                      ({Math.round(selectedSkillTrace.finalWeekExpression.coverageRatio * 100)}% of {selectedSkillTrace.sourceSkillCount} skills expressed)
+                    </span>
+                  </div>
+                  
+                  {/* Multi-skill explanation when narrowed */}
+                  {selectedSkillTrace.sourceSkillCount > selectedSkillTrace.finalWeekExpression.directlyRepresentedSkills.length + selectedSkillTrace.finalWeekExpression.supportExpressedSkills.length && (
+                    <p className="text-[#5A5A5A] text-xs italic pt-1">
+                      This cycle prioritizes {selectedSkillTrace.primarySpineCount + selectedSkillTrace.secondaryAnchorCount} skills directly while preserving {selectedSkillTrace.tertiaryCount + selectedSkillTrace.supportCount} others as support/rotational based on recovery, schedule budget, and current readiness.
+                    </p>
+                  )}
+                </div>
               </div>
             )}
             

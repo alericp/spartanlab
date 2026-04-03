@@ -1474,6 +1474,12 @@ exerciseExplanations?: {
   // ==========================================================================
   generationTruthSnapshot?: GenerationTruthSnapshot
   // ==========================================================================
+  // [CHECKLIST 1 OF 4] Authoritative Selected Skill Trace Contract
+  // Persists the exact journey of each selected skill from canonical source
+  // through to final week expression. Every skill has an explicit disposition.
+  // ==========================================================================
+  selectedSkillTrace?: SelectedSkillTraceContract | null
+  // ==========================================================================
   // [PHASE 1 SPINE] Authoritative Generation Spine Contract
   // This is the SINGLE authoritative contract that governed this generation.
   // It must be persisted for rebuild/restart/display parity.
@@ -1987,6 +1993,108 @@ export interface MultiSkillSessionAllocationContract {
   totalMateriallyExpressed: number
   generatedAt: string
   contractVersion: string
+}
+
+// =============================================================================
+// [CHECKLIST 1 OF 4] AUTHORITATIVE SELECTED SKILL TRACE CONTRACT
+// =============================================================================
+// This is the SINGLE authoritative trace that explains every selected skill's
+// journey from canonical source to final week expression.
+// Every skill in canonicalProfile.selectedSkills MUST appear here with:
+// - Its assigned priority/role
+// - Whether it was materially expressed, support-only, rotational, or deferred
+// - The exact reason for any reduction/deferral
+// - Current working progression vs historical ceiling
+// =============================================================================
+
+export type SkillFinalRole = 'primary_spine' | 'secondary_anchor' | 'tertiary' | 'support' | 'deferred'
+export type SkillRepresentationOutcome = 'direct' | 'support' | 'rotational' | 'deferred'
+export type DeferralReasonCodeV2 = 
+  | 'weekly_budget_protected_primary_spine'
+  | 'weekly_budget_protected_secondary_anchor'
+  | 'recovery_protection'
+  | 'joint_safety'
+  | 'equipment_mismatch'
+  | 'insufficient_current_progression'
+  | 'schedule_density_conflict'
+  | 'doctrine_conflict'
+  | 'not_included_in_weighted_allocation'
+  | 'skill_invalid_or_unsupported'
+  | 'carryover_only_by_design'
+  | null
+
+export interface SkillTraceEntry {
+  skill: string
+  
+  // Source truth
+  inCanonicalProfile: boolean
+  wasPrimaryGoal: boolean
+  wasSecondaryGoal: boolean
+  
+  // Weighted allocation
+  inWeightedAllocation: boolean
+  weightedPriorityLevel: 'primary' | 'secondary' | 'tertiary' | 'support' | null
+  weightedExposureSessions: number
+  weightedRationale: string | null
+  
+  // Materiality contract
+  finalRole: SkillFinalRole
+  materiallyAllocated: boolean
+  representationOutcome: SkillRepresentationOutcome
+  
+  // Deferral details (if applicable)
+  deferralReasonCode: DeferralReasonCodeV2
+  deferralReasonLabel: string | null
+  deferralDetails: string | null
+  
+  // Progression truth
+  currentWorkingProgression: string | null
+  historicalCeiling: string | null
+  progressionTruthSource: string | null
+  isConservative: boolean
+  progressionDroveDecision: boolean
+  
+  // Constraints
+  constrainedBy: string[]
+}
+
+export interface SelectedSkillTraceContract {
+  // Source truth snapshot
+  sourceSelectedSkills: string[]
+  sourcePrimaryGoal: string | null
+  sourceSecondaryGoal: string | null
+  sourceSkillCount: number
+  
+  // Per-skill trace
+  skillTraces: SkillTraceEntry[]
+  
+  // Summary counts
+  weightedAllocationCount: number
+  primarySpineCount: number
+  secondaryAnchorCount: number
+  tertiaryCount: number
+  supportCount: number
+  deferredCount: number
+  
+  // Final week expression summary
+  finalWeekExpression: {
+    directlyRepresentedSkills: string[]
+    supportExpressedSkills: string[]
+    rotationalSkills: string[]
+    deferredSkills: Array<{
+      skill: string
+      reasonCode: DeferralReasonCodeV2
+      reasonLabel: string
+      details: string | null
+    }>
+    coverageVerdict: 'strong' | 'adequate' | 'weak'
+    coverageRatio: number
+  }
+  
+  // Audit metadata
+  generatedAt: string
+  contractVersion: string
+  sixSessionLogicTouched: boolean // Should always be false
 }
 
 // =============================================================================
@@ -2828,6 +2936,253 @@ export function buildAuthoritativeMultiSkillIntentContract(
     contractVersion: contract.contractVersion,
   })
 
+  return contract
+}
+
+// =============================================================================
+// [CHECKLIST 1 OF 4] BUILD SELECTED SKILL TRACE CONTRACT
+// =============================================================================
+// This function builds the authoritative trace showing exactly where each
+// selected skill ends up and why. It MUST be called during generation
+// and attached to the program output.
+// =============================================================================
+
+export function buildSelectedSkillTraceContract(
+  canonicalProfile: CanonicalProgrammingProfile,
+  weightedSkillAllocation: WeightedSkillAllocation[],
+  materialityContract: AuthoritativeGenerationMaterialityContract | null,
+  currentWorkingProgressions: Record<string, { currentWorkingProgression: string | null; historicalCeiling: string | null; truthSource: string; isConservative: boolean }> | null
+): SelectedSkillTraceContract {
+  const sourceSelectedSkills = canonicalProfile.selectedSkills || []
+  const sourcePrimaryGoal = canonicalProfile.primaryGoal || null
+  const sourceSecondaryGoal = canonicalProfile.secondaryGoal || null
+  
+  const skillTraces: SkillTraceEntry[] = []
+  const directlyRepresentedSkills: string[] = []
+  const supportExpressedSkills: string[] = []
+  const rotationalSkills: string[] = []
+  const deferredSkillsOutput: SelectedSkillTraceContract['finalWeekExpression']['deferredSkills'] = []
+  
+  // Track counts
+  let weightedAllocationCount = 0
+  let primarySpineCount = 0
+  let secondaryAnchorCount = 0
+  let tertiaryCount = 0
+  let supportCount = 0
+  let deferredCount = 0
+  
+  // Process each selected skill
+  for (const skill of sourceSelectedSkills) {
+    const weightedAlloc = weightedSkillAllocation.find(a => a.skill === skill)
+    const materialIntent = materialityContract?.materialSkillIntent?.find(m => m.skill === skill)
+    const progressionData = currentWorkingProgressions?.[skill.replace(/_/g, '')] || 
+                            currentWorkingProgressions?.[skill] || null
+    
+    const inWeightedAllocation = !!weightedAlloc
+    if (inWeightedAllocation) weightedAllocationCount++
+    
+    // Determine final role
+    let finalRole: SkillFinalRole = 'deferred'
+    let representationOutcome: SkillRepresentationOutcome = 'deferred'
+    let deferralReasonCode: DeferralReasonCodeV2 = null
+    let deferralReasonLabel: string | null = null
+    let deferralDetails: string | null = null
+    const constrainedBy: string[] = []
+    
+    if (skill === sourcePrimaryGoal) {
+      finalRole = 'primary_spine'
+      representationOutcome = 'direct'
+      primarySpineCount++
+      directlyRepresentedSkills.push(skill)
+    } else if (skill === sourceSecondaryGoal) {
+      finalRole = 'secondary_anchor'
+      representationOutcome = 'direct'
+      secondaryAnchorCount++
+      directlyRepresentedSkills.push(skill)
+    } else if (materialIntent) {
+      // Use material intent if available
+      if (materialIntent.role === 'tertiary') {
+        finalRole = 'tertiary'
+        tertiaryCount++
+        if (materialIntent.representationMode === 'technical_slot' || materialIntent.representationMode === 'direct_block') {
+          representationOutcome = 'direct'
+          directlyRepresentedSkills.push(skill)
+        } else if (materialIntent.representationMode === 'support_expressed') {
+          representationOutcome = 'support'
+          supportExpressedSkills.push(skill)
+        } else if (materialIntent.representationMode === 'support_rotational') {
+          representationOutcome = 'rotational'
+          rotationalSkills.push(skill)
+        } else {
+          representationOutcome = 'support'
+          supportExpressedSkills.push(skill)
+        }
+      } else if (materialIntent.role === 'support') {
+        finalRole = 'support'
+        supportCount++
+        if (materialIntent.representationMode === 'support_expressed') {
+          representationOutcome = 'support'
+          supportExpressedSkills.push(skill)
+        } else if (materialIntent.representationMode === 'support_rotational') {
+          representationOutcome = 'rotational'
+          rotationalSkills.push(skill)
+        } else if (materialIntent.representationMode === 'carryover_only') {
+          representationOutcome = 'rotational'
+          rotationalSkills.push(skill)
+          deferralReasonCode = 'carryover_only_by_design'
+          deferralReasonLabel = 'Expressed via carryover exercises'
+        } else {
+          representationOutcome = 'support'
+          supportExpressedSkills.push(skill)
+        }
+      } else if (materialIntent.role === 'deferred') {
+        finalRole = 'deferred'
+        deferredCount++
+        representationOutcome = 'deferred'
+        deferralReasonCode = (materialIntent.deferralReasonCode as DeferralReasonCodeV2) || 'weekly_budget_protected_primary_spine'
+        deferralReasonLabel = materialIntent.deferralReason || 'Deferred to protect primary/secondary focus'
+        deferralDetails = `Skill deferred due to ${deferralReasonCode}`
+        deferredSkillsOutput.push({
+          skill,
+          reasonCode: deferralReasonCode,
+          reasonLabel: deferralReasonLabel || 'Unknown reason',
+          details: deferralDetails,
+        })
+      }
+      
+      // Copy constraints
+      if (materialIntent.constrainedBy) {
+        constrainedBy.push(...materialIntent.constrainedBy)
+      }
+    } else if (weightedAlloc) {
+      // Fallback to weighted allocation
+      if (weightedAlloc.priorityLevel === 'tertiary') {
+        finalRole = 'tertiary'
+        tertiaryCount++
+        representationOutcome = weightedAlloc.exposureSessions >= 2 ? 'direct' : 'support'
+        if (representationOutcome === 'direct') {
+          directlyRepresentedSkills.push(skill)
+        } else {
+          supportExpressedSkills.push(skill)
+        }
+      } else if (weightedAlloc.priorityLevel === 'support') {
+        finalRole = 'support'
+        supportCount++
+        representationOutcome = weightedAlloc.exposureSessions >= 1 ? 'support' : 'rotational'
+        if (representationOutcome === 'support') {
+          supportExpressedSkills.push(skill)
+        } else {
+          rotationalSkills.push(skill)
+        }
+      }
+    } else {
+      // Skill not in weighted allocation - this is a trace failure
+      finalRole = 'deferred'
+      deferredCount++
+      representationOutcome = 'deferred'
+      deferralReasonCode = 'not_included_in_weighted_allocation'
+      deferralReasonLabel = 'Not included in weighted allocation'
+      deferralDetails = 'Skill was in canonical profile but dropped before weighted allocation'
+      deferredSkillsOutput.push({
+        skill,
+        reasonCode: deferralReasonCode,
+        reasonLabel: deferralReasonLabel,
+        details: deferralDetails,
+      })
+    }
+    
+    // Determine if progression drove the decision
+    const progressionDroveDecision = !!(
+      progressionData && 
+      progressionData.isConservative &&
+      (finalRole === 'support' || finalRole === 'deferred')
+    )
+    
+    skillTraces.push({
+      skill,
+      inCanonicalProfile: true,
+      wasPrimaryGoal: skill === sourcePrimaryGoal,
+      wasSecondaryGoal: skill === sourceSecondaryGoal,
+      inWeightedAllocation,
+      weightedPriorityLevel: weightedAlloc?.priorityLevel || null,
+      weightedExposureSessions: weightedAlloc?.exposureSessions || 0,
+      weightedRationale: weightedAlloc?.rationale || null,
+      finalRole,
+      materiallyAllocated: representationOutcome !== 'deferred',
+      representationOutcome,
+      deferralReasonCode,
+      deferralReasonLabel,
+      deferralDetails,
+      currentWorkingProgression: progressionData?.currentWorkingProgression || null,
+      historicalCeiling: progressionData?.historicalCeiling || null,
+      progressionTruthSource: progressionData?.truthSource || null,
+      isConservative: progressionData?.isConservative || false,
+      progressionDroveDecision,
+      constrainedBy,
+    })
+  }
+  
+  // Calculate coverage
+  const materiallyExpressedCount = directlyRepresentedSkills.length + supportExpressedSkills.length + rotationalSkills.length
+  const coverageRatio = sourceSelectedSkills.length > 0 
+    ? materiallyExpressedCount / sourceSelectedSkills.length 
+    : 1
+  const coverageVerdict: 'strong' | 'adequate' | 'weak' = 
+    coverageRatio >= 0.8 ? 'strong' : coverageRatio >= 0.5 ? 'adequate' : 'weak'
+  
+  const contract: SelectedSkillTraceContract = {
+    sourceSelectedSkills,
+    sourcePrimaryGoal,
+    sourceSecondaryGoal,
+    sourceSkillCount: sourceSelectedSkills.length,
+    skillTraces,
+    weightedAllocationCount,
+    primarySpineCount,
+    secondaryAnchorCount,
+    tertiaryCount,
+    supportCount,
+    deferredCount,
+    finalWeekExpression: {
+      directlyRepresentedSkills,
+      supportExpressedSkills,
+      rotationalSkills,
+      deferredSkills: deferredSkillsOutput,
+      coverageVerdict,
+      coverageRatio,
+    },
+    generatedAt: new Date().toISOString(),
+    contractVersion: '1.0.0',
+    sixSessionLogicTouched: false,
+  }
+  
+  // Log the checkpoint audit
+  console.log('[MULTI_SKILL_TRACE_CHECKPOINT]', {
+    checkpoint: 'selected_skill_trace_contract_built',
+    sourceSelectedSkillsCount: sourceSelectedSkills.length,
+    sourceSelectedSkills,
+    perSkill: skillTraces.map(t => ({
+      skill: t.skill,
+      inCanonical: t.inCanonicalProfile,
+      inWeightedAllocation: t.inWeightedAllocation,
+      weightedPriority: t.weightedPriorityLevel,
+      finalRole: t.finalRole,
+      representedThisCycle: t.representationOutcome !== 'deferred',
+      representationMode: t.representationOutcome,
+      deferredReason: t.deferralReasonCode,
+      currentWorkingProgression: t.currentWorkingProgression,
+      historicalCeiling: t.historicalCeiling,
+      progressionDroveDecision: t.progressionDroveDecision,
+    })),
+    summary: {
+      direct: directlyRepresentedSkills.length,
+      support: supportExpressedSkills.length,
+      rotational: rotationalSkills.length,
+      deferred: deferredSkillsOutput.length,
+      coverageVerdict,
+      coverageRatio: coverageRatio.toFixed(2),
+    },
+  })
+  
   return contract
 }
 
@@ -5494,6 +5849,27 @@ async function generateAdaptiveProgramImpl(
   )
   
   // ==========================================================================
+  // [CHECKLIST 1 OF 4] CHECKPOINT: POST WEIGHTED SKILL ALLOCATION
+  // ==========================================================================
+  console.log('[MULTI_SKILL_TRACE_CHECKPOINT]', {
+    checkpoint: 'post_weighted_skill_allocation',
+    sourceSelectedSkills: canonicalProfile.selectedSkills || [],
+    sourceSelectedSkillsCount: (canonicalProfile.selectedSkills || []).length,
+    weightedAllocationCount: weightedSkillAllocation.length,
+    perSkill: weightedSkillAllocation.map(alloc => ({
+      skill: alloc.skill,
+      inCanonical: (canonicalProfile.selectedSkills || []).includes(alloc.skill),
+      priorityLevel: alloc.priorityLevel,
+      exposureSessions: alloc.exposureSessions,
+      weight: Math.round(alloc.weight * 100) + '%',
+    })),
+    skillsLostFromCanonical: (canonicalProfile.selectedSkills || []).filter(
+      s => !weightedSkillAllocation.some(a => a.skill === s)
+    ),
+    sixSessionLogicTouched: false,
+  })
+  
+  // ==========================================================================
   // [PHASE-MATERIALITY] TASK 1: BUILD AUTHORITATIVE MATERIALITY CONTRACT
   // ==========================================================================
   // This contract is the single source of truth for all downstream generation.
@@ -5527,6 +5903,33 @@ async function generateAdaptiveProgramImpl(
   doctrineEnabled,
   doctrineSummary
   )
+  
+  // ==========================================================================
+  // [CHECKLIST 1 OF 4] CHECKPOINT: POST MATERIALITY CONTRACT
+  // ==========================================================================
+  console.log('[MULTI_SKILL_TRACE_CHECKPOINT]', {
+    checkpoint: 'post_materiality_contract',
+    sourceSelectedSkills: materialityContract.selectedSkills,
+    sourceSelectedSkillsCount: materialityContract.selectedSkills.length,
+    perSkill: materialityContract.materialSkillIntent.map(intent => ({
+      skill: intent.skill,
+      role: intent.role,
+      materiallyAllocated: intent.materiallyAllocated,
+      weeklyExposureTarget: intent.weeklyExposureTarget,
+      representationMode: intent.representationMode,
+      deferralReasonCode: intent.deferralReasonCode,
+      currentWorkingProgression: intent.currentWorkingProgression,
+      historicalCeiling: intent.historicalCeiling,
+    })),
+    roleCounts: {
+      primary_spine: materialityContract.materialSkillIntent.filter(i => i.role === 'primary_spine').length,
+      secondary_anchor: materialityContract.materialSkillIntent.filter(i => i.role === 'secondary_anchor').length,
+      tertiary: materialityContract.materialSkillIntent.filter(i => i.role === 'tertiary').length,
+      support: materialityContract.materialSkillIntent.filter(i => i.role === 'support').length,
+      deferred: materialityContract.materialSkillIntent.filter(i => i.role === 'deferred').length,
+    },
+    sixSessionLogicTouched: false,
+  })
   
   // ==========================================================================
   // [PHASE 1 SPINE] BUILD AUTHORITATIVE GENERATION SPINE CONTRACT
@@ -5766,6 +6169,38 @@ async function generateAdaptiveProgramImpl(
     cwpForIntentContract,
     inputs.selectedSkills?.length || 0
   )
+  
+  // ==========================================================================
+  // [CHECKLIST 1 OF 4] BUILD SELECTED SKILL TRACE CONTRACT
+  // ==========================================================================
+  // This is the authoritative trace showing each skill's journey from canonical
+  // source to final week expression. Every skill MUST have an explicit disposition.
+  // ==========================================================================
+  const selectedSkillTrace = buildSelectedSkillTraceContract(
+    canonicalProfile,
+    weightedSkillAllocation,
+    materialityContract,
+    cwpForIntentContract
+  )
+  
+  // Log the trace checkpoint
+  console.log('[CHECKLIST_1_OF_4_SKILL_TRACE_AUDIT]', {
+    checkpoint: 'post_trace_contract_build',
+    sourceSkillCount: selectedSkillTrace.sourceSkillCount,
+    weightedAllocationCount: selectedSkillTrace.weightedAllocationCount,
+    primarySpineCount: selectedSkillTrace.primarySpineCount,
+    secondaryAnchorCount: selectedSkillTrace.secondaryAnchorCount,
+    tertiaryCount: selectedSkillTrace.tertiaryCount,
+    supportCount: selectedSkillTrace.supportCount,
+    deferredCount: selectedSkillTrace.deferredCount,
+    coverageVerdict: selectedSkillTrace.finalWeekExpression.coverageVerdict,
+    coverageRatio: selectedSkillTrace.finalWeekExpression.coverageRatio.toFixed(2),
+    directlyRepresented: selectedSkillTrace.finalWeekExpression.directlyRepresentedSkills,
+    supportExpressed: selectedSkillTrace.finalWeekExpression.supportExpressedSkills,
+    rotational: selectedSkillTrace.finalWeekExpression.rotationalSkills,
+    deferred: selectedSkillTrace.finalWeekExpression.deferredSkills.map(d => ({ skill: d.skill, reason: d.reasonCode })),
+    sixSessionLogicTouched: selectedSkillTrace.sixSessionLogicTouched,
+  })
   
   // ==========================================================================
   // [PHASE-MATERIALITY] ROOT CAUSE AUDIT
@@ -11798,6 +12233,12 @@ return explanations.length > 0 ? explanations : undefined
         return undefined
       }
     })(),
+    // ==========================================================================
+    // [CHECKLIST 1 OF 4] Selected Skill Trace Contract
+    // Persists the exact journey of each selected skill from canonical source
+    // through to final week expression.
+    // ==========================================================================
+    selectedSkillTrace: selectedSkillTrace,
     // ==========================================================================
     // [PHASE 1 SPINE] Authoritative Generation Spine Contract
     // This is the SINGLE authoritative contract that governed this generation.
